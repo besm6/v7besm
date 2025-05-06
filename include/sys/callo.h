@@ -10,10 +10,9 @@
  * delays on typewriters.
  */
 
-struct	callo
-{
-	int	c_time;		/* incremental time */
-	caddr_t	c_arg;		/* argument to routine */
-	int	(*c_func)();	/* routine */
+struct callo {
+    int c_time;      /* incremental time */
+    caddr_t c_arg;   /* argument to routine */
+    int (*c_func)(); /* routine */
 };
-struct	callo	callout[NCALL];
+struct callo callout[NCALL];

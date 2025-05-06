@@ -6,18 +6,18 @@
  * registers relative to R0 (EAX for the x86).
  * Usage is u.u_ar0[XX].
  */
-#define	EAX	(0)
-#define	ECX	(-1)
-#define	EDX	(-2)
-#define	EBX	(-3)
-#define	ESP	(8)
-#define	EBP	(-9)
-#define	ESI	(-4)
-#define	EDI	(-5)
-#define	EIP	(5)
-#define	EFL	(7)
+#define EAX (0)
+#define ECX (-1)
+#define EDX (-2)
+#define EBX (-3)
+#define ESP (8)
+#define EBP (-9)
+#define ESI (-4)
+#define EDI (-5)
+#define EIP (5)
+#define EFL (7)
 
-#define	TBIT	0x100		/* EFLAGS trap flag */
+#define TBIT 0x100 /* EFLAGS trap flag */
 
 struct trap {
     int dev;

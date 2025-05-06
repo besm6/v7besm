@@ -1,13 +1,13 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 /* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
+#include "../h/buf.h"
+#include "../h/conf.h"
+#include "../h/dir.h"
+#include "../h/inode.h"
 #include "../h/param.h"
 #include "../h/systm.h"
-#include "../h/conf.h"
-#include "../h/inode.h"
-#include "../h/dir.h"
 #include "../h/user.h"
-#include "../h/buf.h"
 
 /*
  * Bmap defines the structure of file system storage
@@ -17,109 +17,108 @@
  * block number of the next block of the file in rablock
  * for use in read-ahead.
  */
-daddr_t
-bmap(ip, bn, rwflg)
+daddr_t bmap(ip, bn, rwflg)
 register struct inode *ip;
 daddr_t bn;
 {
-	register i;
-	struct buf *bp, *nbp;
-	int j, sh;
-	daddr_t nb, *bap;
-	dev_t dev;
+    register i;
+    struct buf *bp, *nbp;
+    int j, sh;
+    daddr_t nb, *bap;
+    dev_t dev;
 
-	if(bn < 0) {
-		u.u_error = EFBIG;
-		return((daddr_t)0);
-	}
-	dev = ip->i_dev;
-	rablock = 0;
+    if (bn < 0) {
+        u.u_error = EFBIG;
+        return ((daddr_t)0);
+    }
+    dev = ip->i_dev;
+    rablock = 0;
 
-	/*
-	 * blocks 0..NADDR-4 are direct blocks
-	 */
-	if(bn < NADDR-3) {
-		i = bn;
-		nb = ip->i_un.i_addr[i];
-		if(nb == 0) {
-			if(rwflg==B_READ || (bp = alloc(dev))==NULL)
-				return((daddr_t)-1);
-			nb = bp->b_blkno;
-			bdwrite(bp);
-			ip->i_un.i_addr[i] = nb;
-			ip->i_flag |= IUPD|ICHG;
-		}
-		if(i < NADDR-4)
-			rablock = ip->i_un.i_addr[i+1];
-		return(nb);
-	}
+    /*
+     * blocks 0..NADDR-4 are direct blocks
+     */
+    if (bn < NADDR - 3) {
+        i = bn;
+        nb = ip->i_un.i_addr[i];
+        if (nb == 0) {
+            if (rwflg == B_READ || (bp = alloc(dev)) == NULL)
+                return ((daddr_t)-1);
+            nb = bp->b_blkno;
+            bdwrite(bp);
+            ip->i_un.i_addr[i] = nb;
+            ip->i_flag |= IUPD | ICHG;
+        }
+        if (i < NADDR - 4)
+            rablock = ip->i_un.i_addr[i + 1];
+        return (nb);
+    }
 
-	/*
-	 * addresses NADDR-3, NADDR-2, and NADDR-1
-	 * have single, double, triple indirect blocks.
-	 * the first step is to determine
-	 * how many levels of indirection.
-	 */
-	sh = 0;
-	nb = 1;
-	bn -= NADDR-3;
-	for(j=3; j>0; j--) {
-		sh += NSHIFT;
-		nb <<= NSHIFT;
-		if(bn < nb)
-			break;
-		bn -= nb;
-	}
-	if(j == 0) {
-		u.u_error = EFBIG;
-		return((daddr_t)0);
-	}
+    /*
+     * addresses NADDR-3, NADDR-2, and NADDR-1
+     * have single, double, triple indirect blocks.
+     * the first step is to determine
+     * how many levels of indirection.
+     */
+    sh = 0;
+    nb = 1;
+    bn -= NADDR - 3;
+    for (j = 3; j > 0; j--) {
+        sh += NSHIFT;
+        nb <<= NSHIFT;
+        if (bn < nb)
+            break;
+        bn -= nb;
+    }
+    if (j == 0) {
+        u.u_error = EFBIG;
+        return ((daddr_t)0);
+    }
 
-	/*
-	 * fetch the address from the inode
-	 */
-	nb = ip->i_un.i_addr[NADDR-j];
-	if(nb == 0) {
-		if(rwflg==B_READ || (bp = alloc(dev))==NULL)
-			return((daddr_t)-1);
-		nb = bp->b_blkno;
-		bdwrite(bp);
-		ip->i_un.i_addr[NADDR-j] = nb;
-		ip->i_flag |= IUPD|ICHG;
-	}
+    /*
+     * fetch the address from the inode
+     */
+    nb = ip->i_un.i_addr[NADDR - j];
+    if (nb == 0) {
+        if (rwflg == B_READ || (bp = alloc(dev)) == NULL)
+            return ((daddr_t)-1);
+        nb = bp->b_blkno;
+        bdwrite(bp);
+        ip->i_un.i_addr[NADDR - j] = nb;
+        ip->i_flag |= IUPD | ICHG;
+    }
 
-	/*
-	 * fetch through the indirect blocks
-	 */
-	for(; j<=3; j++) {
-		bp = bread(dev, nb);
-		if(bp->b_flags & B_ERROR) {
-			brelse(bp);
-			return((daddr_t)0);
-		}
-		bap = bp->b_un.b_daddr;
-		sh -= NSHIFT;
-		i = (bn>>sh) & NMASK;
-		nb = bap[i];
-		if(nb == 0) {
-			if(rwflg==B_READ || (nbp = alloc(dev))==NULL) {
-				brelse(bp);
-				return((daddr_t)-1);
-			}
-			nb = nbp->b_blkno;
-			bdwrite(nbp);
-			bap[i] = nb;
-			bdwrite(bp);
-		} else
-			brelse(bp);
-	}
+    /*
+     * fetch through the indirect blocks
+     */
+    for (; j <= 3; j++) {
+        bp = bread(dev, nb);
+        if (bp->b_flags & B_ERROR) {
+            brelse(bp);
+            return ((daddr_t)0);
+        }
+        bap = bp->b_un.b_daddr;
+        sh -= NSHIFT;
+        i = (bn >> sh) & NMASK;
+        nb = bap[i];
+        if (nb == 0) {
+            if (rwflg == B_READ || (nbp = alloc(dev)) == NULL) {
+                brelse(bp);
+                return ((daddr_t)-1);
+            }
+            nb = nbp->b_blkno;
+            bdwrite(nbp);
+            bap[i] = nb;
+            bdwrite(bp);
+        } else
+            brelse(bp);
+    }
 
-	/*
-	 * calculate read-ahead.
-	 */
-	if(i < NINDIR-1)
-		rablock = bap[i+1];
-	return(nb);
+    /*
+     * calculate read-ahead.
+     */
+    if (i < NINDIR - 1)
+        rablock = bap[i + 1];
+    return (nb);
 }
 
 /*
@@ -128,21 +127,18 @@ daddr_t bn;
  * on the last character of the user's read.
  * u_base is in the user address space unless u_segflg is set.
  */
-passc(c)
-register c;
+passc(c) register c;
 {
-
-	if(u.u_segflg)
-		*u.u_base = c;
-	else
-		if(subyte(u.u_base, c) < 0) {
-			u.u_error = EFAULT;
-			return(-1);
-		}
-	u.u_count--;
-	u.u_offset++;
-	u.u_base++;
-	return(u.u_count == 0? -1: 0);
+    if (u.u_segflg)
+        *u.u_base = c;
+    else if (subyte(u.u_base, c) < 0) {
+        u.u_error = EFAULT;
+        return (-1);
+    }
+    u.u_count--;
+    u.u_offset++;
+    u.u_base++;
+    return (u.u_count == 0 ? -1 : 0);
 }
 
 /*
@@ -154,21 +150,20 @@ register c;
  */
 cpass()
 {
-	register c;
+    register c;
 
-	if(u.u_count == 0)
-		return(-1);
-	if(u.u_segflg)
-		c = *u.u_base;
-	else
-		if((c = fubyte(u.u_base)) < 0) {
-			u.u_error = EFAULT;
-			return(-1);
-		}
-	u.u_count--;
-	u.u_offset++;
-	u.u_base++;
-	return(c&0377);
+    if (u.u_count == 0)
+        return (-1);
+    if (u.u_segflg)
+        c = *u.u_base;
+    else if ((c = fubyte(u.u_base)) < 0) {
+        u.u_error = EFAULT;
+        return (-1);
+    }
+    u.u_count--;
+    u.u_offset++;
+    u.u_base++;
+    return (c & 0377);
 }
 
 /*
@@ -177,8 +172,7 @@ cpass()
  */
 nodev()
 {
-
-	u.u_error = ENODEV;
+    u.u_error = ENODEV;
 }
 
 /*

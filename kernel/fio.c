@@ -1,15 +1,15 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
-#include "../h/param.h"
-#include "../h/systm.h"
-#include "../h/dir.h"
-#include "../h/user.h"
-#include "../h/filsys.h"
-#include "../h/file.h"
-#include "../h/conf.h"
-#include "../h/inode.h"
-#include "../h/reg.h"
 #include "../h/acct.h"
+#include "../h/conf.h"
+#include "../h/dir.h"
+#include "../h/file.h"
+#include "../h/filsys.h"
+#include "../h/inode.h"
+#include "../h/param.h"
+#include "../h/reg.h"
+#include "../h/systm.h"
+#include "../h/user.h"
 
 /*
  * Convert a user supplied
@@ -18,19 +18,18 @@
  * Only task is to check range
  * of the descriptor.
  */
-struct file *
-getf(f)
+struct file *getf(f)
 register int f;
 {
-	register struct file *fp;
+    register struct file *fp;
 
-	if(0 <= f && f < NOFILE) {
-		fp = u.u_ofile[f];
-		if(fp != NULL)
-			return(fp);
-	}
-	u.u_error = EBADF;
-	return(NULL);
+    if (0 <= f && f < NOFILE) {
+        fp = u.u_ofile[f];
+        if (fp != NULL)
+            return (fp);
+    }
+    u.u_error = EBADF;
+    return (NULL);
 }
 
 /*
@@ -44,56 +43,54 @@ register int f;
  * removal to the referencing file structure.
  * Call device handler on last close.
  */
-closef(fp)
-register struct file *fp;
+closef(fp) register struct file *fp;
 {
-	register struct inode *ip;
-	int flag, mode;
-	dev_t dev;
-	register int (*cfunc)();
-	struct chan *cp;
+    register struct inode *ip;
+    int flag, mode;
+    dev_t dev;
+    register int (*cfunc)();
+    struct chan *cp;
 
-	if(fp == NULL)
-		return;
-	if (fp->f_count > 1) {
-		fp->f_count--;
-		return;
-	}
-	ip = fp->f_inode;
-	flag = fp->f_flag;
-	cp = fp->f_un.f_chan;
-	dev = (dev_t)ip->i_un.i_rdev;
-	mode = ip->i_mode;
+    if (fp == NULL)
+        return;
+    if (fp->f_count > 1) {
+        fp->f_count--;
+        return;
+    }
+    ip = fp->f_inode;
+    flag = fp->f_flag;
+    cp = fp->f_un.f_chan;
+    dev = (dev_t)ip->i_un.i_rdev;
+    mode = ip->i_mode;
 
-	plock(ip);
-	fp->f_count = 0;
-	if(flag & FPIPE) {
-		ip->i_mode &= ~(IREAD|IWRITE);
-		wakeup((caddr_t)ip+1);
-		wakeup((caddr_t)ip+2);
-	}
-	iput(ip);
+    plock(ip);
+    fp->f_count = 0;
+    if (flag & FPIPE) {
+        ip->i_mode &= ~(IREAD | IWRITE);
+        wakeup((caddr_t)ip + 1);
+        wakeup((caddr_t)ip + 2);
+    }
+    iput(ip);
 
-	switch(mode&IFMT) {
+    switch (mode & IFMT) {
+    case IFCHR:
+    case IFMPC:
+        cfunc = cdevsw[major(dev)].d_close;
+        break;
 
-	case IFCHR:
-	case IFMPC:
-		cfunc = cdevsw[major(dev)].d_close;
-		break;
+    case IFBLK:
+    case IFMPB:
+        cfunc = bdevsw[major(dev)].d_close;
+        break;
+    default:
+        return;
+    }
 
-	case IFBLK:
-	case IFMPB:
-		cfunc = bdevsw[major(dev)].d_close;
-		break;
-	default:
-		return;
-	}
-
-	if ((flag & FMP) == 0)
-		for(fp=file; fp < &file[NFILE]; fp++)
-			if (fp->f_count && fp->f_inode==ip)
-				return;
-	(*cfunc)(dev, flag, cp);
+    if ((flag & FMP) == 0)
+        for (fp = file; fp < &file[NFILE]; fp++)
+            if (fp->f_count && fp->f_inode == ip)
+                return;
+    (*cfunc)(dev, flag, cp);
 }
 
 /*
@@ -101,33 +98,31 @@ register struct file *fp;
  * of special files to initialize and
  * validate before actual IO.
  */
-openi(ip, rw)
-register struct inode *ip;
+openi(ip, rw) register struct inode *ip;
 {
-	dev_t dev;
-	register unsigned int maj;
+    dev_t dev;
+    register unsigned int maj;
 
-	dev = (dev_t)ip->i_un.i_rdev;
-	maj = major(dev);
-	switch(ip->i_mode&IFMT) {
+    dev = (dev_t)ip->i_un.i_rdev;
+    maj = major(dev);
+    switch (ip->i_mode & IFMT) {
+    case IFCHR:
+    case IFMPC:
+        if (maj >= nchrdev)
+            goto bad;
+        (*cdevsw[maj].d_open)(dev, rw);
+        break;
 
-	case IFCHR:
-	case IFMPC:
-		if(maj >= nchrdev)
-			goto bad;
-		(*cdevsw[maj].d_open)(dev, rw);
-		break;
-
-	case IFBLK:
-	case IFMPB:
-		if(maj >= nblkdev)
-			goto bad;
-		(*bdevsw[maj].d_open)(dev, rw);
-	}
-	return;
+    case IFBLK:
+    case IFMPB:
+        if (maj >= nblkdev)
+            goto bad;
+        (*bdevsw[maj].d_open)(dev, rw);
+    }
+    return;
 
 bad:
-	u.u_error = ENXIO;
+    u.u_error = ENXIO;
 }
 
 /*
@@ -143,36 +138,35 @@ bad:
  * The super user is granted all
  * permissions.
  */
-access(ip, mode)
-register struct inode *ip;
+access(ip, mode) register struct inode *ip;
 {
-	register m;
+    register m;
 
-	m = mode;
-	if(m == IWRITE) {
-		if(getfs(ip->i_dev)->s_ronly != 0) {
-			u.u_error = EROFS;
-			return(1);
-		}
-		if (ip->i_flag&ITEXT)		/* try to free text */
-			xrele(ip);
-		if(ip->i_flag & ITEXT) {
-			u.u_error = ETXTBSY;
-			return(1);
-		}
-	}
-	if(u.u_uid == 0)
-		return(0);
-	if(u.u_uid != ip->i_uid) {
-		m >>= 3;
-		if(u.u_gid != ip->i_gid)
-			m >>= 3;
-	}
-	if((ip->i_mode&m) != 0)
-		return(0);
+    m = mode;
+    if (m == IWRITE) {
+        if (getfs(ip->i_dev)->s_ronly != 0) {
+            u.u_error = EROFS;
+            return (1);
+        }
+        if (ip->i_flag & ITEXT) /* try to free text */
+            xrele(ip);
+        if (ip->i_flag & ITEXT) {
+            u.u_error = ETXTBSY;
+            return (1);
+        }
+    }
+    if (u.u_uid == 0)
+        return (0);
+    if (u.u_uid != ip->i_uid) {
+        m >>= 3;
+        if (u.u_gid != ip->i_gid)
+            m >>= 3;
+    }
+    if ((ip->i_mode & m) != 0)
+        return (0);
 
-	u.u_error = EACCES;
-	return(1);
+    u.u_error = EACCES;
+    return (1);
 }
 
 /*
@@ -183,20 +177,19 @@ register struct inode *ip;
  * If permission is granted,
  * return inode pointer.
  */
-struct inode *
-owner()
+struct inode *owner()
 {
-	register struct inode *ip;
+    register struct inode *ip;
 
-	ip = namei(uchar, 0);
-	if(ip == NULL)
-		return(NULL);
-	if(u.u_uid == ip->i_uid)
-		return(ip);
-	if(suser())
-		return(ip);
-	iput(ip);
-	return(NULL);
+    ip = namei(uchar, 0);
+    if (ip == NULL)
+        return (NULL);
+    if (u.u_uid == ip->i_uid)
+        return (ip);
+    if (suser())
+        return (ip);
+    iput(ip);
+    return (NULL);
 }
 
 /*
@@ -205,13 +198,12 @@ owner()
  */
 suser()
 {
-
-	if(u.u_uid == 0) {
-		u.u_acflag |= ASU;
-		return(1);
-	}
-	u.u_error = EPERM;
-	return(0);
+    if (u.u_uid == 0) {
+        u.u_acflag |= ASU;
+        return (1);
+    }
+    u.u_error = EPERM;
+    return (0);
 }
 
 /*
@@ -219,16 +211,16 @@ suser()
  */
 ufalloc()
 {
-	register i;
+    register i;
 
-	for(i=0; i<NOFILE; i++)
-		if(u.u_ofile[i] == NULL) {
-			u.u_r.r_val1 = i;
-			u.u_pofile[i] = 0;
-			return(i);
-		}
-	u.u_error = EMFILE;
-	return(-1);
+    for (i = 0; i < NOFILE; i++)
+        if (u.u_ofile[i] == NULL) {
+            u.u_r.r_val1 = i;
+            u.u_pofile[i] = 0;
+            return (i);
+        }
+    u.u_error = EMFILE;
+    return (-1);
 }
 
 /*
@@ -240,23 +232,22 @@ ufalloc()
  * no file -- if there are no available
  * 	file structures.
  */
-struct file *
-falloc()
+struct file *falloc()
 {
-	register struct file *fp;
-	register i;
+    register struct file *fp;
+    register i;
 
-	i = ufalloc();
-	if(i < 0)
-		return(NULL);
-	for(fp = &file[0]; fp < &file[NFILE]; fp++)
-		if(fp->f_count == 0) {
-			u.u_ofile[i] = fp;
-			fp->f_count++;
-			fp->f_un.f_offset = 0;
-			return(fp);
-		}
-	printf("no file\n");
-	u.u_error = ENFILE;
-	return(NULL);
+    i = ufalloc();
+    if (i < 0)
+        return (NULL);
+    for (fp = &file[0]; fp < &file[NFILE]; fp++)
+        if (fp->f_count == 0) {
+            u.u_ofile[i] = fp;
+            fp->f_count++;
+            fp->f_un.f_offset = 0;
+            return (fp);
+        }
+    printf("no file\n");
+    u.u_error = ENFILE;
+    return (NULL);
 }
