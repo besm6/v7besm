@@ -171,6 +171,7 @@ static int va = ATNL;
 
 static int beepon;
 
+char msgbuf[MSGBUFS]; /* saved "printf" characters */
 char *msgbufp = msgbuf;
 
 scopen(dev, flag) dev_t dev;

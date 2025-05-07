@@ -14,6 +14,8 @@
 
 #define SCHMAG 8 / 10
 
+int lbolt;             /* time of day in 60th not in time */
+
 /*
  * clock is called straight from
  * the real time clock interrupt.

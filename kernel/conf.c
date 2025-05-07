@@ -16,11 +16,11 @@
 int nulldev();
 int nodev();
 int hdopen(), hdstrategy();
-struct buf hdtab;
+extern struct buf hdtab;
 int fdstrategy();
-struct buf fdtab;
+extern struct buf fdtab;
 int mdstrategy();
-struct buf mdtab;
+extern struct buf mdtab;
 struct bdevsw bdevsw[] = { hdopen,  nulldev, hdstrategy, &hdtab, /* hd = 0 */
                            nulldev, nulldev, fdstrategy, &fdtab, /* fd = 1 */
                            nulldev, nulldev, mdstrategy, &mdtab, /* md = 2 */

@@ -59,12 +59,12 @@ struct pack {
 #define NOTCNTL(a) (a & 0300)
 #define MIN(a, b) ((a < b) ? a : b)
 
-char next[8];
-char mask[8];
-int npbits;
-int pkactive;
-int pkzot;
-int pkdisc;
+extern char next[8];
+extern char mask[8];
+extern int npbits;
+extern int pkactive;
+extern int pkzot;
+extern int pkdisc;
 
 /*
  * driver state
@@ -133,7 +133,7 @@ struct piocb {
     char window;
 };
 
-int pkdebug;
+extern int pkdebug;
 extern int pksizes[];
 
 #define Pwrite 1
@@ -145,4 +145,4 @@ extern int pksizes[];
 #define Pacc 01
 #define Pread 01
 
-int *PTRACE;
+extern int *PTRACE;

@@ -18,6 +18,15 @@
 
 extern int kend;
 
+time_t time;           /* time in sec from 1970 */
+int nblkdev;
+int dk_busy;
+long dk_numb[3];
+long dk_wds[3];
+long dk_time[32];
+struct mount mount[NMOUNT];
+struct inode *rootdir; /* pointer to inode of root directory */
+
 /*
  * Initialization code.
  * Called from cold start routine as

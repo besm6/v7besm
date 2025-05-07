@@ -10,6 +10,8 @@
 #include "sys/buf.h"
 // clang-format on
 
+struct inode *mpxip;  /* mpx virtual inode */
+
 /*
  * Convert a pathname into a pointer to
  * an inode. Note that the inode is locked.

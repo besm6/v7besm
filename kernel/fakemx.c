@@ -13,6 +13,7 @@
 #include "sys/mx.h"
 // clang-format on
 
+#if 0
 sdata(cp) struct chan *cp;
 {
 }
@@ -34,3 +35,4 @@ caddr_t q;
 scontrol(chan, s, c) struct chan *chan;
 {
 }
+#endif

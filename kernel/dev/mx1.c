@@ -34,14 +34,14 @@
  *	a channel and so that sdata will be called from ttyinput.
  *
  */
-struct chan chans[NCHANS];
+extern struct chan chans[NCHANS];
 struct schan schans[NPORTS];
-struct group *groups[NGROUPS];
-int mpxline;
+extern struct group *groups[NGROUPS];
+extern int mpxline;
 struct chan *xcp();
 dev_t mpxdev = -1;
 
-char mcdebugs[NDEBUGS];
+extern char mcdebugs[NDEBUGS];
 
 /*
  * Allocate a channel, set c_index to index.

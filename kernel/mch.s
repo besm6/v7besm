@@ -39,9 +39,9 @@ _start:
         cli
         cs
         lgdt gdtd
-        mov     cr0, %eax
+        mov     %cr0, %eax
         inc     %eax
-        mov     %eax, cr0
+        mov     %eax, %cr0
         jmpl    $KCODE, $1f-KA
 
 // Now in 32-bit protected mode
@@ -49,24 +49,24 @@ _start:
 
 1:
         mov     KDATA, %eax
-        mov     %ax, es
-        mov     %ax, ds
-        mov     %ax, ss
+        mov     %ax, %es
+        mov     %ax, %ds
+        mov     %ax, %ss
         mov     $_start-KA, %esp
         push    $0x2
         popf
 
 // Clear bss
 
-        mov     $_edata-KA, %edi
-        mov     $_end-KA, %ecx
+        mov     $edata-KA, %edi
+        mov     $end-KA, %ecx
         add     $PGSZ-1, %ecx
         and     $![PGSZ-1], %ecx
         sub     %edi, %ecx
         xor     %eax, %eax
         rep
         stosb
-        mov     %edi, _kend-KA
+        mov     %edi, kend-KA
 
 // Clear some additional pages
 
@@ -113,7 +113,7 @@ _start:
         pop     %eax
         sub     %ecx, %eax
         add     $256, %eax
-        mov     %eax, _phymem-KA
+        mov     %eax, phymem-KA
 
 // Pages are allocated as follows:
 //     0    page directory
@@ -123,7 +123,7 @@ _start:
 //     7    u. area
 //     8    kernel stack
 
-        mov     _kend-KA, %ebx
+        mov     kend-KA, %ebx
 
 // Set up page directory
 
@@ -170,7 +170,7 @@ _start:
         lea     6*PGSZ(%ebx), %edi
 
         mov     $_start-KA, %eax
-        mov     $_etext-KA, %ecx
+        mov     $etext-KA, %ecx
         add     $PGSZ-1, %ecx
         sub     %eax, %ecx
         shr     $PGSH, %ecx
@@ -215,10 +215,10 @@ _start:
 // Enable paging
 
         lea     0*PGSZ(%ebx), %eax
-        mov     %eax, cr3
-        mov     cr0, %eax
+        mov     %eax, %cr3
+        mov     %cr0, %eax
         or      $0x80000000, %eax
-        mov     %eax, cr0
+        mov     %eax, %cr0
         ljmp    $KCODE, $1f
 
 1:
@@ -278,15 +278,15 @@ _start:
 
 // Done
 
-        call    _main
+        call    main
 
         mov     $TSS, %eax
         ltr     %ax
         mov     $UCODE, %eax
-        mov     %ax, es
+        mov     %ax, %es
         mov     $UDATA, %eax
-        mov     %ax, es
-        mov     %ax, ds
+        mov     %ax, %es
+        mov     %ax, %ds
         push    %eax
         pushl   $0x1000
         pushl   $0x202
@@ -388,8 +388,8 @@ call:
         movb    $0, 4(%esp)
 
 call1:
-        push    es
-        push    ds
+        push    %es
+        push    %ds
         push    %eax
         push    %ecx
         push    %edx
@@ -399,8 +399,8 @@ call1:
         push    %edi
 
         mov     $KDATA, %eax
-        mov     %eax, es
-        mov     %eax, ds
+        mov     %eax, %es
+        mov     %eax, %ds
 
         mov     0x20(%esp), %edx
         mov     $0x10, %ecx
@@ -433,10 +433,10 @@ call1:
 
         cmpb    $KCODE, 0x34(%esp)
         je      1f
-        cmpb    $0, _runrun
+        cmpb    $0, runrun
         je      1f
         movb    $0xf, (%esp)
-        call    _trap
+        call    trap
 
 1:
         pop     %edx
@@ -452,40 +452,40 @@ call1:
         pop     %edx
         pop     %ecx
         pop     %eax
-        pop     ds
-        pop     es
+        pop     %ds
+        pop     %es
         add     $0x8, %esp
         iret
 
-.globl  _spl0, _spl1, _spl4, _spl5, _spl6, _spl7, _splx
-_spl0:
+.globl  spl0, spl1, spl4, spl5, spl6, spl7, splx
+spl0:
         mov     $IPL0, %edx
-        jmp     splx
+        jmp     spl_x
 
-_spl1:
+spl1:
         mov     $IPL1, %edx
-        jmp     splx
+        jmp     spl_x
 
-_spl4:
+spl4:
         mov     $IPL4, %edx
-        jmp     splx
+        jmp     spl_x
 
-_spl5:
+spl5:
         mov     $IPL5, %edx
-        jmp     splx
+        jmp     spl_x
 
-_spl6:
+spl6:
         mov     $IPL6, %edx
-        jmp     splx
+        jmp     spl_x
 
-_spl7:
+spl7:
         mov     $IPL7, %edx
-        jmp     splx
-
-_splx:
-        mov     4(%esp), %edx
+        jmp     spl_x
 
 splx:
+        mov     4(%esp), %edx
+
+spl_x:
         mov     pl, %eax
         mov     %edx, pl
 
@@ -498,33 +498,33 @@ unqint:
         bsf     %ecx, %ecx
         btr     %ecx, iq
         lea     intx20(, %ecx, 4), %ecx
-        push    cs
+        push    %cs
         call    *%ecx
         jmp     unqint
 1:
         popf
         ret
 
-.globl  _savfp
-_savfp:
+.globl  savfp
+savfp:
         mov     0x4(%esp), %eax
         fnsave  (%eax)
         ret
 
-.globl  _restfp
-_restfp:
+.globl  restfp
+restfp:
         mov     0x4(%esp), %eax
         frstor  (%eax)
         ret
 
-.globl  _stst
-_stst:
+.globl  stst
+stst:
         mov     0x4(%esp), %eax
         fnstcw  (%eax)
         ret
 
-.globl  _addupc
-_addupc:
+.globl  addupc
+addupc:
         mov     8(%esp), %ebx
         mov     4(%esp), %eax
         sub     8(%ebx), %eax
@@ -550,8 +550,8 @@ _addupc:
 1:
         ret
 
-.globl  _fubyte
-_fubyte:
+.globl  fubyte
+fubyte:
         mov     0x4(%esp), %edx
         mov     $0x1, %ecx
         call    bwfsu
@@ -559,16 +559,16 @@ _fubyte:
         movb    (%edx), %al
         jmp     2f
 
-.globl  _fuword
-_fuword:
+.globl  fuword
+fuword:
         mov     0x4(%esp), %edx
         mov     $0x4, %ecx
         call    bwfsu
         mov     (%edx), %eax
         jmp     2f
 
-.globl  _subyte
-_subyte:
+.globl  subyte
+subyte:
         mov     0x4(%esp), %edx
         mov     $0x1, %ecx
         call    bwssu
@@ -576,8 +576,8 @@ _subyte:
         movb    %al, (%edx)
         jmp     1f
 
-.globl  _suword
-_suword:
+.globl  suword
+suword:
         mov     0x4(%esp), %edx
         mov     $0x4, %ecx
         call    bwssu
@@ -607,8 +607,8 @@ bwfsu:
         movl    $3b, nofault
         jmp     *%eax
 
-.globl  _copyin
-_copyin:
+.globl  copyin
+copyin:
         mov     0x4(%esp), %edx
         call    cpisu
         mov     0x10(%esp), %ebx
@@ -620,8 +620,8 @@ _copyin:
         loop    1b
         jmp     2f
 
-.globl  _copyout
-_copyout:
+.globl  copyout
+copyout:
         mov     0x8(%esp), %edx
         call    cposu
         mov     0xc(%esp), %ebx
@@ -679,20 +679,20 @@ ckr:
         mov     $-1, %eax
         ret
 
-.globl  _idle
-_idle:
+.globl  idle
+idle:
         pushf
         push    pl
         movl    $IPL0, pl
         sti
         hlt
-waitloc:
+wait_loc:
         pop     pl
         popf
         ret
 
-.globl   _save
-_save:
+.globl   save
+save:
         pop     %edx
         mov     (%esp), %eax
         mov     %ebx, (%eax)
@@ -704,8 +704,8 @@ _save:
         xor     %eax, %eax
         jmp     *%edx
 
-.globl  _resume
-_resume:
+.globl  resume
+resume:
         mov     0x4(%esp), %eax
         mov     0x8(%esp), %edx
         shl     $0xc, %eax
@@ -714,8 +714,8 @@ _resume:
         mov     %eax, kptu
         add     $PGSZ, %eax
         mov     %eax, kptk
-        mov     cr3, %eax
-        mov     %eax, cr3
+        mov     %cr3, %eax
+        mov     %eax, %cr3
         mov     (%edx), %ebx
         mov     0x4(%edx), %esp
         mov     0x8(%edx), %ebp
@@ -725,8 +725,8 @@ _resume:
         mov     $0x1, %eax
         jmp     *0x14(%edx)
 
-.globl  _bcopy
-_bcopy:
+.globl  bcopy
+bcopy:
         push    %esi
         push    %edi
         mov     0x0c(%esp), %esi
@@ -744,8 +744,8 @@ _bcopy:
         pop     %esi
         ret
 
-.globl  _bzero
-_bzero:
+.globl  bzero
+bzero:
         push    %edi
         mov     0x8(%esp), %edi
         mov     0xc(%esp), %ecx
@@ -761,22 +761,22 @@ _bzero:
         pop     %edi
         ret
 
-.globl  _inb
-_inb:
+.globl  inb
+inb:
         mov     0x4(%esp), %edx
         xor     %eax, %eax
         inb     %dx, %al
         ret
 
-.globl  _outb
-_outb:
+.globl  outb
+outb:
         mov     0x4(%esp), %edx
         movb    0x8(%esp), %al
         outb    %al, %dx
         ret
 
-.globl  _insw
-_insw:
+.globl  insw
+insw:
         push    %edi
         mov     0x08(%esp), %edx
         mov     0x0c(%esp), %edi
@@ -787,8 +787,8 @@ _insw:
         pop     %edi
         ret
 
-.globl  _outsw
-_outsw:
+.globl  outsw
+outsw:
         push    %esi
         mov     0x08(%esp), %edx
         mov     0x0c(%esp), %esi
@@ -799,34 +799,34 @@ _outsw:
         pop     %esi
         ret
 
-.globl  _ld_cr0
-_ld_cr0:
-        mov     cr0, %eax
+.globl  ld_cr0
+ld_cr0:
+        mov     %cr0, %eax
         ret
 
-.globl  _ld_cr2
-_ld_cr2:
-        mov     cr2, %eax
+.globl  ld_cr2
+ld_cr2:
+        mov     %cr2, %eax
         ret
 
-.globl  _ld_cr3
-_ld_cr3:
-        mov     cr3, %eax
+.globl  ld_cr3
+ld_cr3:
+        mov     %cr3, %eax
         ret
 
-.globl  _invd
-_invd:
-        mov     cr3, %eax
-        mov     %eax, cr3
+.globl  invd
+invd:
+        mov     %cr3, %eax
+        mov     %eax, %cr3
         ret
 
-.globl  _cli
-_cli:
+.globl  cli
+cli:
         cli
         ret
 
-.globl  _sti
-_sti:
+.globl  sti
+sti:
         sti
         ret
 
@@ -843,23 +843,23 @@ idtctl: .long 0xfffe8e00, intx00        // int 0x00-0x0f
 
 .data
 
-_inttbl:.long _clock                    // irq0 timer
-        .long _scrint                   // irq1 keyboard
-        .long _stray                    // irq2
-        .long _srintr                   // irq3 serial port 1
-        .long _srintr                   // irq4 serial port 0
-        .long _stray                    // irq5
-        .long _fdintr                   // irq6 floppy drive
-        .long _stray                    // irq7
-        .long _stray                    // irq8
-        .long _stray                    // irq9
-        .long _stray                    // irq10
-        .long _stray                    // irq11
-        .long _stray                    // irq12
-        .long _stray                    // irq13
-        .long _hdintr                   // irq14 hard drive
-        .long _cdintr                   // irq15 cdrom drive
-        .long _trap                     // trap
+_inttbl:.long clock                     // irq0 timer
+        .long scrint                    // irq1 keyboard
+        .long stray                     // irq2
+        .long srintr                    // irq3 serial port 1
+        .long srintr                    // irq4 serial port 0
+        .long stray                     // irq5
+        .long fdintr                    // irq6 floppy drive
+        .long stray                     // irq7
+        .long stray                     // irq8
+        .long stray                     // irq9
+        .long stray                     // irq10
+        .long stray                     // irq11
+        .long stray                     // irq12
+        .long stray                     // irq13
+        .long hdintr                    // irq14 hard drive
+        .long cdintr                    // irq15 cdrom drive
+        .long trap                      // trap
 
 _ipltbl:.long IPL6                      // irq0 timer
         .long IPL4                      // irq1 keyboard
@@ -891,8 +891,8 @@ gdt1:
 pl:     .long IPL7
 iq:     .long 0
 
-.globl  _waitloc
-_waitloc:.long waitloc
+.globl  waitloc
+waitloc:.long wait_loc
 
 ivt:    .space 0x188
 ivt1:
@@ -914,19 +914,19 @@ idtd:   .word ivt1-ivt-1
 
 nofault:.long 0
 
-.globl  _kend
-_kend:  .long 0
+.globl  kend
+kend:  .long 0
 
-.globl  _phymem
-_phymem:.long 0
+.globl  phymem
+phymem:.long 0
 
-.globl  _u
-.set    _u, U
+.globl  u
+.set    u, U
 
-.globl  _mem, _pdir, _upt
-.set    _mem, 0x40000000
-.set    _pdir, 0x7ff9a000
-.set    _upt, 0x7ff9b000
+.globl  mem, pdir, upt
+.set    mem, 0x40000000
+.set    pdir, 0x7ff9a000
+.set    upt, 0x7ff9b000
 
 .set    kpt, 0x7ff9c000
 .set    kptu, kpt+[925*4]

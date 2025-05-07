@@ -53,7 +53,7 @@ struct inode {
 #define i_group i_s1.group
 
 extern struct inode inode[]; /* The inode table itself */
-struct inode *mpxip;         /* mpx virtual inode */
+extern struct inode *mpxip;  /* mpx virtual inode */
 
 /* flags */
 #define ILOCK 01   /* inode is locked */

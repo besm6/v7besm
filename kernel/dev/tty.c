@@ -18,6 +18,11 @@
 #include "sys/conf.h"
 // clang-format on
 
+long tk_nin;
+long tk_nout;
+
+char canonb[CANBSIZ];  /* buffer for erase and kill (#@) */
+
 extern char partab[];
 
 /*

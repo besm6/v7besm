@@ -16,6 +16,8 @@
 
 typedef struct fblk *FBLKP;
 
+int updlock;          /* lock for sync */
+
 /*
  * alloc will obtain the next available
  * free disk block from the free list of

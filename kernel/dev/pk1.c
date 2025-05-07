@@ -7,8 +7,12 @@
  * kernel support routines.
  */
 
-struct pack *pklines[NPLINES];
+extern struct pack *pklines[NPLINES];
 int maxwindow = 2;
+int npbits;
+int pkdebug;
+int pkdisc;
+int pkzot;
 
 /*
  * start initial synchronization.
