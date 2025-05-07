@@ -37,7 +37,7 @@ char curpri;                 /* more scheduling */
  * premature return, and check that the reason for
  * sleeping has gone away.
  */
-sleep(chan, pri) caddr_t chan;
+void sleep(caddr_t chan, int pri)
 {
     register struct proc *rp;
     register s, h;
@@ -91,7 +91,7 @@ psig:
 /*
  * Wake up all processes sleeping on chan.
  */
-wakeup(chan) register caddr_t chan;
+void wakeup(register caddr_t chan)
 {
     register struct proc *p, *q;
     register i;
@@ -126,7 +126,7 @@ wakeup(chan) register caddr_t chan;
  * 'proc on q' diagnostic, the
  * diagnostic loop can be removed.
  */
-setrq(p) struct proc *p;
+void setrq(struct proc *p)
 {
     register struct proc *q;
     register s;
@@ -147,7 +147,7 @@ out:
  * Set the process running;
  * arrange for it to be swapped in if necessary.
  */
-setrun(p) register struct proc *p;
+void setrun(register struct proc *p)
 {
     register caddr_t w;
 
@@ -177,7 +177,7 @@ setrun(p) register struct proc *p;
  * is set if the priority is better
  * than the currently running process.
  */
-setpri(pp) register struct proc *pp;
+int setpri(register struct proc *pp)
 {
     register p;
 
@@ -207,7 +207,7 @@ setpri(pp) register struct proc *pp;
  * selected swapped process.  It is awakened when the
  * core situation changes and in any case once per second.
  */
-sched()
+void sched()
 {
     register struct proc *rp, *p;
     register outage, inage;
@@ -296,7 +296,7 @@ loop:
  * Allocate data and possible text separately.
  * It would be better to do largest first.
  */
-swapin(p) register struct proc *p;
+int swapin(register struct proc *p)
 {
     register struct text *xp;
     register int a;
@@ -332,7 +332,7 @@ swapin(p) register struct proc *p;
  * the Q of running processes and
  * call the scheduler.
  */
-qswtch()
+void qswtch()
 {
     setrq(u.u_procp);
     swtch();
@@ -349,7 +349,7 @@ qswtch()
  * will return in at most 1HZ time.
  * i.e. its not worth putting an spl() in.
  */
-swtch()
+void swtch()
 {
     register n;
     register struct proc *p, *q, *pp, *pq;
@@ -428,7 +428,7 @@ loop:
  * sys fork.
  * It returns 1 in the new process, 0 in the old.
  */
-newproc()
+int newproc()
 {
     int a1, a2;
     struct proc *p, *up;
@@ -547,7 +547,7 @@ retry:
  * After the expansion, the caller will take care of copying
  * the user's stack towards or away from the data area.
  */
-expand(newsize)
+void expand(int newsize)
 {
     register i, n;
     register struct proc *p;

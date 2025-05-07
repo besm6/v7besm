@@ -40,7 +40,7 @@ struct {
  * Called by tty.c for quits and
  * interrupts.
  */
-signal(pgrp, sig) register pgrp;
+void signal(register int pgrp, int sig)
 {
     register struct proc *p;
 
@@ -55,8 +55,7 @@ signal(pgrp, sig) register pgrp;
  * Send the specified signal to
  * the specified process.
  */
-psignal(p, sig) register struct proc *p;
-register sig;
+void psignal(register struct proc *p, register int sig)
 {
     if ((unsigned)sig >= NSIG)
         return;
@@ -79,7 +78,7 @@ register sig;
  * a flag that asks the process to
  * do something to itself.
  */
-issig()
+int issig()
 {
     register n;
     register struct proc *p;
@@ -100,7 +99,7 @@ issig()
  * informed and the process is able to
  * receive commands from the parent.
  */
-stop()
+void stop()
 {
     register struct proc *pp, *cp;
 
@@ -126,7 +125,7 @@ loop:
  *	if(issig())
  *		psig();
  */
-psig()
+void psig()
 {
     register n, p;
     register struct proc *rp;
@@ -169,7 +168,7 @@ psig()
  * find the signal in bit-position
  * representation in p_sig.
  */
-fsig(p) struct proc *p;
+int fsig(struct proc *p)
 {
     register n, i;
 
@@ -192,7 +191,7 @@ fsig(p) struct proc *p;
  * user.h area followed by the entire
  * data+stack segments.
  */
-core()
+int core()
 {
     register struct inode *ip;
     register unsigned s;
@@ -233,8 +232,7 @@ core()
  * grow the stack to include the SP
  * true return if successful.
  */
-
-grow(sp) unsigned sp;
+int grow(unsigned sp)
 {
     register si, i;
     register struct proc *p;
@@ -263,7 +261,7 @@ grow(sp) unsigned sp;
 /*
  * sys-trace system call.
  */
-ptrace()
+void ptrace()
 {
     register struct proc *p;
     register struct a {
@@ -307,7 +305,7 @@ found:
  * executes to implement the command
  * of the parent process in tracing.
  */
-procxmt()
+int procxmt()
 {
     register int i;
     register *p;

@@ -61,13 +61,16 @@ char maptab[] = {
 #define q3 tp->t_outq
 #define q4 tp->t_un.t_ctlq
 
+void wflushtty(struct tty *tp);
+void ttyblock(struct tty *tp);
+void ttyoutput(int c, struct tty *tp);
+
 /*
  * routine called on first teletype open.
  * establishes a process group for distribution
  * of quits and interrupts from the tty.
  */
-ttyopen(dev, tp) dev_t dev;
-register struct tty *tp;
+void ttyopen(dev_t dev, register struct tty *tp)
 {
     register struct proc *pp;
 
@@ -87,7 +90,7 @@ register struct tty *tp;
 /*
  * set default control characters.
  */
-ttychars(tp) register struct tty *tp;
+void ttychars(register struct tty *tp)
 {
     tun.t_intrc  = CINTR;
     tun.t_quitc  = CQUIT;
@@ -102,7 +105,7 @@ ttychars(tp) register struct tty *tp;
 /*
  * clean tp on last close
  */
-ttyclose(tp) register struct tty *tp;
+void ttyclose(register struct tty *tp)
 {
     tp->t_pgrp = 0;
     wflushtty(tp);
@@ -112,14 +115,14 @@ ttyclose(tp) register struct tty *tp;
 /*
  * stty/gtty writearound
  */
-stty()
+void stty()
 {
     u.u_arg[2] = u.u_arg[1];
     u.u_arg[1] = TIOCSETP;
     ioctl();
 }
 
-gtty()
+void gtty()
 {
     u.u_arg[2] = u.u_arg[1];
     u.u_arg[1] = TIOCGETP;
@@ -131,7 +134,7 @@ gtty()
  * Check legality, execute common code, and switch out to individual
  * device routine.
  */
-ioctl()
+void ioctl()
 {
     register struct file *fp;
     register struct inode *ip;
@@ -167,8 +170,7 @@ ioctl()
 /*
  * Common code for several tty ioctl commands
  */
-ttioccomm(com, tp, addr, dev) register struct tty *tp;
-caddr_t addr;
+int ttioccomm(int com, register struct tty *tp, caddr_t addr, dev_t dev)
 {
     unsigned t;
     struct ttiocb iocb;
@@ -286,7 +288,7 @@ caddr_t addr;
 /*
  * Wait for output to drain, then flush input waiting.
  */
-wflushtty(tp) register struct tty *tp;
+void wflushtty(register struct tty *tp)
 {
     spl5();
     while (tp->t_outq.c_cc && tp->t_state & CARR_ON) {
@@ -301,7 +303,7 @@ wflushtty(tp) register struct tty *tp;
 /*
  * flush all TTY queues
  */
-flushtty(tp) register struct tty *tp;
+void flushtty(register struct tty *tp)
 {
     register s;
 
@@ -326,7 +328,7 @@ flushtty(tp) register struct tty *tp;
  * It waits until a full line has been typed in cooked mode,
  * or until any character has been typed in raw mode.
  */
-canon(tp) register struct tty *tp;
+int canon(register struct tty *tp)
 {
     register char *bp;
     char *bp1;
@@ -392,8 +394,7 @@ loop:
 /*
  * block transfer input handler.
  */
-ttyrend(tp, pb, pe) register struct tty *tp;
-register char *pb, *pe;
+void ttyrend(register struct tty *tp, register char *pb, register char *pe)
 {
     int tandem;
 
@@ -421,8 +422,7 @@ register char *pb, *pe;
  * The arguments are the character and the appropriate
  * tty structure.
  */
-ttyinput(c, tp) register c;
-register struct tty *tp;
+void ttyinput(register int c, register struct tty *tp)
 {
     register int t_flags;
     register struct chan *cp;
@@ -491,7 +491,7 @@ register struct tty *tp;
 /*
  * Send stop character on input overflow.
  */
-ttyblock(tp) register struct tty *tp;
+void ttyblock(register struct tty *tp)
 {
     register x;
     x = q1.c_cc + q2.c_cc;
@@ -515,8 +515,7 @@ ttyblock(tp) register struct tty *tp;
  * interrupt level for echoing.
  * The arguments are the character and the tty structure.
  */
-ttyoutput(c, tp) register c;
-register struct tty *tp;
+void ttyoutput(register int c, register struct tty *tp)
 {
     register char *colp;
     register ctype;
@@ -644,7 +643,7 @@ register struct tty *tp;
  * The name of the routine is passed to the timeout
  * subroutine and it is called during a clock interrupt.
  */
-ttrstrt(tp) register struct tty *tp;
+void ttrstrt(register struct tty *tp)
 {
     tp->t_state &= ~TIMEOUT;
     ttstart(tp);
@@ -656,7 +655,7 @@ ttrstrt(tp) register struct tty *tp;
  * from the interrupt routine to transmit the next
  * character, and after a timeout has finished.
  */
-ttstart(tp) register struct tty *tp;
+void ttstart(register struct tty *tp)
 {
     register s;
 
@@ -670,7 +669,7 @@ ttstart(tp) register struct tty *tp;
  * Called from device's read routine after it has
  * calculated the tty-structure given as argument.
  */
-ttread(tp) register struct tty *tp;
+int ttread(register struct tty *tp)
 {
     if ((tp->t_state & CARR_ON) == 0)
         return (0);
@@ -684,8 +683,7 @@ ttread(tp) register struct tty *tp;
  * Called from the device's write routine after it has
  * calculated the tty-structure given as argument.
  */
-caddr_t ttwrite(tp)
-register struct tty *tp;
+caddr_t ttwrite(register struct tty *tp)
 {
     register c;
 

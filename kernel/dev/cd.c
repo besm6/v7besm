@@ -85,10 +85,13 @@ static int drv = -1;
 static int trq;
 static int tticks;
 
-cdtimer();
-static delay();
+void cdtimer(void);
+static void delay(void);
+void cdstart(void);
+void cdio(int st);
+int cdsm(int st);
 
-cdstrategy(bp) register struct buf *bp;
+void cdstrategy(register struct buf *bp)
 {
     bp->av_forw = (struct buf *)NULL;
     spl5();
@@ -102,7 +105,7 @@ cdstrategy(bp) register struct buf *bp;
     spl0();
 }
 
-cdstart()
+void cdstart()
 {
     struct buf *bp;
     int s;
@@ -128,7 +131,7 @@ cdstart()
     cdio(STCMD);
 }
 
-cdintr()
+void cdintr()
 {
     if (cdtab.b_active == 0)
         return;
@@ -137,7 +140,7 @@ cdintr()
     cdio(STINT);
 }
 
-cdtimer()
+void cdtimer()
 {
     if (trq == TMDONE)
         trq = TMOFF;
@@ -153,7 +156,7 @@ cdtimer()
     }
 }
 
-cdio(st)
+void cdio(int st)
 {
     struct buf *bp;
     int x;
@@ -179,7 +182,7 @@ cdio(st)
     }
 }
 
-cdsm(st)
+int cdsm(int st)
 {
     char pkt[PKTSZ];
     int x;
@@ -244,14 +247,15 @@ cdsm(st)
             return -1;
         return 0;
     }
+    return -1;
 }
 
-cdread(dev)
+void cdread(int dev)
 {
     physio(cdstrategy, &rcdbuf, dev, B_READ);
 }
 
-static delay()
+static void delay()
 {
     inb(ASTAT);
     inb(ASTAT);

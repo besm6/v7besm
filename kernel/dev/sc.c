@@ -155,9 +155,6 @@ static unsigned char acs[32] = {
 
 struct tty sc;
 
-int ttrstrt();
-int scstart();
-
 static int init;
 static int cmd;
 static int led;
@@ -174,7 +171,17 @@ static int beepon;
 char msgbuf[MSGBUFS]; /* saved "printf" characters */
 char *msgbufp = msgbuf;
 
-scopen(dev, flag) dev_t dev;
+void scinit(void);
+void scstart(register struct tty *tp);
+void scputc(int ch);
+void kbput(int prt, int cmd);
+void vscroll(int pos, int rev);
+void hscroll(int pos, int col, int ins);
+void beep(void);
+void scmov(short *s, short *d, int n);
+void scset(short *p, int c, int n);
+
+void scopen(dev_t dev, int flag)
 {
     register struct tty *tp;
 
@@ -197,22 +204,22 @@ scopen(dev, flag) dev_t dev;
     ttyopen(dev, tp);
 }
 
-scclose(dev, flag) dev_t dev;
+void scclose(dev_t dev, int flag)
 {
     ttyclose(&sc);
 }
 
-scread(dev) dev_t dev;
+void scread(dev_t dev)
 {
     ttread(&sc);
 }
 
-scwrite(dev) dev_t dev;
+void scwrite(dev_t dev)
 {
     ttwrite(&sc);
 }
 
-scxint(dev) dev_t dev;
+void scxint(dev_t dev)
 {
     register struct tty *tp;
 
@@ -225,7 +232,7 @@ scxint(dev) dev_t dev;
     }
 }
 
-scrint()
+void scrint()
 {
     static int ctrl, shift, lock;
     int st, sn, ch, x, i;
@@ -303,14 +310,13 @@ scrint()
     }
 }
 
-scioctl(dev, cmd, addr, flag) caddr_t addr;
-dev_t dev;
+void scioctl(dev_t dev, int cmd, caddr_t addr, int flag)
 {
     if (ttioccomm(cmd, &sc, addr, dev) == 0)
         u.u_error = ENOTTY;
 }
 
-scstart(tp) register struct tty *tp;
+void scstart(register struct tty *tp)
 {
     register i, c;
 
@@ -323,14 +329,14 @@ scstart(tp) register struct tty *tp;
     }
 }
 
-scinit()
+void scinit()
 {
     led = -1;
     cmd = 1;
     kbput(KDT, 0xf6);
 }
 
-scputc(ch)
+void scputc(int ch)
 {
     static int sm, vm, p0, st;
     static int pos = LROW;
@@ -497,7 +503,7 @@ scputc(ch)
     outb(SCRPRT + 1, pos);
 }
 
-kbput(prt, cmd)
+void kbput(int prt, int cmd)
 {
     int i;
 
@@ -508,7 +514,7 @@ kbput(prt, cmd)
     outb(prt, cmd);
 }
 
-vscroll(pos, rev)
+void vscroll(int pos, int rev)
 {
     int n;
 
@@ -522,7 +528,7 @@ vscroll(pos, rev)
     clear(rev ? pos : LROW, COLS);
 }
 
-hscroll(pos, col, ins)
+void hscroll(int pos, int col, int ins)
 {
     int n;
 
@@ -536,14 +542,14 @@ hscroll(pos, col, ins)
     scr[ins ? pos : pos + n] = va | ' ';
 }
 
-beepoff()
+void beepoff()
 {
     /* 8255 ppi: speaker off */
     outb(0x61, inb(0x61) & ~3);
     beepon = 0;
 }
 
-beep()
+void beep()
 {
     int s;
 
@@ -563,8 +569,7 @@ beep()
     splx(s);
 }
 
-scmov(s, d, n) short *s;
-short *d;
+void scmov(short *s, short *d, int n)
 {
     if (s < d)
         for (s += n, d += n; n--;)
@@ -574,7 +579,7 @@ short *d;
             *d++ = *s++;
 }
 
-scset(p, c, n) short *p;
+void scset(short *p, int c, int n)
 {
     while (n--)
         *p++ = c;
@@ -585,7 +590,7 @@ scset(p, c, n) short *p;
  * later retrieval by dmesg, and gets printed on the console
  * if we're not in cursor addressing mode.
  */
-putchar(c)
+void putchar(int c)
 {
     if (c && c != '\r') {
         *msgbufp = c;

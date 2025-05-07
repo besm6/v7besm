@@ -24,14 +24,16 @@
 
 int pksizes[] = { 1, 32, 64, 128, 256, 512, 1024, 2048, 4096, 1 };
 
+void pkrend(struct tty *tp);
+void pkdata(char c, unsigned short sum, struct pack *pk, char *cp);
+
 /*
  * Pseudo-dma byte collection.
  * This code can be put in the device driver
  * interrupt routine to eliminate the per byte
  * subroutine call.
  */
-pkrint(c, tp) register c;
-register struct tty *tp;
+void pkrint(register int c, register struct tty *tp)
 {
     if (q1.c_cc < 0) {
         if (q1.c_cf != NULL) {
@@ -48,7 +50,7 @@ register struct tty *tp;
 /*
  * End of input transfer.
  */
-pkrend(tp) register struct tty *tp;
+void pkrend(register struct tty *tp)
 {
     register char *p;
     struct pack *pk;
@@ -137,10 +139,7 @@ istart2:
  * Put packet located at address bp
  * in an input slot for further processing.
  */
-pkdata(c, sum, pk, cp) char c;
-unsigned short sum;
-register struct pack *pk;
-char *cp;
+void pkdata(char c, unsigned short sum, register struct pack *pk, char *cp)
 {
     register struct tty *tp;
     register x;
@@ -187,9 +186,7 @@ slot:
  * in the driver (t_line==2) the transfer is
  * passed on to the driver.
  */
-pkxstart(pk, cntl, x) struct pack *pk;
-char cntl;
-register x;
+void pkxstart(struct pack *pk, char cntl, register int x)
 {
     struct tty *tp;
     register char *p;
@@ -233,11 +230,10 @@ register x;
  */
 int pkdelay = 2;
 
-pkxint(tp) register struct tty *tp;
+void pkxint(register struct tty *tp)
 {
     register struct pack *pk;
     register s;
-    extern int pkoutput();
 
     pk = (struct pack *)tp->t_linep;
     s  = spl6();

@@ -10,10 +10,13 @@
 #include "sys/inode.h"
 // clang-format on
 
+void rdwr(int mode);
+void open1(struct inode *ip, int mode, int trf);
+
 /*
  * read system call
  */
-read()
+void read()
 {
     rdwr(FREAD);
 }
@@ -21,7 +24,7 @@ read()
 /*
  * write system call
  */
-write()
+void write()
 {
     rdwr(FWRITE);
 }
@@ -31,7 +34,7 @@ write()
  * check permissions, set base, count, and offset,
  * and switch out to readi, writei, or pipe code.
  */
-rdwr(mode) register mode;
+void rdwr(register int mode)
 {
     register struct file *fp;
     register struct inode *ip;
@@ -80,7 +83,7 @@ rdwr(mode) register mode;
 /*
  * open system call
  */
-open()
+void open()
 {
     register struct inode *ip;
     register struct a {
@@ -98,7 +101,7 @@ open()
 /*
  * creat system call
  */
-creat()
+void creat()
 {
     register struct inode *ip;
     register struct a {
@@ -124,8 +127,7 @@ creat()
  * Check permissions, allocate an open file structure,
  * and call the device open routine if any.
  */
-open1(ip, mode, trf) register struct inode *ip;
-register mode;
+void open1(register struct inode *ip, register int mode, int trf)
 {
     register struct file *fp;
     int i;
@@ -162,7 +164,7 @@ out:
 /*
  * close system call
  */
-close()
+void close()
 {
     register struct file *fp;
     register struct a {
@@ -180,7 +182,7 @@ close()
 /*
  * seek system call
  */
-seek()
+void seek()
 {
     register struct file *fp;
     register struct a {
@@ -208,7 +210,7 @@ seek()
 /*
  * link system call
  */
-link()
+void link()
 {
     register struct inode *ip, *xp;
     register struct a {
@@ -258,7 +260,7 @@ out:
 /*
  * mknod system call
  */
-mknod()
+void mknod()
 {
     register struct inode *ip;
     register struct a {
@@ -289,7 +291,7 @@ out:
 /*
  * access system call
  */
-saccess()
+void saccess()
 {
     register svuid, svgid;
     register struct inode *ip;

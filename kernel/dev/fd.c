@@ -81,18 +81,20 @@ static int trq;       /* Timer request */
 struct buf rfdbuf;
 struct buf fdtab;
 
-fdtimer();
-static fdx1();
-static fdx2();
-static fddma();
+void fdtimer(void);
+static void fdx1(void);
+static int fdx2(void);
+static void fddma(void);
 static int fdcmd(int cmd);
-static fdrst();
+static void fdrst(void);
 static int fdsis(char *av);
 static int fdput(int x);
 static int fdget(char *x);
 static int fdrqm(int m);
+void fdstart(void);
+void fdio(void);
 
-void fdstrategy(bp) struct buf *bp;
+void fdstrategy(struct buf *bp)
 {
     long sz;
 
@@ -114,7 +116,7 @@ void fdstrategy(bp) struct buf *bp;
     spl0();
 }
 
-fdstart()
+void fdstart()
 {
     struct buf *bp;
     daddr_t bn;
@@ -158,7 +160,7 @@ fdstart()
     fdio();
 }
 
-fdintr()
+void fdintr()
 {
     struct buf *bp;
 
@@ -198,7 +200,7 @@ fdintr()
     fdstart();
 }
 
-fdio()
+void fdio()
 {
     unsigned sz;
 
@@ -220,7 +222,7 @@ fdio()
     fdx1();
 }
 
-fdtimer()
+void fdtimer()
 {
     tick++;
     if (fd.mtr == 1 && tick > 2) {
@@ -241,17 +243,17 @@ fdtimer()
         timeout(fdtimer, NULL, HZ / 5);
 }
 
-int fdread(dev)
+void fdread(int dev)
 {
     physio(fdstrategy, &rfdbuf, dev, B_READ);
 }
 
-int fdwrite(dev)
+void fdwrite(int dev)
 {
     physio(fdstrategy, &rfdbuf, dev, B_WRITE);
 }
 
-static fdx1()
+static void fdx1()
 {
     if (!fd.err) {
         fd.cmd = FDCNO;
@@ -279,7 +281,7 @@ static fdx1()
     }
 }
 
-static fdx2()
+static int fdx2()
 {
     char av[8];
     int i, e;
@@ -328,9 +330,10 @@ static fdx2()
                 break;
         return 1;
     }
+    return -1;
 }
 
-static fddma()
+static void fddma()
 {
     /* Set up DMA 1 channel 2. */
     outb(0x0a, 0x6);
@@ -344,8 +347,7 @@ static fddma()
     outb(0x0a, 2);
 }
 
-static int fdcmd(cmd)
-int cmd;
+static int fdcmd(int cmd)
 {
     unsigned char av[9];
     int n, i;
@@ -384,14 +386,13 @@ int cmd;
     return 0;
 }
 
-static fdrst()
+static void fdrst()
 {
     outb(FDDOR, 0x10);
     outb(FDDOR, 0x1c);
 }
 
-static int fdsis(av)
-char *av;
+static int fdsis(char *av)
 {
     if (fdput(FDCSI) || fdget(av))
         return -1;
@@ -402,7 +403,7 @@ char *av;
     return fdget(av + 1);
 }
 
-static int fdput(x)
+static int fdput(int x)
 {
     int r;
 
@@ -411,8 +412,7 @@ static int fdput(x)
     return r;
 }
 
-static int fdget(x)
-char *x;
+static int fdget(char *x)
 {
     int r;
 
@@ -421,7 +421,7 @@ char *x;
     return r;
 }
 
-static int fdrqm(m)
+static int fdrqm(int m)
 {
     int i, x;
 

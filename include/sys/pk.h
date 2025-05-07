@@ -146,3 +146,9 @@ extern int pksizes[];
 #define Pread 01
 
 extern int *PTRACE;
+
+#ifdef KERNEL
+void pkbadframe(struct pack *pk);
+void pkoutput(struct pack *pk);
+void pktimeout(void);
+#endif

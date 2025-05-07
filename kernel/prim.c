@@ -21,7 +21,7 @@ int nchrdev;
 /*
  * Character list get/put
  */
-getc(p) register struct clist *p;
+int getc(register struct clist *p)
 {
     register struct cblock *bp;
     register int c, s;
@@ -56,8 +56,7 @@ getc(p) register struct clist *p;
  * copy clist to buffer.
  * return number of bytes moved.
  */
-q_to_b(q, cp, cc) register struct clist *q;
-register char *cp;
+int q_to_b(register struct clist *q, register char *cp, int cc)
 {
     register struct cblock *bp;
     register int s;
@@ -101,7 +100,7 @@ register char *cp;
  * in clist starting at q->c_cf.
  * Stop counting if flag&character is non-null.
  */
-ndqb(q, flag) register struct clist *q;
+int ndqb(register struct clist *q, int flag)
 {
     register cc;
     int s;
@@ -139,8 +138,7 @@ out:
  * Update clist to show that cc characters
  * were removed.  It is assumed that cc < CBSIZE.
  */
-ndflush(q, cc) register struct clist *q;
-register cc;
+void ndflush(register struct clist *q, register int cc)
 {
     register s;
 
@@ -185,7 +183,8 @@ register cc;
 out:
     splx(s);
 }
-putc(c, p) register struct clist *p;
+
+int putc(int c, register struct clist *p)
 {
     register struct cblock *bp;
     register char *cp;
@@ -222,9 +221,7 @@ putc(c, p) register struct clist *p;
  * copy buffer to clist.
  * return number of bytes not transfered.
  */
-b_to_q(cp, cc, q) register char *cp;
-struct clist *q;
-register int cc;
+int b_to_q(register char *cp, register int cc, struct clist *q)
 {
     register char *cq;
     register struct cblock *bp;
@@ -267,7 +264,7 @@ out:
  * Initialize clist by freeing all character blocks, then count
  * number of character devices. (Once-only routine)
  */
-cinit()
+void cinit()
 {
     register int ccp;
     register struct cblock *cp;
@@ -289,7 +286,7 @@ cinit()
  * integer (2-byte) get/put
  * using clists
  */
-getw(p) register struct clist *p;
+int getw(register struct clist *p)
 {
     register int s;
 
@@ -299,7 +296,7 @@ getw(p) register struct clist *p;
     return (s | (getc(p) << 8));
 }
 
-putw(c, p) register struct clist *p;
+int putw(int c, register struct clist *p)
 {
     register s;
 

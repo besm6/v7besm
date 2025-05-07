@@ -14,11 +14,12 @@
 /*
  * Everything in this file is a routine implementing a system call.
  */
+void chdirec(register struct inode **ipp);
 
 /*
  * return the current time (old-style entry)
  */
-gtime()
+void gtime()
 {
     u.u_r.r_time = time;
 }
@@ -27,7 +28,7 @@ gtime()
  * New time entry-- return TOD with milliseconds, timezone,
  * DST flag
  */
-ftime()
+void ftime()
 {
     register struct a {
         struct timeb *tp;
@@ -54,7 +55,7 @@ ftime()
 /*
  * Set the time
  */
-stime()
+void stime()
 {
     register struct a {
         time_t time;
@@ -65,7 +66,7 @@ stime()
         time = uap->time;
 }
 
-setuid()
+void setuid()
 {
     register uid;
     register struct a {
@@ -81,13 +82,13 @@ setuid()
     }
 }
 
-getuid()
+void getuid()
 {
     u.u_r.r_val1 = u.u_ruid;
     u.u_r.r_val2 = u.u_uid;
 }
 
-setgid()
+void setgid()
 {
     register gid;
     register struct a {
@@ -102,24 +103,24 @@ setgid()
     }
 }
 
-getgid()
+void getgid()
 {
     u.u_r.r_val1 = u.u_rgid;
     u.u_r.r_val2 = u.u_gid;
 }
 
-getpid()
+void getpid()
 {
     u.u_r.r_val1 = u.u_procp->p_pid;
     u.u_r.r_val2 = u.u_procp->p_ppid;
 }
 
-sync()
+void sync()
 {
     update();
 }
 
-nice()
+void nice()
 {
     register n;
     register struct a {
@@ -143,7 +144,7 @@ nice()
  * Hard to avoid races here, especially
  * in unlinking directories.
  */
-unlink()
+void unlink()
 {
     register struct inode *ip, *pp;
     struct a {
@@ -192,18 +193,19 @@ out:
 out1:
     iput(pp);
 }
-chdir()
+
+void chdir()
 {
     chdirec(&u.u_cdir);
 }
 
-chroot()
+void chroot()
 {
     if (suser())
         chdirec(&u.u_rdir);
 }
 
-chdirec(ipp) register struct inode **ipp;
+void chdirec(register struct inode **ipp)
 {
     register struct inode *ip;
     struct a {
@@ -231,7 +233,7 @@ bad:
     iput(ip);
 }
 
-chmod()
+void chmod()
 {
     register struct inode *ip;
     register struct a {
@@ -252,7 +254,7 @@ chmod()
     iput(ip);
 }
 
-chown()
+void chown()
 {
     register struct inode *ip;
     register struct a {
@@ -270,7 +272,7 @@ chown()
     iput(ip);
 }
 
-ssig()
+void ssig()
 {
     register a;
     struct a {
@@ -289,7 +291,7 @@ ssig()
     u.u_procp->p_sig &= ~(1 << (a - 1));
 }
 
-kill()
+void kill()
 {
     register struct proc *p, *q;
     register a;
@@ -324,7 +326,7 @@ kill()
         u.u_error = ESRCH;
 }
 
-times()
+void times()
 {
     register struct a {
         time_t (*times)[4];
@@ -335,7 +337,7 @@ times()
         u.u_error = EFAULT;
 }
 
-profil()
+void profil()
 {
     register struct a {
         short *bufbase;
@@ -354,7 +356,7 @@ profil()
 /*
  * alarm clock signal
  */
-alarm()
+void alarm()
 {
     register struct proc *p;
     register c;
@@ -373,7 +375,7 @@ alarm()
  * indefinite wait.
  * no one should wakeup(&u)
  */
-pause()
+void pause()
 {
     for (;;)
         sleep((caddr_t)&u, PSLEP);
@@ -382,7 +384,7 @@ pause()
 /*
  * mode mask for creation of files
  */
-umask()
+void umask()
 {
     register struct a {
         int mask;
@@ -399,7 +401,7 @@ umask()
  * Set IUPD and IACC times on file.
  * Can't set ICHG.
  */
-utime()
+void utime()
 {
     register struct a {
         char *fname;

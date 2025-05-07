@@ -85,10 +85,14 @@ static struct {
 struct buf rhdbuf;
 struct buf hdtab;
 
-static unptpd(), delay();
-static int doio(), await();
+static void unptpd(dev_t dev, int *un, int *pt, int *pd);
+static void delay(void);
+static int doio(int x);
+static int await(int addr, int mask);
+void hdstart(void);
+void hdio(int st);
 
-hdopen(dev, rw) dev_t dev;
+void hdopen(dev_t dev, int rw)
 {
     struct buf *bp;
     struct ptent *pe;
@@ -115,7 +119,7 @@ hdopen(dev, rw) dev_t dev;
     brelse(bp);
 }
 
-hdstrategy(bp) register struct buf *bp;
+void hdstrategy(register struct buf *bp)
 {
     unsigned sz, nb;
     int un, pt, pd;
@@ -152,7 +156,7 @@ hdstrategy(bp) register struct buf *bp;
     spl0();
 }
 
-hdstart()
+void hdstart()
 {
     struct buf *bp;
     int un, pt, pd;
@@ -172,7 +176,7 @@ hdstart()
     hdio(0);
 }
 
-hdintr()
+void hdintr()
 {
     if (hdtab.b_active == 0)
         return;
@@ -180,7 +184,7 @@ hdintr()
     hdio(1);
 }
 
-hdio(st)
+void hdio(int st)
 {
     struct buf *bp;
     int err;
@@ -204,7 +208,7 @@ hdio(st)
     }
 }
 
-int hdsm(st)
+int hdsm(int st)
 {
     int x;
 
@@ -249,29 +253,27 @@ int hdsm(st)
             return ERR2;
         return 0;
     }
+    return -1;
 }
 
-int hdread(dev)
+void hdread(int dev)
 {
     physio(hdstrategy, &rhdbuf, dev, B_READ);
 }
 
-int hdwrite(dev)
+void hdwrite(int dev)
 {
     physio(hdstrategy, &rhdbuf, dev, B_WRITE);
 }
 
-static unptpd(dev, un, pt, pd) dev_t dev;
-int *un;
-int *pt;
-int *pd;
+static void unptpd(dev_t dev, int *un, int *pt, int *pd)
 {
     *un = (minor(dev) & 0100) >> 6;
     *pt = (minor(dev) & 070) >> 3;
     *pd = minor(dev) & 07;
 }
 
-static int doio(x)
+static int doio(int x)
 {
     if ((x & (BSY | DRQ)) == DRQ) {
         (hd.rd ? insw : outsw)(DATA, hd.addr, BSIZE >> 1);
@@ -281,7 +283,7 @@ static int doio(x)
     return x & (BSY | DF | ERR) || (x & DRQ) == 0 ? -1 : 0;
 }
 
-static int await(addr, mask)
+static int await(int addr, int mask)
 {
     int i;
 
@@ -291,7 +293,7 @@ static int await(addr, mask)
     return -1;
 }
 
-static delay()
+static void delay()
 {
     inb(ASTAT);
     inb(ASTAT);

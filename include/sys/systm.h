@@ -49,20 +49,88 @@ extern int szicode;          /* its size */
 
 dev_t getmdev();
 daddr_t bmap();
-struct inode *ialloc();
-struct inode *iget();
+struct inode *ialloc(dev_t dev);
+struct inode *iget(dev_t dev, ino_t ino);
+void iput(struct inode *ip);
+void iupdat(struct inode *ip, time_t *ta, time_t *tm);
+void itrunc(struct inode *ip);
+void wdir(struct inode *ip);
 struct inode *owner();
 struct inode *maknode();
 struct inode *namei();
-struct buf *alloc();
-struct buf *getblk();
+struct buf *alloc(dev_t dev);
+struct buf *getblk(dev_t dev, daddr_t blkno);
 struct buf *geteblk();
-struct buf *bread();
-struct buf *breada();
-struct filsys *getfs();
+struct buf *bread(dev_t dev, daddr_t blkno);
+struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+void bawrite(struct buf *bp);
+void brelse(struct buf *bp);
+struct filsys *getfs(dev_t dev);
 struct file *getf();
 struct file *falloc();
 int uchar();
+void plock(struct inode *ip);
+void prele(struct inode *ip);
+unsigned min(unsigned a, unsigned b);
+void psignal(struct proc *p, int sig);
+void wakeup(caddr_t chan);
+void setrun(struct proc *p);
+void swtch(void);
+void exece(void);
+void exit(int rv);
+void nullsys(void);
+void rexit(void);
+void fork(void);
+void read(void);
+void write(void);
+void open(void);
+void close(void);
+void wait(void);
+void creat(void);
+void link(void);
+void unlink(void);
+void exec(void);
+void chdir(void);
+void gtime(void);
+void mknod(void);
+void chmod(void);
+void chown(void);
+void sbreak(void);
+void stat(void);
+void seek(void);
+void getpid(void);
+void smount(void);
+void sumount(void);
+void setuid(void);
+void getuid(void);
+void stime(void);
+void ptrace(void);
+void alarm(void);
+void fstat(void);
+void pause(void);
+void utime(void);
+void stty(void);
+void gtty(void);
+void saccess(void);
+void nice(void);
+void ftime(void);
+void sync(void);
+void kill(void);
+void nosys(void);
+void dup(void);
+void pipe(void);
+void times(void);
+void profil(void);
+void setgid(void);
+void getgid(void);
+void ssig(void);
+void sysacct(void);
+void sysphys(void);
+void syslock(void);
+void ioctl(void);
+void mpxchan(void);
+void umask(void);
+void chroot(void);
 
 /*
  * Instrumentation
@@ -78,7 +146,7 @@ extern long tk_nout;
  * Structure of the system-entry table
  */
 extern struct sysent {
-    char sy_narg;     /* total number of arguments */
-    char sy_nrarg;    /* number of args in registers */
-    int (*sy_call)(); /* handler */
+    char sy_narg;          /* total number of arguments */
+    char sy_nrarg;         /* number of args in registers */
+    void (*sy_call)(void); /* handler */
 } sysent[];

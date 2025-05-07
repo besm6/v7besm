@@ -67,10 +67,10 @@ short srstab[] = {
 
 struct tty sr[NSR];
 
-extern ttrstrt();
-srstart();
+void srstart(struct tty *tp);
+void srparam(struct tty *tp);
 
-sropen(dev, flag) dev_t dev;
+void sropen(dev_t dev, int flag)
 {
     struct tty *tp;
     int port, d;
@@ -96,22 +96,22 @@ sropen(dev, flag) dev_t dev;
     ttyopen(dev, tp);
 }
 
-srclose(dev, flag) dev_t dev;
+void srclose(dev_t dev, int flag)
 {
     ttyclose(&sr[minor(dev)]);
 }
 
-srread(dev) dev_t dev;
+void srread(dev_t dev)
 {
     ttread(&sr[minor(dev)]);
 }
 
-srwrite(dev) dev_t dev;
+void srwrite(dev)
 {
     ttwrite(&sr[minor(dev)]);
 }
 
-srintr(dev) dev_t dev;
+void srintr(dev_t dev)
 {
     struct tty *tp;
     int port, st, c;
@@ -132,8 +132,7 @@ srintr(dev) dev_t dev;
     }
 }
 
-srioctl(dev, cmd, addr, flag) dev_t dev;
-caddr_t addr;
+void srioctl(dev_t dev, int cmd, caddr_t addr, int flag)
 {
     struct tty *tp;
 
@@ -145,7 +144,7 @@ caddr_t addr;
         u.u_error = ENOTTY;
 }
 
-srstart(tp) struct tty *tp;
+void srstart(struct tty *tp)
 {
     int port, c, i;
 
@@ -173,7 +172,7 @@ srstart(tp) struct tty *tp;
     }
 }
 
-srparam(tp) struct tty *tp;
+void srparam(struct tty *tp)
 {
     int port, v, d, p;
 

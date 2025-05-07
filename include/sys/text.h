@@ -18,6 +18,9 @@ struct text {
 
 extern struct text text[];
 
+void xlock(struct text *xp);
+void xunlock(struct text *xp);
+
 #define XTRC  01  /* Text may be written, exclusive use */
 #define XWRIT 02  /* Text written into, must swap out */
 #define XLOAD 04  /* Currently being read from file */

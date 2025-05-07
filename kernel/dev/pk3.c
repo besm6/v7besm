@@ -16,6 +16,7 @@ char *nbase[NBLOCKS]; /* normal allocations */
 short nmap[NBLOCKS];  /* 1 bit == 32 bytes */
 
 char log[] = { 0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4 };
+
 #define FULL   -1
 #define LOCK   s = spl6()
 #define UNLOCK splx(s)
@@ -24,7 +25,7 @@ char log[] = { 0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4 };
  * getepack: get empty packet
  * with size specified by bitmask.
  */
-char *getepack(bits)
+char *getepack(int bits)
 {
     register i;
     int s, savbits;
@@ -104,7 +105,7 @@ char *getepack(bits)
  * at address p with length specified
  * by bits.
  */
-freepack(p, bits) char *p;
+void freepack(char *p, int bits)
 {
     register i, d, s;
     char **base;
@@ -144,7 +145,7 @@ out:
 /*
  * integer to bitmap conversion
  */
-dtom(d) register d;
+int dtom(register int d)
 {
     register m;
 
@@ -157,5 +158,6 @@ dtom(d) register d;
 }
 
 #define NRECS 160
+
 int reclist[NRECS];
 int recbits[NRECS];

@@ -17,7 +17,7 @@
 
 extern int end;
 
-mmread(dev)
+void mmread(int dev)
 {
     register k, c;
 
@@ -30,7 +30,7 @@ mmread(dev)
     while (u.u_error == 0 && passc(c) >= 0);
 }
 
-mmwrite(dev)
+void mmwrite(int dev)
 {
     register k, c;
 
@@ -44,7 +44,7 @@ mmwrite(dev)
             *(caddr_t)((k ? 0 : PHY) + u.u_offset) = c;
 }
 
-mmvaloff(k)
+int mmvaloff(int k)
 {
     if (!k) {
         if (u.u_offset < 0x1000000)

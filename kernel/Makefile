@@ -10,10 +10,10 @@ DEV     = bio.o cd.o dsort.o fd.o hd.o md.o mem.o mx1.o mx2.o partab.o \
 # Clang compiler on MacOS
 LLVMBIN = $(dir $(wildcard /usr/local/Cellar/llvm@19/19.*/bin/clang-19))
 
-CC      = $(LLVMBIN)clang -std=c89 -target i486-unknown-linux-gnu -ffreestanding \
-            -I../include -Wno-deprecated-non-prototype -Wno-implicit-function-declaration \
-            -Wno-return-mismatch -Wno-return-type -Werror
 AS      =  $(LLVMBIN)clang -target i486-unknown-linux-gnu -c
+CC      = $(LLVMBIN)clang -std=c89 -target i486-unknown-linux-gnu -ffreestanding
+CFLAGS  = -Os -DKERNEL -I../include -Wno-deprecated-non-prototype -Wno-implicit-function-declaration \
+          -Wno-return-mismatch -Werror
 
 VPATH = dev
 
@@ -34,3 +34,141 @@ libsys.a: $(SYS)
 
 libdev.a: $(DEV)
 	ar cr $@ $(DEV)
+
+###
+acct.o: acct.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/acct.h ../include/sys/dir.h ../include/sys/user.h \
+  ../include/sys/inode.h ../include/sys/proc.h ../include/sys/seg.h
+alloc.o: alloc.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/mount.h ../include/sys/filsys.h ../include/sys/fblk.h \
+  ../include/sys/conf.h ../include/sys/buf.h ../include/sys/inode.h \
+  ../include/sys/ino.h ../include/sys/dir.h ../include/sys/user.h
+clock.o: clock.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/callo.h ../include/sys/seg.h ../include/sys/dir.h \
+  ../include/sys/user.h ../include/sys/proc.h ../include/sys/reg.h
+conf.o: conf.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/buf.h ../include/sys/tty.h ../include/sys/conf.h \
+  ../include/sys/proc.h ../include/sys/text.h ../include/sys/dir.h \
+  ../include/sys/user.h ../include/sys/file.h ../include/sys/inode.h \
+  ../include/sys/acct.h
+fakemx.o: fakemx.c ../include/sys/param.h ../include/sys/dir.h \
+  ../include/sys/user.h ../include/sys/tty.h ../include/sys/inode.h \
+  ../include/sys/mx.h
+fio.o: fio.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/filsys.h \
+  ../include/sys/file.h ../include/sys/conf.h ../include/sys/inode.h \
+  ../include/sys/reg.h ../include/sys/acct.h
+iget.o: iget.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/mount.h ../include/sys/dir.h ../include/sys/user.h \
+  ../include/sys/inode.h ../include/sys/ino.h ../include/sys/filsys.h \
+  ../include/sys/conf.h ../include/sys/buf.h
+machdep.o: machdep.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/acct.h ../include/sys/dir.h ../include/sys/user.h \
+  ../include/sys/inode.h ../include/sys/proc.h ../include/sys/seg.h \
+  ../include/sys/map.h ../include/sys/reg.h ../include/sys/buf.h
+main.o: main.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/filsys.h \
+  ../include/sys/mount.h ../include/sys/map.h ../include/sys/proc.h \
+  ../include/sys/inode.h ../include/sys/seg.h ../include/sys/conf.h \
+  ../include/sys/buf.h
+malloc.o: malloc.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/map.h
+nami.o: nami.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/inode.h ../include/sys/mount.h ../include/sys/dir.h \
+  ../include/sys/user.h ../include/sys/buf.h
+pipe.o: pipe.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/inode.h \
+  ../include/sys/file.h ../include/sys/reg.h
+prf.o: prf.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/seg.h ../include/sys/buf.h ../include/sys/conf.h
+prim.o: prim.c ../include/sys/param.h ../include/sys/tty.h \
+  ../include/sys/systm.h ../include/sys/conf.h ../include/sys/buf.h
+rdwri.o: rdwri.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/inode.h ../include/sys/dir.h ../include/sys/user.h \
+  ../include/sys/buf.h ../include/sys/conf.h
+sig.o: sig.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/proc.h \
+  ../include/sys/inode.h ../include/sys/reg.h ../include/sys/text.h \
+  ../include/sys/seg.h
+slp.o: slp.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/proc.h \
+  ../include/sys/text.h ../include/sys/map.h ../include/sys/file.h \
+  ../include/sys/inode.h ../include/sys/buf.h
+subr.o: subr.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/conf.h ../include/sys/inode.h ../include/sys/dir.h \
+  ../include/sys/user.h ../include/sys/buf.h
+sys1.o: sys1.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/map.h ../include/sys/dir.h ../include/sys/user.h \
+  ../include/sys/proc.h ../include/sys/buf.h ../include/sys/reg.h \
+  ../include/sys/inode.h ../include/sys/seg.h ../include/sys/acct.h
+sys2.o: sys2.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/reg.h \
+  ../include/sys/file.h ../include/sys/inode.h
+sys3.o: sys3.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/mount.h ../include/sys/ino.h ../include/sys/reg.h \
+  ../include/sys/buf.h ../include/sys/filsys.h ../include/sys/dir.h \
+  ../include/sys/user.h ../include/sys/inode.h ../include/sys/file.h \
+  ../include/sys/conf.h ../include/sys/stat.h
+sys4.o: sys4.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/reg.h \
+  ../include/sys/inode.h ../include/sys/proc.h ../include/sys/timeb.h
+sysent.o: sysent.c ../include/sys/param.h ../include/sys/systm.h
+text.o: text.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/map.h ../include/sys/dir.h ../include/sys/user.h \
+  ../include/sys/proc.h ../include/sys/text.h ../include/sys/inode.h \
+  ../include/sys/buf.h ../include/sys/seg.h
+trap.o: trap.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/proc.h \
+  ../include/sys/reg.h ../include/sys/seg.h
+utab.o: utab.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/proc.h \
+  ../include/sys/text.h ../include/sys/seg.h
+bio.o: dev/bio.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/buf.h \
+  ../include/sys/conf.h ../include/sys/proc.h ../include/sys/seg.h
+cd.o: dev/cd.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/buf.h ../include/sys/dir.h ../include/sys/user.h
+dsort.o: dev/dsort.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/buf.h
+fd.o: dev/fd.c ../include/sys/param.h ../include/sys/buf.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/systm.h
+hd.o: dev/hd.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/buf.h ../include/sys/dir.h ../include/sys/user.h \
+  ../include/sys/part.h
+md.o: dev/md.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/buf.h ../include/sys/dir.h ../include/sys/user.h
+mem.o: dev/mem.c ../include/sys/param.h ../include/sys/dir.h \
+  ../include/sys/user.h ../include/sys/conf.h
+mx1.o: dev/mx1.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/reg.h \
+  ../include/sys/proc.h ../include/sys/tty.h ../include/sys/inode.h \
+  ../include/sys/mx.h ../include/sys/file.h ../include/sys/conf.h
+mx2.o: dev/mx2.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/proc.h \
+  ../include/sys/tty.h ../include/sys/inode.h ../include/sys/mx.h \
+  ../include/sys/file.h ../include/sys/conf.h ../include/sys/buf.h
+partab.o: dev/partab.c
+pk0.o: dev/pk0.c ../include/sys/pk.p ../include/sys/param.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/pk.h \
+  ../include/sys/tty.h ../include/sys/buf.h ../include/sys/proc.h
+pk1.o: dev/pk1.c ../include/sys/pk.p ../include/sys/param.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/pk.h \
+  ../include/sys/tty.h ../include/sys/buf.h ../include/sys/proc.h
+pk2.o: dev/pk2.c ../include/sys/pk.p ../include/sys/param.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/pk.h \
+  ../include/sys/tty.h ../include/sys/buf.h ../include/sys/proc.h
+pk3.o: dev/pk3.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/conf.h ../include/sys/buf.h
+sc.o: dev/sc.c ../include/sys/param.h ../include/sys/conf.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/tty.h \
+  ../include/sys/systm.h
+sr.o: dev/sr.c ../include/sys/param.h ../include/sys/conf.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/tty.h \
+  ../include/sys/systm.h
+sys.o: dev/sys.c ../include/sys/param.h ../include/sys/conf.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/tty.h \
+  ../include/sys/proc.h
+tty.o: dev/tty.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/tty.h \
+  ../include/sys/proc.h ../include/sys/mx.h ../include/sys/inode.h \
+  ../include/sys/file.h ../include/sys/reg.h ../include/sys/conf.h

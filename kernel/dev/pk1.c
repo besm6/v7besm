@@ -14,16 +14,17 @@ int pkdebug;
 int pkdisc;
 int pkzot;
 
+void pkioctl(int com, struct tty *tp, caddr_t addr);
+void pksetgrp(struct tty *tp);
+
 /*
  * start initial synchronization.
  * allocate space.
  */
-pkopen(dev, tp, addr) register struct tty *tp;
-caddr_t addr;
+void pkopen(dev_t dev, register struct tty *tp, caddr_t addr)
 {
     register struct pack *pk;
     register i;
-    int pktimeout();
     char **bp;
     static timer_on;
     int s;
@@ -116,8 +117,7 @@ found:
 /*
  * unix ioctl interface
  */
-pkioctl(com, tp, addr) register struct tty *tp;
-caddr_t addr;
+void pkioctl(int com, register struct tty *tp, caddr_t addr)
 {
     struct piocb piocb;
     register struct pack *pk;
@@ -139,7 +139,7 @@ caddr_t addr;
  * Arrange for the device (i.e. tp)
  * to be able to generate signals if need be.
  */
-pksetgrp(tp) register struct tty *tp;
+void pksetgrp(register struct tty *tp)
 {
     register struct proc *pp;
 
@@ -155,7 +155,7 @@ pksetgrp(tp) register struct tty *tp;
  * The problem is mainly input since the
  * device driver may have a buffer.
  */
-pkturnoff(tp) register struct tty *tp;
+void pkturnoff(register struct tty *tp)
 {
     register char **bp;
     register struct pack *pk;
@@ -177,7 +177,7 @@ pkturnoff(tp) register struct tty *tp;
 /*
  * link dead?
  */
-pklive(pk) register struct pack *pk;
+int pklive(register struct pack *pk)
 {
     register struct tty *tp;
 
@@ -193,7 +193,7 @@ pklive(pk) register struct pack *pk;
  * wakes up periodically to check status
  * of active lines.
  */
-pktimeout()
+void pktimeout()
 {
     register struct pack *pk;
     extern time_t time;

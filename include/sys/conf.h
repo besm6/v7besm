@@ -11,7 +11,7 @@
  * file conf.c.
  */
 extern struct bdevsw {
-    int (*d_open)();
+    void (*d_open)(dev_t, int);
     int (*d_close)();
     int (*d_strategy)();
     struct buf *d_tab;
@@ -21,7 +21,7 @@ extern struct bdevsw {
  * Character device switch.
  */
 extern struct cdevsw {
-    int (*d_open)();
+    void (*d_open)(dev_t, int);
     int (*d_close)();
     int (*d_read)();
     int (*d_write)();
@@ -39,8 +39,8 @@ extern struct linesw {
     int (*l_read)();
     int (*l_write)();
     int (*l_ioctl)();
-    int (*l_rint)();
-    int (*l_rend)();
+    void (*l_rint)(int, struct tty *);
+    void (*l_rend)(struct tty *);
     int (*l_meta)();
     int (*l_start)();
     int (*l_modem)();

@@ -14,6 +14,9 @@
 #include "sys/buf.h"
 // clang-format on
 
+void iexpand(register struct inode *ip, register struct dinode *dp);
+void tloop(dev_t dev, daddr_t bn, int f1, int f2);
+
 /*
  * Look up an inode by device,inumber.
  * If it is in core (in the inode structure),
@@ -31,9 +34,7 @@
  *	system is not in the mount table.
  *	"cannot happen"
  */
-struct inode *iget(dev, ino)
-dev_t dev;
-ino_t ino;
+struct inode *iget(dev_t dev, ino_t ino)
 {
     register struct inode *ip;
     register struct mount *mp;
@@ -93,8 +94,7 @@ loop:
     return (ip);
 }
 
-iexpand(ip, dp) register struct inode *ip;
-register struct dinode *dp;
+void iexpand(register struct inode *ip, register struct dinode *dp)
 {
     register char *p1;
     char *p2;
@@ -122,7 +122,7 @@ register struct dinode *dp;
  * write the inode out and if necessary,
  * truncate and deallocate the file.
  */
-iput(ip) register struct inode *ip;
+void iput(register struct inode *ip)
 {
     if (ip->i_count == 1) {
         ip->i_flag |= ILOCK;
@@ -147,8 +147,7 @@ iput(ip) register struct inode *ip;
  * If any are on, update the inode
  * with the current time.
  */
-iupdat(ip, ta, tm) register struct inode *ip;
-time_t *ta, *tm;
+void iupdat(register struct inode *ip, time_t *ta, time_t *tm)
 {
     register struct buf *bp;
     struct dinode *dp;
@@ -200,7 +199,7 @@ time_t *ta, *tm;
  * a contiguous free list much longer
  * than FIFO.
  */
-itrunc(ip) register struct inode *ip;
+void itrunc(register struct inode *ip)
 {
     register i;
     dev_t dev;
@@ -236,8 +235,7 @@ itrunc(ip) register struct inode *ip;
     ip->i_flag |= ICHG | IUPD;
 }
 
-tloop(dev, bn, f1, f2) dev_t dev;
-daddr_t bn;
+void tloop(dev_t dev, daddr_t bn, int f1, int f2)
 {
     register i;
     register struct buf *bp;
@@ -272,7 +270,7 @@ daddr_t bn;
 /*
  * Make a new file.
  */
-struct inode *maknode(mode)
+struct inode *maknode(int mode)
 {
     register struct inode *ip;
 
@@ -297,7 +295,7 @@ struct inode *maknode(mode)
  * parameters left as side effects
  * to a call to namei.
  */
-wdir(ip) struct inode *ip;
+void wdir(struct inode *ip)
 {
     if (u.u_pdir->i_nlink <= 0) {
         u.u_error = ENOTDIR;

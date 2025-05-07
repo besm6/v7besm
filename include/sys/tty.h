@@ -45,7 +45,7 @@ struct tty {
     struct clist t_rawq; /* input chars right off device */
     struct clist t_canq; /* input chars after erase and kill */
     struct clist t_outq; /* output list to device */
-    int (*t_oproc)();    /* routine to start output */
+    void (*t_oproc)(struct tty *); /* routine to start output */
     int (*t_iproc)();    /* routine to start input */
     struct chan *t_chan; /* destination channel */
     caddr_t t_linep;     /* aux line discipline pointer */
@@ -167,3 +167,10 @@ struct ttiocb {
 #define FIONCLEX  (('f' << 8) | 2)
 #define MXLSTN    (('x' << 8) | 1)
 #define MXNBLK    (('x' << 8) | 2)
+
+#ifdef KERNEL
+void ttstart(struct tty *tp);
+void ttrstrt(struct tty *tp);
+void flushtty(struct tty *tp);
+void ttyinput(int c, struct tty *tp);
+#endif

@@ -30,7 +30,7 @@ char regloc[10] = { EAX, EDX, ECX, EBX, ESI, EDI, EBP, ESP, EIP, EFL };
  * get copied back on return.
  * dev is the kind of trap that occurred.
  */
-trap(tr) struct trap tr;
+void trap(struct trap tr)
 {
     register i;
     register *a;
@@ -170,7 +170,7 @@ out:
 /*
  * stray interrupt
  */
-stray(dev)
+void stray(int dev)
 {
     printf("stray interrupt %d ignored\n", dev & ~0x20);
 }
@@ -178,7 +178,7 @@ stray(dev)
 /*
  * nonexistent system call-- set fatal error code.
  */
-nosys()
+void nosys()
 {
     u.u_error = EINVAL;
 }
@@ -186,6 +186,6 @@ nosys()
 /*
  * Ignored system call
  */
-nullsys()
+void nullsys()
 {
 }

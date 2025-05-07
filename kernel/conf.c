@@ -14,8 +14,10 @@
 // clang-format on
 
 int nulldev();
+void nullopen(dev_t, int);
 int nodev();
-int hdopen(), hdstrategy();
+void hdopen(dev_t, int);
+int hdstrategy();
 extern struct buf hdtab;
 int fdstrategy();
 extern struct buf fdtab;
@@ -24,17 +26,20 @@ extern struct buf mdtab;
 
 struct bdevsw bdevsw[] = {
 #if 1
-    { hdopen, nulldev, hdstrategy, &hdtab },  /* hd = 0 */
-    { nulldev, nulldev, fdstrategy, &fdtab }, /* fd = 1 */
-    { nulldev, nulldev, mdstrategy, &mdtab }, /* md = 2 */
+    { hdopen, nulldev, hdstrategy, &hdtab },   /* hd = 0 */
+    { nullopen, nulldev, fdstrategy, &fdtab }, /* fd = 1 */
+    { nullopen, nulldev, mdstrategy, &mdtab }, /* md = 2 */
 #endif
     {},
 };
 
-int scopen(), scclose(), scread(), scwrite(), scioctl();
+void scopen(dev_t, int);
+int scclose(), scread(), scwrite(), scioctl();
 int mmread(), mmwrite();
-int syopen(), syread(), sywrite(), sysioctl();
-int sropen(), srclose(), srread(), srwrite(), srioctl();
+void syopen(dev_t, int);
+int syread(), sywrite(), sysioctl();
+void sropen(dev_t, int);
+int srclose(), srread(), srwrite(), srioctl();
 extern struct tty sr[];
 int hdread(), hdwrite();
 int fdread(), fdwrite();
@@ -44,18 +49,18 @@ int cdread();
 struct cdevsw cdevsw[] = {
 #if 1
     { scopen, scclose, scread, scwrite, scioctl, nulldev, 0 },  /* console = 0 */
-    { nulldev, nulldev, mmread, mmwrite, nodev, nulldev, 0 },   /* mem = 1 */
+    { nullopen, nulldev, mmread, mmwrite, nodev, nulldev, 0 },  /* mem = 1 */
     { syopen, nulldev, syread, sywrite, sysioctl, nulldev, 0 }, /* tty = 2 */
     { sropen, srclose, srread, srwrite, srioctl, nulldev, sr }, /* sr = 3 */
     { hdopen, nulldev, hdread, hdwrite, nodev, nulldev, 0 },    /* hd = 4 */
-    { nulldev, nulldev, fdread, fdwrite, nodev, nulldev, 0 },   /* fd = 5 */
-    { nulldev, nulldev, mdread, mdwrite, nodev, nulldev, 0 },   /* md = 6 */
-    { nulldev, nulldev, cdread, nodev, nodev, nulldev, 0 },     /* cd = 7 */
+    { nullopen, nulldev, fdread, fdwrite, nodev, nulldev, 0 },  /* fd = 5 */
+    { nullopen, nulldev, mdread, mdwrite, nodev, nulldev, 0 },  /* md = 6 */
+    { nullopen, nulldev, cdread, nodev, nodev, nulldev, 0 },    /* cd = 7 */
 #endif
     {},
 };
 
-int ttyopen(), ttyclose(), ttread(), ttwrite(), ttyinput(), ttstart();
+int ttyopen(), ttyclose(), ttread(), ttwrite();
 
 struct linesw linesw[] = {
     { ttyopen, nulldev, ttread, ttwrite, nodev, ttyinput, ttstart }, /* 0 */
@@ -72,8 +77,6 @@ int nswap     = 32000;
 struct buf buf[NBUF];
 struct file file[NFILE];
 struct inode inode[NINODE];
-int mpxchan();
-int (*ldmpx)() = mpxchan;
 struct proc proc[NPROC];
 struct text text[NTEXT];
 struct buf bfreelist;

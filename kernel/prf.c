@@ -14,8 +14,9 @@
  * panicstr contains argument to last
  * call to panic.
  */
-
 char *panicstr;
+
+void printn(unsigned long n, int b);
 
 /*
  * Scaled down version of C Library printf.
@@ -27,7 +28,6 @@ char *panicstr;
  * suspended.
  * Printf should not be used for chit-chat.
  */
-/* VARARGS 1 */
 void printf(char *fmt, ...)
 {
     register c;
@@ -67,7 +67,7 @@ loop:
 /*
  * Print an unsigned integer in base b.
  */
-printn(n, b) unsigned long n; /* XXX */
+void printn(unsigned long n, int b)
 {
     register unsigned long a; /* XXX */
 
@@ -86,7 +86,7 @@ printn(n, b) unsigned long n; /* XXX */
  * It syncs, prints "panic: mesg" and
  * then loops.
  */
-panic(s) char *s;
+void panic(char *s)
 {
     panicstr = s;
     update();
@@ -101,8 +101,7 @@ panic(s) char *s;
  * x and y are the major and minor parts of
  * the device argument.
  */
-prdev(str, dev) char *str;
-dev_t dev;
+void prdev(char *str, dev_t dev)
 {
     printf("%s on dev %u/%u\n", str, major(dev), minor(dev));
 }
@@ -114,7 +113,7 @@ dev_t dev;
  * and an octal word (usually some error
  * status register) passed as argument.
  */
-deverror(bp, o1, o2) register struct buf *bp;
+void deverror(register struct buf *bp, int o1, int o2)
 {
     prdev("err", bp->b_dev);
     printf("bn=%D er=%o,%o\n", bp->b_blkno, o1, o2);

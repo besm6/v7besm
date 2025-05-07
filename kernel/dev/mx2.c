@@ -21,7 +21,6 @@
 struct chan chans[NCHANS];
 struct group *groups[NGROUPS];
 int mpxline;
-struct chan *xcp();
 struct chan *addch();
 struct chan *nextcp();
 
@@ -47,8 +46,17 @@ char mcdebugs[NDEBUGS];
 int mxdummy;
 int *MP = &mxdummy;
 
-struct group *getmpx(dev)
-dev_t dev;
+void mpxname(struct chan *cp);
+void zero(char *s, int cc);
+void msread(int fmp, struct chan *cp);
+void mswrite(int fmp, struct chan *cp);
+void mxrstrt(struct chan *cp, struct clist *q, int b);
+void mxwcontrol(struct chan *cp);
+void flush(struct clist *q);
+void wflush(struct chan *cp, struct clist *q);
+void rmdata(struct chan *cp);
+
+struct group *getmpx(dev_t dev)
 {
     register d;
 
@@ -58,7 +66,7 @@ dev_t dev;
     return (groups[d]);
 }
 
-mxopen(dev, flag)
+void mxopen(dev_t dev, int flag)
 {
     register struct group *gp;
     register struct file *fp;
@@ -110,7 +118,8 @@ mxopen(dev, flag)
 char mxnmbuf[NMSIZE];
 int nmsize;
 struct chan *mxnmcp;
-mpxname(cp) register struct chan *cp;
+
+void mpxname(register struct chan *cp)
 {
     register char *np;
     register c;
@@ -129,8 +138,7 @@ mpxname(cp) register struct chan *cp;
     cp->c_flags |= NMBUF;
 }
 
-mxclose(dev, flag, cp) dev_t dev;
-register struct chan *cp;
+void mxclose(dev_t dev, int flag, register struct chan *cp)
 {
     register struct group *gp;
     register struct inode *ip;
@@ -190,8 +198,7 @@ register struct chan *cp;
     iput(ip);
 }
 
-zero(s, cc) register char *s;
-register cc;
+void zero(register char *s, register int cc)
 {
     while (cc--)
         *s++ = 0;
@@ -206,7 +213,7 @@ char m_eot[] = { M_EOT, 0, 0, 0 };
  * Calls are made through linesw to handle actual
  * data movement.
  */
-mxread(dev)
+void mxread(int dev)
 {
     register struct group *gp;
     register struct chan *cp;
@@ -291,7 +298,7 @@ mxread(dev)
     }
 }
 
-mxwrite(dev)
+void mxwrite(int dev)
 {
     register struct chan *cp;
     struct file *fp;
@@ -378,7 +385,7 @@ mxwrite(dev)
  * Kernel-to-Kernel and other special transfers are not
  * yet in.
  */
-mcread(cp) register struct chan *cp;
+int mcread(register struct chan *cp)
 {
     register struct clist *q;
     register char *np;
@@ -401,8 +408,7 @@ mcread(cp) register struct chan *cp;
         return (cp->c_ctlx.c_cc + cp->cx.datq.c_cc);
 }
 
-char *mcwrite(cp)
-register struct chan *cp;
+char *mcwrite(register struct chan *cp)
 {
     register struct clist *q;
     register cc;
@@ -427,7 +433,7 @@ register struct chan *cp;
  * Msread and mswrite move bytes
  * between user and non-multiplexed channel.
  */
-msread(fmp, cp) register struct chan *cp;
+void msread(int fmp, register struct chan *cp)
 {
     register struct clist *q;
     int s;
@@ -460,7 +466,7 @@ out:
     splx(s);
 }
 
-mswrite(fmp, cp) register struct chan *cp;
+void mswrite(int fmp, register struct chan *cp)
 {
     register struct clist *q;
     register int cc;
@@ -502,8 +508,7 @@ mswrite(fmp, cp) register struct chan *cp;
 /*
  * move chars between clist and user space.
  */
-mxmove(q, dir) register struct clist *q;
-register dir;
+int mxmove(register struct clist *q, register int dir)
 {
     register cc;
     char buf[HIQ];
@@ -519,9 +524,7 @@ register dir;
     return (cc);
 }
 
-mxrstrt(cp, q, b) register struct chan *cp;
-register struct clist *q;
-register b;
+void mxrstrt(register struct chan *cp, register struct clist *q, register int b)
 {
     int s;
 
@@ -542,8 +545,7 @@ register b;
  * called from driver start or xint routines
  * to wakeup output sleeper.
  */
-mcstart(cp, q) register struct chan *cp;
-register caddr_t q;
+void mcstart(register struct chan *cp, register caddr_t q)
 {
     if (cp->c_flags & (BLKMSG)) {
         cp->c_flags &= ~BLKMSG;
@@ -552,7 +554,7 @@ register caddr_t q;
         wakeup((caddr_t)q);
 }
 
-mxwcontrol(cp) register struct chan *cp;
+void mxwcontrol(register struct chan *cp)
 {
     short cmd[2];
     int s;
@@ -582,7 +584,7 @@ mxwcontrol(cp) register struct chan *cp;
     }
 }
 
-mxioctl(dev, cmd, addr, flag) caddr_t addr;
+void mxioctl(int dev, int cmd, caddr_t addr, int flag)
 {
     struct group *gp;
     int fmp;
@@ -617,7 +619,7 @@ mxioctl(dev, cmd, addr, flag) caddr_t addr;
     }
 }
 
-chdrain(cp) register struct chan *cp;
+void chdrain(register struct chan *cp)
 {
     register struct tty *tp;
     int wflag;
@@ -642,7 +644,7 @@ chdrain(cp) register struct chan *cp;
     }
 }
 
-chwake(cp) register struct chan *cp;
+void chwake(register struct chan *cp)
 {
     register char *p;
 
@@ -658,7 +660,7 @@ chwake(cp) register struct chan *cp;
     wakeup((caddr_t)++p);
 }
 
-chfree(cp) register struct chan *cp;
+void chfree(register struct chan *cp)
 {
     register struct group *gp;
     register i;
@@ -673,14 +675,13 @@ chfree(cp) register struct chan *cp;
     cp->c_group = NULL;
 }
 
-flush(q) register struct clist *q;
+void flush(register struct clist *q)
 {
     while (q->c_cc)
         getc(q);
 }
 
-wflush(cp, q) register struct chan *cp;
-register struct clist *q;
+void wflush(register struct chan *cp, register struct clist *q)
 {
     register s;
 
@@ -699,8 +700,7 @@ out:
     splx(s);
 }
 
-scontrol(cp, event, value) register struct chan *cp;
-short event, value;
+void scontrol(register struct chan *cp, short event, short value)
 {
     register struct clist *q;
     int s;
@@ -714,7 +714,7 @@ short event, value;
     splx(s);
 }
 
-sdata(cp) register struct chan *cp;
+int sdata(register struct chan *cp)
 {
     register struct group *gp;
     register short x;
@@ -743,9 +743,7 @@ sdata(cp) register struct chan *cp;
     return ((int)gp);
 }
 
-struct chan *xcp(gp, x)
-register struct group *gp;
-register short x;
+struct chan *xcp(register struct group *gp, register short x)
 {
     register i;
 
@@ -760,7 +758,7 @@ register short x;
     return ((struct chan *)gp);
 }
 
-cpx(cp) register struct chan *cp;
+int cpx(register struct chan *cp)
 {
     register x;
     register struct group *gp;
@@ -780,8 +778,7 @@ cpx(cp) register struct chan *cp;
     return (x);
 }
 
-struct chan *nextcp(gp)
-register struct group *gp;
+struct chan *nextcp(register struct group *gp)
 {
     if (gp->g_datq == 0) {
         gp = NULL;
@@ -800,12 +797,12 @@ register struct group *gp;
         gp = (struct group *)gp->g_chans[gp->g_rot];
     }
     if (gp)
-        rmdata(gp);
+        rmdata((struct chan *)gp);
 out:
     return ((struct chan *)gp);
 }
 
-rmdata(cp) register struct chan *cp;
+void rmdata(register struct chan *cp)
 {
     register struct group *gp;
     register short x;
@@ -822,32 +819,30 @@ rmdata(cp) register struct chan *cp;
     }
 }
 
-mcrint(c, tp) struct tty *tp;
+void mcrint(int c, struct tty *tp)
 {
 }
 
-mcxint(tp) struct tty *tp;
+void mcxint(struct tty *tp)
 {
 }
+
 /*
-prstuff(s,cc)
-register char *s;
-register cc;
+void prstuff(register char *s, register int cc)
 {
-        while (cc--)
-                printf("%o ",*s++&0377);
+    while (cc--)
+        printf("%o ",*s++&0377);
 }
 
-prascii(s, cc)
-register char *s;
-register cc;
+void prascii(register char *s, register int cc)
 {
-register c;
-        while (cc--) {
-                c = *s++;
-                if (c>=040 && c<=0176)
-                        putchar(c); else
-                        printf(" %o ", c&0377);
-        }
+    register c;
+
+    while (cc--) {
+        c = *s++;
+        if (c>=040 && c<=0176)
+            putchar(c); else
+        printf(" %o ", c&0377);
+    }
 }
 */

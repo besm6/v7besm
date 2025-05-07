@@ -23,7 +23,7 @@ int uphi;
 
 /* sutab and estabut */
 
-sureg()
+void sureg()
 {
     register i, a, n;
     int taddr, daddr;
@@ -51,7 +51,7 @@ sureg()
     invd();
 }
 
-estabur(nt, nd, ns, sep, xrw)
+int estabur(int nt, int nd, int ns, int sep, int xrw)
 {
     if (nt + nd + ns > 1023)
         goto err;
@@ -68,7 +68,7 @@ err:
     return (-1);
 }
 
-clearseg(d)
+void clearseg(int d)
 {
     unsigned xd;
 
@@ -76,7 +76,7 @@ clearseg(d)
     bzero(xd, PGSZ);
 }
 
-copyseg(s, d)
+void copyseg(int s, int d)
 {
     unsigned xs, xd;
 
@@ -87,8 +87,7 @@ copyseg(s, d)
     bcopy(xs, xd, PGSZ);
 }
 
-unsigned physaddr(addr)
-unsigned addr;
+unsigned physaddr(unsigned addr)
 {
     unsigned d, t, o, x, z;
     unsigned *pt;

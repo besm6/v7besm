@@ -38,15 +38,17 @@ extern struct chan chans[NCHANS];
 struct schan schans[NPORTS];
 extern struct group *groups[NGROUPS];
 extern int mpxline;
-struct chan *xcp();
 dev_t mpxdev = -1;
 
 extern char mcdebugs[NDEBUGS];
 
+void mxfalloc(struct file *fp);
+void mlink(struct group *sub, struct group *master);
+
 /*
  * Allocate a channel, set c_index to index.
  */
-struct chan *challoc(index, isport)
+struct chan *challoc(int index, int isport)
 {
     register s;
 
@@ -85,7 +87,7 @@ out:
 /*
  * Allocate a group table cell.
  */
-gpalloc()
+int gpalloc()
 {
     register i, s;
 
@@ -103,8 +105,7 @@ gpalloc()
  * Add a channel to the group in
  * inode ip.
  */
-struct chan *addch(ip, isport)
-struct inode *ip;
+struct chan *addch(struct inode *ip, int isport)
 {
     register struct chan *cp;
     register struct group *gp;
@@ -130,12 +131,10 @@ struct inode *ip;
 /*
  * mpxchan system call
  */
-mpxchan()
+void mpxchan()
 {
     struct inode *ip, *gip;
     register int i;
-    extern mxopen(), mcread();
-    extern sdata(), scontrol();
     dev_t dev;
     struct tty *tp;
     struct file *fp, *chfp, *gfp;
@@ -411,7 +410,7 @@ sw:
     }
 }
 
-detach(cp) register struct chan *cp;
+void detach(register struct chan *cp)
 {
     register struct group *gp;
     register int i;
@@ -437,7 +436,7 @@ detach(cp) register struct chan *cp;
     }
 }
 
-mxfalloc(fp) register struct file *fp;
+void mxfalloc(register struct file *fp)
 {
     register i;
 
@@ -455,7 +454,7 @@ mxfalloc(fp) register struct file *fp;
     return;
 }
 
-mlink(sub, master) struct group *sub, *master;
+void mlink(struct group *sub, struct group *master)
 {
     register i;
 

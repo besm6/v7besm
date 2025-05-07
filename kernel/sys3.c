@@ -16,10 +16,12 @@
 #include "sys/stat.h"
 // clang-format on
 
+void stat1(register struct inode *ip, struct stat *ub, off_t pipeadj);
+
 /*
  * the fstat system call.
  */
-fstat()
+void fstat()
 {
     register struct file *fp;
     register struct a {
@@ -37,7 +39,7 @@ fstat()
 /*
  * the stat system call.
  */
-stat()
+void stat()
 {
     register struct inode *ip;
     register struct a {
@@ -57,9 +59,7 @@ stat()
  * The basic routine for fstat and stat:
  * get the inode and pass appropriate parts back.
  */
-stat1(ip, ub, pipeadj) register struct inode *ip;
-struct stat *ub;
-off_t pipeadj;
+void stat1(register struct inode *ip, struct stat *ub, off_t pipeadj)
 {
     register struct dinode *dp;
     register struct buf *bp;
@@ -94,7 +94,7 @@ off_t pipeadj;
 /*
  * the dup system call.
  */
-dup()
+void dup()
 {
     register struct file *fp;
     register struct a {
@@ -131,7 +131,7 @@ dup()
 /*
  * the mount system call.
  */
-smount()
+void smount()
 {
     dev_t dev;
     register struct inode *ip;
@@ -196,7 +196,7 @@ out1:
 /*
  * the umount system call.
  */
-sumount()
+void sumount()
 {
     dev_t dev;
     register struct inode *ip;

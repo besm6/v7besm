@@ -20,8 +20,7 @@
  * Only task is to check range
  * of the descriptor.
  */
-struct file *getf(f)
-register int f;
+struct file *getf(register int f)
 {
     register struct file *fp;
 
@@ -45,7 +44,7 @@ register int f;
  * removal to the referencing file structure.
  * Call device handler on last close.
  */
-closef(fp) register struct file *fp;
+void closef(register struct file *fp)
 {
     register struct inode *ip;
     int flag, mode;
@@ -100,7 +99,7 @@ closef(fp) register struct file *fp;
  * of special files to initialize and
  * validate before actual IO.
  */
-openi(ip, rw) register struct inode *ip;
+void openi(register struct inode *ip, int rw)
 {
     dev_t dev;
     register unsigned int maj;
@@ -140,7 +139,7 @@ bad:
  * The super user is granted all
  * permissions.
  */
-access(ip, mode) register struct inode *ip;
+int access(register struct inode *ip, int mode)
 {
     register m;
 
@@ -198,7 +197,7 @@ struct inode *owner()
  * Test if the current user is the
  * super user.
  */
-suser()
+int suser()
 {
     if (u.u_uid == 0) {
         u.u_acflag |= ASU;
@@ -211,7 +210,7 @@ suser()
 /*
  * Allocate a user file descriptor.
  */
-ufalloc()
+int ufalloc()
 {
     register i;
 

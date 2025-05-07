@@ -27,6 +27,9 @@ long dk_time[32];
 struct mount mount[NMOUNT];
 struct inode *rootdir; /* pointer to inode of root directory */
 
+void iinit(void);
+void binit(void);
+
 /*
  * Initialization code.
  * Called from cold start routine as
@@ -43,7 +46,7 @@ struct inode *rootdir; /* pointer to inode of root directory */
  * loop at low address in user mode -- /etc/init
  *	cannot be executed.
  */
-main()
+void main()
 {
     startup();
     /*
@@ -102,7 +105,7 @@ main()
  * panic: iinit -- cannot read the super
  * block. Usually because of an IO error.
  */
-iinit()
+void iinit()
 {
     register struct buf *cp, *bp;
     register struct filsys *fp;
@@ -138,7 +141,7 @@ char buffers[NBUF][BSIZE];
  * Initialize the buffer I/O system by freeing
  * all buffers and setting all device buffer lists to empty.
  */
-binit()
+void binit()
 {
     register struct buf *bp;
     register struct buf *dp;

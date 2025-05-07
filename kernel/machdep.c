@@ -37,10 +37,12 @@ int icode[] = {
 };
 int szicode = sizeof(icode);
 
+void readrtc(void);
+
 /*
  * Machine-dependent startup code
  */
-startup()
+void startup()
 {
     register i;
     int j;
@@ -68,7 +70,7 @@ startup()
  * set up a physical address
  * into users virtual address space.
  */
-sysphys()
+void sysphys()
 {
     if (!suser())
         return;
@@ -78,7 +80,7 @@ sysphys()
 /*
  * Start the clock.
  */
-clkstart()
+void clkstart()
 {
     unsigned c = (0x1234dd + HZ / 2) / HZ;
 
@@ -95,7 +97,7 @@ clkstart()
 /*
  * Let a process handle a signal by simulating a call
  */
-sendsig(p, signo) caddr_t p;
+void sendsig(caddr_t p, int signo)
 {
     register unsigned n;
 
@@ -110,7 +112,7 @@ sendsig(p, signo) caddr_t p;
 /*
  * Set the time from the real time clock.
  */
-readrtc()
+void readrtc()
 {
     static short days[] = { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 };
     int yr, mt, dm, hr, mn, sc;
@@ -131,7 +133,7 @@ readrtc()
     time += TIMEZONE * 60;
 }
 
-int getrtc(addr)
+int getrtc(int addr)
 {
     int x;
 
@@ -139,7 +141,7 @@ int getrtc(addr)
     return (x >> 4) * 10 + (x & 15);
 }
 
-int inrtc(addr)
+int inrtc(int addr)
 {
     outb(0x70, addr);
     return inb(0x71);

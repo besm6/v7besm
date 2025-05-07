@@ -15,9 +15,7 @@ struct pack *pklines[NPLINES];
 /*
  * receive control messages
  */
-
-pkcntl(cntl, pk) register cntl;
-register struct pack *pk;
+void pkcntl(register int cntl, register struct pack *pk)
 {
     register val;
     register m;
@@ -102,7 +100,7 @@ register struct pack *pk;
  * Cleared by receiving a good frame
  * (pkcntl or pkdata).
  */
-pkbadframe(pk) register struct pack *pk;
+void pkbadframe(register struct pack *pk)
 {
     WAKEUP(&pk->p_pr);
     if (pk->p_state & BADFRAME)
@@ -114,7 +112,7 @@ pkbadframe(pk) register struct pack *pk;
 /*
  * Look at sequence numbers (mostly).
  */
-pkaccept(pk) register struct pack *pk;
+int pkaccept(register struct pack *pk)
 {
     register x, seq;
     char m, cntl, *p, imask, **bp;
@@ -242,7 +240,7 @@ out:
     return (accept);
 }
 
-pkread(S) SDEF;
+int pkread(struct tty *tp)
 {
     register struct pack *pk;
     register x, s;
@@ -314,14 +312,13 @@ out:
     return (count);
 }
 
-pkwrite(S) SDEF;
+int pkwrite(struct tty *tp)
 {
     register struct pack *pk;
     register x;
     int partial;
     caddr_t cp;
     int cc, s, fc, count;
-    int pktimeout();
 
     pk = PADDR;
     if ((pk->p_state & LIVE) == 0) {
@@ -373,7 +370,7 @@ pkwrite(S) SDEF;
     return (count - UCOUNT);
 }
 
-pksack(pk) register struct pack *pk;
+int pksack(register struct pack *pk)
 {
     register x, i;
     int s;
@@ -396,13 +393,13 @@ pksack(pk) register struct pack *pk;
     return (i);
 }
 
-pkoutput(pk) register struct pack *pk;
+void pkoutput(register struct pack *pk)
 {
     register x;
     int s;
     char bstate;
     int i;
-    SDEF;
+    struct tty *tp;
     extern pkzot;
 
     ISYSTEM;
@@ -509,7 +506,7 @@ out:
  *	letting output drain
  *	releasing space and turning off line discipline
  */
-pkclose(S) SDEF;
+void pkclose(struct tty *tp)
 {
     register struct pack *pk;
     register i, s, rbits;
@@ -583,14 +580,13 @@ final:
     FREEPACK((caddr_t)pk, npbits);
 }
 
-pkreset(pk) register struct pack *pk;
+void pkreset(register struct pack *pk)
 {
     pk->p_ps = pk->p_pr = pk->p_rpr = 0;
     pk->p_nxtps                     = 1;
 }
 
-chksum(s, n) register char *s;
-register n;
+int chksum(register char *s, register int n)
 {
     register short sum;
     register unsigned t;
@@ -616,7 +612,7 @@ register n;
     return (sum);
 }
 
-pkline(pk) register struct pack *pk;
+int pkline(register struct pack *pk)
 {
     register i;
     for (i = 0; i < NPLINES; i++) {
@@ -626,14 +622,13 @@ pkline(pk) register struct pack *pk;
     return (-i);
 }
 
-pkzero(s, n) register char *s;
-register n;
+void pkzero(register char *s, register int n)
 {
     while (n--)
         *s++ = 0;
 }
 
-pksize(n) register n;
+int pksize(register int n)
 {
     register k;
 

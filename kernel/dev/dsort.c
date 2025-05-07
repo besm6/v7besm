@@ -12,7 +12,7 @@
 
 #define b_cylin b_resid
 
-disksort(dp, bp) register struct buf *dp, *bp;
+void disksort(register struct buf *dp, register struct buf *bp)
 {
     register struct buf *ap;
     struct buf *tp;

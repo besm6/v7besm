@@ -9,61 +9,6 @@
  * Each row contains the number of arguments expected
  * and a pointer to the routine.
  */
-int alarm();
-int mpxchan();
-int chdir();
-int chmod();
-int chown();
-int chroot();
-int close();
-int creat();
-int dup();
-int exec();
-int exece();
-int fork();
-int fstat();
-int getgid();
-int getpid();
-int getuid();
-int gtime();
-int gtty();
-int ioctl();
-int kill();
-int link();
-int mknod();
-int nice();
-int nosys();
-int nullsys();
-int open();
-int pause();
-int pipe();
-int profil();
-int ptrace();
-int read();
-int rexit();
-int saccess();
-int sbreak();
-int seek();
-int setgid();
-int setuid();
-int smount();
-int ssig();
-int stat();
-int stime();
-int stty();
-int sumount();
-int ftime();
-int sync();
-int sysacct();
-int syslock();
-int sysphys();
-int times();
-int umask();
-int unlink();
-int utime();
-int wait();
-int write();
-
 struct sysent sysent[64] = {
     0, 0, nullsys, /*  0 = indir */
     1, 1, rexit,   /*  1 = exit */

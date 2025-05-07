@@ -17,7 +17,7 @@
  * is 512 bytes.
  * Algorithm is first-fit.
  */
-malloc(mp, size) struct map *mp;
+int malloc(struct map *mp, int size)
 {
     register unsigned int a;
     register struct map *bp;
@@ -44,8 +44,7 @@ malloc(mp, size) struct map *mp;
  * Sort aa into map and combine on
  * one or both ends if possible.
  */
-mfree(mp, size, a) struct map *mp;
-register int a;
+void mfree(struct map *mp, int size, register int a)
 {
     register struct map *bp;
     register unsigned int t;

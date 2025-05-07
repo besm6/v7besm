@@ -88,6 +88,15 @@ struct schan {
 #define PORT    020000
 #define ALT     040000
 
+struct chan *xcp(struct group *gp, short x);
+void detach(struct chan *cp);
+void mcstart(struct chan *cp, caddr_t q);
+void chdrain(struct chan *cp);
+void chwake(struct chan *cp);
+void chfree(struct chan *cp);
+void scontrol(struct chan *cp, short event, short value);
+int mcread(register struct chan *cp);
+void mxopen(dev_t dev, int flag);
 #endif
 
 /*

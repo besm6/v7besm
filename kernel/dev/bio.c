@@ -53,13 +53,15 @@ struct buf swbuf2;
  *	bawrite
  *	brelse
  */
+int incore(dev_t dev, daddr_t blkno);
+void iowait(struct buf *bp);
+void notavail(struct buf *bp);
+void geterror(struct buf *bp);
 
 /*
  * Read in (if necessary) the block and return a buffer pointer.
  */
-struct buf *bread(dev, blkno)
-dev_t dev;
-daddr_t blkno;
+struct buf *bread(dev_t dev, daddr_t blkno)
 {
     register struct buf *bp;
 
@@ -84,9 +86,7 @@ daddr_t blkno;
  * Read in the block, like bread, but also start I/O on the
  * read-ahead block (which is not allocated to the caller)
  */
-struct buf *breada(dev, blkno, rablkno)
-dev_t dev;
-daddr_t blkno, rablkno;
+struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno)
 {
     register struct buf *bp, *rabp;
 
@@ -125,7 +125,7 @@ daddr_t blkno, rablkno;
  * Write the buffer, waiting for completion.
  * Then release the buffer.
  */
-bwrite(bp) register struct buf *bp;
+void bwrite(register struct buf *bp)
 {
     register flag;
 
@@ -153,7 +153,7 @@ bwrite(bp) register struct buf *bp;
  * This can't be done for magtape, since writes must be done
  * in the same order as requested.
  */
-bdwrite(bp) register struct buf *bp;
+void bdwrite(register struct buf *bp)
 {
     register struct buf *dp;
 
@@ -169,7 +169,7 @@ bdwrite(bp) register struct buf *bp;
 /*
  * Release the buffer, start I/O on it, but don't wait for completion.
  */
-bawrite(bp) register struct buf *bp;
+void bawrite(register struct buf *bp)
 {
     bp->b_flags |= B_ASYNC;
     bwrite(bp);
@@ -178,7 +178,7 @@ bawrite(bp) register struct buf *bp;
 /*
  * release the buffer, with no I/O implied.
  */
-brelse(bp) register struct buf *bp;
+void brelse(register struct buf *bp)
 {
     register struct buf **backp;
     register s;
@@ -213,8 +213,7 @@ brelse(bp) register struct buf *bp;
  * See if the block is associated with some buffer
  * (mainly to avoid getting hung up on a wait in breada)
  */
-incore(dev, blkno) dev_t dev;
-daddr_t blkno;
+int incore(dev_t dev, daddr_t blkno)
 {
     register struct buf *bp;
     register struct buf *dp;
@@ -231,9 +230,7 @@ daddr_t blkno;
  * block is already associated, return it; otherwise search
  * for the oldest non-busy buffer and reassign it.
  */
-struct buf *getblk(dev, blkno)
-dev_t dev;
-daddr_t blkno;
+struct buf *getblk(dev_t dev, daddr_t blkno)
 {
     register struct buf *bp;
     register struct buf *dp;
@@ -335,7 +332,7 @@ loop:
  * Wait for I/O completion on the buffer; return errors
  * to the user.
  */
-iowait(bp) register struct buf *bp;
+void iowait(register struct buf *bp)
 {
     spl6();
     while ((bp->b_flags & B_DONE) == 0)
@@ -348,7 +345,7 @@ iowait(bp) register struct buf *bp;
  * Unlink a buffer from the available list and mark it busy.
  * (internal interface)
  */
-notavail(bp) register struct buf *bp;
+void notavail(register struct buf *bp)
 {
     register s;
 
@@ -363,7 +360,7 @@ notavail(bp) register struct buf *bp;
  * Mark I/O complete on a buffer, release it if I/O is asynchronous,
  * and wake up anyone waiting for it.
  */
-iodone(bp) register struct buf *bp;
+void iodone(register struct buf *bp)
 {
     bp->b_flags |= B_DONE;
     if (bp->b_flags & B_ASYNC)
@@ -377,7 +374,7 @@ iodone(bp) register struct buf *bp;
 /*
  * Zero the core associated with a buffer.
  */
-clrbuf(bp) struct buf *bp;
+void clrbuf(struct buf *bp)
 {
     bzero(bp->b_un.b_addr, BSIZE);
     bp->b_resid = 0;
@@ -386,7 +383,7 @@ clrbuf(bp) struct buf *bp;
 /*
  * swap I/O
  */
-swap(blkno, coreaddr, count, rdflg) register count;
+void swap(int blkno, int coreaddr, register int count, int rdflg)
 {
     register struct buf *bp;
     register tcount;
@@ -431,7 +428,7 @@ swap(blkno, coreaddr, count, rdflg) register count;
  * are flushed out.
  * (from umount and update)
  */
-bflush(dev) dev_t dev;
+void bflush(dev_t dev)
 {
     register struct buf *bp;
 
@@ -456,8 +453,7 @@ loop:
  *	The device number
  *	Read/write flag
  */
-physio(strat, bp, dev, rw) register struct buf *bp;
-int (*strat)();
+void physio(int (*strat)(), register struct buf *bp, int dev, int rw)
 {
     register unsigned base;
     register int nb;
@@ -519,7 +515,7 @@ bad:
  * code.  Actually the latter is always true because devices
  * don't yet return specific errors.
  */
-geterror(bp) register struct buf *bp;
+void geterror(register struct buf *bp)
 {
     if (bp->b_flags & B_ERROR)
         if ((u.u_error = bp->b_error) == 0)

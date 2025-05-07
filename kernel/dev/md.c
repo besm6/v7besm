@@ -19,7 +19,7 @@ int mdsz    = 4096;                     /* size in blocks */
 struct buf mdtab;
 struct buf rmdbuf;
 
-mdstrategy(bp) register struct buf *bp;
+void mdstrategy(register struct buf *bp)
 {
     unsigned sz, x;
 
@@ -39,12 +39,12 @@ mdstrategy(bp) register struct buf *bp;
     iodone(bp);
 }
 
-mdread(dev)
+void mdread(int dev)
 {
     physio(mdstrategy, &rmdbuf, dev, B_READ);
 }
 
-mdwrite(dev)
+void mdwrite(int dev)
 {
     physio(mdstrategy, &rmdbuf, dev, B_WRITE);
 }

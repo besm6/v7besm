@@ -18,6 +18,8 @@ typedef struct fblk *FBLKP;
 
 int updlock; /* lock for sync */
 
+int badblock(register struct filsys *fp, daddr_t bn, dev_t dev);
+
 /*
  * alloc will obtain the next available
  * free disk block from the free list of
@@ -29,8 +31,7 @@ int updlock; /* lock for sync */
  * no space on dev x/y -- when
  * the free list is exhausted.
  */
-struct buf *alloc(dev)
-dev_t dev;
+struct buf *alloc(dev_t dev)
 {
     daddr_t bno;
     register struct filsys *fp;
@@ -81,8 +82,7 @@ nospace:
  * back on the free list of the
  * specified device.
  */
-free(dev, bno) dev_t dev;
-daddr_t bno;
+void free(dev_t dev, daddr_t bno)
 {
     register struct filsys *fp;
     register struct buf *bp;
@@ -121,9 +121,7 @@ daddr_t bno;
  *
  * bad block on dev x/y -- not in range
  */
-badblock(fp, bn, dev) register struct filsys *fp;
-daddr_t bn;
-dev_t dev;
+int badblock(register struct filsys *fp, daddr_t bn, dev_t dev)
 {
     if (bn < fp->s_isize || bn >= fp->s_fsize) {
         prdev("bad block", dev);
@@ -143,8 +141,7 @@ dev_t dev;
  * I list is instituted to pick
  * up NICINOD more.
  */
-struct inode *ialloc(dev)
-dev_t dev;
+struct inode *ialloc(dev_t dev)
 {
     register struct filsys *fp;
     register struct buf *bp;
@@ -221,8 +218,7 @@ loop:
  * to NICINOD I nodes in the super
  * block and throws away any more.
  */
-ifree(dev, ino) dev_t dev;
-ino_t ino;
+void ifree(dev_t dev, ino_t ino)
 {
     register struct filsys *fp;
 
@@ -253,8 +249,7 @@ ino_t ino;
  * panic: no fs -- the device is not mounted.
  *	this "cannot happen"
  */
-struct filsys *getfs(dev)
-dev_t dev;
+struct filsys *getfs(dev_t dev)
 {
     register struct mount *mp;
     register struct filsys *fp;
@@ -282,7 +277,7 @@ dev_t dev;
  * the mount table to initiate modified
  * super blocks.
  */
-update()
+void update()
 {
     register struct inode *ip;
     register struct mount *mp;

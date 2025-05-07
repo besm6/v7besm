@@ -24,13 +24,15 @@ struct execa {
     char **envp;
 };
 
-exec()
+void setregs(void);
+
+void exec()
 {
     ((struct execa *)u.u_ap)->envp = NULL;
     exece();
 }
 
-exece()
+void exece()
 {
     register nc;
     register char *cp;
@@ -146,7 +148,7 @@ bad:
  * Zero return is normal;
  * non-zero means only the text is being replaced
  */
-getxfile(ip, nargc) register struct inode *ip;
+int getxfile(register struct inode *ip, int nargc)
 {
     register unsigned ds;
     register unsigned ts, ss;
@@ -254,7 +256,7 @@ bad:
 /*
  * Clear registers on exec
  */
-setregs()
+void setregs()
 {
     register int *rp;
     register char *cp;
@@ -284,7 +286,7 @@ setregs()
  * exit system call:
  * pass back caller's arg
  */
-rexit()
+void rexit()
 {
     register struct a {
         int rval;
@@ -301,7 +303,7 @@ rexit()
  * Wake up parent and init processes,
  * and dispose of children.
  */
-exit(rv)
+void exit(int rv)
 {
     register int i;
     register struct proc *p, *q;
@@ -353,7 +355,7 @@ exit(rv)
  * Look also for stopped (traced) children,
  * and pass back status from them.
  */
-wait()
+void wait()
 {
     register f;
     register struct proc *p;
@@ -398,7 +400,7 @@ loop:
 /*
  * fork system call.
  */
-fork()
+void fork()
 {
     register struct proc *p1, *p2;
     register a;
@@ -453,7 +455,7 @@ out:
  * break system call.
  *  -- bad planning: "break" is a dirty word in C.
  */
-sbreak()
+void sbreak()
 {
     struct a {
         char *nsiz;

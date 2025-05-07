@@ -29,8 +29,7 @@ int lbolt; /* time of day in 60th not in time */
  *	alarm clock signals
  *	jab the scheduler
  */
-
-clock(tr) struct trap tr;
+void clock(struct trap tr)
 {
     register struct callo *p1, *p2;
     register struct proc *pp;
@@ -143,8 +142,7 @@ out:
  * The panic is there because there is nothing
  * intelligent to be done if an entry won't fit.
  */
-timeout(fun, arg, tim) int (*fun)();
-caddr_t arg;
+void timeout(int (*fun)(), caddr_t arg, int tim)
 {
     register struct callo *p1, *p2;
     register int t;
