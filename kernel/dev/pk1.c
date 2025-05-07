@@ -39,7 +39,7 @@ caddr_t addr;
         return;
     }
     npbits = dtom(sizeof(struct pack));
-    pk = (struct pack *)getepack(npbits);
+    pk     = (struct pack *)getepack(npbits);
     if (pk == NULL)
         goto notsobad;
     pkzero((caddr_t)pk, sizeof(struct pack));
@@ -60,7 +60,7 @@ caddr_t addr;
         bp = (char **)getepack(pk->p_bits);
         if (bp == NULL)
             break;
-        *bp = (char *)pk->p_ipool;
+        *bp         = (char *)pk->p_ipool;
         pk->p_ipool = bp;
     }
 
@@ -73,13 +73,13 @@ caddr_t addr;
      * wait for synchronization.
      */
     flushtty(tp);
-    s = spl6();
+    s      = spl6();
     pkdisc = tp->t_line = piocb.t;
-    pk->p_ttyp = tp;
-    tp->t_linep = (caddr_t)pk;
+    pk->p_ttyp          = tp;
+    tp->t_linep         = (caddr_t)pk;
     q2.c_cf = q2.c_cl = NULL;
     q1.c_cf = q1.c_cl = (caddr_t)&pk->p_ihbuf;
-    q1.c_cc = -HDRSIZ;
+    q1.c_cc           = -HDRSIZ;
     if (tp->t_iproc != NULL)
         (*tp->t_iproc)(tp);
 
@@ -103,7 +103,7 @@ found:
 
     if ((pk->p_state & LIVE) == 0) {
         pk->p_state = DOWN;
-        pk->p_rmsg = 0;
+        pk->p_rmsg  = 0;
     notsobad:
         u.u_error = ENXIO;
         return;
@@ -125,8 +125,8 @@ caddr_t addr;
     pk = (struct pack *)tp->t_linep;
     if (com == DIOCGETP) {
         piocb.window = pk->p_swindow;
-        piocb.psize = pk->p_xsize;
-        piocb.state = pk->p_state;
+        piocb.psize  = pk->p_xsize;
+        piocb.state  = pk->p_state;
         if (copyout((caddr_t)&piocb, addr, sizeof(piocb))) {
             u.u_error = EFAULT;
         }
@@ -163,12 +163,12 @@ pkturnoff(tp) register struct tty *tp;
 
     pk = PADDR;
     LOCK;
-    bp = pk->p_io;
+    bp         = pk->p_io;
     tp->t_line = 0;
-    q1.c_cf = NULL;
+    q1.c_cf    = NULL;
     flushtty(tp);
     if (bp != NULL) {
-        *bp = (char *)pk->p_ipool;
+        *bp         = (char *)pk->p_ipool;
         pk->p_ipool = bp;
     }
     UNLOCK;

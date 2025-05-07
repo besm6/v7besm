@@ -199,8 +199,8 @@ core()
     extern schar();
 
     u.u_error = 0;
-    u.u_dirp = "core";
-    ip = namei(schar, 1);
+    u.u_dirp  = "core";
+    ip        = namei(schar, 1);
     if (ip == NULL) {
         if (u.u_error)
             return (0);
@@ -211,17 +211,17 @@ core()
     if (!access(ip, IWRITE) && (ip->i_mode & IFMT) == IFREG && u.u_uid == u.u_ruid) {
         itrunc(ip);
         u.u_offset = 0;
-        u.u_base = (caddr_t)&u;
-        u.u_count = ctob(1);
+        u.u_base   = (caddr_t)&u;
+        u.u_count  = ctob(1);
         u.u_segflg = 1;
         writei(ip);
-        u.u_base = (caddr_t)&u + ctob(2);
+        u.u_base  = (caddr_t)&u + ctob(2);
         u.u_count = ctob(1);
         writei(ip);
         s = u.u_procp->p_size - USIZE;
         estabur((unsigned)0, s, (unsigned)0, 0, RO);
-        u.u_base = 0;
-        u.u_count = ctob(s);
+        u.u_base   = 0;
+        u.u_count  = ctob(s);
         u.u_segflg = 0;
         writei(ip);
     }
@@ -290,7 +290,7 @@ found:
     ipc.ip_lock = p->p_pid;
     ipc.ip_data = uap->data;
     ipc.ip_addr = uap->addr;
-    ipc.ip_req = uap->req;
+    ipc.ip_req  = uap->req;
     p->p_flag &= ~SWTED;
     setrun(p);
     while (ipc.ip_req > 0)
@@ -315,7 +315,7 @@ procxmt()
 
     if (ipc.ip_lock != u.u_procp->p_pid)
         return (0);
-    i = ipc.ip_req;
+    i          = ipc.ip_req;
     ipc.ip_req = 0;
     wakeup((caddr_t)&ipc);
     switch (i) {

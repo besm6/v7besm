@@ -10,7 +10,7 @@
 #include "sys/buf.h"
 // clang-format on
 
-struct inode *mpxip;  /* mpx virtual inode */
+struct inode *mpxip; /* mpx virtual inode */
 
 /*
  * Convert a pathname into a pointer to
@@ -101,8 +101,8 @@ seloop:
      */
     u.u_offset = 0;
     u.u_segflg = 1;
-    eo = 0;
-    bp = NULL;
+    eo         = 0;
+    bp         = NULL;
 
 eloop:
 

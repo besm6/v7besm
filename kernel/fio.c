@@ -59,10 +59,10 @@ closef(fp) register struct file *fp;
         fp->f_count--;
         return;
     }
-    ip = fp->f_inode;
+    ip   = fp->f_inode;
     flag = fp->f_flag;
-    cp = fp->f_un.f_chan;
-    dev = (dev_t)ip->i_un.i_rdev;
+    cp   = fp->f_un.f_chan;
+    dev  = (dev_t)ip->i_un.i_rdev;
     mode = ip->i_mode;
 
     plock(ip);
@@ -217,7 +217,7 @@ ufalloc()
 
     for (i = 0; i < NOFILE; i++)
         if (u.u_ofile[i] == NULL) {
-            u.u_r.r_val1 = i;
+            u.u_r.r_val1  = i;
             u.u_pofile[i] = 0;
             return (i);
         }

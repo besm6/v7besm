@@ -18,7 +18,7 @@
 
 extern int kend;
 
-time_t time;           /* time in sec from 1970 */
+time_t time; /* time in sec from 1970 */
 int nblkdev;
 int dk_busy;
 long dk_numb[3];
@@ -55,8 +55,8 @@ main()
     proc[0].p_stat = SRUN;
     proc[0].p_flag |= SLOAD | SSYS;
     proc[0].p_nice = NZERO;
-    u.u_procp = &proc[0];
-    u.u_cmask = CMASK;
+    u.u_procp      = &proc[0];
+    u.u_cmask      = CMASK;
 
     /*
      * Initialize devices and
@@ -115,11 +115,11 @@ iinit()
     bcopy(bp->b_un.b_addr, cp->b_un.b_addr, sizeof(struct filsys));
     brelse(bp);
     mount[0].m_bufp = cp;
-    mount[0].m_dev = rootdev;
-    fp = cp->b_un.b_filsys;
-    fp->s_flock = 0;
-    fp->s_ilock = 0;
-    fp->s_ronly = 0;
+    mount[0].m_dev  = rootdev;
+    fp              = cp->b_un.b_filsys;
+    fp->s_flock     = 0;
+    fp->s_ilock     = 0;
+    fp->s_ronly     = 0;
     if (time == 0)
         time = fp->s_time;
 }
@@ -147,14 +147,14 @@ binit()
 
     bfreelist.b_forw = bfreelist.b_back = bfreelist.av_forw = bfreelist.av_back = &bfreelist;
     for (i = 0; i < NBUF; i++) {
-        bp = &buf[i];
-        bp->b_dev = NODEV;
-        bp->b_un.b_addr = buffers[i];
-        bp->b_back = &bfreelist;
-        bp->b_forw = bfreelist.b_forw;
+        bp                       = &buf[i];
+        bp->b_dev                = NODEV;
+        bp->b_un.b_addr          = buffers[i];
+        bp->b_back               = &bfreelist;
+        bp->b_forw               = bfreelist.b_forw;
         bfreelist.b_forw->b_back = bp;
-        bfreelist.b_forw = bp;
-        bp->b_flags = B_BUSY;
+        bfreelist.b_forw         = bp;
+        bp->b_flags              = B_BUSY;
         brelse(bp);
     }
     for (bdp = bdevsw; bdp->d_open; bdp++) {

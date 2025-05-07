@@ -36,11 +36,11 @@ struct line {
     char *ep;
 };
 #define WWAIT 02
-#define CRUN 04
+#define CRUN  04
 #define RWAIT 010
 #define ALLOC 020
-#define DIS 040
-#define DLY 0100
+#define DIS   040
+#define DLY   0100
 
 /*
  * machine structure
@@ -59,7 +59,7 @@ struct mach {
 
 /* m flags */
 #define RNEXT 01
-#define MRUN 04
+#define MRUN  04
 #define XNEXT 010
 
 /*

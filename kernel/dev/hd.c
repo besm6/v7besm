@@ -21,37 +21,37 @@ extern int insw(), outsw();
 #define CB2 0x3f0 /* 0x3f0 or 0x370 */
 
 /* controller registers */
-#define DATA (CB1 + 0)  /* data reg */
-#define FR (CB1 + 1)    /* feature reg */
-#define SC (CB1 + 2)    /* sector count */
-#define SN (CB1 + 3)    /* sector number */
-#define CL (CB1 + 4)    /* cylinder low */
-#define CH (CB1 + 5)    /* cylinder high */
-#define DH (CB1 + 6)    /* device head */
-#define STAT (CB1 + 7)  /* primary status */
-#define CMD (CB1 + 7)   /* command */
+#define DATA  (CB1 + 0) /* data reg */
+#define FR    (CB1 + 1) /* feature reg */
+#define SC    (CB1 + 2) /* sector count */
+#define SN    (CB1 + 3) /* sector number */
+#define CL    (CB1 + 4) /* cylinder low */
+#define CH    (CB1 + 5) /* cylinder high */
+#define DH    (CB1 + 6) /* device head */
+#define STAT  (CB1 + 7) /* primary status */
+#define CMD   (CB1 + 7) /* command */
 #define ASTAT (CB2 + 6) /* alternate status */
-#define DC (CB2 + 6)    /* device control */
+#define DC    (CB2 + 6) /* device control */
 
 /* status flags */
 #define BSY 0x80 /* busy */
-#define DF 0x20  /* device fault */
+#define DF  0x20 /* device fault */
 #define DRQ 0x08 /* data request */
 #define ERR 0x01 /* error */
 
 /* misc bits */
 #define DEV0 0xa0 /* device 0 */
 #define DEV1 0xb0 /* device 1 */
-#define LBA 0x40  /* LBA mode */
+#define LBA  0x40 /* LBA mode */
 
 /* commands */
 #define RDSECT 0x20 /* read sector(s) */
 #define WRSECT 0x30 /* write sector(s) */
 
 #define MAXBLK 0xfffffff /* maximum block number */
-#define ERR1 1           /* error: timeout */
-#define ERR2 2           /* error: other */
-#define DK_N 0           /* monitoring device bit */
+#define ERR1   1         /* error: timeout */
+#define ERR2   2         /* error: other */
+#define DK_N   0         /* monitoring device bit */
 
 static struct {
     int dn;       /* device number */
@@ -98,7 +98,7 @@ hdopen(dev, rw) dev_t dev;
     if (part[un][0].size)
         return;
     part[un][0].size = MAXBLK;
-    bp = bread((dev & 0300) | 2, 0);
+    bp               = bread((dev & 0300) | 2, 0);
     if ((bp->b_flags & B_ERROR) == 0 &&
         *(unsigned short *)(bp->b_un.b_addr + BSIZE - 2) == PTMAGIC) {
         pe = (struct ptent *)(bp->b_un.b_addr + PTOFF);
@@ -161,11 +161,11 @@ hdstart()
         return;
     hdtab.b_active++;
     unptpd(bp->b_dev, &un, &pt, &pd);
-    hd.dn = un;
-    hd.bn = part[un][pt].base + pseudo[pd].base + bp->b_blkno;
-    hd.bc = (bp->b_bcount + BMASK) >> BSHIFT;
+    hd.dn   = un;
+    hd.bn   = part[un][pt].base + pseudo[pd].base + bp->b_blkno;
+    hd.bc   = (bp->b_bcount + BMASK) >> BSHIFT;
     hd.addr = bp->b_un.b_addr;
-    hd.rd = bp->b_flags & B_READ;
+    hd.rd   = bp->b_flags & B_READ;
     dk_busy |= 1 << DK_N;
     dk_numb[DK_N] += 1;
     dk_wds[DK_N] += bp->b_bcount >> 6;
@@ -186,7 +186,7 @@ hdio(st)
     int err;
 
     if ((err = hdsm(st)) != -1) {
-        bp = hdtab.b_actf;
+        bp             = hdtab.b_actf;
         hdtab.b_active = 0;
         if (err) {
             deverror(bp, err, hd.bn);
@@ -197,8 +197,8 @@ hdio(st)
             bp->b_flags |= B_ERROR;
         }
         hdtab.b_errcnt = 0;
-        hdtab.b_actf = bp->av_forw;
-        bp->b_resid = 0;
+        hdtab.b_actf   = bp->av_forw;
+        bp->b_resid    = 0;
         iodone(bp);
         hdstart();
     }

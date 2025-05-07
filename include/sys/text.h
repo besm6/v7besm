@@ -18,7 +18,7 @@ struct text {
 
 extern struct text text[];
 
-#define XTRC 01   /* Text may be written, exclusive use */
+#define XTRC  01  /* Text may be written, exclusive use */
 #define XWRIT 02  /* Text written into, must swap out */
 #define XLOAD 04  /* Currently being read from file */
 #define XLOCK 010 /* Being swapped in or out */

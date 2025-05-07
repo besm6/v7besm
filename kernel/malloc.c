@@ -72,10 +72,10 @@ register int a;
             bp->m_size += size;
         } else if (size) {
             do {
-                t = bp->m_addr;
+                t          = bp->m_addr;
                 bp->m_addr = a;
-                a = t;
-                t = bp->m_size;
+                a          = t;
+                t          = bp->m_size;
                 bp->m_size = size;
                 bp++;
             } while (size = t);

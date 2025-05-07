@@ -13,7 +13,7 @@
 #include "sys/buf.h"
 // clang-format on
 
-#define SQSIZE 0100 /* Must be power of 2 */
+#define SQSIZE  0100 /* Must be power of 2 */
 #define HASH(x) (((int)x >> 5) & (SQSIZE - 1))
 
 struct proc *slpque[SQSIZE];
@@ -43,22 +43,22 @@ sleep(chan, pri) caddr_t chan;
     register s, h;
 
     rp = u.u_procp;
-    s = spl6();
+    s  = spl6();
     if (chan == 0)
         panic("zero wchan");
-    rp->p_stat = SSLEEP;
+    rp->p_stat  = SSLEEP;
     rp->p_wchan = chan;
     if (chan == 0)
         panic("Sleeping on wchan 0");
-    rp->p_pri = pri;
-    h = HASH(chan);
+    rp->p_pri  = pri;
+    h          = HASH(chan);
     rp->p_link = slpque[h];
-    slpque[h] = rp;
+    slpque[h]  = rp;
     if (pri > PZERO) {
         if (issig()) {
             rp->p_wchan = 0;
-            rp->p_stat = SRUN;
-            slpque[h] = rp->p_link;
+            rp->p_stat  = SRUN;
+            slpque[h]   = rp->p_link;
             spl0();
             goto psig;
         }
@@ -138,7 +138,7 @@ setrq(p) struct proc *p;
             goto out;
         }
     p->p_link = runq;
-    runq = p;
+    runq      = p;
 out:
     splx(s);
 }
@@ -224,7 +224,7 @@ loop:
     for (rp = &proc[0]; rp < &proc[NPROC]; rp++)
         if (rp->p_stat == SRUN && (rp->p_flag & SLOAD) == 0 &&
             rp->p_time - (rp->p_nice - NZERO) * 8 > outage) {
-            p = rp;
+            p      = rp;
             outage = rp->p_time - (rp->p_nice - NZERO) * 8;
         }
     /*
@@ -253,9 +253,9 @@ loop:
      */
 
     spl6();
-    p = NULL;
+    p       = NULL;
     maxsize = -1;
-    inage = -1;
+    inage   = -1;
     for (rp = &proc[0]; rp < &proc[NPROC]; rp++) {
         if (rp->p_stat == SZOMB || (rp->p_flag & (SSYS | SLOCK | SULOCK | SLOAD)) != SLOAD)
             continue;
@@ -263,12 +263,12 @@ loop:
             continue;
         if (rp->p_stat == SSLEEP && rp->p_pri >= PZERO || rp->p_stat == SSTOP) {
             if (maxsize < rp->p_size) {
-                p = rp;
+                p       = rp;
                 maxsize = rp->p_size;
             }
         } else if (maxsize < 0 && (rp->p_stat == SRUN || rp->p_stat == SSLEEP)) {
             if (rp->p_time + rp->p_nice - NZERO > inage) {
-                p = rp;
+                p     = rp;
                 inage = rp->p_time + rp->p_nice - NZERO;
             }
         }
@@ -384,9 +384,9 @@ swtch()
 loop:
     spl6();
     runrun = 0;
-    pp = NULL;
-    q = NULL;
-    n = 128;
+    pp     = NULL;
+    q      = NULL;
+    n      = 128;
     /*
      * Search for highest-priority runnable process
      */
@@ -395,7 +395,7 @@ loop:
             if (p->p_pri < n) {
                 pp = p;
                 pq = q;
-                n = p->p_pri;
+                n  = p->p_pri;
             }
         }
         q = p;
@@ -461,19 +461,19 @@ retry:
      * make proc entry for new proc
      */
 
-    rip = u.u_procp;
-    up = rip;
-    rpp->p_stat = SRUN;
+    rip           = u.u_procp;
+    up            = rip;
+    rpp->p_stat   = SRUN;
     rpp->p_clktim = 0;
-    rpp->p_flag = SLOAD;
-    rpp->p_uid = rip->p_uid;
-    rpp->p_pgrp = rip->p_pgrp;
-    rpp->p_nice = rip->p_nice;
-    rpp->p_textp = rip->p_textp;
-    rpp->p_pid = mpid;
-    rpp->p_ppid = rip->p_pid;
-    rpp->p_time = 0;
-    rpp->p_cpu = 0;
+    rpp->p_flag   = SLOAD;
+    rpp->p_uid    = rip->p_uid;
+    rpp->p_pgrp   = rip->p_pgrp;
+    rpp->p_nice   = rip->p_nice;
+    rpp->p_textp  = rip->p_textp;
+    rpp->p_pid    = mpid;
+    rpp->p_ppid   = rip->p_pid;
+    rpp->p_time   = 0;
+    rpp->p_cpu    = 0;
 
     /*
      * make duplicate entries
@@ -495,11 +495,11 @@ retry:
      * of the new process so that when it is actually
      * created (by copying) it will look right.
      */
-    rpp = p;
-    u.u_procp = rpp;
-    rip = up;
-    n = rip->p_size;
-    a1 = rip->p_addr;
+    rpp         = p;
+    u.u_procp   = rpp;
+    rip         = up;
+    n           = rip->p_size;
+    a1          = rip->p_addr;
     rpp->p_size = n;
     /*
      * When the resume is executed for the new process,
@@ -553,10 +553,10 @@ expand(newsize)
     register struct proc *p;
     register a1, a2;
 
-    p = u.u_procp;
-    n = p->p_size;
+    p         = u.u_procp;
+    n         = p->p_size;
     p->p_size = newsize;
-    a1 = p->p_addr;
+    a1        = p->p_addr;
     if (n >= newsize) {
         mfree(coremap, n - newsize, a1 + newsize);
         return;

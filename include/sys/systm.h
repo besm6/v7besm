@@ -39,13 +39,13 @@ extern daddr_t swplo;        /* block number of swap space */
 extern int nswap;            /* size of swap space */
 extern int updlock;          /* lock for sync */
 extern daddr_t rablock;      /* block to be read ahead */
-extern char regloc[]; /* locs. of saved user registers (trap.c) */
+extern char regloc[];        /* locs. of saved user registers (trap.c) */
 extern char msgbuf[MSGBUFS]; /* saved "printf" characters */
 extern dev_t rootdev;        /* device of the root */
 extern dev_t swapdev;        /* swapping device */
 extern dev_t pipedev;        /* pipe device */
-extern int icode[];   /* user init code */
-extern int szicode;   /* its size */
+extern int icode[];          /* user init code */
+extern int szicode;          /* its size */
 
 dev_t getmdev();
 daddr_t bmap();

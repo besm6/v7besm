@@ -28,24 +28,24 @@ getc(p) register struct clist *p;
 
     s = spl6();
     if (p->c_cc <= 0) {
-        c = -1;
+        c       = -1;
         p->c_cc = 0;
         p->c_cf = p->c_cl = NULL;
     } else {
         c = *p->c_cf++ & 0377;
         if (--p->c_cc <= 0) {
-            bp = (struct cblock *)(p->c_cf - 1);
-            bp = (struct cblock *)((int)bp & ~CROUND);
-            p->c_cf = NULL;
-            p->c_cl = NULL;
+            bp         = (struct cblock *)(p->c_cf - 1);
+            bp         = (struct cblock *)((int)bp & ~CROUND);
+            p->c_cf    = NULL;
+            p->c_cl    = NULL;
             bp->c_next = cfreelist;
-            cfreelist = bp;
+            cfreelist  = bp;
         } else if (((int)p->c_cf & CROUND) == 0) {
             bp = (struct cblock *)(p->c_cf);
             bp--;
-            p->c_cf = bp->c_next->c_info;
+            p->c_cf    = bp->c_next->c_info;
             bp->c_next = cfreelist;
-            cfreelist = bp;
+            cfreelist  = bp;
         }
     }
     splx(s);
@@ -77,19 +77,19 @@ register char *cp;
     while (--cc) {
         *cp++ = *q->c_cf++;
         if (--q->c_cc <= 0) {
-            bp = (struct cblock *)(q->c_cf - 1);
-            bp = (struct cblock *)((int)bp & ~CROUND);
+            bp      = (struct cblock *)(q->c_cf - 1);
+            bp      = (struct cblock *)((int)bp & ~CROUND);
             q->c_cf = q->c_cl = NULL;
-            bp->c_next = cfreelist;
-            cfreelist = bp;
+            bp->c_next        = cfreelist;
+            cfreelist         = bp;
             break;
         }
         if (((int)q->c_cf & CROUND) == 0) {
             bp = (struct cblock *)(q->c_cf);
             bp--;
-            q->c_cf = bp->c_next->c_info;
+            q->c_cf    = bp->c_next->c_info;
             bp->c_next = cfreelist;
-            cfreelist = bp;
+            cfreelist  = bp;
         }
     }
     splx(s);
@@ -118,7 +118,7 @@ ndqb(q, flag) register struct clist *q;
     if (flag) {
         register char *p, *end;
 
-        p = q->c_cf;
+        p   = q->c_cf;
         end = p;
         end += cc;
         while (p < end) {
@@ -173,13 +173,13 @@ register cc;
             q->c_cf = q->c_cl = NULL;
         }
         bp->c_next = cfreelist;
-        cfreelist = bp;
+        cfreelist  = bp;
     } else if (q->c_cc == 0) {
         register struct cblock *bp;
-        q->c_cf = (char *)((int)q->c_cf & ~CROUND);
-        bp = (struct cblock *)(q->c_cf);
+        q->c_cf    = (char *)((int)q->c_cf & ~CROUND);
+        bp         = (struct cblock *)(q->c_cf);
         bp->c_next = cfreelist;
-        cfreelist = bp;
+        cfreelist  = bp;
         q->c_cf = q->c_cl = NULL;
     }
 out:
@@ -197,7 +197,7 @@ putc(c, p) register struct clist *p;
             splx(s);
             return (-1);
         }
-        cfreelist = bp->c_next;
+        cfreelist  = bp->c_next;
         bp->c_next = NULL;
         p->c_cf = cp = bp->c_info;
     } else if (((int)cp & CROUND) == 0) {
@@ -206,10 +206,10 @@ putc(c, p) register struct clist *p;
             splx(s);
             return (-1);
         }
-        bp = bp->c_next;
-        cfreelist = bp->c_next;
+        bp         = bp->c_next;
+        cfreelist  = bp->c_next;
         bp->c_next = NULL;
-        cp = bp->c_info;
+        cp         = bp->c_info;
     }
     *cp++ = c;
     p->c_cc++;
@@ -238,7 +238,7 @@ register int cc;
     if ((cq = q->c_cl) == NULL || q->c_cc < 0) {
         if ((bp = cfreelist) == NULL)
             goto out;
-        cfreelist = bp->c_next;
+        cfreelist  = bp->c_next;
         bp->c_next = NULL;
         q->c_cf = cq = bp->c_info;
     }
@@ -248,10 +248,10 @@ register int cc;
             bp = (struct cblock *)cq - 1;
             if ((bp->c_next = cfreelist) == NULL)
                 goto out;
-            bp = bp->c_next;
-            cfreelist = bp->c_next;
+            bp         = bp->c_next;
+            cfreelist  = bp->c_next;
             bp->c_next = NULL;
-            cq = bp->c_info;
+            cq         = bp->c_info;
         }
         *cq++ = *cp++;
         cc--;
@@ -277,7 +277,7 @@ cinit()
     ccp = (ccp + CROUND) & ~CROUND;
     for (cp = (struct cblock *)ccp; cp <= &cfree[NCLIST - 1]; cp++) {
         cp->c_next = cfreelist;
-        cfreelist = cp;
+        cfreelist  = cp;
     }
     ccp = 0;
     for (cdp = cdevsw; cdp->d_open; cdp++)

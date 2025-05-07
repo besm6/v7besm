@@ -42,7 +42,7 @@ exece()
     if ((ip = namei(uchar, 0)) == NULL)
         return;
     bno = 0;
-    bp = 0;
+    bp  = 0;
     if (access(ip, IEXEC))
         goto bad;
     if ((ip->i_mode & IFMT) != IFREG || (ip->i_mode & (IEXEC | (IEXEC >> 3) | (IEXEC >> 6))) == 0) {
@@ -52,9 +52,9 @@ exece()
     /*
      * Collect arguments on "file" in swap space.
      */
-    na = 0;
-    ne = 0;
-    nc = 0;
+    na  = 0;
+    ne  = 0;
+    nc  = 0;
     uap = (struct execa *)u.u_ap;
     if ((bno = malloc(swapmap, (NCARGS + BSIZE - 1) / BSIZE)) == 0)
         panic("Out of swap");
@@ -105,8 +105,8 @@ exece()
      * copy back arglist
      */
 
-    ucp = USTK - nc - NBPW;
-    ap = ucp - na * NBPW - 3 * NBPW;
+    ucp          = USTK - nc - NBPW;
+    ap           = ucp - na * NBPW - 3 * NBPW;
     u.u_ar0[ESP] = ap;
     suword((caddr_t)ap, na - ne);
     nc = 0;
@@ -162,8 +162,8 @@ getxfile(ip, nargc) register struct inode *ip;
      *  410 is RO text
      */
 
-    u.u_base = (caddr_t)&u.u_exdata;
-    u.u_count = sizeof(u.u_exdata);
+    u.u_base   = (caddr_t)&u.u_exdata;
+    u.u_count  = sizeof(u.u_exdata);
     u.u_offset = 0;
     u.u_segflg = 1;
     readi(ip);
@@ -175,7 +175,7 @@ getxfile(ip, nargc) register struct inode *ip;
         goto bad;
     }
     if (u.u_exdata.ux_mag == 0407) {
-        lsize = (long)u.u_exdata.ux_dsize + u.u_exdata.ux_tsize;
+        lsize               = (long)u.u_exdata.ux_dsize + u.u_exdata.ux_tsize;
         u.u_exdata.ux_dsize = lsize;
         if (lsize != u.u_exdata.ux_dsize) { /* check overflow */
             u.u_error = ENOMEM;
@@ -196,7 +196,7 @@ getxfile(ip, nargc) register struct inode *ip;
      * try them out for possible
      * overflow of max sizes
      */
-    ts = btoc(u.u_exdata.ux_tsize);
+    ts    = btoc(u.u_exdata.ux_tsize);
     lsize = (long)u.u_exdata.ux_dsize + u.u_exdata.ux_bsize;
     if (lsize != (unsigned)lsize) {
         u.u_error = ENOMEM;
@@ -226,9 +226,9 @@ getxfile(ip, nargc) register struct inode *ip;
      */
 
     estabur((unsigned)0, ds, (unsigned)0, 0, RO);
-    u.u_base = 0;
+    u.u_base   = 0;
     u.u_offset = sizeof(u.u_exdata) + u.u_exdata.ux_tsize;
-    u.u_count = u.u_exdata.ux_dsize;
+    u.u_count  = u.u_exdata.ux_dsize;
     readi(ip);
     /*
      * set SUID/SGID protections, if no tracing
@@ -236,7 +236,7 @@ getxfile(ip, nargc) register struct inode *ip;
     if ((u.u_procp->p_flag & STRC) == 0) {
         if (ip->i_mode & ISUID)
             if (u.u_uid != 0) {
-                u.u_uid = ip->i_uid;
+                u.u_uid          = ip->i_uid;
                 u.u_procp->p_uid = ip->i_uid;
             }
         if (ip->i_mode & ISGID)
@@ -313,7 +313,7 @@ exit(rv)
     for (i = 0; i < NSIG; i++)
         u.u_signal[i] = 1;
     for (i = 0; i < NOFILE; i++) {
-        f = u.u_ofile[i];
+        f            = u.u_ofile[i];
         u.u_ofile[i] = NULL;
         closef(f);
     }
@@ -326,7 +326,7 @@ exit(rv)
     xfree();
     acct();
     mfree(coremap, p->p_size, p->p_addr);
-    p->p_stat = SZOMB;
+    p->p_stat                     = SZOMB;
     ((struct xproc *)p)->xp_xstat = rv;
     ((struct xproc *)p)->xp_utime = u.u_cutime + u.u_utime;
     ((struct xproc *)p)->xp_stime = u.u_cstime + u.u_stime;
@@ -369,13 +369,13 @@ loop:
                 u.u_r.r_val2 = ((struct xproc *)p)->xp_xstat;
                 u.u_cutime += ((struct xproc *)p)->xp_utime;
                 u.u_cstime += ((struct xproc *)p)->xp_stime;
-                p->p_pid = 0;
-                p->p_ppid = 0;
-                p->p_pgrp = 0;
-                p->p_sig = 0;
-                p->p_flag = 0;
+                p->p_pid   = 0;
+                p->p_ppid  = 0;
+                p->p_pgrp  = 0;
+                p->p_sig   = 0;
+                p->p_flag  = 0;
                 p->p_wchan = 0;
-                p->p_stat = NULL;
+                p->p_stat  = NULL;
                 return;
             }
             if (p->p_stat == SSTOP) {
@@ -412,7 +412,7 @@ fork()
         goto out;
     }
     mfree(swapmap, ctod(MAXMEM), a);
-    a = 0;
+    a  = 0;
     p2 = NULL;
     for (p1 = &proc[0]; p1 < &proc[NPROC]; p1++) {
         if (p1->p_stat == NULL && p2 == NULL)
@@ -435,12 +435,12 @@ fork()
     p1 = u.u_procp;
     if (newproc()) {
         u.u_r.r_val1 = p1->p_pid;
-        u.u_start = time;
-        u.u_cstime = 0;
-        u.u_stime = 0;
-        u.u_cutime = 0;
-        u.u_utime = 0;
-        u.u_acflag = AFORK;
+        u.u_start    = time;
+        u.u_cstime   = 0;
+        u.u_stime    = 0;
+        u.u_cutime   = 0;
+        u.u_utime    = 0;
+        u.u_acflag   = AFORK;
         return;
     }
     u.u_r.r_val1 = p2->p_pid;

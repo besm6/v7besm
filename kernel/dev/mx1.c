@@ -53,12 +53,12 @@ struct chan *challoc(index, isport)
     s = spl6();
     if (isport) {
         register struct schan *cp, *lastcp;
-        cp = schans;
+        cp     = schans;
         lastcp = &schans[NPORTS];
         for (; cp < lastcp; cp++)
             if (cp->c_group == NULL) {
                 cp->c_index = index;
-                cp->c_pgrp = 0;
+                cp->c_pgrp  = 0;
                 cp->c_flags = 0;
                 splx(s);
                 return ((struct chan *)cp);
@@ -66,12 +66,12 @@ struct chan *challoc(index, isport)
         goto out;
     } else {
         register struct chan *cp, *lastcp;
-        cp = chans;
+        cp     = chans;
         lastcp = &chans[NCHANS];
         for (; cp < lastcp; cp++)
             if (cp->c_group == NULL) {
                 cp->c_index = index;
-                cp->c_pgrp = 0;
+                cp->c_pgrp  = 0;
                 cp->c_flags = 0;
                 splx(s);
                 return (cp);
@@ -117,7 +117,7 @@ struct inode *ip;
         if (cp == NULL) {
             if ((cp = challoc(i, isport)) != NULL) {
                 gp->g_chans[i] = cp;
-                cp->c_group = gp;
+                cp->c_group    = gp;
             }
             break;
         }
@@ -167,7 +167,7 @@ mpxchan()
         if (gfp == NULL)
             goto bad;
         gip = gfp->f_inode;
-        gp = &gip->i_un.i_group;
+        gp  = &gip->i_un.i_group;
         if (gp->g_inode != gip)
             goto bad;
     }
@@ -205,7 +205,7 @@ sw:
             goto merge;
         }
         u.u_dirp = vec.m_name;
-        ip = namei(uchar, 1);
+        ip       = namei(uchar, 1);
         if (ip != NULL) {
             u.u_error = EEXIST;
             iput(ip);
@@ -222,15 +222,15 @@ sw:
             goto bad;
         }
         ip->i_un.i_rdev = (daddr_t)(mpxdev + i);
-        gp = &ip->i_un.i_group;
-        groups[i] = gp;
-        gp->g_inode = ip;
-        gp->g_state = COPEN;
-        gp->g_group = NULL;
-        gp->g_index = 0;
-        gp->g_rotmask = 1;
-        gp->g_rot = 0;
-        gp->g_datq = 0;
+        gp              = &ip->i_un.i_group;
+        groups[i]       = gp;
+        gp->g_inode     = ip;
+        gp->g_state     = COPEN;
+        gp->g_group     = NULL;
+        gp->g_index     = 0;
+        gp->g_rotmask   = 1;
+        gp->g_rot       = 0;
+        gp->g_datq      = 0;
         open1(ip, FREAD + FWRITE, 2);
         if (u.u_error) {
             groups[i] = NULL;
@@ -243,7 +243,7 @@ sw:
         fp = u.u_ofile[u.u_r.r_val1];
         fp->f_flag |= FMP;
         fp->f_un.f_chan = NULL;
-        gp->g_file = fp;
+        gp->g_file      = fp;
         for (i = 0; i < NINDEX;)
             gp->g_chans[i++] = NULL;
         return;
@@ -255,7 +255,7 @@ sw:
         if ((fp = getf(vec.m_arg[0])) == NULL)
             goto bad;
         ip = fp->f_inode;
-        i = ip->i_mode & IFMT;
+        i  = ip->i_mode & IFMT;
         if (i == IFMPC) {
             if ((fp->f_flag & FMP) != FMP) {
                 goto bad;
@@ -268,7 +268,7 @@ sw:
         if (i != IFCHR)
             goto bad;
         dev = (dev_t)ip->i_un.i_rdev;
-        tp = cdevsw[major(dev)].d_ttys;
+        tp  = cdevsw[major(dev)].d_ttys;
         if (tp == NULL)
             goto bad;
         tp = &tp[minor(dev)];
@@ -277,11 +277,11 @@ sw:
         if ((cp = addch(gip, 1)) == NULL)
             goto bad;
         tp->t_chan = cp;
-        cp->c_fy = fp;
+        cp->c_fy   = fp;
         fp->f_count++;
-        cp->c_ttyp = tp;
-        cp->c_line = tp->t_line;
-        cp->c_flags = XGRP + PORT;
+        cp->c_ttyp   = tp;
+        cp->c_line   = tp->t_line;
+        cp->c_flags  = XGRP + PORT;
         u.u_r.r_val1 = cpx(cp);
         return;
     /*
@@ -322,8 +322,8 @@ sw:
         fp->f_inode = gip;
         gip->i_count++;
         fp->f_un.f_chan = cp;
-        fp->f_flag = (vec.m_arg[2]) ? (FREAD | FWRITE | FMPY) : (FREAD | FWRITE | FMPX);
-        cp->c_fy = fp;
+        fp->f_flag      = (vec.m_arg[2]) ? (FREAD | FWRITE | FMPY) : (FREAD | FWRITE | FMPX);
+        cp->c_fy        = fp;
         return;
     /*
      * make new chan on group (arg 1)
@@ -332,10 +332,10 @@ sw:
         if ((cp = addch(gip, 0)) == NULL)
             goto bad;
         cp->c_flags = XGRP;
-        cp->c_fy = NULL;
+        cp->c_fy    = NULL;
         cp->c_ttyp = cp->c_ottyp = (struct tty *)cp;
         cp->c_line = cp->c_oline = mpxline;
-        u.u_r.r_val1 = cpx(cp);
+        u.u_r.r_val1             = cpx(cp);
         return;
     /*
      * connect fd (arg 0) to channel fd (arg 1)
@@ -349,11 +349,11 @@ sw:
         if ((chfp = getf(vec.m_arg[1])) == NULL)
             goto bad;
         ip = fp->f_inode;
-        i = ip->i_mode & IFMT;
+        i  = ip->i_mode & IFMT;
         if (i != IFCHR)
             goto bad;
         dev = (dev_t)ip->i_un.i_rdev;
-        tp = cdevsw[major(dev)].d_ttys;
+        tp  = cdevsw[major(dev)].d_ttys;
         if (tp == NULL)
             goto bad;
         tp = &tp[minor(dev)];
@@ -383,7 +383,7 @@ sw:
             if (cp == NULL)
                 goto bad;
         }
-        pp = u.u_procp;
+        pp         = u.u_procp;
         pp->p_pgrp = pp->p_pid;
         if (vec.m_arg[2])
             pp->p_pgrp = vec.m_arg[2];
@@ -419,7 +419,7 @@ detach(cp) register struct chan *cp;
     if (cp->c_flags & ISGRP) {
         gp = (struct group *)cp;
         closef(gp->g_file);
-        i = ((struct group *)cp)->g_index;
+        i              = ((struct group *)cp)->g_index;
         gp->g_chans[i] = NULL;
         return;
     } else if (cp->c_flags & PORT && cp->c_ttyp != NULL) {
@@ -463,9 +463,9 @@ mlink(sub, master) struct group *sub, *master;
         if (master->g_chans[i] != NULL)
             continue;
         master->g_chans[i] = (struct chan *)sub;
-        sub->g_group = master;
-        sub->g_index = i;
-        u.u_r.r_val1 = i;
+        sub->g_group       = master;
+        sub->g_index       = i;
+        u.u_r.r_val1       = i;
         return;
     }
     u.u_error = ENXIO;

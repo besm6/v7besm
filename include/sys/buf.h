@@ -46,26 +46,26 @@ extern struct buf bfreelist; /* head of available list */
 /*
  * These flags are kept in b_flags.
  */
-#define B_WRITE 0      /* non-read pseudo-flag */
-#define B_READ 01      /* read when I/O occurs */
-#define B_DONE 02      /* transaction finished */
-#define B_ERROR 04     /* transaction aborted */
-#define B_BUSY 010     /* not on av_forw/back list */
-#define B_PHYS 020     /* physical I/O */
+#define B_WRITE  0     /* non-read pseudo-flag */
+#define B_READ   01    /* read when I/O occurs */
+#define B_DONE   02    /* transaction finished */
+#define B_ERROR  04    /* transaction aborted */
+#define B_BUSY   010   /* not on av_forw/back list */
+#define B_PHYS   020   /* physical I/O */
 #define B_WANTED 0100  /* issue wakeup when BUSY goes off */
-#define B_AGE 0200     /* delayed write for correct aging */
-#define B_ASYNC 0400   /* don't wait for I/O completion */
+#define B_AGE    0200  /* delayed write for correct aging */
+#define B_ASYNC  0400  /* don't wait for I/O completion */
 #define B_DELWRI 01000 /* don't write till block leaves available list */
-#define B_TAPE 02000   /* this is a magtape (no bdwrite) */
-#define B_PBUSY 04000
-#define B_PACK 010000
+#define B_TAPE   02000 /* this is a magtape (no bdwrite) */
+#define B_PBUSY  04000
+#define B_PACK   010000
 
 /*
  * special redeclarations for
  * the head of the queue per
  * device driver.
  */
-#define b_actf av_forw
-#define b_actl av_back
+#define b_actf   av_forw
+#define b_actl   av_back
 #define b_active b_bcount
 #define b_errcnt b_resid

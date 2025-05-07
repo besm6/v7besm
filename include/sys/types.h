@@ -9,6 +9,6 @@ typedef int label_t[6];       /* program status */
 typedef short dev_t;          /* device code */
 typedef long off_t;           /* offset in file */
                               /* selectors and constructor for device code */
-#define major(x) (int)(((unsigned)x >> 8))
-#define minor(x) (int)(x & 0377)
+#define major(x)      (int)(((unsigned)x >> 8))
+#define minor(x)      (int)(x & 0377)
 #define makedev(x, y) (dev_t)((x) << 8 | (y))

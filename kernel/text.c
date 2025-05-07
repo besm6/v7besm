@@ -60,7 +60,7 @@ xfree()
     xlock(xp);
     xp->x_flag &= ~XLOCK;
     u.u_procp->p_textp = NULL;
-    ip = xp->x_iptr;
+    ip                 = xp->x_iptr;
     if (--xp->x_count == 0 && (ip->i_mode & ISVTX) == 0) {
         xp->x_iptr = NULL;
         mfree(swapmap, ctod(xp->x_size), xp->x_daddr);
@@ -116,22 +116,22 @@ xalloc(ip) register struct inode *ip;
         psignal(u.u_procp, SIGKIL);
         return;
     }
-    xp->x_flag = XLOAD | XLOCK;
-    xp->x_count = 1;
+    xp->x_flag   = XLOAD | XLOCK;
+    xp->x_count  = 1;
     xp->x_ccount = 0;
-    xp->x_iptr = ip;
+    xp->x_iptr   = ip;
     ip->i_flag |= ITEXT;
     ip->i_count++;
-    ts = btoc(u.u_exdata.ux_tsize);
+    ts         = btoc(u.u_exdata.ux_tsize);
     xp->x_size = ts;
     if ((xp->x_daddr = malloc(swapmap, (int)ctod(ts))) == NULL)
         panic("out of swap space");
     u.u_procp->p_textp = xp;
     xexpand(xp);
     estabur(ts, (unsigned)0, (unsigned)0, 0, RW);
-    u.u_count = u.u_exdata.ux_tsize;
+    u.u_count  = u.u_exdata.ux_tsize;
     u.u_offset = sizeof(u.u_exdata);
-    u.u_base = 0;
+    u.u_base   = 0;
     u.u_segflg = 2;
     u.u_procp->p_flag |= SLOCK;
     readi(ip);

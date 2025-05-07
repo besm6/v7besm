@@ -40,23 +40,23 @@ pipe()
         iput(ip);
         return;
     }
-    r = u.u_r.r_val1;
+    r  = u.u_r.r_val1;
     wf = falloc();
     if (wf == NULL) {
-        rf->f_count = 0;
+        rf->f_count  = 0;
         u.u_ofile[r] = NULL;
         iput(ip);
         return;
     }
     u.u_r.r_val2 = u.u_r.r_val1;
     u.u_r.r_val1 = r;
-    wf->f_flag = FWRITE | FPIPE;
-    wf->f_inode = ip;
-    rf->f_flag = FREAD | FPIPE;
-    rf->f_inode = ip;
-    ip->i_count = 2;
-    ip->i_mode = IFREG;
-    ip->i_flag = IACC | IUPD | ICHG;
+    wf->f_flag   = FWRITE | FPIPE;
+    wf->f_inode  = ip;
+    rf->f_flag   = FREAD | FPIPE;
+    rf->f_inode  = ip;
+    ip->i_count  = 2;
+    ip->i_mode   = IFREG;
+    ip->i_flag   = IACC | IUPD | ICHG;
 }
 
 /*
@@ -104,7 +104,7 @@ loop:
      */
     if (fp->f_un.f_offset == ip->i_size) {
         fp->f_un.f_offset = 0;
-        ip->i_size = 0;
+        ip->i_size        = 0;
         if (ip->i_mode & IWRITE) {
             ip->i_mode &= ~IWRITE;
             wakeup((caddr_t)ip + 1);
@@ -122,7 +122,7 @@ writep(fp) register struct file *fp;
     register struct inode *ip;
 
     ip = fp->f_inode;
-    c = u.u_count;
+    c  = u.u_count;
 
 loop:
 
@@ -172,7 +172,7 @@ loop:
      */
 
     u.u_offset = ip->i_size;
-    u.u_count = min((unsigned)c, (unsigned)PIPSIZ);
+    u.u_count  = min((unsigned)c, (unsigned)PIPSIZ);
     c -= u.u_count;
     writei(ip);
     prele(ip);

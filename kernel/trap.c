@@ -38,7 +38,7 @@ trap(tr) struct trap tr;
     time_t syst;
     int osp;
 
-    syst = u.u_stime;
+    syst        = u.u_stime;
     u.u_fpsaved = 0;
     if (USERMODE(tr.cs))
         tr.dev |= USER;
@@ -124,14 +124,14 @@ trap(tr) struct trap tr;
     case 48 + USER: /* sys call */
         u.u_error = 0;
         tr.efl &= ~EBIT;
-        a = (int *)(tr.esp + 4);
+        a     = (int *)(tr.esp + 4);
         callp = &sysent[tr.eax & 077];
         for (i = 0; i < callp->sy_narg; i++)
             u.u_arg[i] = fuword((caddr_t)a++);
-        u.u_dirp = (caddr_t)u.u_arg[0];
+        u.u_dirp     = (caddr_t)u.u_arg[0];
         u.u_r.r_val1 = 0;
         u.u_r.r_val2 = 0;
-        u.u_ap = u.u_arg;
+        u.u_ap       = u.u_arg;
         if (save(u.u_qsav)) {
             if (u.u_error == 0)
                 u.u_error = EINTR;

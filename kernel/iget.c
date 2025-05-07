@@ -72,12 +72,12 @@ loop:
         u.u_error = ENFILE;
         return (NULL);
     }
-    ip->i_dev = dev;
+    ip->i_dev    = dev;
     ip->i_number = ino;
-    ip->i_flag = ILOCK;
+    ip->i_flag   = ILOCK;
     ip->i_count++;
     ip->i_un.i_lastr = 0;
-    bp = bread(dev, itod(ino));
+    bp               = bread(dev, itod(ino));
     /*
      * Check I/O errors
      */
@@ -100,13 +100,13 @@ register struct dinode *dp;
     char *p2;
     int i;
 
-    ip->i_mode = dp->di_mode;
+    ip->i_mode  = dp->di_mode;
     ip->i_nlink = dp->di_nlink;
-    ip->i_uid = dp->di_uid;
-    ip->i_gid = dp->di_gid;
-    ip->i_size = dp->di_size;
-    p1 = (char *)ip->i_un.i_addr;
-    p2 = (char *)dp->di_addr;
+    ip->i_uid   = dp->di_uid;
+    ip->i_gid   = dp->di_gid;
+    ip->i_size  = dp->di_size;
+    p1          = (char *)ip->i_un.i_addr;
+    p2          = (char *)dp->di_addr;
     for (i = 0; i < NADDR; i++) {
         *p1++ = *p2++;
         *p1++ = *p2++;
@@ -134,7 +134,7 @@ iput(ip) register struct inode *ip;
         }
         iupdat(ip, &time, &time);
         prele(ip);
-        ip->i_flag = 0;
+        ip->i_flag   = 0;
         ip->i_number = 0;
     }
     ip->i_count--;
@@ -166,13 +166,13 @@ time_t *ta, *tm;
         }
         dp = bp->b_un.b_dino;
         dp += itoo(ip->i_number);
-        dp->di_mode = ip->i_mode;
+        dp->di_mode  = ip->i_mode;
         dp->di_nlink = ip->i_nlink;
-        dp->di_uid = ip->i_uid;
-        dp->di_gid = ip->i_gid;
-        dp->di_size = ip->i_size;
-        p1 = (char *)dp->di_addr;
-        p2 = (char *)ip->i_un.i_addr;
+        dp->di_uid   = ip->i_uid;
+        dp->di_gid   = ip->i_gid;
+        dp->di_size  = ip->i_size;
+        p1           = (char *)dp->di_addr;
+        p2           = (char *)ip->i_un.i_addr;
         for (i = 0; i < NADDR; i++) {
             *p1++ = *p2++;
             *p1++ = *p2++;
@@ -284,10 +284,10 @@ struct inode *maknode(mode)
     ip->i_flag |= IACC | IUPD | ICHG;
     if ((mode & IFMT) == 0)
         mode |= IFREG;
-    ip->i_mode = mode & ~u.u_cmask;
+    ip->i_mode  = mode & ~u.u_cmask;
     ip->i_nlink = 1;
-    ip->i_uid = u.u_uid;
-    ip->i_gid = u.u_gid;
+    ip->i_uid   = u.u_uid;
+    ip->i_gid   = u.u_gid;
     wdir(ip);
     return (ip);
 }
@@ -305,9 +305,9 @@ wdir(ip) struct inode *ip;
     }
     u.u_dent.d_ino = ip->i_number;
     bcopy((caddr_t)u.u_dbuf, (caddr_t)u.u_dent.d_name, DIRSIZ);
-    u.u_count = sizeof(struct direct);
+    u.u_count  = sizeof(struct direct);
     u.u_segflg = 1;
-    u.u_base = (caddr_t)&u.u_dent;
+    u.u_base   = (caddr_t)&u.u_dent;
     writei(u.u_pdir);
 out:
     iput(u.u_pdir);

@@ -17,7 +17,7 @@
 
 extern int kend, phymem;
 
-int maxmem;           /* actual max memory per process */
+int maxmem; /* actual max memory per process */
 
 /*
  * Icode is the hex bootstrap

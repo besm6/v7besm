@@ -19,8 +19,8 @@ disksort(dp, bp) register struct buf *dp, *bp;
 
     ap = dp->b_actf;
     if (ap == NULL) {
-        dp->b_actf = bp;
-        dp->b_actl = bp;
+        dp->b_actf  = bp;
+        dp->b_actl  = bp;
         bp->av_forw = NULL;
         return;
     }

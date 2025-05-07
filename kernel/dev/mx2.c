@@ -103,7 +103,7 @@ mxopen(dev, flag)
         chfree(cp);
         goto bad;
     }
-    cp->c_fy = fp;
+    cp->c_fy   = fp;
     cp->c_pgrp = u.u_procp->p_pgrp;
 }
 
@@ -114,7 +114,7 @@ mpxname(cp) register struct chan *cp;
 {
     register char *np;
     register c;
-    np = mxnmbuf;
+    np       = mxnmbuf;
     u.u_dirp = (caddr_t)u.u_arg[0];
 
     while (np < &mxnmbuf[NMSIZE]) {
@@ -123,7 +123,7 @@ mpxname(cp) register struct chan *cp;
             break;
         *np++ = c;
     }
-    *np++ = '\0';
+    *np++  = '\0';
     nmsize = np - mxnmbuf;
 
     cp->c_flags |= NMBUF;
@@ -222,7 +222,7 @@ mxread(dev)
         u.u_error = ENXIO;
         return;
     }
-    fp = getf(u.u_arg[0]);
+    fp  = getf(u.u_arg[0]);
     fmp = fp->f_flag & FMP;
     if (fmp != FMP) {
         msread(fmp, fp->f_un.f_chan);
@@ -239,7 +239,7 @@ mxread(dev)
     while (gp->g_datq && u.u_count >= CNTLSIZ + 2) {
         splx(s);
         esc = 0;
-        cp = nextcp(gp);
+        cp  = nextcp(gp);
         if (cp == NULL) {
             continue;
         }
@@ -254,7 +254,7 @@ mxread(dev)
             }
             esc++;
         }
-        base = u.u_base;
+        base  = u.u_base;
         count = u.u_count;
         u.u_base += sizeof h;
         u.u_count -= sizeof h;
@@ -274,10 +274,10 @@ mxread(dev)
         }
         xfr -= u.u_count;
         if (esc) {
-            h.count = 0;
+            h.count  = 0;
             h.ccount = xfr;
         } else {
-            h.count = xfr;
+            h.count  = xfr;
             h.ccount = 0;
             mxrstrt(cp, &cp->cx.datq, BLOCK | ALT);
         }
@@ -304,7 +304,7 @@ mxwrite(dev)
         u.u_error = ENXIO;
         return;
     }
-    fp = getf(u.u_arg[0]);
+    fp  = getf(u.u_arg[0]);
     fmp = fp->f_flag & FMP;
     if (fmp != FMP) {
         mswrite(fmp, fp->f_un.f_chan);
@@ -325,10 +325,10 @@ mxwrite(dev)
         if (cp == NULL) {
             continue;
         }
-        ucount = u.u_count;
-        ubase = u.u_base;
+        ucount    = u.u_count;
+        ubase     = u.u_base;
         u.u_count = h.count;
-        u.u_base = h.data;
+        u.u_base  = h.data;
 
         if (esc == 0) {
             struct tty *tp;
@@ -337,10 +337,10 @@ mxwrite(dev)
 
             if (cp->c_flags & PORT) {
                 line = cp->c_line;
-                tp = cp->c_ttyp;
+                tp   = cp->c_ttyp;
             } else {
                 line = cp->c_oline;
-                tp = cp->c_ottyp;
+                tp   = cp->c_ottyp;
             }
         loop:
             waddr = (caddr_t)(*linesw[line].l_write)(tp);
@@ -352,8 +352,8 @@ mxwrite(dev)
                                                             scontrol(cp, M_BLK, u.u_count);
                     */
                     h.ccount = -1;
-                    h.count = u.u_count;
-                    h.data = u.u_base;
+                    h.count  = u.u_count;
+                    h.data   = u.u_base;
                     copyout((caddr_t)&h, hbase, sizeof h);
                 } else {
                     if (waddr == 0) {
@@ -367,7 +367,7 @@ mxwrite(dev)
         } else
             mxwcontrol(cp);
         u.u_count = ucount;
-        u.u_base = ubase;
+        u.u_base  = ubase;
     }
     u.u_count = burpcount;
 }
@@ -385,7 +385,7 @@ mcread(cp) register struct chan *cp;
 
     int cc;
 
-    q = (cp->c_ctlx.c_cc) ? &cp->c_ctlx : &cp->cx.datq;
+    q  = (cp->c_ctlx.c_cc) ? &cp->c_ctlx : &cp->cx.datq;
     cc = mxmove(q, B_READ);
 
     if (cp->c_flags & NMBUF && q == &cp->c_ctlx) {
@@ -625,7 +625,7 @@ chdrain(cp) register struct chan *cp;
     chwake(cp);
 
     wflag = (cp->c_flags & WCLOSE) == 0;
-    tp = cp->c_ttyp;
+    tp    = cp->c_ttyp;
     if (tp == NULL) /* prob not required */
         return;
     if (cp->c_flags & PORT && tp->t_chan == cp) {
@@ -733,9 +733,9 @@ sdata(cp) register struct chan *cp;
             return (0);
         }
         gp->g_datq |= cmask[x];
-        x = gp->g_index;
+        x   = gp->g_index;
         lgp = gp;
-        gp = gp->g_group;
+        gp  = gp->g_group;
     }
     gp = lgp;
     splx(s);
@@ -767,7 +767,7 @@ cpx(cp) register struct chan *cp;
 
     if (cp == NULL)
         return (-1);
-    x = (~0u << 4) + cp->c_index;
+    x  = (~0u << 4) + cp->c_index;
     gp = cp->c_group;
     if (gp == NULL || (gp->g_state & ISGRP) == 0)
         return (-1);
@@ -811,13 +811,13 @@ rmdata(cp) register struct chan *cp;
     register short x;
 
     gp = cp->c_group;
-    x = cp->c_index;
+    x  = cp->c_index;
 
     while (gp) {
         gp->g_datq &= ~cmask[x];
         if (gp->g_datq)
             return;
-        x = gp->g_index;
+        x  = gp->g_index;
         gp = gp->g_group;
     }
 }

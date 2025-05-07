@@ -14,7 +14,7 @@
 
 #define SCHMAG 8 / 10
 
-int lbolt;             /* time of day in 60th not in time */
+int lbolt; /* time of day in 60th not in time */
 
 /*
  * clock is called straight from
@@ -70,7 +70,7 @@ clock(tr) struct trap tr;
         p2 = &callout[0];
         while (p2->c_func = p1->c_func) {
             p2->c_time = p1->c_time;
-            p2->c_arg = p1->c_arg;
+            p2->c_arg  = p1->c_arg;
             p1++;
             p2++;
         }
@@ -150,9 +150,9 @@ caddr_t arg;
     register int t;
     int s;
 
-    t = tim;
+    t  = tim;
     p1 = &callout[0];
-    s = spl7();
+    s  = spl7();
     while (p1->c_func != 0 && p1->c_time <= t) {
         t -= p1->c_time;
         p1++;
@@ -166,11 +166,11 @@ caddr_t arg;
     while (p2 >= p1) {
         (p2 + 1)->c_time = p2->c_time;
         (p2 + 1)->c_func = p2->c_func;
-        (p2 + 1)->c_arg = p2->c_arg;
+        (p2 + 1)->c_arg  = p2->c_arg;
         p2--;
     }
     p1->c_time = t;
     p1->c_func = fun;
-    p1->c_arg = arg;
+    p1->c_arg  = arg;
     splx(s);
 }

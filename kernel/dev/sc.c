@@ -37,12 +37,12 @@
 #define KSD 0xf6 /* set defaults */
 
 /* scan codes */
-#define CTRL 0x1d   /* ctrl */
+#define CTRL   0x1d /* ctrl */
 #define LSHIFT 0x2a /* left shift */
 #define RSHIFT 0x36 /* right shift */
-#define ALT 0x38    /* alt */
-#define CAPS 0x3a   /* caps lock */
-#define NUM 0x45    /* num lock */
+#define ALT    0x38 /* alt */
+#define CAPS   0x3a /* caps lock */
+#define NUM    0x45 /* num lock */
 #define SCROLL 0x46 /* scroll lock */
 
 #define BRK 0x80 /* break flag */
@@ -56,7 +56,7 @@
 
 #define ROWS 25 /* number of rows */
 #define COLS 80 /* number of columns */
-#define TAB 8   /* tab size */
+#define TAB  8  /* tab size */
 
 #define CHRS (ROWS * COLS) /* screen size */
 #define LROW (CHRS - COLS) /* last row */
@@ -167,7 +167,7 @@ static int curs;
 short *scr = (short *)(0x7ff00000 + SCRBUF);
 
 static int attr[] = { ATNL, ATNH, ATRL, ATRH };
-static int va = ATNL;
+static int va     = ATNL;
 
 static int beepon;
 
@@ -186,8 +186,8 @@ scopen(dev, flag) dev_t dev;
         scinit();
         init++;
     }
-    tp = &sc;
-    tp->t_addr = (caddr_t)0;
+    tp          = &sc;
+    tp->t_addr  = (caddr_t)0;
     tp->t_oproc = scstart;
     if ((tp->t_state & ISOPEN) == 0) {
         tp->t_state = ISOPEN | CARR_ON;
@@ -217,7 +217,7 @@ scxint(dev) dev_t dev;
     register struct tty *tp;
 
     tout = 0;
-    tp = &sc;
+    tp   = &sc;
     ttstart(tp);
     if (tp->t_state & ASLEEP && tp->t_outq.c_cc <= TTLOWAT) {
         tp->t_state &= ~ASLEEP;

@@ -20,10 +20,10 @@ struct file {
 extern struct file file[]; /* The file table itself */
 
 /* flags */
-#define FREAD 01
-#define FWRITE 02
-#define FPIPE 04
-#define FMPX 010
-#define FMPY 020
-#define FMP 030
+#define FREAD   01
+#define FWRITE  02
+#define FPIPE   04
+#define FMPX    010
+#define FMPY    020
+#define FMP     030
 #define FKERNEL 040

@@ -14,7 +14,7 @@
 // clang-format on
 
 char *mdmem = (char *)(PHY + 0xe00000); /* memory to use */
-int mdsz = 4096;                        /* size in blocks */
+int mdsz    = 4096;                     /* size in blocks */
 
 struct buf mdtab;
 struct buf rmdbuf;
@@ -30,7 +30,7 @@ mdstrategy(bp) register struct buf *bp;
         return;
     }
     bp->av_forw = NULL;
-    x = bp->b_blkno << BSHIFT;
+    x           = bp->b_blkno << BSHIFT;
     if (bp->b_flags & B_READ)
         bcopy(mdmem + x, bp->b_un.b_addr, bp->b_bcount);
     else

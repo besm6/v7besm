@@ -7,7 +7,7 @@
 #include "sys/buf.h"
 // clang-format on
 
-#define XPRI 30
+#define XPRI    30
 #define NBLOCKS 10
 
 int bwaiting, wcount;
@@ -16,8 +16,8 @@ char *nbase[NBLOCKS]; /* normal allocations */
 short nmap[NBLOCKS];  /* 1 bit == 32 bytes */
 
 char log[] = { 0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4 };
-#define FULL -1
-#define LOCK s = spl6()
+#define FULL   -1
+#define LOCK   s = spl6()
 #define UNLOCK splx(s)
 
 /*
@@ -31,8 +31,8 @@ char *getepack(bits)
     char **base;
     short *map;
 
-    base = nbase;
-    map = nmap;
+    base    = nbase;
+    map     = nmap;
     savbits = bits;
 
     /*
@@ -84,7 +84,7 @@ char *getepack(bits)
             bufps[i] = bp = geteblk();
             bp->b_flags |= B_PACK;
             bp->b_flags |= B_PBUSY;
-            map[i] = bits;
+            map[i]  = bits;
             base[i] = bp->b_un.b_addr;
             UNLOCK;
             return (bp->b_un.b_addr);
@@ -114,7 +114,7 @@ freepack(p, bits) char *p;
         return;
     LOCK;
     base = nbase;
-    map = nmap;
+    map  = nmap;
 
     for (i = 0; i < NBLOCKS; i++) {
         d = p - base[i];
@@ -131,7 +131,7 @@ found:
 
         bp = bufps[i];
         bp->b_flags &= ~B_PBUSY;
-        base[i] = NULL;
+        base[i]  = NULL;
         bufps[i] = NULL;
         brelse(bp);
     }

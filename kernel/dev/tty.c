@@ -21,7 +21,7 @@
 long tk_nin;
 long tk_nout;
 
-char canonb[CANBSIZ];  /* buffer for erase and kill (#@) */
+char canonb[CANBSIZ]; /* buffer for erase and kill (#@) */
 
 extern char partab[];
 
@@ -71,7 +71,7 @@ register struct tty *tp;
 {
     register struct proc *pp;
 
-    pp = u.u_procp;
+    pp        = u.u_procp;
     tp->t_dev = dev;
     if (pp->p_pgrp == 0) {
         u.u_ttyp = tp;
@@ -89,14 +89,14 @@ register struct tty *tp;
  */
 ttychars(tp) register struct tty *tp;
 {
-    tun.t_intrc = CINTR;
-    tun.t_quitc = CQUIT;
+    tun.t_intrc  = CINTR;
+    tun.t_quitc  = CQUIT;
     tun.t_startc = CSTART;
-    tun.t_stopc = CSTOP;
-    tun.t_eofc = CEOT;
-    tun.t_brkc = CBRK;
-    tp->t_erase = CERASE;
-    tp->t_kill = CKILL;
+    tun.t_stopc  = CSTOP;
+    tun.t_eofc   = CEOT;
+    tun.t_brkc   = CBRK;
+    tp->t_erase  = CERASE;
+    tp->t_kill   = CKILL;
 }
 
 /*
@@ -154,7 +154,7 @@ ioctl()
         u.u_pofile[uap->fdes] &= ~EXCLOSE;
         return;
     }
-    ip = fp->f_inode;
+    ip  = fp->f_inode;
     fmt = ip->i_mode & IFMT;
     if (fmt != IFCHR && fmt != IFMPC) {
         u.u_error = ENOTTY;
@@ -226,9 +226,9 @@ caddr_t addr;
         }
         tp->t_ispeed = iocb.ioc_ispeed;
         tp->t_ospeed = iocb.ioc_ospeed;
-        tp->t_erase = iocb.ioc_erase;
-        tp->t_kill = iocb.ioc_kill;
-        tp->t_flags = iocb.ioc_flags;
+        tp->t_erase  = iocb.ioc_erase;
+        tp->t_kill   = iocb.ioc_kill;
+        tp->t_flags  = iocb.ioc_flags;
         break;
 
     /*
@@ -237,9 +237,9 @@ caddr_t addr;
     case TIOCGETP:
         iocb.ioc_ispeed = tp->t_ispeed;
         iocb.ioc_ospeed = tp->t_ospeed;
-        iocb.ioc_erase = tp->t_erase;
-        iocb.ioc_kill = tp->t_kill;
-        iocb.ioc_flags = tp->t_flags;
+        iocb.ioc_erase  = tp->t_erase;
+        iocb.ioc_kill   = tp->t_kill;
+        iocb.ioc_flags  = tp->t_flags;
         if (copyout((caddr_t)&iocb, addr, sizeof(iocb)))
             u.u_error = EFAULT;
         break;
@@ -576,9 +576,9 @@ register struct tty *tp;
      * In raw mode there are no delays and the
      * transmission path is 8 bits wide.
      */
-    colp = &tp->t_col;
+    colp  = &tp->t_col;
     ctype = partab[c];
-    c = 0;
+    c     = 0;
     switch (ctype & 077) {
     /* ordinary */
     case 0:

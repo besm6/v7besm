@@ -32,19 +32,19 @@ extern struct proc proc[]; /* the proc table itself */
 
 /* stat codes */
 #define SSLEEP 1 /* awaiting an event */
-#define SWAIT 2  /* (abandoned state) */
-#define SRUN 3   /* running */
-#define SIDL 4   /* intermediate state in process creation */
-#define SZOMB 5  /* intermediate state in process termination */
-#define SSTOP 6  /* process being traced */
+#define SWAIT  2 /* (abandoned state) */
+#define SRUN   3 /* running */
+#define SIDL   4 /* intermediate state in process creation */
+#define SZOMB  5 /* intermediate state in process termination */
+#define SSTOP  6 /* process being traced */
 
 /* flag codes */
-#define SLOAD 01    /* in core */
-#define SSYS 02     /* scheduling process */
-#define SLOCK 04    /* process cannot be swapped */
-#define SSWAP 010   /* process is being swapped out */
-#define STRC 020    /* process is being traced */
-#define SWTED 040   /* another tracing flag */
+#define SLOAD  01   /* in core */
+#define SSYS   02   /* scheduling process */
+#define SLOCK  04   /* process cannot be swapped */
+#define SSWAP  010  /* process is being swapped out */
+#define STRC   020  /* process is being traced */
+#define SWTED  040  /* another tracing flag */
 #define SULOCK 0100 /* user settable lock in core */
 
 /*

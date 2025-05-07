@@ -36,9 +36,9 @@ register struct pack *pk;
     switch (cntl) {
     case INITB:
         val++;
-        pk->p_xsize = pksizes[val];
+        pk->p_xsize  = pksizes[val];
         pk->p_lpsize = val;
-        pk->p_bits = DTOM(pk->p_xsize);
+        pk->p_bits   = DTOM(pk->p_xsize);
         if (pk->p_state & LIVE) {
             pk->p_msg |= M_INITC;
             break;
@@ -84,7 +84,7 @@ register struct pack *pk;
         break;
     case CLOSE:
         pk->p_state = DOWN + RCLOSE;
-        pk->p_rmsg = 0;
+        pk->p_rmsg  = 0;
         WAKEUP(&pk->p_pr);
         WAKEUP(&pk->p_ps);
         WAKEUP(&pk->p_state);
@@ -153,7 +153,7 @@ pkaccept(pk) register struct pack *pk;
         free:
             bp = (char **)pk->p_ib[x];
             LOCK;
-            *bp = (char *)pk->p_ipool;
+            *bp         = (char *)pk->p_ipool;
             pk->p_ipool = bp;
             pk->p_is[x] = 0;
             UNLOCK;
@@ -161,7 +161,7 @@ pkaccept(pk) register struct pack *pk;
         }
 
         pk->p_is[x] = ~(B_COPY + B_MARK);
-        sum = (unsigned)chksum(pk->p_ib[x], pk->p_rsize) ^ (unsigned)cntl;
+        sum         = (unsigned)chksum(pk->p_ib[x], pk->p_rsize) ^ (unsigned)cntl;
         sum += pk->p_isum[x];
         if (sum == CHECK) {
             seq = (cntl >> 3) & MOD8;
@@ -173,9 +173,9 @@ pkaccept(pk) register struct pack *pk;
                 }
                 if (x != seq) {
                     LOCK;
-                    p = pk->p_ib[x];
-                    pk->p_ib[x] = pk->p_ib[seq];
-                    pk->p_is[x] = pk->p_is[seq];
+                    p             = pk->p_ib[x];
+                    pk->p_ib[x]   = pk->p_ib[seq];
+                    pk->p_is[x]   = pk->p_is[seq];
                     pk->p_ib[seq] = p;
                     UNLOCK;
                 }
@@ -184,8 +184,8 @@ pkaccept(pk) register struct pack *pk;
                 cc = 0;
                 if (cntl & B_SHORT) {
                     pk->p_is[seq] = B_MARK + B_SHORT;
-                    p = pk->p_ib[seq];
-                    cc = (unsigned)*p++;
+                    p             = pk->p_ib[seq];
+                    cc            = (unsigned)*p++;
                     if (cc & 0200) {
                         cc &= 0177;
                         cc |= *p << 7;
@@ -214,7 +214,7 @@ pkaccept(pk) register struct pack *pk;
             if (t >= 0) {
                 bp = (char **)pk->p_ib[x];
                 LOCK;
-                *bp = (char *)pk->p_ipool;
+                *bp         = (char *)pk->p_ipool;
                 pk->p_ipool = bp;
                 pk->p_is[x] = 0;
                 UNLOCK;
@@ -249,8 +249,8 @@ pkread(S) SDEF;
     int is, cc, xfr, count;
     char *cp, **bp;
 
-    pk = PADDR;
-    xfr = 0;
+    pk    = PADDR;
+    xfr   = 0;
     count = -1;
     while (pkaccept(pk) == 0) {
         PKGETPKT(pk);
@@ -267,7 +267,7 @@ pkread(S) SDEF;
     count = 0;
 
     while (UCOUNT) {
-        x = next[pk->p_pr];
+        x  = next[pk->p_pr];
         is = pk->p_is[x];
 
         if (is & B_COPY) {
@@ -290,9 +290,9 @@ pkread(S) SDEF;
             pk->p_isum[x] -= cc;
             if (pk->p_isum[x] == 0) {
                 LOCK;
-                pk->p_pr = x;
-                bp = (char **)pk->p_ib[x];
-                *bp = (char *)pk->p_ipool;
+                pk->p_pr    = x;
+                bp          = (char **)pk->p_ib[x];
+                *bp         = (char *)pk->p_ipool;
                 pk->p_ipool = bp;
                 pk->p_is[x] = 0;
                 pk->p_rcount--;
@@ -345,16 +345,16 @@ pkwrite(S) SDEF;
         while (pk->p_os[x] != B_NULL) {
             goto down;
         }
-        pk->p_os[x] = B_MARK;
+        pk->p_os[x]  = B_MARK;
         pk->p_pscopy = x;
         pk->p_xcount++;
         UNLOCK;
 
         cp = pk->p_ob[x] = (char *)GETEPACK;
-        partial = 0;
+        partial          = 0;
         if ((int)UCOUNT < pk->p_xsize) {
-            cc = UCOUNT;
-            fc = pk->p_xsize - cc;
+            cc  = UCOUNT;
+            fc  = pk->p_xsize - cc;
             *cp = fc & 0177;
             if (fc > 127) {
                 *cp++ |= 0200;
@@ -366,7 +366,7 @@ pkwrite(S) SDEF;
             cc = pk->p_xsize;
         IOMOVE(cp, cc, B_WRITE);
         pk->p_osum[x] = chksum(pk->p_ob[x], pk->p_xsize);
-        pk->p_os[x] = B_READY + partial;
+        pk->p_os[x]   = B_READY + partial;
         pkoutput(pk);
     } while (UCOUNT);
 
@@ -420,7 +420,7 @@ pkoutput(pk) register struct pack *pk;
         pk->p_nxtps = next[pk->p_rpr];
         pk->p_state &= ~RXMIT;
     }
-    x = pk->p_nxtps;
+    x      = pk->p_nxtps;
     bstate = pk->p_os[x];
 
     /*
@@ -476,7 +476,7 @@ pkoutput(pk) register struct pack *pk;
         char seq;
 
         bstate |= B_SENT;
-        seq = x;
+        seq         = x;
         pk->p_nxtps = next[x];
 
         x = 0200 + pk->p_pr + (seq << 3);
@@ -546,7 +546,7 @@ pkclose(S) SDEF;
      */
     i = 0;
     while ((pk->p_state & RCLOSE) == 0 && i < NTRIES) {
-        pk->p_msg = M_CLOSE;
+        pk->p_msg   = M_CLOSE;
         pk->p_timer = 2;
         pkoutput(pk);
         SLEEP(&pk->p_ps, PKOPRI);
@@ -571,7 +571,7 @@ final:
     }
     LOCK;
     while (pk->p_ipool != NULL) {
-        bp = pk->p_ipool;
+        bp          = pk->p_ipool;
         pk->p_ipool = (char **)*bp;
         FREEPACK((caddr_t)bp, rbits);
     }
@@ -586,7 +586,7 @@ final:
 pkreset(pk) register struct pack *pk;
 {
     pk->p_ps = pk->p_pr = pk->p_rpr = 0;
-    pk->p_nxtps = 1;
+    pk->p_nxtps                     = 1;
 }
 
 chksum(s, n) register char *s;
@@ -597,7 +597,7 @@ register n;
     register x;
 
     sum = -1;
-    x = 0;
+    x   = 0;
 
     do {
         if (sum < 0) {

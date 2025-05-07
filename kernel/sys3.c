@@ -28,7 +28,7 @@ fstat()
     } *uap;
 
     uap = (struct a *)u.u_ap;
-    fp = getf(uap->fdes);
+    fp  = getf(uap->fdes);
     if (fp == NULL)
         return;
     stat1(fp->f_inode, uap->sb, fp->f_flag & FPIPE ? fp->f_un.f_offset : 0);
@@ -46,7 +46,7 @@ stat()
     } *uap;
 
     uap = (struct a *)u.u_ap;
-    ip = namei(uchar, 0);
+    ip  = namei(uchar, 0);
     if (ip == NULL)
         return;
     stat1(ip, uap->sb, (off_t)0);
@@ -69,14 +69,14 @@ off_t pipeadj;
     /*
      * first copy from inode table
      */
-    ds.st_dev = ip->i_dev;
-    ds.st_ino = ip->i_number;
-    ds.st_mode = ip->i_mode;
+    ds.st_dev   = ip->i_dev;
+    ds.st_ino   = ip->i_number;
+    ds.st_mode  = ip->i_mode;
     ds.st_nlink = ip->i_nlink;
-    ds.st_uid = ip->i_uid;
-    ds.st_gid = ip->i_gid;
-    ds.st_rdev = (dev_t)ip->i_un.i_rdev;
-    ds.st_size = ip->i_size - pipeadj;
+    ds.st_uid   = ip->i_uid;
+    ds.st_gid   = ip->i_gid;
+    ds.st_rdev  = (dev_t)ip->i_un.i_rdev;
+    ds.st_size  = ip->i_size - pipeadj;
     /*
      * next the dates in the disk
      */
@@ -104,7 +104,7 @@ dup()
     register i, m;
 
     uap = (struct a *)u.u_ap;
-    m = uap->fdes & ~077;
+    m   = uap->fdes & ~077;
     uap->fdes &= 077;
     fp = getf(uap->fdes);
     if (fp == NULL)
@@ -150,7 +150,7 @@ smount()
     if (u.u_error)
         return;
     u.u_dirp = (caddr_t)uap->freg;
-    ip = namei(uchar, 0);
+    ip       = namei(uchar, 0);
     if (ip == NULL)
         return;
     if (ip->i_count != 1 || (ip->i_mode & (IFBLK & IFCHR)) != 0)
@@ -175,10 +175,10 @@ smount()
         goto out1;
     }
     mp->m_inodp = ip;
-    mp->m_dev = dev;
-    mp->m_bufp = geteblk();
+    mp->m_dev   = dev;
+    mp->m_bufp  = geteblk();
     bcopy((caddr_t)bp->b_un.b_addr, mp->m_bufp->b_un.b_addr, BSIZE);
-    fp = mp->m_bufp->b_un.b_filsys;
+    fp          = mp->m_bufp->b_un.b_filsys;
     fp->s_ilock = 0;
     fp->s_flock = 0;
     fp->s_ronly = uap->ronly & 1;
@@ -228,7 +228,7 @@ found:
     ip->i_flag &= ~IMOUNT;
     plock(ip);
     iput(ip);
-    bp = mp->m_bufp;
+    bp         = mp->m_bufp;
     mp->m_bufp = NULL;
     brelse(bp);
 }

@@ -93,11 +93,11 @@ unsigned addr;
     unsigned d, t, o, x, z;
     unsigned *pt;
 
-    d = addr >> 22;
-    t = (addr >> 12) & 1023;
-    o = addr & 4095;
-    x = 0;
-    z = 0;
+    d  = addr >> 22;
+    t  = (addr >> 12) & 1023;
+    o  = addr & 4095;
+    x  = 0;
+    z  = 0;
     pt = (unsigned *)(PHY + pdir[d] & ~4095);
     if (pt != NULL) {
         x = pt[t] & ~4095;

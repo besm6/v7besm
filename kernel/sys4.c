@@ -38,15 +38,15 @@ ftime()
     uap = (struct a *)u.u_ap;
     spl7();
     t.time = time;
-    ms = lbolt;
+    ms     = lbolt;
     spl0();
     if (ms > HZ) {
         ms -= HZ;
         t.time++;
     }
-    t.millitm = (1000 * ms) / HZ;
+    t.millitm  = (1000 * ms) / HZ;
     t.timezone = TIMEZONE;
-    t.dstflag = DSTFLAG;
+    t.dstflag  = DSTFLAG;
     if (copyout((caddr_t)&t, (caddr_t)uap->tp, sizeof(t)) < 0)
         u.u_error = EFAULT;
 }
@@ -75,9 +75,9 @@ setuid()
     uap = (struct a *)u.u_ap;
     uid = uap->uid;
     if (u.u_ruid == uid || suser()) {
-        u.u_uid = uid;
+        u.u_uid          = uid;
         u.u_procp->p_uid = uid;
-        u.u_ruid = uid;
+        u.u_ruid         = uid;
     }
 }
 
@@ -97,7 +97,7 @@ setgid()
     uap = (struct a *)u.u_ap;
     gid = uap->gid;
     if (u.u_rgid == gid || suser()) {
-        u.u_gid = gid;
+        u.u_gid  = gid;
         u.u_rgid = gid;
     }
 }
@@ -127,7 +127,7 @@ nice()
     } *uap;
 
     uap = (struct a *)u.u_ap;
-    n = uap->niceness;
+    n   = uap->niceness;
     if (n < 0 && !suser())
         n = 0;
     n += u.u_procp->p_nice;
@@ -180,8 +180,8 @@ unlink()
         goto out;
     }
     u.u_offset -= sizeof(struct direct);
-    u.u_base = (caddr_t)&u.u_dent;
-    u.u_count = sizeof(struct direct);
+    u.u_base       = (caddr_t)&u.u_dent;
+    u.u_count      = sizeof(struct direct);
     u.u_dent.d_ino = 0;
     writei(pp);
     ip->i_nlink--;
@@ -279,12 +279,12 @@ ssig()
     } *uap;
 
     uap = (struct a *)u.u_ap;
-    a = uap->signo;
+    a   = uap->signo;
     if (a <= 0 || a >= NSIG || a == SIGKIL) {
         u.u_error = EINVAL;
         return;
     }
-    u.u_r.r_val1 = u.u_signal[a];
+    u.u_r.r_val1  = u.u_signal[a];
     u.u_signal[a] = uap->fun;
     u.u_procp->p_sig &= ~(1 << (a - 1));
 }
@@ -299,9 +299,9 @@ kill()
     } *uap;
     int f, priv;
 
-    uap = (struct a *)u.u_ap;
-    f = 0;
-    a = uap->pid;
+    uap  = (struct a *)u.u_ap;
+    f    = 0;
+    a    = uap->pid;
     priv = 0;
     if (a == -1 && u.u_uid == 0) {
         priv++;
@@ -344,10 +344,10 @@ profil()
         unsigned pcscale;
     } *uap;
 
-    uap = (struct a *)u.u_ap;
-    u.u_prof.pr_base = uap->bufbase;
-    u.u_prof.pr_size = uap->bufsize;
-    u.u_prof.pr_off = uap->pcoffset;
+    uap               = (struct a *)u.u_ap;
+    u.u_prof.pr_base  = uap->bufbase;
+    u.u_prof.pr_size  = uap->bufsize;
+    u.u_prof.pr_off   = uap->pcoffset;
     u.u_prof.pr_scale = uap->pcscale;
 }
 
@@ -362,10 +362,10 @@ alarm()
         int deltat;
     } *uap;
 
-    uap = (struct a *)u.u_ap;
-    p = u.u_procp;
-    c = p->p_clktim;
-    p->p_clktim = uap->deltat;
+    uap          = (struct a *)u.u_ap;
+    p            = u.u_procp;
+    c            = p->p_clktim;
+    p->p_clktim  = uap->deltat;
     u.u_r.r_val1 = c;
 }
 
@@ -389,9 +389,9 @@ umask()
     } *uap;
     register t;
 
-    uap = (struct a *)u.u_ap;
-    t = u.u_cmask;
-    u.u_cmask = uap->mask & 0777;
+    uap          = (struct a *)u.u_ap;
+    t            = u.u_cmask;
+    u.u_cmask    = uap->mask & 0777;
     u.u_r.r_val1 = t;
 }
 

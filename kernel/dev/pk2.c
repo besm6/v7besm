@@ -36,7 +36,7 @@ register struct tty *tp;
     if (q1.c_cc < 0) {
         if (q1.c_cf != NULL) {
             tp->t_erase = 0;
-            *q1.c_cf++ = c;
+            *q1.c_cf++  = c;
         }
         if (++q1.c_cc)
             return;
@@ -59,14 +59,14 @@ pkrend(tp) register struct tty *tp;
     int i, j, k;
     char **bp;
 
-    p = q1.c_cl;
-    x = (int)q1.c_cf - (int)p;
+    p  = q1.c_cl;
+    x  = (int)q1.c_cf - (int)p;
     pk = (struct pack *)tp->t_linep;
-    h = (struct header *)&pk->p_ihbuf;
+    h  = (struct header *)&pk->p_ihbuf;
     if (x == HDRSIZ) {
         if (*p++ == SYN) {
             hdcheck = k = *p++;
-            sum = (unsigned)*p;
+            sum         = (unsigned)*p;
             hdcheck ^= *p++;
             sum |= (unsigned)*p << 8;
             hdcheck ^= *p++;
@@ -86,12 +86,12 @@ pkrend(tp) register struct tty *tp;
                 bp = pk->p_ipool;
                 if (bp) {
                     pk->p_ipool = (char **)*bp;
-                    pk->p_io = bp;
+                    pk->p_io    = bp;
                 } else {
                 }
                 q1.c_cf = (char *)bp;
                 q1.c_cc = -pk->p_rsize;
-                h->sum = sum;
+                h->sum  = sum;
                 h->cntl = cntl;
                 goto istart1;
             }
@@ -114,8 +114,8 @@ pkrend(tp) register struct tty *tp;
     if (x == pk->p_rsize) {
         pkdata(h->cntl, h->sum, pk, q1.c_cl);
         pk->p_io = NULL;
-        q1.c_cf = (char *)h;
-        q1.c_cc = -HDRSIZ;
+        q1.c_cf  = (char *)h;
+        q1.c_cc  = -HDRSIZ;
         goto istart1;
     }
     if (x == 0) {
@@ -165,15 +165,15 @@ char *cp;
      */
     printf("no slot\n");
 drop:
-    *bp = (char *)pk->p_ipool;
+    *bp         = (char *)pk->p_ipool;
     pk->p_ipool = bp;
     return;
 
 slot:
     pk->p_imap |= mask[x];
-    pk->p_is[x] = c;
+    pk->p_is[x]   = c;
     pk->p_isum[x] = sum;
-    pk->p_ib[x] = cp;
+    pk->p_ib[x]   = cp;
     if (tp->t_chan)
         sdata(tp->t_chan);
     else
@@ -196,32 +196,32 @@ register x;
     short checkword;
     char hdcheck;
 
-    p = (caddr_t)&pk->p_ohbuf;
+    p  = (caddr_t)&pk->p_ohbuf;
     tp = pk->p_ttyp;
 
     if (tp->t_line == 1) {
         *p++ = SYN;
         if (x < 0) {
-            *p = 9;
+            *p        = 9;
             checkword = cntl;
-            q3.c_cl = NULL;
+            q3.c_cl   = NULL;
         } else {
-            *p = pk->p_lpsize;
+            *p        = pk->p_lpsize;
             checkword = pk->p_osum[x] ^ (unsigned)cntl;
-            q3.c_cl = pk->p_ob[x];
+            q3.c_cl   = pk->p_ob[x];
         }
-        checkword = CHECK - checkword;
-        hdcheck = *p++;
+        checkword       = CHECK - checkword;
+        hdcheck         = *p++;
         hdcheck ^= *p++ = checkword;
         hdcheck ^= *p++ = checkword >> 8;
-        q3.c_cc = -HDRSIZ;
+        q3.c_cc         = -HDRSIZ;
     } else {
         q3.c_cc = -1;
     }
 
     hdcheck ^= *p++ = cntl;
-    *p = hdcheck;
-    q3.c_cf = (caddr_t)&pk->p_ohbuf;
+    *p              = hdcheck;
+    q3.c_cf         = (caddr_t)&pk->p_ohbuf;
     /*
             pk->p_srxmit++;
     */
@@ -240,7 +240,7 @@ pkxint(tp) register struct tty *tp;
     extern int pkoutput();
 
     pk = (struct pack *)tp->t_linep;
-    s = spl6();
+    s  = spl6();
     tp->t_state &= ~BUSY;
     if (q3.c_cl == NULL) {
         pkoutput(pk);

@@ -16,7 +16,7 @@
 
 typedef struct fblk *FBLKP;
 
-int updlock;          /* lock for sync */
+int updlock; /* lock for sync */
 
 /*
  * alloc will obtain the next available
@@ -87,19 +87,19 @@ daddr_t bno;
     register struct filsys *fp;
     register struct buf *bp;
 
-    fp = getfs(dev);
+    fp         = getfs(dev);
     fp->s_fmod = 1;
     while (fp->s_flock)
         sleep((caddr_t)&fp->s_flock, PINOD);
     if (badblock(fp, bno, dev))
         return;
     if (fp->s_nfree <= 0) {
-        fp->s_nfree = 1;
+        fp->s_nfree   = 1;
         fp->s_free[0] = 0;
     }
     if (fp->s_nfree >= NICFREE) {
         fp->s_flock++;
-        bp = getblk(dev, bno);
+        bp                                   = getblk(dev, bno);
         ((FBLKP)(bp->b_un.b_addr))->df_nfree = fp->s_nfree;
         bcopy((caddr_t)fp->s_free, (caddr_t)((FBLKP)(bp->b_un.b_addr))->df_free,
               sizeof(fp->s_free));
@@ -109,7 +109,7 @@ daddr_t bno;
         wakeup((caddr_t)&fp->s_flock);
     }
     fp->s_free[fp->s_nfree++] = bno;
-    fp->s_fmod = 1;
+    fp->s_fmod                = 1;
 }
 
 /*
@@ -232,7 +232,7 @@ ino_t ino;
     if (fp->s_ninode >= NICINOD)
         return;
     fp->s_inode[fp->s_ninode++] = ino;
-    fp->s_fmod = 1;
+    fp->s_fmod                  = 1;
 }
 
 /*
@@ -264,7 +264,7 @@ dev_t dev;
             fp = mp->m_bufp->b_un.b_filsys;
             if (fp->s_nfree > NICFREE || fp->s_ninode > NICINOD) {
                 prdev("bad count", dev);
-                fp->s_nfree = 0;
+                fp->s_nfree  = 0;
                 fp->s_ninode = 0;
             }
             return (fp);

@@ -23,4 +23,4 @@ extern struct acct acctbuf;
 extern struct inode *acctp; /* inode of accounting file */
 
 #define AFORK 01 /* has executed fork, but no exec */
-#define ASU 02   /* used super-user privileges */
+#define ASU   02 /* used super-user privileges */

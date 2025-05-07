@@ -42,15 +42,15 @@ rdwr(mode) register mode;
     } *uap;
 
     uap = (struct a *)u.u_ap;
-    fp = getf(uap->fdes);
+    fp  = getf(uap->fdes);
     if (fp == NULL)
         return;
     if ((fp->f_flag & mode) == 0) {
         u.u_error = EBADF;
         return;
     }
-    u.u_base = (caddr_t)uap->cbuf;
-    u.u_count = uap->count;
+    u.u_base   = (caddr_t)uap->cbuf;
+    u.u_count  = uap->count;
     u.u_segflg = 0;
     if ((fp->f_flag & FPIPE) != 0) {
         if (mode == FREAD)
@@ -89,7 +89,7 @@ open()
     } *uap;
 
     uap = (struct a *)u.u_ap;
-    ip = namei(uchar, 0);
+    ip  = namei(uchar, 0);
     if (ip == NULL)
         return;
     open1(ip, ++uap->rwmode, 0);
@@ -107,7 +107,7 @@ creat()
     } *uap;
 
     uap = (struct a *)u.u_ap;
-    ip = namei(uchar, 1);
+    ip  = namei(uchar, 1);
     if (ip == NULL) {
         if (u.u_error)
             return;
@@ -146,9 +146,9 @@ register mode;
     prele(ip);
     if ((fp = falloc()) == NULL)
         goto out;
-    fp->f_flag = mode & (FREAD | FWRITE);
+    fp->f_flag  = mode & (FREAD | FWRITE);
     fp->f_inode = ip;
-    i = u.u_r.r_val1;
+    i           = u.u_r.r_val1;
     openi(ip, mode & FWRITE);
     if (u.u_error == 0)
         return;
@@ -170,7 +170,7 @@ close()
     } *uap;
 
     uap = (struct a *)u.u_ap;
-    fp = getf(uap->fdes);
+    fp  = getf(uap->fdes);
     if (fp == NULL)
         return;
     u.u_ofile[uap->fdes] = NULL;
@@ -190,7 +190,7 @@ seek()
     } *uap;
 
     uap = (struct a *)u.u_ap;
-    fp = getf(uap->fdes);
+    fp  = getf(uap->fdes);
     if (fp == NULL)
         return;
     if (fp->f_flag & (FPIPE | FMP)) {
@@ -202,7 +202,7 @@ seek()
     else if (uap->sbase == 2)
         uap->off += fp->f_inode->i_size;
     fp->f_un.f_offset = uap->off;
-    u.u_r.r_off = uap->off;
+    u.u_r.r_off       = uap->off;
 }
 
 /*
@@ -217,7 +217,7 @@ link()
     } *uap;
 
     uap = (struct a *)u.u_ap;
-    ip = namei(uchar, 0);
+    ip  = namei(uchar, 0);
     if (ip == NULL)
         return;
     if ((ip->i_mode & IFMT) == IFDIR && !suser())
@@ -232,7 +232,7 @@ link()
      */
     prele(ip);
     u.u_dirp = (caddr_t)uap->linkname;
-    xp = namei(uchar, 1);
+    xp       = namei(uchar, 1);
     if (xp != NULL) {
         u.u_error = EEXIST;
         iput(xp);
@@ -298,12 +298,12 @@ saccess()
         int fmode;
     } *uap;
 
-    uap = (struct a *)u.u_ap;
-    svuid = u.u_uid;
-    svgid = u.u_gid;
+    uap     = (struct a *)u.u_ap;
+    svuid   = u.u_uid;
+    svgid   = u.u_gid;
     u.u_uid = u.u_ruid;
     u.u_gid = u.u_rgid;
-    ip = namei(uchar, 0);
+    ip      = namei(uchar, 0);
     if (ip != NULL) {
         if (uap->fmode & (IREAD >> 6))
             access(ip, IREAD);

@@ -193,17 +193,17 @@ brelse(bp) register struct buf *bp;
         bp->b_dev = NODEV; /* no assoc. on error */
     s = spl6();
     if (bp->b_flags & B_AGE) {
-        backp = &bfreelist.av_forw;
+        backp             = &bfreelist.av_forw;
         (*backp)->av_back = bp;
-        bp->av_forw = *backp;
-        *backp = bp;
-        bp->av_back = &bfreelist;
+        bp->av_forw       = *backp;
+        *backp            = bp;
+        bp->av_back       = &bfreelist;
     } else {
-        backp = &bfreelist.av_back;
+        backp             = &bfreelist.av_back;
         (*backp)->av_forw = bp;
-        bp->av_back = *backp;
-        *backp = bp;
-        bp->av_forw = &bfreelist;
+        bp->av_back       = *backp;
+        *backp            = bp;
+        bp->av_forw       = &bfreelist;
     }
     bp->b_flags &= ~(B_WANTED | B_BUSY | B_ASYNC | B_AGE);
     splx(s);
@@ -260,7 +260,7 @@ loop:
         }
         spl0();
 #ifdef DISKMON
-        i = 0;
+        i  = 0;
         dp = bp->av_forw;
         while (dp != &bfreelist) {
             i++;
@@ -285,15 +285,15 @@ loop:
         bwrite(bp);
         goto loop;
     }
-    bp->b_flags = B_BUSY;
+    bp->b_flags        = B_BUSY;
     bp->b_back->b_forw = bp->b_forw;
     bp->b_forw->b_back = bp->b_back;
-    bp->b_forw = dp->b_forw;
-    bp->b_back = dp;
+    bp->b_forw         = dp->b_forw;
+    bp->b_back         = dp;
     dp->b_forw->b_back = bp;
-    dp->b_forw = bp;
-    bp->b_dev = dev;
-    bp->b_blkno = blkno;
+    dp->b_forw         = bp;
+    bp->b_dev          = dev;
+    bp->b_blkno        = blkno;
     return (bp);
 }
 
@@ -320,14 +320,14 @@ loop:
         bwrite(bp);
         goto loop;
     }
-    bp->b_flags = B_BUSY;
+    bp->b_flags        = B_BUSY;
     bp->b_back->b_forw = bp->b_forw;
     bp->b_forw->b_back = bp->b_back;
-    bp->b_forw = dp->b_forw;
-    bp->b_back = dp;
+    bp->b_forw         = dp->b_forw;
+    bp->b_back         = dp;
     dp->b_forw->b_back = bp;
-    dp->b_forw = bp;
-    bp->b_dev = (dev_t)NODEV;
+    dp->b_forw         = bp;
+    bp->b_dev          = (dev_t)NODEV;
     return (bp);
 }
 
@@ -352,7 +352,7 @@ notavail(bp) register struct buf *bp;
 {
     register s;
 
-    s = spl6();
+    s                    = spl6();
     bp->av_back->av_forw = bp->av_forw;
     bp->av_forw->av_back = bp->av_back;
     bp->b_flags |= B_BUSY;
@@ -402,12 +402,12 @@ swap(blkno, coreaddr, count, rdflg) register count;
     }
     while (count) {
         bp->b_flags = B_BUSY | B_PHYS | rdflg;
-        bp->b_dev = swapdev;
-        tcount = count;
+        bp->b_dev   = swapdev;
+        tcount      = count;
         if (tcount >= 037) /* workaround for hd */
             tcount = 037;
-        bp->b_bcount = ctob(tcount);
-        bp->b_blkno = swplo + blkno;
+        bp->b_bcount    = ctob(tcount);
+        bp->b_blkno     = swplo + blkno;
         bp->b_un.b_addr = (caddr_t)(PHY + ctob(coreaddr));
         (*bdevsw[major(swapdev)].d_strategy)(bp);
         spl6();
@@ -490,12 +490,12 @@ int (*strat)();
         bp->b_flags |= B_WANTED;
         sleep((caddr_t)bp, PRIBIO + 1);
     }
-    bp->b_flags = B_BUSY | B_PHYS | rw;
-    bp->b_dev = dev;
+    bp->b_flags     = B_BUSY | B_PHYS | rw;
+    bp->b_dev       = dev;
     bp->b_un.b_addr = (caddr_t)(PHY + physaddr(base));
-    bp->b_blkno = u.u_offset >> BSHIFT;
-    bp->b_bcount = u.u_count;
-    bp->b_error = 0;
+    bp->b_blkno     = u.u_offset >> BSHIFT;
+    bp->b_bcount    = u.u_count;
+    bp->b_error     = 0;
     u.u_procp->p_flag |= SLOCK;
     (*strat)(bp);
     spl6();

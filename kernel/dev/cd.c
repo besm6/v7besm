@@ -18,21 +18,21 @@
 #define CB2 0x370 /* 0x3f0 or 0x370 */
 
 /* controller registers */
-#define DATA (CB1 + 0)  /* data reg */
-#define FR (CB1 + 1)    /* feature reg */
-#define SC (CB1 + 2)    /* sector count */
-#define SN (CB1 + 3)    /* sector number */
-#define CL (CB1 + 4)    /* cylinder low */
-#define CH (CB1 + 5)    /* cylinder high */
-#define DH (CB1 + 6)    /* device head */
-#define STAT (CB1 + 7)  /* primary status */
-#define CMD (CB1 + 7)   /* command */
+#define DATA  (CB1 + 0) /* data reg */
+#define FR    (CB1 + 1) /* feature reg */
+#define SC    (CB1 + 2) /* sector count */
+#define SN    (CB1 + 3) /* sector number */
+#define CL    (CB1 + 4) /* cylinder low */
+#define CH    (CB1 + 5) /* cylinder high */
+#define DH    (CB1 + 6) /* device head */
+#define STAT  (CB1 + 7) /* primary status */
+#define CMD   (CB1 + 7) /* command */
 #define ASTAT (CB2 + 6) /* alternate status */
-#define DC (CB2 + 6)    /* device control */
+#define DC    (CB2 + 6) /* device control */
 
 /* status flags */
 #define BSY 0x80 /* busy */
-#define DF 0x20  /* device fault */
+#define DF  0x20 /* device fault */
 #define DRQ 0x08 /* data request */
 #define ERR 0x01 /* error */
 
@@ -45,30 +45,30 @@
 #define CMDRST 0x08 /* DEVICE RESET */
 
 /* various */
-#define CDBSIZE 2048 /* block size */
-#define CDSHIFT 11   /* LOG2(CDBSIZE) */
-#define PKTSZ 12     /* packet size */
-#define DPBC CDBSIZE /* max byte count */
-#define DK_N 2       /* monitoring device bit */
+#define CDBSIZE 2048    /* block size */
+#define CDSHIFT 11      /* LOG2(CDBSIZE) */
+#define PKTSZ   12      /* packet size */
+#define DPBC    CDBSIZE /* max byte count */
+#define DK_N    2       /* monitoring device bit */
 
 /* timer parameters */
 #define CDTIME (HZ / 5)
 #define CDTOUT 50
 
 /* timer states */
-#define TMOFF 0
+#define TMOFF  0
 #define TMDONE 1
-#define TMON 2
+#define TMON   2
 
 /* driver states */
-#define STCMD 1
-#define STPKT 2
-#define STINT 3
+#define STCMD  1
+#define STPKT  2
+#define STINT  3
 #define STCMDX 4
 #define STPKTX 5
 #define STRSTX 6
 #define STENDX 7
-#define STX 4
+#define STX    4
 
 struct buf cdtab;
 struct buf rcdbuf;
@@ -117,10 +117,10 @@ cdstart()
         timeout(cdtimer, NULL, CDTIME);
     trq = TMON;
     splx(s);
-    tticks = 0;
-    cd.dn = minor(bp->b_dev) & 1;
-    cd.bn = bp->b_blkno >> (CDSHIFT - BSHIFT);
-    cd.bc = bp->b_bcount >> CDSHIFT;
+    tticks  = 0;
+    cd.dn   = minor(bp->b_dev) & 1;
+    cd.bn   = bp->b_blkno >> (CDSHIFT - BSHIFT);
+    cd.bc   = bp->b_bcount >> CDSHIFT;
     cd.addr = bp->b_un.b_addr;
     dk_busy |= 1 << DK_N;
     dk_numb[DK_N] += 1;
@@ -145,7 +145,7 @@ cdtimer()
         timeout(cdtimer, NULL, CDTIME);
         if (cd.st && ++tticks > CDTOUT) {
             printf("cd: timeout (%d)\n", cd.st);
-            cd.st = STRSTX;
+            cd.st  = STRSTX;
             tticks = 0;
         }
         if (cd.st & STX)
@@ -158,10 +158,10 @@ cdio(st)
     struct buf *bp;
     int x;
 
-    x = cdsm(st);
+    x     = cdsm(st);
     cd.st = x > 0 ? x : 0;
     if (cd.st == 0) {
-        bp = cdtab.b_actf;
+        bp             = cdtab.b_actf;
         cdtab.b_active = NULL;
         if (x) {
             deverror(bp, -x, cd.bn);
@@ -172,8 +172,8 @@ cdio(st)
             bp->b_flags |= B_ERROR;
         }
         cdtab.b_errcnt = 0;
-        cdtab.b_actf = bp->av_forw;
-        bp->b_resid = 0;
+        cdtab.b_actf   = bp->av_forw;
+        bp->b_resid    = 0;
         iodone(bp);
         cdstart();
     }

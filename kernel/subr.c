@@ -11,7 +11,7 @@
 #include "sys/buf.h"
 // clang-format on
 
-daddr_t rablock;      /* block to be read ahead */
+daddr_t rablock; /* block to be read ahead */
 
 /*
  * Bmap defines the structure of file system storage
@@ -35,14 +35,14 @@ daddr_t bn;
         u.u_error = EFBIG;
         return ((daddr_t)0);
     }
-    dev = ip->i_dev;
+    dev     = ip->i_dev;
     rablock = 0;
 
     /*
      * blocks 0..NADDR-4 are direct blocks
      */
     if (bn < NADDR - 3) {
-        i = bn;
+        i  = bn;
         nb = ip->i_un.i_addr[i];
         if (nb == 0) {
             if (rwflg == B_READ || (bp = alloc(dev)) == NULL)
@@ -102,7 +102,7 @@ daddr_t bn;
         }
         bap = bp->b_un.b_daddr;
         sh -= NSHIFT;
-        i = (bn >> sh) & NMASK;
+        i  = (bn >> sh) & NMASK;
         nb = bap[i];
         if (nb == 0) {
             if (rwflg == B_READ || (nbp = alloc(dev)) == NULL) {

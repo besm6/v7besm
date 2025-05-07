@@ -12,7 +12,7 @@
  * from permanent inode on volume.
  */
 
-#define NADDR 13
+#define NADDR  13
 #define NINDEX 15
 
 struct group {
@@ -47,34 +47,34 @@ struct inode {
         } i_s1;
     } i_un;
 };
-#define i_addr i_s0.addr
+#define i_addr  i_s0.addr
 #define i_lastr i_s0.lastr
-#define i_rdev i_s1.rdev
+#define i_rdev  i_s1.rdev
 #define i_group i_s1.group
 
 extern struct inode inode[]; /* The inode table itself */
 extern struct inode *mpxip;  /* mpx virtual inode */
 
 /* flags */
-#define ILOCK 01   /* inode is locked */
-#define IUPD 02    /* file has been modified */
-#define IACC 04    /* inode access time to be updated */
-#define IMOUNT 010 /* inode is mounted on */
-#define IWANT 020  /* some process waiting on lock */
-#define ITEXT 040  /* inode is pure text prototype */
-#define ICHG 0100  /* inode has been changed */
+#define ILOCK  01   /* inode is locked */
+#define IUPD   02   /* file has been modified */
+#define IACC   04   /* inode access time to be updated */
+#define IMOUNT 010  /* inode is mounted on */
+#define IWANT  020  /* some process waiting on lock */
+#define ITEXT  040  /* inode is pure text prototype */
+#define ICHG   0100 /* inode has been changed */
 
 /* modes */
-#define IFMT 0170000  /* type of file */
-#define IFDIR 0040000 /* directory */
-#define IFCHR 0020000 /* character special */
-#define IFBLK 0060000 /* block special */
-#define IFREG 0100000 /* regular */
-#define IFMPC 0030000 /* multiplexed char special */
-#define IFMPB 0070000 /* multiplexed block special */
-#define ISUID 04000   /* set user id on execution */
-#define ISGID 02000   /* set group id on execution */
-#define ISVTX 01000   /* save swapped text even after use */
-#define IREAD 0400    /* read, write, execute permissions */
+#define IFMT   0170000 /* type of file */
+#define IFDIR  0040000 /* directory */
+#define IFCHR  0020000 /* character special */
+#define IFBLK  0060000 /* block special */
+#define IFREG  0100000 /* regular */
+#define IFMPC  0030000 /* multiplexed char special */
+#define IFMPB  0070000 /* multiplexed block special */
+#define ISUID  04000   /* set user id on execution */
+#define ISGID  02000   /* set group id on execution */
+#define ISVTX  01000   /* save swapped text even after use */
+#define IREAD  0400    /* read, write, execute permissions */
 #define IWRITE 0200
-#define IEXEC 0100
+#define IEXEC  0100

@@ -14,7 +14,7 @@
 // clang-format on
 
 #define NFDBLK 2880 /* Sectors per disk */
-#define FDSPT 18    /* Sectors per track */
+#define FDSPT  18   /* Sectors per track */
 
 /* Ports */
 #define FDDOR 0x3f2 /* Digital Output Register */
@@ -124,20 +124,20 @@ fdstart()
         s = spl6();
         if (fd.mtr) {
             fd.mtr = 3;
-            tick = 0;
+            tick   = 0;
         }
         splx(s);
         return;
     }
     fdtab.b_active++;
 
-    bn = bp->b_blkno;
-    fd.cn = bn / FDSPT / 2;
-    fd.hn = bn / FDSPT % 2;
-    fd.sn = bn % FDSPT + 1;
+    bn       = bp->b_blkno;
+    fd.cn    = bn / FDSPT / 2;
+    fd.hn    = bn / FDSPT % 2;
+    fd.sn    = bn % FDSPT + 1;
     fd.bleft = bp->b_bcount;
-    fd.addr = bp->b_un.b_addr;
-    fd.rd = bp->b_flags & B_READ;
+    fd.addr  = bp->b_un.b_addr;
+    fd.rd    = bp->b_flags & B_READ;
 
     /* Handle the timer and motor. */
     s = spl6();
@@ -145,7 +145,7 @@ fdstart()
         timeout(fdtimer, NULL, HZ / 5);
         outb(FDDOR, 0x1c);
         fd.mtr = 1;
-        tick = 0;
+        tick   = 0;
         fdcmd(FDSPC);
         outb(FDCCR, 0);
     } else if (fd.mtr == 3)
@@ -192,8 +192,8 @@ fdintr()
     }
     fdtab.b_active = 0;
     fdtab.b_errcnt = 0;
-    fdtab.b_actf = bp->av_forw;
-    bp->b_resid = 0;
+    fdtab.b_actf   = bp->av_forw;
+    bp->b_resid    = 0;
     iodone(bp);
     fdstart();
 }
@@ -210,7 +210,7 @@ fdio()
     sz = (0x10000 - (fd.phys & 0xffff)) & ~(BSIZE - 1);
     if (sz == 0) {
         fd.phys = FDBUF;
-        sz = BSIZE;
+        sz      = BSIZE;
     }
     if (fd.bpart > sz)
         fd.bpart = sz;
@@ -233,7 +233,7 @@ fdtimer()
         trq = 0;
         fdx1();
     } else if (trq == 1 && tick > 10) {
-        trq = 0;
+        trq    = 0;
         fd.err = FDETO;
         fdx1();
     }
@@ -261,7 +261,7 @@ static fdx1()
             fd.cmd = FDCSK;
         else {
             if (fd.mtr == 1) {
-                trq = -1;
+                trq  = -1;
                 tick = 0;
                 return;
             }
@@ -269,7 +269,7 @@ static fdx1()
             fd.cmd = fd.rd ? FDCRD : FDCWR;
         }
         if (!fdcmd(fd.cmd)) {
-            trq = 1;
+            trq  = 1;
             tick = 0;
         }
     }
@@ -353,16 +353,16 @@ int cmd;
     case FDSPC:
         av[1] = 0xdf;
         av[2] = 2;
-        n = 3;
+        n     = 3;
         break;
     case FDCRC:
         av[1] = 0;
-        n = 2;
+        n     = 2;
         break;
     case FDCSK:
         av[1] = fd.hn << 2;
         av[2] = fd.cn;
-        n = 3;
+        n     = 3;
         break;
     case FDCRD:
     case FDCWR:
@@ -374,7 +374,7 @@ int cmd;
         av[6] = FDSPT;
         av[7] = FDGPL;
         av[8] = 0xff;
-        n = 9;
+        n     = 9;
     }
     for (i = 0; i < n; i++)
         if (fdput(av[i]))

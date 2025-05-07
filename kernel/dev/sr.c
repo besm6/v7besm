@@ -14,7 +14,7 @@
 #include "sys/systm.h"
 // clang-format on
 
-#define NSR 2
+#define NSR    2
 #define SSPEED 13 /* 9600 bps */
 
 /* 8250 registers */
@@ -35,10 +35,10 @@
 #define PARTN 0000 /* parity none */
 #define PARTO 0010 /* parity odd */
 #define PARTE 0030 /* parity even */
-#define DLAB 0200  /* divisor latch access bit */
+#define DLAB  0200 /* divisor latch access bit */
 
 /* line status */
-#define DR 0001   /* data ready */
+#define DR   0001 /* data ready */
 #define THRE 0040 /* transmitter holding register empty */
 
 /*
@@ -80,14 +80,14 @@ sropen(dev, flag) dev_t dev;
         u.u_error = ENXIO;
         return;
     }
-    tp = &sr[d];
-    tp->t_addr = (caddr_t)(d == 0 ? 0x3f8 : 0x2f8);
+    tp          = &sr[d];
+    tp->t_addr  = (caddr_t)(d == 0 ? 0x3f8 : 0x2f8);
     tp->t_oproc = srstart;
     if ((tp->t_state & ISOPEN) == 0) {
-        tp->t_state = CARR_ON;
+        tp->t_state  = CARR_ON;
         tp->t_ispeed = SSPEED;
         tp->t_ospeed = SSPEED;
-        tp->t_flags = RAW | ODDP | EVENP | ECHO;
+        tp->t_flags  = RAW | ODDP | EVENP | ECHO;
         srparam(tp);
         port = (int)tp->t_addr;
         outb(port + MCR, inb(port + MCR) | 8);
@@ -116,7 +116,7 @@ srintr(dev) dev_t dev;
     struct tty *tp;
     int port, st, c;
 
-    tp = &sr[dev & 1];
+    tp   = &sr[dev & 1];
     port = (int)tp->t_addr;
     switch (inb(port + IIR) & 7) {
     case 4:
