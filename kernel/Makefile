@@ -1,10 +1,10 @@
-OBJ1    = conf.o mch.o
+OBJ     = conf.o mch.o libsys.a libdev.a
 
-OBJ2    = acct.o alloc.o clock.o fakemx.o fio.o iget.o machdep.o main.o \
+SYS     = acct.o alloc.o clock.o fakemx.o fio.o iget.o machdep.o main.o \
           malloc.o nami.o pipe.o prf.o prim.o rdwri.o sig.o slp.o subr.o \
-          sys1.o sys2.o sys3.o sys4.o sysent.o text.o trap.o utab.o \
+          sys1.o sys2.o sys3.o sys4.o sysent.o text.o trap.o utab.o
 
-OBJ3    = bio.o cd.o dsort.o fd.o hd.o md.o mem.o mx1.o mx2.o partab.o \
+DEV     = bio.o cd.o dsort.o fd.o hd.o md.o mem.o mx1.o mx2.o partab.o \
           pk0.o pk1.o pk2.o pk3.o sc.o sr.o sys.o tty.o
 
 # Clang compiler on MacOS
@@ -18,12 +18,20 @@ AS      =  $(LLVMBIN)clang -target i486-unknown-linux-gnu -c
 VPATH = dev
 
 all:    unix
+	$(LLVMBIN)llvm-size unix
 
 clean:
-	rm -f *.o
+	rm -f *.o *.a *.nm unix mkconf
 
-unix:   $(OBJ1) $(OBJ2) $(OBJ3)
-	ld.lld -T unix.ld $(OBJ1) $(OBJ2) $(OBJ3) -o $@
+unix:   $(OBJ)
+	ld.lld -T unix.ld $(OBJ) -o $@
+	$(LLVMBIN)llvm-nm -n $@ > $@.nm
+
+libsys.a: $(SYS)
+	ar cr $@ $(SYS)
+
+libdev.a: $(DEV)
+	ar cr $@ $(DEV)
 
 mkconf: conf/mkconf.c
 	cc -O -o $@ $<
