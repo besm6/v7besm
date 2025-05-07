@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 
 #define CHAR 01
 #define BLOCK 02
@@ -129,7 +130,7 @@ dev_t    swapdev    = makedev(%d, %d);\n\
 dev_t    pipedev = makedev(%d, %d);\n\
 int    nldisp = %d;\n\
 daddr_t    swplo    = %ld;\n\
-int    nswap    = %l;\n\
+int    nswap    = %ld;\n\
 "
 };
 
@@ -198,14 +199,16 @@ int input()
 
     if (fgets(line, 100, stdin) == NULL)
         return (0);
-    count = -1;
-    n = sscanf(line, "%d%s%s%ld", &count, keyw, dev, &num);
-    if (count == -1 && n > 0) {
-        count = 1;
-        n++;
+    count = 1;
+    if (isdigit(line[0])) {
+        n = sscanf(line, "%d%s%s%ld", &count, keyw, dev, &num);
+    } else {
+        n = 1 + sscanf(line, "%s%s%ld", keyw, dev, &num);
     }
-    if (n < 2)
+    if (n < 2) {
+        fprintf(stderr, "Cannot parse: '%s'\n", line);
         goto badl;
+    }
     for (q = table; q->name; q++)
         if (equal(q->name, keyw)) {
             if (q->count < 0) {
