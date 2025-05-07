@@ -1,14 +1,16 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 /* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
-#include "../h/buf.h"
-#include "../h/conf.h"
-#include "../h/dir.h"
-#include "../h/param.h"
-#include "../h/proc.h"
-#include "../h/seg.h"
-#include "../h/systm.h"
-#include "../h/user.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/dir.h"
+#include "sys/user.h"
+#include "sys/buf.h"
+#include "sys/conf.h"
+#include "sys/proc.h"
+#include "sys/seg.h"
+// clang-format on
 
 #define DISKMON 1
 

@@ -5,11 +5,13 @@
  * Memory disk driver
  */
 
-#include "../h/buf.h"
-#include "../h/dir.h"
-#include "../h/param.h"
-#include "../h/systm.h"
-#include "../h/user.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/buf.h"
+#include "sys/dir.h"
+#include "sys/user.h"
+// clang-format on
 
 char *mdmem = (char *)(PHY + 0xe00000); /* memory to use */
 int mdsz = 4096;                        /* size in blocks */

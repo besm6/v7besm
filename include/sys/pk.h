@@ -134,7 +134,7 @@ struct piocb {
 };
 
 int pkdebug;
-int pksizes[];
+extern int pksizes[];
 
 #define Pwrite 1
 #define Poutput 1

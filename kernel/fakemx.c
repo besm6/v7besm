@@ -4,13 +4,14 @@
  * Fake multiplexor routines to satisfy references
  * if you don't want it.
  */
-
-#include "../h/dir.h"
-#include "../h/inode.h"
-#include "../h/mx.h"
-#include "../h/param.h"
-#include "../h/tty.h"
-#include "../h/user.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/dir.h"
+#include "sys/user.h"
+#include "sys/tty.h"
+#include "sys/inode.h"
+#include "sys/mx.h"
+// clang-format on
 
 sdata(cp) struct chan *cp;
 {

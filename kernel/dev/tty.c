@@ -1,22 +1,22 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 /* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
-#
 /*
  * general TTY subroutines
  */
-#include "../h/tty.h"
-
-#include "../h/conf.h"
-#include "../h/dir.h"
-#include "../h/file.h"
-#include "../h/inode.h"
-#include "../h/mx.h"
-#include "../h/param.h"
-#include "../h/proc.h"
-#include "../h/reg.h"
-#include "../h/systm.h"
-#include "../h/user.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/dir.h"
+#include "sys/user.h"
+#include "sys/tty.h"
+#include "sys/proc.h"
+#include "sys/mx.h"
+#include "sys/inode.h"
+#include "sys/file.h"
+#include "sys/reg.h"
+#include "sys/conf.h"
+// clang-format on
 
 extern char partab[];
 

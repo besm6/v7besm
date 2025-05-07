@@ -1,7 +1,7 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
-#include "../h/param.h"
-#include "../h/systm.h"
+#include "sys/param.h"
+#include "sys/systm.h"
 
 /*
  * This table is the switch used to transfer

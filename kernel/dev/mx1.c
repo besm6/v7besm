@@ -1,17 +1,19 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
-#include "../h/dir.h"
-#include "../h/inode.h"
-#include "../h/param.h"
-#include "../h/proc.h"
-#include "../h/reg.h"
-#include "../h/systm.h"
-#include "../h/tty.h"
-#include "../h/user.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/dir.h"
+#include "sys/user.h"
+#include "sys/reg.h"
+#include "sys/proc.h"
+#include "sys/tty.h"
+#include "sys/inode.h"
 #define KERNEL 1
-#include "../h/conf.h"
-#include "../h/file.h"
-#include "../h/mx.h"
+#include "sys/mx.h"
+#include "sys/file.h"
+#include "sys/conf.h"
+// clang-format on
 
 /*
  * Multiplexor:   clist version

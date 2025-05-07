@@ -1,18 +1,20 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
-#include "../h/buf.h"
-#include "../h/conf.h"
-#include "../h/dir.h"
-#include "../h/file.h"
-#include "../h/filsys.h"
-#include "../h/ino.h"
-#include "../h/inode.h"
-#include "../h/mount.h"
-#include "../h/param.h"
-#include "../h/reg.h"
-#include "../h/stat.h"
-#include "../h/systm.h"
-#include "../h/user.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/mount.h"
+#include "sys/ino.h"
+#include "sys/reg.h"
+#include "sys/buf.h"
+#include "sys/filsys.h"
+#include "sys/dir.h"
+#include "sys/user.h"
+#include "sys/inode.h"
+#include "sys/file.h"
+#include "sys/conf.h"
+#include "sys/stat.h"
+// clang-format on
 
 /*
  * the fstat system call.
@@ -200,7 +202,7 @@ sumount()
     register struct inode *ip;
     register struct mount *mp;
     struct buf *bp;
-    register struct a {
+    struct a {
         char *fspec;
     };
 

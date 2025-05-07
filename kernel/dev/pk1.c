@@ -1,7 +1,7 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
 #define KERNEL 1
-#include "../h/pk.p"
+#include "sys/pk.p"
 
 /*
  * kernel support routines.

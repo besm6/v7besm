@@ -1,10 +1,12 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
-#include "../h/buf.h"
-#include "../h/conf.h"
-#include "../h/param.h"
-#include "../h/systm.h"
-#include "../h/tty.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/tty.h"
+#include "sys/systm.h"
+#include "sys/conf.h"
+#include "sys/buf.h"
+// clang-format on
 
 struct cblock {
     struct cblock *c_next;

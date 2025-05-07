@@ -5,12 +5,14 @@
  * Serial driver: 8250 UART
  */
 
-#include "../h/conf.h"
-#include "../h/dir.h"
-#include "../h/param.h"
-#include "../h/systm.h"
-#include "../h/tty.h"
-#include "../h/user.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/conf.h"
+#include "sys/dir.h"
+#include "sys/user.h"
+#include "sys/tty.h"
+#include "sys/systm.h"
+// clang-format on
 
 #define NSR 2
 #define SSPEED 13 /* 9600 bps */

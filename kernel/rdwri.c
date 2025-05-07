@@ -1,13 +1,15 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 /* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
-#include "../h/buf.h"
-#include "../h/conf.h"
-#include "../h/dir.h"
-#include "../h/inode.h"
-#include "../h/param.h"
-#include "../h/systm.h"
-#include "../h/user.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/inode.h"
+#include "sys/dir.h"
+#include "sys/user.h"
+#include "sys/buf.h"
+#include "sys/conf.h"
+// clang-format on
 
 /*
  * Read the file corresponding to

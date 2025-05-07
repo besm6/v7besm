@@ -4,9 +4,11 @@
  * generalized seek sort for disk
  */
 
-#include "../h/buf.h"
-#include "../h/param.h"
-#include "../h/systm.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/buf.h"
+// clang-format on
 
 #define b_cylin b_resid
 

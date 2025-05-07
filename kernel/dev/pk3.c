@@ -1,9 +1,11 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
-#include "../h/buf.h"
-#include "../h/conf.h"
-#include "../h/param.h"
-#include "../h/systm.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/conf.h"
+#include "sys/buf.h"
+// clang-format on
 
 #define XPRI 30
 #define NBLOCKS 10

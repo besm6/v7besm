@@ -1,13 +1,15 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
-#include "../h/dir.h"
-#include "../h/inode.h"
-#include "../h/param.h"
-#include "../h/proc.h"
-#include "../h/reg.h"
-#include "../h/systm.h"
-#include "../h/timeb.h"
-#include "../h/user.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/dir.h"
+#include "sys/user.h"
+#include "sys/reg.h"
+#include "sys/inode.h"
+#include "sys/proc.h"
+#include "sys/timeb.h"
+// clang-format on
 
 /*
  * Everything in this file is a routine implementing a system call.

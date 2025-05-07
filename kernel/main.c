@@ -1,18 +1,20 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 /* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
-#include "../h/buf.h"
-#include "../h/conf.h"
-#include "../h/dir.h"
-#include "../h/filsys.h"
-#include "../h/inode.h"
-#include "../h/map.h"
-#include "../h/mount.h"
-#include "../h/param.h"
-#include "../h/proc.h"
-#include "../h/seg.h"
-#include "../h/systm.h"
-#include "../h/user.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/dir.h"
+#include "sys/user.h"
+#include "sys/filsys.h"
+#include "sys/mount.h"
+#include "sys/map.h"
+#include "sys/proc.h"
+#include "sys/inode.h"
+#include "sys/seg.h"
+#include "sys/conf.h"
+#include "sys/buf.h"
+// clang-format on
 
 extern int kend;
 

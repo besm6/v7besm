@@ -1,7 +1,7 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
 #define KERNEL 1
-#include "../h/pk.p"
+#include "sys/pk.p"
 
 /*
  * packet driver
@@ -281,7 +281,7 @@ pkread(S) SDEF;
                 cp = pk->p_ib[x];
                 if (is & B_SHORT) {
                     if (*cp++ & 0200)
-                        *cp++;
+                        cp++;
                 }
             }
             IOMOVE(cp, cc, B_READ);

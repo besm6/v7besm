@@ -1,17 +1,19 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 /* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
-#include "../h/acct.h"
-#include "../h/buf.h"
-#include "../h/dir.h"
-#include "../h/inode.h"
-#include "../h/map.h"
-#include "../h/param.h"
-#include "../h/proc.h"
-#include "../h/reg.h"
-#include "../h/seg.h"
-#include "../h/systm.h"
-#include "../h/user.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/map.h"
+#include "sys/dir.h"
+#include "sys/user.h"
+#include "sys/proc.h"
+#include "sys/buf.h"
+#include "sys/reg.h"
+#include "sys/inode.h"
+#include "sys/seg.h"
+#include "sys/acct.h"
+// clang-format on
 
 /*
  * exec system call, with and without environments.

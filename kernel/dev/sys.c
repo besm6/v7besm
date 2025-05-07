@@ -3,12 +3,14 @@
 /*
  *	indirect driver for controlling tty.
  */
-#include "../h/conf.h"
-#include "../h/dir.h"
-#include "../h/param.h"
-#include "../h/proc.h"
-#include "../h/tty.h"
-#include "../h/user.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/conf.h"
+#include "sys/dir.h"
+#include "sys/user.h"
+#include "sys/tty.h"
+#include "sys/proc.h"
+// clang-format on
 
 syopen(dev, flag)
 {

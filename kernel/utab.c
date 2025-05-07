@@ -1,13 +1,15 @@
 /* V7/x86 source code: see www.nordier.com/v7x86 for details. */
 /* Copyright (c) 1999 Robert Nordier.  All rights reserved. */
 
-#include "../h/dir.h"
-#include "../h/param.h"
-#include "../h/proc.h"
-#include "../h/seg.h"
-#include "../h/systm.h"
-#include "../h/text.h"
-#include "../h/user.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/dir.h"
+#include "sys/user.h"
+#include "sys/proc.h"
+#include "sys/text.h"
+#include "sys/seg.h"
+// clang-format on
 
 extern int pdir[], upt[];
 

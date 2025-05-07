@@ -1,9 +1,11 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 /* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
-#include "../h/map.h"
-#include "../h/param.h"
-#include "../h/systm.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/map.h"
+// clang-format on
 
 /*
  * Allocate 'size' units from the given

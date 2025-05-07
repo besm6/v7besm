@@ -1,16 +1,17 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
-#include "../h/text.h"
-
-#include "../h/buf.h"
-#include "../h/dir.h"
-#include "../h/inode.h"
-#include "../h/map.h"
-#include "../h/param.h"
-#include "../h/proc.h"
-#include "../h/seg.h"
-#include "../h/systm.h"
-#include "../h/user.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/map.h"
+#include "sys/dir.h"
+#include "sys/user.h"
+#include "sys/proc.h"
+#include "sys/text.h"
+#include "sys/inode.h"
+#include "sys/buf.h"
+#include "sys/seg.h"
+// clang-format on
 
 /*
  * Swap out process p.

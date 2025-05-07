@@ -1,17 +1,19 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
-#include "../h/dir.h"
-#include "../h/inode.h"
-#include "../h/param.h"
-#include "../h/proc.h"
-#include "../h/systm.h"
-#include "../h/tty.h"
-#include "../h/user.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/dir.h"
+#include "sys/user.h"
+#include "sys/proc.h"
+#include "sys/tty.h"
+#include "sys/inode.h"
 #define KERNEL 1
-#include "../h/buf.h"
-#include "../h/conf.h"
-#include "../h/file.h"
-#include "../h/mx.h"
+#include "sys/mx.h"
+#include "sys/file.h"
+#include "sys/conf.h"
+#include "sys/buf.h"
+// clang-format on
 
 /*
  * multiplexor driver
@@ -36,7 +38,6 @@ short cmask[16] = {
 
 #define HIQ 100
 #define LOQ 20
-#define FP ((struct file *)cp)
 
 char mcdebugs[NDEBUGS];
 
@@ -209,6 +210,7 @@ mxread(dev)
 {
     register struct group *gp;
     register struct chan *cp;
+    struct file *fp;
     register esc;
     struct rh h;
     caddr_t base;
@@ -220,10 +222,10 @@ mxread(dev)
         u.u_error = ENXIO;
         return;
     }
-    FP = getf(u.u_arg[0]);
-    fmp = FP->f_flag & FMP;
+    fp = getf(u.u_arg[0]);
+    fmp = fp->f_flag & FMP;
     if (fmp != FMP) {
-        msread(fmp, FP->f_un.f_chan);
+        msread(fmp, fp->f_un.f_chan);
         return;
     }
 
@@ -292,6 +294,7 @@ mxread(dev)
 mxwrite(dev)
 {
     register struct chan *cp;
+    struct file *fp;
     struct wh h;
     struct group *gp;
     int ucount, esc, fmp, burpcount;
@@ -301,10 +304,10 @@ mxwrite(dev)
         u.u_error = ENXIO;
         return;
     }
-    FP = getf(u.u_arg[0]);
-    fmp = FP->f_flag & FMP;
+    fp = getf(u.u_arg[0]);
+    fmp = fp->f_flag & FMP;
     if (fmp != FMP) {
-        mswrite(fmp, FP->f_un.f_chan);
+        mswrite(fmp, fp->f_un.f_chan);
         return;
     }
     burpcount = 0;
@@ -764,7 +767,7 @@ cpx(cp) register struct chan *cp;
 
     if (cp == NULL)
         return (-1);
-    x = (-1 << 4) + cp->c_index;
+    x = (~0u << 4) + cp->c_index;
     gp = cp->c_group;
     if (gp == NULL || (gp->g_state & ISGRP) == 0)
         return (-1);

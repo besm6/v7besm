@@ -5,11 +5,13 @@
  * Floppy disk driver
  */
 
-#include "../h/buf.h"
-#include "../h/dir.h"
-#include "../h/param.h"
-#include "../h/systm.h"
-#include "../h/user.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/buf.h"
+#include "sys/dir.h"
+#include "sys/user.h"
+#include "sys/systm.h"
+// clang-format on
 
 #define NFDBLK 2880 /* Sectors per disk */
 #define FDSPT 18    /* Sectors per track */
@@ -80,6 +82,15 @@ struct buf rfdbuf;
 struct buf fdtab;
 
 fdtimer();
+static fdx1();
+static fdx2();
+static fddma();
+static int fdcmd(int cmd);
+static fdrst();
+static int fdsis(char *av);
+static int fdput(int x);
+static int fdget(char *x);
+static int fdrqm(int m);
 
 void fdstrategy(bp) struct buf *bp;
 {

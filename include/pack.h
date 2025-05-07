@@ -118,4 +118,4 @@ struct piocb {
 };
 
 int pkdebug;
-int pksizes[];
+extern int pksizes[];

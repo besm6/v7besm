@@ -35,20 +35,20 @@ char *getepack();
 #define IOMOVE(p, c, f) iomove(p, c, f)
 #define PKGETPKT(p)
 #define DTOM(a)		dtom(a)
-#include "../h/param.h"
-#include "../h/dir.h"
-#include "../h/user.h"
-#include "../h/pk.h"
-#include "../h/tty.h"
-#include "../h/buf.h"
-#include "../h/proc.h"
+#include "sys/param.h"
+#include "sys/dir.h"
+#include "sys/user.h"
+#include "sys/pk.h"
+#include "sys/tty.h"
+#include "sys/buf.h"
+#include "sys/proc.h"
 
 #endif
 /*
  * user level
  */
 #ifdef	USER
-#define SLEEP(a, b) 
+#define SLEEP(a, b)
 #define SIGNAL
 #define WAKEUP(a)
 #define DSYSTEM		int p_ifn, p_ofn

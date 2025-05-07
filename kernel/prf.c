@@ -1,11 +1,13 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 /* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
-#include "../h/buf.h"
-#include "../h/conf.h"
-#include "../h/param.h"
-#include "../h/seg.h"
-#include "../h/systm.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/seg.h"
+#include "sys/buf.h"
+#include "sys/conf.h"
+// clang-format on
 
 /*
  * In case console is off,
@@ -26,15 +28,14 @@ char *panicstr;
  * Printf should not be used for chit-chat.
  */
 /* VARARGS 1 */
-printf(fmt, x1) register char *fmt;
-unsigned x1;
+void printf(char *fmt, ...)
 {
     register c;
     register unsigned int *adx;
     char *s;
     int d;
 
-    adx = &x1;
+    adx = 1 + (unsigned int *)&fmt;
 loop:
     while ((c = *fmt++) != '%') {
         if (c == '\0')

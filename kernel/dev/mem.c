@@ -8,10 +8,12 @@
  *	minor device 2 is EOF/RATHOLE
  */
 
-#include "../h/conf.h"
-#include "../h/dir.h"
-#include "../h/param.h"
-#include "../h/user.h"
+// clang-format off
+#include "sys/param.h"
+#include "sys/dir.h"
+#include "sys/user.h"
+#include "sys/conf.h"
+// clang-format on
 
 extern int end;
 
