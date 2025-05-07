@@ -21,7 +21,7 @@ all:    unix
 	$(LLVMBIN)llvm-size unix
 
 clean:
-	rm -f *.o *.a *.nm unix mkconf
+	rm -f *.o *.a *.nm unix
 
 unix:   $(OBJ)
 	ld.lld -T unix.ld $(OBJ) -o $@
@@ -32,6 +32,3 @@ libsys.a: $(SYS)
 
 libdev.a: $(DEV)
 	ar cr $@ $(DEV)
-
-mkconf: conf/mkconf.c
-	cc -O -o $@ $<
