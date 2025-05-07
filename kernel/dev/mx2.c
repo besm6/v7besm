@@ -244,7 +244,7 @@ mxread(dev)
             continue;
         }
         h.index = cpx(cp);
-        if (count = cp->c_ctlx.c_cc) {
+        if ((count = cp->c_ctlx.c_cc)) {
             count += CNTLSIZ;
             if (cp->c_flags & NMBUF)
                 count += nmsize;

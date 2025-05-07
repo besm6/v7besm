@@ -30,7 +30,7 @@ malloc(mp, size) struct map *mp;
                 do {
                     bp++;
                     (bp - 1)->m_addr = bp->m_addr;
-                } while ((bp - 1)->m_size = bp->m_size);
+                } while (((bp - 1)->m_size = bp->m_size));
             }
             return (a);
         }
@@ -78,7 +78,7 @@ register int a;
                 t          = bp->m_size;
                 bp->m_size = size;
                 bp++;
-            } while (size = t);
+            } while ((size = t));
         }
     }
 }

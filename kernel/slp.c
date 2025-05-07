@@ -157,7 +157,7 @@ setrun(p) register struct proc *p;
      * The assignment to w is necessary because of
      * race conditions. (Interrupt between test and use)
      */
-    if (w = p->p_wchan) {
+    if ((w = p->p_wchan)) {
         wakeup(w);
         return;
     }
@@ -304,7 +304,7 @@ swapin(p) register struct proc *p;
 
     if ((a = malloc(coremap, p->p_size)) == NULL)
         return (0);
-    if (xp = p->p_textp) {
+    if ((xp = p->p_textp)) {
         xlock(xp);
         if (xp->x_ccount == 0) {
             if ((x = malloc(coremap, xp->x_size)) == NULL) {

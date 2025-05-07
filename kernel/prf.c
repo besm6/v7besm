@@ -54,7 +54,7 @@ loop:
         printn((long)*adx, c == 'o' ? 8 : (c == 'x' ? 16 : 10));
     else if (c == 's') {
         s = (char *)*adx;
-        while (c = *s++)
+        while ((c = *s++))
             putchar(c);
     } else if (c == 'D') {
         printn(*(long *)adx, 10);
@@ -75,7 +75,7 @@ printn(n, b) unsigned long n; /* XXX */
         putchar('-');
         n = -n;
     }
-    if (a = n / b)
+    if ((a = n / b))
         printn(a, b);
     putchar("0123456789ABCDEF"[(int)(n % b)]);
 }

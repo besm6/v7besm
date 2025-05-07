@@ -23,9 +23,11 @@ int mdstrategy();
 extern struct buf mdtab;
 
 struct bdevsw bdevsw[] = {
+#if 1
     { hdopen, nulldev, hdstrategy, &hdtab },  /* hd = 0 */
     { nulldev, nulldev, fdstrategy, &fdtab }, /* fd = 1 */
     { nulldev, nulldev, mdstrategy, &mdtab }, /* md = 2 */
+#endif
     {},
 };
 
@@ -40,6 +42,7 @@ int mdread(), mdwrite();
 int cdread();
 
 struct cdevsw cdevsw[] = {
+#if 1
     { scopen, scclose, scread, scwrite, scioctl, nulldev, 0 },  /* console = 0 */
     { nulldev, nulldev, mmread, mmwrite, nodev, nulldev, 0 },   /* mem = 1 */
     { syopen, nulldev, syread, sywrite, sysioctl, nulldev, 0 }, /* tty = 2 */
@@ -48,6 +51,7 @@ struct cdevsw cdevsw[] = {
     { nulldev, nulldev, fdread, fdwrite, nodev, nulldev, 0 },   /* fd = 5 */
     { nulldev, nulldev, mdread, mdwrite, nodev, nulldev, 0 },   /* md = 6 */
     { nulldev, nulldev, cdread, nodev, nodev, nulldev, 0 },     /* cd = 7 */
+#endif
     {},
 };
 

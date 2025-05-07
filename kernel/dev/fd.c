@@ -288,7 +288,7 @@ static fdx2()
     switch (fd.cmd) {
     case FDCRC:
     case FDCSK:
-        if (!fdsis(av))
+        if (!fdsis(av)) {
             if (av[0] & 0xc0) {
                 if (av[0] & 0x80)
                     fd.err = FDECE;
@@ -296,8 +296,10 @@ static fdx2()
                     fd.pcn = -2;
                 else
                     fd.err = FDESF;
-            } else
+            } else {
                 fd.pcn = fd.cmd == FDCRC ? 0 : fd.cn;
+            }
+        }
         return 0;
     case FDCRD:
     case FDCWR:

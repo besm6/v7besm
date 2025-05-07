@@ -5,8 +5,8 @@
  * tunable variables
  */
 
-#define NBUF     251       /* size of buffer cache */
-#define NINODE   200       /* number of in core inodes */
+#define NBUF     251       /* size of buffer cache (min 10) */
+#define NINODE   200       /* number of in core inodes (min 24) */
 #define NFILE    175       /* number of in core file structures */
 #define NMOUNT   8         /* number of mountable file systems */
 #define MAXMEM   (64 * 32) /* max core per process - first # is Kw */
@@ -72,7 +72,7 @@
  */
 
 #define NBPW    sizeof(int)               /* number of bytes in an integer */
-#define BSIZE   512                       /* size of secondary block (bytes) */
+#define BSIZE   512                       /* size of secondary block (bytes, 6144 for besm) */
 #define NINDIR  (BSIZE / sizeof(daddr_t)) /* number of indirect blocks */
 #define BMASK   0777                      /* BSIZE-1 */
 #define BSHIFT  9                         /* LOG2(BSIZE) */
@@ -98,22 +98,22 @@
 #define ctod(x) ((x) << 3)
 
 /* inumber to disk address */
-#define itod(x) (daddr_t)((((unsigned)x + 15) >> 3))
+#define itod(x) (daddr_t)((((unsigned)(x) + 15) >> 3))
 
 /* inumber to disk offset */
-#define itoo(x) (int)((x + 15) & 07)
+#define itoo(x) (int)(((x) + 15) & 07)
 
 /* clicks to bytes */
-#define ctob(x) (x << 12)
+#define ctob(x) ((x) << 12)
 
 /* bytes to clicks */
-#define btoc(x) ((((unsigned)x + 4095) >> 12))
+#define btoc(x) ((((unsigned)(x) + 4095) >> 12))
 
 /* major part of a device */
-#define major(x) (int)(((unsigned)x >> 8))
+#define major(x) (int)(((unsigned)(x) >> 8))
 
 /* minor part of a device */
-#define minor(x) (int)(x & 0377)
+#define minor(x) (int)((x) & 0377)
 
 /* make a device number */
 #define makedev(x, y) (dev_t)((x) << 8 | (y))

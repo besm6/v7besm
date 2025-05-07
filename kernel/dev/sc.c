@@ -513,11 +513,12 @@ vscroll(pos, rev)
     int n;
 
     n = CHRS - pos - COLS;
-    if (n)
+    if (n) {
         if (rev)
             scmov(&scr[pos], &scr[pos + COLS], n);
         else
             scmov(&scr[pos + COLS], &scr[pos], n);
+    }
     clear(rev ? pos : LROW, COLS);
 }
 
@@ -526,11 +527,12 @@ hscroll(pos, col, ins)
     int n;
 
     n = COLS - col - 1;
-    if (n)
+    if (n) {
         if (ins)
             scmov(&scr[pos], &scr[pos + 1], n);
         else
             scmov(&scr[pos + 1], &scr[pos], n);
+    }
     scr[ins ? pos : pos + n] = va | ' ';
 }
 

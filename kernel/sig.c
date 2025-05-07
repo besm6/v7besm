@@ -342,7 +342,7 @@ procxmt()
         /*
          * If text, must assure exclusive use
          */
-        if (xp = u.u_procp->p_textp) {
+        if ((xp = u.u_procp->p_textp)) {
             if (xp->x_count != 1 || xp->x_iptr->i_mode & ISVTX)
                 goto error;
             xp->x_iptr->i_flag &= ~ITEXT;
