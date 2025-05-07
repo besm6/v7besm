@@ -17,7 +17,10 @@ AS      =  $(LLVMBIN)clang -target i486-unknown-linux-gnu
 
 VPATH = conf:dev
 
-all:    $(OBJ1) $(OBJ2) $(OBJ3)
+all:    mkconf $(OBJ1) $(OBJ2) $(OBJ3)
 
 clean:
 	rm -f *.o
+
+mkconf: conf/mkconf.c
+	cc -O -o $@ $<

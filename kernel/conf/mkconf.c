@@ -2,6 +2,7 @@
 /* Changes: Copyright (c) 2007 Robert Nordier. All rights reserved. */
 
 #include <stdio.h>
+#include <string.h>
 
 #define CHAR 01
 #define BLOCK 02
@@ -173,94 +174,21 @@ int nswap = 872;
 int pack;
 int nldisp = 1;
 
-main()
+int equal(char *a, char *b)
 {
-    register struct tab *p;
-    register char *q;
-    int i, n, ev;
-    int flagf, flagb, dumpht;
-
-    while (input())
-        ;
-
-    freopen("c.c", "w", stdout);
-    /*
-     * declarations
-     */
-    puke(stre);
-    for (i = 0; q = btab[i]; i++) {
-        for (p = table; p->name; p++)
-            if (equal(q, p->name) && (p->key & BLOCK) && p->count && *p->codef)
-                printf("%s\n", p->codef);
-    }
-    puke(stre1);
-    for (i = 0; q = btab[i]; i++) {
-        for (p = table; p->name; p++)
-            if (equal(q, p->name) && (p->key & BLOCK) && p->count) {
-                printf("%s    /* %s = %d */\n", p->coded, q, i);
-                if (p->key & ROOT)
-                    rootmaj = i;
-                if (p->key & SWAP)
-                    swapmaj = i;
-                if (p->key & PIPE)
-                    pipemaj = i;
-                goto newb;
-            }
-        printf("    nodev, nodev, nodev, 0, /* %s = %d */\n", q, i);
-    newb:;
-    }
-    if (swapmaj == -1) {
-        swapmaj = rootmaj;
-        swapmin = rootmin;
-    }
-    if (pipemaj == -1) {
-        pipemaj = rootmaj;
-        pipemin = rootmin;
-    }
-    puke(strf);
-    for (i = 0; q = ctab[i]; i++) {
-        for (p = table; p->name; p++)
-            if (equal(q, p->name) && (p->key & CHAR) && p->count && *p->codeg)
-                printf("%s\n", p->codeg);
-    }
-    puke(strf1);
-    for (i = 0; q = ctab[i]; i++) {
-        for (p = table; p->name; p++)
-            if (equal(q, p->name) && (p->key & CHAR) && p->count) {
-                printf("%s    /* %s = %d */\n", p->codee, q, i);
-                goto newc;
-            }
-        printf("    nodev, nodev, nodev, nodev, nodev, nulldev, 0, /* %s = %d */\n", q, i);
-    newc:;
-    }
-    puke(strh);
-    if (pack) {
-        nldisp++;
-        puke(stri);
-    }
-    puke(strj);
-    if (pack)
-        puke(strk);
-    printf(strg, rootmaj, rootmin, swapmaj, swapmin, pipemaj, pipemin, nldisp, swplo, nswap);
-    printf(strg1);
-    if (!mpx)
-        puke(strg1a);
-    printf(strg2);
-    if (rootmaj < 0)
-        fprintf(stderr, "No root device given\n");
+    return (!strcmp(a, b));
 }
 
-puke(s, a) char **s;
+void puke(char **s)
 {
     char *c;
 
-    while (c = *s++) {
-        printf(c, a);
-        printf("\n");
+    while ((c = *s++)) {
+        printf("%s\n", c);
     }
 }
 
-input()
+int input()
 {
     char line[100];
     register struct tab *q;
@@ -363,7 +291,79 @@ badl:
     return (1);
 }
 
-equal(a, b) char *a, *b;
+int main()
 {
-    return (!strcmp(a, b));
+    register struct tab *p;
+    register char *q;
+    int i, n, ev;
+    int flagf, flagb, dumpht;
+
+    while (input())
+        ;
+
+    freopen("c.c", "w", stdout);
+    /*
+     * declarations
+     */
+    puke(stre);
+    for (i = 0; (q = btab[i]); i++) {
+        for (p = table; p->name; p++)
+            if (equal(q, p->name) && (p->key & BLOCK) && p->count && *p->codef)
+                printf("%s\n", p->codef);
+    }
+    puke(stre1);
+    for (i = 0; (q = btab[i]); i++) {
+        for (p = table; p->name; p++)
+            if (equal(q, p->name) && (p->key & BLOCK) && p->count) {
+                printf("%s    /* %s = %d */\n", p->coded, q, i);
+                if (p->key & ROOT)
+                    rootmaj = i;
+                if (p->key & SWAP)
+                    swapmaj = i;
+                if (p->key & PIPE)
+                    pipemaj = i;
+                goto newb;
+            }
+        printf("    nodev, nodev, nodev, 0, /* %s = %d */\n", q, i);
+    newb:;
+    }
+    if (swapmaj == -1) {
+        swapmaj = rootmaj;
+        swapmin = rootmin;
+    }
+    if (pipemaj == -1) {
+        pipemaj = rootmaj;
+        pipemin = rootmin;
+    }
+    puke(strf);
+    for (i = 0; (q = ctab[i]); i++) {
+        for (p = table; p->name; p++)
+            if (equal(q, p->name) && (p->key & CHAR) && p->count && *p->codeg)
+                printf("%s\n", p->codeg);
+    }
+    puke(strf1);
+    for (i = 0; (q = ctab[i]); i++) {
+        for (p = table; p->name; p++)
+            if (equal(q, p->name) && (p->key & CHAR) && p->count) {
+                printf("%s    /* %s = %d */\n", p->codee, q, i);
+                goto newc;
+            }
+        printf("    nodev, nodev, nodev, nodev, nodev, nulldev, 0, /* %s = %d */\n", q, i);
+    newc:;
+    }
+    puke(strh);
+    if (pack) {
+        nldisp++;
+        puke(stri);
+    }
+    puke(strj);
+    if (pack)
+        puke(strk);
+    printf(strg, rootmaj, rootmin, swapmaj, swapmin, pipemaj, pipemin, nldisp, swplo, nswap);
+    printf("%s", strg1);
+    if (!mpx)
+        puke(strg1a);
+    printf("%s", strg2);
+    if (rootmaj < 0)
+        fprintf(stderr, "No root device given\n");
 }
