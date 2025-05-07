@@ -132,7 +132,7 @@ iinit()
  * I/O to be done-- e.g. swbuf for
  * swapping.
  */
-char buffers[NBUF][BSIZE + BSLOP];
+char buffers[NBUF][BSIZE];
 
 /*
  * Initialize the buffer I/O system by freeing
