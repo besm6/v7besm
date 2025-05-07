@@ -13,7 +13,7 @@ LLVMBIN = $(dir $(wildcard /usr/local/Cellar/llvm@19/19.*/bin/clang-19))
 AS      =  $(LLVMBIN)clang -target i486-unknown-linux-gnu -c
 CC      = $(LLVMBIN)clang -std=c89 -target i486-unknown-linux-gnu -ffreestanding
 CFLAGS  = -Os -DKERNEL -I../include -Wno-deprecated-non-prototype -Wno-implicit-function-declaration \
-          -Wno-return-mismatch -Werror
+          -Werror
 
 VPATH = dev
 

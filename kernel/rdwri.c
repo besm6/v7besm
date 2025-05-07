@@ -42,7 +42,8 @@ void readi(register struct inode *ip)
     dev  = (dev_t)ip->i_un.i_rdev;
     type = ip->i_mode & IFMT;
     if (type == IFCHR || type == IFMPC) {
-        return ((*cdevsw[major(dev)].d_read)(dev));
+        (*cdevsw[major(dev)].d_read)(dev);
+        return;
     }
 
     do {
