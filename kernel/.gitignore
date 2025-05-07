@@ -1,2 +1,4 @@
 mkconf
+unix
+*.nm
 *.s-

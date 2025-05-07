@@ -34,11 +34,10 @@
 _start:
 
 // We start off in real mode
-.code16
+//TODO: .code16
 
         cli
-        cs
-        lgdt gdtd
+        cs; lgdt gdtd
         mov     %cr0, %eax
         inc     %eax
         mov     %eax, %cr0
@@ -881,7 +880,7 @@ _ipltbl:.long IPL6                      // irq0 timer
 
 .align  16
 gdt:    .word 0x0, 0x0, 0x0, 0x0
-        .word 0x0067, tss, 0xe9c0, 0x7f40  // TSS
+//TODO: .word 0x0067, tss, 0xe9c0, 0x7f40  // TSS
         .word 0xffff, 0x0, 0x9a00, 0xcf    // KCODE
         .word 0xffff, 0x0, 0x9200, 0xcf    // KDATA
         .word 0xffff, 0x0, 0xfa00, 0xcf    // UCODE
