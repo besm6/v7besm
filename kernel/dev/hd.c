@@ -14,7 +14,9 @@
 #include "sys/part.h"
 // clang-format on
 
-extern int insw(), outsw();
+/* implemented in mch.s */
+void insw(int, char *, int);
+void outsw(int, char *, int);
 
 /* controller ports */
 #define CB1 0x1f0 /* 0x1f0 or 0x170 */

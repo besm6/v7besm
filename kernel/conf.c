@@ -13,9 +13,6 @@
 #include "sys/acct.h"
 // clang-format on
 
-int nulldev();
-void nullopen(dev_t, int);
-int nodev();
 void hdopen(dev_t, int);
 int hdstrategy();
 extern struct buf hdtab;
@@ -26,44 +23,47 @@ extern struct buf mdtab;
 
 struct bdevsw bdevsw[] = {
 #if 1
-    { hdopen, nulldev, hdstrategy, &hdtab },   /* hd = 0 */
-    { nullopen, nulldev, fdstrategy, &fdtab }, /* fd = 1 */
-    { nullopen, nulldev, mdstrategy, &mdtab }, /* md = 2 */
+    { hdopen, nullclose, hdstrategy, &hdtab },   /* hd = 0 */
+    { nullopen, nullclose, fdstrategy, &fdtab }, /* fd = 1 */
+    { nullopen, nullclose, mdstrategy, &mdtab }, /* md = 2 */
 #endif
     {},
 };
 
 void scopen(dev_t, int);
-int scclose(), scread(), scwrite(), scioctl();
-int mmread(), mmwrite();
+void scclose(dev_t, int, struct chan *);
+void scread(dev_t), scwrite(dev_t);
+void scioctl(dev_t, int, caddr_t, int);
+void mmread(dev_t), mmwrite(dev_t);
 void syopen(dev_t, int);
-int syread(), sywrite(), sysioctl();
+void syread(dev_t), sywrite(dev_t);
+void sysioctl(dev_t, int, caddr_t, int);
 void sropen(dev_t, int);
-int srclose(), srread(), srwrite(), srioctl();
+void srclose(dev_t, int, struct chan *);
+void srread(dev_t), srwrite(dev_t);
+void srioctl(dev_t, int, caddr_t, int);
 extern struct tty sr[];
-int hdread(), hdwrite();
-int fdread(), fdwrite();
-int mdread(), mdwrite();
-int cdread();
+void hdread(dev_t), hdwrite(dev_t);
+void fdread(dev_t), fdwrite(dev_t);
+void mdread(dev_t), mdwrite(dev_t);
+void cdread(dev_t);
 
 struct cdevsw cdevsw[] = {
 #if 1
-    { scopen, scclose, scread, scwrite, scioctl, nulldev, 0 },  /* console = 0 */
-    { nullopen, nulldev, mmread, mmwrite, nodev, nulldev, 0 },  /* mem = 1 */
-    { syopen, nulldev, syread, sywrite, sysioctl, nulldev, 0 }, /* tty = 2 */
-    { sropen, srclose, srread, srwrite, srioctl, nulldev, sr }, /* sr = 3 */
-    { hdopen, nulldev, hdread, hdwrite, nodev, nulldev, 0 },    /* hd = 4 */
-    { nullopen, nulldev, fdread, fdwrite, nodev, nulldev, 0 },  /* fd = 5 */
-    { nullopen, nulldev, mdread, mdwrite, nodev, nulldev, 0 },  /* md = 6 */
-    { nullopen, nulldev, cdread, nodev, nodev, nulldev, 0 },    /* cd = 7 */
+    { scopen, scclose, scread, scwrite, scioctl, nulldstop, 0 },       /* console = 0 */
+    { nullopen, nullclose, mmread, mmwrite, nullioctl, nulldstop, 0 }, /* mem = 1 */
+    { syopen, nullclose, syread, sywrite, sysioctl, nulldstop, 0 },    /* tty = 2 */
+    { sropen, srclose, srread, srwrite, srioctl, nulldstop, sr },      /* sr = 3 */
+    { hdopen, nullclose, hdread, hdwrite, nullioctl, nulldstop, 0 },   /* hd = 4 */
+    { nullopen, nullclose, fdread, fdwrite, nullioctl, nulldstop, 0 }, /* fd = 5 */
+    { nullopen, nullclose, mdread, mdwrite, nullioctl, nulldstop, 0 }, /* md = 6 */
+    { nullopen, nullclose, cdread, nullrw, nullioctl, nulldstop, 0 },  /* cd = 7 */
 #endif
     {},
 };
 
-int ttyopen(), ttyclose(), ttread(), ttwrite();
-
 struct linesw linesw[] = {
-    { ttyopen, nulldev, ttread, ttwrite, nodev, ttyinput, ttstart }, /* 0 */
+    { ttyopen, nulltclose, ttread, ttwrite, nulltioctl, ttyinput, ttstart }, /* 0 */
     {},
 };
 

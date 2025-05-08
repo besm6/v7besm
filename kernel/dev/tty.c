@@ -201,7 +201,7 @@ int ttioccomm(int com, register struct tty *tp, caddr_t addr, dev_t dev)
         if (tp->t_line)
             (*linesw[tp->t_line].l_close)(tp);
         if (t)
-            (*linesw[t].l_open)(dev, tp, addr);
+            (*linesw[t].l_open)(dev, tp);
         if (u.u_error == 0)
             tp->t_line = t;
         break;

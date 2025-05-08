@@ -185,10 +185,30 @@ void nulldev()
 {
 }
 
-/*
- * Null routine; placed in insignificant entries
- * in the bdevsw and cdevsw tables.
- */
 void nullopen(dev_t dev, int flag)
+{
+}
+
+void nullclose(dev_t dev, int flag, struct chan *cp)
+{
+}
+
+void nullrw(dev_t dev)
+{
+}
+
+void nullioctl(dev_t dev, int cmd, caddr_t addr, int flag)
+{
+}
+
+void nulldstop(struct tty *tp)
+{
+}
+
+void nulltclose(struct tty *tp)
+{
+}
+
+void nulltioctl(int com, struct tty *tp, caddr_t addr)
 {
 }

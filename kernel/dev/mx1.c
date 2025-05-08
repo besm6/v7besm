@@ -179,11 +179,14 @@ sw:
     case MPX:
     case MPXN:
         if (mpxdev < 0) {
+#if 0
+            /* this never happens */
             for (i = 0; linesw[i].l_open; i++)
                 if (linesw[i].l_read == mcread) {
                     mpxline = i;
                     goto found1;
                 }
+#endif
             goto bad;
 
         found1:

@@ -47,8 +47,10 @@ extern dev_t pipedev;        /* pipe device */
 extern int icode[];          /* user init code */
 extern int szicode;          /* its size */
 
+struct chan;
+
 dev_t getmdev();
-daddr_t bmap();
+daddr_t bmap(struct inode *ip, daddr_t bn, int rwflg);
 struct inode *ialloc(dev_t dev);
 struct inode *iget(dev_t dev, ino_t ino);
 void iput(struct inode *ip);
@@ -56,8 +58,8 @@ void iupdat(struct inode *ip, time_t *ta, time_t *tm);
 void itrunc(struct inode *ip);
 void wdir(struct inode *ip);
 struct inode *owner();
-struct inode *maknode();
-struct inode *namei();
+struct inode *maknode(int mode);
+struct inode *namei(int (*func)(void), int flag);
 struct buf *alloc(dev_t dev);
 struct buf *getblk(dev_t dev, daddr_t blkno);
 struct buf *geteblk();
@@ -66,7 +68,7 @@ struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
 void bawrite(struct buf *bp);
 void brelse(struct buf *bp);
 struct filsys *getfs(dev_t dev);
-struct file *getf();
+struct file *getf(int f);
 struct file *falloc();
 int uchar();
 void plock(struct inode *ip);
@@ -131,6 +133,10 @@ void ioctl(void);
 void mpxchan(void);
 void umask(void);
 void chroot(void);
+void nullopen(dev_t, int);
+void nullclose(dev_t, int, struct chan *);
+void nullrw(dev_t);
+void nullioctl(dev_t, int, caddr_t, int);
 
 /*
  * Instrumentation

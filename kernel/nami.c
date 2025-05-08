@@ -23,7 +23,7 @@ struct inode *mpxip; /* mpx virtual inode */
  *	1 if name is to be created
  *	2 if name is to be deleted
  */
-struct inode *namei(func, flag) int (*func)();
+struct inode *namei(int (*func)(void), int flag)
 {
     register struct inode *dp;
     register c;
@@ -205,7 +205,7 @@ out:
  * Return the next character from the
  * kernel string pointed at by dirp.
  */
-schar()
+int schar()
 {
     return (*u.u_dirp++ & 0377);
 }
@@ -214,7 +214,7 @@ schar()
  * Return the next character from the
  * user string pointed at by dirp.
  */
-uchar()
+int uchar()
 {
     register c;
 

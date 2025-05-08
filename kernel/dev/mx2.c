@@ -21,8 +21,6 @@
 struct chan chans[NCHANS];
 struct group *groups[NGROUPS];
 int mpxline;
-struct chan *addch();
-struct chan *nextcp();
 
 #define MIN(a, b) ((a < b) ? a : b)
 short cmask[16] = {
@@ -55,6 +53,7 @@ void mxwcontrol(struct chan *cp);
 void flush(struct clist *q);
 void wflush(struct chan *cp, struct clist *q);
 void rmdata(struct chan *cp);
+struct chan *nextcp(struct group *gp);
 
 struct group *getmpx(dev_t dev)
 {

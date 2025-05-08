@@ -151,4 +151,5 @@ extern int *PTRACE;
 void pkbadframe(struct pack *pk);
 void pkoutput(struct pack *pk);
 void pktimeout(void);
+char *getepack(int bits);
 #endif

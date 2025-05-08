@@ -106,7 +106,7 @@ void srread(dev_t dev)
     ttread(&sr[minor(dev)]);
 }
 
-void srwrite(dev)
+void srwrite(dev_t dev)
 {
     ttwrite(&sr[minor(dev)]);
 }

@@ -95,8 +95,9 @@ void chdrain(struct chan *cp);
 void chwake(struct chan *cp);
 void chfree(struct chan *cp);
 void scontrol(struct chan *cp, short event, short value);
-int mcread(register struct chan *cp);
+int mcread(struct chan *cp);
 void mxopen(dev_t dev, int flag);
+struct chan *addch(struct inode *ip, int isport);
 #endif
 
 /*

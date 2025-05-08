@@ -49,7 +49,7 @@ void closef(register struct file *fp)
     register struct inode *ip;
     int flag, mode;
     dev_t dev;
-    register int (*cfunc)();
+    register void (*cfunc)(dev_t, int, struct chan *);
     struct chan *cp;
 
     if (fp == NULL)

@@ -16,7 +16,6 @@
 #define SETERROR	u.u_error = EIO
 #define OBUSY		tp->t_state&BUSY
 #define	ODEAD		((tp->t_state&CARR_ON)==0)
-char *getepack();
 #define GETEPACK	getepack(pk->p_bits)
 #define FREEPACK(a,b)	freepack(a, b)
 
