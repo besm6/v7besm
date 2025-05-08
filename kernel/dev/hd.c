@@ -70,14 +70,14 @@ static struct {
     unsigned base;
     unsigned size;
 } pseudo[8] = {
-    0,      10000,  /* a */
-    10000,  32000,  /* b */
-    0,      MAXBLK, /* c */
-    0,      0,      /* d */
-    42000,  255000, /* e */
-    297000, 255000, /* f */
-    552000, 255000, /* g */
-    807000, 255000  /* h */
+    { 0,      10000 },  /* a */
+    { 10000,  32000 },  /* b */
+    { 0,      MAXBLK }, /* c */
+    { 0,      0 },      /* d */
+    { 42000,  255000 }, /* e */
+    { 297000, 255000 }, /* f */
+    { 552000, 255000 }, /* g */
+    { 807000, 255000 }, /* h */
 };
 
 struct buf rhdbuf;
@@ -228,7 +228,7 @@ int hdsm(int st)
         outb(SN, hd.bn);
         outb(CL, hd.bn >> 8);
         outb(CH, hd.bn >> 16);
-        outb(DH, LBA | (drv ? DEV1 : DEV0) | hd.bn >> 24 & 0xf);
+        outb(DH, LBA | (drv ? DEV1 : DEV0) | (hd.bn >> 24 & 0xf));
         outb(CMD, hd.rd ? RDSECT : WRSECT);
         if (!hd.rd) {
             delay();

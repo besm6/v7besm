@@ -189,7 +189,7 @@ sw:
 #endif
             goto bad;
 
-        found1:
+      /*found1:*/
             for (i = 0; cdevsw[i].d_open; i++) {
                 if (cdevsw[i].d_open == mxopen)
                     goto found2;

@@ -126,7 +126,7 @@ int pkaccept(register struct pack *pk)
      * wait for input
      */
     LOCK;
-    x = next[pk->p_pr];
+    x = next[(unsigned)pk->p_pr];
     if ((imask = pk->p_imap) == 0 && pk->p_rcount == 0) {
         UNLOCK;
         goto out;
@@ -207,7 +207,7 @@ int pkaccept(register struct pack *pk)
      * numbers.
      */
     accept = 0;
-    for (x = next[pk->p_pr], t = -1; m & mask[x]; x = next[x]) {
+    for (x = next[(unsigned)pk->p_pr], t = -1; m & mask[x]; x = next[x]) {
         if (pk->p_is[x] & B_MARK)
             pk->p_is[x] |= B_COPY;
         if (pk->p_is[x] & B_COPY) {
@@ -267,7 +267,7 @@ int pkread(struct tty *tp)
     count = 0;
 
     while (UCOUNT) {
-        x  = next[pk->p_pr];
+        x  = next[(unsigned)pk->p_pr];
         is = pk->p_is[x];
 
         if (is & B_COPY) {
@@ -340,7 +340,7 @@ int pkwrite(struct tty *tp)
             if (pk->p_state & DOWN)
                 goto down;
         }
-        x = next[pk->p_pscopy];
+        x = next[(unsigned)pk->p_pscopy];
         while (pk->p_os[x] != B_NULL) {
             goto down;
         }
@@ -416,7 +416,7 @@ void pkoutput(register struct pack *pk)
      * of next output packet
      */
     if (pk->p_state & RXMIT) {
-        pk->p_nxtps = next[pk->p_rpr];
+        pk->p_nxtps = next[(unsigned)pk->p_rpr];
         pk->p_state &= ~RXMIT;
     }
     x      = pk->p_nxtps;
@@ -482,8 +482,8 @@ void pkoutput(register struct pack *pk)
         if (bstate & B_SHORT)
             x |= 0100;
         pkxstart(pk, x, seq);
-        if (pk->p_os[seq])
-            pk->p_os[seq] = bstate;
+        if (pk->p_os[(unsigned)seq])
+            pk->p_os[(unsigned)seq] = bstate;
         pk->p_nout++;
         goto out;
     }

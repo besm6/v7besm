@@ -368,7 +368,7 @@ int procxmt()
         if (p >= (int *)&u.u_fps && p < (int *)&u.u_segflg)
             goto ok;
         for (i = 0; i < 8; i++)
-            if (p == &u.u_ar0[regloc[i]])
+            if (p == &u.u_ar0[(unsigned)regloc[i]])
                 goto ok;
         if (p == &u.u_ar0[EFL]) {
             /* XXX */

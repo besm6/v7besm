@@ -289,7 +289,7 @@ void scrint()
                     x = 2;
                 else {
                     x = shift;
-                    if (lock & LCAP && type[sn] == 1 || lock & LNUM && type[sn] == 2)
+                    if (((lock & LCAP) && type[sn] == 1) || ((lock & LNUM) && type[sn] == 2))
                         x ^= 1;
                 }
                 ch = map[x][sn];

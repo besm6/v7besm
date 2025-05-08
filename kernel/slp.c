@@ -261,7 +261,7 @@ loop:
             continue;
         if (rp->p_textp && rp->p_textp->x_flag & XLOCK)
             continue;
-        if (rp->p_stat == SSLEEP && rp->p_pri >= PZERO || rp->p_stat == SSTOP) {
+        if ((rp->p_stat == SSLEEP && rp->p_pri >= PZERO) || rp->p_stat == SSTOP) {
             if (maxsize < rp->p_size) {
                 p       = rp;
                 maxsize = rp->p_size;

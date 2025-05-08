@@ -32,7 +32,7 @@ char regloc[10] = { EAX, EDX, ECX, EBX, ESI, EDI, EBP, ESP, EIP, EFL };
  */
 void trap(struct trap tr)
 {
-    register int i;
+    register int i = 0;
     register int *a;
     register struct sysent *callp;
     time_t syst;

@@ -176,7 +176,7 @@ void srparam(struct tty *tp)
 {
     int port, v, d, p;
 
-    v = srstab[tp->t_ispeed];
+    v = srstab[(unsigned)tp->t_ispeed];
     if (v == 0)
         return;
     p = PARTN;

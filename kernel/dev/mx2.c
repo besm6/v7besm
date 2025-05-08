@@ -269,7 +269,7 @@ void mxread(int dev)
         if (esc && cp->c_flags & PORT) {
             more = mcread(cp);
         } else {
-            more = (*linesw[cp->c_line].l_read)(cp->c_ttyp);
+            more = (*linesw[(unsigned)cp->c_line].l_read)(cp->c_ttyp);
         }
         if (more > 0)
             sdata(cp);
@@ -390,10 +390,8 @@ int mcread(register struct chan *cp)
     register struct clist *q;
     register char *np;
 
-    int cc;
-
     q  = (cp->c_ctlx.c_cc) ? &cp->c_ctlx : &cp->cx.datq;
-    cc = mxmove(q, B_READ);
+    (void) mxmove(q, B_READ);
 
     if (cp->c_flags & NMBUF && q == &cp->c_ctlx) {
         np = mxnmbuf;
@@ -411,7 +409,6 @@ int mcread(register struct chan *cp)
 char *mcwrite(register struct chan *cp)
 {
     register struct clist *q;
-    register int cc;
     int s;
 
     q = &cp->cy.datq;
@@ -423,7 +420,7 @@ char *mcwrite(register struct chan *cp)
             break;
         }
         splx(s);
-        cc = mxmove(q, B_WRITE);
+        (void) mxmove(q, B_WRITE);
     }
     wakeup((caddr_t)q);
     return ((caddr_t)q);
@@ -794,7 +791,7 @@ struct chan *nextcp(register struct group *gp)
             else
                 gp->g_rotmask = 1;
         }
-        gp = (struct group *)gp->g_chans[gp->g_rot];
+        gp = (struct group *)gp->g_chans[(unsigned)gp->g_rot];
     }
     if (gp)
         rmdata((struct chan *)gp);

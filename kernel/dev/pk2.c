@@ -154,7 +154,7 @@ void pkdata(char c, unsigned short sum, register struct pack *pk, char *cp)
         pkoutput(pk);
         goto drop;
     }
-    t = next[pk->p_pr];
+    t = next[(unsigned)pk->p_pr];
     for (x = pk->p_pr; x != t; x = (x - 1) & 7) {
         if (pk->p_is[x] == 0)
             goto slot;
@@ -191,7 +191,7 @@ void pkxstart(struct pack *pk, char cntl, register int x)
     struct tty *tp;
     register char *p;
     short checkword;
-    char hdcheck;
+    char hdcheck = 0;
 
     p  = (caddr_t)&pk->p_ohbuf;
     tp = pk->p_ttyp;

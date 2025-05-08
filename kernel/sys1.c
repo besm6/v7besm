@@ -266,7 +266,7 @@ void setregs()
         if ((*rp & 1) == 0)
             *rp = 0;
     for (cp = &regloc[0]; cp < &regloc[7];)
-        u.u_ar0[*cp++] = 0;
+        u.u_ar0[(unsigned)*cp++] = 0;
     u.u_ar0[EIP] = u.u_exdata.ux_entloc;
     for (i = 0; i < NOFILE; i++) {
         if (u.u_pofile[i] & EXCLOSE) {
