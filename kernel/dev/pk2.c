@@ -55,7 +55,7 @@ void pkrend(register struct tty *tp)
     register char *p;
     struct pack *pk;
     struct header *h;
-    register x;
+    register int x;
     char cntl, hdcheck;
     unsigned short sum;
     int i, j, k;
@@ -142,7 +142,7 @@ istart2:
 void pkdata(char c, unsigned short sum, register struct pack *pk, char *cp)
 {
     register struct tty *tp;
-    register x;
+    register int x;
     char **bp;
     int t;
 
@@ -233,7 +233,7 @@ int pkdelay = 2;
 void pkxint(register struct tty *tp)
 {
     register struct pack *pk;
-    register s;
+    register int s;
 
     pk = (struct pack *)tp->t_linep;
     s  = spl6();

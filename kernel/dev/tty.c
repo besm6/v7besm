@@ -144,7 +144,7 @@ void ioctl()
         caddr_t cmarg;
     } *uap;
     register dev_t dev;
-    register fmt;
+    register int fmt;
 
     uap = (struct a *)u.u_ap;
     if ((fp = getf(uap->fdes)) == NULL)
@@ -305,7 +305,7 @@ void wflushtty(register struct tty *tp)
  */
 void flushtty(register struct tty *tp)
 {
-    register s;
+    register int s;
 
     while (getc(&tp->t_canq) >= 0)
         ;
@@ -493,7 +493,8 @@ void ttyinput(register int c, register struct tty *tp)
  */
 void ttyblock(register struct tty *tp)
 {
-    register x;
+    register int x;
+
     x = q1.c_cc + q2.c_cc;
     if (q1.c_cc > TTYHOG) {
         flushtty(tp);
@@ -518,7 +519,7 @@ void ttyblock(register struct tty *tp)
 void ttyoutput(register int c, register struct tty *tp)
 {
     register char *colp;
-    register ctype;
+    register int ctype;
 
     tk_nout += 1;
     /*
@@ -662,7 +663,7 @@ void ttrstrt(caddr_t arg)
  */
 void ttstart(register struct tty *tp)
 {
-    register s;
+    register int s;
 
     s = spl5();
     if ((tp->t_state & (TIMEOUT | TTSTOP | BUSY)) == 0)
@@ -690,7 +691,7 @@ int ttread(register struct tty *tp)
  */
 caddr_t ttwrite(register struct tty *tp)
 {
-    register c;
+    register int c;
 
     if ((tp->t_state & CARR_ON) == 0)
         return (NULL);

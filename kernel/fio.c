@@ -141,7 +141,7 @@ bad:
  */
 int access(register struct inode *ip, int mode)
 {
-    register m;
+    register int m;
 
     m = mode;
     if (m == IWRITE) {
@@ -212,7 +212,7 @@ int suser()
  */
 int ufalloc()
 {
-    register i;
+    register int i;
 
     for (i = 0; i < NOFILE; i++)
         if (u.u_ofile[i] == NULL) {
@@ -236,7 +236,7 @@ int ufalloc()
 struct file *falloc()
 {
     register struct file *fp;
-    register i;
+    register int i;
 
     i = ufalloc();
     if (i < 0)

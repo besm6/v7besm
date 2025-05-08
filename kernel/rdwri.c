@@ -27,8 +27,8 @@ void readi(register struct inode *ip)
     dev_t dev;
     daddr_t lbn, bn;
     off_t diff;
-    register on, n;
-    register type;
+    register int on, n;
+    register int type;
 
     if (u.u_count == 0)
         return;
@@ -90,8 +90,8 @@ void writei(register struct inode *ip)
     struct buf *bp;
     dev_t dev;
     daddr_t bn;
-    register n, on;
-    register type;
+    register int n, on;
+    register int type;
 
     if (u.u_offset < 0) {
         u.u_error = EINVAL;
@@ -171,7 +171,7 @@ unsigned min(unsigned a, unsigned b)
  */
 void iomove(register caddr_t cp, register int n, int flag)
 {
-    register t;
+    register int t;
 
     if (n == 0)
         return;

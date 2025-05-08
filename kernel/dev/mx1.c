@@ -50,7 +50,7 @@ void mlink(struct group *sub, struct group *master);
  */
 struct chan *challoc(int index, int isport)
 {
-    register s;
+    register int s;
 
     s = spl6();
     if (isport) {
@@ -89,7 +89,7 @@ out:
  */
 int gpalloc()
 {
-    register i, s;
+    register int i, s;
 
     s = spl6();
     for (i = NGROUPS - 1; i >= 0; i--)
@@ -109,7 +109,7 @@ struct chan *addch(struct inode *ip, int isport)
 {
     register struct chan *cp;
     register struct group *gp;
-    register i;
+    register int i;
 
     plock(ip);
     gp = &ip->i_un.i_group;
@@ -441,7 +441,7 @@ void detach(register struct chan *cp)
 
 void mxfalloc(register struct file *fp)
 {
-    register i;
+    register int i;
 
     if (fp == NULL) {
         u.u_error = ENXIO;
@@ -459,7 +459,7 @@ void mxfalloc(register struct file *fp)
 
 void mlink(struct group *sub, struct group *master)
 {
-    register i;
+    register int i;
 
     for (i = 0; i < NINDEX; i++) {
         if (master->g_chans[i] != NULL)

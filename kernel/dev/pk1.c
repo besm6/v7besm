@@ -24,9 +24,9 @@ void pksetgrp(struct tty *tp);
 void pkopen(dev_t dev, register struct tty *tp, caddr_t addr)
 {
     register struct pack *pk;
-    register i;
+    register int i;
     char **bp;
-    static timer_on;
+    static int timer_on;
     int s;
     struct piocb piocb;
 
@@ -159,7 +159,7 @@ void pkturnoff(register struct tty *tp)
 {
     register char **bp;
     register struct pack *pk;
-    register s;
+    register int s;
 
     pk = PADDR;
     LOCK;
@@ -197,7 +197,7 @@ void pktimeout(caddr_t arg)
 {
     register struct pack *pk;
     extern time_t time;
-    register i;
+    register int i;
 
     for (i = 0; i < NPLINES; i++) {
         if ((pk = pklines[i]) == NULL)

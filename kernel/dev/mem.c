@@ -22,7 +22,7 @@ int mmvaloff(int k);
 
 void mmread(int dev)
 {
-    register k, c;
+    register int k, c;
 
     if (minor(dev) == 2)
         return;
@@ -35,7 +35,7 @@ void mmread(int dev)
 
 void mmwrite(int dev)
 {
-    register k, c;
+    register int k, c;
 
     if (minor(dev) == 2) {
         u.u_count = 0;

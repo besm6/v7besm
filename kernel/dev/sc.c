@@ -318,7 +318,7 @@ void scioctl(dev_t dev, int cmd, caddr_t addr, int flag)
 
 void scstart(register struct tty *tp)
 {
-    register i, c;
+    register int i, c;
 
     for (i = 0; (c = getc(&tp->t_outq)) >= 0; i++)
         if (tp->t_flags & RAW || c <= 0177)

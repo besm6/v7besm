@@ -12,8 +12,7 @@ LLVMBIN = $(dir $(wildcard /usr/local/Cellar/llvm@19/19.*/bin/clang-19))
 
 AS      =  $(LLVMBIN)clang -target i486-unknown-linux-gnu -c
 CC      = $(LLVMBIN)clang -target i486-unknown-linux-gnu -ffreestanding
-CFLAGS  = -Os -I../include -DKERNEL -fcolor-diagnostics \
-          -Wno-implicit-int -Werror # TODO: -Wall
+CFLAGS  = -Os -I../include -DKERNEL -fcolor-diagnostics -Werror # TODO: -Wall
 
 VPATH = dev
 

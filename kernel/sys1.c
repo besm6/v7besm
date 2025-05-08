@@ -34,7 +34,7 @@ void exec()
 
 void exece()
 {
-    register nc;
+    register int nc;
     register char *cp;
     register struct buf *bp;
     register struct execa *uap;
@@ -152,7 +152,7 @@ int getxfile(register struct inode *ip, int nargc)
 {
     register unsigned ds;
     register unsigned ts, ss;
-    register i;
+    register int i;
     long lsize;
 
     /*
@@ -260,7 +260,7 @@ void setregs()
 {
     register int *rp;
     register char *cp;
-    register i;
+    register int i;
 
     for (rp = &u.u_signal[0]; rp < &u.u_signal[NSIG]; rp++)
         if ((*rp & 1) == 0)
@@ -357,7 +357,7 @@ void exit(int rv)
  */
 void wait()
 {
-    register f;
+    register int f;
     register struct proc *p;
 
     f = 0;
@@ -403,7 +403,7 @@ loop:
 void fork()
 {
     register struct proc *p1, *p2;
-    register a;
+    register int a;
 
     /*
      * Make sure there's enough swap space for max
@@ -460,7 +460,7 @@ void sbreak()
     struct a {
         char *nsiz;
     };
-    register a, n, d;
+    register int a, n, d;
     int i;
 
     /*

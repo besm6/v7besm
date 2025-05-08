@@ -127,7 +127,7 @@ struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno)
  */
 void bwrite(register struct buf *bp)
 {
-    register flag;
+    register int flag;
 
     flag = bp->b_flags;
     bp->b_flags &= ~(B_READ | B_DONE | B_ERROR | B_DELWRI | B_AGE);
@@ -181,7 +181,7 @@ void bawrite(register struct buf *bp)
 void brelse(register struct buf *bp)
 {
     register struct buf **backp;
-    register s;
+    register int s;
 
     if (bp->b_flags & B_WANTED)
         wakeup((caddr_t)bp);
@@ -235,7 +235,7 @@ struct buf *getblk(dev_t dev, daddr_t blkno)
     register struct buf *bp;
     register struct buf *dp;
 #ifdef DISKMON
-    register i;
+    register int i;
 #endif
 
     if (major(dev) >= nblkdev)
@@ -347,7 +347,7 @@ void iowait(register struct buf *bp)
  */
 void notavail(register struct buf *bp)
 {
-    register s;
+    register int s;
 
     s                    = spl6();
     bp->av_back->av_forw = bp->av_forw;
@@ -386,7 +386,7 @@ void clrbuf(struct buf *bp)
 void swap(int blkno, int coreaddr, register int count, int rdflg)
 {
     register struct buf *bp;
-    register tcount;
+    register int tcount;
 
     bp = &swbuf1;
     if (bp->b_flags & B_BUSY)

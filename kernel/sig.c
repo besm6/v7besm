@@ -80,7 +80,7 @@ void psignal(register struct proc *p, register int sig)
  */
 int issig()
 {
-    register n;
+    register int n;
     register struct proc *p;
 
     p = u.u_procp;
@@ -127,7 +127,7 @@ loop:
  */
 void psig()
 {
-    register n, p;
+    register int n, p;
     register struct proc *rp;
 
     rp = u.u_procp;
@@ -170,7 +170,7 @@ void psig()
  */
 int fsig(struct proc *p)
 {
-    register n, i;
+    register int n, i;
 
     n = p->p_sig;
     for (i = 1; i < NSIG; i++) {
@@ -195,7 +195,6 @@ int core()
 {
     register struct inode *ip;
     register unsigned s;
-    extern schar();
 
     u.u_error = 0;
     u.u_dirp  = "core";
@@ -234,9 +233,9 @@ int core()
  */
 int grow(unsigned sp)
 {
-    register si, i;
+    register int si, i;
     register struct proc *p;
-    register a;
+    register int a;
 
     if (sp > USTK - ctob(u.u_ssize))
         return (0);
@@ -308,7 +307,7 @@ found:
 int procxmt()
 {
     register int i;
-    register *p;
+    register int *p;
     register struct text *xp;
 
     if (ipc.ip_lock != u.u_procp->p_pid)

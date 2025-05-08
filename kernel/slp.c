@@ -40,7 +40,7 @@ char curpri;                 /* more scheduling */
 void sleep(caddr_t chan, int pri)
 {
     register struct proc *rp;
-    register s, h;
+    register int s, h;
 
     rp = u.u_procp;
     s  = spl6();
@@ -94,7 +94,7 @@ psig:
 void wakeup(register caddr_t chan)
 {
     register struct proc *p, *q;
-    register i;
+    register int i;
     int s;
 
     s = spl6();
@@ -129,7 +129,7 @@ void wakeup(register caddr_t chan)
 void setrq(struct proc *p)
 {
     register struct proc *q;
-    register s;
+    register int s;
 
     s = spl6();
     for (q = runq; q != NULL; q = q->p_link)
@@ -179,7 +179,7 @@ void setrun(register struct proc *p)
  */
 int setpri(register struct proc *pp)
 {
-    register p;
+    register int p;
 
     p = (pp->p_cpu & 0377) / 16;
     p += PUSER + pp->p_nice - NZERO;
@@ -210,7 +210,7 @@ int setpri(register struct proc *pp)
 void sched()
 {
     register struct proc *rp, *p;
-    register outage, inage;
+    register int outage, inage;
     int maxsize;
 
     /*
@@ -351,7 +351,7 @@ void qswtch()
  */
 void swtch()
 {
-    register n;
+    register int n;
     register struct proc *p, *q, *pp, *pq;
 
     /*
@@ -433,7 +433,7 @@ int newproc()
     int a1, a2;
     struct proc *p, *up;
     register struct proc *rpp, *rip;
-    register n;
+    register int n;
 
     p = NULL;
     /*
@@ -549,9 +549,9 @@ retry:
  */
 void expand(int newsize)
 {
-    register i, n;
+    register int i, n;
     register struct proc *p;
-    register a1, a2;
+    register int a1, a2;
 
     p         = u.u_procp;
     n         = p->p_size;

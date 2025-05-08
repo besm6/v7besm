@@ -25,7 +25,7 @@ int uphi;
 
 void sureg()
 {
-    register i, a, n;
+    register int i, a, n;
     int taddr, daddr;
     struct text *tp;
 

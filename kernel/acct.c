@@ -53,7 +53,7 @@ void sysacct()
  */
 void acct()
 {
-    register i;
+    register int i;
     register struct inode *ip;
     off_t siz;
 
@@ -90,7 +90,7 @@ void acct()
  */
 int compress(register time_t t)
 {
-    register exp = 0, round = 0;
+    register int exp = 0, round = 0;
 
     while (t >= 8192) {
         exp++;

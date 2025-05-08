@@ -27,7 +27,7 @@ char log[] = { 0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4 };
  */
 char *getepack(int bits)
 {
-    register i;
+    register int i;
     int s, savbits;
     char **base;
     short *map;
@@ -45,9 +45,9 @@ char *getepack(int bits)
             goto force;
 
         for (i = 0; i < NBLOCKS; i++) {
-            register m;
+            register int m;
             register unsigned n;
-            register offset;
+            register int offset;
 
             m = map[i];
             if (m == FULL || base[i] == NULL)
@@ -107,7 +107,7 @@ char *getepack(int bits)
  */
 void freepack(char *p, int bits)
 {
-    register i, d, s;
+    register int i, d, s;
     char **base;
     short *map;
 
@@ -147,7 +147,7 @@ out:
  */
 int dtom(register int d)
 {
-    register m;
+    register int m;
 
     m = 1;
     while (d > 32) {

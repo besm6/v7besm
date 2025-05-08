@@ -70,6 +70,7 @@ struct filsys *getfs(dev_t dev);
 struct file *getf(int f);
 struct file *falloc(void);
 int uchar(void);
+int schar(void);
 void plock(struct inode *ip);
 void prele(struct inode *ip);
 unsigned min(unsigned a, unsigned b);

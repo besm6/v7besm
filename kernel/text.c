@@ -29,7 +29,7 @@ void xuntext(register struct text *xp);
  */
 void xswap(register struct proc *p, int ff, int os)
 {
-    register a;
+    register int a;
 
     if (os == 0)
         os = p->p_size;

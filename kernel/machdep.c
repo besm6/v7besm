@@ -44,7 +44,7 @@ void readrtc(void);
  */
 void startup()
 {
-    register i;
+    register int i;
     int j;
 
     outb(0x3f2, 0xc); /* XXX turn floppy drive motor off */

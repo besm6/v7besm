@@ -201,7 +201,7 @@ void iupdat(register struct inode *ip, time_t *ta, time_t *tm)
  */
 void itrunc(register struct inode *ip)
 {
-    register i;
+    register int i;
     dev_t dev;
     daddr_t bn;
 
@@ -237,7 +237,7 @@ void itrunc(register struct inode *ip)
 
 void tloop(dev_t dev, daddr_t bn, int f1, int f2)
 {
-    register i;
+    register int i;
     register struct buf *bp;
     register daddr_t *bap;
     daddr_t nb;

@@ -23,7 +23,7 @@ daddr_t rablock; /* block to be read ahead */
  */
 daddr_t bmap(register struct inode *ip, daddr_t bn, int rwflg)
 {
-    register i;
+    register int i;
     struct buf *bp, *nbp;
     int j, sh;
     daddr_t nb, *bap;
@@ -152,7 +152,7 @@ int passc(register int c)
  */
 int cpass()
 {
-    register c;
+    register int c;
 
     if (u.u_count == 0)
         return (-1);

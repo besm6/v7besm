@@ -118,7 +118,7 @@ loop:
  */
 void writep(register struct file *fp)
 {
-    register c;
+    register int c;
     register struct inode *ip;
 
     ip = fp->f_inode;

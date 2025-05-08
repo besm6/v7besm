@@ -26,7 +26,7 @@ struct inode *mpxip; /* mpx virtual inode */
 struct inode *namei(int (*func)(void), int flag)
 {
     register struct inode *dp;
-    register c;
+    register int c;
     register char *cp;
     struct buf *bp;
     int i;
@@ -216,7 +216,7 @@ int schar()
  */
 int uchar()
 {
-    register c;
+    register int c;
 
     c = fubyte(u.u_dirp++);
     if (c == -1)

@@ -101,7 +101,7 @@ void dup()
         int fdes;
         int fdes2;
     } *uap;
-    register i, m;
+    register int i, m;
 
     uap = (struct a *)u.u_ap;
     m   = uap->fdes & ~077;

@@ -19,8 +19,8 @@ static int chksum(char *s, int n);
  */
 void pkcntl(register int cntl, register struct pack *pk)
 {
-    register val;
-    register m;
+    register int val;
+    register int m;
 
     val = cntl & MOD8;
 
@@ -116,7 +116,7 @@ void pkbadframe(register struct pack *pk)
  */
 int pkaccept(register struct pack *pk)
 {
-    register x, seq;
+    register int x, seq;
     char m, cntl, *p, imask, **bp;
     int bad, accept, skip, s, t, cc;
     unsigned short sum;
@@ -245,7 +245,7 @@ out:
 int pkread(struct tty *tp)
 {
     register struct pack *pk;
-    register x, s;
+    register int x, s;
     int is, cc, xfr, count;
     char *cp, **bp;
 
@@ -317,7 +317,7 @@ out:
 int pkwrite(struct tty *tp)
 {
     register struct pack *pk;
-    register x;
+    register int x;
     int partial;
     caddr_t cp;
     int cc, s, fc, count;
@@ -374,7 +374,7 @@ int pkwrite(struct tty *tp)
 
 int pksack(register struct pack *pk)
 {
-    register x, i;
+    register int x, i;
     int s;
 
     i = 0;
@@ -397,12 +397,12 @@ int pksack(register struct pack *pk)
 
 void pkoutput(register struct pack *pk)
 {
-    register x;
+    register int x;
     int s;
     char bstate;
     int i;
     struct tty *tp;
-    extern pkzot;
+    extern int pkzot;
 
     ISYSTEM;
     LOCK;
@@ -511,7 +511,7 @@ out:
 void pkclose(struct tty *tp)
 {
     register struct pack *pk;
-    register i, s, rbits;
+    register int i, s, rbits;
     char **bp;
 
 #define NTRIES 1
@@ -592,7 +592,7 @@ int chksum(register char *s, register int n)
 {
     register short sum;
     register unsigned t;
-    register x;
+    register int x;
 
     sum = -1;
     x   = 0;
@@ -616,7 +616,7 @@ int chksum(register char *s, register int n)
 
 int pkline(register struct pack *pk)
 {
-    register i;
+    register int i;
     for (i = 0; i < NPLINES; i++) {
         if (pklines[i] == pk)
             return (i);
@@ -632,7 +632,7 @@ void pkzero(register char *s, register int n)
 
 int pksize(register int n)
 {
-    register k;
+    register int k;
 
     n >>= 5;
     for (k = 0; n >>= 1; k++)

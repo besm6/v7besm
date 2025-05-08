@@ -68,7 +68,7 @@ void stime()
 
 void setuid()
 {
-    register uid;
+    register int uid;
     register struct a {
         int uid;
     } *uap;
@@ -90,7 +90,7 @@ void getuid()
 
 void setgid()
 {
-    register gid;
+    register int gid;
     register struct a {
         int gid;
     } *uap;
@@ -122,7 +122,7 @@ void sync()
 
 void nice()
 {
-    register n;
+    register int n;
     register struct a {
         int niceness;
     } *uap;
@@ -274,7 +274,7 @@ void chown()
 
 void ssig()
 {
-    register a;
+    register int a;
     struct a {
         int signo;
         int fun;
@@ -294,7 +294,7 @@ void ssig()
 void kill()
 {
     register struct proc *p, *q;
-    register a;
+    register int a;
     register struct a {
         int pid;
         int signo;
@@ -359,7 +359,7 @@ void profil()
 void alarm()
 {
     register struct proc *p;
-    register c;
+    register int c;
     register struct a {
         int deltat;
     } *uap;
@@ -389,7 +389,7 @@ void umask()
     register struct a {
         int mask;
     } *uap;
-    register t;
+    register int t;
 
     uap          = (struct a *)u.u_ap;
     t            = u.u_cmask;

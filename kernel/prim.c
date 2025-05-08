@@ -102,7 +102,7 @@ int q_to_b(register struct clist *q, register char *cp, int cc)
  */
 int ndqb(register struct clist *q, int flag)
 {
-    register cc;
+    register int cc;
     int s;
 
     s = spl6();
@@ -140,7 +140,7 @@ out:
  */
 void ndflush(register struct clist *q, register int cc)
 {
-    register s;
+    register int s;
 
     s = spl6();
     if (q->c_cc < 0) {
@@ -188,7 +188,7 @@ int putc(int c, register struct clist *p)
 {
     register struct cblock *bp;
     register char *cp;
-    register s;
+    register int s;
 
     s = spl6();
     if ((cp = p->c_cl) == NULL || p->c_cc < 0) {
@@ -225,7 +225,7 @@ int b_to_q(register char *cp, register int cc, struct clist *q)
 {
     register char *cq;
     register struct cblock *bp;
-    register s, acc;
+    register int s, acc;
 
     if (cc <= 0)
         return (0);
@@ -298,7 +298,7 @@ int getw(register struct clist *p)
 
 int putw(int c, register struct clist *p)
 {
-    register s;
+    register int s;
 
     s = spl6();
     if (cfreelist == NULL) {

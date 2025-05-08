@@ -58,7 +58,7 @@ int mxmove(struct clist *q, int dir);
 
 struct group *getmpx(dev_t dev)
 {
-    register d;
+    register int d;
 
     d = minor(dev);
     if (d >= NGROUPS)
@@ -122,7 +122,7 @@ struct chan *mxnmcp;
 void mpxname(register struct chan *cp)
 {
     register char *np;
-    register c;
+    register int c;
     np       = mxnmbuf;
     u.u_dirp = (caddr_t)u.u_arg[0];
 
@@ -218,7 +218,7 @@ void mxread(int dev)
     register struct group *gp;
     register struct chan *cp;
     struct file *fp;
-    register esc;
+    register int esc;
     struct rh h;
     caddr_t base;
     unsigned count;
@@ -411,7 +411,7 @@ int mcread(register struct chan *cp)
 char *mcwrite(register struct chan *cp)
 {
     register struct clist *q;
-    register cc;
+    register int cc;
     int s;
 
     q = &cp->cy.datq;
@@ -510,7 +510,7 @@ void mswrite(int fmp, register struct chan *cp)
  */
 int mxmove(register struct clist *q, register int dir)
 {
-    register cc;
+    register int cc;
     char buf[HIQ];
 
     cc = MIN(u.u_count, sizeof buf);
@@ -663,7 +663,7 @@ void chwake(register struct chan *cp)
 void chfree(register struct chan *cp)
 {
     register struct group *gp;
-    register i;
+    register int i;
 
     gp = cp->c_group;
     if (gp == NULL)
@@ -683,7 +683,7 @@ void flush(register struct clist *q)
 
 void wflush(register struct chan *cp, register struct clist *q)
 {
-    register s;
+    register int s;
 
     s = spl6();
     while (q->c_cc) {
@@ -745,7 +745,7 @@ int sdata(register struct chan *cp)
 
 struct chan *xcp(register struct group *gp, register short x)
 {
-    register i;
+    register int i;
 
     i = 0;
     while (i < NLEVELS && gp->g_state & ISGRP) {
@@ -760,7 +760,7 @@ struct chan *xcp(register struct group *gp, register short x)
 
 int cpx(register struct chan *cp)
 {
-    register x;
+    register int x;
     register struct group *gp;
 
     if (cp == NULL)

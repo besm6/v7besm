@@ -30,7 +30,7 @@ void printn(unsigned long n, int b);
  */
 void printf(char *fmt, ...)
 {
-    register c;
+    register int c;
     register unsigned int *adx;
     char *s;
     int d;

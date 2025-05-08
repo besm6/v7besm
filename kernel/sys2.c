@@ -293,7 +293,7 @@ out:
  */
 void saccess()
 {
-    register svuid, svgid;
+    register int svuid, svgid;
     register struct inode *ip;
     register struct a {
         char *fname;
