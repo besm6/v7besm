@@ -150,6 +150,16 @@ extern int *PTRACE;
 #ifdef KERNEL
 void pkbadframe(struct pack *pk);
 void pkoutput(struct pack *pk);
-void pktimeout(void);
+void pktimeout(caddr_t arg);
 char *getepack(int bits);
+int dtom(int d);
+int pksack(struct pack *pk);
+void freepack(char *p, int bits);
+int pksize(int n);
+void pkxstart(struct pack *pk, char cntl, int x);
+int pklive(struct pack *pk);
+void pkturnoff(struct tty *tp);
+void pkzero(char *s, int n);
+void pkreset(struct pack *pk);
+void pkcntl(int cntl, struct pack *pk);
 #endif

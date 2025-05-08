@@ -14,10 +14,6 @@
 #include "sys/part.h"
 // clang-format on
 
-/* implemented in mch.s */
-void insw(int, char *, int);
-void outsw(int, char *, int);
-
 /* controller ports */
 #define CB1 0x1f0 /* 0x1f0 or 0x170 */
 #define CB2 0x3f0 /* 0x3f0 or 0x370 */
@@ -93,6 +89,7 @@ static int doio(int x);
 static int await(int addr, int mask);
 void hdstart(void);
 void hdio(int st);
+int hdsm(int st);
 
 void hdopen(dev_t dev, int rw)
 {

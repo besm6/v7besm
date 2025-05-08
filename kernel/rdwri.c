@@ -11,8 +11,6 @@
 #include "sys/conf.h"
 // clang-format on
 
-void iomove(register caddr_t cp, register int n, int flag);
-
 /*
  * Read the file corresponding to
  * the inode pointed at by the argument.

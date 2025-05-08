@@ -142,7 +142,7 @@ out:
  * The panic is there because there is nothing
  * intelligent to be done if an entry won't fit.
  */
-void timeout(int (*fun)(), caddr_t arg, int tim)
+void timeout(void (*fun)(caddr_t), caddr_t arg, int tim)
 {
     register struct callo *p1, *p2;
     register int t;

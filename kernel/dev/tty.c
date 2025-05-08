@@ -597,8 +597,11 @@ void ttyoutput(register int c, register struct tty *tp)
     case 3:
         ctype = (tp->t_flags >> 8) & 03;
         if (ctype == 1) { /* tty 37 */
-            if (*colp)
-                c = max(((unsigned)*colp >> 4) + 3, (unsigned)6);
+            if (*colp) {
+                c = ((unsigned)*colp >> 4) + 3;
+                if (c < 6)
+                    c = 6;
+            }
         } else if (ctype == 2) { /* vt05 */
             c = 6;
         }
@@ -643,8 +646,10 @@ void ttyoutput(register int c, register struct tty *tp)
  * The name of the routine is passed to the timeout
  * subroutine and it is called during a clock interrupt.
  */
-void ttrstrt(register struct tty *tp)
+void ttrstrt(caddr_t arg)
 {
+    register struct tty *tp = (struct tty *) arg;
+
     tp->t_state &= ~TIMEOUT;
     ttstart(tp);
 }

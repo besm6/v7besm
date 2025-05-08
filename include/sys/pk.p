@@ -35,12 +35,14 @@
 #define PKGETPKT(p)
 #define DTOM(a)		dtom(a)
 #include "sys/param.h"
+#include "sys/systm.h"
 #include "sys/dir.h"
 #include "sys/user.h"
 #include "sys/pk.h"
 #include "sys/tty.h"
 #include "sys/buf.h"
 #include "sys/proc.h"
+#include "sys/mx.h"
 
 #endif
 /*

@@ -219,7 +219,7 @@ void scwrite(dev_t dev)
     ttwrite(&sc);
 }
 
-void scxint(dev_t dev)
+void scxint(caddr_t arg)
 {
     register struct tty *tp;
 

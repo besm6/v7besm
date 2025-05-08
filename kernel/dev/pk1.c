@@ -96,7 +96,7 @@ found:
     pk->p_timer++;
     if (timer_on == 0) {
         timer_on++;
-        pktimeout();
+        pktimeout((caddr_t)pk);
     }
     splx(s);
     SLEEP(&pk->p_state, PKOPRI);
@@ -193,7 +193,7 @@ int pklive(register struct pack *pk)
  * wakes up periodically to check status
  * of active lines.
  */
-void pktimeout()
+void pktimeout(caddr_t arg)
 {
     register struct pack *pk;
     extern time_t time;

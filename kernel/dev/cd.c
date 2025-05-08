@@ -85,7 +85,7 @@ static int drv = -1;
 static int trq;
 static int tticks;
 
-void cdtimer(void);
+void cdtimer(caddr_t);
 static void delay(void);
 void cdstart(void);
 void cdio(int st);
@@ -140,7 +140,7 @@ void cdintr()
     cdio(STINT);
 }
 
-void cdtimer()
+void cdtimer(caddr_t arg)
 {
     if (trq == TMDONE)
         trq = TMOFF;

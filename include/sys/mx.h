@@ -98,6 +98,8 @@ void scontrol(struct chan *cp, short event, short value);
 int mcread(struct chan *cp);
 void mxopen(dev_t dev, int flag);
 struct chan *addch(struct inode *ip, int isport);
+int cpx(register struct chan *cp);
+int sdata(struct chan *cp);
 #endif
 
 /*

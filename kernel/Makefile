@@ -11,8 +11,9 @@ DEV     = bio.o cd.o dsort.o fd.o hd.o md.o mem.o mx1.o mx2.o partab.o \
 LLVMBIN = $(dir $(wildcard /usr/local/Cellar/llvm@19/19.*/bin/clang-19))
 
 AS      =  $(LLVMBIN)clang -target i486-unknown-linux-gnu -c
-CC      = $(LLVMBIN)clang -std=c89 -target i486-unknown-linux-gnu -ffreestanding
-CFLAGS  = -Os -I../include -DKERNEL -Werror # TODO: -Wall
+CC      = $(LLVMBIN)clang -target i486-unknown-linux-gnu -ffreestanding
+CFLAGS  = -Os -I../include -DKERNEL -fcolor-diagnostics \
+          -Wno-implicit-int -Werror # TODO: -Wall
 
 VPATH = dev
 

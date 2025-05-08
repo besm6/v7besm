@@ -172,12 +172,19 @@ struct ttiocb {
 int ttread(struct tty *tp);
 caddr_t ttwrite(struct tty *tp);
 void ttstart(struct tty *tp);
-void ttrstrt(struct tty *tp);
+void ttrstrt(caddr_t arg);
+int ttioccomm(int com, struct tty *tp, caddr_t addr, dev_t dev);
 void flushtty(struct tty *tp);
 void ttyinput(int c, struct tty *tp);
 void ttyopen(dev_t, struct tty *);
 void ttyclose(struct tty *tp);
+void ttychars(struct tty *tp);
 void nulldstop(struct tty *);
 void nulltclose(struct tty *);
 void nulltioctl(int, struct tty *, caddr_t);
+int q_to_b(struct clist *q, char *cp, int cc);
+int b_to_q(char *cp, int cc, struct clist *q);
+int getc(struct clist *p);
+int putw(int c, struct clist *p);
+int putc(int c, struct clist *p);
 #endif

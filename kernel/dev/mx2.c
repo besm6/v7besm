@@ -54,6 +54,7 @@ void flush(struct clist *q);
 void wflush(struct chan *cp, struct clist *q);
 void rmdata(struct chan *cp);
 struct chan *nextcp(struct group *gp);
+int mxmove(struct clist *q, int dir);
 
 struct group *getmpx(dev_t dev)
 {

@@ -10,12 +10,15 @@
 
 // clang-format off
 #include "sys/param.h"
+#include "sys/systm.h"
 #include "sys/dir.h"
 #include "sys/user.h"
 #include "sys/conf.h"
 // clang-format on
 
 extern int end;
+
+int mmvaloff(int k);
 
 void mmread(int dev)
 {

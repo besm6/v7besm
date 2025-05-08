@@ -162,7 +162,7 @@ out:
     if (runrun)
         qswtch();
     if (u.u_prof.pr_scale)
-        addupc((caddr_t)tr.eip, &u.u_prof, (int)(u.u_stime - syst));
+        addupc(tr.eip, &u.u_prof, (int)(u.u_stime - syst));
     if (u.u_fpsaved)
         restfp(&u.u_fps);
 }

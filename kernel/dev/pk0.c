@@ -12,6 +12,8 @@ char mask[8] = { 1, 2, 4, 010, 020, 040, 0100, 0200 };
 
 struct pack *pklines[NPLINES];
 
+static int chksum(char *s, int n);
+
 /*
  * receive control messages
  */

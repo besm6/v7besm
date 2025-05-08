@@ -81,7 +81,7 @@ static int trq;       /* Timer request */
 struct buf rfdbuf;
 struct buf fdtab;
 
-void fdtimer(void);
+void fdtimer(caddr_t arg);
 static void fdx1(void);
 static int fdx2(void);
 static void fddma(void);
@@ -183,7 +183,7 @@ void fdintr()
         fd.bpart = fd.bleft;
     }
     if (fd.rd && fd.phys == FDBUF)
-        bcopy(PHY + fd.phys, fd.addr, fd.bpart);
+        bcopy((caddr_t)(PHY + fd.phys), fd.addr, fd.bpart);
     if ((fd.bleft -= fd.bpart) > 0) {
         fd.addr += fd.bpart;
         fd.cn++;
@@ -217,12 +217,12 @@ void fdio()
     if (fd.bpart > sz)
         fd.bpart = sz;
     if (!fd.rd && fd.phys == FDBUF)
-        bcopy(fd.addr, PHY + fd.phys, fd.bpart);
+        bcopy(fd.addr, (caddr_t)(PHY + fd.phys), fd.bpart);
     fd.err = fd.cmd = fd.try = 0;
     fdx1();
 }
 
-void fdtimer()
+void fdtimer(caddr_t arg)
 {
     tick++;
     if (fd.mtr == 1 && tick > 2) {

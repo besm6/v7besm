@@ -73,7 +73,7 @@ void clearseg(int d)
     unsigned xd;
 
     xd = PHY + ctob(d);
-    bzero(xd, PGSZ);
+    bzero((caddr_t)xd, PGSZ);
 }
 
 void copyseg(int s, int d)
@@ -84,7 +84,7 @@ void copyseg(int s, int d)
         return;
     xs = PHY + ctob(s);
     xd = PHY + ctob(d);
-    bcopy(xs, xd, PGSZ);
+    bcopy((caddr_t)xs, (caddr_t)xd, PGSZ);
 }
 
 unsigned physaddr(unsigned addr)

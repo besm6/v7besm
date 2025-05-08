@@ -453,7 +453,7 @@ loop:
  *	The device number
  *	Read/write flag
  */
-void physio(int (*strat)(struct buf *), register struct buf *bp, int dev, int rw)
+void physio(void (*strat)(struct buf *), register struct buf *bp, int dev, int rw)
 {
     register unsigned base;
     register int nb;

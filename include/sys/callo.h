@@ -13,6 +13,6 @@
 struct callo {
     int c_time;             /* incremental time */
     caddr_t c_arg;          /* argument to routine */
-    int (*c_func)(caddr_t); /* routine */
+    void (*c_func)(caddr_t); /* routine */
 };
 struct callo callout[NCALL];

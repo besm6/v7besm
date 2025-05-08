@@ -7,3 +7,8 @@ struct map {
 
 extern struct map coremap[CMAPSIZ]; /* space for core allocation */
 extern struct map swapmap[SMAPSIZ]; /* space for swap allocation */
+
+#ifdef KERNEL
+int malloc(struct map *mp, int size);
+void mfree(struct map *mp, int size, int a);
+#endif
