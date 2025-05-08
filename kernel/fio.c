@@ -49,8 +49,7 @@ void closef(register struct file *fp)
     register struct inode *ip;
     int flag, mode;
     dev_t dev;
-    register void (*cfunc)(dev_t, int, struct chan *);
-    struct chan *cp;
+    register void (*cfunc)(dev_t, int);
 
     if (fp == NULL)
         return;
@@ -60,7 +59,6 @@ void closef(register struct file *fp)
     }
     ip   = fp->f_inode;
     flag = fp->f_flag;
-    cp   = fp->f_un.f_chan;
     dev  = (dev_t)ip->i_un.i_rdev;
     mode = ip->i_mode;
 
@@ -91,7 +89,7 @@ void closef(register struct file *fp)
         for (fp = file; fp < &file[NFILE]; fp++)
             if (fp->f_count && fp->f_inode == ip)
                 return;
-    (*cfunc)(dev, flag, cp);
+    (*cfunc)(dev, flag);
 }
 
 /*

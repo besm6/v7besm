@@ -47,8 +47,6 @@ extern dev_t pipedev;        /* pipe device */
 extern int icode[];          /* user init code */
 extern int szicode;          /* its size */
 
-struct chan;
-
 daddr_t bmap(struct inode *ip, daddr_t bn, int rwflg);
 struct inode *ialloc(dev_t dev);
 struct inode *iget(dev_t dev, ino_t ino);
@@ -134,7 +132,7 @@ void mpxchan(void);
 void umask(void);
 void chroot(void);
 void nullopen(dev_t, int);
-void nullclose(dev_t, int, struct chan *);
+void nullclose(dev_t, int);
 void nullrw(dev_t);
 void nullioctl(dev_t, int, caddr_t, int);
 int suser(void);

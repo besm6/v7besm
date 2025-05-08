@@ -11,7 +11,6 @@
 #include "sys/user.h"
 #include "sys/tty.h"
 #include "sys/proc.h"
-#include "sys/mx.h"
 #include "sys/inode.h"
 #include "sys/file.h"
 #include "sys/reg.h"
@@ -338,7 +337,7 @@ int canon(register struct tty *tp)
     spl5();
     while (((tp->t_flags & (RAW | CBREAK)) == 0 && tp->t_delct == 0) ||
            ((tp->t_flags & (RAW | CBREAK)) != 0 && tp->t_rawq.c_cc == 0)) {
-        if ((tp->t_state & CARR_ON) == 0 || tp->t_chan != NULL) {
+        if ((tp->t_state & CARR_ON) == 0) {
             return (0);
         }
         sleep((caddr_t)&tp->t_rawq, TTIPRI);
@@ -401,10 +400,7 @@ void ttyrend(register struct tty *tp, register char *pb, register char *pe)
     tandem = tp->t_flags & TANDEM;
     if (tp->t_flags & RAW) {
         b_to_q(pb, pe - pb, &tp->t_rawq);
-        if (tp->t_chan)
-            sdata(tp->t_chan);
-        else
-            wakeup((caddr_t)&tp->t_rawq);
+        wakeup((caddr_t)&tp->t_rawq);
     } else {
         tp->t_flags &= ~TANDEM;
         while (pb < pe)
@@ -425,7 +421,6 @@ void ttyrend(register struct tty *tp, register char *pb, register char *pe)
 void ttyinput(register int c, register struct tty *tp)
 {
     register int t_flags;
-    register struct chan *cp;
 
     tk_nin += 1;
     c &= 0377;
@@ -456,10 +451,7 @@ void ttyinput(register int c, register struct tty *tp)
         if (c == tun.t_quitc || c == tun.t_intrc) {
             flushtty(tp);
             c = (c == tun.t_intrc) ? SIGINT : SIGQUIT;
-            if (tp->t_chan)
-                scontrol(tp->t_chan, M_SIG, c);
-            else
-                signal(tp->t_pgrp, c);
+            signal(tp->t_pgrp, c);
             return;
         }
         if (c == '\r' && t_flags & CRMOD)
@@ -475,10 +467,7 @@ void ttyinput(register int c, register struct tty *tp)
     if (t_flags & (RAW | CBREAK) || (c == '\n' || c == tun.t_eofc || c == tun.t_brkc)) {
         if ((t_flags & (RAW | CBREAK)) == 0 && putc(0377, &tp->t_rawq) == 0)
             tp->t_delct++;
-        if ((cp = tp->t_chan) != NULL)
-            sdata(cp);
-        else
-            wakeup((caddr_t)&tp->t_rawq);
+        wakeup((caddr_t)&tp->t_rawq);
     }
     if (t_flags & ECHO) {
         ttyoutput(c, tp);
@@ -702,8 +691,6 @@ caddr_t ttwrite(register struct tty *tp)
             if (tp->t_outq.c_cc == 0)
                 break;
             tp->t_state |= ASLEEP;
-            if (tp->t_chan)
-                return ((caddr_t)&tp->t_outq);
             sleep((caddr_t)&tp->t_outq, TTOPRI);
         }
         spl0();

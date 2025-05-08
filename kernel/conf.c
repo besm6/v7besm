@@ -22,24 +22,20 @@ int mdstrategy();
 extern struct buf mdtab;
 
 struct bdevsw bdevsw[] = {
-#if 1
     { hdopen, nullclose, hdstrategy, &hdtab },   /* hd = 0 */
     { nullopen, nullclose, fdstrategy, &fdtab }, /* fd = 1 */
     { nullopen, nullclose, mdstrategy, &mdtab }, /* md = 2 */
-#endif
     {},
 };
 
-void scopen(dev_t, int);
-void scclose(dev_t, int, struct chan *);
+void scopen(dev_t, int), scclose(dev_t, int);
 void scread(dev_t), scwrite(dev_t);
 void scioctl(dev_t, int, caddr_t, int);
 void mmread(dev_t), mmwrite(dev_t);
 void syopen(dev_t, int);
 void syread(dev_t), sywrite(dev_t);
 void sysioctl(dev_t, int, caddr_t, int);
-void sropen(dev_t, int);
-void srclose(dev_t, int, struct chan *);
+void sropen(dev_t, int), srclose(dev_t, int);
 void srread(dev_t), srwrite(dev_t);
 void srioctl(dev_t, int, caddr_t, int);
 extern struct tty sr[];
@@ -49,7 +45,6 @@ void mdread(dev_t), mdwrite(dev_t);
 void cdread(dev_t);
 
 struct cdevsw cdevsw[] = {
-#if 1
     { scopen, scclose, scread, scwrite, scioctl, nulldstop, 0 },       /* console = 0 */
     { nullopen, nullclose, mmread, mmwrite, nullioctl, nulldstop, 0 }, /* mem = 1 */
     { syopen, nullclose, syread, sywrite, sysioctl, nulldstop, 0 },    /* tty = 2 */
@@ -58,7 +53,6 @@ struct cdevsw cdevsw[] = {
     { nullopen, nullclose, fdread, fdwrite, nullioctl, nulldstop, 0 }, /* fd = 5 */
     { nullopen, nullclose, mdread, mdwrite, nullioctl, nulldstop, 0 }, /* md = 6 */
     { nullopen, nullclose, cdread, nullrw, nullioctl, nulldstop, 0 },  /* cd = 7 */
-#endif
     {},
 };
 

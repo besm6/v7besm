@@ -189,7 +189,7 @@ void nullopen(dev_t dev, int flag)
 {
 }
 
-void nullclose(dev_t dev, int flag, struct chan *cp)
+void nullclose(dev_t dev, int flag)
 {
 }
 

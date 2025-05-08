@@ -4,7 +4,7 @@ SYS     = acct.o alloc.o clock.o fio.o iget.o machdep.o main.o \
           malloc.o nami.o pipe.o prf.o prim.o rdwri.o sig.o slp.o subr.o \
           sys1.o sys2.o sys3.o sys4.o sysent.o text.o trap.o utab.o
 
-DEV     = bio.o cd.o fd.o hd.o md.o mem.o mx1.o mx2.o partab.o \
+DEV     = bio.o cd.o fd.o hd.o md.o mem.o partab.o \
           sc.o sr.o sys.o tty.o
 
 # Clang compiler on MacOS
@@ -48,9 +48,6 @@ conf.o: conf.c ../include/sys/param.h ../include/sys/systm.h \
   ../include/sys/proc.h ../include/sys/text.h ../include/sys/dir.h \
   ../include/sys/user.h ../include/sys/file.h ../include/sys/inode.h \
   ../include/sys/acct.h
-fakemx.o: fakemx.c ../include/sys/param.h ../include/sys/dir.h \
-  ../include/sys/user.h ../include/sys/tty.h ../include/sys/inode.h \
-  ../include/sys/mx.h
 fio.o: fio.c ../include/sys/param.h ../include/sys/systm.h \
   ../include/sys/dir.h ../include/sys/user.h ../include/sys/filsys.h \
   ../include/sys/file.h ../include/sys/conf.h ../include/sys/inode.h \
@@ -136,14 +133,6 @@ md.o: dev/md.c ../include/sys/param.h ../include/sys/systm.h \
   ../include/sys/buf.h ../include/sys/dir.h ../include/sys/user.h
 mem.o: dev/mem.c ../include/sys/param.h ../include/sys/dir.h \
   ../include/sys/user.h ../include/sys/conf.h
-mx1.o: dev/mx1.c ../include/sys/param.h ../include/sys/systm.h \
-  ../include/sys/dir.h ../include/sys/user.h ../include/sys/reg.h \
-  ../include/sys/proc.h ../include/sys/tty.h ../include/sys/inode.h \
-  ../include/sys/mx.h ../include/sys/file.h ../include/sys/conf.h
-mx2.o: dev/mx2.c ../include/sys/param.h ../include/sys/systm.h \
-  ../include/sys/dir.h ../include/sys/user.h ../include/sys/proc.h \
-  ../include/sys/tty.h ../include/sys/inode.h ../include/sys/mx.h \
-  ../include/sys/file.h ../include/sys/conf.h ../include/sys/buf.h
 partab.o: dev/partab.c
 sc.o: dev/sc.c ../include/sys/param.h ../include/sys/conf.h \
   ../include/sys/dir.h ../include/sys/user.h ../include/sys/tty.h \
@@ -156,5 +145,5 @@ sys.o: dev/sys.c ../include/sys/param.h ../include/sys/conf.h \
   ../include/sys/proc.h
 tty.o: dev/tty.c ../include/sys/param.h ../include/sys/systm.h \
   ../include/sys/dir.h ../include/sys/user.h ../include/sys/tty.h \
-  ../include/sys/proc.h ../include/sys/mx.h ../include/sys/inode.h \
+  ../include/sys/proc.h ../include/sys/inode.h \
   ../include/sys/file.h ../include/sys/reg.h ../include/sys/conf.h

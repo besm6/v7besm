@@ -223,7 +223,7 @@ found:
             u.u_error = EBUSY;
             return;
         }
-    (*bdevsw[major(dev)].d_close)(dev, 0, NULL);
+    (*bdevsw[major(dev)].d_close)(dev, 0);
     ip = mp->m_inodp;
     ip->i_flag &= ~IMOUNT;
     plock(ip);

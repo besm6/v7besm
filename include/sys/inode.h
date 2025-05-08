@@ -24,8 +24,8 @@ struct group {
     struct file *g_file;
     short g_rotmask;
     short g_datq;
-    struct chan *g_chans[NINDEX];
 };
+
 struct inode {
     char i_flag;
     char i_count;   /* reference count */

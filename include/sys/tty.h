@@ -47,7 +47,6 @@ struct tty {
     struct clist t_outq; /* output list to device */
     void (*t_oproc)(struct tty *); /* routine to start output */
     void (*t_iproc)(struct tty *); /* routine to start input */
-    struct chan *t_chan; /* destination channel */
     caddr_t t_linep;     /* aux line discipline pointer */
     caddr_t t_addr;      /* device address */
     dev_t t_dev;         /* device number */

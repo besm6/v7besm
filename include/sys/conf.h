@@ -1,8 +1,7 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 /* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
-struct chan; /* forward declarations */
-struct buf;
+struct buf; /* forward declarations */
 struct tty;
 
 /*
@@ -16,7 +15,7 @@ struct tty;
  */
 extern struct bdevsw {
     void (*d_open)(dev_t, int);
-    void (*d_close)(dev_t, int, struct chan *);
+    void (*d_close)(dev_t, int);
     int (*d_strategy)(struct buf *);
     struct buf *d_tab;
 } bdevsw[];
@@ -26,7 +25,7 @@ extern struct bdevsw {
  */
 extern struct cdevsw {
     void (*d_open)(dev_t, int);
-    void (*d_close)(dev_t, int, struct chan *);
+    void (*d_close)(dev_t, int);
     void (*d_read)(dev_t);
     void (*d_write)(dev_t);
     void (*d_ioctl)(dev_t, int, caddr_t, int);
