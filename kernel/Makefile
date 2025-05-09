@@ -32,6 +32,9 @@ libsys.a: $(SYS)
 libdev.a: $(DEV)
 	ar cr $@ $(DEV)
 
+%.ast:  %.c
+	$(CC) -Xclang -ast-dump=json -fsyntax-only $(CFLAGS) $< > $@
+
 ###
 acct.o: acct.c ../include/sys/param.h ../include/sys/systm.h \
   ../include/sys/acct.h ../include/sys/dir.h ../include/sys/user.h \
