@@ -30,14 +30,6 @@ char *outp, *inp;
 char *newp;
 char cinit;
 
-/* some code depends on whether characters are sign or zero extended */
-/*	#if '\377' < 0		not used here, old cpp doesn't understand */
-#if pdp11 | vax
-#define COFF 128
-#else
-#define COFF 0
-#endif
-
 #define ALFSIZ 256 /* alphabet size */
 
 char macbit[ALFSIZ + 11];
@@ -84,24 +76,12 @@ char t21[ALFSIZ], t22[ALFSIZ], t23[ALFSIZ + 8];
 #define b7 128
 #endif
 
-#define IB 1
-#define SB 2
-#define NB 4
-#define CB 8
-#define QB 16
-#define WB 32
-
 char fastab[ALFSIZ];
 char slotab[ALFSIZ];
 char *ptrtab;
 
-#define isslo     (ptrtab == (slotab + COFF))
-#define isid(a)   ((fastab + COFF)[a] & IB)
-#define isspc(a)  (ptrtab[a] & SB)
-#define isnum(a)  ((fastab + COFF)[a] & NB)
-#define iscom(a)  ((fastab + COFF)[a] & CB)
-#define isquo(a)  ((fastab + COFF)[a] & QB)
-#define iswarn(a) ((fastab + COFF)[a] & WB)
+#define isslo     (ptrtab == slotab)
+#define isspc(a)  (ptrtab[(unsigned char)a] & SB)
 
 #define eob(a) ((a) >= pend)
 #define bob(a) (pbeg >= (a))
@@ -251,14 +231,14 @@ void dump()
      * if it has to do an unaligned copy.  thus we buffer.  this silly loop
      * is 15% of the total time, thus even the 'putc' macro is too slow.
      */
-    register char *p1, *p2;
+    register char *p1;
     register FILE *f;
     if ((p1 = outp) == inp || flslvl != 0)
         return;
 #if tgp
 #define MAXOUT 80
     if (!tgpscan) { /* scan again to insure <= MAXOUT chars between linefeeds */
-        register char c, *pblank;
+        register char c, *pblank, *p2;
         char savc, stopc, brk;
         tgpscan = 1;
         brk = stopc = pblank = 0;
@@ -631,7 +611,7 @@ char *cotoken(register char *p)
 #define tmac1(c, bit)      \
     if (!xmac1(c, bit, &)) \
     goto nomac
-#define xmac1(c, bit, op) ((macbit + COFF)[c] op(bit))
+#define xmac1(c, bit, op) (macbit[(unsigned char)c] op(bit))
 #else
 #define tmac1(c, bit)
 #define xmac1(c, bit, op)
@@ -642,7 +622,7 @@ char *cotoken(register char *p)
     if (!xmac2(c0, c1, cpos, &)) \
     goto nomac
 #define xmac2(c0, c1, cpos, op) \
-    ((macbit + COFF)[(t21 + COFF)[c0] + (t22 + COFF)[c1]] op(t23 + COFF + cpos)[c0])
+    (macbit[t21[(unsigned char)c0] + t22[(unsigned char)c1]] op (t23 + cpos)[(unsigned char)c0])
 #else
 #define tmac2(c0, c1, cpos)
 #define xmac2(c0, c1, cpos, op)
@@ -736,7 +716,7 @@ char *skipbl(register char *p)
     do {
         outp = inp = p;
         p          = cotoken(p);
-    } while ((toktyp + COFF)[*inp] == BLANK);
+    } while (toktyp[(unsigned char)*inp] == BLANK);
     return (p);
 }
 
@@ -920,7 +900,7 @@ char *dodef(char *p)
     ++flslvl;         /* prevent macro expansion during 'define' */
     p   = skipbl(p);
     pin = inp;
-    if ((toktyp + COFF)[*pin] != IDENT) {
+    if (toktyp[(unsigned char)*pin] != IDENT) {
         ppwarn("illegal macro name");
         while (*inp != '\n')
             p = skipbl(p);
@@ -960,7 +940,7 @@ char *dodef(char *p)
                 break;
             if (*pin == ',')
                 continue;
-            if ((toktyp + COFF)[*pin] != IDENT) {
+            if (toktyp[(unsigned char)*pin] != IDENT) {
                 c  = *p;
                 *p = '\0';
                 pperror("bad formal: %s", pin);
@@ -998,7 +978,7 @@ char *dodef(char *p)
         if (*pin == '\n')
             break;
         if (params) { /* mark the appearance of formals in the definiton */
-            if ((toktyp + COFF)[*pin] == IDENT) {
+            if (toktyp[(unsigned char)*pin] == IDENT) {
                 for (qf = pf; --qf >= formal;) {
                     if (equfrm(*qf, pin, p)) {
                         *psav++ = qf - formal + 1;
@@ -1053,8 +1033,8 @@ char *dodef(char *p)
     return (p);
 }
 
-#define fasscan() ptrtab = fastab + COFF
-#define sloscan() ptrtab = slotab + COFF
+#define fasscan() ptrtab = fastab
+#define sloscan() ptrtab = slotab
 
 /*
  * find and handle preprocessor control lines
@@ -1487,43 +1467,43 @@ int main(int argc, char *argv[])
     p = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     i = 0;
     while ((c = *p++)) {
-        (fastab + COFF)[c] |= IB | NB | SB;
-        (toktyp + COFF)[c] = IDENT;
+        fastab[(unsigned char)c] |= IB | NB | SB;
+        toktyp[(unsigned char)c] = IDENT;
 #if scw2
         /* 53 == 63-10; digits rarely appear in identifiers,
          * and can never be the first char of an identifier.
          * 11 == 53*53/sizeof(macbit) .
          */
         ++i;
-        (t21 + COFF)[c] = (53 * i) / 11;
-        (t22 + COFF)[c] = i % 11;
+        t21[(unsigned char)c] = (53 * i) / 11;
+        t22[(unsigned char)c] = i % 11;
 #endif
     }
     p = "0123456789.";
     while ((c = *p++)) {
-        (fastab + COFF)[c] |= NB | SB;
-        (toktyp + COFF)[c] = NUMBR;
+        fastab[(unsigned char)c] |= NB | SB;
+        toktyp[(unsigned char)c] = NUMBR;
     }
     p = "\n\"'/\\";
     while ((c = *p++))
-        (fastab + COFF)[c] |= SB;
+        fastab[(unsigned char)c] |= SB;
     p = "\n\"'\\";
     while ((c = *p++))
-        (fastab + COFF)[c] |= QB;
+        fastab[(unsigned char)c] |= QB;
     p = "*\n";
     while ((c = *p++))
-        (fastab + COFF)[c] |= CB;
-    (fastab + COFF)[warnc] |= WB;
-    (fastab + COFF)['\0'] |= CB | QB | SB | WB;
+        fastab[(unsigned char)c] |= CB;
+    fastab[(unsigned char)warnc] |= WB;
+    fastab['\0'] |= CB | QB | SB | WB;
     for (i = ALFSIZ; --i >= 0;)
         slotab[i] = fastab[i] | SB;
     p = " \t\013\f\r"; /* note no \n;	\v not legal for vertical tab? */
     while ((c = *p++))
-        (toktyp + COFF)[c] = BLANK;
+        toktyp[(unsigned char)c] = BLANK;
 #if scw2
-    for ((t23 + COFF)[i = ALFSIZ + 7 - COFF] = 1; --i >= -COFF;)
-        if (((t23 + COFF)[i] = (t23 + COFF + 1)[i] << 1) == 0)
-            (t23 + COFF)[i] = 1;
+    for (t23[i = ALFSIZ + 7] = 1; --i >= 0;)
+        if ((t23[i] = (t23 + 1)[i] << 1) == 0)
+            t23[i] = 1;
 #endif
 
     fnames[ifno = 0] = "";

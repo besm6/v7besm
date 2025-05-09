@@ -222,10 +222,3 @@ int yyparse(void)
         pperror("Expected stop token");
     return result;
 }
-
-#if 0
-int main(void) {
-    printf("%d\n", parse());
-    return 0;
-}
-#endif

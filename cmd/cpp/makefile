@@ -1,4 +1,4 @@
-CFLAGS = -O -Werror -fdiagnostics-color
+CFLAGS = -O -Wall -Werror
 OBJ = cpp.o parser.o yylex.o
 
 all:	cpp

@@ -3,15 +3,6 @@
 #include <string.h>
 #include "defs.h"
 
-#define isid(a) ((fastab + COFF)[a] & IB)
-#define IB      1
-/*	#if '\377' < 0		it would be nice if this worked properly!!!!! */
-#if pdp11 | vax
-#define COFF 128
-#else
-#define COFF 0
-#endif
-
 int tobinary(char *st, int b);
 
 int yylex()
@@ -20,7 +11,6 @@ int yylex()
     static char *op2[] = { "||", "&&", ">>", "<<", ">=", "<=", "!=", "==" };
     static int val2[]  = { OROR, ANDAND, RS, LS, GE, LE, NE, EQ };
     static char *opc   = "b\bt\tn\nf\fr\r\\\\";
-    extern char fastab[];
     extern char *outp, *inp, *newp;
     extern int flslvl;
     register char savc, *s;
