@@ -174,7 +174,7 @@ char *msgbufp = msgbuf;
 void scinit(void);
 void scstart(register struct tty *tp);
 void scputc(int ch);
-void kbput(int prt, int cmd);
+void kbput(int prt, int command);
 void vscroll(int pos, int rev);
 void hscroll(int pos, int col, int ins);
 void beep(void);
@@ -310,9 +310,9 @@ void scrint()
     }
 }
 
-void scioctl(dev_t dev, int cmd, caddr_t addr, int flag)
+void scioctl(dev_t dev, int command, caddr_t addr, int flag)
 {
-    if (ttioccomm(cmd, &sc, addr, dev) == 0)
+    if (ttioccomm(command, &sc, addr, dev) == 0)
         u.u_error = ENOTTY;
 }
 
@@ -503,7 +503,7 @@ void scputc(int ch)
     outb(SCRPRT + 1, pos);
 }
 
-void kbput(int prt, int cmd)
+void kbput(int prt, int command)
 {
     int i;
 
@@ -511,7 +511,7 @@ void kbput(int prt, int cmd)
         ;
     if (i == 0)
         printf("sc: keyboard write timeout\n");
-    outb(prt, cmd);
+    outb(prt, command);
 }
 
 void vscroll(int pos, int rev)

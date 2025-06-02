@@ -12,7 +12,7 @@ LLVMBIN = $(dir $(wildcard /usr/local/Cellar/llvm@19/19.*/bin/clang-19))
 
 AS      =  $(LLVMBIN)clang -target i486-unknown-linux-gnu -c
 CC      = $(LLVMBIN)clang -target i486-unknown-linux-gnu -ffreestanding
-CFLAGS  = -Os -I../include -DKERNEL -Wall -Werror
+CFLAGS  = -Os -I../include -DKERNEL -Wall -Werror -Wshadow
 
 VPATH = dev
 
@@ -34,6 +34,16 @@ libdev.a: $(DEV)
 
 %.ast:  %.c
 	$(CC) -Xclang -ast-dump=json -fsyntax-only $(CFLAGS) $< > $@
+
+%.i:    %.c
+	cpp -E $(CFLAGS) $< > $@
+
+%.yaml: %.i
+	cast --yaml $<
+
+yaml:   $(patsubst %.o,%.yaml,$(SYS) $(DEV))
+
+i:      $(patsubst %.o,%.i,$(SYS) $(DEV))
 
 ###
 acct.o: acct.c ../include/sys/param.h ../include/sys/systm.h \
