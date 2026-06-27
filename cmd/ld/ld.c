@@ -1248,11 +1248,9 @@ void pass2(int argc, char **argv)
                 for (dnum=atoi(*p); dorigin<dnum; dorigin++) {
 */
                 for (dnum=atoi(*p); dnum>0; --dnum) {
-                    fputh(0L, doutb);
-                    fputh(0L, doutb);
+                    fputw(0, doutb);
                     if (rflag) {
-                        fputh(0L, droutb);
-                        fputh(0L, droutb);
+                        fputw(0, droutb);
                     }
                 }
             case 'u':
@@ -1296,19 +1294,16 @@ void finishout()
             n = corigin;
             while (n & 01777) {
                 n ++;
-                fputh(0L, coutb);
-                fputh(0L, coutb);
+                fputw(0, coutb);
             }
         }
         /* now torigin points to the end of text */
         n = torigin;
         while (n & 01777) {
             n ++;
-            fputh(0L, toutb);
-            fputh(0L, toutb);
+            fputw(0, toutb);
             if (rflag) {
-                fputh(0L, troutb);
-                fputh(0L, troutb);
+                fputw(0, troutb);
             }
         }
     }

@@ -5,8 +5,8 @@
 
 // Read one archive member header from a stream into *h, decoding the 46-byte
 // on-disk layout shared with getarhdr()/putarhdr(): 14 name bytes, 2 zero
-// bytes, a two-half-word date, a half-word each for uid/gid/mode (every one
-// followed by a discarded high half-word) and a two-half-word size.
+// bytes, a two-half-word date, one full word each for uid/gid/mode (the value
+// in the low half-word, the high half-word discarded) and a two-half-word size.
 // Returns 1 on success, 0 on EOF or a non-zero byte where padding is expected.
 int fgetarhdr(register FILE *f, register struct ar_hdr *h)
 {
@@ -26,14 +26,9 @@ int fgetarhdr(register FILE *f, register struct ar_hdr *h)
     h->ar_date = fgeth(f);
     h->ar_date |= fgeth(f) << 32;
 
-    h->ar_uid = fgeth(f);
-    fgeth(f);
-
-    h->ar_gid = fgeth(f);
-    fgeth(f);
-
-    h->ar_mode = fgeth(f);
-    fgeth(f);
+    h->ar_uid = fgetw(f);
+    h->ar_gid = fgetw(f);
+    h->ar_mode = fgetw(f);
 
     h->ar_size = fgeth(f);
     h->ar_size |= fgeth(f) << 32;
