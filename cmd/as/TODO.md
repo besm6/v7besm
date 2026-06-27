@@ -10,10 +10,12 @@ Tasks to do in assembler:
 
  * AS-5: makeheader() in pass2.c does not initialize hdr.a_abss, so the abss size field is written as garbage. Set it (currently always 0) along with the other a_* fields.
 
- * AS-6: Word-length migration is only half done. cmd/as + cross/besm6/b.out.h (HDRSZ) + cmd/libaout (fputh/fgeth/fgetsym) now use the BESM-6 48-bit word (W=6, 3-byte half-words, HDRSZ=54). But cmd/ld/ld.c, cmd/disasm/dis.c, cmd/ld/size.c and cmd/ld/ranlib.c still `#define W 8`, so they read/produce files inconsistent with what `as` now emits. Migrate each to W=6 (and any hard-coded 8/72 byte offsets) before they can interoperate with as's output.
+ * AS-6: Word-length migration is nearly done. cmd/as + cross/besm6/b.out.h (HDRSZ) + cmd/libaout (fputh/fgeth/fgetsym) and now cmd/ld/{ld.c,size.c,ranlib.c} use the BESM-6 48-bit word (W=6, 3-byte half-words, HDRSZ=54). STILL TODO: cmd/disasm/dis.c still `#define W 8`, so it reads files inconsistent with what `as`/`ld` now emit. Migrate it to W=6 (and any hard-coded 8/72 byte offsets) before it can interoperate.
 
  * AS-7: The archive int codec cmd/libaout/{putint,getint}.c still encodes an int as 2 value bytes + 6 zero pad (an 8-byte "Elbrus-B" word). If the archive word is meant to follow the object word, migrate it to 3 value + 3 pad (6 bytes); deferred with ranlib.
 
  * AS-8: Five cmd/libaout sources (fputran.c, getarhdr.c, getint.c, putarhdr.c, putint.c) are still un-ported K&R: they use implicit-int definitions and old `ranlib.h`-style includes instead of the besm6/ cross headers, so they fail under -Werror and are left out of cmd/libaout/CMakeLists.txt. Port them to ANSI prototypes + besm6/ headers (matching their fget*/fput* siblings) and add them back to the library.
+
+ * AS-10: copyfil() in cmd/ld/ar.c pads archive member *data* to an even byte count (the IODD/OODD flags, a PDP-11 2-byte-word legacy) instead of to a 6-byte BESM-6 word. The header is now fully word-aligned (ar_name[30], ARHDRSZ=60) and ld advances by `archdr.ar_size + ARHDRSZ`, so member data must also be padded to a whole 6-byte word for member offsets to stay word-aligned. Replace the even-byte padding in copyfil() (and the matching size accounting) with rounding to a multiple of W=6.
 
  * AS-9: The helper-declaration comments in cross/besm6/b.out.h are stale. They state that fgeth/fputh "read and write one 4-byte word" and that the helpers are "implemented in cmd/ld/", but the unit is actually a 3-byte half-word (24 bits) and the implementations now live in cmd/libaout. Fix the comment block above the fgeth/fputh/fgethdr/fgetsym/fgetint declarations (and the getint/putint note) to say 3-byte half-word and cmd/libaout.

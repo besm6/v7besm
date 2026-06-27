@@ -31,7 +31,7 @@
 #include "besm6/ar.h"
 #include "besm6/ranlib.h"
 
-#define W       8               /* длина слова в байтах */
+#define W       6               /* длина слова в байтах */
 #define LOCSYM  'L'             /* убрать локальные символы, нач. с 'L' */
 #define BADDR   (HDRSZ/W)       /* память 0...BADDR-1 свободна */
 #define SYMDEF  "__.SYMDEF"
@@ -498,9 +498,9 @@ int step(register long nloc)
         checklibp();
         return 0;
     }
-    cp = malloc(15);
-    strncpy(cp, archdr.ar_name, 14);
-    cp [14] = '\0';
+    cp = malloc(sizeof(archdr.ar_name) + 1);
+    strncpy(cp, archdr.ar_name, sizeof(archdr.ar_name));
+    cp [sizeof(archdr.ar_name)] = '\0';
     if (load1(nloc + ARHDRSZ, 1, mkfsym(cp, 0)))
         *libp++ = nloc;
     free(cp);
@@ -1207,9 +1207,9 @@ void load2arg(register char *acp)
         for (lp = libp; *lp != -1; lp++) {
             fseek(text, *lp, 0);
             fgetarhdr(text, &archdr);
-            acp = malloc(15);
-            strncpy(acp, archdr.ar_name, 14);
-            acp [14] = '\0';
+            acp = malloc(sizeof(archdr.ar_name) + 1);
+            strncpy(acp, archdr.ar_name, sizeof(archdr.ar_name));
+            acp [sizeof(archdr.ar_name)] = '\0';
             if (trace)
                 printf("%s(%s):\n", arname, acp);
             mkfsym(acp, 1);

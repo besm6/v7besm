@@ -28,7 +28,8 @@ The port proceeds in two stages:
 
 ```text
 kernel/    v7 kernel sources and device drivers (kernel/dev/)
-include/   v7 system headers (sys/) and the b.out.h object-file format
+include/   v7 system headers (sys/)
+cross/     BESM-6 object/archive format headers (b.out.h, ar.h, ranlib.h)
 cmd/       BESM-6 toolchain: as, ld, cpp, disasm
 doc/       BESM-6 architecture references
 ```

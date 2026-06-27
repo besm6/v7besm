@@ -17,20 +17,20 @@ static void putword(unsigned char *p, uword_t v)
 }
 
 // Write an archive header in the same field layout getarhdr()/fgetarhdr()
-// read back -- 46 bytes total (see getarhdr.c for the layout).
+// read back -- 60 bytes total (see getarhdr.c for the layout).
 int putarhdr(int f, const struct ar_hdr *h)
 {
-    unsigned char b[46];
+    unsigned char b[60];
     register int i;
 
     memset(b, 0, sizeof(b));
-    for (i=0; i<14; i++)
+    for (i=0; i < (int) sizeof(h->ar_name); i++)
         b[i] = h->ar_name[i];
 
-    putword(b+16, h->ar_date);
-    putword(b+22, h->ar_uid);
-    putword(b+28, h->ar_gid);
-    putword(b+34, h->ar_mode);
-    putword(b+40, h->ar_size);
+    putword(b+30, h->ar_date);
+    putword(b+36, h->ar_uid);
+    putword(b+42, h->ar_gid);
+    putword(b+48, h->ar_mode);
+    putword(b+54, h->ar_size);
     return write(f, b, sizeof(b)) == (ssize_t) sizeof(b);
 }

@@ -117,23 +117,6 @@ TEST(ArHdr, DateSizeFullWord) {
     unlink(path);
 }
 
-// fgetarhdr rejects a record whose 2-byte name padding (bytes 14-15) is
-// non-zero, returning 0.
-TEST(ArHdr, RejectsNonZeroPadding) {
-    unsigned char rec[46];
-    std::memset(rec, 0, sizeof(rec));
-    rec[15] = 0xFF;  // corrupt a padding byte
-
-    FILE *f = std::tmpfile();
-    ASSERT_NE(f, nullptr);
-    ASSERT_EQ(std::fwrite(rec, 1, sizeof(rec), f), sizeof(rec));
-    std::rewind(f);
-
-    struct ar_hdr in{};
-    EXPECT_EQ(fgetarhdr(f, &in), 0);
-    std::fclose(f);
-}
-
 // putarhdr then read back with both getarhdr (fd) and fgetarhdr (FILE*).
 TEST(ArHdr, RoundTrip) {
     char path[L_tmpnam + 16];
@@ -143,7 +126,7 @@ TEST(ArHdr, RoundTrip) {
     // Each multi-byte field is encoded as 24-bit half-words, so keep values
     // within the bits that survive the layout.
     struct ar_hdr out{};
-    for (int i = 0; i < 14; i++)
+    for (int i = 0; i < static_cast<int>(sizeof(out.ar_name)); i++)
         out.ar_name[i] = static_cast<char>('a' + i);
     out.ar_date = 0x0ABCDE;
     out.ar_uid  = 0x111;
@@ -153,7 +136,7 @@ TEST(ArHdr, RoundTrip) {
     ASSERT_EQ(putarhdr(fd, &out), 1);
 
     auto expect_eq = [&](const struct ar_hdr &in) {
-        for (int i = 0; i < 14; i++)
+        for (int i = 0; i < static_cast<int>(sizeof(out.ar_name)); i++)
             EXPECT_EQ(in.ar_name[i], out.ar_name[i]) << "name byte " << i;
         EXPECT_EQ(in.ar_date, out.ar_date);
         EXPECT_EQ(in.ar_uid,  out.ar_uid);

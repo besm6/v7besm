@@ -60,7 +60,7 @@ char   *tfnam;
 char   *tf1nam;
 char   *tf2nam;
 char   *file;
-char    name[16];
+char    name[31];
 int     af;
 int     tf;
 int     tf1;
@@ -555,7 +555,7 @@ movefil (f) {
 	register        i;
 
 	cp = trim (file);
-	for (i = 0; i < 14; i++)
+	for (i = 0; i < (int) sizeof (arbuf.ar_name); i++)
 		if (arbuf.ar_name[i] = *cp)
 			cp++;
 	arbuf.ar_size = stbuf.st_size;
@@ -624,7 +624,7 @@ getdir () {
 		}
 		return (1);
 	}
-	for (i = 0; i < 14; i++) name[i] = arbuf.ar_name[i];
+	for (i = 0; i < (int) sizeof (arbuf.ar_name); i++) name[i] = arbuf.ar_name[i];
 	file = name;
 	return (0);
 }

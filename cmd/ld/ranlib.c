@@ -15,7 +15,7 @@
 # include "besm6/ar.h"
 # include "besm6/ranlib.h"
 
-# define W              8       /* sizeof word of Elbrus-B */
+# define W              6       /* sizeof word of BESM-6 */
 
 # define AR             "/usr/SVSB/bin/ar"
 
