@@ -151,11 +151,11 @@ putcom:
         if ((reltype & REXT) == REXT && stab[RGETIX(reltype)].n_type == N_EXT + N_ACOMM) {
             // if the instruction references ACOMM,
             // insert utc before it
-            puthr((long)index << 28 | UTCCOM | (addr >> 12 & 0xfffff), reltype | RSHIFT);
+            puthr((long)index << 28 | UTCCOM | (addr >> 12 & 077777), reltype | RSHIFT);
             puthr(val | (addr & 07777), (long)RABS | RTRUNC);
         } else {
-            addr &= 0xfffff;
-            puthr((long)index << 28 | val | (addr & 0xfffff), reltype | RLONG);
+            addr &= 077777;
+            puthr((long)index << 28 | val | (addr & 077777), reltype | RLONG);
         }
     } else {
         puthr((long)index << 28 | val | (addr & 07777), reltype | RSHORT);
@@ -266,10 +266,10 @@ void pass1(void)
             makecmd(table[cval].val, table[cval].type);
             break;
         case LSCMD:
-            makecmd((long)cval << 12 | 0x3f00000L, 0);
+            makecmd((long)cval << 12, 0);
             break;
         case LLCMD:
-            makecmd((long)cval << 20, TLONG);
+            makecmd((long)cval << 15, TLONG);
             break;
         case '.':
             if (getlex(&cval) != '=')

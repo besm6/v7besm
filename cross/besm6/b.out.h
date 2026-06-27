@@ -9,7 +9,7 @@
  *      relocation records, the symbol table and the string table.
  *
  *      Because the BESM-6 is a 48-bit word machine, all sizes and offsets here
- *      are counted in bytes but are always a multiple of 8 (one word == 8
+ *      are counted in bytes but are always a multiple of 6 (one word == 6
  *      bytes; see W in cmd/ld/ld.c). On disk every multi-byte quantity is
  *      stored little-endian.
  *
@@ -19,15 +19,15 @@
  *                              a_text   size of the text segment    )
  *                              a_data   size of the data segment    ) in bytes,
  *                              a_bss    size of the bss segment      ) multiple
- *                              a_abss   size of the abss segment    ) of 8
+ *                              a_abss   size of the abss segment    ) of 6
  *                              a_syms   size of the symbol table    )
  *                              a_entry  entry-point address (word index)
  *                              a_flag   flags (relocatable / const-in-data)
  *
  *      The struct below has only 9 meaningful fields, yet the header occupies
- *      HDRSZ == 72 bytes == 9 words. Each field is stored as a 4-byte
- *      little-endian value followed by 4 zero padding bytes, so that every
- *      field starts on an 8-byte (one-word) boundary and the segment data that
+ *      HDRSZ == 54 bytes == 9 words. Each field is stored as a 3-byte
+ *      little-endian value followed by 3 zero padding bytes, so that every
+ *      field starts on a 6-byte (one-word) boundary and the segment data that
  *      follows begins at a clean word offset. See fgethdr()/fputhdr() in
  *      cmd/ld/ for the exact encoding.
  *
@@ -35,13 +35,13 @@
  *      only when the file is still relocatable (a_flag & RELFLG):
  *
  *      header:                 0
- *      const:                  72
- *      text:                   72 + constsize
- *      data:                   72 + constsize + textsize
- *      const relocation:       72 + constsize + textsize + datasize
- *      text relocation:        72 + 2*constsize + textsize + datasize
- *      data relocation:        72 + 2*constsize + 2*textsize + datasize
- *      symbol table:           72 + 2*constsize + 2*textsize + 2*datasize
+ *      const:                  54
+ *      text:                   54 + constsize
+ *      data:                   54 + constsize + textsize
+ *      const relocation:       54 + constsize + textsize + datasize
+ *      text relocation:        54 + 2*constsize + textsize + datasize
+ *      data relocation:        54 + 2*constsize + 2*textsize + datasize
+ *      symbol table:           54 + 2*constsize + 2*textsize + 2*datasize
  *
  */
 
@@ -49,13 +49,13 @@
  * a.out file header.
  *
  * a_magic distinguishes the file kind (see FMAGIC/NMAGIC/AMAGIC).
- * The five segment-size fields and a_syms are byte counts, each a multiple of 8.
+ * The five segment-size fields and a_syms are byte counts, each a multiple of 6.
  * a_entry is the program entry point as a word address.
  * a_flag carries the RELFLG / TCDFLG bits.
  */
 struct exec {
     int     a_magic;            /* magic number */
-    long    a_const;            /* const segment size, bytes (multiple of 8) */
+    long    a_const;            /* const segment size, bytes (multiple of 6) */
     long    a_text;             /* text (code) segment size, bytes */
     long    a_data;             /* initialized data segment size, bytes */
     long    a_bss;              /* uninitialized data (bss) size, bytes */
@@ -69,7 +69,7 @@ struct exec {
  * Symbol table entry.
  *
  * On disk a symbol is stored as: one byte name length, one byte type,
- * a 4-byte little-endian value, then n_len name bytes (no trailing NUL).
+ * a 3-byte little-endian value, then n_len name bytes (no trailing NUL).
  * In memory n_name points at a separately allocated NUL-terminated copy.
  * See fgetsym()/fputsym() in cmd/ld/.
  */
@@ -87,7 +87,7 @@ struct nlist {
                          * cleared means fully linked / non-relocatable */
 #define TCDFLG  2       /* const segment is folded into the data segment */
 
-#define HDRSZ   72      /* header size in bytes (9 words of 8 bytes) */
+#define HDRSZ   54      /* header size in bytes (9 words of 6 bytes) */
 
 /*
  * Magic numbers (a_magic). Only FMAGIC and NMAGIC are accepted on input

@@ -69,9 +69,9 @@ static long adjust(long h, long a, int hr)
         a &= 07777;
     case RLONG:
     rlong:
-        a += h & 0xfffff;
-        h &= ~0xfffff;
-        h |= a & 0xfffff;
+        a += h & 077777;
+        h &= ~077777;
+        h |= a & 077777;
         break;
     }
     return h;

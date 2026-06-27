@@ -4,7 +4,7 @@
 //
 #include "besm6/b.out.h"
 
-#define W 8 // word length in bytes
+#define W 6 // word length in bytes
 
 // token types
 

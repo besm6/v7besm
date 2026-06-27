@@ -21,5 +21,6 @@ int fgetsym(register FILE *text, register struct nlist *sym)
 
     sym->n_name [sym->n_len] = '\0';
 
-    return sym->n_len + 6;
+    // On disk: 1 len byte + 1 type byte + 3-byte value + n_len name bytes.
+    return sym->n_len + 5;
 }
