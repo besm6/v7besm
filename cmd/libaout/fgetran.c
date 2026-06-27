@@ -1,8 +1,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "microbesm/a.out.h"
-#include "microbesm/ranlib.h"
+#include "besm6/a.out.h"
+#include "besm6/ranlib.h"
 
 int fgetran(register FILE *text, register struct ranlib *sym)
 {

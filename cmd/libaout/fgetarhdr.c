@@ -1,7 +1,7 @@
 
 #include <stdio.h>
-#include "microbesm/a.out.h"
-#include "microbesm/ar.h"
+#include "besm6/a.out.h"
+#include "besm6/ar.h"
 
 int fgetarhdr(register FILE *f, register struct ar_hdr *h)
 {

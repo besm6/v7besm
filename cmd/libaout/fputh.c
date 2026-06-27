@@ -1,6 +1,6 @@
 
 #include <stdio.h>
-#include "microbesm/a.out.h"
+#include "besm6/a.out.h"
 
 void fputh(long h, FILE *f)
 {

@@ -1,6 +1,6 @@
 
 #include <stdio.h>
-#include "microbesm/a.out.h"
+#include "besm6/a.out.h"
 
 void fputsym(register struct nlist *s, register FILE *file)
 {

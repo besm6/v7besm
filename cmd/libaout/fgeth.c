@@ -1,6 +1,6 @@
 
 #include <stdio.h>
-#include "microbesm/a.out.h"
+#include "besm6/a.out.h"
 
 long fgeth(register FILE *f)
 {
