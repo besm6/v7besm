@@ -68,5 +68,12 @@ enable_testing()
 #
 set(BESM6_CROSS_INCLUDE ${CMAKE_SOURCE_DIR}/cross)
 
+#
+# Aggregate target that builds every unit-test executable without building the
+# whole project (used by `make test`). Each test subdirectory registers its
+# executable via add_dependencies(build_tests <exe>).
+#
+add_custom_target(build_tests)
+
 add_subdirectory(cmd/libaout)
 add_subdirectory(cmd/as)

@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <unistd.h>
 
 // The library is compiled as C and the besm6 headers have no extern "C" guard.
@@ -51,6 +52,86 @@ TEST(ArInt, RoundTrip) {
     EXPECT_EQ(via_file, value);
     std::fclose(f);
     unlink(path);
+}
+
+// putint encodes the value in the low half-word and zeroes the high half-word;
+// the 24-bit boundary values round-trip through both readers.
+TEST(ArInt, Boundaries) {
+    const int values[] = { 0, 0xFFFFFF };
+    for (int value : values) {
+        char path[L_tmpnam + 16];
+        int fd = make_tmp(path);
+        ASSERT_GE(fd, 0);
+        ASSERT_EQ(putint(fd, value), 1);
+
+        // Raw bytes: low half-word holds the value, high half-word is zero.
+        ASSERT_EQ(lseek(fd, 0, SEEK_SET), 0);
+        unsigned char raw[6];
+        ASSERT_EQ(read(fd, raw, 6), 6);
+        EXPECT_EQ(raw[3], 0) << "value 0x" << std::hex << value;
+        EXPECT_EQ(raw[4], 0) << "value 0x" << std::hex << value;
+        EXPECT_EQ(raw[5], 0) << "value 0x" << std::hex << value;
+
+        ASSERT_EQ(lseek(fd, 0, SEEK_SET), 0);
+        int via_fd = -1;
+        ASSERT_EQ(getint(fd, &via_fd), 1);
+        EXPECT_EQ(via_fd, value);
+        close(fd);
+
+        FILE *f = std::fopen(path, "rb");
+        ASSERT_NE(f, nullptr);
+        int via_file = -1;
+        ASSERT_EQ(fgetint(f, &via_file), 1);
+        EXPECT_EQ(via_file, value);
+        std::fclose(f);
+        unlink(path);
+    }
+}
+
+// ar_date / ar_size are 64-bit, split into two 24-bit half-words 32 bits apart.
+// Use values whose high half-word is non-zero so the reconstruction is tested.
+TEST(ArHdr, SixtyFourBitSplit) {
+    char path[L_tmpnam + 16];
+    int fd = make_tmp(path);
+    ASSERT_GE(fd, 0);
+
+    struct ar_hdr out{};
+    out.ar_date = 0x0000000300000002L;  // low 24 bits = 2, high half-word = 3
+    out.ar_size = 0x0000000500000004L;
+    ASSERT_EQ(putarhdr(fd, &out), 1);
+
+    ASSERT_EQ(lseek(fd, 0, SEEK_SET), 0);
+    struct ar_hdr via_fd{};
+    ASSERT_EQ(getarhdr(fd, &via_fd), 1);
+    EXPECT_EQ(via_fd.ar_date, out.ar_date);
+    EXPECT_EQ(via_fd.ar_size, out.ar_size);
+    close(fd);
+
+    FILE *f = std::fopen(path, "rb");
+    ASSERT_NE(f, nullptr);
+    struct ar_hdr via_file{};
+    ASSERT_EQ(fgetarhdr(f, &via_file), 1);
+    EXPECT_EQ(via_file.ar_date, out.ar_date);
+    EXPECT_EQ(via_file.ar_size, out.ar_size);
+    std::fclose(f);
+    unlink(path);
+}
+
+// fgetarhdr rejects a record whose 2-byte name padding (bytes 14-15) is
+// non-zero, returning 0.
+TEST(ArHdr, RejectsNonZeroPadding) {
+    unsigned char rec[46];
+    std::memset(rec, 0, sizeof(rec));
+    rec[15] = 0xFF;  // corrupt a padding byte
+
+    FILE *f = std::tmpfile();
+    ASSERT_NE(f, nullptr);
+    ASSERT_EQ(std::fwrite(rec, 1, sizeof(rec), f), sizeof(rec));
+    std::rewind(f);
+
+    struct ar_hdr in{};
+    EXPECT_EQ(fgetarhdr(f, &in), 0);
+    std::fclose(f);
 }
 
 // putarhdr then read back with both getarhdr (fd) and fgetarhdr (FILE*).
@@ -116,5 +197,20 @@ TEST(Ranlib, RoundTrip) {
     ASSERT_NE(in.ran_name, nullptr);
     EXPECT_STREQ(in.ran_name, name);
     std::free(in.ran_name);
+    std::fclose(f);
+}
+
+// A zero-length ranlib entry marks end of the index: fgetran returns 0 and
+// allocates nothing.
+TEST(Ranlib, EmptyEntryAtEof) {
+    FILE *f = std::tmpfile();
+    ASSERT_NE(f, nullptr);
+    putc(0, f);  // single zero length byte
+    std::rewind(f);
+
+    struct ranlib in{};
+    in.ran_name = nullptr;
+    EXPECT_EQ(fgetran(f, &in), 0);
+    EXPECT_EQ(in.ran_name, nullptr);  // no allocation for an empty entry
     std::fclose(f);
 }

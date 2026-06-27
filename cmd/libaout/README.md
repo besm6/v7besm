@@ -138,8 +138,14 @@ Returns 1 on success, 0 on a short write.
 
 GoogleTest unit tests live in [`test/`](test):
 
-- [`test/fhdr_test.cpp`](test/fhdr_test.cpp) — round-trips for `fputhdr`/`fgethdr`.
-- [`test/ar_test.cpp`](test/ar_test.cpp) — round-trips for the archive-header helpers.
+- [`test/half_test.cpp`](test/half_test.cpp) — the `fputh`/`fgeth` half-word primitives,
+  including the little-endian byte layout and 24-bit truncation.
+- [`test/fhdr_test.cpp`](test/fhdr_test.cpp) — round-trips and raw byte layout for
+  `fputhdr`/`fgethdr`.
+- [`test/sym_test.cpp`](test/sym_test.cpp) — `fputsym`/`fgetsym`, covering the encoded
+  size, NUL-termination, the empty-entry terminator and sequential reads.
+- [`test/ar_test.cpp`](test/ar_test.cpp) — the int and archive/ranlib helpers, including
+  the 64-bit date/size split, non-zero padding rejection and EOF handling.
 
 They are built as the `libaout_test` target (see [`test/CMakeLists.txt`](test/CMakeLists.txt))
 and run via CTest.

@@ -82,6 +82,30 @@ TEST(Header, ZeroRoundTrip) {
     fclose(f);
 }
 
+// Every field at the 24-bit boundary (0xFFFFFF) survives a round-trip.
+TEST(Header, MaxFieldValues) {
+    struct exec out{};
+    out.a_magic = 0xFFFFFF;
+    out.a_const = 0xFFFFFF;
+    out.a_text  = 0xFFFFFF;
+    out.a_data  = 0xFFFFFF;
+    out.a_bss   = 0xFFFFFF;
+    out.a_abss  = 0xFFFFFF;
+    out.a_syms  = 0xFFFFFF;
+    out.a_entry = 0xFFFFFF;
+    out.a_flag  = 0xFFFF;  // a_flag is a short
+
+    FILE *f = tmpfile();
+    ASSERT_NE(f, nullptr);
+    fputhdr(&out, f);
+    rewind(f);
+
+    struct exec in{};
+    EXPECT_EQ(fgethdr(f, &in), 1);
+    expect_eq_header(out, in);
+    fclose(f);
+}
+
 // The on-disk image is exactly the bytes we expect: for each of the 9 fields,
 // a 3-byte little-endian value followed by 3 zero pad bytes, in header order
 // (magic, const, text, data, bss, abss, syms, entry, flag).
