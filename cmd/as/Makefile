@@ -8,7 +8,8 @@ VPATH   = ../libaout
 
 as      = besm6-as
 
-OBJS    = as.o fgeth.o fputh.o fputhdr.o fputsym.o
+OBJS    = as.o tables.o lex.o symtab.o expr.o pass1.o pass2.o \
+          fgeth.o fputh.o fputhdr.o fputsym.o
 
 all:    as
 

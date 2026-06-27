@@ -1,0 +1,247 @@
+//
+// Assembler for BESM-6.
+// Read-only conversion and instruction tables.
+//
+#include <stdio.h>
+
+#include "as.h"
+
+short ctype[256] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 7, 7, 7, 7, 7, 7, 7, 7, 5, 5, 0, 0, 0, 0, 0, 0,
+    0, 9, 9, 9, 9, 9, 9, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 8,
+    0, 9, 9, 9, 9, 9, 9, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
+    8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 0,
+};
+
+short segmtype[] = {
+    // convert segment number to symbol type
+    N_CONST, // SCONST
+    N_TEXT,  // STEXT
+    N_DATA,  // SDATA
+    N_STRNG, // SSTRNG
+    N_BSS,   // SBSS
+    N_UNDF,  // SEXT
+    N_ABS,   // SABS
+};
+
+short segmrel[] = {
+    // convert segment number to relocation type
+    RCONST, // SCONST
+    RTEXT,  // STEXT
+    RDATA,  // SDATA
+    RSTRNG, // SSTRNG
+    RBSS,   // SBSS
+    REXT,   // SEXT
+    RABS,   // SABS
+};
+
+short typesegm[] = {
+    // convert symbol type to segment number
+    SEXT,   // N_UNDF
+    SABS,   // N_ABS
+    SCONST, // N_CONST
+    STEXT,  // N_TEXT
+    SDATA,  // N_DATA
+    SBSS,   // N_BSS
+    SSTRNG, // N_STRNG
+};
+
+// Table of machine instructions.
+struct table table[] = {
+    { 0x0000000L, "atx", TLONG | TCOMP },
+    { 0x0100000L, "stx", TLONG | TCOMP },
+    { 0x0200000L, "xtna", TLONG | TLIT | TCOMP },
+    { 0x0200000L, "xtra", TLONG | TLIT | TCOMP },
+    { 0x0300000L, "xts", TLONG | TLIT | TCOMP },
+    { 0x0400000L, "aadx", TLONG | TLIT | TINT | TCOMP },
+    { 0x0400000L, "apx", TLONG | TLIT | TINT | TCOMP },
+    { 0x0500000L, "asux", TLONG | TLIT | TINT | TCOMP },
+    { 0x0500000L, "asx", TLONG | TLIT | TINT | TCOMP },
+    { 0x0600000L, "xsa", TLONG | TLIT | TINT | TCOMP },
+    { 0x0600000L, "xsua", TLONG | TLIT | TINT | TCOMP },
+    { 0x0700000L, "amsx", TLONG | TLIT | TCOMP },
+    { 0x0800000L, "xta", TLONG | TLIT | TCOMP },
+    { 0x0900000L, "aax", TLONG | TLIT | TCOMP },
+    { 0x0a00000L, "aex", TLONG | TLIT | TCOMP },
+    { 0x0b00000L, "arx", TLONG | TLIT | TCOMP },
+    { 0x0c00000L, "avx", TLONG | TLIT | TINT | TCOMP },
+    { 0x0d00000L, "aox", TLONG | TLIT | TCOMP },
+    { 0x0e00000L, "adx", TLONG | TCOMP },
+    { 0x0f00000L, "amux", TLONG | TLIT | TINT | TCOMP },
+    { 0x0f00000L, "amx", TLONG | TLIT | TINT | TCOMP },
+    { 0x1000000L, "apkx", TLONG | TLIT | TCOMP },
+    { 0x1100000L, "aux", TLONG | TLIT | TCOMP },
+    { 0x1200000L, "acx", TLONG | TLIT | TCOMP },
+    { 0x1300000L, "anx", TLONG | TLIT | TCOMP },
+    { 0x1400000L, "eax", TLONG | TCOMP },
+    { 0x1400000L, "epx", TLONG | TCOMP },
+    { 0x1500000L, "esx", TLONG | TCOMP },
+    { 0x1600000L, "asrx", TLONG | TCOMP },
+    { 0x1700000L, "xtr", TLONG },
+    { 0x1800000L, "uj", TLONG },
+    { 0x1800000L, "xj", TLONG },
+    { 0x1900000L, "vjm", TLONG | TALIGN },
+    { 0x1a00000L, "vgm", TLONG },
+    { 0x1b00000L, "vlm", TLONG },
+    { 0x1e00000L, "alx", TLONG | TCOMP },
+    { 0x1e00000L, "aslx", TLONG | TCOMP },
+    { 0x2000000L, "vzm", TLONG },
+    { 0x2100000L, "vim", TLONG },
+    { 0x2200000L, "vpzm", TLONG },
+    { 0x2300000L, "vnm", TLONG },
+    { 0x2400000L, "vnzm", TLONG },
+    { 0x2500000L, "vpm", TLONG },
+    { 0x2800000L, "uz", TLONG },
+    { 0x2800000L, "xz", TLONG },
+    { 0x2900000L, "ui", TLONG },
+    { 0x2900000L, "xi", TLONG },
+    { 0x2a00000L, "upz", TLONG },
+    { 0x2a00000L, "xpz", TLONG },
+    { 0x2b00000L, "un", TLONG },
+    { 0x2b00000L, "xn1", TLONG },
+    { 0x2c00000L, "unz", TLONG },
+    { 0x2c00000L, "xnz", TLONG },
+    { 0x2d00000L, "up", TLONG },
+    { 0x2d00000L, "xp1", TLONG },
+    { 0x2e00000L, "uiv", TLONG },
+    { 0x2e00000L, "xv1", TLONG },
+    { 0x2f00000L, "uzv", TLONG },
+    { 0x2f00000L, "xvz", TLONG },
+    { 0x3000000L, "xtga", TLONG | TCOMP },
+    { 0x3000000L, "xtwa", TLONG | TCOMP },
+    { 0x3100000L, "xtqa", TLONG | TCOMP },
+    { 0x3100000L, "xtsa", TLONG | TCOMP },
+    { 0x3200000L, "xtha", TLONG },
+    { 0x3300000L, "xtta", TLONG },
+    { 0x3400000L, "ztx", TLONG | TCOMP },
+    { 0x3500000L, "atcx", TLONG },
+    { 0x3600000L, "ath", TLONG },
+    { 0x3700000L, "atgx", TLONG | TCOMP },
+    { 0x3700000L, "atwx", TLONG | TCOMP },
+    { 0x3800000L, "pctm", TLONG },
+    { 0x3800000L, "vtdm", TLONG },
+    { 0x3900000L, "atc", TLONG },
+    { 0x3a00000L, "utcs", TLONG },
+    { 0x3a00000L, "xtpc", TLONG },
+    { 0x3b00000L, "wtc", TLONG },
+    { 0x3b00000L, "xtc", TLONG },
+    { 0x3c00000L, "vtm", TLONG },
+    { 0x3d00000L, "utm", TLONG },
+    { 0x3d00000L, "xtm", TLONG },
+    { 0x3e00000L, "do", TLONG },
+    { 0x3f00000L, "ex", TALIGN },
+    { 0x3f01000L, "pop", TALIGN },
+    { 0x3f02000L, "rmod", 0 },
+    { 0x3f03000L, "ij", TALIGN },
+    { 0x3f06000L, "wmod", 0 },
+    { 0x3f07000L, "halt", TALIGN },
+    { 0x3f11000L, "yma", 0 },
+    { 0x3f14000L, "ecn", 0 },
+    { 0x3f16000L, "asn", 0 },
+    { 0x3f18000L, "rta", 0 },
+    { 0x3f19000L, "yta", 0 },
+    { 0x3f1a000L, "een", 0 },
+    { 0x3f1b000L, "set", 0 },
+    { 0x3f1c000L, "ean", 0 },
+    { 0x3f1d000L, "esn", 0 },
+    { 0x3f1e000L, "aln", 0 },
+    { 0x3f1f000L, "ntr", 0 },
+    { 0x3f20000L, "ati", 0 },
+    { 0x3f21000L, "sti", 0 },
+    { 0x3f22000L, "ita", 0 },
+    { 0x3f23000L, "iita", 0 },
+    { 0x3f24000L, "mtj", 0 },
+    { 0x3f25000L, "jam", 0 },
+    { 0x3f26000L, "msj", 0 },
+    { 0x3f27000L, "jsm", 0 },
+    { 0x3f28000L, "ato", 0 },
+    { 0x3f29000L, "sto", 0 },
+    { 0x3f2a000L, "ota", 0 },
+    { 0x3f2c000L, "mto", 0 },
+    { 0x3f34000L, "ent", 0 },
+    { 0x3f35000L, "int", 0 },
+    { 0x3f36000L, "asy", 0 },
+    { 0x3f38000L, "atia", 0 },
+    { 0x3f3c000L, "aca", 0 },
+    { 0x3f3e000L, "aly", 0 },
+    { 0x3f3f000L, "tst", 0 },
+    { 0x3f51000L, "yms", 0 },
+    { 0x3f54000L, "ecns", 0 },
+    { 0x3f56000L, "asns", 0 },
+    { 0x3f58000L, "rts", 0 },
+    { 0x3f59000L, "yts", 0 },
+    { 0x3f5a000L, "eens", 0 },
+    { 0x3f5c000L, "eans", 0 },
+    { 0x3f5d000L, "esns", 0 },
+    { 0x3f5e000L, "alns", 0 },
+    { 0x3f5f000L, "ntrs", 0 },
+    { 0x3f62000L, "its", 0 },
+    { 0x3f63000L, "iits", 0 },
+    { 0x3f6a000L, "ots", 0 },
+    { 0x3f74000L, "ents", 0 },
+    { 0x3f75000L, "ints", 0 },
+    { 0x3f76000L, "asys", 0 },
+    { 0x3f78000L, "atis", 0 },
+    { 0x3f7c000L, "acs", 0 },
+    { 0x3f7e000L, "alys", 0 },
+    { 0x3f7f000L, "tsts", 0 },
+    { 0x4000000L, "xtal", TLONG },
+    { 0x4100000L, "xtsl", TLONG },
+    { 0x4200000L, "utra", TLONG },
+    { 0x4200000L, "xtnal", TLONG },
+    { 0x4300000L, "uts", TLONG },
+    { 0x4300000L, "xtsu", TLONG },
+    { 0x4400000L, "aadu", TLONG },
+    { 0x4500000L, "asuu", TLONG },
+    { 0x4600000L, "usua", TLONG },
+    { 0x4700000L, "amu", TLONG },
+    { 0x4800000L, "uta", TLONG },
+    { 0x4800000L, "xtau", TLONG },
+    { 0x4900000L, "aau", TLONG },
+    { 0x4a00000L, "aeu", TLONG },
+    { 0x4b00000L, "aru", TLONG },
+    { 0x4c00000L, "avu", TLONG },
+    { 0x4d00000L, "aou", TLONG },
+    { 0x4f00000L, "amuu", TLONG },
+    { 0x5000000L, "apu", TLONG },
+    { 0x5100000L, "auu", TLONG },
+    { 0x5200000L, "acu", TLONG },
+    { 0x5300000L, "anu", TLONG },
+    { 0x6000000L, "atk", TLONG },
+    { 0x6100000L, "stk", TLONG },
+    { 0x6200000L, "ktra", TLONG },
+    { 0x6300000L, "kts", TLONG },
+    { 0x6400000L, "aadk", TLONG },
+    { 0x6500000L, "asuk", TLONG },
+    { 0x6600000L, "ksua", TLONG },
+    { 0x6700000L, "amk", TLONG },
+    { 0x6800000L, "kta", TLONG },
+    { 0x6900000L, "aak", TLONG },
+    { 0x6a00000L, "aek", TLONG },
+    { 0x6b00000L, "ark", TLONG },
+    { 0x6c00000L, "avk", TLONG },
+    { 0x6d00000L, "aok", TLONG },
+    { 0x6e00000L, "adk", TLONG },
+    { 0x6f00000L, "amuk", TLONG },
+    { 0x7000000L, "apk", TLONG },
+    { 0x7100000L, "auk", TLONG },
+    { 0x7200000L, "ack", TLONG },
+    { 0x7300000L, "ank", TLONG },
+    { 0x7400000L, "eak", TLONG },
+    { 0x7500000L, "esk", TLONG },
+    { 0x7600000L, "ask", TLONG },
+    { 0x7800000L, "ktga", TLONG },
+    { 0x7900000L, "ktsa", TLONG },
+    { 0x7a00000L, "ktha", TLONG },
+    { 0x7b00000L, "ktta", TLONG },
+    { 0x7c00000L, "ztk", TLONG },
+    { 0x7d00000L, "atck", TLONG },
+    { 0x7e00000L, "alk", TLONG },
+    { 0x7f00000L, "atgk", TLONG },
+
+    { 0, 0L, 0 },
+};
