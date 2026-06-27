@@ -39,7 +39,7 @@ void makeheader(void)
     struct exec hdr;
 
     hdr.a_magic = FMAGIC;
-    hdr.a_const = nconst * W;
+    hdr.a_const = (long)nconst * W;
     hdr.a_text  = count[STEXT] * (W / 2);
     hdr.a_data  = (count[SDATA] + count[SSTRNG]) * (W / 2);
     hdr.a_bss   = count[SBSS] * (W / 2);
@@ -210,15 +210,15 @@ static long relhalf(register long hr)
 void makereloc(void)
 {
     register short i;
-    register long len;
 
     for (i = 0; i < nconst; i++) {
         fputh(relhalf(constab[i].hr2), stdout);
         fputh(0L, stdout);
     }
     for (segm = STEXT; segm < SBSS; segm++) {
+        register long len = count[segm];
+
         rewind(rfile[segm]);
-        len = count[segm];
         while (len--)
             fputh(relhalf(fgeth(rfile[segm])), stdout);
     }

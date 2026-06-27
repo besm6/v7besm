@@ -180,10 +180,10 @@ static void getbitnum(int c)
     if (c < 0 || c >= 64)
         uerror("bit number out of range 1..64");
     if (c >= 32) {
-        intval.left  = 1 << (c - 32);
+        intval.left  = 1L << (c - 32);
         intval.right = 0;
-    } else {
-        intval.right = 1 << c;
+    } else if (c >= 0) {
+        intval.right = 1L << c;
         intval.left  = 0;
     }
 }

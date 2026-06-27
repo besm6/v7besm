@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include "besm6/b.out.h"
 
-void fputhdr(struct exec *filhdr, register FILE *coutb)
+void fputhdr(const struct exec *filhdr, register FILE *coutb)
 {
     fputh((long) filhdr->a_magic, coutb);
     fputh(0L, coutb);

@@ -37,7 +37,7 @@ short hashconst[HCONSZ];
 short aflag; // don't align on word boundary
 
 // Fatal error message.
-void uerror(char *fmt, ...)
+noreturn void uerror(char *fmt, ...)
 {
     va_list ap;
 

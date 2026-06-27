@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<!--
+  Minimal cppcheck library definition for GoogleTest.
+
+  Teaches cppcheck about the GoogleTest macros so it does not emit false
+  positives (e.g. unreachable code / syntax confusion) when checking test
+  sources.  Referenced from the top-level CMakeLists.txt via
+  CMAKE_CXX_CPPCHECK --library=.../scripts/googletest.xml.
+-->
+<def format="2">
+  <!-- TEST(suite, name) / TEST_F(fixture, name) define a function body. -->
+  <define name="TEST(a,b)"      value="void a##_##b()"/>
+  <define name="TEST_F(a,b)"    value="void a##_##b()"/>
+  <define name="TEST_P(a,b)"    value="void a##_##b()"/>
+  <define name="TYPED_TEST(a,b)" value="void a##_##b()"/>
+
+  <!-- Assertion macros evaluate their arguments; mark them so cppcheck does
+       not treat the values as unused. -->
+  <function name="EXPECT_EQ"><use-retval/><arg nr="any"/></function>
+  <function name="EXPECT_NE"><use-retval/><arg nr="any"/></function>
+  <function name="EXPECT_TRUE"><use-retval/><arg nr="1"/></function>
+  <function name="EXPECT_FALSE"><use-retval/><arg nr="1"/></function>
+  <function name="ASSERT_EQ"><use-retval/><arg nr="any"/></function>
+  <function name="ASSERT_NE"><use-retval/><arg nr="any"/></function>
+  <function name="ASSERT_TRUE"><use-retval/><arg nr="1"/></function>
+  <function name="ASSERT_FALSE"><use-retval/><arg nr="1"/></function>
+</def>

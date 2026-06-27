@@ -7,7 +7,7 @@
 
 #include "as.h"
 
-static int chash(char *s)
+static int chash(const char *s)
 {
     register short h, c;
 
@@ -19,7 +19,7 @@ static int chash(char *s)
 
 void hashinit(void)
 {
-    register short i, h;
+    register short i;
     register struct table *p;
 
     for (i = 0; i < HCONSZ; i++)
@@ -27,7 +27,8 @@ void hashinit(void)
     for (i = 0; i < HCMDSZ; i++)
         hashctab[i] = -1;
     for (p = table; p->name; p++) {
-        h = chash(p->name);
+        register short h = chash(p->name);
+
         while (hashctab[h] != -1)
             if (--h < 0)
                 h += HCMDSZ;
@@ -100,7 +101,7 @@ int lookcmd(void)
     return -1;
 }
 
-static int hash(char *s)
+static int hash(const char *s)
 {
     register short h, c;
 
@@ -134,13 +135,16 @@ int lookname(void)
 
     // enter a new symbol into the table
 
-    if ((i = stabfree++) >= STSIZE)
+    i = stabfree++;
+    if (i >= STSIZE)
         uerror("symbol table overflow");
-    stab[i].n_len  = strlen(name);
-    stab[i].n_name = alloc(1 + stab[i].n_len);
-    strcpy(stab[i].n_name, name);
-    stab[i].n_value = 0;
-    stab[i].n_type  = 0;
-    hashtab[h]      = i;
-    return i;
+    else {
+        stab[i].n_len  = strlen(name);
+        stab[i].n_name = alloc(1 + stab[i].n_len);
+        strcpy(stab[i].n_name, name);
+        stab[i].n_value = 0;
+        stab[i].n_type  = 0;
+        hashtab[h]      = i;
+        return i;
+    }
 }

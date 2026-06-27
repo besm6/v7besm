@@ -10,3 +10,4 @@
 
 cmd/as/as
 tmp/
+build/

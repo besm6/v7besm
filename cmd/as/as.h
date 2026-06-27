@@ -2,6 +2,8 @@
 // Assembler for BESM-6.
 // Shared declarations.
 //
+#include <stdnoreturn.h>
+
 #include "besm6/b.out.h"
 
 #define W 6 // word length in bytes
@@ -143,7 +145,7 @@ extern short typesegm[];
 extern struct table table[];
 
 // Shared functions.
-void uerror(char *fmt, ...);
+noreturn void uerror(char *fmt, ...);
 int getlex(int *pval);
 void ungetlex(int val, int type);
 long getexpr(int *s);

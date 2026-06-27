@@ -168,7 +168,7 @@ struct nlist {
 long fgeth(FILE *f);
 void fputh(long h, FILE *f);
 int  fgethdr(FILE *f, struct exec *h);
-void fputhdr(struct exec *h, FILE *f);
+void fputhdr(const struct exec *h, FILE *f);
 int fgetsym(FILE *text, struct nlist *sym);
-void fputsym(struct nlist *s, FILE *f);
+void fputsym(const struct nlist *s, FILE *f);
 int fgetint(FILE *f, int *i);

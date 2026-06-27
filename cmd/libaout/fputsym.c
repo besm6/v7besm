@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include "besm6/b.out.h"
 
-void fputsym(register struct nlist *s, register FILE *file)
+void fputsym(register const struct nlist *s, register FILE *file)
 {
     register int i;
 
