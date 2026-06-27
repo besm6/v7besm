@@ -1,16 +1,17 @@
-/*
- * Assembler for BESM-6.
- */
+//
+// Assembler for BESM-6.
+//
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <stdarg.h>
+
 #include "besm6/b.out.h"
 
-#define W       8               /* word length in bytes */
+#define W 8 // word length in bytes
 
-/* token types */
+// token types
 
 #define LEOF    1
 #define LEOL    2
@@ -25,351 +26,354 @@
 #define LINCR   11
 #define LDECR   12
 
-/* segment numbers */
+// segment numbers
 
-#define SCONST  0
-#define STEXT   1
-#define SDATA   2
-#define SSTRNG  3
-#define SBSS    4
-#define SEXT    6
-#define SABS    7               /* degenerate case for getexpr */
+#define SCONST 0
+#define STEXT  1
+#define SDATA  2
+#define SSTRNG 3
+#define SBSS   4
+#define SEXT   6
+#define SABS   7 // degenerate case for getexpr
 
-/* assembler directives */
+// assembler directives
 
-#define ACOMM   0
-#define ASCII   1
-#define BSS     2
-#define COMM    3
-#define DATA    4
-#define GLOBL   5
-#define HALF    6
-#define STRNG   7
-#define TEXT    8
-#define EQU     9
-#define WORD    10
+#define ACOMM 0
+#define ASCII 1
+#define BSS   2
+#define COMM  3
+#define DATA  4
+#define GLOBL 5
+#define HALF  6
+#define STRNG 7
+#define TEXT  8
+#define EQU   9
+#define WORD  10
 
-/* instruction types */
+// instruction types
 
-#define TLONG   01              /* long-address instruction */
-#define TALIGN  02              /* align after the instruction */
-#define TLIT    04              /* instruction has a literal counterpart */
-#define TINT    010             /* instruction has an integer mode */
-#define TCOMP   020             /* instruction can be made a component one */
+#define TLONG  01  // long-address instruction
+#define TALIGN 02  // align after the instruction
+#define TLIT   04  // instruction has a literal counterpart
+#define TINT   010 // instruction has an integer mode
+#define TCOMP  020 // instruction can be made a component one
 
-/* table sizes */
-/* hash sizes must be powers of two! */
+// table sizes
+// hash sizes must be powers of two!
 
-#define HASHSZ  2048                    /* name table hash size */
-#define HCONSZ  256                     /* constant segment hash size */
-#define HCMDSZ  1024                    /* assembler instruction hash size */
+#define HASHSZ 2048 // name table hash size
+#define HCONSZ 256  // constant segment hash size
+#define HCMDSZ 1024 // assembler instruction hash size
 
-#define STSIZE  (HASHSZ*9/10)           /* name table size */
-#define CSIZE   (HCONSZ*9/10)           /* constant segment size */
-#define SPACESZ (STSIZE*8)              /* size of array for names */
+#define STSIZE  (HASHSZ * 9 / 10) // name table size
+#define CSIZE   (HCONSZ * 9 / 10) // constant segment size
+#define SPACESZ (STSIZE * 8)      // size of array for names
 
-#define SEGMTYPE(s)     segmtype[s]     /* segment number to symbol type */
-#define TYPESEGM(s)     typesegm[s]     /* symbol type to segment number */
-#define SEGMREL(s)      segmrel[s]      /* segment number to relocation type */
+#define SEGMTYPE(s) segmtype[s] // segment number to symbol type
+#define TYPESEGM(s) typesegm[s] // symbol type to segment number
+#define SEGMREL(s)  segmrel[s]  // segment number to relocation type
 
-#define EMPCOM          0x3a00000L      /* empty instruction - filler */
-#define UTCCOM          0x3a00000L      /* the <> instruction */
-#define WTCCOM          0x3b00000L      /* the [] instruction */
+#define EMPCOM 0x3a00000L // empty instruction - filler
+#define UTCCOM 0x3a00000L // the <> instruction
+#define WTCCOM 0x3b00000L // the [] instruction
 
-/* convert an instruction into a component one */
+// convert an instruction into a component one
 
-#define MAKECOMP(c)     ((c) & 0x2000000L ? (c)|0x4800000L : (c)|0x6000000L)
+#define MAKECOMP(c) ((c) & 0x2000000L ? (c) | 0x4800000L : (c) | 0x6000000L)
 
-/* optimal hash multiplier for a 32-bit word == 011706736335L */
-/* the same for a 16-bit word = 067433 */
+// optimal hash multiplier for a 32-bit word == 011706736335L
+// the same for a 16-bit word = 067433
 
-#define SUPERHASH(key,mask) (((short)(key) * (short)067433) & (short)(mask))
+#define SUPERHASH(key, mask) (((short)(key) * (short)067433) & (short)(mask))
 
-#define ISHEX(c)        (ctype[(c)&0377] & 1)
-#define ISOCTAL(c)      (ctype[(c)&0377] & 2)
-#define ISDIGIT(c)      (ctype[(c)&0377] & 4)
-#define ISLETTER(c)     (ctype[(c)&0377] & 8)
+#define ISHEX(c)    (ctype[(c) & 0377] & 1)
+#define ISOCTAL(c)  (ctype[(c) & 0377] & 2)
+#define ISDIGIT(c)  (ctype[(c) & 0377] & 4)
+#define ISLETTER(c) (ctype[(c) & 0377] & 8)
 
-FILE *sfile [SABS], *rfile [SABS];
-long count [SABS];
+FILE *sfile[SABS], *rfile[SABS];
+long count[SABS];
 short segm;
 char *infile, *outfile = "a.out";
 char tfilename[] = "/tmp/asXXXXXX";
-short line;                             /* current line number */
-short debug;                            /* debug flag */
+short line;  // current line number
+short debug; // debug flag
 short xflags, Xflag, uflag;
-short stlength;                         /* symbol table length in bytes */
-short stalign;                          /* symbol table alignment */
+short stlength; // symbol table length in bytes
+short stalign;  // symbol table alignment
 long cbase, tbase, dbase, adbase, bbase;
-struct nlist stab [STSIZE];
+struct nlist stab[STSIZE];
 short stabfree;
-char space [SPACESZ];                   /* storage for symbol names */
-short lastfree;                         /* counter of used space */
-short regleft;                          /* register number to the left of the instruction */
-struct { long h, h2, hr2; } constab [CSIZE];
+char space[SPACESZ]; // storage for symbol names
+short lastfree;      // counter of used space
+short regleft;       // register number to the left of the instruction
+struct {
+    long h, h2, hr2;
+} constab[CSIZE];
 short nconst;
-char name [256];
-struct word { long left, right; } intval;
+char name[256];
+struct word {
+    long left, right;
+} intval;
 short extref;
 short blexflag, backlex, blextype;
-short hashtab [HASHSZ], hashctab [HCMDSZ];
-short hashconst [HCONSZ];
-short aflag;                            /* don't align on word boundary */
+short hashtab[HASHSZ], hashctab[HCMDSZ];
+short hashconst[HCONSZ];
+short aflag; // don't align on word boundary
 
 int getlex(int *val);
 long getexpr(int *s);
 
-/* on the second pass hashtab is unused; reuse it as newindex
- * to reindex relocation when flag x or X is set */
+// on the second pass hashtab is unused; reuse it as newindex
+// to reindex relocation when flag x or X is set
 
 #define newindex hashtab
 
-short ctype [256] = {
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,8,0,7,7,7,7,7,7,7,7,5,5,0,0,0,0,0,0,
-    0,9,9,9,9,9,9,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,0,0,0,0,8,
-    0,9,9,9,9,9,9,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,
-    8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,0,
+short ctype[256] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 7, 7, 7, 7, 7, 7, 7, 7, 5, 5, 0, 0, 0, 0, 0, 0,
+    0, 9, 9, 9, 9, 9, 9, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 8,
+    0, 9, 9, 9, 9, 9, 9, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
+    8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 0,
 };
 
-short segmtype [] = {   /* convert segment number to symbol type */
-    N_CONST,            /* SCONST */
-    N_TEXT,             /* STEXT */
-    N_DATA,             /* SDATA */
-    N_STRNG,            /* SSTRNG */
-    N_BSS,              /* SBSS */
-    N_UNDF,             /* SEXT */
-    N_ABS,              /* SABS */
+short segmtype[] = {
+    // convert segment number to symbol type
+    N_CONST, // SCONST
+    N_TEXT,  // STEXT
+    N_DATA,  // SDATA
+    N_STRNG, // SSTRNG
+    N_BSS,   // SBSS
+    N_UNDF,  // SEXT
+    N_ABS,   // SABS
 };
 
-short segmrel [] = {    /* convert segment number to relocation type */
-    RCONST,             /* SCONST */
-    RTEXT,              /* STEXT */
-    RDATA,              /* SDATA */
-    RSTRNG,             /* SSTRNG */
-    RBSS,               /* SBSS */
-    REXT,               /* SEXT */
-    RABS,               /* SABS */
+short segmrel[] = {
+    // convert segment number to relocation type
+    RCONST, // SCONST
+    RTEXT,  // STEXT
+    RDATA,  // SDATA
+    RSTRNG, // SSTRNG
+    RBSS,   // SBSS
+    REXT,   // SEXT
+    RABS,   // SABS
 };
 
-short typesegm [] = {   /* convert symbol type to segment number */
-    SEXT,               /* N_UNDF */
-    SABS,               /* N_ABS */
-    SCONST,             /* N_CONST */
-    STEXT,              /* N_TEXT */
-    SDATA,              /* N_DATA */
-    SBSS,               /* N_BSS */
-    SSTRNG,             /* N_STRNG */
+short typesegm[] = {
+    // convert symbol type to segment number
+    SEXT,   // N_UNDF
+    SABS,   // N_ABS
+    SCONST, // N_CONST
+    STEXT,  // N_TEXT
+    SDATA,  // N_DATA
+    SBSS,   // N_BSS
+    SSTRNG, // N_STRNG
 };
 
-/*
- * Table of machine instructions.
- */
+// Table of machine instructions.
 struct table {
     long val;
     char *name;
     short type;
-} table [] = {
-    { 0x0000000L,     "atx",          TLONG|TCOMP },
-    { 0x0100000L,     "stx",          TLONG|TCOMP },
-    { 0x0200000L,     "xtna",         TLONG|TLIT|TCOMP },
-    { 0x0200000L,     "xtra",         TLONG|TLIT|TCOMP },
-    { 0x0300000L,     "xts",          TLONG|TLIT|TCOMP },
-    { 0x0400000L,     "aadx",         TLONG|TLIT|TINT|TCOMP },
-    { 0x0400000L,     "apx",          TLONG|TLIT|TINT|TCOMP },
-    { 0x0500000L,     "asux",         TLONG|TLIT|TINT|TCOMP },
-    { 0x0500000L,     "asx",          TLONG|TLIT|TINT|TCOMP },
-    { 0x0600000L,     "xsa",          TLONG|TLIT|TINT|TCOMP },
-    { 0x0600000L,     "xsua",         TLONG|TLIT|TINT|TCOMP },
-    { 0x0700000L,     "amsx",         TLONG|TLIT|TCOMP },
-    { 0x0800000L,     "xta",          TLONG|TLIT|TCOMP },
-    { 0x0900000L,     "aax",          TLONG|TLIT|TCOMP },
-    { 0x0a00000L,     "aex",          TLONG|TLIT|TCOMP },
-    { 0x0b00000L,     "arx",          TLONG|TLIT|TCOMP },
-    { 0x0c00000L,     "avx",          TLONG|TLIT|TINT|TCOMP },
-    { 0x0d00000L,     "aox",          TLONG|TLIT|TCOMP },
-    { 0x0e00000L,     "adx",          TLONG|TCOMP },
-    { 0x0f00000L,     "amux",         TLONG|TLIT|TINT|TCOMP },
-    { 0x0f00000L,     "amx",          TLONG|TLIT|TINT|TCOMP },
-    { 0x1000000L,     "apkx",         TLONG|TLIT|TCOMP },
-    { 0x1100000L,     "aux",          TLONG|TLIT|TCOMP },
-    { 0x1200000L,     "acx",          TLONG|TLIT|TCOMP },
-    { 0x1300000L,     "anx",          TLONG|TLIT|TCOMP },
-    { 0x1400000L,     "eax",          TLONG|TCOMP },
-    { 0x1400000L,     "epx",          TLONG|TCOMP },
-    { 0x1500000L,     "esx",          TLONG|TCOMP },
-    { 0x1600000L,     "asrx",         TLONG|TCOMP },
-    { 0x1700000L,     "xtr",          TLONG },
-    { 0x1800000L,     "uj",           TLONG },
-    { 0x1800000L,     "xj",           TLONG },
-    { 0x1900000L,     "vjm",          TLONG|TALIGN },
-    { 0x1a00000L,     "vgm",          TLONG },
-    { 0x1b00000L,     "vlm",          TLONG },
-    { 0x1e00000L,     "alx",          TLONG|TCOMP },
-    { 0x1e00000L,     "aslx",         TLONG|TCOMP },
-    { 0x2000000L,     "vzm",          TLONG },
-    { 0x2100000L,     "vim",          TLONG },
-    { 0x2200000L,     "vpzm",         TLONG },
-    { 0x2300000L,     "vnm",          TLONG },
-    { 0x2400000L,     "vnzm",         TLONG },
-    { 0x2500000L,     "vpm",          TLONG },
-    { 0x2800000L,     "uz",           TLONG },
-    { 0x2800000L,     "xz",           TLONG },
-    { 0x2900000L,     "ui",           TLONG },
-    { 0x2900000L,     "xi",           TLONG },
-    { 0x2a00000L,     "upz",          TLONG },
-    { 0x2a00000L,     "xpz",          TLONG },
-    { 0x2b00000L,     "un",           TLONG },
-    { 0x2b00000L,     "xn1",          TLONG },
-    { 0x2c00000L,     "unz",          TLONG },
-    { 0x2c00000L,     "xnz",          TLONG },
-    { 0x2d00000L,     "up",           TLONG },
-    { 0x2d00000L,     "xp1",          TLONG },
-    { 0x2e00000L,     "uiv",          TLONG },
-    { 0x2e00000L,     "xv1",          TLONG },
-    { 0x2f00000L,     "uzv",          TLONG },
-    { 0x2f00000L,     "xvz",          TLONG },
-    { 0x3000000L,     "xtga",         TLONG|TCOMP },
-    { 0x3000000L,     "xtwa",         TLONG|TCOMP },
-    { 0x3100000L,     "xtqa",         TLONG|TCOMP },
-    { 0x3100000L,     "xtsa",         TLONG|TCOMP },
-    { 0x3200000L,     "xtha",         TLONG },
-    { 0x3300000L,     "xtta",         TLONG },
-    { 0x3400000L,     "ztx",          TLONG|TCOMP },
-    { 0x3500000L,     "atcx",         TLONG },
-    { 0x3600000L,     "ath",          TLONG },
-    { 0x3700000L,     "atgx",         TLONG|TCOMP },
-    { 0x3700000L,     "atwx",         TLONG|TCOMP },
-    { 0x3800000L,     "pctm",         TLONG },
-    { 0x3800000L,     "vtdm",         TLONG },
-    { 0x3900000L,     "atc",          TLONG },
-    { 0x3a00000L,     "utcs",         TLONG },
-    { 0x3a00000L,     "xtpc",         TLONG },
-    { 0x3b00000L,     "wtc",          TLONG },
-    { 0x3b00000L,     "xtc",          TLONG },
-    { 0x3c00000L,     "vtm",          TLONG },
-    { 0x3d00000L,     "utm",          TLONG },
-    { 0x3d00000L,     "xtm",          TLONG },
-    { 0x3e00000L,     "do",           TLONG },
-    { 0x3f00000L,     "ex",           TALIGN },
-    { 0x3f01000L,     "pop",          TALIGN },
-    { 0x3f02000L,     "rmod",         0 },
-    { 0x3f03000L,     "ij",           TALIGN },
-    { 0x3f06000L,     "wmod",         0 },
-    { 0x3f07000L,     "halt",         TALIGN },
-    { 0x3f11000L,     "yma",          0 },
-    { 0x3f14000L,     "ecn",          0 },
-    { 0x3f16000L,     "asn",          0 },
-    { 0x3f18000L,     "rta",          0 },
-    { 0x3f19000L,     "yta",          0 },
-    { 0x3f1a000L,     "een",          0 },
-    { 0x3f1b000L,     "set",          0 },
-    { 0x3f1c000L,     "ean",          0 },
-    { 0x3f1d000L,     "esn",          0 },
-    { 0x3f1e000L,     "aln",          0 },
-    { 0x3f1f000L,     "ntr",          0 },
-    { 0x3f20000L,     "ati",          0 },
-    { 0x3f21000L,     "sti",          0 },
-    { 0x3f22000L,     "ita",          0 },
-    { 0x3f23000L,     "iita",         0 },
-    { 0x3f24000L,     "mtj",          0 },
-    { 0x3f25000L,     "jam",          0 },
-    { 0x3f26000L,     "msj",          0 },
-    { 0x3f27000L,     "jsm",          0 },
-    { 0x3f28000L,     "ato",          0 },
-    { 0x3f29000L,     "sto",          0 },
-    { 0x3f2a000L,     "ota",          0 },
-    { 0x3f2c000L,     "mto",          0 },
-    { 0x3f34000L,     "ent",          0 },
-    { 0x3f35000L,     "int",          0 },
-    { 0x3f36000L,     "asy",          0 },
-    { 0x3f38000L,     "atia",         0 },
-    { 0x3f3c000L,     "aca",          0 },
-    { 0x3f3e000L,     "aly",          0 },
-    { 0x3f3f000L,     "tst",          0 },
-    { 0x3f51000L,     "yms",          0 },
-    { 0x3f54000L,     "ecns",         0 },
-    { 0x3f56000L,     "asns",         0 },
-    { 0x3f58000L,     "rts",          0 },
-    { 0x3f59000L,     "yts",          0 },
-    { 0x3f5a000L,     "eens",         0 },
-    { 0x3f5c000L,     "eans",         0 },
-    { 0x3f5d000L,     "esns",         0 },
-    { 0x3f5e000L,     "alns",         0 },
-    { 0x3f5f000L,     "ntrs",         0 },
-    { 0x3f62000L,     "its",          0 },
-    { 0x3f63000L,     "iits",         0 },
-    { 0x3f6a000L,     "ots",          0 },
-    { 0x3f74000L,     "ents",         0 },
-    { 0x3f75000L,     "ints",         0 },
-    { 0x3f76000L,     "asys",         0 },
-    { 0x3f78000L,     "atis",         0 },
-    { 0x3f7c000L,     "acs",          0 },
-    { 0x3f7e000L,     "alys",         0 },
-    { 0x3f7f000L,     "tsts",         0 },
-    { 0x4000000L,     "xtal",         TLONG },
-    { 0x4100000L,     "xtsl",         TLONG },
-    { 0x4200000L,     "utra",         TLONG },
-    { 0x4200000L,     "xtnal",        TLONG },
-    { 0x4300000L,     "uts",          TLONG },
-    { 0x4300000L,     "xtsu",         TLONG },
-    { 0x4400000L,     "aadu",         TLONG },
-    { 0x4500000L,     "asuu",         TLONG },
-    { 0x4600000L,     "usua",         TLONG },
-    { 0x4700000L,     "amu",          TLONG },
-    { 0x4800000L,     "uta",          TLONG },
-    { 0x4800000L,     "xtau",         TLONG },
-    { 0x4900000L,     "aau",          TLONG },
-    { 0x4a00000L,     "aeu",          TLONG },
-    { 0x4b00000L,     "aru",          TLONG },
-    { 0x4c00000L,     "avu",          TLONG },
-    { 0x4d00000L,     "aou",          TLONG },
-    { 0x4f00000L,     "amuu",         TLONG },
-    { 0x5000000L,     "apu",          TLONG },
-    { 0x5100000L,     "auu",          TLONG },
-    { 0x5200000L,     "acu",          TLONG },
-    { 0x5300000L,     "anu",          TLONG },
-    { 0x6000000L,     "atk",          TLONG },
-    { 0x6100000L,     "stk",          TLONG },
-    { 0x6200000L,     "ktra",         TLONG },
-    { 0x6300000L,     "kts",          TLONG },
-    { 0x6400000L,     "aadk",         TLONG },
-    { 0x6500000L,     "asuk",         TLONG },
-    { 0x6600000L,     "ksua",         TLONG },
-    { 0x6700000L,     "amk",          TLONG },
-    { 0x6800000L,     "kta",          TLONG },
-    { 0x6900000L,     "aak",          TLONG },
-    { 0x6a00000L,     "aek",          TLONG },
-    { 0x6b00000L,     "ark",          TLONG },
-    { 0x6c00000L,     "avk",          TLONG },
-    { 0x6d00000L,     "aok",          TLONG },
-    { 0x6e00000L,     "adk",          TLONG },
-    { 0x6f00000L,     "amuk",         TLONG },
-    { 0x7000000L,     "apk",          TLONG },
-    { 0x7100000L,     "auk",          TLONG },
-    { 0x7200000L,     "ack",          TLONG },
-    { 0x7300000L,     "ank",          TLONG },
-    { 0x7400000L,     "eak",          TLONG },
-    { 0x7500000L,     "esk",          TLONG },
-    { 0x7600000L,     "ask",          TLONG },
-    { 0x7800000L,     "ktga",         TLONG },
-    { 0x7900000L,     "ktsa",         TLONG },
-    { 0x7a00000L,     "ktha",         TLONG },
-    { 0x7b00000L,     "ktta",         TLONG },
-    { 0x7c00000L,     "ztk",          TLONG },
-    { 0x7d00000L,     "atck",         TLONG },
-    { 0x7e00000L,     "alk",          TLONG },
-    { 0x7f00000L,     "atgk",         TLONG },
+} table[] = {
+    { 0x0000000L, "atx", TLONG | TCOMP },
+    { 0x0100000L, "stx", TLONG | TCOMP },
+    { 0x0200000L, "xtna", TLONG | TLIT | TCOMP },
+    { 0x0200000L, "xtra", TLONG | TLIT | TCOMP },
+    { 0x0300000L, "xts", TLONG | TLIT | TCOMP },
+    { 0x0400000L, "aadx", TLONG | TLIT | TINT | TCOMP },
+    { 0x0400000L, "apx", TLONG | TLIT | TINT | TCOMP },
+    { 0x0500000L, "asux", TLONG | TLIT | TINT | TCOMP },
+    { 0x0500000L, "asx", TLONG | TLIT | TINT | TCOMP },
+    { 0x0600000L, "xsa", TLONG | TLIT | TINT | TCOMP },
+    { 0x0600000L, "xsua", TLONG | TLIT | TINT | TCOMP },
+    { 0x0700000L, "amsx", TLONG | TLIT | TCOMP },
+    { 0x0800000L, "xta", TLONG | TLIT | TCOMP },
+    { 0x0900000L, "aax", TLONG | TLIT | TCOMP },
+    { 0x0a00000L, "aex", TLONG | TLIT | TCOMP },
+    { 0x0b00000L, "arx", TLONG | TLIT | TCOMP },
+    { 0x0c00000L, "avx", TLONG | TLIT | TINT | TCOMP },
+    { 0x0d00000L, "aox", TLONG | TLIT | TCOMP },
+    { 0x0e00000L, "adx", TLONG | TCOMP },
+    { 0x0f00000L, "amux", TLONG | TLIT | TINT | TCOMP },
+    { 0x0f00000L, "amx", TLONG | TLIT | TINT | TCOMP },
+    { 0x1000000L, "apkx", TLONG | TLIT | TCOMP },
+    { 0x1100000L, "aux", TLONG | TLIT | TCOMP },
+    { 0x1200000L, "acx", TLONG | TLIT | TCOMP },
+    { 0x1300000L, "anx", TLONG | TLIT | TCOMP },
+    { 0x1400000L, "eax", TLONG | TCOMP },
+    { 0x1400000L, "epx", TLONG | TCOMP },
+    { 0x1500000L, "esx", TLONG | TCOMP },
+    { 0x1600000L, "asrx", TLONG | TCOMP },
+    { 0x1700000L, "xtr", TLONG },
+    { 0x1800000L, "uj", TLONG },
+    { 0x1800000L, "xj", TLONG },
+    { 0x1900000L, "vjm", TLONG | TALIGN },
+    { 0x1a00000L, "vgm", TLONG },
+    { 0x1b00000L, "vlm", TLONG },
+    { 0x1e00000L, "alx", TLONG | TCOMP },
+    { 0x1e00000L, "aslx", TLONG | TCOMP },
+    { 0x2000000L, "vzm", TLONG },
+    { 0x2100000L, "vim", TLONG },
+    { 0x2200000L, "vpzm", TLONG },
+    { 0x2300000L, "vnm", TLONG },
+    { 0x2400000L, "vnzm", TLONG },
+    { 0x2500000L, "vpm", TLONG },
+    { 0x2800000L, "uz", TLONG },
+    { 0x2800000L, "xz", TLONG },
+    { 0x2900000L, "ui", TLONG },
+    { 0x2900000L, "xi", TLONG },
+    { 0x2a00000L, "upz", TLONG },
+    { 0x2a00000L, "xpz", TLONG },
+    { 0x2b00000L, "un", TLONG },
+    { 0x2b00000L, "xn1", TLONG },
+    { 0x2c00000L, "unz", TLONG },
+    { 0x2c00000L, "xnz", TLONG },
+    { 0x2d00000L, "up", TLONG },
+    { 0x2d00000L, "xp1", TLONG },
+    { 0x2e00000L, "uiv", TLONG },
+    { 0x2e00000L, "xv1", TLONG },
+    { 0x2f00000L, "uzv", TLONG },
+    { 0x2f00000L, "xvz", TLONG },
+    { 0x3000000L, "xtga", TLONG | TCOMP },
+    { 0x3000000L, "xtwa", TLONG | TCOMP },
+    { 0x3100000L, "xtqa", TLONG | TCOMP },
+    { 0x3100000L, "xtsa", TLONG | TCOMP },
+    { 0x3200000L, "xtha", TLONG },
+    { 0x3300000L, "xtta", TLONG },
+    { 0x3400000L, "ztx", TLONG | TCOMP },
+    { 0x3500000L, "atcx", TLONG },
+    { 0x3600000L, "ath", TLONG },
+    { 0x3700000L, "atgx", TLONG | TCOMP },
+    { 0x3700000L, "atwx", TLONG | TCOMP },
+    { 0x3800000L, "pctm", TLONG },
+    { 0x3800000L, "vtdm", TLONG },
+    { 0x3900000L, "atc", TLONG },
+    { 0x3a00000L, "utcs", TLONG },
+    { 0x3a00000L, "xtpc", TLONG },
+    { 0x3b00000L, "wtc", TLONG },
+    { 0x3b00000L, "xtc", TLONG },
+    { 0x3c00000L, "vtm", TLONG },
+    { 0x3d00000L, "utm", TLONG },
+    { 0x3d00000L, "xtm", TLONG },
+    { 0x3e00000L, "do", TLONG },
+    { 0x3f00000L, "ex", TALIGN },
+    { 0x3f01000L, "pop", TALIGN },
+    { 0x3f02000L, "rmod", 0 },
+    { 0x3f03000L, "ij", TALIGN },
+    { 0x3f06000L, "wmod", 0 },
+    { 0x3f07000L, "halt", TALIGN },
+    { 0x3f11000L, "yma", 0 },
+    { 0x3f14000L, "ecn", 0 },
+    { 0x3f16000L, "asn", 0 },
+    { 0x3f18000L, "rta", 0 },
+    { 0x3f19000L, "yta", 0 },
+    { 0x3f1a000L, "een", 0 },
+    { 0x3f1b000L, "set", 0 },
+    { 0x3f1c000L, "ean", 0 },
+    { 0x3f1d000L, "esn", 0 },
+    { 0x3f1e000L, "aln", 0 },
+    { 0x3f1f000L, "ntr", 0 },
+    { 0x3f20000L, "ati", 0 },
+    { 0x3f21000L, "sti", 0 },
+    { 0x3f22000L, "ita", 0 },
+    { 0x3f23000L, "iita", 0 },
+    { 0x3f24000L, "mtj", 0 },
+    { 0x3f25000L, "jam", 0 },
+    { 0x3f26000L, "msj", 0 },
+    { 0x3f27000L, "jsm", 0 },
+    { 0x3f28000L, "ato", 0 },
+    { 0x3f29000L, "sto", 0 },
+    { 0x3f2a000L, "ota", 0 },
+    { 0x3f2c000L, "mto", 0 },
+    { 0x3f34000L, "ent", 0 },
+    { 0x3f35000L, "int", 0 },
+    { 0x3f36000L, "asy", 0 },
+    { 0x3f38000L, "atia", 0 },
+    { 0x3f3c000L, "aca", 0 },
+    { 0x3f3e000L, "aly", 0 },
+    { 0x3f3f000L, "tst", 0 },
+    { 0x3f51000L, "yms", 0 },
+    { 0x3f54000L, "ecns", 0 },
+    { 0x3f56000L, "asns", 0 },
+    { 0x3f58000L, "rts", 0 },
+    { 0x3f59000L, "yts", 0 },
+    { 0x3f5a000L, "eens", 0 },
+    { 0x3f5c000L, "eans", 0 },
+    { 0x3f5d000L, "esns", 0 },
+    { 0x3f5e000L, "alns", 0 },
+    { 0x3f5f000L, "ntrs", 0 },
+    { 0x3f62000L, "its", 0 },
+    { 0x3f63000L, "iits", 0 },
+    { 0x3f6a000L, "ots", 0 },
+    { 0x3f74000L, "ents", 0 },
+    { 0x3f75000L, "ints", 0 },
+    { 0x3f76000L, "asys", 0 },
+    { 0x3f78000L, "atis", 0 },
+    { 0x3f7c000L, "acs", 0 },
+    { 0x3f7e000L, "alys", 0 },
+    { 0x3f7f000L, "tsts", 0 },
+    { 0x4000000L, "xtal", TLONG },
+    { 0x4100000L, "xtsl", TLONG },
+    { 0x4200000L, "utra", TLONG },
+    { 0x4200000L, "xtnal", TLONG },
+    { 0x4300000L, "uts", TLONG },
+    { 0x4300000L, "xtsu", TLONG },
+    { 0x4400000L, "aadu", TLONG },
+    { 0x4500000L, "asuu", TLONG },
+    { 0x4600000L, "usua", TLONG },
+    { 0x4700000L, "amu", TLONG },
+    { 0x4800000L, "uta", TLONG },
+    { 0x4800000L, "xtau", TLONG },
+    { 0x4900000L, "aau", TLONG },
+    { 0x4a00000L, "aeu", TLONG },
+    { 0x4b00000L, "aru", TLONG },
+    { 0x4c00000L, "avu", TLONG },
+    { 0x4d00000L, "aou", TLONG },
+    { 0x4f00000L, "amuu", TLONG },
+    { 0x5000000L, "apu", TLONG },
+    { 0x5100000L, "auu", TLONG },
+    { 0x5200000L, "acu", TLONG },
+    { 0x5300000L, "anu", TLONG },
+    { 0x6000000L, "atk", TLONG },
+    { 0x6100000L, "stk", TLONG },
+    { 0x6200000L, "ktra", TLONG },
+    { 0x6300000L, "kts", TLONG },
+    { 0x6400000L, "aadk", TLONG },
+    { 0x6500000L, "asuk", TLONG },
+    { 0x6600000L, "ksua", TLONG },
+    { 0x6700000L, "amk", TLONG },
+    { 0x6800000L, "kta", TLONG },
+    { 0x6900000L, "aak", TLONG },
+    { 0x6a00000L, "aek", TLONG },
+    { 0x6b00000L, "ark", TLONG },
+    { 0x6c00000L, "avk", TLONG },
+    { 0x6d00000L, "aok", TLONG },
+    { 0x6e00000L, "adk", TLONG },
+    { 0x6f00000L, "amuk", TLONG },
+    { 0x7000000L, "apk", TLONG },
+    { 0x7100000L, "auk", TLONG },
+    { 0x7200000L, "ack", TLONG },
+    { 0x7300000L, "ank", TLONG },
+    { 0x7400000L, "eak", TLONG },
+    { 0x7500000L, "esk", TLONG },
+    { 0x7600000L, "ask", TLONG },
+    { 0x7800000L, "ktga", TLONG },
+    { 0x7900000L, "ktsa", TLONG },
+    { 0x7a00000L, "ktha", TLONG },
+    { 0x7b00000L, "ktta", TLONG },
+    { 0x7c00000L, "ztk", TLONG },
+    { 0x7d00000L, "atck", TLONG },
+    { 0x7e00000L, "alk", TLONG },
+    { 0x7f00000L, "atgk", TLONG },
 
-    { 0,              0L,             0 },
+    { 0, 0L, 0 },
 };
 
-/*
- * Fatal error message.
- */
+// Fatal error message.
 void uerror(char *fmt, ...)
 {
     va_list ap;
@@ -396,11 +400,11 @@ void startup()
     } else {
         close(fd);
     }
-    for (i=STEXT; i<SBSS; i++) {
-        if (! (sfile [i] = fopen(tfilename, "w+")))
+    for (i = STEXT; i < SBSS; i++) {
+        if (!(sfile[i] = fopen(tfilename, "w+")))
             uerror("cannot open %s", tfilename);
         unlink(tfilename);
-        if (! (rfile [i] = fopen(tfilename, "w+")))
+        if (!(rfile[i] = fopen(tfilename, "w+")))
             uerror("cannot open %s", tfilename);
         unlink(tfilename);
     }
@@ -412,8 +416,9 @@ int chash(char *s)
     register short h, c;
 
     h = 12345;
-    while ((c = *s++)) h += h + c;
-    return SUPERHASH(h, HCMDSZ-1);
+    while ((c = *s++))
+        h += h + c;
+    return SUPERHASH(h, HCMDSZ - 1);
 }
 
 void hashinit()
@@ -421,18 +426,18 @@ void hashinit()
     register short i, h;
     register struct table *p;
 
-    for (i=0; i<HCONSZ; i++)
+    for (i = 0; i < HCONSZ; i++)
         hashconst[i] = -1;
-    for (i=0; i<HCMDSZ; i++)
+    for (i = 0; i < HCMDSZ; i++)
         hashctab[i] = -1;
-    for (p=table; p->name; p++) {
+    for (p = table; p->name; p++) {
         h = chash(p->name);
         while (hashctab[h] != -1)
             if (--h < 0)
                 h += HCMDSZ;
         hashctab[h] = p - table;
     }
-    for (i=0; i<HASHSZ; i++)
+    for (i = 0; i < HASHSZ; i++)
         hashtab[i] = -1;
 }
 
@@ -451,107 +456,108 @@ void getlhex(void)
     register int c;
     register char *cp, *p;
 
-    /* read a hexadecimal number 'ZZZ */
+    // read a hexadecimal number 'ZZZ
 
     c = getchar();
-    for (cp=name; ISHEX(c); c=getchar())
+    for (cp = name; ISHEX(c); c = getchar())
         *cp++ = hexdig(c);
     ungetc(c, stdin);
-    intval.left = 0;
+    intval.left  = 0;
     intval.right = 0;
-    p = name;
-    for (c=28; c>=0; c-=4, ++p) {
+    p            = name;
+    for (c = 28; c >= 0; c -= 4, ++p) {
         if (p >= cp)
             return;
-        intval.left |= (long) *p << c;
+        intval.left |= (long)*p << c;
     }
-    for (c=28; c>=0; c-=4, ++p) {
+    for (c = 28; c >= 0; c -= 4, ++p) {
         if (p >= cp)
             return;
-        intval.right |= (long) *p << c;
+        intval.right |= (long)*p << c;
     }
 }
 
-/*
- * read a hexadecimal number 0xZZZ
- */
+// read a hexadecimal number 0xZZZ
 void gethnum(void)
 {
     register int c;
     register char *cp;
 
     c = getchar();
-    for (cp=name; ISHEX(c); c=getchar())
+    for (cp = name; ISHEX(c); c = getchar())
         *cp++ = hexdig(c);
     ungetc(c, stdin);
-    intval.left = 0;
+    intval.left  = 0;
     intval.right = 0;
-    for (c=0; c<32; c+=4) {
+    for (c = 0; c < 32; c += 4) {
         if (--cp < name)
             return;
-        intval.right |= (long) *cp << c;
+        intval.right |= (long)*cp << c;
     }
-    for (c=0; c<32; c+=4) {
+    for (c = 0; c < 32; c += 4) {
         if (--cp < name)
             return;
-        intval.left |= (long) *cp << c;
+        intval.left |= (long)*cp << c;
     }
 }
 
-/*
- * Read a number:
- *      1234 1234d 1234D - decimal
- *      01234 1234. 1234o 1234O - octal
- *      1234' 1234h 1234H - hexadecimal
- */
+// Read a number:
+//      1234 1234d 1234D - decimal
+//      01234 1234. 1234o 1234O - octal
+//      1234' 1234h 1234H - hexadecimal
 void getnum(int c)
 {
     register char *cp;
     int leadingzero;
 
-    leadingzero = (c=='0');
-    for (cp=name; ISHEX(c); c=getchar()) *cp++ = hexdig(c);
-    intval.left = 0;
+    leadingzero = (c == '0');
+    for (cp = name; ISHEX(c); c = getchar())
+        *cp++ = hexdig(c);
+    intval.left  = 0;
     intval.right = 0;
-    if (c=='.' || c=='o' || c=='O') {
-octal:
-        for (c=0; c<=27; c+=3) {
-            if (--cp < name) return;
-            intval.right |= (long) *cp << c;
+    if (c == '.' || c == 'o' || c == 'O') {
+    octal:
+        for (c = 0; c <= 27; c += 3) {
+            if (--cp < name)
+                return;
+            intval.right |= (long)*cp << c;
         }
-        if (--cp < name) return;
-        intval.right |= (long) *cp << 30;
-        intval.left = (long) *cp >> 2;
-        for (c=1; c<=31; c+=3) {
-            if (--cp < name) return;
-            intval.left |= (long) *cp << c;
-        }
-        return;
-    } else if (c=='h' || c=='H' || c=='\'') {
-        for (c=0; c<32; c+=4) {
-            if (--cp < name) return;
-            intval.right |= (long) *cp << c;
-        }
-        for (c=0; c<32; c+=4) {
-            if (--cp < name) return;
-            intval.left |= (long) *cp << c;
+        if (--cp < name)
+            return;
+        intval.right |= (long)*cp << 30;
+        intval.left = (long)*cp >> 2;
+        for (c = 1; c <= 31; c += 3) {
+            if (--cp < name)
+                return;
+            intval.left |= (long)*cp << c;
         }
         return;
-    } else if (c!='d' && c!='D') {
+    } else if (c == 'h' || c == 'H' || c == '\'') {
+        for (c = 0; c < 32; c += 4) {
+            if (--cp < name)
+                return;
+            intval.right |= (long)*cp << c;
+        }
+        for (c = 0; c < 32; c += 4) {
+            if (--cp < name)
+                return;
+            intval.left |= (long)*cp << c;
+        }
+        return;
+    } else if (c != 'd' && c != 'D') {
         ungetc(c, stdin);
         if (leadingzero)
             goto octal;
     }
-    for (c=1; ; c*=10) {
-        if (--cp < name) return;
-        intval.right += (long) *cp * c;
+    for (c = 1;; c *= 10) {
+        if (--cp < name)
+            return;
+        intval.right += (long)*cp * c;
     }
 }
 
-/*
- * Read a number .[a:b], where a, b are bit numbers
- * or .[a=b]
- */
+// Read a number .[a:b], where a, b are bit numbers
+// or .[a=b]
 void getbitmask()
 {
     register int c, a, b;
@@ -564,33 +570,33 @@ void getbitmask()
     if (c != ':' && c != '=')
         uerror("illegal bit mask delimiter");
     compl = c == '=';
-    b = getexpr(&v) - 1;
+    b     = getexpr(&v) - 1;
     if (v != SABS)
         uerror("illegal expression in bit mask");
     c = getlex(&v);
     if (c != ']')
         uerror("illegal bit mask delimiter");
-    if (a<0 || a>=64 || b<0 || b>=64)
+    if (a < 0 || a >= 64 || b < 0 || b >= 64)
         uerror("bit number out of range 1..64");
     if (a < b)
         c = a, a = b, b = c;
     if (compl && --a < ++b) {
-        intval.left = 0xffffffff;
+        intval.left  = 0xffffffff;
         intval.right = 0xffffffff;
         return;
     }
-    /* a greater than or equal to b */
+    // a greater than or equal to b
     if (a >= 32) {
         if (b >= 32) {
-            intval.left = (unsigned long) ~0L >> (63-a+b-32) << (b-32);
+            intval.left  = (unsigned long)~0L >> (63 - a + b - 32) << (b - 32);
             intval.right = 0;
         } else {
-            intval.left = (unsigned long) ~0L >> (63-a);
-            intval.right = (unsigned long) ~0L << b;
+            intval.left  = (unsigned long)~0L >> (63 - a);
+            intval.right = (unsigned long)~0L << b;
         }
     } else {
-        intval.left = 0;
-        intval.right = (unsigned long) ~0L >> (31-a+b) << b;
+        intval.left  = 0;
+        intval.right = (unsigned long)~0L >> (31 - a + b) << b;
     }
     intval.left &= 0xffffffff;
     intval.right &= 0xffffffff;
@@ -600,9 +606,7 @@ void getbitmask()
     }
 }
 
-/*
- * Read a number .N, where N is a bit number
- */
+// Read a number .N, where N is a bit number
 void getbitnum(int c)
 {
     getnum(c);
@@ -610,11 +614,11 @@ void getbitnum(int c)
     if (c < 0 || c >= 64)
         uerror("bit number out of range 1..64");
     if (c >= 32) {
-        intval.left = 1 << (c-32);
+        intval.left  = 1 << (c - 32);
         intval.right = 0;
     } else {
         intval.right = 1 << c;
-        intval.left = 0;
+        intval.left  = 0;
     }
 }
 
@@ -622,7 +626,7 @@ void getname(int c)
 {
     register char *cp;
 
-    for (cp=name; ISLETTER(c) || ISDIGIT(c); c=getchar())
+    for (cp = name; ISLETTER(c) || ISDIGIT(c); c = getchar())
         *cp++ = c;
     *cp = 0;
     ungetc(c, stdin);
@@ -630,37 +634,48 @@ void getname(int c)
 
 int lookacmd()
 {
-    switch (name [1]) {
+    switch (name[1]) {
     case 'a':
-        if (! strcmp(".ascii", name)) return ASCII;
-        if (! strcmp(".acomm", name)) return ACOMM;
+        if (!strcmp(".ascii", name))
+            return ASCII;
+        if (!strcmp(".acomm", name))
+            return ACOMM;
         break;
     case 'b':
-        if (! strcmp(".bss", name)) return BSS;
+        if (!strcmp(".bss", name))
+            return BSS;
         break;
     case 'c':
-        if (! strcmp(".comm", name)) return COMM;
+        if (!strcmp(".comm", name))
+            return COMM;
         break;
     case 'd':
-        if (! strcmp(".data", name)) return DATA;
+        if (!strcmp(".data", name))
+            return DATA;
         break;
     case 'e':
-        if (! strcmp(".equ", name)) return EQU;
+        if (!strcmp(".equ", name))
+            return EQU;
         break;
     case 'g':
-        if (! strcmp(".globl", name)) return GLOBL;
+        if (!strcmp(".globl", name))
+            return GLOBL;
         break;
     case 'h':
-        if (! strcmp(".half", name)) return HALF;
+        if (!strcmp(".half", name))
+            return HALF;
         break;
     case 's':
-        if (! strcmp(".strng", name)) return STRNG;
+        if (!strcmp(".strng", name))
+            return STRNG;
         break;
     case 't':
-        if (! strcmp(".text", name)) return TEXT;
+        if (!strcmp(".text", name))
+            return TEXT;
         break;
     case 'w':
-        if (! strcmp(".word", name)) return WORD;
+        if (!strcmp(".word", name))
+            return WORD;
         break;
     }
     return -1;
@@ -685,8 +700,9 @@ int hash(char *s)
     register short h, c;
 
     h = 12345;
-    while ((c = *s++)) h += h + c;
-    return SUPERHASH(h, HASHSZ-1);
+    while ((c = *s++))
+        h += h + c;
+    return SUPERHASH(h, HASHSZ - 1);
 }
 
 char *alloc(int len)
@@ -711,136 +727,156 @@ int lookname()
             h += HASHSZ;
     }
 
-    /* enter a new symbol into the table */
+    // enter a new symbol into the table
 
     if ((i = stabfree++) >= STSIZE)
         uerror("symbol table overflow");
-    stab[i].n_len = strlen(name);
+    stab[i].n_len  = strlen(name);
     stab[i].n_name = alloc(1 + stab[i].n_len);
     strcpy(stab[i].n_name, name);
     stab[i].n_value = 0;
-    stab[i].n_type = 0;
-    hashtab[h] = i;
+    stab[i].n_type  = 0;
+    hashtab[h]      = i;
     return i;
 }
 
-/*
- * int getlex(int *val) - read a token, return its type,
- * store its value in *val.
- * Returned token types:
- *      LEOL    - end of line. Value is the number of the line that began.
- *      LEOF    - end of file.
- *      LNUM    - integer. Value is in intval, *val undefined.
- *      LCMD    - machine instruction. Value is its index in table.
- *      LNAME   - identifier. Value is its index in stab.
- *      LACMD   - assembler directive. Value is its type.
- *      LLCMD   - long-address instruction. Value is the code.
- *      LSCMD   - short-address instruction. Value is the code.
- */
+// int getlex(int *val) - read a token, return its type,
+// store its value in *val.
+// Returned token types:
+//      LEOL    - end of line. Value is the number of the line that began.
+//      LEOF    - end of file.
+//      LNUM    - integer. Value is in intval, *val undefined.
+//      LCMD    - machine instruction. Value is its index in table.
+//      LNAME   - identifier. Value is its index in stab.
+//      LACMD   - assembler directive. Value is its type.
+//      LLCMD   - long-address instruction. Value is the code.
+//      LSCMD   - short-address instruction. Value is the code.
 int getlex(int *pval)
 {
     register short c;
 
     if (blexflag) {
         blexflag = 0;
-        *pval = blextype;
+        *pval    = blextype;
         return backlex;
     }
-    for (;;) switch (c = getchar()) {
-    case ';':
-skiptoeol:
-        while ((c = getchar()) != '\n')
-            if (c == EOF)
-                return LEOF;
-    case '\n':
-        c = getchar();
-        if (c == '#')
-            goto skiptoeol;
-        ungetc(c, stdin);
-        *pval = ++line;
-        return LEOL;
-    case ' ':
-    case '\t':
-        continue;
-    case EOF:
-        return LEOF;
-    case '\\':
-        c = getchar();
-        if (c=='<')
-            return LLSHIFT;
-        if (c=='>')
-            return LRSHIFT;
-        ungetc(c, stdin);
-        return '\\';
-    case '+':
-        if ((c = getchar()) == '+')
-            return LINCR;
-        ungetc(c, stdin);
-        return '+';
-    case '-':
-        if ((c = getchar()) == '-')
-            return LINCR;
-        ungetc(c, stdin);
-        return '-';
-    case '^':       case '&':       case '|':       case '~':
-    case '#':       case '*':       case '/':       case '%':
-    case '"':       case ',':       case '[':       case ']':
-    case '(':       case ')':       case '{':       case '}':
-    case '<':       case '>':       case '=':       case ':':
-        return c;
-    case '\'':
-        getlhex();
-        return LNUM;
-    case '0':
-        if ((c = getchar()) == 'x' || c=='X') {
-            gethnum();
-            return LNUM;
-        }
-        ungetc(c, stdin);
-        c = '0';
-    case '1':       case '2':       case '3':
-    case '4':       case '5':       case '6':       case '7':
-    case '8':       case '9':
-        getnum(c);
-        return LNUM;
-    case '@':
-    case '$':
-        *pval = hexdig(getchar());
-        *pval = *pval<<4 | hexdig(getchar());
-        return (c == '$') ? LSCMD : LLCMD;
-    default:
-        if (!ISLETTER(c))
-            uerror("bad character: \\%o", c & 0377);
-        if (c=='.') {
+    for (;;)
+        switch (c = getchar()) {
+        case ';':
+        skiptoeol:
+            while ((c = getchar()) != '\n')
+                if (c == EOF)
+                    return LEOF;
+        case '\n':
             c = getchar();
-            if (c == '[') {
-                getbitmask();
-                return LNUM;
-            } else if (ISOCTAL(c)) {
-                getbitnum(c);
+            if (c == '#')
+                goto skiptoeol;
+            ungetc(c, stdin);
+            *pval = ++line;
+            return LEOL;
+        case ' ':
+        case '\t':
+            continue;
+        case EOF:
+            return LEOF;
+        case '\\':
+            c = getchar();
+            if (c == '<')
+                return LLSHIFT;
+            if (c == '>')
+                return LRSHIFT;
+            ungetc(c, stdin);
+            return '\\';
+        case '+':
+            if ((c = getchar()) == '+')
+                return LINCR;
+            ungetc(c, stdin);
+            return '+';
+        case '-':
+            if ((c = getchar()) == '-')
+                return LINCR;
+            ungetc(c, stdin);
+            return '-';
+        case '^':
+        case '&':
+        case '|':
+        case '~':
+        case '#':
+        case '*':
+        case '/':
+        case '%':
+        case '"':
+        case ',':
+        case '[':
+        case ']':
+        case '(':
+        case ')':
+        case '{':
+        case '}':
+        case '<':
+        case '>':
+        case '=':
+        case ':':
+            return c;
+        case '\'':
+            getlhex();
+            return LNUM;
+        case '0':
+            if ((c = getchar()) == 'x' || c == 'X') {
+                gethnum();
                 return LNUM;
             }
             ungetc(c, stdin);
-            c = '.';
+            c = '0';
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+            getnum(c);
+            return LNUM;
+        case '@':
+        case '$':
+            *pval = hexdig(getchar());
+            *pval = *pval << 4 | hexdig(getchar());
+            return (c == '$') ? LSCMD : LLCMD;
+        default:
+            if (!ISLETTER(c))
+                uerror("bad character: \\%o", c & 0377);
+            if (c == '.') {
+                c = getchar();
+                if (c == '[') {
+                    getbitmask();
+                    return LNUM;
+                } else if (ISOCTAL(c)) {
+                    getbitnum(c);
+                    return LNUM;
+                }
+                ungetc(c, stdin);
+                c = '.';
+            }
+            getname(c);
+            if (name[0] == '.') {
+                if (name[1] == 0)
+                    return '.';
+                if ((*pval = lookacmd()) != -1)
+                    return LACMD;
+            }
+            if ((*pval = lookcmd()) != -1)
+                return LCMD;
+            *pval = lookname();
+            return LNAME;
         }
-        getname(c);
-        if (name[0]=='.') {
-            if (name[1]==0)
-                return '.';
-            if ((*pval = lookacmd()) != -1)
-                return LACMD;
-        }
-        if ((*pval = lookcmd()) != -1)
-            return LCMD;
-        *pval = lookname();
-        return LNAME;
-    }
 }
 
 void ungetlex(int val, int type)
 {
     blexflag = 1;
-    backlex = val;
+    backlex  = val;
     blextype = type;
 }
 
@@ -856,15 +892,15 @@ int getterm()
         return SABS;
     case LNAME:
         intval.left = intval.right = 0;
-        ty = stab[cval].n_type & N_TYPE;
-        if (ty==N_UNDF || ty==N_COMM || ty==N_ACOMM) {
+        ty                         = stab[cval].n_type & N_TYPE;
+        if (ty == N_UNDF || ty == N_COMM || ty == N_ACOMM) {
             extref = cval;
             return SEXT;
         }
         intval.right = stab[cval].n_value;
         return TYPESEGM(ty);
     case '.':
-        intval.left = 0;
+        intval.left  = 0;
         intval.right = count[segm] / 2;
         return segm;
     case '(':
@@ -873,7 +909,7 @@ int getterm()
             uerror("bad () syntax");
         return s;
     case '{':
-        /* truncate the exponent */
+        // truncate the exponent
         getexpr(&s);
         if (getlex(&cval) != '}')
             uerror("bad () syntax");
@@ -882,28 +918,26 @@ int getterm()
     }
 }
 
-/*
- * long getexpr(int *s) - read an expression.
- * Return the value; store the base segment number in *s.
- * The low 4 bytes of the value are returned;
- * the full copy stays in intval.
- *
- * expression   = [operand] {operation operand}...
- * operand      = LNAME | LNUM | "." | "(" expression ")" | "{" expression "}"
- * operation    = "+" | "-" | "&" | "|" | "^" | "~" | "\" | "/" | "*" | "%"
- */
+// long getexpr(int *s) - read an expression.
+// Return the value; store the base segment number in *s.
+// The low 4 bytes of the value are returned;
+// the full copy stays in intval.
+//
+// expression   = [operand] {operation operand}...
+// operand      = LNAME | LNUM | "." | "(" expression ")" | "{" expression "}"
+// operation    = "+" | "-" | "&" | "|" | "^" | "~" | "\" | "/" | "*" | "%"
 long getexpr(int *s)
 {
     register short clex;
     int cval, s2;
     struct word rez;
 
-    /* look at the first token */
+    // look at the first token
     switch (clex = getlex(&cval)) {
     default:
         ungetlex(clex, cval);
         rez.left = rez.right = 0;
-        *s = SABS;
+        *s                   = SABS;
         break;
     case LNUM:
     case LNAME:
@@ -911,7 +945,7 @@ long getexpr(int *s)
     case '(':
     case '{':
         ungetlex(clex, cval);
-        *s = getterm();
+        *s  = getterm();
         rez = intval;
         break;
     }
@@ -920,32 +954,37 @@ long getexpr(int *s)
             register long t;
         case '+':
             s2 = getterm();
-            if (*s == SABS) *s = s2;
+            if (*s == SABS)
+                *s = s2;
             else if (s2 != SABS)
                 uerror("too complex expression");
-            t = rez.right>>16 & 0xffff;
+            t = rez.right >> 16 & 0xffff;
             rez.right &= 0xffff;
             rez.right += intval.right & 0xffff;
-            if (rez.right & ~0xffff) t++;
+            if (rez.right & ~0xffff)
+                t++;
             rez.right &= 0xffff;
-            t += intval.right>>16 & 0xffff;
+            t += intval.right >> 16 & 0xffff;
             rez.right |= t << 16;
             rez.left += intval.left;
-            if (t & ~0xffff) rez.left++;
+            if (t & ~0xffff)
+                rez.left++;
             break;
         case '-':
             s2 = getterm();
             if (s2 != SABS)
                 uerror("too complex expression");
-            t = rez.right>>16 & 0xffff;
+            t = rez.right >> 16 & 0xffff;
             rez.right &= 0xffff;
             rez.right -= intval.right & 0xffff;
-            if (rez.right & ~0xffff) t--;
+            if (rez.right & ~0xffff)
+                t--;
             rez.right &= 0xffff;
-            t -= intval.right>>16 & 0xffff;
+            t -= intval.right >> 16 & 0xffff;
             rez.right |= t << 16;
             rez.left -= intval.left;
-            if (t & ~0xffff) rez.left--;
+            if (t & ~0xffff)
+                rez.left--;
             break;
         case '&':
             s2 = getterm();
@@ -975,42 +1014,42 @@ long getexpr(int *s)
             rez.left ^= ~intval.left;
             rez.right ^= ~intval.right;
             break;
-        case LLSHIFT:           /* shift left */
+        case LLSHIFT: // shift left
             s2 = getterm();
             if (*s != SABS || s2 != SABS)
                 uerror("too complex expression");
             clex = intval.right & 077;
-            if (clex<32) {
+            if (clex < 32) {
                 rez.left <<= clex;
-                rez.left |= rez.right >> (32-clex);
+                rez.left |= rez.right >> (32 - clex);
                 rez.right <<= clex;
             } else {
-                rez.left = rez.right << (clex-32);
+                rez.left  = rez.right << (clex - 32);
                 rez.right = 0;
             }
             break;
-        case LRSHIFT:           /* shift right */
+        case LRSHIFT: // shift right
             s2 = getterm();
             if (*s != SABS || s2 != SABS)
                 uerror("too complex expression");
             clex = intval.right & 077;
-            if (clex<32) {
+            if (clex < 32) {
                 rez.right >>= clex;
-                rez.right |= rez.left << (32-clex);
+                rez.right |= rez.left << (32 - clex);
                 rez.left >>= clex;
             } else {
-                rez.right = rez.left >> (clex-32);
-                rez.left = 0;
+                rez.right = rez.left >> (clex - 32);
+                rez.left  = 0;
             }
             break;
-        case '*':       /* 31-bit operation */
+        case '*': // 31-bit operation
             s2 = getterm();
             if (*s != SABS || s2 != SABS)
                 uerror("too complex expression");
             rez.left = 0;
             rez.right *= intval.right;
             break;
-        case '/':       /* 31-bit operation */
+        case '/': // 31-bit operation
             s2 = getterm();
             if (*s != SABS || s2 != SABS)
                 uerror("too complex expression");
@@ -1020,7 +1059,7 @@ long getexpr(int *s)
             else
                 uerror("division by zero");
             break;
-        case '%':       /* 31-bit operation */
+        case '%': // 31-bit operation
             s2 = getterm();
             if (*s != SABS || s2 != SABS)
                 uerror("too complex expression");
@@ -1036,7 +1075,7 @@ long getexpr(int *s)
             return rez.right;
         }
     }
-    /* NOTREACHED */
+    // NOTREACHED
 }
 
 void puthr(long h, long r)
@@ -1062,10 +1101,11 @@ void align(int s)
     if (s != segm) {
         save = segm;
         segm = s;
-    } else save = -1;
+    } else
+        save = -1;
 
     if (count[s] & 01)
-        puthr(s==STEXT ? EMPCOM : 0L, (long) RABS);
+        puthr(s == STEXT ? EMPCOM : 0L, (long)RABS);
 
     if (save >= 0)
         segm = save;
@@ -1076,19 +1116,21 @@ long enterconst(int bs)
     register short hash, i;
     register long h, h2, hr2;
 
-    h = intval.left;
-    h2 = intval.right;
+    h   = intval.left;
+    h2  = intval.right;
     hr2 = SEGMREL(bs);
-    if (bs == SEXT) hr2 |= RPUTIX(extref);
-    hash = SUPERHASH(h+h2+hr2, HCONSZ-1);
+    if (bs == SEXT)
+        hr2 |= RPUTIX(extref);
+    hash = SUPERHASH(h + h2 + hr2, HCONSZ - 1);
     while ((i = hashconst[hash]) != -1) {
-        if (h==constab[i].h && h2==constab[i].h2 && hr2==constab[i].hr2)
+        if (h == constab[i].h && h2 == constab[i].h2 && hr2 == constab[i].hr2)
             return i;
-        if (--hash < 0) hash += HCONSZ;
+        if (--hash < 0)
+            hash += HCONSZ;
     }
-    hashconst[hash] = nconst;
-    constab[nconst].h = h;
-    constab[nconst].h2 = h2;
+    hashconst[hash]     = nconst;
+    constab[nconst].h   = h;
+    constab[nconst].h2  = h2;
     constab[nconst].hr2 = hr2;
     return nconst++;
 }
@@ -1099,7 +1141,7 @@ void makecmd(long val, int type)
     register long addr, reltype;
     int cval, segment;
 
-    index = regleft;
+    index   = regleft;
     reltype = RABS;
     for (;;) {
         switch (clex = getlex(&cval)) {
@@ -1113,9 +1155,8 @@ void makecmd(long val, int type)
             if (type & TLIT) {
                 addr = intval.right >> 19 & 017777;
                 if (type & TINT) {
-                    if ((!addr && !intval.left && !(intval.left>>16)) ||
-                        (addr==017777 && intval.left==0xfffff))
-                    {
+                    if ((!addr && !intval.left && !(intval.left >> 16)) ||
+                        (addr == 017777 && intval.left == 0xfffff)) {
                         addr = intval.right & 0xfffff;
                         val |= 0x4000000;
                         reltype = SEGMREL(segment);
@@ -1124,9 +1165,8 @@ void makecmd(long val, int type)
                         break;
                     }
                 } else {
-                    if ((!addr && !intval.left && !(intval.left>>16)) ||
-                        (addr==017777 && intval.left==0xffffffff))
-                    {
+                    if ((!addr && !intval.left && !(intval.left >> 16)) ||
+                        (addr == 017777 && intval.left == 0xffffffff)) {
                         addr = intval.right & 0xfffff;
                         val |= 0x4000000;
                         reltype = SEGMREL(segment);
@@ -1136,7 +1176,7 @@ void makecmd(long val, int type)
                     }
                 }
             }
-            addr = enterconst(segment);
+            addr    = enterconst(segment);
             reltype = RCONST;
             break;
         case '[':
@@ -1151,7 +1191,7 @@ void makecmd(long val, int type)
             continue;
         default:
             ungetlex(clex, cval);
-            addr = getexpr(&segment);
+            addr    = getexpr(&segment);
             reltype = SEGMREL(segment);
             if (reltype == REXT)
                 reltype |= RPUTIX(extref);
@@ -1163,16 +1203,16 @@ void makecmd(long val, int type)
         index = getexpr(&segment);
         if (segment != SABS)
             uerror("bad register number");
-        if ((type & TCOMP) && addr==0 && reltype==RABS) {
-            if ((clex = getlex(&cval)) == LINCR || clex==LDECR) {
+        if ((type & TCOMP) && addr == 0 && reltype == RABS) {
+            if ((clex = getlex(&cval)) == LINCR || clex == LDECR) {
                 incr = getexpr(&segment);
                 if (segment != SABS)
                     uerror("bad register increment");
                 if (incr == 0)
                     incr = 1;
-                /* make a component instruction */
-                addr = clex==LINCR ? incr : -incr;
-                val = MAKECOMP(val);
+                // make a component instruction
+                addr = clex == LINCR ? incr : -incr;
+                val  = MAKECOMP(val);
             } else
                 ungetlex(clex, cval);
         }
@@ -1180,24 +1220,19 @@ void makecmd(long val, int type)
         ungetlex(clex, cval);
 putcom:
     if (type & TLONG) {
-        if ((reltype & REXT) == REXT &&
-            stab[RGETIX(reltype)].n_type == N_EXT+N_ACOMM)
-        {
-            /* if the instruction references ACOMM,
-             * insert utc before it */
-            puthr((long) index<<28 | UTCCOM | (addr>>12 & 0xfffff),
-                reltype | RSHIFT);
-            puthr(val | (addr&07777), (long) RABS | RTRUNC);
+        if ((reltype & REXT) == REXT && stab[RGETIX(reltype)].n_type == N_EXT + N_ACOMM) {
+            // if the instruction references ACOMM,
+            // insert utc before it
+            puthr((long)index << 28 | UTCCOM | (addr >> 12 & 0xfffff), reltype | RSHIFT);
+            puthr(val | (addr & 07777), (long)RABS | RTRUNC);
         } else {
             addr &= 0xfffff;
-            puthr((long) index<<28 | val | (addr & 0xfffff),
-                reltype | RLONG);
+            puthr((long)index << 28 | val | (addr & 0xfffff), reltype | RLONG);
         }
     } else {
-        puthr((long) index<<28 | val | (addr & 07777),
-            reltype | RSHORT);
+        puthr((long)index << 28 | val | (addr & 07777), reltype | RSHORT);
     }
-    if (! aflag && (type & TALIGN))
+    if (!aflag && (type & TALIGN))
         align(segm);
 }
 
@@ -1222,17 +1257,25 @@ void makeascii()
                 uerror("EOF in text string");
             case '\n':
                 continue;
-            case '0': case '1': case '2': case '3':
-            case '4': case '5': case '6': case '7':
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
                 cval = c & 07;
-                c = getchar();
-                if (c>='0' && c<='7') {
-                    cval = cval<<3 | (c&7);
-                    c = getchar();
-                    if (c>='0' && c<='7') {
-                        cval = cval<<3 | (c&7);
-                    } else ungetc(c, stdin);
-                } else ungetc(c, stdin);
+                c    = getchar();
+                if (c >= '0' && c <= '7') {
+                    cval = cval << 3 | (c & 7);
+                    c    = getchar();
+                    if (c >= '0' && c <= '7') {
+                        cval = cval << 3 | (c & 7);
+                    } else
+                        ungetc(c, stdin);
+                } else
+                    ungetc(c, stdin);
                 c = cval;
                 break;
             case 't':
@@ -1259,7 +1302,7 @@ void makeascii()
         break;
     }
     c = W - n % W;
-    n = (n + c) / (W/2);
+    n = (n + c) / (W / 2);
     count[segm] += n;
     while (c--)
         fputc(0, sfile[segm]);
@@ -1295,10 +1338,10 @@ void pass1()
             makecmd(table[cval].val, table[cval].type);
             break;
         case LSCMD:
-            makecmd((long) cval<<12 | 0x3f00000L, 0);
+            makecmd((long)cval << 12 | 0x3f00000L, 0);
             break;
         case LLCMD:
-            makecmd((long) cval<<20, TLONG);
+            makecmd((long)cval << 20, TLONG);
             break;
         case '.':
             if (getlex(&cval) != '=')
@@ -1310,12 +1353,13 @@ void pass1()
             if (addr < count[segm])
                 uerror("negative count increment");
             if (segm == SBSS)
-                count [segm] = addr;
-            else while (count[segm] < addr) {
-                fputh(segm==STEXT? EMPCOM: 0L, sfile[segm]);
-                fputh(0L, rfile[segm]);
-                count[segm]++;
-            }
+                count[segm] = addr;
+            else
+                while (count[segm] < addr) {
+                    fputh(segm == STEXT ? EMPCOM : 0L, sfile[segm]);
+                    fputh(0L, rfile[segm]);
+                    count[segm]++;
+                }
             break;
         case LNAME:
             if ((clex = getlex(&tval)) == ':') {
@@ -1324,21 +1368,19 @@ void pass1()
                 stab[cval].n_type &= ~N_TYPE;
                 stab[cval].n_type |= SEGMTYPE(segm);
                 continue;
-            } else if (clex=='=' || (clex==LACMD && tval==EQU)) {
+            } else if (clex == '=' || (clex == LACMD && tval == EQU)) {
                 stab[cval].n_value = getexpr(&csegm);
                 if (csegm == SEXT)
                     uerror("indirect equivalence");
                 stab[cval].n_type &= N_EXT;
                 stab[cval].n_type |= SEGMTYPE(csegm);
                 break;
-            } else if (clex==LACMD && (tval==COMM || tval==ACOMM)) {
-                /* name .comm len */
-                if (stab[cval].n_type != N_UNDF &&
-                    stab[cval].n_type != (N_EXT|N_COMM) &&
-                    stab[cval].n_type != (N_EXT|N_ACOMM))
+            } else if (clex == LACMD && (tval == COMM || tval == ACOMM)) {
+                // name .comm len
+                if (stab[cval].n_type != N_UNDF && stab[cval].n_type != (N_EXT | N_COMM) &&
+                    stab[cval].n_type != (N_EXT | N_ACOMM))
                     uerror("name already defined");
-                stab[cval].n_type = N_EXT | (tval==COMM ?
-                    N_COMM : N_ACOMM);
+                stab[cval].n_type = N_EXT | (tval == COMM ? N_COMM : N_ACOMM);
                 getexpr(&tval);
                 if (tval != SABS)
                     uerror("bad length .comm");
@@ -1408,16 +1450,14 @@ void pass1()
                 break;
             case COMM:
             case ACOMM:
-                /* .comm name,len */
+                // .comm name,len
                 tval = cval;
                 if (getlex(&cval) != LNAME)
                     uerror("bad parameter .comm");
-                if (stab[cval].n_type != N_UNDF &&
-                    stab[cval].n_type != (N_EXT|N_COMM) &&
-                    stab[cval].n_type != (N_EXT|N_ACOMM))
+                if (stab[cval].n_type != N_UNDF && stab[cval].n_type != (N_EXT | N_COMM) &&
+                    stab[cval].n_type != (N_EXT | N_ACOMM))
                     uerror("name already defined");
-                stab[cval].n_type = N_EXT | (tval==COMM ?
-                    N_COMM : N_ACOMM);
+                stab[cval].n_type = N_EXT | (tval == COMM ? N_COMM : N_ACOMM);
                 if ((clex = getlex(&tval)) == ',') {
                     getexpr(&tval);
                     if (tval != SABS)
@@ -1434,8 +1474,10 @@ void pass1()
             uerror("bad syntax");
         }
         if ((clex = getlex(&cval)) != LEOL) {
-            if (clex == LEOF) return;
-            else uerror("bad command end");
+            if (clex == LEOF)
+                return;
+            else
+                uerror("bad command end");
         }
         regleft = 0;
     }
@@ -1449,19 +1491,19 @@ void middle()
     align(SDATA);
     align(SSTRNG);
     stlength = 0;
-    for (snum=0, i=0; i<stabfree; i++) {
-        /* if uflag is not set,
-         * an undefined name is treated as external */
+    for (snum = 0, i = 0; i < stabfree; i++) {
+        // if uflag is not set,
+        // an undefined name is treated as external
         if (stab[i].n_type == N_UNDF) {
             if (uflag)
                 uerror("name undefined", stab[i].n_name);
-            else stab[i].n_type |= N_EXT;
+            else
+                stab[i].n_type |= N_EXT;
         }
-        if (xflags) newindex[i] = snum;
-        if (!xflags || (stab[i].n_type & N_EXT) || (Xflag &&
-            stab[i].n_name[0] != 'L'))
-        {
-            stlength += 2 + W/2 + stab[i].n_len;
+        if (xflags)
+            newindex[i] = snum;
+        if (!xflags || (stab[i].n_type & N_EXT) || (Xflag && stab[i].n_name[0] != 'L')) {
+            stlength += 2 + W / 2 + stab[i].n_len;
             snum++;
         }
     }
@@ -1475,12 +1517,12 @@ void makeheader()
 
     hdr.a_magic = FMAGIC;
     hdr.a_const = nconst * W;
-    hdr.a_text = count [STEXT] * (W/2);
-    hdr.a_data = (count [SDATA] + count [SSTRNG]) * (W/2);
-    hdr.a_bss = count [SBSS] * (W/2);
-    hdr.a_syms = stlength;
-    hdr.a_entry = HDRSZ/W + count [SCONST] / (W/2);
-    hdr.a_flag = 0;
+    hdr.a_text  = count[STEXT] * (W / 2);
+    hdr.a_data  = (count[SDATA] + count[SSTRNG]) * (W / 2);
+    hdr.a_bss   = count[SBSS] * (W / 2);
+    hdr.a_syms  = stlength;
+    hdr.a_entry = HDRSZ / W + count[SCONST] / (W / 2);
+    hdr.a_flag  = 0;
     fputhdr(&hdr, stdout);
 }
 
@@ -1503,7 +1545,7 @@ long adjust(long h, long a, int hr)
     case RTRUNC:
         a &= 07777;
     case RLONG:
-rlong:
+    rlong:
         a += h & 0xfffff;
         h &= ~0xfffff;
         h |= a & 0xfffff;
@@ -1516,30 +1558,29 @@ long makehalf(long h, long hr)
 {
     register short i;
 
-    switch ((int) hr & REXT) {
+    switch ((int)hr & REXT) {
     case RABS:
         break;
     case RCONST:
-        h = adjust(h, cbase, (int) hr);
+        h = adjust(h, cbase, (int)hr);
         break;
     case RTEXT:
-        h = adjust(h, tbase, (int) hr);
+        h = adjust(h, tbase, (int)hr);
         break;
     case RDATA:
-        h = adjust(h, dbase, (int) hr);
+        h = adjust(h, dbase, (int)hr);
         break;
     case RSTRNG:
-        h = adjust(h, adbase, (int) hr);
+        h = adjust(h, adbase, (int)hr);
         break;
     case RBSS:
-        h = adjust(h, bbase, (int) hr);
+        h = adjust(h, bbase, (int)hr);
         break;
     case REXT:
         i = RGETIX(hr);
-        if (stab[i].n_type != N_EXT+N_UNDF &&
-            stab[i].n_type != N_EXT+N_COMM &&
-            stab[i].n_type != N_EXT+N_ACOMM)
-            h = adjust(h, stab[i].n_value, (int) hr);
+        if (stab[i].n_type != N_EXT + N_UNDF && stab[i].n_type != N_EXT + N_COMM &&
+            stab[i].n_type != N_EXT + N_ACOMM)
+            h = adjust(h, stab[i].n_value, (int)hr);
         break;
     }
     return h;
@@ -1550,14 +1591,14 @@ void pass2()
     register short i;
     register long h;
 
-    cbase = HDRSZ/W;
-    tbase = cbase + nconst;
-    dbase = tbase + count[STEXT]/2;
-    adbase = dbase + count[SDATA]/2;
-    bbase = adbase + count[SSTRNG]/2;
+    cbase  = HDRSZ / W;
+    tbase  = cbase + nconst;
+    dbase  = tbase + count[STEXT] / 2;
+    adbase = dbase + count[SDATA] / 2;
+    bbase  = adbase + count[SSTRNG] / 2;
 
-    /* process the symbol table */
-    for (i=0; i<stabfree; i++) {
+    // process the symbol table
+    for (i = 0; i < stabfree; i++) {
         h = stab[i].n_value;
         switch (stab[i].n_type & N_TYPE) {
         case N_UNDF:
@@ -1582,37 +1623,42 @@ void pass2()
         }
         stab[i].n_value = h;
     }
-    /* process the constant segment */
-    for (i=0; i<nconst; i++) {
+    // process the constant segment
+    for (i = 0; i < nconst; i++) {
         fputh(makehalf(constab[i].h2, constab[i].hr2), stdout);
         fputh(constab[i].h, stdout);
     }
-    for (segm=STEXT; segm<SBSS; segm++) {
-        rewind(sfile [segm]);
-        rewind(rfile [segm]);
-        h = count [segm];
-        while (h--) fputh(makehalf(fgeth(sfile[segm]),
-            fgeth(rfile[segm])), stdout);
+    for (segm = STEXT; segm < SBSS; segm++) {
+        rewind(sfile[segm]);
+        rewind(rfile[segm]);
+        h = count[segm];
+        while (h--)
+            fputh(makehalf(fgeth(sfile[segm]), fgeth(rfile[segm])), stdout);
     }
 }
 
-/*
- * convert symbol type to relocation type
- */
+// convert symbol type to relocation type
 int typerel(int t)
 {
     switch (t & N_TYPE) {
-    case N_ABS:     return RABS;
-    case N_CONST:   return RCONST;
-    case N_TEXT:    return RTEXT;
-    case N_DATA:    return RDATA;
-    case N_BSS:     return RBSS;
-    case N_STRNG:   return RDATA;
+    case N_ABS:
+        return RABS;
+    case N_CONST:
+        return RCONST;
+    case N_TEXT:
+        return RTEXT;
+    case N_DATA:
+        return RDATA;
+    case N_BSS:
+        return RBSS;
+    case N_STRNG:
+        return RDATA;
     case N_UNDF:
     case N_COMM:
     case N_ACOMM:
     case N_FN:
-    default:        return 0;
+    default:
+        return 0;
     }
 }
 
@@ -1620,21 +1666,19 @@ long relhalf(register long hr)
 {
     register short i;
 
-    switch ((int) hr & REXT) {
+    switch ((int)hr & REXT) {
     case RSTRNG:
         hr = RDATA | (hr & RSHORT);
         break;
     case REXT:
         i = RGETIX(hr);
-        if (stab[i].n_type == N_EXT+N_UNDF ||
-            stab[i].n_type == N_EXT+N_COMM ||
-            stab[i].n_type == N_EXT+N_ACOMM)
-        {
-            /* reindexing */
+        if (stab[i].n_type == N_EXT + N_UNDF || stab[i].n_type == N_EXT + N_COMM ||
+            stab[i].n_type == N_EXT + N_ACOMM) {
+            // reindexing
             if (xflags)
-                hr = (hr & (RSHORT|REXT)) | RPUTIX(newindex [i]);
+                hr = (hr & (RSHORT | REXT)) | RPUTIX(newindex[i]);
         } else
-            hr = (hr & RSHORT) | typerel((int) stab[i].n_type);
+            hr = (hr & RSHORT) | typerel((int)stab[i].n_type);
         break;
     }
     return hr;
@@ -1645,14 +1689,15 @@ void makereloc()
     register short i;
     register long len;
 
-    for (i=0; i<nconst; i++) {
+    for (i = 0; i < nconst; i++) {
         fputh(relhalf(constab[i].hr2), stdout);
         fputh(0L, stdout);
     }
-    for (segm=STEXT; segm<SBSS; segm++) {
-        rewind(rfile [segm]);
-        len = count [segm];
-        while (len--) fputh(relhalf(fgeth(rfile[segm])), stdout);
+    for (segm = STEXT; segm < SBSS; segm++) {
+        rewind(rfile[segm]);
+        len = count[segm];
+        while (len--)
+            fputh(relhalf(fgeth(rfile[segm])), stdout);
     }
 }
 
@@ -1660,9 +1705,8 @@ void makesymtab()
 {
     register short i;
 
-    for (i=0; i<stabfree; i++)
-        if (!xflags || (stab[i].n_type & N_EXT) || (Xflag &&
-            stab[i].n_name[0] != 'L'))
+    for (i = 0; i < stabfree; i++)
+        if (!xflags || (stab[i].n_type & N_EXT) || (Xflag && stab[i].n_name[0] != 'L'))
             fputsym(&stab[i], stdout);
     while (stalign--)
         putchar(0);
@@ -1688,14 +1732,14 @@ int main(int argc, char *argv[])
     register char *cp;
     int ofile = 0;
 
-    /* parse flags */
+    // parse flags
 
-    for (i=1; i<argc; i++) {
+    for (i = 1; i < argc; i++) {
         switch (argv[i][0]) {
         case '-':
-            for (cp=argv[i]; *cp; cp++) {
+            for (cp = argv[i]; *cp; cp++) {
                 switch (*cp) {
-                case 'd':       /* debug flag */
+                case 'd': // debug flag
                     debug++;
                     break;
                 case 'X':
@@ -1703,23 +1747,24 @@ int main(int argc, char *argv[])
                 case 'x':
                     xflags++;
                     break;
-                case 'a':       /* don't align on word boundary */
+                case 'a': // don't align on word boundary
                     aflag++;
                     break;
                 case 'u':
                     uflag++;
                     break;
-                case 'o':       /* output file */
+                case 'o': // output file
                     if (ofile)
                         uerror("too many -o flags");
                     ofile = 1;
-                    if (cp [1]) {
-                        /* -ofile */
-                        outfile = cp+1;
-                        while (*++cp);
+                    if (cp[1]) {
+                        // -ofile
+                        outfile = cp + 1;
+                        while (*++cp)
+                            ;
                         --cp;
-                    } else if (i+1 < argc)
-                        /* -o file */
+                    } else if (i + 1 < argc)
+                        // -o file
                         outfile = argv[++i];
                     break;
                 default:
@@ -1735,26 +1780,26 @@ int main(int argc, char *argv[])
             break;
         }
     }
-    if (! infile && isatty(0))
+    if (!infile && isatty(0))
         usage();
 
-    /* set up input/output */
+    // set up input/output
 
-    if (infile && ! freopen(infile, "r", stdin))
+    if (infile && !freopen(infile, "r", stdin))
         uerror("cannot open %s", infile);
-    if (! freopen(outfile, "w", stdout))
+    if (!freopen(outfile, "w", stdout))
         uerror("cannot open %s", outfile);
 
     i = getchar();
-    ungetc(i=='#' ? ';' : i, stdin);
+    ungetc(i == '#' ? ';' : i, stdin);
 
-    startup();          /* open temporary files */
-    hashinit();         /* initialize hash tables */
-    pass1();            /* first pass */
-    middle();           /* intermediate actions */
-    makeheader();       /* write the header */
-    pass2();            /* second pass */
-    makereloc();        /* write relocation files */
-    makesymtab();       /* write the symbol table */
+    startup();    // open temporary files
+    hashinit();   // initialize hash tables
+    pass1();      // first pass
+    middle();     // intermediate actions
+    makeheader(); // write the header
+    pass2();      // second pass
+    makereloc();  // write relocation files
+    makesymtab(); // write the symbol table
     return 0;
 }
