@@ -68,4 +68,5 @@ enable_testing()
 #
 set(BESM6_CROSS_INCLUDE ${CMAKE_SOURCE_DIR}/cross)
 
+add_subdirectory(cmd/libaout)
 add_subdirectory(cmd/as)

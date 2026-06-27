@@ -13,3 +13,5 @@ Tasks to do in assembler:
  * AS-6: Word-length migration is only half done. cmd/as + cross/besm6/b.out.h (HDRSZ) + cmd/libaout (fputh/fgeth/fgetsym) now use the BESM-6 48-bit word (W=6, 3-byte half-words, HDRSZ=54). But cmd/ld/ld.c, cmd/disasm/dis.c, cmd/ld/size.c and cmd/ld/ranlib.c still `#define W 8`, so they read/produce files inconsistent with what `as` now emits. Migrate each to W=6 (and any hard-coded 8/72 byte offsets) before they can interoperate with as's output.
 
  * AS-7: The archive int codec cmd/libaout/{putint,getint}.c still encodes an int as 2 value bytes + 6 zero pad (an 8-byte "Elbrus-B" word). If the archive word is meant to follow the object word, migrate it to 3 value + 3 pad (6 bytes); deferred with ranlib.
+
+ * AS-8: Five cmd/libaout sources (fputran.c, getarhdr.c, getint.c, putarhdr.c, putint.c) are still un-ported K&R: they use implicit-int definitions and old `ranlib.h`-style includes instead of the besm6/ cross headers, so they fail under -Werror and are left out of cmd/libaout/CMakeLists.txt. Port them to ANSI prototypes + besm6/ headers (matching their fget*/fput* siblings) and add them back to the library.

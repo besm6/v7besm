@@ -5,9 +5,10 @@
 
 int fgetarhdr(register FILE *f, register struct ar_hdr *h)
 {
-    register int i, c;
+    register int i;
 
     for (i=0; i<14; i++) {
+        register int c;
         if ((c = getc(f)) == EOF)
             return 0;
         h->ar_name[i] = c;
