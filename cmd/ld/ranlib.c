@@ -11,15 +11,9 @@
 
 # include <stdio.h>
 
-# ifdef CROSS
-#    include "../h/a.out.h"
-#    include "../h/ar.h"
-#    include "../h/ranlib.h"
-# else
-#    include <a.out.h>
-#    include <ar.h>
-#    include <ranlib.h>
-# endif
+# include "besm6/b.out.h"
+# include "besm6/ar.h"
+# include "besm6/ranlib.h"
 
 # define W              8       /* sizeof word of Elbrus-B */
 

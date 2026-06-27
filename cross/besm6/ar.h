@@ -1,14 +1,15 @@
+#include "besm6/arch.h"
 
 #define ARMAG   0177545
 #define ARHDRSZ 56
 
 struct ar_hdr {
     char    ar_name[14];
-    long    ar_date;
-    int     ar_uid;
-    int     ar_gid;
-    int     ar_mode;
-    long    ar_size;
+    word_t  ar_date;
+    word_t  ar_uid;
+    word_t  ar_gid;
+    word_t  ar_mode;
+    word_t  ar_size;
 };
 
 int fgetarhdr(FILE *f, struct ar_hdr *h);

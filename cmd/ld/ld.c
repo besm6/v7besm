@@ -27,9 +27,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include "microbesm/a.out.h"
-#include "microbesm/ar.h"
-#include "microbesm/ranlib.h"
+#include "besm6/b.out.h"
+#include "besm6/ar.h"
+#include "besm6/ranlib.h"
 
 #define W       8               /* длина слова в байтах */
 #define LOCSYM  'L'             /* убрать локальные символы, нач. с 'L' */

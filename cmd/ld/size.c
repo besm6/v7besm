@@ -10,11 +10,7 @@
 
 # include <stdio.h>
 
-# ifdef CROSS
-#    include "../h/a.out.h"
-# else
-#    include <a.out.h>
-# endif
+# include "besm6/b.out.h"
 
 # define W 8            /* длина слова в байтах */
 

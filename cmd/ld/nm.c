@@ -8,13 +8,8 @@
 # include <stdio.h>
 # include <ctype.h>
 
-# ifdef CROSS
-#    include "../h/a.out.h"
-#    include "../h/ar.h"
-# else
-#    include <a.out.h>
-#    include <ar.h>
-# endif
+# include "besm6/b.out.h"
+# include "besm6/ar.h"
 
 # define QUANT  2048
 

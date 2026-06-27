@@ -93,7 +93,7 @@ TEST(Header, MaxFieldValues) {
     out.a_abss  = 0xFFFFFF;
     out.a_syms  = 0xFFFFFF;
     out.a_entry = 0xFFFFFF;
-    out.a_flag  = 0xFFFF;  // a_flag is a short
+    out.a_flag  = 0xFFFFFF;
 
     FILE *f = tmpfile();
     ASSERT_NE(f, nullptr);

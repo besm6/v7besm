@@ -12,11 +12,7 @@
 # include <sys/stat.h>
 # include <signal.h>
 
-# ifdef CROSS
-#    include "../h/ar.h"
-# else
-#    include <ar.h>
-# endif
+# include "besm6/ar.h"
 
 struct stat     stbuf;
 struct ar_hdr   arbuf;

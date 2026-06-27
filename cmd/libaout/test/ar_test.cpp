@@ -181,7 +181,7 @@ TEST(ArHdr, RoundTrip) {
 TEST(Ranlib, RoundTrip) {
     char name[] = "_symbol";
     struct ranlib out{};
-    out.ran_len  = static_cast<short>(sizeof(name) - 1);
+    out.ran_len  = static_cast<word_t>(sizeof(name) - 1);
     out.ran_off  = 0x0ABCDE;  // low half-word only
     out.ran_name = name;
 

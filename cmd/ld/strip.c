@@ -2,11 +2,7 @@
 # include <signal.h>
 # include <stdio.h>
 
-# ifdef CROSS
-#    include "../h/a.out.h"
-# else
-#    include <a.out.h>
-# endif
+# include "besm6/b.out.h"
 
 # ifndef BUFSIZ
 # define BUFSIZ 512

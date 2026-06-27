@@ -21,7 +21,7 @@ extern "C" {
 static struct nlist sample_sym(char *name)
 {
     struct nlist s{};
-    s.n_len   = static_cast<short>(std::strlen(name));
+    s.n_len   = static_cast<word_t>(std::strlen(name));
     s.n_type  = N_TEXT | N_EXT;
     s.n_value = 0x123456;
     s.n_name  = name;

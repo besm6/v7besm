@@ -44,6 +44,7 @@
  *      symbol table:           54 + 2*constsize + 2*textsize + 2*datasize
  *
  */
+#include "besm6/arch.h"
 
 /*
  * a.out file header.
@@ -54,15 +55,15 @@
  * a_flag carries the RELFLG / TCDFLG bits.
  */
 struct exec {
-    int     a_magic;            /* magic number */
-    long    a_const;            /* const segment size, bytes (multiple of 6) */
-    long    a_text;             /* text (code) segment size, bytes */
-    long    a_data;             /* initialized data segment size, bytes */
-    long    a_bss;              /* uninitialized data (bss) size, bytes */
-    long    a_abss;             /* absolute bss size, bytes */
-    long    a_syms;             /* symbol table size, bytes */
-    long    a_entry;            /* entry point, word address */
-    short   a_flag;             /* flags: RELFLG, TCDFLG */
+    word_t  a_magic;            /* magic number */
+    word_t  a_const;            /* const segment size, bytes (multiple of 6) */
+    word_t  a_text;             /* text (code) segment size, bytes */
+    word_t  a_data;             /* initialized data segment size, bytes */
+    word_t  a_bss;              /* uninitialized data (bss) size, bytes */
+    word_t  a_abss;             /* absolute bss size, bytes */
+    word_t  a_syms;             /* symbol table size, bytes */
+    word_t  a_entry;            /* entry point, word address */
+    word_t  a_flag;             /* flags: RELFLG, TCDFLG */
 };
 
 /*
@@ -74,9 +75,9 @@ struct exec {
  * See fgetsym()/fputsym() in cmd/ld/.
  */
 struct nlist {
-    short   n_len;      /* length of the name in bytes */
-    short   n_type;     /* symbol type (N_* values, with the N_EXT bit) */
-    long    n_value;    /* symbol value (address or constant) */
+    word_t  n_len;      /* length of the name in bytes */
+    word_t  n_type;     /* symbol type (N_* values, with the N_EXT bit) */
+    word_t  n_value;    /* symbol value (address or constant) */
     char *  n_name;     /* pointer to the name */
 };
 
