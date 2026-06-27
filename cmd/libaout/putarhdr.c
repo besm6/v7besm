@@ -5,12 +5,12 @@
 #include "besm6/b.out.h"
 #include "besm6/ar.h"
 
-// Encode one 24-bit half-word (3 bytes, little-endian) into a buffer.
+// Encode one 24-bit half-word (3 bytes, big-endian) into a buffer.
 static void puth(unsigned char *p, long v)
 {
-    p[0] = v;
+    p[0] = v >> 16;
     p[1] = v >> 8;
-    p[2] = v >> 16;
+    p[2] = v;
 }
 
 // Write an archive header in the same field layout getarhdr()/fgetarhdr()
@@ -24,12 +24,12 @@ int putarhdr(int f, const struct ar_hdr *h)
     for (i=0; i<14; i++)
         b[i] = h->ar_name[i];
 
-    puth(b+16, h->ar_date);
-    puth(b+19, h->ar_date >> 32);
-    puth(b+22, h->ar_uid);
-    puth(b+28, h->ar_gid);
-    puth(b+34, h->ar_mode);
-    puth(b+40, h->ar_size);
-    puth(b+43, h->ar_size >> 32);
+    puth(b+16, h->ar_date >> 32);
+    puth(b+19, h->ar_date);
+    puth(b+25, h->ar_uid);
+    puth(b+31, h->ar_gid);
+    puth(b+37, h->ar_mode);
+    puth(b+40, h->ar_size >> 32);
+    puth(b+43, h->ar_size);
     return write(f, b, sizeof(b)) == (ssize_t) sizeof(b);
 }

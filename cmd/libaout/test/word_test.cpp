@@ -1,10 +1,11 @@
 //
 // Unit tests for the full-word primitives fgetw() / fputw().
 //
-// A BESM-6 word is 48 bits == 6 bytes, stored as two little-endian 24-bit
-// half-words (low half-word first). As with the half-word tests, a round-trip
-// alone cannot catch a byte-order bug (an encode and a decode bug would cancel
-// out), so the raw-bytes test pins the on-disk layout independently of fgetw().
+// A BESM-6 word is 48 bits == 6 bytes, stored as two big-endian 24-bit
+// half-words (high half-word first), so the six bytes form a plain big-endian
+// 48-bit number. As with the half-word tests, a round-trip alone cannot catch a
+// byte-order bug (an encode and a decode bug would cancel out), so the raw-bytes
+// test pins the on-disk layout independently of fgetw().
 //
 #include <gtest/gtest.h>
 #include <cstdio>
@@ -40,14 +41,14 @@ TEST(Word, EncodedSize) {
     fclose(f);
 }
 
-// The on-disk image is little-endian: low half-word first, low byte first.
-TEST(Word, RawBytesLittleEndian) {
+// The on-disk image is big-endian: high half-word first, high byte first.
+TEST(Word, RawBytesBigEndian) {
     FILE *f = tmpfile();
     ASSERT_NE(f, nullptr);
     fputw(0x123456789ABCull, f);
     rewind(f);
 
-    const unsigned char expected[6] = { 0xBC, 0x9A, 0x78, 0x56, 0x34, 0x12 };
+    const unsigned char expected[6] = { 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC };
     unsigned char buf[6];
     ASSERT_EQ(fread(buf, 1, 6, f), (size_t)6);
     EXPECT_EQ(getc(f), EOF);  // nothing beyond the word

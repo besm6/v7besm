@@ -2,7 +2,7 @@
 // Unit tests for the symbol table serializers fputsym() / fgetsym().
 //
 // A symbol is stored as: a 1-byte name length, a 1-byte type, a 3-byte
-// little-endian value, then n_len name bytes (no trailing NUL). fgetsym()
+// big-endian value, then n_len name bytes (no trailing NUL). fgetsym()
 // allocates and NUL-terminates n_name, and returns the on-disk entry size
 // (n_len + 5) -- or 1 for an empty (zero-length) terminator entry.
 //
@@ -67,8 +67,8 @@ TEST(Sym, NulTerminated) {
     fclose(f);
 }
 
-// The on-disk layout is: len, type, 3-byte LE value, then the name bytes with
-// no trailing NUL.
+// The on-disk layout is: len, type, 3-byte big-endian value, then the name
+// bytes with no trailing NUL.
 TEST(Sym, RawBytes) {
     char name[] = "ab";
     struct nlist out = sample_sym(name);  // n_len 2, type 043, value 0x123456
@@ -81,7 +81,7 @@ TEST(Sym, RawBytes) {
     const unsigned char expected[] = {
         0x02,                    // n_len
         N_TEXT | N_EXT,          // n_type (043)
-        0x56, 0x34, 0x12,        // n_value = 0x123456, little-endian
+        0x12, 0x34, 0x56,        // n_value = 0x123456, big-endian
         'a', 'b',                // name bytes, no trailing NUL
     };
     unsigned char buf[sizeof(expected)];

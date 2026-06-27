@@ -54,8 +54,8 @@ TEST(ArInt, RoundTrip) {
     unlink(path);
 }
 
-// putint encodes the value in the low half-word and zeroes the high half-word;
-// the 24-bit boundary values round-trip through both readers.
+// putint zeroes the high (first) half-word and encodes the value in the low
+// (second) half-word; the 24-bit boundary values round-trip through both readers.
 TEST(ArInt, Boundaries) {
     const int values[] = { 0, 0xFFFFFF };
     for (int value : values) {
@@ -64,13 +64,13 @@ TEST(ArInt, Boundaries) {
         ASSERT_GE(fd, 0);
         ASSERT_EQ(putint(fd, value), 1);
 
-        // Raw bytes: low half-word holds the value, high half-word is zero.
+        // Raw bytes: high (first) half-word is zero, low half-word holds value.
         ASSERT_EQ(lseek(fd, 0, SEEK_SET), 0);
         unsigned char raw[6];
         ASSERT_EQ(read(fd, raw, 6), 6);
-        EXPECT_EQ(raw[3], 0) << "value 0x" << std::hex << value;
-        EXPECT_EQ(raw[4], 0) << "value 0x" << std::hex << value;
-        EXPECT_EQ(raw[5], 0) << "value 0x" << std::hex << value;
+        EXPECT_EQ(raw[0], 0) << "value 0x" << std::hex << value;
+        EXPECT_EQ(raw[1], 0) << "value 0x" << std::hex << value;
+        EXPECT_EQ(raw[2], 0) << "value 0x" << std::hex << value;
 
         ASSERT_EQ(lseek(fd, 0, SEEK_SET), 0);
         int via_fd = -1;

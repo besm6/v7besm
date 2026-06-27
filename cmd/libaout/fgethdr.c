@@ -3,8 +3,8 @@
 #include "besm6/b.out.h"
 
 // Read an a.out exec header from a stream into *h. Each of the 9 logical
-// fields is stored as one full word (a value half-word followed by a zero
-// padding half-word); fgetw() reads both halves and the padding is discarded.
+// fields is stored as one full word (a zero padding half-word followed by the
+// value half-word); fgetw() reads both halves and the padding is discarded.
 // Always returns 1.
 int fgethdr(register FILE *text, register struct exec *h)
 {

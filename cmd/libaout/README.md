@@ -20,20 +20,23 @@ and the format-level constants are declared in the cross headers:
 The BESM-6 is a 48-bit word machine. The serialization conventions follow from that:
 
 - **Word** = 48 bits = **6 bytes**. **Half-word** = 24 bits = **3 bytes**. Every
-  multi-byte quantity is stored **little-endian**.
+  multi-byte quantity is stored **big-endian** (most significant byte first), natural
+  for the BESM-6.
 - The primitive unit moved by the library is the half-word: `fgeth` reads one and
-  `fputh` writes one (3 bytes).
-- A full **word** is stored as two half-words (6 bytes), low half-word first:
-  `fgetw` reads one and `fputw` writes one (`uword_t`, low 48 bits).
+  `fputh` writes one (3 bytes, most significant byte first).
+- A full **word** is stored as two half-words (6 bytes), high half-word first, so the
+  six bytes form a plain big-endian 48-bit number: `fgetw` reads one and `fputw` writes
+  one (`uword_t`, low 48 bits).
 - An `int`/`long` field is stored as **two half-words (6 bytes == one word)**. Only the
-  low half-word carries the value; the high half-word is written as zero and ignored on
-  read (`fgetint`, `getint`, `putint`).
-- The **exec header** stores its 9 logical fields each as a value half-word followed by
-  a zero padding half-word, so each field begins on a 6-byte word boundary; the whole
-  header is `HDRSZ == 54` bytes (9 words). See `fgethdr`/`fputhdr`.
+  low (second) half-word carries the value; the high (first) half-word is written as
+  zero and ignored on read (`fgetint`, `getint`, `putint`).
+- The **exec header** stores its 9 logical fields each as a zero padding half-word
+  followed by the value half-word, so each field begins on a 6-byte word boundary; the
+  whole header is `HDRSZ == 54` bytes (9 words). See `fgethdr`/`fputhdr`.
 - The **archive member header** is a 46-byte record: 14 name bytes, 2 zero bytes, a
-  two-half-word date, a half-word each for uid/gid/mode (each followed by a discarded
-  high half-word), and a two-half-word size. See `fgetarhdr`/`getarhdr`/`putarhdr`.
+  two-half-word date (high half-word first), a half-word each for uid/gid/mode (each
+  preceded by a discarded high half-word), and a two-half-word size. See
+  `fgetarhdr`/`getarhdr`/`putarhdr`.
   (Note: `ARHDRSZ == 56` in `ar.h` is the in-memory `struct ar_hdr` size, distinct from
   this 46-byte on-disk record.)
 - A **symbol** is: 1 length byte, 1 type byte, a half-word value, then `n_len` name
@@ -55,22 +58,22 @@ members in place. Both flavors share the same byte-level layout described above.
 
 #### `long fgeth(FILE *f)` — [`fgeth.c`](fgeth.c)
 
-Read one 24-bit half-word (3 little-endian bytes) and return it as a `long`. Building
+Read one 24-bit half-word (3 big-endian bytes) and return it as a `long`. Building
 block for all the stream readers.
 
 #### `void fputh(long h, FILE *f)` — [`fputh.c`](fputh.c)
 
-Write the low 24 bits of `h` as one half-word (3 little-endian bytes). Building block for
+Write the low 24 bits of `h` as one half-word (3 big-endian bytes). Building block for
 all the stream writers.
 
 #### `uword_t fgetw(FILE *f)` — [`fgetw.c`](fgetw.c)
 
-Read one full 48-bit word as two little-endian half-words (6 bytes), low half-word first,
+Read one full 48-bit word as two big-endian half-words (6 bytes), high half-word first,
 and return it as a `uword_t`.
 
 #### `void fputw(uword_t w, FILE *f)` — [`fputw.c`](fputw.c)
 
-Write the low 48 bits of `w` as two little-endian half-words (6 bytes), low half-word
+Write the low 48 bits of `w` as two big-endian half-words (6 bytes), high half-word
 first.
 
 ### Exec (object/executable) header
@@ -151,9 +154,9 @@ Returns 1 on success, 0 on a short write.
 GoogleTest unit tests live in [`test/`](test):
 
 - [`test/half_test.cpp`](test/half_test.cpp) — the `fputh`/`fgeth` half-word primitives,
-  including the little-endian byte layout and 24-bit truncation.
+  including the big-endian byte layout and 24-bit truncation.
 - [`test/word_test.cpp`](test/word_test.cpp) — the `fputw`/`fgetw` full-word primitives,
-  including the little-endian byte layout and 48-bit truncation.
+  including the big-endian byte layout and 48-bit truncation.
 - [`test/fhdr_test.cpp`](test/fhdr_test.cpp) — round-trips and raw byte layout for
   `fputhdr`/`fgethdr`.
 - [`test/sym_test.cpp`](test/sym_test.cpp) — `fputsym`/`fgetsym`, covering the encoded

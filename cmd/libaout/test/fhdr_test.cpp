@@ -11,7 +11,7 @@ extern "C" {
 }
 
 // Build a representative header. All field values are kept within 24 bits,
-// because fputh()/fgeth() serialize each field as a 24-bit little-endian
+// because fputh()/fgeth() serialize each field as a 24-bit big-endian
 // half-word (see cmd/libaout/fputh.c), so only the low 24 bits round-trip.
 static struct exec sample_header()
 {
@@ -107,8 +107,8 @@ TEST(Header, MaxFieldValues) {
 }
 
 // The on-disk image is exactly the bytes we expect: for each of the 9 fields,
-// a 3-byte little-endian value followed by 3 zero pad bytes, in header order
-// (magic, const, text, data, bss, abss, syms, entry, flag).
+// 3 zero pad bytes (the high half-word) followed by a 3-byte big-endian value,
+// in header order (magic, const, text, data, bss, abss, syms, entry, flag).
 TEST(Header, RawBytes) {
     struct exec out = sample_header();
     FILE *f = tmpfile();
@@ -119,15 +119,15 @@ TEST(Header, RawBytes) {
 
     // FMAGIC == 0407, a_text == 0x123456, a_entry == 0xABCDE, a_flag == 1.
     const unsigned char expected[HDRSZ] = {
-        0x07, 0x01, 0x00,  0x00, 0x00, 0x00,   // a_magic = 0407
-        0x06, 0x00, 0x00,  0x00, 0x00, 0x00,   // a_const = 6
-        0x56, 0x34, 0x12,  0x00, 0x00, 0x00,   // a_text  = 0x123456
-        0x0C, 0x00, 0x00,  0x00, 0x00, 0x00,   // a_data  = 12
-        0x12, 0x00, 0x00,  0x00, 0x00, 0x00,   // a_bss   = 18
-        0x18, 0x00, 0x00,  0x00, 0x00, 0x00,   // a_abss  = 24
-        0x1E, 0x00, 0x00,  0x00, 0x00, 0x00,   // a_syms  = 30
-        0xDE, 0xBC, 0x0A,  0x00, 0x00, 0x00,   // a_entry = 0xABCDE
-        0x01, 0x00, 0x00,  0x00, 0x00, 0x00,   // a_flag  = RELFLG
+        0x00, 0x00, 0x00,  0x00, 0x01, 0x07,   // a_magic = 0407
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x06,   // a_const = 6
+        0x00, 0x00, 0x00,  0x12, 0x34, 0x56,   // a_text  = 0x123456
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x0C,   // a_data  = 12
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x12,   // a_bss   = 18
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x18,   // a_abss  = 24
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x1E,   // a_syms  = 30
+        0x00, 0x00, 0x00,  0x0A, 0xBC, 0xDE,   // a_entry = 0xABCDE
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x01,   // a_flag  = RELFLG
     };
 
     unsigned char buf[HDRSZ];
@@ -138,7 +138,8 @@ TEST(Header, RawBytes) {
     fclose(f);
 }
 
-// Each 6-byte field group is a 3-byte value followed by 3 zero pad bytes.
+// Each 6-byte field group is 3 zero pad bytes (high half-word) followed by a
+// 3-byte value.
 TEST(Header, PadBytesAreZero) {
     struct exec out = sample_header();
     FILE *f = tmpfile();
@@ -150,9 +151,9 @@ TEST(Header, PadBytesAreZero) {
     unsigned char buf[HDRSZ];
     ASSERT_EQ(fread(buf, 1, HDRSZ, f), (size_t)HDRSZ);
     for (int field = 0; field < HDRSZ / 6; field++) {
-        EXPECT_EQ(buf[field * 6 + 3], 0) << "field " << field;
-        EXPECT_EQ(buf[field * 6 + 4], 0) << "field " << field;
-        EXPECT_EQ(buf[field * 6 + 5], 0) << "field " << field;
+        EXPECT_EQ(buf[field * 6 + 0], 0) << "field " << field;
+        EXPECT_EQ(buf[field * 6 + 1], 0) << "field " << field;
+        EXPECT_EQ(buf[field * 6 + 2], 0) << "field " << field;
     }
     fclose(f);
 }

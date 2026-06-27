@@ -2,7 +2,7 @@
 // Unit tests for the half-word primitives fgeth() / fputh().
 //
 // These are the foundation every FILE*-based serializer is built on: each
-// 24-bit field is written by fputh() and read by fgeth() in little-endian byte
+// 24-bit field is written by fputh() and read by fgeth() in big-endian byte
 // order. Round-trip tests alone cannot catch a byte-order bug here (an encode
 // and a decode bug would cancel out), so the raw-bytes test pins the on-disk
 // layout independently of fgeth().
@@ -37,14 +37,14 @@ TEST(Half, EncodedSize) {
     fclose(f);
 }
 
-// The on-disk image is little-endian: 0x123456 -> {0x56, 0x34, 0x12}.
-TEST(Half, RawBytesLittleEndian) {
+// The on-disk image is big-endian: 0x123456 -> {0x12, 0x34, 0x56}.
+TEST(Half, RawBytesBigEndian) {
     FILE *f = tmpfile();
     ASSERT_NE(f, nullptr);
     fputh(0x123456, f);
     rewind(f);
 
-    const unsigned char expected[3] = { 0x56, 0x34, 0x12 };
+    const unsigned char expected[3] = { 0x12, 0x34, 0x56 };
     unsigned char buf[3];
     ASSERT_EQ(fread(buf, 1, 3, f), (size_t)3);
     EXPECT_EQ(getc(f), EOF);  // nothing beyond the half-word
