@@ -1,6 +1,6 @@
 
 #include <stdio.h>
-#include "besm6/a.out.h"
+#include "besm6/b.out.h"
 #include "besm6/ar.h"
 
 int fgetarhdr(register FILE *f, register struct ar_hdr *h)

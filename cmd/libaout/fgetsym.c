@@ -1,7 +1,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "besm6/a.out.h"
+#include "besm6/b.out.h"
 
 int fgetsym(register FILE *text, register struct nlist *sym)
 {

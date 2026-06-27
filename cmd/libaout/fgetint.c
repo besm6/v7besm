@@ -1,6 +1,6 @@
 
 #include <stdio.h>
-#include "besm6/a.out.h"
+#include "besm6/b.out.h"
 
 int fgetint(register FILE *f, register int *i)
 {

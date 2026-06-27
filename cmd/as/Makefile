@@ -4,13 +4,16 @@
 DESTDIR = /usr/local
 CFLAGS  = -I../../cross -O0 -g -Werror -Wall
 LDFLAGS =
+VPATH   = ../libaout
 
 as      = besm6-as
 
+OBJS    = as.o fgeth.o fputh.o fputhdr.o fputsym.o
+
 all:    as
 
-as:     as.o
-	$(CC) $(LDFLAGS) as.o -o as
+as:     $(OBJS)
+	$(CC) $(LDFLAGS) $(OBJS) -o as
 
 install: $(DESTDIR)/bin/$(as)
 
