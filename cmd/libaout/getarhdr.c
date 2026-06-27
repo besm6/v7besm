@@ -1,50 +1,31 @@
 
-# ifdef CROSS
-#    include "../h/ar.h"
-# else
-#    include <ar.h>
-# endif
+#include <stdio.h>
+#include <unistd.h>
+#include "besm6/b.out.h"
+#include "besm6/ar.h"
 
-# define skip(n) \
-	for (i=0; i<n; i++) if (read (f, &c, 1) != 1) return (0)
+// Decode one 24-bit half-word (3 bytes, little-endian) from a buffer.
+#define GETH(p) ((long)(p)[0] | ((long)(p)[1] << 8) | ((long)(p)[2] << 16))
 
-getarhdr (f, h)
-register f;
-register struct ar_hdr * h;
+// Read an archive header in the same field layout as fgetarhdr():
+// 14 name bytes, 2 zero bytes, then two-half-word date, single-half-word
+// uid/gid/mode (each followed by a discarded half-word) and a two-half-word
+// size -- 46 bytes total.
+int getarhdr(int f, struct ar_hdr *h)
 {
-	register i;
-	char c;
+    unsigned char b[46];
+    register int i;
 
-	for (i=0; i<14; i++)
-		if (read (f, (char *) &h->ar_name[i], 1) != 1)
-			return (0);
-	skip (2);
+    if (read(f, b, sizeof(b)) != (ssize_t) sizeof(b))
+        return 0;
 
-	h->ar_date = 0;
-	for (i=0; i<=24; i+=8) {
-		if (read (f, &c, 1) != 1) return (0);
-		h->ar_date |= ((long) c & 0377) << i;
-	}
-	skip (4);
+    for (i=0; i<14; i++)
+        h->ar_name[i] = b[i];
 
-	if (read (f, &c, 1) != 1) return (0);
-	h->ar_uid = c & 0377;
-	skip (7);
-	if (read (f, &c, 1) != 1) return (0);
-	h->ar_gid = c & 0377;
-	skip (7);
-
-	if (read (f, &c, 1) != 1) return (0);
-	h->ar_mode = c & 0377;
-	if (read (f, &c, 1) != 1) return (0);
-	h->ar_mode |= (c&0377) << 8;
-	skip (6);
-
-	h->ar_size = 0;
-	for (i=0; i<=24; i+=8) {
-		if (read (f, &c, 1) != 1) return (0);
-		h->ar_size |= ((long) c & 0377) << i;
-	}
-	skip (4);
-	return (1);
+    h->ar_date = GETH(b+16) | (GETH(b+19) << 32);
+    h->ar_uid  = GETH(b+22);
+    h->ar_gid  = GETH(b+28);
+    h->ar_mode = GETH(b+34);
+    h->ar_size = GETH(b+40) | (GETH(b+43) << 32);
+    return 1;
 }

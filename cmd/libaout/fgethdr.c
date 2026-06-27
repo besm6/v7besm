@@ -2,6 +2,10 @@
 #include <stdio.h>
 #include "besm6/b.out.h"
 
+// Read an a.out exec header from a stream into *h. Each of the 9 logical
+// fields is stored as a value half-word followed by a zero padding half-word
+// (so each field starts on a 6-byte word boundary); the padding is read and
+// discarded. Always returns 1.
 int fgethdr(register FILE *text, register struct exec *h)
 {
     h->a_magic = fgeth(text);  fgeth(text);

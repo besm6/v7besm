@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include "besm6/b.out.h"
 
+// Write an a.out exec header to a stream, the inverse of fgethdr(). Each of
+// the 9 logical fields is emitted as a value half-word followed by a zero
+// padding half-word, so every field starts on a 6-byte word boundary.
 void fputhdr(const struct exec *filhdr, register FILE *coutb)
 {
     fputh((long) filhdr->a_magic, coutb);

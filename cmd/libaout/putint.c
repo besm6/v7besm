@@ -1,14 +1,13 @@
 
-putint (f, i)
-register f;
-{
-	char c;
-	static char buf[6];
+#include <stdio.h>
+#include <unistd.h>
+#include "besm6/b.out.h"
 
-	c = i & 0377;
-	if (write (f, &c, 1) != 1) return (0);
-	c = (i >> 8) & 0377;
-	if (write (f, &c, 1) != 1) return (0);
-	if (write (f, buf, 6) != 6) return (0);
-	return (1);
+// Write one int as two 24-bit half-words (6 bytes), matching fgetint():
+// the low half-word holds the value, the high half-word is zero.
+int putint(int f, int i)
+{
+    unsigned char b[6] = { i, i >> 8, i >> 16, 0, 0, 0 };
+
+    return write(f, b, sizeof(b)) == (ssize_t) sizeof(b);
 }

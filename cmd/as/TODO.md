@@ -15,3 +15,5 @@ Tasks to do in assembler:
  * AS-7: The archive int codec cmd/libaout/{putint,getint}.c still encodes an int as 2 value bytes + 6 zero pad (an 8-byte "Elbrus-B" word). If the archive word is meant to follow the object word, migrate it to 3 value + 3 pad (6 bytes); deferred with ranlib.
 
  * AS-8: Five cmd/libaout sources (fputran.c, getarhdr.c, getint.c, putarhdr.c, putint.c) are still un-ported K&R: they use implicit-int definitions and old `ranlib.h`-style includes instead of the besm6/ cross headers, so they fail under -Werror and are left out of cmd/libaout/CMakeLists.txt. Port them to ANSI prototypes + besm6/ headers (matching their fget*/fput* siblings) and add them back to the library.
+
+ * AS-9: The helper-declaration comments in cross/besm6/b.out.h are stale. They state that fgeth/fputh "read and write one 4-byte word" and that the helpers are "implemented in cmd/ld/", but the unit is actually a 3-byte half-word (24 bits) and the implementations now live in cmd/libaout. Fix the comment block above the fgeth/fputh/fgethdr/fgetsym/fgetint declarations (and the getint/putint note) to say 3-byte half-word and cmd/libaout.

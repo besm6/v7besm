@@ -3,6 +3,11 @@
 #include "besm6/b.out.h"
 #include "besm6/ar.h"
 
+// Read one archive member header from a stream into *h, decoding the 46-byte
+// on-disk layout shared with getarhdr()/putarhdr(): 14 name bytes, 2 zero
+// bytes, a two-half-word date, a half-word each for uid/gid/mode (every one
+// followed by a discarded high half-word) and a two-half-word size.
+// Returns 1 on success, 0 on EOF or a non-zero byte where padding is expected.
 int fgetarhdr(register FILE *f, register struct ar_hdr *h)
 {
     register int i;

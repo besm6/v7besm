@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include "besm6/b.out.h"
 
+// Write one symbol table entry to a stream, the inverse of fgetsym(): a
+// 1-byte name length, a 1-byte type, a half-word value, then the name bytes
+// (no trailing NUL).
 void fputsym(register const struct nlist *s, register FILE *file)
 {
     register int i;

@@ -4,6 +4,10 @@
 #include "besm6/b.out.h"
 #include "besm6/ranlib.h"
 
+// Read one ranlib (archive symbol-index) entry from a stream into *sym:
+// a 1-byte name length, a half-word archive offset, then that many name bytes.
+// Allocates sym->ran_name and NUL-terminates it.
+// Returns 1 on success, 0 on EOF (zero-length entry), -1 on out of memory.
 int fgetran(register FILE *text, register struct ranlib *sym)
 {
     register int c;

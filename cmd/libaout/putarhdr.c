@@ -1,48 +1,35 @@
 
-# ifdef CROSS
-#    include "../h/ar.h"
-# else
-#    include <ar.h>
-# endif
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include "besm6/b.out.h"
+#include "besm6/ar.h"
 
-# define skip(n) \
-	for (c=i=0; i<n; i++) if (write (f, &c, 1) != 1) return (0)
-
-putarhdr (f, h)
-register f;
-register struct ar_hdr *h;
+// Encode one 24-bit half-word (3 bytes, little-endian) into a buffer.
+static void puth(unsigned char *p, long v)
 {
-	register i;
-	char c;
+    p[0] = v;
+    p[1] = v >> 8;
+    p[2] = v >> 16;
+}
 
-	for (i=0; i<14; i++)
-		if (write (f, (char *) &h->ar_name[i], 1) != 1)
-			return (0);
-	skip (2);
+// Write an archive header in the same field layout getarhdr()/fgetarhdr()
+// read back -- 46 bytes total (see getarhdr.c for the layout).
+int putarhdr(int f, const struct ar_hdr *h)
+{
+    unsigned char b[46];
+    register int i;
 
-	for (i=0; i<=24; i+=8) {
-		c = (h->ar_date >> i) & 0377;
-		if (write (f, &c, 1) != 1) return (0);
-	}
-	skip (4);
+    memset(b, 0, sizeof(b));
+    for (i=0; i<14; i++)
+        b[i] = h->ar_name[i];
 
-	c = h->ar_uid;
-	if (write (f, &c, 1) != 1) return (0);
-	skip (7);
-	c = h->ar_gid;
-	if (write (f, &c, 1) != 1) return (0);
-	skip (7);
-
-	c = h->ar_mode & 0377;
-	if (write (f, &c, 1) != 1) return (0);
-	c = (h->ar_mode >> 8) & 0377;
-	if (write (f, &c, 1) != 1) return (0);
-	skip (6);
-
-	for (i=0; i<=24; i+=8) {
-		c = (h->ar_size >> i) & 0377;
-		if (write (f, &c, 1) != 1) return (0);
-	}
-	skip (4);
-	return (1);
+    puth(b+16, h->ar_date);
+    puth(b+19, h->ar_date >> 32);
+    puth(b+22, h->ar_uid);
+    puth(b+28, h->ar_gid);
+    puth(b+34, h->ar_mode);
+    puth(b+40, h->ar_size);
+    puth(b+43, h->ar_size >> 32);
+    return write(f, b, sizeof(b)) == (ssize_t) sizeof(b);
 }

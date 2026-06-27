@@ -3,9 +3,9 @@
 # Built from the host C compiler: it runs on the host and manipulates BESM-6
 # objects.  Shared by as, ld, ar, nm, size and the rest of the toolchain.
 #
-# The K&R-style sources fputran.c, getarhdr.c, getint.c, putarhdr.c and
-# putint.c are not yet ported to the besm6/ cross headers and ANSI prototypes,
-# so they are left out until modernized.
+# The fd-based ar/ranlib helpers (getint.c, putint.c, getarhdr.c, putarhdr.c)
+# keep their file-descriptor interface for in-place archive rewrites, but now
+# share the BESM-6 half-word on-disk layout used by the fget*() routines.
 #
 add_library(aout STATIC
     fgetarhdr.c
@@ -16,7 +16,12 @@ add_library(aout STATIC
     fgetsym.c
     fputhdr.c
     fputh.c
+    fputran.c
     fputsym.c
+    getarhdr.c
+    getint.c
+    putarhdr.c
+    putint.c
 )
 target_include_directories(aout PUBLIC ${BESM6_CROSS_INCLUDE})
 

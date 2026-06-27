@@ -5,3 +5,4 @@ struct ranlib {
 };
 
 int fgetran(FILE *text, struct ranlib *sym);
+void fputran(const struct ranlib *sym, FILE *file);

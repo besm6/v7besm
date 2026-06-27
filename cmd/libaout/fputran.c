@@ -1,22 +1,17 @@
 
-# include <stdio.h>
+#include <stdio.h>
+#include "besm6/b.out.h"
+#include "besm6/ranlib.h"
 
-# ifdef CROSS
-#    include "../h/ranlib.h"
-# else
-#    include <ranlib.h>
-# endif
-
-extern fputh ();
-
-fputran (s, file)
-register struct ranlib *s;
-register FILE *file;
+// Write one ranlib (archive symbol-index) entry to a stream, the inverse of
+// fgetran(): a 1-byte name length, a half-word archive offset, then the name
+// bytes (no trailing NUL).
+void fputran(register const struct ranlib *s, register FILE *file)
 {
-	register i;
+    register int i;
 
-	putc (s->ran_len, file);
-	fputh (s->ran_off, file);
-	for (i=0; i<s->ran_len; i++)
-		putc (s->ran_name[i], file);
+    putc(s->ran_len, file);
+    fputh(s->ran_off, file);
+    for (i=0; i<s->ran_len; i++)
+        putc(s->ran_name[i], file);
 }

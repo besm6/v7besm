@@ -3,6 +3,11 @@
 #include <stdlib.h>
 #include "besm6/b.out.h"
 
+// Read one symbol table entry from a stream into *sym: a 1-byte name length,
+// a 1-byte type, a half-word value, then that many name bytes. Allocates
+// sym->n_name and NUL-terminates it.
+// Returns the on-disk entry size in bytes (n_len + 5) on success, 1 for an
+// empty entry / EOF (zero-length name), or 0 on out of memory.
 int fgetsym(register FILE *text, register struct nlist *sym)
 {
     register int c;
