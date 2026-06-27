@@ -88,16 +88,16 @@ TEST(ArInt, Boundaries) {
     }
 }
 
-// ar_date / ar_size are 64-bit, split into two 24-bit half-words 32 bits apart.
-// Use values whose high half-word is non-zero so the reconstruction is tested.
-TEST(ArHdr, SixtyFourBitSplit) {
+// ar_date / ar_size are full 48-bit big-endian words. Use values that exercise
+// all 48 bits -- including bits 24-31, which the old two-half-word split dropped.
+TEST(ArHdr, DateSizeFullWord) {
     char path[L_tmpnam + 16];
     int fd = make_tmp(path);
     ASSERT_GE(fd, 0);
 
     struct ar_hdr out{};
-    out.ar_date = 0x0000000300000002L;  // low 24 bits = 2, high half-word = 3
-    out.ar_size = 0x0000000500000004L;
+    out.ar_date = 0x123456789ABCL;
+    out.ar_size = 0x0FEDCBA98765L;
     ASSERT_EQ(putarhdr(fd, &out), 1);
 
     ASSERT_EQ(lseek(fd, 0, SEEK_SET), 0);

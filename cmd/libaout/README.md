@@ -33,9 +33,9 @@ The BESM-6 is a 48-bit word machine. The serialization conventions follow from t
 - The **exec header** stores its 9 logical fields each as a zero padding half-word
   followed by the value half-word, so each field begins on a 6-byte word boundary; the
   whole header is `HDRSZ == 54` bytes (9 words). See `fgethdr`/`fputhdr`.
-- The **archive member header** is a 46-byte record: 14 name bytes, 2 zero bytes, a
-  two-half-word date (high half-word first), a half-word each for uid/gid/mode (each
-  preceded by a discarded high half-word), and a two-half-word size. See
+- The **archive member header** is a 46-byte record: 14 name bytes, 2 zero bytes, then
+  one full 48-bit word each for date, uid, gid, mode and size (for uid/gid/mode the
+  value is the low half-word, preceded by a discarded high half-word). See
   `fgetarhdr`/`getarhdr`/`putarhdr`.
   (Note: `ARHDRSZ == 56` in `ar.h` is the in-memory `struct ar_hdr` size, distinct from
   this 46-byte on-disk record.)
@@ -162,7 +162,7 @@ GoogleTest unit tests live in [`test/`](test):
 - [`test/sym_test.cpp`](test/sym_test.cpp) — `fputsym`/`fgetsym`, covering the encoded
   size, NUL-termination, the empty-entry terminator and sequential reads.
 - [`test/ar_test.cpp`](test/ar_test.cpp) — the int and archive/ranlib helpers, including
-  the 64-bit date/size split, non-zero padding rejection and EOF handling.
+  the full-word (48-bit) date/size fields, non-zero padding rejection and EOF handling.
 
 They are built as the `libaout_test` target (see [`test/CMakeLists.txt`](test/CMakeLists.txt))
 and run via CTest.
