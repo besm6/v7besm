@@ -1,14 +1,88 @@
-Port of Unix v7 to BESM-6 mainframe.
+# Unix v7 for the BESM-6
 
-We already have a cross-compiler for BESM-6: https://github.com/besm6/c-compiler/
+A port of Seventh Edition Unix to the **BESM-6**, a Soviet 48-bit-word mainframe from
+the 1960s.
 
-There is also an authentic simulator of the BESM-6 hardware: https://github.com/besm6/simh/tree/master/BESM6/
+## Background
 
-We use the above software to port Unix v7 to BESM-6.
+The BESM-6 was the most widely used Soviet high-performance computer of its era — a
+word-addressed machine with a 48-bit word and its own native instruction set and
+floating-point format. This project revives Research Unix v7 on it, both as a piece of
+computing archaeology and as a working system for the BESM-6 hardware simulator. The
+machine's architecture differs from anything modern; the full details live in
+[`doc/`](doc/).
 
-The nearest goals:
- * Create assembler in AT&T style with Madlen mnemonics (port from Elbrous-B)
- * Create linker (port from Elbrous-B)
- * Create libc library
- * Build and link the kernel
- * Develop drivers of required peripherals for the kernel
+## Approach
+
+The port proceeds in two stages:
+
+1. **Now — validate the C as i486.** The v7 kernel (derived from Robert Nordier's
+   [v7/x86](http://www.nordier.com/v7x86/) port) is compiled as a 32-bit i486 ELF binary
+   with modern Clang and strict warnings. This shakes the decades-old C into clean,
+   warning-free shape before retargeting.
+2. **Goal — retarget to the BESM-6.** Build the kernel for real BESM-6 code using this
+   project's own toolchain together with the external [cross-compiler](#related-projects),
+   and run it on the [SIMH simulator](#related-projects).
+
+## Repository layout
+
+```text
+kernel/    v7 kernel sources and device drivers (kernel/dev/)
+include/   v7 system headers (sys/) and the b.out.h object-file format
+cmd/       BESM-6 toolchain: as, ld, cpp, disasm
+doc/       BESM-6 architecture references
+```
+
+## Components and status
+
+| Component                     | Location      | Status                    |
+|-------------------------------|---------------|---------------------------|
+| Assembler (AT&T / Madlen)     | `cmd/as`      | ✔ exists                  |
+| Linker + binutils             | `cmd/ld`      | ✔ exists                  |
+| C preprocessor                | `cmd/cpp`     | ✔ exists                  |
+| Disassembler                  | `cmd/disasm`  | ✔ exists                  |
+| Kernel (i486 validation)      | `kernel/`     | ✔ builds                  |
+| libc library                  | —             | ☐ to do                   |
+| Build & link kernel for BESM-6| —             | ☐ to do                   |
+| Peripheral drivers            | `kernel/dev/` | ◐ in progress             |
+
+## Building
+
+There is no top-level build — each component is built from its own directory.
+
+**Kernel**
+
+```sh
+cd kernel && make          # for now produces `unix` (i486 ELF) and `unix.nm`
+```
+
+**Toolchain:**
+
+```sh
+cd cmd/as     && make      # assembler
+cd cmd/ld     && make      # linker
+cd cmd/cpp    && make      # C preprocessor
+cd cmd/disasm && make      # disassembler
+```
+
+See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail.
+
+## Documentation
+
+- [doc/Besm6_Instruction_Set.md](doc/Besm6_Instruction_Set.md) — opcodes, registers, and
+  instruction encoding.
+- [doc/Besm6_Calling_Conventions.md](doc/Besm6_Calling_Conventions.md) — the C ABI:
+  argument passing, registers, and return linkage.
+- [doc/Besm6_Data_Representation.md](doc/Besm6_Data_Representation.md) — how C scalar types
+  are laid out in a 48-bit word.
+
+## Related projects
+
+- [besm6/c-compiler](https://github.com/besm6/c-compiler/) — C cross-compiler for the BESM-6.
+- [besm6/simh](https://github.com/besm6/simh/tree/master/BESM6/) — authentic BESM-6 hardware
+  simulator.
+
+## License
+
+The Unix v7 portions are distributed under the Caldera BSD-style license. See
+[COPYRIGHT](COPYRIGHT) for the full notice.
