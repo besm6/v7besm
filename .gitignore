@@ -9,3 +9,4 @@
 *.s-
 
 cmd/as/as
+tmp/

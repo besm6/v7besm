@@ -68,9 +68,9 @@
 #define TYPESEGM(s) typesegm[s] // symbol type to segment number
 #define SEGMREL(s)  segmrel[s]  // segment number to relocation type
 
-#define EMPCOM 0x3a00000L // empty instruction - filler
-#define UTCCOM 0x3a00000L // the <> instruction
-#define WTCCOM 0x3b00000L // the [] instruction
+#define EMPCOM 02200000L // empty instruction - filler (utc 0)
+#define UTCCOM 02200000L // the <> instruction (utc, opcode 022)
+#define WTCCOM 02300000L // the [] instruction (wtc, opcode 023)
 
 // convert an instruction into a component one
 
