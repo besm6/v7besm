@@ -23,6 +23,8 @@ The BESM-6 is a 48-bit word machine. The serialization conventions follow from t
   multi-byte quantity is stored **little-endian**.
 - The primitive unit moved by the library is the half-word: `fgeth` reads one and
   `fputh` writes one (3 bytes).
+- A full **word** is stored as two half-words (6 bytes), low half-word first:
+  `fgetw` reads one and `fputw` writes one (`uword_t`, low 48 bits).
 - An `int`/`long` field is stored as **two half-words (6 bytes == one word)**. Only the
   low half-word carries the value; the high half-word is written as zero and ignored on
   read (`fgetint`, `getint`, `putint`).
@@ -49,7 +51,7 @@ members in place. Both flavors share the same byte-level layout described above.
 
 ## Function reference
 
-### Primitive half-word I/O
+### Primitive half-word / word I/O
 
 #### `long fgeth(FILE *f)` — [`fgeth.c`](fgeth.c)
 
@@ -60,6 +62,16 @@ block for all the stream readers.
 
 Write the low 24 bits of `h` as one half-word (3 little-endian bytes). Building block for
 all the stream writers.
+
+#### `uword_t fgetw(FILE *f)` — [`fgetw.c`](fgetw.c)
+
+Read one full 48-bit word as two little-endian half-words (6 bytes), low half-word first,
+and return it as a `uword_t`.
+
+#### `void fputw(uword_t w, FILE *f)` — [`fputw.c`](fputw.c)
+
+Write the low 48 bits of `w` as two little-endian half-words (6 bytes), low half-word
+first.
 
 ### Exec (object/executable) header
 
@@ -140,6 +152,8 @@ GoogleTest unit tests live in [`test/`](test):
 
 - [`test/half_test.cpp`](test/half_test.cpp) — the `fputh`/`fgeth` half-word primitives,
   including the little-endian byte layout and 24-bit truncation.
+- [`test/word_test.cpp`](test/word_test.cpp) — the `fputw`/`fgetw` full-word primitives,
+  including the little-endian byte layout and 48-bit truncation.
 - [`test/fhdr_test.cpp`](test/fhdr_test.cpp) — round-trips and raw byte layout for
   `fputhdr`/`fgethdr`.
 - [`test/sym_test.cpp`](test/sym_test.cpp) — `fputsym`/`fgetsym`, covering the encoded

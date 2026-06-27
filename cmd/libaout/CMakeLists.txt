@@ -11,11 +11,13 @@ add_library(aout STATIC
     fgetarhdr.c
     fgethdr.c
     fgeth.c
+    fgetw.c
     fgetint.c
     fgetran.c
     fgetsym.c
     fputhdr.c
     fputh.c
+    fputw.c
     fputran.c
     fputsym.c
     getarhdr.c

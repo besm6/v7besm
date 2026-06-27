@@ -168,6 +168,8 @@ struct nlist {
  */
 long fgeth(FILE *f);
 void fputh(long h, FILE *f);
+uword_t fgetw(FILE *f);
+void fputw(uword_t w, FILE *f);
 int  fgethdr(FILE *f, struct exec *h);
 void fputhdr(const struct exec *h, FILE *f);
 int fgetsym(FILE *text, struct nlist *sym);
