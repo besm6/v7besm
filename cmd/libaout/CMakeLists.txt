@@ -19,3 +19,5 @@ add_library(aout STATIC
     fputsym.c
 )
 target_include_directories(aout PUBLIC ${BESM6_CROSS_INCLUDE})
+
+add_subdirectory(test)
