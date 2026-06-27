@@ -40,9 +40,9 @@ TEST(ArInt, RoundTrip) {
     ASSERT_EQ(putint(fd, value), 1);
 
     ASSERT_EQ(lseek(fd, 0, SEEK_SET), 0);
-    int via_fd = 0;
+    uword_t via_fd = 0;
     ASSERT_EQ(getint(fd, &via_fd), 1);
-    EXPECT_EQ(via_fd, value);
+    EXPECT_EQ(via_fd, static_cast<uword_t>(value));
     close(fd);
 
     FILE *f = std::fopen(path, "rb");
@@ -73,9 +73,9 @@ TEST(ArInt, Boundaries) {
         EXPECT_EQ(raw[2], 0) << "value 0x" << std::hex << value;
 
         ASSERT_EQ(lseek(fd, 0, SEEK_SET), 0);
-        int via_fd = -1;
+        uword_t via_fd = ~0ULL;
         ASSERT_EQ(getint(fd, &via_fd), 1);
-        EXPECT_EQ(via_fd, value);
+        EXPECT_EQ(via_fd, static_cast<uword_t>(value));
         close(fd);
 
         FILE *f = std::fopen(path, "rb");

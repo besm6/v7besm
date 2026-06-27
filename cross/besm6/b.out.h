@@ -180,5 +180,5 @@ int fgetint(FILE *f, int *i);
  * File-descriptor counterparts used by ar/ranlib for in-place archive I/O.
  * They use the same 6-byte (two half-word) on-disk layout as fgetint().
  */
-int getint(int f, int *i);
-int putint(int f, int i);
+int getint(int f, uword_t *i);
+int putint(int f, uword_t i);

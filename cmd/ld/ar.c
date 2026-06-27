@@ -380,7 +380,7 @@ init () {
 }
 
 getaf () {
-	int     mbuf;
+	uword_t mbuf;
 
 	af = open (arnam, 0);
 	if (af < 0)
@@ -396,7 +396,7 @@ getaf () {
 }
 
 getqf () {
-	int     mbuf;
+	uword_t mbuf;
 
 	if ((qf = open (arnam, 2)) < 0) {
 		if (!flg['c' - 'a'])
