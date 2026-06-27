@@ -1,0 +1,174 @@
+/*
+ *      BESM-6 a.out object / executable file format.
+ *
+ *      This is the on-disk layout shared by the whole toolchain: the assembler
+ *      (cmd/as) emits it, the linker and binutils (cmd/ld, plus ar/nm/size/...)
+ *      read and write it, and the disassembler (cmd/disasm) reads it.
+ *
+ *      A file consists of a fixed header, the segment images, optional
+ *      relocation records, the symbol table and the string table.
+ *
+ *      Because the BESM-6 is a 48-bit word machine, all sizes and offsets here
+ *      are counted in bytes but are always a multiple of 8 (one word == 8
+ *      bytes; see W in cmd/ld/ld.c). On disk every multi-byte quantity is
+ *      stored little-endian.
+ *
+ *      Header (9 logical words):
+ *                              a_magic  magic number 0407 / 0410 / 0411
+ *                              a_const  size of the const segment   )
+ *                              a_text   size of the text segment    )
+ *                              a_data   size of the data segment    ) in bytes,
+ *                              a_bss    size of the bss segment      ) multiple
+ *                              a_abss   size of the abss segment    ) of 8
+ *                              a_syms   size of the symbol table    )
+ *                              a_entry  entry-point address (word index)
+ *                              a_flag   flags (relocatable / const-in-data)
+ *
+ *      The struct below has only 9 meaningful fields, yet the header occupies
+ *      HDRSZ == 72 bytes == 9 words. Each field is stored as a 4-byte
+ *      little-endian value followed by 4 zero padding bytes, so that every
+ *      field starts on an 8-byte (one-word) boundary and the segment data that
+ *      follows begins at a clean word offset. See fgethdr()/fputhdr() in
+ *      cmd/ld/ for the exact encoding.
+ *
+ *      File layout (byte offsets), where the relocation sections are present
+ *      only when the file is still relocatable (a_flag & RELFLG):
+ *
+ *      header:                 0
+ *      const:                  72
+ *      text:                   72 + constsize
+ *      data:                   72 + constsize + textsize
+ *      const relocation:       72 + constsize + textsize + datasize
+ *      text relocation:        72 + 2*constsize + textsize + datasize
+ *      data relocation:        72 + 2*constsize + 2*textsize + datasize
+ *      symbol table:           72 + 2*constsize + 2*textsize + 2*datasize
+ *
+ */
+
+/*
+ * a.out file header.
+ *
+ * a_magic distinguishes the file kind (see FMAGIC/NMAGIC/AMAGIC).
+ * The five segment-size fields and a_syms are byte counts, each a multiple of 8.
+ * a_entry is the program entry point as a word address.
+ * a_flag carries the RELFLG / TCDFLG bits.
+ */
+struct exec {
+    int     a_magic;            /* magic number */
+    long    a_const;            /* const segment size, bytes (multiple of 8) */
+    long    a_text;             /* text (code) segment size, bytes */
+    long    a_data;             /* initialized data segment size, bytes */
+    long    a_bss;              /* uninitialized data (bss) size, bytes */
+    long    a_abss;             /* absolute bss size, bytes */
+    long    a_syms;             /* symbol table size, bytes */
+    long    a_entry;            /* entry point, word address */
+    short   a_flag;             /* flags: RELFLG, TCDFLG */
+};
+
+/*
+ * Symbol table entry.
+ *
+ * On disk a symbol is stored as: one byte name length, one byte type,
+ * a 4-byte little-endian value, then n_len name bytes (no trailing NUL).
+ * In memory n_name points at a separately allocated NUL-terminated copy.
+ * See fgetsym()/fputsym() in cmd/ld/.
+ */
+struct nlist {
+    short   n_len;      /* length of the name in bytes */
+    short   n_type;     /* symbol type (N_* values, with the N_EXT bit) */
+    long    n_value;    /* symbol value (address or constant) */
+    char *  n_name;     /* pointer to the name */
+};
+
+/*
+ * Header flags (a_flag).
+ */
+#define RELFLG  1       /* file still contains relocation records;
+                         * cleared means fully linked / non-relocatable */
+#define TCDFLG  2       /* const segment is folded into the data segment */
+
+#define HDRSZ   72      /* header size in bytes (9 words of 8 bytes) */
+
+/*
+ * Magic numbers (a_magic). Only FMAGIC and NMAGIC are accepted on input
+ * (see BADMAG below).
+ */
+#define FMAGIC  0407    /* standard relocatable / impure executable */
+#define NMAGIC  0410    /* read-only (pure) text segment */
+#define AMAGIC  0411    /* text segment in a separate address space */
+
+/*
+ * Symbol types (n_type).
+ *
+ * The low five bits (N_TYPE) hold the type; N_EXT marks an external (global)
+ * symbol. The type names the segment the symbol belongs to.
+ */
+#define N_EXT   040     /* external (global) symbol bit */
+#define N_TYPE  037     /* mask selecting the type bits */
+#define N_FN    037     /* file name symbol (debug) */
+#define N_UNDF  00      /* undefined / unresolved external reference */
+#define N_ABS   01      /* absolute (address-independent) value */
+#define N_CONST 02      /* const segment */
+#define N_TEXT  03      /* text (code) segment */
+#define N_DATA  04      /* initialized data segment */
+#define N_BSS   05      /* uninitialized data (bss) segment */
+#define N_ABSS  06      /* absolute bss segment */
+#define N_STRNG 07      /* string constant (used by as) */
+#define N_COMM  010     /* common block (becomes bss when linked) */
+#define N_ACOMM 011     /* absolute common (becomes abss when linked) */
+
+/*
+ * Relocation types.
+ *
+ * A relocation record's low bits name what the patched reference resolves
+ * against: RABS for an absolute value, RCONST/RTEXT/RDATA/RBSS/RABSS for a
+ * segment-relative reference, or REXT for an external symbol. For REXT the
+ * symbol's index is packed into the upper bits of the record (see
+ * RGETIX/RPUTIX). REXT also doubles as a bit mask.
+ */
+#define RABS    0       /* absolute - no relocation */
+#define RCONST  010     /* relative to the const segment */
+#define RTEXT   020     /* relative to the text segment */
+#define RDATA   030     /* relative to the data segment */
+#define RBSS    040     /* relative to the bss segment */
+#define RABSS   050     /* relative to the abss segment */
+#define RSTRNG  060     /* string constant (used by as) */
+#define REXT    070     /* external symbol reference; also a bit mask */
+
+/*
+ * Address-field modifiers, stored in the low bits alongside the relocation
+ * type. They tell the linker which width of the instruction's address field to
+ * patch and how to shift the relocated value (see relhalf() in cmd/ld/ld.c).
+ */
+#define RSHIFT  04      /* short address field, value shifted right by 12 */
+#define RTRUNC  05      /* short address field, shift truncated to 12 bits */
+#define RLONG   06      /* long (full) address field */
+#define RSHORT  07      /* short address field; also a bit mask */
+
+#define RGETIX(h)   ((h)>>6)            /* extract symbol index from a record */
+#define RPUTIX(h)   ((long)(h)<<6)      /* pack symbol index into a record */
+
+/*
+ * Macros computing positions within the file from the header.
+ */
+#define N_TXTOFF(x) HDRSZ                                                /* offset of the segment images */
+#define N_SYMOFF(x) (N_TXTOFF(x) + (x).a_const + (x).a_text + (x).a_data)/* offset of the symbol table */
+#define N_STROFF(x) (N_SYMOFF(x) + (x).a_syms)                          /* offset of the string table */
+
+#define BADMAG(x)   ((x).a_magic != FMAGIC && (x).a_magic != NMAGIC)
+#define N_BADMAG    BADMAG
+#define FORMAT      "%07lx" /* printf format for a symbol value */
+#define N_FORMAT    FORMAT
+
+/*
+ * Little-endian I/O helpers for the format above (implemented in cmd/ld/):
+ * fgeth/fputh read and write one 4-byte word; fgethdr/fputhdr a whole header;
+ * fgetsym/fputsym one symbol table entry; fgetint a 4-byte integer.
+ */
+long fgeth(FILE *f);
+void fputh(long h, FILE *f);
+int  fgethdr(FILE *f, struct exec *h);
+void fputhdr(struct exec *h, FILE *f);
+int fgetsym(FILE *text, struct nlist *sym);
+void fputsym(struct nlist *s, FILE *f);
+int fgetint(FILE *f, int *i);

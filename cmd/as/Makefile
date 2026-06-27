@@ -2,7 +2,7 @@
 # Assembler for BESM-6
 #
 DESTDIR = /usr/local
-CFLAGS  = -I.. -O0 -Werror #-Wall
+CFLAGS  = -I../../cross -O0 -g -Werror -Wall
 LDFLAGS =
 
 as      = besm6-as
