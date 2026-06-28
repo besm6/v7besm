@@ -1,36 +1,18 @@
 //
 // Assembler for BESM-6.
-// Driver: global state, command line and pass sequencing.
+// Engine: global state and pass sequencing.  The command-line front end lives
+// in main.c; uerror() is supplied by whoever links this library (main.c for the
+// CLI, the test harness for unit tests).
 //
 #include "as.h"
 
-#include <stdarg.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 
 struct assembler as = {
     .outfile   = "a.out",
     .tfilename = "/tmp/asXXXXXX",
 };
-
-// Fatal error message.
-noreturn void uerror(char *fmt, ...)
-{
-    va_list ap;
-
-    va_start(ap, fmt);
-    fprintf(stderr, "as: ");
-    if (as.infile)
-        fprintf(stderr, "%s, ", as.infile);
-    if (as.line)
-        fprintf(stderr, "%d: ", as.line);
-    vfprintf(stderr, fmt, ap);
-    va_end(ap);
-    fprintf(stderr, "\n");
-    exit(1);
-}
 
 static void startup(void)
 {
@@ -53,79 +35,27 @@ static void startup(void)
     as.line = 1;
 }
 
-static void usage(void)
-{
-    fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "    b6as [-uaxXd] [-o outfile] [infile]\n");
-    fprintf(stderr, "Options:\n");
-    fprintf(stderr, "    -o filename     Set output file name, default stdout\n");
-    fprintf(stderr, "    -u              Treat undefined names as error\n");
-    fprintf(stderr, "    -a              Don't align on word boundary\n");
-    fprintf(stderr, "    -x              Discard local symbols\n");
-    fprintf(stderr, "    -X              Discard locals starting with 'L' or '.'\n");
-    fprintf(stderr, "    -d              Debug mode\n");
-    exit(1);
-}
-
-int main(int argc, char *argv[])
+int assemble(const struct assembler_args *args)
 {
     int i;
-    char *cp;
-    int ofile = 0;
+    int saved_in, saved_out;
 
-    // parse flags
+    // Copy options into the global state.
+    as.infile  = args->infile;
+    as.outfile = args->outfile ? args->outfile : (char *)"a.out";
+    as.debug   = args->debug;
+    as.xflags  = args->xflags;
+    as.Xflag   = args->Xflag;
+    as.uflag   = args->uflag;
+    as.aflag   = args->aflag;
 
-    for (i = 1; i < argc; i++) {
-        switch (argv[i][0]) {
-        case '-':
-            for (cp = argv[i] + 1; *cp; cp++) {
-                switch (*cp) {
-                case 'd': // debug flag
-                    as.debug++;
-                    break;
-                case 'X':
-                    as.Xflag++;
-                case 'x':
-                    as.xflags++;
-                    break;
-                case 'a': // don't align on word boundary
-                    as.aflag++;
-                    break;
-                case 'u':
-                    as.uflag++;
-                    break;
-                case 'o': // output file
-                    if (ofile)
-                        uerror("too many -o flags");
-                    ofile = 1;
-                    if (cp[1]) {
-                        // -ofile
-                        as.outfile = cp + 1;
-                        while (*++cp)
-                            ;
-                        --cp;
-                    } else if (i + 1 < argc)
-                        // -o file
-                        as.outfile = argv[++i];
-                    break;
-                default:
-                    fprintf(stderr, "Unknown option: %s\n", cp);
-                    usage();
-                }
-            }
-            break;
-        default:
-            if (as.infile)
-                uerror("too many input files");
-            as.infile = argv[i];
-            break;
-        }
-    }
-    if (!as.infile && isatty(0))
-        usage();
+    // Save the original stdin/stdout so they can be restored when done; the
+    // passes read from stdin and write to stdout, so we redirect them here but
+    // must not leave them redirected for a caller (e.g. a test process).
+    saved_in  = dup(fileno(stdin));
+    saved_out = dup(fileno(stdout));
 
     // set up input/output
-
     if (as.infile && !freopen(as.infile, "r", stdin))
         uerror("cannot open %s", as.infile);
     if (!freopen(as.outfile, "w", stdout))
@@ -142,5 +72,18 @@ int main(int argc, char *argv[])
     pass2();      // second pass
     makereloc();  // write relocation files
     makesymtab(); // write the symbol table
+
+    // Restore the original stdin/stdout.
+    fflush(stdout);
+    if (saved_in >= 0) {
+        dup2(saved_in, fileno(stdin));
+        close(saved_in);
+        clearerr(stdin);
+    }
+    if (saved_out >= 0) {
+        dup2(saved_out, fileno(stdout));
+        close(saved_out);
+        clearerr(stdout);
+    }
     return 0;
 }

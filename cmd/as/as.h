@@ -4,6 +4,7 @@
 //
 #include <stdnoreturn.h>
 
+#include "assemble.h"
 #include "besm6/b.out.h"
 
 #define W 6 // word length in bytes
