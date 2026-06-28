@@ -23,14 +23,14 @@ char msg;
 
 initmsg ()
 {
-	register char *p;
+	char *p;
 	extern char *getenv ();
 
 	msg = (p = getenv ("MSG")) && *p == 'r';
 }
 
 main (argc, argv)
-register char **argv;
+char **argv;
 {
 	int yesarg;     /* были ли параметры - имена файлов */
 
@@ -58,11 +58,11 @@ register char **argv;
 }
 
 size (fname)
-register char *fname;
+char *fname;
 {
 	struct exec buf;
 	long sum;
-	register FILE *f;
+	FILE *f;
 
 	if ((f = fopen(fname, "r"))==NULL) {
 		printf (MSG ("size: %s not found\n",

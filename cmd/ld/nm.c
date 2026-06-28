@@ -34,7 +34,7 @@ char msg;
 
 initmsg ()
 {
-	register char *p;
+	char *p;
 	extern char *getenv ();
 
 	msg = (p = getenv ("MSG")) && *p == 'r';
@@ -121,11 +121,11 @@ nm (name, narg)
 char * name;
 {
 	struct nlist sym;                       /* current symbol */
-	register struct nlist *symp = NULL;     /* sym table */
+	struct nlist *symp = NULL;     /* sym table */
 	int symplen = 0;                        /* sym table length */
-	register symindex = 0;                  /* next free table entry */
-	register c;
-	register long n;
+	symindex = 0;                  /* next free table entry */
+	c;
+	long n;
 
 	n = hdr.a_const + hdr.a_text + hdr.a_data;
 	if (! (hdr.a_flag & RELFLG)) n *= 2;
@@ -223,12 +223,12 @@ char * name;
 }
 
 compare (p1, p2)
-register struct nlist *p1, *p2;
+struct nlist *p1, *p2;
 {
-	register rez;
+	rez;
 
 	if (numsort_flg) {
-		register d = p1->n_value - p2->n_value;
+		d = p1->n_value - p2->n_value;
 
 		if (d>0)
 			rez = 1;

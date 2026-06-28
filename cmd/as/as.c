@@ -56,7 +56,7 @@ noreturn void uerror(char *fmt, ...)
 
 static void startup(void)
 {
-    register short i;
+    short i;
 
     int fd = mkstemp(tfilename);
     if (fd == -1) {
@@ -91,8 +91,8 @@ static void usage(void)
 
 int main(int argc, char *argv[])
 {
-    register short i;
-    register char *cp;
+    short i;
+    char *cp;
     int ofile = 0;
 
     // parse flags

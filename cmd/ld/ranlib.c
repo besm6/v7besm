@@ -41,11 +41,11 @@ main (argc, argv)
 char **argv;
 {
 	char cmdbuf [BUFSIZ];
-	register justtouch = 0;
+	justtouch = 0;
 
 	/* check for the "-t" flag" */
 	for (; argc>1 && argv[1][0]=='-'; --argc, ++argv) {
-		register char *p;
+		char *p;
 
 		for (p=argv[1]+1; *p; ++p) switch (*p) {
 		case 't':
@@ -71,7 +71,7 @@ char **argv;
 			continue;
 		}
 		if (justtouch) {
-			register int len;
+			int len;
 
 			fseek (fi, (long) W, 0);
 			if (! fgetarhdr (fi, &archdr)) {
@@ -96,7 +96,7 @@ char **argv;
 			continue;
 		}
 		do {
-			register n;
+			n;
 			struct nlist sym;
 
 			if (! strncmp (tempnm, archdr.ar_name, sizeof (archdr.ar_name)))
@@ -166,7 +166,7 @@ FILE *af;
 fixdate (s)             /* patch time */
 char *s;
 {
-	register fd;
+	fd;
 
 	fd = open (s, 2);
 	if (fd < 0) {
@@ -184,8 +184,8 @@ char *s;
 putrantab (f)
 FILE *f;
 {
-	register struct ranlib *p;
-	register n;
+	struct ranlib *p;
+	n;
 
 	n = 0;
 	for (p=rantab; p<rantab+tnum; ++p) {

@@ -16,7 +16,7 @@
 int getarhdr(int f, struct ar_hdr *h)
 {
     unsigned char b[60];
-    register int i;
+    int i;
 
     if (read(f, b, sizeof(b)) != (ssize_t) sizeof(b))
         return 0;

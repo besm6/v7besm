@@ -231,14 +231,14 @@ void dump()
      * if it has to do an unaligned copy.  thus we buffer.  this silly loop
      * is 15% of the total time, thus even the 'putc' macro is too slow.
      */
-    register char *p1;
-    register FILE *f;
+    char *p1;
+    FILE *f;
     if ((p1 = outp) == inp || flslvl != 0)
         return;
 #if tgp
 #define MAXOUT 80
     if (!tgpscan) { /* scan again to insure <= MAXOUT chars between linefeeds */
-        register char c, *pblank, *p2;
+        char c, *pblank, *p2;
         char savc, stopc, brk;
         tgpscan = 1;
         brk = stopc = pblank = 0;
@@ -276,13 +276,13 @@ void dump()
     outp = p1;
 }
 
-char *refill(register char *p)
+char *refill(char *p)
 {
     /* dump buffer.  save chars from inp to p.  read into buffer at pbuf,
      * contiguous with p.  update pointers, return new p.
      */
-    register char *np, *op;
-    register int ninbuf;
+    char *np, *op;
+    int ninbuf;
 
     dump();
     np = pbuf - (p - inp);
@@ -352,9 +352,9 @@ char *refill(register char *p)
 #define BEG 0
 #define LF  1
 
-char *cotoken(register char *p)
+char *cotoken(char *p)
 {
-    register int c, i;
+    int c, i;
     char quoc;
     static int state = BEG;
 
@@ -711,7 +711,7 @@ char *cotoken(register char *p)
 /*
  * get next non-blank token
  */
-char *skipbl(register char *p)
+char *skipbl(char *p)
 {
     do {
         outp = inp = p;
@@ -724,10 +724,10 @@ char *skipbl(register char *p)
  * take <= BUFSIZ chars from right end of buffer and put them on instack .
  * slide rest of buffer to the right, update pointers, return new p.
  */
-char *unfill(register char *p)
+char *unfill(char *p)
 {
-    register char *np, *op;
-    register int d;
+    char *np, *op;
+    int d;
 
     if (mactop >= MAXFRE) {
         pperror("%s: too much pushback", macnam);
@@ -777,10 +777,10 @@ char *unfill(register char *p)
     return (p + d);
 }
 
-char *doincl(register char *p)
+char *doincl(char *p)
 {
     int filok, inctype;
-    register char *cp;
+    char *cp;
     char **dirp, *nfil;
     char filname[BUFSIZ];
 
@@ -868,9 +868,9 @@ char *doincl(register char *p)
     return (p);
 }
 
-int equfrm(register char *a, register char *p1, register char *p2)
+int equfrm(char *a, char *p1, char *p2)
 {
-    register char c;
+    char c;
     int flag;
     c    = *p2;
     *p2  = '\0';
@@ -884,7 +884,7 @@ int equfrm(register char *a, register char *p1, register char *p2)
  */
 char *dodef(char *p)
 {
-    register char *pin, *psav, *cf;
+    char *pin, *psav, *cf;
     char **pf, **qf;
     int b, c, params;
     struct symtab *np;
@@ -1039,9 +1039,9 @@ char *dodef(char *p)
 /*
  * find and handle preprocessor control lines
  */
-char *control(register char *p)
+char *control(char *p)
 {
-    register struct symtab *np;
+    struct symtab *np;
     for (;;) {
         fasscan();
         p = cotoken(p);
@@ -1148,10 +1148,10 @@ char *control(register char *p)
     }
 }
 
-struct symtab *stsym(register char *s)
+struct symtab *stsym(char *s)
 {
     char buf[BUFSIZ];
-    register char *p;
+    char *p;
 
     /* make definition look exactly like end of #define line */
     /* copy to avoid running off end of world when param list is at end */
@@ -1180,7 +1180,7 @@ struct symtab *stsym(register char *s)
 /* kluge */
 struct symtab *ppsym(char *s)
 {
-    register struct symtab *sp;
+    struct symtab *sp;
 
     cinit    = SALT;
     *savch++ = SALT;
@@ -1233,10 +1233,10 @@ void ppwarn(const char *s, ...)
 
 struct symtab *lookup(char *namep, int enterf)
 {
-    register char *np, *snp;
-    register int c, i;
+    char *np, *snp;
+    int c, i;
     int around;
-    register struct symtab *sp;
+    struct symtab *sp;
 
     /* namep had better not be too long (currently, <=8 chars) */
     np     = namep;
@@ -1244,7 +1244,7 @@ struct symtab *lookup(char *namep, int enterf)
     i      = cinit;
     while ((c = *np++))
         i += i + c;
-    c = i; /* c=i for register usage on pdp11 */
+    c = i; /* c=i for usage on pdp11 */
     c %= symsiz;
     if (c < 0)
         c += symsiz;
@@ -1275,9 +1275,9 @@ struct symtab *lookup(char *namep, int enterf)
     return (lastsym = sp);
 }
 
-struct symtab *slookup(register char *p1, register char *p2, int enterf)
+struct symtab *slookup(char *p1, char *p2, int enterf)
 {
-    register char *p3;
+    char *p3;
     char c2, c3;
     struct symtab *np;
     c2  = *p2;
@@ -1300,10 +1300,10 @@ struct symtab *slookup(register char *p1, register char *p2, int enterf)
     return (np);
 }
 
-char *subst(register char *p, struct symtab *sp)
+char *subst(char *p, struct symtab *sp)
 {
     static char match[] = "%s: argument mismatch";
-    register char *ca, *vp;
+    char *ca, *vp;
     int params;
     char *actual[MAXFRM]; /* actual[n] is text of nth actual */
     char acttxt[BUFSIZ];  /* space for actuals */
@@ -1335,7 +1335,7 @@ char *subst(register char *p, struct symtab *sp)
             ;
     }
     if (0 != (params = *--vp & 0xFF)) { /* definition calls for params */
-        register char **pa;
+        char **pa;
         ca = acttxt;
         pa = actual;
         if (params == 0xFF)
@@ -1406,9 +1406,9 @@ char *subst(register char *p, struct symtab *sp)
     return (p);
 }
 
-char *trmdir(register char *s)
+char *trmdir(char *s)
 {
-    register char *p = s;
+    char *p = s;
     while (*p++)
         ;
     --p;
@@ -1420,9 +1420,9 @@ char *trmdir(register char *s)
     return (s);
 }
 
-STATIC char *copy(register char *s)
+STATIC char *copy(char *s)
 {
-    register char *old;
+    char *old;
 
     old = savch;
     while ((*savch++ = *s++))
@@ -1459,8 +1459,8 @@ void usage()
 
 int main(int argc, char *argv[])
 {
-    register int i, c;
-    register char *p;
+    int i, c;
+    char *p;
     char *tf, **cp2;
 
     fout = stdout;

@@ -158,7 +158,7 @@ char *scmd1 [] = {
 
 char **lcmd = lcmd1, **scmd = scmd1;
 
-void prrel(register long r)
+void prrel(long r)
 {
     if (Rflag) {
         printf("%d %d", (int) (r & REXT) >> 3, (int) (r & RSHORT));
@@ -186,9 +186,9 @@ void prrel(register long r)
     }
 }
 
-void prconst(register int n)
+void prconst(int n)
 {
-    register long c, r;
+    long c, r;
 
     while (n--) {
         c = fgeth(text);
@@ -204,10 +204,10 @@ void prconst(register int n)
     }
 }
 
-char *addrtoa(register long a)
+char *addrtoa(long a)
 {
     static char buf [20];
-    register char *p;
+    char *p;
     int sign;
 
     if (a & 0x80000L)
@@ -235,10 +235,10 @@ char *addrtoa(register long a)
     return p;
 }
 
-void prmnem(register long c)
+void prmnem(long c)
 {
-    register int r;
-    register long a;
+    int r;
+    long a;
 
     r = (c >> 28) & 017;
     if (r)
@@ -260,10 +260,10 @@ void prmnem(register long c)
         printf("       \t");
 }
 
-void prcmd(register long c)
+void prcmd(long c)
 {
-    register int r;
-    register long a;
+    int r;
+    long a;
 
     if (! Cflag)
         prmnem(c);
@@ -271,9 +271,9 @@ void prcmd(register long c)
         printf("\t%08lx\t", c);
 }
 
-void prtext(register int n)
+void prtext(int n)
 {
-    register long c, r;
+    long c, r;
 
     while (n--) {
         printf("x%x:", addr++);
@@ -294,9 +294,9 @@ void prtext(register int n)
     }
 }
 
-void prdata(register int n)
+void prdata(int n)
 {
-    register long c, r;
+    long c, r;
 
     while (n--) {
         c = fgeth(text);
@@ -328,7 +328,7 @@ void disfile()
     prdata((int) hdr.a_data/W);
 }
 
-void dis(register char *fname)
+void dis(char *fname)
 {
     if ((text = fopen(fname, "r")) == NULL) {
         fprintf(stderr, "dis: %s not found\n", fname);
@@ -352,7 +352,7 @@ void dis(register char *fname)
     disfile();
 }
 
-int main(int argc, register char **argv)
+int main(int argc, char **argv)
 {
     int yesarg;                 /* были ли параметры - имена файлов */
 
@@ -360,7 +360,7 @@ int main(int argc, register char **argv)
     while(--argc) {
         ++argv;
         if (**argv == '-') {
-            register char *cp;
+            char *cp;
 
             for (cp = *argv+1; *cp; cp++) {
                 switch (*cp) {

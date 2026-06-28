@@ -53,7 +53,7 @@ const short typesegm[] = {
 // Table of machine instructions.
 //
 // BESM-6 opcodes occupy the same bit positions as in the hardware instruction
-// word (octal, bit 1 = LSB); pass1.c ORs the modifier register (index << 28)
+// word (octal, bit 1 = LSB); pass1.c ORs the modifier (index << 28)
 // and the address field into `val`.
 //
 //   short-address (opcodes 000-077):  val = opcode << 12  -> 0zz0000

@@ -8,9 +8,9 @@
 // sym->n_name and NUL-terminates it.
 // Returns the on-disk entry size in bytes (n_len + 5) on success, 1 for an
 // empty entry / EOF (zero-length name), or 0 on out of memory.
-int fgetsym(register FILE *text, register struct nlist *sym)
+int fgetsym(FILE *text, struct nlist *sym)
 {
-    register int c;
+    int c;
 
     if ((sym->n_len = getc(text)) <= 0)
         return 1;

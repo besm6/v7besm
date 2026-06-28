@@ -5,9 +5,9 @@
 // Write one symbol table entry to a stream, the inverse of fgetsym(): a
 // 1-byte name length, a 1-byte type, a half-word value, then the name bytes
 // (no trailing NUL).
-void fputsym(register const struct nlist *s, register FILE *file)
+void fputsym(const struct nlist *s, FILE *file)
 {
-    register int i;
+    int i;
 
     putc(s->n_len, file);
     putc(s->n_type, file);

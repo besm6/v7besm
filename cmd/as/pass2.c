@@ -8,7 +8,7 @@
 
 void middle(void)
 {
-    register short i, snum;
+    short i, snum;
 
     align(STEXT);
     align(SDATA);
@@ -80,7 +80,7 @@ static long adjust(long h, long a, int hr)
 
 static long makehalf(long h, long hr)
 {
-    register short i;
+    short i;
 
     switch ((int)hr & REXT) {
     case RABS:
@@ -112,8 +112,8 @@ static long makehalf(long h, long hr)
 
 void pass2(void)
 {
-    register short i;
-    register long h;
+    short i;
+    long h;
 
     cbase  = HDRSZ / W;
     tbase  = cbase + nconst;
@@ -186,9 +186,9 @@ static int typerel(int t)
     }
 }
 
-static long relhalf(register long hr)
+static long relhalf(long hr)
 {
-    register short i;
+    short i;
 
     switch ((int)hr & REXT) {
     case RSTRNG:
@@ -210,14 +210,14 @@ static long relhalf(register long hr)
 
 void makereloc(void)
 {
-    register short i;
+    short i;
 
     for (i = 0; i < nconst; i++) {
         fputh(relhalf(constab[i].hr2), stdout);
         fputh(0L, stdout);
     }
     for (segm = STEXT; segm < SBSS; segm++) {
-        register long len = count[segm];
+        long len = count[segm];
 
         rewind(rfile[segm]);
         while (len--)
@@ -227,7 +227,7 @@ void makereloc(void)
 
 void makesymtab(void)
 {
-    register short i;
+    short i;
 
     for (i = 0; i < stabfree; i++)
         if (!xflags || (stab[i].n_type & N_EXT) || (Xflag && stab[i].n_name[0] != 'L'))

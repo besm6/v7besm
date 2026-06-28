@@ -21,7 +21,7 @@ static void putword(unsigned char *p, uword_t v)
 int putarhdr(int f, const struct ar_hdr *h)
 {
     unsigned char b[60];
-    register int i;
+    int i;
 
     memset(b, 0, sizeof(b));
     for (i=0; i < (int) sizeof(h->ar_name); i++)

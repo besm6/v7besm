@@ -24,7 +24,7 @@ static void puthr(long h, long r)
 
 void align(int s)
 {
-    register short save;
+    short save;
 
     if (s != segm) {
         save = segm;
@@ -41,8 +41,8 @@ void align(int s)
 
 static long enterconst(int bs)
 {
-    register short hash, i;
-    register long h, h2, hr2;
+    short hash, i;
+    long h, h2, hr2;
 
     h   = intval.left;
     h2  = intval.right;
@@ -65,8 +65,8 @@ static long enterconst(int bs)
 
 static void makecmd(long val, int type)
 {
-    register short clex, index;
-    register long addr, reltype;
+    short clex, index;
+    long addr, reltype;
     int cval, segment;
 
     index   = regleft;
@@ -129,7 +129,7 @@ putcom:
 
 static void makeascii(void)
 {
-    register short c, n;
+    short c, n;
     int cval;
 
     c = getlex(&cval);
@@ -204,11 +204,11 @@ static void makeascii(void)
 void pass1(void)
 {
     int cval, tval, csegm;
-    register long addr;
+    long addr;
 
     segm = STEXT;
     for (;;) {
-        register short clex;
+        short clex;
 
         // A machine instruction is expected at the start of a statement;
         // enable operator characters in names for this lex only.

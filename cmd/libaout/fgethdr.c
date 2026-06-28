@@ -6,7 +6,7 @@
 // fields is stored as one full word (a zero padding half-word followed by the
 // value half-word); fgetw() reads both halves and the padding is discarded.
 // Always returns 1.
-int fgethdr(register FILE *text, register struct exec *h)
+int fgethdr(FILE *text, struct exec *h)
 {
     h->a_magic = fgetw(text);
     h->a_const = fgetw(text);

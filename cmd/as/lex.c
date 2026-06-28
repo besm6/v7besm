@@ -19,8 +19,8 @@ static int hexdig(int c)
 
 static void getlhex(void)
 {
-    register int c;
-    register char *cp, *p;
+    int c;
+    char *cp, *p;
 
     // read a hexadecimal number 'ZZZ
 
@@ -46,8 +46,8 @@ static void getlhex(void)
 // read a hexadecimal number 0xZZZ
 static void gethnum(void)
 {
-    register int c;
-    register char *cp;
+    int c;
+    char *cp;
 
     c = getchar();
     for (cp = name; ISHEX(c); c = getchar())
@@ -73,7 +73,7 @@ static void gethnum(void)
 //      1234' 1234h 1234H - hexadecimal
 static void getnum(int c)
 {
-    register char *cp;
+    char *cp;
     int leadingzero;
 
     leadingzero = (c == '0');
@@ -126,7 +126,7 @@ static void getnum(int c)
 // or .[a=b]
 static void getbitmask(void)
 {
-    register int c, a, b;
+    int c, a, b;
     int v, compl;
 
     a = getexpr(&v) - 1;
@@ -196,7 +196,7 @@ static int isopername(int c)
 
 static void getname(int c)
 {
-    register char *cp;
+    char *cp;
 
     // When a machine instruction is expected, absorb the operator characters
     // so mnemonics like "a+x" lex as a single name.
@@ -219,7 +219,7 @@ static void getname(int c)
 //      LSCMD   - short-address instruction. Value is the code.
 int getlex(int *pval)
 {
-    register short c;
+    short c;
 
     if (blexflag) {
         blexflag = 0;

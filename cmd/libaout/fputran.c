@@ -6,9 +6,9 @@
 // Write one ranlib (archive symbol-index) entry to a stream, the inverse of
 // fgetran(): a 1-byte name length, a half-word archive offset, then the name
 // bytes (no trailing NUL).
-void fputran(register const struct ranlib *s, register FILE *file)
+void fputran(const struct ranlib *s, FILE *file)
 {
-    register int i;
+    int i;
 
     putc(s->ran_len, file);
     fputh(s->ran_off, file);

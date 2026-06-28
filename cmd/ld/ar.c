@@ -81,7 +81,7 @@ char msg;
 
 initmsg ()
 {
-	register char *p;
+	char *p;
 
 	msg = (p = getenv ("MSG")) && *p == 'r';
 }
@@ -89,8 +89,8 @@ initmsg ()
 main (argc, argv)
 char   *argv[];
 {
-	register        i;
-	register char  *cp;
+	i;
+	char  *cp;
 
 	initmsg ();
 	for (i = 0; signum[i]; i++)
@@ -194,7 +194,7 @@ int     (*fun) ();
 }
 
 rcmd () {
-	register        f;
+	f;
 
 	init ();
 	getaf ();
@@ -245,7 +245,7 @@ dcmd () {
 }
 
 xcmd () {
-	register        f;
+	f;
 
 	if (getaf ())
 		noar ();
@@ -331,7 +331,7 @@ tcmd () {
 }
 
 qcmd () {
-	register        i,
+	i,
 	                f;
 
 	if (flg['a' - 'a'] || flg['b' - 'a']) {
@@ -457,7 +457,7 @@ done (c) {
 }
 
 notfound () {
-	register        i,
+	i,
 	                n;
 
 	n = 0;
@@ -473,7 +473,7 @@ notfound () {
 }
 
 morefil () {
-	register        i,
+	i,
 	                n;
 
 	n = 0;
@@ -484,7 +484,7 @@ morefil () {
 }
 
 cleanup () {
-	register        i,
+	i,
 	                f;
 
 	for (i = 0; i < namc; i++) {
@@ -507,7 +507,7 @@ cleanup () {
 }
 
 install () {
-	register        i;
+	i;
 
 	for (i = 0; signum[i]; i++)
 		signal (signum[i], SIG_IGN);
@@ -551,8 +551,8 @@ install () {
  * into the temporary file
  */
 movefil (f) {
-	register char  *cp;
-	register        i;
+	char  *cp;
+	i;
 
 	cp = trim (file);
 	for (i = 0; i < (int) sizeof (arbuf.ar_name); i++)
@@ -568,7 +568,7 @@ movefil (f) {
 }
 
 stats () {
-	register        f;
+	f;
 
 	f = open (file, 0);
 	if (f < 0)
@@ -585,7 +585,7 @@ stats () {
  * size given in arbuf
  */
 copyfil (fi, fo, flag) {
-	register        i,
+	i,
 	                o;
 	int     pe;
 
@@ -614,7 +614,7 @@ copyfil (fi, fo, flag) {
 }
 
 getdir () {
-	register        i;
+	i;
 
 	if (! getarhdr (af, & arbuf)) {
 		if (tf1nam) {
@@ -630,7 +630,7 @@ getdir () {
 }
 
 match () {
-	register        i;
+	i;
 
 	for (i = 0; i < namc; i++) {
 		if (namv[i] == 0)
@@ -645,7 +645,7 @@ match () {
 }
 
 bamatch () {
-	register        f;
+	f;
 
 	switch (bastate) {
 
@@ -691,7 +691,7 @@ char   *
         trim (s)
 char   *s;
 {
-	register char  *p1,
+	char  *p1,
 	               *p2;
 
 	for (p1 = s; *p1; p1++);
@@ -724,7 +724,7 @@ char   *s;
 #define	STXT	01000
 
 longt () {
-	register char  *cp;
+	char  *cp;
 
 	pmode ();
 	printf ("%3d/%1d", arbuf.ar_uid, arbuf.ar_gid);
@@ -766,7 +766,7 @@ int    *m[] = {
 };
 
 pmode () {
-	register int  **mp;
+	int  **mp;
 
 	for (mp = &m[0]; mp < &m[9];)
 		select (*mp++);
@@ -775,7 +775,7 @@ pmode () {
 select (pairp)
 int    *pairp;
 {
-	register int    n,
+	int    n,
 	               *ap;
 
 	ap = pairp;

@@ -8,9 +8,9 @@
 // a 1-byte name length, a half-word archive offset, then that many name bytes.
 // Allocates sym->ran_name and NUL-terminates it.
 // Returns 1 on success, 0 on EOF (zero-length entry), -1 on out of memory.
-int fgetran(register FILE *text, register struct ranlib *sym)
+int fgetran(FILE *text, struct ranlib *sym)
 {
-    register int c;
+    int c;
 
     /* read struct ranlib from file */
     /* 1 byte - length of name */

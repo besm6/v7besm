@@ -156,7 +156,7 @@ void error(int n, char *fmt, ...)
     errlev = n;
 }
 
-int getfile(register char *cp)
+int getfile(char *cp)
 {
     int c;
     struct stat x;
@@ -222,9 +222,9 @@ void readhdr(long loc)
 
 int passconst()
 {
-    register short count;
+    short count;
     short save;
-    register struct constab *p, *c;
+    struct constab *p, *c;
 
     save = nconst;
     count = filhdr.a_const / W;
@@ -248,7 +248,7 @@ int passconst()
 
 void symreloc()
 {
-    register short i;
+    short i;
 
     switch (cursym.n_type) {
 
@@ -287,9 +287,9 @@ void symreloc()
         cursym.n_type = N_EXT+N_ABS;
 }
 
-int enter(register struct nlist **hp)
+int enter(struct nlist **hp)
 {
-    register struct nlist *sp;
+    struct nlist *sp;
 
     if (! *hp) {
         if (symindex >= NSYM)
@@ -309,10 +309,10 @@ int enter(register struct nlist **hp)
 
 struct nlist **lookup()
 {
-    register int i;
+    int i;
     int clash;
-    register char *cp, *cp1;
-    register struct nlist **hp;
+    char *cp, *cp1;
+    struct nlist **hp;
 
     i = 0;
     for (cp = cursym.n_name; *cp; i = (i << 1) + *cp++);
@@ -333,7 +333,7 @@ struct nlist **lookup()
     return hp;
 }
 
-long add(register long a, register long b, char *s)
+long add(long a, long b, char *s)
 {
     a += b;
     if (a >= 04000000L*W)
@@ -341,7 +341,7 @@ long add(register long a, register long b, char *s)
     return a;
 }
 
-long addlong(register long a, register long b, char *s)
+long addlong(long a, long b, char *s)
 {
     a += b;
     if (a >= 01000000000L*W)
@@ -354,7 +354,7 @@ long addlong(register long a, register long b, char *s)
  */
 int load1(long loc, int libflg, int nloc)
 {
-    register struct nlist *sp;
+    struct nlist *sp;
     int savindex, savcindex;
     int ndef, type, symlen, nsymbol;
 
@@ -449,7 +449,7 @@ int load1(long loc, int libflg, int nloc)
     cindex = savcindex;
     nconst -= coptsize[nfile];
     while (symindex > savindex) {
-        register struct nlist **p;
+        struct nlist **p;
 
         p = symhash[--symindex];
         free((*p)->n_name);
@@ -458,9 +458,9 @@ int load1(long loc, int libflg, int nloc)
     return 0;
 }
 
-int mkfsym(register char *s, int wflag)
+int mkfsym(char *s, int wflag)
 {
-    register char *p;
+    char *p;
 
     if (sflag || xflag)
         return 0;
@@ -488,9 +488,9 @@ void checklibp()
         error(2, "library table overflow");
 }
 
-int step(register long nloc)
+int step(long nloc)
 {
-    register char *cp;
+    char *cp;
 
     fseek(text, nloc, 0);
     if (!fgetarhdr(text, &archdr)) {
@@ -510,8 +510,8 @@ int step(register long nloc)
 
 void getrantab()
 {
-    register struct ranlib *p;
-    register int n;
+    struct ranlib *p;
+    int n;
 
     for (p=rantab; p<rantab+RANTABSZ; ++p) {
         n = fgetran(text, p);
@@ -536,7 +536,7 @@ struct nlist **slookup(char *s)
 
 int ldrand()
 {
-    register struct ranlib *p;
+    struct ranlib *p;
     struct nlist **pp;
     long *oldp = libp;
 
@@ -552,7 +552,7 @@ int ldrand()
 
 void freerantab()
 {
-    register struct ranlib *p;
+    struct ranlib *p;
 
     for (p=rantab; p<rantab+tnum; ++p)
         free(p->ran_name);
@@ -561,9 +561,9 @@ void freerantab()
 /*
  * scan file to find defined symbols
  */
-void load1arg(register char *cp)
+void load1arg(char *cp)
 {
-    register long nloc;
+    long nloc;
 
     switch (getfile(cp)) {
     case 0:                 /* regular file */
@@ -597,9 +597,9 @@ archive:
  */
 void pass1(int argc, char **argv)
 {
-    register int c, i;
+    int c, i;
     long num;
-    register char *ap, **p;
+    char *ap, **p;
     char save;
 
 
@@ -721,7 +721,7 @@ void pass1(int argc, char **argv)
     }
 }
 
-void ldrsym(register struct nlist *sp, long val, int type)
+void ldrsym(struct nlist *sp, long val, int type)
 {
     if (sp == 0) return;
     if (sp->n_type != N_EXT+N_UNDF) {
@@ -735,9 +735,9 @@ void ldrsym(register struct nlist *sp, long val, int type)
 
 void middle()
 {
-    register struct nlist *sp, *symp;
-    register long t;
-    register long cmsize, acmsize;
+    struct nlist *sp, *symp;
+    long t;
+    long cmsize, acmsize;
     int nund;
     long cmorigin, acmorigin;
 
@@ -872,7 +872,7 @@ void middle()
     }
 }
 
-void tcreat(register FILE **buf, register int tempflg)
+void tcreat(FILE **buf, int tempflg)
 {
     *buf = fopen(tempflg ? tfname : ofilename, "w+");
     if (! *buf)
@@ -926,9 +926,9 @@ void setupout()
     fputhdr(&filhdr, outb);
 }
 
-struct nlist *lookloc(register struct local *lp, register int sn)
+struct nlist *lookloc(struct local *lp, int sn)
 {
-    register struct local *clp;
+    struct local *clp;
 
     for (clp=local; clp<lp; clp++)
         if (clp->locindex == sn)
@@ -961,11 +961,11 @@ int reltype(int stype)
     }
 }
 
-void relhalf(struct local *lp, register long t, register long r, long *pt, long *pr)
+void relhalf(struct local *lp, long t, long r, long *pt, long *pr)
 {
-    register long a, ad;
-    register short i;
-    register struct nlist *sp;
+    long a, ad;
+    short i;
+    struct nlist *sp;
 
     if (trace > 2)
         printf("%08lx %08lx", t, r);
@@ -1063,7 +1063,7 @@ void relhalf(struct local *lp, register long t, register long r, long *pt, long 
 void relocconst(struct local *lp)
 {
     long r, t;
-    register struct constab *p, *c;
+    struct constab *p, *c;
 
     p = &constab[nconst];
     c = p + coptsize[nfile];
@@ -1096,9 +1096,9 @@ void relocate(struct local *lp, FILE *b1, FILE *b2, long len)
 
 void load2(long loc)
 {
-    register struct nlist *sp;
-    register struct local *lp;
-    register int symno;
+    struct nlist *sp;
+    struct local *lp;
+    int symno;
     int type;
     long count;
 
@@ -1191,9 +1191,9 @@ void load2(long loc)
     nfile++;
 }
 
-void load2arg(register char *acp)
+void load2arg(char *acp)
 {
-    register long *lp;
+    long *lp;
 
     if (getfile(acp) == 0) {
         if (trace)
@@ -1224,9 +1224,9 @@ void load2arg(register char *acp)
 
 void pass2(int argc, char **argv)
 {
-    register int c, i;
+    int c, i;
     long dnum;
-    register char *ap, **p;
+    char *ap, **p;
 
     p = argv+1;
     libp = liblist;
@@ -1274,9 +1274,9 @@ void pass2(int argc, char **argv)
     }
 }
 
-void copy(register FILE *buf)
+void copy(FILE *buf)
 {
-    register int c;
+    int c;
 
     rewind(buf);
     while ((c = getc(buf)) != EOF)
@@ -1286,8 +1286,8 @@ void copy(register FILE *buf)
 
 void finishout()
 {
-    register long n;
-    register struct nlist *p;
+    long n;
+    struct nlist *p;
 
     if (nflag || alflag) {
         if (alflag) {

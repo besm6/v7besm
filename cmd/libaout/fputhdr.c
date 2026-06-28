@@ -6,7 +6,7 @@
 // the 9 logical fields is emitted as one full word via fputw(): a zero padding
 // half-word followed by the value in the low half-word, so every field starts
 // on a 6-byte word boundary.
-void fputhdr(const struct exec *filhdr, register FILE *coutb)
+void fputhdr(const struct exec *filhdr, FILE *coutb)
 {
     fputw((uword_t) filhdr->a_magic, coutb);
     fputw((uword_t) filhdr->a_const, coutb);

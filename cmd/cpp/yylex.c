@@ -13,9 +13,9 @@ int yylex()
     static char *opc   = "b\bt\tn\nf\fr\r\\\\";
     extern char *outp, *inp, *newp;
     extern int flslvl;
-    register char savc, *s;
+    char savc, *s;
     int val;
-    register char **p2;
+    char **p2;
     struct symtab *sp;
 
     for (;;) {

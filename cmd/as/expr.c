@@ -8,7 +8,7 @@
 
 static int getterm(void)
 {
-    register int ty;
+    int ty;
     int cval, s;
 
     switch (getlex(&cval)) {
@@ -54,7 +54,7 @@ static int getterm(void)
 // operation    = "+" | "-" | "&" | "|" | "^" | "~" | "\" | "/" | "*" | "%"
 long getexpr(int *s)
 {
-    register short clex;
+    short clex;
     int cval, s2;
     struct word rez;
 
@@ -77,7 +77,7 @@ long getexpr(int *s)
     }
     for (;;) {
         switch (clex = getlex(&cval)) {
-            register long t;
+            long t;
         case '+':
             s2 = getterm();
             if (*s == SABS)

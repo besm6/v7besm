@@ -20,7 +20,7 @@ char msg;
 
 initmsg ()
 {
-	register char *p;
+	char *p;
 	extern char *getenv ();
 
 	msg = (p = getenv ("MSG")) && *p == 'r';
@@ -29,7 +29,7 @@ initmsg ()
 main (argc, argv)
 char *argv[];
 {
-	register i;
+	i;
 
 	initmsg ();
 	signal (SIGHUP, SIG_IGN);
@@ -56,7 +56,7 @@ char *argv[];
 strip (name)
 char * name;
 {
-	register FILE * f;
+	FILE * f;
 	long size;
 
 	f = fopen (name, "r");
@@ -111,7 +111,7 @@ char *name;
 FILE * fr, * to;
 long size;
 {
-	register s, n;
+	s, n;
 	char buf [BUFSIZ];
 
 	while (size != 0) {
