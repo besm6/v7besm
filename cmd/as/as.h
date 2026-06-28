@@ -51,9 +51,6 @@
 
 #define TLONG  01  // long-address instruction
 #define TALIGN 02  // align after the instruction
-#define TLIT   04  // instruction has a literal counterpart
-#define TINT   010 // instruction has an integer mode
-#define TCOMP  020 // instruction can be made a component one
 
 // table sizes
 // hash sizes must be powers of two!
@@ -73,10 +70,6 @@
 #define EMPCOM 02200000L // empty instruction - filler (utc 0)
 #define UTCCOM 02200000L // the <> instruction (utc, opcode 022)
 #define WTCCOM 02300000L // the [] instruction (wtc, opcode 023)
-
-// convert an instruction into a component one
-
-#define MAKECOMP(c) ((c) & 0x2000000L ? (c) | 0x4800000L : (c) | 0x6000000L)
 
 // optimal hash multiplier for a 32-bit word == 011706736335L
 // the same for a 16-bit word = 067433

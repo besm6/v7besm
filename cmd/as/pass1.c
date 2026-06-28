@@ -65,7 +65,7 @@ static long enterconst(int bs)
 
 static void makecmd(long val, int type)
 {
-    register short clex, index, incr;
+    register short clex, index;
     register long addr, reltype;
     int cval, segment;
 
@@ -80,30 +80,6 @@ static void makecmd(long val, int type)
             goto putcom;
         case '#':
             getexpr(&segment);
-            if (type & TLIT) {
-                addr = intval.right >> 19 & 017777;
-                if (type & TINT) {
-                    if ((!addr && !intval.left && !(intval.left >> 16)) ||
-                        (addr == 017777 && intval.left == 0xfffff)) {
-                        addr = intval.right & 0xfffff;
-                        val |= 0x4000000;
-                        reltype = SEGMREL(segment);
-                        if (reltype == REXT)
-                            reltype |= RPUTIX(extref);
-                        break;
-                    }
-                } else {
-                    if ((!addr && !intval.left && !(intval.left >> 16)) ||
-                        (addr == 017777 && intval.left == 0xffffffff)) {
-                        addr = intval.right & 0xfffff;
-                        val |= 0x4000000;
-                        reltype = SEGMREL(segment);
-                        if (reltype == REXT)
-                            reltype |= RPUTIX(extref);
-                        break;
-                    }
-                }
-            }
             addr    = enterconst(segment);
             reltype = RCONST;
             break;
@@ -131,19 +107,6 @@ static void makecmd(long val, int type)
         index = getexpr(&segment);
         if (segment != SABS)
             uerror("bad register number");
-        if ((type & TCOMP) && addr == 0 && reltype == RABS) {
-            if ((clex = getlex(&cval)) == LINCR || clex == LDECR) {
-                incr = getexpr(&segment);
-                if (segment != SABS)
-                    uerror("bad register increment");
-                if (incr == 0)
-                    incr = 1;
-                // make a component instruction
-                addr = clex == LINCR ? incr : -incr;
-                val  = MAKECOMP(val);
-            } else
-                ungetlex(clex, cval);
-        }
     } else
         ungetlex(clex, cval);
 putcom:
