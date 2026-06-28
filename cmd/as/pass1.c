@@ -114,14 +114,14 @@ putcom:
         if ((reltype & REXT) == REXT && as.stab[RGETIX(reltype)].n_type == N_EXT + N_ACOMM) {
             // if the instruction references ACOMM,
             // insert utc before it
-            puthr((long)index << 28 | UTCCOM | (addr >> 12 & 077777), reltype | RSHIFT);
+            puthr((long)index << 20 | UTCCOM | (addr >> 12 & 077777), reltype | RSHIFT);
             puthr(val | (addr & 07777), (long)RABS | RTRUNC);
         } else {
             addr &= 077777;
-            puthr((long)index << 28 | val | (addr & 077777), reltype | RLONG);
+            puthr((long)index << 20 | val | (addr & 077777), reltype | RLONG);
         }
     } else {
-        puthr((long)index << 28 | val | (addr & 07777), reltype | RSHORT);
+        puthr((long)index << 20 | val | (addr & 07777), reltype | RSHORT);
     }
     if (!as.aflag && (type & TALIGN))
         align(as.segm);

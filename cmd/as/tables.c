@@ -18,25 +18,31 @@ const int ctype[256] = {
 };
 
 const int segmtype[] = {
-    // convert segment number to symbol type
-    N_CONST, // SCONST
-    N_TEXT,  // STEXT
-    N_DATA,  // SDATA
-    N_STRNG, // SSTRNG
-    N_BSS,   // SBSS
-    N_UNDF,  // SEXT
-    N_ABS,   // SABS
+    // convert segment number to symbol type.  Indexed by the S* segment numbers,
+    // which are NOT contiguous: SEXT==6 and SABS==7 leave slot 5 (abss) unused,
+    // so it must be present here or SEGMTYPE(SEXT)/SEGMTYPE(SABS) read the wrong
+    // (or out-of-bounds) entry.
+    N_CONST, // SCONST 0
+    N_TEXT,  // STEXT  1
+    N_DATA,  // SDATA  2
+    N_STRNG, // SSTRNG 3
+    N_BSS,   // SBSS   4
+    N_ABSS,  // (abss) 5 - unused placeholder
+    N_UNDF,  // SEXT   6
+    N_ABS,   // SABS   7
 };
 
 const int segmrel[] = {
-    // convert segment number to relocation type
-    RCONST, // SCONST
-    RTEXT,  // STEXT
-    RDATA,  // SDATA
-    RSTRNG, // SSTRNG
-    RBSS,   // SBSS
-    REXT,   // SEXT
-    RABS,   // SABS
+    // convert segment number to relocation type (same non-contiguous indexing as
+    // segmtype: slot 5 is the unused abss placeholder).
+    RCONST, // SCONST 0
+    RTEXT,  // STEXT  1
+    RDATA,  // SDATA  2
+    RSTRNG, // SSTRNG 3
+    RBSS,   // SBSS   4
+    RABSS,  // (abss) 5 - unused placeholder
+    REXT,   // SEXT   6
+    RABS,   // SABS   7
 };
 
 const int typesegm[] = {
@@ -53,7 +59,7 @@ const int typesegm[] = {
 // Table of machine instructions.
 //
 // BESM-6 opcodes occupy the same bit positions as in the hardware instruction
-// word (octal, bit 1 = LSB); pass1.c ORs the modifier (index << 28)
+// word (octal, bit 1 = LSB); pass1.c ORs the modifier (index << 20)
 // and the address field into `val`.
 //
 //   short-address (opcodes 000-077):  val = opcode << 12  -> 0zz0000

@@ -77,95 +77,148 @@ static long word_low(const std::vector<unsigned char> &b, int w)
     return ((long)b[o] << 16) | ((long)b[o + 1] << 8) | b[o + 2];
 }
 
+// One symbol-table entry as serialized by cmd/libaout/fputsym.c.
+struct Sym {
+    std::string name;
+    long type;
+    long value;
+};
+
+// Walk the symbol table.  The file is header (54 B) then the const/text/data
+// segments, then their relocation records (same byte sizes), then the symbol
+// table (a_syms bytes).  Each entry is n_len(1) n_type(1) n_value(3, big-endian)
+// followed by n_len name bytes; the table is zero-padded to a word at the end.
+static std::vector<Sym> read_symbols(const std::vector<unsigned char> &b)
+{
+    long a_const = word_low(b, 1), a_text = word_low(b, 2), a_data = word_low(b, 3);
+    long a_syms = word_low(b, 6);
+    size_t off = 54 + 2 * (size_t)(a_const + a_text + a_data);
+    size_t end = off + (size_t)a_syms;
+    std::vector<Sym> out;
+    while (off + 5 <= end && b[off] != 0) {
+        int nlen   = b[off];
+        long type  = b[off + 1];
+        long value = ((long)b[off + 2] << 16) | ((long)b[off + 3] << 8) | b[off + 4];
+        out.push_back({ std::string(reinterpret_cast<const char *>(&b[off + 5]), nlen), type, value });
+        off += 5 + nlen;
+    }
+    return out;
+}
+
+// The i-th relocation half-word of a segment (0 = const, 1 = text, 2 = data).
+// Relocation records follow the segments, one 3-byte record per emitted
+// half-word, in the same const/text/data order.
+static long reloc_half(const std::vector<unsigned char> &b, int seg, int i)
+{
+    long a_const = word_low(b, 1), a_text = word_low(b, 2), a_data = word_low(b, 3);
+    size_t o = 54 + (size_t)(a_const + a_text + a_data); // start of relocation area
+    if (seg >= 1)
+        o += a_const;
+    if (seg >= 2)
+        o += a_text;
+    o += (size_t)i * 3;
+    return ((long)b[o] << 16) | ((long)b[o + 1] << 8) | b[o + 2];
+}
+
 // Assemble every machine instruction from the assembler's table[] and check the
 // opcode emitted for each one.  Two 24-bit instructions pack into one 48-bit
 // word: the first lands in the high (left, executed-first) half-word, the second
 // in the low half-word.  The three TALIGN instructions (vjm/ij/stop) cause a utc
 // (02200000) filler to be inserted in the low half so the following instruction
 // stays word-aligned.  Text begins at file word 9 (a_entry/HDRSZ).
+//
+// Every instruction also carries an operand, so this exercises the whole address
+// path without growing the text segment (still 41 words): direct addresses in
+// every number base, the bit-mask and expression syntaxes, a trailing index and a
+// leading modifier register (reg << 20), backward label references, an equate, and
+// both comment forms (; and a line-start #).  Operands that change the layout
+// (#const, <addr>, [addr]) are covered by the ConstPool / UtcWtc tests instead.
 TEST(Assemble, AllInstructions)
 {
     std::vector<unsigned char> got = assemble(R"(
-        atx
-        stx
-        mod
-        xts
-        a+x
-        a-x
-        x-a
-        amx
-        xta
-        aax
-        aex
-        arx
-        avx
-        aox
-        a/x
-        a*x
-        apx
-        aux
-        acx
-        anx
-        e+x
-        e-x
-        asx
-        xtr
-        rte
-        yta
-        $32
-        $33
-        e+n
-        e-n
-        asn
-        ntr
-        ati
-        sti
-        ita
-        its
-        mtj
-        j+m
-        $46
-        $47
-        $50
-        $51
-        $52
-        $53
-        $54
-        $55
-        $56
-        $57
-        $60
-        $61
-        $62
-        $63
-        $64
-        $65
-        $66
-        $67
-        $70
-        $71
-        $72
-        $73
-        $74
-        $75
-        $76
-        $77
-        @20
-        @21
-        utc
-        wtc
-        vtm
-        utm
-        uza
-        u1a
-        uj
-        vjm
-        ij
-        stop
-        vzm
-        v1m
-        @36
-        vlm
+K = 0252
+#a line-start hash is a whole-line comment and emits nothing
+start:  atx 0123            ; direct octal address
+        stx 100             ; decimal address
+        mod 0x2a            ; hexadecimal address
+        xts .5              ; single-bit mask .N
+        a+x 0100+0023       ; expression: addition
+        a-x 0200-0055       ; subtraction
+        x-a 0777&0307       ; bitwise and
+        amx 0100|0023       ; bitwise or
+        xta start           ; backward label reference
+        aax 0143^0060       ; bitwise xor
+        aex 0123, 5         ; indexed: trailing register 5
+        arx 07777 ~ 07654   ; xor-with-complement (a ^ ~b)
+        avx 1 \< 6          ; shift left
+        aox 0200 \> 1       ; shift right
+        a/x 7*011           ; multiply
+        a*x 0144/012        ; divide
+        apx 0145%012        ; modulo
+        aux 1+2*3           ; no precedence: (1+2)*3 == 011
+        acx 1+(2*3)         ; grouping forces 1+(2*3) == 7
+        anx {0123}          ; exponent-truncate braces
+        e+x 010             ; operator-bearing mnemonic with operand
+        e-x 0234
+        asx 4095            ; max 12-bit decimal == 07777
+        4 xtr 0567          ; leading modifier register 4
+        rte 077
+        yta .1
+        $32 0123            ; raw short opcode with an address
+        $33 0246
+        e+n 010
+        e-n 020
+        asn 0300
+        ntr K               ; absolute equate, resolved to its value
+mid:                        ; second label
+        ati 2
+        sti 3
+        ita 4
+        its 5
+        mtj 6, 1            ; indexed: trailing register 1
+        j+m 7
+        $46 050
+        $47 051
+        $50 052
+        $51 053
+        $52 054
+        $53 055
+        $54 056
+        $55 057
+        $56 060
+        $57 061
+        $60 062
+        $61 063
+        $62 064
+        $63 065
+        $64 066
+        $65 067
+        $66 070
+        $67 071
+        $70 072
+        $71 073
+        $72 074
+        $73 075
+        $74 076
+        $75 077
+        $76 0100
+        $77 0101
+        @20 040000          ; long opcode with a 15-bit address
+        @21 041234
+        utc 050000
+        wtc 0123
+        vtm 040000, 2       ; long opcode, indexed
+        utm 010
+        uza start           ; backward label, long opcode
+        u1a mid
+        uj 0
+        vjm 060000
+        ij 0123
+        stop 0456
+        vzm 070000
+        v1m 077777          ; max 15-bit address
+        @36 012345
+        vlm mid             ; backward label
 )");
 
     // Header sanity, so a gross regression points at the offending field.
@@ -173,89 +226,293 @@ TEST(Assemble, AllInstructions)
     EXPECT_EQ(word_low(got, 0), 0x4D0107L);  // a_magic low half  == "M" + FMAGIC
     EXPECT_EQ(word_low(got, 2), 246);  // a_text  == 41 words * 6 bytes
 
-    // Short-address instructions (opcodes 000-077, val = opcode << 12).
-    EXPECT_EQ(word_high(got, 9), 00000000L);  // atx
-    EXPECT_EQ(word_low(got, 9), 00010000L);   // stx
-    EXPECT_EQ(word_high(got, 10), 00020000L); // mod
-    EXPECT_EQ(word_low(got, 10), 00030000L);  // xts
-    EXPECT_EQ(word_high(got, 11), 00040000L); // a+x
-    EXPECT_EQ(word_low(got, 11), 00050000L);  // a-x
-    EXPECT_EQ(word_high(got, 12), 00060000L); // x-a
-    EXPECT_EQ(word_low(got, 12), 00070000L);  // amx
-    EXPECT_EQ(word_high(got, 13), 00100000L); // xta
-    EXPECT_EQ(word_low(got, 13), 00110000L);  // aax
-    EXPECT_EQ(word_high(got, 14), 00120000L); // aex
-    EXPECT_EQ(word_low(got, 14), 00130000L);  // arx
-    EXPECT_EQ(word_high(got, 15), 00140000L); // avx
-    EXPECT_EQ(word_low(got, 15), 00150000L);  // aox
-    EXPECT_EQ(word_high(got, 16), 00160000L); // a/x
-    EXPECT_EQ(word_low(got, 16), 00170000L);  // a*x
-    EXPECT_EQ(word_high(got, 17), 00200000L); // apx
-    EXPECT_EQ(word_low(got, 17), 00210000L);  // aux
-    EXPECT_EQ(word_high(got, 18), 00220000L); // acx
-    EXPECT_EQ(word_low(got, 18), 00230000L);  // anx
-    EXPECT_EQ(word_high(got, 19), 00240000L); // e+x
-    EXPECT_EQ(word_low(got, 19), 00250000L);  // e-x
-    EXPECT_EQ(word_high(got, 20), 00260000L); // asx
-    EXPECT_EQ(word_low(got, 20), 00270000L);  // xtr
-    EXPECT_EQ(word_high(got, 21), 00300000L); // rte
-    EXPECT_EQ(word_low(got, 21), 00310000L);  // yta
-    EXPECT_EQ(word_high(got, 22), 00320000L); // e32
-    EXPECT_EQ(word_low(got, 22), 00330000L);  // e33
-    EXPECT_EQ(word_high(got, 23), 00340000L); // e+n
-    EXPECT_EQ(word_low(got, 23), 00350000L);  // e-n
-    EXPECT_EQ(word_high(got, 24), 00360000L); // asn
-    EXPECT_EQ(word_low(got, 24), 00370000L);  // ntr
-    EXPECT_EQ(word_high(got, 25), 00400000L); // ati
-    EXPECT_EQ(word_low(got, 25), 00410000L);  // sti
-    EXPECT_EQ(word_high(got, 26), 00420000L); // ita
-    EXPECT_EQ(word_low(got, 26), 00430000L);  // its
-    EXPECT_EQ(word_high(got, 27), 00440000L); // mtj
-    EXPECT_EQ(word_low(got, 27), 00450000L);  // j+m
-    EXPECT_EQ(word_high(got, 28), 00460000L); // e46
-    EXPECT_EQ(word_low(got, 28), 00470000L);  // e47
-    EXPECT_EQ(word_high(got, 29), 00500000L); // e50
-    EXPECT_EQ(word_low(got, 29), 00510000L);  // e51
-    EXPECT_EQ(word_high(got, 30), 00520000L); // e52
-    EXPECT_EQ(word_low(got, 30), 00530000L);  // e53
-    EXPECT_EQ(word_high(got, 31), 00540000L); // e54
-    EXPECT_EQ(word_low(got, 31), 00550000L);  // e55
-    EXPECT_EQ(word_high(got, 32), 00560000L); // e56
-    EXPECT_EQ(word_low(got, 32), 00570000L);  // e57
-    EXPECT_EQ(word_high(got, 33), 00600000L); // e60
-    EXPECT_EQ(word_low(got, 33), 00610000L);  // e61
-    EXPECT_EQ(word_high(got, 34), 00620000L); // e62
-    EXPECT_EQ(word_low(got, 34), 00630000L);  // e63
-    EXPECT_EQ(word_high(got, 35), 00640000L); // e64
-    EXPECT_EQ(word_low(got, 35), 00650000L);  // e65
-    EXPECT_EQ(word_high(got, 36), 00660000L); // e66
-    EXPECT_EQ(word_low(got, 36), 00670000L);  // e67
-    EXPECT_EQ(word_high(got, 37), 00700000L); // e70
-    EXPECT_EQ(word_low(got, 37), 00710000L);  // e71
-    EXPECT_EQ(word_high(got, 38), 00720000L); // e72
-    EXPECT_EQ(word_low(got, 38), 00730000L);  // e73
-    EXPECT_EQ(word_high(got, 39), 00740000L); // e74
-    EXPECT_EQ(word_low(got, 39), 00750000L);  // e75
-    EXPECT_EQ(word_high(got, 40), 00760000L); // e76
-    EXPECT_EQ(word_low(got, 40), 00770000L);  // e77
+    // Short-address instructions (opcodes 000-077, val = opcode << 12).  Each
+    // now carries an operand, so the expected value is val | (addr & 07777);
+    // an index or leading modifier register adds (reg << 20).
+    EXPECT_EQ(word_high(got, 9), 00000000L | 0123L);  // atx 0123  (start:)
+    EXPECT_EQ(word_low(got, 9), 00010000L | 0144L);   // stx 100   (decimal)
+    EXPECT_EQ(word_high(got, 10), 00020000L | 052L);  // mod 0x2a  (hex)
+    EXPECT_EQ(word_low(got, 10), 00030000L | 020L);   // xts .5    (bit mask)
+    EXPECT_EQ(word_high(got, 11), 00040000L | 0123L); // a+x 0100+0023
+    EXPECT_EQ(word_low(got, 11), 00050000L | 0123L);  // a-x 0200-0055
+    EXPECT_EQ(word_high(got, 12), 00060000L | 0307L); // x-a 0777&0307
+    EXPECT_EQ(word_low(got, 12), 00070000L | 0123L);  // amx 0100|0023
+    EXPECT_EQ(word_high(got, 13), 00100000L | 9L);    // xta start  (label == word 9)
+    EXPECT_EQ(word_low(got, 13), 00110000L | 0123L);  // aax 0143^0060
+    EXPECT_EQ(word_high(got, 14), (5L << 20) | 00120000L | 0123L); // aex 0123, 5
+    EXPECT_EQ(word_low(got, 14), 00130000L | 07654L); // arx 07777 ~ 07654
+    EXPECT_EQ(word_high(got, 15), 00140000L | 0100L); // avx 1 \< 6   (shift left)
+    EXPECT_EQ(word_low(got, 15), 00150000L | 0100L);  // aox 0200 \> 1 (shift right)
+    EXPECT_EQ(word_high(got, 16), 00160000L | 077L);  // a/x 7*011    (multiply)
+    EXPECT_EQ(word_low(got, 16), 00170000L | 012L);   // a*x 0144/012 (divide)
+    EXPECT_EQ(word_high(got, 17), 00200000L | 1L);    // apx 0145%012 (modulo)
+    EXPECT_EQ(word_low(got, 17), 00210000L | 011L);   // aux 1+2*3 == (1+2)*3
+    EXPECT_EQ(word_high(got, 18), 00220000L | 7L);    // acx 1+(2*3)  (grouping)
+    EXPECT_EQ(word_low(got, 18), 00230000L | 0123L);  // anx {0123}   (braces)
+    EXPECT_EQ(word_high(got, 19), 00240000L | 010L);  // e+x 010
+    EXPECT_EQ(word_low(got, 19), 00250000L | 0234L);  // e-x 0234
+    EXPECT_EQ(word_high(got, 20), 00260000L | 07777L); // asx 4095  (== 07777)
+    EXPECT_EQ(word_low(got, 20), (4L << 20) | 00270000L | 0567L); // 4 xtr 0567
+    EXPECT_EQ(word_high(got, 21), 00300000L | 077L);  // rte 077
+    EXPECT_EQ(word_low(got, 21), 00310000L | 1L);     // yta .1
+    EXPECT_EQ(word_high(got, 22), 00320000L | 0123L); // $32 0123
+    EXPECT_EQ(word_low(got, 22), 00330000L | 0246L);  // $33 0246
+    EXPECT_EQ(word_high(got, 23), 00340000L | 010L);  // e+n 010
+    EXPECT_EQ(word_low(got, 23), 00350000L | 020L);   // e-n 020
+    EXPECT_EQ(word_high(got, 24), 00360000L | 0300L); // asn 0300
+    EXPECT_EQ(word_low(got, 24), 00370000L | 0252L);  // ntr K  (K = 0252, absolute equate)
+    EXPECT_EQ(word_high(got, 25), 00400000L | 2L);    // ati 2  (mid:)
+    EXPECT_EQ(word_low(got, 25), 00410000L | 3L);     // sti 3
+    EXPECT_EQ(word_high(got, 26), 00420000L | 4L);    // ita 4
+    EXPECT_EQ(word_low(got, 26), 00430000L | 5L);     // its 5
+    EXPECT_EQ(word_high(got, 27), (1L << 20) | 00440000L | 6L); // mtj 6, 1
+    EXPECT_EQ(word_low(got, 27), 00450000L | 7L);     // j+m 7
+    EXPECT_EQ(word_high(got, 28), 00460000L | 050L);  // $46 050
+    EXPECT_EQ(word_low(got, 28), 00470000L | 051L);   // $47 051
+    EXPECT_EQ(word_high(got, 29), 00500000L | 052L);  // $50 052
+    EXPECT_EQ(word_low(got, 29), 00510000L | 053L);   // $51 053
+    EXPECT_EQ(word_high(got, 30), 00520000L | 054L);  // $52 054
+    EXPECT_EQ(word_low(got, 30), 00530000L | 055L);   // $53 055
+    EXPECT_EQ(word_high(got, 31), 00540000L | 056L);  // $54 056
+    EXPECT_EQ(word_low(got, 31), 00550000L | 057L);   // $55 057
+    EXPECT_EQ(word_high(got, 32), 00560000L | 060L);  // $56 060
+    EXPECT_EQ(word_low(got, 32), 00570000L | 061L);   // $57 061
+    EXPECT_EQ(word_high(got, 33), 00600000L | 062L);  // $60 062
+    EXPECT_EQ(word_low(got, 33), 00610000L | 063L);   // $61 063
+    EXPECT_EQ(word_high(got, 34), 00620000L | 064L);  // $62 064
+    EXPECT_EQ(word_low(got, 34), 00630000L | 065L);   // $63 065
+    EXPECT_EQ(word_high(got, 35), 00640000L | 066L);  // $64 066
+    EXPECT_EQ(word_low(got, 35), 00650000L | 067L);   // $65 067
+    EXPECT_EQ(word_high(got, 36), 00660000L | 070L);  // $66 070
+    EXPECT_EQ(word_low(got, 36), 00670000L | 071L);   // $67 071
+    EXPECT_EQ(word_high(got, 37), 00700000L | 072L);  // $70 072
+    EXPECT_EQ(word_low(got, 37), 00710000L | 073L);   // $71 073
+    EXPECT_EQ(word_high(got, 38), 00720000L | 074L);  // $72 074
+    EXPECT_EQ(word_low(got, 38), 00730000L | 075L);   // $73 075
+    EXPECT_EQ(word_high(got, 39), 00740000L | 076L);  // $74 076
+    EXPECT_EQ(word_low(got, 39), 00750000L | 077L);   // $75 077
+    EXPECT_EQ(word_high(got, 40), 00760000L | 0100L); // $76 0100
+    EXPECT_EQ(word_low(got, 40), 00770000L | 0101L);  // $77 0101
 
-    // Long-address instructions (opcodes 020-037, val = opcode << 15).
-    EXPECT_EQ(word_high(got, 41), 02000000L); // e20
-    EXPECT_EQ(word_low(got, 41), 02100000L);  // e21
-    EXPECT_EQ(word_high(got, 42), 02200000L); // utc
-    EXPECT_EQ(word_low(got, 42), 02300000L);  // wtc
-    EXPECT_EQ(word_high(got, 43), 02400000L); // vtm
-    EXPECT_EQ(word_low(got, 43), 02500000L);  // utm
-    EXPECT_EQ(word_high(got, 44), 02600000L); // uza
-    EXPECT_EQ(word_low(got, 44), 02700000L);  // u1a
-    EXPECT_EQ(word_high(got, 45), 03000000L); // uj
-    EXPECT_EQ(word_low(got, 45), 03100000L);  // vjm
-    EXPECT_EQ(word_high(got, 46), 03200000L); // ij
-    EXPECT_EQ(word_low(got, 46), 02200000L);  // utc filler (align after ij)
-    EXPECT_EQ(word_high(got, 47), 03300000L); // stop
-    EXPECT_EQ(word_low(got, 47), 02200000L);  // utc filler (align after stop)
-    EXPECT_EQ(word_high(got, 48), 03400000L); // vzm
-    EXPECT_EQ(word_low(got, 48), 03500000L);  // v1m
-    EXPECT_EQ(word_high(got, 49), 03600000L); // e36
-    EXPECT_EQ(word_low(got, 49), 03700000L);  // vlm
+    // Long-address instructions (opcodes 020-037, val = opcode << 15,
+    // 15-bit address field & 077777).
+    EXPECT_EQ(word_high(got, 41), 02000000L | 040000L); // @20 040000
+    EXPECT_EQ(word_low(got, 41), 02100000L | 041234L);  // @21 041234
+    EXPECT_EQ(word_high(got, 42), 02200000L | 050000L); // utc 050000
+    EXPECT_EQ(word_low(got, 42), 02300000L | 0123L);    // wtc 0123
+    EXPECT_EQ(word_high(got, 43), (2L << 20) | 02400000L | 040000L); // vtm 040000, 2
+    EXPECT_EQ(word_low(got, 43), 02500000L | 010L);     // utm 010
+    EXPECT_EQ(word_high(got, 44), 02600000L | 9L);      // uza start (== word 9)
+    EXPECT_EQ(word_low(got, 44), 02700000L | 25L);      // u1a mid   (== word 25)
+    EXPECT_EQ(word_high(got, 45), 03000000L | 0L);      // uj 0
+    EXPECT_EQ(word_low(got, 45), 03100000L | 060000L);  // vjm 060000 (lands low: no filler)
+    EXPECT_EQ(word_high(got, 46), 03200000L | 0123L);   // ij 0123
+    EXPECT_EQ(word_low(got, 46), 02200000L);            // utc filler (align after ij)
+    EXPECT_EQ(word_high(got, 47), 03300000L | 0456L);   // stop 0456
+    EXPECT_EQ(word_low(got, 47), 02200000L);            // utc filler (align after stop)
+    EXPECT_EQ(word_high(got, 48), 03400000L | 070000L); // vzm 070000
+    EXPECT_EQ(word_low(got, 48), 03500000L | 077777L);  // v1m 077777 (max 15-bit)
+    EXPECT_EQ(word_high(got, 49), 03600000L | 012345L); // @36 012345
+    EXPECT_EQ(word_low(got, 49), 03700000L | 25L);      // vlm mid    (== word 25)
+}
+
+// Header fields live in the low half-word of their file word (a_const = word 1,
+// a_text = word 2, a_data = word 3, a_bss = word 4, a_syms = word 6).
+
+// The <addr>/[addr] address-extension operands, the alignment fillers forced by
+// ':' and by a mid-word label, and the '. = expr' location-counter assignment.
+TEST(Assemble, UtcWtc)
+{
+    // <addr> emits a utc (022) carrying the address, then the instruction with
+    // address 0; [addr] emits a wtc (023) the same way.
+    auto got = assemble(R"(
+        xta <040000>
+        atx [050000]
+)");
+    EXPECT_EQ(word_high(got, 9), 02200000L | 040000L);  // utc 040000
+    EXPECT_EQ(word_low(got, 9), 00100000L);             // xta 0
+    EXPECT_EQ(word_high(got, 10), 02300000L | 050000L); // wtc 050000
+    EXPECT_EQ(word_low(got, 10), 00000000L);            // atx 0
+
+    // A lone ':' line, and a label that would otherwise land mid-word, each force
+    // a utc (02200000) filler so the next instruction starts a fresh word.
+    got = assemble(R"(
+        atx 0
+        stx 0
+        atx 0
+:
+        stx 0
+lbl:    atx 0
+)");
+    EXPECT_EQ(word_low(got, 10), 02200000L);  // filler from the lone ':'
+    EXPECT_EQ(word_high(got, 11), 00010000L); // stx 0
+    EXPECT_EQ(word_low(got, 11), 02200000L);  // filler before lbl:
+    EXPECT_EQ(word_high(got, 12), 00000000L); // atx 0  (lbl:)
+
+    // '. = . + 3' in text fills the gap with utc fillers and advances the
+    // location, so the next instruction lands three words further on.
+    got = assemble(R"(
+        atx 0
+        . = . + 3
+        stx 0
+)");
+    EXPECT_EQ(word_low(got, 2), 30);          // a_text == 5 words
+    EXPECT_EQ(word_high(got, 10), 02200000L); // a utc filler in the gap
+    EXPECT_EQ(word_high(got, 13), 00010000L); // stx 0, three words on
+}
+
+// Data-emitting directives and segment switches.
+TEST(Assemble, DataDirective)
+{
+    // .word emits a full 48-bit word: its low 24 bits land in the high half-word
+    // (executed-first position), the high 24 bits in the low half-word.
+    auto got = assemble(R"(
+        .data
+        .word 0123, 0456
+        .word 0x0f0f0f
+)");
+    EXPECT_EQ(word_low(got, 3), 18);          // a_data == 3 words
+    EXPECT_EQ(word_high(got, 9), 0123L);      // .word 0123
+    EXPECT_EQ(word_low(got, 9), 0);
+    EXPECT_EQ(word_high(got, 10), 0456L);     // .word 0456
+    EXPECT_EQ(word_high(got, 11), 0x0f0f0fL); // low 24 bits of the value
+    EXPECT_EQ(word_low(got, 11), 0);          // high 24 bits
+
+    // .half packs two 24-bit half-words per word, padding the last with zero.
+    got = assemble(R"(
+        .data
+        .half 0111, 0222
+        .half 0333
+)");
+    EXPECT_EQ(word_high(got, 9), 0111L);
+    EXPECT_EQ(word_low(got, 9), 0222L);
+    EXPECT_EQ(word_high(got, 10), 0333L);
+    EXPECT_EQ(word_low(got, 10), 0); // pad
+
+    // .ascii packs six raw bytes per word, big-endian.  It always appends
+    // padding, so a length that is already a multiple of six gains a zero word.
+    got = assemble(R"(
+        .data
+        .ascii "ABCDEF"
+        .ascii "Hi\n"
+)");
+    EXPECT_EQ(word_high(got, 9), 0x414243L); // "ABC"
+    EXPECT_EQ(word_low(got, 9), 0x444546L);  // "DEF"
+    EXPECT_EQ(word_high(got, 10), 0);        // the always-appended pad word
+    EXPECT_EQ(word_low(got, 10), 0);
+    EXPECT_EQ(word_high(got, 11), 0x48690aL); // 'H' 'i' '\n'
+    EXPECT_EQ(word_low(got, 11), 0);          // zero-padded
+
+    // Segment switches: text, data and strng (folded into data) and bss each get
+    // their own size in the header.
+    got = assemble(R"(
+        atx 0
+        .data
+        .word 0
+        .word 0
+        .strng
+        .ascii "xy"
+        .bss
+        . = . + 4   ; In bss the counter only advances a_bss; nothing is emitted.
+)");
+    EXPECT_EQ(word_low(got, 1), 0);  // a_const
+    EXPECT_EQ(word_low(got, 2), 6);  // a_text  == 1 word
+    EXPECT_EQ(word_low(got, 3), 18); // a_data  == 2 .word + 1 strng word
+    EXPECT_EQ(word_low(got, 4), 24); // a_bss   == 4 words
+}
+
+// The '#' constant-pool operator: the value goes into the const segment (which
+// precedes text in the file) and the instruction addresses it; equal constants
+// are deduplicated.
+TEST(Assemble, ConstPool)
+{
+    auto got = assemble(R"(
+        xta #0123
+        xta #0123
+)");
+    EXPECT_EQ(word_low(got, 1), 6); // a_const == 1 word (deduplicated)
+    EXPECT_EQ(word_low(got, 2), 6); // a_text  == 1 word
+
+    // The pooled constant sits at file word 9 (right after the 9-word header).
+    EXPECT_EQ(word_high(got, 9), 0123L); // constant value, low 24 bits
+    EXPECT_EQ(word_low(got, 9), 0);
+
+    // Both instructions address that word (cbase == 9), packed into text word 10.
+    EXPECT_EQ(word_high(got, 10), 00100000L | 9L); // xta #0123
+    EXPECT_EQ(word_low(got, 10), 00100000L | 9L);  // xta #0123 (same const)
+}
+
+// A .globl label lands in the symbol table with the external bit (N_EXT == 040)
+// and its relocated text address; a reference to it relocates against the text.
+TEST(Assemble, Globl)
+{
+    auto got = assemble(R"(
+        .globl foo
+foo:    atx 0
+        uj foo
+)");
+    auto syms = read_symbols(got);
+    ASSERT_EQ(syms.size(), 1u);
+    EXPECT_EQ(syms[0].name, "foo");
+    EXPECT_EQ(syms[0].type, 043L); // N_EXT | N_TEXT
+    EXPECT_EQ(syms[0].value, 9L);  // text base 9 + offset 0
+
+    EXPECT_EQ(word_high(got, 9), 00000000L);     // atx 0  (foo:)
+    EXPECT_EQ(word_low(got, 9), 03000000L | 9L); // uj foo -> resolved to word 9
+    EXPECT_EQ(reloc_half(got, 1, 1), 026L);      // RTEXT | RLONG for the uj foo
+}
+
+// .comm and .acomm declare common blocks: external symbols whose value is the
+// requested length in words.
+TEST(Assemble, Comm)
+{
+    auto got = assemble(R"(
+        .comm buf, 4
+        .acomm abuf, 2
+        atx 0
+)");
+    auto syms = read_symbols(got);
+    ASSERT_EQ(syms.size(), 2u);
+    EXPECT_EQ(syms[0].name, "buf");
+    EXPECT_EQ(syms[0].type, 050L); // N_EXT | N_COMM
+    EXPECT_EQ(syms[0].value, 4L);
+    EXPECT_EQ(syms[1].name, "abuf");
+    EXPECT_EQ(syms[1].type, 051L); // N_EXT | N_ACOMM
+    EXPECT_EQ(syms[1].value, 2L);
+}
+
+// An undefined name becomes an external symbol (N_EXT | N_UNDF == 040) and the
+// referencing instruction is emitted with address 0.
+TEST(Assemble, ExternalReference)
+{
+    auto got = assemble(R"(
+        uj undef
+        atx 0
+)");
+    auto syms = read_symbols(got);
+    ASSERT_EQ(syms.size(), 1u);
+    EXPECT_EQ(syms[0].name, "undef");
+    EXPECT_EQ(syms[0].type, 040L); // N_EXT | N_UNDF
+    EXPECT_EQ(syms[0].value, 0L);
+    EXPECT_EQ(word_high(got, 9), 03000000L); // uj undef -> address 0 (filled by the linker)
+
+    // The reference carries an REXT (segment field 070) relocation naming `undef`
+    // (symbol index 0), so the linker can patch in its address.
+    EXPECT_EQ(reloc_half(got, 1, 0), 076L); // REXT | RLONG, symbol index 0
+}
+
+// A data word that names a text label gets an RTEXT (segment field 020)
+// relocation and stores the label's relocated address.
+TEST(Assemble, TextRelocation)
+{
+    auto got = assemble(R"(
+        atx 0
+tlabel: atx 0
+        .data
+        .word tlabel
+)");
+    int dword = 9 + (int)((word_low(got, 1) + word_low(got, 2)) / 6); // first data word
+    EXPECT_EQ(word_high(got, dword), 012L); // tlabel == text base 9 + offset 1
+    EXPECT_EQ(word_low(got, dword), 0L);
+    EXPECT_EQ(reloc_half(got, 2, 0) & 070L, 020L); // data reloc relative to text
 }

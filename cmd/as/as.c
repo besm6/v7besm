@@ -7,6 +7,7 @@
 #include "as.h"
 
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 struct assembler as = {
@@ -39,6 +40,13 @@ int assemble(const struct assembler_args *args)
 {
     int i;
     int saved_in, saved_out;
+
+    // Reset the global state so the engine can be invoked repeatedly in one
+    // process (the unit tests assemble many sources in a row; the CLI front end
+    // calls this just once).  Everything else is rebuilt by startup()/hashinit()/
+    // the passes; only the two static defaults need restoring afterwards.
+    memset(&as, 0, sizeof as);
+    strcpy(as.tfilename, "/tmp/asXXXXXX");
 
     // Copy options into the global state.
     as.infile  = args->infile;
