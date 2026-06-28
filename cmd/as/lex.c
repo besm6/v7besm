@@ -306,10 +306,15 @@ int getlex(int *pval)
             getnum(c);
             return LNUM;
         case '@':
-        case '$':
-            *pval = hexdig(getchar());
-            *pval = *pval << 4 | hexdig(getchar());
+        case '$': {
+            // Raw opcode $NN (short) or @NN (long); NN is the two-octal-digit
+            // opcode number, for opcodes that have no dedicated mnemonic.
+            int d1 = getchar(), d2 = getchar();
+            if (!ISOCTAL(d1) || !ISOCTAL(d2))
+                uerror("bad octal opcode after '%c'", c);
+            *pval = (d1 - '0') * 8 + (d2 - '0');
             return (c == '$') ? LSCMD : LLCMD;
+        }
         default:
             if (!ISLETTER(c))
                 uerror("bad character: \\%o", c & 0377);

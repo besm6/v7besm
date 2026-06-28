@@ -36,16 +36,16 @@ doc/       BESM-6 architecture references
 
 ## Components and status
 
-| Component                     | Location      | Status                    |
-|-------------------------------|---------------|---------------------------|
-| Assembler (AT&T / Madlen)     | `cmd/as`      | ✔ exists                  |
-| Linker + binutils             | `cmd/ld`      | ✔ exists                  |
-| C preprocessor                | `cmd/cpp`     | ✔ exists                  |
-| Disassembler                  | `cmd/disasm`  | ✔ exists                  |
-| Kernel (i486 validation)      | `kernel/`     | ✔ builds                  |
-| libc library                  | —             | ☐ to do                   |
-| Build & link kernel for BESM-6| —             | ☐ to do                   |
-| Peripheral drivers            | `kernel/dev/` | ◐ in progress             |
+| Component                     | Location      | Status                        |
+|-------------------------------|---------------|-------------------------------|
+| Assembler (AT&T / Madlen)     | `cmd/as`      | ✔ working, tested, documented |
+| Linker + binutils             | `cmd/ld`      | ✔ exists                      |
+| C preprocessor                | `cmd/cpp`     | ✔ exists                      |
+| Disassembler                  | `cmd/disasm`  | ✔ exists                      |
+| Kernel (i486 validation)      | `kernel/`     | ✔ builds                      |
+| libc library                  | —             | ☐ to do                       |
+| Build & link kernel for BESM-6| —             | ☐ to do                       |
+| Peripheral drivers            | `kernel/dev/` | ◐ in progress                 |
 
 ## Building
 
@@ -76,6 +76,8 @@ See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail.
   argument passing, registers, and return linkage.
 - [doc/Besm6_Data_Representation.md](doc/Besm6_Data_Representation.md) — how C scalar types
   are laid out in a 48-bit word.
+- [doc/Assembler_Manual.md](doc/Assembler_Manual.md) — the `cmd/as` assembly language:
+  syntax, directives, expressions, and addressing forms.
 
 ## Related projects
 

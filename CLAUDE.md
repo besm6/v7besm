@@ -71,6 +71,8 @@ the authoritative references and are kept current:
 - `doc/Besm6_Calling_Conventions.md` — args pushed in direct order, last arg left in the
   accumulator, r14 = negative arg count, r13 = return address; `_Noreturn` tail-call rules.
 - `doc/Besm6_Data_Representation.md` — how every C scalar is laid out in a word.
+- `doc/Assembler_Manual.md` — the `cmd/as` assembly language: lexical rules, directives,
+  expression grammar, number formats, operand/addressing forms, and `$NN`/`@NN` raw opcodes.
 
 **Object/executable format** is a BESM-6-specific `a.out` variant defined in
 `cross/besm6/b.out.h` (magic `FMAGIC`/`NMAGIC`/`AMAGIC`, `struct exec` with separate

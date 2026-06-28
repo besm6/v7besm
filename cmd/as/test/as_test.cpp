@@ -112,8 +112,8 @@ TEST(Assemble, AllInstructions)
         xtr
         rte
         yta
-        e32
-        e33
+        $32
+        $33
         e+n
         e-n
         asn
@@ -124,34 +124,34 @@ TEST(Assemble, AllInstructions)
         its
         mtj
         j+m
-        e46
-        e47
-        e50
-        e51
-        e52
-        e53
-        e54
-        e55
-        e56
-        e57
-        e60
-        e61
-        e62
-        e63
-        e64
-        e65
-        e66
-        e67
-        e70
-        e71
-        e72
-        e73
-        e74
-        e75
-        e76
-        e77
-        e20
-        e21
+        $46
+        $47
+        $50
+        $51
+        $52
+        $53
+        $54
+        $55
+        $56
+        $57
+        $60
+        $61
+        $62
+        $63
+        $64
+        $65
+        $66
+        $67
+        $70
+        $71
+        $72
+        $73
+        $74
+        $75
+        $76
+        $77
+        @20
+        @21
         utc
         wtc
         vtm
@@ -164,7 +164,7 @@ TEST(Assemble, AllInstructions)
         stop
         vzm
         v1m
-        e36
+        @36
         vlm
 )");
 
