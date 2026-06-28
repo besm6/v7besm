@@ -10,32 +10,10 @@
 #include <string.h>
 #include <unistd.h>
 
-FILE *sfile[SABS], *rfile[SABS];
-long count[SABS];
-int segm;
-char *infile, *outfile = "a.out";
-char tfilename[] = "/tmp/asXXXXXX";
-int line;  // current line number
-int debug; // debug flag
-int xflags, Xflag, uflag;
-int stlength; // symbol table length in bytes
-int stalign;  // symbol table alignment
-long cbase, tbase, dbase, adbase, bbase;
-struct nlist stab[STSIZE];
-int stabfree;
-char space[SPACESZ]; // storage for symbol names
-int lastfree;        // counter of used space
-int regleft;         // register number to the left of the instruction
-struct constent constab[CSIZE];
-int nconst;
-char name[256];
-struct word intval;
-int extref;
-int blexflag, backlex, blextype;
-int hashtab[HASHSZ], hashctab[HCMDSZ];
-int hashconst[HCONSZ];
-int aflag;   // don't align on word boundary
-int cmdmode; // lexer expects a machine instruction (allow + - * / in name)
+struct assembler as = {
+    .outfile   = "a.out",
+    .tfilename = "/tmp/asXXXXXX",
+};
 
 // Fatal error message.
 noreturn void uerror(char *fmt, ...)
@@ -44,10 +22,10 @@ noreturn void uerror(char *fmt, ...)
 
     va_start(ap, fmt);
     fprintf(stderr, "as: ");
-    if (infile)
-        fprintf(stderr, "%s, ", infile);
-    if (line)
-        fprintf(stderr, "%d: ", line);
+    if (as.infile)
+        fprintf(stderr, "%s, ", as.infile);
+    if (as.line)
+        fprintf(stderr, "%d: ", as.line);
     vfprintf(stderr, fmt, ap);
     va_end(ap);
     fprintf(stderr, "\n");
@@ -58,27 +36,27 @@ static void startup(void)
 {
     int i;
 
-    int fd = mkstemp(tfilename);
+    int fd = mkstemp(as.tfilename);
     if (fd == -1) {
-        uerror("cannot create temporary file %s", tfilename);
+        uerror("cannot create temporary file %s", as.tfilename);
     } else {
         close(fd);
     }
     for (i = STEXT; i < SBSS; i++) {
-        if (!(sfile[i] = fopen(tfilename, "w+")))
-            uerror("cannot open %s", tfilename);
-        unlink(tfilename);
-        if (!(rfile[i] = fopen(tfilename, "w+")))
-            uerror("cannot open %s", tfilename);
-        unlink(tfilename);
+        if (!(as.sfile[i] = fopen(as.tfilename, "w+")))
+            uerror("cannot open %s", as.tfilename);
+        unlink(as.tfilename);
+        if (!(as.rfile[i] = fopen(as.tfilename, "w+")))
+            uerror("cannot open %s", as.tfilename);
+        unlink(as.tfilename);
     }
-    line = 1;
+    as.line = 1;
 }
 
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "    mkb-as [-uaxXd] [-o outfile] [infile]\n");
+    fprintf(stderr, "    b6as [-uaxXd] [-o outfile] [infile]\n");
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "    -o filename     Set output file name, default stdout\n");
     fprintf(stderr, "    -u              Treat undefined names as error\n");
@@ -103,18 +81,18 @@ int main(int argc, char *argv[])
             for (cp = argv[i] + 1; *cp; cp++) {
                 switch (*cp) {
                 case 'd': // debug flag
-                    debug++;
+                    as.debug++;
                     break;
                 case 'X':
-                    Xflag++;
+                    as.Xflag++;
                 case 'x':
-                    xflags++;
+                    as.xflags++;
                     break;
                 case 'a': // don't align on word boundary
-                    aflag++;
+                    as.aflag++;
                     break;
                 case 'u':
-                    uflag++;
+                    as.uflag++;
                     break;
                 case 'o': // output file
                     if (ofile)
@@ -122,13 +100,13 @@ int main(int argc, char *argv[])
                     ofile = 1;
                     if (cp[1]) {
                         // -ofile
-                        outfile = cp + 1;
+                        as.outfile = cp + 1;
                         while (*++cp)
                             ;
                         --cp;
                     } else if (i + 1 < argc)
                         // -o file
-                        outfile = argv[++i];
+                        as.outfile = argv[++i];
                     break;
                 default:
                     fprintf(stderr, "Unknown option: %s\n", cp);
@@ -137,21 +115,21 @@ int main(int argc, char *argv[])
             }
             break;
         default:
-            if (infile)
+            if (as.infile)
                 uerror("too many input files");
-            infile = argv[i];
+            as.infile = argv[i];
             break;
         }
     }
-    if (!infile && isatty(0))
+    if (!as.infile && isatty(0))
         usage();
 
     // set up input/output
 
-    if (infile && !freopen(infile, "r", stdin))
-        uerror("cannot open %s", infile);
-    if (!freopen(outfile, "w", stdout))
-        uerror("cannot open %s", outfile);
+    if (as.infile && !freopen(as.infile, "r", stdin))
+        uerror("cannot open %s", as.infile);
+    if (!freopen(as.outfile, "w", stdout))
+        uerror("cannot open %s", as.outfile);
 
     i = getchar();
     ungetc(i == '#' ? ';' : i, stdin);

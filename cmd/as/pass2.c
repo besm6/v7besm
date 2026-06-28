@@ -13,25 +13,25 @@ void middle(void)
     align(STEXT);
     align(SDATA);
     align(SSTRNG);
-    stlength = 0;
-    for (snum = 0, i = 0; i < stabfree; i++) {
+    as.stlength = 0;
+    for (snum = 0, i = 0; i < as.stabfree; i++) {
         // if uflag is not set,
         // an undefined name is treated as external
-        if (stab[i].n_type == N_UNDF) {
-            if (uflag)
-                uerror("name undefined", stab[i].n_name);
+        if (as.stab[i].n_type == N_UNDF) {
+            if (as.uflag)
+                uerror("name undefined", as.stab[i].n_name);
             else
-                stab[i].n_type |= N_EXT;
+                as.stab[i].n_type |= N_EXT;
         }
-        if (xflags)
+        if (as.xflags)
             newindex[i] = snum;
-        if (!xflags || (stab[i].n_type & N_EXT) || (Xflag && stab[i].n_name[0] != 'L')) {
-            stlength += 2 + W / 2 + stab[i].n_len;
+        if (!as.xflags || (as.stab[i].n_type & N_EXT) || (as.Xflag && as.stab[i].n_name[0] != 'L')) {
+            as.stlength += 2 + W / 2 + as.stab[i].n_len;
             snum++;
         }
     }
-    stalign = W - stlength % W;
-    stlength += stalign;
+    as.stalign = W - as.stlength % W;
+    as.stlength += as.stalign;
 }
 
 void makeheader(void)
@@ -39,13 +39,13 @@ void makeheader(void)
     struct exec hdr;
 
     hdr.a_magic = FMAGIC;
-    hdr.a_const = (long)nconst * W;
-    hdr.a_text  = count[STEXT] * (W / 2);
-    hdr.a_data  = (count[SDATA] + count[SSTRNG]) * (W / 2);
-    hdr.a_bss   = count[SBSS] * (W / 2);
+    hdr.a_const = (long)as.nconst * W;
+    hdr.a_text  = as.count[STEXT] * (W / 2);
+    hdr.a_data  = (as.count[SDATA] + as.count[SSTRNG]) * (W / 2);
+    hdr.a_bss   = as.count[SBSS] * (W / 2);
     hdr.a_abss  = 0; /* no absolute-bss segment in as */
-    hdr.a_syms  = stlength;
-    hdr.a_entry = HDRSZ / W + count[SCONST] / (W / 2);
+    hdr.a_syms  = as.stlength;
+    hdr.a_entry = HDRSZ / W + as.count[SCONST] / (W / 2);
     hdr.a_flag  = 0;
     fputhdr(&hdr, stdout);
 }
@@ -86,25 +86,25 @@ static long makehalf(long h, long hr)
     case RABS:
         break;
     case RCONST:
-        h = adjust(h, cbase, (int)hr);
+        h = adjust(h, as.cbase, (int)hr);
         break;
     case RTEXT:
-        h = adjust(h, tbase, (int)hr);
+        h = adjust(h, as.tbase, (int)hr);
         break;
     case RDATA:
-        h = adjust(h, dbase, (int)hr);
+        h = adjust(h, as.dbase, (int)hr);
         break;
     case RSTRNG:
-        h = adjust(h, adbase, (int)hr);
+        h = adjust(h, as.adbase, (int)hr);
         break;
     case RBSS:
-        h = adjust(h, bbase, (int)hr);
+        h = adjust(h, as.bbase, (int)hr);
         break;
     case REXT:
         i = RGETIX(hr);
-        if (stab[i].n_type != N_EXT + N_UNDF && stab[i].n_type != N_EXT + N_COMM &&
-            stab[i].n_type != N_EXT + N_ACOMM)
-            h = adjust(h, stab[i].n_value, (int)hr);
+        if (as.stab[i].n_type != N_EXT + N_UNDF && as.stab[i].n_type != N_EXT + N_COMM &&
+            as.stab[i].n_type != N_EXT + N_ACOMM)
+            h = adjust(h, as.stab[i].n_value, (int)hr);
         break;
     }
     return h;
@@ -115,49 +115,49 @@ void pass2(void)
     int i;
     long h;
 
-    cbase  = HDRSZ / W;
-    tbase  = cbase + nconst;
-    dbase  = tbase + count[STEXT] / 2;
-    adbase = dbase + count[SDATA] / 2;
-    bbase  = adbase + count[SSTRNG] / 2;
+    as.cbase  = HDRSZ / W;
+    as.tbase  = as.cbase + as.nconst;
+    as.dbase  = as.tbase + as.count[STEXT] / 2;
+    as.adbase = as.dbase + as.count[SDATA] / 2;
+    as.bbase  = as.adbase + as.count[SSTRNG] / 2;
 
     // process the symbol table
-    for (i = 0; i < stabfree; i++) {
-        h = stab[i].n_value;
-        switch (stab[i].n_type & N_TYPE) {
+    for (i = 0; i < as.stabfree; i++) {
+        h = as.stab[i].n_value;
+        switch (as.stab[i].n_type & N_TYPE) {
         case N_UNDF:
         case N_ABS:
             break;
         case N_CONST:
-            h = adjust(h, cbase, 0);
+            h = adjust(h, as.cbase, 0);
             break;
         case N_TEXT:
-            h = adjust(h, tbase, 0);
+            h = adjust(h, as.tbase, 0);
             break;
         case N_DATA:
-            h = adjust(h, dbase, 0);
+            h = adjust(h, as.dbase, 0);
             break;
         case N_STRNG:
-            h = adjust(h, adbase, 0);
-            stab[i].n_type += N_DATA - N_STRNG;
+            h = adjust(h, as.adbase, 0);
+            as.stab[i].n_type += N_DATA - N_STRNG;
             break;
         case N_BSS:
-            h = adjust(h, bbase, 0);
+            h = adjust(h, as.bbase, 0);
             break;
         }
-        stab[i].n_value = h;
+        as.stab[i].n_value = h;
     }
     // process the constant segment
-    for (i = 0; i < nconst; i++) {
-        fputh(makehalf(constab[i].h2, constab[i].hr2), stdout);
-        fputh(constab[i].h, stdout);
+    for (i = 0; i < as.nconst; i++) {
+        fputh(makehalf(as.constab[i].h2, as.constab[i].hr2), stdout);
+        fputh(as.constab[i].h, stdout);
     }
-    for (segm = STEXT; segm < SBSS; segm++) {
-        rewind(sfile[segm]);
-        rewind(rfile[segm]);
-        h = count[segm];
+    for (as.segm = STEXT; as.segm < SBSS; as.segm++) {
+        rewind(as.sfile[as.segm]);
+        rewind(as.rfile[as.segm]);
+        h = as.count[as.segm];
         while (h--)
-            fputh(makehalf(fgeth(sfile[segm]), fgeth(rfile[segm])), stdout);
+            fputh(makehalf(fgeth(as.sfile[as.segm]), fgeth(as.rfile[as.segm])), stdout);
     }
 }
 
@@ -196,13 +196,13 @@ static long relhalf(long hr)
         break;
     case REXT:
         i = RGETIX(hr);
-        if (stab[i].n_type == N_EXT + N_UNDF || stab[i].n_type == N_EXT + N_COMM ||
-            stab[i].n_type == N_EXT + N_ACOMM) {
+        if (as.stab[i].n_type == N_EXT + N_UNDF || as.stab[i].n_type == N_EXT + N_COMM ||
+            as.stab[i].n_type == N_EXT + N_ACOMM) {
             // reindexing
-            if (xflags)
+            if (as.xflags)
                 hr = (hr & (RSHORT | REXT)) | RPUTIX(newindex[i]);
         } else
-            hr = (hr & RSHORT) | typerel((int)stab[i].n_type);
+            hr = (hr & RSHORT) | typerel((int)as.stab[i].n_type);
         break;
     }
     return hr;
@@ -212,16 +212,16 @@ void makereloc(void)
 {
     int i;
 
-    for (i = 0; i < nconst; i++) {
-        fputh(relhalf(constab[i].hr2), stdout);
+    for (i = 0; i < as.nconst; i++) {
+        fputh(relhalf(as.constab[i].hr2), stdout);
         fputh(0L, stdout);
     }
-    for (segm = STEXT; segm < SBSS; segm++) {
-        long len = count[segm];
+    for (as.segm = STEXT; as.segm < SBSS; as.segm++) {
+        long len = as.count[as.segm];
 
-        rewind(rfile[segm]);
+        rewind(as.rfile[as.segm]);
         while (len--)
-            fputh(relhalf(fgeth(rfile[segm])), stdout);
+            fputh(relhalf(fgeth(as.rfile[as.segm])), stdout);
     }
 }
 
@@ -229,9 +229,9 @@ void makesymtab(void)
 {
     int i;
 
-    for (i = 0; i < stabfree; i++)
-        if (!xflags || (stab[i].n_type & N_EXT) || (Xflag && stab[i].n_name[0] != 'L'))
-            fputsym(&stab[i], stdout);
-    while (stalign--)
+    for (i = 0; i < as.stabfree; i++)
+        if (!as.xflags || (as.stab[i].n_type & N_EXT) || (as.Xflag && as.stab[i].n_name[0] != 'L'))
+            fputsym(&as.stab[i], stdout);
+    while (as.stalign--)
         putchar(0);
 }

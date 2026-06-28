@@ -25,21 +25,21 @@ static void getlhex(void)
     // read a hexadecimal number 'ZZZ
 
     c = getchar();
-    for (cp = name; ISHEX(c); c = getchar())
+    for (cp = as.name; ISHEX(c); c = getchar())
         *cp++ = hexdig(c);
     ungetc(c, stdin);
-    intval.left  = 0;
-    intval.right = 0;
-    p            = name;
+    as.intval.left  = 0;
+    as.intval.right = 0;
+    p            = as.name;
     for (c = 28; c >= 0; c -= 4, ++p) {
         if (p >= cp)
             return;
-        intval.left |= (long)*p << c;
+        as.intval.left |= (long)*p << c;
     }
     for (c = 28; c >= 0; c -= 4, ++p) {
         if (p >= cp)
             return;
-        intval.right |= (long)*p << c;
+        as.intval.right |= (long)*p << c;
     }
 }
 
@@ -50,20 +50,20 @@ static void gethnum(void)
     char *cp;
 
     c = getchar();
-    for (cp = name; ISHEX(c); c = getchar())
+    for (cp = as.name; ISHEX(c); c = getchar())
         *cp++ = hexdig(c);
     ungetc(c, stdin);
-    intval.left  = 0;
-    intval.right = 0;
+    as.intval.left  = 0;
+    as.intval.right = 0;
     for (c = 0; c < 32; c += 4) {
-        if (--cp < name)
+        if (--cp < as.name)
             return;
-        intval.right |= (long)*cp << c;
+        as.intval.right |= (long)*cp << c;
     }
     for (c = 0; c < 32; c += 4) {
-        if (--cp < name)
+        if (--cp < as.name)
             return;
-        intval.left |= (long)*cp << c;
+        as.intval.left |= (long)*cp << c;
     }
 }
 
@@ -77,37 +77,37 @@ static void getnum(int c)
     int leadingzero;
 
     leadingzero = (c == '0');
-    for (cp = name; ISHEX(c); c = getchar())
+    for (cp = as.name; ISHEX(c); c = getchar())
         *cp++ = hexdig(c);
-    intval.left  = 0;
-    intval.right = 0;
+    as.intval.left  = 0;
+    as.intval.right = 0;
     if (c == '.' || c == 'o' || c == 'O') {
     octal:
         for (c = 0; c <= 27; c += 3) {
-            if (--cp < name)
+            if (--cp < as.name)
                 return;
-            intval.right |= (long)*cp << c;
+            as.intval.right |= (long)*cp << c;
         }
-        if (--cp < name)
+        if (--cp < as.name)
             return;
-        intval.right |= (long)*cp << 30;
-        intval.left = (long)*cp >> 2;
+        as.intval.right |= (long)*cp << 30;
+        as.intval.left = (long)*cp >> 2;
         for (c = 1; c <= 31; c += 3) {
-            if (--cp < name)
+            if (--cp < as.name)
                 return;
-            intval.left |= (long)*cp << c;
+            as.intval.left |= (long)*cp << c;
         }
         return;
     } else if (c == 'h' || c == 'H' || c == '\'') {
         for (c = 0; c < 32; c += 4) {
-            if (--cp < name)
+            if (--cp < as.name)
                 return;
-            intval.right |= (long)*cp << c;
+            as.intval.right |= (long)*cp << c;
         }
         for (c = 0; c < 32; c += 4) {
-            if (--cp < name)
+            if (--cp < as.name)
                 return;
-            intval.left |= (long)*cp << c;
+            as.intval.left |= (long)*cp << c;
         }
         return;
     } else if (c != 'd' && c != 'D') {
@@ -116,9 +116,9 @@ static void getnum(int c)
             goto octal;
     }
     for (c = 1;; c *= 10) {
-        if (--cp < name)
+        if (--cp < as.name)
             return;
-        intval.right += (long)*cp * c;
+        as.intval.right += (long)*cp * c;
     }
 }
 
@@ -147,28 +147,28 @@ static void getbitmask(void)
     if (a < b)
         c = a, a = b, b = c;
     if (compl && --a < ++b) {
-        intval.left  = 0xffffffff;
-        intval.right = 0xffffffff;
+        as.intval.left  = 0xffffffff;
+        as.intval.right = 0xffffffff;
         return;
     }
     // a greater than or equal to b
     if (a >= 32) {
         if (b >= 32) {
-            intval.left  = (unsigned long)~0L >> (63 - a + b - 32) << (b - 32);
-            intval.right = 0;
+            as.intval.left  = (unsigned long)~0L >> (63 - a + b - 32) << (b - 32);
+            as.intval.right = 0;
         } else {
-            intval.left  = (unsigned long)~0L >> (63 - a);
-            intval.right = (unsigned long)~0L << b;
+            as.intval.left  = (unsigned long)~0L >> (63 - a);
+            as.intval.right = (unsigned long)~0L << b;
         }
     } else {
-        intval.left  = 0;
-        intval.right = (unsigned long)~0L >> (31 - a + b) << b;
+        as.intval.left  = 0;
+        as.intval.right = (unsigned long)~0L >> (31 - a + b) << b;
     }
-    intval.left &= 0xffffffff;
-    intval.right &= 0xffffffff;
+    as.intval.left &= 0xffffffff;
+    as.intval.right &= 0xffffffff;
     if (compl) {
-        intval.left ^= 0xffffffff;
-        intval.right ^= 0xffffffff;
+        as.intval.left ^= 0xffffffff;
+        as.intval.right ^= 0xffffffff;
     }
 }
 
@@ -176,15 +176,15 @@ static void getbitmask(void)
 static void getbitnum(int c)
 {
     getnum(c);
-    c = intval.right - 1;
+    c = as.intval.right - 1;
     if (c < 0 || c >= 64)
         uerror("bit number out of range 1..64");
     if (c >= 32) {
-        intval.left  = 1L << (c - 32);
-        intval.right = 0;
+        as.intval.left  = 1L << (c - 32);
+        as.intval.right = 0;
     } else if (c >= 0) {
-        intval.right = 1L << c;
-        intval.left  = 0;
+        as.intval.right = 1L << c;
+        as.intval.left  = 0;
     }
 }
 
@@ -200,7 +200,7 @@ static void getname(int c)
 
     // When a machine instruction is expected, absorb the operator characters
     // so mnemonics like "a+x" lex as a single name.
-    for (cp = name; ISLETTER(c) || ISDIGIT(c) || (cmdmode && isopername(c)); c = getchar())
+    for (cp = as.name; ISLETTER(c) || ISDIGIT(c) || (as.cmdmode && isopername(c)); c = getchar())
         *cp++ = c;
     *cp = 0;
     ungetc(c, stdin);
@@ -221,10 +221,10 @@ int getlex(int *pval)
 {
     int c;
 
-    if (blexflag) {
-        blexflag = 0;
-        *pval    = blextype;
-        return backlex;
+    if (as.blexflag) {
+        as.blexflag = 0;
+        *pval    = as.blextype;
+        return as.backlex;
     }
     for (;;)
         switch (c = getchar()) {
@@ -238,7 +238,7 @@ int getlex(int *pval)
             if (c == '#')
                 goto skiptoeol;
             ungetc(c, stdin);
-            *pval = ++line;
+            *pval = ++as.line;
             return LEOL;
         case ' ':
         case '\t':
@@ -326,8 +326,8 @@ int getlex(int *pval)
                 c = '.';
             }
             getname(c);
-            if (name[0] == '.') {
-                if (name[1] == 0)
+            if (as.name[0] == '.') {
+                if (as.name[1] == 0)
                     return '.';
                 if ((*pval = lookacmd()) != -1)
                     return LACMD;
@@ -341,7 +341,7 @@ int getlex(int *pval)
 
 void ungetlex(int val, int type)
 {
-    blexflag = 1;
-    backlex  = val;
-    blextype = type;
+    as.blexflag = 1;
+    as.backlex  = val;
+    as.blextype = type;
 }

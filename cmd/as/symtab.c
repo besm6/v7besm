@@ -23,64 +23,64 @@ void hashinit(void)
     const struct table *p;
 
     for (i = 0; i < HCONSZ; i++)
-        hashconst[i] = -1;
+        as.hashconst[i] = -1;
     for (i = 0; i < HCMDSZ; i++)
-        hashctab[i] = -1;
+        as.hashctab[i] = -1;
     for (p = table; p->name; p++) {
         int h = chash(p->name);
 
-        while (hashctab[h] != -1)
+        while (as.hashctab[h] != -1)
             if (--h < 0)
                 h += HCMDSZ;
-        hashctab[h] = p - table;
+        as.hashctab[h] = p - table;
     }
     for (i = 0; i < HASHSZ; i++)
-        hashtab[i] = -1;
+        as.hashtab[i] = -1;
 }
 
 int lookacmd(void)
 {
-    switch (name[1]) {
+    switch (as.name[1]) {
     case 'a':
-        if (!strcmp(".ascii", name))
+        if (!strcmp(".ascii", as.name))
             return ASCII;
-        if (!strcmp(".acomm", name))
+        if (!strcmp(".acomm", as.name))
             return ACOMM;
         break;
     case 'b':
-        if (!strcmp(".bss", name))
+        if (!strcmp(".bss", as.name))
             return BSS;
         break;
     case 'c':
-        if (!strcmp(".comm", name))
+        if (!strcmp(".comm", as.name))
             return COMM;
         break;
     case 'd':
-        if (!strcmp(".data", name))
+        if (!strcmp(".data", as.name))
             return DATA;
         break;
     case 'e':
-        if (!strcmp(".equ", name))
+        if (!strcmp(".equ", as.name))
             return EQU;
         break;
     case 'g':
-        if (!strcmp(".globl", name))
+        if (!strcmp(".globl", as.name))
             return GLOBL;
         break;
     case 'h':
-        if (!strcmp(".half", name))
+        if (!strcmp(".half", as.name))
             return HALF;
         break;
     case 's':
-        if (!strcmp(".strng", name))
+        if (!strcmp(".strng", as.name))
             return STRNG;
         break;
     case 't':
-        if (!strcmp(".text", name))
+        if (!strcmp(".text", as.name))
             return TEXT;
         break;
     case 'w':
-        if (!strcmp(".word", name))
+        if (!strcmp(".word", as.name))
             return WORD;
         break;
     }
@@ -91,9 +91,9 @@ int lookcmd(void)
 {
     int i, h;
 
-    h = chash(name);
-    while ((i = hashctab[h]) != -1) {
-        if (!strcmp(table[i].name, name))
+    h = chash(as.name);
+    while ((i = as.hashctab[h]) != -1) {
+        if (!strcmp(table[i].name, as.name))
             return i;
         if (--h < 0)
             h += HCMDSZ;
@@ -115,19 +115,19 @@ static char *alloc(int len)
 {
     int r;
 
-    r = lastfree;
-    if ((lastfree += len) > SPACESZ)
+    r = as.lastfree;
+    if ((as.lastfree += len) > SPACESZ)
         uerror("out of memory");
-    return space + r;
+    return as.space + r;
 }
 
 int lookname(void)
 {
     int i, h;
 
-    h = hash(name);
-    while ((i = hashtab[h]) != -1) {
-        if (!strcmp(stab[i].n_name, name))
+    h = hash(as.name);
+    while ((i = as.hashtab[h]) != -1) {
+        if (!strcmp(as.stab[i].n_name, as.name))
             return i;
         if (--h < 0)
             h += HASHSZ;
@@ -135,16 +135,16 @@ int lookname(void)
 
     // enter a new symbol into the table
 
-    i = stabfree++;
+    i = as.stabfree++;
     if (i >= STSIZE)
         uerror("symbol table overflow");
     else {
-        stab[i].n_len  = strlen(name);
-        stab[i].n_name = alloc(1 + stab[i].n_len);
-        strcpy(stab[i].n_name, name);
-        stab[i].n_value = 0;
-        stab[i].n_type  = 0;
-        hashtab[h]      = i;
+        as.stab[i].n_len  = strlen(as.name);
+        as.stab[i].n_name = alloc(1 + as.stab[i].n_len);
+        strcpy(as.stab[i].n_name, as.name);
+        as.stab[i].n_value = 0;
+        as.stab[i].n_type  = 0;
+        as.hashtab[h]      = i;
         return i;
     }
 }

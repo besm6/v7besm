@@ -84,7 +84,7 @@
 // on the second pass hashtab is unused; reuse it as newindex
 // to reindex relocation when flag x or X is set
 
-#define newindex hashtab
+#define newindex as.hashtab
 
 // Two halves of a 48-bit word.
 struct word {
@@ -103,33 +103,37 @@ struct constent {
     long h, h2, hr2;
 };
 
-// Global state (defined in as.c).
-extern FILE *sfile[SABS], *rfile[SABS];
-extern long count[SABS];
-extern int segm;
-extern char *infile, *outfile;
-extern char tfilename[];
-extern int line;  // current line number
-extern int debug; // debug flag
-extern int xflags, Xflag, uflag;
-extern int stlength; // symbol table length in bytes
-extern int stalign;  // symbol table alignment
-extern long cbase, tbase, dbase, adbase, bbase;
-extern struct nlist stab[STSIZE];
-extern int stabfree;
-extern char space[SPACESZ]; // storage for symbol names
-extern int lastfree;        // counter of used space
-extern int regleft;         // register number to the left of the instruction
-extern struct constent constab[CSIZE];
-extern int nconst;
-extern char name[256];
-extern struct word intval;
-extern int extref;
-extern int blexflag, backlex, blextype;
-extern int hashtab[HASHSZ], hashctab[HCMDSZ];
-extern int hashconst[HCONSZ];
-extern int aflag;   // don't align on word boundary
-extern int cmdmode; // lexer expects a machine instruction (allow + - * / in name)
+// Global state of the assembler (defined in as.c).
+struct assembler {
+    FILE *sfile[SABS], *rfile[SABS];
+    long count[SABS];
+    int segm;
+    char *infile, *outfile;
+    char tfilename[14]; // "/tmp/asXXXXXX"
+    int line;           // current line number
+    int debug;          // debug flag
+    int xflags, Xflag, uflag;
+    int stlength; // symbol table length in bytes
+    int stalign;  // symbol table alignment
+    long cbase, tbase, dbase, adbase, bbase;
+    struct nlist stab[STSIZE];
+    int stabfree;
+    char space[SPACESZ]; // storage for symbol names
+    int lastfree;        // counter of used space
+    int regleft;         // register number to the left of the instruction
+    struct constent constab[CSIZE];
+    int nconst;
+    char name[256];
+    struct word intval;
+    int extref;
+    int blexflag, backlex, blextype;
+    int hashtab[HASHSZ], hashctab[HCMDSZ];
+    int hashconst[HCONSZ];
+    int aflag;   // don't align on word boundary
+    int cmdmode; // lexer expects a machine instruction (allow + - * / in name)
+};
+
+extern struct assembler as;
 
 // Read-only tables (defined in tables.c).
 extern const int ctype[256];
