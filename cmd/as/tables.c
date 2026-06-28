@@ -6,7 +6,7 @@
 
 #include "as.h"
 
-short ctype[256] = {
+const short ctype[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 7, 7, 7, 7, 7, 7, 7, 7, 5, 5, 0, 0, 0, 0, 0, 0,
     0, 9, 9, 9, 9, 9, 9, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 8,
@@ -17,7 +17,7 @@ short ctype[256] = {
     8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 0,
 };
 
-short segmtype[] = {
+const short segmtype[] = {
     // convert segment number to symbol type
     N_CONST, // SCONST
     N_TEXT,  // STEXT
@@ -28,7 +28,7 @@ short segmtype[] = {
     N_ABS,   // SABS
 };
 
-short segmrel[] = {
+const short segmrel[] = {
     // convert segment number to relocation type
     RCONST, // SCONST
     RTEXT,  // STEXT
@@ -39,7 +39,7 @@ short segmrel[] = {
     RABS,   // SABS
 };
 
-short typesegm[] = {
+const short typesegm[] = {
     // convert symbol type to segment number
     SEXT,   // N_UNDF
     SABS,   // N_ABS
@@ -59,7 +59,7 @@ short typesegm[] = {
 //   short-address (opcodes 000-077):  val = opcode << 12  -> 0zz0000
 //   long-address  (opcodes 020-037):  val = opcode << 15  -> 0zz00000
 //
-struct table table[] = {
+const struct table table[] = {
     // Short-address instructions (Format 1, opcodes 000-077).
     { 00000000L, "atx", 0 },
     { 00010000L, "stx", 0 },

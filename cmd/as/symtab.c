@@ -20,7 +20,7 @@ static int chash(const char *s)
 void hashinit(void)
 {
     register short i;
-    register struct table *p;
+    register const struct table *p;
 
     for (i = 0; i < HCONSZ; i++)
         hashconst[i] = -1;

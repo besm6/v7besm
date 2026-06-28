@@ -94,7 +94,7 @@ struct word {
 // Table of machine instructions.
 struct table {
     long val;
-    char *name;
+    const char *name;
     short type;
 };
 
@@ -132,11 +132,11 @@ extern short aflag;   // don't align on word boundary
 extern short cmdmode; // lexer expects a machine instruction (allow + - * / in name)
 
 // Read-only tables (defined in tables.c).
-extern short ctype[256];
-extern short segmtype[];
-extern short segmrel[];
-extern short typesegm[];
-extern struct table table[];
+extern const short ctype[256];
+extern const short segmtype[];
+extern const short segmrel[];
+extern const short typesegm[];
+extern const struct table table[];
 
 // Shared functions.
 noreturn void uerror(char *fmt, ...);
