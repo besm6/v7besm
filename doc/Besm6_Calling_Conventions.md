@@ -16,24 +16,24 @@ We use decimal numbering.
 
 A function declared `_Noreturn` (e.g. `exit`, `abort`, `longjmp`, or a user function)
 never returns to its caller, so no return linkage is set up: the caller sets up the
-arguments exactly as above but invokes the callee with a tail `,uj,` (unconditional jump)
-instead of `,call,` (which is `13 ,vjm,`, i.e. it loads r13 with the return address).
+arguments exactly as above but invokes the callee with a tail `uj` (unconditional jump)
+instead of `call` (which is `13 vjm`, i.e. it loads r13 with the return address).
 Because control never comes back, every instruction after the jump — including the
-caller's own epilogue `,uj, b/ret` — is dead and is removed by the peephole pass. In the
+caller's own epilogue `uj b/ret` — is dead and is removed by the peephole pass. In the
 TAC IR this is the dedicated `FunCallNoreturn` instruction; the front end emits it for a
 *direct* call whose callee carries the `_Noreturn` flag.
 
 ### Defining a parameterless `_Noreturn` function
 
-The standard prologue `,its, 13` / `,call, b/save0` exists to (1) save the return address
+The standard prologue `its 13` / `call b/save0` exists to (1) save the return address
 and the caller's `r5`/`r6`/`r7` so they can be restored on return, and (2) set up this
 function's frame pointer `r7` (auto base) and the mode register `R = 7`. A function that is
 itself declared `_Noreturn` **and takes no parameters** never returns, so job (1) is pure
 waste — nothing is ever restored. The backend therefore drops the `b/save0` call (and the
 dead `b/ret` epilogue) and inlines only what remains:
 
- * `,ntr, 7` — always, to establish the mode register `R = 7` that `b/save0` would have left.
- * `15 ,mtj, 7` — only when the function has auto locals or compiler temporaries, to point
+ * `ntr 7` — always, to establish the mode register `R = 7` that `b/save0` would have left.
+ * `15 mtj 7` — only when the function has auto locals or compiler temporaries, to point
    `r7` at the incoming stack top before the `utm` reserves the auto slots. With no register
    save area pushed, the autos start directly at the caller's stack top.
 
@@ -73,7 +73,7 @@ Calling function with no arguments (and parameters). In C:
 
 In assembler:
 
-    13 ,vjm, flush
+    13 vjm flush
 
 ## Example 2
 
@@ -83,9 +83,9 @@ Calling function with one argument. In C:
 
 In assembler:
 
-       ,xta, a
-    14 ,vtm, -1
-    13 ,vjm, putch
+       xta a
+    14 vtm -1
+    13 vjm putch
 
 ## Example 3
 
@@ -95,12 +95,12 @@ Calling function with three arguments an a result. In C:
 
 In assembler:
 
-       ,xta, a
-       ,xts, b
-       ,xts, c
-    14 ,vtm, -3
-    13 ,vjm, foobar
-       ,atx, result
+       xta a
+       xts b
+       xts c
+    14 vtm -3
+    13 vjm foobar
+       atx result
 
 # Stack Frame
 
@@ -147,8 +147,8 @@ Here is the stack layout of the called function.
 
 Every C function should start with:
 
-       ,its, 13
-    13 ,vjm, c/save
+       its 13
+    13 vjm c/save
 
 The c/save routine performs the following actions:
 
@@ -158,20 +158,20 @@ The c/save routine performs the following actions:
 
 Example:
 
-    c/save: ,name,
-         15 ,j+m, 14
-            ,its, 7
-            ,its, 6
-            ,its,
-         14 ,mtj, 6
-         15 ,mtj, 7
-         13 ,uj,
+    c/save:
+         15 j+m 14
+            its 7
+            its 6
+            its
+         14 mtj 6
+         15 mtj 7
+         13 uj
 
 ## Restore Context
 
 On return, every C function should perform:
 
-        ,uj, c/ret
+        uj c/ret
 
 The c/ret routine does the following:
 
@@ -181,12 +181,12 @@ The c/ret routine does the following:
 
 Example:
 
-     c/ret: ,name,
-          6 ,mtj, 14
-          7 ,mtj, 15
-          7 ,stx, -4
-            ,sti, 6
-            ,sti, 7
-            ,sti, 13
-         14 ,mtj, 15
-         13 ,uj,
+     c/ret:
+          6 mtj 14
+          7 mtj 15
+          7 stx -4
+            sti 6
+            sti 7
+            sti 13
+         14 mtj 15
+         13 uj

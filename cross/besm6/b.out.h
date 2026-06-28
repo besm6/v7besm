@@ -162,9 +162,11 @@ struct nlist {
 #define N_FORMAT    FORMAT
 
 /*
- * Little-endian I/O helpers for the format above (implemented in cmd/ld/):
- * fgeth/fputh read and write one 4-byte word; fgethdr/fputhdr a whole header;
- * fgetsym/fputsym one symbol table entry; fgetint a 4-byte integer.
+ * Big-endian I/O helpers for the format above (implemented in cmd/libaout):
+ * fgeth/fputh read and write one 3-byte half-word (24 bits); fgetw/fputw one
+ * full 6-byte word (48 bits); fgethdr/fputhdr a whole header; fgetsym/fputsym
+ * one symbol table entry; fgetint an int stored as a full 6-byte word (value in
+ * the low half-word).
  */
 long fgeth(FILE *f);
 void fputh(long h, FILE *f);

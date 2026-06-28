@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
     for (i = 1; i < argc; i++) {
         switch (argv[i][0]) {
         case '-':
-            for (cp = argv[i]; *cp; cp++) {
+            for (cp = argv[i] + 1; *cp; cp++) {
                 switch (*cp) {
                 case 'd': // debug flag
                     debug++;
