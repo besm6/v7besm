@@ -169,7 +169,8 @@ TEST(Assemble, AllInstructions)
 )");
 
     // Header sanity, so a gross regression points at the offending field.
-    EXPECT_EQ(word_low(got, 0), 0407); // a_magic == FMAGIC
+    EXPECT_EQ(word_high(got, 0), 0x424553L); // a_magic high half == "BES"
+    EXPECT_EQ(word_low(got, 0), 0x4D0107L);  // a_magic low half  == "M" + FMAGIC
     EXPECT_EQ(word_low(got, 2), 246);  // a_text  == 41 words * 6 bytes
 
     // Short-address instructions (opcodes 000-077, val = opcode << 12).

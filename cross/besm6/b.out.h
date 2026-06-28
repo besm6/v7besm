@@ -14,7 +14,7 @@
  *      stored little-endian.
  *
  *      Header (9 logical words):
- *                              a_magic  magic number 0407 / 0410 / 0411
+ *                              a_magic  magic number ("BESM" + 0407 / 0410 / 0411)
  *                              a_const  size of the const segment   )
  *                              a_text   size of the text segment    )
  *                              a_data   size of the data segment    ) in bytes,
@@ -94,9 +94,9 @@ struct nlist {
  * Magic numbers (a_magic). Only FMAGIC and NMAGIC are accepted on input
  * (see BADMAG below).
  */
-#define FMAGIC  0407    /* standard relocatable / impure executable */
-#define NMAGIC  0410    /* read-only (pure) text segment */
-#define AMAGIC  0411    /* text segment in a separate address space */
+#define FMAGIC  02044252323200407   /* standard relocatable / impure executable */
+#define NMAGIC  02044252323200410   /* read-only (pure) text segment */
+#define AMAGIC  02044252323200411   /* text segment in a separate address space */
 
 /*
  * Symbol types (n_type).

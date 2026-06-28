@@ -117,9 +117,9 @@ TEST(Header, RawBytes) {
     fputhdr(&out, f);
     rewind(f);
 
-    // FMAGIC == 0407, a_text == 0x123456, a_entry == 0xABCDE, a_flag == 1.
+    // FMAGIC == "BESM" + 0407, a_text == 0x123456, a_entry == 0xABCDE, a_flag == 1.
     const unsigned char expected[HDRSZ] = {
-        0x00, 0x00, 0x00,  0x00, 0x01, 0x07,   // a_magic = 0407
+        0x42, 0x45, 0x53,  0x4D, 0x01, 0x07,   // a_magic = FMAGIC ("BESM" + 0407)
         0x00, 0x00, 0x00,  0x00, 0x00, 0x06,   // a_const = 6
         0x00, 0x00, 0x00,  0x12, 0x34, 0x56,   // a_text  = 0x123456
         0x00, 0x00, 0x00,  0x00, 0x00, 0x0C,   // a_data  = 12
@@ -139,7 +139,8 @@ TEST(Header, RawBytes) {
 }
 
 // Each 6-byte field group is 3 zero pad bytes (high half-word) followed by a
-// 3-byte value.
+// 3-byte value. The magic (field 0) is the exception: its high half-word holds
+// the "BES" of the "BESM" tag, so the check starts at field 1.
 TEST(Header, PadBytesAreZero) {
     struct exec out = sample_header();
     FILE *f = tmpfile();
@@ -150,7 +151,7 @@ TEST(Header, PadBytesAreZero) {
 
     unsigned char buf[HDRSZ];
     ASSERT_EQ(fread(buf, 1, HDRSZ, f), (size_t)HDRSZ);
-    for (int field = 0; field < HDRSZ / 6; field++) {
+    for (int field = 1; field < HDRSZ / 6; field++) {
         EXPECT_EQ(buf[field * 6 + 0], 0) << "field " << field;
         EXPECT_EQ(buf[field * 6 + 1], 0) << "field " << field;
         EXPECT_EQ(buf[field * 6 + 2], 0) << "field " << field;
