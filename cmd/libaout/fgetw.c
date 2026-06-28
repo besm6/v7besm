@@ -1,5 +1,6 @@
 
 #include <stdio.h>
+
 #include "besm6/b.out.h"
 
 // One full word == 48 bits == 6 bytes, read as two big-endian 24-bit
@@ -7,8 +8,8 @@
 // 48-bit number.
 uword_t fgetw(FILE *f)
 {
-    uword_t hi = (uword_t) fgeth(f);
-    uword_t lo = (uword_t) fgeth(f);
+    uword_t hi = (uword_t)fgeth(f);
+    uword_t lo = (uword_t)fgeth(f);
 
     return (hi << 24) | lo;
 }

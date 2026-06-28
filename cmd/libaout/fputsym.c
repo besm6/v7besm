@@ -1,5 +1,6 @@
 
 #include <stdio.h>
+
 #include "besm6/b.out.h"
 
 // Write one symbol table entry to a stream, the inverse of fgetsym(): a
@@ -12,6 +13,6 @@ void fputsym(const struct nlist *s, FILE *file)
     putc(s->n_len, file);
     putc(s->n_type, file);
     fputh(s->n_value, file);
-    for (i=0; i<s->n_len; i++)
+    for (i = 0; i < s->n_len; i++)
         putc(s->n_name[i], file);
 }

@@ -5,12 +5,13 @@
  * written by John F. Reiser
  * July/August 1978
  */
+#include <fcntl.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdarg.h>
 #include <unistd.h>
-#include <fcntl.h>
+
 #include "defs.h"
 
 #define STATIC
@@ -80,8 +81,8 @@ char fastab[ALFSIZ];
 char slotab[ALFSIZ];
 char *ptrtab;
 
-#define isslo     (ptrtab == slotab)
-#define isspc(a)  (ptrtab[(unsigned char)a] & SB)
+#define isslo    (ptrtab == slotab)
+#define isspc(a) (ptrtab[(unsigned char)a] & SB)
 
 #define eob(a) ((a) >= pend)
 #define bob(a) (pbeg >= (a))
@@ -124,9 +125,9 @@ STATIC int fins[MAXINC];
 STATIC int lineno[MAXINC];
 
 STATIC char *dirs[10]; /* -I and <> directories */
-STATIC int fin    = STDIN;
+STATIC int fin = STDIN;
 STATIC FILE *fout;
-STATIC int nd     = 1;
+STATIC int nd = 1;
 STATIC int pflag;   /* don't put out lines "# 12 foo.c" */
 STATIC int passcom; /* don't delete comments */
 STATIC int rflag;   /* allow macro recursion */
@@ -622,7 +623,7 @@ char *cotoken(char *p)
     if (!xmac2(c0, c1, cpos, &)) \
     goto nomac
 #define xmac2(c0, c1, cpos, op) \
-    (macbit[t21[(unsigned char)c0] + t22[(unsigned char)c1]] op (t23 + cpos)[(unsigned char)c0])
+    (macbit[t21[(unsigned char)c0] + t22[(unsigned char)c1]] op(t23 + cpos)[(unsigned char)c0])
 #else
 #define tmac2(c0, c1, cpos)
 #define xmac2(c0, c1, cpos, op)
@@ -759,7 +760,7 @@ char *unfill(char *p)
             ;
         if (eob(op))
             break;
-    }                      /* out with old */
+    } /* out with old */
     endbuf[mactop++] = np; /* mark end of saved text */
     np               = pbuf + BUFSIZ;
     op               = pend - BUFSIZ;
@@ -835,9 +836,7 @@ char *doincl(char *p)
     }
     filok = 0;
     for (dirp = dirs + inctype; *dirp; ++dirp) {
-        if (
-            filname[0] == '/'
-            || **dirp == '\0')
+        if (filname[0] == '/' || **dirp == '\0')
             strcpy(nfil, filname);
         else {
             strcpy(nfil, *dirp);
@@ -987,8 +986,7 @@ char *dodef(char *p)
                         break;
                     }
                 }
-            } else if (*pin == '"' || *pin == '\''
-            ) { /* inside quotation marks, too */
+            } else if (*pin == '"' || *pin == '\'') { /* inside quotation marks, too */
                 char quoc = *pin;
                 for (*psav++ = *pin++; pin < p && *pin != quoc;) {
                     while (pin < p && !isid(*pin))
@@ -1464,8 +1462,8 @@ int main(int argc, char *argv[])
     char *tf, **cp2;
 
     fout = stdout;
-    p = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    i = 0;
+    p    = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    i    = 0;
     while ((c = *p++)) {
         fastab[(unsigned char)c] |= IB | NB | SB;
         toktyp[(unsigned char)c] = IDENT;

@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+
 #include "besm6/b.out.h"
 #include "besm6/ranlib.h"
 
@@ -22,11 +23,11 @@ int fgetran(FILE *text, struct ranlib *sym)
     if ((sym->ran_len = getc(text)) <= 0)
         return 0;
 
-    if (! (sym->ran_name = malloc(sym->ran_len+1)))
+    if (!(sym->ran_name = malloc(sym->ran_len + 1)))
         return -1;
 
     sym->ran_off = fgeth(text);
-    for (c=0; c<sym->ran_len; c++)
+    for (c = 0; c < sym->ran_len; c++)
         sym->ran_name[c] = getc(text);
 
     sym->ran_name[sym->ran_len] = '\0';

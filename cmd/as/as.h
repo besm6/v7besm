@@ -49,8 +49,8 @@
 
 // instruction types
 
-#define TLONG  01  // long-address instruction
-#define TALIGN 02  // align after the instruction
+#define TLONG  01 // long-address instruction
+#define TALIGN 02 // align after the instruction
 
 // table sizes
 // hash sizes must be powers of two!
@@ -118,8 +118,8 @@ extern long cbase, tbase, dbase, adbase, bbase;
 extern struct nlist stab[STSIZE];
 extern int stabfree;
 extern char space[SPACESZ]; // storage for symbol names
-extern int lastfree;      // counter of used space
-extern int regleft;       // register number to the left of the instruction
+extern int lastfree;        // counter of used space
+extern int regleft;         // register number to the left of the instruction
 extern struct constent constab[CSIZE];
 extern int nconst;
 extern char name[256];

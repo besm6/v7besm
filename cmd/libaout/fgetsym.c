@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+
 #include "besm6/b.out.h"
 
 // Read one symbol table entry from a stream into *sym: a 1-byte name length,
@@ -15,16 +16,16 @@ int fgetsym(FILE *text, struct nlist *sym)
     if ((sym->n_len = getc(text)) <= 0)
         return 1;
 
-    if (! (sym->n_name = malloc(sym->n_len+1)))
+    if (!(sym->n_name = malloc(sym->n_len + 1)))
         return 0;
 
-    sym->n_type = getc(text);
+    sym->n_type  = getc(text);
     sym->n_value = fgeth(text);
 
-    for (c=0; c<sym->n_len; c++)
-        sym->n_name [c] = getc(text);
+    for (c = 0; c < sym->n_len; c++)
+        sym->n_name[c] = getc(text);
 
-    sym->n_name [sym->n_len] = '\0';
+    sym->n_name[sym->n_len] = '\0';
 
     // On disk: 1 len byte + 1 type byte + 3-byte value + n_len name bytes.
     return sym->n_len + 5;

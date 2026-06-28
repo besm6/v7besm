@@ -1,5 +1,6 @@
 
 #include <stdio.h>
+
 #include "besm6/b.out.h"
 
 // Read one int from a stream as a single full word (6 bytes): the value is the

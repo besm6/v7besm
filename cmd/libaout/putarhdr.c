@@ -2,8 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include "besm6/b.out.h"
+
 #include "besm6/ar.h"
+#include "besm6/b.out.h"
 
 // Encode one 48-bit word (6 bytes, big-endian) into a buffer.
 static void putword(unsigned char *p, uword_t v)
@@ -24,13 +25,13 @@ int putarhdr(int f, const struct ar_hdr *h)
     int i;
 
     memset(b, 0, sizeof(b));
-    for (i=0; i < (int) sizeof(h->ar_name); i++)
+    for (i = 0; i < (int)sizeof(h->ar_name); i++)
         b[i] = h->ar_name[i];
 
-    putword(b+30, h->ar_date);
-    putword(b+36, h->ar_uid);
-    putword(b+42, h->ar_gid);
-    putword(b+48, h->ar_mode);
-    putword(b+54, h->ar_size);
-    return write(f, b, sizeof(b)) == (ssize_t) sizeof(b);
+    putword(b + 30, h->ar_date);
+    putword(b + 36, h->ar_uid);
+    putword(b + 42, h->ar_gid);
+    putword(b + 48, h->ar_mode);
+    putword(b + 54, h->ar_size);
+    return write(f, b, sizeof(b)) == (ssize_t)sizeof(b);
 }

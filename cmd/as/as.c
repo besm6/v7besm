@@ -2,13 +2,13 @@
 // Assembler for BESM-6.
 // Driver: global state, command line and pass sequencing.
 //
+#include "as.h"
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-#include "as.h"
 
 FILE *sfile[SABS], *rfile[SABS];
 long count[SABS];
@@ -24,8 +24,8 @@ long cbase, tbase, dbase, adbase, bbase;
 struct nlist stab[STSIZE];
 int stabfree;
 char space[SPACESZ]; // storage for symbol names
-int lastfree;      // counter of used space
-int regleft;       // register number to the left of the instruction
+int lastfree;        // counter of used space
+int regleft;         // register number to the left of the instruction
 struct constent constab[CSIZE];
 int nconst;
 char name[256];

@@ -18,27 +18,27 @@
  *      -t              tracing
  *      -k              align const and text on page boundary
  */
+#include <signal.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <stdarg.h>
-#include <signal.h>
-#include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
-#include "besm6/b.out.h"
 #include "besm6/ar.h"
+#include "besm6/b.out.h"
 #include "besm6/ranlib.h"
 
-#define W       6               /* длина слова в байтах */
-#define LOCSYM  'L'             /* убрать локальные символы, нач. с 'L' */
-#define BADDR   (HDRSZ/W)       /* память 0...BADDR-1 свободна */
-#define SYMDEF  "__.SYMDEF"
+#define W      6           /* длина слова в байтах */
+#define LOCSYM 'L'         /* убрать локальные символы, нач. с 'L' */
+#define BADDR  (HDRSZ / W) /* память 0...BADDR-1 свободна */
+#define SYMDEF "__.SYMDEF"
 
-struct exec filhdr;             /* aout header */
+struct exec filhdr; /* aout header */
 struct ar_hdr archdr;
-FILE *text, *reloc;             /* input management */
+FILE *text, *reloc; /* input management */
 
 /*
  * output management
@@ -49,37 +49,37 @@ FILE *outb, *coutb, *toutb, *doutb, *croutb, *troutb, *droutb, *soutb;
  * symbol management
  */
 struct local {
-    long locindex;              /* index to symbol in file */
-    struct nlist *locsymbol;    /* ptr to symbol table */
+    long locindex;           /* index to symbol in file */
+    struct nlist *locsymbol; /* ptr to symbol table */
 };
 
-#define NSYM        2000
-#define NSYMPR      1000
-#define NCONST      512
-#define LLSIZE      256
-#define RANTABSZ    1000
+#define NSYM     2000
+#define NSYMPR   1000
+#define NCONST   512
+#define LLSIZE   256
+#define RANTABSZ 1000
 
 struct constab {
     long h, h2, hr, hr2;
-} constab [NCONST];             /* константы */
+} constab[NCONST]; /* константы */
 
 struct nlist cursym;            /* текущий символ */
-struct nlist symtab [NSYM];     /* собственно символы */
-struct nlist **symhash [NSYM];  /* указатели на хэш-таблицу */
+struct nlist symtab[NSYM];      /* собственно символы */
+struct nlist **symhash[NSYM];   /* указатели на хэш-таблицу */
 struct nlist *lastsym;          /* последний введенный символ */
-struct nlist *hshtab [NSYM+2];  /* хэш-таблица для символов */
-struct local local [NSYMPR];
-int symindex;                 /* следующий свободный вход таб. символов */
-int newindex [NCONST];        /* таблица переиндексации констант */
-int nconst;                   /* след. своб. вход в constab */
-int cindex;                   /* тек. индекс в newindex */
-int nfile;                    /* номер тек. файла (индекс в coptsize */
-int coptsize [LLSIZE];        /* длины сегментов конст. после оптимизации */
-long basaddr = BADDR;           /* base address of loading */
-struct ranlib rantab [RANTABSZ];
-int tnum;                       /* number of elements in rantab */
+struct nlist *hshtab[NSYM + 2]; /* хэш-таблица для символов */
+struct local local[NSYMPR];
+int symindex;         /* следующий свободный вход таб. символов */
+int newindex[NCONST]; /* таблица переиндексации констант */
+int nconst;           /* след. своб. вход в constab */
+int cindex;           /* тек. индекс в newindex */
+int nfile;            /* номер тек. файла (индекс в coptsize */
+int coptsize[LLSIZE]; /* длины сегментов конст. после оптимизации */
+long basaddr = BADDR; /* base address of loading */
+struct ranlib rantab[RANTABSZ];
+int tnum; /* number of elements in rantab */
 
-long liblist [LLSIZE], *libp;   /* library management */
+long liblist[LLSIZE], *libp; /* library management */
 
 /*
  * internal symbols
@@ -89,17 +89,17 @@ struct nlist *p_econst, *p_etext, *p_edata, *p_ebss, *p_end, *entrypt;
 /*
  * flags
  */
-int     trace;                  /* internal trace flag */
-int     xflag;                  /* discard local symbols */
-int     Xflag;                  /* discard locals starting with LOCSYM */
-int     Sflag;                  /* discard all except locals and globals*/
-int     Cflag;                  /* put constants in data segment */
-int     rflag;                  /* preserve relocation bits, don't define commons */
-int     arflag;                 /* original copy of rflag */
-int     sflag;                  /* discard all symbols */
-int     nflag;                  /* pure procedure */
-int     dflag;                  /* define common even with rflag */
-int     alflag;                 /* const и text выровнены на границу листа */
+int trace;  /* internal trace flag */
+int xflag;  /* discard local symbols */
+int Xflag;  /* discard locals starting with LOCSYM */
+int Sflag;  /* discard all except locals and globals*/
+int Cflag;  /* put constants in data segment */
+int rflag;  /* preserve relocation bits, don't define commons */
+int arflag; /* original copy of rflag */
+int sflag;  /* discard all symbols */
+int nflag;  /* pure procedure */
+int dflag;  /* define common even with rflag */
+int alflag; /* const и text выровнены на границу листа */
 
 /*
  * cumulative sizes set in pass 1
@@ -111,25 +111,25 @@ long csize, tsize, dsize, bsize, asize, ssize, nsym;
  */
 long ctrel, cdrel, cbrel, carel;
 
-int     ofilfnd;
-char    *ofilename = "l.out";
-char    *filname;
-int     errlev;
-int     delarg    = 4;
-char    tfname[] = "/tmp/ldaXXXXX";
-char    libname[] = "/usr/local/lib/microbesm/libxxxxxxxxxxxxxxx";
+int ofilfnd;
+char *ofilename = "l.out";
+char *filname;
+int errlev;
+int delarg     = 4;
+char tfname[]  = "/tmp/ldaXXXXX";
+char libname[] = "/usr/local/lib/microbesm/libxxxxxxxxxxxxxxx";
 
-#define LNAMLEN 17             /* originally 12 */
+#define LNAMLEN 17 /* originally 12 */
 
-#define ALIGN(x,y)     ((x)+(y)-1-((x)+(y)-1)%(y))
+#define ALIGN(x, y) ((x) + (y) - 1 - ((x) + (y) - 1) % (y))
 
 /* Needed after pass 1 */
-long    corigin;
-long    cbasaddr;
-long    torigin;
-long    dorigin;
-long    borigin;
-long    aorigin;
+long corigin;
+long cbasaddr;
+long torigin;
+long dorigin;
+long borigin;
+long aorigin;
 
 void delexit()
 {
@@ -161,38 +161,38 @@ int getfile(char *cp)
     int c;
     struct stat x;
 
-    text = 0;
+    text    = 0;
     filname = cp;
     if (cp[0] == '-' && cp[1] == 'l') {
         if (cp[2] == '\0')
             cp = "-la";
         filname = libname;
-        for (c = 0; cp [c+2]; c++)
-            filname [c + LNAMLEN] = cp [c+2];
-        filname [c + LNAMLEN] = '.';
-        filname [c + LNAMLEN + 1] = 'a';
-        filname [c + LNAMLEN + 2] = '\0';
-        text = fopen(filname, "r");
-        if (! text)
+        for (c = 0; cp[c + 2]; c++)
+            filname[c + LNAMLEN] = cp[c + 2];
+        filname[c + LNAMLEN]     = '.';
+        filname[c + LNAMLEN + 1] = 'a';
+        filname[c + LNAMLEN + 2] = '\0';
+        text                     = fopen(filname, "r");
+        if (!text)
             filname += 4;
     }
-    if (! text && ! (text = fopen(filname, "r")))
+    if (!text && !(text = fopen(filname, "r")))
         error(2, "cannot open");
     reloc = fopen(filname, "r");
-    if (! reloc)
+    if (!reloc)
         error(2, "cannot open");
-    if (! fgetint(text, &c))
+    if (!fgetint(text, &c))
         error(1, "unexpected EOF");
     if (c != ARMAG)
-        return 0;       /* regular file */
-    if (! fgetarhdr(text, &archdr))
-        return 1;       /* regular archive */
+        return 0; /* regular file */
+    if (!fgetarhdr(text, &archdr))
+        return 1; /* regular archive */
     if (strncmp(archdr.ar_name, SYMDEF, sizeof(archdr.ar_name)))
-        return 1;       /* regular archive */
+        return 1; /* regular archive */
     fstat(fileno(text), &x);
-    if (x.st_mtime > archdr.ar_date+2)
-        return 3;       /* out of date archive */
-    return 2;           /* randomized archive */
+    if (x.st_mtime > archdr.ar_date + 2)
+        return 3; /* out of date archive */
+    return 2;     /* randomized archive */
 }
 
 void readhdr(long loc)
@@ -212,12 +212,10 @@ void readhdr(long loc)
         error(2, "bad length of bss");
     if (filhdr.a_abss % W)
         error(2, "bad length of abss");
-    ctrel = - BADDR - filhdr.a_const / W;
-    cdrel = - BADDR - (filhdr.a_const + filhdr.a_text) / W;
-    cbrel = - BADDR - (filhdr.a_const + filhdr.a_text +
-        filhdr.a_data) / W;
-    carel = - BADDR - (filhdr.a_const + filhdr.a_text +
-        filhdr.a_data + filhdr.a_bss) / W;
+    ctrel = -BADDR - filhdr.a_const / W;
+    cdrel = -BADDR - (filhdr.a_const + filhdr.a_text) / W;
+    cbrel = -BADDR - (filhdr.a_const + filhdr.a_text + filhdr.a_data) / W;
+    carel = -BADDR - (filhdr.a_const + filhdr.a_text + filhdr.a_data + filhdr.a_bss) / W;
 }
 
 int passconst()
@@ -226,19 +224,20 @@ int passconst()
     int save;
     struct constab *p, *c;
 
-    save = nconst;
+    save  = nconst;
     count = filhdr.a_const / W;
-    c = &constab[nconst];
+    c     = &constab[nconst];
     while (count--) {
-        c->h = fgeth(text);
-        c->h2 = fgeth(text);
-        c->hr = fgeth(reloc);
+        c->h   = fgeth(text);
+        c->h2  = fgeth(text);
+        c->hr  = fgeth(reloc);
         c->hr2 = fgeth(reloc);
-        p = c;
-        if (!c->hr && !c->hr2) for (p=constab; p<c; p++)
-            if (!p->hr2 && c->h==p->h && c->h2==p->h2 && !p->hr)
-                break;
-        if (p==c && ++c >= &constab[NCONST])
+        p      = c;
+        if (!c->hr && !c->hr2)
+            for (p = constab; p < c; p++)
+                if (!p->hr2 && c->h == p->h && c->h2 == p->h2 && !p->hr)
+                    break;
+        if (p == c && ++c >= &constab[NCONST])
             error(2, "constant table overflow");
         newindex[cindex++] = p - constab;
     }
@@ -251,55 +250,54 @@ void symreloc()
     int i;
 
     switch (cursym.n_type) {
-
     case N_CONST:
-    case N_EXT+N_CONST:
-        i = cindex + cursym.n_value - HDRSZ/W;
+    case N_EXT + N_CONST:
+        i              = cindex + cursym.n_value - HDRSZ / W;
         cursym.n_value = newindex[i];
         return;
 
     case N_TEXT:
-    case N_EXT+N_TEXT:
+    case N_EXT + N_TEXT:
         cursym.n_value += ctrel;
         return;
 
     case N_DATA:
-    case N_EXT+N_DATA:
+    case N_EXT + N_DATA:
         cursym.n_value += cdrel;
         return;
 
     case N_BSS:
-    case N_EXT+N_BSS:
+    case N_EXT + N_BSS:
         cursym.n_value += cbrel;
         return;
 
     case N_ABSS:
-    case N_EXT+N_ABSS:
+    case N_EXT + N_ABSS:
         cursym.n_value += carel;
         return;
 
-    case N_EXT+N_UNDF:
-    case N_EXT+N_COMM:
-    case N_EXT+N_ACOMM:
+    case N_EXT + N_UNDF:
+    case N_EXT + N_COMM:
+    case N_EXT + N_ACOMM:
         return;
     }
     if (cursym.n_type & N_EXT)
-        cursym.n_type = N_EXT+N_ABS;
+        cursym.n_type = N_EXT + N_ABS;
 }
 
 int enter(struct nlist **hp)
 {
     struct nlist *sp;
 
-    if (! *hp) {
+    if (!*hp) {
         if (symindex >= NSYM)
             error(2, "symbol table overflow");
-        symhash [symindex] = hp;
+        symhash[symindex] = hp;
         *hp = lastsym = sp = &symtab[symindex++];
-        sp->n_len = cursym.n_len;
-        sp->n_name = cursym.n_name;
-        sp->n_type = cursym.n_type;
-        sp->n_value = cursym.n_value;
+        sp->n_len          = cursym.n_len;
+        sp->n_name         = cursym.n_name;
+        sp->n_type         = cursym.n_type;
+        sp->n_value        = cursym.n_value;
         return 1;
     } else {
         lastsym = *hp;
@@ -315,9 +313,10 @@ struct nlist **lookup()
     struct nlist **hp;
 
     i = 0;
-    for (cp = cursym.n_name; *cp; i = (i << 1) + *cp++);
+    for (cp = cursym.n_name; *cp; i = (i << 1) + *cp++)
+        ;
     for (hp = &hshtab[(i & 077777) % NSYM + 2]; *hp != 0;) {
-        cp1 = (*hp)->n_name;
+        cp1   = (*hp)->n_name;
         clash = 0;
         for (cp = cursym.n_name; *cp;)
             if (*cp++ != *cp1++) {
@@ -325,7 +324,7 @@ struct nlist **lookup()
                 break;
             }
         if (clash) {
-            if (++hp >= &hshtab[NSYM+2])
+            if (++hp >= &hshtab[NSYM + 2])
                 hp = hshtab;
         } else
             break;
@@ -336,7 +335,7 @@ struct nlist **lookup()
 long add(long a, long b, char *s)
 {
     a += b;
-    if (a >= 04000000L*W)
+    if (a >= 04000000L * W)
         error(1, s);
     return a;
 }
@@ -344,7 +343,7 @@ long add(long a, long b, char *s)
 long addlong(long a, long b, char *s)
 {
     a += b;
-    if (a >= 01000000000L*W)
+    if (a >= 01000000000L * W)
         error(1, s);
     return a;
 }
@@ -366,15 +365,18 @@ int load1(long loc, int libflg, int nloc)
     savcindex = cindex;
     fseek(reloc, loc + N_SYMOFF(filhdr), 0);
     coptsize[nfile] = passconst();
-    ctrel += tsize/W;
-    cdrel += dsize/W;
-    cbrel += bsize/W;
-    carel += asize/W;
+    ctrel += tsize / W;
+    cdrel += dsize / W;
+    cbrel += bsize / W;
+    carel += asize / W;
     loc += HDRSZ + (filhdr.a_const + filhdr.a_text + filhdr.a_data) * 2;
     fseek(text, loc, 0);
-    ndef = 0;
+    ndef     = 0;
     savindex = symindex;
-    if (nloc) nsymbol = 1; else nsymbol = 0;
+    if (nloc)
+        nsymbol = 1;
+    else
+        nsymbol = 0;
     for (;;) {
         symlen = fgetsym(text, &cursym);
         if (symlen == 0)
@@ -382,15 +384,12 @@ int load1(long loc, int libflg, int nloc)
         if (symlen == 1)
             break;
         type = cursym.n_type;
-        if (Sflag && ((type & N_TYPE) == N_ABS ||
-            (type & N_TYPE) > N_ACOMM))
-        {
+        if (Sflag && ((type & N_TYPE) == N_ABS || (type & N_TYPE) > N_ACOMM)) {
             free(cursym.n_name);
             continue;
         }
-        if (! (type & N_EXT)) {
-            if (!sflag && !xflag &&
-                (!Xflag || cursym.n_name[0] != LOCSYM)) {
+        if (!(type & N_EXT)) {
+            if (!sflag && !xflag && (!Xflag || cursym.n_name[0] != LOCSYM)) {
                 nsymbol++;
                 nloc += symlen;
             }
@@ -401,43 +400,30 @@ int load1(long loc, int libflg, int nloc)
         if (enter(lookup()))
             continue;
         free(cursym.n_name);
-        if (cursym.n_type == N_EXT+N_UNDF)
+        if (cursym.n_type == N_EXT + N_UNDF)
             continue;
         sp = lastsym;
-        if (sp->n_type == N_EXT+N_UNDF ||
-            sp->n_type == N_EXT+N_COMM ||
-            sp->n_type == N_EXT+N_ACOMM)
-        {
-            if (cursym.n_type == N_EXT+N_COMM ||
-                cursym.n_type == N_EXT+N_ACOMM)
-            {
+        if (sp->n_type == N_EXT + N_UNDF || sp->n_type == N_EXT + N_COMM ||
+            sp->n_type == N_EXT + N_ACOMM) {
+            if (cursym.n_type == N_EXT + N_COMM || cursym.n_type == N_EXT + N_ACOMM) {
                 sp->n_type = cursym.n_type;
                 if (cursym.n_value > sp->n_value)
                     sp->n_value = cursym.n_value;
-            }
-            else if (sp->n_type==N_EXT+N_UNDF ||
-                cursym.n_type==N_EXT+N_DATA ||
-                cursym.n_type==N_EXT+N_BSS)
-            {
+            } else if (sp->n_type == N_EXT + N_UNDF || cursym.n_type == N_EXT + N_DATA ||
+                       cursym.n_type == N_EXT + N_BSS) {
                 ndef++;
-                sp->n_type = cursym.n_type;
+                sp->n_type  = cursym.n_type;
                 sp->n_value = cursym.n_value;
             }
         }
     }
-    if (! libflg || ndef) {
-        csize = add(csize, (long) W * coptsize[nfile++],
-            "const segment overflow");
-        tsize = add(tsize, filhdr.a_text,
-            "text segment overflow");
-        dsize = add(dsize, filhdr.a_data,
-            "data segment overflow");
-        bsize = add(bsize, filhdr.a_bss,
-            "bss segment overflow");
-        asize = addlong(asize, filhdr.a_abss,
-            "abss segment overflow");
-        ssize = add(ssize, (long) nloc,
-            "symbol table overflow");
+    if (!libflg || ndef) {
+        csize = add(csize, (long)W * coptsize[nfile++], "const segment overflow");
+        tsize = add(tsize, filhdr.a_text, "text segment overflow");
+        dsize = add(dsize, filhdr.a_data, "data segment overflow");
+        bsize = add(bsize, filhdr.a_bss, "bss segment overflow");
+        asize = addlong(asize, filhdr.a_abss, "abss segment overflow");
+        ssize = add(ssize, (long)nloc, "symbol table overflow");
         nsym += nsymbol;
         return 1;
     }
@@ -464,18 +450,18 @@ int mkfsym(char *s, int wflag)
 
     if (sflag || xflag)
         return 0;
-    for (p=s; *p;)
+    for (p = s; *p;)
         if (*p++ == '/')
             s = p;
     if (!wflag)
         return p - s + 6;
-    cursym.n_len = p - s;
+    cursym.n_len  = p - s;
     cursym.n_name = malloc(cursym.n_len + 1);
-    if (! cursym.n_name)
+    if (!cursym.n_name)
         error(2, "out of memory");
-    for (p=cursym.n_name; *s; p++, s++)
+    for (p = cursym.n_name; *s; p++, s++)
         *p = *s;
-    cursym.n_type = N_FN;
+    cursym.n_type  = N_FN;
     cursym.n_value = torigin;
     fputsym(&cursym, soutb);
     free(cursym.n_name);
@@ -500,7 +486,7 @@ int step(long nloc)
     }
     cp = malloc(sizeof(archdr.ar_name) + 1);
     strncpy(cp, archdr.ar_name, sizeof(archdr.ar_name));
-    cp [sizeof(archdr.ar_name)] = '\0';
+    cp[sizeof(archdr.ar_name)] = '\0';
     if (load1(nloc + ARHDRSZ, 1, mkfsym(cp, 0)))
         *libp++ = nloc;
     free(cp);
@@ -513,12 +499,12 @@ void getrantab()
     struct ranlib *p;
     int n;
 
-    for (p=rantab; p<rantab+RANTABSZ; ++p) {
+    for (p = rantab; p < rantab + RANTABSZ; ++p) {
         n = fgetran(text, p);
         if (n < 0)
             error(2, "out of memory");
         if (n == 0) {
-            tnum = p-rantab;
+            tnum = p - rantab;
             return;
         }
     }
@@ -527,9 +513,9 @@ void getrantab()
 
 struct nlist **slookup(char *s)
 {
-    cursym.n_len = strlen(s) + 1;
-    cursym.n_name = s;
-    cursym.n_type = N_EXT+N_UNDF;
+    cursym.n_len   = strlen(s) + 1;
+    cursym.n_name  = s;
+    cursym.n_type  = N_EXT + N_UNDF;
     cursym.n_value = 0;
     return lookup();
 }
@@ -540,11 +526,11 @@ int ldrand()
     struct nlist **pp;
     long *oldp = libp;
 
-    for (p=rantab; p<rantab+tnum; ++p) {
+    for (p = rantab; p < rantab + tnum; ++p) {
         pp = slookup(p->ran_name);
-        if (! *pp)
+        if (!*pp)
             continue;
-        if ((*pp)->n_type == N_EXT+N_UNDF)
+        if ((*pp)->n_type == N_EXT + N_UNDF)
             step(p->ran_off);
     }
     return (oldp != libp);
@@ -554,7 +540,7 @@ void freerantab()
 {
     struct ranlib *p;
 
-    for (p=rantab; p<rantab+tnum; ++p)
+    for (p = rantab; p < rantab + tnum; ++p)
         free(p->ran_name);
 }
 
@@ -566,16 +552,16 @@ void load1arg(char *cp)
     long nloc;
 
     switch (getfile(cp)) {
-    case 0:                 /* regular file */
+    case 0: /* regular file */
         load1(0L, 0, mkfsym(cp, 0));
         break;
-    case 1:                 /* regular archive */
+    case 1: /* regular archive */
         nloc = W;
-archive:
+    archive:
         while (step(nloc))
             nloc += archdr.ar_size + ARHDRSZ;
         break;
-    case 2:                 /* table of contents */
+    case 2: /* table of contents */
         getrantab();
         while (ldrand())
             ;
@@ -583,7 +569,7 @@ archive:
         *libp++ = -1;
         checklibp();
         break;
-    case 3:                 /* out of date archive */
+    case 3: /* out of date archive */
         error(0, "out of date (warning)");
         nloc = W + archdr.ar_size + ARHDRSZ;
         goto archive;
@@ -602,20 +588,18 @@ void pass1(int argc, char **argv)
     char *ap, **p;
     char save;
 
-
-    p = argv + 1;
+    p    = argv + 1;
     libp = liblist;
-    for (c=1; c<argc; ++c) {
+    for (c = 1; c < argc; ++c) {
         filname = 0;
-        ap = *p++;
+        ap      = *p++;
 
         if (*ap != '-') {
             load1arg(ap);
             continue;
         }
-        for (i=1; ap[i]; i++) {
-            switch (ap [i]) {
-
+        for (i = 1; ap[i]; i++) {
+            switch (ap[i]) {
                 /* output file name */
             case 'o':
                 if (++c >= argc)
@@ -634,7 +618,7 @@ void pass1(int argc, char **argv)
                 /* 'entry' */
             case 'e':
                 if (++c >= argc)
-                    error (2, "-e: argument missed");
+                    error(2, "-e: argument missed");
                 enter(slookup(*p++));
                 entrypt = lastsym;
                 continue;
@@ -651,15 +635,15 @@ void pass1(int argc, char **argv)
 
                 /* base address of loading */
             case 'T':
-                basaddr = strtoul(ap+i+1, 0, 0);
+                basaddr = strtoul(ap + i + 1, 0, 0);
                 break;
 
                 /* library */
             case 'l':
-                save = ap [--i];
-                ap [i] = '-';
+                save  = ap[--i];
+                ap[i] = '-';
                 load1arg(&ap[i]);
-                ap [i] = save;
+                ap[i] = save;
                 break;
 
                 /* discard local symbols */
@@ -723,13 +707,14 @@ void pass1(int argc, char **argv)
 
 void ldrsym(struct nlist *sp, long val, int type)
 {
-    if (sp == 0) return;
-    if (sp->n_type != N_EXT+N_UNDF) {
+    if (sp == 0)
+        return;
+    if (sp->n_type != N_EXT + N_UNDF) {
         printf("%s: ", sp->n_name);
         error(1, "name redefined");
         return;
     }
-    sp->n_type = type;
+    sp->n_type  = type;
     sp->n_value = val;
 }
 
@@ -742,51 +727,48 @@ void middle()
     long cmorigin, acmorigin;
 
     p_econst = *slookup("_econst");
-    p_etext = *slookup("_etext");
-    p_edata = *slookup("_edata");
-    p_ebss = *slookup("_ebss");
-    p_end = *slookup("_end");
+    p_etext  = *slookup("_etext");
+    p_edata  = *slookup("_edata");
+    p_ebss   = *slookup("_ebss");
+    p_end    = *slookup("_end");
 
     /*
      * If there are any undefined symbols, save the relocation bits.
      */
     symp = &symtab[symindex];
     if (!rflag) {
-        for (sp=symtab; sp<symp; sp++)
-            if (sp->n_type == N_EXT+N_UNDF &&
-                sp != p_end && sp != p_ebss && sp != p_edata &&
-                sp != p_etext && sp != p_econst)
-            {
+        for (sp = symtab; sp < symp; sp++)
+            if (sp->n_type == N_EXT + N_UNDF && sp != p_end && sp != p_ebss && sp != p_edata &&
+                sp != p_etext && sp != p_econst) {
                 rflag++;
                 dflag = 0;
                 break;
             }
     }
-    if (rflag) Cflag = alflag = nflag = sflag = 0;
+    if (rflag)
+        Cflag = alflag = nflag = sflag = 0;
 
     /*
      * Assign common locations.
      */
 
-    cmsize = 0;
+    cmsize  = 0;
     acmsize = 0;
     if (dflag || !rflag) {
-        ldrsym(p_econst, csize/W, N_EXT+N_CONST);
-        ldrsym(p_etext, tsize/W, N_EXT+N_TEXT);
-        ldrsym(p_edata, dsize/W, N_EXT+N_DATA);
-        ldrsym(p_ebss, bsize/W, N_EXT+N_BSS);
-        ldrsym(p_end, asize/W, N_EXT+N_ABSS);
-        for (sp=symtab; sp<symp; sp++)
+        ldrsym(p_econst, csize / W, N_EXT + N_CONST);
+        ldrsym(p_etext, tsize / W, N_EXT + N_TEXT);
+        ldrsym(p_edata, dsize / W, N_EXT + N_DATA);
+        ldrsym(p_ebss, bsize / W, N_EXT + N_BSS);
+        ldrsym(p_end, asize / W, N_EXT + N_ABSS);
+        for (sp = symtab; sp < symp; sp++)
             if ((sp->n_type & N_TYPE) == N_COMM) {
-                t = sp->n_value;
-                sp->n_value = cmsize/W;
-                cmsize = add(cmsize, (long) t*W,
-                    "переполнен сегмент bss");
+                t           = sp->n_value;
+                sp->n_value = cmsize / W;
+                cmsize      = add(cmsize, (long)t * W, "переполнен сегмент bss");
             } else if ((sp->n_type & N_TYPE) == N_ACOMM) {
-                t = sp->n_value;
-                sp->n_value = acmsize/W;
-                acmsize = addlong(acmsize, (long) t*W,
-                     "переполнен сегмент abss");
+                t           = sp->n_value;
+                sp->n_value = acmsize / W;
+                acmsize     = addlong(acmsize, (long)t * W, "переполнен сегмент abss");
             }
     }
 
@@ -797,26 +779,29 @@ void middle()
         torigin = basaddr;
     else {
         corigin = basaddr;
-        torigin = corigin + csize/W;
+        torigin = corigin + csize / W;
     }
-    if (alflag) torigin = ALIGN(torigin, 1024);
+    if (alflag)
+        torigin = ALIGN(torigin, 1024);
     if (Cflag) {
-        corigin = torigin + tsize/W;
-        dorigin = corigin + csize/W;
+        corigin = torigin + tsize / W;
+        dorigin = corigin + csize / W;
     } else
-        dorigin = torigin + tsize/W;
-    if (nflag || alflag) dorigin = ALIGN(dorigin, 1024);
-    cmorigin = dorigin + dsize/W;
-    borigin = cmorigin + cmsize/W;
-    acmorigin = borigin + bsize/W;
-    aorigin = acmorigin + acmsize/W;
-    cbasaddr = corigin;
-    nund = 0;
-    for (sp=symtab; sp<symp; sp++) {
+        dorigin = torigin + tsize / W;
+    if (nflag || alflag)
+        dorigin = ALIGN(dorigin, 1024);
+    cmorigin  = dorigin + dsize / W;
+    borigin   = cmorigin + cmsize / W;
+    acmorigin = borigin + bsize / W;
+    aorigin   = acmorigin + acmsize / W;
+    cbasaddr  = corigin;
+    nund      = 0;
+    for (sp = symtab; sp < symp; sp++) {
         switch (sp->n_type) {
-        case N_EXT+N_UNDF:
-            if (!arflag) errlev |= 01;
-            if (!arflag)   {
+        case N_EXT + N_UNDF:
+            if (!arflag)
+                errlev |= 01;
+            if (!arflag) {
                 if (!nund)
                     printf("Undefined:\n");
                 nund++;
@@ -824,38 +809,39 @@ void middle()
             }
             break;
         default:
-        case N_EXT+N_ABS:
+        case N_EXT + N_ABS:
             break;
-        case N_EXT+N_CONST:
+        case N_EXT + N_CONST:
             sp->n_value += corigin;
             break;
-        case N_EXT+N_TEXT:
+        case N_EXT + N_TEXT:
             sp->n_value += torigin;
             break;
-        case N_EXT+N_DATA:
+        case N_EXT + N_DATA:
             sp->n_value += dorigin;
             break;
-        case N_EXT+N_BSS:
+        case N_EXT + N_BSS:
             sp->n_value += borigin;
             break;
-        case N_EXT+N_ABSS:
+        case N_EXT + N_ABSS:
             sp->n_value += aorigin;
             break;
         case N_COMM:
-        case N_EXT+N_COMM:
-            sp->n_type = N_EXT+N_BSS;
+        case N_EXT + N_COMM:
+            sp->n_type = N_EXT + N_BSS;
             sp->n_value += cmorigin;
             break;
         case N_ACOMM:
-        case N_EXT+N_ACOMM:
-            sp->n_type = N_EXT+N_ABSS;
+        case N_EXT + N_ACOMM:
+            sp->n_type = N_EXT + N_ABSS;
             sp->n_value += acmorigin;
             break;
         }
         if (sp->n_value & ~0777777777)
             error(1, "long address: %s=0%lo", sp->n_name, sp->n_value);
     }
-    if (sflag || xflag) ssize = 0;
+    if (sflag || xflag)
+        ssize = 0;
     bsize = add(bsize, cmsize, "переполнен сегмент bss");
     asize = addlong(asize, acmsize, "переполнен сегмент abss");
 
@@ -863,9 +849,11 @@ void middle()
      * Compute ssize; add length of local symbols, if need,
      * and one more zero byte. Alignment will be taken at setupout.
      */
-    if (sflag) ssize = 0;
+    if (sflag)
+        ssize = 0;
     else {
-        if (xflag) ssize = 0;
+        if (xflag)
+            ssize = 0;
         for (sp = symtab; sp < &symtab[symindex]; sp++)
             ssize += sp->n_len + 6;
         ssize++;
@@ -875,10 +863,8 @@ void middle()
 void tcreat(FILE **buf, int tempflg)
 {
     *buf = fopen(tempflg ? tfname : ofilename, "w+");
-    if (! *buf)
-        error(2, tempflg ?
-            "cannot create temporary file" :
-            "cannot create output file");
+    if (!*buf)
+        error(2, tempflg ? "cannot create temporary file" : "cannot create output file");
     if (tempflg)
         unlink(tfname);
 }
@@ -895,7 +881,8 @@ void setupout()
     tcreat(&coutb, 1);
     tcreat(&toutb, 1);
     tcreat(&doutb, 1);
-    if (!sflag || !xflag) tcreat(&soutb, 1);
+    if (!sflag || !xflag)
+        tcreat(&soutb, 1);
     if (rflag) {
         tcreat(&croutb, 1);
         tcreat(&troutb, 1);
@@ -903,16 +890,16 @@ void setupout()
     }
     filhdr.a_magic = nflag ? NMAGIC : alflag ? AMAGIC : FMAGIC;
     filhdr.a_const = csize;
-    filhdr.a_text = tsize;
-    filhdr.a_data = dsize;
-    filhdr.a_bss = bsize;
-    filhdr.a_abss = asize;
-    filhdr.a_syms = ALIGN(ssize, W);
+    filhdr.a_text  = tsize;
+    filhdr.a_data  = dsize;
+    filhdr.a_bss   = bsize;
+    filhdr.a_abss  = asize;
+    filhdr.a_syms  = ALIGN(ssize, W);
     if (entrypt) {
-        if (entrypt->n_type != N_EXT+N_TEXT &&
-            entrypt->n_type != N_EXT+N_UNDF)
+        if (entrypt->n_type != N_EXT + N_TEXT && entrypt->n_type != N_EXT + N_UNDF)
             error(1, "entry out of text");
-        else filhdr.a_entry = entrypt->n_value;
+        else
+            filhdr.a_entry = entrypt->n_value;
     } else
         filhdr.a_entry = torigin;
     if (rflag)
@@ -930,12 +917,12 @@ struct nlist *lookloc(struct local *lp, int sn)
 {
     struct local *clp;
 
-    for (clp=local; clp<lp; clp++)
+    for (clp = local; clp < lp; clp++)
         if (clp->locindex == sn)
             return clp->locsymbol;
     if (trace) {
         fprintf(stderr, "*** %d ***\n", sn);
-        for (clp=local; clp<lp; clp++)
+        for (clp = local; clp < lp; clp++)
             fprintf(stderr, "%ld, ", clp->locindex);
         fprintf(stderr, "\n");
     }
@@ -946,18 +933,30 @@ struct nlist *lookloc(struct local *lp, int sn)
 int reltype(int stype)
 {
     switch (stype & N_TYPE) {
-    case N_UNDF:    return 0;
-    case N_ABS:     return RABS;
-    case N_CONST:   return RCONST;
-    case N_TEXT:    return RTEXT;
-    case N_DATA:    return RDATA;
-    case N_BSS:     return RBSS;
-    case N_ABSS:    return RABSS;
-    case N_STRNG:   return RDATA;
-    case N_COMM:    return RBSS;
-    case N_ACOMM:   return RABSS;
-    case N_FN:      return 0;
-    default:        return 0;
+    case N_UNDF:
+        return 0;
+    case N_ABS:
+        return RABS;
+    case N_CONST:
+        return RCONST;
+    case N_TEXT:
+        return RTEXT;
+    case N_DATA:
+        return RDATA;
+    case N_BSS:
+        return RBSS;
+    case N_ABSS:
+        return RABSS;
+    case N_STRNG:
+        return RDATA;
+    case N_COMM:
+        return RBSS;
+    case N_ACOMM:
+        return RABSS;
+    case N_FN:
+        return 0;
+    default:
+        return 0;
     }
 }
 
@@ -972,7 +971,7 @@ void relhalf(struct local *lp, long t, long r, long *pt, long *pr)
 
     /* extract address from command */
 
-    switch ((int) r & RSHORT) {
+    switch ((int)r & RSHORT) {
     case 0:
         a = t & 0777777777;
         break;
@@ -990,15 +989,15 @@ void relhalf(struct local *lp, long t, long r, long *pt, long *pr)
     default:
         a = 0;
         break;
-     }
+    }
 
     /* compute address shift `ad' */
     /* update relocation word */
 
     ad = 0;
-    switch ((int) r & REXT) {
+    switch ((int)r & REXT) {
     case RCONST:
-        i = newindex [a - HDRSZ/W + cindex];
+        i  = newindex[a - HDRSZ / W + cindex];
         ad = cbasaddr + i - a;
         break;
     case RTEXT:
@@ -1014,13 +1013,11 @@ void relhalf(struct local *lp, long t, long r, long *pt, long *pr)
         ad = carel;
         break;
     case REXT:
-        sp = lookloc(lp, (int) RGETIX(r));
+        sp = lookloc(lp, (int)RGETIX(r));
         r &= RSHORT;
-        if (sp->n_type == N_EXT+N_UNDF ||
-            sp->n_type == N_EXT+N_COMM ||
-            sp->n_type == N_EXT+N_ACOMM)
-        {
-            r |= REXT | RPUTIX(nsym+(sp-symtab));
+        if (sp->n_type == N_EXT + N_UNDF || sp->n_type == N_EXT + N_COMM ||
+            sp->n_type == N_EXT + N_ACOMM) {
+            r |= REXT | RPUTIX(nsym + (sp - symtab));
             break;
         }
         r |= reltype(sp->n_type);
@@ -1030,7 +1027,7 @@ void relhalf(struct local *lp, long t, long r, long *pt, long *pr)
 
     /* add updated address to command */
 
-    switch ((int) r & RSHORT) {
+    switch ((int)r & RSHORT) {
     case 0:
         t &= ~0777777777;
         t |= (a + ad) & 0777777777;
@@ -1067,7 +1064,7 @@ void relocconst(struct local *lp)
 
     p = &constab[nconst];
     c = p + coptsize[nfile];
-    for (; p<c; p++) {
+    for (; p < c; p++) {
         relhalf(lp, p->h, p->hr, &t, &r);
         fputh(t, coutb);
         if (rflag)
@@ -1083,7 +1080,7 @@ void relocate(struct local *lp, FILE *b1, FILE *b2, long len)
 {
     long r, t;
 
-    len /= W/2;
+    len /= W / 2;
     while (len--) {
         t = fgeth(text);
         r = fgeth(reloc);
@@ -1109,17 +1106,15 @@ void load2(long loc)
     carel += aorigin;
 
     if (trace > 1)
-        printf("ctrel=%lxh, cdrel=%lxh, cbrel=%lxh, carel=%lxh\n",
-            ctrel, cdrel, cbrel, carel);
+        printf("ctrel=%lxh, cdrel=%lxh, cbrel=%lxh, carel=%lxh\n", ctrel, cdrel, cbrel, carel);
     /*
      * Re-read the symbol table, recording the numbering
      * of symbols for fixing external references.
      */
-    lp = local;
+    lp    = local;
     symno = -1;
     loc += HDRSZ;
-    fseek(text, loc + (filhdr.a_const + filhdr.a_text +
-        filhdr.a_data) * 2, 0);
+    fseek(text, loc + (filhdr.a_const + filhdr.a_text + filhdr.a_data) * 2, 0);
     for (;;) {
         symno++;
         count = fgetsym(text, &cursym);
@@ -1129,35 +1124,28 @@ void load2(long loc)
             break;
         symreloc();
         type = cursym.n_type;
-        if (Sflag && ((type & N_TYPE) == N_ABS ||
-            (type & N_TYPE) > N_ACOMM))
-        {
+        if (Sflag && ((type & N_TYPE) == N_ABS || (type & N_TYPE) > N_ACOMM)) {
             free(cursym.n_name);
             continue;
         }
-        if (! (type & N_EXT)) {
-            if (!sflag && !xflag &&
-                (!Xflag || cursym.n_name [0] != LOCSYM))
+        if (!(type & N_EXT)) {
+            if (!sflag && !xflag && (!Xflag || cursym.n_name[0] != LOCSYM))
                 fputsym(&cursym, soutb);
             free(cursym.n_name);
             continue;
         }
-        if (! (sp = *lookup()))
+        if (!(sp = *lookup()))
             error(2, "internal error: symbol not found");
         free(cursym.n_name);
-        if (cursym.n_type == N_EXT+N_UNDF ||
-            cursym.n_type == N_EXT+N_COMM ||
-            cursym.n_type == N_EXT+N_ACOMM)
-        {
-            if (lp >= &local [NSYMPR])
+        if (cursym.n_type == N_EXT + N_UNDF || cursym.n_type == N_EXT + N_COMM ||
+            cursym.n_type == N_EXT + N_ACOMM) {
+            if (lp >= &local[NSYMPR])
                 error(2, "local symbol table overflow");
-            lp->locindex = symno;
+            lp->locindex    = symno;
             lp++->locsymbol = sp;
             continue;
         }
-        if (cursym.n_type != sp->n_type ||
-            cursym.n_value != sp->n_value)
-        {
+        if (cursym.n_type != sp->n_type || cursym.n_value != sp->n_value) {
             printf("%s: ", cursym.n_name);
             error(1, "name redefined");
         }
@@ -1182,12 +1170,12 @@ void load2(long loc)
     relocate(lp, doutb, droutb, filhdr.a_data);
 
     nconst += coptsize[nfile];
-    cindex += filhdr.a_const/W;
+    cindex += filhdr.a_const / W;
     corigin += coptsize[nfile];
-    torigin += filhdr.a_text/W;
-    dorigin += filhdr.a_data/W;
-    borigin += filhdr.a_bss/W;
-    aorigin += filhdr.a_abss/W;
+    torigin += filhdr.a_text / W;
+    dorigin += filhdr.a_data / W;
+    borigin += filhdr.a_bss / W;
+    aorigin += filhdr.a_abss / W;
     nfile++;
 }
 
@@ -1209,7 +1197,7 @@ void load2arg(char *acp)
             fgetarhdr(text, &archdr);
             acp = malloc(sizeof(archdr.ar_name) + 1);
             strncpy(acp, archdr.ar_name, sizeof(archdr.ar_name));
-            acp [sizeof(archdr.ar_name)] = '\0';
+            acp[sizeof(archdr.ar_name)] = '\0';
             if (trace)
                 printf("%s(%s):\n", arname, acp);
             mkfsym(acp, 1);
@@ -1228,26 +1216,25 @@ void pass2(int argc, char **argv)
     long dnum;
     char *ap, **p;
 
-    p = argv+1;
-    libp = liblist;
+    p      = argv + 1;
+    libp   = liblist;
     cindex = 0;
     nconst = 0;
-    nfile = 0;
-    for (c=1; c<argc; c++) {
+    nfile  = 0;
+    for (c = 1; c < argc; c++) {
         ap = *p++;
         if (*ap != '-') {
             load2arg(ap);
             continue;
         }
-        for (i=1; ap[i]; i++) {
+        for (i = 1; ap[i]; i++) {
             switch (ap[i]) {
-
             case 'D':
-/*
-/* по-моему, все-таки, должно быть так.
-                for (dnum=atoi(*p); dorigin<dnum; dorigin++) {
-*/
-                for (dnum=atoi(*p); dnum>0; --dnum) {
+                /*
+                /* по-моему, все-таки, должно быть так.
+                                for (dnum=atoi(*p); dorigin<dnum; dorigin++) {
+                */
+                for (dnum = atoi(*p); dnum > 0; --dnum) {
                     fputw(0, doutb);
                     if (rflag) {
                         fputw(0, droutb);
@@ -1264,10 +1251,9 @@ void pass2(int argc, char **argv)
                 continue;
 
             case 'l':
-                ap [--i] = '-';
+                ap[--i] = '-';
                 load2arg(&ap[i]);
                 break;
-
             }
             break;
         }
@@ -1293,38 +1279,38 @@ void finishout()
         if (alflag) {
             n = corigin;
             while (n & 01777) {
-                n ++;
+                n++;
                 fputw(0, coutb);
             }
         }
         /* now torigin points to the end of text */
         n = torigin;
         while (n & 01777) {
-            n ++;
+            n++;
             fputw(0, toutb);
             if (rflag) {
                 fputw(0, troutb);
             }
         }
     }
-    if (! Cflag)
+    if (!Cflag)
         copy(coutb);
     copy(toutb);
     if (Cflag)
         copy(coutb);
     copy(doutb);
     if (rflag) {
-        if (! Cflag)
+        if (!Cflag)
             copy(croutb);
         copy(troutb);
         if (Cflag)
             copy(croutb);
         copy(droutb);
     }
-    if (! sflag) {
-        if (! xflag)
+    if (!sflag) {
+        if (!xflag)
             copy(soutb);
-        for (p=symtab; p<&symtab[symindex]; ++p)
+        for (p = symtab; p < &symtab[symindex]; ++p)
             fputsym(p, outb);
         putc(0, outb);
         while (ssize++ % W)
@@ -1337,11 +1323,13 @@ int main(int argc, char **argv)
 {
     if (argc == 1) {
         printf("Usage: %s [-xXsSrndt] [-lname] [-D num] [-u name] [-e name] [-o file] file...\n",
-            argv [0]);
+               argv[0]);
         exit(4);
     }
-    if (signal(SIGINT, SIG_IGN) != SIG_IGN) signal(SIGINT, delexit);
-    if (signal(SIGTERM, SIG_IGN) != SIG_IGN) signal(SIGTERM, delexit);
+    if (signal(SIGINT, SIG_IGN) != SIG_IGN)
+        signal(SIGINT, delexit);
+    if (signal(SIGTERM, SIG_IGN) != SIG_IGN)
+        signal(SIGTERM, delexit);
 
     /*
      * Первый проход: вычисление длин сегментов и таблицы имен,

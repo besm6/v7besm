@@ -161,6 +161,9 @@ struct nlist {
 #define FORMAT      "%07lx" /* printf format for a symbol value */
 #define N_FORMAT    FORMAT
 
+#ifndef KERNEL
+#include <stdio.h>
+
 /*
  * Big-endian I/O helpers for the format above (implemented in cmd/libaout):
  * fgeth/fputh read and write one 3-byte half-word (24 bits); fgetw/fputw one
@@ -184,3 +187,4 @@ int fgetint(FILE *f, int *i);
  */
 int getint(int f, uword_t *i);
 int putint(int f, uword_t i);
+#endif

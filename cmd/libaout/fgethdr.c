@@ -1,5 +1,6 @@
 
 #include <stdio.h>
+
 #include "besm6/b.out.h"
 
 // Read an a.out exec header from a stream into *h. Each of the 9 logical

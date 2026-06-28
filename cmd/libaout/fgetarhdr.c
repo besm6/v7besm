@@ -1,7 +1,8 @@
 
 #include <stdio.h>
-#include "besm6/b.out.h"
+
 #include "besm6/ar.h"
+#include "besm6/b.out.h"
 
 // Read one archive member header from a stream into *h, decoding the 60-byte
 // on-disk layout shared with getarhdr()/putarhdr(): 30 name bytes (5 words),
@@ -13,7 +14,7 @@ int fgetarhdr(FILE *f, struct ar_hdr *h)
 {
     int i;
 
-    for (i=0; i < (int) sizeof(h->ar_name); i++) {
+    for (i = 0; i < (int)sizeof(h->ar_name); i++) {
         int c;
         if ((c = getc(f)) == EOF)
             return 0;

@@ -1,5 +1,6 @@
 
 #include <stdio.h>
+
 #include "besm6/b.out.h"
 
 // Write an a.out exec header to a stream, the inverse of fgethdr(). Each of
@@ -8,13 +9,13 @@
 // on a 6-byte word boundary.
 void fputhdr(const struct exec *filhdr, FILE *coutb)
 {
-    fputw((uword_t) filhdr->a_magic, coutb);
-    fputw((uword_t) filhdr->a_const, coutb);
-    fputw((uword_t) filhdr->a_text, coutb);
-    fputw((uword_t) filhdr->a_data, coutb);
-    fputw((uword_t) filhdr->a_bss, coutb);
-    fputw((uword_t) filhdr->a_abss, coutb);
-    fputw((uword_t) filhdr->a_syms, coutb);
-    fputw((uword_t) filhdr->a_entry, coutb);
-    fputw((uword_t) filhdr->a_flag, coutb);
+    fputw((uword_t)filhdr->a_magic, coutb);
+    fputw((uword_t)filhdr->a_const, coutb);
+    fputw((uword_t)filhdr->a_text, coutb);
+    fputw((uword_t)filhdr->a_data, coutb);
+    fputw((uword_t)filhdr->a_bss, coutb);
+    fputw((uword_t)filhdr->a_abss, coutb);
+    fputw((uword_t)filhdr->a_syms, coutb);
+    fputw((uword_t)filhdr->a_entry, coutb);
+    fputw((uword_t)filhdr->a_flag, coutb);
 }

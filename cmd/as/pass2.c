@@ -43,7 +43,7 @@ void makeheader(void)
     hdr.a_text  = count[STEXT] * (W / 2);
     hdr.a_data  = (count[SDATA] + count[SSTRNG]) * (W / 2);
     hdr.a_bss   = count[SBSS] * (W / 2);
-    hdr.a_abss  = 0;                       /* no absolute-bss segment in as */
+    hdr.a_abss  = 0; /* no absolute-bss segment in as */
     hdr.a_syms  = stlength;
     hdr.a_entry = HDRSZ / W + count[SCONST] / (W / 2);
     hdr.a_flag  = 0;

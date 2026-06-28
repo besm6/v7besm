@@ -1,6 +1,7 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
 #include <string.h>
+
 #include "defs.h"
 
 int tobinary(char *st, int b);
