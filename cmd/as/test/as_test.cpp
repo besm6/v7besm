@@ -324,41 +324,33 @@ mid:                        ; second label
 TEST(Assemble, UtcWtc)
 {
     // <addr> emits a utc (022) carrying the address, then the instruction with
-    // address 0; [addr] emits a wtc (023) the same way.
+    // address 0; [addr] emits a wtc (023) the same way.  A lone ':' line, and a
+    // label that would otherwise land mid-word, each force a utc (02200000)
+    // filler so the next instruction starts a fresh word.  '. = . + 3' in text
+    // fills the gap with utc fillers and advances the location.
     auto got = assemble(R"(
         xta <040000>
         atx [050000]
+        atx 0
+:
+        stx 0
+lbl:    atx 0
+        . = . + 3
+        stx 0
 )");
     EXPECT_EQ(word_high(got, 9), 02200000L | 040000L);  // utc 040000
     EXPECT_EQ(word_low(got, 9), 00100000L);             // xta 0
     EXPECT_EQ(word_high(got, 10), 02300000L | 050000L); // wtc 050000
     EXPECT_EQ(word_low(got, 10), 00000000L);            // atx 0
 
-    // A lone ':' line, and a label that would otherwise land mid-word, each force
-    // a utc (02200000) filler so the next instruction starts a fresh word.
-    got = assemble(R"(
-        atx 0
-        stx 0
-        atx 0
-:
-        stx 0
-lbl:    atx 0
-)");
-    EXPECT_EQ(word_low(got, 10), 02200000L);  // filler from the lone ':'
-    EXPECT_EQ(word_high(got, 11), 00010000L); // stx 0
-    EXPECT_EQ(word_low(got, 11), 02200000L);  // filler before lbl:
-    EXPECT_EQ(word_high(got, 12), 00000000L); // atx 0  (lbl:)
+    EXPECT_EQ(word_low(got, 11), 02200000L);  // filler from the lone ':'
+    EXPECT_EQ(word_high(got, 12), 00010000L); // stx 0
+    EXPECT_EQ(word_low(got, 12), 02200000L);  // filler before lbl:
+    EXPECT_EQ(word_high(got, 13), 00000000L); // atx 0  (lbl:)
 
-    // '. = . + 3' in text fills the gap with utc fillers and advances the
-    // location, so the next instruction lands three words further on.
-    got = assemble(R"(
-        atx 0
-        . = . + 3
-        stx 0
-)");
-    EXPECT_EQ(word_low(got, 2), 30);          // a_text == 5 words
-    EXPECT_EQ(word_high(got, 10), 02200000L); // a utc filler in the gap
-    EXPECT_EQ(word_high(got, 13), 00010000L); // stx 0, three words on
+    EXPECT_EQ(word_low(got, 2), 54);          // a_text == 9 words
+    EXPECT_EQ(word_high(got, 14), 02200000L); // a utc filler in the gap
+    EXPECT_EQ(word_high(got, 17), 00010000L); // stx 0
 }
 
 // Data-emitting directives and segment switches.
