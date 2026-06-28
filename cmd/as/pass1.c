@@ -11,10 +11,10 @@ static void puthr(long h, long r)
     static long sh, sr;
 
     if (as.count[as.segm] & 01) {
-        fputh(h, as.sfile[as.segm]);
-        fputh(r, as.rfile[as.segm]);
-        fputh(sh, as.sfile[as.segm]);
+        fputh(sh, as.sfile[as.segm]); // first-of-pair  -> high half-word
         fputh(sr, as.rfile[as.segm]);
+        fputh(h, as.sfile[as.segm]); // second-of-pair -> low half-word
+        fputh(r, as.rfile[as.segm]);
     } else {
         sh = h;
         sr = r;
