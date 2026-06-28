@@ -219,7 +219,7 @@ static void getname(int c)
 //      LSCMD   - short-address instruction. Value is the code.
 int getlex(int *pval)
 {
-    short c;
+    int c;
 
     if (blexflag) {
         blexflag = 0;

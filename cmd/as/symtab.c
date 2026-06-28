@@ -9,7 +9,7 @@
 
 static int chash(const char *s)
 {
-    short h, c;
+    int h, c;
 
     h = 12345;
     while ((c = *s++))
@@ -19,7 +19,7 @@ static int chash(const char *s)
 
 void hashinit(void)
 {
-    short i;
+    int i;
     const struct table *p;
 
     for (i = 0; i < HCONSZ; i++)
@@ -27,7 +27,7 @@ void hashinit(void)
     for (i = 0; i < HCMDSZ; i++)
         hashctab[i] = -1;
     for (p = table; p->name; p++) {
-        short h = chash(p->name);
+        int h = chash(p->name);
 
         while (hashctab[h] != -1)
             if (--h < 0)
@@ -89,7 +89,7 @@ int lookacmd(void)
 
 int lookcmd(void)
 {
-    short i, h;
+    int i, h;
 
     h = chash(name);
     while ((i = hashctab[h]) != -1) {
@@ -103,7 +103,7 @@ int lookcmd(void)
 
 static int hash(const char *s)
 {
-    short h, c;
+    int h, c;
 
     h = 12345;
     while ((c = *s++))
@@ -113,7 +113,7 @@ static int hash(const char *s)
 
 static char *alloc(int len)
 {
-    short r;
+    int r;
 
     r = lastfree;
     if ((lastfree += len) > SPACESZ)
@@ -123,7 +123,7 @@ static char *alloc(int len)
 
 int lookname(void)
 {
-    short i, h;
+    int i, h;
 
     h = hash(name);
     while ((i = hashtab[h]) != -1) {

@@ -6,7 +6,7 @@
 
 #include "as.h"
 
-const short ctype[256] = {
+const int ctype[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 7, 7, 7, 7, 7, 7, 7, 7, 5, 5, 0, 0, 0, 0, 0, 0,
     0, 9, 9, 9, 9, 9, 9, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 8,
@@ -17,7 +17,7 @@ const short ctype[256] = {
     8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 0,
 };
 
-const short segmtype[] = {
+const int segmtype[] = {
     // convert segment number to symbol type
     N_CONST, // SCONST
     N_TEXT,  // STEXT
@@ -28,7 +28,7 @@ const short segmtype[] = {
     N_ABS,   // SABS
 };
 
-const short segmrel[] = {
+const int segmrel[] = {
     // convert segment number to relocation type
     RCONST, // SCONST
     RTEXT,  // STEXT
@@ -39,7 +39,7 @@ const short segmrel[] = {
     RABS,   // SABS
 };
 
-const short typesegm[] = {
+const int typesegm[] = {
     // convert symbol type to segment number
     SEXT,   // N_UNDF
     SABS,   // N_ABS

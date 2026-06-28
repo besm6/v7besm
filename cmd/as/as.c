@@ -12,30 +12,30 @@
 
 FILE *sfile[SABS], *rfile[SABS];
 long count[SABS];
-short segm;
+int segm;
 char *infile, *outfile = "a.out";
 char tfilename[] = "/tmp/asXXXXXX";
-short line;  // current line number
-short debug; // debug flag
-short xflags, Xflag, uflag;
-short stlength; // symbol table length in bytes
-short stalign;  // symbol table alignment
+int line;  // current line number
+int debug; // debug flag
+int xflags, Xflag, uflag;
+int stlength; // symbol table length in bytes
+int stalign;  // symbol table alignment
 long cbase, tbase, dbase, adbase, bbase;
 struct nlist stab[STSIZE];
-short stabfree;
+int stabfree;
 char space[SPACESZ]; // storage for symbol names
-short lastfree;      // counter of used space
-short regleft;       // register number to the left of the instruction
+int lastfree;      // counter of used space
+int regleft;       // register number to the left of the instruction
 struct constent constab[CSIZE];
-short nconst;
+int nconst;
 char name[256];
 struct word intval;
-short extref;
-short blexflag, backlex, blextype;
-short hashtab[HASHSZ], hashctab[HCMDSZ];
-short hashconst[HCONSZ];
-short aflag;   // don't align on word boundary
-short cmdmode; // lexer expects a machine instruction (allow + - * / in name)
+int extref;
+int blexflag, backlex, blextype;
+int hashtab[HASHSZ], hashctab[HCMDSZ];
+int hashconst[HCONSZ];
+int aflag;   // don't align on word boundary
+int cmdmode; // lexer expects a machine instruction (allow + - * / in name)
 
 // Fatal error message.
 noreturn void uerror(char *fmt, ...)
@@ -56,7 +56,7 @@ noreturn void uerror(char *fmt, ...)
 
 static void startup(void)
 {
-    short i;
+    int i;
 
     int fd = mkstemp(tfilename);
     if (fd == -1) {
@@ -91,7 +91,7 @@ static void usage(void)
 
 int main(int argc, char *argv[])
 {
-    short i;
+    int i;
     char *cp;
     int ofile = 0;
 

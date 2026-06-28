@@ -95,7 +95,7 @@ struct word {
 struct table {
     long val;
     const char *name;
-    short type;
+    int type;
 };
 
 // Constant segment entry.
@@ -106,36 +106,36 @@ struct constent {
 // Global state (defined in as.c).
 extern FILE *sfile[SABS], *rfile[SABS];
 extern long count[SABS];
-extern short segm;
+extern int segm;
 extern char *infile, *outfile;
 extern char tfilename[];
-extern short line;  // current line number
-extern short debug; // debug flag
-extern short xflags, Xflag, uflag;
-extern short stlength; // symbol table length in bytes
-extern short stalign;  // symbol table alignment
+extern int line;  // current line number
+extern int debug; // debug flag
+extern int xflags, Xflag, uflag;
+extern int stlength; // symbol table length in bytes
+extern int stalign;  // symbol table alignment
 extern long cbase, tbase, dbase, adbase, bbase;
 extern struct nlist stab[STSIZE];
-extern short stabfree;
+extern int stabfree;
 extern char space[SPACESZ]; // storage for symbol names
-extern short lastfree;      // counter of used space
-extern short regleft;       // register number to the left of the instruction
+extern int lastfree;      // counter of used space
+extern int regleft;       // register number to the left of the instruction
 extern struct constent constab[CSIZE];
-extern short nconst;
+extern int nconst;
 extern char name[256];
 extern struct word intval;
-extern short extref;
-extern short blexflag, backlex, blextype;
-extern short hashtab[HASHSZ], hashctab[HCMDSZ];
-extern short hashconst[HCONSZ];
-extern short aflag;   // don't align on word boundary
-extern short cmdmode; // lexer expects a machine instruction (allow + - * / in name)
+extern int extref;
+extern int blexflag, backlex, blextype;
+extern int hashtab[HASHSZ], hashctab[HCMDSZ];
+extern int hashconst[HCONSZ];
+extern int aflag;   // don't align on word boundary
+extern int cmdmode; // lexer expects a machine instruction (allow + - * / in name)
 
 // Read-only tables (defined in tables.c).
-extern const short ctype[256];
-extern const short segmtype[];
-extern const short segmrel[];
-extern const short typesegm[];
+extern const int ctype[256];
+extern const int segmtype[];
+extern const int segmrel[];
+extern const int typesegm[];
 extern const struct table table[];
 
 // Shared functions.

@@ -69,12 +69,12 @@ struct nlist **symhash [NSYM];  /* указатели на хэш-таблицу
 struct nlist *lastsym;          /* последний введенный символ */
 struct nlist *hshtab [NSYM+2];  /* хэш-таблица для символов */
 struct local local [NSYMPR];
-short symindex;                 /* следующий свободный вход таб. символов */
-short newindex [NCONST];        /* таблица переиндексации констант */
-short nconst;                   /* след. своб. вход в constab */
-short cindex;                   /* тек. индекс в newindex */
-short nfile;                    /* номер тек. файла (индекс в coptsize */
-short coptsize [LLSIZE];        /* длины сегментов конст. после оптимизации */
+int symindex;                 /* следующий свободный вход таб. символов */
+int newindex [NCONST];        /* таблица переиндексации констант */
+int nconst;                   /* след. своб. вход в constab */
+int cindex;                   /* тек. индекс в newindex */
+int nfile;                    /* номер тек. файла (индекс в coptsize */
+int coptsize [LLSIZE];        /* длины сегментов конст. после оптимизации */
 long basaddr = BADDR;           /* base address of loading */
 struct ranlib rantab [RANTABSZ];
 int tnum;                       /* number of elements in rantab */
@@ -222,8 +222,8 @@ void readhdr(long loc)
 
 int passconst()
 {
-    short count;
-    short save;
+    int count;
+    int save;
     struct constab *p, *c;
 
     save = nconst;
@@ -248,7 +248,7 @@ int passconst()
 
 void symreloc()
 {
-    short i;
+    int i;
 
     switch (cursym.n_type) {
 
@@ -964,7 +964,7 @@ int reltype(int stype)
 void relhalf(struct local *lp, long t, long r, long *pt, long *pr)
 {
     long a, ad;
-    short i;
+    int i;
     struct nlist *sp;
 
     if (trace > 2)

@@ -54,7 +54,7 @@ static int getterm(void)
 // operation    = "+" | "-" | "&" | "|" | "^" | "~" | "\" | "/" | "*" | "%"
 long getexpr(int *s)
 {
-    short clex;
+    int clex;
     int cval, s2;
     struct word rez;
 
