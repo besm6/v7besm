@@ -353,51 +353,26 @@ lbl:    atx 0
     EXPECT_EQ(word_high(got, 17), 00010000L); // stx 0
 }
 
-// Data-emitting directives and segment switches.
+// Data-emitting directives and segment switches.  Each segment accumulates
+// independently and the file lays them out const/text/data/strng/bss, so the
+// lone text instruction takes file word 9 and the data words follow from word
+// 10; .strng folds onto the end of data; .bss only advances a_bss.
 TEST(Assemble, DataDirective)
 {
     // .word emits a full 48-bit word: its low 24 bits land in the high half-word
-    // (executed-first position), the high 24 bits in the low half-word.
+    // (executed-first position), the high 24 bits in the low half-word.  .half
+    // packs two 24-bit half-words per word, padding the last with zero.  .ascii
+    // packs six raw bytes per word, big-endian, and always appends padding, so a
+    // length that is already a multiple of six gains a zero word.
     auto got = assemble(R"(
         .data
         .word 0123, 0456
         .word 0x0f0f0f
-)");
-    EXPECT_EQ(word_low(got, 3), 18);          // a_data == 3 words
-    EXPECT_EQ(word_high(got, 9), 0123L);      // .word 0123
-    EXPECT_EQ(word_low(got, 9), 0);
-    EXPECT_EQ(word_high(got, 10), 0456L);     // .word 0456
-    EXPECT_EQ(word_high(got, 11), 0x0f0f0fL); // low 24 bits of the value
-    EXPECT_EQ(word_low(got, 11), 0);          // high 24 bits
-
-    // .half packs two 24-bit half-words per word, padding the last with zero.
-    got = assemble(R"(
-        .data
         .half 0111, 0222
         .half 0333
-)");
-    EXPECT_EQ(word_high(got, 9), 0111L);
-    EXPECT_EQ(word_low(got, 9), 0222L);
-    EXPECT_EQ(word_high(got, 10), 0333L);
-    EXPECT_EQ(word_low(got, 10), 0); // pad
-
-    // .ascii packs six raw bytes per word, big-endian.  It always appends
-    // padding, so a length that is already a multiple of six gains a zero word.
-    got = assemble(R"(
-        .data
         .ascii "ABCDEF"
         .ascii "Hi\n"
-)");
-    EXPECT_EQ(word_high(got, 9), 0x414243L); // "ABC"
-    EXPECT_EQ(word_low(got, 9), 0x444546L);  // "DEF"
-    EXPECT_EQ(word_high(got, 10), 0);        // the always-appended pad word
-    EXPECT_EQ(word_low(got, 10), 0);
-    EXPECT_EQ(word_high(got, 11), 0x48690aL); // 'H' 'i' '\n'
-    EXPECT_EQ(word_low(got, 11), 0);          // zero-padded
-
-    // Segment switches: text, data and strng (folded into data) and bss each get
-    // their own size in the header.
-    got = assemble(R"(
+        .text
         atx 0
         .data
         .word 0
@@ -407,10 +382,33 @@ TEST(Assemble, DataDirective)
         .bss
         . = . + 4   ; In bss the counter only advances a_bss; nothing is emitted.
 )");
+    // Segment sizes in the header: text, data (+strng folded in) and bss.
     EXPECT_EQ(word_low(got, 1), 0);  // a_const
-    EXPECT_EQ(word_low(got, 2), 6);  // a_text  == 1 word
-    EXPECT_EQ(word_low(got, 3), 18); // a_data  == 2 .word + 1 strng word
-    EXPECT_EQ(word_low(got, 4), 24); // a_bss   == 4 words
+    EXPECT_EQ(word_low(got, 2), 6);  // a_text == 1 word
+    EXPECT_EQ(word_low(got, 3), 66); // a_data == 8 + 2 .word + 1 strng word
+    EXPECT_EQ(word_low(got, 4), 24); // a_bss  == 4 words
+
+    // .word: the data words begin at file word 10 (text holds word 9).
+    EXPECT_EQ(word_high(got, 10), 0123L); // .word 0123
+    EXPECT_EQ(word_low(got, 10), 0);
+    EXPECT_EQ(word_high(got, 11), 0456L);     // .word 0456
+    EXPECT_EQ(word_high(got, 12), 0x0f0f0fL); // low 24 bits of the value
+    EXPECT_EQ(word_low(got, 12), 0);          // high 24 bits
+
+    // .half packs two 24-bit half-words per word, padding the last with zero.
+    EXPECT_EQ(word_high(got, 13), 0111L);
+    EXPECT_EQ(word_low(got, 13), 0222L);
+    EXPECT_EQ(word_high(got, 14), 0333L);
+    EXPECT_EQ(word_low(got, 14), 0); // pad
+
+    // .ascii packs six raw bytes per word, big-endian.  "ABCDEF" gains the
+    // always-appended pad word; "Hi\n" is zero-padded within its word.
+    EXPECT_EQ(word_high(got, 15), 0x414243L); // "ABC"
+    EXPECT_EQ(word_low(got, 15), 0x444546L);  // "DEF"
+    EXPECT_EQ(word_high(got, 16), 0);         // the always-appended pad word
+    EXPECT_EQ(word_low(got, 16), 0);
+    EXPECT_EQ(word_high(got, 17), 0x48690aL); // 'H' 'i' '\n'
+    EXPECT_EQ(word_low(got, 17), 0);          // zero-padded
 }
 
 // The '#' constant-pool operator: the value goes into the const segment (which
