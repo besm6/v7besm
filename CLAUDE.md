@@ -45,13 +45,13 @@ Diagnostic make targets (require the external `cast` tool / C compiler AST dump)
 
 ### Toolchain commands (`cmd/`)
 ```sh
-cd cmd/as  && make    # assembler           -> `as`  (installs as besm6-as)
-cd cmd/ld  && make    # linker              -> `ld`  (installs as mkb-ld)
-cd cmd/cpp && make    # C preprocessor      -> `cpp`
-cd cmd/disasm && make # disassembler
+cd cmd/as  && make    # assembler           -> `as`  (installs as b6as)
+cd cmd/ld  && make    # linker              -> `ld`  (installs as b6ld)
+cd cmd/cpp && make    # C preprocessor      -> `cpp` (installs as b6cpp)
+cd cmd/disasm && make # disassembler              (installs as b6disasm)
 ```
 `cmd/ld`'s Makefile also has targets for the companion binutils built from the same object
-helpers (`ar`, `nm`, `size`, `strip`, `ranlib` → installed as `mkb-*`); only `ld` is built
+helpers (`ar`, `nm`, `size`, `strip`, `ranlib` → installed as `b6*`); only `ld` is built
 by default — uncomment in the `all:` rule to build the rest. These are built with the host
 compiler (`$(CC)`), since they are tools that *run on the host* and emit BESM-6 objects.
 

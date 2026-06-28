@@ -18,7 +18,7 @@
 
 #define W 6 /* sizeof word of BESM-6 */
 
-#define AR "/usr/SVSB/bin/ar"
+#define AR "/usr/local/bin/b6ar"
 
 #define TABSZ    1000
 #define STRTABSZ (TABSZ * 10)

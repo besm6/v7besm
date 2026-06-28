@@ -20,8 +20,8 @@ add_library(assembler STATIC
 target_include_directories(assembler PUBLIC ${BESM6_CROSS_INCLUDE} ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(assembler PUBLIC aout)
 
-add_executable(besm6-as main.c)
-target_link_libraries(besm6-as PRIVATE assembler)
-install(TARGETS besm6-as RUNTIME DESTINATION bin)
+add_executable(b6as main.c)
+target_link_libraries(b6as PRIVATE assembler)
+install(TARGETS b6as RUNTIME DESTINATION bin)
 
 add_subdirectory(test)

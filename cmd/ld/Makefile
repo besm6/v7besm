@@ -1,17 +1,17 @@
 #
 # Linker, archiver and other object file utilities
 #
-DESTDIR = /usr/SVSB
+DESTDIR = /usr/local
 CFLAGS  = -I.. -Werror
 LDFLAGS =
 
-ld      = mkb-ld
-ar      = mkb-ar
-strip   = mkb-strip
-nm      = mkb-nm
-size    = mkb-size
-lorder  = mkb-lorder
-ranlib  = mkb-ranlib
+ld      = b6ld
+ar      = b6ar
+strip   = b6strip
+nm      = b6nm
+size    = b6size
+lorder  = b6lorder
+ranlib  = b6ranlib
 
 all:    ld #ar strip nm size ranlib
 
