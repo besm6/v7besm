@@ -188,11 +188,19 @@ static void getbitnum(int c)
     }
 }
 
+// + - * / are part of operator-bearing mnemonics (a+x, j+m, e-n, ...).
+static int isopername(int c)
+{
+    return c == '+' || c == '-' || c == '*' || c == '/';
+}
+
 static void getname(int c)
 {
     register char *cp;
 
-    for (cp = name; ISLETTER(c) || ISDIGIT(c); c = getchar())
+    // When a machine instruction is expected, absorb the operator characters
+    // so mnemonics like "a+x" lex as a single name.
+    for (cp = name; ISLETTER(c) || ISDIGIT(c) || (cmdmode && isopername(c)); c = getchar())
         *cp++ = c;
     *cp = 0;
     ungetc(c, stdin);

@@ -1,7 +1,5 @@
 Tasks to do in assembler:
 
- * AS-1: The operator-bearing mnemonics (a+x, a-x, x-a, a/x, a*x, e+x, e-x, e+n, e-n, j+m) cannot be matched by the current name lexer (+ - * / are not name characters in cmd/as/lex.c). Makeg the lexer to accept them. 
-
  * AS-2: The 15-bit long-address masks are fixed in pass1.c makecmd() and pass2.c adjust(), and the raw-opcode escapes (LSCMD $NN, LLCMD @NN) now emit the BESM-6 bit positions. STILL TODO: the matching long mask in cmd/ld/ld.c relhalf() is still 20-bit (03777777) and must become 15-bit (077777); deferred with the rest of ld.
 
  * AS-3: Review the TLIT/TINT/TCOMP/MAKECOMP machinery (the literal-pool `#` path and the 0x4000000 literal bit in pass1.c makecmd(), plus the MAKECOMP macro and component-instruction handling). Tag BESM-6 instruction with these flags where appropriate. Remove dead flags.

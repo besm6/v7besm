@@ -240,12 +240,18 @@ static void makeascii(void)
 
 void pass1(void)
 {
-    register short clex;
     int cval, tval, csegm;
     register long addr;
 
     segm = STEXT;
-    while ((clex = getlex(&cval)) != LEOF) {
+    for (;;) {
+        register short clex;
+
+        // A machine instruction is expected at the start of a statement;
+        // enable operator characters in names for this lex only.
+        cmdmode = 1;
+        clex    = getlex(&cval);
+        cmdmode = 0;
         switch (clex) {
         case LEOF:
             return;

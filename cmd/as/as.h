@@ -135,7 +135,8 @@ extern short extref;
 extern short blexflag, backlex, blextype;
 extern short hashtab[HASHSZ], hashctab[HCMDSZ];
 extern short hashconst[HCONSZ];
-extern short aflag; // don't align on word boundary
+extern short aflag;   // don't align on word boundary
+extern short cmdmode; // lexer expects a machine instruction (allow + - * / in name)
 
 // Read-only tables (defined in tables.c).
 extern short ctype[256];

@@ -34,7 +34,8 @@ short extref;
 short blexflag, backlex, blextype;
 short hashtab[HASHSZ], hashctab[HCMDSZ];
 short hashconst[HCONSZ];
-short aflag; // don't align on word boundary
+short aflag;   // don't align on word boundary
+short cmdmode; // lexer expects a machine instruction (allow + - * / in name)
 
 // Fatal error message.
 noreturn void uerror(char *fmt, ...)
