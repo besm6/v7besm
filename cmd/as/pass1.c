@@ -226,7 +226,9 @@ void pass1(void)
             continue;
         case LNUM:
             ungetlex(clex, cval);
+            as.cmdmode = 1; // a mnemonic may follow the register number
             getexpr(&cval);
+            as.cmdmode = 0;
             if (cval != SABS)
                 uerror("bad register number");
             as.regleft = as.intval.right & 017;

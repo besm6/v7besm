@@ -176,7 +176,7 @@ mid:                        ; second label
         ita 4
         its 5
         mtj 6, 1            ; indexed: trailing register 1
-        j+m 7
+      8 j+m 7
         $46 050
         $47 051
         $50 052
@@ -266,7 +266,7 @@ mid:                        ; second label
     EXPECT_EQ(word_high(got, 26), 00420000L | 4L);    // ita 4
     EXPECT_EQ(word_low(got, 26), 00430000L | 5L);     // its 5
     EXPECT_EQ(word_high(got, 27), (1L << 20) | 00440000L | 6L); // mtj 6, 1
-    EXPECT_EQ(word_low(got, 27), 00450000L | 7L);     // j+m 7
+    EXPECT_EQ(word_low(got, 27), (8L << 20) | 00450000L | 7L);  // 8 j+m 7
     EXPECT_EQ(word_high(got, 28), 00460000L | 050L);  // $46 050
     EXPECT_EQ(word_low(got, 28), 00470000L | 051L);   // $47 051
     EXPECT_EQ(word_high(got, 29), 00500000L | 052L);  // $50 052

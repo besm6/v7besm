@@ -57,6 +57,8 @@ long getexpr(int *s)
     int clex;
     int cval, s2;
     struct word rez;
+    int cmd = as.cmdmode; // a machine instruction may follow the expression
+    as.cmdmode  = 0;      // operands themselves never absorb operator chars
 
     // look at the first token
     switch (clex = getlex(&cval)) {
@@ -76,7 +78,10 @@ long getexpr(int *s)
         break;
     }
     for (;;) {
-        switch (clex = getlex(&cval)) {
+        as.cmdmode = cmd; // the look-ahead may land on a mnemonic
+        clex       = getlex(&cval);
+        as.cmdmode = 0;
+        switch (clex) {
             long t;
         case '+':
             s2 = getterm();
@@ -197,7 +202,8 @@ long getexpr(int *s)
             break;
         default:
             ungetlex(clex, cval);
-            as.intval = rez;
+            as.cmdmode = cmd; // restore for the caller
+            as.intval  = rez;
             return rez.right;
         }
     }
