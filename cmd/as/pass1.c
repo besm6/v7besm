@@ -192,6 +192,9 @@ static void makeascii(void)
         }
         break;
     }
+    // Always append one trailing NUL byte, then zero-pad to a word boundary
+    // (NUL-terminated string). When n is already a multiple of W this is a
+    // full extra zero word: 1 NUL + (W-1) alignment bytes — intentional.
     c = W - n % W;
     n = (n + c) / (W / 2);
     as.count[as.segm] += n;

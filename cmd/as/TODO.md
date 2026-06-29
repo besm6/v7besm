@@ -8,6 +8,4 @@ Tasks to do in assembler:
 
  * AS-12: The decimal suffix `d`/`D` misparses. Per doc/Assembler_Manual.md §6.1 `1234d` should be decimal 1234 (== 02322), but lex.c yields 030101 instead (bare `1234` is correct). The number scanner mishandles the trailing `d` (likely treating it as a hex digit and/or not committing to base 10). Fix getnum()/the suffix handling in lex.c so `digits` `d`/`D` is plain decimal.
 
- * AS-13: `.ascii` always appends padding, even when the byte count is already a multiple of W. makeascii() in pass1.c computes `c = W - n % W` without the `% W` guard, so `n % W == 0` yields a full extra zero word (e.g. `.ascii "ABCDEF"` emits two words: the text and an all-zero word). Decide whether a trailing NUL word is intended; if not, make the pad `(W - n % W) % W`.
-
  * AS-14: typesegm[] in tables.c has the same non-contiguous-index defect that was just fixed in segmtype[]/segmrel[], but in the *type* index space: N_BSS=05, N_ABSS=06, N_STRNG=07 leave the array short, so TYPESEGM(N_STRNG) reads out of bounds and TYPESEGM(N_ABSS) returns SSTRNG. No current input exercises it (it bites a symbol whose type is N_STRNG, i.e. a label defined in the .strng segment). Fix: insert the N_ABSS placeholder at index 6 so N_STRNG lands at index 7, mirroring the segmtype[]/segmrel[] fix.
