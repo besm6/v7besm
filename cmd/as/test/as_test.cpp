@@ -506,3 +506,30 @@ tlabel: atx 0
     EXPECT_EQ(word_low(got, dword), 0L);
     EXPECT_EQ(reloc_half(got, 2, 0) & 070L, 020L); // data reloc relative to text
 }
+
+// Referencing a label defined in the .strng segment exercises TYPESEGM(N_STRNG)
+// in expr.c.  Regression test for AS-14: typesegm[] was one entry short, so
+// TYPESEGM(N_STRNG) read out of bounds and the reference relocated against the
+// wrong segment.  The strng segment folds onto the end of data, so pass2 rewrites
+// the symbol's type to N_DATA and emits the reference as an RDATA relocation; with
+// the bug the .word would relocate against some other (garbage) segment instead.
+TEST(Assemble, StrngLabelReference)
+{
+    auto got = assemble(R"(
+        .globl slabel
+        atx 0
+        .strng
+slabel: .ascii "ab"
+        .data
+        .word slabel
+)");
+    auto syms = read_symbols(got);
+    ASSERT_EQ(syms.size(), 1u);
+    EXPECT_EQ(syms[0].name, "slabel");
+    EXPECT_EQ(syms[0].type, 044L); // N_EXT | N_DATA (strng folded into data)
+
+    // The .word resolves the strng label through TYPESEGM(N_STRNG) -> SSTRNG and
+    // relocates against the folded data segment (RDATA); the bug produced a
+    // different segment from the out-of-bounds typesegm[] read.
+    EXPECT_EQ(reloc_half(got, 2, 0) & 070L, 030L); // RDATA
+}

@@ -46,14 +46,18 @@ const int segmrel[] = {
 };
 
 const int typesegm[] = {
-    // convert symbol type to segment number
-    SEXT,   // N_UNDF
-    SABS,   // N_ABS
-    SCONST, // N_CONST
-    STEXT,  // N_TEXT
-    SDATA,  // N_DATA
-    SBSS,   // N_BSS
-    SSTRNG, // N_STRNG
+    // convert symbol type to segment number.  Indexed by the N_* type numbers,
+    // which are NOT contiguous: N_ABSS==06 and N_STRNG==07, so the abss slot must
+    // be present here or TYPESEGM(N_STRNG) reads out of bounds and TYPESEGM(N_ABSS)
+    // returns the wrong segment.
+    SEXT,   // N_UNDF  0
+    SABS,   // N_ABS   1
+    SCONST, // N_CONST 2
+    STEXT,  // N_TEXT  3
+    SDATA,  // N_DATA  4
+    SBSS,   // N_BSS   5
+    5,      // N_ABSS  6 - abss segment, unused placeholder
+    SSTRNG, // N_STRNG 7
 };
 
 // Table of machine instructions.
