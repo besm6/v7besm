@@ -1,128 +1,106 @@
 /*
- * Disassembler for micro-BESM
+ * Disassembler for BESM-6 a.out object files.
+ *
+ * A BESM-6 word is 48 bits == 6 bytes (two 24-bit half-words).  Every text word
+ * holds two 24-bit instructions; the high (left) half-word executes first.  The
+ * instruction encoding and the mnemonic tables below match tmp/objdump.c and the
+ * encoding emitted by cmd/as (see cmd/as/tables.c, doc/Besm6_Instruction_Set.md).
  */
-#include <ctype.h>
 #include <stdio.h>
 
-#include "b.out.h"
+#include "besm6/b.out.h"
+#include "disasm.h"
 
-#define W 8 /* длина слова в байтах */
+#define W 6 /* длина слова в байтах */
 
 struct exec hdr; /* заголовок */
 FILE *text, *rel;
 int rflag, Rflag, cflag, Cflag;
 int addr;
 
-char *lcmd2[] = {
-    "зп",   "зпм",  "счн",  "счм",   "сл",    "вч",    "вчоб",  "вчаб",  "сч",    "и",     "нтж",
-    "слк",  "из",   "или",  "дел",   "умн",   "сбр",   "рзб",   "чед",   "нед",   "слпп",  "вчпп",
-    "сдпп", "уржп", "пб",   "пв",    "циклу", "цикл",  "@1c",   "@1d",   "сдлп",  "@1f",   "пирв",
-    "пинр", "пибр", "пимн", "пимр",  "пибл",  "@26",   "@27",   "прв",   "пнр",   "пбр",   "пмн",
-    "пмр",  "пбл",  "пос",  "пно",   "счт",   "сем",   "счх",   "счк",   "зпн",   "зпк",   "зпх",
-    "зпт",  "где",  "пфс",  "пфа",   "пф",    "уиа",   "слиа",  "груп",  "@3f",   "счц",   "счцм",
-    "счнц", "счлм", "слц",  "вчц",   "вчобц", "вчабц", "счл",   "ил",    "нтжл",  "слкл",  "изц",
-    "илил", "@4e",  "умнц", "сбрл",  "рзбл",  "чедл",  "недл",  "слф",   "вчф",   "вчобф", "вчабф",
-    "@58",  "@59",  "@5a",  "@5b",   "@5c",   "@5d",   "@5e",   "@5f",   "зп.",   "зпм.",  "счн.",
-    "счм.", "сл.",  "вч.",  "вчоб.", "вчаб.", "сч.",   "и.",    "нтж.",  "слк.",  "из.",   "или.",
-    "дел.", "умн.", "сбр.", "рзб.",  "чед.",  "нед.",  "слпп.", "вчпп.", "сдпп.", "@77",   "счт.",
-    "сем.", "счх.", "счк.", "зпн.",  "зпк.",  "сдлп.", "зпт.",
-
-    "@80",  "@81",  "@82",  "@83",   "@84",   "@85",   "@86",   "@87",   "@88",   "@89",   "@8a",
-    "@8b",  "@8c",  "@8d",  "@8e",   "@8f",   "@90",   "@91",   "@92",   "@93",   "@94",   "@95",
-    "@96",  "@97",  "@98",  "@99",   "@9a",   "@9b",   "@9c",   "@9d",   "@9e",   "@9f",   "@a0",
-    "@a1",  "@a2",  "@a3",  "@a4",   "@a5",   "@a6",   "@a7",   "@a8",   "@a9",   "@aa",   "@ab",
-    "@ac",  "@ad",  "@ae",  "@af",   "@b0",   "@b1",   "@b2",   "@b3",   "@b4",   "@b5",   "@b6",
-    "@b7",  "@b8",  "@b9",  "@ba",   "@bb",   "@bc",   "@bd",   "@be",   "@bf",   "@c0",   "@c1",
-    "@c2",  "@c3",  "@c4",  "@c5",   "@c6",   "@c7",   "@c8",   "@c9",   "@ca",   "@cb",   "@cc",
-    "@cd",  "@ce",  "@cf",  "@d0",   "@d1",   "@d2",   "@d3",   "@d4",   "@d5",   "@d6",   "@d7",
-    "@d8",  "@d9",  "@da",  "@db",   "@dc",   "@dd",   "@de",   "@df",   "@e0",   "@e1",   "@e2",
-    "@e3",  "@e4",  "@e5",  "@e6",   "@e7",   "@e8",   "@e9",   "@ea",   "@eb",   "@ec",   "@ed",
-    "@ee",  "@ef",  "@f0",  "@f1",   "@f2",   "@f3",   "@f4",   "@f5",   "@f6",   "@f7",   "@f8",
-    "@f9",  "@fa",  "@fb",  "@fc",   "@fd",   "@fe",   "@ff",
+/*
+ * Long-address instructions (format flag = 1): opcodes 020-037, 16 entries.
+ *
+ * The MADLEN (ASCII) names match the assembler's table[] in cmd/as/tables.c;
+ * opcodes the assembler leaves unnamed disassemble to its raw long-opcode form
+ * "@NN" (octal), which the assembler accepts back verbatim.  The BEMSH set is
+ * the Cyrillic dialect from tmp/objdump.c.
+ */
+const char *lcmd_bemsh[16] = {
+    "э20", "э21", "мода", "мод", "уиа", "слиа", "по",   "пе",
+    "пб",  "пв",  "выпр", "стоп", "пио", "пино", "э36",  "цикл",
 };
 
-char *lcmd1[] = {
-    "atx",  "stx",  "xtra", "xts",  "aadx", "asux", "xsua", "amsx", "xta",  "aax",  "aex",  "arx",
-    "avx",  "aox",  "adx",  "amux", "apkx", "aux",  "acx",  "anx",  "eax",  "esx",  "asrx", "xtr",
-    "uj",   "vjm",  "vgm",  "vlm",  "@1c",  "@1d",  "alx",  "@1f",  "vzm",  "vim",  "vpzm", "vnm",
-    "vnzm", "vpm",  "@26",  "@27",  "uz",   "ui",   "upz",  "un",   "unz",  "up",   "uiv",  "uzv",
-    "xtga", "xtqa", "xtha", "xtta", "ztx",  "atcx", "ath",  "atgx", "pctm", "atc",  "utcs", "wtc",
-    "vtm",  "utm",  "do",   "@3f",  "xtal", "xtsl", "utra", "uts",  "aadu", "asuu", "usua", "amu",
-    "uta",  "aau",  "aeu",  "aru",  "avu",  "aou",  "@4e",  "amuu", "apu",  "auu",  "acu",  "anu",
-    "@54",  "@55",  "@56",  "@57",  "@58",  "@59",  "@5a",  "@5b",  "@5c",  "@5d",  "@5e",  "@5f",
-    "atk",  "stk",  "ktra", "kts",  "aadk", "asuk", "ksua", "amk",  "kta",  "aak",  "aek",  "ark",
-    "avk",  "aok",  "adk",  "amuk", "apk",  "auk",  "ack",  "ank",  "eak",  "esk",  "ask",  "@77",
-    "ktga", "ktsa", "ktha", "ktta", "ztk",  "atck", "alk",  "atgk",
-
-    "@80",  "@81",  "@82",  "@83",  "@84",  "@85",  "@86",  "@87",  "@88",  "@89",  "@8a",  "@8b",
-    "@8c",  "@8d",  "@8e",  "@8f",  "@90",  "@91",  "@92",  "@93",  "@94",  "@95",  "@96",  "@97",
-    "@98",  "@99",  "@9a",  "@9b",  "@9c",  "@9d",  "@9e",  "@9f",  "@a0",  "@a1",  "@a2",  "@a3",
-    "@a4",  "@a5",  "@a6",  "@a7",  "@a8",  "@a9",  "@aa",  "@ab",  "@ac",  "@ad",  "@ae",  "@af",
-    "@b0",  "@b1",  "@b2",  "@b3",  "@b4",  "@b5",  "@b6",  "@b7",  "@b8",  "@b9",  "@ba",  "@bb",
-    "@bc",  "@bd",  "@be",  "@bf",  "@c0",  "@c1",  "@c2",  "@c3",  "@c4",  "@c5",  "@c6",  "@c7",
-    "@c8",  "@c9",  "@ca",  "@cb",  "@cc",  "@cd",  "@ce",  "@cf",  "@d0",  "@d1",  "@d2",  "@d3",
-    "@d4",  "@d5",  "@d6",  "@d7",  "@d8",  "@d9",  "@da",  "@db",  "@dc",  "@dd",  "@de",  "@df",
-    "@e0",  "@e1",  "@e2",  "@e3",  "@e4",  "@e5",  "@e6",  "@e7",  "@e8",  "@e9",  "@ea",  "@eb",
-    "@ec",  "@ed",  "@ee",  "@ef",  "@f0",  "@f1",  "@f2",  "@f3",  "@f4",  "@f5",  "@f6",  "@f7",
-    "@f8",  "@f9",  "@fa",  "@fb",  "@fc",  "@fd",  "@fe",  "@ff",
+const char *lcmd_madlen[16] = {
+    "@20", "@21", "utc",  "wtc", "vtm", "utm", "uza",  "u1a",
+    "uj",  "vjm", "ij",   "stop", "vzm", "v1m", "@36",  "vlm",
 };
 
-char *scmd2[] = {
-    "эк",   "выт",  "врг",   "вых",  "$04",  "$05",   "ург",   "стоп",  "$08",   "$09",  "$0a",
-    "$0b",  "$0c",  "$0d",   "$0e",  "$0f",  "$10",   "вдп",   "$12",   "$13",   "кор",  "$15",
-    "сдп",  "$17",  "врж",   "вд",   "нтжп", "упр",   "слп",   "вчп",   "сдл",   "урж",  "уи",
-    "уим",  "ви",   "виц",   "уии",  "сли",  "вчиоб", "вчи",   "ур",    "урм",   "вр",   "$2b",
-    "ури",  "$2d",  "$2e",   "$2f",  "$30",  "$31",   "$32",   "$33",   "цела",  "целф", "сдпд",
-    "$37",  "уисч", "$39",   "$3a",  "$3b",  "инв",   "$3d",   "сдлд",  "лог",   "$40",  "$41",
-    "$42",  "$43",  "$44",   "$45",  "$46",  "$47",   "$48",   "$49",   "$4a",   "$4b",  "$4c",
-    "$4d",  "$4e",  "$4f",   "$50",  "вдпм", "$52",   "$53",   "корм",  "$55",   "сдпм", "$57",
-    "вржм", "вдм",  "нтжпм", "$5b",  "слпм", "вчпм",  "сдлм",  "уржм",  "$60",   "$61",  "вим",
-    "вицм", "$64",  "$65",   "$66",  "$67",  "$68",   "$69",   "врм",   "$6b",   "$6c",  "$6d",
-    "$6e",  "$6f",  "$70",   "$71",  "$72",  "$73",   "целам", "целфм", "сдпдм", "$77",  "уисчм",
-    "$79",  "$7a",  "$7b",   "инвм", "$7d",  "сдлдм", "логм",
-
-    "$80",  "$81",  "$82",   "$83",  "$84",  "$85",   "$86",   "$87",   "$88",   "$89",  "$8a",
-    "$8b",  "$8c",  "$8d",   "$8e",  "$8f",  "$90",   "$91",   "$92",   "$93",   "$94",  "$95",
-    "$96",  "$97",  "$98",   "$99",  "$9a",  "$9b",   "$9c",   "$9d",   "$9e",   "$9f",  "$a0",
-    "$a1",  "$a2",  "$a3",   "$a4",  "$a5",  "$a6",   "$a7",   "$a8",   "$a9",   "$aa",  "$ab",
-    "$ac",  "$ad",  "$ae",   "$af",  "$b0",  "$b1",   "$b2",   "$b3",   "$b4",   "$b5",  "$b6",
-    "$b7",  "$b8",  "$b9",   "$ba",  "$bb",  "$bc",   "$bd",   "$be",   "$bf",   "$c0",  "$c1",
-    "$c2",  "$c3",  "$c4",   "$c5",  "$c6",  "$c7",   "$c8",   "$c9",   "$ca",   "$cb",  "$cc",
-    "$cd",  "$ce",  "$cf",   "$d0",  "$d1",  "$d2",   "$d3",   "$d4",   "$d5",   "$d6",  "$d7",
-    "$d8",  "$d9",  "$da",   "$db",  "$dc",  "$dd",   "$de",   "$df",   "$e0",   "$e1",  "$e2",
-    "$e3",  "$e4",  "$e5",   "$e6",  "$e7",  "$e8",   "$e9",   "$ea",   "$eb",   "$ec",  "$ed",
-    "$ee",  "$ef",  "$f0",   "$f1",  "$f2",  "$f3",   "$f4",   "$f5",   "$f6",   "$f7",  "$f8",
-    "$f9",  "$fa",  "$fb",   "$fc",  "$fd",  "$fe",   "$ff",
+/*
+ * Short-address instructions (format flag = 0): opcodes 000-077, 64 entries.
+ * MADLEN names match cmd/as/tables.c; unnamed opcodes use the raw "$NN" form.
+ */
+const char *scmd_bemsh[64] = {
+    "зп",   "зпм",  "рег",  "счм",  "сл",   "вч",   "вчоб", "вчаб",
+    "сч",   "и",    "нтж",  "слц",  "знак", "или",  "дел",  "умн",
+    "сбр",  "рзб",  "чед",  "нед",  "слп",  "вчп",  "сд",   "рж",
+    "счрж", "счмр", "уис",  "счис", "слпа", "вчпа", "сда",  "ржа",
+    "уи",   "уим",  "счи",  "счим", "уии",  "сли",  "э46",  "э47",
+    "э50",  "э51",  "э52",  "э53",  "э54",  "э55",  "э56",  "э57",
+    "э60",  "э61",  "э62",  "э63",  "э64",  "э65",  "э66",  "э67",
+    "э70",  "э71",  "э72",  "э73",  "э74",  "э75",  "э76",  "э77",
 };
 
-char *scmd1[] = {
-    "ex",   "pop", "rmod", "ij",   "$04", "$05", "wmod", "halt", "$08",  "$09",  "$0a",  "$0b",
-    "$0c",  "$0d", "$0e",  "$0f",  "$10", "yma", "$12",  "$13",  "ecn",  "$15",  "asn",  "$17",
-    "rta",  "yta", "een",  "set",  "ean", "esn", "aln",  "ntr",  "ati",  "sti",  "ita",  "iita",
-    "mtj",  "jam", "msj",  "jsm",  "ato", "sto", "ota",  "$2b",  "mto",  "$2d",  "$2e",  "$2f",
-    "$30",  "$31", "$32",  "$33",  "ent", "int", "asy",  "$37",  "atia", "$39",  "$3a",  "$3b",
-    "aca",  "$3d", "aly",  "tst",  "$40", "$41", "$42",  "$43",  "$44",  "$45",  "$46",  "$47",
-    "$48",  "$49", "$4a",  "$4b",  "$4c", "$4d", "$4e",  "$4f",  "$50",  "yms",  "$52",  "$53",
-    "ecns", "$55", "asns", "$57",  "rts", "yts", "eens", "$5b",  "eans", "esns", "alns", "ntrs",
-    "$60",  "$61", "its",  "iits", "$64", "$65", "$66",  "$67",  "$68",  "$69",  "ots",  "$6b",
-    "$6c",  "$6d", "$6e",  "$6f",  "$70", "$71", "$72",  "$73",  "ents", "ints", "asys", "$77",
-    "atis", "$79", "$7a",  "$7b",  "acs", "$7d", "alys", "tsts",
-
-    "$80",  "$81", "$82",  "$83",  "$84", "$85", "$86",  "$87",  "$88",  "$89",  "$8a",  "$8b",
-    "$8c",  "$8d", "$8e",  "$8f",  "$90", "$91", "$92",  "$93",  "$94",  "$95",  "$96",  "$97",
-    "$98",  "$99", "$9a",  "$9b",  "$9c", "$9d", "$9e",  "$9f",  "$a0",  "$a1",  "$a2",  "$a3",
-    "$a4",  "$a5", "$a6",  "$a7",  "$a8", "$a9", "$aa",  "$ab",  "$ac",  "$ad",  "$ae",  "$af",
-    "$b0",  "$b1", "$b2",  "$b3",  "$b4", "$b5", "$b6",  "$b7",  "$b8",  "$b9",  "$ba",  "$bb",
-    "$bc",  "$bd", "$be",  "$bf",  "$c0", "$c1", "$c2",  "$c3",  "$c4",  "$c5",  "$c6",  "$c7",
-    "$c8",  "$c9", "$ca",  "$cb",  "$cc", "$cd", "$ce",  "$cf",  "$d0",  "$d1",  "$d2",  "$d3",
-    "$d4",  "$d5", "$d6",  "$d7",  "$d8", "$d9", "$da",  "$db",  "$dc",  "$dd",  "$de",  "$df",
-    "$e0",  "$e1", "$e2",  "$e3",  "$e4", "$e5", "$e6",  "$e7",  "$e8",  "$e9",  "$ea",  "$eb",
-    "$ec",  "$ed", "$ee",  "$ef",  "$f0", "$f1", "$f2",  "$f3",  "$f4",  "$f5",  "$f6",  "$f7",
-    "$f8",  "$f9", "$fa",  "$fb",  "$fc", "$fd", "$fe",  "$ff",
+const char *scmd_madlen[64] = {
+    "atx",  "stx",  "mod",  "xts",  "a+x",  "a-x",  "x-a",  "amx",
+    "xta",  "aax",  "aex",  "arx",  "avx",  "aox",  "a/x",  "a*x",
+    "apx",  "aux",  "acx",  "anx",  "e+x",  "e-x",  "asx",  "xtr",
+    "rte",  "yta",  "$32",  "$33",  "e+n",  "e-n",  "asn",  "ntr",
+    "ati",  "sti",  "ita",  "its",  "mtj",  "j+m",  "$46",  "$47",
+    "$50",  "$51",  "$52",  "$53",  "$54",  "$55",  "$56",  "$57",
+    "$60",  "$61",  "$62",  "$63",  "$64",  "$65",  "$66",  "$67",
+    "$70",  "$71",  "$72",  "$73",  "$74",  "$75",  "$76",  "$77",
 };
 
-char **lcmd = lcmd1, **scmd = scmd1;
+const char **lcmd = lcmd_madlen, **scmd = scmd_madlen;
 
+/*
+ * Decode one 24-bit instruction into re-assemblable text:
+ *      mnemonic [' ' addr] [', ' reg]
+ * The address is printed in octal: a single digit (1-7) bare, larger values
+ * with a leading 0 (%#o); the modifier/index register is decimal.  Both
+ * operands are omitted when zero, except that a non-zero register forces the
+ * (possibly zero) address to be printed too.
+ */
+void disasm_insn(unsigned insn, char *buf)
+{
+    unsigned op_ir    = (insn >> 20) & 017; /* modifier register, bits 20-23 */
+    unsigned op_lflag = (insn >> 19) & 1;   /* long-address format flag, bit 19 */
+    unsigned op_addr;
+    const char *mnem;
+
+    if (op_lflag) {
+        unsigned op_lcmd = (insn >> 15) & 037; /* opcode 020-037 */
+        op_addr = insn & 077777;               /* 15-bit address */
+        mnem    = lcmd[op_lcmd - 020];
+    } else {
+        unsigned op_scmd = (insn >> 12) & 0177; /* opcode + extension bit */
+        op_addr = insn & 07777;                 /* 12-bit address */
+        mnem    = scmd[op_scmd & 077];
+        if (op_scmd & 0100)
+            op_addr |= 070000; /* short address extended to 15 bits */
+    }
+
+    buf += sprintf(buf, "%s", mnem);
+    if (op_addr != 0 || op_ir != 0)
+        buf += sprintf(buf, op_addr < 8 ? " %o" : " %#o", op_addr);
+    if (op_ir != 0)
+        sprintf(buf, ", %u", op_ir);
+}
+
+/*
+ * Print one relocation record (-r) symbolically, or as raw numbers (-R).
+ */
 void prrel(long r)
 {
     if (Rflag) {
@@ -132,255 +110,133 @@ void prrel(long r)
         return;
     }
     switch ((int)r & REXT) {
-    default:
-        putchar('?');
-        break;
-    case RCONST:
-        putchar('c');
-        break;
-    case RTEXT:
-        putchar('t');
-        break;
-    case RDATA:
-        putchar('d');
-        break;
-    case RBSS:
-        putchar('b');
-        break;
-    case RABSS:
-        putchar('y');
-        break;
-    case RABS:
-        putchar('a');
-        break;
-    case REXT:
-        printf("%d", (int)RGETIX(r));
+    default:     putchar('?'); break;
+    case RCONST: putchar('c'); break;
+    case RTEXT:  putchar('t'); break;
+    case RDATA:  putchar('d'); break;
+    case RBSS:   putchar('b'); break;
+    case RABSS:  putchar('y'); break;
+    case RABS:   putchar('a'); break;
+    case REXT:   printf("%d", (int)RGETIX(r));
     }
     switch ((int)r & RSHORT) {
-    case RLONG:
-        putchar('l');
-        break;
-    case RSHORT:
-        putchar('s');
-        break;
-    case RSHIFT:
-        putchar('h');
-        break;
-    case RTRUNC:
-        putchar('t');
-        break;
-    case 0:
-        putchar('a');
-        break;
-    default:
-        putchar('?');
-        break;
+    case RLONG:  putchar('l'); break;
+    case RSHORT: putchar('s'); break;
+    case RSHIFT: putchar('h'); break;
+    case RTRUNC: putchar('t'); break;
+    case 0:      putchar('a'); break;
+    default:     putchar('?'); break;
     }
 }
 
-void prconst(int n)
+/*
+ * Dump n data words (const or data segment) as octal half-words.
+ */
+void prwords(int n)
 {
-    long c, r;
-
     while (n--) {
-        c = fgeth(text);
-        printf("x%x:\t%08lx%08lx", addr++, fgeth(text), c);
+        long hi = fgeth(text);
+        long lo = fgeth(text);
+        printf("%5o:\t%08lo %08lo", addr++, hi & 077777777L, lo & 077777777L);
         if (rflag) {
+            long rhi = fgeth(rel);
+            long rlo = fgeth(rel);
             putchar('\t');
-            r = fgeth(rel);
-            prrel(fgeth(rel));
+            prrel(rhi);
             putchar(' ');
-            prrel(r);
+            prrel(rlo);
         }
         putchar('\n');
     }
 }
 
-char *addrtoa(long a)
-{
-    static char buf[20];
-    char *p;
-    int sign;
-
-    if (a & 0x80000L)
-        a -= 0x100000L;
-    if (a >= 0 && a < 16 || a < 0 && a > -16) {
-        sprintf(buf, "%ld", a);
-        return buf;
-    }
-    p    = buf + sizeof(buf);
-    *--p = 0;
-    sign = 0;
-    if (a < 0) {
-        sign = 1;
-        a    = -a;
-    }
-    if (a >= 0x10)
-        *--p = 'h';
-    do
-        *--p = "0123456789abcdef"[a & 0xf];
-    while (a >>= 4);
-    if (*p > '9')
-        *--p = '0';
-    if (sign)
-        *--p = '-';
-    return p;
-}
-
-void prmnem(long c)
-{
-    int r;
-    long a;
-
-    r = (c >> 28) & 017;
-    if (r)
-        printf("\t%2d ", r);
-    else
-        printf("\t   ");
-
-    if ((c & 0xff00000L) == 0x3f00000L) {
-        printf("%s", scmd[c >> 12 & 0377]);
-        a = c & 0xfff;
-    } else {
-        printf("%s", lcmd[c >> 20 & 0377]);
-        a = c & 0xfffff;
-    }
-
-    if (a)
-        printf(" %-7s\t", addrtoa(a));
-    else
-        printf("       \t");
-}
-
+/*
+ * Print one decoded instruction half-word, optionally with its raw octal value.
+ */
 void prcmd(long c)
 {
-    int r;
-    long a;
-
-    if (!Cflag)
-        prmnem(c);
+    if (!Cflag) {
+        char buf[64];
+        disasm_insn((unsigned)c, buf);
+        printf("\t%s", buf);
+    }
     if (cflag)
-        printf("\t%08lx\t", c);
+        printf("\t%08lo", c & 077777777L);
 }
 
+/*
+ * Disassemble n text words, high half-word first.
+ */
 void prtext(int n)
 {
-    long c, r;
-
     while (n--) {
-        printf("x%x:", addr++);
-        c = fgeth(text);
-        prcmd(fgeth(text));
+        long hi = fgeth(text);
+        long lo = fgeth(text);
+        long rhi = 0, rlo = 0;
+        if (rflag) {
+            rhi = fgeth(rel);
+            rlo = fgeth(rel);
+        }
+        printf("%5o:", addr++);
+        prcmd(hi);
         if (rflag) {
             putchar('\t');
-            r = fgeth(rel);
-            prrel(fgeth(rel));
+            prrel(rhi);
         }
         putchar('\n');
-        prcmd(c);
+        printf("      ");
+        prcmd(lo);
         if (rflag) {
             putchar('\t');
-            prrel(r);
+            prrel(rlo);
         }
         putchar('\n');
     }
 }
 
-void prdata(int n)
-{
-    long c, r;
-
-    while (n--) {
-        c = fgeth(text);
-        printf("x%x:\t%08lx%08lx", addr++, fgeth(text), c);
-        if (rflag) {
-            putchar('\t');
-            r = fgeth(rel);
-            prrel(fgeth(rel));
-            putchar(' ');
-            prrel(r);
-        }
-        putchar('\n');
-    }
-}
-
-void disfile()
+/*
+ * Walk the segments in on-disk order: const, text, data.
+ */
+void disfile(void)
 {
     addr = HDRSZ / W;
-    if (!(hdr.a_flag & TCDFLG)) {
-        prconst((int)hdr.a_const / W);
-        putchar('\n');
-    }
-    prtext((int)hdr.a_text / W);
+    prwords((int)(hdr.a_const / W));
     putchar('\n');
-    if (hdr.a_flag & TCDFLG) {
-        prconst((int)hdr.a_const / W);
-        putchar('\n');
-    }
-    prdata((int)hdr.a_data / W);
+    prtext((int)(hdr.a_text / W));
+    putchar('\n');
+    prwords((int)(hdr.a_data / W));
 }
 
-void dis(char *fname)
+/*
+ * Disassemble a whole a.out object file to stdout.  Returns 0 on success.
+ */
+int disassemble(const char *fname)
 {
     if ((text = fopen(fname, "r")) == NULL) {
         fprintf(stderr, "dis: %s not found\n", fname);
-        return;
+        return 1;
     }
     if (!fgethdr(text, &hdr) || N_BADMAG(hdr)) {
         fprintf(stderr, "dis: %s not an object file\n", fname);
-        return;
+        fclose(text);
+        return 1;
     }
     if (rflag) {
-        if (hdr.a_flag & RELFLG) {
+        if (!(hdr.a_flag & RELFLG)) {
             fprintf(stderr, "dis: %s is not relocatable\n", fname);
-            return;
+            fclose(text);
+            return 1;
         }
         if ((rel = fopen(fname, "r")) == NULL) {
             fprintf(stderr, "dis: %s not found\n", fname);
-            return;
+            fclose(text);
+            return 1;
         }
         fseek(rel, N_SYMOFF(hdr), 0);
     }
     disfile();
-}
-
-int main(int argc, char **argv)
-{
-    int yesarg; /* были ли параметры - имена файлов */
-
-    yesarg = 0;
-    while (--argc) {
-        ++argv;
-        if (**argv == '-') {
-            char *cp;
-
-            for (cp = *argv + 1; *cp; cp++) {
-                switch (*cp) {
-                case 'R': /* print relocation in hexadecimal */
-                    Rflag++;
-                case 'r': /* print relocation info */
-                    rflag++;
-                    break;
-                case 'C': /* print commands only in hex */
-                    Cflag++;
-                case 'c': /* print commands in hexadecimal */
-                    cflag++;
-                    break;
-                case 'b': /* use BEMSH mnemonics */
-                    lcmd = lcmd2;
-                    scmd = scmd2;
-                    break;
-                default:
-                    fprintf(stderr, "Usage: dis [-bcrR] file...\n");
-                    return 1;
-                }
-            }
-        } else {
-            dis(*argv);
-            yesarg = 1;
-        }
-    }
-    if (!yesarg)
-        dis("a.out");
+    if (rflag)
+        fclose(rel);
+    fclose(text);
     return 0;
 }
