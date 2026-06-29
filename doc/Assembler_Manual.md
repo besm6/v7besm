@@ -36,8 +36,8 @@ segments.
 
 > **Octal convention.** Octal is the native notation for BESM-6 (opcodes, masks, addresses
 > are all customarily written in octal). Be aware, however, that **the lexer does not default
-> to octal** — a bare integer literal is *decimal*. A leading `0` (or an explicit suffix)
-> selects octal. See [§6](#6-numbers-and-literals).
+> to octal** — a bare integer literal is *decimal*. A leading `0` selects octal. See
+> [§6](#6-numbers-and-literals).
 
 ---
 
@@ -147,20 +147,15 @@ Local symbols can be stripped at output time with `-x`/`-X` ([§2](#2-invoking-t
 
 ### 6.1 Integer bases
 
-A numeric literal's base is chosen by a prefix or suffix. **With no prefix or suffix, the
-literal is decimal** — a leading `0` is what makes it octal.
+A numeric literal's base is chosen by a C-style prefix. **With no prefix, the literal is
+decimal** — a leading `0` is what makes it octal. There are no base-selecting suffixes.
 
 | Form | Base | Example | Value (decimal) |
 |------|------|---------|-----------------|
 | `digits` | decimal | `1234` | 1234 |
-| `digits` `d` / `D` | decimal | `1234d` | 1234 |
 | `0digits` | octal (leading zero) | `01234` | 668 |
-| `digits` `o` / `O` | octal | `1234o` | 668 |
-| `digits` `.` | octal (trailing dot) | `1234.` | 668 |
-| `digits` `h` / `H` | hexadecimal | `1ffh` | 511 |
-| `digits` `'` | hexadecimal (trailing apostrophe) | `1ff'` | 511 |
-| `'`digits | hexadecimal (leading apostrophe) | `'1ff` | 511 |
-| `0x` / `0X` digits | hexadecimal (C-style) | `0x1ff` | 511 |
+| `0x` / `0X` digits | hexadecimal | `0x1ff` | 511 |
+| `0b` / `0B` digits | binary | `0b101` | 5 |
 
 Literals are full 48-bit values, stored internally as two halves (`left`, `right`). There is
 no dedicated negative-literal syntax; negate with a unary minus in an expression
@@ -182,8 +177,7 @@ exponent field and sets everything else.
 
 ### 6.3 Characters and raw opcodes
 
-There is no general character-constant (`'c'`) syntax. The apostrophe introduces a
-hexadecimal number ([§6.1](#61-integer-bases)). Two further lexical forms read **two octal
+There is no general character-constant (`'c'`) syntax. Two lexical forms read **two octal
 digits** and produce a raw instruction opcode rather than a number — see
 [§9.3](#93-raw-opcodes).
 
@@ -455,8 +449,8 @@ entry:  vtm count, 1
 **Expression operators (left-to-right, no precedence):** `+` `-` `&` `|` `^` `~` `\<` `\>`
 `*` `/` `%`; grouping `( )`; exponent-truncate `{ }`; current location `.`.
 
-**Number formats:** decimal (default) `1234`/`1234d`; octal `01234`/`1234o`/`1234.`;
-hex `1ffh`/`1ff'`/`'1ff`/`0x1ff`; bit masks `.[a:b]` `.[a=b]` `.N`.
+**Number formats:** decimal (default) `1234`; octal `01234`; hex `0x1ff`; binary `0b101`;
+bit masks `.[a:b]` `.[a=b]` `.N`.
 
 **Operand forms:** `op addr` · `op #const` · `op addr, reg` · `op <addr>` · `op [addr]` ·
 `reg op addr` (leading modifier register).

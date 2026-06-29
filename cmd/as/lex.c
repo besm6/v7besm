@@ -17,32 +17,6 @@ static int hexdig(int c)
         return c - 'a' + 10;
 }
 
-static void getlhex(void)
-{
-    int c;
-    char *cp, *p;
-
-    // read a hexadecimal number 'ZZZ
-
-    c = getchar();
-    for (cp = as.name; ISHEX(c); c = getchar())
-        *cp++ = hexdig(c);
-    ungetc(c, stdin);
-    as.intval.left  = 0;
-    as.intval.right = 0;
-    p            = as.name;
-    for (c = 28; c >= 0; c -= 4, ++p) {
-        if (p >= cp)
-            return;
-        as.intval.left |= (long)*p << c;
-    }
-    for (c = 28; c >= 0; c -= 4, ++p) {
-        if (p >= cp)
-            return;
-        as.intval.right |= (long)*p << c;
-    }
-}
-
 // read a hexadecimal number 0xZZZ
 static void gethnum(void)
 {
@@ -67,22 +41,46 @@ static void gethnum(void)
     }
 }
 
-// Read a number:
-//      1234 1234d 1234D - decimal
-//      01234 1234. 1234o 1234O - octal
-//      1234' 1234h 1234H - hexadecimal
+// read a binary number 0bZZZ
+static void getbnum(void)
+{
+    int c;
+    char *cp;
+
+    c = getchar();
+    for (cp = as.name; c == '0' || c == '1'; c = getchar())
+        *cp++ = c - '0';
+    ungetc(c, stdin);
+    as.intval.left  = 0;
+    as.intval.right = 0;
+    for (c = 0; c < 32; c++) {
+        if (--cp < as.name)
+            return;
+        as.intval.right |= (long)*cp << c;
+    }
+    for (c = 0; c < 32; c++) {
+        if (--cp < as.name)
+            return;
+        as.intval.left |= (long)*cp << c;
+    }
+}
+
+// Read a numeric literal.  The base is fixed by a C++-style prefix:
+//      1234  - decimal (no prefix)
+//      01234 - octal (leading zero)
+// (0x.../0X... and 0b.../0B... are handled by gethnum()/getbnum().)  Each base
+// reads only its own digit class, so a stray non-digit ends the number cleanly.
 static void getnum(int c)
 {
     char *cp;
-    int leadingzero;
 
-    leadingzero = (c == '0');
-    for (cp = as.name; ISHEX(c); c = getchar())
-        *cp++ = hexdig(c);
     as.intval.left  = 0;
     as.intval.right = 0;
-    if (c == '.' || c == 'o' || c == 'O') {
-    octal:
+    if (c == '0') {
+        // Octal: leading-zero literal, e.g. 0123.
+        for (cp = as.name; ISOCTAL(c); c = getchar())
+            *cp++ = c - '0';
+        ungetc(c, stdin);
         for (c = 0; c <= 27; c += 3) {
             if (--cp < as.name)
                 return;
@@ -98,23 +96,12 @@ static void getnum(int c)
             as.intval.left |= (long)*cp << c;
         }
         return;
-    } else if (c == 'h' || c == 'H' || c == '\'') {
-        for (c = 0; c < 32; c += 4) {
-            if (--cp < as.name)
-                return;
-            as.intval.right |= (long)*cp << c;
-        }
-        for (c = 0; c < 32; c += 4) {
-            if (--cp < as.name)
-                return;
-            as.intval.left |= (long)*cp << c;
-        }
-        return;
-    } else if (c != 'd' && c != 'D') {
-        ungetc(c, stdin);
-        if (leadingzero)
-            goto octal;
     }
+
+    // Decimal: no prefix, e.g. 1234.
+    for (cp = as.name; ISDIGIT(c); c = getchar())
+        *cp++ = c - '0';
+    ungetc(c, stdin);
     for (c = 1;; c *= 10) {
         if (--cp < as.name)
             return;
@@ -284,12 +271,14 @@ int getlex(int *pval)
         case '=':
         case ':':
             return c;
-        case '\'':
-            getlhex();
-            return LNUM;
         case '0':
-            if ((c = getchar()) == 'x' || c == 'X') {
+            c = getchar();
+            if (c == 'x' || c == 'X') {
                 gethnum();
+                return LNUM;
+            }
+            if (c == 'b' || c == 'B') {
+                getbnum();
                 return LNUM;
             }
             ungetc(c, stdin);

@@ -129,9 +129,9 @@ static long reloc_half(const std::vector<unsigned char> &b, int seg, int i)
 //
 // Every instruction also carries an operand, so this exercises the whole address
 // path without growing the text segment (still 41 words): direct addresses in
-// every number base, the bit-mask and expression syntaxes, a trailing index and a
-// leading modifier register (reg << 20), backward label references, an equate, and
-// both comment forms (; and a line-start #).  Operands that change the layout
+// every number base (decimal, octal 0NNN, hex 0xNN, binary 0bNN), the bit-mask and
+// expression syntaxes, a trailing index and a leading modifier register (reg << 20),
+// backward label references, an equate, and both comment forms (; and a line-start #).  Operands that change the layout
 // (#const, <addr>, [addr]) are covered by the ConstPool / UtcWtc tests instead.
 TEST(Assemble, AllInstructions)
 {
@@ -208,7 +208,7 @@ mid:                        ; second label
         utc 050000
         wtc 0123
         vtm 040000, 2       ; long opcode, indexed
-        utm 010
+        utm 0b1000          ; binary address (== 010)
         uza start           ; backward label, long opcode
         u1a mid
         uj 0
@@ -301,7 +301,7 @@ mid:                        ; second label
     EXPECT_EQ(word_high(got, 42), 02200000L | 050000L); // utc 050000
     EXPECT_EQ(word_low(got, 42), 02300000L | 0123L);    // wtc 0123
     EXPECT_EQ(word_high(got, 43), (2L << 20) | 02400000L | 040000L); // vtm 040000, 2
-    EXPECT_EQ(word_low(got, 43), 02500000L | 010L);     // utm 010
+    EXPECT_EQ(word_low(got, 43), 02500000L | 010L);     // utm 0b1000 (binary == 010)
     EXPECT_EQ(word_high(got, 44), 02600000L | 9L);      // uza start (== word 9)
     EXPECT_EQ(word_low(got, 44), 02700000L | 25L);      // u1a mid   (== word 25)
     EXPECT_EQ(word_high(got, 45), 03000000L | 0L);      // uj 0
