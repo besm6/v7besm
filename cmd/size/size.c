@@ -9,54 +9,29 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "besm6/b.out.h"
 
+#include "size.h"
+
 #define W 6 /* длина слова в байтах */
 
-int header; /* был ли уже напечатан заголовок */
-int wflag;  /* выдавать длину в словах */
+static int header; /* был ли уже напечатан заголовок */
+static int wflag;  /* выдавать длину в словах */
 
 #define MSG(l, r) (msg ? (r) : (l))
 
-char msg;
+static char msg;
 
-initmsg()
+static void initmsg(void)
 {
-    char *p;
-    extern char *getenv();
+    const char *p;
 
     msg = (p = getenv("MSG")) && *p == 'r';
 }
 
-main(argc, argv) char **argv;
-{
-    int yesarg; /* были ли параметры - имена файлов */
-
-    initmsg();
-    while (--argc) {
-        ++argv;
-        if (**argv == '-') {
-            while (*++*argv)
-                switch (**argv) {
-                case 'w':
-                    wflag++;
-                    break;
-                default:
-                    fprintf(stderr, MSG("size: bad flag %c\n", "size: неизвестный флаг %c\n"),
-                            **argv);
-                    exit(1);
-                }
-            continue;
-        }
-        size(*argv);
-        yesarg = 1;
-    }
-    if (!yesarg)
-        size("a.out");
-}
-
-size(fname) char *fname;
+static void size(const char *fname)
 {
     struct exec buf;
     long sum;
@@ -78,11 +53,43 @@ size(fname) char *fname;
     sum = buf.a_const + buf.a_text + buf.a_data + buf.a_bss + buf.a_abss;
     if (wflag) {
         sum /= W;
-        printf("%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%lx\t%s\n", buf.a_const / W, buf.a_text / W,
-               buf.a_data / W, buf.a_bss / W, buf.a_abss / W, sum, sum, fname);
+        printf("%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%lx\t%s\n", (long)buf.a_const / W,
+               (long)buf.a_text / W, (long)buf.a_data / W, (long)buf.a_bss / W,
+               (long)buf.a_abss / W, sum, sum, fname);
     } else {
-        printf("%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%lx\t%s\n", buf.a_const, buf.a_text, buf.a_data,
-               buf.a_bss, buf.a_abss, sum, sum, fname);
+        printf("%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%lx\t%s\n", (long)buf.a_const, (long)buf.a_text,
+               (long)buf.a_data, (long)buf.a_bss, (long)buf.a_abss, sum, sum, fname);
     }
     fclose(f);
+}
+
+int size_run(int argc, char **argv)
+{
+    int yesarg = 0; /* были ли параметры - имена файлов */
+
+    /* Reset option state so repeated in-process runs start clean. */
+    header = wflag = 0;
+
+    initmsg();
+    while (--argc) {
+        ++argv;
+        if (**argv == '-') {
+            while (*++*argv)
+                switch (**argv) {
+                case 'w':
+                    wflag++;
+                    break;
+                default:
+                    fprintf(stderr, MSG("size: bad flag %c\n", "size: неизвестный флаг %c\n"),
+                            **argv);
+                    return 1;
+                }
+            continue;
+        }
+        size(*argv);
+        yesarg = 1;
+    }
+    if (!yesarg)
+        size("a.out");
+    return 0;
 }
