@@ -7,12 +7,23 @@
  *
  */
 
-#include "besm6/ar.h"
-
+#include <fcntl.h>
+#include <setjmp.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
+
+#include "besm6/ar.h"
+#include "besm6/b.out.h"
+
+#include "archive.h"
+
+#define W 6 // длина слова БЭСМ-6 в байтах
 
 struct stat stbuf;
 struct ar_hdr arbuf;
@@ -22,62 +33,118 @@ struct ar_hdr arbuf;
 #define OODD 4
 #define HEAD 8
 
-char *man = { "mrxtdpq" };
-char *opt = { "uvnbail" };
+static char *man = "mrxtdpq";
+static char *opt = "uvnbail";
 
-int signum[] = { SIGHUP, SIGINT, SIGQUIT, 0 };
-int sigdone();
-long lseek();
-int rcmd();
-int dcmd();
-int xcmd();
-int tcmd();
-int pcmd();
-int mcmd();
-int qcmd();
-int (*comfun)();
-char flg[26];
-char **namv;
-int namc;
-char *arnam;
-char *ponam;
-char *tmp0nam = { "/tmp/vXXXXX" };
-char *tmp1nam = { "/tmp/v1XXXXX" };
-char *tmp2nam = { "/tmp/v2XXXXX" };
-char *tfnam;
-char *tf1nam;
-char *tf2nam;
-char *file;
-char name[31];
-int af;
-int tf;
-int tf1;
-int tf2;
-int qf;
-int bastate;
-char buf[512];
+static int signum[] = { SIGHUP, SIGINT, SIGQUIT, 0 };
 
-char *trim();
-char *mktemp();
-char *ctime();
+static void (*comfun)(void);
+static char flg[26];
+static char **namv;
+static int namc;
+static char *arnam;
+static char *ponam;
 
-extern char *getenv();
+// Шаблоны имён временных файлов (mkstemp заменяет последние шесть 'X').
+static char tmp0nam[20];
+static char tmp1nam[20];
+static char tmp2nam[20];
+static char *tfnam;
+static char *tf1nam;
+static char *tf2nam;
+static char *file;
+static char name[31];
+static int af;
+static int tf;
+static int tf1;
+static int tf2;
+static int qf;
+static int bastate;
+static char buf[512];
+
+// Единственная точка выхода: done() сворачивает работу через longjmp в ar_run(),
+// чтобы движок можно было многократно вызывать в одном процессе (из тестов).
+static jmp_buf done_env;
+static int exit_code;
+
+static char msg;
 
 #define MSG(l, r) (msg ? (r) : (l))
 
-char msg;
+static void done(int c);
+static void sigdone(int sig);
+static void wrerr(void);
+static void usage(void);
+static void noar(void);
+static int getaf(void);
+static void getqf(void);
+static int getdir(void);
+static int match(void);
+static void bamatch(void);
+static int stats(void);
+static int notfound(void);
+static int morefil(void);
+static char *trim(char *s);
+static void longt(void);
+static void pmode(void);
+static void selmode(const int *pairp);
+static void copyfil(int fi, int fo, int flag);
+static void movefil(int f);
+static void init(void);
+static void cleanup(void);
+static void install(void);
+static void mesg(int c);
+static void phserr(void);
+static void setcom(void (*fun)(void));
+static void rcommand(void);
+static void dcommand(void);
+static void xcommand(void);
+static void tcommand(void);
+static void pcommand(void);
+static void mcommand(void);
+static void qcommand(void);
 
-initmsg()
+static void initmsg(void)
 {
-    char *p;
+    const char *p;
 
     msg = (p = getenv("MSG")) && *p == 'r';
 }
 
-main(argc, argv) char *argv[];
+// Сброс глобального состояния, чтобы повторные вызовы ar_run() не зависели друг
+// от друга.
+static void reset_state(void)
 {
-    i;
+    comfun = 0;
+    memset(flg, 0, sizeof(flg));
+    namv    = 0;
+    namc    = 0;
+    arnam   = 0;
+    ponam   = 0;
+    tfnam   = 0;
+    tf1nam  = 0;
+    tf2nam  = 0;
+    file    = 0;
+    af      = 0;
+    tf      = 0;
+    tf1     = 0;
+    tf2     = 0;
+    qf      = 0;
+    bastate = 0;
+    strcpy(tmp0nam, "/tmp/ar0XXXXXX");
+    strcpy(tmp1nam, "/tmp/ar1XXXXXX");
+    strcpy(tmp2nam, "/tmp/ar2XXXXXX");
+}
+
+int ar_run(int argc, char **argv)
+{
+    int i;
     char *cp;
+
+    reset_state();
+    exit_code = 0;
+    if (setjmp(done_env))
+        return exit_code;
 
     initmsg();
     for (i = 0; signum[i]; i++)
@@ -85,7 +152,6 @@ main(argc, argv) char *argv[];
             signal(signum[i], sigdone);
     if (argc < 3)
         usage();
-    cp = argv[1];
     for (cp = argv[1]; *cp; cp++)
         switch (*cp) {
         case 'l':
@@ -100,31 +166,31 @@ main(argc, argv) char *argv[];
             continue;
 
         case 'r':
-            setcom(rcmd);
+            setcom(rcommand);
             continue;
 
         case 'd':
-            setcom(dcmd);
+            setcom(dcommand);
             continue;
 
         case 'x':
-            setcom(xcmd);
+            setcom(xcommand);
             continue;
 
         case 't':
-            setcom(tcmd);
+            setcom(tcommand);
             continue;
 
         case 'p':
-            setcom(pcmd);
+            setcom(pcommand);
             continue;
 
         case 'm':
-            setcom(mcmd);
+            setcom(mcommand);
             continue;
 
         case 'q':
-            setcom(qcmd);
+            setcom(qcommand);
             continue;
 
         default:
@@ -132,12 +198,13 @@ main(argc, argv) char *argv[];
             done(1);
         }
     if (flg['l' - 'a']) {
-        tmp0nam = "vXXXXX";
-        tmp1nam = "v1XXXXX";
-        tmp2nam = "v2XXXXX";
+        strcpy(tmp0nam, "ar0XXXXXX");
+        strcpy(tmp1nam, "ar1XXXXXX");
+        strcpy(tmp2nam, "ar2XXXXXX");
     }
     if (flg['i' - 'a'])
         flg['b' - 'a']++;
+    // cppcheck-suppress duplicateExpression
     if (flg['a' - 'a'] || flg['b' - 'a']) {
         bastate = 1;
         ponam   = trim(argv[2]);
@@ -155,13 +222,14 @@ main(argc, argv) char *argv[];
                     man);
             done(1);
         }
-        setcom(rcmd);
+        setcom(rcommand);
     }
     (*comfun)();
     done(notfound());
+    return exit_code;
 }
 
-setcom(fun) int (*fun)();
+static void setcom(void (*fun)(void))
 {
     if (comfun != 0) {
         fprintf(stderr, MSG("ar: only one of [%s] allowed\n", "ar: разрешен только один из [%s]\n"),
@@ -171,9 +239,9 @@ setcom(fun) int (*fun)();
     comfun = fun;
 }
 
-rcmd()
+static void rcommand(void)
 {
-    f;
+    int f;
 
     init();
     getaf();
@@ -203,7 +271,7 @@ rcmd()
     cleanup();
 }
 
-dcmd()
+static void dcommand(void)
 {
     init();
     if (getaf())
@@ -220,9 +288,9 @@ dcmd()
     install();
 }
 
-xcmd()
+static void xcommand(void)
 {
-    f;
+    int f;
 
     if (getaf())
         noar();
@@ -246,7 +314,7 @@ xcmd()
     }
 }
 
-pcmd()
+static void pcommand(void)
 {
     if (getaf())
         noar();
@@ -263,19 +331,18 @@ pcmd()
     }
 }
 
-mcmd()
+static void mcommand(void)
 {
     init();
     if (getaf())
         noar();
-    tf2nam = mktemp(tmp2nam);
-    close(creat(tf2nam, 0600));
-    tf2 = open(tf2nam, 2);
+    tf2 = mkstemp(tmp2nam);
     if (tf2 < 0) {
         fprintf(stderr, MSG("ar: cannot create third temporary file\n",
                             "ar: не могу создать третий временный файл\n"));
         done(1);
     }
+    tf2nam = tmp2nam;
     while (!getdir()) {
         bamatch();
         if (match()) {
@@ -289,7 +356,7 @@ mcmd()
     install();
 }
 
-tcmd()
+static void tcommand(void)
 {
     if (getaf())
         noar();
@@ -303,10 +370,11 @@ tcmd()
     }
 }
 
-qcmd()
+static void qcommand(void)
 {
-    i, f;
+    int i, f;
 
+    // cppcheck-suppress duplicateExpression
     if (flg['a' - 'a'] || flg['b' - 'a']) {
         fprintf(stderr, MSG("ar: abi and q incompatible\n", "ar: abi нельзя с q\n"));
         done(1);
@@ -314,7 +382,7 @@ qcmd()
     getqf();
     for (i = 0; signum[i]; i++)
         signal(signum[i], SIG_IGN);
-    lseek(qf, 0l, 2);
+    lseek(qf, 0l, SEEK_END);
     for (i = 0; i < namc; i++) {
         file = namv[i];
         if (file == 0)
@@ -332,27 +400,26 @@ qcmd()
     }
 }
 
-init()
+static void init(void)
 {
-    static mbuf = ARMAG;
+    uword_t mbuf = ARMAG;
 
-    tfnam = mktemp(tmp0nam);
-    close(creat(tfnam, 0600));
-    tf = open(tfnam, 2);
+    tf = mkstemp(tmp0nam);
     if (tf < 0) {
         fprintf(stderr,
                 MSG("ar: cannot create temporary file\n", "ar: не могу создать временный файл\n"));
         done(1);
     }
+    tfnam = tmp0nam;
     if (!putint(tf, mbuf))
         wrerr();
 }
 
-getaf()
+static int getaf(void)
 {
     uword_t mbuf;
 
-    af = open(arnam, 0);
+    af = open(arnam, O_RDONLY);
     if (af < 0)
         return (1);
     if (!getint(af, &mbuf) || mbuf != ARMAG) {
@@ -363,15 +430,15 @@ getaf()
     return (0);
 }
 
-getqf()
+static void getqf(void)
 {
     uword_t mbuf;
 
-    if ((qf = open(arnam, 2)) < 0) {
+    if ((qf = open(arnam, O_RDWR)) < 0) {
         if (!flg['c' - 'a'])
             fprintf(stderr, MSG("ar: creating %s\n", "ar: создание %s\n"), arnam);
         close(creat(arnam, 0666));
-        if ((qf = open(arnam, 2)) < 0) {
+        if ((qf = open(arnam, O_RDWR)) < 0) {
             fprintf(stderr, MSG("ar: cannot create %s\n", "ar: не могу создать %s\n"), arnam);
             done(1);
         }
@@ -385,25 +452,26 @@ getqf()
     }
 }
 
-usage()
+static void usage(void)
 {
     printf(MSG("Usage: ar [%s][%s] archive file...\n", "Вызов: ar [%s][%s] архив файл...\n"), opt,
            man);
     done(1);
 }
 
-noar()
+static void noar(void)
 {
     fprintf(stderr, MSG("ar: %s not found\n", "ar: %s не существует\n"), arnam);
     done(1);
 }
 
-sigdone()
+static void sigdone(int sig)
 {
+    (void)sig;
     done(100);
 }
 
-done(c)
+static void done(int c)
 {
     if (tfnam)
         unlink(tfnam);
@@ -411,12 +479,13 @@ done(c)
         unlink(tf1nam);
     if (tf2nam)
         unlink(tf2nam);
-    exit(c);
+    exit_code = c;
+    longjmp(done_env, 1);
 }
 
-notfound()
+static int notfound(void)
 {
-    i, n;
+    int i, n;
 
     n = 0;
     for (i = 0; i < namc; i++)
@@ -427,9 +496,9 @@ notfound()
     return (n);
 }
 
-morefil()
+static int morefil(void)
 {
-    i, n;
+    int i, n;
 
     n = 0;
     for (i = 0; i < namc; i++)
@@ -438,9 +507,9 @@ morefil()
     return (n);
 }
 
-cleanup()
+static void cleanup(void)
 {
-    i, f;
+    int i, f;
 
     for (i = 0; i < namc; i++) {
         file = namv[i];
@@ -458,9 +527,9 @@ cleanup()
     install();
 }
 
-install()
+static void install(void)
 {
-    i;
+    int i;
 
     for (i = 0; signum[i]; i++)
         signal(signum[i], SIG_IGN);
@@ -474,19 +543,19 @@ install()
         done(1);
     }
     if (tfnam) {
-        lseek(tf, 0l, 0);
+        lseek(tf, 0l, SEEK_SET);
         while ((i = read(tf, buf, 512)) > 0)
             if (write(af, buf, i) != i)
                 wrerr();
     }
     if (tf2nam) {
-        lseek(tf2, 0l, 0);
+        lseek(tf2, 0l, SEEK_SET);
         while ((i = read(tf2, buf, 512)) > 0)
             if (write(af, buf, i) != i)
                 wrerr();
     }
     if (tf1nam) {
-        lseek(tf1, 0l, 0);
+        lseek(tf1, 0l, SEEK_SET);
         while ((i = read(tf1, buf, 512)) > 0)
             if (write(af, buf, i) != i)
                 wrerr();
@@ -497,14 +566,14 @@ install()
  * insert the file 'file'
  * into the temporary file
  */
-movefil(f)
+static void movefil(int f)
 {
-    char *cp;
-    i;
+    const char *cp;
+    int i;
 
     cp = trim(file);
     for (i = 0; i < (int)sizeof(arbuf.ar_name); i++)
-        if (arbuf.ar_name[i] = *cp)
+        if ((arbuf.ar_name[i] = *cp))
             cp++;
     arbuf.ar_size = stbuf.st_size;
     arbuf.ar_date = stbuf.st_mtime;
@@ -515,11 +584,11 @@ movefil(f)
     close(f);
 }
 
-stats()
+static int stats(void)
 {
-    f;
+    int f;
 
-    f = open(file, 0);
+    f = open(file, O_RDONLY);
     if (f < 0)
         return (f);
     if (fstat(f, &stbuf) < 0) {
@@ -532,41 +601,51 @@ stats()
 /*
  * copy next file
  * size given in arbuf
+ *
+ * Член архива дополняется нулями до целого слова БЭСМ-6 (W=6 байт), а в
+ * заголовок записывается уже выровненный размер: ld шагает к следующему члену
+ * по `ar_size + ARHDRSZ` без округления, так что ar_size обязан быть кратен W.
  */
-copyfil(fi, fo, flag)
+static void copyfil(int fi, int fo, int flag)
 {
-    i, o;
     int pe;
+    long size = arbuf.ar_size; // настоящее число байт данных
+    int pad   = (int)((W - size % W) % W); // добивка до границы слова (0..W-1)
 
-    if (flag & HEAD)
+    if (flag & HEAD) {
+        arbuf.ar_size = size + pad;
         if (!putarhdr(fo, &arbuf))
             wrerr();
+    }
     pe = 0;
-    while (arbuf.ar_size > 0) {
-        i = o = 512;
-        if (arbuf.ar_size < i) {
-            i = o = arbuf.ar_size;
-            if (i & 1) {
-                if (flag & IODD)
-                    i++;
-                if (flag & OODD)
-                    o++;
-            }
-        }
+    while (size > 0) {
+        int i, o;
+        i = o = (size < 512) ? (int)size : 512;
         if (read(fi, buf, i) != i)
             pe++;
         if ((flag & SKIP) == 0)
             if (write(fo, buf, o) != o)
                 wrerr();
-        arbuf.ar_size -= 512;
+        size -= 512;
+    }
+    if (pad) {
+        if (flag & IODD)
+            if (read(fi, buf, pad) != pad) // поглотить добивку из входа
+                pe++;
+        if ((flag & OODD) && (flag & SKIP) == 0) {
+            char zero[W];
+            memset(zero, 0, sizeof(zero));
+            if (write(fo, zero, pad) != pad)
+                wrerr();
+        }
     }
     if (pe)
         phserr();
 }
 
-getdir()
+static int getdir(void)
 {
-    i;
+    int i;
 
     if (!getarhdr(af, &arbuf)) {
         if (tf1nam) {
@@ -582,9 +661,9 @@ getdir()
     return (0);
 }
 
-match()
+static int match(void)
 {
-    i;
+    int i;
 
     for (i = 0; i < namc; i++) {
         if (namv[i] == 0)
@@ -598,47 +677,47 @@ match()
     return (0);
 }
 
-bamatch()
+static void bamatch(void)
 {
-    f;
+    int f;
 
     switch (bastate) {
     case 1:
         if (strcmp(file, ponam) != 0)
             return;
         bastate = 2;
+        // cppcheck-suppress duplicateExpression
         if (flg['a' - 'a'])
             return;
+        /* fallthrough */
 
     case 2:
         bastate = 0;
-        tf1nam  = mktemp(tmp1nam);
-        close(creat(tf1nam, 0600));
-        f = open(tf1nam, 2);
+        f       = mkstemp(tmp1nam);
         if (f < 0) {
             fprintf(stderr, MSG("ar: cannot create second temporary file\n",
                                 "ar: не могу создать второй временный файл\n"));
             return;
         }
-        tf1 = tf;
-        tf  = f;
+        tf1nam = tmp1nam;
+        tf1    = tf;
+        tf     = f;
     }
 }
 
-phserr()
+static void phserr(void)
 {
     fprintf(stderr, MSG("ar: phase error on %s\n", "ar: ошибка фазы на %s\n"), file);
 }
 
-mesg(c)
+static void mesg(int c)
 {
     if (flg['v' - 'a'])
         if (c != 'c' || flg['v' - 'a'] > 1)
             printf("%c - %s\n", c, file);
 }
 
-char *trim(s)
-char *s;
+static char *trim(char *s)
 {
     char *p1, *p2;
 
@@ -672,40 +751,43 @@ char *s;
 #define XOTH  01
 #define STXT  01000
 
-longt()
+static void longt(void)
 {
-    char *cp;
+    const char *cp;
+    time_t t;
 
     pmode();
-    printf("%3d/%1d", arbuf.ar_uid, arbuf.ar_gid);
+    printf("%3d/%1d", (int)arbuf.ar_uid, (int)arbuf.ar_gid);
     printf("%7ld", (long)arbuf.ar_size);
-    cp = ctime(&arbuf.ar_date);
+    t  = arbuf.ar_date;
+    cp = ctime(&t);
     printf(" %-12.12s %-4.4s ", cp + 4, cp + 20);
 }
 
-int m1[] = { 1, ROWN, 'r', '-' };
-int m2[] = { 1, WOWN, 'w', '-' };
-int m3[] = { 2, SUID, 's', XOWN, 'x', '-' };
-int m4[] = { 1, RGRP, 'r', '-' };
-int m5[] = { 1, WGRP, 'w', '-' };
-int m6[] = { 2, SGID, 's', XGRP, 'x', '-' };
-int m7[] = { 1, ROTH, 'r', '-' };
-int m8[] = { 1, WOTH, 'w', '-' };
-int m9[] = { 2, STXT, 't', XOTH, 'x', '-' };
+static int m1[] = { 1, ROWN, 'r', '-' };
+static int m2[] = { 1, WOWN, 'w', '-' };
+static int m3[] = { 2, SUID, 's', XOWN, 'x', '-' };
+static int m4[] = { 1, RGRP, 'r', '-' };
+static int m5[] = { 1, WGRP, 'w', '-' };
+static int m6[] = { 2, SGID, 's', XGRP, 'x', '-' };
+static int m7[] = { 1, ROTH, 'r', '-' };
+static int m8[] = { 1, WOTH, 'w', '-' };
+static int m9[] = { 2, STXT, 't', XOTH, 'x', '-' };
 
-int *m[] = { m1, m2, m3, m4, m5, m6, m7, m8, m9 };
+static int *m[] = { m1, m2, m3, m4, m5, m6, m7, m8, m9 };
 
-pmode()
+static void pmode(void)
 {
     int **mp;
 
     for (mp = &m[0]; mp < &m[9];)
-        select(*mp++);
+        selmode(*mp++);
 }
 
-select(pairp) int *pairp;
+static void selmode(const int *pairp)
 {
-    int n, *ap;
+    int n;
+    const int *ap;
 
     ap = pairp;
     n  = *ap++;
@@ -714,7 +796,7 @@ select(pairp) int *pairp;
     putchar(*ap);
 }
 
-wrerr()
+static void wrerr(void)
 {
     perror("ar write error");
     done(1);
