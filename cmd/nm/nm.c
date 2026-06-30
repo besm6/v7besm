@@ -7,43 +7,49 @@
 
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "besm6/ar.h"
 #include "besm6/b.out.h"
 
+#include "nm.h"
+
 #define QUANT 2048
 
-int numsort_flg;
-int undef_flg;
-int revsort_flg;
-int globl_flg;
-int nosort_flg;
-int prep_flg;
-int ar_flg;
-long off;
-struct exec hdr;
-struct ar_hdr arhdr;
-FILE *fi;
-char *malloc();
-char *realloc();
-long ftell();
+static int numsort_flg;
+static int undef_flg;
+static int revsort_flg;
+static int globl_flg;
+static int nosort_flg;
+static int prep_flg;
+static int ar_flg;
+static long off;
+static struct exec hdr;
+static struct ar_hdr arhdr;
+static FILE *fi;
 
 #define MSG(l, r) (msg ? (r) : (l))
 
-char msg;
+static char msg;
 
-initmsg()
+static void initmsg(void)
 {
-    char *p;
-    extern char *getenv();
+    const char *p;
 
     msg = (p = getenv("MSG")) && *p == 'r';
 }
 
-main(argc, argv) char **argv;
+static void nm(const char *name, int narg);
+static int compare(const void *p1, const void *p2);
+
+int nm_run(int argc, char **argv)
 {
     int narg;
-    int compare();
+
+    /* Reset option state so repeated in-process runs start clean. */
+    numsort_flg = undef_flg = revsort_flg = 0;
+    globl_flg = nosort_flg = prep_flg = ar_flg = 0;
 
     initmsg();
     if (--argc > 0 && argv[1][0] == '-' && argv[1][1] != 0) {
@@ -71,7 +77,7 @@ main(argc, argv) char **argv;
             default: /* oops */
                 fprintf(stderr, MSG("nm: unknown flag -%c\n", "nm: неизвестный флаг -%c\n"),
                         *argv[0]);
-                exit(1);
+                return 1;
             }
         argc--;
     }
@@ -86,10 +92,11 @@ main(argc, argv) char **argv;
             fprintf(stderr, MSG("nm: cannot open %s\n", "nm: не могу открыть %s\n"), *argv);
             continue;
         }
-        fgetint(fi, &hdr.a_magic);
-        ar_flg = hdr.a_magic == ARMAG;
+        hdr.a_magic = fgetw(fi);
+        ar_flg      = hdr.a_magic == ARMAG;
         if (!ar_flg && N_BADMAG(hdr)) {
             fprintf(stderr, MSG("nm: %s: bad format\n", "nm: %s: плохой формат\n"), *argv);
+            fclose(fi);
             continue;
         }
         off = 8L;
@@ -109,16 +116,16 @@ main(argc, argv) char **argv;
         } while (ar_flg);
         fclose(fi);
     }
-    exit(0);
+    return 0;
 }
 
-nm(name, narg) char *name;
+static void nm(const char *name, int narg)
 {
     struct nlist sym;          /* current symbol */
     struct nlist *symp = NULL; /* sym table */
     int symplen        = 0;    /* sym table length */
-    symindex           = 0;    /* next free table entry */
-    c;
+    int symindex       = 0;    /* next free table entry */
+    int c;
     long n;
 
     n = hdr.a_const + hdr.a_text + hdr.a_data;
@@ -192,17 +199,20 @@ nm(name, narg) char *name;
             c = toupper(c);
         sym.n_type = c;
         if (symindex == symplen) {
+            struct nlist *grown;
             if (!symplen) {
                 symplen = QUANT;
-                symp    = (struct nlist *)malloc(symplen * sizeof(struct nlist));
+                grown   = (struct nlist *)malloc(symplen * sizeof(struct nlist));
             } else {
                 symplen += QUANT;
-                symp = (struct nlist *)realloc(symp, symplen * sizeof(struct nlist));
+                grown = (struct nlist *)realloc(symp, symplen * sizeof(struct nlist));
             }
-            if (symp == NULL) {
+            if (grown == NULL) {
                 fprintf(stderr, MSG("nm: out of memory on %s\n", "nm: мало памяти на %s\n"), name);
+                free(symp);
                 exit(2);
             }
+            symp = grown;
         }
         symp[symindex++] = sym;
     }
@@ -237,12 +247,14 @@ nm(name, narg) char *name;
         free((char *)symp);
 }
 
-compare(p1, p2) struct nlist *p1, *p2;
+static int compare(const void *p1, const void *p2)
 {
-    rez;
+    const struct nlist *s1 = p1;
+    const struct nlist *s2 = p2;
+    int rez;
 
     if (numsort_flg) {
-        d = p1->n_value - p2->n_value;
+        long d = s1->n_value - s2->n_value;
 
         if (d > 0)
             rez = 1;
@@ -251,7 +263,7 @@ compare(p1, p2) struct nlist *p1, *p2;
         else
             rez = -1;
     } else {
-        rez = strcmp(p1->n_name, p2->n_name);
+        rez = strcmp(s1->n_name, s2->n_name);
     }
     if (revsort_flg)
         rez = -rez;
