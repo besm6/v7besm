@@ -122,7 +122,7 @@ struct table {
 };
 
 // One pooled constant.  Identical constants are stored once; see intern_constant().
-struct constent {
+struct constant {
     long h;   // high half of the constant's value
     long h2;  // low half of the constant's value
     long hr2; // relocation type for the constant (R* code, possibly with a symbol index)
@@ -165,7 +165,7 @@ struct assembler {
 
     int regleft; // index register written to the left of an instruction (the "N M" prefix)
 
-    struct constent constab[CSIZE]; // the constant pool
+    struct constant constab[CSIZE]; // the constant pool
     int nconst;                     // number of pooled constants
 
     char name[256];   // scratch buffer: the identifier/number text just scanned
