@@ -15,7 +15,4 @@ registered with `gtest_discover_tests`, and is hooked into the aggregate build v
 `add_dependencies(build_tests <tool>_test)`. lorder is an install-only shell script, so it
 gets no library split and no unit test.
 
- * STRIP-1: wire cmd/strip into the top-level CMake and build b6strip; fix warnings/errors.
-   Split into a `strip` library + main.c and add cmd/strip/test/strip_test.cpp.
-
  * LORDER-1: wire cmd/lorder (install-only shell script) into the top-level CMake.
