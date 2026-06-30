@@ -32,7 +32,7 @@ extern "C" {
 #include "besm6/ranlib.h"
 }
 
-#define W 6 // длина слова БЭСМ-6 в байтах
+#define W 6 // BESM-6 word length in bytes
 
 namespace {
 

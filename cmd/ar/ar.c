@@ -1,9 +1,9 @@
 /*
- *      Обслуживание библиотечных (архивных) файлов.
+ *      Maintenance of library (archive) files.
  *
- *      ar [mrxtdpq][uvnbail] имя_архива файлы ...
+ *      ar [mrxtdpq][uvnbail] archive_name files ...
  *
- *      Метод сборки:  cc -O -n -s
+ *      Build method:  cc -O -n -s
  *
  */
 
@@ -23,7 +23,7 @@
 
 #include "archive.h"
 
-#define W 6 // длина слова БЭСМ-6 в байтах
+#define W 6 // BESM-6 word length in bytes
 
 struct stat stbuf;
 struct ar_hdr arbuf;
@@ -45,7 +45,7 @@ static int namc;
 static char *arnam;
 static char *ponam;
 
-// Шаблоны имён временных файлов (mkstemp заменяет последние шесть 'X').
+// Temporary file name templates (mkstemp replaces the last six 'X' chars).
 static char tmp0nam[20];
 static char tmp1nam[20];
 static char tmp2nam[20];
@@ -62,8 +62,8 @@ static int qf;
 static int bastate;
 static char buf[512];
 
-// Единственная точка выхода: done() сворачивает работу через longjmp в ar_run(),
-// чтобы движок можно было многократно вызывать в одном процессе (из тестов).
+// Single exit point: done() unwinds via longjmp back into ar_run() so that
+// the engine can be invoked repeatedly within one process (from tests).
 static jmp_buf done_env;
 static int exit_code;
 
@@ -101,8 +101,8 @@ static void pcommand(void);
 static void mcommand(void);
 static void qcommand(void);
 
-// Сброс глобального состояния, чтобы повторные вызовы ar_run() не зависели друг
-// от друга.
+// Reset global state so that repeated ar_run() calls do not depend on
+// one another.
 static void reset_state(void)
 {
     comfun = 0;
@@ -590,15 +590,15 @@ static int stats(void)
  * copy next file
  * size given in arbuf
  *
- * Член архива дополняется нулями до целого слова БЭСМ-6 (W=6 байт), а в
- * заголовок записывается уже выровненный размер: ld шагает к следующему члену
- * по `ar_size + ARHDRSZ` без округления, так что ar_size обязан быть кратен W.
+ * An archive member is zero-padded to a whole BESM-6 word (W=6 bytes), and the
+ * already-aligned size is written into the header: ld steps to the next member
+ * by `ar_size + ARHDRSZ` without rounding, so ar_size must be a multiple of W.
  */
 static void copyfil(int fi, int fo, int flag)
 {
     int pe;
-    long size = arbuf.ar_size; // настоящее число байт данных
-    int pad   = (int)((W - size % W) % W); // добивка до границы слова (0..W-1)
+    long size = arbuf.ar_size; // actual number of data bytes
+    int pad   = (int)((W - size % W) % W); // padding to the word boundary (0..W-1)
 
     if (flag & HEAD) {
         arbuf.ar_size = size + pad;
@@ -618,7 +618,7 @@ static void copyfil(int fi, int fo, int flag)
     }
     if (pad) {
         if (flag & IODD)
-            if (read(fi, buf, pad) != pad) // поглотить добивку из входа
+            if (read(fi, buf, pad) != pad) // consume the padding from the input
                 pe++;
         if ((flag & OODD) && (flag & SKIP) == 0) {
             char zero[W];

@@ -1,6 +1,6 @@
 /*
  *	print symbol tables for
- *      object files (СВС-Б)
+ *      object files (SVS-B)
  *
  *	nm [-goprun] [name ...]
  */

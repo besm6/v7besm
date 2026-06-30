@@ -11,9 +11,9 @@
 #include "besm6/b.out.h"
 #include "disasm.h"
 
-#define W 6 /* длина слова в байтах */
+#define W 6 /* word length in bytes */
 
-struct exec hdr; /* заголовок */
+struct exec hdr; /* header */
 FILE *text, *rel;
 int rflag, Rflag, cflag, Cflag;
 int addr;

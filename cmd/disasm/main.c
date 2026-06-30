@@ -10,7 +10,7 @@
 
 int main(int argc, char **argv)
 {
-    int yesarg = 0; /* были ли параметры - имена файлов */
+    int yesarg = 0; /* whether file-name arguments were given */
 
     while (--argc) {
         ++argv;

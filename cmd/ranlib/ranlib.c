@@ -1,12 +1,12 @@
 /*
- *      ОС ДЕМОС СВС-Б.
+ *      DEMOS SVS-B operating system.
  *
- *      Создание таблицы symdef для быстрой загрузки.
+ *      Build the symdef table for fast loading.
  *
- *      Автор: Вакуленко С.
- *      Версия от 06.02.90.
+ *      Author: S. Vakulenko.
+ *      Version of 06.02.90.
  *
- *      Исходные тексты взяты из ОС UNIX 4.3 BSD.
+ *      Source code taken from UNIX 4.3 BSD.
  */
 
 #include "symdef.h"

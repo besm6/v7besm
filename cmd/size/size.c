@@ -1,11 +1,11 @@
 /*
- *      ОС ДЕМОС СВС-Б.
+ *      DEMOS SVS-B operating system.
  *
- *      size [-w] [file ...]    - выдать размеры сегментов объектного файла.
- *                                Если задан флаг "-w", размеры выдаются
- *                                в словах, иначе - в байтах.
+ *      size [-w] [file ...]    - print the segment sizes of an object file.
+ *                                If the "-w" flag is given, sizes are printed
+ *                                in words, otherwise in bytes.
  *
- *      Автор: Вакуленко С.В. (МФТИ).
+ *      Author: S.V. Vakulenko (MIPT).
  */
 
 #include <stdio.h>
@@ -15,10 +15,10 @@
 
 #include "size.h"
 
-#define W 6 /* длина слова в байтах */
+#define W 6 /* word length in bytes */
 
-static int header; /* был ли уже напечатан заголовок */
-static int wflag;  /* выдавать длину в словах */
+static int header; /* whether the header has already been printed */
+static int wflag;  /* print sizes in words */
 
 
 static void size(const char *fname)
@@ -55,7 +55,7 @@ static void size(const char *fname)
 
 int size_run(int argc, char **argv)
 {
-    int yesarg = 0; /* были ли параметры - имена файлов */
+    int yesarg = 0; /* whether file-name arguments were given */
 
     /* Reset option state so repeated in-process runs start clean. */
     header = wflag = 0;
