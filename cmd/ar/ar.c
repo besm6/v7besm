@@ -67,9 +67,6 @@ static char buf[512];
 static jmp_buf done_env;
 static int exit_code;
 
-static char msg;
-
-#define MSG(l, r) (msg ? (r) : (l))
 
 static void done(int c);
 static void sigdone(int sig);
@@ -103,13 +100,6 @@ static void tcommand(void);
 static void pcommand(void);
 static void mcommand(void);
 static void qcommand(void);
-
-static void initmsg(void)
-{
-    const char *p;
-
-    msg = (p = getenv("MSG")) && *p == 'r';
-}
 
 // Сброс глобального состояния, чтобы повторные вызовы ar_run() не зависели друг
 // от друга.
@@ -146,7 +136,6 @@ int ar_run(int argc, char **argv)
     if (setjmp(done_env))
         return exit_code;
 
-    initmsg();
     for (i = 0; signum[i]; i++)
         if (signal(signum[i], SIG_IGN) != SIG_IGN)
             signal(signum[i], sigdone);
@@ -194,7 +183,7 @@ int ar_run(int argc, char **argv)
             continue;
 
         default:
-            fprintf(stderr, MSG("ar: unknown flag `%c'\n", "ar: неизвестный флаг `%c'\n"), *cp);
+            fprintf(stderr, "ar: unknown flag `%c'\n", *cp);
             done(1);
         }
     if (flg['l' - 'a']) {
@@ -218,7 +207,7 @@ int ar_run(int argc, char **argv)
     namc  = argc - 3;
     if (comfun == 0) {
         if (flg['u' - 'a'] == 0) {
-            fprintf(stderr, MSG("ar: must be one of [%s]\n", "ar: должен быть один из [%s]\n"),
+            fprintf(stderr, "ar: must be one of [%s]\n",
                     man);
             done(1);
         }
@@ -232,7 +221,7 @@ int ar_run(int argc, char **argv)
 static void setcom(void (*fun)(void))
 {
     if (comfun != 0) {
-        fprintf(stderr, MSG("ar: only one of [%s] allowed\n", "ar: разрешен только один из [%s]\n"),
+        fprintf(stderr, "ar: only one of [%s] allowed\n",
                 man);
         done(1);
     }
@@ -251,7 +240,7 @@ static void rcommand(void)
             f = stats();
             if (f < 0) {
                 if (namc)
-                    fprintf(stderr, MSG("ar: cannot open %s\n", "ar: не могу открыть %s\n"), file);
+                    fprintf(stderr, "ar: cannot open %s\n", file);
                 goto cp;
             }
             if (flg['u' - 'a'])
@@ -298,7 +287,7 @@ static void xcommand(void)
         if (namc == 0 || match()) {
             f = creat(file, arbuf.ar_mode & 0777);
             if (f < 0) {
-                fprintf(stderr, MSG("ar: cannot create %s\n", "ar: не могу создать %s\n"), file);
+                fprintf(stderr, "ar: cannot create %s\n", file);
                 goto sk;
             }
             mesg('x');
@@ -338,8 +327,7 @@ static void mcommand(void)
         noar();
     tf2 = mkstemp(tmp2nam);
     if (tf2 < 0) {
-        fprintf(stderr, MSG("ar: cannot create third temporary file\n",
-                            "ar: не могу создать третий временный файл\n"));
+        fprintf(stderr, "ar: cannot create third temporary file\n");
         done(1);
     }
     tf2nam = tmp2nam;
@@ -376,7 +364,7 @@ static void qcommand(void)
 
     // cppcheck-suppress duplicateExpression
     if (flg['a' - 'a'] || flg['b' - 'a']) {
-        fprintf(stderr, MSG("ar: abi and q incompatible\n", "ar: abi нельзя с q\n"));
+        fprintf(stderr, "ar: abi and q incompatible\n");
         done(1);
     }
     getqf();
@@ -391,7 +379,7 @@ static void qcommand(void)
         mesg('q');
         f = stats();
         if (f < 0) {
-            fprintf(stderr, MSG("ar: cannot open %s\n", "ar: не могу открыть %s\n"), file);
+            fprintf(stderr, "ar: cannot open %s\n", file);
             continue;
         }
         tf = qf;
@@ -407,7 +395,7 @@ static void init(void)
     tf = mkstemp(tmp0nam);
     if (tf < 0) {
         fprintf(stderr,
-                MSG("ar: cannot create temporary file\n", "ar: не могу создать временный файл\n"));
+                "ar: cannot create temporary file\n");
         done(1);
     }
     tfnam = tmp0nam;
@@ -423,7 +411,7 @@ static int getaf(void)
     if (af < 0)
         return (1);
     if (!getint(af, &mbuf) || mbuf != ARMAG) {
-        fprintf(stderr, MSG("ar: %s is not in archive format\n", "ar: %s не в формате архива\n"),
+        fprintf(stderr, "ar: %s is not in archive format\n",
                 arnam);
         done(1);
     }
@@ -436,17 +424,17 @@ static void getqf(void)
 
     if ((qf = open(arnam, O_RDWR)) < 0) {
         if (!flg['c' - 'a'])
-            fprintf(stderr, MSG("ar: creating %s\n", "ar: создание %s\n"), arnam);
+            fprintf(stderr, "ar: creating %s\n", arnam);
         close(creat(arnam, 0666));
         if ((qf = open(arnam, O_RDWR)) < 0) {
-            fprintf(stderr, MSG("ar: cannot create %s\n", "ar: не могу создать %s\n"), arnam);
+            fprintf(stderr, "ar: cannot create %s\n", arnam);
             done(1);
         }
         mbuf = ARMAG;
         if (!putint(qf, mbuf))
             wrerr();
     } else if (!getint(qf, &mbuf) || mbuf != ARMAG) {
-        fprintf(stderr, MSG("ar: %s is not in archive format\n", "ar: %s не в формате архива\n"),
+        fprintf(stderr, "ar: %s is not in archive format\n",
                 arnam);
         done(1);
     }
@@ -454,14 +442,14 @@ static void getqf(void)
 
 static void usage(void)
 {
-    printf(MSG("Usage: ar [%s][%s] archive file...\n", "Вызов: ar [%s][%s] архив файл...\n"), opt,
+    printf("Usage: ar [%s][%s] archive file...\n", opt,
            man);
     done(1);
 }
 
 static void noar(void)
 {
-    fprintf(stderr, MSG("ar: %s not found\n", "ar: %s не существует\n"), arnam);
+    fprintf(stderr, "ar: %s not found\n", arnam);
     done(1);
 }
 
@@ -490,7 +478,7 @@ static int notfound(void)
     n = 0;
     for (i = 0; i < namc; i++)
         if (namv[i]) {
-            fprintf(stderr, MSG("ar: %s not found\n", "ar: %s не найден\n"), namv[i]);
+            fprintf(stderr, "ar: %s not found\n", namv[i]);
             n++;
         }
     return (n);
@@ -519,7 +507,7 @@ static void cleanup(void)
         mesg('a');
         f = stats();
         if (f < 0) {
-            fprintf(stderr, MSG("ar: cannot open %s\n", "ar: не могу открыть %s\n"), file);
+            fprintf(stderr, "ar: cannot open %s\n", file);
             continue;
         }
         movefil(f);
@@ -535,11 +523,11 @@ static void install(void)
         signal(signum[i], SIG_IGN);
     if (af < 0)
         if (!flg['c' - 'a'])
-            fprintf(stderr, MSG("ar: creating %s\n", "ar: создание %s\n"), arnam);
+            fprintf(stderr, "ar: creating %s\n", arnam);
     close(af);
     af = creat(arnam, 0666);
     if (af < 0) {
-        fprintf(stderr, MSG("ar: cannot create %s\n", "ar: не могу создать %s\n"), arnam);
+        fprintf(stderr, "ar: cannot create %s\n", arnam);
         done(1);
     }
     if (tfnam) {
@@ -695,8 +683,7 @@ static void bamatch(void)
         bastate = 0;
         f       = mkstemp(tmp1nam);
         if (f < 0) {
-            fprintf(stderr, MSG("ar: cannot create second temporary file\n",
-                                "ar: не могу создать второй временный файл\n"));
+            fprintf(stderr, "ar: cannot create second temporary file\n");
             return;
         }
         tf1nam = tmp1nam;
@@ -707,7 +694,7 @@ static void bamatch(void)
 
 static void phserr(void)
 {
-    fprintf(stderr, MSG("ar: phase error on %s\n", "ar: ошибка фазы на %s\n"), file);
+    fprintf(stderr, "ar: phase error on %s\n", file);
 }
 
 static void mesg(int c)

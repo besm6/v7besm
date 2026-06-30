@@ -20,16 +20,6 @@
 static int header; /* был ли уже напечатан заголовок */
 static int wflag;  /* выдавать длину в словах */
 
-#define MSG(l, r) (msg ? (r) : (l))
-
-static char msg;
-
-static void initmsg(void)
-{
-    const char *p;
-
-    msg = (p = getenv("MSG")) && *p == 'r';
-}
 
 static void size(const char *fname)
 {
@@ -38,11 +28,11 @@ static void size(const char *fname)
     FILE *f;
 
     if ((f = fopen(fname, "r")) == NULL) {
-        printf(MSG("size: %s not found\n", "size: %s не найден\n"), fname);
+        printf("size: %s not found\n", fname);
         return;
     }
     if (!fgethdr(f, &buf) || N_BADMAG(buf)) {
-        printf(MSG("size: %s not an object file\n", "size: %s не объектный файл\n"), fname);
+        printf("size: %s not an object file\n", fname);
         fclose(f);
         return;
     }
@@ -70,7 +60,6 @@ int size_run(int argc, char **argv)
     /* Reset option state so repeated in-process runs start clean. */
     header = wflag = 0;
 
-    initmsg();
     while (--argc) {
         ++argv;
         if (**argv == '-') {
@@ -80,7 +69,7 @@ int size_run(int argc, char **argv)
                     wflag++;
                     break;
                 default:
-                    fprintf(stderr, MSG("size: bad flag %c\n", "size: неизвестный флаг %c\n"),
+                    fprintf(stderr, "size: bad flag %c\n",
                             **argv);
                     return 1;
                 }

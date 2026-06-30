@@ -14,23 +14,10 @@ struct exec head;
 int status;
 FILE *tf;
 
-#define MSG(l, r) (msg ? (r) : (l))
-
-char msg;
-
-initmsg()
-{
-    char *p;
-    extern char *getenv();
-
-    msg = (p = getenv("MSG")) && *p == 'r';
-}
-
 main(argc, argv) char *argv[];
 {
     i;
 
-    initmsg();
     signal(SIGHUP, SIG_IGN);
     signal(SIGINT, SIG_IGN);
     signal(SIGQUIT, SIG_IGN);
@@ -38,7 +25,7 @@ main(argc, argv) char *argv[];
     close(creat(tname, 0600));
     tf = fopen(tname, "w+");
     if (!tf) {
-        printf(MSG("cannot create temp file\n", "не могу создать временный файл\n"));
+        printf("cannot create temp file\n");
         exit(2);
     }
     for (i = 1; i < argc; i++) {
@@ -58,18 +45,18 @@ strip(name) char *name;
 
     f = fopen(name, "r");
     if (!f) {
-        printf(MSG("cannot open %s\n", "не могу открыть %s\n"), name);
+        printf("cannot open %s\n", name);
         status = 1;
         goto out;
     }
     fgethdr(f, &head);
     if (N_BADMAG(head)) {
-        printf(MSG("%s not in a.out format\n", "%s не в формате a.out\n"), name);
+        printf("%s not in a.out format\n", name);
         status = 1;
         goto out;
     }
     if (!head.a_syms && (head.a_flag & RELFLG)) {
-        printf(MSG("%s already stripped\n", "%s уже обрезано\n"), name);
+        printf("%s already stripped\n", name);
         goto out;
     }
     size        = head.a_const + head.a_text + head.a_data;
@@ -85,7 +72,7 @@ strip(name) char *name;
     fclose(f);
     f = fopen(name, "w");
     if (!f) {
-        printf(MSG("%s cannot recreate\n", "не могу переоткрыть %s\n"), name);
+        printf("%s cannot recreate\n", name);
         status = 1;
         goto out;
     }
@@ -109,12 +96,12 @@ long size;
             s = size;
         n = fread(buf, 1, s, fr);
         if (n != s) {
-            printf(MSG("%s unexpected eof\n", "%s преждевременный конец файла\n"), name);
+            printf("%s unexpected eof\n", name);
             return (1);
         }
         n = fwrite(buf, 1, s, to);
         if (n != s) {
-            printf(MSG("%s unexpected write eof\n", "%s ошибка при записи\n"), name);
+            printf("%s unexpected write eof\n", name);
             return (1);
         }
         size -= s;

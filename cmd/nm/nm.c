@@ -29,17 +29,6 @@ static struct exec hdr;
 static struct ar_hdr arhdr;
 static FILE *fi;
 
-#define MSG(l, r) (msg ? (r) : (l))
-
-static char msg;
-
-static void initmsg(void)
-{
-    const char *p;
-
-    msg = (p = getenv("MSG")) && *p == 'r';
-}
-
 static void nm(const char *name, int narg);
 static int compare(const void *p1, const void *p2);
 
@@ -51,7 +40,6 @@ int nm_run(int argc, char **argv)
     numsort_flg = undef_flg = revsort_flg = 0;
     globl_flg = nosort_flg = prep_flg = ar_flg = 0;
 
-    initmsg();
     if (--argc > 0 && argv[1][0] == '-' && argv[1][1] != 0) {
         argv++;
         while (*++*argv)
@@ -75,7 +63,7 @@ int nm_run(int argc, char **argv)
                 prep_flg++;
                 continue;
             default: /* oops */
-                fprintf(stderr, MSG("nm: unknown flag -%c\n", "nm: неизвестный флаг -%c\n"),
+                fprintf(stderr, "nm: unknown flag -%c\n",
                         *argv[0]);
                 return 1;
             }
@@ -89,13 +77,13 @@ int nm_run(int argc, char **argv)
     while (argc--) {
         fi = fopen(*++argv, "r");
         if (fi == NULL) {
-            fprintf(stderr, MSG("nm: cannot open %s\n", "nm: не могу открыть %s\n"), *argv);
+            fprintf(stderr, "nm: cannot open %s\n", *argv);
             continue;
         }
         hdr.a_magic = fgetw(fi);
         ar_flg      = hdr.a_magic == ARMAG;
         if (!ar_flg && N_BADMAG(hdr)) {
-            fprintf(stderr, MSG("nm: %s: bad format\n", "nm: %s: плохой формат\n"), *argv);
+            fprintf(stderr, "nm: %s: bad format\n", *argv);
             fclose(fi);
             continue;
         }
@@ -137,13 +125,13 @@ static void nm(const char *name, int narg)
         fprintf(stderr, "nm: %s: ", name);
         if (ar_flg)
             fprintf(stderr, "%s: ", arhdr.ar_name);
-        fprintf(stderr, MSG("no symbol table\n", "нет таблицы имен\n"));
+        fprintf(stderr, "no symbol table\n");
         return;
     }
     for (;;) {
         c = fgetsym(fi, &sym);
         if (c == 0) {
-            fprintf(stderr, MSG("nm: out of memory\n", "nm: мало памяти\n"));
+            fprintf(stderr, "nm: out of memory\n");
             exit(4);
         }
         if (c == 1)
@@ -151,7 +139,7 @@ static void nm(const char *name, int narg)
         n -= c;
         if (n <= 0) {
             fprintf(stderr,
-                    MSG("nm: bad symbol table length\n", "nm: неверная длина таблицы имен\n"));
+                    "nm: bad symbol table length\n");
             exit(3);
         }
         if (globl_flg && (sym.n_type & N_EXT) == 0) {
@@ -208,7 +196,7 @@ static void nm(const char *name, int narg)
                 grown = (struct nlist *)realloc(symp, symplen * sizeof(struct nlist));
             }
             if (grown == NULL) {
-                fprintf(stderr, MSG("nm: out of memory on %s\n", "nm: мало памяти на %s\n"), name);
+                fprintf(stderr, "nm: out of memory on %s\n", name);
                 free(symp);
                 exit(2);
             }
