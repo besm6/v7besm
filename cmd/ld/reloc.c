@@ -44,17 +44,17 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
     if (trace > 2)
         printf("%08lx %08lx", t, r);
 
-    /* extract address from command */
+    // extract address from command
 
     switch ((int)r & RSHORT) {
     case 0:
         a = t & 0777777777;
         break;
     case RLONG:
-        a = t & 077777; /* long address - 15 bits */
+        a = t & 077777; // long address - 15 bits
         break;
     case RTRUNC:
-        a = t & 07777; /* truncated short address - 12 bits */
+        a = t & 07777; // truncated short address - 12 bits
         break;
     case RSHORT:
         a = t & 07777;
@@ -68,8 +68,8 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
         break;
     }
 
-    /* compute address shift `ad' */
-    /* update relocation word */
+    // compute address shift `ad'
+    // update relocation word
 
     ad = 0;
     switch ((int)r & REXT) {
@@ -102,7 +102,7 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
         break;
     }
 
-    /* add updated address to command */
+    // add updated address to command
 
     switch ((int)r & RSHORT) {
     case 0:

@@ -23,10 +23,10 @@ void relocate_object(long loc)
 
     if (trace > 1)
         printf("ctrel=%lxh, cdrel=%lxh, cbrel=%lxh, carel=%lxh\n", ctrel, cdrel, cbrel, carel);
-    /*
-     * Re-read the symbol table, recording the numbering
-     * of symbols for fixing external references.
-     */
+    //
+    // Re-read the symbol table, recording the numbering
+    // of symbols for fixing external references.
+    //
     lp    = local;
     symno = -1;
     loc += HDRSZ;
@@ -103,7 +103,7 @@ void relocate_file(char *acp)
         make_file_symbol(acp, 1);
         relocate_object(0L);
     } else {
-        /* scan archive members referenced */
+        // scan archive members referenced
         const char *arname = acp;
         long *lp;
 
@@ -148,10 +148,10 @@ void pass2(int argc, char **argv)
         for (i = 1; ap[i]; i++) {
             switch (ap[i]) {
             case 'D':
-                /*
-                 * I think it should actually be like this:
-                 *              for (dnum=atoi(*p); dorigin<dnum; dorigin++) {
-                 */
+                //
+                // I think it should actually be like this:
+                //              for (dnum=atoi(*p); dorigin<dnum; dorigin++) {
+                //
                 for (dnum = atoi(*p); dnum > 0; --dnum) {
                     fputw(0, doutb);
                     if (rflag) {

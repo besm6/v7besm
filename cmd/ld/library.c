@@ -38,15 +38,15 @@ int open_input(char *cp)
     if (!fgetint(text, &c))
         error(1, "unexpected EOF");
     if (c != ARMAG)
-        return 0; /* regular file */
+        return 0; // regular file
     if (!fgetarhdr(text, &archdr))
-        return 1; /* regular archive */
+        return 1; // regular archive
     if (strncmp(archdr.ar_name, SYMDEF, sizeof(archdr.ar_name)))
-        return 1; /* regular archive */
+        return 1; // regular archive
     fstat(fileno(text), &x);
     if (x.st_mtime > archdr.ar_date + 2)
-        return 3; /* out of date archive */
-    return 2;     /* randomized archive */
+        return 3; // out of date archive
+    return 2;     // randomized archive
 }
 
 void check_liblist(void)

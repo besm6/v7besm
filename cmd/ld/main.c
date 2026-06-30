@@ -1,9 +1,9 @@
-/*
- * Command-line front end for the BESM-6 linker.
- *
- * Installs the interrupt handlers, then hands off to ld_link(), which does the
- * actual work (cmd/ld/ld.c).  Argument parsing lives in the engine's pass1().
- */
+//
+// Command-line front end for the BESM-6 linker.
+//
+// Installs the interrupt handlers, then hands off to ld_link(), which does the
+// actual work (cmd/ld/ld.c).  Argument parsing lives in the engine's pass1().
+//
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>

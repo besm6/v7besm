@@ -81,7 +81,7 @@ void finish_output(void)
                 fputw(0, coutb);
             }
         }
-        /* now torigin points to the end of text */
+        // now torigin points to the end of text
         n = torigin;
         while (n & 01777) {
             n++;

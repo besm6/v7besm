@@ -1,23 +1,23 @@
-/*
- * Linker for micro-BESM.
- * Options:
- *      -o filename     output file name
- *      -u symbol       'use'
- *      -e symbol       'entry'
- *      -D size         set data size
- *      -Taddress       base address of loading
- *      -llibname       library
- *      -x              discard local symbols
- *      -X              discard locals starting with LOCSYM
- *      -S              discard all except locals and globals
- *      -C              put constants in data segment
- *      -r              preserve rel. bits, don't define common's
- *      -s              discard all symbols
- *      -n              pure procedure
- *      -d              define common even with rflag
- *      -t              tracing
- *      -k              align const and text on page boundary
- */
+//
+// Linker for micro-BESM.
+// Options:
+//      -o filename     output file name
+//      -u symbol       'use'
+//      -e symbol       'entry'
+//      -D size         set data size
+//      -Taddress       base address of loading
+//      -llibname       library
+//      -x              discard local symbols
+//      -X              discard locals starting with LOCSYM
+//      -S              discard all except locals and globals
+//      -C              put constants in data segment
+//      -r              preserve rel. bits, don't define common's
+//      -s              discard all symbols
+//      -n              pure procedure
+//      -d              define common even with rflag
+//      -t              tracing
+//      -k              align const and text on page boundary
+//
 #include <stdarg.h>
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -26,66 +26,66 @@
 
 #include "intern.h"
 
-struct exec filhdr; /* aout header */
+struct exec filhdr; // aout header
 struct ar_hdr archdr;
-FILE *text, *reloc; /* input management */
+FILE *text, *reloc; // input management
 
-/*
- * output management
- */
+//
+// output management
+//
 FILE *outb, *coutb, *toutb, *doutb, *croutb, *troutb, *droutb, *soutb;
 
-/*
- * symbol management
- */
-struct constab constab[NCONST]; /* constants */
+//
+// symbol management
+//
+struct constab constab[NCONST]; // constants
 
-struct nlist cursym;            /* current symbol */
-struct nlist symtab[NSYM];      /* the symbols themselves */
-struct nlist **symhash[NSYM];   /* pointers to hash table */
-struct nlist *lastsym;          /* last entered symbol */
-struct nlist *hshtab[NSYM + 2]; /* hash table for symbols */
+struct nlist cursym;            // current symbol
+struct nlist symtab[NSYM];      // the symbols themselves
+struct nlist **symhash[NSYM];   // pointers to hash table
+struct nlist *lastsym;          // last entered symbol
+struct nlist *hshtab[NSYM + 2]; // hash table for symbols
 struct local local[NSYMPR];
-int symindex;         /* next free entry in symbol table */
-int newindex[NCONST]; /* constant reindexing table */
-int nconst;           /* next free entry in constab */
-int cindex;           /* current index in newindex */
-int nfile;            /* current file number (index into coptsize) */
-int coptsize[LLSIZE]; /* const segment lengths after optimization */
-long basaddr = BADDR; /* base address of loading */
+int symindex;         // next free entry in symbol table
+int newindex[NCONST]; // constant reindexing table
+int nconst;           // next free entry in constab
+int cindex;           // current index in newindex
+int nfile;            // current file number (index into coptsize)
+int coptsize[LLSIZE]; // const segment lengths after optimization
+long basaddr = BADDR; // base address of loading
 struct ranlib rantab[RANTABSZ];
-int tnum; /* number of elements in rantab */
+int tnum; // number of elements in rantab
 
-long liblist[LLSIZE], *libp; /* library management */
+long liblist[LLSIZE], *libp; // library management
 
-/*
- * internal symbols
- */
+//
+// internal symbols
+//
 struct nlist *p_econst, *p_etext, *p_edata, *p_ebss, *p_end, *entrypt;
 
-/*
- * flags
- */
-int trace;  /* internal trace flag */
-int xflag;  /* discard local symbols */
-int Xflag;  /* discard locals starting with LOCSYM */
-int Sflag;  /* discard all except locals and globals*/
-int Cflag;  /* put constants in data segment */
-int rflag;  /* preserve relocation bits, don't define commons */
-int arflag; /* original copy of rflag */
-int sflag;  /* discard all symbols */
-int nflag;  /* pure procedure */
-int dflag;  /* define common even with rflag */
-int alflag; /* const and text aligned on page boundary */
+//
+// flags
+//
+int trace;  // internal trace flag
+int xflag;  // discard local symbols
+int Xflag;  // discard locals starting with LOCSYM
+int Sflag;  // discard all except locals and globals
+int Cflag;  // put constants in data segment
+int rflag;  // preserve relocation bits, don't define commons
+int arflag; // original copy of rflag
+int sflag;  // discard all symbols
+int nflag;  // pure procedure
+int dflag;  // define common even with rflag
+int alflag; // const and text aligned on page boundary
 
-/*
- * cumulative sizes set in pass 1
- */
+//
+// cumulative sizes set in pass 1
+//
 long csize, tsize, dsize, bsize, asize, ssize, nsym;
 
-/*
- * symbol relocation; both passes
- */
+//
+// symbol relocation; both passes
+//
 long ctrel, cdrel, cbrel, carel;
 
 int ofilfnd;
@@ -96,7 +96,7 @@ int delarg     = 4;
 char tfname[]  = "/tmp/ldaXXXXX";
 char libname[] = "/usr/local/lib/microbesm/libxxxxxxxxxxxxxxx";
 
-/* Needed after pass 1 */
+// Needed after pass 1
 long corigin;
 long cbasaddr;
 long torigin;
@@ -104,11 +104,11 @@ long dorigin;
 long borigin;
 long aorigin;
 
-/*
- * Final cleanup: remove the temporary l.out and set permissions on the
- * result.  Returns the exit code without calling exit(), so the engine
- * (ld_link) can be invoked from a test without terminating the process.
- */
+//
+// Final cleanup: remove the temporary l.out and set permissions on the
+// result.  Returns the exit code without calling exit(), so the engine
+// (ld_link) can be invoked from a test without terminating the process.
+//
 static int ld_cleanup(void)
 {
     unlink("l.out");
@@ -192,9 +192,9 @@ void assign_addresses(void)
     p_ebss   = *lookup_name("_ebss");
     p_end    = *lookup_name("_end");
 
-    /*
-     * If there are any undefined symbols, save the relocation bits.
-     */
+    //
+    // If there are any undefined symbols, save the relocation bits.
+    //
     symp = &symtab[symindex];
     if (!rflag) {
         for (sp = symtab; sp < symp; sp++)
@@ -208,9 +208,9 @@ void assign_addresses(void)
     if (rflag)
         Cflag = alflag = nflag = sflag = 0;
 
-    /*
-     * Assign common locations.
-     */
+    //
+    // Assign common locations.
+    //
 
     cmsize  = 0;
     acmsize = 0;
@@ -234,9 +234,9 @@ void assign_addresses(void)
         }
     }
 
-    /*
-     * Now set symbols to their final value
-     */
+    //
+    // Now set symbols to their final value
+    //
     if (Cflag)
         torigin = basaddr;
     else {
@@ -306,10 +306,10 @@ void assign_addresses(void)
     bsize = add_size(bsize, cmsize, "bss segment overflow");
     asize = add_size_long(asize, acmsize, "abss segment overflow");
 
-    /*
-     * Compute ssize; add length of local symbols, if need,
-     * and one more zero byte. Alignment will be taken at setup_output.
-     */
+    //
+    // Compute ssize; add length of local symbols, if need,
+    // and one more zero byte. Alignment will be taken at setup_output.
+    //
     if (sflag)
         ssize = 0;
     else {
@@ -321,38 +321,38 @@ void assign_addresses(void)
     }
 }
 
-/*
- * Linker engine: links the object files listed in argv and writes the
- * executable image.  Returns the error level (errlev); unlike the old main()
- * it does not call exit() on the success path, so it suits both the thin
- * front end (main.c) and the unit test.
- */
+//
+// Linker engine: links the object files listed in argv and writes the
+// executable image.  Returns the error level (errlev); unlike the old main()
+// it does not call exit() on the success path, so it suits both the thin
+// front end (main.c) and the unit test.
+//
 int ld_link(int argc, char **argv)
 {
-    /*
-     * First pass: compute segment lengths, name table, and entry address.
-     */
+    //
+    // First pass: compute segment lengths, name table, and entry address.
+    //
     pass1(argc, argv);
     filname = 0;
 
-    /*
-     * Process the name table.
-     */
+    //
+    // Process the name table.
+    //
     assign_addresses();
 
-    /*
-     * Create buffer files and write the header.
-     */
+    //
+    // Create buffer files and write the header.
+    //
     setup_output();
 
-    /*
-     * Second pass: fix up references.
-     */
+    //
+    // Second pass: fix up references.
+    //
     pass2(argc, argv);
 
-    /*
-     * Flush the buffers.
-     */
+    //
+    // Flush the buffers.
+    //
     finish_output();
 
     if (!ofilfnd) {

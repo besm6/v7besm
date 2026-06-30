@@ -13,12 +13,11 @@
 #include "besm6/ar.h"
 #include "besm6/b.out.h"
 #include "besm6/ranlib.h"
-
 #include "ld.h"
 
-#define W      6           /* word length in bytes */
-#define LOCSYM 'L'         /* discard local symbols starting with 'L' */
-#define BADDR  (HDRSZ / W) /* memory 0...BADDR-1 is free */
+#define W      6           // word length in bytes
+#define LOCSYM 'L'         // discard local symbols starting with 'L'
+#define BADDR  (HDRSZ / W) // memory 0...BADDR-1 is free
 #define SYMDEF "__.SYMDEF"
 
 #define NSYM     2000
@@ -27,71 +26,71 @@
 #define LLSIZE   256
 #define RANTABSZ 1000
 
-#define LNAMLEN 17 /* originally 12 */
+#define LNAMLEN 17 // originally 12
 
 #define ALIGN(x, y) ((x) + (y) - 1 - ((x) + (y) - 1) % (y))
 
-/*
- * symbol management
- */
+//
+// symbol management
+//
 struct local {
-    long locindex;           /* index to symbol in file */
-    struct nlist *locsymbol; /* ptr to symbol table */
+    long locindex;           // index to symbol in file
+    struct nlist *locsymbol; // ptr to symbol table
 };
 
 struct constab {
     long h, h2, hr, hr2;
 };
 
-/*
- * Global engine state (defined in ld.c).
- */
-extern struct exec filhdr; /* aout header */
+//
+// Global engine state (defined in ld.c).
+//
+extern struct exec filhdr; // aout header
 extern struct ar_hdr archdr;
-extern FILE *text, *reloc; /* input management */
+extern FILE *text, *reloc; // input management
 
-/* output management */
+// output management
 extern FILE *outb, *coutb, *toutb, *doutb, *croutb, *troutb, *droutb, *soutb;
 
-extern struct constab constab[NCONST];  /* constants */
-extern struct nlist cursym;             /* current symbol */
-extern struct nlist symtab[NSYM];       /* the symbols themselves */
-extern struct nlist **symhash[NSYM];    /* pointers to hash table */
-extern struct nlist *lastsym;           /* last entered symbol */
-extern struct nlist *hshtab[NSYM + 2];  /* hash table for symbols */
+extern struct constab constab[NCONST]; // constants
+extern struct nlist cursym;            // current symbol
+extern struct nlist symtab[NSYM];      // the symbols themselves
+extern struct nlist **symhash[NSYM];   // pointers to hash table
+extern struct nlist *lastsym;          // last entered symbol
+extern struct nlist *hshtab[NSYM + 2]; // hash table for symbols
 extern struct local local[NSYMPR];
-extern int symindex;         /* next free entry in symbol table */
-extern int newindex[NCONST]; /* constant reindexing table */
-extern int nconst;           /* next free entry in constab */
-extern int cindex;           /* current index in newindex */
-extern int nfile;            /* current file number (index into coptsize) */
-extern int coptsize[LLSIZE]; /* const segment lengths after optimization */
-extern long basaddr;         /* base address of loading */
+extern int symindex;         // next free entry in symbol table
+extern int newindex[NCONST]; // constant reindexing table
+extern int nconst;           // next free entry in constab
+extern int cindex;           // current index in newindex
+extern int nfile;            // current file number (index into coptsize)
+extern int coptsize[LLSIZE]; // const segment lengths after optimization
+extern long basaddr;         // base address of loading
 extern struct ranlib rantab[RANTABSZ];
-extern int tnum; /* number of elements in rantab */
+extern int tnum; // number of elements in rantab
 
-extern long liblist[LLSIZE], *libp; /* library management */
+extern long liblist[LLSIZE], *libp; // library management
 
-/* internal symbols */
+// internal symbols
 extern struct nlist *p_econst, *p_etext, *p_edata, *p_ebss, *p_end, *entrypt;
 
-/* flags */
-extern int trace;  /* internal trace flag */
-extern int xflag;  /* discard local symbols */
-extern int Xflag;  /* discard locals starting with LOCSYM */
-extern int Sflag;  /* discard all except locals and globals */
-extern int Cflag;  /* put constants in data segment */
-extern int rflag;  /* preserve relocation bits, don't define commons */
-extern int arflag; /* original copy of rflag */
-extern int sflag;  /* discard all symbols */
-extern int nflag;  /* pure procedure */
-extern int dflag;  /* define common even with rflag */
-extern int alflag; /* const and text aligned on page boundary */
+// flags
+extern int trace;  // internal trace flag
+extern int xflag;  // discard local symbols
+extern int Xflag;  // discard locals starting with LOCSYM
+extern int Sflag;  // discard all except locals and globals
+extern int Cflag;  // put constants in data segment
+extern int rflag;  // preserve relocation bits, don't define commons
+extern int arflag; // original copy of rflag
+extern int sflag;  // discard all symbols
+extern int nflag;  // pure procedure
+extern int dflag;  // define common even with rflag
+extern int alflag; // const and text aligned on page boundary
 
-/* cumulative sizes set in pass 1 */
+// cumulative sizes set in pass 1
 extern long csize, tsize, dsize, bsize, asize, ssize, nsym;
 
-/* symbol relocation; both passes */
+// symbol relocation; both passes
 extern long ctrel, cdrel, cbrel, carel;
 
 extern int ofilfnd;
@@ -102,7 +101,7 @@ extern int delarg;
 extern char tfname[];
 extern char libname[];
 
-/* Needed after pass 1 */
+// Needed after pass 1
 extern long corigin;
 extern long cbasaddr;
 extern long torigin;
@@ -110,17 +109,17 @@ extern long dorigin;
 extern long borigin;
 extern long aorigin;
 
-/*
- * Shared functions.
- */
-/* ld.c */
+//
+// Shared functions.
+//
+// ld.c
 void error(int n, char *fmt, ...);
 void read_header(long loc);
 long add_size(long a, long b, char *s);
 long add_size_long(long a, long b, char *s);
 void assign_addresses(void);
 
-/* symtab.c */
+// symtab.c
 void relocate_cursym(void);
 int enter_symbol(struct nlist **hp);
 struct nlist **lookup_symbol(void);
@@ -129,7 +128,7 @@ void define_symbol(struct nlist *sp, long val, int type);
 struct nlist *lookup_local(const struct local *lp, int sn);
 int make_file_symbol(char *s, int wflag);
 
-/* library.c */
+// library.c
 int open_input(char *cp);
 void check_liblist(void);
 int scan_member(long nloc);
@@ -137,24 +136,24 @@ void read_ranlib(void);
 int load_ranlib_members(void);
 void free_ranlib(void);
 
-/* pass1.c */
+// pass1.c
 int load_constants(void);
 int scan_object(long loc, int libflg, int nloc);
 void scan_file(char *cp);
 void pass1(int argc, char **argv);
 
-/* pass2.c */
+// pass2.c
 void relocate_object(long loc);
 void relocate_file(char *acp);
 void pass2(int argc, char **argv);
 
-/* reloc.c */
+// reloc.c
 int reloc_type(int stype);
 void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *pr);
 void relocate_constants(const struct local *lp);
 void relocate_segment(const struct local *lp, FILE *b1, FILE *b2, long len);
 
-/* output.c */
+// output.c
 void create_buffer(FILE **buf, int tempflg);
 void setup_output(void);
 void copy_buffer(FILE *buf);

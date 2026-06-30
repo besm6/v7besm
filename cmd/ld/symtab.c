@@ -130,7 +130,7 @@ struct nlist *lookup_local(const struct local *lp, int sn)
         fprintf(stderr, "\n");
     }
     error(2, "bad symbol reference");
-    /* NOTREACHED */
+    // NOTREACHED
     return 0;
 }
 

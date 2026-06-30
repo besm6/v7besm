@@ -35,9 +35,9 @@ int load_constants(void)
     return nconst - save;
 }
 
-/*
- * single file
- */
+//
+// single file
+//
 int scan_object(long loc, int libflg, int nloc)
 {
     struct nlist *sp;
@@ -116,10 +116,10 @@ int scan_object(long loc, int libflg, int nloc)
         return 1;
     }
 
-    /*
-     * No symbols defined by this library member.
-     * Rip out the hash table entries and reset the symbol table.
-     */
+    //
+    // No symbols defined by this library member.
+    // Rip out the hash table entries and reset the symbol table.
+    //
     cindex = savcindex;
     nconst -= coptsize[nfile];
     while (symindex > savindex) {
@@ -132,24 +132,24 @@ int scan_object(long loc, int libflg, int nloc)
     return 0;
 }
 
-/*
- * scan file to find defined symbols
- */
+//
+// scan file to find defined symbols
+//
 void scan_file(char *cp)
 {
     long nloc;
 
     switch (open_input(cp)) {
-    case 0: /* regular file */
+    case 0: // regular file
         scan_object(0L, 0, make_file_symbol(cp, 0));
         break;
-    case 1: /* regular archive */
+    case 1: // regular archive
         nloc = W;
     archive:
         while (scan_member(nloc))
             nloc += archdr.ar_size + ARHDRSZ;
         break;
-    case 2: /* table of contents */
+    case 2: // table of contents
         read_ranlib();
         while (load_ranlib_members())
             ;
@@ -157,7 +157,7 @@ void scan_file(char *cp)
         *libp++ = -1;
         check_liblist();
         break;
-    case 3: /* out of date archive */
+    case 3: // out of date archive
         error(0, "out of date (warning)");
         nloc = W + archdr.ar_size + ARHDRSZ;
         goto archive;
@@ -166,9 +166,9 @@ void scan_file(char *cp)
     fclose(reloc);
 }
 
-/*
- * scan files once to find symdefs
- */
+//
+// scan files once to find symdefs
+//
 void pass1(int argc, char **argv)
 {
     int c, i;
@@ -188,7 +188,7 @@ void pass1(int argc, char **argv)
         }
         for (i = 1; ap[i]; i++) {
             switch (ap[i]) {
-                /* output file name */
+                // output file name
             case 'o':
                 if (++c >= argc)
                     error(2, "-o: argument missed");
@@ -196,14 +196,14 @@ void pass1(int argc, char **argv)
                 ofilfnd++;
                 continue;
 
-                /* 'use' */
+                // 'use'
             case 'u':
                 if (++c >= argc)
                     error(2, "-u: argument missed");
                 enter_symbol(lookup_name(*p++));
                 continue;
 
-                /* 'entry' */
+                // 'entry'
             case 'e':
                 if (++c >= argc)
                     error(2, "-e: argument missed");
@@ -211,7 +211,7 @@ void pass1(int argc, char **argv)
                 entrypt = lastsym;
                 continue;
 
-                /* set data size */
+                // set data size
             case 'D':
                 if (++c >= argc)
                     error(2, "-D: argument missed");
@@ -221,12 +221,12 @@ void pass1(int argc, char **argv)
                 dsize = num;
                 continue;
 
-                /* base address of loading */
+                // base address of loading
             case 'T':
                 basaddr = strtoul(ap + i + 1, 0, 0);
                 break;
 
-                /* library */
+                // library
             case 'l':
                 save  = ap[--i];
                 ap[i] = '-';
@@ -234,49 +234,49 @@ void pass1(int argc, char **argv)
                 ap[i] = save;
                 break;
 
-                /* discard local symbols */
+                // discard local symbols
             case 'x':
                 xflag++;
                 continue;
 
-                /* discard locals starting with LOCSYM */
+                // discard locals starting with LOCSYM
             case 'X':
                 Xflag++;
                 continue;
 
-                /* discard all except locals and globals*/
+                // discard all except locals and globals
             case 'S':
                 Sflag++;
                 continue;
 
-                /* put constants in data segment */
+                // put constants in data segment
             case 'C':
                 Cflag++;
                 continue;
 
-                /* preserve rel. bits, don't define common */
+                // preserve rel. bits, don't define common
             case 'r':
                 rflag++;
                 arflag++;
                 continue;
 
-                /* discard all symbols */
+                // discard all symbols
             case 's':
                 sflag++;
                 xflag++;
                 continue;
 
-                /* pure procedure */
+                // pure procedure
             case 'n':
                 nflag++;
                 continue;
 
-                /* define common even with rflag */
+                // define common even with rflag
             case 'd':
                 dflag++;
                 continue;
 
-                /* tracing */
+                // tracing
             case 't':
                 trace++;
                 continue;
