@@ -18,7 +18,6 @@
  *      -t              tracing
  *      -k              align const and text on page boundary
  */
-#include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,6 +29,8 @@
 #include "besm6/ar.h"
 #include "besm6/b.out.h"
 #include "besm6/ranlib.h"
+
+#include "ld.h"
 
 #define W      6           /* длина слова в байтах */
 #define LOCSYM 'L'         /* убрать локальные символы, нач. с 'L' */
@@ -131,12 +132,22 @@ long dorigin;
 long borigin;
 long aorigin;
 
-void delexit()
+/*
+ * Завершающая уборка: удалить временный l.out и установить права на
+ * результат.  Возвращает код возврата, не вызывая exit(), чтобы движок
+ * (ld_link) можно было вызывать из теста, не завершая процесс.
+ */
+static int ld_cleanup(void)
 {
     unlink("l.out");
     if (!delarg && !arflag)
         chmod(ofilename, 0777 & ~umask(0));
-    exit(delarg);
+    return delarg;
+}
+
+void delexit(void)
+{
+    exit(ld_cleanup());
 }
 
 void error(int n, char *fmt, ...)
@@ -222,7 +233,8 @@ int passconst()
 {
     int count;
     int save;
-    struct constab *p, *c;
+    struct constab *c;
+    const struct constab *p;
 
     save  = nconst;
     count = filhdr.a_const / W;
@@ -308,16 +320,15 @@ int enter(struct nlist **hp)
 struct nlist **lookup()
 {
     int i;
-    int clash;
-    char *cp, *cp1;
+    char *cp;
     struct nlist **hp;
 
     i = 0;
     for (cp = cursym.n_name; *cp; i = (i << 1) + *cp++)
         ;
     for (hp = &hshtab[(i & 077777) % NSYM + 2]; *hp != 0;) {
-        cp1   = (*hp)->n_name;
-        clash = 0;
+        const char *cp1 = (*hp)->n_name;
+        int clash       = 0;
         for (cp = cursym.n_name; *cp;)
             if (*cp++ != *cp1++) {
                 clash = 1;
@@ -355,7 +366,7 @@ int load1(long loc, int libflg, int nloc)
 {
     struct nlist *sp;
     int savindex, savcindex;
-    int ndef, type, symlen, nsymbol;
+    int ndef, nsymbol;
 
     readhdr(loc);
     if (filhdr.a_flag & RELFLG) {
@@ -378,7 +389,8 @@ int load1(long loc, int libflg, int nloc)
     else
         nsymbol = 0;
     for (;;) {
-        symlen = fgetsym(text, &cursym);
+        int symlen = fgetsym(text, &cursym);
+        int type;
         if (symlen == 0)
             error(2, "out of memory");
         if (symlen == 1)
@@ -485,6 +497,9 @@ int step(long nloc)
         return 0;
     }
     cp = malloc(sizeof(archdr.ar_name) + 1);
+    if (!cp)
+        error(2, "out of memory");
+    // cppcheck-suppress nullPointerOutOfMemory
     strncpy(cp, archdr.ar_name, sizeof(archdr.ar_name));
     cp[sizeof(archdr.ar_name)] = '\0';
     if (load1(nloc + ARHDRSZ, 1, mkfsym(cp, 0)))
@@ -497,10 +512,9 @@ int step(long nloc)
 void getrantab()
 {
     struct ranlib *p;
-    int n;
 
     for (p = rantab; p < rantab + RANTABSZ; ++p) {
-        n = fgetran(text, p);
+        int n = fgetran(text, p);
         if (n < 0)
             error(2, "out of memory");
         if (n == 0) {
@@ -523,11 +537,10 @@ struct nlist **slookup(char *s)
 int ldrand()
 {
     struct ranlib *p;
-    struct nlist **pp;
-    long *oldp = libp;
+    const long *oldp = libp;
 
     for (p = rantab; p < rantab + tnum; ++p) {
-        pp = slookup(p->ran_name);
+        struct nlist **pp = slookup(p->ran_name);
         if (!*pp)
             continue;
         if ((*pp)->n_type == N_EXT + N_UNDF)
@@ -720,8 +733,8 @@ void ldrsym(struct nlist *sp, long val, int type)
 
 void middle()
 {
-    struct nlist *sp, *symp;
-    long t;
+    struct nlist *sp;
+    const struct nlist *symp;
     long cmsize, acmsize;
     int nund;
     long cmorigin, acmorigin;
@@ -760,7 +773,8 @@ void middle()
         ldrsym(p_edata, dsize / W, N_EXT + N_DATA);
         ldrsym(p_ebss, bsize / W, N_EXT + N_BSS);
         ldrsym(p_end, asize / W, N_EXT + N_ABSS);
-        for (sp = symtab; sp < symp; sp++)
+        for (sp = symtab; sp < symp; sp++) {
+            long t;
             if ((sp->n_type & N_TYPE) == N_COMM) {
                 t           = sp->n_value;
                 sp->n_value = cmsize / W;
@@ -770,6 +784,7 @@ void middle()
                 sp->n_value = acmsize / W;
                 acmsize     = addlong(acmsize, (long)t * W, "переполнен сегмент abss");
             }
+        }
     }
 
     /*
@@ -799,9 +814,8 @@ void middle()
     for (sp = symtab; sp < symp; sp++) {
         switch (sp->n_type) {
         case N_EXT + N_UNDF:
-            if (!arflag)
-                errlev |= 01;
             if (!arflag) {
+                errlev |= 01;
                 if (!nund)
                     printf("Undefined:\n");
                 nund++;
@@ -913,9 +927,9 @@ void setupout()
     fputhdr(&filhdr, outb);
 }
 
-struct nlist *lookloc(struct local *lp, int sn)
+struct nlist *lookloc(const struct local *lp, int sn)
 {
-    struct local *clp;
+    const struct local *clp;
 
     for (clp = local; clp < lp; clp++)
         if (clp->locindex == sn)
@@ -928,6 +942,7 @@ struct nlist *lookloc(struct local *lp, int sn)
     }
     error(2, "bad symbol reference");
     /* NOTREACHED */
+    return 0;
 }
 
 int reltype(int stype)
@@ -960,11 +975,11 @@ int reltype(int stype)
     }
 }
 
-void relhalf(struct local *lp, long t, long r, long *pt, long *pr)
+void relhalf(const struct local *lp, long t, long r, long *pt, long *pr)
 {
     long a, ad;
     int i;
-    struct nlist *sp;
+    const struct nlist *sp;
 
     if (trace > 2)
         printf("%08lx %08lx", t, r);
@@ -976,8 +991,10 @@ void relhalf(struct local *lp, long t, long r, long *pt, long *pr)
         a = t & 0777777777;
         break;
     case RLONG:
+        a = t & 077777; /* длинный адрес - 15 бит */
+        break;
     case RTRUNC:
-        a = t & 03777777;
+        a = t & 07777; /* усечённый короткий адрес - 12 бит */
         break;
     case RSHORT:
         a = t & 07777;
@@ -1037,16 +1054,16 @@ void relhalf(struct local *lp, long t, long r, long *pt, long *pr)
         t |= (a + ad) & 07777;
         break;
     case RLONG:
-        t &= ~03777777;
-        t |= (a + ad) & 03777777;
+        t &= ~077777;
+        t |= (a + ad) & 077777;
         break;
     case RSHIFT:
-        t &= ~03777777;
-        t |= (a + ad) >> 12 & 03777777;
+        t &= ~077777;
+        t |= (a + ad) >> 12 & 077777;
         break;
     case RTRUNC:
-        t &= ~03777777;
-        t |= (a + (ad & 07777)) & 03777777;
+        t &= ~07777;
+        t |= (a + (ad & 07777)) & 07777;
         break;
     }
 
@@ -1057,10 +1074,11 @@ void relhalf(struct local *lp, long t, long r, long *pt, long *pr)
     *pr = r;
 }
 
-void relocconst(struct local *lp)
+void relocconst(const struct local *lp)
 {
     long r, t;
-    struct constab *p, *c;
+    struct constab *p;
+    const struct constab *c;
 
     p = &constab[nconst];
     c = p + coptsize[nfile];
@@ -1076,7 +1094,7 @@ void relocconst(struct local *lp)
     }
 }
 
-void relocate(struct local *lp, FILE *b1, FILE *b2, long len)
+void relocate(const struct local *lp, FILE *b1, FILE *b2, long len)
 {
     long r, t;
 
@@ -1096,7 +1114,6 @@ void load2(long loc)
     struct nlist *sp;
     struct local *lp;
     int symno;
-    int type;
     long count;
 
     readhdr(loc);
@@ -1123,7 +1140,7 @@ void load2(long loc)
         if (count == 1)
             break;
         symreloc();
-        type = cursym.n_type;
+        int type = cursym.n_type;
         if (Sflag && ((type & N_TYPE) == N_ABS || (type & N_TYPE) > N_ACOMM)) {
             free(cursym.n_name);
             continue;
@@ -1181,8 +1198,6 @@ void load2(long loc)
 
 void load2arg(char *acp)
 {
-    long *lp;
-
     if (getfile(acp) == 0) {
         if (trace)
             printf("%s:\n", acp);
@@ -1190,12 +1205,16 @@ void load2arg(char *acp)
         load2(0L);
     } else {
         /* scan archive members referenced */
-        char *arname = acp;
+        const char *arname = acp;
+        long *lp;
 
         for (lp = libp; *lp != -1; lp++) {
             fseek(text, *lp, 0);
             fgetarhdr(text, &archdr);
             acp = malloc(sizeof(archdr.ar_name) + 1);
+            if (!acp)
+                error(2, "out of memory");
+            // cppcheck-suppress nullPointerOutOfMemory
             strncpy(acp, archdr.ar_name, sizeof(archdr.ar_name));
             acp[sizeof(archdr.ar_name)] = '\0';
             if (trace)
@@ -1231,9 +1250,9 @@ void pass2(int argc, char **argv)
             switch (ap[i]) {
             case 'D':
                 /*
-                /* по-моему, все-таки, должно быть так.
-                                for (dnum=atoi(*p); dorigin<dnum; dorigin++) {
-                */
+                 * по-моему, все-таки, должно быть так.
+                 *              for (dnum=atoi(*p); dorigin<dnum; dorigin++) {
+                 */
                 for (dnum = atoi(*p); dnum > 0; --dnum) {
                     fputw(0, doutb);
                     if (rflag) {
@@ -1272,10 +1291,8 @@ void copy(FILE *buf)
 
 void finishout()
 {
-    long n;
-    struct nlist *p;
-
     if (nflag || alflag) {
+        long n;
         if (alflag) {
             n = corigin;
             while (n & 01777) {
@@ -1308,6 +1325,7 @@ void finishout()
         copy(droutb);
     }
     if (!sflag) {
+        const struct nlist *p;
         if (!xflag)
             copy(soutb);
         for (p = symtab; p < &symtab[symindex]; ++p)
@@ -1319,18 +1337,14 @@ void finishout()
     fclose(outb);
 }
 
-int main(int argc, char **argv)
+/*
+ * Движок компоновщика: связывает объектные файлы, перечисленные в argv, и
+ * пишет исполняемый образ.  Возвращает уровень ошибки (errlev); в отличие от
+ * прежнего main() не вызывает exit() на успешном пути, поэтому годится и для
+ * тонкого front end (main.c), и для модульного теста.
+ */
+int ld_link(int argc, char **argv)
 {
-    if (argc == 1) {
-        printf("Usage: %s [-xXsSrndt] [-lname] [-D num] [-u name] [-e name] [-o file] file...\n",
-               argv[0]);
-        exit(4);
-    }
-    if (signal(SIGINT, SIG_IGN) != SIG_IGN)
-        signal(SIGINT, delexit);
-    if (signal(SIGTERM, SIG_IGN) != SIG_IGN)
-        signal(SIGTERM, delexit);
-
     /*
      * Первый проход: вычисление длин сегментов и таблицы имен,
      * а также адреса входа.
@@ -1364,6 +1378,5 @@ int main(int argc, char **argv)
         ofilename = "a.out";
     }
     delarg = errlev;
-    delexit();
-    return 0;
+    return ld_cleanup();
 }

@@ -5,7 +5,15 @@
 # (and archives produced by cmd/ar) into an executable.  The fget*/fput*/get*/put*
 # helpers it needs come from cmd/libaout (aout).
 #
-add_executable(b6ld ld.c)
-target_include_directories(b6ld PRIVATE ${BESM6_CROSS_INCLUDE})
-target_link_libraries(b6ld PRIVATE aout)
+# The engine is split into a reusable library so it can be linked into both the
+# command-line tool and the unit tests.
+#
+add_library(linker STATIC ld.c)
+target_include_directories(linker PUBLIC ${BESM6_CROSS_INCLUDE} ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(linker PUBLIC aout)
+
+add_executable(b6ld main.c)
+target_link_libraries(b6ld PRIVATE linker)
 install(TARGETS b6ld RUNTIME DESTINATION bin)
+
+add_subdirectory(test)
