@@ -75,34 +75,19 @@ void write_header(void)
 // Add base address `a` into the address field of half-word `h`, then return the
 // patched half-word.  The relocation modifier bits (hr & RSHORT) say which
 // field width to touch and how:
-//   0      - full 27-bit address
+//   0      - full 15-bit address
 //   RSHORT - 12-bit short address
-//   RLONG  - 15-bit long address
-//   RSHIFT - long address, but the base is shifted down 12 bits first (the high
-//            part of an address split across two instructions)
-//   RTRUNC - short address; only the low 12 bits of the base are added (the low
-//            part of that split address)
 //
 static long relocate_field(long h, long a, int hr)
 {
     switch (hr & RSHORT) {
-    case 0:
-        a += h & 0777777777;
-        h &= ~0777777777;
-        h |= a & 0777777777;
-        break;
     case RSHORT:
         a += h & 07777;
         h &= ~07777;
         h |= a & 07777;
         break;
-    case RSHIFT:
-        a >>= 12;
-        goto rlong;
-    case RTRUNC:
-        a &= 07777;
-    case RLONG:
-    rlong:
+    case 0:
+    default:
         a += h & 077777;
         h &= ~077777;
         h |= a & 077777;

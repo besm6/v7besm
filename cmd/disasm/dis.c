@@ -120,10 +120,7 @@ void prrel(long r)
     case REXT:   printf("%d", (int)RGETIX(r));
     }
     switch ((int)r & RSHORT) {
-    case RLONG:  putchar('l'); break;
     case RSHORT: putchar('s'); break;
-    case RSHIFT: putchar('h'); break;
-    case RTRUNC: putchar('t'); break;
     case 0:      putchar('a'); break;
     default:     putchar('?'); break;
     }

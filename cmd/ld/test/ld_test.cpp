@@ -71,7 +71,7 @@ TEST(Link, AssembleAndLink)
 
     // A long jump to a text label: one short instr (atx, high half) and one long
     // instr (uj, low half) pack into text word 9.  The assembler emits `uj foo`
-    // as 03000000|9 with an RTEXT|RLONG relocation (see cmd/as Assemble.Globl).
+    // as 03000000|9 with an RTEXT relocation (long field, see cmd/as Assemble.Globl).
     {
         std::ofstream src(sfile, std::ios::trunc);
         src << "        .globl foo\n"

@@ -139,12 +139,9 @@ struct nlist {
 /*
  * Address-field modifiers, stored in the low bits alongside the relocation
  * type. They tell the linker which width of the instruction's address field to
- * patch and how to shift the relocated value (see relhalf() in cmd/ld/ld.c).
+ * patch (see relocate_halfword() in cmd/ld/reloc.c).
  */
-#define RSHIFT  04      /* short address field, value shifted right by 12 */
-#define RTRUNC  05      /* short address field, shift truncated to 12 bits */
-#define RLONG   06      /* long (full) address field */
-#define RSHORT  07      /* short address field; also a bit mask */
+#define RSHORT  01      /* short address field; also a bit mask */
 
 #define RGETIX(h)   ((h)>>6)            /* extract symbol index from a record */
 #define RPUTIX(h)   ((long)(h)<<6)      /* pack symbol index into a record */

@@ -487,7 +487,7 @@ foo:    atx 0
 
     EXPECT_EQ(word_high(got, 9), 00000000L);     // atx 0  (foo:)
     EXPECT_EQ(word_low(got, 9), 03000000L | 9L); // uj foo -> resolved to word 9
-    EXPECT_EQ(reloc_half(got, 1, 1), 026L);      // RTEXT | RLONG for the uj foo
+    EXPECT_EQ(reloc_half(got, 1, 1), 020L);      // RTEXT (long field, no modifier) for the uj foo
 }
 
 // .comm and .acomm declare common blocks: external symbols whose value is the
@@ -526,7 +526,7 @@ TEST(Assemble, ExternalReference)
 
     // The reference carries an REXT (segment field 070) relocation naming `undef`
     // (symbol index 0), so the linker can patch in its address.
-    EXPECT_EQ(reloc_half(got, 1, 0), 076L); // REXT | RLONG, symbol index 0
+    EXPECT_EQ(reloc_half(got, 1, 0), 070L); // REXT (long field, no modifier), symbol index 0
 }
 
 // A data word that names a text label gets an RTEXT (segment field 020)

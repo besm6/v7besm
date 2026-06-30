@@ -185,26 +185,24 @@ void read_header(long loc)
 // overflows the address range.  Used to accumulate the const/text/data/bss
 // sizes as files are scanned.  `s` is the message printed on overflow.
 //
-// The limit is 04000000 (octal) words, the largest value a normal 24-bit
-// address field can hold; add_size_long() below allows the wider 01000000000-
-// word range used for the abss segment, whose addresses are not packed into an
-// ordinary instruction field and so may be larger.
+// The limit is 0100000 (octal) words: the BESM-6 address space is a flat 15
+// bits (32768 words), so no segment may grow past it.
 //
 long add_size(long a, long b, char *s)
 {
     a += b;
-    if (a >= 04000000L * W)
+    if (a >= 0100000L * W)
         error(1, s);
     return a;
 }
 
 //
-// Like add_size(), but with the wider abss address limit (see above).
+// Same as add_size(); the abss segment shares the flat 15-bit address space.
 //
 long add_size_long(long a, long b, char *s)
 {
     a += b;
-    if (a >= 01000000000L * W)
+    if (a >= 0100000L * W)
         error(1, s);
     return a;
 }
@@ -363,7 +361,7 @@ void assign_addresses(void)
             sp->n_value += acmorigin;
             break;
         }
-        if (sp->n_value & ~0777777777)
+        if (sp->n_value & ~077777777)
             error(1, "long address: %s=0%lo", sp->n_name, sp->n_value);
     }
     if (ld.sflag || ld.xflag)

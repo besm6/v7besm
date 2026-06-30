@@ -161,18 +161,9 @@ putcom:
     // Build the final half-word(s): OR together the index register (bits
     // 20..23), the opcode, and the address field, and attach the relocation.
     if (type & TLONG) {
-        if ((reltype & REXT) == REXT && as.stab[RGETIX(reltype)].n_type == N_EXT + N_ACOMM) {
-            // A long instruction referencing an absolute-common symbol needs a
-            // utc in front to carry the high address bits, so emit two
-            // half-words: the utc (high 15 bits, RSHIFT) then the instruction
-            // itself (low 12 bits, RTRUNC).
-            emit_halfword((long)index << 20 | UTCCOM | (addr >> 12 & 077777), reltype | RSHIFT);
-            emit_halfword(val | (addr & 07777), (long)RABS | RTRUNC);
-        } else {
-            // Normal long instruction: a 15-bit address field.
-            addr &= 077777;
-            emit_halfword((long)index << 20 | val | (addr & 077777), reltype | RLONG);
-        }
+        // Long instruction: a 15-bit address field.
+        addr &= 077777;
+        emit_halfword((long)index << 20 | val | (addr & 077777), reltype);
     } else {
         // Short instruction: a 12-bit address field.
         emit_halfword((long)index << 20 | val | (addr & 07777), reltype | RSHORT);

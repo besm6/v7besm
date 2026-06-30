@@ -48,8 +48,7 @@ int reloc_type(int stype)
 //
 // It works in three steps:
 //   1. Pull the address field out of `t`.  The record's low bits say how wide it
-//      is - full word, 15-bit long, or 12-bit short - and the RSHIFT form holds
-//      the top bits of an address that was split across two instructions.
+//      is - full word, 15-bit long, or 12-bit short.
 //   2. Work out `ad`, the amount to add.  The record's REXT bits say what the
 //      field refers to: a particular segment (add that segment's base), or an
 //      external symbol (REXT).  For an external symbol we look it up; if it is
@@ -68,24 +67,12 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
 
     // Step 1: extract the current address field from the instruction.
     switch ((int)r & RSHORT) {
-    case 0:
-        a = t & 0777777777; // full 27-bit address
-        break;
-    case RLONG:
-        a = t & 077777; // long address - 15 bits
-        break;
-    case RTRUNC:
-        a = t & 07777; // truncated short address - 12 bits
-        break;
     case RSHORT:
         a = t & 07777; // short address - 12 bits
         break;
-    case RSHIFT:
-        a = t & 077777; // high half of a split address...
-        a <<= 12;       // ...shifted up into place
-        break;
+    case 0:
     default:
-        a = 0;
+        a = t & 077777; // full 15-bit address
         break;
     }
 
@@ -130,25 +117,14 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
 
     // Step 3: write (a + ad) back into the same address field of `t`.
     switch ((int)r & RSHORT) {
-    case 0:
-        t &= ~0777777777;
-        t |= (a + ad) & 0777777777;
-        break;
     case RSHORT:
         t &= ~07777;
         t |= (a + ad) & 07777;
         break;
-    case RLONG:
+    case 0:
+    default:
         t &= ~077777;
         t |= (a + ad) & 077777;
-        break;
-    case RSHIFT:
-        t &= ~077777;
-        t |= (a + ad) >> 12 & 077777; // store back only the high bits
-        break;
-    case RTRUNC:
-        t &= ~07777;
-        t |= (a + (ad & 07777)) & 07777;
         break;
     }
 
