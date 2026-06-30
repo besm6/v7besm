@@ -8,6 +8,14 @@
 
 #include "intern.h"
 
+//
+// Pass-2 processing of one object file at byte offset `loc`.  By now every symbol
+// has a final address, so this routine emits the file's actual contents: it walks
+// the file's symbol table to build the local number->global symbol map (used to
+// resolve external references), then copies the const, text and data segments to
+// the output buffers, relocating every address field on the way through.  At the
+// end it advances all the running origins past this file's contribution.
+//
 void relocate_object(long loc)
 {
     struct nlist *sp;
@@ -15,6 +23,8 @@ void relocate_object(long loc)
     int symno;
     long count;
 
+    // Turn this file's relocation biases (relative offsets) into absolute ones by
+    // adding the final base address chosen for each segment.
     read_header(loc);
     ld.ctrel += ld.torigin;
     ld.cdrel += ld.dorigin;
@@ -25,8 +35,8 @@ void relocate_object(long loc)
         printf("ctrel=%lxh, cdrel=%lxh, cbrel=%lxh, carel=%lxh\n", ld.ctrel, ld.cdrel, ld.cbrel,
                ld.carel);
     //
-    // Re-read the symbol table, recording the numbering
-    // of symbols for fixing external references.
+    // Re-read the symbol table, recording, for each external reference, which
+    // global symbol the file's local symbol number maps to (in ld.local[]).
     //
     lp    = ld.local;
     symno = -1;
@@ -51,9 +61,14 @@ void relocate_object(long loc)
             free(ld.cursym.n_name);
             continue;
         }
+
+        // Find the global entry for this external name (it must exist now).
         if (!(sp = *lookup_symbol()))
             error(2, "internal error: symbol not found");
         free(ld.cursym.n_name);
+
+        // Still unresolved (undefined/common): remember symno -> sp so that
+        // references in this file's code can be steered to the global symbol.
         if (ld.cursym.n_type == N_EXT + N_UNDF || ld.cursym.n_type == N_EXT + N_COMM ||
             ld.cursym.n_type == N_EXT + N_ACOMM) {
             if (lp >= &ld.local[NSYMPR])
@@ -62,12 +77,17 @@ void relocate_object(long loc)
             lp++->locsymbol = sp;
             continue;
         }
+
+        // Defined here: it had better agree with the definition pass 1 chose.
         if (ld.cursym.n_type != sp->n_type || ld.cursym.n_value != sp->n_value) {
             printf("%s: ", ld.cursym.n_name);
             error(1, "name redefined");
         }
     }
 
+    // Relocate and emit the three stored segments.  ld.text is positioned at the
+    // segment data, ld.reloc at the matching relocation records (which sit one
+    // const+text+data block further on in the file).
     count = loc + ld.filhdr.a_const + ld.filhdr.a_text + ld.filhdr.a_data;
 
     if (ld.trace > 1)
@@ -86,6 +106,8 @@ void relocate_object(long loc)
     fseek(ld.reloc, count + ld.filhdr.a_const + ld.filhdr.a_text, 0);
     relocate_segment(lp, ld.doutb, ld.droutb, ld.filhdr.a_data);
 
+    // Advance every running counter past this file's contribution so the next
+    // file's contents land immediately after it.
     ld.nconst += ld.coptsize[ld.nfile];
     ld.cindex += ld.filhdr.a_const / W;
     ld.corigin += ld.coptsize[ld.nfile];
@@ -96,6 +118,12 @@ void relocate_object(long loc)
     ld.nfile++;
 }
 
+//
+// Pass-2 handling of one command-line file argument.  A plain object is relocated
+// directly; for an archive we revisit exactly the members pass 1 decided to keep
+// (their offsets were recorded in ld.liblist), in the same order, and relocate
+// each.  Emits a filename symbol before each so the symbol table stays annotated.
+//
 void relocate_file(char *acp)
 {
     if (open_input(acp) == 0) {
@@ -104,7 +132,7 @@ void relocate_file(char *acp)
         make_file_symbol(acp, 1);
         relocate_object(0L);
     } else {
-        // scan archive members referenced
+        // Replay the archive members recorded during pass 1 (up to the -1 mark).
         const char *arname = acp;
         long *lp;
 
@@ -114,6 +142,7 @@ void relocate_file(char *acp)
             acp = malloc(sizeof(ld.archdr.ar_name) + 1);
             if (!acp)
                 error(2, "out of memory");
+
             // cppcheck-suppress nullPointerOutOfMemory
             strncpy(acp, ld.archdr.ar_name, sizeof(ld.archdr.ar_name));
             acp[sizeof(ld.archdr.ar_name)] = '\0';
@@ -129,6 +158,13 @@ void relocate_file(char *acp)
     fclose(ld.reloc);
 }
 
+//
+// The whole of pass 2: walk the command line a second time, in the same order, so
+// files are emitted in the layout pass 1 planned.  Non-option arguments are
+// relocated (relocate_file); options are mostly skipped here, but the ones that
+// took a value (-u/-e/-o/-v) must still step over that value, and -D emits the
+// extra zero-filled data words it reserved, and -l re-triggers an archive.
+//
 void pass2(int argc, char **argv)
 {
     int c, i;
@@ -148,7 +184,7 @@ void pass2(int argc, char **argv)
         }
         for (i = 1; ap[i]; i++) {
             switch (ap[i]) {
-            case 'D':
+            case 'D': // emit the reserved data words as zeros (note: falls through)
                 //
                 // I think it should actually be like this:
                 //              for (dnum=atoi(*p); dorigin<dnum; dorigin++) {

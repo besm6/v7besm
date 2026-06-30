@@ -7,6 +7,11 @@
 
 #include "intern.h"
 
+//
+// Open one output buffer file into *buf.  With tempflg set it is a scratch file
+// (one per segment) that is unlink()ed immediately, so it has no name on disk but
+// stays usable until closed; with tempflg clear it is the real output file.
+//
 void create_buffer(FILE **buf, int tempflg)
 {
     *buf = fopen(tempflg ? ld.tfname : ld.ofilename, "w+");
@@ -16,6 +21,14 @@ void create_buffer(FILE **buf, int tempflg)
         unlink(ld.tfname);
 }
 
+//
+// Prepare for pass 2: open the real output file plus a scratch buffer for each
+// segment (and, with -r, for each segment's relocation), then fill in and write
+// the executable header from the sizes and flags computed so far.  The segments
+// are written to these separate buffers during pass 2 and stitched together by
+// finish_output().  a_entry is the entry point: the -e symbol if given, else the
+// start of text.
+//
 void setup_output(void)
 {
     int fd = mkstemp(ld.tfname);
@@ -60,6 +73,10 @@ void setup_output(void)
     fputhdr(&ld.filhdr, ld.outb);
 }
 
+//
+// Append the entire contents of a scratch segment buffer to the final output
+// file, then close (and thereby discard) the scratch buffer.
+//
 void copy_buffer(FILE *buf)
 {
     int c;
@@ -70,18 +87,27 @@ void copy_buffer(FILE *buf)
     fclose(buf);
 }
 
+//
+// Assemble the final image after pass 2.  First, for a pure (-n) or page-aligned
+// (-k) layout, pad const/text up to the next page boundary.  Then append the
+// segment buffers to the output in the order the header promised - const, text,
+// data (with -C moving const to sit just after text), optionally followed by the
+// relocation buffers, and finally the symbol table.
+//
 void finish_output(void)
 {
     if (ld.nflag || ld.alflag) {
         long n;
         if (ld.alflag) {
+            // Pad the const segment up to a 1024-word page boundary.
             n = ld.corigin;
             while (n & 01777) {
                 n++;
                 fputw(0, ld.coutb);
             }
         }
-        // now torigin points to the end of text
+
+        // Pad the text segment up to a page boundary (n is now the end of text).
         n = ld.torigin;
         while (n & 01777) {
             n++;
@@ -91,12 +117,16 @@ void finish_output(void)
             }
         }
     }
+
+    // Concatenate the segment images.  -C (Cflag) folds const in just after text.
     if (!ld.Cflag)
         copy_buffer(ld.coutb);
     copy_buffer(ld.toutb);
     if (ld.Cflag)
         copy_buffer(ld.coutb);
     copy_buffer(ld.doutb);
+
+    // With -r, the relocation records follow in the same segment order.
     if (ld.rflag) {
         if (!ld.Cflag)
             copy_buffer(ld.croutb);
@@ -105,6 +135,9 @@ void finish_output(void)
             copy_buffer(ld.croutb);
         copy_buffer(ld.droutb);
     }
+
+    // Finally the symbol table: the local symbols gathered in soutb, then every
+    // global symbol, then a terminating zero byte padded out to a whole word.
     if (!ld.sflag) {
         const struct nlist *p;
         if (!ld.xflag)

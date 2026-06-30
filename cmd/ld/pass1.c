@@ -7,6 +7,17 @@
 
 #include "intern.h"
 
+//
+// Read the current file's constant pool and merge it into the program-wide pool
+// (ld.constab), discarding duplicates so a constant used by many files is stored
+// once.  Each constant is two half-words of value (h, h2) plus two half-words of
+// relocation (hr, hr2); only non-relocatable constants (hr==hr2==0) can be shared,
+// since a relocatable one means something different in each file.
+//
+// As it goes it fills ld.newindex[]: for each of this file's constants, the index
+// of the pooled copy.  relocate_cursym() and relocate_halfword() use that map to
+// repoint constant references.  Returns how many *new* pool entries were added.
+//
 int load_constants(void)
 {
     int count;
@@ -23,10 +34,14 @@ int load_constants(void)
         c->hr  = fgeth(ld.reloc);
         c->hr2 = fgeth(ld.reloc);
         p      = c;
+
+        // A plain (non-relocatable) constant: look for an identical earlier one.
         if (!c->hr && !c->hr2)
             for (p = ld.constab; p < c; p++)
                 if (!p->hr2 && c->h == p->h && c->h2 == p->h2 && !p->hr)
                     break;
+
+        // p==c means no duplicate was found, so keep this new entry.
         if (p == c && ++c >= &ld.constab[NCONST])
             error(2, "constant table overflow");
         ld.newindex[ld.cindex++] = p - ld.constab;
@@ -36,7 +51,15 @@ int load_constants(void)
 }
 
 //
-// single file
+// Pass-1 scan of one object file located at byte offset `loc`.  This is the heart
+// of pass 1: it reads the header (accumulating segment sizes), merges the constant
+// pool, and reads the symbol table to build the global symbol table.
+//
+// `libflg` is set when the file is an archive member: such a member is only kept
+// if it actually defines a needed symbol (ndef > 0); otherwise everything it added
+// is rolled back at the end and 0 is returned.  `nloc` is the byte size already
+// reserved for this file's local symbols (e.g. its filename symbol).  Returns 1 if
+// the file was incorporated, 0 if a library member was skipped.
 //
 int scan_object(long loc, int libflg, int nloc)
 {
@@ -64,6 +87,9 @@ int scan_object(long loc, int libflg, int nloc)
         nsymbol = 1;
     else
         nsymbol = 0;
+
+    // Read the file's symbol table one entry at a time (into ld.cursym) until the
+    // terminating empty entry (symlen==1).
     for (;;) {
         int symlen = fgetsym(ld.text, &ld.cursym);
         int type;
@@ -72,10 +98,15 @@ int scan_object(long loc, int libflg, int nloc)
         if (symlen == 1)
             break;
         type = ld.cursym.n_type;
+
+        // -S drops absolute and debug symbols.
         if (ld.Sflag && ((type & N_TYPE) == N_ABS || (type & N_TYPE) > N_ACOMM)) {
             free(ld.cursym.n_name);
             continue;
         }
+
+        // Local (non-external) symbol: it isn't shared, so just count the bytes
+        // it will occupy in the output (unless we're discarding locals).
         if (!(type & N_EXT)) {
             if (!ld.sflag && !ld.xflag && (!ld.Xflag || ld.cursym.n_name[0] != LOCSYM)) {
                 nsymbol++;
@@ -84,27 +115,38 @@ int scan_object(long loc, int libflg, int nloc)
             free(ld.cursym.n_name);
             continue;
         }
+
+        // External symbol: relocate its value, then look it up in the global
+        // table.  enter_symbol returns 1 if this is the first sighting (nothing
+        // more to do); 0 if the name already exists and must be merged below.
         relocate_cursym();
         if (enter_symbol(lookup_symbol()))
             continue;
         free(ld.cursym.n_name);
         if (ld.cursym.n_type == N_EXT + N_UNDF)
-            continue;
+            continue; // this occurrence is just another reference
         sp = ld.lastsym;
+
+        // The existing entry is still unresolved (undefined or common).  Merge:
         if (sp->n_type == N_EXT + N_UNDF || sp->n_type == N_EXT + N_COMM ||
             sp->n_type == N_EXT + N_ACOMM) {
             if (ld.cursym.n_type == N_EXT + N_COMM || ld.cursym.n_type == N_EXT + N_ACOMM) {
+                // New one is also common: keep the larger size requested.
                 sp->n_type = ld.cursym.n_type;
                 if (ld.cursym.n_value > sp->n_value)
                     sp->n_value = ld.cursym.n_value;
             } else if (sp->n_type == N_EXT + N_UNDF || ld.cursym.n_type == N_EXT + N_DATA ||
                        ld.cursym.n_type == N_EXT + N_BSS) {
+                // New one is a real definition: adopt it (counts as a definition).
                 ndef++;
                 sp->n_type  = ld.cursym.n_type;
                 sp->n_value = ld.cursym.n_value;
             }
         }
     }
+
+    // Keep this file (always for a normal object; for a library member only if it
+    // defined something): fold its segment sizes into the running totals.
     if (!libflg || ndef) {
         ld.csize = add_size(ld.csize, (long)W * ld.coptsize[ld.nfile++], "const segment overflow");
         ld.tsize = add_size(ld.tsize, ld.filhdr.a_text, "text segment overflow");
@@ -133,7 +175,10 @@ int scan_object(long loc, int libflg, int nloc)
 }
 
 //
-// scan file to find defined symbols
+// Pass-1 handling of one command-line file argument `cp`.  open_input() decides
+// what it is, and we scan it accordingly: a plain object is scanned outright; an
+// ordinary archive is walked member by member; a randomized archive is resolved
+// through its table of contents, repeatedly, until no more members are needed.
 //
 void scan_file(char *cp)
 {
@@ -143,12 +188,15 @@ void scan_file(char *cp)
     case 0: // regular file
         scan_object(0L, 0, make_file_symbol(cp, 0));
         break;
+
     case 1: // regular archive
         nloc = W;
     archive:
+        // Step through every member; each header gives the offset of the next.
         while (scan_member(nloc))
             nloc += ld.archdr.ar_size + ARHDRSZ;
         break;
+
     case 2: // table of contents
         read_ranlib();
         while (load_ranlib_members())
@@ -157,6 +205,7 @@ void scan_file(char *cp)
         *ld.libp++ = -1;
         check_liblist();
         break;
+
     case 3: // out of date archive
         error(0, "out of date (warning)");
         nloc = W + ld.archdr.ar_size + ARHDRSZ;
@@ -167,7 +216,11 @@ void scan_file(char *cp)
 }
 
 //
-// scan files once to find symdefs
+// The whole of pass 1: walk the command line once.  A non-option argument is a
+// file to scan (scan_file); an option either sets a flag in `ld` or, for the ones
+// that take a value (-o, -u, -e, -D, -T, -l), consumes/uses that value.  -u and -e
+// pre-seed a symbol so it is treated as referenced (and, for -e, as the entry
+// point) even if nothing else mentions it.
 //
 void pass1(int argc, char **argv)
 {
@@ -186,6 +239,9 @@ void pass1(int argc, char **argv)
             scan_file(ap);
             continue;
         }
+
+        // An option: ap[1..] are the flag letters (most are single letters; a few
+        // take the following argv entry or the rest of this one).
         for (i = 1; ap[i]; i++) {
             switch (ap[i]) {
                 // output file name

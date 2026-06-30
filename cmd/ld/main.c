@@ -10,12 +10,22 @@
 
 #include "ld.h"
 
+//
+// Signal handler: if the user interrupts the link (Ctrl-C / kill), don't leave a
+// half-written output behind - run the normal cleanup and exit.
+//
 static void onsig(int sig)
 {
     (void)sig;
     cleanup_and_exit();
 }
 
+//
+// Program entry point.  With no arguments, print a usage line.  Otherwise arrange
+// for interrupts to clean up, then run the linker engine (ld_link) and exit with
+// its result code.  All the real work - option parsing and the two passes - is in
+// the engine; this file is just the thin command-line wrapper.
+//
 int main(int argc, char **argv)
 {
     if (argc == 1) {

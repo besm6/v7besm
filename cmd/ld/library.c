@@ -10,6 +10,19 @@
 
 #include "intern.h"
 
+//
+// Open an input argument `cp` and report what kind of thing it is.  Opens two
+// stdio handles on it: ld.text for the segment/symbol data and ld.reloc for the
+// relocation records (the two passes read from different positions, so each gets
+// its own handle).  A "-lfoo" argument is expanded into a library path like
+// /usr/local/lib/microbesm/libfoo.a using the ld.libname scratch buffer.
+//
+// Return value classifies the file so the caller knows how to read it:
+//      0 - a plain object file
+//      1 - an ordinary archive (must scan members one by one)
+//      2 - a randomized archive (has a "__.SYMDEF" table of contents)
+//      3 - a randomized archive whose contents are out of date (warn, scan it)
+//
 int open_input(char *cp)
 {
     int c;
@@ -28,40 +41,54 @@ int open_input(char *cp)
         ld.filname[c + LNAMLEN + 2] = '\0';
         ld.text                     = fopen(ld.filname, "r");
         if (!ld.text)
-            ld.filname += 4;
+            ld.filname += 4; // try the name without the "/usr.../" prefix
     }
     if (!ld.text && !(ld.text = fopen(ld.filname, "r")))
         error(2, "cannot open");
     ld.reloc = fopen(ld.filname, "r");
     if (!ld.reloc)
         error(2, "cannot open");
+
+    // The first word tells an archive (magic ARMAG) from a plain object file.
     if (!fgetint(ld.text, &c))
         error(1, "unexpected EOF");
     if (c != ARMAG)
         return 0; // regular file
     if (!fgetarhdr(ld.text, &ld.archdr))
         return 1; // regular archive
+    // A randomized archive begins with a special "__.SYMDEF" member.
     if (strncmp(ld.archdr.ar_name, SYMDEF, sizeof(ld.archdr.ar_name)))
         return 1; // regular archive
+    // It is only trustworthy if not older than the archive file itself.
     fstat(fileno(ld.text), &x);
     if (x.st_mtime > ld.archdr.ar_date + 2)
         return 3; // out of date archive
     return 2;     // randomized archive
 }
 
+//
+// Guard against overflowing the liblist[] array of remembered member offsets.
+//
 void check_liblist(void)
 {
     if (ld.libp >= &ld.liblist[LLSIZE])
         error(2, "library table overflow");
 }
 
+//
+// Pass-1 visit of one archive member at byte offset `nloc`.  Reads the member's
+// archive header, then scans it like an object file (scan_object) but in "library
+// mode": the member is pulled into the link only if it defines a symbol that is
+// currently needed.  When it is, its offset is remembered in liblist[] so pass 2
+// can find it again; returns 1 if a member was processed, 0 at end of archive.
+//
 int scan_member(long nloc)
 {
     char *cp;
 
     fseek(ld.text, nloc, 0);
     if (!fgetarhdr(ld.text, &ld.archdr)) {
-        *ld.libp++ = -1;
+        *ld.libp++ = -1; // mark end of this archive's member list
         check_liblist();
         return 0;
     }
@@ -78,6 +105,12 @@ int scan_member(long nloc)
     return 1;
 }
 
+//
+// Read a randomized archive's table of contents (the "__.SYMDEF" member) into
+// ld.rantab.  Each entry pairs an exported symbol name with the byte offset of
+// the member that defines it, so we can pull in members on demand without
+// scanning the whole archive.  Records the count in ld.tnum.
+//
 void read_ranlib(void)
 {
     struct ranlib *p;
@@ -94,6 +127,13 @@ void read_ranlib(void)
     error(2, "ranlib buffer overflow");
 }
 
+//
+// One sweep over the table of contents: for every entry whose symbol is
+// currently undefined, pull in the member that defines it (scan_member).  Pulling
+// in a member can satisfy some references but introduce new undefined ones, so
+// the caller calls this repeatedly until a sweep loads nothing more.  Returns
+// nonzero if this sweep loaded at least one member (i.e. ld.libp advanced).
+//
 int load_ranlib_members(void)
 {
     struct ranlib *p;
@@ -109,6 +149,9 @@ int load_ranlib_members(void)
     return (oldp != ld.libp);
 }
 
+//
+// Free the symbol-name strings allocated while reading the table of contents.
+//
 void free_ranlib(void)
 {
     struct ranlib *p;

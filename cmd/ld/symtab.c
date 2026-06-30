@@ -8,6 +8,16 @@
 
 #include "intern.h"
 
+//
+// Adjust the value of the symbol just read (ld.cursym) so it refers to the right
+// place once this file's segments are merged with everyone else's.  Which
+// adjustment depends on the symbol's segment type:
+//   - const: the constant pool was de-duplicated, so look up where this file's
+//     constant ended up via the newindex map.
+//   - text/data/bss/abss: shift by this file's relocation bias for that segment.
+//   - undefined / common: nothing to do yet (resolved later).
+//   - anything else external: treat as a plain absolute value.
+//
 void relocate_cursym(void)
 {
     int i;
@@ -48,6 +58,13 @@ void relocate_cursym(void)
         ld.cursym.n_type = N_EXT + N_ABS;
 }
 
+//
+// Insert ld.cursym into the symbol table, given the hash slot `hp` that
+// lookup_symbol() found for it.  If the slot is empty (a brand-new name), copy
+// the symbol into the next free symtab entry and return 1.  If the name is
+// already present, just remember it in ld.lastsym and return 0 (the caller then
+// merges the two definitions).
+//
 int enter_symbol(struct nlist **hp)
 {
     struct nlist *sp;
@@ -68,12 +85,23 @@ int enter_symbol(struct nlist **hp)
     }
 }
 
+//
+// Find the hash-table slot for the current symbol's name (ld.cursym.n_name).
+// Returns a pointer to that slot: it points to the matching symbol if the name
+// is already known, or to an empty slot (*slot == 0) where it should be added.
+//
+// The table uses open addressing: hash the name into a starting bucket, then
+// step forward one bucket at a time past any names that don't match (wrapping
+// around at the end) until we hit either our name or an empty slot.  The first
+// two buckets are reserved, hence "% NSYM + 2".
+//
 struct nlist **lookup_symbol(void)
 {
     int i;
     char *cp;
     struct nlist **hp;
 
+    // Fold the name's characters into a hash value i.
     i = 0;
     for (cp = ld.cursym.n_name; *cp; i = (i << 1) + *cp++)
         ;
@@ -86,14 +114,20 @@ struct nlist **lookup_symbol(void)
                 break;
             }
         if (clash) {
+            // Occupied by a different name: try the next bucket, wrapping.
             if (++hp >= &ld.hshtab[NSYM + 2])
                 hp = ld.hshtab;
         } else
-            break;
+            break; // found our name, or an empty slot
     }
     return hp;
 }
 
+//
+// Convenience wrapper: look up a plain C string `s` by stuffing it into
+// ld.cursym as an undefined external and calling lookup_symbol().  Used to find
+// or create the linker's own named symbols (e.g. "_etext", or -u/-e names).
+//
 struct nlist **lookup_name(char *s)
 {
     ld.cursym.n_len   = strlen(s) + 1;
@@ -103,6 +137,12 @@ struct nlist **lookup_name(char *s)
     return lookup_symbol();
 }
 
+//
+// Give the symbol `sp` a definition: set its type and value.  Used for the
+// linker's built-in boundary symbols (_etext, ...).  It must currently be an
+// undefined external; defining an already-defined name is an error.  A NULL `sp`
+// (the name was never referenced) is silently ignored.
+//
 void define_symbol(struct nlist *sp, long val, int type)
 {
     if (sp == 0)
@@ -116,6 +156,12 @@ void define_symbol(struct nlist *sp, long val, int type)
     sp->n_value = val;
 }
 
+//
+// Map a file-local symbol number `sn` to the global symbol it stands for.
+// During pass 2 a file's external references point at its local symbols by
+// number; the `local` array (entries 0..lp-1) records the number->symbol pairing
+// built earlier for this file.  A miss means the object is malformed.
+//
 struct nlist *lookup_local(const struct local *lp, int sn)
 {
     const struct local *clp;
@@ -134,13 +180,23 @@ struct nlist *lookup_local(const struct local *lp, int sn)
     return 0;
 }
 
+//
+// Produce a debugger "file name" symbol (type N_FN) for input file `s`, so the
+// symbol table records which file the following symbols came from.  Any
+// directory prefix is stripped, keeping just the base name.
+//
+// Two modes: with wflag==0 it only returns how many bytes such a symbol *would*
+// occupy (so pass 1 can budget for it); with wflag!=0 it actually writes the
+// symbol to the output.  Either way it returns that byte size, or 0 when symbols
+// are being discarded (-s/-x).
+//
 int make_file_symbol(char *s, int wflag)
 {
     char *p;
 
     if (ld.sflag || ld.xflag)
         return 0;
-    for (p = s; *p;)
+    for (p = s; *p;) // strip everything up to the last '/'
         if (*p++ == '/')
             s = p;
     if (!wflag)

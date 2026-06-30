@@ -5,6 +5,12 @@
 //
 #include "intern.h"
 
+//
+// Translate a symbol's type (which segment it lives in) into the matching
+// relocation-type code stored in a relocation record.  Used when a reference
+// that was "to an external symbol" becomes "relative to that symbol's segment"
+// once the symbol is known.
+//
 int reloc_type(int stype)
 {
     switch (stype & N_TYPE) {
@@ -35,6 +41,22 @@ int reloc_type(int stype)
     }
 }
 
+//
+// The workhorse of relocation.  It patches one 24-bit half-word `t` (a machine
+// instruction or a constant) using its relocation record `r`, returning the fixed
+// half-word in *pt and the (possibly rewritten) record in *pr.
+//
+// It works in three steps:
+//   1. Pull the address field out of `t`.  The record's low bits say how wide it
+//      is - full word, 15-bit long, or 12-bit short - and the RSHIFT form holds
+//      the top bits of an address that was split across two instructions.
+//   2. Work out `ad`, the amount to add.  The record's REXT bits say what the
+//      field refers to: a particular segment (add that segment's base), or an
+//      external symbol (REXT).  For an external symbol we look it up; if it is
+//      still undefined we just renumber the reference for the output, otherwise
+//      we add the symbol's now-known address and record its segment.
+//   3. Put (a + ad) back into the same field width.
+//
 void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *pr)
 {
     long a, ad;
@@ -44,11 +66,10 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
     if (ld.trace > 2)
         printf("%08lx %08lx", t, r);
 
-    // extract address from command
-
+    // Step 1: extract the current address field from the instruction.
     switch ((int)r & RSHORT) {
     case 0:
-        a = t & 0777777777;
+        a = t & 0777777777; // full 27-bit address
         break;
     case RLONG:
         a = t & 077777; // long address - 15 bits
@@ -57,53 +78,57 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
         a = t & 07777; // truncated short address - 12 bits
         break;
     case RSHORT:
-        a = t & 07777;
+        a = t & 07777; // short address - 12 bits
         break;
     case RSHIFT:
-        a = t & 077777;
-        a <<= 12;
+        a = t & 077777; // high half of a split address...
+        a <<= 12;       // ...shifted up into place
         break;
     default:
         a = 0;
         break;
     }
 
-    // compute address shift `ad'
-    // update relocation word
-
+    // Step 2: decide how much to add (ad), based on what the field points at.
     ad = 0;
     switch ((int)r & REXT) {
     case RCONST:
+        // The constant pool was de-duplicated; redirect to the pooled slot.
         i  = ld.newindex[a - HDRSZ / W + ld.cindex];
         ad = ld.cbasaddr + i - a;
         break;
     case RTEXT:
-        ad = ld.ctrel;
+        ad = ld.ctrel; // add the text segment base
         break;
     case RDATA:
-        ad = ld.cdrel;
+        ad = ld.cdrel; // add the data segment base
         break;
     case RBSS:
-        ad = ld.cbrel;
+        ad = ld.cbrel; // add the bss segment base
         break;
     case RABSS:
-        ad = ld.carel;
+        ad = ld.carel; // add the abss segment base
         break;
     case REXT:
+        // A reference to an external symbol, named by an index packed into the
+        // record.  Map that index to the global symbol it stands for.
         sp = lookup_local(lp, (int)RGETIX(r));
         r &= RSHORT;
         if (sp->n_type == N_EXT + N_UNDF || sp->n_type == N_EXT + N_COMM ||
             sp->n_type == N_EXT + N_ACOMM) {
+            // Still undefined: keep it external in the output, but renumber it to
+            // its slot in the final global symbol table.
             r |= REXT | RPUTIX(ld.nsym + (sp - ld.symtab));
             break;
         }
+        // Resolved: bake in the symbol's address and tag the record with the
+        // segment the symbol ended up in.
         r |= reloc_type(sp->n_type);
         ad = sp->n_value;
         break;
     }
 
-    // add updated address to command
-
+    // Step 3: write (a + ad) back into the same address field of `t`.
     switch ((int)r & RSHORT) {
     case 0:
         t &= ~0777777777;
@@ -119,7 +144,7 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
         break;
     case RSHIFT:
         t &= ~077777;
-        t |= (a + ad) >> 12 & 077777;
+        t |= (a + ad) >> 12 & 077777; // store back only the high bits
         break;
     case RTRUNC:
         t &= ~07777;
@@ -134,6 +159,12 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
     *pr = r;
 }
 
+//
+// Relocate this file's whole constant pool and write it to the const output
+// buffer.  Each pooled constant is two half-words (h, h2) with their own
+// relocation records (hr, hr2); both halves go through relocate_halfword.  When
+// -r is in effect the updated records are written to the const relocation buffer.
+//
 void relocate_constants(const struct local *lp)
 {
     long r, t;
