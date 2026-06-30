@@ -117,7 +117,7 @@ static int ld_cleanup(void)
     return delarg;
 }
 
-void delexit(void)
+void cleanup_and_exit(void)
 {
     exit(ld_cleanup());
 }
@@ -135,11 +135,11 @@ void error(int n, char *fmt, ...)
     va_end(ap);
     printf("\n");
     if (n > 1)
-        delexit();
+        cleanup_and_exit();
     errlev = n;
 }
 
-void readhdr(long loc)
+void read_header(long loc)
 {
     fseek(text, loc, 0);
     if (!fgethdr(text, &filhdr))
@@ -162,7 +162,7 @@ void readhdr(long loc)
     carel = -BADDR - (filhdr.a_const + filhdr.a_text + filhdr.a_data + filhdr.a_bss) / W;
 }
 
-long add(long a, long b, char *s)
+long add_size(long a, long b, char *s)
 {
     a += b;
     if (a >= 04000000L * W)
@@ -170,7 +170,7 @@ long add(long a, long b, char *s)
     return a;
 }
 
-long addlong(long a, long b, char *s)
+long add_size_long(long a, long b, char *s)
 {
     a += b;
     if (a >= 01000000000L * W)
@@ -178,7 +178,7 @@ long addlong(long a, long b, char *s)
     return a;
 }
 
-void middle(void)
+void assign_addresses(void)
 {
     struct nlist *sp;
     const struct nlist *symp;
@@ -186,11 +186,11 @@ void middle(void)
     int nund;
     long cmorigin, acmorigin;
 
-    p_econst = *slookup("_econst");
-    p_etext  = *slookup("_etext");
-    p_edata  = *slookup("_edata");
-    p_ebss   = *slookup("_ebss");
-    p_end    = *slookup("_end");
+    p_econst = *lookup_name("_econst");
+    p_etext  = *lookup_name("_etext");
+    p_edata  = *lookup_name("_edata");
+    p_ebss   = *lookup_name("_ebss");
+    p_end    = *lookup_name("_end");
 
     /*
      * If there are any undefined symbols, save the relocation bits.
@@ -215,21 +215,21 @@ void middle(void)
     cmsize  = 0;
     acmsize = 0;
     if (dflag || !rflag) {
-        ldrsym(p_econst, csize / W, N_EXT + N_CONST);
-        ldrsym(p_etext, tsize / W, N_EXT + N_TEXT);
-        ldrsym(p_edata, dsize / W, N_EXT + N_DATA);
-        ldrsym(p_ebss, bsize / W, N_EXT + N_BSS);
-        ldrsym(p_end, asize / W, N_EXT + N_ABSS);
+        define_symbol(p_econst, csize / W, N_EXT + N_CONST);
+        define_symbol(p_etext, tsize / W, N_EXT + N_TEXT);
+        define_symbol(p_edata, dsize / W, N_EXT + N_DATA);
+        define_symbol(p_ebss, bsize / W, N_EXT + N_BSS);
+        define_symbol(p_end, asize / W, N_EXT + N_ABSS);
         for (sp = symtab; sp < symp; sp++) {
             long t;
             if ((sp->n_type & N_TYPE) == N_COMM) {
                 t           = sp->n_value;
                 sp->n_value = cmsize / W;
-                cmsize      = add(cmsize, (long)t * W, "bss segment overflow");
+                cmsize      = add_size(cmsize, (long)t * W, "bss segment overflow");
             } else if ((sp->n_type & N_TYPE) == N_ACOMM) {
                 t           = sp->n_value;
                 sp->n_value = acmsize / W;
-                acmsize     = addlong(acmsize, (long)t * W, "abss segment overflow");
+                acmsize     = add_size_long(acmsize, (long)t * W, "abss segment overflow");
             }
         }
     }
@@ -303,12 +303,12 @@ void middle(void)
     }
     if (sflag || xflag)
         ssize = 0;
-    bsize = add(bsize, cmsize, "bss segment overflow");
-    asize = addlong(asize, acmsize, "abss segment overflow");
+    bsize = add_size(bsize, cmsize, "bss segment overflow");
+    asize = add_size_long(asize, acmsize, "abss segment overflow");
 
     /*
      * Compute ssize; add length of local symbols, if need,
-     * and one more zero byte. Alignment will be taken at setupout.
+     * and one more zero byte. Alignment will be taken at setup_output.
      */
     if (sflag)
         ssize = 0;
@@ -338,12 +338,12 @@ int ld_link(int argc, char **argv)
     /*
      * Process the name table.
      */
-    middle();
+    assign_addresses();
 
     /*
      * Create buffer files and write the header.
      */
-    setupout();
+    setup_output();
 
     /*
      * Second pass: fix up references.
@@ -353,7 +353,7 @@ int ld_link(int argc, char **argv)
     /*
      * Flush the buffers.
      */
-    finishout();
+    finish_output();
 
     if (!ofilfnd) {
         unlink("a.out");

@@ -13,7 +13,7 @@
 static void onsig(int sig)
 {
     (void)sig;
-    delexit();
+    cleanup_and_exit();
 }
 
 int main(int argc, char **argv)

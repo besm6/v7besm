@@ -5,7 +5,7 @@
 //
 #include "intern.h"
 
-int reltype(int stype)
+int reloc_type(int stype)
 {
     switch (stype & N_TYPE) {
     case N_UNDF:
@@ -35,7 +35,7 @@ int reltype(int stype)
     }
 }
 
-void relhalf(const struct local *lp, long t, long r, long *pt, long *pr)
+void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *pr)
 {
     long a, ad;
     int i;
@@ -90,14 +90,14 @@ void relhalf(const struct local *lp, long t, long r, long *pt, long *pr)
         ad = carel;
         break;
     case REXT:
-        sp = lookloc(lp, (int)RGETIX(r));
+        sp = lookup_local(lp, (int)RGETIX(r));
         r &= RSHORT;
         if (sp->n_type == N_EXT + N_UNDF || sp->n_type == N_EXT + N_COMM ||
             sp->n_type == N_EXT + N_ACOMM) {
             r |= REXT | RPUTIX(nsym + (sp - symtab));
             break;
         }
-        r |= reltype(sp->n_type);
+        r |= reloc_type(sp->n_type);
         ad = sp->n_value;
         break;
     }
@@ -134,7 +134,7 @@ void relhalf(const struct local *lp, long t, long r, long *pt, long *pr)
     *pr = r;
 }
 
-void relocconst(const struct local *lp)
+void relocate_constants(const struct local *lp)
 {
     long r, t;
     struct constab *p;
@@ -143,18 +143,18 @@ void relocconst(const struct local *lp)
     p = &constab[nconst];
     c = p + coptsize[nfile];
     for (; p < c; p++) {
-        relhalf(lp, p->h, p->hr, &t, &r);
+        relocate_halfword(lp, p->h, p->hr, &t, &r);
         fputh(t, coutb);
         if (rflag)
             fputh(r, croutb);
-        relhalf(lp, p->h2, p->hr2, &t, &r);
+        relocate_halfword(lp, p->h2, p->hr2, &t, &r);
         fputh(t, coutb);
         if (rflag)
             fputh(r, croutb);
     }
 }
 
-void relocate(const struct local *lp, FILE *b1, FILE *b2, long len)
+void relocate_segment(const struct local *lp, FILE *b1, FILE *b2, long len)
 {
     long r, t;
 
@@ -162,7 +162,7 @@ void relocate(const struct local *lp, FILE *b1, FILE *b2, long len)
     while (len--) {
         t = fgeth(text);
         r = fgeth(reloc);
-        relhalf(lp, t, r, &t, &r);
+        relocate_halfword(lp, t, r, &t, &r);
         fputh(t, b1);
         if (rflag)
             fputh(r, b2);

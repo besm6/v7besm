@@ -7,7 +7,7 @@
 
 #include "intern.h"
 
-void tcreat(FILE **buf, int tempflg)
+void create_buffer(FILE **buf, int tempflg)
 {
     *buf = fopen(tempflg ? tfname : ofilename, "w+");
     if (!*buf)
@@ -16,7 +16,7 @@ void tcreat(FILE **buf, int tempflg)
         unlink(tfname);
 }
 
-void setupout(void)
+void setup_output(void)
 {
     int fd = mkstemp(tfname);
     if (fd == -1) {
@@ -24,16 +24,16 @@ void setupout(void)
     } else {
         close(fd);
     }
-    tcreat(&outb, 0);
-    tcreat(&coutb, 1);
-    tcreat(&toutb, 1);
-    tcreat(&doutb, 1);
+    create_buffer(&outb, 0);
+    create_buffer(&coutb, 1);
+    create_buffer(&toutb, 1);
+    create_buffer(&doutb, 1);
     if (!sflag || !xflag)
-        tcreat(&soutb, 1);
+        create_buffer(&soutb, 1);
     if (rflag) {
-        tcreat(&croutb, 1);
-        tcreat(&troutb, 1);
-        tcreat(&droutb, 1);
+        create_buffer(&croutb, 1);
+        create_buffer(&troutb, 1);
+        create_buffer(&droutb, 1);
     }
     filhdr.a_magic = nflag ? NMAGIC : alflag ? AMAGIC : FMAGIC;
     filhdr.a_const = csize;
@@ -60,7 +60,7 @@ void setupout(void)
     fputhdr(&filhdr, outb);
 }
 
-void copy(FILE *buf)
+void copy_buffer(FILE *buf)
 {
     int c;
 
@@ -70,7 +70,7 @@ void copy(FILE *buf)
     fclose(buf);
 }
 
-void finishout(void)
+void finish_output(void)
 {
     if (nflag || alflag) {
         long n;
@@ -92,23 +92,23 @@ void finishout(void)
         }
     }
     if (!Cflag)
-        copy(coutb);
-    copy(toutb);
+        copy_buffer(coutb);
+    copy_buffer(toutb);
     if (Cflag)
-        copy(coutb);
-    copy(doutb);
+        copy_buffer(coutb);
+    copy_buffer(doutb);
     if (rflag) {
         if (!Cflag)
-            copy(croutb);
-        copy(troutb);
+            copy_buffer(croutb);
+        copy_buffer(troutb);
         if (Cflag)
-            copy(croutb);
-        copy(droutb);
+            copy_buffer(croutb);
+        copy_buffer(droutb);
     }
     if (!sflag) {
         const struct nlist *p;
         if (!xflag)
-            copy(soutb);
+            copy_buffer(soutb);
         for (p = symtab; p < &symtab[symindex]; ++p)
             fputsym(p, outb);
         putc(0, outb);

@@ -7,7 +7,7 @@
 
 #include "intern.h"
 
-int passconst(void)
+int load_constants(void)
 {
     int count;
     int save;
@@ -38,20 +38,20 @@ int passconst(void)
 /*
  * single file
  */
-int load1(long loc, int libflg, int nloc)
+int scan_object(long loc, int libflg, int nloc)
 {
     struct nlist *sp;
     int savindex, savcindex;
     int ndef, nsymbol;
 
-    readhdr(loc);
+    read_header(loc);
     if (filhdr.a_flag & RELFLG) {
         error(1, "file stripped");
         return 0;
     }
     savcindex = cindex;
     fseek(reloc, loc + N_SYMOFF(filhdr), 0);
-    coptsize[nfile] = passconst();
+    coptsize[nfile] = load_constants();
     ctrel += tsize / W;
     cdrel += dsize / W;
     cbrel += bsize / W;
@@ -84,8 +84,8 @@ int load1(long loc, int libflg, int nloc)
             free(cursym.n_name);
             continue;
         }
-        symreloc();
-        if (enter(lookup()))
+        relocate_cursym();
+        if (enter_symbol(lookup_symbol()))
             continue;
         free(cursym.n_name);
         if (cursym.n_type == N_EXT + N_UNDF)
@@ -106,12 +106,12 @@ int load1(long loc, int libflg, int nloc)
         }
     }
     if (!libflg || ndef) {
-        csize = add(csize, (long)W * coptsize[nfile++], "const segment overflow");
-        tsize = add(tsize, filhdr.a_text, "text segment overflow");
-        dsize = add(dsize, filhdr.a_data, "data segment overflow");
-        bsize = add(bsize, filhdr.a_bss, "bss segment overflow");
-        asize = addlong(asize, filhdr.a_abss, "abss segment overflow");
-        ssize = add(ssize, (long)nloc, "symbol table overflow");
+        csize = add_size(csize, (long)W * coptsize[nfile++], "const segment overflow");
+        tsize = add_size(tsize, filhdr.a_text, "text segment overflow");
+        dsize = add_size(dsize, filhdr.a_data, "data segment overflow");
+        bsize = add_size(bsize, filhdr.a_bss, "bss segment overflow");
+        asize = add_size_long(asize, filhdr.a_abss, "abss segment overflow");
+        ssize = add_size(ssize, (long)nloc, "symbol table overflow");
         nsym += nsymbol;
         return 1;
     }
@@ -135,27 +135,27 @@ int load1(long loc, int libflg, int nloc)
 /*
  * scan file to find defined symbols
  */
-void load1arg(char *cp)
+void scan_file(char *cp)
 {
     long nloc;
 
-    switch (getfile(cp)) {
+    switch (open_input(cp)) {
     case 0: /* regular file */
-        load1(0L, 0, mkfsym(cp, 0));
+        scan_object(0L, 0, make_file_symbol(cp, 0));
         break;
     case 1: /* regular archive */
         nloc = W;
     archive:
-        while (step(nloc))
+        while (scan_member(nloc))
             nloc += archdr.ar_size + ARHDRSZ;
         break;
     case 2: /* table of contents */
-        getrantab();
-        while (ldrand())
+        read_ranlib();
+        while (load_ranlib_members())
             ;
-        freerantab();
+        free_ranlib();
         *libp++ = -1;
-        checklibp();
+        check_liblist();
         break;
     case 3: /* out of date archive */
         error(0, "out of date (warning)");
@@ -183,7 +183,7 @@ void pass1(int argc, char **argv)
         ap      = *p++;
 
         if (*ap != '-') {
-            load1arg(ap);
+            scan_file(ap);
             continue;
         }
         for (i = 1; ap[i]; i++) {
@@ -200,14 +200,14 @@ void pass1(int argc, char **argv)
             case 'u':
                 if (++c >= argc)
                     error(2, "-u: argument missed");
-                enter(slookup(*p++));
+                enter_symbol(lookup_name(*p++));
                 continue;
 
                 /* 'entry' */
             case 'e':
                 if (++c >= argc)
                     error(2, "-e: argument missed");
-                enter(slookup(*p++));
+                enter_symbol(lookup_name(*p++));
                 entrypt = lastsym;
                 continue;
 
@@ -230,7 +230,7 @@ void pass1(int argc, char **argv)
             case 'l':
                 save  = ap[--i];
                 ap[i] = '-';
-                load1arg(&ap[i]);
+                scan_file(&ap[i]);
                 ap[i] = save;
                 break;
 

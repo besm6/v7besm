@@ -8,14 +8,14 @@
 
 #include "intern.h"
 
-void load2(long loc)
+void relocate_object(long loc)
 {
     struct nlist *sp;
     struct local *lp;
     int symno;
     long count;
 
-    readhdr(loc);
+    read_header(loc);
     ctrel += torigin;
     cdrel += dorigin;
     cbrel += borigin;
@@ -38,7 +38,7 @@ void load2(long loc)
             error(2, "out of memory");
         if (count == 1)
             break;
-        symreloc();
+        relocate_cursym();
         int type = cursym.n_type;
         if (Sflag && ((type & N_TYPE) == N_ABS || (type & N_TYPE) > N_ACOMM)) {
             free(cursym.n_name);
@@ -50,7 +50,7 @@ void load2(long loc)
             free(cursym.n_name);
             continue;
         }
-        if (!(sp = *lookup()))
+        if (!(sp = *lookup_symbol()))
             error(2, "internal error: symbol not found");
         free(cursym.n_name);
         if (cursym.n_type == N_EXT + N_UNDF || cursym.n_type == N_EXT + N_COMM ||
@@ -71,19 +71,19 @@ void load2(long loc)
 
     if (trace > 1)
         printf("** CONST **\n");
-    relocconst(lp);
+    relocate_constants(lp);
 
     if (trace > 1)
         printf("** TEXT **\n");
     fseek(text, loc + filhdr.a_const, 0);
     fseek(reloc, count + filhdr.a_const, 0);
-    relocate(lp, toutb, troutb, filhdr.a_text);
+    relocate_segment(lp, toutb, troutb, filhdr.a_text);
 
     if (trace > 1)
         printf("** DATA **\n");
     fseek(text, loc + filhdr.a_const + filhdr.a_text, 0);
     fseek(reloc, count + filhdr.a_const + filhdr.a_text, 0);
-    relocate(lp, doutb, droutb, filhdr.a_data);
+    relocate_segment(lp, doutb, droutb, filhdr.a_data);
 
     nconst += coptsize[nfile];
     cindex += filhdr.a_const / W;
@@ -95,13 +95,13 @@ void load2(long loc)
     nfile++;
 }
 
-void load2arg(char *acp)
+void relocate_file(char *acp)
 {
-    if (getfile(acp) == 0) {
+    if (open_input(acp) == 0) {
         if (trace)
             printf("%s:\n", acp);
-        mkfsym(acp, 1);
-        load2(0L);
+        make_file_symbol(acp, 1);
+        relocate_object(0L);
     } else {
         /* scan archive members referenced */
         const char *arname = acp;
@@ -118,9 +118,9 @@ void load2arg(char *acp)
             acp[sizeof(archdr.ar_name)] = '\0';
             if (trace)
                 printf("%s(%s):\n", arname, acp);
-            mkfsym(acp, 1);
+            make_file_symbol(acp, 1);
             free(acp);
-            load2(*lp + ARHDRSZ);
+            relocate_object(*lp + ARHDRSZ);
         }
         libp = ++lp;
     }
@@ -142,7 +142,7 @@ void pass2(int argc, char **argv)
     for (c = 1; c < argc; c++) {
         ap = *p++;
         if (*ap != '-') {
-            load2arg(ap);
+            relocate_file(ap);
             continue;
         }
         for (i = 1; ap[i]; i++) {
@@ -170,7 +170,7 @@ void pass2(int argc, char **argv)
 
             case 'l':
                 ap[--i] = '-';
-                load2arg(&ap[i]);
+                relocate_file(&ap[i]);
                 break;
             }
             break;

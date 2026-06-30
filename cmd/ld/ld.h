@@ -17,7 +17,7 @@ extern "C" {
 int ld_link(int argc, char **argv);
 
 // Clean up and terminate; installed as the SIGINT/SIGTERM handler by main.c.
-void delexit(void);
+void cleanup_and_exit(void);
 
 #ifdef __cplusplus
 }

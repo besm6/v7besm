@@ -6,7 +6,7 @@
 // array and check it word by word.  The program is a single long-address jump
 // to a text label; linking it at a non-default base relocates the address and
 // must preserve the instruction's opcode -- the regression check for LD-2 (the
-// 15-bit long-address mask in relhalf()): a 20-bit mask would clear the opcode
+// 15-bit long-address mask in relocate_halfword()): a 20-bit mask would clear the opcode
 // bits of the long instruction while relocating.
 //
 // The ld engine carries scattered, non-reset globals, so the suite performs a

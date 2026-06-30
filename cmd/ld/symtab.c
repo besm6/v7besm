@@ -8,7 +8,7 @@
 
 #include "intern.h"
 
-void symreloc(void)
+void relocate_cursym(void)
 {
     int i;
 
@@ -48,7 +48,7 @@ void symreloc(void)
         cursym.n_type = N_EXT + N_ABS;
 }
 
-int enter(struct nlist **hp)
+int enter_symbol(struct nlist **hp)
 {
     struct nlist *sp;
 
@@ -68,7 +68,7 @@ int enter(struct nlist **hp)
     }
 }
 
-struct nlist **lookup(void)
+struct nlist **lookup_symbol(void)
 {
     int i;
     char *cp;
@@ -94,16 +94,16 @@ struct nlist **lookup(void)
     return hp;
 }
 
-struct nlist **slookup(char *s)
+struct nlist **lookup_name(char *s)
 {
     cursym.n_len   = strlen(s) + 1;
     cursym.n_name  = s;
     cursym.n_type  = N_EXT + N_UNDF;
     cursym.n_value = 0;
-    return lookup();
+    return lookup_symbol();
 }
 
-void ldrsym(struct nlist *sp, long val, int type)
+void define_symbol(struct nlist *sp, long val, int type)
 {
     if (sp == 0)
         return;
@@ -116,7 +116,7 @@ void ldrsym(struct nlist *sp, long val, int type)
     sp->n_value = val;
 }
 
-struct nlist *lookloc(const struct local *lp, int sn)
+struct nlist *lookup_local(const struct local *lp, int sn)
 {
     const struct local *clp;
 
@@ -134,7 +134,7 @@ struct nlist *lookloc(const struct local *lp, int sn)
     return 0;
 }
 
-int mkfsym(char *s, int wflag)
+int make_file_symbol(char *s, int wflag)
 {
     char *p;
 

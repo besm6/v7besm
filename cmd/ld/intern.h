@@ -115,49 +115,49 @@ extern long aorigin;
  */
 /* ld.c */
 void error(int n, char *fmt, ...);
-void readhdr(long loc);
-long add(long a, long b, char *s);
-long addlong(long a, long b, char *s);
-void middle(void);
+void read_header(long loc);
+long add_size(long a, long b, char *s);
+long add_size_long(long a, long b, char *s);
+void assign_addresses(void);
 
 /* symtab.c */
-void symreloc(void);
-int enter(struct nlist **hp);
-struct nlist **lookup(void);
-struct nlist **slookup(char *s);
-void ldrsym(struct nlist *sp, long val, int type);
-struct nlist *lookloc(const struct local *lp, int sn);
-int mkfsym(char *s, int wflag);
+void relocate_cursym(void);
+int enter_symbol(struct nlist **hp);
+struct nlist **lookup_symbol(void);
+struct nlist **lookup_name(char *s);
+void define_symbol(struct nlist *sp, long val, int type);
+struct nlist *lookup_local(const struct local *lp, int sn);
+int make_file_symbol(char *s, int wflag);
 
 /* library.c */
-int getfile(char *cp);
-void checklibp(void);
-int step(long nloc);
-void getrantab(void);
-int ldrand(void);
-void freerantab(void);
+int open_input(char *cp);
+void check_liblist(void);
+int scan_member(long nloc);
+void read_ranlib(void);
+int load_ranlib_members(void);
+void free_ranlib(void);
 
 /* pass1.c */
-int passconst(void);
-int load1(long loc, int libflg, int nloc);
-void load1arg(char *cp);
+int load_constants(void);
+int scan_object(long loc, int libflg, int nloc);
+void scan_file(char *cp);
 void pass1(int argc, char **argv);
 
 /* pass2.c */
-void load2(long loc);
-void load2arg(char *acp);
+void relocate_object(long loc);
+void relocate_file(char *acp);
 void pass2(int argc, char **argv);
 
 /* reloc.c */
-int reltype(int stype);
-void relhalf(const struct local *lp, long t, long r, long *pt, long *pr);
-void relocconst(const struct local *lp);
-void relocate(const struct local *lp, FILE *b1, FILE *b2, long len);
+int reloc_type(int stype);
+void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *pr);
+void relocate_constants(const struct local *lp);
+void relocate_segment(const struct local *lp, FILE *b1, FILE *b2, long len);
 
 /* output.c */
-void tcreat(FILE **buf, int tempflg);
-void setupout(void);
-void copy(FILE *buf);
-void finishout(void);
+void create_buffer(FILE **buf, int tempflg);
+void setup_output(void);
+void copy_buffer(FILE *buf);
+void finish_output(void);
 
 #endif // BESM6_LD_INTERN_H

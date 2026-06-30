@@ -10,7 +10,7 @@
 
 #include "intern.h"
 
-int getfile(char *cp)
+int open_input(char *cp)
 {
     int c;
     struct stat x;
@@ -49,20 +49,20 @@ int getfile(char *cp)
     return 2;     /* randomized archive */
 }
 
-void checklibp(void)
+void check_liblist(void)
 {
     if (libp >= &liblist[LLSIZE])
         error(2, "library table overflow");
 }
 
-int step(long nloc)
+int scan_member(long nloc)
 {
     char *cp;
 
     fseek(text, nloc, 0);
     if (!fgetarhdr(text, &archdr)) {
         *libp++ = -1;
-        checklibp();
+        check_liblist();
         return 0;
     }
     cp = malloc(sizeof(archdr.ar_name) + 1);
@@ -71,14 +71,14 @@ int step(long nloc)
     // cppcheck-suppress nullPointerOutOfMemory
     strncpy(cp, archdr.ar_name, sizeof(archdr.ar_name));
     cp[sizeof(archdr.ar_name)] = '\0';
-    if (load1(nloc + ARHDRSZ, 1, mkfsym(cp, 0)))
+    if (scan_object(nloc + ARHDRSZ, 1, make_file_symbol(cp, 0)))
         *libp++ = nloc;
     free(cp);
-    checklibp();
+    check_liblist();
     return 1;
 }
 
-void getrantab(void)
+void read_ranlib(void)
 {
     struct ranlib *p;
 
@@ -94,22 +94,22 @@ void getrantab(void)
     error(2, "ranlib buffer overflow");
 }
 
-int ldrand(void)
+int load_ranlib_members(void)
 {
     struct ranlib *p;
     const long *oldp = libp;
 
     for (p = rantab; p < rantab + tnum; ++p) {
-        struct nlist **pp = slookup(p->ran_name);
+        struct nlist **pp = lookup_name(p->ran_name);
         if (!*pp)
             continue;
         if ((*pp)->n_type == N_EXT + N_UNDF)
-            step(p->ran_off);
+            scan_member(p->ran_off);
     }
     return (oldp != libp);
 }
 
-void freerantab(void)
+void free_ranlib(void)
 {
     struct ranlib *p;
 
