@@ -32,9 +32,9 @@
 
 #include "ld.h"
 
-#define W      6           /* длина слова в байтах */
-#define LOCSYM 'L'         /* убрать локальные символы, нач. с 'L' */
-#define BADDR  (HDRSZ / W) /* память 0...BADDR-1 свободна */
+#define W      6           /* word length in bytes */
+#define LOCSYM 'L'         /* discard local symbols starting with 'L' */
+#define BADDR  (HDRSZ / W) /* memory 0...BADDR-1 is free */
 #define SYMDEF "__.SYMDEF"
 
 struct exec filhdr; /* aout header */
@@ -62,20 +62,20 @@ struct local {
 
 struct constab {
     long h, h2, hr, hr2;
-} constab[NCONST]; /* константы */
+} constab[NCONST]; /* constants */
 
-struct nlist cursym;            /* текущий символ */
-struct nlist symtab[NSYM];      /* собственно символы */
-struct nlist **symhash[NSYM];   /* указатели на хэш-таблицу */
-struct nlist *lastsym;          /* последний введенный символ */
-struct nlist *hshtab[NSYM + 2]; /* хэш-таблица для символов */
+struct nlist cursym;            /* current symbol */
+struct nlist symtab[NSYM];      /* the symbols themselves */
+struct nlist **symhash[NSYM];   /* pointers to hash table */
+struct nlist *lastsym;          /* last entered symbol */
+struct nlist *hshtab[NSYM + 2]; /* hash table for symbols */
 struct local local[NSYMPR];
-int symindex;         /* следующий свободный вход таб. символов */
-int newindex[NCONST]; /* таблица переиндексации констант */
-int nconst;           /* след. своб. вход в constab */
-int cindex;           /* тек. индекс в newindex */
-int nfile;            /* номер тек. файла (индекс в coptsize */
-int coptsize[LLSIZE]; /* длины сегментов конст. после оптимизации */
+int symindex;         /* next free entry in symbol table */
+int newindex[NCONST]; /* constant reindexing table */
+int nconst;           /* next free entry in constab */
+int cindex;           /* current index in newindex */
+int nfile;            /* current file number (index into coptsize) */
+int coptsize[LLSIZE]; /* const segment lengths after optimization */
 long basaddr = BADDR; /* base address of loading */
 struct ranlib rantab[RANTABSZ];
 int tnum; /* number of elements in rantab */
@@ -100,7 +100,7 @@ int arflag; /* original copy of rflag */
 int sflag;  /* discard all symbols */
 int nflag;  /* pure procedure */
 int dflag;  /* define common even with rflag */
-int alflag; /* const и text выровнены на границу листа */
+int alflag; /* const and text aligned on page boundary */
 
 /*
  * cumulative sizes set in pass 1
@@ -133,9 +133,9 @@ long borigin;
 long aorigin;
 
 /*
- * Завершающая уборка: удалить временный l.out и установить права на
- * результат.  Возвращает код возврата, не вызывая exit(), чтобы движок
- * (ld_link) можно было вызывать из теста, не завершая процесс.
+ * Final cleanup: remove the temporary l.out and set permissions on the
+ * result.  Returns the exit code without calling exit(), so the engine
+ * (ld_link) can be invoked from a test without terminating the process.
  */
 static int ld_cleanup(void)
 {
@@ -778,11 +778,11 @@ void middle()
             if ((sp->n_type & N_TYPE) == N_COMM) {
                 t           = sp->n_value;
                 sp->n_value = cmsize / W;
-                cmsize      = add(cmsize, (long)t * W, "переполнен сегмент bss");
+                cmsize      = add(cmsize, (long)t * W, "bss segment overflow");
             } else if ((sp->n_type & N_TYPE) == N_ACOMM) {
                 t           = sp->n_value;
                 sp->n_value = acmsize / W;
-                acmsize     = addlong(acmsize, (long)t * W, "переполнен сегмент abss");
+                acmsize     = addlong(acmsize, (long)t * W, "abss segment overflow");
             }
         }
     }
@@ -856,8 +856,8 @@ void middle()
     }
     if (sflag || xflag)
         ssize = 0;
-    bsize = add(bsize, cmsize, "переполнен сегмент bss");
-    asize = addlong(asize, acmsize, "переполнен сегмент abss");
+    bsize = add(bsize, cmsize, "bss segment overflow");
+    asize = addlong(asize, acmsize, "abss segment overflow");
 
     /*
      * Compute ssize; add length of local symbols, if need,
@@ -991,10 +991,10 @@ void relhalf(const struct local *lp, long t, long r, long *pt, long *pr)
         a = t & 0777777777;
         break;
     case RLONG:
-        a = t & 077777; /* длинный адрес - 15 бит */
+        a = t & 077777; /* long address - 15 bits */
         break;
     case RTRUNC:
-        a = t & 07777; /* усечённый короткий адрес - 12 бит */
+        a = t & 07777; /* truncated short address - 12 bits */
         break;
     case RSHORT:
         a = t & 07777;
@@ -1250,7 +1250,7 @@ void pass2(int argc, char **argv)
             switch (ap[i]) {
             case 'D':
                 /*
-                 * по-моему, все-таки, должно быть так.
+                 * I think it should actually be like this:
                  *              for (dnum=atoi(*p); dorigin<dnum; dorigin++) {
                  */
                 for (dnum = atoi(*p); dnum > 0; --dnum) {
@@ -1338,37 +1338,36 @@ void finishout()
 }
 
 /*
- * Движок компоновщика: связывает объектные файлы, перечисленные в argv, и
- * пишет исполняемый образ.  Возвращает уровень ошибки (errlev); в отличие от
- * прежнего main() не вызывает exit() на успешном пути, поэтому годится и для
- * тонкого front end (main.c), и для модульного теста.
+ * Linker engine: links the object files listed in argv and writes the
+ * executable image.  Returns the error level (errlev); unlike the old main()
+ * it does not call exit() on the success path, so it suits both the thin
+ * front end (main.c) and the unit test.
  */
 int ld_link(int argc, char **argv)
 {
     /*
-     * Первый проход: вычисление длин сегментов и таблицы имен,
-     * а также адреса входа.
+     * First pass: compute segment lengths, name table, and entry address.
      */
     pass1(argc, argv);
     filname = 0;
 
     /*
-     * Обработка таблицы имен.
+     * Process the name table.
      */
     middle();
 
     /*
-     * Создание буферных файлов и запись заголовка
+     * Create buffer files and write the header.
      */
     setupout();
 
     /*
-     * Второй проход: настройка связей.
+     * Second pass: fix up references.
      */
     pass2(argc, argv);
 
     /*
-     * Сброс буферов.
+     * Flush the buffers.
      */
     finishout();
 
