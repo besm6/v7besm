@@ -9,7 +9,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-// Fatal error message.
+//
+// Print a fatal error message and exit.  The message is prefixed with "as: "
+// and, when known, the input file name and current source line, then a
+// printf-style message.  This is the only way the assembler reports an
+// unrecoverable problem; it never returns.  (The unit-test harness links its
+// own version that records the error instead of exiting.)
+//
 noreturn void fatal(char *fmt, ...)
 {
     va_list ap;
@@ -26,6 +32,9 @@ noreturn void fatal(char *fmt, ...)
     exit(1);
 }
 
+//
+// Print the command-line usage summary and exit with an error.
+//
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n");
@@ -40,6 +49,11 @@ static void usage(void)
     exit(1);
 }
 
+//
+// Program entry point.  Parse the command-line options into an
+// assembler_args, then hand off to assemble().  Each "-..." argument is a
+// bundle of single-letter flags; anything else is the (single) input file.
+//
 int main(int argc, char *argv[])
 {
     int i;
@@ -54,12 +68,15 @@ int main(int argc, char *argv[])
     for (i = 1; i < argc; i++) {
         switch (argv[i][0]) {
         case '-':
+            // Walk the letters of one "-xyz" argument, setting a flag for each.
             for (cp = argv[i] + 1; *cp; cp++) {
                 switch (*cp) {
                 case 'd': // debug flag
                     args.debug++;
                     break;
                 case 'X':
+                    // -X implies -x: it discards a subset of the locals that -x
+                    // discards, so fall through to also set xflags.
                     args.Xflag++;
                 case 'x':
                     args.xflags++;
@@ -70,18 +87,19 @@ int main(int argc, char *argv[])
                 case 'u':
                     args.uflag++;
                     break;
-                case 'o': // output file
+                case 'o': // output file name
                     if (ofile)
                         fatal("too many -o flags");
                     ofile = 1;
                     if (cp[1]) {
-                        // -ofile
+                        // "-ofile": the name is glued to the flag.  Take the
+                        // rest of this argument and advance cp to its end.
                         args.outfile = cp + 1;
                         while (*++cp)
                             ;
                         --cp;
                     } else if (i + 1 < argc)
-                        // -o file
+                        // "-o file": the name is the next argument.
                         args.outfile = argv[++i];
                     break;
                 default:

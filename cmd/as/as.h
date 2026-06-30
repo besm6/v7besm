@@ -1,161 +1,208 @@
 //
 // Assembler for BESM-6.
-// Shared declarations.
+// Shared declarations: the token kinds the lexer produces, the segment and
+// directive numbers, the sizes of the in-memory tables, and the one big
+// `struct assembler` that holds the whole assembler's state.  Every source
+// file in cmd/as includes this header.
 //
 #include <stdnoreturn.h>
 
 #include "assemble.h"
-#include "besm6/b.out.h"
+#include "besm6/b.out.h" // a.out object format: struct exec, N_* / R* codes, fputh()
 
-#define W 6 // word length in bytes
+#define W 6 // word length in bytes (a BESM-6 word is 48 bits = two 24-bit half-words)
 
-// token types
+// Token kinds returned by next_token().  Single-character tokens (operators,
+// brackets, ...) are returned as their own ASCII code instead; these names
+// cover everything that is not a single literal character.
 
-#define LEOF    1
-#define LEOL    2
-#define LNAME   3
-#define LCMD    4
-#define LACMD   5
-#define LNUM    6
-#define LLCMD   7
-#define LSCMD   8
-#define LLSHIFT 9
-#define LRSHIFT 10
-#define LINCR   11
-#define LDECR   12
+#define LEOF    1  // end of input
+#define LEOL    2  // end of line; value is the line number that just started
+#define LNAME   3  // identifier; value is its index in the symbol table (stab)
+#define LCMD    4  // machine instruction mnemonic; value is its index in table[]
+#define LACMD   5  // assembler directive (.text, .word, ...); value is its code
+#define LNUM    6  // integer literal; the value sits in as.intval
+#define LLCMD   7  // raw long-address opcode (@NN); value is the opcode number
+#define LSCMD   8  // raw short-address opcode ($NN); value is the opcode number
+#define LLSHIFT 9  // the "\<" shift-left operator
+#define LRSHIFT 10 // the "\>" shift-right operator
+#define LINCR   11 // the "++" token
+#define LDECR   12 // the "--" token
 
-// segment numbers
+// Segment numbers.  A program is built up in several parallel segments; these
+// index the per-segment arrays in struct assembler (sfile/rfile/count).  The
+// gap at 5 (an unused "abss" slot) keeps these aligned with the N_*/R* codes.
 
-#define SCONST 0
-#define STEXT  1
-#define SDATA  2
-#define SSTRNG 3
-#define SBSS   4
-#define SEXT   6
-#define SABS   7 // degenerate case for parse_expr
+#define SCONST 0   // constant pool (de-duplicated literals)
+#define STEXT  1   // text: machine code
+#define SDATA  2   // initialized data
+#define SSTRNG 3   // string constants (folded onto data at output time)
+#define SBSS   4   // uninitialized data (reserved space, no image on disk)
+#define SEXT   6   // pseudo-segment: an external (undefined) symbol reference
+#define SABS   7   // pseudo-segment: a plain absolute value (degenerate case for parse_expr)
 
-// assembler directives
+// Assembler directive codes (the value carried by an LACMD token).
 
-#define ACOMM 0
-#define ASCII 1
-#define BSS   2
-#define COMM  3
-#define DATA  4
-#define GLOBL 5
-#define HALF  6
-#define STRNG 7
-#define TEXT  8
-#define EQU   9
-#define WORD  10
+#define ACOMM 0  // .acomm  - absolute common block
+#define ASCII 1  // .ascii  - emit a string constant
+#define BSS   2  // .bss    - switch to the bss segment
+#define COMM  3  // .comm   - common block
+#define DATA  4  // .data   - switch to the data segment
+#define GLOBL 5  // .globl  - mark a name as external (global)
+#define HALF  6  // .half   - emit raw half-words (24 bits each)
+#define STRNG 7  // .strng  - switch to the string-constant segment
+#define TEXT  8  // .text   - switch to the text (code) segment
+#define EQU   9  // .equ    - define a name = expression
+#define WORD  10 // .word   - emit full 48-bit words
 
-// instruction types
+// Per-instruction flags stored in the `type` column of table[].
 
-#define TLONG  01 // long-address instruction
-#define TALIGN 02 // align after the instruction
+#define TLONG  01 // long-address instruction (15-bit address field)
+#define TALIGN 02 // word-align the segment after emitting this instruction
 
-// table sizes
-// hash sizes must be powers of two!
+// Table sizes.  The hash arrays use open addressing, so they are deliberately
+// larger than the number of entries they hold; the hash size must be a power
+// of two so SUPERHASH's bit-mask works.
 
-#define HASHSZ 2048 // name table hash size
-#define HCONSZ 256  // constant segment hash size
-#define HCMDSZ 1024 // assembler instruction hash size
+#define HASHSZ 2048 // name (symbol) table hash size
+#define HCONSZ 256  // constant pool hash size
+#define HCMDSZ 1024 // machine-instruction hash size
 
-#define STSIZE  (HASHSZ * 9 / 10) // name table size
-#define CSIZE   (HCONSZ * 9 / 10) // constant segment size
-#define SPACESZ (STSIZE * 8)      // size of array for names
+#define STSIZE  (HASHSZ * 9 / 10) // max symbols (kept below the hash size to stay sparse)
+#define CSIZE   (HCONSZ * 9 / 10) // max pooled constants
+#define SPACESZ (STSIZE * 8)      // bytes of arena for symbol-name text
 
-#define SEGMTYPE(s) segmtype[s] // segment number to symbol type
-#define TYPESEGM(s) typesegm[s] // symbol type to segment number
-#define SEGMREL(s)  segmrel[s]  // segment number to relocation type
+// Conversion tables wrapped as macros (the arrays live in tables.c).
 
-#define EMPCOM 02200000L // empty instruction - filler (utc 0)
-#define UTCCOM 02200000L // the <> instruction (utc, opcode 022)
-#define WTCCOM 02300000L // the [] instruction (wtc, opcode 023)
+#define SEGMTYPE(s) segmtype[s] // segment number -> symbol type (N_*)
+#define TYPESEGM(s) typesegm[s] // symbol type   -> segment number (S*)
+#define SEGMREL(s)  segmrel[s]  // segment number -> relocation type (R*)
 
+// Pre-built instruction words used as fillers / building blocks.
+
+#define EMPCOM 02200000L // empty instruction used to pad the text segment (utc 0)
+#define UTCCOM 02200000L // the "<>" construct expands to this utc (opcode 022)
+#define WTCCOM 02300000L // the "[]" construct expands to this wtc (opcode 023)
+
+// Hash function used by every table here.  Multiplying by this constant and
+// masking to the (power-of-two) table size scatters keys well.
 // optimal hash multiplier for a 32-bit word == 011706736335L
 // the same for a 16-bit word = 067433
 
 #define SUPERHASH(key, mask) (((short)(key) * (short)067433) & (short)(mask))
 
-#define ISHEX(c)    (ctype[(c) & 0377] & 1)
-#define ISOCTAL(c)  (ctype[(c) & 0377] & 2)
-#define ISDIGIT(c)  (ctype[(c) & 0377] & 4)
-#define ISLETTER(c) (ctype[(c) & 0377] & 8)
+// Character classification, driven by the bit flags in ctype[] (see tables.c).
 
-// on the second pass hashtab is unused; reuse it as newindex
-// to reindex relocation when flag x or X is set
+#define ISHEX(c)    (ctype[(c) & 0377] & 1) // hexadecimal digit 0-9 A-F a-f
+#define ISOCTAL(c)  (ctype[(c) & 0377] & 2) // octal digit 0-7
+#define ISDIGIT(c)  (ctype[(c) & 0377] & 4) // decimal digit 0-9
+#define ISLETTER(c) (ctype[(c) & 0377] & 8) // name character (letter, '.', '_', ...)
+
+// On the second pass the symbol-name hash table is no longer needed, so the
+// same array is reused to remap symbol indices when -x/-X drops local symbols.
+// "newindex" is just a readable alias for that reuse.
 
 #define newindex as.hashtab
 
-// Two halves of a 48-bit word.
+// The two 24-bit halves of one 48-bit BESM-6 word.  Numbers are carried around
+// in this split form because a host `long` is not guaranteed to hold 48 bits.
 struct word {
-    long left, right;
+    long left;  // high half (bits 25..48)
+    long right; // low half  (bits 1..24)
 };
 
-// Table of machine instructions.
+// One row of the machine-instruction table (tables.c).
 struct table {
-    long val;
-    const char *name;
-    int type;
+    long val;         // base opcode word (modifier and address get OR-ed in later)
+    const char *name; // mnemonic, e.g. "xta"
+    int type;         // TLONG / TALIGN flags
 };
 
-// Constant segment entry.
+// One pooled constant.  Identical constants are stored once; see intern_constant().
 struct constent {
-    long h, h2, hr2;
+    long h;   // high half of the constant's value
+    long h2;  // low half of the constant's value
+    long hr2; // relocation type for the constant (R* code, possibly with a symbol index)
 };
 
-// Global state of the assembler (defined in as.c).
+// The entire mutable state of the assembler, in one struct so it is easy to
+// reset between runs (the unit tests assemble many files in one process).
+// The single instance is `as`, defined in as.c.
 struct assembler {
-    FILE *sfile[SABS], *rfile[SABS];
-    long count[SABS];
-    int segm;
-    char *infile, *outfile;
-    char tfilename[14]; // "/tmp/asXXXXXX"
-    int line;           // current line number
-    int debug;          // debug flag
-    int xflags, Xflag, uflag;
-    int stlength; // symbol table length in bytes
-    int stalign;  // symbol table alignment
-    long cbase, tbase, dbase, adbase, bbase;
-    struct nlist stab[STSIZE];
-    int stabfree;
-    char space[SPACESZ]; // storage for symbol names
-    int lastfree;        // counter of used space
-    int regleft;         // register number to the left of the instruction
-    struct constent constab[CSIZE];
-    int nconst;
-    char name[256];
-    struct word intval;
-    int extref;
-    int blexflag, backlex, blextype;
-    int hashtab[HASHSZ], hashctab[HCMDSZ];
-    int hashconst[HCONSZ];
-    int aflag;   // don't align on word boundary
-    int cmdmode; // lexer expects a machine instruction (allow + - * / in name)
+    FILE *sfile[SABS]; // per-segment temp file holding the segment's code/data image
+    FILE *rfile[SABS]; // per-segment temp file holding the matching relocation half-words
+    long count[SABS];  // per-segment size, counted in 24-bit half-words
+
+    int segm; // segment currently being assembled into (one of S*)
+
+    char *infile;       // input file name (NULL = stdin)
+    char *outfile;      // output file name
+    char tfilename[14]; // template for the temp files: "/tmp/asXXXXXX"
+    int line;           // current source line number (for error messages)
+    int debug;          // -d: debug flag
+
+    int xflags; // -x: discard local symbols from the output
+    int Xflag;  // -X: discard only locals whose name starts with 'L'
+    int uflag;  // -u: treat an undefined name as an error rather than external
+
+    int stlength; // symbol-table size in bytes (computed in finalize_symtab)
+    int stalign;  // zero padding bytes appended after the symbol table
+
+    long cbase;  // const segment base address (word index), set in emit_segments
+    long tbase;  // text  segment base address
+    long dbase;  // data  segment base address
+    long adbase; // string-constant segment base address
+    long bbase;  // bss   segment base address
+
+    struct nlist stab[STSIZE]; // the symbol table
+    int stabfree;              // number of symbols used so far
+
+    char space[SPACESZ]; // arena that holds the symbol-name strings
+    int lastfree;        // bytes of the arena used so far
+
+    int regleft; // index register written to the left of an instruction (the "N M" prefix)
+
+    struct constent constab[CSIZE]; // the constant pool
+    int nconst;                     // number of pooled constants
+
+    char name[256];      // scratch buffer: the identifier/number text just scanned
+    struct word intval;  // scratch: the value of the integer literal just scanned
+    int extref;          // symbol index of the external name referenced by the current operand
+
+    int blexflag; // a token has been pushed back (see unget_token / next_token)
+    int backlex;  // the pushed-back token's value
+    int blextype; // the pushed-back token's type
+
+    int hashtab[HASHSZ];  // hash buckets for the symbol table (reused as newindex on pass 2)
+    int hashctab[HCMDSZ]; // hash buckets for the machine-instruction table
+    int hashconst[HCONSZ]; // hash buckets for the constant pool
+
+    int aflag;   // -a: do not word-align after instructions
+    int cmdmode; // lexer expects a machine instruction (so '+ - * /' may be part of a name)
 };
 
-extern struct assembler as;
+extern struct assembler as; // the one global assembler state (as.c)
 
 // Read-only tables (defined in tables.c).
-extern const int ctype[256];
-extern const int segmtype[];
-extern const int segmrel[];
-extern const int typesegm[];
-extern const struct table table[];
+extern const int ctype[256];       // character classification bit flags
+extern const int segmtype[];       // segment number -> symbol type
+extern const int segmrel[];        // segment number -> relocation type
+extern const int typesegm[];       // symbol type -> segment number
+extern const struct table table[]; // machine-instruction definitions
 
-// Shared functions.
-noreturn void fatal(char *fmt, ...);
-int next_token(int *pval);
-void unget_token(int val, int type);
-long parse_expr(int *s);
-void init_hash_tables(void);
-int lookup_directive(void);
-int lookup_instruction(void);
-int lookup_name(void);
-void align_segment(int s);
-void generate_code(void);
-void finalize_symtab(void);
-void write_header(void);
-void emit_segments(void);
-void write_reloc(void);
-void write_symtab(void);
+// Shared functions (each is documented at its definition).
+noreturn void fatal(char *fmt, ...);  // print an error and exit (main.c / test harness)
+int next_token(int *pval);            // read one token, return its kind (lex.c)
+void unget_token(int val, int type);  // push one token back (lex.c)
+long parse_expr(int *s);              // parse an expression, return value + segment (expr.c)
+void init_hash_tables(void);          // build the instruction/symbol/constant hashes (symtab.c)
+int lookup_directive(void);           // match as.name against the directive names (symtab.c)
+int lookup_instruction(void);         // match as.name against the instruction table (symtab.c)
+int lookup_name(void);                // find or create a symbol for as.name (symtab.c)
+void align_segment(int s);            // word-align segment s (pass1.c)
+void generate_code(void);             // pass 1: parse source into the segment temp files (pass1.c)
+void finalize_symtab(void);           // between passes: align segments, size the symbol table (pass2.c)
+void write_header(void);              // emit the a.out header (pass2.c)
+void emit_segments(void);             // pass 2: relocate and write const + code segments (pass2.c)
+void write_reloc(void);               // emit the relocation records (pass2.c)
+void write_symtab(void);              // emit the symbol table (pass2.c)

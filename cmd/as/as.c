@@ -4,17 +4,63 @@
 // in main.c; fatal() is supplied by whoever links this library (main.c for the
 // CLI, the test harness for unit tests).
 //
+// HOW IT WORKS
+// ------------
+// The assembler turns one source file into one relocatable object file (the
+// BESM-6 a.out format described in cross/besm6/b.out.h).  It runs in two
+// passes, which is the classic way to handle forward references (a "jump
+// ahead" to a label that has not been seen yet):
+//
+//   Pass 1 (generate_code): read the source line by line and translate it into
+//   machine words, but with addresses still expressed symbolically.  Output is
+//   accumulated into several SEGMENTS, each stored in a pair of temporary
+//   files:
+//       sfile[seg]  - the segment's actual code/data image
+//       rfile[seg]  - a parallel stream of relocation half-words, one per
+//                     image half-word, recording "what does this address
+//                     refer to" so pass 2 can fix it up.
+//   The segments are: const (a de-duplicated pool of literal values), text
+//   (code), data, strng (string constants), and bss (reserved space).  As
+//   names are seen they are entered into the symbol table.
+//
+//   A BESM-6 word is 48 bits, handled here as two 24-bit HALF-WORDS, because a
+//   host `long` cannot be relied on to hold 48 bits.  Two instructions pack
+//   into one word, so the engine works in half-words throughout.
+//
+//   Between the passes (finalize_symtab) the segment sizes are final, so the
+//   symbol table can be sized; pass 2 then assigns each segment its base
+//   address.
+//
+//   Pass 2 (emit_segments + friends): now every address is known, so re-read
+//   the temp files, add the segment bases to every reference (relocation), and
+//   write the final object file: header, segment images, relocation records,
+//   and the symbol table.
+//
+// The whole pipeline, driven by assemble() below, is:
+//   open_temp_files -> init_hash_tables -> generate_code -> finalize_symtab ->
+//   write_header -> emit_segments -> write_reloc -> write_symtab
+//
 #include "as.h"
 
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
+// The single instance of the assembler's state.  Only the two fields with
+// non-zero defaults are set here; assemble() zeroes the rest at the start of
+// each run.
 struct assembler as = {
     .outfile   = "a.out",
     .tfilename = "/tmp/asXXXXXX",
 };
 
+//
+// Open the temporary files that hold the segment images and their relocation
+// streams during pass 1.  Each segment needs two files (code image + matching
+// relocations).  The files are created with mkstemp() and then immediately
+// unlink()ed: they have no name on disk, so they disappear automatically when
+// the process exits, yet stay usable through the open FILE* handles.
+//
 static void open_temp_files(void)
 {
     int i;
@@ -36,6 +82,15 @@ static void open_temp_files(void)
     as.line = 1;
 }
 
+//
+// Public entry point: assemble one file with the given options and return 0.
+// The passes communicate through stdin/stdout (the input source and the output
+// object), so this function redirects those streams and carefully restores
+// them on exit - that matters because the unit-test process calls assemble()
+// many times and must get its own stdin/stdout back each time.  For the same
+// reason the whole global state is zeroed at the top, making the engine safely
+// re-runnable in a single process.
+//
 int assemble(const struct assembler_args *args)
 {
     int i;
@@ -69,17 +124,21 @@ int assemble(const struct assembler_args *args)
     if (!freopen(as.outfile, "w", stdout))
         fatal("cannot open %s", as.outfile);
 
+    // If the very first character is '#', treat it as a comment introducer by
+    // pushing back ';' instead (the lexer's comment character), so a leading
+    // "#"-style comment line is skipped.  Otherwise push the character back
+    // unchanged.
     i = getchar();
     ungetc(i == '#' ? ';' : i, stdin);
 
-    open_temp_files();    // open temporary files
-    init_hash_tables();   // initialize hash tables
-    generate_code();      // first pass
-    finalize_symtab();     // intermediate actions
-    write_header(); // write the header
-    emit_segments();      // second pass
-    write_reloc();  // write relocation files
-    write_symtab(); // write the symbol table
+    open_temp_files();  // open the per-segment temp files
+    init_hash_tables(); // build the instruction/symbol/constant hash tables
+    generate_code();    // pass 1: parse source into the segment temp files
+    finalize_symtab();  // align segments and size the symbol table
+    write_header();     // write the a.out header
+    emit_segments();    // pass 2: relocate and write const + code segments
+    write_reloc();      // write the relocation records
+    write_symtab();     // write the symbol table
 
     // Restore the original stdin/stdout.
     fflush(stdout);

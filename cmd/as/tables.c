@@ -6,6 +6,17 @@
 
 #include "as.h"
 
+// Character classification table, indexed by a byte value.  Each entry is a
+// bit set tested by the IS* macros in as.h:
+//   bit 0 (1) = hex digit      0-9 A-F a-f
+//   bit 1 (2) = octal digit    0-7
+//   bit 2 (4) = decimal digit  0-9
+//   bit 3 (8) = "letter"       valid in an identifier
+// '.' and '_' are flagged as letters so they may appear in names; while a
+// machine instruction is expected the lexer also treats '+ - * /' as letters
+// so mnemonics like "a+x" scan as a single name (see read_name()).  So e.g.
+// '0'..'7' carry 1|2|4 = 7, '8'/'9' carry 1|4 = 5, and 'A'..'F'/'a'..'f' carry
+// 1|8 = 9.
 const int ctype[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 7, 7, 7, 7, 7, 7, 7, 7, 5, 5, 0, 0, 0, 0, 0, 0,
@@ -70,66 +81,70 @@ const int typesegm[] = {
 //   long-address  (opcodes 020-037):  val = opcode << 15  -> 0zz00000
 //
 const struct table table[] = {
-    // Short-address instructions (Format 1, opcodes 000-077).
-    { 00000000L, "atx", 0 },
-    { 00010000L, "stx", 0 },
-    { 00020000L, "mod", 0 },
-    { 00030000L, "xts", 0 },
-    { 00040000L, "a+x", 0 },
-    { 00050000L, "a-x", 0 },
-    { 00060000L, "x-a", 0 },
-    { 00070000L, "amx", 0 },
-    { 00100000L, "xta", 0 },
-    { 00110000L, "aax", 0 },
-    { 00120000L, "aex", 0 },
-    { 00130000L, "arx", 0 },
-    { 00140000L, "avx", 0 },
-    { 00150000L, "aox", 0 },
-    { 00160000L, "a/x", 0 },
-    { 00170000L, "a*x", 0 },
-    { 00200000L, "apx", 0 },
-    { 00210000L, "aux", 0 },
-    { 00220000L, "acx", 0 },
-    { 00230000L, "anx", 0 },
-    { 00240000L, "e+x", 0 },
-    { 00250000L, "e-x", 0 },
-    { 00260000L, "asx", 0 },
-    { 00270000L, "xtr", 0 },
-    { 00300000L, "rte", 0 },
-    { 00310000L, "yta", 0 },
-    // $32
-    // $33
-    { 00340000L, "e+n", 0 },
-    { 00350000L, "e-n", 0 },
-    { 00360000L, "asn", 0 },
-    { 00370000L, "ntr", 0 },
-    { 00400000L, "ati", 0 },
-    { 00410000L, "sti", 0 },
-    { 00420000L, "ita", 0 },
-    { 00430000L, "its", 0 },
-    { 00440000L, "mtj", 0 },
-    { 00450000L, "j+m", 0 },
-    // $46
-    // $47
-    // $50...$77
+    // Short-address instructions (Format 1, opcodes 000-077).  Opcodes that
+    // have no mnemonic (e.g. 032, 033, 046, 047 and 050-077) are reached via
+    // the raw "$NN" form instead and so are absent here.  The Cyrillic name in
+    // parentheses is the original BESM-6 mnemonic; see doc/Besm6_Instruction_Set.md.
+    { 00000000L, "atx", 0 }, // store accumulator to memory (зп)
+    { 00010000L, "stx", 0 }, // store accumulator and pop the stack (зпм)
+    { 00020000L, "mod", 0 }, // modify privileged registers (рег)
+    { 00030000L, "xts", 0 }, // push the stack, then load (счм)
+    { 00040000L, "a+x", 0 }, // add (сл)
+    { 00050000L, "a-x", 0 }, // subtract (вч)
+    { 00060000L, "x-a", 0 }, // reverse subtract: memory - accumulator (вчоб)
+    { 00070000L, "amx", 0 }, // subtract absolute values (вчаб)
+    { 00100000L, "xta", 0 }, // load memory into the accumulator (сч)
+    { 00110000L, "aax", 0 }, // bitwise AND (и)
+    { 00120000L, "aex", 0 }, // bitwise XOR (нтж)
+    { 00130000L, "arx", 0 }, // cyclical add with end-around carry (слц)
+    { 00140000L, "avx", 0 }, // conditionally negate by sign of memory (знак)
+    { 00150000L, "aox", 0 }, // bitwise OR (или)
+    { 00160000L, "a/x", 0 }, // divide (дел)
+    { 00170000L, "a*x", 0 }, // multiply (умн)
+    { 00200000L, "apx", 0 }, // pack bits under a mask (сбр)
+    { 00210000L, "aux", 0 }, // unpack bits under a mask (рзб)
+    { 00220000L, "acx", 0 }, // population count (чед)
+    { 00230000L, "anx", 0 }, // find the highest set bit (нед)
+    { 00240000L, "e+x", 0 }, // add exponent from memory (слп)
+    { 00250000L, "e-x", 0 }, // subtract exponent from memory (вчп)
+    { 00260000L, "asx", 0 }, // arithmetic shift by exponent in memory (сд)
+    { 00270000L, "xtr", 0 }, // set the mode register from memory (рж)
+    { 00300000L, "rte", 0 }, // read the mode register into the exponent (счрж)
+    { 00310000L, "yta", 0 }, // get the younger-bits (Y) register (счмр)
+    // $32 - full-width I/O read, no mnemonic
+    // $33 - full-width I/O read, no mnemonic
+    { 00340000L, "e+n", 0 }, // add immediate to exponent (слпа)
+    { 00350000L, "e-n", 0 }, // subtract immediate from exponent (вчпа)
+    { 00360000L, "asn", 0 }, // arithmetic shift by immediate (сда)
+    { 00370000L, "ntr", 0 }, // set the mode register from immediate (ржа)
+    { 00400000L, "ati", 0 }, // copy accumulator to an index register (уи)
+    { 00410000L, "sti", 0 }, // store to an index register and pop (уим)
+    { 00420000L, "ita", 0 }, // copy an index register to the accumulator (счи)
+    { 00430000L, "its", 0 }, // push accumulator, then load an index register (счим)
+    { 00440000L, "mtj", 0 }, // copy one index register to another (уии)
+    { 00450000L, "j+m", 0 }, // add two index registers (сли)
+    // $46 - special memory access, no mnemonic
+    // $47 - reserved, no mnemonic
+    // $50...$77 - extracodes, reached via "$NN"
 
-    // Long-address instructions (Format 2, opcodes 020-037).
+    // Long-address instructions (Format 2, opcodes 020-037), with a 15-bit
+    // address.  Opcodes 020/021 and 036 have no mnemonic (use "@NN").
     // @20
     // @21
-    { 02200000L, "utc", TLONG },
-    { 02300000L, "wtc", TLONG },
-    { 02400000L, "vtm", TLONG },
-    { 02500000L, "utm", TLONG },
-    { 02600000L, "uza", TLONG },
-    { 02700000L, "u1a", TLONG },
-    { 03000000L, "uj", TLONG },
-    { 03100000L, "vjm", TLONG | TALIGN },
-    { 03200000L, "ij", TLONG | TALIGN },
-    { 03300000L, "stop", TLONG | TALIGN },
-    { 03400000L, "vzm", TLONG },
-    { 03500000L, "v1m", TLONG },
-    // @36
-    { 03700000L, "vlm", TLONG },
+    { 02200000L, "utc", TLONG },          // set the C register from an immediate address (мода)
+    { 02300000L, "wtc", TLONG },          // set the C register from memory (мод)
+    { 02400000L, "vtm", TLONG },          // set an index register to an immediate (уиа)
+    { 02500000L, "utm", TLONG },          // add an immediate to an index register (слиа)
+    { 02600000L, "uza", TLONG },          // branch if the condition flag ω = 0 (по)
+    { 02700000L, "u1a", TLONG },          // branch if the condition flag ω != 0 (пе)
+    { 03000000L, "uj", TLONG },           // unconditional branch (пб)
+    { 03100000L, "vjm", TLONG | TALIGN }, // jump to subroutine, saving the return address (пв)
+    { 03200000L, "ij", TLONG | TALIGN },  // return from interrupt (выпр)
+    { 03300000L, "stop", TLONG | TALIGN },// stop the processor (стоп)
+    { 03400000L, "vzm", TLONG },          // branch if an index register is zero (пио)
+    { 03500000L, "v1m", TLONG },          // branch if an index register is not zero (пино)
+    // @36 - undocumented, behaves like vzm
+    { 03700000L, "vlm", TLONG }, // loop: bump an index register and branch while nonzero (цикл)
 
-    { 0, 0L, 0 },
+    { 0, 0L, 0 }, // sentinel: a NULL name ends the table
 };
