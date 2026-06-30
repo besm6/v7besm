@@ -26,83 +26,17 @@
 
 #include "intern.h"
 
-struct exec filhdr; // aout header
-struct ar_hdr archdr;
-FILE *text, *reloc; // input management
-
 //
-// output management
+// The entire engine state, bundled into one struct (mirrors cmd/as).  Only the
+// few fields below need a non-zero initial value; the rest are zeroed.
 //
-FILE *outb, *coutb, *toutb, *doutb, *croutb, *troutb, *droutb, *soutb;
-
-//
-// symbol management
-//
-struct constab constab[NCONST]; // constants
-
-struct nlist cursym;            // current symbol
-struct nlist symtab[NSYM];      // the symbols themselves
-struct nlist **symhash[NSYM];   // pointers to hash table
-struct nlist *lastsym;          // last entered symbol
-struct nlist *hshtab[NSYM + 2]; // hash table for symbols
-struct local local[NSYMPR];
-int symindex;         // next free entry in symbol table
-int newindex[NCONST]; // constant reindexing table
-int nconst;           // next free entry in constab
-int cindex;           // current index in newindex
-int nfile;            // current file number (index into coptsize)
-int coptsize[LLSIZE]; // const segment lengths after optimization
-long basaddr = BADDR; // base address of loading
-struct ranlib rantab[RANTABSZ];
-int tnum; // number of elements in rantab
-
-long liblist[LLSIZE], *libp; // library management
-
-//
-// internal symbols
-//
-struct nlist *p_econst, *p_etext, *p_edata, *p_ebss, *p_end, *entrypt;
-
-//
-// flags
-//
-int trace;  // internal trace flag
-int xflag;  // discard local symbols
-int Xflag;  // discard locals starting with LOCSYM
-int Sflag;  // discard all except locals and globals
-int Cflag;  // put constants in data segment
-int rflag;  // preserve relocation bits, don't define commons
-int arflag; // original copy of rflag
-int sflag;  // discard all symbols
-int nflag;  // pure procedure
-int dflag;  // define common even with rflag
-int alflag; // const and text aligned on page boundary
-
-//
-// cumulative sizes set in pass 1
-//
-long csize, tsize, dsize, bsize, asize, ssize, nsym;
-
-//
-// symbol relocation; both passes
-//
-long ctrel, cdrel, cbrel, carel;
-
-int ofilfnd;
-char *ofilename = "l.out";
-char *filname;
-int errlev;
-int delarg     = 4;
-char tfname[]  = "/tmp/ldaXXXXX";
-char libname[] = "/usr/local/lib/microbesm/libxxxxxxxxxxxxxxx";
-
-// Needed after pass 1
-long corigin;
-long cbasaddr;
-long torigin;
-long dorigin;
-long borigin;
-long aorigin;
+struct linker ld = {
+    .basaddr   = BADDR,
+    .ofilename = "l.out",
+    .delarg    = 4,
+    .tfname    = "/tmp/ldaXXXXX",
+    .libname   = "/usr/local/lib/microbesm/libxxxxxxxxxxxxxxx",
+};
 
 //
 // Final cleanup: remove the temporary l.out and set permissions on the
@@ -112,9 +46,9 @@ long aorigin;
 static int ld_cleanup(void)
 {
     unlink("l.out");
-    if (!delarg && !arflag)
-        chmod(ofilename, 0777 & ~umask(0));
-    return delarg;
+    if (!ld.delarg && !ld.arflag)
+        chmod(ld.ofilename, 0777 & ~umask(0));
+    return ld.delarg;
 }
 
 void cleanup_and_exit(void)
@@ -127,39 +61,40 @@ void error(int n, char *fmt, ...)
     va_list ap;
 
     va_start(ap, fmt);
-    if (!errlev)
+    if (!ld.errlev)
         printf("ld: ");
-    if (filname)
-        printf("%s: ", filname);
+    if (ld.filname)
+        printf("%s: ", ld.filname);
     vprintf(fmt, ap);
     va_end(ap);
     printf("\n");
     if (n > 1)
         cleanup_and_exit();
-    errlev = n;
+    ld.errlev = n;
 }
 
 void read_header(long loc)
 {
-    fseek(text, loc, 0);
-    if (!fgethdr(text, &filhdr))
+    fseek(ld.text, loc, 0);
+    if (!fgethdr(ld.text, &ld.filhdr))
         error(2, "bad format");
-    if (filhdr.a_magic != FMAGIC)
+    if (ld.filhdr.a_magic != FMAGIC)
         error(2, "bad magic");
-    if (filhdr.a_const % W)
+    if (ld.filhdr.a_const % W)
         error(2, "bad length of const");
-    if (filhdr.a_text % W)
+    if (ld.filhdr.a_text % W)
         error(2, "bad length of text");
-    if (filhdr.a_data % W)
+    if (ld.filhdr.a_data % W)
         error(2, "bad length of data");
-    if (filhdr.a_bss % W)
+    if (ld.filhdr.a_bss % W)
         error(2, "bad length of bss");
-    if (filhdr.a_abss % W)
+    if (ld.filhdr.a_abss % W)
         error(2, "bad length of abss");
-    ctrel = -BADDR - filhdr.a_const / W;
-    cdrel = -BADDR - (filhdr.a_const + filhdr.a_text) / W;
-    cbrel = -BADDR - (filhdr.a_const + filhdr.a_text + filhdr.a_data) / W;
-    carel = -BADDR - (filhdr.a_const + filhdr.a_text + filhdr.a_data + filhdr.a_bss) / W;
+    ld.ctrel = -BADDR - ld.filhdr.a_const / W;
+    ld.cdrel = -BADDR - (ld.filhdr.a_const + ld.filhdr.a_text) / W;
+    ld.cbrel = -BADDR - (ld.filhdr.a_const + ld.filhdr.a_text + ld.filhdr.a_data) / W;
+    ld.carel =
+        -BADDR - (ld.filhdr.a_const + ld.filhdr.a_text + ld.filhdr.a_data + ld.filhdr.a_bss) / W;
 }
 
 long add_size(long a, long b, char *s)
@@ -186,27 +121,27 @@ void assign_addresses(void)
     int nund;
     long cmorigin, acmorigin;
 
-    p_econst = *lookup_name("_econst");
-    p_etext  = *lookup_name("_etext");
-    p_edata  = *lookup_name("_edata");
-    p_ebss   = *lookup_name("_ebss");
-    p_end    = *lookup_name("_end");
+    ld.p_econst = *lookup_name("_econst");
+    ld.p_etext  = *lookup_name("_etext");
+    ld.p_edata  = *lookup_name("_edata");
+    ld.p_ebss   = *lookup_name("_ebss");
+    ld.p_end    = *lookup_name("_end");
 
     //
     // If there are any undefined symbols, save the relocation bits.
     //
-    symp = &symtab[symindex];
-    if (!rflag) {
-        for (sp = symtab; sp < symp; sp++)
-            if (sp->n_type == N_EXT + N_UNDF && sp != p_end && sp != p_ebss && sp != p_edata &&
-                sp != p_etext && sp != p_econst) {
-                rflag++;
-                dflag = 0;
+    symp = &ld.symtab[ld.symindex];
+    if (!ld.rflag) {
+        for (sp = ld.symtab; sp < symp; sp++)
+            if (sp->n_type == N_EXT + N_UNDF && sp != ld.p_end && sp != ld.p_ebss &&
+                sp != ld.p_edata && sp != ld.p_etext && sp != ld.p_econst) {
+                ld.rflag++;
+                ld.dflag = 0;
                 break;
             }
     }
-    if (rflag)
-        Cflag = alflag = nflag = sflag = 0;
+    if (ld.rflag)
+        ld.Cflag = ld.alflag = ld.nflag = ld.sflag = 0;
 
     //
     // Assign common locations.
@@ -214,13 +149,13 @@ void assign_addresses(void)
 
     cmsize  = 0;
     acmsize = 0;
-    if (dflag || !rflag) {
-        define_symbol(p_econst, csize / W, N_EXT + N_CONST);
-        define_symbol(p_etext, tsize / W, N_EXT + N_TEXT);
-        define_symbol(p_edata, dsize / W, N_EXT + N_DATA);
-        define_symbol(p_ebss, bsize / W, N_EXT + N_BSS);
-        define_symbol(p_end, asize / W, N_EXT + N_ABSS);
-        for (sp = symtab; sp < symp; sp++) {
+    if (ld.dflag || !ld.rflag) {
+        define_symbol(ld.p_econst, ld.csize / W, N_EXT + N_CONST);
+        define_symbol(ld.p_etext, ld.tsize / W, N_EXT + N_TEXT);
+        define_symbol(ld.p_edata, ld.dsize / W, N_EXT + N_DATA);
+        define_symbol(ld.p_ebss, ld.bsize / W, N_EXT + N_BSS);
+        define_symbol(ld.p_end, ld.asize / W, N_EXT + N_ABSS);
+        for (sp = ld.symtab; sp < symp; sp++) {
             long t;
             if ((sp->n_type & N_TYPE) == N_COMM) {
                 t           = sp->n_value;
@@ -237,32 +172,32 @@ void assign_addresses(void)
     //
     // Now set symbols to their final value
     //
-    if (Cflag)
-        torigin = basaddr;
+    if (ld.Cflag)
+        ld.torigin = ld.basaddr;
     else {
-        corigin = basaddr;
-        torigin = corigin + csize / W;
+        ld.corigin = ld.basaddr;
+        ld.torigin = ld.corigin + ld.csize / W;
     }
-    if (alflag)
-        torigin = ALIGN(torigin, 1024);
-    if (Cflag) {
-        corigin = torigin + tsize / W;
-        dorigin = corigin + csize / W;
+    if (ld.alflag)
+        ld.torigin = ALIGN(ld.torigin, 1024);
+    if (ld.Cflag) {
+        ld.corigin = ld.torigin + ld.tsize / W;
+        ld.dorigin = ld.corigin + ld.csize / W;
     } else
-        dorigin = torigin + tsize / W;
-    if (nflag || alflag)
-        dorigin = ALIGN(dorigin, 1024);
-    cmorigin  = dorigin + dsize / W;
-    borigin   = cmorigin + cmsize / W;
-    acmorigin = borigin + bsize / W;
-    aorigin   = acmorigin + acmsize / W;
-    cbasaddr  = corigin;
-    nund      = 0;
-    for (sp = symtab; sp < symp; sp++) {
+        ld.dorigin = ld.torigin + ld.tsize / W;
+    if (ld.nflag || ld.alflag)
+        ld.dorigin = ALIGN(ld.dorigin, 1024);
+    cmorigin    = ld.dorigin + ld.dsize / W;
+    ld.borigin  = cmorigin + cmsize / W;
+    acmorigin   = ld.borigin + ld.bsize / W;
+    ld.aorigin  = acmorigin + acmsize / W;
+    ld.cbasaddr = ld.corigin;
+    nund        = 0;
+    for (sp = ld.symtab; sp < symp; sp++) {
         switch (sp->n_type) {
         case N_EXT + N_UNDF:
-            if (!arflag) {
-                errlev |= 01;
+            if (!ld.arflag) {
+                ld.errlev |= 01;
                 if (!nund)
                     printf("Undefined:\n");
                 nund++;
@@ -273,19 +208,19 @@ void assign_addresses(void)
         case N_EXT + N_ABS:
             break;
         case N_EXT + N_CONST:
-            sp->n_value += corigin;
+            sp->n_value += ld.corigin;
             break;
         case N_EXT + N_TEXT:
-            sp->n_value += torigin;
+            sp->n_value += ld.torigin;
             break;
         case N_EXT + N_DATA:
-            sp->n_value += dorigin;
+            sp->n_value += ld.dorigin;
             break;
         case N_EXT + N_BSS:
-            sp->n_value += borigin;
+            sp->n_value += ld.borigin;
             break;
         case N_EXT + N_ABSS:
-            sp->n_value += aorigin;
+            sp->n_value += ld.aorigin;
             break;
         case N_COMM:
         case N_EXT + N_COMM:
@@ -301,23 +236,23 @@ void assign_addresses(void)
         if (sp->n_value & ~0777777777)
             error(1, "long address: %s=0%lo", sp->n_name, sp->n_value);
     }
-    if (sflag || xflag)
-        ssize = 0;
-    bsize = add_size(bsize, cmsize, "bss segment overflow");
-    asize = add_size_long(asize, acmsize, "abss segment overflow");
+    if (ld.sflag || ld.xflag)
+        ld.ssize = 0;
+    ld.bsize = add_size(ld.bsize, cmsize, "bss segment overflow");
+    ld.asize = add_size_long(ld.asize, acmsize, "abss segment overflow");
 
     //
     // Compute ssize; add length of local symbols, if need,
     // and one more zero byte. Alignment will be taken at setup_output.
     //
-    if (sflag)
-        ssize = 0;
+    if (ld.sflag)
+        ld.ssize = 0;
     else {
-        if (xflag)
-            ssize = 0;
-        for (sp = symtab; sp < &symtab[symindex]; sp++)
-            ssize += sp->n_len + 6;
-        ssize++;
+        if (ld.xflag)
+            ld.ssize = 0;
+        for (sp = ld.symtab; sp < &ld.symtab[ld.symindex]; sp++)
+            ld.ssize += sp->n_len + 6;
+        ld.ssize++;
     }
 }
 
@@ -333,7 +268,7 @@ int ld_link(int argc, char **argv)
     // First pass: compute segment lengths, name table, and entry address.
     //
     pass1(argc, argv);
-    filname = 0;
+    ld.filname = 0;
 
     //
     // Process the name table.
@@ -355,11 +290,11 @@ int ld_link(int argc, char **argv)
     //
     finish_output();
 
-    if (!ofilfnd) {
+    if (!ld.ofilfnd) {
         unlink("a.out");
         link("l.out", "a.out");
-        ofilename = "a.out";
+        ld.ofilename = "a.out";
     }
-    delarg = errlev;
+    ld.delarg = ld.errlev;
     return ld_cleanup();
 }

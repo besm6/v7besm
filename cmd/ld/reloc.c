@@ -41,7 +41,7 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
     int i;
     const struct nlist *sp;
 
-    if (trace > 2)
+    if (ld.trace > 2)
         printf("%08lx %08lx", t, r);
 
     // extract address from command
@@ -74,27 +74,27 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
     ad = 0;
     switch ((int)r & REXT) {
     case RCONST:
-        i  = newindex[a - HDRSZ / W + cindex];
-        ad = cbasaddr + i - a;
+        i  = ld.newindex[a - HDRSZ / W + ld.cindex];
+        ad = ld.cbasaddr + i - a;
         break;
     case RTEXT:
-        ad = ctrel;
+        ad = ld.ctrel;
         break;
     case RDATA:
-        ad = cdrel;
+        ad = ld.cdrel;
         break;
     case RBSS:
-        ad = cbrel;
+        ad = ld.cbrel;
         break;
     case RABSS:
-        ad = carel;
+        ad = ld.carel;
         break;
     case REXT:
         sp = lookup_local(lp, (int)RGETIX(r));
         r &= RSHORT;
         if (sp->n_type == N_EXT + N_UNDF || sp->n_type == N_EXT + N_COMM ||
             sp->n_type == N_EXT + N_ACOMM) {
-            r |= REXT | RPUTIX(nsym + (sp - symtab));
+            r |= REXT | RPUTIX(ld.nsym + (sp - ld.symtab));
             break;
         }
         r |= reloc_type(sp->n_type);
@@ -127,7 +127,7 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
         break;
     }
 
-    if (trace > 2)
+    if (ld.trace > 2)
         printf(" -> %08lx %08lx\n", t, r);
 
     *pt = t;
@@ -140,17 +140,17 @@ void relocate_constants(const struct local *lp)
     struct constab *p;
     const struct constab *c;
 
-    p = &constab[nconst];
-    c = p + coptsize[nfile];
+    p = &ld.constab[ld.nconst];
+    c = p + ld.coptsize[ld.nfile];
     for (; p < c; p++) {
         relocate_halfword(lp, p->h, p->hr, &t, &r);
-        fputh(t, coutb);
-        if (rflag)
-            fputh(r, croutb);
+        fputh(t, ld.coutb);
+        if (ld.rflag)
+            fputh(r, ld.croutb);
         relocate_halfword(lp, p->h2, p->hr2, &t, &r);
-        fputh(t, coutb);
-        if (rflag)
-            fputh(r, croutb);
+        fputh(t, ld.coutb);
+        if (ld.rflag)
+            fputh(r, ld.croutb);
     }
 }
 
@@ -160,11 +160,11 @@ void relocate_segment(const struct local *lp, FILE *b1, FILE *b2, long len)
 
     len /= W / 2;
     while (len--) {
-        t = fgeth(text);
-        r = fgeth(reloc);
+        t = fgeth(ld.text);
+        r = fgeth(ld.reloc);
         relocate_halfword(lp, t, r, &t, &r);
         fputh(t, b1);
-        if (rflag)
+        if (ld.rflag)
             fputh(r, b2);
     }
 }

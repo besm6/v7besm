@@ -15,43 +15,43 @@ int open_input(char *cp)
     int c;
     struct stat x;
 
-    text    = 0;
-    filname = cp;
+    ld.text    = 0;
+    ld.filname = cp;
     if (cp[0] == '-' && cp[1] == 'l') {
         if (cp[2] == '\0')
             cp = "-la";
-        filname = libname;
+        ld.filname = ld.libname;
         for (c = 0; cp[c + 2]; c++)
-            filname[c + LNAMLEN] = cp[c + 2];
-        filname[c + LNAMLEN]     = '.';
-        filname[c + LNAMLEN + 1] = 'a';
-        filname[c + LNAMLEN + 2] = '\0';
-        text                     = fopen(filname, "r");
-        if (!text)
-            filname += 4;
+            ld.filname[c + LNAMLEN] = cp[c + 2];
+        ld.filname[c + LNAMLEN]     = '.';
+        ld.filname[c + LNAMLEN + 1] = 'a';
+        ld.filname[c + LNAMLEN + 2] = '\0';
+        ld.text                     = fopen(ld.filname, "r");
+        if (!ld.text)
+            ld.filname += 4;
     }
-    if (!text && !(text = fopen(filname, "r")))
+    if (!ld.text && !(ld.text = fopen(ld.filname, "r")))
         error(2, "cannot open");
-    reloc = fopen(filname, "r");
-    if (!reloc)
+    ld.reloc = fopen(ld.filname, "r");
+    if (!ld.reloc)
         error(2, "cannot open");
-    if (!fgetint(text, &c))
+    if (!fgetint(ld.text, &c))
         error(1, "unexpected EOF");
     if (c != ARMAG)
         return 0; // regular file
-    if (!fgetarhdr(text, &archdr))
+    if (!fgetarhdr(ld.text, &ld.archdr))
         return 1; // regular archive
-    if (strncmp(archdr.ar_name, SYMDEF, sizeof(archdr.ar_name)))
+    if (strncmp(ld.archdr.ar_name, SYMDEF, sizeof(ld.archdr.ar_name)))
         return 1; // regular archive
-    fstat(fileno(text), &x);
-    if (x.st_mtime > archdr.ar_date + 2)
+    fstat(fileno(ld.text), &x);
+    if (x.st_mtime > ld.archdr.ar_date + 2)
         return 3; // out of date archive
     return 2;     // randomized archive
 }
 
 void check_liblist(void)
 {
-    if (libp >= &liblist[LLSIZE])
+    if (ld.libp >= &ld.liblist[LLSIZE])
         error(2, "library table overflow");
 }
 
@@ -59,20 +59,20 @@ int scan_member(long nloc)
 {
     char *cp;
 
-    fseek(text, nloc, 0);
-    if (!fgetarhdr(text, &archdr)) {
-        *libp++ = -1;
+    fseek(ld.text, nloc, 0);
+    if (!fgetarhdr(ld.text, &ld.archdr)) {
+        *ld.libp++ = -1;
         check_liblist();
         return 0;
     }
-    cp = malloc(sizeof(archdr.ar_name) + 1);
+    cp = malloc(sizeof(ld.archdr.ar_name) + 1);
     if (!cp)
         error(2, "out of memory");
     // cppcheck-suppress nullPointerOutOfMemory
-    strncpy(cp, archdr.ar_name, sizeof(archdr.ar_name));
-    cp[sizeof(archdr.ar_name)] = '\0';
+    strncpy(cp, ld.archdr.ar_name, sizeof(ld.archdr.ar_name));
+    cp[sizeof(ld.archdr.ar_name)] = '\0';
     if (scan_object(nloc + ARHDRSZ, 1, make_file_symbol(cp, 0)))
-        *libp++ = nloc;
+        *ld.libp++ = nloc;
     free(cp);
     check_liblist();
     return 1;
@@ -82,12 +82,12 @@ void read_ranlib(void)
 {
     struct ranlib *p;
 
-    for (p = rantab; p < rantab + RANTABSZ; ++p) {
-        int n = fgetran(text, p);
+    for (p = ld.rantab; p < ld.rantab + RANTABSZ; ++p) {
+        int n = fgetran(ld.text, p);
         if (n < 0)
             error(2, "out of memory");
         if (n == 0) {
-            tnum = p - rantab;
+            ld.tnum = p - ld.rantab;
             return;
         }
     }
@@ -97,22 +97,22 @@ void read_ranlib(void)
 int load_ranlib_members(void)
 {
     struct ranlib *p;
-    const long *oldp = libp;
+    const long *oldp = ld.libp;
 
-    for (p = rantab; p < rantab + tnum; ++p) {
+    for (p = ld.rantab; p < ld.rantab + ld.tnum; ++p) {
         struct nlist **pp = lookup_name(p->ran_name);
         if (!*pp)
             continue;
         if ((*pp)->n_type == N_EXT + N_UNDF)
             scan_member(p->ran_off);
     }
-    return (oldp != libp);
+    return (oldp != ld.libp);
 }
 
 void free_ranlib(void)
 {
     struct ranlib *p;
 
-    for (p = rantab; p < rantab + tnum; ++p)
+    for (p = ld.rantab; p < ld.rantab + ld.tnum; ++p)
         free(p->ran_name);
 }

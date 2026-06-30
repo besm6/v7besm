@@ -45,69 +45,73 @@ struct constab {
 //
 // Global engine state (defined in ld.c).
 //
-extern struct exec filhdr; // aout header
-extern struct ar_hdr archdr;
-extern FILE *text, *reloc; // input management
+struct linker {
+    struct exec filhdr; // aout header
+    struct ar_hdr archdr;
+    FILE *text, *reloc; // input management
 
-// output management
-extern FILE *outb, *coutb, *toutb, *doutb, *croutb, *troutb, *droutb, *soutb;
+    // output management
+    FILE *outb, *coutb, *toutb, *doutb, *croutb, *troutb, *droutb, *soutb;
 
-extern struct constab constab[NCONST]; // constants
-extern struct nlist cursym;            // current symbol
-extern struct nlist symtab[NSYM];      // the symbols themselves
-extern struct nlist **symhash[NSYM];   // pointers to hash table
-extern struct nlist *lastsym;          // last entered symbol
-extern struct nlist *hshtab[NSYM + 2]; // hash table for symbols
-extern struct local local[NSYMPR];
-extern int symindex;         // next free entry in symbol table
-extern int newindex[NCONST]; // constant reindexing table
-extern int nconst;           // next free entry in constab
-extern int cindex;           // current index in newindex
-extern int nfile;            // current file number (index into coptsize)
-extern int coptsize[LLSIZE]; // const segment lengths after optimization
-extern long basaddr;         // base address of loading
-extern struct ranlib rantab[RANTABSZ];
-extern int tnum; // number of elements in rantab
+    struct constab constab[NCONST]; // constants
+    struct nlist cursym;            // current symbol
+    struct nlist symtab[NSYM];      // the symbols themselves
+    struct nlist **symhash[NSYM];   // pointers to hash table
+    struct nlist *lastsym;          // last entered symbol
+    struct nlist *hshtab[NSYM + 2]; // hash table for symbols
+    struct local local[NSYMPR];
+    int symindex;         // next free entry in symbol table
+    int newindex[NCONST]; // constant reindexing table
+    int nconst;           // next free entry in constab
+    int cindex;           // current index in newindex
+    int nfile;            // current file number (index into coptsize)
+    int coptsize[LLSIZE]; // const segment lengths after optimization
+    long basaddr;         // base address of loading
+    struct ranlib rantab[RANTABSZ];
+    int tnum; // number of elements in rantab
 
-extern long liblist[LLSIZE], *libp; // library management
+    long liblist[LLSIZE], *libp; // library management
 
-// internal symbols
-extern struct nlist *p_econst, *p_etext, *p_edata, *p_ebss, *p_end, *entrypt;
+    // internal symbols
+    struct nlist *p_econst, *p_etext, *p_edata, *p_ebss, *p_end, *entrypt;
 
-// flags
-extern int trace;  // internal trace flag
-extern int xflag;  // discard local symbols
-extern int Xflag;  // discard locals starting with LOCSYM
-extern int Sflag;  // discard all except locals and globals
-extern int Cflag;  // put constants in data segment
-extern int rflag;  // preserve relocation bits, don't define commons
-extern int arflag; // original copy of rflag
-extern int sflag;  // discard all symbols
-extern int nflag;  // pure procedure
-extern int dflag;  // define common even with rflag
-extern int alflag; // const and text aligned on page boundary
+    // flags
+    int trace;  // internal trace flag
+    int xflag;  // discard local symbols
+    int Xflag;  // discard locals starting with LOCSYM
+    int Sflag;  // discard all except locals and globals
+    int Cflag;  // put constants in data segment
+    int rflag;  // preserve relocation bits, don't define commons
+    int arflag; // original copy of rflag
+    int sflag;  // discard all symbols
+    int nflag;  // pure procedure
+    int dflag;  // define common even with rflag
+    int alflag; // const and text aligned on page boundary
 
-// cumulative sizes set in pass 1
-extern long csize, tsize, dsize, bsize, asize, ssize, nsym;
+    // cumulative sizes set in pass 1
+    long csize, tsize, dsize, bsize, asize, ssize, nsym;
 
-// symbol relocation; both passes
-extern long ctrel, cdrel, cbrel, carel;
+    // symbol relocation; both passes
+    long ctrel, cdrel, cbrel, carel;
 
-extern int ofilfnd;
-extern char *ofilename;
-extern char *filname;
-extern int errlev;
-extern int delarg;
-extern char tfname[];
-extern char libname[];
+    int ofilfnd;
+    char *ofilename;
+    char *filname;
+    int errlev;
+    int delarg;
+    char tfname[14];  // "/tmp/ldaXXXXX"
+    char libname[44]; // "/usr/local/lib/microbesm/lib" + name
 
-// Needed after pass 1
-extern long corigin;
-extern long cbasaddr;
-extern long torigin;
-extern long dorigin;
-extern long borigin;
-extern long aorigin;
+    // Needed after pass 1
+    long corigin;
+    long cbasaddr;
+    long torigin;
+    long dorigin;
+    long borigin;
+    long aorigin;
+};
+
+extern struct linker ld;
 
 //
 // Shared functions.

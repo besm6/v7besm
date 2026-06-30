@@ -9,55 +9,55 @@
 
 void create_buffer(FILE **buf, int tempflg)
 {
-    *buf = fopen(tempflg ? tfname : ofilename, "w+");
+    *buf = fopen(tempflg ? ld.tfname : ld.ofilename, "w+");
     if (!*buf)
         error(2, tempflg ? "cannot create temporary file" : "cannot create output file");
     if (tempflg)
-        unlink(tfname);
+        unlink(ld.tfname);
 }
 
 void setup_output(void)
 {
-    int fd = mkstemp(tfname);
+    int fd = mkstemp(ld.tfname);
     if (fd == -1) {
-        error(2, "cannot create temporary file %s", tfname);
+        error(2, "cannot create temporary file %s", ld.tfname);
     } else {
         close(fd);
     }
-    create_buffer(&outb, 0);
-    create_buffer(&coutb, 1);
-    create_buffer(&toutb, 1);
-    create_buffer(&doutb, 1);
-    if (!sflag || !xflag)
-        create_buffer(&soutb, 1);
-    if (rflag) {
-        create_buffer(&croutb, 1);
-        create_buffer(&troutb, 1);
-        create_buffer(&droutb, 1);
+    create_buffer(&ld.outb, 0);
+    create_buffer(&ld.coutb, 1);
+    create_buffer(&ld.toutb, 1);
+    create_buffer(&ld.doutb, 1);
+    if (!ld.sflag || !ld.xflag)
+        create_buffer(&ld.soutb, 1);
+    if (ld.rflag) {
+        create_buffer(&ld.croutb, 1);
+        create_buffer(&ld.troutb, 1);
+        create_buffer(&ld.droutb, 1);
     }
-    filhdr.a_magic = nflag ? NMAGIC : alflag ? AMAGIC : FMAGIC;
-    filhdr.a_const = csize;
-    filhdr.a_text  = tsize;
-    filhdr.a_data  = dsize;
-    filhdr.a_bss   = bsize;
-    filhdr.a_abss  = asize;
-    filhdr.a_syms  = ALIGN(ssize, W);
-    if (entrypt) {
-        if (entrypt->n_type != N_EXT + N_TEXT && entrypt->n_type != N_EXT + N_UNDF)
+    ld.filhdr.a_magic = ld.nflag ? NMAGIC : ld.alflag ? AMAGIC : FMAGIC;
+    ld.filhdr.a_const = ld.csize;
+    ld.filhdr.a_text  = ld.tsize;
+    ld.filhdr.a_data  = ld.dsize;
+    ld.filhdr.a_bss   = ld.bsize;
+    ld.filhdr.a_abss  = ld.asize;
+    ld.filhdr.a_syms  = ALIGN(ld.ssize, W);
+    if (ld.entrypt) {
+        if (ld.entrypt->n_type != N_EXT + N_TEXT && ld.entrypt->n_type != N_EXT + N_UNDF)
             error(1, "entry out of text");
         else
-            filhdr.a_entry = entrypt->n_value;
+            ld.filhdr.a_entry = ld.entrypt->n_value;
     } else
-        filhdr.a_entry = torigin;
-    if (rflag)
-        filhdr.a_flag &= ~RELFLG;
+        ld.filhdr.a_entry = ld.torigin;
+    if (ld.rflag)
+        ld.filhdr.a_flag &= ~RELFLG;
     else
-        filhdr.a_flag |= RELFLG;
-    if (Cflag)
-        filhdr.a_flag |= TCDFLG;
+        ld.filhdr.a_flag |= RELFLG;
+    if (ld.Cflag)
+        ld.filhdr.a_flag |= TCDFLG;
     else
-        filhdr.a_flag &= ~TCDFLG;
-    fputhdr(&filhdr, outb);
+        ld.filhdr.a_flag &= ~TCDFLG;
+    fputhdr(&ld.filhdr, ld.outb);
 }
 
 void copy_buffer(FILE *buf)
@@ -66,54 +66,54 @@ void copy_buffer(FILE *buf)
 
     rewind(buf);
     while ((c = getc(buf)) != EOF)
-        putc(c, outb);
+        putc(c, ld.outb);
     fclose(buf);
 }
 
 void finish_output(void)
 {
-    if (nflag || alflag) {
+    if (ld.nflag || ld.alflag) {
         long n;
-        if (alflag) {
-            n = corigin;
+        if (ld.alflag) {
+            n = ld.corigin;
             while (n & 01777) {
                 n++;
-                fputw(0, coutb);
+                fputw(0, ld.coutb);
             }
         }
         // now torigin points to the end of text
-        n = torigin;
+        n = ld.torigin;
         while (n & 01777) {
             n++;
-            fputw(0, toutb);
-            if (rflag) {
-                fputw(0, troutb);
+            fputw(0, ld.toutb);
+            if (ld.rflag) {
+                fputw(0, ld.troutb);
             }
         }
     }
-    if (!Cflag)
-        copy_buffer(coutb);
-    copy_buffer(toutb);
-    if (Cflag)
-        copy_buffer(coutb);
-    copy_buffer(doutb);
-    if (rflag) {
-        if (!Cflag)
-            copy_buffer(croutb);
-        copy_buffer(troutb);
-        if (Cflag)
-            copy_buffer(croutb);
-        copy_buffer(droutb);
+    if (!ld.Cflag)
+        copy_buffer(ld.coutb);
+    copy_buffer(ld.toutb);
+    if (ld.Cflag)
+        copy_buffer(ld.coutb);
+    copy_buffer(ld.doutb);
+    if (ld.rflag) {
+        if (!ld.Cflag)
+            copy_buffer(ld.croutb);
+        copy_buffer(ld.troutb);
+        if (ld.Cflag)
+            copy_buffer(ld.croutb);
+        copy_buffer(ld.droutb);
     }
-    if (!sflag) {
+    if (!ld.sflag) {
         const struct nlist *p;
-        if (!xflag)
-            copy_buffer(soutb);
-        for (p = symtab; p < &symtab[symindex]; ++p)
-            fputsym(p, outb);
-        putc(0, outb);
-        while (ssize++ % W)
-            putc(0, outb);
+        if (!ld.xflag)
+            copy_buffer(ld.soutb);
+        for (p = ld.symtab; p < &ld.symtab[ld.symindex]; ++p)
+            fputsym(p, ld.outb);
+        putc(0, ld.outb);
+        while (ld.ssize++ % W)
+            putc(0, ld.outb);
     }
-    fclose(outb);
+    fclose(ld.outb);
 }

@@ -16,89 +16,90 @@ void relocate_object(long loc)
     long count;
 
     read_header(loc);
-    ctrel += torigin;
-    cdrel += dorigin;
-    cbrel += borigin;
-    carel += aorigin;
+    ld.ctrel += ld.torigin;
+    ld.cdrel += ld.dorigin;
+    ld.cbrel += ld.borigin;
+    ld.carel += ld.aorigin;
 
-    if (trace > 1)
-        printf("ctrel=%lxh, cdrel=%lxh, cbrel=%lxh, carel=%lxh\n", ctrel, cdrel, cbrel, carel);
+    if (ld.trace > 1)
+        printf("ctrel=%lxh, cdrel=%lxh, cbrel=%lxh, carel=%lxh\n", ld.ctrel, ld.cdrel, ld.cbrel,
+               ld.carel);
     //
     // Re-read the symbol table, recording the numbering
     // of symbols for fixing external references.
     //
-    lp    = local;
+    lp    = ld.local;
     symno = -1;
     loc += HDRSZ;
-    fseek(text, loc + (filhdr.a_const + filhdr.a_text + filhdr.a_data) * 2, 0);
+    fseek(ld.text, loc + (ld.filhdr.a_const + ld.filhdr.a_text + ld.filhdr.a_data) * 2, 0);
     for (;;) {
         symno++;
-        count = fgetsym(text, &cursym);
+        count = fgetsym(ld.text, &ld.cursym);
         if (count == 0)
             error(2, "out of memory");
         if (count == 1)
             break;
         relocate_cursym();
-        int type = cursym.n_type;
-        if (Sflag && ((type & N_TYPE) == N_ABS || (type & N_TYPE) > N_ACOMM)) {
-            free(cursym.n_name);
+        int type = ld.cursym.n_type;
+        if (ld.Sflag && ((type & N_TYPE) == N_ABS || (type & N_TYPE) > N_ACOMM)) {
+            free(ld.cursym.n_name);
             continue;
         }
         if (!(type & N_EXT)) {
-            if (!sflag && !xflag && (!Xflag || cursym.n_name[0] != LOCSYM))
-                fputsym(&cursym, soutb);
-            free(cursym.n_name);
+            if (!ld.sflag && !ld.xflag && (!ld.Xflag || ld.cursym.n_name[0] != LOCSYM))
+                fputsym(&ld.cursym, ld.soutb);
+            free(ld.cursym.n_name);
             continue;
         }
         if (!(sp = *lookup_symbol()))
             error(2, "internal error: symbol not found");
-        free(cursym.n_name);
-        if (cursym.n_type == N_EXT + N_UNDF || cursym.n_type == N_EXT + N_COMM ||
-            cursym.n_type == N_EXT + N_ACOMM) {
-            if (lp >= &local[NSYMPR])
+        free(ld.cursym.n_name);
+        if (ld.cursym.n_type == N_EXT + N_UNDF || ld.cursym.n_type == N_EXT + N_COMM ||
+            ld.cursym.n_type == N_EXT + N_ACOMM) {
+            if (lp >= &ld.local[NSYMPR])
                 error(2, "local symbol table overflow");
             lp->locindex    = symno;
             lp++->locsymbol = sp;
             continue;
         }
-        if (cursym.n_type != sp->n_type || cursym.n_value != sp->n_value) {
-            printf("%s: ", cursym.n_name);
+        if (ld.cursym.n_type != sp->n_type || ld.cursym.n_value != sp->n_value) {
+            printf("%s: ", ld.cursym.n_name);
             error(1, "name redefined");
         }
     }
 
-    count = loc + filhdr.a_const + filhdr.a_text + filhdr.a_data;
+    count = loc + ld.filhdr.a_const + ld.filhdr.a_text + ld.filhdr.a_data;
 
-    if (trace > 1)
+    if (ld.trace > 1)
         printf("** CONST **\n");
     relocate_constants(lp);
 
-    if (trace > 1)
+    if (ld.trace > 1)
         printf("** TEXT **\n");
-    fseek(text, loc + filhdr.a_const, 0);
-    fseek(reloc, count + filhdr.a_const, 0);
-    relocate_segment(lp, toutb, troutb, filhdr.a_text);
+    fseek(ld.text, loc + ld.filhdr.a_const, 0);
+    fseek(ld.reloc, count + ld.filhdr.a_const, 0);
+    relocate_segment(lp, ld.toutb, ld.troutb, ld.filhdr.a_text);
 
-    if (trace > 1)
+    if (ld.trace > 1)
         printf("** DATA **\n");
-    fseek(text, loc + filhdr.a_const + filhdr.a_text, 0);
-    fseek(reloc, count + filhdr.a_const + filhdr.a_text, 0);
-    relocate_segment(lp, doutb, droutb, filhdr.a_data);
+    fseek(ld.text, loc + ld.filhdr.a_const + ld.filhdr.a_text, 0);
+    fseek(ld.reloc, count + ld.filhdr.a_const + ld.filhdr.a_text, 0);
+    relocate_segment(lp, ld.doutb, ld.droutb, ld.filhdr.a_data);
 
-    nconst += coptsize[nfile];
-    cindex += filhdr.a_const / W;
-    corigin += coptsize[nfile];
-    torigin += filhdr.a_text / W;
-    dorigin += filhdr.a_data / W;
-    borigin += filhdr.a_bss / W;
-    aorigin += filhdr.a_abss / W;
-    nfile++;
+    ld.nconst += ld.coptsize[ld.nfile];
+    ld.cindex += ld.filhdr.a_const / W;
+    ld.corigin += ld.coptsize[ld.nfile];
+    ld.torigin += ld.filhdr.a_text / W;
+    ld.dorigin += ld.filhdr.a_data / W;
+    ld.borigin += ld.filhdr.a_bss / W;
+    ld.aorigin += ld.filhdr.a_abss / W;
+    ld.nfile++;
 }
 
 void relocate_file(char *acp)
 {
     if (open_input(acp) == 0) {
-        if (trace)
+        if (ld.trace)
             printf("%s:\n", acp);
         make_file_symbol(acp, 1);
         relocate_object(0L);
@@ -107,25 +108,25 @@ void relocate_file(char *acp)
         const char *arname = acp;
         long *lp;
 
-        for (lp = libp; *lp != -1; lp++) {
-            fseek(text, *lp, 0);
-            fgetarhdr(text, &archdr);
-            acp = malloc(sizeof(archdr.ar_name) + 1);
+        for (lp = ld.libp; *lp != -1; lp++) {
+            fseek(ld.text, *lp, 0);
+            fgetarhdr(ld.text, &ld.archdr);
+            acp = malloc(sizeof(ld.archdr.ar_name) + 1);
             if (!acp)
                 error(2, "out of memory");
             // cppcheck-suppress nullPointerOutOfMemory
-            strncpy(acp, archdr.ar_name, sizeof(archdr.ar_name));
-            acp[sizeof(archdr.ar_name)] = '\0';
-            if (trace)
+            strncpy(acp, ld.archdr.ar_name, sizeof(ld.archdr.ar_name));
+            acp[sizeof(ld.archdr.ar_name)] = '\0';
+            if (ld.trace)
                 printf("%s(%s):\n", arname, acp);
             make_file_symbol(acp, 1);
             free(acp);
             relocate_object(*lp + ARHDRSZ);
         }
-        libp = ++lp;
+        ld.libp = ++lp;
     }
-    fclose(text);
-    fclose(reloc);
+    fclose(ld.text);
+    fclose(ld.reloc);
 }
 
 void pass2(int argc, char **argv)
@@ -134,11 +135,11 @@ void pass2(int argc, char **argv)
     long dnum;
     char *ap, **p;
 
-    p      = argv + 1;
-    libp   = liblist;
-    cindex = 0;
-    nconst = 0;
-    nfile  = 0;
+    p         = argv + 1;
+    ld.libp   = ld.liblist;
+    ld.cindex = 0;
+    ld.nconst = 0;
+    ld.nfile  = 0;
     for (c = 1; c < argc; c++) {
         ap = *p++;
         if (*ap != '-') {
@@ -153,9 +154,9 @@ void pass2(int argc, char **argv)
                 //              for (dnum=atoi(*p); dorigin<dnum; dorigin++) {
                 //
                 for (dnum = atoi(*p); dnum > 0; --dnum) {
-                    fputw(0, doutb);
-                    if (rflag) {
-                        fputw(0, droutb);
+                    fputw(0, ld.doutb);
+                    if (ld.rflag) {
+                        fputw(0, ld.droutb);
                     }
                 }
             case 'u':

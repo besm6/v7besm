@@ -14,25 +14,25 @@ int load_constants(void)
     struct constab *c;
     const struct constab *p;
 
-    save  = nconst;
-    count = filhdr.a_const / W;
-    c     = &constab[nconst];
+    save  = ld.nconst;
+    count = ld.filhdr.a_const / W;
+    c     = &ld.constab[ld.nconst];
     while (count--) {
-        c->h   = fgeth(text);
-        c->h2  = fgeth(text);
-        c->hr  = fgeth(reloc);
-        c->hr2 = fgeth(reloc);
+        c->h   = fgeth(ld.text);
+        c->h2  = fgeth(ld.text);
+        c->hr  = fgeth(ld.reloc);
+        c->hr2 = fgeth(ld.reloc);
         p      = c;
         if (!c->hr && !c->hr2)
-            for (p = constab; p < c; p++)
+            for (p = ld.constab; p < c; p++)
                 if (!p->hr2 && c->h == p->h && c->h2 == p->h2 && !p->hr)
                     break;
-        if (p == c && ++c >= &constab[NCONST])
+        if (p == c && ++c >= &ld.constab[NCONST])
             error(2, "constant table overflow");
-        newindex[cindex++] = p - constab;
+        ld.newindex[ld.cindex++] = p - ld.constab;
     }
-    nconst = c - constab;
-    return nconst - save;
+    ld.nconst = c - ld.constab;
+    return ld.nconst - save;
 }
 
 //
@@ -45,74 +45,74 @@ int scan_object(long loc, int libflg, int nloc)
     int ndef, nsymbol;
 
     read_header(loc);
-    if (filhdr.a_flag & RELFLG) {
+    if (ld.filhdr.a_flag & RELFLG) {
         error(1, "file stripped");
         return 0;
     }
-    savcindex = cindex;
-    fseek(reloc, loc + N_SYMOFF(filhdr), 0);
-    coptsize[nfile] = load_constants();
-    ctrel += tsize / W;
-    cdrel += dsize / W;
-    cbrel += bsize / W;
-    carel += asize / W;
-    loc += HDRSZ + (filhdr.a_const + filhdr.a_text + filhdr.a_data) * 2;
-    fseek(text, loc, 0);
+    savcindex = ld.cindex;
+    fseek(ld.reloc, loc + N_SYMOFF(ld.filhdr), 0);
+    ld.coptsize[ld.nfile] = load_constants();
+    ld.ctrel += ld.tsize / W;
+    ld.cdrel += ld.dsize / W;
+    ld.cbrel += ld.bsize / W;
+    ld.carel += ld.asize / W;
+    loc += HDRSZ + (ld.filhdr.a_const + ld.filhdr.a_text + ld.filhdr.a_data) * 2;
+    fseek(ld.text, loc, 0);
     ndef     = 0;
-    savindex = symindex;
+    savindex = ld.symindex;
     if (nloc)
         nsymbol = 1;
     else
         nsymbol = 0;
     for (;;) {
-        int symlen = fgetsym(text, &cursym);
+        int symlen = fgetsym(ld.text, &ld.cursym);
         int type;
         if (symlen == 0)
             error(2, "out of memory");
         if (symlen == 1)
             break;
-        type = cursym.n_type;
-        if (Sflag && ((type & N_TYPE) == N_ABS || (type & N_TYPE) > N_ACOMM)) {
-            free(cursym.n_name);
+        type = ld.cursym.n_type;
+        if (ld.Sflag && ((type & N_TYPE) == N_ABS || (type & N_TYPE) > N_ACOMM)) {
+            free(ld.cursym.n_name);
             continue;
         }
         if (!(type & N_EXT)) {
-            if (!sflag && !xflag && (!Xflag || cursym.n_name[0] != LOCSYM)) {
+            if (!ld.sflag && !ld.xflag && (!ld.Xflag || ld.cursym.n_name[0] != LOCSYM)) {
                 nsymbol++;
                 nloc += symlen;
             }
-            free(cursym.n_name);
+            free(ld.cursym.n_name);
             continue;
         }
         relocate_cursym();
         if (enter_symbol(lookup_symbol()))
             continue;
-        free(cursym.n_name);
-        if (cursym.n_type == N_EXT + N_UNDF)
+        free(ld.cursym.n_name);
+        if (ld.cursym.n_type == N_EXT + N_UNDF)
             continue;
-        sp = lastsym;
+        sp = ld.lastsym;
         if (sp->n_type == N_EXT + N_UNDF || sp->n_type == N_EXT + N_COMM ||
             sp->n_type == N_EXT + N_ACOMM) {
-            if (cursym.n_type == N_EXT + N_COMM || cursym.n_type == N_EXT + N_ACOMM) {
-                sp->n_type = cursym.n_type;
-                if (cursym.n_value > sp->n_value)
-                    sp->n_value = cursym.n_value;
-            } else if (sp->n_type == N_EXT + N_UNDF || cursym.n_type == N_EXT + N_DATA ||
-                       cursym.n_type == N_EXT + N_BSS) {
+            if (ld.cursym.n_type == N_EXT + N_COMM || ld.cursym.n_type == N_EXT + N_ACOMM) {
+                sp->n_type = ld.cursym.n_type;
+                if (ld.cursym.n_value > sp->n_value)
+                    sp->n_value = ld.cursym.n_value;
+            } else if (sp->n_type == N_EXT + N_UNDF || ld.cursym.n_type == N_EXT + N_DATA ||
+                       ld.cursym.n_type == N_EXT + N_BSS) {
                 ndef++;
-                sp->n_type  = cursym.n_type;
-                sp->n_value = cursym.n_value;
+                sp->n_type  = ld.cursym.n_type;
+                sp->n_value = ld.cursym.n_value;
             }
         }
     }
     if (!libflg || ndef) {
-        csize = add_size(csize, (long)W * coptsize[nfile++], "const segment overflow");
-        tsize = add_size(tsize, filhdr.a_text, "text segment overflow");
-        dsize = add_size(dsize, filhdr.a_data, "data segment overflow");
-        bsize = add_size(bsize, filhdr.a_bss, "bss segment overflow");
-        asize = add_size_long(asize, filhdr.a_abss, "abss segment overflow");
-        ssize = add_size(ssize, (long)nloc, "symbol table overflow");
-        nsym += nsymbol;
+        ld.csize = add_size(ld.csize, (long)W * ld.coptsize[ld.nfile++], "const segment overflow");
+        ld.tsize = add_size(ld.tsize, ld.filhdr.a_text, "text segment overflow");
+        ld.dsize = add_size(ld.dsize, ld.filhdr.a_data, "data segment overflow");
+        ld.bsize = add_size(ld.bsize, ld.filhdr.a_bss, "bss segment overflow");
+        ld.asize = add_size_long(ld.asize, ld.filhdr.a_abss, "abss segment overflow");
+        ld.ssize = add_size(ld.ssize, (long)nloc, "symbol table overflow");
+        ld.nsym += nsymbol;
         return 1;
     }
 
@@ -120,12 +120,12 @@ int scan_object(long loc, int libflg, int nloc)
     // No symbols defined by this library member.
     // Rip out the hash table entries and reset the symbol table.
     //
-    cindex = savcindex;
-    nconst -= coptsize[nfile];
-    while (symindex > savindex) {
+    ld.cindex = savcindex;
+    ld.nconst -= ld.coptsize[ld.nfile];
+    while (ld.symindex > savindex) {
         struct nlist **p;
 
-        p = symhash[--symindex];
+        p = ld.symhash[--ld.symindex];
         free((*p)->n_name);
         *p = 0;
     }
@@ -147,23 +147,23 @@ void scan_file(char *cp)
         nloc = W;
     archive:
         while (scan_member(nloc))
-            nloc += archdr.ar_size + ARHDRSZ;
+            nloc += ld.archdr.ar_size + ARHDRSZ;
         break;
     case 2: // table of contents
         read_ranlib();
         while (load_ranlib_members())
             ;
         free_ranlib();
-        *libp++ = -1;
+        *ld.libp++ = -1;
         check_liblist();
         break;
     case 3: // out of date archive
         error(0, "out of date (warning)");
-        nloc = W + archdr.ar_size + ARHDRSZ;
+        nloc = W + ld.archdr.ar_size + ARHDRSZ;
         goto archive;
     }
-    fclose(text);
-    fclose(reloc);
+    fclose(ld.text);
+    fclose(ld.reloc);
 }
 
 //
@@ -176,11 +176,11 @@ void pass1(int argc, char **argv)
     char *ap, **p;
     char save;
 
-    p    = argv + 1;
-    libp = liblist;
+    p       = argv + 1;
+    ld.libp = ld.liblist;
     for (c = 1; c < argc; ++c) {
-        filname = 0;
-        ap      = *p++;
+        ld.filname = 0;
+        ap         = *p++;
 
         if (*ap != '-') {
             scan_file(ap);
@@ -192,8 +192,8 @@ void pass1(int argc, char **argv)
             case 'o':
                 if (++c >= argc)
                     error(2, "-o: argument missed");
-                ofilename = *p++;
-                ofilfnd++;
+                ld.ofilename = *p++;
+                ld.ofilfnd++;
                 continue;
 
                 // 'use'
@@ -208,7 +208,7 @@ void pass1(int argc, char **argv)
                 if (++c >= argc)
                     error(2, "-e: argument missed");
                 enter_symbol(lookup_name(*p++));
-                entrypt = lastsym;
+                ld.entrypt = ld.lastsym;
                 continue;
 
                 // set data size
@@ -216,14 +216,14 @@ void pass1(int argc, char **argv)
                 if (++c >= argc)
                     error(2, "-D: argument missed");
                 num = W * atoi(*p++);
-                if (dsize > num)
+                if (ld.dsize > num)
                     error(2, "-D: too small");
-                dsize = num;
+                ld.dsize = num;
                 continue;
 
                 // base address of loading
             case 'T':
-                basaddr = strtoul(ap + i + 1, 0, 0);
+                ld.basaddr = strtoul(ap + i + 1, 0, 0);
                 break;
 
                 // library
@@ -236,53 +236,53 @@ void pass1(int argc, char **argv)
 
                 // discard local symbols
             case 'x':
-                xflag++;
+                ld.xflag++;
                 continue;
 
                 // discard locals starting with LOCSYM
             case 'X':
-                Xflag++;
+                ld.Xflag++;
                 continue;
 
                 // discard all except locals and globals
             case 'S':
-                Sflag++;
+                ld.Sflag++;
                 continue;
 
                 // put constants in data segment
             case 'C':
-                Cflag++;
+                ld.Cflag++;
                 continue;
 
                 // preserve rel. bits, don't define common
             case 'r':
-                rflag++;
-                arflag++;
+                ld.rflag++;
+                ld.arflag++;
                 continue;
 
                 // discard all symbols
             case 's':
-                sflag++;
-                xflag++;
+                ld.sflag++;
+                ld.xflag++;
                 continue;
 
                 // pure procedure
             case 'n':
-                nflag++;
+                ld.nflag++;
                 continue;
 
                 // define common even with rflag
             case 'd':
-                dflag++;
+                ld.dflag++;
                 continue;
 
                 // tracing
             case 't':
-                trace++;
+                ld.trace++;
                 continue;
 
             case 'k':
-                alflag++;
+                ld.alflag++;
                 continue;
 
             default:

@@ -12,31 +12,31 @@ void relocate_cursym(void)
 {
     int i;
 
-    switch (cursym.n_type) {
+    switch (ld.cursym.n_type) {
     case N_CONST:
     case N_EXT + N_CONST:
-        i              = cindex + cursym.n_value - HDRSZ / W;
-        cursym.n_value = newindex[i];
+        i                 = ld.cindex + ld.cursym.n_value - HDRSZ / W;
+        ld.cursym.n_value = ld.newindex[i];
         return;
 
     case N_TEXT:
     case N_EXT + N_TEXT:
-        cursym.n_value += ctrel;
+        ld.cursym.n_value += ld.ctrel;
         return;
 
     case N_DATA:
     case N_EXT + N_DATA:
-        cursym.n_value += cdrel;
+        ld.cursym.n_value += ld.cdrel;
         return;
 
     case N_BSS:
     case N_EXT + N_BSS:
-        cursym.n_value += cbrel;
+        ld.cursym.n_value += ld.cbrel;
         return;
 
     case N_ABSS:
     case N_EXT + N_ABSS:
-        cursym.n_value += carel;
+        ld.cursym.n_value += ld.carel;
         return;
 
     case N_EXT + N_UNDF:
@@ -44,8 +44,8 @@ void relocate_cursym(void)
     case N_EXT + N_ACOMM:
         return;
     }
-    if (cursym.n_type & N_EXT)
-        cursym.n_type = N_EXT + N_ABS;
+    if (ld.cursym.n_type & N_EXT)
+        ld.cursym.n_type = N_EXT + N_ABS;
 }
 
 int enter_symbol(struct nlist **hp)
@@ -53,17 +53,17 @@ int enter_symbol(struct nlist **hp)
     struct nlist *sp;
 
     if (!*hp) {
-        if (symindex >= NSYM)
+        if (ld.symindex >= NSYM)
             error(2, "symbol table overflow");
-        symhash[symindex] = hp;
-        *hp = lastsym = sp = &symtab[symindex++];
-        sp->n_len          = cursym.n_len;
-        sp->n_name         = cursym.n_name;
-        sp->n_type         = cursym.n_type;
-        sp->n_value        = cursym.n_value;
+        ld.symhash[ld.symindex] = hp;
+        *hp = ld.lastsym = sp = &ld.symtab[ld.symindex++];
+        sp->n_len             = ld.cursym.n_len;
+        sp->n_name            = ld.cursym.n_name;
+        sp->n_type            = ld.cursym.n_type;
+        sp->n_value           = ld.cursym.n_value;
         return 1;
     } else {
-        lastsym = *hp;
+        ld.lastsym = *hp;
         return 0;
     }
 }
@@ -75,19 +75,19 @@ struct nlist **lookup_symbol(void)
     struct nlist **hp;
 
     i = 0;
-    for (cp = cursym.n_name; *cp; i = (i << 1) + *cp++)
+    for (cp = ld.cursym.n_name; *cp; i = (i << 1) + *cp++)
         ;
-    for (hp = &hshtab[(i & 077777) % NSYM + 2]; *hp != 0;) {
+    for (hp = &ld.hshtab[(i & 077777) % NSYM + 2]; *hp != 0;) {
         const char *cp1 = (*hp)->n_name;
         int clash       = 0;
-        for (cp = cursym.n_name; *cp;)
+        for (cp = ld.cursym.n_name; *cp;)
             if (*cp++ != *cp1++) {
                 clash = 1;
                 break;
             }
         if (clash) {
-            if (++hp >= &hshtab[NSYM + 2])
-                hp = hshtab;
+            if (++hp >= &ld.hshtab[NSYM + 2])
+                hp = ld.hshtab;
         } else
             break;
     }
@@ -96,10 +96,10 @@ struct nlist **lookup_symbol(void)
 
 struct nlist **lookup_name(char *s)
 {
-    cursym.n_len   = strlen(s) + 1;
-    cursym.n_name  = s;
-    cursym.n_type  = N_EXT + N_UNDF;
-    cursym.n_value = 0;
+    ld.cursym.n_len   = strlen(s) + 1;
+    ld.cursym.n_name  = s;
+    ld.cursym.n_type  = N_EXT + N_UNDF;
+    ld.cursym.n_value = 0;
     return lookup_symbol();
 }
 
@@ -120,12 +120,12 @@ struct nlist *lookup_local(const struct local *lp, int sn)
 {
     const struct local *clp;
 
-    for (clp = local; clp < lp; clp++)
+    for (clp = ld.local; clp < lp; clp++)
         if (clp->locindex == sn)
             return clp->locsymbol;
-    if (trace) {
+    if (ld.trace) {
         fprintf(stderr, "*** %d ***\n", sn);
-        for (clp = local; clp < lp; clp++)
+        for (clp = ld.local; clp < lp; clp++)
             fprintf(stderr, "%ld, ", clp->locindex);
         fprintf(stderr, "\n");
     }
@@ -138,22 +138,22 @@ int make_file_symbol(char *s, int wflag)
 {
     char *p;
 
-    if (sflag || xflag)
+    if (ld.sflag || ld.xflag)
         return 0;
     for (p = s; *p;)
         if (*p++ == '/')
             s = p;
     if (!wflag)
         return p - s + 6;
-    cursym.n_len  = p - s;
-    cursym.n_name = malloc(cursym.n_len + 1);
-    if (!cursym.n_name)
+    ld.cursym.n_len  = p - s;
+    ld.cursym.n_name = malloc(ld.cursym.n_len + 1);
+    if (!ld.cursym.n_name)
         error(2, "out of memory");
-    for (p = cursym.n_name; *s; p++, s++)
+    for (p = ld.cursym.n_name; *s; p++, s++)
         *p = *s;
-    cursym.n_type  = N_FN;
-    cursym.n_value = torigin;
-    fputsym(&cursym, soutb);
-    free(cursym.n_name);
-    return cursym.n_len + 6;
+    ld.cursym.n_type  = N_FN;
+    ld.cursym.n_value = ld.torigin;
+    fputsym(&ld.cursym, ld.soutb);
+    free(ld.cursym.n_name);
+    return ld.cursym.n_len + 6;
 }
