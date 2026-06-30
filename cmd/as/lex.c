@@ -31,7 +31,7 @@ static int hex_digit_value(int c)
 // The digit values are stashed left-to-right in as.name, then assembled into
 // the 48-bit value back-to-front: the least significant digit goes to bit 0 of
 // the low half, four bits per hex digit, spilling into the high half once the
-// low half's 32 bits are full.  The loops stop early when the digit pointer
+// low half's 24 bits are full.  The loops stop early when the digit pointer
 // runs back past the start, i.e. when all digits are placed.
 //
 static void read_hex_number(void)
@@ -45,14 +45,15 @@ static void read_hex_number(void)
     ungetc(c, stdin);
     as.intval.left  = 0;
     as.intval.right = 0;
-    // Fill the low half (bits 0..31), 4 bits per digit, from the last digit up.
-    for (c = 0; c < 32; c += 4) {
+    // Fill the low half (bits 1..24, i.e. 0-based 0..23), 4 bits per digit,
+    // from the last digit up.
+    for (c = 0; c < 24; c += 4) {
         if (--cp < as.name)
             return;
         as.intval.right |= (long)*cp << c;
     }
     // Remaining digits spill into the high half.
-    for (c = 0; c < 32; c += 4) {
+    for (c = 0; c < 24; c += 4) {
         if (--cp < as.name)
             return;
         as.intval.left |= (long)*cp << c;
@@ -74,12 +75,12 @@ static void read_binary_number(void)
     ungetc(c, stdin);
     as.intval.left  = 0;
     as.intval.right = 0;
-    for (c = 0; c < 32; c++) {
+    for (c = 0; c < 24; c++) {
         if (--cp < as.name)
             return;
         as.intval.right |= (long)*cp << c;
     }
-    for (c = 0; c < 32; c++) {
+    for (c = 0; c < 24; c++) {
         if (--cp < as.name)
             return;
         as.intval.left |= (long)*cp << c;
@@ -96,29 +97,23 @@ static void read_binary_number(void)
 //
 static void read_number(int c)
 {
-    char *cp;
-
     as.intval.left  = 0;
     as.intval.right = 0;
     if (c == '0') {
+        char *cp;
         // Octal: leading-zero literal, e.g. 0123.  Three bits per digit.
         for (cp = as.name; ISOCTAL(c); c = getchar())
             *cp++ = c - '0';
         ungetc(c, stdin);
-        // Pack ten digits (bits 0..29) into the low half.
-        for (c = 0; c <= 27; c += 3) {
+        // Pack eight digits (bits 1..24, i.e. 0-based 0..23) into the low half.
+        for (c = 0; c <= 21; c += 3) {
             if (--cp < as.name)
                 return;
             as.intval.right |= (long)*cp << c;
         }
-        // The 11th octal digit straddles the half-word boundary at bit 30: its
-        // low 2 bits finish the low half, its top bit starts the high half.
-        if (--cp < as.name)
-            return;
-        as.intval.right |= (long)*cp << 30;
-        as.intval.left = (long)*cp >> 2;
-        // Further digits continue in the high half.
-        for (c = 1; c <= 31; c += 3) {
+        // Further digits continue in the high half.  24 is a multiple of 3, so
+        // octal digits align on the half-word boundary - no straddling digit.
+        for (c = 0; c <= 21; c += 3) {
             if (--cp < as.name)
                 return;
             as.intval.left |= (long)*cp << c;
@@ -126,15 +121,16 @@ static void read_number(int c)
         return;
     }
 
-    // Decimal: no prefix, e.g. 1234.  Built by Horner-style place value; this
-    // path uses only the low half, so a decimal literal must fit in 32 bits.
-    for (cp = as.name; ISDIGIT(c); c = getchar())
-        *cp++ = c - '0';
-    ungetc(c, stdin);
-    for (c = 1;; c *= 10) {
-        if (--cp < as.name)
-            return;
-        as.intval.right += (long)*cp * c;
+    // Decimal: no prefix, e.g. 1234.  Accumulate into a wide host value, then
+    // split at the 24-bit half-word boundary so a large decimal does not leak
+    // past the low half.
+    {
+        unsigned long long v = 0;
+        for (; ISDIGIT(c); c = getchar())
+            v = v * 10 + (c - '0');
+        ungetc(c, stdin);
+        as.intval.right = (long)(v & 077777777UL);
+        as.intval.left  = (long)((v >> 24) & 077777777UL);
     }
 }
 
@@ -144,8 +140,8 @@ static void read_number(int c)
 // to a set.  The ':' form sets that range; the '=' form sets the COMPLEMENT
 // (everything outside the range) - "compl" remembers which.  Bit numbers are
 // converted to 0-based here (the "- 1").  The shifts below build the mask in
-// the two 32-bit halves, handling the cases where the range lies entirely in
-// the low half, entirely in the high half, or straddles the boundary.
+// the two 24-bit halves (low half = value bits 0..23, high half = value bits
+// 24..47, stored in the low 24 bits of as.intval.left).
 //
 static void read_bit_mask(void)
 {
@@ -171,28 +167,30 @@ static void read_bit_mask(void)
         c = a, a = b, b = c;
     // For the '=' (complement) form an empty range means "set everything".
     if (compl && --a < ++b) {
-        as.intval.left  = 0xffffffff;
-        as.intval.right = 0xffffffff;
+        as.intval.left  = 077777777L;
+        as.intval.right = 077777777L;
         return;
     }
-    // a greater than or equal to b
-    if (a >= 32) {
-        if (b >= 32) {
-            as.intval.left  = (unsigned long)~0L >> (63 - a + b - 32) << (b - 32);
+    // a >= b.  Set bits b..a, split across the two 24-bit halves: bit range
+    // b..min(a,23) in the low half, max(b,24)..min(a,47) in the high half.
+    // A contiguous run of bits lo..hi is (~0 >> (63 - (hi - lo))) << lo.
+    {
+        unsigned long m = ~0UL;
+        if (b <= 23) {
+            int hi          = a < 23 ? a : 23;
+            as.intval.right = (long)((m >> (63 - (hi - b)) << b) & 077777777UL);
+        } else
             as.intval.right = 0;
-        } else {
-            as.intval.left  = (unsigned long)~0L >> (63 - a);
-            as.intval.right = (unsigned long)~0L << b;
-        }
-    } else {
-        as.intval.left  = 0;
-        as.intval.right = (unsigned long)~0L >> (31 - a + b) << b;
+        if (a >= 24) {
+            int lo         = (b > 24 ? b : 24) - 24;
+            int hi         = (a < 47 ? a : 47) - 24;
+            as.intval.left = (long)((m >> (63 - (hi - lo)) << lo) & 077777777UL);
+        } else
+            as.intval.left = 0;
     }
-    as.intval.left &= 0xffffffff;
-    as.intval.right &= 0xffffffff;
     if (compl) {
-        as.intval.left ^= 0xffffffff;
-        as.intval.right ^= 0xffffffff;
+        as.intval.left ^= 077777777L;
+        as.intval.right ^= 077777777L;
     }
 }
 
@@ -206,8 +204,8 @@ static void read_bit_number(int c)
     c = as.intval.right - 1;
     if (c < 0 || c >= 64)
         fatal("bit number out of range 1..64");
-    if (c >= 32) {
-        as.intval.left  = 1L << (c - 32);
+    if (c >= 24) {
+        as.intval.left  = 1L << (c - 24);
         as.intval.right = 0;
     } else if (c >= 0) {
         as.intval.right = 1L << c;

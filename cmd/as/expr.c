@@ -52,11 +52,12 @@ static int parse_operand(void)
             fatal("bad () syntax");
         return s;
     case '{':
-        // truncate the exponent
+        // truncate the exponent: clear the 7-bit exponent field (bits 42..48 =
+        // the top 7 bits of the high half-word), keeping the sign and mantissa.
         parse_expr(&s);
         if (next_token(&cval) != '}')
             fatal("bad () syntax");
-        as.intval.left &= 07777777L;
+        as.intval.left &= 0377777L;
         return s;
     }
 }
@@ -109,29 +110,24 @@ long parse_expr(int *s)
         clex       = next_token(&cval);
         as.cmdmode = 0;
         switch (clex) {
-            long t;
         case '+':
             // Addition may combine with a relocatable term: if the result so
             // far is absolute it adopts the operand's segment; otherwise the
             // operand must be absolute (two relocatables can't be added).  The
-            // arithmetic is a 48-bit add done in 16-bit chunks so the carry can
-            // be propagated by hand across the two halves of the word.
+            // arithmetic is a 48-bit add of two 24-bit halves, propagating one
+            // carry by hand from the low half-word into the high half-word.
             s2 = parse_operand();
             if (*s == SABS)
                 *s = s2;
             else if (s2 != SABS)
                 fatal("too complex expression");
-            t = rez.right >> 16 & 0xffff;
-            rez.right &= 0xffff;
-            rez.right += as.intval.right & 0xffff;
-            if (rez.right & ~0xffff)
-                t++;
-            rez.right &= 0xffff;
-            t += as.intval.right >> 16 & 0xffff;
-            rez.right |= t << 16;
+            rez.right += as.intval.right;
             rez.left += as.intval.left;
-            if (t & ~0xffff)
+            if (rez.right & ~077777777L) { // carry out of the low half-word
                 rez.left++;
+                rez.right &= 077777777L;
+            }
+            rez.left &= 077777777L;
             break;
         case '-':
             // Subtraction with the same hand-carried 48-bit arithmetic.  The
@@ -139,17 +135,13 @@ long parse_expr(int *s)
             s2 = parse_operand();
             if (s2 != SABS)
                 fatal("too complex expression");
-            t = rez.right >> 16 & 0xffff;
-            rez.right &= 0xffff;
-            rez.right -= as.intval.right & 0xffff;
-            if (rez.right & ~0xffff)
-                t--;
-            rez.right &= 0xffff;
-            t -= as.intval.right >> 16 & 0xffff;
-            rez.right |= t << 16;
+            rez.right -= as.intval.right;
             rez.left -= as.intval.left;
-            if (t & ~0xffff)
+            if (rez.right < 0) {          // borrow from the high half-word
+                rez.right += 0100000000L; // 2^24
                 rez.left--;
+            }
+            rez.left &= 077777777L;
             break;
         // The remaining operators (bitwise, shift, multiply, divide, modulo)
         // all require both sides absolute and act on the full 48-bit value.
@@ -178,20 +170,19 @@ long parse_expr(int *s)
             s2 = parse_operand();
             if (*s != SABS || s2 != SABS)
                 fatal("too complex expression");
-            rez.left ^= ~as.intval.left;
-            rez.right ^= ~as.intval.right;
+            rez.left ^= ~as.intval.left & 077777777L;
+            rez.right ^= ~as.intval.right & 077777777L;
             break;
         case LLSHIFT: // shift left across the two halves; count is the low 6 bits
             s2 = parse_operand();
             if (*s != SABS || s2 != SABS)
                 fatal("too complex expression");
             clex = as.intval.right & 077;
-            if (clex < 32) {
-                rez.left <<= clex;
-                rez.left |= rez.right >> (32 - clex);
-                rez.right <<= clex;
+            if (clex < 24) {
+                rez.left  = (rez.left << clex | rez.right >> (24 - clex)) & 077777777L;
+                rez.right = (rez.right << clex) & 077777777L;
             } else {
-                rez.left  = rez.right << (clex - 32);
+                rez.left  = (rez.right << (clex - 24)) & 077777777L;
                 rez.right = 0;
             }
             break;
@@ -200,12 +191,11 @@ long parse_expr(int *s)
             if (*s != SABS || s2 != SABS)
                 fatal("too complex expression");
             clex = as.intval.right & 077;
-            if (clex < 32) {
-                rez.right >>= clex;
-                rez.right |= rez.left << (32 - clex);
+            if (clex < 24) {
+                rez.right = (rez.right >> clex | rez.left << (24 - clex)) & 077777777L;
                 rez.left >>= clex;
             } else {
-                rez.right = rez.left >> (clex - 32);
+                rez.right = rez.left >> (clex - 24);
                 rez.left  = 0;
             }
             break;

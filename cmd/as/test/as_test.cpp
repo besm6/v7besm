@@ -411,6 +411,44 @@ TEST(Assemble, DataDirective)
     EXPECT_EQ(word_low(got, 17), 0);          // zero-padded
 }
 
+// Values that use bits 24..31 (and full 48-bit values) must survive intact: the
+// 48-bit word splits at the 24-bit half-word boundary, not at bit 32.  Each
+// .word emits low 24 bits in the high (executed-first) half-word and high 24
+// bits in the low half-word.  These cases all fail if the value is cut at bit 32.
+TEST(Assemble, WideWords)
+{
+    auto got = assemble(R"(
+        .data
+        .word 0x1000000         ; bit 24 alone (hex): high24 == 1
+        .word 0xabcdef123456    ; a full 48-bit value
+        .word 16777216          ; 2^24 (decimal) spills into the high half
+        .word 0100000000        ; 2^24 (octal)
+        .word 0b1 \< 24         ; shift exactly onto the boundary
+        .word .[48:25]          ; the whole high half-word
+        .word .[28:20]          ; a range straddling bit 24
+        .word .[28=20]          ; the complement of an interior range
+)");
+    EXPECT_EQ(word_low(got, 3), 48); // a_data == 8 words * 6 bytes
+
+    // low 24 bits -> high half-word; high 24 bits -> low half-word.
+    EXPECT_EQ(word_high(got, 9), 0L); // .word 0x1000000
+    EXPECT_EQ(word_low(got, 9), 1L);
+    EXPECT_EQ(word_high(got, 10), 0x123456L); // .word 0xabcdef123456
+    EXPECT_EQ(word_low(got, 10), 0xabcdefL);
+    EXPECT_EQ(word_high(got, 11), 0L); // .word 16777216
+    EXPECT_EQ(word_low(got, 11), 1L);
+    EXPECT_EQ(word_high(got, 12), 0L); // .word 0100000000
+    EXPECT_EQ(word_low(got, 12), 1L);
+    EXPECT_EQ(word_high(got, 13), 0L); // .word 0b1 \< 24
+    EXPECT_EQ(word_low(got, 13), 1L);
+    EXPECT_EQ(word_high(got, 14), 0L);          // .word .[48:25]
+    EXPECT_EQ(word_low(got, 14), 0xffffffL);    // bits 25..48 == whole high half
+    EXPECT_EQ(word_high(got, 15), 0xf80000L);   // .word .[28:20] -> bits 20..24
+    EXPECT_EQ(word_low(got, 15), 0xfL);         //               -> bits 25..28
+    EXPECT_EQ(word_high(got, 16), 0x0fffffL);   // .word .[28=20] (complement)
+    EXPECT_EQ(word_low(got, 16), 0xfffff8L);
+}
+
 // The '#' constant-pool operator: the value goes into the const segment (which
 // precedes text in the file) and the instruction addresses it; equal constants
 // are deduplicated.
