@@ -2,12 +2,12 @@
 // Assembler for BESM-6.
 // Command-line front end: parse arguments and invoke assemble().
 //
-#include "as.h"
-
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+
+#include "as.h"
 
 //
 // Print a fatal error message and exit.  The message is prefixed with "as: "
@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
 {
     int i;
     char *cp;
-    int ofile = 0;
+    int ofile                  = 0;
     struct assembler_args args = {
         .outfile = "a.out",
     };

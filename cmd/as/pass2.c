@@ -39,7 +39,8 @@ void finalize_symtab(void)
             newindex[i] = snum; // remember each symbol's new (compacted) index
         // Keep the symbol if we are not stripping, or it is external, or (-X)
         // it is not a local "L..." name.
-        if (!as.xflags || (as.stab[i].n_type & N_EXT) || (as.Xflag && as.stab[i].n_name[0] != 'L')) {
+        if (!as.xflags || (as.stab[i].n_type & N_EXT) ||
+            (as.Xflag && as.stab[i].n_name[0] != 'L')) {
             as.stlength += 2 + W / 2 + as.stab[i].n_len;
             snum++;
         }

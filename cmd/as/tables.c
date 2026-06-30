@@ -131,18 +131,18 @@ const struct table table[] = {
     // address.  Opcodes 020/021 and 036 have no mnemonic (use "@NN").
     // @20
     // @21
-    { 02200000L, "utc", TLONG },          // set the C register from an immediate address (мода)
-    { 02300000L, "wtc", TLONG },          // set the C register from memory (мод)
-    { 02400000L, "vtm", TLONG },          // set an index register to an immediate (уиа)
-    { 02500000L, "utm", TLONG },          // add an immediate to an index register (слиа)
-    { 02600000L, "uza", TLONG },          // branch if the condition flag ω = 0 (по)
-    { 02700000L, "u1a", TLONG },          // branch if the condition flag ω != 0 (пе)
-    { 03000000L, "uj", TLONG },           // unconditional branch (пб)
-    { 03100000L, "vjm", TLONG | TALIGN }, // jump to subroutine, saving the return address (пв)
-    { 03200000L, "ij", TLONG | TALIGN },  // return from interrupt (выпр)
-    { 03300000L, "stop", TLONG | TALIGN },// stop the processor (стоп)
-    { 03400000L, "vzm", TLONG },          // branch if an index register is zero (пио)
-    { 03500000L, "v1m", TLONG },          // branch if an index register is not zero (пино)
+    { 02200000L, "utc", TLONG },           // set the C register from an immediate address (мода)
+    { 02300000L, "wtc", TLONG },           // set the C register from memory (мод)
+    { 02400000L, "vtm", TLONG },           // set an index register to an immediate (уиа)
+    { 02500000L, "utm", TLONG },           // add an immediate to an index register (слиа)
+    { 02600000L, "uza", TLONG },           // branch if the condition flag ω = 0 (по)
+    { 02700000L, "u1a", TLONG },           // branch if the condition flag ω != 0 (пе)
+    { 03000000L, "uj", TLONG },            // unconditional branch (пб)
+    { 03100000L, "vjm", TLONG | TALIGN },  // jump to subroutine, saving the return address (пв)
+    { 03200000L, "ij", TLONG | TALIGN },   // return from interrupt (выпр)
+    { 03300000L, "stop", TLONG | TALIGN }, // stop the processor (стоп)
+    { 03400000L, "vzm", TLONG },           // branch if an index register is zero (пио)
+    { 03500000L, "v1m", TLONG },           // branch if an index register is not zero (пино)
     // @36 - undocumented, behaves like vzm
     { 03700000L, "vlm", TLONG }, // loop: bump an index register and branch while nonzero (цикл)
 

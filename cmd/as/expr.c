@@ -33,7 +33,7 @@ static int parse_operand(void)
         // segment.  An undefined or common symbol becomes an external
         // reference, remembered in as.extref for the relocation record.
         as.intval.left = as.intval.right = 0;
-        ty                         = as.stab[cval].n_type & N_TYPE;
+        ty                               = as.stab[cval].n_type & N_TYPE;
         if (ty == N_UNDF || ty == N_COMM || ty == N_ACOMM) {
             as.extref = cval;
             return SEXT;
@@ -81,8 +81,8 @@ long parse_expr(int *s)
     int clex;
     int cval, s2;
     struct word rez;
-    int cmd = as.cmdmode; // a machine instruction may follow the expression
-    as.cmdmode  = 0;      // operands themselves never absorb operator chars
+    int cmd    = as.cmdmode; // a machine instruction may follow the expression
+    as.cmdmode = 0;          // operands themselves never absorb operator chars
 
     // look at the first token
     switch (clex = next_token(&cval)) {

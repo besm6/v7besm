@@ -44,7 +44,7 @@ void align_segment(int s)
     int save;
 
     if (s != as.segm) {
-        save = as.segm;
+        save    = as.segm;
         as.segm = s;
     } else
         save = -1;
@@ -84,7 +84,7 @@ static long intern_constant(int bs)
             hash += HCONSZ;
     }
     // Not found: append a new pool entry and record it in the hash slot.
-    as.hashconst[hash]     = as.nconst;
+    as.hashconst[hash]        = as.nconst;
     as.constab[as.nconst].h   = h;
     as.constab[as.nconst].h2  = h2;
     as.constab[as.nconst].hr2 = hr2;
@@ -259,8 +259,8 @@ static void assemble_ascii(void)
     // Always append one trailing NUL byte, then zero-pad to a word boundary
     // (NUL-terminated string). When n is already a multiple of W this is a
     // full extra zero word: 1 NUL + (W-1) alignment bytes — intentional.
-    c = W - n % W;            // bytes of padding to add (1..W)
-    n = (n + c) / (W / 2);    // total half-words now written
+    c = W - n % W;         // bytes of padding to add (1..W)
+    n = (n + c) / (W / 2); // total half-words now written
     as.count[as.segm] += n;
     while (c--)
         fputc(0, as.sfile[as.segm]); // zero-pad the code image
@@ -289,7 +289,7 @@ void generate_code(void)
         // A machine instruction is expected at the start of a statement;
         // enable operator characters in names for this lex only.
         as.cmdmode = 1;
-        clex    = next_token(&cval);
+        clex       = next_token(&cval);
         as.cmdmode = 0;
         switch (clex) {
         case LEOF:

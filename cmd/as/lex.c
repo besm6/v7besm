@@ -235,7 +235,8 @@ static void read_name(int c)
 
     // When a machine instruction is expected, absorb the operator characters
     // so mnemonics like "a+x" lex as a single name.
-    for (cp = as.name; ISLETTER(c) || ISDIGIT(c) || (as.cmdmode && is_operator_char(c)); c = getchar())
+    for (cp = as.name; ISLETTER(c) || ISDIGIT(c) || (as.cmdmode && is_operator_char(c));
+         c  = getchar())
         *cp++ = c;
     *cp = 0;
     ungetc(c, stdin);
@@ -263,7 +264,7 @@ int next_token(int *pval)
     // If a token was pushed back, hand it straight back.
     if (as.blexflag) {
         as.blexflag = 0;
-        *pval    = as.blextype;
+        *pval       = as.blextype;
         return as.backlex;
     }
     for (;;)

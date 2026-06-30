@@ -33,13 +33,13 @@
 // index the per-segment arrays in struct assembler (sfile/rfile/count).  The
 // gap at 5 (an unused "abss" slot) keeps these aligned with the N_*/R* codes.
 
-#define SCONST 0   // constant pool (de-duplicated literals)
-#define STEXT  1   // text: machine code
-#define SDATA  2   // initialized data
-#define SSTRNG 3   // string constants (folded onto data at output time)
-#define SBSS   4   // uninitialized data (reserved space, no image on disk)
-#define SEXT   6   // pseudo-segment: an external (undefined) symbol reference
-#define SABS   7   // pseudo-segment: a plain absolute value (degenerate case for parse_expr)
+#define SCONST 0 // constant pool (de-duplicated literals)
+#define STEXT  1 // text: machine code
+#define SDATA  2 // initialized data
+#define SSTRNG 3 // string constants (folded onto data at output time)
+#define SBSS   4 // uninitialized data (reserved space, no image on disk)
+#define SEXT   6 // pseudo-segment: an external (undefined) symbol reference
+#define SABS   7 // pseudo-segment: a plain absolute value (degenerate case for parse_expr)
 
 // Assembler directive codes (the value carried by an LACMD token).
 
@@ -165,16 +165,16 @@ struct assembler {
     struct constent constab[CSIZE]; // the constant pool
     int nconst;                     // number of pooled constants
 
-    char name[256];      // scratch buffer: the identifier/number text just scanned
-    struct word intval;  // scratch: the value of the integer literal just scanned
-    int extref;          // symbol index of the external name referenced by the current operand
+    char name[256];     // scratch buffer: the identifier/number text just scanned
+    struct word intval; // scratch: the value of the integer literal just scanned
+    int extref;         // symbol index of the external name referenced by the current operand
 
     int blexflag; // a token has been pushed back (see unget_token / next_token)
     int backlex;  // the pushed-back token's value
     int blextype; // the pushed-back token's type
 
-    int hashtab[HASHSZ];  // hash buckets for the symbol table (reused as newindex on pass 2)
-    int hashctab[HCMDSZ]; // hash buckets for the machine-instruction table
+    int hashtab[HASHSZ];   // hash buckets for the symbol table (reused as newindex on pass 2)
+    int hashctab[HCMDSZ];  // hash buckets for the machine-instruction table
     int hashconst[HCONSZ]; // hash buckets for the constant pool
 
     int aflag;   // -a: do not word-align after instructions
@@ -191,18 +191,18 @@ extern const int typesegm[];       // symbol type -> segment number
 extern const struct table table[]; // machine-instruction definitions
 
 // Shared functions (each is documented at its definition).
-noreturn void fatal(char *fmt, ...);  // print an error and exit (main.c / test harness)
-int next_token(int *pval);            // read one token, return its kind (lex.c)
-void unget_token(int val, int type);  // push one token back (lex.c)
-long parse_expr(int *s);              // parse an expression, return value + segment (expr.c)
-void init_hash_tables(void);          // build the instruction/symbol/constant hashes (symtab.c)
-int lookup_directive(void);           // match as.name against the directive names (symtab.c)
-int lookup_instruction(void);         // match as.name against the instruction table (symtab.c)
-int lookup_name(void);                // find or create a symbol for as.name (symtab.c)
-void align_segment(int s);            // word-align segment s (pass1.c)
-void generate_code(void);             // pass 1: parse source into the segment temp files (pass1.c)
-void finalize_symtab(void);           // between passes: align segments, size the symbol table (pass2.c)
-void write_header(void);              // emit the a.out header (pass2.c)
-void emit_segments(void);             // pass 2: relocate and write const + code segments (pass2.c)
-void write_reloc(void);               // emit the relocation records (pass2.c)
-void write_symtab(void);              // emit the symbol table (pass2.c)
+noreturn void fatal(char *fmt, ...); // print an error and exit (main.c / test harness)
+int next_token(int *pval);           // read one token, return its kind (lex.c)
+void unget_token(int val, int type); // push one token back (lex.c)
+long parse_expr(int *s);             // parse an expression, return value + segment (expr.c)
+void init_hash_tables(void);         // build the instruction/symbol/constant hashes (symtab.c)
+int lookup_directive(void);          // match as.name against the directive names (symtab.c)
+int lookup_instruction(void);        // match as.name against the instruction table (symtab.c)
+int lookup_name(void);               // find or create a symbol for as.name (symtab.c)
+void align_segment(int s);           // word-align segment s (pass1.c)
+void generate_code(void);            // pass 1: parse source into the segment temp files (pass1.c)
+void finalize_symtab(void); // between passes: align segments, size the symbol table (pass2.c)
+void write_header(void);    // emit the a.out header (pass2.c)
+void emit_segments(void);   // pass 2: relocate and write const + code segments (pass2.c)
+void write_reloc(void);     // emit the relocation records (pass2.c)
+void write_symtab(void);    // emit the symbol table (pass2.c)
