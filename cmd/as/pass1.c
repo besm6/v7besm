@@ -70,8 +70,8 @@ static long intern_constant(int bs)
     int hash, i;
     long h, h2, hr2;
 
-    h   = as.intval.left;
-    h2  = as.intval.right;
+    h   = HIHALF(as.intval);
+    h2  = LOHALF(as.intval);
     hr2 = SEGMREL(bs);
     if (bs == SEXT)
         hr2 |= RPUTIX(as.extref); // external constant: remember which symbol
@@ -309,7 +309,7 @@ void generate_code(void)
             as.cmdmode = 0;
             if (cval != SABS)
                 fatal("bad register number");
-            as.regleft = as.intval.right & 017;
+            as.regleft = as.intval & 017;
             continue;
         case LCMD:
             // A named instruction: assemble with its table entry.
@@ -370,7 +370,7 @@ void generate_code(void)
                 parse_expr(&tval);
                 if (tval != SABS)
                     fatal("bad length .comm");
-                as.stab[cval].n_value = as.intval.right;
+                as.stab[cval].n_value = LOHALF(as.intval);
                 break;
             }
             fatal("bad command");
@@ -397,7 +397,7 @@ void generate_code(void)
                     addr = SEGMREL(cval);
                     if (cval == SEXT)
                         addr |= RPUTIX(as.extref);
-                    emit_halfword(as.intval.right, addr);
+                    emit_halfword(LOHALF(as.intval), addr);
                     if ((clex = next_token(&cval)) != ',') {
                         unget_token(clex, cval);
                         break;
@@ -413,9 +413,9 @@ void generate_code(void)
                     addr = SEGMREL(cval);
                     if (cval == SEXT)
                         addr |= RPUTIX(as.extref);
-                    fputh(as.intval.right, as.sfile[as.segm]);
+                    fputh(LOHALF(as.intval), as.sfile[as.segm]);
                     fputh(addr, as.rfile[as.segm]);
-                    fputh(as.intval.left, as.sfile[as.segm]);
+                    fputh(HIHALF(as.intval), as.sfile[as.segm]);
                     fputh(0L, as.rfile[as.segm]);
                     as.count[as.segm] += 2;
                     if ((clex = next_token(&cval)) != ',') {
@@ -456,9 +456,9 @@ void generate_code(void)
                         fatal("bad length .comm");
                 } else {
                     unget_token(clex, cval);
-                    as.intval.right = 1;
+                    as.intval = 1;
                 }
-                as.stab[cval].n_value = as.intval.right;
+                as.stab[cval].n_value = LOHALF(as.intval);
                 break;
             }
             break;

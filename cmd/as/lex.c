@@ -43,20 +43,19 @@ static void read_hex_number(void)
     for (cp = as.name; ISHEX(c); c = getchar())
         *cp++ = hex_digit_value(c);
     ungetc(c, stdin);
-    as.intval.left  = 0;
-    as.intval.right = 0;
+    as.intval = 0;
     // Fill the low half (bits 1..24, i.e. 0-based 0..23), 4 bits per digit,
     // from the last digit up.
     for (c = 0; c < 24; c += 4) {
         if (--cp < as.name)
             return;
-        as.intval.right |= (long)*cp << c;
+        as.intval |= (int64_t)*cp << c;
     }
-    // Remaining digits spill into the high half.
+    // Remaining digits spill into the high half (bits 25..48).
     for (c = 0; c < 24; c += 4) {
         if (--cp < as.name)
             return;
-        as.intval.left |= (long)*cp << c;
+        as.intval |= (int64_t)*cp << (c + 24);
     }
 }
 
@@ -73,17 +72,16 @@ static void read_binary_number(void)
     for (cp = as.name; c == '0' || c == '1'; c = getchar())
         *cp++ = c - '0';
     ungetc(c, stdin);
-    as.intval.left  = 0;
-    as.intval.right = 0;
+    as.intval = 0;
     for (c = 0; c < 24; c++) {
         if (--cp < as.name)
             return;
-        as.intval.right |= (long)*cp << c;
+        as.intval |= (int64_t)*cp << c;
     }
     for (c = 0; c < 24; c++) {
         if (--cp < as.name)
             return;
-        as.intval.left |= (long)*cp << c;
+        as.intval |= (int64_t)*cp << (c + 24);
     }
 }
 
@@ -97,8 +95,7 @@ static void read_binary_number(void)
 //
 static void read_number(int c)
 {
-    as.intval.left  = 0;
-    as.intval.right = 0;
+    as.intval = 0;
     if (c == '0') {
         char *cp;
         // Octal: leading-zero literal, e.g. 0123.  Three bits per digit.
@@ -109,28 +106,26 @@ static void read_number(int c)
         for (c = 0; c <= 21; c += 3) {
             if (--cp < as.name)
                 return;
-            as.intval.right |= (long)*cp << c;
+            as.intval |= (int64_t)*cp << c;
         }
         // Further digits continue in the high half.  24 is a multiple of 3, so
         // octal digits align on the half-word boundary - no straddling digit.
         for (c = 0; c <= 21; c += 3) {
             if (--cp < as.name)
                 return;
-            as.intval.left |= (long)*cp << c;
+            as.intval |= (int64_t)*cp << (c + 24);
         }
         return;
     }
 
     // Decimal: no prefix, e.g. 1234.  Accumulate into a wide host value, then
-    // split at the 24-bit half-word boundary so a large decimal does not leak
-    // past the low half.
+    // mask to 48 bits so a large decimal does not leak past the word.
     {
         unsigned long long v = 0;
         for (; ISDIGIT(c); c = getchar())
             v = v * 10 + (c - '0');
         ungetc(c, stdin);
-        as.intval.right = (long)(v & 077777777UL);
-        as.intval.left  = (long)((v >> 24) & 077777777UL);
+        as.intval = (int64_t)(v & WORD_MASK);
     }
 }
 
@@ -141,7 +136,7 @@ static void read_number(int c)
 // (everything outside the range) - "compl" remembers which.  Bit numbers are
 // converted to 0-based here (the "- 1").  The shifts below build the mask in
 // the two 24-bit halves (low half = value bits 0..23, high half = value bits
-// 24..47, stored in the low 24 bits of as.intval.left).
+// 24..47, OR'd into as.intval shifted up by 24).
 //
 static void read_bit_mask(void)
 {
@@ -167,8 +162,7 @@ static void read_bit_mask(void)
         c = a, a = b, b = c;
     // For the '=' (complement) form an empty range means "set everything".
     if (compl && --a < ++b) {
-        as.intval.left  = 077777777L;
-        as.intval.right = 077777777L;
+        as.intval = WORD_MASK;
         return;
     }
     // a >= b.  Set bits b..a, split across the two 24-bit halves: bit range
@@ -176,22 +170,19 @@ static void read_bit_mask(void)
     // A contiguous run of bits lo..hi is (~0 >> (63 - (hi - lo))) << lo.
     {
         unsigned long m = ~0UL;
+        as.intval       = 0;
         if (b <= 23) {
-            int hi          = a < 23 ? a : 23;
-            as.intval.right = (long)((m >> (63 - (hi - b)) << b) & 077777777UL);
-        } else
-            as.intval.right = 0;
+            int hi = a < 23 ? a : 23;
+            as.intval |= (int64_t)((m >> (63 - (hi - b)) << b) & 077777777UL);
+        }
         if (a >= 24) {
-            int lo         = (b > 24 ? b : 24) - 24;
-            int hi         = (a < 47 ? a : 47) - 24;
-            as.intval.left = (long)((m >> (63 - (hi - lo)) << lo) & 077777777UL);
-        } else
-            as.intval.left = 0;
+            int lo = (b > 24 ? b : 24) - 24;
+            int hi = (a < 47 ? a : 47) - 24;
+            as.intval |= (int64_t)((m >> (63 - (hi - lo)) << lo) & 077777777UL) << 24;
+        }
     }
-    if (compl) {
-        as.intval.left ^= 077777777L;
-        as.intval.right ^= 077777777L;
-    }
+    if (compl)
+        as.intval ^= WORD_MASK;
 }
 
 //
@@ -201,16 +192,14 @@ static void read_bit_mask(void)
 static void read_bit_number(int c)
 {
     read_number(c);
-    c = as.intval.right - 1;
+    c = (int)as.intval - 1;
     if (c < 0 || c >= 64)
         fatal("bit number out of range 1..64");
-    if (c >= 24) {
-        as.intval.left  = 1L << (c - 24);
-        as.intval.right = 0;
-    } else if (c >= 0) {
-        as.intval.right = 1L << c;
-        as.intval.left  = 0;
-    }
+    // Split at bit 24 so each shift amount stays within one half-word.
+    if (c >= 24)
+        as.intval = (int64_t)(1L << (c - 24)) << 24;
+    else if (c >= 0)
+        as.intval = 1L << c;
 }
 
 //

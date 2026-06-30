@@ -5,6 +5,7 @@
 // `struct assembler` that holds the whole assembler's state.  Every source
 // file in cmd/as includes this header.
 //
+#include <stdint.h>
 #include <stdnoreturn.h>
 
 #include "assemble.h"
@@ -98,18 +99,20 @@
 #define ISDIGIT(c)  (ctype[(c) & 0377] & 4) // decimal digit 0-9
 #define ISLETTER(c) (ctype[(c) & 0377] & 8) // name character (letter, '.', '_', ...)
 
+// A BESM-6 word is 48 bits.  Values are carried in a single int64_t; these
+// masks and accessors split a word into its two 24-bit half-words where the
+// on-disk format needs them (high half = bits 25..48, low half = bits 1..24).
+
+#define WORD_MASK (((int64_t)1 << 48) - 1) // 48-bit value mask
+#define HALF_MASK 077777777L               // 24-bit half-word mask
+#define HIHALF(w) ((long)(((w) >> 24) & HALF_MASK)) // high 24 bits as a long
+#define LOHALF(w) ((long)((w) & HALF_MASK))         // low  24 bits as a long
+
 // On the second pass the symbol-name hash table is no longer needed, so the
 // same array is reused to remap symbol indices when -x/-X drops local symbols.
 // "newindex" is just a readable alias for that reuse.
 
 #define newindex as.hashtab
-
-// The two 24-bit halves of one 48-bit BESM-6 word.  Numbers are carried around
-// in this split form because a host `long` is not guaranteed to hold 48 bits.
-struct word {
-    long left;  // high half (bits 25..48)
-    long right; // low half  (bits 1..24)
-};
 
 // One row of the machine-instruction table (tables.c).
 struct table {
@@ -165,9 +168,9 @@ struct assembler {
     struct constent constab[CSIZE]; // the constant pool
     int nconst;                     // number of pooled constants
 
-    char name[256];     // scratch buffer: the identifier/number text just scanned
-    struct word intval; // scratch: the value of the integer literal just scanned
-    int extref;         // symbol index of the external name referenced by the current operand
+    char name[256];   // scratch buffer: the identifier/number text just scanned
+    int64_t intval;   // scratch: the value of the integer literal just scanned (full 48-bit word)
+    int extref;       // symbol index of the external name referenced by the current operand
 
     int blexflag; // a token has been pushed back (see unget_token / next_token)
     int backlex;  // the pushed-back token's value
