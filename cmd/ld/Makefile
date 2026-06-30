@@ -1,68 +1,28 @@
 #
-# Linker, archiver and other object file utilities
+# Linker for BESM-6 a.out objects.
+#
+# The companion utilities (ar, ranlib, strip, nm, size, lorder) now live in
+# their own directories under cmd/ and are built via CMake.
 #
 DESTDIR = /usr/local
 CFLAGS  = -I.. -Werror
 LDFLAGS =
 
 ld      = b6ld
-ar      = b6ar
-strip   = b6strip
-nm      = b6nm
-size    = b6size
-lorder  = b6lorder
-ranlib  = b6ranlib
 
-all:    ld #ar strip nm size ranlib
+all:    ld
 
 ld:     ld.o fgetarhdr.o fgetint.o fgetsym.o fputsym.o fgethdr.o fputhdr.o\
 		fgeth.o fputh.o fgetran.o
 	$(CC) $(LDFLAGS) ld.o -o ld fgetarhdr.o fgetint.o fgetsym.o fputsym.o\
 		fgethdr.o fputhdr.o fgeth.o fputh.o fgetran.o
 
-ar:     ar.o getarhdr.o putarhdr.o getint.o putint.o
-	$(CC) $(LDFLAGS) ar.o -o ar getarhdr.o putarhdr.o getint.o putint.o
+install: $(DESTDIR)/bin/$(ld)
 
-ranlib: ranlib.o getarhdr.o putarhdr.o fgetarhdr.o fgeth.o fgetsym.o\
-		fputran.o fputh.o fgethdr.o
-	$(CC) $(LDFLAGS) ranlib.o -o ranlib getarhdr.o putarhdr.o fgetarhdr.o\
-		fgeth.o fgetsym.o fputran.o fputh.o fgethdr.o
-
-strip:  strip.o fgethdr.o fputhdr.o fgeth.o fputh.o
-	$(CC) $(LDFLAGS) strip.o -o strip fgethdr.o fputhdr.o fgeth.o fputh.o
-
-nm:     nm.o fgetsym.o fgethdr.o fgetarhdr.o fgetint.o fgeth.o
-	$(CC) $(LDFLAGS) nm.o -o nm fgetsym.o fgethdr.o fgetarhdr.o fgetint.o\
-		fgeth.o
-
-size:   size.o fgethdr.o fgeth.o
-	$(CC) $(LDFLAGS) size.o -o size fgethdr.o fgeth.o
-
-install: $(DESTDIR)/bin/$(ld) $(DESTDIR)/bin/$(ar) $(DESTDIR)/bin/$(nm)\
-		$(DESTDIR)/bin/$(size) $(DESTDIR)/bin/$(strip)\
-		$(DESTDIR)/bin/$(lorder) $(DESTDIR)/bin/$(ranlib)
 clean:
-	rm -f *.o *.b a.out core ot ld ar strip nm size ranlib
+	rm -f *.o *.b a.out core ot ld
 
 $(DESTDIR)/bin/$(ld): ld
 	install -s ld $(DESTDIR)/bin/$(ld)
-
-$(DESTDIR)/bin/$(ranlib): ranlib
-	install -s ranlib $(DESTDIR)/bin/$(ranlib)
-
-$(DESTDIR)/bin/$(ar): ar
-	install -s ar $(DESTDIR)/bin/$(ar)
-
-$(DESTDIR)/bin/$(nm): nm
-	install -s nm $(DESTDIR)/bin/$(nm)
-
-$(DESTDIR)/bin/$(size): size
-	install -s size $(DESTDIR)/bin/$(size)
-
-$(DESTDIR)/bin/$(strip): strip
-	install -s strip $(DESTDIR)/bin/$(strip)
-
-$(DESTDIR)/bin/$(lorder): lorder.sh
-	install lorder.sh $(DESTDIR)/bin/$(lorder)
 
 ###
