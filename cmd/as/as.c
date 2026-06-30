@@ -1,7 +1,7 @@
 //
 // Assembler for BESM-6.
 // Engine: global state and pass sequencing.  The command-line front end lives
-// in main.c; uerror() is supplied by whoever links this library (main.c for the
+// in main.c; fatal() is supplied by whoever links this library (main.c for the
 // CLI, the test harness for unit tests).
 //
 #include "as.h"
@@ -15,22 +15,22 @@ struct assembler as = {
     .tfilename = "/tmp/asXXXXXX",
 };
 
-static void startup(void)
+static void open_temp_files(void)
 {
     int i;
 
     int fd = mkstemp(as.tfilename);
     if (fd == -1) {
-        uerror("cannot create temporary file %s", as.tfilename);
+        fatal("cannot create temporary file %s", as.tfilename);
     } else {
         close(fd);
     }
     for (i = STEXT; i < SBSS; i++) {
         if (!(as.sfile[i] = fopen(as.tfilename, "w+")))
-            uerror("cannot open %s", as.tfilename);
+            fatal("cannot open %s", as.tfilename);
         unlink(as.tfilename);
         if (!(as.rfile[i] = fopen(as.tfilename, "w+")))
-            uerror("cannot open %s", as.tfilename);
+            fatal("cannot open %s", as.tfilename);
         unlink(as.tfilename);
     }
     as.line = 1;
@@ -43,7 +43,7 @@ int assemble(const struct assembler_args *args)
 
     // Reset the global state so the engine can be invoked repeatedly in one
     // process (the unit tests assemble many sources in a row; the CLI front end
-    // calls this just once).  Everything else is rebuilt by startup()/hashinit()/
+    // calls this just once).  Everything else is rebuilt by open_temp_files()/init_hash_tables()/
     // the passes; only the two static defaults need restoring afterwards.
     memset(&as, 0, sizeof as);
     strcpy(as.tfilename, "/tmp/asXXXXXX");
@@ -65,21 +65,21 @@ int assemble(const struct assembler_args *args)
 
     // set up input/output
     if (as.infile && !freopen(as.infile, "r", stdin))
-        uerror("cannot open %s", as.infile);
+        fatal("cannot open %s", as.infile);
     if (!freopen(as.outfile, "w", stdout))
-        uerror("cannot open %s", as.outfile);
+        fatal("cannot open %s", as.outfile);
 
     i = getchar();
     ungetc(i == '#' ? ';' : i, stdin);
 
-    startup();    // open temporary files
-    hashinit();   // initialize hash tables
-    pass1();      // first pass
-    middle();     // intermediate actions
-    makeheader(); // write the header
-    pass2();      // second pass
-    makereloc();  // write relocation files
-    makesymtab(); // write the symbol table
+    open_temp_files();    // open temporary files
+    init_hash_tables();   // initialize hash tables
+    generate_code();      // first pass
+    finalize_symtab();     // intermediate actions
+    write_header(); // write the header
+    emit_segments();      // second pass
+    write_reloc();  // write relocation files
+    write_symtab(); // write the symbol table
 
     // Restore the original stdin/stdout.
     fflush(stdout);

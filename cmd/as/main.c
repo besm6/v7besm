@@ -10,7 +10,7 @@
 #include <unistd.h>
 
 // Fatal error message.
-noreturn void uerror(char *fmt, ...)
+noreturn void fatal(char *fmt, ...)
 {
     va_list ap;
 
@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
                     break;
                 case 'o': // output file
                     if (ofile)
-                        uerror("too many -o flags");
+                        fatal("too many -o flags");
                     ofile = 1;
                     if (cp[1]) {
                         // -ofile
@@ -92,7 +92,7 @@ int main(int argc, char *argv[])
             break;
         default:
             if (args.infile)
-                uerror("too many input files");
+                fatal("too many input files");
             args.infile = argv[i];
             break;
         }

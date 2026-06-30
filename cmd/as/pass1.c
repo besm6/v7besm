@@ -6,7 +6,7 @@
 
 #include "as.h"
 
-static void puthr(long h, long r)
+static void emit_halfword(long h, long r)
 {
     static long sh, sr;
 
@@ -22,7 +22,7 @@ static void puthr(long h, long r)
     as.count[as.segm]++;
 }
 
-void align(int s)
+void align_segment(int s)
 {
     int save;
 
@@ -33,13 +33,13 @@ void align(int s)
         save = -1;
 
     if (as.count[s] & 01)
-        puthr(s == STEXT ? EMPCOM : 0L, (long)RABS);
+        emit_halfword(s == STEXT ? EMPCOM : 0L, (long)RABS);
 
     if (save >= 0)
         as.segm = save;
 }
 
-static long enterconst(int bs)
+static long intern_constant(int bs)
 {
     int hash, i;
     long h, h2, hr2;
@@ -63,7 +63,7 @@ static long enterconst(int bs)
     return as.nconst++;
 }
 
-static void makecmd(long val, int type)
+static void assemble_instruction(long val, int type)
 {
     int clex, index;
     long addr, reltype;
@@ -72,30 +72,30 @@ static void makecmd(long val, int type)
     index   = as.regleft;
     reltype = RABS;
     for (;;) {
-        switch (clex = getlex(&cval)) {
+        switch (clex = next_token(&cval)) {
         case LEOF:
         case LEOL:
-            ungetlex(clex, cval);
+            unget_token(clex, cval);
             addr = 0;
             goto putcom;
         case '#':
-            getexpr(&segment);
-            addr    = enterconst(segment);
+            parse_expr(&segment);
+            addr    = intern_constant(segment);
             reltype = RCONST;
             break;
         case '[':
-            makecmd(WTCCOM, TLONG);
-            if (getlex(&cval) != ']')
-                uerror("bad [] syntax");
+            assemble_instruction(WTCCOM, TLONG);
+            if (next_token(&cval) != ']')
+                fatal("bad [] syntax");
             continue;
         case '<':
-            makecmd(UTCCOM, TLONG);
-            if (getlex(&cval) != '>')
-                uerror("bad <> syntax");
+            assemble_instruction(UTCCOM, TLONG);
+            if (next_token(&cval) != '>')
+                fatal("bad <> syntax");
             continue;
         default:
-            ungetlex(clex, cval);
-            addr    = getexpr(&segment);
+            unget_token(clex, cval);
+            addr    = parse_expr(&segment);
             reltype = SEGMREL(segment);
             if (reltype == REXT)
                 reltype |= RPUTIX(as.extref);
@@ -103,49 +103,49 @@ static void makecmd(long val, int type)
         }
         break;
     }
-    if ((clex = getlex(&cval)) == ',') {
-        index = getexpr(&segment);
+    if ((clex = next_token(&cval)) == ',') {
+        index = parse_expr(&segment);
         if (segment != SABS)
-            uerror("bad register number");
+            fatal("bad register number");
     } else
-        ungetlex(clex, cval);
+        unget_token(clex, cval);
 putcom:
     if (type & TLONG) {
         if ((reltype & REXT) == REXT && as.stab[RGETIX(reltype)].n_type == N_EXT + N_ACOMM) {
             // if the instruction references ACOMM,
             // insert utc before it
-            puthr((long)index << 20 | UTCCOM | (addr >> 12 & 077777), reltype | RSHIFT);
-            puthr(val | (addr & 07777), (long)RABS | RTRUNC);
+            emit_halfword((long)index << 20 | UTCCOM | (addr >> 12 & 077777), reltype | RSHIFT);
+            emit_halfword(val | (addr & 07777), (long)RABS | RTRUNC);
         } else {
             addr &= 077777;
-            puthr((long)index << 20 | val | (addr & 077777), reltype | RLONG);
+            emit_halfword((long)index << 20 | val | (addr & 077777), reltype | RLONG);
         }
     } else {
-        puthr((long)index << 20 | val | (addr & 07777), reltype | RSHORT);
+        emit_halfword((long)index << 20 | val | (addr & 07777), reltype | RSHORT);
     }
     if (!as.aflag && (type & TALIGN))
-        align(as.segm);
+        align_segment(as.segm);
 }
 
-static void makeascii(void)
+static void assemble_ascii(void)
 {
     int c, n;
     int cval;
 
-    c = getlex(&cval);
+    c = next_token(&cval);
     if (c != '"')
-        uerror("no .ascii parameter");
+        fatal("no .ascii parameter");
     n = 0;
     for (;;) {
         switch (c = getchar()) {
         case EOF:
-            uerror("EOF in text string");
+            fatal("EOF in text string");
         case '"':
             break;
         case '\\':
             switch (c = getchar()) {
             case EOF:
-                uerror("EOF in text string");
+                fatal("EOF in text string");
             case '\n':
                 continue;
             case '0':
@@ -204,7 +204,7 @@ static void makeascii(void)
         fputh(0L, as.rfile[as.segm]);
 }
 
-void pass1(void)
+void generate_code(void)
 {
     int cval, tval, csegm;
     long addr;
@@ -216,7 +216,7 @@ void pass1(void)
         // A machine instruction is expected at the start of a statement;
         // enable operator characters in names for this lex only.
         as.cmdmode = 1;
-        clex    = getlex(&cval);
+        clex    = next_token(&cval);
         as.cmdmode = 0;
         switch (clex) {
         case LEOF:
@@ -225,35 +225,35 @@ void pass1(void)
             as.regleft = 0;
             continue;
         case ':':
-            align(as.segm);
+            align_segment(as.segm);
             continue;
         case LNUM:
-            ungetlex(clex, cval);
+            unget_token(clex, cval);
             as.cmdmode = 1; // a mnemonic may follow the register number
-            getexpr(&cval);
+            parse_expr(&cval);
             as.cmdmode = 0;
             if (cval != SABS)
-                uerror("bad register number");
+                fatal("bad register number");
             as.regleft = as.intval.right & 017;
             continue;
         case LCMD:
-            makecmd(table[cval].val, table[cval].type);
+            assemble_instruction(table[cval].val, table[cval].type);
             break;
         case LSCMD:
-            makecmd((long)cval << 12, 0);
+            assemble_instruction((long)cval << 12, 0);
             break;
         case LLCMD:
-            makecmd((long)cval << 15, TLONG);
+            assemble_instruction((long)cval << 15, TLONG);
             break;
         case '.':
-            if (getlex(&cval) != '=')
-                uerror("bad command");
-            align(as.segm);
-            addr = 2 * getexpr(&csegm);
+            if (next_token(&cval) != '=')
+                fatal("bad command");
+            align_segment(as.segm);
+            addr = 2 * parse_expr(&csegm);
             if (csegm != as.segm)
-                uerror("bad count assignment");
+                fatal("bad count assignment");
             if (addr < as.count[as.segm])
-                uerror("negative count increment");
+                fatal("negative count increment");
             if (as.segm == SBSS)
                 as.count[as.segm] = addr;
             else
@@ -264,16 +264,16 @@ void pass1(void)
                 }
             break;
         case LNAME:
-            if ((clex = getlex(&tval)) == ':') {
-                align(as.segm);
+            if ((clex = next_token(&tval)) == ':') {
+                align_segment(as.segm);
                 as.stab[cval].n_value = as.count[as.segm] / 2;
                 as.stab[cval].n_type &= ~N_TYPE;
                 as.stab[cval].n_type |= SEGMTYPE(as.segm);
                 continue;
             } else if (clex == '=' || (clex == LACMD && tval == EQU)) {
-                as.stab[cval].n_value = getexpr(&csegm);
+                as.stab[cval].n_value = parse_expr(&csegm);
                 if (csegm == SEXT)
-                    uerror("indirect equivalence");
+                    fatal("indirect equivalence");
                 as.stab[cval].n_type &= N_EXT;
                 as.stab[cval].n_type |= SEGMTYPE(csegm);
                 break;
@@ -281,15 +281,15 @@ void pass1(void)
                 // name .comm len
                 if (as.stab[cval].n_type != N_UNDF && as.stab[cval].n_type != (N_EXT | N_COMM) &&
                     as.stab[cval].n_type != (N_EXT | N_ACOMM))
-                    uerror("name already defined");
+                    fatal("name already defined");
                 as.stab[cval].n_type = N_EXT | (tval == COMM ? N_COMM : N_ACOMM);
-                getexpr(&tval);
+                parse_expr(&tval);
                 if (tval != SABS)
-                    uerror("bad length .comm");
+                    fatal("bad length .comm");
                 as.stab[cval].n_value = as.intval.right;
                 break;
             }
-            uerror("bad command");
+            fatal("bad command");
         case LACMD:
             switch (cval) {
             case TEXT:
@@ -306,21 +306,21 @@ void pass1(void)
                 break;
             case HALF:
                 for (;;) {
-                    getexpr(&cval);
+                    parse_expr(&cval);
                     addr = SEGMREL(cval);
                     if (cval == SEXT)
                         addr |= RPUTIX(as.extref);
-                    puthr(as.intval.right, addr);
-                    if ((clex = getlex(&cval)) != ',') {
-                        ungetlex(clex, cval);
+                    emit_halfword(as.intval.right, addr);
+                    if ((clex = next_token(&cval)) != ',') {
+                        unget_token(clex, cval);
                         break;
                     }
                 }
                 break;
             case WORD:
-                align(as.segm);
+                align_segment(as.segm);
                 for (;;) {
-                    getexpr(&cval);
+                    parse_expr(&cval);
                     addr = SEGMREL(cval);
                     if (cval == SEXT)
                         addr |= RPUTIX(as.extref);
@@ -329,23 +329,23 @@ void pass1(void)
                     fputh(as.intval.left, as.sfile[as.segm]);
                     fputh(0L, as.rfile[as.segm]);
                     as.count[as.segm] += 2;
-                    if ((clex = getlex(&cval)) != ',') {
-                        ungetlex(clex, cval);
+                    if ((clex = next_token(&cval)) != ',') {
+                        unget_token(clex, cval);
                         break;
                     }
                 }
                 break;
             case ASCII:
-                align(as.segm);
-                makeascii();
+                align_segment(as.segm);
+                assemble_ascii();
                 break;
             case GLOBL:
                 for (;;) {
-                    if ((clex = getlex(&cval)) != LNAME)
-                        uerror("bad parameter .globl");
+                    if ((clex = next_token(&cval)) != LNAME)
+                        fatal("bad parameter .globl");
                     as.stab[cval].n_type |= N_EXT;
-                    if ((clex = getlex(&cval)) != ',') {
-                        ungetlex(clex, cval);
+                    if ((clex = next_token(&cval)) != ',') {
+                        unget_token(clex, cval);
                         break;
                     }
                 }
@@ -354,18 +354,18 @@ void pass1(void)
             case ACOMM:
                 // .comm name,len
                 tval = cval;
-                if (getlex(&cval) != LNAME)
-                    uerror("bad parameter .comm");
+                if (next_token(&cval) != LNAME)
+                    fatal("bad parameter .comm");
                 if (as.stab[cval].n_type != N_UNDF && as.stab[cval].n_type != (N_EXT | N_COMM) &&
                     as.stab[cval].n_type != (N_EXT | N_ACOMM))
-                    uerror("name already defined");
+                    fatal("name already defined");
                 as.stab[cval].n_type = N_EXT | (tval == COMM ? N_COMM : N_ACOMM);
-                if ((clex = getlex(&tval)) == ',') {
-                    getexpr(&tval);
+                if ((clex = next_token(&tval)) == ',') {
+                    parse_expr(&tval);
                     if (tval != SABS)
-                        uerror("bad length .comm");
+                        fatal("bad length .comm");
                 } else {
-                    ungetlex(clex, cval);
+                    unget_token(clex, cval);
                     as.intval.right = 1;
                 }
                 as.stab[cval].n_value = as.intval.right;
@@ -373,13 +373,13 @@ void pass1(void)
             }
             break;
         default:
-            uerror("bad syntax");
+            fatal("bad syntax");
         }
-        if ((clex = getlex(&cval)) != LEOL) {
+        if ((clex = next_token(&cval)) != LEOL) {
             if (clex == LEOF)
                 return;
             else
-                uerror("bad command end");
+                fatal("bad command end");
         }
         as.regleft = 0;
     }

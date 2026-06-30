@@ -32,7 +32,7 @@
 #define SSTRNG 3
 #define SBSS   4
 #define SEXT   6
-#define SABS   7 // degenerate case for getexpr
+#define SABS   7 // degenerate case for parse_expr
 
 // assembler directives
 
@@ -144,18 +144,18 @@ extern const int typesegm[];
 extern const struct table table[];
 
 // Shared functions.
-noreturn void uerror(char *fmt, ...);
-int getlex(int *pval);
-void ungetlex(int val, int type);
-long getexpr(int *s);
-void hashinit(void);
-int lookacmd(void);
-int lookcmd(void);
-int lookname(void);
-void align(int s);
-void pass1(void);
-void middle(void);
-void makeheader(void);
-void pass2(void);
-void makereloc(void);
-void makesymtab(void);
+noreturn void fatal(char *fmt, ...);
+int next_token(int *pval);
+void unget_token(int val, int type);
+long parse_expr(int *s);
+void init_hash_tables(void);
+int lookup_directive(void);
+int lookup_instruction(void);
+int lookup_name(void);
+void align_segment(int s);
+void generate_code(void);
+void finalize_symtab(void);
+void write_header(void);
+void emit_segments(void);
+void write_reloc(void);
+void write_symtab(void);

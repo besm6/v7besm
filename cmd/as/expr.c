@@ -6,14 +6,14 @@
 
 #include "as.h"
 
-static int getterm(void)
+static int parse_operand(void)
 {
     int ty;
     int cval, s;
 
-    switch (getlex(&cval)) {
+    switch (next_token(&cval)) {
     default:
-        uerror("operand missed");
+        fatal("operand missed");
     case LNUM:
         return SABS;
     case LNAME:
@@ -30,21 +30,21 @@ static int getterm(void)
         as.intval.right = as.count[as.segm] / 2;
         return as.segm;
     case '(':
-        getexpr(&s);
-        if (getlex(&cval) != ')')
-            uerror("bad () syntax");
+        parse_expr(&s);
+        if (next_token(&cval) != ')')
+            fatal("bad () syntax");
         return s;
     case '{':
         // truncate the exponent
-        getexpr(&s);
-        if (getlex(&cval) != '}')
-            uerror("bad () syntax");
+        parse_expr(&s);
+        if (next_token(&cval) != '}')
+            fatal("bad () syntax");
         as.intval.left &= 07777777L;
         return s;
     }
 }
 
-// long getexpr(int *s) - read an expression.
+// long parse_expr(int *s) - read an expression.
 // Return the value; store the base segment number in *s.
 // The low 4 bytes of the value are returned;
 // the full copy stays in intval.
@@ -52,7 +52,7 @@ static int getterm(void)
 // expression   = [operand] {operation operand}...
 // operand      = LNAME | LNUM | "." | "(" expression ")" | "{" expression "}"
 // operation    = "+" | "-" | "&" | "|" | "^" | "~" | "\" | "/" | "*" | "%"
-long getexpr(int *s)
+long parse_expr(int *s)
 {
     int clex;
     int cval, s2;
@@ -61,9 +61,9 @@ long getexpr(int *s)
     as.cmdmode  = 0;      // operands themselves never absorb operator chars
 
     // look at the first token
-    switch (clex = getlex(&cval)) {
+    switch (clex = next_token(&cval)) {
     default:
-        ungetlex(clex, cval);
+        unget_token(clex, cval);
         rez.left = rez.right = 0;
         *s                   = SABS;
         break;
@@ -72,23 +72,23 @@ long getexpr(int *s)
     case '.':
     case '(':
     case '{':
-        ungetlex(clex, cval);
-        *s  = getterm();
+        unget_token(clex, cval);
+        *s  = parse_operand();
         rez = as.intval;
         break;
     }
     for (;;) {
         as.cmdmode = cmd; // the look-ahead may land on a mnemonic
-        clex       = getlex(&cval);
+        clex       = next_token(&cval);
         as.cmdmode = 0;
         switch (clex) {
             long t;
         case '+':
-            s2 = getterm();
+            s2 = parse_operand();
             if (*s == SABS)
                 *s = s2;
             else if (s2 != SABS)
-                uerror("too complex expression");
+                fatal("too complex expression");
             t = rez.right >> 16 & 0xffff;
             rez.right &= 0xffff;
             rez.right += as.intval.right & 0xffff;
@@ -102,9 +102,9 @@ long getexpr(int *s)
                 rez.left++;
             break;
         case '-':
-            s2 = getterm();
+            s2 = parse_operand();
             if (s2 != SABS)
-                uerror("too complex expression");
+                fatal("too complex expression");
             t = rez.right >> 16 & 0xffff;
             rez.right &= 0xffff;
             rez.right -= as.intval.right & 0xffff;
@@ -118,37 +118,37 @@ long getexpr(int *s)
                 rez.left--;
             break;
         case '&':
-            s2 = getterm();
+            s2 = parse_operand();
             if (*s != SABS || s2 != SABS)
-                uerror("too complex expression");
+                fatal("too complex expression");
             rez.left &= as.intval.left;
             rez.right &= as.intval.right;
             break;
         case '|':
-            s2 = getterm();
+            s2 = parse_operand();
             if (*s != SABS || s2 != SABS)
-                uerror("too complex expression");
+                fatal("too complex expression");
             rez.left |= as.intval.left;
             rez.right |= as.intval.right;
             break;
         case '^':
-            s2 = getterm();
+            s2 = parse_operand();
             if (*s != SABS || s2 != SABS)
-                uerror("too complex expression");
+                fatal("too complex expression");
             rez.left ^= as.intval.left;
             rez.right ^= as.intval.right;
             break;
         case '~':
-            s2 = getterm();
+            s2 = parse_operand();
             if (*s != SABS || s2 != SABS)
-                uerror("too complex expression");
+                fatal("too complex expression");
             rez.left ^= ~as.intval.left;
             rez.right ^= ~as.intval.right;
             break;
         case LLSHIFT: // shift left
-            s2 = getterm();
+            s2 = parse_operand();
             if (*s != SABS || s2 != SABS)
-                uerror("too complex expression");
+                fatal("too complex expression");
             clex = as.intval.right & 077;
             if (clex < 32) {
                 rez.left <<= clex;
@@ -160,9 +160,9 @@ long getexpr(int *s)
             }
             break;
         case LRSHIFT: // shift right
-            s2 = getterm();
+            s2 = parse_operand();
             if (*s != SABS || s2 != SABS)
-                uerror("too complex expression");
+                fatal("too complex expression");
             clex = as.intval.right & 077;
             if (clex < 32) {
                 rez.right >>= clex;
@@ -174,34 +174,34 @@ long getexpr(int *s)
             }
             break;
         case '*': // 31-bit operation
-            s2 = getterm();
+            s2 = parse_operand();
             if (*s != SABS || s2 != SABS)
-                uerror("too complex expression");
+                fatal("too complex expression");
             rez.left = 0;
             rez.right *= as.intval.right;
             break;
         case '/': // 31-bit operation
-            s2 = getterm();
+            s2 = parse_operand();
             if (*s != SABS || s2 != SABS)
-                uerror("too complex expression");
+                fatal("too complex expression");
             rez.left = 0;
             if (as.intval.right)
                 rez.right /= as.intval.right;
             else
-                uerror("division by zero");
+                fatal("division by zero");
             break;
         case '%': // 31-bit operation
-            s2 = getterm();
+            s2 = parse_operand();
             if (*s != SABS || s2 != SABS)
-                uerror("too complex expression");
+                fatal("too complex expression");
             rez.left = 0;
             if (as.intval.right)
                 rez.right %= as.intval.right;
             else
-                uerror("division (%%) by zero");
+                fatal("division (%%) by zero");
             break;
         default:
-            ungetlex(clex, cval);
+            unget_token(clex, cval);
             as.cmdmode = cmd; // restore for the caller
             as.intval  = rez;
             return rez.right;

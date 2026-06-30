@@ -6,20 +6,20 @@
 
 #include "as.h"
 
-void middle(void)
+void finalize_symtab(void)
 {
     int i, snum;
 
-    align(STEXT);
-    align(SDATA);
-    align(SSTRNG);
+    align_segment(STEXT);
+    align_segment(SDATA);
+    align_segment(SSTRNG);
     as.stlength = 0;
     for (snum = 0, i = 0; i < as.stabfree; i++) {
         // if uflag is not set,
         // an undefined name is treated as external
         if (as.stab[i].n_type == N_UNDF) {
             if (as.uflag)
-                uerror("name undefined", as.stab[i].n_name);
+                fatal("name undefined", as.stab[i].n_name);
             else
                 as.stab[i].n_type |= N_EXT;
         }
@@ -34,7 +34,7 @@ void middle(void)
     as.stlength += as.stalign;
 }
 
-void makeheader(void)
+void write_header(void)
 {
     struct exec hdr;
 
@@ -50,7 +50,7 @@ void makeheader(void)
     fputhdr(&hdr, stdout);
 }
 
-static long adjust(long h, long a, int hr)
+static long relocate_field(long h, long a, int hr)
 {
     switch (hr & RSHORT) {
     case 0:
@@ -78,7 +78,7 @@ static long adjust(long h, long a, int hr)
     return h;
 }
 
-static long makehalf(long h, long hr)
+static long relocate_halfword(long h, long hr)
 {
     int i;
 
@@ -86,31 +86,31 @@ static long makehalf(long h, long hr)
     case RABS:
         break;
     case RCONST:
-        h = adjust(h, as.cbase, (int)hr);
+        h = relocate_field(h, as.cbase, (int)hr);
         break;
     case RTEXT:
-        h = adjust(h, as.tbase, (int)hr);
+        h = relocate_field(h, as.tbase, (int)hr);
         break;
     case RDATA:
-        h = adjust(h, as.dbase, (int)hr);
+        h = relocate_field(h, as.dbase, (int)hr);
         break;
     case RSTRNG:
-        h = adjust(h, as.adbase, (int)hr);
+        h = relocate_field(h, as.adbase, (int)hr);
         break;
     case RBSS:
-        h = adjust(h, as.bbase, (int)hr);
+        h = relocate_field(h, as.bbase, (int)hr);
         break;
     case REXT:
         i = RGETIX(hr);
         if (as.stab[i].n_type != N_EXT + N_UNDF && as.stab[i].n_type != N_EXT + N_COMM &&
             as.stab[i].n_type != N_EXT + N_ACOMM)
-            h = adjust(h, as.stab[i].n_value, (int)hr);
+            h = relocate_field(h, as.stab[i].n_value, (int)hr);
         break;
     }
     return h;
 }
 
-void pass2(void)
+void emit_segments(void)
 {
     int i;
     long h;
@@ -129,27 +129,27 @@ void pass2(void)
         case N_ABS:
             break;
         case N_CONST:
-            h = adjust(h, as.cbase, 0);
+            h = relocate_field(h, as.cbase, 0);
             break;
         case N_TEXT:
-            h = adjust(h, as.tbase, 0);
+            h = relocate_field(h, as.tbase, 0);
             break;
         case N_DATA:
-            h = adjust(h, as.dbase, 0);
+            h = relocate_field(h, as.dbase, 0);
             break;
         case N_STRNG:
-            h = adjust(h, as.adbase, 0);
+            h = relocate_field(h, as.adbase, 0);
             as.stab[i].n_type += N_DATA - N_STRNG;
             break;
         case N_BSS:
-            h = adjust(h, as.bbase, 0);
+            h = relocate_field(h, as.bbase, 0);
             break;
         }
         as.stab[i].n_value = h;
     }
     // process the constant segment
     for (i = 0; i < as.nconst; i++) {
-        fputh(makehalf(as.constab[i].h2, as.constab[i].hr2), stdout);
+        fputh(relocate_halfword(as.constab[i].h2, as.constab[i].hr2), stdout);
         fputh(as.constab[i].h, stdout);
     }
     for (as.segm = STEXT; as.segm < SBSS; as.segm++) {
@@ -157,12 +157,12 @@ void pass2(void)
         rewind(as.rfile[as.segm]);
         h = as.count[as.segm];
         while (h--)
-            fputh(makehalf(fgeth(as.sfile[as.segm]), fgeth(as.rfile[as.segm])), stdout);
+            fputh(relocate_halfword(fgeth(as.sfile[as.segm]), fgeth(as.rfile[as.segm])), stdout);
     }
 }
 
 // convert symbol type to relocation type
-static int typerel(int t)
+static int type_to_reloc(int t)
 {
     switch (t & N_TYPE) {
     case N_ABS:
@@ -186,7 +186,7 @@ static int typerel(int t)
     }
 }
 
-static long relhalf(long hr)
+static long rewrite_reloc(long hr)
 {
     int i;
 
@@ -202,18 +202,18 @@ static long relhalf(long hr)
             if (as.xflags)
                 hr = (hr & (RSHORT | REXT)) | RPUTIX(newindex[i]);
         } else
-            hr = (hr & RSHORT) | typerel((int)as.stab[i].n_type);
+            hr = (hr & RSHORT) | type_to_reloc((int)as.stab[i].n_type);
         break;
     }
     return hr;
 }
 
-void makereloc(void)
+void write_reloc(void)
 {
     int i;
 
     for (i = 0; i < as.nconst; i++) {
-        fputh(relhalf(as.constab[i].hr2), stdout);
+        fputh(rewrite_reloc(as.constab[i].hr2), stdout);
         fputh(0L, stdout);
     }
     for (as.segm = STEXT; as.segm < SBSS; as.segm++) {
@@ -221,11 +221,11 @@ void makereloc(void)
 
         rewind(as.rfile[as.segm]);
         while (len--)
-            fputh(relhalf(fgeth(as.rfile[as.segm])), stdout);
+            fputh(rewrite_reloc(fgeth(as.rfile[as.segm])), stdout);
     }
 }
 
-void makesymtab(void)
+void write_symtab(void)
 {
     int i;
 

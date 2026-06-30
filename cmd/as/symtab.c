@@ -7,7 +7,7 @@
 
 #include "as.h"
 
-static int chash(const char *s)
+static int hash_instruction(const char *s)
 {
     int h, c;
 
@@ -17,7 +17,7 @@ static int chash(const char *s)
     return SUPERHASH(h, HCMDSZ - 1);
 }
 
-void hashinit(void)
+void init_hash_tables(void)
 {
     int i;
     const struct table *p;
@@ -27,7 +27,7 @@ void hashinit(void)
     for (i = 0; i < HCMDSZ; i++)
         as.hashctab[i] = -1;
     for (p = table; p->name; p++) {
-        int h = chash(p->name);
+        int h = hash_instruction(p->name);
 
         while (as.hashctab[h] != -1)
             if (--h < 0)
@@ -38,7 +38,7 @@ void hashinit(void)
         as.hashtab[i] = -1;
 }
 
-int lookacmd(void)
+int lookup_directive(void)
 {
     switch (as.name[1]) {
     case 'a':
@@ -87,11 +87,11 @@ int lookacmd(void)
     return -1;
 }
 
-int lookcmd(void)
+int lookup_instruction(void)
 {
     int i, h;
 
-    h = chash(as.name);
+    h = hash_instruction(as.name);
     while ((i = as.hashctab[h]) != -1) {
         if (!strcmp(table[i].name, as.name))
             return i;
@@ -101,7 +101,7 @@ int lookcmd(void)
     return -1;
 }
 
-static int hash(const char *s)
+static int hash_name(const char *s)
 {
     int h, c;
 
@@ -111,21 +111,21 @@ static int hash(const char *s)
     return SUPERHASH(h, HASHSZ - 1);
 }
 
-static char *alloc(int len)
+static char *alloc_name(int len)
 {
     int r;
 
     r = as.lastfree;
     if ((as.lastfree += len) > SPACESZ)
-        uerror("out of memory");
+        fatal("out of memory");
     return as.space + r;
 }
 
-int lookname(void)
+int lookup_name(void)
 {
     int i, h;
 
-    h = hash(as.name);
+    h = hash_name(as.name);
     while ((i = as.hashtab[h]) != -1) {
         if (!strcmp(as.stab[i].n_name, as.name))
             return i;
@@ -137,10 +137,10 @@ int lookname(void)
 
     i = as.stabfree++;
     if (i >= STSIZE)
-        uerror("symbol table overflow");
+        fatal("symbol table overflow");
     else {
         as.stab[i].n_len  = strlen(as.name);
-        as.stab[i].n_name = alloc(1 + as.stab[i].n_len);
+        as.stab[i].n_name = alloc_name(1 + as.stab[i].n_len);
         strcpy(as.stab[i].n_name, as.name);
         as.stab[i].n_value = 0;
         as.stab[i].n_type  = 0;

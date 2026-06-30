@@ -20,9 +20,9 @@ extern "C" {
 #include "assemble.h"
 }
 
-// Replace the front-end uerror(): instead of exit(1), surface the assembler
+// Replace the front-end fatal(): instead of exit(1), surface the assembler
 // error as a GoogleTest failure via an uncaught exception.
-extern "C" [[noreturn]] void uerror(char *fmt, ...)
+extern "C" [[noreturn]] void fatal(char *fmt, ...)
 {
     char buf[256];
     va_list ap;
@@ -510,7 +510,7 @@ tlabel: atx 0
 // Referencing a label defined in the .strng segment exercises TYPESEGM(N_STRNG)
 // in expr.c.  Regression test for AS-14: typesegm[] was one entry short, so
 // TYPESEGM(N_STRNG) read out of bounds and the reference relocated against the
-// wrong segment.  The strng segment folds onto the end of data, so pass2 rewrites
+// wrong segment.  The strng segment folds onto the end of data, so emit_segments rewrites
 // the symbol's type to N_DATA and emits the reference as an RDATA relocation; with
 // the bug the .word would relocate against some other (garbage) segment instead.
 TEST(Assemble, StrngLabelReference)

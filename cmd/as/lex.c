@@ -7,7 +7,7 @@
 
 #include "as.h"
 
-static int hexdig(int c)
+static int hex_digit_value(int c)
 {
     if (c <= '9')
         return c - '0';
@@ -18,14 +18,14 @@ static int hexdig(int c)
 }
 
 // read a hexadecimal number 0xZZZ
-static void gethnum(void)
+static void read_hex_number(void)
 {
     int c;
     char *cp;
 
     c = getchar();
     for (cp = as.name; ISHEX(c); c = getchar())
-        *cp++ = hexdig(c);
+        *cp++ = hex_digit_value(c);
     ungetc(c, stdin);
     as.intval.left  = 0;
     as.intval.right = 0;
@@ -42,7 +42,7 @@ static void gethnum(void)
 }
 
 // read a binary number 0bZZZ
-static void getbnum(void)
+static void read_binary_number(void)
 {
     int c;
     char *cp;
@@ -68,9 +68,9 @@ static void getbnum(void)
 // Read a numeric literal.  The base is fixed by a C++-style prefix:
 //      1234  - decimal (no prefix)
 //      01234 - octal (leading zero)
-// (0x.../0X... and 0b.../0B... are handled by gethnum()/getbnum().)  Each base
+// (0x.../0X... and 0b.../0B... are handled by read_hex_number()/read_binary_number().)  Each base
 // reads only its own digit class, so a stray non-digit ends the number cleanly.
-static void getnum(int c)
+static void read_number(int c)
 {
     char *cp;
 
@@ -111,26 +111,26 @@ static void getnum(int c)
 
 // Read a number .[a:b], where a, b are bit numbers
 // or .[a=b]
-static void getbitmask(void)
+static void read_bit_mask(void)
 {
     int c, a, b;
     int v, compl;
 
-    a = getexpr(&v) - 1;
+    a = parse_expr(&v) - 1;
     if (v != SABS)
-        uerror("illegal expression in bit mask");
-    c = getlex(&v);
+        fatal("illegal expression in bit mask");
+    c = next_token(&v);
     if (c != ':' && c != '=')
-        uerror("illegal bit mask delimiter");
+        fatal("illegal bit mask delimiter");
     compl = c == '=';
-    b     = getexpr(&v) - 1;
+    b     = parse_expr(&v) - 1;
     if (v != SABS)
-        uerror("illegal expression in bit mask");
-    c = getlex(&v);
+        fatal("illegal expression in bit mask");
+    c = next_token(&v);
     if (c != ']')
-        uerror("illegal bit mask delimiter");
+        fatal("illegal bit mask delimiter");
     if (a < 0 || a >= 64 || b < 0 || b >= 64)
-        uerror("bit number out of range 1..64");
+        fatal("bit number out of range 1..64");
     if (a < b)
         c = a, a = b, b = c;
     if (compl && --a < ++b) {
@@ -160,12 +160,12 @@ static void getbitmask(void)
 }
 
 // Read a number .N, where N is a bit number
-static void getbitnum(int c)
+static void read_bit_number(int c)
 {
-    getnum(c);
+    read_number(c);
     c = as.intval.right - 1;
     if (c < 0 || c >= 64)
-        uerror("bit number out of range 1..64");
+        fatal("bit number out of range 1..64");
     if (c >= 32) {
         as.intval.left  = 1L << (c - 32);
         as.intval.right = 0;
@@ -176,24 +176,24 @@ static void getbitnum(int c)
 }
 
 // + - * / are part of operator-bearing mnemonics (a+x, j+m, e-n, ...).
-static int isopername(int c)
+static int is_operator_char(int c)
 {
     return c == '+' || c == '-' || c == '*' || c == '/';
 }
 
-static void getname(int c)
+static void read_name(int c)
 {
     char *cp;
 
     // When a machine instruction is expected, absorb the operator characters
     // so mnemonics like "a+x" lex as a single name.
-    for (cp = as.name; ISLETTER(c) || ISDIGIT(c) || (as.cmdmode && isopername(c)); c = getchar())
+    for (cp = as.name; ISLETTER(c) || ISDIGIT(c) || (as.cmdmode && is_operator_char(c)); c = getchar())
         *cp++ = c;
     *cp = 0;
     ungetc(c, stdin);
 }
 
-// int getlex(int *val) - read a token, return its type,
+// int next_token(int *val) - read a token, return its type,
 // store its value in *val.
 // Returned token types:
 //      LEOL    - end of line. Value is the number of the line that began.
@@ -204,7 +204,7 @@ static void getname(int c)
 //      LACMD   - assembler directive. Value is its type.
 //      LLCMD   - long-address instruction. Value is the code.
 //      LSCMD   - short-address instruction. Value is the code.
-int getlex(int *pval)
+int next_token(int *pval)
 {
     int c;
 
@@ -274,11 +274,11 @@ int getlex(int *pval)
         case '0':
             c = getchar();
             if (c == 'x' || c == 'X') {
-                gethnum();
+                read_hex_number();
                 return LNUM;
             }
             if (c == 'b' || c == 'B') {
-                getbnum();
+                read_binary_number();
                 return LNUM;
             }
             ungetc(c, stdin);
@@ -292,7 +292,7 @@ int getlex(int *pval)
         case '7':
         case '8':
         case '9':
-            getnum(c);
+            read_number(c);
             return LNUM;
         case '@':
         case '$': {
@@ -300,40 +300,40 @@ int getlex(int *pval)
             // opcode number, for opcodes that have no dedicated mnemonic.
             int d1 = getchar(), d2 = getchar();
             if (!ISOCTAL(d1) || !ISOCTAL(d2))
-                uerror("bad octal opcode after '%c'", c);
+                fatal("bad octal opcode after '%c'", c);
             *pval = (d1 - '0') * 8 + (d2 - '0');
             return (c == '$') ? LSCMD : LLCMD;
         }
         default:
             if (!ISLETTER(c))
-                uerror("bad character: \\%o", c & 0377);
+                fatal("bad character: \\%o", c & 0377);
             if (c == '.') {
                 c = getchar();
                 if (c == '[') {
-                    getbitmask();
+                    read_bit_mask();
                     return LNUM;
                 } else if (ISOCTAL(c)) {
-                    getbitnum(c);
+                    read_bit_number(c);
                     return LNUM;
                 }
                 ungetc(c, stdin);
                 c = '.';
             }
-            getname(c);
+            read_name(c);
             if (as.name[0] == '.') {
                 if (as.name[1] == 0)
                     return '.';
-                if ((*pval = lookacmd()) != -1)
+                if ((*pval = lookup_directive()) != -1)
                     return LACMD;
             }
-            if ((*pval = lookcmd()) != -1)
+            if ((*pval = lookup_instruction()) != -1)
                 return LCMD;
-            *pval = lookname();
+            *pval = lookup_name();
             return LNAME;
         }
 }
 
-void ungetlex(int val, int type)
+void unget_token(int val, int type)
 {
     as.blexflag = 1;
     as.backlex  = val;
