@@ -68,25 +68,24 @@ void align_segment(int s)
 static long intern_constant(int bs)
 {
     int hash, i;
-    long h, h2, hr2;
+    int64_t val;
+    long hr2;
 
-    h   = HIHALF(as.intval);
-    h2  = LOHALF(as.intval);
+    val = as.intval;
     hr2 = SEGMREL(bs);
     if (bs == SEXT)
         hr2 |= RPUTIX(as.extref); // external constant: remember which symbol
-    hash = SUPERHASH(h + h2 + hr2, HCONSZ - 1);
+    hash = SUPERHASH(HIHALF(val) + LOHALF(val) + hr2, HCONSZ - 1);
     while ((i = as.hashconst[hash]) != -1) {
         // Slot taken: a real match means the constant already exists.
-        if (h == as.constab[i].h && h2 == as.constab[i].h2 && hr2 == as.constab[i].hr2)
+        if (val == as.constab[i].val && hr2 == as.constab[i].hr2)
             return i;
         if (--hash < 0)
             hash += HCONSZ;
     }
     // Not found: append a new pool entry and record it in the hash slot.
     as.hashconst[hash]        = as.nconst;
-    as.constab[as.nconst].h   = h;
-    as.constab[as.nconst].h2  = h2;
+    as.constab[as.nconst].val = val;
     as.constab[as.nconst].hr2 = hr2;
     return as.nconst++;
 }

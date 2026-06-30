@@ -203,8 +203,8 @@ void emit_segments(void)
     // process the constant segment: emit each pooled constant (low half
     // relocated, high half as-is).
     for (i = 0; i < as.nconst; i++) {
-        fputh(relocate_halfword(as.constab[i].h2, as.constab[i].hr2), stdout);
-        fputh(as.constab[i].h, stdout);
+        fputh(relocate_halfword(LOHALF(as.constab[i].val), as.constab[i].hr2), stdout);
+        fputh(HIHALF(as.constab[i].val), stdout);
     }
     // re-read each code/data segment from its temp file and emit it, relocating
     // every half-word as it goes.
