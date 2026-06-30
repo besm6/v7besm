@@ -15,12 +15,6 @@ registered with `gtest_discover_tests`, and is hooked into the aggregate build v
 `add_dependencies(build_tests <tool>_test)`. lorder is an install-only shell script, so it
 gets no library split and no unit test.
 
- * NM-1: wire cmd/nm into the top-level CMake and build b6nm; fix warnings/errors. Split
-   into an `nm` library + main.c and add cmd/nm/test/nm_test.cpp.
-
- * RANLIB-1: wire cmd/ranlib into the top-level CMake and build b6ranlib; fix
-   warnings/errors. Split into a `ranlib` library + main.c and add cmd/ranlib/test/ranlib_test.cpp.
-
  * SIZE-1: wire cmd/size into the top-level CMake and build b6size; fix warnings/errors.
    Split into a `size` library + main.c and add cmd/size/test/size_test.cpp.
 

@@ -9,39 +9,55 @@
  *      Исходные тексты взяты из ОС UNIX 4.3 BSD.
  */
 
-#include "besm6/ranlib.h"
+#include "symdef.h"
 
+#include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
 
 #include "besm6/ar.h"
 #include "besm6/b.out.h"
+#include "besm6/ranlib.h"
+
+#include "archive.h" /* ar_run() -- the in-process archiver engine */
 
 #define W 6 /* sizeof word of BESM-6 */
-
-#define AR "/usr/local/bin/b6ar"
 
 #define TABSZ    1000
 #define STRTABSZ (TABSZ * 10)
 
-struct ar_hdr archdr;
-struct exec exp;
+static struct ar_hdr archdr;
+static struct exec exp;
 
-long arsize;
-FILE *fi, *fo;
-long off, oldoff;
-int new;
-char firstname[40];
-char tempnm[] = "__.SYMDEF";
-struct ranlib rantab[TABSZ];
-int tnum;
-int debug;
+static long arsize;
+static FILE *fi, *fo;
+static long off, oldoff;
+static int new;
+static char firstname[31];
+static char tempnm[] = "__.SYMDEF";
+static struct ranlib rantab[TABSZ];
+static int tnum;
+static int debug;
+static int justtouch;
 
-extern long fgeth(), time();
+static int nextel(FILE *af);
+static void fixdate(const char *s);
+static void putrantab(FILE *f);
+static void stash(const struct nlist *s);
+static void fixsize(void);
 
-main(argc, argv) char **argv;
+int ranlib_run(int argc, char **argv)
 {
-    char cmdbuf[BUFSIZ];
+    /* Reset state so repeated in-process runs start clean. */
     justtouch = 0;
+    debug     = 0;
+    tnum      = 0;
+    new       = 0;
+    off       = 0;
+    oldoff    = 0;
 
     /* check for the "-t" flag" */
     for (; argc > 1 && argv[1][0] == '-'; --argc, ++argv) {
@@ -67,8 +83,9 @@ main(argc, argv) char **argv;
             fprintf(stderr, "ranlib: cannot open %s\n", *argv);
             continue;
         }
-        if (fgeth(fi) != ARMAG) {
+        if (fgetw(fi) != ARMAG) {
             fprintf(stderr, "not an archive: %s\n", *argv);
+            fclose(fi);
             continue;
         }
         if (justtouch) {
@@ -77,11 +94,13 @@ main(argc, argv) char **argv;
             fseek(fi, (long)W, 0);
             if (!fgetarhdr(fi, &archdr)) {
                 fprintf(stderr, "malformed archive: %s\n", *argv);
+                fclose(fi);
                 continue;
             }
             len = strlen(tempnm);
             if (strncmp(archdr.ar_name, tempnm, len)) {
                 fprintf(stderr, "no symbol table: %s\n", *argv);
+                fclose(fi);
                 continue;
             }
             fclose(fi);
@@ -95,7 +114,6 @@ main(argc, argv) char **argv;
             continue;
         }
         do {
-            n;
             struct nlist sym;
 
             if (!strncmp(tempnm, archdr.ar_name, sizeof(archdr.ar_name)))
@@ -111,7 +129,7 @@ main(argc, argv) char **argv;
             }
             fseek(fi, 2 * (exp.a_const + exp.a_text + exp.a_data), 1);
             for (;;) {
-                n = fgetsym(fi, &sym);
+                int n = fgetsym(fi, &sym);
                 if (n == 0) { /* malloc returned 0 */
                     fprintf(stderr, "ranlib: out of memory\n");
                     exit(1);
@@ -133,20 +151,27 @@ main(argc, argv) char **argv;
         }
         putrantab(fo);
         fclose(fo);
-        if (new)
-            sprintf(cmdbuf, "%s rlb %s %s %s", AR, firstname, *argv, tempnm);
-        else
-            sprintf(cmdbuf, "%s rl %s %s", AR, *argv, tempnm);
-        if (system(cmdbuf))
-            fprintf(stderr, "ranlib: ``%s'' failed\n", cmdbuf);
-        else
-            fixdate(*argv);
+        {
+            int rc;
+
+            if (new) {
+                char *av[] = { "ar", "rlb", firstname, *argv, tempnm };
+                rc         = ar_run(5, av);
+            } else {
+                char *av[] = { "ar", "rl", *argv, tempnm };
+                rc         = ar_run(4, av);
+            }
+            if (rc)
+                fprintf(stderr, "ranlib: ``ar'' failed on %s\n", *argv);
+            else
+                fixdate(*argv);
+        }
         unlink(tempnm);
     }
     return (0);
 }
 
-nextel(af) FILE *af;
+static int nextel(FILE *af)
 {
     oldoff = off;
     fseek(af, off, 0);
@@ -157,10 +182,9 @@ nextel(af) FILE *af;
     return (1);
 }
 
-fixdate(s) /* patch time */
-    char *s;
+static void fixdate(const char *s) /* patch time */
 {
-    fd;
+    int fd;
 
     fd = open(s, 2);
     if (fd < 0) {
@@ -170,20 +194,20 @@ fixdate(s) /* patch time */
     lseek(fd, (long)W, 0);
     getarhdr(fd, &archdr);
     lseek(fd, (long)W, 0);
-    archdr.ar_date = time((long *)0);
+    archdr.ar_date = time(NULL);
     putarhdr(fd, &archdr);
     close(fd);
 }
 
-putrantab(f) FILE *f;
+static void putrantab(FILE *f)
 {
     struct ranlib *p;
-    n;
+    int n;
 
     n = 0;
     for (p = rantab; p < rantab + tnum; ++p) {
         if (debug)
-            printf("%08o: %3d  %s\n", p->ran_off, p->ran_len, p->ran_name);
+            printf("%08lo: %3ld  %s\n", (long)p->ran_off, (long)p->ran_len, p->ran_name);
         fputran(p, f);
         n += 5 + p->ran_len;
         free(p->ran_name);
@@ -195,7 +219,7 @@ putrantab(f) FILE *f;
     while (++n % W);
 }
 
-stash(s) struct nlist *s;
+static void stash(const struct nlist *s)
 {
     if (tnum >= TABSZ) {
         fprintf(stderr, "ranlib: symbol table overflow\n");
@@ -207,7 +231,7 @@ stash(s) struct nlist *s;
     ++tnum;
 }
 
-fixsize()
+static void fixsize(void)
 {
     int i;
     long offdelta;
@@ -224,6 +248,7 @@ fixsize()
     } else {
         new = 1;
         strncpy(firstname, archdr.ar_name, sizeof(archdr.ar_name));
+        firstname[sizeof(archdr.ar_name)] = 0;
     }
     for (i = 0; i < tnum; ++i)
         rantab[i].ran_off += offdelta;
