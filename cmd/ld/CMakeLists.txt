@@ -8,7 +8,15 @@
 # The engine is split into a reusable library so it can be linked into both the
 # command-line tool and the unit tests.
 #
-add_library(linker STATIC ld.c)
+add_library(linker STATIC
+    ld.c
+    symtab.c
+    library.c
+    pass1.c
+    pass2.c
+    reloc.c
+    output.c
+)
 target_include_directories(linker PUBLIC ${BESM6_CROSS_INCLUDE} ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(linker PUBLIC aout)
 
