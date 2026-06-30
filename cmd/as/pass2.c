@@ -203,7 +203,7 @@ void emit_segments(void)
     // process the constant segment: emit each pooled constant (low half
     // relocated, high half as-is).
     for (i = 0; i < as.nconst; i++) {
-        fputh(relocate_halfword(LOHALF(as.constab[i].val), as.constab[i].hr2), stdout);
+        fputh(relocate_halfword(LOHALF(as.constab[i].val), as.constab[i].rel), stdout);
         fputh(HIHALF(as.constab[i].val), stdout);
     }
     // re-read each code/data segment from its temp file and emit it, relocating
@@ -290,7 +290,7 @@ void write_reloc(void)
     int i;
 
     for (i = 0; i < as.nconst; i++) {
-        fputh(rewrite_reloc(as.constab[i].hr2), stdout);
+        fputh(rewrite_reloc(as.constab[i].rel), stdout);
         fputh(0L, stdout);
     }
     for (as.segm = STEXT; as.segm < SBSS; as.segm++) {

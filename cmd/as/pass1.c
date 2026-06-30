@@ -78,7 +78,7 @@ static long intern_constant(int bs)
     hash = SUPERHASH(HIHALF(val) + LOHALF(val) + hr2, HCONSZ - 1);
     while ((i = as.hashconst[hash]) != -1) {
         // Slot taken: a real match means the constant already exists.
-        if (val == as.constab[i].val && hr2 == as.constab[i].hr2)
+        if (val == as.constab[i].val && hr2 == as.constab[i].rel)
             return i;
         if (--hash < 0)
             hash += HCONSZ;
@@ -86,7 +86,7 @@ static long intern_constant(int bs)
     // Not found: append a new pool entry and record it in the hash slot.
     as.hashconst[hash]        = as.nconst;
     as.constab[as.nconst].val = val;
-    as.constab[as.nconst].hr2 = hr2;
+    as.constab[as.nconst].rel = hr2;
     return as.nconst++;
 }
 

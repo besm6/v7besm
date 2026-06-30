@@ -124,7 +124,7 @@ struct table {
 // One pooled constant.  Identical constants are stored once; see intern_constant().
 struct constant {
     int64_t val; // the constant's 48-bit value
-    long hr2;    // relocation type for the constant (R* code, possibly with a symbol index)
+    long rel;    // relocation type for the constant (R* code, possibly with a symbol index)
 };
 
 // The entire mutable state of the assembler, in one struct so it is easy to
