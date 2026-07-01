@@ -14,14 +14,16 @@
   <define name="TEST_P(a,b)"    value="void a##_##b()"/>
   <define name="TYPED_TEST(a,b)" value="void a##_##b()"/>
 
-  <!-- Assertion macros evaluate their arguments; mark them so cppcheck does
-       not treat the values as unused. -->
-  <function name="EXPECT_EQ"><use-retval/><arg nr="any"/></function>
-  <function name="EXPECT_NE"><use-retval/><arg nr="any"/></function>
-  <function name="EXPECT_TRUE"><use-retval/><arg nr="1"/></function>
-  <function name="EXPECT_FALSE"><use-retval/><arg nr="1"/></function>
-  <function name="ASSERT_EQ"><use-retval/><arg nr="any"/></function>
-  <function name="ASSERT_NE"><use-retval/><arg nr="any"/></function>
-  <function name="ASSERT_TRUE"><use-retval/><arg nr="1"/></function>
-  <function name="ASSERT_FALSE"><use-retval/><arg nr="1"/></function>
+  <!-- Assertion macros evaluate their arguments; mark them (arg nr) so cppcheck
+       does not treat the argument values as unused.  The macros themselves may
+       be used without consuming their return value (a bare EXPECT_TRUE(...) with
+       no trailing "<< msg" is idiomatic gtest), so they are NOT use-retval. -->
+  <function name="EXPECT_EQ"><arg nr="any"/></function>
+  <function name="EXPECT_NE"><arg nr="any"/></function>
+  <function name="EXPECT_TRUE"><arg nr="1"/></function>
+  <function name="EXPECT_FALSE"><arg nr="1"/></function>
+  <function name="ASSERT_EQ"><arg nr="any"/></function>
+  <function name="ASSERT_NE"><arg nr="any"/></function>
+  <function name="ASSERT_TRUE"><arg nr="1"/></function>
+  <function name="ASSERT_FALSE"><arg nr="1"/></function>
 </def>
