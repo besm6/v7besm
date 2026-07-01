@@ -2,13 +2,24 @@
 
 The GoogleTest conformance suite in [test/](test/) drives the built `b6cpp`
 binary against the C11 preprocessor requirements (ISO/IEC 9899:2011, N1570).
-As of this writing **26 pass, 49 fail**. This file scopes one task per failure
-cluster so they can be picked up individually. Run the suite with:
+As of this writing **27 pass; the other 49 are marked `DISABLED_`** so the suite
+stays green. This file scopes one task per failure cluster so they can be picked
+up individually.
+
+**Every task starts the same way: re-enable its tests first.** The tests a task
+lists are currently disabled — their `TEST_F` names carry a `DISABLED_` prefix in
+the referenced `test_*.cpp`. Step one is to drop that prefix so the tests run,
+watch them fail, then implement the feature in b6cpp until they pass. The test
+names in this file are written *without* the `DISABLED_` prefix they currently
+carry in the source (e.g. `Paste.IdentifierPaste` is `TEST_F(Paste,
+DISABLED_IdentifierPaste)` in [test/test_paste.cpp](test/test_paste.cpp)).
+
+Run the suite with:
 
 ```sh
-make && make run                                  # whole project
-./build/cmd/cpp/test/cpp_test --gtest_filter='-Cpp.*'   # conformance only
-./build/cmd/cpp/test/cpp_test --gtest_filter='Paste.*'  # one topic
+make && make run                                # whole project (skips DISABLED_)
+./build/cmd/cpp/test/cpp_test                   # the conformance suite
+./build/cmd/cpp/test/cpp_test --gtest_also_run_disabled_tests --gtest_filter='Paste.*'
 ```
 
 b6cpp is John F. Reiser's pre-ANSI `cpp`, so most failures are genuinely
@@ -32,7 +43,7 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ## 1. [CRASH] Function-like macro name used without an argument list segfaults
 
-- **Failing test:** `Macro.NameWithoutParensNotInvoked`
+- **Test to enable (drop `DISABLED_`):** `Macro.NameWithoutParensNotInvoked`
 - **Repro:** `#define F(x) x` then a bare `F` (not followed by `(`) → exit 139
   (SIGSEGV).
 - **Expected:** a function-like macro name not immediately followed by `(` is
@@ -44,7 +55,7 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ## 2. `#if` expression evaluator stops after the first operand
 
-- **Failing tests:** `Conditional.IfElifElse`, `Conditional.DefinedBothForms`,
+- **Tests to enable (drop `DISABLED_`):** `Conditional.IfElifElse`, `Conditional.DefinedBothForms`,
   `Conditional.UndefinedIdentifierIsZero`, `Conditional.Operators`,
   `Conditional.CharacterConstant`
 - **Root cause (bug, not missing feature):** [parser.c:112](parser.c#L112) —
@@ -68,7 +79,7 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ## 3. Stringize operator `#` (§6.10.3.2)
 
-- **Failing tests:** `Stringize.Basic`, `Stringize.EscapesQuotesAndBackslashes`,
+- **Tests to enable (drop `DISABLED_`):** `Stringize.Basic`, `Stringize.EscapesQuotesAndBackslashes`,
   `Stringize.ExpandsThroughIndirection`, `Stringize.HashNotFollowedByParamDiagnosed`
 - **Current:** `#x` is passed through literally (`# hello world`).
 - **Scope (in [macro.c](macro.c) replacement-list handling):**
@@ -82,7 +93,7 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ## 4. Token-paste operator `##` (§6.10.3.3)
 
-- **Failing tests:** `Paste.IdentifierPaste`, `Paste.NumberPaste`,
+- **Tests to enable (drop `DISABLED_`):** `Paste.IdentifierPaste`, `Paste.NumberPaste`,
   `Paste.EmptyLeftOperand`, `Paste.EmptyRightOperand`, `Paste.ResultIsRescanned`,
   `Paste.AtStartDiagnosed`, `Paste.AtEndDiagnosed`
 - **Current:** `a##b` is passed through literally (`foo ## bar`).
@@ -96,7 +107,7 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ## 5. Variadic macros `...` / `__VA_ARGS__` (C99/C11 §6.10.3)
 
-- **Failing tests:** `Varargs.MultipleArguments`, `Varargs.SingleArgument`,
+- **Tests to enable (drop `DISABLED_`):** `Varargs.MultipleArguments`, `Varargs.SingleArgument`,
   `Varargs.NamedPlusVariadic`, `Varargs.CommasPreserved`,
   `Varargs.VaArgsOutsideVariadicDiagnosed`
 - **Current:** `...` in a parameter list is rejected as `bad formal: .`
@@ -110,7 +121,7 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ## 6. Predefined macros `__STDC__`, `__STDC_VERSION__`, `__STDC_HOSTED__`, `__DATE__`, `__TIME__` (§6.10.8)
 
-- **Failing tests:** `Predefined.StdcIsOne`, `Predefined.StdcVersionIsC11`,
+- **Tests to enable (drop `DISABLED_`):** `Predefined.StdcIsOne`, `Predefined.StdcVersionIsC11`,
   `Predefined.StdcHostedDefined`, `Predefined.DateAndTimeShape`
 - **Current:** these names pass through undefined (`__LINE__`/`__FILE__` already
   work — see the synthesis in [macro.c:311](macro.c#L311)).
@@ -122,7 +133,7 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ## 7. Diagnose illegal (re)definitions (§6.10.3 / §6.10.8.4)
 
-- **Failing tests:** `Macro.IncompatibleRedefinitionDiagnosed`,
+- **Tests to enable (drop `DISABLED_`):** `Macro.IncompatibleRedefinitionDiagnosed`,
   `Predefined.RedefiningLineDiagnosed`, `Predefined.DefiningDefinedDiagnosed`
 - **Current:** redefining a macro with a *different* body is silently accepted
   (new value wins); `#define __LINE__ 7` only warns (exit 0); `#define defined`
@@ -136,7 +147,7 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ## 8. `#line` directive has no effect (§6.10.4)
 
-- **Failing tests:** `LineControl.SetsLineAndFile`, `LineControl.SetsLineOnly`,
+- **Tests to enable (drop `DISABLED_`):** `LineControl.SetsLineAndFile`, `LineControl.SetsLineOnly`,
   `LineControl.MacroExpandedOperands`
 - **Current:** `#line` is registered but does not change `__LINE__`/`__FILE__`
   (the following line still reports its physical number/name).
@@ -146,7 +157,7 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ## 9. `#error` directive (§6.10.5)
 
-- **Failing test:** `ErrorDirective.SkippedErrorIsInert`
+- **Test to enable (drop `DISABLED_`):** `ErrorDirective.SkippedErrorIsInert`
   (`ErrorDirective.StopsTranslation` currently passes only by accident — an
   unknown directive already errors.)
 - **Current:** `#error` is not a known directive, so it reports
@@ -157,7 +168,7 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ## 10. `#pragma` directive and `_Pragma` operator (§6.10.6, §6.10.9)
 
-- **Failing tests:** `Pragma.UnknownPragmaAccepted`, `PragmaOperator.LeavesOtherTokens`
+- **Tests to enable (drop `DISABLED_`):** `Pragma.UnknownPragmaAccepted`, `PragmaOperator.LeavesOtherTokens`
 - **Current:** `#pragma …` reports `undefined control` (exit 1); the `_Pragma`
   operator is passed through untouched.
 - **Scope:**
@@ -169,7 +180,7 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ## 11. Comment handling (§5.1.1.2 / §6.4.9)
 
-- **Failing tests:** `TranslationPhases.BlockCommentBecomesSpace`,
+- **Tests to enable (drop `DISABLED_`):** `TranslationPhases.BlockCommentBecomesSpace`,
   `TranslationPhases.LineCommentRemoved`, `TranslationPhases.UnterminatedCommentDiagnosed`
 - **Current:** `a/**/b` becomes `ab` (comment deleted, tokens fuse — should be
   `a b`); `//` line comments are not recognized (C99); an unterminated `/*` is
@@ -182,7 +193,7 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ## 12. Trigraph replacement (§5.2.1.1, translation phase 1)
 
-- **Failing tests:** `Trigraphs.HashIntroducesDirective`,
+- **Tests to enable (drop `DISABLED_`):** `Trigraphs.HashIntroducesDirective`,
   `Trigraphs.PunctuationMappings`, `Trigraphs.SlashActsAsLineSplice`
 - **Current:** trigraph sequences are left literal. (The tests pass
   `-trigraphs -w`, which b6cpp harmlessly ignores — unknown flags do not error.)
@@ -193,7 +204,7 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ## 13. Raise translation limits to the C11 minimums (§5.2.4.1)
 
-- **Failing tests:** `Limits.MacrosDefined4095`, `Limits.MacroParameters127`,
+- **Tests to enable (drop `DISABLED_`):** `Limits.MacrosDefined4095`, `Limits.MacroParameters127`,
   `Limits.LogicalLine4095`
 - **Current caps are far below the mandated minimums:** `too many defines` at
   ~388 ([macro.c:233](macro.c#L233)); `too many formals` at ~30
@@ -206,7 +217,7 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ## 14. Macro rescanning / self-reference must not be a hard error (§6.10.3.4)
 
-- **Failing tests:** `Macro.SelfReference`, `Macro.NoRescanRecursion`
+- **Tests to enable (drop `DISABLED_`):** `Macro.SelfReference`, `Macro.NoRescanRecursion`
 - **Current:** `#define X X` then `X` errors `macro recursion`
   ([macro.c:302](macro.c#L302)); `#define f(x) x f` then `f(1)(2)` errors
   `unterminated macro call`.
@@ -220,7 +231,7 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ## 15. Diagnose wrong macro argument count (§6.10.3)
 
-- **Failing tests:** `Macro.TooFewArgumentsDiagnosed`, `Macro.TooManyArgumentsDiagnosed`
+- **Tests to enable (drop `DISABLED_`):** `Macro.TooFewArgumentsDiagnosed`, `Macro.TooManyArgumentsDiagnosed`
 - **Current:** argument-count mismatch is a `ppwarn` (exit 0) —
   [macro.c:362](macro.c#L362), [macro.c:368](macro.c#L368).
 - **Scope:** promote `argument mismatch` from `ppwarn` to `pperror` so a
@@ -230,7 +241,7 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ## 16. Directives with leading whitespace before `#` are not recognized
 
-- **Failing test:** `Conditional.Nested`
+- **Test to enable (drop `DISABLED_`):** `Conditional.Nested`
 - **Current:** `  #if …` (indented) is passed through as ordinary text, so a
   nested conditional inside a taken group is not processed. Whitespace *after*
   the `#` (`# define`) already works; only leading whitespace *before* `#` fails.
