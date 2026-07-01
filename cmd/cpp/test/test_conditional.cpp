@@ -69,3 +69,8 @@ TEST_F(Conditional, FloatingConstantDiagnosed) {
 TEST_F(Conditional, AssignmentDiagnosed) {
     EXPECT_PP_DIAGNOSES("#if (a = 1)\nX\n#endif\n");
 }
+
+// A -D definition on the command line activates a matching #ifdef branch.
+TEST_F(Conditional, CommandLineDefineActivatesIfdef) {
+    EXPECT_TRUE(TokensAre("#ifdef FOO\nyes\n#else\nno\n#endif\n", "yes", {"-DFOO=1"}));
+}

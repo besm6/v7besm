@@ -3,14 +3,13 @@
 # binary over real input and check the preprocessed output.  The binary path is
 # injected at compile time via the C11PP_* generator expressions below.
 #
-# Every suite now shares one harness: cpp_harness.* spawns the tool under test
-# in an auto-removed temp dir, and all test files derive from the common
-# PreprocessorTest fixture (test_support.h).  cpp_test.cpp is a lightweight
-# smoke layer (Cpp.* suite); the test_*.cpp files are the C11 (N1570)
-# conformance suite.  The tool under test is selected via the C11PP_* macros.
+# Every suite shares one harness: cpp_harness.* spawns the tool under test in an
+# auto-removed temp dir, and each test_*.cpp file is a C11 (N1570) conformance
+# suite keyed to a standard clause, derived from the common PreprocessorTest
+# fixture (test_support.h).  The tool under test is selected via the C11PP_*
+# macros below.
 #
 add_executable(cpp_test
-    cpp_test.cpp
     cpp_harness.cpp
     test_conditional.cpp
     test_include.cpp
