@@ -8,7 +8,7 @@
 // CMakeLists.txt.  The matchers and PreprocessorTest fixture further down layer
 // on top so individual test files read as one-liners keyed to C11 clauses.
 //
-// The harness is declared here and implemented in cpp_harness.cpp.
+// The harness is declared here and implemented in test_support.cpp.
 #pragma once
 
 #include <gtest/gtest.h>
