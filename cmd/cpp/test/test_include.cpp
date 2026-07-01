@@ -1,10 +1,10 @@
 // C11 §6.10.2 — Source file inclusion.
 #include "test_support.h"
 
-using namespace c11pp;
+using Include = c11pp::PreprocessorTest;
 
 // #include "..." finds a file next to the including source.
-TEST(Include, QuotedForm) {
+TEST_F(Include, QuotedForm) {
     EXPECT_TRUE(TokensAre(
         "#include \"local.h\"\n"
         "GREETING\n",
@@ -14,7 +14,7 @@ TEST(Include, QuotedForm) {
 }
 
 // #include <...> searches the include path (harness passes -I<tempdir>).
-TEST(Include, AngleForm) {
+TEST_F(Include, AngleForm) {
     EXPECT_TRUE(TokensAre(
         "#include <sys.h>\n"
         "SYSVAL\n",
@@ -24,7 +24,7 @@ TEST(Include, AngleForm) {
 }
 
 // §6.10.2p4: the macro-expanded form of #include (computed include).
-TEST(Include, Computed) {
+TEST_F(Include, Computed) {
     EXPECT_TRUE(TokensAre(
         "#define HDR \"local.h\"\n"
         "#include HDR\n"
@@ -35,7 +35,7 @@ TEST(Include, Computed) {
 }
 
 // An include-guarded header included twice yields its body only once.
-TEST(Include, GuardIsIdempotent) {
+TEST_F(Include, GuardIsIdempotent) {
     EXPECT_TRUE(TokensAre(
         "#include \"g.h\"\n"
         "#include \"g.h\"\n",
@@ -45,7 +45,7 @@ TEST(Include, GuardIsIdempotent) {
 }
 
 // __FILE__/__LINE__ reflect the included file, then restore on return.
-TEST(Include, LineAndFileTracking) {
+TEST_F(Include, LineAndFileTracking) {
     // inc.h line 1 emits its own __LINE__ (1); back in the main file, __LINE__
     // sits on line 2.
     Result r = Preprocess(

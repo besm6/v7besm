@@ -55,4 +55,46 @@ inline ::testing::AssertionResult Diagnoses(const std::string& source,
 #define EXPECT_PP_OK(src) EXPECT_TRUE(::c11pp::Succeeds((src)))
 #define EXPECT_PP_DIAGNOSES(src) EXPECT_TRUE(::c11pp::Diagnoses((src)))
 
+// Shared gtest fixture for every preprocessor test suite.  It exposes the
+// harness (Preprocess / PreprocessStrict / Normalize) and the matcher helpers
+// as members so tests read as plain calls without `::c11pp::` qualification.
+// Each suite aliases this fixture to keep its own name, e.g.
+// `using Macro = c11pp::PreprocessorTest;` then `TEST_F(Macro, ...)`.
+class PreprocessorTest : public ::testing::Test {
+protected:
+    using Result  = ::c11pp::Result;   // so tests can write `Result r = ...`
+    using AuxFile = ::c11pp::AuxFile;
+
+    Result Preprocess(const std::string& src,
+                      const std::vector<std::string>& extraArgs = {},
+                      const std::vector<AuxFile>& aux = {}) {
+        return ::c11pp::Preprocess(src, extraArgs, aux);
+    }
+    Result PreprocessStrict(const std::string& src,
+                            const std::vector<std::string>& extraArgs = {},
+                            const std::vector<AuxFile>& aux = {}) {
+        return ::c11pp::PreprocessStrict(src, extraArgs, aux);
+    }
+    static std::string Normalize(const std::string& s) { return ::c11pp::Normalize(s); }
+
+    // Matcher helpers, so tests that spell out an assertion (rather than use the
+    // EXPECT_* macros above) can call them unqualified inside a TEST_F body.
+    ::testing::AssertionResult TokensAre(const std::string& source,
+                                         const std::string& expected,
+                                         const std::vector<std::string>& extraArgs = {},
+                                         const std::vector<AuxFile>& aux = {}) {
+        return ::c11pp::TokensAre(source, expected, extraArgs, aux);
+    }
+    ::testing::AssertionResult Succeeds(const std::string& source,
+                                        const std::vector<std::string>& extraArgs = {},
+                                        const std::vector<AuxFile>& aux = {}) {
+        return ::c11pp::Succeeds(source, extraArgs, aux);
+    }
+    ::testing::AssertionResult Diagnoses(const std::string& source,
+                                         const std::vector<std::string>& extraArgs = {},
+                                         const std::vector<AuxFile>& aux = {}) {
+        return ::c11pp::Diagnoses(source, extraArgs, aux);
+    }
+};
+
 }  // namespace c11pp

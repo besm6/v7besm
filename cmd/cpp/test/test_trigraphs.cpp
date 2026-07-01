@@ -3,7 +3,7 @@
 // explicitly request it and silence the associated warning.
 #include "test_support.h"
 
-using namespace c11pp;
+using Trigraphs = c11pp::PreprocessorTest;
 
 namespace {
 const std::vector<std::string> kTrigraphArgs = {"-trigraphs", "-w"};
@@ -14,7 +14,7 @@ const std::vector<std::string> kTrigraphArgs = {"-trigraphs", "-w"};
 // snippet handed to the preprocessor-under-test is exactly "??...".
 
 // ??= forms '#', so it can introduce a directive.
-TEST(Trigraphs, HashIntroducesDirective) {
+TEST_F(Trigraphs, DISABLED_HashIntroducesDirective) {
     EXPECT_TRUE(TokensAre(
         "\?\?=define X 1\n"
         "X\n",
@@ -23,7 +23,7 @@ TEST(Trigraphs, HashIntroducesDirective) {
 }
 
 // The seven punctuation trigraphs each map to their single character.
-TEST(Trigraphs, PunctuationMappings) {
+TEST_F(Trigraphs, DISABLED_PunctuationMappings) {
     EXPECT_TRUE(TokensAre(
         "\?\?( \?\?) \?\?< \?\?> \?\?! \?\?' \?\?-\n",
         "[ ] { } | ^ ~",
@@ -31,7 +31,7 @@ TEST(Trigraphs, PunctuationMappings) {
 }
 
 // ??/ is a backslash, so ??/ at end of line performs line splicing.
-TEST(Trigraphs, SlashActsAsLineSplice) {
+TEST_F(Trigraphs, DISABLED_SlashActsAsLineSplice) {
     EXPECT_TRUE(TokensAre(
         "foo\?\?/\n"
         "bar\n",

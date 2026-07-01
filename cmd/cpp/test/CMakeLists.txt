@@ -1,12 +1,13 @@
 #
 # End-to-end unit tests for the C preprocessor: they drive the built b6cpp
 # binary over real input and check the preprocessed output.  The binary path is
-# injected at compile time via a generator expression.
+# injected at compile time via the C11PP_* generator expressions below.
 #
-# Two harness styles share the cpp_test executable:
-#   * cpp_test.cpp          -- lightweight substring checks (Cpp.* suite).
-#   * cpp_harness.* + the   -- the C11 (N1570) conformance suite; the tool under
-#     test_*.cpp files          test is selected via the C11PP_* macros below.
+# Every suite now shares one harness: cpp_harness.* spawns the tool under test
+# in an auto-removed temp dir, and all test files derive from the common
+# PreprocessorTest fixture (test_support.h).  cpp_test.cpp is a lightweight
+# smoke layer (Cpp.* suite); the test_*.cpp files are the C11 (N1570)
+# conformance suite.  The tool under test is selected via the C11PP_* macros.
 #
 add_executable(cpp_test
     cpp_test.cpp
@@ -25,8 +26,7 @@ add_executable(cpp_test
     test_varargs.cpp)
 target_link_libraries(cpp_test PRIVATE GTest::gtest_main)
 target_compile_definitions(cpp_test PRIVATE
-    B6CPP_PATH="$<TARGET_FILE:b6cpp>"
-    # Point the conformance harness at b6cpp.  b6cpp writes to stdout by default
+    # Point the harness at b6cpp.  b6cpp writes to stdout by default
     # and Normalize() drops line markers, so no -P is needed.  -E is a no-op b6cpp
     # accepts (unlike clang's -std=c11, which b6cpp would reject).  b6cpp's exit
     # status is its error count, so no separate strict flag is required.
