@@ -30,44 +30,53 @@
 #define OODD 4
 #define HEAD 8
 
-static char *man = "mrxtdpq";
-static char *opt = "uvnbail";
+static char *command_letters = "mrxtdpq";
+static char *option_letters  = "uvnbail";
 
-static int signum[] = { SIGHUP, SIGINT, SIGQUIT, 0 };
+static int caught_signals[] = { SIGHUP, SIGINT, SIGQUIT, 0 };
 
 // All mutable per-run state, bundled so that reset_state() can clear it in one
 // memset and repeated ar_run() calls do not depend on one another.
 struct arstate {
-    struct stat   stbuf;
-    struct ar_hdr arbuf;
+    struct stat   filestat; // stat of the on-disk file being added
+    struct ar_hdr hdr;      // current member header
 
-    void (*comfun)(void);
-    char   flg[26];
-    char **namv;
-    int    namc;
-    char  *arnam;
-    char  *ponam;
+    void (*command)(void); // selected command function
+
+    // Option flags, one per accepted command-line letter.
+    int opt_update;  // 'u': replace only if the input file is newer
+    int opt_verbose; // 'v': verbose (counted; vv = extra detail)
+    int opt_local;   // 'l': put temp files in cwd, not /tmp
+    int opt_after;   // 'a': insert after position_name
+    int opt_before;  // 'b': insert before position_name
+    int opt_insert;  // 'i': synonym for -b
+    int opt_create;  // 'c': suppress the "creating archive" notice
+
+    char **names;        // named-file argv slice
+    int    namecount;    // number of named files
+    char  *archive_name; // archive path
+    char  *position_name; // member named by -a/-b/-i
 
     // Temporary file name templates (mkstemp replaces the last six 'X' chars).
-    char   tmp0nam[20];
-    char   tmp1nam[20];
-    char   tmp2nam[20];
-    char  *tfnam;
-    char  *tf1nam;
-    char  *tf2nam;
+    char   tmpl_main[20];   // main
+    char   tmpl_before[20]; // -b staging
+    char   tmpl_move[20];   // m staging
+    char  *tmp_name;        // active main temp name (NULL until created)
+    char  *tmp1_name;       // active before-temp name
+    char  *tmp2_name;       // active move-temp name
 
-    char  *file;
-    char   name[31];
-    int    af;
-    int    tf;
-    int    tf1;
-    int    tf2;
-    int    qf;
-    int    bastate;
-    char   buf[512];
+    char  *cur_file;        // current file/member name
+    char   member_name[31]; // member-name buffer
+    int    arfd;            // archive fd
+    int    tmpfd;           // main temp fd
+    int    tmp1fd;          // before-temp fd
+    int    tmp2fd;          // move-temp fd
+    int    qfd;             // quick-append fd
+    int    insert_state;    // -a/-b insertion state (0/1/2)
+    char   iobuf[512];      // I/O buffer
 
-    // Single exit point: done() unwinds via longjmp back into ar_run() so that
-    // the engine can be invoked repeatedly within one process (from tests).
+    // Single exit point: finish() unwinds via longjmp back into ar_run() so
+    // that the engine can be invoked repeatedly within one process (from tests).
     jmp_buf done_env;
     int     exit_code;
 };
@@ -75,47 +84,47 @@ struct arstate {
 static struct arstate ar;
 
 
-static void done(int c);
-static void sigdone(int sig);
-static void wrerr(void);
-static void usage(void);
-static void noar(void);
-static int getaf(void);
-static void getqf(void);
-static int getdir(void);
-static int match(void);
-static void bamatch(void);
-static int stats(void);
-static int notfound(void);
-static int morefil(void);
-static char *trim(char *s);
-static void longt(void);
-static void pmode(void);
-static void selmode(const int *pairp);
-static void copyfil(int fi, int fo, int flag);
-static void movefil(int f);
-static void init(void);
-static void cleanup(void);
-static void install(void);
-static void mesg(int c);
-static void phserr(void);
-static void setcom(void (*fun)(void));
-static void rcommand(void);
-static void dcommand(void);
-static void xcommand(void);
-static void tcommand(void);
-static void pcommand(void);
-static void mcommand(void);
-static void qcommand(void);
+static void finish(int c);
+static void on_signal(int sig);
+static void die_write_error(void);
+static void die_usage(void);
+static void die_no_archive(void);
+static int open_archive(void);
+static void open_archive_rw(void);
+static int next_member(void);
+static int match_member(void);
+static void handle_position(void);
+static int open_input(void);
+static int report_missing(void);
+static int count_pending(void);
+static char *basename_of(char *s);
+static void print_long_entry(void);
+static void print_perm_bits(void);
+static void print_perm_char(const int *pairp);
+static void copy_member(int fi, int fo, int flag);
+static void write_member(int f);
+static void start_temp_archive(void);
+static void append_new_files(void);
+static void commit_archive(void);
+static void log_action(int c);
+static void phase_error(void);
+static void set_command(void (*fun)(void));
+static void cmd_replace(void);
+static void cmd_delete(void);
+static void cmd_extract(void);
+static void cmd_list(void);
+static void cmd_print(void);
+static void cmd_move(void);
+static void cmd_quick(void);
 
 // Reset global state so that repeated ar_run() calls do not depend on
 // one another.
 static void reset_state(void)
 {
     memset(&ar, 0, sizeof(ar));
-    strcpy(ar.tmp0nam, "/tmp/ar0XXXXXX");
-    strcpy(ar.tmp1nam, "/tmp/ar1XXXXXX");
-    strcpy(ar.tmp2nam, "/tmp/ar2XXXXXX");
+    strcpy(ar.tmpl_main, "/tmp/ar0XXXXXX");
+    strcpy(ar.tmpl_before, "/tmp/ar1XXXXXX");
+    strcpy(ar.tmpl_move, "/tmp/ar2XXXXXX");
 }
 
 int ar_run(int argc, char **argv)
@@ -128,450 +137,469 @@ int ar_run(int argc, char **argv)
     if (setjmp(ar.done_env))
         return ar.exit_code;
 
-    for (i = 0; signum[i]; i++)
-        if (signal(signum[i], SIG_IGN) != SIG_IGN)
-            signal(signum[i], sigdone);
+    for (i = 0; caught_signals[i]; i++)
+        if (signal(caught_signals[i], SIG_IGN) != SIG_IGN)
+            signal(caught_signals[i], on_signal);
     if (argc < 3)
-        usage();
+        die_usage();
     for (cp = argv[1]; *cp; cp++)
         switch (*cp) {
-        case 'l':
-        case 'v':
         case 'u':
-        case 'n':
+            ar.opt_update++;
+            continue;
+
+        case 'v':
+            ar.opt_verbose++;
+            continue;
+
+        case 'l':
+            ar.opt_local++;
+            continue;
+
         case 'a':
+            ar.opt_after++;
+            continue;
+
         case 'b':
-        case 'c':
+            ar.opt_before++;
+            continue;
+
         case 'i':
-            ar.flg[*cp - 'a']++;
+            ar.opt_insert++;
+            continue;
+
+        case 'c':
+            ar.opt_create++;
+            continue;
+
+        case 'n':
+            // accepted for compatibility, ignored
             continue;
 
         case 'r':
-            setcom(rcommand);
+            set_command(cmd_replace);
             continue;
 
         case 'd':
-            setcom(dcommand);
+            set_command(cmd_delete);
             continue;
 
         case 'x':
-            setcom(xcommand);
+            set_command(cmd_extract);
             continue;
 
         case 't':
-            setcom(tcommand);
+            set_command(cmd_list);
             continue;
 
         case 'p':
-            setcom(pcommand);
+            set_command(cmd_print);
             continue;
 
         case 'm':
-            setcom(mcommand);
+            set_command(cmd_move);
             continue;
 
         case 'q':
-            setcom(qcommand);
+            set_command(cmd_quick);
             continue;
 
         default:
             fprintf(stderr, "ar: unknown flag `%c'\n", *cp);
-            done(1);
+            finish(1);
         }
-    if (ar.flg['l' - 'a']) {
-        strcpy(ar.tmp0nam, "ar0XXXXXX");
-        strcpy(ar.tmp1nam, "ar1XXXXXX");
-        strcpy(ar.tmp2nam, "ar2XXXXXX");
+    if (ar.opt_local) {
+        strcpy(ar.tmpl_main, "ar0XXXXXX");
+        strcpy(ar.tmpl_before, "ar1XXXXXX");
+        strcpy(ar.tmpl_move, "ar2XXXXXX");
     }
-    if (ar.flg['i' - 'a'])
-        ar.flg['b' - 'a']++;
-    // cppcheck-suppress duplicateExpression
-    if (ar.flg['a' - 'a'] || ar.flg['b' - 'a']) {
-        ar.bastate = 1;
-        ar.ponam   = trim(argv[2]);
+    if (ar.opt_insert)
+        ar.opt_before++;
+    if (ar.opt_after || ar.opt_before) {
+        ar.insert_state  = 1;
+        ar.position_name = basename_of(argv[2]);
         argv++;
         argc--;
         if (argc < 3)
-            usage();
+            die_usage();
     }
-    ar.arnam = argv[2];
-    ar.namv  = argv + 3;
-    ar.namc  = argc - 3;
-    if (ar.comfun == 0) {
-        if (ar.flg['u' - 'a'] == 0) {
+    ar.archive_name = argv[2];
+    ar.names        = argv + 3;
+    ar.namecount    = argc - 3;
+    if (ar.command == 0) {
+        if (ar.opt_update == 0) {
             fprintf(stderr, "ar: must be one of [%s]\n",
-                    man);
-            done(1);
+                    command_letters);
+            finish(1);
         }
-        setcom(rcommand);
+        set_command(cmd_replace);
     }
-    (*ar.comfun)();
-    done(notfound());
+    (*ar.command)();
+    finish(report_missing());
     return ar.exit_code;
 }
 
-static void setcom(void (*fun)(void))
+static void set_command(void (*fun)(void))
 {
-    if (ar.comfun != 0) {
+    if (ar.command != 0) {
         fprintf(stderr, "ar: only one of [%s] allowed\n",
-                man);
-        done(1);
+                command_letters);
+        finish(1);
     }
-    ar.comfun = fun;
+    ar.command = fun;
 }
 
-static void rcommand(void)
+static void cmd_replace(void)
 {
     int f;
 
-    init();
-    getaf();
-    while (!getdir()) {
-        bamatch();
-        if (ar.namc == 0 || match()) {
-            f = stats();
+    start_temp_archive();
+    open_archive();
+    while (!next_member()) {
+        handle_position();
+        if (ar.namecount == 0 || match_member()) {
+            f = open_input();
             if (f < 0) {
-                if (ar.namc)
-                    fprintf(stderr, "ar: cannot open %s\n", ar.file);
+                if (ar.namecount)
+                    fprintf(stderr, "ar: cannot open %s\n", ar.cur_file);
                 goto cp;
             }
-            if (ar.flg['u' - 'a'])
-                if (ar.stbuf.st_mtime <= ar.arbuf.ar_date) {
+            if (ar.opt_update)
+                if (ar.filestat.st_mtime <= ar.hdr.ar_date) {
                     close(f);
                     goto cp;
                 }
-            mesg('r');
-            copyfil(ar.af, -1, IODD + SKIP);
-            movefil(f);
+            log_action('r');
+            copy_member(ar.arfd, -1, IODD + SKIP);
+            write_member(f);
             continue;
         }
     cp:
-        mesg('c');
-        copyfil(ar.af, ar.tf, IODD + OODD + HEAD);
+        log_action('c');
+        copy_member(ar.arfd, ar.tmpfd, IODD + OODD + HEAD);
     }
-    cleanup();
+    append_new_files();
 }
 
-static void dcommand(void)
+static void cmd_delete(void)
 {
-    init();
-    if (getaf())
-        noar();
-    while (!getdir()) {
-        if (match()) {
-            mesg('d');
-            copyfil(ar.af, -1, IODD + SKIP);
+    start_temp_archive();
+    if (open_archive())
+        die_no_archive();
+    while (!next_member()) {
+        if (match_member()) {
+            log_action('d');
+            copy_member(ar.arfd, -1, IODD + SKIP);
             continue;
         }
-        mesg('c');
-        copyfil(ar.af, ar.tf, IODD + OODD + HEAD);
+        log_action('c');
+        copy_member(ar.arfd, ar.tmpfd, IODD + OODD + HEAD);
     }
-    install();
+    commit_archive();
 }
 
-static void xcommand(void)
+static void cmd_extract(void)
 {
     int f;
 
-    if (getaf())
-        noar();
-    while (!getdir()) {
-        if (ar.namc == 0 || match()) {
-            f = creat(ar.file, ar.arbuf.ar_mode & 0777);
+    if (open_archive())
+        die_no_archive();
+    while (!next_member()) {
+        if (ar.namecount == 0 || match_member()) {
+            f = creat(ar.cur_file, ar.hdr.ar_mode & 0777);
             if (f < 0) {
-                fprintf(stderr, "ar: cannot create %s\n", ar.file);
+                fprintf(stderr, "ar: cannot create %s\n", ar.cur_file);
                 goto sk;
             }
-            mesg('x');
-            copyfil(ar.af, f, IODD);
+            log_action('x');
+            copy_member(ar.arfd, f, IODD);
             close(f);
             continue;
         }
     sk:
-        mesg('c');
-        copyfil(ar.af, -1, IODD + SKIP);
-        if (ar.namc > 0 && !morefil())
-            done(0);
+        log_action('c');
+        copy_member(ar.arfd, -1, IODD + SKIP);
+        if (ar.namecount > 0 && !count_pending())
+            finish(0);
     }
 }
 
-static void pcommand(void)
+static void cmd_print(void)
 {
-    if (getaf())
-        noar();
-    while (!getdir()) {
-        if (ar.namc == 0 || match()) {
-            if (ar.flg['v' - 'a']) {
-                printf("\n<%s>\n\n", ar.file);
+    if (open_archive())
+        die_no_archive();
+    while (!next_member()) {
+        if (ar.namecount == 0 || match_member()) {
+            if (ar.opt_verbose) {
+                printf("\n<%s>\n\n", ar.cur_file);
                 fflush(stdout);
             }
-            copyfil(ar.af, 1, IODD);
+            copy_member(ar.arfd, 1, IODD);
             continue;
         }
-        copyfil(ar.af, -1, IODD + SKIP);
+        copy_member(ar.arfd, -1, IODD + SKIP);
     }
 }
 
-static void mcommand(void)
+static void cmd_move(void)
 {
-    init();
-    if (getaf())
-        noar();
-    ar.tf2 = mkstemp(ar.tmp2nam);
-    if (ar.tf2 < 0) {
+    start_temp_archive();
+    if (open_archive())
+        die_no_archive();
+    ar.tmp2fd = mkstemp(ar.tmpl_move);
+    if (ar.tmp2fd < 0) {
         fprintf(stderr, "ar: cannot create third temporary file\n");
-        done(1);
+        finish(1);
     }
-    ar.tf2nam = ar.tmp2nam;
-    while (!getdir()) {
-        bamatch();
-        if (match()) {
-            mesg('m');
-            copyfil(ar.af, ar.tf2, IODD + OODD + HEAD);
+    ar.tmp2_name = ar.tmpl_move;
+    while (!next_member()) {
+        handle_position();
+        if (match_member()) {
+            log_action('m');
+            copy_member(ar.arfd, ar.tmp2fd, IODD + OODD + HEAD);
             continue;
         }
-        mesg('c');
-        copyfil(ar.af, ar.tf, IODD + OODD + HEAD);
+        log_action('c');
+        copy_member(ar.arfd, ar.tmpfd, IODD + OODD + HEAD);
     }
-    install();
+    commit_archive();
 }
 
-static void tcommand(void)
+static void cmd_list(void)
 {
-    if (getaf())
-        noar();
-    while (!getdir()) {
-        if (ar.namc == 0 || match()) {
-            if (ar.flg['v' - 'a'])
-                longt();
-            printf("%s\n", trim(ar.file));
+    if (open_archive())
+        die_no_archive();
+    while (!next_member()) {
+        if (ar.namecount == 0 || match_member()) {
+            if (ar.opt_verbose)
+                print_long_entry();
+            printf("%s\n", basename_of(ar.cur_file));
         }
-        copyfil(ar.af, -1, IODD + SKIP);
+        copy_member(ar.arfd, -1, IODD + SKIP);
     }
 }
 
-static void qcommand(void)
+static void cmd_quick(void)
 {
     int i, f;
 
-    // cppcheck-suppress duplicateExpression
-    if (ar.flg['a' - 'a'] || ar.flg['b' - 'a']) {
+    if (ar.opt_after || ar.opt_before) {
         fprintf(stderr, "ar: abi and q incompatible\n");
-        done(1);
+        finish(1);
     }
-    getqf();
-    for (i = 0; signum[i]; i++)
-        signal(signum[i], SIG_IGN);
-    lseek(ar.qf, 0l, SEEK_END);
-    for (i = 0; i < ar.namc; i++) {
-        ar.file = ar.namv[i];
-        if (ar.file == 0)
+    open_archive_rw();
+    for (i = 0; caught_signals[i]; i++)
+        signal(caught_signals[i], SIG_IGN);
+    lseek(ar.qfd, 0l, SEEK_END);
+    for (i = 0; i < ar.namecount; i++) {
+        ar.cur_file = ar.names[i];
+        if (ar.cur_file == 0)
             continue;
-        ar.namv[i] = 0;
-        mesg('q');
-        f = stats();
+        ar.names[i] = 0;
+        log_action('q');
+        f = open_input();
         if (f < 0) {
-            fprintf(stderr, "ar: cannot open %s\n", ar.file);
+            fprintf(stderr, "ar: cannot open %s\n", ar.cur_file);
             continue;
         }
-        ar.tf = ar.qf;
-        movefil(f);
-        ar.qf = ar.tf;
+        ar.tmpfd = ar.qfd;
+        write_member(f);
+        ar.qfd = ar.tmpfd;
     }
 }
 
-static void init(void)
+static void start_temp_archive(void)
 {
     uword_t mbuf = ARMAG;
 
-    ar.tf = mkstemp(ar.tmp0nam);
-    if (ar.tf < 0) {
+    ar.tmpfd = mkstemp(ar.tmpl_main);
+    if (ar.tmpfd < 0) {
         fprintf(stderr,
                 "ar: cannot create temporary file\n");
-        done(1);
+        finish(1);
     }
-    ar.tfnam = ar.tmp0nam;
-    if (!putint(ar.tf, mbuf))
-        wrerr();
+    ar.tmp_name = ar.tmpl_main;
+    if (!putint(ar.tmpfd, mbuf))
+        die_write_error();
 }
 
-static int getaf(void)
+static int open_archive(void)
 {
     uword_t mbuf;
 
-    ar.af = open(ar.arnam, O_RDONLY);
-    if (ar.af < 0)
+    ar.arfd = open(ar.archive_name, O_RDONLY);
+    if (ar.arfd < 0)
         return (1);
-    if (!getint(ar.af, &mbuf) || mbuf != ARMAG) {
+    if (!getint(ar.arfd, &mbuf) || mbuf != ARMAG) {
         fprintf(stderr, "ar: %s is not in archive format\n",
-                ar.arnam);
-        done(1);
+                ar.archive_name);
+        finish(1);
     }
     return (0);
 }
 
-static void getqf(void)
+static void open_archive_rw(void)
 {
     uword_t mbuf;
 
-    if ((ar.qf = open(ar.arnam, O_RDWR)) < 0) {
-        if (!ar.flg['c' - 'a'])
-            fprintf(stderr, "ar: creating %s\n", ar.arnam);
-        close(creat(ar.arnam, 0666));
-        if ((ar.qf = open(ar.arnam, O_RDWR)) < 0) {
-            fprintf(stderr, "ar: cannot create %s\n", ar.arnam);
-            done(1);
+    if ((ar.qfd = open(ar.archive_name, O_RDWR)) < 0) {
+        if (!ar.opt_create)
+            fprintf(stderr, "ar: creating %s\n", ar.archive_name);
+        close(creat(ar.archive_name, 0666));
+        if ((ar.qfd = open(ar.archive_name, O_RDWR)) < 0) {
+            fprintf(stderr, "ar: cannot create %s\n", ar.archive_name);
+            finish(1);
         }
         mbuf = ARMAG;
-        if (!putint(ar.qf, mbuf))
-            wrerr();
-    } else if (!getint(ar.qf, &mbuf) || mbuf != ARMAG) {
+        if (!putint(ar.qfd, mbuf))
+            die_write_error();
+    } else if (!getint(ar.qfd, &mbuf) || mbuf != ARMAG) {
         fprintf(stderr, "ar: %s is not in archive format\n",
-                ar.arnam);
-        done(1);
+                ar.archive_name);
+        finish(1);
     }
 }
 
-static void usage(void)
+static void die_usage(void)
 {
-    printf("Usage: ar [%s][%s] archive file...\n", opt,
-           man);
-    done(1);
+    printf("Usage: ar [%s][%s] archive file...\n", option_letters,
+           command_letters);
+    finish(1);
 }
 
-static void noar(void)
+static void die_no_archive(void)
 {
-    fprintf(stderr, "ar: %s not found\n", ar.arnam);
-    done(1);
+    fprintf(stderr, "ar: %s not found\n", ar.archive_name);
+    finish(1);
 }
 
-static void sigdone(int sig)
+static void on_signal(int sig)
 {
     (void)sig;
-    done(100);
+    finish(100);
 }
 
-static void done(int c)
+static void finish(int c)
 {
-    if (ar.tfnam)
-        unlink(ar.tfnam);
-    if (ar.tf1nam)
-        unlink(ar.tf1nam);
-    if (ar.tf2nam)
-        unlink(ar.tf2nam);
+    if (ar.tmp_name)
+        unlink(ar.tmp_name);
+    if (ar.tmp1_name)
+        unlink(ar.tmp1_name);
+    if (ar.tmp2_name)
+        unlink(ar.tmp2_name);
     ar.exit_code = c;
     longjmp(ar.done_env, 1);
 }
 
-static int notfound(void)
+static int report_missing(void)
 {
     int i, n;
 
     n = 0;
-    for (i = 0; i < ar.namc; i++)
-        if (ar.namv[i]) {
-            fprintf(stderr, "ar: %s not found\n", ar.namv[i]);
+    for (i = 0; i < ar.namecount; i++)
+        if (ar.names[i]) {
+            fprintf(stderr, "ar: %s not found\n", ar.names[i]);
             n++;
         }
     return (n);
 }
 
-static int morefil(void)
+static int count_pending(void)
 {
     int i, n;
 
     n = 0;
-    for (i = 0; i < ar.namc; i++)
-        if (ar.namv[i])
+    for (i = 0; i < ar.namecount; i++)
+        if (ar.names[i])
             n++;
     return (n);
 }
 
-static void cleanup(void)
+static void append_new_files(void)
 {
     int i, f;
 
-    for (i = 0; i < ar.namc; i++) {
-        ar.file = ar.namv[i];
-        if (ar.file == 0)
+    for (i = 0; i < ar.namecount; i++) {
+        ar.cur_file = ar.names[i];
+        if (ar.cur_file == 0)
             continue;
-        ar.namv[i] = 0;
-        mesg('a');
-        f = stats();
+        ar.names[i] = 0;
+        log_action('a');
+        f = open_input();
         if (f < 0) {
-            fprintf(stderr, "ar: cannot open %s\n", ar.file);
+            fprintf(stderr, "ar: cannot open %s\n", ar.cur_file);
             continue;
         }
-        movefil(f);
+        write_member(f);
     }
-    install();
+    commit_archive();
 }
 
-static void install(void)
+static void commit_archive(void)
 {
     int i;
 
-    for (i = 0; signum[i]; i++)
-        signal(signum[i], SIG_IGN);
-    if (ar.af < 0)
-        if (!ar.flg['c' - 'a'])
-            fprintf(stderr, "ar: creating %s\n", ar.arnam);
-    close(ar.af);
-    ar.af = creat(ar.arnam, 0666);
-    if (ar.af < 0) {
-        fprintf(stderr, "ar: cannot create %s\n", ar.arnam);
-        done(1);
+    for (i = 0; caught_signals[i]; i++)
+        signal(caught_signals[i], SIG_IGN);
+    if (ar.arfd < 0)
+        if (!ar.opt_create)
+            fprintf(stderr, "ar: creating %s\n", ar.archive_name);
+    close(ar.arfd);
+    ar.arfd = creat(ar.archive_name, 0666);
+    if (ar.arfd < 0) {
+        fprintf(stderr, "ar: cannot create %s\n", ar.archive_name);
+        finish(1);
     }
-    if (ar.tfnam) {
-        lseek(ar.tf, 0l, SEEK_SET);
-        while ((i = read(ar.tf, ar.buf, 512)) > 0)
-            if (write(ar.af, ar.buf, i) != i)
-                wrerr();
+    if (ar.tmp_name) {
+        lseek(ar.tmpfd, 0l, SEEK_SET);
+        while ((i = read(ar.tmpfd, ar.iobuf, 512)) > 0)
+            if (write(ar.arfd, ar.iobuf, i) != i)
+                die_write_error();
     }
-    if (ar.tf2nam) {
-        lseek(ar.tf2, 0l, SEEK_SET);
-        while ((i = read(ar.tf2, ar.buf, 512)) > 0)
-            if (write(ar.af, ar.buf, i) != i)
-                wrerr();
+    if (ar.tmp2_name) {
+        lseek(ar.tmp2fd, 0l, SEEK_SET);
+        while ((i = read(ar.tmp2fd, ar.iobuf, 512)) > 0)
+            if (write(ar.arfd, ar.iobuf, i) != i)
+                die_write_error();
     }
-    if (ar.tf1nam) {
-        lseek(ar.tf1, 0l, SEEK_SET);
-        while ((i = read(ar.tf1, ar.buf, 512)) > 0)
-            if (write(ar.af, ar.buf, i) != i)
-                wrerr();
+    if (ar.tmp1_name) {
+        lseek(ar.tmp1fd, 0l, SEEK_SET);
+        while ((i = read(ar.tmp1fd, ar.iobuf, 512)) > 0)
+            if (write(ar.arfd, ar.iobuf, i) != i)
+                die_write_error();
     }
 }
 
 /*
- * insert the file 'file'
+ * insert the file 'cur_file'
  * into the temporary file
  */
-static void movefil(int f)
+static void write_member(int f)
 {
     const char *cp;
     int i;
 
-    cp = trim(ar.file);
-    for (i = 0; i < (int)sizeof(ar.arbuf.ar_name); i++)
-        if ((ar.arbuf.ar_name[i] = *cp))
+    cp = basename_of(ar.cur_file);
+    for (i = 0; i < (int)sizeof(ar.hdr.ar_name); i++)
+        if ((ar.hdr.ar_name[i] = *cp))
             cp++;
-    ar.arbuf.ar_size = ar.stbuf.st_size;
-    ar.arbuf.ar_date = ar.stbuf.st_mtime;
-    ar.arbuf.ar_uid  = ar.stbuf.st_uid;
-    ar.arbuf.ar_gid  = ar.stbuf.st_gid;
-    ar.arbuf.ar_mode = ar.stbuf.st_mode;
-    copyfil(f, ar.tf, OODD + HEAD);
+    ar.hdr.ar_size = ar.filestat.st_size;
+    ar.hdr.ar_date = ar.filestat.st_mtime;
+    ar.hdr.ar_uid  = ar.filestat.st_uid;
+    ar.hdr.ar_gid  = ar.filestat.st_gid;
+    ar.hdr.ar_mode = ar.filestat.st_mode;
+    copy_member(f, ar.tmpfd, OODD + HEAD);
     close(f);
 }
 
-static int stats(void)
+static int open_input(void)
 {
     int f;
 
-    f = open(ar.file, O_RDONLY);
+    f = open(ar.cur_file, O_RDONLY);
     if (f < 0)
         return (f);
-    if (fstat(f, &ar.stbuf) < 0) {
+    if (fstat(f, &ar.filestat) < 0) {
         close(f);
         return (-1);
     }
@@ -580,123 +608,122 @@ static int stats(void)
 
 /*
  * copy next file
- * size given in arbuf
+ * size given in hdr
  *
  * An archive member is zero-padded to a whole BESM-6 word (W=6 bytes), and the
  * already-aligned size is written into the header: ld steps to the next member
  * by `ar_size + ARHDRSZ` without rounding, so ar_size must be a multiple of W.
  */
-static void copyfil(int fi, int fo, int flag)
+static void copy_member(int fi, int fo, int flag)
 {
     int pe;
-    long size = ar.arbuf.ar_size; // actual number of data bytes
+    long size = ar.hdr.ar_size; // actual number of data bytes
     int pad   = (int)((W - size % W) % W); // padding to the word boundary (0..W-1)
 
     if (flag & HEAD) {
-        ar.arbuf.ar_size = size + pad;
-        if (!putarhdr(fo, &ar.arbuf))
-            wrerr();
+        ar.hdr.ar_size = size + pad;
+        if (!putarhdr(fo, &ar.hdr))
+            die_write_error();
     }
     pe = 0;
     while (size > 0) {
         int i, o;
         i = o = (size < 512) ? (int)size : 512;
-        if (read(fi, ar.buf, i) != i)
+        if (read(fi, ar.iobuf, i) != i)
             pe++;
         if ((flag & SKIP) == 0)
-            if (write(fo, ar.buf, o) != o)
-                wrerr();
+            if (write(fo, ar.iobuf, o) != o)
+                die_write_error();
         size -= 512;
     }
     if (pad) {
         if (flag & IODD)
-            if (read(fi, ar.buf, pad) != pad) // consume the padding from the input
+            if (read(fi, ar.iobuf, pad) != pad) // consume the padding from the input
                 pe++;
         if ((flag & OODD) && (flag & SKIP) == 0) {
             char zero[W];
             memset(zero, 0, sizeof(zero));
             if (write(fo, zero, pad) != pad)
-                wrerr();
+                die_write_error();
         }
     }
     if (pe)
-        phserr();
+        phase_error();
 }
 
-static int getdir(void)
+static int next_member(void)
 {
     int i;
 
-    if (!getarhdr(ar.af, &ar.arbuf)) {
-        if (ar.tf1nam) {
-            i      = ar.tf;
-            ar.tf  = ar.tf1;
-            ar.tf1 = i;
+    if (!getarhdr(ar.arfd, &ar.hdr)) {
+        if (ar.tmp1_name) {
+            i         = ar.tmpfd;
+            ar.tmpfd  = ar.tmp1fd;
+            ar.tmp1fd = i;
         }
         return (1);
     }
-    for (i = 0; i < (int)sizeof(ar.arbuf.ar_name); i++)
-        ar.name[i] = ar.arbuf.ar_name[i];
-    ar.file = ar.name;
+    for (i = 0; i < (int)sizeof(ar.hdr.ar_name); i++)
+        ar.member_name[i] = ar.hdr.ar_name[i];
+    ar.cur_file = ar.member_name;
     return (0);
 }
 
-static int match(void)
+static int match_member(void)
 {
     int i;
 
-    for (i = 0; i < ar.namc; i++) {
-        if (ar.namv[i] == 0)
+    for (i = 0; i < ar.namecount; i++) {
+        if (ar.names[i] == 0)
             continue;
-        if (strcmp(trim(ar.namv[i]), ar.file) == 0) {
-            ar.file    = ar.namv[i];
-            ar.namv[i] = 0;
+        if (strcmp(basename_of(ar.names[i]), ar.cur_file) == 0) {
+            ar.cur_file = ar.names[i];
+            ar.names[i] = 0;
             return (1);
         }
     }
     return (0);
 }
 
-static void bamatch(void)
+static void handle_position(void)
 {
     int f;
 
-    switch (ar.bastate) {
+    switch (ar.insert_state) {
     case 1:
-        if (strcmp(ar.file, ar.ponam) != 0)
+        if (strcmp(ar.cur_file, ar.position_name) != 0)
             return;
-        ar.bastate = 2;
-        // cppcheck-suppress duplicateExpression
-        if (ar.flg['a' - 'a'])
+        ar.insert_state = 2;
+        if (ar.opt_after)
             return;
         /* fallthrough */
 
     case 2:
-        ar.bastate = 0;
-        f          = mkstemp(ar.tmp1nam);
+        ar.insert_state = 0;
+        f               = mkstemp(ar.tmpl_before);
         if (f < 0) {
             fprintf(stderr, "ar: cannot create second temporary file\n");
             return;
         }
-        ar.tf1nam = ar.tmp1nam;
-        ar.tf1    = ar.tf;
-        ar.tf     = f;
+        ar.tmp1_name = ar.tmpl_before;
+        ar.tmp1fd    = ar.tmpfd;
+        ar.tmpfd     = f;
     }
 }
 
-static void phserr(void)
+static void phase_error(void)
 {
-    fprintf(stderr, "ar: phase error on %s\n", ar.file);
+    fprintf(stderr, "ar: phase error on %s\n", ar.cur_file);
 }
 
-static void mesg(int c)
+static void log_action(int c)
 {
-    if (ar.flg['v' - 'a'])
-        if (c != 'c' || ar.flg['v' - 'a'] > 1)
-            printf("%c - %s\n", c, ar.file);
+    if (ar.opt_verbose)
+        if (c != 'c' || ar.opt_verbose > 1)
+            printf("%c - %s\n", c, ar.cur_file);
 }
 
-static char *trim(char *s)
+static char *basename_of(char *s)
 {
     char *p1, *p2;
 
@@ -730,15 +757,15 @@ static char *trim(char *s)
 #define XOTH  01
 #define STXT  01000
 
-static void longt(void)
+static void print_long_entry(void)
 {
     const char *cp;
     time_t t;
 
-    pmode();
-    printf("%3d/%1d", (int)ar.arbuf.ar_uid, (int)ar.arbuf.ar_gid);
-    printf("%7ld", (long)ar.arbuf.ar_size);
-    t  = ar.arbuf.ar_date;
+    print_perm_bits();
+    printf("%3d/%1d", (int)ar.hdr.ar_uid, (int)ar.hdr.ar_gid);
+    printf("%7ld", (long)ar.hdr.ar_size);
+    t  = ar.hdr.ar_date;
     cp = ctime(&t);
     printf(" %-12.12s %-4.4s ", cp + 4, cp + 20);
 }
@@ -755,28 +782,28 @@ static int m9[] = { 2, STXT, 't', XOTH, 'x', '-' };
 
 static int *m[] = { m1, m2, m3, m4, m5, m6, m7, m8, m9 };
 
-static void pmode(void)
+static void print_perm_bits(void)
 {
     int **mp;
 
     for (mp = &m[0]; mp < &m[9];)
-        selmode(*mp++);
+        print_perm_char(*mp++);
 }
 
-static void selmode(const int *pairp)
+static void print_perm_char(const int *pairp)
 {
     int n;
     const int *ap;
 
     ap = pairp;
     n  = *ap++;
-    while (--n >= 0 && (ar.arbuf.ar_mode & *ap++) == 0)
+    while (--n >= 0 && (ar.hdr.ar_mode & *ap++) == 0)
         ap++;
     putchar(*ap);
 }
 
-static void wrerr(void)
+static void die_write_error(void)
 {
     perror("ar write error");
-    done(1);
+    finish(1);
 }
