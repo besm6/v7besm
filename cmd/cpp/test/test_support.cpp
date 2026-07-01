@@ -66,10 +66,10 @@ void RemoveTree(const std::string& dir) {
     nftw(dir.c_str(), RemoveEntry, 8, FTW_DEPTH | FTW_PHYS);
 }
 
-Result Run(const std::string& source,
-           const std::vector<std::string>& extraArgs,
-           const std::vector<AuxFile>& aux,
-           bool strict) {
+Result RunPreprocessor(const std::string& source,
+                       const std::vector<std::string>& extraArgs,
+                       const std::vector<AuxFile>& aux,
+                       bool strict) {
     // Unique scratch directory under $TMPDIR.
     const char* tmp = getenv("TMPDIR");
     std::string base = (tmp && *tmp) ? std::string(tmp) : std::string("/tmp");
@@ -145,16 +145,16 @@ Result Run(const std::string& source,
 
 }  // namespace
 
-Result Preprocess(const std::string& source,
-                  const std::vector<std::string>& extraArgs,
-                  const std::vector<AuxFile>& aux) {
-    return Run(source, extraArgs, aux, /*strict=*/false);
+Result PreprocessorTest::Preprocess(const std::string& source,
+                                    const std::vector<std::string>& extraArgs,
+                                    const std::vector<AuxFile>& aux) {
+    return RunPreprocessor(source, extraArgs, aux, /*strict=*/false);
 }
 
-Result PreprocessStrict(const std::string& source,
-                        const std::vector<std::string>& extraArgs,
-                        const std::vector<AuxFile>& aux) {
-    return Run(source, extraArgs, aux, /*strict=*/true);
+Result PreprocessorTest::PreprocessStrict(const std::string& source,
+                                          const std::vector<std::string>& extraArgs,
+                                          const std::vector<AuxFile>& aux) {
+    return RunPreprocessor(source, extraArgs, aux, /*strict=*/true);
 }
 
 namespace {
@@ -174,7 +174,7 @@ bool IsLineMarker(const std::string& line) {
 
 }  // namespace
 
-std::string Normalize(const std::string& out) {
+std::string PreprocessorTest::Normalize(const std::string& out) {
     // Pass 1: drop line-marker lines.
     std::string body;
     std::istringstream is(out);
@@ -240,10 +240,9 @@ std::string Normalize(const std::string& out) {
 
 // --- Convenience matchers --------------------------------------------------
 
-::testing::AssertionResult TokensAre(const std::string& source,
-                                     const std::string& expected,
-                                     const std::vector<std::string>& extraArgs,
-                                     const std::vector<AuxFile>& aux) {
+::testing::AssertionResult PreprocessorTest::TokensAre(
+    const std::string& source, const std::string& expected,
+    const std::vector<std::string>& extraArgs, const std::vector<AuxFile>& aux) {
     Result r = Preprocess(source, extraArgs, aux);
     if (r.exit_code != 0) {
         return ::testing::AssertionFailure()
@@ -258,9 +257,9 @@ std::string Normalize(const std::string& out) {
            << "]";
 }
 
-::testing::AssertionResult Succeeds(const std::string& source,
-                                    const std::vector<std::string>& extraArgs,
-                                    const std::vector<AuxFile>& aux) {
+::testing::AssertionResult PreprocessorTest::Succeeds(
+    const std::string& source, const std::vector<std::string>& extraArgs,
+    const std::vector<AuxFile>& aux) {
     Result r = Preprocess(source, extraArgs, aux);
     if (r.exit_code == 0) return ::testing::AssertionSuccess();
     return ::testing::AssertionFailure()
@@ -268,50 +267,14 @@ std::string Normalize(const std::string& out) {
            << r.err;
 }
 
-::testing::AssertionResult Diagnoses(const std::string& source,
-                                     const std::vector<std::string>& extraArgs,
-                                     const std::vector<AuxFile>& aux) {
+::testing::AssertionResult PreprocessorTest::Diagnoses(
+    const std::string& source, const std::vector<std::string>& extraArgs,
+    const std::vector<AuxFile>& aux) {
     Result r = PreprocessStrict(source, extraArgs, aux);
     if (r.exit_code != 0) return ::testing::AssertionSuccess();
     return ::testing::AssertionFailure()
            << "expected a diagnostic (nonzero exit) but tool exited 0\n--- stdout ---\n"
            << r.out;
-}
-
-// --- PreprocessorTest fixture (forwards to the free functions above) -------
-
-Result PreprocessorTest::Preprocess(const std::string& src,
-                                    const std::vector<std::string>& extraArgs,
-                                    const std::vector<AuxFile>& aux) {
-    return ::c11pp::Preprocess(src, extraArgs, aux);
-}
-
-Result PreprocessorTest::PreprocessStrict(const std::string& src,
-                                          const std::vector<std::string>& extraArgs,
-                                          const std::vector<AuxFile>& aux) {
-    return ::c11pp::PreprocessStrict(src, extraArgs, aux);
-}
-
-std::string PreprocessorTest::Normalize(const std::string& s) {
-    return ::c11pp::Normalize(s);
-}
-
-::testing::AssertionResult PreprocessorTest::TokensAre(
-    const std::string& source, const std::string& expected,
-    const std::vector<std::string>& extraArgs, const std::vector<AuxFile>& aux) {
-    return ::c11pp::TokensAre(source, expected, extraArgs, aux);
-}
-
-::testing::AssertionResult PreprocessorTest::Succeeds(
-    const std::string& source, const std::vector<std::string>& extraArgs,
-    const std::vector<AuxFile>& aux) {
-    return ::c11pp::Succeeds(source, extraArgs, aux);
-}
-
-::testing::AssertionResult PreprocessorTest::Diagnoses(
-    const std::string& source, const std::vector<std::string>& extraArgs,
-    const std::vector<AuxFile>& aux) {
-    return ::c11pp::Diagnoses(source, extraArgs, aux);
 }
 
 }  // namespace c11pp
