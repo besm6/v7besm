@@ -1,0 +1,239 @@
+# b6cpp — C11 conformance TODO
+
+The GoogleTest conformance suite in [test/](test/) drives the built `b6cpp`
+binary against the C11 preprocessor requirements (ISO/IEC 9899:2011, N1570).
+As of this writing **26 pass, 49 fail**. This file scopes one task per failure
+cluster so they can be picked up individually. Run the suite with:
+
+```sh
+make && make run                                  # whole project
+./build/cmd/cpp/test/cpp_test --gtest_filter='-Cpp.*'   # conformance only
+./build/cmd/cpp/test/cpp_test --gtest_filter='Paste.*'  # one topic
+```
+
+b6cpp is John F. Reiser's pre-ANSI `cpp`, so most failures are genuinely
+unimplemented ANSI/C99/C11 features rather than regressions.
+
+### Cross-cutting note: constraint violations must exit non-zero
+
+Several tests use `EXPECT_PP_DIAGNOSES`, which asserts a **non-zero exit**
+(the harness sets `C11PP_STRICT_ARGS=""`, so there is no "make warnings fatal"
+flag — the underlying condition must itself be an error). b6cpp currently
+reports many constraint violations with `ppwarn()` (non-fatal, exit 0). The
+relevant tasks below call out where a `ppwarn` must become a `pperror`
+(`pperror` bumps `cpp.exit_code`, see [diag.c](diag.c)).
+
+Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
+`direct.c` (directive dispatch) · `macro.c` (definition + expansion) ·
+`scan.c` (lexing, comments) · `parser.c`/`yylex.c` (`#if` expression) ·
+`diag.c` (diagnostics) · `defs.h` (limits/table sizes).
+
+---
+
+## 1. [CRASH] Function-like macro name used without an argument list segfaults
+
+- **Failing test:** `Macro.NameWithoutParensNotInvoked`
+- **Repro:** `#define F(x) x` then a bare `F` (not followed by `(`) → exit 139
+  (SIGSEGV).
+- **Expected:** a function-like macro name not immediately followed by `(` is
+  *not* an invocation; the name is emitted verbatim (`F`).
+- **Files:** [macro.c](macro.c) (invocation path that looks ahead for `(`).
+- **Scope:** guard the look-ahead so end-of-input / no-`(` leaves the identifier
+  untouched instead of dereferencing a null argument list. This is a
+  crash — do it first.
+
+## 2. `#if` expression evaluator stops after the first operand
+
+- **Failing tests:** `Conditional.IfElifElse`, `Conditional.DefinedBothForms`,
+  `Conditional.UndefinedIdentifierIsZero`, `Conditional.Operators`,
+  `Conditional.CharacterConstant`
+- **Root cause (bug, not missing feature):** [parser.c:112](parser.c#L112) —
+  the operator loop guard is `if (op_prec <= precedence(','))`. `precedence(',')`
+  is `1`, so the condition is true only for `,`; for every real operator
+  (`+`=11, `&&`=5, `==`=8, `<<`=10, …) it is false and the loop `break`s after
+  the first term. Hence `#if 1 && 1`, `#if 'A' == 65`, `#if 2+2==4` all report
+  `Expected stop token` yet still use the first operand's truthiness. The full
+  precedence table, 2-char operators, char constants, and `defined` already
+  exist in [parser.c](parser.c)/[yylex.c](yylex.c).
+- **Scope:**
+  1. Fix the guard so the loop continues for any binary operator
+     (e.g. `op_prec >= precedence(',')`, i.e. `precedence(op) > 0`).
+  2. **Also** register the missing `#elif` directive (`install_directive`
+     in [cpp.c](cpp.c), dispatch in [direct.c](direct.c)); today `#elif`
+     yields `undefined control`. `IfElifElse` needs both this and the loop fix.
+  3. Latent follow-up (not currently exercised, note in code): each operator
+     branch recurses via `eval_expr()`, making evaluation right-associative and
+     precedence-blind (`2*3+4` → 14). Consider precedence-climbing so operator
+     precedence is actually honored.
+
+## 3. Stringize operator `#` (§6.10.3.2)
+
+- **Failing tests:** `Stringize.Basic`, `Stringize.EscapesQuotesAndBackslashes`,
+  `Stringize.ExpandsThroughIndirection`, `Stringize.HashNotFollowedByParamDiagnosed`
+- **Current:** `#x` is passed through literally (`# hello world`).
+- **Scope (in [macro.c](macro.c) replacement-list handling):**
+  - In a function-like macro body, `#` followed by a parameter stringizes the
+    corresponding **unexpanded** argument: leading/trailing whitespace removed,
+    internal whitespace collapsed to one space, and `"`/`\` inside string/char
+    literals escaped. (`STR`/`XSTR` indirection then stringizes the *expanded*
+    value — cf. `ExpandsThroughIndirection`.)
+  - `#` not followed by a parameter is a constraint violation → `pperror`
+    (`HashNotFollowedByParamDiagnosed` needs the non-zero exit).
+
+## 4. Token-paste operator `##` (§6.10.3.3)
+
+- **Failing tests:** `Paste.IdentifierPaste`, `Paste.NumberPaste`,
+  `Paste.EmptyLeftOperand`, `Paste.EmptyRightOperand`, `Paste.ResultIsRescanned`,
+  `Paste.AtStartDiagnosed`, `Paste.AtEndDiagnosed`
+- **Current:** `a##b` is passed through literally (`foo ## bar`).
+- **Scope (in [macro.c](macro.c)):**
+  - Concatenate the tokens on either side of `##` into a single token, then
+    rescan the result for further macro replacement (`ResultIsRescanned`).
+  - Placemarker semantics: an empty operand pastes to nothing
+    (`C(,tail)` → `tail`, `C(head,)` → `head`).
+  - `##` at the very start or end of a replacement list is a constraint
+    violation → `pperror` (`AtStartDiagnosed`/`AtEndDiagnosed`).
+
+## 5. Variadic macros `...` / `__VA_ARGS__` (C99/C11 §6.10.3)
+
+- **Failing tests:** `Varargs.MultipleArguments`, `Varargs.SingleArgument`,
+  `Varargs.NamedPlusVariadic`, `Varargs.CommasPreserved`,
+  `Varargs.VaArgsOutsideVariadicDiagnosed`
+- **Current:** `...` in a parameter list is rejected as `bad formal: .`
+  ([macro.c:103](macro.c#L103)).
+- **Scope (in [macro.c](macro.c)):**
+  - Accept `...` as the last parameter; bind all trailing arguments (commas
+    preserved) to `__VA_ARGS__` in the body.
+  - Support a named prefix before `...` (`LOG(fmt, ...)`).
+  - `__VA_ARGS__` appearing in a non-variadic macro is a constraint violation →
+    `pperror` (`VaArgsOutsideVariadicDiagnosed`).
+
+## 6. Predefined macros `__STDC__`, `__STDC_VERSION__`, `__STDC_HOSTED__`, `__DATE__`, `__TIME__` (§6.10.8)
+
+- **Failing tests:** `Predefined.StdcIsOne`, `Predefined.StdcVersionIsC11`,
+  `Predefined.StdcHostedDefined`, `Predefined.DateAndTimeShape`
+- **Current:** these names pass through undefined (`__LINE__`/`__FILE__` already
+  work — see the synthesis in [macro.c:311](macro.c#L311)).
+- **Scope (register alongside the existing predefineds in [cpp.c](cpp.c)):**
+  - `__STDC__` → `1`, `__STDC_VERSION__` → `201112L`, `__STDC_HOSTED__` → `1`.
+  - `__DATE__` → `"Mmm dd yyyy"`, `__TIME__` → `"hh:mm:ss"` string literals.
+    (Note: `Date.now()`/`localtime` at run time; the test only checks the
+    literal *shape*, not the value.)
+
+## 7. Diagnose illegal (re)definitions (§6.10.3 / §6.10.8.4)
+
+- **Failing tests:** `Macro.IncompatibleRedefinitionDiagnosed`,
+  `Predefined.RedefiningLineDiagnosed`, `Predefined.DefiningDefinedDiagnosed`
+- **Current:** redefining a macro with a *different* body is silently accepted
+  (new value wins); `#define __LINE__ 7` only warns (exit 0); `#define defined`
+  is silently ignored.
+- **Scope (in [macro.c](macro.c)/[direct.c](direct.c) define handling):**
+  - Redefinition with a non-identical replacement list → `pperror`.
+    (Identical redefinition stays legal — `Macro.IdenticalRedefinitionAllowed`
+    must keep passing.)
+  - `#define`/`#undef` of a predefined macro (`__LINE__`, …) or of `defined` →
+    `pperror` (promote the existing `__LINE__ redefined` warning to an error).
+
+## 8. `#line` directive has no effect (§6.10.4)
+
+- **Failing tests:** `LineControl.SetsLineAndFile`, `LineControl.SetsLineOnly`,
+  `LineControl.MacroExpandedOperands`
+- **Current:** `#line` is registered but does not change `__LINE__`/`__FILE__`
+  (the following line still reports its physical number/name).
+- **Scope (in [direct.c](direct.c)):** macro-expand the operands, then set the
+  current line counter (`cpp.line_no[...]`) and, if a second operand is present,
+  the reported file name used by `__FILE__`.
+
+## 9. `#error` directive (§6.10.5)
+
+- **Failing test:** `ErrorDirective.SkippedErrorIsInert`
+  (`ErrorDirective.StopsTranslation` currently passes only by accident — an
+  unknown directive already errors.)
+- **Current:** `#error` is not a known directive, so it reports
+  `undefined control` **even inside a skipped `#if 0` group**.
+- **Scope (in [direct.c](direct.c)):** implement `#error` so it (a) is ignored
+  when the enclosing conditional group is not taken, and (b) emits its message
+  and a non-zero exit when reached. Keep `StopsTranslation` green.
+
+## 10. `#pragma` directive and `_Pragma` operator (§6.10.6, §6.10.9)
+
+- **Failing tests:** `Pragma.UnknownPragmaAccepted`, `PragmaOperator.LeavesOtherTokens`
+- **Current:** `#pragma …` reports `undefined control` (exit 1); the `_Pragma`
+  operator is passed through untouched.
+- **Scope:**
+  - [direct.c](direct.c): accept `#pragma` and swallow an unrecognized pragma
+    without error (a conformant tool ignores unknown pragmas).
+  - [macro.c](macro.c)/[scan.c](scan.c): implement the `_Pragma("…")` operator —
+    destringize its string-literal argument into a `#pragma …` directive line,
+    leaving surrounding tokens intact.
+
+## 11. Comment handling (§5.1.1.2 / §6.4.9)
+
+- **Failing tests:** `TranslationPhases.BlockCommentBecomesSpace`,
+  `TranslationPhases.LineCommentRemoved`, `TranslationPhases.UnterminatedCommentDiagnosed`
+- **Current:** `a/**/b` becomes `ab` (comment deleted, tokens fuse — should be
+  `a b`); `//` line comments are not recognized (C99); an unterminated `/*` is
+  not diagnosed.
+- **Scope (in [scan.c](scan.c), around the `/*` handling at
+  [scan.c:122](scan.c#L122)):**
+  - Replace each comment with a single space so adjacent tokens do not merge.
+  - Recognize `//` … end-of-line comments.
+  - Diagnose a `/*` with no closing `*/` before EOF → `pperror`.
+
+## 12. Trigraph replacement (§5.2.1.1, translation phase 1)
+
+- **Failing tests:** `Trigraphs.HashIntroducesDirective`,
+  `Trigraphs.PunctuationMappings`, `Trigraphs.SlashActsAsLineSplice`
+- **Current:** trigraph sequences are left literal. (The tests pass
+  `-trigraphs -w`, which b6cpp harmlessly ignores — unknown flags do not error.)
+- **Scope (early lexing in [scan.c](scan.c), before line-splice/comment
+  phases):** translate the nine trigraphs unconditionally:
+  `??=`→`#`, `??(`→`[`, `??)`→`]`, `??<`→`{`, `??>`→`}`, `??!`→`|`,
+  `??'`→`^`, `??-`→`~`, `??/`→`\` (the last then acts as a line-continuation).
+
+## 13. Raise translation limits to the C11 minimums (§5.2.4.1)
+
+- **Failing tests:** `Limits.MacrosDefined4095`, `Limits.MacroParameters127`,
+  `Limits.LogicalLine4095`
+- **Current caps are far below the mandated minimums:** `too many defines` at
+  ~388 ([macro.c:233](macro.c#L233)); `too many formals` at ~30
+  ([macro.c:108](macro.c#L108)); `token too long` well under 4095 chars
+  ([scan.c](scan.c) buffer).
+- **Scope:** raise the relevant table/buffer sizes (macro table, formal-list
+  size, line/token buffer) in [defs.h](defs.h)/[macro.c](macro.c)/[scan.c](scan.c)
+  to at least: **4095** macros simultaneously defined, **127** parameters per
+  macro, **4095** characters in a logical source line.
+
+## 14. Macro rescanning / self-reference must not be a hard error (§6.10.3.4)
+
+- **Failing tests:** `Macro.SelfReference`, `Macro.NoRescanRecursion`
+- **Current:** `#define X X` then `X` errors `macro recursion`
+  ([macro.c:302](macro.c#L302)); `#define f(x) x f` then `f(1)(2)` errors
+  `unterminated macro call`.
+- **Expected:** a macro that references itself (directly or via rescanning)
+  expands **once**; the recurring name is left un-re-expanded ("blue paint"),
+  so `X` → `X` and `f(1)(2)` → `1 f(2)`. No error, exit 0.
+- **Scope (in [macro.c](macro.c) expansion/rescan):** mark a macro as
+  "in progress" while expanding and suppress its re-expansion during rescan,
+  instead of aborting. (There is a `-R` "allow recursion" flag today; the
+  correct default is paint-and-continue, not error.)
+
+## 15. Diagnose wrong macro argument count (§6.10.3)
+
+- **Failing tests:** `Macro.TooFewArgumentsDiagnosed`, `Macro.TooManyArgumentsDiagnosed`
+- **Current:** argument-count mismatch is a `ppwarn` (exit 0) —
+  [macro.c:362](macro.c#L362), [macro.c:368](macro.c#L368).
+- **Scope:** promote `argument mismatch` from `ppwarn` to `pperror` so a
+  function-like macro invoked with too few/too many arguments yields a non-zero
+  exit. (Coordinate with task 5: a variadic macro's `...` legitimately absorbs
+  extra arguments and must not trip this.)
+
+## 16. Directives with leading whitespace before `#` are not recognized
+
+- **Failing test:** `Conditional.Nested`
+- **Current:** `  #if …` (indented) is passed through as ordinary text, so a
+  nested conditional inside a taken group is not processed. Whitespace *after*
+  the `#` (`# define`) already works; only leading whitespace *before* `#` fails.
+- **Scope (directive recognition in [scan.c](scan.c)/[direct.c](direct.c)):**
+  allow optional horizontal whitespace before the `#` that introduces a
+  directive.
