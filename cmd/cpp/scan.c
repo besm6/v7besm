@@ -11,32 +11,58 @@
 #include "intern.h"
 
 #if scw2
+// character-pair superimposed-code tables (scw2 build only): pair_row/pair_col
+// index into pair_bits, the pair-fingerprint filter parallel to macro_bits.
 char pair_row[ALFSIZ], pair_col[ALFSIZ], pair_bits[ALFSIZ + 8];
 #endif
 
-#define BEG 0
-#define LF  1
+#define BEG 0 // scanner start state
+#define LF  1 // scanner just returned at a newline (used to resume mid-line)
 
+//
+// Scan the next token starting at p and return the pointer just past it; the
+// token itself is left as the bytes from cpp.tok_ptr up to the returned pointer.
+//
+// This is the heart of the preprocessor and the hottest loop, so it is written
+// for speed: a "fast scan" races through ordinary characters using is_special()
+// (a single table lookup) and only stops on a character that needs attention.
+// The big switch then handles that character -- end of buffer, an operator, a
+// backslash-newline continuation, a comment, a string or char literal, a
+// newline, a number, or an identifier.  Whenever the scanner runs off the end
+// of the buffered text it calls refill_buffer() to get more and continues.
+//
+// The identifier case is where macros happen: it first runs the cheap
+// superimposed-code filter (tmac1/tmac2), and only if the name could be a macro
+// does it call lookup_token(), which may expand the macro in place.
+//
+// A "#" seen at the very start of a line is returned to the caller
+// (process_directives) so directives can be handled.  While evaluating a #if
+// expression (in_slow_scan) the scanner returns every token individually and
+// remembers, via the static "state", that it stopped on a newline.
+//
 char *scan_token(char *p)
 {
     int c, i;
-    char quoc;
-    static int state = BEG;
+    char quoc;              // the opening quote of the string/char literal being scanned
+    static int state = BEG; // remembers a pending newline between calls (slow scan)
 
     if (state != BEG)
         goto prevlf;
     for (;;) {
     again:
+        // fast scan: skip characters that need no special handling
         while (!is_special(*p++))
             ;
         switch (*(cpp.tok_ptr = p - 1)) {
-        case 0: {
+        case 0: { // possible end of buffered text (a nul), else an ignorable nul byte
             if (at_buf_end(--p)) {
                 p = refill_buffer(p);
                 goto again;
             } else
                 ++p; // ignore null byte
         } break;
+        // Two-character operators in a #if expression (||, &&, ==, !=, <=, >=,
+        // <<, >>): glue the second character on so the lexer sees one token.
         case '|':
         case '&':
             for (;;) { // sloscan only
@@ -70,6 +96,8 @@ char *scan_token(char *p)
                     break;
             }
             break;
+        // Backslash: a backslash-newline is a line continuation -- swallow it
+        // (and count the line) so the two source lines read as one.
         case '\\':
             for (;;) {
                 if (*p++ == '\n') {
@@ -84,6 +112,11 @@ char *scan_token(char *p)
                 }
             }
             break;
+        // Slash: if followed by '*' this is a comment.  Normally the comment is
+        // deleted (treated like a skipped region: false_level is bumped so
+        // flush_output writes nothing), but under -C it is kept, and a comment
+        // longer than the buffer is split and re-emitted in pieces.  A lone '/'
+        // is just an operator.
         case '/':
             for (;;) {
                 if (*p++ == '*') { // comment
@@ -152,9 +185,12 @@ char *scan_token(char *p)
                     break;
             }
             break;
+        // String or character literal: copy through until the matching closing
+        // quote.  Backslash escapes are honored, and an unescaped newline ends
+        // the literal (a lenient rule this old preprocessor uses).
         case '"':
         case '\'': {
-            quoc = p[-1];
+            quoc = p[-1]; // remember which quote opened it
             for (;;) {
                 while (!isquo(*p++))
                     ;
@@ -183,6 +219,10 @@ char *scan_token(char *p)
                     ++p; // it was a different quote character
             }
         } break;
+        // Newline: count the line.  In a #if expression, stop here (remembering
+        // via state=LF that a newline is pending).  Otherwise look at the start
+        // of the next line: if it begins with '#', return it to the caller so a
+        // directive can be processed; if not, keep scanning.
         case '\n': {
             ++cpp.line_no[cpp.inc_level];
             if (in_slow_scan) {
@@ -200,6 +240,7 @@ char *scan_token(char *p)
                     goto again;
             }
         } break;
+        // A number: consume the run of digits.
         case '0':
         case '1':
         case '2':
@@ -219,6 +260,12 @@ char *scan_token(char *p)
                     break;
             }
             break;
+        // An identifier (letter or '_' start): this is where macro names are
+        // recognized.  If we are skipping a false #if branch, just consume it
+        // (goto nomac).  Otherwise run the superimposed-code filter character by
+        // character (tmac1/tmac2): the moment a position rules out every macro
+        // name we jump to nomac and skip the lookup; if the name survives the
+        // filter we call lookup_token, which expands it if it is really a macro.
         case 'A':
         case 'B':
         case 'C':
@@ -330,6 +377,8 @@ char *scan_token(char *p)
                 }
                 tmac2(p[-1], 0, -1 + (p - cpp.tok_ptr));
             lokid:
+                // the name passed the filter: look it up; if it was a macro,
+                // lookup_token set scan_ptr to where scanning should resume.
                 lookup_token(cpp.tok_ptr, p, 0);
                 if (cpp.scan_ptr) {
                     p = cpp.scan_ptr;
@@ -337,6 +386,7 @@ char *scan_token(char *p)
                 } else
                     break;
             nomac:
+                // definitely not a macro: just consume the rest of the identifier.
                 while (isid(*p++))
                     ;
                 if (at_buf_end(--p)) {
@@ -348,13 +398,16 @@ char *scan_token(char *p)
             break;
         } // end of switch
 
+        // In normal scanning we loop to grab the next token; in a #if expression
+        // we hand back one token at a time.
         if (in_slow_scan)
             return (p);
     } // end of infinite loop
 }
 
 //
-// get next non-blank token
+// Scan forward past whitespace and return the first non-blank token, so callers
+// that only care about real tokens do not have to test for blanks themselves.
 //
 char *skip_blanks(char *p)
 {

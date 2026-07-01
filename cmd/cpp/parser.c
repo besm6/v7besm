@@ -4,18 +4,33 @@
 
 #include "defs.h"
 
-#define YYSTYPE int
+//
+// Evaluator for the constant expression on a "#if" line.  The scanner
+// (lex_if_token, in yylex.c) turns the line into a stream of tokens; this file
+// reads them one at a time and computes the integer result, which the directive
+// loop treats as true (nonzero) or false.  It is a small recursive-descent
+// parser with one-token lookahead kept in cpp.look_token / cpp.look_value.
+//
+
+#define YYSTYPE int // (historical) the value type carried by a token: plain int
 
 void advance(void);
 int eval_expr(void);
 int eval_term(void);
 
+//
+// Consume the current token and fetch the next one into the lookahead slot.
+//
 void advance(void)
 {
     cpp.look_token = lex_if_token();
     cpp.look_value = cpp.tok_value;
 }
 
+//
+// If the lookahead token is "token", consume it and return 1 (true); otherwise
+// leave it in place and return 0.
+//
 int match(int token)
 {
     if (cpp.look_token == token) {
@@ -25,7 +40,10 @@ int match(int token)
     return 0;
 }
 
-// Precedence and associativity handling
+//
+// Return the binding strength of an operator: bigger means it binds tighter
+// (e.g. '*' beats '+').  Used to decide the order operators are applied in.
+//
 int precedence(int token)
 {
     switch (token) {
@@ -75,6 +93,12 @@ int precedence(int token)
     }
 }
 
+//
+// Parse and evaluate an expression: a first operand followed by any number of
+// "operator operand" pairs (+, *, comparisons, &&, ||, the ?: conditional, ...).
+// Each operand is an eval_term(); the recursion naturally handles precedence and
+// parentheses.  Returns the computed value.
+//
 int eval_expr(void)
 {
     int val, val2;
@@ -166,6 +190,11 @@ int eval_expr(void)
     return val;
 }
 
+//
+// Parse and evaluate a single operand (a "term"): an optional unary operator
+// (-, !, ~) applied to another term, a parenthesized expression, a "defined(X)"
+// test, or a plain number.  Returns its value.
+//
 int eval_term(void)
 {
     int val;
@@ -210,6 +239,11 @@ int eval_term(void)
     return 0;
 }
 
+//
+// Entry point called from the directive loop for a "#if" line: prime the
+// lookahead, evaluate the whole expression, and check that the line ended where
+// expected.  Returns the expression's value (nonzero = take the #if branch).
+//
 int eval_if(void)
 {
     advance();

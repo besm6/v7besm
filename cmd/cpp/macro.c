@@ -10,6 +10,12 @@
 
 #include "intern.h"
 
+//
+// Does formal-parameter name "a" equal the token in the buffer spanning
+// [p1, p2)?  The token is not null-terminated, so we temporarily write a '\0' at
+// p2, compare, then restore the byte.  Used when scanning a macro body to spot
+// where a parameter name appears.
+//
 static int formal_matches(const char *a, const char *p1, char *p2)
 {
     char c;
@@ -22,7 +28,14 @@ static int formal_matches(const char *a, const char *p1, char *p2)
 }
 
 //
-// process '#define'
+// Handle a "#define" line: parse the macro name, the optional parameter list,
+// and the replacement text, and store it in the symbol table.
+//
+// The stored body is not copied verbatim: wherever a parameter name appears it
+// is replaced by a two-byte marker (a parameter number followed by WARN) so that
+// expand_macro can later splice in the actual arguments without re-parsing.  A
+// redefinition that differs from the previous one draws a warning; an identical
+// one is silently accepted and its space reclaimed.
 //
 char *do_define(char *p)
 {
@@ -66,6 +79,8 @@ char *do_define(char *p)
     cpp.out_ptr = cpp.tok_ptr = p;
     p                         = scan_token(p);
     pin                       = cpp.tok_ptr;
+    // If the name is immediately followed by '(' this is a function-like macro:
+    // collect the parameter names into formal[] / formtxt.
     if (*pin == '(') { // with parameters; identify the formals
         cf = formtxt;
         pf = formal;
@@ -111,6 +126,9 @@ char *do_define(char *p)
     // warn if a redefinition is different from old value.
     //
     oldsavch = psav = cpp.side_ptr;
+    // Copy the replacement text into the side buffer, token by token, replacing
+    // each occurrence of a parameter name (even inside string/char literals)
+    // with the marker "<param number><WARN>".
     for (;;) { // accumulate definition until linefeed
         cpp.out_ptr = cpp.tok_ptr = p;
         p                         = scan_token(p);
@@ -174,11 +192,18 @@ char *do_define(char *p)
     return (p);
 }
 
+//
+// Find the null-terminated name "namep" in the symbol hash table and return its
+// entry.  The name is hashed to a starting slot, then we probe backwards
+// (wrapping around once) until we find the name or an empty slot.  "enterf"
+// selects the behavior: >0 inserts the name if absent, DROP marks an existing
+// entry deleted, 0 just looks.  The result is also cached in cpp.last_sym.
+//
 struct symtab *lookup(char *namep, int enterf)
 {
     const char *np, *snp;
     int c, i;
-    int around;
+    int around; // set once we have wrapped past slot 0, to detect a full table
     struct symtab *sp;
 
     // namep had better not be too long (currently, <=8 chars)
@@ -218,6 +243,14 @@ struct symtab *lookup(char *namep, int enterf)
     return (cpp.last_sym = sp);
 }
 
+//
+// Look up the token occupying the buffer span [p1, p2) -- the convenient form
+// the scanner uses, since tokens in the buffer are not null-terminated and names
+// are significant only to 8 characters.  We null-terminate temporarily, truncate
+// to 8 chars, look it up, then restore the bytes.  If it turns out to be a
+// defined macro (and we are not in a skipped branch) it is expanded right away
+// via expand_macro, and cpp.scan_ptr is set to where scanning should resume.
+//
 struct symtab *lookup_token(char *p1, char *p2, int enterf)
 {
     char *p3;
@@ -243,6 +276,18 @@ struct symtab *lookup_token(char *p1, char *p2, int enterf)
     return (np);
 }
 
+//
+// Expand a macro call.  sp is the macro; p points just past its name.  For a
+// function-like macro we first scan the "(actual, actual, ...)" argument list.
+// Then we push the stored body onto the front of the input (in reverse), and
+// wherever the body has a parameter marker we push that argument's text instead
+// -- so the generated text is simply rescanned by scan_token as if the user had
+// typed it.  The built-ins __LINE__ and __FILE__ synthesize their body here.
+//
+// A recursion guard (recur_depth / recur_bound) stops a macro that expands to
+// itself from looping forever, unless -R (opt_recurse) was given.  Returns the
+// new scan pointer.
+//
 char *expand_macro(char *p, struct symtab *sp)
 {
     char *ca, *vp;
@@ -276,6 +321,8 @@ char *expand_macro(char *p, struct symtab *sp)
         while (*vp++)
             ;
     }
+    // Function-like macro: scan the parenthesized actual arguments, recording a
+    // pointer to each one in actual[].  Expansion is suppressed while we do this.
     if (0 != (params = *--vp & 0xFF)) { // definition calls for params
         char **pa;
         ca = acttxt;
@@ -324,6 +371,8 @@ char *expand_macro(char *p, struct symtab *sp)
         --cpp.false_level;
         set_fast_scan();
     }
+    // Push the body onto the front of the input, back to front, so it will be
+    // rescanned.  A WARN marker means "insert actual argument N here" instead.
     for (;;) { // push definition onto front of input stack
         while (!iswarn(*--vp)) {
             if (at_buf_start(p)) {

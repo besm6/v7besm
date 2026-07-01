@@ -11,9 +11,15 @@
 #include "intern.h"
 
 #if tgp
-int tgp_scanning; // flag for dump();
+int tgp_scanning; // re-entry guard for flush_output()'s line-wrapping pass (tgp build only)
 #endif
 
+//
+// Emit a "# line "file"" marker so the next tool (compiler) knows which source
+// line the following text came from.  Suppressed by the -P option
+// (cpp.opt_no_lines).  Called whenever the line numbering jumps -- after an
+// #include, at end of file, etc.
+//
 void emit_line_marker()
 {
     if (cpp.opt_no_lines == 0)
@@ -73,6 +79,13 @@ void emit_line_marker()
 // free_stack[0:free_top-1] holds addresses of side buffers which
 // are available for use.
 //
+
+//
+// Write the finished text -- the bytes between out_ptr and tok_ptr -- to the
+// output file, then advance out_ptr.  Does nothing while inside a skipped #if
+// block (false_level != 0).  The optional tgp section re-wraps long lines and
+// is disabled in normal builds.
+//
 void flush_output()
 {
     // write part of buffer which lies between  out_ptr  and  tok_ptr .
@@ -85,7 +98,7 @@ void flush_output()
     if ((p1 = cpp.out_ptr) == cpp.tok_ptr || cpp.false_level != 0)
         return;
 #if tgp
-#define MAXOUT 80
+#define MAXOUT 80        // tgp build: wrap output lines at this many characters
     if (!tgp_scanning) { // scan again to insure <= MAXOUT chars between linefeeds
         char c, *pblank, *p2;
         char savc, stopc, brk;
@@ -125,10 +138,16 @@ void flush_output()
     cpp.out_ptr = p1;
 }
 
+//
+// Make more input available when the scanner has reached the end of what is in
+// the buffer.  Steps: flush finished output, keep the partial token
+// (tok_ptr..p), then top the buffer up from -- in priority order -- pushed-back
+// macro text, then the current file, then (on EOF) the file that #included it.
+// At true end of input it flushes and exits.  Returns the updated scan pointer.
+//
 char *refill_buffer(char *p)
 {
-    // flush buffer.  save chars from tok_ptr to p.  read into arena at buf_mid,
-    // contiguous with p.  update pointers, return new p.
+    // save chars from tok_ptr to p, read into arena at buf_mid contiguous with p.
     //
     char *np;
     const char *op;
@@ -201,8 +220,13 @@ char *refill_buffer(char *p)
 }
 
 //
-// take <= BUFSIZ chars from right end of buffer and put them on push_stack .
-// slide rest of buffer to the right, update pointers, return new p.
+// Macro expansion pushes generated text in front of the scan point, which can
+// run off the low end of the buffer.  spill_buffer makes room: it copies up to
+// BUFSIZ characters from the right (high) end of the buffer into a fresh side
+// buffer recorded on push_stack (they will be re-read later by refill_buffer),
+// then slides the rest of the buffer to the right.  Pointers are adjusted and
+// the shifted scan pointer is returned.  If all pushback slots are in use it
+// first drains some by flushing.
 //
 char *spill_buffer(char *p)
 {

@@ -20,8 +20,12 @@
 //
 struct cppstate cpp;
 
+// The byte written into a stored macro body to flag "a parameter goes here".
 char warn_mark = WARN;
 
+//
+// Print the command-line help and the meaning of each option.
+//
 void usage()
 {
     printf("Usage:\n");
@@ -36,13 +40,25 @@ void usage()
     printf("    -E                  Ignored for compatibility\n");
 }
 
+//
+// Program entry point.  Startup happens in a fixed order:
+//   1. seed the state fields that need a non-zero initial value;
+//   2. build the character-classification tables (fast_tab / slow_tab /
+//      char_class) that drive the scanner;
+//   3. parse the command line (-I/-D/-U/-P/-C/-R and the input/output files);
+//   4. register the built-in directives (#define, #if, ...) and predefined
+//      macros (__LINE__, __FILE__, and any -D options), and apply -U removals;
+//   5. set the buffer pointers and hand control to process_directives, which
+//      runs until end of input.
+// The process exit status is the number of errors reported.
+//
 int main(int argc, char *argv[])
 {
     int i, c;
     char *p;
     char *tf, **cp2;
 
-    // Fields that used to have static initializers referencing other fields;
+    // 1. Fields that used to have static initializers referencing other fields;
     // set them up before anything runs (the instance is otherwise zeroed).
     cpp.side_ptr       = cpp.side_buf;
     cpp.pre_defs_end   = cpp.pre_defs;
@@ -51,8 +67,12 @@ int main(int argc, char *argv[])
     cpp.ndirs          = 1;
 
     cpp.out_file = stdout;
-    p            = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    i            = 0;
+
+    // 2. Build the scan tables: mark which bytes are identifier chars, digits,
+    // quotes, comment starters, whitespace, etc.  The scanner then classifies a
+    // character with a single table lookup.
+    p = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    i = 0;
     while ((c = *p++)) {
         cpp.fast_tab[(unsigned char)c] |= IB | NB | SB;
         cpp.char_class[(unsigned char)c] = IDENT;
@@ -93,6 +113,8 @@ int main(int argc, char *argv[])
             pair_bits[i] = 1;
 #endif
 
+    // 3. Parse the command line: options begin with '-', otherwise the argument
+    // is the input file (first) or output file (second).
     cpp.inc_file[cpp.inc_level = 0] = "";
     for (i = 1; i < argc; i++) {
         switch (argv[i][0]) {
@@ -171,6 +193,9 @@ int main(int argc, char *argv[])
 
     cpp.inc_fd[cpp.inc_level] = cpp.in_fd;
     cpp.exit_code             = 0;
+
+    // 4. Finish the include search path, then register the built-in directives
+    // and predefined macros.
     // after user -I files here are the standard include libraries
     cpp.search_dirs[cpp.ndirs++] = "/usr/include";
     cpp.search_dirs[cpp.ndirs++] = 0;
@@ -232,6 +257,8 @@ int main(int argc, char *argv[])
     cpp.buf_mid                 = cpp.buf_start + BUFSIZ;
     cpp.buf_end                 = cpp.buf_mid + BUFSIZ;
 
+    // 5. Point the buffer cursors at the (empty) buffer and run the main loop.
+    // The first refill inside process_directives reads the actual input.
     cpp.true_level  = 0;
     cpp.false_level = 0;
     cpp.line_no[0]  = 1;

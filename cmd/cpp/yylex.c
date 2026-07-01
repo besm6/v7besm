@@ -6,12 +6,22 @@
 
 int str_to_int(char *st, int b);
 
+//
+// The lexer for #if expressions: return the next token to the parser
+// (parser.c).  It reads from the scan buffer via skip_blanks/scan_token,
+// recognizing two-character operators (||, &&, ==, ...), single-character
+// operators, numbers, character constants, the "defined" keyword, and
+// identifiers.  A number's value is left in cpp.tok_value.  An identifier is
+// looked up: a defined macro name becomes 1, an undefined one becomes 0 -- which
+// is exactly how "#if SOMENAME" is supposed to behave.  Returns "stop" at the
+// end of the line.
+//
 int lex_if_token()
 {
-    static int ifdef        = 0;
-    static char *op2[]      = { "||", "&&", ">>", "<<", ">=", "<=", "!=", "==" };
-    static const int val2[] = { OROR, ANDAND, RS, LS, GE, LE, NE, EQ };
-    static const char *opc  = "b\bt\tn\nf\fr\r\\\\";
+    static int ifdef        = 0; // 1 while the operand of "defined" is expected
+    static char *op2[]      = { "||", "&&", ">>", "<<", ">=", "<=", "!=", "==" }; // 2-char ops
+    static const int val2[] = { OROR, ANDAND, RS, LS, GE, LE, NE, EQ }; // their token codes
+    static const char *opc  = "b\bt\tn\nf\fr\r\\\\"; // escape letter -> value pairs (\n, \t, ...)
     char savc;
     const char *s;
     int val;
@@ -91,6 +101,11 @@ int lex_if_token()
     }
 }
 
+//
+// Convert the numeric string st to an integer in base b (8, 10 or 16), the way
+// #if numeric literals are written.  A trailing 'l'/'L' length suffix is
+// tolerated; any other stray character is an error.  Returns the value.
+//
 int str_to_int(char *st, int b)
 {
     int n, c, t;

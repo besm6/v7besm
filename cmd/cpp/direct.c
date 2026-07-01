@@ -10,9 +10,16 @@
 
 #include "intern.h"
 
+//
+// Handle a "#include" line.  Read the file name (either <name> or "name"),
+// finish and flush the current line, then search for the file: <> names skip the
+// current directory, "" names include it.  On success we open the file, push a
+// new level on the include stack, save the current buffer contents aside (so we
+// can resume the including file at end-of-file), and start reading the new file.
+//
 static char *do_include(char *p)
 {
-    int filok, inctype;
+    int filok, inctype; // filok: file was opened; inctype: 0="" 1=<> 2=bad
     char *cp;
     char **dirp, *nfil;
     char filname[BUFSIZ];
@@ -66,6 +73,7 @@ static char *do_include(char *p)
         pperror("no space");
         exit(cpp.exit_code);
     }
+    // Try each directory on the search path in turn until one opens.
     filok = 0;
     for (dirp = cpp.search_dirs + inctype; *dirp; ++dirp) {
         if (filname[0] == '/' || **dirp == '\0')
@@ -99,6 +107,12 @@ static char *do_include(char *p)
     return (p);
 }
 
+//
+// Apply a command-line "-D name" or "-D name=value" option by turning it into
+// text that looks exactly like the tail of a #define line and feeding it to
+// do_define().  "name" alone becomes "name 1"; "name=value" becomes
+// "name value".  Returns the created symbol.
+//
 struct symtab *define_symbol(const char *s)
 {
     char buf[BUFSIZ];
@@ -128,7 +142,12 @@ struct symtab *define_symbol(const char *s)
     return (cpp.last_sym);
 }
 
-// kluge
+//
+// Register a built-in directive keyword such as "define" or "ifdef" in the
+// symbol table.  The name is stored with a leading SALT ('#') byte and a special
+// hash seed so that directives live in their own corner of the table and never
+// collide with ordinary macro names.  Returns the entry (saved in cpp.sym_*).
+//
 struct symtab *install_directive(const char *s)
 {
     struct symtab *sp;
@@ -142,11 +161,17 @@ struct symtab *install_directive(const char *s)
 }
 
 //
-// find and handle preprocessor control lines
+// The directive loop -- the top level of the preprocessor.  It scans the input;
+// scan_token hands back control at the '#' that starts each directive line.  We
+// read the directive keyword, dispatch on which built-in it is (comparing the
+// looked-up symbol against the cpp.sym_* handles), and act on it: #define,
+// #include, the #if/#ifdef/#ifndef/#else/#endif conditional stack (tracked by
+// true_level/false_level), #undef, and #line.  Text inside a false conditional
+// branch is scanned but not emitted.  This function does not return.
 //
 char *process_directives(char *p)
 {
-    const struct symtab *np;
+    const struct symtab *np; // the directive keyword's symbol-table entry
     for (;;) {
         set_fast_scan();
         p = scan_token(p);
