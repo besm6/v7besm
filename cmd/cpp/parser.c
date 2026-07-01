@@ -6,10 +6,6 @@
 
 #define YYSTYPE int
 
-int yylval;
-int lookahead;
-int token_val;
-
 void advance(void);
 int parse(void);
 int e(void);
@@ -17,13 +13,13 @@ int term(void);
 
 void advance(void)
 {
-    lookahead = yylex();
-    token_val = yylval;
+    cpp.lookahead = yylex();
+    cpp.token_val = cpp.yylval;
 }
 
 int match(int token)
 {
-    if (lookahead == token) {
+    if (cpp.lookahead == token) {
         advance();
         return 1;
     }
@@ -87,7 +83,7 @@ int e(void)
     val = term();
 
     while (1) {
-        int op      = lookahead;
+        int op      = cpp.lookahead;
         int op_prec = prec(op);
 
         if (op_prec <= prec(',')) { // Handle lowest precedence up to comma
@@ -191,22 +187,22 @@ int term(void)
         return val;
     } else if (match(DEFINED)) {
         if (match('(')) {
-            if (lookahead != number)
+            if (cpp.lookahead != number)
                 pperror("Expected number in DEFINED");
-            val = token_val;
+            val = cpp.token_val;
             advance();
             if (!match(')'))
                 pperror("Expected ')' in DEFINED");
             return val;
-        } else if (lookahead == number) {
-            val = token_val;
+        } else if (cpp.lookahead == number) {
+            val = cpp.token_val;
             advance();
             return val;
         } else {
             pperror("Expected number or '(' after DEFINED");
         }
-    } else if (lookahead == number) {
-        val = token_val;
+    } else if (cpp.lookahead == number) {
+        val = cpp.token_val;
         advance();
         return val;
     }
@@ -219,7 +215,7 @@ int yyparse(void)
 {
     advance();
     int result = e();
-    if (lookahead != stop)
+    if (cpp.lookahead != stop)
         pperror("Expected stop token");
     return result;
 }

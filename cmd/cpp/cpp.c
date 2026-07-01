@@ -22,23 +22,9 @@
 #define READ   0
 #define WRITE  1
 #define SALT   '#'
-#ifndef BUFSIZ
-#define BUFSIZ 512
-#endif
-
-char *pbeg, *pbuf, *pend;
-char *outp, *inp;
-char *newp;
-char cinit;
-
-#define ALFSIZ 256 // alphabet size
-
-char macbit[ALFSIZ + 11];
-char toktyp[ALFSIZ];
-
-#define BLANK 1
-#define IDENT 2
-#define NUMBR 3
+#define BLANK  1
+#define IDENT  2
+#define NUMBR  3
 
 //
 // a superimposed code is used to reduce the number of calls to the
@@ -77,90 +63,28 @@ char t21[ALFSIZ], t22[ALFSIZ], t23[ALFSIZ + 8];
 #define b7 128
 #endif
 
-char fastab[ALFSIZ];
-char slotab[ALFSIZ];
-char *ptrtab;
+#define isslo    (cpp.ptrtab == cpp.slotab)
+#define isspc(a) (cpp.ptrtab[(unsigned char)a] & SB)
 
-#define isslo    (ptrtab == slotab)
-#define isspc(a) (ptrtab[(unsigned char)a] & SB)
-
-#define eob(a) ((a) >= pend)
-#define bob(a) (pbeg >= (a))
-
-char buffer[8 + BUFSIZ + BUFSIZ + 8];
-
-#define SBSIZE 12000
-
-char sbf[SBSIZE];
-char *savch = sbf;
+#define eob(a) ((a) >= cpp.pend)
+#define bob(a) (cpp.pbeg >= (a))
 
 #define DROP   0xFE // special character not legal ASCII or EBCDIC
 #define WARN   DROP
 #define SAME   0
-#define MAXINC 10
-#define MAXFRE 14 // max buffers of macro pushback
 #define MAXFRM 31 // max number of formals/actuals to a macro
 
 static char warnc = WARN;
-
-int mactop, fretop;
-char *instack[MAXFRE], *bufstack[MAXFRE], *endbuf[MAXFRE];
-
-int plvl;      // parenthesis level during scan for macro actuals
-int maclin;    // line number of macro call requiring actuals
-char *macfil;  // file name of macro call requiring actuals
-char *macnam;  // name of macro requiring actuals
-int maclvl;    // # calls since last decrease in nesting level
-char *macforw; // pointer which must be exceeded to decrease nesting level
-int macdam;    // offset to macforw due to buffer shifting
 
 #if tgp
 int tgpscan; // flag for dump();
 #endif
 
-STATIC int inctop[MAXINC];
-STATIC char *fnames[MAXINC];
-STATIC char *dirnams[MAXINC]; // actual directory of #include files
-STATIC int fins[MAXINC];
-STATIC int lineno[MAXINC];
-
-STATIC char *dirs[10]; // -I and <> directories
-STATIC int fin = STDIN;
-STATIC FILE *fout;
-STATIC int nd = 1;
-STATIC int pflag;   // don't put out lines "# 12 foo.c"
-STATIC int passcom; // don't delete comments
-STATIC int rflag;   // allow macro recursion
-STATIC int ifno;
-
-#define NPREDEF 20
-
-STATIC char *prespc[NPREDEF];
-STATIC char **predef = prespc;
-STATIC char *punspc[NPREDEF];
-STATIC char **prund = punspc;
-STATIC int exfail;
-struct symtab *lastsym;
-
-#define symsiz 400
-
-STATIC struct symtab stab[symsiz];
-
-STATIC struct symtab *defloc;
-STATIC struct symtab *udfloc;
-STATIC struct symtab *incloc;
-STATIC struct symtab *ifloc;
-STATIC struct symtab *elsloc;
-STATIC struct symtab *eifloc;
-STATIC struct symtab *ifdloc;
-STATIC struct symtab *ifnloc;
-STATIC struct symtab *ysysloc;
-STATIC struct symtab *varloc;
-STATIC struct symtab *lneloc;
-STATIC struct symtab *ulnloc;
-STATIC struct symtab *uflloc;
-STATIC int trulvl;
-STATIC int flslvl;
+//
+// The one and only instance of the preprocessor's mutable state, declared in
+// defs.h.  Bundles what used to be ~40 file-scope globals.
+//
+struct cppstate cpp;
 
 struct symtab *slookup(char *p1, char *p2, int enterf);
 char *trmdir(char *s);
@@ -169,8 +93,8 @@ char *subst(char *p, struct symtab *sp);
 
 void sayline()
 {
-    if (pflag == 0)
-        fprintf(fout, "# %d \"%s\"\n", lineno[ifno], fnames[ifno]);
+    if (cpp.pflag == 0)
+        fprintf(cpp.fout, "# %d \"%s\"\n", cpp.lineno[cpp.ifno], cpp.fnames[cpp.ifno]);
 }
 
 // data structure guide
@@ -234,7 +158,7 @@ void dump()
     //
     char *p1;
     FILE *f;
-    if ((p1 = outp) == inp || flslvl != 0)
+    if ((p1 = cpp.outp) == cpp.inp || cpp.flslvl != 0)
         return;
 #if tgp
 #define MAXOUT 80
@@ -243,7 +167,7 @@ void dump()
         char savc, stopc, brk;
         tgpscan = 1;
         brk = stopc = pblank = 0;
-        p2                   = inp;
+        p2                   = cpp.inp;
         savc                 = *p2;
         *p2                  = '\0';
         while (c = *p1++) {
@@ -253,9 +177,9 @@ void dump()
                 stopc = 0;
             else if (c == '"' || c == '\'')
                 stopc = c;
-            if (p1 - outp > MAXOUT && pblank != 0) {
+            if (p1 - cpp.outp > MAXOUT && pblank != 0) {
                 *pblank++ = '\n';
-                inp       = pblank;
+                cpp.inp   = pblank;
                 dump();
                 brk    = 1;
                 pblank = 0;
@@ -266,15 +190,15 @@ void dump()
         if (brk)
             sayline();
         *p2     = savc;
-        inp     = p2;
-        p1      = outp;
+        cpp.inp = p2;
+        p1      = cpp.outp;
         tgpscan = 0;
     }
 #endif
-    f = fout;
-    while (p1 < inp)
+    f = cpp.fout;
+    while (p1 < cpp.inp)
         putc(*p1++, f);
-    outp = p1;
+    cpp.outp = p1;
 }
 
 char *refill(char *p)
@@ -286,66 +210,66 @@ char *refill(char *p)
     const char *op;
 
     dump();
-    np = pbuf - (p - inp);
-    op = inp;
+    np = cpp.pbuf - (p - cpp.inp);
+    op = cpp.inp;
     if (bob(np + 1)) {
         pperror("token too long");
-        np = pbeg;
-        p  = inp + BUFSIZ;
+        np = cpp.pbeg;
+        p  = cpp.inp + BUFSIZ;
     }
-    macdam += np - inp;
-    outp = inp = np;
+    cpp.macdam += np - cpp.inp;
+    cpp.outp = cpp.inp = np;
     while (op < p)
         *np++ = *op++;
     p = np;
     for (;;) {
-        if (mactop > inctop[ifno]) { // retrieve hunk of pushed-back macro text
-            op = instack[--mactop];
-            np = pbuf;
+        if (cpp.mactop > cpp.inctop[cpp.ifno]) { // retrieve hunk of pushed-back macro text
+            op = cpp.instack[--cpp.mactop];
+            np = cpp.pbuf;
             do {
                 while ((*np++ = *op++))
                     ;
-            } while (op < endbuf[mactop]);
-            pend = np - 1;
+            } while (op < cpp.endbuf[cpp.mactop]);
+            cpp.pend = np - 1;
             // make buffer space avail for 'include' processing
-            if (fretop < MAXFRE)
-                bufstack[fretop++] = instack[mactop];
+            if (cpp.fretop < MAXFRE)
+                cpp.bufstack[cpp.fretop++] = cpp.instack[cpp.mactop];
             return (p);
         } else { // get more text from file(s)
-            maclvl     = 0;
-            int ninbuf = read(fin, pbuf, BUFSIZ);
+            cpp.maclvl = 0;
+            int ninbuf = read(cpp.fin, cpp.pbuf, BUFSIZ);
             if (0 < ninbuf) {
-                pend  = pbuf + ninbuf;
-                *pend = '\0';
+                cpp.pend  = cpp.pbuf + ninbuf;
+                *cpp.pend = '\0';
                 return (p);
             }
             // end of #include file
-            if (ifno == 0) { // end of input
-                if (plvl != 0) {
-                    int n = plvl, tlin = lineno[ifno];
-                    char *tfil   = fnames[ifno];
-                    lineno[ifno] = maclin;
-                    fnames[ifno] = macfil;
-                    pperror("%s: unterminated macro call", macnam);
-                    lineno[ifno] = tlin;
-                    fnames[ifno] = tfil;
-                    np           = p;
-                    *np++        = '\n'; // shut off unterminated quoted string
+            if (cpp.ifno == 0) { // end of input
+                if (cpp.plvl != 0) {
+                    int n = cpp.plvl, tlin = cpp.lineno[cpp.ifno];
+                    char *tfil           = cpp.fnames[cpp.ifno];
+                    cpp.lineno[cpp.ifno] = cpp.maclin;
+                    cpp.fnames[cpp.ifno] = cpp.macfil;
+                    pperror("%s: unterminated macro call", cpp.macnam);
+                    cpp.lineno[cpp.ifno] = tlin;
+                    cpp.fnames[cpp.ifno] = tfil;
+                    np                   = p;
+                    *np++                = '\n'; // shut off unterminated quoted string
                     while (--n >= 0)
                         *np++ = ')'; // supply missing parens
-                    pend = np;
-                    *np  = '\0';
-                    if (plvl < 0)
-                        plvl = 0;
+                    cpp.pend = np;
+                    *np      = '\0';
+                    if (cpp.plvl < 0)
+                        cpp.plvl = 0;
                     return (p);
                 }
-                inp = p;
+                cpp.inp = p;
                 dump();
-                exit(exfail);
+                exit(cpp.exfail);
             }
-            close(fin);
-            fin     = fins[--ifno];
-            dirs[0] = dirnams[ifno];
+            close(cpp.fin);
+            cpp.fin     = cpp.fins[--cpp.ifno];
+            cpp.dirs[0] = cpp.dirnams[cpp.ifno];
             sayline();
         }
     }
@@ -366,7 +290,7 @@ char *cotoken(char *p)
     again:
         while (!isspc(*p++))
             ;
-        switch (*(inp = p - 1)) {
+        switch (*(cpp.inp = p - 1)) {
         case 0: {
             if (eob(--p)) {
                 p = refill(p);
@@ -377,7 +301,7 @@ char *cotoken(char *p)
         case '|':
         case '&':
             for (;;) { // sloscan only
-                if (*p++ == *inp)
+                if (*p++ == *cpp.inp)
                     break;
                 if (eob(--p))
                     p = refill(p);
@@ -410,7 +334,7 @@ char *cotoken(char *p)
         case '\\':
             for (;;) {
                 if (*p++ == '\n') {
-                    ++lineno[ifno];
+                    ++cpp.lineno[cpp.ifno];
                     break;
                 }
                 if (eob(--p))
@@ -424,10 +348,10 @@ char *cotoken(char *p)
         case '/':
             for (;;) {
                 if (*p++ == '*') { // comment
-                    if (!passcom) {
-                        inp = p - 2;
+                    if (!cpp.passcom) {
+                        cpp.inp = p - 2;
                         dump();
-                        ++flslvl;
+                        ++cpp.flslvl;
                     }
                     for (;;) {
                         while (!iscom(*p++))
@@ -437,48 +361,48 @@ char *cotoken(char *p)
                                 if (*p++ == '/')
                                     goto endcom;
                                 if (eob(--p)) {
-                                    if (!passcom) {
-                                        inp = p;
-                                        p   = refill(p);
-                                    } else if ((p - inp) >= BUFSIZ) { // split long comment
-                                        inp = p;
-                                        p   = refill(p); // last char written is '*'
-                                        putc('/', fout); // terminate first part
+                                    if (!cpp.passcom) {
+                                        cpp.inp = p;
+                                        p       = refill(p);
+                                    } else if ((p - cpp.inp) >= BUFSIZ) { // split long comment
+                                        cpp.inp = p;
+                                        p       = refill(p); // last char written is '*'
+                                        putc('/', cpp.fout); // terminate first part
                                         // and fake start of 2nd
-                                        outp = inp = p -= 3;
-                                        *p++       = '/';
-                                        *p++       = '*';
-                                        *p++       = '*';
+                                        cpp.outp = cpp.inp = p -= 3;
+                                        *p++               = '/';
+                                        *p++               = '*';
+                                        *p++               = '*';
                                     } else
                                         p = refill(p);
                                 } else
                                     break;
                             }
                         else if (p[-1] == '\n') {
-                            ++lineno[ifno];
-                            if (!passcom)
-                                putc('\n', fout);
+                            ++cpp.lineno[cpp.ifno];
+                            if (!cpp.passcom)
+                                putc('\n', cpp.fout);
                         } else if (eob(--p)) {
-                            if (!passcom) {
-                                inp = p;
-                                p   = refill(p);
-                            } else if ((p - inp) >= BUFSIZ) { // split long comment
-                                inp = p;
-                                p   = refill(p);
-                                putc('*', fout);
-                                putc('/', fout);
-                                outp = inp = p -= 2;
-                                *p++       = '/';
-                                *p++       = '*';
+                            if (!cpp.passcom) {
+                                cpp.inp = p;
+                                p       = refill(p);
+                            } else if ((p - cpp.inp) >= BUFSIZ) { // split long comment
+                                cpp.inp = p;
+                                p       = refill(p);
+                                putc('*', cpp.fout);
+                                putc('/', cpp.fout);
+                                cpp.outp = cpp.inp = p -= 2;
+                                *p++               = '/';
+                                *p++               = '*';
                             } else
                                 p = refill(p);
                         } else
                             ++p; // ignore null byte
                     }
                 endcom:
-                    if (!passcom) {
-                        outp = inp = p;
-                        --flslvl;
+                    if (!cpp.passcom) {
+                        cpp.outp = cpp.inp = p;
+                        --cpp.flslvl;
                         goto again;
                     }
                     break;
@@ -504,7 +428,7 @@ char *cotoken(char *p)
                 if (p[-1] == '\\')
                     for (;;) {
                         if (*p++ == '\n') {
-                            ++lineno[ifno];
+                            ++cpp.lineno[cpp.ifno];
                             break;
                         } // escaped \n ignored
                         if (eob(--p))
@@ -521,7 +445,7 @@ char *cotoken(char *p)
             }
         } break;
         case '\n': {
-            ++lineno[ifno];
+            ++cpp.lineno[cpp.ifno];
             if (isslo) {
                 state = LF;
                 return (p);
@@ -531,7 +455,7 @@ char *cotoken(char *p)
             for (;;) {
                 if (*p++ == '#')
                     return (p);
-                if (eob(inp = --p))
+                if (eob(cpp.inp = --p))
                     p = refill(p);
                 else
                     goto again;
@@ -613,7 +537,7 @@ char *cotoken(char *p)
 #define tmac1(c, bit)      \
     if (!xmac1(c, bit, &)) \
     goto nomac
-#define xmac1(c, bit, op) (macbit[(unsigned char)c] op(bit))
+#define xmac1(c, bit, op) (cpp.macbit[(unsigned char)c] op(bit))
 #else
 #define tmac1(c, bit)
 #define xmac1(c, bit, op)
@@ -624,13 +548,13 @@ char *cotoken(char *p)
     if (!xmac2(c0, c1, cpos, &)) \
     goto nomac
 #define xmac2(c0, c1, cpos, op) \
-    (macbit[t21[(unsigned char)c0] + t22[(unsigned char)c1]] op(t23 + cpos)[(unsigned char)c0])
+    (cpp.macbit[t21[(unsigned char)c0] + t22[(unsigned char)c1]] op(t23 + cpos)[(unsigned char)c0])
 #else
 #define tmac2(c0, c1, cpos)
 #define xmac2(c0, c1, cpos, op)
 #endif
 
-            if (flslvl)
+            if (cpp.flslvl)
                 goto nomac;
             for (;;) {
                 c = p[-1];
@@ -675,21 +599,21 @@ char *cotoken(char *p)
                     ;
                 if (eob(--p)) {
                     refill(p);
-                    p = inp + 1;
+                    p = cpp.inp + 1;
                     continue;
                 }
                 goto lokid;
             endid:
                 if (eob(--p)) {
                     refill(p);
-                    p = inp + 1;
+                    p = cpp.inp + 1;
                     continue;
                 }
-                tmac2(p[-1], 0, -1 + (p - inp));
+                tmac2(p[-1], 0, -1 + (p - cpp.inp));
             lokid:
-                slookup(inp, p, 0);
-                if (newp) {
-                    p = newp;
+                slookup(cpp.inp, p, 0);
+                if (cpp.newp) {
+                    p = cpp.newp;
                     goto again;
                 } else
                     break;
@@ -716,9 +640,9 @@ char *cotoken(char *p)
 char *skipbl(char *p)
 {
     do {
-        outp = inp = p;
-        p          = cotoken(p);
-    } while (toktyp[(unsigned char)*inp] == BLANK);
+        cpp.outp = cpp.inp = p;
+        p                  = cotoken(p);
+    } while (cpp.toktyp[(unsigned char)*cpp.inp] == BLANK);
     return (p);
 }
 
@@ -732,29 +656,29 @@ char *unfill(char *p)
     const char *op;
     int d;
 
-    if (mactop >= MAXFRE) {
-        pperror("%s: too much pushback", macnam);
-        p = inp = pend;
+    if (cpp.mactop >= MAXFRE) {
+        pperror("%s: too much pushback", cpp.macnam);
+        p = cpp.inp = cpp.pend;
         dump(); // begin flushing pushback
-        while (mactop > inctop[ifno]) {
+        while (cpp.mactop > cpp.inctop[cpp.ifno]) {
             p = refill(p);
-            p = inp = pend;
+            p = cpp.inp = cpp.pend;
             dump();
         }
     }
-    if (fretop > 0)
-        np = bufstack[--fretop];
+    if (cpp.fretop > 0)
+        np = cpp.bufstack[--cpp.fretop];
     else {
-        np = savch;
-        savch += BUFSIZ;
-        if (savch >= sbf + SBSIZE) {
+        np = cpp.savch;
+        cpp.savch += BUFSIZ;
+        if (cpp.savch >= cpp.sbf + SBSIZE) {
             pperror("no space");
-            exit(exfail);
+            exit(cpp.exfail);
         }
-        *savch++ = '\0';
+        *cpp.savch++ = '\0';
     }
-    instack[mactop] = np;
-    op              = pend - BUFSIZ;
+    cpp.instack[cpp.mactop] = np;
+    op                      = cpp.pend - BUFSIZ;
     if (op < p)
         op = p;
     for (;;) {
@@ -763,20 +687,20 @@ char *unfill(char *p)
         if (eob(op))
             break;
     } // out with old
-    endbuf[mactop++] = np; // mark end of saved text
-    np               = pbuf + BUFSIZ;
-    op               = pend - BUFSIZ;
-    pend             = np;
+    cpp.endbuf[cpp.mactop++] = np; // mark end of saved text
+    np                       = cpp.pbuf + BUFSIZ;
+    op                       = cpp.pend - BUFSIZ;
+    cpp.pend                 = np;
     if (op < p)
         op = p;
-    while (outp < op)
+    while (cpp.outp < op)
         *--np = *--op; // slide over new
     if (bob(np))
         pperror("token too long");
-    d = np - outp;
-    outp += d;
-    inp += d;
-    macdam += d;
+    d = np - cpp.outp;
+    cpp.outp += d;
+    cpp.inp += d;
+    cpp.macdam += d;
     return (p + d);
 }
 
@@ -789,27 +713,27 @@ char *doincl(char *p)
 
     p  = skipbl(p);
     cp = filname;
-    if (*inp++ == '<') { // special <> syntax
+    if (*cpp.inp++ == '<') { // special <> syntax
         inctype = 1;
         for (;;) {
-            outp = inp = p;
-            p          = cotoken(p);
-            if (*inp == '\n') {
+            cpp.outp = cpp.inp = p;
+            p                  = cotoken(p);
+            if (*cpp.inp == '\n') {
                 --p;
                 *cp = '\0';
                 break;
             }
-            if (*inp == '>') {
+            if (*cpp.inp == '>') {
                 *cp = '\0';
                 break;
             }
-            while (inp < p)
-                *cp++ = *inp++;
+            while (cpp.inp < p)
+                *cp++ = *cpp.inp++;
         }
-    } else if (inp[-1] == '"') { // regular "" syntax
+    } else if (cpp.inp[-1] == '"') { // regular "" syntax
         inctype = 0;
-        while (inp < p)
-            *cp++ = *inp++;
+        while (cpp.inp < p)
+            *cp++ = *cpp.inp++;
         if (*--cp == '"')
             *cp = '\0';
     } else {
@@ -817,27 +741,27 @@ char *doincl(char *p)
         inctype = 2;
     }
     // flush current file to \n , then write \n
-    ++flslvl;
+    ++cpp.flslvl;
     do {
-        outp = inp = p;
-        p          = cotoken(p);
-    } while (*inp != '\n');
-    --flslvl;
-    inp = p;
+        cpp.outp = cpp.inp = p;
+        p                  = cotoken(p);
+    } while (*cpp.inp != '\n');
+    --cpp.flslvl;
+    cpp.inp = p;
     dump();
     if (inctype == 2)
         return (p);
     // look for included file
-    if (ifno + 1 >= MAXINC) {
+    if (cpp.ifno + 1 >= MAXINC) {
         pperror("Unreasonable include nesting", 0);
         return (p);
     }
-    if ((nfil = savch) > sbf + SBSIZE - BUFSIZ) {
+    if ((nfil = cpp.savch) > cpp.sbf + SBSIZE - BUFSIZ) {
         pperror("no space");
-        exit(exfail);
+        exit(cpp.exfail);
     }
     filok = 0;
-    for (dirp = dirs + inctype; *dirp; ++dirp) {
+    for (dirp = cpp.dirs + inctype; *dirp; ++dirp) {
         if (filname[0] == '/' || **dirp == '\0')
             strcpy(nfil, filname);
         else {
@@ -845,26 +769,26 @@ char *doincl(char *p)
             strcat(nfil, "/");
             strcat(nfil, filname);
         }
-        if (0 < (fins[ifno + 1] = open(nfil, READ))) {
-            filok = 1;
-            fin   = fins[++ifno];
+        if (0 < (cpp.fins[cpp.ifno + 1] = open(nfil, READ))) {
+            filok   = 1;
+            cpp.fin = cpp.fins[++cpp.ifno];
             break;
         }
     }
     if (filok == 0)
         pperror("Can't find include file %s", filname);
     else {
-        lineno[ifno] = 1;
-        fnames[ifno] = cp = nfil;
+        cpp.lineno[cpp.ifno] = 1;
+        cpp.fnames[cpp.ifno] = cp = nfil;
         while (*cp++)
             ;
-        savch         = cp;
-        dirnams[ifno] = dirs[0] = trmdir(copy(nfil));
+        cpp.savch             = cp;
+        cpp.dirnams[cpp.ifno] = cpp.dirs[0] = trmdir(copy(nfil));
         sayline();
         // save current contents of buffer
         while (!eob(p))
             p = unfill(p);
-        inctop[ifno] = mactop;
+        cpp.inctop[cpp.ifno] = cpp.mactop;
     }
     return (p);
 }
@@ -893,23 +817,23 @@ char *dodef(char *p)
     char *formal[MAXFRM]; // formal[n] is name of nth formal
     char formtxt[BUFSIZ]; // space for formal names
 
-    if (savch > sbf + SBSIZE - BUFSIZ) {
+    if (cpp.savch > cpp.sbf + SBSIZE - BUFSIZ) {
         pperror("too much defining");
         return (p);
     }
-    oldsavch = savch; // to reclaim space if redefinition
-    ++flslvl;         // prevent macro expansion during 'define'
+    oldsavch = cpp.savch; // to reclaim space if redefinition
+    ++cpp.flslvl;         // prevent macro expansion during 'define'
     p   = skipbl(p);
-    pin = inp;
-    if (toktyp[(unsigned char)*pin] != IDENT) {
+    pin = cpp.inp;
+    if (cpp.toktyp[(unsigned char)*pin] != IDENT) {
         ppwarn("illegal macro name");
-        while (*inp != '\n')
+        while (*cpp.inp != '\n')
             p = skipbl(p);
         return (p);
     }
     np = slookup(pin, p, 1);
     if ((oldval = np->value))
-        savch = oldsavch; // was previously defined
+        cpp.savch = oldsavch; // was previously defined
     b  = 1;
     cf = pin;
     while (cf < p) { // update macbit
@@ -921,18 +845,18 @@ char *dodef(char *p)
         else
             xmac2(c, 0, -1 + (cf - pin), |=);
     }
-    params = 0;
-    outp = inp = p;
-    p          = cotoken(p);
-    pin        = inp;
+    params   = 0;
+    cpp.outp = cpp.inp = p;
+    p                  = cotoken(p);
+    pin                = cpp.inp;
     if (*pin == '(') { // with parameters; identify the formals
         cf = formtxt;
         pf = formal;
         for (;;) {
             p   = skipbl(p);
-            pin = inp;
+            pin = cpp.inp;
             if (*pin == '\n') {
-                --lineno[ifno];
+                --cpp.lineno[cpp.ifno];
                 --p;
                 pperror("%s: missing )", np->name);
                 break;
@@ -941,7 +865,7 @@ char *dodef(char *p)
                 break;
             if (*pin == ',')
                 continue;
-            if (toktyp[(unsigned char)*pin] != IDENT) {
+            if (cpp.toktyp[(unsigned char)*pin] != IDENT) {
                 c  = *p;
                 *p = '\0';
                 pperror("bad formal: %s", pin);
@@ -962,24 +886,24 @@ char *dodef(char *p)
         if (params == 0)
             --params; // #define foo() ...
     } else if (*pin == '\n') {
-        --lineno[ifno];
+        --cpp.lineno[cpp.ifno];
         --p;
     }
 
     // remember beginning of macro body, so that we can
     // warn if a redefinition is different from old value.
     //
-    oldsavch = psav = savch;
+    oldsavch = psav = cpp.savch;
     for (;;) { // accumulate definition until linefeed
-        outp = inp = p;
-        p          = cotoken(p);
-        pin        = inp;
+        cpp.outp = cpp.inp = p;
+        p                  = cotoken(p);
+        pin                = cpp.inp;
         if (*pin == '\\' && pin[1] == '\n')
             continue; // ignore escaped lf
         if (*pin == '\n')
             break;
         if (params) { // mark the appearance of formals in the definiton
-            if (toktyp[(unsigned char)*pin] == IDENT) {
+            if (cpp.toktyp[(unsigned char)*pin] == IDENT) {
                 for (qf = pf; --qf >= formal;) {
                     if (equfrm(*qf, pin, p)) {
                         *psav++ = qf - formal + 1;
@@ -1019,22 +943,22 @@ char *dodef(char *p)
         while (*--cf)
             ;                              // go back to the beginning
         if (0 != strcmp(++cf, oldsavch)) { // redefinition different from old
-            --lineno[ifno];
+            --cpp.lineno[cpp.ifno];
             ppwarn("%s redefined", np->name);
-            ++lineno[ifno];
+            ++cpp.lineno[cpp.ifno];
             np->value = psav - 1;
         } else
             psav = oldsavch; // identical redef.; reclaim space
     } else
         np->value = psav - 1;
-    --flslvl;
-    inp   = pin;
-    savch = psav;
+    --cpp.flslvl;
+    cpp.inp   = pin;
+    cpp.savch = psav;
     return (p);
 }
 
-#define fasscan() ptrtab = fastab
-#define sloscan() ptrtab = slotab
+#define fasscan() cpp.ptrtab = cpp.fastab
+#define sloscan() cpp.ptrtab = cpp.slotab
 
 //
 // find and handle preprocessor control lines
@@ -1045,106 +969,106 @@ char *control(char *p)
     for (;;) {
         fasscan();
         p = cotoken(p);
-        if (*inp == '\n')
-            ++inp;
+        if (*cpp.inp == '\n')
+            ++cpp.inp;
         dump();
         sloscan();
-        p      = skipbl(p);
-        *--inp = SALT;
-        outp   = inp;
-        ++flslvl;
-        np = slookup(inp, p, 0);
-        --flslvl;
-        if (np == defloc) { // define
-            if (flslvl == 0) {
+        p          = skipbl(p);
+        *--cpp.inp = SALT;
+        cpp.outp   = cpp.inp;
+        ++cpp.flslvl;
+        np = slookup(cpp.inp, p, 0);
+        --cpp.flslvl;
+        if (np == cpp.defloc) { // define
+            if (cpp.flslvl == 0) {
                 p = dodef(p);
                 continue;
             }
-        } else if (np == incloc) { // include
-            if (flslvl == 0) {
+        } else if (np == cpp.incloc) { // include
+            if (cpp.flslvl == 0) {
                 p = doincl(p);
                 continue;
             }
-        } else if (np == ifnloc) { // ifndef
-            ++flslvl;
+        } else if (np == cpp.ifnloc) { // ifndef
+            ++cpp.flslvl;
             p  = skipbl(p);
-            np = slookup(inp, p, 0);
-            --flslvl;
-            if (flslvl == 0 && np->value == 0)
-                ++trulvl;
+            np = slookup(cpp.inp, p, 0);
+            --cpp.flslvl;
+            if (cpp.flslvl == 0 && np->value == 0)
+                ++cpp.trulvl;
             else
-                ++flslvl;
-        } else if (np == ifdloc) { // ifdef
-            ++flslvl;
+                ++cpp.flslvl;
+        } else if (np == cpp.ifdloc) { // ifdef
+            ++cpp.flslvl;
             p  = skipbl(p);
-            np = slookup(inp, p, 0);
-            --flslvl;
-            if (flslvl == 0 && np->value != 0)
-                ++trulvl;
+            np = slookup(cpp.inp, p, 0);
+            --cpp.flslvl;
+            if (cpp.flslvl == 0 && np->value != 0)
+                ++cpp.trulvl;
             else
-                ++flslvl;
-        } else if (np == eifloc) { // endif
-            if (flslvl) {
-                if (--flslvl == 0)
+                ++cpp.flslvl;
+        } else if (np == cpp.eifloc) { // endif
+            if (cpp.flslvl) {
+                if (--cpp.flslvl == 0)
                     sayline();
-            } else if (trulvl)
-                --trulvl;
+            } else if (cpp.trulvl)
+                --cpp.trulvl;
             else
                 pperror("If-less endif", 0);
-        } else if (np == elsloc) { // else
-            if (flslvl) {
-                if (--flslvl != 0)
-                    ++flslvl;
+        } else if (np == cpp.elsloc) { // else
+            if (cpp.flslvl) {
+                if (--cpp.flslvl != 0)
+                    ++cpp.flslvl;
                 else {
-                    ++trulvl;
+                    ++cpp.trulvl;
                     sayline();
                 }
-            } else if (trulvl) {
-                ++flslvl;
-                --trulvl;
+            } else if (cpp.trulvl) {
+                ++cpp.flslvl;
+                --cpp.trulvl;
             } else
                 pperror("If-less else", 0);
-        } else if (np == udfloc) { // undefine
-            if (flslvl == 0) {
-                ++flslvl;
+        } else if (np == cpp.udfloc) { // undefine
+            if (cpp.flslvl == 0) {
+                ++cpp.flslvl;
                 p = skipbl(p);
-                slookup(inp, p, DROP);
-                --flslvl;
+                slookup(cpp.inp, p, DROP);
+                --cpp.flslvl;
             }
-        } else if (np == ifloc) { // if
+        } else if (np == cpp.ifloc) { // if
 #if tgp
             pperror(" IF not implemented, true assumed", 0);
-            if (flslvl == 0)
-                ++trulvl;
+            if (cpp.flslvl == 0)
+                ++cpp.trulvl;
             else
-                ++flslvl;
+                ++cpp.flslvl;
 #else
-            newp = p;
-            if (flslvl == 0 && yyparse())
-                ++trulvl;
+            cpp.newp = p;
+            if (cpp.flslvl == 0 && yyparse())
+                ++cpp.trulvl;
             else
-                ++flslvl;
-            p = newp;
+                ++cpp.flslvl;
+            p = cpp.newp;
 #endif
-        } else if (np == lneloc) { // line
-            if (flslvl == 0 && pflag == 0) {
-                outp = inp = p;
-                *--outp    = '#';
-                while (*inp != '\n')
+        } else if (np == cpp.lneloc) { // line
+            if (cpp.flslvl == 0 && cpp.pflag == 0) {
+                cpp.outp = cpp.inp = p;
+                *--cpp.outp        = '#';
+                while (*cpp.inp != '\n')
                     p = cotoken(p);
                 continue;
             }
-        } else if (*++inp == '\n')
-            outp = inp; // allows blank line after #
+        } else if (*++cpp.inp == '\n')
+            cpp.outp = cpp.inp; // allows blank line after #
         else
             pperror("undefined control", 0);
         // flush to lf
-        ++flslvl;
-        while (*inp != '\n') {
-            outp = inp = p;
-            p          = cotoken(p);
+        ++cpp.flslvl;
+        while (*cpp.inp != '\n') {
+            cpp.outp = cpp.inp = p;
+            p                  = cotoken(p);
         }
-        --flslvl;
+        --cpp.flslvl;
     }
 }
 
@@ -1170,11 +1094,11 @@ struct symtab *stsym(const char *s)
         while ((*p++ = *s++))
             ;
     }
-    pend = p;
-    *--p = '\n';
+    cpp.pend = p;
+    *--p     = '\n';
     sloscan();
     dodef(buf);
-    return (lastsym);
+    return (cpp.lastsym);
 }
 
 // kluge
@@ -1182,23 +1106,23 @@ struct symtab *ppsym(const char *s)
 {
     struct symtab *sp;
 
-    cinit    = SALT;
-    *savch++ = SALT;
-    sp       = stsym(s);
+    cpp.cinit    = SALT;
+    *cpp.savch++ = SALT;
+    sp           = stsym(s);
     --sp->name;
-    cinit = 0;
+    cpp.cinit = 0;
     return (sp);
 }
 
 void verror(const char *s, va_list ap)
 {
-    if (fnames[ifno][0]) {
-        fprintf(stderr, "%s: ", fnames[ifno]);
+    if (cpp.fnames[cpp.ifno][0]) {
+        fprintf(stderr, "%s: ", cpp.fnames[cpp.ifno]);
     }
-    fprintf(stderr, "%d: ", lineno[ifno]);
+    fprintf(stderr, "%d: ", cpp.lineno[cpp.ifno]);
     vfprintf(stderr, s, ap);
     fprintf(stderr, "\n");
-    ++exfail;
+    ++cpp.exfail;
 }
 
 void pperror(const char *s, ...)
@@ -1221,14 +1145,14 @@ void yyerror(const char *s, ...)
 
 void ppwarn(const char *s, ...)
 {
-    int fail = exfail;
+    int fail = cpp.exfail;
     va_list ap;
 
-    exfail = -1;
+    cpp.exfail = -1;
     va_start(ap, s);
     verror(s, ap);
     va_end(ap);
-    exfail = fail;
+    cpp.exfail = fail;
 }
 
 struct symtab *lookup(char *namep, int enterf)
@@ -1241,14 +1165,14 @@ struct symtab *lookup(char *namep, int enterf)
     // namep had better not be too long (currently, <=8 chars)
     np     = namep;
     around = 0;
-    i      = cinit;
+    i      = cpp.cinit;
     while ((c = *np++))
         i += i + c;
     c = i; // c=i for usage on pdp11
     c %= symsiz;
     if (c < 0)
         c += symsiz;
-    sp = &stab[c];
+    sp = &cpp.stab[c];
     while ((snp = sp->name)) {
         np = namep;
         while (*snp++ == *np) {
@@ -1257,22 +1181,22 @@ struct symtab *lookup(char *namep, int enterf)
                     sp->name[0] = DROP;
                     sp->value   = 0;
                 }
-                return (lastsym = sp);
+                return (cpp.lastsym = sp);
             }
         }
-        if (--sp < &stab[0]) {
+        if (--sp < &cpp.stab[0]) {
             if (around) {
                 pperror("too many defines", 0);
-                exit(exfail);
+                exit(cpp.exfail);
             } else {
                 ++around;
-                sp = &stab[symsiz - 1];
+                sp = &cpp.stab[symsiz - 1];
             }
         }
     }
     if (enterf > 0)
         sp->name = namep;
-    return (lastsym = sp);
+    return (cpp.lastsym = sp);
 }
 
 struct symtab *slookup(char *p1, char *p2, int enterf)
@@ -1293,10 +1217,10 @@ struct symtab *slookup(char *p1, char *p2, int enterf)
     np  = lookup(p1, enterf);
     *p3 = c3;
     *p2 = c2;
-    if (np->value != 0 && flslvl == 0)
-        newp = subst(p2, np);
+    if (np->value != 0 && cpp.flslvl == 0)
+        cpp.newp = subst(p2, np);
     else
-        newp = 0;
+        cpp.newp = 0;
     return (np);
 }
 
@@ -1309,27 +1233,27 @@ char *subst(char *p, struct symtab *sp)
 
     if (0 == (vp = sp->value))
         return (p);
-    if ((p - macforw) <= macdam) {
-        if (++maclvl > symsiz && !rflag) {
+    if ((p - cpp.macforw) <= cpp.macdam) {
+        if (++cpp.maclvl > symsiz && !cpp.rflag) {
             pperror("%s: macro recursion", sp->name);
             return (p);
         }
     } else
-        maclvl = 0; // level decreased
-    macforw = p;
-    macdam  = 0; // new target for decrease in level
-    macnam  = sp->name;
+        cpp.maclvl = 0; // level decreased
+    cpp.macforw = p;
+    cpp.macdam  = 0; // new target for decrease in level
+    cpp.macnam  = sp->name;
     dump();
-    if (sp == ulnloc) {
+    if (sp == cpp.ulnloc) {
         vp    = acttxt;
         *vp++ = '\0';
-        sprintf(vp, "%d", lineno[ifno]);
+        sprintf(vp, "%d", cpp.lineno[cpp.ifno]);
         while (*vp++)
             ;
-    } else if (sp == uflloc) {
+    } else if (sp == cpp.uflloc) {
         vp    = acttxt;
         *vp++ = '\0';
-        sprintf(vp, "\"%s\"", fnames[ifno]);
+        sprintf(vp, "\"%s\"", cpp.fnames[cpp.ifno]);
         while (*vp++)
             ;
     }
@@ -1340,31 +1264,31 @@ char *subst(char *p, struct symtab *sp)
         if (params == 0xFF)
             params = 1; // #define foo() ...
         sloscan();
-        ++flslvl; // no expansion during search for actuals
-        plvl = -1;
+        ++cpp.flslvl; // no expansion during search for actuals
+        cpp.plvl = -1;
         do
             p = skipbl(p);
-        while (*inp == '\n'); // skip \n too
-        if (*inp == '(') {
-            maclin = lineno[ifno];
-            macfil = fnames[ifno];
-            for (plvl = 1; plvl != 0;) {
+        while (*cpp.inp == '\n'); // skip \n too
+        if (*cpp.inp == '(') {
+            cpp.maclin = cpp.lineno[cpp.ifno];
+            cpp.macfil = cpp.fnames[cpp.ifno];
+            for (cpp.plvl = 1; cpp.plvl != 0;) {
                 *ca++ = '\0';
                 for (;;) {
-                    outp = inp = p;
-                    p          = cotoken(p);
-                    if (*inp == '(')
-                        ++plvl;
-                    if (*inp == ')' && --plvl == 0) {
+                    cpp.outp = cpp.inp = p;
+                    p                  = cotoken(p);
+                    if (*cpp.inp == '(')
+                        ++cpp.plvl;
+                    if (*cpp.inp == ')' && --cpp.plvl == 0) {
                         --params;
                         break;
                     }
-                    if (plvl == 1 && *inp == ',') {
+                    if (cpp.plvl == 1 && *cpp.inp == ',') {
                         --params;
                         break;
                     }
-                    while (inp < p)
-                        *ca++ = *inp++;
+                    while (cpp.inp < p)
+                        *ca++ = *cpp.inp++;
                     if (ca > &acttxt[BUFSIZ])
                         pperror("%s: actuals too long", sp->name);
                 }
@@ -1378,14 +1302,14 @@ char *subst(char *p, struct symtab *sp)
             ppwarn("%s: argument mismatch", sp->name);
         while (--params >= 0)
             *pa++ = &""[1]; // null string for missing actuals
-        --flslvl;
+        --cpp.flslvl;
         fasscan();
     }
     for (;;) { // push definition onto front of input stack
         while (!iswarn(*--vp)) {
             if (bob(p)) {
-                outp = inp = p;
-                p          = unfill(p);
+                cpp.outp = cpp.inp = p;
+                p                  = unfill(p);
             }
             *--p = *vp;
         }
@@ -1393,15 +1317,15 @@ char *subst(char *p, struct symtab *sp)
             ca = actual[*--vp - 1];
             while (*--ca) {
                 if (bob(p)) {
-                    outp = inp = p;
-                    p          = unfill(p);
+                    cpp.outp = cpp.inp = p;
+                    p                  = unfill(p);
                 }
                 *--p = *ca;
             }
         } else
             break;
     }
-    outp = inp = p;
+    cpp.outp = cpp.inp = p;
     return (p);
 }
 
@@ -1423,8 +1347,8 @@ STATIC char *copy(const char *s)
 {
     char *old;
 
-    old = savch;
-    while ((*savch++ = *s++))
+    old = cpp.savch;
+    while ((*cpp.savch++ = *s++))
         ;
     return (old);
 }
@@ -1462,12 +1386,20 @@ int main(int argc, char *argv[])
     char *p;
     char *tf, **cp2;
 
-    fout = stdout;
-    p    = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    i    = 0;
+    // Fields that used to have static initializers referencing other fields;
+    // set them up before anything runs (the instance is otherwise zeroed).
+    cpp.savch  = cpp.sbf;
+    cpp.predef = cpp.prespc;
+    cpp.prund  = cpp.punspc;
+    cpp.fin    = STDIN;
+    cpp.nd     = 1;
+
+    cpp.fout = stdout;
+    p        = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    i        = 0;
     while ((c = *p++)) {
-        fastab[(unsigned char)c] |= IB | NB | SB;
-        toktyp[(unsigned char)c] = IDENT;
+        cpp.fastab[(unsigned char)c] |= IB | NB | SB;
+        cpp.toktyp[(unsigned char)c] = IDENT;
 #if scw2
         // 53 == 63-10; digits rarely appear in identifiers,
         // and can never be the first char of an identifier.
@@ -1480,67 +1412,67 @@ int main(int argc, char *argv[])
     }
     p = "0123456789.";
     while ((c = *p++)) {
-        fastab[(unsigned char)c] |= NB | SB;
-        toktyp[(unsigned char)c] = NUMBR;
+        cpp.fastab[(unsigned char)c] |= NB | SB;
+        cpp.toktyp[(unsigned char)c] = NUMBR;
     }
     p = "\n\"'/\\";
     while ((c = *p++))
-        fastab[(unsigned char)c] |= SB;
+        cpp.fastab[(unsigned char)c] |= SB;
     p = "\n\"'\\";
     while ((c = *p++))
-        fastab[(unsigned char)c] |= QB;
+        cpp.fastab[(unsigned char)c] |= QB;
     p = "*\n";
     while ((c = *p++))
-        fastab[(unsigned char)c] |= CB;
-    fastab[(unsigned char)warnc] |= WB;
-    fastab['\0'] |= CB | QB | SB | WB;
+        cpp.fastab[(unsigned char)c] |= CB;
+    cpp.fastab[(unsigned char)warnc] |= WB;
+    cpp.fastab['\0'] |= CB | QB | SB | WB;
     for (i = ALFSIZ; --i >= 0;)
-        slotab[i] = fastab[i] | SB;
+        cpp.slotab[i] = cpp.fastab[i] | SB;
     p = " \t\013\f\r"; // note no \n;	\v not legal for vertical tab?
     while ((c = *p++))
-        toktyp[(unsigned char)c] = BLANK;
+        cpp.toktyp[(unsigned char)c] = BLANK;
 #if scw2
     for (t23[i = ALFSIZ + 7] = 1; --i >= 0;)
         if ((t23[i] = (t23 + 1)[i] << 1) == 0)
             t23[i] = 1;
 #endif
 
-    fnames[ifno = 0] = "";
+    cpp.fnames[cpp.ifno = 0] = "";
     for (i = 1; i < argc; i++) {
         switch (argv[i][0]) {
         case '-':
             switch (argv[i][1]) {
             case 'P':
-                pflag++;
+                cpp.pflag++;
             case 'E':
                 continue;
             case 'R':
-                ++rflag;
+                ++cpp.rflag;
                 continue;
             case 'C':
-                passcom++;
+                cpp.passcom++;
                 continue;
             case 'D':
-                if (predef > prespc + NPREDEF) {
+                if (cpp.predef > cpp.prespc + NPREDEF) {
                     pperror("too many -D options, ignoring %s", argv[i]);
                     continue;
                 }
                 // ignore plain "-D" (no argument)
                 if (*(argv[i] + 2))
-                    *predef++ = argv[i] + 2;
+                    *cpp.predef++ = argv[i] + 2;
                 continue;
             case 'U':
-                if (prund > punspc + NPREDEF) {
+                if (cpp.prund > cpp.punspc + NPREDEF) {
                     pperror("too many -U options, ignoring %s", argv[i]);
                     continue;
                 }
-                *prund++ = argv[i] + 2;
+                *cpp.prund++ = argv[i] + 2;
                 continue;
             case 'I':
-                if (nd > 8)
+                if (cpp.nd > 8)
                     pperror("excessive -I file (%s) ignored", argv[i]);
                 else
-                    dirs[nd++] = argv[i] + 2;
+                    cpp.dirs[cpp.nd++] = argv[i] + 2;
                 continue;
             case '\0':
                 continue;
@@ -1549,106 +1481,106 @@ int main(int argc, char *argv[])
                 continue;
             }
         default:
-            if (fin == STDIN) {
-                fin = open(argv[i], READ);
-                if (fin < 0) {
+            if (cpp.fin == STDIN) {
+                cpp.fin = open(argv[i], READ);
+                if (cpp.fin < 0) {
                     pperror("No source file %s", argv[i]);
                     exit(8);
                 }
-                fnames[ifno] = copy(argv[i]);
-                dirs[0] = dirnams[ifno] = trmdir(argv[i]);
+                cpp.fnames[cpp.ifno] = copy(argv[i]);
+                cpp.dirs[0] = cpp.dirnams[cpp.ifno] = trmdir(argv[i]);
 
                 // too dangerous to have file name in same syntactic position
                 // be input or output file depending on file redirections,
                 // so force output to stdout, willy-nilly
                 //      [i don't see what the problem is.  jfr]
                 //
-            } else if (fout == stdout) {
+            } else if (cpp.fout == stdout) {
                 static char sobuf[BUFSIZ];
-                fout = fopen(argv[i], "w");
-                if (!fout) {
+                cpp.fout = fopen(argv[i], "w");
+                if (!cpp.fout) {
                     pperror("Can't create %s", argv[i]);
                     exit(8);
                 }
                 fclose(stdout);
-                setbuffer(fout, sobuf, sizeof(sobuf));
+                setbuffer(cpp.fout, sobuf, sizeof(sobuf));
             } else
                 pperror("extraneous name %s", argv[i]);
         }
     }
-    if (isatty(fin)) {
+    if (isatty(cpp.fin)) {
         usage();
         exit(8);
     }
 
-    fins[ifno] = fin;
-    exfail     = 0;
+    cpp.fins[cpp.ifno] = cpp.fin;
+    cpp.exfail         = 0;
     // after user -I files here are the standard include libraries
-    dirs[nd++] = "/usr/include";
-    dirs[nd++] = 0;
-    defloc     = ppsym("define");
-    udfloc     = ppsym("undef");
-    incloc     = ppsym("include");
-    elsloc     = ppsym("else");
-    eifloc     = ppsym("endif");
-    ifdloc     = ppsym("ifdef");
-    ifnloc     = ppsym("ifndef");
-    ifloc      = ppsym("if");
-    lneloc     = ppsym("line");
-    for (i = sizeof(macbit) / sizeof(macbit[0]); --i >= 0;)
-        macbit[i] = 0;
+    cpp.dirs[cpp.nd++] = "/usr/include";
+    cpp.dirs[cpp.nd++] = 0;
+    cpp.defloc         = ppsym("define");
+    cpp.udfloc         = ppsym("undef");
+    cpp.incloc         = ppsym("include");
+    cpp.elsloc         = ppsym("else");
+    cpp.eifloc         = ppsym("endif");
+    cpp.ifdloc         = ppsym("ifdef");
+    cpp.ifnloc         = ppsym("ifndef");
+    cpp.ifloc          = ppsym("if");
+    cpp.lneloc         = ppsym("line");
+    for (i = sizeof(cpp.macbit) / sizeof(cpp.macbit[0]); --i >= 0;)
+        cpp.macbit[i] = 0;
 #if unix
-    ysysloc = stsym("unix");
+    cpp.ysysloc = stsym("unix");
 #endif
 #if gcos
-    ysysloc = stsym("gcos");
+    cpp.ysysloc = stsym("gcos");
 #endif
 #if ibm
-    ysysloc = stsym("ibm");
+    cpp.ysysloc = stsym("ibm");
 #endif
 #if pdp11
-    varloc = stsym("pdp11");
+    cpp.varloc = stsym("pdp11");
 #endif
 #if vax
-    varloc = stsym("vax");
+    cpp.varloc = stsym("vax");
 #endif
 #if interdata
-    varloc = stsym("interdata");
+    cpp.varloc = stsym("interdata");
 #endif
 #if tss
-    varloc = stsym("tss");
+    cpp.varloc = stsym("tss");
 #endif
 #if os
-    varloc = stsym("os");
+    cpp.varloc = stsym("os");
 #endif
 #if mert
-    varloc = stsym("mert");
+    cpp.varloc = stsym("mert");
 #endif
-    ulnloc = stsym("__LINE__");
-    uflloc = stsym("__FILE__");
+    cpp.ulnloc = stsym("__LINE__");
+    cpp.uflloc = stsym("__FILE__");
 
-    tf           = fnames[ifno];
-    fnames[ifno] = "command line";
-    lineno[ifno] = 1;
-    cp2          = prespc;
-    while (cp2 < predef)
+    tf                   = cpp.fnames[cpp.ifno];
+    cpp.fnames[cpp.ifno] = "command line";
+    cpp.lineno[cpp.ifno] = 1;
+    cp2                  = cpp.prespc;
+    while (cp2 < cpp.predef)
         stsym(*cp2++);
-    cp2 = punspc;
-    while (cp2 < prund) {
+    cp2 = cpp.punspc;
+    while (cp2 < cpp.prund) {
         if ((p = strdex(*cp2, '=')))
             *p++ = '\0';
         lookup(*cp2++, DROP);
     }
-    fnames[ifno] = tf;
-    pbeg         = buffer + 8;
-    pbuf         = pbeg + BUFSIZ;
-    pend         = pbuf + BUFSIZ;
+    cpp.fnames[cpp.ifno] = tf;
+    cpp.pbeg             = cpp.buffer + 8;
+    cpp.pbuf             = cpp.pbeg + BUFSIZ;
+    cpp.pend             = cpp.pbuf + BUFSIZ;
 
-    trulvl    = 0;
-    flslvl    = 0;
-    lineno[0] = 1;
+    cpp.trulvl    = 0;
+    cpp.flslvl    = 0;
+    cpp.lineno[0] = 1;
     sayline();
-    outp = inp = pend;
-    control(pend);
-    return (exfail);
+    cpp.outp = cpp.inp = cpp.pend;
+    control(cpp.pend);
+    return (cpp.exfail);
 }

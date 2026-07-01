@@ -12,8 +12,6 @@ int yylex()
     static char *op2[]      = { "||", "&&", ">>", "<<", ">=", "<=", "!=", "==" };
     static const int val2[] = { OROR, ANDAND, RS, LS, GE, LE, NE, EQ };
     static const char *opc  = "b\bt\tn\nf\fr\r\\\\";
-    extern char *outp, *inp, *newp;
-    extern int flslvl;
     char savc;
     const char *s;
     int val;
@@ -21,73 +19,73 @@ int yylex()
     const struct symtab *sp;
 
     for (;;) {
-        newp = skipbl(newp);
-        if (*inp == '\n')
+        cpp.newp = skipbl(cpp.newp);
+        if (*cpp.inp == '\n')
             return (stop); // end of #if
-        savc  = *newp;
-        *newp = '\0';
+        savc      = *cpp.newp;
+        *cpp.newp = '\0';
         for (p2 = op2 + 8; --p2 >= op2;) // check 2-char ops
-            if (0 == strcmp(*p2, inp)) {
+            if (0 == strcmp(*p2, cpp.inp)) {
                 val = val2[p2 - op2];
                 goto ret;
             }
         s = "+-*/%<>&^|?:!~(),"; // check 1-char ops
         while (*s)
-            if (*s++ == *inp) {
+            if (*s++ == *cpp.inp) {
                 val = *--s;
                 goto ret;
             }
-        if (*inp <= '9' && *inp >= '0') { // a number
-            if (*inp == '0')
-                yylval =
-                    (inp[1] == 'x' || inp[1] == 'X') ? tobinary(inp + 2, 16) : tobinary(inp + 1, 8);
+        if (*cpp.inp <= '9' && *cpp.inp >= '0') { // a number
+            if (*cpp.inp == '0')
+                cpp.yylval = (cpp.inp[1] == 'x' || cpp.inp[1] == 'X') ? tobinary(cpp.inp + 2, 16)
+                                                                      : tobinary(cpp.inp + 1, 8);
             else
-                yylval = tobinary(inp, 10);
+                cpp.yylval = tobinary(cpp.inp, 10);
             val = number;
-        } else if (isid(*inp)) {
-            if (0 == strcmp(inp, "defined")) {
+        } else if (isid(*cpp.inp)) {
+            if (0 == strcmp(cpp.inp, "defined")) {
                 ifdef = 1;
-                ++flslvl;
+                ++cpp.flslvl;
                 val = DEFINED;
             } else {
-                sp = lookup(inp, -1);
+                sp = lookup(cpp.inp, -1);
                 if (ifdef != 0) {
                     ifdef = 0;
-                    --flslvl;
+                    --cpp.flslvl;
                 }
-                yylval = (sp->value == 0) ? 0 : 1;
-                val    = number;
+                cpp.yylval = (sp->value == 0) ? 0 : 1;
+                val        = number;
             }
-        } else if (*inp == '\'') { // character constant
+        } else if (*cpp.inp == '\'') { // character constant
             val = number;
-            if (inp[1] == '\\') { // escaped
-                if (newp[-1] == '\'')
-                    newp[-1] = '\0';
+            if (cpp.inp[1] == '\\') { // escaped
+                if (cpp.newp[-1] == '\'')
+                    cpp.newp[-1] = '\0';
                 s = opc;
                 while (*s)
-                    if (*s++ != inp[2])
+                    if (*s++ != cpp.inp[2])
                         ++s;
                     else {
-                        yylval = *s;
+                        cpp.yylval = *s;
                         goto ret;
                     }
-                if (inp[2] <= '9' && inp[2] >= '0')
-                    yylval = tobinary(inp + 2, 8);
+                if (cpp.inp[2] <= '9' && cpp.inp[2] >= '0')
+                    cpp.yylval = tobinary(cpp.inp + 2, 8);
                 else
-                    yylval = inp[2];
+                    cpp.yylval = cpp.inp[2];
             } else
-                yylval = inp[1];
-        } else if (0 == strcmp("\\\n", inp)) {
-            *newp = savc;
+                cpp.yylval = cpp.inp[1];
+        } else if (0 == strcmp("\\\n", cpp.inp)) {
+            *cpp.newp = savc;
             continue;
         } else {
-            *newp = savc;
-            pperror("Illegal character %c in preprocessor if", *inp);
+            *cpp.newp = savc;
+            pperror("Illegal character %c in preprocessor if", *cpp.inp);
             continue;
         }
     ret:
-        *newp = savc;
-        outp = inp = newp;
+        *cpp.newp = savc;
+        cpp.outp = cpp.inp = cpp.newp;
         return (val);
     }
 }
