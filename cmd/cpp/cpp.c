@@ -164,7 +164,7 @@ STATIC int flslvl;
 
 struct symtab *slookup(char *p1, char *p2, int enterf);
 char *trmdir(char *s);
-STATIC char *copy(char *s);
+STATIC char *copy(const char *s);
 char *subst(char *p, struct symtab *sp);
 
 void sayline()
@@ -282,8 +282,8 @@ char *refill(char *p)
     /* dump buffer.  save chars from inp to p.  read into buffer at pbuf,
      * contiguous with p.  update pointers, return new p.
      */
-    char *np, *op;
-    int ninbuf;
+    char *np;
+    const char *op;
 
     dump();
     np = pbuf - (p - inp);
@@ -313,7 +313,8 @@ char *refill(char *p)
             return (p);
         } else { /* get more text from file(s) */
             maclvl = 0;
-            if (0 < (ninbuf = read(fin, pbuf, BUFSIZ))) {
+            int ninbuf = read(fin, pbuf, BUFSIZ);
+            if (0 < ninbuf) {
                 pend  = pbuf + ninbuf;
                 *pend = '\0';
                 return (p);
@@ -727,7 +728,8 @@ char *skipbl(char *p)
  */
 char *unfill(char *p)
 {
-    char *np, *op;
+    char *np;
+    const char *op;
     int d;
 
     if (mactop >= MAXFRE) {
@@ -867,7 +869,7 @@ char *doincl(char *p)
     return (p);
 }
 
-int equfrm(char *a, char *p1, char *p2)
+int equfrm(const char *a, const char *p1, char *p2)
 {
     char c;
     int flag;
@@ -1039,7 +1041,7 @@ char *dodef(char *p)
  */
 char *control(char *p)
 {
-    struct symtab *np;
+    const struct symtab *np;
     for (;;) {
         fasscan();
         p = cotoken(p);
@@ -1146,7 +1148,7 @@ char *control(char *p)
     }
 }
 
-struct symtab *stsym(char *s)
+struct symtab *stsym(const char *s)
 {
     char buf[BUFSIZ];
     char *p;
@@ -1176,7 +1178,7 @@ struct symtab *stsym(char *s)
 }
 
 /* kluge */
-struct symtab *ppsym(char *s)
+struct symtab *ppsym(const char *s)
 {
     struct symtab *sp;
 
@@ -1231,7 +1233,7 @@ void ppwarn(const char *s, ...)
 
 struct symtab *lookup(char *namep, int enterf)
 {
-    char *np, *snp;
+    const char *np, *snp;
     int c, i;
     int around;
     struct symtab *sp;
@@ -1300,7 +1302,6 @@ struct symtab *slookup(char *p1, char *p2, int enterf)
 
 char *subst(char *p, struct symtab *sp)
 {
-    static char match[] = "%s: argument mismatch";
     char *ca, *vp;
     int params;
     char *actual[MAXFRM]; /* actual[n] is text of nth actual */
@@ -1368,13 +1369,13 @@ char *subst(char *p, struct symtab *sp)
                         pperror("%s: actuals too long", sp->name);
                 }
                 if (pa >= &actual[MAXFRM])
-                    ppwarn(match, sp->name);
+                    ppwarn("%s: argument mismatch", sp->name);
                 else
                     *pa++ = ca;
             }
         }
         if (params != 0)
-            ppwarn(match, sp->name);
+            ppwarn("%s: argument mismatch", sp->name);
         while (--params >= 0)
             *pa++ = &""[1]; /* null string for missing actuals */
         --flslvl;
@@ -1418,7 +1419,7 @@ char *trmdir(char *s)
     return (s);
 }
 
-STATIC char *copy(char *s)
+STATIC char *copy(const char *s)
 {
     char *old;
 

@@ -76,6 +76,7 @@ set(BESM6_CROSS_INCLUDE ${CMAKE_SOURCE_DIR}/cross)
 add_custom_target(build_tests)
 
 add_subdirectory(cmd/libaout)
+add_subdirectory(cmd/cpp)
 add_subdirectory(cmd/as)
 add_subdirectory(cmd/disasm)
 add_subdirectory(cmd/ld)

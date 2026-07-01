@@ -82,14 +82,13 @@ int prec(int token)
 
 int e(void)
 {
-    int val, val2, val3;
-    int op, op_prec;
+    int val, val2;
 
     val = term();
 
     while (1) {
-        op      = lookahead;
-        op_prec = prec(op);
+        int op      = lookahead;
+        int op_prec = prec(op);
 
         if (op_prec <= prec(',')) { // Handle lowest precedence up to comma
             if (op == '*' && match('*')) {
@@ -99,12 +98,14 @@ int e(void)
                 val2 = e();
                 if (val2 == 0)
                     pperror("Division by zero");
-                val = val / val2;
+                else
+                    val = val / val2;
             } else if (op == '%' && match('%')) {
                 val2 = e();
                 if (val2 == 0)
                     pperror("Modulo by zero");
-                val = val % val2;
+                else
+                    val = val % val2;
             } else if (op == '+' && match('+')) {
                 val2 = e();
                 val  = val + val2;
@@ -154,8 +155,8 @@ int e(void)
                 val2 = e();
                 if (!match(':'))
                     pperror("Expected ':' in ternary operator");
-                val3 = e();
-                val  = val ? val2 : val3;
+                int val3 = e();
+                val      = val ? val2 : val3;
             } else if (op == ',' && match(',')) {
                 val2 = e();
                 val  = val2;

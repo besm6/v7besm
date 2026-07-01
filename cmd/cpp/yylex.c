@@ -10,14 +10,15 @@ int yylex()
 {
     static int ifdef   = 0;
     static char *op2[] = { "||", "&&", ">>", "<<", ">=", "<=", "!=", "==" };
-    static int val2[]  = { OROR, ANDAND, RS, LS, GE, LE, NE, EQ };
-    static char *opc   = "b\bt\tn\nf\fr\r\\\\";
+    static const int val2[] = { OROR, ANDAND, RS, LS, GE, LE, NE, EQ };
+    static const char *opc = "b\bt\tn\nf\fr\r\\\\";
     extern char *outp, *inp, *newp;
     extern int flslvl;
-    char savc, *s;
+    char savc;
+    const char *s;
     int val;
     char **p2;
-    struct symtab *sp;
+    const struct symtab *sp;
 
     for (;;) {
         newp = skipbl(newp);
@@ -60,7 +61,6 @@ int yylex()
         } else if (*inp == '\'') { /* character constant */
             val = number;
             if (inp[1] == '\\') { /* escaped */
-                char c;
                 if (newp[-1] == '\'')
                     newp[-1] = '\0';
                 s = opc;
@@ -72,7 +72,7 @@ int yylex()
                         goto ret;
                     }
                 if (inp[2] <= '9' && inp[2] >= '0')
-                    yylval = c = tobinary(inp + 2, 8);
+                    yylval = tobinary(inp + 2, 8);
                 else
                     yylval = inp[2];
             } else
@@ -95,7 +95,7 @@ int yylex()
 int tobinary(char *st, int b)
 {
     int n, c, t;
-    char *s;
+    const char *s;
     n = 0;
     s = st;
     while ((c = *s++)) {
