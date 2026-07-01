@@ -4,9 +4,9 @@
 
 #include "defs.h"
 
-int tobinary(char *st, int b);
+int str_to_int(char *st, int b);
 
-int yylex()
+int lex_if_token()
 {
     static int ifdef        = 0;
     static char *op2[]      = { "||", "&&", ">>", "<<", ">=", "<=", "!=", "==" };
@@ -19,78 +19,79 @@ int yylex()
     const struct symtab *sp;
 
     for (;;) {
-        cpp.newp = skipbl(cpp.newp);
-        if (*cpp.inp == '\n')
+        cpp.scan_ptr = skip_blanks(cpp.scan_ptr);
+        if (*cpp.tok_ptr == '\n')
             return (stop); // end of #if
-        savc      = *cpp.newp;
-        *cpp.newp = '\0';
+        savc          = *cpp.scan_ptr;
+        *cpp.scan_ptr = '\0';
         for (p2 = op2 + 8; --p2 >= op2;) // check 2-char ops
-            if (0 == strcmp(*p2, cpp.inp)) {
+            if (0 == strcmp(*p2, cpp.tok_ptr)) {
                 val = val2[p2 - op2];
                 goto ret;
             }
         s = "+-*/%<>&^|?:!~(),"; // check 1-char ops
         while (*s)
-            if (*s++ == *cpp.inp) {
+            if (*s++ == *cpp.tok_ptr) {
                 val = *--s;
                 goto ret;
             }
-        if (*cpp.inp <= '9' && *cpp.inp >= '0') { // a number
-            if (*cpp.inp == '0')
-                cpp.yylval = (cpp.inp[1] == 'x' || cpp.inp[1] == 'X') ? tobinary(cpp.inp + 2, 16)
-                                                                      : tobinary(cpp.inp + 1, 8);
+        if (*cpp.tok_ptr <= '9' && *cpp.tok_ptr >= '0') { // a number
+            if (*cpp.tok_ptr == '0')
+                cpp.tok_value = (cpp.tok_ptr[1] == 'x' || cpp.tok_ptr[1] == 'X')
+                                    ? str_to_int(cpp.tok_ptr + 2, 16)
+                                    : str_to_int(cpp.tok_ptr + 1, 8);
             else
-                cpp.yylval = tobinary(cpp.inp, 10);
+                cpp.tok_value = str_to_int(cpp.tok_ptr, 10);
             val = number;
-        } else if (isid(*cpp.inp)) {
-            if (0 == strcmp(cpp.inp, "defined")) {
+        } else if (isid(*cpp.tok_ptr)) {
+            if (0 == strcmp(cpp.tok_ptr, "defined")) {
                 ifdef = 1;
-                ++cpp.flslvl;
+                ++cpp.false_level;
                 val = DEFINED;
             } else {
-                sp = lookup(cpp.inp, -1);
+                sp = lookup(cpp.tok_ptr, -1);
                 if (ifdef != 0) {
                     ifdef = 0;
-                    --cpp.flslvl;
+                    --cpp.false_level;
                 }
-                cpp.yylval = (sp->value == 0) ? 0 : 1;
-                val        = number;
+                cpp.tok_value = (sp->value == 0) ? 0 : 1;
+                val           = number;
             }
-        } else if (*cpp.inp == '\'') { // character constant
+        } else if (*cpp.tok_ptr == '\'') { // character constant
             val = number;
-            if (cpp.inp[1] == '\\') { // escaped
-                if (cpp.newp[-1] == '\'')
-                    cpp.newp[-1] = '\0';
+            if (cpp.tok_ptr[1] == '\\') { // escaped
+                if (cpp.scan_ptr[-1] == '\'')
+                    cpp.scan_ptr[-1] = '\0';
                 s = opc;
                 while (*s)
-                    if (*s++ != cpp.inp[2])
+                    if (*s++ != cpp.tok_ptr[2])
                         ++s;
                     else {
-                        cpp.yylval = *s;
+                        cpp.tok_value = *s;
                         goto ret;
                     }
-                if (cpp.inp[2] <= '9' && cpp.inp[2] >= '0')
-                    cpp.yylval = tobinary(cpp.inp + 2, 8);
+                if (cpp.tok_ptr[2] <= '9' && cpp.tok_ptr[2] >= '0')
+                    cpp.tok_value = str_to_int(cpp.tok_ptr + 2, 8);
                 else
-                    cpp.yylval = cpp.inp[2];
+                    cpp.tok_value = cpp.tok_ptr[2];
             } else
-                cpp.yylval = cpp.inp[1];
-        } else if (0 == strcmp("\\\n", cpp.inp)) {
-            *cpp.newp = savc;
+                cpp.tok_value = cpp.tok_ptr[1];
+        } else if (0 == strcmp("\\\n", cpp.tok_ptr)) {
+            *cpp.scan_ptr = savc;
             continue;
         } else {
-            *cpp.newp = savc;
-            pperror("Illegal character %c in preprocessor if", *cpp.inp);
+            *cpp.scan_ptr = savc;
+            pperror("Illegal character %c in preprocessor if", *cpp.tok_ptr);
             continue;
         }
     ret:
-        *cpp.newp = savc;
-        cpp.outp = cpp.inp = cpp.newp;
+        *cpp.scan_ptr = savc;
+        cpp.out_ptr = cpp.tok_ptr = cpp.scan_ptr;
         return (val);
     }
 }
 
-int tobinary(char *st, int b)
+int str_to_int(char *st, int b)
 {
     int n, c, t;
     const char *s;

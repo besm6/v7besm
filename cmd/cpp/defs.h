@@ -38,58 +38,58 @@ struct symtab {
 //
 struct cppstate {
     // scan buffer and cursors
-    char *pbeg, *pbuf, *pend; // buffer bounds
-    char *outp, *inp, *newp;  // output / input / macro-expansion cursors
-    char cinit;               // hash seed
-    char buffer[8 + BUFSIZ + BUFSIZ + 8];
+    char *buf_start, *buf_mid, *buf_end; // buffer bounds
+    char *out_ptr, *tok_ptr, *scan_ptr;  // output / current-token / scan-ahead cursors
+    char hash_seed;                      // seed for lookup()'s hash
+    char arena[8 + BUFSIZ + BUFSIZ + 8]; // backing store for the scan buffer
 
     // character-class / scan tables (built at startup)
-    char macbit[ALFSIZ + 11];
-    char toktyp[ALFSIZ];
-    char fastab[ALFSIZ];
-    char slotab[ALFSIZ];
-    char *ptrtab; // active scan table
+    char macro_bits[ALFSIZ + 11]; // superimposed-code filter for macro names
+    char char_class[ALFSIZ];      // BLANK / IDENT / NUMBR per character
+    char fast_tab[ALFSIZ];        // normal-mode scan classification
+    char slow_tab[ALFSIZ];        // #if-expression scan classification
+    char *scan_tab;               // active table: fast_tab or slow_tab
 
     // side buffer for macro pushback
-    char sbf[SBSIZE];
-    char *savch; // init: sbf
-    int mactop, fretop;
-    char *instack[MAXFRE], *bufstack[MAXFRE], *endbuf[MAXFRE];
+    char side_buf[SBSIZE];
+    char *side_ptr; // next free byte in side_buf; init: side_buf
+    int push_top, free_top;
+    char *push_stack[MAXFRE], *free_stack[MAXFRE], *push_end[MAXFRE];
 
     // in-flight macro call context
-    int plvl, maclin, maclvl, macdam;
-    char *macfil, *macnam, *macforw;
+    int paren_level, call_line, recur_depth, recur_bound_adj;
+    char *call_file, *macro_name, *recur_bound;
 
     // include stack
-    int inctop[MAXINC], fins[MAXINC], lineno[MAXINC];
-    char *fnames[MAXINC], *dirnams[MAXINC];
-    char *dirs[10];
-    int fin; // init: STDIN
-    FILE *fout;
-    int nd; // init: 1
-    int ifno;
+    int inc_push_top[MAXINC], inc_fd[MAXINC], line_no[MAXINC];
+    char *inc_file[MAXINC], *inc_dir[MAXINC];
+    char *search_dirs[10];
+    int in_fd; // init: STDIN
+    FILE *out_file;
+    int ndirs; // init: 1
+    int inc_level;
 
     // options
-    int pflag, passcom, rflag;
+    int opt_no_lines, opt_keep_comments, opt_recurse;
 
     // predefined -D / -U staging
-    char *prespc[NPREDEF];
-    char **predef; // init: prespc
-    char *punspc[NPREDEF];
-    char **prund; // init: punspc
-    int exfail;
+    char *pre_defs[NPREDEF];
+    char **pre_defs_end; // init: pre_defs
+    char *pre_undefs[NPREDEF];
+    char **pre_undefs_end; // init: pre_undefs
+    int exit_code;
 
     // symbol table + directive/keyword handles
-    struct symtab stab[symsiz];
-    struct symtab *lastsym;
-    struct symtab *defloc, *udfloc, *incloc, *ifloc, *elsloc, *eifloc, *ifdloc, *ifnloc, *ysysloc,
-        *varloc, *lneloc, *ulnloc, *uflloc;
+    struct symtab symbols[symsiz];
+    struct symtab *last_sym;
+    struct symtab *sym_define, *sym_undef, *sym_include, *sym_if, *sym_else, *sym_endif, *sym_ifdef,
+        *sym_ifndef, *sym_os, *sym_arch, *sym_line, *sym_line_macro, *sym_file_macro;
 
     // conditional-compilation nesting
-    int trulvl, flslvl;
+    int true_level, false_level;
 
     // #if expression parser (parser.c / yylex.c)
-    int yylval, lookahead, token_val;
+    int tok_value, look_token, look_value;
 };
 
 extern struct cppstate cpp;
@@ -101,15 +101,15 @@ extern struct cppstate cpp;
 #define QB 16
 #define WB 32
 
-#define isid(a)   (cpp.fastab[(unsigned char)a] & IB)
-#define isnum(a)  (cpp.fastab[(unsigned char)a] & NB)
-#define iscom(a)  (cpp.fastab[(unsigned char)a] & CB)
-#define isquo(a)  (cpp.fastab[(unsigned char)a] & QB)
-#define iswarn(a) (cpp.fastab[(unsigned char)a] & WB)
+#define isid(a)   (cpp.fast_tab[(unsigned char)a] & IB)
+#define isnum(a)  (cpp.fast_tab[(unsigned char)a] & NB)
+#define iscom(a)  (cpp.fast_tab[(unsigned char)a] & CB)
+#define isquo(a)  (cpp.fast_tab[(unsigned char)a] & QB)
+#define iswarn(a) (cpp.fast_tab[(unsigned char)a] & WB)
 
-int yylex(void);
-int yyparse(void);
-char *skipbl(char *p);
+int lex_if_token(void);
+int eval_if(void);
+char *skip_blanks(char *p);
 struct symtab *lookup(char *namep, int enterf);
 void pperror(const char *s, ...);
 void ppwarn(const char *s, ...);

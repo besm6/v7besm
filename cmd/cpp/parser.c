@@ -7,19 +7,18 @@
 #define YYSTYPE int
 
 void advance(void);
-int parse(void);
-int e(void);
-int term(void);
+int eval_expr(void);
+int eval_term(void);
 
 void advance(void)
 {
-    cpp.lookahead = yylex();
-    cpp.token_val = cpp.yylval;
+    cpp.look_token = lex_if_token();
+    cpp.look_value = cpp.tok_value;
 }
 
 int match(int token)
 {
-    if (cpp.lookahead == token) {
+    if (cpp.look_token == token) {
         advance();
         return 1;
     }
@@ -27,7 +26,7 @@ int match(int token)
 }
 
 // Precedence and associativity handling
-int prec(int token)
+int precedence(int token)
 {
     switch (token) {
     case ',':
@@ -76,85 +75,85 @@ int prec(int token)
     }
 }
 
-int e(void)
+int eval_expr(void)
 {
     int val, val2;
 
-    val = term();
+    val = eval_term();
 
     while (1) {
-        int op      = cpp.lookahead;
-        int op_prec = prec(op);
+        int op      = cpp.look_token;
+        int op_prec = precedence(op);
 
-        if (op_prec <= prec(',')) { // Handle lowest precedence up to comma
+        if (op_prec <= precedence(',')) { // Handle lowest precedence up to comma
             if (op == '*' && match('*')) {
-                val2 = e();
+                val2 = eval_expr();
                 val  = val * val2;
             } else if (op == '/' && match('/')) {
-                val2 = e();
+                val2 = eval_expr();
                 if (val2 == 0)
                     pperror("Division by zero");
                 else
                     val = val / val2;
             } else if (op == '%' && match('%')) {
-                val2 = e();
+                val2 = eval_expr();
                 if (val2 == 0)
                     pperror("Modulo by zero");
                 else
                     val = val % val2;
             } else if (op == '+' && match('+')) {
-                val2 = e();
+                val2 = eval_expr();
                 val  = val + val2;
             } else if (op == '-' && match('-')) {
-                val2 = e();
+                val2 = eval_expr();
                 val  = val - val2;
             } else if (op == LS && match(LS)) {
-                val2 = e();
+                val2 = eval_expr();
                 val  = val << val2;
             } else if (op == RS && match(RS)) {
-                val2 = e();
+                val2 = eval_expr();
                 val  = val >> val2;
             } else if (op == '<' && match('<')) {
-                val2 = e();
+                val2 = eval_expr();
                 val  = val < val2;
             } else if (op == '>' && match('>')) {
-                val2 = e();
+                val2 = eval_expr();
                 val  = val > val2;
             } else if (op == LE && match(LE)) {
-                val2 = e();
+                val2 = eval_expr();
                 val  = val <= val2;
             } else if (op == GE && match(GE)) {
-                val2 = e();
+                val2 = eval_expr();
                 val  = val >= val2;
             } else if (op == EQ && match(EQ)) {
-                val2 = e();
+                val2 = eval_expr();
                 val  = val == val2;
             } else if (op == NE && match(NE)) {
-                val2 = e();
+                val2 = eval_expr();
                 val  = val != val2;
             } else if (op == '&' && match('&')) {
-                val2 = e();
+                val2 = eval_expr();
                 val  = val & val2;
             } else if (op == '^' && match('^')) {
-                val2 = e();
+                val2 = eval_expr();
                 val  = val ^ val2;
             } else if (op == '|' && match('|')) {
-                val2 = e();
+                val2 = eval_expr();
                 val  = val | val2;
             } else if (op == ANDAND && match(ANDAND)) {
-                val2 = e();
+                val2 = eval_expr();
                 val  = val && val2;
             } else if (op == OROR && match(OROR)) {
-                val2 = e();
+                val2 = eval_expr();
                 val  = val || val2;
             } else if (op == '?' && match('?')) {
-                val2 = e();
+                val2 = eval_expr();
                 if (!match(':'))
                     pperror("Expected ':' in ternary operator");
-                int val3 = e();
+                int val3 = eval_expr();
                 val      = val ? val2 : val3;
             } else if (op == ',' && match(',')) {
-                val2 = e();
+                val2 = eval_expr();
                 val  = val2;
             } else {
                 break;
@@ -167,42 +166,42 @@ int e(void)
     return val;
 }
 
-int term(void)
+int eval_term(void)
 {
     int val;
 
     if (match('-')) {
-        val = term();
+        val = eval_term();
         return -val;
     } else if (match('!')) {
-        val = term();
+        val = eval_term();
         return !val;
     } else if (match('~')) {
-        val = term();
+        val = eval_term();
         return ~val;
     } else if (match('(')) {
-        val = e();
+        val = eval_expr();
         if (!match(')'))
             pperror("Expected ')'");
         return val;
     } else if (match(DEFINED)) {
         if (match('(')) {
-            if (cpp.lookahead != number)
+            if (cpp.look_token != number)
                 pperror("Expected number in DEFINED");
-            val = cpp.token_val;
+            val = cpp.look_value;
             advance();
             if (!match(')'))
                 pperror("Expected ')' in DEFINED");
             return val;
-        } else if (cpp.lookahead == number) {
-            val = cpp.token_val;
+        } else if (cpp.look_token == number) {
+            val = cpp.look_value;
             advance();
             return val;
         } else {
             pperror("Expected number or '(' after DEFINED");
         }
-    } else if (cpp.lookahead == number) {
-        val = cpp.token_val;
+    } else if (cpp.look_token == number) {
+        val = cpp.look_value;
         advance();
         return val;
     }
@@ -211,11 +210,11 @@ int term(void)
     return 0;
 }
 
-int yyparse(void)
+int eval_if(void)
 {
     advance();
-    int result = e();
-    if (cpp.lookahead != stop)
+    int result = eval_expr();
+    if (cpp.look_token != stop)
         pperror("Expected stop token");
     return result;
 }
