@@ -1,4 +1,4 @@
-#include "cpp_harness.h"
+#include "test_support.h"
 
 #include <spawn.h>
 #include <sys/wait.h>
