@@ -57,47 +57,22 @@ std::string Normalize(const std::string& out);
 
 // Assert that preprocessing `source` succeeds and its normalized output equals
 // `expected` (also normalized, so callers can write natural spacing).
-inline ::testing::AssertionResult TokensAre(const std::string& source,
-                                            const std::string& expected,
-                                            const std::vector<std::string>& extraArgs = {},
-                                            const std::vector<AuxFile>& aux = {}) {
-    Result r = Preprocess(source, extraArgs, aux);
-    if (r.exit_code != 0) {
-        return ::testing::AssertionFailure()
-               << "preprocessor exited " << r.exit_code << "\n--- stderr ---\n"
-               << r.err;
-    }
-    std::string got = Normalize(r.out);
-    std::string want = Normalize(expected);
-    if (got == want) return ::testing::AssertionSuccess();
-    return ::testing::AssertionFailure()
-           << "output mismatch\n  expected: [" << want << "]\n  actual:   [" << got
-           << "]";
-}
+::testing::AssertionResult TokensAre(const std::string& source,
+                                     const std::string& expected,
+                                     const std::vector<std::string>& extraArgs = {},
+                                     const std::vector<AuxFile>& aux = {});
 
 // Assert that preprocessing succeeds (exit 0), ignoring the output.
-inline ::testing::AssertionResult Succeeds(const std::string& source,
-                                           const std::vector<std::string>& extraArgs = {},
-                                           const std::vector<AuxFile>& aux = {}) {
-    Result r = Preprocess(source, extraArgs, aux);
-    if (r.exit_code == 0) return ::testing::AssertionSuccess();
-    return ::testing::AssertionFailure()
-           << "expected success but exited " << r.exit_code << "\n--- stderr ---\n"
-           << r.err;
-}
+::testing::AssertionResult Succeeds(const std::string& source,
+                                    const std::vector<std::string>& extraArgs = {},
+                                    const std::vector<AuxFile>& aux = {});
 
 // Assert that a constraint/error is diagnosed: run in strict mode and require a
 // nonzero exit (a conformant tool must at least diagnose; strict mode makes the
 // mandated diagnostic fatal so we can check it portably).
-inline ::testing::AssertionResult Diagnoses(const std::string& source,
-                                            const std::vector<std::string>& extraArgs = {},
-                                            const std::vector<AuxFile>& aux = {}) {
-    Result r = PreprocessStrict(source, extraArgs, aux);
-    if (r.exit_code != 0) return ::testing::AssertionSuccess();
-    return ::testing::AssertionFailure()
-           << "expected a diagnostic (nonzero exit) but tool exited 0\n--- stdout ---\n"
-           << r.out;
-}
+::testing::AssertionResult Diagnoses(const std::string& source,
+                                     const std::vector<std::string>& extraArgs = {},
+                                     const std::vector<AuxFile>& aux = {});
 
 #define EXPECT_TOKENS(src, expected) EXPECT_TRUE(::c11pp::TokensAre((src), (expected)))
 #define EXPECT_PP_OK(src) EXPECT_TRUE(::c11pp::Succeeds((src)))
@@ -115,34 +90,24 @@ protected:
 
     Result Preprocess(const std::string& src,
                       const std::vector<std::string>& extraArgs = {},
-                      const std::vector<AuxFile>& aux = {}) {
-        return ::c11pp::Preprocess(src, extraArgs, aux);
-    }
+                      const std::vector<AuxFile>& aux = {});
     Result PreprocessStrict(const std::string& src,
                             const std::vector<std::string>& extraArgs = {},
-                            const std::vector<AuxFile>& aux = {}) {
-        return ::c11pp::PreprocessStrict(src, extraArgs, aux);
-    }
-    static std::string Normalize(const std::string& s) { return ::c11pp::Normalize(s); }
+                            const std::vector<AuxFile>& aux = {});
+    static std::string Normalize(const std::string& s);
 
     // Matcher helpers, so tests that spell out an assertion (rather than use the
     // EXPECT_* macros above) can call them unqualified inside a TEST_F body.
     ::testing::AssertionResult TokensAre(const std::string& source,
                                          const std::string& expected,
                                          const std::vector<std::string>& extraArgs = {},
-                                         const std::vector<AuxFile>& aux = {}) {
-        return ::c11pp::TokensAre(source, expected, extraArgs, aux);
-    }
+                                         const std::vector<AuxFile>& aux = {});
     ::testing::AssertionResult Succeeds(const std::string& source,
                                         const std::vector<std::string>& extraArgs = {},
-                                        const std::vector<AuxFile>& aux = {}) {
-        return ::c11pp::Succeeds(source, extraArgs, aux);
-    }
+                                        const std::vector<AuxFile>& aux = {});
     ::testing::AssertionResult Diagnoses(const std::string& source,
                                          const std::vector<std::string>& extraArgs = {},
-                                         const std::vector<AuxFile>& aux = {}) {
-        return ::c11pp::Diagnoses(source, extraArgs, aux);
-    }
+                                         const std::vector<AuxFile>& aux = {});
 };
 
 }  // namespace c11pp

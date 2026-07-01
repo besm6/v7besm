@@ -238,4 +238,80 @@ std::string Normalize(const std::string& out) {
     return result;
 }
 
+// --- Convenience matchers --------------------------------------------------
+
+::testing::AssertionResult TokensAre(const std::string& source,
+                                     const std::string& expected,
+                                     const std::vector<std::string>& extraArgs,
+                                     const std::vector<AuxFile>& aux) {
+    Result r = Preprocess(source, extraArgs, aux);
+    if (r.exit_code != 0) {
+        return ::testing::AssertionFailure()
+               << "preprocessor exited " << r.exit_code << "\n--- stderr ---\n"
+               << r.err;
+    }
+    std::string got = Normalize(r.out);
+    std::string want = Normalize(expected);
+    if (got == want) return ::testing::AssertionSuccess();
+    return ::testing::AssertionFailure()
+           << "output mismatch\n  expected: [" << want << "]\n  actual:   [" << got
+           << "]";
+}
+
+::testing::AssertionResult Succeeds(const std::string& source,
+                                    const std::vector<std::string>& extraArgs,
+                                    const std::vector<AuxFile>& aux) {
+    Result r = Preprocess(source, extraArgs, aux);
+    if (r.exit_code == 0) return ::testing::AssertionSuccess();
+    return ::testing::AssertionFailure()
+           << "expected success but exited " << r.exit_code << "\n--- stderr ---\n"
+           << r.err;
+}
+
+::testing::AssertionResult Diagnoses(const std::string& source,
+                                     const std::vector<std::string>& extraArgs,
+                                     const std::vector<AuxFile>& aux) {
+    Result r = PreprocessStrict(source, extraArgs, aux);
+    if (r.exit_code != 0) return ::testing::AssertionSuccess();
+    return ::testing::AssertionFailure()
+           << "expected a diagnostic (nonzero exit) but tool exited 0\n--- stdout ---\n"
+           << r.out;
+}
+
+// --- PreprocessorTest fixture (forwards to the free functions above) -------
+
+Result PreprocessorTest::Preprocess(const std::string& src,
+                                    const std::vector<std::string>& extraArgs,
+                                    const std::vector<AuxFile>& aux) {
+    return ::c11pp::Preprocess(src, extraArgs, aux);
+}
+
+Result PreprocessorTest::PreprocessStrict(const std::string& src,
+                                          const std::vector<std::string>& extraArgs,
+                                          const std::vector<AuxFile>& aux) {
+    return ::c11pp::PreprocessStrict(src, extraArgs, aux);
+}
+
+std::string PreprocessorTest::Normalize(const std::string& s) {
+    return ::c11pp::Normalize(s);
+}
+
+::testing::AssertionResult PreprocessorTest::TokensAre(
+    const std::string& source, const std::string& expected,
+    const std::vector<std::string>& extraArgs, const std::vector<AuxFile>& aux) {
+    return ::c11pp::TokensAre(source, expected, extraArgs, aux);
+}
+
+::testing::AssertionResult PreprocessorTest::Succeeds(
+    const std::string& source, const std::vector<std::string>& extraArgs,
+    const std::vector<AuxFile>& aux) {
+    return ::c11pp::Succeeds(source, extraArgs, aux);
+}
+
+::testing::AssertionResult PreprocessorTest::Diagnoses(
+    const std::string& source, const std::vector<std::string>& extraArgs,
+    const std::vector<AuxFile>& aux) {
+    return ::c11pp::Diagnoses(source, extraArgs, aux);
+}
+
 }  // namespace c11pp
