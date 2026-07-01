@@ -1,4 +1,4 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 #include <string.h>
 
@@ -8,10 +8,10 @@ int tobinary(char *st, int b);
 
 int yylex()
 {
-    static int ifdef   = 0;
-    static char *op2[] = { "||", "&&", ">>", "<<", ">=", "<=", "!=", "==" };
+    static int ifdef        = 0;
+    static char *op2[]      = { "||", "&&", ">>", "<<", ">=", "<=", "!=", "==" };
     static const int val2[] = { OROR, ANDAND, RS, LS, GE, LE, NE, EQ };
-    static const char *opc = "b\bt\tn\nf\fr\r\\\\";
+    static const char *opc  = "b\bt\tn\nf\fr\r\\\\";
     extern char *outp, *inp, *newp;
     extern int flslvl;
     char savc;
@@ -23,21 +23,21 @@ int yylex()
     for (;;) {
         newp = skipbl(newp);
         if (*inp == '\n')
-            return (stop); /* end of #if */
+            return (stop); // end of #if
         savc  = *newp;
         *newp = '\0';
-        for (p2 = op2 + 8; --p2 >= op2;) /* check 2-char ops */
+        for (p2 = op2 + 8; --p2 >= op2;) // check 2-char ops
             if (0 == strcmp(*p2, inp)) {
                 val = val2[p2 - op2];
                 goto ret;
             }
-        s = "+-*/%<>&^|?:!~(),"; /* check 1-char ops */
+        s = "+-*/%<>&^|?:!~(),"; // check 1-char ops
         while (*s)
             if (*s++ == *inp) {
                 val = *--s;
                 goto ret;
             }
-        if (*inp <= '9' && *inp >= '0') { /* a number */
+        if (*inp <= '9' && *inp >= '0') { // a number
             if (*inp == '0')
                 yylval =
                     (inp[1] == 'x' || inp[1] == 'X') ? tobinary(inp + 2, 16) : tobinary(inp + 1, 8);
@@ -58,9 +58,9 @@ int yylex()
                 yylval = (sp->value == 0) ? 0 : 1;
                 val    = number;
             }
-        } else if (*inp == '\'') { /* character constant */
+        } else if (*inp == '\'') { // character constant
             val = number;
-            if (inp[1] == '\\') { /* escaped */
+            if (inp[1] == '\\') { // escaped
                 if (newp[-1] == '\'')
                     newp[-1] = '\0';
                 s = opc;

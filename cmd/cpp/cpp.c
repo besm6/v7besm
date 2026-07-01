@@ -1,10 +1,10 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * C preprocessor
- * written by John F. Reiser
- * July/August 1978
- */
+//
+// C preprocessor
+// written by John F. Reiser
+// July/August 1978
+//
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -31,7 +31,7 @@ char *outp, *inp;
 char *newp;
 char cinit;
 
-#define ALFSIZ 256 /* alphabet size */
+#define ALFSIZ 256 // alphabet size
 
 char macbit[ALFSIZ + 11];
 char toktyp[ALFSIZ];
@@ -40,25 +40,25 @@ char toktyp[ALFSIZ];
 #define IDENT 2
 #define NUMBR 3
 
-/*
- * a superimposed code is used to reduce the number of calls to the
- * symbol table lookup routine.  (if the kth character of an identifier
- * is 'a' and there are no macro names whose kth character is 'a'
- * then the identifier cannot be a macro name, hence there is no need
- * to look in the symbol table.)  'scw1' enables the test based on
- * single characters and their position in the identifier.  'scw2'
- * enables the test based on adjacent pairs of characters and their
- * position in the identifier.  scw1 typically costs 1 indexed fetch,
- * an AND, and a jump per character of identifier, until the identifier
- * is known as a non-macro name or until the end of the identifier.
- * scw1 is inexpensive.  scw2 typically costs 4 indexed fetches,
- * an add, an AND, and a jump per character of identifier, but it is also
- * slightly more effective at reducing symbol table searches.
- * scw2 usually costs too much because the symbol table search is
- * usually short; but if symbol table search should become expensive,
- * the code is here.
- * using both scw1 and scw2 is of dubious value.
- */
+//
+// a superimposed code is used to reduce the number of calls to the
+// symbol table lookup routine.  (if the kth character of an identifier
+// is 'a' and there are no macro names whose kth character is 'a'
+// then the identifier cannot be a macro name, hence there is no need
+// to look in the symbol table.)  'scw1' enables the test based on
+// single characters and their position in the identifier.  'scw2'
+// enables the test based on adjacent pairs of characters and their
+// position in the identifier.  scw1 typically costs 1 indexed fetch,
+// an AND, and a jump per character of identifier, until the identifier
+// is known as a non-macro name or until the end of the identifier.
+// scw1 is inexpensive.  scw2 typically costs 4 indexed fetches,
+// an add, an AND, and a jump per character of identifier, but it is also
+// slightly more effective at reducing symbol table searches.
+// scw2 usually costs too much because the symbol table search is
+// usually short; but if symbol table search should become expensive,
+// the code is here.
+// using both scw1 and scw2 is of dubious value.
+//
 #define scw1 1
 #define scw2 0
 
@@ -94,43 +94,43 @@ char buffer[8 + BUFSIZ + BUFSIZ + 8];
 char sbf[SBSIZE];
 char *savch = sbf;
 
-#define DROP   0xFE /* special character not legal ASCII or EBCDIC */
+#define DROP   0xFE // special character not legal ASCII or EBCDIC
 #define WARN   DROP
 #define SAME   0
 #define MAXINC 10
-#define MAXFRE 14 /* max buffers of macro pushback */
-#define MAXFRM 31 /* max number of formals/actuals to a macro */
+#define MAXFRE 14 // max buffers of macro pushback
+#define MAXFRM 31 // max number of formals/actuals to a macro
 
 static char warnc = WARN;
 
 int mactop, fretop;
 char *instack[MAXFRE], *bufstack[MAXFRE], *endbuf[MAXFRE];
 
-int plvl;      /* parenthesis level during scan for macro actuals */
-int maclin;    /* line number of macro call requiring actuals */
-char *macfil;  /* file name of macro call requiring actuals */
-char *macnam;  /* name of macro requiring actuals */
-int maclvl;    /* # calls since last decrease in nesting level */
-char *macforw; /* pointer which must be exceeded to decrease nesting level */
-int macdam;    /* offset to macforw due to buffer shifting */
+int plvl;      // parenthesis level during scan for macro actuals
+int maclin;    // line number of macro call requiring actuals
+char *macfil;  // file name of macro call requiring actuals
+char *macnam;  // name of macro requiring actuals
+int maclvl;    // # calls since last decrease in nesting level
+char *macforw; // pointer which must be exceeded to decrease nesting level
+int macdam;    // offset to macforw due to buffer shifting
 
 #if tgp
-int tgpscan; /* flag for dump(); */
+int tgpscan; // flag for dump();
 #endif
 
 STATIC int inctop[MAXINC];
 STATIC char *fnames[MAXINC];
-STATIC char *dirnams[MAXINC]; /* actual directory of #include files */
+STATIC char *dirnams[MAXINC]; // actual directory of #include files
 STATIC int fins[MAXINC];
 STATIC int lineno[MAXINC];
 
-STATIC char *dirs[10]; /* -I and <> directories */
+STATIC char *dirs[10]; // -I and <> directories
 STATIC int fin = STDIN;
 STATIC FILE *fout;
 STATIC int nd = 1;
-STATIC int pflag;   /* don't put out lines "# 12 foo.c" */
-STATIC int passcom; /* don't delete comments */
-STATIC int rflag;   /* allow macro recursion */
+STATIC int pflag;   // don't put out lines "# 12 foo.c"
+STATIC int passcom; // don't delete comments
+STATIC int rflag;   // allow macro recursion
 STATIC int ifno;
 
 #define NPREDEF 20
@@ -173,72 +173,72 @@ void sayline()
         fprintf(fout, "# %d \"%s\"\n", lineno[ifno], fnames[ifno]);
 }
 
-/* data structure guide
- *
- * most of the scanning takes place in the buffer:
- *
- *  (low address)                                             (high address)
- *  pbeg                           pbuf                                 pend
- *  |      <-- BUFSIZ chars -->      |         <-- BUFSIZ chars -->        |
- *  _______________________________________________________________________
- * |_______________________________________________________________________|
- *          |               |               |
- *          |<-- waiting -->|               |<-- waiting -->
- *          |    to be      |<-- current -->|    to be
- *          |    written    |    token      |    scanned
- *          |               |               |
- *          outp            inp             p
- *
- *  *outp   first char not yet written to output file
- *  *inp    first char of current token
- *  *p      first char not yet scanned
- *
- * macro expansion: write from *outp to *inp (chars waiting to be written),
- * ignore from *inp to *p (chars of the macro call), place generated
- * characters in front of *p (in reverse order), update pointers,
- * resume scanning.
- *
- * symbol table pointers point to just beyond the end of macro definitions;
- * the first preceding character is the number of formal parameters.
- * the appearance of a formal in the body of a definition is marked by
- * 2 chars: the char WARN, and a char containing the parameter number.
- * the first char of a definition is preceded by a zero character.
- *
- * when macro expansion attempts to back up over the beginning of the
- * buffer, some characters preceding *pend are saved in a side buffer,
- * the address of the side buffer is put on 'instack', and the rest
- * of the main buffer is moved to the right.  the end of the saved buffer
- * is kept in 'endbuf' since there may be nulls in the saved buffer.
- *
- * similar action is taken when an 'include' statement is processed,
- * except that the main buffer must be completely emptied.  the array
- * element 'inctop[ifno]' records the last side buffer saved when
- * file 'ifno' was included.  these buffers remain dormant while
- * the file is being read, and are reactivated at end-of-file.
- *
- * instack[0 : mactop] holds the addresses of all pending side buffers.
- * instack[inctop[ifno]+1 : mactop-1] holds the addresses of the side
- * buffers which are "live"; the side buffers instack[0 : inctop[ifno]]
- * are dormant, waiting for end-of-file on the current file.
- *
- * space for side buffers is obtained from 'savch' and is never returned.
- * bufstack[0:fretop-1] holds addresses of side buffers which
- * are available for use.
- */
+// data structure guide
+//
+// most of the scanning takes place in the buffer:
+//
+//  (low address)                                             (high address)
+//  pbeg                           pbuf                                 pend
+//  |      <-- BUFSIZ chars -->      |         <-- BUFSIZ chars -->        |
+//  _______________________________________________________________________
+// |_______________________________________________________________________|
+//          |               |               |
+//          |<-- waiting -->|               |<-- waiting -->
+//          |    to be      |<-- current -->|    to be
+//          |    written    |    token      |    scanned
+//          |               |               |
+//          outp            inp             p
+//
+//  *outp   first char not yet written to output file
+//  *inp    first char of current token
+//  *p      first char not yet scanned
+//
+// macro expansion: write from *outp to *inp (chars waiting to be written),
+// ignore from *inp to *p (chars of the macro call), place generated
+// characters in front of *p (in reverse order), update pointers,
+// resume scanning.
+//
+// symbol table pointers point to just beyond the end of macro definitions;
+// the first preceding character is the number of formal parameters.
+// the appearance of a formal in the body of a definition is marked by
+// 2 chars: the char WARN, and a char containing the parameter number.
+// the first char of a definition is preceded by a zero character.
+//
+// when macro expansion attempts to back up over the beginning of the
+// buffer, some characters preceding *pend are saved in a side buffer,
+// the address of the side buffer is put on 'instack', and the rest
+// of the main buffer is moved to the right.  the end of the saved buffer
+// is kept in 'endbuf' since there may be nulls in the saved buffer.
+//
+// similar action is taken when an 'include' statement is processed,
+// except that the main buffer must be completely emptied.  the array
+// element 'inctop[ifno]' records the last side buffer saved when
+// file 'ifno' was included.  these buffers remain dormant while
+// the file is being read, and are reactivated at end-of-file.
+//
+// instack[0 : mactop] holds the addresses of all pending side buffers.
+// instack[inctop[ifno]+1 : mactop-1] holds the addresses of the side
+// buffers which are "live"; the side buffers instack[0 : inctop[ifno]]
+// are dormant, waiting for end-of-file on the current file.
+//
+// space for side buffers is obtained from 'savch' and is never returned.
+// bufstack[0:fretop-1] holds addresses of side buffers which
+// are available for use.
+//
 void dump()
 {
-    /* write part of buffer which lies between  outp  and  inp .
-     * this should be a direct call to 'write', but the system slows to a crawl
-     * if it has to do an unaligned copy.  thus we buffer.  this silly loop
-     * is 15% of the total time, thus even the 'putc' macro is too slow.
-     */
+    // write part of buffer which lies between  outp  and  inp .
+    // this should be a direct call to 'write', but the system slows to a crawl
+    // if it has to do an unaligned copy.  thus we buffer.  this silly loop
+    // is 15% of the total time, thus even the 'putc' macro is too slow.
+    //
     char *p1;
     FILE *f;
     if ((p1 = outp) == inp || flslvl != 0)
         return;
 #if tgp
 #define MAXOUT 80
-    if (!tgpscan) { /* scan again to insure <= MAXOUT chars between linefeeds */
+    if (!tgpscan) { // scan again to insure <= MAXOUT chars between linefeeds
         char c, *pblank, *p2;
         char savc, stopc, brk;
         tgpscan = 1;
@@ -279,9 +279,9 @@ void dump()
 
 char *refill(char *p)
 {
-    /* dump buffer.  save chars from inp to p.  read into buffer at pbuf,
-     * contiguous with p.  update pointers, return new p.
-     */
+    // dump buffer.  save chars from inp to p.  read into buffer at pbuf,
+    // contiguous with p.  update pointers, return new p.
+    //
     char *np;
     const char *op;
 
@@ -299,7 +299,7 @@ char *refill(char *p)
         *np++ = *op++;
     p = np;
     for (;;) {
-        if (mactop > inctop[ifno]) { /* retrieve hunk of pushed-back macro text */
+        if (mactop > inctop[ifno]) { // retrieve hunk of pushed-back macro text
             op = instack[--mactop];
             np = pbuf;
             do {
@@ -307,20 +307,20 @@ char *refill(char *p)
                     ;
             } while (op < endbuf[mactop]);
             pend = np - 1;
-            /* make buffer space avail for 'include' processing */
+            // make buffer space avail for 'include' processing
             if (fretop < MAXFRE)
                 bufstack[fretop++] = instack[mactop];
             return (p);
-        } else { /* get more text from file(s) */
-            maclvl = 0;
+        } else { // get more text from file(s)
+            maclvl     = 0;
             int ninbuf = read(fin, pbuf, BUFSIZ);
             if (0 < ninbuf) {
                 pend  = pbuf + ninbuf;
                 *pend = '\0';
                 return (p);
             }
-            /* end of #include file */
-            if (ifno == 0) { /* end of input */
+            // end of #include file
+            if (ifno == 0) { // end of input
                 if (plvl != 0) {
                     int n = plvl, tlin = lineno[ifno];
                     char *tfil   = fnames[ifno];
@@ -330,9 +330,9 @@ char *refill(char *p)
                     lineno[ifno] = tlin;
                     fnames[ifno] = tfil;
                     np           = p;
-                    *np++        = '\n'; /* shut off unterminated quoted string */
+                    *np++        = '\n'; // shut off unterminated quoted string
                     while (--n >= 0)
-                        *np++ = ')'; /* supply missing parens */
+                        *np++ = ')'; // supply missing parens
                     pend = np;
                     *np  = '\0';
                     if (plvl < 0)
@@ -372,11 +372,11 @@ char *cotoken(char *p)
                 p = refill(p);
                 goto again;
             } else
-                ++p; /* ignore null byte */
+                ++p; // ignore null byte
         } break;
         case '|':
         case '&':
-            for (;;) { /* sloscan only */
+            for (;;) { // sloscan only
                 if (*p++ == *inp)
                     break;
                 if (eob(--p))
@@ -387,7 +387,7 @@ char *cotoken(char *p)
             break;
         case '=':
         case '!':
-            for (;;) { /* sloscan only */
+            for (;;) { // sloscan only
                 if (*p++ == '=')
                     break;
                 if (eob(--p))
@@ -398,7 +398,7 @@ char *cotoken(char *p)
             break;
         case '<':
         case '>':
-            for (;;) { /* sloscan only */
+            for (;;) { // sloscan only
                 if (*p++ == '=' || p[-2] == p[-1])
                     break;
                 if (eob(--p))
@@ -423,7 +423,7 @@ char *cotoken(char *p)
             break;
         case '/':
             for (;;) {
-                if (*p++ == '*') { /* comment */
+                if (*p++ == '*') { // comment
                     if (!passcom) {
                         inp = p - 2;
                         dump();
@@ -440,11 +440,11 @@ char *cotoken(char *p)
                                     if (!passcom) {
                                         inp = p;
                                         p   = refill(p);
-                                    } else if ((p - inp) >= BUFSIZ) { /* split long comment */
+                                    } else if ((p - inp) >= BUFSIZ) { // split long comment
                                         inp = p;
-                                        p   = refill(p); /* last char written is '*' */
-                                        putc('/', fout); /* terminate first part */
-                                        /* and fake start of 2nd */
+                                        p   = refill(p); // last char written is '*'
+                                        putc('/', fout); // terminate first part
+                                        // and fake start of 2nd
                                         outp = inp = p -= 3;
                                         *p++       = '/';
                                         *p++       = '*';
@@ -462,7 +462,7 @@ char *cotoken(char *p)
                             if (!passcom) {
                                 inp = p;
                                 p   = refill(p);
-                            } else if ((p - inp) >= BUFSIZ) { /* split long comment */
+                            } else if ((p - inp) >= BUFSIZ) { // split long comment
                                 inp = p;
                                 p   = refill(p);
                                 putc('*', fout);
@@ -473,7 +473,7 @@ char *cotoken(char *p)
                             } else
                                 p = refill(p);
                         } else
-                            ++p; /* ignore null byte */
+                            ++p; // ignore null byte
                     }
                 endcom:
                     if (!passcom) {
@@ -500,13 +500,13 @@ char *cotoken(char *p)
                 if (p[-1] == '\n') {
                     --p;
                     break;
-                } /* bare \n terminates quotation */
+                } // bare \n terminates quotation
                 if (p[-1] == '\\')
                     for (;;) {
                         if (*p++ == '\n') {
                             ++lineno[ifno];
                             break;
-                        } /* escaped \n ignored */
+                        } // escaped \n ignored
                         if (eob(--p))
                             p = refill(p);
                         else {
@@ -517,7 +517,7 @@ char *cotoken(char *p)
                 else if (eob(--p))
                     p = refill(p);
                 else
-                    ++p; /* it was a different quote character */
+                    ++p; // it was a different quote character
             }
         } break;
         case '\n': {
@@ -703,16 +703,16 @@ char *cotoken(char *p)
                     break;
             }
             break;
-        } /* end of switch */
+        } // end of switch
 
         if (isslo)
             return (p);
-    } /* end of infinite loop */
+    } // end of infinite loop
 }
 
-/*
- * get next non-blank token
- */
+//
+// get next non-blank token
+//
 char *skipbl(char *p)
 {
     do {
@@ -722,10 +722,10 @@ char *skipbl(char *p)
     return (p);
 }
 
-/*
- * take <= BUFSIZ chars from right end of buffer and put them on instack .
- * slide rest of buffer to the right, update pointers, return new p.
- */
+//
+// take <= BUFSIZ chars from right end of buffer and put them on instack .
+// slide rest of buffer to the right, update pointers, return new p.
+//
 char *unfill(char *p)
 {
     char *np;
@@ -735,7 +735,7 @@ char *unfill(char *p)
     if (mactop >= MAXFRE) {
         pperror("%s: too much pushback", macnam);
         p = inp = pend;
-        dump(); /* begin flushing pushback */
+        dump(); // begin flushing pushback
         while (mactop > inctop[ifno]) {
             p = refill(p);
             p = inp = pend;
@@ -762,15 +762,15 @@ char *unfill(char *p)
             ;
         if (eob(op))
             break;
-    } /* out with old */
-    endbuf[mactop++] = np; /* mark end of saved text */
+    } // out with old
+    endbuf[mactop++] = np; // mark end of saved text
     np               = pbuf + BUFSIZ;
     op               = pend - BUFSIZ;
     pend             = np;
     if (op < p)
         op = p;
     while (outp < op)
-        *--np = *--op; /* slide over new */
+        *--np = *--op; // slide over new
     if (bob(np))
         pperror("token too long");
     d = np - outp;
@@ -789,7 +789,7 @@ char *doincl(char *p)
 
     p  = skipbl(p);
     cp = filname;
-    if (*inp++ == '<') { /* special <> syntax */
+    if (*inp++ == '<') { // special <> syntax
         inctype = 1;
         for (;;) {
             outp = inp = p;
@@ -806,7 +806,7 @@ char *doincl(char *p)
             while (inp < p)
                 *cp++ = *inp++;
         }
-    } else if (inp[-1] == '"') { /* regular "" syntax */
+    } else if (inp[-1] == '"') { // regular "" syntax
         inctype = 0;
         while (inp < p)
             *cp++ = *inp++;
@@ -816,7 +816,7 @@ char *doincl(char *p)
         pperror("bad include syntax", 0);
         inctype = 2;
     }
-    /* flush current file to \n , then write \n */
+    // flush current file to \n , then write \n
     ++flslvl;
     do {
         outp = inp = p;
@@ -827,7 +827,7 @@ char *doincl(char *p)
     dump();
     if (inctype == 2)
         return (p);
-    /* look for included file */
+    // look for included file
     if (ifno + 1 >= MAXINC) {
         pperror("Unreasonable include nesting", 0);
         return (p);
@@ -861,7 +861,7 @@ char *doincl(char *p)
         savch         = cp;
         dirnams[ifno] = dirs[0] = trmdir(copy(nfil));
         sayline();
-        /* save current contents of buffer */
+        // save current contents of buffer
         while (!eob(p))
             p = unfill(p);
         inctop[ifno] = mactop;
@@ -880,9 +880,9 @@ int equfrm(const char *a, const char *p1, char *p2)
     return (flag == SAME);
 }
 
-/*
- * process '#define'
- */
+//
+// process '#define'
+//
 char *dodef(char *p)
 {
     char *pin, *psav, *cf;
@@ -890,15 +890,15 @@ char *dodef(char *p)
     int b, c, params;
     struct symtab *np;
     char *oldval, *oldsavch;
-    char *formal[MAXFRM]; /* formal[n] is name of nth formal */
-    char formtxt[BUFSIZ]; /* space for formal names */
+    char *formal[MAXFRM]; // formal[n] is name of nth formal
+    char formtxt[BUFSIZ]; // space for formal names
 
     if (savch > sbf + SBSIZE - BUFSIZ) {
         pperror("too much defining");
         return (p);
     }
-    oldsavch = savch; /* to reclaim space if redefinition */
-    ++flslvl;         /* prevent macro expansion during 'define' */
+    oldsavch = savch; // to reclaim space if redefinition
+    ++flslvl;         // prevent macro expansion during 'define'
     p   = skipbl(p);
     pin = inp;
     if (toktyp[(unsigned char)*pin] != IDENT) {
@@ -909,10 +909,10 @@ char *dodef(char *p)
     }
     np = slookup(pin, p, 1);
     if ((oldval = np->value))
-        savch = oldsavch; /* was previously defined */
+        savch = oldsavch; // was previously defined
     b  = 1;
     cf = pin;
-    while (cf < p) { /* update macbit */
+    while (cf < p) { // update macbit
         c = *cf++;
         xmac1(c, b, |=);
         b = (b + b) & 0xFF;
@@ -925,7 +925,7 @@ char *dodef(char *p)
     outp = inp = p;
     p          = cotoken(p);
     pin        = inp;
-    if (*pin == '(') { /* with parameters; identify the formals */
+    if (*pin == '(') { // with parameters; identify the formals
         cf = formtxt;
         pf = formal;
         for (;;) {
@@ -960,25 +960,25 @@ char *dodef(char *p)
             }
         }
         if (params == 0)
-            --params; /* #define foo() ... */
+            --params; // #define foo() ...
     } else if (*pin == '\n') {
         --lineno[ifno];
         --p;
     }
 
-    /* remember beginning of macro body, so that we can
-     * warn if a redefinition is different from old value.
-     */
+    // remember beginning of macro body, so that we can
+    // warn if a redefinition is different from old value.
+    //
     oldsavch = psav = savch;
-    for (;;) { /* accumulate definition until linefeed */
+    for (;;) { // accumulate definition until linefeed
         outp = inp = p;
         p          = cotoken(p);
         pin        = inp;
         if (*pin == '\\' && pin[1] == '\n')
-            continue; /* ignore escaped lf */
+            continue; // ignore escaped lf
         if (*pin == '\n')
             break;
-        if (params) { /* mark the appearance of formals in the definiton */
+        if (params) { // mark the appearance of formals in the definiton
             if (toktyp[(unsigned char)*pin] == IDENT) {
                 for (qf = pf; --qf >= formal;) {
                     if (equfrm(*qf, pin, p)) {
@@ -988,7 +988,7 @@ char *dodef(char *p)
                         break;
                     }
                 }
-            } else if (*pin == '"' || *pin == '\'') { /* inside quotation marks, too */
+            } else if (*pin == '"' || *pin == '\'') { // inside quotation marks, too
                 char quoc = *pin;
                 for (*psav++ = *pin++; pin < p && *pin != quoc;) {
                     while (pin < p && !isid(*pin))
@@ -1014,17 +1014,17 @@ char *dodef(char *p)
     }
     *psav++ = params;
     *psav++ = '\0';
-    if ((cf = oldval) != NULL) { /* redefinition */
-        --cf;                    /* skip no. of params, which may be zero */
+    if ((cf = oldval) != NULL) { // redefinition
+        --cf;                    // skip no. of params, which may be zero
         while (*--cf)
-            ;                              /* go back to the beginning */
-        if (0 != strcmp(++cf, oldsavch)) { /* redefinition different from old */
+            ;                              // go back to the beginning
+        if (0 != strcmp(++cf, oldsavch)) { // redefinition different from old
             --lineno[ifno];
             ppwarn("%s redefined", np->name);
             ++lineno[ifno];
             np->value = psav - 1;
         } else
-            psav = oldsavch; /* identical redef.; reclaim space */
+            psav = oldsavch; // identical redef.; reclaim space
     } else
         np->value = psav - 1;
     --flslvl;
@@ -1036,9 +1036,9 @@ char *dodef(char *p)
 #define fasscan() ptrtab = fastab
 #define sloscan() ptrtab = slotab
 
-/*
- * find and handle preprocessor control lines
- */
+//
+// find and handle preprocessor control lines
+//
 char *control(char *p)
 {
     const struct symtab *np;
@@ -1055,17 +1055,17 @@ char *control(char *p)
         ++flslvl;
         np = slookup(inp, p, 0);
         --flslvl;
-        if (np == defloc) { /* define */
+        if (np == defloc) { // define
             if (flslvl == 0) {
                 p = dodef(p);
                 continue;
             }
-        } else if (np == incloc) { /* include */
+        } else if (np == incloc) { // include
             if (flslvl == 0) {
                 p = doincl(p);
                 continue;
             }
-        } else if (np == ifnloc) { /* ifndef */
+        } else if (np == ifnloc) { // ifndef
             ++flslvl;
             p  = skipbl(p);
             np = slookup(inp, p, 0);
@@ -1074,7 +1074,7 @@ char *control(char *p)
                 ++trulvl;
             else
                 ++flslvl;
-        } else if (np == ifdloc) { /* ifdef */
+        } else if (np == ifdloc) { // ifdef
             ++flslvl;
             p  = skipbl(p);
             np = slookup(inp, p, 0);
@@ -1083,7 +1083,7 @@ char *control(char *p)
                 ++trulvl;
             else
                 ++flslvl;
-        } else if (np == eifloc) { /* endif */
+        } else if (np == eifloc) { // endif
             if (flslvl) {
                 if (--flslvl == 0)
                     sayline();
@@ -1091,7 +1091,7 @@ char *control(char *p)
                 --trulvl;
             else
                 pperror("If-less endif", 0);
-        } else if (np == elsloc) { /* else */
+        } else if (np == elsloc) { // else
             if (flslvl) {
                 if (--flslvl != 0)
                     ++flslvl;
@@ -1104,14 +1104,14 @@ char *control(char *p)
                 --trulvl;
             } else
                 pperror("If-less else", 0);
-        } else if (np == udfloc) { /* undefine */
+        } else if (np == udfloc) { // undefine
             if (flslvl == 0) {
                 ++flslvl;
                 p = skipbl(p);
                 slookup(inp, p, DROP);
                 --flslvl;
             }
-        } else if (np == ifloc) { /* if */
+        } else if (np == ifloc) { // if
 #if tgp
             pperror(" IF not implemented, true assumed", 0);
             if (flslvl == 0)
@@ -1126,7 +1126,7 @@ char *control(char *p)
                 ++flslvl;
             p = newp;
 #endif
-        } else if (np == lneloc) { /* line */
+        } else if (np == lneloc) { // line
             if (flslvl == 0 && pflag == 0) {
                 outp = inp = p;
                 *--outp    = '#';
@@ -1135,10 +1135,10 @@ char *control(char *p)
                 continue;
             }
         } else if (*++inp == '\n')
-            outp = inp; /* allows blank line after # */
+            outp = inp; // allows blank line after #
         else
             pperror("undefined control", 0);
-        /* flush to lf */
+        // flush to lf
         ++flslvl;
         while (*inp != '\n') {
             outp = inp = p;
@@ -1153,14 +1153,14 @@ struct symtab *stsym(const char *s)
     char buf[BUFSIZ];
     char *p;
 
-    /* make definition look exactly like end of #define line */
-    /* copy to avoid running off end of world when param list is at end */
+    // make definition look exactly like end of #define line
+    // copy to avoid running off end of world when param list is at end
     p = buf;
     while ((*p++ = *s++))
         ;
     p = buf;
     while (isid(*p++))
-        ; /* skip first identifier */
+        ; // skip first identifier
     if (*--p == '=') {
         *p++ = ' ';
         while (*p++)
@@ -1177,7 +1177,7 @@ struct symtab *stsym(const char *s)
     return (lastsym);
 }
 
-/* kluge */
+// kluge
 struct symtab *ppsym(const char *s)
 {
     struct symtab *sp;
@@ -1238,13 +1238,13 @@ struct symtab *lookup(char *namep, int enterf)
     int around;
     struct symtab *sp;
 
-    /* namep had better not be too long (currently, <=8 chars) */
+    // namep had better not be too long (currently, <=8 chars)
     np     = namep;
     around = 0;
     i      = cinit;
     while ((c = *np++))
         i += i + c;
-    c = i; /* c=i for usage on pdp11 */
+    c = i; // c=i for usage on pdp11
     c %= symsiz;
     if (c < 0)
         c += symsiz;
@@ -1281,13 +1281,13 @@ struct symtab *slookup(char *p1, char *p2, int enterf)
     char c2, c3;
     struct symtab *np;
     c2  = *p2;
-    *p2 = '\0'; /* mark end of token */
+    *p2 = '\0'; // mark end of token
     if ((p2 - p1) > 8)
         p3 = p1 + 8;
     else
         p3 = p2;
     c3  = *p3;
-    *p3 = '\0'; /* truncate to 8 chars or less */
+    *p3 = '\0'; // truncate to 8 chars or less
     if (enterf == 1)
         p1 = copy(p1);
     np  = lookup(p1, enterf);
@@ -1304,8 +1304,8 @@ char *subst(char *p, struct symtab *sp)
 {
     char *ca, *vp;
     int params;
-    char *actual[MAXFRM]; /* actual[n] is text of nth actual */
-    char acttxt[BUFSIZ];  /* space for actuals */
+    char *actual[MAXFRM]; // actual[n] is text of nth actual
+    char acttxt[BUFSIZ];  // space for actuals
 
     if (0 == (vp = sp->value))
         return (p);
@@ -1315,9 +1315,9 @@ char *subst(char *p, struct symtab *sp)
             return (p);
         }
     } else
-        maclvl = 0; /* level decreased */
+        maclvl = 0; // level decreased
     macforw = p;
-    macdam  = 0; /* new target for decrease in level */
+    macdam  = 0; // new target for decrease in level
     macnam  = sp->name;
     dump();
     if (sp == ulnloc) {
@@ -1333,18 +1333,18 @@ char *subst(char *p, struct symtab *sp)
         while (*vp++)
             ;
     }
-    if (0 != (params = *--vp & 0xFF)) { /* definition calls for params */
+    if (0 != (params = *--vp & 0xFF)) { // definition calls for params
         char **pa;
         ca = acttxt;
         pa = actual;
         if (params == 0xFF)
-            params = 1; /* #define foo() ... */
+            params = 1; // #define foo() ...
         sloscan();
-        ++flslvl; /* no expansion during search for actuals */
+        ++flslvl; // no expansion during search for actuals
         plvl = -1;
         do
             p = skipbl(p);
-        while (*inp == '\n'); /* skip \n too */
+        while (*inp == '\n'); // skip \n too
         if (*inp == '(') {
             maclin = lineno[ifno];
             macfil = fnames[ifno];
@@ -1377,11 +1377,11 @@ char *subst(char *p, struct symtab *sp)
         if (params != 0)
             ppwarn("%s: argument mismatch", sp->name);
         while (--params >= 0)
-            *pa++ = &""[1]; /* null string for missing actuals */
+            *pa++ = &""[1]; // null string for missing actuals
         --flslvl;
         fasscan();
     }
-    for (;;) { /* push definition onto front of input stack */
+    for (;;) { // push definition onto front of input stack
         while (!iswarn(*--vp)) {
             if (bob(p)) {
                 outp = inp = p;
@@ -1389,7 +1389,7 @@ char *subst(char *p, struct symtab *sp)
             }
             *--p = *vp;
         }
-        if (*vp == warnc) { /* insert actual param */
+        if (*vp == warnc) { // insert actual param
             ca = actual[*--vp - 1];
             while (*--ca) {
                 if (bob(p)) {
@@ -1469,10 +1469,10 @@ int main(int argc, char *argv[])
         fastab[(unsigned char)c] |= IB | NB | SB;
         toktyp[(unsigned char)c] = IDENT;
 #if scw2
-        /* 53 == 63-10; digits rarely appear in identifiers,
-         * and can never be the first char of an identifier.
-         * 11 == 53*53/sizeof(macbit) .
-         */
+        // 53 == 63-10; digits rarely appear in identifiers,
+        // and can never be the first char of an identifier.
+        // 11 == 53*53/sizeof(macbit) .
+        //
         ++i;
         t21[(unsigned char)c] = (53 * i) / 11;
         t22[(unsigned char)c] = i % 11;
@@ -1496,7 +1496,7 @@ int main(int argc, char *argv[])
     fastab['\0'] |= CB | QB | SB | WB;
     for (i = ALFSIZ; --i >= 0;)
         slotab[i] = fastab[i] | SB;
-    p = " \t\013\f\r"; /* note no \n;	\v not legal for vertical tab? */
+    p = " \t\013\f\r"; // note no \n;	\v not legal for vertical tab?
     while ((c = *p++))
         toktyp[(unsigned char)c] = BLANK;
 #if scw2
@@ -1525,7 +1525,7 @@ int main(int argc, char *argv[])
                     pperror("too many -D options, ignoring %s", argv[i]);
                     continue;
                 }
-                /* ignore plain "-D" (no argument) */
+                // ignore plain "-D" (no argument)
                 if (*(argv[i] + 2))
                     *predef++ = argv[i] + 2;
                 continue;
@@ -1558,11 +1558,11 @@ int main(int argc, char *argv[])
                 fnames[ifno] = copy(argv[i]);
                 dirs[0] = dirnams[ifno] = trmdir(argv[i]);
 
-                /* too dangerous to have file name in same syntactic position
-                 * be input or output file depending on file redirections,
-                 * so force output to stdout, willy-nilly
-                 *      [i don't see what the problem is.  jfr]
-                 */
+                // too dangerous to have file name in same syntactic position
+                // be input or output file depending on file redirections,
+                // so force output to stdout, willy-nilly
+                //      [i don't see what the problem is.  jfr]
+                //
             } else if (fout == stdout) {
                 static char sobuf[BUFSIZ];
                 fout = fopen(argv[i], "w");
@@ -1583,7 +1583,7 @@ int main(int argc, char *argv[])
 
     fins[ifno] = fin;
     exfail     = 0;
-    /* after user -I files here are the standard include libraries */
+    // after user -I files here are the standard include libraries
     dirs[nd++] = "/usr/include";
     dirs[nd++] = 0;
     defloc     = ppsym("define");
