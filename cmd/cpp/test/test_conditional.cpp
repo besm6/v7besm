@@ -1,7 +1,7 @@
 // C11 §6.10.1 — Conditional inclusion.
 #include "test_support.h"
 
-using Conditional = c11pp::PreprocessorTest;
+using Conditional = PreprocessorTest;
 
 TEST_F(Conditional, DISABLED_IfElifElse) {
     EXPECT_TOKENS(

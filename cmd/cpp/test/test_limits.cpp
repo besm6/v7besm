@@ -5,7 +5,7 @@
 
 #include <string>
 
-using Limits = c11pp::PreprocessorTest;
+using Limits = PreprocessorTest;
 
 // §5.2.4.1: 63 nesting levels of conditional inclusion.
 TEST_F(Limits, ConditionalNesting63) {

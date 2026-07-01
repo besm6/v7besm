@@ -3,7 +3,7 @@
 // explicitly request it and silence the associated warning.
 #include "test_support.h"
 
-using Trigraphs = c11pp::PreprocessorTest;
+using Trigraphs = PreprocessorTest;
 
 namespace {
 const std::vector<std::string> kTrigraphArgs = {"-trigraphs", "-w"};

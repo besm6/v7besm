@@ -1,7 +1,7 @@
 // C11 §6.10.3.3 — The ## (token paste) operator.
 #include "test_support.h"
 
-using Paste = c11pp::PreprocessorTest;
+using Paste = PreprocessorTest;
 
 TEST_F(Paste, DISABLED_IdentifierPaste) {
     EXPECT_TOKENS("#define C(a,b) a##b\nC(foo,bar)\n", "foobar");

@@ -1,7 +1,7 @@
 // C11 §6.10.3.2 — The # (stringize) operator.
 #include "test_support.h"
 
-using Stringize = c11pp::PreprocessorTest;
+using Stringize = PreprocessorTest;
 
 // Leading/trailing whitespace deleted; interior whitespace collapsed to one
 // space; the result is a string literal.

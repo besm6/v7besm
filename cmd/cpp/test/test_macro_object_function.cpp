@@ -2,7 +2,7 @@
 // rescanning, and the scope of definitions.
 #include "test_support.h"
 
-using Macro = c11pp::PreprocessorTest;
+using Macro = PreprocessorTest;
 
 TEST_F(Macro, ObjectLike) {
     EXPECT_TOKENS("#define N 42\nN\n", "42");

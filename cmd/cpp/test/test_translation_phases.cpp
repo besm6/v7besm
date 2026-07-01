@@ -2,7 +2,7 @@
 // Phase 2: backslash-newline splicing.  Phase 3: comments become one space.
 #include "test_support.h"
 
-using TranslationPhases = c11pp::PreprocessorTest;
+using TranslationPhases = PreprocessorTest;
 
 // Phase 2: a backslash-newline in a macro replacement list is spliced away.
 TEST_F(TranslationPhases, LineSpliceInReplacementList) {

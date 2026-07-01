@@ -1,7 +1,7 @@
 // C11 §6.10.2 — Source file inclusion.
 #include "test_support.h"
 
-using Include = c11pp::PreprocessorTest;
+using Include = PreprocessorTest;
 
 // #include "..." finds a file next to the including source.
 TEST_F(Include, QuotedForm) {

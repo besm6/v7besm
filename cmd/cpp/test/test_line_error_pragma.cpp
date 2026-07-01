@@ -1,10 +1,10 @@
 // C11 §6.10.4 (#line), §6.10.5 (#error), §6.10.6 (#pragma), §6.10.7 (null).
 #include "test_support.h"
 
-using LineControl    = c11pp::PreprocessorTest;
-using ErrorDirective = c11pp::PreprocessorTest;
-using Pragma         = c11pp::PreprocessorTest;
-using NullDirective  = c11pp::PreprocessorTest;
+using LineControl    = PreprocessorTest;
+using ErrorDirective = PreprocessorTest;
+using Pragma         = PreprocessorTest;
+using NullDirective  = PreprocessorTest;
 
 // §6.10.4: #line sets the presumed line number and file name.
 TEST_F(LineControl, DISABLED_SetsLineAndFile) {

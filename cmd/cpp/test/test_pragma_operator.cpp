@@ -1,7 +1,7 @@
 // C11 §6.10.9 — The _Pragma unary operator.
 #include "test_support.h"
 
-using PragmaOperator = c11pp::PreprocessorTest;
+using PragmaOperator = PreprocessorTest;
 
 // _Pragma("STDC FP_CONTRACT ON") is destringized to a standard pragma and
 // accepted (a conformant standard pragma, §6.10.6 / §7.6.1).

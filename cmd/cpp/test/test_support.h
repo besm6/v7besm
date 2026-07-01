@@ -15,8 +15,6 @@
 #include <string>
 #include <vector>
 
-namespace c11pp {
-
 // An auxiliary file materialised next to the main source (used by #include
 // tests).  `name` is a path relative to the temporary directory.
 struct AuxFile {
@@ -41,12 +39,9 @@ struct Result {
 // Shared gtest fixture for every preprocessor test suite: it owns the whole
 // harness + matcher API as methods, so tests read as plain unqualified calls.
 // Each suite aliases this fixture to keep its own name, e.g.
-// `using Macro = c11pp::PreprocessorTest;` then `TEST_F(Macro, ...)`.
+// `using Macro = PreprocessorTest;` then `TEST_F(Macro, ...)`.
 class PreprocessorTest : public ::testing::Test {
 protected:
-    using Result  = ::c11pp::Result;   // so tests can write `Result r = ...`
-    using AuxFile = ::c11pp::AuxFile;
-
     // Run the preprocessor-under-test on `source`.  The snippet is written to a
     // throwaway `*.c` file in a unique temp directory (auto-removed), together
     // with any `aux` files, and the temp directory is placed on the include
@@ -87,5 +82,3 @@ protected:
                                          const std::vector<std::string>& extraArgs = {},
                                          const std::vector<AuxFile>& aux = {});
 };
-
-}  // namespace c11pp

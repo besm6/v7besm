@@ -1,7 +1,7 @@
 // C11 §6.10.3 / §6.10.3.1 — Variadic macros and __VA_ARGS__.
 #include "test_support.h"
 
-using Varargs = c11pp::PreprocessorTest;
+using Varargs = PreprocessorTest;
 
 TEST_F(Varargs, DISABLED_MultipleArguments) {
     EXPECT_TOKENS("#define P(...) __VA_ARGS__\nP(a,b,c)\n", "a,b,c");

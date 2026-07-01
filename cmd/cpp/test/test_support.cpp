@@ -28,7 +28,6 @@ extern char** environ;
 #define C11PP_STRICT_ARGS "-Werror,-pedantic-errors"
 #endif
 
-namespace c11pp {
 namespace {
 
 // Split a comma-separated argument string, dropping empty fields.  (Comma, not
@@ -276,5 +275,3 @@ std::string PreprocessorTest::Normalize(const std::string& out) {
            << "expected a diagnostic (nonzero exit) but tool exited 0\n--- stdout ---\n"
            << r.out;
 }
-
-}  // namespace c11pp

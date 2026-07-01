@@ -1,7 +1,7 @@
 // C11 §6.10.8 — Predefined macro names.
 #include "test_support.h"
 
-using Predefined = c11pp::PreprocessorTest;
+using Predefined = PreprocessorTest;
 
 // §6.10.8.1: __STDC__ expands to 1.
 TEST_F(Predefined, DISABLED_StdcIsOne) {
