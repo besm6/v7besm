@@ -5,9 +5,7 @@
 
 using Trigraphs = PreprocessorTest;
 
-namespace {
-const std::vector<std::string> kTrigraphArgs = {"-trigraphs", "-w"};
-}
+static const std::vector<std::string> kTrigraphArgs = {"-trigraphs", "-w"};
 
 // The trigraphs are written with \? escapes so that the host C++ compiler does
 // not itself react to them; each \? yields a literal '?' at run time, so the

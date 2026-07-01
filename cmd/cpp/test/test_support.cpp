@@ -28,12 +28,10 @@ extern char** environ;
 #define C11PP_STRICT_ARGS "-Werror,-pedantic-errors"
 #endif
 
-namespace {
-
 // Split a comma-separated argument string, dropping empty fields.  (Comma, not
 // ';', because ';' is CMake's list separator and would break the compile-time
 // -D definitions.)
-std::vector<std::string> Split(const std::string& s) {
+static std::vector<std::string> Split(const std::string& s) {
     std::vector<std::string> out;
     std::string cur;
     std::istringstream is(s);
@@ -43,29 +41,29 @@ std::vector<std::string> Split(const std::string& s) {
     return out;
 }
 
-void WriteFile(const std::string& path, const std::string& content) {
+static void WriteFile(const std::string& path, const std::string& content) {
     std::ofstream f(path, std::ios::binary);
     if (!f) throw std::runtime_error("cannot write " + path);
     f.write(content.data(), static_cast<std::streamsize>(content.size()));
 }
 
-std::string ReadFile(const std::string& path) {
+static std::string ReadFile(const std::string& path) {
     std::ifstream f(path, std::ios::binary);
     std::ostringstream ss;
     ss << f.rdbuf();
     return ss.str();
 }
 
-int RemoveEntry(const char* path, const struct stat*, int, struct FTW*) {
+static int RemoveEntry(const char* path, const struct stat*, int, struct FTW*) {
     return remove(path);
 }
 
-void RemoveTree(const std::string& dir) {
+static void RemoveTree(const std::string& dir) {
     // Depth-first so directories are removed after their contents.
     nftw(dir.c_str(), RemoveEntry, 8, FTW_DEPTH | FTW_PHYS);
 }
 
-Result RunPreprocessor(const std::string& source,
+static Result RunPreprocessor(const std::string& source,
                        const std::vector<std::string>& extraArgs,
                        const std::vector<AuxFile>& aux,
                        bool strict) {
@@ -142,8 +140,6 @@ Result RunPreprocessor(const std::string& source,
     }
 }
 
-}  // namespace
-
 Result PreprocessorTest::Preprocess(const std::string& source,
                                     const std::vector<std::string>& extraArgs,
                                     const std::vector<AuxFile>& aux) {
@@ -156,13 +152,11 @@ Result PreprocessorTest::PreprocessStrict(const std::string& source,
     return RunPreprocessor(source, extraArgs, aux, /*strict=*/true);
 }
 
-namespace {
-
-bool IsWordChar(unsigned char c) { return std::isalnum(c) != 0 || c == '_'; }
+static bool IsWordChar(unsigned char c) { return std::isalnum(c) != 0 || c == '_'; }
 
 // Is `line` a GNU line marker ("# 12 \"file\"") or a #line marker?  Such lines
 // are preprocessor bookkeeping, not translated tokens, so they are dropped.
-bool IsLineMarker(const std::string& line) {
+static bool IsLineMarker(const std::string& line) {
     std::size_t p = line.find_first_not_of(" \t");
     if (p == std::string::npos || line[p] != '#') return false;
     std::size_t q = line.find_first_not_of(" \t", p + 1);
@@ -170,8 +164,6 @@ bool IsLineMarker(const std::string& line) {
     return std::isdigit(static_cast<unsigned char>(line[q])) != 0 ||
            line.compare(q, 4, "line") == 0;
 }
-
-}  // namespace
 
 std::string PreprocessorTest::Normalize(const std::string& out) {
     // Pass 1: drop line-marker lines.
