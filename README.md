@@ -40,7 +40,7 @@ doc/       BESM-6 architecture references
 |-------------------------------|---------------|-------------------------------|
 | Assembler (AT&T / Madlen)     | `cmd/as`      | ✔ working, tested, documented |
 | Linker + binutils             | `cmd/ld`      | ✔ exists                      |
-| C preprocessor                | `cmd/cpp`     | ✔ exists                      |
+| C preprocessor                | `cmd/cpp`     | ✔ exists, C11 test suite      |
 | Disassembler                  | `cmd/disasm`  | ✔ exists                      |
 | Kernel (i486 validation)      | `kernel/`     | ✔ builds                      |
 | libc library                  | —             | ☐ to do                       |
@@ -49,21 +49,24 @@ doc/       BESM-6 architecture references
 
 ## Building
 
-There is no top-level build — each component is built from its own directory.
+The `cmd/` toolchain builds with a top-level CMake project (driven through a thin
+`Makefile`); the kernel keeps its own LLVM Makefile.
 
-**Kernel**
+**Toolchain** — from the repo root:
+
+```sh
+make            # configure and build every cmd/ tool into build/
+make run        # build and run the unit tests (ctest)
+make install    # install the tools as b6* into ~/.local (or /usr/local)
+```
+
+Building requires CMake and a host C/C++ compiler; GoogleTest is fetched
+automatically, and every `cmd/` component has a unit-test suite run by `make run`.
+
+**Kernel** — a separate LLVM cross-build:
 
 ```sh
 cd kernel && make          # for now produces `unix` (i486 ELF) and `unix.nm`
-```
-
-**Toolchain:**
-
-```sh
-cd cmd/as     && make      # assembler
-cd cmd/ld     && make      # linker
-cd cmd/cpp    && make      # C preprocessor
-cd cmd/disasm && make      # disassembler
 ```
 
 See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail.

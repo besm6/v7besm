@@ -21,18 +21,41 @@ External pieces this project depends on (not in this repo):
 
 ## Building
 
-There is no top-level build. Each component has its own Makefile and is built from its
-own directory.
+Two separate build systems. The **`cmd/` toolchain** builds with a **top-level CMake
+project**, driven through a thin top-level `Makefile`; there are no per-component
+Makefiles under `cmd/` anymore (everything is configured by the root `CMakeLists.txt`).
+The **kernel** keeps its own hand-written Makefile because it cross-compiles with LLVM.
+
+### Toolchain (`cmd/`) — top-level build
+
+From the repo root:
+```sh
+make            # configure (into build/) and build every cmd/ tool
+make test       # build the unit tests, but don't run them
+make run        # run all unit tests via ctest
+make clean      # remove build/
+make install    # install the tools as b6* into ~/.local (or /usr/local)
+
+make clean; make debug; make   # reconfigure as a Debug build (default is RelWithDebInfo)
+```
+Requires **CMake** and a host C/C++ compiler (C++17). GoogleTest is fetched automatically
+at configure time, and **cppcheck** runs as part of the build when installed. Everything is
+compiled with `-Wall -Werror -Wshadow`. Each tool is built under a `b6`-prefixed name and
+`make install` copies it into `bin/` (`cmd/as`→`b6as`, `cmd/ld`→`b6ld`, `cmd/cpp`→`b6cpp`,
+`cmd/disasm`→`b6disasm`, plus the binutils `b6ar`/`b6nm`/`b6size`/`b6strip`/`b6ranlib`/`b6lorder`).
+These are host tools that run on the build machine and emit BESM-6 objects. **Do not** invoke `cc`/`clang` by hand or run
+`cmake --build` directly — always go through the top-level `make` targets.
 
 ### Kernel (`kernel/`)
 ```sh
 cd kernel && make          # produces `unix` (i486 ELF) and `unix.nm`
 make clean
 ```
-Requires **LLVM 19** (`clang`, `ld.lld`, `llvm-nm`, `llvm-size`). The Makefile locates it
-via `/usr/local/Cellar/llvm@19/...` (Homebrew on macOS); adjust `LLVMBIN` if installed
-elsewhere. The kernel is compiled with `clang -target i486-unknown-linux-gnu
--ffreestanding -Os -DKERNEL -Wall -Werror -Wshadow` and linked with `ld.lld -T unix.ld`.
+The kernel is **not** part of the CMake build. It requires **LLVM 19** (`clang`, `ld.lld`,
+`llvm-nm`, `llvm-size`). The Makefile locates it via `/usr/local/Cellar/llvm@19/...`
+(Homebrew on macOS); adjust `LLVMBIN` if installed elsewhere. The kernel is compiled with
+`clang -target i486-unknown-linux-gnu -ffreestanding -Os -DKERNEL -Wall -Werror -Wshadow`
+and linked with `ld.lld -T unix.ld`.
 
 The kernel is split into two static libs that are link-pulled so unused code is dropped:
 `libsys.a` (core kernel, `kernel/*.c`) and `libdev.a` (device drivers, `kernel/dev/*.c`).
@@ -43,17 +66,20 @@ Diagnostic make targets (require the external `cast` tool / C compiler AST dump)
 - `make yaml` — dump `.yaml` for each source
 - `%.ast` — C compiler AST dump (`*.ast` files are committed snapshots)
 
-### Toolchain commands (`cmd/`)
-```sh
-cd cmd/as  && make    # assembler           -> `as`  (installs as b6as)
-cd cmd/ld  && make    # linker              -> `ld`  (installs as b6ld)
-cd cmd/cpp && make    # C preprocessor      -> `cpp` (installs as b6cpp)
-cd cmd/disasm && make # disassembler              (installs as b6disasm)
-```
-`cmd/ld`'s Makefile also has targets for the companion binutils built from the same object
-helpers (`ar`, `nm`, `size`, `strip`, `ranlib` → installed as `b6*`); only `ld` is built
-by default — uncomment in the `all:` rule to build the rest. These are built with the host
-compiler (`$(CC)`), since they are tools that *run on the host* and emit BESM-6 objects.
+### Tests
+
+Every `cmd/` component has a GoogleTest suite under `cmd/<tool>/test/`, wired into the
+`build_tests` target and run by `make run` (ctest). The C preprocessor has the most
+extensive one: a **C11 (N1570) conformance suite** in `cmd/cpp/test/` that drives the built
+`b6cpp` over source snippets. All of its suites derive from a single `PreprocessorTest`
+gtest fixture in `cmd/cpp/test/test_support.{h,cpp}` — the harness spawns the tool in a
+temp dir, captures and normalizes its output, and exposes `Preprocess`/`Normalize` plus the
+`EXPECT_TOKENS`/`EXPECT_PP_OK`/`EXPECT_PP_DIAGNOSES` matchers as methods; a per-suite alias
+(`using Macro = PreprocessorTest;`) keeps each suite's name. b6cpp is a pre-ANSI cpp, so 49
+conformance tests currently fail for unimplemented C11 features: they are disabled with a
+`DISABLED_` name prefix (so `make run` stays green) and triaged one task per cluster in
+[cmd/cpp/TODO.md](cmd/cpp/TODO.md) — each task's first step is to drop the `DISABLED_`
+prefix to re-enable its tests.
 
 ## Architecture notes
 
