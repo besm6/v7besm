@@ -2,29 +2,13 @@
 // BESM-6 archiver: verbose table-of-contents listing and permission formatting.
 //
 #include <stdio.h>
+#include <sys/stat.h>
 #include <time.h>
 
 #include "intern.h"
 
 static void print_perm_bits(void);             // file-local; defined below
 static void print_perm_char(const int *pairp); // file-local; defined below
-
-// Permission and file-type bits, matching the on-disk st_mode layout (octal).
-#define IFMT  060000 // mask for the file-type field (unused here)
-#define ISARG 01000  // "argument" bit (unused here)
-#define LARGE 010000 // large-file bit (unused here)
-#define SUID  04000  // set-user-id on execution
-#define SGID  02000  // set-group-id on execution
-#define ROWN  0400   // owner read
-#define WOWN  0200   // owner write
-#define XOWN  0100   // owner execute
-#define RGRP  040    // group read
-#define WGRP  020    // group write
-#define XGRP  010    // group execute
-#define ROTH  04     // other read
-#define WOTH  02     // other write
-#define XOTH  01     // other execute
-#define STXT  01000  // sticky ("save text") bit
 
 // Print the long, ls -l style listing line for the current member (t -v).
 //
@@ -49,15 +33,15 @@ void print_long_entry(void)
 // print_perm_char() tests the masks in order and prints the char paired with
 // the first mask that is set, or the final fallback char if none match. The
 // nine rows drive the nine columns of an "rwxrwxrwx" permission string.
-static int m1[] = { 1, ROWN, 'r', '-' };            // owner read
-static int m2[] = { 1, WOWN, 'w', '-' };            // owner write
-static int m3[] = { 2, SUID, 's', XOWN, 'x', '-' }; // owner exec / setuid
-static int m4[] = { 1, RGRP, 'r', '-' };            // group read
-static int m5[] = { 1, WGRP, 'w', '-' };            // group write
-static int m6[] = { 2, SGID, 's', XGRP, 'x', '-' }; // group exec / setgid
-static int m7[] = { 1, ROTH, 'r', '-' };            // other read
-static int m8[] = { 1, WOTH, 'w', '-' };            // other write
-static int m9[] = { 2, STXT, 't', XOTH, 'x', '-' }; // other exec / sticky
+static int m1[] = { 1, S_IRUSR, 'r', '-' };               // owner read
+static int m2[] = { 1, S_IWUSR, 'w', '-' };               // owner write
+static int m3[] = { 2, S_ISUID, 's', S_IXUSR, 'x', '-' }; // owner exec / setuid
+static int m4[] = { 1, S_IRGRP, 'r', '-' };               // group read
+static int m5[] = { 1, S_IWGRP, 'w', '-' };               // group write
+static int m6[] = { 2, S_ISGID, 's', S_IXGRP, 'x', '-' }; // group exec / setgid
+static int m7[] = { 1, S_IROTH, 'r', '-' };               // other read
+static int m8[] = { 1, S_IWOTH, 'w', '-' };               // other write
+static int m9[] = { 2, S_ISVTX, 't', S_IXOTH, 'x', '-' }; // other exec / sticky
 
 static int *m[] = { m1, m2, m3, m4, m5, m6, m7, m8, m9 }; // the nine columns in order
 
