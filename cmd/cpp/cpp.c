@@ -223,6 +223,7 @@ int main(int argc, char *argv[])
     cpp.sym_if                   = install_directive("if");
     cpp.sym_line                 = install_directive("line");
     cpp.sym_error                = install_directive("error");
+    cpp.sym_pragma               = install_directive("pragma");
     for (i = sizeof(cpp.macro_bits) / sizeof(cpp.macro_bits[0]); --i >= 0;)
         cpp.macro_bits[i] = 0;
 #if unix
@@ -254,6 +255,7 @@ int main(int argc, char *argv[])
 #endif
     cpp.sym_line_macro = define_symbol("__LINE__");
     cpp.sym_file_macro = define_symbol("__FILE__");
+    cpp.sym_pragma_op  = define_symbol("_Pragma");
 
     // C11 §6.10.8 standard predefined macros with fixed bodies.  Unlike
     // __LINE__/__FILE__ these need no per-expansion synthesis, so they are just

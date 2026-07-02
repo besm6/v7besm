@@ -2,7 +2,7 @@
 
 The GoogleTest conformance suite in [test/](test/) drives the built `b6cpp`
 binary against the C11 preprocessor requirements (ISO/IEC 9899:2011, N1570).
-As of this writing **61 pass; the other 16 are marked `DISABLED_`** so the suite
+As of this writing **63 pass; the other 14 are marked `DISABLED_`** so the suite
 stays green. This file scopes one task per failure cluster so they can be picked
 up individually.
 
@@ -40,18 +40,6 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 `diag.c` (diagnostics) · `defs.h` (limits/table sizes).
 
 ---
-
-## 10. `#pragma` directive and `_Pragma` operator (§6.10.6, §6.10.9)
-
-- **Tests to enable (drop `DISABLED_`):** `Pragma.UnknownPragmaAccepted`, `PragmaOperator.LeavesOtherTokens`
-- **Current:** `#pragma …` reports `undefined control` (exit 1); the `_Pragma`
-  operator is passed through untouched.
-- **Scope:**
-  - [direct.c](direct.c): accept `#pragma` and swallow an unrecognized pragma
-    without error (a conformant tool ignores unknown pragmas).
-  - [macro.c](macro.c)/[scan.c](scan.c): implement the `_Pragma("…")` operator —
-    destringize its string-literal argument into a `#pragma …` directive line,
-    leaving surrounding tokens intact.
 
 ## 11. Comment handling (§5.1.1.2 / §6.4.9)
 

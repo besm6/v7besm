@@ -547,6 +547,58 @@ char *expand_text(const char *a0, const char *a1, char *out, int cap)
 }
 
 //
+// Handle the C11 _Pragma("...") unary operator (§6.10.9).  p points just past the
+// _Pragma name; the preceding text is already flushed.  We read the parenthesized
+// string-literal argument, destringize it (drop the surrounding quotes, turn \"
+// into " and \\ into \), and emit it as a "#pragma ..." line to the output,
+// leaving the surrounding tokens intact.
+//
+static char *pragma_operator(char *p)
+{
+    char text[BUFSIZ]; // destringized pragma text
+    char *w        = text;
+    const char *s = 0, *e = 0;
+
+    set_slow_scan();
+    ++cpp.false_level; // suppress expansion and keep flush_output inert
+    do
+        p = skip_blanks(p);
+    while (*cpp.tok_ptr == '\n');
+    if (*cpp.tok_ptr != '(') {
+        pperror("_Pragma: missing '('");
+        goto done;
+    }
+    do
+        p = skip_blanks(p);
+    while (*cpp.tok_ptr == '\n');
+    if (*cpp.tok_ptr != '"') {
+        pperror("_Pragma: string literal expected");
+        goto done;
+    }
+    // destringize [tok_ptr, p): drop the quotes, unescaping the escaped
+    // backslash and double-quote spellings
+    s = cpp.tok_ptr + 1; // past the opening quote
+    e = p - 1;           // the closing quote
+    while (s < e && w < text + sizeof(text) - 1) {
+        if (*s == '\\' && s + 1 < e && (s[1] == '"' || s[1] == '\\'))
+            ++s;
+        *w++ = *s++;
+    }
+    do
+        p = skip_blanks(p);
+    while (*cpp.tok_ptr == '\n');
+    if (*cpp.tok_ptr != ')')
+        pperror("_Pragma: missing ')'");
+done:
+    *w = '\0';
+    --cpp.false_level;
+    set_fast_scan();
+    cpp.out_ptr = cpp.tok_ptr = p;                 // drop the consumed _Pragma(...) region first
+    fprintf(cpp.out_file, "\n#pragma %s\n", text); // then emit the directive line
+    return (p);
+}
+
+//
 // Expand a macro call.  sp is the macro; p points just past its name.  For a
 // function-like macro we first scan the "(actual, actual, ...)" argument list.
 // Then we push the stored body onto the front of the input (in reverse), and
@@ -580,6 +632,8 @@ char *expand_macro(char *p, struct symtab *sp)
     cpp.recur_bound_adj = 0; // new target for decrease in level
     cpp.macro_name      = sp->name;
     flush_output();
+    if (sp == cpp.sym_pragma_op) // _Pragma("...") operator (§6.10.9)
+        return pragma_operator(p);
     if (sp == cpp.sym_line_macro) {
         vp    = acttxt;
         *vp++ = '\0';

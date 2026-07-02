@@ -366,6 +366,9 @@ char *process_directives(char *p)
             }
             // Inside a skipped conditional group: inert; fall through to the
             // shared drain-to-'\n' loop below, like a skipped #define/#undef.
+        } else if (np == cpp.sym_pragma) { // pragma (§6.10.6): accept, ignore unknown
+            // No handling: fall through to the shared drain, which swallows the
+            // line without error (a conformant tool ignores unknown pragmas).
         } else if (*++cpp.tok_ptr == '\n')
             cpp.out_ptr = cpp.tok_ptr; // allows blank line after #
         else

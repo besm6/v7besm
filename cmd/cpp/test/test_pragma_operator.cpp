@@ -10,7 +10,7 @@ TEST_F(PragmaOperator, StandardPragmaAccepted) {
 }
 
 // The surrounding tokens survive and the pragma is emitted as a #pragma line.
-TEST_F(PragmaOperator, DISABLED_LeavesOtherTokens) {
+TEST_F(PragmaOperator, LeavesOtherTokens) {
     EXPECT_TOKENS(
         "before\n"
         "_Pragma(\"STDC FENV_ACCESS OFF\")\n"

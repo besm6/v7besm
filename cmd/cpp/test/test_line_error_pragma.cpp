@@ -49,7 +49,7 @@ TEST_F(ErrorDirective, SkippedErrorIsInert) {
 
 // §6.10.6: an unrecognized #pragma is ignored (implementation-defined, but must
 // not fail translation).
-TEST_F(Pragma, DISABLED_UnknownPragmaAccepted) {
+TEST_F(Pragma, UnknownPragmaAccepted) {
     EXPECT_PP_OK("#pragma this is not a real pragma\nOK\n");
 }
 
