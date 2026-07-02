@@ -47,7 +47,7 @@ char *scan_token(char *p)
         // fast scan: skip characters that need no special handling
         while (!is_special(*p++))
             ;
-        switch (*(cpp.tok_ptr = p - 1)) {
+        switch ((unsigned char)*(cpp.tok_ptr = p - 1)) {
         case 0: { // possible end of buffered text (a nul), else an ignorable nul byte
             if (at_buf_end(--p)) {
                 p = refill_buffer(p);
@@ -58,7 +58,7 @@ char *scan_token(char *p)
         // §6.10.3.4: the end of a macro's expansion region (blue paint).  Drop the
         // marker from the output and un-paint the macro, then keep scanning.  Works
         // in both fast and slow (#if) scans since macros expand in #if too.
-        case paint_end_mark:
+        case PAINT_END_MARK:
             cpp.tok_ptr = p - 1; // the marker
             flush_output();      // emit finished text up to it
             if (cpp.paint_top > 0)

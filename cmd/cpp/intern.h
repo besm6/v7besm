@@ -18,7 +18,6 @@
 #define NUMBR  3   // char_class value: digit
 
 #define DROP   0xFE // special character not legal ASCII or EBCDIC
-#define WARN   DROP // same byte, used inside macro bodies to flag a formal-parameter slot
 #define SAME   0    // strcmp() returns this when two strings are equal
 #define MAXFRM 127  // max number of formals/actuals to a macro (§5.2.4.1 minimum; also the
                     // encoding ceiling: the param-number byte and the VA_FLAG=0x80 params-count
@@ -69,25 +68,18 @@
 #define xmac1(c, bit, op) // scw1 disabled: no-op
 #endif
 
-// Marks formal-parameter references inside stored macro bodies (defined in cpp.c).
-extern char warn_mark;
-
-// Marks a "#parameter" (stringize) reference inside stored macro bodies (cpp.c).
-extern char stringize_mark;
-
-// Marks a "##" (token-paste) parameter operand inside stored macro bodies (cpp.c).
-extern char paste_mark;
-
-// Marks a GNU ", ## __VA_ARGS__" comma-elision operand inside stored macro bodies
-// (cpp.c): the preceding comma is dropped when the variadic actual is empty.
-extern char comma_paste_mark;
-
-// §6.10.3.4: end of a macro's expansion region in the scan buffer; when the
-// scanner reaches it the macro is "un-painted".  Unlike the body marks above it
-// lives in the live buffer (not stored bodies), so it is a compile-time constant
-// usable as a switch label.  Cast to char so the label matches the byte as read
-// (char may be signed on this host).
-#define paint_end_mark ((char)0xFB)
+// Marker bytes stored inside macro bodies (and, for PAINT_END_MARK, the live scan
+// buffer).  Their values sit outside legal ASCII/EBCDIC so they cannot collide with
+// real source characters.  As an enum these constants are int-typed, so (char may be
+// signed on this host) writing one into a char buffer needs a (char) cast, and a byte
+// read back must be cast to (unsigned char) before comparing it; see scan.c/macro.c.
+enum macro_mark {
+    WARN_MARK        = 0xFE, // a formal-parameter slot: insert the expanded actual
+    STRINGIZE_MARK   = 0xFD, // '#param': insert the quoted raw actual
+    PASTE_MARK       = 0xFC, // '##' operand: insert the raw actual, fused to its neighbor
+    PAINT_END_MARK   = 0xFB, // §6.10.3.4 end of a macro's expansion region (blue paint)
+    COMMA_PASTE_MARK = 0xFA, // GNU ", ## __VA_ARGS__": raw actual, drop the comma if empty
+};
 
 // buffer.c -- scan-buffer refill/spill and output
 void emit_line_marker(void);  // write a "# line file" marker to the output

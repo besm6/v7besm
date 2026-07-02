@@ -161,13 +161,13 @@ extern struct cppstate cpp; // the single global instance, defined in cpp.c
 #define NB 4  // numeric digit
 #define CB 8  // could begin a comment ('/')
 #define QB 16 // quote character (' or ")
-#define WB 32 // the WARN marker byte used inside stored macro bodies
+#define WB 32 // a macro_mark marker byte used inside stored macro bodies
 
 #define isid(a)   (cpp.fast_tab[(unsigned char)a] & IB) // is a an identifier char?
 #define isnum(a)  (cpp.fast_tab[(unsigned char)a] & NB) // is a a digit?
 #define iscom(a)  (cpp.fast_tab[(unsigned char)a] & CB) // could a start a comment?
 #define isquo(a)  (cpp.fast_tab[(unsigned char)a] & QB) // is a a quote char?
-#define iswarn(a) (cpp.fast_tab[(unsigned char)a] & WB) // is a the WARN marker?
+#define iswarn(a) (cpp.fast_tab[(unsigned char)a] & WB) // is a a macro_mark marker?
 
 // Functions defined in the core files but also called from parser.c / yylex.c.
 int lex_if_token(void);                         // scan one #if-expression token (yylex.c)

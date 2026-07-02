@@ -51,7 +51,7 @@ static int macro_is_painted(const struct symtab *sp)
 // and the replacement text, and store it in the symbol table.
 //
 // The stored body is not copied verbatim: wherever a parameter name appears it
-// is replaced by a two-byte marker (a parameter number followed by WARN) so that
+// is replaced by a two-byte marker (a parameter number followed by WARN_MARK) so that
 // expand_macro can later splice in the actual arguments without re-parsing.  A
 // redefinition that differs from the previous one draws a warning; an identical
 // one is silently accepted and its space reclaimed.
@@ -201,7 +201,7 @@ char *do_define(char *p)
     body_start      = psav;
     // Copy the replacement text into the side buffer, token by token, replacing
     // each occurrence of a parameter name (even inside string/char literals)
-    // with the marker "<param number><WARN>".
+    // with the marker "<param number><WARN_MARK>".
     for (;;) { // accumulate definition until linefeed
         cpp.out_ptr = cpp.tok_ptr = p;
         p                         = scan_token(p);
@@ -239,8 +239,8 @@ char *do_define(char *p)
                         pperror("'##' at start of macro replacement list");
                         continue; // no left operand to paste onto
                     }
-                    if (psav[-1] == warn_mark) // left operand is a parameter: keep it raw
-                        psav[-1] = paste_mark;
+                    if ((unsigned char)psav[-1] == WARN_MARK) // left operand is a parameter: keep it raw
+                        psav[-1] = (char)PASTE_MARK;
                     paste_pending = 1; // the next token is the right operand
                     continue;
                 }
@@ -254,7 +254,7 @@ char *do_define(char *p)
                 if (c != 0) {     // '#' <parameter>: emit stringize marker
                     psav    = hp; // drop the '#' and any blanks after it
                     *psav++ = c;
-                    *psav++ = stringize_mark;
+                    *psav++ = (char)STRINGIZE_MARK;
                     pin     = p;
                     continue;
                 }
@@ -278,9 +278,9 @@ char *do_define(char *p)
                 if (num == 0 && variadic && formal_matches(va_args_name, pin, p))
                     num = va_num;
                 if (num != 0) {
-                    // a '##' operand keeps its raw actual (paste_mark); a plain
-                    // parameter substitutes its expanded actual (warn_mark)
-                    char mark = paste_now ? paste_mark : WARN;
+                    // a '##' operand keeps its raw actual (PASTE_MARK); a plain
+                    // parameter substitutes its expanded actual (WARN_MARK)
+                    char mark = paste_now ? (char)PASTE_MARK : (char)WARN_MARK;
                     // GNU ", ## __VA_ARGS__" comma elision: when the '##' left
                     // operand is a literal comma and the right operand is the
                     // variadic formal, drop the comma here; expand_macro re-emits
@@ -288,7 +288,7 @@ char *do_define(char *p)
                     if (paste_now && num == va_num && // num != 0 here, so va_num != 0
                         psav > body_start && psav[-1] == ',') {
                         --psav;
-                        mark = comma_paste_mark;
+                        mark = (char)COMMA_PASTE_MARK;
                     }
                     *psav++ = num;
                     *psav++ = mark;
@@ -308,7 +308,7 @@ char *do_define(char *p)
                     for (qf = pf; --qf >= formal;) {
                         if (formal_matches(*qf, pin, cf)) {
                             *psav++ = qf - formal + 1;
-                            *psav++ = WARN;
+                            *psav++ = (char)WARN_MARK;
                             pin     = cf;
                             break;
                         }
@@ -828,9 +828,9 @@ char *expand_macro(char *p, struct symtab *sp)
         cpp.out_ptr = cpp.tok_ptr = p;
         p                         = spill_buffer(p);
     }
-    *--p = paint_end_mark;
+    *--p = (char)PAINT_END_MARK;
     // Push the body onto the front of the input, back to front, so it will be
-    // rescanned.  A WARN marker means "insert actual argument N here" instead.
+    // rescanned.  A WARN_MARK means "insert actual argument N here" instead.
     for (;;) { // push definition onto front of input stack
         while (!iswarn(*--vp)) {
             if (at_buf_start(p)) {
@@ -839,7 +839,7 @@ char *expand_macro(char *p, struct symtab *sp)
             }
             *--p = *vp;
         }
-        if (*vp == warn_mark) { // insert the expanded actual param
+        if ((unsigned char)*vp == WARN_MARK) { // insert the expanded actual param
             ca = expanded[*--vp - 1];
             while (*--ca) {
                 if (at_buf_start(p)) {
@@ -848,7 +848,7 @@ char *expand_macro(char *p, struct symtab *sp)
                 }
                 *--p = *ca;
             }
-        } else if (*vp == stringize_mark) { // '#param': push the quoted raw actual
+        } else if ((unsigned char)*vp == STRINGIZE_MARK) { // '#param': push the quoted raw actual
             char strbuf[2 * BUFSIZ + 4];
             const char *a1 = actual[*--vp - 1];
             const char *a0 = a1;
@@ -863,7 +863,7 @@ char *expand_macro(char *p, struct symtab *sp)
                 }
                 *--p = *--ce;
             }
-        } else if (*vp == paste_mark) { // '##' operand: push the RAW actual, unexpanded
+        } else if ((unsigned char)*vp == PASTE_MARK) { // '##' operand: push the RAW actual, unexpanded
             const char *a1 = actual[*--vp - 1];
             const char *a0 = a1;
             while (a0[-1] != '\0') // walk back to the start of this actual's text
@@ -875,7 +875,7 @@ char *expand_macro(char *p, struct symtab *sp)
                 }
                 *--p = *--a1;
             }
-        } else if (*vp == comma_paste_mark) { // GNU ", ## __VA_ARGS__": raw actual,
+        } else if ((unsigned char)*vp == COMMA_PASTE_MARK) { // GNU ", ## __VA_ARGS__": raw actual,
             const char *a1 = actual[*--vp - 1]; // with the comma dropped when empty
             const char *a0 = a1;
             while (a0[-1] != '\0') // walk back to the start of this actual's text

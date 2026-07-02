@@ -51,7 +51,7 @@ void emit_line_marker()
 // symbol table pointers point to just beyond the end of macro definitions;
 // the first preceding character is the number of formal parameters.
 // the appearance of a formal in the body of a definition is marked by
-// 2 chars: the char WARN, and a char containing the parameter number.
+// 2 chars: the char WARN_MARK, and a char containing the parameter number.
 // the first char of a definition is preceded by a zero character.
 //
 // when macro expansion attempts to back up over the beginning of the

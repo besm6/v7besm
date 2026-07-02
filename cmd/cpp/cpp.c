@@ -21,25 +21,6 @@
 //
 struct cppstate cpp;
 
-// The byte written into a stored macro body to flag "a parameter goes here".
-char warn_mark = WARN;
-
-// The byte written into a stored macro body to flag "stringize this parameter"
-// (the '#' operator).  Like warn_mark it must carry the WB bit (see below) so
-// the back-to-front expansion loop stops on it instead of copying it literally.
-char stringize_mark = 0xFD;
-
-// The byte written into a stored macro body to flag a '##' (token-paste) operand:
-// the parameter's *raw* (unexpanded) actual is pushed, adjacent to its neighbor, so
-// the rescan fuses them into one token.  Like the other marks it carries WB.
-char paste_mark = 0xFC;
-
-// The byte written into a stored macro body to flag a GNU ", ## __VA_ARGS__"
-// comma-elision operand: like paste_mark it pushes the raw variadic actual, but
-// when that actual is empty the preceding comma is dropped instead of emitted.
-// Like the other marks it carries WB so the expansion loop stops on it.
-char comma_paste_mark = 0xFA;
-
 //
 // Print the command-line help and the meaning of each option.
 //
@@ -107,13 +88,13 @@ int main(int argc, char *argv[])
     p = "*\n";
     while ((c = *p++))
         cpp.fast_tab[(unsigned char)c] |= CB;
-    cpp.fast_tab[(unsigned char)warn_mark] |= WB;
-    cpp.fast_tab[(unsigned char)stringize_mark] |= WB;
-    cpp.fast_tab[(unsigned char)paste_mark] |= WB;
-    cpp.fast_tab[(unsigned char)comma_paste_mark] |= WB;
+    cpp.fast_tab[WARN_MARK] |= WB;
+    cpp.fast_tab[STRINGIZE_MARK] |= WB;
+    cpp.fast_tab[PASTE_MARK] |= WB;
+    cpp.fast_tab[COMMA_PASTE_MARK] |= WB;
     // The blue-paint region-end marker only needs to stop the fast scanner (SB);
     // it must NOT carry WB/IB so the body-push loop and identifier scan ignore it.
-    cpp.fast_tab[(unsigned char)paint_end_mark] |= SB;
+    cpp.fast_tab[PAINT_END_MARK] |= SB;
     cpp.fast_tab['\0'] |= CB | QB | SB | WB;
     for (i = ALFSIZ; --i >= 0;)
         cpp.slow_tab[i] = cpp.fast_tab[i] | SB;
