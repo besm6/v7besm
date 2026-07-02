@@ -102,6 +102,12 @@ char *scan_token(char *p)
             for (;;) {
                 if (*p++ == '\n') {
                     ++cpp.line_no[cpp.inc_level];
+                    // Phase 2 (C11 §5.1.1.2): splice the two physical lines by
+                    // deleting the backslash-newline from the output as well as
+                    // the token stream, so the surrounding characters join.
+                    cpp.tok_ptr = p - 2; // the '\'
+                    flush_output();
+                    cpp.out_ptr = cpp.tok_ptr = p;
                     break;
                 }
                 if (at_buf_end(--p))

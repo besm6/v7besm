@@ -92,6 +92,7 @@ struct cppstate {
     int line_no[MAXINC];      // current line number
     char *inc_file[MAXINC];   // file name (for line markers and errors)
     char *inc_dir[MAXINC];    // directory the file was found in (searched first for its #includes)
+    int trig_nhold[MAXINC];   // trailing '?' count carried across a read boundary (per level, -trigraphs)
     char *search_dirs[10];    // #include search path: [0]=current dir, then -I dirs, then system
     int in_fd;                // fd of the file currently being read; init: STDIN
     FILE *out_file;           // where preprocessed text is written (usually stdout)
@@ -102,6 +103,8 @@ struct cppstate {
     int opt_no_lines;      // -P: do not emit "# line" markers
     int opt_keep_comments; // -C: keep comments in the output instead of stripping them
     int opt_recurse;       // -R: allow a macro to expand recursively
+    int opt_trigraphs;     // -trigraphs: translate the nine C11 trigraph sequences (phase 1)
+    int opt_no_warnings;   // -w: suppress warnings (e.g. the per-trigraph conversion notice)
 
     // -D / -U options staged on the command line, applied once input starts
     char *pre_defs[NPREDEF];   // -D definitions

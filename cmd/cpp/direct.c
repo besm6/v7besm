@@ -93,6 +93,7 @@ static char *do_include(char *p)
         pperror("Can't find include file %s", filname);
     else {
         cpp.line_no[cpp.inc_level]  = 1;
+        cpp.trig_nhold[cpp.inc_level] = 0; // fresh file: no trigraph '?' carried in
         cpp.inc_file[cpp.inc_level] = cp = nfil;
         while (*cp++)
             ;

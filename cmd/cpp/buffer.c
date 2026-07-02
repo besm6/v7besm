@@ -99,6 +99,44 @@ void flush_output()
 }
 
 //
+// Translate the nine C11 trigraph sequences (§5.2.1.1, translation phase 1) in
+// place within [buf, buf+n), returning the new (shorter or equal) length.  Each
+// "??x" becomes its single character; unless -w was given, a warning is issued
+// per conversion.  A trailing "?" or "??" whose third character is not yet in
+// the buffer (src+2 >= end) is left literal, so the caller can carry it across
+// the next read (see refill_buffer).
+//
+static int translate_trigraphs(char *buf, int n)
+{
+    static const struct {
+        char t, r;
+    } map[] = { { '=', '#' }, { '(', '[' }, { ')', ']' }, { '<', '{' }, { '>', '}' },
+                { '!', '|' }, { '\'', '^' }, { '-', '~' }, { '/', '\\' } };
+    char *src = buf, *dst = buf;
+    const char *end = buf + n;
+
+    while (src < end) {
+        if (src[0] == '?' && src + 2 < end && src[1] == '?') {
+            char c = src[2], r = 0;
+            for (unsigned k = 0; k < sizeof map / sizeof *map; k++)
+                if (map[k].t == c) {
+                    r = map[k].r;
+                    break;
+                }
+            if (r) {
+                if (!cpp.opt_no_warnings)
+                    ppwarn("warning: trigraph ??%c converted to %c", c, r);
+                *dst++ = r;
+                src += 3;
+                continue;
+            }
+        }
+        *dst++ = *src++;
+    }
+    return (int)(dst - buf);
+}
+
+//
 // Make more input available when the scanner has reached the end of what is in
 // the buffer.  Steps: flush finished output, keep the partial token
 // (tok_ptr..p), then top the buffer up from -- in priority order -- pushed-back
@@ -141,11 +179,38 @@ char *refill_buffer(char *p)
             return (p);
         } else { // get more text from file(s)
             cpp.recur_depth = 0;
-            int ninbuf      = read(cpp.in_fd, cpp.buf_mid, BUFSIZ);
-            if (0 < ninbuf) {
-                cpp.buf_end  = cpp.buf_mid + ninbuf;
-                *cpp.buf_end = '\0';
-                return (p);
+            if (cpp.opt_trigraphs) {
+                // Phase-1 trigraph translation on the freshly read bytes.  Any
+                // '?' held from the previous read of this file (a trigraph split
+                // across the read boundary) is prepended before translating.
+                int hold   = cpp.trig_nhold[cpp.inc_level];
+                int ninbuf = read(cpp.in_fd, cpp.buf_mid + hold, BUFSIZ - hold);
+                if (ninbuf > 0 || hold > 0) {
+                    if (ninbuf < 0)
+                        ninbuf = 0;
+                    for (int i = 0; i < hold; i++)
+                        cpp.buf_mid[i] = '?';
+                    int m  = translate_trigraphs(cpp.buf_mid, hold + ninbuf);
+                    int nh = 0;
+                    // Re-hold a trailing '?' run (max 2) unless this was EOF.
+                    if (ninbuf > 0)
+                        while (nh < 2 && m > 0 && cpp.buf_mid[m - 1] == '?') {
+                            --m;
+                            ++nh;
+                        }
+                    cpp.trig_nhold[cpp.inc_level] = nh;
+                    cpp.buf_end                   = cpp.buf_mid + m;
+                    *cpp.buf_end                  = '\0';
+                    return (p);
+                }
+                // ninbuf == 0 && hold == 0: real EOF, fall through to EOF handling.
+            } else {
+                int ninbuf = read(cpp.in_fd, cpp.buf_mid, BUFSIZ);
+                if (0 < ninbuf) {
+                    cpp.buf_end  = cpp.buf_mid + ninbuf;
+                    *cpp.buf_end = '\0';
+                    return (p);
+                }
             }
             // end of #include file
             if (cpp.inc_level == 0) { // end of input

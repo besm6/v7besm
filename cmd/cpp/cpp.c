@@ -143,6 +143,16 @@ int main(int argc, char *argv[])
             case 'C':
                 cpp.opt_keep_comments++;
                 continue;
+            case 'w':
+                cpp.opt_no_warnings++;
+                continue;
+            case 't':
+                if (strcmp(argv[i], "-trigraphs") == 0) {
+                    cpp.opt_trigraphs++;
+                    continue;
+                }
+                pperror("unknown flag %s", argv[i]); // any other -t... flag is unknown
+                exit(8);
             case 'D':
                 if (cpp.pre_defs_end > cpp.pre_defs + NPREDEF) {
                     pperror("too many -D options, ignoring %s", argv[i]);
@@ -169,7 +179,7 @@ int main(int argc, char *argv[])
                 continue;
             default:
                 pperror("unknown flag %s", argv[i]);
-                continue;
+                exit(8);
             }
         default:
             if (cpp.in_fd == STDIN) {

@@ -2,7 +2,7 @@
 
 The GoogleTest conformance suite in [test/](test/) drives the built `b6cpp`
 binary against the C11 preprocessor requirements (ISO/IEC 9899:2011, N1570).
-As of this writing **66 pass; the other 11 are marked `DISABLED_`** so the suite
+As of this writing **69 pass; the other 8 are marked `DISABLED_`** so the suite
 stays green. This file scopes one task per failure cluster so they can be picked
 up individually.
 
@@ -40,17 +40,6 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 `diag.c` (diagnostics) · `defs.h` (limits/table sizes).
 
 ---
-
-## 12. Trigraph replacement (§5.2.1.1, translation phase 1)
-
-- **Tests to enable (drop `DISABLED_`):** `Trigraphs.HashIntroducesDirective`,
-  `Trigraphs.PunctuationMappings`, `Trigraphs.SlashActsAsLineSplice`
-- **Current:** trigraph sequences are left literal. (The tests pass
-  `-trigraphs -w`, which b6cpp harmlessly ignores — unknown flags do not error.)
-- **Scope (early lexing in [scan.c](scan.c), before line-splice/comment
-  phases):** translate the nine trigraphs unconditionally:
-  `??=`→`#`, `??(`→`[`, `??)`→`]`, `??<`→`{`, `??>`→`}`, `??!`→`|`,
-  `??'`→`^`, `??-`→`~`, `??/`→`\` (the last then acts as a line-continuation).
 
 ## 13. Raise translation limits to the C11 minimums (§5.2.4.1)
 
