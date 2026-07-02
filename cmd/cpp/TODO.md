@@ -41,22 +41,6 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ---
 
-## 17. Variadic-macro extensions and edge cases (follow-on to task 5)
-
-- **Tests to enable:** none yet — these are unimplemented extensions/edge cases
-  left over from the `...` / `__VA_ARGS__` work; add tests as each is tackled.
-- **Current:** task 5 implemented C99 `...` bound to `__VA_ARGS__`, but three
-  related behaviors are not handled.
-- **Scope (mostly in [macro.c](macro.c)):**
-  - GNU **named-varargs** `#define P(args...)`: accept an identifier immediately
-    before `...` and bind the trailing arguments to *that* name (in addition to
-    the standard anonymous `__VA_ARGS__`).
-  - GNU **`, ## __VA_ARGS__` comma elision**: when the variadic part is empty,
-    the token-paste against the preceding comma drops that comma.
-  - Diagnose `__VA_ARGS__` used in an **object-like** macro body. Task 5's
-    diagnostic lives only in the function-like (`if (params)`) path, so
-    `#define X __VA_ARGS__` is still accepted silently.
-
 ## 18. Protect predefined macros and `defined` from `#undef` (follow-on to task 7)
 
 - **Tests to enable:** none yet — add tests as each is tackled.

@@ -34,6 +34,12 @@ char stringize_mark = 0xFD;
 // the rescan fuses them into one token.  Like the other marks it carries WB.
 char paste_mark = 0xFC;
 
+// The byte written into a stored macro body to flag a GNU ", ## __VA_ARGS__"
+// comma-elision operand: like paste_mark it pushes the raw variadic actual, but
+// when that actual is empty the preceding comma is dropped instead of emitted.
+// Like the other marks it carries WB so the expansion loop stops on it.
+char comma_paste_mark = 0xFA;
+
 //
 // Print the command-line help and the meaning of each option.
 //
@@ -114,6 +120,7 @@ int main(int argc, char *argv[])
     cpp.fast_tab[(unsigned char)warn_mark] |= WB;
     cpp.fast_tab[(unsigned char)stringize_mark] |= WB;
     cpp.fast_tab[(unsigned char)paste_mark] |= WB;
+    cpp.fast_tab[(unsigned char)comma_paste_mark] |= WB;
     // The blue-paint region-end marker only needs to stop the fast scanner (SB);
     // it must NOT carry WB/IB so the body-push loop and identifier scan ignore it.
     cpp.fast_tab[(unsigned char)paint_end_mark] |= SB;

@@ -93,6 +93,10 @@ extern char stringize_mark;
 // Marks a "##" (token-paste) parameter operand inside stored macro bodies (cpp.c).
 extern char paste_mark;
 
+// Marks a GNU ", ## __VA_ARGS__" comma-elision operand inside stored macro bodies
+// (cpp.c): the preceding comma is dropped when the variadic actual is empty.
+extern char comma_paste_mark;
+
 // §6.10.3.4: end of a macro's expansion region in the scan buffer; when the
 // scanner reaches it the macro is "un-painted".  Unlike the body marks above it
 // lives in the live buffer (not stored bodies), so it is a compile-time constant

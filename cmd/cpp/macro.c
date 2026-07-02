@@ -62,6 +62,7 @@ char *do_define(char *p)
     char **pf, **qf;
     int b, c, params;
     int variadic = 0; // set once a '...' formal is seen: last formal is __VA_ARGS__
+    int va_num   = 0; // 1-based number of the variadic formal (the last one), else 0
     struct symtab *np;
     char *oldval, *oldsavch;
     char *hashpos = NULL; // side-buffer position of a pending '#' (stringize) operator
@@ -113,6 +114,7 @@ char *do_define(char *p)
     // If the name is immediately followed by '(' this is a function-like macro:
     // collect the parameter names into formal[] / formtxt.
     if (*pin == '(') { // with parameters; identify the formals
+        int prev_was_formal = 0; // previous token was a normal named formal
         cf = formtxt;
         pf = formal;
         for (;;) {
@@ -126,12 +128,25 @@ char *do_define(char *p)
             }
             if (*pin == ')')
                 break;
-            if (*pin == ',')
+            if (*pin == ',') {
+                prev_was_formal = 0;
                 continue;
+            }
             if (*pin == '.' && pin[1] == '.' && pin[2] == '.') {
-                // '...' : an implicit final formal named __VA_ARGS__ that binds
-                // all trailing arguments (§6.10.3).  In slow scan the first '.'
-                // is a one-char token, so step p over the other two.
+                // '...' : the variadic formal that binds all trailing arguments
+                // (§6.10.3).  In slow scan the first '.' is a one-char token, so
+                // step p over the other two.
+                if (prev_was_formal) {
+                    // GNU named varargs `#define P(args...)`: the identifier just
+                    // before '...' becomes the variadic name; do not add a
+                    // separate __VA_ARGS__ formal.
+                    variadic = 1;
+                    prev_was_formal = 0;
+                    p += 2;
+                    continue;
+                }
+                // Anonymous C99 form `#define P(...)`: an implicit final formal
+                // literally named __VA_ARGS__.
                 if (pf >= &formal[MAXFRM])
                     pperror("%s: too many formals", np->name);
                 else {
@@ -149,21 +164,26 @@ char *do_define(char *p)
                 *p = '\0';
                 pperror("bad formal: %s", pin);
                 *p = c;
+                prev_was_formal = 0;
             } else if (pf >= &formal[MAXFRM]) {
                 c  = *p;
                 *p = '\0';
                 pperror("too many formals: %s", pin);
                 *p = c;
+                prev_was_formal = 0;
             } else {
                 *pf++ = cf;
                 while (pin < p)
                     *cf++ = *pin++;
                 *cf++ = '\0';
                 ++params;
+                prev_was_formal = 1;
             }
         }
         if (params == 0)
             --params; // #define foo() ...
+        if (variadic)
+            va_num = params; // the variadic formal is always the last one
     } else if (*pin == '\n') {
         --cpp.line_no[cpp.inc_level];
         --p;
@@ -241,22 +261,37 @@ char *do_define(char *p)
                 continue;
             }
             if (cpp.char_class[(unsigned char)*pin] == IDENT) {
-                int matched = 0;
+                int num = 0; // resolved 1-based formal number, or 0 if not a formal
                 for (qf = pf; --qf >= formal;) {
                     if (formal_matches(*qf, pin, p)) {
-                        *psav++ = qf - formal + 1;
-                        // a '##' operand keeps its raw actual (paste_mark); a plain
-                        // parameter substitutes its expanded actual (warn_mark)
-                        *psav++ = paste_now ? paste_mark : WARN;
-                        pin     = p;
-                        matched = 1;
+                        num = qf - formal + 1;
                         break;
                     }
                 }
-                // §6.10.3p5: __VA_ARGS__ is legal only in a variadic macro (where it
-                // is a formal and so matched above).
-                if (!matched && !variadic && formal_matches(va_args_name, pin, p))
+                // GNU named varargs: bare __VA_ARGS__ also refers to the trailing-
+                // args formal, which may carry a user-chosen name (#define P(a...)).
+                if (num == 0 && variadic && formal_matches(va_args_name, pin, p))
+                    num = va_num;
+                if (num != 0) {
+                    // a '##' operand keeps its raw actual (paste_mark); a plain
+                    // parameter substitutes its expanded actual (warn_mark)
+                    char mark = paste_now ? paste_mark : WARN;
+                    // GNU ", ## __VA_ARGS__" comma elision: when the '##' left
+                    // operand is a literal comma and the right operand is the
+                    // variadic formal, drop the comma here; expand_macro re-emits
+                    // it only when the variadic actual is non-empty.
+                    if (paste_now && num == va_num && // num != 0 here, so va_num != 0
+                        psav > body_start && psav[-1] == ',') {
+                        --psav;
+                        mark = comma_paste_mark;
+                    }
+                    *psav++ = num;
+                    *psav++ = mark;
+                    pin     = p;
+                } else if (!variadic && formal_matches(va_args_name, pin, p)) {
+                    // §6.10.3p5: __VA_ARGS__ is legal only in a variadic macro.
                     pperror("__VA_ARGS__ can only appear in a variadic macro");
+                }
             } else if (*pin == '"' || *pin == '\'') { // inside quotation marks, too
                 char quoc = *pin;
                 for (*psav++ = *pin++; pin < p && *pin != quoc;) {
@@ -277,6 +312,11 @@ char *do_define(char *p)
                         *psav++ = *pin++;
                 }
             }
+        } else if (cpp.char_class[(unsigned char)*pin] == IDENT &&
+                   formal_matches(va_args_name, pin, p)) {
+            // §6.10.3p5: __VA_ARGS__ must not appear in an object-like macro
+            // (params == 0, so it is never variadic).
+            pperror("__VA_ARGS__ can only appear in a variadic macro");
         }
         while (pin < p)
             *psav++ = *pin++;
@@ -745,7 +785,10 @@ char *expand_macro(char *p, struct symtab *sp)
                     *pa++ = ca;
             }
         }
-        if (params != 0)
+        // A variadic macro may omit the trailing variadic argument entirely (GNU
+        // extension); that leaves exactly the __VA_ARGS__ formal unfilled and is
+        // not an error.  Any other count mismatch still is.
+        if (params != 0 && !(variadic && params == 1))
             pperror("%s: argument mismatch", sp->name);
         while (--params >= 0)
             *pa++ = &""[1]; // null string for missing actuals
@@ -827,6 +870,26 @@ char *expand_macro(char *p, struct symtab *sp)
                 }
                 *--p = *--a1;
             }
+        } else if (*vp == comma_paste_mark) { // GNU ", ## __VA_ARGS__": raw actual,
+            const char *a1 = actual[*--vp - 1]; // with the comma dropped when empty
+            const char *a0 = a1;
+            while (a0[-1] != '\0') // walk back to the start of this actual's text
+                --a0;
+            if (a1 > a0) { // non-empty: push the actual, then re-emit the comma
+                while (a1 > a0) {
+                    if (at_buf_start(p)) {
+                        cpp.out_ptr = cpp.tok_ptr = p;
+                        p                         = spill_buffer(p);
+                    }
+                    *--p = *--a1;
+                }
+                if (at_buf_start(p)) {
+                    cpp.out_ptr = cpp.tok_ptr = p;
+                    p                         = spill_buffer(p);
+                }
+                *--p = ',';
+            }
+            // empty: push nothing -- the comma is elided.
         } else
             break;
     }
