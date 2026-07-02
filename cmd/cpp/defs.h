@@ -114,7 +114,8 @@ struct cppstate {
     struct symtab symbols[symsiz]; // the macro hash table
     struct symtab *last_sym;       // most recent lookup() result (cache for lookup_token)
     struct symtab *sym_define, *sym_undef, *sym_include, *sym_if, *sym_elif, *sym_else, *sym_endif,
-        *sym_ifdef, *sym_ifndef, *sym_os, *sym_arch, *sym_line, *sym_line_macro, *sym_file_macro;
+        *sym_ifdef, *sym_ifndef, *sym_os, *sym_arch, *sym_line, *sym_error, *sym_line_macro,
+        *sym_file_macro;
 
     // #if conditional nesting: how many enclosing blocks are taken vs skipped
     int true_level, false_level;

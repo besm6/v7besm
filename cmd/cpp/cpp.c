@@ -222,6 +222,7 @@ int main(int argc, char *argv[])
     cpp.sym_ifndef               = install_directive("ifndef");
     cpp.sym_if                   = install_directive("if");
     cpp.sym_line                 = install_directive("line");
+    cpp.sym_error                = install_directive("error");
     for (i = sizeof(cpp.macro_bits) / sizeof(cpp.macro_bits[0]); --i >= 0;)
         cpp.macro_bits[i] = 0;
 #if unix

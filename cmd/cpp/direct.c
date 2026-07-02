@@ -348,6 +348,24 @@ char *process_directives(char *p)
                 }
                 continue;
             }
+        } else if (np == cpp.sym_error) { // error (§6.10.5)
+            if (cpp.false_level == 0) {
+                char msg[BUFSIZ]; // the diagnostic tokens, used literally
+                char *cp = msg;
+
+                p = skip_blanks(p);
+                while (*cpp.tok_ptr != '\n') {
+                    while (cpp.tok_ptr < p && cp < msg + sizeof(msg) - 1)
+                        *cp++ = *cpp.tok_ptr++;
+                    cpp.out_ptr = cpp.tok_ptr = p;
+                    p                         = scan_token(p);
+                }
+                *cp = '\0';
+                pperror("#error %s", msg); // msg is a %s arg, so a '%' in it is harmless
+                continue;
+            }
+            // Inside a skipped conditional group: inert; fall through to the
+            // shared drain-to-'\n' loop below, like a skipped #define/#undef.
         } else if (*++cpp.tok_ptr == '\n')
             cpp.out_ptr = cpp.tok_ptr; // allows blank line after #
         else

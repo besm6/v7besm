@@ -2,7 +2,7 @@
 
 The GoogleTest conformance suite in [test/](test/) drives the built `b6cpp`
 binary against the C11 preprocessor requirements (ISO/IEC 9899:2011, N1570).
-As of this writing **60 pass; the other 17 are marked `DISABLED_`** so the suite
+As of this writing **61 pass; the other 16 are marked `DISABLED_`** so the suite
 stays green. This file scopes one task per failure cluster so they can be picked
 up individually.
 
@@ -40,17 +40,6 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 `diag.c` (diagnostics) · `defs.h` (limits/table sizes).
 
 ---
-
-## 9. `#error` directive (§6.10.5)
-
-- **Test to enable (drop `DISABLED_`):** `ErrorDirective.SkippedErrorIsInert`
-  (`ErrorDirective.StopsTranslation` currently passes only by accident — an
-  unknown directive already errors.)
-- **Current:** `#error` is not a known directive, so it reports
-  `undefined control` **even inside a skipped `#if 0` group**.
-- **Scope (in [direct.c](direct.c)):** implement `#error` so it (a) is ignored
-  when the enclosing conditional group is not taken, and (b) emits its message
-  and a non-zero exit when reached. Keep `StopsTranslation` green.
 
 ## 10. `#pragma` directive and `_Pragma` operator (§6.10.6, §6.10.9)
 

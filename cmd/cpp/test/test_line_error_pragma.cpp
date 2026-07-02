@@ -43,7 +43,7 @@ TEST_F(ErrorDirective, StopsTranslation) {
 }
 
 // A #error inside a skipped group is inert.
-TEST_F(ErrorDirective, DISABLED_SkippedErrorIsInert) {
+TEST_F(ErrorDirective, SkippedErrorIsInert) {
     EXPECT_TOKENS("#if 0\n#error not reached\n#endif\nOK\n", "OK");
 }
 
