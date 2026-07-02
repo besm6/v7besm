@@ -2,7 +2,7 @@
 
 The GoogleTest conformance suite in [test/](test/) drives the built `b6cpp`
 binary against the C11 preprocessor requirements (ISO/IEC 9899:2011, N1570).
-As of this writing **69 pass; the other 8 are marked `DISABLED_`** so the suite
+As of this writing **72 pass; the other 5 are marked `DISABLED_`** so the suite
 stays green. This file scopes one task per failure cluster so they can be picked
 up individually.
 
@@ -40,19 +40,6 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 `diag.c` (diagnostics) · `defs.h` (limits/table sizes).
 
 ---
-
-## 13. Raise translation limits to the C11 minimums (§5.2.4.1)
-
-- **Tests to enable (drop `DISABLED_`):** `Limits.MacrosDefined4095`, `Limits.MacroParameters127`,
-  `Limits.LogicalLine4095`
-- **Current caps are far below the mandated minimums:** `too many defines` at
-  ~388 ([macro.c:233](macro.c#L233)); `too many formals` at ~30
-  ([macro.c:108](macro.c#L108)); `token too long` well under 4095 chars
-  ([scan.c](scan.c) buffer).
-- **Scope:** raise the relevant table/buffer sizes (macro table, formal-list
-  size, line/token buffer) in [defs.h](defs.h)/[macro.c](macro.c)/[scan.c](scan.c)
-  to at least: **4095** macros simultaneously defined, **127** parameters per
-  macro, **4095** characters in a logical source line.
 
 ## 14. Macro rescanning / self-reference must not be a hard error (§6.10.3.4)
 

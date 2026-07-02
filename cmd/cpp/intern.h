@@ -20,7 +20,9 @@
 #define DROP   0xFE // special character not legal ASCII or EBCDIC
 #define WARN   DROP // same byte, used inside macro bodies to flag a formal-parameter slot
 #define SAME   0    // strcmp() returns this when two strings are equal
-#define MAXFRM 31   // max number of formals/actuals to a macro
+#define MAXFRM 127  // max number of formals/actuals to a macro (§5.2.4.1 minimum; also the
+                    // encoding ceiling: the param-number byte and the VA_FLAG=0x80 params-count
+                    // byte both top out at 127, so a 128th formal is rejected, not misencoded)
 #define VA_FLAG 0x80 // OR'd into a stored params byte: last formal is __VA_ARGS__ (absorbs trailing args)
 
 // scan-table selection and buffer-boundary predicates

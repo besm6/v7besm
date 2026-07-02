@@ -19,7 +19,7 @@ TEST_F(Limits, ConditionalNesting63) {
 
 // §5.2.4.1: 4095 macro identifiers simultaneously defined in one preprocessing
 // translation unit.
-TEST_F(Limits, DISABLED_MacrosDefined4095) {
+TEST_F(Limits, MacrosDefined4095) {
     const int count = 4095;
     std::string src;
     for (int i = 0; i < count; ++i)
@@ -29,7 +29,7 @@ TEST_F(Limits, DISABLED_MacrosDefined4095) {
 }
 
 // §5.2.4.1: 127 parameters in one macro definition (and invocation).
-TEST_F(Limits, DISABLED_MacroParameters127) {
+TEST_F(Limits, MacroParameters127) {
     const int n = 127;
     std::string params, args;
     for (int i = 0; i < n; ++i) {
@@ -46,7 +46,7 @@ TEST_F(Limits, DISABLED_MacroParameters127) {
 }
 
 // §5.2.4.1: 4095 characters in a logical source line.
-TEST_F(Limits, DISABLED_LogicalLine4095) {
+TEST_F(Limits, LogicalLine4095) {
     std::string literal(4200, 'a');  // comfortably over the 4095 minimum
     std::string src = "#define LONG \"" + literal + "\"\nLONG\n";
     EXPECT_TOKENS(src, "\"" + literal + "\"");

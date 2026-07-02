@@ -39,15 +39,20 @@ struct symtab {
 };
 
 #define ALFSIZ 256 // alphabet size: one table slot per possible byte value
-#ifndef BUFSIZ
-#define BUFSIZ 512 // fallback if <stdio.h> did not already define it
-#endif
-#define SBSIZE  12000 // bytes of "side buffer" for saved macro/definition text
+// Width of the scan window a single token / logical source line may occupy.  Do
+// not inherit <stdio.h>'s BUFSIZ (platform-dependent: 1024 on macOS): the C11
+// §5.2.4.1 minimum of 4095 characters in a logical line requires a deterministic,
+// larger value.  Stack arrays scale from this (e.g. exptxt[4*BUFSIZ] = 32 KB in
+// expand_macro); that is fine here because expansion works by buffer pushback and
+// rescan, not deep C recursion.  Keep it comfortably above 4095.
+#undef BUFSIZ
+#define BUFSIZ 8192
+#define SBSIZE  65536 // bytes of "side buffer" for saved macro/definition text (holds every macro's name+body)
 #define MAXINC  10    // maximum depth of nested #include files
 #define MAXIF   64    // maximum depth of nested #if/#ifdef/#ifndef blocks
 #define MAXFRE  14    // max buffers of macro pushback in flight at once
 #define NPREDEF 20    // max -D / -U options accepted on the command line
-#define symsiz  400   // number of slots in the symbol hash table
+#define symsiz  6151  // number of slots in the symbol hash table (prime; holds the §5.2.4.1 min of 4095 macros)
 
 //
 // All mutable per-run state of the preprocessor, bundled into one instance
