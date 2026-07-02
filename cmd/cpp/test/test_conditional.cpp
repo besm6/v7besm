@@ -9,7 +9,7 @@ TEST_F(Conditional, IfElifElse) {
         "B");
 }
 
-TEST_F(Conditional, DISABLED_Nested) {
+TEST_F(Conditional, Nested) {
     EXPECT_TOKENS(
         "#if 1\n"
         "  #if 0\nX\n  #else\nY\n  #endif\n"

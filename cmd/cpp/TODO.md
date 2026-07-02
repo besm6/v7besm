@@ -2,9 +2,9 @@
 
 The GoogleTest conformance suite in [test/](test/) drives the built `b6cpp`
 binary against the C11 preprocessor requirements (ISO/IEC 9899:2011, N1570).
-As of this writing **76 pass; the other 1 is marked `DISABLED_`** so the suite
-stays green. This file scopes one task per failure cluster so they can be picked
-up individually.
+As of this writing **all 77 tests pass; none are marked `DISABLED_`**. This file
+scopes one task per remaining feature cluster so they can be picked up
+individually.
 
 **Every task starts the same way: re-enable its tests first.** The tests a task
 lists are currently disabled — their `TEST_F` names carry a `DISABLED_` prefix in
@@ -40,16 +40,6 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 `diag.c` (diagnostics) · `defs.h` (limits/table sizes).
 
 ---
-
-## 16. Directives with leading whitespace before `#` are not recognized
-
-- **Test to enable (drop `DISABLED_`):** `Conditional.Nested`
-- **Current:** `  #if …` (indented) is passed through as ordinary text, so a
-  nested conditional inside a taken group is not processed. Whitespace *after*
-  the `#` (`# define`) already works; only leading whitespace *before* `#` fails.
-- **Scope (directive recognition in [scan.c](scan.c)/[direct.c](direct.c)):**
-  allow optional horizontal whitespace before the `#` that introduces a
-  directive.
 
 ## 17. Variadic-macro extensions and edge cases (follow-on to task 5)
 

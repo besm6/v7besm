@@ -283,6 +283,11 @@ char *scan_token(char *p)
         prevlf:
             state = BEG;
             for (;;) {
+                // §6.10: horizontal white space may precede the '#' that
+                // introduces a directive.  Skip it (BLANK excludes '\n', so we
+                // stay on this line) before testing for the '#'.
+                while (cpp.char_class[(unsigned char)*p] == BLANK)
+                    ++p;
                 if (*p++ == '#')
                     return (p);
                 if (at_buf_end(cpp.tok_ptr = --p))
