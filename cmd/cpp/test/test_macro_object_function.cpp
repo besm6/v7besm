@@ -27,12 +27,12 @@ TEST_F(Macro, ArgumentsPrescanned) {
 
 // §6.10.3.4p2: a macro is not re-expanded during rescan of its own expansion.
 // f(1)(2) -> "1 f" then rescanning does not re-invoke f -> "1 f(2)".
-TEST_F(Macro, DISABLED_NoRescanRecursion) {
+TEST_F(Macro, NoRescanRecursion) {
     EXPECT_TOKENS("#define f(x) x f\nf(1)(2)\n", "1 f(2)");
 }
 
 // A self-referential object-like macro expands to itself once (blue paint).
-TEST_F(Macro, DISABLED_SelfReference) {
+TEST_F(Macro, SelfReference) {
     EXPECT_TOKENS("#define X X\nX\n", "X");
 }
 

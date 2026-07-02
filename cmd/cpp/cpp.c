@@ -114,6 +114,9 @@ int main(int argc, char *argv[])
     cpp.fast_tab[(unsigned char)warn_mark] |= WB;
     cpp.fast_tab[(unsigned char)stringize_mark] |= WB;
     cpp.fast_tab[(unsigned char)paste_mark] |= WB;
+    // The blue-paint region-end marker only needs to stop the fast scanner (SB);
+    // it must NOT carry WB/IB so the body-push loop and identifier scan ignore it.
+    cpp.fast_tab[(unsigned char)paint_end_mark] |= SB;
     cpp.fast_tab['\0'] |= CB | QB | SB | WB;
     for (i = ALFSIZ; --i >= 0;)
         cpp.slow_tab[i] = cpp.fast_tab[i] | SB;

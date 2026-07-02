@@ -2,7 +2,7 @@
 
 The GoogleTest conformance suite in [test/](test/) drives the built `b6cpp`
 binary against the C11 preprocessor requirements (ISO/IEC 9899:2011, N1570).
-As of this writing **72 pass; the other 5 are marked `DISABLED_`** so the suite
+As of this writing **74 pass; the other 3 are marked `DISABLED_`** so the suite
 stays green. This file scopes one task per failure cluster so they can be picked
 up individually.
 
@@ -40,20 +40,6 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 `diag.c` (diagnostics) · `defs.h` (limits/table sizes).
 
 ---
-
-## 14. Macro rescanning / self-reference must not be a hard error (§6.10.3.4)
-
-- **Tests to enable (drop `DISABLED_`):** `Macro.SelfReference`, `Macro.NoRescanRecursion`
-- **Current:** `#define X X` then `X` errors `macro recursion`
-  ([macro.c:302](macro.c#L302)); `#define f(x) x f` then `f(1)(2)` errors
-  `unterminated macro call`.
-- **Expected:** a macro that references itself (directly or via rescanning)
-  expands **once**; the recurring name is left un-re-expanded ("blue paint"),
-  so `X` → `X` and `f(1)(2)` → `1 f(2)`. No error, exit 0.
-- **Scope (in [macro.c](macro.c) expansion/rescan):** mark a macro as
-  "in progress" while expanding and suppress its re-expansion during rescan,
-  instead of aborting. (There is a `-R` "allow recursion" flag today; the
-  correct default is paint-and-continue, not error.)
 
 ## 15. Diagnose wrong macro argument count (§6.10.3)
 

@@ -32,6 +32,21 @@ static int formal_matches(const char *a, const char *p1, char *p2)
 }
 
 //
+// Is macro "sp" currently painted -- i.e. is its expansion region still being
+// rescanned (§6.10.3.4)?  If so, a recurrence of its name is left un-expanded
+// instead of looping.  The stack is small (bounded by the nesting of open
+// expansions), so a linear scan is cheap.
+//
+static int macro_is_painted(const struct symtab *sp)
+{
+    int i;
+    for (i = 0; i < cpp.paint_top; i++)
+        if (cpp.paint_stack[i] == sp)
+            return 1;
+    return 0;
+}
+
+//
 // Handle a "#define" line: parse the macro name, the optional parameter list,
 // and the replacement text, and store it in the symbol table.
 //
@@ -482,6 +497,11 @@ char *expand_text(const char *a0, const char *a1, char *out, int cap)
     int s_rd = cpp.recur_depth, s_rba = cpp.recur_bound_adj;
     int s_ptop = cpp.push_top, s_ftop = cpp.free_top;
     int s_line = cpp.line_no[cpp.inc_level];
+    // The paint array is intentionally NOT cleared: a macro active in the outer
+    // expansion stays painted during this argument prescan (§6.10.3.1).  Only the
+    // top is saved/restored, so any region left open when the isolated scan stops
+    // at its "\n#" sentinel is discarded instead of leaking.
+    int s_ptaint = cpp.paint_top;
 
     char *mbuf  = NULL;
     size_t mlen = 0;
@@ -532,6 +552,7 @@ char *expand_text(const char *a0, const char *a1, char *out, int cap)
     cpp.push_top               = s_ptop;
     cpp.free_top               = s_ftop;
     cpp.line_no[cpp.inc_level] = s_line;
+    cpp.paint_top              = s_ptaint;
 
     // Copy the captured expansion (minus any trailing newline) into out.
     while (mlen > 0 && mbuf[mlen - 1] == '\n')
@@ -620,6 +641,12 @@ char *expand_macro(char *p, struct symtab *sp)
     char exptxt[4 * BUFSIZ]; // space for the expanded actuals
 
     if (0 == (vp = sp->value))
+        return (p);
+    // §6.10.3.4: the name recurs inside its own (still-open) expansion.  Leave it
+    // un-expanded ("blue paint"); the bytes in [tok_ptr, p) are flushed as text
+    // and scanning resumes just past the name, so a function-like name here is not
+    // treated as a call (its following '(...)' is emitted verbatim).
+    if (macro_is_painted(sp))
         return (p);
     if ((p - cpp.recur_bound) <= cpp.recur_bound_adj) {
         if (++cpp.recur_depth > symsiz && !cpp.opt_recurse) {
@@ -743,6 +770,17 @@ char *expand_macro(char *p, struct symtab *sp)
             }
         }
     }
+    // Blue paint (§6.10.3.4): mark this macro active and push a region-end marker
+    // first (so it becomes the last token of the pushed body).  Any recurrence of
+    // the name while the region is open is left un-expanded; the marker un-paints
+    // the macro when the scanner reaches it.  The per-macro-appears-once invariant
+    // bounds paint_top by symsiz, so the stack cannot overflow.
+    cpp.paint_stack[cpp.paint_top++] = sp;
+    if (at_buf_start(p)) {
+        cpp.out_ptr = cpp.tok_ptr = p;
+        p                         = spill_buffer(p);
+    }
+    *--p = paint_end_mark;
     // Push the body onto the front of the input, back to front, so it will be
     // rescanned.  A WARN marker means "insert actual argument N here" instead.
     for (;;) { // push definition onto front of input stack

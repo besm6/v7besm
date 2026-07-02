@@ -91,6 +91,13 @@ struct cppstate {
     char *macro_name;    // name of the macro being expanded (for error messages)
     char *recur_bound;   // scan point that must be passed before nesting is judged to drop
 
+    // blue paint (§6.10.3.4): macros whose expansion is currently being rescanned.
+    // A macro on this stack is left un-expanded if its name recurs, then popped
+    // when its region-end marker is scanned.  Each active macro appears at most
+    // once, so the depth is bounded by the number of defined macros (symsiz).
+    struct symtab *paint_stack[symsiz];
+    int paint_top;
+
     // include stack: one slot per open file, indexed by inc_level
     int inc_push_top[MAXINC]; // push_stack index in effect when this file was entered
     int inc_fd[MAXINC];       // open file descriptor

@@ -61,6 +61,16 @@ char *scan_token(char *p)
             } else
                 ++p; // ignore null byte
         } break;
+        // §6.10.3.4: the end of a macro's expansion region (blue paint).  Drop the
+        // marker from the output and un-paint the macro, then keep scanning.  Works
+        // in both fast and slow (#if) scans since macros expand in #if too.
+        case paint_end_mark:
+            cpp.tok_ptr = p - 1; // the marker
+            flush_output();      // emit finished text up to it
+            if (cpp.paint_top > 0)
+                --cpp.paint_top; // region closes: the macro may expand again
+            cpp.out_ptr = cpp.tok_ptr = p; // skip the marker (never emitted)
+            goto again;
         // Two-character operators in a #if expression (||, &&, ==, !=, <=, >=,
         // <<, >>): glue the second character on so the lexer sees one token.
         case '|':

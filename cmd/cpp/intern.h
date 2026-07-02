@@ -93,6 +93,13 @@ extern char stringize_mark;
 // Marks a "##" (token-paste) parameter operand inside stored macro bodies (cpp.c).
 extern char paste_mark;
 
+// §6.10.3.4: end of a macro's expansion region in the scan buffer; when the
+// scanner reaches it the macro is "un-painted".  Unlike the body marks above it
+// lives in the live buffer (not stored bodies), so it is a compile-time constant
+// usable as a switch label.  Cast to char so the label matches the byte as read
+// (char may be signed on this host).
+#define paint_end_mark ((char)0xFB)
+
 // buffer.c -- scan-buffer refill/spill and output
 void emit_line_marker(void);  // write a "# line file" marker to the output
 void flush_output(void);      // write finished text from the buffer to the output file
