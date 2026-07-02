@@ -2,7 +2,7 @@
 
 The GoogleTest conformance suite in [test/](test/) drives the built `b6cpp`
 binary against the C11 preprocessor requirements (ISO/IEC 9899:2011, N1570).
-As of this writing **27 pass; the other 49 are marked `DISABLED_`** so the suite
+As of this writing **28 pass; the other 48 are marked `DISABLED_`** so the suite
 stays green. This file scopes one task per failure cluster so they can be picked
 up individually.
 
@@ -40,18 +40,6 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 `diag.c` (diagnostics) · `defs.h` (limits/table sizes).
 
 ---
-
-## 1. [CRASH] Function-like macro name used without an argument list segfaults
-
-- **Test to enable (drop `DISABLED_`):** `Macro.NameWithoutParensNotInvoked`
-- **Repro:** `#define F(x) x` then a bare `F` (not followed by `(`) → exit 139
-  (SIGSEGV).
-- **Expected:** a function-like macro name not immediately followed by `(` is
-  *not* an invocation; the name is emitted verbatim (`F`).
-- **Files:** [macro.c](macro.c) (invocation path that looks ahead for `(`).
-- **Scope:** guard the look-ahead so end-of-input / no-`(` leaves the identifier
-  untouched instead of dereferencing a null argument list. This is a
-  crash — do it first.
 
 ## 2. `#if` expression evaluator stops after the first operand
 

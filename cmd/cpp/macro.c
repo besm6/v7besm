@@ -335,7 +335,23 @@ char *expand_macro(char *p, struct symtab *sp)
         do
             p = skip_blanks(p);
         while (*cpp.tok_ptr == '\n'); // skip \n too
-        if (*cpp.tok_ptr == '(') {
+        if (*cpp.tok_ptr != '(') {
+            // Function-like macro name not followed by '(': not an invocation.
+            // Restore scan state and emit the name verbatim.  The name bytes
+            // may be gone from the buffer (refill_buffer relocates it) and
+            // there is no blue-paint yet, so we must not push the name back (it
+            // would re-expand); write it straight to the output instead.
+            cpp.paren_level = 0;
+            --cpp.false_level;
+            set_fast_scan();
+            fputs(sp->name, cpp.out_file);
+            putc(' ', cpp.out_file); // separator so the next token can't fuse
+            if (*cpp.tok_ptr == '\0')
+                ++cpp.tok_ptr;         // step over refill_buffer's EOF sentinel
+            cpp.out_ptr = cpp.tok_ptr; // drop the (stale) name region
+            return (cpp.tok_ptr);      // resume at the peeked token
+        }
+        {
             cpp.call_line = cpp.line_no[cpp.inc_level];
             cpp.call_file = cpp.inc_file[cpp.inc_level];
             for (cpp.paren_level = 1; cpp.paren_level != 0;) {

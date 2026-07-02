@@ -45,7 +45,7 @@ TEST_F(Macro, InvocationSpansLines) {
 }
 
 // A bare mention of a function-like macro name (no '(') is not an invocation.
-TEST_F(Macro, DISABLED_NameWithoutParensNotInvoked) {
+TEST_F(Macro, NameWithoutParensNotInvoked) {
     EXPECT_TOKENS("#define F(x) x\nF\n", "F");
 }
 

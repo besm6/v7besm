@@ -189,11 +189,12 @@ char *refill_buffer(char *p)
             }
             // end of #include file
             if (cpp.inc_level == 0) { // end of input
-                if (cpp.paren_level != 0) {
+                if (cpp.paren_level > 0) {
                     int n = cpp.paren_level, tlin = cpp.line_no[cpp.inc_level];
-                    char *tfil                  = cpp.inc_file[cpp.inc_level];
-                    cpp.line_no[cpp.inc_level]  = cpp.call_line;
-                    cpp.inc_file[cpp.inc_level] = cpp.call_file;
+                    char *tfil                 = cpp.inc_file[cpp.inc_level];
+                    cpp.line_no[cpp.inc_level] = cpp.call_line;
+                    if (cpp.call_file)
+                        cpp.inc_file[cpp.inc_level] = cpp.call_file;
                     pperror("%s: unterminated macro call", cpp.macro_name);
                     cpp.line_no[cpp.inc_level]  = tlin;
                     cpp.inc_file[cpp.inc_level] = tfil;
@@ -203,8 +204,18 @@ char *refill_buffer(char *p)
                         *np++ = ')'; // supply missing parens
                     cpp.buf_end = np;
                     *np         = '\0';
-                    if (cpp.paren_level < 0)
-                        cpp.paren_level = 0;
+                    return (p);
+                }
+                if (cpp.paren_level < 0) {
+                    // A function-macro '(' look-ahead reached end of input: the
+                    // name is not an invocation.  Hand a nul token back to
+                    // expand_macro (do NOT exit); it will emit the bare name
+                    // verbatim.  The nul is left just short of buf_end so
+                    // scan_token returns it instead of re-refilling here.
+                    cpp.paren_level = 0;
+                    *p              = '\0';
+                    cpp.buf_end     = p + 1;
+                    *cpp.buf_end    = '\0';
                     return (p);
                 }
                 cpp.tok_ptr = p;
