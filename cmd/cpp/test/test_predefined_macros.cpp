@@ -4,18 +4,18 @@
 using Predefined = PreprocessorTest;
 
 // §6.10.8.1: __STDC__ expands to 1.
-TEST_F(Predefined, DISABLED_StdcIsOne) {
+TEST_F(Predefined, StdcIsOne) {
     EXPECT_TOKENS("__STDC__\n", "1");
 }
 
 // §6.10.8.1: __STDC_VERSION__ is 201112L for C11 — the defining evidence that
 // the tool is operating in C11 mode.
-TEST_F(Predefined, DISABLED_StdcVersionIsC11) {
+TEST_F(Predefined, StdcVersionIsC11) {
     EXPECT_TOKENS("__STDC_VERSION__\n", "201112L");
 }
 
 // §6.10.8.1: __STDC_HOSTED__ is defined (1 for a hosted implementation).
-TEST_F(Predefined, DISABLED_StdcHostedDefined) {
+TEST_F(Predefined, StdcHostedDefined) {
     EXPECT_TOKENS("#ifdef __STDC_HOSTED__\nHOSTED\n#endif\n", "HOSTED");
 }
 
@@ -68,7 +68,7 @@ static std::string NthQuotedSpan(const std::string& s, int n) {
     return {};
 }
 
-TEST_F(Predefined, DISABLED_DateAndTimeShape) {
+TEST_F(Predefined, DateAndTimeShape) {
     Result r = Preprocess("__DATE__\n__TIME__\n");
     ASSERT_EQ(r.exit_code, 0) << r.err;
     std::string body = StripDirectiveLines(r.out);

@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "intern.h"
@@ -252,6 +253,24 @@ int main(int argc, char *argv[])
 #endif
     cpp.sym_line_macro = define_symbol("__LINE__");
     cpp.sym_file_macro = define_symbol("__FILE__");
+
+    // C11 §6.10.8 standard predefined macros with fixed bodies.  Unlike
+    // __LINE__/__FILE__ these need no per-expansion synthesis, so they are just
+    // registered like ordinary macros.  Registered before the -D/-U loop so a
+    // command-line option can still override them.
+    define_symbol("__STDC__=1");
+    define_symbol("__STDC_VERSION__=201112L");
+    define_symbol("__STDC_HOSTED__=1");
+    {
+        time_t now    = time((time_t *)0);
+        const struct tm *tm = localtime(&now);
+        char dtbuf[64];
+        // "Mmm dd yyyy": %e is space-padded so days < 10 keep the 11-char shape.
+        strftime(dtbuf, sizeof(dtbuf), "__DATE__=\"%b %e %Y\"", tm);
+        define_symbol(dtbuf);
+        strftime(dtbuf, sizeof(dtbuf), "__TIME__=\"%H:%M:%S\"", tm);
+        define_symbol(dtbuf);
+    }
 
     tf                          = cpp.inc_file[cpp.inc_level];
     cpp.inc_file[cpp.inc_level] = "command line";
