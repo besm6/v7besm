@@ -94,6 +94,15 @@ char *do_define(char *p)
         --cpp.false_level;
         return (p);
     }
+    // §6.10.8.4: a predefined macro may not be the subject of #define, whatever
+    // the replacement list (so this precedes the identical-redefinition check).
+    if (np->predefined) {
+        pperror("predefined macro \"%s\" cannot be redefined", np->name);
+        while (*cpp.tok_ptr != '\n')
+            p = skip_blanks(p);
+        --cpp.false_level;
+        return (p);
+    }
     if ((oldval = np->value))
         cpp.side_ptr = oldsavch; // was previously defined
     b  = 1;

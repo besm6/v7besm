@@ -36,6 +36,7 @@ enum {
 struct symtab {
     char *name;
     char *value;
+    char  predefined; // §6.10.8.4: reject #define/#undef of this name
 };
 
 #define ALFSIZ 256 // alphabet size: one table slot per possible byte value

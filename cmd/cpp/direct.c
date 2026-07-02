@@ -287,9 +287,23 @@ char *process_directives(char *p)
             }
         } else if (np == cpp.sym_undef) { // undefine
             if (cpp.false_level == 0) {
+                struct symtab *usp;
+                char saved;
+                int is_def;
                 ++cpp.false_level;
-                p = skip_blanks(p);
-                lookup_token(cpp.tok_ptr, p, DROP);
+                p   = skip_blanks(p);
+                usp = lookup_token(cpp.tok_ptr, p, 0); // look only, do not DROP yet
+                // "defined" is never a table entry, so match it by token text.
+                saved  = *p;
+                *p     = '\0';
+                is_def = (strcmp(cpp.tok_ptr, "defined") == 0);
+                *p     = saved;
+                if (is_def) // §6.10.8.4
+                    pperror("\"defined\" cannot be undefined");
+                else if (usp->name && (unsigned char)usp->name[0] != DROP && usp->predefined)
+                    pperror("predefined macro \"%s\" cannot be undefined", usp->name);
+                else
+                    lookup_token(cpp.tok_ptr, p, DROP);
                 --cpp.false_level;
             }
         } else if (np == cpp.sym_if) { // if

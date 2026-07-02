@@ -88,3 +88,33 @@ TEST_F(Predefined, RedefiningLineDiagnosed) {
 TEST_F(Predefined, DefiningDefinedDiagnosed) {
     EXPECT_PP_DIAGNOSES("#define defined 1\n");
 }
+
+// §6.10.8.4: #define of a predefined macro is an error even when the
+// replacement list matches the built-in body (task 7 only caught mismatches).
+TEST_F(Predefined, RedefiningStdcDiagnosed) {
+    EXPECT_PP_DIAGNOSES("#define __STDC__ 1\n");
+}
+
+// §6.10.8.4: none of the predefined macros (nor `defined`) may be #undef'd.
+TEST_F(Predefined, UndefLineDiagnosed) {
+    EXPECT_PP_DIAGNOSES("#undef __LINE__\n");
+}
+
+TEST_F(Predefined, UndefFileDiagnosed) {
+    EXPECT_PP_DIAGNOSES("#undef __FILE__\n");
+}
+
+TEST_F(Predefined, UndefStdcDiagnosed) {
+    EXPECT_PP_DIAGNOSES("#undef __STDC__\n");
+}
+
+// `defined` is not a symbol-table entry, yet §6.10.8.4 still forbids #undef'ing it.
+TEST_F(Predefined, UndefDefinedDiagnosed) {
+    EXPECT_PP_DIAGNOSES("#undef defined\n");
+}
+
+// Scope guard: the non-standard platform macros are ordinary and stay
+// freely #undef'able (matching §6.10.8.4 and GCC/Clang).
+TEST_F(Predefined, UndefPlatformMacroAllowed) {
+    EXPECT_PP_OK("#undef unix\n");
+}

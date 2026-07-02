@@ -41,19 +41,19 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ---
 
-## 18. Protect predefined macros and `defined` from `#undef` (follow-on to task 7)
+## 18. Protect predefined macros and `defined` from `#undef` (follow-on to task 7) — DONE
 
-- **Tests to enable:** none yet — add tests as each is tackled.
-- **Current:** task 7 made an incompatible `#define` of a macro (including a
-  predefined one such as `__LINE__`) an error, and rejected `#define defined`.
-  Three §6.10.8.4 cases remain unguarded:
-  - `#undef defined` is silently accepted (`defined` is not a macro-table entry,
-    so the name must be matched from the token text, not via a symtab lookup).
-  - `#undef __LINE__` / `#undef __FILE__` (and the other predefineds) silently
-    drop the macro instead of erroring.
-  - Identical redefinition of a predefined macro (e.g. `#define __LINE__ 1`) is
-    accepted because it matches the stored body; §6.10.8.4 forbids `#define` of a
-    predefined name regardless of the replacement list.
-- **Scope (in [macro.c](macro.c)/[direct.c](direct.c)):** flag predefined
-  symbols (and `defined`) so both `#define` and `#undef` of them → `pperror`,
-  independent of the replacement-list comparison.
+- **Tests:** `Predefined.RedefiningStdcDiagnosed`, `Predefined.UndefLineDiagnosed`,
+  `Predefined.UndefFileDiagnosed`, `Predefined.UndefStdcDiagnosed`,
+  `Predefined.UndefDefinedDiagnosed`, and the scope guard
+  `Predefined.UndefPlatformMacroAllowed` in
+  [test/test_predefined_macros.cpp](test/test_predefined_macros.cpp).
+- **What was done:** added a `predefined` flag to `struct symtab`
+  ([defs.h](defs.h)), set on the seven C11 standard predefined macros at
+  registration ([cpp.c](cpp.c)); `do_define` ([macro.c](macro.c)) and the `#undef`
+  handler ([direct.c](direct.c)) now `pperror` on any `#define`/`#undef` of a
+  flagged macro (independent of the replacement-list comparison, so identical
+  redefinition is rejected too). `defined` — which is not a symbol-table entry —
+  is matched by token text in both handlers. The non-standard platform macros
+  (`unix`, `pdp11`, …) are deliberately left `#undef`-able, matching §6.10.8.4 and
+  GCC/Clang.
