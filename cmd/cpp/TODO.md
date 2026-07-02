@@ -2,7 +2,7 @@
 
 The GoogleTest conformance suite in [test/](test/) drives the built `b6cpp`
 binary against the C11 preprocessor requirements (ISO/IEC 9899:2011, N1570).
-As of this writing **39 pass; the other 39 are marked `DISABLED_`** so the suite
+As of this writing **44 pass; the other 32 are marked `DISABLED_`** so the suite
 stays green. This file scopes one task per failure cluster so they can be picked
 up individually.
 
@@ -40,20 +40,6 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 `diag.c` (diagnostics) · `defs.h` (limits/table sizes).
 
 ---
-
-## 4. Token-paste operator `##` (§6.10.3.3)
-
-- **Tests to enable (drop `DISABLED_`):** `Paste.IdentifierPaste`, `Paste.NumberPaste`,
-  `Paste.EmptyLeftOperand`, `Paste.EmptyRightOperand`, `Paste.ResultIsRescanned`,
-  `Paste.AtStartDiagnosed`, `Paste.AtEndDiagnosed`
-- **Current:** `a##b` is passed through literally (`foo ## bar`).
-- **Scope (in [macro.c](macro.c)):**
-  - Concatenate the tokens on either side of `##` into a single token, then
-    rescan the result for further macro replacement (`ResultIsRescanned`).
-  - Placemarker semantics: an empty operand pastes to nothing
-    (`C(,tail)` → `tail`, `C(head,)` → `head`).
-  - `##` at the very start or end of a replacement list is a constraint
-    violation → `pperror` (`AtStartDiagnosed`/`AtEndDiagnosed`).
 
 ## 5. Variadic macros `...` / `__VA_ARGS__` (C99/C11 §6.10.3)
 

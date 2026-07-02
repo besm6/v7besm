@@ -87,6 +87,9 @@ extern char warn_mark;
 // Marks a "#parameter" (stringize) reference inside stored macro bodies (cpp.c).
 extern char stringize_mark;
 
+// Marks a "##" (token-paste) parameter operand inside stored macro bodies (cpp.c).
+extern char paste_mark;
+
 // buffer.c -- scan-buffer refill/spill and output
 void emit_line_marker(void);  // write a "# line file" marker to the output
 void flush_output(void);      // write finished text from the buffer to the output file

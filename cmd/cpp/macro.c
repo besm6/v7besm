@@ -45,6 +45,8 @@ char *do_define(char *p)
     struct symtab *np;
     char *oldval, *oldsavch;
     char *hashpos = NULL; // side-buffer position of a pending '#' (stringize) operator
+    const char *body_start; // side-buffer position where the replacement text begins
+    int paste_pending = 0; // a '##' was just seen; its right operand pastes onto the left
     char *formal[MAXFRM]; // formal[n] is name of nth formal
     char formtxt[BUFSIZ]; // space for formal names
 
@@ -127,6 +129,7 @@ char *do_define(char *p)
     // warn if a redefinition is different from old value.
     //
     oldsavch = psav = cpp.side_ptr;
+    body_start      = psav;
     // Copy the replacement text into the side buffer, token by token, replacing
     // each occurrence of a parameter name (even inside string/char literals)
     // with the marker "<param number><WARN>".
@@ -139,6 +142,13 @@ char *do_define(char *p)
         if (*pin == '\n')
             break;
         if (params) { // mark the appearance of formals in the definiton
+            int paste_now;
+            // '##' (token paste), §6.10.3.3: its right operand is pasted directly
+            // onto the left, so first strip any white space following the '##'.
+            if (paste_pending && cpp.char_class[(unsigned char)*pin] == BLANK)
+                continue;
+            paste_now     = paste_pending; // is *this* token the right operand of a '##'?
+            paste_pending = 0;
             // The '#' (stringize) operator, §6.10.3.2.  In a function-like macro
             // body a '#' must be followed by a parameter; the pair is replaced by
             // a stringize marker so expand_macro can quote the raw argument.  A
@@ -152,9 +162,17 @@ char *do_define(char *p)
                         *psav++ = *pin++;
                     continue;
                 }
-                if (*pin == '#' && (p - pin) == 1) { // '##' token paste (task 4)
-                    while (pin < p)                  // leave both '#' literal
-                        *psav++ = *pin++;
+                if (*pin == '#' && (p - pin) == 1) { // '##' token-paste operator
+                    psav = hp;                        // drop the pending '#'
+                    while (psav > body_start && (psav[-1] == ' ' || psav[-1] == '\t'))
+                        --psav; // strip white space preceding the '##'
+                    if (psav <= body_start) {
+                        pperror("'##' at start of macro replacement list");
+                        continue; // no left operand to paste onto
+                    }
+                    if (psav[-1] == warn_mark) // left operand is a parameter: keep it raw
+                        psav[-1] = paste_mark;
+                    paste_pending = 1; // the next token is the right operand
                     continue;
                 }
                 c = 0; // parameter number, or 0 if the token is not a formal
@@ -182,7 +200,9 @@ char *do_define(char *p)
                 for (qf = pf; --qf >= formal;) {
                     if (formal_matches(*qf, pin, p)) {
                         *psav++ = qf - formal + 1;
-                        *psav++ = WARN;
+                        // a '##' operand keeps its raw actual (paste_mark); a plain
+                        // parameter substitutes its expanded actual (warn_mark)
+                        *psav++ = paste_now ? paste_mark : WARN;
                         pin     = p;
                         break;
                     }
@@ -213,6 +233,8 @@ char *do_define(char *p)
     }
     if (hashpos != NULL) // '#' at end of a function-like body, no parameter follows
         pperror("'#' is not followed by a macro parameter");
+    if (paste_pending) // '##' at end of a function-like body, no right operand follows
+        pperror("'##' at end of macro replacement list");
     *psav++ = params;
     *psav++ = '\0';
     if ((cf = oldval) != NULL) { // redefinition
@@ -653,6 +675,18 @@ char *expand_macro(char *p, struct symtab *sp)
                     p                         = spill_buffer(p);
                 }
                 *--p = *--ce;
+            }
+        } else if (*vp == paste_mark) { // '##' operand: push the RAW actual, unexpanded
+            const char *a1 = actual[*--vp - 1];
+            const char *a0 = a1;
+            while (a0[-1] != '\0') // walk back to the start of this actual's text
+                --a0;
+            while (a1 > a0) { // push it back-to-front, adjacent to its neighbor
+                if (at_buf_start(p)) {
+                    cpp.out_ptr = cpp.tok_ptr = p;
+                    p                         = spill_buffer(p);
+                }
+                *--p = *--a1;
             }
         } else
             break;

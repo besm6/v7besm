@@ -28,6 +28,11 @@ char warn_mark = WARN;
 // the back-to-front expansion loop stops on it instead of copying it literally.
 char stringize_mark = 0xFD;
 
+// The byte written into a stored macro body to flag a '##' (token-paste) operand:
+// the parameter's *raw* (unexpanded) actual is pushed, adjacent to its neighbor, so
+// the rescan fuses them into one token.  Like the other marks it carries WB.
+char paste_mark = 0xFC;
+
 //
 // Print the command-line help and the meaning of each option.
 //
@@ -107,6 +112,7 @@ int main(int argc, char *argv[])
         cpp.fast_tab[(unsigned char)c] |= CB;
     cpp.fast_tab[(unsigned char)warn_mark] |= WB;
     cpp.fast_tab[(unsigned char)stringize_mark] |= WB;
+    cpp.fast_tab[(unsigned char)paste_mark] |= WB;
     cpp.fast_tab['\0'] |= CB | QB | SB | WB;
     for (i = ALFSIZ; --i >= 0;)
         cpp.slow_tab[i] = cpp.fast_tab[i] | SB;
