@@ -75,11 +75,12 @@ extensive one: a **C11 (N1570) conformance suite** in `cmd/cpp/test/` that drive
 gtest fixture in `cmd/cpp/test/test_support.{h,cpp}` — the harness spawns the tool in a
 temp dir, captures and normalizes its output, and exposes `Preprocess`/`Normalize` plus the
 `EXPECT_TOKENS`/`EXPECT_PP_OK`/`EXPECT_PP_DIAGNOSES` matchers as methods; a per-suite alias
-(`using Macro = PreprocessorTest;`) keeps each suite's name. b6cpp is a pre-ANSI cpp, so 49
-conformance tests currently fail for unimplemented C11 features: they are disabled with a
-`DISABLED_` name prefix (so `make run` stays green) and triaged one task per cluster in
-[cmd/cpp/TODO.md](cmd/cpp/TODO.md) — each task's first step is to drop the `DISABLED_`
-prefix to re-enable its tests.
+(`using Macro = PreprocessorTest;`) keeps each suite's name. b6cpp now implements the bulk of
+C11 preprocessing — variadic macros and `__VA_ARGS__`, the `#` (stringize) and `##` (paste)
+operators, `_Pragma`, the C11 predefined macros, trigraphs, `#line`/`#error`/`#pragma`, and
+"blue paint" rescanning — and the conformance suite passes in full (no `DISABLED_` tests
+remain). See [cmd/cpp/README.md](cmd/cpp/README.md) for the user-facing feature and option
+list.
 
 ## Architecture notes
 

@@ -10,12 +10,6 @@
 
 #include "intern.h"
 
-#if scw2
-// character-pair superimposed-code tables (scw2 build only): pair_row/pair_col
-// index into pair_bits, the pair-fingerprint filter parallel to macro_bits.
-char pair_row[ALFSIZ], pair_col[ALFSIZ], pair_bits[ALFSIZ + 8];
-#endif
-
 #define BEG 0 // scanner start state
 #define LF  1 // scanner just returned at a newline (used to resume mid-line)
 
@@ -32,7 +26,7 @@ char pair_row[ALFSIZ], pair_col[ALFSIZ], pair_bits[ALFSIZ + 8];
 // of the buffered text it calls refill_buffer() to get more and continues.
 //
 // The identifier case is where macros happen: it first runs the cheap
-// superimposed-code filter (tmac1/tmac2), and only if the name could be a macro
+// superimposed-code filter (tmac1), and only if the name could be a macro
 // does it call lookup_token(), which may expand the macro in place.
 //
 // A "#" seen at the very start of a line is returned to the caller
@@ -319,7 +313,7 @@ char *scan_token(char *p)
         // An identifier (letter or '_' start): this is where macro names are
         // recognized.  If we are skipping a false #if branch, just consume it
         // (goto nomac).  Otherwise run the superimposed-code filter character by
-        // character (tmac1/tmac2): the moment a position rules out every macro
+        // character (tmac1): the moment a position rules out every macro
         // name we jump to nomac and skip the lookup; if the name survives the
         // filter we call lookup_token, which expands it if it is really a macro.
         case 'A':
@@ -385,38 +379,30 @@ char *scan_token(char *p)
                 if (!isid(i))
                     goto endid;
                 tmac1(i, b1);
-                tmac2(c, i, 0);
                 c = *p++;
                 if (!isid(c))
                     goto endid;
                 tmac1(c, b2);
-                tmac2(i, c, 1);
                 i = *p++;
                 if (!isid(i))
                     goto endid;
                 tmac1(i, b3);
-                tmac2(c, i, 2);
                 c = *p++;
                 if (!isid(c))
                     goto endid;
                 tmac1(c, b4);
-                tmac2(i, c, 3);
                 i = *p++;
                 if (!isid(i))
                     goto endid;
                 tmac1(i, b5);
-                tmac2(c, i, 4);
                 c = *p++;
                 if (!isid(c))
                     goto endid;
                 tmac1(c, b6);
-                tmac2(i, c, 5);
                 i = *p++;
                 if (!isid(i))
                     goto endid;
                 tmac1(i, b7);
-                tmac2(c, i, 6);
-                tmac2(i, 0, 7);
                 while (isid(*p++))
                     ;
                 if (at_buf_end(--p)) {
@@ -431,7 +417,6 @@ char *scan_token(char *p)
                     p = cpp.tok_ptr + 1;
                     continue;
                 }
-                tmac2(p[-1], 0, -1 + (p - cpp.tok_ptr));
             lokid:
                 // the name passed the filter: look it up; if it was a macro,
                 // lookup_token set scan_ptr to where scanning should resume.

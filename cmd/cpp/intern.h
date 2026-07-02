@@ -39,11 +39,9 @@
 // defined, bits are set in cpp.macro_bits[] for the characters it contains (and
 // their positions); scanning an identifier then just ANDs those bits, and only
 // falls back to a real lookup if every character could belong to some macro.
-// scw1 tests single characters (cheap, enabled); scw2 also tests adjacent pairs
-// (rarely worth the cost, disabled).
+// scw1 tests single characters (cheap, enabled).
 //
 #define scw1 1 // enable the single-character superimposed-code test
-#define scw2 0 // enable the character-pair test (off: usually not worth it)
 
 #if scw1
 // Position bits: the k-th character of an identifier contributes bit b(k) (the
@@ -69,19 +67,6 @@
 #else
 #define tmac1(c, bit)     // scw1 disabled: no-op
 #define xmac1(c, bit, op) // scw1 disabled: no-op
-#endif
-
-#if scw2
-// tmac2/xmac2: the same idea for adjacent character pairs (c0,c1).  Disabled.
-#define tmac2(c0, c1, cpos)      \
-    if (!xmac2(c0, c1, cpos, &)) \
-    goto nomac
-#define xmac2(c0, c1, cpos, op)                                                    \
-    (cpp.macro_bits[pair_row[(unsigned char)c0] + pair_col[(unsigned char)c1]] op( \
-        pair_bits + cpos)[(unsigned char)c0])
-#else
-#define tmac2(c0, c1, cpos)     // scw2 disabled: no-op
-#define xmac2(c0, c1, cpos, op) // scw2 disabled: no-op
 #endif
 
 // Marks formal-parameter references inside stored macro bodies (defined in cpp.c).

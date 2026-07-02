@@ -111,10 +111,6 @@ char *do_define(char *p)
         c = *cf++;
         xmac1(c, b, |=);
         b = (b + b) & 0xFF;
-        if (cf != p)
-            xmac2(c, *cf, -1 + (cf - pin), |=);
-        else
-            xmac2(c, 0, -1 + (cf - pin), |=);
     }
     params      = 0;
     cpp.out_ptr = cpp.tok_ptr = p;

@@ -39,9 +39,9 @@ doc/       BESM-6 architecture references
 | Component                     | Location      | Status                        |
 |-------------------------------|---------------|-------------------------------|
 | Assembler (AT&T / Madlen)     | `cmd/as`      | ✔ working, tested, documented |
-| Linker + binutils             | `cmd/ld`      | ✔ exists                      |
-| C preprocessor                | `cmd/cpp`     | ✔ exists, C11 test suite      |
-| Disassembler                  | `cmd/disasm`  | ✔ exists                      |
+| Linker + binutils             | `cmd/ld`      | ✔ working, tested             |
+| C preprocessor                | `cmd/cpp`     | ✔ C11, tested, documented     |
+| Disassembler                  | `cmd/disasm`  | ✔ working, tested             |
 | Kernel (i486 validation)      | `kernel/`     | ✔ builds                      |
 | libc library                  | —             | ☐ to do                       |
 | Build & link kernel for BESM-6| —             | ☐ to do                       |

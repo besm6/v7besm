@@ -89,19 +89,9 @@ int main(int argc, char *argv[])
     // quotes, comment starters, whitespace, etc.  The scanner then classifies a
     // character with a single table lookup.
     p = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    i = 0;
     while ((c = *p++)) {
         cpp.fast_tab[(unsigned char)c] |= IB | NB | SB;
         cpp.char_class[(unsigned char)c] = IDENT;
-#if scw2
-        // 53 == 63-10; digits rarely appear in identifiers,
-        // and can never be the first char of an identifier.
-        // 11 == 53*53/sizeof(macro_bits) .
-        //
-        ++i;
-        pair_row[(unsigned char)c] = (53 * i) / 11;
-        pair_col[(unsigned char)c] = i % 11;
-#endif
     }
     p = "0123456789.";
     while ((c = *p++)) {
@@ -130,11 +120,6 @@ int main(int argc, char *argv[])
     p = " \t\013\f\r"; // note no \n;	\v not legal for vertical tab?
     while ((c = *p++))
         cpp.char_class[(unsigned char)c] = BLANK;
-#if scw2
-    for (pair_bits[i = ALFSIZ + 7] = 1; --i >= 0;)
-        if ((pair_bits[i] = (pair_bits + 1)[i] << 1) == 0)
-            pair_bits[i] = 1;
-#endif
 
     // 3. Parse the command line: options begin with '-', otherwise the argument
     // is the input file (first) or output file (second).
