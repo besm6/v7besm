@@ -79,6 +79,14 @@ int main(int argc, char *argv[])
         cpp.fast_tab[(unsigned char)c] |= NB | SB;
         cpp.char_class[(unsigned char)c] = NUMBR;
     }
+    // High bytes (0x80-0xFF) are treated as identifier characters so UTF-8 names
+    // like "длина" work.  NOT NB: they are never digits.  The five marker bytes
+    // 0xFA-0xFE live in this range but valid UTF-8 never produces 0xF5-0xFF, so we
+    // hand the whole range IB here and clear it back off the markers below.
+    for (i = 0x80; i <= 0xFF; i++) {
+        cpp.fast_tab[i] |= IB | SB;
+        cpp.char_class[i] = IDENT;
+    }
     p = "\n\"'/\\";
     while ((c = *p++))
         cpp.fast_tab[(unsigned char)c] |= SB;
@@ -88,13 +96,18 @@ int main(int argc, char *argv[])
     p = "*\n";
     while ((c = *p++))
         cpp.fast_tab[(unsigned char)c] |= CB;
-    cpp.fast_tab[WARN_MARK] |= WB;
-    cpp.fast_tab[STRINGIZE_MARK] |= WB;
-    cpp.fast_tab[PASTE_MARK] |= WB;
-    cpp.fast_tab[COMMA_PASTE_MARK] |= WB;
+    // Marker bytes sit in the high range just marked as identifier chars, so
+    // assign (=, not |=) to clear the IB bit off them: a marker must never be
+    // treated as an identifier character.
+    cpp.fast_tab[WARN_MARK] = WB;
+    cpp.fast_tab[STRINGIZE_MARK] = WB;
+    cpp.fast_tab[PASTE_MARK] = WB;
+    cpp.fast_tab[COMMA_PASTE_MARK] = WB;
     // The blue-paint region-end marker only needs to stop the fast scanner (SB);
     // it must NOT carry WB/IB so the body-push loop and identifier scan ignore it.
-    cpp.fast_tab[PAINT_END_MARK] |= SB;
+    cpp.fast_tab[PAINT_END_MARK] = SB;
+    cpp.char_class[WARN_MARK] = cpp.char_class[STRINGIZE_MARK] = cpp.char_class[PASTE_MARK] =
+        cpp.char_class[COMMA_PASTE_MARK] = cpp.char_class[PAINT_END_MARK] = 0;
     cpp.fast_tab['\0'] |= CB | QB | SB | WB;
     for (i = ALFSIZ; --i >= 0;)
         cpp.slow_tab[i] = cpp.fast_tab[i] | SB;

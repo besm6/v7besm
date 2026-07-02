@@ -369,6 +369,13 @@ char *scan_token(char *p)
         case 'x':
         case 'y':
         case 'z':
+        // High bytes start a UTF-8 identifier (e.g. Cyrillic macro names).  The
+        // range deliberately skips the marker bytes 0xFA-0xFE: PAINT_END_MARK
+        // (0xFB) has its own case earlier in the switch, and the four WB markers
+        // (0xFA, 0xFC-0xFE) have no case, so a stray one in live text just falls
+        // through and is emitted as-is rather than starting an identifier.
+        case 0x80 ... 0xF9:
+        case 0xFF:
 
             if (cpp.false_level)
                 goto nomac;

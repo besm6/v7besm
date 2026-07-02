@@ -22,6 +22,7 @@ add_executable(cpp_test
     test_stringize.cpp
     test_translation_phases.cpp
     test_trigraphs.cpp
+    test_utf8_identifiers.cpp
     test_varargs.cpp)
 target_link_libraries(cpp_test PRIVATE GTest::gtest_main)
 target_compile_definitions(cpp_test PRIVATE

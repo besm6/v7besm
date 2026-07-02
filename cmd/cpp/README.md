@@ -115,6 +115,11 @@ honors the C11 §5.2.4.1 translation-limit minimums; the relevant sizes (from
 
 Trigraph translation (translation phase 1) is available via `-trigraphs`.
 
+Identifiers are significant to their full length (no truncation). Bytes 0x80–0xFF
+are accepted as identifier characters, so raw UTF-8 names such as `#define длина 100`
+work — including function-like macro and parameter names. This matches GCC/Clang's
+default handling of the implementation-defined extended identifier set (§6.4.2).
+
 ## Source layout
 
 | File | Responsibility |

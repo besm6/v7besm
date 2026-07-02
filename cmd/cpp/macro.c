@@ -369,7 +369,7 @@ struct symtab *lookup(char *namep, int enterf)
     np     = namep;
     around = 0;
     i      = cpp.hash_seed;
-    while ((c = *np++))
+    while ((c = (unsigned char)*np++)) // cast: high UTF-8 bytes must not sign-extend
         i += i + c;
     c = i; // c=i for usage on pdp11
     c %= SYMSIZ;
@@ -404,29 +404,22 @@ struct symtab *lookup(char *namep, int enterf)
 
 //
 // Look up the token occupying the buffer span [p1, p2) -- the convenient form
-// the scanner uses, since tokens in the buffer are not null-terminated and names
-// are significant only to 8 characters.  We null-terminate temporarily, truncate
-// to 8 chars, look it up, then restore the bytes.  If it turns out to be a
-// defined macro (and we are not in a skipped branch) it is expanded right away
-// via expand_macro, and cpp.scan_ptr is set to where scanning should resume.
+// the scanner uses, since tokens in the buffer are not null-terminated.  We
+// null-terminate temporarily, look it up over its full length (names are
+// significant to their whole length, per C11 §5.2.4.1), then restore the byte.
+// If it turns out to be a defined macro (and we are not in a skipped branch) it
+// is expanded right away via expand_macro, and cpp.scan_ptr is set to where
+// scanning should resume.
 //
 struct symtab *lookup_token(char *p1, char *p2, int enterf)
 {
-    char *p3;
-    char c2, c3;
+    char c2;
     struct symtab *np;
     c2  = *p2;
     *p2 = '\0'; // mark end of token
-    if ((p2 - p1) > 8)
-        p3 = p1 + 8;
-    else
-        p3 = p2;
-    c3  = *p3;
-    *p3 = '\0'; // truncate to 8 chars or less
     if (enterf == 1)
         p1 = save_string(p1);
     np  = lookup(p1, enterf);
-    *p3 = c3;
     *p2 = c2;
     if (np->value != 0 && cpp.false_level == 0)
         cpp.scan_ptr = expand_macro(p2, np);
