@@ -10,6 +10,10 @@
 
 #include "intern.h"
 
+// The implicit final formal of a variadic macro; a body reference to it is bound
+// to all trailing arguments (§6.10.3).
+static const char va_args_name[] = "__VA_ARGS__";
+
 //
 // Does formal-parameter name "a" equal the token in the buffer spanning
 // [p1, p2)?  The token is not null-terminated, so we temporarily write a '\0' at
@@ -42,6 +46,7 @@ char *do_define(char *p)
     char *pin, *psav, *cf;
     char **pf, **qf;
     int b, c, params;
+    int variadic = 0; // set once a '...' formal is seen: last formal is __VA_ARGS__
     struct symtab *np;
     char *oldval, *oldsavch;
     char *hashpos = NULL; // side-buffer position of a pending '#' (stringize) operator
@@ -100,6 +105,22 @@ char *do_define(char *p)
                 break;
             if (*pin == ',')
                 continue;
+            if (*pin == '.' && pin[1] == '.' && pin[2] == '.') {
+                // '...' : an implicit final formal named __VA_ARGS__ that binds
+                // all trailing arguments (§6.10.3).  In slow scan the first '.'
+                // is a one-char token, so step p over the other two.
+                if (pf >= &formal[MAXFRM])
+                    pperror("%s: too many formals", np->name);
+                else {
+                    *pf++ = cf;
+                    strcpy(cf, va_args_name);
+                    cf += sizeof(va_args_name); // name plus its '\0'
+                    ++params;
+                }
+                variadic = 1;
+                p += 2;
+                continue;
+            }
             if (cpp.char_class[(unsigned char)*pin] != IDENT) {
                 c  = *p;
                 *p = '\0';
@@ -197,6 +218,7 @@ char *do_define(char *p)
                 continue;
             }
             if (cpp.char_class[(unsigned char)*pin] == IDENT) {
+                int matched = 0;
                 for (qf = pf; --qf >= formal;) {
                     if (formal_matches(*qf, pin, p)) {
                         *psav++ = qf - formal + 1;
@@ -204,9 +226,14 @@ char *do_define(char *p)
                         // parameter substitutes its expanded actual (warn_mark)
                         *psav++ = paste_now ? paste_mark : WARN;
                         pin     = p;
+                        matched = 1;
                         break;
                     }
                 }
+                // §6.10.3p5: __VA_ARGS__ is legal only in a variadic macro (where it
+                // is a formal and so matched above).
+                if (!matched && !variadic && formal_matches(va_args_name, pin, p))
+                    pperror("__VA_ARGS__ can only appear in a variadic macro");
             } else if (*pin == '"' || *pin == '\'') { // inside quotation marks, too
                 char quoc = *pin;
                 for (*psav++ = *pin++; pin < p && *pin != quoc;) {
@@ -235,7 +262,7 @@ char *do_define(char *p)
         pperror("'#' is not followed by a macro parameter");
     if (paste_pending) // '##' at end of a function-like body, no right operand follows
         pperror("'##' at end of macro replacement list");
-    *psav++ = params;
+    *psav++ = variadic ? (params | VA_FLAG) : params;
     *psav++ = '\0';
     if ((cf = oldval) != NULL) { // redefinition
         --cf;                    // skip no. of params, which may be zero
@@ -562,10 +589,19 @@ char *expand_macro(char *p, struct symtab *sp)
     // pointer to each one in actual[].  Expansion is suppressed while we do this.
     if (0 != (params = *--vp & 0xFF)) { // definition calls for params
         char **pa;
+        int variadic; // last formal is __VA_ARGS__: absorbs all trailing actuals
+        int nformals; // number of formals (incl. __VA_ARGS__)
         ca = acttxt;
         pa = actual;
-        if (params == 0xFF)
-            params = 1; // #define foo() ...
+        if (params == 0xFF) {
+            params   = 1; // #define foo() ...
+            variadic = 0;
+        } else if (params & VA_FLAG) {
+            params &= ~VA_FLAG; // last formal is __VA_ARGS__
+            variadic = 1;
+        } else
+            variadic = 0;
+        nformals = params;
         set_slow_scan();
         ++cpp.false_level; // no expansion during search for actuals
         cpp.paren_level = -1;
@@ -592,7 +628,10 @@ char *expand_macro(char *p, struct symtab *sp)
             cpp.call_line = cpp.line_no[cpp.inc_level];
             cpp.call_file = cpp.inc_file[cpp.inc_level];
             for (cpp.paren_level = 1; cpp.paren_level != 0;) {
-                *ca++ = '\0';
+                // The variadic argument (the last formal) absorbs the rest of the
+                // list, so top-level commas do not end it (§6.10.3).
+                int collecting_va = variadic && (pa - actual) == nformals - 1;
+                *ca++             = '\0';
                 for (;;) {
                     cpp.out_ptr = cpp.tok_ptr = p;
                     p                         = scan_token(p);
@@ -602,7 +641,7 @@ char *expand_macro(char *p, struct symtab *sp)
                         --params;
                         break;
                     }
-                    if (cpp.paren_level == 1 && *cpp.tok_ptr == ',') {
+                    if (cpp.paren_level == 1 && *cpp.tok_ptr == ',' && !collecting_va) {
                         --params;
                         break;
                     }

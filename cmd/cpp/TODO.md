@@ -2,7 +2,7 @@
 
 The GoogleTest conformance suite in [test/](test/) drives the built `b6cpp`
 binary against the C11 preprocessor requirements (ISO/IEC 9899:2011, N1570).
-As of this writing **44 pass; the other 32 are marked `DISABLED_`** so the suite
+As of this writing **49 pass; the other 27 are marked `DISABLED_`** so the suite
 stays green. This file scopes one task per failure cluster so they can be picked
 up individually.
 
@@ -40,20 +40,6 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 `diag.c` (diagnostics) · `defs.h` (limits/table sizes).
 
 ---
-
-## 5. Variadic macros `...` / `__VA_ARGS__` (C99/C11 §6.10.3)
-
-- **Tests to enable (drop `DISABLED_`):** `Varargs.MultipleArguments`, `Varargs.SingleArgument`,
-  `Varargs.NamedPlusVariadic`, `Varargs.CommasPreserved`,
-  `Varargs.VaArgsOutsideVariadicDiagnosed`
-- **Current:** `...` in a parameter list is rejected as `bad formal: .`
-  ([macro.c:103](macro.c#L103)).
-- **Scope (in [macro.c](macro.c)):**
-  - Accept `...` as the last parameter; bind all trailing arguments (commas
-    preserved) to `__VA_ARGS__` in the body.
-  - Support a named prefix before `...` (`LOG(fmt, ...)`).
-  - `__VA_ARGS__` appearing in a non-variadic macro is a constraint violation →
-    `pperror` (`VaArgsOutsideVariadicDiagnosed`).
 
 ## 6. Predefined macros `__STDC__`, `__STDC_VERSION__`, `__STDC_HOSTED__`, `__DATE__`, `__TIME__` (§6.10.8)
 
@@ -184,3 +170,19 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 - **Scope (directive recognition in [scan.c](scan.c)/[direct.c](direct.c)):**
   allow optional horizontal whitespace before the `#` that introduces a
   directive.
+
+## 17. Variadic-macro extensions and edge cases (follow-on to task 5)
+
+- **Tests to enable:** none yet — these are unimplemented extensions/edge cases
+  left over from the `...` / `__VA_ARGS__` work; add tests as each is tackled.
+- **Current:** task 5 implemented C99 `...` bound to `__VA_ARGS__`, but three
+  related behaviors are not handled.
+- **Scope (mostly in [macro.c](macro.c)):**
+  - GNU **named-varargs** `#define P(args...)`: accept an identifier immediately
+    before `...` and bind the trailing arguments to *that* name (in addition to
+    the standard anonymous `__VA_ARGS__`).
+  - GNU **`, ## __VA_ARGS__` comma elision**: when the variadic part is empty,
+    the token-paste against the preceding comma drops that comma.
+  - Diagnose `__VA_ARGS__` used in an **object-like** macro body. Task 5's
+    diagnostic lives only in the function-like (`if (params)`) path, so
+    `#define X __VA_ARGS__` is still accepted silently.

@@ -21,6 +21,7 @@
 #define WARN   DROP // same byte, used inside macro bodies to flag a formal-parameter slot
 #define SAME   0    // strcmp() returns this when two strings are equal
 #define MAXFRM 31   // max number of formals/actuals to a macro
+#define VA_FLAG 0x80 // OR'd into a stored params byte: last formal is __VA_ARGS__ (absorbs trailing args)
 
 // scan-table selection and buffer-boundary predicates
 #define in_slow_scan    (cpp.scan_tab == cpp.slow_tab)        // scanning a #if expression?
