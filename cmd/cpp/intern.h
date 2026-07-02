@@ -109,6 +109,7 @@ struct symtab *install_directive(const char *s); // register a built-in like "#d
 char *do_define(char *p);                                    // parse and store a #define
 struct symtab *lookup_token(char *p1, char *p2, int enterf); // look up the token in [p1,p2)
 char *expand_macro(char *p, struct symtab *sp);              // expand a macro call in place
+char *expand_text(const char *a0, const char *a1, char *out, int cap); // fully expand [a0,a1) into out
 
 // diag.c -- diagnostics and small string helpers
 char *dir_of(char *s);                   // reduce a path to its directory part

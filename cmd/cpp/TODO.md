@@ -2,7 +2,7 @@
 
 The GoogleTest conformance suite in [test/](test/) drives the built `b6cpp`
 binary against the C11 preprocessor requirements (ISO/IEC 9899:2011, N1570).
-As of this writing **49 pass; the other 27 are marked `DISABLED_`** so the suite
+As of this writing **60 pass; the other 17 are marked `DISABLED_`** so the suite
 stays green. This file scopes one task per failure cluster so they can be picked
 up individually.
 
@@ -40,16 +40,6 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 `diag.c` (diagnostics) · `defs.h` (limits/table sizes).
 
 ---
-
-## 8. `#line` directive has no effect (§6.10.4)
-
-- **Tests to enable (drop `DISABLED_`):** `LineControl.SetsLineAndFile`, `LineControl.SetsLineOnly`,
-  `LineControl.MacroExpandedOperands`
-- **Current:** `#line` is registered but does not change `__LINE__`/`__FILE__`
-  (the following line still reports its physical number/name).
-- **Scope (in [direct.c](direct.c)):** macro-expand the operands, then set the
-  current line counter (`cpp.line_no[...]`) and, if a second operand is present,
-  the reported file name used by `__FILE__`.
 
 ## 9. `#error` directive (§6.10.5)
 

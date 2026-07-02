@@ -300,12 +300,52 @@ char *process_directives(char *p)
                 p            = cpp.scan_ptr;
             }
             enter_if(was_live, taken);
-        } else if (np == cpp.sym_line) { // line
-            if (cpp.false_level == 0 && cpp.opt_no_lines == 0) {
-                cpp.out_ptr = cpp.tok_ptr = p;
-                *--cpp.out_ptr            = '#';
-                while (*cpp.tok_ptr != '\n')
-                    p = scan_token(p);
+        } else if (np == cpp.sym_line) { // line (§6.10.4)
+            if (cpp.false_level == 0) {
+                char optext[BUFSIZ]; // raw operand text
+                char expbuf[BUFSIZ]; // operands after macro expansion
+                char fbuf[BUFSIZ];   // extracted file name
+                char *cp, *e;
+
+                // Collect the raw operand text up to end of line.  Reaching the
+                // '\n' here counts the directive line (scan_token bumps line_no);
+                // we set the presumed line number afterwards so it is not perturbed.
+                p  = skip_blanks(p);
+                cp = optext;
+                while (*cpp.tok_ptr != '\n') {
+                    while (cpp.tok_ptr < p && cp < optext + sizeof(optext) - 1)
+                        *cp++ = *cpp.tok_ptr++;
+                    cpp.out_ptr = cpp.tok_ptr = p;
+                    p                         = scan_token(p);
+                }
+                *cp = '\0';
+                // §6.10.4p5: the operands are macro-expanded before use.
+                expand_text(optext, cp, expbuf, sizeof(expbuf));
+                e = expbuf;
+                while (*e == ' ' || *e == '\t')
+                    ++e;
+                if (*e < '0' || *e > '9')
+                    pperror("illegal #line", 0); // §6.10.4: first operand must be a digit sequence
+                else {
+                    const char *fname = 0;
+                    int num           = (int)strtol(e, &e, 10);
+                    while (*e == ' ' || *e == '\t')
+                        ++e;
+                    if (*e == '"') { // optional "file-name"
+                        char *fp = fbuf;
+                        ++e;
+                        while (*e && *e != '"' && fp < fbuf + sizeof(fbuf) - 1)
+                            *fp++ = *e++;
+                        *fp   = '\0';
+                        fname = fbuf;
+                    }
+                    // Update the presumed location that __LINE__/__FILE__ report.
+                    cpp.line_no[cpp.inc_level] = num;
+                    if (fname)
+                        cpp.inc_file[cpp.inc_level] = save_string(fname);
+                    if (cpp.opt_no_lines == 0)
+                        emit_line_marker();
+                }
                 continue;
             }
         } else if (*++cpp.tok_ptr == '\n')

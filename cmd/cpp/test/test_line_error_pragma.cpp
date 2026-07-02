@@ -7,14 +7,14 @@ using Pragma         = PreprocessorTest;
 using NullDirective  = PreprocessorTest;
 
 // §6.10.4: #line sets the presumed line number and file name.
-TEST_F(LineControl, DISABLED_SetsLineAndFile) {
+TEST_F(LineControl, SetsLineAndFile) {
     EXPECT_TOKENS(
         "#line 100 \"foo.c\"\n"
         "__LINE__ __FILE__\n",
         "100 \"foo.c\"");
 }
 
-TEST_F(LineControl, DISABLED_SetsLineOnly) {
+TEST_F(LineControl, SetsLineOnly) {
     EXPECT_TOKENS(
         "#line 500\n"
         "__LINE__\n",
@@ -22,12 +22,18 @@ TEST_F(LineControl, DISABLED_SetsLineOnly) {
 }
 
 // §6.10.4p5: the digit sequence / file name may be produced by macro expansion.
-TEST_F(LineControl, DISABLED_MacroExpandedOperands) {
+TEST_F(LineControl, MacroExpandedOperands) {
     EXPECT_TOKENS(
         "#define WHERE 250\n"
         "#line WHERE\n"
         "__LINE__\n",
         "250");
+}
+
+// §6.10.4: the first operand must be a digit sequence; a non-numeric #line is a
+// constraint violation and must prevent successful translation.
+TEST_F(LineControl, NonDigitOperandDiagnosed) {
+    EXPECT_PP_DIAGNOSES("#line notanumber\n");
 }
 
 // §6.10.5: a #error not skipped by conditional inclusion prevents successful

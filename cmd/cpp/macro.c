@@ -455,7 +455,7 @@ static int stringize(const char *a0, const char *a1, char *out)
 // reused over an isolated buffer whose output is captured through a memory
 // stream; every global the scanner touches is saved and restored around the run.
 //
-static char *expand_text(const char *a0, const char *a1, char *out, int cap)
+char *expand_text(const char *a0, const char *a1, char *out, int cap)
 {
     char subarena[8 + 2 * BUFSIZ + 8];
     char *start = subarena + 8 + BUFSIZ; // mirror the real arena: BUFSIZ of pushback headroom
