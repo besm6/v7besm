@@ -120,6 +120,10 @@ struct cppstate {
     // #if conditional nesting: how many enclosing blocks are taken vs skipped
     int true_level, false_level;
 
+    // nonzero while a block comment '/* ... */' is being scanned, so an EOF that
+    // arrives before the closing '*/' can be diagnosed (see refill_buffer)
+    int in_block_comment;
+
     // per-#if-group state so #elif/#else take at most one branch.  if_top is the
     // current #if/#ifdef/#ifndef nesting depth; if_taken[if_top] is nonzero once a
     // branch in that group has been taken (or the whole group is nested inside a

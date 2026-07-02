@@ -2,7 +2,7 @@
 
 The GoogleTest conformance suite in [test/](test/) drives the built `b6cpp`
 binary against the C11 preprocessor requirements (ISO/IEC 9899:2011, N1570).
-As of this writing **63 pass; the other 14 are marked `DISABLED_`** so the suite
+As of this writing **66 pass; the other 11 are marked `DISABLED_`** so the suite
 stays green. This file scopes one task per failure cluster so they can be picked
 up individually.
 
@@ -40,19 +40,6 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 `diag.c` (diagnostics) · `defs.h` (limits/table sizes).
 
 ---
-
-## 11. Comment handling (§5.1.1.2 / §6.4.9)
-
-- **Tests to enable (drop `DISABLED_`):** `TranslationPhases.BlockCommentBecomesSpace`,
-  `TranslationPhases.LineCommentRemoved`, `TranslationPhases.UnterminatedCommentDiagnosed`
-- **Current:** `a/**/b` becomes `ab` (comment deleted, tokens fuse — should be
-  `a b`); `//` line comments are not recognized (C99); an unterminated `/*` is
-  not diagnosed.
-- **Scope (in [scan.c](scan.c), around the `/*` handling at
-  [scan.c:122](scan.c#L122)):**
-  - Replace each comment with a single space so adjacent tokens do not merge.
-  - Recognize `//` … end-of-line comments.
-  - Diagnose a `/*` with no closing `*/` before EOF → `pperror`.
 
 ## 12. Trigraph replacement (§5.2.1.1, translation phase 1)
 

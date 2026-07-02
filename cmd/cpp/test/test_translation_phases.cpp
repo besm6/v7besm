@@ -21,12 +21,12 @@ TEST_F(TranslationPhases, LineSpliceJoinsToken) {
 }
 
 // Phase 3: a block comment is replaced by a single space (it does not vanish).
-TEST_F(TranslationPhases, DISABLED_BlockCommentBecomesSpace) {
+TEST_F(TranslationPhases, BlockCommentBecomesSpace) {
     EXPECT_TOKENS("a/**/b\n", "a b");
 }
 
 // Phase 3: a // comment runs to end of line and is removed.
-TEST_F(TranslationPhases, DISABLED_LineCommentRemoved) {
+TEST_F(TranslationPhases, LineCommentRemoved) {
     EXPECT_TOKENS(
         "a//trailing\n"
         "b\n",
@@ -42,6 +42,6 @@ TEST_F(TranslationPhases, BlockCommentSpansLines) {
 }
 
 // A comment that is never closed cannot be tokenized: a diagnostic is required.
-TEST_F(TranslationPhases, DISABLED_UnterminatedCommentDiagnosed) {
+TEST_F(TranslationPhases, UnterminatedCommentDiagnosed) {
     EXPECT_PP_DIAGNOSES("a /* never closed\n");
 }

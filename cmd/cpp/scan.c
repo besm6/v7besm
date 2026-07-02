@@ -120,6 +120,7 @@ char *scan_token(char *p)
         case '/':
             for (;;) {
                 if (*p++ == '*') { // comment
+                    cpp.in_block_comment = 1;
                     if (!cpp.opt_keep_comments) {
                         cpp.tok_ptr = p - 2;
                         flush_output();
@@ -172,12 +173,46 @@ char *scan_token(char *p)
                             ++p; // ignore null byte
                     }
                 endcom:
+                    cpp.in_block_comment = 0;
                     if (!cpp.opt_keep_comments) {
-                        cpp.out_ptr = cpp.tok_ptr = p;
+                        // A comment becomes one space (C11 §5.1.1.2 phase 3), so
+                        // adjacent tokens do not merge -- but only when we are in
+                        // live text, not inside a skipped #if branch.
                         --cpp.false_level;
+                        if (cpp.false_level == 0)
+                            putc(' ', cpp.out_file);
+                        cpp.out_ptr = cpp.tok_ptr = p;
                         goto again;
                     }
                     break;
+                }
+                // A '//' end-of-line comment (C99): consume up to, but not
+                // including, the newline, which is left to be scanned normally.
+                if (p[-1] == '/') {
+                    if (!cpp.opt_keep_comments) {
+                        cpp.tok_ptr = p - 2;
+                        flush_output();
+                        ++cpp.false_level;
+                    }
+                    for (;;) {
+                        while (*p != '\n' && *p != '\0')
+                            ++p;
+                        if (*p != '\0')
+                            break; // reached the newline
+                        if (at_buf_end(p)) {
+                            cpp.tok_ptr = p;
+                            p           = refill_buffer(p);
+                        } else
+                            ++p; // ignore null byte
+                    }
+                    if (!cpp.opt_keep_comments) {
+                        --cpp.false_level;
+                        if (cpp.false_level == 0)
+                            putc(' ', cpp.out_file);
+                        cpp.out_ptr = cpp.tok_ptr = p;
+                        goto again;
+                    }
+                    break; // -C: keep the '//...' run as the current token
                 }
                 if (at_buf_end(--p))
                     p = refill_buffer(p);

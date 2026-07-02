@@ -178,6 +178,8 @@ char *refill_buffer(char *p)
                     *cpp.buf_end    = '\0';
                     return (p);
                 }
+                if (cpp.in_block_comment)
+                    pperror("unterminated comment");
                 cpp.tok_ptr = p;
                 flush_output();
                 exit(cpp.exit_code);
