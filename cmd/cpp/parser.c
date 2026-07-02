@@ -16,6 +16,7 @@
 
 void advance(void);
 int eval_expr(void);
+int eval_binary(int min_prec);
 int eval_term(void);
 
 //
@@ -94,100 +95,118 @@ int precedence(int token)
 }
 
 //
-// Parse and evaluate an expression: a first operand followed by any number of
-// "operator operand" pairs (+, *, comparisons, &&, ||, the ?: conditional, ...).
-// Each operand is an eval_term(); the recursion naturally handles precedence and
-// parentheses.  Returns the computed value.
+// Apply a binary operator "op" to two already-evaluated operands and return the
+// result.  Division/modulo by zero is reported (and yields 0); an operator token
+// with no arithmetic meaning here (e.g. a stray '.') is an error -- which is how
+// a malformed operand such as a floating constant gets diagnosed.
 //
-int eval_expr(void)
+static int apply_op(int op, int a, int b)
 {
-    int val, val2;
+    switch (op) {
+    case '*':
+        return a * b;
+    case '/':
+        if (b == 0) {
+            pperror("Division by zero");
+            return 0;
+        }
+        return a / b;
+    case '%':
+        if (b == 0) {
+            pperror("Modulo by zero");
+            return 0;
+        }
+        return a % b;
+    case '+':
+        return a + b;
+    case '-':
+        return a - b;
+    case LS:
+        return a << b;
+    case RS:
+        return a >> b;
+    case '<':
+        return a < b;
+    case '>':
+        return a > b;
+    case LE:
+        return a <= b;
+    case GE:
+        return a >= b;
+    case EQ:
+        return a == b;
+    case NE:
+        return a != b;
+    case '&':
+        return a & b;
+    case '^':
+        return a ^ b;
+    case '|':
+        return a | b;
+    case ANDAND:
+        return a && b;
+    case OROR:
+        return a || b;
+    case ',':
+        return b;
+    default:
+        pperror("Unexpected operator in preprocessor if");
+        return a;
+    }
+}
 
-    val = eval_term();
+//
+// Parse and evaluate an expression using precedence climbing: an operand
+// (eval_term) followed by any number of "operator operand" pairs, where the
+// operand of each operator is parsed only as far as operators that bind at least
+// as tightly.  This honors both operator precedence (from precedence()) and
+// left-to-right associativity, and it handles the right-associative ?: ternary.
+// "min_prec" is the lowest precedence this call is allowed to consume.  Returns
+// the computed value.
+//
+int eval_binary(int min_prec)
+{
+    int val = eval_term();
 
-    while (1) {
-        int op      = cpp.look_token;
-        int op_prec = precedence(op);
+    for (;;) {
+        int op   = cpp.look_token;
+        int prec = precedence(op);
 
-        if (op_prec <= precedence(',')) { // Handle lowest precedence up to comma
-            if (op == '*' && match('*')) {
-                val2 = eval_expr();
-                val  = val * val2;
-            } else if (op == '/' && match('/')) {
-                val2 = eval_expr();
-                if (val2 == 0)
-                    pperror("Division by zero");
-                else
-                    val = val / val2;
-            } else if (op == '%' && match('%')) {
-                val2 = eval_expr();
-                if (val2 == 0)
-                    pperror("Modulo by zero");
-                else
-                    val = val % val2;
-            } else if (op == '+' && match('+')) {
-                val2 = eval_expr();
-                val  = val + val2;
-            } else if (op == '-' && match('-')) {
-                val2 = eval_expr();
-                val  = val - val2;
-            } else if (op == LS && match(LS)) {
-                val2 = eval_expr();
-                val  = val << val2;
-            } else if (op == RS && match(RS)) {
-                val2 = eval_expr();
-                val  = val >> val2;
-            } else if (op == '<' && match('<')) {
-                val2 = eval_expr();
-                val  = val < val2;
-            } else if (op == '>' && match('>')) {
-                val2 = eval_expr();
-                val  = val > val2;
-            } else if (op == LE && match(LE)) {
-                val2 = eval_expr();
-                val  = val <= val2;
-            } else if (op == GE && match(GE)) {
-                val2 = eval_expr();
-                val  = val >= val2;
-            } else if (op == EQ && match(EQ)) {
-                val2 = eval_expr();
-                val  = val == val2;
-            } else if (op == NE && match(NE)) {
-                val2 = eval_expr();
-                val  = val != val2;
-            } else if (op == '&' && match('&')) {
-                val2 = eval_expr();
-                val  = val & val2;
-            } else if (op == '^' && match('^')) {
-                val2 = eval_expr();
-                val  = val ^ val2;
-            } else if (op == '|' && match('|')) {
-                val2 = eval_expr();
-                val  = val | val2;
-            } else if (op == ANDAND && match(ANDAND)) {
-                val2 = eval_expr();
-                val  = val && val2;
-            } else if (op == OROR && match(OROR)) {
-                val2 = eval_expr();
-                val  = val || val2;
-            } else if (op == '?' && match('?')) {
-                val2 = eval_expr();
-                if (!match(':'))
-                    pperror("Expected ':' in ternary operator");
-                int val3 = eval_expr();
-                val      = val ? val2 : val3;
-            } else if (op == ',' && match(',')) {
-                val2 = eval_expr();
-                val  = val2;
-            } else {
-                break;
-            }
-        } else {
+        if (prec == 0 || prec < min_prec)
             break;
+        if (op == ':') // belongs to an enclosing '?', not a binary operator here
+            break;
+
+        advance(); // consume the operator
+
+        if (op == '?') {
+            // Ternary conditional (right-associative): middle runs up to ':'.
+            int mid = eval_binary(precedence(','));
+            if (!match(':'))
+                pperror("Expected ':' in ternary operator");
+            int els = eval_binary(prec);
+            val     = val ? mid : els;
+        } else if (op == '=') {
+            // Assignment is a constraint violation in a constant expression.
+            pperror("Assignment operator not allowed in preprocessor if");
+            eval_binary(prec); // consume the right-hand side to stay in sync
+        } else {
+            // Left-associative binary operator: the right operand may only
+            // absorb operators that bind strictly tighter.
+            int rhs = eval_binary(prec + 1);
+            val     = apply_op(op, val, rhs);
         }
     }
 
     return val;
+}
+
+//
+// Parse and evaluate a whole #if expression (down to the comma operator).
+//
+int eval_expr(void)
+{
+    return eval_binary(precedence(','));
 }
 
 //

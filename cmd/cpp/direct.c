@@ -161,6 +161,27 @@ struct symtab *install_directive(const char *s)
 }
 
 //
+// Enter a new #if/#ifdef/#ifndef group.  "was_live" is nonzero when we are not
+// already inside a skipped region; "taken" is nonzero when this group's opening
+// branch is taken.  Push the per-group "already decided" flag -- eligible (0)
+// only when the group is live and its opening branch was not taken -- and bump
+// the taken/skipped counters accordingly.
+//
+static void enter_if(int was_live, int taken)
+{
+    if (taken)
+        ++cpp.true_level;
+    else
+        ++cpp.false_level;
+    if (cpp.if_top >= MAXIF) {
+        pperror("Too many nested #if", 0);
+        return; // matching #endif still unwinds via the level counters
+    }
+    ++cpp.if_top;
+    cpp.if_taken[cpp.if_top] = (was_live && !taken) ? 0 : 1;
+}
+
+//
 // The directive loop -- the top level of the preprocessor.  It scans the input;
 // scan_token hands back control at the '#' that starts each directive line.  We
 // read the directive keyword, dispatch on which built-in it is (comparing the
@@ -200,40 +221,69 @@ char *process_directives(char *p)
             p  = skip_blanks(p);
             np = lookup_token(cpp.tok_ptr, p, 0);
             --cpp.false_level;
-            if (cpp.false_level == 0 && np->value == 0)
-                ++cpp.true_level;
-            else
-                ++cpp.false_level;
+            {
+                int was_live = (cpp.false_level == 0);
+                enter_if(was_live, was_live && np->value == 0);
+            }
         } else if (np == cpp.sym_ifdef) { // ifdef
             ++cpp.false_level;
             p  = skip_blanks(p);
             np = lookup_token(cpp.tok_ptr, p, 0);
             --cpp.false_level;
-            if (cpp.false_level == 0 && np->value != 0)
-                ++cpp.true_level;
-            else
-                ++cpp.false_level;
+            {
+                int was_live = (cpp.false_level == 0);
+                enter_if(was_live, was_live && np->value != 0);
+            }
         } else if (np == cpp.sym_endif) { // endif
-            if (cpp.false_level) {
-                if (--cpp.false_level == 0)
-                    emit_line_marker();
-            } else if (cpp.true_level)
-                --cpp.true_level;
-            else
+            if (cpp.if_top == 0)
                 pperror("If-less endif", 0);
-        } else if (np == cpp.sym_else) { // else
-            if (cpp.false_level) {
-                if (--cpp.false_level != 0)
+            else {
+                if (cpp.false_level) {
+                    if (--cpp.false_level == 0)
+                        emit_line_marker();
+                } else if (cpp.true_level)
+                    --cpp.true_level;
+                --cpp.if_top;
+            }
+        } else if (np == cpp.sym_elif) { // elif
+            if (cpp.if_top == 0)
+                pperror("If-less elif", 0);
+            else if (cpp.if_taken[cpp.if_top]) {
+                // A branch was already taken (or the whole group is nested in a
+                // skipped region): this #elif must not be taken.
+                if (cpp.false_level == 0) {
+                    --cpp.true_level; // close the currently active branch
                     ++cpp.false_level;
-                else {
-                    ++cpp.true_level;
-                    emit_line_marker();
                 }
-            } else if (cpp.true_level) {
-                ++cpp.false_level;
-                --cpp.true_level;
-            } else
+                // else already skipping -- stay skipping
+            } else {
+                // Still eligible: the group's own skip is exactly one false_level,
+                // so drop it and evaluate the #elif condition.
+                cpp.scan_ptr = p;
+                --cpp.false_level;
+                if (eval_if()) {
+                    ++cpp.true_level;
+                    cpp.if_taken[cpp.if_top] = 1;
+                } else
+                    ++cpp.false_level;
+                p = cpp.scan_ptr;
+            }
+        } else if (np == cpp.sym_else) { // else
+            if (cpp.if_top == 0)
                 pperror("If-less else", 0);
+            else if (cpp.if_taken[cpp.if_top]) {
+                // Some branch already taken: skip the #else branch.
+                if (cpp.false_level == 0) {
+                    --cpp.true_level;
+                    ++cpp.false_level;
+                }
+            } else {
+                // No branch taken yet: take the #else branch.
+                --cpp.false_level;
+                ++cpp.true_level;
+                cpp.if_taken[cpp.if_top] = 1;
+                emit_line_marker();
+            }
         } else if (np == cpp.sym_undef) { // undefine
             if (cpp.false_level == 0) {
                 ++cpp.false_level;
@@ -242,20 +292,20 @@ char *process_directives(char *p)
                 --cpp.false_level;
             }
         } else if (np == cpp.sym_if) { // if
+            int was_live = (cpp.false_level == 0);
+            int taken;
 #if tgp
             pperror(" IF not implemented, true assumed", 0);
-            if (cpp.false_level == 0)
-                ++cpp.true_level;
-            else
-                ++cpp.false_level;
+            taken = was_live;
 #else
-            cpp.scan_ptr = p;
-            if (cpp.false_level == 0 && eval_if())
-                ++cpp.true_level;
-            else
-                ++cpp.false_level;
-            p = cpp.scan_ptr;
+            taken = 0;
+            if (was_live) {
+                cpp.scan_ptr = p;
+                taken        = eval_if();
+                p            = cpp.scan_ptr;
+            }
 #endif
+            enter_if(was_live, taken);
         } else if (np == cpp.sym_line) { // line
             if (cpp.false_level == 0 && cpp.opt_no_lines == 0) {
                 cpp.out_ptr = cpp.tok_ptr = p;

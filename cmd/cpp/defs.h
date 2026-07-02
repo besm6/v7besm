@@ -44,6 +44,7 @@ struct symtab {
 #endif
 #define SBSIZE  12000 // bytes of "side buffer" for saved macro/definition text
 #define MAXINC  10    // maximum depth of nested #include files
+#define MAXIF   64    // maximum depth of nested #if/#ifdef/#ifndef blocks
 #define MAXFRE  14    // max buffers of macro pushback in flight at once
 #define NPREDEF 20    // max -D / -U options accepted on the command line
 #define symsiz  400   // number of slots in the symbol hash table
@@ -112,11 +113,18 @@ struct cppstate {
     // symbol table plus quick handles to the built-in directive/macro entries
     struct symtab symbols[symsiz]; // the macro hash table
     struct symtab *last_sym;       // most recent lookup() result (cache for lookup_token)
-    struct symtab *sym_define, *sym_undef, *sym_include, *sym_if, *sym_else, *sym_endif, *sym_ifdef,
-        *sym_ifndef, *sym_os, *sym_arch, *sym_line, *sym_line_macro, *sym_file_macro;
+    struct symtab *sym_define, *sym_undef, *sym_include, *sym_if, *sym_elif, *sym_else, *sym_endif,
+        *sym_ifdef, *sym_ifndef, *sym_os, *sym_arch, *sym_line, *sym_line_macro, *sym_file_macro;
 
     // #if conditional nesting: how many enclosing blocks are taken vs skipped
     int true_level, false_level;
+
+    // per-#if-group state so #elif/#else take at most one branch.  if_top is the
+    // current #if/#ifdef/#ifndef nesting depth; if_taken[if_top] is nonzero once a
+    // branch in that group has been taken (or the whole group is nested inside a
+    // skipped region), meaning no further branch may be taken.
+    int if_top;
+    char if_taken[MAXIF + 1];
 
     // scratch shared by the #if expression lexer (yylex.c) and parser (parser.c)
     int tok_value;  // value of the number token just scanned

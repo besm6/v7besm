@@ -3,7 +3,7 @@
 
 using Conditional = PreprocessorTest;
 
-TEST_F(Conditional, DISABLED_IfElifElse) {
+TEST_F(Conditional, IfElifElse) {
     EXPECT_TOKENS(
         "#if 0\nA\n#elif 1\nB\n#else\nC\n#endif\n",
         "B");
@@ -27,7 +27,7 @@ TEST_F(Conditional, IfdefIfndef) {
 }
 
 // Both spellings of the `defined` operator, §6.10.1p1.
-TEST_F(Conditional, DISABLED_DefinedBothForms) {
+TEST_F(Conditional, DefinedBothForms) {
     EXPECT_TOKENS(
         "#define M 1\n"
         "#if defined M && defined(M) && !defined X\nOK\n#endif\n",
@@ -35,14 +35,14 @@ TEST_F(Conditional, DISABLED_DefinedBothForms) {
 }
 
 // §6.10.1p4: identifiers remaining after macro expansion are replaced by 0.
-TEST_F(Conditional, DISABLED_UndefinedIdentifierIsZero) {
+TEST_F(Conditional, UndefinedIdentifierIsZero) {
     EXPECT_TOKENS(
         "#if 2+2==4 && UNDEFINED_NAME==0\nOK\n#endif\n",
         "OK");
 }
 
 // A representative slice of the integer-constant-expression operator set.
-TEST_F(Conditional, DISABLED_Operators) {
+TEST_F(Conditional, Operators) {
     EXPECT_TOKENS(
         "#if (1<<4) == 16 && (255 >> 4) == 15 && (6 & 3) == 2 && (1 | 4) == 5 "
         "&& (5 ^ 1) == 4 && (1 ? 2 : 3) == 2\nOK\n#endif\n",
@@ -50,7 +50,7 @@ TEST_F(Conditional, DISABLED_Operators) {
 }
 
 // §6.10.1p4: character constants are permitted in the controlling expression.
-TEST_F(Conditional, DISABLED_CharacterConstant) {
+TEST_F(Conditional, CharacterConstant) {
     EXPECT_TOKENS("#if 'A' == 65\nOK\n#endif\n", "OK");
 }
 

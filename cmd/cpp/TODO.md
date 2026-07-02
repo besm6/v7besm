@@ -2,7 +2,7 @@
 
 The GoogleTest conformance suite in [test/](test/) drives the built `b6cpp`
 binary against the C11 preprocessor requirements (ISO/IEC 9899:2011, N1570).
-As of this writing **28 pass; the other 48 are marked `DISABLED_`** so the suite
+As of this writing **33 pass; the other 43 are marked `DISABLED_`** so the suite
 stays green. This file scopes one task per failure cluster so they can be picked
 up individually.
 
@@ -40,30 +40,6 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 `diag.c` (diagnostics) · `defs.h` (limits/table sizes).
 
 ---
-
-## 2. `#if` expression evaluator stops after the first operand
-
-- **Tests to enable (drop `DISABLED_`):** `Conditional.IfElifElse`, `Conditional.DefinedBothForms`,
-  `Conditional.UndefinedIdentifierIsZero`, `Conditional.Operators`,
-  `Conditional.CharacterConstant`
-- **Root cause (bug, not missing feature):** [parser.c:112](parser.c#L112) —
-  the operator loop guard is `if (op_prec <= precedence(','))`. `precedence(',')`
-  is `1`, so the condition is true only for `,`; for every real operator
-  (`+`=11, `&&`=5, `==`=8, `<<`=10, …) it is false and the loop `break`s after
-  the first term. Hence `#if 1 && 1`, `#if 'A' == 65`, `#if 2+2==4` all report
-  `Expected stop token` yet still use the first operand's truthiness. The full
-  precedence table, 2-char operators, char constants, and `defined` already
-  exist in [parser.c](parser.c)/[yylex.c](yylex.c).
-- **Scope:**
-  1. Fix the guard so the loop continues for any binary operator
-     (e.g. `op_prec >= precedence(',')`, i.e. `precedence(op) > 0`).
-  2. **Also** register the missing `#elif` directive (`install_directive`
-     in [cpp.c](cpp.c), dispatch in [direct.c](direct.c)); today `#elif`
-     yields `undefined control`. `IfElifElse` needs both this and the loop fix.
-  3. Latent follow-up (not currently exercised, note in code): each operator
-     branch recurses via `eval_expr()`, making evaluation right-associative and
-     precedence-blind (`2*3+4` → 14). Consider precedence-climbing so operator
-     precedence is actually honored.
 
 ## 3. Stringize operator `#` (§6.10.3.2)
 

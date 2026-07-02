@@ -202,6 +202,7 @@ int main(int argc, char *argv[])
     cpp.sym_define               = install_directive("define");
     cpp.sym_undef                = install_directive("undef");
     cpp.sym_include              = install_directive("include");
+    cpp.sym_elif                 = install_directive("elif");
     cpp.sym_else                 = install_directive("else");
     cpp.sym_endif                = install_directive("endif");
     cpp.sym_ifdef                = install_directive("ifdef");
