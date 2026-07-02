@@ -2,7 +2,7 @@
 
 The GoogleTest conformance suite in [test/](test/) drives the built `b6cpp`
 binary against the C11 preprocessor requirements (ISO/IEC 9899:2011, N1570).
-As of this writing **74 pass; the other 3 are marked `DISABLED_`** so the suite
+As of this writing **76 pass; the other 1 is marked `DISABLED_`** so the suite
 stays green. This file scopes one task per failure cluster so they can be picked
 up individually.
 
@@ -40,16 +40,6 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 `diag.c` (diagnostics) · `defs.h` (limits/table sizes).
 
 ---
-
-## 15. Diagnose wrong macro argument count (§6.10.3)
-
-- **Tests to enable (drop `DISABLED_`):** `Macro.TooFewArgumentsDiagnosed`, `Macro.TooManyArgumentsDiagnosed`
-- **Current:** argument-count mismatch is a `ppwarn` (exit 0) —
-  [macro.c:362](macro.c#L362), [macro.c:368](macro.c#L368).
-- **Scope:** promote `argument mismatch` from `ppwarn` to `pperror` so a
-  function-like macro invoked with too few/too many arguments yields a non-zero
-  exit. (Coordinate with task 5: a variadic macro's `...` legitimately absorbs
-  extra arguments and must not trip this.)
 
 ## 16. Directives with leading whitespace before `#` are not recognized
 

@@ -740,13 +740,13 @@ char *expand_macro(char *p, struct symtab *sp)
                         pperror("%s: actuals too long", sp->name);
                 }
                 if (pa >= &actual[MAXFRM])
-                    ppwarn("%s: argument mismatch", sp->name);
+                    pperror("%s: argument mismatch", sp->name);
                 else
                     *pa++ = ca;
             }
         }
         if (params != 0)
-            ppwarn("%s: argument mismatch", sp->name);
+            pperror("%s: argument mismatch", sp->name);
         while (--params >= 0)
             *pa++ = &""[1]; // null string for missing actuals
         --cpp.false_level;

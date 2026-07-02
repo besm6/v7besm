@@ -64,11 +64,11 @@ TEST_F(Macro, IncompatibleRedefinitionDiagnosed) {
 }
 
 // §6.10.3p4: too few arguments to a function-like macro.
-TEST_F(Macro, DISABLED_TooFewArgumentsDiagnosed) {
+TEST_F(Macro, TooFewArgumentsDiagnosed) {
     EXPECT_PP_DIAGNOSES("#define F(a,b) a b\nF(1)\n");
 }
 
 // §6.10.3p4: too many arguments to a function-like macro.
-TEST_F(Macro, DISABLED_TooManyArgumentsDiagnosed) {
+TEST_F(Macro, TooManyArgumentsDiagnosed) {
     EXPECT_PP_DIAGNOSES("#define F(a) a\nF(1,2)\n");
 }
