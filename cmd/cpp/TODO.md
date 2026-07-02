@@ -2,7 +2,7 @@
 
 The GoogleTest conformance suite in [test/](test/) drives the built `b6cpp`
 binary against the C11 preprocessor requirements (ISO/IEC 9899:2011, N1570).
-As of this writing **33 pass; the other 43 are marked `DISABLED_`** so the suite
+As of this writing **39 pass; the other 39 are marked `DISABLED_`** so the suite
 stays green. This file scopes one task per failure cluster so they can be picked
 up individually.
 
@@ -40,20 +40,6 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 `diag.c` (diagnostics) · `defs.h` (limits/table sizes).
 
 ---
-
-## 3. Stringize operator `#` (§6.10.3.2)
-
-- **Tests to enable (drop `DISABLED_`):** `Stringize.Basic`, `Stringize.EscapesQuotesAndBackslashes`,
-  `Stringize.ExpandsThroughIndirection`, `Stringize.HashNotFollowedByParamDiagnosed`
-- **Current:** `#x` is passed through literally (`# hello world`).
-- **Scope (in [macro.c](macro.c) replacement-list handling):**
-  - In a function-like macro body, `#` followed by a parameter stringizes the
-    corresponding **unexpanded** argument: leading/trailing whitespace removed,
-    internal whitespace collapsed to one space, and `"`/`\` inside string/char
-    literals escaped. (`STR`/`XSTR` indirection then stringizes the *expanded*
-    value — cf. `ExpandsThroughIndirection`.)
-  - `#` not followed by a parameter is a constraint violation → `pperror`
-    (`HashNotFollowedByParamDiagnosed` needs the non-zero exit).
 
 ## 4. Token-paste operator `##` (§6.10.3.3)
 

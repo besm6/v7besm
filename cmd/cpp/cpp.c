@@ -23,6 +23,11 @@ struct cppstate cpp;
 // The byte written into a stored macro body to flag "a parameter goes here".
 char warn_mark = WARN;
 
+// The byte written into a stored macro body to flag "stringize this parameter"
+// (the '#' operator).  Like warn_mark it must carry the WB bit (see below) so
+// the back-to-front expansion loop stops on it instead of copying it literally.
+char stringize_mark = 0xFD;
+
 //
 // Print the command-line help and the meaning of each option.
 //
@@ -101,6 +106,7 @@ int main(int argc, char *argv[])
     while ((c = *p++))
         cpp.fast_tab[(unsigned char)c] |= CB;
     cpp.fast_tab[(unsigned char)warn_mark] |= WB;
+    cpp.fast_tab[(unsigned char)stringize_mark] |= WB;
     cpp.fast_tab['\0'] |= CB | QB | SB | WB;
     for (i = ALFSIZ; --i >= 0;)
         cpp.slow_tab[i] = cpp.fast_tab[i] | SB;

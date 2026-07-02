@@ -44,6 +44,7 @@ char *do_define(char *p)
     int b, c, params;
     struct symtab *np;
     char *oldval, *oldsavch;
+    char *hashpos = NULL; // side-buffer position of a pending '#' (stringize) operator
     char *formal[MAXFRM]; // formal[n] is name of nth formal
     char formtxt[BUFSIZ]; // space for formal names
 
@@ -138,6 +139,45 @@ char *do_define(char *p)
         if (*pin == '\n')
             break;
         if (params) { // mark the appearance of formals in the definiton
+            // The '#' (stringize) operator, §6.10.3.2.  In a function-like macro
+            // body a '#' must be followed by a parameter; the pair is replaced by
+            // a stringize marker so expand_macro can quote the raw argument.  A
+            // '#' not followed by a parameter is a constraint violation.
+            if (hashpos != NULL) { // resolve the '#' seen in a previous iteration
+                char *hp = hashpos;
+                hashpos  = NULL;
+                if (cpp.char_class[(unsigned char)*pin] == BLANK) {
+                    hashpos = hp; // blanks between '#' and its parameter: keep waiting
+                    while (pin < p)
+                        *psav++ = *pin++;
+                    continue;
+                }
+                if (*pin == '#' && (p - pin) == 1) { // '##' token paste (task 4)
+                    while (pin < p)                  // leave both '#' literal
+                        *psav++ = *pin++;
+                    continue;
+                }
+                c = 0; // parameter number, or 0 if the token is not a formal
+                if (cpp.char_class[(unsigned char)*pin] == IDENT)
+                    for (qf = pf; --qf >= formal;)
+                        if (formal_matches(*qf, pin, p)) {
+                            c = qf - formal + 1;
+                            break;
+                        }
+                if (c != 0) {     // '#' <parameter>: emit stringize marker
+                    psav    = hp; // drop the '#' and any blanks after it
+                    *psav++ = c;
+                    *psav++ = stringize_mark;
+                    pin     = p;
+                    continue;
+                }
+                pperror("'#' is not followed by a macro parameter");
+                // fall through: copy the current token, leaving the '#' literal
+            } else if (*pin == '#' && (p - pin) == 1) { // a fresh '#': start waiting
+                *psav++ = *pin++;
+                hashpos = psav - 1;
+                continue;
+            }
             if (cpp.char_class[(unsigned char)*pin] == IDENT) {
                 for (qf = pf; --qf >= formal;) {
                     if (formal_matches(*qf, pin, p)) {
@@ -171,6 +211,8 @@ char *do_define(char *p)
         while (pin < p)
             *psav++ = *pin++;
     }
+    if (hashpos != NULL) // '#' at end of a function-like body, no parameter follows
+        pperror("'#' is not followed by a macro parameter");
     *psav++ = params;
     *psav++ = '\0';
     if ((cf = oldval) != NULL) { // redefinition
@@ -277,6 +319,177 @@ struct symtab *lookup_token(char *p1, char *p2, int enterf)
 }
 
 //
+// Stringize the raw argument text [a0,a1) into out[] as a string literal, per
+// §6.10.3.2: drop leading/trailing white space, collapse each interior
+// white-space run to a single space, and within a string- or character-literal
+// spelling insert a '\' before every '"' and '\'.  Returns the byte count.
+//
+static int stringize(const char *a0, const char *a1, char *out)
+{
+    char *w       = out;
+    const char *s = a0;
+    int quote     = 0; // 0 outside a literal, else the opening quote character
+    int pending   = 0; // a collapsed space is owed before the next emitted char
+
+    *w++ = '"';
+    while (s < a1 && (*s == ' ' || *s == '\t' || *s == '\n'))
+        ++s; // drop leading white space (never inside a literal here)
+    while (s < a1) {
+        char ch = *s;
+        if (!quote && (ch == ' ' || ch == '\t' || ch == '\n')) {
+            pending = 1; // collapse the run; a lone space is emitted only if more follows
+            ++s;
+            continue;
+        }
+        if (pending) {
+            *w++    = ' ';
+            pending = 0;
+        }
+        if (quote) {
+            if (ch == '\\') { // an escape sequence: backslash + the escaped char
+                *w++ = '\\';
+                *w++ = '\\';
+                if (++s < a1) {
+                    if (*s == '"' || *s == '\\')
+                        *w++ = '\\';
+                    *w++ = *s++;
+                }
+                continue;
+            }
+            if (ch == '"') { // '"' is escaped; it also closes a string literal
+                *w++ = '\\';
+                *w++ = '"';
+                if (quote == '"')
+                    quote = 0;
+                ++s;
+                continue;
+            }
+            if (ch == '\'') { // ''' is not escaped; it closes a char literal
+                *w++ = '\'';
+                if (quote == '\'')
+                    quote = 0;
+                ++s;
+                continue;
+            }
+            *w++ = ch; // ordinary literal content (interior white space is significant)
+            ++s;
+            continue;
+        }
+        if (ch == '"' || ch == '\'') { // entering a literal spelling
+            quote = ch;
+            if (ch == '"')
+                *w++ = '\\'; // the opening '"' is part of the spelling -> escaped
+            *w++ = ch;
+            ++s;
+            continue;
+        }
+        *w++ = ch; // ordinary token char ('\' outside a literal is left unescaped)
+        ++s;
+    }
+    *w++ = '"';
+    return (int)(w - out);
+}
+
+//
+// Expand the raw argument text [a0,a1) to its fully macro-expanded form and store
+// it, NUL-terminated, at out[cap]; return out.  A normal parameter substitutes
+// this *expanded* argument (§6.10.3.1p2), which is what lets the STR/XSTR
+// stringize-through-indirection idiom yield the expanded value.  The engine is
+// reused over an isolated buffer whose output is captured through a memory
+// stream; every global the scanner touches is saved and restored around the run.
+//
+static char *expand_text(const char *a0, const char *a1, char *out, int cap)
+{
+    char subarena[8 + 2 * BUFSIZ + 8];
+    char *start = subarena + 8 + BUFSIZ; // mirror the real arena: BUFSIZ of pushback headroom
+    long n      = a1 - a0;
+    char *w     = out;
+
+    if (n < 0)
+        n = 0;
+    // Too large to load with its sentinel without risking a refill from real
+    // input: fall back to the raw (unexpanded) text.
+    if (n > BUFSIZ - 8) {
+        while (a0 < a1 && w < out + cap - 1)
+            *w++ = *a0++;
+        *w = '\0';
+        return out;
+    }
+
+    // Save engine state.
+    char *s_buf_start = cpp.buf_start, *s_buf_mid = cpp.buf_mid, *s_buf_end = cpp.buf_end;
+    char *s_out = cpp.out_ptr, *s_tok = cpp.tok_ptr, *s_scan = cpp.scan_ptr;
+    char *s_scan_tab = cpp.scan_tab, *s_mac = cpp.macro_name, *s_rb = cpp.recur_bound;
+    FILE *s_of  = cpp.out_file;
+    int s_false = cpp.false_level, s_paren = cpp.paren_level;
+    int s_rd = cpp.recur_depth, s_rba = cpp.recur_bound_adj;
+    int s_ptop = cpp.push_top, s_ftop = cpp.free_top;
+    int s_line = cpp.line_no[cpp.inc_level];
+
+    char *mbuf  = NULL;
+    size_t mlen = 0;
+    FILE *mf    = open_memstream(&mbuf, &mlen);
+    if (mf == NULL) { // capture unavailable: fall back to raw text
+        while (a0 < a1 && w < out + cap - 1)
+            *w++ = *a0++;
+        *w = '\0';
+        return out;
+    }
+
+    // Load  raw + "\n#"  into the isolated buffer.  The "\n#" makes scan_token
+    // return (it looks like the start of a directive) so we regain control.
+    memcpy(start, a0, (size_t)n);
+    start[n]      = '\n';
+    start[n + 1]  = '#';
+    start[n + 2]  = '\0';
+    cpp.buf_start = subarena + 8;
+    cpp.buf_mid   = start;
+    cpp.buf_end   = start + n + 2;
+    cpp.out_ptr = cpp.tok_ptr = start;
+    cpp.out_file              = mf;
+    cpp.false_level           = 0;
+    cpp.paren_level           = 0;
+    cpp.recur_depth           = 0;
+    cpp.recur_bound           = start;
+    cpp.recur_bound_adj       = 0;
+    set_fast_scan();
+    scan_token(start);
+    flush_output(); // push [out_ptr,tok_ptr) (the expanded text) into the memory stream
+    fclose(mf);
+
+    // Restore engine state.
+    cpp.buf_start              = s_buf_start;
+    cpp.buf_mid                = s_buf_mid;
+    cpp.buf_end                = s_buf_end;
+    cpp.out_ptr                = s_out;
+    cpp.tok_ptr                = s_tok;
+    cpp.scan_ptr               = s_scan;
+    cpp.scan_tab               = s_scan_tab;
+    cpp.macro_name             = s_mac;
+    cpp.recur_bound            = s_rb;
+    cpp.out_file               = s_of;
+    cpp.false_level            = s_false;
+    cpp.paren_level            = s_paren;
+    cpp.recur_depth            = s_rd;
+    cpp.recur_bound_adj        = s_rba;
+    cpp.push_top               = s_ptop;
+    cpp.free_top               = s_ftop;
+    cpp.line_no[cpp.inc_level] = s_line;
+
+    // Copy the captured expansion (minus any trailing newline) into out.
+    while (mlen > 0 && mbuf[mlen - 1] == '\n')
+        --mlen;
+    {
+        size_t i;
+        for (i = 0; i < mlen && w < out + cap - 1; i++)
+            *w++ = mbuf[i];
+    }
+    *w = '\0';
+    free(mbuf);
+    return out;
+}
+
+//
 // Expand a macro call.  sp is the macro; p points just past its name.  For a
 // function-like macro we first scan the "(actual, actual, ...)" argument list.
 // Then we push the stored body onto the front of the input (in reverse), and
@@ -292,8 +505,10 @@ char *expand_macro(char *p, struct symtab *sp)
 {
     char *ca, *vp;
     int params;
-    char *actual[MAXFRM]; // actual[n] is text of nth actual
-    char acttxt[BUFSIZ];  // space for actuals
+    char *actual[MAXFRM];    // actual[n] is the raw text of the nth actual (for '#')
+    char *expanded[MAXFRM];  // expanded[n] is its macro-expanded text (for normal use)
+    char acttxt[BUFSIZ];     // space for the raw actuals
+    char exptxt[4 * BUFSIZ]; // space for the expanded actuals
 
     if (0 == (vp = sp->value))
         return (p);
@@ -386,6 +601,24 @@ char *expand_macro(char *p, struct symtab *sp)
             *pa++ = &""[1]; // null string for missing actuals
         --cpp.false_level;
         set_fast_scan();
+        // Pre-expand each raw actual into expanded[] so a normal parameter
+        // substitutes the macro-expanded argument (a '#'/'##' operand keeps the
+        // raw actual[]).  expanded[n] points just past its text, which is
+        // preceded by a '\0', so the back-to-front push reads it like actual[].
+        {
+            int nact = (int)(pa - actual), k;
+            char *ep = exptxt;
+            for (k = 0; k < nact; k++) {
+                const char *a1 = actual[k], *a0 = a1;
+                while (a0[-1] != '\0') // start of this raw actual's text
+                    --a0;
+                *ep++ = '\0';
+                expand_text(a0, a1, ep, (int)(exptxt + sizeof(exptxt) - ep));
+                ep += strlen(ep);
+                expanded[k] = ep; // end pointer (leading '\0' stops the reader)
+                ep++;
+            }
+        }
     }
     // Push the body onto the front of the input, back to front, so it will be
     // rescanned.  A WARN marker means "insert actual argument N here" instead.
@@ -397,14 +630,29 @@ char *expand_macro(char *p, struct symtab *sp)
             }
             *--p = *vp;
         }
-        if (*vp == warn_mark) { // insert actual param
-            ca = actual[*--vp - 1];
+        if (*vp == warn_mark) { // insert the expanded actual param
+            ca = expanded[*--vp - 1];
             while (*--ca) {
                 if (at_buf_start(p)) {
                     cpp.out_ptr = cpp.tok_ptr = p;
                     p                         = spill_buffer(p);
                 }
                 *--p = *ca;
+            }
+        } else if (*vp == stringize_mark) { // '#param': push the quoted raw actual
+            char strbuf[2 * BUFSIZ + 4];
+            const char *a1 = actual[*--vp - 1];
+            const char *a0 = a1;
+            const char *ce;
+            while (a0[-1] != '\0') // walk back to the start of this actual's text
+                --a0;
+            ce = strbuf + stringize(a0, a1, strbuf);
+            while (ce > strbuf) { // push the built string back-to-front
+                if (at_buf_start(p)) {
+                    cpp.out_ptr = cpp.tok_ptr = p;
+                    p                         = spill_buffer(p);
+                }
+                *--p = *--ce;
             }
         } else
             break;
