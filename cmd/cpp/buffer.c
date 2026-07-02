@@ -10,10 +10,6 @@
 
 #include "intern.h"
 
-#if tgp
-int tgp_scanning; // re-entry guard for flush_output()'s line-wrapping pass (tgp build only)
-#endif
-
 //
 // Emit a "# line "file"" marker so the next tool (compiler) knows which source
 // line the following text came from.  Suppressed by the -P option
@@ -83,8 +79,7 @@ void emit_line_marker()
 //
 // Write the finished text -- the bytes between out_ptr and tok_ptr -- to the
 // output file, then advance out_ptr.  Does nothing while inside a skipped #if
-// block (false_level != 0).  The optional tgp section re-wraps long lines and
-// is disabled in normal builds.
+// block (false_level != 0).
 //
 void flush_output()
 {
@@ -97,41 +92,6 @@ void flush_output()
     FILE *f;
     if ((p1 = cpp.out_ptr) == cpp.tok_ptr || cpp.false_level != 0)
         return;
-#if tgp
-#define MAXOUT 80        // tgp build: wrap output lines at this many characters
-    if (!tgp_scanning) { // scan again to insure <= MAXOUT chars between linefeeds
-        char c, *pblank, *p2;
-        char savc, stopc, brk;
-        tgp_scanning = 1;
-        brk = stopc = pblank = 0;
-        p2                   = cpp.tok_ptr;
-        savc                 = *p2;
-        *p2                  = '\0';
-        while (c = *p1++) {
-            if (c == '\\')
-                c = *p1++;
-            if (stopc == c)
-                stopc = 0;
-            else if (c == '"' || c == '\'')
-                stopc = c;
-            if (p1 - cpp.out_ptr > MAXOUT && pblank != 0) {
-                *pblank++   = '\n';
-                cpp.tok_ptr = pblank;
-                flush_output();
-                brk    = 1;
-                pblank = 0;
-            }
-            if (c == ' ' && stopc == 0)
-                pblank = p1 - 1;
-        }
-        if (brk)
-            emit_line_marker();
-        *p2          = savc;
-        cpp.tok_ptr  = p2;
-        p1           = cpp.out_ptr;
-        tgp_scanning = 0;
-    }
-#endif
     f = cpp.out_file;
     while (p1 < cpp.tok_ptr)
         putc(*p1++, f);

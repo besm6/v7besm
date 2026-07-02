@@ -192,8 +192,8 @@ static void enter_if(int was_live, int taken)
 //
 char *process_directives(char *p)
 {
-    const struct symtab *np; // the directive keyword's symbol-table entry
     for (;;) {
+        const struct symtab *np; // the directive keyword's symbol-table entry
         set_fast_scan();
         p = scan_token(p);
         if (*cpp.tok_ptr == '\n')
@@ -293,18 +293,12 @@ char *process_directives(char *p)
             }
         } else if (np == cpp.sym_if) { // if
             int was_live = (cpp.false_level == 0);
-            int taken;
-#if tgp
-            pperror(" IF not implemented, true assumed", 0);
-            taken = was_live;
-#else
-            taken = 0;
+            int taken    = 0;
             if (was_live) {
                 cpp.scan_ptr = p;
                 taken        = eval_if();
                 p            = cpp.scan_ptr;
             }
-#endif
             enter_if(was_live, taken);
         } else if (np == cpp.sym_line) { // line
             if (cpp.false_level == 0 && cpp.opt_no_lines == 0) {
