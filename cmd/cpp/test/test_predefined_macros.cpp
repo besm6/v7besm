@@ -81,10 +81,10 @@ TEST_F(Predefined, DateAndTimeShape) {
 }
 
 // §6.10.8.4: none of the predefined macros (nor `defined`) may be redefined.
-TEST_F(Predefined, DISABLED_RedefiningLineDiagnosed) {
+TEST_F(Predefined, RedefiningLineDiagnosed) {
     EXPECT_PP_DIAGNOSES("#define __LINE__ 7\n");
 }
 
-TEST_F(Predefined, DISABLED_DefiningDefinedDiagnosed) {
+TEST_F(Predefined, DefiningDefinedDiagnosed) {
     EXPECT_PP_DIAGNOSES("#define defined 1\n");
 }

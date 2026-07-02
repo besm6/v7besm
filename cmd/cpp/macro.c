@@ -70,6 +70,14 @@ char *do_define(char *p)
         return (p);
     }
     np = lookup_token(pin, p, 1);
+    // §6.10.8.4: "defined" is reserved and may not be used as a macro name.
+    if (strcmp(np->name, "defined") == 0) {
+        pperror("\"defined\" cannot be used as a macro name");
+        while (*cpp.tok_ptr != '\n') // consume the rest of the line
+            p = skip_blanks(p);
+        --cpp.false_level;
+        return (p);
+    }
     if ((oldval = np->value))
         cpp.side_ptr = oldsavch; // was previously defined
     b  = 1;
@@ -270,7 +278,7 @@ char *do_define(char *p)
             ;                              // go back to the beginning
         if (0 != strcmp(++cf, oldsavch)) { // redefinition different from old
             --cpp.line_no[cpp.inc_level];
-            ppwarn("%s redefined", np->name);
+            pperror("%s redefined", np->name);
             ++cpp.line_no[cpp.inc_level];
             np->value = psav - 1;
         } else

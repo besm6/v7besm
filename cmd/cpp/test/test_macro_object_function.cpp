@@ -59,7 +59,7 @@ TEST_F(Macro, IdenticalRedefinitionAllowed) {
 }
 
 // §6.10.3p2: an incompatible redefinition requires a diagnostic.
-TEST_F(Macro, DISABLED_IncompatibleRedefinitionDiagnosed) {
+TEST_F(Macro, IncompatibleRedefinitionDiagnosed) {
     EXPECT_PP_DIAGNOSES("#define M 1\n#define M 2\nM\n");
 }
 

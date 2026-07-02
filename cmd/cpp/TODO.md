@@ -41,32 +41,6 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
 
 ---
 
-## 6. Predefined macros `__STDC__`, `__STDC_VERSION__`, `__STDC_HOSTED__`, `__DATE__`, `__TIME__` (§6.10.8)
-
-- **Tests to enable (drop `DISABLED_`):** `Predefined.StdcIsOne`, `Predefined.StdcVersionIsC11`,
-  `Predefined.StdcHostedDefined`, `Predefined.DateAndTimeShape`
-- **Current:** these names pass through undefined (`__LINE__`/`__FILE__` already
-  work — see the synthesis in [macro.c:311](macro.c#L311)).
-- **Scope (register alongside the existing predefineds in [cpp.c](cpp.c)):**
-  - `__STDC__` → `1`, `__STDC_VERSION__` → `201112L`, `__STDC_HOSTED__` → `1`.
-  - `__DATE__` → `"Mmm dd yyyy"`, `__TIME__` → `"hh:mm:ss"` string literals.
-    (Note: `Date.now()`/`localtime` at run time; the test only checks the
-    literal *shape*, not the value.)
-
-## 7. Diagnose illegal (re)definitions (§6.10.3 / §6.10.8.4)
-
-- **Tests to enable (drop `DISABLED_`):** `Macro.IncompatibleRedefinitionDiagnosed`,
-  `Predefined.RedefiningLineDiagnosed`, `Predefined.DefiningDefinedDiagnosed`
-- **Current:** redefining a macro with a *different* body is silently accepted
-  (new value wins); `#define __LINE__ 7` only warns (exit 0); `#define defined`
-  is silently ignored.
-- **Scope (in [macro.c](macro.c)/[direct.c](direct.c) define handling):**
-  - Redefinition with a non-identical replacement list → `pperror`.
-    (Identical redefinition stays legal — `Macro.IdenticalRedefinitionAllowed`
-    must keep passing.)
-  - `#define`/`#undef` of a predefined macro (`__LINE__`, …) or of `defined` →
-    `pperror` (promote the existing `__LINE__ redefined` warning to an error).
-
 ## 8. `#line` directive has no effect (§6.10.4)
 
 - **Tests to enable (drop `DISABLED_`):** `LineControl.SetsLineAndFile`, `LineControl.SetsLineOnly`,
@@ -186,3 +160,20 @@ Source-file map: `cpp.c` (startup, predefined macros, arg parsing) ·
   - Diagnose `__VA_ARGS__` used in an **object-like** macro body. Task 5's
     diagnostic lives only in the function-like (`if (params)`) path, so
     `#define X __VA_ARGS__` is still accepted silently.
+
+## 18. Protect predefined macros and `defined` from `#undef` (follow-on to task 7)
+
+- **Tests to enable:** none yet — add tests as each is tackled.
+- **Current:** task 7 made an incompatible `#define` of a macro (including a
+  predefined one such as `__LINE__`) an error, and rejected `#define defined`.
+  Three §6.10.8.4 cases remain unguarded:
+  - `#undef defined` is silently accepted (`defined` is not a macro-table entry,
+    so the name must be matched from the token text, not via a symtab lookup).
+  - `#undef __LINE__` / `#undef __FILE__` (and the other predefineds) silently
+    drop the macro instead of erroring.
+  - Identical redefinition of a predefined macro (e.g. `#define __LINE__ 1`) is
+    accepted because it matches the stored body; §6.10.8.4 forbids `#define` of a
+    predefined name regardless of the replacement list.
+- **Scope (in [macro.c](macro.c)/[direct.c](direct.c)):** flag predefined
+  symbols (and `defined`) so both `#define` and `#undef` of them → `pperror`,
+  independent of the replacement-list comparison.
