@@ -18,7 +18,7 @@
 // token itself is left as the bytes from cpp.tok_ptr up to the returned pointer.
 //
 // This is the heart of the preprocessor and the hottest loop, so it is written
-// for speed: a "fast scan" races through ordinary characters using is_special()
+// for speed: a "fast scan" races through ordinary characters using IS_SPECIAL()
 // (a single table lookup) and only stops on a character that needs attention.
 // The big switch then handles that character -- end of buffer, an operator, a
 // backslash-newline continuation, a comment, a string or char literal, a
@@ -26,12 +26,12 @@
 // of the buffered text it calls refill_buffer() to get more and continues.
 //
 // The identifier case is where macros happen: it first runs the cheap
-// superimposed-code filter (tmac1), and only if the name could be a macro
+// superimposed-code filter (TMAC1), and only if the name could be a macro
 // does it call lookup_token(), which may expand the macro in place.
 //
 // A "#" seen at the very start of a line is returned to the caller
 // (process_directives) so directives can be handled.  While evaluating a #if
-// expression (in_slow_scan) the scanner returns every token individually and
+// expression (IN_SLOW_SCAN) the scanner returns every token individually and
 // remembers, via the static "state", that it stopped on a newline.
 //
 char *scan_token(char *p)
@@ -45,11 +45,11 @@ char *scan_token(char *p)
     for (;;) {
     again:
         // fast scan: skip characters that need no special handling
-        while (!is_special(*p++))
+        while (!IS_SPECIAL(*p++))
             ;
         switch ((unsigned char)*(cpp.tok_ptr = p - 1)) {
         case 0: { // possible end of buffered text (a nul), else an ignorable nul byte
-            if (at_buf_end(--p)) {
+            if (AT_BUF_END(--p)) {
                 p = refill_buffer(p);
                 goto again;
             } else
@@ -72,7 +72,7 @@ char *scan_token(char *p)
             for (;;) { // sloscan only
                 if (*p++ == *cpp.tok_ptr)
                     break;
-                if (at_buf_end(--p))
+                if (AT_BUF_END(--p))
                     p = refill_buffer(p);
                 else
                     break;
@@ -83,7 +83,7 @@ char *scan_token(char *p)
             for (;;) { // sloscan only
                 if (*p++ == '=')
                     break;
-                if (at_buf_end(--p))
+                if (AT_BUF_END(--p))
                     p = refill_buffer(p);
                 else
                     break;
@@ -94,7 +94,7 @@ char *scan_token(char *p)
             for (;;) { // sloscan only
                 if (*p++ == '=' || p[-2] == p[-1])
                     break;
-                if (at_buf_end(--p))
+                if (AT_BUF_END(--p))
                     p = refill_buffer(p);
                 else
                     break;
@@ -114,7 +114,7 @@ char *scan_token(char *p)
                     cpp.out_ptr = cpp.tok_ptr = p;
                     break;
                 }
-                if (at_buf_end(--p))
+                if (AT_BUF_END(--p))
                     p = refill_buffer(p);
                 else {
                     ++p;
@@ -137,13 +137,13 @@ char *scan_token(char *p)
                         ++cpp.false_level;
                     }
                     for (;;) {
-                        while (!iscom(*p++))
+                        while (!ISCOM(*p++))
                             ;
                         if (p[-1] == '*')
                             for (;;) {
                                 if (*p++ == '/')
                                     goto endcom;
-                                if (at_buf_end(--p)) {
+                                if (AT_BUF_END(--p)) {
                                     if (!cpp.opt_keep_comments) {
                                         cpp.tok_ptr = p;
                                         p           = refill_buffer(p);
@@ -165,7 +165,7 @@ char *scan_token(char *p)
                             ++cpp.line_no[cpp.inc_level];
                             if (!cpp.opt_keep_comments)
                                 putc('\n', cpp.out_file);
-                        } else if (at_buf_end(--p)) {
+                        } else if (AT_BUF_END(--p)) {
                             if (!cpp.opt_keep_comments) {
                                 cpp.tok_ptr = p;
                                 p           = refill_buffer(p);
@@ -209,7 +209,7 @@ char *scan_token(char *p)
                             ++p;
                         if (*p != '\0')
                             break; // reached the newline
-                        if (at_buf_end(p)) {
+                        if (AT_BUF_END(p)) {
                             cpp.tok_ptr = p;
                             p           = refill_buffer(p);
                         } else
@@ -224,7 +224,7 @@ char *scan_token(char *p)
                     }
                     break; // -C: keep the '//...' run as the current token
                 }
-                if (at_buf_end(--p))
+                if (AT_BUF_END(--p))
                     p = refill_buffer(p);
                 else
                     break;
@@ -237,7 +237,7 @@ char *scan_token(char *p)
         case '\'': {
             quoc = p[-1]; // remember which quote opened it
             for (;;) {
-                while (!isquo(*p++))
+                while (!ISQUO(*p++))
                     ;
                 if (p[-1] == quoc)
                     break;
@@ -251,14 +251,14 @@ char *scan_token(char *p)
                             ++cpp.line_no[cpp.inc_level];
                             break;
                         } // escaped \n ignored
-                        if (at_buf_end(--p))
+                        if (AT_BUF_END(--p))
                             p = refill_buffer(p);
                         else {
                             ++p;
                             break;
                         }
                     }
-                else if (at_buf_end(--p))
+                else if (AT_BUF_END(--p))
                     p = refill_buffer(p);
                 else
                     ++p; // it was a different quote character
@@ -270,7 +270,7 @@ char *scan_token(char *p)
         // directive can be processed; if not, keep scanning.
         case '\n': {
             ++cpp.line_no[cpp.inc_level];
-            if (in_slow_scan) {
+            if (IN_SLOW_SCAN()) {
                 state = LF;
                 return (p);
             }
@@ -284,7 +284,7 @@ char *scan_token(char *p)
                     ++p;
                 if (*p++ == '#')
                     return (p);
-                if (at_buf_end(cpp.tok_ptr = --p))
+                if (AT_BUF_END(cpp.tok_ptr = --p))
                     p = refill_buffer(p);
                 else
                     goto again;
@@ -302,9 +302,9 @@ char *scan_token(char *p)
         case '8':
         case '9':
             for (;;) {
-                while (isnum(*p++))
+                while (ISNUM(*p++))
                     ;
-                if (at_buf_end(--p))
+                if (AT_BUF_END(--p))
                     p = refill_buffer(p);
                 else
                     break;
@@ -313,7 +313,7 @@ char *scan_token(char *p)
         // An identifier (letter or '_' start): this is where macro names are
         // recognized.  If we are skipping a false #if branch, just consume it
         // (goto nomac).  Otherwise run the superimposed-code filter character by
-        // character (tmac1): the moment a position rules out every macro
+        // character (TMAC1): the moment a position rules out every macro
         // name we jump to nomac and skip the lookup; if the name survives the
         // filter we call lookup_token, which expands it if it is really a macro.
         case 'A':
@@ -374,45 +374,45 @@ char *scan_token(char *p)
                 goto nomac;
             for (;;) {
                 c = p[-1];
-                tmac1(c, b0);
+                TMAC1(c, B0);
                 i = *p++;
-                if (!isid(i))
+                if (!ISID(i))
                     goto endid;
-                tmac1(i, b1);
+                TMAC1(i, B1);
                 c = *p++;
-                if (!isid(c))
+                if (!ISID(c))
                     goto endid;
-                tmac1(c, b2);
+                TMAC1(c, B2);
                 i = *p++;
-                if (!isid(i))
+                if (!ISID(i))
                     goto endid;
-                tmac1(i, b3);
+                TMAC1(i, B3);
                 c = *p++;
-                if (!isid(c))
+                if (!ISID(c))
                     goto endid;
-                tmac1(c, b4);
+                TMAC1(c, B4);
                 i = *p++;
-                if (!isid(i))
+                if (!ISID(i))
                     goto endid;
-                tmac1(i, b5);
+                TMAC1(i, B5);
                 c = *p++;
-                if (!isid(c))
+                if (!ISID(c))
                     goto endid;
-                tmac1(c, b6);
+                TMAC1(c, B6);
                 i = *p++;
-                if (!isid(i))
+                if (!ISID(i))
                     goto endid;
-                tmac1(i, b7);
-                while (isid(*p++))
+                TMAC1(i, B7);
+                while (ISID(*p++))
                     ;
-                if (at_buf_end(--p)) {
+                if (AT_BUF_END(--p)) {
                     refill_buffer(p);
                     p = cpp.tok_ptr + 1;
                     continue;
                 }
                 goto lokid;
             endid:
-                if (at_buf_end(--p)) {
+                if (AT_BUF_END(--p)) {
                     refill_buffer(p);
                     p = cpp.tok_ptr + 1;
                     continue;
@@ -428,9 +428,9 @@ char *scan_token(char *p)
                     break;
             nomac:
                 // definitely not a macro: just consume the rest of the identifier.
-                while (isid(*p++))
+                while (ISID(*p++))
                     ;
-                if (at_buf_end(--p)) {
+                if (AT_BUF_END(--p)) {
                     p = refill_buffer(p);
                     goto nomac;
                 } else
@@ -441,7 +441,7 @@ char *scan_token(char *p)
 
         // In normal scanning we loop to grab the next token; in a #if expression
         // we hand back one token at a time.
-        if (in_slow_scan)
+        if (IN_SLOW_SCAN())
             return (p);
     } // end of infinite loop
 }

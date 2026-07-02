@@ -153,7 +153,7 @@ char *refill_buffer(char *p)
     flush_output();
     np = cpp.buf_mid - (p - cpp.tok_ptr);
     op = cpp.tok_ptr;
-    if (at_buf_start(np + 1)) {
+    if (AT_BUF_START(np + 1)) {
         pperror("token too long");
         np = cpp.buf_start;
         p  = cpp.tok_ptr + BUFSIZ;
@@ -300,7 +300,7 @@ char *spill_buffer(char *p)
     for (;;) {
         while ((*np++ = *op++))
             ;
-        if (at_buf_end(op))
+        if (AT_BUF_END(op))
             break;
     } // out with old
     cpp.push_end[cpp.push_top++] = np; // mark end of saved text
@@ -311,7 +311,7 @@ char *spill_buffer(char *p)
         op = p;
     while (cpp.out_ptr < op)
         *--np = *--op; // slide over new
-    if (at_buf_start(np))
+    if (AT_BUF_START(np))
         pperror("token too long");
     d = np - cpp.out_ptr;
     cpp.out_ptr += d;

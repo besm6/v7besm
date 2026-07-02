@@ -53,7 +53,7 @@ struct symtab {
 #define MAXIF   64    // maximum depth of nested #if/#ifdef/#ifndef blocks
 #define MAXFRE  14    // max buffers of macro pushback in flight at once
 #define NPREDEF 20    // max -D / -U options accepted on the command line
-#define symsiz  6151  // number of slots in the symbol hash table (prime; holds the §5.2.4.1 min of 4095 macros)
+#define SYMSIZ  6151  // number of slots in the symbol hash table (prime; holds the §5.2.4.1 min of 4095 macros)
 
 //
 // All mutable per-run state of the preprocessor, bundled into one instance
@@ -95,8 +95,8 @@ struct cppstate {
     // blue paint (§6.10.3.4): macros whose expansion is currently being rescanned.
     // A macro on this stack is left un-expanded if its name recurs, then popped
     // when its region-end marker is scanned.  Each active macro appears at most
-    // once, so the depth is bounded by the number of defined macros (symsiz).
-    struct symtab *paint_stack[symsiz];
+    // once, so the depth is bounded by the number of defined macros (SYMSIZ).
+    struct symtab *paint_stack[SYMSIZ];
     int paint_top;
 
     // include stack: one slot per open file, indexed by inc_level
@@ -127,7 +127,7 @@ struct cppstate {
     int exit_code;             // accumulated error count; becomes the process exit status
 
     // symbol table plus quick handles to the built-in directive/macro entries
-    struct symtab symbols[symsiz]; // the macro hash table
+    struct symtab symbols[SYMSIZ]; // the macro hash table
     struct symtab *last_sym;       // most recent lookup() result (cache for lookup_token)
     struct symtab *sym_define, *sym_undef, *sym_include, *sym_if, *sym_elif, *sym_else, *sym_endif,
         *sym_ifdef, *sym_ifndef, *sym_os, *sym_arch, *sym_line, *sym_error, *sym_pragma,
@@ -163,11 +163,11 @@ extern struct cppstate cpp; // the single global instance, defined in cpp.c
 #define QB 16 // quote character (' or ")
 #define WB 32 // a macro_mark marker byte used inside stored macro bodies
 
-#define isid(a)   (cpp.fast_tab[(unsigned char)a] & IB) // is a an identifier char?
-#define isnum(a)  (cpp.fast_tab[(unsigned char)a] & NB) // is a a digit?
-#define iscom(a)  (cpp.fast_tab[(unsigned char)a] & CB) // could a start a comment?
-#define isquo(a)  (cpp.fast_tab[(unsigned char)a] & QB) // is a a quote char?
-#define iswarn(a) (cpp.fast_tab[(unsigned char)a] & WB) // is a a macro_mark marker?
+#define ISID(a)   (cpp.fast_tab[(unsigned char)a] & IB) // is a an identifier char?
+#define ISNUM(a)  (cpp.fast_tab[(unsigned char)a] & NB) // is a a digit?
+#define ISCOM(a)  (cpp.fast_tab[(unsigned char)a] & CB) // could a start a comment?
+#define ISQUO(a)  (cpp.fast_tab[(unsigned char)a] & QB) // is a a quote char?
+#define ISWARN(a) (cpp.fast_tab[(unsigned char)a] & WB) // is a a macro_mark marker?
 
 // Functions defined in the core files but also called from parser.c / yylex.c.
 int lex_if_token(void);                         // scan one #if-expression token (yylex.c)

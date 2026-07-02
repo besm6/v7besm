@@ -25,12 +25,12 @@
 #define VA_FLAG 0x80 // OR'd into a stored params byte: last formal is __VA_ARGS__ (absorbs trailing args)
 
 // scan-table selection and buffer-boundary predicates
-#define in_slow_scan    (cpp.scan_tab == cpp.slow_tab)        // scanning a #if expression?
-#define is_special(a)   (cpp.scan_tab[(unsigned char)a] & SB) // char that stops the fast scan?
-#define at_buf_end(a)   ((a) >= cpp.buf_end)                  // pointer a past the live buffer?
-#define at_buf_start(a) (cpp.buf_start >= (a))                // pointer a before the live buffer?
-#define set_fast_scan() cpp.scan_tab = cpp.fast_tab           // switch to normal scanning
-#define set_slow_scan() cpp.scan_tab = cpp.slow_tab           // switch to #if-expression scanning
+#define IN_SLOW_SCAN()  (cpp.scan_tab == cpp.slow_tab)        // scanning a #if expression?
+#define IS_SPECIAL(a)   (cpp.scan_tab[(unsigned char)a] & SB) // char that stops the fast scan?
+#define AT_BUF_END(a)   ((a) >= cpp.buf_end)                  // pointer a past the live buffer?
+#define AT_BUF_START(a) (cpp.buf_start >= (a))                // pointer a before the live buffer?
+#define SET_FAST_SCAN() cpp.scan_tab = cpp.fast_tab           // switch to normal scanning
+#define SET_SLOW_SCAN() cpp.scan_tab = cpp.slow_tab           // switch to #if-expression scanning
 
 //
 // A "superimposed code" is a cheap pre-test that answers "this identifier
@@ -38,34 +38,34 @@
 // defined, bits are set in cpp.macro_bits[] for the characters it contains (and
 // their positions); scanning an identifier then just ANDs those bits, and only
 // falls back to a real lookup if every character could belong to some macro.
-// scw1 tests single characters (cheap, enabled).
+// SCW1 tests single characters (cheap, enabled).
 //
-#define scw1 1 // enable the single-character superimposed-code test
+#define SCW1 1 // enable the single-character superimposed-code test
 
-#if scw1
+#if SCW1
 // Position bits: the k-th character of an identifier contributes bit b(k) (the
-// last character always uses b7).  A macro name "leaves its fingerprint" here.
-#define b0 1
-#define b1 2
-#define b2 4
-#define b3 8
-#define b4 16
-#define b5 32
-#define b6 64
-#define b7 128
+// last character always uses B7).  A macro name "leaves its fingerprint" here.
+#define B0 1
+#define B1 2
+#define B2 4
+#define B3 8
+#define B4 16
+#define B5 32
+#define B6 64
+#define B7 128
 #endif
 
-#if scw1
-// tmac1: during scanning, bail out to label "nomac" if character c cannot occur
-// at this position in any macro name.  xmac1: test (op '&') or set (op '|=') the
+#if SCW1
+// TMAC1: during scanning, bail out to label "nomac" if character c cannot occur
+// at this position in any macro name.  XMAC1: test (op '&') or set (op '|=') the
 // bit for character c in the single-character filter.
-#define tmac1(c, bit)      \
-    if (!xmac1(c, bit, &)) \
+#define TMAC1(c, bit)      \
+    if (!XMAC1(c, bit, &)) \
     goto nomac
-#define xmac1(c, bit, op) (cpp.macro_bits[(unsigned char)c] op(bit))
+#define XMAC1(c, bit, op) (cpp.macro_bits[(unsigned char)c] op(bit))
 #else
-#define tmac1(c, bit)     // scw1 disabled: no-op
-#define xmac1(c, bit, op) // scw1 disabled: no-op
+#define TMAC1(c, bit)     // SCW1 disabled: no-op
+#define XMAC1(c, bit, op) // SCW1 disabled: no-op
 #endif
 
 // Marker bytes stored inside macro bodies (and, for PAINT_END_MARK, the live scan

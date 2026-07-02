@@ -101,7 +101,7 @@ static char *do_include(char *p)
         cpp.inc_dir[cpp.inc_level] = cpp.search_dirs[0] = dir_of(save_string(nfil));
         emit_line_marker();
         // save current contents of buffer
-        while (!at_buf_end(p))
+        while (!AT_BUF_END(p))
             p = spill_buffer(p);
         cpp.inc_push_top[cpp.inc_level] = cpp.push_top;
     }
@@ -125,7 +125,7 @@ struct symtab *define_symbol(const char *s)
     while ((*p++ = *s++))
         ;
     p = buf;
-    while (isid(*p++))
+    while (ISID(*p++))
         ; // skip first identifier
     if (*--p == '=') {
         *p++ = ' ';
@@ -138,7 +138,7 @@ struct symtab *define_symbol(const char *s)
     }
     cpp.buf_end = p;
     *--p        = '\n';
-    set_slow_scan();
+    SET_SLOW_SCAN();
     do_define(buf);
     return (cpp.last_sym);
 }
@@ -195,12 +195,12 @@ char *process_directives(char *p)
 {
     for (;;) {
         const struct symtab *np; // the directive keyword's symbol-table entry
-        set_fast_scan();
+        SET_FAST_SCAN();
         p = scan_token(p);
         if (*cpp.tok_ptr == '\n')
             ++cpp.tok_ptr;
         flush_output();
-        set_slow_scan();
+        SET_SLOW_SCAN();
         p              = skip_blanks(p);
         *--cpp.tok_ptr = SALT;
         cpp.out_ptr    = cpp.tok_ptr;

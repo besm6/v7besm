@@ -53,7 +53,7 @@ int lex_if_token()
             else
                 cpp.tok_value = str_to_int(cpp.tok_ptr, 10);
             val = number;
-        } else if (isid(*cpp.tok_ptr)) {
+        } else if (ISID(*cpp.tok_ptr)) {
             if (0 == strcmp(cpp.tok_ptr, "defined")) {
                 ifdef = 1;
                 ++cpp.false_level;

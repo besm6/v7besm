@@ -109,7 +109,7 @@ char *do_define(char *p)
     cf = pin;
     while (cf < p) { // update macro_bits
         c = *cf++;
-        xmac1(c, b, |=);
+        XMAC1(c, b, |=);
         b = (b + b) & 0xFF;
     }
     params      = 0;
@@ -300,10 +300,10 @@ char *do_define(char *p)
             } else if (*pin == '"' || *pin == '\'') { // inside quotation marks, too
                 char quoc = *pin;
                 for (*psav++ = *pin++; pin < p && *pin != quoc;) {
-                    while (pin < p && !isid(*pin))
+                    while (pin < p && !ISID(*pin))
                         *psav++ = *pin++;
                     cf = pin;
-                    while (cf < p && isid(*cf))
+                    while (cf < p && ISID(*cf))
                         ++cf;
                     for (qf = pf; --qf >= formal;) {
                         if (formal_matches(*qf, pin, cf)) {
@@ -372,9 +372,9 @@ struct symtab *lookup(char *namep, int enterf)
     while ((c = *np++))
         i += i + c;
     c = i; // c=i for usage on pdp11
-    c %= symsiz;
+    c %= SYMSIZ;
     if (c < 0)
-        c += symsiz;
+        c += SYMSIZ;
     sp = &cpp.symbols[c];
     while ((snp = sp->name)) {
         np = namep;
@@ -393,7 +393,7 @@ struct symtab *lookup(char *namep, int enterf)
                 exit(cpp.exit_code);
             } else {
                 ++around;
-                sp = &cpp.symbols[symsiz - 1];
+                sp = &cpp.symbols[SYMSIZ - 1];
             }
         }
     }
@@ -574,7 +574,7 @@ char *expand_text(const char *a0, const char *a1, char *out, int cap)
     cpp.recur_depth           = 0;
     cpp.recur_bound           = start;
     cpp.recur_bound_adj       = 0;
-    set_fast_scan();
+    SET_FAST_SCAN();
     scan_token(start);
     flush_output(); // push [out_ptr,tok_ptr) (the expanded text) into the memory stream
     fclose(mf);
@@ -625,7 +625,7 @@ static char *pragma_operator(char *p)
     char *w        = text;
     const char *s = 0, *e = 0;
 
-    set_slow_scan();
+    SET_SLOW_SCAN();
     ++cpp.false_level; // suppress expansion and keep flush_output inert
     do
         p = skip_blanks(p);
@@ -658,7 +658,7 @@ static char *pragma_operator(char *p)
 done:
     *w = '\0';
     --cpp.false_level;
-    set_fast_scan();
+    SET_FAST_SCAN();
     cpp.out_ptr = cpp.tok_ptr = p;                 // drop the consumed _Pragma(...) region first
     fprintf(cpp.out_file, "\n#pragma %s\n", text); // then emit the directive line
     return (p);
@@ -694,7 +694,7 @@ char *expand_macro(char *p, struct symtab *sp)
     if (macro_is_painted(sp))
         return (p);
     if ((p - cpp.recur_bound) <= cpp.recur_bound_adj) {
-        if (++cpp.recur_depth > symsiz && !cpp.opt_recurse) {
+        if (++cpp.recur_depth > SYMSIZ && !cpp.opt_recurse) {
             pperror("%s: macro recursion", sp->name);
             return (p);
         }
@@ -736,7 +736,7 @@ char *expand_macro(char *p, struct symtab *sp)
         } else
             variadic = 0;
         nformals = params;
-        set_slow_scan();
+        SET_SLOW_SCAN();
         ++cpp.false_level; // no expansion during search for actuals
         cpp.paren_level = -1;
         do
@@ -750,7 +750,7 @@ char *expand_macro(char *p, struct symtab *sp)
             // would re-expand); write it straight to the output instead.
             cpp.paren_level = 0;
             --cpp.false_level;
-            set_fast_scan();
+            SET_FAST_SCAN();
             fputs(sp->name, cpp.out_file);
             putc(' ', cpp.out_file); // separator so the next token can't fuse
             if (*cpp.tok_ptr == '\0')
@@ -798,7 +798,7 @@ char *expand_macro(char *p, struct symtab *sp)
         while (--params >= 0)
             *pa++ = &""[1]; // null string for missing actuals
         --cpp.false_level;
-        set_fast_scan();
+        SET_FAST_SCAN();
         // Pre-expand each raw actual into expanded[] so a normal parameter
         // substitutes the macro-expanded argument (a '#'/'##' operand keeps the
         // raw actual[]).  expanded[n] points just past its text, which is
@@ -822,9 +822,9 @@ char *expand_macro(char *p, struct symtab *sp)
     // first (so it becomes the last token of the pushed body).  Any recurrence of
     // the name while the region is open is left un-expanded; the marker un-paints
     // the macro when the scanner reaches it.  The per-macro-appears-once invariant
-    // bounds paint_top by symsiz, so the stack cannot overflow.
+    // bounds paint_top by SYMSIZ, so the stack cannot overflow.
     cpp.paint_stack[cpp.paint_top++] = sp;
-    if (at_buf_start(p)) {
+    if (AT_BUF_START(p)) {
         cpp.out_ptr = cpp.tok_ptr = p;
         p                         = spill_buffer(p);
     }
@@ -832,8 +832,8 @@ char *expand_macro(char *p, struct symtab *sp)
     // Push the body onto the front of the input, back to front, so it will be
     // rescanned.  A WARN_MARK means "insert actual argument N here" instead.
     for (;;) { // push definition onto front of input stack
-        while (!iswarn(*--vp)) {
-            if (at_buf_start(p)) {
+        while (!ISWARN(*--vp)) {
+            if (AT_BUF_START(p)) {
                 cpp.out_ptr = cpp.tok_ptr = p;
                 p                         = spill_buffer(p);
             }
@@ -842,7 +842,7 @@ char *expand_macro(char *p, struct symtab *sp)
         if ((unsigned char)*vp == WARN_MARK) { // insert the expanded actual param
             ca = expanded[*--vp - 1];
             while (*--ca) {
-                if (at_buf_start(p)) {
+                if (AT_BUF_START(p)) {
                     cpp.out_ptr = cpp.tok_ptr = p;
                     p                         = spill_buffer(p);
                 }
@@ -857,7 +857,7 @@ char *expand_macro(char *p, struct symtab *sp)
                 --a0;
             ce = strbuf + stringize(a0, a1, strbuf);
             while (ce > strbuf) { // push the built string back-to-front
-                if (at_buf_start(p)) {
+                if (AT_BUF_START(p)) {
                     cpp.out_ptr = cpp.tok_ptr = p;
                     p                         = spill_buffer(p);
                 }
@@ -869,7 +869,7 @@ char *expand_macro(char *p, struct symtab *sp)
             while (a0[-1] != '\0') // walk back to the start of this actual's text
                 --a0;
             while (a1 > a0) { // push it back-to-front, adjacent to its neighbor
-                if (at_buf_start(p)) {
+                if (AT_BUF_START(p)) {
                     cpp.out_ptr = cpp.tok_ptr = p;
                     p                         = spill_buffer(p);
                 }
@@ -882,13 +882,13 @@ char *expand_macro(char *p, struct symtab *sp)
                 --a0;
             if (a1 > a0) { // non-empty: push the actual, then re-emit the comma
                 while (a1 > a0) {
-                    if (at_buf_start(p)) {
+                    if (AT_BUF_START(p)) {
                         cpp.out_ptr = cpp.tok_ptr = p;
                         p                         = spill_buffer(p);
                     }
                     *--p = *--a1;
                 }
-                if (at_buf_start(p)) {
+                if (AT_BUF_START(p)) {
                     cpp.out_ptr = cpp.tok_ptr = p;
                     p                         = spill_buffer(p);
                 }
