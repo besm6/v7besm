@@ -12,8 +12,8 @@ work has two halves:
   are validated as a **32-bit i486 ELF binary**, not yet BESM-6 code — this is an
   intermediate step to get the C compiling cleanly with modern warnings before retargeting.
 - **`cmd/`** — the BESM-6-specific toolchain being written/ported to eventually build the
-  kernel for real BESM-6 hardware: an assembler, a linker (+ archiver/nm/size/etc.), a C
-  preprocessor, and a disassembler.
+  kernel for real BESM-6 hardware: a C compiler driver, an assembler, a linker
+  (+ archiver/nm/size/etc.), a C preprocessor, and a disassembler.
 
 External pieces this project depends on (not in this repo):
 - BESM-6 C cross-compiler: https://github.com/besm6/c-compiler/
@@ -41,8 +41,9 @@ make clean; make debug; make   # reconfigure as a Debug build (default is RelWit
 Requires **CMake** and a host C/C++ compiler (C++17). GoogleTest is fetched automatically
 at configure time, and **cppcheck** runs as part of the build when installed. Everything is
 compiled with `-Wall -Werror -Wshadow`. Each tool is built under a `b6`-prefixed name and
-`make install` copies it into `bin/` (`cmd/as`→`b6as`, `cmd/ld`→`b6ld`, `cmd/cpp`→`b6cpp`,
-`cmd/disasm`→`b6disasm`, plus the binutils `b6ar`/`b6nm`/`b6size`/`b6strip`/`b6ranlib`/`b6lorder`).
+`make install` copies it into `bin/` (`cmd/cc`→`b6cc`, `cmd/as`→`b6as`, `cmd/ld`→`b6ld`,
+`cmd/cpp`→`b6cpp`, `cmd/disasm`→`b6disasm`, plus the binutils
+`b6ar`/`b6nm`/`b6size`/`b6strip`/`b6ranlib`/`b6lorder`).
 These are host tools that run on the build machine and emit BESM-6 objects. **Do not** invoke `cc`/`clang` by hand or run
 `cmake --build` directly — always go through the top-level `make` targets.
 
@@ -113,6 +114,16 @@ BESM-6 **6-byte word** (`W == 6`, two 3-byte big-endian half-words); the archive
 header (`cross/besm6/ar.h`, `struct ar_hdr`) is word-aligned with 30-char names and
 `ARHDRSZ == 60`. The assembler uses **AT&T-style syntax with Madlen mnemonics**; the
 disassembler prints the Cyrillic BESM-6 mnemonics directly.
+
+**`cmd/cc` (`b6cc`) is the compiler driver**, not a compiler itself. It chains the
+toolchain one sub-tool per stage — `b6cpp` → `b6parse` → `b6lower` → `b6codegen` → `b6as`
+→ `b6ld` — where `b6parse`/`b6lower`/`b6codegen` are the three passes of the external
+[c-compiler](https://github.com/besm6/c-compiler/) (installed to `~/.local/bin`). Stage
+selection follows the usual `cc` flags: `-E` (stop after cpp), `-S` (after codegen, emit
+Madlen assembly), `-c` (after assembling). Sub-tools are resolved via per-tool env
+overrides (`B6CPP`, `B6PARSE`, …) or under `~/.local/bin` then `/usr/local/bin`. Only
+`-E`/`-S` work end-to-end today; assembling/linking await `b6codegen`↔`b6as` compatibility
+and library/crt0 wiring (see `cmd/cc/TODO.md`).
 
 **`include/` is the Unix v7 system-header tree** (`sys/` plus libc-style headers). The
 kernel includes them via `-I../include`.

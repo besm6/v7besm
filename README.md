@@ -30,7 +30,7 @@ The port proceeds in two stages:
 kernel/    v7 kernel sources and device drivers (kernel/dev/)
 include/   v7 system headers (sys/)
 cross/     BESM-6 object/archive format headers (b.out.h, ar.h, ranlib.h)
-cmd/       BESM-6 toolchain: as, ld, cpp, disasm
+cmd/       BESM-6 toolchain: cc, as, ld, cpp, disasm
 doc/       BESM-6 architecture references
 ```
 
@@ -38,8 +38,9 @@ doc/       BESM-6 architecture references
 
 | Component                     | Location      | Status                        |
 |-------------------------------|---------------|-------------------------------|
+| C compiler driver             | `cmd/cc`      | ◐ drives passes; -E/-S work   |
 | Assembler (AT&T / Madlen)     | `cmd/as`      | ✔ working, tested, documented |
-| Linker + binutils             | `cmd/ld`      | ✔ working, tested             |
+| Linker + binutils             | `cmd/ld`      | ✔ working, tested, documented |
 | C preprocessor                | `cmd/cpp`     | ✔ C11, tested, documented     |
 | Disassembler                  | `cmd/disasm`  | ✔ working, tested             |
 | Kernel (i486 validation)      | `kernel/`     | ✔ builds                      |
