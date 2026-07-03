@@ -34,7 +34,7 @@ static int parse_operand(void)
         // reference, remembered in as.extref for the relocation record.
         as.intval = 0;
         ty        = as.stab[cval].n_type & N_TYPE;
-        if (ty == N_UNDF || ty == N_COMM || ty == N_ACOMM) {
+        if (ty == N_UNDF || ty == N_COMM) {
             as.extref = cval;
             return SEXT;
         }

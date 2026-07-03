@@ -165,9 +165,6 @@ static void nm(const char *name, int narg)
         case N_BSS:
             c = 'b';
             break;
-        case N_ABSS:
-            c = 'y';
-            break;
         case N_FN:
             c = 'f';
             break;
@@ -176,9 +173,6 @@ static void nm(const char *name, int narg)
             break;
         case N_COMM:
             c = 'c';
-            break;
-        case N_ACOMM:
-            c = 'm';
             break;
         }
         if (undef_flg && c != 'u') {

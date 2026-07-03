@@ -38,8 +38,7 @@ std::string current_test_name()
 
 // Write a relocatable a.out object whose header carries exactly these segment
 // sizes (in bytes).  size reads only the header, so no segment images follow.
-void build_object(const std::string &path, long a_const, long a_text, long a_data, long a_bss,
-                  long a_abss)
+void build_object(const std::string &path, long a_const, long a_text, long a_data, long a_bss)
 {
     struct exec hdr;
     std::memset(&hdr, 0, sizeof(hdr));
@@ -48,7 +47,6 @@ void build_object(const std::string &path, long a_const, long a_text, long a_dat
     hdr.a_text  = a_text;
     hdr.a_data  = a_data;
     hdr.a_bss   = a_bss;
-    hdr.a_abss  = a_abss;
     hdr.a_flag  = RELFLG;
 
     FILE *f = std::fopen(path.c_str(), "w");
@@ -88,18 +86,18 @@ size_t at(const std::string &hay, const std::string &needle)
 
 } // namespace
 
-// Byte mode prints the column header plus a tab-separated row with the five
+// Byte mode prints the column header plus a tab-separated row with the four
 // segment sizes, their decimal sum, and that sum in hex.
 TEST(Size, ByteSizes)
 {
     std::string obj = current_test_name() + ".o";
-    build_object(obj, 12, 24, 36, 48, 60); // sum = 180 = 0xb4
+    build_object(obj, 12, 24, 36, 48); // sum = 120 = 0x78
 
     Result r = run_size({ "b6size", obj });
 
     EXPECT_EQ(r.rc, 0) << r.out;
-    EXPECT_NE(at(r.out, "const\ttext\tdata\tbss\tabss\tdec\thex\n"), std::string::npos) << r.out;
-    EXPECT_NE(at(r.out, "12\t24\t36\t48\t60\t180\tb4\t" + obj + "\n"), std::string::npos) << r.out;
+    EXPECT_NE(at(r.out, "const\ttext\tdata\tbss\tdec\thex\n"), std::string::npos) << r.out;
+    EXPECT_NE(at(r.out, "12\t24\t36\t48\t120\t78\t" + obj + "\n"), std::string::npos) << r.out;
 
     unlink(obj.c_str());
 }
@@ -108,12 +106,12 @@ TEST(Size, ByteSizes)
 TEST(Size, WordSizes)
 {
     std::string obj = current_test_name() + ".o";
-    build_object(obj, 12, 24, 36, 48, 60); // /6 -> 2 4 6 8 10, sum 30 = 0x1e
+    build_object(obj, 12, 24, 36, 48); // /6 -> 2 4 6 8, sum 20 = 0x14
 
     Result r = run_size({ "b6size", "-w", obj });
 
     EXPECT_EQ(r.rc, 0) << r.out;
-    EXPECT_NE(at(r.out, "2\t4\t6\t8\t10\t30\t1e\t" + obj + "\n"), std::string::npos) << r.out;
+    EXPECT_NE(at(r.out, "2\t4\t6\t8\t20\t14\t" + obj + "\n"), std::string::npos) << r.out;
 
     unlink(obj.c_str());
 }
@@ -123,8 +121,8 @@ TEST(Size, HeaderOnce)
 {
     std::string a = current_test_name() + ".a.o";
     std::string b = current_test_name() + ".b.o";
-    build_object(a, W, W, W, 0, 0);
-    build_object(b, W, W, W, 0, 0);
+    build_object(a, W, W, W, 0);
+    build_object(b, W, W, W, 0);
 
     Result r = run_size({ "b6size", a, b });
 
@@ -141,7 +139,7 @@ TEST(Size, HeaderOnce)
 TEST(Size, BadFlag)
 {
     std::string obj = current_test_name() + ".o";
-    build_object(obj, W, W, W, 0, 0);
+    build_object(obj, W, W, W, 0);
 
     Result r = run_size({ "b6size", "-x", obj });
 

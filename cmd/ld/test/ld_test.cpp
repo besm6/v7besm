@@ -95,21 +95,20 @@ TEST(Link, AssembleAndLink)
     EXPECT_EQ(ld_link(5, argv), 0);
 
     auto img = read_file(image);
-    ASSERT_GE(img.size(), (size_t)10 * 6); // header (9 words) + at least one text word
+    ASSERT_GE(img.size(), (size_t)9 * 6); // header (8 words) + at least one text word
 
-    // Header: 9 words, each value in the low half-word (a_magic is a full word).
+    // Header: 8 words, each value in the low half-word (a_magic is a full word).
     EXPECT_EQ((word_high(img, 0) << 24) | word_low(img, 0), 02044252323200407L); // a_magic = FMAGIC
     EXPECT_EQ(word_low(img, 1), 0L);    // a_const: no const segment
     EXPECT_EQ(word_low(img, 2), 6L);    // a_text:  one 48-bit word
     EXPECT_EQ(word_low(img, 3), 0L);    // a_data
     EXPECT_EQ(word_low(img, 4), 0L);    // a_bss
-    EXPECT_EQ(word_low(img, 5), 0L);    // a_abss
-    EXPECT_EQ(word_low(img, 7), 0100L); // a_entry = torigin = load base 0100
-    EXPECT_EQ(word_low(img, 8), 1L);    // a_flag = RELFLG (fully linked, rflag==0)
+    EXPECT_EQ(word_low(img, 6), 0100L); // a_entry = torigin = load base 0100
+    EXPECT_EQ(word_low(img, 7), 1L);    // a_flag = RELFLG (fully linked, rflag==0)
 
-    // The relocated text word (file word 9): atx 0 in the high half (unchanged),
+    // The relocated text word (file word 8): atx 0 in the high half (unchanged),
     // `uj foo` in the low half with foo relocated to 0100.  The opcode bits
     // (03000000) MUST survive relocation -- this is the LD-2 check.
-    EXPECT_EQ(word_high(img, 9), 0L);          // atx 0
-    EXPECT_EQ(word_low(img, 9), 03000000L | 0100L); // uj foo -> 0100, opcode preserved
+    EXPECT_EQ(word_high(img, 8), 0L);          // atx 0
+    EXPECT_EQ(word_low(img, 8), 03000000L | 0100L); // uj foo -> 0100, opcode preserved
 }

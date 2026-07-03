@@ -14,7 +14,7 @@
 // adjustment depends on the symbol's segment type:
 //   - const: the constant pool was de-duplicated, so look up where this file's
 //     constant ended up via the newindex map.
-//   - text/data/bss/abss: shift by this file's relocation bias for that segment.
+//   - text/data/bss: shift by this file's relocation bias for that segment.
 //   - undefined / common: nothing to do yet (resolved later).
 //   - anything else external: treat as a plain absolute value.
 //
@@ -44,14 +44,8 @@ void relocate_cursym(void)
         ld.cursym.n_value += ld.cbrel;
         return;
 
-    case N_ABSS:
-    case N_EXT + N_ABSS:
-        ld.cursym.n_value += ld.carel;
-        return;
-
     case N_EXT + N_UNDF:
     case N_EXT + N_COMM:
-    case N_EXT + N_ACOMM:
         return;
     }
     if (ld.cursym.n_type & N_EXT)

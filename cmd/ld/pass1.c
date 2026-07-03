@@ -80,7 +80,6 @@ int scan_object(long loc, int libflg, int nloc)
     ld.ctrel += ld.tsize / W;
     ld.cdrel += ld.dsize / W;
     ld.cbrel += ld.bsize / W;
-    ld.carel += ld.asize / W;
     loc += HDRSZ + (ld.filhdr.a_const + ld.filhdr.a_text + ld.filhdr.a_data) * 2;
     fseek(ld.text, loc, 0);
     ndef     = 0;
@@ -102,7 +101,7 @@ int scan_object(long loc, int libflg, int nloc)
         type = ld.cursym.n_type;
 
         // -S drops absolute and debug symbols.
-        if (ld.Sflag && ((type & N_TYPE) == N_ABS || (type & N_TYPE) > N_ACOMM)) {
+        if (ld.Sflag && ((type & N_TYPE) == N_ABS || (type & N_TYPE) > N_COMM)) {
             free(ld.cursym.n_name);
             continue;
         }
@@ -130,9 +129,8 @@ int scan_object(long loc, int libflg, int nloc)
         sp = ld.lastsym;
 
         // The existing entry is still unresolved (undefined or common).  Merge:
-        if (sp->n_type == N_EXT + N_UNDF || sp->n_type == N_EXT + N_COMM ||
-            sp->n_type == N_EXT + N_ACOMM) {
-            if (ld.cursym.n_type == N_EXT + N_COMM || ld.cursym.n_type == N_EXT + N_ACOMM) {
+        if (sp->n_type == N_EXT + N_UNDF || sp->n_type == N_EXT + N_COMM) {
+            if (ld.cursym.n_type == N_EXT + N_COMM) {
                 // New one is also common: keep the larger size requested.
                 sp->n_type = ld.cursym.n_type;
                 if (ld.cursym.n_value > sp->n_value)
@@ -154,7 +152,6 @@ int scan_object(long loc, int libflg, int nloc)
         ld.tsize = add_size(ld.tsize, ld.filhdr.a_text, "text segment overflow");
         ld.dsize = add_size(ld.dsize, ld.filhdr.a_data, "data segment overflow");
         ld.bsize = add_size(ld.bsize, ld.filhdr.a_bss, "bss segment overflow");
-        ld.asize = add_size_long(ld.asize, ld.filhdr.a_abss, "abss segment overflow");
         ld.ssize = add_size(ld.ssize, (long)nloc, "symbol table overflow");
         ld.nsym += nsymbol;
         return 1;

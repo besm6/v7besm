@@ -84,15 +84,15 @@ struct Sym {
     long value;
 };
 
-// Walk the symbol table.  The file is header (54 B) then the const/text/data
+// Walk the symbol table.  The file is header (48 B) then the const/text/data
 // segments, then their relocation records (same byte sizes), then the symbol
 // table (a_syms bytes).  Each entry is n_len(1) n_type(1) n_value(3, big-endian)
 // followed by n_len name bytes; the table is zero-padded to a word at the end.
 static std::vector<Sym> read_symbols(const std::vector<unsigned char> &b)
 {
     long a_const = word_low(b, 1), a_text = word_low(b, 2), a_data = word_low(b, 3);
-    long a_syms = word_low(b, 6);
-    size_t off = 54 + 2 * (size_t)(a_const + a_text + a_data);
+    long a_syms = word_low(b, 5);
+    size_t off = 48 + 2 * (size_t)(a_const + a_text + a_data);
     size_t end = off + (size_t)a_syms;
     std::vector<Sym> out;
     while (off + 5 <= end && b[off] != 0) {
@@ -111,7 +111,7 @@ static std::vector<Sym> read_symbols(const std::vector<unsigned char> &b)
 static long reloc_half(const std::vector<unsigned char> &b, int seg, int i)
 {
     long a_const = word_low(b, 1), a_text = word_low(b, 2), a_data = word_low(b, 3);
-    size_t o = 54 + (size_t)(a_const + a_text + a_data); // start of relocation area
+    size_t o = 48 + (size_t)(a_const + a_text + a_data); // start of relocation area
     if (seg >= 1)
         o += a_const;
     if (seg >= 2)
@@ -125,7 +125,7 @@ static long reloc_half(const std::vector<unsigned char> &b, int seg, int i)
 // word: the first lands in the high (left, executed-first) half-word, the second
 // in the low half-word.  The three TALIGN instructions (vjm/ij/stop) cause a utc
 // (02200000) filler to be inserted in the low half so the following instruction
-// stays word-aligned.  Text begins at file word 9 (a_entry/HDRSZ).
+// stays word-aligned.  Text begins at file word 8 (a_entry/HDRSZ).
 //
 // Every instruction also carries an operand, so this exercises the whole address
 // path without growing the text segment (still 41 words): direct addresses in
@@ -229,91 +229,91 @@ mid:                        ; second label
     // Short-address instructions (opcodes 000-077, val = opcode << 12).  Each
     // now carries an operand, so the expected value is val | (addr & 07777);
     // an index or leading modifier register adds (reg << 20).
-    EXPECT_EQ(word_high(got, 9), 00000000L | 0123L);  // atx 0123  (start:)
-    EXPECT_EQ(word_low(got, 9), 00010000L | 0144L);   // stx 100   (decimal)
-    EXPECT_EQ(word_high(got, 10), 00020000L | 052L);  // mod 0x2a  (hex)
-    EXPECT_EQ(word_low(got, 10), 00030000L | 020L);   // xts .5    (bit mask)
-    EXPECT_EQ(word_high(got, 11), 00040000L | 0123L); // a+x 0100+0023
-    EXPECT_EQ(word_low(got, 11), 00050000L | 0123L);  // a-x 0200-0055
-    EXPECT_EQ(word_high(got, 12), 00060000L | 0307L); // x-a 0777&0307
-    EXPECT_EQ(word_low(got, 12), 00070000L | 0123L);  // amx 0100|0023
-    EXPECT_EQ(word_high(got, 13), 00100000L | 9L);    // xta start  (label == word 9)
-    EXPECT_EQ(word_low(got, 13), 00110000L | 0123L);  // aax 0143^0060
-    EXPECT_EQ(word_high(got, 14), (5L << 20) | 00120000L | 0123L); // aex 0123, 5
-    EXPECT_EQ(word_low(got, 14), 00130000L | 07654L); // arx 07777 ~ 07654
-    EXPECT_EQ(word_high(got, 15), 00140000L | 0100L); // avx 1 \< 6   (shift left)
-    EXPECT_EQ(word_low(got, 15), 00150000L | 0100L);  // aox 0200 \> 1 (shift right)
-    EXPECT_EQ(word_high(got, 16), 00160000L | 077L);  // a/x 7*011    (multiply)
-    EXPECT_EQ(word_low(got, 16), 00170000L | 012L);   // a*x 0144/012 (divide)
-    EXPECT_EQ(word_high(got, 17), 00200000L | 1L);    // apx 0145%012 (modulo)
-    EXPECT_EQ(word_low(got, 17), 00210000L | 011L);   // aux 1+2*3 == (1+2)*3
-    EXPECT_EQ(word_high(got, 18), 00220000L | 7L);    // acx 1+(2*3)  (grouping)
-    EXPECT_EQ(word_low(got, 18), 00230000L | 0123L);  // anx {0123}   (braces)
-    EXPECT_EQ(word_high(got, 19), 00240000L | 010L);  // e+x 010
-    EXPECT_EQ(word_low(got, 19), 00250000L | 0234L);  // e-x 0234
-    EXPECT_EQ(word_high(got, 20), 00260000L | 07777L); // asx 4095  (== 07777)
-    EXPECT_EQ(word_low(got, 20), (4L << 20) | 00270000L | 0567L); // 4 xtr 0567
-    EXPECT_EQ(word_high(got, 21), 00300000L | 077L);  // rte 077
-    EXPECT_EQ(word_low(got, 21), 00310000L | 1L);     // yta .1
-    EXPECT_EQ(word_high(got, 22), 00320000L | 0123L); // $32 0123
-    EXPECT_EQ(word_low(got, 22), 00330000L | 0246L);  // $33 0246
-    EXPECT_EQ(word_high(got, 23), 00340000L | 010L);  // e+n 010
-    EXPECT_EQ(word_low(got, 23), 00350000L | 020L);   // e-n 020
-    EXPECT_EQ(word_high(got, 24), 00360000L | 0300L); // asn 0300
-    EXPECT_EQ(word_low(got, 24), 00370000L | 0252L);  // ntr K  (K = 0252, absolute equate)
-    EXPECT_EQ(word_high(got, 25), 00400000L | 2L);    // ati 2  (mid:)
-    EXPECT_EQ(word_low(got, 25), 00410000L | 3L);     // sti 3
-    EXPECT_EQ(word_high(got, 26), 00420000L | 4L);    // ita 4
-    EXPECT_EQ(word_low(got, 26), 00430000L | 5L);     // its 5
-    EXPECT_EQ(word_high(got, 27), (1L << 20) | 00440000L | 6L); // mtj 6, 1
-    EXPECT_EQ(word_low(got, 27), (8L << 20) | 00450000L | 7L);  // 8 j+m 7
-    EXPECT_EQ(word_high(got, 28), 00460000L | 050L);  // $46 050
-    EXPECT_EQ(word_low(got, 28), 00470000L | 051L);   // $47 051
-    EXPECT_EQ(word_high(got, 29), 00500000L | 052L);  // $50 052
-    EXPECT_EQ(word_low(got, 29), 00510000L | 053L);   // $51 053
-    EXPECT_EQ(word_high(got, 30), 00520000L | 054L);  // $52 054
-    EXPECT_EQ(word_low(got, 30), 00530000L | 055L);   // $53 055
-    EXPECT_EQ(word_high(got, 31), 00540000L | 056L);  // $54 056
-    EXPECT_EQ(word_low(got, 31), 00550000L | 057L);   // $55 057
-    EXPECT_EQ(word_high(got, 32), 00560000L | 060L);  // $56 060
-    EXPECT_EQ(word_low(got, 32), 00570000L | 061L);   // $57 061
-    EXPECT_EQ(word_high(got, 33), 00600000L | 062L);  // $60 062
-    EXPECT_EQ(word_low(got, 33), 00610000L | 063L);   // $61 063
-    EXPECT_EQ(word_high(got, 34), 00620000L | 064L);  // $62 064
-    EXPECT_EQ(word_low(got, 34), 00630000L | 065L);   // $63 065
-    EXPECT_EQ(word_high(got, 35), 00640000L | 066L);  // $64 066
-    EXPECT_EQ(word_low(got, 35), 00650000L | 067L);   // $65 067
-    EXPECT_EQ(word_high(got, 36), 00660000L | 070L);  // $66 070
-    EXPECT_EQ(word_low(got, 36), 00670000L | 071L);   // $67 071
-    EXPECT_EQ(word_high(got, 37), 00700000L | 072L);  // $70 072
-    EXPECT_EQ(word_low(got, 37), 00710000L | 073L);   // $71 073
-    EXPECT_EQ(word_high(got, 38), 00720000L | 074L);  // $72 074
-    EXPECT_EQ(word_low(got, 38), 00730000L | 075L);   // $73 075
-    EXPECT_EQ(word_high(got, 39), 00740000L | 076L);  // $74 076
-    EXPECT_EQ(word_low(got, 39), 00750000L | 077L);   // $75 077
-    EXPECT_EQ(word_high(got, 40), 00760000L | 0100L); // $76 0100
-    EXPECT_EQ(word_low(got, 40), 00770000L | 0101L);  // $77 0101
+    EXPECT_EQ(word_high(got, 8), 00000000L | 0123L);  // atx 0123  (start:)
+    EXPECT_EQ(word_low(got, 8), 00010000L | 0144L);   // stx 100   (decimal)
+    EXPECT_EQ(word_high(got, 9), 00020000L | 052L);  // mod 0x2a  (hex)
+    EXPECT_EQ(word_low(got, 9), 00030000L | 020L);   // xts .5    (bit mask)
+    EXPECT_EQ(word_high(got, 10), 00040000L | 0123L); // a+x 0100+0023
+    EXPECT_EQ(word_low(got, 10), 00050000L | 0123L);  // a-x 0200-0055
+    EXPECT_EQ(word_high(got, 11), 00060000L | 0307L); // x-a 0777&0307
+    EXPECT_EQ(word_low(got, 11), 00070000L | 0123L);  // amx 0100|0023
+    EXPECT_EQ(word_high(got, 12), 00100000L | 8L);    // xta start  (label == word 8)
+    EXPECT_EQ(word_low(got, 12), 00110000L | 0123L);  // aax 0143^0060
+    EXPECT_EQ(word_high(got, 13), (5L << 20) | 00120000L | 0123L); // aex 0123, 5
+    EXPECT_EQ(word_low(got, 13), 00130000L | 07654L); // arx 07777 ~ 07654
+    EXPECT_EQ(word_high(got, 14), 00140000L | 0100L); // avx 1 \< 6   (shift left)
+    EXPECT_EQ(word_low(got, 14), 00150000L | 0100L);  // aox 0200 \> 1 (shift right)
+    EXPECT_EQ(word_high(got, 15), 00160000L | 077L);  // a/x 7*011    (multiply)
+    EXPECT_EQ(word_low(got, 15), 00170000L | 012L);   // a*x 0144/012 (divide)
+    EXPECT_EQ(word_high(got, 16), 00200000L | 1L);    // apx 0145%012 (modulo)
+    EXPECT_EQ(word_low(got, 16), 00210000L | 011L);   // aux 1+2*3 == (1+2)*3
+    EXPECT_EQ(word_high(got, 17), 00220000L | 7L);    // acx 1+(2*3)  (grouping)
+    EXPECT_EQ(word_low(got, 17), 00230000L | 0123L);  // anx {0123}   (braces)
+    EXPECT_EQ(word_high(got, 18), 00240000L | 010L);  // e+x 010
+    EXPECT_EQ(word_low(got, 18), 00250000L | 0234L);  // e-x 0234
+    EXPECT_EQ(word_high(got, 19), 00260000L | 07777L); // asx 4095  (== 07777)
+    EXPECT_EQ(word_low(got, 19), (4L << 20) | 00270000L | 0567L); // 4 xtr 0567
+    EXPECT_EQ(word_high(got, 20), 00300000L | 077L);  // rte 077
+    EXPECT_EQ(word_low(got, 20), 00310000L | 1L);     // yta .1
+    EXPECT_EQ(word_high(got, 21), 00320000L | 0123L); // $32 0123
+    EXPECT_EQ(word_low(got, 21), 00330000L | 0246L);  // $33 0246
+    EXPECT_EQ(word_high(got, 22), 00340000L | 010L);  // e+n 010
+    EXPECT_EQ(word_low(got, 22), 00350000L | 020L);   // e-n 020
+    EXPECT_EQ(word_high(got, 23), 00360000L | 0300L); // asn 0300
+    EXPECT_EQ(word_low(got, 23), 00370000L | 0252L);  // ntr K  (K = 0252, absolute equate)
+    EXPECT_EQ(word_high(got, 24), 00400000L | 2L);    // ati 2  (mid:)
+    EXPECT_EQ(word_low(got, 24), 00410000L | 3L);     // sti 3
+    EXPECT_EQ(word_high(got, 25), 00420000L | 4L);    // ita 4
+    EXPECT_EQ(word_low(got, 25), 00430000L | 5L);     // its 5
+    EXPECT_EQ(word_high(got, 26), (1L << 20) | 00440000L | 6L); // mtj 6, 1
+    EXPECT_EQ(word_low(got, 26), (8L << 20) | 00450000L | 7L);  // 8 j+m 7
+    EXPECT_EQ(word_high(got, 27), 00460000L | 050L);  // $46 050
+    EXPECT_EQ(word_low(got, 27), 00470000L | 051L);   // $47 051
+    EXPECT_EQ(word_high(got, 28), 00500000L | 052L);  // $50 052
+    EXPECT_EQ(word_low(got, 28), 00510000L | 053L);   // $51 053
+    EXPECT_EQ(word_high(got, 29), 00520000L | 054L);  // $52 054
+    EXPECT_EQ(word_low(got, 29), 00530000L | 055L);   // $53 055
+    EXPECT_EQ(word_high(got, 30), 00540000L | 056L);  // $54 056
+    EXPECT_EQ(word_low(got, 30), 00550000L | 057L);   // $55 057
+    EXPECT_EQ(word_high(got, 31), 00560000L | 060L);  // $56 060
+    EXPECT_EQ(word_low(got, 31), 00570000L | 061L);   // $57 061
+    EXPECT_EQ(word_high(got, 32), 00600000L | 062L);  // $60 062
+    EXPECT_EQ(word_low(got, 32), 00610000L | 063L);   // $61 063
+    EXPECT_EQ(word_high(got, 33), 00620000L | 064L);  // $62 064
+    EXPECT_EQ(word_low(got, 33), 00630000L | 065L);   // $63 065
+    EXPECT_EQ(word_high(got, 34), 00640000L | 066L);  // $64 066
+    EXPECT_EQ(word_low(got, 34), 00650000L | 067L);   // $65 067
+    EXPECT_EQ(word_high(got, 35), 00660000L | 070L);  // $66 070
+    EXPECT_EQ(word_low(got, 35), 00670000L | 071L);   // $67 071
+    EXPECT_EQ(word_high(got, 36), 00700000L | 072L);  // $70 072
+    EXPECT_EQ(word_low(got, 36), 00710000L | 073L);   // $71 073
+    EXPECT_EQ(word_high(got, 37), 00720000L | 074L);  // $72 074
+    EXPECT_EQ(word_low(got, 37), 00730000L | 075L);   // $73 075
+    EXPECT_EQ(word_high(got, 38), 00740000L | 076L);  // $74 076
+    EXPECT_EQ(word_low(got, 38), 00750000L | 077L);   // $75 077
+    EXPECT_EQ(word_high(got, 39), 00760000L | 0100L); // $76 0100
+    EXPECT_EQ(word_low(got, 39), 00770000L | 0101L);  // $77 0101
 
     // Long-address instructions (opcodes 020-037, val = opcode << 15,
     // 15-bit address field & 077777).
-    EXPECT_EQ(word_high(got, 41), 02000000L | 040000L); // @20 040000
-    EXPECT_EQ(word_low(got, 41), 02100000L | 041234L);  // @21 041234
-    EXPECT_EQ(word_high(got, 42), 02200000L | 050000L); // utc 050000
-    EXPECT_EQ(word_low(got, 42), 02300000L | 0123L);    // wtc 0123
-    EXPECT_EQ(word_high(got, 43), (2L << 20) | 02400000L | 040000L); // vtm 040000, 2
-    EXPECT_EQ(word_low(got, 43), 02500000L | 010L);     // utm 0b1000 (binary == 010)
-    EXPECT_EQ(word_high(got, 44), 02600000L | 9L);      // uza start (== word 9)
-    EXPECT_EQ(word_low(got, 44), 02700000L | 25L);      // u1a mid   (== word 25)
-    EXPECT_EQ(word_high(got, 45), 03000000L | 0L);      // uj 0
-    EXPECT_EQ(word_low(got, 45), 03100000L | 060000L);  // vjm 060000 (lands low: no filler)
-    EXPECT_EQ(word_high(got, 46), 03200000L | 0123L);   // ij 0123
-    EXPECT_EQ(word_low(got, 46), 02200000L);            // utc filler (align after ij)
-    EXPECT_EQ(word_high(got, 47), 03300000L | 0456L);   // stop 0456
-    EXPECT_EQ(word_low(got, 47), 02200000L);            // utc filler (align after stop)
-    EXPECT_EQ(word_high(got, 48), 03400000L | 070000L); // vzm 070000
-    EXPECT_EQ(word_low(got, 48), 03500000L | 077777L);  // v1m 077777 (max 15-bit)
-    EXPECT_EQ(word_high(got, 49), 03600000L | 012345L); // @36 012345
-    EXPECT_EQ(word_low(got, 49), 03700000L | 25L);      // vlm mid    (== word 25)
+    EXPECT_EQ(word_high(got, 40), 02000000L | 040000L); // @20 040000
+    EXPECT_EQ(word_low(got, 40), 02100000L | 041234L);  // @21 041234
+    EXPECT_EQ(word_high(got, 41), 02200000L | 050000L); // utc 050000
+    EXPECT_EQ(word_low(got, 41), 02300000L | 0123L);    // wtc 0123
+    EXPECT_EQ(word_high(got, 42), (2L << 20) | 02400000L | 040000L); // vtm 040000, 2
+    EXPECT_EQ(word_low(got, 42), 02500000L | 010L);     // utm 0b1000 (binary == 010)
+    EXPECT_EQ(word_high(got, 43), 02600000L | 8L);      // uza start (== word 8)
+    EXPECT_EQ(word_low(got, 43), 02700000L | 24L);      // u1a mid   (== word 24)
+    EXPECT_EQ(word_high(got, 44), 03000000L | 0L);      // uj 0
+    EXPECT_EQ(word_low(got, 44), 03100000L | 060000L);  // vjm 060000 (lands low: no filler)
+    EXPECT_EQ(word_high(got, 45), 03200000L | 0123L);   // ij 0123
+    EXPECT_EQ(word_low(got, 45), 02200000L);            // utc filler (align after ij)
+    EXPECT_EQ(word_high(got, 46), 03300000L | 0456L);   // stop 0456
+    EXPECT_EQ(word_low(got, 46), 02200000L);            // utc filler (align after stop)
+    EXPECT_EQ(word_high(got, 47), 03400000L | 070000L); // vzm 070000
+    EXPECT_EQ(word_low(got, 47), 03500000L | 077777L);  // v1m 077777 (max 15-bit)
+    EXPECT_EQ(word_high(got, 48), 03600000L | 012345L); // @36 012345
+    EXPECT_EQ(word_low(got, 48), 03700000L | 24L);      // vlm mid    (== word 24)
 }
 
 // Header fields live in the low half-word of their file word (a_const = word 1,
@@ -338,25 +338,25 @@ lbl:    atx 0
         . = . + 3
         stx 0
 )");
-    EXPECT_EQ(word_high(got, 9), 02200000L | 040000L);  // utc 040000
-    EXPECT_EQ(word_low(got, 9), 00100000L);             // xta 0
-    EXPECT_EQ(word_high(got, 10), 02300000L | 050000L); // wtc 050000
-    EXPECT_EQ(word_low(got, 10), 00000000L);            // atx 0
+    EXPECT_EQ(word_high(got, 8), 02200000L | 040000L);  // utc 040000
+    EXPECT_EQ(word_low(got, 8), 00100000L);             // xta 0
+    EXPECT_EQ(word_high(got, 9), 02300000L | 050000L); // wtc 050000
+    EXPECT_EQ(word_low(got, 9), 00000000L);            // atx 0
 
-    EXPECT_EQ(word_low(got, 11), 02200000L);  // filler from the lone ':'
-    EXPECT_EQ(word_high(got, 12), 00010000L); // stx 0
-    EXPECT_EQ(word_low(got, 12), 02200000L);  // filler before lbl:
-    EXPECT_EQ(word_high(got, 13), 00000000L); // atx 0  (lbl:)
+    EXPECT_EQ(word_low(got, 10), 02200000L);  // filler from the lone ':'
+    EXPECT_EQ(word_high(got, 11), 00010000L); // stx 0
+    EXPECT_EQ(word_low(got, 11), 02200000L);  // filler before lbl:
+    EXPECT_EQ(word_high(got, 12), 00000000L); // atx 0  (lbl:)
 
     EXPECT_EQ(word_low(got, 2), 54);          // a_text == 9 words
-    EXPECT_EQ(word_high(got, 14), 02200000L); // a utc filler in the gap
-    EXPECT_EQ(word_high(got, 17), 00010000L); // stx 0
+    EXPECT_EQ(word_high(got, 13), 02200000L); // a utc filler in the gap
+    EXPECT_EQ(word_high(got, 16), 00010000L); // stx 0
 }
 
 // Data-emitting directives and segment switches.  Each segment accumulates
 // independently and the file lays them out const/text/data/strng/bss, so the
-// lone text instruction takes file word 9 and the data words follow from word
-// 10; .strng folds onto the end of data; .bss only advances a_bss.
+// lone text instruction takes file word 8 and the data words follow from word
+// 9; .strng folds onto the end of data; .bss only advances a_bss.
 TEST(Assemble, DataDirective)
 {
     // .word emits a full 48-bit word: its low 24 bits land in the high half-word
@@ -388,27 +388,27 @@ TEST(Assemble, DataDirective)
     EXPECT_EQ(word_low(got, 3), 66); // a_data == 8 + 2 .word + 1 strng word
     EXPECT_EQ(word_low(got, 4), 24); // a_bss  == 4 words
 
-    // .word: the data words begin at file word 10 (text holds word 9).
-    EXPECT_EQ(word_high(got, 10), 0123L); // .word 0123
-    EXPECT_EQ(word_low(got, 10), 0);
-    EXPECT_EQ(word_high(got, 11), 0456L);     // .word 0456
-    EXPECT_EQ(word_high(got, 12), 0x0f0f0fL); // low 24 bits of the value
-    EXPECT_EQ(word_low(got, 12), 0);          // high 24 bits
+    // .word: the data words begin at file word 9 (text holds word 8).
+    EXPECT_EQ(word_high(got, 9), 0123L); // .word 0123
+    EXPECT_EQ(word_low(got, 9), 0);
+    EXPECT_EQ(word_high(got, 10), 0456L);     // .word 0456
+    EXPECT_EQ(word_high(got, 11), 0x0f0f0fL); // low 24 bits of the value
+    EXPECT_EQ(word_low(got, 11), 0);          // high 24 bits
 
     // .half packs two 24-bit half-words per word, padding the last with zero.
-    EXPECT_EQ(word_high(got, 13), 0111L);
-    EXPECT_EQ(word_low(got, 13), 0222L);
-    EXPECT_EQ(word_high(got, 14), 0333L);
-    EXPECT_EQ(word_low(got, 14), 0); // pad
+    EXPECT_EQ(word_high(got, 12), 0111L);
+    EXPECT_EQ(word_low(got, 12), 0222L);
+    EXPECT_EQ(word_high(got, 13), 0333L);
+    EXPECT_EQ(word_low(got, 13), 0); // pad
 
     // .ascii packs six raw bytes per word, big-endian.  "ABCDEF" gains the
     // always-appended pad word; "Hi\n" is zero-padded within its word.
-    EXPECT_EQ(word_high(got, 15), 0x414243L); // "ABC"
-    EXPECT_EQ(word_low(got, 15), 0x444546L);  // "DEF"
-    EXPECT_EQ(word_high(got, 16), 0);         // the always-appended pad word
-    EXPECT_EQ(word_low(got, 16), 0);
-    EXPECT_EQ(word_high(got, 17), 0x48690aL); // 'H' 'i' '\n'
-    EXPECT_EQ(word_low(got, 17), 0);          // zero-padded
+    EXPECT_EQ(word_high(got, 14), 0x414243L); // "ABC"
+    EXPECT_EQ(word_low(got, 14), 0x444546L);  // "DEF"
+    EXPECT_EQ(word_high(got, 15), 0);         // the always-appended pad word
+    EXPECT_EQ(word_low(got, 15), 0);
+    EXPECT_EQ(word_high(got, 16), 0x48690aL); // 'H' 'i' '\n'
+    EXPECT_EQ(word_low(got, 16), 0);          // zero-padded
 }
 
 // Values that use bits 24..31 (and full 48-bit values) must survive intact: the
@@ -431,22 +431,22 @@ TEST(Assemble, WideWords)
     EXPECT_EQ(word_low(got, 3), 48); // a_data == 8 words * 6 bytes
 
     // low 24 bits -> high half-word; high 24 bits -> low half-word.
-    EXPECT_EQ(word_high(got, 9), 0L); // .word 0x1000000
-    EXPECT_EQ(word_low(got, 9), 1L);
-    EXPECT_EQ(word_high(got, 10), 0x123456L); // .word 0xabcdef123456
-    EXPECT_EQ(word_low(got, 10), 0xabcdefL);
-    EXPECT_EQ(word_high(got, 11), 0L); // .word 16777216
+    EXPECT_EQ(word_high(got, 8), 0L); // .word 0x1000000
+    EXPECT_EQ(word_low(got, 8), 1L);
+    EXPECT_EQ(word_high(got, 9), 0x123456L); // .word 0xabcdef123456
+    EXPECT_EQ(word_low(got, 9), 0xabcdefL);
+    EXPECT_EQ(word_high(got, 10), 0L); // .word 16777216
+    EXPECT_EQ(word_low(got, 10), 1L);
+    EXPECT_EQ(word_high(got, 11), 0L); // .word 0100000000
     EXPECT_EQ(word_low(got, 11), 1L);
-    EXPECT_EQ(word_high(got, 12), 0L); // .word 0100000000
+    EXPECT_EQ(word_high(got, 12), 0L); // .word 0b1 \< 24
     EXPECT_EQ(word_low(got, 12), 1L);
-    EXPECT_EQ(word_high(got, 13), 0L); // .word 0b1 \< 24
-    EXPECT_EQ(word_low(got, 13), 1L);
-    EXPECT_EQ(word_high(got, 14), 0L);          // .word .[48:25]
-    EXPECT_EQ(word_low(got, 14), 0xffffffL);    // bits 25..48 == whole high half
-    EXPECT_EQ(word_high(got, 15), 0xf80000L);   // .word .[28:20] -> bits 20..24
-    EXPECT_EQ(word_low(got, 15), 0xfL);         //               -> bits 25..28
-    EXPECT_EQ(word_high(got, 16), 0x0fffffL);   // .word .[28=20] (complement)
-    EXPECT_EQ(word_low(got, 16), 0xfffff8L);
+    EXPECT_EQ(word_high(got, 13), 0L);          // .word .[48:25]
+    EXPECT_EQ(word_low(got, 13), 0xffffffL);    // bits 25..48 == whole high half
+    EXPECT_EQ(word_high(got, 14), 0xf80000L);   // .word .[28:20] -> bits 20..24
+    EXPECT_EQ(word_low(got, 14), 0xfL);         //               -> bits 25..28
+    EXPECT_EQ(word_high(got, 15), 0x0fffffL);   // .word .[28=20] (complement)
+    EXPECT_EQ(word_low(got, 15), 0xfffff8L);
 }
 
 // The '#' constant-pool operator: the value goes into the const segment (which
@@ -461,13 +461,13 @@ TEST(Assemble, ConstPool)
     EXPECT_EQ(word_low(got, 1), 6); // a_const == 1 word (deduplicated)
     EXPECT_EQ(word_low(got, 2), 6); // a_text  == 1 word
 
-    // The pooled constant sits at file word 9 (right after the 9-word header).
-    EXPECT_EQ(word_high(got, 9), 0123L); // constant value, low 24 bits
-    EXPECT_EQ(word_low(got, 9), 0);
+    // The pooled constant sits at file word 8 (right after the 8-word header).
+    EXPECT_EQ(word_high(got, 8), 0123L); // constant value, low 24 bits
+    EXPECT_EQ(word_low(got, 8), 0);
 
-    // Both instructions address that word (cbase == 9), packed into text word 10.
-    EXPECT_EQ(word_high(got, 10), 00100000L | 9L); // xta #0123
-    EXPECT_EQ(word_low(got, 10), 00100000L | 9L);  // xta #0123 (same const)
+    // Both instructions address that word (cbase == 8), packed into text word 9.
+    EXPECT_EQ(word_high(got, 9), 00100000L | 8L); // xta #0123
+    EXPECT_EQ(word_low(got, 9), 00100000L | 8L);  // xta #0123 (same const)
 }
 
 // A .globl label lands in the symbol table with the external bit (N_EXT == 040)
@@ -483,30 +483,26 @@ foo:    atx 0
     ASSERT_EQ(syms.size(), 1u);
     EXPECT_EQ(syms[0].name, "foo");
     EXPECT_EQ(syms[0].type, 043L); // N_EXT | N_TEXT
-    EXPECT_EQ(syms[0].value, 9L);  // text base 9 + offset 0
+    EXPECT_EQ(syms[0].value, 8L);  // text base 8 + offset 0
 
-    EXPECT_EQ(word_high(got, 9), 00000000L);     // atx 0  (foo:)
-    EXPECT_EQ(word_low(got, 9), 03000000L | 9L); // uj foo -> resolved to word 9
+    EXPECT_EQ(word_high(got, 8), 00000000L);     // atx 0  (foo:)
+    EXPECT_EQ(word_low(got, 8), 03000000L | 8L); // uj foo -> resolved to word 8
     EXPECT_EQ(reloc_half(got, 1, 1), 020L);      // RTEXT (long field, no modifier) for the uj foo
 }
 
-// .comm and .acomm declare common blocks: external symbols whose value is the
+// .comm declares a common block: an external symbol whose value is the
 // requested length in words.
 TEST(Assemble, Comm)
 {
     auto got = assemble(R"(
         .comm buf, 4
-        .acomm abuf, 2
         atx 0
 )");
     auto syms = read_symbols(got);
-    ASSERT_EQ(syms.size(), 2u);
+    ASSERT_EQ(syms.size(), 1u);
     EXPECT_EQ(syms[0].name, "buf");
     EXPECT_EQ(syms[0].type, 050L); // N_EXT | N_COMM
     EXPECT_EQ(syms[0].value, 4L);
-    EXPECT_EQ(syms[1].name, "abuf");
-    EXPECT_EQ(syms[1].type, 051L); // N_EXT | N_ACOMM
-    EXPECT_EQ(syms[1].value, 2L);
 }
 
 // An undefined name becomes an external symbol (N_EXT | N_UNDF == 040) and the
@@ -522,7 +518,7 @@ TEST(Assemble, ExternalReference)
     EXPECT_EQ(syms[0].name, "undef");
     EXPECT_EQ(syms[0].type, 040L); // N_EXT | N_UNDF
     EXPECT_EQ(syms[0].value, 0L);
-    EXPECT_EQ(word_high(got, 9), 03000000L); // uj undef -> address 0 (filled by the linker)
+    EXPECT_EQ(word_high(got, 8), 03000000L); // uj undef -> address 0 (filled by the linker)
 
     // The reference carries an REXT (segment field 070) relocation naming `undef`
     // (symbol index 0), so the linker can patch in its address.
@@ -539,8 +535,8 @@ tlabel: atx 0
         .data
         .word tlabel
 )");
-    int dword = 9 + (int)((word_low(got, 1) + word_low(got, 2)) / 6); // first data word
-    EXPECT_EQ(word_high(got, dword), 012L); // tlabel == text base 9 + offset 1
+    int dword = 8 + (int)((word_low(got, 1) + word_low(got, 2)) / 6); // first data word
+    EXPECT_EQ(word_high(got, dword), 011L); // tlabel == text base 8 + offset 1
     EXPECT_EQ(word_low(got, dword), 0L);
     EXPECT_EQ(reloc_half(got, 2, 0) & 070L, 020L); // data reloc relative to text
 }

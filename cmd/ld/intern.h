@@ -107,7 +107,6 @@ struct linker {
     long tsize; // text segment
     long dsize; // data segment
     long bsize; // bss segment
-    long asize; // abss segment
     long ssize; // symbol table
     long nsym;  // number of symbols emitted to the output
 
@@ -115,7 +114,6 @@ struct linker {
     long ctrel; // const
     long cdrel; // data
     long cbrel; // bss
-    long carel; // abss
 
     int ofilfnd;      // set once a -o output name has been seen
     char *ofilename;  // output file name (default "l.out", then "a.out")
@@ -131,7 +129,6 @@ struct linker {
     long torigin;   // base of the text segment
     long dorigin;   // base of the data segment
     long borigin;   // base of the bss segment
-    long aorigin;   // base of the abss segment
 };
 
 extern struct linker ld;
@@ -143,7 +140,6 @@ extern struct linker ld;
 void error(int n, char *fmt, ...);
 void read_header(long loc);
 long add_size(long a, long b, char *s);
-long add_size_long(long a, long b, char *s);
 void assign_addresses(void);
 
 // symtab.c

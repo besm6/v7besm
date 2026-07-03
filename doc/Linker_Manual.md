@@ -46,8 +46,8 @@ The whole machine address space is a flat **15 bits**: `0100000` words (32768 wo
 segment may grow past that limit, and the linker checks for it as it accumulates sizes
 (`add_size()` in [ld.c](../cmd/ld/ld.c)).
 
-Every object file is divided into **five segments**, and the linker glues each kind end-to-end
-across all the inputs (see [§3](#3-the-five-segments)):
+Every object file is divided into **four segments**, and the linker glues each kind end-to-end
+across all the inputs (see [§3](#3-the-four-segments)):
 
 | Segment | Holds | In the file? |
 |---------|-------|--------------|
@@ -55,7 +55,6 @@ across all the inputs (see [§3](#3-the-five-segments)):
 | text | the program code | yes |
 | data | pre-initialized variables | yes |
 | bss | variables that start out zero | no — size only |
-| abss | "absolute" bss, placed in a fixed address window | no — size only |
 
 The linker does its work in **two passes** over the inputs, with a layout step in between:
 
@@ -134,9 +133,9 @@ immediately and leaves no output.
 
 ---
 
-## 3. The five segments
+## 3. The four segments
 
-Each input object declares five segment sizes in its header (see [§8.2](#82-the-header-struct-exec)).
+Each input object declares four segment sizes in its header (see [§8.2](#82-the-header-struct-exec)).
 The linker concatenates all the inputs' segments of the same kind, in the order the files appear
 on the command line:
 
@@ -149,10 +148,8 @@ on the command line:
 - **bss** — zero-initialized variables. Occupies **no space** in the file; only its total size
   is recorded, and it is the loader's job to clear it. Common symbols land here (see
   [§5.4](#54-common-symbols)).
-- **abss** — "absolute" bss: like bss, but placed in a separate fixed address window. Absolute
-  commons (`.acomm`) land here.
 
-The segments are stacked const → text → data → bss → abss (with the common areas
+The segments are stacked const → text → data → bss (with the common area
 interleaved; see [§4.2](#42-memory-layout)).
 
 ### 3.1 The constant pool
@@ -177,9 +174,9 @@ constants again.
 
 **Pass 1** (`pass1()` → `scan_file()` → `scan_object()`):
 
-1. `read_header()` reads and validates the 9-word header (see
-   [§8.2](#82-the-header-struct-exec)) and precomputes this file's four relocation *biases*
-   (`ctrel`, `cdrel`, `cbrel`, `carel`; see [§6.2](#62-relocation-biases)).
+1. `read_header()` reads and validates the 8-word header (see
+   [§8.2](#82-the-header-struct-exec)) and precomputes this file's three relocation *biases*
+   (`ctrel`, `cdrel`, `cbrel`; see [§6.2](#62-relocation-biases)).
 2. `load_constants()` merges the const pool.
 3. The file's symbol table is read entry by entry into `ld.cursym`. Local symbols are counted
    (for the output symbol-table size) unless they are being discarded. External symbols are
@@ -196,12 +193,11 @@ constants again.
 2. Decide whether the output stays relocatable: if any genuine symbol is still undefined (the
    five boundary symbols don't count), force `-r` on and clear `-d`.
 3. Lay out common symbols: replace each common's requested size with the offset of the slot it
-   is granted, growing the bss-common area (`cmsize`) and abss-common area (`acmsize`). Skipped
-   under `-r` without `-d`.
+   is granted, growing the bss-common area (`cmsize`). Skipped under `-r` without `-d`.
 4. Choose each segment's base address (its *origin*) and stack the segments (see
    [§4.2](#42-memory-layout)).
 5. Walk every global symbol, turning its segment-relative value into a final address by adding
-   that segment's origin; commons become ordinary bss/abss symbols here. Report undefined
+   that segment's origin; commons become ordinary bss symbols here. Report undefined
    symbols (unless `-r`) and flag any value that overflows the 24-bit value field
    (`n_value & ~077777777`), the width of a half-word field.
 6. Total up the symbol-table size (`ssize`).
@@ -222,18 +218,16 @@ segment starts where the previous one ended:
   dorigin ─▶ data
             bss commons        (cmorigin)
   borigin ─▶ bss
-            abss commons       (acmorigin)
-  aorigin ─▶ abss
 ```
 
 The base address of const (`corigin`) is `ld.basaddr`, which defaults to `BADDR` (= `HDRSZ / W`
-= 9, leaving words `0…8` free) and is overridden by `-T`. The `-n` option bends this layout:
+= 8, leaving words `0…7` free) and is overridden by `-T`. The `-n` option bends this layout:
 
 - **`-n`** (`nflag`) rounds `dorigin` up to the next 1024-word page boundary via the `ALIGN()`
   macro, so the read-only text ends on a clean page.
 
 The bss commons sit right after data (`cmorigin = dorigin + dsize/W`), then the files' own bss
-(`borigin`), then the abss commons (`acmorigin`), then the files' own abss (`aorigin`).
+(`borigin`).
 
 ---
 
@@ -254,10 +248,8 @@ bit (`040`) marks an **external** (global) symbol.
 | `N_TEXT` | `03` | in the text segment |
 | `N_DATA` | `04` | in the data segment |
 | `N_BSS` | `05` | in the bss segment |
-| `N_ABSS` | `06` | in the abss segment |
 | `N_STRNG` | `07` | string constant (emitted by `b6as`; treated as data) |
 | `N_COMM` | `010` | common block — becomes bss when linked |
-| `N_ACOMM` | `011` | absolute common — becomes abss when linked |
 | `N_FN` | `037` | file-name symbol (debug annotation) |
 
 For example a global function symbol has type `N_EXT + N_TEXT` (`043`).
@@ -298,13 +290,12 @@ later.
 ### 5.4 Common symbols
 
 A common symbol is a *tentative* definition — think of a C global declared without an
-initializer (`.comm`/`.acomm` in the assembler). Several files may each request one; the linker
+initializer (`.comm` in the assembler). Several files may each request one; the linker
 reserves a **single** slot sized to the **largest** request. While unresolved, a common's
 `n_value` holds the requested size (in words). In `assign_addresses()` each common's value is
 replaced by the offset of the slot it is granted within the common area, the area grows by the
-requested size, and the symbol's type is rewritten to `N_EXT + N_BSS` (for `N_COMM`) or
-`N_EXT + N_ABSS` (for `N_ACOMM`). Under `-r` without `-d`, commons are left undefined for a later
-link instead.
+requested size, and the symbol's type is rewritten to `N_EXT + N_BSS`. Under `-r` without `-d`,
+commons are left undefined for a later link instead.
 
 ### 5.5 Boundary symbols and the entry point
 
@@ -356,7 +347,6 @@ A relocation record's low bits name what the field resolves against
 | `RTEXT` | `020` | the text segment |
 | `RDATA` | `030` | the data segment |
 | `RBSS` | `040` | the bss segment |
-| `RABSS` | `050` | the abss segment |
 | `RSTRNG` | `060` | string constant (assembler use; treated as data) |
 | `REXT` | `070` | an external symbol; also serves as a bit mask |
 
@@ -373,13 +363,13 @@ segment-relative.
 
 ### 6.2 Relocation biases
 
-`read_header()` seeds four biases per file — `ctrel`, `cdrel`, `cbrel`, `carel` — one per
+`read_header()` seeds three biases per file — `ctrel`, `cdrel`, `cbrel` — one per
 relocatable segment. Inside an object, an address counts from 0 within its own segment, but the
 assembler stored it biased by `BADDR` and by the sizes of the segments that precede it. The
 biases are the amount to add to turn an in-file address back into a clean offset within its own
 segment (they start negative, subtracting the built-in offset). During pass 1, `scan_object()`
 advances them by the segments accumulated from earlier files; during pass 2, `relocate_object()`
-adds each segment's final origin (`torigin`, `dorigin`, `borigin`, `aorigin`), so a bias becomes
+adds each segment's final origin (`torigin`, `dorigin`, `borigin`), so a bias becomes
 the full amount to add to every field pointing into that segment.
 
 ### 6.3 Patching a half-word
@@ -390,7 +380,7 @@ half-word `t` using its record `r`, in three steps:
 1. **Extract** the address field — 12 bits if `RSHORT`, else 15 bits.
 2. **Compute the addend `ad`** from the record's `REXT` bits:
    - `RCONST` — redirect to the de-duplicated pool slot via `ld.newindex[]`.
-   - `RTEXT`/`RDATA`/`RBSS`/`RABSS` — add that segment's bias.
+   - `RTEXT`/`RDATA`/`RBSS` — add that segment's bias.
    - `REXT` — look up the external symbol by its packed index. If it is still undefined/common,
      keep the field external in the output but renumber it to the symbol's slot in the final
      global table (`ld.nsym + (sp - symtab)`). Otherwise bake in the symbol's now-known address
@@ -467,13 +457,13 @@ the string table. Byte offsets, given the header's segment sizes:
 
 ```
   header:            0
-  const:             54
-  text:              54 +   constsize
-  data:              54 +   constsize +   textsize
-  const relocation:  54 +   constsize +   textsize +   datasize   ┐
-  text relocation:   54 + 2*constsize +   textsize +   datasize   │ present only while
-  data relocation:   54 + 2*constsize + 2*textsize +   datasize   ┘ RELFLG is clear
-  symbol table:      54 + 2*constsize + 2*textsize + 2*datasize
+  const:             48
+  text:              48 +   constsize
+  data:              48 +   constsize +   textsize
+  const relocation:  48 +   constsize +   textsize +   datasize   ┐
+  text relocation:   48 + 2*constsize +   textsize +   datasize   │ present only while
+  data relocation:   48 + 2*constsize + 2*textsize +   datasize   ┘ RELFLG is clear
+  symbol table:      48 + 2*constsize + 2*textsize + 2*datasize
   string table:      symbol table + a_syms
 ```
 
@@ -497,19 +487,18 @@ struct exec {
     word_t  a_text;     /* text (code) segment size, bytes */
     word_t  a_data;     /* initialized data segment size, bytes */
     word_t  a_bss;      /* uninitialized data (bss) size, bytes */
-    word_t  a_abss;     /* absolute bss size, bytes */
     word_t  a_syms;     /* symbol table size, bytes */
     word_t  a_entry;    /* entry point, word address */
     word_t  a_flag;     /* flags: RELFLG */
 };
 ```
 
-The five segment sizes and `a_syms` are **byte counts, each a multiple of 6**; `read_header()`
-rejects a file whose const/text/data/bss/abss size is not. `a_entry` is a **word address**.
-`HDRSZ` is **54 bytes = 9 words**: although the struct has 9 logical fields, each is written as a
+The four segment sizes and `a_syms` are **byte counts, each a multiple of 6**; `read_header()`
+rejects a file whose const/text/data/bss size is not. `a_entry` is a **word address**.
+`HDRSZ` is **48 bytes = 8 words**: although the struct has 8 logical fields, each is written as a
 full 6-byte word — a zero padding half-word followed by the value in the low half-word — so every
 field, and the const segment that follows, starts on a clean word boundary. `fputhdr()`/
-`fgethdr()` ([cmd/libaout](../cmd/libaout/)) do this, calling `fputw`/`fgetw` nine times.
+`fgethdr()` ([cmd/libaout](../cmd/libaout/)) do this, calling `fputw`/`fgetw` eight times.
 
 ### 8.3 Magic numbers and flags
 
@@ -579,7 +568,7 @@ All I/O goes through [`cmd/libaout/`](../cmd/libaout/):
 |--------|--------------|----------|
 | `fgeth` / `fputh` | one 24-bit half-word | 3 big-endian bytes |
 | `fgetw` / `fputw` | one 48-bit word | two big-endian half-words, high half first |
-| `fgethdr` / `fputhdr` | a `struct exec` header | 9 words |
+| `fgethdr` / `fputhdr` | a `struct exec` header | 8 words |
 | `fgetsym` / `fputsym` | one symbol entry | 1+1+3 bytes + name |
 | `fgetran` / `fputran` | one ranlib entry | 1+3 bytes + name |
 | `fgetarhdr` | one archive member header | see [§8.7](#87-archive-and-ranlib-structures) |
@@ -675,9 +664,9 @@ The exit status is the highest severity seen.
 |---------|:--------:|-------|
 | `bad format` | 2 | header could not be read |
 | `bad magic` | 2 | `a_magic` is not `FMAGIC` on input |
-| `bad length of const`/`text`/`data`/`bss`/`abss` | 2 | that segment size is not a multiple of 6 |
+| `bad length of const`/`text`/`data`/`bss` | 2 | that segment size is not a multiple of 6 |
 | `not relocatable` | 1 | input has `RELFLG` set (already linked / no relocation records) |
-| `const`/`text`/`data`/`bss`/`abss`/`symbol table segment overflow` | 1 | a running total passed `0100000` words |
+| `const`/`text`/`data`/`bss`/`symbol table segment overflow` | 1 | a running total passed `0100000` words |
 | `constant table overflow` | 2 | more than `NCONST` (512) pooled constants |
 | `Undefined:` + a list of names | 1 | genuine symbols left unresolved (non-relocatable link) |
 | `long address: name=0…` | 1 | a symbol value exceeded the 24-bit value field (`~077777777`) |
@@ -711,7 +700,7 @@ b6ld -o hello hello.o util.o -lc
 
 What the linker does, step by step:
 
-1. **Pass 1** reads `hello.o`, then `util.o`, accumulating the const/text/data/bss/abss sizes,
+1. **Pass 1** reads `hello.o`, then `util.o`, accumulating the const/text/data/bss sizes,
    merging their constant pools, and entering their globals. `hello.o`'s reference to `printf`
    is entered as undefined.
 2. `-lc` expands to `/usr/local/lib/microbesm/libc.a`. Because it is a randomized archive, its
@@ -720,7 +709,7 @@ What the linker does, step by step:
    new undefined symbols remain.
 3. **`assign_addresses()`** defines `_econst`…`_end`, reserves slots for any common symbols, and
    fixes the segment origins starting at `BADDR` — const, then text, then data, then the bss
-   commons and bss, then abss. Every global gets its final address; nothing is left undefined, so
+   commons and bss. Every global gets its final address; nothing is left undefined, so
    the link stays a finished (non-relocatable) executable.
 4. **Pass 2** re-reads the same files in order, copies const/text/data into per-segment buffers
    while relocating every address field, and emits the local and file-name symbols.

@@ -63,8 +63,6 @@ int lookup_directive(void)
     case 'a':
         if (!strcmp(".ascii", as.name))
             return ASCII;
-        if (!strcmp(".acomm", as.name))
-            return ACOMM;
         break;
     case 'b':
         if (!strcmp(".bss", as.name))

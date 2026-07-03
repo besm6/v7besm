@@ -26,14 +26,10 @@ int reloc_type(int stype)
         return RDATA;
     case N_BSS:
         return RBSS;
-    case N_ABSS:
-        return RABSS;
     case N_STRNG:
         return RDATA;
     case N_COMM:
         return RBSS;
-    case N_ACOMM:
-        return RABSS;
     case N_FN:
         return 0;
     default:
@@ -93,16 +89,12 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
     case RBSS:
         ad = ld.cbrel; // add the bss segment base
         break;
-    case RABSS:
-        ad = ld.carel; // add the abss segment base
-        break;
     case REXT:
         // A reference to an external symbol, named by an index packed into the
         // record.  Map that index to the global symbol it stands for.
         sp = lookup_local(lp, (int)RGETIX(r));
         r &= RSHORT;
-        if (sp->n_type == N_EXT + N_UNDF || sp->n_type == N_EXT + N_COMM ||
-            sp->n_type == N_EXT + N_ACOMM) {
+        if (sp->n_type == N_EXT + N_UNDF || sp->n_type == N_EXT + N_COMM) {
             // Still undefined: keep it external in the output, but renumber it to
             // its slot in the final global symbol table.
             r |= REXT | RPUTIX(ld.nsym + (sp - ld.symtab));

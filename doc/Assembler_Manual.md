@@ -379,9 +379,8 @@ constant-pool operator ([§8](#8-registers-and-addressing)).
 | `.globl` | `name [, name …]` | Mark each name as external/global. |
 | `.equ` | `name .equ expr` | Equate `name` to `expr` (also available as `name = expr`). |
 | `.comm` | `name [, len]` or `name .comm len` | Declare a **common** block of `len` words (default 1); becomes bss at link time. |
-| `.acomm` | `name [, len]` or `name .acomm len` | Declare an **absolute common** block; becomes absolute bss at link time. |
 
-`.comm`/`.acomm` accept both the prefix form (`.comm name, len`) and the infix form
+`.comm` accepts both the prefix form (`.comm name, len`) and the infix form
 (`name .comm len`).
 
 ---
@@ -444,7 +443,7 @@ entry:  vtm count, 1
 ## 12. Quick reference
 
 **Directives:** `.text` `.data` `.strng` `.bss` · `.word` `.half` `.ascii` · `.globl`
-`.equ` `.comm` `.acomm`.
+`.equ` `.comm`.
 
 **Expression operators (left-to-right, no precedence):** `+` `-` `&` `|` `^` `~` `\<` `\>`
 `*` `/` `%`; grouping `( )`; exponent-truncate `{ }`; current location `.`.

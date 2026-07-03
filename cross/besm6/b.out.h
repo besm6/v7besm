@@ -13,19 +13,18 @@
  *      bytes; see W in cmd/ld/ld.c). On disk every multi-byte quantity is
  *      stored big-endian (most significant byte first).
  *
- *      Header (9 logical words):
- *                              a_magic  magic number ("BESM" + 0407 / 0410)
- *                              a_const  size of the const segment   )
- *                              a_text   size of the text segment    )
- *                              a_data   size of the data segment    ) in bytes,
- *                              a_bss    size of the bss segment     ) multiple
- *                              a_abss   size of the abss segment    ) of 6
- *                              a_syms   size of the symbol table    )
- *                              a_entry  entry-point address (word index)
- *                              a_flag   flags (relocatable)
+ *      Header (8 logical words):
+ *                          a_magic  magic number ("BESM" + 0407 / 0410)
+ *                          a_const  size of the const segment  )
+ *                          a_text   size of the text segment   ) in bytes,
+ *                          a_data   size of the data segment   ) multiple
+ *                          a_bss    size of the bss segment    ) of 6
+ *                          a_syms   size of the symbol table   )
+ *                          a_entry  entry-point address (word index)
+ *                          a_flag   flags (relocatable)
  *
- *      The struct below has only 9 meaningful fields, yet the header occupies
- *      HDRSZ == 54 bytes == 9 words. Each field is stored as 3 zero padding
+ *      The struct below has only 8 meaningful fields, and the header occupies
+ *      HDRSZ == 48 bytes == 8 words. Each field is stored as 3 zero padding
  *      bytes followed by a 3-byte big-endian value, so that every field starts
  *      on a 6-byte (one-word) boundary and the segment data that follows begins
  *      at a clean word offset. See fgethdr()/fputhdr() in cmd/ld/ for the exact
@@ -35,14 +34,14 @@
  *      only when the file is still relocatable, i.e. RELFLG is clear (see the
  *      RELFLG note below):
  *
- *      header:                 0
- *      const:                  54
- *      text:                   54 + constsize
- *      data:                   54 + constsize + textsize
- *      const relocation:       54 + constsize + textsize + datasize
- *      text relocation:        54 + 2*constsize + textsize + datasize
- *      data relocation:        54 + 2*constsize + 2*textsize + datasize
- *      symbol table:           54 + 2*constsize + 2*textsize + 2*datasize
+ *      header:             0
+ *      const:              48
+ *      text:               48 + constsize
+ *      data:               48 + constsize + textsize
+ *      const relocation:   48 + constsize + textsize + datasize
+ *      text relocation:    48 + 2*constsize + textsize + datasize
+ *      data relocation:    48 + 2*constsize + 2*textsize + datasize
+ *      symbol table:       48 + 2*constsize + 2*textsize + 2*datasize
  *
  */
 #include "besm6/arch.h"
@@ -51,20 +50,19 @@
  * a.out file header.
  *
  * a_magic distinguishes the file kind (see FMAGIC/NMAGIC).
- * The five segment-size fields and a_syms are byte counts, each a multiple of 6.
+ * The four segment-size fields and a_syms are byte counts, each a multiple of 6.
  * a_entry is the program entry point as a word address.
  * a_flag carries the RELFLG bit.
  */
 struct exec {
-    word_t  a_magic;            /* magic number */
-    word_t  a_const;            /* const segment size, bytes (multiple of 6) */
-    word_t  a_text;             /* text (code) segment size, bytes */
-    word_t  a_data;             /* initialized data segment size, bytes */
-    word_t  a_bss;              /* uninitialized data (bss) size, bytes */
-    word_t  a_abss;             /* absolute bss size, bytes */
-    word_t  a_syms;             /* symbol table size, bytes */
-    word_t  a_entry;            /* entry point, word address */
-    word_t  a_flag;             /* flags: RELFLG */
+    word_t  a_magic;    /* magic number */
+    word_t  a_const;    /* const segment size, bytes (multiple of 6) */
+    word_t  a_text;     /* text (code) segment size, bytes */
+    word_t  a_data;     /* initialized data segment size, bytes */
+    word_t  a_bss;      /* uninitialized data (bss) size, bytes */
+    word_t  a_syms;     /* symbol table size, bytes */
+    word_t  a_entry;    /* entry point, word address */
+    word_t  a_flag;     /* flags: RELFLG */
 };
 
 /*
@@ -89,7 +87,7 @@ struct nlist {
                          * has no relocation records; clear: relocation records
                          * are still present (despite the flag's name) */
 
-#define HDRSZ   54      /* header size in bytes (9 words of 6 bytes) */
+#define HDRSZ   48      /* header size in bytes (8 words of 6 bytes) */
 
 /*
  * Magic numbers (a_magic). Only FMAGIC and NMAGIC are accepted on input
@@ -113,16 +111,14 @@ struct nlist {
 #define N_TEXT  03      /* text (code) segment */
 #define N_DATA  04      /* initialized data segment */
 #define N_BSS   05      /* uninitialized data (bss) segment */
-#define N_ABSS  06      /* absolute bss segment */
 #define N_STRNG 07      /* string constant (used by as) */
 #define N_COMM  010     /* common block (becomes bss when linked) */
-#define N_ACOMM 011     /* absolute common (becomes abss when linked) */
 
 /*
  * Relocation types.
  *
  * A relocation record's low bits name what the patched reference resolves
- * against: RABS for an absolute value, RCONST/RTEXT/RDATA/RBSS/RABSS for a
+ * against: RABS for an absolute value, RCONST/RTEXT/RDATA/RBSS for a
  * segment-relative reference, or REXT for an external symbol. For REXT the
  * symbol's index is packed into the upper bits of the record (see
  * RGETIX/RPUTIX). REXT also doubles as a bit mask.
@@ -132,7 +128,6 @@ struct nlist {
 #define RTEXT   020     /* relative to the text segment */
 #define RDATA   030     /* relative to the data segment */
 #define RBSS    040     /* relative to the bss segment */
-#define RABSS   050     /* relative to the abss segment */
 #define RSTRNG  060     /* string constant (used by as) */
 #define REXT    070     /* external symbol reference; also a bit mask */
 
@@ -149,9 +144,9 @@ struct nlist {
 /*
  * Macros computing positions within the file from the header.
  */
-#define N_TXTOFF(x) HDRSZ                                                /* offset of the segment images */
-#define N_SYMOFF(x) (N_TXTOFF(x) + (x).a_const + (x).a_text + (x).a_data)/* offset of the symbol table */
-#define N_STROFF(x) (N_SYMOFF(x) + (x).a_syms)                          /* offset of the string table */
+#define N_TXTOFF(x) HDRSZ                                                 /* offset of the segment images */
+#define N_SYMOFF(x) (N_TXTOFF(x) + (x).a_const + (x).a_text + (x).a_data) /* offset of the symbol table */
+#define N_STROFF(x) (N_SYMOFF(x) + (x).a_syms)                            /* offset of the string table */
 #define N_BADMAG(x) ((x).a_magic != FMAGIC && (x).a_magic != NMAGIC)
 
 #ifndef KERNEL

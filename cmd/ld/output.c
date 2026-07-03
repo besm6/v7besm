@@ -53,7 +53,6 @@ void setup_output(void)
     ld.filhdr.a_text  = ld.tsize;
     ld.filhdr.a_data  = ld.dsize;
     ld.filhdr.a_bss   = ld.bsize;
-    ld.filhdr.a_abss  = ld.asize;
     ld.filhdr.a_syms  = ALIGN(ld.ssize, W);
     if (ld.entrypt) {
         if (ld.entrypt->n_type != N_EXT + N_TEXT && ld.entrypt->n_type != N_EXT + N_UNDF)

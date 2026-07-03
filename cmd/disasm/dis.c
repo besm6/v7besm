@@ -115,7 +115,6 @@ void prrel(long r)
     case RTEXT:  putchar('t'); break;
     case RDATA:  putchar('d'); break;
     case RBSS:   putchar('b'); break;
-    case RABSS:  putchar('y'); break;
     case RABS:   putchar('a'); break;
     case REXT:   printf("%d", (int)RGETIX(r));
     }

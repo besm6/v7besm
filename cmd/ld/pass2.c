@@ -29,11 +29,9 @@ void relocate_object(long loc)
     ld.ctrel += ld.torigin;
     ld.cdrel += ld.dorigin;
     ld.cbrel += ld.borigin;
-    ld.carel += ld.aorigin;
 
     if (ld.trace > 1)
-        printf("ctrel=%lxh, cdrel=%lxh, cbrel=%lxh, carel=%lxh\n", ld.ctrel, ld.cdrel, ld.cbrel,
-               ld.carel);
+        printf("ctrel=%lxh, cdrel=%lxh, cbrel=%lxh\n", ld.ctrel, ld.cdrel, ld.cbrel);
     //
     // Re-read the symbol table, recording, for each external reference, which
     // global symbol the file's local symbol number maps to (in ld.local[]).
@@ -51,7 +49,7 @@ void relocate_object(long loc)
             break;
         relocate_cursym();
         int type = ld.cursym.n_type;
-        if (ld.Sflag && ((type & N_TYPE) == N_ABS || (type & N_TYPE) > N_ACOMM)) {
+        if (ld.Sflag && ((type & N_TYPE) == N_ABS || (type & N_TYPE) > N_COMM)) {
             free(ld.cursym.n_name);
             continue;
         }
@@ -69,8 +67,7 @@ void relocate_object(long loc)
 
         // Still unresolved (undefined/common): remember symno -> sp so that
         // references in this file's code can be steered to the global symbol.
-        if (ld.cursym.n_type == N_EXT + N_UNDF || ld.cursym.n_type == N_EXT + N_COMM ||
-            ld.cursym.n_type == N_EXT + N_ACOMM) {
+        if (ld.cursym.n_type == N_EXT + N_UNDF || ld.cursym.n_type == N_EXT + N_COMM) {
             if (lp >= &ld.local[NSYMPR])
                 error(2, "local symbol table overflow");
             lp->locindex    = symno;
@@ -114,7 +111,6 @@ void relocate_object(long loc)
     ld.torigin += ld.filhdr.a_text / W;
     ld.dorigin += ld.filhdr.a_data / W;
     ld.borigin += ld.filhdr.a_bss / W;
-    ld.aorigin += ld.filhdr.a_abss / W;
     ld.nfile++;
 }
 

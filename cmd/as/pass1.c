@@ -261,7 +261,7 @@ static void assemble_ascii(void)
 //
 // Pass 1's main loop: read the source one statement at a time and act on it.
 // A statement is one of: a label "name:", a location-counter assignment ".=",
-// a name definition ("name = expr" or ".equ"), a ".comm/.acomm" declaration, a
+// a name definition ("name = expr" or ".equ"), a ".comm" declaration, a
 // machine instruction (named or raw $NN/@NN), an "N M" index-register prefix,
 // or an assembler directive (.text, .data, .word, .ascii, .globl, ...).  It
 // runs until end of file.  cmdmode is turned on around the leading token so
@@ -351,12 +351,11 @@ void generate_code(void)
                 as.stab[cval].n_type &= N_EXT;
                 as.stab[cval].n_type |= SEGMTYPE(csegm);
                 break;
-            } else if (clex == LACMD && (tval == COMM || tval == ACOMM)) {
+            } else if (clex == LACMD && tval == COMM) {
                 // "name .comm len" - declare a common block of `len`.
-                if (as.stab[cval].n_type != N_UNDF && as.stab[cval].n_type != (N_EXT | N_COMM) &&
-                    as.stab[cval].n_type != (N_EXT | N_ACOMM))
+                if (as.stab[cval].n_type != N_UNDF && as.stab[cval].n_type != (N_EXT | N_COMM))
                     fatal("name already defined");
-                as.stab[cval].n_type = N_EXT | (tval == COMM ? N_COMM : N_ACOMM);
+                as.stab[cval].n_type = N_EXT | N_COMM;
                 parse_expr(&tval);
                 if (tval != SABS)
                     fatal("bad length .comm");
@@ -431,15 +430,12 @@ void generate_code(void)
                 }
                 break;
             case COMM:
-            case ACOMM:
                 // ".comm name, len" - the directive form of a common block.
-                tval = cval;
                 if (next_token(&cval) != LNAME)
                     fatal("bad parameter .comm");
-                if (as.stab[cval].n_type != N_UNDF && as.stab[cval].n_type != (N_EXT | N_COMM) &&
-                    as.stab[cval].n_type != (N_EXT | N_ACOMM))
+                if (as.stab[cval].n_type != N_UNDF && as.stab[cval].n_type != (N_EXT | N_COMM))
                     fatal("name already defined");
-                as.stab[cval].n_type = N_EXT | (tval == COMM ? N_COMM : N_ACOMM);
+                as.stab[cval].n_type = N_EXT | N_COMM;
                 if ((clex = next_token(&tval)) == ',') {
                     parse_expr(&tval);
                     if (tval != SABS)

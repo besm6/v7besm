@@ -31,8 +31,9 @@
 #define LDECR   12 // the "--" token
 
 // Segment numbers.  A program is built up in several parallel segments; these
-// index the per-segment arrays in struct assembler (sfile/rfile/count).  The
-// gap at 5 (an unused "abss" slot) keeps these aligned with the N_*/R* codes.
+// index the per-segment arrays in struct assembler (sfile/rfile/count).  Slot 5
+// is reserved (formerly the "abss" segment) to keep these aligned with the
+// N_*/R* codes.
 
 #define SCONST 0 // constant pool (de-duplicated literals)
 #define STEXT  1 // text: machine code
@@ -44,7 +45,6 @@
 
 // Assembler directive codes (the value carried by an LACMD token).
 
-#define ACOMM 0  // .acomm  - absolute common block
 #define ASCII 1  // .ascii  - emit a string constant
 #define BSS   2  // .bss    - switch to the bss segment
 #define COMM  3  // .comm   - common block

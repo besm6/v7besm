@@ -64,7 +64,6 @@ void write_header(void)
     hdr.a_text  = as.count[STEXT] * (W / 2);
     hdr.a_data  = (as.count[SDATA] + as.count[SSTRNG]) * (W / 2);
     hdr.a_bss   = as.count[SBSS] * (W / 2);
-    hdr.a_abss  = 0; /* no absolute-bss segment in as */
     hdr.a_syms  = as.stlength;
     hdr.a_entry = HDRSZ / W + as.count[SCONST] / (W / 2);
     hdr.a_flag  = 0;
@@ -129,8 +128,7 @@ static long relocate_halfword(long h, long hr)
         // External symbol: if it is now defined here, fill in its value;
         // otherwise leave it for the linker.
         i = RGETIX(hr);
-        if (as.stab[i].n_type != N_EXT + N_UNDF && as.stab[i].n_type != N_EXT + N_COMM &&
-            as.stab[i].n_type != N_EXT + N_ACOMM)
+        if (as.stab[i].n_type != N_EXT + N_UNDF && as.stab[i].n_type != N_EXT + N_COMM)
             h = relocate_field(h, as.stab[i].n_value, (int)hr);
         break;
     }
@@ -224,7 +222,6 @@ static int type_to_reloc(int t)
         return RDATA;
     case N_UNDF:
     case N_COMM:
-    case N_ACOMM:
     case N_FN:
     default:
         return 0;
@@ -251,8 +248,7 @@ static long rewrite_reloc(long hr)
         break;
     case REXT:
         i = RGETIX(hr);
-        if (as.stab[i].n_type == N_EXT + N_UNDF || as.stab[i].n_type == N_EXT + N_COMM ||
-            as.stab[i].n_type == N_EXT + N_ACOMM) {
+        if (as.stab[i].n_type == N_EXT + N_UNDF || as.stab[i].n_type == N_EXT + N_COMM) {
             // still external: renumber the symbol index if symbols were dropped
             if (as.xflags)
                 hr = (hr & (RSHORT | REXT)) | RPUTIX(newindex[i]);

@@ -17,13 +17,12 @@
 // half-word, two per word.  An "address" in this code is therefore a word index,
 // not a byte pointer.
 //
-// Every object file is divided into five segments, and the linker glues each
+// Every object file is divided into four segments, and the linker glues each
 // kind end-to-end across all the inputs:
 //      const - read-only constants / literal pool
 //      text  - the program code
 //      data  - pre-initialized variables
 //      bss   - variables that start out zero (occupy no space in the file)
-//      abss  - "absolute" bss, placed in a fixed address window
 //
 // A symbol is a named location: it has a type (which segment it lives in) and a
 // value (its address).  A *global* (external) symbol can be defined in one file
@@ -142,12 +141,12 @@ void error(int n, char *fmt, ...)
 }
 
 //
-// Read and sanity-check the 9-word header of the object file at byte offset
+// Read and sanity-check the 8-word header of the object file at byte offset
 // `loc` in ld.text, leaving it in ld.filhdr.  Each segment size must be a whole
 // number of 6-byte words or the file is corrupt.
 //
-// It also precomputes this file's four relocation "biases" (ctrel/cdrel/cbrel/
-// carel).  Inside the object, a const-segment address counts from 0, a text
+// It also precomputes this file's three relocation "biases" (ctrel/cdrel/
+// cbrel).  Inside the object, a const-segment address counts from 0, a text
 // address from 0, and so on - but the assembler actually stored them biased by
 // BADDR and by the segments that precede them (const, then text, then data,
 // then bss).  These biases are the amount to add to turn an in-file address back
@@ -169,13 +168,9 @@ void read_header(long loc)
         error(2, "bad length of data");
     if (ld.filhdr.a_bss % W)
         error(2, "bad length of bss");
-    if (ld.filhdr.a_abss % W)
-        error(2, "bad length of abss");
     ld.ctrel = -BADDR - ld.filhdr.a_const / W;
     ld.cdrel = -BADDR - (ld.filhdr.a_const + ld.filhdr.a_text) / W;
     ld.cbrel = -BADDR - (ld.filhdr.a_const + ld.filhdr.a_text + ld.filhdr.a_data) / W;
-    ld.carel =
-        -BADDR - (ld.filhdr.a_const + ld.filhdr.a_text + ld.filhdr.a_data + ld.filhdr.a_bss) / W;
 }
 
 //
@@ -195,19 +190,8 @@ long add_size(long a, long b, char *s)
 }
 
 //
-// Same as add_size(); the abss segment shares the flat 15-bit address space.
-//
-long add_size_long(long a, long b, char *s)
-{
-    a += b;
-    if (a >= 0100000L * W)
-        error(1, s);
-    return a;
-}
-
-//
 // The "middle" pass, run once between pass 1 and pass 2.  By now pass 1 knows
-// the total size of each segment (ld.csize/tsize/dsize/bsize/asize) and has the
+// the total size of each segment (ld.csize/tsize/dsize/bsize) and has the
 // whole global symbol table; this routine decides where everything finally goes:
 //
 //   1. Resolve the five built-in boundary symbols (_econst, _etext, ... _end) -
@@ -223,9 +207,9 @@ void assign_addresses(void)
 {
     struct nlist *sp;
     const struct nlist *symp;
-    long cmsize, acmsize;
+    long cmsize;
     int nund;
-    long cmorigin, acmorigin;
+    long cmorigin;
 
     ld.p_econst = *lookup_name("_econst");
     ld.p_etext  = *lookup_name("_etext");
@@ -255,28 +239,21 @@ void assign_addresses(void)
     //
     // Lay out the common symbols.  A common symbol's n_value currently holds the
     // *size* the file asked for; replace it with the offset of the slot we hand
-    // out, and grow the running common area (cmsize for bss commons, acmsize for
-    // abss commons).  Skipped when -r without -d, since then commons stay
-    // undefined for a later link.
+    // out, and grow the running common area (cmsize).  Skipped when -r without
+    // -d, since then commons stay undefined for a later link.
     //
     cmsize  = 0;
-    acmsize = 0;
     if (ld.dflag || !ld.rflag) {
         define_symbol(ld.p_econst, ld.csize / W, N_EXT + N_CONST);
         define_symbol(ld.p_etext, ld.tsize / W, N_EXT + N_TEXT);
         define_symbol(ld.p_edata, ld.dsize / W, N_EXT + N_DATA);
         define_symbol(ld.p_ebss, ld.bsize / W, N_EXT + N_BSS);
-        define_symbol(ld.p_end, ld.asize / W, N_EXT + N_ABSS);
+        define_symbol(ld.p_end, ld.bsize / W, N_EXT + N_BSS);
         for (sp = ld.symtab; sp < symp; sp++) {
-            long t;
             if ((sp->n_type & N_TYPE) == N_COMM) {
-                t           = sp->n_value;
+                long t      = sp->n_value;
                 sp->n_value = cmsize / W;
                 cmsize      = add_size(cmsize, (long)t * W, "bss segment overflow");
-            } else if ((sp->n_type & N_TYPE) == N_ACOMM) {
-                t           = sp->n_value;
-                sp->n_value = acmsize / W;
-                acmsize     = add_size_long(acmsize, (long)t * W, "abss segment overflow");
             }
         }
     }
@@ -286,7 +263,7 @@ void assign_addresses(void)
     // and record each one's base address (its "origin").  Normal order is:
     //
     //      corigin: const | torigin: text | dorigin: data | bss commons |
-    //      borigin: bss | abss commons | aorigin: abss
+    //      borigin: bss
     //
     // -n forces the data origin up to the next 1024-word page boundary via ALIGN().
     //
@@ -298,14 +275,12 @@ void assign_addresses(void)
     }
     cmorigin    = ld.dorigin + ld.dsize / W; // bss commons sit right after data
     ld.borigin  = cmorigin + cmsize / W;     // then the files' own bss
-    acmorigin   = ld.borigin + ld.bsize / W; // then abss commons
-    ld.aorigin  = acmorigin + acmsize / W;   // then the files' own abss
     ld.cbasaddr = ld.corigin;
 
     //
     // Walk every global symbol and turn its segment-relative value into a final
     // address by adding that segment's origin.  Common symbols become ordinary
-    // bss/abss symbols here.  Undefined ones are reported (unless -r), and any
+    // bss symbols here.  Undefined ones are reported (unless -r), and any
     // value that overflows the 27-bit address field is flagged.
     //
     nund = 0;
@@ -335,18 +310,10 @@ void assign_addresses(void)
         case N_EXT + N_BSS:
             sp->n_value += ld.borigin;
             break;
-        case N_EXT + N_ABSS:
-            sp->n_value += ld.aorigin;
-            break;
         case N_COMM:
         case N_EXT + N_COMM:
             sp->n_type = N_EXT + N_BSS;
             sp->n_value += cmorigin;
-            break;
-        case N_ACOMM:
-        case N_EXT + N_ACOMM:
-            sp->n_type = N_EXT + N_ABSS;
-            sp->n_value += acmorigin;
             break;
         }
         if (sp->n_value & ~077777777)
@@ -355,7 +322,6 @@ void assign_addresses(void)
     if (ld.sflag || ld.xflag)
         ld.ssize = 0;
     ld.bsize = add_size(ld.bsize, cmsize, "bss segment overflow");
-    ld.asize = add_size_long(ld.asize, acmsize, "abss segment overflow");
 
     //
     // Compute ssize; add length of local symbols, if need,

@@ -21,7 +21,6 @@ static struct exec sample_header()
     h.a_text  = 0x123456;
     h.a_data  = 12;
     h.a_bss   = 18;
-    h.a_abss  = 24;
     h.a_syms  = 30;
     h.a_entry = 0xABCDE;
     h.a_flag  = RELFLG;
@@ -35,7 +34,6 @@ static void expect_eq_header(const struct exec &a, const struct exec &b)
     EXPECT_EQ(a.a_text,  b.a_text);
     EXPECT_EQ(a.a_data,  b.a_data);
     EXPECT_EQ(a.a_bss,   b.a_bss);
-    EXPECT_EQ(a.a_abss,  b.a_abss);
     EXPECT_EQ(a.a_syms,  b.a_syms);
     EXPECT_EQ(a.a_entry, b.a_entry);
     EXPECT_EQ(a.a_flag,  b.a_flag);
@@ -56,7 +54,7 @@ TEST(Header, RoundTrip) {
     fclose(f);
 }
 
-// fputhdr writes exactly HDRSZ (54) bytes.
+// fputhdr writes exactly HDRSZ (48) bytes.
 TEST(Header, EncodedSize) {
     struct exec out = sample_header();
     FILE *f = tmpfile();
@@ -90,7 +88,6 @@ TEST(Header, MaxFieldValues) {
     out.a_text  = 0xFFFFFF;
     out.a_data  = 0xFFFFFF;
     out.a_bss   = 0xFFFFFF;
-    out.a_abss  = 0xFFFFFF;
     out.a_syms  = 0xFFFFFF;
     out.a_entry = 0xFFFFFF;
     out.a_flag  = 0xFFFFFF;
@@ -106,9 +103,9 @@ TEST(Header, MaxFieldValues) {
     fclose(f);
 }
 
-// The on-disk image is exactly the bytes we expect: for each of the 9 fields,
+// The on-disk image is exactly the bytes we expect: for each of the 8 fields,
 // 3 zero pad bytes (the high half-word) followed by a 3-byte big-endian value,
-// in header order (magic, const, text, data, bss, abss, syms, entry, flag).
+// in header order (magic, const, text, data, bss, syms, entry, flag).
 TEST(Header, RawBytes) {
     struct exec out = sample_header();
     FILE *f = tmpfile();
@@ -124,7 +121,6 @@ TEST(Header, RawBytes) {
         0x00, 0x00, 0x00,  0x12, 0x34, 0x56,   // a_text  = 0x123456
         0x00, 0x00, 0x00,  0x00, 0x00, 0x0C,   // a_data  = 12
         0x00, 0x00, 0x00,  0x00, 0x00, 0x12,   // a_bss   = 18
-        0x00, 0x00, 0x00,  0x00, 0x00, 0x18,   // a_abss  = 24
         0x00, 0x00, 0x00,  0x00, 0x00, 0x1E,   // a_syms  = 30
         0x00, 0x00, 0x00,  0x0A, 0xBC, 0xDE,   // a_entry = 0xABCDE
         0x00, 0x00, 0x00,  0x00, 0x00, 0x01,   // a_flag  = RELFLG
