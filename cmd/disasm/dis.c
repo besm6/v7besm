@@ -219,7 +219,9 @@ int disassemble(const char *fname)
         return 1;
     }
     if (rflag) {
-        if (!(hdr.a_flag & RELFLG)) {
+        // Showing relocation needs the records to be present, i.e. RELFLG clear;
+        // a set RELFLG marks a fully-linked file with no relocation records.
+        if (hdr.a_flag & RELFLG) {
             fprintf(stderr, "dis: %s is not relocatable\n", fname);
             fclose(text);
             return 1;

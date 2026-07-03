@@ -11,7 +11,7 @@
  *      Because the BESM-6 is a 48-bit word machine, all sizes and offsets here
  *      are counted in bytes but are always a multiple of 6 (one word == 6
  *      bytes; see W in cmd/ld/ld.c). On disk every multi-byte quantity is
- *      stored little-endian.
+ *      stored big-endian (most significant byte first).
  *
  *      Header (9 logical words):
  *                              a_magic  magic number ("BESM" + 0407 / 0410 / 0411)
@@ -25,14 +25,15 @@
  *                              a_flag   flags (relocatable / const-in-data)
  *
  *      The struct below has only 9 meaningful fields, yet the header occupies
- *      HDRSZ == 54 bytes == 9 words. Each field is stored as a 3-byte
- *      little-endian value followed by 3 zero padding bytes, so that every
- *      field starts on a 6-byte (one-word) boundary and the segment data that
- *      follows begins at a clean word offset. See fgethdr()/fputhdr() in
- *      cmd/ld/ for the exact encoding.
+ *      HDRSZ == 54 bytes == 9 words. Each field is stored as 3 zero padding
+ *      bytes followed by a 3-byte big-endian value, so that every field starts
+ *      on a 6-byte (one-word) boundary and the segment data that follows begins
+ *      at a clean word offset. See fgethdr()/fputhdr() in cmd/ld/ for the exact
+ *      encoding.
  *
  *      File layout (byte offsets), where the relocation sections are present
- *      only when the file is still relocatable (a_flag & RELFLG):
+ *      only when the file is still relocatable, i.e. RELFLG is clear (see the
+ *      RELFLG note below):
  *
  *      header:                 0
  *      const:                  54
@@ -70,7 +71,7 @@ struct exec {
  * Symbol table entry.
  *
  * On disk a symbol is stored as: one byte name length, one byte type,
- * a 3-byte little-endian value, then n_len name bytes (no trailing NUL).
+ * a 3-byte big-endian value, then n_len name bytes (no trailing NUL).
  * In memory n_name points at a separately allocated NUL-terminated copy.
  * See fgetsym()/fputsym() in cmd/ld/.
  */
@@ -84,8 +85,9 @@ struct nlist {
 /*
  * Header flags (a_flag).
  */
-#define RELFLG  1       /* file still contains relocation records;
-                         * cleared means fully linked / non-relocatable */
+#define RELFLG  1       /* set: file is fully linked / non-relocatable, i.e. it
+                         * has no relocation records; clear: relocation records
+                         * are still present (despite the flag's name) */
 #define TCDFLG  2       /* const segment is folded into the data segment */
 
 #define HDRSZ   54      /* header size in bytes (9 words of 6 bytes) */

@@ -68,8 +68,10 @@ int scan_object(long loc, int libflg, int nloc)
     int ndef, nsymbol;
 
     read_header(loc);
+    // RELFLG set means the file has no relocation records (it is fully linked),
+    // so there is nothing to relocate against and it cannot be linked again.
     if (ld.filhdr.a_flag & RELFLG) {
-        error(1, "file stripped");
+        error(1, "not relocatable");
         return 0;
     }
     savcindex = ld.cindex;
