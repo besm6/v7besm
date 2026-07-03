@@ -100,6 +100,10 @@ the authoritative references and are kept current:
 - `doc/Besm6_Data_Representation.md` — how every C scalar is laid out in a word.
 - `doc/Assembler_Manual.md` — the `cmd/as` assembly language: lexical rules, directives,
   expression grammar, number formats, operand/addressing forms, and `$NN`/`@NN` raw opcodes.
+- `doc/Linker_Manual.md` — the `cmd/ld` linker: the linking model, symbol resolution,
+  relocation, archives/libraries, and the `a.out` object/executable format.
+- `doc/Archiver_Manual.md` — the `cmd/ar` archiver: command/option letters and the on-disk
+  `.a` archive format (`ARMAG`, `struct ar_hdr`, word padding).
 
 **Object/executable format** is a BESM-6-specific `a.out` variant defined in
 `cross/besm6/b.out.h` (magic `FMAGIC`/`NMAGIC`/`AMAGIC`, `struct exec` with separate

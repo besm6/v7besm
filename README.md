@@ -81,6 +81,10 @@ See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail.
   are laid out in a 48-bit word.
 - [doc/Assembler_Manual.md](doc/Assembler_Manual.md) — the `cmd/as` assembly language:
   syntax, directives, expressions, and addressing forms.
+- [doc/Linker_Manual.md](doc/Linker_Manual.md) — the `cmd/ld` linker: linking model, symbol
+  resolution, relocation, archives, and the `a.out` object/executable format.
+- [doc/Archiver_Manual.md](doc/Archiver_Manual.md) — the `cmd/ar` archiver: commands, options,
+  and the on-disk `.a` archive format.
 
 ## Related projects
 
