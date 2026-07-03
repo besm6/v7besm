@@ -1,12 +1,12 @@
-#ifndef BESM6_ARCH_H
-#define BESM6_ARCH_H
+#ifndef BESM6_TYPES_H
+#define BESM6_TYPES_H
 
 #if besm6
 
 //
 // Native build.
 //
-typedef int      word_t;
+typedef int word_t;
 typedef unsigned uword_t;
 
 #else
@@ -16,9 +16,9 @@ typedef unsigned uword_t;
 //
 #include <stdint.h>
 
-typedef int64_t  word_t;
+typedef int64_t word_t;
 typedef uint64_t uword_t;
 
 #endif
 
-#endif /* BESM6_ARCH_H */
+#endif // BESM6_TYPES_H
