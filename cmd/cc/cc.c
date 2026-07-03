@@ -11,6 +11,10 @@
 //     b6as    assemble      .s  -> .o
 //     b6ld    link          .o  -> a.out
 //
+// Input files are dispatched by suffix: .c runs the full pipeline, .S is
+// preprocessed assembly (cpp -> as), .s is assembled directly, and .o is passed
+// straight to the linker.
+//
 // Selection of the last stage to run is controlled by -E (stop after cpp),
 // -S (stop after codegen, emit assembly) and -c (stop after as, emit object).
 // With none of those, the objects are linked into an executable.
@@ -26,6 +30,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -172,6 +177,20 @@ static char *replace_suffix(const char *name, const char *suf)
     out[stem] = '.';
     strcpy(out + stem + 1, suf);
     return out;
+}
+
+//
+// True if `a` and `b` name the same existing file (same device + inode).  Used
+// to avoid clobbering a .S source on a case-insensitive filesystem, where the
+// derived .s output resolves to the same file.  Returns false if either path
+// cannot be stat()ed -- there is nothing to clobber yet.
+//
+static bool same_file(const char *a, const char *b)
+{
+    struct stat sa, sb;
+    if (stat(a, &sa) != 0 || stat(b, &sb) != 0)
+        return false;
+    return sa.st_dev == sb.st_dev && sa.st_ino == sb.st_ino;
 }
 
 //
@@ -372,8 +391,10 @@ static int run_as(const char *in, const char *out)
 
 //
 // Compile one source file through the pipeline up to the stage selected by the
-// -E/-S/-c flags.  A produced object file is appended to `objects` so a later
-// link step can pick it up.  Returns 0 on success.
+// -E/-S/-c flags.  A .c file runs the full pipeline; a .S file is preprocessed
+// assembly (cpp -> as); a .s file only needs assembling.  A produced object file
+// is appended to `objects` so a later link step can pick it up.  Returns 0 on
+// success.
 //
 static int compile_one(const char *src)
 {
@@ -388,6 +409,39 @@ static int compile_one(const char *src)
         vec_push(&objects, obj);
         return rc;
     }
+
+    // A .S file is assembly that must be preprocessed first: cpp -> as.  b6as
+    // treats the resulting "# line" markers as comments, so run_cpp's output
+    // feeds straight into the assembler.
+    if (suf == 'S') {
+        // Where the preprocessed assembly goes depends on the stop stage.
+        const char *sfile;
+        if (opt_E)
+            sfile = own(outfile ? strdup(outfile) : replace_suffix(src, "i"));
+        else if (opt_S)
+            sfile = own(outfile ? strdup(outfile) : replace_suffix(src, "s"));
+        else
+            sfile = make_temp("s");
+
+        // Guard against overwriting the source on a case-insensitive filesystem,
+        // where replace_suffix("foo.S", "s") == "foo.s" names the same file.
+        if ((opt_E || opt_S) && same_file(src, sfile)) {
+            error("%s: refusing to overwrite input; use -o", src);
+            return 1;
+        }
+
+        if (run_cpp(src, sfile) != 0)
+            return 1;
+        if (opt_E || opt_S)
+            return 0;
+
+        // Assemble the preprocessed output: .s -> .o
+        char *obj = own(outfile && opt_c ? strdup(outfile) : replace_suffix(src, "o"));
+        int rc = run_as(sfile, obj);
+        vec_push(&objects, obj);
+        return rc;
+    }
+
     if (suf != 'c') {
         error("don't know how to compile %s", src);
         return 1;
@@ -472,6 +526,8 @@ static void usage(void)
     fprintf(stderr, "    -Dname[=val]    Predefine a preprocessor macro\n");
     fprintf(stderr, "    -Uname          Undefine a preprocessor macro\n");
     fprintf(stderr, "    -Ipath          Add a header search directory\n");
+    fprintf(stderr, "Inputs are dispatched by suffix: .c (compile), "
+                    ".S (preprocess + assemble), .s (assemble), .o (link).\n");
     exit(1);
 }
 

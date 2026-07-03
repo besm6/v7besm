@@ -3,10 +3,12 @@
 //
 // It writes a tiny C program to a throwaway temp directory, runs the built
 // b6cc with -S, and checks that the generated Madlen assembly contains the
-// expected landmarks.  The preprocessor is pinned to the freshly built b6cpp
-// via the B6CPP override; the three compiler passes (b6parse/b6lower/
-// b6codegen) are resolved by the driver from ~/.local/bin or /usr/local/bin.
-// When those passes are not installed, the test skips rather than fails.
+// expected landmarks.  The preprocessor and assembler are pinned to the freshly
+// built b6cpp/b6as via the B6CPP/B6AS overrides; the three compiler passes
+// (b6parse/b6lower/b6codegen) are resolved by the driver from ~/.local/bin or
+// /usr/local/bin.  When those passes are not installed, the C test skips rather
+// than fails.  The .S (preprocessed assembly) path uses only b6cpp and b6as, so
+// its tests run without the external passes.
 //
 #include <gtest/gtest.h>
 
@@ -83,8 +85,9 @@ protected:
         ASSERT_NE(mkdtemp(tmpl), nullptr) << "mkdtemp failed";
         dir = tmpl;
 
-        // Pin the preprocessor to the freshly built b6cpp.
+        // Pin the preprocessor and assembler to the freshly built tools.
         ASSERT_EQ(setenv("B6CPP", B6CPP_PATH, 1), 0);
+        ASSERT_EQ(setenv("B6AS", B6AS_PATH, 1), 0);
     }
 
     void TearDown() override
@@ -125,6 +128,47 @@ TEST_F(CcDriver, CompileToAssembly)
     EXPECT_NE(text.find("main:"), std::string::npos) << text;
     EXPECT_NE(text.find(",end,"), std::string::npos) << text;
     EXPECT_NE(text.find("b/save"), std::string::npos) << text;
+}
+
+// A .S file is assembly that must be run through the C preprocessor first.  With
+// -E the driver stops after b6cpp, so this exercises the cpp half of the path
+// using only the pinned b6cpp.
+TEST_F(CcDriver, PreprocessDotS)
+{
+    WriteSource("x.S",
+                "#define REG 0\n"
+                "#ifdef REG\n"
+                "        xta REG\n"
+                "#endif\n");
+
+    std::string src = dir + "/x.S";
+    std::string out = dir + "/x.i";
+    ASSERT_EQ(RunProcess({ B6CC_COMMAND, "-E", "-o", out, src }), 0)
+        << "b6cc -E on .S failed";
+
+    std::string text = ReadFile(out);
+    // The macro was expanded and the directives are gone.
+    EXPECT_NE(text.find("xta 0"), std::string::npos) << text;
+    EXPECT_EQ(text.find("#define"), std::string::npos) << text;
+    EXPECT_EQ(text.find("#ifdef"), std::string::npos) << text;
+}
+
+// The full .S path: cpp -> as -> object.  Uses only the in-tree b6cpp and b6as,
+// so it does not depend on the external c-compiler passes.
+TEST_F(CcDriver, AssembleDotS)
+{
+    WriteSource("x.S",
+                "#define REG 0\n"
+                "        xta REG\n"
+                "        atx REG\n");
+
+    std::string src = dir + "/x.S";
+    std::string obj = dir + "/x.o";
+    ASSERT_EQ(RunProcess({ B6CC_COMMAND, "-c", "-o", obj, src }), 0)
+        << "b6cc -c on .S failed";
+
+    std::string bytes = ReadFile(obj);
+    EXPECT_FALSE(bytes.empty()) << "object file is empty";
 }
 
 } // namespace
