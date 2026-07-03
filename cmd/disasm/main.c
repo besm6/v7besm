@@ -1,17 +1,17 @@
-/*
- * Command-line front end for the BESM-6 disassembler.
- *
- * Parses flags, selects the mnemonic dialect, then disassembles each named
- * a.out file.
- */
+//
+// Command-line front end for the BESM-6 disassembler.
+//
+// Parses flags, selects the mnemonic dialect, then disassembles each named
+// a.out file.
+//
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "disasm.h"
 
-/*
- * Print the command-line usage summary and exit with an error.
- */
+//
+// Print the command-line usage summary and exit with an error.
+//
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n");
@@ -27,7 +27,7 @@ static void usage(void)
 
 int main(int argc, char **argv)
 {
-    int yesarg = 0; /* whether file-name arguments were given */
+    int yesarg = 0; // whether file-name arguments were given
 
     while (--argc) {
         ++argv;
@@ -36,19 +36,19 @@ int main(int argc, char **argv)
 
             for (cp = *argv + 1; *cp; cp++) {
                 switch (*cp) {
-                case 'R': /* print relocation in numbers */
+                case 'R': // print relocation in numbers
                     Rflag++;
-                    /* fallthrough */
-                case 'r': /* print relocation info */
+                    // fallthrough
+                case 'r': // print relocation info
                     rflag++;
                     break;
-                case 'C': /* print commands only in octal */
+                case 'C': // print commands only in octal
                     Cflag++;
-                    /* fallthrough */
-                case 'c': /* print commands in octal */
+                    // fallthrough
+                case 'c': // print commands in octal
                     cflag++;
                     break;
-                case 'b': /* use BEMSH (Cyrillic) mnemonics */
+                case 'b': // use BEMSH (Cyrillic) mnemonics
                     lcmd = lcmd_bemsh;
                     scmd = scmd_bemsh;
                     break;
