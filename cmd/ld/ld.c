@@ -66,7 +66,6 @@
 //      -x              discard local symbols
 //      -X              discard locals starting with LOCSYM
 //      -S              discard all except locals and globals
-//      -C              put constants in data segment
 //      -r              preserve rel. bits, don't define common's
 //      -s              discard all symbols
 //      -n              pure procedure
@@ -251,7 +250,7 @@ void assign_addresses(void)
             }
     }
     if (ld.rflag)
-        ld.Cflag = ld.nflag = ld.sflag = 0;
+        ld.nflag = ld.sflag = 0;
 
     //
     // Lay out the common symbols.  A common symbol's n_value currently holds the
@@ -289,22 +288,14 @@ void assign_addresses(void)
     //      corigin: const | torigin: text | dorigin: data | bss commons |
     //      borigin: bss | abss commons | aorigin: abss
     //
-    // -C (Cflag) moves const to just after text (folded near data); -n forces
-    // the data origin up to the next 1024-word page boundary via ALIGN().
+    // -n forces the data origin up to the next 1024-word page boundary via ALIGN().
     //
-    if (ld.Cflag)
-        ld.torigin = ld.basaddr;
-    else {
-        ld.corigin = ld.basaddr;
-        ld.torigin = ld.corigin + ld.csize / W;
-    }
-    if (ld.Cflag) {
-        ld.corigin = ld.torigin + ld.tsize / W;
-        ld.dorigin = ld.corigin + ld.csize / W;
-    } else
-        ld.dorigin = ld.torigin + ld.tsize / W;
-    if (ld.nflag)
+    ld.corigin = ld.basaddr;
+    ld.torigin = ld.corigin + ld.csize / W;
+    ld.dorigin = ld.torigin + ld.tsize / W;
+    if (ld.nflag) {
         ld.dorigin = ALIGN(ld.dorigin, 1024);
+    }
     cmorigin    = ld.dorigin + ld.dsize / W; // bss commons sit right after data
     ld.borigin  = cmorigin + cmsize / W;     // then the files' own bss
     acmorigin   = ld.borigin + ld.bsize / W; // then abss commons

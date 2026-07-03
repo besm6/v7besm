@@ -96,7 +96,6 @@ struct linker {
     int xflag;  // -x: discard local symbols
     int Xflag;  // -X: discard locals starting with LOCSYM
     int Sflag;  // -S: discard all except locals and globals
-    int Cflag;  // -C: put constants in the data segment
     int rflag;  // -r: keep relocation bits, don't define commons
     int arflag; // original copy of rflag (rflag may be forced on later)
     int sflag;  // -s: discard all symbols

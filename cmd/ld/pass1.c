@@ -307,11 +307,6 @@ void pass1(int argc, char **argv)
                 ld.Sflag++;
                 continue;
 
-                // put constants in data segment
-            case 'C':
-                ld.Cflag++;
-                continue;
-
                 // preserve rel. bits, don't define common
             case 'r':
                 ld.rflag++;

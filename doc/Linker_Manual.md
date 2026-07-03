@@ -105,7 +105,6 @@ while `-T` and `-l` take the rest of the **same** argument.
 | `-x` | — | Discard all local (non-global) symbols from the output. |
 | `-X` | — | Discard local symbols whose name begins with `L` (the `LOCSYM` character — compiler temporaries). |
 | `-S` | — | Strip absolute and debug symbols (everything that is not a segment-relative local or a global). |
-| `-C` | — | Put the const segment in the data segment: fold const to sit just after text, and set `TCDFLG` in the header. |
 | `-r` | — | Retain relocation records and produce a relocatable output that can be linked again; do **not** define common symbols (unless `-d` is also given). |
 | `-s` | — | Discard **all** symbols. Implies `-x`. |
 | `-n` | — | Pure procedure: mark the text segment read-only (`NMAGIC`) and page-align the data segment. |
@@ -119,7 +118,7 @@ Several flags override one another; the precedence is fixed in `assign_addresses
 
 - **`-r` wins over layout and stripping flags.** If the output stays relocatable — either
   because `-r` was given, or because a genuine symbol is left undefined and the linker forces
-  `-r` on — then `-C`, `-n` and `-s` are all cleared. A relocatable file keeps its
+  `-r` on — then `-n` and `-s` are cleared. A relocatable file keeps its
   const/text/data in the canonical order and keeps its symbols so it can be re-linked.
 - **`-r` suppresses common definitions** unless `-d` is present; `-d` alone (no `-r`) is a
   no-op because commons are defined anyway.
@@ -153,10 +152,8 @@ on the command line:
 - **abss** — "absolute" bss: like bss, but placed in a separate fixed address window. Absolute
   commons (`.acomm`) land here.
 
-By default the segments are stacked const → text → data → bss → abss (with the common areas
-interleaved; see [§4.2](#42-memory-layout)). The `-C` option relocates const to sit immediately
-after text — "folded" next to data — and records that choice with the `TCDFLG` header flag so the
-loader knows const is not at the front.
+The segments are stacked const → text → data → bss → abss (with the common areas
+interleaved; see [§4.2](#42-memory-layout)).
 
 ### 3.1 The constant pool
 
@@ -230,10 +227,8 @@ segment starts where the previous one ended:
 ```
 
 The base address of const (`corigin`) is `ld.basaddr`, which defaults to `BADDR` (= `HDRSZ / W`
-= 9, leaving words `0…8` free) and is overridden by `-T`. The options bend this layout:
+= 9, leaving words `0…8` free) and is overridden by `-T`. The `-n` option bends this layout:
 
-- **`-C`** puts text first, at `basaddr`, then const just after text, then data:
-  `torigin | corigin | dorigin`.
 - **`-n`** (`nflag`) rounds `dorigin` up to the next 1024-word page boundary via the `ALIGN()`
   macro, so the read-only text ends on a clean page.
 
@@ -505,7 +500,7 @@ struct exec {
     word_t  a_abss;     /* absolute bss size, bytes */
     word_t  a_syms;     /* symbol table size, bytes */
     word_t  a_entry;    /* entry point, word address */
-    word_t  a_flag;     /* flags: RELFLG, TCDFLG */
+    word_t  a_flag;     /* flags: RELFLG */
 };
 ```
 
@@ -532,7 +527,6 @@ sets two `a_flag` bits:
 | Flag | Octal | Meaning |
 |------|-------|---------|
 | `RELFLG` | `1` | **set** means the file is fully linked / non-relocatable (no relocation records); **clear** means it still contains relocation records |
-| `TCDFLG` | `2` | the const segment is folded into the data segment (`-C`) |
 
 Mind the name: a **set** `RELFLG` marks a *non-relocatable* file (no relocation records), not a
 relocatable one. `setup_output()` **sets** it when `-r` is *not* in effect (a finished
@@ -653,7 +647,7 @@ The four output shapes are:
 
 Under `-n`, `finish_output()` pads the text buffer with zero words up to the
 next page boundary before concatenating. The segments are then appended in the header's order —
-const, text, data (with `-C` moving const to just after text) — followed, under `-r`, by the
+const, text, data — followed, under `-r`, by the
 relocation buffers in the same order, and finally the symbol table. The image is built under the
 scratch name `l.out`; if no `-o` was given it is then hard-linked to `a.out`. On success the
 output is made executable (`chmod 0777 & ~umask`) unless `-r` was given.

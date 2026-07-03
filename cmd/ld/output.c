@@ -66,10 +66,6 @@ void setup_output(void)
         ld.filhdr.a_flag &= ~RELFLG;
     else
         ld.filhdr.a_flag |= RELFLG;
-    if (ld.Cflag)
-        ld.filhdr.a_flag |= TCDFLG;
-    else
-        ld.filhdr.a_flag &= ~TCDFLG;
     fputhdr(&ld.filhdr, ld.outb);
 }
 
@@ -90,9 +86,8 @@ void copy_buffer(FILE *buf)
 //
 // Assemble the final image after pass 2.  First, for a pure (-n) layout, pad
 // the text up to the next page boundary.  Then append the segment buffers to
-// the output in the order the header promised - const, text, data (with -C
-// moving const to sit just after text), optionally followed by the relocation
-// buffers, and finally the symbol table.
+// the output in the order the header promised - const, text, data - optionally
+// followed by the relocation buffers, and finally the symbol table.
 //
 void finish_output(void)
 {
@@ -110,21 +105,15 @@ void finish_output(void)
         }
     }
 
-    // Concatenate the segment images.  -C (Cflag) folds const in just after text.
-    if (!ld.Cflag)
-        copy_buffer(ld.coutb);
+    // Concatenate the segment images in canonical order: const, text, data.
+    copy_buffer(ld.coutb);
     copy_buffer(ld.toutb);
-    if (ld.Cflag)
-        copy_buffer(ld.coutb);
     copy_buffer(ld.doutb);
 
     // With -r, the relocation records follow in the same segment order.
     if (ld.rflag) {
-        if (!ld.Cflag)
-            copy_buffer(ld.croutb);
+        copy_buffer(ld.croutb);
         copy_buffer(ld.troutb);
-        if (ld.Cflag)
-            copy_buffer(ld.croutb);
         copy_buffer(ld.droutb);
     }
 

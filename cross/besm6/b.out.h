@@ -18,11 +18,11 @@
  *                              a_const  size of the const segment   )
  *                              a_text   size of the text segment    )
  *                              a_data   size of the data segment    ) in bytes,
- *                              a_bss    size of the bss segment      ) multiple
+ *                              a_bss    size of the bss segment     ) multiple
  *                              a_abss   size of the abss segment    ) of 6
  *                              a_syms   size of the symbol table    )
  *                              a_entry  entry-point address (word index)
- *                              a_flag   flags (relocatable / const-in-data)
+ *                              a_flag   flags (relocatable)
  *
  *      The struct below has only 9 meaningful fields, yet the header occupies
  *      HDRSZ == 54 bytes == 9 words. Each field is stored as 3 zero padding
@@ -53,7 +53,7 @@
  * a_magic distinguishes the file kind (see FMAGIC/NMAGIC).
  * The five segment-size fields and a_syms are byte counts, each a multiple of 6.
  * a_entry is the program entry point as a word address.
- * a_flag carries the RELFLG / TCDFLG bits.
+ * a_flag carries the RELFLG bit.
  */
 struct exec {
     word_t  a_magic;            /* magic number */
@@ -64,7 +64,7 @@ struct exec {
     word_t  a_abss;             /* absolute bss size, bytes */
     word_t  a_syms;             /* symbol table size, bytes */
     word_t  a_entry;            /* entry point, word address */
-    word_t  a_flag;             /* flags: RELFLG, TCDFLG */
+    word_t  a_flag;             /* flags: RELFLG */
 };
 
 /*
@@ -88,7 +88,6 @@ struct nlist {
 #define RELFLG  1       /* set: file is fully linked / non-relocatable, i.e. it
                          * has no relocation records; clear: relocation records
                          * are still present (despite the flag's name) */
-#define TCDFLG  2       /* const segment is folded into the data segment */
 
 #define HDRSZ   54      /* header size in bytes (9 words of 6 bytes) */
 
@@ -153,9 +152,7 @@ struct nlist {
 #define N_TXTOFF(x) HDRSZ                                                /* offset of the segment images */
 #define N_SYMOFF(x) (N_TXTOFF(x) + (x).a_const + (x).a_text + (x).a_data)/* offset of the symbol table */
 #define N_STROFF(x) (N_SYMOFF(x) + (x).a_syms)                          /* offset of the string table */
-
-#define BADMAG(x)   ((x).a_magic != FMAGIC && (x).a_magic != NMAGIC)
-#define N_BADMAG    BADMAG
+#define N_BADMAG(x) ((x).a_magic != FMAGIC && (x).a_magic != NMAGIC)
 
 #ifndef KERNEL
 #include <stdio.h>
