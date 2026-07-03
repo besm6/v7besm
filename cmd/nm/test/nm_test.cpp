@@ -122,7 +122,7 @@ TEST(Nm, BasicListing)
     EXPECT_NE(at(out, " d data1"), std::string::npos) << out;
     EXPECT_NE(at(out, " U udef"), std::string::npos) << out;
     // Undefined symbols print blank where the value would be.
-    EXPECT_NE(at(out, "          U udef"), std::string::npos) << out;
+    EXPECT_NE(at(out, "      U udef"), std::string::npos) << out;
     // Default sort is lexical: data1 < main < udef.
     EXPECT_LT(at(out, "data1"), at(out, "main"));
     EXPECT_LT(at(out, "main"), at(out, "udef"));

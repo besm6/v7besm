@@ -157,8 +157,6 @@ struct nlist {
 
 #define BADMAG(x)   ((x).a_magic != FMAGIC && (x).a_magic != NMAGIC)
 #define N_BADMAG    BADMAG
-#define FORMAT      "%07lx" /* printf format for a symbol value */
-#define N_FORMAT    FORMAT
 
 #ifndef KERNEL
 #include <stdio.h>

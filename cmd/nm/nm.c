@@ -15,6 +15,8 @@
 
 #include "nm.h"
 
+#define N_FORMAT "%05lo" /* octal printf format for a symbol value */
+
 #define QUANT 2048
 
 static int numsort_flg;
@@ -222,7 +224,7 @@ static void nm(const char *name, int narg)
         c = symp[n].n_type;
         if (!undef_flg) {
             if (c == 'u' || c == 'U')
-                printf("         ");
+                printf("     ");
             else
                 printf(N_FORMAT, (long)symp[n].n_value);
             printf(" %c ", c);
