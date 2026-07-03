@@ -339,10 +339,6 @@ void pass1(int argc, char **argv)
                 ld.trace++;
                 continue;
 
-            case 'k':
-                ld.alflag++;
-                continue;
-
             default:
                 error(2, "unknown flag");
             }

@@ -72,7 +72,6 @@
 //      -n              pure procedure
 //      -d              define common even with rflag
 //      -t              tracing
-//      -k              align const and text on page boundary
 //
 #include <stdarg.h>
 #include <stdlib.h>
@@ -252,7 +251,7 @@ void assign_addresses(void)
             }
     }
     if (ld.rflag)
-        ld.Cflag = ld.alflag = ld.nflag = ld.sflag = 0;
+        ld.Cflag = ld.nflag = ld.sflag = 0;
 
     //
     // Lay out the common symbols.  A common symbol's n_value currently holds the
@@ -290,8 +289,8 @@ void assign_addresses(void)
     //      corigin: const | torigin: text | dorigin: data | bss commons |
     //      borigin: bss | abss commons | aorigin: abss
     //
-    // -C (Cflag) moves const to just after text (folded near data); -k/-n force
-    // some origins up to the next 1024-word page boundary via ALIGN().
+    // -C (Cflag) moves const to just after text (folded near data); -n forces
+    // the data origin up to the next 1024-word page boundary via ALIGN().
     //
     if (ld.Cflag)
         ld.torigin = ld.basaddr;
@@ -299,14 +298,12 @@ void assign_addresses(void)
         ld.corigin = ld.basaddr;
         ld.torigin = ld.corigin + ld.csize / W;
     }
-    if (ld.alflag)
-        ld.torigin = ALIGN(ld.torigin, 1024);
     if (ld.Cflag) {
         ld.corigin = ld.torigin + ld.tsize / W;
         ld.dorigin = ld.corigin + ld.csize / W;
     } else
         ld.dorigin = ld.torigin + ld.tsize / W;
-    if (ld.nflag || ld.alflag)
+    if (ld.nflag)
         ld.dorigin = ALIGN(ld.dorigin, 1024);
     cmorigin    = ld.dorigin + ld.dsize / W; // bss commons sit right after data
     ld.borigin  = cmorigin + cmsize / W;     // then the files' own bss

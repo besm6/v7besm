@@ -30,10 +30,9 @@ Two fields identify a file:
   |------------|-------|-----------|----------------------------------|
   | `0x0107`   | 0407  | `FMAGIC`  | relocatable / impure             |
   | `0x0108`   | 0410  | `NMAGIC`  | pure executable                  |
-  | `0x0109`   | 0411  | `AMAGIC`  | separate-address executable      |
 
   So a big-endian 16-bit read (`beshort`) at **offset 4** distinguishes the
-  three magics.
+  two magics.
 
 - **`a_flag`** is the 9th header word (offset 48). Its low value byte lands at
   **offset 53**. The `RELFLG` bit (`0x01`, see `b.out.h`) is **set** in a fully
@@ -42,7 +41,7 @@ Two fields identify a file:
 
 That gives the discrimination:
 
-- `NMAGIC`/`AMAGIC` → always an executable (pure / separate-address).
+- `NMAGIC` → always an executable (pure).
 - `FMAGIC` → check `RELFLG` at byte 53: set → executable, clear → object.
 
 ## The magic rules
@@ -52,7 +51,6 @@ That gives the discrimination:
 0	string	BESM	besm6 a.out
 # a_magic tail selects the file kind
 >4	beshort	0x0108	pure executable
->4	beshort	0x0109	separate-address executable
 >4	beshort	0x0107
 # FMAGIC: RELFLG bit (a_flag, byte 53) tells linked exe from relocatable object
 >>53	byte&0x01	1	executable
@@ -68,7 +66,6 @@ line prints `besm6 a.out`; each nested `>` / `>>` line appends the kind:
 | FMAGIC, `RELFLG` set (linked)          | `besm6 a.out executable`                 |
 | FMAGIC, `RELFLG` clear (relocatable)   | `besm6 a.out object`                     |
 | NMAGIC                                 | `besm6 a.out pure executable`            |
-| AMAGIC                                 | `besm6 a.out separate-address executable`|
 
 ## Setup
 

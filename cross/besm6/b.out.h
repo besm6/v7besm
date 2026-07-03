@@ -14,7 +14,7 @@
  *      stored big-endian (most significant byte first).
  *
  *      Header (9 logical words):
- *                              a_magic  magic number ("BESM" + 0407 / 0410 / 0411)
+ *                              a_magic  magic number ("BESM" + 0407 / 0410)
  *                              a_const  size of the const segment   )
  *                              a_text   size of the text segment    )
  *                              a_data   size of the data segment    ) in bytes,
@@ -50,7 +50,7 @@
 /*
  * a.out file header.
  *
- * a_magic distinguishes the file kind (see FMAGIC/NMAGIC/AMAGIC).
+ * a_magic distinguishes the file kind (see FMAGIC/NMAGIC).
  * The five segment-size fields and a_syms are byte counts, each a multiple of 6.
  * a_entry is the program entry point as a word address.
  * a_flag carries the RELFLG / TCDFLG bits.
@@ -98,7 +98,6 @@ struct nlist {
  */
 #define FMAGIC  02044252323200407   /* standard relocatable / impure executable */
 #define NMAGIC  02044252323200410   /* read-only (pure) text segment */
-#define AMAGIC  02044252323200411   /* text segment in a separate address space */
 
 /*
  * Symbol types (n_type).

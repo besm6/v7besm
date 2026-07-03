@@ -102,7 +102,6 @@ struct linker {
     int sflag;  // -s: discard all symbols
     int nflag;  // -n: pure procedure (read-only text)
     int dflag;  // -d: define commons even with -r
-    int alflag; // -k: align const and text on a page boundary
 
     // running segment sizes, totalled during pass 1 (bytes)
     long csize; // const segment

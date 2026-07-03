@@ -48,7 +48,7 @@ void setup_output(void)
         create_buffer(&ld.troutb, 1);
         create_buffer(&ld.droutb, 1);
     }
-    ld.filhdr.a_magic = ld.nflag ? NMAGIC : ld.alflag ? AMAGIC : FMAGIC;
+    ld.filhdr.a_magic = ld.nflag ? NMAGIC : FMAGIC;
     ld.filhdr.a_const = ld.csize;
     ld.filhdr.a_text  = ld.tsize;
     ld.filhdr.a_data  = ld.dsize;
@@ -88,26 +88,18 @@ void copy_buffer(FILE *buf)
 }
 
 //
-// Assemble the final image after pass 2.  First, for a pure (-n) or page-aligned
-// (-k) layout, pad const/text up to the next page boundary.  Then append the
-// segment buffers to the output in the order the header promised - const, text,
-// data (with -C moving const to sit just after text), optionally followed by the
-// relocation buffers, and finally the symbol table.
+// Assemble the final image after pass 2.  First, for a pure (-n) layout, pad
+// the text up to the next page boundary.  Then append the segment buffers to
+// the output in the order the header promised - const, text, data (with -C
+// moving const to sit just after text), optionally followed by the relocation
+// buffers, and finally the symbol table.
 //
 void finish_output(void)
 {
-    if (ld.nflag || ld.alflag) {
+    if (ld.nflag) {
         long n;
-        if (ld.alflag) {
-            // Pad the const segment up to a 1024-word page boundary.
-            n = ld.corigin;
-            while (n & 01777) {
-                n++;
-                fputw(0, ld.coutb);
-            }
-        }
 
-        // Pad the text segment up to a page boundary (n is now the end of text).
+        // Pad the text segment up to a page boundary.
         n = ld.torigin;
         while (n & 01777) {
             n++;

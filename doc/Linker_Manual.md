@@ -111,7 +111,6 @@ while `-T` and `-l` take the rest of the **same** argument.
 | `-n` | — | Pure procedure: mark the text segment read-only (`NMAGIC`) and page-align the data segment. |
 | `-d` | — | Define common symbols even under `-r`. |
 | `-t` | — | Trace progress. Repeating it (`-t -t`, `-t -t -t`) raises the verbosity: file names, then per-segment biases and section markers, then every half-word before/after relocation. |
-| `-k` | — | Page-align const and text on 1024-word boundaries and mark the output `AMAGIC`. |
 
 ### 2.2 Interactions between options
 
@@ -120,13 +119,12 @@ Several flags override one another; the precedence is fixed in `assign_addresses
 
 - **`-r` wins over layout and stripping flags.** If the output stays relocatable — either
   because `-r` was given, or because a genuine symbol is left undefined and the linker forces
-  `-r` on — then `-C`, `-k`, `-n` and `-s` are all cleared. A relocatable file keeps its
+  `-r` on — then `-C`, `-n` and `-s` are all cleared. A relocatable file keeps its
   const/text/data in the canonical order and keeps its symbols so it can be re-linked.
 - **`-r` suppresses common definitions** unless `-d` is present; `-d` alone (no `-r`) is a
   no-op because commons are defined anyway.
 - **`-s` implies `-x`** (both set `ld.xflag`).
-- **`-n` and `-k`** both trigger 1024-word page alignment, and select `NMAGIC`/`AMAGIC`
-  respectively.
+- **`-n`** triggers 1024-word page alignment of the data segment and selects `NMAGIC`.
 
 ### 2.3 Exit status
 
@@ -236,10 +234,8 @@ The base address of const (`corigin`) is `ld.basaddr`, which defaults to `BADDR`
 
 - **`-C`** puts text first, at `basaddr`, then const just after text, then data:
   `torigin | corigin | dorigin`.
-- **`-k`** (`alflag`) rounds `torigin` and `dorigin` up to the next 1024-word page boundary
-  via the `ALIGN()` macro; the const segment is also padded to a page in `finish_output()`.
-- **`-n`** (`nflag`) rounds `dorigin` up to a page boundary, so the read-only text ends on a
-  clean page.
+- **`-n`** (`nflag`) rounds `dorigin` up to the next 1024-word page boundary via the `ALIGN()`
+  macro, so the read-only text ends on a clean page.
 
 The bss commons sit right after data (`cmorigin = dorigin + dsize/W`), then the files' own bss
 (`borigin`), then the abss commons (`acmorigin`), then the files' own abss (`aorigin`).
@@ -528,10 +524,9 @@ field, and the const segment that follows, starts on a clean word boundary. `fpu
 |----------|-------|---------|-----------|
 | `FMAGIC` | `02044252323200407` | standard relocatable / impure executable | default |
 | `NMAGIC` | `02044252323200410` | read-only (pure) text segment | `-n` |
-| `AMAGIC` | `02044252323200411` | text segment in a separate address space | `-k` |
 
-Only `FMAGIC` and `NMAGIC` are accepted on **input** — `BADMAG(x)` is true for anything else —
-though the linker will *produce* `AMAGIC`. `setup_output()` picks the magic from `-n`/`-k` and
+`FMAGIC` and `NMAGIC` are the only magic numbers; both are accepted on **input** —
+`BADMAG(x)` is true for anything else. `setup_output()` picks the magic from `-n` and
 sets two `a_flag` bits:
 
 | Flag | Octal | Meaning |
@@ -653,11 +648,10 @@ The four output shapes are:
 - **Impure executable** (default, `FMAGIC`) — const, text, data all writable and contiguous.
 - **Pure text** (`-n`, `NMAGIC`) — text is read-only; the data segment is page-aligned so the
   text page can be shared / write-protected.
-- **Page-aligned** (`-k`, `AMAGIC`) — const and text both start on 1024-word page boundaries.
 - **Relocatable** (`-r`, `RELFLG` cleared) — keeps the relocation records and (with `-d`)
   leaves commons undefined, so the file can be linked again.
 
-Under `-n`/`-k`, `finish_output()` pads the const and/or text buffers with zero words up to the
+Under `-n`, `finish_output()` pads the text buffer with zero words up to the
 next page boundary before concatenating. The segments are then appended in the header's order —
 const, text, data (with `-C` moving const to just after text) — followed, under `-r`, by the
 relocation buffers in the same order, and finally the symbol table. The image is built under the
@@ -744,7 +738,6 @@ Useful variants:
 ```sh
 b6ld -r -o part.o a.o b.o      # incremental link: keep relocation, leave commons undefined
 b6ld -n -o pure a.o b.o        # read-only (pure) text, page-aligned data  (NMAGIC)
-b6ld -k -T 010000 -o img a.o   # page-aligned const/text, load base 010000 (AMAGIC)
 b6ld -s -o small a.o b.o       # strip all symbols from the output
 b6ld -e start -o img a.o       # make `start` the entry point
 ```

@@ -107,7 +107,7 @@ the authoritative references and are kept current:
   `.a` archive format (`ARMAG`, `struct ar_hdr`, word padding).
 
 **Object/executable format** is a BESM-6-specific `a.out` variant defined in
-`cross/besm6/b.out.h` (magic `FMAGIC`/`NMAGIC`/`AMAGIC`, `struct exec` with separate
+`cross/besm6/b.out.h` (magic `FMAGIC`/`NMAGIC`, `struct exec` with separate
 `const`/`text`/`data`/`bss` segment sizes). The assembler, linker, and disassembler all
 share this header. The shared on-disk serialization lives in `cmd/libaout` and uses the
 BESM-6 **6-byte word** (`W == 6`, two 3-byte big-endian half-words); the archive member
