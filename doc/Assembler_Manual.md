@@ -115,10 +115,10 @@ malformed) is treated as an ordinary whole-line comment and emits nothing.
 
 ## 5. Symbols and labels
 
-**Name characters.** A name is a run of letters, digits, `_`, `.`, the minus sign `-`, and
-high-bit bytes (codes 0200–0377, which carry Cyrillic letters in the BESM-6 character set).
-A name may not begin with a digit (a leading digit starts a number). Names are
-case-sensitive.
+**Name characters.** A name is a run of letters, digits, `_`, `.`, `$`, and high-bit bytes
+(codes 0200–0377, which carry UTF-8 multibyte characters, including Cyrillic letters). A
+name may not begin with a digit (a leading digit starts a number) nor with `$` (a leading
+`$` starts a raw `$NN` opcode, see [§9.3](#93-raw-opcodes)). Names are case-sensitive.
 
 **Defining a label.** A name followed by a colon defines a symbol whose value is the current
 location (in words) within the current segment:

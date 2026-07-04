@@ -8,6 +8,7 @@
 //
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 #include <fstream>
@@ -522,6 +523,42 @@ foo:    atx 0
     EXPECT_EQ(word_high(got, 8), 00000000L);     // atx 0  (foo:)
     EXPECT_EQ(word_low(got, 8), 03000000L | 8L); // uj foo -> resolved to word 8
     EXPECT_EQ(reloc_half(got, 1, 1), 020L);      // RTEXT (long field, no modifier) for the uj foo
+}
+
+// Names may contain '$' and UTF-8 multibyte (e.g. Cyrillic) characters; both
+// kinds of label reach the symbol table under their exact byte spelling.  A
+// leading '$' still starts a raw opcode, so '$' is only valid within a name.
+TEST(Assemble, DollarAndUtf8InNames)
+{
+    auto got = assemble(R"(
+        .globl foo$bar
+        .globl метка
+foo$bar: atx 0
+метка:   uj foo$bar
+)");
+    auto syms = read_symbols(got);
+    ASSERT_EQ(syms.size(), 2u);
+
+    auto find = [&](const std::string &n) -> const Sym * {
+        auto it = std::find_if(syms.begin(), syms.end(),
+                               [&](const Sym &s) { return s.name == n; });
+        return it == syms.end() ? nullptr : &*it;
+    };
+    const Sym *dollar = find("foo$bar");
+    const Sym *cyril  = find("метка");
+    ASSERT_NE(dollar, nullptr); // '$' lexed as part of the name
+    ASSERT_NE(cyril, nullptr);  // high-bit UTF-8 bytes lexed as part of the name
+    EXPECT_EQ(dollar->type, 043L); // N_EXT | N_TEXT
+    EXPECT_EQ(dollar->value, 8L);  // foo$bar: at text base 8 + offset 0
+    EXPECT_EQ(cyril->type, 043L);  // N_EXT | N_TEXT
+    // метка: forces word alignment, so a utc filler fills the low half of word 8
+    // and the label lands at word 9.
+    EXPECT_EQ(cyril->value, 9L);
+    EXPECT_EQ(word_low(got, 8), 02200000L); // utc alignment filler
+
+    // The `uj foo$bar` reference (at word 9) resolved to word 8, proving the '$'
+    // name lexed as one symbol rather than a raw '$' opcode.
+    EXPECT_EQ(word_high(got, 9), 03000000L | 8L);
 }
 
 // .comm declares a common block: an external symbol whose value is the

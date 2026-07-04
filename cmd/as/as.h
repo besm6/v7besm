@@ -99,7 +99,7 @@
 #define ISHEX(c)    (ctype[(c) & 0377] & 1) // hexadecimal digit 0-9 A-F a-f
 #define ISOCTAL(c)  (ctype[(c) & 0377] & 2) // octal digit 0-7
 #define ISDIGIT(c)  (ctype[(c) & 0377] & 4) // decimal digit 0-9
-#define ISLETTER(c) (ctype[(c) & 0377] & 8) // name character (letter, '.', '_', ...)
+#define ISLETTER(c) (ctype[(c) & 0377] & 8) // name character (letter, '.', '_', '$', high-bit)
 
 // A BESM-6 word is 48 bits.  Values are carried in a single int64_t; these
 // masks and accessors split a word into its two 24-bit half-words where the
