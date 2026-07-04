@@ -300,10 +300,11 @@ the full set):
 | `a+x` | 004 | `aox` | 015 |
 | `a-x` | 005 | `a/x` | 016 |
 | `x-a` | 006 | `a*x` | 017 |
+| `ext` | 033 | `ntr` | 037 |
 | `ati` | 040 | `ita` | 042 |
 | `mtj` | 044 | `j+m` | 045 |
 
-Opcodes with no dedicated mnemonic (the extracodes and reserved slots — e.g. `032`, `033`,
+Opcodes with no dedicated mnemonic (the extracodes and reserved slots — e.g. `032`,
 `046`…`077`, and long `020`, `021`, `036`) have no named form; write them with the raw
 `$NN`/`@NN` syntax described in [§9.3](#93-raw-opcodes).
 

@@ -316,6 +316,15 @@ mid:                        ; second label
     EXPECT_EQ(word_low(got, 48), 03700000L | 24L);      // vlm mid    (== word 24)
 }
 
+// The `ext` mnemonic (opcode 033) assembles to the same word as the raw $33
+// form checked above, giving the assemble->disassemble roundtrip: the
+// disassembler decodes 00330000 back to "ext" (see cmd/disasm/test).
+TEST(Assemble, ExtMnemonic)
+{
+    std::vector<unsigned char> got = assemble("        ext 0246\n");
+    EXPECT_EQ(word_high(got, 8), 00330000L | 0246L); // ext 0246
+}
+
 // Header fields live in the low half-word of their file word (a_const = word 1,
 // a_text = word 2, a_data = word 3, a_bss = word 4, a_syms = word 6).
 

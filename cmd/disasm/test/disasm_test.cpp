@@ -61,7 +61,7 @@ TEST(Disassemble, AllInstructions)
     EXPECT_EQ(decode(00300000 | 077), "rte 077");
     EXPECT_EQ(decode(00310000 | 1), "yta 1");
     EXPECT_EQ(decode(00320000 | 0123), "$32 0123"); // raw short opcode
-    EXPECT_EQ(decode(00330000 | 0246), "$33 0246"); // raw short opcode
+    EXPECT_EQ(decode(00330000 | 0246), "ext 0246"); // external I/O control
     EXPECT_EQ(decode(00340000 | 010), "e+n 010");
     EXPECT_EQ(decode(00350000 | 020), "e-n 020");
     EXPECT_EQ(decode(00360000 | 0300), "asn 0300");
@@ -130,6 +130,7 @@ TEST(Disassemble, BemshDialect)
     scmd = scmd_bemsh;
     lcmd = lcmd_bemsh;
     EXPECT_EQ(decode(00000000 | 0123), "зп 0123");  // atx -> зп
+    EXPECT_EQ(decode(00330000 | 0246), "увв 0246"); // ext -> увв
     EXPECT_EQ(decode(02200000 | 050000), "мода 050000"); // utc -> мода
     EXPECT_EQ(decode(03300000 | 0456), "стоп 0456"); // stop -> стоп
 

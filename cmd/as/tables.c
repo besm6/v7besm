@@ -82,7 +82,7 @@ const int typesegm[] = {
 //
 const struct table table[] = {
     // Short-address instructions (Format 1, opcodes 000-077).  Opcodes that
-    // have no mnemonic (e.g. 032, 033, 046, 047 and 050-077) are reached via
+    // have no mnemonic (e.g. 032, 046, 047 and 050-077) are reached via
     // the raw "$NN" form instead and so are absent here.  The Cyrillic name in
     // parentheses is the original BESM-6 mnemonic; see doc/Besm6_Instruction_Set.md.
     { 00000000L, "atx", 0 }, // store accumulator to memory (зп)
@@ -111,8 +111,8 @@ const struct table table[] = {
     { 00270000L, "xtr", 0 }, // set the mode register from memory (рж)
     { 00300000L, "rte", 0 }, // read the mode register into the exponent (счрж)
     { 00310000L, "yta", 0 }, // get the younger-bits (Y) register (счмр)
-    // $32 - full-width I/O read, no mnemonic
-    // $33 - full-width I/O read, no mnemonic
+    // $32 - no mnemonic
+    { 00330000L, "ext", 0 }, // control external I/O devices (увв)
     { 00340000L, "e+n", 0 }, // add immediate to exponent (слпа)
     { 00350000L, "e-n", 0 }, // subtract immediate from exponent (вчпа)
     { 00360000L, "asn", 0 }, // arithmetic shift by immediate (сда)

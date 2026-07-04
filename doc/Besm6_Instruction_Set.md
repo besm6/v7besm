@@ -737,13 +737,13 @@ This is used to reconstruct the second word of a double-precision value.
 
 ---
 
-#### 032 — EXT (зпп) — Full-width I/O write
+#### 032 — (no name) — Interrupt control
 
 **Kernel mode only.** Throws `Illegal instruction` in user mode.
 
 ---
 
-#### 033 — (счп) — Full-width I/O read
+#### 033 — EXT (увв) — Control external I/O devices
 
 **Kernel mode only.** Throws `Illegal instruction` in user mode.
 
@@ -1224,9 +1224,9 @@ execute normally.
 | Opcode | Mnemonic | Description |
 |--------|----------|-------------|
 | 002 | MOD (рег) | Modify privileged registers (clock, interrupt masks, etc.) |
-| 032 | EXT (зпп) | Full-width write to external I/O control registers |
-| 033 | — (счп) | Full-width read from external I/O control registers |
-| 046 | — (соп) | Special memory access with extended privileges |
+| 032 | — | Interrupt control |
+| 033 | EXT (увв) | Control external I/O peripherals |
+| 046 | — (э46) | Reserved; always illegal |
 | 047 | — (э47) | Reserved; always illegal |
 | 0320 | IJ (выпр) | Return from interrupt (restores kernel/user mode and PC) |
 
