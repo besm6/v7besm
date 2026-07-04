@@ -368,9 +368,14 @@ constant-pool operator ([§8](#8-registers-and-addressing)).
 
 | Directive | Operands | Effect |
 |-----------|----------|--------|
-| `.word` | `expr [, expr …]` | Emit each expression as a full **48-bit word**. Aligns to a word boundary first. |
-| `.half` | `expr [, expr …]` | Emit each expression as a **24-bit half-word** (no alignment), packing two per word. |
+| `.word` | `expr [, expr …]` | Emit each expression as a full **48-bit word**, big-endian. Aligns to a word boundary first. |
+| `.half` | `expr [, expr …]` | Emit each expression as a **24-bit half-word** (no alignment), packing two per word — the first in the high half, the second in the low half. |
 | `.ascii` | `"string"` | Emit the string, packed six characters per word and zero-padded to a word boundary. Aligns first. See escapes below. |
+
+The half-word order is the same big-endian layout used everywhere else (instructions,
+the header, and the constant pool): the high 24-bit half-word is stored first on disk, so
+the six bytes of a word read as one big-endian 48-bit number. An address-carrying `.word`
+keeps its relocation on the low (second) half-word.
 
 **`.ascii` escape sequences** (inside the double-quoted string):
 

@@ -377,11 +377,11 @@ lbl:    atx 0
 // 9; .strng folds onto the end of data; .bss only advances a_bss.
 TEST(Assemble, DataDirective)
 {
-    // .word emits a full 48-bit word: its low 24 bits land in the high half-word
-    // (executed-first position), the high 24 bits in the low half-word.  .half
-    // packs two 24-bit half-words per word, padding the last with zero.  .ascii
-    // packs six raw bytes per word, big-endian, and always appends padding, so a
-    // length that is already a multiple of six gains a zero word.
+    // .word emits a full 48-bit word big-endian: the high 24 bits land in the
+    // high (executed-first) half-word, the low 24 bits in the low half-word.
+    // .half packs two 24-bit half-words per word, padding the last with zero.
+    // .ascii packs six raw bytes per word, big-endian, and always appends
+    // padding, so a length that is already a multiple of six gains a zero word.
     auto got = assemble(R"(
         .data
         .word 0123, 0456
@@ -407,11 +407,12 @@ TEST(Assemble, DataDirective)
     EXPECT_EQ(word_low(got, 4), 24); // a_bss  == 4 words
 
     // .word: the data words begin at file word 9 (text holds word 8).
-    EXPECT_EQ(word_high(got, 9), 0123L); // .word 0123
-    EXPECT_EQ(word_low(got, 9), 0);
-    EXPECT_EQ(word_high(got, 10), 0456L);     // .word 0456
-    EXPECT_EQ(word_high(got, 11), 0x0f0f0fL); // low 24 bits of the value
-    EXPECT_EQ(word_low(got, 11), 0);          // high 24 bits
+    EXPECT_EQ(word_high(got, 9), 0);    // .word 0123 -> high 24 bits
+    EXPECT_EQ(word_low(got, 9), 0123L); //           -> low 24 bits
+    EXPECT_EQ(word_high(got, 10), 0);         // .word 0456
+    EXPECT_EQ(word_low(got, 10), 0456L);
+    EXPECT_EQ(word_high(got, 11), 0);          // high 24 bits of the value
+    EXPECT_EQ(word_low(got, 11), 0x0f0f0fL);   // low 24 bits
 
     // .half packs two 24-bit half-words per word, padding the last with zero.
     EXPECT_EQ(word_high(got, 12), 0111L);
@@ -431,7 +432,7 @@ TEST(Assemble, DataDirective)
 
 // Values that use bits 24..31 (and full 48-bit values) must survive intact: the
 // 48-bit word splits at the 24-bit half-word boundary, not at bit 32.  Each
-// .word emits low 24 bits in the high (executed-first) half-word and high 24
+// .word emits high 24 bits in the high (executed-first) half-word and low 24
 // bits in the low half-word.  These cases all fail if the value is cut at bit 32.
 TEST(Assemble, WideWords)
 {
@@ -448,23 +449,38 @@ TEST(Assemble, WideWords)
 )");
     EXPECT_EQ(word_low(got, 3), 48); // a_data == 8 words * 6 bytes
 
-    // low 24 bits -> high half-word; high 24 bits -> low half-word.
-    EXPECT_EQ(word_high(got, 8), 0L); // .word 0x1000000
-    EXPECT_EQ(word_low(got, 8), 1L);
-    EXPECT_EQ(word_high(got, 9), 0x123456L); // .word 0xabcdef123456
-    EXPECT_EQ(word_low(got, 9), 0xabcdefL);
-    EXPECT_EQ(word_high(got, 10), 0L); // .word 16777216
-    EXPECT_EQ(word_low(got, 10), 1L);
-    EXPECT_EQ(word_high(got, 11), 0L); // .word 0100000000
-    EXPECT_EQ(word_low(got, 11), 1L);
-    EXPECT_EQ(word_high(got, 12), 0L); // .word 0b1 \< 24
-    EXPECT_EQ(word_low(got, 12), 1L);
-    EXPECT_EQ(word_high(got, 13), 0L);          // .word .[48:25]
-    EXPECT_EQ(word_low(got, 13), 0xffffffL);    // bits 25..48 == whole high half
-    EXPECT_EQ(word_high(got, 14), 0xf80000L);   // .word .[28:20] -> bits 20..24
-    EXPECT_EQ(word_low(got, 14), 0xfL);         //               -> bits 25..28
-    EXPECT_EQ(word_high(got, 15), 0x0fffffL);   // .word .[28=20] (complement)
-    EXPECT_EQ(word_low(got, 15), 0xfffff8L);
+    // high 24 bits -> high half-word; low 24 bits -> low half-word.
+    EXPECT_EQ(word_high(got, 8), 1L); // .word 0x1000000
+    EXPECT_EQ(word_low(got, 8), 0L);
+    EXPECT_EQ(word_high(got, 9), 0xabcdefL); // .word 0xabcdef123456
+    EXPECT_EQ(word_low(got, 9), 0x123456L);
+    EXPECT_EQ(word_high(got, 10), 1L); // .word 16777216
+    EXPECT_EQ(word_low(got, 10), 0L);
+    EXPECT_EQ(word_high(got, 11), 1L); // .word 0100000000
+    EXPECT_EQ(word_low(got, 11), 0L);
+    EXPECT_EQ(word_high(got, 12), 1L); // .word 0b1 \< 24
+    EXPECT_EQ(word_low(got, 12), 0L);
+    EXPECT_EQ(word_high(got, 13), 0xffffffL);   // .word .[48:25]
+    EXPECT_EQ(word_low(got, 13), 0L);           // bits 25..48 == whole high half
+    EXPECT_EQ(word_high(got, 14), 0xfL);        // .word .[28:20] -> bits 25..28
+    EXPECT_EQ(word_low(got, 14), 0xf80000L);    //               -> bits 20..24
+    EXPECT_EQ(word_high(got, 15), 0xfffff8L);   // .word .[28=20] (complement)
+    EXPECT_EQ(word_low(got, 15), 0x0fffffL);
+}
+
+// A .word must serialize its 48-bit value in BESM-6 big-endian half-word order:
+// the high 24 bits occupy the first (high) half-word on disk and the low 24 bits
+// the second (low) half-word - the same order instructions, .half, and the
+// header use.  Uses an asymmetric value so a half-swap is unmistakable.
+TEST(Assemble, WordDirectiveHalfOrder)
+{
+    auto got = assemble(R"(
+        .data
+        .word 0x334455667788
+)");
+    int dword = 8 + (int)((word_low(got, 1) + word_low(got, 2)) / 6);
+    EXPECT_EQ(word_high(got, dword), 0x334455L); // high 24 bits stored first
+    EXPECT_EQ(word_low(got, dword), 0x667788L);  // low 24 bits stored second
 }
 
 // The '#' constant-pool operator: the value goes into the const segment (which
@@ -480,8 +496,8 @@ TEST(Assemble, ConstPool)
     EXPECT_EQ(word_low(got, 2), 6); // a_text  == 1 word
 
     // The pooled constant sits at file word 8 (right after the 8-word header).
-    EXPECT_EQ(word_high(got, 8), 0123L); // constant value, low 24 bits
-    EXPECT_EQ(word_low(got, 8), 0);
+    EXPECT_EQ(word_high(got, 8), 0);     // constant value, high 24 bits
+    EXPECT_EQ(word_low(got, 8), 0123L);  //                 low 24 bits
 
     // Both instructions address that word (cbase == 8), packed into text word 9.
     EXPECT_EQ(word_high(got, 9), 00100000L | 8L); // xta #0123
@@ -554,9 +570,9 @@ tlabel: atx 0
         .word tlabel
 )");
     int dword = 8 + (int)((word_low(got, 1) + word_low(got, 2)) / 6); // first data word
-    EXPECT_EQ(word_high(got, dword), 011L); // tlabel == text base 8 + offset 1
-    EXPECT_EQ(word_low(got, dword), 0L);
-    EXPECT_EQ(reloc_half(got, 2, 0) & 070L, 020L); // data reloc relative to text
+    EXPECT_EQ(word_high(got, dword), 0L);
+    EXPECT_EQ(word_low(got, dword), 011L);         // tlabel == text base 8 + offset 1
+    EXPECT_EQ(reloc_half(got, 2, 1) & 070L, 020L); // low half (address) reloc relative to text
 }
 
 // Referencing a label defined in the .strng segment exercises TYPESEGM(N_STRNG)
@@ -583,7 +599,7 @@ slabel: .ascii "ab"
     // The .word resolves the strng label through TYPESEGM(N_STRNG) -> SSTRNG and
     // relocates against the folded data segment (RDATA); the bug produced a
     // different segment from the out-of-bounds typesegm[] read.
-    EXPECT_EQ(reloc_half(got, 2, 0) & 070L, 030L); // RDATA
+    EXPECT_EQ(reloc_half(got, 2, 1) & 070L, 030L); // RDATA (low half carries the address)
 }
 
 // Assemble a source expected to fail, returning the diagnostic message (the

@@ -402,10 +402,10 @@ void generate_code(void)
                     addr = SEGMREL(cval);
                     if (cval == SEXT)
                         addr |= RPUTIX(as.extref);
-                    fputh(LOHALF(as.intval), as.sfile[as.segm]);
-                    fputh(addr, as.rfile[as.segm]);
                     fputh(HIHALF(as.intval), as.sfile[as.segm]);
                     fputh(0L, as.rfile[as.segm]);
+                    fputh(LOHALF(as.intval), as.sfile[as.segm]);
+                    fputh(addr, as.rfile[as.segm]);
                     as.count[as.segm] += 2;
                     if ((clex = next_token(&cval)) != ',') {
                         unget_token(clex, cval);

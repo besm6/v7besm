@@ -110,7 +110,9 @@ the authoritative references and are kept current:
 `cross/besm6/b.out.h` (magic `FMAGIC`/`NMAGIC`, `struct exec` with separate
 `const`/`text`/`data`/`bss` segment sizes). The assembler, linker, and disassembler all
 share this header. The shared on-disk serialization lives in `cmd/libaout` and uses the
-BESM-6 **6-byte word** (`W == 6`, two 3-byte big-endian half-words); the archive member
+BESM-6 **6-byte word** (`W == 6`, two 3-byte big-endian half-words, **high half-word
+first**, so a word's six bytes read as one big-endian 48-bit number — this holds uniformly
+for instructions, `.word`/`.half` data, the constant pool, and the header); the archive member
 header (`cross/besm6/ar.h`, `struct ar_hdr`) is word-aligned with 30-char names and
 `ARHDRSZ == 60`. The assembler uses **AT&T-style syntax with Madlen mnemonics**; the
 disassembler prints the Cyrillic BESM-6 mnemonics directly.

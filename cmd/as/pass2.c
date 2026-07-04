@@ -183,11 +183,11 @@ void emit_segments(void)
         }
         as.stab[i].n_value = h;
     }
-    // process the constant segment: emit each pooled constant (low half
-    // relocated, high half as-is).
+    // process the constant segment: emit each pooled constant high half first
+    // (as-is), then the low half (relocated) - the big-endian half-word order.
     for (i = 0; i < as.nconst; i++) {
-        fputh(relocate_halfword(LOHALF(as.constab[i].val), as.constab[i].rel), stdout);
         fputh(HIHALF(as.constab[i].val), stdout);
+        fputh(relocate_halfword(LOHALF(as.constab[i].val), as.constab[i].rel), stdout);
     }
     // re-read each code/data segment from its temp file and emit it, relocating
     // every half-word as it goes.
