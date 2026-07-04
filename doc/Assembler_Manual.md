@@ -70,7 +70,7 @@ relocation and symbol tables.
 A statement occupies one line. In its most general form:
 
 ```
-[label:]  [modreg]  operation  [operands]      ; comment
+[label:]  [modreg]  operation  [operands]      // comment
 ```
 
 - **`label:`** — an optional symbol definition (see [§5](#5-symbols-and-labels)).
@@ -97,7 +97,7 @@ Two comment forms are recognized:
 
 | Syntax | Where | Meaning |
 |--------|-------|---------|
-| `;` … | anywhere on a line | Comment to end of line. |
+| `//` … | anywhere on a line | Comment to end of line. |
 | `#` … | **only at the start of a line** | Comment to end of line. |
 
 The `#` comment is recognized only immediately after a newline. A `#` appearing **mid-line**
@@ -126,8 +126,8 @@ Defining a label first aligns the current segment to a word boundary.
 **Equating a symbol.** A symbol may be set to the value of an expression with either of:
 
 ```
-buf_size = 0200          ; infix '=' form
-buf_size .equ 0200        ; .equ directive form
+buf_size = 0200          // infix '=' form
+buf_size .equ 0200        // .equ directive form
 ```
 
 The symbol takes the segment/relocation class of the expression. Equating to an external
@@ -402,11 +402,11 @@ Bare mnemonics, two packing into each word:
 ### 11.2 A counted loop
 
 ```
-        vtm -10, 2          ; M2 = -10 (loop counter)
-loop:   xta tab, 2          ; A = tab[M2]
+        vtm -10, 2          // M2 = -10 (loop counter)
+loop:   xta tab, 2          // A = tab[M2]
         a+x sum
         atx sum
-        vlm loop, 2         ; step M2 toward zero, branch to loop while nonzero
+        vlm loop, 2         // step M2 toward zero, branch to loop while nonzero
         uj  done
 ```
 
@@ -416,25 +416,25 @@ loop:   xta tab, 2          ; A = tab[M2]
         .data
 sum:    .word 0
 tab:    .word 1, 2, 3, 4
-flags:  .half 0, .[1:4]     ; two half-words: 0 and the low-4-bit mask
-msg:    .ascii "hello\n"    ; packed 6 chars/word, zero-padded
+flags:  .half 0, .[1:4]     // two half-words: 0 and the low-4-bit mask
+msg:    .ascii "hello\n"    // packed 6 chars/word, zero-padded
         .bss
-buf:    . = . + 0100        ; reserve 64 words
+buf:    . = . + 0100        // reserve 64 words
 ```
 
 ### 11.4 Constant pool and address extension
 
 ```
-        a+x #3.14159        ; load the constant from the const segment and add
-        xta <far_table>     ; utc far_table; xta  — reach a 15-bit address
-        atx [far_slot]      ; wtc far_slot; atx
+        a+x #3.14159        // load the constant from the const segment and add
+        xta <far_table>     // utc far_table; xta  — reach a 15-bit address
+        atx [far_slot]      // wtc far_slot; atx
 ```
 
 ### 11.5 Symbols
 
 ```
         .globl entry
-count   = 0144              ; octal 144 = 100 decimal
+count   = 0144              // octal 144 = 100 decimal
 entry:  vtm count, 1
         uj  entry
 ```
@@ -457,7 +457,7 @@ bit masks `.[a:b]` `.[a=b]` `.N`.
 
 **Raw opcodes (octal):** `$NN` (short), `@NN` (long).
 
-**Comments:** `;` anywhere; `#` only at line start.
+**Comments:** `//` anywhere; `#` only at line start.
 
 ---
 

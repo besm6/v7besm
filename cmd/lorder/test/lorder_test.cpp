@@ -72,7 +72,7 @@ bool has_line(const std::string &out, const std::string &line)
 const char *const SRC_A = R"(
         .globl funcA
 funcA:  atx 0
-        uj funcB        ; external reference, defined in b
+        uj funcB        // external reference, defined in b
 )";
 
 // funcB is a defined global.

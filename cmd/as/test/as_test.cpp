@@ -131,51 +131,51 @@ static long reloc_half(const std::vector<unsigned char> &b, int seg, int i)
 // path without growing the text segment (still 41 words): direct addresses in
 // every number base (decimal, octal 0NNN, hex 0xNN, binary 0bNN), the bit-mask and
 // expression syntaxes, a trailing index and a leading modifier register (reg << 20),
-// backward label references, an equate, and both comment forms (; and a line-start #).  Operands that change the layout
+// backward label references, an equate, and both comment forms (// and a line-start #).  Operands that change the layout
 // (#const, <addr>, [addr]) are covered by the ConstPool / UtcWtc tests instead.
 TEST(Assemble, AllInstructions)
 {
     std::vector<unsigned char> got = assemble(R"(
 K = 0252
 #a line-start hash is a whole-line comment and emits nothing
-start:  atx 0123            ; direct octal address
-        stx 100             ; decimal address
-        mod 0x2a            ; hexadecimal address
-        xts .5              ; single-bit mask .N
-        a+x 0100+0023       ; expression: addition
-        a-x 0200-0055       ; subtraction
-        x-a 0777&0307       ; bitwise and
-        amx 0100|0023       ; bitwise or
-        xta start           ; backward label reference
-        aax 0143^0060       ; bitwise xor
-        aex 0123, 5         ; indexed: trailing register 5
-        arx 07777 ~ 07654   ; xor-with-complement (a ^ ~b)
-        avx 1 \< 6          ; shift left
-        aox 0200 \> 1       ; shift right
-        a/x 7*011           ; multiply
-        a*x 0144/012        ; divide
-        apx 0145%012        ; modulo
-        aux 1+2*3           ; no precedence: (1+2)*3 == 011
-        acx 1+(2*3)         ; grouping forces 1+(2*3) == 7
-        anx {0123}          ; exponent-truncate braces
-        e+x 010             ; operator-bearing mnemonic with operand
+start:  atx 0123            // direct octal address
+        stx 100             // decimal address
+        mod 0x2a            // hexadecimal address
+        xts .5              // single-bit mask .N
+        a+x 0100+0023       // expression: addition
+        a-x 0200-0055       // subtraction
+        x-a 0777&0307       // bitwise and
+        amx 0100|0023       // bitwise or
+        xta start           // backward label reference
+        aax 0143^0060       // bitwise xor
+        aex 0123, 5         // indexed: trailing register 5
+        arx 07777 ~ 07654   // xor-with-complement (a ^ ~b)
+        avx 1 \< 6          // shift left
+        aox 0200 \> 1       // shift right
+        a/x 7*011           // multiply
+        a*x 0144/012        // divide
+        apx 0145%012        // modulo
+        aux 1+2*3           // no precedence: (1+2)*3 == 011
+        acx 1+(2*3)         // grouping forces 1+(2*3) == 7
+        anx {0123}          // exponent-truncate braces
+        e+x 010             // operator-bearing mnemonic with operand
         e-x 0234
-        asx 4095            ; max 12-bit decimal == 07777
-        4 xtr 0567          ; leading modifier register 4
+        asx 4095            // max 12-bit decimal == 07777
+        4 xtr 0567          // leading modifier register 4
         rte 077
         yta .1
-        $32 0123            ; raw short opcode with an address
+        $32 0123            // raw short opcode with an address
         $33 0246
         e+n 010
         e-n 020
         asn 0300
-        ntr K               ; absolute equate, resolved to its value
-mid:                        ; second label
+        ntr K               // absolute equate, resolved to its value
+mid:                        // second label
         ati 2
         sti 3
         ita 4
         its 5
-        mtj 6, 1            ; indexed: trailing register 1
+        mtj 6, 1            // indexed: trailing register 1
       8 j+m 7
         $46 050
         $47 051
@@ -203,22 +203,22 @@ mid:                        ; second label
         $75 077
         $76 0100
         $77 0101
-        @20 040000          ; long opcode with a 15-bit address
+        @20 040000          // long opcode with a 15-bit address
         @21 041234
         utc 050000
         wtc 0123
-        vtm 040000, 2       ; long opcode, indexed
-        utm 0b1000          ; binary address (== 010)
-        uza start           ; backward label, long opcode
+        vtm 040000, 2       // long opcode, indexed
+        utm 0b1000          // binary address (== 010)
+        uza start           // backward label, long opcode
         u1a mid
         uj 0
         vjm 060000
         ij 0123
         stop 0456
         vzm 070000
-        v1m 077777          ; max 15-bit address
+        v1m 077777          // max 15-bit address
         @36 012345
-        vlm mid             ; backward label
+        vlm mid             // backward label
 )");
 
     // Header sanity, so a gross regression points at the offending field.
@@ -389,7 +389,7 @@ TEST(Assemble, DataDirective)
         .strng
         .ascii "xy"
         .bss
-        . = . + 4   ; In bss the counter only advances a_bss; nothing is emitted.
+        . = . + 4   // In bss the counter only advances a_bss; nothing is emitted.
 )");
     // Segment sizes in the header: text, data (+strng folded in) and bss.
     EXPECT_EQ(word_low(got, 1), 0);  // a_const
@@ -428,14 +428,14 @@ TEST(Assemble, WideWords)
 {
     auto got = assemble(R"(
         .data
-        .word 0x1000000         ; bit 24 alone (hex): high24 == 1
-        .word 0xabcdef123456    ; a full 48-bit value
-        .word 16777216          ; 2^24 (decimal) spills into the high half
-        .word 0100000000        ; 2^24 (octal)
-        .word 0b1 \< 24         ; shift exactly onto the boundary
-        .word .[48:25]          ; the whole high half-word
-        .word .[28:20]          ; a range straddling bit 24
-        .word .[28=20]          ; the complement of an interior range
+        .word 0x1000000         // bit 24 alone (hex): high24 == 1
+        .word 0xabcdef123456    // a full 48-bit value
+        .word 16777216          // 2^24 (decimal) spills into the high half
+        .word 0100000000        // 2^24 (octal)
+        .word 0b1 \< 24         // shift exactly onto the boundary
+        .word .[48:25]          // the whole high half-word
+        .word .[28:20]          // a range straddling bit 24
+        .word .[28=20]          // the complement of an interior range
 )");
     EXPECT_EQ(word_low(got, 3), 48); // a_data == 8 words * 6 bytes
 

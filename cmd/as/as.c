@@ -124,12 +124,17 @@ int assemble(const struct assembler_args *args)
     if (!freopen(as.outfile, "w", stdout))
         fatal("cannot open %s", as.outfile);
 
-    // If the very first character is '#', treat it as a comment introducer by
-    // pushing back ';' instead (the lexer's comment character), so a leading
-    // "#"-style comment line is skipped.  Otherwise push the character back
-    // unchanged.
+    // A '#' on the very first line is a whole-line comment / cc-style line
+    // marker.  There is no preceding newline to trigger the lexer's line-start
+    // handling, so skip the line here and leave the '\n' for the lexer (which
+    // counts lines and handles any following line-start '#').  Otherwise push
+    // the character back unchanged.
     i = getchar();
-    ungetc(i == '#' ? ';' : i, stdin);
+    if (i == '#') {
+        while (i != '\n' && i != EOF)
+            i = getchar();
+    }
+    ungetc(i, stdin);
 
     open_temp_files();  // open the per-segment temp files
     init_hash_tables(); // build the instruction/symbol/constant hash tables

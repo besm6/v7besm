@@ -256,10 +256,10 @@ int next_token(int *pval)
     }
     for (;;)
         switch (c = getchar()) {
-        case ';':
         skiptoeol:
             // Comment: skip the rest of the line, then fall into the newline
-            // handling below.
+            // handling below.  Reached only via goto (from the "//" and the
+            // line-start '#' handlers).
             while ((c = getchar()) != '\n')
                 if (c == EOF)
                     return LEOF;
@@ -297,13 +297,19 @@ int next_token(int *pval)
                 return LINCR;
             ungetc(c, stdin);
             return '-';
+        case '/':
+            // "//" starts a comment to end of line (C-style); a single '/' is
+            // the division operator.
+            if ((c = getchar()) == '/')
+                goto skiptoeol;
+            ungetc(c, stdin);
+            return '/';
         case '^':
         case '&':
         case '|':
         case '~':
         case '#':
         case '*':
-        case '/':
         case '%':
         case '"':
         case ',':
