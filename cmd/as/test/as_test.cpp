@@ -18,18 +18,27 @@
 // The engine library is compiled as C; assemble.h is C++-safe.
 extern "C" {
 #include "assemble.h"
+
+// Renders the "file:line: " diagnostic prefix from the engine's global state
+// (defined in as.c).  Declared here so the harness fatal() below matches the
+// CLI's message format without pulling in the whole C-only as.h.
+char *format_location(char *buf, int size);
 }
 
 // Replace the front-end fatal(): instead of exit(1), surface the assembler
-// error as a GoogleTest failure via an uncaught exception.
+// error as a GoogleTest failure via an uncaught exception.  The message carries
+// the same "file:line: " prefix the CLI would print, so tests can assert on the
+// reported source location.
 extern "C" [[noreturn]] void fatal(char *fmt, ...)
 {
+    char loc[1056];
     char buf[256];
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(buf, sizeof buf, fmt, ap);
     va_end(ap);
-    throw std::runtime_error(buf);
+    format_location(loc, sizeof loc);
+    throw std::runtime_error(std::string(loc) + buf);
 }
 
 // Name of the currently running test, e.g. "Assemble.StopInstruction".
@@ -575,4 +584,72 @@ slabel: .ascii "ab"
     // relocates against the folded data segment (RDATA); the bug produced a
     // different segment from the out-of-bounds typesegm[] read.
     EXPECT_EQ(reloc_half(got, 2, 0) & 070L, 030L); // RDATA
+}
+
+// Assemble a source expected to fail, returning the diagnostic message (the
+// "file:line: message" text thrown by the harness fatal()).  Returns "" if no
+// error was raised.  "xts .101" is a reliable trigger: a bit number > 64.
+static std::string assemble_error(const std::string &source)
+{
+    try {
+        assemble(source);
+    } catch (const std::exception &e) {
+        return e.what();
+    }
+    return "";
+}
+
+// A mid-file "# N \"file\"" marker makes fatal() report the marker's source
+// location rather than the physical line of the intermediate file.
+TEST(LineMarker, MidFileLocation)
+{
+    std::string msg = assemble_error(R"(
+# 5 "bar.h"
+        xts .101
+)");
+    EXPECT_NE(msg.find("bar.h:5: "), std::string::npos) << "message was: " << msg;
+}
+
+// A marker on the very first line (no preceding newline) is handled by the
+// first-line path in assemble(); the following line is source line N.
+TEST(LineMarker, FirstLineLocation)
+{
+    std::string msg = assemble_error("# 1 \"foo.c\"\n        xts .101\n");
+    EXPECT_NE(msg.find("foo.c:1: "), std::string::npos) << "message was: " << msg;
+}
+
+// Consecutive markers (as emitted around an #include return): the last one wins.
+TEST(LineMarker, ConsecutiveMarkersLastWins)
+{
+    std::string msg = assemble_error(R"(
+# 5 "bar.h"
+# 20 "baz.h"
+        xts .101
+)");
+    EXPECT_NE(msg.find("baz.h:20: "), std::string::npos) << "message was: " << msg;
+}
+
+// A '#' line that is not a valid marker stays an ordinary whole-line comment: it
+// emits nothing and leaves no source file recorded, so diagnostics fall back to
+// the input file name and physical line number.
+TEST(LineMarker, NonMarkerHashIsComment)
+{
+    // The comment line must not perturb the emitted code: assembling with and
+    // without it yields identical objects.
+    auto with_comment = assemble(R"(
+# this is just a comment, not a marker
+        atx 0123
+)");
+    auto without_comment = assemble(R"(
+        atx 0123
+)");
+    EXPECT_EQ(with_comment, without_comment);
+
+    // With no marker seen, an error reports the intermediate file, not a marker.
+    std::string msg = assemble_error(R"(
+# plain comment
+        xts .101
+)");
+    EXPECT_EQ(msg.find(".c:"), std::string::npos) << "message was: " << msg;
+    EXPECT_NE(msg.find(".s, "), std::string::npos) << "message was: " << msg;
 }

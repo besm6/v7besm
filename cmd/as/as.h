@@ -73,6 +73,8 @@
 #define CSIZE   (HCONSZ * 9 / 10) // max pooled constants
 #define SPACESZ (STSIZE * 8)      // bytes of arena for symbol-name text
 
+#define SRCNAME_MAX 1024 // max length of a source file name from a "# N \"file\"" marker
+
 // Conversion tables wrapped as macros (the arrays live in tables.c).
 
 #define SEGMTYPE(s) segmtype[s] // segment number -> symbol type (N_*)
@@ -140,7 +142,9 @@ struct assembler {
     char *infile;       // input file name (NULL = stdin)
     char *outfile;      // output file name
     char tfilename[14]; // template for the temp files: "/tmp/asXXXXXX"
-    int line;           // current source line number (for error messages)
+    int line;           // current physical input line number (fallback for error messages)
+    int srcline;        // source line from the last "# N \"file\"" marker (0 = none seen)
+    char srcfile[SRCNAME_MAX]; // source file name from the last marker ("" = none seen)
     int debug;          // -d: debug flag
 
     int xflags; // -x: discard local symbols from the output
@@ -196,6 +200,8 @@ extern const struct table table[]; // machine-instruction definitions
 noreturn void fatal(char *fmt, ...); // print an error and exit (main.c / test harness)
 int next_token(int *pval);           // read one token, return its kind (lex.c)
 void unget_token(int val, int type); // push one token back (lex.c)
+void parse_line_marker(void);        // parse a cc-style "# N \"file\"" line marker (lex.c)
+char *format_location(char *buf, int size); // render the "file:line: " diagnostic prefix (as.c)
 long parse_expr(int *s);             // parse an expression, return value + segment (expr.c)
 void init_hash_tables(void);         // build the instruction/symbol/constant hashes (symtab.c)
 int lookup_directive(void);          // match as.name against the directive names (symtab.c)

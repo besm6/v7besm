@@ -20,12 +20,11 @@ noreturn void fatal(char *fmt, ...)
 {
     va_list ap;
 
+    char loc[SRCNAME_MAX + 32];
+
     va_start(ap, fmt);
-    fprintf(stderr, "as: ");
-    if (as.infile)
-        fprintf(stderr, "%s, ", as.infile);
-    if (as.line)
-        fprintf(stderr, "%d: ", as.line);
+    format_location(loc, sizeof loc);
+    fprintf(stderr, "as: %s", loc);
     vfprintf(stderr, fmt, ap);
     va_end(ap);
     fprintf(stderr, "\n");

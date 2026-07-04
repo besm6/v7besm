@@ -230,6 +230,59 @@ static void read_name(int c)
 }
 
 //
+// Parse a cc-style line marker of the form:  # <lineno> "<filename>"
+// (the leading '#' has already been consumed, and we are at a line start).  The
+// C preprocessor emits these so downstream tools can report diagnostics against
+// the original source rather than the flattened intermediate file.
+//
+// This is best-effort: on a well-formed marker it sets as.srcfile to the quoted
+// name and as.srcline to lineno-1, so the ++as.srcline done at the *next* real
+// line start lands on lineno.  If the line is not a valid marker (e.g. a plain
+// "# comment" or the "#a..." whole-line comment), nothing is updated and the
+// caller still skips the line as an ordinary comment.  Either way the line's
+// terminating '\n' (or EOF) is left unconsumed for the caller to handle.
+//
+void parse_line_marker(void)
+{
+    int c;
+    long lineno = 0;
+    int ndigits = 0;
+    char buf[SRCNAME_MAX];
+    char *cp        = buf;
+    const char *end = buf + sizeof(buf) - 1;
+
+    // Optional leading blanks, then the decimal line number.
+    while ((c = getchar()) == ' ' || c == '\t')
+        ;
+    for (; ISDIGIT(c); c = getchar()) {
+        lineno = lineno * 10 + (c - '0');
+        ndigits++;
+    }
+    // Blanks between the number and the opening quote.
+    while (c == ' ' || c == '\t')
+        c = getchar();
+
+    if (ndigits > 0 && c == '"') {
+        // Copy the quoted file name into a scratch buffer (truncating if it
+        // overflows), then commit only once the closing quote is seen so a
+        // malformed marker cannot corrupt a previously recorded position.
+        while ((c = getchar()) != '"' && c != '\n' && c != EOF) {
+            if (cp < end)
+                *cp++ = c;
+        }
+        if (c == '"') {
+            *cp = 0;
+            memcpy(as.srcfile, buf, cp - buf + 1);
+            as.srcline = (int)(lineno - 1);
+        }
+    }
+
+    // Leave the line terminator for the caller's skip-to-eol logic.
+    if (c == '\n' || c == EOF)
+        ungetc(c, stdin);
+}
+
+//
 // Read one token from the input, return its kind, and store its value in
 // *pval.  This is the heart of the lexer; everything else in the assembler
 // reads the source only through here.  The kinds and what *pval carries:
@@ -264,12 +317,17 @@ int next_token(int *pval)
                 if (c == EOF)
                     return LEOF;
         case '\n':
-            // A '#' at the very start of the next line also begins a comment
-            // (cc-style line markers), so loop back and skip it.
+            // A '#' at the very start of the next line begins a whole-line
+            // comment / cc-style line marker: parse it (updating the source
+            // file/line if it is a "# N \"file\"" marker) and skip the rest of
+            // the line.  Consecutive markers chain through the fall-through.
             c = getchar();
-            if (c == '#')
+            if (c == '#') {
+                parse_line_marker();
                 goto skiptoeol;
+            }
             ungetc(c, stdin);
+            ++as.srcline;
             *pval = ++as.line;
             return LEOL;
         case ' ':

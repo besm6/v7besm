@@ -104,6 +104,13 @@ The `#` comment is recognized only immediately after a newline. A `#` appearing 
 is the constant-pool operator (see [§8](#8-registers-and-addressing)), not a comment. There
 is no block-comment syntax.
 
+A line-start `#` of the special form `# <lineno> "<filename>"` is a **cc-style line marker**,
+as emitted by the C preprocessor when it flattens `#include`s into a single stream. The
+assembler reads the line number and file name from the marker and reports subsequent
+diagnostics against that original source location (`filename:lineno:`) instead of the physical
+line of the preprocessed input. Any other line-start `#` (including a marker that is
+malformed) is treated as an ordinary whole-line comment and emits nothing.
+
 ---
 
 ## 5. Symbols and labels
