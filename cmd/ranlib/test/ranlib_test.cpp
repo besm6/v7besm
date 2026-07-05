@@ -195,6 +195,50 @@ TEST(Ranlib, BasicIndex)
     unlink(lib.c_str());
 }
 
+// A larger archive (>= 6 indexed symbols) must still produce correct member
+// offsets.  Each __.SYMDEF entry is 4 bytes + name on disk (1 len + a 3-byte
+// half-word offset), so mis-accounting it as 5 bytes over-counts by one byte per
+// entry; at six entries that accumulates into a full 6-byte word and every
+// ran_off lands one word past the real member header -- which b6ld rejects with
+// "bad magic".  Verify each offset still points at a real member.
+TEST(Ranlib, ManyMembersIndex)
+{
+    std::string base = current_test_name();
+    std::string lib  = base + ".a";
+
+    std::vector<std::string> objs;
+    std::vector<std::string> args = { "b6ar", "rc", lib };
+    for (int i = 1; i <= 6; i++) {
+        std::string name = base + "_s" + std::to_string(i) + ".o";
+        std::string sym  = "s" + std::to_string(i);
+        build_object(name, { { sym.c_str(), N_TEXT | N_EXT, 010 * i } });
+        objs.push_back(name);
+        args.push_back(name);
+    }
+
+    ASSERT_EQ(run(ar_run, args), 0);
+    ASSERT_EQ(run(ranlib_run, { "b6ranlib", lib }), 0);
+
+    std::vector<long> members;
+    auto t = read_symdef(lib, &members);
+
+    for (int i = 1; i <= 6; i++)
+        EXPECT_TRUE(has_symbol(t, "s" + std::to_string(i)))
+            << "missing external defined symbol s" << i;
+
+    // Every offset is word-aligned and points at a real member header; with the
+    // over-count bug these overshoot by one word and match no member.
+    for (const auto &e : t) {
+        EXPECT_EQ(e.off % W, 0) << e.name << " offset not word-aligned";
+        EXPECT_NE(std::find(members.begin(), members.end(), e.off), members.end())
+            << e.name << " offset " << e.off << " does not point at a member header";
+    }
+
+    for (const auto &o : objs)
+        unlink(o.c_str());
+    unlink(lib.c_str());
+}
+
 // Running ranlib twice is idempotent: the second run replaces the existing
 // __.SYMDEF rather than adding a second one, and the index is unchanged.
 TEST(Ranlib, Idempotent)

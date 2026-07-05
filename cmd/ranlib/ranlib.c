@@ -209,7 +209,7 @@ static void putrantab(FILE *f)
         if (debug)
             printf("%08lo: %3ld  %s\n", (long)p->ran_off, (long)p->ran_len, p->ran_name);
         fputran(p, f);
-        n += 5 + p->ran_len;
+        n += 4 + p->ran_len; /* fputran writes 1 len + 3-byte half-word off + name */
         free(p->ran_name);
     }
     tnum = 0;
@@ -238,7 +238,7 @@ static void fixsize(void)
 
     offdelta = ARHDRSZ;
     for (i = 0; i < tnum; ++i)
-        offdelta += rantab[i].ran_len + 5;
+        offdelta += rantab[i].ran_len + 4; /* 1 len + 3-byte half-word off + name */
     offdelta = (offdelta + W) / W * W;
     off      = W;
     nextel(fi);
