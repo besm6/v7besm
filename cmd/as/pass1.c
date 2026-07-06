@@ -343,6 +343,8 @@ void generate_code(void)
             // A name at statement start; what follows decides its meaning.
             if ((clex = next_token(&tval)) == ':') {
                 // "name:" - a label: bind the name to the current location.
+                if ((as.stab[cval].n_type & N_TYPE) != N_UNDF)
+                    fatal("name already defined");
                 align_segment(as.segm);
                 as.stab[cval].n_value = as.count[as.segm] / 2;
                 as.stab[cval].n_type &= ~N_TYPE;

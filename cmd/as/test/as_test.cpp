@@ -706,3 +706,20 @@ TEST(LineMarker, NonMarkerHashIsComment)
     EXPECT_EQ(msg.find(".c:"), std::string::npos) << "message was: " << msg;
     EXPECT_NE(msg.find(".s, "), std::string::npos) << "message was: " << msg;
 }
+
+// Defining the same label twice is an error: the second "foo:" must be rejected
+// rather than silently rebinding the symbol to the later location.
+TEST(Assemble, DuplicateLabel)
+{
+    std::string msg = assemble_error("foo: .word 1\nfoo: .word 2\n");
+    EXPECT_NE(msg.find("name already defined"), std::string::npos)
+        << "message was: " << msg;
+}
+
+// A ".globl" declaration only marks a name external; it does not define it, so a
+// subsequent label with the same name is still the first (valid) definition.
+TEST(Assemble, GloblThenLabelOk)
+{
+    std::string msg = assemble_error("        .globl foo\nfoo: .word 1\n");
+    EXPECT_EQ(msg, "") << "message was: " << msg;
+}
