@@ -126,8 +126,9 @@ TEST_F(CcDriver, CompileToAssembly)
     EXPECT_FALSE(text.empty()) << "assembly output is empty";
     // Landmarks from the BESM-6 codegen for a trivial main() (=52 is octal 42).
     EXPECT_NE(text.find("main:"), std::string::npos) << text;
-    EXPECT_NE(text.find(",end,"), std::string::npos) << text;
-    EXPECT_NE(text.find("b/save"), std::string::npos) << text;
+    EXPECT_NE(text.find("b$save"), std::string::npos) << text;
+    EXPECT_NE(text.find("#052"), std::string::npos) << text;
+    EXPECT_NE(text.find("b$ret"), std::string::npos) << text;
 }
 
 // A .S file is assembly that must be run through the C preprocessor first.  With

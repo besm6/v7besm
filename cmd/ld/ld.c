@@ -88,7 +88,7 @@ struct linker ld = {
     .ofilename = "l.out",
     .delarg    = 4,
     .tfname    = "/tmp/ldaXXXXX",
-    .libname   = "/usr/local/lib/microbesm/libxxxxxxxxxxxxxxx",
+    .libname   = "/usr/local/share/besm6/lib/lib",
 };
 
 //

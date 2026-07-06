@@ -15,7 +15,7 @@
 // stdio handles on it: ld.text for the segment/symbol data and ld.reloc for the
 // relocation records (the two passes read from different positions, so each gets
 // its own handle).  A "-lfoo" argument is expanded into a library path like
-// /usr/local/lib/microbesm/libfoo.a using the ld.libname scratch buffer.
+// /usr/local/share/besm6/lib/libfoo.a using the ld.libname scratch buffer.
 //
 // Return value classifies the file so the caller knows how to read it:
 //      0 - a plain object file
@@ -33,13 +33,13 @@ int open_input(char *cp)
     if (cp[0] == '-' && cp[1] == 'l') {
         if (cp[2] == '\0')
             cp = "-la";
-        ld.filname = ld.libname;
-        for (c = 0; cp[c + 2]; c++)
-            ld.filname[c + LNAMLEN] = cp[c + 2];
-        ld.filname[c + LNAMLEN]     = '.';
-        ld.filname[c + LNAMLEN + 1] = 'a';
-        ld.filname[c + LNAMLEN + 2] = '\0';
-        ld.text                     = fopen(ld.filname, "r");
+        ld.filname = malloc(strlen(ld.libname) + strlen(cp) + 1);
+        if (!ld.filname)
+            error(2, "out of memory");
+        strcpy(ld.filname, ld.libname);
+        strcat(ld.filname, cp + 2);
+        strcat(ld.filname, ".a");
+        ld.text = fopen(ld.filname, "r");
         if (!ld.text)
             ld.filname += 4; // try the name without the "/usr.../" prefix
     }

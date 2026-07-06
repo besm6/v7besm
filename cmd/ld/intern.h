@@ -26,8 +26,6 @@
 #define LLSIZE   256  // capacity of the library / file-offset list
 #define RANTABSZ 1000 // capacity of the ranlib table of contents
 
-#define LNAMLEN 17 // originally 12
-
 // Round x up to the next multiple of y.
 #define ALIGN(x, y) ((x) + (y) - 1 - ((x) + (y) - 1) % (y))
 
@@ -121,7 +119,7 @@ struct linker {
     int errlev;       // highest error severity seen so far (the eventual exit code)
     int delarg;       // exit code; nonzero means "leave a.out alone / failed"
     char tfname[14];  // template for the temp files: "/tmp/ldaXXXXX"
-    char libname[44]; // scratch buffer for building a "-l" library path
+    const char *libname; // scratch buffer for building a "-l" library path
 
     // segment base addresses, fixed by assign_addresses() after pass 1
     long corigin;   // base of the const segment
