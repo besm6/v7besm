@@ -151,6 +151,62 @@ TEST(Syscall, ExitNonZeroStatus)
 }
 
 //
+// --status prints the _exit() value as a 41-bit signed integer on stdout.
+//
+TEST(Syscall, ExitStatusReport)
+{
+    // A small positive value prints as itself.
+    {
+        Memory memory;
+        Machine machine{ memory };
+        machine.set_report_status(true);
+
+        memory.store(ENTRY, word(syscall_insn(SYS_exit), 0));
+        machine.cpu.set_pc(ENTRY);
+        machine.cpu.set_acc(5);
+
+        testing::internal::CaptureStdout();
+        machine.run();
+        EXPECT_EQ(testing::internal::GetCapturedStdout(), "5\n");
+        EXPECT_EQ(machine.get_exit_status(), 5);
+    }
+
+    // A value with bit 41 set is sign-extended: -1, not 255.
+    {
+        Memory memory;
+        Machine machine{ memory };
+        machine.set_report_status(true);
+
+        memory.store(ENTRY, word(syscall_insn(SYS_exit), 0));
+        machine.cpu.set_pc(ENTRY);
+        machine.cpu.set_acc(GUEST_MINUS_ONE);
+
+        testing::internal::CaptureStdout();
+        machine.run();
+        EXPECT_EQ(testing::internal::GetCapturedStdout(), "-1\n");
+        // The host process return code is still the low byte.
+        EXPECT_EQ(machine.get_exit_status(), 0xff);
+    }
+}
+
+//
+// Without --status, the _exit() value is not printed.
+//
+TEST(Syscall, ExitStatusNoReport)
+{
+    Memory memory;
+    Machine machine{ memory };
+
+    memory.store(ENTRY, word(syscall_insn(SYS_exit), 0));
+    machine.cpu.set_pc(ENTRY);
+    machine.cpu.set_acc(5);
+
+    testing::internal::CaptureStdout();
+    machine.run();
+    EXPECT_EQ(testing::internal::GetCapturedStdout(), "");
+}
+
+//
 // write(1, "hi\n", 3) sends three bytes to stdout and returns the count.
 //
 TEST(Syscall, Write)

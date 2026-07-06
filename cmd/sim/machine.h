@@ -31,6 +31,10 @@ private:
     // Program exit status, set by the _exit() Unix syscall.
     int program_exit_status{ 0 };
 
+    // When set (--status option), print the program's _exit() value as a
+    // 41-bit signed integer on stdout.
+    bool report_status_enabled{ false };
+
     // Program break: the first free word above the data/bss image.  Set by
     // load_program() and moved by the break() (sbrk) Unix syscall.
     unsigned program_break{ 0 };
@@ -122,9 +126,14 @@ public:
     void exec(const std::string &filename, const std::vector<std::string> &argv,
               const std::vector<std::string> &envp);
 
-    // Exit status set by the _exit() Unix syscall.
+    // Exit status set by the _exit() Unix syscall.  set_exit_status() takes the
+    // raw accumulator: it stores the low byte as the host process return code
+    // and, when --status is enabled, prints the full 41-bit signed value.
     int get_exit_status() const { return program_exit_status; }
-    void set_exit_status(int status) { program_exit_status = status; }
+    void set_exit_status(Word acc);
+
+    // Enable printing of the program exit status (--status option).
+    void set_report_status(bool on) { report_status_enabled = on; }
 
     // Program break, maintained by the break() (sbrk) Unix syscall.
     unsigned get_program_break() const { return program_break; }

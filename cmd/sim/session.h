@@ -41,6 +41,9 @@ public:
     // Enable verbose mode: print more details to the trace log.
     void set_verbose(bool on = true);
 
+    // Print the program exit status as a signed integer (--status option).
+    void set_report_status(bool on = true);
+
     // Enable a trace log to stdout or to the specified file.
     void enable_trace(const char *mode);
     void set_trace_file(const char *filename, const char *default_mode);

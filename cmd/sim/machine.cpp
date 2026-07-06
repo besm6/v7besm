@@ -140,6 +140,22 @@ void Machine::finish()
 }
 
 //
+// Record the program's _exit() status.  The accumulator holds a 41-bit signed
+// C int; the low byte becomes the host process return code.  When --status is
+// enabled, print the full value as a 41-bit signed integer on stdout.
+//
+void Machine::set_exit_status(Word acc)
+{
+    program_exit_status = acc & 0xff;
+    if (report_status_enabled) {
+        int64_t v = acc & BITS41;
+        if (acc & BIT41)
+            v -= (int64_t)1 << 41;
+        std::cout << v << std::endl;
+    }
+}
+
+//
 // Fetch instruction word.
 //
 Word Machine::mem_fetch(unsigned addr)

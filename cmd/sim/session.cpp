@@ -113,6 +113,11 @@ public:
     void set_verbose(bool on) { machine.set_verbose(on); }
 
     //
+    // Print the program exit status as a signed integer (--status option).
+    //
+    void set_report_status(bool on) { machine.set_report_status(on); }
+
+    //
     // Enable trace log to stdout.
     //
     static void enable_trace(const char *mode)
@@ -221,6 +226,14 @@ void Session::set_trace_file(const char *filename, const char *default_mode)
 void Session::set_verbose(bool on)
 {
     internal->set_verbose(on);
+}
+
+//
+// Print the program exit status as a signed integer.
+//
+void Session::set_report_status(bool on)
+{
+    internal->set_report_status(on);
 }
 
 //

@@ -19,6 +19,7 @@ static const struct option long_options[] = {
     { "limit",          required_argument,  nullptr,    'l' },
     { "trace",          required_argument,  nullptr,    'T' },
     { "debug",          required_argument,  nullptr,    'd' },
+    { "status",         no_argument,        nullptr,    's' },
     {},
     // clang-format on
 };
@@ -41,6 +42,8 @@ static void print_usage(std::ostream &out, const char *prog_name)
         << Session::get_default_limit() << ")" << std::endl;
     out << "    --trace=FILE            Redirect trace to the file" << std::endl;
     out << "    -d MODE, --debug=MODE   Select debug mode, default irm" << std::endl;
+    out << "    -s, --status            Print program exit status as a signed integer"
+        << std::endl;
     out << "Debug modes:" << std::endl;
     out << "    i       Trace instructions" << std::endl;
     out << "    e       Trace extracodes (syscalls)" << std::endl;
@@ -69,7 +72,7 @@ int main(int argc, char *argv[])
 
     // Parse command line options.
     for (;;) {
-        switch (getopt_long(argc, argv, "-hVvl:tT:d:r", long_options, nullptr)) {
+        switch (getopt_long(argc, argv, "-hVvl:tT:d:sr", long_options, nullptr)) {
         case EOF:
             break;
 
@@ -126,6 +129,11 @@ int main(int argc, char *argv[])
         case 'd':
             // Set trace options.
             session.enable_trace(optarg);
+            continue;
+
+        case 's':
+            // Print the program exit status as a signed integer.
+            session.set_report_status(true);
             continue;
 
         default:

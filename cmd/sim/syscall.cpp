@@ -364,7 +364,9 @@ void Processor::syscall(unsigned num)
     switch (num) {
     case SYS_exit:
         // void _exit(int status): status is in the accumulator. No return.
-        machine.set_exit_status(core.ACC & 0xff);
+        // Pass the raw accumulator: set_exit_status() keeps the low byte as the
+        // process return code and prints the full 41-bit value under --status.
+        machine.set_exit_status(core.ACC);
         throw Exception(""); // empty message: clean halt
 
     case SYS_fork: {
