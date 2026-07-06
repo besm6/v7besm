@@ -171,6 +171,35 @@ TEST(Syscall, Write)
 }
 
 //
+// The $77 trap performs the callee stack cleanup: on return r15 (M[017]) is
+// decremented by N-1 (the words the caller pushed), per the BESM-6 calling
+// convention.  With 0 or 1 arguments nothing is on the stack, so r15 is
+// unchanged.
+//
+TEST(Syscall, StackCleanup)
+{
+    Memory memory;
+    Machine machine{ memory };
+
+    // 3-argument write: two words pushed, r15 drops by 2 back to STACK.
+    Word buf = put_string(memory, 0x300, "hi\n");
+    testing::internal::CaptureStdout();
+    run_syscall(machine, SYS_write, { 1, buf }, 3);
+    testing::internal::GetCapturedStdout();
+    EXPECT_EQ(machine.cpu.get_m(017), STACK);
+
+    // 2-argument open of a nonexistent path: one word pushed, r15 drops by 1.
+    Word path = put_string(memory, 0x300, "/no/such/file");
+    run_syscall(machine, SYS_open, { path }, 0);
+    EXPECT_EQ(machine.cpu.get_acc(), GUEST_MINUS_ONE);
+    EXPECT_EQ(machine.cpu.get_m(017), STACK);
+
+    // 0-argument getpid: nothing pushed, r15 left unchanged.
+    run_syscall(machine, SYS_getpid, {}, 0);
+    EXPECT_EQ(machine.cpu.get_m(017), STACK);
+}
+
+//
 // getpid() returns the host pid.
 //
 TEST(Syscall, Getpid)

@@ -85,8 +85,17 @@ continues. (The syscall numbers are the classic v7 ones from
 The calling convention for a syscall is the ordinary BESM-6 C convention
 ([Besm6_Calling_Conventions.md](Besm6_Calling_Conventions.md)): for a call with *N*
 arguments, arguments 1…*N*−1 sit on the stack just below the stack pointer `r15`, the **last**
-argument is left in the accumulator, `r14` holds the argument count as a negative number, the
-**result** comes back in the accumulator, and **`errno`** (0 on success) comes back in `r14`.
+argument is left in the accumulator, the **result** comes back in the accumulator, and **`errno`** (0 on success) comes back in `r14`.
+Note that for syscalls `r14` does not have to hold the argument count as a negative number.
+Value of `r14` is ignored on input to syscalls.
+
+The `$77 N` trap stands in for the called function, so it also performs the callee's stack
+cleanup: on return it decrements `r15` by *N*−1 — the number of arguments the caller pushed
+below `r15` (the *N*th argument travelled in the accumulator and was never pushed). Calls with
+0 or 1 arguments leave `r15` unchanged. Because `r14` is ignored, `b6sim` derives *N* from the
+syscall number itself (each v7 syscall has a fixed arity). This means naked syscall stubs such
+as [`putch.s`](../cmd/sim/tmp/putch.s) — just `$77 N` followed by `13 uj` — need no
+`c/save`/`c/ret` frame to keep the caller's stack balanced.
 
 There is not yet a real C startup object (`crt0`) or `libc` in the project, so `b6sim`
 supplies the bare minimum a program needs to start: when it loads an executable it points the
@@ -153,7 +162,6 @@ _start:
     xta #1          // ACC = 1 (stdout)
     xts ptr         // push the fd, then ACC = char* to the text
     xts #6          // push the pointer, then ACC = byte count (the last argument)
- 14 vtm -3          // r14 = -3: three arguments
     $77 4           // write(fd, buf, len)  — syscall 4
 
     xta

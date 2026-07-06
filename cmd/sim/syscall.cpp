@@ -90,6 +90,66 @@ enum {
 };
 
 //
+// Number of C arguments each syscall is called with (v7 prototypes).  Drives
+// the callee stack cleanup at the end of Processor::syscall (r15 -= N-1); it
+// must match the `count` passed to syscall_arg() in each case below.  The count
+// is the true prototype arity even for calls whose arguments b6sim ignores
+// (e.g. ioctl, mount): the caller still pushed those words and expects them
+// popped.  Pointer arguments passed in the accumulator (wait/pipe/times/ftime)
+// count as the single, last argument, so those are 1.
+//
+static unsigned syscall_nargs(unsigned num)
+{
+    switch (num) {
+    // Zero-argument calls: leave r15 unchanged.
+    case SYS_fork:
+    case SYS_time:
+    case SYS_getpid:
+    case SYS_getuid:
+    case SYS_getgid:
+    case SYS_pause:
+    case SYS_sync:
+        return 0;
+
+    // Three-argument calls.
+    case SYS_read:
+    case SYS_write:
+    case SYS_mknod:
+    case SYS_chown:
+    case SYS_seek:
+    case SYS_exece:
+    case SYS_ioctl:
+    case SYS_mount:
+        return 3;
+
+    // Four-argument calls.
+    case SYS_ptrace:
+    case SYS_profil:
+        return 4;
+
+    // Two-argument calls.
+    case SYS_open:
+    case SYS_creat:
+    case SYS_link:
+    case SYS_chmod:
+    case SYS_stat:
+    case SYS_fstat:
+    case SYS_utime:
+    case SYS_access:
+    case SYS_kill:
+    case SYS_stty:
+    case SYS_gtty:
+    case SYS_signal:
+    case SYS_exec:
+        return 2;
+
+    // Everything else takes one argument (single stack/ACC operand).
+    default:
+        return 1;
+    }
+}
+
+//
 // Map a host errno to the guest's value (include/errno.h).  The classic Unix
 // codes 1..34 are identical on the guest and on every host we build on, so the
 // mapping is mostly the identity; the switch pins the ones that can differ
@@ -288,7 +348,11 @@ void Processor::sys_exec(unsigned count, bool with_env)
         // entry point; exec() sets ACC/M[14] for the main(argc, argv) call.
         machine.exec(path, argv, envp);
     } catch (const std::exception &) {
+        // Failure returns to the C caller, so clean up its pushed arguments
+        // exactly as the common tail in Processor::syscall would.
         sys_err(ENOENT);
+        if (count >= 2)
+            core.M[017] = ADDR(core.M[017] - (count - 1));
     }
 }
 
@@ -407,12 +471,14 @@ void Processor::syscall(unsigned num)
         break;
 
     case SYS_exec:
+        // On success the image is replaced and r15 reseeded, so the tail pop
+        // below must not run; sys_exec pops itself on failure.
         sys_exec(2, false);
-        break;
+        return;
 
     case SYS_exece:
         sys_exec(3, true);
-        break;
+        return;
 
     case SYS_chdir:
         // int chdir(char *path)
@@ -704,4 +770,13 @@ void Processor::syscall(unsigned num)
     default:
         throw Exception("Unimplemented syscall " + std::to_string(num));
     }
+
+    // Callee stack cleanup (doc/Besm6_Calling_Conventions.md): the caller pushed
+    // N-1 arguments just below r15 (the Nth argument travels in the accumulator
+    // and is never pushed).  The bare `$77 N` trap stands in for the called
+    // function, so it must decrement r15 by N-1 exactly as a c/ret epilogue
+    // would; with 0 or 1 arguments there is nothing on the stack to pop.
+    unsigned n = syscall_nargs(num);
+    if (n >= 2)
+        core.M[017] = ADDR(core.M[017] - (n - 1));
 }
