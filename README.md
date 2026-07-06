@@ -30,7 +30,7 @@ The port proceeds in two stages:
 kernel/    v7 kernel sources and device drivers (kernel/dev/)
 include/   v7 system headers (sys/)
 cross/     BESM-6 object/archive format headers (b.out.h, ar.h, ranlib.h)
-cmd/       BESM-6 toolchain: cc, as, ld, cpp, disasm
+cmd/       BESM-6 toolchain: cc, as, ld, cpp, disasm, sim
 doc/       BESM-6 architecture references
 ```
 
@@ -43,6 +43,7 @@ doc/       BESM-6 architecture references
 | Linker + binutils             | `cmd/ld`      | ✔ working, tested, documented |
 | C preprocessor                | `cmd/cpp`     | ✔ C11, tested, documented     |
 | Disassembler                  | `cmd/disasm`  | ✔ working, tested             |
+| a.out simulator (Unix v7)     | `cmd/sim`     | ✔ working, tested, documented |
 | Kernel (i486 validation)      | `kernel/`     | ✔ builds                      |
 | libc library                  | —             | ☐ to do                       |
 | Build & link kernel for BESM-6| —             | ☐ to do                       |
@@ -86,6 +87,9 @@ See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail.
   resolution, relocation, archives, and the `a.out` object/executable format.
 - [doc/Archiver_Manual.md](doc/Archiver_Manual.md) — the `cmd/ar` archiver: commands, options,
   and the on-disk `.a` archive format.
+- [doc/Aout_Simulator.md](doc/Aout_Simulator.md) — the `cmd/sim` simulator (`b6sim`): an
+  apout-style user-level runner for BESM-6 `a.out` executables that services Unix v7 system
+  calls; its CLI, trace modes, syscall set, and a worked example.
 
 ## Related projects
 

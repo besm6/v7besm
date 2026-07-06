@@ -13,11 +13,14 @@ work has two halves:
   intermediate step to get the C compiling cleanly with modern warnings before retargeting.
 - **`cmd/`** — the BESM-6-specific toolchain being written/ported to eventually build the
   kernel for real BESM-6 hardware: a C compiler driver, an assembler, a linker
-  (+ archiver/nm/size/etc.), a C preprocessor, and a disassembler.
+  (+ archiver/nm/size/etc.), a C preprocessor, a disassembler, and a user-level a.out
+  simulator (`b6sim`, `cmd/sim/`) that runs BESM-6 executables and services Unix v7
+  syscalls — the only tool here that actually *executes* BESM-6 code.
 
 External pieces this project depends on (not in this repo):
 - BESM-6 C cross-compiler: https://github.com/besm6/c-compiler/
-- BESM-6 hardware simulator (SIMH): https://github.com/besm6/simh/tree/master/BESM6/
+- BESM-6 hardware simulator (SIMH): https://github.com/besm6/simh/tree/master/BESM6/ — the
+  authentic full-machine emulator, distinct from the in-repo user-level `b6sim`.
 
 ## Building
 
@@ -42,7 +45,7 @@ Requires **CMake** and a host C/C++ compiler (C++17). GoogleTest is fetched auto
 at configure time, and **cppcheck** runs as part of the build when installed. Everything is
 compiled with `-Wall -Werror -Wshadow`. Each tool is built under a `b6`-prefixed name and
 `make install` copies it into `bin/` (`cmd/cc`→`b6cc`, `cmd/as`→`b6as`, `cmd/ld`→`b6ld`,
-`cmd/cpp`→`b6cpp`, `cmd/disasm`→`b6disasm`, plus the binutils
+`cmd/cpp`→`b6cpp`, `cmd/disasm`→`b6disasm`, `cmd/sim`→`b6sim`, plus the binutils
 `b6ar`/`b6nm`/`b6size`/`b6strip`/`b6ranlib`/`b6lorder`).
 These are host tools that run on the build machine and emit BESM-6 objects. **Do not** invoke `cc`/`clang` by hand or run
 `cmake --build` directly — always go through the top-level `make` targets.
@@ -105,11 +108,14 @@ the authoritative references and are kept current:
   relocation, archives/libraries, and the `a.out` object/executable format.
 - `doc/Archiver_Manual.md` — the `cmd/ar` archiver: command/option letters and the on-disk
   `.a` archive format (`ARMAG`, `struct ar_hdr`, word padding).
+- `doc/Aout_Simulator.md` — the `cmd/sim` simulator (`b6sim`): what it is (an apout-style
+  user-level a.out runner, not full-machine SIMH), its CLI and trace modes, the Unix v7
+  syscall set, and the `$77 N` extracode syscall trap.
 
 **Object/executable format** is a BESM-6-specific `a.out` variant defined in
 `cross/besm6/b.out.h` (magic `FMAGIC`/`NMAGIC`, `struct exec` with separate
-`const`/`text`/`data`/`bss` segment sizes). The assembler, linker, and disassembler all
-share this header. The shared on-disk serialization lives in `cmd/libaout` and uses the
+`const`/`text`/`data`/`bss` segment sizes). The assembler, linker, disassembler, and
+simulator all share this header. The shared on-disk serialization lives in `cmd/libaout` and uses the
 BESM-6 **6-byte word** (`W == 6`, two 3-byte big-endian half-words, **high half-word
 first**, so a word's six bytes read as one big-endian 48-bit number — this holds uniformly
 for instructions, `.word`/`.half` data, the constant pool, and the header); the archive member
@@ -126,6 +132,19 @@ Madlen assembly), `-c` (after assembling). Sub-tools are resolved via per-tool e
 overrides (`B6CPP`, `B6PARSE`, …) or under `~/.local/bin` then `/usr/local/bin`. Only
 `-E`/`-S` work end-to-end today; assembling/linking await `b6codegen`↔`b6as` compatibility
 and library/crt0 wiring (see `cmd/cc/TODO.md`).
+
+**`cmd/sim` (`b6sim`) is a user-level a.out simulator**, in the spirit of Warren Toomey's
+`apout` for the PDP-11 (reference copy under `cmd/sim/tmp/apout/`). It loads one BESM-6
+`a.out`, interprets the instruction stream on a software CPU + memory model, and traps the
+sole user-mode extracode `$77 N` to run Unix v7 syscall `N` on the host (`syscall.cpp`;
+numbers from `kernel/sysent.c`). The syscall ABI follows the calling convention — args
+1..N-1 below the stack pointer `r15`, last arg in the accumulator, result in the
+accumulator, errno in `r14` — and because every C scalar is one word, structs like
+`struct stat` are one word per field. Since there is no `crt0`/`libc` yet, the loader seeds
+`r15` and the program break itself. Today's runnable path is `.s` → `b6as` → `b6ld` →
+`b6sim`; the C front end plugs into the same final step as it matures. This is the harness
+for verifying the compiler back-end and runtime library. See `doc/Aout_Simulator.md` and
+the ABI-spec tests in `cmd/sim/test/sim_test.cpp`.
 
 **`include/` is the Unix v7 system-header tree** (`sys/` plus libc-style headers). The
 kernel includes them via `-I../include`.
