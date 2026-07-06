@@ -165,8 +165,13 @@ putcom:
         addr &= 077777;
         emit_halfword((long)index << 20 | val | (addr & 077777), reltype);
     } else {
-        // Short instruction: a 12-bit address field.
-        emit_halfword((long)index << 20 | val | (addr & 07777), reltype | RSHORT);
+        // Short instruction: a 12-bit address field, treated as a 13-bit signed
+        // value.  When bit 13 (010000) is set the address is negative (e.g. a
+        // stack-relative offset such as -2), so set the address sign bit
+        // (ONEBIT(19), 01000000) and the CPU sign-extends the 12-bit field.
+        long sign = (addr & 010000) ? 01000000L : 0L;
+        emit_halfword((long)index << 20 | val | sign | (addr & 07777),
+                      reltype | RSHORT);
     }
     if (!as.aflag && (type & TALIGN))
         align_segment(as.segm);

@@ -250,7 +250,7 @@ mid:                        // second label
     EXPECT_EQ(word_high(got, 12), 00100000L | 8L);    // xta start  (label == word 8)
     EXPECT_EQ(word_low(got, 12), 00110000L | 0123L);  // aax 0143^0060
     EXPECT_EQ(word_high(got, 13), (5L << 20) | 00120000L | 0123L); // aex 0123, 5
-    EXPECT_EQ(word_low(got, 13), 00130000L | 07654L); // arx 07777 ~ 07654
+    EXPECT_EQ(word_low(got, 13), 01130000L | 07654L); // arx 07777 ~ 07654
     EXPECT_EQ(word_high(got, 14), 00140000L | 0100L); // avx 1 \< 6   (shift left)
     EXPECT_EQ(word_low(got, 14), 00150000L | 0100L);  // aox 0200 \> 1 (shift right)
     EXPECT_EQ(word_high(got, 15), 00160000L | 077L);  // a/x 7*011    (multiply)
