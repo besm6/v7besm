@@ -498,13 +498,16 @@ bool Processor::step()
     case 073:
     case 074:
     case 075:
-    case 076:
-    case 077:  // э50...э77
+    case 076:  // э50...э76
     case 0200: // э20
     case 0210: // э21
-        Aex        = ADDR(addr + core.M[reg]);
-        core.M[14] = Aex;
-        extracode(opcode);
+        throw Exception("Illegal extracode " + to_octal(opcode));
+
+    case 077: // э77
+        // Only extracode 077 is valid in user mode: the Unix v7 syscall trap
+        // (see syscall.cpp).  The syscall number is the executive address.
+        Aex = ADDR(addr + core.M[reg]);
+        syscall(Aex);
         core.set_logical();
         break;
 

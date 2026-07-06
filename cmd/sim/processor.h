@@ -75,10 +75,8 @@ private:
     const std::string MSG_ARITH_OVERFLOW = "Arithmetic overflow";
     const std::string MSG_ARITH_DIVZERO  = "Division by zero";
 
-    // Execute extracode. Extracode 077 is the Unix v7 syscall trap.
-    void extracode(unsigned opcode);
-
-    // Dispatch a Unix v7 system call (see kernel/sysent.c).
+    // Dispatch a Unix v7 system call (see kernel/sysent.c).  Reached from the
+    // extracode 077 trap in step(); the syscall number arrives in M[14].
     void syscall(unsigned num);
 
     //
