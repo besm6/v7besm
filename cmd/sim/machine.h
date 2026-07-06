@@ -31,6 +31,10 @@ private:
     // Program exit status, set by the _exit() Unix syscall.
     int program_exit_status{ 0 };
 
+    // Program break: the first free word above the data/bss image.  Set by
+    // load_program() and moved by the break() (sbrk) Unix syscall.
+    unsigned program_break{ 0 };
+
     // Trace output.
     static std::ofstream trace_stream;
 
@@ -112,9 +116,19 @@ public:
     // Throws std::runtime_error when the file is missing or has a bad format.
     void load_program(const std::string &filename);
 
+    // Replace the running image with a new a.out (the exec() Unix syscall):
+    // reload the program, lay argv/envp onto the fresh stack and jump to the
+    // new entry point.  Throws std::runtime_error on a bad/missing file.
+    void exec(const std::string &filename, const std::vector<std::string> &argv,
+              const std::vector<std::string> &envp);
+
     // Exit status set by the _exit() Unix syscall.
     int get_exit_status() const { return program_exit_status; }
     void set_exit_status(int status) { program_exit_status = status; }
+
+    // Program break, maintained by the break() (sbrk) Unix syscall.
+    unsigned get_program_break() const { return program_break; }
+    void set_program_break(unsigned addr) { program_break = addr; }
 
     //
     // Trace methods.

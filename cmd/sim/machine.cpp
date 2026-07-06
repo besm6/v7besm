@@ -260,4 +260,58 @@ void Machine::load_program(const std::string &filename)
     // Seed the stack pointer (r15) just past bss.  A real crt0 would set this;
     // the stack grows towards higher addresses (see doc/Besm6_Calling_Conventions.md).
     cpu.set_m(017, borigin + nbss);
+
+    // The program break starts just past bss; break()/sbrk() grow it upwards.
+    program_break = borigin + nbss;
+}
+
+//
+// Replace the running image with a new a.out (the exec() Unix syscall).
+//
+// Reload the executable, then build the argument vector on the fresh stack in
+// the C calling convention for main(argc, argv): the string bodies and the
+// argv[] array (a NUL-terminated list of char* fat pointers) are laid down at
+// the current stack top, argc is pushed onto the stack, and argv is left in the
+// accumulator.  envp is laid down the same way just above argv; there is no
+// established crt0/argv ABI in the toolchain yet, so this is the minimal
+// reasonable convention and is deliberately confined to this one method.
+//
+void Machine::exec(const std::string &filename, const std::vector<std::string> &argv,
+                   const std::vector<std::string> &envp)
+{
+    // Loads the image and seeds PC, the stack pointer and the break.
+    load_program(filename);
+
+    // Pack a NUL-terminated argument list starting at word address `top`,
+    // returning the word address of the char*[] vector and advancing `top`.
+    unsigned top = cpu.get_m(017);
+    auto lay_vector = [&](const std::vector<std::string> &vec) -> unsigned {
+        // Vector of fat pointers, one per string plus a terminating null.
+        const unsigned vec_addr = top;
+        top += vec.size() + 1;
+        for (size_t i = 0; i < vec.size(); i++) {
+            // Store the string body, remembering a fat pointer to byte #0.
+            const unsigned str_addr = top;
+            BytePointer bp(memory, str_addr, 0);
+            for (char c : vec[i])
+                bp.put_byte((uint8_t)c);
+            bp.put_byte(0);
+            top = bp.word_addr + (bp.byte_index != 0);
+            // Fat pointer: bit 48 set, offset field 5 (byte #0), word address.
+            const Word fatptr = BIT48 | (5ull << 44) | str_addr;
+            memory.store(vec_addr + i, fatptr);
+        }
+        memory.store(vec_addr + vec.size(), 0);
+        return vec_addr;
+    };
+
+    const unsigned argv_addr = lay_vector(argv);
+    lay_vector(envp);
+
+    // main(argc, argv): argc on the stack, argv in the accumulator.
+    memory.store(top, argv.size());
+    cpu.set_m(017, top + 1);
+    cpu.set_acc(argv_addr);
+    cpu.set_m(14, (unsigned)-2 & BITS(15)); // r14 = negative argument count (two args)
+    program_break = top + 1;
 }

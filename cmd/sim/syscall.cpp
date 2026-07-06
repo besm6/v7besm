@@ -1,0 +1,707 @@
+//
+// Unix v7 system calls for the user-level BESM-6 simulator.
+//
+// Each guest syscall (issued as `$77 N`, see extracode.cpp) is mapped onto the
+// host operating system, in the spirit of Warren Toomey's `apout` for the
+// PDP-11 (reference: cmd/sim/tmp/apout/v7trap.c).  The syscall numbers come from
+// kernel/sysent.c.
+//
+// BESM-6 calling convention (doc/Besm6_Calling_Conventions.md): for a call of N
+// arguments the last one is in the accumulator and arguments 1..N-1 sit just
+// below the stack pointer M[017].  The result is returned in the accumulator and
+// errno (0 on success) in register M[14].
+//
+// BESM-6 makes this much simpler than apout: every C scalar is one 48-bit word,
+// so time_t/off_t and every struct stat field are a single word — none of the
+// PDP-11 high/low splitting or middle-endian copylong juggling is needed.
+//
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/times.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <utime.h>
+
+#include <csignal>
+#include <cerrno>
+#include <cstdio>
+#include <ctime>
+#include <string>
+#include <vector>
+
+#include "machine.h"
+#include "memory.h"
+
+//
+// Unix v7 system call numbers (kernel/sysent.c).
+//
+enum {
+    SYS_exit   = 1,
+    SYS_fork   = 2,
+    SYS_read   = 3,
+    SYS_write  = 4,
+    SYS_open   = 5,
+    SYS_close  = 6,
+    SYS_wait   = 7,
+    SYS_creat  = 8,
+    SYS_link   = 9,
+    SYS_unlink = 10,
+    SYS_exec   = 11,
+    SYS_chdir  = 12,
+    SYS_time   = 13,
+    SYS_mknod  = 14,
+    SYS_chmod  = 15,
+    SYS_chown  = 16,
+    SYS_break  = 17,
+    SYS_stat   = 18,
+    SYS_seek   = 19,
+    SYS_getpid = 20,
+    SYS_mount  = 21,
+    SYS_umount = 22,
+    SYS_setuid = 23,
+    SYS_getuid = 24,
+    SYS_stime  = 25,
+    SYS_ptrace = 26,
+    SYS_alarm  = 27,
+    SYS_fstat  = 28,
+    SYS_pause  = 29,
+    SYS_utime  = 30,
+    SYS_stty   = 31,
+    SYS_gtty   = 32,
+    SYS_access = 33,
+    SYS_nice   = 34,
+    SYS_ftime  = 35,
+    SYS_sync   = 36,
+    SYS_kill   = 37,
+    SYS_dup    = 41,
+    SYS_pipe   = 42,
+    SYS_times  = 43,
+    SYS_profil = 44,
+    SYS_setgid = 46,
+    SYS_getgid = 47,
+    SYS_signal = 48,
+    SYS_acct   = 51,
+    SYS_phys   = 52,
+    SYS_lock   = 53,
+    SYS_ioctl  = 54,
+    SYS_exece  = 59,
+    SYS_umask  = 60,
+    SYS_chroot = 61,
+};
+
+//
+// Map a host errno to the guest's value (include/errno.h).  The classic Unix
+// codes 1..34 are identical on the guest and on every host we build on, so the
+// mapping is mostly the identity; the switch pins the ones that can differ
+// (e.g. EAGAIN on macOS) and passes everything else through unchanged.
+//
+static int guest_errno(int e)
+{
+    switch (e) {
+    case EPERM:   return 1;
+    case ENOENT:  return 2;
+    case ESRCH:   return 3;
+    case EINTR:   return 4;
+    case EIO:     return 5;
+    case ENXIO:   return 6;
+    case E2BIG:   return 7;
+    case ENOEXEC: return 8;
+    case EBADF:   return 9;
+    case ECHILD:  return 10;
+    case EAGAIN:  return 11;
+    case ENOMEM:  return 12;
+    case EACCES:  return 13;
+    case EFAULT:  return 14;
+    case ENOTBLK: return 15;
+    case EBUSY:   return 16;
+    case EEXIST:  return 17;
+    case EXDEV:   return 18;
+    case ENODEV:  return 19;
+    case ENOTDIR: return 20;
+    case EISDIR:  return 21;
+    case EINVAL:  return 22;
+    case ENFILE:  return 23;
+    case EMFILE:  return 24;
+    case ENOTTY:  return 25;
+    case ETXTBSY: return 26;
+    case EFBIG:   return 27;
+    case ENOSPC:  return 28;
+    case ESPIPE:  return 29;
+    case EROFS:   return 30;
+    case EMLINK:  return 31;
+    case EPIPE:   return 32;
+    case EDOM:    return 33;
+    case ERANGE:  return 34;
+    default:      return e;
+    }
+}
+
+//
+// Sign-extend a guest int (41-bit two's complement in bits 41..1).
+//
+static int64_t sign_extend41(Word w)
+{
+    int64_t v = w & BITS41;
+    if (w & BIT41)
+        v -= (int64_t)1 << 41;
+    return v;
+}
+
+//
+// Turn a char*/void* fat pointer into a BytePointer.  Fat pointer layout
+// (doc/Besm6_Data_Representation.md): bit 48 set, byte-offset field in bits
+// 47..45 (field 5 = byte #0/MSB), word address in bits 15..1.
+//
+static BytePointer fat_to_byteptr(Memory &mem, Word fatptr)
+{
+    unsigned word_addr = fatptr & BITS(15);
+    unsigned offset    = (fatptr >> 44) & 7;
+    unsigned byte_idx  = (offset <= 5) ? 5 - offset : 0;
+    return BytePointer(mem, word_addr, byte_idx);
+}
+
+//
+// Store a host struct stat into the guest's 11-word struct stat
+// (include/sys/stat.h): one word per field, no packing.
+//
+static void store_stat(Machine &m, unsigned addr, const struct stat &st)
+{
+    m.mem_store(addr + 0, (Word)st.st_dev & BITS41);
+    m.mem_store(addr + 1, (Word)st.st_ino & BITS41);
+    m.mem_store(addr + 2, (Word)st.st_mode & BITS41);
+    m.mem_store(addr + 3, (Word)st.st_nlink & BITS41);
+    m.mem_store(addr + 4, (Word)st.st_uid & BITS41);
+    m.mem_store(addr + 5, (Word)st.st_gid & BITS41);
+    m.mem_store(addr + 6, (Word)st.st_rdev & BITS41);
+    m.mem_store(addr + 7, (Word)st.st_size & BITS41);
+    m.mem_store(addr + 8, (Word)st.st_atime & BITS41);
+    m.mem_store(addr + 9, (Word)st.st_mtime & BITS41);
+    m.mem_store(addr + 10, (Word)st.st_ctime & BITS41);
+}
+
+//
+// Fetch the k-th argument (1-based) of a call passing `count` arguments.
+//
+Word Processor::syscall_arg(unsigned k, unsigned count)
+{
+    if (k >= count)
+        return core.ACC & BITS48;
+    return machine.mem_load(core.M[017] - (count - k));
+}
+
+//
+// Read a NUL-terminated string addressed by a char* fat pointer.
+//
+std::string Processor::mem_get_string(Word fatptr)
+{
+    BytePointer bp = fat_to_byteptr(memory, fatptr);
+    std::string s;
+    for (unsigned i = 0; i < MEMORY_NWORDS * 6; i++) {
+        uint8_t c = bp.get_byte();
+        if (c == 0)
+            break;
+        s.push_back((char)c);
+    }
+    return s;
+}
+
+//
+// Copy `n` bytes from a char* fat pointer into a host buffer.
+//
+void Processor::mem_get_bytes(Word fatptr, char *dst, unsigned n)
+{
+    BytePointer bp = fat_to_byteptr(memory, fatptr);
+    for (unsigned i = 0; i < n; i++)
+        dst[i] = (char)bp.get_byte();
+}
+
+//
+// Copy `n` bytes from a host buffer into a char* fat pointer.
+//
+void Processor::mem_put_bytes(Word fatptr, const char *src, unsigned n)
+{
+    BytePointer bp = fat_to_byteptr(memory, fatptr);
+    for (unsigned i = 0; i < n; i++)
+        bp.put_byte((uint8_t)src[i]);
+}
+
+//
+// Finish a syscall on success: result in the accumulator, errno cleared.
+// The result is stored as a guest int (41 bits, sign in bit 41).
+//
+void Processor::sys_ok(int64_t result)
+{
+    core.ACC   = (Word)result & BITS41;
+    core.M[14] = 0;
+}
+
+//
+// Finish a syscall on error: -1 in the accumulator, errno in M[14].
+//
+void Processor::sys_err(int host_errno)
+{
+    core.ACC   = (Word)(-1) & BITS41;
+    core.M[14] = guest_errno(host_errno);
+}
+
+//
+// Common tail: -1 means the host call failed and set errno.
+//
+void Processor::sys_ret(int64_t result)
+{
+    if (result == -1)
+        sys_err(errno);
+    else
+        sys_ok(result);
+}
+
+//
+// exec()/exece(): replace the process image with a new a.out.
+//
+void Processor::sys_exec(unsigned count, bool with_env)
+{
+    std::string path = mem_get_string(syscall_arg(1, count));
+    Word argvptr     = syscall_arg(2, count);
+    Word envpptr     = with_env ? syscall_arg(3, count) : 0;
+
+    // Walk a guest array of char* fat pointers into a vector of host strings.
+    auto read_vec = [&](Word vec) -> std::vector<std::string> {
+        std::vector<std::string> out;
+        unsigned addr = vec & BITS(15);
+        if (addr == 0)
+            return out;
+        for (unsigned i = 0; i < 4096; i++) {
+            Word p = machine.mem_load(addr + i);
+            if (p == 0)
+                break;
+            out.push_back(mem_get_string(p));
+        }
+        return out;
+    };
+
+    std::vector<std::string> argv = read_vec(argvptr);
+    std::vector<std::string> envp = with_env ? read_vec(envpptr) : std::vector<std::string>();
+
+    fflush(nullptr);
+    try {
+        // On success the image is replaced and execution continues at the new
+        // entry point; exec() sets ACC/M[14] for the main(argc, argv) call.
+        machine.exec(path, argv, envp);
+    } catch (const std::exception &) {
+        sys_err(ENOENT);
+    }
+}
+
+//
+// Dispatch a Unix v7 system call.
+//
+void Processor::syscall(unsigned num)
+{
+    switch (num) {
+    case SYS_exit:
+        // void _exit(int status): status is in the accumulator. No return.
+        machine.set_exit_status(core.ACC & 0xff);
+        throw Exception(""); // empty message: clean halt
+
+    case SYS_fork: {
+        // pid_t fork(void): parent gets the child pid, child gets 0.
+        fflush(nullptr);
+        pid_t pid = fork();
+        if (pid < 0)
+            sys_err(errno);
+        else
+            sys_ok(pid); // 0 in the child, child pid in the parent
+        break;
+    }
+
+    case SYS_read: {
+        // int read(int fd, char *buf, int n)
+        int fd       = (int)sign_extend41(syscall_arg(1, 3));
+        Word bufptr  = syscall_arg(2, 3);
+        int64_t n    = sign_extend41(syscall_arg(3, 3));
+        if (n < 0 || (uint64_t)n > (uint64_t)MEMORY_NWORDS * 6) {
+            sys_err(EINVAL);
+            break;
+        }
+        std::vector<char> buf(n);
+        ssize_t r = ::read(fd, buf.data(), n);
+        if (r < 0)
+            sys_err(errno);
+        else {
+            mem_put_bytes(bufptr, buf.data(), (unsigned)r);
+            sys_ok(r);
+        }
+        break;
+    }
+
+    case SYS_write: {
+        // int write(int fd, char *buf, int n)
+        int fd      = (int)sign_extend41(syscall_arg(1, 3));
+        Word bufptr = syscall_arg(2, 3);
+        int64_t n   = sign_extend41(syscall_arg(3, 3));
+        if (n < 0 || (uint64_t)n > (uint64_t)MEMORY_NWORDS * 6) {
+            sys_err(EINVAL);
+            break;
+        }
+        std::vector<char> buf(n);
+        mem_get_bytes(bufptr, buf.data(), (unsigned)n);
+        sys_ret(::write(fd, buf.data(), n));
+        break;
+    }
+
+    case SYS_open: {
+        // int open(char *path, int mode): v7 mode 0/1/2 -> RDONLY/WRONLY/RDWR.
+        std::string path = mem_get_string(syscall_arg(1, 2));
+        int vmode        = (int)sign_extend41(syscall_arg(2, 2));
+        int hmode        = (vmode == 0) ? O_RDONLY : (vmode == 1) ? O_WRONLY : O_RDWR;
+        sys_ret(::open(path.c_str(), hmode));
+        break;
+    }
+
+    case SYS_close:
+        // int close(int fd)
+        sys_ret(::close((int)sign_extend41(syscall_arg(1, 1))));
+        break;
+
+    case SYS_wait: {
+        // int wait(int *status): status word (optional) addressed by ACC.
+        int status = 0;
+        pid_t pid  = ::wait(&status);
+        if (pid < 0) {
+            sys_err(errno);
+            break;
+        }
+        unsigned sp = core.ACC & BITS(15);
+        if (sp != 0) {
+            // v7 status: high byte = exit code, low byte = terminating signal.
+            int v7 = 0;
+            if (WIFEXITED(status))
+                v7 = (WEXITSTATUS(status) & 0xff) << 8;
+            else if (WIFSIGNALED(status))
+                v7 = WTERMSIG(status) & 0x7f;
+            machine.mem_store(sp, v7);
+        }
+        sys_ok(pid);
+        break;
+    }
+
+    case SYS_creat: {
+        // int creat(char *path, int mode)
+        std::string path = mem_get_string(syscall_arg(1, 2));
+        int mode         = (int)sign_extend41(syscall_arg(2, 2));
+        sys_ret(::creat(path.c_str(), mode));
+        break;
+    }
+
+    case SYS_link: {
+        // int link(char *name1, char *name2)
+        std::string name1 = mem_get_string(syscall_arg(1, 2));
+        std::string name2 = mem_get_string(syscall_arg(2, 2));
+        sys_ret(::link(name1.c_str(), name2.c_str()));
+        break;
+    }
+
+    case SYS_unlink:
+        // int unlink(char *path)
+        sys_ret(::unlink(mem_get_string(syscall_arg(1, 1)).c_str()));
+        break;
+
+    case SYS_exec:
+        sys_exec(2, false);
+        break;
+
+    case SYS_exece:
+        sys_exec(3, true);
+        break;
+
+    case SYS_chdir:
+        // int chdir(char *path)
+        sys_ret(::chdir(mem_get_string(syscall_arg(1, 1)).c_str()));
+        break;
+
+    case SYS_time:
+        // time_t time(void): seconds since the epoch in one word.
+        sys_ok((int64_t)::time(nullptr));
+        break;
+
+    case SYS_mknod: {
+        // int mknod(char *path, int mode, int dev)
+        std::string path = mem_get_string(syscall_arg(1, 3));
+        int mode         = (int)sign_extend41(syscall_arg(2, 3));
+        int dev          = (int)sign_extend41(syscall_arg(3, 3));
+        if ((mode & S_IFMT) == S_IFDIR)
+            sys_ret(::mkdir(path.c_str(), mode & 07777));
+        else
+            sys_ret(::mknod(path.c_str(), mode, dev));
+        break;
+    }
+
+    case SYS_chmod: {
+        // int chmod(char *path, int mode)
+        std::string path = mem_get_string(syscall_arg(1, 2));
+        int mode         = (int)sign_extend41(syscall_arg(2, 2));
+        sys_ret(::chmod(path.c_str(), mode));
+        break;
+    }
+
+    case SYS_chown: {
+        // int chown(char *path, int uid, int gid)
+        std::string path = mem_get_string(syscall_arg(1, 3));
+        int uid          = (int)sign_extend41(syscall_arg(2, 3));
+        int gid          = (int)sign_extend41(syscall_arg(3, 3));
+        sys_ret(::chown(path.c_str(), uid, gid));
+        break;
+    }
+
+    case SYS_break: {
+        // int break(char *addr): set the program break (word address).  The
+        // heap may not grow into the stack, so fail if it reaches M[017].
+        unsigned addr = (unsigned)(syscall_arg(1, 1) & BITS(15));
+        if (addr >= core.M[017])
+            sys_err(ENOMEM);
+        else {
+            machine.set_program_break(addr);
+            sys_ok(0);
+        }
+        break;
+    }
+
+    case SYS_stat: {
+        // int stat(char *path, struct stat *buf)
+        std::string path = mem_get_string(syscall_arg(1, 2));
+        unsigned bufaddr = syscall_arg(2, 2) & BITS(15);
+        struct stat st;
+        if (::stat(path.c_str(), &st) < 0)
+            sys_err(errno);
+        else {
+            store_stat(machine, bufaddr, st);
+            sys_ok(0);
+        }
+        break;
+    }
+
+    case SYS_fstat: {
+        // int fstat(int fd, struct stat *buf)
+        int fd           = (int)sign_extend41(syscall_arg(1, 2));
+        unsigned bufaddr = syscall_arg(2, 2) & BITS(15);
+        struct stat st;
+        if (::fstat(fd, &st) < 0)
+            sys_err(errno);
+        else {
+            store_stat(machine, bufaddr, st);
+            sys_ok(0);
+        }
+        break;
+    }
+
+    case SYS_seek: {
+        // off_t lseek(int fd, off_t off, int whence): one-word offset.
+        int fd       = (int)sign_extend41(syscall_arg(1, 3));
+        off_t off    = (off_t)sign_extend41(syscall_arg(2, 3));
+        int whence   = (int)sign_extend41(syscall_arg(3, 3));
+        sys_ret((int64_t)::lseek(fd, off, whence));
+        break;
+    }
+
+    case SYS_getpid:
+        sys_ok(::getpid());
+        break;
+
+    case SYS_setuid:
+        sys_ret(::setuid((int)sign_extend41(syscall_arg(1, 1))));
+        break;
+
+    case SYS_getuid:
+        sys_ok(::getuid());
+        break;
+
+    case SYS_setgid:
+        sys_ret(::setgid((int)sign_extend41(syscall_arg(1, 1))));
+        break;
+
+    case SYS_getgid:
+        sys_ok(::getgid());
+        break;
+
+    case SYS_stime:
+        // stime(): cannot set host time from a user process; ignore (apout).
+        sys_ok(0);
+        break;
+
+    case SYS_alarm:
+        // unsigned alarm(unsigned sec)
+        sys_ok(::alarm((unsigned)(syscall_arg(1, 1) & BITS48)));
+        break;
+
+    case SYS_pause:
+        // int pause(void): returns -1/EINTR when a signal arrives.
+        ::pause();
+        sys_err(errno);
+        break;
+
+    case SYS_utime: {
+        // int utime(char *path, struct { time_t actime, modtime; } *times)
+        std::string path = mem_get_string(syscall_arg(1, 2));
+        unsigned tp      = syscall_arg(2, 2) & BITS(15);
+        if (tp == 0)
+            sys_ret(::utime(path.c_str(), nullptr));
+        else {
+            struct utimbuf ub;
+            ub.actime  = sign_extend41(machine.mem_load(tp));
+            ub.modtime = sign_extend41(machine.mem_load(tp + 1));
+            sys_ret(::utime(path.c_str(), &ub));
+        }
+        break;
+    }
+
+    case SYS_access: {
+        // int access(char *path, int mode)
+        std::string path = mem_get_string(syscall_arg(1, 2));
+        int mode         = (int)sign_extend41(syscall_arg(2, 2));
+        sys_ret(::access(path.c_str(), mode));
+        break;
+    }
+
+    case SYS_nice: {
+        // int nice(int incr): -1 is a legal result, so check errno.
+        errno  = 0;
+        int r  = ::nice((int)sign_extend41(syscall_arg(1, 1)));
+        if (r == -1 && errno != 0)
+            sys_err(errno);
+        else
+            sys_ok(r);
+        break;
+    }
+
+    case SYS_ftime: {
+        // ftime(struct timeb *): time, millitm, timezone, dstflag.
+        unsigned bp = core.ACC & BITS(15);
+        machine.mem_store(bp + 0, (Word)::time(nullptr) & BITS41);
+        machine.mem_store(bp + 1, 0);
+        machine.mem_store(bp + 2, 0);
+        machine.mem_store(bp + 3, 0);
+        sys_ok(0);
+        break;
+    }
+
+    case SYS_sync:
+        ::sync();
+        sys_ok(0);
+        break;
+
+    case SYS_kill: {
+        // int kill(int pid, int sig)
+        int pid = (int)sign_extend41(syscall_arg(1, 2));
+        int sig = (int)sign_extend41(syscall_arg(2, 2));
+        sys_ret(::kill(pid, sig));
+        break;
+    }
+
+    case SYS_dup:
+        // int dup(int fd)
+        sys_ret(::dup((int)sign_extend41(syscall_arg(1, 1))));
+        break;
+
+    case SYS_pipe: {
+        // int pipe(int fildes[2])
+        int fd[2];
+        if (::pipe(fd) < 0) {
+            sys_err(errno);
+            break;
+        }
+        unsigned p = core.ACC & BITS(15);
+        machine.mem_store(p, fd[0]);
+        machine.mem_store(p + 1, fd[1]);
+        sys_ok(0);
+        break;
+    }
+
+    case SYS_times: {
+        // clock_t times(struct tms *): 4 one-word fields.
+        unsigned bp = core.ACC & BITS(15);
+        struct tms tb;
+        clock_t r = ::times(&tb);
+        machine.mem_store(bp + 0, (Word)tb.tms_utime & BITS41);
+        machine.mem_store(bp + 1, (Word)tb.tms_stime & BITS41);
+        machine.mem_store(bp + 2, (Word)tb.tms_cutime & BITS41);
+        machine.mem_store(bp + 3, (Word)tb.tms_cstime & BITS41);
+        sys_ret((int64_t)r);
+        break;
+    }
+
+    case SYS_signal: {
+        // signal(int sig, void (*func)()): only SIG_DFL/SIG_IGN are supported.
+        int sig   = (int)sign_extend41(syscall_arg(1, 2));
+        Word func = core.ACC & BITS48;
+        if (sig <= 0 || sig >= NSIG) {
+            sys_err(EINVAL);
+            break;
+        }
+        void (*disp)(int);
+        if (func == 0)
+            disp = SIG_DFL;
+        else if (func == 1)
+            disp = SIG_IGN;
+        else {
+            // Custom guest handlers cannot be run from the host signal context.
+            sys_err(EINVAL);
+            break;
+        }
+        void (*old)(int) = ::signal(sig, disp);
+        if (old == SIG_ERR)
+            sys_err(errno);
+        else
+            sys_ok(old == SIG_IGN ? 1 : 0);
+        break;
+    }
+
+    case SYS_umask:
+        // int umask(int mask)
+        sys_ok(::umask((int)sign_extend41(syscall_arg(1, 1)) & 0777));
+        break;
+
+    case SYS_chroot:
+        // int chroot(char *path)
+        sys_ret(::chroot(mem_get_string(syscall_arg(1, 1)).c_str()));
+        break;
+
+    case SYS_stty:
+    case SYS_gtty: {
+        // Terminal parameters: honoured only as far as "is this a tty".
+        int fd = (int)sign_extend41(syscall_arg(1, 2));
+        if (!isatty(fd))
+            sys_err(ENOTTY);
+        else if (num == SYS_gtty) {
+            unsigned bp = syscall_arg(2, 2) & BITS(15);
+            for (unsigned i = 0; i < 5; i++)
+                machine.mem_store(bp + i, 0);
+            sys_ok(0);
+        } else
+            sys_ok(0);
+        break;
+    }
+
+    case SYS_ioctl:
+        // Accepted as a no-op success, like apout for non-tty-param requests.
+        sys_ok(0);
+        break;
+
+    case SYS_lock:
+        // Ignored; return success (apout).
+        sys_ok(0);
+        break;
+
+    case SYS_mount:
+    case SYS_umount:
+    case SYS_ptrace:
+    case SYS_profil:
+    case SYS_acct:
+    case SYS_phys:
+        // Not meaningful for a user-level simulator.
+        sys_err(EPERM);
+        break;
+
+    default:
+        throw Exception("Unimplemented syscall " + std::to_string(num));
+    }
+}

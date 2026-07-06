@@ -81,6 +81,28 @@ private:
     // Dispatch a Unix v7 system call (see kernel/sysent.c).
     void syscall(unsigned num);
 
+    //
+    // Syscall helpers (syscall.cpp).
+    //
+    // Fetch the k-th argument (1-based) of a call passing `count` arguments:
+    // the last one is in the accumulator, the rest sit below the stack pointer.
+    Word syscall_arg(unsigned k, unsigned count);
+
+    // Read a NUL-terminated string addressed by a char* fat pointer.
+    std::string mem_get_string(Word fatptr);
+
+    // Copy `n` bytes between host memory and a char* fat pointer.
+    void mem_get_bytes(Word fatptr, char *dst, unsigned n);
+    void mem_put_bytes(Word fatptr, const char *src, unsigned n);
+
+    // Finish a syscall: result in the accumulator, errno (0 on success) in M[14].
+    void sys_ok(int64_t result);
+    void sys_err(int host_errno);
+    void sys_ret(int64_t result); // -1 -> sys_err(errno), else sys_ok(result)
+
+    // Process-control syscalls, factored out for readability.
+    void sys_exec(unsigned count, bool with_env);
+
     // Print executive address of extracode (tracing).
     void print_executive_address();
 
