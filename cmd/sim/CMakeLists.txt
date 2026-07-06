@@ -12,7 +12,6 @@ add_library(simulator STATIC
     extracode.cpp
     syscall.cpp
     trace.cpp
-    assembler.cpp
 )
 target_include_directories(simulator PUBLIC ${BESM6_CROSS_INCLUDE} ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(simulator PUBLIC aout)
