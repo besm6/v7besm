@@ -102,7 +102,7 @@ void Machine::run()
                 throw std::runtime_error("Simulation limit exceeded");
 
             if (done) {
-                // Halted by 'стоп' instruction.
+                // Halted by 'stop' instruction.
                 cpu.finish();
                 return;
             }

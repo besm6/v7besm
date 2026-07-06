@@ -17,14 +17,14 @@ class MantissaExponent;
 // Internal state of the processor.
 //
 struct CoreState {
-    unsigned PC;           // program counter СчАС
+    unsigned PC;           // program counter (SchAS)
     Word ACC;              // accumulator
-    Word RMR;              // регистр младших разрядов
+    Word RMR;              // low-order bits register
     unsigned M[16];        // registers modifiers
     unsigned MOD;          // MOD register
-    unsigned RAU;          // ALU mode (режим АУ)
-    bool right_instr_flag; // execute right half of the word (ПрК)
-    bool apply_mod_reg;    // modify address by register M[16] (ПрИК)
+    unsigned RAU;          // ALU mode (rezhim AU)
+    bool right_instr_flag; // execute right half of the word (PrK)
+    bool apply_mod_reg;    // modify address by register M[16] (PrIK)
 
     // Check and modify ALU mode.
     bool is_additive() const { return RAU & RAU_ADD; }
@@ -67,7 +67,7 @@ private:
     // Previous state, for tracing.
     struct CoreState prev{};
 
-    unsigned RK{};    // регистр команд
+    unsigned RK{};    // instruction register
     unsigned Aex{};   // executive address
     int corr_stack{}; // stack correction on exception
 

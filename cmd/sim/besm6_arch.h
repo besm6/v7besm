@@ -12,34 +12,11 @@
 // Page, or zone, has 1024 words.
 //
 static const unsigned PAGE_NWORDS = 1024;
-static const unsigned PAGE_NBYTES = PAGE_NWORDS * 6;
-
-//
-// Sector, or paragraph, has 256 words.
-//
-static const unsigned SECTOR_NWORDS = 256;
 
 //
 // Memory has 32 pages, or 32768 words.
 //
 static const unsigned MEMORY_NWORDS = 32 * PAGE_NWORDS;
-
-//
-// One zone in the disk image takes 8 extra words for OS info.
-//
-static const unsigned DISK_ZONE_NWORDS = 8 + 1024;
-
-//
-// Four first physical zones in the disk image are reserved by OS.
-//
-static const unsigned DISK_ZONE_OFFSET = 4;
-
-//
-// Total 32 disks on units 030-067.
-// Total 32 drums on units 0-027, 070-077.
-//
-static const unsigned NDISKS = 32;
-static const unsigned NDRUMS = 32;
 
 //
 // 48-bit memory word in lower bits of uint64_t value.
@@ -52,23 +29,13 @@ using Word = uint64_t;
 using Words = std::vector<Word>;
 
 //
-// Convert assembly source code into binary word.
-//
-Word besm6_asm(const char *source);
-
-//
 // Get instruction mnemonics by opcode, in range 000..077 or 0200..0370.
 //
 const char *besm6_opname(unsigned opcode);
 
 //
-// Get instruction opcode by mnemonics (UTF-8).
-//
-bool besm6_opcode(const char *opname, unsigned &opcode);
-
-//
 // Find highest bit.
-// Bit 48 returns 1, bit 47-й -> 2 and so on.
+// Bit 48 returns 1, bit 47 -> 2 and so on.
 //
 unsigned besm6_highest_bit(Word val);
 
@@ -93,16 +60,9 @@ unsigned besm6_count_ones(Word word);
 bool is_extracode(unsigned opcode);
 
 //
-// Convert float value between IEEE and BESM-6 formats.
-//
-Word ieee_to_besm6(double d);
-double besm6_to_ieee(Word word);
-
-//
 // Print BESM-6 word.
 //
 void besm6_print_word_octal(std::ostream &out, Word value);
-void besm6_print_word_bytes(std::ostream &out, Word value);
 
 //
 // Print BESM-6 instruction.
@@ -116,44 +76,31 @@ void besm6_print_instruction_mnemonics(std::ostream &out, unsigned cmd);
 std::string to_octal(unsigned val);
 
 //
-// Elementary functions.
-//
-Word besm6_sqrt(Word input);
-Word besm6_sin(Word input);
-Word besm6_cos(Word input);
-Word besm6_arctan(Word input);
-Word besm6_arcsin(Word input);
-Word besm6_log(Word input);
-Word besm6_exp(Word input);
-Word besm6_floor(Word input);
-
-//
 // Bits of memory word, from right to left, starting from 1.
 //
-#define ONEBIT(n)      (1ULL << (n - 1))             // один бит, от 1 до 64
-#define BITS(n)        ((uint64_t)~0ULL >> (64 - n)) // маска битов n..1
-#define ADDR(x)        ((x) & BITS(15))              // адрес слова
-#define FIELD(x, n, w) (((x) >> (n - 1)) & BITS(w))  // поле шириной w бит, начиная с бита n
+#define ONEBIT(n) (1ULL << (n - 1))             // single bit, from 1 to 64
+#define BITS(n)   ((uint64_t)~0ULL >> (64 - n)) // mask of bits n..1
+#define ADDR(x)   ((x) & BITS(15))              // word address
 
-#define BIT40  0'0010'0000'0000'0000LL // 40-й бит - старший разряд мантиссы
-#define BIT41  0'0020'0000'0000'0000LL // 41-й бит - знак
-#define BIT42  0'0040'0000'0000'0000LL // 42-й бит - дубль-знак в мантиссе
-#define BIT48  0'4000'0000'0000'0000LL // 48-й бит - знак порядка
-#define BITS40 0'0017'7777'7777'7777LL // биты 40..1 - мантисса
-#define BITS41 0'0037'7777'7777'7777LL // биты 41..1 - мантисса и знак
-#define BITS42 0'0077'7777'7777'7777LL // биты 42..1 - мантисса и оба знака
-#define BITS48 0'7777'7777'7777'7777LL // биты 48..1
+#define BIT40  0'0010'0000'0000'0000LL // bit 40 - most significant bit of mantissa
+#define BIT41  0'0020'0000'0000'0000LL // bit 41 - sign
+#define BIT42  0'0040'0000'0000'0000LL // bit 42 - duplicate sign in mantissa
+#define BIT48  0'4000'0000'0000'0000LL // bit 48 - exponent sign
+#define BITS40 0'0017'7777'7777'7777LL // bits 40..1 - mantissa
+#define BITS41 0'0037'7777'7777'7777LL // bits 41..1 - mantissa and sign
+#define BITS42 0'0077'7777'7777'7777LL // bits 42..1 - mantissa and both signs
+#define BITS48 0'7777'7777'7777'7777LL // bits 48..1
 
 //
 // Bits of ALU mode.
 //
 enum {
-    RAU_NORM_DISABLE  = 001, // блокировка нормализации
-    RAU_ROUND_DISABLE = 002, // блокировка округления
-    RAU_LOG           = 004, // признак логической группы
-    RAU_MULT          = 010, // признак группы умножения
-    RAU_ADD           = 020, // признак группы сложения
-    RAU_OVF_DISABLE   = 040, // блокировка переполнения
+    RAU_NORM_DISABLE  = 001, // disable normalization
+    RAU_ROUND_DISABLE = 002, // disable rounding
+    RAU_LOG           = 004, // logical group flag
+    RAU_MULT          = 010, // multiply group flag
+    RAU_ADD           = 020, // add group flag
+    RAU_OVF_DISABLE   = 040, // disable overflow
     RAU_MODE          = RAU_LOG | RAU_MULT | RAU_ADD,
 };
 
@@ -188,8 +135,8 @@ public:
     bool is_negative() { return (mantissa & BIT42) != 0; }
 
     //
-    // Вернуть true если число ненормализованное.
-    // У нормализованного числа биты 42 и 41 совпадают.
+    // Return true if the number is not normalized.
+    // In a normalized number bits 42 and 41 are equal.
     //
     bool is_denormal() { return ((mantissa >> 40) ^ (mantissa >> 41)) & 1; }
 

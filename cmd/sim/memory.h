@@ -30,10 +30,6 @@ public:
     void read_words(Word output[], unsigned nwords, unsigned addr);
     Word *get_ptr(unsigned addr) { return &mem[addr]; }
 
-    // Dump disk data for debug.
-    void dump(unsigned serial_num, unsigned disk_unit, unsigned zone, unsigned sector,
-              unsigned addr, unsigned nwords);
-
     // Cannot copy the Memory object.
     Memory(const Memory &)            = delete;
     Memory &operator=(const Memory &) = delete;

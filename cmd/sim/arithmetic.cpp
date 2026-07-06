@@ -5,9 +5,9 @@
 #include "processor.h"
 
 //
-// Сложение и все варианты вычитаний.
-// Исходные значения: регистр ACC и аргумент 'val'.
-// Результат помещается в регистр ACC и 40-1 разряды RMR.
+// Addition and all variants of subtraction.
+// Inputs: the ACC register and the 'val' argument.
+// The result goes into the ACC register and bits 40..1 of RMR.
 //
 void Processor::arith_add(Word val, bool negate_acc, bool negate_val)
 {
@@ -16,17 +16,17 @@ void Processor::arith_add(Word val, bool negate_acc, bool negate_val)
 
     if (!negate_acc) {
         if (!negate_val) {
-            // Сложение
+            // Addition
         } else {
-            // Вычитание
+            // Subtraction
             word.negate();
         }
     } else {
         if (!negate_val) {
-            // Обратное вычитание
+            // Reverse subtraction
             acc.negate();
         } else {
-            // Вычитание модулей
+            // Subtraction of magnitudes
             if (acc.is_negative())
                 acc.negate();
             if (!word.is_negative())
@@ -75,8 +75,8 @@ void Processor::arith_add(Word val, bool negate_acc, bool negate_val)
     acc.exponent = a2.exponent;
     acc.mantissa = a1.mantissa + a2.mantissa;
 
-    // Если требуется нормализация вправо, биты 42:41
-    // принимают значение 01 или 10.
+    // If normalization to the right is required, bits 42:41
+    // take the value 01 or 10.
     if (acc.is_denormal()) {
         round_flag = round_flag || (acc.mantissa & 1);
         mr = (mr >> 1) | ((acc.mantissa & 1) << 39);
@@ -86,9 +86,9 @@ void Processor::arith_add(Word val, bool negate_acc, bool negate_val)
 }
 
 //
-// Нормализация и округление.
-// Результат помещается в регистры ACC и 40-1 разряды RMR.
-// 48-41 разряды RMR сохраняются.
+// Normalization and rounding.
+// The result goes into the ACC register and bits 40..1 of RMR.
+// Bits 48..41 of RMR are preserved.
 //
 void Processor::arith_normalize_and_round(MantissaExponent acc, Word mr, bool round_flag)
 {
@@ -172,7 +172,7 @@ chk_rnd:
     core.ACC = (Word)(acc.exponent & BITS(7)) << 41 | (acc.mantissa & BITS41);
     core.RMR = mr & BITS40;
 
-    // При переполнении мантисса и младшие разряды порядка верны
+    // On overflow the mantissa and the low bits of the exponent are correct
     if (acc.exponent & 0x80) {
         if (!(core.RAU & RAU_OVF_DISABLE)) {
             throw Exception(MSG_ARITH_OVERFLOW);
@@ -181,8 +181,8 @@ chk_rnd:
 }
 
 //
-// Изменение порядка числа на сумматоре ACC.
-// Результат помещается в регистр ACC, RMR гасится.
+// Change the exponent of the number in the ACC accumulator.
+// The result goes into the ACC register; RMR is cleared.
 //
 void Processor::arith_add_exponent(int val)
 {
@@ -194,8 +194,8 @@ void Processor::arith_add_exponent(int val)
 }
 
 //
-// Изменение знака числа на сумматоре ACC.
-// Результат помещается в регистр ACC, RMR гасится.
+// Change the sign of the number in the ACC accumulator.
+// The result goes into the ACC register; RMR is cleared.
 //
 void Processor::arith_change_sign(bool negate_acc)
 {
@@ -212,9 +212,9 @@ void Processor::arith_change_sign(bool negate_acc)
 }
 
 //
-// Умножение.
-// Исходные значения: регистр ACC и аргумент 'val'.
-// Результат помещается в регистр ACC и 40-1 разряды RMR.
+// Multiplication.
+// Inputs: the ACC register and the 'val' argument.
+// The result goes into the ACC register and bits 40..1 of RMR.
 //
 void Processor::arith_multiply(Word val)
 {
@@ -325,14 +325,14 @@ static inline MantissaExponent nrdiv(MantissaExponent n, MantissaExponent d)
 }
 
 //
-// Деление.
-// Исходные значения: регистр ACC и аргумент 'val'.
-// Результат помещается в регистр ACC, содержимое RMR не определено.
+// Division.
+// Inputs: the ACC register and the 'val' argument.
+// The result goes into the ACC register; the contents of RMR are undefined.
 //
 void Processor::arith_divide(Word val)
 {
     if (((val ^ (val << 1)) & BIT41) == 0) {
-        // Ненормализованный делитель: деление на ноль.
+        // Denormalized divisor: division by zero.
         throw Exception(MSG_ARITH_DIVZERO);
     }
 
@@ -344,14 +344,14 @@ void Processor::arith_divide(Word val)
 }
 
 //
-// Сдвиг сумматора ACC с выдвижением в регистр младших разрядов RMR.
-// Величина сдвига находится в диапазоне -64..63.
+// Shift the ACC accumulator, shifting out into the low-order register RMR.
+// The shift amount is in the range -64..63.
 //
 void Processor::arith_shift(int nbits)
 {
     core.RMR = 0;
     if (nbits > 0) {
-        // Сдвиг вправо.
+        // Shift right.
         if (nbits < 48) {
             core.RMR = (core.ACC << (48 - nbits)) & BITS48;
             core.ACC >>= nbits;
@@ -360,7 +360,7 @@ void Processor::arith_shift(int nbits)
             core.ACC = 0;
         }
     } else if (nbits < 0) {
-        // Сдвиг влево.
+        // Shift left.
         nbits = -nbits;
         if (nbits < 48) {
             core.RMR = core.ACC >> (48 - nbits);

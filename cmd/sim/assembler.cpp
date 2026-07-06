@@ -25,8 +25,8 @@ static const char *opname_long_madlen[16] = {
 };
 
 //
-// Выдача мнемоники по коду инструкции.
-// Код должен быть в диапазоне 000..077 или 0200..0370.
+// Return the mnemonic for an instruction opcode.
+// The opcode must be in range 000..077 or 0200..0370.
 //
 const char *besm6_opname(unsigned opcode)
 {

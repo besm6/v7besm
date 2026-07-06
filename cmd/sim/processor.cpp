@@ -134,7 +134,7 @@ bool Processor::step()
         break;
 
     case 002: // рег, mod
-        throw Exception("Illegal instruction 002 рег/mod");
+        throw Exception("Illegal instruction 002 reg/mod");
 
     case 003: // счм, xts
         machine.mem_store(core.M[017], core.ACC);
@@ -315,12 +315,12 @@ bool Processor::step()
         if (core.ACC) {
             int n = besm6_highest_bit(core.ACC);
 
-            // "Остаток" сумматора, исключая бит,
-            // номер которого определен, помещается в РМР,
-            // начиная со старшего бита РМР.
+            // The "remainder" of the accumulator, excluding the bit
+            // whose number is determined, is placed into RMR,
+            // starting from the most significant bit of RMR.
             arith_shift(48 - n);
 
-            // Циклическое сложение номера со словом по Аисп.
+            // Cyclic addition of the number with the word at Aex.
             core.ACC = n + machine.mem_load(Aex);
             if (core.ACC & ONEBIT(49))
                 core.ACC = (core.ACC + 1) & BITS48;
@@ -391,11 +391,11 @@ bool Processor::step()
         }
         break;
 
-    case 032: // зпп, запись полноразрядная
-        throw Exception("Illegal instruction 032 зпп");
+    case 032: // illegal in user mode
+        throw Exception("Illegal instruction 032 zpp");
 
-    case 033: // счп, считывание полноразрядное
-        throw Exception("Illegal instruction 033 счп");
+    case 033: // illegal in user mode
+        throw Exception("Illegal instruction 033 schp");
 
     case 034: // слпа, e+n
         Aex = ADDR(addr + core.M[reg]);
@@ -470,10 +470,10 @@ bool Processor::step()
         core.M[0]         = 0;
         break;
 
-    case 046: // cоп, специальное обращение к памяти
-        throw Exception("Illegal instruction 046 cоп");
+    case 046: // illegal in user mode
+        throw Exception("Illegal instruction 046");
 
-    case 047: // э47, x47
+    case 047: // illegal in user mode
         throw Exception("Illegal instruction 047");
 
     case 050:
@@ -594,7 +594,7 @@ bool Processor::step()
         break;
 
     case 0320: // выпр, iret
-        throw Exception("Illegal instruction 32 выпр/iret");
+        throw Exception("Illegal instruction 32 vypr/iret");
 
     case 0330: // стоп, stop
         // We are done.
@@ -618,7 +618,7 @@ bool Processor::step()
         break;
 
     case 0360: // э36, *36
-        // Как ПИО, но с выталкиванием БРЗ.
+        // Like PIO (vzm), but pops the BRZ register.
         goto branch_zero;
 
     case 0370: // цикл, vlm
@@ -636,7 +636,7 @@ bool Processor::step()
     }
 
     if (next_mod != 0) {
-        // Модификация адреса следующей команды.
+        // Modify the address of the next instruction.
         core.MOD           = next_mod;
         core.apply_mod_reg = true;
     } else {
