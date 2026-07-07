@@ -14,7 +14,9 @@
 // in its own process anyway.
 //
 #include <gtest/gtest.h>
+#include <sys/stat.h>
 
+#include <cerrno>
 #include <cstdlib>
 #include <fstream>
 #include <string>
@@ -27,6 +29,10 @@ extern "C" {
 
 #ifndef B6AS_PATH
 #error "B6AS_PATH (path to the b6as binary) must be defined by the build"
+#endif
+
+#ifndef B6AR_PATH
+#error "B6AR_PATH (path to the b6ar binary) must be defined by the build"
 #endif
 
 // High 24-bit half-word at word index `w` (a BESM-6 word is two big-endian
@@ -111,4 +117,104 @@ TEST(Link, AssembleAndLink)
     // (03000000) MUST survive relocation -- this is the LD-2 check.
     EXPECT_EQ(word_high(img, 8), 0L);          // atx 0
     EXPECT_EQ(word_low(img, 8), 03000000L | 0100L); // uj foo -> 0100, opcode preserved
+}
+
+// Assemble a tiny object, archive it as libfoo.a inside a sub-directory, then
+// link "-u foo -L <subdir> -lfoo": the -L search path must locate the archive
+// (which lives nowhere on the default, empty path) and pull in the member that
+// defines foo.
+TEST(Link, LibrarySearchPath)
+{
+    std::string base   = current_test_name();
+    std::string sfile  = base + ".s";
+    std::string ofile  = base + ".o";
+    std::string image  = base + ".out";
+    std::string libdir = base + ".libdir";
+    std::string archive = libdir + "/libfoo.a";
+
+    {
+        std::ofstream src(sfile, std::ios::trunc);
+        src << "        .globl foo\n"
+               "foo:    atx 0\n"
+               "        uj foo\n";
+    }
+    std::string ascmd = std::string(B6AS_PATH) + " " + sfile + " -o " + ofile;
+    ASSERT_EQ(std::system(ascmd.c_str()), 0) << "assembler failed: " << ascmd;
+
+    // Put the archive in its own directory, reachable only via -L.
+    ASSERT_EQ(mkdir(libdir.c_str(), 0777) == 0 || errno == EEXIST, true);
+    std::string arcmd = std::string(B6AR_PATH) + " r " + archive + " " + ofile;
+    ASSERT_EQ(std::system(arcmd.c_str()), 0) << "archiver failed: " << arcmd;
+
+    // Link: -u foo forces the reference, -L points at the archive's directory.
+    char a0[] = "ld";
+    char a1[] = "-u";
+    char a2[] = "foo";
+    char a3[] = "-L";
+    std::vector<char> a4(libdir.begin(), libdir.end());
+    a4.push_back('\0');
+    char a5[] = "-lfoo";
+    char a6[] = "-o";
+    std::vector<char> a7(image.begin(), image.end());
+    a7.push_back('\0');
+    char *argv[] = { a0, a1, a2, a3, a4.data(), a5, a6, a7.data(), nullptr };
+    EXPECT_EQ(ld_link(8, argv), 0);
+
+    auto img = read_file(image);
+    ASSERT_GE(img.size(), (size_t)9 * 6); // header + the pulled-in member's text
+    EXPECT_EQ(word_low(img, 2), 6L);      // a_text: foo's one word was linked in
+}
+
+// Same as LibrarySearchPath, but the directory is glued to the flag ("-L<dir>")
+// instead of passed as a separate argument.  This exercises the glued-form
+// parsing in both pass 1 and pass 2.
+TEST(Link, LibrarySearchPathGlued)
+{
+    std::string base   = current_test_name();
+    std::string sfile  = base + ".s";
+    std::string ofile  = base + ".o";
+    std::string image  = base + ".out";
+    std::string libdir = base + ".libdir";
+    std::string archive = libdir + "/libfoo.a";
+
+    {
+        std::ofstream src(sfile, std::ios::trunc);
+        src << "        .globl foo\n"
+               "foo:    atx 0\n"
+               "        uj foo\n";
+    }
+    std::string ascmd = std::string(B6AS_PATH) + " " + sfile + " -o " + ofile;
+    ASSERT_EQ(std::system(ascmd.c_str()), 0) << "assembler failed: " << ascmd;
+
+    ASSERT_EQ(mkdir(libdir.c_str(), 0777) == 0 || errno == EEXIST, true);
+    std::string arcmd = std::string(B6AR_PATH) + " r " + archive + " " + ofile;
+    ASSERT_EQ(std::system(arcmd.c_str()), 0) << "archiver failed: " << arcmd;
+
+    // Link: the directory is glued to -L (e.g. "-LLink.....libdir").
+    char a0[] = "ld";
+    char a1[] = "-u";
+    char a2[] = "foo";
+    std::string ldir = "-L" + libdir;
+    std::vector<char> a3(ldir.begin(), ldir.end());
+    a3.push_back('\0');
+    char a4[] = "-lfoo";
+    char a5[] = "-o";
+    std::vector<char> a6(image.begin(), image.end());
+    a6.push_back('\0');
+    char *argv[] = { a0, a1, a2, a3.data(), a4, a5, a6.data(), nullptr };
+    EXPECT_EQ(ld_link(7, argv), 0);
+
+    auto img = read_file(image);
+    ASSERT_GE(img.size(), (size_t)9 * 6);
+    EXPECT_EQ(word_low(img, 2), 6L); // a_text: foo's one word was linked in
+}
+
+// With no -L, the search path is empty, so "-lfoo" cannot be found and the
+// linker aborts with "cannot open" (fatal error -> exit code 4).
+TEST(LinkDeath, EmptyLibrarySearchPath)
+{
+    char a0[] = "ld";
+    char a1[] = "-lfoo";
+    char *argv[] = { a0, a1, nullptr };
+    EXPECT_EXIT(ld_link(2, argv), ::testing::ExitedWithCode(4), "");
 }

@@ -30,7 +30,7 @@ int main(int argc, char **argv)
 {
     if (argc == 1) {
         printf("Usage:\n");
-        printf("    %s [-xXsSrndt] [-T addr] [-D num] [-lname] [-u name] [-e name] [-o file] file...\n",
+        printf("    %s [-xXsSrndt] [-T addr] [-D num] [-L dir] [-lname] [-u name] [-e name] [-o file] file...\n",
                argv[0]);
         printf("Options:\n");
         printf("    -o file     Set output file name, default a.out\n");
@@ -38,6 +38,7 @@ int main(int argc, char **argv)
         printf("    -u name     Enter name as an undefined external (force library load)\n");
         printf("    -D num      Reserve a data segment of at least num words\n");
         printf("    -T addr     Set base load address (octal/hex accepted)\n");
+        printf("    -L dir      Add dir to the library search path (for -l; -Ldir also works)\n");
         printf("    -lname      Link library libname.a (bare -l means -la)\n");
         printf("    -x          Discard all local symbols\n");
         printf("    -X          Discard local symbols starting with '.'\n");

@@ -25,6 +25,7 @@
 #define NCONST   512  // capacity of the merged constant pool
 #define LLSIZE   256  // capacity of the library / file-offset list
 #define RANTABSZ 1000 // capacity of the ranlib table of contents
+#define NLIBDIR  32   // capacity of the -L library search path
 
 // Round x up to the next multiple of y.
 #define ALIGN(x, y) ((x) + (y) - 1 - ((x) + (y) - 1) % (y))
@@ -81,6 +82,9 @@ struct linker {
     long liblist[LLSIZE]; // file offsets of the archive members we decided to load
     long *libp;           // current position within liblist
 
+    char *libdir[NLIBDIR]; // -L: directories to search for -lNAME libraries
+    int nlibdir;           // number of entries used in libdir[]
+
     // internal (linker-defined) symbols
     struct nlist *p_econst; // _econst: first address past the const segment
     struct nlist *p_etext;  // _etext:  first address past the text segment
@@ -120,7 +124,6 @@ struct linker {
     int errlev;       // highest error severity seen so far (the eventual exit code)
     int delarg;       // exit code; nonzero means "leave a.out alone / failed"
     char tfname[14];  // template for the temp files: "/tmp/ldaXXXXX"
-    const char *libname; // scratch buffer for building a "-l" library path
 
     // segment base addresses, fixed by assign_addresses() after pass 1
     long corigin;   // base of the const segment

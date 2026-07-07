@@ -229,6 +229,7 @@ void pass1(int argc, char **argv)
     int c, i;
     long num;
     char *ap, **p;
+    char *dir;
     char save;
 
     p       = argv + 1;
@@ -283,6 +284,22 @@ void pass1(int argc, char **argv)
             case 'T':
                 ld.basaddr = strtoul(ap + i + 1, 0, 0);
                 break;
+
+                // add a directory to the library search path; the directory may
+                // be glued to the flag ("-Ldir") or given as the next argument
+                // ("-L dir").
+            case 'L':
+                if (ap[i + 1] != '\0') {
+                    dir = ap + i + 1;
+                } else {
+                    if (++c >= argc)
+                        error(2, "-L: argument missed");
+                    dir = *p++;
+                }
+                if (ld.nlibdir >= NLIBDIR)
+                    error(2, "-L: too many library directories");
+                ld.libdir[ld.nlibdir++] = dir;
+                break; // the rest of a glued token is the directory, not flags
 
                 // library
             case 'l':

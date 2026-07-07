@@ -100,7 +100,8 @@ while `-T` and `-l` take the rest of the **same** argument.
 | `-e name` | next arg | *Entry*: like `-u`, and additionally make `name` the program entry point (`a_entry`). The symbol must resolve into the text segment, or it is an error. |
 | `-D num` | next arg | Reserve a data segment of at least `num` words. Must not be smaller than the data already accumulated. Pass 2 emits the extra words as zeros. |
 | `-T addr` | rest of arg | Set the base load address (`ld.basaddr`, default `BADDR`). Parsed with `strtoul`, so `0`-prefixed octal and `0x` hex are accepted. |
-| `-l name` | rest of arg | Link the library `libname.a`. Expanded to `/usr/local/lib/microbesm/libname.a`, falling back to `libname.a` in the current search if that path can't be opened. Bare `-l` means `-la`. See [§7](#7-archives-and-libraries). |
+| `-L dir` | next arg or rest of arg | Append `dir` to the library search path used by `-l`. Accepts both `-L dir` and the glued `-Ldir`. May be given more than once; directories are searched in the order listed. The search path is empty by default. See [§7.3](#73-library-search). |
+| `-l name` | rest of arg | Link the library `libname.a`, looked up in the `-L` search path. Bare `-l` means `-la`. See [§7](#7-archives-and-libraries). |
 | `-x` | — | Discard all local (non-global) symbols from the output. |
 | `-X` | — | Discard local symbols whose name begins with `.` (the `LOCSYM` character — compiler temporaries). |
 | `-S` | — | Strip absolute and debug symbols (everything that is not a segment-relative local or a global). |
@@ -432,9 +433,12 @@ only if it is not older than the archive itself (an `st_mtime` check); a stale o
 
 ### 7.3 Library search
 
-`-lname` is expanded in `open_input()` to `/usr/local/lib/microbesm/libname.a`. If that path
-can't be opened, the leading directory is dropped and `libname.a` is tried in the current
-location. A bare `-l` is treated as `-la`.
+`-lname` is expanded in `open_input()` to `libname.a` and looked up in each `-L` directory in
+turn: for directory `dir`, the path `dir/libname.a` is tried, and the first one that opens
+wins. The search path is **empty by default** — supply one or more `-L dir` options (either
+`-L dir` or the glued `-Ldir`) to point the linker at a library directory. If the path is
+empty or nothing matched, `libname.a` is
+tried in the current directory as a last resort. A bare `-l` is treated as `-la`.
 
 ---
 

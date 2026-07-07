@@ -14,8 +14,9 @@
 // Open an input argument `cp` and report what kind of thing it is.  Opens two
 // stdio handles on it: ld.text for the segment/symbol data and ld.reloc for the
 // relocation records (the two passes read from different positions, so each gets
-// its own handle).  A "-lfoo" argument is expanded into a library path like
-// /usr/local/share/besm6/lib/libfoo.a using the ld.libname scratch buffer.
+// its own handle).  A "-lfoo" argument is expanded to "libfoo.a" and looked up
+// in each -L search directory in turn (ld.libdir), falling back to "libfoo.a" in
+// the current directory if the search path is empty or nothing matched.
 //
 // Return value classifies the file so the caller knows how to read it:
 //      0 - a plain object file
@@ -32,18 +33,40 @@ int open_input(char *cp)
     ld.filname       = cp;
     ld.filname_alloc = 0;
     if (cp[0] == '-' && cp[1] == 'l') {
-        if (cp[2] == '\0')
-            cp = "-la";
-        ld.filname = malloc(strlen(ld.libname) + strlen(cp) + 1);
-        if (!ld.filname)
-            error(2, "out of memory");
-        ld.filname_alloc = ld.filname; // owning base, kept even if filname is advanced below
-        strcpy(ld.filname, ld.libname);
-        strcat(ld.filname, cp + 2);
-        strcat(ld.filname, ".a");
-        ld.text = fopen(ld.filname, "r");
-        if (!ld.text)
-            ld.filname += 4; // try the name without the "/usr.../" prefix
+        // Bare "-l" means "-la"; otherwise the name is whatever follows "-l".
+        const char *name = (cp[2] == '\0') ? "a" : cp + 2;
+        int i;
+
+        // Search each -L directory in turn for "<dir>/lib<name>.a".
+        for (i = 0; !ld.text && i < ld.nlibdir; i++) {
+            const char *dir = ld.libdir[i];
+            size_t sz       = strlen(dir) + strlen(name) + sizeof("/lib.a");
+            char *p         = malloc(sz);
+            if (!p)
+                error(2, "out of memory");
+            // cppcheck-suppress nullPointerOutOfMemory
+            snprintf(p, sz, "%s/lib%s.a", dir, name);
+            ld.text = fopen(p, "r");
+            if (ld.text) {
+                ld.filname       = p;
+                ld.filname_alloc = p;
+            } else {
+                free(p);
+            }
+        }
+
+        // Nothing matched (or the search path is empty): try "lib<name>.a" in
+        // the current directory.  The open below reports failure if it is absent.
+        if (!ld.text) {
+            size_t sz = strlen(name) + sizeof("lib.a");
+            char *p   = malloc(sz);
+            if (!p)
+                error(2, "out of memory");
+            // cppcheck-suppress nullPointerOutOfMemory
+            snprintf(p, sz, "lib%s.a", name);
+            ld.filname       = p;
+            ld.filname_alloc = p;
+        }
     }
     if (!ld.text && !(ld.text = fopen(ld.filname, "r")))
         error(2, "cannot open");

@@ -204,6 +204,15 @@ void pass2(int argc, char **argv)
             default:
                 continue;
 
+            case 'L':
+                // "-L dir" takes the next argv entry; "-Ldir" carries the
+                // directory in this token (nothing extra to step over).
+                if (ap[i + 1] == '\0') {
+                    ++c;
+                    ++p;
+                }
+                break; // stop scanning this token (its tail is the dir, not flags)
+
             case 'l':
                 ap[--i] = '-';
                 relocate_file(&ap[i]);

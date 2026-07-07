@@ -62,6 +62,7 @@
 //      -D size         set data size
 //      -Taddress       base address of loading
 //      -llibname       library
+//      -L dir          add dir to the library search path (for -l)
 //      -x              discard local symbols
 //      -X              discard locals starting with LOCSYM
 //      -S              discard all except locals and globals
@@ -88,7 +89,6 @@ struct linker ld = {
     .ofilename = "l.out",
     .delarg    = 4,
     .tfname    = "/tmp/ldaXXXXX",
-    .libname   = "/usr/local/share/besm6/lib/lib",
 };
 
 //
