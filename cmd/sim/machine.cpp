@@ -180,6 +180,8 @@ void Machine::mem_store(unsigned addr, Word val)
     addr &= BITS(15);
     if (addr == 0)
         return;
+    if (addr == STACK_LIMIT)
+        throw Processor::Exception("stack protection violation");
 
     memory.store(addr, val);
     trace_memory_write(addr, val);
@@ -193,6 +195,8 @@ Word Machine::mem_load(unsigned addr)
     addr &= BITS(15);
     if (addr == 0)
         return 0;
+    if (addr == STACK_LIMIT)
+        throw Processor::Exception("stack protection violation");
 
     Word val = memory.load(addr);
     trace_memory_read(addr, val);
@@ -248,7 +252,8 @@ void Machine::load_program(const std::string &filename)
     }
     const unsigned borigin = dorigin + ndata;
 
-    if (borigin + nbss > MEMORY_NWORDS) {
+    if (borigin + nbss > STACK_BASE) {
+        // The image (and the heap that grows above it) must stay below the stack.
         fclose(file);
         throw std::runtime_error("Program does not fit in memory: " + filename);
     }
@@ -273,9 +278,10 @@ void Machine::load_program(const std::string &filename)
     // Entry point is an absolute word address.
     cpu.set_pc(hdr.a_entry);
 
-    // Seed the stack pointer (r15) just past bss.  A real crt0 would set this;
-    // the stack grows towards higher addresses (see doc/Besm6_Calling_Conventions.md).
-    cpu.set_m(017, borigin + nbss);
+    // Seed the stack pointer (r15) at the base of the reserved stack region.  A real
+    // crt0 would set this; the stack grows towards higher addresses, up to the guard
+    // word STACK_LIMIT (see doc/Besm6_Calling_Conventions.md).
+    cpu.set_m(017, STACK_BASE);
 
     // The program break starts just past bss; break()/sbrk() grow it upwards.
     program_break = borigin + nbss;

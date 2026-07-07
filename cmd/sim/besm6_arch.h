@@ -19,6 +19,12 @@ static const unsigned PAGE_NWORDS = 1024;
 static const unsigned MEMORY_NWORDS = 32 * PAGE_NWORDS;
 
 //
+// Stack occupies the top of memory: r15 is seeded here and grows upward.
+//
+static const unsigned STACK_BASE  = 070000; // stack pointer seed; heap must stay below
+static const unsigned STACK_LIMIT = 077777; // guard word at top of memory
+
+//
 // 48-bit memory word in lower bits of uint64_t value.
 //
 using Word = uint64_t;

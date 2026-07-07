@@ -20,6 +20,11 @@
 #include "machine.h"
 #include "memory.h"
 
+// The a.out I/O helpers are plain C; pull them in with C linkage (as machine.cpp does).
+extern "C" {
+#include "besm6/b.out.h"
+}
+
 //
 // Program entry point: BADDR = HDRSZ / W = 48 / 6 = 8.
 //
@@ -458,6 +463,67 @@ TEST(Cpu, IllegalInstructionTerminates)
 
     // Opcode 002 (рег/mod) is illegal in user mode.
     memory.store(ENTRY, word(insn(0, 002, 0), 0));
+    machine.cpu.set_pc(ENTRY);
+
+    EXPECT_THROW(machine.run(), std::runtime_error);
+}
+
+//
+// After loading an executable the stack pointer r15 (M[017]) is seeded at the
+// base of the reserved stack region, disjoint from the heap.
+//
+TEST(Cpu, StackSeededAtBase)
+{
+    const char *path = "test_stackseed.bout";
+
+    // A minimal FMAGIC executable: one text word, no const/data/bss.
+    struct exec hdr = {};
+    hdr.a_magic     = FMAGIC;
+    hdr.a_text      = 6; // one 6-byte word
+    hdr.a_entry     = HDRSZ / 6;
+    FILE *f         = fopen(path, "wb");
+    ASSERT_NE(f, nullptr);
+    fputhdr(&hdr, f);
+    fputw(0, f); // the single text word (never executed here)
+    fclose(f);
+
+    Memory memory;
+    Machine machine{ memory };
+    machine.load_program(path);
+    EXPECT_EQ(machine.cpu.get_m(017), STACK_BASE);
+
+    std::remove(path);
+}
+
+//
+// A store to the guard word 077777 through the stack register traps with a
+// "stack protection violation" (surfaced as std::runtime_error).
+//
+TEST(Cpu, StackGuardTrapsStore)
+{
+    Memory memory;
+    Machine machine{ memory };
+
+    // atx (000) with reg 017, addr 0: store ACC at M[017], then post-increment.
+    memory.store(ENTRY, word(insn(017, 000, 0), stop_insn()));
+    machine.cpu.set_m(017, STACK_LIMIT);
+    machine.cpu.set_pc(ENTRY);
+
+    EXPECT_THROW(machine.run(), std::runtime_error);
+}
+
+//
+// A load from the guard word 077777 through the stack register traps too.
+//
+TEST(Cpu, StackGuardTrapsLoad)
+{
+    Memory memory;
+    Machine machine{ memory };
+
+    // xta (010) with reg 017, addr 1: Aex = 1 + M[017] = 077777 (nonzero addr
+    // avoids the addr==0 stack-pop that would step off the guard word).
+    memory.store(ENTRY, word(insn(017, 010, 1), stop_insn()));
+    machine.cpu.set_m(017, STACK_LIMIT - 1);
     machine.cpu.set_pc(ENTRY);
 
     EXPECT_THROW(machine.run(), std::runtime_error);
