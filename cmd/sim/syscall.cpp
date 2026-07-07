@@ -522,9 +522,11 @@ void Processor::syscall(unsigned num)
     }
 
     case SYS_break: {
-        // int break(char *addr): set the program break (word address).  The
-        // heap may not grow into the stack, so fail if it reaches M[017].
+        // int break(char *addr): set the program break (word address), rounded up
+        // to a page boundary.  The heap may not grow into the stack, so fail if the
+        // page-aligned break reaches M[017].
         unsigned addr = (unsigned)(syscall_arg(1, 1) & BITS(15));
+        addr          = (addr + PAGE_NWORDS - 1) / PAGE_NWORDS * PAGE_NWORDS;
         if (addr >= core.M[017])
             sys_err(ENOMEM);
         else {

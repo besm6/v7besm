@@ -283,8 +283,9 @@ void Machine::load_program(const std::string &filename)
     // word STACK_LIMIT (see doc/Besm6_Calling_Conventions.md).
     cpu.set_m(017, STACK_BASE);
 
-    // The program break starts just past bss; break()/sbrk() grow it upwards.
-    program_break = borigin + nbss;
+    // The program break starts on the first page boundary past bss; break()/sbrk()
+    // grow it upwards.
+    program_break = (borigin + nbss + PAGE_NWORDS - 1) / PAGE_NWORDS * PAGE_NWORDS;
 }
 
 //

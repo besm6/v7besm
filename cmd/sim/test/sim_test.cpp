@@ -372,19 +372,31 @@ TEST(Syscall, Stat)
 }
 
 //
-// break() moves the program break and rejects growth into the stack.
+// break() rounds the requested break up to a page boundary and rejects growth
+// into the stack.
 //
 TEST(Syscall, Break)
 {
     Memory memory;
     Machine machine{ memory };
 
-    // run_syscall leaves the stack pointer at STACK for a 1-arg call.
-    run_syscall(machine, SYS_break, {}, 0x100); // below the stack -> ok
-    EXPECT_EQ(machine.cpu.get_acc(), 0u);
-    EXPECT_EQ(machine.get_program_break(), 0x100u);
+    // break() takes its single argument in the accumulator.  Seed the stack
+    // pointer at the reserved base so page-aligned breaks below it are accepted.
+    auto run_break = [&](Word addr) {
+        machine.cpu.set_m(017, STACK_BASE);
+        machine.cpu.set_acc(addr);
+        machine.memory.store(ENTRY, word(syscall_insn(SYS_break), stop_insn()));
+        machine.cpu.set_pc(ENTRY);
+        machine.run();
+    };
 
-    run_syscall(machine, SYS_break, {}, 0x300); // above the stack -> ENOMEM
+    // An unaligned break below the stack is rounded up to the next page.
+    run_break(0x401);
+    EXPECT_EQ(machine.cpu.get_acc(), 0u);
+    EXPECT_EQ(machine.get_program_break(), 0x800u);
+
+    // A break that reaches the stack base is rejected.
+    run_break(STACK_BASE);
     EXPECT_EQ(machine.cpu.get_acc(), GUEST_MINUS_ONE);
     EXPECT_EQ(machine.cpu.get_m(14), 12u); // ENOMEM
 }
