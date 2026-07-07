@@ -129,9 +129,9 @@ toolchain one sub-tool per stage — `b6cpp` → `b6parse` → `b6lower` → `b6
 [c-compiler](https://github.com/besm6/c-compiler/) (installed to `~/.local/bin`). Stage
 selection follows the usual `cc` flags: `-E` (stop after cpp), `-S` (after codegen, emit
 Madlen assembly), `-c` (after assembling). Sub-tools are resolved via per-tool env
-overrides (`B6CPP`, `B6PARSE`, …) or under `~/.local/bin` then `/usr/local/bin`. Only
-`-E`/`-S` work end-to-end today; assembling/linking await `b6codegen`↔`b6as` compatibility
-and library/crt0 wiring (see `cmd/cc/TODO.md`).
+overrides (`B6CPP`, `B6PARSE`, …) or under `~/.local/bin` then `/usr/local/bin`. The full
+pipeline runs end-to-end; `-O` and `-g` are accepted but currently no-ops. See
+[cmd/cc/README.md](cmd/cc/README.md).
 
 **`cmd/sim` (`b6sim`) is a user-level a.out simulator**, in the spirit of Warren Toomey's
 `apout` for the PDP-11 (reference copy under `cmd/sim/tmp/apout/`). It loads one BESM-6

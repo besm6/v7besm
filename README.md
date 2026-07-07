@@ -38,7 +38,7 @@ doc/       BESM-6 architecture references
 
 | Component                     | Location      | Status                        |
 |-------------------------------|---------------|-------------------------------|
-| C compiler driver             | `cmd/cc`      | ◐ drives passes; -E/-S work   |
+| C compiler driver             | `cmd/cc`      | ✔ working, tested, documented |
 | Assembler (AT&T / Madlen)     | `cmd/as`      | ✔ working, tested, documented |
 | Linker + binutils             | `cmd/ld`      | ✔ working, tested, documented |
 | C preprocessor                | `cmd/cpp`     | ✔ C11, tested, documented     |
