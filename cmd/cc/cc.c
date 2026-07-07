@@ -383,7 +383,7 @@ static int run_as(const char *in, const char *out)
         error("cannot find b6as");
         return 1;
     }
-    char *av[] = { tool, "-o", (char *)out, (char *)in, NULL };
+    char *av[] = { tool, "-X", "-o", (char *)out, (char *)in, NULL };
     int rc = run(tool, av);
     free(tool);
     return rc;
@@ -498,6 +498,7 @@ static int link_objects(void)
 
     struct vec av = { 0 };
     vec_push(&av, tool);
+    vec_push(&av, "-X");
     vec_push(&av, "-o");
     vec_push(&av, outfile ? outfile : (char *)"a.out");
     for (size_t i = 0; i < objects.len; i++)
