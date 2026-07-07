@@ -7,12 +7,12 @@ one sub-tool per stage.
 ## Pipeline
 
 ```text
-b6cpp   preprocess    .c   -> .i
-b6parse parse         .i   -> .ast
-b6lower lower + opt   .ast  -> .tac
-b6codegen code gen    .tac -> .s     (Madlen assembly)
-b6as    assemble      .s   -> .o
-b6ld    link          .o   -> a.out
+b6cpp      preprocess    .c   -> .i
+b6parse    parse         .i   -> .ast
+b6lower    lower + opt   .ast -> .tac
+b6codegen  code gen      .tac -> .s
+b6as       assemble      .s   -> .o
+b6ld       link          .o   -> a.out
 ```
 
 `b6parse`, `b6lower`, and `b6codegen` are the three passes of the external
@@ -48,10 +48,15 @@ Inputs are dispatched by suffix:
 | `-Lpath`      | Add a library search directory (passed to the linker)     |
 | `-lname`      | Link against library `libname` (passed to the linker)     |
 | `-nostdlib`   | Do not use the standard library dirs, `crt0.o`, or `-lc`  |
+| `-nostdinc`   | Do not add the standard system include directory          |
 
 The last stage to run is selected by `-E` (stop after preprocessing), `-S` (stop after code
 generation, emit assembly), and `-c` (stop after assembling, emit an object). With none of these,
 the objects are linked into an executable.
+
+When preprocessing, `b6cc` automatically adds the standard BESM-6 system include directory
+(`<prefix>/share/besm6/include`). `-nostdinc` suppresses that; any user `-I` directories are still
+passed through.
 
 ## Linking
 

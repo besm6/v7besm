@@ -77,6 +77,7 @@ static bool opt_g;      // -g: request debug info (currently a no-op; see TODO.m
 static bool opt_O;      // -O: request optimization (currently a no-op; see TODO.md)
 static bool opt_v;         // -v: echo each sub-command before running it
 static bool opt_nostdlib;  // -nostdlib: skip the standard library dirs and -lc
+static bool opt_nostdinc;  // -nostdinc: skip the standard system include dir
 static char *outfile;      // -o NAME: explicit output name
 
 static struct vec sources;   // input .c/.s files to compile
@@ -376,7 +377,8 @@ static int run_cpp(const char *in, const char *out)
         error("cannot find b6cpp");
         return 1;
     }
-    char *incdir = besm6_include_dir();
+    // The standard system include dir is added automatically unless -nostdinc.
+    char *incdir = opt_nostdinc ? NULL : besm6_include_dir();
 
     struct vec av = { 0 };
     vec_push(&av, tool);
@@ -595,6 +597,7 @@ static void usage(void)
     fprintf(stderr, "    -Lpath          Add a library search directory (for the linker)\n");
     fprintf(stderr, "    -lname          Link against library libname (for the linker)\n");
     fprintf(stderr, "    -nostdlib       Do not use the standard library dirs or -lc\n");
+    fprintf(stderr, "    -nostdinc       Do not add the standard system include directory\n");
     fprintf(stderr, "Inputs are dispatched by suffix: .c (compile), "
                     ".S (preprocess + assemble), .s (assemble), .o (link).\n");
     exit(1);
@@ -613,6 +616,10 @@ int main(int argc, char *argv[])
         // Multi-character options that the single-letter switch would misread.
         if (strcmp(arg, "-nostdlib") == 0) {
             opt_nostdlib = true;
+            continue;
+        }
+        if (strcmp(arg, "-nostdinc") == 0) {
+            opt_nostdinc = true;
             continue;
         }
         switch (arg[1]) {
