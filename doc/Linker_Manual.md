@@ -102,7 +102,7 @@ while `-T` and `-l` take the rest of the **same** argument.
 | `-T addr` | rest of arg | Set the base load address (`ld.basaddr`, default `BADDR`). Parsed with `strtoul`, so `0`-prefixed octal and `0x` hex are accepted. |
 | `-l name` | rest of arg | Link the library `libname.a`. Expanded to `/usr/local/lib/microbesm/libname.a`, falling back to `libname.a` in the current search if that path can't be opened. Bare `-l` means `-la`. See [§7](#7-archives-and-libraries). |
 | `-x` | — | Discard all local (non-global) symbols from the output. |
-| `-X` | — | Discard local symbols whose name begins with `L` (the `LOCSYM` character — compiler temporaries). |
+| `-X` | — | Discard local symbols whose name begins with `.` (the `LOCSYM` character — compiler temporaries). |
 | `-S` | — | Strip absolute and debug symbols (everything that is not a segment-relative local or a global). |
 | `-r` | — | Retain relocation records and produce a relocatable output that can be linked again; do **not** define common symbols (unless `-d` is also given). |
 | `-s` | — | Discard **all** symbols. Implies `-x`. |
@@ -258,7 +258,7 @@ For example a global function symbol has type `N_EXT + N_TEXT` (`043`).
 
 A **local** symbol is private to the file that defines it — it is not shared or resolved against
 anything, so pass 1 only counts the bytes it will occupy in the output (and pass 2 copies it out,
-subject to the `-x/-X/-S/-s` stripping flags). Local symbols named starting with `L` (`LOCSYM`)
+subject to the `-x/-X/-S/-s` stripping flags). Local symbols named starting with `.` (`LOCSYM`)
 are the compiler's temporaries and can be dropped with `-X`.
 
 A **global** (external) symbol is shared. All globals live in one open-addressing hash table:

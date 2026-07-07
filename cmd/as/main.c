@@ -43,7 +43,7 @@ static void usage(void)
     fprintf(stderr, "    -u              Treat undefined names as error\n");
     fprintf(stderr, "    -a              Don't align on word boundary\n");
     fprintf(stderr, "    -x              Discard local symbols\n");
-    fprintf(stderr, "    -X              Discard locals starting with 'L' or '.'\n");
+    fprintf(stderr, "    -X              Discard locals starting with '.'\n");
     fprintf(stderr, "    -d              Debug mode\n");
     exit(1);
 }

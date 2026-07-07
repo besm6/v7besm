@@ -18,7 +18,7 @@ struct assembler_args {
     char *outfile; // output file, default "a.out"
     int debug;     // -d  debug mode
     int xflags;    // -x  discard local symbols
-    int Xflag;     // -X  discard locals starting with 'L' or '.'
+    int Xflag;     // -X  discard locals starting with '.'
     int uflag;     // -u  treat undefined names as error
     int aflag;     // -a  don't align on word boundary
 };

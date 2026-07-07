@@ -148,7 +148,7 @@ struct assembler {
     int debug;          // -d: debug flag
 
     int xflags; // -x: discard local symbols from the output
-    int Xflag;  // -X: discard only locals whose name starts with 'L'
+    int Xflag;  // -X: discard only locals whose name starts with '.'
     int uflag;  // -u: treat an undefined name as an error rather than external
 
     int stlength; // symbol-table size in bytes (computed in finalize_symtab)

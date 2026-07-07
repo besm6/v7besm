@@ -53,7 +53,7 @@ b6as [-uaxXd] [-o outfile] [infile]
 | `-u` | Treat undefined names as an error. |
 | `-a` | Do **not** align instructions on word boundaries (suppresses the padding normally inserted after `vjm`/`ij`/`stop` and for `.word`/`.ascii`). |
 | `-x` | Discard local symbols from the output symbol table. |
-| `-X` | Discard local symbols whose names start with `L` or `.` (compiler-generated labels). Implies `-x`. |
+| `-X` | Discard local symbols whose names start with `.` (compiler-generated labels). Implies `-x`. |
 | `-d` | Debug mode (verbose). |
 
 If no `infile` is given and standard input is a terminal, the usage message is printed.

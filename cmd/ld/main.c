@@ -40,7 +40,7 @@ int main(int argc, char **argv)
         printf("    -T addr     Set base load address (octal/hex accepted)\n");
         printf("    -lname      Link library libname.a (bare -l means -la)\n");
         printf("    -x          Discard all local symbols\n");
-        printf("    -X          Discard local symbols starting with 'L'\n");
+        printf("    -X          Discard local symbols starting with '.'\n");
         printf("    -S          Strip absolute and debug symbols\n");
         printf("    -s          Discard all symbols\n");
         printf("    -r          Retain relocation; produce relinkable output\n");

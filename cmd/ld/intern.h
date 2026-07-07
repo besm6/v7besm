@@ -16,7 +16,7 @@
 #include "ld.h"
 
 #define W      6           // word length in bytes
-#define LOCSYM 'L'         // discard local symbols starting with 'L'
+#define LOCSYM '.'         // discard local symbols starting with '.'
 #define BADDR  (HDRSZ / W) // memory 0...BADDR-1 is free
 #define SYMDEF "__.SYMDEF" // name of the table-of-contents member in a ranlib archive
 
