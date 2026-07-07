@@ -11,11 +11,12 @@ work, but the later stages are not yet usable.
   are reconciled, `-c` (compile to object) and the default compile-and-link path
   will fail at the assemble stage. `-S` (stop after codegen) works.
 
-- **Linking is not wired up.** No startup object (`crt0`) is installed under
-  `<prefix>/share/besm6/lib` (only `libc.bin` is present), and the `-lc` search
-  path / library-resolution convention for `b6ld` is not defined yet. The
-  `link_objects()` step is implemented but expected to fail until this is sorted:
-  decide the crt0 object, the library directory, and how `-l` names map to files.
+- **Linking is only partly wired up.** The driver now locates the `crt0.o`
+  startup object under `<prefix>/share/besm6/lib` (`~/.local` then `/usr/local`)
+  and links it first, erroring out if it is absent (unless `-nostdlib`). Still
+  open: the `-lc` search path / library-resolution convention for `b6ld` — how
+  `-l` names map to files (e.g. `libc.bin`) is not defined yet, so the link
+  still fails at library resolution.
 
 ## Reserved / unimplemented options
 

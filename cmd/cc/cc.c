@@ -288,6 +288,26 @@ static char *besm6_include_dir(void)
 }
 
 //
+// Locate the crt0 startup object.  Resolution order mirrors besm6_include_dir():
+//   1. <HOME>/.local/share/besm6/lib/crt0.o, if it exists;
+//   2. /usr/local/share/besm6/lib/crt0.o, if it exists.
+// Returns a heap-allocated (and owned) full path, or NULL if neither is present.
+//
+static char *find_crt0(void)
+{
+    const char *home = getenv("HOME");
+    if (home && *home) {
+        char *path = concat(home, "/.local/share/besm6/lib/crt0.o");
+        if (access(path, R_OK) == 0)
+            return path;
+    }
+    char *fallback = concat("/usr/local/share/besm6/lib", "/crt0.o");
+    if (access(fallback, R_OK) == 0)
+        return fallback;
+    return NULL;
+}
+
+//
 // Append the standard BESM-6 library search directories to `av` as glued -L
 // flags.  Unlike besm6_include_dir(), both prefixes are checked independently:
 // <HOME>/.local/share/besm6/lib and /usr/local/share/besm6/lib are each added
@@ -504,9 +524,10 @@ static int compile_one(const char *src)
 //
 // Link all collected objects into an executable via b6ld.
 //
-// NOTE: linking is not fully wired up yet -- no startup object (crt0) is
-// installed and the -lc search path is undefined, so this stage is expected to
-// fail for now.  See TODO.md.  Returns 0 on success.
+// Unless -nostdlib is given, the crt0 startup object (which provides the
+// _start entry point) is located in the standard library directories and
+// linked first; a missing crt0.o is a fatal error.  See TODO.md.  Returns 0
+// on success.
 //
 static int link_objects(void)
 {
@@ -526,6 +547,19 @@ static int link_objects(void)
     // Standard library search dirs come before the objects; -nostdlib skips them.
     if (!opt_nostdlib)
         add_default_libdirs(&av);
+    // The crt0 startup object leads the link so its _start comes first; skipped
+    // by -nostdlib, fatal if it cannot be found.
+    if (!opt_nostdlib) {
+        char *crt0 = find_crt0();
+        if (!crt0) {
+            error("crt0.o not found in the standard library directories "
+                  "(~/.local or /usr/local share/besm6/lib); use -nostdlib to link without it");
+            vec_free(&av);
+            free(tool);
+            return 1;
+        }
+        vec_push(&av, crt0);
+    }
     for (size_t i = 0; i < objects.len; i++)
         vec_push(&av, objects.data[i]);
     // User -L/-l flags follow the objects so user-named libraries resolve their
