@@ -75,12 +75,14 @@ static bool opt_S;      // -S: compile to assembly only
 static bool opt_E;      // -E: preprocess only
 static bool opt_g;      // -g: request debug info (currently a no-op; see TODO.md)
 static bool opt_O;      // -O: request optimization (currently a no-op; see TODO.md)
-static bool opt_v;      // -v: echo each sub-command before running it
-static char *outfile;   // -o NAME: explicit output name
+static bool opt_v;         // -v: echo each sub-command before running it
+static bool opt_nostdlib;  // -nostdlib: skip the standard library dirs and -lc
+static char *outfile;      // -o NAME: explicit output name
 
 static struct vec sources;   // input .c/.s files to compile
 static struct vec objects;   // .o (and produced) files to link
 static struct vec cppflags;  // -D/-I/-U pass-throughs for the preprocessor
+static struct vec ldflags;   // -L/-l pass-throughs for the linker
 static struct vec tmpfiles;  // temp files to unlink on exit
 static struct vec owned;     // heap-allocated file names to free on exit
 
@@ -283,6 +285,24 @@ static char *besm6_include_dir(void)
         return fallback;
     free(fallback);
     return NULL;
+}
+
+//
+// Append the standard BESM-6 library search directories to `av` as glued -L
+// flags.  Unlike besm6_include_dir(), both prefixes are checked independently:
+// <HOME>/.local/share/besm6/lib and /usr/local/share/besm6/lib are each added
+// if they exist.  Suppressed by -nostdlib (the caller decides).
+//
+static void add_default_libdirs(struct vec *av)
+{
+    const char *home = getenv("HOME");
+    if (home && *home) {
+        char *dir = concat(home, "/.local/share/besm6/lib");
+        if (access(dir, X_OK) == 0)
+            vec_push(av, concat("-L", dir));
+    }
+    if (access("/usr/local/share/besm6/lib", X_OK) == 0)
+        vec_push(av, own(strdup("-L/usr/local/share/besm6/lib")));
 }
 
 //
@@ -503,9 +523,18 @@ static int link_objects(void)
     vec_push(&av, "_start");
     vec_push(&av, "-o");
     vec_push(&av, outfile ? outfile : (char *)"a.out");
+    // Standard library search dirs come before the objects; -nostdlib skips them.
+    if (!opt_nostdlib)
+        add_default_libdirs(&av);
     for (size_t i = 0; i < objects.len; i++)
         vec_push(&av, objects.data[i]);
-    vec_push(&av, "-lc");
+    // User -L/-l flags follow the objects so user-named libraries resolve their
+    // references (conventional link order).
+    for (size_t i = 0; i < ldflags.len; i++)
+        vec_push(&av, ldflags.data[i]);
+    // The implicit C library, unless -nostdlib asked for a freestanding link.
+    if (!opt_nostdlib)
+        vec_push(&av, "-lc");
     vec_push(&av, NULL);
 
     int rc = run(tool, av.data);
@@ -529,6 +558,9 @@ static void usage(void)
     fprintf(stderr, "    -Dname[=val]    Predefine a preprocessor macro\n");
     fprintf(stderr, "    -Uname          Undefine a preprocessor macro\n");
     fprintf(stderr, "    -Ipath          Add a header search directory\n");
+    fprintf(stderr, "    -Lpath          Add a library search directory (for the linker)\n");
+    fprintf(stderr, "    -lname          Link against library libname (for the linker)\n");
+    fprintf(stderr, "    -nostdlib       Do not use the standard library dirs or -lc\n");
     fprintf(stderr, "Inputs are dispatched by suffix: .c (compile), "
                     ".S (preprocess + assemble), .s (assemble), .o (link).\n");
     exit(1);
@@ -542,6 +574,11 @@ int main(int argc, char *argv[])
         char *arg = argv[i];
         if (arg[0] != '-' || arg[1] == '\0') {
             vec_push(&sources, arg);
+            continue;
+        }
+        // Multi-character options that the single-letter switch would misread.
+        if (strcmp(arg, "-nostdlib") == 0) {
+            opt_nostdlib = true;
             continue;
         }
         switch (arg[1]) {
@@ -589,6 +626,20 @@ int main(int argc, char *argv[])
                 usage();
             }
             break;
+        case 'L':
+        case 'l':
+            // Pass through to the linker.  Fold the separated form (-L dir) into
+            // one glued token, matching the -D/-I handling above.
+            if (arg[2]) {
+                vec_push(&ldflags, arg);
+            } else if (i + 1 < argc) {
+                const char flag[3] = { '-', arg[1], '\0' };
+                vec_push(&ldflags, concat(flag, argv[++i]));
+            } else {
+                error("%s requires an argument", arg);
+                usage();
+            }
+            break;
         default:
             error("unknown option %s", arg);
             usage();
@@ -623,5 +674,6 @@ int main(int argc, char *argv[])
     vec_free(&sources);
     vec_free(&objects);
     vec_free(&cppflags);
+    vec_free(&ldflags);
     return errflag ? 1 : 0;
 }
