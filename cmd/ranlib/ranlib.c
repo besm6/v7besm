@@ -49,6 +49,16 @@ static void putrantab(FILE *f);
 static void stash(const struct nlist *s);
 static void fixsize(void);
 
+/* Print the command-line usage summary. */
+static void usage(void)
+{
+    printf("Usage:\n");
+    printf("    ranlib [-td] archive...\n");
+    printf("Options:\n");
+    printf("    -t          Touch: update the symbol-table timestamp without rebuilding it\n");
+    printf("    -d          Debug: print the symbol table as it is built\n");
+}
+
 int ranlib_run(int argc, char **argv)
 {
     /* Reset state so repeated in-process runs start clean. */
@@ -75,6 +85,11 @@ int ranlib_run(int argc, char **argv)
                 fprintf(stderr, "ranlib: unknown flag '%c'\n", *p);
                 exit(1);
             }
+    }
+
+    if (argc <= 1) {
+        usage();
+        return 1;
     }
 
     while (--argc > 0) {

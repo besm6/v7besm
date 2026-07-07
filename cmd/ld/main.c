@@ -29,8 +29,24 @@ static void onsig(int sig)
 int main(int argc, char **argv)
 {
     if (argc == 1) {
-        printf("Usage: %s [-xXsSrndt] [-lname] [-D num] [-u name] [-e name] [-o file] file...\n",
+        printf("Usage:\n");
+        printf("    %s [-xXsSrndt] [-T addr] [-D num] [-lname] [-u name] [-e name] [-o file] file...\n",
                argv[0]);
+        printf("Options:\n");
+        printf("    -o file     Set output file name, default a.out\n");
+        printf("    -e name     Make name the program entry point\n");
+        printf("    -u name     Enter name as an undefined external (force library load)\n");
+        printf("    -D num      Reserve a data segment of at least num words\n");
+        printf("    -T addr     Set base load address (octal/hex accepted)\n");
+        printf("    -lname      Link library libname.a (bare -l means -la)\n");
+        printf("    -x          Discard all local symbols\n");
+        printf("    -X          Discard local symbols starting with 'L'\n");
+        printf("    -S          Strip absolute and debug symbols\n");
+        printf("    -s          Discard all symbols\n");
+        printf("    -r          Retain relocation; produce relinkable output\n");
+        printf("    -n          Pure procedure: read-only text, page-aligned data\n");
+        printf("    -d          Define common symbols even under -r\n");
+        printf("    -t          Trace progress (repeat for more detail)\n");
         exit(4);
     }
     if (signal(SIGINT, SIG_IGN) != SIG_IGN)

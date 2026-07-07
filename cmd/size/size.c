@@ -1,7 +1,7 @@
 /*
  *      DEMOS SVS-B operating system.
  *
- *      size [-w] [file ...]    - print the segment sizes of an object file.
+ *      size [-w] file ...      - print the segment sizes of an object file.
  *                                If the "-w" flag is given, sizes are printed
  *                                in words, otherwise in bytes.
  *
@@ -20,6 +20,15 @@
 static int header; /* whether the header has already been printed */
 static int wflag;  /* print sizes in words */
 
+
+/* Print the command-line usage summary. */
+static void usage(void)
+{
+    printf("Usage:\n");
+    printf("    size [-w] file...\n");
+    printf("Options:\n");
+    printf("    -w          Print sizes in words instead of bytes\n");
+}
 
 static void size(const char *fname)
 {
@@ -78,7 +87,9 @@ int size_run(int argc, char **argv)
         size(*argv);
         yesarg = 1;
     }
-    if (!yesarg)
-        size("a.out");
+    if (!yesarg) {
+        usage();
+        return 1;
+    }
     return 0;
 }

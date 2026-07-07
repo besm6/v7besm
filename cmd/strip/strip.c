@@ -1,5 +1,5 @@
 /*
- *      strip [file ...]        - remove the symbol table and relocation bits
+ *      strip file ...          - remove the symbol table and relocation bits
  *                                from BESM-6 a.out objects, rewriting each file
  *                                in place via a temporary file.
  */
@@ -88,6 +88,13 @@ static int strip_file(const char *name, FILE *tf)
     return status;
 }
 
+/* Print the command-line usage summary. */
+static void usage(void)
+{
+    printf("Usage:\n");
+    printf("    strip file...\n");
+}
+
 int strip_run(int argc, char **argv)
 {
     char tname[] = "/tmp/stripXXXXXX";
@@ -95,6 +102,11 @@ int strip_run(int argc, char **argv)
     int fd;
     int status = 0;
     int i;
+
+    if (argc < 2) {
+        usage();
+        return 1;
+    }
 
     signal(SIGHUP, SIG_IGN);
     signal(SIGINT, SIG_IGN);

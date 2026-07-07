@@ -2,7 +2,7 @@
  *	print symbol tables for
  *      object files (SVS-B)
  *
- *	nm [-goprun] [name ...]
+ *	nm [-goprun] name ...
  */
 
 #include <ctype.h>
@@ -33,6 +33,20 @@ static FILE *fi;
 
 static void nm(const char *name, int narg);
 static int compare(const void *p1, const void *p2);
+
+// Print the command-line usage summary.
+static void usage(void)
+{
+    printf("Usage:\n");
+    printf("    nm [-goprun] file...\n");
+    printf("Options:\n");
+    printf("    -n          Sort numerically by value\n");
+    printf("    -g          List global (external) symbols only\n");
+    printf("    -u          List undefined symbols only\n");
+    printf("    -r          Sort in reverse order\n");
+    printf("    -p          Don't sort; print in symbol-table order\n");
+    printf("    -o          Prepend the file name to each line\n");
+}
 
 int nm_run(int argc, char **argv)
 {
@@ -72,8 +86,8 @@ int nm_run(int argc, char **argv)
         argc--;
     }
     if (argc == 0) {
-        argc    = 1;
-        argv[1] = "a.out";
+        usage();
+        return 1;
     }
     narg = argc;
     while (argc--) {

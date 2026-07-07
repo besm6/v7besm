@@ -6,10 +6,30 @@
 
 #include "intern.h"
 
-// Print the usage line and exit with an error.
+// Print the usage summary and exit with an error.
 void die_usage(void)
 {
-    printf("Usage: ar [%s][%s] archive file...\n", option_letters, command_letters);
+    printf("Usage:\n");
+    printf("    ar [-]{%s}[%s] archive file...\n", command_letters, option_letters);
+    printf("Commands (exactly one required):\n");
+    printf("    r           Replace or add files to the archive\n");
+    printf("    d           Delete files from the archive\n");
+    printf("    x           Extract files from the archive\n");
+    printf("    t           List a table of contents\n");
+    printf("    p           Print members to standard output\n");
+    printf("    m           Move files within the archive\n");
+    printf("    q           Quick-append files without checking for duplicates\n");
+    printf("Options:\n");
+    printf("    u           With r, replace a member only if the file is newer\n");
+    printf("    v           Verbose: trace each action (repeat to trace unchanged members)\n");
+    printf("    a           Position insert/move after the named member\n");
+    printf("    b           Position insert/move before the named member\n");
+    printf("    i           Synonym for b\n");
+    printf("    c           Suppress the \"creating archive\" notice\n");
+    printf("    l           Keep temporary files in the current directory, not /tmp\n");
+    printf("    n           Accepted for compatibility, ignored\n");
+    printf("    archive     The archive file to create or modify\n");
+    printf("    file...     Files/members to operate on\n");
     finish(1);
 }
 
