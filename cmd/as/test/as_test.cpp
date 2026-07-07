@@ -431,6 +431,31 @@ TEST(Assemble, DataDirective)
     EXPECT_EQ(word_low(got, 16), 0);          // zero-padded
 }
 
+// A segment switch while the current segment holds an odd (unpaired) half-word must
+// flush that half-word first: emit_halfword() buffers the pending half-word in a single
+// static pair shared across all segments, so without the pre-switch align the new
+// segment's first half-word clobbers it and the instruction is lost.  Regression test
+// for the pass1.c segment-switch flush fix.
+TEST(Assemble, SegmentSwitchFlushesPendingHalfword)
+{
+    auto got = assemble(R"(
+        atx 0525        // text: one short instruction -> an unpaired half-word
+        .data
+        .half 0111      // first data half-word clobbers the shared buffer (pre-fix)
+        .half 0222
+)");
+    // Text is one word: the instruction, then a utc (EMPCOM) alignment filler.
+    // With the bug, word 8 high was overwritten by the data value 0111.
+    EXPECT_EQ(word_high(got, 8), 0525L);      // atx 0525 survives the .data switch
+    EXPECT_EQ(word_low(got, 8), 02200000L);   // EMPCOM filler flushed by the switch
+
+    // Data lands in its own word (const=0, text=1 word), uncorrupted.
+    EXPECT_EQ(word_low(got, 2), 6);           // a_text  == 1 word
+    EXPECT_EQ(word_low(got, 3), 6);           // a_data  == 1 word
+    EXPECT_EQ(word_high(got, 9), 0111L);
+    EXPECT_EQ(word_low(got, 9), 0222L);
+}
+
 // Values that use bits 24..31 (and full 48-bit values) must survive intact: the
 // 48-bit word splits at the 24-bit half-word boundary, not at bit 32.  Each
 // .word emits high 24 bits in the high (executed-first) half-word and low 24

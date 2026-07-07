@@ -374,16 +374,25 @@ void generate_code(void)
             // An assembler directive.  Most either switch the active segment or
             // emit data into it.
             switch (cval) {
+            // Flush the current segment's pending half-word before switching:
+            // emit_halfword() buffers the odd half-word in a single static pair
+            // shared across segments, so a mid-word switch would otherwise let the
+            // new segment's first half-word clobber (and drop) it.  align_segment
+            // is a no-op when the segment is already whole-word aligned.
             case TEXT:
+                align_segment(as.segm);
                 as.segm = STEXT;
                 break;
             case DATA:
+                align_segment(as.segm);
                 as.segm = SDATA;
                 break;
             case STRNG:
+                align_segment(as.segm);
                 as.segm = SSTRNG;
                 break;
             case BSS:
+                align_segment(as.segm);
                 as.segm = SBSS;
                 break;
             case HALF:
