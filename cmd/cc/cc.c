@@ -499,6 +499,8 @@ static int link_objects(void)
     struct vec av = { 0 };
     vec_push(&av, tool);
     vec_push(&av, "-X");
+    vec_push(&av, "-e");
+    vec_push(&av, "_start");
     vec_push(&av, "-o");
     vec_push(&av, outfile ? outfile : (char *)"a.out");
     for (size_t i = 0; i < objects.len; i++)
