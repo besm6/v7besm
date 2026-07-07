@@ -152,6 +152,9 @@ void relocate_file(char *acp)
     }
     fclose(ld.text);
     fclose(ld.reloc);
+    free(ld.filname_alloc);
+    ld.filname_alloc = 0;
+    ld.filname       = 0;
 }
 
 //

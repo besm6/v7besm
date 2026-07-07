@@ -212,6 +212,9 @@ void scan_file(char *cp)
     }
     fclose(ld.text);
     fclose(ld.reloc);
+    free(ld.filname_alloc);
+    ld.filname_alloc = 0;
+    ld.filname       = 0;
 }
 
 //

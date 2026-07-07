@@ -28,14 +28,16 @@ int open_input(char *cp)
     int c;
     struct stat x;
 
-    ld.text    = 0;
-    ld.filname = cp;
+    ld.text          = 0;
+    ld.filname       = cp;
+    ld.filname_alloc = 0;
     if (cp[0] == '-' && cp[1] == 'l') {
         if (cp[2] == '\0')
             cp = "-la";
         ld.filname = malloc(strlen(ld.libname) + strlen(cp) + 1);
         if (!ld.filname)
             error(2, "out of memory");
+        ld.filname_alloc = ld.filname; // owning base, kept even if filname is advanced below
         strcpy(ld.filname, ld.libname);
         strcat(ld.filname, cp + 2);
         strcat(ld.filname, ".a");
