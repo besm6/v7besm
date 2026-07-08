@@ -266,9 +266,9 @@ static void assemble_ascii(void)
 //
 // Pass 1's main loop: read the source one statement at a time and act on it.
 // A statement is one of: a label "name:", a location-counter assignment ".=",
-// a name definition ("name = expr" or ".equ"), a machine instruction (named or
-// raw $NN/@NN), an "N M" index-register prefix, or an assembler directive
-// (.text, .data, .word, .ascii, .globl, .comm, ...).  It
+// a name definition ("name = expr"), a machine instruction (named or raw
+// $NN/@NN), an "N M" index-register prefix, or an assembler directive
+// (.text, .data, .word, .ascii, .globl, .equ, .comm, ...).  It
 // runs until end of file.  cmdmode is turned on around the leading token so
 // that mnemonics containing '+ - * /' scan as one name.
 //
@@ -350,8 +350,8 @@ void generate_code(void)
                 as.stab[cval].n_type &= ~N_TYPE;
                 as.stab[cval].n_type |= SEGMTYPE(as.segm);
                 continue;
-            } else if (clex == '=' || (clex == LACMD && tval == EQU)) {
-                // "name = expr" / "name .equ expr" - define a constant name.
+            } else if (clex == '=') {
+                // "name = expr" - define a constant name.
                 as.stab[cval].n_value = parse_expr(&csegm);
                 if (csegm == SEXT)
                     fatal("indirect equivalence");
@@ -434,6 +434,19 @@ void generate_code(void)
                         break;
                     }
                 }
+                break;
+            case EQU:
+                // ".equ name, expr" - define a constant name (directive form of
+                // "name = expr").
+                if (next_token(&cval) != LNAME)
+                    fatal("bad parameter .equ");
+                if (next_token(&tval) != ',')
+                    fatal("bad parameter .equ");
+                as.stab[cval].n_value = parse_expr(&csegm);
+                if (csegm == SEXT)
+                    fatal("indirect equivalence");
+                as.stab[cval].n_type &= N_EXT;
+                as.stab[cval].n_type |= SEGMTYPE(csegm);
                 break;
             case COMM:
                 // ".comm name, len" - the directive form of a common block.

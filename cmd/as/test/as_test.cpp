@@ -809,6 +809,25 @@ TEST(Assemble, InfixCommRejected)
     EXPECT_NE(msg.find("bad command"), std::string::npos) << "message was: " << msg;
 }
 
+// ".equ name, expr" is the directive form of an equate (the infix "name .equ expr"
+// form was removed).  The name takes the value and segment class of the expression.
+TEST(Assemble, EquDirective)
+{
+    auto got = assemble(R"(
+.equ val, 7
+        xta val
+)");
+    EXPECT_EQ(word_high(got, 8), 00100000L | 7L); // xta val -> absolute value 7
+    EXPECT_EQ(reloc_half(got, 1, 0) & 070L, 0L);  // RABS: val is an absolute equate
+}
+
+// The infix "name .equ expr" form was removed; only ".equ name, expr" is accepted.
+TEST(Assemble, InfixEquRejected)
+{
+    std::string msg = assemble_error("foo .equ 5\n");
+    EXPECT_NE(msg.find("bad command"), std::string::npos) << "message was: " << msg;
+}
+
 // A word matching an instruction mnemonic may still name a label: "sti:" defines
 // a text label, and a later "uj sti" resolves against it (RTEXT relocation, not an
 // undefined external).  Mnemonic recognition is confined to instruction position,
