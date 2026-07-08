@@ -8,15 +8,19 @@ DEV     = bio.o cd.o fd.o hd.o md.o mem.o partab.o \
           sc.o sr.o sys.o tty.o
 
 # Clang compiler on MacOS
-LLVMBIN = $(dir $(wildcard /usr/local/Cellar/llvm/22.*/bin/clang-22))
-AS      = $(LLVMBIN)clang -target i486-unknown-linux-gnu -c
-CC      = $(LLVMBIN)clang -target i486-unknown-linux-gnu -ffreestanding
-CFLAGS  = -Os -I../include -DKERNEL -Wall -Werror -Wshadow
+#LLVMBIN = $(dir $(wildcard /usr/local/Cellar/llvm/22.*/bin/clang-22))
+#AS      = $(LLVMBIN)clang -target i486-unknown-linux-gnu -c
+#CC      = $(LLVMBIN)clang -target i486-unknown-linux-gnu -ffreestanding
+#CFLAGS  = -Os -I../include -DKERNEL -Wall -Werror -Wshadow
+#AR      = ar
+#LD      = ld.lld -T unix.ld
 
 # Besm6 toolchain
-#AS      = b6cc -c
-#CC      = b6cc
-#CFLAGS  = -I../include -DKERNEL
+AS      = b6cc -c
+CC      = b6cc
+CFLAGS  = -I../include -DKERNEL
+AR      = b6ar
+LD      = b6ld
 
 VPATH = dev
 
@@ -27,14 +31,14 @@ clean:
 	rm -f *.o *.a *.nm unix
 
 unix:   $(OBJ)
-	ld.lld -T unix.ld $(OBJ) -o $@
+	$(LD) $(OBJ) -o $@ -L$$HOME/.local/share/besm6/lib -lc
 	$(LLVMBIN)llvm-nm -n $@ > $@.nm
 
 libsys.a: $(SYS)
-	ar cr $@ $(SYS)
+	$(AR) cr $@ $(SYS)
 
 libdev.a: $(DEV)
-	ar cr $@ $(DEV)
+	$(AR) cr $@ $(DEV)
 
 %.ast:  %.c
 	$(CC) -Xclang -ast-dump=json -fsyntax-only $(CFLAGS) $< > $@
