@@ -53,6 +53,26 @@ static int digit_separator(int c, int have_digit, int (*is_digit)(int))
 }
 
 //
+// Pack already-decoded digit values (MSB-first in as.name[start..end)) against
+// the TOP of the 48-bit word: digit 0 fills the highest bits_per_digit bits, the
+// rest follow, low bits zero.  Used by the leading-apostrophe "left-aligned"
+// literal forms 0'123 / 0x'abc / 0b'111, which fill out a full 48-bit word.
+//
+static void pack_left(const char *start, const char *end, int bits_per_digit)
+{
+    int nbits = (int)(end - start) * bits_per_digit;
+    if (nbits > 48)
+        fatal("left-aligned literal wider than 48 bits");
+
+    // Assemble the mantissa right-aligned, then shift it up to the top of the
+    // word so digit 0 lands in the most-significant position.
+    int64_t v = 0;
+    for (const char *dp = start; dp < end; dp++)
+        v = (v << bits_per_digit) | *dp;
+    as.intval = (nbits < 48) ? (v << (48 - nbits)) : v;
+}
+
+//
 // Read a hexadecimal literal of the form 0xZZZ (the "0x" is already consumed).
 // The digit values are stashed left-to-right in as.name, then assembled into
 // the 48-bit value back-to-front: the least significant digit goes to bit 0 of
@@ -66,6 +86,10 @@ static void read_hex_number(void)
     char *cp;
 
     c = getchar();
+    // A leading apostrophe (0x'abc) makes the literal left-aligned in the word.
+    int left_align = (c == '\'');
+    if (left_align)
+        c = getchar();
     for (cp = as.name; ; c = getchar()) {
         c = digit_separator(c, cp > as.name, is_hex_digit);
         if (!ISHEX(c))
@@ -73,6 +97,12 @@ static void read_hex_number(void)
         *cp++ = hex_digit_value(c);
     }
     ungetc(c, stdin);
+    if (left_align) {
+        if (cp == as.name)
+            fatal("no digits after left-align marker '");
+        pack_left(as.name, cp, 4);
+        return;
+    }
     as.intval = 0;
     // Fill the low half (bits 1..24, i.e. 0-based 0..23), 4 bits per digit,
     // from the last digit up.
@@ -99,6 +129,10 @@ static void read_binary_number(void)
     char *cp;
 
     c = getchar();
+    // A leading apostrophe (0b'111) makes the literal left-aligned in the word.
+    int left_align = (c == '\'');
+    if (left_align)
+        c = getchar();
     for (cp = as.name; ; c = getchar()) {
         c = digit_separator(c, cp > as.name, is_binary_digit);
         if (c != '0' && c != '1')
@@ -106,6 +140,12 @@ static void read_binary_number(void)
         *cp++ = c - '0';
     }
     ungetc(c, stdin);
+    if (left_align) {
+        if (cp == as.name)
+            fatal("no digits after left-align marker '");
+        pack_left(as.name, cp, 1);
+        return;
+    }
     as.intval = 0;
     for (c = 0; c < 24; c++) {
         if (--cp < as.name)
@@ -132,7 +172,13 @@ static void read_number(int c)
     as.intval = 0;
     if (c == '0') {
         char *cp;
-        // Octal: leading-zero literal, e.g. 0123.  Three bits per digit.
+        // Octal: leading-zero literal, e.g. 0123.  Three bits per digit.  The
+        // leading '0' is only the base marker; a following apostrophe (0'123)
+        // makes the literal left-aligned and drops the '0' from the mantissa.
+        c              = getchar();
+        int left_align = (c == '\'');
+        if (left_align)
+            c = getchar();
         for (cp = as.name; ; c = getchar()) {
             c = digit_separator(c, cp > as.name, is_octal_digit);
             if (!ISOCTAL(c))
@@ -140,6 +186,12 @@ static void read_number(int c)
             *cp++ = c - '0';
         }
         ungetc(c, stdin);
+        if (left_align) {
+            if (cp == as.name)
+                fatal("no digits after left-align marker '");
+            pack_left(as.name, cp, 3);
+            return;
+        }
         // Pack eight digits (bits 1..24, i.e. 0-based 0..23) into the low half.
         for (c = 0; c <= 21; c += 3) {
             if (--cp < as.name)

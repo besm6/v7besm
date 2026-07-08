@@ -519,6 +519,34 @@ TEST(Assemble, DigitSeparators)
     EXPECT_EQ(word_low(got, 12), 0x123456L);
 }
 
+// An apostrophe right after the base prefix (0'123, 0x'abc, 0b'111) makes the
+// literal LEFT-aligned: the digits pack against the top of the 48-bit word and
+// the low bits are zero.  value == digits << (48 - Ndigits*bits_per_digit); the
+// octal base marker '0' is not part of the mantissa.  Internal separators still
+// work inside such a literal.
+TEST(Assemble, LeftAlignedLiterals)
+{
+    auto got = assemble(R"(
+        .data
+        .word 0'123      // 0123 \< 39 -> high 0x298000
+        .word 0x'abc     // 0xabc \< 36 -> high 0xabc000
+        .word 0b'111     // 0b111 \< 45 -> high 0xe00000
+        .word 0x'ab'cd   // internal separator still works -> high 0xabcd00
+        .word 0123 \< 39 // cross-check: same word as 0'123
+)");
+    EXPECT_EQ(word_high(got, 8), 0x298000L); // .word 0'123
+    EXPECT_EQ(word_low(got, 8), 0L);
+    EXPECT_EQ(word_high(got, 9), 0xabc000L); // .word 0x'abc
+    EXPECT_EQ(word_low(got, 9), 0L);
+    EXPECT_EQ(word_high(got, 10), 0xe00000L); // .word 0b'111
+    EXPECT_EQ(word_low(got, 10), 0L);
+    EXPECT_EQ(word_high(got, 11), 0xabcd00L); // .word 0x'ab'cd
+    EXPECT_EQ(word_low(got, 11), 0L);
+    // 0'123 must equal the explicit shift form.
+    EXPECT_EQ(word_high(got, 12), word_high(got, 8)); // .word 0123 \< 39
+    EXPECT_EQ(word_low(got, 12), word_low(got, 8));
+}
+
 // A .word must serialize its 48-bit value in BESM-6 big-endian half-word order:
 // the high 24 bits occupy the first (high) half-word on disk and the low 24 bits
 // the second (low) half-word - the same order instructions, .half, and the
