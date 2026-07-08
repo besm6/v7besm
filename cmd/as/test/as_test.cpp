@@ -801,3 +801,54 @@ TEST(Assemble, GloblThenLabelOk)
     std::string msg = assemble_error("        .globl foo\nfoo: .word 1\n");
     EXPECT_EQ(msg, "") << "message was: " << msg;
 }
+
+// A word matching an instruction mnemonic may still name a label: "sti:" defines
+// a text label, and a later "uj sti" resolves against it (RTEXT relocation, not an
+// undefined external).  Mnemonic recognition is confined to instruction position,
+// so a following ':' makes the word a label.
+TEST(Assemble, MnemonicAsLabel)
+{
+    auto got = assemble(R"(
+sti:
+        uj sti
+)");
+    EXPECT_EQ(word_high(got, 8), 03000000L | 8L);  // uj sti -> text base word 8 (relocated)
+    EXPECT_EQ(reloc_half(got, 1, 0) & 070L, 020L); // RTEXT: sti resolved as a local text label
+}
+
+// In operand position a mnemonic spelling is an ordinary symbol, never an
+// instruction: "uj mod" references an (undefined) symbol `mod`, which becomes an
+// external reference just like any other undefined name.
+TEST(Assemble, MnemonicAsOperand)
+{
+    auto got = assemble(R"(
+        uj mod
+        atx 0
+)");
+    auto syms = read_symbols(got);
+    ASSERT_EQ(syms.size(), 1u);
+    EXPECT_EQ(syms[0].name, "mod");
+    EXPECT_EQ(syms[0].type, 040L);                 // N_EXT | N_UNDF
+    EXPECT_EQ(word_high(got, 8), 03000000L);       // uj mod -> address 0 (filled by the linker)
+    EXPECT_EQ(reloc_half(got, 1, 0), 070L);        // REXT naming `mod` (symbol index 0)
+}
+
+// A "name = expr" definition may also use a mnemonic spelling: a following '=' in
+// instruction position marks the word as a symbol being defined, not an opcode.
+TEST(Assemble, MnemonicAsEquate)
+{
+    auto got = assemble(R"(
+ext = 5
+        xta ext
+)");
+    EXPECT_EQ(word_high(got, 8), 00100000L | 5L);  // xta ext -> absolute value 5
+    EXPECT_EQ(reloc_half(got, 1, 0) & 070L, 0L);   // RABS: ext is an absolute equate
+}
+
+// Regression guard: a bare mnemonic followed by an operand (no ':' / '=') is still
+// assembled as the instruction, unchanged.
+TEST(Assemble, MnemonicStillInstruction)
+{
+    auto got = assemble("        sti 3\n");
+    EXPECT_EQ(word_high(got, 8), 00410000L | 3L);  // sti 3 (store to index register)
+}

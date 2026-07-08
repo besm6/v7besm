@@ -379,6 +379,24 @@ void parse_line_marker(void)
 }
 
 //
+// After a word matched a mnemonic in instruction position, decide whether it is
+// really a label/definition rather than an instruction: skip blanks/tabs and look
+// at the next character.  ':' (label) or '=' (name = expr) means the word names a
+// symbol, so it must lex as LNAME, not LCMD.  The peeked character is pushed back
+// either way; a newline/EOF is not a label marker, so a bare mnemonic on its own
+// line stays an instruction.
+//
+static int next_is_label_or_equal(void)
+{
+    int c;
+
+    while ((c = getchar()) == ' ' || c == '\t')
+        ;
+    ungetc(c, stdin);
+    return c == ':' || c == '=';
+}
+
+//
 // Read one token from the input, return its kind, and store its value in
 // *pval.  This is the heart of the lexer; everything else in the assembler
 // reads the source only through here.  The kinds and what *pval carries:
@@ -541,9 +559,11 @@ int next_token(int *pval)
                 if ((*pval = lookup_directive()) != -1)
                     return LACMD;
             }
-            // Otherwise it is a machine-instruction mnemonic if it matches the
-            // table, else an ordinary symbol name.
-            if ((*pval = lookup_instruction()) != -1)
+            // Otherwise it is a machine instruction only when one is expected
+            // (cmdmode) and it is not immediately used as a label/definition
+            // ("name:" or "name = expr"); in every other position a mnemonic
+            // spelling is just an ordinary symbol name.
+            if (as.cmdmode && (*pval = lookup_instruction()) != -1 && !next_is_label_or_equal())
                 return LCMD;
             *pval = lookup_name();
             return LNAME;

@@ -120,6 +120,14 @@ malformed) is treated as an ordinary whole-line comment and emits nothing.
 name may not begin with a digit (a leading digit starts a number) nor with `$` (a leading
 `$` starts a raw `$NN` opcode, see [§9.3](#93-raw-opcodes)). Names are case-sensitive.
 
+**Mnemonics are not reserved.** A name may be spelled like a machine instruction (`sti`,
+`mod`, `ext`, …): a word is read as a mnemonic only where an instruction is expected — the
+start of a statement — and even there a following `:` or `=` marks it as a label or equate
+instead. In operand position a mnemonic spelling is always an ordinary symbol, so
+`uj sti` jumps to a label named `sti`. (The one exception is the `.equ`/`.comm` directive
+forms — `sti .equ 5` — which stay ambiguous with a `.`-operand and are not supported for a
+mnemonic-spelled name; use the `=` form instead.)
+
 **Defining a label.** A name followed by a colon defines a symbol whose value is the current
 location (in words) within the current segment:
 
