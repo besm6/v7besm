@@ -124,8 +124,8 @@ name may not begin with a digit (a leading digit starts a number) nor with `$` (
 `mod`, `ext`, …): a word is read as a mnemonic only where an instruction is expected — the
 start of a statement — and even there a following `:` or `=` marks it as a label or equate
 instead. In operand position a mnemonic spelling is always an ordinary symbol, so
-`uj sti` jumps to a label named `sti`. (The one exception is the `.equ`/`.comm` directive
-forms — `sti .equ 5` — which stay ambiguous with a `.`-operand and are not supported for a
+`uj sti` jumps to a label named `sti`. (The one exception is the `.equ` directive form —
+`sti .equ 5` — which stays ambiguous with a `.`-operand and is not supported for a
 mnemonic-spelled name; use the `=` form instead.)
 
 **Defining a label.** A name followed by a colon defines a symbol whose value is the current
@@ -420,10 +420,7 @@ keeps its relocation on the low (second) half-word.
 |-----------|----------|--------|
 | `.globl` | `name [, name …]` | Mark each name as external/global. |
 | `.equ` | `name .equ expr` | Equate `name` to `expr` (also available as `name = expr`). |
-| `.comm` | `name [, len]` or `name .comm len` | Declare a **common** block of `len` words (default 1); becomes bss at link time. |
-
-`.comm` accepts both the prefix form (`.comm name, len`) and the infix form
-(`name .comm len`).
+| `.comm` | `name [, len]` | Declare a **common** block of `len` words (default 1); becomes bss at link time. |
 
 ---
 

@@ -802,6 +802,13 @@ TEST(Assemble, GloblThenLabelOk)
     EXPECT_EQ(msg, "") << "message was: " << msg;
 }
 
+// The infix "name .comm len" form was removed; only ".comm name, len" is accepted.
+TEST(Assemble, InfixCommRejected)
+{
+    std::string msg = assemble_error("buf .comm 4\n");
+    EXPECT_NE(msg.find("bad command"), std::string::npos) << "message was: " << msg;
+}
+
 // A word matching an instruction mnemonic may still name a label: "sti:" defines
 // a text label, and a later "uj sti" resolves against it (RTEXT relocation, not an
 // undefined external).  Mnemonic recognition is confined to instruction position,
