@@ -168,6 +168,11 @@ Literals are full 48-bit values, stored internally as two halves (`left`, `right
 no dedicated negative-literal syntax; negate with a unary minus in an expression
 ([§7](#7-expressions)).
 
+A single apostrophe `'` may be used as a digit-group separator between two digits, C++-style;
+it does not affect the value. This works in every base: `1'000'000`, `0xdead'beef`,
+`0100'000'000`, `0b1000'0000`. The apostrophe must sit **between** digits — a leading,
+trailing, or doubled `'` (e.g. `1'`, `0x'1`, `1''0`) is an error.
+
 ### 6.2 Bit-mask literals
 
 A `.`-prefixed bracket or number builds a bit mask directly. Bit numbers run 1–64 (bit 1 =
@@ -462,7 +467,7 @@ entry:  vtm count, 1
 `*` `/` `%`; grouping `( )`; exponent-truncate `{ }`; current location `.`.
 
 **Number formats:** decimal (default) `1234`; octal `01234`; hex `0x1ff`; binary `0b101`;
-bit masks `.[a:b]` `.[a=b]` `.N`.
+bit masks `.[a:b]` `.[a=b]` `.N`. A `'` between digits is an ignored separator (`1'000'000`).
 
 **Operand forms:** `op addr` · `op #const` · `op addr, reg` · `op <addr>` · `op [addr]` ·
 `reg op addr` (leading modifier register).

@@ -494,6 +494,31 @@ TEST(Assemble, WideWords)
     EXPECT_EQ(word_low(got, 15), 0x0fffffL);
 }
 
+// A single apostrophe may separate digit groups in an integer literal, C++-style:
+// it is ignored by the value, so each separated literal must assemble identically
+// to its unseparated form, in every base and across the half-word boundary.
+TEST(Assemble, DigitSeparators)
+{
+    auto got = assemble(R"(
+        .data
+        .word 1'000             // decimal 1000
+        .word 0xab'cd'ef        // hex, low half only
+        .word 0100'000'000      // octal 2^24, spills into the high half
+        .word 0b1000'0000       // binary 128
+        .word 0xabcd'ef12'3456  // full 48-bit, separators across both halves
+)");
+    EXPECT_EQ(word_high(got, 8), 0L); // .word 1'000
+    EXPECT_EQ(word_low(got, 8), 1000L);
+    EXPECT_EQ(word_high(got, 9), 0L); // .word 0xab'cd'ef
+    EXPECT_EQ(word_low(got, 9), 0xabcdefL);
+    EXPECT_EQ(word_high(got, 10), 1L); // .word 0100'000'000
+    EXPECT_EQ(word_low(got, 10), 0L);
+    EXPECT_EQ(word_high(got, 11), 0L); // .word 0b1000'0000
+    EXPECT_EQ(word_low(got, 11), 128L);
+    EXPECT_EQ(word_high(got, 12), 0xabcdefL); // .word 0xabcd'ef12'3456
+    EXPECT_EQ(word_low(got, 12), 0x123456L);
+}
+
 // A .word must serialize its 48-bit value in BESM-6 big-endian half-word order:
 // the high 24 bits occupy the first (high) half-word on disk and the low 24 bits
 // the second (low) half-word - the same order instructions, .half, and the

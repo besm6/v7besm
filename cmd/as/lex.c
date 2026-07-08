@@ -26,6 +26,32 @@ static int hex_digit_value(int c)
         return c - 'a' + 10;
 }
 
+// Per-base digit predicates, used by digit_separator() below.
+static int is_hex_digit(int c)     { return ISHEX(c); }
+static int is_octal_digit(int c)   { return ISOCTAL(c); }
+static int is_decimal_digit(int c) { return ISDIGIT(c); }
+static int is_binary_digit(int c)  { return c == '0' || c == '1'; }
+
+//
+// C++-style digit separator: a single apostrophe may sit between two digits of
+// an integer literal (e.g. 1'000'000, 0xdead'beef).  Given the just-read char c
+// and whether a digit already precedes it, if c is such a separator consume it
+// and return the following digit; a misplaced ' (leading, trailing, or doubled)
+// is an error.  Any other char is returned unchanged.  Erroring on the misplaced
+// case avoids needing two chars of ungetc() pushback (only one is portable).
+//
+static int digit_separator(int c, int have_digit, int (*is_digit)(int))
+{
+    if (c != '\'')
+        return c;
+    if (!have_digit)
+        fatal("misplaced digit separator '");
+    c = getchar();
+    if (!is_digit(c))
+        fatal("misplaced digit separator '");
+    return c;
+}
+
 //
 // Read a hexadecimal literal of the form 0xZZZ (the "0x" is already consumed).
 // The digit values are stashed left-to-right in as.name, then assembled into
@@ -40,8 +66,12 @@ static void read_hex_number(void)
     char *cp;
 
     c = getchar();
-    for (cp = as.name; ISHEX(c); c = getchar())
+    for (cp = as.name; ; c = getchar()) {
+        c = digit_separator(c, cp > as.name, is_hex_digit);
+        if (!ISHEX(c))
+            break;
         *cp++ = hex_digit_value(c);
+    }
     ungetc(c, stdin);
     as.intval = 0;
     // Fill the low half (bits 1..24, i.e. 0-based 0..23), 4 bits per digit,
@@ -69,8 +99,12 @@ static void read_binary_number(void)
     char *cp;
 
     c = getchar();
-    for (cp = as.name; c == '0' || c == '1'; c = getchar())
+    for (cp = as.name; ; c = getchar()) {
+        c = digit_separator(c, cp > as.name, is_binary_digit);
+        if (c != '0' && c != '1')
+            break;
         *cp++ = c - '0';
+    }
     ungetc(c, stdin);
     as.intval = 0;
     for (c = 0; c < 24; c++) {
@@ -99,8 +133,12 @@ static void read_number(int c)
     if (c == '0') {
         char *cp;
         // Octal: leading-zero literal, e.g. 0123.  Three bits per digit.
-        for (cp = as.name; ISOCTAL(c); c = getchar())
+        for (cp = as.name; ; c = getchar()) {
+            c = digit_separator(c, cp > as.name, is_octal_digit);
+            if (!ISOCTAL(c))
+                break;
             *cp++ = c - '0';
+        }
         ungetc(c, stdin);
         // Pack eight digits (bits 1..24, i.e. 0-based 0..23) into the low half.
         for (c = 0; c <= 21; c += 3) {
@@ -122,8 +160,14 @@ static void read_number(int c)
     // mask to 48 bits so a large decimal does not leak past the word.
     {
         unsigned long long v = 0;
-        for (; ISDIGIT(c); c = getchar())
-            v = v * 10 + (c - '0');
+        int have_digit = 0;
+        for (;; c = getchar()) {
+            c = digit_separator(c, have_digit, is_decimal_digit);
+            if (!ISDIGIT(c))
+                break;
+            v          = v * 10 + (c - '0');
+            have_digit = 1;
+        }
         ungetc(c, stdin);
         as.intval = (int64_t)(v & WORD_MASK);
     }

@@ -8,11 +8,15 @@ DEV     = bio.o cd.o fd.o hd.o md.o mem.o partab.o \
           sc.o sr.o sys.o tty.o
 
 # Clang compiler on MacOS
-LLVMBIN = $(dir $(wildcard /usr/local/Cellar/llvm@19/19.*/bin/clang-19))
-
-AS      =  $(LLVMBIN)clang -target i486-unknown-linux-gnu -c
+LLVMBIN = $(dir $(wildcard /usr/local/Cellar/llvm/22.*/bin/clang-22))
+AS      = $(LLVMBIN)clang -target i486-unknown-linux-gnu -c
 CC      = $(LLVMBIN)clang -target i486-unknown-linux-gnu -ffreestanding
 CFLAGS  = -Os -I../include -DKERNEL -Wall -Werror -Wshadow
+
+# Besm6 toolchain
+#AS      = b6cc -c
+#CC      = b6cc
+#CFLAGS  = -I../include -DKERNEL
 
 VPATH = dev
 
