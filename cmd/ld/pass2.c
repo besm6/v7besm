@@ -77,8 +77,7 @@ void relocate_object(long loc)
 
         // Defined here: it had better agree with the definition pass 1 chose.
         if (ld.cursym.n_type != sp->n_type || ld.cursym.n_value != sp->n_value) {
-            printf("%s: ", ld.cursym.n_name);
-            error(1, "name redefined");
+            error(1, "name '%s' redefined", sp->n_name);
         }
     }
 

@@ -74,6 +74,7 @@
 //
 #include <stdarg.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -120,21 +121,23 @@ void cleanup_and_exit(void)
 //      1 - error; remember it (errlev=1) but keep going so we can list every
 //          problem in one run instead of stopping at the first
 //      2 - fatal; print and abort immediately via cleanup_and_exit()
-// The "ld: " prefix is printed only for the first message of a run, and the
-// current input file name (ld.filname) is shown when known.
+// Each diagnostic is self-contained, in GNU/Clang style, on stderr:
+//      progname: [file: ]{error|warning}: message
+// where progname is the basename of argv[0] and the input file name
+// (ld.filname) is shown when known.
 //
 void error(int n, char *fmt, ...)
 {
     va_list ap;
 
     va_start(ap, fmt);
-    if (!ld.errlev)
-        printf("ld: ");
+    fprintf(stderr, "%s: ", ld.progname);
     if (ld.filname)
-        printf("%s: ", ld.filname);
-    vprintf(fmt, ap);
+        fprintf(stderr, "%s: ", ld.filname);
+    fprintf(stderr, "%s: ", n == 0 ? "warning" : "error");
+    vfprintf(stderr, fmt, ap);
     va_end(ap);
-    printf("\n");
+    fprintf(stderr, "\n");
     if (n > 1)
         cleanup_and_exit();
     ld.errlev = n;
@@ -208,7 +211,6 @@ void assign_addresses(void)
     struct nlist *sp;
     const struct nlist *symp;
     long cmsize;
-    int nund;
     long cmorigin;
 
     ld.p_econst = *lookup_name("_econst");
@@ -283,17 +285,11 @@ void assign_addresses(void)
     // bss symbols here.  Undefined ones are reported (unless -r), and any
     // value that overflows the 27-bit address field is flagged.
     //
-    nund = 0;
     for (sp = ld.symtab; sp < symp; sp++) {
         switch (sp->n_type) {
         case N_EXT + N_UNDF:
-            if (!ld.arflag) {
-                ld.errlev |= 01;
-                if (!nund)
-                    printf("Undefined:\n");
-                nund++;
-                printf("\t%s\n", sp->n_name);
-            }
+            if (!ld.arflag)
+                error(1, "undefined reference to '%s'", sp->n_name);
             break;
         default:
         case N_EXT + N_ABS:
@@ -346,6 +342,16 @@ void assign_addresses(void)
 //
 int ld_link(int argc, char **argv)
 {
+    //
+    // Derive the diagnostic prefix from argv[0]'s basename (falling back to
+    // "ld"), before any pass can emit a message.
+    //
+    ld.progname = "ld";
+    if (argc > 0 && argv[0] && argv[0][0]) {
+        char *slash = strrchr(argv[0], '/');
+        ld.progname = slash ? slash + 1 : argv[0];
+    }
+
     //
     // First pass: compute segment lengths, name table, and entry address.
     //

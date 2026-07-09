@@ -13,6 +13,7 @@ DEV     = bio.o cd.o fd.o hd.o md.o mem.o partab.o \
 #CC      = $(LLVMBIN)clang -target i486-unknown-linux-gnu -ffreestanding
 #CFLAGS  = -Os -I../include -DKERNEL -Wall -Werror -Wshadow
 #AR      = ar
+#RANLIB  = :
 #LD      = ld.lld -T unix.ld
 
 # Besm6 toolchain
@@ -20,6 +21,7 @@ AS      = b6cc -c
 CC      = b6cc
 CFLAGS  = -I../include -DKERNEL
 AR      = b6ar
+RANLIB  = b6ranlib
 LD      = b6ld
 
 VPATH = dev
@@ -36,9 +38,11 @@ unix:   $(OBJ)
 
 libsys.a: $(SYS)
 	$(AR) cr $@ $(SYS)
+	$(RANLIB) $@
 
 libdev.a: $(DEV)
 	$(AR) cr $@ $(DEV)
+	$(RANLIB) $@
 
 %.ast:  %.c
 	$(CC) -Xclang -ast-dump=json -fsyntax-only $(CFLAGS) $< > $@

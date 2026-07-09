@@ -206,7 +206,7 @@ void scan_file(char *cp)
         break;
 
     case 3: // out of date archive
-        error(0, "out of date (warning)");
+        error(0, "out of date");
         nloc = W + (ld.archdr.ar_size + W - 1) / W * W + ARHDRSZ;
         goto archive;
     }

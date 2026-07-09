@@ -119,6 +119,7 @@ struct linker {
 
     int ofilfnd;      // set once a -o output name has been seen
     char *ofilename;  // output file name (default "l.out", then "a.out")
+    char *progname;   // basename of argv[0], used as the diagnostic prefix
     char *filname;    // name of the input file currently being processed
     char *filname_alloc; // malloc'd base of filname for a "-l" arg (0 if filname is unowned)
     int errlev;       // highest error severity seen so far (the eventual exit code)

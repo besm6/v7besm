@@ -142,8 +142,7 @@ void define_symbol(struct nlist *sp, long val, int type)
     if (sp == 0)
         return;
     if (sp->n_type != N_EXT + N_UNDF) {
-        printf("%s: ", sp->n_name);
-        error(1, "name redefined");
+        error(1, "name '%s' redefined", sp->n_name);
         return;
     }
     sp->n_type  = type;
