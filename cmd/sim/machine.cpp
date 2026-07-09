@@ -26,6 +26,9 @@ extern "C" {
 #include "besm6/b.out.h"
 }
 
+// Diagnostic prefix (basename of argv[0]); declared in session.h, set by main().
+const char *sim_progname = "sim";
+
 // Static fields.
 bool Machine::verbose                    = false;
 uint64_t Machine::simulated_instructions = 0;
@@ -119,8 +122,8 @@ void Machine::run()
             // Empty message - legally halted by extracode e74.
             return;
         }
-        std::cerr << "Error: " << message << " @" << std::oct << std::setfill('0') << std::setw(5)
-                  << pc << std::endl;
+        std::cerr << sim_progname << ": error: " << message << " @" << std::oct
+                  << std::setfill('0') << std::setw(5) << pc << std::endl;
         throw std::runtime_error(message);
 
     } catch (std::exception &ex) {

@@ -36,6 +36,8 @@
 
 extern char **environ;
 
+static char *progname = "cc"; // diagnostic prefix: basename of argv[0]
+
 //
 // A growable vector of C strings, used for argument lists and file lists.
 // The stored pointers are borrowed unless noted; the vector owns only its
@@ -53,7 +55,7 @@ static void vec_push(struct vec *v, char *s)
         v->cap = v->cap ? v->cap * 2 : 8;
         v->data = realloc(v->data, v->cap * sizeof(*v->data));
         if (!v->data) {
-            fprintf(stderr, "cc: out of memory\n");
+            fprintf(stderr, "%s: error: out of memory\n", progname);
             exit(1);
         }
     }
@@ -110,7 +112,7 @@ static char *concat(const char *a, const char *b)
     size_t n = strlen(a) + strlen(b) + 1;
     char *s = malloc(n);
     if (!s) {
-        fprintf(stderr, "cc: out of memory\n");
+        fprintf(stderr, "%s: error: out of memory\n", progname);
         exit(1);
     }
     snprintf(s, n, "%s%s", a, b);
@@ -126,7 +128,7 @@ static void error(const char *fmt, ...)
     va_list ap;
 
     va_start(ap, fmt);
-    fprintf(stderr, "cc: ");
+    fprintf(stderr, "%s: error: ", progname);
     vfprintf(stderr, fmt, ap);
     va_end(ap);
     fprintf(stderr, "\n");
@@ -581,30 +583,36 @@ static int link_objects(void)
 
 static void usage(void)
 {
-    fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "    b6cc [options] file...\n");
-    fprintf(stderr, "Options:\n");
-    fprintf(stderr, "    -c              Compile and assemble, but do not link\n");
-    fprintf(stderr, "    -S              Compile only; emit assembly (.s)\n");
-    fprintf(stderr, "    -E              Preprocess only; write to output or .i\n");
-    fprintf(stderr, "    -o file         Set output file name\n");
-    fprintf(stderr, "    -O              Optimize (reserved; currently a no-op)\n");
-    fprintf(stderr, "    -g              Emit debug info (reserved; currently a no-op)\n");
-    fprintf(stderr, "    -v              Verbose: echo each sub-command\n");
-    fprintf(stderr, "    -Dname[=val]    Predefine a preprocessor macro\n");
-    fprintf(stderr, "    -Uname          Undefine a preprocessor macro\n");
-    fprintf(stderr, "    -Ipath          Add a header search directory\n");
-    fprintf(stderr, "    -Lpath          Add a library search directory (for the linker)\n");
-    fprintf(stderr, "    -lname          Link against library libname (for the linker)\n");
-    fprintf(stderr, "    -nostdlib       Do not use the standard library dirs or -lc\n");
-    fprintf(stderr, "    -nostdinc       Do not add the standard system include directory\n");
-    fprintf(stderr, "Inputs are dispatched by suffix: .c (compile), "
-                    ".S (preprocess + assemble), .s (assemble), .o (link).\n");
+    printf("Usage:\n");
+    printf("    %s [options] file...\n", progname);
+    printf("Options:\n");
+    printf("    -c              Compile and assemble, but do not link\n");
+    printf("    -S              Compile only; emit assembly (.s)\n");
+    printf("    -E              Preprocess only; write to output or .i\n");
+    printf("    -o file         Set output file name\n");
+    printf("    -O              Optimize (reserved; currently a no-op)\n");
+    printf("    -g              Emit debug info (reserved; currently a no-op)\n");
+    printf("    -v              Verbose: echo each sub-command\n");
+    printf("    -Dname[=val]    Predefine a preprocessor macro\n");
+    printf("    -Uname          Undefine a preprocessor macro\n");
+    printf("    -Ipath          Add a header search directory\n");
+    printf("    -Lpath          Add a library search directory (for the linker)\n");
+    printf("    -lname          Link against library libname (for the linker)\n");
+    printf("    -nostdlib       Do not use the standard library dirs or -lc\n");
+    printf("    -nostdinc       Do not add the standard system include directory\n");
+    printf("Inputs are dispatched by suffix: .c (compile), "
+           ".S (preprocess + assemble), .s (assemble), .o (link).\n");
     exit(1);
 }
 
 int main(int argc, char *argv[])
 {
+    // Derive the diagnostic prefix from argv[0]'s basename (fallback "cc").
+    if (argc > 0 && argv[0] && argv[0][0]) {
+        char *slash = strrchr(argv[0], '/');
+        progname    = slash ? slash + 1 : argv[0];
+    }
+
     atexit(cleanup);
 
     for (int i = 1; i < argc; i++) {

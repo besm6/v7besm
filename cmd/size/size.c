@@ -10,6 +10,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "besm6/b.out.h"
 
@@ -17,15 +18,16 @@
 
 #define W 6 /* word length in bytes */
 
-static int header; /* whether the header has already been printed */
-static int wflag;  /* print sizes in words */
+static int header;            /* whether the header has already been printed */
+static int wflag;             /* print sizes in words */
+static char *progname = "size"; /* diagnostic prefix: basename of argv[0] */
 
 
 /* Print the command-line usage summary. */
 static void usage(void)
 {
     printf("Usage:\n");
-    printf("    size [-w] file...\n");
+    printf("    %s [-w] file...\n", progname);
     printf("Options:\n");
     printf("    -w          Print sizes in words instead of bytes\n");
 }
@@ -37,11 +39,11 @@ static void size(const char *fname)
     FILE *f;
 
     if ((f = fopen(fname, "r")) == NULL) {
-        printf("size: %s not found\n", fname);
+        fprintf(stderr, "%s: error: %s not found\n", progname, fname);
         return;
     }
     if (!fgethdr(f, &buf) || N_BADMAG(buf)) {
-        printf("size: %s not an object file\n", fname);
+        fprintf(stderr, "%s: error: %s not an object file\n", progname, fname);
         fclose(f);
         return;
     }
@@ -66,6 +68,12 @@ int size_run(int argc, char **argv)
 {
     int yesarg = 0; /* whether file-name arguments were given */
 
+    /* Derive the diagnostic prefix from argv[0]'s basename (fallback "size"). */
+    if (argc > 0 && argv[0] && argv[0][0]) {
+        char *slash = strrchr(argv[0], '/');
+        progname    = slash ? slash + 1 : argv[0];
+    }
+
     /* Reset option state so repeated in-process runs start clean. */
     header = wflag = 0;
 
@@ -78,8 +86,8 @@ int size_run(int argc, char **argv)
                     wflag++;
                     break;
                 default:
-                    fprintf(stderr, "size: bad flag %c\n",
-                            **argv);
+                    fprintf(stderr, "%s: error: bad flag %c\n",
+                            progname, **argv);
                     return 1;
                 }
             continue;

@@ -24,7 +24,7 @@ void start_temp_archive(void)
 
     ar.tmpfd = mkstemp(ar.tmpl_main);
     if (ar.tmpfd < 0) {
-        fprintf(stderr, "ar: cannot create temporary file\n");
+        fprintf(stderr, "%s: error: cannot create temporary file\n", ar.progname);
         finish(1);
     }
     ar.tmp_name = ar.tmpl_main;
@@ -45,7 +45,7 @@ int open_archive(void)
     if (ar.arfd < 0)
         return (1);
     if (!getint(ar.arfd, &mbuf) || mbuf != ARMAG) {
-        fprintf(stderr, "ar: %s is not in archive format\n", ar.archive_name);
+        fprintf(stderr, "%s: error: %s is not in archive format\n", ar.progname, ar.archive_name);
         finish(1);
     }
     return (0);
@@ -62,17 +62,17 @@ void open_archive_rw(void)
 
     if ((ar.qfd = open(ar.archive_name, O_RDWR)) < 0) {
         if (!ar.opt_create)
-            fprintf(stderr, "ar: creating %s\n", ar.archive_name);
+            fprintf(stderr, "%s: creating %s\n", ar.progname, ar.archive_name);
         close(creat(ar.archive_name, 0666));
         if ((ar.qfd = open(ar.archive_name, O_RDWR)) < 0) {
-            fprintf(stderr, "ar: cannot create %s\n", ar.archive_name);
+            fprintf(stderr, "%s: error: cannot create %s\n", ar.progname, ar.archive_name);
             finish(1);
         }
         mbuf = ARMAG;
         if (!putint(ar.qfd, mbuf))
             die_write_error();
     } else if (!getint(ar.qfd, &mbuf) || mbuf != ARMAG) {
-        fprintf(stderr, "ar: %s is not in archive format\n", ar.archive_name);
+        fprintf(stderr, "%s: error: %s is not in archive format\n", ar.progname, ar.archive_name);
         finish(1);
     }
 }
@@ -94,7 +94,7 @@ void append_new_files(void)
         log_action('a');
         f = open_input();
         if (f < 0) {
-            fprintf(stderr, "ar: cannot open %s\n", ar.cur_file);
+            fprintf(stderr, "%s: error: cannot open %s\n", ar.progname, ar.cur_file);
             continue;
         }
         write_member(f);
@@ -118,11 +118,11 @@ void commit_archive(void)
         signal(caught_signals[i], SIG_IGN);
     if (ar.arfd < 0)
         if (!ar.opt_create)
-            fprintf(stderr, "ar: creating %s\n", ar.archive_name);
+            fprintf(stderr, "%s: creating %s\n", ar.progname, ar.archive_name);
     close(ar.arfd);
     ar.arfd = creat(ar.archive_name, 0666);
     if (ar.arfd < 0) {
-        fprintf(stderr, "ar: cannot create %s\n", ar.archive_name);
+        fprintf(stderr, "%s: error: cannot create %s\n", ar.progname, ar.archive_name);
         finish(1);
     }
     if (ar.tmp_name) { // main temp: everything up to the insertion point
@@ -320,7 +320,7 @@ void handle_position(void)
         ar.insert_state = 0;
         f               = mkstemp(ar.tmpl_before);
         if (f < 0) {
-            fprintf(stderr, "ar: cannot create second temporary file\n");
+            fprintf(stderr, "%s: error: cannot create second temporary file\n", ar.progname);
             return;
         }
         // Divert the remaining members: tmp1 keeps the old main-temp fd (the
@@ -335,5 +335,5 @@ void handle_position(void)
 // Warn that a member was shorter than its header claimed (corrupt archive).
 static void phase_error(void)
 {
-    fprintf(stderr, "ar: phase error on %s\n", ar.cur_file);
+    fprintf(stderr, "%s: error: phase error on %s\n", ar.progname, ar.cur_file);
 }

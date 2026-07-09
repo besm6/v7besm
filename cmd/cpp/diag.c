@@ -11,17 +11,19 @@
 #include "intern.h"
 
 //
-// Print one diagnostic line "file: line: message" to stderr, using printf-style
-// formatting (the message and its arguments arrive as a va_list).  Every error
+// Print one diagnostic line "progname: [file:]line: label: message" to stderr,
+// in GNU/Clang style, using printf-style formatting (the message and its
+// arguments arrive as a va_list).  `label` is "error" or "warning".  Every error
 // bumps cpp.exit_code so the program can exit non-zero; the callers below wrap
 // this with the usual (const char *fmt, ...) interface.
 //
-static void vreport(const char *s, va_list ap)
+static void vreport(const char *label, const char *s, va_list ap)
 {
+    fprintf(stderr, "%s: ", cpp.prog_name ? cpp.prog_name : "cpp");
     if (cpp.inc_file[cpp.inc_level][0]) {
-        fprintf(stderr, "%s: ", cpp.inc_file[cpp.inc_level]);
+        fprintf(stderr, "%s:", cpp.inc_file[cpp.inc_level]);
     }
-    fprintf(stderr, "%d: ", cpp.line_no[cpp.inc_level]);
+    fprintf(stderr, "%d: %s: ", cpp.line_no[cpp.inc_level], label);
     vfprintf(stderr, s, ap);
     fprintf(stderr, "\n");
     ++cpp.exit_code;
@@ -35,7 +37,7 @@ void pperror(const char *s, ...)
     va_list ap;
 
     va_start(ap, s);
-    vreport(s, ap);
+    vreport("error", s, ap);
     va_end(ap);
 }
 
@@ -48,7 +50,7 @@ void parse_error(const char *s, ...)
     va_list ap;
 
     va_start(ap, s);
-    vreport(s, ap);
+    vreport("error", s, ap);
     va_end(ap);
 }
 
@@ -64,7 +66,7 @@ void ppwarn(const char *s, ...)
 
     cpp.exit_code = -1;
     va_start(ap, s);
-    vreport(s, ap);
+    vreport("warning", s, ap);
     va_end(ap);
     cpp.exit_code = fail;
 }

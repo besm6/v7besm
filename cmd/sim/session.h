@@ -11,6 +11,10 @@
 
 #include "besm6_arch.h"
 
+// Diagnostic prefix (basename of argv[0]); set by main(), used by the error
+// sinks in session.cpp and machine.cpp.  Defined in machine.cpp.
+extern const char *sim_progname;
+
 //
 // External interface to the simulator.
 //

@@ -27,7 +27,7 @@ struct cppstate cpp;
 void usage()
 {
     printf("Usage:\n");
-    printf("    cpp [options] [infile [outfile]]\n");
+    printf("    %s [options] [infile [outfile]]\n", cpp.prog_name ? cpp.prog_name : "cpp");
     printf("Options:\n");
     printf("    -I path             Add path to the search list for header files\n");
     printf("    -D macro[=value]    Fake a definition at the beginning\n");
@@ -63,6 +63,13 @@ int main(int argc, char *argv[])
     cpp.pre_undefs_end = cpp.pre_undefs;
     cpp.in_fd          = STDIN;
     cpp.ndirs          = 1;
+
+    // Diagnostic prefix: the basename of argv[0] (fallback "cpp").
+    cpp.prog_name = "cpp";
+    if (argc > 0 && argv[0] && argv[0][0]) {
+        char *slash   = strrchr(argv[0], '/');
+        cpp.prog_name = slash ? slash + 1 : argv[0];
+    }
 
     cpp.out_file = stdout;
 

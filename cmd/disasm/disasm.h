@@ -18,6 +18,9 @@ extern const char **lcmd, **scmd;
 // Output-control flags consumed by the file driver.
 extern int rflag, Rflag, cflag, Cflag;
 
+// Diagnostic prefix (basename of argv[0]); set by main(), used by disassemble().
+extern char *progname;
+
 // Decode one 24-bit instruction into re-assemblable text written to buf.
 void disasm_insn(unsigned insn, char *buf);
 

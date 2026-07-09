@@ -91,9 +91,10 @@ long file_size(const std::string &path)
 struct Result {
     int rc;          // strip_run() exit code
     std::string out; // everything written to stdout
+    std::string err; // everything written to stderr (diagnostics)
 };
 
-// Run b6strip with the given arguments, returning its exit code and stdout.
+// Run b6strip with the given arguments, returning its exit code, stdout and stderr.
 Result run_strip(std::vector<std::string> args)
 {
     // s is non-const: strip_run() may rewrite argv in place, and the non-const
@@ -105,9 +106,13 @@ Result run_strip(std::vector<std::string> args)
     argv.push_back(nullptr);
 
     testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
     int rc = strip_run((int)args.size(), argv.data());
     std::fflush(stdout);
-    return { rc, testing::internal::GetCapturedStdout() };
+    std::fflush(stderr);
+    std::string out = testing::internal::GetCapturedStdout();
+    std::string err = testing::internal::GetCapturedStderr();
+    return { rc, out, err };
 }
 
 } // namespace
@@ -140,9 +145,9 @@ TEST(Strip, AlreadyStripped)
 
     Result r = run_strip({ "b6strip", obj });
 
-    EXPECT_EQ(r.rc, 0) << r.out;
-    EXPECT_NE(r.out.find("already stripped"), std::string::npos) << r.out;
-    EXPECT_EQ(file_size(obj), before) << r.out;
+    EXPECT_EQ(r.rc, 0) << r.err;
+    EXPECT_NE(r.err.find("already stripped"), std::string::npos) << r.err;
+    EXPECT_EQ(file_size(obj), before) << r.err;
 
     unlink(obj.c_str());
 }
@@ -158,8 +163,8 @@ TEST(Strip, NotAnObject)
 
     Result r = run_strip({ "b6strip", obj });
 
-    EXPECT_NE(r.rc, 0) << r.out;
-    EXPECT_NE(r.out.find("not in a.out format"), std::string::npos) << r.out;
+    EXPECT_NE(r.rc, 0) << r.err;
+    EXPECT_NE(r.err.find("not in a.out format"), std::string::npos) << r.err;
 
     unlink(obj.c_str());
 }

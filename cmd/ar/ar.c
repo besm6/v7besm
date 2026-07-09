@@ -84,6 +84,11 @@ int ar_run(int argc, char **argv)
     if (setjmp(ar.done_env)) // finish() lands here; ar.exit_code holds the result
         return ar.exit_code;
 
+    // Derive the diagnostic prefix from argv[0]'s basename (fallback "ar").
+    ar.progname = "ar";
+    if (argc > 0 && argv[0] && argv[0][0])
+        ar.progname = basename_of(argv[0]);
+
     // Trap interrupt signals so a partial temp file is removed on the way out,
     // but only if the signal wasn't already being ignored (e.g. by a shell).
     for (i = 0; caught_signals[i]; i++)
@@ -157,7 +162,7 @@ int ar_run(int argc, char **argv)
             continue;
 
         default:
-            fprintf(stderr, "ar: unknown flag `%c'\n", *cp);
+            fprintf(stderr, "%s: error: unknown flag `%c'\n", ar.progname, *cp);
             finish(1);
         }
 
@@ -189,7 +194,7 @@ int ar_run(int argc, char **argv)
     // it is an error — the user must pick exactly one command.
     if (ar.command == 0) {
         if (ar.opt_update == 0) {
-            fprintf(stderr, "ar: must be one of [%s]\n", command_letters);
+            fprintf(stderr, "%s: error: must be one of [%s]\n", ar.progname, command_letters);
             finish(1);
         }
         set_command(cmd_replace);
@@ -206,7 +211,7 @@ int ar_run(int argc, char **argv)
 static void set_command(void (*fun)(void))
 {
     if (ar.command != 0) {
-        fprintf(stderr, "ar: only one of [%s] allowed\n", command_letters);
+        fprintf(stderr, "%s: error: only one of [%s] allowed\n", ar.progname, command_letters);
         finish(1);
     }
     ar.command = fun;

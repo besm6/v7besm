@@ -125,7 +125,7 @@ static int translate_trigraphs(char *buf, int n)
                 }
             if (r) {
                 if (!cpp.opt_no_warnings)
-                    ppwarn("warning: trigraph ??%c converted to %c", c, r);
+                    ppwarn("trigraph ??%c converted to %c", c, r);
                 *dst++ = r;
                 src += 3;
                 continue;

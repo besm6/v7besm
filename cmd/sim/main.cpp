@@ -65,6 +65,8 @@ int main(int argc, char *argv[])
     } else {
         prog_name++;
     }
+    // Publish it for the diagnostic sinks in machine.cpp/session.cpp.
+    sim_progname = prog_name;
 
     // Instantiate the session.
     // Enable wall clock by default.
@@ -84,8 +86,8 @@ int main(int argc, char *argv[])
             if (session.get_program_file().empty()) {
                 session.set_program_file(optarg);
             } else {
-                std::cerr << "Too many arguments: " << optarg << std::endl;
-                print_usage(std::cerr, prog_name);
+                std::cerr << prog_name << ": error: too many arguments: " << optarg << std::endl;
+                print_usage(std::cout, prog_name);
                 exit(EXIT_FAILURE);
             }
             continue;
@@ -110,8 +112,8 @@ int main(int argc, char *argv[])
             try {
                 session.set_limit(std::stoull(optarg));
             } catch (...) {
-                std::cerr << "Bad --limit option: " << optarg << std::endl;
-                print_usage(std::cerr, prog_name);
+                std::cerr << prog_name << ": error: bad --limit option: " << optarg << std::endl;
+                print_usage(std::cout, prog_name);
                 exit(EXIT_FAILURE);
             }
             continue;
@@ -137,7 +139,7 @@ int main(int argc, char *argv[])
             continue;
 
         default:
-            print_usage(std::cerr, prog_name);
+            print_usage(std::cout, prog_name);
             exit(EXIT_FAILURE);
         }
         break;
@@ -145,7 +147,7 @@ int main(int argc, char *argv[])
 
     // Must specify a program to run.
     if (session.get_program_file().empty()) {
-        print_usage(std::cerr, prog_name);
+        print_usage(std::cout, prog_name);
         exit(EXIT_FAILURE);
     }
 

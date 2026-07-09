@@ -108,6 +108,7 @@ struct cppstate {
     int trig_nhold[MAXINC];   // trailing '?' count carried across a read boundary (per level, -trigraphs)
     char *search_dirs[10];    // #include search path: [0]=current dir, then -I dirs, then system
     int in_fd;                // fd of the file currently being read; init: STDIN
+    char *prog_name;          // diagnostic prefix: basename of argv[0]
     FILE *out_file;           // where preprocessed text is written (usually stdout)
     int ndirs;                // number of entries filled in search_dirs; init: 1
     int inc_level;            // current #include nesting depth (0 = top-level file)

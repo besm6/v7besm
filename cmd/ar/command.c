@@ -28,7 +28,7 @@ void cmd_replace(void)
             f = open_input(); // the newer on-disk version of this member
             if (f < 0) {
                 if (ar.namecount)
-                    fprintf(stderr, "ar: cannot open %s\n", ar.cur_file);
+                    fprintf(stderr, "%s: error: cannot open %s\n", ar.progname, ar.cur_file);
                 goto cp; // can't read it: keep the old member instead
             }
             if (ar.opt_update)
@@ -85,7 +85,7 @@ void cmd_extract(void)
         if (ar.namecount == 0 || match_member()) {
             f = creat(ar.cur_file, ar.hdr.ar_mode & 0777);
             if (f < 0) {
-                fprintf(stderr, "ar: cannot create %s\n", ar.cur_file);
+                fprintf(stderr, "%s: error: cannot create %s\n", ar.progname, ar.cur_file);
                 goto sk;
             }
             log_action('x');
@@ -134,7 +134,7 @@ void cmd_move(void)
         die_no_archive();
     ar.tmp2fd = mkstemp(ar.tmpl_move);
     if (ar.tmp2fd < 0) {
-        fprintf(stderr, "ar: cannot create third temporary file\n");
+        fprintf(stderr, "%s: error: cannot create third temporary file\n", ar.progname);
         finish(1);
     }
     ar.tmp2_name = ar.tmpl_move;
@@ -180,7 +180,7 @@ void cmd_quick(void)
     int i, f;
 
     if (ar.opt_after || ar.opt_before) {
-        fprintf(stderr, "ar: abi and q incompatible\n");
+        fprintf(stderr, "%s: error: abi and q incompatible\n", ar.progname);
         finish(1);
     }
     open_archive_rw();
@@ -197,7 +197,7 @@ void cmd_quick(void)
         log_action('q');
         f = open_input();
         if (f < 0) {
-            fprintf(stderr, "ar: cannot open %s\n", ar.cur_file);
+            fprintf(stderr, "%s: error: cannot open %s\n", ar.progname, ar.cur_file);
             continue;
         }
         // write_member() emits into ar.tmpfd, so point that at the archive fd

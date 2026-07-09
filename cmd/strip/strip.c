@@ -8,6 +8,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "besm6/b.out.h"
@@ -15,6 +16,8 @@
 #include "strip.h"
 
 #define BUFSZ 8192 /* copy chunk size in bytes */
+
+static char *progname = "strip"; /* diagnostic prefix: basename of argv[0] */
 
 /* Copy `size` bytes from `fr` to `to`; returns nonzero on short read/write. */
 static int copy(const char *name, FILE *fr, FILE *to, long size)
@@ -26,11 +29,11 @@ static int copy(const char *name, FILE *fr, FILE *to, long size)
         if (size < (long)s)
             s = (size_t)size;
         if (fread(buf, 1, s, fr) != s) {
-            printf("%s unexpected eof\n", name);
+            fprintf(stderr, "%s: error: %s unexpected eof\n", progname, name);
             return 1;
         }
         if (fwrite(buf, 1, s, to) != s) {
-            printf("%s unexpected write eof\n", name);
+            fprintf(stderr, "%s: error: %s unexpected write eof\n", progname, name);
             return 1;
         }
         size -= (long)s;
@@ -52,16 +55,16 @@ static int strip_file(const char *name, FILE *tf)
 
     f = fopen(name, "r");
     if (!f) {
-        printf("cannot open %s\n", name);
+        fprintf(stderr, "%s: error: cannot open %s\n", progname, name);
         return 1;
     }
     if (!fgethdr(f, &head) || N_BADMAG(head)) {
-        printf("%s not in a.out format\n", name);
+        fprintf(stderr, "%s: error: %s not in a.out format\n", progname, name);
         fclose(f);
         return 1;
     }
     if (!head.a_syms && (head.a_flag & RELFLG)) {
-        printf("%s already stripped\n", name);
+        fprintf(stderr, "%s: error: %s already stripped\n", progname, name);
         fclose(f);
         return 0;
     }
@@ -78,7 +81,7 @@ static int strip_file(const char *name, FILE *tf)
     fclose(f);
     f = fopen(name, "w");
     if (!f) {
-        printf("%s cannot recreate\n", name);
+        fprintf(stderr, "%s: error: %s cannot recreate\n", progname, name);
         return 1;
     }
     fseek(tf, 0L, SEEK_SET);
@@ -92,7 +95,7 @@ static int strip_file(const char *name, FILE *tf)
 static void usage(void)
 {
     printf("Usage:\n");
-    printf("    strip file...\n");
+    printf("    %s file...\n", progname);
 }
 
 int strip_run(int argc, char **argv)
@@ -102,6 +105,12 @@ int strip_run(int argc, char **argv)
     int fd;
     int status = 0;
     int i;
+
+    /* Derive the diagnostic prefix from argv[0]'s basename (fallback "strip"). */
+    if (argc > 0 && argv[0] && argv[0][0]) {
+        char *slash = strrchr(argv[0], '/');
+        progname    = slash ? slash + 1 : argv[0];
+    }
 
     if (argc < 2) {
         usage();
@@ -114,7 +123,7 @@ int strip_run(int argc, char **argv)
 
     fd = mkstemp(tname);
     if (fd < 0 || (tf = fdopen(fd, "w+")) == NULL) {
-        printf("cannot create temp file\n");
+        fprintf(stderr, "%s: error: cannot create temp file\n", progname);
         if (fd >= 0) {
             close(fd);
             unlink(tname);

@@ -6,6 +6,7 @@
 //
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "disasm.h"
 
@@ -14,20 +15,26 @@
 //
 static void usage(void)
 {
-    fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "    b6disasm [-bcCrR] file...\n");
-    fprintf(stderr, "Options:\n");
-    fprintf(stderr, "    -b    Use BEMSH (Cyrillic) mnemonics instead of the default MADLEN\n");
-    fprintf(stderr, "    -c    Also print each instruction word in octal\n");
-    fprintf(stderr, "    -C    Print instruction words only in octal (implies -c)\n");
-    fprintf(stderr, "    -r    Print relocation info\n");
-    fprintf(stderr, "    -R    Print relocation as numbers (implies -r)\n");
+    printf("Usage:\n");
+    printf("    %s [-bcCrR] file...\n", progname);
+    printf("Options:\n");
+    printf("    -b    Use BEMSH (Cyrillic) mnemonics instead of the default MADLEN\n");
+    printf("    -c    Also print each instruction word in octal\n");
+    printf("    -C    Print instruction words only in octal (implies -c)\n");
+    printf("    -r    Print relocation info\n");
+    printf("    -R    Print relocation as numbers (implies -r)\n");
     exit(1);
 }
 
 int main(int argc, char **argv)
 {
     int yesarg = 0; // whether file-name arguments were given
+
+    // Derive the diagnostic prefix from argv[0]'s basename (fallback "disasm").
+    if (argc > 0 && argv[0] && argv[0][0]) {
+        char *slash = strrchr(argv[0], '/');
+        progname    = slash ? slash + 1 : argv[0];
+    }
 
     while (--argc) {
         ++argv;

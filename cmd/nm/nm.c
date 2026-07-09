@@ -26,6 +26,7 @@ static int globl_flg;
 static int nosort_flg;
 static int prep_flg;
 static int ar_flg;
+static char *progname = "nm"; /* diagnostic prefix: basename of argv[0] */
 static long off;
 static struct exec hdr;
 static struct ar_hdr arhdr;
@@ -38,7 +39,7 @@ static int compare(const void *p1, const void *p2);
 static void usage(void)
 {
     printf("Usage:\n");
-    printf("    nm [-goprun] file...\n");
+    printf("    %s [-goprun] file...\n", progname);
     printf("Options:\n");
     printf("    -n          Sort numerically by value\n");
     printf("    -g          List global (external) symbols only\n");
@@ -51,6 +52,12 @@ static void usage(void)
 int nm_run(int argc, char **argv)
 {
     int narg;
+
+    /* Derive the diagnostic prefix from argv[0]'s basename (fallback "nm"). */
+    if (argc > 0 && argv[0] && argv[0][0]) {
+        char *slash = strrchr(argv[0], '/');
+        progname    = slash ? slash + 1 : argv[0];
+    }
 
     /* Reset option state so repeated in-process runs start clean. */
     numsort_flg = undef_flg = revsort_flg = 0;
@@ -79,8 +86,8 @@ int nm_run(int argc, char **argv)
                 prep_flg++;
                 continue;
             default: /* oops */
-                fprintf(stderr, "nm: unknown flag -%c\n",
-                        *argv[0]);
+                fprintf(stderr, "%s: error: unknown flag -%c\n",
+                        progname, *argv[0]);
                 return 1;
             }
         argc--;
@@ -93,13 +100,13 @@ int nm_run(int argc, char **argv)
     while (argc--) {
         fi = fopen(*++argv, "r");
         if (fi == NULL) {
-            fprintf(stderr, "nm: cannot open %s\n", *argv);
+            fprintf(stderr, "%s: error: cannot open %s\n", progname, *argv);
             continue;
         }
         hdr.a_magic = fgetw(fi);
         ar_flg      = hdr.a_magic == ARMAG;
         if (!ar_flg && N_BADMAG(hdr)) {
-            fprintf(stderr, "nm: %s: bad format\n", *argv);
+            fprintf(stderr, "%s: error: %s: bad format\n", progname, *argv);
             fclose(fi);
             continue;
         }
@@ -138,7 +145,7 @@ static void nm(const char *name, int narg)
     fseek(fi, n, 1);
     n = hdr.a_syms;
     if (n == 0) {
-        fprintf(stderr, "nm: %s: ", name);
+        fprintf(stderr, "%s: error: %s: ", progname, name);
         if (ar_flg)
             fprintf(stderr, "%s: ", arhdr.ar_name);
         fprintf(stderr, "no symbol table\n");
@@ -147,7 +154,7 @@ static void nm(const char *name, int narg)
     for (;;) {
         c = fgetsym(fi, &sym);
         if (c == 0) {
-            fprintf(stderr, "nm: out of memory\n");
+            fprintf(stderr, "%s: error: out of memory\n", progname);
             exit(4);
         }
         if (c == 1)
@@ -155,7 +162,7 @@ static void nm(const char *name, int narg)
         n -= c;
         if (n <= 0) {
             fprintf(stderr,
-                    "nm: bad symbol table length\n");
+                    "%s: error: bad symbol table length\n", progname);
             exit(3);
         }
         if (globl_flg && (sym.n_type & N_EXT) == 0) {
@@ -206,7 +213,7 @@ static void nm(const char *name, int narg)
                 grown = (struct nlist *)realloc(symp, symplen * sizeof(struct nlist));
             }
             if (grown == NULL) {
-                fprintf(stderr, "nm: out of memory on %s\n", name);
+                fprintf(stderr, "%s: error: out of memory on %s\n", progname, name);
                 free(symp);
                 exit(2);
             }

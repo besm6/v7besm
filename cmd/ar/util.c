@@ -1,7 +1,9 @@
 //
 // BESM-6 archiver: exit path, diagnostics, and small shared helpers.
 //
+#include <errno.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "intern.h"
@@ -10,7 +12,7 @@
 void die_usage(void)
 {
     printf("Usage:\n");
-    printf("    ar [-]{%s}[%s] archive file...\n", command_letters, option_letters);
+    printf("    %s [-]{%s}[%s] archive file...\n", ar.progname, command_letters, option_letters);
     printf("Commands (exactly one required):\n");
     printf("    r           Replace or add files to the archive\n");
     printf("    d           Delete files from the archive\n");
@@ -36,7 +38,7 @@ void die_usage(void)
 // Complain that the archive doesn't exist and exit.
 void die_no_archive(void)
 {
-    fprintf(stderr, "ar: %s not found\n", ar.archive_name);
+    fprintf(stderr, "%s: error: %s not found\n", ar.progname, ar.archive_name);
     finish(1);
 }
 
@@ -77,7 +79,7 @@ int report_missing(void)
     n = 0;
     for (i = 0; i < ar.namecount; i++)
         if (ar.names[i]) {
-            fprintf(stderr, "ar: %s not found\n", ar.names[i]);
+            fprintf(stderr, "%s: error: %s not found\n", ar.progname, ar.names[i]);
             n++;
         }
     return (n);
@@ -136,6 +138,6 @@ char *basename_of(char *s)
 // Report a write failure (disk full, etc.) and exit.
 void die_write_error(void)
 {
-    perror("ar write error");
+    fprintf(stderr, "%s: error: write error: %s\n", ar.progname, strerror(errno));
     finish(1);
 }

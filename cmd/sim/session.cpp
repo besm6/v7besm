@@ -66,7 +66,7 @@ public:
     void set_program_file(const char *filename)
     {
         if (!program_file.empty()) {
-            std::cerr << "Too many program files: " << filename << std::endl;
+            std::cerr << sim_progname << ": error: too many program files: " << filename << std::endl;
             ::exit(EXIT_FAILURE);
         }
         program_file = filename;
@@ -88,7 +88,7 @@ public:
             exit_status = machine.get_exit_status();
         } catch (const std::exception &ex) {
             // Print exception message.
-            std::cerr << "Error: " << ex.what() << std::endl;
+            std::cerr << sim_progname << ": error: " << ex.what() << std::endl;
             exit_status = EXIT_FAILURE;
         } catch (...) {
             // Assuming the exception message already printed.

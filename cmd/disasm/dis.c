@@ -17,6 +17,7 @@ struct exec hdr; // header
 FILE *text, *rel;
 int rflag, Rflag, cflag, Cflag;
 int addr;
+char *progname = "disasm"; // diagnostic prefix: basename of argv[0]
 
 //
 // Long-address instructions (format flag = 1): opcodes 020-037, 16 entries.
@@ -209,11 +210,11 @@ void disfile(void)
 int disassemble(const char *fname)
 {
     if ((text = fopen(fname, "r")) == NULL) {
-        fprintf(stderr, "dis: %s not found\n", fname);
+        fprintf(stderr, "%s: error: %s not found\n", progname, fname);
         return 1;
     }
     if (!fgethdr(text, &hdr) || N_BADMAG(hdr)) {
-        fprintf(stderr, "dis: %s not an object file\n", fname);
+        fprintf(stderr, "%s: error: %s not an object file\n", progname, fname);
         fclose(text);
         return 1;
     }
@@ -221,12 +222,12 @@ int disassemble(const char *fname)
         // Showing relocation needs the records to be present, i.e. RELFLG clear;
         // a set RELFLG marks a fully-linked file with no relocation records.
         if (hdr.a_flag & RELFLG) {
-            fprintf(stderr, "dis: %s is not relocatable\n", fname);
+            fprintf(stderr, "%s: error: %s is not relocatable\n", progname, fname);
             fclose(text);
             return 1;
         }
         if ((rel = fopen(fname, "r")) == NULL) {
-            fprintf(stderr, "dis: %s not found\n", fname);
+            fprintf(stderr, "%s: error: %s not found\n", progname, fname);
             fclose(text);
             return 1;
         }
