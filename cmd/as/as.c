@@ -66,9 +66,9 @@ char *format_location(char *buf, int size)
     if (as.srcfile[0])
         snprintf(buf, size, "%s:%d: ", as.srcfile, as.srcline);
     else if (as.infile && as.line)
-        snprintf(buf, size, "%s, %d: ", as.infile, as.line);
+        snprintf(buf, size, "%s:%d: ", as.infile, as.line);
     else if (as.infile)
-        snprintf(buf, size, "%s, ", as.infile);
+        snprintf(buf, size, "%s: ", as.infile);
     else if (as.line)
         snprintf(buf, size, "%d: ", as.line);
     else

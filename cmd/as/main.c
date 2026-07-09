@@ -5,16 +5,21 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "as.h"
 
+// Diagnostic prefix: the basename of argv[0] (set in main()), "as" by default.
+static char *progname = "as";
+
 //
-// Print a fatal error message and exit.  The message is prefixed with "as: "
-// and, when known, the input file name and current source line, then a
-// printf-style message.  This is the only way the assembler reports an
-// unrecoverable problem; it never returns.  (The unit-test harness links its
-// own version that records the error instead of exiting.)
+// Print a fatal error message and exit, in GNU/Clang style:
+//      progname: [file:line: ]error: message
+// The location prefix (from format_location) is shown when known.  This is the
+// only way the assembler reports an unrecoverable problem; it never returns.
+// (The unit-test harness links its own version that records the error instead
+// of exiting.)
 //
 noreturn void fatal(char *fmt, ...)
 {
@@ -24,7 +29,7 @@ noreturn void fatal(char *fmt, ...)
 
     va_start(ap, fmt);
     format_location(loc, sizeof loc);
-    fprintf(stderr, "as: %s", loc);
+    fprintf(stderr, "%s: %serror: ", progname, loc);
     vfprintf(stderr, fmt, ap);
     va_end(ap);
     fprintf(stderr, "\n");
@@ -37,7 +42,7 @@ noreturn void fatal(char *fmt, ...)
 static void usage(void)
 {
     fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "    b6as [-uaxXd] [-o outfile] [infile]\n");
+    fprintf(stderr, "    %s [-uaxXd] [-o outfile] [infile]\n", progname);
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "    -o filename     Set output file name, default stdout\n");
     fprintf(stderr, "    -u              Treat undefined names as error\n");
@@ -61,6 +66,12 @@ int main(int argc, char *argv[])
     struct assembler_args args = {
         .outfile = "a.out",
     };
+
+    // Derive the diagnostic prefix from argv[0]'s basename (fallback "as").
+    if (argc > 0 && argv[0] && argv[0][0]) {
+        char *slash = strrchr(argv[0], '/');
+        progname    = slash ? slash + 1 : argv[0];
+    }
 
     // parse flags
 
@@ -102,7 +113,7 @@ int main(int argc, char *argv[])
                         args.outfile = argv[++i];
                     break;
                 default:
-                    fprintf(stderr, "Unknown option: %s\n", cp);
+                    fprintf(stderr, "%s: error: unknown option '%c'\n", progname, *cp);
                     usage();
                 }
             }

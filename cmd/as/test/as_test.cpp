@@ -782,7 +782,7 @@ TEST(LineMarker, NonMarkerHashIsComment)
         xts .101
 )");
     EXPECT_EQ(msg.find(".c:"), std::string::npos) << "message was: " << msg;
-    EXPECT_NE(msg.find(".s, "), std::string::npos) << "message was: " << msg;
+    EXPECT_NE(msg.find(".s:"), std::string::npos) << "message was: " << msg;
 }
 
 // Defining the same label twice is an error: the second "foo:" must be rejected
