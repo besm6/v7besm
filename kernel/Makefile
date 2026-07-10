@@ -1,5 +1,3 @@
-OBJ     = conf.o mch.o libsys.a libdev.a
-
 SYS     = acct.o alloc.o clock.o fio.o iget.o machdep.o main.o \
           malloc.o nami.o pipe.o prf.o prim.o rdwri.o sig.o slp.o subr.o \
           sys1.o sys2.o sys3.o sys4.o sysent.o text.o trap.o utab.o
@@ -7,7 +5,7 @@ SYS     = acct.o alloc.o clock.o fio.o iget.o machdep.o main.o \
 DEV     = bio.o cd.o fd.o hd.o md.o mem.o partab.o \
           sc.o sr.o sys.o tty.o
 
-# Clang compiler on MacOS
+# i486: Clang compiler on MacOS
 #LLVMBIN = $(dir $(wildcard /usr/local/Cellar/llvm/22.*/bin/clang-22))
 #AS      = $(LLVMBIN)clang -target i486-unknown-linux-gnu -c
 #CC      = $(LLVMBIN)clang -target i486-unknown-linux-gnu -ffreestanding
@@ -15,26 +13,35 @@ DEV     = bio.o cd.o fd.o hd.o md.o mem.o partab.o \
 #AR      = ar
 #RANLIB  = :
 #LD      = ld.lld -T unix.ld
+#NM      = $(LLVMBIN)llvm-nm
+#SIZE    = $(LLVMBIN)llvm-size
+#DISASM  = $(LLVMBIN)llvm-objdump -D
+#OBJ     = conf.o x86.o libsys.a libdev.a
 
-# Besm6 toolchain
+# Besm6
 AS      = b6cc -c
 CC      = b6cc
 CFLAGS  = -I../include -DKERNEL
 AR      = b6ar
 RANLIB  = b6ranlib
 LD      = b6ld
+NM      = b6nm
+SIZE    = b6size -w
+DISASM  = b6disasm
+OBJ     = conf.o besm6.o libsys.a libdev.a
 
 VPATH = dev
 
 all:    unix
-	$(LLVMBIN)llvm-size unix
+	$(SIZE) unix
 
 clean:
 	rm -f *.o *.a *.nm unix
 
 unix:   $(OBJ)
 	$(LD) $(OBJ) -o $@ -L$$HOME/.local/share/besm6/lib -lc
-	$(LLVMBIN)llvm-nm -n $@ > $@.nm
+	$(NM) -n $@ > $@.nm
+	$(DISASM) $@ > $@.dis
 
 libsys.a: $(SYS)
 	$(AR) cr $@ $(SYS)
@@ -147,8 +154,6 @@ bio.o: dev/bio.c ../include/sys/param.h ../include/sys/systm.h \
   ../include/sys/conf.h ../include/sys/proc.h ../include/sys/seg.h
 cd.o: dev/cd.c ../include/sys/param.h ../include/sys/systm.h \
   ../include/sys/buf.h ../include/sys/dir.h ../include/sys/user.h
-dsort.o: dev/dsort.c ../include/sys/param.h ../include/sys/systm.h \
-  ../include/sys/buf.h
 fd.o: dev/fd.c ../include/sys/param.h ../include/sys/buf.h \
   ../include/sys/dir.h ../include/sys/user.h ../include/sys/systm.h
 hd.o: dev/hd.c ../include/sys/param.h ../include/sys/systm.h \
@@ -156,8 +161,8 @@ hd.o: dev/hd.c ../include/sys/param.h ../include/sys/systm.h \
   ../include/sys/part.h
 md.o: dev/md.c ../include/sys/param.h ../include/sys/systm.h \
   ../include/sys/buf.h ../include/sys/dir.h ../include/sys/user.h
-mem.o: dev/mem.c ../include/sys/param.h ../include/sys/dir.h \
-  ../include/sys/user.h ../include/sys/conf.h
+mem.o: dev/mem.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/conf.h
 partab.o: dev/partab.c
 sc.o: dev/sc.c ../include/sys/param.h ../include/sys/conf.h \
   ../include/sys/dir.h ../include/sys/user.h ../include/sys/tty.h \
@@ -170,5 +175,5 @@ sys.o: dev/sys.c ../include/sys/param.h ../include/sys/conf.h \
   ../include/sys/proc.h
 tty.o: dev/tty.c ../include/sys/param.h ../include/sys/systm.h \
   ../include/sys/dir.h ../include/sys/user.h ../include/sys/tty.h \
-  ../include/sys/proc.h ../include/sys/inode.h \
-  ../include/sys/file.h ../include/sys/reg.h ../include/sys/conf.h
+  ../include/sys/proc.h ../include/sys/inode.h ../include/sys/file.h \
+  ../include/sys/reg.h ../include/sys/conf.h

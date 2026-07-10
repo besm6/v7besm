@@ -5,10 +5,10 @@
  * tunable variables
  */
 
-#define NBUF     251       /* size of buffer cache (min 10) */
-#define NINODE   200       /* number of in core inodes (min 24) */
-#define NFILE    175       /* number of in core file structures */
-#define NMOUNT   8         /* number of mountable file systems */
+#define NBUF     10        /* size of buffer cache (min 10) */
+#define NINODE   24        /* number of in core inodes (min 24) */
+#define NFILE    50        /* number of in core file structures */
+#define NMOUNT   2         /* number of mountable file systems */
 #define MAXMEM   (64 * 32) /* max core per process - first # is Kw */
 #define MAXUPRC  25        /* max processes per user */
 #define SSIZE    1         /* initial stack size (*4096 bytes) */
@@ -72,7 +72,7 @@
  */
 
 #define NBPW    sizeof(int)               /* number of bytes in an integer */
-#define BSIZE   512                       /* size of secondary block (bytes, 6144 for besm) */
+#define BSIZE   3072                      /* size of secondary block (bytes, 6144 for besm) */
 #define NINDIR  (BSIZE / sizeof(daddr_t)) /* number of indirect blocks */
 #define BMASK   0777                      /* BSIZE-1 */
 #define BSHIFT  9                         /* LOG2(BSIZE) */

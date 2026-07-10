@@ -35,7 +35,8 @@
 // pushed arguments, then `13 uj`.
 
         .const
-        . = . + 0500
+        . = . - 010 + 0100
+#include "const.s"
         uj trap
       : uj clock
 

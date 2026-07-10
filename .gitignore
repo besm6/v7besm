@@ -1,6 +1,7 @@
 *.o
 *.a
 *.nm
+*.dis
 *.i
 *.yaml
 *.ast
