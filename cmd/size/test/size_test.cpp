@@ -87,17 +87,17 @@ size_t at(const std::string &hay, const std::string &needle)
 } // namespace
 
 // Byte mode prints the column header plus a tab-separated row with the four
-// segment sizes, their decimal sum, and that sum in hex.
+// segment sizes, their decimal sum, and that sum in octal.
 TEST(Size, ByteSizes)
 {
     std::string obj = current_test_name() + ".o";
-    build_object(obj, 12, 24, 36, 48); // sum = 120 = 0x78
+    build_object(obj, 12, 24, 36, 48); // sum = 120 = 0170
 
     Result r = run_size({ "b6size", obj });
 
     EXPECT_EQ(r.rc, 0) << r.out;
-    EXPECT_NE(at(r.out, "const\ttext\tdata\tbss\tdec\thex\n"), std::string::npos) << r.out;
-    EXPECT_NE(at(r.out, "12\t24\t36\t48\t120\t78\t" + obj + "\n"), std::string::npos) << r.out;
+    EXPECT_NE(at(r.out, "const\ttext\tdata\tbss\tdec\toct\n"), std::string::npos) << r.out;
+    EXPECT_NE(at(r.out, "12\t24\t36\t48\t120\t170\t" + obj + "\n"), std::string::npos) << r.out;
 
     unlink(obj.c_str());
 }
@@ -106,12 +106,12 @@ TEST(Size, ByteSizes)
 TEST(Size, WordSizes)
 {
     std::string obj = current_test_name() + ".o";
-    build_object(obj, 12, 24, 36, 48); // /6 -> 2 4 6 8, sum 20 = 0x14
+    build_object(obj, 12, 24, 36, 48); // /6 -> 2 4 6 8, sum 20 = 024
 
     Result r = run_size({ "b6size", "-w", obj });
 
     EXPECT_EQ(r.rc, 0) << r.out;
-    EXPECT_NE(at(r.out, "2\t4\t6\t8\t20\t14\t" + obj + "\n"), std::string::npos) << r.out;
+    EXPECT_NE(at(r.out, "2\t4\t6\t8\t20\t24\t" + obj + "\n"), std::string::npos) << r.out;
 
     unlink(obj.c_str());
 }

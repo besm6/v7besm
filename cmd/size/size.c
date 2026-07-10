@@ -48,17 +48,17 @@ static void size(const char *fname)
         return;
     }
     if (header == 0) {
-        printf("const\ttext\tdata\tbss\tdec\thex\n");
+        printf("const\ttext\tdata\tbss\tdec\toct\n");
         header = 1;
     }
     sum = buf.a_const + buf.a_text + buf.a_data + buf.a_bss;
     if (wflag) {
         sum /= W;
-        printf("%ld\t%ld\t%ld\t%ld\t%ld\t%lx\t%s\n", (long)buf.a_const / W,
+        printf("%ld\t%ld\t%ld\t%ld\t%ld\t%lo\t%s\n", (long)buf.a_const / W,
                (long)buf.a_text / W, (long)buf.a_data / W, (long)buf.a_bss / W,
                sum, sum, fname);
     } else {
-        printf("%ld\t%ld\t%ld\t%ld\t%ld\t%lx\t%s\n", (long)buf.a_const, (long)buf.a_text,
+        printf("%ld\t%ld\t%ld\t%ld\t%ld\t%lo\t%s\n", (long)buf.a_const, (long)buf.a_text,
                (long)buf.a_data, (long)buf.a_bss, sum, sum, fname);
     }
     fclose(f);
