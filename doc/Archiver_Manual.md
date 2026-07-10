@@ -28,8 +28,8 @@ listing), `util.c` (diagnostics, the exit path, small helpers), and the shared h
 
 > **Octal convention.** Octal is the native notation for BESM-6, and this manual writes the
 > magic number and other machine constants in octal (a leading `0`, as in the C sources:
-> `ARMAG` is `0177545`). Decimal is used only for human-scale counts (byte lengths of fixed
-> structures, such as the 60-byte member header).
+> `ARMAG` is `0177545`). Decimal is used only for human-scale counts (byte lengths of on-disk
+> structures, such as the member header).
 
 > **Word addressing.** The BESM-6 is a **48-bit, word-addressed** machine: one word is **6
 > bytes**, the constant `W` that pervades the toolchain. `b6ar` treats member data as opaque
@@ -47,7 +47,7 @@ file (name, date, owner, permissions, size) immediately followed by the file's r
 
 ```
   [ magic word ARMAG ]            one BESM-6 word (6 bytes), marks the file as an archive
-  [ member 1 header ][ data ]     header = struct ar_hdr (60 bytes); data = the file's bytes
+  [ member 1 header ][ data ]     header = struct ar_hdr (variable size); data = the file's bytes
   [ member 2 header ][ data ]
   ...
 ```
@@ -57,8 +57,8 @@ word boundary (see [§6](#6-the-archive-file-format)). The magic number is `ARMA
 file whose first word is anything else is "not in archive format" and is rejected.
 
 Members are stored under their **basename** only: `b6ar r lib.a src/util.o` stores the member as
-`util.o`, and later commands match it by that short name. The name field holds up to 30
-characters.
+`util.o`, and later commands match it by that short name. A member name may be up to `ARMAXNAME`
+(255) bytes long; a longer basename is rejected.
 
 `b6ar` builds no symbol index of its own — it is a pure container. The optional `__.SYMDEF`
 table of contents that lets the linker find a symbol without scanning every member is added by
@@ -290,14 +290,14 @@ found` and their count becomes the exit status ([§2.1](#21-exit-status)).
 ## 6. The archive file format
 
 An archive is the magic word `ARMAG` stored as one full 6-byte word, followed by a sequence of
-members. Each member is a fixed 60-byte header immediately followed by the member's data, which is
-zero-padded up to a whole word:
+members. Each member is a **variable-size, word-aligned header** immediately followed by the
+member's data, which is zero-padded up to a whole word:
 
 ```
   offset 0:   ARMAG                         one word  (6 bytes)
-  offset 6:   ar_hdr of member 1            60 bytes  (ARHDRSZ)
+  offset 6:   ar_hdr of member 1            arhdrsz(&h1) bytes (a multiple of 6)
               member 1 data + zero padding  ar_size bytes (a multiple of 6)
-              ar_hdr of member 2            60 bytes
+              ar_hdr of member 2            arhdrsz(&h2) bytes
               member 2 data + zero padding  ...
               ...
 ```
@@ -305,37 +305,45 @@ zero-padded up to a whole word:
 The constants live in [`cross/besm6/ar.h`](../cross/besm6/ar.h):
 
 ```c
-#define ARMAG   0177545        /* archive magic, stored as one 6-byte word */
-#define ARHDRSZ 60             /* size of one member header on disk */
+#define ARMAG     0177545      /* archive magic, stored as one 6-byte word */
+#define ARMAXNAME 255          /* longest member name, in bytes */
 
 struct ar_hdr {
-    char    ar_name[30];       /* member name, NUL-padded (not NUL-terminated) */
+    char   *ar_name;           /* malloc'd, NUL-terminated (caller-owned) */
     word_t  ar_date;           /* modification time */
     word_t  ar_uid;            /* owner user id */
     word_t  ar_gid;            /* owner group id */
     word_t  ar_mode;           /* permission bits */
     word_t  ar_size;           /* data size in bytes — already word-padded */
 };
+
+int arhdrsz(const struct ar_hdr *h);   /* on-disk header size for h->ar_name */
 ```
 
 ### 6.1 Header on-disk layout
 
-Every multi-byte quantity is **big-endian** (most significant byte first). The 60-byte header is
-30 name bytes (five words) followed by five full 6-byte words:
+The member name is **length-prefixed** on disk — a single length byte (1..255) followed by that
+many name bytes — and the name is zero-padded so that the length byte plus name occupy a whole
+number of words; the five metadata words follow. Every multi-byte quantity is **big-endian** (most
+significant byte first). For a name of `L` bytes:
 
 | Byte range | Bytes | Field | Notes |
 |------------|-------|-------|-------|
-| 0 – 29 | 30 | `ar_name` | up to 30 characters, unused tail NUL-filled |
-| 30 – 35 | 6 | `ar_date` | full 48-bit word |
-| 36 – 41 | 6 | `ar_uid` | value in the low half-word, high half zero |
-| 42 – 47 | 6 | `ar_gid` | value in the low half-word, high half zero |
-| 48 – 53 | 6 | `ar_mode` | value in the low half-word, high half zero |
-| 54 – 59 | 6 | `ar_size` | full 48-bit word: the padded data length |
+| 0 | 1 | length | name length `L`, 1..255 |
+| 1 … L | L | `ar_name` | the name, no NUL terminator |
+| L+1 … | pad | padding | zero bytes rounding `1 + L` up to a multiple of 6 |
+| … +0 | 6 | `ar_date` | full 48-bit word |
+| … +6 | 6 | `ar_uid` | value in the low half-word, high half zero |
+| … +12 | 6 | `ar_gid` | value in the low half-word, high half zero |
+| … +18 | 6 | `ar_mode` | value in the low half-word, high half zero |
+| … +24 | 6 | `ar_size` | full 48-bit word: the padded data length |
 
-The header is written by `putarhdr()` and read by `getarhdr()` in
-[`cmd/libaout/`](../cmd/libaout/); the magic word and any bare integer go through
-`putint()`/`getint()`, which write/read one 6-byte big-endian word. These share the identical
-layout with the linker's `fput*`/`fget*` helpers — see
+So the whole header occupies `arhdrsz(&h) = roundup(1 + L, 6) + 5·6` bytes, always a multiple of 6.
+In memory `ar_name` is a malloc'd, NUL-terminated string: `fgetarhdr()`/`getarhdr()` allocate it and
+the caller must `free()` it; `putarhdr()` only reads it (it may point at a borrowed string). The
+header is written by `putarhdr()` and read by `getarhdr()` in [`cmd/libaout/`](../cmd/libaout/); the
+magic word and any bare integer go through `putint()`/`getint()`, which write/read one 6-byte
+big-endian word. These share the identical layout with the linker's `fput*`/`fget*` helpers — see
 [Linker_Manual.md §8.6](Linker_Manual.md#86-word-encoding-and-the-libaout-helpers).
 
 ### 6.2 Word padding and the stepping invariant
@@ -344,8 +352,9 @@ layout with the linker's `fput*`/`fget*` helpers — see
 **padded** length in `ar_size` (`copy_member()` computes `pad = (W - size % W) % W` and records
 `size + pad`). Two consequences follow:
 
-- Every member header lands on a word boundary, so the whole archive is a whole number of words.
-- A reader can step from one member to the next by exactly `ar_size + ARHDRSZ` bytes with **no
+- Because the header size is itself a multiple of `W`, every member header lands on a word
+  boundary, so the whole archive is a whole number of words.
+- A reader can step from one member to the next by exactly `ar_size + arhdrsz(&h)` bytes with **no
   rounding** — which is precisely what the linker does. The archiver's unit tests
   (`MembersWordAligned` in [`cmd/ar/test/ar_test.cpp`](../cmd/ar/test/ar_test.cpp)) verify this
   invariant by re-reading the produced archive with the same `getarhdr`/`getint` decoders the
@@ -467,6 +476,6 @@ $ b6ld -o prog  crt0.o  main.o  libutil.a         # link against the library
 | [`cmd/ar/intern.h`](../cmd/ar/intern.h) | the `arstate` engine state, `W`, and the `SKIP/IODD/OODD/HEAD` copy flags |
 | [`cmd/ar/archive.h`](../cmd/ar/archive.h) | the public `ar_run()` entry point (shared with the tests) |
 | [`cmd/ar/test/ar_test.cpp`](../cmd/ar/test/ar_test.cpp) | round-trip, word-alignment, extract, and delete tests |
-| [`cross/besm6/ar.h`](../cross/besm6/ar.h) | `ARMAG`, `ARHDRSZ`, and `struct ar_hdr` |
+| [`cross/besm6/ar.h`](../cross/besm6/ar.h) | `ARMAG`, `ARMAXNAME`, `arhdrsz()`, and `struct ar_hdr` |
 | [`cross/besm6/ranlib.h`](../cross/besm6/ranlib.h) | `struct ranlib` for the `__.SYMDEF` table of contents |
 | [`cmd/libaout/`](../cmd/libaout/) | `getarhdr`/`putarhdr`/`getint`/`putint` — the shared big-endian word serialization |

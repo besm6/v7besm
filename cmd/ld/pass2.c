@@ -133,20 +133,13 @@ void relocate_file(char *acp)
 
         for (lp = ld.libp; *lp != -1; lp++) {
             fseek(ld.text, *lp, 0);
+            free(ld.archdr.ar_name);      // release the previous member name, if any
+            ld.archdr.ar_name = NULL;
             fgetarhdr(ld.text, &ld.archdr);
-            unsigned len = sizeof(ld.archdr.ar_name) + 1;
-            acp = malloc(len);
-            if (!acp) {
-                error(2, "out of memory");
-            } else {
-                strncpy(acp, ld.archdr.ar_name, len);
-                acp[sizeof(ld.archdr.ar_name)] = '\0';
-                if (ld.trace)
-                    printf("%s(%s):\n", arname, acp);
-                make_file_symbol(acp, 1);
-                free(acp);
-                relocate_object(*lp + ARHDRSZ);
-            }
+            if (ld.trace)
+                printf("%s(%s):\n", arname, ld.archdr.ar_name);
+            make_file_symbol(ld.archdr.ar_name, 1);
+            relocate_object(*lp + arhdrsz(&ld.archdr));
         }
         ld.libp = ++lp;
     }

@@ -55,8 +55,8 @@ struct arstate {
     char *tmp1_name;      // active before-temp name
     char *tmp2_name;      // active move-temp name
 
-    char *cur_file;       // current file/member name
-    char member_name[31]; // member-name buffer
+    char *cur_file;                    // current file/member name
+    char member_name[ARMAXNAME + 1];   // member-name buffer
     char *progname;       // diagnostic prefix: basename of argv[0]
     int arfd;             // archive fd
     int tmpfd;            // main temp fd

@@ -8,6 +8,7 @@
 # share the BESM-6 half-word on-disk layout used by the fget*() routines.
 #
 add_library(aout STATIC
+    arhdrsz.c
     fgetarhdr.c
     fgethdr.c
     fgeth.c

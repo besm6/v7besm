@@ -110,10 +110,12 @@ int nm_run(int argc, char **argv)
             fclose(fi);
             continue;
         }
-        off = 8L;
+        off = 6L; // first member header follows the one-word (6-byte) ARMAG
         do {
             if (ar_flg) {
                 fseek(fi, off, 0);
+                free(arhdr.ar_name); // release the previous member name, if any
+                arhdr.ar_name = NULL;
                 if (!fgetarhdr(fi, &arhdr))
                     break;
                 /* offset to next element */

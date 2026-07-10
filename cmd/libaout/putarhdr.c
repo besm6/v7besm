@@ -6,6 +6,8 @@
 #include "besm6/ar.h"
 #include "besm6/b.out.h"
 
+#define W 6 /* sizeof word of BESM-6 */
+
 // Encode one 48-bit word (6 bytes, big-endian) into a buffer.
 static void putword(unsigned char *p, uword_t v)
 {
@@ -17,21 +19,28 @@ static void putword(unsigned char *p, uword_t v)
     p[5] = v;
 }
 
-// Write an archive header in the same field layout getarhdr()/fgetarhdr()
-// read back -- 60 bytes total (see getarhdr.c for the layout).
+// Write an archive member header in the length-prefixed layout that
+// getarhdr()/fgetarhdr() read back (see getarhdr.c): a 1-byte name length L,
+// L name bytes, zero padding up to a whole word, then the 5 metadata words.
+// Only reads h->ar_name (may be a borrowed string).  Returns 1 on success.
 int putarhdr(int f, const struct ar_hdr *h)
 {
-    unsigned char b[60];
-    int i;
+    unsigned char b[1 + ARMAXNAME + W + 5 * W];
+    int len = (int)strlen(h->ar_name);
+    int pad = (int)((W - (1 + len) % W) % W);
+    int hdrsz;
 
     memset(b, 0, sizeof(b));
-    for (i = 0; i < (int)sizeof(h->ar_name); i++)
-        b[i] = h->ar_name[i];
+    b[0] = (unsigned char)len;
+    for (int i = 0; i < len; i++)
+        b[1 + i] = h->ar_name[i];
 
-    putword(b + 30, h->ar_date);
-    putword(b + 36, h->ar_uid);
-    putword(b + 42, h->ar_gid);
-    putword(b + 48, h->ar_mode);
-    putword(b + 54, h->ar_size);
-    return write(f, b, sizeof(b)) == (ssize_t)sizeof(b);
+    putword(b + 1 + len + pad, h->ar_date);
+    putword(b + 1 + len + pad + W, h->ar_uid);
+    putword(b + 1 + len + pad + 2 * W, h->ar_gid);
+    putword(b + 1 + len + pad + 3 * W, h->ar_mode);
+    putword(b + 1 + len + pad + 4 * W, h->ar_size);
+
+    hdrsz = 1 + len + pad + 5 * W;
+    return write(f, b, hdrsz) == (ssize_t)hdrsz;
 }

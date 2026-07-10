@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <numeric>
 #include <string>
@@ -118,11 +119,14 @@ std::vector<RanEntry> read_symdef(const std::string &path, std::vector<long> *me
 
     long off = W; // past the magic word
     struct ar_hdr h;
+    h.ar_name  = nullptr;
     bool first = true;
     while (fgetarhdr(f, &h)) {
-        long datasize = (h.ar_size + W - 1) / W * W;
-        bool is_symdef =
-            std::strncmp(h.ar_name, "__.SYMDEF", std::strlen("__.SYMDEF")) == 0;
+        long datasize   = (h.ar_size + W - 1) / W * W;
+        long hdrsize    = arhdrsz(&h);
+        bool is_symdef  = std::strcmp(h.ar_name, "__.SYMDEF") == 0;
+        free(h.ar_name);
+        h.ar_name = nullptr;
         if (is_symdef) {
             // __.SYMDEF must be the very first member so the linker finds it.
             EXPECT_TRUE(first) << "__.SYMDEF is not the first member";
@@ -139,7 +143,7 @@ std::vector<RanEntry> read_symdef(const std::string &path, std::vector<long> *me
                 member_offsets->push_back(off);
             std::fseek(f, datasize, 1);
         }
-        off += ARHDRSZ + datasize;
+        off += hdrsize + datasize;
         first = false;
     }
     std::fclose(f);
@@ -266,11 +270,14 @@ TEST(Ranlib, Idempotent)
     ASSERT_NE(f, nullptr);
     EXPECT_EQ(fgetw(f), (uword_t)ARMAG);
     struct ar_hdr h;
+    h.ar_name   = nullptr;
     int symdefs = 0;
     while (fgetarhdr(f, &h)) {
         long datasize = (h.ar_size + W - 1) / W * W;
-        if (std::strncmp(h.ar_name, "__.SYMDEF", std::strlen("__.SYMDEF")) == 0)
+        if (std::strcmp(h.ar_name, "__.SYMDEF") == 0)
             symdefs++;
+        free(h.ar_name);
+        h.ar_name = nullptr;
         std::fseek(f, datasize, 1);
     }
     std::fclose(f);

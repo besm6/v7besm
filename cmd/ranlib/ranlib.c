@@ -36,7 +36,7 @@ static long arsize;
 static FILE *fi, *fo;
 static long off, oldoff;
 static int new;
-static char firstname[31];
+static char firstname[ARMAXNAME + 1];
 static char tempnm[] = "__.SYMDEF";
 static struct ranlib rantab[TABSZ];
 static int tnum;
@@ -111,16 +111,15 @@ int ranlib_run(int argc, char **argv)
             continue;
         }
         if (justtouch) {
-            int len;
-
             fseek(fi, (long)W, 0);
+            free(archdr.ar_name); // release the previous member name, if any
+            archdr.ar_name = NULL;
             if (!fgetarhdr(fi, &archdr)) {
                 fprintf(stderr, "%s: error: malformed archive: %s\n", progname, *argv);
                 fclose(fi);
                 continue;
             }
-            len = strlen(tempnm);
-            if (strncmp(archdr.ar_name, tempnm, len)) {
+            if (strcmp(archdr.ar_name, tempnm)) {
                 fprintf(stderr, "%s: error: no symbol table: %s\n", progname, *argv);
                 fclose(fi);
                 continue;
@@ -138,7 +137,7 @@ int ranlib_run(int argc, char **argv)
         do {
             struct nlist sym;
 
-            if (!strncmp(tempnm, archdr.ar_name, sizeof(archdr.ar_name)))
+            if (!strcmp(tempnm, archdr.ar_name))
                 continue;
             if (!fgethdr(fi, &exh))
                 continue;
@@ -197,6 +196,8 @@ static int nextel(FILE *af)
 {
     oldoff = off;
     fseek(af, off, 0);
+    free(archdr.ar_name); // release the previous member name, if any
+    archdr.ar_name = NULL;
     if (!fgetarhdr(af, &archdr))
         return (0);
     arsize = (archdr.ar_size + W - 1) / W * W;
@@ -214,6 +215,8 @@ static void fixdate(const char *s) /* patch time */
         return;
     }
     lseek(fd, (long)W, 0);
+    free(archdr.ar_name); // release the previous member name, if any
+    archdr.ar_name = NULL;
     getarhdr(fd, &archdr);
     lseek(fd, (long)W, 0);
     archdr.ar_date = time(NULL);
@@ -257,20 +260,23 @@ static void fixsize(void)
 {
     int i;
     long offdelta;
+    struct ar_hdr symdef;
 
-    offdelta = ARHDRSZ;
+    /* On-disk header size of the "__.SYMDEF" member we are about to insert. */
+    symdef.ar_name = tempnm;
+    offdelta       = arhdrsz(&symdef);
     for (i = 0; i < tnum; ++i)
         offdelta += rantab[i].ran_len + 4; /* 1 len + 3-byte half-word off + name */
     offdelta = (offdelta + W) / W * W;
     off      = W;
     nextel(fi);
-    if (!strncmp(archdr.ar_name, tempnm, sizeof(archdr.ar_name))) {
+    if (!strcmp(archdr.ar_name, tempnm)) {
         new = 0;
-        offdelta -= ARHDRSZ + arsize;
+        offdelta -= arhdrsz(&archdr) + arsize;
     } else {
         new = 1;
-        strncpy(firstname, archdr.ar_name, sizeof(firstname));
-        firstname[sizeof(archdr.ar_name)] = 0;
+        strncpy(firstname, archdr.ar_name, sizeof(firstname) - 1);
+        firstname[sizeof(firstname) - 1] = 0;
     }
     for (i = 0; i < tnum; ++i)
         rantab[i].ran_off += offdelta;

@@ -587,26 +587,31 @@ zero. The file-descriptor counterparts `getint`/`putint` and `getarhdr`/`putarhd
 ### 8.7 Archive and ranlib structures
 
 An archive begins with the magic word `ARMAG` (`0177545`) and is a sequence of members, each
-preceded by a fixed 60-byte header ([`ar.h`](../cross/besm6/ar.h)):
+preceded by a variable-size, word-aligned header ([`ar.h`](../cross/besm6/ar.h)):
 
 ```c
-#define ARMAG   0177545
-#define ARHDRSZ 60
+#define ARMAG     0177545
+#define ARMAXNAME 255       /* longest member name, in bytes */
 
 struct ar_hdr {
-    char    ar_name[30];    /* 30 bytes = 5 words */
+    char   *ar_name;        /* malloc'd, NUL-terminated (caller-owned) */
     word_t  ar_date;        /* full word */
     word_t  ar_uid;         /* full word (value in low half) */
     word_t  ar_gid;         /* full word (value in low half) */
     word_t  ar_mode;        /* full word (value in low half) */
     word_t  ar_size;        /* full word: member size in bytes */
 };
+
+int arhdrsz(const struct ar_hdr *h);   /* on-disk header size for h->ar_name */
 ```
 
-The name field is 30 characters (note `LNAMLEN`/name handling in the linker allows longer names
-than the historical 12); `ar_date`/`ar_size` carry full 48-bit values, while `ar_uid`/`ar_gid`/
-`ar_mode` keep their value in the low half-word. The next member's header follows
-`ar_size + ARHDRSZ` bytes on.
+The member name is length-prefixed on disk — a 1-byte length (up to `ARMAXNAME`) followed by that
+many name bytes, zero-padded so the length byte plus name occupy a whole number of words — and then
+the five metadata words. `ar_date`/`ar_size` carry full 48-bit values, while `ar_uid`/`ar_gid`/
+`ar_mode` keep their value in the low half-word. In memory `ar_name` is a malloc'd, NUL-terminated
+string that `fgetarhdr()`/`getarhdr()` allocate and the caller must `free()`. The whole header is
+`arhdrsz(&h) = roundup(1 + strlen(ar_name), 6) + 5·6` bytes — always a multiple of 6 — so the next
+member's header follows `ar_size + arhdrsz(&h)` bytes on.
 
 The table of contents of a randomized archive is a `__.SYMDEF` member whose payload is a run of
 ranlib entries ([`ranlib.h`](../cross/besm6/ranlib.h)):

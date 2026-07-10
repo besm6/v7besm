@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <unistd.h>
 
 // The library is compiled as C and the besm6 headers have no extern "C" guard.
@@ -96,6 +97,8 @@ TEST(ArHdr, DateSizeFullWord) {
     ASSERT_GE(fd, 0);
 
     struct ar_hdr out{};
+    char name[] = "member.o";
+    out.ar_name = name;
     out.ar_date = 0x123456789ABCL;
     out.ar_size = 0x0FEDCBA98765L;
     ASSERT_EQ(putarhdr(fd, &out), 1);
@@ -105,6 +108,7 @@ TEST(ArHdr, DateSizeFullWord) {
     ASSERT_EQ(getarhdr(fd, &via_fd), 1);
     EXPECT_EQ(via_fd.ar_date, out.ar_date);
     EXPECT_EQ(via_fd.ar_size, out.ar_size);
+    std::free(via_fd.ar_name);
     close(fd);
 
     FILE *f = std::fopen(path, "rb");
@@ -113,21 +117,24 @@ TEST(ArHdr, DateSizeFullWord) {
     ASSERT_EQ(fgetarhdr(f, &via_file), 1);
     EXPECT_EQ(via_file.ar_date, out.ar_date);
     EXPECT_EQ(via_file.ar_size, out.ar_size);
+    std::free(via_file.ar_name);
     std::fclose(f);
     unlink(path);
 }
 
-// putarhdr then read back with both getarhdr (fd) and fgetarhdr (FILE*).
-TEST(ArHdr, RoundTrip) {
+// The member name is length-prefixed on disk (1 length byte + name, padded to
+// a word), so the header is variable-sized and NUL-terminated in memory. Write
+// a header with putarhdr and read it back with both getarhdr (fd) and fgetarhdr
+// (FILE*), for name lengths spanning the boundaries: 1 byte, a mid-length name,
+// and the 255-byte maximum.
+static void RoundTripName(const std::string &name) {
     char path[L_tmpnam + 16];
     int fd = make_tmp(path);
     ASSERT_GE(fd, 0);
 
-    // Each multi-byte field is encoded as 24-bit half-words, so keep values
-    // within the bits that survive the layout.
+    std::string mutable_name = name;  // ar_name is a non-const char *
     struct ar_hdr out{};
-    for (int i = 0; i < static_cast<int>(sizeof(out.ar_name)); i++)
-        out.ar_name[i] = static_cast<char>('a' + i);
+    out.ar_name = mutable_name.data();
     out.ar_date = 0x0ABCDE;
     out.ar_uid  = 0x111;
     out.ar_gid  = 0x222;
@@ -135,9 +142,14 @@ TEST(ArHdr, RoundTrip) {
     out.ar_size = 0x0FEDCB;
     ASSERT_EQ(putarhdr(fd, &out), 1);
 
+    // The on-disk header size must be a whole number of words and match arhdrsz().
+    off_t written = lseek(fd, 0, SEEK_CUR);
+    EXPECT_EQ(written, arhdrsz(&out)) << "name len " << name.size();
+    EXPECT_EQ(written % 6, 0) << "header word-aligned, name len " << name.size();
+
     auto expect_eq = [&](const struct ar_hdr &in) {
-        for (int i = 0; i < static_cast<int>(sizeof(out.ar_name)); i++)
-            EXPECT_EQ(in.ar_name[i], out.ar_name[i]) << "name byte " << i;
+        ASSERT_NE(in.ar_name, nullptr);
+        EXPECT_STREQ(in.ar_name, name.c_str());
         EXPECT_EQ(in.ar_date, out.ar_date);
         EXPECT_EQ(in.ar_uid,  out.ar_uid);
         EXPECT_EQ(in.ar_gid,  out.ar_gid);
@@ -149,6 +161,7 @@ TEST(ArHdr, RoundTrip) {
     struct ar_hdr via_fd{};
     ASSERT_EQ(getarhdr(fd, &via_fd), 1);
     expect_eq(via_fd);
+    std::free(via_fd.ar_name);
     close(fd);
 
     FILE *f = std::fopen(path, "rb");
@@ -156,9 +169,14 @@ TEST(ArHdr, RoundTrip) {
     struct ar_hdr via_file{};
     ASSERT_EQ(fgetarhdr(f, &via_file), 1);
     expect_eq(via_file);
+    std::free(via_file.ar_name);
     std::fclose(f);
     unlink(path);
 }
+
+TEST(ArHdr, RoundTripShortName) { RoundTripName("a"); }
+TEST(ArHdr, RoundTripMidName)   { RoundTripName("util.o"); }
+TEST(ArHdr, RoundTripLongName)  { RoundTripName(std::string(ARMAXNAME, 'x')); }
 
 // fputran then read back with fgetran.
 TEST(Ranlib, RoundTrip) {

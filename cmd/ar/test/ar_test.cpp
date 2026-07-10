@@ -6,7 +6,7 @@
 // exit(), so each operation runs in-process.  Results are inspected by walking
 // the produced archive with the very same libaout decoders that ld uses
 // (getint/getarhdr), which is what makes the AR-10 word-alignment guarantee
-// meaningful: ld steps to the next member with `ar_size + ARHDRSZ`.
+// meaningful: ld steps to the next member with `ar_size + arhdrsz(&h)`.
 //
 #include <gtest/gtest.h>
 
@@ -14,6 +14,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -115,12 +116,10 @@ std::vector<Member> read_archive(const std::string &path)
 
     long off = W; // past the magic word
     struct ar_hdr h;
+    h.ar_name = nullptr;
     while (getarhdr(fd, &h)) {
         Member m;
-        char nm[sizeof(h.ar_name) + 1];
-        memcpy(nm, h.ar_name, sizeof(h.ar_name));
-        nm[sizeof(h.ar_name)] = '\0';
-        m.name   = nm;
+        m.name   = h.ar_name; // getarhdr() malloc'd a NUL-terminated name
         m.size   = (long)h.ar_size;
         m.offset = off;
         m.data.resize(m.size);
@@ -128,7 +127,9 @@ std::vector<Member> read_archive(const std::string &path)
             EXPECT_EQ(read(fd, m.data.data(), m.size), (ssize_t)m.size);
         }
         v.push_back(m);
-        off += ARHDRSZ + m.size;
+        off += arhdrsz(&h) + m.size; // variable header + word-padded data
+        free(h.ar_name);
+        h.ar_name = nullptr;
     }
     close(fd);
     return v;
@@ -227,6 +228,30 @@ TEST(Ar, Extract)
     expect_member_payload(got, pa);
 
     unlink(a.c_str());
+    unlink(lib.c_str());
+}
+
+// A member name well beyond the historical 30-char limit round-trips in full:
+// it is length-prefixed on disk and the header stays word-aligned.
+TEST(Ar, LongMemberName)
+{
+    std::string base = current_test_name();
+    // 200-char basename (comfortably over the old 30, under the 255 max).
+    std::string longname = std::string(200, 'n');
+    std::string lib      = base + ".a";
+
+    auto pa = payload(0x33, 9);
+    write_file(longname, pa);
+
+    ASSERT_EQ(run_ar({ "b6ar", "rc", lib, longname }), 0);
+
+    auto m = read_archive(lib);
+    ASSERT_EQ(m.size(), 1u);
+    EXPECT_EQ(m[0].name, longname);
+    EXPECT_EQ(m[0].offset % W, 0);
+    expect_member_payload(m[0].data, pa);
+
+    unlink(longname.c_str());
     unlink(lib.c_str());
 }
 

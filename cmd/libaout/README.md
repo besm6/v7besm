@@ -33,11 +33,13 @@ The BESM-6 is a 48-bit word machine. The serialization conventions follow from t
 - The **exec header** stores its 9 logical fields each as a zero padding half-word
   followed by the value half-word, so each field begins on a 6-byte word boundary; the
   whole header is `HDRSZ == 54` bytes (9 words). See `fgethdr`/`fputhdr`.
-- The **archive member header** is a fully word-aligned 60-byte record (10 words): 30
-  name bytes (5 words), then one full 48-bit word each for date, uid, gid, mode and size
-  (for uid/gid/mode the value is the low half-word, preceded by a discarded high
-  half-word). `ARHDRSZ == 60` in `ar.h` equals this on-disk record size. See
-  `fgetarhdr`/`getarhdr`/`putarhdr`.
+- The **archive member header** is a variable-size, fully word-aligned record: a 1-byte
+  name length (up to `ARMAXNAME == 255`), that many name bytes, zero padding up to a whole
+  word, then one full 48-bit word each for date, uid, gid, mode and size (for uid/gid/mode
+  the value is the low half-word, preceded by a discarded high half-word). Its on-disk size
+  is `arhdrsz(&h) == roundup(1 + strlen(ar_name), 6) + 5·6`, always a multiple of 6. In
+  memory `ar_name` is malloc'd and NUL-terminated (caller-owned, like `ran_name`). See
+  `arhdrsz`/`fgetarhdr`/`getarhdr`/`putarhdr`.
 - A **symbol** is: 1 length byte, 1 type byte, a half-word value, then `n_len` name
   bytes with no trailing NUL. In memory `n_name` points at a separately malloc'd,
   NUL-terminated copy. See `fgetsym`/`fputsym`.
@@ -133,20 +135,29 @@ name bytes (no trailing NUL).
 
 ### Archive member header
 
+#### `int arhdrsz(const struct ar_hdr *h)` — [`arhdrsz.c`](arhdrsz.c)
+
+Return the on-disk byte size of the member header for the name in `*h`:
+`roundup(1 + strlen(h->ar_name), 6) + 5·6`, always a multiple of 6. Readers use it to step
+from one member to the next (`ar_size + arhdrsz(&h)`).
+
 #### `int fgetarhdr(FILE *f, struct ar_hdr *h)` — [`fgetarhdr.c`](fgetarhdr.c)
 
-Read one 60-byte archive member header from a stream into `*h`. Returns 1 on success, 0
-on EOF.
+Read one variable-size archive member header from a stream into `*h`, allocating a
+NUL-terminated `h->ar_name` (caller must `free()` it). Returns 1 on success, 0 on EOF, -1
+on out of memory.
 
 #### `int getarhdr(int f, struct ar_hdr *h)` — [`getarhdr.c`](getarhdr.c)
 
-File-descriptor counterpart of `fgetarhdr`. Reads the 60-byte record with a single
-`read(2)` and decodes it. Returns 1 on success, 0 on a short read.
+File-descriptor counterpart of `fgetarhdr`. Reads the length byte, then the rest of the
+record, with `read(2)` and decodes it, allocating `h->ar_name` (caller must `free()` it).
+Returns 1 on success, 0 on a short read.
 
 #### `int putarhdr(int f, const struct ar_hdr *h)` — [`putarhdr.c`](putarhdr.c)
 
-Encode an archive member header into a 60-byte buffer and write it via `write(2)`.
-Returns 1 on success, 0 on a short write.
+Encode an archive member header (length byte + name + word padding + 5 metadata words) and
+write it via `write(2)`. Only reads `h->ar_name` (may be a borrowed string). Returns 1 on
+success, 0 on a short write.
 
 ## Tests
 

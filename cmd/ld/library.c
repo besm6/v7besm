@@ -83,10 +83,12 @@ int open_input(char *cp)
         error(1, "unexpected EOF");
     if (c != ARMAG)
         return 0; // regular file
+    free(ld.archdr.ar_name);      // release the previous member name, if any
+    ld.archdr.ar_name = NULL;
     if (!fgetarhdr(ld.text, &ld.archdr))
         return 1; // regular archive
     // A randomized archive begins with a special "__.SYMDEF" member.
-    if (strncmp(ld.archdr.ar_name, SYMDEF, sizeof(ld.archdr.ar_name)))
+    if (strcmp(ld.archdr.ar_name, SYMDEF))
         return 1; // regular archive
     // It is only trustworthy if not older than the archive file itself.
     fstat(fileno(ld.text), &x);
@@ -113,26 +115,17 @@ void check_liblist(void)
 //
 int scan_member(long nloc)
 {
-    char *cp;
-
     fseek(ld.text, nloc, 0);
+    free(ld.archdr.ar_name);      // release the previous member name, if any
+    ld.archdr.ar_name = NULL;
     if (!fgetarhdr(ld.text, &ld.archdr)) {
         *ld.libp++ = -1; // mark end of this archive's member list
         check_liblist();
         return 0;
     }
-    unsigned len = sizeof(ld.archdr.ar_name) + 1;
-    cp = malloc(len);
-    if (!cp) {
-        error(2, "out of memory");
-    } else {
-        strncpy(cp, ld.archdr.ar_name, len);
-        cp[sizeof(ld.archdr.ar_name)] = '\0';
-        if (scan_object(nloc + ARHDRSZ, 1, make_file_symbol(cp, 0)))
-            *ld.libp++ = nloc;
-        free(cp);
-        check_liblist();
-    }
+    if (scan_object(nloc + arhdrsz(&ld.archdr), 1, make_file_symbol(ld.archdr.ar_name, 0)))
+        *ld.libp++ = nloc;
+    check_liblist();
     return 1;
 }
 

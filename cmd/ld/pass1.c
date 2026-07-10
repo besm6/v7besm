@@ -193,7 +193,7 @@ void scan_file(char *cp)
     archive:
         // Step through every member; each header gives the offset of the next.
         while (scan_member(nloc))
-            nloc += (ld.archdr.ar_size + W - 1) / W * W + ARHDRSZ;
+            nloc += (ld.archdr.ar_size + W - 1) / W * W + arhdrsz(&ld.archdr);
         break;
 
     case 2: // table of contents
@@ -207,7 +207,7 @@ void scan_file(char *cp)
 
     case 3: // out of date archive
         error(0, "out of date");
-        nloc = W + (ld.archdr.ar_size + W - 1) / W * W + ARHDRSZ;
+        nloc = W + (ld.archdr.ar_size + W - 1) / W * W + arhdrsz(&ld.archdr);
         goto archive;
     }
     fclose(ld.text);

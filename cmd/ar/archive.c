@@ -148,19 +148,20 @@ void commit_archive(void)
 // Add the on-disk file open on fd 'f' to the temp archive as a new member.
 //
 // Fills in the member header from the file's stat info (name trimmed to its
-// basename and packed into the fixed-width ar_name field), then copies the file
-// bytes into the main temp with a header (HEAD) and output padding (OODD).
+// basename, which ar_name borrows for the putarhdr() write), then copies the
+// file bytes into the main temp with a header (HEAD) and output padding (OODD).
 void write_member(int f)
 {
-    const char *cp;
-    int i;
+    char *cp;
 
     cp = basename_of(ar.cur_file);
-    // Copy the name into the fixed-size ar_name field. Once the source string
-    // ends, stop advancing cp so the remaining bytes are filled with its NUL.
-    for (i = 0; i < (int)sizeof(ar.hdr.ar_name); i++)
-        if ((ar.hdr.ar_name[i] = *cp))
-            cp++;
+    if (strlen(cp) > ARMAXNAME) {
+        fprintf(stderr, "%s: error: member name too long (max %d): %s\n", ar.progname,
+                ARMAXNAME, cp);
+        finish(1);
+    }
+    // ar_name is written straight from the basename; putarhdr() only reads it.
+    ar.hdr.ar_name = cp;
     ar.hdr.ar_size = ar.filestat.st_size;
     ar.hdr.ar_date = ar.filestat.st_mtime;
     ar.hdr.ar_uid  = ar.filestat.st_uid;
@@ -201,7 +202,7 @@ int open_input(void)
 //
 // An archive member is zero-padded to a whole BESM-6 word (W=6 bytes), and the
 // already-aligned size is written into the header: ld steps to the next member
-// by `ar_size + ARHDRSZ` without rounding, so ar_size must be a multiple of W.
+// by `ar_size + arhdrsz(&h)` without rounding, so ar_size must be a multiple of W.
 void copy_member(int fi, int fo, int flag)
 {
     int pe;
@@ -261,11 +262,15 @@ int next_member(void)
         }
         return (1);
     }
-    // The stored name isn't NUL-terminated in the header, so copy it into a
-    // buffer that is, and point cur_file at it.
-    for (i = 0; i < (int)sizeof(ar.hdr.ar_name); i++)
+    // getarhdr() malloc'd ar.hdr.ar_name; copy it into a stable member_name
+    // buffer and free the allocation, so ar.hdr.ar_name never carries ownership
+    // across calls (write_member() may later point it at a borrowed string).
+    for (i = 0; i < ARMAXNAME && ar.hdr.ar_name[i]; i++)
         ar.member_name[i] = ar.hdr.ar_name[i];
-    ar.cur_file = ar.member_name;
+    ar.member_name[i] = '\0';
+    free(ar.hdr.ar_name);
+    ar.hdr.ar_name = ar.member_name;
+    ar.cur_file    = ar.member_name;
     return (0);
 }
 
