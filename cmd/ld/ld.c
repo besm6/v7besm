@@ -271,6 +271,13 @@ void assign_addresses(void)
     //
     ld.corigin = ld.basaddr;
     ld.torigin = ld.corigin + ld.csize / W;
+
+    // Const words are reached through the 12-bit short address field, so the
+    // whole merged segment must lie below CONSTTOP.
+    if (ld.csize && ld.torigin - 1 > CONSTTOP)
+        error(2, "const segment too large: last word at 0%lo, limit 0%o", ld.torigin - 1,
+              CONSTTOP);
+
     ld.dorigin = ld.torigin + ld.tsize / W;
     if (ld.nflag) {
         ld.dorigin = ALIGN(ld.dorigin, 1024);

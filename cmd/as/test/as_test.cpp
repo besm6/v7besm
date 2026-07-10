@@ -583,6 +583,124 @@ TEST(Assemble, ConstPool)
     EXPECT_EQ(word_low(got, 9), 00100000L | 8L);  // xta #0123 (same const)
 }
 
+// ".const" selects the const segment, which is an ordinary segment holding data,
+// labels and code.  It is laid down first, so its words start at cbase (8) and
+// the text segment begins after it.
+TEST(Assemble, ConstDirectiveData)
+{
+    auto got = assemble(R"(
+        .const
+tbl:    .word 1, 2, 1
+        .text
+        uj tbl
+)");
+    EXPECT_EQ(word_low(got, 1), 3 * 6);  // a_const == 3 words
+    EXPECT_EQ(word_low(got, 6), 8L + 3); // a_entry == past the header and const
+
+    EXPECT_EQ(word_low(got, 8), 1L);  // the three words survive, in order,
+    EXPECT_EQ(word_low(got, 9), 2L);  // duplicates included: nothing is
+    EXPECT_EQ(word_low(got, 10), 1L); // de-duplicated behind the programmer's back
+
+    auto syms = read_symbols(got);
+    ASSERT_EQ(syms.size(), 1u);
+    EXPECT_EQ(syms[0].name, "tbl");
+    EXPECT_EQ(syms[0].type, 02L); // N_CONST
+    EXPECT_EQ(syms[0].value, 8L); // cbase + word offset 0
+}
+
+// A ".const" data word carries no relocation on either half, and in particular
+// no RMERGE: it is positioned data, and the linker must not move it.  A "#expr"
+// literal is anonymous and marks its high half RMERGE.
+TEST(Assemble, ConstDirectiveWordIsNotMergeable)
+{
+    auto got = assemble(R"(
+        .const
+        .word 5
+        .text
+        atx 0
+)");
+    EXPECT_EQ(reloc_half(got, 0, 0), 0L); // high half: RABS, no RMERGE
+    EXPECT_EQ(reloc_half(got, 0, 1), 0L); // low half: RABS
+
+    auto pooled = assemble("        xta #5\n");
+    EXPECT_EQ(reloc_half(pooled, 0, 0), 02L); // high half: RMERGE
+}
+
+// The dedup table indexes every const word whose halves are both absolute, so a
+// later "#expr" addresses the word already there instead of appending a copy.
+TEST(Assemble, ConstDirectiveWordIsReusedByPoolOperator)
+{
+    auto got = assemble(R"(
+        .const
+        .word 5
+        .text
+        xta #5
+        atx 0
+)");
+    EXPECT_EQ(word_low(got, 1), 6);              // a_const == 1 word, not 2
+    EXPECT_EQ(word_low(got, 8), 5L);             // the ".const" word
+    EXPECT_EQ(word_high(got, 9), 00100000L | 8L) // xta addresses it
+        << "#5 must reuse the .word 5 already in the const segment";
+    EXPECT_EQ(reloc_half(got, 1, 0) & 070L, 010L); // RCONST
+}
+
+// A word whose value needs relocating is no use as a literal - it means a
+// different address in each file - so it is not offered to the dedup table.  Here
+// the ".const" word holds datum's address, which happens to be 0 at this point,
+// and "#0" must not pick it up.
+TEST(Assemble, ConstDirectiveRelocatableWordNotReused)
+{
+    auto got = assemble(R"(
+        .const
+        .word datum
+        .text
+        xta #5
+        atx 0
+        .data
+datum:  .word 1
+)");
+    EXPECT_EQ(word_low(got, 1), 2 * 6) << "the relocatable word cannot serve as the literal 5";
+    EXPECT_EQ(word_low(got, 9), 5L); // the literal got its own word
+    EXPECT_EQ(reloc_half(got, 0, 1), 030L); // first word's low half: RDATA
+}
+
+// Machine code may live in the const segment; it word-aligns like text, padding
+// with a utc filler.
+TEST(Assemble, ConstDirectiveCode)
+{
+    auto got = assemble(R"(
+        .const
+c1:     xta 0
+        .text
+        uj c1
+)");
+    EXPECT_EQ(word_low(got, 1), 6);            // a_const == 1 word
+    EXPECT_EQ(word_high(got, 8), 00100000L);   // xta 0
+    EXPECT_EQ(word_low(got, 8), 02200000L);    // utc 0 filler
+    EXPECT_EQ(word_high(got, 9), 03000000L | 8L); // uj c1 -> word 8
+}
+
+// Interning a literal appends to the const segment in the middle of assembling a
+// text instruction.  The two segments buffer their half-finished words apart, so
+// the text word must come out exactly as it would without the literal.
+TEST(Assemble, ConstInterningPreservesPendingTextHalfword)
+{
+    auto got = assemble(R"(
+        atx 1
+        xta #7
+        atx 2
+)");
+    ASSERT_EQ(word_low(got, 1), 6); // one const word, holding the 7
+    EXPECT_EQ(word_low(got, 8), 7L);
+
+    // text: "atx 1" kept its place as the high half of the first word (atx is
+    // opcode 0, so the half-word is just the address).
+    EXPECT_EQ(word_high(got, 9), 1L);
+    EXPECT_EQ(word_low(got, 9), 00100000L | 8L); // xta -> the literal at cbase 8
+    EXPECT_EQ(word_high(got, 10), 2L);
+    EXPECT_EQ(word_low(got, 10), 02200000L); // utc 0 filler
+}
+
 // An absolute "#0" needs no pool slot: memory word 0 always reads as 0, so the
 // instruction addresses word 0 directly, with an RABS (i.e. no) relocation.
 TEST(Assemble, ConstZeroNotPooled)
@@ -622,7 +740,7 @@ TEST(Assemble, ConstZeroExternalStillPooled)
     EXPECT_EQ(word_low(got, 1), 6);              // a_const == 1 word: pooled
     EXPECT_EQ(word_high(got, 9), 00100000L | 8L); // xta -> the pooled word at cbase 8
 
-    EXPECT_EQ(reloc_half(got, 0, 0), 0L);          // pool word, high half: RABS
+    EXPECT_EQ(reloc_half(got, 0, 0), 02L);         // pool word, high half: RMERGE
     EXPECT_EQ(reloc_half(got, 0, 1) & 070L, 070L); // pool word, low half: REXT
 }
 
@@ -665,7 +783,7 @@ datum:  .word 1
     EXPECT_EQ(word_high(got, 8), 0);  // pooled word, high half: no address here
     EXPECT_EQ(word_low(got, 8), 10L); // pooled word, low half: datum, relocated
 
-    EXPECT_EQ(reloc_half(got, 0, 0), 0L);    // high half: RABS
+    EXPECT_EQ(reloc_half(got, 0, 0), 02L);   // high half: RMERGE, no relocation
     EXPECT_EQ(reloc_half(got, 0, 1), 030L);  // low half: RDATA, where the address is
 }
 
@@ -829,6 +947,29 @@ static std::string assemble_error(const std::string &source)
     return "";
 }
 
+// An "#expr" inside the const segment would append its literal at the cursor,
+// i.e. immediately in front of the instruction referencing it.  Reject it.
+TEST(Assemble, ConstDirectivePoolOperatorRejected)
+{
+    std::string msg = assemble_error("        .const\n        xta #5\n");
+    EXPECT_NE(msg.find("constant operand inside the const segment"), std::string::npos)
+        << "message was: " << msg;
+}
+
+// A const word is addressed through the 12-bit short address field, so the
+// segment cannot reach past CONSTTOP (07777).  It starts at word 8, so exactly
+// 4088 words fit and the next one is an error.
+TEST(Assemble, ConstSegmentAddressLimit)
+{
+    std::string ok = "        .const\n";
+    for (int i = 1; i <= 4088; i++)
+        ok += "        .word " + std::to_string(i) + "\n";
+    EXPECT_EQ(assemble_error(ok), "") << "4088 words end exactly at 07777";
+
+    std::string msg = assemble_error(ok + "        .word 4089\n");
+    EXPECT_NE(msg.find("const segment too large"), std::string::npos) << "message was: " << msg;
+}
+
 // Indexing a constant operand is meaningless - the index would modify the pool
 // address, not the value - and "#0, 017" (offset 0, modifier 017) is the BESM-6
 // stack-pop encoding, which would add a side effect.  Reject all of them.  The
@@ -851,21 +992,37 @@ TEST(Assemble, DiagnosticLineAtEndOfStatement)
     EXPECT_NE(msg.find(":2: "), std::string::npos) << "message was: " << msg;
 }
 
-// The constant pool is a fixed-size array (CSIZE entries); overflowing it must
-// be diagnosed rather than scribbling past the end of constab[].  Only distinct
-// values consume a slot, so CSIZE+1 of them is the smallest overflowing input.
-TEST(Assemble, ConstPoolOverflow)
+// The const segment has no fixed size, so a program may use any number of
+// literals.  Only the dedup table (CSIZE entries) is bounded, and it is a cache:
+// once it fills, "#expr" keeps appending words, it just stops recognising
+// repeats.  Filling it must not fail the assembly nor scribble past constab[].
+//
+// 4000 distinct literals is past CSIZE (== HCONSZ * 9/10 == 3686), so the two
+// trailing copies of one more value can no longer be de-duplicated and each
+// takes a word of its own.
+TEST(Assemble, ConstDedupTableFillsGracefully)
 {
     std::string source;
-    for (int i = 1; i <= 231; i++)
+    for (int i = 1; i <= 4000; i++)
         source += "        xta #" + std::to_string(i) + "\n";
+    source += "        xta #999999\n";
+    source += "        xta #999999\n";
 
-    std::string msg = assemble_error(source);
-    EXPECT_NE(msg.find("constant pool overflow"), std::string::npos) << "message was: " << msg;
+    ASSERT_EQ(assemble_error(source), "");
+    auto got = assemble(source);
+    EXPECT_EQ(word_low(got, 1), 4002 * 6) << "a_const: 4000 distinct + 2 un-deduplicated copies";
+}
 
-    // One fewer constant still fits.
-    source.resize(source.rfind("        xta #231"));
-    EXPECT_EQ(assemble_error(source), "");
+// Below that limit an identical literal is still recognised and shared.
+TEST(Assemble, ConstDedupBelowTableLimit)
+{
+    std::string source;
+    for (int i = 1; i <= 100; i++)
+        source += "        xta #" + std::to_string(i) + "\n";
+    source += "        xta #50\n"; // a repeat: must reuse the existing word
+
+    auto got = assemble(source);
+    EXPECT_EQ(word_low(got, 1), 100 * 6); // a_const: 100 words, not 101
 }
 
 // A mid-file "# N \"file\"" marker makes fatal() report the marker's source

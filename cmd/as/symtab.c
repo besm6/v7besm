@@ -71,6 +71,8 @@ int lookup_directive(void)
     case 'c':
         if (!strcmp(".comm", as.name))
             return COMM;
+        if (!strcmp(".const", as.name))
+            return CONST;
         break;
     case 'd':
         if (!strcmp(".data", as.name))

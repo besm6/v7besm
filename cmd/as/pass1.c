@@ -10,34 +10,78 @@
 #include "as.h"
 
 //
+// Record a completed const-segment word in the dedup table, so that a later
+// "#expr" can address it instead of appending its own copy.  `val` is the whole
+// 48-bit word and `rel` the relocation of its value; `addr` is its offset in
+// words from the start of the segment.
+//
+// Registration is best-effort: the table is a cache, not a limit.  Once it is
+// full we simply stop recording, and identical constants start costing a word
+// each - correct, only bigger.  Keeping the table below its hash size also
+// guarantees the linear probing here and in intern_constant() finds a free slot.
+//
+static void register_constant(int64_t val, long rel, long addr)
+{
+    int hash, i;
+
+    if (as.nconst >= CSIZE)
+        return; // table full: give up de-duplicating, do not fail
+    hash = SUPERHASH(HIHALF(val) + LOHALF(val) + rel, HCONSZ - 1);
+    while ((i = as.hashconst[hash]) != -1) {
+        if (val == as.constab[i].val && rel == as.constab[i].rel)
+            return; // already known: keep the word we found first
+        if (--hash < 0)
+            hash += HCONSZ;
+    }
+    as.hashconst[hash]         = as.nconst;
+    as.constab[as.nconst].val  = val;
+    as.constab[as.nconst].rel  = rel;
+    as.constab[as.nconst].addr = addr;
+    as.nconst++;
+}
+
+//
 // Emit one 24-bit half-word `h` and its relocation half-word `r` into the
 // current segment.  A BESM-6 word holds two half-words, written together, so
-// this buffers the first half-word of a pair (in the statics sh/sr) and flushes
-// both only when the second arrives.  count[] tracks how many half-words the
-// segment holds, and its low bit tells us which half of the pair we are on.
+// this buffers the first half-word of a pair (in as.pendh/pendr, one slot per
+// segment) and flushes both only when the second arrives.  count[] tracks how
+// many half-words the segment holds, and its low bit tells us which half of the
+// pair we are on.
+//
+// Completing a word in the const segment also offers it to the dedup table, as
+// long as neither half needs relocating - a word that moves at link time, or
+// whose value is an address, is no use as a literal.  A word laid down by
+// intern_constant() carries RMERGE in its high half and registers itself there,
+// under the value's own relocation type; skipping it here keeps that key intact.
 //
 static void emit_halfword(long h, long r)
 {
-    static long sh, sr;
-
     if (as.count[as.segm] & 01) {
+        long sh = as.pendh[as.segm];
+        long sr = as.pendr[as.segm];
+
         fputh(sh, as.sfile[as.segm]); // first-of-pair  -> high half-word
         fputh(sr, as.rfile[as.segm]);
         fputh(h, as.sfile[as.segm]); // second-of-pair -> low half-word
         fputh(r, as.rfile[as.segm]);
-    } else {
-        // Odd half-word: hold it until its partner shows up.
-        sh = h;
-        sr = r;
+        as.count[as.segm]++;
+
+        if (as.segm == SCONST && !(sr & RMERGE) && (sr & REXT) == RABS && (r & REXT) == RABS)
+            register_constant(((int64_t)sh << 24) | (h & HALF_MASK), RABS,
+                              as.count[SCONST] / 2 - 1);
+        return;
     }
+    // Odd half-word: hold it until its partner shows up.
+    as.pendh[as.segm] = h;
+    as.pendr[as.segm] = r;
     as.count[as.segm]++;
 }
 
 //
 // Make sure segment `s` ends on a whole-word boundary: if it currently holds an
 // odd number of half-words, emit one filler half-word (an empty instruction in
-// text, a zero elsewhere).  Switches to segment s if needed and restores the
-// previous segment afterwards.
+// the two segments that may hold code, a zero elsewhere).  Switches to segment
+// s if needed and restores the previous segment afterwards.
 //
 void align_segment(int s)
 {
@@ -50,44 +94,58 @@ void align_segment(int s)
         save = -1;
 
     if (as.count[s] & 01)
-        emit_halfword(s == STEXT ? EMPCOM : 0L, (long)RABS);
+        emit_halfword((s == STEXT || s == SCONST) ? EMPCOM : 0L, (long)RABS);
 
     if (save >= 0)
         as.segm = save;
 }
 
 //
-// Add the 48-bit value `val` to the constant pool and return its index there.
-// Identical constants are stored only once: the pool is a hash table, and a
-// constant is keyed on both its value and its relocation type `bs` (so e.g. an
-// absolute 5 and an address-of-something that happens to equal 5 stay
-// distinct); `extref` names the symbol when `bs` is SEXT.  Collisions are
-// resolved by linear probing - on a clash, step to the previous slot, wrapping
-// around - the same scheme used by the symbol and instruction tables.
+// Find the const-segment word holding the 48-bit value `val`, appending one if
+// no suitable word is there yet, and return its offset in words from the start
+// of the segment.  Backs the "#expr" operand.
+//
+// A word only serves as `val` if it also agrees on the relocation: `bs` is the
+// value's segment, so an absolute 5 and the address of something that happens
+// to sit at 5 stay distinct, and `extref` names the symbol when `bs` is SEXT.
+// The candidates are whatever register_constant() has offered - words appended
+// here, and any word a ".const" directive laid down with both halves absolute.
+// Collisions are resolved by linear probing, stepping to the previous slot and
+// wrapping around, the same scheme the symbol and instruction tables use.
+//
+// A fresh word is appended at the const segment's cursor, wherever that is, and
+// carries RMERGE in its high half to tell the linker it is an anonymous literal
+// that may be merged with an identical one from another object file.
 //
 static long intern_constant(int64_t val, int bs, int extref)
 {
-    int hash, i;
-    long hr2;
+    int hash, i, save;
+    long hr2, addr;
 
     hr2 = SEGMREL(bs);
     if (bs == SEXT)
         hr2 |= RPUTIX(extref); // external constant: remember which symbol
     hash = SUPERHASH(HIHALF(val) + LOHALF(val) + hr2, HCONSZ - 1);
     while ((i = as.hashconst[hash]) != -1) {
-        // Slot taken: a real match means the constant already exists.
+        // Slot taken: a real match means a suitable word already exists.
         if (val == as.constab[i].val && hr2 == as.constab[i].rel)
-            return i;
+            return as.constab[i].addr;
         if (--hash < 0)
             hash += HCONSZ;
     }
-    // Not found: append a new pool entry and record it in the hash slot.
-    if (as.nconst >= CSIZE)
-        fatal("constant pool overflow");
-    as.hashconst[hash]        = as.nconst;
-    as.constab[as.nconst].val = val;
-    as.constab[as.nconst].rel = hr2;
-    return as.nconst++;
+    // Not found: append the literal to the const segment.  align_segment() first,
+    // since a word must start on a word boundary; the caller's segment keeps its
+    // own half-finished word (as.pendh/pendr are per-segment).
+    align_segment(SCONST);
+    save    = as.segm;
+    as.segm = SCONST;
+    emit_halfword(HIHALF(val), (long)RMERGE);
+    emit_halfword(LOHALF(val), hr2);
+    as.segm = save;
+
+    addr = as.count[SCONST] / 2 - 1;
+    register_constant(val, hr2, addr);
+    return addr;
 }
 
 //
@@ -180,6 +238,11 @@ static void assemble_instruction(long val, int type)
     if (pooled) {
         if (index != 0)
             fatal("index register on a constant operand");
+        if (as.segm == SCONST)
+            // The literal would be appended to the const segment at the cursor,
+            // i.e. right in front of the instruction referencing it.  Put the
+            // constant in the segment yourself and address it by name.
+            fatal("constant operand inside the const segment");
         if (poolseg == SABS && poolval == 0 && !cset) {
             addr    = 0;
             reltype = RABS;
@@ -404,6 +467,10 @@ void generate_code(void)
                 align_segment(as.segm);
                 as.segm = STEXT;
                 break;
+            case CONST:
+                align_segment(as.segm);
+                as.segm = SCONST;
+                break;
             case DATA:
                 align_segment(as.segm);
                 as.segm = SDATA;
@@ -433,17 +500,16 @@ void generate_code(void)
             case WORD:
                 // ".word e, e, ..." - emit each value as one full 48-bit word
                 // (low half carries the relocation, high half is absolute).
+                // The halves go through emit_halfword() so that a word landing
+                // in the const segment is offered to the dedup table.
                 align_segment(as.segm);
                 for (;;) {
                     parse_expr(&cval);
                     addr = SEGMREL(cval);
                     if (cval == SEXT)
                         addr |= RPUTIX(as.extref);
-                    fputh(HIHALF(as.intval), as.sfile[as.segm]);
-                    fputh(0L, as.rfile[as.segm]);
-                    fputh(LOHALF(as.intval), as.sfile[as.segm]);
-                    fputh(addr, as.rfile[as.segm]);
-                    as.count[as.segm] += 2;
+                    emit_halfword(HIHALF(as.intval), (long)RABS);
+                    emit_halfword(LOHALF(as.intval), addr);
                     if ((clex = next_token(&cval)) != ',') {
                         unget_token(clex, cval);
                         break;

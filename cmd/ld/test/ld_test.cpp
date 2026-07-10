@@ -218,3 +218,74 @@ TEST(LinkDeath, EmptyLibrarySearchPath)
     char *argv[] = { a0, a1, nullptr };
     EXPECT_EXIT(ld_link(2, argv), ::testing::ExitedWithCode(4), "");
 }
+
+// Write `text` to `path` and assemble it into `path`.o with the b6as binary.
+static void assemble_to(const std::string &sfile, const std::string &ofile, const char *text)
+{
+    {
+        std::ofstream src(sfile, std::ios::trunc);
+        src << text;
+    }
+    std::string cmd = std::string(B6AS_PATH) + " " + sfile + " -o " + ofile;
+    ASSERT_EQ(std::system(cmd.c_str()), 0) << "assembler failed: " << cmd;
+}
+
+// Two objects each interning the same literal: the words are anonymous (marked
+// RMERGE by the "#expr" operator), so the linker stores the value once and points
+// both references at the surviving copy.
+TEST(Link, MergesIdenticalLiterals)
+{
+    std::string base = current_test_name();
+    std::string o1 = base + ".1.o", o2 = base + ".2.o", image = base + ".out";
+
+    assemble_to(base + ".1.s", o1, "        .globl f\nf:      xta #0x123456789a\n        uj f\n");
+    assemble_to(base + ".2.s", o2, "        .globl g\ng:      xta #0x123456789a\n        uj g\n");
+
+    char a0[] = "ld";
+    char a1[] = "-o";
+    std::vector<char> a2(image.begin(), image.end()), a3(o1.begin(), o1.end()),
+        a4(o2.begin(), o2.end());
+    a2.push_back('\0');
+    a3.push_back('\0');
+    a4.push_back('\0');
+    char *argv[] = { a0, a1, a2.data(), a3.data(), a4.data(), nullptr };
+    EXPECT_EQ(ld_link(5, argv), 0);
+
+    auto img = read_file(image);
+    EXPECT_EQ(word_low(img, 1), 6L) << "a_const: the shared literal is stored once";
+    EXPECT_EQ(word_high(img, 8), 0x1234L);   // the merged word, high 24 bits
+    EXPECT_EQ(word_low(img, 8), 0x56789aL);  //                 low 24 bits
+}
+
+// Words placed by ".const" are ordered data, not anonymous literals, so the
+// linker must keep every one of them even when two are identical.  Merging the
+// third word onto the first would leave `tbl` a two-word array -- the regression
+// this whole marking scheme exists to prevent.
+TEST(Link, PreservesConstDataAdjacency)
+{
+    std::string base = current_test_name();
+    std::string ofile = base + ".o", image = base + ".out";
+
+    assemble_to(base + ".s", ofile,
+                "        .const\n"
+                "        .globl tbl\n"
+                "tbl:    .word 1, 2, 1\n"
+                "        .text\n"
+                "        .globl f\n"
+                "f:      uj f\n");
+
+    char a0[] = "ld";
+    char a1[] = "-o";
+    std::vector<char> a2(image.begin(), image.end()), a3(ofile.begin(), ofile.end());
+    a2.push_back('\0');
+    a3.push_back('\0');
+    char *argv[] = { a0, a1, a2.data(), a3.data(), nullptr };
+    EXPECT_EQ(ld_link(4, argv), 0);
+
+    auto img = read_file(image);
+    EXPECT_EQ(word_low(img, 1), 3 * 6L) << "a_const: all three words survive";
+    EXPECT_EQ(word_low(img, 8), 1L);  // tbl[0]
+    EXPECT_EQ(word_low(img, 9), 2L);  // tbl[1] -- would be tbl[2] if the 1s merged
+    EXPECT_EQ(word_low(img, 10), 1L); // tbl[2]
+    EXPECT_EQ(word_low(img, 6), 8L + 3); // a_entry = torigin, past the const segment
+}

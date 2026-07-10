@@ -94,7 +94,7 @@ static void open_temp_files(void)
     } else {
         close(fd);
     }
-    for (i = STEXT; i < SBSS; i++) {
+    for (i = SCONST; i < SBSS; i++) {
         if (!(as.sfile[i] = fopen(as.tfilename, "w+")))
             fatal("cannot open %s", as.tfilename);
         unlink(as.tfilename);

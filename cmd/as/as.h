@@ -35,7 +35,7 @@
 // is reserved (formerly the "abss" segment) to keep these aligned with the
 // N_*/R* codes.
 
-#define SCONST 0 // constant pool (de-duplicated literals)
+#define SCONST 0 // const: read-only data, code, and the de-duplicated literal pool
 #define STEXT  1 // text: machine code
 #define SDATA  2 // initialized data
 #define SSTRNG 3 // string constants (folded onto data at output time)
@@ -55,6 +55,7 @@
 #define TEXT  8  // .text   - switch to the text (code) segment
 #define EQU   9  // .equ    - define a name = expression
 #define WORD  10 // .word   - emit full 48-bit words
+#define CONST 11 // .const  - switch to the const segment
 
 // Per-instruction flags stored in the `type` column of table[].
 
@@ -66,11 +67,11 @@
 // of two so SUPERHASH's bit-mask works.
 
 #define HASHSZ 2048 // name (symbol) table hash size
-#define HCONSZ 256  // constant pool hash size
+#define HCONSZ 4096 // constant-dedup hash size
 #define HCMDSZ 1024 // machine-instruction hash size
 
 #define STSIZE  (HASHSZ * 9 / 10) // max symbols (kept below the hash size to stay sparse)
-#define CSIZE   (HCONSZ * 9 / 10) // max pooled constants
+#define CSIZE   (HCONSZ * 9 / 10) // max entries in the constant-dedup table
 #define SPACESZ (STSIZE * 8)      // bytes of arena for symbol-name text
 
 #define SRCNAME_MAX 1024 // max length of a source file name from a "# N \"file\"" marker
@@ -123,10 +124,15 @@ struct table {
     int type;         // TLONG / TALIGN flags
 };
 
-// One pooled constant.  Identical constants are stored once; see intern_constant().
+// One entry of the constant-dedup table: a const-segment word that a "#expr"
+// operand may address instead of appending a fresh copy.  Entries come both
+// from intern_constant() and from any word laid down in the const segment whose
+// two halves are absolute (see register_constant()).  Note this table indexes
+// const words - it no longer *holds* them; the words live in the segment image.
 struct constant {
-    int64_t val; // the constant's 48-bit value
-    long rel;    // relocation type for the constant (R* code, possibly with a symbol index)
+    int64_t val; // the word's 48-bit value
+    long rel;    // relocation type of the value (R* code, possibly with a symbol index)
+    long addr;   // the word's offset, in words, from the start of the const segment
 };
 
 // The entire mutable state of the assembler, in one struct so it is easy to
@@ -136,6 +142,14 @@ struct assembler {
     FILE *sfile[SABS]; // per-segment temp file holding the segment's code/data image
     FILE *rfile[SABS]; // per-segment temp file holding the matching relocation half-words
     long count[SABS];  // per-segment size, counted in 24-bit half-words
+
+    // A word holds two half-words, written to the temp file together, so the
+    // first half of a pair waits here until its partner arrives.  The buffer is
+    // per-segment: interning a "#expr" literal appends to the const segment in
+    // the middle of assembling an instruction elsewhere, and must not disturb
+    // that segment's half-finished word.
+    long pendh[SABS]; // the pending first half-word of the current pair
+    long pendr[SABS]; // and its relocation record
 
     int segm; // segment currently being assembled into (one of S*)
 
@@ -168,8 +182,8 @@ struct assembler {
 
     int regleft; // index register written to the left of an instruction (the "N M" prefix)
 
-    struct constant constab[CSIZE]; // the constant pool
-    int nconst;                     // number of pooled constants
+    struct constant constab[CSIZE]; // the constant-dedup table
+    int nconst;                     // number of entries in it
 
     char name[256];   // scratch buffer: the identifier/number text just scanned
     int64_t intval;   // scratch: the value of the integer literal just scanned (full 48-bit word)

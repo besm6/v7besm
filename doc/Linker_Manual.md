@@ -51,7 +51,7 @@ across all the inputs (see [§3](#3-the-four-segments)):
 
 | Segment | Holds | In the file? |
 |---------|-------|--------------|
-| const | read-only constants / the literal pool | yes |
+| const | read-only data and code, plus the literal pool | yes |
 | text | the program code | yes |
 | data | pre-initialized variables | yes |
 | bss | variables that start out zero | no — size only |
@@ -140,9 +140,12 @@ Each input object declares four segment sizes in its header (see [§8.2](#82-the
 The linker concatenates all the inputs' segments of the same kind, in the order the files appear
 on the command line:
 
-- **const** — the read-only literal pool. Constants are **de-duplicated** across the whole
-  program: an identical non-relocatable constant used by several files is stored once (see
-  [§3.1](#31-the-constant-pool)). Const is written to the output file.
+- **const** — read-only data, code, and the literal pool. Anonymous literals (those the
+  assembler's `#expr` operator appended) are **de-duplicated** across the whole program: one
+  used by several files is stored once. Words a `.const` directive placed there are ordered
+  data and are never merged (see [§3.1](#31-the-constant-pool)). Const is written to the
+  output file, and because references reach it through the 12-bit short address field it may
+  not extend past word `07777`.
 - **text** — machine code, 24-bit half-words two per word. Written to the file; made read-only
   by `-n`.
 - **data** — initialized variables. Written to the file.
@@ -155,17 +158,25 @@ interleaved; see [§4.2](#42-memory-layout)).
 
 ### 3.1 The constant pool
 
-`load_constants()` ([pass1.c](../cmd/ld/pass1.c)) reads each file's const segment one entry at a
-time. Every constant is two half-words of value (`h`, `h2`) plus two half-words of relocation
-(`hr`, `hr2`) — a `struct constab`. Only a **non-relocatable** constant (`hr == hr2 == 0`) can be
-shared, because a relocatable one means something different in every file. For each such constant
-the linker scans the pool built so far for an identical earlier copy and, if found, reuses it.
+`load_constants()` ([pass1.c](../cmd/ld/pass1.c)) reads each file's const segment one word at a
+time. Every word is two half-words of value (`h`, `h2`) plus two half-words of relocation
+(`hr`, `hr2`) — a `struct constab`.
 
-As it merges, it fills `ld.newindex[]`, mapping each of this file's constant slots to the pooled
-slot it ended up in. Both symbol relocation (`relocate_cursym()`) and half-word relocation
-(`relocate_halfword()`) consult that map to repoint every constant reference at its pooled copy.
-The per-file post-dedup size is remembered in `ld.coptsize[]` so pass 2 can walk the same
-constants again.
+Only an **anonymous literal** may be merged away, and the word says so itself: the assembler
+sets `RMERGE` in the high-half relocation record of every word its `#expr` operator appends
+(`cross/besm6/b.out.h`). Words a `.const` directive placed there carry no mark — they are
+ordered data or code, and dropping one from the middle of an array would leave its neighbours
+adjacent to the wrong words. A literal whose value must itself be relocated (`hr2 != 0`) is
+never merged either, because it means a different address in every file. For each mergeable
+word the linker scans the segment built so far for an identical earlier copy — marked or not,
+since the survivor does not move — and, if one is found, reuses it.
+
+As it merges, it fills `ld.newindex[]`, mapping **every** one of this file's const words to
+the slot it ended up in, merged or not. Both symbol relocation (`relocate_cursym()`) and
+half-word relocation (`relocate_halfword()`) consult that map, so `.const` labels and data
+references stay correct as earlier duplicates collapse and shift the words after them. The
+per-file post-merge size is remembered in `ld.coptsize[]` so pass 2 can walk the same words
+again.
 
 ---
 

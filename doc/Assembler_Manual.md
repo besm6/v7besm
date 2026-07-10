@@ -291,7 +291,7 @@ For a machine instruction, the operand after the mnemonic may take any of these 
 |------|---------|---------|
 | *(none)* | `xta` | Address field 0. |
 | expression | `xta data` | Direct address; the address field is the expression's value, relocated by its segment. |
-| `# expr` | `a+x #1.0` | **Constant pool**: place `expr`'s value in the const segment (deduplicated) and address it. Use for literals and large constants. An absolute `#0` is folded to a direct reference to memory word 0 (which always reads 0) and takes no pool slot. |
+| `# expr` | `a+x #1.0` | **Constant pool**: address a const-segment word holding `expr`'s value, appending one at the segment's cursor if no suitable word is there yet. Use for literals and large constants. An absolute `#0` is folded to a direct reference to memory word 0 (which always reads 0) and takes no word at all. |
 | `expr , reg` | `xta tab, 3` | Index the access with register M`reg` (`reg` must be absolute, 0–15). |
 | `< expr >` | `xta <bigaddr>` | **Address extension**: emit `utc expr` first, loading C, then the instruction. Lets a 15-bit address reach beyond the 12-bit short field. |
 | `[ expr ]` | `atx [bigaddr]` | Emit `wtc expr` first (write-to-C variant), then the instruction. |
@@ -308,6 +308,15 @@ Only an **absolute** zero is folded onto memory word 0. A relocatable or externa
 always pooled, even when its value is 0 while assembling, because its address is not known
 until link time. `#0` after `<expr>`/`[expr]` is pooled as well: the `utc`/`wtc` leaves `C`
 live, and `C` is added to the effective address.
+
+Identical constants share one word. Two constants match only when their *relocations* match
+too, so an absolute `5` and the address of something that happens to sit at word 5 stay
+apart. Sharing is a best-effort optimisation: the table that tracks candidate words is a
+fixed-size cache, and once it fills, repeats simply cost a word each. Words appended here are
+marked as anonymous literals, which lets the linker merge them across object files
+(see [Linker §3.1](Linker_Manual.md#31-the-constant-pool)); words written with `.const` are not,
+and never move. `#expr` may not appear on an instruction that is itself in `.const` —
+see [§10](#10-directives).
 
 ---
 
@@ -394,12 +403,32 @@ All directives begin with `.`. The complete set (`cmd/as/symtab.c:lookacmd`):
 | Directive | Operands | Effect |
 |-----------|----------|--------|
 | `.text` | — | Switch to the **text** (code) segment. This is the initial segment. |
+| `.const` | — | Switch to the **const** (read-only) segment, which is laid down first, before text. |
 | `.data` | — | Switch to the **data** (initialized data) segment. |
 | `.strng` | — | Switch to the **string** segment (string constants; folded into data at link time). |
 | `.bss` | — | Switch to the **bss** (uninitialized data) segment. |
 
-The const segment is not selected by a directive; it is populated implicitly via the `#`
-constant-pool operator ([§8](#8-registers-and-addressing)).
+The const segment holds data, labels, and machine code like any other, and is *also* where
+the `#` constant-pool operator ([§8](#8-registers-and-addressing)) appends its literals. Two
+rules follow from that shared use:
+
+- **Every const word whose two halves need no relocation is offered to the constant pool.**
+  Write `.word 5` in `.const` and a later `xta #5` addresses that very word instead of
+  appending a copy. A word holding an address (`.word datum`) is not offered: it means a
+  different address in each object file. `.ascii` text is not offered either — its words are
+  built a byte at a time and are meant to be reached by label.
+- **`#expr` is rejected on an instruction inside `.const`** (`constant operand inside the
+  const segment`). The literal would be appended at the segment's cursor, i.e. directly in
+  front of the instruction referring to it. Put the constant in the segment yourself and
+  address it by name.
+
+The const segment is reached through the 12-bit short address field, so it cannot extend past
+word `07777`. It begins at word 8, leaving room for 4088 words; both `b6as` and `b6ld` refuse
+to lay out more (`const segment too large`).
+
+Because `#expr` appends at the const cursor wherever it happens to be, a `.const` array must
+not straddle a `.text` instruction that interns a literal — the literal would land in the
+middle of the array. Finish the array before switching segments.
 
 ### Emitting data
 
@@ -471,6 +500,11 @@ buf:    . = . + 0100        // reserve 64 words
 ### 11.4 Constant pool and address extension
 
 ```
+        .const
+mask:   .word 0777777777777 // read-only data, addressable by name...
+        .text
+        aax mask
+        aax #0777777777777  // ...and reused here: no second word is emitted
         a+x #3.14159        // load the constant from the const segment and add
         xta #0              // xta 0 — memory word 0; no const word is emitted
         xta <far_table>     // utc far_table; xta  — reach a 15-bit address
@@ -490,7 +524,7 @@ entry:  vtm count, 1
 
 ## 12. Quick reference
 
-**Directives:** `.text` `.data` `.strng` `.bss` · `.word` `.half` `.ascii` · `.globl`
+**Directives:** `.text` `.const` `.data` `.strng` `.bss` · `.word` `.half` `.ascii` · `.globl`
 `.equ` `.comm`.
 
 **Expression operators (left-to-right, no precedence):** `+` `-` `&` `|` `^` `~` `\<` `\>`

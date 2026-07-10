@@ -138,6 +138,31 @@ struct nlist {
 //
 #define RSHORT 01 // short address field; also a bit mask
 
+//
+// Highest word address the const segment may occupy. Most instructions address
+// memory through the 12-bit short address field, and the "#expr" operator emits
+// exactly such a reference, so no const word may sit above 07777. Both the
+// assembler and the linker refuse to lay one out past this line.
+//
+#define CONSTTOP 07777 // last word address available to the const segment
+
+//
+// Const-segment word marker, valid only on the *high-half* relocation record of
+// a word in the const segment. It says the word is an anonymous literal, put
+// there by the assembler's "#expr" operator, so the linker may merge it with an
+// identical word or drop it (load_constants() in cmd/ld/pass1.c). Words placed
+// in the segment by a ".const" directive never carry it: they hold ordered data
+// or code, and moving one relative to its neighbours would corrupt the program.
+//
+// A const word's high half never needs a relocation of its own (the address
+// field of a 48-bit value lives in the low half), so the record is free to
+// carry this flag. Bit 04 is still unused. Note that rewrite_reloc() in
+// cmd/as/pass2.c and relocate_halfword() in cmd/ld/reloc.c preserve unknown
+// bits on RABS and segment-relative records but strip them when rewriting an
+// REXT or RSTRNG record -- a path no const word's high half ever takes.
+//
+#define RMERGE 02 // const word: anonymous literal, the linker may merge it
+
 #define RGETIX(h) ((h) >> 6)       // extract symbol index from a record
 #define RPUTIX(h) ((long)(h) << 6) // pack symbol index into a record
 

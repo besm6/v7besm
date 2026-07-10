@@ -22,7 +22,7 @@
 
 #define NSYM     2000 // capacity of the global symbol table
 #define NSYMPR   1000 // capacity of the per-file local-symbol map
-#define NCONST   512  // capacity of the merged constant pool
+#define NCONST   4096 // capacity of the merged const segment, in words (see CONSTTOP)
 #define LLSIZE   256  // capacity of the library / file-offset list
 #define RANTABSZ 1000 // capacity of the ranlib table of contents
 #define NLIBDIR  32   // capacity of the -L library search path

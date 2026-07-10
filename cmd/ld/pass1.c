@@ -8,15 +8,27 @@
 #include "intern.h"
 
 //
-// Read the current file's constant pool and merge it into the program-wide pool
-// (ld.constab), discarding duplicates so a constant used by many files is stored
-// once.  Each constant is two half-words of value (h, h2) plus two half-words of
-// relocation (hr, hr2); only non-relocatable constants (hr==hr2==0) can be shared,
-// since a relocatable one means something different in each file.
+// Read the current file's const segment and append it to the program-wide one
+// (ld.constab), merging duplicated literals so a constant used by many files is
+// stored once.  Each word is two half-words of value (h, h2) plus two half-words
+// of relocation (hr, hr2).
 //
-// As it goes it fills ld.newindex[]: for each of this file's constants, the index
-// of the pooled copy.  relocate_cursym() and relocate_halfword() use that map to
-// repoint constant references.  Returns how many *new* pool entries were added.
+// Only an *anonymous literal* may be merged away, and it says so itself: the
+// assembler's "#expr" operator sets RMERGE in the word's high-half relocation
+// record.  Words a ".const" directive put there carry no such mark, because they
+// are ordered data or code - dropping one out of the middle of an array would
+// leave its neighbours adjacent to the wrong words.  A literal whose value needs
+// relocating (hr2 != 0) is likewise never merged: it means a different address
+// in each file.
+//
+// The survivor of a merge may be any earlier word with the same value and no
+// relocation of its own, marked or not, since it does not move as a result.
+//
+// As it goes it fills ld.newindex[]: for each of this file's const words, the
+// index of the word it ended up at.  relocate_cursym() and relocate_halfword()
+// use that map to repoint const references - it covers every word, merged or
+// not, so ".const" labels and data references stay correct as earlier duplicates
+// collapse.  Returns how many *new* entries were added.
 //
 int load_constants(void)
 {
@@ -35,10 +47,10 @@ int load_constants(void)
         c->hr2 = fgeth(ld.reloc);
         p      = c;
 
-        // A plain (non-relocatable) constant: look for an identical earlier one.
-        if (!c->hr && !c->hr2)
+        // An anonymous, non-relocatable literal: look for an identical earlier word.
+        if (c->hr == RMERGE && !c->hr2)
             for (p = ld.constab; p < c; p++)
-                if (!p->hr2 && c->h == p->h && c->h2 == p->h2 && !p->hr)
+                if (!p->hr2 && !(p->hr & ~(long)RMERGE) && c->h == p->h && c->h2 == p->h2)
                     break;
 
         // p==c means no duplicate was found, so keep this new entry.
