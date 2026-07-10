@@ -165,8 +165,8 @@ start:  atx 0123            // direct octal address
         a/x 7*011           // multiply
         a*x 0144/012        // divide
         apx 0145%012        // modulo
-        aux 1+2*3           // no precedence: (1+2)*3 == 011
-        acx 1+(2*3)         // grouping forces 1+(2*3) == 7
+        aux 1+2*3           // C precedence: 1+(2*3) == 7
+        acx (1+2)*3         // grouping forces (1+2)*3 == 011
         anx {0123}          // exponent-truncate braces
         e+x 010             // operator-bearing mnemonic with operand
         e-x 0234
@@ -256,8 +256,8 @@ mid:                        // second label
     EXPECT_EQ(word_high(got, 15), 00160000L | 077L);  // a/x 7*011    (multiply)
     EXPECT_EQ(word_low(got, 15), 00170000L | 012L);   // a*x 0144/012 (divide)
     EXPECT_EQ(word_high(got, 16), 00200000L | 1L);    // apx 0145%012 (modulo)
-    EXPECT_EQ(word_low(got, 16), 00210000L | 011L);   // aux 1+2*3 == (1+2)*3
-    EXPECT_EQ(word_high(got, 17), 00220000L | 7L);    // acx 1+(2*3)  (grouping)
+    EXPECT_EQ(word_low(got, 16), 00210000L | 7L);     // aux 1+2*3 == 1+(2*3)
+    EXPECT_EQ(word_high(got, 17), 00220000L | 011L);  // acx (1+2)*3  (grouping)
     EXPECT_EQ(word_low(got, 17), 00230000L | 0123L);  // anx {0123}   (braces)
     EXPECT_EQ(word_high(got, 18), 00240000L | 010L);  // e+x 010
     EXPECT_EQ(word_low(got, 18), 00250000L | 0234L);  // e-x 0234
@@ -502,6 +502,42 @@ TEST(Assemble, WideWords)
     EXPECT_EQ(word_low(got, 14), 0xf80000L);    //               -> bits 20..24
     EXPECT_EQ(word_high(got, 15), 0xfffff8L);   // .word .[28=20] (complement)
     EXPECT_EQ(word_low(got, 15), 0x0fffffL);
+}
+
+// Operators bind with the usual C precedence (* / % over + - over << >> over &
+// over ^ ~ over |) and associate left to right; the unary prefixes - ~ + bind
+// tighter than any of them.  Every line below is chosen so that a flat
+// left-to-right fold would produce a different value, so the test fails if the
+// precedence climb regresses.  Data begins at file word 8.
+TEST(Assemble, OperatorPrecedence)
+{
+    auto got = assemble(R"(
+        .data
+lbl:    .word 1+2*3     // '*' over '+'                 == 7   (left to right: 011)
+        .word 2*3+4*5   // both products first          == 032 (l-t-r: 062)
+        .word 2-4/2     // '/' over '-'                 == 0   (l-t-r: 0777777)
+        .word 1+2<<3    // '+' over '<<'                == 030 (l-t-r: 030)
+        .word 1<<2*3    // '*' over '<<'                == 0100 (l-t-r: 010)
+        .word 1|2^3     // '^' over '|'                 == 1   (l-t-r: 0)
+        .word 1^3&2     // '&' over '^'                 == 3   (l-t-r: 2)
+        .word ~0 & 0177 // unary '~' over '&'           == 0177 (l-t-r: all ones)
+        .word -2+3*4    // unary '-', then '*' over '+' == 012 (l-t-r: 04)
+        .word lbl+2*3   // a relocatable plus a product == lbl+6
+)");
+    EXPECT_EQ(word_low(got, 3), 60); // a_data == 10 words * 6 bytes
+
+    EXPECT_EQ(word_low(got, 8), 7L);      // 1+2*3   == 1+(2*3)
+    EXPECT_EQ(word_low(got, 9), 032L);    // 2*3+4*5 == (2*3)+(4*5)
+    EXPECT_EQ(word_low(got, 10), 0L);     // 2-4/2   == 2-(4/2)
+    EXPECT_EQ(word_low(got, 11), 030L);   // 1+2<<3  == (1+2)<<3
+    EXPECT_EQ(word_low(got, 12), 0100L);  // 1<<2*3  == 1<<(2*3), not 1<<3
+    EXPECT_EQ(word_low(got, 13), 1L);     // 1|2^3   == 1|(2^3)
+    EXPECT_EQ(word_low(got, 14), 3L);     // 1^3&2   == 1^(3&2)
+    EXPECT_EQ(word_low(got, 15), 0177L);  // ~0&0177 == (~0)&0177
+    EXPECT_EQ(word_high(got, 15), 0L);
+    EXPECT_EQ(word_low(got, 16), 012L);   // -2+3*4  == (-2)+(3*4)
+    EXPECT_EQ(word_high(got, 16), 0L);
+    EXPECT_EQ(word_low(got, 17), 8L + 6L); // lbl+2*3 == lbl+6; lbl == 8, the load base
 }
 
 // A single apostrophe may separate digit groups in an integer literal, C++-style:
@@ -955,6 +991,15 @@ static std::string assemble_error(const std::string &source)
         return e.what();
     }
     return "";
+}
+
+// A whole expression may be empty (an omitted operand field is 0), but an
+// operator's right operand may not: the empty case is recognized only at the
+// start of an expression, so "1 + * 2" is an error rather than "(1 + 0) * 2".
+TEST(Assemble, MissingRightOperandRejected)
+{
+    std::string msg = assemble_error("        .data\n        .word 1 + * 2\n");
+    EXPECT_NE(msg.find("operand missed"), std::string::npos) << "message was: " << msg;
 }
 
 // An "#expr" inside the const segment would append its literal at the cursor,

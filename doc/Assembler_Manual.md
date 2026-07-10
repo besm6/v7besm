@@ -223,10 +223,14 @@ Wherever a value is needed (an address, a directive operand, the right side of `
 **expression** may appear. The grammar is:
 
 ```
-expression  =  [operand] { operator operand } ...
+expression  =  [ term { operator term } ... ]
+term        =  { "-" | "~" | "+" } term | operand
 operand     =  number | name | "." | "(" expression ")" | "{" expression "}"
 operator    =  "+" | "-" | "&" | "|" | "^" | "~" | "<<" | ">>" | "*" | "/" | "%"
 ```
+
+An expression as a whole may be empty — an omitted operand field is `0` — but an operator's
+right-hand operand may not, so `1 + * 2` is an error.
 
 **Operands.**
 
@@ -238,25 +242,32 @@ operator    =  "+" | "-" | "&" | "|" | "^" | "~" | "<<" | ">>" | "*" | "/" | "%"
 | `( … )` | Grouping. |
 | `{ … }` | Same as `( … )`, but **truncates the exponent field** of the result (clears bits 48–25 of the value's high half). Useful for stripping a floating-point exponent. |
 
-**Operators.**
+**Unary operators.** These are prefixes and bind tighter than every binary operator, so
+`~0 & 0177` is `(~0) & 0177` and `-2 + 3 * 4` is `(-2) + (3 * 4)`.
 
 | Operator | Operation |
 |----------|-----------|
-| `+` | Addition. |
-| `-` | Subtraction. |
-| `&` | Bitwise AND. |
-| `\|` | Bitwise OR. |
-| `^` | Bitwise XOR. |
-| `~` | XOR with the complement (`a ~ b` = `a ^ ~b`). |
-| `<<` | Shift left (count = right operand mod 64). |
-| `>>` | Shift right. |
-| `*` | Multiply (low 31 bits). |
-| `/` | Divide (low 31 bits; division by zero is an error). |
-| `%` | Modulo (low 31 bits; modulo by zero is an error). |
+| `-` | Negate (two's complement of the 48-bit value). Requires an absolute operand. |
+| `~` | Complement all 48 bits. Requires an absolute operand. |
+| `+` | Identity. Keeps the operand's relocation class, so `+label` is still relocatable. |
 
-> **No operator precedence.** Expressions are evaluated **strictly left to right**. `1 + 2 * 3`
-> is `(1 + 2) * 3 = 9`, not 7. Use parentheses to force any other grouping.
->
+**Binary operators.** They obey the usual **C precedence** and all associate **left to right**.
+The table is ordered from tightest-binding to loosest; operators in one row bind equally.
+
+| Operator | Operation |
+|----------|-----------|
+| `*` `/` `%` | Multiply / divide / modulo (low 31 bits; division or modulo by zero is an error). |
+| `+` `-` | Addition, subtraction. |
+| `<<` `>>` | Shift left / right (count = right operand mod 64). |
+| `&` | Bitwise AND. |
+| `^` `~` | Bitwise XOR; `a ~ b` is XOR with the complement (`a ^ ~b`). |
+| `\|` | Bitwise OR. |
+
+So `1 + 2 * 3` is `1 + (2 * 3) = 7`, and `1 << 2 * 3` is `1 << 6`. Note that — exactly as in C —
+the shifts bind **looser** than `+`, so `1 + 2 << 3` means `(1 + 2) << 3 = 030`. Binary `~` is a
+BESM-6 operator with no C counterpart; it shares XOR's level, between `&` and `|`. Use
+parentheses to force any other grouping.
+
 > **`<` and `>` doubled versus single.** A doubled `<<`/`>>` is always the shift operator; a
 > single `<` or `>` is the address-extension wrapper of [§8](#8-registers-and-addressing)
 > (`< expr >`). The two never collide, because an expression can neither begin nor end with
@@ -267,7 +278,11 @@ through an expression, and only `+` may combine it:
 
 - `+` accepts a relocatable left or right term (e.g. `label + 4`).
 - `-` requires its right operand to be absolute (`label - 4` is fine; `label - other` is not).
-- All bitwise, shift, and multiplicative operators require **both** operands absolute.
+- All unary, bitwise, shift, and multiplicative operators require **both** operands absolute.
+
+Because precedence now groups the absolute sub-expression first, `label + 2 * 3` is accepted
+(the product is folded before the addition sees it); under the old left-to-right rule the
+relocatable term reached `*` and the expression was rejected.
 
 Violations produce "too complex expression".
 
@@ -532,8 +547,9 @@ entry:  vtm count, 1
 **Directives:** `.text` `.const` `.data` `.strng` `.bss` · `.word` `.half` `.ascii` · `.globl`
 `.equ` `.comm`.
 
-**Expression operators (left-to-right, no precedence):** `+` `-` `&` `|` `^` `~` `<<` `>>`
-`*` `/` `%`; grouping `( )`; exponent-truncate `{ }`; current location `.`.
+**Expression operators (C precedence, left-associative)**, tightest first: `*` `/` `%`; `+` `-`;
+`<<` `>>`; `&`; `^` `~`; `|`. Unary prefixes `-` `~` `+` bind tightest of all. Grouping `( )`;
+exponent-truncate `{ }`; current location `.`.
 
 **Number formats:** decimal (default) `1234`; octal `01234`; hex `0x1ff`; binary `0b101`;
 bit masks `.[a:b]` `.[a=b]` `.N`. A `'` between digits is an ignored separator (`1'000'000`);
