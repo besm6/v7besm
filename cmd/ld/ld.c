@@ -197,7 +197,7 @@ long add_size(long a, long b, char *s)
 // the total size of each segment (ld.csize/tsize/dsize/bsize) and has the
 // whole global symbol table; this routine decides where everything finally goes:
 //
-//   1. Resolve the five built-in boundary symbols (_econst, _etext, ... _end) -
+//   1. Resolve the five built-in boundary symbols (econst, etext, ... end) -
 //      programs use these to find the end of each segment.
 //   2. Decide whether the output stays relocatable (rflag): if any real symbol
 //      is still undefined we keep relocation info so the file can be re-linked.
@@ -213,11 +213,11 @@ void assign_addresses(void)
     long cmsize;
     long cmorigin;
 
-    ld.p_econst = *lookup_name("_econst");
-    ld.p_etext  = *lookup_name("_etext");
-    ld.p_edata  = *lookup_name("_edata");
-    ld.p_ebss   = *lookup_name("_ebss");
-    ld.p_end    = *lookup_name("_end");
+    ld.p_econst = *lookup_name("econst");
+    ld.p_etext  = *lookup_name("etext");
+    ld.p_edata  = *lookup_name("edata");
+    ld.p_ebss   = *lookup_name("ebss");
+    ld.p_end    = *lookup_name("end");
 
     //
     // If a genuine symbol is still undefined, we cannot produce a finished

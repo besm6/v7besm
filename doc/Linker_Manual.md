@@ -201,7 +201,7 @@ again.
 
 **`assign_addresses()`** runs once, between the passes:
 
-1. Look up the five built-in boundary symbols `_econst`/`_etext`/`_edata`/`_ebss`/`_end`.
+1. Look up the five built-in boundary symbols `econst`/`etext`/`edata`/`ebss`/`end`.
 2. Decide whether the output stays relocatable: if any genuine symbol is still undefined (the
    five boundary symbols don't count), force `-r` on and clear `-d`.
 3. Lay out common symbols: replace each common's requested size with the offset of the slot it
@@ -316,14 +316,19 @@ The linker defines five **boundary symbols** that programs use to find the end o
 
 | Symbol | Value |
 |--------|-------|
-| `_econst` | first word past the const segment |
-| `_etext` | first word past the text segment |
-| `_edata` | first word past the data segment |
-| `_ebss` | first word past the bss segment |
-| `_end` | first word past everything |
+| `econst` | first word past the const segment |
+| `etext` | first word past the text segment |
+| `edata` | first word past the data segment |
+| `ebss` | first word past the bss segment |
+| `end` | first word past everything |
 
 Because they are defined by the linker, a leftover reference to one of them does **not** count as
 an undefined symbol when deciding whether to force `-r`.
+
+`ebss` and `end` always hold the **same** value: both are defined as `bsize / W` with type
+`N_EXT + N_BSS`, and since bss is the last segment laid down, "past the bss segment" and "past
+everything" name the same address. Note also that `end` is *not* `edata + bsize` — the common
+area sits between data and bss, and `borigin` already accounts for it.
 
 The **entry point** written into the header (`a_entry`) is the `-e` symbol's address if one was
 given (it must be in text, or resolve as undefined for a later link), otherwise the start of the
@@ -727,7 +732,7 @@ What the linker does, step by step:
    `__.SYMDEF` table is consulted: the member defining `printf` is pulled in (satisfying the
    reference), which may itself reference `write`, pulling in another member, and so on until no
    new undefined symbols remain.
-3. **`assign_addresses()`** defines `_econst`…`_end`, reserves slots for any common symbols, and
+3. **`assign_addresses()`** defines `econst`…`end`, reserves slots for any common symbols, and
    fixes the segment origins starting at `BADDR` — const, then text, then data, then the bss
    commons and bss. Every global gets its final address; nothing is left undefined, so
    the link stays a finished (non-relocatable) executable.

@@ -87,11 +87,11 @@ struct linker {
     int nlibdir;           // number of entries used in libdir[]
 
     // internal (linker-defined) symbols
-    struct nlist *p_econst; // _econst: first address past the const segment
-    struct nlist *p_etext;  // _etext:  first address past the text segment
-    struct nlist *p_edata;  // _edata:  first address past the data segment
-    struct nlist *p_ebss;   // _ebss:   first address past the bss segment
-    struct nlist *p_end;    // _end:    first address past everything
+    struct nlist *p_econst; // econst: first address past the const segment
+    struct nlist *p_etext;  // etext:  first address past the text segment
+    struct nlist *p_edata;  // edata:  first address past the data segment
+    struct nlist *p_ebss;   // ebss:   first address past the bss segment
+    struct nlist *p_end;    // end:    first address past everything (same as ebss)
     struct nlist *entrypt;  // the program entry point symbol (the -e option)
 
     // flags

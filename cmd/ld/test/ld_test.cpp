@@ -468,3 +468,53 @@ TEST(Link, LiteralMergesOntoConstDataWord)
     // corigin 8 + one const word = torigin 9; file 1 owns word 9, file 2 word 10.
     EXPECT_EQ(word_high(img, 10) & 07777, 8L) << "file 2's #5 -> tbl's word";
 }
+
+// The five boundary symbols the linker defines itself.  They carry no leading
+// underscore -- the BESM-6 C compiler emits C names verbatim, so `extern int end`
+// in C must resolve against a symbol spelled exactly "end" (cf. kernel/dev/mem.c).
+//
+// Naming each of them in a ".globl" without defining it leaves it undefined in the
+// object; assign_addresses() must then define all five, and must not treat those
+// dangling references as grounds for forcing -r on (were it to, the image would
+// keep its relocation records and read_symbols() would look at the wrong offset).
+TEST(Link, DefinesBoundarySymbols)
+{
+    std::string base = current_test_name();
+    std::string ofile = base + ".o", image = base + ".out";
+
+    // Give every segment a distinct, known size so the five addresses differ:
+    // 2 const words, 1 text word, 1 data word, 3 bss words.
+    assemble_to(base + ".s", ofile,
+                "        .globl econst, etext, edata, ebss, end\n"
+                "        .const\n"
+                "cw:     .word 1, 2\n"
+                "        .data\n"
+                "dw:     .word 7\n"
+                "        .bss\n"
+                "bw:     . = . + 3\n"
+                "        .text\n"
+                "        .globl f\n"
+                "f:      uj f\n");
+
+    ASSERT_EQ(link_files(image, { ofile }), 0);
+
+    auto img  = read_file(image);
+    auto syms = read_symbols(img);
+
+    // corigin = BADDR = 8, then each segment starts where the previous one ended.
+    EXPECT_EQ(find_symbol(syms, "econst").value, 8L + 2);         // = torigin
+    EXPECT_EQ(find_symbol(syms, "etext").value, 8L + 2 + 1);      // = dorigin
+    EXPECT_EQ(find_symbol(syms, "edata").value, 8L + 2 + 1 + 1);  // = borigin
+    EXPECT_EQ(find_symbol(syms, "ebss").value, 8L + 2 + 1 + 1 + 3);
+
+    // bss is the last segment, so "past bss" and "past everything" coincide.
+    EXPECT_EQ(find_symbol(syms, "end").value, find_symbol(syms, "ebss").value);
+
+    // The old v7 spellings are gone; nothing defines them any more.  find_symbol()
+    // fails the test on a miss, so check for absence directly.
+    for (const char *stale : { "_econst", "_etext", "_edata", "_ebss", "_end" }) {
+        auto it = std::find_if(syms.begin(), syms.end(),
+                               [stale](const Sym &s) { return s.name == stale; });
+        EXPECT_EQ(it, syms.end()) << "stale symbol '" << stale << "' is still defined";
+    }
+}

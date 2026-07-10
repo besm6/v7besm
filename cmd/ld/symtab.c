@@ -127,7 +127,7 @@ struct nlist **lookup_symbol(void)
 //
 // Convenience wrapper: look up a plain C string `s` by stuffing it into
 // ld.cursym as an undefined external and calling lookup_symbol().  Used to find
-// or create the linker's own named symbols (e.g. "_etext", or -u/-e names).
+// or create the linker's own named symbols (e.g. "etext", or -u/-e names).
 //
 struct nlist **lookup_name(char *s)
 {
@@ -140,7 +140,7 @@ struct nlist **lookup_name(char *s)
 
 //
 // Give the symbol `sp` a definition: set its type and value.  Used for the
-// linker's built-in boundary symbols (_etext, ...).  It must currently be an
+// linker's built-in boundary symbols (etext, ...).  It must currently be an
 // undefined external; defining an already-defined name is an error.  A NULL `sp`
 // (the name was never referenced) is silently ignored.
 //
