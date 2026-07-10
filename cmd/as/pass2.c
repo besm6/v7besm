@@ -65,7 +65,7 @@ void write_header(void)
     hdr.a_data  = (as.count[SDATA] + as.count[SSTRNG]) * (W / 2);
     hdr.a_bss   = as.count[SBSS] * (W / 2);
     hdr.a_syms  = as.stlength;
-    hdr.a_entry = HDRSZ / W + as.count[SCONST] / (W / 2);
+    hdr.a_entry = HDRSZ / W + as.nconst; // == as.tbase
     hdr.a_flag  = 0;
     fputhdr(&hdr, stdout);
 }
@@ -141,7 +141,7 @@ static long relocate_halfword(long h, long hr)
 // and emit everything that has an image on disk:
 //   * every symbol's value gets its segment base added (string symbols are
 //     reclassified as data, since strings fold onto data);
-//   * the constant pool is written, low then high half of each constant;
+//   * the constant pool is written, high then low half of each constant;
 //   * the text/data/string segment images are re-read from their temp files,
 //     each half-word relocated through relocate_halfword(), and written out.
 //
@@ -262,17 +262,19 @@ static long rewrite_reloc(long hr)
 
 //
 // Write the relocation records, one per emitted half-word, in the same order
-// as the segment images: first the constant pool (the high half of each
-// constant is absolute, hence the trailing zero), then the text/data/string
-// segments re-read from their relocation temp files.
+// as the segment images: first the constant pool, then the text/data/string
+// segments re-read from their relocation temp files.  A pooled constant's
+// address field lives in its low half, so the leading zero belongs to the high
+// half and the relocation to the low one - matching the order emit_segments()
+// writes the two halves in.
 //
 void write_reloc(void)
 {
     int i;
 
     for (i = 0; i < as.nconst; i++) {
-        fputh(rewrite_reloc(as.constab[i].rel), stdout);
         fputh(0L, stdout);
+        fputh(rewrite_reloc(as.constab[i].rel), stdout);
     }
     for (as.segm = STEXT; as.segm < SBSS; as.segm++) {
         long len = as.count[as.segm];

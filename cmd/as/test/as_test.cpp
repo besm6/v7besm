@@ -583,6 +583,39 @@ TEST(Assemble, ConstPool)
     EXPECT_EQ(word_low(got, 9), 00100000L | 8L);  // xta #0123 (same const)
 }
 
+// A pooled constant may itself be relocatable ("#datum" pools datum's address).
+// Its address field lives in the low half of the pooled word, so the relocation
+// record must be attached to the low half and the high half left absolute.  The
+// linker reads the two records in that order (ld/pass1.c:load_constants).
+TEST(Assemble, ConstPoolRelocatable)
+{
+    auto got = assemble(R"(
+        xta #datum
+        atx 0
+        .data
+datum:  .word 1
+)");
+    // const 8, text 9 (one word), so the data segment - and datum - begin at 10.
+    EXPECT_EQ(word_high(got, 8), 0);  // pooled word, high half: no address here
+    EXPECT_EQ(word_low(got, 8), 10L); // pooled word, low half: datum, relocated
+
+    EXPECT_EQ(reloc_half(got, 0, 0), 0L);    // high half: RABS
+    EXPECT_EQ(reloc_half(got, 0, 1), 030L);  // low half: RDATA, where the address is
+}
+
+// a_entry is the word index of the first text word, so it must clear the header
+// *and* the constant pool that precedes text in the file.
+TEST(Assemble, EntryPointFollowsConstPool)
+{
+    auto got = assemble(R"(
+        xta #1
+        xta #2
+)");
+    EXPECT_EQ(word_low(got, 1), 12L);   // a_const == 2 words
+    EXPECT_EQ(word_low(got, 6), 8L + 2) // a_entry == header (8 words) + pool
+        << "a_entry must point past the constant pool, not into it";
+}
+
 // A .globl label lands in the symbol table with the external bit (N_EXT == 040)
 // and its relocated text address; a reference to it relocates against the text.
 TEST(Assemble, Globl)
@@ -728,6 +761,23 @@ static std::string assemble_error(const std::string &source)
         return e.what();
     }
     return "";
+}
+
+// The constant pool is a fixed-size array (CSIZE entries); overflowing it must
+// be diagnosed rather than scribbling past the end of constab[].  Only distinct
+// values consume a slot, so CSIZE+1 of them is the smallest overflowing input.
+TEST(Assemble, ConstPoolOverflow)
+{
+    std::string source;
+    for (int i = 1; i <= 231; i++)
+        source += "        xta #" + std::to_string(i) + "\n";
+
+    std::string msg = assemble_error(source);
+    EXPECT_NE(msg.find("constant pool overflow"), std::string::npos) << "message was: " << msg;
+
+    // One fewer constant still fits.
+    source.resize(source.rfind("        xta #231"));
+    EXPECT_EQ(assemble_error(source), "");
 }
 
 // A mid-file "# N \"file\"" marker makes fatal() report the marker's source

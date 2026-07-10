@@ -84,6 +84,8 @@ static long intern_constant(int bs)
             hash += HCONSZ;
     }
     // Not found: append a new pool entry and record it in the hash slot.
+    if (as.nconst >= CSIZE)
+        fatal("constant pool overflow");
     as.hashconst[hash]        = as.nconst;
     as.constab[as.nconst].val = val;
     as.constab[as.nconst].rel = hr2;
