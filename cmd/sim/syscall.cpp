@@ -717,7 +717,11 @@ void Processor::syscall(unsigned num)
             sys_err(EINVAL);
             break;
         }
-        sighandler_t old = ::signal(sig, disp);
+        // cppcheck wants a "pointer to const" here, but for a function pointer
+        // that would be const void (*)(int) -- a pointer to a function returning
+        // const void, which signal() cannot be assigned to.
+        // cppcheck-suppress constVariablePointer
+        void (*old)(int) = ::signal(sig, disp);
         if (old == SIG_ERR)
             sys_err(errno);
         else
