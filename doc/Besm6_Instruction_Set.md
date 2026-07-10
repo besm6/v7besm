@@ -29,6 +29,12 @@ the least-significant bit; bit 48 is the most-significant bit.
 
 **M[0]** always reads as 0.
 
+**Memory word 0** always reads as 0 too, and stores to address 0 are discarded. This is a
+separate rule from `M[0]` above: one concerns the modifier register, the other the address
+space. Words 0–7 are reserved (the linker places the first segment at word 8), so an address
+field of 0 — with no index register and no live `C` — is a dependable source of the constant
+zero, and the assembler uses it to avoid pooling `#0`.
+
 ### Floating-point format of the accumulator A
 
 ```

@@ -583,6 +583,72 @@ TEST(Assemble, ConstPool)
     EXPECT_EQ(word_low(got, 9), 00100000L | 8L);  // xta #0123 (same const)
 }
 
+// An absolute "#0" needs no pool slot: memory word 0 always reads as 0, so the
+// instruction addresses word 0 directly, with an RABS (i.e. no) relocation.
+TEST(Assemble, ConstZeroNotPooled)
+{
+    auto got = assemble("        xta #0\n");
+    EXPECT_EQ(word_low(got, 1), 0);  // a_const == 0: the pool stays empty
+    EXPECT_EQ(word_low(got, 6), 8L); // a_entry == 8: text begins right after the header
+
+    EXPECT_EQ(word_high(got, 8), 00100000L);     // xta 0 (address field 0)
+    EXPECT_EQ(word_low(got, 8), 02200000L);      // utc 0 filler (odd half-word padding)
+    EXPECT_EQ(reloc_half(got, 1, 0) & 070L, 0L); // RABS, not RCONST
+}
+
+// Folding "#0" does not disturb the other constants: only the 5 is pooled, and
+// it still lands at cbase (word 8), addressed by an RCONST reference.
+TEST(Assemble, ConstZeroAlongsideOtherConstants)
+{
+    auto got = assemble(R"(
+        xta #0
+        xta #5
+)");
+    EXPECT_EQ(word_low(got, 1), 6);  // a_const == 1 word: just the 5
+    EXPECT_EQ(word_low(got, 8), 5L); // the pooled 5
+
+    EXPECT_EQ(word_high(got, 9), 00100000L);       // xta 0     -> memory word 0
+    EXPECT_EQ(word_low(got, 9), 00100000L | 8L);   // xta #5    -> pooled, at cbase 8
+    EXPECT_EQ(reloc_half(got, 1, 0) & 070L, 0L);   // RABS
+    EXPECT_EQ(reloc_half(got, 1, 1) & 070L, 010L); // RCONST
+}
+
+// Only an *absolute* zero folds.  An undefined name also has the value 0 while
+// it is being assembled, but its address is unknown until link time, so it must
+// still occupy a pool slot carrying an REXT relocation.
+TEST(Assemble, ConstZeroExternalStillPooled)
+{
+    auto got = assemble("        xta #undef\n");
+    EXPECT_EQ(word_low(got, 1), 6);              // a_const == 1 word: pooled
+    EXPECT_EQ(word_high(got, 9), 00100000L | 8L); // xta -> the pooled word at cbase 8
+
+    EXPECT_EQ(reloc_half(got, 0, 0), 0L);          // pool word, high half: RABS
+    EXPECT_EQ(reloc_half(got, 0, 1) & 070L, 070L); // pool word, low half: REXT
+}
+
+// A "<addr>" prefix emits a utc that loads C, and C is added to the following
+// instruction's effective address.  Address 0 would then read mem[C], not 0, so
+// "#0" must stay pooled here rather than folding.
+TEST(Assemble, ConstZeroAfterUtcStillPooled)
+{
+    auto got = assemble("        xta <040000> #0\n");
+    EXPECT_EQ(word_low(got, 1), 6);  // a_const == 1 word: the zero is pooled
+    EXPECT_EQ(word_high(got, 8), 0); // the pooled zero, high half
+    EXPECT_EQ(word_low(got, 8), 0);  //                  low half
+
+    EXPECT_EQ(word_high(got, 9), 02200000L | 040000L); // utc 040000 -> loads C
+    EXPECT_EQ(word_low(got, 9), 00100000L | 8L);       // xta -> pooled zero at cbase 8
+}
+
+// An explicit ", 0" is the identity index (M[0] always reads as 0), so it is
+// still accepted on a constant operand; the constant pools as usual.
+TEST(Assemble, ConstIndexZeroAccepted)
+{
+    auto got = assemble("        xta #5, 0\n");
+    EXPECT_EQ(word_low(got, 1), 6);               // a_const == 1 word
+    EXPECT_EQ(word_high(got, 9), 00100000L | 8L); // xta 8, index field 0
+}
+
 // A pooled constant may itself be relocatable ("#datum" pools datum's address).
 // Its address field lives in the low half of the pooled word, so the relocation
 // record must be attached to the low half and the high half left absolute.  The
@@ -761,6 +827,28 @@ static std::string assemble_error(const std::string &source)
         return e.what();
     }
     return "";
+}
+
+// Indexing a constant operand is meaningless - the index would modify the pool
+// address, not the value - and "#0, 017" (offset 0, modifier 017) is the BESM-6
+// stack-pop encoding, which would add a side effect.  Reject all of them.  The
+// index may arrive either as a trailing ", reg" or as a leading modreg prefix.
+TEST(Assemble, ConstIndexRejected)
+{
+    for (const char *source : { "        xta #0, 3\n", "        xta #0, 017\n",
+                                "        xta #5, 3\n", "        3 xta #0\n" }) {
+        std::string msg = assemble_error(source);
+        EXPECT_NE(msg.find("index register on a constant operand"), std::string::npos)
+            << "source was: " << source << "message was: " << msg;
+    }
+}
+
+// A diagnostic raised while the parser sits on a pushed-back end-of-line names
+// the line the statement was written on, not the line after it.
+TEST(Assemble, DiagnosticLineAtEndOfStatement)
+{
+    std::string msg = assemble_error("        xta 1\n        xta #0, 3\n");
+    EXPECT_NE(msg.find(":2: "), std::string::npos) << "message was: " << msg;
 }
 
 // The constant pool is a fixed-size array (CSIZE entries); overflowing it must

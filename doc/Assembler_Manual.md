@@ -291,13 +291,23 @@ For a machine instruction, the operand after the mnemonic may take any of these 
 |------|---------|---------|
 | *(none)* | `xta` | Address field 0. |
 | expression | `xta data` | Direct address; the address field is the expression's value, relocated by its segment. |
-| `# expr` | `a+x #1.0` | **Constant pool**: place `expr`'s value in the const segment (deduplicated) and address it. Use for literals and large constants. |
+| `# expr` | `a+x #1.0` | **Constant pool**: place `expr`'s value in the const segment (deduplicated) and address it. Use for literals and large constants. An absolute `#0` is folded to a direct reference to memory word 0 (which always reads 0) and takes no pool slot. |
 | `expr , reg` | `xta tab, 3` | Index the access with register M`reg` (`reg` must be absolute, 0–15). |
 | `< expr >` | `xta <bigaddr>` | **Address extension**: emit `utc expr` first, loading C, then the instruction. Lets a 15-bit address reach beyond the 12-bit short field. |
 | `[ expr ]` | `atx [bigaddr]` | Emit `wtc expr` first (write-to-C variant), then the instruction. |
 
 The leading **modifier register** (the `modreg` of [§3](#3-source-line-structure)) is distinct
 from the trailing `, reg` index; both ultimately fill the instruction's 4-bit modifier field.
+
+A `#` operand may not be indexed, by either form: `xta #0, 3` and `3 xta #0` are errors
+(`index register on a constant operand`). The index would modify the pool address rather
+than the value, and `, 017` with a zero offset is the stack-pop encoding. An explicit `, 0`
+is still allowed, since M[0] reads 0 and changes nothing.
+
+Only an **absolute** zero is folded onto memory word 0. A relocatable or external `#name` is
+always pooled, even when its value is 0 while assembling, because its address is not known
+until link time. `#0` after `<expr>`/`[expr]` is pooled as well: the `utc`/`wtc` leaves `C`
+live, and `C` is added to the effective address.
 
 ---
 
@@ -462,6 +472,7 @@ buf:    . = . + 0100        // reserve 64 words
 
 ```
         a+x #3.14159        // load the constant from the const segment and add
+        xta #0              // xta 0 — memory word 0; no const word is emitted
         xta <far_table>     // utc far_table; xta  — reach a 15-bit address
         atx [far_slot]      // wtc far_slot; atx
 ```

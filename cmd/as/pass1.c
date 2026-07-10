@@ -57,24 +57,22 @@ void align_segment(int s)
 }
 
 //
-// Add the value currently in as.intval to the constant pool and return its
-// index there.  Identical constants are stored only once: the pool is a hash
-// table, and a constant is keyed on both its 48-bit value and its relocation
-// type `bs` (so e.g. an absolute 5 and an address-of-something that happens to
-// equal 5 stay distinct).  Collisions are resolved by linear probing - on a
-// clash, step to the previous slot, wrapping around - the same scheme used by
-// the symbol and instruction tables.
+// Add the 48-bit value `val` to the constant pool and return its index there.
+// Identical constants are stored only once: the pool is a hash table, and a
+// constant is keyed on both its value and its relocation type `bs` (so e.g. an
+// absolute 5 and an address-of-something that happens to equal 5 stay
+// distinct); `extref` names the symbol when `bs` is SEXT.  Collisions are
+// resolved by linear probing - on a clash, step to the previous slot, wrapping
+// around - the same scheme used by the symbol and instruction tables.
 //
-static long intern_constant(int bs)
+static long intern_constant(int64_t val, int bs, int extref)
 {
     int hash, i;
-    int64_t val;
     long hr2;
 
-    val = as.intval;
     hr2 = SEGMREL(bs);
     if (bs == SEXT)
-        hr2 |= RPUTIX(as.extref); // external constant: remember which symbol
+        hr2 |= RPUTIX(extref); // external constant: remember which symbol
     hash = SUPERHASH(HIHALF(val) + LOHALF(val) + hr2, HCONSZ - 1);
     while ((i = as.hashconst[hash]) != -1) {
         // Slot taken: a real match means the constant already exists.
@@ -97,7 +95,8 @@ static long intern_constant(int bs)
 // (from table[] or a raw $NN/@NN), `type` carries the TLONG/TALIGN flags.  The
 // job is to parse the operand and turn it into the instruction's address field
 // plus a relocation record:
-//   * "# expr"  - the operand is a constant; intern it and point at the pool.
+//   * "# expr"  - the operand is a constant; point at the constant pool, or at
+//                 memory word 0 when the constant is an absolute zero.
 //   * "[ ... ]" / "< ... >" - shorthand that emits a wtc/utc instruction first
 //                 (the BESM-6 way of forming a long address), then continues.
 //   * otherwise - the operand is an address expression.
@@ -110,6 +109,11 @@ static void assemble_instruction(long val, int type)
     int clex, index;
     long addr, reltype;
     int cval, segment;
+    int pooled      = 0;    // a pending "# expr", awaiting the final index register
+    int cset        = 0;    // a utc/wtc has loaded C, which modifies the next address
+    int64_t poolval = 0;    // the "# expr" value / segment / external symbol, captured
+    int poolseg     = SABS; //   before the ", reg" parse below clobbers as.intval
+    int poolext     = 0;    //   and as.extref
 
     index   = as.regleft; // index register set by a "N M" prefix, if any
     reltype = RABS;
@@ -122,23 +126,31 @@ static void assemble_instruction(long val, int type)
             addr = 0;
             goto putcom;
         case '#':
-            // "# expr": immediate constant, placed in the constant pool; the
-            // address field becomes the pool index, relocated as RCONST.
+            // "# expr": an immediate constant.  Interning is deferred until the
+            // index register is known, because memory word 0 always reads as 0:
+            // an unindexed absolute "#0" addresses 0 directly and needs no pool
+            // slot.  Capture the value now - the ", reg" parse below reuses
+            // as.intval and as.extref.
             parse_expr(&segment);
-            addr    = intern_constant(segment);
-            reltype = RCONST;
+            poolval = as.intval;
+            poolseg = segment;
+            poolext = as.extref;
+            pooled  = 1;
+            addr    = 0;
             break;
         case '[':
             // "[ ... ]" expands to a wtc instruction before this one.
             assemble_instruction(WTCCOM, TLONG);
             if (next_token(&cval) != ']')
                 fatal("bad [] syntax");
+            cset = 1; // wtc loaded C: it is added to this instruction's address
             continue;
         case '<':
             // "< ... >" expands to a utc instruction before this one.
             assemble_instruction(UTCCOM, TLONG);
             if (next_token(&cval) != '>')
                 fatal("bad <> syntax");
+            cset = 1; // utc loaded C: it is added to this instruction's address
             continue;
         default:
             // An ordinary address expression; its segment fixes the relocation
@@ -159,6 +171,23 @@ static void assemble_instruction(long val, int type)
             fatal("bad register number");
     } else
         unget_token(clex, cval);
+
+    // Resolve a pending "# expr" now that the index register is final.  Indexing
+    // a literal is meaningless - it would modify the pool address - and with
+    // M == 017 it would encode a stack pop, so reject it outright.  An absolute
+    // zero with no live C register then addresses memory word 0, which always
+    // reads as 0; anything else goes into the pool.
+    if (pooled) {
+        if (index != 0)
+            fatal("index register on a constant operand");
+        if (poolseg == SABS && poolval == 0 && !cset) {
+            addr    = 0;
+            reltype = RABS;
+        } else {
+            addr    = intern_constant(poolval, poolseg, poolext);
+            reltype = RCONST;
+        }
+    }
 putcom:
     // Build the final half-word(s): OR together the index register (bits
     // 20..23), the opcode, and the address field, and attach the relocation.

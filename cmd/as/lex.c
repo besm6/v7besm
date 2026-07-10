@@ -415,10 +415,15 @@ int next_token(int *pval)
 {
     int c;
 
-    // If a token was pushed back, hand it straight back.
+    // If a token was pushed back, hand it straight back.  Re-entering a pushed
+    // back end-of-line steps the line counters forward again (see unget_token).
     if (as.blexflag) {
         as.blexflag = 0;
         *pval       = as.blextype;
+        if (as.backlex == LEOL) {
+            ++as.line;
+            ++as.srcline;
+        }
         return as.backlex;
     }
     for (;;)
@@ -574,9 +579,18 @@ int next_token(int *pval)
 // Push one token back so the next next_token() returns it again.  Only a
 // single token of look-ahead is supported, which is all the parser needs.
 //
+// Scanning an end-of-line has already stepped the line counters onto the next
+// line.  Pushing it back rewinds them, so a diagnostic issued while the parser
+// sits on the look-ahead still names the line the statement was written on;
+// next_token() steps them forward again when the token is re-delivered.
+//
 void unget_token(int val, int type)
 {
     as.blexflag = 1;
     as.backlex  = val;
     as.blextype = type;
+    if (val == LEOL) {
+        --as.line;
+        --as.srcline;
+    }
 }
