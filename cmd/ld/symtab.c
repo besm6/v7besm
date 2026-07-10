@@ -25,11 +25,13 @@ void relocate_cursym(void)
     switch (ld.cursym.n_type) {
     case N_CONST:
     case N_EXT + N_CONST:
-        // Where this file's const word ended up after merging.  cbasaddr is the
-        // segment's final origin, and is still 0 during pass 1 - which is what
-        // assign_addresses() expects, since it adds corigin itself.  By pass 2 it
-        // is set, so the value recomputed here matches the one pass 1 settled on
-        // (the same trick ctrel/cdrel/cbrel play in relocate_object()).
+        // Where this file's const word ended up after merging.  ld.cindex is the
+        // file's base within newindex[] in both passes, so the symbol's word
+        // offset indexes straight off it.  cbasaddr is the segment's final origin,
+        // and is still 0 during pass 1 - which is what assign_addresses() expects,
+        // since it adds corigin itself.  By pass 2 it is set, so the value
+        // recomputed here matches the one pass 1 settled on (the same trick
+        // ctrel/cdrel/cbrel play in relocate_object()).
         i                 = ld.cindex + ld.cursym.n_value - HDRSZ / W;
         ld.cursym.n_value = ld.newindex[i] + ld.cbasaddr;
         return;

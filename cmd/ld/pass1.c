@@ -30,16 +30,24 @@
 // not, so ".const" labels and data references stay correct as earlier duplicates
 // collapse.  Returns how many *new* entries were added.
 //
+// ld.cindex is this file's base within newindex[] and stays put: both readers of
+// the map need it that way while the file's symbols are being processed.  The
+// caller advances it past the file once the file is known to be kept.
+//
 int load_constants(void)
 {
     int count;
     int save;
+    int ci;
     struct constab *c;
     const struct constab *p;
 
     save  = ld.nconst;
     count = ld.filhdr.a_const / W;
-    c     = &ld.constab[ld.nconst];
+    ci    = ld.cindex;
+    if (ci + count > NCINDEX)
+        error(2, "constant index table overflow");
+    c = &ld.constab[ld.nconst];
     while (count--) {
         c->h   = fgeth(ld.text);
         c->h2  = fgeth(ld.text);
@@ -56,7 +64,7 @@ int load_constants(void)
         // p==c means no duplicate was found, so keep this new entry.
         if (p == c && ++c >= &ld.constab[NCONST])
             error(2, "constant table overflow");
-        ld.newindex[ld.cindex++] = p - ld.constab;
+        ld.newindex[ci++] = p - ld.constab;
     }
     ld.nconst = c - ld.constab;
     return ld.nconst - save;
@@ -76,7 +84,7 @@ int load_constants(void)
 int scan_object(long loc, int libflg, int nloc)
 {
     struct nlist *sp;
-    int savindex, savcindex;
+    int savindex;
     int ndef, nsymbol;
 
     read_header(loc);
@@ -86,7 +94,6 @@ int scan_object(long loc, int libflg, int nloc)
         error(1, "not relocatable");
         return 0;
     }
-    savcindex = ld.cindex;
     fseek(ld.reloc, loc + N_SYMOFF(ld.filhdr), 0);
     ld.coptsize[ld.nfile] = load_constants();
     ld.ctrel += ld.tsize / W;
@@ -158,8 +165,10 @@ int scan_object(long loc, int libflg, int nloc)
     }
 
     // Keep this file (always for a normal object; for a library member only if it
-    // defined something): fold its segment sizes into the running totals.
+    // defined something): fold its segment sizes into the running totals, and step
+    // ld.cindex over the const words this file contributed to newindex[].
     if (!libflg || ndef) {
+        ld.cindex += ld.filhdr.a_const / W;
         ld.csize = add_size(ld.csize, (long)W * ld.coptsize[ld.nfile++], "const segment overflow");
         ld.tsize = add_size(ld.tsize, ld.filhdr.a_text, "text segment overflow");
         ld.dsize = add_size(ld.dsize, ld.filhdr.a_data, "data segment overflow");
@@ -170,10 +179,10 @@ int scan_object(long loc, int libflg, int nloc)
     }
 
     //
-    // No symbols defined by this library member.
-    // Rip out the hash table entries and reset the symbol table.
+    // No symbols defined by this library member.  Rip out the hash table entries
+    // and reset the symbol table.  ld.cindex never moved, so the newindex[] slots
+    // this member scribbled on are simply reused by the next one.
     //
-    ld.cindex = savcindex;
     ld.nconst -= ld.coptsize[ld.nfile];
     while (ld.symindex > savindex) {
         struct nlist **p;

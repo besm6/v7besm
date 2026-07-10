@@ -20,12 +20,13 @@
 #define BADDR  (HDRSZ / W) // memory 0...BADDR-1 is free
 #define SYMDEF "__.SYMDEF" // name of the table-of-contents member in a ranlib archive
 
-#define NSYM     2000 // capacity of the global symbol table
-#define NSYMPR   1000 // capacity of the per-file local-symbol map
-#define NCONST   4096 // capacity of the merged const segment, in words (see CONSTTOP)
-#define LLSIZE   256  // capacity of the library / file-offset list
-#define RANTABSZ 1000 // capacity of the ranlib table of contents
-#define NLIBDIR  32   // capacity of the -L library search path
+#define NSYM     2000  // capacity of the global symbol table
+#define NSYMPR   1000  // capacity of the per-file local-symbol map
+#define NCONST   4096  // capacity of the merged const segment, in words (see CONSTTOP)
+#define NCINDEX  16384 // capacity of newindex[]: total const words over all input files
+#define LLSIZE   256   // capacity of the library / file-offset list
+#define RANTABSZ 1000  // capacity of the ranlib table of contents
+#define NLIBDIR  32    // capacity of the -L library search path
 
 // Round x up to the next multiple of y.
 #define ALIGN(x, y) ((x) + (y) - 1 - ((x) + (y) - 1) % (y))
@@ -70,9 +71,9 @@ struct linker {
     struct nlist *hshtab[NSYM + 2]; // open-addressing hash table over symtab
     struct local local[NSYMPR];     // current file's local-symbol-number -> entry map
     int symindex;                   // number of symbols used in symtab
-    int newindex[NCONST];           // maps a file's constant index -> pooled index
+    int newindex[NCINDEX];          // maps a file's constant index -> pooled index
     int nconst;                     // number of constants used in constab
-    int cindex;                     // current write position in newindex
+    int cindex;                     // base index, in newindex, of this file's const words
     int nfile;                      // index of the current input file (into coptsize)
     int coptsize[LLSIZE];           // each file's const-pool size after de-duplication
     long basaddr;                   // address where loading starts (the -T option)

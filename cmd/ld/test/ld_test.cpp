@@ -16,9 +16,11 @@
 #include <gtest/gtest.h>
 #include <sys/stat.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdlib>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -230,6 +232,67 @@ static void assemble_to(const std::string &sfile, const std::string &ofile, cons
     ASSERT_EQ(std::system(cmd.c_str()), 0) << "assembler failed: " << cmd;
 }
 
+// Run "ld -o image obj..." through the in-process engine and return its errlev.
+// ld_link() takes a writable argv, so hand it pointers into `names`, which must
+// outlive the call and must not reallocate once they are taken.
+static int link_files(const std::string &image, const std::vector<std::string> &objs)
+{
+    static char a0[] = "ld";
+    static char a1[] = "-o";
+    std::vector<std::string> names{ image };
+    names.insert(names.end(), objs.begin(), objs.end());
+
+    std::vector<char *> argv{ a0, a1 };
+    std::transform(names.begin(), names.end(), std::back_inserter(argv),
+                   [](std::string &s) { return &s[0]; });
+    argv.push_back(nullptr);
+    return ld_link((int)argv.size() - 1, argv.data());
+}
+
+// One symbol-table entry as serialized by cmd/libaout/fputsym.c.
+struct Sym {
+    std::string name;
+    long type;
+    long value;
+};
+
+// Walk a linked image's symbol table.  Layout is header (48 B), the const/text/
+// data segments, then -- only while the file is still relocatable, i.e. RELFLG
+// (a_flag bit 0) is clear -- their relocation records, and finally the symbol
+// table.  Each entry is n_len(1) n_type(1) n_value(3, big-endian) followed by
+// n_len name bytes.  Cf. read_symbols() in cmd/as/test/as_test.cpp, which always
+// sees relocation records because it reads objects rather than executables.
+static std::vector<Sym> read_symbols(const std::vector<unsigned char> &b)
+{
+    long segs   = word_low(b, 1) + word_low(b, 2) + word_low(b, 3);
+    long a_syms = word_low(b, 5);
+    size_t off  = 48 + (size_t)((word_low(b, 7) & 1) ? segs : 2 * segs);
+    size_t end  = off + (size_t)a_syms;
+    std::vector<Sym> out;
+    while (off + 5 <= end && b[off] != 0) {
+        int nlen   = b[off];
+        long type  = b[off + 1];
+        long value = ((long)b[off + 2] << 16) | ((long)b[off + 3] << 8) | b[off + 4];
+        out.push_back(
+            { std::string(reinterpret_cast<const char *>(&b[off + 5]), nlen), type, value });
+        off += 5 + nlen;
+    }
+    return out;
+}
+
+// The symbol named `name`.  Returned by value so a caller may pass a temporary
+// read_symbols() result straight in.  Fails the calling test if absent.
+static Sym find_symbol(const std::vector<Sym> &syms, const char *name)
+{
+    auto it =
+        std::find_if(syms.begin(), syms.end(), [name](const Sym &s) { return s.name == name; });
+    if (it == syms.end()) {
+        ADD_FAILURE() << "symbol '" << name << "' is missing from the linked image";
+        return {};
+    }
+    return *it;
+}
+
 // Two objects each interning the same literal: the words are anonymous (marked
 // RMERGE by the "#expr" operator), so the linker stores the value once and points
 // both references at the surviving copy.
@@ -288,4 +351,120 @@ TEST(Link, PreservesConstDataAdjacency)
     EXPECT_EQ(word_low(img, 9), 2L);  // tbl[1] -- would be tbl[2] if the 1s merged
     EXPECT_EQ(word_low(img, 10), 1L); // tbl[2]
     EXPECT_EQ(word_low(img, 6), 8L + 3); // a_entry = torigin, past the const segment
+}
+
+// A global label in ".const" is relocated through newindex[], indexed off
+// ld.cindex -- the base of this file's const words.  Pass 1 used to read that map
+// past the end of the file's own block (load_constants() had already stepped
+// ld.cindex over it), so it recorded a bogus value, pass 2 recomputed the right
+// one, and the mismatch surfaced as "name 'tbl' redefined".  Offset 0 escaped
+// only because the slot it wrongly read happened to hold 0 as well.
+TEST(Link, GlobalConstLabelAtNonzeroOffset)
+{
+    std::string base  = current_test_name();
+    std::string ofile = base + ".o", image = base + ".out";
+
+    assemble_to(base + ".s", ofile,
+                "        .const\n"
+                "        .word 111\n"
+                "        .globl tbl\n"
+                "tbl:    .word 222\n"
+                "        .text\n"
+                "        .globl f\n"
+                "f:      uj f\n");
+
+    ASSERT_EQ(link_files(image, { ofile }), 0);
+
+    auto img = read_file(image);
+    Sym tbl  = find_symbol(read_symbols(img), "tbl");
+    EXPECT_EQ(tbl.type, 040L + 02L); // N_EXT + N_CONST
+    EXPECT_EQ(tbl.value, 8L + 1);    // corigin + word offset 1
+}
+
+// The same lookup, with merging actually in play: file 1 contributes one pooled
+// literal, so file 2's ".const" block starts at pooled index 1 and `tbl` must
+// follow the literal rather than land on top of it.
+TEST(Link, ConstLabelAfterMergedLiteral)
+{
+    std::string base = current_test_name();
+    std::string o1 = base + ".1.o", o2 = base + ".2.o", image = base + ".out";
+
+    assemble_to(base + ".1.s", o1, "        .globl f\nf:      xta #7\n        uj f\n");
+    assemble_to(base + ".2.s", o2,
+                "        .const\n"
+                "        .globl tbl\n"
+                "tbl:    .word 222\n"
+                "        .word 333\n"
+                "        .text\n"
+                "        .globl g\n"
+                "g:      uj g\n");
+
+    ASSERT_EQ(link_files(image, { o1, o2 }), 0);
+
+    auto img = read_file(image);
+    EXPECT_EQ(word_low(img, 1), 3 * 6L) << "a_const: literal 7, then tbl[0..1]";
+    EXPECT_EQ(word_low(img, 8), 7L);    // the pooled literal
+    EXPECT_EQ(word_low(img, 9), 222L);  // tbl[0]
+    EXPECT_EQ(word_low(img, 10), 333L); // tbl[1]
+
+    Sym tbl = find_symbol(read_symbols(img), "tbl");
+    EXPECT_EQ(tbl.value, 8L + 1); // corigin + pooled index 1
+}
+
+// Merging must repoint every reference, not just shrink the segment: file 2's
+// "#2" has to end up addressing file 1's copy.  Both files number that literal
+// differently (index 1 in file 1, index 0 in file 2), so this is what catches a
+// wrong ld.cindex base in relocate_halfword().
+TEST(Link, MergedLiteralIsAddressedFromEveryFile)
+{
+    std::string base = current_test_name();
+    std::string o1 = base + ".1.o", o2 = base + ".2.o", image = base + ".out";
+
+    assemble_to(base + ".1.s", o1,
+                "        .globl f\nf:      xta #1\n        xta #2\n        uj f\n");
+    assemble_to(base + ".2.s", o2,
+                "        .globl g\ng:      xta #2\n        xta #3\n        uj g\n");
+
+    ASSERT_EQ(link_files(image, { o1, o2 }), 0);
+
+    auto img = read_file(image);
+    EXPECT_EQ(word_low(img, 1), 3 * 6L) << "a_const: 1, 2, 3 -- the shared 2 stored once";
+    EXPECT_EQ(word_low(img, 8), 1L);
+    EXPECT_EQ(word_low(img, 9), 2L);
+    EXPECT_EQ(word_low(img, 10), 3L);
+
+    // corigin 8 + three const words = torigin 11; file 1 takes text words 11..12,
+    // so file 2's two "xta" instructions pack into word 13.
+    EXPECT_EQ(word_high(img, 13) & 07777, 9L) << "file 2's #2 -> file 1's word";
+    EXPECT_EQ(word_low(img, 13) & 07777, 10L) << "file 2's #3 -> its own word";
+}
+
+// An unmarked ".const" word may serve as the survivor of a merge -- it does not
+// move, so nothing that depends on its position is disturbed -- even though it
+// can never itself be merged away.
+TEST(Link, LiteralMergesOntoConstDataWord)
+{
+    std::string base = current_test_name();
+    std::string o1 = base + ".1.o", o2 = base + ".2.o", image = base + ".out";
+
+    assemble_to(base + ".1.s", o1,
+                "        .const\n"
+                "        .globl tbl\n"
+                "tbl:    .word 5\n"
+                "        .text\n"
+                "        .globl f\n"
+                "f:      uj f\n");
+    assemble_to(base + ".2.s", o2, "        .globl g\ng:      xta #5\n        uj g\n");
+
+    ASSERT_EQ(link_files(image, { o1, o2 }), 0);
+
+    auto img = read_file(image);
+    EXPECT_EQ(word_low(img, 1), 6L) << "a_const: the literal reuses tbl's word";
+    EXPECT_EQ(word_low(img, 8), 5L);
+
+    Sym tbl = find_symbol(read_symbols(img), "tbl");
+    EXPECT_EQ(tbl.value, 8L); // corigin
+
+    // corigin 8 + one const word = torigin 9; file 1 owns word 9, file 2 word 10.
+    EXPECT_EQ(word_high(img, 10) & 07777, 8L) << "file 2's #5 -> tbl's word";
 }
