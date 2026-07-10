@@ -25,8 +25,8 @@
 #define LNUM    6  // integer literal; the value sits in as.intval
 #define LLCMD   7  // raw long-address opcode (@NN); value is the opcode number
 #define LSCMD   8  // raw short-address opcode ($NN); value is the opcode number
-#define LLSHIFT 9  // the "\<" shift-left operator
-#define LRSHIFT 10 // the "\>" shift-right operator
+#define LLSHIFT 9  // the "<<" shift-left operator
+#define LRSHIFT 10 // the ">>" shift-right operator
 #define LINCR   11 // the "++" token
 #define LDECR   12 // the "--" token
 

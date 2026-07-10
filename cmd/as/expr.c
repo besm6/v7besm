@@ -67,7 +67,7 @@ static int parse_operand(void)
 //
 //   expression = [operand] {operation operand}...
 //   operand    = LNAME | LNUM | "." | "(" expression ")" | "{" expression "}"
-//   operation  = "+" | "-" | "&" | "|" | "^" | "~" | "\<" | "\>" | "/" | "*" | "%"
+//   operation  = "+" | "-" | "&" | "|" | "^" | "~" | "<<" | ">>" | "/" | "*" | "%"
 //
 // The grammar is a flat left-to-right fold (no operator precedence): each
 // operator simply combines the running result with the next operand.  Only '+'

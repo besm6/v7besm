@@ -160,8 +160,8 @@ start:  atx 0123            // direct octal address
         aax 0143^0060       // bitwise xor
         aex 0123, 5         // indexed: trailing register 5
         arx 07777 ~ 07654   // xor-with-complement (a ^ ~b)
-        avx 1 \< 6          // shift left
-        aox 0200 \> 1       // shift right
+        avx 1 << 6          // shift left
+        aox 0200 >> 1       // shift right
         a/x 7*011           // multiply
         a*x 0144/012        // divide
         apx 0145%012        // modulo
@@ -251,8 +251,8 @@ mid:                        // second label
     EXPECT_EQ(word_low(got, 12), 00110000L | 0123L);  // aax 0143^0060
     EXPECT_EQ(word_high(got, 13), (5L << 20) | 00120000L | 0123L); // aex 0123, 5
     EXPECT_EQ(word_low(got, 13), 01130000L | 07654L); // arx 07777 ~ 07654
-    EXPECT_EQ(word_high(got, 14), 00140000L | 0100L); // avx 1 \< 6   (shift left)
-    EXPECT_EQ(word_low(got, 14), 00150000L | 0100L);  // aox 0200 \> 1 (shift right)
+    EXPECT_EQ(word_high(got, 14), 00140000L | 0100L); // avx 1 << 6   (shift left)
+    EXPECT_EQ(word_low(got, 14), 00150000L | 0100L);  // aox 0200 >> 1 (shift right)
     EXPECT_EQ(word_high(got, 15), 00160000L | 077L);  // a/x 7*011    (multiply)
     EXPECT_EQ(word_low(got, 15), 00170000L | 012L);   // a*x 0144/012 (divide)
     EXPECT_EQ(word_high(got, 16), 00200000L | 1L);    // apx 0145%012 (modulo)
@@ -372,6 +372,16 @@ lbl:    atx 0
     EXPECT_EQ(word_high(got, 16), 00010000L); // stx 0
 }
 
+// The angle brackets of <addr> never collide with the "<<"/">>" shift
+// operators: an expression can neither begin nor end with an angle bracket, so
+// a doubled bracket is always a shift and a single one always the wrapper.
+TEST(Assemble, ShiftInsideUtcWrapper)
+{
+    auto got = assemble("        xta <1 << 15 >> 1>\n");
+    EXPECT_EQ(word_high(got, 8), 02200000L | 040000L); // utc 1<<15>>1 == 040000
+    EXPECT_EQ(word_low(got, 8), 00100000L);            // xta 0
+}
+
 // Data-emitting directives and segment switches.  Each segment accumulates
 // independently and the file lays them out const/text/data/strng/bss, so the
 // lone text instruction takes file word 8 and the data words follow from word
@@ -468,7 +478,7 @@ TEST(Assemble, WideWords)
         .word 0xabcdef123456    // a full 48-bit value
         .word 16777216          // 2^24 (decimal) spills into the high half
         .word 0100000000        // 2^24 (octal)
-        .word 0b1 \< 24         // shift exactly onto the boundary
+        .word 0b1 << 24         // shift exactly onto the boundary
         .word .[48:25]          // the whole high half-word
         .word .[28:20]          // a range straddling bit 24
         .word .[28=20]          // the complement of an interior range
@@ -484,7 +494,7 @@ TEST(Assemble, WideWords)
     EXPECT_EQ(word_low(got, 10), 0L);
     EXPECT_EQ(word_high(got, 11), 1L); // .word 0100000000
     EXPECT_EQ(word_low(got, 11), 0L);
-    EXPECT_EQ(word_high(got, 12), 1L); // .word 0b1 \< 24
+    EXPECT_EQ(word_high(got, 12), 1L); // .word 0b1 << 24
     EXPECT_EQ(word_low(got, 12), 0L);
     EXPECT_EQ(word_high(got, 13), 0xffffffL);   // .word .[48:25]
     EXPECT_EQ(word_low(got, 13), 0L);           // bits 25..48 == whole high half
@@ -528,11 +538,11 @@ TEST(Assemble, LeftAlignedLiterals)
 {
     auto got = assemble(R"(
         .data
-        .word 0'123      // 0123 \< 39 -> high 0x298000
-        .word 0x'abc     // 0xabc \< 36 -> high 0xabc000
-        .word 0b'111     // 0b111 \< 45 -> high 0xe00000
+        .word 0'123      // 0123 << 39 -> high 0x298000
+        .word 0x'abc     // 0xabc << 36 -> high 0xabc000
+        .word 0b'111     // 0b111 << 45 -> high 0xe00000
         .word 0x'ab'cd   // internal separator still works -> high 0xabcd00
-        .word 0123 \< 39 // cross-check: same word as 0'123
+        .word 0123 << 39 // cross-check: same word as 0'123
 )");
     EXPECT_EQ(word_high(got, 8), 0x298000L); // .word 0'123
     EXPECT_EQ(word_low(got, 8), 0L);
@@ -543,7 +553,7 @@ TEST(Assemble, LeftAlignedLiterals)
     EXPECT_EQ(word_high(got, 11), 0xabcd00L); // .word 0x'ab'cd
     EXPECT_EQ(word_low(got, 11), 0L);
     // 0'123 must equal the explicit shift form.
-    EXPECT_EQ(word_high(got, 12), word_high(got, 8)); // .word 0123 \< 39
+    EXPECT_EQ(word_high(got, 12), word_high(got, 8)); // .word 0123 << 39
     EXPECT_EQ(word_low(got, 12), word_low(got, 8));
 }
 

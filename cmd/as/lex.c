@@ -454,15 +454,19 @@ int next_token(int *pval)
             continue; // whitespace separates tokens but is not one
         case EOF:
             return LEOF;
-        case '\\':
-            // "\<" and "\>" are the shift operators; a bare backslash is itself.
-            c = getchar();
-            if (c == '<')
+        case '<':
+            // "<<" is the shift-left operator; a single '<' opens the "< ... >"
+            // utc wrapper.
+            if ((c = getchar()) == '<')
                 return LLSHIFT;
-            if (c == '>')
+            ungetc(c, stdin);
+            return '<';
+        case '>':
+            // ">>" is the shift-right operator; a single '>' closes "< ... >".
+            if ((c = getchar()) == '>')
                 return LRSHIFT;
             ungetc(c, stdin);
-            return '\\';
+            return '>';
         case '+':
             // "++" is one token, otherwise a plain '+'.
             if ((c = getchar()) == '+')
@@ -496,8 +500,6 @@ int next_token(int *pval)
         case ')':
         case '{':
         case '}':
-        case '<':
-        case '>':
         case '=':
         case ':':
             return c; // single-character tokens: return the character itself

@@ -34,7 +34,10 @@
 // valid no-op functions: value-returning stubs clear A with a bare `xta`, pop any
 // pushed arguments, then `13 uj`.
 
-        .text
+        .const
+        . = . + 0500
+        uj trap
+      : uj clock
 
 // ============================================================================
 // Kernel entry point
@@ -55,12 +58,16 @@
 //   * `phymem` set to the amount of physical memory found;
 //   * the u-area and kernel stack mapped, interrupt vector installed;
 //   * call main();  then enter user mode on the first process (icode).
+
+        .text
         .globl  _start
 _start:
         // TODO: BESM-6 processor initialization.
         // TODO: zero bss, set kend / phymem, map u-area + kernel stack.
         // TODO: install interrupt vector; call main; enter user mode.
-        13 uj                    // placeholder: return to loader for now
+     13 vjm main
+        stop                        // placeholder
+
 
 // ============================================================================
 // Trap and interrupt dispatch

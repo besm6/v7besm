@@ -186,12 +186,12 @@ and binary — not decimal (which has no prefix).
 
 | Form | Meaning | Value |
 |------|---------|-------|
-| `0'123` | octal `123`, left-aligned | `0123 \< 39` = `01230000000000000` |
-| `0x'abc` | hex `abc`, left-aligned | `0xabc \< 36` = `0xabc000000000` |
-| `0b'111` | binary `111`, left-aligned | `0b111 \< 45` |
+| `0'123` | octal `123`, left-aligned | `0123 << 39` = `01230000000000000` |
+| `0x'abc` | hex `abc`, left-aligned | `0xabc << 36` = `0xabc000000000` |
+| `0b'111` | binary `111`, left-aligned | `0b111 << 45` |
 
 Formally, for `N` mantissa digits of `B` bits each (octal `B`=3, hex `B`=4, binary `B`=1),
-the value is `digits \< (48 - N*B)`; the octal base marker `0` is not part of the mantissa.
+the value is `digits << (48 - N*B)`; the octal base marker `0` is not part of the mantissa.
 Internal separators still work (`0x'ab'cd`). At least one digit must follow the marker, and
 the mantissa may not exceed 48 bits.
 
@@ -225,7 +225,7 @@ Wherever a value is needed (an address, a directive operand, the right side of `
 ```
 expression  =  [operand] { operator operand } ...
 operand     =  number | name | "." | "(" expression ")" | "{" expression "}"
-operator    =  "+" | "-" | "&" | "|" | "^" | "~" | "\<" | "\>" | "*" | "/" | "%"
+operator    =  "+" | "-" | "&" | "|" | "^" | "~" | "<<" | ">>" | "*" | "/" | "%"
 ```
 
 **Operands.**
@@ -248,14 +248,19 @@ operator    =  "+" | "-" | "&" | "|" | "^" | "~" | "\<" | "\>" | "*" | "/" | "%"
 | `\|` | Bitwise OR. |
 | `^` | Bitwise XOR. |
 | `~` | XOR with the complement (`a ~ b` = `a ^ ~b`). |
-| `\<` | Shift left (count = right operand mod 64). Written as backslash-less-than. |
-| `\>` | Shift right. Written as backslash-greater-than. |
+| `<<` | Shift left (count = right operand mod 64). |
+| `>>` | Shift right. |
 | `*` | Multiply (low 31 bits). |
 | `/` | Divide (low 31 bits; division by zero is an error). |
 | `%` | Modulo (low 31 bits; modulo by zero is an error). |
 
 > **No operator precedence.** Expressions are evaluated **strictly left to right**. `1 + 2 * 3`
 > is `(1 + 2) * 3 = 9`, not 7. Use parentheses to force any other grouping.
+>
+> **`<` and `>` doubled versus single.** A doubled `<<`/`>>` is always the shift operator; a
+> single `<` or `>` is the address-extension wrapper of [§8](#8-registers-and-addressing)
+> (`< expr >`). The two never collide, because an expression can neither begin nor end with
+> an angle bracket.
 
 **Relocation constraints.** Only one relocatable (segment-relative or external) term may flow
 through an expression, and only `+` may combine it:
@@ -527,7 +532,7 @@ entry:  vtm count, 1
 **Directives:** `.text` `.const` `.data` `.strng` `.bss` · `.word` `.half` `.ascii` · `.globl`
 `.equ` `.comm`.
 
-**Expression operators (left-to-right, no precedence):** `+` `-` `&` `|` `^` `~` `\<` `\>`
+**Expression operators (left-to-right, no precedence):** `+` `-` `&` `|` `^` `~` `<<` `>>`
 `*` `/` `%`; grouping `( )`; exponent-truncate `{ }`; current location `.`.
 
 **Number formats:** decimal (default) `1234`; octal `01234`; hex `0x1ff`; binary `0b101`;
