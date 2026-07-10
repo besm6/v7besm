@@ -41,8 +41,9 @@ void write_file(const std::string &path, const std::vector<unsigned char> &bytes
 {
     int fd = creat(path.c_str(), 0644);
     ASSERT_GE(fd, 0) << "creat " << path;
-    if (!bytes.empty())
+    if (!bytes.empty()) {
         ASSERT_EQ(write(fd, bytes.data(), bytes.size()), (ssize_t)bytes.size());
+    }
     close(fd);
 }
 
@@ -123,8 +124,9 @@ std::vector<Member> read_archive(const std::string &path)
         m.size   = (long)h.ar_size;
         m.offset = off;
         m.data.resize(m.size);
-        if (m.size > 0)
+        if (m.size > 0) {
             EXPECT_EQ(read(fd, m.data.data(), m.size), (ssize_t)m.size);
+        }
         v.push_back(m);
         off += ARHDRSZ + m.size;
     }

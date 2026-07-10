@@ -124,7 +124,7 @@ struct linker {
     char *filname_alloc; // malloc'd base of filname for a "-l" arg (0 if filname is unowned)
     int errlev;       // highest error severity seen so far (the eventual exit code)
     int delarg;       // exit code; nonzero means "leave a.out alone / failed"
-    char tfname[14];  // template for the temp files: "/tmp/ldaXXXXX"
+    char tfname[14];  // template for the temp files: "/tmp/ldaXXXXXX"
 
     // segment base addresses, fixed by assign_addresses() after pass 1
     long corigin;   // base of the const segment

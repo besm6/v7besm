@@ -95,7 +95,7 @@ protected:
         if (!dir.empty()) {
             // Best-effort recursive removal of the temp directory.
             std::string cmd = "rm -rf '" + dir + "'";
-            ::system(cmd.c_str());
+            ASSERT_EQ(::system(cmd.c_str()), 0);
         }
     }
 

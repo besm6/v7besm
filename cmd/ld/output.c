@@ -3,6 +3,7 @@
 // Output assembly: create the temporary segment buffers, write the executable
 // header, and concatenate the buffers into the final image.
 //
+#include <stdlib.h>
 #include <unistd.h>
 
 #include "intern.h"

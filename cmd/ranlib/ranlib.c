@@ -30,7 +30,7 @@
 #define STRTABSZ (TABSZ * 10)
 
 static struct ar_hdr archdr;
-static struct exec exp;
+static struct exec exh;
 
 static long arsize;
 static FILE *fi, *fo;
@@ -140,16 +140,16 @@ int ranlib_run(int argc, char **argv)
 
             if (!strncmp(tempnm, archdr.ar_name, sizeof(archdr.ar_name)))
                 continue;
-            if (!fgethdr(fi, &exp))
+            if (!fgethdr(fi, &exh))
                 continue;
-            if (N_BADMAG(exp))
+            if (N_BADMAG(exh))
                 continue;
-            if (!exp.a_syms) {
+            if (!exh.a_syms) {
                 fprintf(stderr, "%s: warning: %s(%s): no symbol table\n", progname, *argv,
                         archdr.ar_name);
                 continue;
             }
-            fseek(fi, 2 * (exp.a_const + exp.a_text + exp.a_data), 1);
+            fseek(fi, 2 * (exh.a_const + exh.a_text + exh.a_data), 1);
             for (;;) {
                 int n = fgetsym(fi, &sym);
                 if (n == 0) { /* malloc returned 0 */
@@ -269,7 +269,7 @@ static void fixsize(void)
         offdelta -= ARHDRSZ + arsize;
     } else {
         new = 1;
-        strncpy(firstname, archdr.ar_name, sizeof(archdr.ar_name));
+        strncpy(firstname, archdr.ar_name, sizeof(firstname));
         firstname[sizeof(archdr.ar_name)] = 0;
     }
     for (i = 0; i < tnum; ++i)

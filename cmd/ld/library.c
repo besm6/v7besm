@@ -42,16 +42,18 @@ int open_input(char *cp)
             const char *dir = ld.libdir[i];
             size_t sz       = strlen(dir) + strlen(name) + sizeof("/lib.a");
             char *p         = malloc(sz);
-            if (!p)
+            if (!p) {
                 error(2, "out of memory");
-            // cppcheck-suppress nullPointerOutOfMemory
-            snprintf(p, sz, "%s/lib%s.a", dir, name);
-            ld.text = fopen(p, "r");
-            if (ld.text) {
-                ld.filname       = p;
-                ld.filname_alloc = p;
             } else {
-                free(p);
+                // cppcheck-suppress nullPointerOutOfMemory
+                snprintf(p, sz, "%s/lib%s.a", dir, name);
+                ld.text = fopen(p, "r");
+                if (ld.text) {
+                    ld.filname       = p;
+                    ld.filname_alloc = p;
+                } else {
+                    free(p);
+                }
             }
         }
 
@@ -60,12 +62,14 @@ int open_input(char *cp)
         if (!ld.text) {
             size_t sz = strlen(name) + sizeof("lib.a");
             char *p   = malloc(sz);
-            if (!p)
+            if (!p) {
                 error(2, "out of memory");
-            // cppcheck-suppress nullPointerOutOfMemory
-            snprintf(p, sz, "lib%s.a", name);
-            ld.filname       = p;
-            ld.filname_alloc = p;
+            } else {
+                // cppcheck-suppress nullPointerOutOfMemory
+                snprintf(p, sz, "lib%s.a", name);
+                ld.filname       = p;
+                ld.filname_alloc = p;
+            }
         }
     }
     if (!ld.text && !(ld.text = fopen(ld.filname, "r")))
@@ -117,16 +121,18 @@ int scan_member(long nloc)
         check_liblist();
         return 0;
     }
-    cp = malloc(sizeof(ld.archdr.ar_name) + 1);
-    if (!cp)
+    unsigned len = sizeof(ld.archdr.ar_name) + 1;
+    cp = malloc(len);
+    if (!cp) {
         error(2, "out of memory");
-    // cppcheck-suppress nullPointerOutOfMemory
-    strncpy(cp, ld.archdr.ar_name, sizeof(ld.archdr.ar_name));
-    cp[sizeof(ld.archdr.ar_name)] = '\0';
-    if (scan_object(nloc + ARHDRSZ, 1, make_file_symbol(cp, 0)))
-        *ld.libp++ = nloc;
-    free(cp);
-    check_liblist();
+    } else {
+        strncpy(cp, ld.archdr.ar_name, len);
+        cp[sizeof(ld.archdr.ar_name)] = '\0';
+        if (scan_object(nloc + ARHDRSZ, 1, make_file_symbol(cp, 0)))
+            *ld.libp++ = nloc;
+        free(cp);
+        check_liblist();
+    }
     return 1;
 }
 

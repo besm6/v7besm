@@ -717,7 +717,7 @@ void Processor::syscall(unsigned num)
             sys_err(EINVAL);
             break;
         }
-        void (*old)(int) = ::signal(sig, disp);
+        sighandler_t old = ::signal(sig, disp);
         if (old == SIG_ERR)
             sys_err(errno);
         else

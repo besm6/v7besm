@@ -89,7 +89,7 @@ struct linker ld = {
     .basaddr   = BADDR,
     .ofilename = "l.out",
     .delarg    = 4,
-    .tfname    = "/tmp/ldaXXXXX",
+    .tfname    = "/tmp/ldaXXXXXX",
 };
 
 //
@@ -385,7 +385,8 @@ int ld_link(int argc, char **argv)
     //
     if (!ld.ofilfnd) {
         unlink("a.out");
-        link("l.out", "a.out");
+        if (link("l.out", "a.out") < 0)
+            error(2, "cannot create a.out");
         ld.ofilename = "a.out";
     }
     ld.delarg = ld.errlev;

@@ -58,8 +58,10 @@ static int macro_is_painted(const struct symtab *sp)
 //
 char *do_define(char *p)
 {
+    char *formal[MAXFRM]; // formal[n] is name of nth formal
+    char formtxt[BUFSIZ]; // space for formal names
     char *pin, *psav, *cf;
-    char **pf, **qf;
+    char **pf = formal, **qf;
     int b, c, params;
     int variadic = 0; // set once a '...' formal is seen: last formal is __VA_ARGS__
     int va_num   = 0; // 1-based number of the variadic formal (the last one), else 0
@@ -68,8 +70,6 @@ char *do_define(char *p)
     char *hashpos = NULL; // side-buffer position of a pending '#' (stringize) operator
     const char *body_start; // side-buffer position where the replacement text begins
     int paste_pending = 0; // a '##' was just seen; its right operand pastes onto the left
-    char *formal[MAXFRM]; // formal[n] is name of nth formal
-    char formtxt[BUFSIZ]; // space for formal names
 
     if (cpp.side_ptr > cpp.side_buf + SBSIZE - BUFSIZ) {
         pperror("too much defining");
@@ -121,7 +121,6 @@ char *do_define(char *p)
     if (*pin == '(') { // with parameters; identify the formals
         int prev_was_formal = 0; // previous token was a normal named formal
         cf = formtxt;
-        pf = formal;
         for (;;) {
             p   = skip_blanks(p);
             pin = cpp.tok_ptr;
