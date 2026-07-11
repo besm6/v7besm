@@ -131,6 +131,93 @@ TEST_F(CcDriver, CompileToAssembly)
     EXPECT_NE(text.find("b$ret"), std::string::npos) << text;
 }
 
+// -Smadlen stops after codegen like -S but selects the Madlen (Dubna) dialect,
+// which differs from the default Unix (b6as) assembly emitted by plain -S.
+TEST_F(CcDriver, CompileToAssemblyMadlen)
+{
+    for (const char *tool : { "b6parse", "b6lower", "b6codegen" }) {
+        if (FindTool(tool).empty())
+            GTEST_SKIP() << tool << " not installed; skipping end-to-end test";
+    }
+
+    WriteSource("t.c", "int main(void)\n{\n    return 42;\n}\n");
+
+    std::string src = dir + "/t.c";
+    std::string unix_out = dir + "/u.s";
+    std::string madlen_out = dir + "/m.s";
+    ASSERT_EQ(RunProcess({ B6CC_COMMAND, "-S", "-o", unix_out, src }), 0)
+        << "b6cc -S failed";
+    ASSERT_EQ(RunProcess({ B6CC_COMMAND, "-Smadlen", "-o", madlen_out, src }), 0)
+        << "b6cc -Smadlen failed";
+
+    std::string madlen = ReadFile(madlen_out);
+    EXPECT_FALSE(madlen.empty()) << "madlen assembly output is empty";
+    EXPECT_NE(madlen.find("main:"), std::string::npos) << madlen;
+    // The ,end, directive is distinctive of the Madlen dialect.
+    EXPECT_NE(madlen.find(",end,"), std::string::npos) << madlen;
+    // And it differs from the default Unix assembly emitted by plain -S.
+    EXPECT_NE(madlen, ReadFile(unix_out)) << "madlen output matches unix -S";
+}
+
+// -Sbemsh stops after codegen like -S but selects the Bemsh (Cyrillic
+// autocode) dialect, so its output differs from the default Unix -S assembly.
+TEST_F(CcDriver, CompileToAssemblyBemsh)
+{
+    for (const char *tool : { "b6parse", "b6lower", "b6codegen" }) {
+        if (FindTool(tool).empty())
+            GTEST_SKIP() << tool << " not installed; skipping end-to-end test";
+    }
+
+    WriteSource("t.c", "int main(void)\n{\n    return 42;\n}\n");
+
+    std::string src = dir + "/t.c";
+    std::string unix_out = dir + "/u.s";
+    std::string bemsh_out = dir + "/b.s";
+    ASSERT_EQ(RunProcess({ B6CC_COMMAND, "-S", "-o", unix_out, src }), 0)
+        << "b6cc -S failed";
+    ASSERT_EQ(RunProcess({ B6CC_COMMAND, "-Sbemsh", "-o", bemsh_out, src }), 0)
+        << "b6cc -Sbemsh failed";
+
+    std::string bemsh = ReadFile(bemsh_out);
+    EXPECT_FALSE(bemsh.empty()) << "bemsh assembly output is empty";
+    // The Bemsh autocode uses Cyrillic keywords: "старт" (start) / "финиш".
+    EXPECT_NE(bemsh.find("\xD1\x81\xD1\x82\xD0\xB0\xD1\x80\xD1\x82"), std::string::npos)
+        << bemsh;
+    // And it differs from the default Unix assembly emitted by plain -S.
+    EXPECT_NE(bemsh, ReadFile(unix_out)) << "bemsh output matches unix -S";
+}
+
+// Without -o, the dialect selectors derive the output name with a matching
+// extension: t.c -> t.bemsh for -Sbemsh, t.madlen for -Smadlen.
+TEST_F(CcDriver, DialectDerivesExtension)
+{
+    for (const char *tool : { "b6parse", "b6lower", "b6codegen" }) {
+        if (FindTool(tool).empty())
+            GTEST_SKIP() << tool << " not installed; skipping end-to-end test";
+    }
+
+    WriteSource("t.c", "int main(void)\n{\n    return 0;\n}\n");
+
+    // b6cc derives the output name relative to the cwd, so run from `dir`.
+    ASSERT_EQ(RunProcess({ "/bin/sh", "-c",
+                           std::string("cd '") + dir + "' && '" + B6CC_COMMAND +
+                               "' -Sbemsh t.c && '" + B6CC_COMMAND + "' -Smadlen t.c" }),
+              0)
+        << "b6cc dialect compile failed";
+
+    EXPECT_FALSE(ReadFile(dir + "/t.bemsh").empty()) << "t.bemsh not produced";
+    EXPECT_FALSE(ReadFile(dir + "/t.madlen").empty()) << "t.madlen not produced";
+}
+
+// An unknown -S suffix is rejected with a usage error.
+TEST_F(CcDriver, RejectsUnknownDialect)
+{
+    WriteSource("t.c", "int main(void)\n{\n    return 0;\n}\n");
+    std::string src = dir + "/t.c";
+    EXPECT_NE(RunProcess({ B6CC_COMMAND, "-Sfoo", src }), 0)
+        << "b6cc -Sfoo should fail";
+}
+
 // A .S file is assembly that must be run through the C preprocessor first.  With
 // -E the driver stops after b6cpp, so this exercises the cpp half of the path
 // using only the pinned b6cpp.

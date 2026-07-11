@@ -17,7 +17,8 @@
 //
 // Selection of the last stage to run is controlled by -E (stop after cpp),
 // -S (stop after codegen, emit assembly) and -c (stop after as, emit object).
-// With none of those, the objects are linked into an executable.
+// With none of those, the objects are linked into an executable.  -Sbemsh and
+// -Smadlen behave like -S but also select the b6codegen assembly dialect.
 //
 // This is a modern rewrite of the original Unix v7 cc(1) driver: the pipeline
 // and tool names are new, and the argument handling, temp-file management and
@@ -81,6 +82,7 @@ static bool opt_v;         // -v: echo each sub-command before running it
 static bool opt_nostdlib;  // -nostdlib: skip the standard library dirs and -lc
 static bool opt_nostdinc;  // -nostdinc: skip the standard system include dir
 static char *outfile;      // -o NAME: explicit output name
+static char *codegen_dialect;  // -Sbemsh/-Smadlen: dialect flag for b6codegen, or NULL
 
 static struct vec sources;   // input .c/.s files to compile
 static struct vec objects;   // .o (and produced) files to link
@@ -418,6 +420,32 @@ static int run_pass(const char *envvar, const char *name, const char *in, const 
 }
 
 //
+// Run the code generator: b6codegen [--bemsh|--madlen] in out.  Unlike the
+// other passes it may carry a dialect flag, selected by -Sbemsh/-Smadlen; for a
+// plain -S the flag is omitted so b6codegen uses its own default.  Returns 0 on
+// success.
+//
+static int run_codegen(const char *in, const char *out)
+{
+    char *tool = find_tool("B6CODEGEN", "b6codegen");
+    if (!tool) {
+        error("cannot find b6codegen");
+        return 1;
+    }
+    struct vec av = { 0 };
+    vec_push(&av, tool);
+    if (codegen_dialect)
+        vec_push(&av, codegen_dialect);
+    vec_push(&av, (char *)in);
+    vec_push(&av, (char *)out);
+    vec_push(&av, NULL);
+    int rc = run(tool, av.data);
+    vec_free(&av);
+    free(tool);
+    return rc;
+}
+
+//
 // Run the assembler: b6as -o out in.  Returns 0 on success.
 //
 static int run_as(const char *in, const char *out)
@@ -510,10 +538,12 @@ static int compile_one(const char *src)
     if (run_pass("B6LOWER", "b6lower", astfile, tacfile) != 0)
         return 1;
 
-    // Code generation: .tac -> .s
+    // Code generation: .tac -> .s (or .madlen/.bemsh for the -Smadlen/-Sbemsh
+    // dialects, so the derived name reflects the assembly dialect emitted).
+    const char *asmsuf = codegen_dialect ? codegen_dialect + 2 : "s";
     const char *asmfile =
-        opt_S ? own(outfile ? strdup(outfile) : replace_suffix(src, "s")) : make_temp("s");
-    if (run_pass("B6CODEGEN", "b6codegen", tacfile, asmfile) != 0)
+        opt_S ? own(outfile ? strdup(outfile) : replace_suffix(src, asmsuf)) : make_temp("s");
+    if (run_codegen(tacfile, asmfile) != 0)
         return 1;
     if (opt_S)
         return 0;
@@ -588,6 +618,8 @@ static void usage(void)
     printf("Options:\n");
     printf("    -c              Compile and assemble, but do not link\n");
     printf("    -S              Compile only; emit assembly (.s)\n");
+    printf("    -Sbemsh         Like -S, but emit Bemsh-dialect assembly\n");
+    printf("    -Smadlen        Like -S, but emit Madlen-dialect assembly\n");
     printf("    -E              Preprocess only; write to output or .i\n");
     printf("    -o file         Set output file name\n");
     printf("    -O              Optimize (reserved; currently a no-op)\n");
@@ -636,6 +668,16 @@ int main(int argc, char *argv[])
             break;
         case 'S':
             opt_S = true;
+            if (arg[2] == '\0')
+                break; // plain -S: codegen default dialect
+            if (strcmp(arg + 2, "bemsh") == 0)
+                codegen_dialect = "--bemsh";
+            else if (strcmp(arg + 2, "madlen") == 0)
+                codegen_dialect = "--madlen";
+            else {
+                error("unknown option %s", arg);
+                usage();
+            }
             break;
         case 'E':
             opt_E = true;

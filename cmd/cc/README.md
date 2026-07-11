@@ -37,6 +37,8 @@ Inputs are dispatched by suffix:
 |---------------|-----------------------------------------------------------|
 | `-c`          | Compile and assemble, but do not link                     |
 | `-S`          | Compile only; emit assembly (`.s`)                        |
+| `-Sbemsh`     | Like `-S`, but emit Bemsh-dialect assembly                |
+| `-Smadlen`    | Like `-S`, but emit Madlen-dialect assembly               |
 | `-E`          | Preprocess only; write to output or `.i`                  |
 | `-o file`     | Set the output file name                                  |
 | `-O`          | Optimize (reserved; currently a no-op)                    |
@@ -53,6 +55,12 @@ Inputs are dispatched by suffix:
 The last stage to run is selected by `-E` (stop after preprocessing), `-S` (stop after code
 generation, emit assembly), and `-c` (stop after assembling, emit an object). With none of these,
 the objects are linked into an executable.
+
+`-Sbemsh` and `-Smadlen` stop after code generation just like `-S`, but additionally pass
+`--bemsh`/`--madlen` to `b6codegen` to select the emitted assembler dialect. Plain `-S` passes no
+dialect flag, so `b6codegen` uses its own default. When no `-o` name is given, the derived output
+file uses a dialect-matching extension: `.bemsh` for `-Sbemsh`, `.madlen` for `-Smadlen`, and `.s`
+for plain `-S`.
 
 When preprocessing, `b6cc` automatically adds the standard BESM-6 system include directory
 (`<prefix>/share/besm6/include`). `-nostdinc` suppresses that; any user `-I` directories are still
