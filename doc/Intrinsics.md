@@ -23,11 +23,9 @@ Companion reading, in the order it becomes relevant:
 3. [Tier 1 — privileged: reaching the hardware](#3-tier-1--privileged-reaching-the-hardware)
 4. [Tier 2 — bit manipulation](#4-tier-2--bit-manipulation)
 5. [Tier 3 — extracodes](#5-tier-3--extracodes)
-6. [Deliberately excluded](#6-deliberately-excluded)
-7. [Worked examples](#7-worked-examples)
-8. [The header `<besm6.h>`](#8-the-header-besm6h)
-9. [Open questions](#9-open-questions)
-10. [Summary table](#10-summary-table)
+6. [Worked examples](#6-worked-examples)
+7. [The header `<besm6.h>`](#7-the-header-besm6h)
+8. [Summary table](#8-summary-table)
 
 ---
 
@@ -206,7 +204,7 @@ from x86's PEXT**, which right-aligns. To right-align, follow with `>> (48 - k)`
 
 The exact inverse. Each 1-bit of `mask`, scanned from bit 48 down, consumes one bit from `a` taken
 from `a`'s MSB downward and deposits it at that position; 0-bits of `mask` yield 0. This is the
-natural tool for building the page-register word of §7.4 and for laying out device control words.
+natural tool for building the page-register word of §6.4 and for laying out device control words.
 
 ### `__besm6_acx` — population count (чед)
 
@@ -252,33 +250,11 @@ any code around the intrinsic must treat `r14` as clobbered.
 
 ---
 
-## 6. Deliberately excluded
-
-| Not proposed | Why |
-|--------------|-----|
-| `aax` (011), `aox` (015), `aex` (012) | C already has `&`, `\|`, `^`. |
-| `a+x`, `a-x`, `x-a`, `a*x`, `a/x` | C already has `+`, `-`, `*`, `/`. |
-| `asn` (036), `asx` (026) | C's `<<` and `>>` on an `unsigned` already compile to exactly these. |
-| `xta` (010), `atx` (000) | Loads and stores. Absolute machine addresses are `volatile unsigned *` — the machine is word-addressed, so a pointer *is* a word index (§2.3). |
-| `ntr` (037), `xtr` (027), `rte` (030) | The AU mode register `R` is the compiler's: compiled code runs under a standing `NTR 3` / logical-ω contract, and C code that changed `R` out from under it would be compiling against an `R` the compiler does not expect. See [Besm6_Runtime_Library.md](Besm6_Runtime_Library.md). |
-| `yta` (031) | The Y register holds the low half of a double-length result, but it is destroyed by almost every instruction (`Y = 0` after `aax`/`aox`/`arx`/`apx`/`aux`/`acx`/`asn`/`asx`, `Y = A` after `aex` and after *both* conditional branches). A reader the compiler is free to schedule is a reader that silently returns garbage. |
-| `a*x` double-length product, `avx` (014), `amx` (007), `e+n`/`e-n` (034/035), `e+x`/`e-x` (024/025) | Floating point. The kernel does not do arithmetic the compiler cannot already express; these belong to a future `libm` discussion, not here. |
-| `ati`, `ita`, `mtj`, `j+m`, `vtm`, `utm` | The index registers belong to the compiler. |
-| `utc` (022), `wtc` (023) | The `C` address-modification register is compiler-internal — it is how *every* 15-bit symbolic global is reached. |
-| `xts`, `stx`, `its`, `sti`; stack-mode addressing | The stack belongs to the compiler. |
-| `uza`, `u1a`, `uj`, `vjm`, `vzm`, `v1m`, `vlm` | Control flow belongs to the compiler. |
-| `ij` (Format 2 `032`, выпр) | Return-from-interrupt is a control transfer that restores the whole machine state, including the privilege level. It cannot be a C function call. Stays in [kernel/besm6.S](../kernel/besm6.S). |
-| The trap frame, `save`/`resume`, `nofault` | `save`/`resume` is a two-return protocol (`save` returns 0 directly and nonzero when resumed); `nofault` is a recovery-PC discipline shared between an inline sequence and the trap dispatcher. Neither has a C shape. See [Kernel_Assembly_Routines.md](Kernel_Assembly_Routines.md). |
-| Format-1 `032` (interrupt control) | Semantics undocumented in our references — see §9. Reachable as raw `$32` in assembly. |
-| `046`, `047` | Always illegal, in both modes. |
-
----
-
-## 7. Worked examples
+## 6. Worked examples
 
 These are what the proposal buys. All four are assembly today.
 
-### 7.1 `spl` — the interrupt priority level
+### 6.1 `spl` — the interrupt priority level
 
 The whole of `spl0`…`spl7`/`splx`, plus `cli`/`sti`, is one write of the МГРП mask:
 
@@ -300,7 +276,7 @@ void cli(void) { __besm6_mod(036, 0); }
 
 Note `ipl[]` is `besm6_word`, not `int`: ГРП bit 48 exists and would not survive a 41-bit type.
 
-### 7.2 The interrupt dispatcher
+### 6.2 The interrupt dispatcher
 
 Read ГРП, find the highest pending unmasked bit, dismiss it:
 
@@ -325,7 +301,7 @@ if (pending) {
 `__besm6_anx` is doing real work here: prioritised interrupt dispatch is *exactly* "find the highest
 set bit", and without the intrinsic it is a loop.
 
-### 7.3 Reading a drum page
+### 6.3 Reading a drum page
 
 This is [Besm6_Peripherals.md](Besm6_Peripherals.md) § *A worked example: reading a drum page*,
 transliterated. That document builds control word `001420024` — page mode, read, memory page 2,
@@ -350,7 +326,7 @@ For page 2 and zone `05` that builds `001420024` — the same control word the p
 derives field by field. The `U` suffix on `GRP_DRUM1_FREE` is not optional: bit 46 does not fit in
 a signed literal.
 
-### 7.4 Packing the page registers
+### 6.4 Packing the page registers
 
 `002 020`–`027` each load four 10-bit page numbers from one word, in a layout the simulator's own
 comment calls unusual: page *i* takes its bits 1–5 from accumulator bits `5i+1 … 5i+5`, but its bit
@@ -374,7 +350,7 @@ number. Written by hand, this is a dozen shifts and masks per page.
 
 ---
 
-## 8. The header `<besm6.h>`
+## 7. The header `<besm6.h>`
 
 The intrinsics should be declared in a single header, alongside the readable wrappers built on
 them. It belongs in the C compiler's `libc/besm6/include/` and installs into
@@ -420,24 +396,7 @@ intrinsics, and belong in the kernel's own include tree.
 
 ---
 
-## 9. Open questions
-
-1. **What does Format-1 opcode `032` do?** [Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) §8
-   lists it as "interrupt control, kernel mode only" and gives no operand semantics; it has no
-   mnemonic in [cmd/as/tables.c](../cmd/as/tables.c) and must be written `$32`. If it turns out to
-   control the interrupt-enable flag, the kernel needs it and it becomes a Tier-1 intrinsic. This
-   is a documentation gap worth closing before the trap handler is written.
-2. **The extracode encoding.** [Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) §6 lists the
-   extracodes as "opcodes 050–077, **020, 021**" — but 020 and 021 are already `apx` and `aux` in
-   Format 1. The parenthetical "(0200)"/"(0210)" suggests a different encoding. This must be
-   resolved before `__besm6_extracode`'s valid range can be specified.
-
-Not open: the Format-1 `S` bit (bit 19, `+070000`) is **never** needed for an `ext` or `mod`
-address. The highest address in the map is `033 4177`, which fits in the 12-bit offset field.
-
----
-
-## 10. Summary table
+## 8. Summary table
 
 | Intrinsic | Op | Cyrillic | Constant arg |
 |-----------|----|----------|--------------|
@@ -463,6 +422,6 @@ assembled by [cmd/as/tables.c](../cmd/as/tables.c).
 - [Besm6_Peripherals.md](Besm6_Peripherals.md) — the `033`/`002` address map and the ГРП/ПРП bits.
 - [Besm6_Data_Representation.md](Besm6_Data_Representation.md) — why the word type is `unsigned`.
 - [Besm6_Runtime_Library.md](Besm6_Runtime_Library.md) — the `NTR 3` / logical-ω contract that
-  compiled code holds, and why the mode register is not exposed.
+  compiled code holds.
 - [Besm6_Calling_Conventions.md](Besm6_Calling_Conventions.md) — the C ABI these plug into.
 - [Kernel_Assembly_Routines.md](Kernel_Assembly_Routines.md) — what stays in assembly regardless.

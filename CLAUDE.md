@@ -127,8 +127,8 @@ the authoritative references and are kept current:
 - `doc/Intrinsics.md` — the proposed C compiler intrinsics that let the kernel drive the hardware
   from C instead of assembly: the privileged pair `__besm6_ext` (033 «увв») and `__besm6_mod`
   (002 «рег»), the bit-manipulation builtins C has no equivalent for (`apx`/`aux` gather and
-  scatter, `acx`, `anx`, `arx`), and `__besm6_extracode`. Also what is deliberately *not* exposed
-  — the mode register, the Y register, the index registers — and what stays in `kernel/besm6.S`.
+  scatter, `acx`, `anx`, `arx`), and `__besm6_extracode`. Signatures, semantics, and worked
+  examples of an `spl`, an interrupt dispatch and a drum read written in C.
 - `doc/Aout_Simulator.md` — the `cmd/sim` simulator (`b6sim`): what it is (an apout-style
   user-level a.out runner, not full-machine SIMH), its CLI and trace modes, the Unix v7
   syscall set, and the `$77 N` extracode syscall trap.
