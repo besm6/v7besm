@@ -108,7 +108,7 @@ See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail.
 - [doc/File_Magic.md](doc/File_Magic.md) — how to recognise a BESM-6 object or executable from
   its first bytes.
 - [doc/Besm6_Runtime_Library.md](doc/Besm6_Runtime_Library.md) — the compiler-support routines
-  (`b/save`, `b/mul`, the relational and conversion helpers): what the compiler emits calls to,
+  (`b$save`, `b$mul`, the relational and conversion helpers): what the compiler emits calls to,
   the helper calling convention, and the ω-mode contract each one obeys.
 
 **The kernel**:

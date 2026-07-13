@@ -119,11 +119,11 @@ the authoritative references and are kept current:
 - `doc/Archiver_Manual.md` — the `cmd/ar` archiver: command/option letters and the on-disk
   `.a` archive format (`ARMAG`, `struct ar_hdr`, word padding).
 - `doc/File_Magic.md` — how to recognise a BESM-6 object/executable from its leading bytes.
-- `doc/Besm6_Runtime_Library.md` — the compiler-support routines (`b/save`, `b/mul`, the
+- `doc/Besm6_Runtime_Library.md` — the compiler-support routines (`b$save`, `b$mul`, the
   relational/conversion helpers): the lightweight helper calling convention (first operand on
   the stack, second in the accumulator, result in the accumulator) and the ω-mode/`NTR 3`
   contract every helper must preserve. Sources live in the external c-compiler repo under
-  `libc/besm6/unix/` (the `b6as` port — the variant this project uses), *not* `libc/besm6/madlen/`.
+  `libc/besm6/unix/`.
 - `doc/Aout_Simulator.md` — the `cmd/sim` simulator (`b6sim`): what it is (an apout-style
   user-level a.out runner, not full-machine SIMH), its CLI and trace modes, the Unix v7
   syscall set, and the `$77 N` extracode syscall trap.
