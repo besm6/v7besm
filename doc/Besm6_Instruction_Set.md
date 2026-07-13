@@ -1250,4 +1250,17 @@ intercepts this and terminates the user job with an appropriate error.
 
 ---
 
+## See also
+
+- [Besm6_Peripherals.md](Besm6_Peripherals.md) — what `002 «рег»` and `033 «увв»` actually reach:
+  the full address map, every control word's bit fields, and the ГРП/ПРП interrupt registers.
+- [Intrinsics.md](Intrinsics.md) — which of these instructions are exposed to C as compiler
+  intrinsics, which are left to the compiler, and which stay in hand-written assembly.
+- [Besm6_Data_Representation.md](Besm6_Data_Representation.md) — how a C scalar sits in the 48-bit
+  word these instructions operate on.
+- [Besm6_Runtime_Library.md](Besm6_Runtime_Library.md) — the ω-mode / `NTR 3` contract that every
+  compiled routine holds.
+
+---
+
 *Copyright © 1997–2018 Leonid A. Broukhis, © 2023-2026 Serge Vakulenko.*

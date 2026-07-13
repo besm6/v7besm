@@ -952,6 +952,8 @@ word field by field.
   simulator, attaching devices, the front panel, tracing and debugging.
 * [Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) — the instruction set that `002 «рег»` and
   `033 «увв»` belong to; opcodes, registers, and encoding.
+* [Intrinsics.md](Intrinsics.md) — how a C driver issues `002` and `033`: the `__besm6_mod` /
+  `__besm6_ext` intrinsics, worked examples of an `spl`, an interrupt dispatch and a drum read.
 * [Besm6_Data_Representation.md](Besm6_Data_Representation.md) — how a C scalar sits in the 48-bit
   word whose bits the control words above carve up.
 * [besm6_defs.h](https://github.com/besm6/simh/blob/master/BESM6/besm6_defs.h) — the ГРП and ПРП
