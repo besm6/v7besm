@@ -30,9 +30,11 @@ the host. This is the same idea as Warren Toomey's `apout` for the PDP-11: run t
 emulate the syscalls, skip the rest of the hardware.
 
 That is deliberately *different* from the authentic full-machine BESM-6 emulator,
-[SIMH](https://github.com/besm6/simh/tree/master/BESM6/), which reproduces the real hardware
-in detail and boots a real operating-system image. Use SIMH when you want to run the whole
-OS; use `b6sim` when you just want to run and check one program quickly.
+[SIMH](Simh_Simulator.md), which reproduces the real hardware in detail and boots a real
+operating-system image — and which is where this project's Unix kernel will ultimately run. Use
+SIMH when you want to run the whole OS; use `b6sim` when you just want to run and check one
+program quickly. Both load the same `a.out` executables, so a program can be moved from one to
+the other unchanged.
 
 ## 2. Why the project needs it
 

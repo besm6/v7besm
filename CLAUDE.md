@@ -8,7 +8,7 @@ A port of **Unix v7 to the BESM-6**, a Soviet 48-bit-word mainframe from the 196
 work has two halves:
 
 - **`kernel/` + `include/`** — the Unix v7 kernel itself. Sources are derived from Robert
-  Nordier's v7/x86 port (see the copyright in `kernel/mch.s`). They currently build and
+  Nordier's v7/x86 port (see the copyright in `kernel/x86.s`). They currently build and
   are validated as a **32-bit i486 ELF binary**, not yet BESM-6 code — this is an
   intermediate step to get the C compiling cleanly with modern warnings before retargeting.
 - **`cmd/`** — the BESM-6-specific toolchain being written/ported to eventually build the
@@ -20,7 +20,10 @@ work has two halves:
 External pieces this project depends on (not in this repo):
 - BESM-6 C cross-compiler: https://github.com/besm6/c-compiler/
 - BESM-6 hardware simulator (SIMH): https://github.com/besm6/simh/tree/master/BESM6/ — the
-  authentic full-machine emulator, distinct from the in-repo user-level `b6sim`.
+  authentic full-machine emulator, distinct from the in-repo user-level `b6sim`. **This is the
+  machine the kernel will boot on**, so it is the target the port aims at, not just a convenience.
+  It is documented here in `doc/Simh_Simulator.md` (how to build, run, and drive it) and
+  `doc/Besm6_Peripherals.md` (how a program talks to its hardware).
 
 ## Building
 
@@ -63,7 +66,9 @@ and linked with `ld.lld -T unix.ld`.
 
 The kernel is split into two static libs that are link-pulled so unused code is dropped:
 `libsys.a` (core kernel, `kernel/*.c`) and `libdev.a` (device drivers, `kernel/dev/*.c`).
-`mch.s` is x86 machine-assist (still x86-specific); `conf.c` is the device config table.
+`x86.s` is the x86 machine-assist (the former `mch.s`, still x86-specific) and `besm6.S` is its
+BESM-6 counterpart (a skeleton — symbols only, bodies still to be written); `conf.c` is the
+device config table.
 
 Diagnostic make targets (require the external `cast` tool / C compiler AST dump):
 - `make i` — preprocess each source to `.i`
@@ -102,15 +107,28 @@ the authoritative references and are kept current:
 - `doc/Besm6_Calling_Conventions.md` — args pushed in direct order, last arg left in the
   accumulator, r14 = negative arg count, r13 = return address; `_Noreturn` tail-call rules.
 - `doc/Besm6_Data_Representation.md` — how every C scalar is laid out in a word.
+- `doc/Besm6_Peripherals.md` — the peripherals as a *program* sees them: the `002 «рег»` and
+  `033 «увв»` supervisor instructions, the full `033` address map, each device's control-word
+  bit fields, and the ГРП/ПРП interrupt bits. Read it before touching `kernel/dev/`.
+- `doc/Simh_Simulator.md` — the external SIMH full-machine emulator: building and running it,
+  attaching peripherals, the front panel, tracing/debugging, and booting DISPAK.
 - `doc/Assembler_Manual.md` — the `cmd/as` assembly language: lexical rules, directives,
   expression grammar, number formats, operand/addressing forms, and `$NN`/`@NN` raw opcodes.
 - `doc/Linker_Manual.md` — the `cmd/ld` linker: the linking model, symbol resolution,
   relocation, archives/libraries, and the `a.out` object/executable format.
 - `doc/Archiver_Manual.md` — the `cmd/ar` archiver: command/option letters and the on-disk
   `.a` archive format (`ARMAG`, `struct ar_hdr`, word padding).
+- `doc/File_Magic.md` — how to recognise a BESM-6 object/executable from its leading bytes.
+- `doc/Besm6_Runtime_Library.md` — the compiler-support routines (`b/save`, `b/mul`, the
+  relational/conversion helpers): the lightweight helper calling convention (first operand on
+  the stack, second in the accumulator, result in the accumulator) and the ω-mode/`NTR 3`
+  contract every helper must preserve. Sources live in the external c-compiler repo under
+  `libc/besm6/unix/` (the `b6as` port — the variant this project uses), *not* `libc/besm6/madlen/`.
 - `doc/Aout_Simulator.md` — the `cmd/sim` simulator (`b6sim`): what it is (an apout-style
   user-level a.out runner, not full-machine SIMH), its CLI and trace modes, the Unix v7
   syscall set, and the `$77 N` extracode syscall trap.
+- `doc/Kernel_Assembly_Routines.md` — the machine-language assist (`kernel/x86.s`, to be
+  rewritten as `kernel/besm6.S`): every routine's contract with its C callers.
 
 **Object/executable format** is a BESM-6-specific `a.out` variant defined in
 `cross/besm6/b.out.h` (magic `FMAGIC`/`NMAGIC`, `struct exec` with separate
@@ -145,6 +163,29 @@ accumulator, errno in `r14` — and because every C scalar is one word, structs 
 `b6sim`; the C front end plugs into the same final step as it matures. This is the harness
 for verifying the compiler back-end and runtime library. See `doc/Aout_Simulator.md` and
 the ABI-spec tests in `cmd/sim/test/sim_test.cpp`.
+
+**SIMH is the target machine — the kernel boots there.** The external
+[besm6/simh](https://github.com/besm6/simh/tree/master/BESM6/) emulator is the full BESM-6:
+512K words of memory, an MMU, drums, disks, tapes, an АЦПУ drum printer, punch-tape and card
+equipment, and a 24-line terminal multiplexer. Executables written by `b6ld` load into it
+directly (`sim> load prog`), which is how code built here reaches the real machine model. What
+this means for the kernel, and for the `kernel/dev/` drivers in particular:
+- **There is no I/O address space and no channel programs.** Every device is reached by two
+  *supervisor-only* instructions that name a register through the **effective address** and pass
+  data in the **accumulator**: `033 «увв»` (`ext`) for the peripherals themselves, and
+  `002 «рег»` (`mod`) for CPU-internal registers — including ГРП, which is how every device
+  reports back. One bit of the address selects read vs. write (`04000` for `033`, `0200` for
+  `002`).
+- **Devices answer through two interrupt registers**, ГРП (48-bit, main) and ПРП (24-bit, slow
+  character devices), each with a mask. ПРП has no interrupt line of its own — a pending ПРП
+  interrupt is delivered by raising `GRP_SLAVE` in ГРП. Some bits are *wired* and cannot be
+  cleared by writing to the register; only clearing the device clears them.
+- **Mass storage exchanges in zones** of `8 + 1024` words — 8 service words plus 1 Kword of data.
+  The data lands where the control word says, but the service words always land at a **fixed low
+  memory address**, one buffer per controller (`010` drum 1, `030` disk 3, …).
+
+`doc/Besm6_Peripherals.md` has the full address map, every control word's bit fields, and both
+interrupt registers bit by bit; `doc/Simh_Simulator.md` covers driving the simulator itself.
 
 **`include/` is the Unix v7 system-header tree** (`sys/` plus libc-style headers). The
 kernel includes them via `-I../include`.

@@ -22,7 +22,8 @@ The port proceeds in two stages:
    warning-free shape before retargeting.
 2. **Goal — retarget to the BESM-6.** Build the kernel for real BESM-6 code using this
    project's own toolchain together with the external [cross-compiler](#related-projects),
-   and run it on the [SIMH simulator](#related-projects).
+   and boot it on the [SIMH simulator](doc/Simh_Simulator.md) — the authentic full-machine
+   emulator, and the hardware this port ultimately runs on.
 
 ## Repository layout
 
@@ -75,27 +76,54 @@ See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail.
 
 ## Documentation
 
+**The machine** — the BESM-6 architecture:
+
 - [doc/Besm6_Instruction_Set.md](doc/Besm6_Instruction_Set.md) — opcodes, registers, and
   instruction encoding.
 - [doc/Besm6_Calling_Conventions.md](doc/Besm6_Calling_Conventions.md) — the C ABI:
   argument passing, registers, and return linkage.
 - [doc/Besm6_Data_Representation.md](doc/Besm6_Data_Representation.md) — how C scalar types
   are laid out in a 48-bit word.
+- [doc/Besm6_Peripherals.md](doc/Besm6_Peripherals.md) — the programmer's view of the hardware:
+  the `002 «рег»` and `033 «увв»` I/O instructions, every device register and control word, and
+  the ГРП/ПРП interrupt bits. The reference the `kernel/dev/` drivers are written against.
+
+**The target** — where the kernel runs:
+
+- [doc/Simh_Simulator.md](doc/Simh_Simulator.md) — the SIMH full-machine BESM-6 emulator:
+  building and running it, attaching peripherals, the front panel, tracing and debugging, and
+  booting the DISPAK operating system.
+- [doc/Aout_Simulator.md](doc/Aout_Simulator.md) — the `cmd/sim` simulator (`b6sim`): an
+  apout-style user-level runner for BESM-6 `a.out` executables that services Unix v7 system
+  calls; its CLI, trace modes, syscall set, and a worked example.
+
+**The toolchain**:
+
 - [doc/Assembler_Manual.md](doc/Assembler_Manual.md) — the `cmd/as` assembly language:
   syntax, directives, expressions, and addressing forms.
 - [doc/Linker_Manual.md](doc/Linker_Manual.md) — the `cmd/ld` linker: linking model, symbol
   resolution, relocation, archives, and the `a.out` object/executable format.
 - [doc/Archiver_Manual.md](doc/Archiver_Manual.md) — the `cmd/ar` archiver: commands, options,
   and the on-disk `.a` archive format.
-- [doc/Aout_Simulator.md](doc/Aout_Simulator.md) — the `cmd/sim` simulator (`b6sim`): an
-  apout-style user-level runner for BESM-6 `a.out` executables that services Unix v7 system
-  calls; its CLI, trace modes, syscall set, and a worked example.
+- [doc/File_Magic.md](doc/File_Magic.md) — how to recognise a BESM-6 object or executable from
+  its first bytes.
+- [doc/Besm6_Runtime_Library.md](doc/Besm6_Runtime_Library.md) — the compiler-support routines
+  (`b/save`, `b/mul`, the relational and conversion helpers): what the compiler emits calls to,
+  the helper calling convention, and the ω-mode contract each one obeys.
+
+**The kernel**:
+
+- [doc/Kernel_Assembly_Routines.md](doc/Kernel_Assembly_Routines.md) — the machine-language
+  assist (`kernel/x86.s`, to be rewritten as `kernel/besm6.S`): what each routine must do and
+  the contract it owes its C callers.
 
 ## Related projects
 
 - [besm6/c-compiler](https://github.com/besm6/c-compiler/) — C cross-compiler for the BESM-6.
 - [besm6/simh](https://github.com/besm6/simh/tree/master/BESM6/) — authentic BESM-6 hardware
-  simulator.
+  simulator; the machine this port targets. Documented locally in
+  [doc/Simh_Simulator.md](doc/Simh_Simulator.md) (operator's view) and
+  [doc/Besm6_Peripherals.md](doc/Besm6_Peripherals.md) (programmer's view).
 
 ## License
 

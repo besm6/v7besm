@@ -1,18 +1,22 @@
-# Kernel Assembly Routines (`kernel/mch.s`)
+# Kernel Assembly Routines (`kernel/x86.s`)
 
 ## Purpose of this document
 
 The Unix v7 kernel in this repository is machine-independent C **except for one file**:
-[kernel/mch.s](../kernel/mch.s), the *machine-language assist*. Everything that cannot be
+[kernel/x86.s](../kernel/x86.s), the *machine-language assist*. Everything that cannot be
 expressed in portable C — booting, the trap/interrupt vector, context switching, touching
 user memory safely, interrupt masking, port I/O, cache/TLB control — lives here. Today it is
-i486/x86 assembly (inherited from Robert Nordier's v7/x86 port); it is the single file that
-must be **rewritten from scratch for the BESM-6**.
+i486/x86 assembly (inherited from Robert Nordier's v7/x86 port, where the file was called
+`mch.s`); it is the single file that must be **rewritten from scratch for the BESM-6**.
+
+That rewrite has a home already: [kernel/besm6.S](../kernel/besm6.S) is the BESM-6 counterpart,
+currently a **skeleton** — the symbols exist so the kernel builds and links with the BESM-6
+toolchain, but the bodies are still to be written, against the contracts specified below.
 
 This document specifies, for each routine, its **contract** — arguments, return value, side
 effects, and role in the kernel — *independently of the x86 implementation*. The goal is that
 the BESM-6 version can be written to satisfy the same contract without reverse-engineering
-x86 idioms. It also documents every **global variable and data table** defined in `mch.s`.
+x86 idioms. It also documents every **global variable and data table** defined in `x86.s`.
 
 Throughout, a distinction is drawn between:
 
@@ -23,7 +27,8 @@ Throughout, a distinction is drawn between:
 
 Related references: [Besm6_Calling_Conventions.md](Besm6_Calling_Conventions.md),
 [Besm6_Instruction_Set.md](Besm6_Instruction_Set.md),
-[Besm6_Data_Representation.md](Besm6_Data_Representation.md).
+[Besm6_Data_Representation.md](Besm6_Data_Representation.md), and — for the interrupt and I/O
+hardware these routines must eventually speak to — [Besm6_Peripherals.md](Besm6_Peripherals.md).
 
 ### Historical lineage
 
@@ -94,12 +99,12 @@ but the pattern — a per-trap frame the C code indexes symbolically — is pres
 
 ### The `nofault` mechanism — contract-level idea, x86 implementation
 
-`nofault` is a single kernel word ([kernel/mch.s:914](../kernel/mch.s)) holding a *recovery
+`nofault` is a single kernel word ([kernel/x86.s:914](../kernel/x86.s)) holding a *recovery
 program counter*. Before a routine touches memory that might fault (user pointers), it stores
 the address of a local recovery label into `nofault`; the page-fault path in the trap
 dispatcher checks `nofault`, and if nonzero, aborts the faulting instruction and jumps to the
 recovery label instead of panicking. It is **not** referenced by any C file — it is entirely
-internal to `mch.s`, used by `fubyte`/`fuword`/`subyte`/`suword`/`copyin`/`copyout`. The
+internal to `x86.s`, used by `fubyte`/`fuword`/`subyte`/`suword`/`copyin`/`copyout`. The
 BESM-6 port needs an equivalent "expected fault → recover" hook in its own trap handler.
 
 ### Interrupt priority model (`spl`, `pl`, `iq`) — contract-level
@@ -128,7 +133,7 @@ over.
 
 ## 2. Boot / initialization path (`_start`)
 
-`_start` ([mch.s:34](../kernel/mch.s)) is the kernel entry point. It is **replaced wholesale
+`_start` ([x86.s:34](../kernel/x86.s)) is the kernel entry point. It is **replaced wholesale
 on BESM-6** (different CPU bring-up, no x86 real mode, no paging hardware, no 8259/8253), so it
 is documented only at a level sufficient to reproduce its *outputs*. In order it:
 
@@ -178,7 +183,7 @@ save state, call a C handler, and restore state. This is the second big block th
 
 ### Vector stubs
 
-`idtctl` ([mch.s:837](../kernel/mch.s)) is a compact description consumed at boot to fill the
+`idtctl` ([x86.s:837](../kernel/x86.s)) is a compact description consumed at boot to fill the
 IDT with gate descriptors pointing at these tables:
 
 - **`intx00`…`intx10`** — CPU exceptions #DE, #DB, NMI, #BP, #OF, #BR, #UD, #NM, #DF, #TS, #NP,
@@ -210,7 +215,7 @@ registers, and `iret`s.
 
 ### `unqint` — deferred interrupt replay
 
-`unqint` ([mch.s:491](../kernel/mch.s)) pops the highest-priority pending IRQ out of `iq` that is
+`unqint` ([x86.s:491](../kernel/x86.s)) pops the highest-priority pending IRQ out of `iq` that is
 now unmasked by `pl`, and calls its stub, looping until none remain. This is how the
 software-level scheme delivers interrupts that hardware masking deferred; it is invoked both at
 the end of interrupt handling and by `splx`/`spl*` when the level drops.
@@ -426,11 +431,11 @@ void sti(void);                                 /* systm.h:163 */
 
 ---
 
-## 5. Global variables and data tables defined in `mch.s`
+## 5. Global variables and data tables defined in `x86.s`
 
 ### Contract-level globals (referenced by C)
 
-| symbol | mch.s | C declaration | meaning |
+| symbol | x86.s | C declaration | meaning |
 |--------|-------|---------------|---------|
 | `u` | 922 (`.set u, U`) | `extern struct user u;` (user.h:101) | the per-process user area, mapped at a fixed virtual address (page 7); holds the kernel stack and per-process state |
 | `kend` | 916 | `extern int kend;` (main.c:19, machdep.c:18) | first free physical address after the kernel; used to size the initial process and free core |
@@ -440,13 +445,13 @@ void sti(void);                                 /* systm.h:163 */
 | `pdir` | 927 (`.set pdir, 0x7ff9a000`) | `extern int pdir[];` (utab.c:14) | virtual address of the page directory; read by `physaddr()` |
 | `upt` | 928 (`.set upt, 0x7ff9b000`) | `extern int upt[];` (utab.c:14) | virtual address of the **user page table**; rewritten by `sureg()` to map the current process's text/data/stack |
 
-`pl` is also contract-*adjacent*: it is a private cell ([mch.s:890](../kernel/mch.s)), but its
+`pl` is also contract-*adjacent*: it is a private cell ([x86.s:890](../kernel/x86.s)), but its
 value at trap time is captured into `struct trap.pl` (reg.h:24) and tested by `BASEPRI()`
 (param.h:145) in `clock.c`.
 
-### Internal globals and data tables (private to `mch.s`)
+### Internal globals and data tables (private to `x86.s`)
 
-| symbol | mch.s | meaning |
+| symbol | x86.s | meaning |
 |--------|-------|---------|
 | `pl` | 890 | current processor priority level (16-bit interrupt mask); manipulated by `spl*`/`splx`/`call` |
 | `iq` | 891 | soft interrupt queue: bitmask of IRQs that arrived while masked, replayed by `unqint` |
