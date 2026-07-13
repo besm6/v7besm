@@ -124,11 +124,15 @@ the authoritative references and are kept current:
   the stack, second in the accumulator, result in the accumulator) and the ω-mode/`NTR 3`
   contract every helper must preserve. Sources live in the external c-compiler repo under
   `libc/besm6/unix/`.
-- `doc/Intrinsics.md` — the proposed C compiler intrinsics that let the kernel drive the hardware
-  from C instead of assembly: the privileged pair `__besm6_ext` (033 «увв») and `__besm6_mod`
-  (002 «рег»), the bit-manipulation builtins C has no equivalent for (`apx`/`aux` gather and
-  scatter, `acx`, `anx`, `arx`), and `__besm6_extracode`. Signatures, semantics, and worked
-  examples of an `spl`, an interrupt dispatch and a drum read written in C.
+- `doc/Intrinsics.md` — the nine C compiler intrinsics of `<besm6.h>`, **implemented** in the
+  external c-compiler, that let the kernel drive the hardware from C instead of assembly: the
+  privileged pair `__besm6_ext` (033 «увв») and `__besm6_mod` (002 «рег»), `__besm6_stop`, the
+  bit-manipulation builtins C has no equivalent for (`apx`/`aux` gather and scatter, `acx`, `anx`,
+  `arx`), and `__besm6_extracode`. Each compiles to a single inline instruction, never a call.
+  Signatures, semantics, diagnostics, the generated code, and worked examples of an `spl`, an
+  interrupt dispatch and a drum read written in C. Read it before writing anything in
+  `kernel/dev/` or adding to `kernel/besm6.S` — much of what that file was meant to hold is now
+  expressible in C.
 - `doc/Aout_Simulator.md` — the `cmd/sim` simulator (`b6sim`): what it is (an apout-style
   user-level a.out runner, not full-machine SIMH), its CLI and trace modes, the Unix v7
   syscall set, and the `$77 N` extracode syscall trap.
@@ -155,6 +159,10 @@ Madlen assembly), `-c` (after assembling). Sub-tools are resolved via per-tool e
 overrides (`B6CPP`, `B6PARSE`, …) or under `~/.local/bin` then `/usr/local/bin`. The full
 pipeline runs end-to-end; `-O` and `-g` are accepted but currently no-ops. See
 [cmd/cc/README.md](cmd/cc/README.md).
+
+The driver also passes `b6cpp` an `-I` for the compiler's own header directory
+(`<prefix>/share/besm6/include`, `~/.local` first, then `/usr/local`), so `#include <besm6.h>` —
+the machine intrinsics, see `doc/Intrinsics.md` — resolves with no flags of its own.
 
 **`cmd/sim` (`b6sim`) is a user-level a.out simulator**, in the spirit of Warren Toomey's
 `apout` for the PDP-11 (reference copy under `cmd/sim/tmp/apout/`). It loads one BESM-6

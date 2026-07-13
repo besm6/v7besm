@@ -84,6 +84,10 @@ is served on the host, the result is placed back in the machine's registers, and
 continues. (The syscall numbers are the classic v7 ones from
 [`kernel/sysent.c`](../kernel/sysent.c).)
 
+The trap need not be written in assembly any more: `$77 N` is what the C compiler emits for
+`__besm6_extracode(077, N, acc)`, one of the `<besm6.h>` intrinsics
+([Intrinsics.md](Intrinsics.md)). That is how a syscall leaf gets written in C.
+
 The calling convention for a syscall is the ordinary BESM-6 C convention
 ([Besm6_Calling_Conventions.md](Besm6_Calling_Conventions.md)): for a call with *N*
 arguments, arguments 1…*N*−1 sit on the stack just below the stack pointer `r15`, the **last**

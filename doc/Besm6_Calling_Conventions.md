@@ -41,6 +41,18 @@ The `_Noreturn`-ness of the definition is carried on the function's TAC top-leve
 serialized alongside `global`/`variadic`) so the machine backend can make this decision.
 Functions with parameters still use `b/save` (its parameter-block setup is needed).
 
+### r14 and the extracode intrinsic
+
+An extracode — issued from C by `__besm6_extracode(op, ea, acc)`, see
+[Intrinsics.md](Intrinsics.md) — loads `M[016]`, that is **r14**, from its
+effective address; no other index register is touched. r14 is the argument-count register on
+entry to a function and, in `b6sim`'s syscall ABI, the place `errno` comes back in, but it is
+caller-saved (only r1–r7 must be preserved), so the clobber is legal. It is also unobservable
+in compiled code: r14 is loaded by `14 ,vtm, -n` immediately before the `,call,` it belongs
+to, with nothing interposable in between, and `b/save` consumes it at entry before any
+intrinsic can run. Hand-written assembly around an extracode must nonetheless treat r14 as
+clobbered.
+
 ## On Return
 
  * The result value is returned in the accumulator.

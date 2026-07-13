@@ -13,6 +13,17 @@ That rewrite has a home already: [kernel/besm6.S](../kernel/besm6.S) is the BESM
 currently a **skeleton** — the symbols exist so the kernel builds and links with the BESM-6
 toolchain, but the bodies are still to be written, against the contracts specified below.
 
+**It will be a much smaller file than `x86.s`.** The C compiler now has the `<besm6.h>` machine
+intrinsics ([Intrinsics.md](Intrinsics.md)), so a routine whose whole job is to issue one
+supervisor instruction no longer needs assembly at all: `spl0`…`spl7`/`splx` are a write of the
+МГРП mask (`__besm6_mod(036, …)`), interrupt dispatch is a read of ГРП and a selective clear, the
+address-space switch inside `resume` is a write of the page registers, and every driver's device
+I/O is a sequence of `__besm6_ext` control words — all of it C. What genuinely stays in
+[kernel/besm6.S](../kernel/besm6.S) is what no intrinsic can reach: the boot entry, the interrupt
+and extracode vector (`besm6.S` must be entered *with the machine's registers as the hardware left
+them*), the register-save/restore of `save`/`resume`, and the `nofault` fault-recovery mechanism.
+Each contract below still holds; the language it is implemented in is now a choice.
+
 This document specifies, for each routine, its **contract** — arguments, return value, side
 effects, and role in the kernel — *independently of the x86 implementation*. The goal is that
 the BESM-6 version can be written to satisfy the same contract without reverse-engineering
