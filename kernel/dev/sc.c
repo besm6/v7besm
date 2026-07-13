@@ -2,7 +2,31 @@
 /* Copyright (c) 2007 Robert Nordier.  All rights reserved. */
 
 /*
- * System console driver
+ * System console driver: the BESM-6 Consul-254 operator typewriter.
+ *
+ * The Consul is a parallel, character-at-a-time device: one whole character goes
+ * out per `ext` instruction, printing finished and character typed each raise an
+ * interrupt.  That is a UART's shape, so this driver follows sr.c, not the CGA
+ * screen driver this file used to be -- the Consul is a real terminal and does its
+ * own cursor motion and scrolling, so there is no screen model here at all.
+ *
+ * Two paths reach the typewriter:
+ *
+ *   - the tty layer, through scstart()/scintr(): one character is handed to the
+ *     device, BUSY is set, and the next one goes out when PRP_CONS1_DONE says the
+ *     last has printed.
+ *
+ *   - printf() and panic(), through putchar(): polled, no interrupts, no clists.
+ *     prf.c calls it with the rest of the system already stopped.
+ *
+ * The character codes are ASCII.  The authentic Consul code is GOST-10859, but it
+ * has no lowercase Latin letters, which a Unix console cannot do without; the SIMH
+ * line is therefore configured `raw` (see kernel/test/sctest.ini) and the bytes go
+ * out untranslated.  Because nothing then translates line endings for us either,
+ * the tty must run with CRMOD -- see scopen().
+ *
+ * doc/Besm6_Peripherals.md has the register map, doc/Intrinsics.md the intrinsics.
+ * kernel/test/sctest.c exercises both paths of this driver against SIMH.
  */
 
 // clang-format off
@@ -12,174 +36,37 @@
 #include "sys/user.h"
 #include "sys/tty.h"
 #include "sys/systm.h"
+#include "sys/besm6dev.h"
 // clang-format on
 
-#ifdef MONO
-#define SCRBUF 0xb0000
-#define SCRPRT 0x3b4
-#else
-#define SCRBUF 0xb8000
-#define SCRPRT 0x3d4
-#endif
+#include <besm6.h>
 
-/* ports */
-#define KDT 0x60 /* data */
-#define KST 0x64 /* status */
+/*
+ * The console is Consul 1.  Consul 2 exists (EXT_CONS2, PRP_CONS2_*, CONS2_READY)
+ * but nothing in this kernel has a second console to put on it.
+ */
+#define SC_PRINT EXT_CONS1
+#define SC_READ  EXT_CONS1_RD
+#define SC_READY CONS1_READY
+#define SC_INPUT PRP_CONS1_INPUT
+#define SC_DONE  PRP_CONS1_DONE
 
-/* status register */
-#define KOB 0x01 /* output buffer */
-#define KIB 0x02 /* input buffer */
-#define KTO 0x40 /* timeout */
-#define KPE 0x80 /* parity error */
-
-/* commands */
-#define KWL 0xed /* write leds */
-#define KSD 0xf6 /* set defaults */
-
-/* scan codes */
-#define CTRL   0x1d /* ctrl */
-#define LSHIFT 0x2a /* left shift */
-#define RSHIFT 0x36 /* right shift */
-#define ALT    0x38 /* alt */
-#define CAPS   0x3a /* caps lock */
-#define NUM    0x45 /* num lock */
-#define SCROLL 0x46 /* scroll lock */
-
-#define BRK 0x80 /* break flag */
-
-/* LED flags */
-#define LSCR 0x1 /* scroll lock */
-#define LNUM 0x2 /* num lock */
-#define LCAP 0x4 /* caps lock */
-
-#define TOV 1048576 /* timeout */
-
-#define ROWS 25 /* number of rows */
-#define COLS 80 /* number of columns */
-#define TAB  8  /* tab size */
-
-#define CHRS (ROWS * COLS) /* screen size */
-#define LROW (CHRS - COLS) /* last row */
-#define LCOL (COLS - 1)    /* last column */
-#define LTAB (COLS - TAB)  /* last tab */
-
-/* video attributes */
-#define ATNL 0x0700 /* normal low */
-#define ATNH 0x0f00 /* normal high */
-#define ATRL 0x7000 /* reverse low */
-#define ATRH 0xf000 /* reverse high */
-
-/* video mode flags */
-#define VMSO 0x01 /* standout mode */
-#define VMUS 0x02 /* underscore mode */
-
-/* beep parameters */
-#define BEEPPT (0x1234dd / 453) /* pitch */
-#define BEEPTM (HZ / 10)        /* duration */
-
-#define clear(p, n) scset(scr + (p), va | ' ', (n))
-
-/* keyboard maps */
-static char map[3][96] = {
-    // clang-format off
-    {
-        0377, 0033, 0061, 0062, 0063, 0064, 0065, 0066,
-        0067, 0070, 0071, 0060, 0055, 0075, 0010, 0011,
-        0161, 0167, 0145, 0162, 0164, 0171, 0165, 0151,
-        0157, 0160, 0133, 0135, 0012, 0377, 0141, 0163,
-        0144, 0146, 0147, 0150, 0152, 0153, 0154, 0073,
-        0047, 0140, 0377, 0134, 0172, 0170, 0143, 0166,
-        0142, 0156, 0155, 0054, 0056, 0057, 0377, 0052,
-        0377, 0040, 0377, 0321, 0322, 0323, 0324, 0325,
-        0326, 0327, 0330, 0331, 0332, 0377, 0377, 0310,
-        0301, 0306, 0055, 0304, 0377, 0303, 0053, 0305,
-        0302, 0307, 0311, 0177, 0377, 0377, 0377, 0377,
-        0377, 0377, 0377, 0377, 0377, 0377, 0377, 0377
-    }, {
-        0377, 0033, 0041, 0100, 0043, 0044, 0045, 0136,
-        0046, 0052, 0050, 0051, 0137, 0053, 0377, 0377,
-        0121, 0127, 0105, 0122, 0124, 0131, 0125, 0111,
-        0117, 0120, 0173, 0175, 0012, 0377, 0101, 0123,
-        0104, 0106, 0107, 0110, 0112, 0113, 0114, 0072,
-        0042, 0176, 0377, 0174, 0132, 0130, 0103, 0126,
-        0102, 0116, 0115, 0074, 0076, 0077, 0377, 0052,
-        0377, 0040, 0377, 0377, 0377, 0377, 0377, 0377,
-        0377, 0377, 0377, 0377, 0377, 0377, 0377, 0067,
-        0070, 0071, 0055, 0064, 0065, 0066, 0053, 0061,
-        0062, 0063, 0060, 0056, 0377, 0377, 0377, 0377,
-        0377, 0377, 0377, 0377, 0377, 0377, 0377, 0377
-    }, {
-        0377, 0377, 0377, 0000, 0377, 0377, 0377, 0036,
-        0377, 0377, 0377, 0377, 0037, 0377, 0377, 0377,
-        0021, 0027, 0005, 0022, 0024, 0031, 0025, 0011,
-        0017, 0020, 0033, 0035, 0012, 0377, 0001, 0023,
-        0004, 0006, 0007, 0010, 0012, 0013, 0014, 0377,
-        0377, 0377, 0377, 0034, 0032, 0030, 0003, 0026,
-        0002, 0016, 0015, 0377, 0377, 0377, 0377, 0377,
-        0377, 0000, 0377, 0377, 0377, 0377, 0377, 0377,
-        0377, 0377, 0377, 0377, 0377, 0377, 0377, 0377,
-        0377, 0377, 0377, 0377, 0377, 0377, 0377, 0377,
-        0377, 0377, 0377, 0377, 0377, 0377, 0377, 0377,
-        0377, 0377, 0377, 0377, 0377, 0377, 0377, 0377
-    }
-    // clang-format on
-};
-
-/* caps/num lock table */
-static char type[96] = {
-    // clang-format off
-    0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0,
-    1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 0, 0, 0, 0, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 0,
-    0, 0, 0, 0, 1, 1, 1, 1,
-    1, 1, 1, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 2,
-    2, 2, 0, 2, 2, 2, 0, 2,
-    2, 2, 2, 2, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0
-    // clang-format on
-};
-
-/* alternate character set */
-static unsigned char acs[32] = {
-    // clang-format off
-    0000, 0001, 0002, 0003, 0004, 0005, 0006, 0007,
-    0010, 0011, 0012, 0013, 0014, 0015, 0016, 0017,
-    0020, 0021, 0022, 0023, 0332, 0304, 0277, 0263,
-    0331, 0300, 0032, 0033, 0034, 0035, 0036, 0037
-    // clang-format on
-};
+/*
+ * How long putchar() waits for the typewriter.  The ready bit is re-raised from the
+ * simulated terminal's clock, so a character costs milliseconds of model time; this
+ * only has to be larger than that, and finite so that a dead console cannot wedge a
+ * panic.
+ */
+#define SC_SPIN 1000000
 
 struct tty sc;
-
-static int init;
-static int cmd;
-static int led;
-static int tout;
-static int curs;
-
-short *scr = (short *)(0x7ff00000 + SCRBUF);
-
-static int attr[] = { ATNL, ATNH, ATRL, ATRH };
-static int va     = ATNL;
-
-static int beepon;
 
 char msgbuf[MSGBUFS]; /* saved "printf" characters */
 char *msgbufp = msgbuf;
 
 void scinit(void);
-void scstart(register struct tty *tp);
-void scputc(int ch);
-void kbput(int prt, int command);
-void vscroll(int pos, int rev);
-void hscroll(int pos, int col, int ins);
-void beep(void);
-void scmov(short *s, short *d, int n);
-void scset(short *p, int c, int n);
+void scintr(void);
+void scstart(struct tty *tp);
 
 void scopen(dev_t dev, int flag)
 {
@@ -189,17 +76,19 @@ void scopen(dev_t dev, int flag)
         u.u_error = ENXIO;
         return;
     }
-    if (!init) {
-        scinit();
-        init++;
-    }
     tp          = &sc;
     tp->t_addr  = (caddr_t)0;
     tp->t_oproc = scstart;
     if ((tp->t_state & ISOPEN) == 0) {
         tp->t_state = ISOPEN | CARR_ON;
-        tp->t_flags = ECHO | XTABS;
+        /*
+         * CRMOD is what makes ttyoutput() send CR before NL and ttyinput() turn a
+         * typed CR into NL.  The line is raw on the simulator side, so if the
+         * kernel does not do this nothing will.
+         */
+        tp->t_flags = ECHO | CRMOD | XTABS;
         ttychars(tp);
+        scinit();
     }
     ttyopen(dev, tp);
 }
@@ -219,384 +108,125 @@ void scwrite(dev_t dev)
     ttwrite(&sc);
 }
 
-void scxint(caddr_t arg)
-{
-    register struct tty *tp;
-
-    tout = 0;
-    tp   = &sc;
-    ttstart(tp);
-    if (tp->t_state & ASLEEP && tp->t_outq.c_cc <= TTLOWAT) {
-        tp->t_state &= ~ASLEEP;
-        wakeup((caddr_t)&tp->t_outq);
-    }
-}
-
-void scrint()
-{
-    static int ctrl, shift, lock;
-    int st, sn, ch, x, i;
-
-    for (i = 1024; i != 0 && (st = inb(KST)) & KOB; i--) {
-        sn = inb(KDT);
-        if ((st & (KTO | KPE)) != 0)
-            continue;
-        switch (sn) {
-        case 0x00:
-        case 0xff:
-            beep();
-            break;
-        case 0xfa:
-            if (cmd == 2) {
-                cmd++;
-                kbput(KDT, led);
-            } else {
-                if (cmd == 0)
-                    printf("sc: ack without command\n");
-                cmd = 0;
-            }
-            break;
-        case 0xfe:
-            printf("sc: nack\n");
-            cmd = 0;
-            break;
-        case CTRL:
-            ctrl = 1;
-            break;
-        case BRK | CTRL:
-            ctrl = 0;
-            break;
-        case LSHIFT:
-        case RSHIFT:
-            shift = 1;
-            break;
-        case BRK | LSHIFT:
-        case BRK | RSHIFT:
-            shift = 0;
-            break;
-        case CAPS:
-            lock ^= LCAP;
-            break;
-        case NUM:
-            lock ^= LNUM;
-            break;
-        case SCROLL:
-            lock ^= LSCR;
-            break;
-        default:
-            if (sn < 0x60) {
-                if (ctrl)
-                    x = 2;
-                else {
-                    x = shift;
-                    if (((lock & LCAP) && type[sn] == 1) || ((lock & LNUM) && type[sn] == 2))
-                        x ^= 1;
-                }
-                ch = map[x][sn];
-                if (ch != 0xff) {
-                    if (ch & 0x80) {
-                        ttyinput(033, &sc);
-                        ch &= 0x7f;
-                    }
-                    ttyinput(ch, &sc);
-                }
-            }
-        }
-        if (led != lock && !cmd) {
-            led = lock;
-            cmd = 2;
-            kbput(KDT, 0xed);
-        }
-    }
-}
-
 void scioctl(dev_t dev, int command, caddr_t addr, int flag)
 {
     if (ttioccomm(command, &sc, addr, dev) == 0)
         u.u_error = ENOTTY;
 }
 
-void scstart(register struct tty *tp)
+/*
+ * Enable the Consul's interrupts.
+ *
+ * The machine comes up with a "printing finished" already pending, so dismiss both
+ * of our bits before unmasking, or the first interrupt would arrive before the
+ * first character does.  МГРП is not touched here: GRP_SLAVE, which is how any ПРП
+ * interrupt reaches the processor, belongs to spl().
+ */
+void scinit(void)
 {
-    register int i, c;
-
-    for (i = 0; (c = getc(&tp->t_outq)) >= 0; i++)
-        if (tp->t_flags & RAW || c <= 0177)
-            scputc(c);
-    if (i && !tout) {
-        tout = 1;
-        timeout(scxint, NULL, 2);
-    }
-}
-
-void scinit()
-{
-    led = -1;
-    cmd = 1;
-    kbput(KDT, 0xf6);
-}
-
-void scputc(int ch)
-{
-    static int sm, vm, p0, st;
-    static int pos = LROW;
-    int col, x;
-
-    ch &= 0177;
-    col = pos % COLS;
-    switch (st) {
-    case 0:
-        switch (ch) {
-        case 0:
-            return;
-        case 7:
-            beep();
-            return;
-        case 8:
-            if (pos > 0)
-                scr[--pos] = va | ' ';
-            break;
-        case 9:
-            if (pos < LTAB)
-                for (x = TAB - (col & TAB - 1); x; x--)
-                    scr[pos++] = va | ' ';
-            break;
-        case 10:
-            pos += COLS;
-            if (!curs)
-                pos -= col;
-            break;
-        case 11:
-            return;
-        case 12:
-            pos = 0;
-            clear(0, CHRS);
-            break;
-        case 13:
-            pos -= col;
-            break;
-        case 27:
-            st = 1;
-            return;
-        case 20:
-        case 21:
-        case 22:
-        case 23:
-        case 24:
-        case 25:
-            ch = acs[ch];
-        default:
-            scr[pos++] = va | ch;
-        }
-        break;
-    case 1:
-        switch (ch) {
-        case '@': /* reset */
-            curs = sm = vm = p0 = 0;
-            break;
-        case 'A': /* cursor up */
-            if (pos >= COLS)
-                pos -= COLS;
-            break;
-        case 'B': /* cursor down */
-            pos += COLS;
-            break;
-        case 'C': /* cursor right */
-            pos++;
-            break;
-        case 'D': /* cursor left */
-            if (col > 0)
-                pos--;
-            break;
-        case 'E': /* clear screen */
-            pos = 0;
-            clear(0, CHRS);
-            break;
-        case 'F': /* alt char set start */
-            break;
-        case 'G': /* alt char set end */
-            break;
-        case 'H': /* cursor home */
-            pos = 0;
-            break;
-        case 'I': /* back tab */
-            if (col > 0)
-                pos = (pos - 1) & ~(TAB - 1);
-            break;
-        case 'J': /* clear to end of display */
-            clear(pos, CHRS - pos);
-            break;
-        case 'K': /* clear to end of line */
-            clear(pos, COLS - col);
-            break;
-        case 'L': /* insert line */
-            vscroll(pos - col, 1);
-            break;
-        case 'M': /* delete line */
-            vscroll(pos - col, 0);
-            break;
-        case 'N': /* delete character */
-            hscroll(pos, col, 0);
-            break;
-        case 'O': /* insert character */
-            hscroll(pos, col, 1);
-            break;
-        case 'P': /* scroll forward */
-            vscroll(0, 0);
-            break;
-        case 'Q': /* scroll reverse */
-            vscroll(0, 1);
-            break;
-        case 'R': /* reserved */
-            break;
-        case 'S': /* standout start */
-            vm |= VMSO;
-            break;
-        case 'T': /* standout end */
-            vm &= ~VMSO;
-            break;
-        case 'U': /* underscore start */
-            vm |= VMUS;
-            break;
-        case 'V': /* underscore end */
-            vm &= ~VMUS;
-            break;
-        case 'W': /* cursor addressing mode start */
-            curs = 1;
-            break;
-        case 'X': /* cursor addressing mode end */
-            curs = 0;
-            break;
-        case 'Y': /* cursor motion (part 1) */
-            st = 2;
-            return;
-        case 'Z': /* special mode (part 1) */
-            st = 4;
-            return;
-        }
-        va = attr[vm];
-        break;
-
-    case 2: /* cursor motion (part 2) */
-        p0 = ch;
-        st++;
-        return;
-    case 3: /* cursor motion (part 3) */
-        p0 -= ' ';
-        ch -= ' ';
-        if (p0 >= 0 && p0 < ROWS && ch >= 0 && ch < COLS)
-            pos = p0 * COLS + ch;
-        break;
-    case 4: /* special mode (part 2) */
-        sm = ch - ' ';
-        break;
-    }
-    st = 0;
-    if (pos >= CHRS) {
-        vscroll(0, 0);
-        pos -= COLS;
-    }
-    /* position hardware cursor */
-    outb(SCRPRT, 0xe);
-    outb(SCRPRT + 1, pos >> 8);
-    outb(SCRPRT, 0xf);
-    outb(SCRPRT + 1, pos);
-}
-
-void kbput(int prt, int command)
-{
-    int i;
-
-    for (i = TOV; i && (inb(KST) & KIB) != 0; i--)
-        ;
-    if (i == 0)
-        printf("sc: keyboard write timeout\n");
-    outb(prt, command);
-}
-
-void vscroll(int pos, int rev)
-{
-    int n;
-
-    n = CHRS - pos - COLS;
-    if (n) {
-        if (rev)
-            scmov(&scr[pos], &scr[pos + COLS], n);
-        else
-            scmov(&scr[pos + COLS], &scr[pos], n);
-    }
-    clear(rev ? pos : LROW, COLS);
-}
-
-void hscroll(int pos, int col, int ins)
-{
-    int n;
-
-    n = COLS - col - 1;
-    if (n) {
-        if (ins)
-            scmov(&scr[pos], &scr[pos + 1], n);
-        else
-            scmov(&scr[pos + 1], &scr[pos], n);
-    }
-    scr[ins ? pos : pos + n] = va | ' ';
-}
-
-void beepoff()
-{
-    /* 8255 ppi: speaker off */
-    outb(0x61, inb(0x61) & ~3);
-    beepon = 0;
-}
-
-void beep()
-{
-    int s;
-
-    s = spl7();
-    if (!beepon) {
-        beepon = 1;
-        /* 8253 pit counter 2 mode 3 */
-        cli();
-        outb(0x43, 0xb6);
-        outb(0x42, BEEPPT);
-        outb(0x42, BEEPPT >> 8);
-        sti();
-        /* 8255 ppi: speaker on */
-        outb(0x61, inb(0x61) | 3);
-        timeout(beepoff, NULL, BEEPTM);
-    }
-    splx(s);
-}
-
-void scmov(short *s, short *d, int n)
-{
-    if (s < d)
-        for (s += n, d += n; n--;)
-            *--d = *--s;
-    else
-        while (n--)
-            *d++ = *s++;
-}
-
-void scset(short *p, int c, int n)
-{
-    while (n--)
-        *p++ = c;
+    __besm6_ext(EXT_PRPCLR, ~(unsigned)(SC_INPUT | SC_DONE));
+    mprpon(SC_INPUT | SC_DONE);
 }
 
 /*
- * Kernel printf output ends up here.  It is buffered for
- * later retrieval by dmesg, and gets printed on the console
- * if we're not in cursor addressing mode.
+ * Hand the typewriter one character.  Called from the tty layer with the output
+ * queue non-empty, and again from scintr() as each character finishes printing.
+ */
+void scstart(register struct tty *tp)
+{
+    register int c;
+
+    if (tp->t_state & (TIMEOUT | BUSY | TTSTOP))
+        return;
+    if ((c = getc(&tp->t_outq)) >= 0) {
+        if (c >= 0200 && (tp->t_flags & RAW) == 0) {
+            /* A delay, not a character: wait it out and come back. */
+            tp->t_state |= TIMEOUT;
+            timeout(ttrstrt, (caddr_t)tp, (c & 0177) + 6);
+        } else {
+            tp->t_char = c;
+            tp->t_state |= BUSY;
+            __besm6_ext(SC_PRINT, c & 0177);
+        }
+        if (tp->t_outq.c_cc <= TTLOWAT && tp->t_state & ASLEEP) {
+            tp->t_state &= ~ASLEEP;
+            wakeup((caddr_t)&tp->t_outq);
+        }
+    }
+}
+
+/*
+ * Consul interrupt, from the ПРП demux in intr.c.
+ *
+ * Each bit is dismissed by writing its complement -- a ZERO bit in the accumulator
+ * is what clears a ПРП bit, so the ones left standing preserve every other device's
+ * bits.  The caller dismisses GRP_SLAVE only after this returns; doing it the other
+ * way round would re-raise GRP_SLAVE immediately, because the processor re-tests
+ * ПРП before every instruction.
+ *
+ * A "printing finished" with BUSY already clear is normal -- putchar() prints
+ * behind the tty layer's back and its character raises the bit too.  ttstart() then
+ * finds the queue empty and does nothing.
+ */
+void scintr(void)
+{
+    register struct tty *tp = &sc;
+    unsigned prp;
+
+    prp = __besm6_ext(EXT_PRPLO, 0);
+    if (prp & SC_INPUT) {
+        __besm6_ext(EXT_PRPCLR, ~(unsigned)SC_INPUT);
+        /* Bits 1-7 are the character; bit 8 is odd parity, not data. */
+        ttyinput(__besm6_ext(SC_READ, 0) & 0177, tp);
+    }
+    if (prp & SC_DONE) {
+        __besm6_ext(EXT_PRPCLR, ~(unsigned)SC_DONE);
+        tp->t_state &= ~BUSY;
+        ttstart(tp);
+    }
+}
+
+/*
+ * Print one character by polling, with no help from the interrupt path: wait for the
+ * typewriter to go idle, hand it the character, and wait for that one to print too.
+ *
+ * Leaving the device idle on return is what lets this coexist with scstart(): the
+ * interrupt path finds the hardware exactly as it left it, and the spurious "printing
+ * finished" this character raises is absorbed by scintr()'s tolerance of a DONE with
+ * BUSY clear.  The caller holds spl7, so scintr() cannot cut in between the two waits.
+ */
+static void scputc(int c)
+{
+    int i;
+
+    for (i = SC_SPIN; i; i--) /* has the previous character printed? */
+        if (__besm6_ext(EXT_READY2, 0) & SC_READY)
+            break;
+    __besm6_ext(SC_PRINT, c & 0177);
+    for (i = SC_SPIN; i; i--) /* has ours? */
+        if (__besm6_ext(EXT_READY2, 0) & SC_READY)
+            break;
+}
+
+/*
+ * Kernel printf output ends up here.  It is buffered for later retrieval by dmesg,
+ * and printed on the console -- polled, because printf() and panic() must work with
+ * the scheduler and the tty layer dead.
  */
 void putchar(int c)
 {
-    if (c && c != '\r') {
+    int s;
+
+    if (c == 0)
+        return;
+    if (c != '\r') {
         *msgbufp = c;
         if (++msgbufp >= &msgbuf[MSGBUFS])
             msgbufp = msgbuf;
     }
-    if (!curs)
-        scputc(c);
+    s = spl7();
+    if (c == '\n')
+        scputc('\r'); /* the tty layer is not in this path to do it for us */
+    scputc(c);
+    splx(s);
 }

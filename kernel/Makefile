@@ -1,4 +1,4 @@
-SYS     = acct.o alloc.o clock.o fio.o iget.o machdep.o main.o \
+SYS     = acct.o alloc.o clock.o fio.o iget.o intr.o machdep.o main.o \
           malloc.o nami.o pipe.o prf.o prim.o rdwri.o sig.o slp.o subr.o \
           sys1.o sys2.o sys3.o sys4.o sysent.o text.o trap.o utab.o
 
@@ -28,7 +28,10 @@ LD      = b6ld
 NM      = b6nm
 SIZE    = b6size -w
 DISASM  = b6disasm
-OBJ     = conf.o besm6.o libsys.a libdev.a
+# libsys.a is named twice: the archives are scanned once each, in order, and the
+# drivers in libdev.a call back into the core kernel (timeout(), wakeup(), ...), so
+# a member of libsys.a can be needed only after libdev.a has been read.
+OBJ     = conf.o besm6.o libsys.a libdev.a libsys.a
 
 VPATH = dev
 
@@ -38,7 +41,7 @@ all:    unix
 clean:
 	rm -f *.o *.a *.nm unix
 
-unix:   $(OBJ)
+unix:   conf.o besm6.o libsys.a libdev.a
 	$(LD) $(OBJ) -o $@ -L$$HOME/.local/share/besm6/lib -lc
 	$(NM) -n $@ > $@.nm
 	$(DISASM) $@ > $@.dis

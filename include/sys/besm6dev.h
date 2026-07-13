@@ -1,0 +1,66 @@
+/*
+ * BESM-6 machine registers reached by the `ext` (033 «увв») and `mod` (002 «рег»)
+ * instructions -- see doc/Besm6_Peripherals.md for the full address map and
+ * doc/Intrinsics.md for the __besm6_ext()/__besm6_mod() intrinsics that issue them.
+ *
+ * Addresses and bit values are OCTAL; bits are numbered right-to-left from 1.
+ *
+ * This header is #define-only so that kernel/besm6.S can include it too.
+ */
+#ifndef _SYS_BESM6DEV_H
+#define _SYS_BESM6DEV_H
+
+/*
+ * Addresses of the 002 «рег» instruction (__besm6_mod).
+ */
+#define MOD_MGRP   036  /* write МГРП, the mask of ГРП (48 bits) */
+#define MOD_GRPCLR 037  /* clear ГРП: GRP &= ACC -- a ZERO bit clears */
+#define MOD_GRP    0237 /* read ГРП */
+
+/*
+ * Addresses of the 033 «увв» instruction (__besm6_ext).  Bit 04000 selects a read.
+ */
+#define EXT_PRPCLR   030   /* clear ПРП: PRP &= ACC -- a ZERO bit clears */
+#define EXT_MPRP     034   /* write МПРП, the mask of ПРП (24 bits) */
+#define EXT_PRPHI    04030 /* read ПРП bits 13-24 */
+#define EXT_PRPLO    04034 /* read ПРП bits 1-12; bits 1-5 always read as 1 */
+#define EXT_READY2   04102 /* read READY2, the peripheral ready flags */
+#define EXT_CONS1    0174  /* Consul 1: print the character in bits 1-8 */
+#define EXT_CONS2    0175  /* Consul 2: print the character in bits 1-8 */
+#define EXT_CONS1_RD 04174 /* Consul 1: read the typed character */
+#define EXT_CONS2_RD 04175 /* Consul 2: read the typed character */
+
+/*
+ * Bits of ГРП, the main interrupt register.  An external interrupt (vector 0501)
+ * fires while GRP & MGRP is non-zero and the PSW does not block interrupts.
+ * The values need the U suffix: bit 42 and up do not fit in a signed int, which
+ * holds only 41 of the machine's 48 bits.
+ */
+#define GRP_TIMER 00010000000000000U /* 40: interval timer tick */
+#define GRP_SLAVE 00001000000000000U /* 37: see below */
+
+/*
+ * Bits of ПРП, the peripheral interrupt register (24 bits, masked by МПРП).
+ *
+ * ПРП has no interrupt line of its own: the processor raises GRP_SLAVE whenever
+ * PRP & MPRP is non-zero, so a peripheral interrupt arrives as an ordinary ГРП
+ * interrupt and the handler must read ПРП to find out which device it was.  The
+ * bit is re-raised before every instruction while the ПРП bit is still up, so a
+ * handler must clear the ПРП bit BEFORE dismissing GRP_SLAVE, or it will storm.
+ *
+ * None of the Consul bits are wired, so all four can be dismissed with EXT_PRPCLR.
+ */
+#define PRP_CONS1_INPUT 04000 /* 12: Consul 1 -- a character was typed */
+#define PRP_CONS2_INPUT 02000 /* 11: Consul 2 -- a character was typed */
+#define PRP_CONS1_DONE  01000 /* 10: Consul 1 -- printing finished */
+#define PRP_CONS2_DONE  0400  /*  9: Consul 2 -- printing finished */
+
+/*
+ * Bits of READY2 (EXT_READY2) -- the polled alternative to the ПРП interrupt.
+ * The Consul lowers its ready bit while it prints and the hardware raises it again
+ * when the character is out.  Note that Consul 2 is bit 6, not bit 7.
+ */
+#define CONS1_READY 0200 /* 8: Consul 1 is idle */
+#define CONS2_READY 040  /* 6: Consul 2 is idle */
+
+#endif /* _SYS_BESM6DEV_H */

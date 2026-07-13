@@ -37,8 +37,8 @@
         .const
         . = . - 010 + 0100
 #include "const.s"
-        uj trap
-      : uj clock
+        uj trap                  // 0500: internal interrupt (fault, extracode)
+      : uj extint                // 0501: external interrupt (ГРП) -- see below
 
 // ============================================================================
 // Kernel entry point
@@ -89,46 +89,69 @@ _start:
 //   * on return to user mode, honor `runrun` (reschedule) and profiling.
 
 // ============================================================================
+// External interrupt entry
+// ============================================================================
+//
+// The hardware vector for an external (ГРП) interrupt is the fixed address 0501,
+// laid down in the .const block above.  It jumps here; this stub saves what the C
+// handler may clobber, calls extintr() in intr.c, and returns with `ij` (выпр).
+//
+// An interrupt is asynchronous, so the calling convention's callee-saved set is not
+// enough -- the interrupted code owns every register.  extintr() preserves r1-r7 and
+// r15 for us (that is the ABI) and the hardware has saved the interrupted PC in
+// M[033], so what is left to save here is the accumulator and the caller-saved index
+// registers r8-r14 -- including r13, which the `vjm` below is about to overwrite with
+// its return address.
+//
+// Interrupts stay blocked throughout (the hardware sets БлПр on entry, and `ij`
+// restores the mode word from СПРВ on the way out), so one static save area is safe.
+//
+// The same stub, and the reasoning behind it, is exercised standalone against SIMH
+// by kernel/test/crt0.s + sctest.c.
+
+        .globl  extint
+extint: atx     sa               // save the accumulator
+        ita     010              // ...and r8-r14, which the C call may clobber
+        atx     s8
+        ita     011
+        atx     s9
+        ita     012
+        atx     s10
+        ita     013
+        atx     s11
+        ita     014
+        atx     s12
+        ita     015
+        atx     s13
+        ita     016
+        atx     s14
+
+     13 vjm     extintr          // intr.c: read ГРП, dispatch, dismiss
+
+        xta     s14
+        ati     016
+        xta     s13
+        ati     015
+        xta     s12
+        ati     014
+        xta     s11
+        ati     013
+        xta     s10
+        ati     012
+        xta     s9
+        ati     011
+        xta     s8
+        ati     010
+        xta     sa
+      3 ij                       // выпр: restore the mode word, jump via M[033]
+
+// ============================================================================
 // Interrupt priority level
 // ============================================================================
 //
-// int spl0(void) ... int spl7(void);   -- raise/lower the processor priority
-// void splx(int s);                     -- restore a saved priority
-//
-// Each splN establishes a fixed interrupt-priority level and RETURNS THE
-// PREVIOUS LEVEL, so a critical section reads `s = spl6(); ...; splx(s);`.
-// Higher levels block more interrupt classes: spl0 allows all, spl7 blocks all;
-// spl5 ~ disk/device class, spl6 ~ scheduler/buffer class.  See x86.s IPL* masks.
-//
-// TODO: keep the current level in a private cell, program the BESM-6 interrupt
-// mask for the requested level, return the old level in A, and replay any
-// interrupts deferred while masked when the level drops.
-
-        .globl  spl0, spl1, spl4, spl5, spl6, spl7, splx
-spl0:
-        xta                      // TODO: return previous level; set level 0 (allow all)
-        13 uj
-spl1:
-        xta                      // TODO: return previous level; set level 1
-        13 uj
-spl4:
-        xta                      // TODO: return previous level; set level 4
-        13 uj
-spl5:
-        xta                      // TODO: return previous level; set level 5 (block device class)
-        13 uj
-spl6:
-        xta                      // TODO: return previous level; set level 6 (block scheduler class)
-        13 uj
-spl7:
-        xta                      // TODO: return previous level; set level 7 (block all)
-        13 uj
-
-// void splx(int s) -- restore the priority level held in the single argument (A).
-splx:
-        // TODO: set the current level to the argument (in A); replay deferred
-        // interrupts if the level dropped.  One parameter: r15 unchanged.
-        13 uj
+// spl0()..spl7() and splx() now live in intr.c: on this machine raising the
+// priority is one write of the МГРП mask (002 036), which is a table lookup and an
+// intrinsic, so there is nothing left for assembly to do.
 
 // ============================================================================
 // Context switch
@@ -416,6 +439,20 @@ sti:
 // ============================================================================
 // Global variables and data
 // ============================================================================
+
+        .bss
+
+// Register save area for the external-interrupt stub above.  One copy is enough:
+// interrupts are blocked from the moment the hardware takes one until the `ij` that
+// ends the handler, so extint cannot be re-entered.
+sa:     . = . + 1                // accumulator
+s8:     . = . + 1                // r8-r14: caller-saved, so the C handler may
+s9:     . = . + 1                //   clobber them and the interrupted code will
+s10:    . = . + 1                //   not be expecting it
+s11:    . = . + 1
+s12:    . = . + 1
+s13:    . = . + 1
+s14:    . = . + 1
 
         .data
 

@@ -12,3 +12,8 @@
 cmd/as/as
 tmp/
 build/
+
+# Linked BESM-6 images built by kernel/test/Makefile.
+kernel/test/hello
+kernel/test/sctest
+kernel/unix

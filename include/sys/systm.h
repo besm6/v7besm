@@ -148,6 +148,7 @@ void panic(char *s);
 void bflush(dev_t dev);
 int spl0(void), spl1(void), spl4(void), spl5(void), spl6(void), spl7(void);
 void splx(int);
+void mprpon(unsigned bits); /* unmask a device's ПРП interrupts (intr.c) */
 void addupc(int, void *, int);
 int setpri(struct proc *pp);
 void xrele(struct inode *ip);
