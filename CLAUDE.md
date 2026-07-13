@@ -124,10 +124,11 @@ the authoritative references and are kept current:
   the stack, second in the accumulator, result in the accumulator) and the ω-mode/`NTR 3`
   contract every helper must preserve. Sources live in the external c-compiler repo under
   `libc/besm6/unix/`.
-- `doc/Intrinsics.md` — the proposed C compiler intrinsics (`__besm6_ext`, `__besm6_mod`, the
-  bit-manipulation and mode-register builtins) that let the kernel drive the hardware from C
-  instead of assembly: signatures, semantics, the ω/`R = 7` contract each must honour, and what
-  deliberately stays in `kernel/besm6.S`.
+- `doc/Intrinsics.md` — the proposed C compiler intrinsics that let the kernel drive the hardware
+  from C instead of assembly: the privileged pair `__besm6_ext` (033 «увв») and `__besm6_mod`
+  (002 «рег»), the bit-manipulation builtins C has no equivalent for (`apx`/`aux` gather and
+  scatter, `acx`, `anx`, `arx`), and `__besm6_extracode`. Also what is deliberately *not* exposed
+  — the mode register, the Y register, the index registers — and what stays in `kernel/besm6.S`.
 - `doc/Aout_Simulator.md` — the `cmd/sim` simulator (`b6sim`): what it is (an apout-style
   user-level a.out runner, not full-machine SIMH), its CLI and trace modes, the Unix v7
   syscall set, and the `$77 N` extracode syscall trap.
