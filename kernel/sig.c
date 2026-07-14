@@ -209,17 +209,18 @@ int core()
     if (!access(ip, IWRITE) && (ip->i_mode & IFMT) == IFREG && u.u_uid == u.u_ruid) {
         itrunc(ip);
         u.u_offset = 0;
+        /*
+         * The u-area is a single page: struct user at the bottom, the kernel
+         * stack above it.  One block.
+         */
         u.u_base   = (caddr_t)&u;
-        u.u_count  = ctob(1);
+        u.u_count  = wtob(USIZE);
         u.u_segflg = 1;
-        writei(ip);
-        u.u_base  = (caddr_t)&u + ctob(2);
-        u.u_count = ctob(1);
         writei(ip);
         s = u.u_procp->p_size - USIZE;
         estabur((unsigned)0, s, (unsigned)0, 0, RO);
         u.u_base   = 0;
-        u.u_count  = ctob(s);
+        u.u_count  = wtob(s);
         u.u_segflg = 0;
         writei(ip);
     }
@@ -237,9 +238,9 @@ int grow(unsigned sp)
     register struct proc *p;
     register int a;
 
-    if (sp > NPAGE * PGSZ - ctob(u.u_ssize))
+    if (sp > NPAGE * PGSZ - u.u_ssize)
         return (0);
-    si = (NPAGE * PGSZ - sp) / 4096 - u.u_ssize + SINCR;
+    si = pground(NPAGE * PGSZ - sp) - u.u_ssize + SINCR;
     if (si <= 0)
         return (0);
     if (estabur(u.u_tsize, u.u_dsize, u.u_ssize + si, u.u_sep, RO))
@@ -247,12 +248,14 @@ int grow(unsigned sp)
     p = u.u_procp;
     expand(p->p_size + si);
     a = p->p_addr + p->p_size;
-    for (i = u.u_ssize; i; i--) {
-        a--;
+    for (i = u.u_ssize; i > 0; i -= PGSZ) {
+        a -= PGSZ;
         copyseg(a - si, a);
     }
-    for (i = si; i; i--)
-        clearseg(--a);
+    for (i = si; i > 0; i -= PGSZ) {
+        a -= PGSZ;
+        clearseg(a);
+    }
     u.u_ssize += si;
     return (1);
 }
@@ -327,10 +330,11 @@ int procxmt()
 
     /* read u */
     case 3:
+        /* the u-area is one page; ip_addr is a word index into it */
         i = (int)ipc.ip_addr;
-        if (i < 0 || i >= ctob(USIZE + 1))
+        if (i < 0 || i >= USIZE)
             goto error;
-        ipc.ip_data = ((physadr)&u)->r[i >> 2];
+        ipc.ip_data = ((physadr)&u)->r[i];
         break;
 
     /* write user I */

@@ -63,9 +63,18 @@ void sureg()
     invd();
 }
 
+/*
+ * Sizes are in words, page-aligned: the image must fit the 32 pages the user
+ * gets, text+data must stay below the stack base, and the stack must fit the
+ * pages above it.
+ */
 int estabur(int nt, int nd, int ns, int sep, int xrw)
 {
-    if (nt + nd + ns > 1023)
+    if (nt + nd + ns > MAXMEM)
+        goto err;
+    if (nt + nd > USTKPAGE * PGSZ)
+        goto err;
+    if (ns > (NPAGE - USTKPAGE) * PGSZ)
         goto err;
     if (nt + nd + ns + USIZE > maxmem)
         goto err;
@@ -80,23 +89,23 @@ err:
     return (-1);
 }
 
+/*
+ * Zero, and copy, one page.  The arguments are page-aligned physical word
+ * addresses.  These are placeholders: a caddr_t is a fat pointer with a
+ * 15-bit word field and cannot name a physical word above 32767, so a page
+ * of the pool (which begins at 0100000) is out of their reach.  Task 11
+ * rewrites both in besm6.S, behind a mapped bracket.
+ */
 void clearseg(int d)
 {
-    unsigned xd;
-
-    xd = ctob(d);
-    bzero((caddr_t)xd, PGSZ);
+    bzero((caddr_t)d, wtob(PGSZ));
 }
 
 void copyseg(int s, int d)
 {
-    unsigned xs, xd;
-
     if (s == d)
         return;
-    xs = ctob(s);
-    xd = ctob(d);
-    bcopy((caddr_t)xs, (caddr_t)xd, PGSZ);
+    bcopy((caddr_t)s, (caddr_t)d, wtob(PGSZ));
 }
 
 unsigned physaddr(unsigned addr)

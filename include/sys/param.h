@@ -94,20 +94,23 @@
 /*
  * Some macros for units conversion
  */
-/* Core clicks (4096 bytes) to disk blocks */
-#define ctod(x) ((x) << 3)
+/* bytes to words (six chars pack into one 48-bit word) */
+#define btow(x) (((unsigned)(x) + 5) / 6)
+
+/* words to bytes */
+#define wtob(x) ((x) * 6)
+
+/* round a word count up to a whole page */
+#define pground(x) (((unsigned)(x) + PGSZ - 1) & ~(PGSZ - 1))
+
+/* words to disk blocks (a block is BSIZE == 512 words) */
+#define wtodb(x) ((x) >> 9)
 
 /* inumber to disk address */
 #define itod(x) (daddr_t)((((unsigned)(x) + 15) >> 3))
 
 /* inumber to disk offset */
 #define itoo(x) (int)(((x) + 15) & 07)
-
-/* clicks to bytes */
-#define ctob(x) ((x) << 12)
-
-/* bytes to clicks */
-#define btoc(x) ((((unsigned)(x) + 4095) >> 12))
 
 /* major part of a device */
 #define major(x) (int)(((unsigned)(x) >> 8))

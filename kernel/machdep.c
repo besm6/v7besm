@@ -15,7 +15,7 @@
 #include "sys/buf.h"
 // clang-format on
 
-extern int kend, phymem;
+extern int phymem;
 
 int maxmem; /* actual max memory per process */
 
@@ -44,20 +44,19 @@ void readrtc(void);
  */
 void startup()
 {
-    register int i;
-    int j;
-
     /*
-     * free all of core
+     * Free all of core above the kernel.  Pages 0..31 -- words 0 through
+     * 0100000 -- are the kernel image and the u-area at 076000, and word
+     * 0100000 is the first free word.  The first page of the pool is the
+     * u-area home of proc[0], which main() claims right after us, so the
+     * pool proper starts one page higher.
+     *
+     * phymem is the size of physical memory, in words; besm6.S still leaves
+     * it zero until the boot code sets it (task 14).
      */
-    j = btoc(kend) + 9;
-    for (i = 1; i < phymem; i++) {
-        if ((i >= 16 && i < j) || (i >= 160 && i < 256))
-            continue;
-        maxmem++;
-        mfree(coremap, 1, i);
-    }
-    printf("mem = %D\n", ctob((long)maxmem));
+    maxmem = phymem - (NPAGE * PGSZ + USIZE);
+    mfree(coremap, maxmem, NPAGE * PGSZ + USIZE);
+    printf("mem = %D words\n", (long)maxmem);
     if (MAXMEM < maxmem)
         maxmem = MAXMEM;
     mfree(swapmap, nswap, 1);

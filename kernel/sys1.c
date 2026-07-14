@@ -198,14 +198,14 @@ int getxfile(register struct inode *ip, int nargc)
      * try them out for possible
      * overflow of max sizes
      */
-    ts    = btoc(u.u_exdata.ux_tsize);
+    ts    = pground(btow(u.u_exdata.ux_tsize));
     lsize = (long)u.u_exdata.ux_dsize + u.u_exdata.ux_bsize;
     if (lsize != (unsigned)lsize) {
         u.u_error = ENOMEM;
         goto bad;
     }
-    ds = btoc(lsize);
-    ss = SSIZE + btoc(nargc);
+    ds = pground(btow(lsize));
+    ss = SSIZE + pground(btow(nargc));
     if (estabur(ts, ds, ss, 0, RO))
         goto bad;
 
@@ -219,7 +219,7 @@ int getxfile(register struct inode *ip, int nargc)
     xfree();
     i = USIZE + ds + ss;
     expand(i);
-    while (--i >= USIZE)
+    while ((i -= PGSZ) >= USIZE)
         clearseg(u.u_procp->p_addr + i);
     xalloc(ip);
 
@@ -409,11 +409,11 @@ void fork()
      * Make sure there's enough swap space for max
      * core image, thus reducing chances of running out
      */
-    if ((a = malloc(swapmap, ctod(MAXMEM))) == 0) {
+    if ((a = malloc(swapmap, wtodb(MAXMEM))) == 0) {
         u.u_error = ENOMEM;
         goto out;
     }
-    mfree(swapmap, ctod(MAXMEM), a);
+    mfree(swapmap, wtodb(MAXMEM), a);
     a  = 0;
     p2 = NULL;
     for (p1 = &proc[0]; p1 < &proc[NPROC]; p1++) {
@@ -469,7 +469,7 @@ void sbreak()
      * set n to new total size
      */
 
-    n = btoc((int)((struct a *)u.u_ap)->nsiz);
+    n = pground(btow((int)((struct a *)u.u_ap)->nsiz));
     if (!u.u_sep)
         n -= u.u_tsize;
     if (n < 0)
@@ -483,10 +483,9 @@ void sbreak()
         goto bigger;
     a = u.u_procp->p_addr + n - u.u_ssize;
     i = n;
-    n = u.u_ssize;
-    while (n--) {
+    for (n = u.u_ssize; n > 0; n -= PGSZ) {
         copyseg(a - d, a);
-        a++;
+        a += PGSZ;
     }
     expand(i);
     return;
@@ -494,11 +493,12 @@ void sbreak()
 bigger:
     expand(n);
     a = u.u_procp->p_addr + n;
-    n = u.u_ssize;
-    while (n--) {
-        a--;
+    for (n = u.u_ssize; n > 0; n -= PGSZ) {
+        a -= PGSZ;
         copyseg(a - d, a);
     }
-    while (d--)
-        clearseg(--a);
+    for (; d > 0; d -= PGSZ) {
+        a -= PGSZ;
+        clearseg(a);
+    }
 }

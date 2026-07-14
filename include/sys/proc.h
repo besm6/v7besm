@@ -20,8 +20,8 @@ struct proc {
     short p_pgrp;         /* name of process group leader */
     short p_pid;          /* unique process id */
     short p_ppid;         /* process id of parent */
-    short p_addr;         /* address of swappable image */
-    short p_size;         /* size of swappable image (clicks) */
+    short p_addr;         /* physical address of swappable image (word, page-aligned) */
+    short p_size;         /* size of swappable image (words, a multiple of PGSZ) */
     caddr_t p_wchan;      /* event process is awaiting */
     struct text *p_textp; /* pointer to text structure */
     struct proc *p_link;  /* linked list of running processes */

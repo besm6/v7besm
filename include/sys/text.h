@@ -7,9 +7,9 @@
  * Manipulated by text.c
  */
 struct text {
-    short x_daddr;        /* disk address of segment (relative to swplo) */
-    short x_caddr;        /* core address, if loaded */
-    short x_size;         /* size (clicks) */
+    short x_daddr;        /* disk address of segment, in blocks (relative to swplo) */
+    short x_caddr;        /* core address, if loaded (word, page-aligned) */
+    short x_size;         /* size (words, a multiple of PGSZ) */
     struct inode *x_iptr; /* inode of prototype */
     char x_count;         /* reference count */
     char x_ccount;        /* number of loaded references */

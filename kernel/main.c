@@ -16,8 +16,6 @@
 #include "sys/buf.h"
 // clang-format on
 
-extern int kend;
-
 time_t time; /* time in sec from 1970 */
 int nblkdev;
 int dk_busy;
@@ -53,7 +51,7 @@ void main()
      * set up system process
      */
 
-    proc[0].p_addr = btoc(kend) + 7; /* XXX */
+    proc[0].p_addr = NPAGE * PGSZ; /* 0100000: the first free word */
     proc[0].p_size = USIZE;
     proc[0].p_stat = SRUN;
     proc[0].p_flag |= SLOAD | SSYS;
@@ -83,8 +81,8 @@ void main()
      */
 
     if (newproc()) {
-        expand(USIZE + (int)btoc(szicode));
-        estabur((unsigned)0, btoc(szicode), (unsigned)0, 0, RO);
+        expand(USIZE + (int)pground(btow(szicode)));
+        estabur((unsigned)0, pground(btow(szicode)), (unsigned)0, 0, RO);
         copyout((caddr_t)icode, (caddr_t)0, szicode);
         /*
          * Return goes to loc. 0 of user init

@@ -33,7 +33,7 @@ void xswap(register struct proc *p, int ff, int os)
 
     if (os == 0)
         os = p->p_size;
-    a = malloc(swapmap, ctod(p->p_size));
+    a = malloc(swapmap, wtodb(p->p_size));
     if (a == NULL)
         panic("out of swap space");
     p->p_flag |= SLOCK;
@@ -67,7 +67,7 @@ void xfree()
     ip                 = xp->x_iptr;
     if (--xp->x_count == 0 && (ip->i_mode & ISVTX) == 0) {
         xp->x_iptr = NULL;
-        mfree(swapmap, ctod(xp->x_size), xp->x_daddr);
+        mfree(swapmap, wtodb(xp->x_size), xp->x_daddr);
         mfree(coremap, xp->x_size, xp->x_caddr);
         ip->i_flag &= ~ITEXT;
         if (ip->i_flag & ILOCK)
@@ -126,9 +126,9 @@ void xalloc(register struct inode *ip)
     xp->x_iptr   = ip;
     ip->i_flag |= ITEXT;
     ip->i_count++;
-    ts         = btoc(u.u_exdata.ux_tsize);
+    ts         = pground(btow(u.u_exdata.ux_tsize));
     xp->x_size = ts;
-    if ((xp->x_daddr = malloc(swapmap, (int)ctod(ts))) == NULL)
+    if ((xp->x_daddr = malloc(swapmap, (int)wtodb(ts))) == NULL)
         panic("out of swap space");
     u.u_procp->p_textp = xp;
     xexpand(xp);
@@ -251,7 +251,7 @@ void xuntext(register struct text *xp)
     ip = xp->x_iptr;
     xp->x_flag &= ~XLOCK;
     xp->x_iptr = NULL;
-    mfree(swapmap, ctod(xp->x_size), xp->x_daddr);
+    mfree(swapmap, wtodb(xp->x_size), xp->x_daddr);
     ip->i_flag &= ~ITEXT;
     if (ip->i_flag & ILOCK)
         ip->i_count--;

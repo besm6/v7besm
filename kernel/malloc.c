@@ -13,8 +13,8 @@
  * space.
  * In a map, the addresses are increasing and the
  * list is terminated by a 0 size.
- * The core map unit is 4096 bytes; the swap map unit
- * is 512 bytes.
+ * The core map unit is one 48-bit word; the swap map
+ * unit is one disk block of BSIZE (512) words.
  * Algorithm is first-fit.
  */
 int malloc(struct map *mp, int size)

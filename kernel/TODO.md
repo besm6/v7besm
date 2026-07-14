@@ -140,18 +140,38 @@ this. Run every MMU test with **`set mmu cache`**.
   physical address. `USTK` became `NPAGE * PGSZ` (the `0100000` ceiling) in `grow()` and `exec()`,
   a stopgap until task 17 turns the stack upward.
 
-**2. Replace the click macros with word macros.** Delete `ctob`, `btoc`, `ctod`; add
+**2. Replace the click macros with word macros.** — **DONE**  Delete `ctob`, `btoc`, `ctod`; add
 `btow(x)` (bytes → words, `((unsigned)(x)+5)/6`), `wtob(x)` (words → bytes, `(x)*6`),
 `pground(x)` (round a word count up to a page), `wtodb(x)` (words → disk blocks, `(x)>>9`, the old
 `ctod`). Fix every caller: `machdep.c:55,62`, `main.c:56,86-87`, `sys1.c:201-230,472-503`,
 `sig.c:213-255,331`, `slp.c:323`, `text.c:129`, `dev/bio.c:406`.
 - **Done when** `grep -rn 'ctob\|btoc\|ctod' kernel include` is empty and the kernel builds.
+- *As done:* four sites beyond the list above. `utab.c`: `clearseg`/`copyseg` lost their `ctob` (the
+  argument is already a page-aligned word address), and `estabur()`'s `nt+nd+ns > 1023` — an x86
+  page-table bound that would now reject any image over 1023 *words* — took task 9's word limits
+  early. `dev/bio.c:408`: `b_un.b_addr` lost its `ctob` and now carries a raw physical word address,
+  which does not fit a `caddr_t` (a fat pointer has a 15-bit word field) — task 18's `b_paddr` is
+  what fixes that, and the same reservation applies to `clearseg`/`copyseg` until task 11 rewrites
+  them in `besm6.S`. `swap()`'s `037`-click cap became `037 * PGSZ` words (31 pages = 62 blocks,
+  inside `hd`'s 255-block limit). Two shapes task 17 asks for fell out of the `ctob` removal and are
+  already in: `core()` writes the u-area as one `USIZE`-word block (the v7 "skip the middle click of
+  a 3-click u-area" trick is gone), and `procxmt()`'s "read u" takes a plain word index. Every
+  `copyseg`/`clearseg` loop — `exec()`, `sbreak()`, `grow()`, `expand()`, `newproc()` — now steps by
+  `PGSZ` instead of by 1: the routines move a page, and a page is no longer the unit of counting.
+  `startup()` lost its per-click free loop and the x86 memory hole (it frees one extent now, from
+  `0100000 + USIZE` — the first pool page is `proc[0]`'s u home, which `main()` claims); `kend` is no
+  longer read from C.
 
-**3. Re-specify the size/address fields as words.** `proc.h` (`p_addr`, `p_size`), `text.h`
+**3. Re-specify the size/address fields as words.** — **DONE**  `proc.h` (`p_addr`, `p_size`), `text.h`
 (`x_caddr`, `x_size`), `user.h` (`u_tsize`, `u_dsize`, `u_ssize`) — no type changes (a `short` is a
 full 48-bit word here, so a 512 Kword address always fits), but the values and comments become word
 counts, page-aligned. The coremap and swapmap now hand out words.
 - **Done when** the comments and the arithmetic agree, and the kernel builds.
+- *As done:* also `map.h` and `malloc.c` (the coremap unit is a word, the swapmap unit a 512-word
+  block — it said "4096 bytes" and "512 bytes"), and the two stale `USIZE*64 bytes` comments in
+  `user.h`. The swapmap still hands out **blocks**, not words: only the coremap changed unit.
+  `physio()` (`dev/bio.c:462-482`) is the one place left whose arithmetic does *not* agree — see the
+  note under task 18.
 
 **4. Drop the x86 drivers.** — **DONE** (folded into task 1). Delete `dev/md.c` (a 14 MB RAM disk that cannot exist in 512 Kwords),
 `dev/fd.c`, `dev/cd.c`; remove them from `DEV` in the Makefile and from `conf.c`. Stub `dev/mem.c`
@@ -160,11 +180,16 @@ Put `besm6.o` **first** in `OBJ` — the vector block's placement at
 `0500`/`0501` depends on `besm6.o`'s const contribution coming first.
 - **Done when** `make` links.
 
-**5. The sizing gate.** `b6size -w unix` and `b6nm -n unix | tail -1` must show `end` **below
+**5. The sizing gate.** — **DONE**  `b6size -w unix` and `b6nm -n unix | tail -1` must show `end` **below
 `076000`**. Today's image is 29098 words and shrinks here (the `pdir`/`upt`/`u` placeholders alone
 are 2561 words), so nothing should need cutting — but if it does not fit, cut `NBUF`, `NPROC`,
 `NTEXT`, `NCLIST` in `param.h` until it does, and record what was cut here.
 - **Done when** `end < 076000` with headroom to spare.
+- *As done:* nothing had to be cut. `b6size -w unix` gives 402 const + 15110 text + 449 data + 11749
+  bss = **27710 words**, and the top of bss sits at **`066105`** — `076000` less **4027 words** of
+  headroom, before task 7 deletes the 2561 words of `pdir`/`upt`/`u` placeholders. Note there is no
+  `end` symbol to look at: `b6ld` does not emit one, and `kend` is a *variable* that `_start` will
+  fill in at boot (task 14), so the gate is the last symbol `b6nm -n` prints, which is the top of bss.
 
 ### Stage 1 — the shadow map
 
@@ -280,6 +305,11 @@ carries a 9-bit page number and reaches all 512 Kwords), so **buffer I/O needs n
 kernel buffers are unmapped and their address *is* their physical address. `mem.c`: /dev/mem through
 a `copyseg`-style bracket, /dev/kmem direct.
 - **Done when** `iinit()` reads the super block and `swap()` round-trips a page.
+- Stage 0 deliberately left `physio()` (`dev/bio.c:462-482`) alone — it is the one piece of memory
+  arithmetic still in the old units. It derives page numbers with `>> PGSH` from `(unsigned)u.u_base`,
+  which is a *fat pointer*, not a byte address, and compares them against `u_tsize`/`u_dsize`/`u_ssize`,
+  which are now words; the `1024` ceilings should be `NPAGE * PGSZ`. It cannot be made right before
+  `useracc()` (task 9) gives it a way to validate a user address, so it is fixed here, with `b_paddr`.
 
 ---
 
@@ -301,3 +331,23 @@ a `copyseg`-style bracket, /dev/kmem direct.
 
 The drum and disk drivers (`033` channel programming, `doc/Besm6_Peripherals.md`), the BESM-6
 `icode[]`, and the byte-granularity of `iomove()`.
+
+### The disk-block constants are the *other* half-converted unit
+
+Found while doing stage 0, and left alone: this is the filesystem axis, not the MMU retarget, and
+settling it means settling the on-disk block layout — a different problem.
+
+`BSIZE` is **3072 bytes = 512 words**, but the constants derived from it were never moved:
+`BSHIFT 9` / `BMASK 0777` still describe a 512-*byte* block, and `NINDIR` is now `BSIZE/sizeof(daddr_t)`
+= **512** while `NMASK 0177` / `NSHIFT 7` still say 128. So every byte-offset → block conversion in
+the kernel is wrong: `rdwri.c:48-49,111-112`, `nami.c:138-156`, `sys1.c:89-128` (the exec arg
+staging), `dev/bio.c:492`, `dev/hd.c:135,169`, and `bmap()` in `subr.c:68-121`.
+
+A 3072-byte block is **not a power of two**, so the shifts and masks cannot survive in that form:
+either the byte offsets divide and modulo by `BSIZE`, or the filesystem's offsets themselves become
+word counts (`BSHIFT`/`BMASK` then describe 512 words, which is what they accidentally already say).
+The second is the BESM-6-shaped answer and the one to think about first — but it reaches into
+`filsys.h`, `ino.h`, `struct direct` and the on-disk inode, so it wants a plan of its own.
+
+Note `wtodb(x) = (x) >> 9` (words → blocks), added in stage 0, is *correct* either way: a block is
+exactly 512 words.

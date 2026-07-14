@@ -320,7 +320,7 @@ int swapin(register struct proc *p)
         xunlock(xp);
     }
     swap(p->p_addr, a, p->p_size, B_READ);
-    mfree(swapmap, ctod(p->p_size), p->p_addr);
+    mfree(swapmap, wtodb(p->p_size), p->p_addr);
     p->p_addr = a;
     p->p_flag |= SLOAD;
     p->p_time = 0;
@@ -525,8 +525,12 @@ retry:
          * There is core, so just copy.
          */
         rpp->p_addr = a2;
-        while (n--)
-            copyseg(a1++, a2++);
+        while (n > 0) {
+            copyseg(a1, a2);
+            a1 += PGSZ;
+            a2 += PGSZ;
+            n -= PGSZ;
+        }
     }
     u.u_procp = rip;
     setrq(rpp);
@@ -573,7 +577,7 @@ void expand(int newsize)
         /* no return */
     }
     p->p_addr = a2;
-    for (i = 0; i < n; i++)
+    for (i = 0; i < n; i += PGSZ)
         copyseg(a1 + i, a2 + i);
     mfree(coremap, n, a1);
     resume(a2, u.u_ssav);

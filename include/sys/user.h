@@ -7,9 +7,10 @@
  * Contains all per process data
  * that doesn't need to be referenced
  * while the process is swapped.
- * The user block is USIZE*64 bytes
- * long; resides at virtual kernel
- * loc 140000; contains the system
+ * The user block is one page, USIZE
+ * words, at the physical address
+ * UBASE (076000) -- the last page of
+ * the kernel space; contains the system
  * stack per user; is cross referenced
  * with the proc structure for the
  * same process.
@@ -55,9 +56,9 @@ struct user {
     struct file *u_ofile[NOFILE]; /* pointers to file structures of open files */
     char u_pofile[NOFILE];        /* per-process flags of open files */
     int u_arg[5];                 /* arguments to current system call */
-    unsigned u_tsize;             /* text size (clicks) */
-    unsigned u_dsize;             /* data size (clicks) */
-    unsigned u_ssize;             /* stack size (clicks) */
+    unsigned u_tsize;             /* text size (words, a multiple of PGSZ) */
+    unsigned u_dsize;             /* data size (words, a multiple of PGSZ) */
+    unsigned u_ssize;             /* stack size (words, a multiple of PGSZ) */
     label_t u_qsav;               /* label variable for quits and interrupts */
     label_t u_ssav;               /* label variable for swapping */
     int u_signal[NSIG];           /* disposition of signals */
@@ -93,8 +94,8 @@ struct user {
     short u_cmask;  /* mask for file creation */
     int u_stack[1];
     /* kernel stack per user
-     * extends from u + USIZE*64
-     * backward not to reach here
+     * grows up from here to
+     * u + USIZE words (0100000)
      */
 };
 

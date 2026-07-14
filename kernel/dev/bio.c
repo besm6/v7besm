@@ -401,18 +401,22 @@ void swap(int blkno, int coreaddr, register int count, int rdflg)
         bp->b_flags = B_BUSY | B_PHYS | rdflg;
         bp->b_dev   = swapdev;
         tcount      = count;
-        if (tcount >= 037) /* workaround for hd */
-            tcount = 037;
-        bp->b_bcount    = ctob(tcount);
-        bp->b_blkno     = swplo + blkno;
-        bp->b_un.b_addr = (caddr_t)ctob(coreaddr);
+        if (tcount > 037 * PGSZ) /* workaround for hd: 31 pages = 62 blocks */
+            tcount = 037 * PGSZ;
+        bp->b_bcount = wtob(tcount);
+        bp->b_blkno  = swplo + blkno;
+        /*
+         * coreaddr is a physical word address, which does not fit a caddr_t;
+         * task 18 gives struct buf a b_paddr for it.
+         */
+        bp->b_un.b_addr = (caddr_t)coreaddr;
         (*bdevsw[major(swapdev)].d_strategy)(bp);
         spl6();
         while ((bp->b_flags & B_DONE) == 0)
             sleep((caddr_t)bp, PSWP);
         count -= tcount;
         coreaddr += tcount;
-        blkno += ctod(tcount);
+        blkno += wtodb(tcount);
     }
     if (bp->b_flags & B_WANTED)
         wakeup((caddr_t)bp);
