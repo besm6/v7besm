@@ -146,6 +146,21 @@ buf_size = 0200          // infix '=' form
 The symbol takes the segment/relocation class of the expression. Equating to an external
 (undefined) symbol is an error ("indirect equivalence").
 
+> **A symbol's value is only 24 bits — a half-word — and a wider value is silently truncated.**
+> Expressions themselves are evaluated in the full 48, so this bites exactly when you equate a
+> name to a 48-bit word constant, such as a bit mask reaching above bit 24:
+>
+> ```
+> MASK = .46 | .42 | .38 | .34 | .30 | .[6:10]   // truncates to 01740 -- the high bits are GONE
+>         .word   MASK                            // 00000000 00001740   WRONG
+>         .word   .46 | .42 | .38 | .34 | .30 | .[6:10]
+>                                                 // 10421040 00001740   right
+> ```
+>
+> Write such a constant out where it is used — `aux #(.46 | .42 | ...)` — or lay it down with
+> `.word` and reference the location. There is no diagnostic. See `kernel/uarea.s`, which builds
+> an РП descriptor this way.
+
 **The location counter.** Inside expressions, `.` evaluates to the current location (see
 [§7](#7-expressions)). As a statement, `. = expr` advances the location counter of the
 current segment to `expr` words, filling the gap (with `utc 0` fillers in text, zeros

@@ -2,9 +2,12 @@
  * mmutest -- the BESM-6 MMU, driven by the kernel's own sureg() (kernel/utab.c).
  *
  * A standalone SIMH program: crt0.s brings the machine up and calls main(), and we
- * link the real utab.o and brz.o against a hand-built process.  Everything here runs
+ * link the real utab.o, brz.o and uarea.o against a hand-built process.  Everything runs
  * in supervisor mode -- reset leaves РежЭ set -- which is what makes `mod' (002 рег)
  * legal, so the kernel's address-space code can be exercised with no kernel under it.
+ *
+ * Two halves: sureg() builds and loads a map (checks 1-12), and then uflush()/uload()
+ * round-trip a u-area through a page above 0100000 (checks 13-17, task 10).
  *
  * The map it builds:
  *
@@ -64,10 +67,27 @@ void extintr(void)
 
 #define PATTERN1 0525252
 #define PATTERN2 0123456
+#define PATTERN3 0707070
+
+/*
+ * The u-area round trip (task 10).  UHOME is a page above 0100000 -- out of reach of any
+ * unmapped access, which is the whole reason uflush()/uload() have to window it -- and clear
+ * both of this image (which lives in the low pages) and of the map built above.
+ */
+#define UHOMEPG 40
+#define UHOME   (UHOMEPG * PGSZ)
+
+/*
+ * The word offset of u_upt in struct user.  kernel/uarea.s is assembled by bare b6as, which
+ * cannot compute an offsetof(), so it hardcodes this -- and this is what keeps it honest.
+ */
+#define UPT 33
 
 int main()
 {
     unsigned va, pa;
+    volatile unsigned *up;
+    int i;
 
     /*
      * Task 6: struct user and a kernel stack must share the one u page.
@@ -143,6 +163,84 @@ int main()
     /* A word the map does not reach must not have been touched. */
     if (*(volatile unsigned *)(DATAPG * PGSZ + 6) != 0)
         return (12);
+
+    /*
+     * Task 10: the u-area round trip, through uflush()/uload() (kernel/uarea.s).
+     *
+     * The assembly hardcodes the offset of u_upt -- b6as cannot compute an offsetof() -- so
+     * check it here, where the compiler can.  Get this wrong and the brackets would restore
+     * garbage into РП0..3, which is a much more confusing failure than this one.
+     */
+    if ((char *)u.u_upt - (char *)&u != UPT * sizeof(int))
+        return (13);
+
+    /*
+     * Fill the live u-area at UBASE.  The kernel reaches it unmapped, and so can we: 076000 is
+     * word 32256, inside the 15-bit word field of a pointer.  The pattern is non-zero at word
+     * 0 on purpose -- a window on virtual page 0 would silently drop exactly that word, which
+     * is why uarea.s windows pages 1 and 2 instead.
+     */
+    up = (volatile unsigned *)UBASE;
+    for (i = 0; i < USIZE; i++)
+        up[i] = PATTERN2 ^ i;
+    drainbrz(); /* settle it into memory: the point of the next paragraph is what is NOT settled */
+
+    for (i = 0; i < 8; i++)
+        up[i] = PATTERN1 ^ i;
+
+    /*
+     * Leave the write cache dirty with VIRTUAL tags, and do not drain: these eight stores were
+     * made through the map, so their БРЗ lines are tagged with virtual addresses in page 2.
+     * uflush() is about to point virtual page 2 somewhere else entirely (at the live u-area), so
+     * if it does not drain first, these lines are written back through the STOLEN map and land
+     * on the wrong physical page.  That is the hazard the leading drain exists for, and it is
+     * the one a context switch faces every time it reloads РП with a user's stores outstanding.
+     */
+    for (i = 0; i < 8; i++)
+        poke(2 * PGSZ + 8 + i, PATTERN3 ^ i);
+
+    uflush(UHOME);
+
+    /* Drained through the map that was loaded when they were made, so they reached the data page. */
+    drainbrz();
+    for (i = 0; i < 8; i++)
+        if (*(volatile unsigned *)(DATAPG * PGSZ + 8 + i) != (unsigned)(PATTERN3 ^ i))
+            return (17);
+
+    /*
+     * The window is gone again.  Virtual page 2 is the first data page of the map above, and
+     * it is one of the two pages uflush() steals -- so this reads РП itself, not the shadow.
+     */
+    if (peek(2 * PGSZ + 5) != PATTERN1)
+        return (14);
+
+    /* Scribble, so that a uload() that copied nothing would be caught. */
+    for (i = 0; i < USIZE; i++)
+        up[i] = PATTERN3 ^ i;
+
+    uload(UHOME);
+
+    /*
+     * The whole page must come back as it was flushed: the dirty head, then the settled tail.
+     * Word 0 included -- it is the one a virtual-page-0 window would have lost.
+     */
+    for (i = 0; i < USIZE; i++)
+        if (up[i] != (unsigned)((i < 8 ? PATTERN1 : PATTERN2) ^ i))
+            return (15);
+
+    /*
+     * And the copy really went to physical UHOME, above 0100000 -- not to some page the two
+     * routines happen to share.  Map the home page at virtual page 0 and read it back.  Word 5,
+     * not word 0: virtual address 0 is the black hole.
+     */
+    tx.x_caddr = UHOME;
+    sureg();
+    if (peek(5) != (unsigned)(PATTERN1 ^ 5))
+        return (16);
+
+    /* Put the map back, so the .ini's РП/РЗ assertions describe the state it expects. */
+    tx.x_caddr = TEXTPG * PGSZ;
+    sureg();
 
     return (0);
 }

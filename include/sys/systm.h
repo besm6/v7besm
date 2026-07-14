@@ -199,6 +199,15 @@ int swapin(struct proc *p);
 void xswap(struct proc *p, int ff, int os);
 void swap(int blkno, int coreaddr, int count, int rdflg);
 void sureg(void);
+/*
+ * The u-area bracket (kernel/uarea.s).  The live u-area is at UBASE; a process's home copy is
+ * the first page of its image at p_addr, above 0100000 and out of reach of an unmapped access.
+ * uflush() only reads the live page and may be called from C; uload() overwrites it -- and with
+ * it the kernel stack its caller is standing on -- so only resume() may call it.  See
+ * kernel/TODO.md, "The u-area invariant".
+ */
+void uflush(unsigned paddr);
+void uload(unsigned paddr);
 int getxfile(struct inode *ip, int nargc);
 void xalloc(struct inode *ip);
 void xfree(void);

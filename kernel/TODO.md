@@ -76,12 +76,25 @@ names the *user's* page 31.
 | bracket | why | what it maps |
 |---|---|---|
 | `copyin`/`copyout`/`fubyte`/`fuword`/`subyte`/`suword` | reach a user page | nothing — the user's map is already loaded. The loop toggles БлП per word: read the user word mapped, store it to the kernel buffer unmapped. |
-| `copyseg`/`clearseg` | reach a physical page above `0100000` | steals virtual pages 0–1 as windows (one `mod 020`), restores the quartet from `u.u_upt[]` afterwards |
-| `uflush()`/`uload()` | save/restore the u-area across a context switch | steals virtual page 0 for the process's u home, and sets РП[31] = 31 (identity) so `076000` names the u-area itself; then it is a straight mapped copy |
+| `copyseg`/`clearseg` | reach a physical page above `0100000` | steals virtual pages 1–2 as windows (one `mod 020`), restores the quartet from `u.u_upt[]` afterwards |
+| `uflush()`/`uload()` | save/restore the u-area across a context switch | steals virtual page 1 for the process's u home and virtual page 2 for the live u-area (physical page 31); both live in quartet 0, so one `mod 020` steals them and one puts them back |
 
-An interrupt taken inside a bracket is harmless: the hardware forces БлП = 1 at the vector, so the
-handler sees the kernel's normal unmapped world and its stack at `076000` resolves physically; `выпр`
-restores БлП from СПСВ and the bracket resumes mapped.
+**Never virtual page 0.** A store to virtual address 0 is dropped and a load returns 0:
+`mmu_store()`/`mmu_load()` test `addr == 0` *before* translation and before the "already physical"
+tag, so the black hole is in the **virtual** address, whatever page 0 is mapped to. A window there
+silently loses word 0 of whatever it copies. Pages 1 and 2 are also the cheap choice: they share
+quartet 0, and their addresses (`02000`–`05777`) fit the 12-bit short address field, so the copy
+loop needs no `utc`.
+
+An interrupt taken inside a bracket is harmless *for addressing*: the hardware forces БлП = 1 at the
+vector, so the handler sees the kernel's normal unmapped world and its stack at `076000` resolves
+physically; `выпр` restores БлП from СПСВ and the bracket resumes mapped.
+
+It is **not** harmless for `uload`, which is overwriting the page the handler's stack frame is in —
+so that bracket holds БлПр. And note that **`vtm N,0` writes БлПр along with БлП and БлЗ**, all three
+from the address field: the bare `vtm 2`/`vtm 3` of `test/mmuhelp.s` *enables* interrupts as a side
+effect. A bracket that wants them off must say `02002`/`02003`, and restore ПСВ afterwards
+(`ita 021`/`ati 021` — supervisor takes a 5-bit register number, so `M[021]` is reachable).
 
 ### Five hardware rules everything below obeys
 
@@ -164,17 +177,45 @@ Two things stage 1 learned, that the tasks below depend on:
 
 ### Stage 2 — the brackets
 
-**10. `uflush()` / `uload()` in `besm6.S`.** Steal virtual page 0 for the process's u home (`mod
-020`) and set РП[31] = 31, identity, so `076000` still names the u-area itself (`mod 027`); drain;
-clear БлП; copy `USIZE` words register-only; set БлП; drain; restore the two quartets from
-`u.u_upt[]`. Optimisation, once it works: copy only up to the saved r15 (`struct user` plus the live
-stack, typically ~300 of the 1024 words).
-- **Done when** `mmutest` round-trips a u-area: fill `076000`, `uflush()` to a page above
-  `0100000`, scribble on `076000`, `uload()` back, compare.
+**10. `uflush()` / `uload()`. DONE**, and `mmutest` round-trips a u-area under `set mmu cache`.
+Three things turned out differently from the sketch above, and each is a fact about the machine
+rather than a matter of taste:
 
-**11. `copyseg()` / `clearseg()` in `besm6.S`.** Same shape: steal virtual pages 0–1 as windows,
+- **They live in `kernel/uarea.s`, not `besm6.S`.** The "done when" requires `mmutest`, and
+  `besm6.o` cannot enter a standalone test — its `0500` vector reaches into the C kernel and
+  `_start` seeds no stack. Same reason, and same shape, as `brz.s`, which they call.
+- **The window is virtual pages 1 and 2, not page 0 plus an РП[31] identity.** A store to virtual
+  address **0** is dropped and a load returns 0: `mmu_store()`/`mmu_load()` test `addr == 0`
+  *before* translation and before the "already physical" tag, so the black hole is in the virtual
+  address, whatever page 0 is mapped to. A window there would have silently lost word 0 of the
+  u-area — `u_rsav[0]`, a saved register, zeroed on every context switch. Pages 1 and 2 are also
+  cheaper: both descriptors live in quartet 0, so it is **one `mod 020`** to steal and one to
+  restore, and both window addresses fit the 12-bit short address field, so the copy loop needs no
+  `utc`.
+- **The bracket holds БлПр and restores ПСВ exactly.** `vtm N,0` writes БлП, БлЗ *and* БлПр from
+  the address field — all three — so the plain `vtm 2`/`vtm 3` of `test/mmuhelp.s` would enable
+  interrupts as a side effect. During `uload` that is fatal: an interrupt builds its frame on the
+  kernel stack, which is in the very page being overwritten. The bracket runs at `02003`/`02002`
+  and puts ПСВ back with `ita 021`/`ati 021` (supervisor takes a 5-bit register number).
+
+Both drains are load-bearing, and `mmutest` proves each separately: without the one *before* the
+copy, a user's mapped stores are written back through the stolen map (returns 17); without the one
+*after* it, the copy never reaches memory (returns 15). Both pass with the cache off.
+
+The contract, for task 16: `uflush` only reads the live page and is safe to call from C, but
+**`uload` overwrites the kernel stack its caller is standing on**, so only `resume()` — assembly,
+keeping its state in registers — may call it. Both are map-neutral: the old quartet 0 is read
+before the copy and put back after.
+
+Still to do, as planned: **copy only up to the saved r15** (`struct user` plus the live stack,
+typically ~300 of the 1024 words).
+
+**11. `copyseg()` / `clearseg()` in `besm6.S`.** Same shape: steal two virtual pages as windows,
 copy/zero register-only, restore the quartet from `u.u_upt[]`. They now take **page-aligned word
 addresses**, not click numbers.
+- **Not virtual pages 0–1**, as this once said: virtual address 0 is a black hole (see task 10).
+  Use pages 1–2, whose descriptors share quartet 0 — one `mod 020` steals both, and both windows
+  fit the short address field. `uarea.s` is the worked example.
 - **Done when** `mmutest`, under `set mmu cache`, copies a page above `0100000` to another and
   reads it back correctly. A missing drain shows up here and nowhere else.
 
