@@ -14,46 +14,57 @@ machine's architecture differs from anything modern; the full details live in
 
 ## Approach
 
-The port proceeds in two stages:
+The port proceeded in three steps, and is on the third.
 
-1. **Now — validate the C as i486.** The v7 kernel (derived from Robert Nordier's
-   [v7/x86](http://www.nordier.com/v7x86/) port) is compiled as a 32-bit i486 ELF binary
-   with modern Clang and strict warnings. This shakes the decades-old C into clean,
-   warning-free shape before retargeting.
-2. **Goal — retarget to the BESM-6.** Build the kernel for real BESM-6 code using this
-   project's own toolchain together with the external [cross-compiler](#related-projects),
-   and boot it on the [SIMH simulator](doc/Simh_Simulator.md) — the authentic full-machine
-   emulator, and the hardware this port ultimately runs on.
+1. **Done — validate the C as i486.** The v7 kernel (derived from Robert Nordier's
+   [v7/x86](http://www.nordier.com/v7x86/) port) was first compiled as a 32-bit i486 ELF binary
+   with modern Clang and strict warnings, to shake the decades-old C into clean, warning-free
+   shape before retargeting.
+2. **Done — build it as BESM-6 code.** The kernel now compiles and links with this project's own
+   toolchain and the external [cross-compiler](#related-projects), into a BESM-6 `a.out`.
+3. **Under way — make it run.** Retarget the machine-dependent half: memory management, boot,
+   traps, and the context switch, and boot the result on the
+   [SIMH simulator](doc/Simh_Simulator.md) — the authentic full-machine emulator, and the
+   hardware this port ultimately runs on. The memory model is settled and the address-space code
+   is real; `_start`, the trap gate and the switch are still skeletons, so the kernel does not
+   boot yet. [kernel/TODO.md](kernel/TODO.md) is the live work plan.
+
+Kernel code that *does* run today runs under SIMH, as standalone tests in
+[kernel/test/](kernel/test/): each links kernel objects against a hand-built environment and lets
+a `.ini` script assert on the machine state afterwards. That is how the MMU code was verified.
 
 ## Repository layout
 
 ```text
-kernel/    v7 kernel sources and device drivers (kernel/dev/)
-include/   v7 system headers (sys/)
-cross/     BESM-6 object/archive format headers (b.out.h, ar.h, ranlib.h)
-cmd/       BESM-6 toolchain: cc, as, ld, cpp, disasm, sim
-doc/       BESM-6 architecture references
+kernel/       v7 kernel sources, device drivers (kernel/dev/), and the work plan (TODO.md)
+kernel/test/  standalone SIMH tests: the only way to run kernel code on the target so far
+include/      v7 system headers (sys/)
+cross/        BESM-6 object/archive format headers (b.out.h, ar.h, ranlib.h)
+cmd/          BESM-6 toolchain: cc, as, ld, cpp, disasm, sim
+doc/          BESM-6 architecture references
 ```
 
 ## Components and status
 
-| Component                     | Location      | Status                        |
-|-------------------------------|---------------|-------------------------------|
-| C compiler driver             | `cmd/cc`      | ✔ working, tested, documented |
-| Assembler (AT&T / Madlen)     | `cmd/as`      | ✔ working, tested, documented |
-| Linker + binutils             | `cmd/ld`      | ✔ working, tested, documented |
-| C preprocessor                | `cmd/cpp`     | ✔ C11, tested, documented     |
-| Disassembler                  | `cmd/disasm`  | ✔ working, tested             |
-| a.out simulator (Unix v7)     | `cmd/sim`     | ✔ working, tested, documented |
-| Kernel (i486 validation)      | `kernel/`     | ✔ builds                      |
-| libc library                  | —             | ☐ to do                       |
-| Build & link kernel for BESM-6| —             | ☐ to do                       |
-| Peripheral drivers            | `kernel/dev/` | ◐ in progress                 |
+| Component                     | Location         | Status                                  |
+|-------------------------------|------------------|-----------------------------------------|
+| C compiler driver             | `cmd/cc`         | ✔ working, tested, documented           |
+| Assembler (AT&T / Madlen)     | `cmd/as`         | ✔ working, tested, documented           |
+| Linker + binutils             | `cmd/ld`         | ✔ working, tested, documented           |
+| C preprocessor                | `cmd/cpp`        | ✔ C11, tested, documented               |
+| Disassembler                  | `cmd/disasm`     | ✔ working, tested                       |
+| a.out simulator (Unix v7)     | `cmd/sim`        | ✔ working, tested, documented           |
+| Kernel, built for the BESM-6  | `kernel/`        | ✔ builds and links                      |
+| Memory management (the MMU)   | `kernel/utab.c`  | ✔ retargeted, tested under SIMH         |
+| Boot, traps, context switch   | `kernel/besm6.S` | ◐ skeleton — the kernel cannot boot yet |
+| Peripheral drivers            | `kernel/dev/`    | ◐ console done; the rest to do          |
+| libc library                  | —                | ☐ to do                                 |
 
 ## Building
 
 The `cmd/` toolchain builds with a top-level CMake project (driven through a thin
-`Makefile`); the kernel keeps its own LLVM Makefile.
+`Makefile`); the kernel has its own Makefile and cross-compiles with the tools that build
+installs, so the toolchain comes first.
 
 **Toolchain** — from the repo root:
 
@@ -66,13 +77,17 @@ make install    # install the tools as b6* into ~/.local (or /usr/local)
 Building requires CMake and a host C/C++ compiler; GoogleTest is fetched
 automatically, and every `cmd/` component has a unit-test suite run by `make run`.
 
-**Kernel** — a separate LLVM cross-build:
+**Kernel** — cross-compiled for the BESM-6 with `b6cc`/`b6as`/`b6ld`:
 
 ```sh
-cd kernel && make          # for now produces `unix` (i486 ELF) and `unix.nm`
+cd kernel && make          # produces `unix`, a BESM-6 a.out, plus unix.nm and unix.dis
+cd kernel/test && make test   # run the kernel's SIMH tests
 ```
 
-See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail.
+The kernel tests need the [SIMH simulator](doc/Simh_Simulator.md) on the path as `besm6`.
+
+See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail, and
+[kernel/TODO.md](kernel/TODO.md) for the state of the retarget.
 
 ## Documentation
 
@@ -120,9 +135,12 @@ See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail.
 
 **The kernel**:
 
+- [kernel/TODO.md](kernel/TODO.md) — the live work plan for the memory-management retarget: the
+  design the machine forces, the hardware rules every part of it obeys, and what is left to do.
 - [doc/Kernel_Assembly_Routines.md](doc/Kernel_Assembly_Routines.md) — the machine-language
-  assist (`kernel/x86.s`, to be rewritten as `kernel/besm6.S`): what each routine must do and
-  the contract it owes its C callers.
+  assist: what each routine must do, the contract it owes its C callers, and — routine by
+  routine — what the BESM-6 version (`kernel/besm6.S`) has to do differently from the x86
+  original it is derived from.
 
 ## Related projects
 

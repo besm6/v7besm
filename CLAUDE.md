@@ -8,9 +8,13 @@ A port of **Unix v7 to the BESM-6**, a Soviet 48-bit-word mainframe from the 196
 work has two halves:
 
 - **`kernel/` + `include/`** — the Unix v7 kernel itself. Sources are derived from Robert
-  Nordier's v7/x86 port (see the copyright in `kernel/x86.s`). They currently build and
-  are validated as a **32-bit i486 ELF binary**, not yet BESM-6 code — this is an
-  intermediate step to get the C compiling cleanly with modern warnings before retargeting.
+  Nordier's v7/x86 port (see the copyright in `kernel/x86.s`, which is the retained x86
+  original and is no longer built). The kernel now **builds as BESM-6 code** with this
+  repo's own toolchain (`b6cc`/`b6as`/`b6ld`), and the memory-management retarget is under
+  way: see `kernel/TODO.md`, which is the live work plan and records what is done and what
+  is not. It does not boot yet — `_start`, the trap gate and the context switch are still
+  skeletons — so the only way to run kernel code on the target machine today is the
+  standalone SIMH tests in `kernel/test/`.
 - **`cmd/`** — the BESM-6-specific toolchain being written/ported to eventually build the
   kernel for real BESM-6 hardware: a C compiler driver, an assembler, a linker
   (+ archiver/nm/size/etc.), a C preprocessor, a disassembler, and a user-level a.out
@@ -30,7 +34,8 @@ External pieces this project depends on (not in this repo):
 Two separate build systems. The **`cmd/` toolchain** builds with a **top-level CMake
 project**, driven through a thin top-level `Makefile`; there are no per-component
 Makefiles under `cmd/` anymore (everything is configured by the root `CMakeLists.txt`).
-The **kernel** keeps its own hand-written Makefile because it cross-compiles with LLVM.
+The **kernel** keeps its own hand-written Makefile, and cross-compiles with the toolchain
+built here — so `make install` must have run before the kernel can be built.
 
 ### Toolchain (`cmd/`) — top-level build
 
@@ -55,20 +60,25 @@ These are host tools that run on the build machine and emit BESM-6 objects. **Do
 
 ### Kernel (`kernel/`)
 ```sh
-cd kernel && make          # produces `unix` (i486 ELF) and `unix.nm`
+cd kernel && make          # produces `unix` (BESM-6 a.out), unix.nm and unix.dis
 make clean
 ```
-The kernel is **not** part of the CMake build. It requires **LLVM 19** (`clang`, `ld.lld`,
-`llvm-nm`, `llvm-size`). The Makefile locates it via `/usr/local/Cellar/llvm@19/...`
-(Homebrew on macOS); adjust `LLVMBIN` if installed elsewhere. The kernel is compiled with
-`clang -target i486-unknown-linux-gnu -ffreestanding -Os -DKERNEL -Wall -Werror -Wshadow`
-and linked with `ld.lld -T unix.ld`.
+The kernel is **not** part of the CMake build. It cross-compiles with the tools this repo
+installs — `b6cc -I../include -DKERNEL`, `b6as`, `b6ld`, `b6ar`/`b6ranlib`, and it links
+against the external c-compiler's libc (`~/.local/share/besm6/lib`). The commented-out
+LLVM/i486 block at the top of the Makefile is the old validation build, kept for reference.
+`make` finishes by printing `b6size -w unix`: the image **must end below `076000`**, because
+supervisor instruction fetch is never mapped and the u-area sits in the last page under that
+line (`doc/Memory_Mapping.md`).
 
 The kernel is split into two static libs that are link-pulled so unused code is dropped:
 `libsys.a` (core kernel, `kernel/*.c`) and `libdev.a` (device drivers, `kernel/dev/*.c`).
-`x86.s` is the x86 machine-assist (the former `mch.s`, still x86-specific) and `besm6.S` is its
-BESM-6 counterpart (a skeleton — symbols only, bodies still to be written); `conf.c` is the
-device config table.
+`besm6.S` is the BESM-6 machine assist — the interrupt/extracode vector block at `0500`/`0501`
+and `0550`–`0577`, plus the routines C cannot express; it is still largely a skeleton, and
+**`besm6.o` must come first in `OBJ`** so its const contribution pins those vectors at their
+fixed addresses. `brz.s` is `drainbrz()`, alone in its own file for two reasons: it cannot be
+written in C (see below), and `kernel/test/` links it directly. `conf.c` is the device config
+table, and `x86.s` is the unbuilt x86 original, kept for reference.
 
 Diagnostic make targets (require the external `cast` tool / C compiler AST dump):
 - `make i` — preprocess each source to `.i`
@@ -76,6 +86,18 @@ Diagnostic make targets (require the external `cast` tool / C compiler AST dump)
 - `%.ast` — C compiler AST dump (`*.ast` files are committed snapshots)
 
 ### Tests
+
+**Kernel tests run on SIMH** (`cd kernel/test && make test`). They are not host unit tests:
+each is a standalone BESM-6 program that links kernel objects against a hand-built
+environment, plus a `.ini` script that loads it into the real simulator, runs it, and asserts
+on the machine state afterwards. This is the *only* way to run kernel code on the target while
+`besm6.S:_start` is still a stub — `b6sim` runs a user `a.out` with no kernel underneath and
+cannot exercise any of it. `crt0.s` (not libc's) seeds the stack and calls `main()`; the
+program's status is left in the accumulator, where the `.ini` asserts on it. `mmutest` is the
+one to copy: it links the kernel's real `utab.o` and `brz.o`, lets `sureg()` program the MMU,
+and checks the mapping both from C and by examining РП/РЗ from the `.ini`. **Run every MMU
+test with `set mmu cache`** — the БРЗ write-back hazards are invisible without it, and a
+kernel that only works with the cache off would not have worked on the real machine.
 
 Every `cmd/` component has a GoogleTest suite under `cmd/<tool>/test/`, wired into the
 `build_tests` target and run by `make run` (ctest). The C preprocessor has the most
@@ -99,6 +121,25 @@ any retargeting work: `CHAR_BIT == 8` but six chars pack into a word, so `sizeof
 (six char-units = one word) and addresses are word indices. Bit numbering is right-to-left
 from 1 (bit 1 = LSB, bit 48 = MSB). Numbers in BESM-6 contexts are octal. There is no IEEE
 754 — the machine has its own float format.
+
+**The kernel's memory model is settled, and `kernel/TODO.md` is its live work plan** — read
+that file before touching anything under `kernel/` that involves memory, and update it as you
+go (it records what is done, and *how* it turned out to be done, when that differed). The
+shape of it: the **kernel runs unmapped** (БлП = БлЗ = 1), so a kernel address *is* a physical
+address, and the kernel image plus the u-area must fit the low 32 pages — everything below
+`076000`, because supervisor instruction fetch is never mapped. The **u-area is a fixed
+physical page at `076000`** (`u` is an absolute symbol, not storage) and is copied in and out
+on a context switch. **РП always holds the current process's map**, so a trap switches nothing.
+Sizes and addresses are counted in **words**, page-aligned; there is no click. The **shadow map
+is `u.u_upt[8]`** — the hardware registers cannot be read back, so this is the only copy —
+and `sureg()` (`kernel/utab.c`) loads the whole address space in twelve `рег`s.
+
+Two things that will bite:
+- **Drain the БРЗ write cache before every РП write** — `drainbrz()` in `kernel/brz.s`. It
+  **cannot be written in C**: the nine stores to physical 1–7 must be consecutive, and `b6cc`
+  materializes the destination pointer through a frame slot, so each C store emits two ordinary
+  stores of its own and resets the flush counter. Verified by disassembly; don't re-litigate it.
+- **The hazard is invisible under default SIMH.** Test with `set mmu cache`, always.
 
 **Read `doc/` before touching codegen, the assembler, or anything ABI-related.** These are
 the authoritative references and are kept current:
@@ -139,12 +180,16 @@ the authoritative references and are kept current:
   Signatures, semantics, diagnostics, the generated code, and worked examples of an `spl`, an
   interrupt dispatch and a drum read written in C. Read it before writing anything in
   `kernel/dev/` or adding to `kernel/besm6.S` — much of what that file was meant to hold is now
-  expressible in C.
+  expressible in C. (Not *everything* is, though: the intrinsics give you the instruction, not
+  control over what the compiler emits around it. `drainbrz()` needs nine stores with nothing in
+  between, and no C spelling of it survives register allocation — hence `kernel/brz.s`. Check the
+  disassembly whenever the *sequence* is the contract, not just the instruction.)
 - `doc/Aout_Simulator.md` — the `cmd/sim` simulator (`b6sim`): what it is (an apout-style
   user-level a.out runner, not full-machine SIMH), its CLI and trace modes, the Unix v7
   syscall set, and the `$77 N` extracode syscall trap.
-- `doc/Kernel_Assembly_Routines.md` — the machine-language assist (`kernel/x86.s`, to be
-  rewritten as `kernel/besm6.S`): every routine's contract with its C callers.
+- `doc/Kernel_Assembly_Routines.md` — the machine-language assist: every routine's contract with
+  its C callers, and — routine by routine — what the BESM-6 version has to do differently. Written
+  against the x86 original (`kernel/x86.s`) as the port's spec for `kernel/besm6.S`.
 
 **Object/executable format** is a BESM-6-specific `a.out` variant defined in
 `cross/besm6/b.out.h` (magic `FMAGIC`/`NMAGIC`, `struct exec` with separate
