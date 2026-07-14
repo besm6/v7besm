@@ -405,7 +405,7 @@ void swap(int blkno, int coreaddr, register int count, int rdflg)
             tcount = 037;
         bp->b_bcount    = ctob(tcount);
         bp->b_blkno     = swplo + blkno;
-        bp->b_un.b_addr = (caddr_t)(PHY + ctob(coreaddr));
+        bp->b_un.b_addr = (caddr_t)ctob(coreaddr);
         (*bdevsw[major(swapdev)].d_strategy)(bp);
         spl6();
         while ((bp->b_flags & B_DONE) == 0)
@@ -488,7 +488,7 @@ void physio(void (*strat)(struct buf *), register struct buf *bp, int dev, int r
     }
     bp->b_flags     = B_BUSY | B_PHYS | rw;
     bp->b_dev       = dev;
-    bp->b_un.b_addr = (caddr_t)(PHY + physaddr(base));
+    bp->b_un.b_addr = (caddr_t)physaddr(base);
     bp->b_blkno     = u.u_offset >> BSHIFT;
     bp->b_bcount    = u.u_count;
     bp->b_error     = 0;

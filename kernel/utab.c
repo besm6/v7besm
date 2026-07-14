@@ -3,7 +3,7 @@
 
 /*
  * Per-process address-space setup.  Still x86 paging: a two-level page table
- * (pdir/upt) of 4K pages, plus the PHY window onto physical memory.
+ * (pdir/upt) of 4K pages.
  *
  * On the BESM-6 none of that exists -- the whole mapping is eight write-only
  * page registers RP (002 020-027) and the protection register RZ (002 030-033),
@@ -84,7 +84,7 @@ void clearseg(int d)
 {
     unsigned xd;
 
-    xd = PHY + ctob(d);
+    xd = ctob(d);
     bzero((caddr_t)xd, PGSZ);
 }
 
@@ -94,8 +94,8 @@ void copyseg(int s, int d)
 
     if (s == d)
         return;
-    xs = PHY + ctob(s);
-    xd = PHY + ctob(d);
+    xs = ctob(s);
+    xd = ctob(d);
     bcopy((caddr_t)xs, (caddr_t)xd, PGSZ);
 }
 
@@ -109,7 +109,7 @@ unsigned physaddr(unsigned addr)
     o  = addr & 4095;
     x  = 0;
     z  = 0;
-    pt = (unsigned *)(PHY + pdir[d] & ~4095);
+    pt = (unsigned *)(pdir[d] & ~4095);
     if (pt != NULL) {
         x = pt[t] & ~4095;
         z = x + o;

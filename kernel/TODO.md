@@ -122,7 +122,7 @@ this. Run every MMU test with **`set mmu cache`**.
 
 ### Stage 0 — units and sizing
 
-**1. `include/sys/param.h`: the machine-dependent block.**
+**1. `include/sys/param.h`: the machine-dependent block.** — **DONE**
 - `PGSH 10`, `PGSZ 1024` (words). Delete `USTK`, `PHY`, `KBASE`, `KSTK`, `USERMODE`, `BASEPRI`.
 - Add the geometry: `NPAGE 32`, `UBASE 076000` (the u-area), `USTKPAGE 28` (user stack base
   `070000`, matching `cmd/sim/besm6_arch.h:24`), `KEND 076000` (ceiling on the kernel image).
@@ -132,6 +132,13 @@ this. Run every MMU test with **`set mmu cache`**.
 - `BSIZE` **stays** 3072 bytes = 512 words: the disk transfers 512-word blocks and the drum 256, and
   the buffer cache stays small.
 - **Done when** it compiles and nothing references a deleted macro.
+- *As done:* task 4 had to come along — `dev/md.c`, `dev/fd.c`, `dev/cd.c` and `dev/mem.c` were the
+  bulk of the `PHY`/`KBASE`/`KSTK` users, and deleting them beat patching code that is about to go.
+  `USERMODE`/`BASEPRI` moved to `include/sys/reg.h`: they describe the trap frame, not the memory
+  geometry, and task 15 rewrites that header anyway. The four surviving `PHY` sites (`utab.c`,
+  `dev/bio.c`) simply lost their `PHY +` — the kernel is unmapped, so a kernel address *is* a
+  physical address. `USTK` became `NPAGE * PGSZ` (the `0100000` ceiling) in `grow()` and `exec()`,
+  a stopgap until task 17 turns the stack upward.
 
 **2. Replace the click macros with word macros.** Delete `ctob`, `btoc`, `ctod`; add
 `btow(x)` (bytes → words, `((unsigned)(x)+5)/6`), `wtob(x)` (words → bytes, `(x)*6`),
@@ -146,9 +153,10 @@ full 48-bit word here, so a 512 Kword address always fits), but the values and c
 counts, page-aligned. The coremap and swapmap now hand out words.
 - **Done when** the comments and the arithmetic agree, and the kernel builds.
 
-**4. Drop the x86 drivers.** Delete `dev/md.c` (a 14 MB RAM disk that cannot exist in 512 Kwords),
-`dev/fd.c`, `dev/hd.c`; remove them from `DEV` in the Makefile and from `conf.c`. Stub `dev/mem.c`
-(task 15 rewrites it). Put `besm6.o` **first** in `OBJ` — the vector block's placement at
+**4. Drop the x86 drivers.** — **DONE** (folded into task 1). Delete `dev/md.c` (a 14 MB RAM disk that cannot exist in 512 Kwords),
+`dev/fd.c`, `dev/cd.c`; remove them from `DEV` in the Makefile and from `conf.c`. Stub `dev/mem.c`
+(task 15 rewrites it). Leave `dev/hd.c` as a skeleton for besm6 disk driver to be developed.
+Put `besm6.o` **first** in `OBJ` — the vector block's placement at
 `0500`/`0501` depends on `besm6.o`'s const contribution coming first.
 - **Done when** `make` links.
 

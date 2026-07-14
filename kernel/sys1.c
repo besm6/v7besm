@@ -107,7 +107,7 @@ void exece()
      * copy back arglist
      */
 
-    ucp          = USTK - nc - NBPW;
+    ucp          = NPAGE * PGSZ - nc - NBPW;
     ap           = ucp - na * NBPW - 3 * NBPW;
     u.u_ar0[ESP] = ap;
     suword((caddr_t)ap, na - ne);

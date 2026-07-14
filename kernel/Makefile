@@ -2,7 +2,7 @@ SYS     = acct.o alloc.o clock.o fio.o iget.o intr.o machdep.o main.o \
           malloc.o nami.o pipe.o prf.o prim.o rdwri.o sig.o slp.o subr.o \
           sys1.o sys2.o sys3.o sys4.o sysent.o text.o trap.o utab.o
 
-DEV     = bio.o cd.o fd.o hd.o md.o mem.o partab.o \
+DEV     = bio.o hd.o mem.o partab.o \
           sc.o sr.o sys.o tty.o
 
 # i486: Clang compiler on MacOS
@@ -28,10 +28,12 @@ LD      = b6ld
 NM      = b6nm
 SIZE    = b6size -w
 DISASM  = b6disasm
+# besm6.o comes first: the vector block's placement at 0500/0501 depends on its
+# const contribution being the first one in the image.
 # libsys.a is named twice: the archives are scanned once each, in order, and the
 # drivers in libdev.a call back into the core kernel (timeout(), wakeup(), ...), so
 # a member of libsys.a can be needed only after libdev.a has been read.
-OBJ     = conf.o besm6.o libsys.a libdev.a libsys.a
+OBJ     = besm6.o conf.o libsys.a libdev.a libsys.a
 
 VPATH = dev
 
@@ -41,7 +43,7 @@ all:    unix
 clean:
 	rm -f *.o *.a *.nm unix
 
-unix:   conf.o besm6.o libsys.a libdev.a
+unix:   besm6.o conf.o libsys.a libdev.a
 	$(LD) $(OBJ) -o $@ -L$$HOME/.local/share/besm6/lib -lc
 	$(NM) -n $@ > $@.nm
 	$(DISASM) $@ > $@.dis
@@ -155,15 +157,9 @@ utab.o: utab.c ../include/sys/param.h ../include/sys/systm.h \
 bio.o: dev/bio.c ../include/sys/param.h ../include/sys/systm.h \
   ../include/sys/dir.h ../include/sys/user.h ../include/sys/buf.h \
   ../include/sys/conf.h ../include/sys/proc.h ../include/sys/seg.h
-cd.o: dev/cd.c ../include/sys/param.h ../include/sys/systm.h \
-  ../include/sys/buf.h ../include/sys/dir.h ../include/sys/user.h
-fd.o: dev/fd.c ../include/sys/param.h ../include/sys/buf.h \
-  ../include/sys/dir.h ../include/sys/user.h ../include/sys/systm.h
 hd.o: dev/hd.c ../include/sys/param.h ../include/sys/systm.h \
   ../include/sys/buf.h ../include/sys/dir.h ../include/sys/user.h \
   ../include/sys/part.h
-md.o: dev/md.c ../include/sys/param.h ../include/sys/systm.h \
-  ../include/sys/buf.h ../include/sys/dir.h ../include/sys/user.h
 mem.o: dev/mem.c ../include/sys/param.h ../include/sys/systm.h \
   ../include/sys/dir.h ../include/sys/user.h ../include/sys/conf.h
 partab.o: dev/partab.c

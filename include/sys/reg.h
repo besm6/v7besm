@@ -19,6 +19,9 @@
 
 #define TBIT 0x100 /* EFLAGS trap flag */
 
+#define USERMODE(cs) (((cs) & 0xffff) != 0x10)
+#define BASEPRI(pl)  ((pl) != 0xffff)
+
 struct trap {
     int dev;
     int pl;

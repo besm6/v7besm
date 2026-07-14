@@ -16,15 +16,9 @@
 void hdopen(dev_t, int);
 int hdstrategy();
 extern struct buf hdtab;
-int fdstrategy();
-extern struct buf fdtab;
-int mdstrategy();
-extern struct buf mdtab;
 
 struct bdevsw bdevsw[] = {
-    { hdopen, nullclose, hdstrategy, &hdtab },   /* hd = 0 */
-    { nullopen, nullclose, fdstrategy, &fdtab }, /* fd = 1 */
-    { nullopen, nullclose, mdstrategy, &mdtab }, /* md = 2 */
+    { hdopen, nullclose, hdstrategy, &hdtab }, /* hd = 0 */
     {},
 };
 
@@ -40,9 +34,6 @@ void srread(dev_t), srwrite(dev_t);
 void srioctl(dev_t, int, caddr_t, int);
 extern struct tty sr[];
 void hdread(dev_t), hdwrite(dev_t);
-void fdread(dev_t), fdwrite(dev_t);
-void mdread(dev_t), mdwrite(dev_t);
-void cdread(dev_t);
 
 struct cdevsw cdevsw[] = {
     { scopen, scclose, scread, scwrite, scioctl, nulldstop, 0 },       /* console = 0 */
@@ -50,9 +41,6 @@ struct cdevsw cdevsw[] = {
     { syopen, nullclose, syread, sywrite, sysioctl, nulldstop, 0 },    /* tty = 2 */
     { sropen, srclose, srread, srwrite, srioctl, nulldstop, sr },      /* sr = 3 */
     { hdopen, nullclose, hdread, hdwrite, nullioctl, nulldstop, 0 },   /* hd = 4 */
-    { nullopen, nullclose, fdread, fdwrite, nullioctl, nulldstop, 0 }, /* fd = 5 */
-    { nullopen, nullclose, mdread, mdwrite, nullioctl, nulldstop, 0 }, /* md = 6 */
-    { nullopen, nullclose, cdread, nullrw, nullioctl, nulldstop, 0 },  /* cd = 7 */
     {},
 };
 

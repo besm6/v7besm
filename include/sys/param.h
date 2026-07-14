@@ -5,27 +5,27 @@
  * tunable variables
  */
 
-#define NBUF     10        /* size of buffer cache (min 10) */
-#define NINODE   24        /* number of in core inodes (min 24) */
-#define NFILE    50        /* number of in core file structures */
-#define NMOUNT   2         /* number of mountable file systems */
-#define MAXMEM   (64 * 32) /* max core per process - first # is Kw */
-#define MAXUPRC  25        /* max processes per user */
-#define SSIZE    1         /* initial stack size (*4096 bytes) */
-#define SINCR    1         /* increment of stack (*4096 bytes) */
-#define NOFILE   20        /* max open files per process */
-#define CANBSIZ  256       /* max size of typewriter line */
-#define CMAPSIZ  50        /* size of core allocation area */
-#define SMAPSIZ  50        /* size of swap allocation area */
-#define NCALL    20        /* max simultaneous time callouts */
-#define NPROC    150       /* max number of processes */
-#define NTEXT    40        /* max number of pure texts */
-#define NCLIST   100       /* max total clist size */
-#define HZ       60        /* Ticks/second of the clock */
-#define TIMEZONE (5 * 60)  /* Minutes westward from Greenwich */
-#define DSTFLAG  1         /* Daylight Saving Time applies in this locality */
-#define MSGBUFS  128       /* Characters saved from error messages */
-#define NCARGS   5120      /* # characters in exec arglist */
+#define NBUF     10             /* size of buffer cache (min 10) */
+#define NINODE   24             /* number of in core inodes (min 24) */
+#define NFILE    50             /* number of in core file structures */
+#define NMOUNT   2              /* number of mountable file systems */
+#define MAXMEM   (NPAGE * PGSZ) /* max core per process, in words */
+#define MAXUPRC  25             /* max processes per user */
+#define SSIZE    PGSZ           /* initial stack size (words) */
+#define SINCR    PGSZ           /* increment of stack (words) */
+#define NOFILE   20             /* max open files per process */
+#define CANBSIZ  256            /* max size of typewriter line */
+#define CMAPSIZ  50             /* size of core allocation area */
+#define SMAPSIZ  50             /* size of swap allocation area */
+#define NCALL    20             /* max simultaneous time callouts */
+#define NPROC    150            /* max number of processes */
+#define NTEXT    40             /* max number of pure texts */
+#define NCLIST   100            /* max total clist size */
+#define HZ       60             /* Ticks/second of the clock */
+#define TIMEZONE (5 * 60)       /* Minutes westward from Greenwich */
+#define DSTFLAG  1              /* Daylight Saving Time applies in this locality */
+#define MSGBUFS  128            /* Characters saved from error messages */
+#define NCARGS   5120           /* # characters in exec arglist */
 
 /*
  * priorities
@@ -78,7 +78,7 @@
 #define BSHIFT  9                         /* LOG2(BSIZE) */
 #define NMASK   0177                      /* NINDIR-1 */
 #define NSHIFT  7                         /* LOG2(NINDIR) */
-#define USIZE   2                         /* size of user block etc. (*4096) */
+#define USIZE   1024                      /* size of the u-area, in words (one page) */
 #define NULL    0                         /* zero pointer */
 #define CMASK   0                         /* default mask for file creation */
 #define NODEV   (dev_t)(-1)               /* no device */
@@ -125,21 +125,17 @@ typedef long daddr_t;
 typedef char *caddr_t;
 typedef unsigned short ino_t;
 typedef long time_t;
-typedef int label_t[6]; /* 5 regs and eip */
+typedef int label_t[10]; /* r1-r7, r13, r15 */
 typedef short dev_t;
 typedef long off_t;
 
 /*
  * Machine-dependent bits and macros
  */
-#define PGSH 12
-#define PGSZ 4096
+#define PGSH 10   /* LOG2(PGSZ) */
+#define PGSZ 1024 /* words per page */
 
-#define USTK 0x400000
-#define PHY  0x40000000
-
-#define KBASE 0x7fc00000
-#define KSTK  0x7ffa0000
-
-#define USERMODE(cs) (((cs) & 0xffff) != 0x10)
-#define BASEPRI(pl)  ((pl) != 0xffff)
+#define NPAGE    32     /* virtual pages per process */
+#define UBASE    076000 /* the u-area: the last page of the kernel space */
+#define KEND     076000 /* the kernel image must end below this */
+#define USTKPAGE 28     /* first page of the user stack (070000) */
