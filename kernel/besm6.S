@@ -82,16 +82,25 @@
 // TODO: implement BESM-6 bring-up.  The BESM-6 has no x86 real mode, no 8259/8253,
 // and a different MMU, so this is written from scratch.  The required *outputs* of
 // this phase are:
-//   * BSS zeroed, `kend` set to the first free word after the kernel image;
+//   * BSS zeroed, from `edata` up to `end`;
 //   * `phymem` set to the amount of physical memory found;
 //   * the u-area and kernel stack mapped, interrupt vector installed;
 //   * call main();  then enter user mode on the first process (icode).
+
+// int edata -- first word past the data segment.
+// int end   -- first word past everything (const + text + data + bss).
+//
+// Both are boundary symbols defined by b6ld, which creates them as soon as they
+// are referenced -- hence the .globl here, and hence no `kend' variable of our
+// own to fill in at boot.  See doc/Linker_Manual.md, section 4.3.
+        .globl  edata
+        .globl  end
 
         .text
         .globl  _start
 _start:
         // TODO: BESM-6 processor initialization.
-        // TODO: zero bss, set kend / phymem, map u-area + kernel stack.
+        // TODO: zero bss (edata..end), set phymem, map u-area + kernel stack.
         // TODO: install interrupt vector; call main; enter user mode.
      13 vjm main
         stop                        // placeholder
@@ -483,11 +492,6 @@ s13:    . = . + 1
 s14:    . = . + 1
 
         .data
-
-// int kend  -- first free word after the kernel image (set by _start; read by
-// main()/startup() to size the initial process and free core).
-        .globl  kend
-kend:   .word 0                  // TODO: set during bring-up
 
 // int phymem -- physical memory size found by the boot memory scan (freed into
 // coremap by startup()).

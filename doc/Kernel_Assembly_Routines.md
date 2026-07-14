@@ -181,9 +181,12 @@ sufficient to reproduce its *outputs*. In order it:
    `_start` loads the task register and does an `iret` that drops into **user mode** at the
    `icode` bootstrap.
 
-For the port, the essential deliverables of this phase are: a zeroed BSS, a known `kend` and
-`phymem`, a valid initial address space with the u-area and kernel stack mapped, a live trap
-vector, and a first transition into user mode running `icode` ([machdep.c:27](../kernel/machdep.c)).
+For the port, the essential deliverables of this phase are: a zeroed BSS, a known `phymem`, a valid
+initial address space with the u-area and kernel stack mapped, a live trap vector, and a first
+transition into user mode running `icode` ([machdep.c:27](../kernel/machdep.c)). Note `kend` is *not*
+among them: `b6ld` defines the boundary symbol `end` (first word past the whole image) as soon as
+something references it — see [Linker_Manual.md](Linker_Manual.md) §4.3 — so the BESM-6 boot code
+zeroes BSS from `edata` to `end` and keeps no such variable of its own.
 
 ---
 
@@ -457,7 +460,7 @@ void sti(void);                                 /* systm.h:163 */
 | symbol | x86.s | C declaration | meaning |
 |--------|-------|---------------|---------|
 | `u` | 922 (`.set u, U`) | `extern struct user u;` (user.h:101) | the per-process user area, mapped at a fixed virtual address (page 7); holds the kernel stack and per-process state |
-| `kend` | 916 | `extern int kend;` (main.c:19, machdep.c:18) | first free physical address after the kernel; used to size the initial process and free core |
+| `kend` | 916 | *(dropped in the port)* | first free physical address after the kernel; used to size the initial process and free core. The BESM-6 kernel has no such variable: `b6ld`'s boundary symbol `end` already names the first word past the image, and nothing in C needs it — `startup()` frees core from `0100000` and `main()` sets `proc[0].p_addr` outright |
 | `phymem` | 919 | `extern int phymem;` (machdep.c:18) | physical memory size in pages, found by the boot memory scan; `startup()` frees it into `coremap` |
 | `waitloc` | 893 | `extern caddr_t waitloc;` (clock.c:37) | PC of the idle `hlt`; the clock compares the interrupted PC against it to charge idle time |
 | `mem` | 926 (`.set mem, 0x40000000`) | (used via macros) | base of the window that maps *all* physical memory into the kernel address space (`PHY` in `utab.c`) |
@@ -512,7 +515,7 @@ change with the device set.
 | `savfp`/`restfp`/`stst` | **rewrite** — BESM-6 float context (non-IEEE-754), no 108-byte frame; may shrink to near-nothing |
 | `inb`/`outb`/`insw`/`outsw` | **replace** — BESM-6 has no x86 port space; use channel/device-register access; driver layer rewritten anyway |
 | `ld_cr0/2/3`, `invd` | **replace/drop** — target-specific status registers; `invd` becomes the MMU's translation-invalidate (or a no-op) |
-| `_start`, trap/IRQ/syscall dispatch (§2–3) | **rewrite wholesale** — BESM-6 bring-up, its own trap and extracode (`$77 N`) mechanism; reproduce the *outputs* (`kend`, `phymem`, mapped u-area/stack, live trap vector, first user-mode entry) and the *shape* (`struct trap` frame, `nofault` check, `runrun` reschedule) |
+| `_start`, trap/IRQ/syscall dispatch (§2–3) | **rewrite wholesale** — BESM-6 bring-up, its own trap and extracode (`$77 N`) mechanism; reproduce the *outputs* (`phymem`, mapped u-area/stack, live trap vector, first user-mode entry) and the *shape* (`struct trap` frame, `nofault` check, `runrun` reschedule) |
 
 Remember the calling-convention shift when re-coding any of these: BESM-6 passes arguments in
 direct order with the last argument in the accumulator, `r14` = negative arg count, `r13` =

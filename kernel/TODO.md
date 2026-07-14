@@ -1,10 +1,14 @@
 # Retargeting the kernel's memory management to the BESM-6 MMU
 
-A work plan. The kernel still carries the memory management of the v7/x86 port it came from: 4 KB
-pages, a two-level page table (`pdir`/`upt`), a 1 GB `PHY` window onto physical memory, and
-page-table entries with permission bits. None of that exists on this machine. `besm6.S` papers over
-it — `u` is a 512-word bss placeholder that is neither per-process nor mapped, and `pdir`/`upt` are
-dummy arrays that exist only so `utab.c` links.
+A work plan. The kernel still carries the memory management of the v7/x86 port it came from: a
+two-level page table (`pdir`/`upt`) of 4 KB pages, with permission bits in the page-table entries.
+None of that exists on this machine. `besm6.S` papers over it — `u` is a 512-word bss placeholder
+that is neither per-process nor mapped, and `pdir`/`upt` are dummy arrays that exist only so
+`utab.c` links.
+
+The units are already converted (stage 0, done): every size and address in the kernel is a count of
+48-bit words, and the `PHY` window is gone — the kernel is unmapped, so a kernel address *is* a
+physical address.
 
 Read [../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) before starting, and
 [../doc/Intrinsics.md](../doc/Intrinsics.md) for how C reaches `002 «рег»`.
@@ -36,7 +40,7 @@ PHYSICAL, pages 0..31 — the kernel, addressed with БлП = 1 (no translation)
    0        const   (interrupt vector 0500/0501, extracodes 0550-0577, literal pool)
             text    (fetched unmapped: РП is irrelevant to it, always)
             data + bss
-   ...      must all end below 076000  (~31 Kwords; today's image is ~27 Kwords)
+   ...      must all end below 076000  (~31 Kwords; today `end` = 066105, 27709 words)
    076000   U AREA  ------ the last page of the kernel space -----------------
               struct user     (~140 words)   `u = 076000`, an absolute symbol
               kernel stack    (~880 words, grows UP to 0100000)
@@ -51,13 +55,17 @@ PHYSICAL, pages 0..31 — the kernel, addressed with БлП = 1 (no translation)
    The user gets all 32 pages. The u-area is not in this map — it is physical.
 ```
 
-### The click dies
+### The click is dead
 
-v7's "click" (a 4 KB page as a unit of counting) has no place on a word-addressed machine. Every
-size and every address in the kernel is counted in **48-bit words**: `p_addr`, `p_size`, `x_caddr`,
-`x_size`, `u_tsize`/`u_dsize`/`u_ssize`, the coremap, `USIZE`. Where the hardware needs a page, the
-value is a word address that is a multiple of `PGSZ` (1024), and the map builder shifts by `PGSH`
-(10). `ctob`/`btoc`/`ctod` go away.
+v7's "click" (a 4 KB page as a unit of counting) has no place on a word-addressed machine, and is
+gone. Every size and every address in the kernel is counted in **48-bit words**: `p_addr`, `p_size`,
+`x_caddr`, `x_size`, `u_tsize`/`u_dsize`/`u_ssize`, the coremap, `USIZE`. Where the hardware needs a
+page, the value is a word address that is a multiple of `PGSZ` (1024), and the map builder shifts by
+`PGSH` (10). `ctob`/`btoc`/`ctod` are replaced by `btow`/`wtob`/`pground`/`wtodb`; the swapmap still
+counts disk blocks (512 words), only the coremap changed unit.
+
+A page is no longer the unit of counting, so `copyseg`/`clearseg` — which still move exactly one
+page — are stepped by `PGSZ` by every loop that calls them.
 
 ### The mapped brackets
 
@@ -120,76 +128,11 @@ Each task leaves the tree building (`cd kernel && make`). Verification is under 
 `sctest.ini` — `b6sim` runs a user `a.out` with no kernel underneath and cannot exercise any of
 this. Run every MMU test with **`set mmu cache`**.
 
-### Stage 0 — units and sizing
-
-**1. `include/sys/param.h`: the machine-dependent block.** — **DONE**
-- `PGSH 10`, `PGSZ 1024` (words). Delete `USTK`, `PHY`, `KBASE`, `KSTK`, `USERMODE`, `BASEPRI`.
-- Add the geometry: `NPAGE 32`, `UBASE 076000` (the u-area), `USTKPAGE 28` (user stack base
-  `070000`, matching `cmd/sim/besm6_arch.h:24`), `KEND 076000` (ceiling on the kernel image).
-- `USIZE 1024` — the u-area, in words.
-- `MAXMEM (NPAGE * PGSZ)` = 32768 words. `SSIZE`/`SINCR` → `PGSZ` (they were "*4096 bytes").
-- `label_t` → `int[10]` (r1–r7, r13, r15).
-- `BSIZE` **stays** 3072 bytes = 512 words: the disk transfers 512-word blocks and the drum 256, and
-  the buffer cache stays small.
-- **Done when** it compiles and nothing references a deleted macro.
-- *As done:* task 4 had to come along — `dev/md.c`, `dev/fd.c`, `dev/cd.c` and `dev/mem.c` were the
-  bulk of the `PHY`/`KBASE`/`KSTK` users, and deleting them beat patching code that is about to go.
-  `USERMODE`/`BASEPRI` moved to `include/sys/reg.h`: they describe the trap frame, not the memory
-  geometry, and task 15 rewrites that header anyway. The four surviving `PHY` sites (`utab.c`,
-  `dev/bio.c`) simply lost their `PHY +` — the kernel is unmapped, so a kernel address *is* a
-  physical address. `USTK` became `NPAGE * PGSZ` (the `0100000` ceiling) in `grow()` and `exec()`,
-  a stopgap until task 17 turns the stack upward.
-
-**2. Replace the click macros with word macros.** — **DONE**  Delete `ctob`, `btoc`, `ctod`; add
-`btow(x)` (bytes → words, `((unsigned)(x)+5)/6`), `wtob(x)` (words → bytes, `(x)*6`),
-`pground(x)` (round a word count up to a page), `wtodb(x)` (words → disk blocks, `(x)>>9`, the old
-`ctod`). Fix every caller: `machdep.c:55,62`, `main.c:56,86-87`, `sys1.c:201-230,472-503`,
-`sig.c:213-255,331`, `slp.c:323`, `text.c:129`, `dev/bio.c:406`.
-- **Done when** `grep -rn 'ctob\|btoc\|ctod' kernel include` is empty and the kernel builds.
-- *As done:* four sites beyond the list above. `utab.c`: `clearseg`/`copyseg` lost their `ctob` (the
-  argument is already a page-aligned word address), and `estabur()`'s `nt+nd+ns > 1023` — an x86
-  page-table bound that would now reject any image over 1023 *words* — took task 9's word limits
-  early. `dev/bio.c:408`: `b_un.b_addr` lost its `ctob` and now carries a raw physical word address,
-  which does not fit a `caddr_t` (a fat pointer has a 15-bit word field) — task 18's `b_paddr` is
-  what fixes that, and the same reservation applies to `clearseg`/`copyseg` until task 11 rewrites
-  them in `besm6.S`. `swap()`'s `037`-click cap became `037 * PGSZ` words (31 pages = 62 blocks,
-  inside `hd`'s 255-block limit). Two shapes task 17 asks for fell out of the `ctob` removal and are
-  already in: `core()` writes the u-area as one `USIZE`-word block (the v7 "skip the middle click of
-  a 3-click u-area" trick is gone), and `procxmt()`'s "read u" takes a plain word index. Every
-  `copyseg`/`clearseg` loop — `exec()`, `sbreak()`, `grow()`, `expand()`, `newproc()` — now steps by
-  `PGSZ` instead of by 1: the routines move a page, and a page is no longer the unit of counting.
-  `startup()` lost its per-click free loop and the x86 memory hole (it frees one extent now, from
-  `0100000 + USIZE` — the first pool page is `proc[0]`'s u home, which `main()` claims); `kend` is no
-  longer read from C.
-
-**3. Re-specify the size/address fields as words.** — **DONE**  `proc.h` (`p_addr`, `p_size`), `text.h`
-(`x_caddr`, `x_size`), `user.h` (`u_tsize`, `u_dsize`, `u_ssize`) — no type changes (a `short` is a
-full 48-bit word here, so a 512 Kword address always fits), but the values and comments become word
-counts, page-aligned. The coremap and swapmap now hand out words.
-- **Done when** the comments and the arithmetic agree, and the kernel builds.
-- *As done:* also `map.h` and `malloc.c` (the coremap unit is a word, the swapmap unit a 512-word
-  block — it said "4096 bytes" and "512 bytes"), and the two stale `USIZE*64 bytes` comments in
-  `user.h`. The swapmap still hands out **blocks**, not words: only the coremap changed unit.
-  `physio()` (`dev/bio.c:462-482`) is the one place left whose arithmetic does *not* agree — see the
-  note under task 18.
-
-**4. Drop the x86 drivers.** — **DONE** (folded into task 1). Delete `dev/md.c` (a 14 MB RAM disk that cannot exist in 512 Kwords),
-`dev/fd.c`, `dev/cd.c`; remove them from `DEV` in the Makefile and from `conf.c`. Stub `dev/mem.c`
-(task 15 rewrites it). Leave `dev/hd.c` as a skeleton for besm6 disk driver to be developed.
-Put `besm6.o` **first** in `OBJ` — the vector block's placement at
-`0500`/`0501` depends on `besm6.o`'s const contribution coming first.
-- **Done when** `make` links.
-
-**5. The sizing gate.** — **DONE**  `b6size -w unix` and `b6nm -n unix | tail -1` must show `end` **below
-`076000`**. Today's image is 29098 words and shrinks here (the `pdir`/`upt`/`u` placeholders alone
-are 2561 words), so nothing should need cutting — but if it does not fit, cut `NBUF`, `NPROC`,
-`NTEXT`, `NCLIST` in `param.h` until it does, and record what was cut here.
-- **Done when** `end < 076000` with headroom to spare.
-- *As done:* nothing had to be cut. `b6size -w unix` gives 402 const + 15110 text + 449 data + 11749
-  bss = **27710 words**, and the top of bss sits at **`066105`** — `076000` less **4027 words** of
-  headroom, before task 7 deletes the 2561 words of `pdir`/`upt`/`u` placeholders. Note there is no
-  `end` symbol to look at: `b6ld` does not emit one, and `kend` is a *variable* that `_start` will
-  fill in at boot (task 14), so the gate is the last symbol `b6nm -n` prints, which is the top of bss.
+**Stage 0 — units and sizing (tasks 1–5) is done and has been removed.** It retargeted `param.h` to
+the BESM-6, dropped the x86 drivers, killed the click (see "The click is dead" above), re-specified
+every size and address field in words, and passed the sizing gate: the image is 27709 words with
+`end` at `066105`, `076000` less 4027 words of headroom. The numbering below is **left as it was** —
+task numbers are cited from the source (`utab.c`, `dev/bio.c`, `besm6.S`) and from `doc/`.
 
 ### Stage 1 — the shadow map
 
@@ -220,8 +163,9 @@ eight lines). Nothing else may be interleaved — any ordinary store resets the 
   *Writing РП here is safe precisely because the kernel is unmapped* — it changes nothing about how
   the kernel addresses its own memory. Unallocated pages get РП = 0 (non-executable) and their РЗ
   bit set. `__besm6_aux` does the quartet packing.
-- `estabur()` — limits become `nt+nd+ns <= MAXMEM`, `nt+nd <= USTKPAGE*PGSZ`,
-  `ns <= (NPAGE-USTKPAGE)*PGSZ`, in words.
+- `estabur()` — **already in**: stage 0 gave it the word limits `nt+nd+ns <= MAXMEM`,
+  `nt+nd <= USTKPAGE*PGSZ`, `ns <= (NPAGE-USTKPAGE)*PGSZ`, because its old x86 bound (`> 1023`) would
+  have rejected any image over 1023 *words* the moment the units changed.
 - `physaddr(v)` — shadow lookup, returning a physical **word** address (0 if unmapped).
 - `useracc(addr, count, rw)` — new: walk `u_upt`; an РП = 0 page means `EFAULT`. This is what lets
   the assembly copies assume a valid address, and it is why v7's whole `nofault` machinery
@@ -260,12 +204,14 @@ the address with `useracc()`, so there is no fault path.
 
 ### Stage 3 — boot, traps, switching
 
-**14. `_start` and boot.** Zero bss, set `kend` and `phymem`, put r15 into the u page, call `main()`
-— all unmapped, which is the mode the machine resets into. `main.c`: `proc[0].p_addr` = the first
-free word (`0100000`), `proc[0].p_size = USIZE`, `uhome = proc[0].p_addr`. `machdep.c`: `startup()`
-frees words `0100000`…`phymem` (never page 0 — a zero РП entry means "not mapped"); drop the x86
-memory hole, the 8253 and the RTC.
-- **Done when** `load unix; go` prints `mem = …` from `machdep.c:62` and halts at a known PC.
+**14. `_start` and boot.** Zero bss — from `edata` to `end`, both defined by `b6ld` (`besm6.S` already
+references them; there is no `kend` variable to set) — size physical memory into `phymem`, put r15
+into the u page, call `main()`: all unmapped, which is the mode the machine resets into. Then
+`uhome = proc[0].p_addr` in `main.c`, and in `machdep.c` drop the 8253 and the RTC. (Stage 0 already
+landed the rest of the C half: `proc[0].p_addr` = the first free word `0100000`, `p_size = USIZE`, and
+a `startup()` that frees words `0100000 + USIZE`…`phymem` in one extent — never page 0, a zero РП entry
+means "not mapped" — with the x86 memory hole gone.)
+- **Done when** `load unix; go` prints `mem = …` from `startup()` and halts at a known PC.
 
 **15. Trap / extracode / interrupt entry and exit (`besm6.S`, `include/sys/reg.h`, `trap.c`).** Entry
 is now trivial — the hardware's forced БлП/БлЗ is already the kernel's mode, so there is no map to
@@ -289,11 +235,12 @@ u page and sets `uhome = a2`; `xswap()` of the current process flushes first.
 **17. Stack growth and the user layout (`sig.c`, `sys1.c`, `text.c`).** `grow()` takes a **page
 number** (that is all the machine reports) and **loses its `copyseg` shuffle** (`sig.c:249-255`):
 with an upward stack a new page is appended at a higher virtual address *and* at the end of the
-image, so the existing stack pages keep their addresses. `core()` writes one `USIZE`-word u-area
-block. `procxmt()`: `((physadr)&u)->r[i>>2]` becomes a plain word index. `sys1.c`: sizes from the
-`a.out` header go through `btow()` + `pground()`; `exec()` seeds the user stack at `070000` growing
-up; `sbreak()`'s shuffle stays (data still grows in the middle of the image) but the break stops at
-page 28; the `u_ar0[EIP] += 2` fork trick is replaced by returning distinct accumulator values.
+image, so the existing stack pages keep their addresses. `exec()` seeds the user stack at `070000`
+growing up; `sbreak()`'s shuffle stays (data still grows in the middle of the image) but the break
+stops at page 28; the `u_ar0[EIP] += 2` fork trick is replaced by returning distinct accumulator
+values. Three pieces of this are **already in** — they fell out of stage 0's `ctob` removal: `core()`
+writes one `USIZE`-word u-area block, `procxmt()`'s "read u" takes a plain word index, and the sizes
+from the `a.out` header go through `btow()` + `pground()`.
 - **Done when** a two-page icode forks and execs, and touching the word past the stack top grows the
   stack instead of raising SIGSEG.
 
