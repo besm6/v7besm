@@ -38,8 +38,7 @@ void trap(struct trap tr)
     time_t syst;
     int osp;
 
-    syst        = u.u_stime;
-    u.u_fpsaved = 0;
+    syst = u.u_stime;
     if (USERMODE(tr.cs))
         tr.dev |= USER;
     u.u_ar0 = &tr.eax;
@@ -111,14 +110,12 @@ void trap(struct trap tr)
      * to the current process to be picked
      * up later.
      */
-    case 16:             /* floating point error */
-        stst(&u.u_fper); /* save error code */
+    case 16: /* floating point error */
         psignal(u.u_procp, SIGFPT);
         return;
 
     case 16 + USER:
         i = SIGFPT;
-        stst(&u.u_fper);
         break;
 
     case 48 + USER: /* sys call */
@@ -163,8 +160,6 @@ out:
         qswtch();
     if (u.u_prof.pr_scale)
         addupc(tr.eip, &u.u_prof, (int)(u.u_stime - syst));
-    if (u.u_fpsaved)
-        restfp(&u.u_fps);
 }
 
 /*

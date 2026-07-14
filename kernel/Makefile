@@ -33,7 +33,7 @@ DISASM  = b6disasm
 # libsys.a is named twice: the archives are scanned once each, in order, and the
 # drivers in libdev.a call back into the core kernel (timeout(), wakeup(), ...), so
 # a member of libsys.a can be needed only after libdev.a has been read.
-OBJ     = besm6.o conf.o libsys.a libdev.a libsys.a
+OBJ     = besm6.o brz.o conf.o libsys.a libdev.a libsys.a
 
 VPATH = dev
 
@@ -43,7 +43,7 @@ all:    unix
 clean:
 	rm -f *.o *.a *.nm unix
 
-unix:   besm6.o conf.o libsys.a libdev.a
+unix:   besm6.o brz.o conf.o libsys.a libdev.a
 	$(LD) $(OBJ) -o $@ -L$$HOME/.local/share/besm6/lib -lc
 	$(NM) -n $@ > $@.nm
 	$(DISASM) $@ > $@.dis

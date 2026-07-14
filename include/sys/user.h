@@ -19,12 +19,7 @@
 #define EXCLOSE 01
 
 struct user {
-    label_t u_rsav; /* save info when exchanging stacks */
-    int u_fper;     /* FP error register */
-    int u_fpsaved;  /* FP regs saved for this proc */
-    struct {
-        char u_fpstat[108]; /* FP state */
-    } u_fps;
+    label_t u_rsav;       /* save info when exchanging stacks */
     char u_segflg;        /* IO flag: 0:user D; 1:system; 2:user I */
     char u_error;         /* return error code */
     short u_uid;          /* effective user id */
@@ -43,16 +38,24 @@ struct user {
     } u_r;
 #define r_val1 u_r0.val1
 #define r_val2 u_r0.val2
-    caddr_t u_base;               /* base address for IO */
-    unsigned int u_count;         /* bytes remaining for IO */
-    off_t u_offset;               /* offset in file for IO */
-    struct inode *u_cdir;         /* pointer to inode of current directory */
-    struct inode *u_rdir;         /* root directory of current process */
-    char u_dbuf[DIRSIZ];          /* current pathname component */
-    caddr_t u_dirp;               /* pathname pointer */
-    struct direct u_dent;         /* current directory entry */
-    struct inode *u_pdir;         /* inode of parent directory of dirp */
-    int u_utab[4];                /* XXX */
+    caddr_t u_base;       /* base address for IO */
+    unsigned int u_count; /* bytes remaining for IO */
+    off_t u_offset;       /* offset in file for IO */
+    struct inode *u_cdir; /* pointer to inode of current directory */
+    struct inode *u_rdir; /* root directory of current process */
+    char u_dbuf[DIRSIZ];  /* current pathname component */
+    caddr_t u_dirp;       /* pathname pointer */
+    struct direct u_dent; /* current directory entry */
+    struct inode *u_pdir; /* inode of parent directory of dirp */
+    /*
+     * The shadow page table, ready to load: eight words, each carrying a quartet
+     * of РП descriptors for virtual pages 4i..4i+3 (accumulator bits 1-20 and
+     * 29-48) and, in the even words, the matching РЗ protection byte for pages
+     * 8j..8j+7 (bits 21-28, which РП leaves alone).  РП and РЗ cannot be read
+     * back, so this is the only copy of the mapping.  See sureg() in utab.c and
+     * doc/Memory_Mapping.md, "Programming the MMU".
+     */
+    unsigned u_upt[8];
     struct file *u_ofile[NOFILE]; /* pointers to file structures of open files */
     char u_pofile[NOFILE];        /* per-process flags of open files */
     int u_arg[5];                 /* arguments to current system call */

@@ -14,7 +14,7 @@ NM      = b6nm
 CFLAGS  = -I../../include
 LIBDIR  = $$HOME/.local/share/besm6/lib
 
-PROGS   = hello sctest
+PROGS   = hello sctest mmutest
 
 all:    $(PROGS)
 
@@ -23,6 +23,7 @@ all:    $(PROGS)
 test:   $(PROGS)
 	besm6 hello.ini
 	besm6 sctest.ini
+	besm6 mmutest.ini
 
 clean:
 	rm -f *.o *.dis *.nm $(PROGS)
@@ -36,6 +37,20 @@ sctest: crt0.o sctest.o
 	$(LD) crt0.o sctest.o -o $@ -L$(LIBDIR) -lc
 	$(DISASM) -c $@ > $@.dis
 	$(NM) -n $@ > $@.nm
+
+# mmutest links the kernel's real utab.o and brz.o -- besm6.o cannot come along
+# (its 0500 vector reaches into the C kernel, and its _start seeds no stack), so the
+# two are compiled here from the kernel sources next door.
+mmutest: crt0.o mmutest.o mmuhelp.o utab.o brz.o
+	$(LD) crt0.o mmutest.o mmuhelp.o utab.o brz.o -o $@ -L$(LIBDIR) -lc
+	$(DISASM) -c $@ > $@.dis
+	$(NM) -n $@ > $@.nm
+
+utab.o: ../utab.c
+	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@
+
+brz.o:  ../brz.s
+	$(AS) $< -o $@
 
 %.o:    %.c
 	$(CC) $(CFLAGS) -c $< -o $@

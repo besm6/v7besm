@@ -131,10 +131,6 @@ void psig()
     register struct proc *rp;
 
     rp = u.u_procp;
-    if (u.u_fpsaved == 0) {
-        savfp(&u.u_fps);
-        u.u_fpsaved = 1;
-    }
     if (rp->p_flag & STRC)
         stop();
     n = fsig(rp);
@@ -367,10 +363,9 @@ int procxmt()
 
     /* write u */
     case 6:
+        /* ip_addr is a word index into the u-area, as in case 3 above */
         i = (int)ipc.ip_addr;
-        p = (int *)&((physadr)&u)->r[i >> 2];
-        if (p >= (int *)&u.u_fps && p < (int *)&u.u_segflg)
-            goto ok;
+        p = (int *)&((physadr)&u)->r[i];
         for (i = 0; i < 8; i++)
             if (p == &u.u_ar0[(unsigned)regloc[i]])
                 goto ok;

@@ -362,10 +362,6 @@ void swtch()
             sureg();
             return;
         }
-        if (u.u_fpsaved == 0) {
-            savfp(&u.u_fps);
-            u.u_fpsaved = 1;
-        }
         resume(proc[0].p_addr, u.u_qsav);
     }
     /*

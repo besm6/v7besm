@@ -34,6 +34,7 @@ extern char runout;          /* scheduling flag */
 extern char runrun;          /* scheduling flag */
 extern char curpri;          /* more scheduling */
 extern int maxmem;           /* actual max memory per process */
+extern int uhome;            /* whose u-area is live at UBASE (its p_addr) */
 extern physadr lks;          /* pointer to clock device */
 extern daddr_t swplo;        /* block number of swap space */
 extern int nswap;            /* size of swap space */
@@ -187,8 +188,6 @@ int cpass(void);
 int passc(int c);
 int fsig(struct proc *p);
 int procxmt(void);
-void savfp(void *ptr);
-void restfp(void *ptr);
 void sendsig(caddr_t p, int signo);
 int core(void);
 void copyseg(int s, int d);
@@ -213,10 +212,9 @@ dev_t getmdev(void);
 void xumount(int dev);
 void qswtch(void);
 int ld_cr0(void), ld_cr2(void), ld_cr3(void);
-void stst(int*);
 void psig(void);
-void invd(void);
 unsigned physaddr(unsigned addr);
+int useracc(unsigned addr, unsigned count, int rw);
 void timeout(void (*fun)(caddr_t), caddr_t arg, int tim);
 void deverror(struct buf *bp, int o1, int o2);
 void iodone(struct buf *bp);

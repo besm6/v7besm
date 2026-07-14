@@ -37,35 +37,35 @@
         .const
         . = . - 010 + 0100      // Skip I/O region
 #include "const.s"              // Put some #constants here to use this space
-      : uj trap                 // 0500: internal interrupt (fault, extracode)
+      : uj trap                 // 0500: internal interrupt (a fault)
       : uj extint               // 0501: external interrupt (ГРП) -- see below
         . = . - 0502 + 0550
-      : uj trap                 // 0550: extracode *50
-      : uj trap                 // 0551: extracode *51
-      : uj trap                 // 0552: extracode *52
-      : uj trap                 // 0553: extracode *53
-      : uj trap                 // 0554: extracode *54
-      : uj trap                 // 0555: extracode *55
-      : uj trap                 // 0556: extracode *56
-      : uj trap                 // 0557: extracode *57
+      : uj badext               // 0550: extracode *50
+      : uj badext               // 0551: extracode *51
+      : uj badext               // 0552: extracode *52
+      : uj badext               // 0553: extracode *53
+      : uj badext               // 0554: extracode *54
+      : uj badext               // 0555: extracode *55
+      : uj badext               // 0556: extracode *56
+      : uj badext               // 0557: extracode *57
 
-      : uj trap                 // 0560: extracode *60, *20
-      : uj trap                 // 0561: extracode *61, *21
-      : uj trap                 // 0562: extracode *62
-      : uj trap                 // 0563: extracode *63
-      : uj trap                 // 0564: extracode *64
-      : uj trap                 // 0565: extracode *65
-      : uj trap                 // 0566: extracode *66
-      : uj trap                 // 0567: extracode *67
+      : uj badext               // 0560: extracode *60, *20
+      : uj badext               // 0561: extracode *61, *21
+      : uj badext               // 0562: extracode *62
+      : uj badext               // 0563: extracode *63
+      : uj badext               // 0564: extracode *64
+      : uj badext               // 0565: extracode *65
+      : uj badext               // 0566: extracode *66
+      : uj badext               // 0567: extracode *67
 
-      : uj trap                 // 0570: extracode *70
-      : uj trap                 // 0571: extracode *71
-      : uj trap                 // 0572: extracode *72
-      : uj trap                 // 0573: extracode *73
-      : uj trap                 // 0574: extracode *74
-      : uj trap                 // 0575: extracode *75
-      : uj trap                 // 0576: extracode *76
-      : uj trap                 // 0577: extracode *77
+      : uj badext               // 0570: extracode *70
+      : uj badext               // 0571: extracode *71
+      : uj badext               // 0572: extracode *72
+      : uj badext               // 0573: extracode *73
+      : uj badext               // 0574: extracode *74
+      : uj badext               // 0575: extracode *75
+      : uj badext               // 0576: extracode *76
+      : uj syscall              // 0577: extracode *77 -- the syscall gate
 
 // ============================================================================
 // Kernel entry point
@@ -105,6 +105,29 @@ _start:
      13 vjm main
         stop                        // placeholder
 
+// ============================================================================
+// Extracode entry
+// ============================================================================
+//
+// The hardware does not funnel extracodes through 0500: it vectors э50-э77
+// straight to 0550-0577, one word each, and hands the effective address to the
+// handler in r14.  So the extracode gate is here, not in trap().
+//
+// э77 is the Unix system call (`$77 N', cf. cmd/sim and doc/Aout_Simulator.md);
+// every other extracode is one we do not implement.  Both are skeletons for now
+// -- they halt with a recognizable code, the way test/crt0.s's fault stub does,
+// rather than jump into C with no frame under them.
+//
+// TODO (task 15): build the trap frame, point u.u_ar0 at it, call the C syscall
+// dispatcher, restore, and return with `2 ij' (выпр through ЭРЕТ, not ИРЕТ).
+
+        .globl  syscall
+syscall: stop   077              // TODO: the syscall gate (extracode э77)
+        uj      syscall          // resumed?  halt again
+
+        .globl  badext
+badext: stop    076              // TODO: an extracode we do not implement
+        uj      badext
 
 // ============================================================================
 // Trap and interrupt dispatch
@@ -310,32 +333,10 @@ copyout:
 // Floating-point state
 // ============================================================================
 //
-// void savfp(void *ptr);   -- save the FP register/state image to *ptr
-// void restfp(void *ptr);  -- restore the FP state from *ptr
-// void stst(int *ptr);     -- store the FP status/exception word to *ptr
-//
-// Lazy FP management around context switches (keyed on u.u_fpsaved); stst captures
-// the FP fault cause for the FP-error trap.
-//
-// TODO: the BESM-6 float format is not IEEE-754 and it has no x86-style FP state
-// frame.  These become "save/restore whatever FP context must survive a switch"
-// and "read the FP fault status", or near no-ops if FP faults are handled
-// differently.
-
-        .globl  savfp
-savfp:
-        // TODO: save FP state to the area pointed at by A.  One parameter.
-        13 uj
-
-        .globl  restfp
-restfp:
-        // TODO: restore FP state from the area pointed at by A.  One parameter.
-        13 uj
-
-        .globl  stst
-stst:
-        // TODO: store FP status word to the address in A.  One parameter.
-        13 uj
+// x86's savfp/restfp/stst are gone with the u-area's FP block.  The BESM-6 has no
+// separate floating-point register file -- the accumulator does float, and the
+// arithmetic mode rides in СПСВ across a trap -- so there is no lazy FP context to
+// save around a context switch, and nothing to restore.
 
 // ============================================================================
 // Execution profiling
@@ -458,10 +459,9 @@ ld_cr3:
         xta                      // TODO: x86-only; no BESM-6 meaning
         13 uj
 
-        .globl  invd
-invd:
-        // No-op on the BESM-6: `reg 020+i' refills the TLB as it writes RP.
-        13 uj
+        // invd is gone: on the BESM-6 `reg 020+i' refills the TLB as it writes RP,
+        // so a stale translation is not a state the machine can be in and there is
+        // nothing for utab.c to invalidate (doc/Memory_Mapping.md).
 
         .globl  cli
 cli:
@@ -503,34 +503,18 @@ phymem: .word 0                  // TODO: set during bring-up
         .globl  waitloc
 waitloc:.word 0                  // TODO: point at the idle-loop wait location
 
-        .bss
+// int uhome -- the p_addr whose u-area is the one currently live at UBASE.  The
+// live u-area is at 076000 and the copy in the process's image is stale between
+// switches; resume() flushes and reloads when it finds uhome != the incoming
+// p_addr.  See kernel/TODO.md, "The u-area invariant".
+        .globl  uhome
+uhome:  .word 0                  // TODO (task 14): set to proc[0].p_addr at boot
 
-// struct user u -- the per-process user area (kernel stack + per-process state),
-// referenced pervasively by the C kernel.  On x86 it is mapped per process at a
-// fixed virtual address (USIZE = 2 pages).  Here it is reserved in bss so the link
-// resolves.
-//
-// TODO: implement the real per-process u-area mapping (swap in/out with the
-// process image).  The reservation below is a placeholder sized generously to hold
-// struct user; adjust to sizeof(struct user) in words once the layout is fixed.
+// struct user u -- the per-process user area: struct user at the bottom and the
+// kernel stack growing up from it to 0100000.  It is not in the user's map and it
+// is not in bss: it is the last page of the kernel's unmapped space, at a fixed
+// PHYSICAL address, copied in and out of the process image on a context switch.
+// So it is an absolute symbol, not storage -- b6as emits N_EXT|N_ABS and b6ld
+// passes it through unrelocated.
         .globl  u
-u:      . = . + 512              // reserve 512 words (placeholder for struct user)
-
-// int pdir[]  -- page directory (indexed by physaddr() in utab.c).
-// int upt[]   -- user page table (rewritten by sureg() in utab.c; indexed to 1023).
-// mem         -- base of the window mapping physical memory into kernel space (PHY).
-//
-// TODO: these model the x86 paging structures and have NO BESM-6 counterpart: the
-// machine has no page table in memory, no page-directory register and no page walk
-// -- the whole mapping is the eight write-only page registers RP, over 32 virtual
-// pages of 1 Kword.  What replaces them is a per-process shadow page table in kernel
-// memory, written out with `reg 020+i'.  See doc/Memory_Mapping.md.
-// Reserved here as placeholder arrays so utab.c links.
-        .globl  pdir
-pdir:   . = . + 1024             // reserve 1024 words (placeholder page directory)
-
-        .globl  upt
-upt:    . = . + 1024             // reserve 1024 words (placeholder user page table)
-
-        .globl  mem
-mem:    . = . + 1                // placeholder memory-window symbol
+        u = 076000               // must agree with UBASE in include/sys/param.h

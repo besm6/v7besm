@@ -2,18 +2,23 @@
 /* Copyright (c) 1999 Robert Nordier.  All rights reserved. */
 
 /*
- * Per-process address-space setup.  Still x86 paging: a two-level page table
- * (pdir/upt) of 4K pages.
+ * Per-process address-space setup.
  *
- * On the BESM-6 none of that exists -- the whole mapping is eight write-only
- * page registers RP (002 020-027) and the protection register RZ (002 030-033),
- * over 32 virtual pages of 1 Kword.  sureg() becomes twelve `reg' writes, invd()
- * becomes a no-op, and physaddr()/pdir[] have no counterpart at all: the mapping
- * cannot be read back, so the kernel must keep its own shadow copy.
- * See doc/Memory_Mapping.md before retargeting this file.
+ * The whole mapping is eight write-only page registers РП (002 020-027) and the
+ * protection register РЗ (002 030-033), over 32 virtual pages of 1 Kword.  Neither
+ * can be read back, so u.u_upt[8] is the only copy of the mapping there is: the
+ * hardware registers are a write-only cache of it, reloaded in twelve `mod's.
+ *
+ * The two packings are complementary by design.  РП uses accumulator bits 1-20 and
+ * 29-48; РЗ uses bits 21-28.  So one word carries a quartet of page numbers (virtual
+ * pages 4i..4i+3) and -- in the even words -- the protection byte of eight pages
+ * (8j..8j+7), and neither write needs a shift.
+ *
+ * Read doc/Memory_Mapping.md, "Programming the MMU", before touching any of this.
  */
 
 // clang-format off
+#include <besm6.h>
 #include "sys/param.h"
 #include "sys/systm.h"
 #include "sys/dir.h"
@@ -23,50 +28,119 @@
 #include "sys/seg.h"
 // clang-format on
 
-extern int pdir[], upt[];
+/*
+ * The accumulator bits page k of a quartet contributes to, most significant first:
+ * its bit 10 at acc 45+k, bit 9 at 41+k, bit 8 at 37+k, bit 7 at 33+k, bit 6 at
+ * 29+k, and its low five bits together at acc 5k+1..5k+5.  (Bit 1 is the LSB, so
+ * acc bit N is 1 << (N-1).)
+ *
+ * That is a bit-scatter, and `aux' is a bit-scatter instruction: it takes the source
+ * from bit 48 downward and deposits into the mask's set bits, also from bit 48
+ * downward.  So a page number left-aligned to bit 48 -- shifted left by 48-10 --
+ * scatters into exactly these positions, and `apx', its inverse, gathers it back.
+ */
+#define PGBITS 10 /* width of a descriptor in the word (masked to 9 by the hardware) */
+#define RPBITS(k)                                                                        \
+    ((1U << (44 + (k))) | (1U << (40 + (k))) | (1U << (36 + (k))) | (1U << (32 + (k))) | \
+     (1U << (28 + (k))) | (037U << (5 * (k))))
 
-#define NT 0
-#define ND 1
-#define NS 2
-#define XX 3
+static const unsigned rpmask[4] = { RPBITS(0), RPBITS(1), RPBITS(2), RPBITS(3) };
 
-int uplo;
-int uphi;
+/*
+ * Drain the БРЗ write cache before reloading РП -- nine consecutive stores to
+ * physical 1-7, which is why it is in assembly (brz.s) and not here.
+ */
+void drainbrz(void);
 
-/* sutab and estabut */
+/*
+ * The physical page mapped at virtual page v, or 0 if the page is not mapped.
+ * Zero is the hardware's own "no page": a zero РП descriptor is what makes a page
+ * non-executable, and physical page 0 is therefore never handed to a process.
+ */
+static unsigned uptget(int v)
+{
+    return __besm6_apx(u.u_upt[v >> 2], rpmask[v & 3]) >> (48 - PGBITS);
+}
 
+/*
+ * Rebuild the shadow map from the process's sizes and load it into РП and РЗ.
+ *
+ * The image at p_addr is the u-area page, then data, then stack; the text is
+ * separate when it is shared.  The u page is NOT in the map -- it lives at a fixed
+ * physical address and the kernel reaches it unmapped.
+ *
+ * Writing РП here is safe precisely because the kernel runs unmapped: changing the
+ * map changes nothing about how the kernel addresses its own memory.
+ */
 void sureg()
 {
-    register int i, a, n;
-    int taddr, daddr;
+    unsigned pg[NPAGE]; /* physical page per virtual page; 0 = not mapped */
+    unsigned prot;      /* one bit per virtual page; set = closed to data */
+    unsigned a, w;
+    register int i, k, v;
     struct text *tp;
+    unsigned taddr, daddr;
 
-    for (i = uplo, uplo = u.u_utab[NT] + u.u_utab[ND]; i > uplo;)
-        upt[--i] = 0;
-    for (i = uphi, uphi = 1023 - u.u_utab[NS]; i < uphi;)
-        upt[++i] = 0;
+    for (i = 0; i < NPAGE; i++)
+        pg[i] = 0;
+    prot = ~0U; /* every page closed until we map it */
+
     taddr = daddr = u.u_procp->p_addr;
     if ((tp = u.u_procp->p_textp) != NULL)
         taddr = tp->x_caddr;
-    taddr *= PGSZ;
-    daddr *= PGSZ;
-    i = 0;
-    a = taddr;
-    for (n = u.u_utab[NT]; n--; a += PGSZ)
-        upt[i++] = a | u.u_utab[XX];
-    a = daddr + USIZE * PGSZ;
-    for (n = u.u_utab[ND]; n--; a += PGSZ)
-        upt[i++] = a | 7;
-    i = uphi;
-    for (n = u.u_utab[NS]; n--; a += PGSZ)
-        upt[++i] = a | 7;
-    invd();
+
+    /*
+     * Text from virtual page 0 up, then data.  Text is left OPEN to data access:
+     * this machine has no read-only page -- РЗ closes a page to reads as well as
+     * writes -- and a closed text page would take the program's own constant pool
+     * with it.
+     */
+    v = 0;
+    for (a = taddr; a < taddr + u.u_tsize; a += PGSZ) {
+        pg[v] = a >> PGSH;
+        prot &= ~(1U << v);
+        v++;
+    }
+    a = daddr + USIZE;
+    for (; a < daddr + USIZE + u.u_dsize; a += PGSZ) {
+        pg[v] = a >> PGSH;
+        prot &= ~(1U << v);
+        v++;
+    }
+
+    /* The stack sits at the top of the image and at virtual page USTKPAGE, growing up. */
+    v = USTKPAGE;
+    for (; a < daddr + USIZE + u.u_dsize + u.u_ssize; a += PGSZ) {
+        pg[v] = a >> PGSH;
+        prot &= ~(1U << v);
+        v++;
+    }
+
+    for (i = 0; i < 8; i++) {
+        w = 0;
+        for (k = 0; k < 4; k++)
+            w |= __besm6_aux(pg[4 * i + k] << (48 - PGBITS), rpmask[k]);
+        if ((i & 1) == 0) {
+            /* even word: it also carries the РЗ byte of pages 8j..8j+7, j = i/2 */
+            w |= ((prot >> (4 * i)) & 0377) << 20;
+        }
+        u.u_upt[i] = w;
+    }
+
+    drainbrz();
+    for (i = 0; i < 8; i++)
+        __besm6_mod(020 + i, u.u_upt[i]);
+    for (i = 0; i < 4; i++)
+        __besm6_mod(030 + i, u.u_upt[2 * i]);
 }
 
 /*
  * Sizes are in words, page-aligned: the image must fit the 32 pages the user
  * gets, text+data must stay below the stack base, and the stack must fit the
  * pages above it.
+ *
+ * xrw (RO/RW from seg.h) is accepted and ignored: the machine has no read-only
+ * page.  So is sep -- there is no I/D separation here either.
  */
 int estabur(int nt, int nd, int ns, int sep, int xrw)
 {
@@ -78,10 +152,9 @@ int estabur(int nt, int nd, int ns, int sep, int xrw)
         goto err;
     if (nt + nd + ns + USIZE > maxmem)
         goto err;
-    u.u_utab[NT] = nt;
-    u.u_utab[ND] = nd;
-    u.u_utab[NS] = ns;
-    u.u_utab[XX] = xrw;
+    u.u_tsize = nt;
+    u.u_dsize = nd;
+    u.u_ssize = ns;
     sureg();
     return (0);
 err:
@@ -108,20 +181,38 @@ void copyseg(int s, int d)
     bcopy((caddr_t)s, (caddr_t)d, wtob(PGSZ));
 }
 
+/*
+ * The physical word address a virtual one maps to, or 0 if it is not mapped.
+ */
 unsigned physaddr(unsigned addr)
 {
-    unsigned d, t, o, x, z;
-    unsigned *pt;
+    unsigned pgno;
 
-    d  = addr >> 22;
-    t  = (addr >> 12) & 1023;
-    o  = addr & 4095;
-    x  = 0;
-    z  = 0;
-    pt = (unsigned *)(pdir[d] & ~4095);
-    if (pt != NULL) {
-        x = pt[t] & ~4095;
-        z = x + o;
-    }
-    return z;
+    pgno = uptget(addr >> PGSH);
+    if (pgno == 0)
+        return (0);
+    return (pgno << PGSH) | (addr & (PGSZ - 1));
+}
+
+/*
+ * Is the user's [addr, addr+count) -- in WORDS -- entirely mapped?  A zero
+ * descriptor means the page is not there, and the answer is EFAULT.
+ *
+ * This is what lets the assembly copies assume a valid address, which is why v7's
+ * whole nofault machinery disappears.  rw is accepted and ignored: a page is open
+ * to data or closed to it, with no read/write distinction to check.
+ */
+int useracc(unsigned addr, unsigned count, int rw)
+{
+    unsigned v, last;
+
+    if (count == 0)
+        return (1);
+    if (addr + count > NPAGE * PGSZ || addr + count < addr)
+        return (0);
+    last = (addr + count - 1) >> PGSH;
+    for (v = addr >> PGSH; v <= last; v++)
+        if (uptget((int)v) == 0)
+            return (0);
+    return (1);
 }

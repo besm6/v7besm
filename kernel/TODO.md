@@ -1,14 +1,14 @@
 # Retargeting the kernel's memory management to the BESM-6 MMU
 
-A work plan. The kernel still carries the memory management of the v7/x86 port it came from: a
-two-level page table (`pdir`/`upt`) of 4 KB pages, with permission bits in the page-table entries.
-None of that exists on this machine. `besm6.S` papers over it — `u` is a 512-word bss placeholder
-that is neither per-process nor mapped, and `pdir`/`upt` are dummy arrays that exist only so
-`utab.c` links.
+A work plan. What remains is the *machinery*: the brackets that reach a page the kernel cannot
+address, the boot code, the trap gate, the context switch, and the process-memory calls that sit on
+top of them.
 
-The units are already converted (stage 0, done): every size and address in the kernel is a count of
-48-bit words, and the `PHY` window is gone — the kernel is unmapped, so a kernel address *is* a
-physical address.
+The model itself is in place. Every size and address in the kernel is a count of 48-bit words (stage
+0), and there is a real shadow page table (stage 1): `u.u_upt[8]`, which `sureg()` builds and blasts
+into РП and РЗ with twelve `рег`s. The x86 two-level page table, its permission bits and the `PHY`
+window are gone — the kernel runs unmapped, so a kernel address *is* a physical address — and `u` is
+an absolute symbol at `076000`, not a bss placeholder.
 
 Read [../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) before starting, and
 [../doc/Intrinsics.md](../doc/Intrinsics.md) for how C reaches `002 «рег»`.
@@ -40,7 +40,7 @@ PHYSICAL, pages 0..31 — the kernel, addressed with БлП = 1 (no translation)
    0        const   (interrupt vector 0500/0501, extracodes 0550-0577, literal pool)
             text    (fetched unmapped: РП is irrelevant to it, always)
             data + bss
-   ...      must all end below 076000  (~31 Kwords; today `end` = 066105, 27709 words)
+   ...      must all end below 076000  (~31 Kwords; today `end` = 061147, 25183 words)
    076000   U AREA  ------ the last page of the kernel space -----------------
               struct user     (~140 words)   `u = 076000`, an absolute symbol
               kernel stack    (~880 words, grows UP to 0100000)
@@ -95,7 +95,8 @@ restores БлП from СПСВ and the bracket resumes mapped.
    with mapping off. (Stores made *unmapped* are tagged physical and survive a map change; stores
    made *mapped* — by the user, or inside a bracket — are tagged virtual and do not.) The hazard is
    invisible under default SIMH and fatal under `set mmu cache`.
-4. **`invd()` is a no-op** — writing РП refills the TLB in the same instruction.
+4. **There is nothing to invalidate** — writing РП refills the TLB in the same instruction, so a stale
+   translation is not a state the machine can be in. v7's `invd()` is deleted, not stubbed.
 5. **A fault reports the faulting *page* (ГРП bits 5–9), and the saved PC points *past* the faulting
    instruction.** Anything that means to retry — stack growth — must back the PC up using
    `SPSW_NEXT_RK` and `SPSW_RIGHT_INSTR`.
@@ -124,55 +125,42 @@ sharpest edge in the whole design.
 ## Tasks
 
 Each task leaves the tree building (`cd kernel && make`). Verification is under **SIMH**
-(`../doc/Simh_Simulator.md`) via `kernel/test/*.ini`, in the style of the existing `hello.ini` /
-`sctest.ini` — `b6sim` runs a user `a.out` with no kernel underneath and cannot exercise any of
-this. Run every MMU test with **`set mmu cache`**.
+(`../doc/Simh_Simulator.md`) via `kernel/test/*.ini` — `b6sim` runs a user `a.out` with no kernel
+underneath and cannot exercise any of this. `test/mmutest` is the model to copy: it links the kernel's
+own objects against a hand-built process, checks itself from C, and lets the `.ini` assert on the
+machine state afterwards. Run every MMU test with **`set mmu cache`**.
 
-**Stage 0 — units and sizing (tasks 1–5) is done and has been removed.** It retargeted `param.h` to
-the BESM-6, dropped the x86 drivers, killed the click (see "The click is dead" above), re-specified
-every size and address field in words, and passed the sizing gate: the image is 27709 words with
-`end` at `066105`, `076000` less 4027 words of headroom. The numbering below is **left as it was** —
-task numbers are cited from the source (`utab.c`, `dev/bio.c`, `besm6.S`) and from `doc/`.
+**Stages 0 and 1 (tasks 1–9) are done and have been removed.** The numbering below is **left as it
+was** — task numbers are cited from the source (`utab.c`, `dev/bio.c`, `besm6.S`, `brz.s`) and from
+`doc/`.
 
-### Stage 1 — the shadow map
+*Stage 0 — units and sizing.* Retargeted `param.h` to the BESM-6, dropped the x86 drivers, killed the
+click (see "The click is dead" above), re-specified every size and address field in words, and passed
+the sizing gate.
 
-**6. `include/sys/user.h`: the u-area.** Drop the x86 FP state (`u_fps[108]`, `u_fper`,
-`u_fpsaved`). Replace `u_utab[4]` with `unsigned u_upt[8]` — the ready-to-load shadow map (four РП
-descriptors per word, plus the matching РЗ byte in bits 21–28 of the even words). Rewrite the stale
-PDP-11 header comment: the u-area is one physical page at `076000`, `struct user` at the bottom and
-the kernel stack growing up from `u_stack` to `0100000`. Check the size: `struct user` should come
-out around 140 words, leaving ~880 for the stack.
-- **Done when** a `sizeof` print (or the `.ast`/`b6nm` output) confirms `sizeof(struct user) < 200`.
+*Stage 1 — the shadow map.* `u_upt[8]` replaced `u_utab[4]`; the x86 FP state went with it, and so did
+`pdir`/`upt`/`mem`/`u` — 2563 words of bss, leaving `end` at `061147`, `076000` less 6521 words of
+headroom. `u` is now `076000 A`. `utab.c` is a BESM-6 file: `sureg()` packs the quartets with
+`__besm6_aux` and writes twelve registers, `physaddr()`/`useracc()` read descriptors back out with
+`__besm6_apx`, and `invd()` is gone rather than stubbed. `estabur()`'s `xrw` and `sep` are inert —
+this machine has no read-only page and no I/D separation, which is also why **text pages are left open
+to data**: РЗ closes a page to reads as well as writes, and a closed text page would take the program's
+own constant pool with it. The extracode vectors now point at `syscall` (`0577`, э77) and `badext`; an
+extracode never reaches `trap()`.
 
-**7. `kernel/besm6.S`: symbols and the vector block.** `u = 076000` as an absolute global (`.globl u`
-+ `u = 076000`; `b6as` emits `N_EXT|N_ABS` and `b6ld` passes it through unrelocated). Delete the
-`pdir`, `upt`, `mem` and `u` bss placeholders. Add `uhome`. Extend the `.const` block to `0577` so
-the extracode vectors exist — today text starts at `0522`, so `0550`–`0577` is *code* (`test/crt0.s`
-already flags this): `uj syscall` at `0577` (э77), a bad-extracode stub for the rest.
-- **Done when** `b6nm unix | grep ' u$'` prints `076000 A u`, and `b6disasm` shows the vectors at
-  `0500`, `0501` and `0577`.
+Two things stage 1 learned, that the tasks below depend on:
 
-**8. `drainbrz()` in `besm6.S`.** Nine consecutive stores to physical 1–7 with mapping off (the
-first only *arms* the counter; eviction starts with the second, so nine are needed to drain all
-eight lines). Nothing else may be interleaved — any ordinary store resets the counter.
-- **Done when** it assembles and is called from `sureg()`.
-
-**9. `kernel/utab.c`: rewrite (C).**
-- `sureg()` — rebuild `u.u_upt[8]` from `p_addr`, `x_caddr`, `u_tsize`/`u_dsize`/`u_ssize` (words,
-  shifted by `PGSH`), then `drainbrz()` and blast it out with twelve `__besm6_mod()` calls.
-  *Writing РП here is safe precisely because the kernel is unmapped* — it changes nothing about how
-  the kernel addresses its own memory. Unallocated pages get РП = 0 (non-executable) and their РЗ
-  bit set. `__besm6_aux` does the quartet packing.
-- `estabur()` — **already in**: stage 0 gave it the word limits `nt+nd+ns <= MAXMEM`,
-  `nt+nd <= USTKPAGE*PGSZ`, `ns <= (NPAGE-USTKPAGE)*PGSZ`, because its old x86 bound (`> 1023`) would
-  have rejected any image over 1023 *words* the moment the units changed.
-- `physaddr(v)` — shadow lookup, returning a physical **word** address (0 if unmapped).
-- `useracc(addr, count, rw)` — new: walk `u_upt`; an РП = 0 page means `EFAULT`. This is what lets
-  the assembly copies assume a valid address, and it is why v7's whole `nofault` machinery
-  disappears.
-- Delete `pdir[]`, `upt[]`, `invd()`, `clearseg`/`copyseg`'s `PHY` window (task 11 rewrites them).
-- **Done when** `test/mmutest.c` builds a map, calls `sureg()`, and a `.ini` `examine mmu РП0..РП7
-  РЗ` matches the worked examples in `doc/Memory_Mapping.md` §"Programming the MMU".
+- **`drainbrz()` cannot be written in C** — hence `brz.s`, the one routine in the kernel that has to be
+  assembly. The nine stores to physical 1–7 must be consecutive, and `b6cc` materializes the
+  destination pointer through a frame slot, so each C store emits two ordinary stores of its own and
+  resets the flush counter. It lives in its own file, not in `besm6.S`, so `test/mmutest` can link the
+  real routine (`besm6.o` cannot go into a standalone test: its `0500` vector reaches into the C kernel
+  and `_start` seeds no stack).
+- **The drain is load-bearing, and `test/mmutest` proves it.** Remove the `drainbrz()` calls and it
+  fails under `set mmu cache` — the store sits dirty in a БРЗ line tagged with the *virtual* address,
+  and a physical read carries a different tag and sees stale memory — and **passes anyway with the
+  cache off**. Every task below that reloads РП or reads a process's image out of memory faces exactly
+  that hazard.
 
 ### Stage 2 — the brackets
 
@@ -198,8 +186,9 @@ the address with `useracc()`, so there is no fault path.
 - **Done when** `mmutest` copies a buffer both ways through a hand-built user map and rejects an
   address in an unmapped page with `EFAULT`.
 
-**13. `bcopy` / `bzero` in `besm6.S`** — plain unmapped word loops. Delete `savfp`, `restfp`, `stst`,
-`ld_cr0/2/3`, `inb`, `outb`, `insw`, `outsw`; `invd` stays a no-op.
+**13. `bcopy` / `bzero` in `besm6.S`** — plain unmapped word loops. Delete `ld_cr0/2/3`, `inb`, `outb`,
+`insw`, `outsw`. (`savfp`, `restfp`, `stst` and `invd` are already gone — stage 1 took them: the first
+three with the u-area's FP block, and `invd` outright rather than as a no-op, since nothing calls it.)
 - **Done when** the kernel links with no stub left that silently returns 0.
 
 ### Stage 3 — boot, traps, switching
@@ -255,8 +244,8 @@ a `copyseg`-style bracket, /dev/kmem direct.
 - Stage 0 deliberately left `physio()` (`dev/bio.c:462-482`) alone — it is the one piece of memory
   arithmetic still in the old units. It derives page numbers with `>> PGSH` from `(unsigned)u.u_base`,
   which is a *fat pointer*, not a byte address, and compares them against `u_tsize`/`u_dsize`/`u_ssize`,
-  which are now words; the `1024` ceilings should be `NPAGE * PGSZ`. It cannot be made right before
-  `useracc()` (task 9) gives it a way to validate a user address, so it is fixed here, with `b_paddr`.
+  which are now words; the `1024` ceilings should be `NPAGE * PGSZ`. Stage 1's `useracc()` is what
+  finally gives it a way to validate a user address, so it is fixed here, along with `b_paddr`.
 
 ---
 

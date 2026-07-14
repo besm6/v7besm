@@ -17,3 +17,4 @@ build/
 kernel/test/hello
 kernel/test/sctest
 kernel/unix
+kernel/test/mmutest
