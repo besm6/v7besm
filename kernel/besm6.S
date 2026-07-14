@@ -35,10 +35,37 @@
 // pushed arguments, then `13 uj`.
 
         .const
-        . = . - 010 + 0100
-#include "const.s"
-        uj trap                  // 0500: internal interrupt (fault, extracode)
-      : uj extint                // 0501: external interrupt (ГРП) -- see below
+        . = . - 010 + 0100      // Skip I/O region
+#include "const.s"              // Put some #constants here to use this space
+      : uj trap                 // 0500: internal interrupt (fault, extracode)
+      : uj extint               // 0501: external interrupt (ГРП) -- see below
+        . = . - 0502 + 0550
+      : uj trap                 // 0550: extracode *50
+      : uj trap                 // 0551: extracode *51
+      : uj trap                 // 0552: extracode *52
+      : uj trap                 // 0553: extracode *53
+      : uj trap                 // 0554: extracode *54
+      : uj trap                 // 0555: extracode *55
+      : uj trap                 // 0556: extracode *56
+      : uj trap                 // 0557: extracode *57
+
+      : uj trap                 // 0560: extracode *60, *20
+      : uj trap                 // 0561: extracode *61, *21
+      : uj trap                 // 0562: extracode *62
+      : uj trap                 // 0563: extracode *63
+      : uj trap                 // 0564: extracode *64
+      : uj trap                 // 0565: extracode *65
+      : uj trap                 // 0566: extracode *66
+      : uj trap                 // 0567: extracode *67
+
+      : uj trap                 // 0570: extracode *70
+      : uj trap                 // 0571: extracode *71
+      : uj trap                 // 0572: extracode *72
+      : uj trap                 // 0573: extracode *73
+      : uj trap                 // 0574: extracode *74
+      : uj trap                 // 0575: extracode *75
+      : uj trap                 // 0576: extracode *76
+      : uj trap                 // 0577: extracode *77
 
 // ============================================================================
 // Kernel entry point
