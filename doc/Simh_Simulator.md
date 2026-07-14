@@ -327,6 +327,16 @@ The memory-management unit is a separate device, `MMU`:
 | `set mmu cache` / `set mmu nocache` | Enable/disable true LRU write-cache modelling. Accurate but ~20 % slower; off by default. |
 | `set mmu check` / `set mmu nocheck` | Enable/disable parity checking. |
 
+> **Programming the MMU.** This section covers how to *configure* the memory-management unit. For
+> what a program sees — how a virtual address becomes a physical one, the page registers РП and the
+> protection register РЗ, why an instruction fetch is protected differently from a data load, and how
+> a protection fault is reported in ГРП — see **[Memory_Mapping.md](Memory_Mapping.md)**. That is the
+> reference the kernel's memory management is written against.
+>
+> Both options above matter to a kernel, not just to the operator. `set mmu cache` is what makes the
+> БРЗ write-back cache behave as the real hardware did, and a kernel that only works with it off is a
+> kernel that would not have worked on the real machine — so test with it **on**.
+
 ---
 
 ## The front panel
@@ -708,6 +718,8 @@ the full reference.
 
 * [Besm6_Peripherals.md](Besm6_Peripherals.md) — the programmer's view of the same hardware: the
   `033 «увв»` address map, every device's control word, and the ГРП/ПРП interrupt bits.
+* [Memory_Mapping.md](Memory_Mapping.md) — the programmer's view of the `MMU` device configured
+  above: address translation, the page and protection registers, supervisor mode, and the БРЗ cache.
 * [Aout_Simulator.md](Aout_Simulator.md) — `b6sim`, the user-level simulator that runs a single
   BESM-6 `a.out` and emulates its Unix v7 system calls on the host.
 * [Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) — the instruction set the simulator's

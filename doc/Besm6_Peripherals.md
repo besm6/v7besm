@@ -109,8 +109,8 @@ Decoded by `cmd_002()` at [besm6_cpu.c:513](https://github.com/besm6/simh/blob/m
 | `Aex & 0377` | Dir | Register | What the accumulator means |
 |--------------|-----|----------|----------------------------|
 | `0`–`7` | write | **БРЗ** — cache (buffer) register, 8 words | The whole 48-bit word. Parity is computed and stored with it. |
-| `020`–`027` | write | **РП** — page (приписка) register, 8 of them | Four packed 10-bit page numbers; see below. Also refills 4 TLB entries. |
-| `030`–`033` | write | **РЗ** — protection register, 4 slices of 8 bits | Only accumulator bits **21–28** are used; they become one 8-bit slice of the 32-bit РЗ. |
+| `020`–`027` | write | **РП** — page (приписка) register, 8 of them | Four packed 10-bit page numbers; see [Memory_Mapping.md](Memory_Mapping.md#packing-of-the-page-registers). Also refills 4 TLB entries. |
+| `030`–`033` | write | **РЗ** — protection register, 4 slices of 8 bits | Only accumulator bits **21–28** are used; they become one 8-bit slice of the 32-bit РЗ. See [Memory_Mapping.md](Memory_Mapping.md#packing-of-the-protection-register). |
 | `036` | write | **МГРП** — mask of the main interrupt register | The full 48-bit mask. |
 | `037` | write | **ГРП** — clear the main interrupt register | `GRP &= ACC | GRP_WIRED_BITS` — a **zero** bit in the accumulator clears the corresponding ГРП bit. Wired bits survive; see below. |
 | `0100`–`0137` | write | **РУУ** — control-unit mode bits | The data is in the **address**, not the accumulator: address bit 1 = БРО (disable the stop-on-error mode), bit 2 = ПКП, bit 4 = ПКЛ (parity generation for the right and left halfword). |
@@ -149,21 +149,19 @@ when the device that drives them is itself cleared. The rule is stated in
 In practice this means the "device free" and "exchange done" bits of the mass-storage channels
 cannot be dismissed with `002 037`; issuing a new command to the device is what lowers them.
 
-### Packing of the page registers (РП)
+### The memory registers РП and РЗ
 
-`mmu_setrp()` at [besm6_mmu.c:694](https://github.com/besm6/simh/blob/master/BESM6/besm6_mmu.c#L694) unpacks four page numbers from one word. The
-layout is unusual — the low 5 bits of the four fields are adjacent, but their high bits are
-scattered across the top of the word:
+The two entries above are the whole of the BESM-6 MMU: `рег 020+i` loads four page descriptors at
+once (in an irregular packing — the low 5 bits of the four fields are adjacent at the bottom of the
+word, their upper bits scattered across the top), and `рег 030+j` loads eight protection bits from
+accumulator bits 21–28. Both are **write-only**: there is no address that reads them back, so a
+kernel must keep its own shadow copy of every process's mapping.
 
-```c
-/* Младшие 5 разрядов 4-х регистров приписки упакованы
- * по 5 в 1-20 рр, 6-е разряды - в 29-32 рр, 7-е разряды - в 33-36 рр и т.п.
- */
-```
-
-That is: page *i* (i = 0…3) takes its bits 1–5 from accumulator bits `5i+1 … 5i+5`, its bit 6 from
-bit `29+i`, its bit 7 from bit `33+i`, its bit 8 from `37+i`, its bit 9 from `41+i` and its bit 10
-from `45+i`. Each page number is then masked to `MEMSIZE/1024 - 1` = `777` (512 pages of 1 Kword).
+That is as much as this document says about them. **[Memory_Mapping.md](Memory_Mapping.md) is the
+reference** — it has the exact bit layout of both packings, how a virtual address becomes a physical
+one, how instruction protection (a zero РП entry) differs from data protection (an РЗ bit), the
+БлП/БлЗ override bits, the fault reports in ГРП, and the БРЗ coherence hazard that a context switch
+must respect.
 
 ---
 
@@ -948,6 +946,9 @@ word field by field.
 
 ## See also
 
+* [Memory_Mapping.md](Memory_Mapping.md) — the other half of `002 «рег»`: the page registers РП and
+  the protection register РЗ, address translation, the two protection mechanisms, and the supervisor
+  mode that both instructions require.
 * [Simh_Simulator.md](Simh_Simulator.md) — the operator's view: building and running the
   simulator, attaching devices, the front panel, tracing and debugging.
 * [Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) — the instruction set that `002 «рег»` and

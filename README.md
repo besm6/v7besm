@@ -87,6 +87,13 @@ See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail.
 - [doc/Besm6_Peripherals.md](doc/Besm6_Peripherals.md) — the programmer's view of the hardware:
   the `002 «рег»` and `033 «увв»` I/O instructions, every device register and control word, and
   the ГРП/ПРП interrupt bits. The reference the `kernel/dev/` drivers are written against.
+- [doc/Memory_Mapping.md](doc/Memory_Mapping.md) — the MMU: how a virtual address becomes a
+  physical one, the page registers РП and the protection register РЗ, why an instruction fetch is
+  protected differently from a data load, supervisor mode and the extracode/interrupt gates into
+  it, and how a fault is reported. The reference the kernel's memory management is written against.
+- [doc/Intrinsics.md](doc/Intrinsics.md) — the nine `<besm6.h>` compiler intrinsics that let the
+  kernel issue `002 «рег»`, `033 «увв»` and the bit-manipulation instructions from C rather than
+  assembly.
 
 **The target** — where the kernel runs:
 

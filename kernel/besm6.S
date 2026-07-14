@@ -401,8 +401,9 @@ outsw:
 // ld_cr0/2/3 are x86-only (used solely by the panic register dump in trap.c); they
 // have no BESM-6 analogue beyond "read whatever status registers exist".  invd
 // flushes the address-translation cache after page-table edits (utab.c); on BESM-6
-// it becomes the MMU's translation-invalidate, or a no-op.  cli/sti are the global
-// interrupt disable/enable around short critical sequences.
+// it is a no-op -- writing a page register refills the corresponding TLB entries in
+// the same instruction, so a stale translation cannot happen (doc/Memory_Mapping.md).
+// cli/sti are the global interrupt disable/enable around short critical sequences.
 //
 // TODO: map these onto the BESM-6 machine state; drop the ones with no meaning.
 
@@ -423,7 +424,7 @@ ld_cr3:
 
         .globl  invd
 invd:
-        // TODO: invalidate the address-translation cache (or no-op).
+        // No-op on the BESM-6: `reg 020+i' refills the TLB as it writes RP.
         13 uj
 
         .globl  cli
@@ -488,7 +489,11 @@ u:      . = . + 512              // reserve 512 words (placeholder for struct us
 // int upt[]   -- user page table (rewritten by sureg() in utab.c; indexed to 1023).
 // mem         -- base of the window mapping physical memory into kernel space (PHY).
 //
-// TODO: these model the x86 paging structures; replace with the BESM-6 memory map.
+// TODO: these model the x86 paging structures and have NO BESM-6 counterpart: the
+// machine has no page table in memory, no page-directory register and no page walk
+// -- the whole mapping is the eight write-only page registers RP, over 32 virtual
+// pages of 1 Kword.  What replaces them is a per-process shadow page table in kernel
+// memory, written out with `reg 020+i'.  See doc/Memory_Mapping.md.
 // Reserved here as placeholder arrays so utab.c links.
         .globl  pdir
 pdir:   . = . + 1024             // reserve 1024 words (placeholder page directory)

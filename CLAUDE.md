@@ -110,6 +110,13 @@ the authoritative references and are kept current:
 - `doc/Besm6_Peripherals.md` — the peripherals as a *program* sees them: the `002 «рег»` and
   `033 «увв»` supervisor instructions, the full `033` address map, each device's control-word
   bit fields, and the ГРП/ПРП interrupt bits. Read it before touching `kernel/dev/`.
+- `doc/Memory_Mapping.md` — the MMU as a *program* sees it: the 15-bit/32-page virtual address
+  space over 512 Kwords of physical memory, the write-only page registers РП and protection
+  register РЗ (`002 020`–`033`), the two independent protection mechanisms (a zero РП entry blocks
+  *execution*, an РЗ bit blocks *data*), the БлП/БлЗ override bits that make `copyin`/`copyout`
+  free, supervisor mode and the extracode/interrupt gates, fault reporting in ГРП, and the БРЗ
+  cache hazard a context switch must respect. Read it before touching `kernel/utab.c`,
+  `kernel/besm6.S`, or the machine-dependent block of `include/sys/param.h`.
 - `doc/Simh_Simulator.md` — the external SIMH full-machine emulator: building and running it,
   attaching peripherals, the front panel, tracing/debugging, and booting DISPAK.
 - `doc/Assembler_Manual.md` — the `cmd/as` assembly language: lexical rules, directives,
@@ -196,9 +203,17 @@ this means for the kernel, and for the `kernel/dev/` drivers in particular:
 - **Mass storage exchanges in zones** of `8 + 1024` words — 8 service words plus 1 Kword of data.
   The data lands where the control word says, but the service words always land at a **fixed low
   memory address**, one buffer per controller (`010` drum 1, `030` disk 3, …).
+- **The MMU is eight write-only registers, not a page table.** A program sees 15 bits of address —
+  **32 pages of 1 Kword** — mapped onto 512 Kwords of physical memory by the page registers РП
+  (`002 020`–`027`); the protection register РЗ (`002 030`–`033`) closes a page to data. Neither can
+  be read back, so the kernel must keep a shadow page table. **Supervisor instruction fetch is never
+  mapped** (so kernel text lives below physical `0100000`) while supervisor *data* access is mapped
+  or not according to the БлП mode bit — which is what makes `copyin`/`copyout` a matter of clearing
+  one bit rather than switching an address space.
 
 `doc/Besm6_Peripherals.md` has the full address map, every control word's bit fields, and both
-interrupt registers bit by bit; `doc/Simh_Simulator.md` covers driving the simulator itself.
+interrupt registers bit by bit; `doc/Memory_Mapping.md` has the MMU, supervisor mode and the fault
+reports; `doc/Simh_Simulator.md` covers driving the simulator itself.
 
 **`include/` is the Unix v7 system-header tree** (`sys/` plus libc-style headers). The
 kernel includes them via `-I../include`.

@@ -372,7 +372,10 @@ the data **in both directions**; one bit of the address — `0200` — selects a
 read the AU switches to logical mode, because what arrives in A is a bit pattern, not a
 number.
 
-Reachable from C as the `__besm6_mod` intrinsic ([Intrinsics.md](Intrinsics.md)).
+Reachable from C as the `__besm6_mod` intrinsic ([Intrinsics.md](Intrinsics.md)). The interrupt
+registers it reaches are in [Besm6_Peripherals.md](Besm6_Peripherals.md); the memory registers —
+what РП and РЗ mean, how they are packed, and the address translation they drive — are in
+[Memory_Mapping.md](Memory_Mapping.md).
 
 ---
 
@@ -1134,7 +1137,18 @@ Return is normally accomplished with `UJ M[reg]` which branches to the saved ret
 
 #### 032 — IJ (выпр) — Return from interrupt
 
-**Kernel mode only.** Throws `Illegal instruction` in user mode.
+**Kernel mode only.** Throws `Illegal instruction` in user mode. Written **`0320`** in the Madlen
+numbering used by the simulator and by [Memory_Mapping.md](Memory_Mapping.md) — the same
+instruction.
+
+This is the only way out of supervisor mode. It restores the mode bits БлП, БлЗ and БлПр from СПСВ,
+restores the supervisor bits (РежЭ/РежПр) from СПСВ — so returning to user mode means returning with
+both of them clear — and loads the PC from the return-address register named by the low two bits of
+the index field: `M[032]` = ЭРЕТ for an extracode, `M[033]` = ИРЕТ for an interrupt. A shared
+trap-exit path must therefore know which door it came in by.
+
+The full sequence, and the saved state each door leaves behind, is in
+[Memory_Mapping.md](Memory_Mapping.md#entering-and-leaving-supervisor-mode).
 
 ---
 
@@ -1282,6 +1296,12 @@ The BESM-6 has two privilege levels. In user mode, certain instructions trap imm
 with an `Illegal instruction` exception. In kernel (supervisor) mode all instructions
 execute normally.
 
+**Supervisor mode is not a bit you set.** You are the supervisor if and only if you are inside an
+extracode or inside an interrupt (РежЭ or РежПр in РУУ); you become one by taking one, and you stop
+being one by executing `выпр`. There is no other door in either direction. Supervisor mode also
+widens the register file from 16 to 32, which is the only reason the kernel can name the mode
+register ПСВ at all. See [Memory_Mapping.md](Memory_Mapping.md#supervisor-mode-versus-user-mode).
+
 ### Instructions restricted to kernel mode
 
 | Opcode | Mnemonic | Description |
@@ -1306,12 +1326,18 @@ When the emulator encounters opcode 002, 032, 033, 046, 047, or 0320, it throws 
 `Processor::Exception` with the message `"Illegal instruction ..."`. The Dubna monitor
 intercepts this and terminates the user job with an appropriate error.
 
+On the SIMH machine this port targets, the same violation raises `STOP_BADCMD` and sets **ГРП bit 13**
+(`GRP_ILL_INSN`), vectoring to the single internal-interrupt entry at physical `0500` — where the
+kernel's own handler decides what to do with the offending process.
+
 ---
 
 ## See also
 
 - [Besm6_Peripherals.md](Besm6_Peripherals.md) — what `002 «рег»` and `033 «увв»` actually reach:
   the full address map, every control word's bit fields, and the ГРП/ПРП interrupt registers.
+- [Memory_Mapping.md](Memory_Mapping.md) — the memory half of `002 «рег»`, the supervisor mode every
+  privileged instruction above requires, and the extracode and interrupt gates into it.
 - [Intrinsics.md](Intrinsics.md) — the nine of these instructions the C compiler exposes as
   intrinsics, so that a driver can issue them from C.
 - [Besm6_Data_Representation.md](Besm6_Data_Representation.md) — how a C scalar sits in the 48-bit

@@ -15,6 +15,7 @@ Companion reading, in the order it becomes relevant:
 [Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) (what the instructions do),
 [Besm6_Data_Representation.md](Besm6_Data_Representation.md) (how a C scalar sits in a word),
 [Besm6_Peripherals.md](Besm6_Peripherals.md) (the `033`/`002` address map),
+[Memory_Mapping.md](Memory_Mapping.md) (the page and protection registers `002` reaches),
 [Besm6_Calling_Conventions.md](Besm6_Calling_Conventions.md) (the C ABI).
 
 ---
@@ -427,12 +428,13 @@ a signed literal.
 
 ### 6.4 Packing the page registers
 
-`002 020`–`027` each load four 10-bit page numbers from one word, in a layout the simulator's own
-comment calls unusual: page *i* takes its bits 1–5 from accumulator bits `5i+1 … 5i+5`, but its bit
-6 from bit `29+i`, bit 7 from `33+i`, bit 8 from `37+i`, bit 9 from `41+i`, bit 10 from `45+i`. The
-fields are interleaved, not adjacent.
+`002 020`–`027` each load four page numbers from one word, and the fields are interleaved rather
+than adjacent — the low 5 bits of the four page numbers sit together at the bottom of the word while
+their upper bits are scattered across the top. The exact layout, and the companion packing of the
+protection register РЗ, are in
+**[Memory_Mapping.md](Memory_Mapping.md#packing-of-the-page-registers)**.
 
-That is a bit-scatter, and `aux` is a bit-scatter instruction:
+That layout is a bit-scatter, and `aux` is a bit-scatter instruction:
 
 ```c
 /* Mask of every bit position that page i contributes to, in descending order. */
@@ -589,6 +591,8 @@ map come out converted: `__besm6_ext(04031, …)` emits `,ext, 2073`, `__besm6_m
 
 - [Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) — the opcodes, the registers, the ω mode.
 - [Besm6_Peripherals.md](Besm6_Peripherals.md) — the `033`/`002` address map and the ГРП/ПРП bits.
+- [Memory_Mapping.md](Memory_Mapping.md) — what `__besm6_mod(020…033, …)` actually programs: the
+  page registers РП, the protection register РЗ, and the address translation they drive.
 - [Besm6_Data_Representation.md](Besm6_Data_Representation.md) — why the word type is `unsigned`.
 - [Besm6_Runtime_Library.md](Besm6_Runtime_Library.md) — the `NTR 3` / logical-ω contract that
   compiled code holds.

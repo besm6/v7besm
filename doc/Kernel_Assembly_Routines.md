@@ -38,8 +38,10 @@ Throughout, a distinction is drawn between:
 
 Related references: [Besm6_Calling_Conventions.md](Besm6_Calling_Conventions.md),
 [Besm6_Instruction_Set.md](Besm6_Instruction_Set.md),
-[Besm6_Data_Representation.md](Besm6_Data_Representation.md), and — for the interrupt and I/O
-hardware these routines must eventually speak to — [Besm6_Peripherals.md](Besm6_Peripherals.md).
+[Besm6_Data_Representation.md](Besm6_Data_Representation.md), and — for the hardware these routines
+must eventually speak to — [Besm6_Peripherals.md](Besm6_Peripherals.md) (the interrupt and I/O side)
+and [Memory_Mapping.md](Memory_Mapping.md) (the memory side: what `resume` must do to switch an
+address space, what `copyin`/`copyout` cost, and why `invd` has nothing left to do).
 
 ### Historical lineage
 
@@ -145,8 +147,9 @@ over.
 ## 2. Boot / initialization path (`_start`)
 
 `_start` ([x86.s:34](../kernel/x86.s)) is the kernel entry point. It is **replaced wholesale
-on BESM-6** (different CPU bring-up, no x86 real mode, no paging hardware, no 8259/8253), so it
-is documented only at a level sufficient to reproduce its *outputs*. In order it:
+on BESM-6** (different CPU bring-up, no x86 real mode, no 8259/8253, and an MMU that works nothing
+like x86 paging — [Memory_Mapping.md](Memory_Mapping.md)), so it is documented only at a level
+sufficient to reproduce its *outputs*. In order it:
 
 1. **Enters 32-bit protected mode** — `cli`, load the GDT (`gdtd`), set `PE` in `%cr0`, far
    jump to flush the pipeline; reload the segment registers and a temporary stack.
@@ -290,6 +293,10 @@ These are the heart of process switching — the v7 `savu`/`aretu`/`resume` prim
   and reload `%cr3`), then reloads the registers and stack from `label` and jumps — i.e. it
   performs the `longjmp` counterpart of the `save` that filled `label`. It does not return to its
   caller in the normal sense; control resurfaces inside the matching `save`.
+  On BESM-6 the switch is twelve `рег` writes (eight of РП, four of РЗ) — but the **БРЗ write cache
+  must be drained first**, or dirty lines from the outgoing process are written back through the
+  incoming process's mapping. See
+  [Memory_Mapping.md](Memory_Mapping.md#the-брз-write-cache-and-the-брс-prefetch-buffer).
 - **Return.** `save` → 0 (direct) / nonzero (via resume). `resume` → does not return.
 - **Callers.** `swtch()` ([slp.c:352](../kernel/slp.c)) — the scheduler core; `sleep()`
   ([slp.c:88](../kernel/slp.c)) resumes at `u_qsav` after a signal; `newproc()`
@@ -434,8 +441,9 @@ void sti(void);                                 /* systm.h:163 */
   address, cr3 = page-directory base). Only caller: the panic/trap register dump in `trap.c:55`.
   Pure x86 — no BESM-6 analogue beyond "read whatever status registers exist".
 - **`invd`** flushes the TLB by reloading `%cr3`. Caller: `utab.c:51` after `sureg()` rewrites the
-  user page table `upt`. On BESM-6, becomes whatever "invalidate address translation after mapping
-  change" the MMU requires (or a no-op if none).
+  user page table `upt`. On BESM-6 it becomes a **no-op**: writing a page register refills the
+  corresponding TLB entries in the same instruction, so a stale translation is not a state the
+  machine can be in ([Memory_Mapping.md](Memory_Mapping.md#the-registers)).
 - **`cli`/`sti`** clear/set the CPU interrupt-enable flag around very short critical sequences
   (programming the PIT in `machdep.c:89-93`, the beeper timer in `dev/sc.c:560-564`). On BESM-6,
   the equivalent global interrupt-disable/enable.
@@ -455,6 +463,13 @@ void sti(void);                                 /* systm.h:163 */
 | `mem` | 926 (`.set mem, 0x40000000`) | (used via macros) | base of the window that maps *all* physical memory into the kernel address space (`PHY` in `utab.c`) |
 | `pdir` | 927 (`.set pdir, 0x7ff9a000`) | `extern int pdir[];` (utab.c:14) | virtual address of the page directory; read by `physaddr()` |
 | `upt` | 928 (`.set upt, 0x7ff9b000`) | `extern int upt[];` (utab.c:14) | virtual address of the **user page table**; rewritten by `sureg()` to map the current process's text/data/stack |
+
+These last three are the ones with **no BESM-6 counterpart at all**. The machine has no page table in
+memory, no page-directory base register and no page walk — the entire mapping is eight write-only
+registers — and no 32-bit window can hold 512 Kwords of physical memory. `kernel/besm6.S` reserves
+`pdir`/`upt`/`mem` as placeholder arrays only so `utab.c` links; what replaces them is a per-process
+**shadow** page table in kernel memory, written out to РП/РЗ with `рег`. See
+[Memory_Mapping.md](Memory_Mapping.md#what-this-means-for-the-v7-kernel).
 
 `pl` is also contract-*adjacent*: it is a private cell ([x86.s:890](../kernel/x86.s)), but its
 value at trap time is captured into `struct trap.pl` (reg.h:24) and tested by `BASEPRI()`

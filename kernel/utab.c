@@ -1,6 +1,18 @@
 /* V7/x86 source code: see www.nordier.com/v7x86 for details. */
 /* Copyright (c) 1999 Robert Nordier.  All rights reserved. */
 
+/*
+ * Per-process address-space setup.  Still x86 paging: a two-level page table
+ * (pdir/upt) of 4K pages, plus the PHY window onto physical memory.
+ *
+ * On the BESM-6 none of that exists -- the whole mapping is eight write-only
+ * page registers RP (002 020-027) and the protection register RZ (002 030-033),
+ * over 32 virtual pages of 1 Kword.  sureg() becomes twelve `reg' writes, invd()
+ * becomes a no-op, and physaddr()/pdir[] have no counterpart at all: the mapping
+ * cannot be read back, so the kernel must keep its own shadow copy.
+ * See doc/Memory_Mapping.md before retargeting this file.
+ */
+
 // clang-format off
 #include "sys/param.h"
 #include "sys/systm.h"
