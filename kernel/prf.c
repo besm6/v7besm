@@ -65,18 +65,20 @@ loop:
 
 /*
  * Print an unsigned integer in base b.
+ * Non-recursive to avoid deep kernel stacks.
  */
 void printn(unsigned long n, int b)
 {
-    register unsigned long a; /* XXX */
-
-    if (n < 0) { /* shouldn't happen */
-        putchar('-');
-        n = -n;
-    }
-    if ((a = n / b))
-        printn(a, b);
-    putchar("0123456789ABCDEF"[(int)(n % b)]);
+    int prbuf[16]; /* 48-bit unsigned -> up to 16 octal digits */
+    int *cp = prbuf;
+    
+    do {
+        *cp++ = "0123456789abcdef"[n % b];
+        n /= b;
+    } while (n);
+    do {
+        putchar(*--cp);
+    } while (cp > prbuf);
 }
 
 /*
