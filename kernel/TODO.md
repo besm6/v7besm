@@ -210,14 +210,31 @@ before the copy and put back after.
 Still to do, as planned: **copy only up to the saved r15** (`struct user` plus the live stack,
 typically ~300 of the 1024 words).
 
-**11. `copyseg()` / `clearseg()` in `besm6.S`.** Same shape: steal two virtual pages as windows,
-copy/zero register-only, restore the quartet from `u.u_upt[]`. They now take **page-aligned word
-addresses**, not click numbers.
-- **Not virtual pages 0–1**, as this once said: virtual address 0 is a black hole (see task 10).
-  Use pages 1–2, whose descriptors share quartet 0 — one `mod 020` steals both, and both windows
-  fit the short address field. `uarea.s` is the worked example.
-- **Done when** `mmutest`, under `set mmu cache`, copies a page above `0100000` to another and
-  reads it back correctly. A missing drain shows up here and nowhere else.
+**11. `copyseg()` / `clearseg()`. DONE**, and `mmutest` copies a page above `0100000` to another
+and back under `set mmu cache`. Same shape as task 10: steal two virtual pages as windows,
+copy/zero register-only, restore the quartet from `u.u_upt[]`. They take **page-aligned word
+addresses**, not click numbers. How it turned out:
+- **They live in `kernel/seg.s`, not `besm6.S`** — for the same reason as `uarea.s`/`brz.s`: the
+  "done when" is `mmutest`, and `besm6.o` cannot enter a standalone test (its `0500` vector reaches
+  into the C kernel and `_start` seeds no stack). The C stubs that were in `utab.c` are gone; wired
+  into both Makefiles next to `uarea.o`.
+- **Windows are virtual pages 1 and 2** (`02000`/`04000`), not 0–1: virtual address 0 is a black
+  hole (task 10). Both descriptors share quartet 0, so one `mod 020` steals both and one restores;
+  both window addresses fit the 12-bit short field, so the copy loop needs no `utc`. `copyseg`
+  scatters the source into the k=1 slot and the dest into the k=2 slot
+  (mask `#(.47|.43|.39|.35|.31|.[11:15])`) and `aox`es them; `clearseg` uses the one k=1 window and
+  clears A with a bare `xta` (the addr-0 black hole reads 0) before the zeroing loop.
+- **The bracket holds БлПр and restores ПСВ exactly**, verbatim from `uarea.s` (`vtm 02003`/`02002`,
+  `ita`/`ati 021`) — interrupts are held off across the copy even though `copyseg` does not overwrite
+  the stack page, which keeps it identical to the proven `uflush`/`uload` shape.
+- **`copyseg` needs no `s == d` guard**: no caller passes equal addresses, and a page copied to
+  itself through two windows is idempotent.
+- `mmutest` (checks 18–19) fills the live page at `076000`, `copyseg`s it low→high then high→high,
+  reads it back mapped, then `clearseg`s and checks zero. The **trailing** drain is load-bearing and
+  `mmutest` proves it (remove it and the copy never reaches memory); the **leading** drain is the
+  standing "drain before every РП write" rule and is the same construct the u-area leg's return-17
+  check already exercises. Adding `seg.o`'s two mask constants grew the const section, so the test's
+  halt PC moved `00575`→`00604` (`mmutest.ini` updated).
 
 **12. `copyin`/`copyout`/`fubyte`/`fuword`/`subyte`/`suword` in `besm6.S`.** The user's map is
 already in РП, so there is no window: the loop toggles БлП per word — read the user word mapped,

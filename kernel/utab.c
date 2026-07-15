@@ -163,23 +163,10 @@ err:
 }
 
 /*
- * Zero, and copy, one page.  The arguments are page-aligned physical word
- * addresses.  These are placeholders: a caddr_t is a fat pointer with a
- * 15-bit word field and cannot name a physical word above 32767, so a page
- * of the pool (which begins at 0100000) is out of their reach.  Task 11
- * rewrites both in besm6.S, behind a mapped bracket.
+ * copyseg()/clearseg() -- one page, copied or zeroed -- live in kernel/seg.s.
+ * They reach a page above 0100000, which no caddr_t (a 15-bit word field) can
+ * name, through a mapped window; see the bracket there.
  */
-void clearseg(int d)
-{
-    bzero((caddr_t)d, wtob(PGSZ));
-}
-
-void copyseg(int s, int d)
-{
-    if (s == d)
-        return;
-    bcopy((caddr_t)s, (caddr_t)d, wtob(PGSZ));
-}
 
 /*
  * The physical word address a virtual one maps to, or 0 if it is not mapped.

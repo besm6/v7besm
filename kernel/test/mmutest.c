@@ -77,6 +77,10 @@ void extintr(void)
 #define UHOMEPG 40
 #define UHOME   (UHOMEPG * PGSZ)
 
+/* Two more pool pages above 0100000, for the copyseg()/clearseg() leg (task 11). */
+#define SEGSRC 41
+#define SEGDST 42
+
 /*
  * The word offset of u_upt in struct user.  kernel/uarea.s is assembled by bare b6as, which
  * cannot compute an offsetof(), so it hardcodes this -- and this is what keeps it honest.
@@ -238,30 +242,48 @@ int main()
     if (peek(5) != (unsigned)(PATTERN1 ^ 5))
         return (16);
 
+    /*
+     * Task 11: copyseg()/clearseg() (kernel/seg.s), reaching a page above 0100000.
+     *
+     * SEGSRC and SEGDST are two pool pages out of reach of any unmapped access -- the whole
+     * reason the two routines have to window them.  Fill the live page at UBASE (which the
+     * kernel, and we, reach unmapped) with a source pattern and DO NOT drain: copyseg's own
+     * leading drain has to settle those unmapped, physical-tagged stores before it reads the
+     * page back mapped, or it copies stale memory.  That is the hazard this leg exists for.
+     */
+    up = (volatile unsigned *)UBASE;
+    for (i = 0; i < PGSZ; i++)
+        up[i] = PATTERN1 ^ i;
+
+    copyseg(UBASE, SEGSRC * PGSZ);          /* low -> high: settles the fill, windows both pages */
+    copyseg(SEGSRC * PGSZ, SEGDST * PGSZ);  /* high -> high: a page above 0100000 to another */
+
+    /*
+     * Read SEGDST back.  Map it at virtual page 0 and peek sample words -- not word 0, the
+     * black hole.  copyseg's trailing drain is what put its mapped stores into physical memory;
+     * without it this reads stale.
+     */
+    tx.x_caddr = SEGDST * PGSZ;
+    sureg();
+    if (peek(5) != (unsigned)(PATTERN1 ^ 5))
+        return (18);
+    if (peek(500) != (unsigned)(PATTERN1 ^ 500))
+        return (18);
+    if (peek(PGSZ - 1) != (unsigned)(PATTERN1 ^ (PGSZ - 1)))
+        return (18);
+
+    /* clearseg() zeroes the same page. */
+    clearseg(SEGDST * PGSZ);
+    tx.x_caddr = SEGDST * PGSZ;
+    sureg();
+    if (peek(5) != 0)
+        return (19);
+    if (peek(PGSZ - 1) != 0)
+        return (19);
+
     /* Put the map back, so the .ini's РП/РЗ assertions describe the state it expects. */
     tx.x_caddr = TEXTPG * PGSZ;
     sureg();
 
     return (0);
-}
-
-/*
- * utab.o's clearseg()/copyseg() call these; nothing here does.  They are stubs, and
- * task 11 replaces the callers with assembly brackets anyway.
- */
-void bzero(void *dst, unsigned len)
-{
-    register char *p = (char *)dst;
-
-    while (len--)
-        *p++ = 0;
-}
-
-void bcopy(const void *src, void *dst, unsigned len)
-{
-    register const char *from = (const char *)src;
-    register char *to         = (char *)dst;
-
-    while (len--)
-        *to++ = *from++;
 }
