@@ -2,6 +2,7 @@
 /* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
 // clang-format off
+#include <stdarg.h>
 #include "sys/param.h"
 #include "sys/systm.h"
 #include "sys/seg.h"
@@ -20,7 +21,7 @@ void printn(unsigned long n, int b);
 
 /*
  * Scaled down version of C Library printf.
- * Only %s %u %d (==%u) %o %x %D are recognized.
+ * Only %s %u %d (==%u) %o %x are recognized.
  * Used to print diagnostic information
  * directly on console tty.
  * Since it is not interrupt driven,
@@ -31,36 +32,34 @@ void printn(unsigned long n, int b);
 void printf(char *fmt, ...)
 {
     register int c;
-    register unsigned int *adx;
+    va_list adx;
     char *s;
     int d;
 
-    adx = 1 + (unsigned int *)&fmt;
+    va_start(adx, fmt);
 loop:
     while ((c = *fmt++) != '%') {
-        if (c == '\0')
+        if (c == '\0') {
+            va_end(adx);
             return;
+        }
         putchar(c);
     }
     c = *fmt++;
     if (c == 'd') {
-        d = *adx;
+        d = va_arg(adx, int);
         if (d < 0) {
             putchar('-');
             d = -d;
         }
         printn((long)d, 10);
     } else if (c == 'u' || c == 'o' || c == 'x')
-        printn((long)*adx, c == 'o' ? 8 : (c == 'x' ? 16 : 10));
+        printn((long)va_arg(adx, unsigned), c == 'o' ? 8 : (c == 'x' ? 16 : 10));
     else if (c == 's') {
-        s = (char *)*adx;
+        s = va_arg(adx, char *);
         while ((c = *s++))
             putchar(c);
-    } else if (c == 'D') {
-        printn(*(long *)adx, 10);
-        adx += (sizeof(long) / sizeof(int)) - 1;
     }
-    adx++;
     goto loop;
 }
 
@@ -116,5 +115,5 @@ void prdev(char *str, dev_t dev)
 void deverror(register struct buf *bp, int o1, int o2)
 {
     prdev("err", bp->b_dev);
-    printf("bn=%D er=%o,%o\n", bp->b_blkno, o1, o2);
+    printf("bn=%d er=%o,%o\n", bp->b_blkno, o1, o2);
 }
