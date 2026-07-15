@@ -268,66 +268,13 @@ idle:
 // Fault-safe access to user memory
 // ============================================================================
 //
-// int fubyte(caddr_t addr);            -- fetch one user byte,  -1 on fault
-// int fuword(caddr_t addr);            -- fetch one user word,  -1 on fault
-// int subyte(caddr_t addr, int value); -- store one user byte,  0 / -1
-// int suword(caddr_t addr, int value); -- store one user word,  0 / -1
-// int copyin (caddr_t from, caddr_t to, unsigned n); -- user->kernel, 0 / -1
-// int copyout(caddr_t from, caddr_t to, unsigned n); -- kernel->user, 0 / -1
-//
-// These cross the user/kernel boundary safely: a bad user address must NOT panic
-// the kernel.  Each validates the address range, arms the `nofault` recovery hook,
-// performs the access, and disarms it; a fault during the access lands on a
-// recovery path that returns -1.
-//
-// TODO: implement the BESM-6 versions.  Because the machine is word-addressed and
-// has no sub-word load/store, the "byte" variants extract/insert a byte within a
-// word (six chars per word).  All six need a `nofault`-equivalent expected-fault
-// recovery cooperating with the trap handler.
-
-// int fubyte(caddr_t addr)  -- one parameter (addr in A).
-        .globl  fubyte
-fubyte:
-        xta                      // TODO: fetch user byte; return value or -1
-        13 uj
-
-// int fuword(caddr_t addr)  -- one parameter (addr in A).
-        .globl  fuword
-fuword:
-        xta                      // TODO: fetch user word; return value or -1
-        13 uj
-
-// int subyte(caddr_t addr, int value)  -- two parameters (addr pushed, value in A).
-        .globl  subyte
-subyte:
-        // TODO: store user byte; return 0 or -1.
-        xta                      // return 0 (success placeholder)
-        15 utm -1                // pop the pushed argument (addr)
-        13 uj
-
-// int suword(caddr_t addr, int value)  -- two parameters (addr pushed, value in A).
-        .globl  suword
-suword:
-        // TODO: store user word; return 0 or -1.
-        xta                      // return 0 (success placeholder)
-        15 utm -1                // pop the pushed argument (addr)
-        13 uj
-
-// int copyin(caddr_t from, caddr_t to, unsigned n)  -- three parameters.
-        .globl  copyin
-copyin:
-        // TODO: copy n bytes user->kernel with fault recovery; return 0 or -1.
-        xta                      // return 0 (success placeholder)
-        15 utm -2                // pop the two pushed arguments (from, to)
-        13 uj
-
-// int copyout(caddr_t from, caddr_t to, unsigned n)  -- three parameters.
-        .globl  copyout
-copyout:
-        // TODO: copy n bytes kernel->user with fault recovery; return 0 or -1.
-        xta                      // return 0 (success placeholder)
-        15 utm -2                // pop the two pushed arguments (from, to)
-        13 uj
+// fubyte/fuword/subyte/suword/copyin/copyout -- fetch/store a byte or word, or copy
+// a block, across the user/kernel boundary -- live in kernel/usermem.s, not here.
+// On this machine the user's map is already in РП, so the copy needs no window: it
+// just toggles БлП per word (read user mapped, store kernel unmapped, or the reverse)
+// and validates the range up front with useracc() -- there is no `nofault' path.  They
+// are in their own file for the same reason as uarea.s/seg.s: kernel/test/mmutest links
+// the real routines, and besm6.o cannot enter a standalone test.  See usermem.s.
 
 // ============================================================================
 // Floating-point state

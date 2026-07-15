@@ -38,11 +38,11 @@ sctest: crt0.o sctest.o
 	$(DISASM) -c $@ > $@.dis
 	$(NM) -n $@ > $@.nm
 
-# mmutest links the kernel's real utab.o, brz.o, uarea.o and seg.o -- besm6.o cannot
-# come along (its 0500 vector reaches into the C kernel, and its _start seeds no stack),
-# so the four are compiled here from the kernel sources next door.
-mmutest: crt0.o mmutest.o mmuhelp.o utab.o brz.o uarea.o seg.o
-	$(LD) crt0.o mmutest.o mmuhelp.o utab.o brz.o uarea.o seg.o -o $@ -L$(LIBDIR) -lc
+# mmutest links the kernel's real utab.o, brz.o, uarea.o, seg.o and usermem.o -- besm6.o
+# cannot come along (its 0500 vector reaches into the C kernel, and its _start seeds no
+# stack), so the five are compiled here from the kernel sources next door.
+mmutest: crt0.o mmutest.o mmuhelp.o utab.o brz.o uarea.o seg.o usermem.o
+	$(LD) crt0.o mmutest.o mmuhelp.o utab.o brz.o uarea.o seg.o usermem.o -o $@ -L$(LIBDIR) -lc
 	$(DISASM) -c $@ > $@.dis
 	$(NM) -n $@ > $@.nm
 
@@ -56,6 +56,9 @@ uarea.o: ../uarea.s
 	$(AS) $< -o $@
 
 seg.o:  ../seg.s
+	$(AS) $< -o $@
+
+usermem.o: ../usermem.s
 	$(AS) $< -o $@
 
 %.o:    %.c

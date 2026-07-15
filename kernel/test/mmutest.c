@@ -70,6 +70,14 @@ void extintr(void)
 #define PATTERN3 0707070
 
 /*
+ * A char* into user virtual word `w': cast the word address to int* and then to char* -- the
+ * compiler makes it a fat pointer at byte #0 (the MSB byte), and `+ k' walks toward the LSB, byte
+ * by byte, exactly as exec/namei do (doc/Besm6_Data_Representation.md §7).  This is the real path
+ * fubyte()/subyte() take; building the fat pointer by hand from an int misses the marker bit.
+ */
+#define UBYTE(w, k) ((caddr_t)(int *)(w) + (k))
+
+/*
  * The u-area round trip (task 10).  UHOME is a page above 0100000 -- out of reach of any
  * unmapped access, which is the whole reason uflush()/uload() have to window it -- and clear
  * both of this image (which lives in the low pages) and of the map built above.
@@ -91,6 +99,8 @@ int main()
 {
     unsigned va, pa;
     volatile unsigned *up;
+    unsigned kbuf[4];
+    unsigned uw, w;
     int i;
 
     /*
@@ -284,6 +294,81 @@ int main()
     /* Put the map back, so the .ini's РП/РЗ assertions describe the state it expects. */
     tx.x_caddr = TEXTPG * PGSZ;
     sureg();
+
+    /*
+     * Task 12: copyin/copyout and the fu/su family (kernel/usermem.s).  The map above has the
+     * data pages (physical 17-18) at virtual pages 2-3, so a word at 2*PGSZ+n is a real user
+     * address -- reachable only through the map, which is exactly what these routines cross.
+     */
+
+    /* copyout: kernel buffer -> user page, read back through the map. */
+    for (i = 0; i < 4; i++)
+        kbuf[i] = PATTERN2 ^ (i + 1);
+    uw = 2 * PGSZ + 16;
+    if (copyout((caddr_t)kbuf, (caddr_t)uw, 4 * NBPW) != 0)
+        return (20);
+    drainbrz();
+    for (i = 0; i < 4; i++)
+        if (peek(uw + i) != (unsigned)(PATTERN2 ^ (i + 1)))
+            return (20);
+
+    /* copyin: user page -> kernel buffer. */
+    uw = 2 * PGSZ + 24;
+    for (i = 0; i < 4; i++)
+        poke(uw + i, PATTERN1 ^ (i + 1));
+    drainbrz();
+    for (i = 0; i < 4; i++)
+        kbuf[i] = 0;
+    if (copyin((caddr_t)uw, (caddr_t)kbuf, 4 * NBPW) != 0)
+        return (21);
+    for (i = 0; i < 4; i++)
+        if (kbuf[i] != (unsigned)(PATTERN1 ^ (i + 1)))
+            return (21);
+
+    /* fuword / suword round trip. */
+    uw = 2 * PGSZ + 40;
+    if (suword((caddr_t)uw, PATTERN3) != 0)
+        return (22);
+    if ((unsigned)fuword((caddr_t)uw) != PATTERN3)
+        return (22);
+
+    /*
+     * subyte / fubyte at every byte offset.  Each subyte is a read-modify-write that must set
+     * its byte and preserve the other five; after all six the packed word must read back exact.
+     */
+    uw = 2 * PGSZ + 48;
+    poke(uw, 0);
+    drainbrz();
+    for (i = 0; i < 6; i++)
+        if (subyte(UBYTE(uw, i), 0300 | i) != 0)
+            return (23);
+    drainbrz();
+    /* byte #k occupies bits (41-8k)..(48-8k) of the word: (w >> (8*(5-k))) & 0377. */
+    w = peek(uw);
+    for (i = 0; i < 6; i++)
+        if (((w >> (8 * (5 - i))) & 0377) != (unsigned)(0300 | i))
+            return (23);
+    for (i = 0; i < 6; i++)
+        if (fubyte(UBYTE(uw, i)) != (int)(0300 | i))
+            return (23);
+
+    /*
+     * An address in an unmapped page (virtual page 10, the hole of check 5) must be rejected with
+     * -1 and never touch memory -- useracc() sees the zero descriptor, so there is no fault path.
+     */
+    uw = 10 * PGSZ;
+    if (fuword((caddr_t)uw) != -1)
+        return (24);
+    if (suword((caddr_t)uw, 0) != -1)
+        return (24);
+    if (fubyte((caddr_t)uw) != -1)
+        return (24);
+    if (subyte((caddr_t)uw, 0) != -1)
+        return (24);
+    if (copyin((caddr_t)uw, (caddr_t)kbuf, 2 * NBPW) == 0)
+        return (24);
+    if (copyout((caddr_t)kbuf, (caddr_t)uw, 2 * NBPW) == 0)
+        return (24);
 
     return (0);
 }

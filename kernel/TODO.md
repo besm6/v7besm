@@ -236,13 +236,39 @@ addresses**, not click numbers. How it turned out:
   check already exercises. Adding `seg.o`'s two mask constants grew the const section, so the test's
   halt PC moved `00575`→`00604` (`mmutest.ini` updated).
 
-**12. `copyin`/`copyout`/`fubyte`/`fuword`/`subyte`/`suword` in `besm6.S`.** The user's map is
-already in РП, so there is no window: the loop toggles БлП per word — read the user word mapped,
-store it to the kernel buffer unmapped. Register-only. Word at a time when both sides are
-word-aligned; the six-chars-per-word edges are read-modify-write. The C caller has already validated
-the address with `useracc()`, so there is no fault path.
-- **Done when** `mmutest` copies a buffer both ways through a hand-built user map and rejects an
-  address in an unmapped page with `EFAULT`.
+**12. `copyin`/`copyout`/`fubyte`/`fuword`/`subyte`/`suword`. DONE**, and `mmutest` copies a buffer
+both ways through the user map, round-trips a word and a byte at every offset, and rejects an
+unmapped address with -1, all under `set mmu cache`. The user's map is already in РП, so there is no
+window: the loop toggles БлП per word — read the user word mapped, store it to the kernel buffer
+unmapped (or the reverse). Register-only. How it turned out:
+
+- **They live in `kernel/usermem.s`, not `besm6.S`** — same reason as `uarea.s`/`seg.s`: the
+  "done when" is `mmutest`, and `besm6.o` cannot enter a standalone test. Wired into both Makefiles
+  next to `seg.o`; the `besm6.S` stubs are gone, replaced by a one-line pointer.
+- **`copyin`/`copyout` are word-only**, exactly like the x86 original: they copy `nbytes / NBPW`
+  whole words. Every caller passes word-aligned addresses and a word-multiple count (iomove's
+  `NBPW` guard, the struct copyouts, `icode`); an unaligned copy stays on the `fubyte`/`subyte`
+  byte path in `iomove`. The ÷6 is a subtract-6 loop (`divword`) that **floors and cannot spin on
+  a non-multiple** — the broken `iomove` `& (NBPW-1)` guard is a separate, out-of-scope bug.
+- **Validation is `useracc()`, called from the routine itself** — no C caller calls it, so this is
+  what "the C caller has already validated" resolves to: the routine calls `useracc`, and a range
+  that runs into a zero descriptor returns -1. There is no `nofault`/trap path.
+- **No `drainbrz`.** РП is never written, so the "drain before the РП write" rule does not apply,
+  and copyout's mapped stores go back through the *same* loaded map — no tag hazard. (A context
+  switch, which does reload РП, drains; that is `resume()`'s job.)
+- **The bracket is `uarea.s`'s, minus the `mod`/drain**: save ПСВ (`ita 021`), toggle БлП with
+  `vtm 02002`/`02003` holding БлЗ+БлПр, copy register-only, restore ПСВ. Interrupts are held off
+  across the copy — these copies are small.
+- **`fubyte` extracts the byte with `asx` on the fat pointer's own exponent field** (it is
+  `64 + 8·off`, so `asx` right-shifts the word by `8·off`); `subyte` is a read-modify-write using a
+  6-entry `bytemask[]` and `aux` to scatter the new byte, with the offset field (bits 47–45) read
+  out by `asn 64+44`. Note the fat-pointer **marker bit (48) is load-bearing** for `fubyte`:
+  building a fat pointer by hand from an `int` (no marker) makes `asx` shift by `8·off − 64` and
+  return 0 — the test must use the compiler's `int*`→`char*` conversion, which is the real path.
+- **The fault return is the clean C `-1` (`.[1:41]`), not all 48 ones**, so `fubyte(...) == -1` at
+  a caller (`sig.c`) matches the compiler's own `-1` literal.
+- `mmutest` grew checks 20–24; the const growth happened to leave the halt PC at `00604`, so the
+  `.ini` PC assertion is unchanged and its single `ACC == 0` check catches any of them.
 
 **13. `bcopy` / `bzero` in `besm6.S`** — plain unmapped word loops. Delete `ld_cr0/2/3`, `inb`, `outb`,
 `insw`, `outsw`. (`savfp`, `restfp`, `stst` and `invd` are already gone — stage 1 took them: the first
