@@ -113,7 +113,7 @@ void iinit()
     cp = geteblk();
     if (u.u_error)
         panic("iinit");
-    bcopy(bp->b_un.b_addr, cp->b_un.b_addr, sizeof(struct filsys));
+    wcopy(bp->b_un.b_addr, cp->b_un.b_addr, btow(sizeof(struct filsys)));
     brelse(bp);
     mount[0].m_bufp = cp;
     mount[0].m_dev  = rootdev;

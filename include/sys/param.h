@@ -73,6 +73,7 @@
 
 #define NBPW    sizeof(int)               /* number of bytes in an integer */
 #define BSIZE   3072                      /* size of secondary block (bytes, 6144 for besm) */
+#define BSIZEW  512                       /* size of secondary block, in words (BSIZE / NBPW) */
 #define NINDIR  (BSIZE / sizeof(daddr_t)) /* number of indirect blocks */
 #define BMASK   0777                      /* BSIZE-1 */
 #define BSHIFT  9                         /* LOG2(BSIZE) */
@@ -84,7 +85,7 @@
 #define NODEV   (dev_t)(-1)               /* no device */
 #define ROOTINO ((ino_t)2)                /* i number of all roots */
 #define SUPERB  ((daddr_t)1)              /* block number of the super block */
-#define DIRSIZ  14                        /* max characters per directory */
+#define DIRSIZ  24                        /* max characters per directory (4 words) */
 #define NICINOD 100                       /* number of superblock inodes */
 #define NICFREE 50                        /* number of superblock free blocks */
 #define INFSIZE 138                       /* size of per-proc info for users */

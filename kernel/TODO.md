@@ -270,10 +270,34 @@ unmapped (or the reverse). Register-only. How it turned out:
 - `mmutest` grew checks 20–24; the const growth happened to leave the halt PC at `00604`, so the
   `.ini` PC assertion is unchanged and its single `ACC == 0` check catches any of them.
 
-**13. `bcopy` / `bzero` in `besm6.S`** — plain unmapped word loops. Delete `ld_cr0/2/3`, `inb`, `outb`,
-`insw`, `outsw`. (`savfp`, `restfp`, `stst` and `invd` are already gone — stage 1 took them: the first
-three with the u-area's FP block, and `invd` outright rather than as a no-op, since nothing calls it.)
-- **Done when** the kernel links with no stub left that silently returns 0.
+**13. `bcopy` / `bzero` in `besm6.S`. DONE**, and `cd kernel && make` links with no stub left that
+silently returns 0 (image ends at `060040`, 24608 words, still below `076000`). How it turned out:
+
+- **Renamed `wcopy`/`wzero`, and they take a WORD count**, not a byte count. Every call site converts
+  its byte count with `btow()` (`param.h`), and the three whole-block copies use the new `BSIZEW`
+  (= 512, block size in words); `BSIZE` (bytes) stays for the still-deferred filesystem block-unit
+  rework. So the loop is pure words with no six-chars-per-word tail — it is `copyin`'s inner loop
+  (`usermem.s`) minus the per-word БлП toggle, the `useracc` validation and the ПСВ save: plain
+  unmapped, register-only (r10 count, r11/r12 pointers, word in A), no window and **no `drainbrz`**
+  (РП is never written). `aax #077777` strips the caller's fat pointer to a 15-bit word address.
+- **`DIRSIZ` is now 24** (a whole 4 words), so `struct direct` is 5 words and directory entries are
+  word-aligned — which incidentally makes `nami.c`'s `b_addr + (u_offset & BMASK)` source a word
+  boundary (fat-pointer offset 0), so the plain word copy there is correct with no byte shuffling.
+- **`cli`/`sti` are implemented**: set / clear the БлПр bit of ПСВ (`M[021]`, bit `02000` = external
+  interrupts off; `doc/Memory_Mapping.md`). It is a read-modify-write (`ita 021` / `aox 02000` or
+  `aax 075777` / `ati 021`), **not** a `vtm`, because `vtm` writes the whole ПСВ and would clobber
+  the other mode bits (БлП/БлЗ/ПОП/ПОК). Verified from `unix.dis`: the immediates materialise through
+  the constant pool as `02000` and `075777`.
+- **The seven x86 routines are deleted** (`ld_cr0/2/3`, `inb`, `outb`, `insw`, `outsw`), with their
+  prototypes, and every remaining caller excised so the link stays clean: `dev/hd.c` and `dev/sr.c`
+  are kept as **BESM-6 driver skeletons** (the x86 port-I/O stripped to `// TODO` stubs, but still
+  built and wired in `conf.c`, so their `bdevsw`/`cdevsw` hooks resolve); `machdep.c` lost the 8253
+  PIT and the CMOS RTC (`clkstart()` is now just `spl0()`, and `readrtc`/`getrtc`/`inrtc` are gone —
+  time-of-day is no longer read at boot); and `trap.c`'s x86 panic dump lost its `cr0/cr2/cr3` line.
+  (`savfp`, `restfp`, `stst` and `invd` were already gone — stage 1 took them.)
+- **No SIMH test.** `wcopy`/`wzero`/`cli`/`sti` have no MMU interaction, so unlike tasks 10–12 there
+  is nothing for `test/mmutest` to exercise; the copy loop is the already-proven `copyin` inner loop
+  with the map toggles removed, and the build/link gate is the task's own "done when".
 
 ### Stage 3 — boot, traps, switching
 

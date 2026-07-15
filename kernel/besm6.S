@@ -308,116 +308,96 @@ addupc:
 // Kernel memory primitives
 // ============================================================================
 //
-// void bcopy(const void *src, void *dst, unsigned len) -- kernel block copy
-// void bzero(void *dst, unsigned len)                  -- kernel block zero
+// void wcopy(const void *src, void *dst, unsigned nwords) -- kernel block copy
+// void wzero(void *dst, unsigned nwords)                  -- kernel block zero
 //
-// Plain kernel-to-kernel operations (no fault protection).  On x86 `len` is a byte
-// count; on the word-addressed BESM-6 these are naturally word loops -- mind the
-// six-chars-per-word packing when a byte count is not a word multiple.
-//
-// TODO: implement the copy / zero loops.
+// Plain kernel-to-kernel operations (no fault protection).  On the word-addressed
+// BESM-6 the count is a WORD count, not a byte count: callers convert with btow()
+// (sys/param.h), so there is no six-chars-per-word tail to handle -- these are pure
+// word loops.  The kernel runs unmapped (a kernel address IS a physical address), so
+// there is no window and no drainbrz: this is copyin's inner loop (usermem.s) minus
+// the per-word БлП toggle, the useracc validation and the ПСВ save.  Register-only:
+// r10/r11/r12 (caller-saved) hold the count and the two pointers; the word rides in A;
+// r1-r7, r13 and r15 are untouched.
 
-// void bcopy(src, dst, len)  -- three parameters (src, dst pushed; len in A).
-        .globl  bcopy
-bcopy:
-        // TODO: copy `len` from src to dst.
-        15 utm -2                // pop the two pushed arguments (src, dst)
-        13 uj
+// void wcopy(src, dst, nwords)  -- three parameters (src, dst pushed; nwords in A).
+        .globl  wcopy
+wcopy:
+        ati     012              // r10 := nwords (arrived in A)
+     15 xta     -2               // A := src   (1st pushed argument)
+        aax     #077777          //   strip the fat-pointer marker/offset -> word address
+        ati     013              // r11 := src word pointer
+     15 xta     -1               // A := dst   (2nd pushed argument)
+        aax     #077777
+        ati     014              // r12 := dst word pointer
+wc_lp:
+     10 vzm     wc_dn            // count == 0 -> done
+     11 xta                      // A := mem[r11]   (unmapped = physical)
+     12 atx                      // mem[r12] := A
+     11 utm     1                // ++src
+     12 utm     1                // ++dst
+     10 utm     -1               // --count
+        uj      wc_lp
+wc_dn:
+     15 utm     -2               // pop the two pushed arguments (src, dst)
+     13 uj
 
-// void bzero(dst, len)  -- two parameters (dst pushed; len in A).
-        .globl  bzero
-bzero:
-        // TODO: zero `len` at dst.
-        15 utm -1                // pop the one pushed argument (dst)
-        13 uj
+// void wzero(dst, nwords)  -- two parameters (dst pushed; nwords in A).
+        .globl  wzero
+wzero:
+        ati     012              // r10 := nwords (arrived in A)
+     15 xta     -1               // A := dst   (the one pushed argument)
+        aax     #077777
+        ati     014              // r12 := dst word pointer
+        xta                      // A := 0 (physical word 0 reads 0 unmapped, cf. copyin)
+wz_lp:
+     10 vzm     wz_dn            // count == 0 -> done
+     12 atx                      // mem[r12] := 0
+     12 utm     1                // ++dst
+     10 utm     -1               // --count
+        uj      wz_lp
+wz_dn:
+     15 utm     -1               // pop the one pushed argument (dst)
+     13 uj
 
 // ============================================================================
-// Low-level device access
+// TLB, interrupt flag
 // ============================================================================
 //
-// int  inb(int addr);                    -- read a byte from an I/O port
-// void outb(int addr, int value);        -- write a byte to an I/O port
-// void insw (int addr, char *buf, int n);-- read n words port -> memory
-// void outsw(int addr, char *buf, int n);-- write n words memory -> port
+// void invd(void);   -- flush the TLB
+// void cli(void);    -- disable interrupts (block external interrupts)
+// void sti(void);    -- enable interrupts
 //
-// These are x86 programmed-I/O primitives, used by the (x86) device drivers.  The
-// BESM-6 has no x86 port space; on the real port these are replaced by the BESM-6
-// channel / device-register access primitives, together with the driver layer.
+// invd flushed the x86 address-translation cache after page-table edits (utab.c); on
+// the BESM-6 it is gone, not stubbed -- writing a page register refills the corresponding
+// TLB entries in the same instruction, so a stale translation cannot happen
+// (doc/Memory_Mapping.md).  The x86 control-register reads ld_cr0/2/3 went with the x86
+// panic dump in trap.c, and the x86 programmed-I/O primitives inb/outb/insw/outsw went
+// with the x86 device drivers: the BESM-6 has no port space, so a peripheral is reached
+// with 033 «увв» / 002 «рег» (doc/Besm6_Peripherals.md), not from here.
 //
-// TODO: implement (or replace) once the BESM-6 device model exists.
-
-// int inb(int addr)  -- one parameter (addr in A).
-        .globl  inb
-inb:
-        xta                      // TODO: return the byte read
-        13 uj
-
-// void outb(int addr, int value)  -- two parameters (addr pushed; value in A).
-        .globl  outb
-outb:
-        // TODO: write the byte.
-        15 utm -1                // pop the pushed argument (addr)
-        13 uj
-
-// void insw(int addr, char *buf, int n)  -- three parameters.
-        .globl  insw
-insw:
-        // TODO: read n words from the port into buf.
-        15 utm -2                // pop the two pushed arguments (addr, buf)
-        13 uj
-
-// void outsw(int addr, char *buf, int n)  -- three parameters.
-        .globl  outsw
-outsw:
-        // TODO: write n words from buf to the port.
-        15 utm -2                // pop the two pushed arguments (addr, buf)
-        13 uj
-
-// ============================================================================
-// Control registers, TLB, interrupt flag
-// ============================================================================
-//
-// int  ld_cr0(void), ld_cr2(void), ld_cr3(void); -- read x86 control registers
-// void invd(void);                                -- flush the TLB
-// void cli(void);                                 -- disable interrupts
-// void sti(void);                                 -- enable interrupts
-//
-// ld_cr0/2/3 are x86-only (used solely by the panic register dump in trap.c); they
-// have no BESM-6 analogue beyond "read whatever status registers exist".  invd
-// flushes the address-translation cache after page-table edits (utab.c); on BESM-6
-// it is a no-op -- writing a page register refills the corresponding TLB entries in
-// the same instruction, so a stale translation cannot happen (doc/Memory_Mapping.md).
-// cli/sti are the global interrupt disable/enable around short critical sequences.
-//
-// TODO: map these onto the BESM-6 machine state; drop the ones with no meaning.
-
-        .globl  ld_cr0
-ld_cr0:
-        xta                      // TODO: x86-only; no BESM-6 meaning
-        13 uj
-
-        .globl  ld_cr2
-ld_cr2:
-        xta                      // TODO: x86-only; no BESM-6 meaning
-        13 uj
-
-        .globl  ld_cr3
-ld_cr3:
-        xta                      // TODO: x86-only; no BESM-6 meaning
-        13 uj
+// cli/sti are the global interrupt disable/enable around short critical sequences.  On the
+// BESM-6 that is the БлПр bit of ПСВ (M[021], bit 02000): set = external interrupts off.
+// We read-modify-write ПСВ so the other mode bits (БлП/БлЗ/ПОП/ПОК) are preserved -- `vtm'
+// would overwrite the whole word.  ita/ati take a 5-bit register number in supervisor mode,
+// so M[021] = ПСВ is reachable (doc/Memory_Mapping.md).
 
         // invd is gone: on the BESM-6 `reg 020+i' refills the TLB as it writes RP,
         // so a stale translation is not a state the machine can be in and there is
         // nothing for utab.c to invalidate (doc/Memory_Mapping.md).
 
         .globl  cli
-cli:
-        // TODO: disable interrupts globally.
+cli:                             // set БлПр -> external interrupts OFF
+        ita     021              // A := ПСВ
+        aox     #02000           //   set БлПр
+        ati     021              // ПСВ := A
         13 uj
 
         .globl  sti
-sti:
-        // TODO: enable interrupts globally.
+sti:                             // clear БлПр -> external interrupts ON
+        ita     021              // A := ПСВ
+        aax     #075777          //   clear БлПр (077777 & ~02000), keep the other bits
+        ati     021              // ПСВ := A
         13 uj
 
 // ============================================================================

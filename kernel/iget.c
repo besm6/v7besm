@@ -302,7 +302,7 @@ void wdir(struct inode *ip)
         goto out;
     }
     u.u_dent.d_ino = ip->i_number;
-    bcopy((caddr_t)u.u_dbuf, (caddr_t)u.u_dent.d_name, DIRSIZ);
+    wcopy((caddr_t)u.u_dbuf, (caddr_t)u.u_dent.d_name, btow(DIRSIZ));
     u.u_count  = sizeof(struct direct);
     u.u_segflg = 1;
     u.u_base   = (caddr_t)&u.u_dent;

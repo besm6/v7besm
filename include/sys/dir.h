@@ -1,7 +1,7 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
 #ifndef DIRSIZ
-#define DIRSIZ 14
+#define DIRSIZ 24
 #endif
 struct direct {
     ino_t d_ino;

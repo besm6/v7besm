@@ -37,8 +37,6 @@ int icode[] = {
 };
 int szicode = sizeof(icode);
 
-void readrtc(void);
-
 /*
  * Machine-dependent startup code
  */
@@ -79,15 +77,10 @@ void sysphys()
  */
 void clkstart()
 {
-    unsigned c = (0x1234dd + HZ / 2) / HZ;
-
-    readrtc();
-    /* 8253 pit counter 0 mode 3 */
-    cli();
-    outb(0x43, 0x36);
-    outb(0x40, c);
-    outb(0x40, c >> 8);
-    sti();
+    /* TODO: BESM-6 interval timer.  The x86 8253 PIT and the CMOS RTC (which set
+     * `time' from the wall clock) are gone -- they were x86 programmed I/O with no
+     * BESM-6 analogue.  Until the machine timer is programmed, just open the
+     * interrupt level. */
     spl0();
 }
 
@@ -106,40 +99,3 @@ void sendsig(caddr_t p, int signo)
     u.u_ar0[EIP] = (int)p;
 }
 
-/*
- * Set the time from the real time clock.
- */
-void readrtc()
-{
-    static short days[] = { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 };
-    int yr, mt, dm, hr, mn, sc;
-
-    if ((inrtc(0xd) & 0x80) == 0)
-        return;
-    while (inrtc(0xa) & 0x80)
-        ;
-    sc = getrtc(0);
-    mn = getrtc(2);
-    hr = getrtc(4);
-    dm = getrtc(7);
-    mt = getrtc(8);
-    yr = getrtc(9);
-    yr += yr >= 70 ? -70 : 30;
-    time = (yr * 365 + (yr + 1) / 4 + days[mt - 1] + ((yr + 2) % 4 == 0 && mt >= 3) + dm - 1);
-    time = ((time * 24 + hr) * 60 + mn) * 60 + sc;
-    time += TIMEZONE * 60;
-}
-
-int getrtc(int addr)
-{
-    int x;
-
-    x = inrtc(addr);
-    return (x >> 4) * 10 + (x & 15);
-}
-
-int inrtc(int addr)
-{
-    outb(0x70, addr);
-    return inb(0x71);
-}

@@ -51,7 +51,6 @@ void trap(struct trap tr)
         printf("eax=%x ecx=%x edx=%x ebx=%x\n", u.u_ar0[EAX], u.u_ar0[ECX], u.u_ar0[EDX],
                u.u_ar0[EBX]);
         printf("esp=%x ebp=%x esi=%x edi=%x\n", tr.esp, u.u_ar0[EBP], u.u_ar0[ESI], u.u_ar0[EDI]);
-        printf("cr0=%x  cr2=%x  cr3=%x\n", ld_cr0(), ld_cr2(), ld_cr3());
         printf("eip=%x  eflags=%x  err=%x\n", tr.eip, tr.efl, tr.err);
         printf("trap type %x\n", tr.dev);
         panic("trap");

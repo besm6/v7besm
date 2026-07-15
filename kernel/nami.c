@@ -153,7 +153,7 @@ eloop:
      * If they do not match, go back to eloop.
      */
 
-    bcopy(bp->b_un.b_addr + (u.u_offset & BMASK), (caddr_t)&u.u_dent, sizeof(struct direct));
+    wcopy(bp->b_un.b_addr + (u.u_offset & BMASK), (caddr_t)&u.u_dent, btow(sizeof(struct direct)));
     u.u_offset += sizeof(struct direct);
     if (u.u_dent.d_ino == 0) {
         if (eo == 0)

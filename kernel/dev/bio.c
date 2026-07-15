@@ -376,7 +376,7 @@ void iodone(register struct buf *bp)
  */
 void clrbuf(struct buf *bp)
 {
-    bzero(bp->b_un.b_addr, BSIZE);
+    wzero(bp->b_un.b_addr, BSIZEW);
     bp->b_resid = 0;
 }
 

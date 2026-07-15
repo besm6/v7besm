@@ -177,7 +177,7 @@ void smount()
     mp->m_inodp = ip;
     mp->m_dev   = dev;
     mp->m_bufp  = geteblk();
-    bcopy((caddr_t)bp->b_un.b_addr, mp->m_bufp->b_un.b_addr, BSIZE);
+    wcopy((caddr_t)bp->b_un.b_addr, mp->m_bufp->b_un.b_addr, BSIZEW);
     fp          = mp->m_bufp->b_un.b_filsys;
     fp->s_ilock = 0;
     fp->s_flock = 0;

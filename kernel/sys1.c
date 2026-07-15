@@ -279,7 +279,7 @@ void setregs()
      * Remember file name for accounting.
      */
     u.u_acflag &= ~AFORK;
-    bcopy((caddr_t)u.u_dbuf, (caddr_t)u.u_comm, DIRSIZ);
+    wcopy((caddr_t)u.u_dbuf, (caddr_t)u.u_comm, btow(DIRSIZ));
 }
 
 /*

@@ -56,8 +56,8 @@ struct buf *alloc(dev_t dev)
         bp = bread(dev, bno);
         if ((bp->b_flags & B_ERROR) == 0) {
             fp->s_nfree = ((FBLKP)(bp->b_un.b_addr))->df_nfree;
-            bcopy((caddr_t)((FBLKP)(bp->b_un.b_addr))->df_free, (caddr_t)fp->s_free,
-                  sizeof(fp->s_free));
+            wcopy((caddr_t)((FBLKP)(bp->b_un.b_addr))->df_free, (caddr_t)fp->s_free,
+                  btow(sizeof(fp->s_free)));
         }
         brelse(bp);
         fp->s_flock = 0;
@@ -101,8 +101,8 @@ void free(dev_t dev, daddr_t bno)
         fp->s_flock++;
         bp                                   = getblk(dev, bno);
         ((FBLKP)(bp->b_un.b_addr))->df_nfree = fp->s_nfree;
-        bcopy((caddr_t)fp->s_free, (caddr_t)((FBLKP)(bp->b_un.b_addr))->df_free,
-              sizeof(fp->s_free));
+        wcopy((caddr_t)fp->s_free, (caddr_t)((FBLKP)(bp->b_un.b_addr))->df_free,
+              btow(sizeof(fp->s_free)));
         fp->s_nfree = 0;
         bwrite(bp);
         fp->s_flock = 0;
@@ -297,7 +297,7 @@ void update()
                 continue;
             fp->s_fmod = 0;
             fp->s_time = time;
-            bcopy((caddr_t)fp, bp->b_un.b_addr, BSIZE);
+            wcopy((caddr_t)fp, bp->b_un.b_addr, BSIZEW);
             bwrite(bp);
         }
     for (ip = &inode[0]; ip < &inode[NINODE]; ip++)
