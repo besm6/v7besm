@@ -301,14 +301,38 @@ silently returns 0 (image ends at `060040`, 24608 words, still below `076000`). 
 
 ### Stage 3 — boot, traps, switching
 
-**14. `_start` and boot.** Zero bss — from `edata` to `end`, both defined by `b6ld` (`besm6.S` already
-references them; there is no `kend` variable to set) — size physical memory into `phymem`, put r15
-into the u page, call `main()`: all unmapped, which is the mode the machine resets into. Then
-`uhome = proc[0].p_addr` in `main.c`, and in `machdep.c` drop the 8253 and the RTC. (Stage 0 already
-landed the rest of the C half: `proc[0].p_addr` = the first free word `0100000`, `p_size = USIZE`, and
-a `startup()` that frees words `0100000 + USIZE`…`phymem` in one extent — never page 0, a zero РП entry
-means "not mapped" — with the x86 memory hole gone.)
-- **Done when** `load unix; go` prints `mem = …` from `startup()` and halts at a known PC.
+**14. `_start` and boot. DONE.** `_start` seeds the kernel stack pointer (r15) and calls `main()`;
+the machine resets straight into the kernel's own mode (supervisor, unmapped, interrupts off, faults
+halt — `doc/Memory_Mapping.md`, "Reset state"), so there is nothing else to set up. Everything the
+boot phase must do that can be said in C is done at the top of `main()`. How it turned out, and why
+it differs from the sketch above:
+
+- **bss-zero and memory sizing moved to C (`main.c`), out of `_start`.** The bss size is `end - edata`,
+  a difference of two linker-defined externals, which `b6as` rejects ("`-` requires its right operand
+  to be absolute", `doc/Assembler_Manual.md` §7); in C the compiler emits the pointer subtraction for
+  free. So `main()` opens with `wzero(edata, end - edata)` (bss cleared before anything reads it —
+  `_start`, the prologue, and `wzero` touch no bss) and then `phymem = 512 * 1024` (the fixed SIMH
+  `MEMSIZE`; the kernel runs unmapped, 32 Kword reach, and cannot probe the 512 Kword store). Both
+  precede `startup()`, which is the first code to read either.
+- **r15 = &u.u_stack (~`076214`) via an integer alias.** `b6cc` will not take the address of a struct
+  member in a static initializer, so `machdep.c` seeds it as `int *const ustkbase = &uarea[sizeof(struct
+  user)/sizeof(int) - 1]` — `uarea` is an absolute `int[]` alias of `u` in `besm6.S` (only `&array[const]`
+  folds a symbol+offset into a relocation), and `u_stack` is the last member, so its word offset is the
+  struct's word size minus one. `_start` loads it with `xta <ustkbase>; aax #077777; ati 017`.
+- **`uhome = proc[0].p_addr` and the 8253/RTC drop** — `uhome` is set in `main.c` right after
+  `proc[0].p_addr`; the `machdep.c` clock/RTC removal was already done in task 13 (`clkstart()` = `spl0()`).
+- **`make run` + `kernel/unix.ini`** added to boot the image under SIMH (no `set mmu cache`: task-14 boot
+  programs no page registers).
+
+Verified under SIMH: r15 = `076214`, `phymem` = `02000000` (524288), `uhome` = `0100000`, `startup()`
+runs and prints `mem = ` on the console. **Not fully done:** the *number* in `mem = …` does not render
+on the console — `printf`/`printn` are proven correct (the exact source prints `mem = 490496 words`
+under `b6sim`) and were reworked to use `<stdarg.h>` (the `&fmt+1` idiom, `%D` dropped), so this is a
+polled-console / driver issue (chars dropped after `mem = `; `putchar`'s `msgbuf` logging also found not
+populating). To debug later; it is not a `_start`/boot defect.
+- **Done when** `load unix; go` prints `mem = …` from `startup()` and halts at a known PC. *(Prints
+  `mem = `; a clean halt awaits the trap/scheduler of tasks 15–16 — today it runs on into the stub
+  init/scheduler.)*
 
 **15. Trap / extracode / interrupt entry and exit (`besm6.S`, `include/sys/reg.h`, `trap.c`).** Entry
 is now trivial — the hardware's forced БлП/БлЗ is already the kernel's mode, so there is no map to

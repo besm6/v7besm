@@ -40,6 +40,11 @@ VPATH = dev
 all:    unix
 	$(SIZE) unix
 
+# Run the kernel on the SIMH BESM-6 simulator.  Prints `mem = ...' from startup()
+# on the operator console; interrupt with ^E / ^C to stop.  See unix.ini.
+run:    unix
+	besm6 unix.ini
+
 clean:
 	rm -f *.o *.a *.nm unix
 

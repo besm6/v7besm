@@ -87,23 +87,28 @@
 //   * the u-area and kernel stack mapped, interrupt vector installed;
 //   * call main();  then enter user mode on the first process (icode).
 
-// int edata -- first word past the data segment.
-// int end   -- first word past everything (const + text + data + bss).
+// _start is deliberately tiny.  Everything the boot phase must do that can be said
+// in C -- zeroing bss and publishing the memory size -- is done at the top of main()
+// (see kernel/main.c).  Only the two things that cannot are here: seeding the stack
+// pointer (r15) before any C runs, and calling main().  The machine resets into the
+// kernel's own mode already (supervisor, unmapped, interrupts off, faults halt --
+// doc/Memory_Mapping.md, "Reset state"), so there is nothing to set up.
 //
-// Both are boundary symbols defined by b6ld, which creates them as soon as they
-// are referenced -- hence the .globl here, and hence no `kend' variable of our
-// own to fill in at boot.  See doc/Linker_Manual.md, section 4.3.
-        .globl  edata
-        .globl  end
+// (bss is zeroed from C rather than here because the size, `end - edata', is a
+// difference of two linker externals that b6as will not assemble -- see main.c.)
 
         .text
         .globl  _start
 _start:
-        // TODO: BESM-6 processor initialization.
-        // TODO: zero bss (edata..end), set phymem, map u-area + kernel stack.
-        // TODO: install interrupt vector; call main; enter user mode.
-     13 vjm main
-        stop                        // placeholder
+        // Seed the kernel stack pointer: the top of struct user, growing up to
+        // 0100000.  ustkbase (machdep.c) holds &u.u_stack, a link-time constant.
+        xta     <ustkbase>
+        aax     #077777             // strip the fat-pointer marker -> word address
+        ati     017                 // r15 := kernel stack base (~076214)
+//     15 vtm [ustkbase]
+     13 vjm     main                // into the C kernel; main() zeroes bss, sizes memory
+bhalt:  stop                        // main returned / faulted upstream: resumable halt
+        uj      bhalt
 
 // ============================================================================
 // Extracode entry
@@ -420,10 +425,11 @@ s14:    . = . + 1
 
         .data
 
-// int phymem -- physical memory size found by the boot memory scan (freed into
-// coremap by startup()).
+// int phymem -- physical memory size in words (freed into coremap by startup()).
+// main() sets it at boot (kernel/main.c); the kernel runs unmapped and cannot probe
+// the store, so it is the fixed SIMH MEMSIZE rather than a scan.
         .globl  phymem
-phymem: .word 0                  // TODO: set during bring-up
+phymem: .word 0                  // set by main() during bring-up
 
 // caddr_t waitloc -- address of the idle wait instruction; clock() compares the
 // interrupted pc against it to charge idle time.
@@ -435,7 +441,7 @@ waitloc:.word 0                  // TODO: point at the idle-loop wait location
 // switches; resume() flushes and reloads when it finds uhome != the incoming
 // p_addr.  See kernel/TODO.md, "The u-area invariant".
         .globl  uhome
-uhome:  .word 0                  // TODO (task 14): set to proc[0].p_addr at boot
+uhome:  .word 0                  // set to proc[0].p_addr at boot by main() (kernel/main.c)
 
 // struct user u -- the per-process user area: struct user at the bottom and the
 // kernel stack growing up from it to 0100000.  It is not in the user's map and it
@@ -445,3 +451,10 @@ uhome:  .word 0                  // TODO (task 14): set to proc[0].p_addr at boo
 // passes it through unrelocated.
         .globl  u
         u = 076000               // must agree with UBASE in include/sys/param.h
+
+// int uarea[] -- the u-area as a flat word array, an absolute alias of `u' at the
+// same address.  It lets C name a word inside the u-area by index (machdep.c seeds
+// r15 with &uarea[wordsizeof(struct user)-1], the top of struct user), which member
+// access -- &u.u_stack -- cannot express in a static initializer.
+        .globl  uarea
+        uarea = 076000           // == u; the u-area addressed as int[]

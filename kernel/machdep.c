@@ -19,6 +19,22 @@ extern int phymem;
 
 int maxmem; /* actual max memory per process */
 
+extern int uarea[]; /* the u-area (076000) as a flat word array; see besm6.S */
+
+/*
+ * Base of the per-process kernel stack: the top of struct user, which grows up
+ * to 0100000.  besm6.S:_start seeds the stack pointer (r15) here at boot; a
+ * context switch reloads r15 from the saved label thereafter.
+ *
+ * u_stack is the last member of struct user, so its word offset is the struct's
+ * word size minus one.  We spell the address as &uarea[that] rather than the
+ * obvious &u.u_stack because b6cc will not take the address of a struct member in
+ * a static initializer -- only &array[const] folds a symbol+offset into the
+ * relocation.  uarea aliases u at the same absolute address, so this is that
+ * word: UBASE + wordsizeof(struct user) - 1 (~076214).
+ */
+int *const ustkbase = &uarea[sizeof(struct user) / sizeof(int) - 1];
+
 /*
  * Icode is the hex bootstrap
  * program executed in user mode
@@ -49,12 +65,12 @@ void startup()
      * u-area home of proc[0], which main() claims right after us, so the
      * pool proper starts one page higher.
      *
-     * phymem is the size of physical memory, in words; besm6.S still leaves
-     * it zero until the boot code sets it (task 14).
+     * phymem is the size of physical memory, in words; main() sets it just
+     * before calling us (kernel/main.c).
      */
     maxmem = phymem - (NPAGE * PGSZ + USIZE);
     mfree(coremap, maxmem, NPAGE * PGSZ + USIZE);
-    printf("mem = %D words\n", (long)maxmem);
+    printf("mem = %d words\n", maxmem);
     if (MAXMEM < maxmem)
         maxmem = MAXMEM;
     mfree(swapmap, nswap, 1);
