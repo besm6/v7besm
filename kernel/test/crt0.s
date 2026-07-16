@@ -61,40 +61,46 @@ fault:  stop    07777
 //
 // Interrupts stay disabled throughout (the hardware sets БлПр on entry and `ij`
 // restores it from СПРВ), so a single static save area is safe.
+//
+// The `< sym >` escapes emit a `utc sym` ahead of each instruction, so the save area is
+// addressed with 15 bits rather than atx/xta's own 12-bit field.  This test image is
+// small enough that its bss would fit either way; the escapes are here because the
+// kernel's copy of this stub needs them (its bss links at 060052) and the two are meant
+// to stay identical.  See kernel/besm6.S.
 
-extint: atx     sa              // save the accumulator
+extint: atx     <sa>            // save the accumulator
         ita     010             // ...and r8-r14, which the C call may clobber
-        atx     s8
+        atx     <s8>
         ita     011
-        atx     s9
+        atx     <s9>
         ita     012
-        atx     s10
+        atx     <s10>
         ita     013
-        atx     s11
+        atx     <s11>
         ita     014
-        atx     s12
+        atx     <s12>
         ita     015
-        atx     s13
+        atx     <s13>
         ita     016
-        atx     s14
+        atx     <s14>
 
      13 vjm     extintr
 
-        xta     s14
+        xta     <s14>
         ati     016
-        xta     s13
+        xta     <s13>
         ati     015
-        xta     s12
+        xta     <s12>
         ati     014
-        xta     s11
+        xta     <s11>
         ati     013
-        xta     s10
+        xta     <s10>
         ati     012
-        xta     s9
+        xta     <s9>
         ati     011
-        xta     s8
+        xta     <s8>
         ati     010
-        xta     sa
+        xta     <sa>
       3 ij                      // выпр: restore the PSW from СПРВ, jump via M[033]
 
         .bss

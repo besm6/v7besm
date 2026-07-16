@@ -172,41 +172,50 @@ badext: stop    076              // TODO: an extracode we do not implement
 //
 // The same stub, and the reasoning behind it, is exercised standalone against SIMH
 // by kernel/test/crt0.s + sctest.c.
+//
+// Every reference to the save area goes through a `< sym >' escape, which emits a
+// `utc sym' ahead of the instruction so the address rides a 15-bit field.  A bare
+// `atx sa' would put it in atx's own 12-bit short-address field, and the save area
+// links at 060052 -- the segment order is const|text|data|commons|bss with all objects
+// concatenated per segment, so the kernel's bss sits far above 07777.  b6as has no
+// equivalent of Madlen's `,base,'.  `utc' touches neither A nor R, and interrupts are
+// blocked here, so the escape is transparent to what this stub is saving.  seg.s and
+// uarea.s reach their own bss the same way.
 
         .globl  extint
-extint: atx     sa               // save the accumulator
+extint: atx     <sa>             // save the accumulator
         ita     010              // ...and r8-r14, which the C call may clobber
-        atx     s8
+        atx     <s8>
         ita     011
-        atx     s9
+        atx     <s9>
         ita     012
-        atx     s10
+        atx     <s10>
         ita     013
-        atx     s11
+        atx     <s11>
         ita     014
-        atx     s12
+        atx     <s12>
         ita     015
-        atx     s13
+        atx     <s13>
         ita     016
-        atx     s14
+        atx     <s14>
 
      13 vjm     extintr          // intr.c: read ГРП, dispatch, dismiss
 
-        xta     s14
+        xta     <s14>
         ati     016
-        xta     s13
+        xta     <s13>
         ati     015
-        xta     s12
+        xta     <s12>
         ati     014
-        xta     s11
+        xta     <s11>
         ati     013
-        xta     s10
+        xta     <s10>
         ati     012
-        xta     s9
+        xta     <s9>
         ati     011
-        xta     s8
+        xta     <s8>
         ati     010
-        xta     sa
+        xta     <sa>
       3 ij                       // выпр: restore the mode word, jump via M[033]
 
 // ============================================================================
@@ -451,10 +460,3 @@ uhome:  .word 0                  // set to proc[0].p_addr at boot by main() (ker
 // passes it through unrelocated.
         .globl  u
         u = 076000               // must agree with UBASE in include/sys/param.h
-
-// int uarea[] -- the u-area as a flat word array, an absolute alias of `u' at the
-// same address.  It lets C name a word inside the u-area by index (machdep.c seeds
-// r15 with &uarea[wordsizeof(struct user)-1], the top of struct user), which member
-// access -- &u.u_stack -- cannot express in a static initializer.
-        .globl  uarea
-        uarea = 076000           // == u; the u-area addressed as int[]
