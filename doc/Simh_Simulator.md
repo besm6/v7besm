@@ -557,16 +557,30 @@ sim> set drum debug
 sim> set md0 debug
 ```
 
+`set cpu debug` in particular emits a detailed per-instruction trace — one line per executed
+instruction with the disassembly and the registers it touches — which is the fastest way to
+see exactly what a program does. It can be voluminous, so route it to a file (below).
+
 The disk device is the exception — it has named debug categories you can enable selectively:
 `OPS` (transactions), `RRD`/`RWR` (register reads/writes), `INTERRUPT`, `TRACE`, `DATA`
 (transferred data), and `STATUS`.
 
-Route the output to a file with the console log:
+Route the debug output straight to a file:
+
+```
+sim> set debug "trace.txt"          ; all debug output goes here
+sim> set cpu debug                  ; ...e.g. the per-instruction CPU trace
+```
+
+or fold it into the console log instead:
 
 ```
 sim> set -n console log=log.txt     ; -n truncates/creates the file
 sim> set console debug=log          ; send debug output to the console log too
 ```
+
+The kernel's `kernel/unix.ini` carries both trace lines commented out; uncomment them to dump
+a full `unix.trace` of the boot.
 
 ### Breakpoints and watchpoints
 

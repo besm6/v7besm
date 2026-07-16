@@ -8,6 +8,7 @@
 *.c-
 *.h-
 *.s-
+*.trace
 
 cmd/as/as
 tmp/

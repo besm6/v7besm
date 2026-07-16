@@ -19,21 +19,16 @@ extern int phymem;
 
 int maxmem; /* actual max memory per process */
 
-extern int uarea[]; /* the u-area (076000) as a flat word array; see besm6.S */
-
 /*
  * Base of the per-process kernel stack: the top of struct user, which grows up
  * to 0100000.  besm6.S:_start seeds the stack pointer (r15) here at boot; a
  * context switch reloads r15 from the saved label thereafter.
  *
- * u_stack is the last member of struct user, so its word offset is the struct's
- * word size minus one.  We spell the address as &uarea[that] rather than the
- * obvious &u.u_stack because b6cc will not take the address of a struct member in
- * a static initializer -- only &array[const] folds a symbol+offset into the
- * relocation.  uarea aliases u at the same absolute address, so this is that
- * word: UBASE + wordsizeof(struct user) - 1 (~076214).
+ * u_stack is the last member of struct user, so this points at UBASE +
+ * wordsizeof(struct user) - 1 (~076214).  b6cc now folds &u.u_stack[0] --
+ * a symbol+offset -- into the static relocation, so we can spell it directly.
  */
-int *const ustkbase = &uarea[sizeof(struct user) / sizeof(int) - 1];
+int *const ustkbase = &u.u_stack[0];
 
 /*
  * Icode is the hex bootstrap
@@ -114,4 +109,3 @@ void sendsig(caddr_t p, int signo)
     u.u_ar0[EFL] &= ~TBIT;
     u.u_ar0[EIP] = (int)p;
 }
-

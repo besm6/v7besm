@@ -313,12 +313,15 @@ it differs from the sketch above:
   free. So `main()` opens with `wzero(edata, end - edata)` (bss cleared before anything reads it —
   `_start`, the prologue, and `wzero` touch no bss) and then `phymem = 512 * 1024` (the fixed SIMH
   `MEMSIZE`; the kernel runs unmapped, 32 Kword reach, and cannot probe the 512 Kword store). Both
-  precede `startup()`, which is the first code to read either.
-- **r15 = &u.u_stack (~`076214`) via an integer alias.** `b6cc` will not take the address of a struct
-  member in a static initializer, so `machdep.c` seeds it as `int *const ustkbase = &uarea[sizeof(struct
-  user)/sizeof(int) - 1]` — `uarea` is an absolute `int[]` alias of `u` in `besm6.S` (only `&array[const]`
-  folds a symbol+offset into a relocation), and `u_stack` is the last member, so its word offset is the
-  struct's word size minus one. `_start` loads it with `xta <ustkbase>; aax #077777; ati 017`.
+  precede `startup()`, which is the first code to read either. **The `wzero` is now guarded out under
+  an `ON_SIMH` `#ifdef`**: SIMH starts every word at zero, so the clear is redundant on the simulator;
+  the code is kept for the day the kernel boots on real hardware.
+- **r15 = &u.u_stack (~`076214`).** `machdep.c` seeds it as `int *const ustkbase = &u.u_stack[0]`
+  — `u_stack` is the last member of `struct user`, so this is UBASE + wordsizeof(struct user) - 1.
+  b6cc now folds `&u.u_stack[0]` (a symbol+offset) into the static relocation, so it is spelled
+  directly; the earlier `&uarea[…]` integer-alias workaround (b6cc could not take a struct member's
+  address in a static initializer) is gone, and with it the `extern int uarea[]` in `machdep.c`.
+  `_start` loads it with `xta <ustkbase>; aax #077777; ati 017`.
 - **`uhome = proc[0].p_addr` and the 8253/RTC drop** — `uhome` is set in `main.c` right after
   `proc[0].p_addr`; the `machdep.c` clock/RTC removal was already done in task 13 (`clkstart()` = `spl0()`).
 - **`make run` + `kernel/unix.ini`** added to boot the image under SIMH (no `set mmu cache`: task-14 boot
