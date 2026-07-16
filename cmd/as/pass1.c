@@ -263,6 +263,8 @@ putcom:
         // value.  When bit 13 (010000) is set the address is negative (e.g. a
         // stack-relative offset such as -2), so set the address sign bit
         // (ONEBIT(19), 01000000) and the CPU sign-extends the 12-bit field.
+        // The address here is still segment-relative; pass 2 adds the segment
+        // base and range-checks the result (see relocate_field).
         long sign = (addr & 010000) ? 01000000L : 0L;
         emit_halfword((long)index << 20 | val | sign | (addr & 07777),
                       reltype | RSHORT);

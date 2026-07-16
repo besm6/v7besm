@@ -57,6 +57,7 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
     long a, ad;
     int i;
     const struct nlist *sp;
+    const char *name = NULL; // the referenced symbol, when the field names one
 
     if (ld.trace > 2)
         printf("%08lx %08lx", t, r);
@@ -103,13 +104,29 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
         // Resolved: bake in the symbol's address and tag the record with the
         // segment the symbol ended up in.
         r |= reloc_type(sp->n_type);
-        ad = sp->n_value;
+        ad   = sp->n_value;
+        name = sp->n_name;
         break;
     }
 
     // Step 3: write (a + ad) back into the same address field of `t`.
     switch ((int)r & RSHORT) {
     case RSHORT:
+        // A short address field is only 12 bits.  Truncating a relocated
+        // reference that no longer fits would leave the instruction quietly
+        // reading and writing an unrelated low address, so treat it as an error:
+        // such code needs a long-address escape ("< sym >" / "[ sym ]", i.e. a
+        // utc/wtc ahead of the instruction).  Only relocated fields reach this
+        // check with a nonzero `ad` - an RABS field falls through step 2 with
+        // ad = 0, so a negative stack offset such as `atx -5(7)` (which encodes
+        // as 07773 plus a sign flag) cannot false-positive.  Under -r the
+        // addresses are not final yet, so there is nothing to judge.
+        if (!ld.rflag && ((a + ad) & ~07777L)) {
+            if (name)
+                error(1, "short address out of range: %s=0%lo", name, a + ad);
+            else
+                error(1, "short address out of range: 0%lo", a + ad);
+        }
         t &= ~07777;
         t |= (a + ad) & 07777;
         break;

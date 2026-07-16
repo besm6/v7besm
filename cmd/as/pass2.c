@@ -90,6 +90,17 @@ static long relocate_field(long h, long a, int hr)
     switch (hr & RSHORT) {
     case RSHORT:
         a += h & 07777;
+        // A short address field is only 12 bits wide, and this is the last place
+        // the assembler sees the address untruncated.  The linker only ever
+        // shifts a segment upward, so an address that does not fit here never
+        // will, and masking it would silently point the instruction at an
+        // unrelated low word.  Such code needs a long-address escape - "< sym >"
+        // or "[ sym ]".  A "#expr" reference (RCONST) is exempt: it indexes the
+        // const segment, which write_header already checks against CONSTTOP.
+        // RABS never reaches relocate_field, so a signed stack offset such as
+        // `atx -5, 7` cannot trip this.
+        if ((hr & REXT) != RCONST && (a & ~07777L))
+            fatal("short address out of range: 0%lo", a);
         h &= ~07777;
         h |= a & 07777;
         break;
