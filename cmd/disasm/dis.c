@@ -67,11 +67,13 @@ const char **lcmd = lcmd_madlen, **scmd = scmd_madlen;
 
 //
 // Decode one 24-bit instruction into re-assemblable text:
-//      mnemonic [' ' addr] [', ' reg]
-// The address is printed in octal: a single digit (1-7) bare, larger values
-// with a leading 0 (%#o); the modifier/index register is decimal.  Both
-// operands are omitted when zero, except that a non-zero register forces the
-// (possibly zero) address to be printed too.
+//      [reg] mnemonic [' ' addr]
+// The modifier/index register leads, as in the assembler's statement form
+// "[modreg] mnemonic operand" (doc/Assembler_Manual.md); it is decimal, right-
+// aligned in a fixed 3-char column so the mnemonics line up whether or not an
+// instruction is indexed.  The address follows in octal: a single digit (1-7)
+// bare, larger values with a leading 0 (%#o).  Either operand is omitted when
+// zero -- a bare "12 xta" carries the register and means address field 0.
 //
 void disasm_insn(unsigned insn, char *buf)
 {
@@ -92,11 +94,13 @@ void disasm_insn(unsigned insn, char *buf)
             op_addr |= 070000; // short address extended to 15 bits
     }
 
-    buf += sprintf(buf, "%s", mnem);
-    if (op_addr != 0 || op_ir != 0)
-        buf += sprintf(buf, op_addr < 8 ? " %o" : " %#o", op_addr);
     if (op_ir != 0)
-        sprintf(buf, ", %u", op_ir);
+        buf += sprintf(buf, "%2u ", op_ir);
+    else
+        buf += sprintf(buf, "   ");
+    buf += sprintf(buf, "%s", mnem);
+    if (op_addr != 0)
+        sprintf(buf, op_addr < 8 ? " %o" : " %#o", op_addr);
 }
 
 //
