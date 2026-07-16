@@ -200,7 +200,9 @@ first**, so a word's six bytes read as one big-endian 48-bit number — this hol
 for instructions, `.word`/`.half` data, the constant pool, and the header); the archive member
 header (`cross/besm6/ar.h`, `struct ar_hdr`) is word-aligned with 30-char names and
 `ARHDRSZ == 60`. The assembler uses **AT&T-style syntax with Madlen mnemonics**; the
-disassembler prints the Cyrillic BESM-6 mnemonics directly.
+disassembler prints the same **ASCII Madlen mnemonics by default**, so its output feeds back
+into `b6as`. The Cyrillic BEMSH dialect is opt-in via `b6disasm -b` (both name tables live in
+`cmd/disasm/dis.c`).
 
 **`cmd/cc` (`b6cc`) is the compiler driver**, not a compiler itself. It chains the
 toolchain one sub-tool per stage — `b6cpp` → `b6parse` → `b6lower` → `b6codegen` → `b6as`

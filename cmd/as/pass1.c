@@ -158,13 +158,16 @@ static long intern_constant(int64_t val, int bs, int extref)
 //   * "[ ... ]" / "< ... >" - shorthand that emits a wtc/utc instruction first
 //                 (the BESM-6 way of forming a long address), then continues.
 //   * otherwise - the operand is an address expression.
-// An optional ", reg" sets the index register field.  Finally the half-word(s)
-// are emitted at the `putcom` label, choosing the long/short encoding (and the
-// special two-word form when the target is an absolute-common symbol).
+// `index` is the index register the caller wants in the modifier field: the
+// "N M" prefix for a statement-level instruction, and 0 for the utc/wtc that
+// the "<>"/"[]" expansion below generates.  An optional ", reg" overrides it.
+// Finally the half-word(s) are emitted at the `putcom` label, choosing the
+// long/short encoding (and the special two-word form when the target is an
+// absolute-common symbol).
 //
-static void assemble_instruction(long val, int type)
+static void assemble_instruction(long val, int type, int index)
 {
-    int clex, index;
+    int clex;
     long addr, reltype;
     int cval, segment;
     int pooled      = 0;    // a pending "# expr", awaiting the final index register
@@ -173,7 +176,6 @@ static void assemble_instruction(long val, int type)
     int poolseg     = SABS; //   before the ", reg" parse below clobbers as.intval
     int poolext     = 0;    //   and as.extref
 
-    index   = as.regleft; // index register set by a "N M" prefix, if any
     reltype = RABS;
     for (;;) {
         switch (clex = next_token(&cval)) {
@@ -197,15 +199,19 @@ static void assemble_instruction(long val, int type)
             addr    = 0;
             break;
         case '[':
-            // "[ ... ]" expands to a wtc instruction before this one.
-            assemble_instruction(WTCCOM, TLONG);
+            // "[ ... ]" expands to a wtc instruction before this one.  The wtc
+            // is unindexed: an index register belongs to the instruction the
+            // programmer wrote it against, and indexing the wtc too would add
+            // M[i] into C on top of the M[i] the instruction itself applies.
+            assemble_instruction(WTCCOM, TLONG, 0);
             if (next_token(&cval) != ']')
                 fatal("bad [] syntax");
             cset = 1; // wtc loaded C: it is added to this instruction's address
             continue;
         case '<':
-            // "< ... >" expands to a utc instruction before this one.
-            assemble_instruction(UTCCOM, TLONG);
+            // "< ... >" expands to a utc instruction before this one, unindexed
+            // for the same reason as the wtc above.
+            assemble_instruction(UTCCOM, TLONG, 0);
             if (next_token(&cval) != '>')
                 fatal("bad <> syntax");
             cset = 1; // utc loaded C: it is added to this instruction's address
@@ -404,15 +410,15 @@ void generate_code(void)
             continue;
         case LCMD:
             // A named instruction: assemble with its table entry.
-            assemble_instruction(table[cval].val, table[cval].type);
+            assemble_instruction(table[cval].val, table[cval].type, as.regleft);
             break;
         case LSCMD:
             // Raw short opcode "$NN": opcode in bits 12+.
-            assemble_instruction((long)cval << 12, 0);
+            assemble_instruction((long)cval << 12, 0, as.regleft);
             break;
         case LLCMD:
             // Raw long opcode "@NN": opcode in bits 15+.
-            assemble_instruction((long)cval << 15, TLONG);
+            assemble_instruction((long)cval << 15, TLONG, as.regleft);
             break;
         case '.':
             // ".= expr" sets the location counter forward, padding the segment

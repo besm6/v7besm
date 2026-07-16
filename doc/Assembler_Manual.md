@@ -334,6 +334,17 @@ For a machine instruction, the operand after the mnemonic may take any of these 
 The leading **modifier register** (the `modreg` of [§3](#3-source-line-structure)) is distinct
 from the trailing `, reg` index; both ultimately fill the instruction's 4-bit modifier field.
 
+When `<expr>`/`[expr]` expand into two instructions, the index — written either way — belongs
+to the instruction itself, and the generated `utc`/`wtc` is always emitted **unindexed**. The
+effective address is `addr + M[i] + C`, so indexing the `utc` too would fold M[i] into `C` and
+count it twice. Both spellings assemble alike:
+
+```
+        12 vtm <0123>           utc 0123
+                          →  12 vtm
+        vtm <0123>, 12
+```
+
 A `#` operand may not be indexed, by either form: `xta #0, 3` and `3 xta #0` are errors
 (`index register on a constant operand`). The index would modify the pool address rather
 than the value, and `, 017` with a zero offset is the stack-pop encoding. An explicit `, 0`

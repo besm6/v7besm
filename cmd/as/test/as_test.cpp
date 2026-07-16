@@ -372,6 +372,28 @@ lbl:    atx 0
     EXPECT_EQ(word_high(got, 16), 00010000L); // stx 0
 }
 
+// An index register applies to the instruction it was written against, never to
+// the utc/wtc that <addr>/[addr] generates.  The effective address is
+// addr + M[i] + C, so indexing the utc as well would fold M[i] into C and count
+// it twice.  Both spellings of the index - the leading "N M" prefix and the
+// trailing ", reg" - must land on the real instruction alone.
+TEST(Assemble, IndexRegisterNotOnGeneratedUtcWtc)
+{
+    auto got = assemble(R"(
+        12 vtm <0123>
+        12 atx [0456]
+        vtm <0123>, 12
+)");
+    EXPECT_EQ(word_high(got, 8), 02200000L | 0123L);       // utc 0123, unindexed
+    EXPECT_EQ(word_low(got, 8), (12L << 20) | 02400000L);  // 12 vtm 0
+    EXPECT_EQ(word_high(got, 9), 02300000L | 0456L);       // wtc 0456, unindexed
+    EXPECT_EQ(word_low(got, 9), (12L << 20) | 00000000L);  // 12 atx 0
+
+    // The trailing form assembles identically to the leading one.
+    EXPECT_EQ(word_high(got, 10), 02200000L | 0123L);      // utc 0123, unindexed
+    EXPECT_EQ(word_low(got, 10), (12L << 20) | 02400000L); // vtm 0, 12
+}
+
 // The angle brackets of <addr> never collide with the "<<"/">>" shift
 // operators: an expression can neither begin nor end with an angle bracket, so
 // a doubled bracket is always a shift and a single one always the wrapper.
