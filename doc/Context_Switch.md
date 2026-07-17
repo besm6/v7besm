@@ -1112,10 +1112,13 @@ gap exists only in `extint`, which saves a *subset* of the registers.
 | `SAVS16` / `И16`, the C register (§13) | an `M[020]` slot in the trap frame and the new `reg.h` |
 | `SMASAV` | the trap frame on the kernel stack at `076000` |
 
-**One difference that matters.** Dubna's ИПЗ is *mapped* — it sits at user page 50, so a context
-switch reprograms РП and the new task's block simply appears. Ours is *copied*: the u-area is a
-fixed physical page at `076000` and `resume()` must `uflush()` the old and `uload()` the new. That
-is the price of an unmapped kernel and it is the one we chose to pay
+**One difference that matters.** Each Dubna task has its **own** ИПЗ page, separately allocated
+(`dubna.dd:10500`, `OCBOБOЖДEHИE ЛИCTA ИПЗ` — "freeing the ИПЗ page"), and a context switch just
+repoints `ГYC` at the incoming task's block — nothing is copied. The supervisor reaches it through
+the physical pointer in `ГYC`, unmapped (at a trap the hardware forces БлП on, so supervisor data is
+physical — [Memory_Mapping.md](Memory_Mapping.md)). Ours is *copied*: the u-area is a **single**
+fixed physical page at `076000`, shared across tasks, so `resume()` must `uflush()` the old and
+`uload()` the new. That is the price of a one-page u-area and it is the one we chose to pay
 ([`kernel/TODO.md`](../kernel/TODO.md), "Known consequences, accepted"). So `SAVIND` is a closer
 model for `save()` than `BOCИПД` is for `resume()` — the register half transfers directly, the
 u-area half does not.
