@@ -43,6 +43,13 @@
 #define SEXT   6 // pseudo-segment: an external (undefined) symbol reference
 #define SABS   7 // pseudo-segment: a plain absolute value (degenerate case for parse_expr)
 
+// The address the const segment is loaded at: the header occupies the words below
+// it.  This is the only segment base known at assembly time -- the linker places
+// const first (BADDR in cmd/ld/intern.h) and every other segment's base depends on
+// what else the link merges in.  ".org" and pass2's segment layout both rely on it.
+
+#define CBASE (HDRSZ / W)
+
 // Assembler directive codes (the value carried by an LACMD token).
 
 #define ASCII 1  // .ascii  - emit a string constant
@@ -56,6 +63,7 @@
 #define EQU   9  // .equ    - define a name = expression
 #define WORD  10 // .word   - emit full 48-bit words
 #define CONST 11 // .const  - switch to the const segment
+#define ORG   12 // .org    - set the location counter to an absolute address (const only)
 
 // Per-instruction flags stored in the `type` column of table[].
 

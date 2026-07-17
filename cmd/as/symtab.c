@@ -90,6 +90,10 @@ int lookup_directive(void)
         if (!strcmp(".half", as.name))
             return HALF;
         break;
+    case 'o':
+        if (!strcmp(".org", as.name))
+            return ORG;
+        break;
     case 's':
         if (!strcmp(".strng", as.name))
             return STRNG;

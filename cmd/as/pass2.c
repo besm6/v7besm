@@ -63,9 +63,9 @@ void write_header(void)
     // A "#expr" reference reaches its word through a 12-bit short address field,
     // so the whole const segment has to fit below CONSTTOP.  The linker checks
     // the merged segment again; this catches a single object early.
-    if (as.count[SCONST] && HDRSZ / W + as.count[SCONST] / 2 - 1 > CONSTTOP)
+    if (as.count[SCONST] && CBASE + as.count[SCONST] / 2 - 1 > CONSTTOP)
         fatal("const segment too large: last word at 0%lo, limit 0%o",
-              HDRSZ / W + as.count[SCONST] / 2 - 1, CONSTTOP);
+              CBASE + as.count[SCONST] / 2 - 1, CONSTTOP);
 
     hdr.a_magic = FMAGIC;
     hdr.a_const = as.count[SCONST] * (W / 2);
@@ -73,7 +73,7 @@ void write_header(void)
     hdr.a_data  = (as.count[SDATA] + as.count[SSTRNG]) * (W / 2);
     hdr.a_bss   = as.count[SBSS] * (W / 2);
     hdr.a_syms  = as.stlength;
-    hdr.a_entry = HDRSZ / W + as.count[SCONST] / 2; // == as.tbase
+    hdr.a_entry = CBASE + as.count[SCONST] / 2; // == as.tbase
     hdr.a_flag  = 0;
     fputhdr(&hdr, stdout);
 }
@@ -186,7 +186,7 @@ void emit_segments(void)
     int i;
     long h, base, limit;
 
-    as.cbase  = HDRSZ / W;
+    as.cbase  = CBASE;
     as.tbase  = as.cbase + as.count[SCONST] / 2;
     as.dbase  = as.tbase + as.count[STEXT] / 2;
     as.adbase = as.dbase + as.count[SDATA] / 2;

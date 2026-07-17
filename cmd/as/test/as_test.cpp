@@ -1388,11 +1388,11 @@ endtab:
     EXPECT_EQ(syms[1].value, 012L); // cbase + offset 2, one past the last word
 }
 
-// An in-segment anchor is how a .const is laid out by absolute address: `.' counts
-// from the segment start, which the linker places at BADDR == 010, so address A
-// sits at `. == A - 010'.  This is the kernel's interrupt-vector idiom
-// (kernel/besm6.S).  Note `. = <absolute>' cannot express it - the location counter
-// assignment demands a segment-relative operand - hence the anchor label.
+// An in-segment anchor lays a .const out by absolute address the long way: `.'
+// counts from the segment start, which the linker places at BADDR == 010, so
+// address A sits at `. == A - 010'.  ".org A" is the spelling to prefer - it says
+// this directly - but the idiom still assembles, and the two must agree (see
+// OrgMatchesAnchorIdiom below).
 TEST(Assemble, ConstOriginAnchor)
 {
     auto got  = assemble(R"(
@@ -1411,9 +1411,176 @@ lab:    .word 0
 
 // The location counter must be set from a same-segment expression: `. = 0100' is
 // address space, `.' is a segment offset, and the assembler will not silently mix
-// them.  This is the constraint that forces the anchor idiom above.
+// them.  That stays true by design; ".org" is the door to absolute addresses.
 TEST(Assemble, AbsoluteLocationCounterRejected)
 {
     EXPECT_EQ(assemble_error("        .const\n. = 0100\n        .word 0\n"),
               "Assemble.AbsoluteLocationCounterRejected.s:2: bad count assignment");
+}
+
+// ".org A" puts the next word on absolute address A: it sets the location counter
+// to A - 010, the const segment's load address (BADDR) being the one segment base
+// known at assembly time.  This is the kernel's interrupt-vector idiom
+// (kernel/besm6.S), with no anchor label and no arithmetic in the source.
+TEST(Assemble, OrgAbsoluteAddress)
+{
+    auto got  = assemble(R"(
+        .const
+        .org 0100
+lab:    .word 0
+)");
+    auto syms = read_symbols(got);
+    ASSERT_EQ(syms.size(), 1u);
+    EXPECT_EQ(syms[0].name, "lab");
+    EXPECT_EQ(syms[0].value, 0100L);
+    EXPECT_EQ(word_low(got, 1), (0100 - 010 + 1) * 6); // a_const: the gap, then the word
+}
+
+// ".org" and the older anchor idiom are the same statement, so they must produce
+// the same object.  This is what lets kernel/besm6.S move over to ".org" without
+// any vector shifting under it.
+TEST(Assemble, OrgMatchesAnchorIdiom)
+{
+    auto with_org    = assemble(R"(
+        .const
+        .org 0100
+        .word 1
+        .org 0500
+        .word 2
+)");
+    auto with_anchor = assemble(R"(
+        .const
+org:
+. = org + 0100 - 010
+        .word 1
+. = org + 0500 - 010
+        .word 2
+)");
+    // The anchor idiom defines one extra symbol, so compare the segment images
+    // rather than the whole files.
+    ASSERT_GT(with_org.size(), (0500 - 010 + 1) * 6u);
+    ASSERT_GT(with_anchor.size(), (0500 - 010 + 1) * 6u);
+    for (unsigned w = 8; w <= 8 + 0500 - 010; w++) {
+        EXPECT_EQ(word_high(with_org, w), word_high(with_anchor, w)) << "word " << w;
+        EXPECT_EQ(word_low(with_org, w), word_low(with_anchor, w)) << "word " << w;
+    }
+}
+
+// An origin on the segment's own base address is where the counter already is:
+// it emits nothing.
+TEST(Assemble, OrgAtSegmentBase)
+{
+    auto got  = assemble(R"(
+        .const
+        .org 010
+lab:    .word 7
+)");
+    EXPECT_EQ(word_low(got, 1), 1 * 6); // a_const == one word: no fill
+    EXPECT_EQ(word_low(got, 8), 7L);
+    auto syms = read_symbols(got);
+    ASSERT_EQ(syms.size(), 1u);
+    EXPECT_EQ(syms[0].value, 010L);
+}
+
+// The gap an origin skips over is zero-filled, matching `. = expr' in the const
+// segment.  (The text segment pads with an empty instruction instead.)
+TEST(Assemble, OrgFillsGapWithZeros)
+{
+    auto got = assemble(R"(
+        .const
+        .org 012
+        .word 1
+)");
+    EXPECT_EQ(word_low(got, 1), 3 * 6); // two filler words, then the data word
+    EXPECT_EQ(word_high(got, 8), 0L);
+    EXPECT_EQ(word_low(got, 8), 0L);
+    EXPECT_EQ(word_high(got, 9), 0L);
+    EXPECT_EQ(word_low(got, 9), 0L);
+    EXPECT_EQ(word_low(got, 10), 1L);
+}
+
+// An origin only moves the counter forward; it never rewinds to overwrite words
+// already emitted.  Shares the diagnostic with `. = expr'.
+TEST(Assemble, OrgForwardOnly)
+{
+    EXPECT_EQ(assemble_error(R"(
+        .const
+        .word 0, 0, 0
+        .org 010
+)"),
+              "Assemble.OrgForwardOnly.s:4: negative count increment");
+}
+
+// The const segment starts at 010, so nothing below it can be addressed: the words
+// underneath belong to the a.out header.
+TEST(Assemble, OrgBelowConstBase)
+{
+    EXPECT_EQ(assemble_error(R"(
+        .const
+        .org 4
+)"),
+              "Assemble.OrgBelowConstBase.s:3: bad .org address");
+}
+
+// The address must be absolute.  A label is a relocatable const-segment value, and
+// an origin computed from one would be an offset wearing an address's clothes.
+TEST(Assemble, OrgNeedsAbsoluteAddress)
+{
+    EXPECT_EQ(assemble_error(R"(
+        .const
+lab:    .word 0
+        .org lab
+)"),
+              "Assemble.OrgNeedsAbsoluteAddress.s:4: bad .org address");
+}
+
+// ".org" is meaningful only where the segment's load address is known, and const is
+// the only such segment: the linker places text and data after whatever else the
+// link merges in, so an origin there could not be honoured.
+TEST(Assemble, OrgOnlyInConstSegment)
+{
+    EXPECT_EQ(assemble_error(R"(
+        .text
+        .org 0100
+)"),
+              "Assemble.OrgOnlyInConstSegment.s:3: .org outside the const segment");
+}
+
+// An address past the top of the const segment is rejected at the origin, rather
+// than after the fill loop has written the words out.
+TEST(Assemble, OrgAboveConstTop)
+{
+    EXPECT_EQ(assemble_error(R"(
+        .const
+        .org 010000
+)"),
+              "Assemble.OrgAboveConstTop.s:3: bad .org address");
+}
+
+// A negative address masks up into a huge unsigned value; it must not be mistaken
+// for a legitimate origin near the top of the address space.
+TEST(Assemble, OrgNegativeAddress)
+{
+    EXPECT_EQ(assemble_error(R"(
+        .const
+        .org -1
+)"),
+              "Assemble.OrgNegativeAddress.s:3: bad .org address");
+}
+
+// An origin mid-word aligns first, exactly like `. = expr': the counter it moves is
+// always a word counter.
+TEST(Assemble, OrgAlignsPendingHalfword)
+{
+    auto got  = assemble(R"(
+        .const
+        .half 1
+        .org 012
+lab:    .word 2
+)");
+    auto syms = read_symbols(got);
+    ASSERT_EQ(syms.size(), 1u);
+    EXPECT_EQ(syms[0].value, 012L); // the dangling half-word did not shift the origin
+    EXPECT_EQ(word_high(got, 8), 1L);
+    EXPECT_EQ(word_low(got, 10), 2L);
 }

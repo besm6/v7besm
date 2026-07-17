@@ -101,6 +101,34 @@ void align_segment(int s)
 }
 
 //
+// Move the current segment's location counter forward to `words`, its offset in
+// words from the start of the segment, padding the gap with empty instructions in
+// the text segment and zeros elsewhere; in bss nothing is emitted and the counter
+// alone moves.  The counter only ever moves forward.
+//
+// The caller must have aligned the segment before parsing the operand, so that a
+// self-referential expression like ". + 3" reads the same counter this lands on.
+// Backs both ". = expr" and ".org addr".
+//
+static void set_location(long words)
+{
+    long half = 2 * words; // the operand is in words, count[] is in half-words
+
+    if (half < as.count[as.segm])
+        fatal("negative count increment");
+
+    if (as.segm == SBSS) {
+        as.count[as.segm] = half;
+        return;
+    }
+    while (as.count[as.segm] < half) {
+        fputh(as.segm == STEXT ? EMPCOM : 0L, as.sfile[as.segm]);
+        fputh(0L, as.rfile[as.segm]);
+        as.count[as.segm]++;
+    }
+}
+
+//
 // Find the const-segment word holding the 48-bit value `val`, appending one if
 // no suitable word is there yet, and return its offset in words from the start
 // of the segment.  Backs the "#expr" operand.
@@ -440,19 +468,10 @@ void generate_code(void)
             if (next_token(&cval) != '=')
                 fatal("bad command");
             align_segment(as.segm);
-            addr = 2 * parse_expr(&csegm); // expr is in words; count[] in half-words
+            addr = parse_expr(&csegm);
             if (csegm != as.segm)
                 fatal("bad count assignment");
-            if (addr < as.count[as.segm])
-                fatal("negative count increment");
-            if (as.segm == SBSS)
-                as.count[as.segm] = addr;
-            else
-                while (as.count[as.segm] < addr) {
-                    fputh(as.segm == STEXT ? EMPCOM : 0L, as.sfile[as.segm]);
-                    fputh(0L, as.rfile[as.segm]);
-                    as.count[as.segm]++;
-                }
+            set_location(addr);
             break;
         case LNAME:
             // A name at statement start; what follows decides its meaning.
@@ -503,6 +522,21 @@ void generate_code(void)
             case BSS:
                 align_segment(as.segm);
                 as.segm = SBSS;
+                break;
+            case ORG:
+                // ".org addr" - lay the segment out by absolute address: put the
+                // next word on address addr.  Only the const segment has a base
+                // known here -- the linker loads it at CBASE, so addr sits at
+                // offset addr-CBASE.  Every other segment's base depends on the
+                // rest of the link, so an origin there would name an address this
+                // assembler can neither compute nor check.
+                if (as.segm != SCONST)
+                    fatal(".org outside the const segment");
+                align_segment(as.segm);
+                addr = parse_expr(&csegm);
+                if (csegm != SABS || addr < CBASE || addr > CONSTTOP)
+                    fatal("bad .org address");
+                set_location(addr - CBASE);
                 break;
             case HALF:
                 // ".half e, e, ..." - emit each value as one 24-bit half-word.

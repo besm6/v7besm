@@ -178,19 +178,19 @@ elsewhere). The new value must not be less than the current one.
 > **`. = expr` requires `expr` to be relative to the current segment.** `.` counts words from
 > the *start of the segment*, not from address 0, so a bare number is rejected ("bad count
 > assignment") rather than silently mixing the two. To lay a segment out by absolute address,
-> anchor on a label at the segment's start and subtract the address the linker gives it — for
-> `.const` that is `BADDR` = `010` (see [Linker_Manual](Linker_Manual.md)):
+> use `.org` ([§10](#10-directives)):
 >
 > ```
 >         .const
-> org:                            // address 000010: the const segment starts here
-> . = org + 0500 - 010            // address 000500
+>         .org 0500               // the next word lands on address 000500
 >       : uj trap
 > ```
 >
-> The anchor has to be a label *inside* the segment; `base0 = . - 010`, naming address 0
-> directly, is the out-of-segment case rejected above. `kernel/besm6.S` places the BESM-6
-> interrupt vectors this way, and depends on the const segment really starting at `010`.
+> `.org` is accepted only in `.const` — that is the one segment whose load address is known
+> when the file is assembled (`BADDR` = `010`, see [Linker_Manual](Linker_Manual.md)), because
+> the linker lays it down first. Text and data start after whatever else the link merges in,
+> so an origin there could not be honoured. `kernel/besm6.S` places the BESM-6 interrupt
+> vectors this way, and depends on the const segment really starting at `010`.
 
 **Global symbols.** `.globl` marks names as external/global (see [§10](#10-directives)).
 Local symbols can be stripped at output time with `-x`/`-X` ([§2](#2-invoking-the-assembler)).
@@ -469,7 +469,7 @@ These take the same operand forms as named instructions.
 
 ## 10. Directives
 
-All directives begin with `.`. The complete set (`cmd/as/symtab.c:lookacmd`):
+All directives begin with `.`. The complete set (`cmd/as/symtab.c:lookup_directive`):
 
 ### Segment selection
 
@@ -503,6 +503,21 @@ word `07777`, leaving room for 4088 words. Both `b6as` and `b6ld` refuse to lay 
 Because `#expr` appends at the const cursor wherever it happens to be, a `.const` array must
 not straddle a `.text` instruction that interns a literal — the literal would land in the
 middle of the array. Finish the array before switching segments.
+
+### The location counter
+
+| Directive | Operands | Effect |
+|-----------|----------|--------|
+| `.org` | `addr` | Set the location counter so the next word lands on **absolute address** `addr`. `.const` only. |
+
+`.org` is the absolute-address counterpart of `. = expr` ([§5](#5-symbols-and-labels)), which
+takes a segment-relative operand. It word-aligns first, zero-fills the gap it skips, and like
+`. = expr` only ever moves the counter forward (`negative count increment`).
+
+The address must be a plain absolute value in `[010, 07777]` — the const segment starts at
+word 8 and cannot extend past `07777` — and `.org` must appear in `.const`; anything else is
+`bad .org address` or `.org outside the const segment`. The const segment is the only one whose
+load address the assembler knows, since the linker lays it down first.
 
 ### Emitting data
 
@@ -598,8 +613,8 @@ entry:  vtm count, 1
 
 ## 12. Quick reference
 
-**Directives:** `.text` `.const` `.data` `.strng` `.bss` · `.word` `.half` `.ascii` · `.globl`
-`.equ` `.comm`.
+**Directives:** `.text` `.const` `.data` `.strng` `.bss` · `.org` · `.word` `.half` `.ascii` ·
+`.globl` `.equ` `.comm`.
 
 **Expression operators (C precedence, left-associative)**, tightest first: `*` `/` `%`; `+` `-`;
 `<<` `>>`; `&`; `^` `~`; `|`. Unary prefixes `-` `~` `+` bind tightest of all. Grouping `( )`;

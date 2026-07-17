@@ -35,27 +35,20 @@
 // pushed arguments, then `13 uj`.
 
 // The vectors below must land on their physical addresses, so this segment is laid
-// out by absolute address.  `.' counts words from the start of the const segment,
-// which the linker places at BADDR == 010 (cmd/ld/intern.h), so address A sits at
-// `. == A - 010'; `org' anchors that.  The origins hold only as long as the const
-// segment really does begin at 010: besm6.o must come first in the link (see OBJ in
-// the Makefile) so nothing is merged in ahead of it, and `ld -T' must not be used.
-//
-// `org' has to be a label inside the segment rather than the more natural
-// `base0 = . - 010'.  A const symbol names a const *word*, which the linker follows
-// through the literal merge; one pointing outside the segment names no word and
-// cannot be relocated (b6as rejects it).  Hence the `- 010' on each origin.
+// out by absolute address with `.org'.  The origins hold only as long as the const
+// segment really does begin at BADDR == 010 (cmd/ld/intern.h), which is what `.org'
+// assumes: besm6.o must come first in the link (see OBJ in the Makefile) so nothing
+// is merged in ahead of it, and `ld -T' must not be used.
 
         .const
-org:                            // Address 000010: the const segment starts here
-. = org + 0100 - 010            // Skip I/O region
+        .org 0100               // Skip I/O region
 #include "const.s"              // Put some #constants here to fill the space
 
-. = org + 0500 - 010            // Vectors for exceptions and interrupts are at 0500
+        .org 0500               // Vectors for exceptions and interrupts are at 0500
       : uj trap                 // 0500: internal interrupt (a fault)
       : uj extint               // 0501: external interrupt (ГРП) -- see below
 
-. = org + 0550 - 010            // Vectors for extracodes start at 0550
+        .org 0550               // Vectors for extracodes start at 0550
       : uj badext               // 0550: extracode *50
       : uj badext               // 0551: extracode *51
       : uj badext               // 0552: extracode *52
@@ -86,6 +79,7 @@ org:                            // Address 000010: the const segment starts here
 // Register save area for the external-interrupt stub above.  One copy is enough:
 // interrupts are blocked from the moment the hardware takes one until the `ij` that
 // ends the handler, so extint cannot be re-entered.
+        .text
 sa:     .word 0                 // accumulator
 s8:     .word 0                 // r8-r14: caller-saved, so the C handler may
 s9:     .word 0                 //   clobber them and the interrupted code will
