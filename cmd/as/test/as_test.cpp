@@ -733,8 +733,9 @@ datum:  .word 1
     EXPECT_EQ(reloc_half(got, 0, 1), 030L); // first word's low half: RDATA
 }
 
-// Machine code may live in the const segment; it word-aligns like text, padding
-// with a utc filler.
+// Machine code may live in the const segment; it word-aligns like text, but pads
+// with zeros rather than text's utc filler.  A zero half-word is `atx 0' and stores
+// to address 0 are discarded, so falling through it does nothing either way.
 TEST(Assemble, ConstDirectiveCode)
 {
     auto got = assemble(R"(
@@ -745,8 +746,25 @@ c1:     xta 0
 )");
     EXPECT_EQ(word_low(got, 1), 6);            // a_const == 1 word
     EXPECT_EQ(word_high(got, 8), 00100000L);   // xta 0
-    EXPECT_EQ(word_low(got, 8), 02200000L);    // utc 0 filler
+    EXPECT_EQ(word_low(got, 8), 0L);           // zero filler
     EXPECT_EQ(word_high(got, 9), 03000000L | 8L); // uj c1 -> word 8
+}
+
+// Every path that pads the const segment agrees on zeros: the aligner (a bare ':'
+// here) and the location counter must not disagree about what a filler word is.
+TEST(Assemble, ConstFillIsZeroOnEveryPath)
+{
+    auto got = assemble(R"(
+        .const
+        xta 0
+      :                 // aligner: pads the low half of word 8
+        .org 012        // origin: fills word 9 whole
+        .word 1
+)");
+    EXPECT_EQ(word_low(got, 8), 0L);  // filler from the ':'
+    EXPECT_EQ(word_high(got, 9), 0L); // filler from the .org gap
+    EXPECT_EQ(word_low(got, 9), 0L);
+    EXPECT_EQ(word_low(got, 10), 1L);
 }
 
 // Interning a literal appends to the const segment in the middle of assembling a

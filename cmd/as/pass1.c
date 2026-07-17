@@ -80,8 +80,13 @@ static void emit_halfword(long h, long r)
 //
 // Make sure segment `s` ends on a whole-word boundary: if it currently holds an
 // odd number of half-words, emit one filler half-word (an empty instruction in
-// the two segments that may hold code, a zero elsewhere).  Switches to segment
-// s if needed and restores the previous segment afterwards.
+// text, a zero everywhere else).  Switches to segment s if needed and restores
+// the previous segment afterwards.
+//
+// The const segment pads with zeros even though it may hold code, matching what
+// ". = expr" and ".org" fill their gaps with: a zero half-word is `atx 0', and
+// stores to address 0 are discarded (doc/Besm6_Instruction_Set.md), so it is as
+// inert to fall through as the `utc 0' the text segment uses.
 //
 void align_segment(int s)
 {
@@ -94,7 +99,7 @@ void align_segment(int s)
         save = -1;
 
     if (as.count[s] & 01)
-        emit_halfword((s == STEXT || s == SCONST) ? EMPCOM : 0L, (long)RABS);
+        emit_halfword(s == STEXT ? EMPCOM : 0L, (long)RABS);
 
     if (save >= 0)
         as.segm = save;

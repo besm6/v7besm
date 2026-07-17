@@ -407,8 +407,8 @@ BESM-6 instructions come in two formats (see
 
 Two 24-bit instructions pack into one 48-bit word; the assembler fills the left half first,
 then the right. Three long jumps — `vjm`, `ij`, `stop` — additionally carry an *align-after*
-flag: a filler (`utc 0`) is inserted after them so the next instruction starts a fresh word
-(suppressed by `-a`).
+flag: a filler is inserted after them so the next instruction starts a fresh word (`utc 0` in
+text, zeros elsewhere — see [§10](#10-directives); suppressed by `-a`).
 
 ### 9.2 The mnemonic table
 
@@ -494,6 +494,13 @@ rules follow from that shared use:
   const segment`). The literal would be appended at the segment's cursor, i.e. directly in
   front of the instruction referring to it. Put the constant in the segment yourself and
   address it by name.
+
+**Padding is zeros in every segment but text.** Wherever the assembler has to fill — the word
+alignment a `:`, a label or a `.word` forces, the gap an `.org` or a `. = expr` skips — text
+gets `utc 0` and everything else, `.const` included, gets zeros. Const pads with zeros even
+though it may hold code, because a zero half-word is `atx 0` and stores to address 0 are
+discarded ([Besm6_Instruction_Set](Besm6_Instruction_Set.md)): falling through one does
+nothing, exactly like the `utc 0`.
 
 The const segment is reached through the short address field. It begins at word 8 and grows up,
 so it sits at the bottom of memory, where the segment bit cannot help it: it cannot extend past
