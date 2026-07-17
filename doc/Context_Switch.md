@@ -46,7 +46,8 @@ shows *how* a kernel that worked actually did it.
 10. [The MMU switch](#10-the-mmu-switch)
 11. [The БРЗ drain](#11-the-брз-drain)
 12. [The scheduler side](#12-the-scheduler-side)
-13. [What this means for the Unix port](#13-what-this-means-for-the-unix-port)
+13. [The C register across a trap](#13-the-c-register-across-a-trap)
+14. [What this means for the Unix port](#14-what-this-means-for-the-unix-port)
 
 ---
 
@@ -118,7 +119,7 @@ Eight words, declared at `dubna.dd:16413`, holding the state of whatever was int
 | Cell                         | Holds |
 |------------------------------|-------|
 | `SAVAC`                      | the accumulator |
-| `SAVSR`                      | the mode register **R** (ω-mode and the НТР suppress bits) |
+| `SAVSR`                      | the mode register **R** (ω-mode and the NTR suppress bits) |
 | `SAVAR`                      | the **РМР** younger-bits register — despite the name |
 | `SAVI15`, `SAVI14`, `SAVI13` | М15, М14, М13 |
 | `SAVMIR`                     | **ГРП**, the main interrupt register |
@@ -156,7 +157,9 @@ save field is **24 words at offset 0** of the task block (`dubna.dd:488`):
 | `22`–`23` | М34, М35 — the address-break registers | |
 
 Note the register file is stored **in descending order**, М16 down to М1 — a consequence of the
-`ITS` push sequence that fills it (§6).
+`ITS` push sequence that fills it (§6). And М16 is not a sixteenth index register — there are only
+fifteen. It is the **C register**, the address modifier, which happens to be addressable as register
+16; saving it here is load-bearing, and §13 is devoted to why.
 
 The layout is independently confirmed by the symbolic offsets declared 4 000 lines away at
 `dubna.dd:16446-16456`, which land on exactly the right slots:
@@ -446,7 +449,7 @@ A is garbage afterward, which is why 15581 reloads it.
 
 `рж` sets `R = X[47:42]` — the exact inverse of the prologue's `RTE 7777`. **The hardware does not
 restore R.** Software does, and if software forgets, the interrupted program resumes with whatever
-ω-mode and НТР suppress bits the handler happened to leave behind. Hold that thought for §13.
+ω-mode and NTR suppress bits the handler happened to leave behind. Hold that thought for §14.
 
 ### `3,32,` is `выпр` through ИРЕТ
 
@@ -863,7 +866,142 @@ And the extracode path joins at `OUTMACRO`, two instructions above `RETURN` (§8
 
 ---
 
-## 13. What this means for the Unix port
+## 13. The C register across a trap
+
+The §2 layout calls slot 06 "М16, one more index register." It is not one more index register.
+There are only fifteen — М1–М15. **М16 is the C register**, the address modifier, and it is the one
+piece of saved context whose *value* and whose *pending state* live in two different places. Getting
+it wrong corrupts an address, silently, one instruction after the return.
+
+### What C is
+
+`utc` (022, мода) and `wtc` (023, мод) load the modifier register C; its value is **added to the
+effective address of the next instruction and then reset to 0**. Every other instruction resets it.
+See [Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) §3 and ops 022/023 — and note §3's point
+that the compiler's own idiom for a global in the middle of memory is `utc name` followed by a bare
+`xta`/`atx`, so C is armed constantly in ordinary compiled code, for exactly one instruction at a
+time.
+
+In the [besm6/simh](https://github.com/besm6/simh/tree/master/BESM6/) sources C is a register-file
+slot:
+
+```c
+#define MOD     020     /* модификатор адреса */          // besm6_defs.h — 020 octal = 16 decimal
+```
+
+So it is reachable by the ordinary index-register moves as register 16, which is exactly how Dubna
+names it — `ITS 16`, `STI 16`, the `SAVS16` cell, the `И16` slot. That the address modifier is also
+addressable as a general register is the whole reason the save/restore machinery of §6 and §7 needs
+no special case for it.
+
+### Two pieces of state, two homes
+
+C is not just the value in `M[020]`. There is also an **armed flag** — whether the *next*
+instruction actually applies the modifier — and it lives in a different register:
+
+```c
+#define RUU_MOD_RK   000020  /* ПрИК - модификация регистром М[16] */
+#define SPSW_MOD_RK  000020  /* ПрИК(РК) - на регистр РК принята команда,
+                                которая должна быть модифицирована регистром М[16] */
+```
+
+`RUU_MOD_RK` is the live flag in РУУ while running; `SPSW_MOD_RK` is where it is parked in **СПСВ**
+(`M[027]`, slot 05) across a trap. The value is in the register file; the armed-bit is in the mode
+word. Two homes.
+
+### The hardware dance
+
+This is what SIMH does, and it is the part our own [Memory_Mapping.md](Memory_Mapping.md) `выпр`
+pseudocode leaves out. At a trap (`op_int_1`):
+
+```c
+if (RUU & RUU_MOD_RK) {          // was a utc/wtc armed when the trap landed?
+    M[SPSW] |= SPSW_MOD_RK;      //   remember that in СПСВ
+    RUU &= ~RUU_MOD_RK;          //   and DISARM the live modifier
+}
+```
+
+The armed flag migrates into СПСВ and the live modifier is **cleared** — so the handler runs
+disarmed. That is what makes the vector safe: the very first half-instruction is `atx SAVAC` (§3),
+and if C were still armed it would be silently modified. The **value in `M[020]` is left
+untouched**, sitting inert in the register file.
+
+On the way out, `выпр` puts it back (case 0320):
+
+```c
+if (M[SPSW] & SPSW_MOD_RK)
+    next_mod = M[MOD];           // re-arm from M[020] for the resumed instruction
+```
+
+And the arm/disarm itself, at the end of every instruction:
+
+```c
+if (next_mod) { M[MOD] = next_mod; RUU |= RUU_MOD_RK; }
+else            RUU &= ~RUU_MOD_RK;
+```
+
+Put together: **a `utc` interrupted before its target executes is preserved across the whole trap.**
+Its value rides in `M[020]`, its armed-bit rides in СПСВ, and `выпр` reconstructs the pending
+modification from the two. The earlier corner of this document that said the hardware does not try
+to reconstruct a mid-`utc` interrupt was wrong; it reconstructs it precisely, and for free.
+
+### How Dubna saves the value
+
+Exactly as it saves any other register — because it *is* addressable as one. The five load-bearing
+sites, all verified:
+
+```
+16524    ,ITS,16                 . EXTINTER prologue: push A ; A := М16 (the interrupted C)
+16525    ,ATX,SAVS16             .   SAVS16 := М16
+16560    ,ITS,16                 . INTINTER prologue: the identical pair
+16561    ,ATX,SAVS16
+15484    ,XTS,SAVS16             . FULSAV: push SAVS16 -> ИПЗ slot 06 = И16
+15574    ,XTA,SAVS16             . RETURN: A := SAVS16
+15575    ,STI,16                 .   М16 := A ; pop
+15897    ,STX,SAVS16             . BOCИПД: pop -> SAVS16, on the way back into RETURN
+```
+
+`SAVS16` is the last cell of the `SMASAV` block (`dubna.dd:16413-16414`) and carries the alias
+`SAVI16:,EQU,SAVS16` (`dubna.dd:51583`), which is where the `И16` naming comes from. It is slot 06 of
+the ИПЗ (§2), and it is one of the М13–М16 group the short prologue already saves (§4).
+
+**The armed flag needs no separate handling.** It is a bit of СПСВ, which `FULSAV` saves to slot 05
+and `BOCИПД` restores, right alongside the mode word documented in §6, §7 and §12. Dubna never
+mentions C-preservation because there is nothing to mention: save the full register file, save СПСВ,
+and a pending `utc` comes back on its own. This is the single cleanest illustration of why the
+two-tier save has to be *complete* — the correctness of an unrelated user instruction depends on a
+bit of СПСВ and a word of the register file that the kernel had no obvious reason to care about.
+
+### Two things to keep straight
+
+**Saving C-as-context is not the same as using C-as-scratch.** Having spilled the interrupted C into
+`SAVS16`, the handler is free to reuse the *live* modifier — which is now disarmed and inert — as an
+ordinary address-modification register, and Dubna does so constantly:
+
+```
+16574    ,WTC,SAVI15             . arm C from the saved М15 cell...
+16575    15,VTM,                 .   ...consume it: М15 := 0 + C  (reload М15)
+16576    ,WTC,RETTRA             . arm C from RETTRA...
+16577    ,UJ,                    .   ...consume it: computed jump to 0 + C
+15528    ,WTC,ГYC                . arm C from the current-task ИПЗ pointer...
+15529    15,XTA,TMATH            .   ...index the page table: TMATH + М15 + C
+15929    ,WTC,Г Y C              . SAVIND: same idiom to reach the ИПЗ base
+```
+
+and the `13,MTJ,16` + `CALL SAVEMOD` return-link idiom (`dubna.dd:20037-20040` and a dozen more)
+parks a subroutine link in the C slot across a nested call. None of these touch the *saved* value in
+`SAVS16`; they borrow the physical register because the trap left it inert.
+
+**The restore order proves C is a plain slot.** `RETURN` restores C **first** (`STI 16` at 15575)
+and *then* М13, М14, М15 through the following `STI`s (§7). If `STI 16` armed the modifier, the next
+`STI 13` would target register `13 + C` — corruption. It does not: only `utc`/`wtc` arm, only `выпр`
+re-establishes the resumed program's armed state, and every `ITS`/`STI`/`ATI` in between is a plain
+register move. That is the same fact from the other side — C is saved and restored as a value, and
+the *pending* semantics are carried entirely by СПСВ's `SPSW_MOD_RK`.
+
+---
+
+## 14. What this means for the Unix port
 
 ### The finding: we are not saving R or РМР
 
@@ -903,6 +1041,37 @@ extint: atx     sa                  // A first, as the vector does
 Per the decision on this task, **this document only records the gap** — `besm6.S` is unchanged. It
 belongs with task 15 in [`kernel/TODO.md`](../kernel/TODO.md).
 
+### The C register is a third gap
+
+The same stub does not save `M[020]` either, and by §13 that is the C register. The race is narrow
+but real. A device interrupt can land in the one-instruction window between a user `utc` and the
+instruction it modifies. The trap parks `SPSW_MOD_RK` in СПСВ and leaves the value in `M[020]`, both
+of which `extint` preserves *by accident* — it never touches СПСВ, and it does not read `M[020]`. But
+`extintr()` is C, and the compiler's idiom for a global is `utc name` + bare load
+([Besm6_Instruction_Set.md:144-149](Besm6_Instruction_Set.md#L144-L149)), so the handler **overwrites
+`M[020]`**. The closing `3 ij` then re-arms from the clobbered value (§13), and the resumed user
+instruction is modified by the wrong address. Nothing faults; a load just reads the wrong word.
+
+The fix is the §13 idiom — read register 020 into a save cell on entry, alongside A and r8–r14, and
+put it back with `ati 020` before `3 ij` (a plain move, which does not arm — §13):
+
+```
+extint: atx     sa
+        ...                         // R, РМР as above; r8-r14 as today
+        ita     020                 // C register -> A
+        atx     sc
+        13 vjm  extintr
+        xta     sc                  // C register back (ati does not arm the modifier)
+        ati     020
+        ...                         // РМР, A, R restore as above
+        3 ij
+```
+
+Recorded, not applied. The positive corollary is the §13 point restated for our side: once the trap
+frame and `save()`/`resume()` (tasks 15/16) save the **full** register file *and* СПСВ, a pending
+`utc` is preserved with no code that mentions it — exactly as Dubna's `FULSAV`/`BOCИПД` get it. The
+gap exists only in `extint`, which saves a *subset* of the registers.
+
 ### What Dubna confirms we already have right
 
 - **`sureg()`.** `PUTTMP` (§10) reloads the whole address space from an in-memory shadow in twelve
@@ -925,7 +1094,8 @@ belongs with task 15 in [`kernel/TODO.md`](../kernel/TODO.md).
   check — is worth having on its own.
 - **The two-tier save** (§4, §6). Most interrupts never park a task, so the prologue saves the
   minimum and the full 24-word context is materialised only when the scheduler actually needs it.
-  Our `extint` already has this shape; it just needs R and РМР added to the short tier.
+  Our `extint` already has this shape; it just needs R, РМР and the C register (§13) added to the
+  short tier.
 - **The internal/external clear asymmetry** (§5). Faults are not queued — clear them all; device
   interrupts are — clear one.
 
@@ -939,6 +1109,7 @@ belongs with task 15 in [`kernel/TODO.md`](../kernel/TODO.md).
 | `PUTTMP` | `sureg()`, [`kernel/utab.c`](../kernel/utab.c) |
 | the nine-store drain (§11) | `drainbrz()`, [`kernel/brz.s`](../kernel/brz.s) |
 | `RETURN`/`OUTMACRO` (§7, §8) | the trap gate, task 15 |
+| `SAVS16` / `И16`, the C register (§13) | an `M[020]` slot in the trap frame and the new `reg.h` |
 | `SMASAV` | the trap frame on the kernel stack at `076000` |
 
 **One difference that matters.** Dubna's ИПЗ is *mapped* — it sits at user page 50, so a context
