@@ -342,8 +342,11 @@ entry is *not* the map-free one-liner an earlier draft of this task claimed, and
 written — `extint` — inherits that mistake. No map switch and no БРЗ drain, true (the hardware's
 forced БлП/БлЗ is already the kernel's mode); but there are **three doors with two save disciplines**,
 and the async ones must preserve more of the machine than the ABI's callee-saved set. Read
-[../doc/Context_Switch.md](../doc/Context_Switch.md) first — §4/§7/§8/§9/§13 are the authority for
+[../doc/Context_Switch.md](../doc/Context_Switch.md) first — §4/§7/§8/§9/§13/§14 are the authority for
 everything below — and use `intr.c`'s `extintr()` as the model of a C handler reached from an asm gate.
+
+This work is split into five sub-tasks, done in order; each leaves the tree building
+(`cd kernel && make`). Four facts cut across all of them:
 
 - **Async vs. synchronous.** An external interrupt (`0501`→`extint`) and an internal fault
   (`0500`→`trap`) land between arbitrary instructions, so the interrupted code owns *every* register
@@ -366,12 +369,30 @@ everything below — and use `intr.c`'s `extintr()` as the model of a C handler 
   growing up — task 17) is now an **unmapped physical** word index pointing *into the kernel image below
   the u-area*; run a C handler on it and it silently corrupts the kernel. `trap`/`syscall` get the switch
   implicitly the moment they "build the frame on the kernel stack"; `extint` calls `extintr()` with no
-  frame step, so it must do the switch explicitly — the reason the async-from-user case is broken today
-  even after the register fixes below land (it passes `sctest` only because that harness enters from
-  kernel mode).
+  frame step, so it must do the switch explicitly.
 
-- **`extint` is inadequate.** It saves ACC and r8–r14 but **not R, not РМР, not the C register
-  M[020]** — three real bugs, each confirmed against SIMH and Dubna this cycle:
+- **One exit, three doors.** An extracode returns via ЭРЕТ (`2 ij`), an interrupt/fault via ИРЕТ
+  (`3 ij`), and the two cannot share a hardcoded `выпр` unless the door is normalised first. Steal
+  Dubna's `OUTMACRO` (Context_Switch.md §8): copy ЭРЕТ→ИРЕТ in two instructions and let one `3 ij`
+  serve both gates — the syscall return then inherits the interrupt epilogue's `runrun`/pending checks
+  for free. The fault path still needs a PC fixup the extracode path does not (see 15c).
+
+- **Only one saved-state slot.** СПСВ, ИРЕТ and ЭРЕТ are single registers, not a stack: a second
+  internal fault while handling the first is fatal (`STOP_DOUBLE_INTR`). A gate must save СПСВ/ИРЕТ to
+  the kernel stack before it does anything that can fault or re-enables interrupts (Memory_Mapping.md,
+  "Notes for an operating-system port", note 12).
+
+**Verification is a `kernel/test` case in the spirit of `sctest`, but entered from user mode** — the
+current `sctest` enters from kernel mode and would pass even with the stack switch missing, so it
+cannot stand in. Task 16's real entry-to-user (`resume()`/SELECT-forge) does not exist yet, so 15a
+**builds the scaffolding**: a new test crt0 that forges user-mode entry (a Dubna `SELECT`-style гейт —
+forge ИРЕТ+СПСВ, `выпр` into user) and programs a user map with the `mmuhelp`/`sureg` machinery
+`mmutest` already links. That harness is reused by 15c and 15d.
+
+**15a. `extint`: save the full async machine, and switch the stack.** The written `extint`
+(`besm6.S:204–238`) saves ACC and r8–r14 but **not R, not РМР, not the C register M[020]**, and it
+never switches the stack — four gaps, each confirmed against SIMH and Dubna this cycle
+(Context_Switch.md §14 has the full corrected prologue verbatim):
   - **R** (ALU mode — ω plus the NTR suppress bits). The C ABI exits `NTR 3` / ω = logical
     ([../doc/Besm6_Runtime_Library.md](../doc/Besm6_Runtime_Library.md), the helper contract), so
     `13 vjm extintr` returns with R changed and the resumed user runs in the wrong arithmetic mode.
@@ -384,58 +405,64 @@ everything below — and use `intr.c`'s `extintr()` as the model of a C handler 
     which overwrites M[020]; the interrupted user's `SPSW_MOD_RK` still rides in СПСВ, so the closing
     `3 ij` re-arms the modifier from the clobbered value and mis-modifies the resumed instruction
     (Context_Switch.md §13).
-  - *Fix:* extend the static save area (`sa`, `s8`–`s14`) with `sr`/`srmr`/`sc` **and `s15`**; on entry
-    add `rte 07777`/`atx`, `yta`/`atx`, `ita 020`/`atx`, then save r15 (`ita 017`/`atx`) and — **only
-    when `СПСВ & 014 == 0` (came from user)** — reload the kernel stack base (`ita 027`, `aax #(014)`,
-    `u1a` past a `15 vtm [ustkbase]`); on exit restore in the **forced order РМР → A → R** (`xta srmr`/
-    `aex`, `xta sa`, `xtr sr`) plus `ati 020` for the C register (a plain move — it does not re-arm) and
-    `xta s15`/`ati 017` for r15, then `3 ij`. The register order is not negotiable (Context_Switch.md
-    §7); the r15 and C-register restores are order-free among themselves but must precede the final `xta
-    sa` (they clobber A) — and both must happen, because `выпр` does not reload the index registers. See
-    the full corrected prologue in Context_Switch.md §14.
+  - **The stack** (the shared "r15 is not banked" fact above): `extint` calls `extintr()` with no
+    frame step, so it must do the r15 switch explicitly, gated on `СПСВ & 014 == 0`.
 
-- **`trap` (0500) is not built.** The vector `uj trap` resolves straight to the C `trap()` with no
-  frame under it. Interpose an asm stub that — after the r15 switch above, when the fault came from user
-  — saves the frame onto the kernel stack at `076000`, points `u.u_ar0` at it, calls `trap()`, restores,
-  and returns via ИРЕТ (`3 ij`) — with the restart protocol (back the PC up from
-  `SPSW_NEXT_RK`/`SPSW_RIGHT_INSTR` before retrying a faulted instruction).
+  *Fix:* extend the static save area (`sa`, `s8`–`s14`) with `sr`/`srmr`/`sc` **and `s15`**; on entry
+  add `rte 07777`/`atx`, `yta`/`atx`, `ita 020`/`atx`, then save r15 (`ita 017`/`atx`) and — **only
+  when `СПСВ & 014 == 0` (came from user)** — reload the kernel stack base (`ita 027`, `aax #(014)`,
+  `u1a` past a `15 vtm [ustkbase]`); on exit restore in the **forced order РМР → A → R** (`xta srmr`/
+  `aex`, `xta sa`, `xtr sr`) plus `ati 020` for the C register (a plain move — it does not re-arm) and
+  `xta s15`/`ati 017` for r15, then `3 ij`. The register order is not negotiable (Context_Switch.md
+  §7); the r15 and C-register restores are order-free among themselves but must precede the final `xta
+  sa` (they clobber A) — and both must happen, because `выпр` does not reload the index registers.
+- **Done when** (done-when *c*): a from-user test (built on the new forge-entry crt0 above) takes an
+  external interrupt with ω-mode / a `utc` armed and r15 holding a user-stack value, runs `extintr()`
+  on the kernel stack (not on the user's r15) and resumes the user with R, РМР, M[020] **and r15**
+  intact. Touches `besm6.S` + the new test only — no `reg.h`/`trap.c` dependency, so it can land first.
 
-- **`syscall` (0577) / `badext` are `stop` stubs.** Build the extracode frame, dispatch, and return
-  via ЭРЕТ (`2 ij`, not ИРЕТ — Context_Switch.md §8; or normalise ЭРЕТ→ИРЕТ the way Dubna's OUTMACRO
-  does, but note the fault path needs a PC fixup the extracode path does not). Syscall ABI, mirroring
-  `cmd/sim/syscall.cpp`: number from the `$77 N` operand (the effective address, in r14), last arg in
-  ACC and the rest below r15, **result in ACC and errno in r14** — not the x86 EAX/esp/carry
-  convention `trap.c` still uses. Because the args sit below the caller's r15, read them (or copy the
-  frame) *before* the r15 switch above, then repoint r15 at the kernel stack to run the C dispatcher —
-  an extracode always comes from user mode, so the switch is unconditional here.
+**15b. `reg.h`: the BESM-6 trap frame, and retarget the C readers.** `reg.h` is still
+`struct trap{eax…ss}` with EAX/EIP/ESP/EFL. Define the BESM-6 `u_ar0[]` frame (ACC, r1–r15,
+C = M[020], R, РМР, ГРП, СПСВ, ЭРЕТ/ИРЕТ, errno). The frame lives on the kernel stack, so `u_ar0`
+points at it in place — the x86 "changed registers are copied back on return" convention becomes "the
+asm epilogue reloads the registers from the frame." Update every reader to keep the tree building —
+`trap.c` (return values, panic dump), `sig.c` (ptrace / single-step, `u_ar0[EFL]`, `u_ar0[EIP]`),
+`sys1.c` (exec register setup; the fork `u_ar0[EIP]+=2` trick → returning distinct ACC values, task
+17), `machdep.c` (`sendsig` stack build), `clock.c`, plus `regloc[]`. EFL has no BESM-6 analogue —
+single-step is the address-break registers (М034/М035) and a syscall error is errno-in-r14, not a
+carry flag — so that logic is rewritten, not remapped. Not yet exercised at runtime: the gates that
+fill the frame are 15c/15d.
+- **Done when** the tree builds (`cd kernel && make`, image still below `076000`) with the new frame,
+  and every reader compiles against it.
 
-- **`reg.h` — replace the x86 frame.** It is still `struct trap{eax…ss}` with EAX/EIP/ESP/EFL. Define
-  the BESM-6 `u_ar0[]` frame (ACC, r1–r15, C = M[020], R, РМР, ГРП, СПСВ, ЭРЕТ/ИРЕТ, errno). The frame
-  lives on the kernel stack, so `u_ar0` points at it in place — the x86 "changed registers are copied
-  back on return" convention becomes "the asm epilogue reloads the registers from the frame." Update
-  every reader — `trap.c` (return values, panic dump), `sig.c` (ptrace / single-step, `u_ar0[EFL]`,
-  `u_ar0[EIP]`), `sys1.c` (exec register setup, and the fork `u_ar0[EIP]+=2` trick → returning
-  distinct ACC values, task 17), `machdep.c` (`sendsig` stack build), plus `regloc[]`. EFL has no
-  BESM-6 analogue — single-step is the address-break registers (М034/М035) and a syscall error is
-  errno-in-r14, not a carry flag — so that logic is rewritten, not remapped.
+**15c. The trap gate (0500) and the fault path in `trap.c`.** The vector `uj trap` resolves straight
+to the C `trap()` with no frame under it. Interpose an asm stub that — after the r15 switch, when the
+fault came from user — saves the frame onto the kernel stack at `076000`, points `u.u_ar0` at it, calls
+`trap()`, restores, and returns via ИРЕТ (`3 ij`) — with the **restart protocol** (back the PC up from
+`SPSW_NEXT_RK`/`SPSW_RIGHT_INSTR` before retrying a faulted instruction). Retarget `trap.c` from x86:
+`trap(struct trap)` by value → the BESM-6 frame; dispatch on ГРП (bit 20 = data protection, faulting
+page in bits 5–9 → `grow()` or SIGSEG; bit 14 = instruction protection; bit 13 = illegal instruction;
+bit 15 = check) instead of x86 vector numbers.
+- **Done when** (done-when *b*): a from-user test's data-protection fault (touching a closed page) grows
+  the stack or signals.
 
-- **`trap.c` — retarget from x86.** `trap(struct trap)` by value → the BESM-6 frame; dispatch on ГРП
-  (bit 20 = data protection, faulting page in bits 5–9 → `grow()` or SIGSEG; bit 14 = instruction
-  protection; bit 13 = illegal instruction; bit 15 = check) instead of x86 vector numbers; rewrite the
-  inline syscall path (`case 48+USER`) to the BESM-6 ABI above.
+**15d. The syscall gate (0577) and `badext`.** `syscall` and `badext` are `stop` stubs. Build the
+extracode frame, dispatch, and return via ЭРЕТ (`2 ij`, or normalise ЭРЕТ→ИРЕТ the `OUTMACRO` way —
+but note the fault path needs the PC fixup the extracode path does not). Rewrite `trap.c`'s inline
+syscall path (`case 48+USER`) to the BESM-6 ABI, mirroring `cmd/sim/syscall.cpp`: number from the
+`$77 N` operand (the effective address, in r14), last arg in ACC and the rest below r15, **result in
+ACC and errno in r14** — not the x86 EAX/esp/carry convention. Because the args sit below the caller's
+r15, read them (or copy the frame) *before* the r15 switch, then repoint r15 at the kernel stack to run
+the C dispatcher — an extracode always comes from user mode, so the switch is unconditional here.
+- **Done when** (done-when *a*): a from-user test issues `$77 N` and returns to user mode with the
+  correct ACC/errno.
 
-- **Entangled: `clock` / GRP_TIMER.** `clock()` still takes `struct trap` by value and `GRP_TIMER` is
-  held out of `IRQ_ON` (`intr.c`) until this frame exists; retargeting the frame unblocks the timer
-  ISR — do it here or as the immediate follow-on. **Leans on task 16:** reschedule-on-return
-  (`runrun`) and any fault that sleeps need `save()`/`resume()`; the exit path checks `runrun`, but the
-  switch itself is task 16.
-
-- **Done when** (a) an icode that issues `$77 N` traps in through the syscall gate and returns to user
-  mode; (b) a data-protection fault grows the stack or signals; and (c) an external interrupt taken **in
-  user mode**, with ω-mode / a `utc` armed and r15 holding a user-stack value, runs `extintr()` on the
-  kernel stack (not on the user's r15) and resumes the user with R, РМР, M[020] **and r15** intact — a
-  `kernel/test` case in the spirit of `sctest`, but entered from user mode so it actually exercises the
-  switch (the current `sctest` enters from kernel mode and would pass even with the switch missing).
+**15e. Unblock the timer (`clock` / GRP_TIMER).** With the frame in place: retarget `clock()` off
+`struct trap` by value onto the BESM-6 frame, add `GRP_TIMER` to `IRQ_ON` and dispatch it from
+`extintr()` (`intr.c`), and remove the standing TODO at `intr.c:144–148`. **Leans on task 16:**
+reschedule-on-return (`runrun`) and any fault that sleeps need `save()`/`resume()`; the exit path
+checks `runrun`, but the switch itself is task 16.
+- **Done when** a timer tick reaches `clock()` and a callout fires under SIMH.
 
 **16. `save()` / `resume()` (`besm6.S`) and the u-area invariant (`slp.c`).** `save()` stores r1–r7,
 r13, r15 into the label. `resume()` implements the invariant above, with interrupts masked across the
