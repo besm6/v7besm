@@ -143,9 +143,9 @@ save field is **24 words at offset 0** of the task block (`dubna.dd:488`):
 `SUMMATOR(24)` is 24 decimal = 030 octal words. The source documents the layout itself at
 `dubna.dd:12110-12123`, and this table is a transcription of that comment block:
 
-| Offset    | Contents                               | Dubna's words |
-|-----------|----------------------------------------|-============--|
-| `0`       | accumulator                            | `CYMMATOP`    |
+| Offset    | Contents                               | Dubna's words            |
+|-----------|----------------------------------------|--------------------------|
+| `0`       | accumulator                            | `CYMMATOP`               |
 | `1`       | mode register **R**                    | `PEЖИM  A Y` — "AU mode" |
 | `2`       | **РМР** younger bits                   | `PEГИCTP MЛAДШИX PAЗPЯДOB` |
 | `3`       | **ИРЕТ** — interrupt return address    | `AДPEC ПPEPЫBAHИЯ (И33)` |
