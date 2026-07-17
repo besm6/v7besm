@@ -337,15 +337,77 @@ populating). To debug later; it is not a `_start`/boot defect.
   `mem = `; a clean halt awaits the trap/scheduler of tasks 15–16 — today it runs on into the stub
   init/scheduler.)*
 
-**15. Trap / extracode / interrupt entry and exit (`besm6.S`, `include/sys/reg.h`, `trap.c`).** Entry
-is now trivial — the hardware's forced БлП/БлЗ is already the kernel's mode, so there is no map to
-switch and nothing to drain: save the frame onto the kernel stack at `076000`, point `u.u_ar0` at
-it, call C, restore, `выпр`. `reg.h` describes the BESM-6 frame (ГРП, СПСВ, ЭРЕТ/ИРЕТ, accumulator,
-r1–r15) and the `u_ar0[]` indices. `trap.c` dispatches on ГРП: bit 20 = data protection (faulting
-page in bits 5–9 → `grow()` or SIGSEG), bit 14 = instruction protection, bit 13 = illegal
-instruction, bit 15 = check; extracode `077` → syscall. Implement the restart protocol — back the PC
-up from `SPSW_NEXT_RK`/`SPSW_RIGHT_INSTR` — before retrying a faulted instruction.
-- **Done when** an icode that issues `$77 N` traps into the kernel and returns to user mode.
+**15. Trap / extracode / interrupt entry and exit (`besm6.S`, `include/sys/reg.h`, `trap.c`).** The
+entry is *not* the map-free one-liner an earlier draft of this task claimed, and the one door that is
+written — `extint` — inherits that mistake. No map switch and no БРЗ drain, true (the hardware's
+forced БлП/БлЗ is already the kernel's mode); but there are **three doors with two save disciplines**,
+and the async ones must preserve more of the machine than the ABI's callee-saved set. Read
+[../doc/Context_Switch.md](../doc/Context_Switch.md) first — §4/§7/§8/§9/§13 are the authority for
+everything below — and use `intr.c`'s `extintr()` as the model of a C handler reached from an asm gate.
+
+- **Async vs. synchronous.** An external interrupt (`0501`→`extint`) and an internal fault
+  (`0500`→`trap`) land between arbitrary instructions, so the interrupted code owns *every* register
+  and the stub must save the full visible machine the C handler can touch. An extracode
+  (`0577`→`syscall`, `0550`–`0576`→`badext`) is a synchronous *call*: the caller owns its live
+  registers, so the gate saves almost nothing (Context_Switch.md §9), and the hardware has already
+  clobbered r14 (= the effective address).
+
+- **`extint` is inadequate.** It saves ACC and r8–r14 but **not R, not РМР, not the C register
+  M[020]** — three real bugs, each confirmed against SIMH and Dubna this cycle:
+  - **R** (ALU mode — ω plus the NTR suppress bits). The C ABI exits `NTR 3` / ω = logical
+    ([../doc/Besm6_Runtime_Library.md](../doc/Besm6_Runtime_Library.md), the helper contract), so
+    `13 vjm extintr` returns with R changed and the resumed user runs in the wrong arithmetic mode.
+    The hardware does **not** save it: SIMH `op_int_1` and `выпр` never touch RAU, and Dubna saves it
+    by hand (`rte`/`xtr`). The "Floating-point state" comment in `besm6.S` — *"the arithmetic mode
+    rides in СПСВ across a trap"* — is therefore **false** and must be corrected when this code lands.
+  - **РМР** (younger-bits): any logical op (`и`/`слц`/`сл`) overwrites it, and the interrupted user
+    may hold it live.
+  - **C register M[020]**: `extintr()` reaches globals through the compiler's `utc name`+load idiom,
+    which overwrites M[020]; the interrupted user's `SPSW_MOD_RK` still rides in СПСВ, so the closing
+    `3 ij` re-arms the modifier from the clobbered value and mis-modifies the resumed instruction
+    (Context_Switch.md §13).
+  - *Fix:* extend the static save area (`sa`, `s8`–`s14`) with `sr`/`srmr`/`sc`; on entry add
+    `rte 07777`/`atx`, `yta`/`atx`, `ita 020`/`atx`; on exit restore in the **forced order РМР → A → R**
+    (`xta srmr`/`aex`, `xta sa`, `xtr sr`) plus `ati 020` for the C register (a plain move — it does
+    not re-arm), then `3 ij`. The order is not negotiable (Context_Switch.md §7).
+
+- **`trap` (0500) is not built.** The vector `uj trap` resolves straight to the C `trap()` with no
+  frame under it. Interpose an asm stub that saves the frame onto the kernel stack at `076000`, points
+  `u.u_ar0` at it, calls `trap()`, restores, and returns via ИРЕТ (`3 ij`) — with the restart protocol
+  (back the PC up from `SPSW_NEXT_RK`/`SPSW_RIGHT_INSTR` before retrying a faulted instruction).
+
+- **`syscall` (0577) / `badext` are `stop` stubs.** Build the extracode frame, dispatch, and return
+  via ЭРЕТ (`2 ij`, not ИРЕТ — Context_Switch.md §8; or normalise ЭРЕТ→ИРЕТ the way Dubna's OUTMACRO
+  does, but note the fault path needs a PC fixup the extracode path does not). Syscall ABI, mirroring
+  `cmd/sim/syscall.cpp`: number from the `$77 N` operand (the effective address, in r14), last arg in
+  ACC and the rest below r15, **result in ACC and errno in r14** — not the x86 EAX/esp/carry
+  convention `trap.c` still uses.
+
+- **`reg.h` — replace the x86 frame.** It is still `struct trap{eax…ss}` with EAX/EIP/ESP/EFL. Define
+  the BESM-6 `u_ar0[]` frame (ACC, r1–r15, C = M[020], R, РМР, ГРП, СПСВ, ЭРЕТ/ИРЕТ, errno). The frame
+  lives on the kernel stack, so `u_ar0` points at it in place — the x86 "changed registers are copied
+  back on return" convention becomes "the asm epilogue reloads the registers from the frame." Update
+  every reader — `trap.c` (return values, panic dump), `sig.c` (ptrace / single-step, `u_ar0[EFL]`,
+  `u_ar0[EIP]`), `sys1.c` (exec register setup, and the fork `u_ar0[EIP]+=2` trick → returning
+  distinct ACC values, task 17), `machdep.c` (`sendsig` stack build), plus `regloc[]`. EFL has no
+  BESM-6 analogue — single-step is the address-break registers (М034/М035) and a syscall error is
+  errno-in-r14, not a carry flag — so that logic is rewritten, not remapped.
+
+- **`trap.c` — retarget from x86.** `trap(struct trap)` by value → the BESM-6 frame; dispatch on ГРП
+  (bit 20 = data protection, faulting page in bits 5–9 → `grow()` or SIGSEG; bit 14 = instruction
+  protection; bit 13 = illegal instruction; bit 15 = check) instead of x86 vector numbers; rewrite the
+  inline syscall path (`case 48+USER`) to the BESM-6 ABI above.
+
+- **Entangled: `clock` / GRP_TIMER.** `clock()` still takes `struct trap` by value and `GRP_TIMER` is
+  held out of `IRQ_ON` (`intr.c`) until this frame exists; retargeting the frame unblocks the timer
+  ISR — do it here or as the immediate follow-on. **Leans on task 16:** reschedule-on-return
+  (`runrun`) and any fault that sleeps need `save()`/`resume()`; the exit path checks `runrun`, but the
+  switch itself is task 16.
+
+- **Done when** (a) an icode that issues `$77 N` traps in through the syscall gate and returns to user
+  mode; (b) a data-protection fault grows the stack or signals; and (c) an external interrupt taken
+  with ω-mode / a `utc` armed resumes the user with R, РМР and M[020] intact — a `kernel/test` case in
+  the spirit of `sctest`.
 
 **16. `save()` / `resume()` (`besm6.S`) and the u-area invariant (`slp.c`).** `save()` stores r1–r7,
 r13, r15 into the label. `resume()` implements the invariant above, with interrupts masked across the
