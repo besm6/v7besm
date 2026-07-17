@@ -1072,6 +1072,79 @@ frame and `save()`/`resume()` (tasks 15/16) save the **full** register file *and
 `utc` is preserved with no code that mentions it — exactly as Dubna's `FULSAV`/`BOCИПД` get it. The
 gap exists only in `extint`, which saves a *subset* of the registers.
 
+### The stack is a fourth gap
+
+The three above are registers the stub forgets to *save*. This one is a stack the stub forgets to
+*switch*, and it is the one Dubna does not let us copy verbatim — because the two kernels place the
+supervisor stack differently.
+
+The PDP-11 v7 that Unix came from switched to the kernel stack for free: SP is banked by processor
+mode, so a trap from user mode lands with SP already pointing at the per-process kernel stack. **The
+BESM-6 has one stack register, М15, shared across modes.** Dubna solves this in the §4 prologue — `ITA
+15` / `15,VTM,SAVI15` saves the interrupted М15 and repoints it at `SMASAV`, so the handler runs on a
+supervisor scratch, not on whatever the interrupted code was using. `extint` does neither: it never
+touches r15 and relies on the note at [`besm6.S:183-186`](../kernel/besm6.S#L183) that "extintr()
+preserves r1–r7 and r15 for us (that is the ABI)."
+
+That reliance holds only when r15 *already* names the kernel stack — i.e. when the interrupt nested
+inside the kernel (case 3 of the four-case analysis). When the interrupt lands in **user** code (case
+2), r15 is the user stack pointer (`exec` seeds it at `070000`, growing up), and the trap has just
+forced БлП **on**, so supervisor data is unmapped: that r15 is now a **physical** word index at
+≈ `070000`, *inside the kernel image below the u-area at `076000`*. `extintr()` is C; its prologue
+decrements r15 and writes its frame there — silent corruption of the kernel's own text/data, invisible
+until the timer or a device ISR is actually armed.
+
+Unlike Dubna, we do not repoint at a global scratch — we have a real per-process kernel stack, the one
+`_start` seeds — so the fix is to reload *that*, and only from user mode. The signal is СПСВ: the trap
+stores `(old ПСВ БлП/БлЗ/БлПр) | IS_SUPERVISOR(RUU)` there (Memory_Mapping.md, "Entering and leaving
+supervisor mode"), so `СПСВ & 014` (РежЭ | РежПр) is zero **iff** the interrupted context was user.
+Test the supervisor bits, **not** БлП: `copyin`/`copyout` clear БлП while staying in supervisor mode,
+so a БлП test would misclassify a fault taken mid-`copyin` and reset r15 out from under the syscall.
+
+The corrected `extint`, folding in all four gaps (R, РМР, M[020], and the stack) — the register save/
+restore order is the §7 rule, the r15 and C-register restores go before the final `xta sa` because they
+clobber A, and the two `выпр`-doesn't-reload registers (r8–r14, r15) are put back by hand:
+
+```
+extint: atx     sa                  // A first, as the vector does
+        rte     07777               // R   -> A
+        atx     sr
+        yta                         // РМР -> A
+        atx     srmr
+        ita     020                 // C register (M[020]) -> A
+        atx     sc
+        ita     017                 // interrupted r15 -> A
+        atx     s15                 //   one static cell: interrupts are blocked, no re-entry
+        ita     027                 // СПСВ -> A
+        aax   #(014)                // isolate РежЭ | РежПр (RUU_EXTRACODE|RUU_INTERRUPT)
+        u1a     extk                // nonzero -> nested in the kernel: keep r15
+     15 vtm     [ustkbase]          // zero -> from user: r15 := kernel stack base (~076214)
+extk:   ita     010                 // r8-r14 as today
+        atx     s8
+        ...                         // r9..r13 unchanged
+        ita     016
+        atx     s14
+
+     13 vjm     extintr             // intr.c: read ГРП, dispatch, dismiss
+
+        xta     s14                 // r8-r14 back, as today
+        ati     016
+        ...                         // r13..r9 unchanged
+        xta     s8
+        ati     010
+        xta     s15                 // interrupted r15 back (before the A restore)
+        ati     017
+        xta     sc                  // C register back (ati does not arm the modifier)
+        ati     020
+        xta     srmr                // РМР back, via the aex side effect
+        aex                         //   (A is garbage after this -- intentional)
+        xta     sa                  // A back (xta does not disturb РМР)
+        xtr     sr                  // R back -- must be last
+      3 ij                          // выпр: restore the mode word, jump via M[033]
+```
+
+Recorded, not applied, like the three above; it belongs with task 15.
+
 ### What Dubna confirms we already have right
 
 - **`sureg()`.** `PUTTMP` (§10) reloads the whole address space from an in-memory shadow in twelve

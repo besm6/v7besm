@@ -352,6 +352,24 @@ everything below — and use `intr.c`'s `extintr()` as the model of a C handler 
   registers, so the gate saves almost nothing (Context_Switch.md §9), and the hardware has already
   clobbered r14 (= the effective address).
 
+- **The stack switch — r15 is not banked.** The PDP-11 got the kernel/user stack swap for free from a
+  mode-banked SP; the BESM-6 has one stack register shared across modes, so **every door entered from
+  user mode must repoint r15 at the kernel stack by hand, and every door that nests inside the kernel
+  must leave it alone.** There is exactly one kernel stack — the u-area is a single fixed physical page
+  — so the switch is a load of a constant, the same `15 vtm [ustkbase]` `_start` already uses (r15 ≈
+  `076214`). The signal is the saved mode word: the trap stashes `(old ПСВ БлП/БлЗ/БлПр) |
+  IS_SUPERVISOR(RUU)` in СПСВ (`M[027]`) — Memory_Mapping.md, "Entering and leaving supervisor mode" —
+  so **`СПСВ & 014`** (РежЭ | РежПр, `RUU_EXTRACODE|RUU_INTERRUPT`) is zero **iff the interrupted
+  context was user**. Test *that*, not БлП: `copyin`/`copyout` run in supervisor mode with БлП clear, so
+  a БлП test would misread a fault taken mid-`copyin` as "from user" and reset r15 out from under the
+  syscall's frame. Why it bites: the trap forces БлП *on*, so a user r15 (exec seeds it at `070000`,
+  growing up — task 17) is now an **unmapped physical** word index pointing *into the kernel image below
+  the u-area*; run a C handler on it and it silently corrupts the kernel. `trap`/`syscall` get the switch
+  implicitly the moment they "build the frame on the kernel stack"; `extint` calls `extintr()` with no
+  frame step, so it must do the switch explicitly — the reason the async-from-user case is broken today
+  even after the register fixes below land (it passes `sctest` only because that harness enters from
+  kernel mode).
+
 - **`extint` is inadequate.** It saves ACC and r8–r14 but **not R, not РМР, not the C register
   M[020]** — three real bugs, each confirmed against SIMH and Dubna this cycle:
   - **R** (ALU mode — ω plus the NTR suppress bits). The C ABI exits `NTR 3` / ω = logical
@@ -366,22 +384,30 @@ everything below — and use `intr.c`'s `extintr()` as the model of a C handler 
     which overwrites M[020]; the interrupted user's `SPSW_MOD_RK` still rides in СПСВ, so the closing
     `3 ij` re-arms the modifier from the clobbered value and mis-modifies the resumed instruction
     (Context_Switch.md §13).
-  - *Fix:* extend the static save area (`sa`, `s8`–`s14`) with `sr`/`srmr`/`sc`; on entry add
-    `rte 07777`/`atx`, `yta`/`atx`, `ita 020`/`atx`; on exit restore in the **forced order РМР → A → R**
-    (`xta srmr`/`aex`, `xta sa`, `xtr sr`) plus `ati 020` for the C register (a plain move — it does
-    not re-arm), then `3 ij`. The order is not negotiable (Context_Switch.md §7).
+  - *Fix:* extend the static save area (`sa`, `s8`–`s14`) with `sr`/`srmr`/`sc` **and `s15`**; on entry
+    add `rte 07777`/`atx`, `yta`/`atx`, `ita 020`/`atx`, then save r15 (`ita 017`/`atx`) and — **only
+    when `СПСВ & 014 == 0` (came from user)** — reload the kernel stack base (`ita 027`, `aax #(014)`,
+    `u1a` past a `15 vtm [ustkbase]`); on exit restore in the **forced order РМР → A → R** (`xta srmr`/
+    `aex`, `xta sa`, `xtr sr`) plus `ati 020` for the C register (a plain move — it does not re-arm) and
+    `xta s15`/`ati 017` for r15, then `3 ij`. The register order is not negotiable (Context_Switch.md
+    §7); the r15 and C-register restores are order-free among themselves but must precede the final `xta
+    sa` (they clobber A) — and both must happen, because `выпр` does not reload the index registers. See
+    the full corrected prologue in Context_Switch.md §14.
 
 - **`trap` (0500) is not built.** The vector `uj trap` resolves straight to the C `trap()` with no
-  frame under it. Interpose an asm stub that saves the frame onto the kernel stack at `076000`, points
-  `u.u_ar0` at it, calls `trap()`, restores, and returns via ИРЕТ (`3 ij`) — with the restart protocol
-  (back the PC up from `SPSW_NEXT_RK`/`SPSW_RIGHT_INSTR` before retrying a faulted instruction).
+  frame under it. Interpose an asm stub that — after the r15 switch above, when the fault came from user
+  — saves the frame onto the kernel stack at `076000`, points `u.u_ar0` at it, calls `trap()`, restores,
+  and returns via ИРЕТ (`3 ij`) — with the restart protocol (back the PC up from
+  `SPSW_NEXT_RK`/`SPSW_RIGHT_INSTR` before retrying a faulted instruction).
 
 - **`syscall` (0577) / `badext` are `stop` stubs.** Build the extracode frame, dispatch, and return
   via ЭРЕТ (`2 ij`, not ИРЕТ — Context_Switch.md §8; or normalise ЭРЕТ→ИРЕТ the way Dubna's OUTMACRO
   does, but note the fault path needs a PC fixup the extracode path does not). Syscall ABI, mirroring
   `cmd/sim/syscall.cpp`: number from the `$77 N` operand (the effective address, in r14), last arg in
   ACC and the rest below r15, **result in ACC and errno in r14** — not the x86 EAX/esp/carry
-  convention `trap.c` still uses.
+  convention `trap.c` still uses. Because the args sit below the caller's r15, read them (or copy the
+  frame) *before* the r15 switch above, then repoint r15 at the kernel stack to run the C dispatcher —
+  an extracode always comes from user mode, so the switch is unconditional here.
 
 - **`reg.h` — replace the x86 frame.** It is still `struct trap{eax…ss}` with EAX/EIP/ESP/EFL. Define
   the BESM-6 `u_ar0[]` frame (ACC, r1–r15, C = M[020], R, РМР, ГРП, СПСВ, ЭРЕТ/ИРЕТ, errno). The frame
@@ -405,9 +431,11 @@ everything below — and use `intr.c`'s `extintr()` as the model of a C handler 
   switch itself is task 16.
 
 - **Done when** (a) an icode that issues `$77 N` traps in through the syscall gate and returns to user
-  mode; (b) a data-protection fault grows the stack or signals; and (c) an external interrupt taken
-  with ω-mode / a `utc` armed resumes the user with R, РМР and M[020] intact — a `kernel/test` case in
-  the spirit of `sctest`.
+  mode; (b) a data-protection fault grows the stack or signals; and (c) an external interrupt taken **in
+  user mode**, with ω-mode / a `utc` armed and r15 holding a user-stack value, runs `extintr()` on the
+  kernel stack (not on the user's r15) and resumes the user with R, РМР, M[020] **and r15** intact — a
+  `kernel/test` case in the spirit of `sctest`, but entered from user mode so it actually exercises the
+  switch (the current `sctest` enters from kernel mode and would pass even with the switch missing).
 
 **16. `save()` / `resume()` (`besm6.S`) and the u-area invariant (`slp.c`).** `save()` stores r1–r7,
 r13, r15 into the label. `resume()` implements the invariant above, with interrupts masked across the
