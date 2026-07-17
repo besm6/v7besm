@@ -102,10 +102,7 @@
 _start:
         // Seed the kernel stack pointer: the top of struct user, growing up to
         // 0100000.  ustkbase (machdep.c) holds &u.u_stack, a link-time constant.
-        xta     <ustkbase>
-        aax     #077777             // strip the fat-pointer marker -> word address
-        ati     017                 // r15 := kernel stack base (~076214)
-//     15 vtm [ustkbase]
+     15 vtm [ustkbase]              // r15 := kernel stack base (~076214)
      13 vjm     main                // into the C kernel; main() zeroes bss, sizes memory
 bhalt:  stop                        // main returned / faulted upstream: resumable halt
         uj      bhalt
