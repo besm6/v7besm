@@ -32,7 +32,18 @@ void relocate_cursym(void)
         // since it adds corigin itself.  By pass 2 it is set, so the value
         // recomputed here matches the one pass 1 settled on (the same trick
         // ctrel/cdrel/cbrel play in relocate_object()).
-        i                 = ld.cindex + ld.cursym.n_value - HDRSZ / W;
+        //
+        // The map only covers the words this file contributed, so the symbol has
+        // to name one of them.  A const symbol pointing outside the segment has no
+        // word to follow and cannot be relocated at all: identical literals are
+        // merged away individually, so the words this file brought are scattered
+        // through the pool, and there is nothing to extrapolate past either edge.
+        // "sym = . - 8" at the top of a .const is the usual way to land here -
+        // anchor such a symbol inside the segment instead.
+        i = ld.cindex + ld.cursym.n_value - HDRSZ / W;
+        if (i < ld.cindex || i >= ld.cindex + (int)(ld.filhdr.a_const / W))
+            error(2, "symbol '%s': const value 0%lo outside the file's const segment",
+                  ld.cursym.n_name, (long)ld.cursym.n_value);
         ld.cursym.n_value = ld.newindex[i] + ld.cbasaddr;
         return;
 

@@ -34,12 +34,28 @@
 // valid no-op functions: value-returning stubs clear A with a bare `xta`, pop any
 // pushed arguments, then `13 uj`.
 
+// The vectors below must land on their physical addresses, so this segment is laid
+// out by absolute address.  `.' counts words from the start of the const segment,
+// which the linker places at BADDR == 010 (cmd/ld/intern.h), so address A sits at
+// `. == A - 010'; `org' anchors that.  The origins hold only as long as the const
+// segment really does begin at 010: besm6.o must come first in the link (see OBJ in
+// the Makefile) so nothing is merged in ahead of it, and `ld -T' must not be used.
+//
+// `org' has to be a label inside the segment rather than the more natural
+// `base0 = . - 010'.  A const symbol names a const *word*, which the linker follows
+// through the literal merge; one pointing outside the segment names no word and
+// cannot be relocated (b6as rejects it).  Hence the `- 010' on each origin.
+
         .const
-        . = . - 010 + 0100      // Skip I/O region
-#include "const.s"              // Put some #constants here to use this space
+org:                            // Address 000010: the const segment starts here
+. = org + 0100 - 010            // Skip I/O region
+#include "const.s"              // Put some #constants here to fill the space
+
+. = org + 0500 - 010            // Vectors for exceptions and interrupts are at 0500
       : uj trap                 // 0500: internal interrupt (a fault)
       : uj extint               // 0501: external interrupt (ГРП) -- see below
-        . = . - 0502 + 0550
+
+. = org + 0550 - 010            // Vectors for extracodes start at 0550
       : uj badext               // 0550: extracode *50
       : uj badext               // 0551: extracode *51
       : uj badext               // 0552: extracode *52
@@ -66,6 +82,18 @@
       : uj badext               // 0575: extracode *75
       : uj badext               // 0576: extracode *76
       : uj syscall              // 0577: extracode *77 -- the syscall gate
+
+// Register save area for the external-interrupt stub above.  One copy is enough:
+// interrupts are blocked from the moment the hardware takes one until the `ij` that
+// ends the handler, so extint cannot be re-entered.
+sa:     .word 0                 // accumulator
+s8:     .word 0                 // r8-r14: caller-saved, so the C handler may
+s9:     .word 0                 //   clobber them and the interrupted code will
+s10:    .word 0                 //   not be expecting it
+s11:    .word 0
+s12:    .word 0
+s13:    .word 0
+s14:    .word 0
 
 // ============================================================================
 // Kernel entry point
@@ -180,40 +208,40 @@ badext: stop    076              // TODO: an extracode we do not implement
 // uarea.s reach their own bss the same way.
 
         .globl  extint
-extint: atx     <sa>             // save the accumulator
-        ita     010              // ...and r8-r14, which the C call may clobber
-        atx     <s8>
+extint: atx     sa                  // save the accumulator
+        ita     010                 // ...and r8-r14, which the C call may clobber
+        atx     s8
         ita     011
-        atx     <s9>
+        atx     s9
         ita     012
-        atx     <s10>
+        atx     s10
         ita     013
-        atx     <s11>
+        atx     s11
         ita     014
-        atx     <s12>
+        atx     s12
         ita     015
-        atx     <s13>
+        atx     s13
         ita     016
-        atx     <s14>
+        atx     s14
 
-     13 vjm     extintr          // intr.c: read ГРП, dispatch, dismiss
+     13 vjm     extintr             // intr.c: read ГРП, dispatch, dismiss
 
-        xta     <s14>
+        xta     s14
         ati     016
-        xta     <s13>
+        xta     s13
         ati     015
-        xta     <s12>
+        xta     s12
         ati     014
-        xta     <s11>
+        xta     s11
         ati     013
-        xta     <s10>
+        xta     s10
         ati     012
-        xta     <s9>
+        xta     s9
         ati     011
-        xta     <s8>
+        xta     s8
         ati     010
-        xta     <sa>
-      3 ij                       // выпр: restore the mode word, jump via M[033]
+        xta     sa
+      3 ij                          // выпр: restore the mode word, jump via M[033]
 
 // ============================================================================
 // Interrupt priority level
@@ -414,20 +442,6 @@ sti:                             // clear БлПр -> external interrupts ON
 // ============================================================================
 // Global variables and data
 // ============================================================================
-
-        .bss
-
-// Register save area for the external-interrupt stub above.  One copy is enough:
-// interrupts are blocked from the moment the hardware takes one until the `ij` that
-// ends the handler, so extint cannot be re-entered.
-sa:     . = . + 1                // accumulator
-s8:     . = . + 1                // r8-r14: caller-saved, so the C handler may
-s9:     . = . + 1                //   clobber them and the interrupted code will
-s10:    . = . + 1                //   not be expecting it
-s11:    . = . + 1
-s12:    . = . + 1
-s13:    . = . + 1
-s14:    . = . + 1
 
         .data
 

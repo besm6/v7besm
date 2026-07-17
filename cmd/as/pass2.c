@@ -164,10 +164,27 @@ static long relocate_halfword(long h, long hr)
 //     files, each half-word relocated through relocate_halfword(), and written
 //     out.
 //
+// The symbol loop biases with a plain 24-bit add, deliberately *not* through
+// relocate_field(): that routine patches the address field of an instruction and
+// leaves the rest of the half-word alone, which is meaningless for a symbol value.
+// A symbol value is a plain number occupying the whole 24-bit field (fputsym()
+// writes it with a single fputh()), so field-patching it silently kept only the low
+// 15 bits - turning "sym = . - 8" into 077700000 rather than 0, and wrapping any
+// symbol in a segment larger than 32K words.
+//
+// A symbol must also land inside the segment it is relative to.  parse_expr() has
+// already masked to 24 bits by the time "name = expr" stores the value, so a value
+// that went negative now reads as a huge positive one; either way it names no word
+// of the segment, and the linker cannot relocate it (see relocate_cursym() in
+// cmd/ld/symtab.c).  Pass 2 is the earliest point the check is decidable - the
+// segment size is only final here, and pass 1 cannot tell "x = . - 8" at offset 0
+// from a legitimate "prev = . - 1" at offset 5.  The line number is gone by now,
+// so the diagnostic names the symbol instead.
+//
 void emit_segments(void)
 {
     int i;
-    long h;
+    long h, base, limit;
 
     as.cbase  = HDRSZ / W;
     as.tbase  = as.cbase + as.count[SCONST] / 2;
@@ -180,27 +197,40 @@ void emit_segments(void)
     for (i = 0; i < as.stabfree; i++) {
         h = as.stab[i].n_value;
         switch (as.stab[i].n_type & N_TYPE) {
+        default:
         case N_UNDF:
         case N_ABS:
-            break;
+            // Not relative to anything: nothing to add, nothing to range-check.
+            as.stab[i].n_value = h;
+            continue;
         case N_CONST:
-            h = relocate_field(h, as.cbase, 0);
+            base  = as.cbase;
+            limit = as.count[SCONST] / 2;
             break;
         case N_TEXT:
-            h = relocate_field(h, as.tbase, 0);
+            base  = as.tbase;
+            limit = as.count[STEXT] / 2;
             break;
         case N_DATA:
-            h = relocate_field(h, as.dbase, 0);
+            base  = as.dbase;
+            limit = as.count[SDATA] / 2;
             break;
         case N_STRNG:
-            h = relocate_field(h, as.adbase, 0);
+            base  = as.adbase;
+            limit = as.count[SSTRNG] / 2;
             as.stab[i].n_type += N_DATA - N_STRNG; // strings live in the data segment
             break;
         case N_BSS:
-            h = relocate_field(h, as.bbase, 0);
+            base  = as.bbase;
+            limit = as.count[SBSS] / 2;
             break;
         }
-        as.stab[i].n_value = h;
+        // ">" not ">=": a label may sit one past the last word, marking the end of
+        // the segment.  align_segment() has already word-aligned every segment, so
+        // the half-word counts above divide exactly.
+        if (h > limit)
+            fatal("symbol '%s': value 0%lo outside its segment", as.stab[i].n_name, h);
+        as.stab[i].n_value = (h + base) & HALF_MASK;
     }
     // re-read each segment that has an image from its temp file and emit it,
     // relocating every half-word as it goes.

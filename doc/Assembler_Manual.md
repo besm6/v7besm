@@ -161,10 +161,36 @@ The symbol takes the segment/relocation class of the expression. Equating to an 
 > `.word` and reference the location. There is no diagnostic. See `kernel/uarea.s`, which builds
 > an РП descriptor this way.
 
+**A symbol must land inside its segment.** A relocatable symbol names a *word* of the
+segment it belongs to, so its value must fall within that segment (a label one past the last
+word is allowed — the `endtab:` idiom). `sym = . - 010` at the top of a segment does not
+name a word and is rejected: *"symbol 'sym': value 077777770 outside its segment"*. The
+value in the message is the 24-bit truncation described above, which is how a negative
+offset reads by the time the check runs. The check happens after the whole file is parsed —
+the segment's size is not known until then — so the line it reports is the end of the file,
+not the offending definition; the symbol is named instead.
+
 **The location counter.** Inside expressions, `.` evaluates to the current location (see
 [§7](#7-expressions)). As a statement, `. = expr` advances the location counter of the
 current segment to `expr` words, filling the gap (with `utc 0` fillers in text, zeros
 elsewhere). The new value must not be less than the current one.
+
+> **`. = expr` requires `expr` to be relative to the current segment.** `.` counts words from
+> the *start of the segment*, not from address 0, so a bare number is rejected ("bad count
+> assignment") rather than silently mixing the two. To lay a segment out by absolute address,
+> anchor on a label at the segment's start and subtract the address the linker gives it — for
+> `.const` that is `BADDR` = `010` (see [Linker_Manual](Linker_Manual.md)):
+>
+> ```
+>         .const
+> org:                            // address 000010: the const segment starts here
+> . = org + 0500 - 010            // address 000500
+>       : uj trap
+> ```
+>
+> The anchor has to be a label *inside* the segment; `base0 = . - 010`, naming address 0
+> directly, is the out-of-segment case rejected above. `kernel/besm6.S` places the BESM-6
+> interrupt vectors this way, and depends on the const segment really starting at `010`.
 
 **Global symbols.** `.globl` marks names as external/global (see [§10](#10-directives)).
 Local symbols can be stripped at output time with `-x`/`-X` ([§2](#2-invoking-the-assembler)).

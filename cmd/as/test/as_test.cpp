@@ -7,6 +7,7 @@
 // artefacts.
 //
 #include <gtest/gtest.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <cstdarg>
@@ -1005,14 +1006,29 @@ slabel: .ascii "ab"
 // Assemble a source expected to fail, returning the diagnostic message (the
 // "file:line: message" text thrown by the harness fatal()).  Returns "" if no
 // error was raised.  "xts .101" is a reliable trigger: a bit number > 64.
+//
+// assemble() redirects stdout to the object file and restores it only on the way
+// out, which is enough for the CLI (there fatal() exits).  Here fatal() throws
+// instead, unwinding past that restore - so stdout has to be put back by hand, or
+// everything GoogleTest prints afterwards, failures included, is silently written
+// into the .o file instead of the terminal.
 static std::string assemble_error(const std::string &source)
 {
+    int saved_out = dup(fileno(stdout));
+    std::string message;
+
     try {
         assemble(source);
     } catch (const std::exception &e) {
-        return e.what();
+        message = e.what();
     }
-    return "";
+    fflush(stdout);
+    if (saved_out >= 0) {
+        dup2(saved_out, fileno(stdout));
+        close(saved_out);
+        clearerr(stdout);
+    }
+    return message;
 }
 
 // A short address field is a 12-bit offset plus the segment bit (bit 19), worth
@@ -1313,4 +1329,91 @@ TEST(Assemble, MnemonicStillInstruction)
 {
     auto got = assemble("        sti 3\n");
     EXPECT_EQ(word_high(got, 8), 00410000L | 3L);  // sti 3 (store to index register)
+}
+
+// A symbol's value is a plain number filling the whole 24-bit field, not an
+// instruction address field: emit_segments() biases it with a plain add.  It used
+// to go through relocate_field(), which patches only the low 15 bits and keeps the
+// high ones - so a value that had gone negative kept its high bits set, and
+// "cneg = . - 010" at offset 0 came out as 077700000 instead of 0.  In .const that
+// crashed the linker outright; in .text/.data it silently produced a wrong symbol.
+// Such a symbol is outside its segment either way, so the diagnostic is what we
+// can observe; the value it reports is the evidence of the old truncation.
+//
+// The check runs in pass 2, where the segment size is final, so the reported line
+// is the end of the file rather than the offending definition.  parse_expr() has
+// already masked to 24 bits by then, so "- 010" reads back as 077777770.
+TEST(Assemble, SymbolBeforeSegmentRejected)
+{
+    EXPECT_EQ(assemble_error("        .const\ncneg = . - 010\n        .word 0\n"),
+              "Assemble.SymbolBeforeSegmentRejected.s:4: "
+              "symbol 'cneg': value 077777770 outside its segment");
+    EXPECT_EQ(assemble_error("        .text\ntneg = . - 010\n        xta 1\n"),
+              "Assemble.SymbolBeforeSegmentRejected.s:4: "
+              "symbol 'tneg': value 077777770 outside its segment");
+    EXPECT_EQ(assemble_error("        .data\ndneg = . - 010\n        .word 0\n"),
+              "Assemble.SymbolBeforeSegmentRejected.s:4: "
+              "symbol 'dneg': value 077777770 outside its segment");
+    EXPECT_EQ(assemble_error("        .bss\nbneg = . - 010\n        . = . + 1\n"),
+              "Assemble.SymbolBeforeSegmentRejected.s:4: "
+              "symbol 'bneg': value 077777770 outside its segment");
+}
+
+// The counterpart: a symbol past the end of its segment is rejected too.  Both
+// edges matter - cmd/ld maps a const symbol through the literal-merge map, which
+// only covers the words the file actually contributed (see relocate_cursym()).
+TEST(Assemble, SymbolPastSegmentRejected)
+{
+    EXPECT_EQ(assemble_error("        .const\n        .word 1\nfar = . + 2\n"),
+              "Assemble.SymbolPastSegmentRejected.s:4: "
+              "symbol 'far': value 03 outside its segment");
+}
+
+// ...but a symbol exactly one past the last word is the end-of-table idiom
+// ("for (p = tab; p < endtab; p++)"), so it must still assemble.  tab holds two
+// words at 010 and 011, so endtab is 012.
+TEST(Assemble, EndOfSegmentLabelAllowed)
+{
+    auto got  = assemble(R"(
+        .const
+tab:    .word 1
+        .word 2
+endtab:
+)");
+    auto syms = read_symbols(got);
+    ASSERT_EQ(syms.size(), 2u);
+    EXPECT_EQ(syms[0].name, "tab");
+    EXPECT_EQ(syms[0].value, 010L); // cbase + offset 0
+    EXPECT_EQ(syms[1].name, "endtab");
+    EXPECT_EQ(syms[1].value, 012L); // cbase + offset 2, one past the last word
+}
+
+// An in-segment anchor is how a .const is laid out by absolute address: `.' counts
+// from the segment start, which the linker places at BADDR == 010, so address A
+// sits at `. == A - 010'.  This is the kernel's interrupt-vector idiom
+// (kernel/besm6.S).  Note `. = <absolute>' cannot express it - the location counter
+// assignment demands a segment-relative operand - hence the anchor label.
+TEST(Assemble, ConstOriginAnchor)
+{
+    auto got  = assemble(R"(
+        .const
+org:                            // address 000010: the const segment starts here
+. = org + 0100 - 010            // address 000100
+lab:    .word 0
+)");
+    auto syms = read_symbols(got);
+    ASSERT_EQ(syms.size(), 2u);
+    EXPECT_EQ(syms[0].name, "org");
+    EXPECT_EQ(syms[0].value, 010L); // the anchor lands on BADDR itself
+    EXPECT_EQ(syms[1].name, "lab");
+    EXPECT_EQ(syms[1].value, 0100L); // and `. = org + 0100 - 010' on address 0100
+}
+
+// The location counter must be set from a same-segment expression: `. = 0100' is
+// address space, `.' is a segment offset, and the assembler will not silently mix
+// them.  This is the constraint that forces the anchor idiom above.
+TEST(Assemble, AbsoluteLocationCounterRejected)
+{
+    EXPECT_EQ(assemble_error("        .const\n. = 0100\n        .word 0\n"),
+              "Assemble.AbsoluteLocationCounterRejected.s:2: bad count assignment");
 }

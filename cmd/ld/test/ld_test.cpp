@@ -592,3 +592,78 @@ TEST(Link, ShortRefRelocatedIntoGapRejected)
 
     EXPECT_NE(link_files(image, { oref, odef }), 0);
 }
+
+// Overwrite the value of symbol `name` in an object file on disk.  A const symbol
+// must name a word of its file's const segment; b6as enforces that itself now
+// (emit_segments()), so the only way to hand the linker one that does not is to
+// forge it.  Layout per cmd/libaout/fputsym.c: the symbol table sits after the
+// segments and their relocation records, each entry being n_len(1) n_type(1)
+// n_value(3, big-endian) then n_len name bytes.
+static void patch_symbol_value(const std::string &ofile, const char *name, long value)
+{
+    std::vector<unsigned char> b = read_file(ofile);
+    long segs                    = word_low(b, 1) + word_low(b, 2) + word_low(b, 3);
+    long a_syms                  = word_low(b, 5);
+    size_t off                   = 48 + (size_t)((word_low(b, 7) & 1) ? segs : 2 * segs);
+    size_t end                   = off + (size_t)a_syms;
+
+    while (off + 5 <= end && b[off] != 0) {
+        int nlen = b[off];
+        if (std::string(reinterpret_cast<const char *>(&b[off + 5]), nlen) == name) {
+            b[off + 2] = (unsigned char)((value >> 16) & 0377);
+            b[off + 3] = (unsigned char)((value >> 8) & 0377);
+            b[off + 4] = (unsigned char)(value & 0377);
+            std::ofstream f(ofile, std::ios::binary | std::ios::trunc);
+            f.write(reinterpret_cast<const char *>(b.data()), (std::streamsize)b.size());
+            return;
+        }
+        off += 5 + nlen;
+    }
+    ADD_FAILURE() << "symbol '" << name << "' is missing from " << ofile;
+}
+
+// A const symbol is relocated by following the word it names through the literal
+// merge (relocate_cursym()), so it has to name a word this file actually
+// contributed.  One that does not indexes newindex[] outside the file's window.
+// The value forged here, 077700000, is what "base0 = . - 8" used to assemble to
+// before emit_segments() stopped truncating symbol values: it drove the index ~64 MB
+// past the end of the map and took the linker out with SIGSEGV.  Diagnose, never crash.
+TEST(LinkDeath, ConstSymbolOutsideSegment)
+{
+    std::string base = current_test_name();
+    std::string obj = base + ".o", image = base + ".out";
+
+    assemble_to(base + ".s", obj,
+                "        .globl org\n"
+                "        .const\n"
+                "org:    .word 1\n"
+                "        .text\n"
+                "        atx org\n");
+    patch_symbol_value(obj, "org", 077700000);
+
+    EXPECT_EXIT(link_files(image, { obj }), ::testing::ExitedWithCode(4),
+                "outside the file's const segment");
+}
+
+// The end-of-table idiom, "for (p = tab; p < endtab; p++)": b6as accepts a label one
+// past the last word of a segment, but in .const the linker has no word for it to
+// name - the map has no "one past this file's pooled words" answer, since merging
+// need not leave those words contiguous.  It used to read the *next* file's mapping
+// and silently relocate the label to an unrelated address; a diagnostic is at least
+// honest.  Documented as a known restriction in doc/Linker_Manual.md.
+TEST(LinkDeath, ConstEndLabelRejected)
+{
+    std::string base = current_test_name();
+    std::string obj = base + ".o", image = base + ".out";
+
+    assemble_to(base + ".s", obj,
+                "        .const\n"
+                "tab:    .word 1\n"
+                "        .word 2\n"
+                "endtab:\n"
+                "        .text\n"
+                "        xta tab\n");
+
+    EXPECT_EXIT(link_files(image, { obj }), ::testing::ExitedWithCode(4),
+                "symbol 'endtab': const value 012 outside the file's const segment");
+}

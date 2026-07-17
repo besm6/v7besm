@@ -179,6 +179,21 @@ references stay correct as earlier duplicates collapse and shift the words after
 per-file post-merge size is remembered in `ld.coptsize[]` so pass 2 can walk the same words
 again.
 
+**A const symbol or reference must name a word of its own file's const segment.** The map is
+per-word and per-file, so that is the only thing that can be relocated: a file's const words
+are scattered through the pool once merging has moved them, and there is nothing to
+extrapolate past either edge of its window. Anything outside it is a fatal error —
+*"symbol 'base0': const value 077700000 outside the file's const segment"*. Two ways to
+land there:
+
+- A symbol *before* the segment. `base0 = . - 010` at the top of a `.const`, naming absolute
+  address 0, is the usual one. `b6as` rejects it first (see
+  [Assembler_Manual](Assembler_Manual.md), §5); anchor on a label inside the segment instead.
+- A label at the *very end*, one past the last word — the `endtab:` idiom. `b6as` allows it,
+  but the linker has no word for it to name and rejects it. This is a known restriction: the
+  map has no "one past this file's pooled words" answer, since merging need not leave those
+  words contiguous. Put the marker on a real word, or keep the table in `.data`.
+
 ---
 
 ## 4. The linking model

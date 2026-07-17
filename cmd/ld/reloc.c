@@ -77,9 +77,15 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
     ad = 0;
     switch ((int)r & REXT) {
     case RCONST:
-        // The constant pool was de-duplicated; redirect to the pooled slot.
-        i  = ld.newindex[a - HDRSZ / W + ld.cindex];
-        ad = ld.cbasaddr + i - a;
+        // The constant pool was de-duplicated; redirect to the pooled slot.  As in
+        // relocate_cursym(), the map only covers the words this file contributed, so
+        // a reference outside them cannot be followed.  `a' is a 15-bit field and so
+        // never negative, but a - HDRSZ/W + cindex still can be, and a + cindex can
+        // run past the end of the map.
+        i = a - HDRSZ / W + ld.cindex;
+        if (i < ld.cindex || i >= ld.cindex + (int)(ld.filhdr.a_const / W))
+            error(2, "const reference to 0%lo outside the file's const segment", a);
+        ad = ld.cbasaddr + ld.newindex[i] - a;
         break;
     case RTEXT:
         ad = ld.ctrel; // add the text segment base
