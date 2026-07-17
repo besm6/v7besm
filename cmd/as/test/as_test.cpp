@@ -1015,6 +1015,69 @@ static std::string assemble_error(const std::string &source)
     return "";
 }
 
+// A short address field is a 12-bit offset plus the segment bit (bit 19), worth
+// 070000 of effective address, so it reaches [0..07777] and [070000..077777] -
+// the latter being where the u-area (076000) and the user stack base (070000)
+// live.  An absolute address is final at pass 1, so the bit is decided there.
+TEST(Assemble, ShortAddressSegmentBit)
+{
+    std::vector<unsigned char> got = assemble(R"(
+        atx 07777           // top of the low range: no segment bit
+        atx 070000          // bottom of the top eighth: bit alone
+        atx 076000          // the u-area
+        atx 077773          // top of the address space
+        atx -5, 7           // a negative literal names the top eighth
+)");
+
+    EXPECT_EQ(word_high(got, 8), 00000000L | 07777L);
+    EXPECT_EQ(word_low(got, 8), 01000000L);
+    EXPECT_EQ(word_high(got, 9), 01000000L | 06000L);
+    EXPECT_EQ(word_low(got, 9), 01000000L | 07773L);
+    EXPECT_EQ(word_high(got, 10), (7L << 20) | 01000000L | 07773L);
+}
+
+// Between the two reachable ranges the field addresses nothing, and there is no
+// room in it to say so.  Masking such an address in would quietly point the
+// instruction at an unrelated word, so reject it: the code needs a "< expr >"
+// escape instead.
+TEST(Assemble, ShortAddressGapRejected)
+{
+    for (const char *addr : { "010000", "017777", "020000", "040000", "067777" }) {
+        std::string msg = assemble_error(std::string("        atx ") + addr + "\n");
+        EXPECT_NE(msg.find("short address out of range"), std::string::npos)
+            << "atx " << addr << " message was: " << msg;
+    }
+}
+
+// The address space is 15 bits and the hardware forms EA modulo 0100000, so an
+// address expression reduces the same way before it is judged: a 48-bit mask
+// names the address in its low 15 bits, not an out-of-range value.
+TEST(Assemble, ShortAddressReducesModuloAddressSpace)
+{
+    std::vector<unsigned char> got = assemble("        arx 07777 ~ 07654\n");
+
+    // 07777 ^ ~07654 == 0777777777654, whose low 15 bits are 077654.
+    EXPECT_EQ(word_high(got, 8), 01130000L | 07654L);
+}
+
+// A relocatable address is only a segment-relative offset at pass 1, so the
+// segment bit cannot be decided yet - pass 2 and the linker set it once a base
+// is added.  The 12-bit field is all the room there is to carry the offset that
+// far, so an offset that would not survive the handoff has to be diagnosed here;
+// truncating it would defeat the range check downstream and silently relocate
+// the wrong address.
+TEST(Assemble, RelocatableShortOffsetAboveFieldRejected)
+{
+    std::string src = "        .text\n";
+    for (int i = 0; i <= 2 * 07777; i++)
+        src += "        atx 0\n";
+    src += "far:    atx 0\n        xta far\n";
+
+    std::string msg = assemble_error(src);
+    EXPECT_NE(msg.find("short address out of range"), std::string::npos)
+        << "message was: " << msg;
+}
+
 // A whole expression may be empty (an omitted operand field is 0), but an
 // operator's right operand may not: the empty case is recognized only at the
 // start of an expression, so "1 + * 2" is an error rather than "(1 + 0) * 2".
@@ -1033,9 +1096,10 @@ TEST(Assemble, ConstDirectivePoolOperatorRejected)
         << "message was: " << msg;
 }
 
-// A const word is addressed through the 12-bit short address field, so the
-// segment cannot reach past CONSTTOP (07777).  It starts at word 8, so exactly
-// 4088 words fit and the next one is an error.
+// A const word is addressed through a short address field.  The segment starts
+// at word 8 and grows up, so it sits at the bottom of memory where the segment
+// bit cannot help it and it cannot reach past CONSTTOP (07777): exactly 4088
+// words fit and the next one is an error.
 TEST(Assemble, ConstSegmentAddressLimit)
 {
     std::string ok = "        .const\n";

@@ -65,7 +65,7 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
     // Step 1: extract the current address field from the instruction.
     switch ((int)r & RSHORT) {
     case RSHORT:
-        a = t & 07777; // short address - 12 bits
+        a = short_addr_get(t); // short address - 12-bit offset plus segment bit
         break;
     case 0:
     default:
@@ -112,23 +112,24 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
     // Step 3: write (a + ad) back into the same address field of `t`.
     switch ((int)r & RSHORT) {
     case RSHORT:
-        // A short address field is only 12 bits.  Truncating a relocated
-        // reference that no longer fits would leave the instruction quietly
-        // reading and writing an unrelated low address, so treat it as an error:
-        // such code needs a long-address escape ("< sym >" / "[ sym ]", i.e. a
-        // utc/wtc ahead of the instruction).  Only relocated fields reach this
-        // check with a nonzero `ad` - an RABS field falls through step 2 with
-        // ad = 0, so a negative stack offset such as `atx -5(7)` (which encodes
-        // as 07773 plus a sign flag) cannot false-positive.  Under -r the
-        // addresses are not final yet, so there is nothing to judge.
-        if (!ld.rflag && ((a + ad) & ~07777L)) {
+        // A short address field reaches [0..07777] and, through its segment bit,
+        // [070000..077777] - the top eighth, where the u-area and the user stack
+        // live.  Truncating a relocated reference that lands between the two
+        // would leave the instruction quietly reading and writing an unrelated
+        // address, so treat it as an error: such code needs a long-address
+        // escape ("< sym >" / "[ sym ]", i.e. a utc/wtc ahead of the
+        // instruction).  A field with nothing to relocate reaches this check
+        // unchanged (`ad` = 0) and so re-encodes to itself, which is why a
+        // negative stack offset such as `atx -5(7)` cannot false-positive: the
+        // assembler already reduced it to 077773, an address in the top eighth.
+        // Under -r the addresses are not final yet, so there is nothing to judge.
+        if (!ld.rflag && !short_addr_fits(a + ad)) {
             if (name)
                 error(1, "short address out of range: %s=0%lo", name, a + ad);
             else
                 error(1, "short address out of range: 0%lo", a + ad);
         }
-        t &= ~07777;
-        t |= (a + ad) & 07777;
+        t = short_addr_put(t, a + ad);
         break;
     case 0:
     default:

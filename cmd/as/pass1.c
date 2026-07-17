@@ -264,16 +264,29 @@ putcom:
         // Long instruction: a 15-bit address field.
         addr &= 077777;
         emit_halfword((long)index << 20 | val | (addr & 077777), reltype);
+    } else if (reltype == RABS) {
+        // Short instruction, absolute address: this is the final value, so the
+        // segment bit can be decided now.  The address space is 15 bits and the
+        // hardware forms EA modulo 0100000, so reduce the expression the same
+        // way: that is what turns a negative literal such as the -5 of
+        // "atx -5, 7" into 077773, and a 48-bit mask into the address it names.
+        // What survives must land in [0..07777] or [070000..077777] - the field
+        // reaches nothing in between, and such code needs a "< expr >" escape.
+        addr &= 077777;
+        if (!short_addr_fits(addr))
+            fatal("short address out of range: 0%lo", addr);
+        // RABS is 0, so the record carries the width modifier alone.
+        emit_halfword(short_addr_put((long)index << 20 | val, addr), RSHORT);
     } else {
-        // Short instruction: a 12-bit address field, treated as a 13-bit signed
-        // value.  When bit 13 (010000) is set the address is negative (e.g. a
-        // stack-relative offset such as -2), so set the address sign bit
-        // (ONEBIT(19), 01000000) and the CPU sign-extends the 12-bit field.
-        // The address here is still segment-relative; pass 2 adds the segment
-        // base and range-checks the result (see relocate_field).
-        long sign = (addr & 010000) ? 01000000L : 0L;
-        emit_halfword((long)index << 20 | val | sign | (addr & 07777),
-                      reltype | RSHORT);
+        // Short instruction, relocatable address: `addr` is only an offset into
+        // its segment, so the final address - and with it the segment bit - is
+        // not known until pass 2 adds the base (or the linker does).  Leave the
+        // bit clear for them to set, and require the offset to reach pass 2
+        // intact: the 12-bit field is all the room there is to carry it, and
+        // silently truncating here would defeat the range check downstream.
+        if (addr & ~SHORTOFF)
+            fatal("short address out of range: 0%lo", addr);
+        emit_halfword((long)index << 20 | val | (addr & SHORTOFF), reltype | RSHORT);
     }
     if (!as.aflag && (type & TALIGN))
         align_segment(as.segm);

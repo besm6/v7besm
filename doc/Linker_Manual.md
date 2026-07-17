@@ -144,8 +144,9 @@ on the command line:
   assembler's `#expr` operator appended) are **de-duplicated** across the whole program: one
   used by several files is stored once. Words a `.const` directive placed there are ordered
   data and are never merged (see [§3.1](#31-the-constant-pool)). Const is written to the
-  output file, and because references reach it through the 12-bit short address field it may
-  not extend past word `07777`.
+  output file, and because references reach it through the short address field — and it sits at
+  the bottom of memory, where that field's segment bit cannot help it — it may not extend past
+  word `07777`.
 - **text** — machine code, 24-bit half-words two per word. Written to the file; made read-only
   by `-n`.
 - **data** — initialized variables. Written to the file.
@@ -371,8 +372,12 @@ For an `REXT` record the referenced symbol's index is packed into the upper bits
 `RGETIX(h) = h >> 6` and stored with `RPUTIX(h) = h << 6`. One address-field **width** modifier
 shares the low bits:
 
-- `RSHORT` (`01`) — the field is a **12-bit short** address (`t & 07777`); without it the field
-  is a **15-bit full** address (`t & 077777`).
+- `RSHORT` (`01`) — the field is a **short** address: a 12-bit offset (`t & 07777`) plus the
+  segment bit (`01000000`, bit 19), which adds `070000` to the effective address. It therefore
+  holds `0`–`07777` or `070000`–`077777` and nothing in between. Without the modifier the field
+  is a **15-bit full** address (`t & 077777`). The `short_addr_get`/`short_addr_fits`/
+  `short_addr_put` codec in [shortaddr.c](../cmd/libaout/shortaddr.c) is what encodes it, and is
+  shared with the assembler so both agree on what a short field can reach.
 
 `reloc_type()` ([reloc.c](../cmd/ld/reloc.c)) maps a resolved symbol's type back to the matching
 relocation code (`N_TEXT → RTEXT`, `N_COMM → RBSS`, and so on) when an external reference becomes
@@ -394,7 +399,8 @@ the full amount to add to every field pointing into that segment.
 `relocate_halfword()` ([reloc.c](../cmd/ld/reloc.c)) is the workhorse. It patches one 24-bit
 half-word `t` using its record `r`, in three steps:
 
-1. **Extract** the address field — 12 bits if `RSHORT`, else 15 bits.
+1. **Extract** the address field — `short_addr_get()` (12-bit offset plus segment bit) if
+   `RSHORT`, else 15 bits.
 2. **Compute the addend `ad`** from the record's `REXT` bits:
    - `RCONST` — redirect to the de-duplicated pool slot via `ld.newindex[]`.
    - `RTEXT`/`RDATA`/`RBSS` — add that segment's bias.
@@ -402,7 +408,10 @@ half-word `t` using its record `r`, in three steps:
      keep the field external in the output but renumber it to the symbol's slot in the final
      global table (`ld.nsym + (sp - symtab)`). Otherwise bake in the symbol's now-known address
      and tag the record with the segment the symbol ended up in.
-3. **Write** `a + ad` back into the same field width.
+3. **Write** `a + ad` back into the same field width. For a short field this is
+   `short_addr_put()`, which sets the segment bit iff the address landed in the top eighth; an
+   address the field cannot reach at all is reported as `short address out of range` (suppressed
+   under `-r`, where addresses are not final yet).
 
 `relocate_constants()` runs every pooled constant (both half-words, with their `hr`/`hr2`
 records) through this, and `relocate_segment()` does the same streaming through the text and data

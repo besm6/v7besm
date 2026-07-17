@@ -328,7 +328,7 @@ For a machine instruction, the operand after the mnemonic may take any of these 
 | expression | `xta data` | Direct address; the address field is the expression's value, relocated by its segment. |
 | `# expr` | `a+x #1.0` | **Constant pool**: address a const-segment word holding `expr`'s value, appending one at the segment's cursor if no suitable word is there yet. Use for literals and large constants. An absolute `#0` is folded to a direct reference to memory word 0 (which always reads 0) and takes no word at all. |
 | `expr , reg` | `xta tab, 3` | Index the access with register M`reg` (`reg` must be absolute, 0–15). |
-| `< expr >` | `xta <bigaddr>` | **Address extension**: emit `utc expr` first, loading C, then the instruction. Lets a 15-bit address reach beyond the 12-bit short field. |
+| `< expr >` | `xta <bigaddr>` | **Address extension**: emit `utc expr` first, loading C, then the instruction. Lets an address the short field cannot reach — anything in `010000`–`067777` — be addressed anyway. |
 | `[ expr ]` | `atx [bigaddr]` | Emit `wtc expr` first (write-to-C variant), then the instruction. |
 
 The leading **modifier register** (the `modreg` of [§3](#3-source-line-structure)) is distinct
@@ -373,8 +373,9 @@ see [§10](#10-directives).
 BESM-6 instructions come in two formats (see
 [Instruction Set §3](Besm6_Instruction_Set.md#3-instruction-formats)):
 
-- **Short address** — opcodes `000`–`077` (octal), a 12-bit address field. Most arithmetic,
-  logical, and stack operations.
+- **Short address** — opcodes `000`–`077` (octal), a 12-bit address field plus a segment bit
+  worth `+070000`, so it reaches `0`–`07777` and `070000`–`077777` but nothing in between.
+  Most arithmetic, logical, and stack operations.
 - **Long address** — opcodes `020`–`037`, a 15-bit address field. Jumps, register-load, and
   address-setup instructions. In the assembler these mnemonics carry the `TLONG` flag.
 
@@ -468,9 +469,10 @@ rules follow from that shared use:
   front of the instruction referring to it. Put the constant in the segment yourself and
   address it by name.
 
-The const segment is reached through the 12-bit short address field, so it cannot extend past
-word `07777`. It begins at word 8, leaving room for 4088 words; both `b6as` and `b6ld` refuse
-to lay out more (`const segment too large`).
+The const segment is reached through the short address field. It begins at word 8 and grows up,
+so it sits at the bottom of memory, where the segment bit cannot help it: it cannot extend past
+word `07777`, leaving room for 4088 words. Both `b6as` and `b6ld` refuse to lay out more
+(`const segment too large`).
 
 Because `#expr` appends at the const cursor wherever it happens to be, a `.const` array must
 not straddle a `.text` instruction that interns a literal — the literal would land in the

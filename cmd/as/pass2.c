@@ -89,20 +89,20 @@ static long relocate_field(long h, long a, int hr)
 {
     switch (hr & RSHORT) {
     case RSHORT:
-        a += h & 07777;
-        // A short address field is only 12 bits wide, and this is the last place
-        // the assembler sees the address untruncated.  The linker only ever
-        // shifts a segment upward, so an address that does not fit here never
-        // will, and masking it would silently point the instruction at an
-        // unrelated low word.  Such code needs a long-address escape - "< sym >"
-        // or "[ sym ]".  A "#expr" reference (RCONST) is exempt: it indexes the
+        a += short_addr_get(h);
+        // A short address field reaches only [0..07777] and [070000..077777],
+        // and this is the last place the assembler sees the address untruncated.
+        // An address outside those ranges cannot be carried any further: the
+        // field has no room for it, so masking it in would silently point the
+        // instruction at an unrelated word and leave the linker nothing to
+        // rescue.  Such code needs a long-address escape - "< sym >" or
+        // "[ sym ]".  A "#expr" reference (RCONST) is exempt: it indexes the
         // const segment, which write_header already checks against CONSTTOP.
-        // RABS never reaches relocate_field, so a signed stack offset such as
-        // `atx -5, 7` cannot trip this.
-        if ((hr & REXT) != RCONST && (a & ~07777L))
+        // RABS never reaches relocate_field - pass 1 range-checks those itself,
+        // so a signed stack offset such as `atx -5, 7` cannot trip this.
+        if ((hr & REXT) != RCONST && !short_addr_fits(a))
             fatal("short address out of range: 0%lo", a);
-        h &= ~07777;
-        h |= a & 07777;
+        h = short_addr_put(h, a);
         break;
     case 0:
     default:

@@ -518,3 +518,77 @@ TEST(Link, DefinesBoundarySymbols)
         EXPECT_EQ(it, syms.end()) << "stale symbol '" << stale << "' is still defined";
     }
 }
+
+// The u-area sits at a fixed physical page, named by an absolute symbol rather
+// than by storage, and the user stack based just below it - both in the top
+// eighth of the address space, which a short instruction reaches through the
+// segment bit (bit 19, worth 070000 of effective address).  So a short reference
+// to such a symbol must link, and must come out with the bit set: the linker is
+// the first stage that knows the value.
+TEST(Link, ShortRefToHighAbsoluteSymbol)
+{
+    std::string base = current_test_name();
+    std::string oref = base + "ref.o", odef = base + "def.o", image = base + ".out";
+
+    assemble_to(base + "ref.s", oref, "        .globl u\n"
+                                      "        .text\n"
+                                      "        atx u\n"
+                                      "        xta u+2\n");
+    assemble_to(base + "def.s", odef, "        .globl u\n"
+                                      "        u = 076000\n"
+                                      "        .text\n"
+                                      "        atx 0\n");
+
+    ASSERT_EQ(link_files(image, { oref, odef }), 0);
+
+    auto img = read_file(image);
+    EXPECT_EQ(word_high(img, 8), 01000000L | 06000L); // atx u    -> 076000
+    EXPECT_EQ(word_low(img, 8), 00100000L | 01000000L | 06002L); // xta u+2 -> 076002
+}
+
+// Relocating a short reference into the top eighth is the linker's own job: the
+// assembler leaves the segment bit clear because it does not yet know the base.
+// Loading the text there (-T) is the case that proves the linker sets it.
+TEST(Link, ShortRefRelocatedIntoTopEighth)
+{
+    std::string base = current_test_name();
+    std::string ofile = base + ".o", image = base + ".out";
+
+    assemble_to(base + ".s", ofile, "        .text\n"
+                                    "        atx here\n"
+                                    "here:   atx here\n");
+
+    static char a0[] = "ld";
+    static char a1[] = "-T076000";
+    static char a2[] = "-o";
+    std::string names[] = { image, ofile };
+    char *argv[] = { a0, a1, a2, &names[0][0], &names[1][0], nullptr };
+    ASSERT_EQ(ld_link(5, argv), 0);
+
+    // The text lands at 076000 but still follows the header in the file, so read
+    // it at file word 8.  `here:` is a label, and a label names a word, so the
+    // instruction before it is padded out to one: each atx sits in a high half,
+    // and `here` is the second of the two words, i.e. 076001.
+    auto img = read_file(image);
+    EXPECT_EQ(word_high(img, 8), 01000000L | 06001L);
+    EXPECT_EQ(word_high(img, 9), 01000000L | 06001L);
+}
+
+// Between the two reachable ranges the field addresses nothing, so a reference
+// that relocates into the gap has to be diagnosed rather than truncated - it
+// needs a "< sym >" escape.  errlev 1 is a hard link error.
+TEST(Link, ShortRefRelocatedIntoGapRejected)
+{
+    std::string base = current_test_name();
+    std::string oref = base + "ref.o", odef = base + "def.o", image = base + ".out";
+
+    assemble_to(base + "ref.s", oref, "        .globl mid\n"
+                                      "        .text\n"
+                                      "        atx mid\n");
+    assemble_to(base + "def.s", odef, "        .globl mid\n"
+                                      "        mid = 040000\n"
+                                      "        .text\n"
+                                      "        atx 0\n");
+
+    EXPECT_NE(link_files(image, { oref, odef }), 0);
+}

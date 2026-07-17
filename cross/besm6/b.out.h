@@ -139,10 +139,33 @@ struct nlist {
 #define RSHORT 01 // short address field; also a bit mask
 
 //
-// Highest word address the const segment may occupy. Most instructions address
-// memory through the 12-bit short address field, and the "#expr" operator emits
-// exactly such a reference, so no const word may sit above 07777. Both the
-// assembler and the linker refuse to lay one out past this line.
+// The short (Format 1) address field. It is a 12-bit offset in bits 12-1 plus
+// the segment bit S in bit 19, which contributes 070000 to the effective
+// address:
+//
+//      EA = (M[reg] + offset + S*070000 + C) mod 0100000
+//
+// So the field addresses exactly [0..07777] and [070000..077777] -- equivalently
+// a 13-bit signed value in [-010000, +07777]. The upper eighth is where the
+// kernel's u-area (076000) and the user stack base (070000) live; the middle of
+// the address space (010000..067777) is unreachable and needs a "< sym >" escape
+// (a utc ahead of the instruction). See doc/Besm6_Instruction_Set.md.
+//
+// Short opcodes occupy bits 18-13 (opcode << 12, at most 0770000), so they never
+// collide with the segment bit. In a long (Format 2) instruction bit 19 belongs
+// to the opcode instead -- only a field carrying RSHORT may be run through the
+// short_addr_* helpers below.
+//
+#define SHORTSEGBIT 01000000L // bit 19 (S): adds SHORTSEG to the effective address
+#define SHORTSEG    070000L   // what the segment bit contributes
+#define SHORTOFF    07777L    // the 12-bit offset field
+
+//
+// Highest word address the const segment may occupy. The "#expr" operator
+// reaches its word through a short address field, and the const segment starts
+// at word 8 and grows up, so it lives at the bottom of memory where the segment
+// bit cannot help it: no const word may sit above 07777. Both the assembler and
+// the linker refuse to lay one out past this line.
 //
 #define CONSTTOP 07777 // last word address available to the const segment
 
@@ -194,6 +217,20 @@ void fputhdr(const struct exec *h, FILE *f);
 int fgetsym(FILE *text, struct nlist *sym);
 void fputsym(const struct nlist *s, FILE *f);
 int fgetint(FILE *f, int *i);
+
+//
+// The short address field codec (implemented in cmd/libaout/shortaddr.c), shared
+// by the assembler and the linker so both agree on what a Format 1 instruction
+// can reach. Only apply these to a field the relocation record marks RSHORT.
+//
+// short_addr_get  -- decode the 15-bit effective address held in `insn`
+// short_addr_fits -- true if `a` is representable; `a` is a plain 15-bit address,
+//                    already reduced modulo 0100000 by its caller
+// short_addr_put  -- put `a` back into `insn`, setting the segment bit as needed
+//
+long short_addr_get(long insn);
+int short_addr_fits(long a);
+long short_addr_put(long insn, long a);
 
 //
 // File-descriptor counterparts used by ar/ranlib for in-place archive I/O.

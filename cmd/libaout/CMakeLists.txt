@@ -25,6 +25,7 @@ add_library(aout STATIC
     getint.c
     putarhdr.c
     putint.c
+    shortaddr.c
 )
 target_include_directories(aout PUBLIC ${BESM6_CROSS_INCLUDE})
 
