@@ -60,7 +60,7 @@ MOD  = 020                      // C register / address modifier (М020 = M16)
 #include "const.s"              // Put some #constants here to fill the space
 
         .org 0500               // Vectors for exceptions and interrupts are at 0500
-      : uj trap                 // 0500: internal interrupt (a fault)
+      : uj trapgate             // 0500: internal interrupt (a fault) -- see below
       : uj extint               // 0501: external interrupt (ГРП) -- see below
 
         .org 0550               // Vectors for extracodes start at 0550
@@ -91,9 +91,18 @@ MOD  = 020                      // C register / address modifier (М020 = M16)
       : uj badext               // 0576: extracode *76
       : uj syscall              // 0577: extracode *77 -- the syscall gate
 
-// Temp cells for the external-interrupt gate below.  One copy is enough: interrupts are
-// blocked from the moment the hardware takes one until the `ij' that ends the handler, so
-// extint cannot be re-entered.
+// Temp cells for the two asynchronous gates below -- `extint' (0501) and `trapgate' (0500).
+// ONE copy serves both, and that is not an oversight:
+//   * A cell is live only across a gate's prologue and its epilogue; in between (while the C
+//     handler runs) the values already sit in the frame and the cells are dead.
+//   * Both windows run with БлПр set -- the hardware forces it on when it takes the interrupt or
+//     the fault, and only the closing `выпр' clears it -- so no external interrupt can land in
+//     them, and the kernel runs unmapped (БлП = БлЗ = 1), so no fault can either.
+//   * The gates therefore cannot overlap: neither can be re-entered, and neither can preempt
+//     the other's live window.  (A second internal fault taken inside a gate is fatal anyway --
+//     СПСВ and IRET are single registers, not a stack.)
+// The epilogue is shared as well: `trapgate' jumps into `intret' below, which pops the frame and
+// re-applies these cells, so the two gates MUST fill the same five.
 //
 // They live here in .const/.text (they link low -- under 0700, unix.nm) so every cell fits the
 // 12-bit short-address field and the gate reaches them with a bare `atx save_a'.  This is not a
@@ -101,7 +110,7 @@ MOD  = 020                      // C register / address modifier (М020 = M16)
 // M[16] save would overwrite the very C register being saved.  The kernel's own data (bss) links
 // far above 07777 and needs the escape; these cells do not.
 //
-// Only FIVE cells, not the whole machine.  extint saves the interrupted context into the
+// Only FIVE cells, not the whole machine.  Each gate saves the interrupted context into the
 // canonical reg.h frame (0 A, 1 R, 2 Y, 3 RET, 4 SPSW, 5 M16, 6 M15 ... 20 M1) built on
 // the kernel stack, filled by the Dubna FULSAV pipeline of `xts'/`its' (doc/Context_Switch.md
 // §6).  That pipeline reaches M1-M14 and IRET/SPSW *live* -- it runs before `13 vjm extintr'
@@ -182,22 +191,109 @@ badext: stop    076              // TODO: an extracode we do not implement
         uj      badext
 
 // ============================================================================
-// Trap and interrupt dispatch
+// Internal-interrupt (fault) entry
 // ============================================================================
 //
-// On x86 the exception, hardware-IRQ, and system-call vectors funnel through
-// hand-written stubs that build a `struct trap` frame, honor `nofault` (the
-// fault-recovery hook), call the C handler (trap() / the device ISR from the
-// interrupt table), replay soft-deferred interrupts, and check `runrun` for a
-// deferred reschedule.
+// The hardware vector for an internal interrupt -- a protection violation, an illegal
+// instruction, an instruction check -- is the fixed address 0500, laid down in the .const block
+// above.  It jumps here; this gate saves the interrupted context into the canonical reg.h frame
+// on the kernel stack, calls trap() in trap.c with a pointer to it, and leaves through the shared
+// epilogue `intret' below, which pops the frame and `выпр's (`3 ij', through М033 = IRET).
 //
-// TODO: implement the BESM-6 trap/interrupt entry.  It must:
-//   * save the interrupted context into a frame the C `trap()` can index
-//     (mirror struct trap for the BESM-6 register set);
-//   * dispatch CPU faults and the syscall extracode (the user-mode `$77 N`
-//     trap, cf. cmd/sim) to trap()/the syscall path;
-//   * provide the `nofault` fast-recovery path used by the user-access family;
-//   * on return to user mode, honor `runrun` (reschedule) and profiling.
+// A fault is asynchronous with respect to the register set -- it can land on any instruction --
+// so the prologue and the FULSAV fill are `extint's, instruction for instruction; the header over
+// `extint' is the authority for every step of them, and for why R, Y, M[16] and M15 must be saved
+// by hand.  Only three things differ:
+//
+//   * THE STACK SWITCH IS UNCONDITIONAL.  `extint' switches M15 only when the interrupted context
+//     was user (СПСВ & 014 == 0), because an external interrupt legitimately nests inside the
+//     kernel and must not have the stack pulled out from under the interrupted C frame.  A FAULT
+//     from supervisor is a different animal: the user-access family validates its range up front
+//     with useracc() and has no `nofault' path (see usermem.s), so a kernel-mode fault is a kernel
+//     BUG, and trap() takes it to the `default' arm -- register dump, then panic.  Resetting M15
+//     to the base of the kernel stack under a panic is harmless (it overwrites the interrupted
+//     frames, which nothing is going to return to), so the discriminator buys nothing here and the
+//     gate drops it.  This gate therefore never nests: the frame is always at [ustkbase].
+//
+//   * THE FRAME IS PASSED TO C, BY POINTER.  trap() takes `struct trap *', and after the fill M15
+//     names the word above the frame, so the base is M15 - 21 -- a regular (word-address) pointer,
+//     which is what a struct pointer is on this machine (doc/Besm6_Data_Representation.md §7).
+//     Passing the frame BY VALUE would look tempting -- the fill already builds exactly the 21-word
+//     argument block the ABI wants -- but it is wrong twice over: b$ret reuses the LAST parameter
+//     word as its return-value scratch (`7 stx -5', libc/besm6/unix/b_ret.s), which is frame[20] =
+//     M1 for a 21-word struct, and it leaves M15 at the block base rather than above it.  With one
+//     pointer argument that scratch word is the dead slot just ABOVE the frame and b$ret hands M15
+//     back at frame-base + 21 -- exactly what `intret' expects.  A pointer is also what reg.h
+//     promises the C readers: u.u_ar0 aliases the frame IN PLACE, so what psig()/sendsig() write
+//     through it is what the epilogue reloads into the registers.
+//
+//   * THE PC MUST BE BACKED UP.  Before vectoring, the machine advances past the faulting
+//     instruction and records that it did so in СПСВ (SPSW_NEXT_RK, with SPSW_RIGHT_INSTR saying
+//     which half of the word faulted) -- so the saved IRET points at the instruction AFTER the one
+//     that faulted, and a plain `выпр' would skip it.  Undoing that is the kernel's job
+//     (doc/Memory_Mapping.md, "The restart protocol").  It is done in C, at the top of trap(),
+//     because the frame is aliased in place and two lines of C beat eight of branchy assembly.
+//
+// The gate does NOT point u.u_ar0 at the frame; trap() does that itself, in C, from the pointer
+// (`u.u_ar0 = (int *)tr'), for the same reason `extint' leaves it alone: doing it here would need a
+// hardcoded u_ar0 offset for no runtime benefit.
+//
+// The same gate, duplicated for the same reason as `extint's copy, is exercised standalone against
+// SIMH by kernel/test/crt0t.S + utrap.c, which forges user-mode entry, faults on a closed page and
+// checks that the faulting instruction re-executes after the map is opened.
+
+        .globl  trapgate
+trapgate:
+        // --- short save: the five registers the FULSAV pipeline cannot reach ---
+        atx     save_a              // A first, as the vector does (frees A as scratch)
+        rte     07777               // R   -> A
+        atx     save_r
+        yta                         // Y   -> A
+        atx     save_y
+        ita     MOD                 // M16 (C register) -> A -- before the vtm below, whose utc for
+        atx     save_c              //   a long address would clobber M16
+        ita     15                  // interrupted M15 -> A -- before the stack switch repoints it
+        atx     save_sp
+
+        // --- stack switch: unconditional (see the header) ---
+     15 vtm     [ustkbase]          // M15 := kernel stack base (~076214) = frame base F
+
+        // --- fill the reg.h frame at [M15 ..] -- `extint's pipeline verbatim ---
+        xta     save_a
+        xts     save_r              // frame[0]  := A     ; A := R
+        xts     save_y              // frame[1]  := R     ; A := Y
+        its     IRET                // frame[2]  := Y     ; A := IRET (M033, live)
+        its     SPSW                // frame[3]  := RET   ; A := SPSW (M027, live)
+        xts     save_c              // frame[4]  := SPSW  ; A := M16
+        xts     save_sp             // frame[5]  := M16   ; A := interrupted M15
+        its     14                  // frame[6]  := M15   ; A := M14 (live)
+        its     13                  // frame[7]  := M14   ; A := M13 (live)
+        its     12
+        its     11
+        its     10
+        its     9
+        its     8
+        its     7
+        its     6
+        its     5
+        its     4
+        its     3
+        its     2
+        its     1                   // frame[19] := M2    ; A := M1
+        xts     save_a              // frame[20] := M1    ; M15 := F+21 (above the frame); A discarded
+
+        // --- call trap(struct trap *) -- one argument, so it rides in A and nothing is pushed.
+        //     `utm' is index arithmetic and does not disturb A, so the base is read out and M15 put
+        //     straight back.  The callee pops N-1 == 0 and b$ret returns M15 = F+21 (its own scratch
+        //     word is the dead slot at F+21), so the frame comes back untouched and the epilogue's
+        //     precondition holds with nothing to fix up. ---
+     15 utm     -21
+        ita     15                  // A := F -- the frame base, a `struct trap *'
+     15 utm     21
+     14 vtm     -1                  // argument count, negative
+     13 vjm     trap                // trap.c: back up the PC, decode ГРП, signal or grow
+
+        uj      intret              // the shared epilogue in `extint' below
 
 // ============================================================================
 // External interrupt entry
@@ -246,7 +342,7 @@ badext: stop    076              // TODO: an extracode we do not implement
 //            (nested), which is exactly reg.h's "the frame lives on the kernel stack".
 //
 // The gate does NOT point u.u_ar0 at the frame: the kernel sets u_ar0 in C (trap.c: u.u_ar0 =
-// &tr.acc), and extintr() is frame-agnostic (takes void); when clock() joins this path (task 15e)
+// (int *)tr), and extintr() is frame-agnostic (takes void); when clock() joins this path (task 15e)
 // it receives the frame by value and points u_ar0 itself.  So the frame is built and reg.h-shaped,
 // but u_ar0 is left to the C handler that first needs it.
 //
@@ -308,7 +404,14 @@ extk:                               // M15 = frame base F (ustkbase, or the inte
         //     reload is a no-op -- extintr() left M027 untouched; RET reloads М033 for the `3 ij'),
         //     while old M15, Y, R and A are re-stashed to the cells and applied last, in the forced
         //     Y -> A -> R order (§7).  M1-M7 are ABI callee-saved, so their reload is redundant but
-        //     keeps the pop symmetric.  A blank-address `stx' stores to word 0, which is discarded. ---
+        //     keeps the pop symmetric.  A blank-address `stx' stores to word 0, which is discarded.
+        //
+        //     `trapgate' (0500) jumps to `intret' rather than carry its own copy: the frame is the
+        //     same reg.h frame, the five cells are the same five, and both doors leave through
+        //     `3 ij' (М033 = IRET).  Its precondition is M15 = F+21 and A dead, which is where the
+        //     C call leaves both gates.  What differs between the doors is entirely upstream --
+        //     the stack-switch rule and the PC fixup -- so there is nothing to parameterise here. ---
+intret:
         stx                         // A := M1 from frame[20]
         sti     1                   // restore M1; A := M2 from frame[19]
         sti     2

@@ -9,9 +9,28 @@
 #include "sys/proc.h"
 #include "sys/reg.h"
 #include "sys/seg.h"
+#include "sys/besm6dev.h"
 // clang-format on
 
+#include <besm6.h>
+
 #define USER 0200 /* user-mode flag added to dev */
+
+/*
+ * The kinds of trap this kernel dispatches.  These are OURS, not hardware numbers: the
+ * BESM-6 has one internal-interrupt vector (0500) and reports the cause in ГРП, so unlike
+ * the x86 there is no vector number to switch on and the gate passes none.  trap() reads
+ * ГРП live -- the fault bits are not framed (reg.h) -- and folds it to one of these.
+ *
+ * T_SYSCALL is not reachable through 0500 at all: the extracode gate at 0577 is its own
+ * door (besm6.S: syscall), and wiring it to the case below is task 15d.
+ */
+#define T_DATA    1  /* data protection: touched a closed page */
+#define T_INSN    2  /* instruction protection: fetched from a closed page */
+#define T_ILL     3  /* privileged instruction attempted in user mode */
+#define T_CHECK   4  /* instruction check: the word fetched is not an instruction */
+#define T_BREAK   5  /* address-break match (М034/М035) */
+#define T_SYSCALL 48 /* extracode э77 -- TODO 15d */
 
 /*
  * Word indices of the user's saved registers in the trap frame (reg.h).
@@ -25,113 +44,119 @@ char regloc[] = {
 };
 
 /*
- * Called from mch.s when a processor trap occurs.
- * The arguments are the words saved on the system stack
- * by the hardware and software during the trap processing.
- * Their order is dictated by the hardware and the details
- * of C's calling sequence. They are peculiar in that
- * this call is not 'by value' and changed user registers
- * get copied back on return.
- * dev is the kind of trap that occurred.
+ * Called from the 0500 gate in besm6.S when the machine takes an internal interrupt --
+ * a protection violation, an illegal instruction, an instruction check.
+ *
+ * `tr' points at the reg.h frame the gate built on the kernel stack (it is NOT a copy:
+ * u.u_ar0 aliases it, so a register this function or psig() changes is a register the
+ * gate's epilogue reloads on the way out).  The cause is not in the frame -- the machine
+ * reports it in ГРП, which we read live below.
  */
-void trap(struct trap tr)
+void trap(struct trap *tr)
 {
     register int i = 0;
     register int *a;
     register struct sysent *callp;
     time_t syst;
-    int osp;
-    int dev; /* trap kind: TODO 15c decode from ГРП (read live) */
+    unsigned grp;  /* ГРП, read live: the fault cause */
+    unsigned page; /* the faulting virtual page (data violations only) */
+    int dev;       /* the trap kind, plus USER if it came from user mode */
 
     syst    = u.u_stime;
-    u.u_ar0 = &tr.acc;
+    u.u_ar0 = (int *)tr;
+
     /*
-     * TODO 15c: decode the fault kind from ГРП -- read live via
-     * __besm6_mod(MOD_GRP,0), not from the frame (ГРП has no slot): bit 20 =
-     * data protection (faulting page in bits 5-9) -> grow()/SIGSEG, bit 14 =
-     * instruction protection, bit 13 = illegal instruction, bit 15 = check.
-     * The 0500 gate (15c) builds the frame and drives this decode; until then
-     * there is no trap kind, so the switch runs on an inert stub.
+     * The restart protocol (doc/Memory_Mapping.md).  Before vectoring, the machine took
+     * delivery of the NEXT WORD of the instruction stream and saved that as the return
+     * address, setting SPSW_NEXT_RK to say so -- so the framed RET is the faulting word
+     * plus one, and `выпр' would resume past the instruction that faulted.  Back it up
+     * here, unconditionally, so that everything downstream (grow()'s retry, sendsig(),
+     * ptrace, addupc()) sees the frame describing the FAULTING instruction.
+     *
+     * Only the word needs correcting: SPSW_RIGHT_INSTR already says WHICH HALF of it
+     * faulted, and `выпр' reloads the half-word indicator from it -- verified on the
+     * machine from both halves (kernel/test/utrap).  Faults that do not advance the PC
+     * (an illegal instruction, an instruction check) leave SPSW_NEXT_RK clear, and the
+     * guard makes this a no-op for them.
      */
-    dev = 0;
-    if (USERMODE(tr.spsw))
+    if (tr->spsw & SPSW_NEXT_RK) {
+        tr->ret--;
+        tr->spsw &= ~SPSW_NEXT_RK;
+    }
+
+    /*
+     * Decode the cause, and dismiss it: MOD_GRPCLR clears the bits that are ZERO in the
+     * accumulator, so a bit left standing could fire afterwards as a spurious external
+     * interrupt if it happens to be unmasked in МГРП.
+     */
+    grp  = __besm6_mod(MOD_GRP, 0);
+    page = 0;
+    if (grp & GRP_OPRND_PROT) {
+        dev  = T_DATA;
+        page = (grp & GRP_PAGE_MASK) >> GRP_PAGE_SHIFT;
+        __besm6_mod(MOD_GRPCLR, ~GRP_OPRND_PROT);
+    } else if (grp & GRP_INSN_PROT) {
+        dev = T_INSN; /* no page is reported for an instruction fault */
+        __besm6_mod(MOD_GRPCLR, ~GRP_INSN_PROT);
+    } else if (grp & GRP_ILL_INSN) {
+        dev = T_ILL;
+        __besm6_mod(MOD_GRPCLR, ~GRP_ILL_INSN);
+    } else if (grp & GRP_INSN_CHECK) {
+        dev = T_CHECK;
+        __besm6_mod(MOD_GRPCLR, ~GRP_INSN_CHECK);
+    } else if (grp & GRP_BREAKPOINT) {
+        dev = T_BREAK;
+        __besm6_mod(MOD_GRPCLR, ~GRP_BREAKPOINT);
+    } else {
+        dev = 0; /* vectored with nothing pending: falls to the panic below */
+    }
+    if (USERMODE(tr->spsw))
         dev |= USER;
+
     switch (minor(dev)) {
     /*
-     * Trap not expected.
-     * Usually a kernel mode bus error.
+     * Trap not expected.  Either a fault taken in kernel mode -- the user-access
+     * family validates its range up front and has no recovery hook, so that is a
+     * kernel bug -- or a cause we do not decode.
      */
     default:
         printf("acc=%o r13=%o r14=%o r15=%o\n", u.u_ar0[ACC], u.u_ar0[R13], u.u_ar0[R14],
                u.u_ar0[R15]);
-        printf("ret=%o spsw=%o\n", u.u_ar0[RET], u.u_ar0[SPSW]);
+        printf("ret=%o spsw=%o grp=%o page=%o\n", u.u_ar0[RET], u.u_ar0[SPSW], grp, page);
         printf("R=%o RMR=%o C=%o\n", u.u_ar0[RREG], u.u_ar0[RMR], u.u_ar0[CREG]);
         panic("trap");
 
-    case 0 + USER: /* divide error */
-    case 4 + USER: /* overflow exception */
-    case 5 + USER: /* bound range exceeded */
-        i = SIGFPT;
-        break;
-
-    case 1 + USER: /* debug exception */
-    case 3 + USER: /* breakpoint exception */
-        i = SIGTRC;
-        /* TODO 15c: single-step is the address-break registers М034/М035, not a
-         * flag bit; there is no EFL/TBIT to clear. */
-        break;
-
-    case 6 + USER: /* invalid opcode */
-    case 9 + USER: /* coprocessor segment overrun */
-        i = SIGINS;
-        break;
-
-    case 7 + USER:                  /* device not available */
-        panic("fpu not available"); /* XXX */
-        break;
-
-    case 8 + USER:  /* double fault */
-    case 10 + USER: /* invalid tss */
-    case 11 + USER: /* segment not present */
-    case 12 + USER: /* stack fault exception */
-    case 13 + USER: /* general protection exception */
-        i = SIGBUS;
-        break;
-
     /*
-     * If the user SP is below the stack segment,
-     * grow the stack automatically.
+     * Data protection: the user touched a page that is closed to data.  If the page is
+     * the one just below the stack, grow the stack automatically and retry; the frame's
+     * RET already points back at the faulting instruction (the restart protocol above).
+     *
+     * TODO 17: grow() still takes a word address and still assumes the x86's
+     * downward-growing stack, so the faulting PAGE is converted back to an address here.
+     * When 17 flips the stack direction, grow() takes the page number and this line goes.
      */
-    case 14 + USER: /* page fault */
-        osp = tr.r15;
-        if (grow((unsigned)osp))
+    case T_DATA + USER:
+        if (grow(page << PGSH))
             goto out;
         i = SIGSEG;
         break;
 
-    /*
-     * Allow process switch
-     */
-    case 15 + USER:
-        goto out;
-
-    /*
-     * Since the floating exception is an
-     * imprecise trap, a user generated
-     * trap may actually come from kernel
-     * mode. In this case, a signal is sent
-     * to the current process to be picked
-     * up later.
-     */
-    case 16: /* floating point error */
-        psignal(u.u_procp, SIGFPT);
-        return;
-
-    case 16 + USER:
-        i = SIGFPT;
+    case T_INSN + USER: /* instruction fetch from a closed page */
+        i = SIGSEG;
         break;
 
-    case 48 + USER: /* sys call */
+    case T_ILL + USER:   /* a privileged instruction in user mode */
+    case T_CHECK + USER: /* the fetched word is not an instruction */
+        i = SIGINS;
+        break;
+
+    case T_BREAK + USER: /* address-break match */
+        i = SIGTRC;
+        /* TODO 17: single-step is the address-break registers М034/М035, not a flag
+         * bit; there is no EFL/TBIT to clear, so re-arming belongs to procxmt(). */
+        break;
+
+    case T_SYSCALL + USER: /* sys call */
         u.u_error = 0;
         /*
          * TODO 15d: BESM-6 syscall ABI (cmd/sim/syscall.cpp) -- number from the
@@ -140,7 +165,7 @@ void trap(struct trap tr)
          * and number decode below are x86-shaped placeholders kept only so the
          * tree builds; 15d rewrites them.
          */
-        a     = (int *)tr.r15;              /* TODO 15d: real arg staging */
+        a     = (int *)tr->r15;             /* TODO 15d: real arg staging */
         callp = &sysent[u.u_ar0[R14] & 077]; /* TODO 15d: number from $77 N */
         for (i = 0; i < callp->sy_narg; i++)
             u.u_arg[i] = fuword((caddr_t)a++);
@@ -178,7 +203,7 @@ out:
     if (runrun)
         qswtch();
     if (u.u_prof.pr_scale)
-        addupc(tr.ret, &u.u_prof, (int)(u.u_stime - syst));
+        addupc(tr->ret, &u.u_prof, (int)(u.u_stime - syst));
 }
 
 /*

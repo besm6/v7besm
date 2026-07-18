@@ -40,6 +40,24 @@
 #define GRP_SLAVE 00001000000000000U /* 37: see below */
 
 /*
+ * The fault bits of ГРП: how an INTERNAL interrupt (vector 0500) says what went wrong.
+ * They are not an external-interrupt source -- the fault vectors on its own -- so the 0500
+ * gate's trap() reads ГРП live to find the cause, then dismisses the bit with MOD_GRPCLR so
+ * that an unmasked bit cannot fire afterwards as a spurious external interrupt.
+ *
+ * The faulting VIRTUAL PAGE rides in bits 5-9, but only for a data violation: an
+ * instruction-protection fault reports no page (the handler has the saved PC instead).
+ * See doc/Memory_Mapping.md, "Protection violations and how they are reported".
+ */
+#define GRP_OPRND_PROT 02000000 /* 20: data access to a closed page ("число в чужом листе") */
+#define GRP_INSN_CHECK 0040000  /* 15: word not tagged as an instruction; also a jump to 0 */
+#define GRP_INSN_PROT  0020000  /* 14: instruction fetch from a zero-descriptor page */
+#define GRP_ILL_INSN   0010000  /* 13: privileged instruction attempted in user mode */
+#define GRP_BREAKPOINT 0004000  /* 12: address-break match (М034/М035) -- TODO 17 single-step */
+#define GRP_PAGE_MASK  0000760  /* 9-5: the faulting virtual page; recover it with >> 4 */
+#define GRP_PAGE_SHIFT 4
+
+/*
  * Bits of ПРП, the peripheral interrupt register (24 bits, masked by МПРП).
  *
  * ПРП has no interrupt line of its own: the processor raises GRP_SLAVE whenever

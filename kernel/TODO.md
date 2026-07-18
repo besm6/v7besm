@@ -497,7 +497,8 @@ fill the frame are 15c/15d.
   `r14` (М14), no own slot. **ГРП is not framed** — the fault cause is read live via
   `__besm6_mod(MOD_GRP,0)` in `trap()` (15c), as Dubna does. All indices non-negative, `u_ar0 =
   &tr.acc` at word 0; `struct trap` stays **by value** into `trap()`/`clock()` (b6cc took the width
-  fine). Aliases: `R_ERRNO R14` (0 = success, no carry bit), provisional `R_VAL2 R13` (15d
+  fine) — **superseded by 15c: `trap()` takes `struct trap *`**, because `b$ret` eats the last
+  parameter word (= `frame[20]`) of a by-value struct; see 15c for the derivation. Aliases: `R_ERRNO R14` (0 = success, no carry bit), provisional `R_VAL2 R13` (15d
   finalizes); `USERMODE(spsw)=((spsw)&014)==0`; `BASEPRI(x)=(0)` (15e placeholder). `regloc[]` is
   `{ACC, R1..R14, R15, RET}` (17 entries): setregs zeroes `[0..14]` (`sys1.c` bound `&regloc[15]`),
   procxmt validates `[0..15]` (`sig.c` bound `i<16`). The collapse resolves the old
@@ -517,6 +518,50 @@ page in bits 5–9 → `grow()` or SIGSEG; bit 14 = instruction protection; bit 
 bit 15 = check) instead of x86 vector numbers.
 - **Done when** (done-when *b*): a from-user test's data-protection fault (touching a closed page) grows
   the stack or signals.
+- **Done.** `0500` now vectors at `trapgate` (`besm6.S`), which is `extint`'s prologue and FULSAV fill
+  instruction for instruction, calls `trap(struct trap *)`, and leaves through **`extint`'s epilogue,
+  reused as-is** — the restore block carries the label `intret` and `trapgate` ends `uj intret`. How it
+  turned out:
+  - **`trap()` takes a POINTER, superseding 15b's "struct trap stays by value"** (annotated there).
+    Passing the 21-word frame by value looks free — the FULSAV fill already builds exactly the argument
+    block the ABI wants — but the ABI says otherwise, and it was checked rather than assumed
+    (`b6cc -S` on a 21-word by-value call, plus `c-compiler/libc/besm6/unix/b_{save,ret}.s`): `b$save`
+    does *not* copy a by-value struct, it points r6 at the caller's block — so `u_ar0` would alias in
+    place either way — but **`b$ret` reuses the LAST parameter word as its return-value scratch**
+    (`7 stx -5`), which for a 21-word struct is `frame[20]` = М1, and it returns r15 at the block base,
+    not above it. With one pointer argument that scratch word is the dead slot at `F+21` and r15 comes
+    back at `F+21` — exactly `intret`'s precondition, so the epilogue needs no fixing up and the gate
+    is a straight `uj`. `clock()` (15e) should take the same shape.
+  - **The stack switch is unconditional** — no `СПСВ & 014` discriminator. A fault from supervisor is a
+    kernel bug (`useracc` validates up front; there is no `nofault` path), `trap()` takes it to the
+    `default` arm and panics, and resetting r15 under a panic costs nothing. So this door never nests.
+  - **One set of temp cells still serves both gates**, and it must: `intret` re-applies them. It is safe
+    because a cell is live only across a prologue/epilogue, and both run with БлПр forced on and the
+    kernel unmapped — no interrupt and no fault can land in that window, so the gates cannot overlap.
+  - **The restart protocol is two lines, not eight, and the machine corrected the plan.** The saved
+    `M[IRET]` is the faulting **word plus one** in *both* cases, and `SPSW_RIGHT_INSTR` already names the
+    half that faulted (`выпр` reloads the indicator from it) — so the fixup is `tr->ret--` plus clearing
+    `SPSW_NEXT_RK`, and nothing else. The first draft "reconstructed" the half-word too and skipped every
+    faulting instruction; `utrap` caught it (ACC `0600`). `doc/Memory_Mapping.md`'s restart-protocol
+    section now carries the derivation and the verified recipe. It lives in C, at the top of `trap()`,
+    because the frame is aliased in place.
+  - **`trap.c` dispatches on ГРП** read live (`__besm6_mod(MOD_GRP,0)`), folded into kernel-local trap
+    kinds (`T_DATA`/`T_INSN`/`T_ILL`/`T_CHECK`/`T_BREAK`, plus `T_SYSCALL` left untouched for 15d) and
+    dismissed with `MOD_GRPCLR` so a fault bit cannot fire afterwards as a spurious external interrupt.
+    The x86-only arms are gone; the panic dump gained ГРП and the faulting page. `GRP_OPRND_PROT`,
+    `GRP_INSN_PROT`, `GRP_ILL_INSN`, `GRP_INSN_CHECK`, `GRP_BREAKPOINT`, `GRP_PAGE_MASK` are new in
+    `sys/besm6dev.h`. `grow()` still takes a word address and still assumes the x86's downward stack, so
+    the faulting page is converted back to an address (`grow(page << PGSH)`) — flagged `TODO 17`.
+  - **`kernel/test/utrap`** (`crt0t.S` + `utrap.c` + `utrap.ini`) is `uintr`'s counterpart on the fault
+    door: it forges user mode, leaves virtual pages 4/5/6 closed and reads them in turn, faulting **once
+    from a right half and once from a left** so both arms of the fixup are exercised. `trap()` there
+    checks the *frame* (R, Y, М16, r15) rather than having the user read its own registers back — which
+    is the point of the aliasing pointer — clobbers all three, and opens the faulted page; the retried
+    `xta` must come back with the sentinel behind it. Needs **`set mmu cache`** (unlike `uintr`): the
+    stub reprograms РП on every fault and the user's reports are mapped stores read back physically.
+    **Bite-tested:** dropping the PC fixup yields ACC `0600`, dropping the stack switch `020`, dropping
+    `xtr save_r` from the shared epilogue `2`.
+  - Image top `060126` (bss), under `076000`; the full `kernel/test` suite is green.
 
 **15d. The syscall gate (0577) and `badext`.** `syscall` and `badext` are `stop` stubs. Build the
 extracode frame, dispatch, and return via ERET (`2 ij`, or normalise ERET→IRET the `OUTMACRO` way —

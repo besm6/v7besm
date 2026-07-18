@@ -466,6 +466,29 @@ So a handler that intends to retry must reconstruct the faulting instruction's p
 and a demand-paged program will skip an instruction every time it faults — which is exactly the kind
 of bug that only shows up under memory pressure.
 
+**The fixup, concretely.** Work the two saves through `sim_instr`'s pre-advance — `PC`/`RUU` are
+stepped *before* the instruction executes ([besm6_cpu.c:1080](https://github.com/besm6/simh/blob/master/BESM6/besm6_cpu.c#L1080)) — and the `++PC`/`^=` above collapses to
+one rule, whichever half faulted:
+
+| faulting instruction | saved `M[IRET]` | saved `SPSW_RIGHT_INSTR` |
+|---|---|---|
+| left half of word *P* | *P* + 1 | clear |
+| right half of word *P* | *P* + 1 | set |
+
+So **`SPSW_RIGHT_INSTR` already names the half that faulted** — it needs no correction, and `выпр`
+reloads the half-word indicator from it. Only the word is off, always by exactly one:
+
+```c
+if (tr->spsw & SPSW_NEXT_RK) {   /* the machine took delivery of the next WORD */
+    tr->ret--;                   /* ... so back up to the faulting one */
+    tr->spsw &= ~SPSW_NEXT_RK;
+}
+```
+
+That is what `kernel/trap.c` does, and `kernel/test/utrap` verifies it on the machine from both
+halves: it faults once from a right half and once from a left, and checks that each faulting `xta`
+re-executes and returns the value behind the newly opened page.
+
 ### Halt instead of interrupt
 
 `PSW_INTR_HALT` (**ПоП**, `000004`) turns internal interrupts into simulator halts, which is what

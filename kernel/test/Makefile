@@ -14,7 +14,7 @@ NM      = b6nm
 CFLAGS  = -I../../include
 LIBDIR  = $$HOME/.local/share/besm6/lib
 
-PROGS   = hello sctest mmutest uintr
+PROGS   = hello sctest mmutest uintr utrap
 
 all:    $(PROGS)
 
@@ -25,6 +25,7 @@ test:   $(PROGS)
 	besm6 sctest.ini
 	besm6 mmutest.ini
 	besm6 uintr.ini
+	besm6 utrap.ini
 
 clean:
 	rm -f *.o *.dis *.nm $(PROGS)
@@ -55,9 +56,21 @@ uintr:  crt0u.o uintr.o utab.o brz.o
 	$(DISASM) -c $@ > $@.dis
 	$(NM) -n $@ > $@.nm
 
-# crt0u.S is preprocessed (it #includes sys/besm6dev.h), so build it through the
+# utrap is uintr's counterpart for the OTHER asynchronous door: it forges a user-mode context
+# (crt0t.o), takes data-protection faults in it, and checks that the 0500 gate framed the machine
+# and that trap() backed the PC up so the faulting instruction re-executed.  See utrap.ini and
+# crt0t.S.
+utrap:  crt0t.o utrap.o utab.o brz.o
+	$(LD) crt0t.o utrap.o utab.o brz.o -o $@ -L$(LIBDIR) -lc
+	$(DISASM) -c $@ > $@.dis
+	$(NM) -n $@ > $@.nm
+
+# crt0u.S/crt0t.S are preprocessed (they #include sys/besm6dev.h), so build them through the
 # compiler driver with the include path, not the bare assembler.
 crt0u.o: crt0u.S
+	$(CC) $(CFLAGS) -c $< -o $@
+
+crt0t.o: crt0t.S
 	$(CC) $(CFLAGS) -c $< -o $@
 
 utab.o: ../utab.c
