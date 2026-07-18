@@ -1,0 +1,297 @@
+//
+// crt0u.s -- forge-entry startup for the from-USER-mode interrupt test (uintr).
+//
+// crt0.s brings the machine up and runs main() in supervisor (kernel) mode, which is enough
+// for sctest/mmutest but useless for testing besm6.S's `extint' stack switch: an interrupt
+// taken in kernel mode does NOT switch the stack, so the one gap that matters would go
+// unexercised.  This crt0 instead forges a real USER-mode context -- a Dubna SELECT-style
+// gate (doc/Context_Switch.md §8): forge ИРЕТ + СПСВ and `выпр' into user -- so the coming
+// external interrupt lands with СПСВ & 014 == 0 and exercises the full corrected `extint'.
+//
+// The pieces:
+//   * main() (uintr.c) programs a user map with sureg(), arms the console interrupt, polls
+//     until its "printing finished" bit is pending, then calls gouser().
+//   * gouser() forges the four registers whose preservation is under test (R, РМР, M[020],
+//     r15) and `выпр's into the user program uprog at virtual page 0.
+//   * The pending console interrupt fires at uprog's first instruction; the hardware vectors
+//     to 0501 -> the corrected `extint', which saves the full async machine, switches to the
+//     kernel stack, runs extintr(), restores, and `выпр's back into uprog.
+//   * uprog reads back R, РМР, the modifier-armed word and r15 into r8-r11 and `stop's; in
+//     user mode `стоп' is re-dispatched as extracode э63 -> vector 0563 -> report().
+//   * report() (supervisor, unmapped) compares r8-r11 against the forged values and the
+//     physical stack-switch sentinel, folds the result into the accumulator, and halts.
+//
+// The forged values, the map and the sentinels are shared with uintr.c through these EQUs and
+// the assumptions in the comments; keep the two in step.
+//
+// This harness (forge-user entry + sureg map) is what tasks 15c/15d reuse for the trap and
+// syscall gates.  See kernel/TODO.md task 15a and doc/Context_Switch.md §14.
+
+PGSZ    = 02000                 // 1024 words per page (octal)
+
+// -- forged register values (gouser plants them; report checks them) ----------------------
+RMODE   = 044                   // R: ω = logical (bits 5-3 = 001) + overflow-suppress (bit 6).
+                                //   Logical so uprog's `yta' returns РМР clean; distinct from
+                                //   the C ABI's steady R = 7 (logical + round + norm suppress),
+                                //   so `rte' catches a dropped R save.
+RMR     = 0123456              // РМР: a distinctive younger-bits value.
+MODVAL  = 04010                // M[020]: a virtual data address (page 2, offset 8).  The
+                                //   armed modifier makes uprog's first `xta 0' read here.
+SENT    = 0525252              // the word uintr.c pokes at virtual MODVAL.
+USPV    = 074000               // r15: an (unmapped) user-stack value; also the PHYSICAL page
+                                //   where extintr()'s frame lands if the switch is missing.
+KSENT   = 0333333              // uintr.c seeds physical USPV/USPV+1 with this; extintr() on the
+                                //   user r15 would overwrite it.
+SPSW    = 020                  // forged СПСВ: SPSW_MOD_RK only.  БлП/БлЗ/БлПр and РежЭ/РежПр all
+                                //   clear -> `выпр' returns to USER mode, mapping on, interrupts
+                                //   on, and re-arms the modifier from M[020].
+
+CLOSEDPG = 024000              // virtual page 10: unmapped, so closed to data -- uprog reads it to
+                                //   raise a data-protection fault, which reaches report() below.
+// uprog stashes the four read values into these words of its mapped data page (virtual page 2),
+// full 48 bits -- NOT into index registers, which are only 15 bits and would truncate SENT/R/РМР.
+// report reads them back through the same map.  They must clear MODVAL (04010, the sentinel).
+VSLOT0  = 04020                // M[020] read
+VSLOT1  = 04021                // R
+VSLOT2  = 04022                // РМР
+VSLOT3  = 04023                // r15
+
+// -- fault bits reported in the accumulator (0 == all five preserved) -----------------------
+//   1  M[020] (the modifier-armed read), 2  R, 4  РМР, 010 r15 value, 020 stack not switched.
+
+// ----------------------------------------------------------------------------
+// Interrupt vectors
+// ----------------------------------------------------------------------------
+// crt0u.o is linked first, so its .const begins at BADDR (010) and `.org' lands the vectors on
+// their hardware addresses (same rule as kernel/besm6.S).  The trailing `.org PGSZ' pads the
+// const section to a full page so the .text below -- and with it uprog -- links into a NON-zero
+// physical page: a zero РП descriptor is non-executable, so uprog cannot live in physical page 0.
+//
+// 0500 is pointed at report(): uprog finishes by touching a closed page, and a data-protection
+// fault IGNORES ПоП and vectors (doc/Memory_Mapping.md, "ПоП is deliberately ignored for
+// data-protection faults") -- unlike `стоп' -> extracode э63, which check-halts here because reset
+// leaves ПоК set.  So the fault is the clean way back to supervisor for the checker.
+
+        .const
+        .org 0500
+        uj      report          // 0500: internal interrupt -- uprog's deliberate data fault
+      : uj      extint          // 0501: external interrupt (ГРП)
+        .org PGSZ               // pad the const page so .text starts in physical page >= 1
+
+// ----------------------------------------------------------------------------
+        .text
+        .globl  _start
+_start:
+     15 vtm     kstack          // seed the kernel stack
+        vtm     02003           // ПСВ := БлП|БлЗ|БлПр: unmapped, unprotected, INTERRUPTS OFF.
+                                //   Reg field 0 in supervisor writes the mode bits from the
+                                //   address; keeping БлПр set is what holds interrupts off
+                                //   through main, until gouser's `выпр' enters user mode.
+     13 vjm     main            // uintr.c: build the map, arm the interrupt, call gouser()
+halt:   stop                    // main() should never return (gouser does not)
+        uj      halt
+
+// ----------------------------------------------------------------------------
+// void gouser(unsigned uentry) -- forge a user context and enter it.
+// ----------------------------------------------------------------------------
+// One parameter (uentry, the virtual entry address of uprog) arrives in the accumulator.
+// Runs in supervisor; `выпр' does not return -- control resurfaces in uprog, in user mode.
+        .globl  gouser
+gouser:
+        ati     033             // ИРЕТ (M[033]) := uentry -- where `выпр' lands
+        xta   #(MODVAL)
+        ati     020             // M[020] := MODVAL (inert; `выпр' re-arms it from СПСВ)
+        xta   #(SPSW)
+        ati     027             // СПСВ (M[027]) := SPSW_MOD_RK, user mode, interrupts on
+     15 vtm     USPV            // r15 := the user-stack value under test
+        ntr     RMODE           // R := RMODE (logical + overflow-suppress)
+        xta   #(RMR)
+        aex                     // РМР := RMR, via the `aex'-with-blank side effect (keeps R)
+      3 ij                      // выпр: into uprog, user mode, modifier armed
+
+// ----------------------------------------------------------------------------
+// uprog -- the user program.  Runs MAPPED at virtual page 0.
+// ----------------------------------------------------------------------------
+// It must touch no absolute kernel memory -- every data address it names would go through the
+// user map -- so it only reads registers and the one modifier-armed word, stashes the four
+// values into r8-r11, and traps out with a data-protection fault.  report() does all the
+// comparing, unmapped.
+//
+// The interrupt is pending at entry, so it fires BEFORE this first instruction; `extint' handles
+// it and `выпр's back here with the modifier re-armed.  The first `xta 0' is therefore modified by
+// the preserved M[020] and reads virtual MODVAL.
+// The four reads must precede any logical op (which would clobber РМР) and any ω-change: `xta',
+// `rte', `yta', `ita' leave РМР alone, and the forged R is already logical so `xta' keeps it; the
+// stores go through `atx'/`vtm', which touch neither.  So read, store full-width, in this order.
+        .globl  uprog
+uprog:
+        xta     0               // A := mem[0 + M[020]] = mem[MODVAL]   -- tests M[020]
+     14 vtm     VSLOT0
+     14 atx     0               //   store it full-width to the mapped data page
+        rte     07777           // A := R << 41                          -- tests R
+     14 vtm     VSLOT1
+     14 atx     0
+        yta                     // A := РМР (R is logical -> full copy)   -- tests РМР
+     14 vtm     VSLOT2
+     14 atx     0
+        ita     017             // A := r15                              -- tests r15 value
+     14 vtm     VSLOT3
+     14 atx     0
+     14 vtm     CLOSEDPG        // trap to supervisor: read a closed page ->
+     14 xta     0               //   data-protection fault -> vector 0500 -> report()
+        uj      uprog           // (never reached)
+
+// ----------------------------------------------------------------------------
+// report -- reached in SUPERVISOR via the 0500 fault vector.  Compare and halt.
+// ----------------------------------------------------------------------------
+// The four values are in uprog's data page; report reads them back through the still-loaded map
+// (a `vtm 02002'/`vtm 02003' bracket toggles БлП while keeping БлПр set, as uarea.s does), and the
+// `#(...)' pool constants and the physical switch-sentinel resolve unmapped to real low memory.
+// The fault mask is accumulated in r14; a register prefix is DECIMAL, so r14 is `14' here, while
+// the operand of `ita 016' that reads it back is OCTAL (016 == M[14]).
+report:
+     14 vtm     0               // r14 := fault mask
+     13 vtm     VSLOT0
+        vtm     02002           // map on (БлП off), interrupts still off
+     13 xta     0               // A := the stored M[020] read, through the map
+        vtm     02003           // map off
+        aex   #(SENT)
+        uza     rp1             // matches -> M[020] preserved
+     14 utm     1
+rp1: 13 vtm     VSLOT1
+        vtm     02002
+     13 xta     0               // A := the stored R value
+        vtm     02003
+        aex   #(.47|.44)        // RMODE = 044 read by `rte 07777' is bits 47 and 44
+        uza     rp2
+     14 utm     2
+rp2: 13 vtm     VSLOT2
+        vtm     02002
+     13 xta     0               // A := the stored РМР
+        vtm     02003
+        aex   #(RMR)
+        uza     rp3
+     14 utm     4
+rp3: 13 vtm     VSLOT3
+        vtm     02002
+     13 xta     0               // A := the stored r15 value
+        vtm     02003
+        aex   #(USPV)
+        uza     rp4
+     14 utm     010
+rp4:                            // the stack-switch discriminator: was the user r15 written on?
+     13 vtm     USPV            // r13 := the physical sentinel address (unmapped)
+     13 xta     0               // A := mem[USPV]
+        aex   #(KSENT)
+        u1a     rpbad           // clobbered -> extintr() ran on the user r15
+     13 xta     1               // A := mem[USPV+1]
+        aex   #(KSENT)
+        uza     rpok            // both intact -> the switch happened
+rpbad:  14 utm  020
+rpok:   ita     016             // A := the fault mask
+        stop                    // halt: the .ini asserts ACC == 0
+        uj      report
+
+// ----------------------------------------------------------------------------
+// The corrected external-interrupt gate -- a copy of kernel/besm6.S:extint.
+// ----------------------------------------------------------------------------
+// besm6.o cannot enter a standalone test (its 0500 vector reaches into the C kernel and its
+// _start seeds no stack), so the gate is duplicated here, as crt0.s already duplicates the old
+// subset gate.  Keep it identical in LOGIC to kernel/besm6.S; doc/Context_Switch.md §14 is the
+// authority.
+//
+// The save area is addressed BARE (no `< sym >' utc escape).  This is not a nicety: a `< sym >'
+// escape emits a `мода' (utc) that loads M[020], so any escape ahead of the `ita 020' below would
+// overwrite the very C register this gate is trying to save.  besm6.S is bare for the same reason;
+// it works here because this image's bss links low (the save cells are under the 12-bit short-
+// address field -- sa is at ~03231, see uintr.nm), just as besm6.S's save area does at ~0635.
+//
+// Saves the full async machine: A, r8-r14, and the four the hardware/ABI drop -- R, РМР, the C
+// register M[020], and r15.  Switches r15 to the kernel stack, but ONLY when the interrupt came
+// from user mode (СПСВ & 014 == 0).  Restores in the forced order РМР -> A -> R (§7).
+        .globl  extint
+extint: atx     sa              // A first, as the vector does
+        rte     07777           // R   -> A
+        atx     sr
+        yta                     // РМР -> A
+        atx     srmr
+        ita     020             // C register M[020] -> A
+        atx     sc
+        ita     017             // interrupted r15 -> A
+        atx     s15
+        ita     027             // СПСВ -> A
+        aax   #(014)            // isolate РежЭ | РежПр
+        u1a     extk            // nonzero -> nested in the kernel: keep r15
+     15 vtm     [ustkbase]      // zero -> from user: r15 := kernel stack base
+extk:   ita     010             // r8-r14, which the C call may clobber
+        atx     s8
+        ita     011
+        atx     s9
+        ita     012
+        atx     s10
+        ita     013
+        atx     s11
+        ita     014
+        atx     s12
+        ita     015
+        atx     s13
+        ita     016
+        atx     s14
+
+     13 vjm     extintr         // uintr.c: dismiss the interrupt
+
+        xta     s14
+        ati     016
+        xta     s13
+        ati     015
+        xta     s12
+        ati     014
+        xta     s11
+        ati     013
+        xta     s10
+        ati     012
+        xta     s9
+        ati     011
+        xta     s8
+        ati     010
+        xta     s15             // interrupted r15 back (before the A restore -- clobbers A)
+        ati     017
+        xta     sc              // C register back (ati does not arm the modifier)
+        ati     020
+        xta     srmr            // РМР back, via the `aex' side effect
+        aex
+        xta     sa              // A back (xta does not disturb РМР)
+        xtr     sr              // R back -- must be last
+      3 ij                      // выпр: restore the mode word, jump via M[033]
+
+// ----------------------------------------------------------------------------
+        .data
+// ustkbase holds the kernel stack base for extint's switch, exactly as machdep.c does for the
+// real kernel.  [ustkbase] loads its CONTENTS (the address of kstack).
+        .globl  ustkbase
+ustkbase: .word kstack
+
+// uprog's link-time WORD address, as a plain integer -- the linker relocates the symbol into
+// this word.  main() reads it to build the map; going through `(unsigned)&uprog' in C instead
+// would hand back a fat pointer whose word address is not simply its low bits.
+        .globl  uprogadr
+uprogadr: .word uprog
+
+        .bss
+// The extint save area (see the gate above).  In .bss, reached with `< sym >' escapes.
+sa:     . = . + 1
+s8:     . = . + 1
+s9:     . = . + 1
+s10:    . = . + 1
+s11:    . = . + 1
+s12:    . = . + 1
+s13:    . = . + 1
+s14:    . = . + 1
+sr:     . = . + 1
+srmr:   . = . + 1
+sc:     . = . + 1
+s15:    . = . + 1
+
+// The kernel stack _start seeds and extint switches to.  The label is the low end; the stack
+// grows up into the reservation.  Well clear of USPV = 074000.
+kstack: . = . + 256

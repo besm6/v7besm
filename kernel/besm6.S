@@ -79,6 +79,19 @@
 // Register save area for the external-interrupt stub above.  One copy is enough:
 // interrupts are blocked from the moment the hardware takes one until the `ij` that
 // ends the handler, so extint cannot be re-entered.
+//
+// It lives here in .const/.text (it links low -- s14 is at 0644, unix.nm) so every cell
+// fits the 12-bit short-address field and the stub addresses it with a bare `atx sa'.  The
+// kernel's own data (bss) links far above 07777 and needs a `utc' escape to reach; the save
+// area does not, which is why -- unlike seg.s/uarea.s reaching their bss -- there is no
+// `< sym >' here.
+//
+// An interrupt is asynchronous: it lands between two arbitrary instructions, so the
+// interrupted code owns EVERY register and the stub must save the whole visible machine the C
+// handler can touch -- not just the ABI's callee-saved set.  So this covers the accumulator,
+// r8-r14 (caller-saved: the C handler may clobber them), and the four the hardware does NOT
+// save and the ABI does NOT preserve across `13 vjm extintr': R, РМР, the C register M[020],
+// and r15 (see the stub for why each -- doc/Context_Switch.md §14).
         .text
 sa:     .word 0                 // accumulator
 s8:     .word 0                 // r8-r14: caller-saved, so the C handler may
@@ -88,6 +101,10 @@ s11:    .word 0
 s12:    .word 0
 s13:    .word 0
 s14:    .word 0
+sr:     .word 0                 // R   -- ALU mode (ω + the NTR suppress bits)
+srmr:   .word 0                 // РМР -- younger-bits register
+sc:     .word 0                 // C register M[020] -- the address modifier
+s15:    .word 0                 // r15 -- the interrupted stack pointer
 
 // ============================================================================
 // Kernel entry point
@@ -176,34 +193,60 @@ badext: stop    076              // TODO: an extracode we do not implement
 // ============================================================================
 //
 // The hardware vector for an external (ГРП) interrupt is the fixed address 0501,
-// laid down in the .const block above.  It jumps here; this stub saves what the C
-// handler may clobber, calls extintr() in intr.c, and returns with `ij` (выпр).
+// laid down in the .const block above.  It jumps here; this stub saves the full visible
+// machine, switches to the kernel stack, calls extintr() in intr.c, restores, and returns
+// with `3 ij` (выпр).  doc/Context_Switch.md §14 has the corrected stub verbatim and the
+// four gaps this fixes; §7 fixes the epilogue's restore order.
 //
-// An interrupt is asynchronous, so the calling convention's callee-saved set is not
-// enough -- the interrupted code owns every register.  extintr() preserves r1-r7 and
-// r15 for us (that is the ABI) and the hardware has saved the interrupted PC in
-// M[033], so what is left to save here is the accumulator and the caller-saved index
-// registers r8-r14 -- including r13, which the `vjm` below is about to overwrite with
-// its return address.
+// An interrupt is asynchronous, so the calling convention's callee-saved set is not enough --
+// the interrupted code owns EVERY register.  The hardware saves the interrupted PC in ИРЕТ
+// (M[033]) and `выпр` restores the mode word from СПСВ (M[027]); everything else that
+// extintr() can touch is on us.  That is the accumulator and r8-r14 (caller-saved), PLUS four
+// the hardware does not save and the ABI does not preserve across `13 vjm extintr':
 //
-// Interrupts stay blocked throughout (the hardware sets БлПр on entry, and `ij`
-// restores the mode word from СПРВ on the way out), so one static save area is safe.
+//   * R   -- the C ABI exits `NTR 3` / ω = logical (doc/Besm6_Runtime_Library.md), so extintr
+//            returns with R changed; resume the user with it and its arithmetic mode is wrong.
+//            The hardware never touches R (`выпр` does not restore it); software must.
+//   * РМР -- any logical op (и/слц/сл) overwrites it, and the interrupted user may hold it live.
+//   * M[020] (the C register / address modifier) -- extintr() reaches globals with the
+//            compiler's `utc name'+load idiom, clobbering it.  When a device interrupt lands in
+//            the one-instruction window after a user `utc', СПСВ carries SPSW_MOD_RK and the
+//            closing `3 ij` re-arms the modifier -- from the clobbered value unless we save it
+//            (doc/Context_Switch.md §13).  `ita`/`ati 020` move it as a plain register and do
+//            NOT arm the modifier, so saving/restoring the value is all that is needed.
+//   * r15 -- NOT banked on this machine (one stack register across modes).  When the interrupt
+//            came from USER mode, r15 is the user stack pointer, and the trap has forced БлП on,
+//            so that value is now an unmapped PHYSICAL word index pointing into the kernel image
+//            below the u-area; run extintr()'s C frame on it and it silently corrupts the
+//            kernel.  So repoint r15 at the kernel stack -- but ONLY from user, or a fault taken
+//            mid-copyin (supervisor, БлП clear) would reset r15 out from under the syscall frame.
+//            The signal is `СПСВ & 014' (РежЭ|РежПр = RUU_EXTRACODE|RUU_INTERRUPT): zero IFF the
+//            interrupted context was user.  Test that, not БлП (Memory_Mapping.md, "Entering and
+//            leaving supervisor mode").  There is one kernel stack (the u-area is one fixed
+//            physical page), so the switch is the constant load `_start` already uses.
 //
-// The same stub, and the reasoning behind it, is exercised standalone against SIMH
-// by kernel/test/crt0.s + sctest.c.
+// Interrupts stay blocked throughout (the hardware sets БлПр on entry, and `выпр` restores the
+// mode word from СПСВ on the way out), so one static save area is safe -- extint cannot be
+// re-entered.
 //
-// Every reference to the save area goes through a `< sym >' escape, which emits a
-// `utc sym' ahead of the instruction so the address rides a 15-bit field.  A bare
-// `atx sa' would put it in atx's own 12-bit short-address field, and the save area
-// links at 060052 -- the segment order is const|text|data|commons|bss with all objects
-// concatenated per segment, so the kernel's bss sits far above 07777.  b6as has no
-// equivalent of Madlen's `,base,'.  `utc' touches neither A nor R, and interrupts are
-// blocked here, so the escape is transparent to what this stub is saving.  seg.s and
-// uarea.s reach their own bss the same way.
+// The same stub, and the reasoning behind it, is exercised standalone against SIMH by
+// kernel/test/crt0u.s + uintr.c, which forges user-mode entry so the stack switch is tested.
 
         .globl  extint
-extint: atx     sa                  // save the accumulator
-        ita     010                 // ...and r8-r14, which the C call may clobber
+extint: atx     sa                  // A first, as the vector does
+        rte     07777               // R   -> A
+        atx     sr
+        yta                         // РМР -> A
+        atx     srmr
+        ita     020                 // C register M[020] -> A
+        atx     sc
+        ita     017                 // interrupted r15 -> A
+        atx     s15
+        ita     027                 // СПСВ -> A
+        aax   #(014)                // isolate РежЭ | РежПр (RUU_EXTRACODE|RUU_INTERRUPT)
+        u1a     extk                // nonzero -> nested in the kernel: keep r15
+     15 vtm     [ustkbase]          // zero -> from user: r15 := kernel stack base (~076214)
+extk:   ita     010                 // ...and r8-r14, which the C call may clobber
         atx     s8
         ita     011
         atx     s9
@@ -234,7 +277,14 @@ extint: atx     sa                  // save the accumulator
         ati     011
         xta     s8
         ati     010
-        xta     sa
+        xta     s15                 // interrupted r15 back (before the A restore -- clobbers A)
+        ati     017
+        xta     sc                  // C register back (ati does not arm the modifier -- §13)
+        ati     020
+        xta     srmr                // РМР back, via the `aex` side effect (§7)
+        aex                         //   (A is garbage after this -- intentional)
+        xta     sa                  // A back (xta does not disturb РМР)
+        xtr     sr                  // R back -- must be last (a later xta would perturb it)
       3 ij                          // выпр: restore the mode word, jump via M[033]
 
 // ============================================================================
@@ -314,9 +364,13 @@ idle:
 // ============================================================================
 //
 // x86's savfp/restfp/stst are gone with the u-area's FP block.  The BESM-6 has no
-// separate floating-point register file -- the accumulator does float, and the
-// arithmetic mode rides in СПСВ across a trap -- so there is no lazy FP context to
-// save around a context switch, and nothing to restore.
+// separate floating-point register file -- the accumulator does float -- so there is no
+// lazy FP context to save around a context switch, and nothing to restore.
+//
+// The arithmetic mode, however, does NOT ride in СПСВ across a trap: СПСВ carries only
+// БлП/БлЗ/БлПр and the supervisor bits.  The ω-mode and the NTR suppress bits live in the
+// mode register R, which the hardware neither saves nor restores; the trap gate saves R by
+// hand (see extint above, and doc/Context_Switch.md §14).
 
 // ============================================================================
 // Execution profiling

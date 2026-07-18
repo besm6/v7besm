@@ -389,9 +389,43 @@ cannot stand in. Task 16's real entry-to-user (`resume()`/SELECT-forge) does not
 forge ИРЕТ+СПСВ, `выпр` into user) and programs a user map with the `mmuhelp`/`sureg` machinery
 `mmutest` already links. That harness is reused by 15c and 15d.
 
-**15a. `extint`: save the full async machine, and switch the stack.** The written `extint`
-(`besm6.S:204–238`) saves ACC and r8–r14 but **not R, not РМР, not the C register M[020]**, and it
-never switches the stack — four gaps, each confirmed against SIMH and Dubna this cycle
+**15a. `extint`: save the full async machine, and switch the stack. DONE**, and a new from-user
+test (`kernel/test/uintr`) takes an external interrupt in forged user mode and confirms R, РМР,
+M[020] and r15 all survive it, on the real machine. The gate now matches Context_Switch.md §14
+verbatim; how it turned out, and what differed from the sketch below:
+
+- **`besm6.S`'s `extint` is bare-addressed, not escaped.** The save area is in `.const`/`.text` (it
+  links at `~0635`, under the 12-bit short-address field), so `atx sa` reaches it directly. This is
+  load-bearing, not a nicety: a `< sym >` escape emits a `мода`/`utc` that loads M[020], so an escape
+  ahead of the `ita 020` **save** would overwrite the very C register the gate is saving. The `<sym>`
+  comment that used to sit on the stub was stale and is gone.
+- **The test harness (`crt0u.s` + `uintr.c`) is the scaffolding 15c/15d reuse.** `gouser()` forges a
+  Dubna `SELECT`-style entry — plant ИРЕТ + СПСВ (with `SPSW_MOD_RK` so `выпр` re-arms the modifier),
+  set R via `ntr`, РМР via the `xta`/`aex` side effect, r15 to a user-stack value — and `3 ij` into a
+  tiny mapped user program at virtual page 0. `sureg()` builds the map from `uprog`'s own physical page
+  (its word address comes from a linker-filled `.word uprog`, **not** `(unsigned)&uprog`, whose fat
+  pointer is not simply its low bits).
+- **The interrupt is raised in software** with `увв 031` ("simulate ГРП") on `GRP_TIMER`, so there is
+  no device and no timing: unmask МГРП, raise the bit while БлПр still masks it, and it fires at
+  `uprog`'s first instruction the instant `выпр` clears БлПр — which is what makes the modifier-armed
+  M[020] test deterministic. `extintr()` dismisses it **and masks МГРП**, because the interval timer
+  re-arms `GRP_TIMER` at reset and would otherwise storm. Keeping БлПр set through `main` (an explicit
+  `vtm 02003` in `_start`) is what stops the bit from firing early, in supervisor.
+- **The user reports back through a deliberate data-protection fault, not `стоп`.** `стоп` in user mode
+  re-dispatches as extracode э63, but reset leaves ПоК set, so it check-halts; a data-protection fault
+  **ignores ПоП/ПоК and always vectors** (Memory_Mapping.md), so `uprog` reads a closed page to reach
+  the `report()` checker at vector `0500`. `report()` runs unmapped and compares five things.
+- **The read-back values live in memory, not index registers** — the index registers are 15 bits and
+  would truncate SENT / R‹‹41 / РМР. `uprog` stores each full-width to its mapped data page; `report()`
+  reads them back through the still-loaded map and the physical stack-switch sentinel unmapped.
+- **The stack-switch discriminator** seeds physical `074000` (= the forged user r15) with a sentinel:
+  if `extint` fails to switch, `extintr()`'s frame — БлП forced on, so r15 is a physical index — lands
+  there and overwrites it. `report()` catches that (bit `020`). **Bite-tested:** dropping the switch
+  yields ACC `020`, dropping the `xtr sr` restore yields ACC `2`.
+- **No `set mmu cache`.** `extint` programs no page registers, so the БРЗ hazard mmutest chases is not
+  in play here; the run stays simple.
+
+The original four gaps, for the record — each confirmed against SIMH and Dubna
 (Context_Switch.md §14 has the full corrected prologue verbatim):
   - **R** (ALU mode — ω plus the NTR suppress bits). The C ABI exits `NTR 3` / ω = logical
     ([../doc/Besm6_Runtime_Library.md](../doc/Besm6_Runtime_Library.md), the helper contract), so

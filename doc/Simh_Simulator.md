@@ -582,6 +582,36 @@ sim> set console debug=log          ; send debug output to the console log too
 The kernel's `kernel/unix.ini` carries both trace lines commented out; uncomment them to dump
 a full `unix.trace` of the boot.
 
+### Latin (MADLEN) trace mnemonics
+
+The trace disassembly defaults to **БЕМШ** (Cyrillic) mnemonics. To get **MADLEN** (Latin)
+ones instead, add the `-l` switch — but it must go on the command that actually runs the CPU,
+not on a `set` command and not on the simulator's own command line:
+
+```
+sim> set cpu debug
+sim> set debug trace.txt
+sim> run -l          ; or: go -l / step -l / cont -l
+```
+
+The dialect is chosen afresh for every printed instruction from the switches of the *current*
+command, so `-l` has to ride on `run`/`go`/`step`/`cont`, and it must be repeated on each
+`cont`/`step` — it is not sticky. A bare `besm6 -l …` at the shell has no effect, because
+`-l` is not a recognized startup flag and is gone by the time a `go` runs. (This is the same
+`L` switch that `examine -ml` uses for static disassembly, above.)
+
+For a **sticky** setting, use the CPU mode instead:
+
+```
+sim> set cpu latin      ; all later trace/disassembly in MADLEN (Latin) mnemonics
+sim> set cpu nolatin    ; back to БЕМШ (Cyrillic) — the default
+sim> show cpu latin     ; report the current dialect
+```
+
+`set cpu latin` flips every mnemonic rendered afterwards (trace, `examine -m`, the CPU log)
+without a per-command switch, and a `-l` on `run`/`go` still forces Latin regardless of the
+mode.
+
 ### Breakpoints and watchpoints
 
 ```

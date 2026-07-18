@@ -14,7 +14,7 @@ NM      = b6nm
 CFLAGS  = -I../../include
 LIBDIR  = $$HOME/.local/share/besm6/lib
 
-PROGS   = hello sctest mmutest
+PROGS   = hello sctest mmutest uintr
 
 all:    $(PROGS)
 
@@ -24,6 +24,7 @@ test:   $(PROGS)
 	besm6 hello.ini
 	besm6 sctest.ini
 	besm6 mmutest.ini
+	besm6 uintr.ini
 
 clean:
 	rm -f *.o *.dis *.nm $(PROGS)
@@ -43,6 +44,14 @@ sctest: crt0.o sctest.o
 # stack), so the five are compiled here from the kernel sources next door.
 mmutest: crt0.o mmutest.o mmuhelp.o utab.o brz.o uarea.o seg.o usermem.o
 	$(LD) crt0.o mmutest.o mmuhelp.o utab.o brz.o uarea.o seg.o usermem.o -o $@ -L$(LIBDIR) -lc
+	$(DISASM) -c $@ > $@.dis
+	$(NM) -n $@ > $@.nm
+
+# uintr forges a user-mode context (crt0u.o) and takes an external interrupt in it, linking the
+# kernel's real utab.o (sureg/physaddr) and brz.o (drainbrz) -- the from-user counterpart of
+# sctest, which enters extint from kernel mode.  See uintr.ini and crt0u.s.
+uintr:  crt0u.o uintr.o utab.o brz.o
+	$(LD) crt0u.o uintr.o utab.o brz.o -o $@ -L$(LIBDIR) -lc
 	$(DISASM) -c $@ > $@.dis
 	$(NM) -n $@ > $@.nm
 
