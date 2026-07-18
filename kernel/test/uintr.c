@@ -1,5 +1,5 @@
 /*
- * uintr -- exercise the corrected external-interrupt gate (kernel/besm6.S:extint) from USER
+ * uintr -- exercise the corrected external-interrupt gate (kernel/besm6.S:intrgate) from USER
  * mode, on the real machine.
  *
  * The gate must preserve the whole visible machine across a C interrupt handler and switch to
@@ -12,14 +12,14 @@
  *   1. sureg() builds a user map: uprog's own physical page at virtual page 0 (so the forged
  *      user runs mapped, executing the real code), two data pages at virtual 2-3, one stack.
  *   2. A sentinel is placed at virtual MODVAL, the address the forged M[16] modifier points at.
- *   3. Physical USPV (= the forged user r15) is seeded with KSENT: if extint fails to switch the
+ *   3. Physical USPV (= the forged user r15) is seeded with KSENT: if intrgate fails to switch the
  *      stack, extintr()'s frame lands there (r15 is a physical index once the trap forces БлП on)
  *      and overwrites it.
  *   4. The console "printing finished" interrupt is armed and kicked; we poll until it is
  *      pending (interrupts are still masked by БлПр in supervisor), then gouser() forges the
  *      four registers and `выпр's into user mode.  The pending interrupt fires at uprog's first
  *      instruction.
- *   5. extint saves/switches/handles/restores; uprog reads the four values back and traps out
+ *   5. intrgate saves/switches/handles/restores; uprog reads the four values back and traps out
  *      via `стоп' -> extracode э63 -> report(), which compares and halts.
  *
  * main() never returns; report() (crt0u.s) leaves the fault mask in the accumulator, and
@@ -74,10 +74,10 @@ void drainbrz(void);
 #define EXT_GRPSET 031U
 
 /*
- * The external interrupt handler, reached from crt0u.s's extint.  It only has to dismiss the
+ * The external interrupt handler, reached from crt0u.s's intrgate.  It only has to dismiss the
  * simulated interrupt so the machine leaves the handler -- but being ordinary C, it clobbers R
  * (the ABI exits NTR 3 / ω = logical), Y (the logical ops) and M[16] (the `nintr++' global
- * reach), which is exactly the state extint must have saved.  If extint drops any of those
+ * reach), which is exactly the state intrgate must have saved.  If intrgate drops any of those
  * saves, uprog sees the damage and report() flags it.
  */
 unsigned nintr; /* bumped through the compiler's `utc nintr' idiom -> clobbers M[16] */
@@ -127,8 +127,8 @@ int main()
     drainbrz();
 
     /*
-     * The stack-switch sentinel: seed physical USPV/USPV+1.  extint on the user r15 (switch
-     * missing) would overwrite it; extint on the kernel stack (switch present) leaves it.
+     * The stack-switch sentinel: seed physical USPV/USPV+1.  intrgate on the user r15 (switch
+     * missing) would overwrite it; intrgate on the kernel stack (switch present) leaves it.
      */
     *(volatile unsigned *)USPV       = KSENT;
     *(volatile unsigned *)(USPV + 1) = KSENT;

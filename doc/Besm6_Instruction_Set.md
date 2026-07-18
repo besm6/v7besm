@@ -210,7 +210,14 @@ without disturbing the suppress bits). See
 | **Logical** (bits 5–3 = 001) | XTA, STX, XTS, AAX, AEX, AOX, APX, AUX, ACX, ANX, ASX, ASN, STI, ITA, ITS, all extracodes (050–077, 020, 021) |
 | **Kept** (R unchanged) | ATX, ATI, MTJ, J+M, UTC, WTC, VTM, UTM, UJ, VJM, VZM, V1M, VLM, *36, STOP |
 | **As set by operand** | XTR sets R = X[47:42]; NTR sets R = EA[6:1] |
-| **Used** (reads R, then kept) | UZA, U1A, YTA, RTE |
+| **Used** (reads R, then kept) | UZA, U1A, YTA |
+| **Used, then set Logical** | RTE |
+
+RTE is the one instruction in both camps: it copies R into A's exponent field and *then*
+sets ω = logical (see [030 — RTE](#030--rte-счрж--read-mode-register-to-exponent), and
+`besm6_cpu.c` case `030`). Do not read the "Used" row as "leaves R alone" for it — a trap
+gate that saves R with `RTE` and then reads Y with `YTA` gets the logical-mode full copy of
+Y *because of* that side effect, not by luck.
 
 ### Normalization suppression (bit 1)
 

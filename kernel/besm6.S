@@ -39,7 +39,7 @@
 // read in the machine documentation.
 
 // Register indices used by the interrupt gate: SPSW the saved mode word, IRET the interrupt /
-// fault return address (М033 -- extint fills the frame's single RET slot from it), and MOD the C
+// fault return address (М033 -- intrgate fills the frame's single RET slot from it), and MOD the C
 // register M16 (the address modifier).  The bit masks (SPSW_EXTRACODE, SPSW_INTERRUPT, ...) come
 // from the shared header; only these register indices are local here, since they are
 // `ita'/`its'/`sti' operands.  (The extracode-return register М032/ERET is the syscall gate's job,
@@ -61,7 +61,7 @@ MOD  = 020                      // C register / address modifier (М020 = M16)
 
         .org 0500               // Vectors for exceptions and interrupts are at 0500
       : uj trapgate             // 0500: internal interrupt (a fault) -- see below
-      : uj extint               // 0501: external interrupt (ГРП) -- see below
+      : uj intrgate             // 0501: external interrupt (ГРП) -- see below
 
         .org 0550               // Vectors for extracodes start at 0550
       : uj badext               // 0550: extracode *50
@@ -91,7 +91,7 @@ MOD  = 020                      // C register / address modifier (М020 = M16)
       : uj badext               // 0576: extracode *76
       : uj syscall              // 0577: extracode *77 -- the syscall gate
 
-// Temp cells for the two asynchronous gates below -- `extint' (0501) and `trapgate' (0500).
+// Temp cells for the two asynchronous gates below -- `intrgate' (0501) and `trapgate' (0500).
 // ONE copy serves both, and that is not an oversight:
 //   * A cell is live only across a gate's prologue and its epilogue; in between (while the C
 //     handler runs) the values already sit in the frame and the cells are dead.
@@ -109,6 +109,22 @@ MOD  = 020                      // C register / address modifier (М020 = M16)
 // nicety: a `< sym >' escape emits a `мода'/`utc' that loads M[16], so an escape ahead of the
 // M[16] save would overwrite the very C register being saved.  The kernel's own data (bss) links
 // far above 07777 and needs the escape; these cells do not.
+//
+// The ORDER of the five spills is a contract, not a style choice.  Two constraints fix it:
+//
+//   * `yta' copies Y into A ONLY in ω = logical mode.  In any other ω it merges Y into A's
+//     mantissa and adjusts the exponent instead (doc/Besm6_Instruction_Set.md, 031 YTA), so a
+//     gate that reads Y while the interrupted user happened to be in additive or multiplicative
+//     mode saves garbage and restores garbage.  The interrupted ω is the USER's and can be
+//     anything, so something must force logical before the `yta'.  The `rte' that saves R does
+//     it: RTE reads R into A's exponent field and *then* sets ω = logical (030 RTE, "ω mode:
+//     Logical").  That is why R must be saved before Y, and why nothing that changes ω may be
+//     inserted between the two.  (The summary table in Besm6_Instruction_Set used to file RTE
+//     under "reads R, then kept", which hides this; it now names the side effect explicitly.)
+//   * The M16 spill must come BEFORE the stack switch: `[ustkbase]' assembles to a `wtc', which
+//     loads M16 (see the escape note above), and a label's alignment filler in text is a `utc',
+//     which loads it as well.  Anything that reaches M16 after the spill is harmless; anything
+//     that reaches it before would have us frame the wrong value.
 //
 // Only FIVE cells, not the whole machine.  Each gate saves the interrupted context into the
 // canonical reg.h frame (0 A, 1 R, 2 Y, 3 RET, 4 SPSW, 5 M16, 6 M15 ... 20 M1) built on
@@ -201,11 +217,11 @@ badext: stop    076              // TODO: an extracode we do not implement
 // epilogue `intret' below, which pops the frame and `выпр's (`3 ij', through М033 = IRET).
 //
 // A fault is asynchronous with respect to the register set -- it can land on any instruction --
-// so the prologue and the FULSAV fill are `extint's, instruction for instruction; the header over
-// `extint' is the authority for every step of them, and for why R, Y, M[16] and M15 must be saved
+// so the prologue and the FULSAV fill are `intrgate's, instruction for instruction; the header over
+// `intrgate' is the authority for every step of them, and for why R, Y, M[16] and M15 must be saved
 // by hand.  Only three things differ:
 //
-//   * THE STACK SWITCH IS UNCONDITIONAL.  `extint' switches M15 only when the interrupted context
+//   * THE STACK SWITCH IS UNCONDITIONAL.  `intrgate' switches M15 only when the interrupted context
 //     was user (СПСВ & 014 == 0), because an external interrupt legitimately nests inside the
 //     kernel and must not have the stack pulled out from under the interrupted C frame.  A FAULT
 //     from supervisor is a different animal: the user-access family validates its range up front
@@ -235,10 +251,10 @@ badext: stop    076              // TODO: an extracode we do not implement
 //     because the frame is aliased in place and two lines of C beat eight of branchy assembly.
 //
 // The gate does NOT point u.u_ar0 at the frame; trap() does that itself, in C, from the pointer
-// (`u.u_ar0 = (int *)tr'), for the same reason `extint' leaves it alone: doing it here would need a
+// (`u.u_ar0 = (int *)tr'), for the same reason `intrgate' leaves it alone: doing it here would need a
 // hardcoded u_ar0 offset for no runtime benefit.
 //
-// The same gate, duplicated for the same reason as `extint's copy, is exercised standalone against
+// The same gate, duplicated for the same reason as `intrgate's copy, is exercised standalone against
 // SIMH by kernel/test/crt0t.S + utrap.c, which forges user-mode entry, faults on a closed page and
 // checks that the faulting instruction re-executes after the map is opened.
 
@@ -246,19 +262,19 @@ badext: stop    076              // TODO: an extracode we do not implement
 trapgate:
         // --- short save: the five registers the FULSAV pipeline cannot reach ---
         atx     save_a              // A first, as the vector does (frees A as scratch)
-        rte     07777               // R   -> A
+        rte     07777               // R -> A
         atx     save_r
-        yta                         // Y   -> A
+        yta                         // Y -> A -- a full copy only because `rte' left ω = logical
         atx     save_y
-        ita     MOD                 // M16 (C register) -> A -- before the vtm below, whose utc for
-        atx     save_c              //   a long address would clobber M16
+        ita     MOD                 // M16 (C register) -> A -- must precede the stack switch,
+        atx     save_c              //   whose `[ustkbase]' escape is a `wtc' that loads M16
         ita     15                  // interrupted M15 -> A -- before the stack switch repoints it
         atx     save_sp
 
         // --- stack switch: unconditional (see the header) ---
      15 vtm     [ustkbase]          // M15 := kernel stack base (~076214) = frame base F
 
-        // --- fill the reg.h frame at [M15 ..] -- `extint's pipeline verbatim ---
+        // --- fill the reg.h frame at [M15 ..] -- `intrgate's pipeline verbatim ---
         xta     save_a
         xts     save_r              // frame[0]  := A     ; A := R
         xts     save_y              // frame[1]  := R     ; A := Y
@@ -293,7 +309,7 @@ trapgate:
      14 vtm     -1                  // argument count, negative
      13 vjm     trap                // trap.c: back up the PC, decode ГРП, signal or grow
 
-        uj      intret              // the shared epilogue in `extint' below
+        uj      intret              // the shared epilogue in `intrgate' below
 
 // ============================================================================
 // External interrupt entry
@@ -347,21 +363,21 @@ trapgate:
 // but u_ar0 is left to the C handler that first needs it.
 //
 // Interrupts stay blocked throughout (the hardware sets БлПр on entry, and `выпр` restores the
-// mode word from SPSW on the way out), so one set of temp cells is safe -- extint cannot re-enter.
+// mode word from SPSW on the way out), so one set of temp cells is safe -- intrgate cannot re-enter.
 //
 // The same gate, and the reasoning behind it, is exercised standalone against SIMH by
 // kernel/test/crt0u.s + uintr.c, which forges user-mode entry so the stack switch is tested.
 
-        .globl  extint
-extint:
+        .globl  intrgate
+intrgate:
         // --- short save: the five sensitive registers ---
         atx     save_a              // A first, as the vector does (frees A as scratch)
-        rte     07777               // R   -> A
+        rte     07777               // R -> A
         atx     save_r
-        yta                         // Y   -> A
+        yta                         // Y -> A -- a full copy only because `rte' left ω = logical
         atx     save_y
-        ita     MOD                 // M16 (C register) -> A -- before the u1a/vtm, whose utc for
-        atx     save_c              //   a long address would clobber M16
+        ita     MOD                 // M16 (C register) -> A -- must precede the stack switch,
+        atx     save_c              //   whose `[ustkbase]' escape is a `wtc' that loads M16
         ita     15                  // interrupted M15 -> A -- before the stack switch repoints it
         atx     save_sp
 
@@ -525,7 +541,7 @@ idle:
 // The arithmetic mode, however, does NOT ride in SPSW across a trap: SPSW carries only
 // БлП/БлЗ/БлПр and the supervisor bits.  The ω-mode and the NTR suppress bits live in the
 // mode register R, which the hardware neither saves nor restores; the trap gate saves R by
-// hand (see extint above, and doc/Context_Switch.md §14).
+// hand (see intrgate above, and doc/Context_Switch.md §14).
 
 // ============================================================================
 // Execution profiling

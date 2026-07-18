@@ -2,7 +2,7 @@
 // crt0t.s -- forge-entry startup for the from-USER-mode FAULT test (utrap).
 //
 // The sibling of crt0u.s: same Dubna SELECT-style forge into user mode, but pointed at the
-// other asynchronous door.  Where uintr takes an EXTERNAL interrupt (0501 -> extint), this
+// other asynchronous door.  Where uintr takes an EXTERNAL interrupt (0501 -> intrgate), this
 // test takes an INTERNAL one -- a data-protection fault on a closed page (0500 -> trapgate)
 // -- which is the door task 15c builds.
 //
@@ -150,10 +150,10 @@ uprog:
 
 // ----------------------------------------------------------------------------
 // The fault gate -- a copy of kernel/besm6.S:trapgate, with the shared epilogue (`intret',
-// which lives in extint over there) spliced in behind it.
+// which lives in intrgate over there) spliced in behind it.
 // ----------------------------------------------------------------------------
 // besm6.o cannot enter a standalone test (its vectors reach into the C kernel and its _start
-// seeds no stack), so the gate is duplicated here, exactly as crt0u.S duplicates extint.  Keep
+// seeds no stack), so the gate is duplicated here, exactly as crt0u.S duplicates intrgate.  Keep
 // it identical in LOGIC to kernel/besm6.S; that file's headers and doc/Context_Switch.md
 // §4/§6/§7/§14 are the authority for every step.
 //
@@ -165,10 +165,10 @@ trapgate:
         atx     save_a          // A first, as the vector does
         rte     07777           // R   -> A
         atx     save_r
-        yta                     // Y   -> A
+        yta                     // Y -> A -- a full copy only because `rte' left ω = logical
         atx     save_y
-        ita     MOD             // M16 (C register) -> A -- before the vtm below, whose utc
-        atx     save_c          //   for a long address would clobber M16
+        ita     MOD             // M16 (C register) -> A -- must precede the stack switch,
+        atx     save_c          //   whose `[ustkbase]' escape is a `wtc' that loads M16
         ita     15              // interrupted M15 -> A -- before the stack switch repoints it
         atx     save_sp
 

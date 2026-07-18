@@ -2,11 +2,11 @@
 // crt0u.s -- forge-entry startup for the from-USER-mode interrupt test (uintr).
 //
 // crt0.s brings the machine up and runs main() in supervisor (kernel) mode, which is enough
-// for sctest/mmutest but useless for testing besm6.S's `extint' stack switch: an interrupt
+// for sctest/mmutest but useless for testing besm6.S's `intrgate' stack switch: an interrupt
 // taken in kernel mode does NOT switch the stack, so the one gap that matters would go
 // unexercised.  This crt0 instead forges a real USER-mode context -- a Dubna SELECT-style
 // gate (doc/Context_Switch.md §8): forge IRET + СПСВ and `выпр' into user -- so the coming
-// external interrupt lands with СПСВ & 014 == 0 and exercises the full corrected `extint'.
+// external interrupt lands with СПСВ & 014 == 0 and exercises the full corrected `intrgate'.
 //
 // The pieces:
 //   * main() (uintr.c) programs a user map with sureg(), arms the console interrupt, polls
@@ -14,7 +14,7 @@
 //   * gouser() forges the four registers whose preservation is under test (R, Y (РМР), M[16] (M[020]),
 //     r15) and `выпр's into the user program uprog at virtual page 0.
 //   * The pending console interrupt fires at uprog's first instruction; the hardware vectors
-//     to 0501 -> the corrected `extint', which saves the full async machine, switches to the
+//     to 0501 -> the corrected `intrgate', which saves the full async machine, switches to the
 //     kernel stack, runs extintr(), restores, and `выпр's back into uprog.
 //   * uprog reads back R, Y, the modifier-armed word and r15 into r8-r11 and `stop's; in
 //     user mode `стоп' is re-dispatched as extracode э63 -> vector 0563 -> report().
@@ -81,7 +81,7 @@ VSLOT3  = 04023                 // r15
         .const
         .org 0500
         uj      report          // 0500: internal interrupt -- uprog's deliberate data fault
-      : uj      extint          // 0501: external interrupt (ГРП)
+      : uj      intrgate          // 0501: external interrupt (ГРП)
         .org PGSZ               // pad the const page so .text starts in physical page >= 1
 
 // ----------------------------------------------------------------------------
@@ -123,7 +123,7 @@ gouser:
 // values into r8-r11, and traps out with a data-protection fault.  report() does all the
 // comparing, unmapped.
 //
-// The interrupt is pending at entry, so it fires BEFORE this first instruction; `extint' handles
+// The interrupt is pending at entry, so it fires BEFORE this first instruction; `intrgate' handles
 // it and `выпр's back here with the modifier re-armed.  The first `xta 0' is therefore modified by
 // the preserved M[16] and reads virtual MODVAL.
 // The four reads must precede any logical op (which would clobber Y) and any ω-change: `xta',
@@ -199,7 +199,7 @@ rpok:   ita     016             // A := the fault mask
         uj      report
 
 // ----------------------------------------------------------------------------
-// The corrected external-interrupt gate -- a copy of kernel/besm6.S:extint.
+// The corrected external-interrupt gate -- a copy of kernel/besm6.S:intrgate.
 // ----------------------------------------------------------------------------
 // besm6.o cannot enter a standalone test (its 0500 vector reaches into the C kernel and its
 // _start seeds no stack), so the gate is duplicated here, as crt0.s already duplicates the old
@@ -218,16 +218,16 @@ rpok:   ita     016             // A := the fault mask
 // the kernel stack, but ONLY when the interrupt came from user mode (СПСВ & 014 == 0).  Restores by
 // the inverse stx/sti pop of the whole frame, applying old M15/Y/A/R last in the forced order
 // Y -> A -> R (§7).  The register indices SPSW/IRET/MOD are defined at the top, matching kernel/besm6.S.
-        .globl  extint
-extint:
+        .globl  intrgate
+intrgate:
         // --- short save: the five registers the FULSAV pipeline cannot reach ---
         atx     save_a          // A first, as the vector does
         rte     07777           // R   -> A
         atx     save_r
-        yta                     // Y   -> A
+        yta                     // Y -> A -- a full copy only because `rte' left ω = logical
         atx     save_y
-        ita     MOD             // M16 (C register) -> A -- before the u1a/vtm utc below
-        atx     save_c
+        ita     MOD             // M16 (C register) -> A -- must precede the stack switch,
+        atx     save_c          //   whose `[ustkbase]' escape is a `wtc' that loads M16
         ita     15              // interrupted M15 -> A -- before the stack switch repoints it
         atx     save_sp
 
@@ -302,7 +302,7 @@ extk:                           // M15 = frame base F (ustkbase, or the interrup
 
 // ----------------------------------------------------------------------------
         .data
-// ustkbase holds the kernel stack base for extint's switch, exactly as machdep.c does for the
+// ustkbase holds the kernel stack base for intrgate's switch, exactly as machdep.c does for the
 // real kernel.  [ustkbase] loads its CONTENTS (the address of kstack).
         .globl  ustkbase
 ustkbase: .word kstack
@@ -314,7 +314,7 @@ ustkbase: .word kstack
 uprogadr: .word uprog
 
         .bss
-// The extint temp cells (see the gate above).  In .bss, but it links low so the gate reaches
+// The intrgate temp cells (see the gate above).  In .bss, but it links low so the gate reaches
 // them with a bare `atx save_a' -- an escape would clobber M[16] mid-save.
 save_a:  . = . + 1
 save_r:  . = . + 1
@@ -322,6 +322,6 @@ save_y:  . = . + 1
 save_c:  . = . + 1
 save_sp: . = . + 1
 
-// The kernel stack _start seeds and extint switches to.  The label is the low end; the stack
+// The kernel stack _start seeds and intrgate switches to.  The label is the low end; the stack
 // grows up into the reservation.  Well clear of USPV = 074000.
 kstack: . = . + 256

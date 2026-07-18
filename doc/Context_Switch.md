@@ -1005,7 +1005,7 @@ the *pending* semantics are carried entirely by СПСВ's `SPSW_MOD_RK`.
 
 ### The finding: we are not saving R or Y
 
-[`kernel/besm6.S:205-238`](../kernel/besm6.S#L205-L238) — the `extint` stub — saves the accumulator
+[`kernel/besm6.S:205-238`](../kernel/besm6.S#L205-L238) — the `intrgate` stub — saves the accumulator
 and r8–r14. It does **not** save the mode register R, and it does **not** save Y. Dubna saves both
 on every single interrupt (`RTE`/`XTR` for R, `YTA` + the `AEX` side-effect for Y), and it is not
 being fussy:
@@ -1023,7 +1023,7 @@ The fix mirrors §4 and §7, and the **order in the epilogue is not negotiable**
 reasons in §7):
 
 ```
-extint: atx     sa                  // A first, as the vector does
+intrgate: atx     sa                  // A first, as the vector does
         rte     07777               // R -> A
         atx     sr
         yta                         // Y -> A
@@ -1046,7 +1046,7 @@ belongs with task 15 in [`kernel/TODO.md`](../kernel/TODO.md).
 The same stub does not save `M[16]` either, and by §13 that is the C register. The race is narrow
 but real. A device interrupt can land in the one-instruction window between a user `utc` and the
 instruction it modifies. The trap parks `SPSW_MOD_RK` in СПСВ and leaves the value in `M[16]`, both
-of which `extint` preserves *by accident* — it never touches СПСВ, and it does not read `M[16]`. But
+of which `intrgate` preserves *by accident* — it never touches СПСВ, and it does not read `M[16]`. But
 `extintr()` is C, and the compiler's idiom for a global is `utc name` + bare load
 ([Besm6_Instruction_Set.md:144-149](Besm6_Instruction_Set.md#L144-L149)), so the handler **overwrites
 `M[16]`**. The closing `3 ij` then re-arms from the clobbered value (§13), and the resumed user
@@ -1056,7 +1056,7 @@ The fix is the §13 idiom — read register 020 into a save cell on entry, along
 put it back with `ati 020` before `3 ij` (a plain move, which does not arm — §13):
 
 ```
-extint: atx     sa
+intrgate: atx     sa
         ...                         // R, Y as above; r8-r14 as today
         ita     020                 // C register -> A
         atx     sc
@@ -1070,7 +1070,7 @@ extint: atx     sa
 Recorded, not applied. The positive corollary is the §13 point restated for our side: once the trap
 frame and `save()`/`resume()` (tasks 15/16) save the **full** register file *and* СПСВ, a pending
 `utc` is preserved with no code that mentions it — exactly as Dubna's `FULSAV`/`BOCИПД` get it. The
-gap exists only in `extint`, which saves a *subset* of the registers.
+gap exists only in `intrgate`, which saves a *subset* of the registers.
 
 ### The stack is a fourth gap
 
@@ -1082,7 +1082,7 @@ The PDP-11 v7 that Unix came from switched to the kernel stack for free: SP is b
 mode, so a trap from user mode lands with SP already pointing at the per-process kernel stack. **The
 BESM-6 has one stack register, М15, shared across modes.** Dubna solves this in the §4 prologue — `ITA
 15` / `15,VTM,SAVI15` saves the interrupted М15 and repoints it at `SMASAV`, so the handler runs on a
-supervisor scratch, not on whatever the interrupted code was using. `extint` does neither: it never
+supervisor scratch, not on whatever the interrupted code was using. `intrgate` does neither: it never
 touches r15 and relies on the note at [`besm6.S:183-186`](../kernel/besm6.S#L183) that "extintr()
 preserves r1–r7 and r15 for us (that is the ABI)."
 
@@ -1101,12 +1101,12 @@ supervisor mode"), so `СПСВ & 014` (РежЭ | РежПр) is zero **iff** t
 Test the supervisor bits, **not** БлП: `copyin`/`copyout` clear БлП while staying in supervisor mode,
 so a БлП test would misclassify a fault taken mid-`copyin` and reset r15 out from under the syscall.
 
-The corrected `extint`, folding in all four gaps (R, Y, M[16], and the stack) — the register save/
+The corrected `intrgate`, folding in all four gaps (R, Y, M[16], and the stack) — the register save/
 restore order is the §7 rule, the r15 and C-register restores go before the final `xta sa` because they
 clobber A, and the two `выпр`-doesn't-reload registers (r8–r14, r15) are put back by hand:
 
 ```
-extint: atx     sa                  // A first, as the vector does
+intrgate: atx     sa                  // A first, as the vector does
         rte     07777               // R   -> A
         atx     sr
         yta                         // Y -> A
@@ -1167,7 +1167,7 @@ Recorded, not applied, like the three above; it belongs with task 15.
   check — is worth having on its own.
 - **The two-tier save** (§4, §6). Most interrupts never park a task, so the prologue saves the
   minimum and the full 24-word context is materialised only when the scheduler actually needs it.
-  Our `extint` already has this shape; it just needs R, Y and the C register (§13) added to the
+  Our `intrgate` already has this shape; it just needs R, Y and the C register (§13) added to the
   short tier.
 - **The internal/external clear asymmetry** (§5). Faults are not queued — clear them all; device
   interrupts are — clear one.

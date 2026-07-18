@@ -339,7 +339,7 @@ populating). To debug later; it is not a `_start`/boot defect.
 
 **15. Trap / extracode / interrupt entry and exit (`besm6.S`, `include/sys/reg.h`, `trap.c`).** The
 entry is *not* the map-free one-liner an earlier draft of this task claimed, and the one door that is
-written — `extint` — inherits that mistake. No map switch and no БРЗ drain, true (the hardware's
+written — `intrgate` — inherits that mistake. No map switch and no БРЗ drain, true (the hardware's
 forced БлП/БлЗ is already the kernel's mode); but there are **three doors with two save disciplines**,
 and the async ones must preserve more of the machine than the ABI's callee-saved set. Read
 [../doc/Context_Switch.md](../doc/Context_Switch.md) first — §4/§7/§8/§9/§13/§14 are the authority for
@@ -348,7 +348,7 @@ everything below — and use `intr.c`'s `extintr()` as the model of a C handler 
 This work is split into five sub-tasks, done in order; each leaves the tree building
 (`cd kernel && make`). Four facts cut across all of them:
 
-- **Async vs. synchronous.** An external interrupt (`0501`→`extint`) and an internal fault
+- **Async vs. synchronous.** An external interrupt (`0501`→`intrgate`) and an internal fault
   (`0500`→`trap`) land between arbitrary instructions, so the interrupted code owns *every* register
   and the stub must save the full visible machine the C handler can touch. An extracode
   (`0577`→`syscall`, `0550`–`0576`→`badext`) is a synchronous *call*: the caller owns its live
@@ -368,7 +368,7 @@ This work is split into five sub-tasks, done in order; each leaves the tree buil
   syscall's frame. Why it bites: the trap forces БлП *on*, so a user r15 (exec seeds it at `070000`,
   growing up — task 17) is now an **unmapped physical** word index pointing *into the kernel image below
   the u-area*; run a C handler on it and it silently corrupts the kernel. `trap`/`syscall` get the switch
-  implicitly the moment they "build the frame on the kernel stack"; `extint` calls `extintr()` with no
+  implicitly the moment they "build the frame on the kernel stack"; `intrgate` calls `extintr()` with no
   frame step, so it must do the switch explicitly.
 
 - **One exit, three doors.** An extracode returns via ERET (`2 ij`), an interrupt/fault via IRET
@@ -389,7 +389,7 @@ cannot stand in. Task 16's real entry-to-user (`resume()`/SELECT-forge) does not
 forge IRET+СПСВ, `выпр` into user) and programs a user map with the `mmuhelp`/`sureg` machinery
 `mmutest` already links. That harness is reused by 15c and 15d.
 
-**15a. `extint`: save the interrupted context into the reg.h frame, and switch the stack. DONE**, and
+**15a. `intrgate`: save the interrupted context into the reg.h frame, and switch the stack. DONE**, and
 a from-user test (`kernel/test/uintr`) takes an external interrupt in forged user mode and confirms
 R, Y (РМР), M[16] (M[020]) and r15 all survive it, on the real machine. The gate goes **beyond** the
 §14 subset sketch below: it builds the full canonical reg.h frame (§2 — `0 A · 1 R · 2 Y · 3 IRET ·
@@ -406,7 +406,7 @@ exactly the frame the trap/syscall gates (15c/15d) and `resume()` (16) will read
   `save_m15` (the pipeline's own stack pointer, repointed by the switch). The restore is the exact
   inverse pop; the spec-register reloads (`sti 027`/`032`/`033`) are no-ops — extintr never touched
   M027/M032/M033 — but keep it symmetric.
-- **`besm6.S`'s `extint` is bare-addressed, not escaped.** The five cells are in `.const`/`.text` (they
+- **`besm6.S`'s `intrgate` is bare-addressed, not escaped.** The five cells are in `.const`/`.text` (they
   link at `~0700`, under the 12-bit short-address field), so `atx save_a` reaches them directly. This
   is load-bearing, not a nicety: a `< sym >` escape emits a `мода`/`utc` that loads M[16], so an escape
   ahead of the `ita 16` M[16] **save** would overwrite the very C register the gate is saving.
@@ -437,10 +437,10 @@ exactly the frame the trap/syscall gates (15c/15d) and `resume()` (16) will read
   would truncate SENT / R‹‹41 / Y. `uprog` stores each full-width to its mapped data page; `report()`
   reads them back through the still-loaded map and the physical stack-switch sentinel unmapped.
 - **The stack-switch discriminator** seeds physical `074000` (= the forged user r15) with a sentinel:
-  if `extint` fails to switch, `extintr()`'s frame — БлП forced on, so r15 is a physical index — lands
+  if `intrgate` fails to switch, `extintr()`'s frame — БлП forced on, so r15 is a physical index — lands
   there and overwrites it. `report()` catches that (bit `020`). **Bite-tested:** dropping the switch
   yields ACC `020`, dropping the `xtr save_r` restore yields ACC `2`.
-- **No `set mmu cache`.** `extint` programs no page registers, so the БРЗ hazard mmutest chases is not
+- **No `set mmu cache`.** `intrgate` programs no page registers, so the БРЗ hazard mmutest chases is not
   in play here; the run stays simple.
 
 The original four gaps, for the record — each confirmed against SIMH and Dubna
@@ -457,7 +457,7 @@ The original four gaps, for the record — each confirmed against SIMH and Dubna
     which overwrites M[16]; the interrupted user's `SPSW_MOD_RK` still rides in СПСВ, so the closing
     `3 ij` re-arms the modifier from the clobbered value and mis-modifies the resumed instruction
     (Context_Switch.md §13).
-  - **The stack** (the shared "r15 is not banked" fact above): `extint` calls `extintr()` with no
+  - **The stack** (the shared "r15 is not banked" fact above): `intrgate` calls `extintr()` with no
     frame step, so it must do the r15 switch explicitly, gated on `СПСВ & 014 == 0`.
 
   *Implemented (superseding the flat-subset sketch this paragraph used to hold):* instead of extending
@@ -518,8 +518,8 @@ page in bits 5–9 → `grow()` or SIGSEG; bit 14 = instruction protection; bit 
 bit 15 = check) instead of x86 vector numbers.
 - **Done when** (done-when *b*): a from-user test's data-protection fault (touching a closed page) grows
   the stack or signals.
-- **Done.** `0500` now vectors at `trapgate` (`besm6.S`), which is `extint`'s prologue and FULSAV fill
-  instruction for instruction, calls `trap(struct trap *)`, and leaves through **`extint`'s epilogue,
+- **Done.** `0500` now vectors at `trapgate` (`besm6.S`), which is `intrgate`'s prologue and FULSAV fill
+  instruction for instruction, calls `trap(struct trap *)`, and leaves through **`intrgate`'s epilogue,
   reused as-is** — the restore block carries the label `intret` and `trapgate` ends `uj intret`. How it
   turned out:
   - **`trap()` takes a POINTER, superseding 15b's "struct trap stays by value"** (annotated there).

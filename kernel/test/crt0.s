@@ -29,7 +29,7 @@
         .const
         . = . - 010 + 0500
         uj      fault           // 0500: internal interrupt
-      : uj      extint          // 0501: external interrupt (ГРП)
+      : uj      intrgate          // 0501: external interrupt (ГРП)
 
         .text
         .globl  _start
@@ -50,7 +50,7 @@ fault:  stop    07777
         uj      fault
 
 // ----------------------------------------------------------------------------
-// extint -- external interrupt entry, calls extintr() in C
+// intrgate -- external interrupt entry, calls extintr() in C
 // ----------------------------------------------------------------------------
 // An interrupt is asynchronous, so the C calling convention's callee-saved set is
 // not enough: the interrupted code owns every register.  extintr() preserves r1-r7
@@ -68,7 +68,8 @@ fault:  stop    07777
 // kernel's copy of this stub needs them (its bss links at 060052) and the two are meant
 // to stay identical.  See kernel/besm6.S.
 
-extint: atx     <sa>            // save the accumulator
+intrgate:
+        atx     <sa>            // save the accumulator
         ita     010             // ...and r8-r14, which the C call may clobber
         atx     <s8>
         ita     011
