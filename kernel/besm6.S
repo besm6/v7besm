@@ -34,15 +34,19 @@
 // valid no-op functions: value-returning stubs clear A with a bare `xta`, pop any
 // pushed arguments, then `13 uj`.
 
-// Number base: index-register operands (r8..r16, incl. M16 = the C register) are
-// written in DECIMAL; bit masks and machine-register addresses (027 = СПСВ) stay
-// OCTAL, as they read in the machine documentation.
+// Number base: index-register operands (r1..r15) are written in DECIMAL; bit masks and the
+// machine-register addresses (027 = SPSW, 020 = MOD = the C register M16) stay OCTAL, as they
+// read in the machine documentation.
 
-// СПСВ, the saved program status / mode word.  The bit masks (SPSW_EXTRACODE,
-// SPSW_INTERRUPT, ...) come from the shared header; only the register index is
-// local here, since it is the operand of `ita SPSW'.
+// Register indices used by the interrupt gate: SPSW the saved mode word, ERET the extracode
+// return address, IRET the interrupt / fault return address, and MOD the C register M16 (the
+// address modifier).  The bit masks (SPSW_EXTRACODE, SPSW_INTERRUPT, ...) come from the shared
+// header; only these register indices are local here, since they are `ita'/`its'/`sti' operands.
 #include "sys/besm6dev.h"
-SPSW = 027
+SPSW = 027                      // saved mode word (М027)
+ERET = 032                      // extracode return address (М032)
+IRET = 033                      // interrupt / fault return address (М033)
+MOD  = 020                      // C register / address modifier (М020 = M16)
 
 // The vectors below must land on their physical addresses, so this segment is laid
 // out by absolute address with `.org'.  The origins hold only as long as the const
@@ -97,20 +101,20 @@ SPSW = 027
 // far above 07777 and needs the escape; these cells do not.
 //
 // Only FIVE cells, not the whole machine.  extint saves the interrupted context into the
-// canonical reg.h frame (0 A, 1 R, 2 Y, 3 ИРЕТ, 4 ЭРЕТ, 5 СПСВ, 6 M16, 7 M15 ... 21 M1) built on
+// canonical reg.h frame (0 A, 1 R, 2 Y, 3 IRET, 4 ERET, 5 SPSW, 6 M16, 7 M15 ... 21 M1) built on
 // the kernel stack, filled by the Dubna FULSAV pipeline of `xts'/`its' (doc/Context_Switch.md
-// §6).  That pipeline reaches M1-M14 and ИРЕТ/ЭРЕТ/СПСВ *live* -- it runs before `13 vjm extintr'
+// §6).  That pipeline reaches M1-M14 and IRET/ERET/SPSW *live* -- it runs before `13 vjm extintr'
 // clobbers anything -- so those need no cell.  The five below are the ones the pipeline cannot
 // reach: A (it is the pipeline register), R and Y (only `rte'/`yta' read them, destroying A), the
 // C register M16 (must be spilled before the stack-switch `u1a'/`vtm', whose utc for a long
 // address would clobber it), and the interrupted M15 (the pipeline's own stack pointer, repointed
 // by the switch).  See the gate and doc/Context_Switch.md §4/§14.
         .text
-save_a:   .word 0               // A
-save_r:   .word 0               // R   -- ALU mode (ω + the NTR suppress bits)
-save_y:   .word 0               // Y (РМР) -- younger-bits register
-save_m16: .word 0               // M16 -- the C register / address modifier
-save_m15: .word 0               // interrupted M15 (the stack pointer)
+save_a:  .word 0                // A
+save_r:  .word 0                // R   -- ALU mode (ω + the NTR suppress bits)
+save_y:  .word 0                // Y (РМР) -- younger-bits register
+save_c:  .word 0                // M16 -- the C register / address modifier
+save_sp: .word 0                // interrupted M15 (the stack pointer)
 
 // ============================================================================
 // Kernel entry point
@@ -166,7 +170,7 @@ bhalt:  stop                        // main returned / faulted upstream: resumab
 // rather than jump into C with no frame under them.
 //
 // TODO (task 15): build the trap frame, point u.u_ar0 at it, call the C syscall
-// dispatcher, restore, and return with `2 ij' (выпр through ЭРЕТ, not ИРЕТ).
+// dispatcher, restore, and return with `2 ij' (выпр through ERET, not IRET).
 
         .globl  syscall
 syscall: stop   077              // TODO: the syscall gate (extracode э77)
@@ -205,13 +209,13 @@ badext: stop    076              // TODO: an extracode we do not implement
 // save, §6 the FULSAV fill pipeline, §7 the forced restore order, §14 the four gaps below.
 //
 // An interrupt is asynchronous, so the calling convention's callee-saved set is not enough --
-// the interrupted code owns EVERY register.  The hardware saves the interrupted PC in ИРЕТ
-// (M[033]) and `выпр` restores the mode word from СПСВ (M[027]); everything else that
+// the interrupted code owns EVERY register.  The hardware saves the interrupted PC in IRET
+// (M[033]) and `выпр` restores the mode word from SPSW (M[027]); everything else that
 // extintr() can touch is on us.  So the gate builds the full 22-word reg.h frame
-//   0 A | 1 R | 2 Y | 3 ИРЕТ | 4 ЭРЕТ | 5 СПСВ | 6 M16 | 7 M15 | 8 M14 ... 21 M1
+//   0 A | 1 R | 2 Y | 3 IRET | 4 ERET | 5 SPSW | 6 M16 | 7 M15 | 8 M14 ... 21 M1
 // with the Dubna FULSAV `xts'/`its' pipeline (§6): one store-and-load per word, the accumulator
 // the pipeline register, M15 the frame pointer.  Because the fill runs BEFORE `13 vjm extintr',
-// M1-M14 and ИРЕТ/ЭРЕТ/СПСВ are still live and go straight into the frame; only A, R, Y, M16 and
+// M1-M14 and IRET/ERET/SPSW are still live and go straight into the frame; only A, R, Y, M16 and
 // the interrupted M15 are spilled to the five temp cells first (see the cells above for why each).
 //
 // Four of those saves are the §14 gaps the old subset gate got wrong, and all four still matter:
@@ -222,7 +226,7 @@ badext: stop    076              // TODO: an extracode we do not implement
 //   * Y   -- any logical op (и/слц/сл) overwrites it, and the interrupted user may hold it live.
 //   * M[16]  (the C register / address modifier) -- extintr() reaches globals with the
 //            compiler's `utc name'+load idiom, clobbering it.  When a device interrupt lands in
-//            the one-instruction window after a user `utc', СПСВ carries SPSW_MOD_RK and the
+//            the one-instruction window after a user `utc', SPSW carries SPSW_MOD_RK and the
 //            closing `3 ij` re-arms the modifier -- from the clobbered value unless we save it
 //            (doc/Context_Switch.md §13).  `ita`/`ati 16` move it as a plain register and do
 //            NOT arm the modifier, so saving/restoring the value is all that is needed.  It is
@@ -233,7 +237,7 @@ badext: stop    076              // TODO: an extracode we do not implement
 //            below the u-area; run extintr()'s C frame on it and it silently corrupts the
 //            kernel.  So repoint M15 at the kernel stack -- but ONLY from user, or a fault taken
 //            mid-copyin (supervisor, БлП clear) would reset M15 out from under the syscall frame.
-//            The signal is `СПСВ & 014' (РежЭ|РежПр = RUU_EXTRACODE|RUU_INTERRUPT): zero IFF the
+//            The signal is `SPSW & 014' (РежЭ|РежПр = RUU_EXTRACODE|RUU_INTERRUPT): zero IFF the
 //            interrupted context was user.  Test that, not БлП (Memory_Mapping.md, "Entering and
 //            leaving supervisor mode").  There is one kernel stack (the u-area is one fixed
 //            physical page), so the switch is the constant load `_start` already uses -- and the
@@ -246,7 +250,7 @@ badext: stop    076              // TODO: an extracode we do not implement
 // but u_ar0 is left to the C handler that first needs it.
 //
 // Interrupts stay blocked throughout (the hardware sets БлПр on entry, and `выпр` restores the
-// mode word from СПСВ on the way out), so one set of temp cells is safe -- extint cannot re-enter.
+// mode word from SPSW on the way out), so one set of temp cells is safe -- extint cannot re-enter.
 //
 // The same gate, and the reasoning behind it, is exercised standalone against SIMH by
 // kernel/test/crt0u.s + uintr.c, which forges user-mode entry so the stack switch is tested.
@@ -259,28 +263,28 @@ extint:
         atx     save_r
         yta                         // Y   -> A
         atx     save_y
-        ita     16                  // M16 (C register) -> A -- before the u1a/vtm, whose utc for
-        atx     save_m16            //   a long address would clobber M16
+        ita     MOD                 // M16 (C register) -> A -- before the u1a/vtm, whose utc for
+        atx     save_c              //   a long address would clobber M16
         ita     15                  // interrupted M15 -> A -- before the stack switch repoints it
-        atx     save_m15
+        atx     save_sp
 
         // --- stack switch: repoint M15 at the kernel stack ONLY when interrupted from user ---
-        ita     SPSW                // СПСВ -> A
+        ita     SPSW                // SPSW -> A
         aax     #(SPSW_INTERRUPT | SPSW_EXTRACODE)
         u1a     extk                // РежЭ|РежПр set -> nested in the kernel: keep M15
      15 vtm     [ustkbase]          // zero -> from user: M15 := kernel stack base (~076214)
 extk:                               // M15 = frame base F (ustkbase, or the interrupted kernel SP)
 
         // --- fill the reg.h frame at [M15 ..] (§6).  xts/its always adjust M15, so it
-        //     walks F -> F+22; M1-M14 and ИРЕТ/ЭРЕТ/СПСВ are read live, the five spills replayed. ---
+        //     walks F -> F+22; M1-M14 and IRET/ERET/SPSW are read live, the five spills replayed. ---
         xta     save_a
         xts     save_r              // frame[0]  := A     ; A := R
         xts     save_y              // frame[1]  := R     ; A := Y
-        its     033                 // frame[2]  := Y     ; A := ИРЕТ (M033, live)
-        its     032                 // frame[3]  := ИРЕТ  ; A := ЭРЕТ (M032, live)
-        its     SPSW                // frame[4]  := ЭРЕТ  ; A := СПСВ (M027, live)
-        xts     save_m16            // frame[5]  := СПСВ  ; A := M16
-        xts     save_m15            // frame[6]  := M16   ; A := interrupted M15
+        its     IRET                // frame[2]  := Y     ; A := IRET (M033, live)
+        its     ERET                // frame[3]  := IRET  ; A := ERET (M032, live)
+        its     SPSW                // frame[4]  := ERET  ; A := SPSW (M027, live)
+        xts     save_c              // frame[5]  := SPSW  ; A := M16
+        xts     save_sp             // frame[6]  := M16   ; A := interrupted M15
         its     14                  // frame[7]  := M15   ; A := M14 (live)
         its     13                  // frame[8]  := M14   ; A := M13 (live)
         its     12                  // frame[9]  := M13   ; A := M12
@@ -300,7 +304,7 @@ extk:                               // M15 = frame base F (ustkbase, or the inte
      13 vjm     extintr             // intr.c: read ГРП, dispatch, dismiss
 
         // --- restore: the exact inverse of the fill.  stx/sti pop frame[21..0], M15 walking
-        //     F+22 -> F: M1-M14, M16 and ИРЕТ/ЭРЕТ/СПСВ go straight back to their registers (the
+        //     F+22 -> F: M1-M14, M16 and IRET/ERET/SPSW go straight back to their registers (the
         //     spec-register reloads are no-ops -- extintr() left M027/M032/M033 untouched), while
         //     old M15, Y, R and A are re-stashed to the cells and applied last, in the forced
         //     Y -> A -> R order (§7).  M1-M7 are ABI callee-saved, so their reload is redundant but
@@ -320,21 +324,21 @@ extk:                               // M15 = frame base F (ustkbase, or the inte
         sti     12                  // restore M12;  A := M13 from frame[9]
         sti     13                  // restore M13;  A := M14 from frame[8]
         sti     14                  // restore M14;  A := M15 from frame[7]
-        stx     save_m15            // prepare M15;  A := M16 from frame[6]
-        sti     16                  // restore C;    A := SPSW from frame[5]
+        stx     save_sp             // prepare M15;  A := M16 from frame[6]
+        sti     MOD                 // restore C;    A := SPSW from frame[5]
         sti     SPSW                // restore SPSW; A := ERET from frame[4]
-        sti     032                 // restore ERET; A := IRET from frame[3]
-        sti     033                 // restore IRET; A := Y from frame[2]
+        sti     ERET                // restore ERET; A := IRET from frame[3]
+        sti     IRET                // restore IRET; A := Y from frame[2]
         stx     save_y              // prepare Y;    A := R from frame[1]
         stx     save_r              // prepare R;    A := A from frame[0]
         atx     save_a              // prepare A
         xta     save_y              // Y back, via the `aex` side effect (§7)
         aex                         //   (A is garbage after this -- intentional)
-        xta     save_m15            // interrupted M15 back (M15 no longer names the frame -- fine)
+        xta     save_sp             // interrupted M15 back (M15 no longer names the frame -- fine)
         ati     15
         xta     save_a              // A back (xta does not disturb Y)
         xtr     save_r              // R back -- must be last (a later xta would perturb it)
-      3 ij                          // выпр: restore the mode word from СПСВ, jump via M[033]=ИРЕТ
+      3 ij                          // выпр: restore the mode word from SPSW, jump via M[033]=IRET
 
 // ============================================================================
 // Interrupt priority level
@@ -416,7 +420,7 @@ idle:
 // separate floating-point register file -- the accumulator does float -- so there is no
 // lazy FP context to save around a context switch, and nothing to restore.
 //
-// The arithmetic mode, however, does NOT ride in СПСВ across a trap: СПСВ carries only
+// The arithmetic mode, however, does NOT ride in SPSW across a trap: SPSW carries only
 // БлП/БлЗ/БлПр and the supervisor bits.  The ω-mode and the NTR suppress bits live in the
 // mode register R, which the hardware neither saves nor restores; the trap gate saves R by
 // hand (see extint above, and doc/Context_Switch.md §14).
@@ -452,7 +456,7 @@ addupc:
 // (sys/param.h), so there is no six-chars-per-word tail to handle -- these are pure
 // word loops.  The kernel runs unmapped (a kernel address IS a physical address), so
 // there is no window and no drainbrz: this is copyin's inner loop (usermem.s) minus
-// the per-word БлП toggle, the useracc validation and the ПСВ save.  Register-only:
+// the per-word БлП toggle, the useracc validation and the PSW save.  Register-only:
 // r10/r11/r12 (caller-saved) hold the count and the two pointers; the word rides in A;
 // r1-r7, r13 and r15 are untouched.
 
@@ -513,10 +517,10 @@ wz_dn:
 // with 033 «увв» / 002 «рег» (doc/Besm6_Peripherals.md), not from here.
 //
 // cli/sti are the global interrupt disable/enable around short critical sequences.  On the
-// BESM-6 that is the БлПр bit of ПСВ (M[021], bit 02000): set = external interrupts off.
-// We read-modify-write ПСВ so the other mode bits (БлП/БлЗ/ПОП/ПОК) are preserved -- `vtm'
+// BESM-6 that is the БлПр bit of PSW (M[021], bit 02000): set = external interrupts off.
+// We read-modify-write PSW so the other mode bits (БлП/БлЗ/ПОП/ПОК) are preserved -- `vtm'
 // would overwrite the whole word.  ita/ati take a 5-bit register number in supervisor mode,
-// so M[021] = ПСВ is reachable (doc/Memory_Mapping.md).
+// so M[021] = PSW is reachable (doc/Memory_Mapping.md).
 
         // invd is gone: on the BESM-6 `reg 020+i' refills the TLB as it writes RP,
         // so a stale translation is not a state the machine can be in and there is
@@ -524,16 +528,16 @@ wz_dn:
 
         .globl  cli
 cli:                             // set БлПр -> external interrupts OFF
-        ita     021              // A := ПСВ
+        ita     021              // A := PSW
         aox     #02000           //   set БлПр
-        ati     021              // ПСВ := A
+        ati     021              // PSW := A
         13 uj
 
         .globl  sti
 sti:                             // clear БлПр -> external interrupts ON
-        ita     021              // A := ПСВ
+        ita     021              // A := PSW
         aax     #075777          //   clear БлПр (077777 & ~02000), keep the other bits
-        ati     021              // ПСВ := A
+        ati     021              // PSW := A
         13 uj
 
 // ============================================================================
