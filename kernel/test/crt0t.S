@@ -200,13 +200,10 @@ trapgate:
         its     1               // frame[19] := M2    ; A := M1
         xts     save_a          // frame[20] := M1    ; M15 := F+21 (above the frame)
 
-        // --- call trap(struct trap *): one argument, so it rides in A and nothing is pushed.
-        //     b$ret's scratch is the dead word at F+21 and it returns M15 = F+21, so the frame
-        //     comes back untouched and the epilogue's precondition holds. ---
-     15 utm     -21
-        ita     15              // A := F -- the frame base, a `struct trap *'
-     15 utm     21
-     14 vtm     -1              // argument count, negative
+        // --- call trap(): nothing is passed.  The switch above is unconditional, so the frame
+        //     is always at [ustkbase] and trap() reads that for itself.  A callee with no
+        //     parameters returns M15 unchanged, so it comes back at F+21 -- the epilogue's
+        //     precondition, with nothing to fix up. ---
      13 vjm     trap            // utrap.c: check the frame, back up the PC, open the page
 
         // --- restore: the exact inverse of the fill (kernel/besm6.S:intret).  stx/sti pop

@@ -413,9 +413,9 @@ exactly the frame the trap/syscall gates (15c/15d) and `resume()` (16) will read
 - **The frame lives on the kernel stack, at M15.** After the switch M15 *is* the frame base — the
   kernel-stack base (`[ustkbase]`) when the interrupt came from user, or the interrupted kernel SP when
   it nested — and the fill builds there, exactly as reg.h describes. **`u.u_ar0` is not stored by the
-  gate**: the kernel sets it in C (`trap.c: u.u_ar0 = &tr.acc`), and `extintr()` is frame-agnostic
-  (takes `void`); when `clock()` joins this path (15e) it receives the frame by value and points
-  `u_ar0` itself. Doing it in asm would need a hardcoded `u_ar0` offset (the `UPT=35`-class constant
+  gate**: the kernel sets it in C (`trap.c: u.u_ar0 = (int *)u.u_stack`), and `extintr()` is
+  frame-agnostic (takes `void`); when `clock()` joins this path (15e) it should take `void` too and
+  find the frame the way `trap()` does — but only from user, since this gate nests. Doing it in asm would need a hardcoded `u_ar0` offset (the `UPT=35`-class constant
   that bit `u_upt` in commit af5b619) for no runtime benefit today.
 - **The test harness (`crt0u.s` + `uintr.c`) is the scaffolding 15c/15d reuse.** `gouser()` forges a
   Dubna `SELECT`-style entry — plant IRET + СПСВ (with `SPSW_MOD_RK` so `выпр` re-arms the modifier),
@@ -497,8 +497,8 @@ fill the frame are 15c/15d.
   `r14` (М14), no own slot. **ГРП is not framed** — the fault cause is read live via
   `__besm6_mod(MOD_GRP,0)` in `trap()` (15c), as Dubna does. All indices non-negative, `u_ar0 =
   &tr.acc` at word 0; `struct trap` stays **by value** into `trap()`/`clock()` (b6cc took the width
-  fine) — **superseded by 15c: `trap()` takes `struct trap *`**, because `b$ret` eats the last
-  parameter word (= `frame[20]`) of a by-value struct; see 15c for the derivation. Aliases: `R_ERRNO R14` (0 = success, no carry bit), provisional `R_VAL2 R13` (15d
+  fine) — **superseded by 15c: `trap()` takes `void`** and finds the frame at `u.u_stack`, since the
+  fault gate's stack switch is unconditional; see 15c for the derivation. Aliases: `R_ERRNO R14` (0 = success, no carry bit), provisional `R_VAL2 R13` (15d
   finalizes); `USERMODE(spsw)=((spsw)&014)==0`; `BASEPRI(x)=(0)` (15e placeholder). `regloc[]` is
   `{ACC, R1..R14, R15, RET}` (17 entries): setregs zeroes `[0..14]` (`sys1.c` bound `&regloc[15]`),
   procxmt validates `[0..15]` (`sig.c` bound `i<16`). The collapse resolves the old
@@ -518,23 +518,28 @@ page in bits 5–9 → `grow()` or SIGSEG; bit 14 = instruction protection; bit 
 bit 15 = check) instead of x86 vector numbers.
 - **Done when** (done-when *b*): a from-user test's data-protection fault (touching a closed page) grows
   the stack or signals.
-- **Done.** `0500` now vectors at `trapgate` (`besm6.S`), which is `intrgate`'s prologue and FULSAV fill
-  instruction for instruction, calls `trap(struct trap *)`, and leaves through **`intrgate`'s epilogue,
-  reused as-is** — the restore block carries the label `intret` and `trapgate` ends `uj intret`. How it
-  turned out:
-  - **`trap()` takes a POINTER, superseding 15b's "struct trap stays by value"** (annotated there).
-    Passing the 21-word frame by value looks free — the FULSAV fill already builds exactly the argument
-    block the ABI wants — but the ABI says otherwise, and it was checked rather than assumed
-    (`b6cc -S` on a 21-word by-value call, plus `c-compiler/libc/besm6/unix/b_{save,ret}.s`): `b$save`
-    does *not* copy a by-value struct, it points r6 at the caller's block — so `u_ar0` would alias in
-    place either way — but **`b$ret` reuses the LAST parameter word as its return-value scratch**
-    (`7 stx -5`), which for a 21-word struct is `frame[20]` = М1, and it returns r15 at the block base,
-    not above it. With one pointer argument that scratch word is the dead slot at `F+21` and r15 comes
-    back at `F+21` — exactly `intret`'s precondition, so the epilogue needs no fixing up and the gate
-    is a straight `uj`. `clock()` (15e) should take the same shape.
+- **Done.** `0500` now vectors at `trapgate` (`besm6.S`), which is `intrgate`'s prologue, FULSAV fill
+  and call instruction for instruction, and leaves through **`intrgate`'s epilogue, reused as-is** —
+  the restore block carries the label `intret` and `trapgate` ends `uj intret`. How it turned out:
   - **The stack switch is unconditional** — no `СПСВ & 014` discriminator. A fault from supervisor is a
     kernel bug (`useracc` validates up front; there is no `nofault` path), `trap()` takes it to the
     `default` arm and panics, and resetting r15 under a panic costs nothing. So this door never nests.
+  - **Nothing is passed to `trap()`; it takes `void`** (superseding 15b's "struct trap stays by value",
+    annotated there, and an intermediate draft that passed a `struct trap *`). Because the switch above
+    is unconditional, the frame base is not a run-time value the gate has to hand over — it is the
+    link-time constant `&u.u_stack`, and `trap()` opens with
+    `register struct trap *tr = (struct trap *)u.u_stack`. The ABI then makes the call free: a callee
+    with **no parameters returns r15 unchanged** (`doc/Besm6_Calling_Conventions.md`, "On Return"), and
+    the fill left r15 at `F+21`, which is exactly `intret`'s precondition — so the gate is
+    `13 vjm trap` with no argument setup, no `14 vtm`, and a straight `uj` out. It is now the identical
+    shape `13 vjm extintr` already had. The frame is still aliased **in place** (`u.u_ar0` points at it),
+    which is the part reg.h's C readers depend on. `clock()` (15e) should take the same shape — but only
+    from user, since `intrgate` *does* nest and its frame is then not at the stack base.
+    - What this replaced: passing the 21-word frame **by value** was checked and rejected first
+      (`b6cc -S` plus `c-compiler/libc/besm6/unix/b_{save,ret}.s`) — `b$save` does not copy it, but
+      **`b$ret` reuses the LAST parameter word as return scratch** (`7 stx -5`), which for a 21-word
+      struct is `frame[20]` = М1, and it returns r15 at the block base rather than above it. A pointer
+      argument dodged that; passing nothing dodges the whole question.
   - **One set of temp cells still serves both gates**, and it must: `intret` re-applies them. It is safe
     because a cell is live only across a prologue/epilogue, and both run with БлПр forced on and the
     kernel unmapped — no interrupt and no fault can land in that window, so the gates cannot overlap.
@@ -556,12 +561,12 @@ bit 15 = check) instead of x86 vector numbers.
     door: it forges user mode, leaves virtual pages 4/5/6 closed and reads them in turn, faulting **once
     from a right half and once from a left** so both arms of the fixup are exercised. `trap()` there
     checks the *frame* (R, Y, М16, r15) rather than having the user read its own registers back — which
-    is the point of the aliasing pointer — clobbers all three, and opens the faulted page; the retried
+    is the point of aliasing the frame in place — clobbers all three, and opens the faulted page; the retried
     `xta` must come back with the sentinel behind it. Needs **`set mmu cache`** (unlike `uintr`): the
     stub reprograms РП on every fault and the user's reports are mapped stores read back physically.
     **Bite-tested:** dropping the PC fixup yields ACC `0600`, dropping the stack switch `020`, dropping
     `xtr save_r` from the shared epilogue `2`.
-  - Image top `060126` (bss), under `076000`; the full `kernel/test` suite is green.
+  - Image top `060131` (bss), under `076000`; the full `kernel/test` suite is green.
 
 **15d. The syscall gate (0577) and `badext`.** `syscall` and `badext` are `stop` stubs. Build the
 extracode frame, dispatch, and return via ERET (`2 ij`, or normalise ERET→IRET the `OUTMACRO` way —
@@ -575,7 +580,10 @@ the C dispatcher — an extracode always comes from user mode, so the switch is 
   correct ACC/errno.
 
 **15e. Unblock the timer (`clock` / GRP_TIMER).** With the frame in place: retarget `clock()` off
-`struct trap` by value onto the BESM-6 frame, add `GRP_TIMER` to `IRQ_ON` and dispatch it from
+`struct trap` by value onto the BESM-6 frame — following 15c, that means `clock(void)` finding the
+frame itself, but note `intrgate` **nests**, so the frame is at the stack base only when the
+interrupt came from user; from the kernel it is wherever the interrupted r15 was, and `clock()` needs
+`USERMODE(spsw)` before it can trust it. Then add `GRP_TIMER` to `IRQ_ON` and dispatch it from
 `extintr()` (`intr.c`), and remove the standing TODO at `intr.c:144–148`. **Leans on task 16:**
 reschedule-on-return (`runrun`) and any fault that sleeps need `save()`/`resume()`; the exit path
 checks `runrun`, but the switch itself is task 16.

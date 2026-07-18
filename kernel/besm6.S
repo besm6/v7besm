@@ -213,13 +213,13 @@ badext: stop    076              // TODO: an extracode we do not implement
 // The hardware vector for an internal interrupt -- a protection violation, an illegal
 // instruction, an instruction check -- is the fixed address 0500, laid down in the .const block
 // above.  It jumps here; this gate saves the interrupted context into the canonical reg.h frame
-// on the kernel stack, calls trap() in trap.c with a pointer to it, and leaves through the shared
-// epilogue `intret' below, which pops the frame and `выпр's (`3 ij', through М033 = IRET).
+// on the kernel stack, calls trap() in trap.c, and leaves through the shared epilogue `intret'
+// below, which pops the frame and `выпр's (`3 ij', through М033 = IRET).
 //
 // A fault is asynchronous with respect to the register set -- it can land on any instruction --
-// so the prologue and the FULSAV fill are `intrgate's, instruction for instruction; the header over
-// `intrgate' is the authority for every step of them, and for why R, Y, M[16] and M15 must be saved
-// by hand.  Only three things differ:
+// so the prologue, the FULSAV fill and the call are `intrgate's, instruction for instruction; the
+// header over `intrgate' is the authority for every step of them, and for why R, Y, M[16] and M15
+// must be saved by hand.  Only two things differ:
 //
 //   * THE STACK SWITCH IS UNCONDITIONAL.  `intrgate' switches M15 only when the interrupted context
 //     was user (СПСВ & 014 == 0), because an external interrupt legitimately nests inside the
@@ -231,17 +231,14 @@ badext: stop    076              // TODO: an extracode we do not implement
 //     frames, which nothing is going to return to), so the discriminator buys nothing here and the
 //     gate drops it.  This gate therefore never nests: the frame is always at [ustkbase].
 //
-//   * THE FRAME IS PASSED TO C, BY POINTER.  trap() takes `struct trap *', and after the fill M15
-//     names the word above the frame, so the base is M15 - 21 -- a regular (word-address) pointer,
-//     which is what a struct pointer is on this machine (doc/Besm6_Data_Representation.md §7).
-//     Passing the frame BY VALUE would look tempting -- the fill already builds exactly the 21-word
-//     argument block the ABI wants -- but it is wrong twice over: b$ret reuses the LAST parameter
-//     word as its return-value scratch (`7 stx -5', libc/besm6/unix/b_ret.s), which is frame[20] =
-//     M1 for a 21-word struct, and it leaves M15 at the block base rather than above it.  With one
-//     pointer argument that scratch word is the dead slot just ABOVE the frame and b$ret hands M15
-//     back at frame-base + 21 -- exactly what `intret' expects.  A pointer is also what reg.h
-//     promises the C readers: u.u_ar0 aliases the frame IN PLACE, so what psig()/sendsig() write
-//     through it is what the epilogue reloads into the registers.
+//     That last sentence is why THE FRAME IS NOT PASSED TO C AT ALL.  Because the switch is
+//     unconditional, the frame base is not a value the gate discovers at run time -- it is the
+//     link-time constant `&u.u_stack', which trap() reads for itself.  So the call is the bare
+//     `13 vjm trap', with no argument to build and no `14 vtm': a callee with NO PARAMETERS returns
+//     M15 unchanged (doc/Besm6_Calling_Conventions.md, "On Return"), and the fill left M15 at
+//     F+21, which is exactly `intret's precondition -- the same way `13 vjm extintr' works below.
+//     The frame is still aliased IN PLACE, which is what reg.h promises its C readers: what
+//     psig()/sendsig() write through u.u_ar0 is what the epilogue reloads into the registers.
 //
 //   * THE PC MUST BE BACKED UP.  Before vectoring, the machine advances past the faulting
 //     instruction and records that it did so in СПСВ (SPSW_NEXT_RK, with SPSW_RIGHT_INSTR saying
@@ -250,8 +247,8 @@ badext: stop    076              // TODO: an extracode we do not implement
 //     (doc/Memory_Mapping.md, "The restart protocol").  It is done in C, at the top of trap(),
 //     because the frame is aliased in place and two lines of C beat eight of branchy assembly.
 //
-// The gate does NOT point u.u_ar0 at the frame; trap() does that itself, in C, from the pointer
-// (`u.u_ar0 = (int *)tr'), for the same reason `intrgate' leaves it alone: doing it here would need a
+// The gate does NOT point u.u_ar0 at the frame; trap() does that itself, in C (`u.u_ar0 =
+// (int *)u.u_stack'), for the same reason `intrgate' leaves it alone: doing it here would need a
 // hardcoded u_ar0 offset for no runtime benefit.
 //
 // The same gate, duplicated for the same reason as `intrgate's copy, is exercised standalone against
@@ -298,15 +295,6 @@ trapgate:
         its     1                   // frame[19] := M2    ; A := M1
         xts     save_a              // frame[20] := M1    ; M15 := F+21 (above the frame); A discarded
 
-        // --- call trap(struct trap *) -- one argument, so it rides in A and nothing is pushed.
-        //     `utm' is index arithmetic and does not disturb A, so the base is read out and M15 put
-        //     straight back.  The callee pops N-1 == 0 and b$ret returns M15 = F+21 (its own scratch
-        //     word is the dead slot at F+21), so the frame comes back untouched and the epilogue's
-        //     precondition holds with nothing to fix up. ---
-     15 utm     -21
-        ita     15                  // A := F -- the frame base, a `struct trap *'
-     15 utm     21
-     14 vtm     -1                  // argument count, negative
      13 vjm     trap                // trap.c: back up the PC, decode ГРП, signal or grow
 
         uj      intret              // the shared epilogue in `intrgate' below
@@ -358,9 +346,10 @@ trapgate:
 //            (nested), which is exactly reg.h's "the frame lives on the kernel stack".
 //
 // The gate does NOT point u.u_ar0 at the frame: the kernel sets u_ar0 in C (trap.c: u.u_ar0 =
-// (int *)tr), and extintr() is frame-agnostic (takes void); when clock() joins this path (task 15e)
-// it receives the frame by value and points u_ar0 itself.  So the frame is built and reg.h-shaped,
-// but u_ar0 is left to the C handler that first needs it.
+// (int *)u.u_stack), and extintr() is frame-agnostic (takes void).  When clock() joins this path
+// (task 15e) it should take void as well and find the frame the way trap() does -- but only from
+// user, since THIS gate nests and the frame is then not at the stack base.  So the frame is built
+// and reg.h-shaped, but u_ar0 is left to the C handler that first needs it.
 //
 // Interrupts stay blocked throughout (the hardware sets БлПр on entry, and `выпр` restores the
 // mode word from SPSW on the way out), so one set of temp cells is safe -- intrgate cannot re-enter.

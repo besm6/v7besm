@@ -47,14 +47,19 @@ char regloc[] = {
  * Called from the 0500 gate in besm6.S when the machine takes an internal interrupt --
  * a protection violation, an illegal instruction, an instruction check.
  *
- * `tr' points at the reg.h frame the gate built on the kernel stack (it is NOT a copy:
- * u.u_ar0 aliases it, so a register this function or psig() changes is a register the
- * gate's epilogue reloads on the way out).  The cause is not in the frame -- the machine
- * reports it in ГРП, which we read live below.
+ * The gate passes nothing.  Its stack switch is unconditional, so this door never nests
+ * and the reg.h frame it built is always at the base of the kernel stack -- the link-time
+ * constant u.u_stack, which is what machdep.c's `ustkbase' holds and what the gate loaded
+ * into M15 before filling the frame.
+ * `tr' is that frame IN PLACE, not a copy: u.u_ar0 aliases it too, so a register this
+ * function or psig() changes is a register the gate's epilogue reloads on the way out.
+ *
+ * The cause is not in the frame -- the machine reports it in ГРП, which we read live below.
  */
-void trap(struct trap *tr)
+void trap(void)
 {
-    register int i = 0;
+    register struct trap *tr = (struct trap *)u.u_stack;
+    register int i           = 0;
     register int *a;
     register struct sysent *callp;
     time_t syst;

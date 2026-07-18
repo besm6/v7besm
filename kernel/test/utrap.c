@@ -53,6 +53,7 @@ static struct text tx;
 
 /* crt0t.S */
 extern unsigned uprogadr; /* uprog's link-time word address, as a plain integer */
+extern int *ustkbase;     /* base of the gate's stack: where the trap frame lands */
 void gouser(unsigned uentry);
 void halt(unsigned mask);
 
@@ -102,11 +103,18 @@ static unsigned nfault; /* which fault we are in: 1, 2, 3 */
 
 /*
  * The fault handler, reached from crt0t.S's trapgate -- the same C signature the real
- * kernel's trap() has, since the gate is the same gate.
+ * kernel's trap() has, since the gate is the same gate: nothing is passed, and the frame
+ * is found at the base of the stack the gate switched to.
+ *
+ * This is where the test must diverge in SPELLING, though not in logic.  kernel/trap.c says
+ * `u.u_stack', because there the u-area is the fixed page at 076000 and its tail IS the
+ * kernel stack; here `u' above is ordinary storage that utab.o wants and the gate's stack is
+ * crt0t.S's `kstack', named by the same `ustkbase' cell the gate loads M15 from.
  */
-void trap(struct trap *tr)
+void trap(void)
 {
-    unsigned *f = (unsigned *)tr; /* the frame, aliased in place */
+    struct trap *tr = (struct trap *)ustkbase;
+    unsigned *f     = (unsigned *)tr; /* the frame, aliased in place */
     unsigned grp, page, want;
 
     nfault++;
