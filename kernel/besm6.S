@@ -38,13 +38,14 @@
 // machine-register addresses (027 = SPSW, 020 = MOD = the C register M16) stay OCTAL, as they
 // read in the machine documentation.
 
-// Register indices used by the interrupt gate: SPSW the saved mode word, ERET the extracode
-// return address, IRET the interrupt / fault return address, and MOD the C register M16 (the
-// address modifier).  The bit masks (SPSW_EXTRACODE, SPSW_INTERRUPT, ...) come from the shared
-// header; only these register indices are local here, since they are `ita'/`its'/`sti' operands.
+// Register indices used by the interrupt gate: SPSW the saved mode word, IRET the interrupt /
+// fault return address (М033 -- extint fills the frame's single RET slot from it), and MOD the C
+// register M16 (the address modifier).  The bit masks (SPSW_EXTRACODE, SPSW_INTERRUPT, ...) come
+// from the shared header; only these register indices are local here, since they are
+// `ita'/`its'/`sti' operands.  (The extracode-return register М032/ERET is the syscall gate's job,
+// task 15d -- not used here.)
 #include "sys/besm6dev.h"
 SPSW = 027                      // saved mode word (М027)
-ERET = 032                      // extracode return address (М032)
 IRET = 033                      // interrupt / fault return address (М033)
 MOD  = 020                      // C register / address modifier (М020 = M16)
 
@@ -101,9 +102,9 @@ MOD  = 020                      // C register / address modifier (М020 = M16)
 // far above 07777 and needs the escape; these cells do not.
 //
 // Only FIVE cells, not the whole machine.  extint saves the interrupted context into the
-// canonical reg.h frame (0 A, 1 R, 2 Y, 3 IRET, 4 ERET, 5 SPSW, 6 M16, 7 M15 ... 21 M1) built on
+// canonical reg.h frame (0 A, 1 R, 2 Y, 3 RET, 4 SPSW, 5 M16, 6 M15 ... 20 M1) built on
 // the kernel stack, filled by the Dubna FULSAV pipeline of `xts'/`its' (doc/Context_Switch.md
-// §6).  That pipeline reaches M1-M14 and IRET/ERET/SPSW *live* -- it runs before `13 vjm extintr'
+// §6).  That pipeline reaches M1-M14 and IRET/SPSW *live* -- it runs before `13 vjm extintr'
 // clobbers anything -- so those need no cell.  The five below are the ones the pipeline cannot
 // reach: A (it is the pipeline register), R and Y (only `rte'/`yta' read them, destroying A), the
 // C register M16 (must be spilled before the stack-switch `u1a'/`vtm', whose utc for a long
@@ -211,11 +212,11 @@ badext: stop    076              // TODO: an extracode we do not implement
 // An interrupt is asynchronous, so the calling convention's callee-saved set is not enough --
 // the interrupted code owns EVERY register.  The hardware saves the interrupted PC in IRET
 // (M[033]) and `выпр` restores the mode word from SPSW (M[027]); everything else that
-// extintr() can touch is on us.  So the gate builds the full 22-word reg.h frame
-//   0 A | 1 R | 2 Y | 3 IRET | 4 ERET | 5 SPSW | 6 M16 | 7 M15 | 8 M14 ... 21 M1
+// extintr() can touch is on us.  So the gate builds the full 21-word reg.h frame
+//   0 A | 1 R | 2 Y | 3 RET | 4 SPSW | 5 M16 | 6 M15 | 7 M14 ... 20 M1
 // with the Dubna FULSAV `xts'/`its' pipeline (§6): one store-and-load per word, the accumulator
 // the pipeline register, M15 the frame pointer.  Because the fill runs BEFORE `13 vjm extintr',
-// M1-M14 and IRET/ERET/SPSW are still live and go straight into the frame; only A, R, Y, M16 and
+// M1-M14 and IRET/SPSW are still live and go straight into the frame; only A, R, Y, M16 and
 // the interrupted M15 are spilled to the five temp cells first (see the cells above for why each).
 //
 // Four of those saves are the §14 gaps the old subset gate got wrong, and all four still matter:
@@ -276,19 +277,18 @@ extint:
 extk:                               // M15 = frame base F (ustkbase, or the interrupted kernel SP)
 
         // --- fill the reg.h frame at [M15 ..] (§6).  xts/its always adjust M15, so it
-        //     walks F -> F+22; M1-M14 and IRET/ERET/SPSW are read live, the five spills replayed. ---
+        //     walks F -> F+21; M1-M14 and IRET/SPSW are read live, the five spills replayed. ---
         xta     save_a
         xts     save_r              // frame[0]  := A     ; A := R
         xts     save_y              // frame[1]  := R     ; A := Y
         its     IRET                // frame[2]  := Y     ; A := IRET (M033, live)
-        its     ERET                // frame[3]  := IRET  ; A := ERET (M032, live)
-        its     SPSW                // frame[4]  := ERET  ; A := SPSW (M027, live)
-        xts     save_c              // frame[5]  := SPSW  ; A := M16
-        xts     save_sp             // frame[6]  := M16   ; A := interrupted M15
-        its     14                  // frame[7]  := M15   ; A := M14 (live)
-        its     13                  // frame[8]  := M14   ; A := M13 (live)
-        its     12                  // frame[9]  := M13   ; A := M12
-        its     11                  // frame[10] := M12   ; A := M11
+        its     SPSW                // frame[3]  := RET   ; A := SPSW (M027, live)
+        xts     save_c              // frame[4]  := SPSW  ; A := M16
+        xts     save_sp             // frame[5]  := M16   ; A := interrupted M15
+        its     14                  // frame[6]  := M15   ; A := M14 (live)
+        its     13                  // frame[7]  := M14   ; A := M13 (live)
+        its     12                  // frame[8]  := M13   ; A := M12
+        its     11                  // frame[9]  := M12   ; A := M11
         its     10
         its     9
         its     8
@@ -298,19 +298,19 @@ extk:                               // M15 = frame base F (ustkbase, or the inte
         its     4
         its     3
         its     2
-        its     1                   // frame[20] := M2    ; A := M1
-        xts     save_a              // frame[21] := M1    ; M15 := F+22 (above the frame); A discarded
+        its     1                   // frame[19] := M2    ; A := M1
+        xts     save_a              // frame[20] := M1    ; M15 := F+21 (above the frame); A discarded
 
      13 vjm     extintr             // intr.c: read ГРП, dispatch, dismiss
 
-        // --- restore: the exact inverse of the fill.  stx/sti pop frame[21..0], M15 walking
-        //     F+22 -> F: M1-M14, M16 and IRET/ERET/SPSW go straight back to their registers (the
-        //     spec-register reloads are no-ops -- extintr() left M027/M032/M033 untouched), while
-        //     old M15, Y, R and A are re-stashed to the cells and applied last, in the forced
+        // --- restore: the exact inverse of the fill.  stx/sti pop frame[20..0], M15 walking
+        //     F+21 -> F: M1-M14, M16 and RET/SPSW go straight back to their registers (the SPSW
+        //     reload is a no-op -- extintr() left M027 untouched; RET reloads М033 for the `3 ij'),
+        //     while old M15, Y, R and A are re-stashed to the cells and applied last, in the forced
         //     Y -> A -> R order (§7).  M1-M7 are ABI callee-saved, so their reload is redundant but
         //     keeps the pop symmetric.  A blank-address `stx' stores to word 0, which is discarded. ---
-        stx                         // A := M1 from frame[21]
-        sti     1                   // restore M1; A := M2 from frame[20]
+        stx                         // A := M1 from frame[20]
+        sti     1                   // restore M1; A := M2 from frame[19]
         sti     2
         sti     3
         sti     4
@@ -320,15 +320,14 @@ extk:                               // M15 = frame base F (ustkbase, or the inte
         sti     8
         sti     9
         sti     10
-        sti     11                  // restore M11;  A := M12 from frame[10]
-        sti     12                  // restore M12;  A := M13 from frame[9]
-        sti     13                  // restore M13;  A := M14 from frame[8]
-        sti     14                  // restore M14;  A := M15 from frame[7]
-        stx     save_sp             // prepare M15;  A := M16 from frame[6]
-        sti     MOD                 // restore C;    A := SPSW from frame[5]
-        sti     SPSW                // restore SPSW; A := ERET from frame[4]
-        sti     ERET                // restore ERET; A := IRET from frame[3]
-        sti     IRET                // restore IRET; A := Y from frame[2]
+        sti     11                  // restore M11;  A := M12 from frame[9]
+        sti     12                  // restore M12;  A := M13 from frame[8]
+        sti     13                  // restore M13;  A := M14 from frame[7]
+        sti     14                  // restore M14;  A := M15 from frame[6]
+        stx     save_sp             // prepare M15;  A := M16 from frame[5]
+        sti     MOD                 // restore C;    A := SPSW from frame[4]
+        sti     SPSW                // restore SPSW; A := RET from frame[3]
+        sti     IRET                // restore RET into М033 (IRET);  A := Y from frame[2]
         stx     save_y              // prepare Y;    A := R from frame[1]
         stx     save_r              // prepare R;    A := A from frame[0]
         atx     save_a              // prepare A
@@ -338,7 +337,7 @@ extk:                               // M15 = frame base F (ustkbase, or the inte
         ati     15
         xta     save_a              // A back (xta does not disturb Y)
         xtr     save_r              // R back -- must be last (a later xta would perturb it)
-      3 ij                          // выпр: restore the mode word from SPSW, jump via M[033]=IRET
+      3 ij                          // return from interrupt via M[033]=IRET
 
 // ============================================================================
 // Interrupt priority level

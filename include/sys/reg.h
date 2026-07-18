@@ -11,19 +11,24 @@
  * with negative offsets.  sizeof(int) == 6 == one 48-bit word, so an index is
  * a word index and the struct-field order below matches the index order.
  *
- * The layout is Dubna's canonical per-process register-save block, verbatim
- * (doc/Context_Switch.md sec 2), so the frame our gates fill lines up slot for
- * slot with the reference machine:
+ * The layout follows Dubna's canonical per-process register-save block
+ * (doc/Context_Switch.md sec 2), with ONE deliberate departure -- the two
+ * return slots are collapsed into one:
  *
- *   0 ACC | 1 R | 2 Y | 3 ИРЕТ | 4 ЭРЕТ | 5 СПСВ | 6..21 М16..М1
+ *   0 ACC | 1 R | 2 Y | 3 RET | 4 СПСВ | 5 М16 | 6..20 М15..М1
  *
- * Two things follow from copying Dubna: the register file is stored
- * DESCENDING -- М16 (which is the C register / address modifier) at offset 6,
- * down to М1 at offset 21, so r15 is at 7 and r1 at 21 -- and there are TWO
- * distinct return slots, ИРЕТ (interrupt/fault, resumed via `выпр'/`3 ij') and
- * ЭРЕТ (extracode, resumed via `2 ij').  ГРП is NOT framed: the fault cause is
- * read live via __besm6_mod(MOD_GRP,0) in trap() (task 15c), which is what
- * Dubna does too.  errno needs no slot -- it is r14 (М14), an alias below.
+ * Dubna keeps IRET (interrupt/fault, resumed via `3 ij') and ERET
+ * (extracode, resumed via `2 ij') as separate slots, but a given frame is built
+ * by exactly one gate, so only one return address is ever live in it.  We store
+ * whichever applies in the single RET slot: a fault/interrupt frame holds IRET
+ * (and its gate resumes `3 ij'), an extracode frame holds ERET (`2 ij').  The
+ * gate that built the frame knows which `ij' to use; readers just use RET.
+ *
+ * The register file is stored DESCENDING -- М16 (the C register / address
+ * modifier) at offset 5, down to М1 at offset 20, so r15 is at 6 and r1 at 20.
+ * ГРП is NOT framed: the fault cause is read live via __besm6_mod(MOD_GRP,0) in
+ * trap() (task 15c), as Dubna does.  errno needs no slot -- it is r14 (М14), an
+ * alias below.
  *
  * The gate that FILLS this frame and the epilogue that RELOADS the registers
  * from it are tasks 15c (the 0500 fault gate) and 15d (the 0577 syscall gate);
@@ -35,29 +40,28 @@
 #define ACC  0 /* accumulator: primary syscall result (was EAX) */
 #define RREG 1 /* R   -- ALU mode word (omega + the NTR suppress bits) */
 #define RMR  2 /* Y (РМР) -- younger-bits register */
-#define IRET 3 /* ИРЕТ -- interrupt / fault return address (И33) */
-#define ERET 4 /* ЭРЕТ -- extracode return address (И32) */
-#define SPSW 5 /* СПСВ -- saved mode word (М027) */
-#define CREG 6 /* М16 = C register M[16] (M[020]), the address modifier */
+#define RET  3 /* return address: IRET (И33) for a fault, ERET (И32) for an extracode */
+#define SPSW 4 /* СПСВ -- saved mode word (М027) */
+#define CREG 5 /* М16 = C register M[16] (M[020]), the address modifier */
 
-/* general registers -- stored DESCENDING, М15..М1 at offsets 7..21 */
-#define R15 7  /* stack pointer */
-#define R14 8  /* argument-count / errno register (BESM-6 syscall ABI) */
-#define R13 9
-#define R12 10
-#define R11 11
-#define R10 12
-#define R9  13
-#define R8  14
-#define R7  15
-#define R6  16
-#define R5  17
-#define R4  18
-#define R3  19
-#define R2  20
-#define R1  21
+/* general registers -- stored DESCENDING, М15..М1 at offsets 6..20 */
+#define R15 6  /* stack pointer */
+#define R14 7  /* argument-count / errno register (BESM-6 syscall ABI) */
+#define R13 8
+#define R12 9
+#define R11 10
+#define R10 11
+#define R9  12
+#define R8  13
+#define R7  14
+#define R6  15
+#define R5  16
+#define R4  17
+#define R3  18
+#define R2  19
+#define R1  20
 
-#define NREGFRAME 22 /* words in the trap frame */
+#define NREGFRAME 21 /* words in the trap frame */
 
 /*
  * Semantic aliases used by the C readers.  These are the BESM-6 syscall ABI
@@ -90,23 +94,22 @@ struct trap {
     int acc;  /*  0  ACC */
     int rreg; /*  1  R */
     int rmr;  /*  2  Y */
-    int iret; /*  3  ИРЕТ (interrupt / fault return) */
-    int eret; /*  4  ЭРЕТ (extracode return) */
-    int spsw; /*  5  СПСВ */
-    int creg; /*  6  М16 = C register M[16] */
-    int r15;  /*  7  М15  (SP) */
-    int r14;  /*  8  М14  (errno / arg count) */
-    int r13;  /*  9  М13 */
-    int r12;  /* 10  М12 */
-    int r11;  /* 11  М11 */
-    int r10;  /* 12  М10 */
-    int r9;   /* 13  М9 */
-    int r8;   /* 14  М8 */
-    int r7;   /* 15  М7 */
-    int r6;   /* 16  М6 */
-    int r5;   /* 17  М5 */
-    int r4;   /* 18  М4 */
-    int r3;   /* 19  М3 */
-    int r2;   /* 20  М2 */
-    int r1;   /* 21  М1 */
+    int ret;  /*  3  RET (IRET for a fault, ERET for an extracode) */
+    int spsw; /*  4  saved program status word */
+    int creg; /*  5  MOD = C register M[16] */
+    int r15;  /*  6  М15  (SP) */
+    int r14;  /*  7  М14  (errno / arg count) */
+    int r13;  /*  8  М13 */
+    int r12;  /*  9  М12 */
+    int r11;  /* 10  М11 */
+    int r10;  /* 11  М10 */
+    int r9;   /* 12  М9 */
+    int r8;   /* 13  М8 */
+    int r7;   /* 14  М7 */
+    int r6;   /* 15  М6 */
+    int r5;   /* 16  М5 */
+    int r4;   /* 17  М4 */
+    int r3;   /* 18  М3 */
+    int r2;   /* 19  М2 */
+    int r1;   /* 20  М1 */
 };

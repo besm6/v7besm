@@ -16,12 +16,12 @@
 /*
  * Word indices of the user's saved registers in the trap frame (reg.h).
  * regloc[0..14] are the general registers zeroed on exec (ACC..r14);
- * regloc[15] = r15 (SP) and regloc[16] = IRET (PC), both set explicitly.
+ * regloc[15] = r15 (SP) and regloc[16] = RET (PC), both set explicitly.
  */
 char regloc[] = {
     ACC, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14, /* [0..14] */
     R15,                                                              /* [15] SP */
-    IRET,                                                             /* [16] PC */
+    RET,                                                              /* [16] PC */
 };
 
 /*
@@ -64,7 +64,7 @@ void trap(struct trap tr)
     default:
         printf("acc=%o r13=%o r14=%o r15=%o\n", u.u_ar0[ACC], u.u_ar0[R13], u.u_ar0[R14],
                u.u_ar0[R15]);
-        printf("iret=%o eret=%o spsw=%o\n", u.u_ar0[IRET], u.u_ar0[ERET], u.u_ar0[SPSW]);
+        printf("ret=%o spsw=%o\n", u.u_ar0[RET], u.u_ar0[SPSW]);
         printf("R=%o RMR=%o C=%o\n", u.u_ar0[RREG], u.u_ar0[RMR], u.u_ar0[CREG]);
         panic("trap");
 
@@ -178,7 +178,7 @@ out:
     if (runrun)
         qswtch();
     if (u.u_prof.pr_scale)
-        addupc(tr.iret, &u.u_prof, (int)(u.u_stime - syst));
+        addupc(tr.ret, &u.u_prof, (int)(u.u_stime - syst));
 }
 
 /*

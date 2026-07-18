@@ -5,7 +5,7 @@
 // for sctest/mmutest but useless for testing besm6.S's `extint' stack switch: an interrupt
 // taken in kernel mode does NOT switch the stack, so the one gap that matters would go
 // unexercised.  This crt0 instead forges a real USER-mode context -- a Dubna SELECT-style
-// gate (doc/Context_Switch.md §8): forge ИРЕТ + СПСВ and `выпр' into user -- so the coming
+// gate (doc/Context_Switch.md §8): forge IRET + СПСВ and `выпр' into user -- so the coming
 // external interrupt lands with СПСВ & 014 == 0 and exercises the full corrected `extint'.
 //
 // The pieces:
@@ -31,8 +31,8 @@
 
 // Machine-register indices for the gate and gouser, matching kernel/besm6.S.  The СПСВ register
 // is 027; the forged mode word gouser plants there is SPSW_MOD_RK (from the shared header above).
+// IRET (М033) fills the frame's single RET slot; the extracode-return register ERET is unused here.
 SPSW = 027                      // saved mode word (М027)
-ERET = 032                      // extracode return address (М032)
 IRET = 033                      // interrupt / fault return address (М033)
 MOD  = 020                      // C register / address modifier (М020 = M16)
 
@@ -104,7 +104,7 @@ halt:   stop                    // main() should never return (gouser does not)
 // Runs in supervisor; `выпр' does not return -- control resurfaces in uprog, in user mode.
         .globl  gouser
 gouser:
-        ati     IRET            // ИРЕТ (M[033]) := uentry -- where `выпр' lands
+        ati     IRET            // IRET (M[033]) := uentry -- where `выпр' lands
         xta   #(MODVAL)
         ati     MOD             // M[16] := MODVAL (inert; `выпр' re-arms it from СПСВ)
         xta   #(SPSW_MOD_RK)    // forged СПСВ: mode bits clear (USER, mapping+interrupts on), the
@@ -212,13 +212,12 @@ rpok:   ita     016             // A := the fault mask
 // it works here because this image's bss links low (the cells are under the 12-bit short-address
 // field -- save_a is at ~03231, see uintr.nm), just as besm6.S's cells do at ~0700.
 //
-// Builds the canonical reg.h frame (0 A, 1 R, 2 Y, 3 ИРЕТ, 4 ЭРЕТ, 5 СПСВ, 6 M16, 7 M15 ... 21 M1)
-// on the kernel stack with the Dubna FULSAV `xts'/`its' pipeline (§6): M1-M14 and ИРЕТ/ЭРЕТ/СПСВ go
-// in live, only A, R, Y, M16 and the interrupted M15 are spilled to the five cells first.  Switches
-// M15 to the kernel stack, but ONLY when the interrupt came from user mode (СПСВ & 014 == 0).
-// Restores by the inverse stx/sti pop of the whole frame, applying old M15/Y/A/R last in the forced
-// order Y -> A -> R (§7).  The register indices SPSW/ERET/IRET/MOD are defined at the top, matching
-// kernel/besm6.S.
+// Builds the canonical reg.h frame (0 A, 1 R, 2 Y, 3 RET, 4 СПСВ, 5 M16, 6 M15 ... 20 M1) on the
+// kernel stack with the Dubna FULSAV `xts'/`its' pipeline (§6): M1-M14 and IRET/СПСВ go in live,
+// only A, R, Y, M16 and the interrupted M15 are spilled to the five cells first.  Switches M15 to
+// the kernel stack, but ONLY when the interrupt came from user mode (СПСВ & 014 == 0).  Restores by
+// the inverse stx/sti pop of the whole frame, applying old M15/Y/A/R last in the forced order
+// Y -> A -> R (§7).  The register indices SPSW/IRET/MOD are defined at the top, matching kernel/besm6.S.
         .globl  extint
 extint:
         // --- short save: the five registers the FULSAV pipeline cannot reach ---
@@ -239,18 +238,17 @@ extint:
      15 vtm     [ustkbase]      // zero -> from user: M15 := kernel stack base
 extk:                           // M15 = frame base F (ustkbase, or the interrupted kernel SP)
 
-        // --- FULSAV: fill the reg.h frame at [M15 ..] (§6); xts/its walk M15 F -> F+22 ---
+        // --- FULSAV: fill the reg.h frame at [M15 ..] (§6); xts/its walk M15 F -> F+21 ---
         xta     save_a
         xts     save_r          // frame[0]  := A     ; A := R
         xts     save_y          // frame[1]  := R     ; A := Y
-        its     IRET            // frame[2]  := Y     ; A := ИРЕТ (M033, live)
-        its     ERET            // frame[3]  := ИРЕТ  ; A := ЭРЕТ (M032, live)
-        its     SPSW            // frame[4]  := ЭРЕТ  ; A := СПСВ (M027, live)
-        xts     save_c          // frame[5]  := СПСВ  ; A := M16
-        xts     save_sp         // frame[6]  := M16   ; A := interrupted M15
-        its     14              // frame[7]  := M15   ; A := M14 (live)
-        its     13              // frame[8]  := M14   ; A := M13 (live)
-        its     12              // frame[9]  := M13   ; A := M12
+        its     IRET            // frame[2]  := Y     ; A := IRET (M033, live)
+        its     SPSW            // frame[3]  := RET   ; A := СПСВ (M027, live)
+        xts     save_c          // frame[4]  := СПСВ  ; A := M16
+        xts     save_sp         // frame[5]  := M16   ; A := interrupted M15
+        its     14              // frame[6]  := M15   ; A := M14 (live)
+        its     13              // frame[7]  := M14   ; A := M13 (live)
+        its     12              // frame[8]  := M13   ; A := M12
         its     11
         its     10
         its     9
@@ -261,19 +259,19 @@ extk:                           // M15 = frame base F (ustkbase, or the interrup
         its     4
         its     3
         its     2
-        its     1               // frame[20] := M2    ; A := M1
-        xts     save_a          // frame[21] := M1    ; M15 := F+22 (above the frame); A discarded
+        its     1               // frame[19] := M2    ; A := M1
+        xts     save_a          // frame[20] := M1    ; M15 := F+21 (above the frame); A discarded
 
      13 vjm     extintr         // uintr.c: dismiss the interrupt
 
-        // --- restore: the exact inverse of the fill.  stx/sti pop frame[21..0], M15 walking
-        //     F+22 -> F: M1-M14, M16 and ИРЕТ/ЭРЕТ/СПСВ go straight back to their registers (the
-        //     spec-register reloads are no-ops -- extintr() left M027/M032/M033 untouched), while
-        //     old M15, Y, R and A are re-stashed to the cells and applied last, in the forced
+        // --- restore: the exact inverse of the fill.  stx/sti pop frame[20..0], M15 walking
+        //     F+21 -> F: M1-M14, M16 and RET/СПСВ go straight back to their registers (the СПСВ
+        //     reload is a no-op -- extintr() left M027 untouched; RET reloads М033 for the `3 ij'),
+        //     while old M15, Y, R and A are re-stashed to the cells and applied last, in the forced
         //     Y -> A -> R order (§7).  M1-M7 are ABI callee-saved, so their reload is redundant but
         //     keeps the pop symmetric.  A blank-address `stx' stores to word 0, which is discarded. ---
-        stx                     // A := M1 from frame[21]
-        sti     1               // restore M1; A := M2 from frame[20]
+        stx                     // A := M1 from frame[20]
+        sti     1               // restore M1; A := M2 from frame[19]
         sti     2
         sti     3
         sti     4
@@ -283,15 +281,14 @@ extk:                           // M15 = frame base F (ustkbase, or the interrup
         sti     8
         sti     9
         sti     10
-        sti     11              // restore M11;  A := M12 from frame[10]
-        sti     12              // restore M12;  A := M13 from frame[9]
-        sti     13              // restore M13;  A := M14 from frame[8]
-        sti     14              // restore M14;  A := M15 from frame[7]
-        stx     save_sp         // prepare M15;  A := M16 from frame[6]
-        sti     MOD             // restore C;    A := СПСВ from frame[5]
-        sti     SPSW            // restore СПСВ; A := ЭРЕТ from frame[4]
-        sti     ERET            // restore ЭРЕТ; A := ИРЕТ from frame[3]
-        sti     IRET            // restore ИРЕТ; A := Y from frame[2]
+        sti     11              // restore M11;  A := M12 from frame[9]
+        sti     12              // restore M12;  A := M13 from frame[8]
+        sti     13              // restore M13;  A := M14 from frame[7]
+        sti     14              // restore M14;  A := M15 from frame[6]
+        stx     save_sp         // prepare M15;  A := M16 from frame[5]
+        sti     MOD             // restore C;    A := СПСВ from frame[4]
+        sti     SPSW            // restore СПСВ; A := RET from frame[3]
+        sti     IRET            // restore RET into М033 (IRET);  A := Y from frame[2]
         stx     save_y          // prepare Y;    A := R from frame[1]
         stx     save_r          // prepare R;    A := A from frame[0]
         atx     save_a          // prepare A

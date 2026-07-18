@@ -84,12 +84,12 @@ out:
     if (USERMODE(tr.spsw)) {
         u.u_utime++;
         if (u.u_prof.pr_scale)
-            addupc(tr.iret, &u.u_prof, 1);
+            addupc(tr.ret, &u.u_prof, 1);
         if (u.u_procp->p_nice > NZERO)
             a += 8;
     } else {
         a += 16;
-        if ((caddr_t)tr.iret == waitloc)
+        if ((caddr_t)tr.ret == waitloc)
             a += 8;
         u.u_stime++;
     }

@@ -384,9 +384,9 @@ int procxmt()
          * (not a flag bit).  Falls through to case 7 to set the resume PC. */
     case 7:
         if ((int)ipc.ip_addr != 1)
-            /* TODO 17: resume slot -- a syscall-stopped proc resumes via ЭРЕТ, a
-             * fault/signal-stopped one via ИРЕТ; ИРЕТ is the provisional pick. */
-            u.u_ar0[IRET] = (int)ipc.ip_addr;
+            /* The single RET slot holds whichever return the stopping gate saved
+             * (ERET for a syscall stop, IRET for a fault/signal stop). */
+            u.u_ar0[RET] = (int)ipc.ip_addr;
         u.u_procp->p_sig = 0;
         if (ipc.ip_data)
             psignal(u.u_procp, ipc.ip_data);

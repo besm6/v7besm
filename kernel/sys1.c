@@ -267,8 +267,8 @@ void setregs()
             *rp = 0;
     for (cp = &regloc[0]; cp < &regloc[15];)
         u.u_ar0[(unsigned)*cp++] = 0;
-    /* exec is an extracode: the new image starts via `выпр' through ЭРЕТ. */
-    u.u_ar0[ERET] = u.u_exdata.ux_entloc;
+    /* exec is an extracode: the new image starts via `выпр' through ERET, held in RET. */
+    u.u_ar0[RET] = u.u_exdata.ux_entloc;
     for (i = 0; i < NOFILE; i++) {
         if (u.u_pofile[i] & EXCLOSE) {
             closef(u.u_ofile[i]);
@@ -451,9 +451,9 @@ void fork()
 out:
     /* TODO 17: the x86 "advance the saved PC past the syscall" trick becomes
      * returning distinct accumulator values to parent and child.  Kept
-     * compiling (fork is an extracode -> ЭРЕТ); not exercised until
+     * compiling (fork is an extracode -> ERET, held in RET); not exercised until
      * save()/resume() (task 16). */
-    u.u_ar0[ERET] += 2;
+    u.u_ar0[RET] += 2;
 }
 
 /*

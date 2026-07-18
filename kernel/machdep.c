@@ -111,7 +111,7 @@ void sendsig(caddr_t p, int signo)
      */
     n = u.u_ar0[R15] - 4;
     grow(n);
-    suword((caddr_t)n, u.u_ar0[IRET]);
-    u.u_ar0[R15]  = n;
-    u.u_ar0[IRET] = (int)p;
+    suword((caddr_t)n, u.u_ar0[RET]);
+    u.u_ar0[R15] = n;
+    u.u_ar0[RET] = (int)p;
 }

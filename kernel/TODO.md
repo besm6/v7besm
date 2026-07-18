@@ -371,14 +371,14 @@ This work is split into five sub-tasks, done in order; each leaves the tree buil
   implicitly the moment they "build the frame on the kernel stack"; `extint` calls `extintr()` with no
   frame step, so it must do the switch explicitly.
 
-- **One exit, three doors.** An extracode returns via ЭРЕТ (`2 ij`), an interrupt/fault via ИРЕТ
+- **One exit, three doors.** An extracode returns via ERET (`2 ij`), an interrupt/fault via IRET
   (`3 ij`), and the two cannot share a hardcoded `выпр` unless the door is normalised first. Steal
-  Dubna's `OUTMACRO` (Context_Switch.md §8): copy ЭРЕТ→ИРЕТ in two instructions and let one `3 ij`
+  Dubna's `OUTMACRO` (Context_Switch.md §8): copy ERET→IRET in two instructions and let one `3 ij`
   serve both gates — the syscall return then inherits the interrupt epilogue's `runrun`/pending checks
   for free. The fault path still needs a PC fixup the extracode path does not (see 15c).
 
-- **Only one saved-state slot.** СПСВ, ИРЕТ and ЭРЕТ are single registers, not a stack: a second
-  internal fault while handling the first is fatal (`STOP_DOUBLE_INTR`). A gate must save СПСВ/ИРЕТ to
+- **Only one saved-state slot.** СПСВ, IRET and ERET are single registers, not a stack: a second
+  internal fault while handling the first is fatal (`STOP_DOUBLE_INTR`). A gate must save СПСВ/IRET to
   the kernel stack before it does anything that can fault or re-enables interrupts (Memory_Mapping.md,
   "Notes for an operating-system port", note 12).
 
@@ -386,20 +386,20 @@ This work is split into five sub-tasks, done in order; each leaves the tree buil
 current `sctest` enters from kernel mode and would pass even with the stack switch missing, so it
 cannot stand in. Task 16's real entry-to-user (`resume()`/SELECT-forge) does not exist yet, so 15a
 **builds the scaffolding**: a new test crt0 that forges user-mode entry (a Dubna `SELECT`-style гейт —
-forge ИРЕТ+СПСВ, `выпр` into user) and programs a user map with the `mmuhelp`/`sureg` machinery
+forge IRET+СПСВ, `выпр` into user) and programs a user map with the `mmuhelp`/`sureg` machinery
 `mmutest` already links. That harness is reused by 15c and 15d.
 
 **15a. `extint`: save the interrupted context into the reg.h frame, and switch the stack. DONE**, and
 a from-user test (`kernel/test/uintr`) takes an external interrupt in forged user mode and confirms
 R, Y (РМР), M[16] (M[020]) and r15 all survive it, on the real machine. The gate goes **beyond** the
-§14 subset sketch below: it builds the full canonical reg.h frame (§2 — `0 A · 1 R · 2 Y · 3 ИРЕТ ·
-4 ЭРЕТ · 5 СПСВ · 6 M16 · 7 M15 … 21 M1`) on the kernel stack with the Dubna FULSAV `xts`/`its`
+§14 subset sketch below: it builds the full canonical reg.h frame (§2 — `0 A · 1 R · 2 Y · 3 IRET ·
+4 ERET · 5 СПСВ · 6 M16 · 7 M15 … 21 M1`) on the kernel stack with the Dubna FULSAV `xts`/`its`
 pipeline (§6) and reloads it with the symmetric `stx`/`sti` pop (§7/§12), so the async door produces
 exactly the frame the trap/syscall gates (15c/15d) and `resume()` (16) will read. How it turned out:
 
 - **Only five temp cells, not the flat subset block.** The FULSAV fill is a store-and-load pipeline
   whose only scratch is the accumulator, so any register the pipeline can reach — M1–M14 and
-  ИРЕТ/ЭРЕТ/СПСВ (via `its`) — is read **live** into the frame, because the fill runs *before*
+  IRET/СПСВ (via `its`) — is read **live** into the frame, because the fill runs *before*
   `13 vjm extintr` clobbers anything. Only the five the pipeline cannot reach are spilled first:
   `save_a`, `save_r`, `save_y` (A/R/Y can't ride an `its`/`xts` chain), `save_m16` (must be spilled
   before the stack-switch `u1a`/`vtm`, whose `utc` for a long address would clobber M16), and
@@ -418,7 +418,7 @@ exactly the frame the trap/syscall gates (15c/15d) and `resume()` (16) will read
   `u_ar0` itself. Doing it in asm would need a hardcoded `u_ar0` offset (the `UPT=35`-class constant
   that bit `u_upt` in commit af5b619) for no runtime benefit today.
 - **The test harness (`crt0u.s` + `uintr.c`) is the scaffolding 15c/15d reuse.** `gouser()` forges a
-  Dubna `SELECT`-style entry — plant ИРЕТ + СПСВ (with `SPSW_MOD_RK` so `выпр` re-arms the modifier),
+  Dubna `SELECT`-style entry — plant IRET + СПСВ (with `SPSW_MOD_RK` so `выпр` re-arms the modifier),
   set R via `ntr`, Y via the `xta`/`aex` side effect, r15 to a user-stack value — and `3 ij` into a
   tiny mapped user program at virtual page 0. `sureg()` builds the map from `uprog`'s own physical page
   (its word address comes from a linker-filled `.word uprog`, **not** `(unsigned)&uprog`, whose fat
@@ -464,7 +464,7 @@ The original four gaps, for the record — each confirmed against SIMH and Dubna
   a scattered `sr`/`srmr`/`sc`/`s15` block, the gate spills the five pipeline-unreachable registers to
   `save_a`/`save_r`/`save_y`/`save_m16`/`save_m15`, switches M15 to `[ustkbase]` **only when
   `СПСВ & 014 == 0`** (`ita 027`, `aax #(014)`, `u1a` past the `15 vtm`), then runs the FULSAV
-  `xts`/`its` fill into the frame at M15 (M1–M14 and ИРЕТ/ЭРЕТ/СПСВ read live). On exit the inverse
+  `xts`/`its` fill into the frame at M15 (M1–M14 and IRET/СПСВ read live). On exit the inverse
   `stx`/`sti` pop reloads the whole frame and re-stashes old M15/Y/R/A to the cells, applied last in
   the **forced order Y → A → R** (`xta save_y`/`aex`, then `ati 15`, `xta save_a`, `xtr save_r`), then
   `3 ij`. The order is not negotiable (Context_Switch.md §7); `выпр` reloads neither the index
@@ -476,7 +476,7 @@ The original four gaps, for the record — each confirmed against SIMH and Dubna
 
 **15b. `reg.h`: the BESM-6 trap frame, and retarget the C readers.** `reg.h` is still
 `struct trap{eax…ss}` with EAX/EIP/ESP/EFL. Define the BESM-6 `u_ar0[]` frame (ACC, r1–r15,
-C = M[16], R, Y, ГРП, СПСВ, ЭРЕТ/ИРЕТ, errno). The frame lives on the kernel stack, so `u_ar0`
+C = M[16], R, Y, ГРП, СПСВ, ERET/IRET, errno). The frame lives on the kernel stack, so `u_ar0`
 points at it in place — the x86 "changed registers are copied back on return" convention becomes "the
 asm epilogue reloads the registers from the frame." Update every reader to keep the tree building —
 `trap.c` (return values, panic dump), `sig.c` (ptrace / single-step, `u_ar0[EFL]`, `u_ar0[EIP]`),
@@ -487,19 +487,21 @@ carry flag — so that logic is rewritten, not remapped. Not yet exercised at ru
 fill the frame are 15c/15d.
 - **Done when** the tree builds (`cd kernel && make`, image still below `076000`) with the new frame,
   and every reader compiles against it.
-- **Done.** `include/sys/reg.h` is the 22-word frame laid out **verbatim to Dubna's canonical
-  register-save block** (Context_Switch.md §2): `ACC 0`, `RREG 1` (R), `RMR 2`, `IRET 3` (ИРЕТ),
-  `ERET 4` (ЭРЕТ), `SPSW 5`, `CREG 6` (= М16 = M[16]), then the register file **descending** —
-  `R15 7`, `R14 8` … `R1 21` (М15…М1) — plus `NREGFRAME 22`. Two distinct return slots (ИРЕТ for
-  interrupt/fault `выпр`, ЭРЕТ for extracode); `errno` is `r14` (М14), no own slot. **ГРП is not
-  framed** — the fault cause is read live via `__besm6_mod(MOD_GRP,0)` in `trap()` (15c), as Dubna
-  does. All indices non-negative, `u_ar0 = &tr.acc` at word 0; `struct trap` stays **by value**
-  into `trap()`/`clock()` (b6cc took the 22-word width fine). Aliases: `R_ERRNO R14` (0 = success,
-  no carry bit), provisional `R_VAL2 R13` (15d finalizes); `USERMODE(spsw)=((spsw)&014)==0`;
-  `BASEPRI(x)=(0)` (15e placeholder). `regloc[]` is `{ACC, R1..R14, R15, IRET}` (17 entries):
-  setregs zeroes `[0..14]` (`sys1.c` bound `&regloc[15]`), procxmt validates `[0..15]` (`sig.c`
-  bound `i<16`). Slot choice by context: interrupt/fault readers (clock, trap profiling,
-  ptrace/sendsig resume) use **ИРЕТ**; extracode readers (exec entry, fork) use **ЭРЕТ**. Deferred
+- **Done.** `include/sys/reg.h` follows Dubna's canonical register-save block (Context_Switch.md
+  §2) with **one deliberate departure — the two return slots are collapsed into one**: `ACC 0`,
+  `RREG 1` (R), `RMR 2`, `RET 3`, `SPSW 4`, `CREG 5` (= М16 = M[16]), then the register file
+  **descending** — `R15 6`, `R14 7` … `R1 20` (М15…М1) — plus `NREGFRAME 21`. Dubna keeps IRET
+  (interrupt/fault `выпр`/`3 ij`) and ERET (extracode `2 ij`) as separate slots, but a frame is
+  filled by exactly one gate, so only one return address is ever live in it — the single `RET` slot
+  holds whichever applies, and the gate that built the frame picks the matching `ij`. `errno` is
+  `r14` (М14), no own slot. **ГРП is not framed** — the fault cause is read live via
+  `__besm6_mod(MOD_GRP,0)` in `trap()` (15c), as Dubna does. All indices non-negative, `u_ar0 =
+  &tr.acc` at word 0; `struct trap` stays **by value** into `trap()`/`clock()` (b6cc took the width
+  fine). Aliases: `R_ERRNO R14` (0 = success, no carry bit), provisional `R_VAL2 R13` (15d
+  finalizes); `USERMODE(spsw)=((spsw)&014)==0`; `BASEPRI(x)=(0)` (15e placeholder). `regloc[]` is
+  `{ACC, R1..R14, R15, RET}` (17 entries): setregs zeroes `[0..14]` (`sys1.c` bound `&regloc[15]`),
+  procxmt validates `[0..15]` (`sig.c` bound `i<16`). The collapse resolves the old
+  IRET-vs-ERET resume-slot ambiguity: all readers just use `RET`. Deferred
   behavior compile-stubbed with `TODO 15c` (ГРП dispatch, breakpoint single-step), `TODO 15d`
   (syscall ABI + r_val2 slot), `TODO 15e` (BASEPRI/clock), `TODO 17` (sendsig up-growing stack,
   fork `+=2`→distinct ACC, ptrace resume-slot, single-step via М034/М035). Image top `060106`
@@ -508,7 +510,7 @@ fill the frame are 15c/15d.
 **15c. The trap gate (0500) and the fault path in `trap.c`.** The vector `uj trap` resolves straight
 to the C `trap()` with no frame under it. Interpose an asm stub that — after the r15 switch, when the
 fault came from user — saves the frame onto the kernel stack at `076000`, points `u.u_ar0` at it, calls
-`trap()`, restores, and returns via ИРЕТ (`3 ij`) — with the **restart protocol** (back the PC up from
+`trap()`, restores, and returns via IRET (`3 ij`) — with the **restart protocol** (back the PC up from
 `SPSW_NEXT_RK`/`SPSW_RIGHT_INSTR` before retrying a faulted instruction). Retarget `trap.c` from x86:
 `trap(struct trap)` by value → the BESM-6 frame; dispatch on ГРП (bit 20 = data protection, faulting
 page in bits 5–9 → `grow()` or SIGSEG; bit 14 = instruction protection; bit 13 = illegal instruction;
@@ -517,7 +519,7 @@ bit 15 = check) instead of x86 vector numbers.
   the stack or signals.
 
 **15d. The syscall gate (0577) and `badext`.** `syscall` and `badext` are `stop` stubs. Build the
-extracode frame, dispatch, and return via ЭРЕТ (`2 ij`, or normalise ЭРЕТ→ИРЕТ the `OUTMACRO` way —
+extracode frame, dispatch, and return via ERET (`2 ij`, or normalise ERET→IRET the `OUTMACRO` way —
 but note the fault path needs the PC fixup the extracode path does not). Rewrite `trap.c`'s inline
 syscall path (`case 48+USER`) to the BESM-6 ABI, mirroring `cmd/sim/syscall.cpp`: number from the
 `$77 N` operand (the effective address, in r14), last arg in ACC and the rest below r15, **result in
