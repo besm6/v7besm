@@ -93,7 +93,7 @@ void extintr(void)
  * The word offset of u_upt in struct user.  kernel/uarea.s is assembled by bare b6as, which
  * cannot compute an offsetof(), so it hardcodes this -- and this is what keeps it honest.
  */
-#define UPT 33
+#define UPT 35
 
 int main()
 {
