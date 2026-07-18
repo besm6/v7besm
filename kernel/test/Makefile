@@ -14,7 +14,7 @@ NM      = b6nm
 CFLAGS  = -I../../include
 LIBDIR  = $$HOME/.local/share/besm6/lib
 
-PROGS   = hello sctest mmutest uintr utrap usys
+PROGS   = hello sctest mmutest uintr utrap usys uclock
 
 all:    $(PROGS)
 
@@ -27,6 +27,7 @@ test:   $(PROGS)
 	besm6 uintr.ini
 	besm6 utrap.ini
 	besm6 usys.ini
+	besm6 uclock.ini
 
 clean:
 	rm -f *.o *.dis *.nm $(PROGS)
@@ -75,10 +76,25 @@ usys:   crt0s.o usys.o syscall.o utab.o brz.o usermem.o
 	$(DISASM) -c $@ > $@.dis
 	$(NM) -n $@ > $@.nm
 
+# uclock is the fourth forge test: it takes a real TIMER interrupt in user mode and checks that it
+# reached clock().  Like usys it links the code under test rather than a copy -- the kernel's own
+# intr.o (the ГРП dispatch) and clock.o -- and hand-builds only the environment they name; only the
+# gate is duplicated, into crt0c.S.  See uclock.ini.
+uclock: crt0c.o uclock.o clock.o intr.o utab.o brz.o
+	$(LD) crt0c.o uclock.o clock.o intr.o utab.o brz.o -o $@ -L$(LIBDIR) -lc
+	$(DISASM) -c $@ > $@.dis
+	$(NM) -n $@ > $@.nm
+
 syscall.o: ../syscall.c
 	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@
 
-# crt0u.S/crt0t.S/crt0s.S are preprocessed (they #include sys/besm6dev.h), so build them through the
+clock.o: ../clock.c
+	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@
+
+intr.o: ../intr.c
+	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@
+
+# crt0u.S/crt0t.S/crt0s.S/crt0c.S are preprocessed (they #include sys/besm6dev.h), so build them through the
 # compiler driver with the include path, not the bare assembler.
 crt0u.o: crt0u.S
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -87,6 +103,9 @@ crt0t.o: crt0t.S
 	$(CC) $(CFLAGS) -c $< -o $@
 
 crt0s.o: crt0s.S
+	$(CC) $(CFLAGS) -c $< -o $@
+
+crt0c.o: crt0c.S
 	$(CC) $(CFLAGS) -c $< -o $@
 
 utab.o: ../utab.c

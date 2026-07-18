@@ -238,6 +238,10 @@ intrgate:
      15 vtm     [ustkbase]      // zero -> from user: M15 := kernel stack base
 extk:                           // M15 = frame base F (ustkbase, or the interrupted kernel SP)
 
+        // --- publish the frame base for clock() (kernel/besm6.S does the same) ---
+        ita     15              // A := F -- the `aax' result it overwrites is dead here
+        atx     intrframe       // a plain cell, bare-addressed: no escape, no M16 touched
+
         // --- FULSAV: fill the reg.h frame at [M15 ..] (§6); xts/its walk M15 F -> F+21 ---
         xta     save_a
         xts     save_r          // frame[0]  := A     ; A := R
@@ -263,6 +267,7 @@ extk:                           // M15 = frame base F (ustkbase, or the interrup
         xts     save_a          // frame[20] := M1    ; M15 := F+21 (above the frame); A discarded
 
      13 vjm     extintr         // uintr.c: dismiss the interrupt
+
 
         // --- restore: the exact inverse of the fill.  stx/sti pop frame[20..0], M15 walking
         //     F+21 -> F: M1-M14, M16 and RET/СПСВ go straight back to their registers (the СПСВ
@@ -321,6 +326,10 @@ save_r:  . = . + 1
 save_y:  . = . + 1
 save_c:  . = . + 1
 save_sp: . = . + 1
+
+// The frame base intrgate publishes for clock(); see kernel/besm6.S.
+        .globl  intrframe
+intrframe: . = . + 1
 
 // The kernel stack _start seeds and intrgate switches to.  The label is the low end; the stack
 // grows up into the reservation.  Well clear of USPV = 074000.

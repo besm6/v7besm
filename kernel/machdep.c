@@ -13,7 +13,10 @@
 #include "sys/map.h"
 #include "sys/reg.h"
 #include "sys/buf.h"
+#include "sys/besm6dev.h"
 // clang-format on
+
+#include <besm6.h>
 
 extern int phymem;
 
@@ -88,10 +91,19 @@ void sysphys()
  */
 void clkstart()
 {
-    /* TODO: BESM-6 interval timer.  The x86 8253 PIT and the CMOS RTC (which set
-     * `time' from the wall clock) are gone -- they were x86 programmed I/O with no
-     * BESM-6 analogue.  Until the machine timer is programmed, just open the
-     * interrupt level. */
+    /*
+     * There is no timer to program.  The BESM-6 interval timer free-runs from reset
+     * and re-arms itself, raising GRP_TIMER (ГРП bit 40) 250 times a second -- see
+     * HZ in <sys/param.h>.  All the kernel can do is mask it, which is what spl does.
+     *
+     * So dismiss whatever the machine accumulated while we were booting -- at 250 Hz
+     * there is certainly a tick pending -- and open the interrupt level.
+     *
+     * The x86 8253 PIT is gone, and so is the CMOS RTC that seeded `time' from the
+     * wall clock: this machine has no clock-calendar a program can read, so the epoch
+     * still starts at 0 until something sets the date.
+     */
+    __besm6_mod(MOD_GRPCLR, ~GRP_TIMER);
     spl0();
 }
 

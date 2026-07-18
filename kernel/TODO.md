@@ -330,8 +330,9 @@ and `trapgate` ends `uj intret`. What the remaining tasks need from it:
   rather than something the gate discovers. The ABI makes the call free: a callee with **no
   parameters returns r15 unchanged** (`doc/Besm6_Calling_Conventions.md`, "On Return"), and the fill
   left r15 at `F+21`, which is exactly `intret`'s precondition — so the gate is `13 vjm trap` with no
-  argument setup and a straight `uj` out. **`clock()` (15e) cannot copy this blindly:** `intrgate`
-  *does* nest, so its frame is at the stack base only when the interrupt came from user.
+  argument setup and a straight `uj` out. **`clock()` could not copy this** — `intrgate` *does* nest,
+  so its frame is at the stack base only when the interrupt came from user — which is why 15e gave
+  that gate a published `intrframe` cell instead.
 - **The restart protocol is two lines, and lives in C** at the top of `trap()`, because the frame is
   aliased in place. The saved `M[IRET]` is the faulting **word plus one** in *both* cases, and
   `SPSW_RIGHT_INSTR` already names the half that faulted (`выпр` reloads the indicator from it), so
@@ -422,15 +423,82 @@ conversion, and a `char *` built by hand from an `int` gets the fat-pointer mark
 `usermem.s`). It is pre-existing, affects every path-taking syscall, and belongs with `iomove()`'s
 byte handling rather than with marshalling.
 
-**15e. Unblock the timer (`clock` / GRP_TIMER).** With the frame in place: retarget `clock()` off
-`struct trap` by value onto the BESM-6 frame — following 15c, that means `clock(void)` finding the
-frame itself, but note `intrgate` **nests**, so the frame is at the stack base only when the
-interrupt came from user; from the kernel it is wherever the interrupted r15 was, and `clock()` needs
-`USERMODE(spsw)` before it can trust it. Then add `GRP_TIMER` to `IRQ_ON` and dispatch it from
-`extintr()` (`intr.c`), and remove the standing TODO at `intr.c:144–148`. **Leans on task 16:**
-reschedule-on-return (`runrun`) and any fault that sleeps need `save()`/`resume()`; the exit path
-checks `runrun`, but the switch itself is task 16.
-- **Done when** a timer tick reaches `clock()` and a callout fires under SIMH.
+**15e. Unblock the timer (`clock` / GRP_TIMER). DONE.** A tick now reaches `clock()` from user
+mode and a callout fires under SIMH — `kernel/test/uclock`. `clock()` takes `struct trap *`;
+`GRP_TIMER` is in `IRQ_ON` and dispatched from `extintr()`; the standing TODO at `intr.c:144-148` is
+gone.
+
+**The frame is *published*, not found — and not through `u.u_ar0`.** The sketch had `clock(void)`
+locating the frame the way `trap()` does, guarded by `USERMODE(spsw)`. That cannot work: `spsw`
+*is* in the frame, so the guard needs what it is trying to find, and on a tick nested inside a
+syscall `u.u_stack` holds the **syscall's** frame — whose СПСВ says *user*, so the guard passes and
+`clock()` charges `u_utime` and profiles at a stale user PC. `intrgate`'s stack switch is
+conditional, so its frame base is a run-time value (`[ustkbase]` from user, the interrupted r15 when
+nested), and the gate now stores it in a private cell:
+```
+extk:   ita     15                  // A := F -- the `aax' result it overwrites is dead here
+        atx     intrframe           // bare-addressed: no escape, so M16 is untouched
+```
+Two instructions, no argument to build, so the call stays the bare `13 vjm extintr` and `intret`'s
+`r15 = F+21` precondition is untouched. `trapgate` and `sysgate` need none of this and keep the
+link-time constant.
+
+**`u.u_ar0` was tried first and is wrong**, which is worth recording because it is the obvious
+choice — v7's own name for the current register frame, and what `trap()`/`syscall()` set. The store
+has to be unconditional (from the kernel too, or the nested case reads the wrong frame), so it
+transiently overwrites the `u_ar0` of an interrupted syscall — and `exec()` (`sys1.c:269-271`) and
+`sendsig()` (`machdep.c:124-128`) write the resumed PC and the signal frame *through* `u_ar0`, from
+paths that sleep. A tick between the assignment and the use sends those writes into a frame that is
+dead by the time anything resumes. Banking the old value works but **cannot be done in C** — the
+gate has already overwritten the cell by the time `extintr()` runs, which `uclock` caught on the
+first run — so it costs two more instructions in the gate and two after the call. And `u_ar0` means
+the *user's* registers; a tick nested in the kernel frames a *kernel* context. A private cell has
+neither problem, and `uclock` now asserts `u.u_ar0` came back untouched.
+
+**`clock()` leaks the ipl, and `extintr()` had to take that over.** Not in the plan, and it would
+have bricked the machine on the first tick. `clock()` calls `spl5()` and `spl1()` and restores
+neither: on the PDP-11 `rtt` reloads the priority field of PS from the frame, but here `выпр`
+restores **БлПр** and МГРП is a separate write-only register outside the mode word. So the first
+tick would have left `mgrp == 0` — every source masked for good — and `extintr()`'s own
+`grp & mgrp` loop condition would have abandoned a co-pending `GRP_SLAVE` undismissed. `extintr()`
+now latches `curipl` on entry and `splx()`es at the **top** of the loop, so the level is repaired
+before the next ГРП read rather than after the loop.
+
+**Smaller things that turned out settled rather than open:**
+- **`BASEPRI(x)` stays `(0)`, permanently**, and the TODO in `reg.h` became the reason. This machine
+  has two levels, not eight; delivery needs БлПр clear *and* `ГРП & МГРП != 0`; `setipl()` leaves
+  МГРП non-zero only at spl0. So anything `clock()` interrupts was at base priority by construction.
+  (The macro's v7 name reads backwards — *true* means "was **above** base, skip the callouts" — which
+  the comment now says, because the next reader will otherwise invert it.)
+- **`HZ` is 250**, was 60. The interval timer free-runs at that rate (`CLK_TPS`, "as per the original
+  documentation") and cannot be programmed, so 60 would have run `time` 4.17× fast and every
+  `timeout()` 4.17× short. Two knock-ons to keep in mind: v7 userland that hardcodes 60 (`/bin/time`,
+  `ps`) will misreport, and the raw tick counts in `dev/sr.c:122` / `dev/sc.c:145` are now 4× shorter
+  pad delays — harmless for a simulated Consul.
+- **`clkstart()` has nothing to program.** The timer free-runs from reset on the hardware and in
+  SIMH, so it dismisses the tick that accumulated during boot and calls `spl0()`. `time` is still
+  never seeded from a wall clock — the x86 CMOS RTC path is gone and this machine has no
+  clock-calendar a program can read — so the epoch starts at 0.
+- `addupc()` is still a stub and `waitloc` still 0, so profiling and idle-time accounting are inert;
+  they belong to tasks 17 and 16.
+
+*The test — `kernel/test/uclock`* (`crt0c.S` + `uclock.c` + `uclock.ini`), the fourth forge test and
+the second (after `usys`) to link the code under test rather than a copy: the real `intr.o` and
+`clock.o`, with only their environment hand-built. `увв 031` raises `GRP_TIMER` while БлПр is still
+set, so the tick fires at `uprog`'s first user instruction — deterministic, no device, no timing.
+`timeout(fn, MAGIC, 1)` and `lbolt = HZ - 1` make *one* tick produce both a callout and a
+second-rollover. Fifteen checks, of which the sharp ones are `u_stime == 0` (the frame really was
+the interrupted user context), `mgrp == IRQ_ON` (the ipl came back) and `intrframe == ustkbase` with
+`u_ar0 == 0` (the frame went to its own cell). Bite-tested three ways: dropping the publish, dropping
+the `splx(s)`, and taking `GRP_TIMER` out of `IRQ_ON` each fail it.
+
+Two notes for whoever writes the next one of these. **The interval timer cannot be switched off** —
+it free-runs at 250 Hz and the SIMH `CLK` device has no `DEV_DISABLE`, so no `.ini` can stop it and a
+second tick may land mid-run; every assertion here is phrased to tolerate exactly one, and a first
+draft's `p_cpu >= 1` check was **passing only because** a second tick happened to arrive after the
+aging code zeroed it. And `crt0c.S` keeps its gate temp cells in **`.text`**, not `.bss` like
+`crt0u.S`/`crt0s.S`: linking the real `clock.o`/`intr.o` (and `proc[NPROC]` with them) pushed this
+image's bss past `010000`, out of reach of the bare 12-bit `atx save_a` the gate must use.
 
 **16. `save()` / `resume()` (`besm6.S`) and the u-area invariant (`slp.c`).** `save()` stores r1–r7,
 r13, r15 into the label. `resume()` implements the invariant above, with interrupts masked across the

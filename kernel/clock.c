@@ -14,7 +14,7 @@
 
 #define SCHMAG 8 / 10
 
-int lbolt; /* time of day in 60th not in time */
+int lbolt; /* ticks since the last second rolled over: 0..HZ-1, not in `time' */
 
 /*
  * clock is called straight from
@@ -28,8 +28,20 @@ int lbolt; /* time of day in 60th not in time */
  *	lightning bolt wakeup (every second)
  *	alarm clock signals
  *	jab the scheduler
+ *
+ * The frame comes by pointer, from the `intrframe' cell the 0501 gate publishes it in.
+ * clock() cannot find it the way trap() does: the interrupt gate's stack switch is
+ * conditional, so the frame sits at the base of the kernel stack only when the tick came
+ * from user -- when it nested inside a syscall, u.u_stack holds the syscall's frame, whose
+ * СПСВ says user, and the USERMODE test below would charge the wrong bucket.  Nor does it
+ * come through u.u_ar0: that names the USER's registers and belongs to whatever the tick
+ * interrupted.  See the header over intrgate in besm6.S.
+ *
+ * Two things this reads are still inert.  addupc() is a stub (besm6.S) and u_prof.pr_scale
+ * is 0 until profil() works -- task 17.  waitloc is 0 until the idle loop exists -- task 16
+ * -- so kernel idle time is charged to the busy bucket instead.  Both are harmless.
  */
-void clock(struct trap tr)
+void clock(struct trap *tr)
 {
     register struct callo *p1, *p2;
     register struct proc *pp;
@@ -52,7 +64,7 @@ void clock(struct trap tr)
     /*
      * if saved pl is high, just return
      */
-    if (BASEPRI(0)) /* TODO 15e: test the global spl / МГРП mask */
+    if (BASEPRI(0))
         goto out;
 
     /*
@@ -81,15 +93,15 @@ void clock(struct trap tr)
      */
 out:
     a = dk_busy & 07;
-    if (USERMODE(tr.spsw)) {
+    if (USERMODE(tr->spsw)) {
         u.u_utime++;
         if (u.u_prof.pr_scale)
-            addupc(tr.ret, &u.u_prof, 1);
+            addupc(tr->ret, &u.u_prof, 1);
         if (u.u_procp->p_nice > NZERO)
             a += 8;
     } else {
         a += 16;
-        if ((caddr_t)tr.ret == waitloc)
+        if ((caddr_t)tr->ret == waitloc)
             a += 8;
         u.u_stime++;
     }
@@ -98,7 +110,7 @@ out:
     if (++pp->p_cpu == 0)
         pp->p_cpu--;
     if (++lbolt >= HZ) {
-        if (BASEPRI(0)) /* TODO 15e: test the global spl / МГРП mask */
+        if (BASEPRI(0))
             return;
         lbolt -= HZ;
         ++time;

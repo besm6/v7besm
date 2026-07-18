@@ -32,6 +32,16 @@
 void scintr(void);
 
 /*
+ * The frame the 0501 gate built, and the handler that wants it.  besm6.S publishes the
+ * frame base in `intrframe' because that gate's stack switch is conditional and the base
+ * is therefore a run-time value -- see the header over intrgate.  `struct trap' is only
+ * forward-declared: this file hands the pointer on and has no business knowing its shape.
+ */
+extern int *intrframe;
+struct trap;
+void clock(struct trap *tr);
+
+/*
  * Interrupt priority level.
  *
  * The BESM-6 has no priority hierarchy: an external interrupt fires whenever
@@ -42,11 +52,11 @@ void scintr(void);
  * splx(s);`) and still get what they were really after: on a uniprocessor with no
  * atomic instruction, masking interrupts is the only lock in the machine.
  *
- * IRQ_ON is the set of sources this kernel can currently service.  GRP_TIMER joins
- * it once clock() can be called -- see extintr().  It is unsigned because ГРП is 48
- * bits wide and a signed int on this target holds only 41 of them.
+ * IRQ_ON is the set of sources this kernel can currently service; it grows a bit per
+ * driver.  It is unsigned because ГРП is 48 bits wide and a signed int on this target
+ * holds only 41 of them.
  */
-#define IRQ_ON GRP_SLAVE
+#define IRQ_ON (GRP_SLAVE | GRP_TIMER)
 
 static int curipl = 1; /* the machine comes up with interrupts blocked */
 
@@ -60,6 +70,14 @@ static int setipl(int s)
     old    = curipl;
     curipl = s;
     mgrp   = s ? 0 : IRQ_ON;
+    /*
+     * The shadows go first and the hardware register last, deliberately: delivery is
+     * gated by МГРП alone, so no interrupt can arrive against a mask this function has
+     * not written yet.  An interrupt landing in the window while we RAISE sees a stale
+     * open shadow and dispatches normally; one landing while we LOWER cannot happen,
+     * the hardware mask being still shut.  Reordering buys nothing and costs the
+     * symmetry.
+     */
     __besm6_mod(MOD_MGRP, mgrp);
     return old;
 }
@@ -130,23 +148,49 @@ static void prpintr(void)
  *
  * Loop until nothing is pending: more than one device can be waiting, and a device
  * can raise a new interrupt while we are servicing another.
+ *
+ * What this function owns, on behalf of every handler it calls, is the interrupt priority
+ * level.  v7's handlers raise the ipl and let the return from interrupt drop it -- which is
+ * what the PDP-11's `rtt' does when it reloads the priority field of PS from the frame.
+ * Nothing here does: `выпр'
+ * restores БлПр from СПСВ, but МГРП is a separate write-only register outside the mode
+ * word.  clock() alone leaves spl5 or spl1 behind, so without the splx() below the FIRST
+ * tick would leave mgrp == 0 and mask every source in the machine for good.
  */
 void extintr(void)
 {
+    int s = curipl;
     unsigned grp;
 
-    while ((grp = __besm6_mod(MOD_GRP, 0) & mgrp) != 0) {
+    for (;;) {
+        /*
+         * At the top of the loop rather than after it: the level a handler left behind
+         * has to be repaired before the next ГРП read, or `& mgrp' below masks out a
+         * device that was pending all along and we would return with it undismissed.
+         */
+        splx(s);
+        grp = __besm6_mod(MOD_GRP, 0) & mgrp;
+        if (grp == 0)
+            break;
+
         if (grp & GRP_SLAVE) {
             prpintr();                           /* clears the ПРП bits ... */
             __besm6_mod(MOD_GRPCLR, ~GRP_SLAVE); /* ... only then this */
             continue;
         }
+        if (grp & GRP_TIMER) {
+            /*
+             * Dismissed BEFORE the handler -- the opposite of GRP_SLAVE above, and for
+             * the opposite reason.  GRP_SLAVE is level-driven off ПРП and re-raises the
+             * instant it is cleared with a ПРП bit still up.  GRP_TIMER is a plain
+             * flip-flop (not one of GRP_WIRED_BITS), and the timer free-runs: clearing
+             * it afterwards would erase a tick that arrived while clock() was running.
+             */
+            __besm6_mod(MOD_GRPCLR, ~GRP_TIMER);
+            clock((struct trap *)intrframe);
+            continue;
+        }
         /*
-         * TODO: GRP_TIMER belongs to clock(), but clock() takes a struct trap by
-         * value and that frame is still the x86 one (include/sys/reg.h).  Building
-         * the BESM-6 trap frame is part of the trap/besm6.S work; until it exists the
-         * timer is left out of IRQ_ON, so it never gets here.
-         *
          * Anything else: dismiss the highest pending bit -- anx numbers from the top
          * of the word, 1 = bit 48 -- and go round again, so that a bit nobody handles
          * cannot spin here forever.

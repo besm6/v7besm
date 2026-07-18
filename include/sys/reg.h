@@ -55,14 +55,18 @@
 #define USERMODE(spsw) (((spsw) & SPSW_MODE) == 0)
 
 /*
- * BASEPRI(): were we interrupted at base priority?  The x86 compared a saved
- * priority level in the frame; the BESM-6 has no per-frame priority -- the
- * current spl is the МГРП mask managed globally in intr.c.  The real test
- * belongs to clock()'s retarget, task 15e; until then this reads "at base
- * priority" so the callout path is never spuriously skipped.  clock() does not
- * fire until 15e wires GRP_TIMER into extintr(), so nothing depends on it yet.
+ * BASEPRI(): were we interrupted ABOVE base priority?  Note the sense -- v7's name
+ * reads backwards.  True means "the interrupted code was holding a raised spl, so do
+ * not run callouts on top of it"; clock() takes the short exit on true.
+ *
+ * On this machine it is permanently false, and that is a fact about the hardware, not
+ * a stub.  The BESM-6 has no priority hierarchy, so this kernel has exactly two levels
+ * rather than the PDP-11's eight: interrupts enabled and interrupts blocked (intr.c).
+ * An external interrupt is delivered only when БлПр is clear AND ГРП & МГРП is nonzero,
+ * and setipl() leaves МГРП nonzero only at spl0 -- so anything clock() interrupts was,
+ * by construction, running at base priority.  There is no raised level for it to find.
  */
-#define BASEPRI(x) (0) /* TODO 15e: test the global spl / МГРП mask */
+#define BASEPRI(x) (0)
 
 struct trap {
     int acc;  /*  0  ACC */

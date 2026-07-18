@@ -146,6 +146,12 @@ save_y:  .word 0                // Y (РМР) -- younger-bits register
 save_c:  .word 0                // M16 -- the C register / address modifier
 save_sp: .word 0                // interrupted M15 (the stack pointer)
 
+// The frame base `intrgate' publishes for clock() -- see that gate's header.  Here beside the
+// temp cells for the same reason they are here: a bare 12-bit `atx intrframe' needs it below
+// 07777, and an escape would emit a `мода' that clobbers M[16].
+        .globl  intrframe
+intrframe: .word 0              // struct trap * -- valid only inside `intrgate'
+
 // ============================================================================
 // Kernel entry point
 // ============================================================================
@@ -462,11 +468,30 @@ trapgate:
 //            frame then builds at that base (from user) or on top of the interrupted kernel stack
 //            (nested), which is exactly reg.h's "the frame lives on the kernel stack".
 //
-// The gate does NOT point u.u_ar0 at the frame: the kernel sets u_ar0 in C (trap.c: u.u_ar0 =
-// (int *)u.u_stack), and extintr() is frame-agnostic (takes void).  When clock() joins this path
-// (task 15e) it should take void as well and find the frame the way trap() does -- but only from
-// user, since THIS gate nests and the frame is then not at the stack base.  So the frame is built
-// and reg.h-shaped, but u_ar0 is left to the C handler that first needs it.
+// THE GATE PUBLISHES THE FRAME BASE IN `intrframe', and this is the one door in the file that has
+// to publish anything.  It is the direct consequence of the conditional switch above.  `trapgate'
+// and `sysgate' switch unconditionally, so their frame base is not something they discover -- it is
+// the link-time constant &u.u_stack, and trap()/syscall() just spell it (`(struct trap *)u.u_stack').
+// Here the base is either [ustkbase] or the interrupted kernel r15, known only at run time, so
+// clock() cannot spell it: on a tick nested inside a syscall, u.u_stack holds the SYSCALL's frame,
+// whose СПСВ says user -- clock() would charge u_utime and profile at a stale user PC.  Hence
+// `ita 15' / `atx intrframe' at `extk' below.  It costs two instructions and no argument: the call
+// stays the bare `13 vjm extintr', which returns M15 unchanged at F+21, `intret's precondition
+// (doc/Besm6_Calling_Conventions.md, "On Return").
+//
+// It is a cell of its own and NOT u.u_ar0, which was the obvious candidate -- v7's own name for
+// the current register frame, and what trap()/syscall() set.  Two reasons it is wrong here.  The
+// store would have to be unconditional (from the kernel too, or clock() reads the wrong frame in
+// exactly the nested case that motivates all this), so it would transiently overwrite the u_ar0 of
+// an interrupted syscall -- and exec() (sys1.c) and sendsig() (machdep.c) write the resumed PC and
+// the signal frame THROUGH u_ar0, from paths that sleep, so a tick landing between the assignment
+// and the use sends those writes into a frame that is dead by the time anything resumes.  Banking
+// the old value would work but cannot be done in C (the gate has already overwritten it by the
+// time extintr() runs), so it would mean two more instructions here and two after the call.  And
+// u_ar0 means the USER's saved registers; a tick nested in the kernel frames a KERNEL context, so
+// pointing u_ar0 at it is a small lie even for the length of one call.  A private cell has neither
+// problem.  One cell suffices for the same reason one `save_a' does: БлПр is held from the vector
+// to the closing `выпр', so this gate cannot re-enter itself.
 //
 // Interrupts stay blocked throughout (the hardware sets БлПр on entry, and `выпр` restores the
 // mode word from SPSW on the way out), so one set of temp cells is safe -- intrgate cannot re-enter.
@@ -493,6 +518,10 @@ intrgate:
         u1a     extk                // РежЭ|РежПр set -> nested in the kernel: keep M15
      15 vtm     [ustkbase]          // zero -> from user: M15 := kernel stack base (~076214)
 extk:                               // M15 = frame base F (ustkbase, or the interrupted kernel SP)
+
+        // --- publish the frame base for clock() (see the header) ---
+        ita     15                  // A := F -- the `aax' result it overwrites is dead here
+        atx     intrframe           // a plain cell, bare-addressed: no escape, no M16 touched
 
         // --- fill the reg.h frame at [M15 ..] (§6).  xts/its always adjust M15, so it
         //     walks F -> F+21; M1-M14 and IRET/SPSW are read live, the five spills replayed. ---
