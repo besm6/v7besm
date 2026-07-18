@@ -30,11 +30,10 @@
  * trap() (task 15c), as Dubna does.  errno needs no slot -- it is r14 (М14), an
  * alias below.
  *
- * The gate that FILLS this frame and the epilogue that RELOADS the registers
- * from it are tasks 15c (the 0500 fault gate) and 15d (the 0577 syscall gate);
- * the async 0501 external-interrupt gate keeps its own static save area
- * (besm6.S, task 15a).  This header only names the slots -- nothing here runs
- * yet.
+ * Both asynchronous gates fill this frame and share one epilogue: `intrgate'
+ * (0501) and `trapgate' (0500) in besm6.S, which leave through `intret'.  The
+ * 0577 syscall gate (task 15d) will join them, normalising ERET into IRET on
+ * the way in so it can reuse the same exit.
  */
 
 #define ACC  0 /* accumulator: primary syscall result (was EAX) */

@@ -195,8 +195,15 @@ bhalt:  stop                        // main returned / faulted upstream: resumab
 // -- they halt with a recognizable code, the way test/crt0.s's fault stub does,
 // rather than jump into C with no frame under them.
 //
-// TODO (task 15): build the trap frame, point u.u_ar0 at it, call the C syscall
-// dispatcher, restore, and return with `2 ij' (выпр through ERET, not IRET).
+// TODO (task 15d): this becomes `sysgate', which is `trapgate' with two changes.
+// (1) Add ERET = 032 and open with the Dubna OUTMACRO normalisation -- `ita ERET'
+// / `ati IRET', after the `atx save_a' and before the fill -- so the fill's own
+// `its IRET' frames the extracode return address and `intret' is reused UNCHANGED:
+// the `ij' index field only picks which register holds the PC, and the mode comes
+// from СПСВ either way.  (2) No PC fixup: the extracode gate stores nextpc in ERET,
+// so unlike the fault path there is nothing to back up.  The stack switch is
+// unconditional (э77 only ever comes from user), so the frame is always at
+// [ustkbase] and the C dispatcher takes void, exactly as trap() does.
 
         .globl  syscall
 syscall: stop   077              // TODO: the syscall gate (extracode э77)
