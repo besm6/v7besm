@@ -77,8 +77,10 @@ The kernel is split into two static libs that are link-pulled so unused code is 
 and `0550`–`0577`, plus the routines C cannot express; it is still largely a skeleton, and
 **`besm6.o` must come first in `OBJ`** so its const contribution pins those vectors at their
 fixed addresses. `brz.s` is `drainbrz()`, alone in its own file for two reasons: it cannot be
-written in C (see below), and `kernel/test/` links it directly. `conf.c` is the device config
-table, and `x86.s` is the unbuilt x86 original, kept for reference.
+written in C (see below), and `kernel/test/` links it directly. `syscall.c` is split out of
+`trap.c` for that second reason alone — it holds the extracode door's C side (`syscall()` and
+`badextr()`), and `kernel/test/usys` links the real thing rather than a copy. `conf.c` is the
+device config table, and `x86.s` is the unbuilt x86 original, kept for reference.
 
 Diagnostic make targets (require the external `cast` tool / C compiler AST dump):
 - `make i` — preprocess each source to `.i`

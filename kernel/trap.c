@@ -22,15 +22,15 @@
  * the x86 there is no vector number to switch on and the gate passes none.  trap() reads
  * ГРП live -- the fault bits are not framed (reg.h) -- and folds it to one of these.
  *
- * T_SYSCALL is not reachable through 0500 at all: the extracode gate at 0577 is its own
- * door (besm6.S: syscall), and wiring it to the case below is task 15d.
+ * There is no T_SYSCALL: an extracode is not reachable through 0500 at all.  The hardware
+ * vectors э50-э77 straight to 0550-0577, so the syscall gate is its own door (besm6.S:
+ * `sysgate'/`badext') and its C side is kernel/syscall.c.
  */
-#define T_DATA    1  /* data protection: touched a closed page */
-#define T_INSN    2  /* instruction protection: fetched from a closed page */
-#define T_ILL     3  /* privileged instruction attempted in user mode */
-#define T_CHECK   4  /* instruction check: the word fetched is not an instruction */
-#define T_BREAK   5  /* address-break match (М034/М035) */
-#define T_SYSCALL 48 /* extracode э77 -- TODO 15d */
+#define T_DATA  1 /* data protection: touched a closed page */
+#define T_INSN  2 /* instruction protection: fetched from a closed page */
+#define T_ILL   3 /* privileged instruction attempted in user mode */
+#define T_CHECK 4 /* instruction check: the word fetched is not an instruction */
+#define T_BREAK 5 /* address-break match (М034/М035) */
 
 /*
  * Word indices of the user's saved registers in the trap frame (reg.h).
@@ -60,8 +60,6 @@ void trap(void)
 {
     register struct trap *tr = (struct trap *)u.u_stack;
     register int i           = 0;
-    register int *a;
-    register struct sysent *callp;
     time_t syst;
     unsigned grp;  /* ГРП, read live: the fault cause */
     unsigned page; /* the faulting virtual page (data violations only) */
@@ -161,37 +159,6 @@ void trap(void)
          * bit; there is no EFL/TBIT to clear, so re-arming belongs to procxmt(). */
         break;
 
-    case T_SYSCALL + USER: /* sys call */
-        u.u_error = 0;
-        /*
-         * TODO 15d: BESM-6 syscall ABI (cmd/sim/syscall.cpp) -- number from the
-         * `$77 N' operand (r14), last arg in ACC and the rest below r15, result
-         * in ACC and errno in r14 (0 on success).  No carry/EBIT.  The arg fetch
-         * and number decode below are x86-shaped placeholders kept only so the
-         * tree builds; 15d rewrites them.
-         */
-        a     = (int *)tr->r15;             /* TODO 15d: real arg staging */
-        callp = &sysent[u.u_ar0[R14] & 077]; /* TODO 15d: number from $77 N */
-        for (i = 0; i < callp->sy_narg; i++)
-            u.u_arg[i] = fuword((caddr_t)a++);
-        u.u_dirp     = (caddr_t)u.u_arg[0];
-        u.u_r.r_val1 = 0;
-        u.u_r.r_val2 = 0;
-        u.u_ap       = u.u_arg;
-        if (save(u.u_qsav)) {
-            if (u.u_error == 0)
-                u.u_error = EINTR;
-        } else {
-            (*callp->sy_call)();
-        }
-        if (u.u_error) {
-            u.u_ar0[R_ERRNO] = u.u_error; /* errno in r14, no carry bit */
-        } else {
-            u.u_ar0[ACC]     = u.u_r.r_val1;
-            u.u_ar0[R_VAL2]  = u.u_r.r_val2; /* TODO 15d: 2nd-result slot */
-            u.u_ar0[R_ERRNO] = 0;
-        }
-        goto out;
     }
     /*
      * If you run elaborate /bin/sh scripts, you'll

@@ -38,15 +38,19 @@
 // machine-register addresses (027 = SPSW, 020 = MOD = the C register M16) stay OCTAL, as they
 // read in the machine documentation.
 
-// Register indices used by the interrupt gate: SPSW the saved mode word, IRET the interrupt /
-// fault return address (М033 -- intrgate fills the frame's single RET slot from it), and MOD the C
-// register M16 (the address modifier).  The bit masks (SPSW_EXTRACODE, SPSW_INTERRUPT, ...) come
-// from the shared header; only these register indices are local here, since they are
-// `ita'/`its'/`sti' operands.  (The extracode-return register М032/ERET is the syscall gate's job,
-// task 15d -- not used here.)
+// Register indices used by the gates: SPSW the saved mode word, IRET the interrupt / fault return
+// address (М033), ERET the extracode return address (М032), and MOD the C register M16 (the
+// address modifier).  The bit masks (SPSW_EXTRACODE, SPSW_INTERRUPT, ...) come from the shared
+// header; only these register indices are local here, since they are `ita'/`its'/`sti' operands.
+//
+// IRET and ERET are the ONE difference between the asynchronous gates and the synchronous ones:
+// each door's frame fill reads the return register its own door uses (`its IRET' vs `its ERET')
+// into the frame's single RET slot, and the shared epilogue reloads that slot into IRET and leaves
+// through one hardcoded `3 ij' for all of them (see `intret' and include/sys/reg.h).
 #include "sys/besm6dev.h"
 SPSW = 027                      // saved mode word (М027)
 IRET = 033                      // interrupt / fault return address (М033)
+ERET = 032                      // extracode return address (М032)
 MOD  = 020                      // C register / address modifier (М020 = M16)
 
 // The vectors below must land on their physical addresses, so this segment is laid
@@ -89,7 +93,7 @@ MOD  = 020                      // C register / address modifier (М020 = M16)
       : uj badext               // 0574: extracode *74
       : uj badext               // 0575: extracode *75
       : uj badext               // 0576: extracode *76
-      : uj syscall              // 0577: extracode *77 -- the syscall gate
+      : uj sysgate              // 0577: extracode *77 -- the syscall gate
 
 // Temp cells for the two asynchronous gates below -- `intrgate' (0501) and `trapgate' (0500).
 // ONE copy serves both, and that is not an oversight:
@@ -190,28 +194,134 @@ bhalt:  stop                        // main returned / faulted upstream: resumab
 // straight to 0550-0577, one word each, and hands the effective address to the
 // handler in r14.  So the extracode gate is here, not in trap().
 //
-// э77 is the Unix system call (`$77 N', cf. cmd/sim and doc/Aout_Simulator.md);
-// every other extracode is one we do not implement.  Both are skeletons for now
-// -- they halt with a recognizable code, the way test/crt0.s's fault stub does,
-// rather than jump into C with no frame under them.
+// э77 is the Unix system call (`$77 N', cf. cmd/sim and doc/Aout_Simulator.md); every other
+// extracode is one we do not implement.  Each gets its own gate below -- `sysgate' calling
+// syscall() and `badext' calling badextr(), both in kernel/syscall.c.
 //
-// TODO (task 15d): this becomes `sysgate', which is `trapgate' with two changes.
-// (1) Add ERET = 032 and open with the Dubna OUTMACRO normalisation -- `ita ERET'
-// / `ati IRET', after the `atx save_a' and before the fill -- so the fill's own
-// `its IRET' frames the extracode return address and `intret' is reused UNCHANGED:
-// the `ij' index field only picks which register holds the PC, and the mode comes
-// from СПСВ either way.  (2) No PC fixup: the extracode gate stores nextpc in ERET,
-// so unlike the fault path there is nothing to back up.  The stack switch is
-// unconditional (э77 only ever comes from user), so the frame is always at
-// [ustkbase] and the C dispatcher takes void, exactly as trap() does.
+// BOTH ARE `trapgate' WITH EXACTLY ONE INSTRUCTION CHANGED: the FULSAV fill reads `its ERET'
+// (М032) where the fault gate reads `its IRET' (М033).  The header over `trapgate' and the one
+// over `intrgate' are the authority for every other step -- the five spills, why R, Y, M[16] and
+// M15 must be saved by hand, and the shared `intret' epilogue.  Three things are worth stating
+// here, because they are what makes the extracode door different:
+//
+//   * THE DOOR IS NORMALISED BY THE FILL, not by a copy.  The hardware puts an extracode's return
+//     address in ERET and an interrupt's in IRET, and `выпр' is a single hardcoded `3 ij' (М033).
+//     Dubna reconciles the two at EXIT, with the two-instruction OUTMACRO that copies ERET into
+//     IRET (doc/Context_Switch.md sec 8).  We reconcile them at ENTRY instead, for free: the fill
+//     already reads a return register live, so it just reads ERET, and `intret' is reused
+//     COMPLETELY UNMODIFIED.  Its `sti IRET' loads that address into М033 and its `3 ij' returns
+//     through it -- which is correct, because the `ij' index field only selects WHICH REGISTER
+//     holds the PC, while the mode (and so user-vs-supervisor) comes from СПСВ either way.
+//
+//   * NO PC FIXUP.  The extracode gate stores nextpc in ERET, so SPSW_NEXT_RK is never set by this
+//     door and there is nothing to back up -- unlike the fault path, whose two lines of fixup sit
+//     at the top of trap().
+//
+//   * THE STACK SWITCH IS UNCONDITIONAL, as in `trapgate': an extracode only ever comes from user
+//     (the kernel never issues one), so this door never nests, the frame is always at [ustkbase],
+//     and the C side takes void and finds it at u.u_stack.
+//
+// The two gates are duplicated rather than sharing a body with a discriminator.  Nothing before
+// the frame is filled can tell the doors apart -- the hardware identifies an extracode purely by
+// WHICH VECTOR WORD it lands on -- so sharing would cost a flag cell and a branch to save a block
+// that is otherwise identical.  This is the same call the file already makes for `trapgate' vs.
+// `intrgate'; KEEP THE COPIES IN STEP.
+//
+// Both are exercised standalone against SIMH by kernel/test/crt0s.S + usys.c, which forges user
+// mode, issues `$77 N' with arguments staged the real way, and checks ACC / r14 / r12 / r13 and a
+// balanced r15 on the way back.
 
-        .globl  syscall
-syscall: stop   077              // TODO: the syscall gate (extracode э77)
-        uj      syscall          // resumed?  halt again
+        .globl  sysgate
+sysgate:
+        // --- short save: the five registers the FULSAV pipeline cannot reach ---
+        atx     save_a              // A first, as the vector does (frees A as scratch)
+        rte     07777               // R -> A
+        atx     save_r
+        yta                         // Y -> A -- a full copy only because `rte' left ω = logical
+        atx     save_y
+        ita     MOD                 // M16 (C register) -> A -- must precede the stack switch,
+        atx     save_c              //   whose `[ustkbase]' escape is a `wtc' that loads M16
+        ita     15                  // interrupted M15 -> A -- before the stack switch repoints it
+        atx     save_sp
+
+        // --- stack switch: unconditional (see the header) ---
+     15 vtm     [ustkbase]          // M15 := kernel stack base (~076214) = frame base F
+
+        // --- fill the reg.h frame at [M15 ..] -- `trapgate's pipeline, with `its ERET' ---
+        xta     save_a
+        xts     save_r              // frame[0]  := A     ; A := R
+        xts     save_y              // frame[1]  := R     ; A := Y
+        its     ERET                // frame[2]  := Y     ; A := ERET (M032, live) <-- THE ONE CHANGE
+        its     SPSW                // frame[3]  := RET   ; A := SPSW (M027, live)
+        xts     save_c              // frame[4]  := SPSW  ; A := M16
+        xts     save_sp             // frame[5]  := M16   ; A := interrupted M15
+        its     14                  // frame[6]  := M15   ; A := M14 (live -- the `$77 N' operand)
+        its     13                  // frame[7]  := M14   ; A := M13 (live)
+        its     12
+        its     11
+        its     10
+        its     9
+        its     8
+        its     7
+        its     6
+        its     5
+        its     4
+        its     3
+        its     2
+        its     1                   // frame[19] := M2    ; A := M1
+        xts     save_a              // frame[20] := M1    ; M15 := F+21 (above the frame); A discarded
+
+     13 vjm     syscall             // syscall.c: marshal the arguments, dispatch, return
+
+        uj      intret              // the shared epilogue in `intrgate' below
+
+// badext -- extracodes э50-э76, which this kernel does not implement.  `sysgate' verbatim, ending
+// in a different call: badextr() signals SIGINS rather than halting the machine.  Note э20/э60 and
+// э21/э61 alias to one vector word each, and a user `стоп' arrives here as э63.
 
         .globl  badext
-badext: stop    076              // TODO: an extracode we do not implement
-        uj      badext
+badext:
+        // --- short save: the five registers the FULSAV pipeline cannot reach ---
+        atx     save_a
+        rte     07777
+        atx     save_r
+        yta
+        atx     save_y
+        ita     MOD
+        atx     save_c
+        ita     15
+        atx     save_sp
+
+        // --- stack switch: unconditional (an extracode only ever comes from user) ---
+     15 vtm     [ustkbase]
+
+        // --- fill the reg.h frame at [M15 ..] ---
+        xta     save_a
+        xts     save_r
+        xts     save_y
+        its     ERET                // the extracode return address, as in `sysgate'
+        its     SPSW
+        xts     save_c
+        xts     save_sp
+        its     14
+        its     13
+        its     12
+        its     11
+        its     10
+        its     9
+        its     8
+        its     7
+        its     6
+        its     5
+        its     4
+        its     3
+        its     2
+        its     1
+        xts     save_a
+
+     13 vjm     badextr             // syscall.c: SIGINS
+
+        uj      intret
 
 // ============================================================================
 // Internal-interrupt (fault) entry

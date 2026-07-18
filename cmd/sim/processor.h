@@ -95,6 +95,9 @@ private:
 
     // Finish a syscall: result in the accumulator, errno (0 on success) in M[14].
     void sys_ok(int64_t result);
+    // ... and a second result in r12, for v7's two-value calls (pipe, wait,
+    // getpid, getuid, getgid).  See R_VAL2 in include/sys/reg.h.
+    void sys_ok2(int64_t v1, int64_t v2);
     void sys_err(int host_errno);
     void sys_ret(int64_t result); // -1 -> sys_err(errno), else sys_ok(result)
 

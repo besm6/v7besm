@@ -9,7 +9,10 @@
 // BESM-6 calling convention (doc/Besm6_Calling_Conventions.md): for a call of N
 // arguments the last one is in the accumulator and arguments 1..N-1 sit just
 // below the stack pointer M[017].  The result is returned in the accumulator and
-// errno (0 on success) in register M[14].
+// errno (0 on success) in register M[14].  The five calls v7 gives a SECOND
+// result -- pipe, wait, getpid, getuid, getgid -- return it in r12 (sys_ok2),
+// which is what the kernel does too (R_VAL2 in include/sys/reg.h), so one binary
+// runs on both.  r13 is left alone: it is the caller's return address.
 //
 // BESM-6 makes this much simpler than apout: every C scalar is one 48-bit word,
 // so time_t/off_t and every struct stat field are a single word — none of the
@@ -95,8 +98,12 @@ enum {
 // must match the `count` passed to syscall_arg() in each case below.  The count
 // is the true prototype arity even for calls whose arguments b6sim ignores
 // (e.g. ioctl, mount): the caller still pushed those words and expects them
-// popped.  Pointer arguments passed in the accumulator (wait/pipe/times/ftime)
-// count as the single, last argument, so those are 1.
+// popped.  Pointer arguments passed in the accumulator (times/ftime) count as
+// the single, last argument, so those are 1.
+//
+// wait and pipe take NO arguments here, unlike their v7 C prototypes: both
+// deliver their second result in r12 (see sys_ok2) rather than through a user
+// buffer, matching the kernel (include/sys/reg.h, R_VAL2).
 //
 static unsigned syscall_nargs(unsigned num)
 {
@@ -109,6 +116,8 @@ static unsigned syscall_nargs(unsigned num)
     case SYS_getgid:
     case SYS_pause:
     case SYS_sync:
+    case SYS_wait:
+    case SYS_pipe:
         return 0;
 
     // Three-argument calls.
@@ -296,6 +305,29 @@ void Processor::sys_ok(int64_t result)
 }
 
 //
+// Finish a syscall that has TWO results: the first in the accumulator as usual,
+// the second in r12, errno cleared.  This is v7's second-return-value convention
+// (the PDP-11 put it in r1), used by pipe, wait, getpid, getuid and getgid.
+//
+// r12 and not r13: r13 is the ABI's return-address register and belongs to the
+// caller (doc/Besm6_Calling_Conventions.md).  It matches the kernel exactly --
+// R_VAL2 in include/sys/reg.h -- so one binary runs on both.
+//
+// NOTE THE WIDTH.  An index register is 15 bits, so a second result above 32767
+// is truncated.  Nothing a v7 guest produces can overflow it (pids stop below
+// 30000, and fds/uids/gids/statuses are far smaller), but a HOST pid can -- so
+// getpid()'s and fork()'s second value may not match the host's getppid() when
+// b6sim runs on a modern system.  The first result is unaffected: it goes to the
+// accumulator, which is a full word.
+//
+void Processor::sys_ok2(int64_t v1, int64_t v2)
+{
+    core.ACC   = (Word)v1 & BITS41;
+    core.M[12] = ADDR(v2);
+    core.M[14] = 0;
+}
+
+//
 // Finish a syscall on error: -1 in the accumulator, errno in M[14].
 //
 void Processor::sys_err(int host_errno)
@@ -370,13 +402,19 @@ void Processor::syscall(unsigned num)
         throw Exception(""); // empty message: clean halt
 
     case SYS_fork: {
-        // pid_t fork(void): parent gets the child pid, child gets 0.
+        // fork(): v7's two-value return, matching the kernel (kernel/sys1.c).
+        // Each side gets the OTHER's pid in the accumulator -- distinct, but not
+        // self-identifying -- so r12 says which side you are: 1 in the child,
+        // 0 in the parent.  (Host fork's own "0 in the child" is not the guest
+        // ABI; do not lean on the accumulator to tell them apart.)
         fflush(nullptr);
         pid_t pid = fork();
         if (pid < 0)
             sys_err(errno);
+        else if (pid == 0)
+            sys_ok2(::getppid(), 1); // the child
         else
-            sys_ok(pid); // 0 in the child, child pid in the parent
+            sys_ok2(pid, 0); // the parent
         break;
     }
 
@@ -430,24 +468,22 @@ void Processor::syscall(unsigned num)
         break;
 
     case SYS_wait: {
-        // int wait(int *status): status word (optional) addressed by ACC.
+        // wait(): no arguments.  The pid comes back in the accumulator and the
+        // status in r12, rather than through a user buffer -- the kernel's
+        // wait() sets u_r.r_val1/r_val2 the same way (kernel/sys1.c).
         int status = 0;
         pid_t pid  = ::wait(&status);
         if (pid < 0) {
             sys_err(errno);
             break;
         }
-        unsigned sp = core.ACC & BITS(15);
-        if (sp != 0) {
-            // v7 status: high byte = exit code, low byte = terminating signal.
-            int v7 = 0;
-            if (WIFEXITED(status))
-                v7 = (WEXITSTATUS(status) & 0xff) << 8;
-            else if (WIFSIGNALED(status))
-                v7 = WTERMSIG(status) & 0x7f;
-            machine.mem_store(sp, v7);
-        }
-        sys_ok(pid);
+        // v7 status: high byte = exit code, low byte = terminating signal.
+        int v7 = 0;
+        if (WIFEXITED(status))
+            v7 = (WEXITSTATUS(status) & 0xff) << 8;
+        else if (WIFSIGNALED(status))
+            v7 = WTERMSIG(status) & 0x7f;
+        sys_ok2(pid, v7);
         break;
     }
 
@@ -574,7 +610,8 @@ void Processor::syscall(unsigned num)
     }
 
     case SYS_getpid:
-        sys_ok(::getpid());
+        // v7 returns the parent's pid as the second result.
+        sys_ok2(::getpid(), ::getppid());
         break;
 
     case SYS_setuid:
@@ -582,7 +619,8 @@ void Processor::syscall(unsigned num)
         break;
 
     case SYS_getuid:
-        sys_ok(::getuid());
+        // v7 returns the effective uid as the second result.
+        sys_ok2(::getuid(), ::geteuid());
         break;
 
     case SYS_setgid:
@@ -590,7 +628,8 @@ void Processor::syscall(unsigned num)
         break;
 
     case SYS_getgid:
-        sys_ok(::getgid());
+        // v7 returns the effective gid as the second result.
+        sys_ok2(::getgid(), ::getegid());
         break;
 
     case SYS_stime:
@@ -673,16 +712,16 @@ void Processor::syscall(unsigned num)
         break;
 
     case SYS_pipe: {
-        // int pipe(int fildes[2])
+        // pipe(): no arguments.  The two descriptors come back as the two
+        // results -- read end in the accumulator, write end in r12 -- rather
+        // than through a user buffer, matching the kernel's pipe() in
+        // kernel/pipe.c (u_r.r_val1 / u_r.r_val2).
         int fd[2];
         if (::pipe(fd) < 0) {
             sys_err(errno);
             break;
         }
-        unsigned p = core.ACC & BITS(15);
-        machine.mem_store(p, fd[0]);
-        machine.mem_store(p + 1, fd[1]);
-        sys_ok(0);
+        sys_ok2(fd[0], fd[1]);
         break;
     }
 

@@ -149,8 +149,8 @@ save field is **24 words at offset 0** of the task block (`dubna.dd:488`):
 | `0`       | accumulator                            | `CYMMATOP`               |
 | `1`       | mode register **R**                    | `PEЖИM  A Y` — "AU mode" |
 | `2`       | **Y** younger bits                   | `PEГИCTP MЛAДШИX PAЗPЯДOB` |
-| `3`       | **ИРЕТ** — interrupt return address    | `AДPEC ПPEPЫBAHИЯ (И33)` |
-| `4`       | **ЭРЕТ** — extracode return address    | `AДPEC ЭKCTPAKOДA (И32)` |
+| `3`       | **IRET** — interrupt return address    | `AДPEC ПPEPЫBAHИЯ (И33)` |
+| `4`       | **ERET** — extracode return address    | `AДPEC ЭKCTPAKOДA (И32)` |
 | `5`       | **СПСВ** — saved mode word             | `PEЖИM  Y Y  (И27)` |
 | `6`–`13`  | М16, М15, М14, М13, М12, М11, М10, М9  | |
 | `14`–`21` | М8, М7, М6, М5, М4, М3, М2, М1         | |
@@ -165,8 +165,8 @@ The layout is independently confirmed by the symbolic offsets declared 4 000 lin
 `dubna.dd:16446-16456`, which land on exactly the right slots:
 
 ```
-16446    S33: ,EQU, 3       . slot 3  = ИРЕТ
-16447    S32: ,EQU, 4       . slot 4  = ЭРЕТ
+16446    S33: ,EQU, 3       . slot 3  = IRET
+16447    S32: ,EQU, 4       . slot 4  = ERET
 16448    S27: ,EQU, 5       . slot 5  = СПСВ
 16449    I14: ,EQU, 10B     . slot 8  = М14
 16456     I5: ,EQU, 21B     . slot 17 = М5
@@ -357,9 +357,9 @@ stow-away"**.
 15478    :,XTA,SAVAC                . <- SAVTOTAL enters HERE
 15479    ,XTS,SAVSR                 . [ИПЗ+00] := SAVAC  ; A := SAVSR
 15480    ,XTS,SAVAR                 . [ИПЗ+01] := SAVSR  ; A := SAVAR
-15481    ,ITS,33B                   . [ИПЗ+02] := SAVAR  ; A := М033 (ИРЕТ)
-15482    ,ITS,32B                   . [ИПЗ+03] := ИРЕТ   ; A := М032 (ЭРЕТ)
-15483    ,ITS,27B                   . [ИПЗ+04] := ЭРЕТ   ; A := М027 (СПСВ)
+15481    ,ITS,33B                   . [ИПЗ+02] := SAVAR  ; A := М033 (IRET)
+15482    ,ITS,32B                   . [ИПЗ+03] := IRET   ; A := М032 (ERET)
+15483    ,ITS,27B                   . [ИПЗ+04] := ERET   ; A := М027 (СПСВ)
 15484    ,XTS,SAVS16                . [ИПЗ+05] := СПСВ   ; A := SAVS16
 15485    ,XTS,SAVI15                . [ИПЗ+06] := SAVS16 ; A := SAVI15
 15486    ,XTS,SAVI14                . [ИПЗ+07] := SAVI15 ; A := SAVI14
@@ -380,7 +380,7 @@ stow-away"**.
 15501    13,UJ,.                    . return via М13
 ```
 
-Every destination matches the §2 layout exactly: A, R, Y, ИРЕТ, ЭРЕТ, СПСВ, М16…М1.
+Every destination matches the §2 layout exactly: A, R, Y, IRET, ERET, СПСВ, М16…М1.
 
 **This is a software pipeline.** Each `ITS`/`XTS` simultaneously retires the previous value and
 fetches the next, so 22 words are saved in 22 instructions with **no scratch cell and no loop
@@ -451,9 +451,9 @@ A is garbage afterward, which is why 15581 reloads it.
 restore R.** Software does, and if software forgets, the interrupted program resumes with whatever
 ω-mode and NTR suppress bits the handler happened to leave behind. Hold that thought for §14.
 
-### `3,32,` is `выпр` through ИРЕТ
+### `3,32,` is `выпр` through IRET
 
-Index field 3, and the hardware computes `PC = M[(reg & 3) | 030]` → `M[033]` = **ИРЕТ**. It also
+Index field 3, and the hardware computes `PC = M[(reg & 3) | 030]` → `M[033]` = **IRET**. It also
 restores **БлП, БлЗ, БлПр and the supervisor bits from СПСВ**, all in one instruction — see
 [Memory_Mapping.md](Memory_Mapping.md), "выпр". So the mode word is *not* restored by any
 instruction in the listing; `ATI 21B` writes the *current* ПСВ, which `выпр` immediately overwrites
@@ -492,7 +492,7 @@ interrupt"*. Only when ГРП is quiet does 15516 go on to check the scheduler.
 
 This is the best idea in the file.
 
-An extracode returns via ЭРЕТ (`выпр` with reg ≡ 2), an interrupt via ИРЕТ (reg ≡ 3). They cannot
+An extracode returns via ERET (`выпр` with reg ≡ 2), an interrupt via IRET (reg ≡ 3). They cannot
 share an exit path — which is precisely the hazard [Memory_Mapping.md](Memory_Mapping.md) flags:
 *"A single `выпр` in a shared trap-exit path must therefore know which door it came in by."*
 
@@ -501,27 +501,27 @@ Dubna's answer is not to branch. It **normalises the door** (`dubna.dd:15506-155
 ```
 15504   C            BЫXOД ИЗ ЭKCTPAKOДOB     . "EXIT FROM EXTRACODES"
 15506    OUTMACRO:,ENTRY,
-15507    ,ITA,32B                             . A := М032 = ЭРЕТ
-15508    ,ATI,33B                             . М033 := A  -> ИРЕТ
+15507    ,ITA,32B                             . A := М032 = ERET
+15508    ,ATI,33B                             . М033 := A  -> IRET
 15509   C
 15510   C                 BOЗBPAT ИЗ ПPEPЫBAHИЯ
 15512    RETURN:,ENTRY,.
 ```
 
-**Two instructions.** `OUTMACRO` copies ЭРЕТ into ИРЕТ and falls straight through into `RETURN`, so
+**Two instructions.** `OUTMACRO` copies ERET into IRET and falls straight through into `RETURN`, so
 the single hardcoded `3,32,` serves both doors. And the payoff compounds: every system-call return
 now automatically inherits the interrupt epilogue's ГРП polling, its reschedule check and its
 debugger hooks, for free.
 
 The third door is a task that was never interrupted at all. `SELECT` (`dubna.dd:15596-15600`
-onward) **forges** ИРЕТ and СПСВ and executes the same instruction:
+onward) **forges** IRET and СПСВ and executes the same instruction:
 
 ```
 15596    SELECT:,ENTRY,.
 15597    SELECT:,24,2003B                . уиа 2003(0) — lock down: БлП+БлЗ+БлПр
 15598    15,VTM, Д H З
 ...
-         12,MTJ,33B                      . М033 := М12   (forge ИРЕТ)
+         12,MTJ,33B                      . М033 := М12   (forge IRET)
          12,VTM,13B                      . М12 := 013
          12,MTJ,27B                      . М027 := М12   (forge СПСВ = 013)
          3,IJ,                           . выпр — "return" into a task that never trapped
@@ -610,9 +610,41 @@ Note also the **vector aliases**: `э20`/`э60` share word 0560 and `э21`/`э61
 the hardware maps `э20`/`э21` to `0540 + (opcode >> 3)`. Pick one of each pair and leave the other
 alone.
 
-Finally, **ЭРЕТ already points past the extracode** — the gate stores `nextpc`, not `pc`. An
+Finally, **ERET already points past the extracode** — the gate stores `nextpc`, not `pc`. An
 extracode needs no "skip the faulting instruction" fixup, unlike the fault path, where
 `SPSW_NEXT_RK` and `SPSW_RIGHT_INSTR` must be unwound by hand.
+
+### An extracode always returns to the left half of the next word
+
+`nextpc` is `PC + 1` — the **next word** — and the extracode entry saves **no right-instruction
+indicator**: it clears `RUU_RIGHT_INSTR` on the way in and builds СПСВ from the mode bits alone,
+so `выпр` resumes at the **left half** of ERET regardless of which half the extracode itself
+occupied. The consequence is sharp:
+
+> **An extracode in a left half takes the instruction packed beside it down with it.** The right
+> half of the extracode's own word is never executed.
+
+An extracode is perfectly legal in either half — the constraint is on what *follows* it inside the
+same word. From a right half nothing is lost, which is why putting it there is the simple
+convention; from a left half, whatever shares the word must be filler you do not mind losing.
+
+This is the same word-granular return `vjm` has, and it is not something a kernel can repair — the
+half is not recorded anywhere for the gate to find. So it is a constraint on the *caller*, and a
+syscall stub written as
+
+```
+putch:  $77 4           // LEFT half
+     13 uj              // RIGHT half -- LOST
+```
+
+falls straight through the return. Verified on the machine (SIMH `besm6_cpu.c`, the `э50…э77`
+arm: `M[ERET] = nextpc; … RUU &= ~RUU_RIGHT_INSTR`) by `kernel/test/usys`, whose `uprog` carries
+a `10 utm 0` no-op before each extracode for exactly this reason — dropping one costs the store
+that follows it.
+
+**`b6sim` does not model this.** The user-level simulator services `$77` inline and continues to
+the next half-instruction, so a stub that works there can still fall through under the real kernel
+(see [Aout_Simulator.md](Aout_Simulator.md) §3).
 
 ---
 
@@ -728,7 +760,7 @@ That is about as strong an independent confirmation as this port is ever going t
 15928    ,ITA,15.                      . A := М15 = the VJM return address
 15929    ,WTC,Г Y C.                   . C := (ГУС)
 15930    15,VTM,.                      . М15 := ИПЗ base
-15931    15,ATX,3.                     . [ИПЗ+03] := return address   <- И33 = ИРЕТ = the resume PC
+15931    15,ATX,3.                     . [ИПЗ+03] := return address   <- И33 = IRET = the resume PC
 15932    ,XTA,C7.
 15933    15,ATX,5.                     . [ИПЗ+05] := 7                <- И27 = СПСВ = БлП|БлЗ|БлПр
 15934    ,RTE,177B.
@@ -746,8 +778,8 @@ That is about as strong an independent confirmation as this port is ever going t
 ```
 
 **Line 15931 is the point.** `SAVIND` *forges the resume PC*: it plants the `VJM` return address
-into slot 03 (ИРЕТ) and mode 7 into slot 05 (СПСВ). When the scheduler later restores this ИПЗ and
-executes `выпр`, the CPU pops ИРЕТ and the task **resumes at the instruction after its own
+into slot 03 (IRET) and mode 7 into slot 05 (СПСВ). When the scheduler later restores this ИПЗ and
+executes `выпр`, the CPU pops IRET and the task **resumes at the instruction after its own
 `15,VJM,SAVIND`**. A cooperative coroutine yield built entirely out of the interrupt-return
 hardware — no separate mechanism at all.
 
@@ -768,9 +800,9 @@ up:
 15946    BLSAVE:,BSS,
 15947    ,ATX,ROLOUTSC
 15948    15,XTA,3
-15949    ,ATX,M33                      . stash the task's real ИРЕТ
+15949    ,ATX,M33                      . stash the task's real IRET
 15950    15,XTA,4
-15951    ,ATX,M32                      . ... and ЭРЕТ
+15951    ,ATX,M32                      . ... and ERET
 15952    15,XTA,5
 15953    ,ATX,M27                      . ... and СПСВ
 15954    14,VTM,TASKSAVR
@@ -814,8 +846,8 @@ used in production.
 15896    ,STX,SAVI15.
 15897    ,STX,SAVS16.
 15898    ,STI,27B.                     . М027 := СПСВ
-15899    ,STI,32B.                     . М032 := ЭРЕТ
-15900    ,STI,33B.                     . М033 := ИРЕТ
+15899    ,STI,32B.                     . М032 := ERET
+15900    ,STI,33B.                     . М033 := IRET
 15901    ,STX,SAVAR.
 15902    ,STX,SAVSR.
 15903    ,STX,SAVAC.
@@ -1162,7 +1194,7 @@ Recorded, not applied, like the three above; it belongs with task 15.
   cell, the accumulator as the pipeline register. This is what `save()`/`resume()` should be built
   from — not a loop, and certainly not `vtm`+`atx` pairs.
 - **`OUTMACRO`'s two-instruction door-merge** (§8) applies directly to task 15's shared exit. Copy
-  ЭРЕТ into ИРЕТ and let one `выпр` serve both the syscall gate and the interrupt gate, rather than
+  ERET into IRET and let one `выпр` serve both the syscall gate and the interrupt gate, rather than
   branching on the door. The bonus — the syscall return inheriting the interrupt epilogue's pending
   check — is worth having on its own.
 - **The two-tier save** (§4, §6). Most interrupts never park a task, so the prologue saves the

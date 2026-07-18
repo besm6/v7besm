@@ -79,6 +79,8 @@ enum {
     SYS_stat   = 18,
     SYS_seek   = 19,
     SYS_getpid = 20,
+    SYS_getuid = 24,
+    SYS_getgid = 47,
     SYS_pipe   = 42,
     SYS_fork   = 2,
 };
@@ -258,10 +260,20 @@ TEST(Syscall, StackCleanup)
     // 0-argument getpid: nothing pushed, r15 left unchanged.
     run_syscall(machine, SYS_getpid, {}, 0);
     EXPECT_EQ(machine.cpu.get_m(017), STACK);
+
+    // pipe() takes no arguments either, now that both descriptors come back in
+    // registers rather than through a user buffer: r15 must not move.
+    run_syscall(machine, SYS_pipe, {}, 0);
+    ::close((int)machine.cpu.get_acc());
+    ::close((int)machine.cpu.get_m(12));
+    EXPECT_EQ(machine.cpu.get_m(017), STACK);
 }
 
 //
-// getpid() returns the host pid.
+// getpid() returns the host pid, and the parent's pid as v7's second result in
+// r12 (R_VAL2; see include/sys/reg.h).  r12 is an index register -- 15 bits --
+// so a host ppid above 32767 arrives truncated; that is the ABI, and a v7 guest
+// never generates a pid that large.
 //
 TEST(Syscall, Getpid)
 {
@@ -270,6 +282,33 @@ TEST(Syscall, Getpid)
 
     run_syscall(machine, SYS_getpid, {}, 0);
     EXPECT_EQ((long)machine.cpu.get_acc(), (long)getpid());
+    EXPECT_EQ((long)machine.cpu.get_m(12), (long)(getppid() & 077777));
+    EXPECT_EQ(machine.cpu.get_m(14), 0u);
+}
+
+//
+// getuid()/getgid() return the real id in the accumulator and the effective one
+// in r12, as v7 does.
+//
+TEST(Syscall, Getuid)
+{
+    Memory memory;
+    Machine machine{ memory };
+
+    run_syscall(machine, SYS_getuid, {}, 0);
+    EXPECT_EQ((long)machine.cpu.get_acc(), (long)getuid());
+    EXPECT_EQ((long)machine.cpu.get_m(12), (long)geteuid());
+    EXPECT_EQ(machine.cpu.get_m(14), 0u);
+}
+
+TEST(Syscall, Getgid)
+{
+    Memory memory;
+    Machine machine{ memory };
+
+    run_syscall(machine, SYS_getgid, {}, 0);
+    EXPECT_EQ((long)machine.cpu.get_acc(), (long)getgid());
+    EXPECT_EQ((long)machine.cpu.get_m(12), (long)getegid());
     EXPECT_EQ(machine.cpu.get_m(14), 0u);
 }
 
@@ -402,21 +441,23 @@ TEST(Syscall, Break)
 }
 
 //
-// pipe() returns two fds; data written to one is read back from the other.
+// pipe() returns the two fds as its two results -- read end in the accumulator,
+// write end in r12 (R_VAL2) -- and data written to one is read back from the
+// other.
 //
 TEST(Syscall, Pipe)
 {
     Memory memory;
     Machine machine{ memory };
 
-    const unsigned P = 0x400;
-    run_syscall(machine, SYS_pipe, {}, P);
-    EXPECT_EQ(machine.cpu.get_acc(), 0u);
+    run_syscall(machine, SYS_pipe, {}, 0);
+    EXPECT_EQ(machine.cpu.get_m(14), 0u);
 
-    int rfd = (int)memory.load(P);
-    int wfd = (int)memory.load(P + 1);
+    int rfd = (int)machine.cpu.get_acc();
+    int wfd = (int)machine.cpu.get_m(12);
     ASSERT_GE(rfd, 0);
     ASSERT_GE(wfd, 0);
+    ASSERT_NE(rfd, wfd);
 
     // Host writes into the write end; the guest reads from the read end.
     ASSERT_EQ(::write(wfd, "xy", 2), 2);
@@ -430,7 +471,9 @@ TEST(Syscall, Pipe)
 }
 
 //
-// fork()/wait(): the child exits with a status the parent collects.
+// fork()/wait(): the child exits with a status the parent collects.  Both use
+// v7's two-value return -- fork says which side you are in r12, and wait brings
+// the pid back in the accumulator with the status in r12.
 //
 TEST(Syscall, ForkWait)
 {
@@ -438,17 +481,16 @@ TEST(Syscall, ForkWait)
     Machine machine{ memory };
 
     run_syscall(machine, SYS_fork, {}, 0);
-    Word acc = machine.cpu.get_acc();
-    if (acc == 0) {
+    if (machine.cpu.get_m(12) == 1) {
         // Forked child: leave the gtest harness immediately with a known code.
         _exit(42);
     }
-    ASSERT_GT((long)acc, 0);
+    Word child = machine.cpu.get_acc();
+    ASSERT_GT((long)child, 0);
 
-    const unsigned STP = 0x600;
-    run_syscall(machine, SYS_wait, {}, STP);
-    EXPECT_EQ(machine.cpu.get_acc(), acc); // pid of the reaped child
-    EXPECT_EQ((memory.load(STP) >> 8) & 0xff, 42u);
+    run_syscall(machine, SYS_wait, {}, 0);
+    EXPECT_EQ(machine.cpu.get_acc(), child); // pid of the reaped child
+    EXPECT_EQ((machine.cpu.get_m(12) >> 8) & 0xff, 42u);
 }
 
 //

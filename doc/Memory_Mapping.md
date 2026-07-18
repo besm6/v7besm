@@ -537,7 +537,7 @@ void op_int_1 (const char *msg)
 ```
 — [besm6_cpu.c:1728](https://github.com/besm6/simh/blob/master/BESM6/besm6_cpu.c#L1728)
 
-The old БлП/БлЗ/БлПр and the old supervisor bits go into **СПСВ**; the PC goes into **ИРЕТ**
+The old БлП/БлЗ/БлПр and the old supervisor bits go into **СПСВ**; the PC goes into **IRET**
 (`M[033]`). Then **БлП, БлЗ and БлПр are all forced on** — mapping off, protection off, external
 interrupts off — and control lands at physical **`0500`** (internal fault) or **`0501`** (external
 interrupt, `op_int_2`, [besm6_cpu.c:1750](https://github.com/besm6/simh/blob/master/BESM6/besm6_cpu.c#L1750)).
@@ -567,7 +567,7 @@ else
 
 The differences from an interrupt matter:
 
-* The return address goes to **ЭРЕТ** (`M[032]`), not ИРЕТ.
+* The return address goes to **ERET** (`M[032]`), not IRET.
 * **The effective address is passed to the handler in `M[14]`** — that is the system-call argument
   register.
 * ПСВ is **overwritten** (`=`, not `|=`). ПоК and the write-watch bit are *lost* across an
@@ -604,8 +604,8 @@ The **index-register field selects the return address register**: `PC = M[(reg &
 
 | `reg & 3` | Register | Used for |
 |-----------|----------|----------|
-| 2 | `M[032]` = **ЭРЕТ** | return from an extracode |
-| 3 | `M[033]` = **ИРЕТ** | return from an interrupt |
+| 2 | `M[032]` = **ERET** | return from an extracode |
+| 3 | `M[033]` = **IRET** | return from an interrupt |
 
 ### The vector map
 
@@ -738,7 +738,7 @@ to `mask` in a single instruction. Only those three bits can be set this way —
 write-watch bit cannot.
 
 The general route is `040 «уи»`, which in supervisor mode writes any of `M[0]`…`M[037]`, ПСВ
-(`M[021]`) included. Use `уиа` for the mode bits and `уи` for everything else (ЭРЕТ, ИРЕТ, СПСВ,
+(`M[021]`) included. Use `уиа` for the mode bits and `уи` for everything else (ERET, IRET, СПСВ,
 ИБП, ДВП).
 
 ### Worked examples
@@ -963,13 +963,13 @@ with mapping off will do it.
 one of each pair as the system-call trap and leave the other alone.
 
 **11. Interrupts and extracodes save state differently.** An extracode *overwrites* ПСВ (losing ПоК
-and the write-watch bit); an interrupt *ORs* the disable bits in. And an extracode returns via ЭРЕТ
-(`выпр` with reg ≡ 2), an interrupt via ИРЕТ (reg ≡ 3). A single `выпр` in a shared trap-exit path
+and the write-watch bit); an interrupt *ORs* the disable bits in. And an extracode returns via ERET
+(`выпр` with reg ≡ 2), an interrupt via IRET (reg ≡ 3). A single `выпр` in a shared trap-exit path
 must therefore know which door it came in by.
 
-**12. There is exactly one saved-state slot.** СПСВ, ЭРЕТ and ИРЕТ are single registers, not a
+**12. There is exactly one saved-state slot.** СПСВ, ERET and IRET are single registers, not a
 stack. Interrupts are disabled on entry (БлПр is forced on), and a second internal fault while
-handling the first is fatal — `STOP_DOUBLE_INTR`. The kernel must save СПСВ/ИРЕТ to its own stack
+handling the first is fatal — `STOP_DOUBLE_INTR`. The kernel must save СПСВ/IRET to its own stack
 before it does anything that can fault, and before it re-enables interrupts.
 
 **13. Hardware debug registers exist.** ИБП (`M[034]`, КРА) is an execute breakpoint and ДВП

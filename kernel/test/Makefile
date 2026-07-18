@@ -14,7 +14,7 @@ NM      = b6nm
 CFLAGS  = -I../../include
 LIBDIR  = $$HOME/.local/share/besm6/lib
 
-PROGS   = hello sctest mmutest uintr utrap
+PROGS   = hello sctest mmutest uintr utrap usys
 
 all:    $(PROGS)
 
@@ -26,6 +26,7 @@ test:   $(PROGS)
 	besm6 mmutest.ini
 	besm6 uintr.ini
 	besm6 utrap.ini
+	besm6 usys.ini
 
 clean:
 	rm -f *.o *.dis *.nm $(PROGS)
@@ -65,12 +66,27 @@ utrap:  crt0t.o utrap.o utab.o brz.o
 	$(DISASM) -c $@ > $@.dis
 	$(NM) -n $@ > $@.nm
 
-# crt0u.S/crt0t.S are preprocessed (they #include sys/besm6dev.h), so build them through the
+# usys is the third forge test, on the EXTRACODE door (0577/0550).  Unlike uintr and utrap it
+# links the code under test itself -- the kernel's real syscall.o -- which is why that dispatcher
+# lives in its own file (kernel/syscall.c); only the gates are duplicated, into crt0s.S.  It also
+# needs usermem.o for fuword(), which syscall() marshals the arguments with.  See usys.ini.
+usys:   crt0s.o usys.o syscall.o utab.o brz.o usermem.o
+	$(LD) crt0s.o usys.o syscall.o utab.o brz.o usermem.o -o $@ -L$(LIBDIR) -lc
+	$(DISASM) -c $@ > $@.dis
+	$(NM) -n $@ > $@.nm
+
+syscall.o: ../syscall.c
+	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@
+
+# crt0u.S/crt0t.S/crt0s.S are preprocessed (they #include sys/besm6dev.h), so build them through the
 # compiler driver with the include path, not the bare assembler.
 crt0u.o: crt0u.S
 	$(CC) $(CFLAGS) -c $< -o $@
 
 crt0t.o: crt0t.S
+	$(CC) $(CFLAGS) -c $< -o $@
+
+crt0s.o: crt0s.S
 	$(CC) $(CFLAGS) -c $< -o $@
 
 utab.o: ../utab.c

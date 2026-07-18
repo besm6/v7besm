@@ -236,10 +236,21 @@ extern long tk_nin;
 extern long tk_nout;
 
 /*
- * Structure of the system-entry table
+ * Structure of the system-entry table.
+ *
+ * NSYSENT must match the array bound in kernel/sysent.c: syscall() RANGE-CHECKS
+ * the number the user put in the `$77 N' effective address against it rather
+ * than masking, so a table and a check that drift apart would dispatch garbage.
+ *
+ * sy_nrarg is vestigial on this machine and is read nowhere.  It counted the
+ * PDP-11's args-already-in-registers; here the count is fixed by the ABI --
+ * exactly one argument (the last) arrives in the accumulator for any narg >= 1,
+ * and the rest are on the user stack (doc/Besm6_Calling_Conventions.md).
  */
+#define NSYSENT 64
+
 extern struct sysent {
     char sy_narg;          /* total number of arguments */
-    char sy_nrarg;         /* number of args in registers */
+    char sy_nrarg;         /* number of args in registers (unused: see above) */
     void (*sy_call)(void); /* handler */
 } sysent[];

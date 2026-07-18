@@ -95,6 +95,21 @@ argument is left in the accumulator, the **result** comes back in the accumulato
 Note that for syscalls `r14` does not have to hold the argument count as a negative number.
 Value of `r14` is ignored on input to syscalls.
 
+Five calls have a **second result**, which v7 returned in the PDP-11's `r1` and which comes back
+here in **`r12`**: `pipe` (read end in the accumulator, write end in `r12`), `wait` (pid, status),
+`fork` (the other side's pid, and 1 in the child / 0 in the parent), `getpid` (pid, ppid),
+`getuid` (real, effective) and `getgid` (real, effective). Because `pipe` and `wait` deliver
+their second value in a register rather than through a user buffer, they take **no arguments**
+at all here, unlike their v7 C prototypes.
+
+`r12` and not `r13`: `r13` is the ABI's return-address register and belongs to the caller. The
+BESM-6 Unix kernel uses the same slot — `R_VAL2` in
+[`include/sys/reg.h`](../include/sys/reg.h) — so one binary runs on both. Note that `r12` is an
+index register and therefore **15 bits**: a second result above 32767 is truncated. Nothing a
+v7 guest produces comes close, but a *host* pid can, so `getpid`/`fork`'s second value may not
+match the host's `getppid()` on a modern system. The first result is unaffected — the
+accumulator is a full word.
+
 The `$77 N` trap stands in for the called function, so it also performs the callee's stack
 cleanup: on return it decrements `r15` by *N*−1 — the number of arguments the caller pushed
 below `r15` (the *N*th argument travelled in the accumulator and was never pushed). Calls with
@@ -102,6 +117,17 @@ below `r15` (the *N*th argument travelled in the accumulator and was never pushe
 syscall number itself (each v7 syscall has a fixed arity). This means naked syscall stubs such
 as [`putch.s`](../cmd/sim/tmp/putch.s) — just `$77 N` followed by `13 uj` — need no
 `c/save`/`c/ret` frame to keep the caller's stack balanced.
+
+> **Known divergence from the real machine: the half-word after `$77`.**
+> `b6sim` services `$77` **inline** and carries straight on to the next half-instruction. The
+> real BESM-6 does not: an extracode vectors to `0550`–`0577` and its return register ERET holds
+> a **word** address (`PC + 1`) with no right-instruction indicator, so `выпр` always resumes at
+> the **left half of the next word** — whichever half the extracode itself was in — and anything
+> packed after it in the same word is never executed. See
+> [Context_Switch.md](Context_Switch.md) §9. `putch.s` above is exactly the shape that breaks:
+> with `$77 4` in the left half, its `13 uj` is skipped under the kernel while `b6sim` runs it.
+> Until `b6sim` models this, **do not pack a live instruction after `$77 N` in its word** — the
+> easy way being to put the extracode in the right half — and a stub will behave the same on both.
 
 There is not yet a real C startup object (`crt0`) or `libc` in the project, so `b6sim`
 supplies the bare minimum a program needs to start: when it loads an executable it points the
@@ -212,7 +238,7 @@ status, which makes exit codes easy to check from a shell script or a test harne
 `b6sim` implements the Unix v7 system-call set. Each call takes its arguments and returns its
 result through the accumulator/stack/`r14` convention described in [§3](#3-how-it-works);
 because every scalar is one word, structures such as `struct stat` are simply one word per
-field.
+field. The six calls with a second result deliver it in `r12` — see [§3](#3-how-it-works).
 
 | Group | Calls |
 |-------|-------|
@@ -272,8 +298,9 @@ a file with `--trace=trace.log`, and cap a program that might loop forever with,
 - A clean exit happens when the program calls `_exit(status)` (`$77 1`); `b6sim` returns that
   `status` as its own exit code.
 - A **failed system call** sets the accumulator to −1 and puts the error number in `r14`,
-  just as on real Unix — the program is expected to notice and react. The simulation keeps
-  running.
+  just as on real Unix — the program is expected to notice and react. `r12` is left alone on
+  the error path, so a two-value call's second result is meaningful only when `r14` is 0. The
+  simulation keeps running.
 - A **fatal machine error** stops the simulation and prints a diagnostic to standard error.
   These include an illegal instruction, an unimplemented system call, running past the
   `--limit`, or a file that is not a BESM-6 `a.out`:
@@ -322,7 +349,7 @@ needs a full operating system:
 ## 12. See also
 
 - [Besm6_Calling_Conventions.md](Besm6_Calling_Conventions.md) — argument passing and the
-  `r13`/`r14`/accumulator return convention used by every system call.
+  `r12`/`r14`/accumulator return convention used by every system call.
 - [Besm6_Data_Representation.md](Besm6_Data_Representation.md) — words, `sizeof(int) == 6`,
   and the `char *` fat-pointer layout.
 - [Assembler_Manual.md](Assembler_Manual.md) and [Linker_Manual.md](Linker_Manual.md) — the

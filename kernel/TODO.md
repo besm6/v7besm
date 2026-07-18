@@ -145,8 +145,8 @@ machine state afterwards. Run every MMU test with **`set mmu cache`**.
 
 **`besm6.o` cannot go into a standalone test** — its `0500` vector reaches into the C kernel and its
 `_start` seeds no stack. That is why every routine a test has to link lives in its own file
-(`brz.s`, `uarea.s`, `seg.s`, `usermem.s`) and why the two gates are duplicated in the tests'
-own crt0s.
+(`brz.s`, `uarea.s`, `seg.s`, `usermem.s`, `syscall.c`) and why the gates are duplicated in the
+tests' own crt0s.
 
 **Stages 0 and 1 (tasks 1–9) are done and have been removed.** The numbering below is **left as it
 was** — task numbers are cited from the source (`utab.c`, `dev/bio.c`, `besm6.S`, `brz.s`) and from
@@ -163,8 +163,8 @@ headroom. `u` is now `076000 A`. `utab.c` is a BESM-6 file: `sureg()` packs the 
 `__besm6_apx`, and `invd()` is gone rather than stubbed. `estabur()`'s `xrw` and `sep` are inert —
 this machine has no read-only page and no I/D separation, which is also why **text pages are left open
 to data**: РЗ closes a page to reads as well as writes, and a closed text page would take the program's
-own constant pool with it. The extracode vectors now point at `syscall` (`0577`, э77) and `badext`; an
-extracode never reaches `trap()`.
+own constant pool with it. The extracode vectors now point at `sysgate` (`0577`, э77) and `badext`
+(`0550`–`0576`); an extracode never reaches `trap()`.
 
 Two things stage 1 learned, that the tasks below depend on:
 
@@ -245,7 +245,7 @@ are **three doors with two save disciplines**, and the async ones must preserve 
 than the ABI's callee-saved set. No door needs a map switch or a БРЗ drain — the hardware's forced
 БлП/БлЗ is already the kernel's mode. Read
 [../doc/Context_Switch.md](../doc/Context_Switch.md) first; §4/§7/§8/§9/§13/§14 are the authority.
-**15a–15c are done; 15d and 15e remain.** Four facts cut across them:
+**15a–15d are done; 15e remains.** Four facts cut across them:
 
 - **Async vs. synchronous.** An external interrupt (`0501`→`intrgate`) and an internal fault
   (`0500`→`trapgate`) land between arbitrary instructions, so the interrupted code owns *every*
@@ -310,10 +310,10 @@ gate, so only one return address is ever live in it and the gate that built it p
 `ij`. `errno` is r14, with no slot of its own; **ГРП is not framed** — the fault cause is read live
 via `__besm6_mod(MOD_GRP,0)`, as Dubna does. EFL has no analogue: single-step is the address-break
 registers (М034/М035) and a syscall error is errno-in-r14, not a carry flag. Aliases: `R_ERRNO R14`
-(0 = success), provisional `R_VAL2 R13` (15d finalizes), `USERMODE(spsw)`, and `BASEPRI(x)=(0)` as a
+(0 = success), `R_VAL2` (15d settled it on **r12**, not the provisional r13 — r13 is the
+caller's return address), `USERMODE(spsw)`, and `BASEPRI(x)=(0)` as a
 15e placeholder. `regloc[]` is `{ACC, R1..R14, R15, RET}` (17 entries): `setregs` zeroes `[0..14]`,
-`procxmt` validates `[0..15]`. Deferred behavior is compile-stubbed in place and marked `TODO 15d`
-(syscall ABI + r_val2), `TODO 15e` (BASEPRI/clock) and `TODO 17` (sendsig up-growing stack, fork
+`procxmt` validates `[0..15]`. Deferred behavior is compile-stubbed in place and marked `TODO 15e` (BASEPRI/clock) and `TODO 17` (sendsig up-growing stack, fork
 `+=2`→distinct ACC, ptrace resume-slot, single-step via М034/М035).
 
 **15c. The trap gate (0500) and the fault path in `trap.c`. DONE.** `0500` vectors at `trapgate`
@@ -339,7 +339,8 @@ and `trapgate` ends `uj intret`. What the remaining tasks need from it:
   "reconstructed" the half-word too and skipped every faulting instruction; `doc/Memory_Mapping.md`
   now carries the derivation and the verified recipe.
 - **`trap.c` dispatches on ГРП** read live, folded into kernel-local trap kinds
-  (`T_DATA`/`T_INSN`/`T_ILL`/`T_CHECK`/`T_BREAK`, plus `T_SYSCALL` left untouched for 15d) and
+  (`T_DATA`/`T_INSN`/`T_ILL`/`T_CHECK`/`T_BREAK`; `T_SYSCALL` is gone -- 15d gave the extracode
+  door its own C file) and
   dismissed with `MOD_GRPCLR` so a fault bit cannot fire afterwards as a spurious external interrupt.
   `grow()` still takes a word address and still assumes the x86's downward stack, so the faulting
   page is converted back (`grow(page << PGSH)`) — flagged `TODO 17`.
@@ -350,75 +351,76 @@ and `trapgate` ends `uj intret`. What the remaining tasks need from it:
   `uintr`): the handler reprograms РП on every fault. Bite-tested — dropping the PC fixup yields ACC
   `0600`, dropping the stack switch `020`, dropping `xtr save_r` from the shared epilogue `2`.
 
-**15d. The syscall gate (0577) and `badext`.** Both are `stop` stubs. 15a–15c settled the frame, the
-switch rule and the epilogue, so almost nothing here is a design question any more — the gate is
-`trapgate` with two changes, and the real work is in C.
+**15d. The syscall gate (0577), `badext` and the dispatcher. DONE.** The gate turned out even
+smaller than planned, and one hardware fact fell out of the test that reaches past this task.
 
-*The gate — rename `syscall` to `sysgate`* (matching `trapgate`/`intrgate`, and freeing the name for
-the C dispatcher, as `trapgate`→`trap()` and `intrgate`→`extintr()`). Then it is `trapgate` verbatim
-— same five spills, same FULSAV fill, same bare `13 vjm`, same `uj intret` — apart from:
+- **`sysgate` is `trapgate` with ONE instruction changed:** the FULSAV fill reads `its ERET`
+  (М032) where the fault gate reads `its IRET` (М033). The planned Dubna `OUTMACRO` normalisation
+  at entry (`ita ERET` / `ati IRET`) is **not needed at all** — the fill already reads a return
+  register live, so it just reads the other one, and `intret` is reused completely unmodified: its
+  `sti IRET` + `3 ij` return to user correctly because the `ij` index field only selects *which
+  register holds the PC*, while the mode comes from СПСВ either way. Bite-tested: revert that one
+  instruction and the return lands nowhere.
+- **`badext` carries its OWN prologue**, a third full copy of the block, rather than sharing
+  `sysgate`'s body through a discriminator cell. Nothing before the frame is filled can tell the
+  doors apart — the hardware identifies an extracode purely by which vector word it lands on — so
+  sharing would cost a flag and a branch to save a block that is otherwise identical. Same call
+  the file already makes for `trapgate` vs. `intrgate`.
+- **The dispatcher is `kernel/syscall.c`, not `trap.c`** (holding `syscall()` and `badextr()`).
+  The reason is the one that split out `brz.s`/`uarea.s`/`seg.s`/`usermem.s`: `kernel/test/usys`
+  links the **real** dispatcher, and it cannot link `trap.c`, which drags in `printf`, the signal
+  machinery and `grow()` — the whole kernel. `nosys`/`nullsys`/`stray` stayed in `trap.c`, and
+  `T_SYSCALL` is gone from it entirely.
+- **`r_val2` is r12, not the provisional r13.** r13 is the ABI's return-address register and
+  belongs to the caller; r12 is ordinary caller-saved scratch, the same class as the accumulator.
+  `R_VAL2` in `reg.h` is settled, and `usys` checks that r13 comes back untouched.
+- **The stack pop happens BEFORE the dispatch**, not after: `exec()` reseeds r15 on success and
+  `sendsig()` builds its frame on the user stack, so both want the popped value and a pop
+  afterwards would corrupt the first and come too late for the second. The arguments are already
+  copied out by then, so nothing reads the user stack at the old depth.
+- The number is range-checked against `NSYSENT` (now in `systm.h`, beside the table) into a
+  file-static `badsysent = {0,0,nosys}` — masking would fold an out-of-range number onto a real
+  syscall. `sy_nrarg` is left in place but read nowhere, and documented as vestigial: exactly one
+  argument arrives in a register on this machine, for any `narg >= 1`.
+- Fork's `u.u_ar0[RET] += 2` is deleted, and **`u_r.r_val2` now tells parent from child** (1 / 0),
+  which is v7's own answer. `r_val1` alone could not: each side gets the *other's* pid, which is
+  distinct but not self-identifying. `cmd/sim` matches.
+- *`cmd/sim`* grew `sys_ok2(v1, v2)` (accumulator + r12) and moved `pipe`, `wait`, `fork`,
+  `getpid`, `getuid`, `getgid` onto it; `pipe` and `wait` therefore take **no arguments** now.
+  Note r12 is an index register — **15 bits** — so a second result above 32767 is truncated;
+  nothing a v7 guest produces comes close, but a *host* pid does, which the `Getpid` test masks
+  for.
 
-- **Add `ERET = 032` to the equates and open with the OUTMACRO normalisation** (`ita ERET` /
-  `ati IRET`), placed after `atx save_a` and before the fill. The fill's existing `its IRET` then
-  frames the extracode return address and **`intret` is reused completely unmodified**: its
-  `sti IRET` + `3 ij` return to user correctly, because the `ij` index field only selects *which
-  register holds the PC*, while the mode — and so user-vs-supervisor — comes from СПСВ either way.
-  Doing this at *entry* rather than at exit (where Dubna's `OUTMACRO` sits, §8) is what lets the
-  single `RET` slot and the shared epilogue both stand.
-- **No PC fixup.** The extracode gate stores `nextpc` in ЭРЕТ (`doc/Context_Switch.md` §9), so
-  unlike the fault path there is nothing to back up; `SPSW_NEXT_RK` is never set by this door.
+**Two things the test found that were not in the plan:**
 
-The stack switch is **unconditional** — э77 only ever comes from user — so, exactly as in 15c, the
-frame is always at `[ustkbase]` and the C dispatcher takes **`void`** and finds it at `u.u_stack`.
-`badext` uses the same gate and calls a C `badextr()` that signals **SIGINS** instead of halting;
-note that э20/э60 and э21/э61 alias to one vector word each, and that a user `стоп` arrives here as
-э63.
+- **An extracode always returns to the LEFT half of the next word.** ERET is a **word** address
+  (`PC + 1`) and the extracode entry saves **no** right-instruction indicator, so that is where
+  `выпр` lands whichever half the extracode itself was in — exactly as `vjm` behaves. The
+  extracode may sit in either half; what it costs is what comes *after* it in the same word. From
+  a left half, the instruction packed beside it is never executed; from a right half nothing is
+  lost, which is why putting it there is the simple convention rather than a hardware rule. No
+  gate can repair this — the half is not recorded anywhere for the gate to find. It is a
+  constraint on the *caller*, now written up in `doc/Context_Switch.md` §9, and it means stubs
+  shaped like `cmd/sim/tmp/putch.s` (`$77 4` in a left half, then `13 uj`) fall through under the
+  kernel. **`b6sim` does not model it** — it services `$77` inline and continues to the next
+  half-instruction — so that is a live divergence to close (`doc/Aout_Simulator.md` §3), along
+  with auditing every existing `$77` stub for what follows it.
+- **A simulator bug, fixed upstream in `simh-besm6`.** Its a.out loader tagged const-segment words
+  as instructions only in `0500..0547`, so the extracode vectors at `0550`–`0577` loaded as *data*
+  and fetching one raised «контроль команды». `BESM6/besm6_sys.c` now covers `0500..0577`. Anyone
+  building this kernel needs a simulator with that fix.
 
-*The dispatcher — move `case T_SYSCALL + USER:` out of `trap()` into its own `syscall(void)` in
-`trap.c`* (which already houses `nosys`/`nullsys`), and drop `T_SYSCALL` from `trap()`'s switch: the
-0500 door cannot reach it. Four things the placeholder body gets wrong:
+*The test — `kernel/test/usys`* (`crt0s.S` + `usys.c` + `usys.ini`), four legs from forged user
+mode: a 0-argument call (the two-value return, and r13/r15 untouched), a 3-argument call staged
+the real way (prototype order, and r15 popped by 2), an out-of-range number (`-1` + EINVAL from
+`nosys`), and `$50` (SIGINS from `badextr`, machine intact). It exits through a data fault as
+`utrap` does. Needs **`set mmu cache`**. Bite-tested three ways: reverting `its ERET`, dropping
+the stack pop, and masking instead of range-checking each fail it.
 
-- **The argument order inverts.** BESM-6 passes argument *k* of *N* at `r15 - (N-k)` with the **last
-  in ACC** — descending in memory, and one of them not in memory at all. The ~35 callees read
-  `(struct a *)u.u_ap` as an *ascending* array in prototype order, so the dispatcher must marshal:
-  `u_arg[i] = fuword(r15 - (n-1) + i)` for `i < n-1`, then `u_arg[n-1]` = the framed ACC. The
-  placeholder reads ascending *from* r15 and never touches ACC — wrong on both counts. Note the args
-  are in **user** space, so this is `fuword`, not a kernel dereference; and the framed r15 is right
-  there at `u.u_ar0[R15]`, so nothing needs reading before the switch. `sysent[].sy_nrarg` is
-  populated but read nowhere today — it is the natural place to record how many arrive in registers.
-- **The number comes from r14, and must be latched before r14 becomes errno.** The hardware writes
-  the effective address to М14 at the vector, so it is `u.u_ar0[R14]` — but `R_ERRNO == R14`, the
-  same slot the return path overwrites. It must also be **range-checked, not masked**: a user can
-  index-modify the EA to any 15-bit value, and today's `& 077` folds an out-of-range number onto a
-  real syscall instead of dispatching `nosys`.
-- **The gate owes the caller a stack cleanup**: `u.u_ar0[R15] -= n - 1`. The `$77 N` trap stands in
-  for a called function and must run the epilogue the callee would (`doc/Aout_Simulator.md`;
-  `cmd/sim/syscall.cpp` already does it). Nothing in the kernel does, and without it the user stack
-  drifts by a word per multi-argument syscall.
-- **Delete `sys1.c`'s fork `u.u_ar0[RET] += 2`** (currently flagged `TODO 17`, but it belongs here).
-  It is the x86 skip-the-`int` idiom and is meaningless when `RET` is a word address; both fork paths
-  already set `u_r.r_val1`, which the dispatcher copies to ACC.
-
-`save(u.u_qsav)` on the EINTR path stays as written but is inert until task 16.
-
-*Align `cmd/sim` to the kernel.* The kernel keeps v7's two-register convention — ACC = `r_val1`,
-**r13** = `r_val2`, r14 = errno — and b6sim moves to match, so one binary runs on both. Add a
-`sys_ok2(v1, v2)` beside `sys_ok` in `cmd/sim/syscall.cpp` and convert the five syscalls v7 gives a
-second result: `pipe` (both fds are currently written to a user buffer at ACC) → `sys_ok2(fd0, fd1)`;
-`wait` (status to a buffer) → `sys_ok2(pid, status)`; `getpid` → `sys_ok2(pid, ppid)`; `getuid` →
-`sys_ok2(ruid, euid)`; `getgid` → `sys_ok2(rgid, egid)`. `pipe` and `wait` then take **no arguments**,
-so their `syscall_nargs()` entries drop to 0. Leave `times`/`ftime`/`stat` alone — those take a
-genuine user buffer in v7 too. Update `cmd/sim/test/sim_test.cpp`.
-
-*The test — `kernel/test/usys`.* `gouser()` is reused as-is; what the harness adds is a `.org`-placed
-`uj sysgate` at **0577**, which neither existing crt0 has. The user program stages arguments the real
-way (`n-1` words below r15, the last in ACC) and issues `$77 N`. **Watch ПоК:** `crt0u.S` records
-that a user `стоп` — which the machine re-dispatches as э63 — *check-halts* under the ПоК the reset
-leaves set, which is why that test returns through a data fault instead. Whether a plain э77 is
-affected too is unverified; establish it on the machine before assuming either way.
-- **Done when** (done-when *a*): a from-user test issues `$77 N`, the dispatcher marshals the
-  arguments in prototype order, and the program resumes in user mode with the correct ACC / r14 /
-  r13 **and a balanced r15**.
+**Still open, and deliberately not touched:** `u.u_dirp = (caddr_t)u.u_arg[0]` is an `int`→`char *`
+conversion, and a `char *` built by hand from an `int` gets the fat-pointer marker wrong (see
+`usermem.s`). It is pre-existing, affects every path-taking syscall, and belongs with `iomove()`'s
+byte handling rather than with marshalling.
 
 **15e. Unblock the timer (`clock` / GRP_TIMER).** With the frame in place: retarget `clock()` off
 `struct trap` by value onto the BESM-6 frame — following 15c, that means `clock(void)` finding the

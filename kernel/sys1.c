@@ -412,7 +412,7 @@ void fork()
      */
     if ((a = malloc(swapmap, wtodb(MAXMEM))) == 0) {
         u.u_error = ENOMEM;
-        goto out;
+        return;
     }
     mfree(swapmap, wtodb(MAXMEM), a);
     a  = 0;
@@ -433,11 +433,23 @@ void fork()
      */
     if (p2 == NULL || (u.u_uid != 0 && (p2 == &proc[NPROC - 1] || a > MAXUPRC))) {
         u.u_error = EAGAIN;
-        goto out;
+        return;
     }
+    /*
+     * Parent and child are told apart by the SECOND return value, r12 (R_VAL2 in
+     * reg.h), which is v7's own answer: 1 in the child, 0 in the parent.  The x86
+     * `u.u_ar0[RET] += 2' -- advance the saved PC past the syscall in one of the two
+     * -- is gone: RET is a WORD address on this machine, so adding 2 skips two whole
+     * instruction words, and there is nothing to skip anyway now that the extracode
+     * gate stores nextpc in ERET (kernel/syscall.c).
+     *
+     * r_val1 alone cannot do it: each side gets the OTHER's pid, which is distinct
+     * but not self-identifying.
+     */
     p1 = u.u_procp;
     if (newproc()) {
-        u.u_r.r_val1 = p1->p_pid;
+        u.u_r.r_val1 = p1->p_pid; /* the child: parent's pid ... */
+        u.u_r.r_val2 = 1;         /* ... and "you are the child" */
         u.u_start    = time;
         u.u_cstime   = 0;
         u.u_stime    = 0;
@@ -446,14 +458,8 @@ void fork()
         u.u_acflag   = AFORK;
         return;
     }
-    u.u_r.r_val1 = p2->p_pid;
-
-out:
-    /* TODO 17: the x86 "advance the saved PC past the syscall" trick becomes
-     * returning distinct accumulator values to parent and child.  Kept
-     * compiling (fork is an extracode -> ERET, held in RET); not exercised until
-     * save()/resume() (task 16). */
-    u.u_ar0[RET] += 2;
+    u.u_r.r_val1 = p2->p_pid; /* the parent: child's pid ... */
+    u.u_r.r_val2 = 0;         /* ... and "you are the parent" */
 }
 
 /*

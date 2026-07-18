@@ -6,34 +6,9 @@
 /*
  * Location of the user's saved registers on the kernel-stack trap frame.
  * Usage is u.u_ar0[XX].  u.u_ar0 points at frame word 0 (the accumulator), so
- * every index below is a plain, non-negative word index -- unlike the x86,
- * whose u_ar0 was anchored mid-frame at EAX and reached the lower registers
- * with negative offsets.  sizeof(int) == 6 == one 48-bit word, so an index is
- * a word index and the struct-field order below matches the index order.
- *
- * The layout follows Dubna's canonical per-process register-save block
- * (doc/Context_Switch.md sec 2), with ONE deliberate departure -- the two
- * return slots are collapsed into one:
- *
- *   0 ACC | 1 R | 2 Y | 3 RET | 4 СПСВ | 5 М16 | 6..20 М15..М1
- *
- * Dubna keeps IRET (interrupt/fault, resumed via `3 ij') and ERET
- * (extracode, resumed via `2 ij') as separate slots, but a given frame is built
- * by exactly one gate, so only one return address is ever live in it.  We store
- * whichever applies in the single RET slot: a fault/interrupt frame holds IRET
- * (and its gate resumes `3 ij'), an extracode frame holds ERET (`2 ij').  The
- * gate that built the frame knows which `ij' to use; readers just use RET.
- *
- * The register file is stored DESCENDING -- М16 (the C register / address
- * modifier) at offset 5, down to М1 at offset 20, so r15 is at 6 and r1 at 20.
- * ГРП is NOT framed: the fault cause is read live via __besm6_mod(MOD_GRP,0) in
- * trap() (task 15c), as Dubna does.  errno needs no slot -- it is r14 (М14), an
- * alias below.
- *
- * Both asynchronous gates fill this frame and share one epilogue: `intrgate'
- * (0501) and `trapgate' (0500) in besm6.S, which leave through `intret'.  The
- * 0577 syscall gate (task 15d) will join them, normalising ERET into IRET on
- * the way in so it can reuse the same exit.
+ * every index below is a plain, non-negative word index.  
+ * sizeof(int) == 6 == one 48-bit word, so an index is a word index and 
+ * the struct-field order below matches the index order.
  */
 
 #define ACC  0 /* accumulator: primary syscall result (was EAX) */
@@ -66,10 +41,10 @@
  * Semantic aliases used by the C readers.  These are the BESM-6 syscall ABI
  * (doc/Besm6_Calling_Conventions.md, cmd/sim/syscall.cpp), NOT x86 renames:
  * a syscall result is ACC, an error is errno-in-r14 (0 on success) with no
- * carry flag.  R_VAL2's slot is provisional -- task 15d fixes the convention.
+ * carry flag, and v7's second result (pipe/wait/getpid/getuid/getgid) is r12.
  */
 #define R_ERRNO R14 /* syscall errno; 0 == success.  There is no carry bit. */
-#define R_VAL2  R13 /* TODO 15d: second syscall result (pipe/getpid/fork) */
+#define R_VAL2  R12 /* second syscall result (pipe/wait/getpid/getuid/getgid) */
 
 /*
  * The saved mode word СПСВ carries РежЭ|РежПр (RUU_EXTRACODE|RUU_INTERRUPT,
@@ -93,7 +68,7 @@ struct trap {
     int acc;  /*  0  ACC */
     int rreg; /*  1  R */
     int rmr;  /*  2  Y */
-    int ret;  /*  3  RET (IRET for a fault, ERET for an extracode) */
+    int ret;  /*  3  return address (IRET for a fault, ERET for an extracode) */
     int spsw; /*  4  saved program status word */
     int creg; /*  5  MOD = C register M[16] */
     int r15;  /*  6  М15  (SP) */

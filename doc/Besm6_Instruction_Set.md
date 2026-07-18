@@ -1169,7 +1169,7 @@ instruction.
 This is the only way out of supervisor mode. It restores the mode bits БлП, БлЗ and БлПр from СПСВ,
 restores the supervisor bits (РежЭ/РежПр) from СПСВ — so returning to user mode means returning with
 both of them clear — and loads the PC from the return-address register named by the low two bits of
-the index field: `M[032]` = ЭРЕТ for an extracode, `M[033]` = ИРЕТ for an interrupt. A shared
+the index field: `M[032]` = ERET for an extracode, `M[033]` = IRET for an interrupt. A shared
 trap-exit path must therefore know which door it came in by.
 
 The full sequence, and the saved state each door leaves behind, is in

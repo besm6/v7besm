@@ -1,6 +1,6 @@
 SYS     = acct.o alloc.o clock.o fio.o iget.o intr.o machdep.o main.o \
           malloc.o nami.o pipe.o prf.o prim.o rdwri.o sig.o slp.o subr.o \
-          sys1.o sys2.o sys3.o sys4.o sysent.o text.o trap.o utab.o
+          sys1.o sys2.o sys3.o sys4.o syscall.o sysent.o text.o trap.o utab.o
 
 DEV     = bio.o hd.o mem.o partab.o \
           sc.o sr.o sys.o tty.o
@@ -153,6 +153,9 @@ sys3.o: sys3.c ../include/sys/param.h ../include/sys/systm.h \
 sys4.o: sys4.c ../include/sys/param.h ../include/sys/systm.h \
   ../include/sys/dir.h ../include/sys/user.h ../include/sys/reg.h \
   ../include/sys/inode.h ../include/sys/proc.h ../include/sys/timeb.h
+syscall.o: syscall.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/dir.h ../include/sys/user.h ../include/sys/proc.h \
+  ../include/sys/reg.h ../include/sys/seg.h
 sysent.o: sysent.c ../include/sys/param.h ../include/sys/systm.h
 text.o: text.c ../include/sys/param.h ../include/sys/systm.h \
   ../include/sys/map.h ../include/sys/dir.h ../include/sys/user.h \
