@@ -53,6 +53,11 @@ unix:   besm6.o brz.o uarea.o seg.o usermem.o conf.o libsys.a libdev.a
 	$(NM) -n $@ > $@.nm
 	$(DISASM) $@ > $@.dis
 
+# besm6.S is preprocessed (it #includes const.s and sys/besm6dev.h), so build it
+# through the compiler driver with the include path, not the bare assembler.
+besm6.o: besm6.S
+	$(CC) -c $(CFLAGS) $< -o $@
+
 libsys.a: $(SYS)
 	$(AR) cr $@ $(SYS)
 	$(RANLIB) $@

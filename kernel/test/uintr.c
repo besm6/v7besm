@@ -6,12 +6,12 @@
  * the kernel stack when the interrupt came from user code.  sctest enters the gate from KERNEL
  * mode, so it cannot see the stack switch (there is nothing to switch) and passes even if that
  * leg is missing.  This test forges a genuine user-mode context and takes an external interrupt
- * in it, so all four fixes -- R, РМР, M[020] and the r15 switch -- are under test.
+ * in it, so all four fixes -- R, Y (РМР), M[16] (M[020]) and the r15 switch -- are under test.
  *
  * How it works (see kernel/test/crt0u.s for the asm half and doc/Context_Switch.md §14):
  *   1. sureg() builds a user map: uprog's own physical page at virtual page 0 (so the forged
  *      user runs mapped, executing the real code), two data pages at virtual 2-3, one stack.
- *   2. A sentinel is placed at virtual MODVAL, the address the forged M[020] modifier points at.
+ *   2. A sentinel is placed at virtual MODVAL, the address the forged M[16] modifier points at.
  *   3. Physical USPV (= the forged user r15) is seeded with KSENT: if extint fails to switch the
  *      stack, extintr()'s frame lands there (r15 is a physical index once the trap forces БлП on)
  *      and overwrites it.
@@ -23,7 +23,7 @@
  *      via `стоп' -> extracode э63 -> report(), which compares and halts.
  *
  * main() never returns; report() (crt0u.s) leaves the fault mask in the accumulator, and
- * uintr.ini asserts ACC == 0.  A nonzero ACC names the failing check (1 M[020], 2 R, 4 РМР,
+ * uintr.ini asserts ACC == 0.  A nonzero ACC names the failing check (1 M[16], 2 R, 4 Y,
  * 010 r15 value, 020 stack-switch).
  */
 
@@ -76,11 +76,11 @@ void drainbrz(void);
 /*
  * The external interrupt handler, reached from crt0u.s's extint.  It only has to dismiss the
  * simulated interrupt so the machine leaves the handler -- but being ordinary C, it clobbers R
- * (the ABI exits NTR 3 / ω = logical), РМР (the logical ops) and M[020] (the `nintr++' global
+ * (the ABI exits NTR 3 / ω = logical), Y (the logical ops) and M[16] (the `nintr++' global
  * reach), which is exactly the state extint must have saved.  If extint drops any of those
  * saves, uprog sees the damage and report() flags it.
  */
-unsigned nintr; /* bumped through the compiler's `utc nintr' idiom -> clobbers M[020] */
+unsigned nintr; /* bumped through the compiler's `utc nintr' idiom -> clobbers M[16] */
 
 void extintr(void)
 {
@@ -138,7 +138,7 @@ int main()
      * Arm and raise a single external interrupt, synchronously: unmask GRP_TIMER in МГРП, then
      * simulate it with увв 031.  БлПр is still set (interrupts masked) all through main, so the
      * bit sits PENDING; the instant gouser's `выпр' clears БлПр it fires -- at uprog's very first
-     * instruction, which is what makes the modifier-armed M[020] test deterministic.
+     * instruction, which is what makes the modifier-armed M[16] test deterministic.
      */
     __besm6_mod(MOD_MGRP, GRP_TIMER);
     __besm6_ext(EXT_GRPSET, (unsigned)(GRP_TIMER >> 24));

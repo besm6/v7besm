@@ -63,4 +63,22 @@
 #define CONS1_READY 0200 /* 8: Consul 1 is idle */
 #define CONS2_READY 040  /* 6: Consul 2 is idle */
 
+/*
+ * Bits of СПСВ, the saved program status / mode word (register 027), read back
+ * after a trap.  РежЭ|РежПр == 0 iff the interrupted context was user mode
+ * (doc/Context_Switch.md).  Octal, bits numbered right-to-left from 1.
+ */
+#define SPSW_MMAP_DISABLE 00001  /* БлП  - data mapping disabled */
+#define SPSW_PROT_DISABLE 00002  /* БлЗ  - data protection disabled */
+#define SPSW_EXTRACODE    00004  /* РежЭ - extracode mode */
+#define SPSW_INTERRUPT    00010  /* РежПр - interrupt mode */
+#define SPSW_MOD_RK       00020  /* ПрИК(РК) - the instruction loaded into the RK register
+                                    must be modified by register M[16] */
+#define SPSW_MOD_RR       00040  /* ПрИК(РР) - the instruction in the RR register
+                                    was executed with modification */
+#define SPSW_RIGHT_INSTR  00400  /* ПрК - right instruction indicator */
+#define SPSW_NEXT_RK      01000  /* ГД./ДК2 - the instruction following the one that caused
+                                    the interrupt has been loaded into the RK register */
+#define SPSW_INTR_DISABLE 02000  /* БлПр - external interrupts disabled */
+
 #endif /* _SYS_BESM6DEV_H */

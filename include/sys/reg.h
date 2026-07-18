@@ -1,6 +1,8 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 /* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
+#include "sys/besm6dev.h" /* SPSW_* mode-word bits */
+
 /*
  * Location of the user's saved registers on the kernel-stack trap frame.
  * Usage is u.u_ar0[XX].  u.u_ar0 points at frame word 0 (the accumulator), so
@@ -13,7 +15,7 @@
  * (doc/Context_Switch.md sec 2), so the frame our gates fill lines up slot for
  * slot with the reference machine:
  *
- *   0 ACC | 1 R | 2 РМР | 3 ИРЕТ | 4 ЭРЕТ | 5 СПСВ | 6..21 М16..М1
+ *   0 ACC | 1 R | 2 Y | 3 ИРЕТ | 4 ЭРЕТ | 5 СПСВ | 6..21 М16..М1
  *
  * Two things follow from copying Dubna: the register file is stored
  * DESCENDING -- М16 (which is the C register / address modifier) at offset 6,
@@ -32,11 +34,11 @@
 
 #define ACC  0 /* accumulator: primary syscall result (was EAX) */
 #define RREG 1 /* R   -- ALU mode word (omega + the NTR suppress bits) */
-#define RMR  2 /* РМР -- younger-bits register */
+#define RMR  2 /* Y (РМР) -- younger-bits register */
 #define IRET 3 /* ИРЕТ -- interrupt / fault return address (И33) */
 #define ERET 4 /* ЭРЕТ -- extracode return address (И32) */
 #define SPSW 5 /* СПСВ -- saved mode word (М027) */
-#define CREG 6 /* М16 = C register M[020], the address modifier */
+#define CREG 6 /* М16 = C register M[16] (M[020]), the address modifier */
 
 /* general registers -- stored DESCENDING, М15..М1 at offsets 7..21 */
 #define R15 7  /* stack pointer */
@@ -71,7 +73,7 @@
  * octal 014); both bits clear iff the interrupted context was user mode.  This
  * replaces the x86 CS-ring test.  See doc/Context_Switch.md and doc/Memory_Mapping.md.
  */
-#define SPSW_MODE      014 /* РежЭ | РежПр */
+#define SPSW_MODE      (SPSW_EXTRACODE | SPSW_INTERRUPT) /* РежЭ | РежПр */
 #define USERMODE(spsw) (((spsw) & SPSW_MODE) == 0)
 
 /*
@@ -87,11 +89,11 @@
 struct trap {
     int acc;  /*  0  ACC */
     int rreg; /*  1  R */
-    int rmr;  /*  2  РМР */
+    int rmr;  /*  2  Y */
     int iret; /*  3  ИРЕТ (interrupt / fault return) */
     int eret; /*  4  ЭРЕТ (extracode return) */
     int spsw; /*  5  СПСВ */
-    int creg; /*  6  М16 = C register M[020] */
+    int creg; /*  6  М16 = C register M[16] */
     int r15;  /*  7  М15  (SP) */
     int r14;  /*  8  М14  (errno / arg count) */
     int r13;  /*  9  М13 */

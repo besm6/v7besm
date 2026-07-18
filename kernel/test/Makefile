@@ -49,11 +49,16 @@ mmutest: crt0.o mmutest.o mmuhelp.o utab.o brz.o uarea.o seg.o usermem.o
 
 # uintr forges a user-mode context (crt0u.o) and takes an external interrupt in it, linking the
 # kernel's real utab.o (sureg/physaddr) and brz.o (drainbrz) -- the from-user counterpart of
-# sctest, which enters extint from kernel mode.  See uintr.ini and crt0u.s.
+# sctest, which enters extint from kernel mode.  See uintr.ini and crt0u.S.
 uintr:  crt0u.o uintr.o utab.o brz.o
 	$(LD) crt0u.o uintr.o utab.o brz.o -o $@ -L$(LIBDIR) -lc
 	$(DISASM) -c $@ > $@.dis
 	$(NM) -n $@ > $@.nm
+
+# crt0u.S is preprocessed (it #includes sys/besm6dev.h), so build it through the
+# compiler driver with the include path, not the bare assembler.
+crt0u.o: crt0u.S
+	$(CC) $(CFLAGS) -c $< -o $@
 
 utab.o: ../utab.c
 	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@

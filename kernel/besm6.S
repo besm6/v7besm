@@ -34,6 +34,16 @@
 // valid no-op functions: value-returning stubs clear A with a bare `xta`, pop any
 // pushed arguments, then `13 uj`.
 
+// Number base: index-register operands (r8..r16, incl. M16 = the C register) are
+// written in DECIMAL; bit masks and machine-register addresses (027 = СПСВ) stay
+// OCTAL, as they read in the machine documentation.
+
+// СПСВ, the saved program status / mode word.  The bit masks (SPSW_EXTRACODE,
+// SPSW_INTERRUPT, ...) come from the shared header; only the register index is
+// local here, since it is the operand of `ita SPSW'.
+#include "sys/besm6dev.h"
+SPSW = 027
+
 // The vectors below must land on their physical addresses, so this segment is laid
 // out by absolute address with `.org'.  The origins hold only as long as the const
 // segment really does begin at BADDR == 010 (cmd/ld/intern.h), which is what `.org'
@@ -90,8 +100,8 @@
 // interrupted code owns EVERY register and the stub must save the whole visible machine the C
 // handler can touch -- not just the ABI's callee-saved set.  So this covers the accumulator,
 // r8-r14 (caller-saved: the C handler may clobber them), and the four the hardware does NOT
-// save and the ABI does NOT preserve across `13 vjm extintr': R, РМР, the C register M[020],
-// and r15 (see the stub for why each -- doc/Context_Switch.md §14).
+// save and the ABI does NOT preserve across `13 vjm extintr': R, Y (РМР), the C register
+// M[16] (M[020]), and r15 (see the stub for why each -- doc/Context_Switch.md §14).
         .text
 sa:     .word 0                 // accumulator
 s8:     .word 0                 // r8-r14: caller-saved, so the C handler may
@@ -102,8 +112,8 @@ s12:    .word 0
 s13:    .word 0
 s14:    .word 0
 sr:     .word 0                 // R   -- ALU mode (ω + the NTR suppress bits)
-srmr:   .word 0                 // РМР -- younger-bits register
-sc:     .word 0                 // C register M[020] -- the address modifier
+srmr:   .word 0                 // Y -- younger-bits register
+sc:     .word 0                 // C register M[16] -- the address modifier
 s15:    .word 0                 // r15 -- the interrupted stack pointer
 
 // ============================================================================
@@ -207,8 +217,8 @@ badext: stop    076              // TODO: an extracode we do not implement
 //   * R   -- the C ABI exits `NTR 3` / ω = logical (doc/Besm6_Runtime_Library.md), so extintr
 //            returns with R changed; resume the user with it and its arithmetic mode is wrong.
 //            The hardware never touches R (`выпр` does not restore it); software must.
-//   * РМР -- any logical op (и/слц/сл) overwrites it, and the interrupted user may hold it live.
-//   * M[020] (the C register / address modifier) -- extintr() reaches globals with the
+//   * Y   -- any logical op (и/слц/сл) overwrites it, and the interrupted user may hold it live.
+//   * M[16]  (the C register / address modifier) -- extintr() reaches globals with the
 //            compiler's `utc name'+load idiom, clobbering it.  When a device interrupt lands in
 //            the one-instruction window after a user `utc', СПСВ carries SPSW_MOD_RK and the
 //            closing `3 ij` re-arms the modifier -- from the clobbered value unless we save it
@@ -234,56 +244,56 @@ badext: stop    076              // TODO: an extracode we do not implement
 
         .globl  extint
 extint: atx     sa                  // A first, as the vector does
-        rte     07777               // R   -> A
+        rte     07777               // R -> A
         atx     sr
-        yta                         // РМР -> A
+        yta                         // Y -> A
         atx     srmr
-        ita     020                 // C register M[020] -> A
+        ita     16                  // C register M[16] -> A
         atx     sc
-        ita     017                 // interrupted r15 -> A
+        ita     15                  // interrupted r15 -> A
         atx     s15
-        ita     027                 // СПСВ -> A
-        aax   #(014)                // isolate РежЭ | РежПр (RUU_EXTRACODE|RUU_INTERRUPT)
-        u1a     extk                // nonzero -> nested in the kernel: keep r15
+        ita     SPSW                // saved PSW -> A
+        aax     #(SPSW_INTERRUPT | SPSW_EXTRACODE)
+        u1a     extk                // РежЭ or РежПр -> nested in the kernel: keep r15
      15 vtm     [ustkbase]          // zero -> from user: r15 := kernel stack base (~076214)
-extk:   ita     010                 // ...and r8-r14, which the C call may clobber
+extk:   ita     8                   // ...and r8-r14, which the C call may clobber
         atx     s8
-        ita     011
+        ita     9
         atx     s9
-        ita     012
+        ita     10
         atx     s10
-        ita     013
+        ita     11
         atx     s11
-        ita     014
+        ita     12
         atx     s12
-        ita     015
+        ita     13
         atx     s13
-        ita     016
+        ita     14
         atx     s14
 
      13 vjm     extintr             // intr.c: read ГРП, dispatch, dismiss
 
         xta     s14
-        ati     016
+        ati     14
         xta     s13
-        ati     015
+        ati     13
         xta     s12
-        ati     014
+        ati     12
         xta     s11
-        ati     013
+        ati     11
         xta     s10
-        ati     012
+        ati     10
         xta     s9
-        ati     011
+        ati     9
         xta     s8
-        ati     010
+        ati     8
         xta     s15                 // interrupted r15 back (before the A restore -- clobbers A)
-        ati     017
+        ati     15
         xta     sc                  // C register back (ati does not arm the modifier -- §13)
-        ati     020
-        xta     srmr                // РМР back, via the `aex` side effect (§7)
+        ati     16
+        xta     srmr                // Y back, via the `aex` side effect (§7)
         aex                         //   (A is garbage after this -- intentional)
-        xta     sa                  // A back (xta does not disturb РМР)
+        xta     sa                  // A back (xta does not disturb Y)
         xtr     sr                  // R back -- must be last (a later xta would perturb it)
       3 ij                          // выпр: restore the mode word, jump via M[033]
 

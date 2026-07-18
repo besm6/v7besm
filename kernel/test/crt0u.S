@@ -11,12 +11,12 @@
 // The pieces:
 //   * main() (uintr.c) programs a user map with sureg(), arms the console interrupt, polls
 //     until its "printing finished" bit is pending, then calls gouser().
-//   * gouser() forges the four registers whose preservation is under test (R, РМР, M[020],
+//   * gouser() forges the four registers whose preservation is under test (R, Y (РМР), M[16] (M[020]),
 //     r15) and `выпр's into the user program uprog at virtual page 0.
 //   * The pending console interrupt fires at uprog's first instruction; the hardware vectors
 //     to 0501 -> the corrected `extint', which saves the full async machine, switches to the
 //     kernel stack, runs extintr(), restores, and `выпр's back into uprog.
-//   * uprog reads back R, РМР, the modifier-armed word and r15 into r8-r11 and `stop's; in
+//   * uprog reads back R, Y, the modifier-armed word and r15 into r8-r11 and `stop's; in
 //     user mode `стоп' is re-dispatched as extracode э63 -> vector 0563 -> report().
 //   * report() (supervisor, unmapped) compares r8-r11 against the forged values and the
 //     physical stack-switch sentinel, folds the result into the accumulator, and halts.
@@ -27,37 +27,39 @@
 // This harness (forge-user entry + sureg map) is what tasks 15c/15d reuse for the trap and
 // syscall gates.  See kernel/TODO.md task 15a and doc/Context_Switch.md §14.
 
+#include "sys/besm6dev.h"       // SPSW_* mode-word bits (shared with kernel/besm6.S)
+
 PGSZ    = 02000                 // 1024 words per page (octal)
 
 // -- forged register values (gouser plants them; report checks them) ----------------------
 RMODE   = 044                   // R: ω = logical (bits 5-3 = 001) + overflow-suppress (bit 6).
-                                //   Logical so uprog's `yta' returns РМР clean; distinct from
+                                //   Logical so uprog's `yta' returns Y clean; distinct from
                                 //   the C ABI's steady R = 7 (logical + round + norm suppress),
                                 //   so `rte' catches a dropped R save.
-RMR     = 0123456              // РМР: a distinctive younger-bits value.
-MODVAL  = 04010                // M[020]: a virtual data address (page 2, offset 8).  The
+RMR     = 0123456               // Y: a distinctive younger-bits value.
+MODVAL  = 04010                 // M[16]: a virtual data address (page 2, offset 8).  The
                                 //   armed modifier makes uprog's first `xta 0' read here.
-SENT    = 0525252              // the word uintr.c pokes at virtual MODVAL.
-USPV    = 074000               // r15: an (unmapped) user-stack value; also the PHYSICAL page
+SENT    = 0525252               // the word uintr.c pokes at virtual MODVAL.
+USPV    = 074000                // r15: an (unmapped) user-stack value; also the PHYSICAL page
                                 //   where extintr()'s frame lands if the switch is missing.
-KSENT   = 0333333              // uintr.c seeds physical USPV/USPV+1 with this; extintr() on the
+KSENT   = 0333333               // uintr.c seeds physical USPV/USPV+1 with this; extintr() on the
                                 //   user r15 would overwrite it.
-SPSW    = 020                  // forged СПСВ: SPSW_MOD_RK only.  БлП/БлЗ/БлПр and РежЭ/РежПр all
+SPSW    = 020                   // forged СПСВ: SPSW_MOD_RK only.  БлП/БлЗ/БлПр and РежЭ/РежПр all
                                 //   clear -> `выпр' returns to USER mode, mapping on, interrupts
-                                //   on, and re-arms the modifier from M[020].
+                                //   on, and re-arms the modifier from M[16].
 
-CLOSEDPG = 024000              // virtual page 10: unmapped, so closed to data -- uprog reads it to
+CLOSEDPG = 024000               // virtual page 10: unmapped, so closed to data -- uprog reads it to
                                 //   raise a data-protection fault, which reaches report() below.
 // uprog stashes the four read values into these words of its mapped data page (virtual page 2),
-// full 48 bits -- NOT into index registers, which are only 15 bits and would truncate SENT/R/РМР.
+// full 48 bits -- NOT into index registers, which are only 15 bits and would truncate SENT/R/Y.
 // report reads them back through the same map.  They must clear MODVAL (04010, the sentinel).
-VSLOT0  = 04020                // M[020] read
-VSLOT1  = 04021                // R
-VSLOT2  = 04022                // РМР
-VSLOT3  = 04023                // r15
+VSLOT0  = 04020                 // M[16] read
+VSLOT1  = 04021                 // R
+VSLOT2  = 04022                 // Y
+VSLOT3  = 04023                 // r15
 
 // -- fault bits reported in the accumulator (0 == all five preserved) -----------------------
-//   1  M[020] (the modifier-armed read), 2  R, 4  РМР, 010 r15 value, 020 stack not switched.
+//   1  M[16] (the modifier-armed read), 2  R, 4  Y, 010 r15 value, 020 stack not switched.
 
 // ----------------------------------------------------------------------------
 // Interrupt vectors
@@ -100,13 +102,13 @@ halt:   stop                    // main() should never return (gouser does not)
 gouser:
         ati     033             // ИРЕТ (M[033]) := uentry -- where `выпр' lands
         xta   #(MODVAL)
-        ati     020             // M[020] := MODVAL (inert; `выпр' re-arms it from СПСВ)
+        ati     020             // M[16] := MODVAL (inert; `выпр' re-arms it from СПСВ)
         xta   #(SPSW)
         ati     027             // СПСВ (M[027]) := SPSW_MOD_RK, user mode, interrupts on
      15 vtm     USPV            // r15 := the user-stack value under test
         ntr     RMODE           // R := RMODE (logical + overflow-suppress)
         xta   #(RMR)
-        aex                     // РМР := RMR, via the `aex'-with-blank side effect (keeps R)
+        aex                     // Y := RMR, via the `aex'-with-blank side effect (keeps R)
       3 ij                      // выпр: into uprog, user mode, modifier armed
 
 // ----------------------------------------------------------------------------
@@ -119,19 +121,19 @@ gouser:
 //
 // The interrupt is pending at entry, so it fires BEFORE this first instruction; `extint' handles
 // it and `выпр's back here with the modifier re-armed.  The first `xta 0' is therefore modified by
-// the preserved M[020] and reads virtual MODVAL.
-// The four reads must precede any logical op (which would clobber РМР) and any ω-change: `xta',
-// `rte', `yta', `ita' leave РМР alone, and the forged R is already logical so `xta' keeps it; the
+// the preserved M[16] and reads virtual MODVAL.
+// The four reads must precede any logical op (which would clobber Y) and any ω-change: `xta',
+// `rte', `yta', `ita' leave Y alone, and the forged R is already logical so `xta' keeps it; the
 // stores go through `atx'/`vtm', which touch neither.  So read, store full-width, in this order.
         .globl  uprog
 uprog:
-        xta     0               // A := mem[0 + M[020]] = mem[MODVAL]   -- tests M[020]
+        xta     0               // A := mem[0 + M[16]] = mem[MODVAL]   -- tests M[16]
      14 vtm     VSLOT0
      14 atx     0               //   store it full-width to the mapped data page
         rte     07777           // A := R << 41                          -- tests R
      14 vtm     VSLOT1
      14 atx     0
-        yta                     // A := РМР (R is logical -> full copy)   -- tests РМР
+        yta                     // A := Y (R is logical -> full copy)   -- tests Y
      14 vtm     VSLOT2
      14 atx     0
         ita     017             // A := r15                              -- tests r15 value
@@ -153,10 +155,10 @@ report:
      14 vtm     0               // r14 := fault mask
      13 vtm     VSLOT0
         vtm     02002           // map on (БлП off), interrupts still off
-     13 xta     0               // A := the stored M[020] read, through the map
+     13 xta     0               // A := the stored M[16] read, through the map
         vtm     02003           // map off
         aex   #(SENT)
-        uza     rp1             // matches -> M[020] preserved
+        uza     rp1             // matches -> M[16] preserved
      14 utm     1
 rp1: 13 vtm     VSLOT1
         vtm     02002
@@ -167,7 +169,7 @@ rp1: 13 vtm     VSLOT1
      14 utm     2
 rp2: 13 vtm     VSLOT2
         vtm     02002
-     13 xta     0               // A := the stored РМР
+     13 xta     0               // A := the stored Y
         vtm     02003
         aex   #(RMR)
         uza     rp3
@@ -201,66 +203,66 @@ rpok:   ita     016             // A := the fault mask
 // authority.
 //
 // The save area is addressed BARE (no `< sym >' utc escape).  This is not a nicety: a `< sym >'
-// escape emits a `мода' (utc) that loads M[020], so any escape ahead of the `ita 020' below would
+// escape emits a `мода' (utc) that loads M[16], so any escape ahead of the `ita 020' below would
 // overwrite the very C register this gate is trying to save.  besm6.S is bare for the same reason;
 // it works here because this image's bss links low (the save cells are under the 12-bit short-
 // address field -- sa is at ~03231, see uintr.nm), just as besm6.S's save area does at ~0635.
 //
-// Saves the full async machine: A, r8-r14, and the four the hardware/ABI drop -- R, РМР, the C
-// register M[020], and r15.  Switches r15 to the kernel stack, but ONLY when the interrupt came
-// from user mode (СПСВ & 014 == 0).  Restores in the forced order РМР -> A -> R (§7).
+// Saves the full async machine: A, r8-r14, and the four the hardware/ABI drop -- R, Y, the C
+// register M[16], and r15.  Switches r15 to the kernel stack, but ONLY when the interrupt came
+// from user mode (СПСВ & 014 == 0).  Restores in the forced order Y -> A -> R (§7).
         .globl  extint
 extint: atx     sa              // A first, as the vector does
         rte     07777           // R   -> A
         atx     sr
-        yta                     // РМР -> A
+        yta                     // Y -> A
         atx     srmr
-        ita     020             // C register M[020] -> A
+        ita     16              // C register M[16] -> A
         atx     sc
-        ita     017             // interrupted r15 -> A
+        ita     15              // interrupted r15 -> A
         atx     s15
-        ita     027             // СПСВ -> A
-        aax   #(014)            // isolate РежЭ | РежПр
-        u1a     extk            // nonzero -> nested in the kernel: keep r15
+        ita     027             // СПСВ -> A  (027 is a machine-register address: octal)
+        aax     #(SPSW_INTERRUPT | SPSW_EXTRACODE) 
+        u1a     extk            // РежЭ | РежПр -> nested in the kernel: keep r15
      15 vtm     [ustkbase]      // zero -> from user: r15 := kernel stack base
-extk:   ita     010             // r8-r14, which the C call may clobber
+extk:   ita     8               // r8-r14, which the C call may clobber
         atx     s8
-        ita     011
+        ita     9
         atx     s9
-        ita     012
+        ita     10
         atx     s10
-        ita     013
+        ita     11
         atx     s11
-        ita     014
+        ita     12
         atx     s12
-        ita     015
+        ita     13
         atx     s13
-        ita     016
+        ita     14
         atx     s14
 
      13 vjm     extintr         // uintr.c: dismiss the interrupt
 
         xta     s14
-        ati     016
+        ati     14
         xta     s13
-        ati     015
+        ati     13
         xta     s12
-        ati     014
+        ati     12
         xta     s11
-        ati     013
+        ati     11
         xta     s10
-        ati     012
+        ati     10
         xta     s9
-        ati     011
+        ati     9
         xta     s8
-        ati     010
+        ati     8
         xta     s15             // interrupted r15 back (before the A restore -- clobbers A)
-        ati     017
+        ati     15
         xta     sc              // C register back (ati does not arm the modifier)
-        ati     020
-        xta     srmr            // РМР back, via the `aex' side effect
+        ati     16
+        xta     srmr            // Y back, via the `aex' side effect
         aex
-        xta     sa              // A back (xta does not disturb РМР)
+        xta     sa              // A back (xta does not disturb Y)
         xtr     sr              // R back -- must be last
       3 ij                      // выпр: restore the mode word, jump via M[033]
 

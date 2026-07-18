@@ -390,25 +390,25 @@ forge ИРЕТ+СПСВ, `выпр` into user) and programs a user map with the 
 `mmutest` already links. That harness is reused by 15c and 15d.
 
 **15a. `extint`: save the full async machine, and switch the stack. DONE**, and a new from-user
-test (`kernel/test/uintr`) takes an external interrupt in forged user mode and confirms R, РМР,
-M[020] and r15 all survive it, on the real machine. The gate now matches Context_Switch.md §14
+test (`kernel/test/uintr`) takes an external interrupt in forged user mode and confirms R, Y (РМР),
+M[16] (M[020]) and r15 all survive it, on the real machine. The gate now matches Context_Switch.md §14
 verbatim; how it turned out, and what differed from the sketch below:
 
 - **`besm6.S`'s `extint` is bare-addressed, not escaped.** The save area is in `.const`/`.text` (it
   links at `~0635`, under the 12-bit short-address field), so `atx sa` reaches it directly. This is
-  load-bearing, not a nicety: a `< sym >` escape emits a `мода`/`utc` that loads M[020], so an escape
+  load-bearing, not a nicety: a `< sym >` escape emits a `мода`/`utc` that loads M[16], so an escape
   ahead of the `ita 020` **save** would overwrite the very C register the gate is saving. The `<sym>`
   comment that used to sit on the stub was stale and is gone.
 - **The test harness (`crt0u.s` + `uintr.c`) is the scaffolding 15c/15d reuse.** `gouser()` forges a
   Dubna `SELECT`-style entry — plant ИРЕТ + СПСВ (with `SPSW_MOD_RK` so `выпр` re-arms the modifier),
-  set R via `ntr`, РМР via the `xta`/`aex` side effect, r15 to a user-stack value — and `3 ij` into a
+  set R via `ntr`, Y via the `xta`/`aex` side effect, r15 to a user-stack value — and `3 ij` into a
   tiny mapped user program at virtual page 0. `sureg()` builds the map from `uprog`'s own physical page
   (its word address comes from a linker-filled `.word uprog`, **not** `(unsigned)&uprog`, whose fat
   pointer is not simply its low bits).
 - **The interrupt is raised in software** with `увв 031` ("simulate ГРП") on `GRP_TIMER`, so there is
   no device and no timing: unmask МГРП, raise the bit while БлПр still masks it, and it fires at
   `uprog`'s first instruction the instant `выпр` clears БлПр — which is what makes the modifier-armed
-  M[020] test deterministic. `extintr()` dismisses it **and masks МГРП**, because the interval timer
+  M[16] test deterministic. `extintr()` dismisses it **and masks МГРП**, because the interval timer
   re-arms `GRP_TIMER` at reset and would otherwise storm. Keeping БлПр set through `main` (an explicit
   `vtm 02003` in `_start`) is what stops the bit from firing early, in supervisor.
 - **The user reports back through a deliberate data-protection fault, not `стоп`.** `стоп` in user mode
@@ -416,7 +416,7 @@ verbatim; how it turned out, and what differed from the sketch below:
   **ignores ПоП/ПоК and always vectors** (Memory_Mapping.md), so `uprog` reads a closed page to reach
   the `report()` checker at vector `0500`. `report()` runs unmapped and compares five things.
 - **The read-back values live in memory, not index registers** — the index registers are 15 bits and
-  would truncate SENT / R‹‹41 / РМР. `uprog` stores each full-width to its mapped data page; `report()`
+  would truncate SENT / R‹‹41 / Y. `uprog` stores each full-width to its mapped data page; `report()`
   reads them back through the still-loaded map and the physical stack-switch sentinel unmapped.
 - **The stack-switch discriminator** seeds physical `074000` (= the forged user r15) with a sentinel:
   if `extint` fails to switch, `extintr()`'s frame — БлП forced on, so r15 is a physical index — lands
@@ -433,10 +433,10 @@ The original four gaps, for the record — each confirmed against SIMH and Dubna
     The hardware does **not** save it: SIMH `op_int_1` and `выпр` never touch RAU, and Dubna saves it
     by hand (`rte`/`xtr`). The "Floating-point state" comment in `besm6.S` — *"the arithmetic mode
     rides in СПСВ across a trap"* — is therefore **false** and must be corrected when this code lands.
-  - **РМР** (younger-bits): any logical op (`и`/`слц`/`сл`) overwrites it, and the interrupted user
+  - **Y** (younger-bits): any logical op (`и`/`слц`/`сл`) overwrites it, and the interrupted user
     may hold it live.
-  - **C register M[020]**: `extintr()` reaches globals through the compiler's `utc name`+load idiom,
-    which overwrites M[020]; the interrupted user's `SPSW_MOD_RK` still rides in СПСВ, so the closing
+  - **C register M[16]**: `extintr()` reaches globals through the compiler's `utc name`+load idiom,
+    which overwrites M[16]; the interrupted user's `SPSW_MOD_RK` still rides in СПСВ, so the closing
     `3 ij` re-arms the modifier from the clobbered value and mis-modifies the resumed instruction
     (Context_Switch.md §13).
   - **The stack** (the shared "r15 is not banked" fact above): `extint` calls `extintr()` with no
@@ -445,19 +445,19 @@ The original four gaps, for the record — each confirmed against SIMH and Dubna
   *Fix:* extend the static save area (`sa`, `s8`–`s14`) with `sr`/`srmr`/`sc` **and `s15`**; on entry
   add `rte 07777`/`atx`, `yta`/`atx`, `ita 020`/`atx`, then save r15 (`ita 017`/`atx`) and — **only
   when `СПСВ & 014 == 0` (came from user)** — reload the kernel stack base (`ita 027`, `aax #(014)`,
-  `u1a` past a `15 vtm [ustkbase]`); on exit restore in the **forced order РМР → A → R** (`xta srmr`/
+  `u1a` past a `15 vtm [ustkbase]`); on exit restore in the **forced order Y → A → R** (`xta srmr`/
   `aex`, `xta sa`, `xtr sr`) plus `ati 020` for the C register (a plain move — it does not re-arm) and
   `xta s15`/`ati 017` for r15, then `3 ij`. The register order is not negotiable (Context_Switch.md
   §7); the r15 and C-register restores are order-free among themselves but must precede the final `xta
   sa` (they clobber A) — and both must happen, because `выпр` does not reload the index registers.
 - **Done when** (done-when *c*): a from-user test (built on the new forge-entry crt0 above) takes an
   external interrupt with ω-mode / a `utc` armed and r15 holding a user-stack value, runs `extintr()`
-  on the kernel stack (not on the user's r15) and resumes the user with R, РМР, M[020] **and r15**
+  on the kernel stack (not on the user's r15) and resumes the user with R, Y, M[16] **and r15**
   intact. Touches `besm6.S` + the new test only — no `reg.h`/`trap.c` dependency, so it can land first.
 
 **15b. `reg.h`: the BESM-6 trap frame, and retarget the C readers.** `reg.h` is still
 `struct trap{eax…ss}` with EAX/EIP/ESP/EFL. Define the BESM-6 `u_ar0[]` frame (ACC, r1–r15,
-C = M[020], R, РМР, ГРП, СПСВ, ЭРЕТ/ИРЕТ, errno). The frame lives on the kernel stack, so `u_ar0`
+C = M[16], R, Y, ГРП, СПСВ, ЭРЕТ/ИРЕТ, errno). The frame lives on the kernel stack, so `u_ar0`
 points at it in place — the x86 "changed registers are copied back on return" convention becomes "the
 asm epilogue reloads the registers from the frame." Update every reader to keep the tree building —
 `trap.c` (return values, panic dump), `sig.c` (ptrace / single-step, `u_ar0[EFL]`, `u_ar0[EIP]`),
@@ -470,7 +470,7 @@ fill the frame are 15c/15d.
   and every reader compiles against it.
 - **Done.** `include/sys/reg.h` is the 22-word frame laid out **verbatim to Dubna's canonical
   register-save block** (Context_Switch.md §2): `ACC 0`, `RREG 1` (R), `RMR 2`, `IRET 3` (ИРЕТ),
-  `ERET 4` (ЭРЕТ), `SPSW 5`, `CREG 6` (= М16 = M[020]), then the register file **descending** —
+  `ERET 4` (ЭРЕТ), `SPSW 5`, `CREG 6` (= М16 = M[16]), then the register file **descending** —
   `R15 7`, `R14 8` … `R1 21` (М15…М1) — plus `NREGFRAME 22`. Two distinct return slots (ИРЕТ for
   interrupt/fault `выпр`, ЭРЕТ for extracode); `errno` is `r14` (М14), no own slot. **ГРП is not
   framed** — the fault cause is read live via `__besm6_mod(MOD_GRP,0)` in `trap()` (15c), as Dubna

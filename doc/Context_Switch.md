@@ -73,7 +73,7 @@ table in [`cmd/as/tables.c:114-172`](../cmd/as/tables.c#L114-L172):
 | `MOD`  | `002` | рег  | read/write a CPU-internal register (supervisor only) |
 | `XTR`  | `027` | рж   | **set the mode register R from memory** |
 | `RTE`  | `030` | счрж | **read R into the accumulator's exponent field** |
-| `YTA`  | `031` | счмр | **read the younger-bits register РМР** |
+| `YTA`  | `031` | счмр | **read the younger-bits register Y (РМР)** |
 | `NTR`  | `037` | ржа  | set R from the immediate address |
 | `ATI`  | `040` | уи   | `M[i] := A` |
 | `STI`  | `041` | уим  | `M[i] := A`, **and pop** |
@@ -120,7 +120,7 @@ Eight words, declared at `dubna.dd:16413`, holding the state of whatever was int
 |------------------------------|-------|
 | `SAVAC`                      | the accumulator |
 | `SAVSR`                      | the mode register **R** (ω-mode and the NTR suppress bits) |
-| `SAVAR`                      | the **РМР** younger-bits register — despite the name |
+| `SAVAR`                      | the **Y** younger-bits register — despite the name |
 | `SAVI15`, `SAVI14`, `SAVI13` | М15, М14, М13 |
 | `SAVMIR`                     | **ГРП**, the main interrupt register |
 | `SAVS16`                     | М16 |
@@ -148,7 +148,7 @@ save field is **24 words at offset 0** of the task block (`dubna.dd:488`):
 |-----------|----------------------------------------|--------------------------|
 | `0`       | accumulator                            | `CYMMATOP`               |
 | `1`       | mode register **R**                    | `PEЖИM  A Y` — "AU mode" |
-| `2`       | **РМР** younger bits                   | `PEГИCTP MЛAДШИX PAЗPЯДOB` |
+| `2`       | **Y** younger bits                   | `PEГИCTP MЛAДШИX PAЗPЯДOB` |
 | `3`       | **ИРЕТ** — interrupt return address    | `AДPEC ПPEPЫBAHИЯ (И33)` |
 | `4`       | **ЭРЕТ** — extracode return address    | `AДPEC ЭKCTPAKOДA (И32)` |
 | `5`       | **СПСВ** — saved mode word             | `PEЖИM  Y Y  (И27)` |
@@ -275,7 +275,7 @@ reading Dubna, because those `*NNN:` labels are assertions, not addresses.
 ```
 
 Order of business: **R first** (`RTE 7777` reads it into A's exponent field), then lock the machine
-down, then the index registers, then РМР, then ГРП.
+down, then the index registers, then Y, then ГРП.
 
 `DISREG` is a block holding `C2013` (`dubna.dd:15458`) = **02013** = БлПр + halt-on-check + БлЗ
 + БлП. The hardware has already forced БлП/БлЗ/БлПр on at the vector; this re-asserts them and adds
@@ -287,7 +287,7 @@ its own slot. Three instructions, no scratch cell, and the stack is now inside `
 
 ### What is *not* saved
 
-**Only A, R, РМР, ГРП and М13–М16.** М1–М12 are left live in the CPU, still holding the interrupted
+**Only A, R, Y, ГРП and М13–М16.** М1–М12 are left live in the CPU, still holding the interrupted
 program's values. The handler bodies are simply written not to touch them.
 
 This is the design decision at the heart of Dubna's trap path: the prologue is deliberately
@@ -380,7 +380,7 @@ stow-away"**.
 15501    13,UJ,.                    . return via М13
 ```
 
-Every destination matches the §2 layout exactly: A, R, РМР, ИРЕТ, ЭРЕТ, СПСВ, М16…М1.
+Every destination matches the §2 layout exactly: A, R, Y, ИРЕТ, ЭРЕТ, СПСВ, М16…М1.
 
 **This is a software pipeline.** Each `ITS`/`XTS` simultaneously retires the previous value and
 fetches the next, so 22 words are saved in 22 instructions with **no scratch cell and no loop
@@ -388,7 +388,7 @@ overhead**. The accumulator is the pipeline register. It is the single most eleg
 file, and it is the idiom to copy.
 
 Note what `FULSAV` is *not* doing: it never reads a register the prologue already spilled. A, R,
-РМР, М13–М16 come out of `SMASAV`; only М1–М12 and the three spec registers are read live. The two
+Y, М13–М16 come out of `SMASAV`; only М1–М12 and the three spec registers are read live. The two
 save areas compose.
 
 `FULSAV+1` is exported as **`SAVTOTAL`** (`dubna.dd:32672`):
@@ -432,17 +432,17 @@ Four things here are not obvious, and all four matter.
 
 It is `нтж` with a blank address — XOR the accumulator with word 0, which always reads 0, so **A is
 unchanged**. The instruction exists *solely* for its side effect: a logical operation copies the old
-A into РМР. `XTA SAVAR; AEX 0` is therefore "**РМР := the saved РМР**", and it is the only way to
+A into Y. `XTA SAVAR; AEX 0` is therefore "**Y := the saved Y**", and it is the only way to
 write that register — the architecture provides `счмр` to read it and nothing at all to write it.
 
 A is garbage afterward, which is why 15581 reloads it.
 
 ### The restore order is forced
 
-**РМР → A → R.** Not a style choice:
+**Y → A → R.** Not a style choice:
 
-- `XTA` (сч) is documented as **not** clearing РМР, unlike `и`/`слц`/`сл`, which all set it to 0.
-  So A can be reloaded *after* РМР without destroying it. Any other order does destroy it.
+- `XTA` (сч) is documented as **not** clearing Y, unlike `и`/`слц`/`сл`, which all set it to 0.
+  So A can be reloaded *after* Y without destroying it. Any other order does destroy it.
 - `XTR` must be last, because a subsequent `XTA` would perturb the mode bits it just restored.
 
 ### `,XTR,SAVSR` is how ω comes back
@@ -836,7 +836,7 @@ while loading the address-break registers, because they match the *mapped* addre
 ```
   hardware trap  ->  vector 0500/0501: ATX SAVAC ; UJ
                        |
-                     short save into SMASAV  (A, R, РМР, ГРП, М13-М16)   [§4]
+                     short save into SMASAV  (A, R, Y, ГРП, М13-М16)   [§4]
                        |
                      dispatch via ГРП bit -> SWINT table                 [§5]
                        |
@@ -846,7 +846,7 @@ while loading the address-break registers, because they match the *mapped* addre
           |                                                        |
    RETURN [§7]                                        NEWTA -> FULSAV [§6]
      re-poll ГРП --(pending)--> INTER                    SMASAV + live М1-М12
-     РМР -> A -> R                                       + М27/М32/М33 -> ИПЗ
+     Y -> A -> R                                       + М27/М32/М33 -> ИПЗ
      3,32, = выпр                                                |
           |                                                   SELECT
      [same task]                                          (pick a new task)
@@ -896,7 +896,7 @@ no special case for it.
 
 ### Two pieces of state, two homes
 
-C is not just the value in `M[020]`. There is also an **armed flag** — whether the *next*
+C is not just the value in `M[16]` (`M[020]`). There is also an **armed flag** — whether the *next*
 instruction actually applies the modifier — and it lives in a different register:
 
 ```c
@@ -923,14 +923,14 @@ if (RUU & RUU_MOD_RK) {          // was a utc/wtc armed when the trap landed?
 
 The armed flag migrates into СПСВ and the live modifier is **cleared** — so the handler runs
 disarmed. That is what makes the vector safe: the very first half-instruction is `atx SAVAC` (§3),
-and if C were still armed it would be silently modified. The **value in `M[020]` is left
+and if C were still armed it would be silently modified. The **value in `M[16]` is left
 untouched**, sitting inert in the register file.
 
 On the way out, `выпр` puts it back (case 0320):
 
 ```c
 if (M[SPSW] & SPSW_MOD_RK)
-    next_mod = M[MOD];           // re-arm from M[020] for the resumed instruction
+    next_mod = M[MOD];           // re-arm from M[16] for the resumed instruction
 ```
 
 And the arm/disarm itself, at the end of every instruction:
@@ -941,7 +941,7 @@ else            RUU &= ~RUU_MOD_RK;
 ```
 
 Put together: **a `utc` interrupted before its target executes is preserved across the whole trap.**
-Its value rides in `M[020]`, its armed-bit rides in СПСВ, and `выпр` reconstructs the pending
+Its value rides in `M[16]`, its armed-bit rides in СПСВ, and `выпр` reconstructs the pending
 modification from the two. The earlier corner of this document that said the hardware does not try
 to reconstruct a mid-`utc` interrupt was wrong; it reconstructs it precisely, and for free.
 
@@ -1003,11 +1003,11 @@ the *pending* semantics are carried entirely by СПСВ's `SPSW_MOD_RK`.
 
 ## 14. What this means for the Unix port
 
-### The finding: we are not saving R or РМР
+### The finding: we are not saving R or Y
 
 [`kernel/besm6.S:205-238`](../kernel/besm6.S#L205-L238) — the `extint` stub — saves the accumulator
-and r8–r14. It does **not** save the mode register R, and it does **not** save РМР. Dubna saves both
-on every single interrupt (`RTE`/`XTR` for R, `YTA` + the `AEX` side-effect for РМР), and it is not
+and r8–r14. It does **not** save the mode register R, and it does **not** save Y. Dubna saves both
+on every single interrupt (`RTE`/`XTR` for R, `YTA` + the `AEX` side-effect for Y), and it is not
 being fussy:
 
 - **The C ABI clobbers R.** [Besm6_Runtime_Library.md:86](Besm6_Runtime_Library.md#L86) states the
@@ -1015,25 +1015,25 @@ being fussy:
   `13 vjm extintr` at `besm6.S:221` returns with R changed, and the interrupted user code resumes
   with the wrong ω-mode and the wrong normalize/round suppression. Its next floating-point
   instruction does something quietly different.
-- **Any logical op clobbers РМР.** `и`, `слц`, `сл` and friends all write it. The interrupted code
-  may hold a live РМР — mid-multiply, or between a `счмр` and its use — and `extintr()` will
+- **Any logical op clobbers Y.** `и`, `слц`, `сл` and friends all write it. The interrupted code
+  may hold a live Y — mid-multiply, or between a `счмр` and its use — and `extintr()` will
   destroy it.
 
-The fix mirrors §4 and §7, and the **order in the epilogue is not negotiable** (РМР → A → R, for the
+The fix mirrors §4 and §7, and the **order in the epilogue is not negotiable** (Y → A → R, for the
 reasons in §7):
 
 ```
 extint: atx     sa                  // A first, as the vector does
         rte     07777               // R -> A
         atx     sr
-        yta                         // РМР -> A
+        yta                         // Y -> A
         atx     srmr
         ...                         // r8-r14 as today
         13 vjm  extintr
         ...                         // r8-r14 as today
-        xta     srmr                // РМР back, via the AEX side effect
+        xta     srmr                // Y back, via the AEX side effect
         aex                         //   (A is garbage after this — intentional)
-        xta     sa                  // A back (xta does not disturb РМР)
+        xta     sa                  // A back (xta does not disturb Y)
         xtr     sr                  // R back — must be last
         3 ij
 ```
@@ -1043,13 +1043,13 @@ belongs with task 15 in [`kernel/TODO.md`](../kernel/TODO.md).
 
 ### The C register is a third gap
 
-The same stub does not save `M[020]` either, and by §13 that is the C register. The race is narrow
+The same stub does not save `M[16]` either, and by §13 that is the C register. The race is narrow
 but real. A device interrupt can land in the one-instruction window between a user `utc` and the
-instruction it modifies. The trap parks `SPSW_MOD_RK` in СПСВ and leaves the value in `M[020]`, both
-of which `extint` preserves *by accident* — it never touches СПСВ, and it does not read `M[020]`. But
+instruction it modifies. The trap parks `SPSW_MOD_RK` in СПСВ and leaves the value in `M[16]`, both
+of which `extint` preserves *by accident* — it never touches СПСВ, and it does not read `M[16]`. But
 `extintr()` is C, and the compiler's idiom for a global is `utc name` + bare load
 ([Besm6_Instruction_Set.md:144-149](Besm6_Instruction_Set.md#L144-L149)), so the handler **overwrites
-`M[020]`**. The closing `3 ij` then re-arms from the clobbered value (§13), and the resumed user
+`M[16]`**. The closing `3 ij` then re-arms from the clobbered value (§13), and the resumed user
 instruction is modified by the wrong address. Nothing faults; a load just reads the wrong word.
 
 The fix is the §13 idiom — read register 020 into a save cell on entry, alongside A and r8–r14, and
@@ -1057,13 +1057,13 @@ put it back with `ati 020` before `3 ij` (a plain move, which does not arm — �
 
 ```
 extint: atx     sa
-        ...                         // R, РМР as above; r8-r14 as today
+        ...                         // R, Y as above; r8-r14 as today
         ita     020                 // C register -> A
         atx     sc
         13 vjm  extintr
         xta     sc                  // C register back (ati does not arm the modifier)
         ati     020
-        ...                         // РМР, A, R restore as above
+        ...                         // Y, A, R restore as above
         3 ij
 ```
 
@@ -1101,7 +1101,7 @@ supervisor mode"), so `СПСВ & 014` (РежЭ | РежПр) is zero **iff** t
 Test the supervisor bits, **not** БлП: `copyin`/`copyout` clear БлП while staying in supervisor mode,
 so a БлП test would misclassify a fault taken mid-`copyin` and reset r15 out from under the syscall.
 
-The corrected `extint`, folding in all four gaps (R, РМР, M[020], and the stack) — the register save/
+The corrected `extint`, folding in all four gaps (R, Y, M[16], and the stack) — the register save/
 restore order is the §7 rule, the r15 and C-register restores go before the final `xta sa` because they
 clobber A, and the two `выпр`-doesn't-reload registers (r8–r14, r15) are put back by hand:
 
@@ -1109,9 +1109,9 @@ clobber A, and the two `выпр`-doesn't-reload registers (r8–r14, r15) are p
 extint: atx     sa                  // A first, as the vector does
         rte     07777               // R   -> A
         atx     sr
-        yta                         // РМР -> A
+        yta                         // Y -> A
         atx     srmr
-        ita     020                 // C register (M[020]) -> A
+        ita     020                 // C register (M[16]) -> A
         atx     sc
         ita     017                 // interrupted r15 -> A
         atx     s15                 //   one static cell: interrupts are blocked, no re-entry
@@ -1136,9 +1136,9 @@ extk:   ita     010                 // r8-r14 as today
         ati     017
         xta     sc                  // C register back (ati does not arm the modifier)
         ati     020
-        xta     srmr                // РМР back, via the aex side effect
+        xta     srmr                // Y back, via the aex side effect
         aex                         //   (A is garbage after this -- intentional)
-        xta     sa                  // A back (xta does not disturb РМР)
+        xta     sa                  // A back (xta does not disturb Y)
         xtr     sr                  // R back -- must be last
       3 ij                          // выпр: restore the mode word, jump via M[033]
 ```
@@ -1167,7 +1167,7 @@ Recorded, not applied, like the three above; it belongs with task 15.
   check — is worth having on its own.
 - **The two-tier save** (§4, §6). Most interrupts never park a task, so the prologue saves the
   minimum and the full 24-word context is materialised only when the scheduler actually needs it.
-  Our `extint` already has this shape; it just needs R, РМР and the C register (§13) added to the
+  Our `extint` already has this shape; it just needs R, Y and the C register (§13) added to the
   short tier.
 - **The internal/external clear asymmetry** (§5). Faults are not queued — clear them all; device
   interrupts are — clear one.
@@ -1182,7 +1182,7 @@ Recorded, not applied, like the three above; it belongs with task 15.
 | `PUTTMP` | `sureg()`, [`kernel/utab.c`](../kernel/utab.c) |
 | the nine-store drain (§11) | `drainbrz()`, [`kernel/brz.s`](../kernel/brz.s) |
 | `RETURN`/`OUTMACRO` (§7, §8) | the trap gate, task 15 |
-| `SAVS16` / `И16`, the C register (§13) | an `M[020]` slot in the trap frame and the new `reg.h` |
+| `SAVS16` / `И16`, the C register (§13) | an `M[16]` slot in the trap frame and the new `reg.h` |
 | `SMASAV` | the trap frame on the kernel stack at `076000` |
 
 **One difference that matters.** Each Dubna task has its **own** ИПЗ page, separately allocated
