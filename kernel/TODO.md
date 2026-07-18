@@ -389,16 +389,34 @@ cannot stand in. Task 16's real entry-to-user (`resume()`/SELECT-forge) does not
 forge ИРЕТ+СПСВ, `выпр` into user) and programs a user map with the `mmuhelp`/`sureg` machinery
 `mmutest` already links. That harness is reused by 15c and 15d.
 
-**15a. `extint`: save the full async machine, and switch the stack. DONE**, and a new from-user
-test (`kernel/test/uintr`) takes an external interrupt in forged user mode and confirms R, Y (РМР),
-M[16] (M[020]) and r15 all survive it, on the real machine. The gate now matches Context_Switch.md §14
-verbatim; how it turned out, and what differed from the sketch below:
+**15a. `extint`: save the interrupted context into the reg.h frame, and switch the stack. DONE**, and
+a from-user test (`kernel/test/uintr`) takes an external interrupt in forged user mode and confirms
+R, Y (РМР), M[16] (M[020]) and r15 all survive it, on the real machine. The gate goes **beyond** the
+§14 subset sketch below: it builds the full canonical reg.h frame (§2 — `0 A · 1 R · 2 Y · 3 ИРЕТ ·
+4 ЭРЕТ · 5 СПСВ · 6 M16 · 7 M15 … 21 M1`) on the kernel stack with the Dubna FULSAV `xts`/`its`
+pipeline (§6) and reloads it with the symmetric `stx`/`sti` pop (§7/§12), so the async door produces
+exactly the frame the trap/syscall gates (15c/15d) and `resume()` (16) will read. How it turned out:
 
-- **`besm6.S`'s `extint` is bare-addressed, not escaped.** The save area is in `.const`/`.text` (it
-  links at `~0635`, under the 12-bit short-address field), so `atx sa` reaches it directly. This is
-  load-bearing, not a nicety: a `< sym >` escape emits a `мода`/`utc` that loads M[16], so an escape
-  ahead of the `ita 020` **save** would overwrite the very C register the gate is saving. The `<sym>`
-  comment that used to sit on the stub was stale and is gone.
+- **Only five temp cells, not the flat subset block.** The FULSAV fill is a store-and-load pipeline
+  whose only scratch is the accumulator, so any register the pipeline can reach — M1–M14 and
+  ИРЕТ/ЭРЕТ/СПСВ (via `its`) — is read **live** into the frame, because the fill runs *before*
+  `13 vjm extintr` clobbers anything. Only the five the pipeline cannot reach are spilled first:
+  `save_a`, `save_r`, `save_y` (A/R/Y can't ride an `its`/`xts` chain), `save_m16` (must be spilled
+  before the stack-switch `u1a`/`vtm`, whose `utc` for a long address would clobber M16), and
+  `save_m15` (the pipeline's own stack pointer, repointed by the switch). The restore is the exact
+  inverse pop; the spec-register reloads (`sti 027`/`032`/`033`) are no-ops — extintr never touched
+  M027/M032/M033 — but keep it symmetric.
+- **`besm6.S`'s `extint` is bare-addressed, not escaped.** The five cells are in `.const`/`.text` (they
+  link at `~0700`, under the 12-bit short-address field), so `atx save_a` reaches them directly. This
+  is load-bearing, not a nicety: a `< sym >` escape emits a `мода`/`utc` that loads M[16], so an escape
+  ahead of the `ita 16` M[16] **save** would overwrite the very C register the gate is saving.
+- **The frame lives on the kernel stack, at M15.** After the switch M15 *is* the frame base — the
+  kernel-stack base (`[ustkbase]`) when the interrupt came from user, or the interrupted kernel SP when
+  it nested — and the fill builds there, exactly as reg.h describes. **`u.u_ar0` is not stored by the
+  gate**: the kernel sets it in C (`trap.c: u.u_ar0 = &tr.acc`), and `extintr()` is frame-agnostic
+  (takes `void`); when `clock()` joins this path (15e) it receives the frame by value and points
+  `u_ar0` itself. Doing it in asm would need a hardcoded `u_ar0` offset (the `UPT=35`-class constant
+  that bit `u_upt` in commit af5b619) for no runtime benefit today.
 - **The test harness (`crt0u.s` + `uintr.c`) is the scaffolding 15c/15d reuse.** `gouser()` forges a
   Dubna `SELECT`-style entry — plant ИРЕТ + СПСВ (with `SPSW_MOD_RK` so `выпр` re-arms the modifier),
   set R via `ntr`, Y via the `xta`/`aex` side effect, r15 to a user-stack value — and `3 ij` into a
@@ -421,7 +439,7 @@ verbatim; how it turned out, and what differed from the sketch below:
 - **The stack-switch discriminator** seeds physical `074000` (= the forged user r15) with a sentinel:
   if `extint` fails to switch, `extintr()`'s frame — БлП forced on, so r15 is a physical index — lands
   there and overwrites it. `report()` catches that (bit `020`). **Bite-tested:** dropping the switch
-  yields ACC `020`, dropping the `xtr sr` restore yields ACC `2`.
+  yields ACC `020`, dropping the `xtr save_r` restore yields ACC `2`.
 - **No `set mmu cache`.** `extint` programs no page registers, so the БРЗ hazard mmutest chases is not
   in play here; the run stays simple.
 
@@ -442,14 +460,15 @@ The original four gaps, for the record — each confirmed against SIMH and Dubna
   - **The stack** (the shared "r15 is not banked" fact above): `extint` calls `extintr()` with no
     frame step, so it must do the r15 switch explicitly, gated on `СПСВ & 014 == 0`.
 
-  *Fix:* extend the static save area (`sa`, `s8`–`s14`) with `sr`/`srmr`/`sc` **and `s15`**; on entry
-  add `rte 07777`/`atx`, `yta`/`atx`, `ita 020`/`atx`, then save r15 (`ita 017`/`atx`) and — **only
-  when `СПСВ & 014 == 0` (came from user)** — reload the kernel stack base (`ita 027`, `aax #(014)`,
-  `u1a` past a `15 vtm [ustkbase]`); on exit restore in the **forced order Y → A → R** (`xta srmr`/
-  `aex`, `xta sa`, `xtr sr`) plus `ati 020` for the C register (a plain move — it does not re-arm) and
-  `xta s15`/`ati 017` for r15, then `3 ij`. The register order is not negotiable (Context_Switch.md
-  §7); the r15 and C-register restores are order-free among themselves but must precede the final `xta
-  sa` (they clobber A) — and both must happen, because `выпр` does not reload the index registers.
+  *Implemented (superseding the flat-subset sketch this paragraph used to hold):* instead of extending
+  a scattered `sr`/`srmr`/`sc`/`s15` block, the gate spills the five pipeline-unreachable registers to
+  `save_a`/`save_r`/`save_y`/`save_m16`/`save_m15`, switches M15 to `[ustkbase]` **only when
+  `СПСВ & 014 == 0`** (`ita 027`, `aax #(014)`, `u1a` past the `15 vtm`), then runs the FULSAV
+  `xts`/`its` fill into the frame at M15 (M1–M14 and ИРЕТ/ЭРЕТ/СПСВ read live). On exit the inverse
+  `stx`/`sti` pop reloads the whole frame and re-stashes old M15/Y/R/A to the cells, applied last in
+  the **forced order Y → A → R** (`xta save_y`/`aex`, then `ati 15`, `xta save_a`, `xtr save_r`), then
+  `3 ij`. The order is not negotiable (Context_Switch.md §7); `выпр` reloads neither the index
+  registers nor R/Y, so the gate must.
 - **Done when** (done-when *c*): a from-user test (built on the new forge-entry crt0 above) takes an
   external interrupt with ω-mode / a `utc` armed and r15 holding a user-stack value, runs `extintr()`
   on the kernel stack (not on the user's r15) and resumes the user with R, Y, M[16] **and r15**

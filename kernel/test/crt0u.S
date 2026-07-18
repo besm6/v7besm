@@ -199,71 +199,104 @@ rpok:   ita     016             // A := the fault mask
 // ----------------------------------------------------------------------------
 // besm6.o cannot enter a standalone test (its 0500 vector reaches into the C kernel and its
 // _start seeds no stack), so the gate is duplicated here, as crt0.s already duplicates the old
-// subset gate.  Keep it identical in LOGIC to kernel/besm6.S; doc/Context_Switch.md §14 is the
-// authority.
+// subset gate.  Keep it identical in LOGIC to kernel/besm6.S; that file's header and
+// doc/Context_Switch.md §4/§6/§7/§14 are the authority for everything below.
 //
-// The save area is addressed BARE (no `< sym >' utc escape).  This is not a nicety: a `< sym >'
-// escape emits a `мода' (utc) that loads M[16], so any escape ahead of the `ita 020' below would
+// The temp cells are addressed BARE (no `< sym >' utc escape).  This is not a nicety: a `< sym >'
+// escape emits a `мода' (utc) that loads M[16], so any escape ahead of the M[16] save below would
 // overwrite the very C register this gate is trying to save.  besm6.S is bare for the same reason;
-// it works here because this image's bss links low (the save cells are under the 12-bit short-
-// address field -- sa is at ~03231, see uintr.nm), just as besm6.S's save area does at ~0635.
+// it works here because this image's bss links low (the cells are under the 12-bit short-address
+// field -- save_a is at ~03231, see uintr.nm), just as besm6.S's cells do at ~0700.
 //
-// Saves the full async machine: A, r8-r14, and the four the hardware/ABI drop -- R, Y, the C
-// register M[16], and r15.  Switches r15 to the kernel stack, but ONLY when the interrupt came
-// from user mode (СПСВ & 014 == 0).  Restores in the forced order Y -> A -> R (§7).
+// Builds the canonical reg.h frame (0 A, 1 R, 2 Y, 3 ИРЕТ, 4 ЭРЕТ, 5 СПСВ, 6 M16, 7 M15 ... 21 M1)
+// on the kernel stack with the Dubna FULSAV `xts'/`its' pipeline (§6): M1-M14 and ИРЕТ/ЭРЕТ/СПСВ go
+// in live, only A, R, Y, M16 and the interrupted M15 are spilled to the five cells first.  Switches
+// M15 to the kernel stack, but ONLY when the interrupt came from user mode (СПСВ & 014 == 0).
+// Restores by the inverse stx/sti pop of the whole frame, applying old M15/Y/A/R last in the forced
+// order Y -> A -> R (§7).  СПСВ here is the machine register 027 (octal) -- NOT the local `SPSW' EQU
+// (= 020, gouser's forged mode word).
         .globl  extint
-extint: atx     sa              // A first, as the vector does
+extint:
+        // --- short save: the five registers the FULSAV pipeline cannot reach ---
+        atx     save_a          // A first, as the vector does
         rte     07777           // R   -> A
-        atx     sr
-        yta                     // Y -> A
-        atx     srmr
-        ita     16              // C register M[16] -> A
-        atx     sc
-        ita     15              // interrupted r15 -> A
-        atx     s15
+        atx     save_r
+        yta                     // Y   -> A
+        atx     save_y
+        ita     16              // M16 (C register) -> A -- before the u1a/vtm utc below
+        atx     save_m16
+        ita     15              // interrupted M15 -> A -- before the stack switch repoints it
+        atx     save_m15
+
+        // --- stack switch: repoint M15 at the kernel stack ONLY when interrupted from user ---
         ita     027             // СПСВ -> A  (027 is a machine-register address: octal)
-        aax     #(SPSW_INTERRUPT | SPSW_EXTRACODE) 
-        u1a     extk            // РежЭ | РежПр -> nested in the kernel: keep r15
-     15 vtm     [ustkbase]      // zero -> from user: r15 := kernel stack base
-extk:   ita     8               // r8-r14, which the C call may clobber
-        atx     s8
-        ita     9
-        atx     s9
-        ita     10
-        atx     s10
-        ita     11
-        atx     s11
-        ita     12
-        atx     s12
-        ita     13
-        atx     s13
-        ita     14
-        atx     s14
+        aax     #(SPSW_INTERRUPT | SPSW_EXTRACODE)
+        u1a     extk            // РежЭ | РежПр -> nested in the kernel: keep M15
+     15 vtm     [ustkbase]      // zero -> from user: M15 := kernel stack base
+extk:                           // M15 = frame base F (ustkbase, or the interrupted kernel SP)
+
+        // --- FULSAV: fill the reg.h frame at [M15 ..] (§6); xts/its walk M15 F -> F+22 ---
+        xta     save_a
+        xts     save_r          // frame[0]  := A     ; A := R
+        xts     save_y          // frame[1]  := R     ; A := Y
+        its     033             // frame[2]  := Y     ; A := ИРЕТ (M033, live)
+        its     032             // frame[3]  := ИРЕТ  ; A := ЭРЕТ (M032, live)
+        its     027             // frame[4]  := ЭРЕТ  ; A := СПСВ (M027, live)
+        xts     save_m16        // frame[5]  := СПСВ  ; A := M16
+        xts     save_m15        // frame[6]  := M16   ; A := interrupted M15
+        its     14              // frame[7]  := M15   ; A := M14 (live)
+        its     13              // frame[8]  := M14   ; A := M13 (live)
+        its     12              // frame[9]  := M13   ; A := M12
+        its     11
+        its     10
+        its     9
+        its     8
+        its     7
+        its     6
+        its     5
+        its     4
+        its     3
+        its     2
+        its     1               // frame[20] := M2    ; A := M1
+        xts     save_a          // frame[21] := M1    ; M15 := F+22 (above the frame); A discarded
 
      13 vjm     extintr         // uintr.c: dismiss the interrupt
 
-        xta     s14
-        ati     14
-        xta     s13
-        ati     13
-        xta     s12
-        ati     12
-        xta     s11
-        ati     11
-        xta     s10
-        ati     10
-        xta     s9
-        ati     9
-        xta     s8
-        ati     8
-        xta     s15             // interrupted r15 back (before the A restore -- clobbers A)
+        // --- restore: the exact inverse of the fill.  stx/sti pop frame[21..0], M15 walking
+        //     F+22 -> F: M1-M14, M16 and ИРЕТ/ЭРЕТ/СПСВ go straight back to their registers (the
+        //     spec-register reloads are no-ops -- extintr() left M027/M032/M033 untouched), while
+        //     old M15, Y, R and A are re-stashed to the cells and applied last, in the forced
+        //     Y -> A -> R order (§7).  M1-M7 are ABI callee-saved, so their reload is redundant but
+        //     keeps the pop symmetric.  A blank-address `stx' stores to word 0, which is discarded. ---
+        stx                     // A := M1 from frame[21]
+        sti     1               // restore M1; A := M2 from frame[20]
+        sti     2
+        sti     3
+        sti     4
+        sti     5
+        sti     6
+        sti     7
+        sti     8
+        sti     9
+        sti     10
+        sti     11              // restore M11;  A := M12 from frame[10]
+        sti     12              // restore M12;  A := M13 from frame[9]
+        sti     13              // restore M13;  A := M14 from frame[8]
+        sti     14              // restore M14;  A := M15 from frame[7]
+        stx     save_m15        // prepare M15;  A := M16 from frame[6]
+        sti     16              // restore C;    A := СПСВ from frame[5]
+        sti     027             // restore СПСВ; A := ЭРЕТ from frame[4]  (027 = M027 register: octal)
+        sti     032             // restore ЭРЕТ; A := ИРЕТ from frame[3]
+        sti     033             // restore ИРЕТ; A := Y from frame[2]
+        stx     save_y          // prepare Y;    A := R from frame[1]
+        stx     save_r          // prepare R;    A := A from frame[0]
+        atx     save_a          // prepare A
+        xta     save_y          // Y back, via the `aex' side effect (§7)
+        aex                     //   (A is garbage after this -- intentional)
+        xta     save_m15        // interrupted M15 back (M15 no longer names the frame -- fine)
         ati     15
-        xta     sc              // C register back (ati does not arm the modifier)
-        ati     16
-        xta     srmr            // Y back, via the `aex' side effect
-        aex
-        xta     sa              // A back (xta does not disturb Y)
-        xtr     sr              // R back -- must be last
+        xta     save_a          // A back (xta does not disturb Y)
+        xtr     save_r          // R back -- must be last (a later xta would perturb it)
       3 ij                      // выпр: restore the mode word, jump via M[033]
 
 // ----------------------------------------------------------------------------
@@ -280,19 +313,13 @@ ustkbase: .word kstack
 uprogadr: .word uprog
 
         .bss
-// The extint save area (see the gate above).  In .bss, reached with `< sym >' escapes.
-sa:     . = . + 1
-s8:     . = . + 1
-s9:     . = . + 1
-s10:    . = . + 1
-s11:    . = . + 1
-s12:    . = . + 1
-s13:    . = . + 1
-s14:    . = . + 1
-sr:     . = . + 1
-srmr:   . = . + 1
-sc:     . = . + 1
-s15:    . = . + 1
+// The extint temp cells (see the gate above).  In .bss, but it links low so the gate reaches
+// them with a bare `atx save_a' -- an escape would clobber M[16] mid-save.
+save_a:   . = . + 1
+save_r:   . = . + 1
+save_y:   . = . + 1
+save_m16: . = . + 1
+save_m15: . = . + 1
 
 // The kernel stack _start seeds and extint switches to.  The label is the low end; the stack
 // grows up into the reservation.  Well clear of USPV = 074000.
