@@ -109,7 +109,7 @@ void exece()
 
     ucp          = NPAGE * PGSZ - nc - NBPW;
     ap           = ucp - na * NBPW - 3 * NBPW;
-    u.u_ar0[ESP] = ap;
+    u.u_ar0[R15] = ap; /* TODO 17: exec user-stack layout (stack grows up) */
     suword((caddr_t)ap, na - ne);
     nc = 0;
     for (;;) {
@@ -265,9 +265,10 @@ void setregs()
     for (rp = &u.u_signal[0]; rp < &u.u_signal[NSIG]; rp++)
         if ((*rp & 1) == 0)
             *rp = 0;
-    for (cp = &regloc[0]; cp < &regloc[7];)
+    for (cp = &regloc[0]; cp < &regloc[15];)
         u.u_ar0[(unsigned)*cp++] = 0;
-    u.u_ar0[EIP] = u.u_exdata.ux_entloc;
+    /* exec is an extracode: the new image starts via `выпр' through ЭРЕТ. */
+    u.u_ar0[ERET] = u.u_exdata.ux_entloc;
     for (i = 0; i < NOFILE; i++) {
         if (u.u_pofile[i] & EXCLOSE) {
             closef(u.u_ofile[i]);
@@ -448,7 +449,11 @@ void fork()
     u.u_r.r_val1 = p2->p_pid;
 
 out:
-    u.u_ar0[EIP] += 2;
+    /* TODO 17: the x86 "advance the saved PC past the syscall" trick becomes
+     * returning distinct accumulator values to parent and child.  Kept
+     * compiling (fork is an extracode -> ЭРЕТ); not exercised until
+     * save()/resume() (task 16). */
+    u.u_ar0[ERET] += 2;
 }
 
 /*

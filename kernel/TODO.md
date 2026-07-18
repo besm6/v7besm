@@ -468,6 +468,23 @@ carry flag — so that logic is rewritten, not remapped. Not yet exercised at ru
 fill the frame are 15c/15d.
 - **Done when** the tree builds (`cd kernel && make`, image still below `076000`) with the new frame,
   and every reader compiles against it.
+- **Done.** `include/sys/reg.h` is the 22-word frame laid out **verbatim to Dubna's canonical
+  register-save block** (Context_Switch.md §2): `ACC 0`, `RREG 1` (R), `RMR 2`, `IRET 3` (ИРЕТ),
+  `ERET 4` (ЭРЕТ), `SPSW 5`, `CREG 6` (= М16 = M[020]), then the register file **descending** —
+  `R15 7`, `R14 8` … `R1 21` (М15…М1) — plus `NREGFRAME 22`. Two distinct return slots (ИРЕТ for
+  interrupt/fault `выпр`, ЭРЕТ for extracode); `errno` is `r14` (М14), no own slot. **ГРП is not
+  framed** — the fault cause is read live via `__besm6_mod(MOD_GRP,0)` in `trap()` (15c), as Dubna
+  does. All indices non-negative, `u_ar0 = &tr.acc` at word 0; `struct trap` stays **by value**
+  into `trap()`/`clock()` (b6cc took the 22-word width fine). Aliases: `R_ERRNO R14` (0 = success,
+  no carry bit), provisional `R_VAL2 R13` (15d finalizes); `USERMODE(spsw)=((spsw)&014)==0`;
+  `BASEPRI(x)=(0)` (15e placeholder). `regloc[]` is `{ACC, R1..R14, R15, IRET}` (17 entries):
+  setregs zeroes `[0..14]` (`sys1.c` bound `&regloc[15]`), procxmt validates `[0..15]` (`sig.c`
+  bound `i<16`). Slot choice by context: interrupt/fault readers (clock, trap profiling,
+  ptrace/sendsig resume) use **ИРЕТ**; extracode readers (exec entry, fork) use **ЭРЕТ**. Deferred
+  behavior compile-stubbed with `TODO 15c` (ГРП dispatch, breakpoint single-step), `TODO 15d`
+  (syscall ABI + r_val2 slot), `TODO 15e` (BASEPRI/clock), `TODO 17` (sendsig up-growing stack,
+  fork `+=2`→distinct ACC, ptrace resume-slot, single-step via М034/М035). Image top `060106`
+  (bss), well under `076000`; no `GRP`/`RETPC`/x86 name survives in kernel C.
 
 **15c. The trap gate (0500) and the fault path in `trap.c`.** The vector `uj trap` resolves straight
 to the C `trap()` with no frame under it. Interpose an asm stub that — after the r15 switch, when the

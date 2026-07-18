@@ -366,13 +366,11 @@ int procxmt()
         /* ip_addr is a word index into the u-area, as in case 3 above */
         i = (int)ipc.ip_addr;
         p = (int *)&((physadr)&u)->r[i];
-        for (i = 0; i < 8; i++)
+        for (i = 0; i < 16; i++)
             if (p == &u.u_ar0[(unsigned)regloc[i]])
                 goto ok;
-        if (p == &u.u_ar0[EFL]) {
-            /* XXX */
-            goto ok;
-        }
+        /* TODO 17: there is no flags register in the frame; single-step /
+         * address-break is М034/М035 (rewritten, not remapped). */
         goto error;
 
     ok:
@@ -382,10 +380,13 @@ int procxmt()
     /* set signal and continue */
     /*  one version causes a trace-trap */
     case 9:
-        u.u_ar0[EFL] |= TBIT;
+        /* TODO 17: arm single-step via the address-break registers М034/М035
+         * (not a flag bit).  Falls through to case 7 to set the resume PC. */
     case 7:
         if ((int)ipc.ip_addr != 1)
-            u.u_ar0[EIP] = (int)ipc.ip_addr;
+            /* TODO 17: resume slot -- a syscall-stopped proc resumes via ЭРЕТ, a
+             * fault/signal-stopped one via ИРЕТ; ИРЕТ is the provisional pick. */
+            u.u_ar0[IRET] = (int)ipc.ip_addr;
         u.u_procp->p_sig = 0;
         if (ipc.ip_data)
             psignal(u.u_procp, ipc.ip_data);

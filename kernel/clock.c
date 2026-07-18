@@ -52,7 +52,7 @@ void clock(struct trap tr)
     /*
      * if saved pl is high, just return
      */
-    if (BASEPRI(tr.pl))
+    if (BASEPRI(0)) /* TODO 15e: test the global spl / МГРП mask */
         goto out;
 
     /*
@@ -81,15 +81,15 @@ void clock(struct trap tr)
      */
 out:
     a = dk_busy & 07;
-    if (USERMODE(tr.cs)) {
+    if (USERMODE(tr.spsw)) {
         u.u_utime++;
         if (u.u_prof.pr_scale)
-            addupc(tr.eip, &u.u_prof, 1);
+            addupc(tr.iret, &u.u_prof, 1);
         if (u.u_procp->p_nice > NZERO)
             a += 8;
     } else {
         a += 16;
-        if ((caddr_t)tr.eip == waitloc)
+        if ((caddr_t)tr.iret == waitloc)
             a += 8;
         u.u_stime++;
     }
@@ -98,7 +98,7 @@ out:
     if (++pp->p_cpu == 0)
         pp->p_cpu--;
     if (++lbolt >= HZ) {
-        if (BASEPRI(tr.pl))
+        if (BASEPRI(0)) /* TODO 15e: test the global spl / МГРП mask */
             return;
         lbolt -= HZ;
         ++time;

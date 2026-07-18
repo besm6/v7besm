@@ -102,10 +102,16 @@ void sendsig(caddr_t p, int signo)
 {
     register unsigned n;
 
-    n = u.u_ar0[ESP] - 4;
+    /*
+     * TODO 17: the BESM-6 user stack grows UP (exec seeds it at 070000), so the
+     * x86 "SP - 4" push direction and the whole signal-frame layout must be
+     * redone.  Kept compiling here; sendsig is not exercised until the signal
+     * delivery path lands.  There is no EFL/TBIT to clear -- single-step is the
+     * address-break registers М034/М035, not a flag.
+     */
+    n = u.u_ar0[R15] - 4;
     grow(n);
-    suword((caddr_t)n, u.u_ar0[EIP]);
-    u.u_ar0[ESP] = n;
-    u.u_ar0[EFL] &= ~TBIT;
-    u.u_ar0[EIP] = (int)p;
+    suword((caddr_t)n, u.u_ar0[IRET]);
+    u.u_ar0[R15]  = n;
+    u.u_ar0[IRET] = (int)p;
 }
