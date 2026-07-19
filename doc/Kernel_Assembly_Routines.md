@@ -291,7 +291,8 @@ These are the heart of process switching — the v7 `savu`/`aretu`/`resume` prim
   /* zero: first time through — go pick another process */
   ```
 
-- **`resume(paddr, label)`** switches to the address space of the process whose swappable image
+- **`resume(paddr, label)`** — *on the BESM-6 this switches the u-area, NOT the address space; see
+  the note at the end of this section.* On x86 it switches to the address space of the process whose swappable image
   is at physical click `paddr` (on x86: rewrite the user/kernel page-table entries `kptu`/`kptk`
   and reload `%cr3`), then reloads the registers and stack from `label` and jumps — i.e. it
   performs the `longjmp` counterpart of the `save` that filled `label`. It does not return to its
@@ -306,10 +307,26 @@ These are the heart of process switching — the v7 `savu`/`aretu`/`resume` prim
   ([slp.c:508](../kernel/slp.c)) and `expand()` ([slp.c:564](../kernel/slp.c)) use `u_ssav`;
   `xalloc` in `text.c:162`; syscall entry `trap.c:135` arms `u_qsav` so an interrupted syscall
   can longjmp out.
-- **BESM-6 notes.** The register set saved and the address-space switch mechanism are entirely
-  machine-dependent — this is the most target-specific pair after boot. Preserve exactly the
-  *return-value protocol* (0 first, nonzero on resume) and the address-space-switch-then-jump
-  semantics; `label_t`'s size must match the BESM-6 callee-saved set. See §1 (`label_t`).
+- **BESM-6 notes — DONE (task 16), in [kernel/switch.s](../kernel/switch.s).** The return-value
+  protocol is preserved exactly; the address-space half of the x86 semantics is **not**, because
+  it does not exist here.
+
+  `save()` stores nine slots — r1–r7, r13, r15 — and nothing else. In particular *not* the mode
+  register R: the ABI fixes R = 7 at every function entry and exit, so the R that `resume()` is
+  entered with is by construction the R the `save()` it reappears in is entitled to return with.
+  (§14's "the hardware never saves R" is true, and applies to the *gates*, which interrupt
+  arbitrary code mid-function — not to a switch that happens at a call boundary in both
+  contexts.) `label_t` is `int[10]`, of which nine are used and slot 9 is reserved; it was left
+  at ten deliberately, because shrinking it moves `u_upt` and `uarea.s` hardcodes that offset.
+
+  **`resume()` switches the u-area, and never writes РП.** Two things that held on the x86 hold
+  here no longer: the kernel runs unmapped, so reloading РП would change nothing it can see (the
+  map is reloaded by `sureg()`, which every landing site that returns to user already calls on
+  the `save()`-returned-nonzero arm); and the u-area is a fixed *physical* page, so it has to be
+  **copied** — `uflush()` out to the outgoing home, `uload()` in from the incoming one. The label
+  pointer survives that copy by being the constant `076000 + n` in every process, which is why it
+  may be captured before the swap and dereferenced after it. The kernel-side rules for who must
+  flush and when are written up once, at `xswap()` in [text.c](../kernel/text.c).
 
 ### 4.3 Idle — `idle`
 
@@ -324,8 +341,17 @@ void idle(void);   /* systm.h:184 */
   the global **`waitloc`** so that if the clock interrupt lands on the idle `hlt`, `clock()`
   ([clock.c:92](../kernel/clock.c)) attributes the tick to idle rather than to the kernel.
 - **Callers.** `swtch()` ([slp.c:408](../kernel/slp.c)); also `prf.c:95` (panic spin).
-- **BESM-6 notes.** Replace `hlt` with the BESM-6 wait-for-interrupt idiom; keep exporting the
-  halt PC as `waitloc` if the clock accounting is retained.
+- **BESM-6 notes — DONE (task 16), and it did not stay in assembly.** There is no
+  wait-for-interrupt on this machine: the only halt is `033` (`стоп`), which is resumable on real
+  hardware only from the operator's console and which SIMH, `dubna` and `b6sim` alike treat as
+  "the run is over". So `idle()` is a **spin**, and since `spl0()` now clears БлПр itself (the
+  interrupt priority moved onto that bit — see `spl0`…`spl7` below) there were no mode bits left
+  for assembly to poke. It is ordinary C, in [intr.c](../kernel/intr.c).
+  **`waitloc` is deleted, not ported.** With no halt instruction to point at, the pc comparison
+  would have had to be calibrated against what the hardware saves, and would drift whenever the
+  code around it was recompiled. The idle spin raises a flag, `idling`, instead; `extintr()`
+  clears it after servicing anything at all, which both releases the spin — that is what makes
+  the spin behave like `hlt` — and leaves `clock()` an exact test for the accounting.
 
 ### 4.4 User-space access with fault protection
 
@@ -462,7 +488,7 @@ void sti(void);                                 /* systm.h:163 */
 | `u` | 922 (`.set u, U`) | `extern struct user u;` (user.h:101) | the per-process user area, mapped at a fixed virtual address (page 7); holds the kernel stack and per-process state |
 | `kend` | 916 | *(dropped in the port)* | first free physical address after the kernel; used to size the initial process and free core. The BESM-6 kernel has no such variable: `b6ld`'s boundary symbol `end` already names the first word past the image, and nothing in C needs it — `startup()` frees core from `0100000` and `main()` sets `proc[0].p_addr` outright |
 | `phymem` | 919 | `extern int phymem;` (machdep.c:18) | physical memory size in pages, found by the boot memory scan; `startup()` frees it into `coremap` |
-| `waitloc` | 893 | `extern caddr_t waitloc;` (clock.c:37) | PC of the idle `hlt`; the clock compares the interrupted PC against it to charge idle time |
+| `waitloc` | 893 | *(deleted in the port)* | PC of the idle `hlt`; the clock compared the interrupted PC against it to charge idle time. This machine has no halt to point at, so task 16 replaced it with the `idling` flag (`intr.c`), which is exact and cannot drift when the code is recompiled |
 | `mem` | 926 (`.set mem, 0x40000000`) | (used via macros) | base of the window that maps *all* physical memory into the kernel address space (`PHY` in `utab.c`) |
 | `pdir` | 927 (`.set pdir, 0x7ff9a000`) | `extern int pdir[];` (utab.c:14) | virtual address of the page directory; read by `physaddr()` |
 | `upt` | 928 (`.set upt, 0x7ff9b000`) | `extern int upt[];` (utab.c:14) | virtual address of the **user page table**; rewritten by `sureg()` to map the current process's text/data/stack |
@@ -506,12 +532,12 @@ change with the device set.
 | routine(s) | effort on BESM-6 |
 |------------|------------------|
 | `bcopy`, `bzero` | **trivial** — word-count copy/zero loops (mind 6 chars/word) |
-| `spl0`…`spl7`, `splx` | **easy** — keep a level in `pl`, map to the BESM-6 interrupt mask, return old level; add deferral only if masking-by-class is unavailable |
+| `spl0`…`spl7`, `splx` | **done** — two levels, not eight, and the knob is **БлПр** (via `cli`/`sti`), not МГРП, which is a source enable armed once by `intrinit()`. Putting the level in the mode word is what lets `выпр` restore it on a gate return, as the PDP-11's `rtt` does |
 | `addupc` | **easy** — same histogram logic, adjust fixed-point scale and word addressing |
 | `cli`, `sti` | **easy** — global interrupt disable/enable |
 | `fubyte`/`fuword`/`subyte`/`suword`, `copyin`/`copyout` | **moderate** — need a new `nofault`-style expected-fault recovery in the BESM-6 trap handler; byte variants emulate sub-word access via word RMW |
-| `save`, `resume` | **hard, fully machine-dependent** — resize `label_t` to the BESM-6 callee-saved set, reimplement address-space switch + longjmp; **preserve the 0/nonzero return protocol** |
-| `idle` | **moderate** — BESM-6 wait-for-interrupt; keep publishing the halt PC as `waitloc` if clock accounting stays |
+| `save`, `resume` | **done (task 16)** — [kernel/switch.s](../kernel/switch.s); nine slots (r1–r7, r13, r15), and `resume()` switches the **u-area**, not the address space: it never writes РП (see below) |
+| `idle` | **done (task 16)** — no wait-for-interrupt exists, so it is a spin released by `extintr()`; written in C, and `waitloc` is deleted in favour of the `idling` flag |
 | `savfp`/`restfp`/`stst` | **rewrite** — BESM-6 float context (non-IEEE-754), no 108-byte frame; may shrink to near-nothing |
 | `inb`/`outb`/`insw`/`outsw` | **replace** — BESM-6 has no x86 port space; use channel/device-register access; driver layer rewritten anyway |
 | `ld_cr0/2/3`, `invd` | **replace/drop** — target-specific status registers; `invd` becomes the MMU's translation-invalidate (or a no-op) |

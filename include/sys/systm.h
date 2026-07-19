@@ -35,6 +35,14 @@ extern char runrun;          /* scheduling flag */
 extern char curpri;          /* more scheduling */
 extern int maxmem;           /* actual max memory per process */
 extern int uhome;            /* whose u-area is live at UBASE (its p_addr) */
+/*
+ * ... or NOUHOME, meaning the live u-area belongs to no in-core image because the image it
+ * belonged to has just been freed.  resume() must then load without flushing first, or it
+ * would write 1024 words into core that malloc() may already have handed to someone else.
+ * 0 is a safe sentinel: no process image ever lives at physical 0.  The rules for who
+ * maintains this are written up once, at xswap() in kernel/text.c.
+ */
+#define NOUHOME 0
 extern physadr lks;          /* pointer to clock device */
 extern daddr_t swplo;        /* block number of swap space */
 extern int nswap;            /* size of swap space */
@@ -188,7 +196,9 @@ void copyseg(int s, int d);
 void clearseg(int d);
 int issig(void);
 int save(label_t);
-void resume(short, label_t);
+void resume(int, label_t); /* a physical word address: 19 bits, not a `short' */
+void intrinit(void);       /* arm МГРП once; the spl level rides on БлПр (intr.c) */
+extern volatile int idling; /* set while the idle spin runs; clock() charges idle time */
 int swapin(struct proc *p);
 void xswap(struct proc *p, int ff, int os);
 void swap(int blkno, int coreaddr, int count, int rdflg);

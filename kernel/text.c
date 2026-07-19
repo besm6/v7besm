@@ -26,6 +26,37 @@ void xuntext(register struct text *xp);
  * and is supplied during core expansion swaps.
  *
  * panic: out of swap space
+ *
+ * ---------------------------------------------------------------------------------------
+ * THE U-AREA INVARIANT.  All of it, in one place, because scattering it is a footgun.
+ *
+ * On this machine the live u-area is a fixed PHYSICAL page at UBASE, not a page mapped at a
+ * fixed virtual address, so `u' is NOT part of the current process's image: the copy sitting
+ * in the image at p_addr is stale between context switches.  `uhome' names the image the
+ * live u-area belongs to, and resume() (kernel/switch.s) keeps the two in step -- it flushes
+ * the outgoing u to `uhome' and loads the incoming one, whenever they differ.
+ *
+ * Which means ANYTHING ELSE THAT READS OR FREES THE CURRENT PROCESS'S IMAGE has to say so.
+ * There are five such places, and only two of them are obvious:
+ *
+ *   1. HERE, below.  swap() DMAs the image straight out of physical memory, so an unflushed
+ *      u page would put a stale struct user -- stale u_upt, stale labels, stale kernel stack
+ *      -- on the disk.  The test is `p->p_addr == uhome', NOT "p is the current process":
+ *      newproc() calls xswap() on the CHILD, whose p_addr is still the parent's image.
+ *      Doing it here rather than at the four call sites (sched(), newproc(), expand(),
+ *      xexpand()) is what makes those four correct without auditing them.
+ *
+ *   2. ... and if `ff' says the core is about to be freed, the live u-area is left with no
+ *      home at all.  Saying NOUHOME is not tidiness: the next resume() would otherwise flush
+ *      1024 words into core that malloc() may already have handed to somebody else.
+ *
+ *   3. newproc(), which copies the parent's image to build the child's (kernel/slp.c).
+ *   4. expand(), which copies the image to a new address -- and skips the u page, because
+ *      the live copy is authoritative and it sets uhome to the new address instead.
+ *   5. exit(), which frees the image outright (kernel/sys1.c).  Same hazard as 2.
+ *
+ * A SIXTH, added later and forgotten, will be a very confusing bug.  See kernel/TODO.md.
+ * ---------------------------------------------------------------------------------------
  */
 void xswap(register struct proc *p, int ff, int os)
 {
@@ -38,9 +69,14 @@ void xswap(register struct proc *p, int ff, int os)
         panic("out of swap space");
     p->p_flag |= SLOCK;
     xccdec(p->p_textp);
+    if (p->p_addr == uhome)
+        uflush(uhome); /* ... or the image goes to disk with a stale u page */
     swap(a, p->p_addr, os, B_WRITE);
-    if (ff)
+    if (ff) {
         mfree(coremap, os, p->p_addr);
+        if (p->p_addr == uhome)
+            uhome = NOUHOME; /* the home we just flushed to no longer exists */
+    }
     p->p_addr = a;
     p->p_flag &= ~(SLOAD | SLOCK);
     p->p_time = 0;

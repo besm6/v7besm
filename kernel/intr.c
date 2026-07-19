@@ -44,13 +44,31 @@ void clock(struct trap *tr);
 /*
  * Interrupt priority level.
  *
- * The BESM-6 has no priority hierarchy: an external interrupt fires whenever
- * GRP & MGRP is non-zero, and МГРП is the only knob there is.  So rather than
- * pretend to the eight graded levels of the PDP-11 and the x86 port, this kernel has
- * exactly two -- interrupts enabled and interrupts blocked.  Only spl0 enables;
- * every splN above it blocks.  Callers keep the v7 spelling (`s = spl5(); ...;
- * splx(s);`) and still get what they were really after: on a uniprocessor with no
- * atomic instruction, masking interrupts is the only lock in the machine.
+ * The BESM-6 has no priority hierarchy, so rather than pretend to the eight graded levels
+ * of the PDP-11 and the x86 port, this kernel has exactly two -- interrupts enabled and
+ * interrupts blocked.  Only spl0 enables; every splN above it blocks.  Callers keep the v7
+ * spelling (`s = spl5(); ...; splx(s);`) and still get what they were really after: on a
+ * uniprocessor with no atomic instruction, masking interrupts is the only lock there is.
+ *
+ * TWO REGISTERS, TWO JOBS.  Delivery needs БлПр clear AND `ГРП & МГРП' non-zero, so either
+ * could serve as the mask.  They are not interchangeable, and this kernel divides them:
+ *
+ *   БлПр (ПСВ bit 02000) is the PRIORITY.  setipl() sets it to block and clears it to
+ *   enable, through cli()/sti() in besm6.S.  It is the right choice because the hardware
+ *   already treats it as one: an interrupt or extracode forces БлПр on at the vector and
+ *   `выпр' restores it from СПСВ, so a gate return re-establishes the level by itself --
+ *   exactly what the PDP-11's `rtt' does when it reloads the priority field of PS.  МГРП,
+ *   being a separate write-only register outside the mode word, does nothing of the kind.
+ *
+ *   МГРП is the SOURCE ENABLE, armed once by intrinit() with IRQ_ON and never rewritten.
+ *   extintr()'s `grp & mgrp' then means "sources this kernel can service", which is what
+ *   that mask was always for.
+ *
+ * It used to be the other way round -- setipl() rewrote МГРП and nothing ever touched БлПр
+ * -- and the two mechanisms fought: the gates hold БлПр from the vector, so spl0() opened
+ * МГРП while БлПр still blocked everything, and no interrupt could be taken in kernel mode
+ * at all.  That was invisible while the only interrupts arrived in user mode, and became
+ * load-bearing the moment idle() needed to spin waiting for one.
  *
  * IRQ_ON is the set of sources this kernel can currently service; it grows a bit per
  * driver.  It is unsigned because ГРП is 48 bits wide and a signed int on this target
@@ -69,17 +87,24 @@ static int setipl(int s)
 
     old    = curipl;
     curipl = s;
-    mgrp   = s ? 0 : IRQ_ON;
-    /*
-     * The shadows go first and the hardware register last, deliberately: delivery is
-     * gated by МГРП alone, so no interrupt can arrive against a mask this function has
-     * not written yet.  An interrupt landing in the window while we RAISE sees a stale
-     * open shadow and dispatches normally; one landing while we LOWER cannot happen,
-     * the hardware mask being still shut.  Reordering buys nothing and costs the
-     * symmetry.
-     */
-    __besm6_mod(MOD_MGRP, mgrp);
+    if (s)
+        cli(); /* set БлПр   -- external interrupts blocked */
+    else
+        sti(); /* clear БлПр -- delivery enabled */
     return old;
+}
+
+/*
+ * Arm the interrupt sources this kernel can service.  Called once from main(), before the
+ * first spl0(); after that МГРП never changes and the priority rides on БлПр alone.
+ *
+ * Separate from clkstart() because it is not the clock's business: every driver's sources
+ * are in IRQ_ON, and a driver added later grows that constant rather than writing МГРП.
+ */
+void intrinit(void)
+{
+    mgrp = IRQ_ON;
+    __besm6_mod(MOD_MGRP, mgrp);
 }
 
 void splx(int s)
@@ -118,6 +143,40 @@ int spl7(void)
 }
 
 /*
+ * The idle loop, called from swtch() when nothing is runnable (and from panic()).
+ *
+ * THERE IS NO WAIT-FOR-INTERRUPT ON THIS MACHINE.  The only halt is 033 (стоп), which is
+ * resumable on real hardware only from the operator's console and which SIMH, dubna and
+ * b6sim alike treat as "the run is over" (doc/Besm6_Instruction_Set.md).  So this is a
+ * spin, and the flag is what turns it back into `hlt': extintr() clears `idling' after
+ * servicing anything at all, so the spin exits on the first interrupt, exactly as the x86
+ * original's `hlt' did.  Like `hlt', it spins forever if none ever arrives -- at spl0, with
+ * МГРП armed and the interval timer free-running at HZ, one always does.
+ *
+ * The flag also replaces x86's `waitloc'.  That was the address of the idle `hlt', which
+ * clock() compared against the interrupted pc to charge the tick to idle rather than to the
+ * kernel; there is no halt instruction here to point at, and a pc comparison would have to
+ * be calibrated against what the hardware saves (`tr->ret' is the raw saved IRET, and the
+ * saved pc does not name the instruction you would expect -- see trap()).  A flag is exact
+ * and cannot drift when the code around it is recompiled.
+ *
+ * spl0() is what actually opens the door, by clearing БлПр; there are no mode bits left for
+ * this function to poke, which is why it is C and not besm6.S.
+ */
+volatile int idling; /* set while the idle spin is running; cleared by extintr() */
+
+void idle(void)
+{
+    int s;
+
+    s      = spl0();
+    idling = 1;
+    while (idling)
+        ; /* spin */
+    splx(s);
+}
+
+/*
  * Let a device's ПРП bits through.  Called from a driver's init, at any spl.
  *
  * Drivers must come through here rather than write МПРП themselves: the register is
@@ -151,11 +210,20 @@ static void prpintr(void)
  *
  * What this function owns, on behalf of every handler it calls, is the interrupt priority
  * level.  v7's handlers raise the ipl and let the return from interrupt drop it -- which is
- * what the PDP-11's `rtt' does when it reloads the priority field of PS from the frame.
- * Nothing here does: `выпр'
- * restores БлПр from СПСВ, but МГРП is a separate write-only register outside the mode
- * word.  clock() alone leaves spl5 or spl1 behind, so without the splx() below the FIRST
- * tick would leave mgrp == 0 and mask every source in the machine for good.
+ * what the PDP-11's `rtt' does when it reloads the priority field of PS from the frame, and
+ * what `выпр' now does here too, БлПр being the priority (see setipl above).  So the
+ * HARDWARE bit needs nothing from us.  `curipl', the software shadow, does: clock() calls
+ * spl5()/spl1() and restores neither, so without the repair at the bottom it would drift out
+ * of step with БлПр from the very first tick on.
+ *
+ * The repair is a plain assignment, NOT splx().  splx(0) would call sti() and clear БлПр
+ * here, inside the handler, with the interrupted context's state still in СПСВ/IRET -- and
+ * the interval timer free-runs, so the next tick would re-enter this function immediately
+ * and keep doing so.  Nothing in the loop below wants delivery open, either: every handler
+ * it calls raises the level (spl5/spl1, both of which only ever SET БлПр), and `grp & mgrp'
+ * no longer depends on the level at all now that МГРП is a constant source mask.  That is
+ * also why the repair moved to the bottom -- it used to sit at the top of the loop precisely
+ * because `& mgrp' could otherwise mask out a device that was pending all along.
  */
 void extintr(void)
 {
@@ -163,12 +231,6 @@ void extintr(void)
     unsigned grp;
 
     for (;;) {
-        /*
-         * At the top of the loop rather than after it: the level a handler left behind
-         * has to be repaired before the next ГРП read, or `& mgrp' below masks out a
-         * device that was pending all along and we would return with it undismissed.
-         */
-        splx(s);
         grp = __besm6_mod(MOD_GRP, 0) & mgrp;
         if (grp == 0)
             break;
@@ -197,4 +259,16 @@ void extintr(void)
          */
         __besm6_mod(MOD_GRPCLR, ~((unsigned)1 << (48 - __besm6_anx(grp, 0))));
     }
+
+    /* Put the shadow back where the handlers found it -- see the header above. */
+    curipl = s;
+
+    /*
+     * Release idle()'s spin.  Any interrupt will do -- this is the machine's stand-in for
+     * the `hlt' the x86 original woke from -- so it is cleared here rather than in any
+     * particular handler.  AFTER the loop, not before it: clock() is called from inside
+     * the loop and reads `idling' to charge the tick to idle time, so clearing it first
+     * would book every idle tick as system time instead.
+     */
+    idling = 0;
 }

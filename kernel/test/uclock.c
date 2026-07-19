@@ -132,7 +132,6 @@ char runin;
 time_t time;
 int dk_busy;
 long dk_time[32];
-caddr_t waitloc; /* 0, as in the kernel until the idle loop lands (task 16) */
 
 /* intr.c calls this from prpintr(); no ПРП bit is ever up here, so it must never run. */
 void scintr(void)
@@ -240,13 +239,26 @@ int main()
     lbolt = HZ - 1;
 
     /*
-     * Dismiss whatever the free-running interval timer accumulated while we were setting up, open
-     * the interrupt level through the REAL spl0() (so curipl and mgrp are the ones extintr() will
-     * read, and `mgrp == IRQ_ON' afterwards means something), then raise the tick by hand.  БлПр is
-     * still set -- crt0c.S entered with ПСВ = 02003 -- so it stays pending until gouser().
+     * Dismiss whatever the free-running interval timer accumulated while we were setting up, arm
+     * the sources, open the interrupt level through the REAL spl0() (so curipl is the one
+     * extintr() will read), then raise the tick by hand.
+     *
+     * intrinit() is not optional: МГРП is armed once, there, and spl0() only clears БлПр.  Leave
+     * it out and extintr()'s `grp & mgrp' sees nothing, the tick is never dispatched, and every
+     * check below fails at once.
+     *
+     * Nor is the cli().  The whole design of this test is that the tick stays PENDING until
+     * gouser()'s `выпр' enters user mode, so that clock() sees a user frame; that used to be free,
+     * because БлПр was set from crt0c.S's ПСВ = 02003 and nothing in the kernel ever cleared it.
+     * Now spl0() clears it for real, so without the cli() the tick fires here, in kernel mode,
+     * inside main().  cli() re-blocks delivery without disturbing curipl, which is what the
+     * splx() in extintr() will restore to; gouser() forges СПСВ = 0, so the `выпр' opens БлПр at
+     * the same instant it enters user mode.
      */
     __besm6_mod(MOD_GRPCLR, ~GRP_TIMER);
+    intrinit();
     spl0();
+    cli();
     __besm6_ext(EXT_GRPSET, (unsigned)(GRP_TIMER >> 24));
 
     gouser(uentry); /* forge the user context and enter it; never returns */
@@ -303,10 +315,18 @@ void report(void)
         mask |= F_SETPRI;
 
     /*
-     * extintr() put back the ipl clock() raised and left: МГРП is outside the mode word, so `выпр'
-     * does not reload it and nothing but extintr() can.
+     * extintr() put back the ipl clock() raised and left.  Two halves, since the ipl moved onto
+     * БлПр and МГРП became a source enable armed once by intrinit():
+     *
+     *   - mgrp still reads IRQ_ON, i.e. nothing rewrote the source mask behind intrinit()'s back;
+     *   - the LEVEL came back, which is now curipl.  spl7() returns the level it displaces, and
+     *     main() left it at 0 before gouser(), so anything else means clock()'s spl5()/spl1()
+     *     leaked past extintr()'s repair.  (`выпр' restores the hardware bit by itself now; the
+     *     software shadow is what still needs extintr() to fix it.)
      */
     if (mgrp_seen != (GRP_SLAVE | GRP_TIMER))
+        mask |= F_MGRP;
+    if (spl7() != 0)
         mask |= F_MGRP;
 
     /*

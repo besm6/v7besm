@@ -14,7 +14,7 @@ NM      = b6nm
 CFLAGS  = -I../../include
 LIBDIR  = $$HOME/.local/share/besm6/lib
 
-PROGS   = hello sctest mmutest uintr utrap usys uclock
+PROGS   = hello sctest mmutest uintr utrap usys uclock uswtch usched
 
 all:    $(PROGS)
 
@@ -28,6 +28,8 @@ test:   $(PROGS)
 	besm6 utrap.ini
 	besm6 usys.ini
 	besm6 uclock.ini
+	besm6 uswtch.ini
+	besm6 usched.ini
 
 clean:
 	rm -f *.o *.dis *.nm $(PROGS)
@@ -80,10 +82,35 @@ usys:   crt0s.o usys.o syscall.o utab.o brz.o usermem.o
 # reached clock().  Like usys it links the code under test rather than a copy -- the kernel's own
 # intr.o (the ГРП dispatch) and clock.o -- and hand-builds only the environment they name; only the
 # gate is duplicated, into crt0c.S.  See uclock.ini.
-uclock: crt0c.o uclock.o clock.o intr.o utab.o brz.o
-	$(LD) crt0c.o uclock.o clock.o intr.o utab.o brz.o -o $@ -L$(LIBDIR) -lc
+uclock: crt0c.o uclock.o clock.o intr.o utab.o brz.o psw.o
+	$(LD) crt0c.o uclock.o clock.o intr.o utab.o brz.o psw.o -o $@ -L$(LIBDIR) -lc
 	$(DISASM) -c $@ > $@.dis
 	$(NM) -n $@ > $@.nm
+
+# uswtch -- save()/resume()/idle() and the u-area invariant (task 16).  Links the real
+# switch.o, uarea.o, brz.o, intr.o and psw.o; only clock() and scintr() are stubbed, in
+# uswtch.c.  crt0w.s puts `u' at the real 076000 and runs main() on the u-page stack.
+uswtch: crt0w.o uswtch.o switch.o uarea.o brz.o intr.o psw.o
+	$(LD) crt0w.o uswtch.o switch.o uarea.o brz.o intr.o psw.o -o $@ -L$(LIBDIR) -lc
+	$(DISASM) -c $@ > $@.dis
+	$(NM) -n $@ > $@.nm
+
+# usched -- newproc() + swtch() alternate between two processes (task 16, "done when").
+# Links the REAL scheduler, slp.o, and lets it drive the switch.  swap/xswap are stubbed in
+# usched.c and must never run: there is no disk yet (task 18).
+usched: crt0w.o usched.o slp.o switch.o uarea.o brz.o intr.o psw.o utab.o seg.o malloc.o
+	$(LD) crt0w.o usched.o slp.o switch.o uarea.o brz.o intr.o psw.o utab.o seg.o malloc.o -o $@ -L$(LIBDIR) -lc
+	$(DISASM) -c $@ > $@.dis
+	$(NM) -n $@ > $@.nm
+
+slp.o: ../slp.c
+	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@
+
+malloc.o: ../malloc.c
+	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@
+
+switch.o: ../switch.s
+	$(AS) $< -o $@
 
 syscall.o: ../syscall.c
 	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@
@@ -121,6 +148,10 @@ seg.o:  ../seg.s
 	$(AS) $< -o $@
 
 usermem.o: ../usermem.s
+	$(AS) $< -o $@
+
+# cli/sti: setipl() in intr.c is built on them (БлПр is the interrupt priority).
+psw.o:  ../psw.s
 	$(AS) $< -o $@
 
 %.o:    %.c

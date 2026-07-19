@@ -505,6 +505,18 @@ retry:
         sureg();
         return (1);
     }
+    /*
+     * The child is built by copying the parent's image, and the parent's u page in that
+     * image is stale -- the live one is at UBASE.  Flush it, or the child inherits a stale
+     * u_ssav and never returns from the save() just above.
+     *
+     * The window is exact.  AFTER the save(), for that reason; and inside the
+     * `u.u_procp = rpp' ... `u.u_procp = rip' bracket, because the environment partially
+     * simulated up there is precisely what the child is supposed to inherit.  Placed here it
+     * serves both arms below -- the copyseg() loop and the xswap(), which re-flushes
+     * harmlessly.  See the invariant at xswap() in text.c.
+     */
+    uflush(a1);
     a2 = malloc(coremap, n);
     /*
      * If there is not enough core for the
@@ -573,8 +585,15 @@ void expand(int newsize)
         /* no return */
     }
     p->p_addr = a2;
-    for (i = 0; i < n; i += PGSZ)
+    /*
+     * From PGSZ, not 0: page 0 of the image is the u home, and the copy there is stale --
+     * the live u-area is at UBASE and is authoritative.  Copying it would move a stale
+     * struct user to the new image only for the next switch to overwrite it anyway.
+     * Instead the home itself moves, and the live u-area reaches it at that next switch.
+     */
+    for (i = PGSZ; i < n; i += PGSZ)
         copyseg(a1 + i, a2 + i);
+    uhome = a2; /* before the mfree: a1 is about to stop existing */
     mfree(coremap, n, a1);
-    resume(a2, u.u_ssav);
+    resume(a2, u.u_ssav); /* paddr == uhome now, so this copies nothing */
 }

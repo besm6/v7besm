@@ -127,8 +127,15 @@ switches. A kernel global `uhome` records whose home the live u-area belongs to.
   `u_ssav` and never returns from its `save()`.
 * `expand()` copies only the data/stack pages (skipping the u page) and sets `uhome = a2`; the live
   u-area is untouched and reaches the new home at the next switch.
-* `xswap()` of the *current* process must `uflush()` first — `swap()` DMAs the image straight out of
-  physical memory and would otherwise write a stale `struct user` to disk.
+* `exit()` frees the current process's image outright, and `xswap(p, ff, …)` frees the one it has
+  just flushed to. In both cases the live u-area is left with **no home**, and the next `resume()`
+  must not flush: `uhome = NOUHOME`. This is the sixth site, found while doing 16c; see the rules
+  at `xswap()` in `text.c`.
+* `xswap()` must `uflush()` first **when the process being swapped is the one the live u-area belongs
+  to** — `swap()` DMAs the image straight out of physical memory and would otherwise write a stale
+  `struct user` to disk. Note this is *not* the same as "the current process": `newproc()` calls
+  `xswap()` on the **child**, whose `p_addr` is still the parent's image. The test is
+  `p->p_addr == uhome`, and task 16c puts it inside `xswap()` rather than at its four call sites.
 
 **Anything else that reads the current process's image out of memory must flush first.** This is the
 sharpest edge in the whole design.
@@ -479,8 +486,9 @@ before the next ГРП read rather than after the loop.
   SIMH, so it dismisses the tick that accumulated during boot and calls `spl0()`. `time` is still
   never seeded from a wall clock — the x86 CMOS RTC path is gone and this machine has no
   clock-calendar a program can read — so the epoch starts at 0.
-- `addupc()` is still a stub and `waitloc` still 0, so profiling and idle-time accounting are inert;
-  they belong to tasks 17 and 16.
+- `addupc()` is still a stub, so profiling is inert; that belongs to task 17. Idle-time accounting
+  went the other way: task 16 **deleted `waitloc`** rather than filling it in — there is no halt
+  instruction to point at — and `clock()` now reads the `idling` flag instead, so that half is live.
 
 *The test — `kernel/test/uclock`* (`crt0c.S` + `uclock.c` + `uclock.ini`), the fourth forge test and
 the second (after `usys`) to link the code under test rather than a copy: the real `intr.o` and
@@ -500,12 +508,127 @@ aging code zeroed it. And `crt0c.S` keeps its gate temp cells in **`.text`**, no
 `crt0u.S`/`crt0s.S`: linking the real `clock.o`/`intr.o` (and `proc[NPROC]` with them) pushed this
 image's bss past `010000`, out of reach of the bare 12-bit `atx save_a` the gate must use.
 
-**16. `save()` / `resume()` (`besm6.S`) and the u-area invariant (`slp.c`).** `save()` stores r1–r7,
-r13, r15 into the label. `resume()` implements the invariant above, with interrupts masked across the
-swap. `slp.c`: `newproc()` calls `uflush()` before copying the parent's image; `expand()` skips the
-u page and sets `uhome = a2`; `xswap()` of the current process flushes first.
-- **Done when** `newproc()` + `swtch()` alternate between proc 0 and proc 1: both `save()` returns
-  fire, and each process sees its own `u`.
+**16. `save()` / `resume()` / `idle()` and the u-area invariant. DONE.** Two processes now
+alternate under the real scheduler — `kernel/test/usched` — and each sees its own `u`. The design
+below held; four things came out differently, and one of them was a memory-corruption bug the
+four-bullet invariant list did not have.
+
+**Where the code went.** `save()`/`resume()` are in a new **`kernel/switch.s`**, not `besm6.S`, for
+the reason `brz.s`/`uarea.s`/`seg.s`/`usermem.s`/`syscall.c` are in their own files: `besm6.o`
+cannot enter a standalone test, and 16e had to link the *real* switch. `uhome` moved with them.
+`cli`/`sti` likewise split off into **`kernel/psw.s`**, because `setipl()` is now built on them and
+every test that links `intr.o` needs them underneath it. `idle()` did **not** go to `switch.s`: it
+ended up as ordinary C in `intr.c` (see 16d).
+
+**`resume()` switches the u-area, not the address space.** It never writes РП — the kernel runs
+unmapped, and `sureg()` at the landing sites is what reloads the map. Recorded at the head of
+`switch.s`, because "resume must switch the address space" is what every surviving v7 comment in
+the tree still says. The label pointer survives the swap by being the constant `076000 + n` in
+every process; that is the whole trick, and it is why the pointer may be captured before the copy
+and dereferenced after it.
+
+**16a/16b — as planned, with one correction worth writing down.** `save()` is a leaf: one argument
+in A, nothing pushed, `ati 14` for the label base and `xta` for the 0 return. **The register number
+is DECIMAL** — a bare literal is decimal and a leading `0` makes it octal (`Assembler_Manual` §6),
+so the `ati 012` idiom elsewhere in the kernel means r10, and a first draft's `ati 014` would have
+been r12. r14 is the right base register in both routines: it is the argument-count register and
+dead by the time either needs a scratch. No `aax #077777` mask ahead of it — `ati` keeps only the
+low 15 bits anyway, so a fat-pointer marker cannot survive it. `label_t` stayed **`int[10]`** with
+slot 9 documented as reserved, rather than shrinking to 9: only `u_rsav` precedes `u_upt` in
+`struct user`, so shrinking would move `u_upt` and `uarea.s` hardcodes that offset as `UPT = 35`
+(with `mmutest` asserting it). Ten words costs three words per process and no risk.
+
+`resume()` parks both arguments in static cells before the flush, holds БлПр across *both* copies,
+and restores the entry ПСВ before the final jump — all as planned. The prototype is now
+`void resume(int, label_t)`; `short` was a full word here anyway, but it read as a lie about a
+19-bit address.
+
+**16c — there is a SIXTH flush site, and it corrupts memory.** The four-bullet list missed
+`exit()` (`sys1.c:331`), which frees the current process's core and *then* calls `swtch()`: the
+live u-area still names the freed image, so the next `resume()` would `uflush()` 1024 words into
+core `malloc()` may already have handed to somebody else. The same shape occurs whenever
+`xswap(p, ff, …)` frees the image it just flushed to (`expand()`, `xexpand()`). A conditional
+flush is not enough for these; the invariant needs a **"no home" state**, `NOUHOME` (0, since no
+image ever lives at physical 0), which `resume()` tests before flushing. So the five edits are:
+the conditional flush *and* the `ff`-guarded `uhome = NOUHOME` inside `xswap()`; `uflush(a1)` in
+`newproc()`, after the `save()` and inside the `u_procp` bracket; `i = PGSZ` plus `uhome = a2` in
+`expand()`; `uhome = NOUHOME` in `exit()`; and the null test in `resume()`. The whole rule is
+written up **once**, in a block comment at `xswap()`, with every other site pointing at it.
+
+**16d-pre — `spl` was masking the wrong register, and nothing had noticed.** Not in the plan.
+`setipl()` implemented the priority level by rewriting **МГРП**, while the gates hold **БлПр** from
+the vector to `выпр` and *nothing in the kernel ever cleared it* (`cli`/`sti` had no callers). The
+two mechanisms fought: `spl0()` opened МГРП with БлПр still set, so **no interrupt could ever be
+taken in kernel mode**. That was invisible for as long as every interrupt arrived in user mode, and
+became load-bearing the instant `idle()` needed to spin waiting for one. The roles are now swapped
+— БлПр is the priority, through `cli()`/`sti()`; МГРП is a source enable armed once by a new
+`intrinit()`, called from `main()` before the first `spl0()`. Putting the level in the mode word is
+what the hardware wants: `выпр` restores БлПр from СПСВ, so a gate return re-establishes the level
+by itself, exactly as the PDP-11's `rtt` does and as `intr.c` had documented this machine as *not*
+doing.
+
+Two consequences that only appeared on the machine:
+
+- **`extintr()`'s `splx(s)` had to become a plain `curipl = s`, at the bottom of the loop rather
+  than the top.** With БлПр as the level, `splx(0)` inside the handler *clears* БлПр with the
+  interrupted state still in СПСВ/IRET — and the interval timer free-runs, so the next tick
+  re-enters `extintr()` immediately and forever. `uswtch` hung on exactly that. Only the software
+  shadow needs repairing (`clock()` leaves spl5/spl1 behind); the hardware bit is `выпр`'s job. And
+  the repair no longer needs to be at the top of the loop: the reason it was there — that
+  `grp & mgrp` could otherwise mask out a device pending all along — evaporated when МГРП became a
+  constant.
+- **`uclock` needed two lines and one changed assertion.** It must call `intrinit()`, or `grp &
+  mgrp` sees nothing and the tick is never dispatched; and it must `cli()` after its `spl0()`,
+  because its whole design is that the hand-raised tick stays *pending* until `gouser()` enters
+  user mode — which used to be free, and is not once `spl0()` really opens the door. Its `F_MGRP`
+  check no longer proves "the ipl came back" (`mgrp` is constant now), so it also asserts
+  `spl7() == 0`, which is where the level actually lives.
+
+**16d — `idle()` is C, and `waitloc` is deleted rather than ported.** There is no
+wait-for-interrupt, so idling is a spin; but with 16d-pre in place `spl0()` clears БлПр itself, so
+there were no mode bits left for assembly to poke. The plan's one-word `vlm` spin existed only to
+give `waitloc` a deterministic PC, and that requirement went away with `waitloc` itself. A
+`volatile int idling`, raised by the spin and cleared by `extintr()` after servicing anything at
+all, is exact where a pc comparison would have had to be calibrated against what the hardware saves
+and would drift on recompilation — *and* it restores the real `hlt` semantics the x86 original had,
+since the spin now ends on the first interrupt instead of after some arbitrary count. `clock()`'s
+idle-time accounting is live for the first time.
+
+**16e — two tests, and the kernel's console fixed itself.**
+
+*`kernel/test/uswtch`* (`crt0w.s` + `uswtch.c`): the primitives, linking the real `switch.o`,
+`uarea.o`, `brz.o`, `intr.o` and `psw.o`, with only `clock()` and `scintr()` stubbed. `crt0w.s` is
+the first crt0 here to put **`u` at the real `076000`** (`uarea.s` windows the live u-area as
+physical page 31, so a bss `u` would copy the wrong page) and to run `main()` **on the u-page
+stack**, which is the point: `resume()` reloads that page out from under its own caller. Three legs
+— the nine label slots through the fast path, the sentinel round trip through two homes above
+`0100000`, and `idle()` returning. Leg C is the **first interrupt this tree has ever taken in
+kernel mode**; until 16d-pre the gates held БлПр and nothing could be.
+
+*`kernel/test/usched`* (`usched.c`, reusing `crt0w.o`): the "done when" — the real `slp.o` drives
+the switch, `newproc()` forks proc[1] out of proc[0]'s image, and the two alternate through v7's
+own dance. `swap`/`xswap`/`panic` are stubs that must never run and set a mask bit if they do, so
+the test cannot pass by proving less than it claims.
+
+Three things learned:
+
+- **`step N`, not `go`.** A broken switch *hangs* rather than failing — `go` takes an address, not
+  a step count — so both `.ini`s use `step 50000000` to turn a hang into a failure.
+- **Both need `set mmu cache`**, and both were bite-tested: removing `resume()`'s `uflush` fails
+  `uswtch` outright, removing `newproc()`'s fails `usched` (the child never returns from its
+  `save()`, exactly as predicted), and dropping `extintr()`'s `idling = 0` hangs leg C. But
+  **`uswtch` is not the drain test**: dropping `uload`'s post-copy drain passes it and still fails
+  `mmutest` (code 17), which remains the owner of that hazard. Worth knowing before trusting the
+  wrong test.
+- **Removing `resume()`'s `uhome` fast path is NOT a bite test**, contrary to the plan: with
+  `paddr == uhome` the flush and load are an identity pair, so every switch merely gets slower. It
+  is a performance guard, not a correctness one.
+
+**A side effect worth recording:** the kernel boot now reaches `panic: iinit` as before, but this
+is *unchanged* — the "`mem = ` number does not render" note under task 14 was already stale, and
+`mem = 490496 words` prints identically before and after. The remaining hang at boot is `panic()`'s
+`for(;;) idle()`, which is now a real spin rather than a tight loop; there is still no disk driver
+(task 18).
 
 ### Stage 4 — process memory and I/O
 
@@ -542,8 +665,13 @@ a `copyseg`-style bracket, /dev/kmem direct.
 * **A context switch copies the u-area twice** (out to the old home, in from the new): 1024 words
   each way, or ~300 with the "copy only up to the saved r15" optimisation. This is the cost of an
   unmapped kernel; in exchange the trap path costs *nothing* and `copyin` needs no window.
-* **The u-area invariant is a footgun.** A fifth flush site, added later and forgotten, will be a
-  very confusing bug.
+* **The u-area invariant is a footgun, and it has already bitten twice.** Scoping task 16 found the
+  fifth site the original four-bullet list had missed (`xswap()` on `newproc()`'s child), which is
+  why 16c pushes the test inside `xswap()` instead of trusting callers. Doing 16c then found a
+  **sixth** — `exit()`, which frees the current process's image and leaves the live u-area with no
+  home at all — and that one *corrupts memory* rather than merely wasting a copy, which is what
+  forced the `NOUHOME` state. A seventh, added later and forgotten, will still be a very confusing
+  bug. The whole rule now lives in one block comment at `xswap()` in `text.c`; add to it there.
 * **`copyin`/`copyout` toggle БлП per word** (~2× a plain copy), and the fat-`char *` byte edges are
   read-modify-write. Reworking `iomove()` for word-aligned bulk I/O is worth doing, but it is an
   orthogonal problem and not part of this work.

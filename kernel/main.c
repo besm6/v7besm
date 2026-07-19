@@ -90,6 +90,7 @@ void main()
      * set up 'known' i-nodes
      */
 
+    intrinit(); /* arm МГРП before anything can call spl0() and open БлПр */
     clkstart();
     cinit();
     binit();

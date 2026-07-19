@@ -605,53 +605,16 @@ intret:
 // Context switch
 // ============================================================================
 //
-// int  save(label_t);            -- save current context; setjmp-like
-// void resume(short paddr, label_t);  -- switch to another process; longjmp-like
+// save() and resume() -- and the `uhome' cell they run on -- live in kernel/switch.s,
+// not here, for the same reason as uarea.s/seg.s/usermem.s: kernel/test/uswtch links the
+// real switch, and besm6.o cannot enter a standalone test.  Note what resume() does and
+// does not do on this machine: it switches the U-AREA (a fixed physical page, so it must be
+// copied), never РП.  The map is reloaded by sureg() at the landing sites.  See switch.s.
 //
-// save() stores the callee-saved registers, stack pointer and return address
-// into the label (a label_t = int[6]) and returns 0 on the direct call.  Later,
-// when some other thread of control calls resume(paddr, label), execution
-// reappears inside that save() returning NONZERO (1).  Callers branch on the
-// result (see swtch()/newproc()/expand() in kernel/slp.c).
-//
-// resume() switches to the address space of the process whose swappable image is
-// at physical click `paddr`, reloads registers/stack from `label`, and jumps --
-// it does NOT return to its caller; control resurfaces in the matching save().
-// resume must run with interrupts masked while it changes the address space.
-
-// int save(label_t lbl)  -- one parameter (the label pointer, in A).
-        .globl  save
-save:
-        // TODO: store r-callee-saved regs, r15 and the return address (r13) into
-        // the label pointed at by A, then return 0 for the direct call.
-        xta                      // return 0 (first-call semantics)
-        13 uj
-
-// void resume(short paddr, label_t lbl)  -- two parameters (paddr pushed, lbl in A).
-        .globl  resume
-resume:
-        // TODO: mask interrupts; switch the address space to `paddr`; reload the
-        // saved registers/stack from `lbl`; set A = 1 so the matching save()
-        // "returns" nonzero; unmask; jump to the saved return address.  Does not
-        // fall through to the caller.
-        15 utm -1                // pop the one pushed argument (paddr)
-        13 uj                    // placeholder: real code jumps into the resumed context
-
-// ============================================================================
-// Idle loop
-// ============================================================================
-//
-// void idle(void) -- called from swtch() when no process is runnable.  Lower the
-// priority to accept all interrupts, wait for an interrupt, then restore the
-// priority and return; the scheduler re-scans the run queue.  The wait
-// instruction's address is published in `waitloc` so clock() can charge the tick
-// to idle time.
-//
-// TODO: drop to level 0, execute the BESM-6 "wait for interrupt", restore level.
-        .globl  idle
-idle:
-        // TODO: enable all interrupts and halt until one arrives (see waitloc).
-        13 uj
+// idle() is not in assembly at all.  There is no wait-for-interrupt instruction here -- the
+// only halt is 033 (стоп), which every simulator treats as "the run is over" -- so idling is
+// a spin, and with spl now masking БлПр (intr.c) there are no mode bits left for assembly to
+// poke.  It is ordinary C, next to spl0()/splx() in kernel/intr.c.
 
 // ============================================================================
 // Fault-safe access to user memory
@@ -769,29 +732,13 @@ wz_dn:
 // with the x86 device drivers: the BESM-6 has no port space, so a peripheral is reached
 // with 033 «увв» / 002 «рег» (doc/Besm6_Peripherals.md), not from here.
 //
-// cli/sti are the global interrupt disable/enable around short critical sequences.  On the
-// BESM-6 that is the БлПр bit of PSW (M[021], bit 02000): set = external interrupts off.
-// We read-modify-write PSW so the other mode bits (БлП/БлЗ/ПОП/ПОК) are preserved -- `vtm'
-// would overwrite the whole word.  ita/ati take a 5-bit register number in supervisor mode,
-// so M[021] = PSW is reachable (doc/Memory_Mapping.md).
+// cli/sti moved to kernel/psw.s.  They are no longer just "around short critical sequences":
+// setipl() (kernel/intr.c) is built on them, БлПр being this kernel's interrupt priority, so
+// every test that links intr.o needs them -- and besm6.o cannot enter a standalone test.
 
         // invd is gone: on the BESM-6 `reg 020+i' refills the TLB as it writes RP,
         // so a stale translation is not a state the machine can be in and there is
         // nothing for utab.c to invalidate (doc/Memory_Mapping.md).
-
-        .globl  cli
-cli:                             // set БлПр -> external interrupts OFF
-        ita     021              // A := PSW
-        aox     #02000           //   set БлПр
-        ati     021              // PSW := A
-        13 uj
-
-        .globl  sti
-sti:                             // clear БлПр -> external interrupts ON
-        ita     021              // A := PSW
-        aax     #075777          //   clear БлПр (077777 & ~02000), keep the other bits
-        ati     021              // PSW := A
-        13 uj
 
 // ============================================================================
 // Global variables and data
@@ -805,17 +752,13 @@ sti:                             // clear БлПр -> external interrupts ON
         .globl  phymem
 phymem: .word 0                  // set by main() during bring-up
 
-// caddr_t waitloc -- address of the idle wait instruction; clock() compares the
-// interrupted pc against it to charge idle time.
-        .globl  waitloc
-waitloc:.word 0                  // TODO: point at the idle-loop wait location
+// x86's `waitloc' is gone, not stubbed.  It held the address of the idle `hlt' so clock()
+// could recognise a tick taken while idle by comparing the interrupted pc against it; this
+// machine has no halt to point at, and idle() is C, so the idle spin raises a plain flag
+// (`idling', kernel/intr.c) instead.  A flag is what v7 would have used had it had one --
+// it is exact, where a pc comparison has to be calibrated against what the hardware saves.
 
-// int uhome -- the p_addr whose u-area is the one currently live at UBASE.  The
-// live u-area is at 076000 and the copy in the process's image is stale between
-// switches; resume() flushes and reloads when it finds uhome != the incoming
-// p_addr.  See kernel/TODO.md, "The u-area invariant".
-        .globl  uhome
-uhome:  .word 0                  // set to proc[0].p_addr at boot by main() (kernel/main.c)
+// `uhome' moved to kernel/switch.s, with the code that maintains it.
 
 // struct user u -- the per-process user area: struct user at the bottom and the
 // kernel stack growing up from it to 0100000.  It is not in the user's map and it

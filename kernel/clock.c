@@ -37,16 +37,16 @@ int lbolt; /* ticks since the last second rolled over: 0..HZ-1, not in `time' */
  * come through u.u_ar0: that names the USER's registers and belongs to whatever the tick
  * interrupted.  See the header over intrgate in besm6.S.
  *
- * Two things this reads are still inert.  addupc() is a stub (besm6.S) and u_prof.pr_scale
- * is 0 until profil() works -- task 17.  waitloc is 0 until the idle loop exists -- task 16
- * -- so kernel idle time is charged to the busy bucket instead.  Both are harmless.
+ * One thing this reads is still inert: addupc() is a stub (besm6.S) and u_prof.pr_scale is 0
+ * until profil() works -- task 17.  Idle-time accounting is live, though: `idling' is raised
+ * by the idle spin in intr.c and cleared by extintr() once this has run, replacing x86's
+ * `waitloc' pc comparison, which had no halt instruction to point at on this machine.
  */
 void clock(struct trap *tr)
 {
     register struct callo *p1, *p2;
     register struct proc *pp;
     int a;
-    extern caddr_t waitloc;
 
     /*
      * callouts
@@ -101,7 +101,7 @@ out:
             a += 8;
     } else {
         a += 16;
-        if ((caddr_t)tr->ret == waitloc)
+        if (idling) /* the idle spin, intr.c -- x86 compared the pc against waitloc */
             a += 8;
         u.u_stime++;
     }
