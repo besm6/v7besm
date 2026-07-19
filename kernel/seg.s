@@ -10,7 +10,7 @@
 // Kwords, and the page pool a process is built from lives ABOVE 0100000, out of that
 // reach.  So a caddr_t cannot name these pages (its word field is only 15 bits), and
 // the copy has to be done through a window, with mapping on -- exactly the bracket
-// task 10 uses in uarea.s, which is the worked example.
+// uarea.s uses, which is the worked example.
 //
 // The bracket:
 //
@@ -51,7 +51,7 @@
 //
 // Both drains run with mapping off, which is what the nine stores to physical 1-7
 // require.  The hazard is invisible under default SIMH and fatal under `set mmu cache'.
-// See doc/Memory_Mapping.md, and kernel/TODO.md task 11.
+// See doc/Memory_Mapping.md, and kernel/TODO.md, "Five hardware rules".
 //
 // Contracts:
 //  * `s' and `d' are PAGE-ALIGNED physical word addresses.

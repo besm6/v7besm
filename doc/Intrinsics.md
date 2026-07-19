@@ -49,7 +49,8 @@ which name a register through the *effective address* and pass data through the 
 There is no way to express either one in C. Without them a kernel obtains *every* machine
 operation by calling out-of-line assembly; with them, most of that assembly disappears:
 
-- `spl0`…`spl7` and `splx` are nothing but writes of the МГРП interrupt mask — `002 036`.
+- Arming the interrupt sources a kernel can service is one write of МГРП — `002 036`. (The
+  priority *level* itself is БлПр, in the mode word, which needs a read-modify-write — see §6.1.)
 - The interrupt dispatcher is a read of ГРП (`002 0237`) followed by a selective clear (`002 037`).
 - An address-space switch is a write of the page registers РП (`002 020`–`027`).
 - Every device driver becomes a sequence of `033` control words.
@@ -356,25 +357,53 @@ any code around the intrinsic must treat `r14` as clobbered.
 
 ### 6.1 `spl` — the interrupt priority level
 
-The whole of `spl0`…`spl7`/`splx`, plus `cli`/`sti`, is one write of the МГРП mask:
+The machine has **no priority hierarchy**: an interrupt is delivered when БлПр is clear *and*
+`ГРП & МГРП` is non-zero. So there are two levels, not eight, and two registers that could each
+serve as the mask. They are not interchangeable, and the choice matters:
+
+* **БлПр (ПСВ bit `02000`) is the priority.** The hardware already treats it as one — a trap or an
+  extracode forces БлПр on at the vector and `выпр` restores it from СПСВ, so returning through a
+  gate re-establishes the level by itself, exactly as the PDP-11's `rtt` does when it reloads the
+  priority field of PS.
+* **МГРП is the source enable**, armed once at boot and never rewritten. `grp & mgrp` in the
+  dispatcher then means "sources this kernel can service", which is what that mask was always for.
+
+Putting the level in МГРП instead looks equivalent and is not: the gates hold БлПр from the vector,
+so an `spl0()` that only opened МГРП would leave БлПр blocking everything, and **no interrupt could
+be taken in kernel mode at all**. That is invisible for as long as every interrupt arrives in user
+mode, and becomes load-bearing the moment an idle loop has to spin waiting for one.
+
+БлПр lives in the mode word, so it is a **read-modify-write** of ПСВ — not a `vtm`, which writes the
+whole register and would clobber БлП/БлЗ/ПОП/ПОК along with it. That is the one piece here the
+intrinsics do *not* reach; see [`kernel/psw.s`](../kernel/psw.s). What C does express is arming the
+source mask:
 
 ```c
-static unsigned ipl[8] = { /* МГРП mask for each level */ };
-static int cur_ipl;
+#define MOD_MGRP  036               /* 002 036 -- write МГРП */
+#define IRQ_ON    (GRP_SLAVE | GRP_TIMER)
 
-int splx(int s)
+unsigned mgrp;                      /* shadow: МГРП cannot be read back */
+
+void intrinit(void)                 /* called once from main(), before the first spl0() */
 {
-    int old = cur_ipl;
-    cur_ipl = s;
-    __besm6_mod(036, ipl[s]);       /* 002 036 -- write МГРП */
-    return old;
+    mgrp = IRQ_ON;
+    __besm6_mod(MOD_MGRP, mgrp);
 }
 
-int spl6(void) { return splx(6); }
-void cli(void) { __besm6_mod(036, 0); }
+static int setipl(int s)            /* the level itself is БлПр, via psw.s */
+{
+    int old = curipl;
+    curipl = s;
+    if (s) cli(); else sti();
+    return old;
+}
 ```
 
-Note `ipl[]` is `unsigned`, not `int`: ГРП bit 48 exists and would not survive a 41-bit type.
+Note `mgrp` is `unsigned`, not `int`: ГРП bit 48 exists and would not survive a 41-bit type. And it
+is a shadow because МГРП, like РП and РЗ, is write-only.
+
+This is what [`kernel/intr.c`](../kernel/intr.c) does; the reasoning above is written up there in
+full.
 
 ### 6.2 The interrupt dispatcher
 

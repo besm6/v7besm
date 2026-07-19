@@ -9,20 +9,34 @@ user memory safely, interrupt masking, port I/O, cache/TLB control — lives her
 i486/x86 assembly (inherited from Robert Nordier's v7/x86 port, where the file was called
 `mch.s`); it is the single file that must be **rewritten from scratch for the BESM-6**.
 
-That rewrite has a home already: [kernel/besm6.S](../kernel/besm6.S) is the BESM-6 counterpart,
-currently a **skeleton** — the symbols exist so the kernel builds and links with the BESM-6
-toolchain, but the bodies are still to be written, against the contracts specified below.
+**That rewrite is done.** The BESM-6 assist now exists and runs on the machine, and it turned out to
+be not one file but seven, because [kernel/besm6.S](../kernel/besm6.S) — which holds the vector
+block, and so pins symbols at fixed addresses — cannot be linked into a standalone SIMH test.
+Anything a test has to exercise for real therefore lives in a file of its own:
 
-**It will be a much smaller file than `x86.s`.** The C compiler now has the `<besm6.h>` machine
-intrinsics ([Intrinsics.md](Intrinsics.md)), so a routine whose whole job is to issue one
-supervisor instruction no longer needs assembly at all: `spl0`…`spl7`/`splx` are a write of the
-МГРП mask (`__besm6_mod(036, …)`), interrupt dispatch is a read of ГРП and a selective clear, the
-address-space switch inside `resume` is a write of the page registers, and every driver's device
-I/O is a sequence of `__besm6_ext` control words — all of it C. What genuinely stays in
-[kernel/besm6.S](../kernel/besm6.S) is what no intrinsic can reach: the boot entry, the interrupt
-and extracode vector (`besm6.S` must be entered *with the machine's registers as the hardware left
-them*), the register-save/restore of `save`/`resume`, and the `nofault` fault-recovery mechanism.
-Each contract below still holds; the language it is implemented in is now a choice.
+| file | holds |
+|---|---|
+| [besm6.S](../kernel/besm6.S) | `_start`, the vector block at `0500`/`0501` and `0550`–`0577`, and the four gates: `trapgate`, `intrgate`, `sysgate`, `badext` |
+| [switch.s](../kernel/switch.s) | `save`, `resume`, and the `uhome` cell |
+| [uarea.s](../kernel/uarea.s) | `uflush`, `uload` — the u-area window bracket |
+| [seg.s](../kernel/seg.s) | `copyseg`, `clearseg` |
+| [usermem.s](../kernel/usermem.s) | `copyin`, `copyout`, `fubyte`, `fuword`, `subyte`, `suword` |
+| [psw.s](../kernel/psw.s) | `cli`, `sti` — the read-modify-write of БлПр |
+| [brz.s](../kernel/brz.s) | `drainbrz` — the nine-store БРЗ drain |
+
+**It is a much smaller body of assembly than `x86.s`.** The C compiler has the `<besm6.h>` machine
+intrinsics ([Intrinsics.md](Intrinsics.md)), so a routine whose whole job is to issue one supervisor
+instruction needs no assembly at all: interrupt dispatch is a read of ГРП and a selective clear
+([intr.c](../kernel/intr.c)), the page-register load is `sureg()` in
+[utab.c](../kernel/utab.c), `idle()` is an ordinary C spin, and every driver's device I/O is a
+sequence of `__besm6_ext` control words. What stays in assembly is what no intrinsic can reach: code
+that must be entered *with the machine's registers as the hardware left them* (the gates), code that
+runs with the kernel's own data unaddressable (the brackets), and code where the **sequence** rather
+than the instruction is the contract (`drainbrz`).
+
+Two contracts below did **not** survive the port, and both are noted where they appear: there is no
+`nofault` mechanism at all — validation is `useracc()` up front — and `invd()` is deleted rather
+than stubbed, because writing РП refills the TLB in the same instruction.
 
 This document specifies, for each routine, its **contract** — arguments, return value, side
 effects, and role in the kernel — *independently of the x86 implementation*. The goal is that
@@ -90,8 +104,12 @@ control. On x86 it stores the five callee-saved registers (`%ebx`, `%esp`, `%ebp
 | `label_t u_qsav` | user.h:61 | non-local goto target for quits/interrupts during a syscall |
 | `label_t u_ssav` | user.h:62 | save info across swapping |
 
-On BESM-6 `label_t` must be resized to hold the BESM-6 callee-saved registers plus the return
-address; the *count* (6) is an x86 detail, the *purpose* is not.
+**On BESM-6 `label_t` is `int[10]`** ([param.h](../include/sys/param.h)), of which nine slots are
+used — r1–r7 (the callee-saved set), r13 (the return address into `save()`'s caller) and r15 (the
+kernel stack pointer). Slot 9 is reserved and unused: shrinking to nine would move `u_upt`, whose
+word offset in `struct user` is hardcoded as `UPT = 35` in [uarea.s](../kernel/uarea.s) and
+[seg.s](../kernel/seg.s) (`b6as` has no `offsetof`; `mmutest` asserts the value). Ten words cost
+three words per process and no risk.
 
 ### The user register frame (`u_ar0` / `reg.h`) — contract-level shape
 
@@ -107,18 +125,55 @@ sets `u.u_ar0` to point at the saved `EAX`, and the kernel reads/writes user reg
 
 `struct trap` (reg.h) mirrors, in order, exactly what the dispatch code (§4) pushes on the
 stack, so C `trap(struct trap tr)` can name every saved word (`tr.dev`, `tr.pl`, the GP
-registers, `tr.eip`, `tr.efl`, `tr.esp`, …). On BESM-6 the *set* of saved registers changes
-but the pattern — a per-trap frame the C code indexes symbolically — is preserved.
+registers, `tr.eip`, `tr.efl`, `tr.esp`, …).
 
-### The `nofault` mechanism — contract-level idea, x86 implementation
+**The BESM-6 frame** ([include/sys/reg.h](../include/sys/reg.h)) keeps that pattern and nothing of
+the layout. `u.u_ar0` points at word 0 and an index *is* a word index:
+
+```c
+#define ACC   0   /* the accumulator          */   #define R15  6
+#define RREG  1   /* R, the arithmetic mode   */   #define R14  7
+#define RMR   2   /* Y (РМР)                  */   /*  ...           */
+#define RET   3   /* the return address       */   #define R1  20
+#define SPSW  4   /* СПСВ                     */   #define NREGFRAME 21
+#define CREG  5   /* M[16], the C register    */
+```
+
+Four differences from the x86 shape are worth naming, because each is a decision rather than a
+translation:
+
+- **The register file descends** — `R15` at 6 down to `R1` at 20 — which is the order the Dubna
+  `its`/`sti` store-and-load pipeline fills it in ([Context_Switch.md](Context_Switch.md) §6).
+- **IRET and ERET collapse into one `RET` slot.** Dubna keeps them separate, but a frame is filled
+  by exactly one gate, so only one return address is ever live in it; the gate that built the frame
+  picks the matching `выпр` index.
+- **ГРП is not framed.** The fault cause is read live with `__besm6_mod(MOD_GRP, 0)`, as Dubna does.
+- **There is no flags word.** `EFL`/`TBIT` have no analogue: a syscall error is `errno` in r14
+  (`R_ERRNO`, 0 meaning success), a second syscall result is r12 (`R_VAL2`), and single-step is the
+  address-break registers М034/М035, not a bit in a saved register.
+
+`USERMODE(spsw)` tests the supervisor bits of the saved mode word; see §3.
+
+### Fault recovery — the `nofault` mechanism, and why BESM-6 has none
 
 `nofault` is a single kernel word ([kernel/x86.s:914](../kernel/x86.s)) holding a *recovery
 program counter*. Before a routine touches memory that might fault (user pointers), it stores
 the address of a local recovery label into `nofault`; the page-fault path in the trap
 dispatcher checks `nofault`, and if nonzero, aborts the faulting instruction and jumps to the
 recovery label instead of panicking. It is **not** referenced by any C file — it is entirely
-internal to `x86.s`, used by `fubyte`/`fuword`/`subyte`/`suword`/`copyin`/`copyout`. The
-BESM-6 port needs an equivalent "expected fault → recover" hook in its own trap handler.
+internal to `x86.s`, used by `fubyte`/`fuword`/`subyte`/`suword`/`copyin`/`copyout`.
+
+**The BESM-6 port has no equivalent, deliberately.** The user-access routines validate up front
+instead: each calls `useracc()` ([utab.c](../kernel/utab.c)), which walks the shadow map `u.u_upt[]`
+and rejects a range that runs into a zero descriptor, and the routine returns a clean C `-1`. There
+is no expected-fault path anywhere in the kernel.
+
+That is not merely a different implementation of the same idea — it is what makes the trap gate
+simple. Since no supervisor-mode fault is ever *expected*, one taken in supervisor mode is by
+definition a kernel bug, so `trapgate` may switch to the kernel stack unconditionally and `trap()`
+may panic on it. See §3, and the corresponding note in
+[Memory_Mapping.md](Memory_Mapping.md#what-this-means-for-the-v7-kernel), which recommends the
+catch-`GRP_OPRND_PROT` approach that this kernel did not take.
 
 ### Interrupt priority model (`spl`, `pl`, `iq`) — contract-level
 
@@ -138,9 +193,34 @@ IPL4 = 0xfd41                       IPL7 = 0        block all
 ```
 
 The macro `BASEPRI(pl)` (`param.h:145`, `(pl) != 0xffff`) tells the clock whether it
-interrupted a critical section. On BESM-6 the numeric masks are x86-specific, but the
-*contract* — six/seven named entry points that set a level and return the old one — carries
-over.
+interrupted a critical section.
+
+**On BESM-6 there are two levels, not eight**, and the v7 spelling survives over them: callers still
+write `s = spl5(); … ; splx(s);` and still get what they were after, since on a uniprocessor with no
+atomic instruction, masking interrupts is the only lock there is. Only `spl0` enables; every `splN`
+above it blocks. Delivery needs БлПр clear **and** `ГРП & МГРП` non-zero, so either register could
+have been the mask, and the kernel divides them:
+
+- **БлПр (ПСВ bit `02000`) is the priority**, set and cleared through `cli()`/`sti()`
+  ([psw.s](../kernel/psw.s)). The hardware already treats it as one — a gate forces БлПр on at the
+  vector and `выпр` restores it from СПСВ, so returning through a gate re-establishes the level by
+  itself, exactly as the PDP-11's `rtt` does. МГРП, outside the mode word, does nothing of the kind.
+- **МГРП is the source enable**, armed once by `intrinit()` from `main()` and never rewritten.
+
+The reverse assignment was tried first and is a trap: with the level in МГРП, `spl0()` opens the
+source mask while the gates still hold БлПр, so **no interrupt can be taken in kernel mode at all**.
+That is invisible while every interrupt arrives in user mode, and becomes fatal the moment `idle()`
+must spin waiting for one. The full argument is at the head of [intr.c](../kernel/intr.c).
+
+There is no soft interrupt queue: `iq`, `unqint` and the deferred-replay machinery are gone, because
+two levels need no arbitration. **`BASEPRI(x)` is permanently `(0)`** — `setipl()` leaves interrupts
+deliverable only at spl0, so anything `clock()` interrupts was at base priority by construction.
+(Note the v7 name reads backwards: *true* means "was **above** base, skip the callouts".)
+
+`HZ` is **250**, not v7's 60: the interval timer free-runs at that rate (SIMH `CLK_TPS`, per the
+original documentation) and **cannot be programmed**, so `clkstart()` has nothing to set up — it
+dismisses the tick accumulated during boot and calls `spl0()`. v7 userland that hardcodes 60
+(`/bin/time`, `ps`) will misreport until it is fixed.
 
 ---
 
@@ -187,6 +267,28 @@ transition into user mode running `icode` ([machdep.c:27](../kernel/machdep.c)).
 among them: `b6ld` defines the boundary symbol `end` (first word past the whole image) as soon as
 something references it — see [Linker_Manual.md](Linker_Manual.md) §4.3 — so the BESM-6 boot code
 zeroes BSS from `edata` to `end` and keeps no such variable of its own.
+
+### BESM-6 notes — done, and almost nothing survives
+
+**`_start` is two instructions**: seed r15 from `machdep.c`'s `int *const ustkbase = &u.u_stack[0]`
+(≈ `076214`) and call `main()`. Steps 1, 4, 5 and 6 above have no counterpart at all — the machine
+**resets straight into the kernel's own mode**, supervisor with mapping, protection and interrupts
+all off ([Memory_Mapping.md](Memory_Mapping.md#reset-state)), and the vector block is not *built* but
+*laid out by the linker* at fixed addresses in the const segment, which is why
+[besm6.o must come first](../kernel/Makefile) in the link order.
+
+Steps 2 and 3 moved **into C, at the top of `main()`**, and neither for stylistic reasons:
+
+- Bss-zero is `wzero(edata, end - edata)`. It cannot be in `_start` because the size is a difference
+  of two linker externals and `b6as` rejects that expression. It is guarded out under `#ifdef
+  ON_SIMH`, since SIMH starts every word at zero.
+- **Memory is not sized, it is asserted**: `phymem = 512 * 1024`. A kernel running unmapped can
+  reach 32 Kwords, so it has no way to probe the 512 Kword store — there is nowhere to write the
+  test pattern. The number is the machine's, not a measurement.
+
+`uhome` is initialised in `main()` immediately after `proc[0].p_addr`; see
+[TODO.md](../kernel/TODO.md), "The u-area invariant". `make run` with
+[kernel/unix.ini](../kernel/unix.ini) boots the image under SIMH.
 
 ---
 
@@ -237,6 +339,60 @@ now unmasked by `pl`, and calls its stub, looping until none remain. This is how
 software-level scheme delivers interrupts that hardware masking deferred; it is invoked both at
 the end of interrupt handling and by `splx`/`spl*` when the level drops.
 
+### BESM-6 notes — four gates, two save disciplines, one exit
+
+Done, in [besm6.S](../kernel/besm6.S). There is no IDT to build and no PIC to acknowledge: the
+hardware vectors to **fixed const-segment words** — `0500` internal fault, `0501` external
+interrupt, `0550`–`0577` the extracodes, one word each. `unqint` and `iq` have no counterpart (§1:
+two levels need no deferred queue). The four gates are:
+
+| gate | vector | door |
+|---|---|---|
+| `trapgate` | `0500` | internal fault → `trap()` |
+| `intrgate` | `0501` | external interrupt → `extintr()` |
+| `sysgate` | `0577` (э77) | the system call → `syscall()` |
+| `badext` | `0550`–`0576` | every other extracode → `badextr()`, which posts SIGINS |
+
+**Two save disciplines.** A fault or an interrupt lands between arbitrary instructions, so the
+interrupted code owns *every* register and the gate must save the full visible machine — including R
+and Y, which the hardware does **not** save (§1 of [Context_Switch.md](Context_Switch.md) §14). An
+extracode is a synchronous *call*: the caller owns its live registers, so the gate saves almost
+nothing, and the hardware has already clobbered r14 with the effective address.
+
+**One exit.** All four leave through `intret`, `intrgate`'s restore block. An extracode's return
+address is in ERET and a fault's in IRET, and Dubna solves this by normalising one into the other
+(`OUTMACRO`, [Context_Switch.md](Context_Switch.md) §8). **That turned out to be unnecessary here:**
+the frame is filled by a `its`/`sti` pipeline that reads a return register *live*, so `sysgate` is
+`trapgate` with exactly one instruction changed — `its ERET` where the fault gate has `its IRET` —
+and `intret` is reused unmodified. Its closing `выпр` index selects only *which register holds the
+PC*; the mode comes from СПСВ either way.
+
+**The stack switch is the sharp edge.** r15 is **not banked by mode**: there is one stack register
+shared across modes, so a gate entered from user must repoint it at the kernel stack by hand, and a
+gate that nests inside the kernel must leave it alone. The signal is **`СПСВ & 014`**
+(РежЭ | РежПр), zero *iff* the interrupted context was user. Test that, **not** БлП: `copyin`
+runs in supervisor mode with БлП clear, so a БлП test would misread a fault taken mid-`copyin` as
+"from user" and reset r15 out from under the syscall frame.
+
+- `trapgate` and `sysgate` switch **unconditionally**, so their frame is always at the link-time
+  constant `[ustkbase]` and `trap()` opens with `(struct trap *)u.u_stack` rather than taking an
+  argument. This is legitimate only because there is no `nofault` path (§1): a supervisor fault is
+  a kernel bug, and resetting r15 under a panic costs nothing.
+- `intrgate` switches **conditionally** — it genuinely nests — so its frame base is a run-time
+  value, and it publishes it in a private `intrframe` cell for `clock()`. Using `u.u_ar0` for this
+  was tried and is wrong: a tick nested inside a syscall would overwrite the interrupted syscall's
+  `u_ar0`, and `exec()` and `sendsig()` write through that pointer from paths that sleep.
+
+**`badext` carries its own third copy of the prologue** rather than sharing `sysgate`'s body behind
+a discriminator. Nothing before the frame is filled can tell the doors apart — the hardware
+identifies an extracode purely by which vector word it landed on — so sharing would cost a flag and
+a branch to save a block that is otherwise identical.
+
+**The restart fixup lives in C**, at the top of `trap()`, because the frame is aliased in place: the
+saved PC is the faulting word plus one and `SPSW_RIGHT_INSTR` already names the half, so the whole
+correction is `tr->ret--` and clearing `SPSW_NEXT_RK`. The derivation and the verified recipe are in
+[Memory_Mapping.md](Memory_Mapping.md#the-restart-protocol--read-this-before-writing-a-fault-handler).
+
 ---
 
 ## 4. Exported routines
@@ -264,10 +420,16 @@ void splx(int s);                                                             /*
 - **Callers.** Pervasive: `slp.c` (`sleep`/`wakeup`/`setrq`/`sched`/`swtch` use `spl6`/`spl0`),
   `clock.c:62,105,153`, `prim.c`, and the device drivers (`dev/bio.c`, `dev/tty.c`, `dev/hd.c`,
   `dev/fd.c`, `dev/cd.c`).
-- **BESM-6 notes.** The 16-bit masks (`IPL*`) and the `iq`/`unqint` deferral are x86/8259
-  artifacts. Reimplement as: keep a level in `pl`, map each level to the target's interrupt
-  mask, return the old level, and provide an equivalent deferred-delivery path if the hardware
-  cannot mask by class.
+- **BESM-6 notes — done**, in [intr.c](../kernel/intr.c) over `cli`/`sti`
+  ([psw.s](../kernel/psw.s)). The 16-bit masks (`IPL*`) and the `iq`/`unqint` deferral are
+  x86/8259 artifacts and are gone: there are **two levels**, the knob is **БлПр** and not МГРП, and
+  nothing needs deferring. The v7 spelling and the return-the-old-level contract are preserved
+  intact. See §1, "Interrupt priority model", for why the register choice is not free.
+
+  One consequence that only appeared on the machine: `splx()` inside an interrupt handler must
+  repair the **software shadow only** (`curipl = s`), not the hardware bit. Clearing БлПр with the
+  interrupted state still in СПСВ/IRET lets the free-running timer re-enter the handler
+  immediately and forever. Restoring the bit is `выпр`'s job, not `splx()`'s.
 
 ### 4.2 Context switch — `save`, `resume`
 
@@ -379,10 +541,66 @@ int copyout(caddr_t from, caddr_t to, unsigned nbytes);  /* systm.h:177 */
   and signal frames (`sendsig` in `machdep.c:106`, `sig.c`, `sys1.c`); `copyin`/`copyout` are the
   core of `iomove` ([rdwri.c:181](../kernel/rdwri.c)), `exec`/`icode` setup (`main.c:88`,
   `sys3.c`, `sys4.c`), and tty I/O (`dev/tty.c`).
-- **BESM-6 notes.** Because BESM-6 is **word-addressed with no sub-word load/store** (see
-  [Besm6_Data_Representation.md](Besm6_Data_Representation.md)), the "byte" variants must emulate
-  byte access by word read-modify-write (six chars per word). The address checks and the
-  `nofault`-style recovery must be reimplemented against the BESM-6 memory map and trap handler.
+- **BESM-6 notes — done**, in [usermem.s](../kernel/usermem.s). The return contracts are preserved
+  exactly; the mechanism is not.
+
+  **There is no window and no map switch.** A trap does not disturb РП, so the user's map is
+  *already loaded*: the loop toggles **БлП per word** — read the user word mapped, store it to the
+  kernel buffer unmapped — and runs entirely out of index registers, because while mapping is on
+  the kernel's own data is not addressable. No `drainbrz` either: РП is never written, and a mapped
+  store goes back through the same loaded map, so there is no tag hazard.
+
+  **There is no `nofault` path at all** (§1). Validation is `useracc()`, called from the routine
+  itself, and a range running into a zero descriptor returns the clean C `-1` — the compiler's own
+  `-1`, not 48 ones, so `fubyte(…) == -1` matches at a C caller.
+
+  **`copyin`/`copyout` are word-only**, exactly as the x86 originals are: they copy `nbytes / NBPW`
+  whole words, every caller passes a word-aligned address and a word-multiple count, and an
+  unaligned copy stays on the `fubyte`/`subyte` byte path inside `iomove`.
+
+  The byte variants do emulate sub-word access by read-modify-write, as predicted — but note the
+  **fat-pointer marker bit (48) is load-bearing**. `fubyte` extracts its byte with `asx` on the
+  pointer's own exponent field, which is `64 + 8·off`; a `char *` built by hand from an `int` has no
+  marker, so the shift becomes `8·off − 64` and the fetch returns 0. Only the compiler's
+  `int*`→`char*` conversion produces a usable pointer. See
+  [Besm6_Data_Representation.md](Besm6_Data_Representation.md).
+
+### 4.4a The mapped brackets — `copyseg`, `clearseg`, `uflush`, `uload`
+
+```c
+void copyseg(unsigned from, unsigned to);   /* one page, word addresses */
+void clearseg(unsigned addr);
+void uflush(unsigned paddr);                /* live u-area -> the process's home */
+void uload(unsigned paddr);                 /* the process's home -> live u-area  */
+```
+
+These have no x86 counterpart worth speaking of (`copyseg`/`clearseg` were `bcopy`/`bzero` through
+the `PHY` window), but they are the characteristic BESM-6 routine, so they are documented here.
+
+The problem they solve: an unmapped kernel reaches only the low 32 Kwords, so **any physical page
+above `0100000` — the page pool, and therefore every process image — is unaddressable**. Each of
+these routines steals two virtual pages as windows with one `mod 020`, copies register-only, and
+puts the quartet back from `u.u_upt[]`.
+
+Three constraints, all of them non-obvious and all of them verified on the machine by
+[mmutest](../kernel/test/mmutest.c) under `set mmu cache`:
+
+- **The windows are virtual pages 1 and 2 — never page 0.** A store to virtual address 0 is dropped
+  and a load returns 0; the test is on the *virtual* address, before translation, so the black hole
+  follows the window wherever page 0 is mapped. A window there silently loses word 0 of whatever it
+  copies. Pages 1 and 2 are also the cheap pair: they share quartet 0, so one `mod 020` steals both,
+  and their addresses fit the 12-bit short address field, so the copy loop needs no `utc`.
+- **The БРЗ is drained on both sides of the copy**, and the two drains cover different hazards — the
+  leading one is the standing "drain before every РП write" rule, the trailing one is what makes the
+  copy reach memory before the map changes back. `mmutest` fails distinctly on each.
+- **The bracket holds БлПр**, which means saying `vtm 02002`/`02003` rather than a bare `vtm 2`:
+  `vtm N,0` writes БлПр along with БлП and БлЗ, so the plain form *enables* interrupts as a side
+  effect. For `uload` that is fatal — it is overwriting the very page an interrupt would build its
+  frame in.
+
+That last point is also `uload`'s calling contract: **it destroys its caller's kernel stack frame**,
+so only `resume()` — assembly, keeping its state in registers — may call it. `uflush()` only reads
+the live page and is safe from C.
 
 ### 4.5 Floating-point state — `savfp`, `restfp`, `stst`
 
@@ -422,8 +640,10 @@ void addupc(int pc, void *prof, int incr);   /* systm.h:151 */
   disarms profiling by zeroing `pr_scale`.
 - **Callers.** `clock.c:87` (one tick, when `pr_scale` set) and `trap.c:165` (syscall CPU time).
   Armed by the `profil` syscall (`sys4.c:340`), cleared on `exec` (`sys1.c:218`).
-- **BESM-6 notes.** Straightforward to port; only the fixed-point scale shift and the buffer
-  addressing need adjusting for word addressing.
+- **BESM-6 notes — still a stub**, so `profil(2)` is inert. Straightforward to port when it is
+  wanted; only the fixed-point scale shift and the buffer addressing need adjusting for word
+  addressing, and the `nofault` guard becomes a `useracc()` check (§4.4). Idle-time accounting,
+  which `addupc`'s neighbourhood in `clock()` used to depend on, went the other way — see §4.3.
 
 ### 4.7 Memory primitives — `bcopy`, `bzero`
 
@@ -437,8 +657,16 @@ void bzero(void *dst, unsigned len);                   /* systm.h:144 */
 - **Callers.** `bcopy`: `alloc.c`, `iget.c:305`, `main.c:118`, `nami.c:156`, `sys1.c:282`,
   `sys3.c:180`, `utab.c:87` (`copyseg`), `dev/md.c`, `dev/fd.c`. `bzero`: `utab.c:76` (`clearseg`),
   `dev/bio.c:379`, `dev/cd.c:217`.
-- **BESM-6 notes.** Trivial to port; `len` is in bytes on x86, but on a word-addressed machine
-  these become word-count loops (mind the byte/word unit — six chars per word).
+- **BESM-6 notes — done, and renamed.** They are **`wcopy`/`wzero`, and they take a WORD count**,
+  not a byte count: every call site converts with `btow()` ([param.h](../include/sys/param.h)), and
+  the whole-block copies use `BSIZEW` (512 words). Putting the conversion at the call sites rather
+  than inside the routine is what keeps the loop pure — no six-chars-per-word tail to handle. The
+  body is `copyin`'s inner loop minus the per-word БлП toggle, the validation and the ПСВ save:
+  plain unmapped, register-only, no window and no drain. `aax #077777` strips a caller's fat
+  pointer to a 15-bit word address.
+
+  A knock-on worth knowing: `DIRSIZ` is now 24, so `struct direct` is 5 words and directory entries
+  are word-aligned — which is what lets `nami.c` use the word copy at all.
 
 ### 4.8 Port I/O — `inb`, `outb`, `insw`, `outsw`
 
@@ -454,8 +682,12 @@ void outsw(int addr, char *buf, int n); /* systm.h:160 */
 - **Callers.** `machdep.c` (PIT/RTC/floppy-motor), and the disk/tty/beeper drivers
   (`dev/hd.c`, `dev/cd.c`, `dev/fd.c`, `dev/sc.c`); e.g. `(hd.rd ? insw : outsw)(DATA, …)` in
   `dev/hd.c:278`.
-- **BESM-6 notes.** BESM-6 has no x86 port space; these are replaced by the BESM-6 device
-  register / channel access primitives. The driver layer that calls them will itself be rewritten.
+- **BESM-6 notes — deleted, all seven.** BESM-6 has no port space, and no assembly stands in for
+  them: a driver reaches a device with the `__besm6_ext` intrinsic (`033 «увв»`) directly from C —
+  see [Intrinsics.md](Intrinsics.md) and [Besm6_Peripherals.md](Besm6_Peripherals.md). `dev/hd.c`
+  and `dev/sr.c` survive as **driver skeletons** with their port I/O stripped to `// TODO`, still
+  wired into `conf.c` so their `bdevsw`/`cdevsw` hooks resolve; `machdep.c` lost the 8253 PIT and
+  the CMOS RTC with them, which is why nothing seeds `time` from a wall clock.
 
 ### 4.9 Control registers, cache/TLB, interrupt flag — `ld_cr0`/`ld_cr2`/`ld_cr3`, `invd`, `cli`/`sti`
 
@@ -470,12 +702,19 @@ void sti(void);                                 /* systm.h:163 */
   address, cr3 = page-directory base). Only caller: the panic/trap register dump in `trap.c:55`.
   Pure x86 — no BESM-6 analogue beyond "read whatever status registers exist".
 - **`invd`** flushes the TLB by reloading `%cr3`. Caller: `utab.c:51` after `sureg()` rewrites the
-  user page table `upt`. On BESM-6 it becomes a **no-op**: writing a page register refills the
-  corresponding TLB entries in the same instruction, so a stale translation is not a state the
-  machine can be in ([Memory_Mapping.md](Memory_Mapping.md#the-registers)).
+  user page table `upt`. On BESM-6 it is **deleted, not stubbed**: writing a page register refills
+  the corresponding TLB entries in the same instruction, so a stale translation is not a state the
+  machine can be in ([Memory_Mapping.md](Memory_Mapping.md#the-registers)). A no-op would have
+  invited someone to wonder when it needs calling.
 - **`cli`/`sti`** clear/set the CPU interrupt-enable flag around very short critical sequences
-  (programming the PIT in `machdep.c:89-93`, the beeper timer in `dev/sc.c:560-564`). On BESM-6,
-  the equivalent global interrupt-disable/enable.
+  (programming the PIT in `machdep.c:89-93`, the beeper timer in `dev/sc.c:560-564`).
+
+  **On BESM-6 they carry far more weight than that**: they are the interrupt priority level itself
+  (§1, §4.1), and every `spl*` is built on them. They live in [psw.s](../kernel/psw.s), and the
+  implementation is a **read-modify-write** of the БлПр bit of ПСВ — `ita 021`, then `aox 02000` or
+  `aax 075777`, then `ati 021`. It is emphatically *not* a `vtm`, which writes the whole mode word
+  and would clobber БлП/БлЗ/ПОП/ПОК along with the bit being changed. (Supervisor mode takes a
+  5-bit register number, which is what makes `M[021]` reachable at all.)
 
 ---
 
@@ -485,24 +724,26 @@ void sti(void);                                 /* systm.h:163 */
 
 | symbol | x86.s | C declaration | meaning |
 |--------|-------|---------------|---------|
-| `u` | 922 (`.set u, U`) | `extern struct user u;` (user.h:101) | the per-process user area, mapped at a fixed virtual address (page 7); holds the kernel stack and per-process state |
+| `u` | 922 (`.set u, U`) | `extern struct user u;` (user.h:101) | the per-process user area; holds the kernel stack and per-process state. On x86 it is *mapped* at a fixed virtual address (page 7). **On BESM-6 it is a fixed PHYSICAL page** — `u = 076000`, an absolute symbol rather than storage — and therefore has to be **copied** in and out on a context switch (§4.2, §4.4a) |
 | `kend` | 916 | *(dropped in the port)* | first free physical address after the kernel; used to size the initial process and free core. The BESM-6 kernel has no such variable: `b6ld`'s boundary symbol `end` already names the first word past the image, and nothing in C needs it — `startup()` frees core from `0100000` and `main()` sets `proc[0].p_addr` outright |
-| `phymem` | 919 | `extern int phymem;` (machdep.c:18) | physical memory size in pages, found by the boot memory scan; `startup()` frees it into `coremap` |
+| `phymem` | 919 | `extern int phymem;` (machdep.c:18) | physical memory size, found by the boot memory scan; `startup()` frees it into `coremap`. On BESM-6 it is a **count of words**, and it is asserted rather than probed — `phymem = 512 * 1024` in `main()`, because an unmapped kernel cannot reach the store it would have to write test patterns into (§2) |
 | `waitloc` | 893 | *(deleted in the port)* | PC of the idle `hlt`; the clock compared the interrupted PC against it to charge idle time. This machine has no halt to point at, so task 16 replaced it with the `idling` flag (`intr.c`), which is exact and cannot drift when the code is recompiled |
 | `mem` | 926 (`.set mem, 0x40000000`) | (used via macros) | base of the window that maps *all* physical memory into the kernel address space (`PHY` in `utab.c`) |
 | `pdir` | 927 (`.set pdir, 0x7ff9a000`) | `extern int pdir[];` (utab.c:14) | virtual address of the page directory; read by `physaddr()` |
 | `upt` | 928 (`.set upt, 0x7ff9b000`) | `extern int upt[];` (utab.c:14) | virtual address of the **user page table**; rewritten by `sureg()` to map the current process's text/data/stack |
 
-These last three are the ones with **no BESM-6 counterpart at all**. The machine has no page table in
-memory, no page-directory base register and no page walk — the entire mapping is eight write-only
-registers — and no 32-bit window can hold 512 Kwords of physical memory. `kernel/besm6.S` reserves
-`pdir`/`upt`/`mem` as placeholder arrays only so `utab.c` links; what replaces them is a per-process
-**shadow** page table in kernel memory, written out to РП/РЗ with `рег`. See
+These last three had **no BESM-6 counterpart at all, and are deleted.** The machine has no page table
+in memory, no page-directory base register and no page walk — the entire mapping is eight write-only
+registers — and no 32-bit window can hold 512 Kwords of physical memory. They were briefly kept as
+placeholder arrays so `utab.c` would link; removing them, together with the x86 FP state and the bss
+`u`, gave back **2563 words** of bss. What replaces them is the per-process **shadow** page table
+`u.u_upt[8]`, blasted out to РП/РЗ by `sureg()` in twelve `рег`s. See
 [Memory_Mapping.md](Memory_Mapping.md#what-this-means-for-the-v7-kernel).
 
 `pl` is also contract-*adjacent*: it is a private cell ([x86.s:890](../kernel/x86.s)), but its
 value at trap time is captured into `struct trap.pl` (reg.h:24) and tested by `BASEPRI()`
-(param.h:145) in `clock.c`.
+(param.h:145) in `clock.c`. On BESM-6 the frame carries no priority slot and `BASEPRI(x)` is
+permanently `(0)` — see §1.
 
 ### Internal globals and data tables (private to `x86.s`)
 
@@ -531,17 +772,18 @@ change with the device set.
 
 | routine(s) | effort on BESM-6 |
 |------------|------------------|
-| `bcopy`, `bzero` | **trivial** — word-count copy/zero loops (mind 6 chars/word) |
+| `bcopy`, `bzero` | **done** — renamed `wcopy`/`wzero` and they take a **word** count, converted by `btow()` at every call site, so the loop has no six-chars-per-word tail |
 | `spl0`…`spl7`, `splx` | **done** — two levels, not eight, and the knob is **БлПр** (via `cli`/`sti`), not МГРП, which is a source enable armed once by `intrinit()`. Putting the level in the mode word is what lets `выпр` restore it on a gate return, as the PDP-11's `rtt` does |
-| `addupc` | **easy** — same histogram logic, adjust fixed-point scale and word addressing |
-| `cli`, `sti` | **easy** — global interrupt disable/enable |
-| `fubyte`/`fuword`/`subyte`/`suword`, `copyin`/`copyout` | **moderate** — need a new `nofault`-style expected-fault recovery in the BESM-6 trap handler; byte variants emulate sub-word access via word RMW |
+| `addupc` | **still a stub**, so `profil(2)` is inert — same histogram logic when wanted, adjusting the fixed-point scale and word addressing |
+| `cli`, `sti` | **done** — [psw.s](../kernel/psw.s); a read-modify-write of БлПр in ПСВ, never a `vtm`, and they now carry the whole interrupt priority level |
+| `fubyte`/`fuword`/`subyte`/`suword`, `copyin`/`copyout` | **done** — [usermem.s](../kernel/usermem.s); **no `nofault` recovery was needed**, validation is `useracc()` up front. No window either: the loop toggles БлП per word through the user map that is already loaded. Byte variants do RMW, and mind the fat-pointer marker bit |
+| `copyseg`/`clearseg`, `uflush`/`uload` | **done** — [seg.s](../kernel/seg.s), [uarea.s](../kernel/uarea.s); the characteristic BESM-6 shape, a two-page window bracket with a БРЗ drain either side (§4.4a). No x86 counterpart |
 | `save`, `resume` | **done (task 16)** — [kernel/switch.s](../kernel/switch.s); nine slots (r1–r7, r13, r15), and `resume()` switches the **u-area**, not the address space: it never writes РП (see below) |
 | `idle` | **done (task 16)** — no wait-for-interrupt exists, so it is a spin released by `extintr()`; written in C, and `waitloc` is deleted in favour of the `idling` flag |
-| `savfp`/`restfp`/`stst` | **rewrite** — BESM-6 float context (non-IEEE-754), no 108-byte frame; may shrink to near-nothing |
-| `inb`/`outb`/`insw`/`outsw` | **replace** — BESM-6 has no x86 port space; use channel/device-register access; driver layer rewritten anyway |
-| `ld_cr0/2/3`, `invd` | **replace/drop** — target-specific status registers; `invd` becomes the MMU's translation-invalidate (or a no-op) |
-| `_start`, trap/IRQ/syscall dispatch (§2–3) | **rewrite wholesale** — BESM-6 bring-up, its own trap and extracode (`$77 N`) mechanism; reproduce the *outputs* (`phymem`, mapped u-area/stack, live trap vector, first user-mode entry) and the *shape* (`struct trap` frame, `nofault` check, `runrun` reschedule) |
+| `savfp`/`restfp`/`stst` | **deleted** — the x86 FP state went with the stage-1 bss cleanup; the mode register R is saved by the gates instead (§3), and there is no separate float context to preserve |
+| `inb`/`outb`/`insw`/`outsw` | **deleted**, all seven — a driver issues `033 «увв»` from C via `__besm6_ext`; no assembly stands in for them |
+| `ld_cr0/2/3`, `invd` | **deleted** — `invd` is not even a no-op: writing РП refills the TLB in the same instruction, so there is nothing to invalidate and no call site to justify |
+| `_start`, trap/IRQ/syscall dispatch (§2–3) | **done** — `_start` is two instructions (the machine resets into the kernel's own mode) with bss-zero and `phymem` moved into C; dispatch is four gates, two save disciplines and one shared exit (§3). `nofault` has no counterpart; `runrun` survives |
 
 Remember the calling-convention shift when re-coding any of these: BESM-6 passes arguments in
 direct order with the last argument in the accumulator, `r14` = negative arg count, `r13` =

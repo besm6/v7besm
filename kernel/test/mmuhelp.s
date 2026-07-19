@@ -15,8 +15,8 @@
 //
 // Everything between the two `vtm's runs out of registers.  While mapping is on the
 // kernel's own data is not addressable -- the addresses mean something else -- so
-// there is nothing here but the one load or store.  This is the shape kernel/besm6.S
-// will use for copyin/copyout (task 12).
+// there is nothing here but the one load or store.  This is the shape the real
+// copyin/copyout use; see kernel/usermem.s.
 
         .text
 

@@ -28,7 +28,7 @@
 //     time reads the sentinel.  On the third fault trap() calls halt() with the fault mask.
 //
 // The forged values, the map and the slot addresses are shared with utrap.c through these EQUs;
-// keep the two in step.  See kernel/TODO.md task 15c.
+// keep the two in step.  See doc/Kernel_Assembly_Routines.md section 3 for the gates.
 
 #include "sys/besm6dev.h"       // SPSW_* mode-word bits (shared with kernel/besm6.S)
 

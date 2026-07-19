@@ -10,7 +10,7 @@
  * against a hand-built process, and it cannot link trap.c -- which drags in printf,
  * the signal machinery and grow(), and with them the rest of the kernel.  Keeping
  * the marshalling here is what lets the test exercise the real thing rather than a
- * copy of it.  (kernel/TODO.md 15d proposed trap.c; this is the recorded deviation.)
+ * copy of it.  (The plan had put this in trap.c; linking usys is what moved it.)
  *
  * An extracode never reaches trap(): the hardware does not funnel it through 0500.
  * It vectors э50-э77 straight to 0550-0577, one word each, and hands the handler
@@ -129,7 +129,7 @@ void syscall(void)
     u.u_r.r_val2 = 0;
     u.u_ap       = u.u_arg;
     if (save(u.u_qsav)) {
-        /* the EINTR path; inert until save()/resume() land in task 16 */
+        /* the EINTR path: a signal longjmp'd back here out of sleep() */
         if (u.u_error == 0)
             u.u_error = EINTR;
     } else {

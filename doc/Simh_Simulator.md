@@ -195,6 +195,14 @@ sim> run
 See [Linker_Manual.md](Linker_Manual.md) and [File_Magic.md](File_Magic.md) for the object and
 executable format.
 
+> **A recent simulator is required to load this repository's kernel.** Words are stored with a
+> 2-bit instruction/number tag, and fetching a data-tagged word raises *«контроль команды»* (see
+> [Machine model and word format](#machine-model-and-word-format)). The a.out loader used to tag
+> const-segment words as instructions only in `0500..0547` — which covers the two interrupt vectors
+> but **not** the extracode vectors at `0550`–`0577`, so those loaded as *data* and the first
+> system call check-halted. `BESM6/besm6_sys.c` now covers `0500..0577`. A simulator predating that
+> fix will load [`kernel/unix`](../kernel/unix) and fail on its first extracode.
+
 Load and start:
 
 ```

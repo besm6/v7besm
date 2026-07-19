@@ -36,7 +36,7 @@
 //     report() (usys.c) checks the stored words and halts with a mask.
 //
 // The forged values, the map and the slot addresses are shared with usys.c through these EQUs;
-// keep the two in step.  See kernel/TODO.md task 15d.
+// keep the two in step.  See doc/Kernel_Assembly_Routines.md section 3 for the gates.
 
 #include "sys/besm6dev.h"       // SPSW_* mode-word bits (shared with kernel/besm6.S)
 

@@ -12,7 +12,7 @@
  *
  * What one tick has to produce, and why each check is the right one:
  *   * THE CALLOUT FIRES.  timeout(tick_fired, MAGIC, 1) is armed before entry, so the tick's
- *     `p2->c_time--' takes it to zero and clock() calls it.  This is TODO.md's done-condition.
+ *     `p2->c_time--' takes it to zero and clock() calls it.  This is what the test exists for.
  *   * u_utime, NOT u_stime.  The interrupt came from user mode, so USERMODE(tr->spsw) must be true
  *     -- which is only so if clock() read the RIGHT frame, the one the gate published.
  *     `u_stime == 0' is the sharpest single check in the file: it fails if the frame pointer is

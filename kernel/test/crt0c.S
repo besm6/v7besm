@@ -28,7 +28,7 @@
 //     report() (uclock.c) checks what the tick did and halts with a mask.
 //
 // The forged values, the map and the sentinel addresses are shared with uclock.c through these
-// EQUs; keep the two in step.  See kernel/TODO.md task 15e.
+// EQUs; keep the two in step.  See doc/Kernel_Assembly_Routines.md section 3 for the gates.
 
 #include "sys/besm6dev.h"       // SPSW_* mode-word bits (shared with kernel/besm6.S)
 

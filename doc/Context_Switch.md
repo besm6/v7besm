@@ -15,11 +15,13 @@ that get it done. Where the hardware reference is derived from the
 [besm6/simh](https://github.com/besm6/simh/tree/master/BESM6/) sources, this is derived from
 software that ran on the real machine for two decades.
 
-It is the reference for the unwritten half of [`kernel/besm6.S`](../kernel/besm6.S) — the trap gate
-and `save()`/`resume()`, tasks 15 and 16 of [`kernel/TODO.md`](../kernel/TODO.md) — and it
-complements [Kernel_Assembly_Routines.md](Kernel_Assembly_Routines.md), which specifies those
-routines' contracts with their C callers. That document says *what* each routine must do; this one
-shows *how* a kernel that worked actually did it.
+It was written as the reference for the then-unwritten trap gate and `save()`/`resume()`, and **that
+work is now done** — [`kernel/besm6.S`](../kernel/besm6.S) and [`kernel/switch.s`](../kernel/switch.s)
+implement it, and §14 records what the port took from Dubna, what it did differently, and the one
+idiom here that turned out to be unnecessary. It complements
+[Kernel_Assembly_Routines.md](Kernel_Assembly_Routines.md), which specifies those routines' contracts
+with their C callers. That document says *what* each routine must do; this one shows *how* a kernel
+that worked actually did it.
 
 > **A note on the octal radix and bit numbering.** Some numbers below are **octal**, and some decimal.
 > Please be aware. BESM-6 numbers bits **right-to-left starting at 1**, so bit 1 is the least significant
@@ -557,8 +559,8 @@ way to flip the mode bits. So:
   `copyin`/`copyout` free.
 
 `dubna.dd:15881-15887` uses exactly that bracket to load the address-break registers through the
-user's mapping, and it is the same bracket [`kernel/TODO.md`](../kernel/TODO.md) specifies for our
-own user-access family.
+user's mapping, and it is the same bracket our own user-access family is built on — see
+[`kernel/usermem.s`](../kernel/usermem.s), which toggles БлП per word around each user access.
 
 ---
 
@@ -1035,12 +1037,16 @@ the *pending* semantics are carried entirely by СПСВ's `SPSW_MOD_RK`.
 
 ## 14. What this means for the Unix port
 
-### The finding: we are not saving R or Y
+**This section is now a record, not a plan.** It began as an audit of a stub `intrgate` that saved
+the accumulator and r8–r14 and little else; the four gaps it found are closed, and the gates are
+built. What follows is what each finding turned into, because the *reasoning* is worth keeping even
+where the code has settled — and because one of Dubna's idioms, recommended here at the time, turned
+out not to be needed.
 
-[`kernel/besm6.S:205-238`](../kernel/besm6.S#L205-L238) — the `intrgate` stub — saves the accumulator
-and r8–r14. It does **not** save the mode register R, and it does **not** save Y. Dubna saves both
-on every single interrupt (`RTE`/`XTR` for R, `YTA` + the `AEX` side-effect for Y), and it is not
-being fussy:
+### The finding: the hardware never saves R or Y
+
+The original stub saved neither the mode register R nor Y. Dubna saves both on every single
+interrupt (`RTE`/`XTR` for R, `YTA` + the `AEX` side-effect for Y), and it is not being fussy:
 
 - **The C ABI clobbers R.** [Besm6_Runtime_Library.md:86](Besm6_Runtime_Library.md#L86) states the
   contract outright: *"enter with `NTR 3` / ω unknown, exit with `NTR 3` / ω = logical."* So the
@@ -1051,31 +1057,20 @@ being fussy:
   may hold a live Y — mid-multiply, or between a `счмр` and its use — and `extintr()` will
   destroy it.
 
-The fix mirrors §4 and §7, and the **order in the epilogue is not negotiable** (Y → A → R, for the
-reasons in §7):
+The point generalises past this one register pair, and is worth stating plainly because the old
+comment in the tree said the opposite: **the arithmetic mode does not ride in СПСВ across a trap.**
+SIMH's `op_int_1` and `выпр` both leave RAU alone, so if software does not save R, the resumed user
+runs in the wrong arithmetic mode. Nothing faults; its next floating-point instruction is quietly
+different.
 
-```
-intrgate: atx     sa                  // A first, as the vector does
-        rte     07777               // R -> A
-        atx     sr
-        yta                         // Y -> A
-        atx     srmr
-        ...                         // r8-r14 as today
-        13 vjm  extintr
-        ...                         // r8-r14 as today
-        xta     srmr                // Y back, via the AEX side effect
-        aex                         //   (A is garbage after this — intentional)
-        xta     sa                  // A back (xta does not disturb Y)
-        xtr     sr                  // R back — must be last
-        3 ij
-```
+**Fixed.** The gates save both, and the **restore order is not negotiable** — Y → A → R, for the
+reasons in §7. Note this applies to the *gates*, which interrupt arbitrary code mid-function, and
+**not** to `save()`/`resume()`: the ABI fixes R = 7 at every call boundary, so a switch that happens
+at one is entitled to the R it was entered with. `save()` stores nine slots and no mode register.
 
-Per the decision on this task, **this document only records the gap** — `besm6.S` is unchanged. It
-belongs with task 15 in [`kernel/TODO.md`](../kernel/TODO.md).
+### The C register was a third gap
 
-### The C register is a third gap
-
-The same stub does not save `M[16]` either, and by §13 that is the C register. The race is narrow
+The same stub did not save `M[16]` either, and by §13 that is the C register. The race is narrow
 but real. A device interrupt can land in the one-instruction window between a user `utc` and the
 instruction it modifies. The trap parks `SPSW_MOD_RK` in СПСВ and leaves the value in `M[16]`, both
 of which `intrgate` preserves *by accident* — it never touches СПСВ, and it does not read `M[16]`. But
@@ -1084,27 +1079,15 @@ of which `intrgate` preserves *by accident* — it never touches СПСВ, and i
 `M[16]`**. The closing `3 ij` then re-arms from the clobbered value (§13), and the resumed user
 instruction is modified by the wrong address. Nothing faults; a load just reads the wrong word.
 
-The fix is the §13 idiom — read register 020 into a save cell on entry, alongside A and r8–r14, and
-put it back with `ati 020` before `3 ij` (a plain move, which does not arm — §13):
+**Fixed** by the §13 idiom — read register 020 into the frame on entry and put it back with
+`ati 020` before the exit (a plain move, which does not arm). It has a slot of its own, `CREG`, in
+[`reg.h`](../include/sys/reg.h).
 
-```
-intrgate: atx     sa
-        ...                         // R, Y as above; r8-r14 as today
-        ita     020                 // C register -> A
-        atx     sc
-        13 vjm  extintr
-        xta     sc                  // C register back (ati does not arm the modifier)
-        ati     020
-        ...                         // Y, A, R restore as above
-        3 ij
-```
+The positive corollary held exactly as predicted: because the gates now fill the **full** register
+file *and* СПСВ, a pending `utc` is preserved by code that never mentions it — the same way Dubna's
+`FULSAV`/`BOCИПД` get it for free. The gap only ever existed because the stub saved a subset.
 
-Recorded, not applied. The positive corollary is the §13 point restated for our side: once the trap
-frame and `save()`/`resume()` (tasks 15/16) save the **full** register file *and* СПСВ, a pending
-`utc` is preserved with no code that mentions it — exactly as Dubna's `FULSAV`/`BOCИПД` get it. The
-gap exists only in `intrgate`, which saves a *subset* of the registers.
-
-### The stack is a fourth gap
+### The stack was a fourth gap
 
 The three above are registers the stub forgets to *save*. This one is a stack the stub forgets to
 *switch*, and it is the one Dubna does not let us copy verbatim — because the two kernels place the
@@ -1114,9 +1097,8 @@ The PDP-11 v7 that Unix came from switched to the kernel stack for free: SP is b
 mode, so a trap from user mode lands with SP already pointing at the per-process kernel stack. **The
 BESM-6 has one stack register, М15, shared across modes.** Dubna solves this in the §4 prologue — `ITA
 15` / `15,VTM,SAVI15` saves the interrupted М15 and repoints it at `SMASAV`, so the handler runs on a
-supervisor scratch, not on whatever the interrupted code was using. `intrgate` does neither: it never
-touches r15 and relies on the note at [`besm6.S:183-186`](../kernel/besm6.S#L183) that "extintr()
-preserves r1–r7 and r15 for us (that is the ABI)."
+supervisor scratch, not on whatever the interrupted code was using. The original stub did neither: it
+never touched r15 and relied on the ABI note that "extintr() preserves r1–r7 and r15 for us."
 
 That reliance holds only when r15 *already* names the kernel stack — i.e. when the interrupt nested
 inside the kernel (case 3 of the four-case analysis). When the interrupt lands in **user** code (case
@@ -1133,49 +1115,46 @@ supervisor mode"), so `СПСВ & 014` (РежЭ | РежПр) is zero **iff** t
 Test the supervisor bits, **not** БлП: `copyin`/`copyout` clear БлП while staying in supervisor mode,
 so a БлП test would misclassify a fault taken mid-`copyin` and reset r15 out from under the syscall.
 
-The corrected `intrgate`, folding in all four gaps (R, Y, M[16], and the stack) — the register save/
-restore order is the §7 rule, the r15 and C-register restores go before the final `xta sa` because they
-clobber A, and the two `выпр`-doesn't-reload registers (r8–r14, r15) are put back by hand:
+**Fixed**, and the `СПСВ & 014` test above is the one the gates use verbatim. Two things about it
+are worth carrying forward:
 
-```
-intrgate: atx     sa                  // A first, as the vector does
-        rte     07777               // R   -> A
-        atx     sr
-        yta                         // Y -> A
-        atx     srmr
-        ita     020                 // C register (M[16]) -> A
-        atx     sc
-        ita     017                 // interrupted r15 -> A
-        atx     s15                 //   one static cell: interrupts are blocked, no re-entry
-        ita     027                 // СПСВ -> A
-        aax   #(014)                // isolate РежЭ | РежПр (RUU_EXTRACODE|RUU_INTERRUPT)
-        u1a     extk                // nonzero -> nested in the kernel: keep r15
-     15 vtm     [ustkbase]          // zero -> from user: r15 := kernel stack base (~076214)
-extk:   ita     010                 // r8-r14 as today
-        atx     s8
-        ...                         // r9..r13 unchanged
-        ita     016
-        atx     s14
+- **The switch is conditional only in `intrgate`.** `trapgate` and `sysgate` switch unconditionally,
+  because a supervisor fault is a kernel bug — the user-access routines validate with `useracc()`
+  and there is no expected-fault path anywhere — so those two doors never nest and their frame is
+  always at the link-time constant `[ustkbase]`. `intrgate` genuinely does nest, so its frame base
+  is a run-time value.
+- **A conditional frame base has to be *published*, not rediscovered.** `clock()` cannot locate the
+  frame the way `trap()` does: on a tick nested inside a syscall, `u.u_stack` holds the *syscall's*
+  frame, whose СПСВ says "user" — so a `USERMODE(spsw)` guard passes, and the tick is charged to
+  user time and profiled at a stale PC. `u.u_ar0` is also the wrong cell for it (the store must be
+  unconditional, so it clobbers an interrupted syscall's `u_ar0`, which `exec()` and `sendsig()`
+  write *through* from paths that sleep). `intrgate` therefore stores its frame base in a private
+  `intrframe` cell, in two instructions.
 
-     13 vjm     extintr             // intr.c: read ГРП, dispatch, dismiss
+### The gates as built
 
-        xta     s14                 // r8-r14 back, as today
-        ati     016
-        ...                         // r13..r9 unchanged
-        xta     s8
-        ati     010
-        xta     s15                 // interrupted r15 back (before the A restore)
-        ati     017
-        xta     sc                  // C register back (ati does not arm the modifier)
-        ati     020
-        xta     srmr                // Y back, via the aex side effect
-        aex                         //   (A is garbage after this -- intentional)
-        xta     sa                  // A back (xta does not disturb Y)
-        xtr     sr                  // R back -- must be last
-      3 ij                          // выпр: restore the mode word, jump via M[033]
-```
+Four doors, not the three Dubna has, because the syscall extracode and the catch-all for every other
+extracode are separate vectors:
 
-Recorded, not applied, like the three above; it belongs with task 15.
+| gate | vector | discipline |
+|---|---|---|
+| `trapgate` | `0500` | full save; unconditional stack switch |
+| `intrgate` | `0501` | full save; conditional switch, publishes `intrframe` |
+| `sysgate` | `0577` (э77) | full save (see below); unconditional switch |
+| `badext` | `0550`–`0576` | as `sysgate`; posts SIGINS |
+
+The frame is filled with Dubna's `xts`/`its` store-and-load pipeline (§6), whose only scratch is the
+accumulator — so M1–M14 and the return register are read **live**, before the C call can clobber
+anything. Only the five registers the pipeline cannot reach are spilled to temp cells first: A, R, Y,
+M[16] and the pipeline's own M15. M[16] must be spilled *before* the stack-switch `vtm`, whose `utc`
+would otherwise clobber it, and the cells must be addressed **bare** rather than `< sym >`-escaped,
+because an escape emits a `мода`/`utc` that loads the very register being saved.
+
+Where they differ is smaller than expected. **`sysgate` is `trapgate` with one instruction changed**
+— the fill reads `its ERET` where the fault gate reads `its IRET` — and `badext` is a third verbatim
+copy of the block. Sharing a body behind a discriminator would not have paid: nothing before the
+frame is filled can tell the doors apart, since the hardware identifies an extracode purely by which
+vector word it landed on.
 
 ### What Dubna confirms we already have right
 
@@ -1188,33 +1167,45 @@ Recorded, not applied, like the three above; it belongs with task 15.
 - **`.org 0500`.** Dubna had no origin directive and counted words by hand, checking itself with
   `*NNN:` labels. Our assembler enforces it. Nothing to change.
 
-### What to steal
+### What was stolen, and the one thing that was not
 
-- **`ITS`/`STI` are the register-save idiom** (§1, §6). One instruction per register, no scratch
-  cell, the accumulator as the pipeline register. This is what `save()`/`resume()` should be built
-  from — not a loop, and certainly not `vtm`+`atx` pairs.
-- **`OUTMACRO`'s two-instruction door-merge** (§8) applies directly to task 15's shared exit. Copy
-  ERET into IRET and let one `выпр` serve both the syscall gate and the interrupt gate, rather than
-  branching on the door. The bonus — the syscall return inheriting the interrupt epilogue's pending
-  check — is worth having on its own.
-- **The two-tier save** (§4, §6). Most interrupts never park a task, so the prologue saves the
-  minimum and the full 24-word context is materialised only when the scheduler actually needs it.
-  Our `intrgate` already has this shape; it just needs R, Y and the C register (§13) added to the
-  short tier.
-- **The internal/external clear asymmetry** (§5). Faults are not queued — clear them all; device
-  interrupts are — clear one.
+- **`ITS`/`STI` are the register-save idiom** (§1, §6) — taken, and it is what the gates' frame fill
+  is built from: one instruction per register, no scratch cell, the accumulator as the pipeline
+  register. Its real value turned out to be a side effect: because the pipeline's only scratch is
+  the accumulator, every register it reaches is captured **live**, which is what makes the "read the
+  return register" trick below work.
+- **The internal/external clear asymmetry** (§5) — taken. Faults are not queued, so clear them all;
+  device interrupts are, so clear one. `trap()` dismisses with `MOD_GRPCLR` so a handled fault bit
+  cannot fire afterwards as a spurious external interrupt.
+- **`OUTMACRO`'s two-instruction door-merge** (§8) — **not needed, and not used.** The advice here
+  was to copy ERET into IRET so one `выпр` could serve both doors. But the frame fill already reads
+  a return register live, so the syscall gate simply reads *the other one*: `sysgate` is `trapgate`
+  with `its ERET` in place of `its IRET`, one instruction, and the shared exit `intret` is reused
+  completely unmodified. Its closing `выпр` returns to user correctly from either door because the
+  `ij` index field selects only *which register holds the PC* — the mode comes from СПСВ either way.
+  The predicted bonus arrived anyway: the syscall return inherits the interrupt epilogue's `runrun`
+  and pending-signal checks for free.
+- **The two-tier save** (§4, §6) — **not adopted.** Dubna saves a minimum in the prologue and
+  materialises the full context only when the scheduler needs it, which is worth real time on a
+  machine where most interrupts never park a task. Our gates fill the whole frame unconditionally.
+  The frame is 21 words rather than Dubna's 24 and the fill is straight-line, so the cost is small
+  and the invariant — *the frame is always complete* — is what lets `trap()`, `syscall()` and
+  `clock()` all read it without asking which door they came in by. Worth revisiting only if the
+  interrupt path ever shows up in a profile.
 
 ### The correspondences
 
 | Dubna | Ours |
 |---|---|
 | ИПЗ, the per-task block | the u-area, [`kernel/TODO.md`](../kernel/TODO.md) "The u-area invariant" |
-| `SAVIND` (§12) | `save()` — [`besm6.S:268`](../kernel/besm6.S#L268), task 16 |
-| `BOCИПД` + `PUTTMP` (§10, §12) | `resume()` — [`besm6.S:276`](../kernel/besm6.S#L276), task 16 |
+| `SAVIND` (§12) | `save()` — [`kernel/switch.s`](../kernel/switch.s) |
+| `BOCИПД` + `PUTTMP` (§10, §12) | `resume()` — [`kernel/switch.s`](../kernel/switch.s); but it switches the **u-area**, not the address space, and never writes РП |
 | `PUTTMP` | `sureg()`, [`kernel/utab.c`](../kernel/utab.c) |
 | the nine-store drain (§11) | `drainbrz()`, [`kernel/brz.s`](../kernel/brz.s) |
-| `RETURN`/`OUTMACRO` (§7, §8) | the trap gate, task 15 |
-| `SAVS16` / `И16`, the C register (§13) | an `M[16]` slot in the trap frame and the new `reg.h` |
+| `FULSAV`/`RETURN` (§6, §7) | `trapgate` … `intret`, [`kernel/besm6.S`](../kernel/besm6.S) |
+| `OUTMACRO` (§8) | *nothing* — one instruction in the fill replaces it; see above |
+| `BADMACRO` (§3) | `badext`, the `0550`–`0576` catch-all |
+| `SAVS16` / `И16`, the C register (§13) | the `CREG` slot in the trap frame, [`include/sys/reg.h`](../include/sys/reg.h) |
 | `SMASAV` | the trap frame on the kernel stack at `076000` |
 
 **One difference that matters.** Each Dubna task has its **own** ИПЗ page, separately allocated

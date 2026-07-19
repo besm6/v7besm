@@ -24,8 +24,8 @@
 // The forged values, the map and the sentinels are shared with uintr.c through these EQUs and
 // the assumptions in the comments; keep the two in step.
 //
-// This harness (forge-user entry + sureg map) is what tasks 15c/15d reuse for the trap and
-// syscall gates.  See kernel/TODO.md task 15a and doc/Context_Switch.md §14.
+// This harness (forge-user entry + sureg map) is what crt0t.S and crt0s.S reuse for the trap
+// and syscall gates.  See doc/Context_Switch.md §14.
 
 #include "sys/besm6dev.h"       // SPSW_* mode-word bits (shared with kernel/besm6.S)
 
