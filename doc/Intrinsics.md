@@ -365,8 +365,11 @@ serve as the mask. They are not interchangeable, and the choice matters:
   extracode forces БлПр on at the vector and `выпр` restores it from СПСВ, so returning through a
   gate re-establishes the level by itself, exactly as the PDP-11's `rtt` does when it reloads the
   priority field of PS.
-* **МГРП is the source enable**, armed once at boot and never rewritten. `grp & mgrp` in the
-  dispatcher then means "sources this kernel can service", which is what that mask was always for.
+* **МГРП is the source enable.** `grp & mgrp` in the dispatcher means "sources this kernel is
+  listening to right now", which is what that mask was always for. It is *not* constant: boot arms
+  the sources that are always live, and a driver arms its own completion bit for the length of one
+  exchange (`mgrpon()`/`mgrpoff()`, below). It is still not the priority — `setipl()` never
+  writes it.
 
 Putting the level in МГРП instead looks equivalent and is not: the gates hold БлПр from the vector,
 so an `spl0()` that only opened МГРП would leave БлПр blocking everything, and **no interrupt could
@@ -397,7 +400,22 @@ static int setipl(int s)            /* the level itself is БлПр, via psw.s *
     if (s) cli(); else sti();
     return old;
 }
+
+void mgrpon(unsigned bits)          /* arm a device's bits for one exchange */
+{
+    int s = spl7();
+    mgrp |= bits;                   /* the shadow first: МГРП is write-only, and a */
+    __besm6_mod(MOD_MGRP, mgrp);    /*   driver writing its own bits would drop */
+    splx(s);                        /*   every other device's */
+}
 ```
+
+`mgrpoff()` is the same with `mgrp &= ~bits`. The pair exists because of the mass-storage
+**wired** bits (§ *Wired bits* in [Besm6_Peripherals.md](Besm6_Peripherals.md)): a "free" bit
+means the channel is **idle**, so it stands whenever no transfer is running, and `002 037`
+cannot lower it. Armed outside a live exchange, one such bit re-enters the dispatcher forever.
+So a driver arms its bit *after* issuing the control word — issuing it is what lowers the bit —
+and disarms it in the handler before `iodone()`. See §6.3 for the exchange itself.
 
 Note `mgrp` is `unsigned`, not `int`: ГРП bit 48 exists and would not survive a 41-bit type. And it
 is a shadow because МГРП, like РП and РЗ, is write-only.
@@ -411,7 +429,7 @@ Read ГРП, find the highest pending unmasked bit, dismiss it:
 
 ```c
 unsigned grp = __besm6_mod(0237, 0);          /* 002 0237 -- read ГРП */
-unsigned pending = grp & ipl[cur_ipl];
+unsigned pending = grp & mgrp;                /* the shadow of МГРП; see §6.1 */
 
 if (pending) {
     /* anx numbers from the MSB: 1 = bit 48, 48 = bit 1. */
@@ -421,9 +439,14 @@ if (pending) {
     dispatch(n);
 
     /* Dismiss it.  A ZERO bit in the accumulator clears the corresponding
-     * ГРП bit, so write the complement -- and note that a wired bit will
-     * survive this and go down only when its device is given a new command. */
+     * ГРП bit, so write the complement. */
     __besm6_mod(037, ~b);                       /* 002 037 -- clear ГРП */
+
+    /* A WIRED bit survives that and goes down only when its device is given a
+     * new command, so a dispatcher that loops must not assume the clear took.
+     * Probing is cheaper than tabulating which bits are wired: */
+    if (__besm6_mod(0237, 0) & b)
+        mgrpoff(b);                             /* stop listening instead */
 }
 ```
 

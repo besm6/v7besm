@@ -60,9 +60,16 @@ void clock(struct trap *tr);
  *   exactly what the PDP-11's `rtt' does when it reloads the priority field of PS.  МГРП,
  *   being a separate write-only register outside the mode word, does nothing of the kind.
  *
- *   МГРП is the SOURCE ENABLE, armed once by intrinit() with IRQ_ON and never rewritten.
- *   extintr()'s `grp & mgrp' then means "sources this kernel can service", which is what
- *   that mask was always for.
+ *   МГРП is the SOURCE ENABLE.  extintr()'s `grp & mgrp' means "sources this kernel is
+ *   listening to right now", which is what that mask was always for.  It is NOT constant:
+ *   intrinit() arms the sources that are always live (IRQ_ON), and a driver arms its own
+ *   completion bit for the duration of one exchange with mgrpon()/mgrpoff() below.  Task
+ *   18b.2 in kernel/TODO.md is why -- the mass-storage "free" bits are WIRED and mean
+ *   IDLE, so one left standing in МГРП wedges extintr() the moment the device goes quiet.
+ *
+ * setipl() still does not touch МГРП, and must not start to.  The level is БлПр alone;
+ * making it a per-level МГРП table again would cost a 002 036 write on every spl() and buy
+ * nothing over two levels -- and it is the arrangement that failed, below.
  *
  * It used to be the other way round -- setipl() rewrote МГРП and nothing ever touched БлПр
  * -- and the two mechanisms fought: the gates hold БлПр from the vector, so spl0() opened
@@ -70,9 +77,13 @@ void clock(struct trap *tr);
  * at all.  That was invisible while the only interrupts arrived in user mode, and became
  * load-bearing the moment idle() needed to spin waiting for one.
  *
- * IRQ_ON is the set of sources this kernel can currently service; it grows a bit per
- * driver.  It is unsigned because ГРП is 48 bits wide and a signed int on this target
- * holds only 41 of them.
+ * IRQ_ON is the set of sources armed at BOOT and left armed -- the ones that are always
+ * live, with no exchange to bracket them.  It is not "every source this kernel can
+ * service": a device whose interrupt means something only while a transfer is running
+ * arms itself through mgrpon() instead, and none of the mass-storage completion bits may
+ * ever appear here (see the comment over them in sys/besm6dev.h).
+ *
+ * Unsigned because ГРП is 48 bits wide and a signed int on this target holds only 41.
  */
 #define IRQ_ON (GRP_SLAVE | GRP_TIMER)
 
@@ -95,11 +106,11 @@ static int setipl(int s)
 }
 
 /*
- * Arm the interrupt sources this kernel can service.  Called once from main(), before the
- * first spl0(); after that МГРП never changes and the priority rides on БлПр alone.
+ * Arm the always-live interrupt sources.  Called once from main(), before the first
+ * spl0().  After this the priority rides on БлПр alone; МГРП changes only through
+ * mgrpon()/mgrpoff(), and only for the length of one exchange.
  *
- * Separate from clkstart() because it is not the clock's business: every driver's sources
- * are in IRQ_ON, and a driver added later grows that constant rather than writing МГРП.
+ * Separate from clkstart() because it is not the clock's business.
  */
 void intrinit(void)
 {
@@ -194,6 +205,38 @@ void mprpon(unsigned bits)
 }
 
 /*
+ * Let a device's ГРП bits through, and shut them off again.  Same contract as mprpon()
+ * and the same reason for existing -- МГРП is a write-only 48-bit overwrite with no read
+ * address, so a driver writing its own bits would drop every other device's.
+ *
+ * Unlike ПРП, these come in PAIRS around one exchange.  A mass-storage completion bit is
+ * WIRED and means "the channel is idle", so it stands whenever no transfer is running:
+ * armed outside an exchange it would fire immediately, again, and forever, and extintr()
+ * cannot dismiss it (only a new command to the device can).  So a driver arms its bit
+ * after issuing the control word -- issuing it is what lowers the bit -- and disarms it in
+ * the handler, before iodone().  See doc/Besm6_Peripherals.md, "Wired bits".
+ */
+void mgrpon(unsigned bits)
+{
+    int s;
+
+    s = spl7();
+    mgrp |= bits;
+    __besm6_mod(MOD_MGRP, mgrp);
+    splx(s);
+}
+
+void mgrpoff(unsigned bits)
+{
+    int s;
+
+    s = spl7();
+    mgrp &= ~bits;
+    __besm6_mod(MOD_MGRP, mgrp);
+    splx(s);
+}
+
+/*
  * A peripheral interrupt.  Ask every device that can raise one whether it was them;
  * each clears its own ПРП bits.  As more drivers are ported this grows a line each.
  */
@@ -221,14 +264,17 @@ static void prpintr(void)
  * the interval timer free-runs, so the next tick would re-enter this function immediately
  * and keep doing so.  Nothing in the loop below wants delivery open, either: every handler
  * it calls raises the level (spl5/spl1, both of which only ever SET БлПр), and `grp & mgrp'
- * no longer depends on the level at all now that МГРП is a constant source mask.  That is
- * also why the repair moved to the bottom -- it used to sit at the top of the loop precisely
- * because `& mgrp' could otherwise mask out a device that was pending all along.
+ * does not depend on the level -- МГРП is a source mask, not a priority.  That is also why
+ * the repair moved to the bottom -- it used to sit at the top of the loop precisely because
+ * `& mgrp' could otherwise mask out a device that was pending all along.
+ *
+ * mgrpoff() below is called from inside this loop and goes through spl7()/splx(), so it
+ * moves `curipl' too; the repair at the bottom covers that as well.
  */
 void extintr(void)
 {
     int s = curipl;
-    unsigned grp;
+    unsigned grp, bit;
 
     for (;;) {
         grp = __besm6_mod(MOD_GRP, 0) & mgrp;
@@ -253,11 +299,26 @@ void extintr(void)
             continue;
         }
         /*
-         * Anything else: dismiss the highest pending bit -- anx numbers from the top
+         * Anything else: get rid of the highest pending bit -- anx numbers from the top
          * of the word, 1 = bit 48 -- and go round again, so that a bit nobody handles
          * cannot spin here forever.
+         *
+         * Dismissing it is not always possible.  The wired bits of ГРП are live wires
+         * from the device rather than flip-flops, and MOD_GRPCLR silently does nothing to
+         * them: the hardware clears only `GRP &= ACC | GRP_WIRED_BITS'.  Clearing one and
+         * looping is the forever this arm exists to prevent.
+         *
+         * So probe rather than tabulate: clear it, read ГРП back, and if the bit is still
+         * standing take it out of МГРП instead.  A table of wired bits would have to be
+         * kept in step with the machine (there are eleven, and this kernel can raise four
+         * -- see sys/besm6dev.h), and it would still miss a level-driven source whose
+         * device nobody cleared.  The probe catches both, and it costs one extra read on
+         * a path that is already the path where something has gone wrong.
          */
-        __besm6_mod(MOD_GRPCLR, ~((unsigned)1 << (48 - __besm6_anx(grp, 0))));
+        bit = (unsigned)1 << (48 - __besm6_anx(grp, 0));
+        __besm6_mod(MOD_GRPCLR, ~bit);
+        if (__besm6_mod(MOD_GRP, 0) & bit)
+            mgrpoff(bit);
     }
 
     /* Put the shadow back where the handlers found it -- see the header above. */

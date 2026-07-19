@@ -21,7 +21,9 @@
  *      The unit select is a one-hot mask in inverted bit order: bit 8 is unit 0.
  *
  * Completion arrives as GRP_CHAN3_FREE or GRP_CHAN4_FREE -- wired bits; see the note in
- * sys/besm6dev.h and task 18b.2.  A status register at 033 4003 / 033 4004 reports
+ * sys/besm6dev.h.  Bracket one exchange with mgrpon()/mgrpoff() (task 18b.2): arm after
+ * step 1, which is what lowers the free bit, and disarm in mdintr() before iodone().
+ * Arming after step 2 races the transfer.  A status register at 033 4003 / 033 4004 reports
  * errors, which the drum has no equivalent of (task 18b.5).
  *
  * What is here now is the driver's public surface only -- the entry points conf.c wires

@@ -312,31 +312,58 @@ How it turned out, where that differed from the sketch:
   those flags live only in the commented-out i486 validation block. Nothing here was caught by the
   compiler, and prototype changes have to be got right by reading.
 
-**18b.2. ГРП: the free bits are wired, and МГРП has to become dynamic.** A prerequisite of both
-drivers, and the one place the existing interrupt design has to give.
+**18b.2. ГРП: the free bits are wired, and МГРП has to become dynamic — DONE.** A prerequisite of
+both drivers, and the one place the existing interrupt design had to give.
 
-`intr.c` states an invariant that this task breaks: *"МГРП is the SOURCE ENABLE, armed once by
-`intrinit()` with `IRQ_ON` and never rewritten."* Two hardware facts make that untenable for mass
-storage:
+`intr.c` stated an invariant this task broke: *"МГРП is the SOURCE ENABLE, armed once by
+`intrinit()` with `IRQ_ON` and never rewritten."* Two hardware facts made it untenable for mass
+storage: the completion bits are **wired** (`MOD_GRPCLR` cannot lower them — SIMH clears
+`GRP &= ACC | GRP_WIRED_BITS`), and **"free" means idle**, so such a bit stands whenever no
+transfer is running. `IRQ_ON` keeps its value and changes meaning: the sources armed at *boot*,
+never "every source this kernel can service". `mgrpon()`/`mgrpoff()` mirror `mprpon()`, for the
+same reason (write-only whole-word register, so a driver writing it directly drops every other
+device's bits), and a driver brackets one exchange with them.
 
-* **The completion bits are wired** (`GRP_WIRED_BITS` — see § *Wired bits*). `__besm6_mod(MOD_GRPCLR,
-  ~bit)` cannot lower them; only issuing a new command to the device does. `extintr()`'s fallback
-  arm — *"dismiss the highest pending bit and go round again, so that a bit nobody handles cannot
-  spin here forever"* — is therefore exactly wrong for these bits: it clears nothing and loops
-  forever. Whatever the mechanism, it must be tested by *reaching* that arm with a wired bit up.
-* **"Free" means idle, so the bit is up whenever no transfer is running.** Put
-  `GRP_DRUM1_FREE` in `IRQ_ON` permanently and the first completed exchange wedges the machine in
-  `extintr()`.
+**Verified by** a clean `make` (`060704`, was `060653` — 21 words), the new `test/ugrp`, and all
+**12** `test/` SIMH tests passing. `uclock` needed no change: its `mgrp_seen == (GRP_SLAVE |
+GRP_TIMER)` assertion still holds exactly, because nothing in that test arms a device bit — which
+is the invariant worth keeping, not a check to relax.
 
-So: an `mgrpon()`/`mgrpoff()` pair mirroring `mprpon()` (same reasoning — the register is write-only
-and a driver writing it directly would drop every other device's bits), with the driver arming its
-own completion bit as it starts an exchange and disarming it in the handler. `mgrp` is already the
-shadow. Alternatively `extintr()` grows an explicit wired-bit case; decide which and write down why.
-Both are `__besm6_mod(MOD_MGRP, ...)`, one instruction.
-
-* **Done when** a forged wired bit left up in ГРП passes through `extintr()` without spinning.
-* **Bite test:** with the fix removed, the test must hang — `step 50000000` turns that into a
-  failure, per the notes at the end of this file.
+How it turned out, where that differed from the sketch:
+- **Both halves, not either/or.** The sketch offered the `mgrpon()`/`mgrpoff()` pair *or* an
+  explicit wired-bit case in `extintr()`. They cover different failures. The pair is the
+  mechanism the drivers use; the `extintr()` guard is what makes the done-when reachable at all,
+  since a *forged* bit is by definition one nobody armed correctly, and without the guard the
+  first driver to leak an arm still spins.
+- **The guard is a probe, not a table.** `extintr()`'s fallback arm now clears the bit, re-reads
+  ГРП, and calls `mgrpoff(bit)` if it is still standing. No `GRP_WIRED`-style constant — 18b.1
+  already rejected one as a trap (it would name four of the machine's eleven wired bits). The
+  probe covers all eleven *and* any level-driven source whose device nobody cleared, needs
+  nothing kept in step with the hardware, and costs one extra `002 0237` read on a path where
+  something has already gone wrong.
+- **`setipl()` still does not write МГРП, deliberately.** Making the mask per-level again is the
+  arrangement that already failed once (the gates hold БлПр from the vector, so an МГРП-only
+  `spl0()` masks nothing back on); re-adding it would cost a `002 036` write on every `spl()` and
+  buy nothing over two levels. Written into the design block in `intr.c`.
+- **`test/ugrp` is the simplest test in the directory**, and on purpose: no gate, no user mode, no
+  forged context. It blocks delivery with the real `spl7()` and calls `extintr()` as an ordinary C
+  function, so every ГРП bit arrives exactly where the source says. Part 1 forges
+  `GRP_DRUM1_FREE` (`увв 031`), arms it, and requires `extintr()` to *return* — and checks the bit
+  is **still up in ГРП** afterwards, which is what proves the wired path was the one exercised.
+  Part 2 is the contrast that makes the probe honest: an ordinary flip-flop nobody handles (bit
+  30, имитация) must come **out of ГРП** and **stay armed** in МГРП. A guard that disarmed every
+  unhandled source would pass part 1 and quietly deafen the kernel to any device that glitches.
+- **Bite test run both ways.** With the probe removed, `ugrp` hangs: `step 50000000` expires at
+  `01040`, inside `extintr()`, and the `.ini` fails on the halt PC.
+- **Two comment blocks were already stale before this task, and were fixed with it.** Both
+  described the pre-БлПр design where the level lived in МГРП: `besm6.S`'s "raising the priority
+  is one write of the МГРП mask (002 036)" — it is `cli()`/`sti()` in `psw.s`, a read-modify-write
+  of ПСВ — and `BASEPRI()` in `include/sys/reg.h`, which justified itself with "setipl() leaves
+  МГРП nonzero only at spl0". `BASEPRI(x)` is still `0`, and for a reason that got *stronger*, not
+  weaker: every `splN` above `spl0` sets БлПр, so code holding a raised level cannot be
+  interrupted at all. Only the argument needed replacing. Both now carry the warning that МГРП is
+  a source enable and says nothing about the level — the misreading that produced the original
+  text.
 
 **18b.3. The drum driver (`dev/mb.c`).** Do this one first: it is one `__besm6_ext(EXT_DRUM1, cw)`
 and no command sequence, so it proves the control word, the zone model, the service-word buffer and
@@ -461,7 +488,8 @@ Loose ends the finished work left behind. None blocks 18.
 
 ## Notes for the next standalone SIMH test
 
-Task 18b will want three — one per step 18b.2, 18b.3 and 18b.4. What the seven existing tests cost
+Task 18b wanted three — one per step 18b.2, 18b.3 and 18b.4. `ugrp` is the first and is done;
+`mbtest` and `mdtest` remain. What the existing tests cost
 to get right:
 
 * **`step N`, not `go`.** A broken switch or a lost gate *hangs* rather than failing, and `go` takes

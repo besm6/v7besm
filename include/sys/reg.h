@@ -62,9 +62,13 @@
  * On this machine it is permanently false, and that is a fact about the hardware, not
  * a stub.  The BESM-6 has no priority hierarchy, so this kernel has exactly two levels
  * rather than the PDP-11's eight: interrupts enabled and interrupts blocked (intr.c).
- * An external interrupt is delivered only when БлПр is clear AND ГРП & МГРП is nonzero,
- * and setipl() leaves МГРП nonzero only at spl0 -- so anything clock() interrupts was,
- * by construction, running at base priority.  There is no raised level for it to find.
+ * The level is БлПр, and every splN above spl0 SETS it -- so code holding a raised spl
+ * cannot be interrupted at all, and anything clock() interrupts was, by construction,
+ * running at base priority.  There is no raised level for it to find.
+ *
+ * Note that the other half of the delivery condition, ГРП & МГРП nonzero, says nothing
+ * about the level and must not be read as if it did: МГРП is a source enable that
+ * drivers arm and disarm per exchange (mgrpon()/mgrpoff()), independently of spl.
  */
 #define BASEPRI(x) (0)
 

@@ -14,7 +14,7 @@ NM      = b6nm
 CFLAGS  = -I../../include
 LIBDIR  = $$HOME/.local/share/besm6/lib
 
-PROGS   = hello sctest mmutest uintr utrap usys uclock uswtch usched ugrow biotest
+PROGS   = hello sctest mmutest uintr utrap usys uclock uswtch usched ugrow biotest ugrp
 
 all:    $(PROGS)
 
@@ -32,6 +32,7 @@ test:   $(PROGS)
 	besm6 usched.ini
 	besm6 ugrow.ini
 	besm6 biotest.ini
+	besm6 ugrp.ini
 
 clean:
 	rm -f *.o *.dis *.nm $(PROGS)
@@ -120,6 +121,14 @@ ugrow:  crt0g.o ugrow.o utab.o brz.o seg.o
 # physaddr/useracc/physrange the translation rests on.  See biotest.ini.
 biotest: crt0.o biotest.o bio.o utab.o brz.o
 	$(LD) crt0.o biotest.o bio.o utab.o brz.o -o $@ -L$(LIBDIR) -lc
+	$(DISASM) -c $@ > $@.dis
+	$(NM) -n $@ > $@.nm
+
+# ugrp -- task 18b.2: МГРП is dynamic, and a WIRED ГРП bit does not wedge extintr().  Links
+# the real intr.o and calls extintr() as an ordinary C function, with delivery blocked --
+# no gate and no forged context, so crt0.s is enough.  See ugrp.ini.
+ugrp:   crt0.o ugrp.o intr.o psw.o
+	$(LD) crt0.o ugrp.o intr.o psw.o -o $@ -L$(LIBDIR) -lc
 	$(DISASM) -c $@ > $@.dis
 	$(NM) -n $@ > $@.nm
 

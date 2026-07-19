@@ -52,11 +52,13 @@
  * The mass-storage completion bits.  All four are WIRED: they are live wires from the
  * device rather than flip-flops in ГРП, so MOD_GRPCLR cannot lower them -- only giving
  * the device a new command does.  extintr()'s fallback arm, which dismisses the highest
- * pending bit so that an unhandled source cannot spin, is therefore a spin on any of
- * them; see task 18b.2 in kernel/TODO.md.
+ * pending bit so that an unhandled source cannot spin, would therefore spin on any of
+ * them; it probes for exactly this and disarms the bit in МГРП instead.
  *
  * "Free" means IDLE, not "an exchange just finished": the bit is up whenever no transfer
- * is running, so none of these may be armed in МГРП outside a live exchange.
+ * is running, so none of these may be armed in МГРП outside a live exchange.  A driver
+ * brackets one exchange with mgrpon()/mgrpoff() (kernel/intr.c); kernel/test/ugrp is the
+ * test that holds both halves of this comment to account.
  *
  * The complete wired set covers the tape channels too -- doc/Besm6_Peripherals.md,
  * "Wired bits".  Only the four this kernel can raise are named here.

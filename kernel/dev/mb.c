@@ -13,8 +13,10 @@
  * and the zone all at once, and issuing it to 033 1 or 033 2 starts the exchange; there
  * is no command sequence, unlike the disk.  Completion arrives as GRP_DRUM1_FREE or
  * GRP_DRUM2_FREE in ГРП -- wired bits, so they cannot be dismissed with MOD_GRPCLR and
- * must not sit armed in МГРП while the drum is idle (see sys/besm6dev.h, and task 18b.2,
- * which owns that mechanism and is a prerequisite of filling this file in).
+ * must not sit armed in МГРП while the drum is idle (see sys/besm6dev.h).  So mbstart()
+ * arms its bit with mgrpon() AFTER issuing the control word -- issuing it is what lowers
+ * the bit -- and mbintr() disarms it with mgrpoff() before iodone().  Task 18b.2 built
+ * that pair; kernel/test/ugrp is what proves it.
  *
  * What is here now is the driver's public surface only -- the entry points conf.c wires
  * into bdevsw/cdevsw -- so that the kernel builds and links while the real 033-channel

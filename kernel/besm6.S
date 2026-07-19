@@ -598,9 +598,21 @@ intret:
 // Interrupt priority level
 // ============================================================================
 //
-// spl0()..spl7() and splx() now live in intr.c: on this machine raising the
-// priority is one write of the МГРП mask (002 036), which is a table lookup and an
-// intrinsic, so there is nothing left for assembly to do.
+// spl0()..spl7() and splx() live in intr.c.  The level is БлПр (ПСВ bit 02000) and
+// nothing else: setipl() sets it to block and clears it to enable, so there are two
+// levels here rather than the PDP-11's eight, and the hardware maintains the level
+// across a gate by itself -- the vector forces БлПр on and `выпр' restores it from
+// СПСВ, which is what the PDP-11's `rtt' does with the priority field of PS.
+//
+// The one piece of it that IS assembly is not here either: БлПр lives in the mode word,
+// so setting it is a read-modify-write of ПСВ and not a `vtm' (which writes the whole
+// register and would clobber БлП/БлЗ along with it).  That is cli()/sti() in kernel/psw.s,
+// where kernel/test/ can link them -- the standing reason nothing testable lives in this
+// file.
+//
+// МГРП (002 036) is NOT the priority.  It is the source enable, and it is dynamic: a
+// driver arms its own completion bit for the length of one exchange, because the
+// mass-storage "free" bits are wired and mean IDLE.  See mgrpon()/mgrpoff() in intr.c.
 
 // ============================================================================
 // Context switch

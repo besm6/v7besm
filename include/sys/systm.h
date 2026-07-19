@@ -158,6 +158,8 @@ void bflush(dev_t dev);
 int spl0(void), spl1(void), spl4(void), spl5(void), spl6(void), spl7(void);
 void splx(int);
 void mprpon(unsigned bits); /* unmask a device's ПРП interrupts (intr.c) */
+void mgrpon(unsigned bits); /* arm a device's ГРП bits for one exchange (intr.c) */
+void mgrpoff(unsigned bits); /* ... and disarm them again; see the pair in intr.c */
 void addupc(int, void *, int);
 int setpri(struct proc *pp);
 void xrele(struct inode *ip);
@@ -197,7 +199,7 @@ void clearseg(int d);
 int issig(void);
 int save(label_t);
 void resume(int, label_t); /* a physical word address: 19 bits, not a `short' */
-void intrinit(void);       /* arm МГРП once; the spl level rides on БлПр (intr.c) */
+void intrinit(void);       /* arm the always-live ГРП sources; the level is БлПр (intr.c) */
 extern volatile int idling; /* set while the idle spin runs; clock() charges idle time */
 int swapin(struct proc *p);
 void xswap(struct proc *p, int ff, int os);
