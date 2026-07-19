@@ -205,9 +205,9 @@ the program's own stack growth cannot walk back over its arguments.
   disk (task 18b).
 
 **18. The disk.** Two halves: the addressing plumbing that lets a request name a physical word
-anywhere in the machine (18a), and the driver that actually moves it (18b). 18a is a prerequisite of
-18b — without `b_paddr` a transfer cannot name a page above 32767, which is most of memory — so do
-them in that order.
+anywhere in the machine (18a), and the drivers that actually move it (18b, itself a sequence of six
+steps). 18a is a prerequisite of 18b — without `b_paddr` a transfer cannot name a page above 32767,
+which is most of memory — so do them in that order.
 
 **18a. I/O addresses — DONE.** `struct buf` gained `unsigned b_paddr`, a physical **word** address
 valid when `B_PHYS`, filled by `swap()` and `physio()`. Read it through **`bufpaddr(bp)`**
@@ -246,16 +246,144 @@ How it turned out, where that differed from the sketch:
   listed in `biotest.ini` and all six fire on the predicted check.
 - **`mem.c` was deferred** — see the entry below.
 
-**18b. The drum/disk driver (`dev/hd.c`).** `hd.c` is a skeleton: `hdstrategy()` sets `B_ERROR` and
-calls `iodone()` on every request, and `hdintr()` is empty. `rootdev`, `swapdev` and `pipedev`
-(`conf.c:52-54`) all name major 0, so this one strategy routine stands between the kernel and every
-criterion below. Write the real thing against the `033 «увв»` channel: control-word assembly with the
-9-bit physical page number, the zone model (8 service words at the controller's fixed low buffer —
-`010` drum 1, `030` disk 3 — plus 1 Kword of data), request queueing through `hdtab`, and completion
-off ГРП in `hdintr()`. Read [../doc/Besm6_Peripherals.md](../doc/Besm6_Peripherals.md) first.
-- **Done when** `iinit()` reads the super block and `swap()` round-trips a page.
-- Wants a new standalone SIMH test (see the notes at the end of this file): attach a disk image,
-  issue one zone read, assert the words landed where the control word said.
+**18b. The drum and disk drivers.** `dev/hd.c` is a skeleton — the x86 IDE driver with its
+programmed-I/O body removed: `hdstrategy()` sets `B_ERROR` and calls `iodone()` on every request,
+and `hdintr()` is empty. `rootdev`, `swapdev` and `pipedev` (`conf.c:52-54`) all name major 0, so
+this one strategy routine stands between the kernel and every criterion below.
+
+Read [../doc/Besm6_Peripherals.md](../doc/Besm6_Peripherals.md) § *Magnetic drums* and § *Magnetic
+disks* first, and [../doc/Intrinsics.md](../doc/Intrinsics.md) — **there is no assembly in this
+task**. `__besm6_ext(addr, acc)` *is* `033 «увв»` and `__besm6_mod(addr, acc)` *is* `002 «рег»`,
+each one inline instruction, so a control word is ordinary C arithmetic and issuing it is a function
+call that isn't one. `doc/Intrinsics.md` §6.3 is a drum page read written out in C and is the model
+for 18b.3; §6.2 is the ГРП dispatch pattern 18b.2 builds on.
+
+**Two drivers, not one split by minor.** The exchange control word is bit-for-bit identical on the
+two devices (BLOCK 27–24, READ_SYSDATA 21, PAGE_MODE 19, READ 18, PAGE 17–13, UNIT 10–8), and that
+much is shared code — but nothing above it is. `hdtab` is v7's one-request-outstanding queue head
+per `bdevsw` entry, and the drum and the disk are independent channels that can transfer at the same
+time; one major would serialise swap traffic behind filesystem traffic for nothing. Starting a
+transfer is a single store on the drum and a three-command state machine on the disk. Completion
+arrives on disjoint ГРП bits that the dispatcher has already separated. A block is one native
+transfer on the disk (`DISK_HALFZONE`) and two sector transfers on the drum. And the disk has a
+status register, seeks and retries where the drum has none. v7 agrees: `rk.c`/`rp.c`/`hp.c`/`rf.c`
+are one driver per controller family, and the minor number selects unit and partition *within* one.
+
+---
+
+**18b.1. The device header and the driver split.** No hardware yet — this step only has to build,
+link and boot as far as it does today.
+
+* New `include/sys/besm6disk.h` (or a section of `sys/besm6dev.h`, which today stops at the Consul):
+  the `033` addresses (`EXT_DRUM1` `01`, `EXT_DRUM2` `02`, `EXT_DISK3` `03`, `EXT_DISK4` `04`,
+  `EXT_DISKCTL3` `023`, `EXT_DISKCTL4` `024`, `EXT_DISKSTAT3` `04003`, `EXT_DISKSTAT4` `04004`),
+  the control-word field masks, the ГРП completion bits (`GRP_DRUM1_FREE` bit 46,
+  `GRP_DRUM2_FREE` bit 45, `GRP_CHAN3_FREE` bit 29, `GRP_CHAN4_FREE` bit 28 — all `unsigned`, all
+  wired), and the service-word buffer addresses (`010` drum 1, `020` drum 2, `030` disk 3,
+  `040` disk 4).
+* One shared inline helper for the common half of the control word: physical word address from
+  `bufpaddr(bp)` → BLOCK (bits 27–24) and PAGE (bits 17–13), plus direction from `B_READ`. Bit *N*
+  has value 2^(N-1), so the page field is scaled by 2^12 and the block field by 2^23; see §6.3 of
+  the intrinsics doc, which does exactly this arithmetic.
+* Retire `dev/hd.c` into **`dev/md.c`** (disks, major 0 — root, pipedev, filesystems) and
+  **`dev/mb.c`** (drums, major 1 — swap). `hdtab`/`rhdbuf` become `mdtab`/`rmdbuf` and
+  `mbtab`/`rmbbuf`; `hdopen`/`hdstrategy`/`hdintr`/`hdread`/`hdwrite` split in two. Both keep the
+  `B_ERROR` stub body for now. `kernel/Makefile` gains the file; the `hd` name is an x86 leftover
+  and now names neither device.
+* `conf.c`: a second `bdevsw` entry, a second `cdevsw` entry, and `swapdev = makedev(1, 0)`.
+* **Done when** `unix` builds, links and still passes the existing `test/` suite unchanged.
+
+**18b.2. ГРП: the free bits are wired, and МГРП has to become dynamic.** A prerequisite of both
+drivers, and the one place the existing interrupt design has to give.
+
+`intr.c` states an invariant that this task breaks: *"МГРП is the SOURCE ENABLE, armed once by
+`intrinit()` with `IRQ_ON` and never rewritten."* Two hardware facts make that untenable for mass
+storage:
+
+* **The completion bits are wired** (`GRP_WIRED_BITS` — see § *Wired bits*). `__besm6_mod(MOD_GRPCLR,
+  ~bit)` cannot lower them; only issuing a new command to the device does. `extintr()`'s fallback
+  arm — *"dismiss the highest pending bit and go round again, so that a bit nobody handles cannot
+  spin here forever"* — is therefore exactly wrong for these bits: it clears nothing and loops
+  forever. Whatever the mechanism, it must be tested by *reaching* that arm with a wired bit up.
+* **"Free" means idle, so the bit is up whenever no transfer is running.** Put
+  `GRP_DRUM1_FREE` in `IRQ_ON` permanently and the first completed exchange wedges the machine in
+  `extintr()`.
+
+So: an `mgrpon()`/`mgrpoff()` pair mirroring `mprpon()` (same reasoning — the register is write-only
+and a driver writing it directly would drop every other device's bits), with the driver arming its
+own completion bit as it starts an exchange and disarming it in the handler. `mgrp` is already the
+shadow. Alternatively `extintr()` grows an explicit wired-bit case; decide which and write down why.
+Both are `__besm6_mod(MOD_MGRP, ...)`, one instruction.
+
+* **Done when** a forged wired bit left up in ГРП passes through `extintr()` without spinning.
+* **Bite test:** with the fix removed, the test must hang — `step 50000000` turns that into a
+  failure, per the notes at the end of this file.
+
+**18b.3. The drum driver (`dev/mb.c`).** Do this one first: it is one `__besm6_ext(EXT_DRUM1, cw)`
+and no command sequence, so it proves the control word, the zone model, the service-word buffer and
+the whole interrupt path with the least in the way. Once it works, swap works, and everything after
+is disk-specific.
+
+* Geometry: 256 zones per drum × `8 + 1024` words, two drums = 1024 blocks of `BSIZEW` (512 words)
+  total. That is a swap area, not a filesystem — size `nswap`/`swplo` in `conf.c` to it (today's
+  `nswap = 32000` is fiction).
+* `b_blkno` → zone and half-zone. The drum's sub-page unit is a *sector* of 256 words selected by
+  `DRUM_PARAGRAF` (bits 12–11), so a 512-word block is two adjacent sectors, or half of one
+  `DRUM_PAGE_MODE` transfer. Pick one and say which in the source; page mode with a 1-Kword request
+  is the simpler path if `swap()` always arrives page-aligned.
+* The zone number is `(cmd & (DRUM_UNIT | DRUM_CYLINDER)) >> 2` — unit and cylinder are adjacent
+  fields that together *are* the zone address, so the driver computes one number, not two.
+* `mbstart()` arms the completion bit (18b.2) and issues the control word; `mbintr()` disarms it,
+  reads the 8 service words at `010`, calls `iodone()` and starts the next queued request off
+  `mbtab`.
+* **Done when** `swap()` round-trips a page: write a known page out, clear it, read it back.
+* **Verified by `test/mbtest`** — `attach drum0`, one zone write and one zone read, assert the
+  words landed where the control word said and that the service words appeared at `010`–`017`.
+
+**18b.4. The disk driver (`dev/md.c`) — the two-step protocol.** The only device in the machine with
+one, and the reason it comes after the drum.
+
+* Step 1, `__besm6_ext(EXT_DISK3, cw)`: the exchange control word. *Nothing happens yet.* This call
+  also lowers the controller's ГРП free bit and clears its error flag.
+* Step 2, `__besm6_ext(EXT_DISKCTL3, cmd)`: select group (bit 9 set, `(cmd & 01774) == 01400`),
+  select unit (bit 11 set — bits 1–8 are a one-hot mask in **inverted** order, bit 8 → unit 0 …
+  bit 1 → unit 7), then supply the track address (bit 12 set) — **and that last one is what
+  transfers.** Zone encoding differs by drive size: `(cmd & BITS(11)) << 1` on a 29 MB drive,
+  `(cmd >> 1) & BITS(10)` with bit 1 as the track on a 7.25 MB drive. Fix one and record it.
+* Note from the doc worth carrying into a comment: seek (`001`, `002`) and the plain read/write
+  commands (`003`, `004`) are *logged but do not act* in SIMH — direction comes from step 1 and the
+  transfer is driven entirely by the bit-12 command. Don't build a seek state machine the simulator
+  will not exercise.
+* The minor-number map: unit and partition. `rootdev` is `makedev(0, 56)` and `pipedev` the same
+  today — those numbers came from the x86 driver's partition scheme and need re-deriving against a
+  real BESM-6 disk layout, together with the partition table `mdopen()` validates against.
+* `DISK_HALFZONE` (bit 1) makes one `BSIZEW` block one native transfer — no splitting, unlike the
+  drum.
+* **Done when** `iinit()` reads the super block off an attached `MD0` image without panicking.
+* **Verified by `test/mdtest`** — the command sequence in order, one zone read, service words at
+  `030`–`037`.
+
+**18b.5. Disk status and errors.** Split out because the drum has no equivalent and the happy path
+should land first.
+
+* Read the status register with `__besm6_ext(EXT_DISKSTAT3, 0)`. SIMH sets only `STATUS_READY` (to
+  command `011`) and `STATUS_ABSENT`/`STATUS_POWERUP`/`STATUS_READONLY` (to command `031`, shifted
+  right by 12) — so the retry logic is written against the documented bits but can only be
+  *exercised* for those. Say so in the source rather than leaving untestable code looking tested.
+* Error count and retry through `b_errcnt`, `B_ERROR` and `b_resid` on give-up, the v7 way.
+* Also the drum's much smaller version: if a unit is not attached, `033 1`/`033 2` set a bit in the
+  error mask readable at `033 4035` and return without transferring — so `mbstart()` must check it
+  or a missing drum hangs waiting for a completion that never comes.
+* **Done when** an unattached unit fails the request instead of hanging.
+
+**18b.6. Wiring up and bring-up.** The step that closes 18b.
+
+* `IRQ_ON`, `conf.c`, `nswap`/`swplo`, and the raw devices through `physio()` (`mdread`/`mdwrite`
+  are already the right shape — `physio(mdstrategy, &rmdbuf, dev, B_READ)`).
+* Build a root filesystem image, attach it, and boot far enough that `iinit()` mounts it.
+* **Done when** `iinit()` reads the super block *and* `swap()` round-trips a page — the original
+  18b criterion, now split across 18b.3 and 18b.4 and re-asserted together here.
+* This is also what unblocks the BESM-6 `icode[]` deferred by task 17.
 
 ---
 
@@ -306,7 +434,8 @@ Loose ends the finished work left behind. None blocks 18.
 
 ## Notes for the next standalone SIMH test
 
-Task 18b will want one. What the seven existing tests cost to get right:
+Task 18b will want three — one per step 18b.2, 18b.3 and 18b.4. What the seven existing tests cost
+to get right:
 
 * **`step N`, not `go`.** A broken switch or a lost gate *hangs* rather than failing, and `go` takes
   an address, not a step count. Every `.ini` uses `step 50000000` to turn a hang into a failure.
