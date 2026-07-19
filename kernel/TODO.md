@@ -7,7 +7,7 @@ I/O — task 18 below.
 
 Where the port stands: `cd kernel && make` links an image that boots under SIMH and reaches
 `panic: iinit`. The hang after that is `panic()`'s own `for(;;) idle()`, which is now a real spin;
-there is no disk driver yet, which is task 18.
+there is no disk driver yet, which is task 18b.
 
 Read [../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) before starting, and
 [../doc/Intrinsics.md](../doc/Intrinsics.md) for how C reaches `002 «рег»`.
@@ -202,21 +202,39 @@ the program's own stack growth cannot walk back over its arguments.
   contents. Both bite tests fire: reintroducing the x86 shuffle gives `020` (the old page lost its
   sentinel), dropping the `sureg()` gives `0212`. The fork/exec half of the original criterion is
   not reachable — `icode[]` is still x86 and the BESM-6 `icode[]` is out of scope until there is a
-  disk (task 18).
+  disk (task 18b).
 
-**18. I/O addresses (`include/sys/buf.h`, `dev/bio.c`, `dev/mem.c`).** Add `unsigned b_paddr` to
+**18. The disk.** Two halves: the addressing plumbing that lets a request name a physical word
+anywhere in the machine (18a), and the driver that actually moves it (18b). 18a is a prerequisite of
+18b — without `b_paddr` a transfer cannot name a page above 32767, which is most of memory — so do
+them in that order.
+
+**18a. I/O addresses (`include/sys/buf.h`, `dev/bio.c`, `dev/mem.c`).** Add `unsigned b_paddr` to
 `struct buf` — a physical **word** address, used when `B_PHYS`: a `char *` is a fat pointer with a
 15-bit word field and cannot name a physical word above 32767. `swap()` and `physio()` fill it
 instead of `PHY + physaddr(…)`. Device transfers take a *physical* page (the drum/disk control word
 carries a 9-bit page number and reaches all 512 Kwords), so **buffer I/O needs no bracket at all** —
 kernel buffers are unmapped and their address *is* their physical address. `mem.c`: /dev/mem through
 a `copyseg`-style bracket, /dev/kmem direct.
-- **Done when** `iinit()` reads the super block and `swap()` round-trips a page.
+- **Done when** a forged `buf` whose target is a physical page above 32767 gets the right `b_paddr`
+  from both `swap()` and `physio()`, and `physio()` accepts/rejects user addresses correctly at the
+  `NPAGE * PGSZ` boundary. No hardware needed — this half is verifiable without a driver.
 - Stage 0 deliberately left `physio()` (`dev/bio.c:462-482`) alone — it is the one piece of memory
   arithmetic still in the old units. It derives page numbers with `>> PGSH` from `(unsigned)u.u_base`,
   which is a *fat pointer*, not a byte address, and compares them against `u_tsize`/`u_dsize`/`u_ssize`,
   which are now words; the `1024` ceilings should be `NPAGE * PGSZ`. Stage 1's `useracc()` is what
   finally gives it a way to validate a user address, so it is fixed here, along with `b_paddr`.
+
+**18b. The drum/disk driver (`dev/hd.c`).** `hd.c` is a skeleton: `hdstrategy()` sets `B_ERROR` and
+calls `iodone()` on every request, and `hdintr()` is empty. `rootdev`, `swapdev` and `pipedev`
+(`conf.c:52-54`) all name major 0, so this one strategy routine stands between the kernel and every
+criterion below. Write the real thing against the `033 «увв»` channel: control-word assembly with the
+9-bit physical page number, the zone model (8 service words at the controller's fixed low buffer —
+`010` drum 1, `030` disk 3 — plus 1 Kword of data), request queueing through `hdtab`, and completion
+off ГРП in `hdintr()`. Read [../doc/Besm6_Peripherals.md](../doc/Besm6_Peripherals.md) first.
+- **Done when** `iinit()` reads the super block and `swap()` round-trips a page.
+- Wants a new standalone SIMH test (see the notes at the end of this file): attach a disk image,
+  issue one zone read, assert the words landed where the control word said.
 
 ---
 
@@ -254,7 +272,7 @@ Loose ends the finished work left behind. None blocks 18.
 
 ## Notes for the next standalone SIMH test
 
-Task 18 will want one. What the seven existing tests cost to get right:
+Task 18b will want one. What the seven existing tests cost to get right:
 
 * **`step N`, not `go`.** A broken switch or a lost gate *hangs* rather than failing, and `go` takes
   an address, not a step count. Every `.ini` uses `step 50000000` to turn a hang into a failure.

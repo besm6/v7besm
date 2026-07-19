@@ -13,7 +13,7 @@
  * own u-area, which is checked with a sentinel written into `u' itself.
  *
  * The environment is hand-built and deliberately thin.  There is no disk on this machine yet
- * (task 18), so swap() and xswap() are stubs that must never run: the coremap is seeded with
+ * (task 18b), so swap() and xswap() are stubs that must never run: the coremap is seeded with
  * enough free core that malloc() always succeeds and newproc() takes its copyseg() branch.
  * If a stub fires, the mask says so rather than the test quietly proving less than it claims.
  *

@@ -407,7 +407,7 @@ void swap(int blkno, int coreaddr, register int count, int rdflg)
         bp->b_blkno  = swplo + blkno;
         /*
          * coreaddr is a physical word address, which does not fit a caddr_t;
-         * task 18 gives struct buf a b_paddr for it.
+         * task 18a gives struct buf a b_paddr for it.
          */
         bp->b_un.b_addr = (caddr_t)coreaddr;
         (*bdevsw[major(swapdev)].d_strategy)(bp);

@@ -11,7 +11,7 @@
  * kernel address against KBASE/KSTK; the BESM-6 has neither.  Physical memory above
  * 0100000 is out of the unmapped kernel's reach and needs a copyseg-style mapped
  * bracket, so minors 0 and 1 are stubbed out for now.  Minor 2 (/dev/null) works.
- * See kernel/TODO.md task 18.
+ * See kernel/TODO.md task 18a.
  */
 
 // clang-format off
