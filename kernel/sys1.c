@@ -38,7 +38,7 @@ void exece()
     register char *cp;
     register struct buf *bp;
     register struct execa *uap;
-    int na, ne, bno, ucp, ap, c;
+    int na, ne, bno, ucp, uco, ap, c;
     struct inode *ip;
 
     if ((ip = namei(uchar, 0)) == NULL)
@@ -100,23 +100,50 @@ void exece()
         bawrite(bp);
     bp = 0;
     nc = (nc + NBPW - 1) & ~(NBPW - 1);
-    if (getxfile(ip, nc) || u.u_error)
+    /*
+     * The stack must hold the pointer vector as well as the strings: argc, na pointers,
+     * the two NULLs and the terminating word.  The x86 original sized it from the strings
+     * alone because its vector was carved out of the same downward run.
+     */
+    if (getxfile(ip, nc + (na + 4) * NBPW) || u.u_error)
         goto bad;
 
     /*
-     * copy back arglist
+     * Copy the arglist back into the new image, at the BASE of the user stack.
+     *
+     * The BESM-6 stack grows UP from USTKPAGE * PGSZ = 070000, so the block sits at that
+     * fixed base and r15 starts ABOVE it -- the program's own stack growth can never walk
+     * back over its own arguments.  argc is therefore always at absolute 070000, which is
+     * how a crt0 finds it with no register hand-off.
+     *
+     *      070000  argc
+     *              argv[0] .. argv[argc-1]     (word addresses of the strings)
+     *              0
+     *              envp[0] .. envp[ne-1]
+     *              0
+     *              the strings, byte-packed six to a word
+     *        r15 = the first free word above the block
+     *
+     * Two unit rules the x86 original never had to state.  suword() takes a WORD address
+     * -- it masks its caddr_t to the low 15 bits (usermem.s) -- so the pointer vector
+     * strides by ONE, not by NBPW; a stride of NBPW would skip six words per pointer.
+     * subyte() takes a FAT pointer -- byte offset in bits 47-45 over a word address in bits
+     * 15-1 (usermem.s again) -- so the string cursor is carried as an explicit (word, offset)
+     * pair: `ucp++' on a plain integer steps whole words and would lay down one character
+     * per word.  The argv[] entries themselves are plain word addresses (offset 0), which is
+     * what a string starting on a word boundary is.
      */
-
-    ucp          = NPAGE * PGSZ - nc - NBPW;
-    ap           = ucp - na * NBPW - 3 * NBPW;
-    u.u_ar0[R15] = ap; /* TODO 17: exec user-stack layout (stack grows up) */
+    ap           = USTKPAGE * PGSZ; /* argc, then the pointer vector */
+    ucp          = ap + 1 + na + 2; /* the strings, just above the vector */
+    uco          = 0;               /* byte offset within the word at ucp */
+    u.u_ar0[R15] = ap;              /* provisional; the real value is set below */
     suword((caddr_t)ap, na - ne);
     nc = 0;
     for (;;) {
-        ap += NBPW;
+        ap++;
         if (na == ne) {
             suword((caddr_t)ap, 0);
-            ap += NBPW;
+            ap++;
         }
         if (--na < 0)
             break;
@@ -128,12 +155,20 @@ void exece()
                 bp = bread(swapdev, swplo + bno + (nc >> BSHIFT));
                 cp = bp->b_un.b_addr;
             }
-            subyte((caddr_t)ucp++, (c = *cp++));
+            /* bit numbering is 1-based, so the offset's LSB (acc bit 45) is `1U << 44' */
+            subyte((caddr_t)(((unsigned)uco << 44) | (unsigned)ucp), (c = *cp++));
+            if (++uco == NBPW) {
+                uco = 0;
+                ucp++;
+            }
             nc++;
         } while (c & 0377);
     }
     suword((caddr_t)ap, 0);
+    if (uco)
+        ucp++; /* round the cursor up: the closing word must not eat a partial string */
     suword((caddr_t)ucp, 0);
+    u.u_ar0[R15] = ucp + 1; /* the first free word; setregs() does not touch r15 */
     setregs();
 bad:
     if (bp)
@@ -495,9 +530,17 @@ void sbreak()
         n = 0;
     d = n - u.u_dsize;
     n += USIZE + u.u_ssize;
+    /*
+     * The break stops at virtual page USTKPAGE (070000), where the stack begins: that is
+     * estabur()'s `nt + nd > USTKPAGE * PGSZ' check (utab.c), which is why there is no
+     * ceiling spelled out here.  And estabur() assigns u_dsize itself -- unlike the x86
+     * original, whose sizes lived in a separate u_utab[] -- so there is no trailing
+     * `u.u_dsize += d', which would count the change twice.  `d' below is still the delta
+     * the copyseg shuffle needs: data grows in the MIDDLE of the image, so unlike the
+     * stack's, its growth really does move the pages above it.
+     */
     if (estabur(u.u_tsize, u.u_dsize + d, u.u_ssize, u.u_sep, RO))
         return;
-    u.u_dsize += d;
     if (d > 0)
         goto bigger;
     a = u.u_procp->p_addr + n - u.u_ssize;

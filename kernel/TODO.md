@@ -1,8 +1,9 @@
 # Retargeting the kernel's memory management to the BESM-6 MMU
 
-A work plan. The memory model, the mapped brackets, boot, all three trap doors, the timer and the
-context switch are **done**: two processes alternate under the real scheduler on SIMH, each seeing
-its own `u`. What remains is process memory and I/O — tasks 17 and 18 below.
+A work plan. The memory model, the mapped brackets, boot, all three trap doors, the timer, the
+context switch and the user memory layout are **done**: two processes alternate under the real
+scheduler on SIMH, each seeing its own `u`, and the user stack grows on demand. What remains is
+I/O — task 18 below.
 
 Where the port stands: `cd kernel && make` links an image that boots under SIMH and reaches
 `panic: iinit`. The hang after that is `panic()`'s own `for(;;) idle()`, which is now a real spin;
@@ -153,18 +154,55 @@ below is **left as it was** — task numbers are cited from the source (`seg.s`,
 
 ### Stage 4 — process memory and I/O
 
-**17. Stack growth and the user layout (`sig.c`, `sys1.c`, `text.c`).** `grow()` takes a **page
-number** (that is all the machine reports) and **loses its `copyseg` shuffle** (`sig.c:249-255`):
-with an upward stack a new page is appended at a higher virtual address *and* at the end of the
-image, so the existing stack pages keep their addresses. `exec()` seeds the user stack at `070000`
-growing up; `sbreak()`'s shuffle stays (data still grows in the middle of the image) but the break
-stops at page 28; the `u_ar0[EIP] += 2` fork trick is replaced by returning distinct accumulator
-values. Three pieces of this are **already in** — they fell out of stage 0's `ctob` removal: `core()`
-writes one `USIZE`-word u-area block, `procxmt()`'s "read u" takes a plain word index, and the sizes
-from the `a.out` header go through `btow()` + `pground()`. The sites are flagged `TODO 17` in
-`sig.c`, `sys1.c`, `trap.c`, `machdep.c` and `include/sys/besm6dev.h`.
-- **Done when** a two-page icode forks and execs, and touching the word past the stack top grows the
-  stack instead of raising SIGSEG.
+**17. Stack growth and the user layout — DONE.** `grow()` (`sig.c`) now takes the **virtual page
+number** the machine reports and has **no `copyseg` shuffle**: with the stack growing up from
+`USTKPAGE`, `sureg()` appends a new page at the next higher virtual address *and* at the end of the
+image at once, so the pages already in the stack keep the addresses they had — there is nothing to
+move. `trap.c` passes `page` straight through. `exec()` seeds the arg block at the fixed base
+`070000` growing up (layout below) with `r15` above it; `sendsig()` pushes upward by one word.
+`sbreak()` keeps its shuffle — data still grows in the *middle* of the image — and stops at page 28
+via `estabur()`'s `nt + nd > USTKPAGE * PGSZ`. The fork trick was already gone (`u_r.r_val2`).
+
+Three things this turned up that the plan did not have:
+
+* **`estabur()` assigns the sizes, so the trailing increments double-counted.** The v7/x86 original
+  kept them in a separate `u_utab[]`, which made `u.u_ssize += si` in `grow()` and `u.u_dsize += d`
+  in `sbreak()` the *real* assignments; this port's `estabur()` writes `u_tsize`/`u_dsize`/`u_ssize`
+  directly, so both lines counted the change twice. Both are gone. Anything else that calls
+  `estabur()` with an adjusted size must not then adjust it again.
+* **The exec arg block had two unit bugs the layout change exposed.** `suword()` takes a **word**
+  address, so the pointer vector strides by 1, not `NBPW` (the x86 stride skipped six words per
+  pointer); and `subyte()` takes a **fat pointer**, byte offset at acc bits 47–45 over a word
+  address, so the string cursor is now an explicit `(word, offset)` pair — `ucp++` on a plain
+  integer stepped whole words and laid down one character per word. Note the 1-based bit numbering:
+  the offset's LSB is acc bit 45, i.e. `1U << 44`. This closes the deferred fat-pointer item **for
+  exec only**; `u.u_dirp` is still open.
+* **`getxfile()` was sized from the strings alone.** It now gets `nc + (na + 4) * NBPW`, so the
+  initial stack covers the pointer vector too.
+
+The arg-block contract, which a BESM-6 `crt0` will have to know:
+
+```text
+   070000   argc                    <- USTKPAGE * PGSZ, a FIXED address
+            argv[0] .. argv[argc-1]    (word addresses of the strings)
+            0
+            envp[0] .. envp[ne-1]
+            0
+            the strings, byte-packed six to a word
+      r15 = the first free word above the block
+```
+
+`argc` is at a fixed address so no register hand-off is needed, and `r15` starts above the block so
+the program's own stack growth cannot walk back over its arguments.
+
+- **Done when** — verified by **`test/ugrow`** (`crt0g.S` + `ugrow.c` + `ugrow.ini`), a new
+  standalone SIMH test: a forged user with a one-page stack at `070000` stores one word past the
+  top, takes the data fault on page 29, the handler grows the stack, and the store re-executes into
+  the page that now exists — while the pre-existing stack page keeps its physical address *and* its
+  contents. Both bite tests fire: reintroducing the x86 shuffle gives `020` (the old page lost its
+  sentinel), dropping the `sureg()` gives `0212`. The fork/exec half of the original criterion is
+  not reachable — `icode[]` is still x86 and the BESM-6 `icode[]` is out of scope until there is a
+  disk (task 18).
 
 **18. I/O addresses (`include/sys/buf.h`, `dev/bio.c`, `dev/mem.c`).** Add `unsigned b_paddr` to
 `struct buf` — a physical **word** address, used when `B_PHYS`: a `char *` is a fat pointer with a
@@ -184,16 +222,25 @@ a `copyseg`-style bracket, /dev/kmem direct.
 
 ## Deferred, owned by no task
 
-Loose ends the finished work left behind. None blocks 17 or 18.
+Loose ends the finished work left behind. None blocks 18.
 
+* **Single-step / the address-break registers М034/М035.** `ptrace()`'s "set signal and continue,
+  one version causing a trace-trap" has no flag bit to set on this machine — there is no EFL/TBIT —
+  so arming it means writing М034/М035, and `procxmt()` has to re-arm after each `T_BREAK`. The
+  sites still carry the old `TODO 17` markers: `sig.c` (cases 6 and 9), `trap.c` (`T_BREAK + USER`)
+  and `GRP_BREAKPOINT` in `include/sys/besm6dev.h`. A `ptrace` feature, not a layout one.
+* **`sendsig()` pushes one word and no more.** The direction and the units are right now, but there
+  is no signal frame proper — no saved accumulator or R, and no `sigreturn` path back through it.
+  Nothing exercises signal delivery yet; build it when something does.
 * **`uflush`/`uload` copy the whole 1024-word page.** Copying only up to the saved r15 —
   `struct user` plus the live stack, typically ~300 words — was planned and never done. It is a
   performance change, not a correctness one.
 * **`u.u_dirp = (caddr_t)u.u_arg[0]` is an `int`→`char *` conversion**, and a `char *` built by hand
-  from an `int` gets the fat-pointer marker bit wrong (see `usermem.s`, `fubyte`). Pre-existing,
-  affects every path-taking syscall, and belongs with `iomove()`'s byte handling rather than with
-  syscall marshalling.
-* **`addupc()` is a stub**, so `profil()` is inert. Nominally task 17.
+  from an `int` gets the fat-pointer byte-offset field wrong (see `usermem.s`, `fubyte`).
+  Pre-existing, affects every path-taking syscall, and belongs with `iomove()`'s byte handling
+  rather than with syscall marshalling. Task 17 fixed the *exec* instance of this — the arg-string
+  cursor now carries an explicit `(word, offset)` pair — which is the pattern to copy here.
+* **`addupc()` is a stub**, so `profil()` is inert. Was nominally task 17; left there.
 * **`time` is never seeded from a wall clock.** The x86 CMOS RTC path is gone and this machine has
   no clock-calendar a program can read, so the epoch starts at 0.
 * **`b6sim` does not model the extracode left-half return.** An extracode returns to the *left half
@@ -207,7 +254,7 @@ Loose ends the finished work left behind. None blocks 17 or 18.
 
 ## Notes for the next standalone SIMH test
 
-Tasks 17 and 18 will each want one. What the six existing tests cost to get right:
+Task 18 will want one. What the seven existing tests cost to get right:
 
 * **`step N`, not `go`.** A broken switch or a lost gate *hangs* rather than failing, and `go` takes
   an address, not a step count. Every `.ini` uses `step 50000000` to turn a hang into a failure.
@@ -224,6 +271,14 @@ Tasks 17 and 18 will each want one. What the six existing tests cost to get righ
 * **A user program reports back through a deliberate data-protection fault, not `стоп`.** In user
   mode `стоп` re-dispatches as extracode э63 and check-halts under the reset ПоК; a data fault
   ignores ПоП/ПоК and always vectors.
+* **A forged `uprog` cannot use the literal pool.** It runs mapped at virtual page 0, but the pool
+  lives in the crt0's `.const` at *physical* page 0, which is not what virtual page 0 maps to — a
+  `#(...)` operand reads whatever happens to be there. `ugrow`'s uprog therefore *reads* its
+  sentinel out of a data page main() seeded, rather than spelling it as a constant. (`vtm`'s 15-bit
+  immediate is fine; it is part of the instruction.)
+* **Write the bite test, then verify it bites.** `ugrow` was checked both ways before being trusted:
+  reintroducing the x86 stack shuffle makes it fail with `020`, and dropping the `sureg()` after the
+  growth with `0212`. A geometry test that cannot fail proves nothing about the geometry.
 
 ---
 

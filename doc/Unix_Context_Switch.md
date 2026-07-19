@@ -228,12 +228,37 @@ bss links far above `07777` and needs the escape; these cells must not.
 
 ## 5. The stack switch
 
+### What `exec` leaves in М15
+
+The user stack is virtual pages `USTKPAGE`..31 (`070000` up), and it **grows towards increasing
+addresses**, like every BESM-6 stack (`doc/Besm6_Calling_Conventions.md`). `exec()` puts the
+argument block at the *base* of it and starts М15 **above** the block, so a program's own stack
+growth can never walk back over its arguments:
+
+```text
+   070000   argc                       <- USTKPAGE * PGSZ, a FIXED address
+            argv[0] .. argv[argc-1]       (word addresses of the strings)
+            0
+            envp[0] .. envp[ne-1]
+            0
+            the strings, byte-packed six to a word
+      r15 = the first free word above the block
+```
+
+`argc` sits at a fixed address, so a `crt0` finds the block without a register hand-off. Two unit
+rules apply when building it, and both differ from the byte-addressed original: the pointer vector
+strides by **one word** because `suword()` takes a word address, and the string cursor is a **fat
+pointer** — a byte offset at accumulator bits 47–45 over the word address — because `subyte()` takes
+one. See `exece()` in `kernel/sys1.c`.
+
+### Why the switch is forced
+
 This is the one place where the BESM-6 forces a design the PDP-11 v7 never needed. On the PDP-11, SP
 is banked by processor mode, so a trap from user lands with SP already naming the per-process kernel
 stack — the switch is free. **The BESM-6 has one stack register, М15, shared across modes.**
 
-So when the interrupt lands in user code, М15 holds the user stack pointer (`exec` seeds it at
-`070000`, growing up) — and the trap has just forced **БлП on**, so supervisor data is unmapped. That
+So when the interrupt lands in user code, М15 holds the user stack pointer — and the trap has just
+forced **БлП on**, so supervisor data is unmapped. That
 value is now a **physical** word index at ≈ `070000`, *inside the kernel image, below the u-area at
 `076000`*. The C handler's prologue would write its frame straight into the kernel's own text and
 data. Silent corruption, invisible until a device ISR is actually armed.
@@ -389,7 +414,12 @@ is a one-shot notification and only the dispatched bit is cleared (§9).
 `dev |= USER` if `USERMODE(tr->spsw)`, then:
 
 - **`T_DATA` from user** → `grow()` the stack and retry. No signal — this is the normal
-  stack-growth path.
+  stack-growth path. `grow()` takes the faulting **page number**, unchanged, because a page number
+  is all ГРП reports (bits 5–9); there is no faulting address to recover. It grows by appending a
+  page at the next higher virtual address — which, since `sureg()` lays the stack out as the tail of
+  the image, is the same page it appends at the end of the image. So the stack pages already mapped
+  keep their addresses and nothing is copied: the x86 original's `copyseg` shuffle has no
+  counterpart here. `kernel/test/ugrow` is the regression test for exactly that property.
 - **`T_INSN` from user** → SIGSEG. **`T_ILL`/`T_CHECK`** → SIGINS. **`T_BREAK`** → SIGTRC.
 - **anything from supervisor** → the `default` arm: dump `acc`/`r13`/`r14`/`r15`, `ret`/`spsw`/`grp`/
   `page`, `R`/`RMR`/`C`, and panic. Per §5, a kernel-mode fault is a kernel bug.

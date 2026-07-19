@@ -167,7 +167,7 @@ void free(dev_t dev, daddr_t bno);
 void bdwrite(struct buf *bp);
 void cli(void);
 void sti(void);
-int grow(unsigned sp);
+int grow(unsigned pg); /* pg is a virtual PAGE number, not an address */
 int subyte(caddr_t addr, int value);
 int suword(caddr_t addr, int value);
 int fubyte(caddr_t addr);

@@ -14,7 +14,7 @@ NM      = b6nm
 CFLAGS  = -I../../include
 LIBDIR  = $$HOME/.local/share/besm6/lib
 
-PROGS   = hello sctest mmutest uintr utrap usys uclock uswtch usched
+PROGS   = hello sctest mmutest uintr utrap usys uclock uswtch usched ugrow
 
 all:    $(PROGS)
 
@@ -30,6 +30,7 @@ test:   $(PROGS)
 	besm6 uclock.ini
 	besm6 uswtch.ini
 	besm6 usched.ini
+	besm6 ugrow.ini
 
 clean:
 	rm -f *.o *.dis *.nm $(PROGS)
@@ -103,6 +104,16 @@ usched: crt0w.o usched.o slp.o switch.o uarea.o brz.o intr.o psw.o utab.o seg.o 
 	$(DISASM) -c $@ > $@.dis
 	$(NM) -n $@ > $@.nm
 
+# ugrow is task 17's: it forges user mode with a ONE-page stack at USTKPAGE, stores past the
+# stack top, and checks that growing the stack appends a page WITHOUT moving the pages already
+# in it -- the geometry the new grow() (kernel/sig.c) relies on to have no copyseg shuffle.
+# grow() itself cannot come along (it calls expand(), i.e. the whole swapper), so ugrow.c does
+# its mapping half; seg.o is here for clearseg().  See ugrow.ini and crt0g.S.
+ugrow:  crt0g.o ugrow.o utab.o brz.o seg.o
+	$(LD) crt0g.o ugrow.o utab.o brz.o seg.o -o $@ -L$(LIBDIR) -lc
+	$(DISASM) -c $@ > $@.dis
+	$(NM) -n $@ > $@.nm
+
 slp.o: ../slp.c
 	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@
 
@@ -133,6 +144,9 @@ crt0s.o: crt0s.S
 	$(CC) $(CFLAGS) -c $< -o $@
 
 crt0c.o: crt0c.S
+	$(CC) $(CFLAGS) -c $< -o $@
+
+crt0g.o: crt0g.S
 	$(CC) $(CFLAGS) -c $< -o $@
 
 utab.o: ../utab.c

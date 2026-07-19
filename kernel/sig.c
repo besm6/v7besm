@@ -225,34 +225,45 @@ int core()
 }
 
 /*
- * grow the stack to include the SP
- * true return if successful.
+ * Grow the stack to include the faulting virtual PAGE.  A page number is all the machine
+ * reports -- ГРП bits 5-9, see trap.c -- so that is what this takes.  True return if it grew.
+ *
+ * The stack occupies virtual pages USTKPAGE .. USTKPAGE + u_ssize/PGSZ - 1, growing UP, and
+ * its physical pages are the tail of the image (sureg(), utab.c).  A new page is therefore
+ * appended at BOTH ends at once -- the next higher virtual page and the end of the image --
+ * so every existing stack page keeps the address it had.  That is what kills the x86 copyseg
+ * shuffle this routine used to do: with an upward stack there is nothing to move.
+ *
+ * The ceiling needs no guard of its own: estabur() rejects ns > (NPAGE - USTKPAGE) * PGSZ.
  */
-int grow(unsigned sp)
+int grow(unsigned pg)
 {
     register int si, i;
     register struct proc *p;
-    register int a;
+    register unsigned a;
 
-    if (sp > NPAGE * PGSZ - u.u_ssize)
-        return (0);
-    si = pground(NPAGE * PGSZ - sp) - u.u_ssize + SINCR;
+    if (pg < USTKPAGE || pg >= NPAGE)
+        return (0); /* not a stack page at all */
+    si = (pg - USTKPAGE + 1) * PGSZ - u.u_ssize;
     if (si <= 0)
-        return (0);
+        return (0); /* already mapped: this was not a stack fault */
+    if (si < SINCR)
+        si = SINCR;
+    /*
+     * estabur() assigns u_ssize itself (unlike the x86 original, whose sizes lived in a
+     * separate u_utab[]), so there is no trailing `u.u_ssize += si' here -- that would
+     * count the growth twice.
+     */
     if (estabur(u.u_tsize, u.u_dsize, u.u_ssize + si, u.u_sep, RO))
         return (0);
     p = u.u_procp;
     expand(p->p_size + si);
-    a = p->p_addr + p->p_size;
-    for (i = u.u_ssize; i > 0; i -= PGSZ) {
-        a -= PGSZ;
-        copyseg(a - si, a);
-    }
+    /* The new pages are the tail of the grown image; expand() may have relocated it. */
+    a = p->p_addr + p->p_size - si;
     for (i = si; i > 0; i -= PGSZ) {
-        a -= PGSZ;
         clearseg(a);
+        a += PGSZ;
     }
-    u.u_ssize += si;
     return (1);
 }
 

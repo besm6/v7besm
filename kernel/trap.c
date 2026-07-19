@@ -131,15 +131,14 @@ void trap(void)
 
     /*
      * Data protection: the user touched a page that is closed to data.  If the page is
-     * the one just below the stack, grow the stack automatically and retry; the frame's
+     * the one just above the stack, grow the stack automatically and retry; the frame's
      * RET already points back at the faulting instruction (the restart protocol above).
      *
-     * TODO 17: grow() still takes a word address and still assumes the x86's
-     * downward-growing stack, so the faulting PAGE is converted back to an address here.
-     * When 17 flips the stack direction, grow() takes the page number and this line goes.
+     * grow() takes the page as reported -- a page number is all the machine gives us, and
+     * with the stack growing up from USTKPAGE that is exactly what it needs.
      */
     case T_DATA + USER:
-        if (grow(page << PGSH))
+        if (grow(page))
             goto out;
         i = SIGSEG;
         break;

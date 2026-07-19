@@ -115,15 +115,19 @@ void sendsig(caddr_t p, int signo)
     register unsigned n;
 
     /*
-     * TODO 17: the BESM-6 user stack grows UP (exec seeds it at 070000), so the
-     * x86 "SP - 4" push direction and the whole signal-frame layout must be
-     * redone.  Kept compiling here; sendsig is not exercised until the signal
-     * delivery path lands.  There is no EFL/TBIT to clear -- single-step is the
-     * address-break registers М034/М035, not a flag.
+     * The user stack grows UP from 070000 (exec seeds it there; see the arg-block
+     * comment in sys1.c), and r15 is a WORD index naming the first free slot -- so a
+     * push stores AT r15 and then increments it by one word, not by a byte count.
+     * That is the whole of the x86 "SP - 4" correction.
+     *
+     * This is the minimal push: one word, the address to resume at.  A full signal
+     * frame -- the saved accumulator, R, and a sigreturn path back through it -- is
+     * still unbuilt, and nothing exercises signal delivery yet.  There is no EFL/TBIT
+     * to clear either: single-step is the address-break registers М034/М035, not a flag.
      */
-    n = u.u_ar0[R15] - 4;
-    grow(n);
+    n = u.u_ar0[R15];
+    grow(n >> PGSH); /* the page r15 points into may not be mapped yet */
     suword((caddr_t)n, u.u_ar0[RET]);
-    u.u_ar0[R15] = n;
+    u.u_ar0[R15] = n + 1;
     u.u_ar0[RET] = (int)p;
 }
