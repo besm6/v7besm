@@ -28,7 +28,7 @@ struct buf {
     struct buf *av_forw; /* position on free list, */
     struct buf *av_back; /*     if not BUSY*/
     dev_t b_dev;         /* major+minor device name */
-    unsigned b_bcount;   /* transfer count */
+    unsigned b_wcount;   /* transfer count, in WORDS */
     union {
         caddr_t b_addr;          /* core address */
         struct filsys *b_filsys; /* superblocks */
@@ -38,6 +38,13 @@ struct buf {
     daddr_t b_blkno;      /* block # on device */
     char b_error;         /* returned after I/O */
     unsigned int b_resid; /* words not transferred after error */
+    /*
+     * Where the data lives, physically, in WORDS -- valid only when B_PHYS.
+     * b_un.b_addr cannot serve: a caddr_t is a fat pointer whose word field is
+     * 15 bits, so it cannot name anything above 32767, and physical memory runs
+     * to 512 Kwords.  Filled by swap() and physio(); read through bufpaddr().
+     */
+    unsigned b_paddr;
 };
 
 extern struct buf buf[];     /* The buffer pool itself */
@@ -61,11 +68,25 @@ extern struct buf bfreelist; /* head of available list */
 #define B_PACK   010000
 
 /*
+ * Where a request's data lives, physically, in words -- the one call a strategy
+ * routine makes to find its transfer target, and the only place B_PHYS is read.
+ *
+ * A kernel buffer is unmapped, so its address IS its physical address and the word
+ * field of the fat pointer is the whole answer.  A B_PHYS request carries the address
+ * explicitly, because its target may be above the 32767 that field can reach.
+ */
+#define bufpaddr(bp) \
+    ((bp)->b_flags & B_PHYS ? (bp)->b_paddr : ptrword((bp)->b_un.b_addr))
+
+/*
  * special redeclarations for
  * the head of the queue per
  * device driver.
+ *
+ * A device header never has B_PHYS set, so b_paddr is unused there and needs no
+ * alias of its own -- do not add one, or bufpaddr() stops meaning one thing.
  */
 #define b_actf   av_forw
 #define b_actl   av_back
-#define b_active b_bcount
+#define b_active b_wcount
 #define b_errcnt b_resid

@@ -26,3 +26,4 @@ kernel/test/uclock
 kernel/test/uswtch
 kernel/test/usched
 kernel/test/ugrow
+kernel/test/biotest

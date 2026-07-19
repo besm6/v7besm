@@ -227,6 +227,7 @@ void qswtch(void);
 void psig(void);
 unsigned physaddr(unsigned addr);
 int useracc(unsigned addr, unsigned count, int rw);
+unsigned physrange(unsigned addr, unsigned count);
 void timeout(void (*fun)(caddr_t), caddr_t arg, int tim);
 void deverror(struct buf *bp, int o1, int o2);
 void iodone(struct buf *bp);

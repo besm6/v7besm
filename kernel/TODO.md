@@ -209,21 +209,42 @@ anywhere in the machine (18a), and the driver that actually moves it (18b). 18a 
 18b — without `b_paddr` a transfer cannot name a page above 32767, which is most of memory — so do
 them in that order.
 
-**18a. I/O addresses (`include/sys/buf.h`, `dev/bio.c`, `dev/mem.c`).** Add `unsigned b_paddr` to
-`struct buf` — a physical **word** address, used when `B_PHYS`: a `char *` is a fat pointer with a
-15-bit word field and cannot name a physical word above 32767. `swap()` and `physio()` fill it
-instead of `PHY + physaddr(…)`. Device transfers take a *physical* page (the drum/disk control word
-carries a 9-bit page number and reaches all 512 Kwords), so **buffer I/O needs no bracket at all** —
-kernel buffers are unmapped and their address *is* their physical address. `mem.c`: /dev/mem through
-a `copyseg`-style bracket, /dev/kmem direct.
-- **Done when** a forged `buf` whose target is a physical page above 32767 gets the right `b_paddr`
-  from both `swap()` and `physio()`, and `physio()` accepts/rejects user addresses correctly at the
-  `NPAGE * PGSZ` boundary. No hardware needed — this half is verifiable without a driver.
-- Stage 0 deliberately left `physio()` (`dev/bio.c:462-482`) alone — it is the one piece of memory
-  arithmetic still in the old units. It derives page numbers with `>> PGSH` from `(unsigned)u.u_base`,
-  which is a *fat pointer*, not a byte address, and compares them against `u_tsize`/`u_dsize`/`u_ssize`,
-  which are now words; the `1024` ceilings should be `NPAGE * PGSZ`. Stage 1's `useracc()` is what
-  finally gives it a way to validate a user address, so it is fixed here, along with `b_paddr`.
+**18a. I/O addresses — DONE.** `struct buf` gained `unsigned b_paddr`, a physical **word** address
+valid when `B_PHYS`, filled by `swap()` and `physio()`. Read it through **`bufpaddr(bp)`**
+(`include/sys/buf.h`) — the one place `B_PHYS` is read, and the call 18b's driver should make: a
+kernel buffer is unmapped so its address *is* physical, and only a `B_PHYS` request needs the extra
+field. Buffer I/O needs no bracket, as planned.
+
+How it turned out, where that differed from the sketch:
+- **`b_bcount` is gone; the field is `b_wcount` and counts WORDS.** It had six writes and *no
+  readers*, so the unit was changed while the field was still write-only rather than after 18b put
+  readers in an interrupt path. `b_resid` was already words; the two now agree. The four
+  buffer-cache writes are `BSIZEW` (512), not `BSIZE` (3072).
+- **`physio()` verifies contiguity instead of looping over runs.** A transfer is one physical
+  address plus a length, so scattered pages cannot be expressed. `physrange(addr, count)`
+  (`kernel/utab.c`, beside `useracc()` because `uptget()` is static there) returns the physical base
+  only if the whole range is mapped *and* one contiguous run, else 0. It cannot fire today —
+  `malloc()` is first-fit and returns one run, `expand()` keeps it one, `sureg()` maps sequentially
+  — so it asserts the allocator's invariant rather than coding around a case it forbids.
+- **The old checks are gone, not renamed.** `physio()` now takes the word address out of the fat
+  pointer with `ptrword()` (new in `sys/param.h`, with `ptrbyte()`), rejects a start that is not on
+  a word boundary and a count that is not a whole number of words, keeps a text guard — `useracc()`
+  deliberately makes no read/write distinction — and leaves the `NPAGE * PGSZ` ceiling to
+  `physrange()`. The old `1024` literals were dead code once `base` is masked to 15 bits, and the
+  old `nb < u_tsize` compared a page number against a word count, refusing *every* data transfer.
+- **`b_blkno` was wrong too**: `u_offset >> BSHIFT` scaled a byte offset as if `BSHIFT` counted
+  bytes, but a block is 3072 bytes / 512 words. Now `wtodb(btow(u.u_offset))`.
+- **`rdwri.c:71`** did `BSIZE - bp->b_resid` — bytes minus words. Fixed here; it was benign only
+  because `b_resid` is 0 on every path today.
+- **Done when / verified by `test/biotest`** (`biotest.c` + `biotest.ini`), a new standalone SIMH
+  test that links the real `bio.o` against stubs and a recording strategy routine. Three legs:
+  `swap()` to physical page 60 in two clamped transfers; `physio()` over a map laid entirely above
+  physical page 32, both sides of the `NPAGE * PGSZ` ceiling, the text guard, the data/stack gap,
+  the alignment rejects; and `physrange()` directly — virtual pages 1–2 are physically adjacent
+  (41, 42) but 0–1 are not (39, 41), since the image's u-area page sits between them and is not in
+  the map, so the contiguity walk is exercised with no hand-built descriptor. Six bite tests are
+  listed in `biotest.ini` and all six fire on the predicted check.
+- **`mem.c` was deferred** — see the entry below.
 
 **18b. The drum/disk driver (`dev/hd.c`).** `hd.c` is a skeleton: `hdstrategy()` sets `B_ERROR` and
 calls `iodone()` on every request, and `hdintr()` is empty. `rootdev`, `swapdev` and `pipedev`
@@ -242,6 +263,19 @@ off ГРП in `hdintr()`. Read [../doc/Besm6_Peripherals.md](../doc/Besm6_Periph
 
 Loose ends the finished work left behind. None blocks 18.
 
+* **/dev/mem and /dev/kmem (`dev/mem.c`).** Split out of 18a, which it shares no code with: the
+  `b_paddr` work is about `struct buf`, and `mmread`/`mmwrite` never touch one. Minors 0 and 1 are
+  stubbed to `ENXIO` today; minor 2 (/dev/null) works. /dev/mem must reach a physical page above
+  `0100000`, which needs a `copyseg`-style mapped bracket (`kernel/seg.s` is the worked example) —
+  or, simpler and with no new assembly, a bounce through a page-aligned kernel buffer using
+  `copyseg()` itself, whose БРЗ drains are already in the right places. /dev/kmem is direct below
+  the unmapped reach. Nothing opens either yet: `iinit()` still panics, so there are no device
+  nodes, and nothing on the path to a booting kernel needs them.
+* **`iomove()` tests alignment with `n & (NBPW - 1)`** (`rdwri.c`), and `NBPW` is 6 — not a power of
+  two, so the mask is meaningless and the fast `copyin`/`copyout` path is taken more or less at
+  random. Marked `/* XXX even addresses */` in the v7 original. Correctness is unaffected (the
+  byte-at-a-time path is right); it is a performance bug, and it wants the same `(word, offset)`
+  treatment as the `u_dirp` item below.
 * **Single-step / the address-break registers М034/М035.** `ptrace()`'s "set signal and continue,
   one version causing a trace-trap" has no flag bit to set on this machine — there is no EFL/TBIT —
   so arming it means writing М034/М035, and `procxmt()` has to re-arm after each `T_BREAK`. The

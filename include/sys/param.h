@@ -109,6 +109,18 @@
 /* words to disk blocks (a block is BSIZE == 512 words) */
 #define wtodb(x) ((x) >> 9)
 
+/*
+ * Taking a char * apart.  A char or void pointer is a FAT POINTER, one word: bit 48 is the
+ * marker, bits 47-45 the byte offset as a right-shift distance (5 = byte #0, the word's
+ * first, down to 0 = byte #5), bits 15-1 the word address.  See doc/Besm6_Data_Representation.md
+ * section 7.  The word field being only 15 bits is why a caddr_t cannot name physical
+ * memory above 32767 -- hence struct buf's b_paddr.
+ *
+ * `aax #077777' is the same idiom in assembly; see usermem.s (fubyte).
+ */
+#define ptrword(p) ((unsigned)(p) & 077777)     /* bits 15-1: the word address */
+#define ptrbyte(p) (((unsigned)(p) >> 44) & 07) /* bits 47-45: 5 = the word's first byte */
+
 /* inumber to disk address */
 #define itod(x) (daddr_t)((((unsigned)(x) + 15) >> 3))
 

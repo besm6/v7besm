@@ -14,7 +14,7 @@ NM      = b6nm
 CFLAGS  = -I../../include
 LIBDIR  = $$HOME/.local/share/besm6/lib
 
-PROGS   = hello sctest mmutest uintr utrap usys uclock uswtch usched ugrow
+PROGS   = hello sctest mmutest uintr utrap usys uclock uswtch usched ugrow biotest
 
 all:    $(PROGS)
 
@@ -31,6 +31,7 @@ test:   $(PROGS)
 	besm6 uswtch.ini
 	besm6 usched.ini
 	besm6 ugrow.ini
+	besm6 biotest.ini
 
 clean:
 	rm -f *.o *.dis *.nm $(PROGS)
@@ -113,6 +114,17 @@ ugrow:  crt0g.o ugrow.o utab.o brz.o seg.o
 	$(LD) crt0g.o ugrow.o utab.o brz.o seg.o -o $@ -L$(LIBDIR) -lc
 	$(DISASM) -c $@ > $@.dis
 	$(NM) -n $@ > $@.nm
+
+# biotest -- task 18a's addressing plumbing.  Links the REAL bio.o (swap() and physio()
+# both live there) against stubs for everything else it names, plus utab.o for the
+# physaddr/useracc/physrange the translation rests on.  See biotest.ini.
+biotest: crt0.o biotest.o bio.o utab.o brz.o
+	$(LD) crt0.o biotest.o bio.o utab.o brz.o -o $@ -L$(LIBDIR) -lc
+	$(DISASM) -c $@ > $@.dis
+	$(NM) -n $@ > $@.nm
+
+bio.o: ../dev/bio.c
+	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@
 
 slp.o: ../slp.c
 	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@

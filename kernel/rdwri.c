@@ -68,7 +68,7 @@ void readi(register struct inode *ip)
         else
             bp = bread(dev, bn);
         ip->i_un.i_lastr = lbn;
-        n                = min((unsigned)n, BSIZE - bp->b_resid);
+        n                = min((unsigned)n, BSIZE - wtob(bp->b_resid));
         if (n != 0)
             iomove(bp->b_un.b_addr + on, n, B_READ);
         brelse(bp);

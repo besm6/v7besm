@@ -203,3 +203,38 @@ int useracc(unsigned addr, unsigned count, int rw)
             return (0);
     return (1);
 }
+
+/*
+ * The physical word address of the user's [addr, addr+count) -- in WORDS -- but only
+ * if the whole range is mapped AND lands on ONE CONTIGUOUS run of physical pages.
+ * Returns 0 otherwise; physical page 0 is never handed to a process, so 0 is a safe
+ * "no" (physaddr() uses it the same way).
+ *
+ * A device transfer is described by one physical address plus a length: the drum/disk
+ * control word carries a 9-bit page number and the driver derives page n by adding
+ * n * PGSZ (doc/Besm6_Peripherals.md).  So a request whose pages are scattered cannot
+ * be expressed at all, and must be refused rather than half-issued.
+ *
+ * Today the check cannot fire.  malloc() is first-fit and returns ONE contiguous run,
+ * expand() keeps the image one run, and sureg() maps text, data and stack sequentially
+ * within it -- so every range that survives physio()'s text and data/stack-gap tests
+ * is contiguous by construction.  This asserts that invariant rather than coding around
+ * a case the allocator forbids: if a future swapper ever breaks it, this is what says
+ * so, instead of a driver quietly DMAing into a page that belongs to someone else.
+ *
+ * Lives here, not in bio.c, because uptget() is static to this file and the buffer
+ * cache has no business knowing how a descriptor is packed.
+ */
+unsigned physrange(unsigned addr, unsigned count)
+{
+    unsigned v, last, first;
+
+    if (count == 0 || !useracc(addr, count, 0))
+        return (0);
+    first = addr >> PGSH;
+    last  = (addr + count - 1) >> PGSH;
+    for (v = first + 1; v <= last; v++)
+        if (uptget((int)v) != uptget((int)first) + (v - first))
+            return (0);
+    return (physaddr(addr));
+}

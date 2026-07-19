@@ -73,7 +73,7 @@ struct buf *bread(dev_t dev, daddr_t blkno)
         return (bp);
     }
     bp->b_flags |= B_READ;
-    bp->b_bcount = BSIZE;
+    bp->b_wcount = BSIZEW;
     (*bdevsw[major(dev)].d_strategy)(bp);
 #ifdef DISKMON
     io_info.nread++;
@@ -95,7 +95,7 @@ struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno)
         bp = getblk(dev, blkno);
         if ((bp->b_flags & B_DONE) == 0) {
             bp->b_flags |= B_READ;
-            bp->b_bcount = BSIZE;
+            bp->b_wcount = BSIZEW;
             (*bdevsw[major(dev)].d_strategy)(bp);
 #ifdef DISKMON
             io_info.nread++;
@@ -108,7 +108,7 @@ struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno)
             brelse(rabp);
         else {
             rabp->b_flags |= B_READ | B_ASYNC;
-            rabp->b_bcount = BSIZE;
+            rabp->b_wcount = BSIZEW;
             (*bdevsw[major(dev)].d_strategy)(rabp);
 #ifdef DISKMON
             io_info.nreada++;
@@ -131,7 +131,7 @@ void bwrite(register struct buf *bp)
 
     flag = bp->b_flags;
     bp->b_flags &= ~(B_READ | B_DONE | B_ERROR | B_DELWRI | B_AGE);
-    bp->b_bcount = BSIZE;
+    bp->b_wcount = BSIZEW;
 #ifdef DISKMON
     io_info.nwrite++;
 #endif
@@ -403,13 +403,15 @@ void swap(int blkno, int coreaddr, register int count, int rdflg)
         tcount      = count;
         if (tcount > 037 * PGSZ) /* workaround for hd: 31 pages = 62 blocks */
             tcount = 037 * PGSZ;
-        bp->b_bcount = wtob(tcount);
+        bp->b_wcount = tcount;
         bp->b_blkno  = swplo + blkno;
         /*
-         * coreaddr is a physical word address, which does not fit a caddr_t;
-         * task 18a gives struct buf a b_paddr for it.
+         * coreaddr is a physical word address and does not fit a caddr_t (15-bit
+         * word field); the image it names lives above the unmapped reach.  It needs
+         * no translation and no bracket: the swapper allocates one contiguous run
+         * out of the coremap, so the address is already what the device wants.
          */
-        bp->b_un.b_addr = (caddr_t)coreaddr;
+        bp->b_paddr = coreaddr;
         (*bdevsw[major(swapdev)].d_strategy)(bp);
         spl6();
         while ((bp->b_flags & B_DONE) == 0)
@@ -460,42 +462,55 @@ loop:
 void physio(void (*strat)(struct buf *), register struct buf *bp, int dev, int rw)
 {
     register unsigned base;
-    register int nb;
-    int eb;
+    unsigned nw, pa;
 
-    base = (unsigned)u.u_base;
+    /*
+     * The address arrives as a fat pointer.  A device moves whole words to a physical
+     * page, so a transfer that starts mid-word, or does not run a whole number of
+     * words, cannot be expressed at all.
+     */
+    if (ptrbyte(u.u_base) != 5 || (u.u_count % NBPW) != 0)
+        goto bad;
+    base = ptrword(u.u_base);
+    nw   = u.u_count / NBPW;
     /*
      * Check address wraparound or zero u.u_count.
      */
-    if (base >= base + u.u_count)
+    if (nw == 0 || base + nw < base)
         goto bad;
-    nb = base >> PGSH;
-    eb = (base + u.u_count - 1) >> PGSH;
     /*
-     * Check that transfer is entirely within the data
-     * plus stack area: not overlapping text or beyond
-     * stack.
+     * Not into the text.  useracc() below deliberately makes no read/write
+     * distinction -- a page is open to data or closed to it -- so without this a raw
+     * read would happily scribble on shared text.
      */
-    if (nb < u.u_tsize || eb >= 1024)
+    if (base < u.u_tsize)
         goto bad;
     /*
      * Check that transfer is either entirely in the
      * data or in the stack: that is, either
      * the end is in the data or the start is in the stack.
      */
-    if (eb > u.u_tsize + u.u_dsize && nb < 1024 - u.u_ssize)
+    if (base + nw > u.u_tsize + u.u_dsize && base < USTKPAGE * PGSZ)
+        goto bad;
+    /*
+     * Mapped, and one contiguous run of physical pages -- which is also what enforces
+     * the NPAGE * PGSZ ceiling, through useracc().  The old code bounded the transfer
+     * with a bare `1024', a page count from a machine whose pages were not these; once
+     * base is masked to its 15 bits that test could never fire at all.
+     */
+    if ((pa = physrange(base, nw)) == 0)
         goto bad;
     spl6();
     while (bp->b_flags & B_BUSY) {
         bp->b_flags |= B_WANTED;
         sleep((caddr_t)bp, PRIBIO + 1);
     }
-    bp->b_flags     = B_BUSY | B_PHYS | rw;
-    bp->b_dev       = dev;
-    bp->b_un.b_addr = (caddr_t)physaddr(base);
-    bp->b_blkno     = u.u_offset >> BSHIFT;
-    bp->b_bcount    = u.u_count;
-    bp->b_error     = 0;
+    bp->b_flags  = B_BUSY | B_PHYS | rw;
+    bp->b_dev    = dev;
+    bp->b_paddr  = pa;
+    bp->b_blkno  = wtodb(btow(u.u_offset));
+    bp->b_wcount = nw;
+    bp->b_error  = 0;
     u.u_procp->p_flag |= SLOCK;
     (*strat)(bp);
     spl6();
@@ -506,7 +521,7 @@ void physio(void (*strat)(struct buf *), register struct buf *bp, int dev, int r
         wakeup((caddr_t)bp);
     spl0();
     bp->b_flags &= ~(B_BUSY | B_WANTED);
-    u.u_count = bp->b_resid;
+    u.u_count = wtob(bp->b_resid); /* b_resid is words, u_count bytes */
     geterror(bp);
     return;
 bad:
