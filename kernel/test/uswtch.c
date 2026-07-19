@@ -4,13 +4,13 @@
  * The fifth standalone SIMH test, and the third (after usys and uclock) to link the code
  * under test rather than a copy: the kernel's own switch.o (save/resume), uarea.o
  * (uflush/uload), brz.o (drainbrz), intr.o (spl/idle/extintr) and psw.o (cli/sti), with only
- * the environment hand-built.  crt0w.s puts `u' at the real 076000 and runs main() on the
+ * the environment hand-built.  crt0w.S puts `u' at the real 076000 and runs main() on the
  * u-page stack, because resume() reloads that very page out from under its caller.
  *
  * Three legs:
  *
  *   A  save()/resume() through the FAST path (paddr == uhome, nothing copied): do the nine
- *      label slots come back?  Driven from crt0w.s's regtest(), since C cannot spend r1-r7.
+ *      label slots come back?  Driven from crt0w.S's regtest(), since C cannot spend r1-r7.
  *
  *   B  the invariant itself.  Two homes above 0100000; a sentinel written into the live
  *      u-area by "process A" must be ABSENT after switching to B and PRESENT again when A is
@@ -27,6 +27,7 @@
  */
 
 // clang-format off
+#include "sys/types.h"
 #include "sys/param.h"
 #include "sys/systm.h"
 #include "sys/dir.h"
@@ -38,7 +39,7 @@
 #include <besm6.h>
 
 /*
- * From crt0w.s: the register-file probe and the cells it reports through.  `u' comes from
+ * From crt0w.S: the register-file probe and the cells it reports through.  `u' comes from
  * there too, as the absolute symbol 076000 -- this file must not define it.
  */
 int regtest(label_t lab);

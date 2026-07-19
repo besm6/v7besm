@@ -18,9 +18,9 @@ Anything a test has to exercise for real therefore lives in a file of its own:
 |---|---|
 | [besm6.S](../kernel/besm6.S) | `_start`, the vector block at `0500`/`0501` and `0550`–`0577`, and the four gates: `trapgate`, `intrgate`, `sysgate`, `badext` |
 | [switch.s](../kernel/switch.s) | `save`, `resume`, and the `uhome` cell |
-| [uarea.s](../kernel/uarea.s) | `uflush`, `uload` — the u-area window bracket |
-| [seg.s](../kernel/seg.s) | `copyseg`, `clearseg` |
-| [usermem.s](../kernel/usermem.s) | `copyin`, `copyout`, `fubyte`, `fuword`, `subyte`, `suword` |
+| [uarea.S](../kernel/uarea.S) | `uflush`, `uload` — the u-area window bracket |
+| [seg.S](../kernel/seg.S) | `copyseg`, `clearseg` |
+| [usermem.S](../kernel/usermem.S) | `copyin`, `copyout`, `fubyte`, `fuword`, `subyte`, `suword` |
 | [psw.s](../kernel/psw.s) | `cli`, `sti` — the read-modify-write of БлПр |
 | [brz.s](../kernel/brz.s) | `drainbrz` — the nine-store БРЗ drain |
 
@@ -107,8 +107,8 @@ control. On x86 it stores the five callee-saved registers (`%ebx`, `%esp`, `%ebp
 **On BESM-6 `label_t` is `int[10]`** ([param.h](../include/sys/param.h)), of which nine slots are
 used — r1–r7 (the callee-saved set), r13 (the return address into `save()`'s caller) and r15 (the
 kernel stack pointer). Slot 9 is reserved and unused: shrinking to nine would move `u_upt`, whose
-word offset in `struct user` is hardcoded as `UPT = 35` in [uarea.s](../kernel/uarea.s) and
-[seg.s](../kernel/seg.s) (`b6as` has no `offsetof`; `mmutest` asserts the value). Ten words cost
+word offset in `struct user` is hardcoded as `UPT = 35` in [uarea.S](../kernel/uarea.S) and
+[seg.S](../kernel/seg.S) (`b6as` has no `offsetof`; `mmutest` asserts the value). Ten words cost
 three words per process and no risk.
 
 ### The user register frame (`u_ar0` / `reg.h`) — contract-level shape
@@ -479,7 +479,7 @@ These are the heart of process switching — the v7 `savu`/`aretu`/`resume` prim
   (§14's "the hardware never saves R" is true, and applies to the *gates*, which interrupt
   arbitrary code mid-function — not to a switch that happens at a call boundary in both
   contexts.) `label_t` is `int[10]`, of which nine are used and slot 9 is reserved; it was left
-  at ten deliberately, because shrinking it moves `u_upt` and `uarea.s` hardcodes that offset.
+  at ten deliberately, because shrinking it moves `u_upt` and `uarea.S` hardcodes that offset.
 
   **`resume()` switches the u-area, and never writes РП.** Two things that held on the x86 hold
   here no longer: the kernel runs unmapped, so reloading РП would change nothing it can see (the
@@ -541,7 +541,7 @@ int copyout(caddr_t from, caddr_t to, unsigned nbytes);  /* systm.h:177 */
   and signal frames (`sendsig` in `machdep.c:106`, `sig.c`, `sys1.c`); `copyin`/`copyout` are the
   core of `iomove` ([rdwri.c:181](../kernel/rdwri.c)), `exec`/`icode` setup (`main.c:88`,
   `sys3.c`, `sys4.c`), and tty I/O (`dev/tty.c`).
-- **BESM-6 notes — done**, in [usermem.s](../kernel/usermem.s). The return contracts are preserved
+- **BESM-6 notes — done**, in [usermem.S](../kernel/usermem.S). The return contracts are preserved
   exactly; the mechanism is not.
 
   **There is no window and no map switch.** A trap does not disturb РП, so the user's map is
@@ -777,8 +777,8 @@ change with the device set.
 | `spl0`…`spl7`, `splx` | **done** — two levels, not eight, and the knob is **БлПр** (via `cli`/`sti`), not МГРП, which is a source enable armed once by `intrinit()`. Putting the level in the mode word is what lets `выпр` restore it on a gate return, as the PDP-11's `rtt` does |
 | `addupc` | **still a stub**, so `profil(2)` is inert — same histogram logic when wanted, adjusting the fixed-point scale and word addressing |
 | `cli`, `sti` | **done** — [psw.s](../kernel/psw.s); a read-modify-write of БлПр in ПСВ, never a `vtm`, and they now carry the whole interrupt priority level |
-| `fubyte`/`fuword`/`subyte`/`suword`, `copyin`/`copyout` | **done** — [usermem.s](../kernel/usermem.s); **no `nofault` recovery was needed**, validation is `useracc()` up front. No window either: the loop toggles БлП per word through the user map that is already loaded. Byte variants do RMW, and mind the fat-pointer marker bit |
-| `copyseg`/`clearseg`, `uflush`/`uload` | **done** — [seg.s](../kernel/seg.s), [uarea.s](../kernel/uarea.s); the characteristic BESM-6 shape, a two-page window bracket with a БРЗ drain either side (§4.4a). No x86 counterpart |
+| `fubyte`/`fuword`/`subyte`/`suword`, `copyin`/`copyout` | **done** — [usermem.S](../kernel/usermem.S); **no `nofault` recovery was needed**, validation is `useracc()` up front. No window either: the loop toggles БлП per word through the user map that is already loaded. Byte variants do RMW, and mind the fat-pointer marker bit |
+| `copyseg`/`clearseg`, `uflush`/`uload` | **done** — [seg.S](../kernel/seg.S), [uarea.S](../kernel/uarea.S); the characteristic BESM-6 shape, a two-page window bracket with a БРЗ drain either side (§4.4a). No x86 counterpart |
 | `save`, `resume` | **done (task 16)** — [kernel/switch.s](../kernel/switch.s); nine slots (r1–r7, r13, r15), and `resume()` switches the **u-area**, not the address space: it never writes РП (see below) |
 | `idle` | **done (task 16)** — no wait-for-interrupt exists, so it is a spin released by `extintr()`; written in C, and `waitloc` is deleted in favour of the `idling` flag |
 | `savfp`/`restfp`/`stst` | **deleted** — the x86 FP state went with the stage-1 bss cleanup; the mode register R is saved by the gates instead (§3), and there is no separate float context to preserve |

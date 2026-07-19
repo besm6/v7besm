@@ -5,7 +5,7 @@
 // int  save(label_t lbl);            -- setjmp-like; returns 0 direct, 1 when resumed
 // void resume(int paddr, label_t lbl) -- longjmp-like; does not return to its caller
 //
-// These live here, and not in besm6.S, for the reason brz.s/uarea.s/seg.s/usermem.s do:
+// These live here, and not in besm6.S, for the reason brz.s/uarea.S/seg.S/usermem.S do:
 // besm6.o cannot enter a standalone test -- its 0500 vector reaches into the C kernel and
 // its _start seeds no stack -- and kernel/test/uswtch links the REAL switch, not a copy.
 // idle() is not here at all: with spl now masking БлПр (intr.c) it is ordinary C.
@@ -25,7 +25,7 @@
 //
 //   * The u-area is a fixed PHYSICAL page at 076000, not a fixed virtual one, so it has to
 //     be COPIED: out to the outgoing process's home, in from the incoming one's.  That is
-//     uflush()/uload() (uarea.s), and it is the price of an unmapped kernel.
+//     uflush()/uload() (uarea.S), and it is the price of an unmapped kernel.
 //
 // The label pointer survives the swap by being a constant: u.u_qsav is 076000+n in EVERY
 // process, so the pointer may be captured before the copy and dereferenced after it, by
@@ -63,7 +63,7 @@
 // were all in registers pops nothing).
 //
 // The stores go into the live u-area UNMAPPED, so their dirty БРЗ lines carry physical
-// tags -- which is exactly what uarea.s's first drain covers.  Nothing extra is owed here.
+// tags -- which is exactly what uarea.S's first drain covers.  Nothing extra is owed here.
 
         .globl  save
 save:
@@ -105,7 +105,7 @@ save:
 //
 //  * `paddr' DOES NOT FIT AN INDEX REGISTER.  It is a physical word address over 512 Kwords
 //    -- 19 bits -- and index registers are 15.  Both arguments are parked in static cells,
-//    exactly as uarea.s parks parg/upt0.  Non-reentrant, like everything on this path.
+//    exactly as uarea.S parks parg/upt0.  Non-reentrant, like everything on this path.
 //
 //  * ITS OWN ARGUMENTS ARE ON THE DOOMED STACK.  `paddr' arrives pushed at r15-1, inside the
 //    u page uload() is about to overwrite, so both arguments must be in their cells BEFORE

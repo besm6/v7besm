@@ -10,7 +10,7 @@
 // Kwords, and the page pool a process is built from lives ABOVE 0100000, out of that
 // reach.  So a caddr_t cannot name these pages (its word field is only 15 bits), and
 // the copy has to be done through a window, with mapping on -- exactly the bracket
-// uarea.s uses, which is the worked example.
+// uarea.S uses, which is the worked example.
 //
 // The bracket:
 //
@@ -28,7 +28,7 @@
 // to.  A window there would silently lose word 0 of the page.
 //
 // Interrupts are held off across the whole bracket, the same way and for the same
-// reasons as uarea.s: `vtm <mask>' with register field 0 writes БлП, БлЗ and БлПр
+// reasons as uarea.S: `vtm <mask>' with register field 0 writes БлП, БлЗ and БлПр
 // straight from the address field -- all three -- so the plain `vtm 2'/`vtm 3' of
 // test/mmuhelp.s would ENABLE interrupts as a side effect.  These run at 02003/02002
 // (БлПр set) and put ПСВ back exactly as found (`ita'/`ati' take a 5-bit register
@@ -65,10 +65,11 @@
 // the real routines: besm6.o cannot go into a standalone test (its 0500 vector reaches
 // into the C kernel, and _start seeds no stack).  Same reason as brz.s, which it calls.
 
+#include "sys/param.h"           // PGSZ
+
         .text
 
 UPT    = 35                     // word offset of u_upt in struct user -- mmutest asserts it
-PGSZ   = 1024                   // words in a page (sys/param.h)
 WSRC   = 02000                  // virtual page 1: the source window (and clearseg's dest)
 WDST   = 04000                  // virtual page 2: the dest window
 
@@ -80,7 +81,7 @@ WDST   = 04000                  // virtual page 2: the dest window
 //      k=2 (virtual page 2)  .47|.43|.39|.35|.31|.[11:15]
 //
 // Written out at each use rather than equated: a symbol's value is only 24 bits, so an
-// equate would silently truncate the scattered high bits (verified in uarea.s).  An inline
+// equate would silently truncate the scattered high bits (verified in uarea.S).  An inline
 // `#(expr)' is evaluated in the full 48.
 
 // ----------------------------------------------------------------------------

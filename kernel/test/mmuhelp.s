@@ -16,7 +16,7 @@
 // Everything between the two `vtm's runs out of registers.  While mapping is on the
 // kernel's own data is not addressable -- the addresses mean something else -- so
 // there is nothing here but the one load or store.  This is the shape the real
-// copyin/copyout use; see kernel/usermem.s.
+// copyin/copyout use; see kernel/usermem.S.
 
         .text
 

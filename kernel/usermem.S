@@ -1,5 +1,5 @@
 //
-// usermem.s -- fault-safe access to user memory.
+// usermem.S -- fault-safe access to user memory.
 //
 //   int fubyte(caddr_t addr);              int fuword(caddr_t addr);
 //   int subyte(caddr_t addr, int value);   int suword(caddr_t addr, int value);
@@ -8,7 +8,7 @@
 //
 // These six cross the user/kernel boundary.  The kernel runs unmapped (БлП set), so a kernel
 // address IS a physical address; the user's pages live in РП, the current process's map.  So
-// unlike uarea.s/seg.s there is NO window to steal -- the user's map is already loaded.  The
+// unlike uarea.S/seg.S there is NO window to steal -- the user's map is already loaded.  The
 // copy just toggles БлП per word: read the user word MAPPED, store it to the kernel buffer
 // UNMAPPED (copyin), or the reverse (copyout).  That asymmetry -- supervisor instruction fetch
 // is never mapped, but supervisor data fetch obeys БлП -- is what makes copyin cheap here.
@@ -23,7 +23,7 @@
 // copyout's mapped stores are written back through the SAME map that is loaded, so no БРЗ tag
 // hazard.  (A context switch, which does reload РП, drains -- that is resume()'s job, not ours.)
 //
-// The mode-bit discipline is uarea.s's, minus the mod/drain: these run in supervisor mode (they
+// The mode-bit discipline is uarea.S's, minus the mod/drain: these run in supervisor mode (they
 // are reached during a syscall/trap), so ita/ati 021 name ПСВ = M[021].  Save ПСВ on entry and
 // restore it exactly on exit, to preserve the caller's БлПр (interrupt-enable); toggle mapping
 // with `vtm 02002' (БлП clear = map on, БлЗ+БлПр held) and `vtm 02003' (unmapped, БлЗ+БлПр held).
@@ -34,7 +34,7 @@
 //
 // useracc is a `vjm' call, which clobbers r13 and every r8..r14; so the return address, the word
 // count and the arguments that must survive the call live in bss temps (read back after it), not
-// in registers.  Non-reentrant (the bss temps are static), same as uarea.s/seg.s -- no interrupt
+// in registers.  Non-reentrant (the bss temps are static), same as uarea.S/seg.S -- no interrupt
 // handler calls these.  r1-r7 are untouched (useracc preserves them for us).
 //
 // copyin/copyout are WORD-ONLY, exactly like the x86 original: they copy nbytes/NBPW whole words.
@@ -44,13 +44,13 @@
 //
 // This lives in its own file rather than in besm6.S so that kernel/test/mmutest can link the real
 // routines: besm6.o cannot go into a standalone test (its 0500 vector reaches into the C kernel,
-// and _start seeds no stack).  Same reason as uarea.s/seg.s/brz.s.
+// and _start seeds no stack).  Same reason as uarea.S/seg.S/brz.s.
+
+#include "sys/param.h"                   // NBPW
 
         .text
 
         .globl  useracc                 // C, in utab.c: useracc(word_addr, word_count, rw)
-
-NBPW    = 6                              // bytes per word (sys/param.h: sizeof(int))
 
 // ----------------------------------------------------------------------------
 // int copyin(caddr_t from, caddr_t to, unsigned nbytes) -- user -> kernel.

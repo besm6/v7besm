@@ -158,7 +158,7 @@ The symbol takes the segment/relocation class of the expression. Equating to an 
 > ```
 >
 > Write such a constant out where it is used — `aux #(.46 | .42 | ...)` — or lay it down with
-> `.word` and reference the location. There is no diagnostic. See `kernel/uarea.s`, which builds
+> `.word` and reference the location. There is no diagnostic. See `kernel/uarea.S`, which builds
 > an РП descriptor this way.
 
 **A symbol must land inside its segment.** A relocatable symbol names a *word* of the

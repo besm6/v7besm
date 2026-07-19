@@ -151,7 +151,7 @@ uprog:
 // report -- reached in SUPERVISOR via the 0500 fault vector.  Compare and halt.
 // ----------------------------------------------------------------------------
 // The four values are in uprog's data page; report reads them back through the still-loaded map
-// (a `vtm 02002'/`vtm 02003' bracket toggles БлП while keeping БлПр set, as uarea.s does), and the
+// (a `vtm 02002'/`vtm 02003' bracket toggles БлП while keeping БлПр set, as uarea.S does), and the
 // `#(...)' pool constants and the physical switch-sentinel resolve unmapped to real low memory.
 // The fault mask is accumulated in r14; a register prefix is DECIMAL, so r14 is `14' here, while
 // the operand of `ita 016' that reads it back is OCTAL (016 == M[14]).

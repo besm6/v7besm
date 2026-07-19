@@ -1,12 +1,12 @@
 //
-// crt0w.s -- startup, vectors and the register-level test helper for `uswtch',
+// crt0w.S -- startup, vectors and the register-level test helper for `uswtch',
 // the standalone SIMH test of save()/resume()/idle() and the u-area invariant.
 //
 // Unlike crt0u.S/crt0t.S/crt0s.S/crt0c.S this forges no user mode: everything under test
 // here runs in the kernel's own world.  What it does instead is put the machine into the
 // shape the switch assumes, which the other tests never had to:
 //
-//   * `u' IS THE REAL u-AREA, at physical 076000.  It has to be: uarea.s windows the live
+//   * `u' IS THE REAL u-AREA, at physical 076000.  It has to be: uarea.S windows the live
 //     u-area as physical page 31 (a hardcoded descriptor), so a `u' declared as ordinary
 //     bss the way crt0c.S declares it would have uflush() copying the wrong page.  `u' is
 //     therefore an absolute symbol here exactly as in kernel/besm6.S.
@@ -22,8 +22,10 @@
 // this test's clock() stub ignores it.
 //
 
-        u     = 076000            // must agree with UBASE in include/sys/param.h
-        ustk  = 076400            // main()'s stack, inside the u page and past struct user
+#include "sys/param.h"            // UBASE
+
+        u     = UBASE             // the real u-area, as in kernel/besm6.S
+        ustk  = UBASE + 0400      // main()'s stack, inside the u page and past struct user
 
         .globl  u
 

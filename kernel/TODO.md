@@ -39,7 +39,11 @@ PHYSICAL, pages 0..31 — the kernel, addressed with БлП = 1 (no translation)
    0        const   (interrupt vector 0500/0501, extracodes 0550-0577, literal pool)
             text    (fetched unmapped: РП is irrelevant to it, always)
             data + bss
-   ...      must all end below 076000  (~31 Kwords; today `end` = 060131, 24665 words)
+   ...      must all end below 064000 = KEND  (today `end` = 047310, 20168 words)
+   064000   BUFFERS ------ buffers[NBUF][BSIZE], NBUF*BSIZEW = 5120 words -----
+              a fixed PHYSICAL area, not bss: the drum/disk controllers transfer
+              to a physical address.  `buffers = BUFBASE', absolute, in besm6.S;
+              main.c declares it `extern'.  Raising NBUF lowers KEND with it.
    076000   U AREA  ------ the last page of the kernel space -----------------
               struct user     (~140 words)   `u = 076000`, an absolute symbol
               kernel stack    (~880 words, grows UP to 0100000)
@@ -144,12 +148,12 @@ machine state afterwards. Run every MMU test with **`set mmu cache`**.
 
 **`besm6.o` cannot go into a standalone test** — its `0500` vector reaches into the C kernel and its
 `_start` seeds no stack. That is why every routine a test has to link lives in its own file
-(`brz.s`, `uarea.s`, `seg.s`, `usermem.s`, `switch.s`, `psw.s`, `syscall.c`) and why the gates are
+(`brz.s`, `uarea.S`, `seg.S`, `usermem.S`, `switch.s`, `psw.s`, `syscall.c`) and why the gates are
 duplicated in the tests' own crt0s.
 
 **Tasks 1–16 are done and their writeups have been removed**; the design they settled on is the
 section above, and how each turned out is in the source comments and in `../doc/`. The numbering
-below is **left as it was** — task numbers are cited from the source (`seg.s`, `dev/bio.c`,
+below is **left as it was** — task numbers are cited from the source (`seg.S`, `dev/bio.c`,
 `dev/mem.c`, `clock.c`, `trap.c`, `sig.c`, `test/crt0*.S`) and from `doc/`.
 
 ### Stage 4 — process memory and I/O
@@ -520,7 +524,7 @@ Loose ends the finished work left behind. None blocks 18.
 * **/dev/mem and /dev/kmem (`dev/mem.c`).** Split out of 18a, which it shares no code with: the
   `b_paddr` work is about `struct buf`, and `mmread`/`mmwrite` never touch one. Minors 0 and 1 are
   stubbed to `ENXIO` today; minor 2 (/dev/null) works. /dev/mem must reach a physical page above
-  `0100000`, which needs a `copyseg`-style mapped bracket (`kernel/seg.s` is the worked example) —
+  `0100000`, which needs a `copyseg`-style mapped bracket (`kernel/seg.S` is the worked example) —
   or, simpler and with no new assembly, a bounce through a page-aligned kernel buffer using
   `copyseg()` itself, whose БРЗ drains are already in the right places. /dev/kmem is direct below
   the unmapped reach. Nothing opens either yet: `iinit()` still panics, so there are no device
@@ -542,7 +546,7 @@ Loose ends the finished work left behind. None blocks 18.
   `struct user` plus the live stack, typically ~300 words — was planned and never done. It is a
   performance change, not a correctness one.
 * **`u.u_dirp = (caddr_t)u.u_arg[0]` is an `int`→`char *` conversion**, and a `char *` built by hand
-  from an `int` gets the fat-pointer byte-offset field wrong (see `usermem.s`, `fubyte`).
+  from an `int` gets the fat-pointer byte-offset field wrong (see `usermem.S`, `fubyte`).
   Pre-existing, affects every path-taking syscall, and belongs with `iomove()`'s byte handling
   rather than with syscall marshalling. Task 17 fixed the *exec* instance of this — the arg-string
   cursor now carries an explicit `(word, offset)` pair — which is the pattern to copy here.
@@ -628,10 +632,21 @@ Found while doing stage 0, and left alone: this is the filesystem axis, not the 
 settling it means settling the on-disk block layout — a different problem.
 
 `BSIZE` is **3072 bytes = 512 words**, but the constants derived from it were never moved:
-`BSHIFT 9` / `BMASK 0777` still describe a 512-*byte* block, and `NINDIR` is now `BSIZE/sizeof(daddr_t)`
-= **512** while `NMASK 0177` / `NSHIFT 7` still say 128. So every byte-offset → block conversion in
-the kernel is wrong: `rdwri.c:48-49,111-112`, `nami.c:138-156`, `sys1.c:89-128` (the exec arg
-staging), `dev/bio.c:492`, and `bmap()` in `subr.c:68-121`.
+`BSHIFT 9` / `BMASK 0777` still describe a 512-*byte* block. So every byte-offset → block
+conversion in the kernel is wrong: `rdwri.c:48-49,111-112`, `nami.c:138-156`, `sys1.c:89-128`
+(the exec arg staging), and `dev/bio.c:492`.
+
+**The indirect-block half of this is now fixed** (done alongside making `param.h`
+assembler-includable). `NINDIR` is `BSIZE/sizeof(daddr_t)` = **512**, but `NMASK 0177` /
+`NSHIFT 7` still said 128, so `bmap()` (`subr.c:68-121`) could only ever index the first
+quarter of each indirect block while `tloop()` (`iget.c:246`) freed all 512 — the two
+disagreed about the same on-disk structure. `NMASK` is now `0777` and `NSHIFT` `9`.
+
+That half was separable precisely because **`bmap()` works in block numbers, never byte
+offsets**: 512 entries per indirect block *is* a power of two, so a mask and a shift express
+it exactly. It is `BSHIFT`/`BMASK` — the byte-offset conversions — that are stuck on 3072
+not being a power of two. `NINDIR` is also now spelled as a literal `512` rather than
+`BSIZE/sizeof(daddr_t)`, because `param.h` may no longer contain `sizeof`.
 
 A 3072-byte block is **not a power of two**, so the shifts and masks cannot survive in that form:
 either the byte offsets divide and modulo by `BSIZE`, or the filesystem's offsets themselves become

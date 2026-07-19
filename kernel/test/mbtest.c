@@ -37,6 +37,7 @@
  */
 
 // clang-format off
+#include "sys/types.h"
 #include "sys/param.h"
 #include "sys/buf.h"
 #include "sys/dir.h"

@@ -93,7 +93,7 @@ uclock: crt0c.o uclock.o clock.o intr.o utab.o brz.o psw.o
 
 # uswtch -- save()/resume()/idle() and the u-area invariant (task 16).  Links the real
 # switch.o, uarea.o, brz.o, intr.o and psw.o; only clock() and scintr() are stubbed, in
-# uswtch.c.  crt0w.s puts `u' at the real 076000 and runs main() on the u-page stack.
+# uswtch.c.  crt0w.S puts `u' at the real 076000 and runs main() on the u-page stack.
 uswtch: crt0w.o uswtch.o switch.o uarea.o brz.o intr.o psw.o
 	$(LD) crt0w.o uswtch.o switch.o uarea.o brz.o intr.o psw.o -o $@ -L$(LIBDIR) -lc
 	$(DISASM) -c $@ > $@.dis
@@ -167,8 +167,9 @@ clock.o: ../clock.c
 intr.o: ../intr.c
 	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@
 
-# crt0u.S/crt0t.S/crt0s.S/crt0c.S are preprocessed (they #include sys/besm6dev.h), so build them through the
-# compiler driver with the include path, not the bare assembler.
+# The crt0*.S files are preprocessed (they #include sys/besm6dev.h, and crt0w.S also
+# sys/param.h), so build them through the compiler driver with the include path, not the
+# bare assembler -- $(AS) here is b6as itself and passes no -I.
 crt0u.o: crt0u.S
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -184,20 +185,23 @@ crt0c.o: crt0c.S
 crt0g.o: crt0g.S
 	$(CC) $(CFLAGS) -c $< -o $@
 
+crt0w.o: crt0w.S
+	$(CC) $(CFLAGS) -c $< -o $@
+
 utab.o: ../utab.c
 	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@
 
 brz.o:  ../brz.s
 	$(AS) $< -o $@
 
-uarea.o: ../uarea.s
-	$(AS) $< -o $@
+uarea.o: ../uarea.S
+	$(CC) $(CFLAGS) -c $< -o $@
 
-seg.o:  ../seg.s
-	$(AS) $< -o $@
+seg.o:  ../seg.S
+	$(CC) $(CFLAGS) -c $< -o $@
 
-usermem.o: ../usermem.s
-	$(AS) $< -o $@
+usermem.o: ../usermem.S
+	$(CC) $(CFLAGS) -c $< -o $@
 
 # cli/sti: setipl() in intr.c is built on them (БлПр is the interrupt priority).
 psw.o:  ../psw.s

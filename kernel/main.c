@@ -2,6 +2,7 @@
 /* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
 // clang-format off
+#include "sys/types.h"
 #include "sys/param.h"
 #include "sys/systm.h"
 #include "sys/dir.h"
@@ -160,7 +161,7 @@ void iinit()
  * I/O to be done-- e.g. swbuf for
  * swapping.
  */
-char buffers[NBUF][BSIZE];
+extern char buffers[NBUF][BSIZE];
 
 /*
  * Initialize the buffer I/O system by freeing

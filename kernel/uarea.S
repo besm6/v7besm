@@ -64,10 +64,11 @@
 // real routines: besm6.o cannot go into a standalone test (its 0500 vector reaches into the C
 // kernel, and _start seeds no stack).  Same reason as brz.s, which it calls.
 
+#include "sys/param.h"          // USIZE
+
         .text
 
 UPT    = 35                    // word offset of u_upt in struct user -- mmutest asserts it
-USIZE  = 1024                   // words in the u-area (sys/param.h)
 WHOME  = 02000                  // virtual page 1: the window on the process's u home
 WLIVE  = 04000                  // virtual page 2: the window on the live u-area
 

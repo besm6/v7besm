@@ -5,8 +5,8 @@
  * The extracode door: the C side of the 0577 syscall gate and of the 0550-0576
  * catch-all (kernel/besm6.S: `sysgate' and `badext').
  *
- * This is a SEPARATE FILE, not part of trap.c, for the same reason brz.s, uarea.s,
- * seg.s and usermem.s are separate: kernel/test/usys links the real dispatcher
+ * This is a SEPARATE FILE, not part of trap.c, for the same reason brz.s, uarea.S,
+ * seg.S and usermem.S are separate: kernel/test/usys links the real dispatcher
  * against a hand-built process, and it cannot link trap.c -- which drags in printf,
  * the signal machinery and grow(), and with them the rest of the kernel.  Keeping
  * the marshalling here is what lets the test exercise the real thing rather than a
@@ -18,6 +18,7 @@
  */
 
 // clang-format off
+#include "sys/types.h"
 #include "sys/param.h"
 #include "sys/systm.h"
 #include "sys/dir.h"
@@ -99,7 +100,7 @@ void syscall(void)
      * dereference.  The framed r15 is right there in the frame, so nothing has to be
      * read before the stack switch.  `ap' is built as an int * and converted by the
      * compiler: a char * is a fat pointer and one assembled by hand from an int has
-     * the wrong marker bit (kernel/usermem.s).
+     * the wrong marker bit (kernel/usermem.S).
      */
     n = callp->sy_narg;
     if (n > 0) {

@@ -47,6 +47,7 @@
 // each door's frame fill reads the return register its own door uses (`its IRET' vs `its ERET')
 // into the frame's single RET slot, and the shared epilogue reloads that slot into IRET and leaves
 // through one hardcoded `3 ij' for all of them (see `intret' and include/sys/reg.h).
+#include "sys/param.h"          // UBASE, NBUF, BSIZEW
 #include "sys/besm6dev.h"
 SPSW = 027                      // saved mode word (М027)
 IRET = 033                      // interrupt / fault return address (М033)
@@ -348,7 +349,7 @@ badext:
 //     was user (СПСВ & 014 == 0), because an external interrupt legitimately nests inside the
 //     kernel and must not have the stack pulled out from under the interrupted C frame.  A FAULT
 //     from supervisor is a different animal: the user-access family validates its range up front
-//     with useracc() and has no `nofault' path (see usermem.s), so a kernel-mode fault is a kernel
+//     with useracc() and has no `nofault' path (see usermem.S), so a kernel-mode fault is a kernel
 //     BUG, and trap() takes it to the `default' arm -- register dump, then panic.  Resetting M15
 //     to the base of the kernel stack under a panic is harmless (it overwrites the interrupted
 //     frames, which nothing is going to return to), so the discriminator buys nothing here and the
@@ -619,7 +620,7 @@ intret:
 // ============================================================================
 //
 // save() and resume() -- and the `uhome' cell they run on -- live in kernel/switch.s,
-// not here, for the same reason as uarea.s/seg.s/usermem.s: kernel/test/uswtch links the
+// not here, for the same reason as uarea.S/seg.S/usermem.S: kernel/test/uswtch links the
 // real switch, and besm6.o cannot enter a standalone test.  Note what resume() does and
 // does not do on this machine: it switches the U-AREA (a fixed physical page, so it must be
 // copied), never РП.  The map is reloaded by sureg() at the landing sites.  See switch.s.
@@ -634,12 +635,12 @@ intret:
 // ============================================================================
 //
 // fubyte/fuword/subyte/suword/copyin/copyout -- fetch/store a byte or word, or copy
-// a block, across the user/kernel boundary -- live in kernel/usermem.s, not here.
+// a block, across the user/kernel boundary -- live in kernel/usermem.S, not here.
 // On this machine the user's map is already in РП, so the copy needs no window: it
 // just toggles БлП per word (read user mapped, store kernel unmapped, or the reverse)
 // and validates the range up front with useracc() -- there is no `nofault' path.  They
-// are in their own file for the same reason as uarea.s/seg.s: kernel/test/mmutest links
-// the real routines, and besm6.o cannot enter a standalone test.  See usermem.s.
+// are in their own file for the same reason as uarea.S/seg.S: kernel/test/mmutest links
+// the real routines, and besm6.o cannot enter a standalone test.  See usermem.S.
 
 // ============================================================================
 // Floating-point state
@@ -684,7 +685,7 @@ addupc:
 // BESM-6 the count is a WORD count, not a byte count: callers convert with btow()
 // (sys/param.h), so there is no six-chars-per-word tail to handle -- these are pure
 // word loops.  The kernel runs unmapped (a kernel address IS a physical address), so
-// there is no window and no drainbrz: this is copyin's inner loop (usermem.s) minus
+// there is no window and no drainbrz: this is copyin's inner loop (usermem.S) minus
 // the per-word БлП toggle, the useracc validation and the PSW save.  Register-only:
 // r10/r11/r12 (caller-saved) hold the count and the two pointers; the word rides in A;
 // r1-r7, r13 and r15 are untouched.
@@ -780,4 +781,9 @@ phymem: .word 0                  // set by main() during bring-up
 // So it is an absolute symbol, not storage -- b6as emits N_EXT|N_ABS and b6ld
 // passes it through unrelocated.
         .globl  u
-        u = 076000               // must agree with UBASE in include/sys/param.h
+        u = UBASE
+
+// char buffers[NBUF][BSIZE] -- page aligned buffers for disk I/O.  Declared `extern' in
+// main.c: like `u' this is a fixed physical area, not bss, so the storage is named here.
+        .globl  buffers
+        buffers = u - NBUF*BSIZEW

@@ -67,9 +67,12 @@ The kernel is **not** part of the CMake build. It cross-compiles with the tools 
 installs — `b6cc -I../include -DKERNEL`, `b6as`, `b6ld`, `b6ar`/`b6ranlib`, and it links
 against the external c-compiler's libc (`~/.local/share/besm6/lib`). The commented-out
 LLVM/i486 block at the top of the Makefile is the old validation build, kept for reference.
-`make` finishes by printing `b6size -w unix`: the image **must end below `076000`**, because
-supervisor instruction fetch is never mapped and the u-area sits in the last page under that
-line (`doc/Memory_Mapping.md`).
+`make` finishes by printing `b6size -w unix`: the image **must end below `064000`** (`KEND` in
+`include/sys/param.h`), because supervisor instruction fetch is never mapped and the top two
+areas of the unmapped space are spoken for — the u-area at `076000` and, just under it,
+`buffers[NBUF][BSIZE]` from `064000` to `076000` (`doc/Memory_Mapping.md`). Both are fixed
+physical areas rather than bss, so they are *not* counted in the `b6size` total; the ceiling is
+derived (`KEND == BUFBASE == UBASE - NBUF*BSIZEW`), so raising `NBUF` lowers it automatically.
 
 The kernel is split into two static libs that are link-pulled so unused code is dropped:
 `libsys.a` (core kernel, `kernel/*.c`) and `libdev.a` (device drivers, `kernel/dev/*.c`).
@@ -128,10 +131,14 @@ from 1 (bit 1 = LSB, bit 48 = MSB). Numbers in BESM-6 contexts are octal. There 
 that file before touching anything under `kernel/` that involves memory, and update it as you
 go (it records what is done, and *how* it turned out to be done, when that differed). The
 shape of it: the **kernel runs unmapped** (БлП = БлЗ = 1), so a kernel address *is* a physical
-address, and the kernel image plus the u-area must fit the low 32 pages — everything below
-`076000`, because supervisor instruction fetch is never mapped. The **u-area is a fixed
-physical page at `076000`** (`u` is an absolute symbol, not storage) and is copied in and out
-on a context switch. **РП always holds the current process's map**, so a trap switches nothing.
+address, and the kernel image plus the u-area plus the buffer cache must fit the low 32 pages,
+because supervisor instruction fetch is never mapped. Two fixed physical areas are carved off
+the top of that space, so the **image itself must end below `064000`** (`KEND`): the **u-area,
+a fixed physical page at `076000`** (`u` is an absolute symbol, not storage), copied in and out
+on a context switch; and **`buffers[NBUF][BSIZE]` at `064000`–`076000`** (`buffers = BUFBASE`,
+likewise absolute, declared `extern` in `main.c`), out of bss because the drum and disk
+controllers transfer to a *physical* address. **РП always holds the current process's map**, so
+a trap switches nothing.
 Sizes and addresses are counted in **words**, page-aligned; there is no click. The **shadow map
 is `u.u_upt[8]`** — the hardware registers cannot be read back, so this is the only copy —
 and `sureg()` (`kernel/utab.c`) loads the whole address space in twelve `рег`s.

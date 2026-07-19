@@ -5,7 +5,7 @@ This is the same question [Dubna_Context_Switch.md](Dubna_Context_Switch.md) ask
 context, switches address spaces, and gets back out again. Every claim below is quoted from the tree
 — [`kernel/besm6.S`](../kernel/besm6.S), [`kernel/switch.s`](../kernel/switch.s),
 [`kernel/trap.c`](../kernel/trap.c), [`kernel/syscall.c`](../kernel/syscall.c),
-[`kernel/utab.c`](../kernel/utab.c), [`kernel/uarea.s`](../kernel/uarea.s),
+[`kernel/utab.c`](../kernel/utab.c), [`kernel/uarea.S`](../kernel/uarea.S),
 [`include/sys/reg.h`](../include/sys/reg.h) — and all of it is code that runs, exercised against the
 real SIMH machine by the standalone tests in [`kernel/test/`](../kernel/test/) (§13).
 
@@ -608,7 +608,7 @@ and pending-signal checks for free.
 
 **A trap switches nothing.** РП always holds the current process's map, and the kernel runs unmapped
 (БлП = БлЗ = 1), so a kernel address *is* a physical address. This is why `copyin`/`copyout` are a
-matter of clearing one bit rather than switching an address space — `kernel/usermem.s` toggles БлП per
+matter of clearing one bit rather than switching an address space — `kernel/usermem.S` toggles БлП per
 word around each user access, the same bracket Dubna uses
 ([Dubna_Context_Switch.md](Dubna_Context_Switch.md) §8).
 
@@ -667,7 +667,7 @@ resets the flush counter. Dubna wrote the identical nine-store loop
 confirmation as this port is going to get.
 
 Call sites: before every РП write in `sureg()`, and **twice each** inside `uflush`/`uload`
-(`kernel/uarea.s`) — before stealing the window (the kernel's own stores were tagged physical, so the
+(`kernel/uarea.S`) — before stealing the window (the kernel's own stores were tagged physical, so the
 mapped copy would miss them) and after the copy (whose stores were tagged virtual and must go out
 while the window is still installed).
 
@@ -720,7 +720,7 @@ Two things changed underneath it:
   and resumes someone else, and proc 0 has no user map worth loading.
 - **The u-area is a fixed *physical* page at `076000`, not a fixed virtual one**, so it has to be
   **copied**: out to the outgoing process's home, in from the incoming one's. That is
-  `uflush()`/`uload()` (`kernel/uarea.s`), and it is the price of an unmapped kernel.
+  `uflush()`/`uload()` (`kernel/uarea.S`), and it is the price of an unmapped kernel.
 
 > **The label pointer survives the swap by being a constant.** `u.u_qsav` is `076000+n` in *every*
 > process, so the pointer may be captured before the copy and dereferenced after it — by which time

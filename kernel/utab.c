@@ -19,6 +19,7 @@
 
 // clang-format off
 #include <besm6.h>
+#include "sys/types.h"
 #include "sys/param.h"
 #include "sys/systm.h"
 #include "sys/dir.h"
@@ -163,7 +164,7 @@ err:
 }
 
 /*
- * copyseg()/clearseg() -- one page, copied or zeroed -- live in kernel/seg.s.
+ * copyseg()/clearseg() -- one page, copied or zeroed -- live in kernel/seg.S.
  * They reach a page above 0100000, which no caddr_t (a 15-bit word field) can
  * name, through a mapped window; see the bracket there.
  */

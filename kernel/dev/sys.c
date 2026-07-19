@@ -4,6 +4,7 @@
  *	indirect driver for controlling tty.
  */
 // clang-format off
+#include "sys/types.h"
 #include "sys/param.h"
 #include "sys/conf.h"
 #include "sys/dir.h"

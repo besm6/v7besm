@@ -53,9 +53,27 @@ unix:   besm6.o brz.o uarea.o seg.o usermem.o switch.o psw.o conf.o libsys.a lib
 	$(NM) -n $@ > $@.nm
 	$(DISASM) $@ > $@.dis
 
-# besm6.S is preprocessed (it #includes const.s and sys/besm6dev.h), so build it
-# through the compiler driver with the include path, not the bare assembler.
-besm6.o: besm6.S
+# The .S sources are preprocessed (they #include sys/param.h, sys/besm6dev.h, const.s),
+# so build them through the compiler driver with the include path: b6cc dispatches .S to
+# cpp -> as, but .s straight to as.
+#
+# These MUST be explicit rules, not a `%.o: %.S' pattern.  The filesystem here is
+# case-insensitive, so `usermem.s' and `usermem.S' name the same file and make's built-in
+# pattern `%.o: %.s' matches just as well as ours would.  Between two pattern rules the
+# built-in can win, and then the file is assembled with no cpp at all -- whereupon b6as
+# takes the `#include' for a comment and fails much later on the undefined constant
+# ("too complex expression").  An explicit rule always beats a pattern rule, so name each
+# file.  Any new .S source needs its line here too.
+besm6.o:   besm6.S
+	$(CC) -c $(CFLAGS) $< -o $@
+
+uarea.o:   uarea.S
+	$(CC) -c $(CFLAGS) $< -o $@
+
+seg.o:     seg.S
+	$(CC) -c $(CFLAGS) $< -o $@
+
+usermem.o: usermem.S
 	$(CC) -c $(CFLAGS) $< -o $@
 
 libsys.a: $(SYS)

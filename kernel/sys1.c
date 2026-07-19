@@ -2,6 +2,7 @@
 /* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
 // clang-format off
+#include "sys/types.h"
 #include "sys/param.h"
 #include "sys/systm.h"
 #include "sys/map.h"
@@ -125,10 +126,10 @@ void exece()
      *        r15 = the first free word above the block
      *
      * Two unit rules the x86 original never had to state.  suword() takes a WORD address
-     * -- it masks its caddr_t to the low 15 bits (usermem.s) -- so the pointer vector
+     * -- it masks its caddr_t to the low 15 bits (usermem.S) -- so the pointer vector
      * strides by ONE, not by NBPW; a stride of NBPW would skip six words per pointer.
      * subyte() takes a FAT pointer -- byte offset in bits 47-45 over a word address in bits
-     * 15-1 (usermem.s again) -- so the string cursor is carried as an explicit (word, offset)
+     * 15-1 (usermem.S again) -- so the string cursor is carried as an explicit (word, offset)
      * pair: `ucp++' on a plain integer steps whole words and would lay down one character
      * per word.  The argv[] entries themselves are plain word addresses (offset 0), which is
      * what a string starting on a word boundary is.

@@ -25,6 +25,7 @@
  */
 
 // clang-format off
+#include "sys/types.h"
 #include "sys/param.h"
 #include "sys/systm.h"
 #include "sys/dir.h"
@@ -90,8 +91,9 @@ void extintr(void)
 #define SEGDST 42
 
 /*
- * The word offset of u_upt in struct user.  kernel/uarea.s is assembled by bare b6as, which
- * cannot compute an offsetof(), so it hardcodes this -- and this is what keeps it honest.
+ * The word offset of u_upt in struct user.  kernel/uarea.S is preprocessed but not compiled,
+ * so it can pick up #defines from sys/param.h yet still cannot compute an offsetof() -- it
+ * hardcodes this, and this is what keeps it honest.
  */
 #define UPT 35
 
@@ -179,7 +181,7 @@ int main()
         return (12);
 
     /*
-     * Task 10: the u-area round trip, through uflush()/uload() (kernel/uarea.s).
+     * Task 10: the u-area round trip, through uflush()/uload() (kernel/uarea.S).
      *
      * The assembly hardcodes the offset of u_upt -- b6as cannot compute an offsetof() -- so
      * check it here, where the compiler can.  Get this wrong and the brackets would restore
@@ -192,7 +194,7 @@ int main()
      * Fill the live u-area at UBASE.  The kernel reaches it unmapped, and so can we: 076000 is
      * word 32256, inside the 15-bit word field of a pointer.  The pattern is non-zero at word
      * 0 on purpose -- a window on virtual page 0 would silently drop exactly that word, which
-     * is why uarea.s windows pages 1 and 2 instead.
+     * is why uarea.S windows pages 1 and 2 instead.
      */
     up = (volatile unsigned *)UBASE;
     for (i = 0; i < USIZE; i++)
@@ -253,7 +255,7 @@ int main()
         return (16);
 
     /*
-     * Task 11: copyseg()/clearseg() (kernel/seg.s), reaching a page above 0100000.
+     * Task 11: copyseg()/clearseg() (kernel/seg.S), reaching a page above 0100000.
      *
      * SEGSRC and SEGDST are two pool pages out of reach of any unmapped access -- the whole
      * reason the two routines have to window them.  Fill the live page at UBASE (which the
@@ -296,7 +298,7 @@ int main()
     sureg();
 
     /*
-     * Task 12: copyin/copyout and the fu/su family (kernel/usermem.s).  The map above has the
+     * Task 12: copyin/copyout and the fu/su family (kernel/usermem.S).  The map above has the
      * data pages (physical 17-18) at virtual pages 2-3, so a word at 2*PGSZ+n is a real user
      * address -- reachable only through the map, which is exactly what these routines cross.
      */
