@@ -5,7 +5,7 @@
 // for sctest/mmutest but useless for testing besm6.S's `intrgate' stack switch: an interrupt
 // taken in kernel mode does NOT switch the stack, so the one gap that matters would go
 // unexercised.  This crt0 instead forges a real USER-mode context -- a Dubna SELECT-style
-// gate (doc/Context_Switch.md §8): forge IRET + СПСВ and `выпр' into user -- so the coming
+// gate (doc/Dubna_Context_Switch.md §8): forge IRET + СПСВ and `выпр' into user -- so the coming
 // external interrupt lands with СПСВ & 014 == 0 and exercises the full corrected `intrgate'.
 //
 // The pieces:
@@ -25,7 +25,7 @@
 // the assumptions in the comments; keep the two in step.
 //
 // This harness (forge-user entry + sureg map) is what crt0t.S and crt0s.S reuse for the trap
-// and syscall gates.  See doc/Context_Switch.md §14.
+// and syscall gates.  See doc/Unix_Context_Switch.md §5.
 
 #include "sys/besm6dev.h"       // SPSW_* mode-word bits (shared with kernel/besm6.S)
 
@@ -204,7 +204,8 @@ rpok:   ita     016             // A := the fault mask
 // besm6.o cannot enter a standalone test (its 0500 vector reaches into the C kernel and its
 // _start seeds no stack), so the gate is duplicated here, as crt0.s already duplicates the old
 // subset gate.  Keep it identical in LOGIC to kernel/besm6.S; that file's header and
-// doc/Context_Switch.md §4/§6/§7/§14 are the authority for everything below.
+// doc/Dubna_Context_Switch.md §4/§6/§7 are the authority for the idioms, and
+// doc/Unix_Context_Switch.md §1/§5 for the four registers the hardware does not save.
 //
 // The temp cells are addressed BARE (no `< sym >' utc escape).  This is not a nicety: a `< sym >'
 // escape emits a `мода' (utc) that loads M[16], so any escape ahead of the M[16] save below would

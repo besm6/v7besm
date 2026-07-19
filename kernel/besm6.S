@@ -132,13 +132,13 @@ MOD  = 020                      // C register / address modifier (М020 = M16)
 //
 // Only FIVE cells, not the whole machine.  Each gate saves the interrupted context into the
 // canonical reg.h frame (0 A, 1 R, 2 Y, 3 RET, 4 SPSW, 5 M16, 6 M15 ... 20 M1) built on
-// the kernel stack, filled by the Dubna FULSAV pipeline of `xts'/`its' (doc/Context_Switch.md
+// the kernel stack, filled by the Dubna FULSAV pipeline of `xts'/`its' (doc/Dubna_Context_Switch.md
 // §6).  That pipeline reaches M1-M14 and IRET/SPSW *live* -- it runs before `13 vjm extintr'
 // clobbers anything -- so those need no cell.  The five below are the ones the pipeline cannot
 // reach: A (it is the pipeline register), R and Y (only `rte'/`yta' read them, destroying A), the
 // C register M16 (must be spilled before the stack-switch `u1a'/`vtm', whose utc for a long
 // address would clobber it), and the interrupted M15 (the pipeline's own stack pointer, repointed
-// by the switch).  See the gate and doc/Context_Switch.md §4/§14.
+// by the switch).  See the gate and doc/Dubna_Context_Switch.md §4 and doc/Unix_Context_Switch.md §4.
         .text
 save_a:  .word 0                // A
 save_r:  .word 0                // R   -- ALU mode (ω + the NTR suppress bits)
@@ -213,7 +213,7 @@ bhalt:  stop                        // main returned / faulted upstream: resumab
 //   * THE DOOR IS NORMALISED BY THE FILL, not by a copy.  The hardware puts an extracode's return
 //     address in ERET and an interrupt's in IRET, and `выпр' is a single hardcoded `3 ij' (М033).
 //     Dubna reconciles the two at EXIT, with the two-instruction OUTMACRO that copies ERET into
-//     IRET (doc/Context_Switch.md sec 8).  We reconcile them at ENTRY instead, for free: the fill
+//     IRET (doc/Dubna_Context_Switch.md sec 8).  We reconcile them at ENTRY instead, for free: the fill
 //     already reads a return register live, so it just reads ERET, and `intret' is reused
 //     COMPLETELY UNMODIFIED.  Its `sti IRET' loads that address into М033 and its `3 ij' returns
 //     through it -- which is correct, because the `ij' index field only selects WHICH REGISTER
@@ -429,8 +429,9 @@ trapgate:
 // The hardware vector for an external (ГРП) interrupt is the fixed address 0501, laid down in
 // the .const block above.  It jumps here; this gate saves the interrupted context into the
 // canonical reg.h frame on the kernel stack, calls extintr() in intr.c, restores, and returns
-// with `3 ij` (выпр).  doc/Context_Switch.md §4/§6/§7/§12/§14 is the authority: §4 the short
-// save, §6 the FULSAV fill pipeline, §7 the forced restore order, §14 the four gaps below.
+// with `3 ij` (выпр).  doc/Dubna_Context_Switch.md §4/§6/§7/§12 is the authority for the idioms:
+// §4 the short save, §6 the FULSAV fill pipeline, §7 the forced restore order.  The four gaps
+// below -- the registers the hardware does not save -- are doc/Unix_Context_Switch.md §1.
 //
 // An interrupt is asynchronous, so the calling convention's callee-saved set is not enough --
 // the interrupted code owns EVERY register.  The hardware saves the interrupted PC in IRET
@@ -452,7 +453,7 @@ trapgate:
 //            compiler's `utc name'+load idiom, clobbering it.  When a device interrupt lands in
 //            the one-instruction window after a user `utc', SPSW carries SPSW_MOD_RK and the
 //            closing `3 ij` re-arms the modifier -- from the clobbered value unless we save it
-//            (doc/Context_Switch.md §13).  `ita`/`ati 16` move it as a plain register and do
+//            (doc/Dubna_Context_Switch.md §13).  `ita`/`ati 16` move it as a plain register and do
 //            NOT arm the modifier, so saving/restoring the value is all that is needed.  It is
 //            spilled up front, before the stack-switch `u1a'/`vtm' below whose utc would clobber it.
 //   * M15 -- NOT banked on this machine (one stack register across modes).  When the interrupt
@@ -639,7 +640,7 @@ intret:
 // The arithmetic mode, however, does NOT ride in SPSW across a trap: SPSW carries only
 // БлП/БлЗ/БлПр and the supervisor bits.  The ω-mode and the NTR suppress bits live in the
 // mode register R, which the hardware neither saves nor restores; the trap gate saves R by
-// hand (see intrgate above, and doc/Context_Switch.md §14).
+// hand (see intrgate above, and doc/Unix_Context_Switch.md §1).
 
 // ============================================================================
 // Execution profiling

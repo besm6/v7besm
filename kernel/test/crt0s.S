@@ -261,7 +261,8 @@ uprog:
 // ----------------------------------------------------------------------------
 // besm6.o cannot enter a standalone test, so the gates are duplicated here, exactly as crt0t.S
 // duplicates trapgate.  Keep them identical in LOGIC to kernel/besm6.S; that file's headers and
-// doc/Context_Switch.md §4/§6/§7/§8/§9/§14 are the authority for every step.
+// doc/Dubna_Context_Switch.md §4/§6/§7/§8/§9 are the authority for the idioms, and
+// doc/Unix_Context_Switch.md §1/§5 for the four registers the hardware does not save.
 //
 // The ONE difference from trapgate is `its ERET' below: the hardware puts an extracode's return
 // address in М032, not М033.  Framing it there means `intret' needs no change at all -- it

@@ -143,7 +143,7 @@ Four differences from the x86 shape are worth naming, because each is a decision
 translation:
 
 - **The register file descends** — `R15` at 6 down to `R1` at 20 — which is the order the Dubna
-  `its`/`sti` store-and-load pipeline fills it in ([Context_Switch.md](Context_Switch.md) §6).
+  `its`/`sti` store-and-load pipeline fills it in ([Dubna_Context_Switch.md](Dubna_Context_Switch.md) §6).
 - **IRET and ERET collapse into one `RET` slot.** Dubna keeps them separate, but a frame is filled
   by exactly one gate, so only one return address is ever live in it; the gate that built the frame
   picks the matching `выпр` index.
@@ -355,13 +355,13 @@ two levels need no deferred queue). The four gates are:
 
 **Two save disciplines.** A fault or an interrupt lands between arbitrary instructions, so the
 interrupted code owns *every* register and the gate must save the full visible machine — including R
-and Y, which the hardware does **not** save (§1 of [Context_Switch.md](Context_Switch.md) §14). An
+and Y, which the hardware does **not** save ([Unix_Context_Switch.md](Unix_Context_Switch.md) §1). An
 extracode is a synchronous *call*: the caller owns its live registers, so the gate saves almost
 nothing, and the hardware has already clobbered r14 with the effective address.
 
 **One exit.** All four leave through `intret`, `intrgate`'s restore block. An extracode's return
 address is in ERET and a fault's in IRET, and Dubna solves this by normalising one into the other
-(`OUTMACRO`, [Context_Switch.md](Context_Switch.md) §8). **That turned out to be unnecessary here:**
+(`OUTMACRO`, [Dubna_Context_Switch.md](Dubna_Context_Switch.md) §8). **That turned out to be unnecessary here:**
 the frame is filled by a `its`/`sti` pipeline that reads a return register *live*, so `sysgate` is
 `trapgate` with exactly one instruction changed — `its ERET` where the fault gate has `its IRET` —
 and `intret` is reused unmodified. Its closing `выпр` index selects only *which register holds the

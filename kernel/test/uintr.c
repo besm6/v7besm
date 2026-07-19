@@ -8,7 +8,7 @@
  * leg is missing.  This test forges a genuine user-mode context and takes an external interrupt
  * in it, so all four fixes -- R, Y (РМР), M[16] (M[020]) and the r15 switch -- are under test.
  *
- * How it works (see kernel/test/crt0u.s for the asm half and doc/Context_Switch.md §14):
+ * How it works (see kernel/test/crt0u.s for the asm half and doc/Unix_Context_Switch.md §5):
  *   1. sureg() builds a user map: uprog's own physical page at virtual page 0 (so the forged
  *      user runs mapped, executing the real code), two data pages at virtual 2-3, one stack.
  *   2. A sentinel is placed at virtual MODVAL, the address the forged M[16] modifier points at.

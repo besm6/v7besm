@@ -84,7 +84,7 @@
 /*
  * Bits of СПСВ, the saved program status / mode word (register 027), read back
  * after a trap.  РежЭ|РежПр == 0 iff the interrupted context was user mode
- * (doc/Context_Switch.md).  Octal, bits numbered right-to-left from 1.
+ * (doc/Unix_Context_Switch.md §3).  Octal, bits numbered right-to-left from 1.
  */
 #define SPSW_MMAP_DISABLE 00001  /* БлП  - data mapping disabled */
 #define SPSW_PROT_DISABLE 00002  /* БлЗ  - data protection disabled */

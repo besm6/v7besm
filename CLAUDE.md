@@ -192,6 +192,13 @@ the authoritative references and are kept current:
 - `doc/Kernel_Assembly_Routines.md` — the machine-language assist: every routine's contract with
   its C callers, and — routine by routine — what the BESM-6 version has to do differently. Written
   against the x86 original (`kernel/x86.s`) as the port's spec for `kernel/besm6.S`.
+- `doc/Unix_Context_Switch.md` — how *this* kernel takes an interrupt, takes an extracode, saves the
+  CPU context, switches address spaces and gets back out: the four gates (`trapgate`/`intrgate`/
+  `sysgate`/`badext`), the 21-word `reg.h` trap frame, the shared `intret` exit, `sureg()` and the
+  u-area copy in `save()`/`resume()`. Read it before touching `kernel/besm6.S` or `kernel/switch.s`.
+- `doc/Dubna_Context_Switch.md` — the same five questions answered by Dubna, an OS that ran on the
+  real machine for two decades. The source of several idioms above (the `its`/`sti` save pipeline,
+  the forced Y → A → R restore order, the nine-store БРЗ drain).
 
 **Object/executable format** is a BESM-6-specific `a.out` variant defined in
 `cross/besm6/b.out.h` (magic `FMAGIC`/`NMAGIC`, `struct exec` with separate

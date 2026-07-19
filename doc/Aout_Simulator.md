@@ -124,7 +124,8 @@ as [`putch.s`](../cmd/sim/tmp/putch.s) — just `$77 N` followed by `13 uj` — 
 > a **word** address (`PC + 1`) with no right-instruction indicator, so `выпр` always resumes at
 > the **left half of the next word** — whichever half the extracode itself was in — and anything
 > packed after it in the same word is never executed. See
-> [Context_Switch.md](Context_Switch.md) §9. `putch.s` above is exactly the shape that breaks:
+> [Dubna_Context_Switch.md](Dubna_Context_Switch.md) §9 and
+> [Unix_Context_Switch.md](Unix_Context_Switch.md) §8. `putch.s` above is exactly the shape that breaks:
 > with `$77 4` in the left half, its `13 uj` is skipped under the kernel while `b6sim` runs it.
 > Until `b6sim` models this, **do not pack a live instruction after `$77 N` in its word** — the
 > easy way being to put the extracode in the right half — and a stub will behave the same on both.

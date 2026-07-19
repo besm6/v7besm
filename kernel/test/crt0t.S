@@ -154,8 +154,9 @@ uprog:
 // ----------------------------------------------------------------------------
 // besm6.o cannot enter a standalone test (its vectors reach into the C kernel and its _start
 // seeds no stack), so the gate is duplicated here, exactly as crt0u.S duplicates intrgate.  Keep
-// it identical in LOGIC to kernel/besm6.S; that file's headers and doc/Context_Switch.md
-// §4/§6/§7/§14 are the authority for every step.
+// it identical in LOGIC to kernel/besm6.S; that file's headers and doc/Dubna_Context_Switch.md
+// §4/§6/§7 are the authority for the idioms, and doc/Unix_Context_Switch.md §1/§5 for the
+// registers the hardware does not save.
 //
 // The temp cells are addressed BARE (no `< sym >' utc escape): an escape emits a `мода' that
 // loads M[16], which would overwrite the very C register the gate is saving.

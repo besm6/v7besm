@@ -49,7 +49,7 @@
 /*
  * The saved mode word СПСВ carries РежЭ|РежПр (RUU_EXTRACODE|RUU_INTERRUPT,
  * octal 014); both bits clear iff the interrupted context was user mode.  This
- * replaces the x86 CS-ring test.  See doc/Context_Switch.md and doc/Memory_Mapping.md.
+ * replaces the x86 CS-ring test.  See doc/Unix_Context_Switch.md and doc/Memory_Mapping.md.
  */
 #define SPSW_MODE      (SPSW_EXTRACODE | SPSW_INTERRUPT) /* РежЭ | РежПр */
 #define USERMODE(spsw) (((spsw) & SPSW_MODE) == 0)

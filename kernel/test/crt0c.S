@@ -153,9 +153,10 @@ uprog:
 // The external-interrupt gate -- a copy of kernel/besm6.S:intrgate, with its epilogue.
 // ----------------------------------------------------------------------------
 // Identical in LOGIC to kernel/besm6.S and to crt0u.S's copy; that file's header and
-// doc/Context_Switch.md §4/§6/§7/§14 are the authority for every step.  The four saves it exists
-// for (R, Y, M[16], the r15 switch) are uintr's subject, not this test's -- what matters here is
-// the `atx intrframe' below, which is how clock() learns where the frame is.
+// doc/Dubna_Context_Switch.md §4/§6/§7 are the authority for every step, and
+// doc/Unix_Context_Switch.md §1/§5 for the registers the hardware does not save.  The four
+// saves it exists for (R, Y, M[16], the r15 switch) are uintr's subject, not this test's --
+// what matters here is the `atx intrframe' below, which is how clock() learns where the frame is.
 //
 // The temp cells are addressed BARE (no `< sym >' utc escape): an escape emits a `мода' that loads
 // M[16], which would overwrite the very C register the gate is saving.
