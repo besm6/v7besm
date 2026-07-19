@@ -89,7 +89,7 @@ static struct rec rec[8];
 static int nrec;
 static int slept; /* a stub that must never run: recstrategy completes synchronously */
 
-static int recstrategy(struct buf *bp)
+static void recstrategy(struct buf *bp)
 {
     if (nrec < 8) {
         rec[nrec].paddr  = bp->b_paddr;
@@ -102,7 +102,6 @@ static int recstrategy(struct buf *bp)
     bp->b_resid = 0;
     bp->b_error = 0;
     bp->b_flags |= B_DONE;
-    return (0);
 }
 
 /*
@@ -157,13 +156,8 @@ void wzero(void *dst, unsigned nwords)
 #define UBYTE(w, k) ((caddr_t)(int *)(w) + (k))
 #define UPTR(w)     ((caddr_t)(int *)(w))
 
-/*
- * physio() declares its strategy argument void (*)(struct buf *) while bdevsw declares
- * d_strategy int (*)(struct buf *) -- the kernel's own inconsistency, which hd.c shares
- * (hdstrategy() is void there and int in conf.c).  Match the table, and cast at the one
- * direct call; the result is ignored either way.
- */
-#define PHYSIO(rw) physio((void (*)(struct buf *))recstrategy, &pb, 0, (rw))
+/* physio() and bdevsw's d_strategy agree on void (*)(struct buf *), so no cast. */
+#define PHYSIO(rw) physio(recstrategy, &pb, 0, (rw))
 
 /* Set up a raw transfer of `nw' words from user virtual word `w'. */
 static void setio(unsigned w, unsigned nw, off_t off)

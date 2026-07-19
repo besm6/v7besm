@@ -16,7 +16,7 @@ struct tty;
 extern struct bdevsw {
     void (*d_open)(dev_t, int);
     void (*d_close)(dev_t, int);
-    int (*d_strategy)(struct buf *);
+    void (*d_strategy)(struct buf *);
     struct buf *d_tab;
 } bdevsw[];
 

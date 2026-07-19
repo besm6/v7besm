@@ -401,7 +401,13 @@ void swap(int blkno, int coreaddr, register int count, int rdflg)
         bp->b_flags = B_BUSY | B_PHYS | rdflg;
         bp->b_dev   = swapdev;
         tcount      = count;
-        if (tcount > 037 * PGSZ) /* workaround for hd: 31 pages = 62 blocks */
+        /*
+         * XXX 31 pages = 62 blocks, inherited from the x86 driver.  A drum exchange
+         * moves at most one zone -- one page -- so this bound is loose rather than
+         * right; task 18b.3 resizes it against the real device, together with the
+         * three assertions test/biotest.c makes on this exact value.
+         */
+        if (tcount > 037 * PGSZ)
             tcount = 037 * PGSZ;
         bp->b_wcount = tcount;
         bp->b_blkno  = swplo + blkno;

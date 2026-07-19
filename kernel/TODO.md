@@ -271,27 +271,46 @@ are one driver per controller family, and the minor number selects unit and part
 
 ---
 
-**18b.1. The device header and the driver split.** No hardware yet — this step only has to build,
-link and boot as far as it does today.
+**18b.1. The device header and the driver split — DONE.** `dev/hd.c` is retired into **`dev/md.c`**
+(disks, major 0 — root, pipedev, filesystems) and **`dev/mb.c`** (drums, major 1 — swap), both still
+`B_ERROR` stubs. The `033` addresses and the four wired ГРП completion bits went into
+`sys/besm6dev.h`; the exchange-control-word layout and the service-word buffers into a new
+`sys/besm6disk.h`. `conf.c` has two `bdevsw` rows and two `cdevsw` rows, and `swapdev = makedev(1, 0)`.
 
-* New `include/sys/besm6disk.h` (or a section of `sys/besm6dev.h`, which today stops at the Consul):
-  the `033` addresses (`EXT_DRUM1` `01`, `EXT_DRUM2` `02`, `EXT_DISK3` `03`, `EXT_DISK4` `04`,
-  `EXT_DISKCTL3` `023`, `EXT_DISKCTL4` `024`, `EXT_DISKSTAT3` `04003`, `EXT_DISKSTAT4` `04004`),
-  the control-word field masks, the ГРП completion bits (`GRP_DRUM1_FREE` bit 46,
-  `GRP_DRUM2_FREE` bit 45, `GRP_CHAN3_FREE` bit 29, `GRP_CHAN4_FREE` bit 28 — all `unsigned`, all
-  wired), and the service-word buffer addresses (`010` drum 1, `020` drum 2, `030` disk 3,
-  `040` disk 4).
-* One shared inline helper for the common half of the control word: physical word address from
-  `bufpaddr(bp)` → BLOCK (bits 27–24) and PAGE (bits 17–13), plus direction from `B_READ`. Bit *N*
-  has value 2^(N-1), so the page field is scaled by 2^12 and the block field by 2^23; see §6.3 of
-  the intrinsics doc, which does exactly this arithmetic.
-* Retire `dev/hd.c` into **`dev/md.c`** (disks, major 0 — root, pipedev, filesystems) and
-  **`dev/mb.c`** (drums, major 1 — swap). `hdtab`/`rhdbuf` become `mdtab`/`rmdbuf` and
-  `mbtab`/`rmbbuf`; `hdopen`/`hdstrategy`/`hdintr`/`hdread`/`hdwrite` split in two. Both keep the
-  `B_ERROR` stub body for now. `kernel/Makefile` gains the file; the `hd` name is an x86 leftover
-  and now names neither device.
-* `conf.c`: a second `bdevsw` entry, a second `cdevsw` entry, and `swapdev = makedev(1, 0)`.
-* **Done when** `unix` builds, links and still passes the existing `test/` suite unchanged.
+**Verified by** a clean `make` (`060653`, was `060553` — 64 words), `b6nm -n unix` showing all ten
+entry points and all four buffers pulled out of `libdev.a`, and all **11** `test/` SIMH tests still
+passing (`biotest` in particular — it is the one the `d_strategy` change below touches).
+
+How it turned out, where that differed from the sketch:
+- **The header split went two ways, and the line is written into `besm6disk.h`'s comment.**
+  `besm6dev.h` owns the machine's two *global* namespaces — the `033`/`002` address map and the
+  ГРП/ПРП bit map — where every device competes for the same numbers. `besm6disk.h` owns one
+  family's *accumulator layout*. The deciding fact: `besm6dev.h` is included by `besm6.S` and by
+  eleven files under `test/`, none of which want two dozen control-word masks.
+- **`d_strategy` was fixed rather than papered over.** `conf.h` declared it
+  `int (*)(struct buf *)` while every driver defines it `void` and `physio()` takes
+  `void (*)(struct buf *)`; `conf.c` hid the conflict behind a K&R `int hdstrategy();`. All five
+  call sites (`dev/bio.c:77,99,112,138,415`) discard the result, so `conf.h` is now `void` and the
+  trick is gone. This is why `test/biotest.c` changed: `recstrategy()` lost its `int`, and the
+  `PHYSIO` macro lost the function-pointer cast that existed only to bridge the mismatch.
+- **`EXT_IOERR`, not `EXT_DRUMERR`.** `033 4035` is the shared ОШМ trigger — it returns
+  `drum_errors() | disk_errors() | mg_errors()` — not a drum register.
+- **No `GRP_WIRED` composite.** The complete wired set also covers seven tape-channel bits this
+  kernel cannot raise, and a mask by that name covering four of eleven is a trap. 18b.2 owns the
+  mechanism and can define the mask it actually needs.
+- **The shared helper takes a page number, not a word address.** `cwpage(pg)` splits nine bits
+  across the two non-adjacent fields (`<< 12` and `<< 23`). There is no shared sub-page field —
+  the disk's is `DISK_HALFPAGE` (512 words), the drum's is `DRUM_PARAGRAF` (256, sector mode only)
+  — so a macro taking a word address would silently drop its low ten bits. See the blocker under
+  18b.4.
+- **`include/sys/part.h` deleted** with `hd.c`: pure x86 MBR (`PTMAGIC 0xaa55`, `struct hsc`),
+  included by nothing, referenced only by a stale `kernel/Makefile` dependency line.
+- **`dev/bio.c:404`'s `037 * PGSZ` swap clamp kept, comment reworded.** `test/biotest.c:227,230`
+  asserts on that exact value in three places, deliberately, to force a two-transfer `swap()`.
+  18b.3 moves the clamp and those assertions together.
+- **The kernel is not built with `-Wall -Werror`** (`Makefile:26` is just `-I../include -DKERNEL`);
+  those flags live only in the commented-out i486 validation block. Nothing here was caught by the
+  compiler, and prototype changes have to be got right by reading.
 
 **18b.2. ГРП: the free bits are wired, and МГРП has to become dynamic.** A prerequisite of both
 drivers, and the one place the existing interrupt design has to give.
@@ -359,6 +378,14 @@ one, and the reason it comes after the drum.
   real BESM-6 disk layout, together with the partition table `mdopen()` validates against.
 * `DISK_HALFZONE` (bit 1) makes one `BSIZEW` block one native transfer — no splitting, unlike the
   drum.
+* **BLOCKER, found in 18b.1: `buffers[]` is not page-aligned, so a filesystem buffer cannot be a
+  transfer target at all.** `main.c:163` is `char buffers[NBUF][BSIZE]` and the linker puts
+  `buffers` at `044730` = 19416 words, which is not a multiple of 512. The control word names a
+  *page*, with `DISK_HALFPAGE` (512 words) or `DRUM_PARAGRAF` (256) as the only sub-page fields —
+  there is nowhere to put an arbitrary word offset, so `cwpage(bufpaddr(bp) >> PGSH)` would
+  silently transfer to the wrong place. Align `buffers[]` to `BSIZEW`: every buffer then lands on
+  a page or half-page boundary and `DISK_HALFPAGE` expresses the difference exactly. Do this
+  before the first real `mdstrategy()` transfer, not after debugging one.
 * **Done when** `iinit()` reads the super block off an attached `MD0` image without panicking.
 * **Verified by `test/mdtest`** — the command sequence in order, one zone read, service words at
   `030`–`037`.
@@ -496,7 +523,7 @@ settling it means settling the on-disk block layout — a different problem.
 `BSHIFT 9` / `BMASK 0777` still describe a 512-*byte* block, and `NINDIR` is now `BSIZE/sizeof(daddr_t)`
 = **512** while `NMASK 0177` / `NSHIFT 7` still say 128. So every byte-offset → block conversion in
 the kernel is wrong: `rdwri.c:48-49,111-112`, `nami.c:138-156`, `sys1.c:89-128` (the exec arg
-staging), `dev/bio.c:492`, `dev/hd.c:135,169`, and `bmap()` in `subr.c:68-121`.
+staging), `dev/bio.c:492`, and `bmap()` in `subr.c:68-121`.
 
 A 3072-byte block is **not a power of two**, so the shifts and masks cannot survive in that form:
 either the byte offsets divide and modulo by `BSIZE`, or the filesystem's offsets themselves become

@@ -2,7 +2,7 @@ SYS     = acct.o alloc.o clock.o fio.o iget.o intr.o machdep.o main.o \
           malloc.o nami.o pipe.o prf.o prim.o rdwri.o sig.o slp.o subr.o \
           sys1.o sys2.o sys3.o sys4.o syscall.o sysent.o text.o trap.o utab.o
 
-DEV     = bio.o hd.o mem.o partab.o \
+DEV     = bio.o mb.o md.o mem.o partab.o \
           sc.o sr.o sys.o tty.o
 
 # i486: Clang compiler on MacOS
@@ -170,9 +170,10 @@ utab.o: utab.c ../include/sys/param.h ../include/sys/systm.h \
 bio.o: dev/bio.c ../include/sys/param.h ../include/sys/systm.h \
   ../include/sys/dir.h ../include/sys/user.h ../include/sys/buf.h \
   ../include/sys/conf.h ../include/sys/proc.h ../include/sys/seg.h
-hd.o: dev/hd.c ../include/sys/param.h ../include/sys/systm.h \
-  ../include/sys/buf.h ../include/sys/dir.h ../include/sys/user.h \
-  ../include/sys/part.h
+mb.o: dev/mb.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/buf.h ../include/sys/besm6dev.h ../include/sys/besm6disk.h
+md.o: dev/md.c ../include/sys/param.h ../include/sys/systm.h \
+  ../include/sys/buf.h ../include/sys/besm6dev.h ../include/sys/besm6disk.h
 mem.o: dev/mem.c ../include/sys/param.h ../include/sys/systm.h \
   ../include/sys/dir.h ../include/sys/user.h ../include/sys/conf.h
 partab.o: dev/partab.c

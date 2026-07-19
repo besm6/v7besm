@@ -685,7 +685,8 @@ void outsw(int addr, char *buf, int n); /* systm.h:160 */
 - **BESM-6 notes — deleted, all seven.** BESM-6 has no port space, and no assembly stands in for
   them: a driver reaches a device with the `__besm6_ext` intrinsic (`033 «увв»`) directly from C —
   see [Intrinsics.md](Intrinsics.md) and [Besm6_Peripherals.md](Besm6_Peripherals.md). `dev/hd.c`
-  and `dev/sr.c` survive as **driver skeletons** with their port I/O stripped to `// TODO`, still
+  became `dev/md.c` (disks) and `dev/mb.c` (drums), which with `dev/sr.c` survive as **driver
+  skeletons** with their port I/O stripped to `// TODO`, still
   wired into `conf.c` so their `bdevsw`/`cdevsw` hooks resolve; `machdep.c` lost the 8253 PIT and
   the CMOS RTC with them, which is why nothing seeds `time` from a wall clock.
 

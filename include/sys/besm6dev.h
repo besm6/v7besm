@@ -20,10 +20,19 @@
 /*
  * Addresses of the 033 «увв» instruction (__besm6_ext).  Bit 04000 selects a read.
  */
+#define EXT_DRUM1    01    /* drum 1: exchange control word -- starts the transfer */
+#define EXT_DRUM2    02    /* drum 2: likewise */
+#define EXT_DISK3    03    /* disk controller 3: exchange control word -- sets up only */
+#define EXT_DISK4    04    /* disk controller 4: likewise */
+#define EXT_DISKCTL3 023   /* disk controller 3: commands; the track address transfers */
+#define EXT_DISKCTL4 024   /* disk controller 4: likewise */
 #define EXT_PRPCLR   030   /* clear ПРП: PRP &= ACC -- a ZERO bit clears */
 #define EXT_MPRP     034   /* write МПРП, the mask of ПРП (24 bits) */
 #define EXT_PRPHI    04030 /* read ПРП bits 13-24 */
 #define EXT_PRPLO    04034 /* read ПРП bits 1-12; bits 1-5 always read as 1 */
+#define EXT_DISKSTAT3 04003 /* disk controller 3: read the status register */
+#define EXT_DISKSTAT4 04004 /* disk controller 4: likewise */
+#define EXT_IOERR    04035 /* опрос триггера ОШМ: drum|disk|tape error masks, OR'd */
 #define EXT_READY2   04102 /* read READY2, the peripheral ready flags */
 #define EXT_CONS1    0174  /* Consul 1: print the character in bits 1-8 */
 #define EXT_CONS2    0175  /* Consul 2: print the character in bits 1-8 */
@@ -38,6 +47,24 @@
  */
 #define GRP_TIMER 00010000000000000U /* 40: interval timer tick */
 #define GRP_SLAVE 00001000000000000U /* 37: see below */
+
+/*
+ * The mass-storage completion bits.  All four are WIRED: they are live wires from the
+ * device rather than flip-flops in ГРП, so MOD_GRPCLR cannot lower them -- only giving
+ * the device a new command does.  extintr()'s fallback arm, which dismisses the highest
+ * pending bit so that an unhandled source cannot spin, is therefore a spin on any of
+ * them; see task 18b.2 in kernel/TODO.md.
+ *
+ * "Free" means IDLE, not "an exchange just finished": the bit is up whenever no transfer
+ * is running, so none of these may be armed in МГРП outside a live exchange.
+ *
+ * The complete wired set covers the tape channels too -- doc/Besm6_Peripherals.md,
+ * "Wired bits".  Only the four this kernel can raise are named here.
+ */
+#define GRP_DRUM1_FREE 01000000000000000U /* 46: drum 1 exchange finished (wired) */
+#define GRP_DRUM2_FREE 00400000000000000U /* 45: drum 2 exchange finished (wired) */
+#define GRP_CHAN3_FREE 00000002000000000  /* 29: disk controller 3 finished (wired) */
+#define GRP_CHAN4_FREE 00000001000000000  /* 28: disk controller 4 finished (wired) */
 
 /*
  * The fault bits of ГРП: how an INTERNAL interrupt (vector 0500) says what went wrong.
