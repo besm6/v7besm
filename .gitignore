@@ -28,3 +28,7 @@ kernel/test/usched
 kernel/test/ugrow
 kernel/test/biotest
 kernel/test/ugrp
+kernel/test/mbtest
+
+# Scratch drum images that kernel/test/mbtest.ini creates with `attach -n'.
+*.drum

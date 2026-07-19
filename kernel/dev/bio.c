@@ -402,13 +402,14 @@ void swap(int blkno, int coreaddr, register int count, int rdflg)
         bp->b_dev   = swapdev;
         tcount      = count;
         /*
-         * XXX 31 pages = 62 blocks, inherited from the x86 driver.  A drum exchange
-         * moves at most one zone -- one page -- so this bound is loose rather than
-         * right; task 18b.3 resizes it against the real device, together with the
-         * three assertions test/biotest.c makes on this exact value.
+         * One zone, which is the most one drum exchange can move (dev/mb.c).  A larger
+         * request would only make the driver chain exchanges behind the sleep below,
+         * which is what this loop already does, one buf at a time.  test/biotest.c
+         * asserts on this value in three places, deliberately, to force the two-transfer
+         * case.
          */
-        if (tcount > 037 * PGSZ)
-            tcount = 037 * PGSZ;
+        if (tcount > PGSZ)
+            tcount = PGSZ;
         bp->b_wcount = tcount;
         bp->b_blkno  = swplo + blkno;
         /*

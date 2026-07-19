@@ -365,30 +365,99 @@ How it turned out, where that differed from the sketch:
   a source enable and says nothing about the level — the misreading that produced the original
   text.
 
-**18b.3. The drum driver (`dev/mb.c`).** Do this one first: it is one `__besm6_ext(EXT_DRUM1, cw)`
-and no command sequence, so it proves the control word, the zone model, the service-word buffer and
-the whole interrupt path with the least in the way. Once it works, swap works, and everything after
-is disk-specific.
+**18b.3. The drum driver (`dev/mb.c`) — DONE.** The one that had to come first: one
+`__besm6_ext(EXT_DRUM1, cw)` and no command sequence, so it proved the control word, the zone
+model, the service-word buffer and the whole interrupt path with the least in the way. `swap()`
+now round-trips a page; everything after this is disk-specific.
 
-* Geometry: 256 zones per drum × `8 + 1024` words, two drums = 1024 blocks of `BSIZEW` (512 words)
-  total. That is a swap area, not a filesystem — size `nswap`/`swplo` in `conf.c` to it (today's
-  `nswap = 32000` is fiction).
-* `b_blkno` → zone and half-zone. The drum's sub-page unit is a *sector* of 256 words selected by
-  `DRUM_PARAGRAF` (bits 12–11), so a 512-word block is two adjacent sectors, or half of one
-  `DRUM_PAGE_MODE` transfer. Pick one and say which in the source; page mode with a 1-Kword request
-  is the simpler path if `swap()` always arrives page-aligned.
-* The zone number is `(cmd & (DRUM_UNIT | DRUM_CYLINDER)) >> 2` — unit and cylinder are adjacent
-  fields that together *are* the zone address, so the driver computes one number, not two.
-* `mbstart()` arms the completion bit (18b.2) and issues the control word; `mbintr()` disarms it,
-  reads the 8 service words at `010`, calls `iodone()` and starts the next queued request off
-  `mbtab`.
-* **Done when** `swap()` round-trips a page: write a known page out, clear it, read it back.
-* **Verified by `test/mbtest`** — `attach drum0`, one zone write and one zone read, assert the
-  words landed where the control word said and that the service words appeared at `010`–`017`.
+Geometry as sketched: 256 zones per drum × `8 + 1024` words, two drums = 1024 blocks of `BSIZEW`.
+`mbstart()` builds the control word and issues it, `mbintr()` disarms and calls `iodone()`, and
+the two drums are one linear block space so `nswap = 1024` is a single number and the minor
+selects nothing.
+
+**Verified by** a clean `make` (`061327`, was `060704` — 403 words), the new `test/mbtest`, and
+all **13** `test/` SIMH tests passing. The drum's own trace (`set drum debug`) shows exactly the
+twelve exchanges the test intends:
+
+```
+### запись МБ 10 зона 00 память 40000-41777          <- check 1, page mode
+### чтение МБ 10 зона 00 память 40000-41777
+### запись МБ 10 зона 00 сектор 2 память 40000-40377 <- check 2, four chained sectors
+### запись МБ 10 зона 00 сектор 3 память 40400-40777
+### запись МБ 10 зона 01 сектор 0 память 41000-41377
+### запись МБ 10 зона 01 сектор 1 память 41400-41777
+### запись МБ 20 зона 00 память 40000-41777          <- check 3, the other drum
+```
+
+How it turned out, where that differed from the sketch:
+
+- **Both transfer modes, not one.** The sketch said "pick one, page mode is simpler if `swap()`
+  always arrives page-aligned". It does — but the *block number* need not be even, and that is
+  the half the sketch missed: swap space is handed out by `malloc(swapmap, …)` in blocks, and
+  `sys1.c:61` allocates `(NCARGS + BSIZE - 1) / BSIZE` of them for exec arguments, which nothing
+  rounds to a zone. One odd allocation and every later one starts mid-zone. There is no
+  half-zone field on the drum (`DISK_HALFZONE` is the disk's), so an odd block *must* go as
+  sectors. `mbstart()` therefore takes page mode when the exchange is zone-aligned,
+  page-aligned and a whole zone long, and one 256-word sector otherwise; `mbintr()` chains.
+  The common swap case is one exchange, the awkward one four.
+- **`__besm6_ext()` with a COMPUTED address is broken in b6cc, and cost an afternoon.**
+  `__besm6_ext(EXT_DRUM1 + ctlr, cw)` reads well and is wrong: the compiler emits `14 ext 0`
+  — address from r14 — while leaving a frame pointer in r14, so the exchange goes to whatever
+  device that address lands on. It landed on a tape controller, which halted SIMH with
+  "Clearing interrupts AND attempting to do something else". `doc/Intrinsics.md` documents the
+  computed path as a fallback for addresses above `07777`; it does not work today. The driver
+  branches to two constant addresses instead, which is also the better code — a constant folds
+  into the instruction's own address field, which is the entire point of the intrinsic. **Use
+  constant addresses in `dev/md.c` too** (18b.4 has four: `EXT_DISK3/4`, `EXT_DISKCTL3/4`).
+- **The `EXT_IOERR` poll was pulled forward out of 18b.5**, and it is not optional. An
+  unattached drum transfers nothing and **never interrupts** — it says so only in the error
+  mask — so without the poll a missing drum is a kernel that waits forever, not a failed
+  request. Bite-tested: remove it and `mbtest` run 2 hangs. That is the drum's whole error
+  story, so 18b.5 is now purely the disk's.
+  - Worth knowing for 18b.5: `033 4035` also stands after *reading a zone the backing file
+    does not reach yet* (`drum_read()` in `besm6_drum.c` sets the same bit), so the driver
+    reports an unwritten zone as an I/O error. That is right for swap, which always writes
+    before it reads, and it is why `mbtest` writes zone 0 before reading anything.
+- **`mbintr()` has an idle guard, and it needed one.** A drum completion with `mbtab.b_active`
+  clear cannot happen from this driver, but the bit is wired: returning without disarming
+  leaves it standing and `extintr()` calls back forever. Bite-tested: neuter the guard and
+  `mbtest` hangs.
+- **`ugrp` part 1 had to move.** It forged `GRP_DRUM1_FREE` to prove `extintr()`'s *fallback
+  probe* does not spin on a wired bit. That bit now has a handler, so the test moved to
+  `GRP_CHAN3_FREE` — same kind of bit, still unclaimed. Bite-tested: point it back and `ugrp`
+  hangs. **18b.4 claims `GRP_CHAN3_FREE` and will have to move it again**, by then to a wired
+  bit of a device this kernel does not drive at all; the tape channels have seven. The drum
+  half of what `ugrp` used to cover now lives in `mbtest` as check 5, where the real `mb.o` is
+  linked and the idle guard is the thing under test rather than the probe.
+- **A round trip is not a test of the mapping, and the first version of `mbtest` was fooled by
+  exactly that.** Writing a pattern and reading it back passes whether or not the data went
+  where `b_blkno` says: forcing page mode unconditionally still passed, because the driver then
+  wrote and re-read the whole of zone 0 self-consistently. Two checks fix it, and both are
+  bite-tested — read zone 0 back *whole* after the sector write and require it to be half check
+  1's pattern and half check 2's (a wrong `DRUM_SECTOR` or `DRUM_PARAGRAF` shift fails here
+  too), and re-read zone 0 after the drum-2 round trip, since with `ctlr` stuck at 0 block 512's
+  zone field wraps in eight bits back to zone 0 and would destroy it unnoticed.
+- **`mbtest` runs twice from one `.ini`**, with a mode word deposited at `0100`. The machine has
+  exactly two drums, so a real second-drum transfer and a missing-drum check cannot coexist in
+  one run: run 1 has both attached, run 2 detaches drum 2.
+- **The test buffer has to live below word 32767.** Physical page `040` — word 32768 — is one
+  past the 15-bit word field of a C pointer, so `fill()` silently wrapped to address 0 and
+  overwrote the service words and the mode word. This constrains only the *test*, which has to
+  look at what arrived: `b_paddr` is a plain `unsigned` and the driver reaches all 512 Kwords.
+  The same trap is waiting for anything else that inspects high memory from C.
+- **The swap clamp is now `PGSZ`**, one zone, which is the most one exchange can move;
+  `test/biotest.c`'s three assertions moved with it, as 18b.1 said they would.
+- **Four `.ini` files needed their halt PC edited** (`uclock`, `uswtch`, `usched`, `biotest`)
+  because adding an `mbintr()` stub to three tests, and removing a multiply from a fourth,
+  shifted `halt` by a word. Every test in this directory hardcodes that address. It is a
+  standing tax on any change to shared code and will be paid again; worth replacing with a
+  symbol lookup if it is paid much more often.
 
 **18b.4. The disk driver (`dev/md.c`) — the two-step protocol.** The only device in the machine with
 one, and the reason it comes after the drum.
 
+* **Use CONSTANT `__besm6_ext()` addresses** — all four of them. A computed address is broken in
+  b6cc today and fails silently into another device; see 18b.3 above. Branch on the controller.
 * Step 1, `__besm6_ext(EXT_DISK3, cw)`: the exchange control word. *Nothing happens yet.* This call
   also lowers the controller's ГРП free bit and clears its error flag.
 * Step 2, `__besm6_ext(EXT_DISKCTL3, cmd)`: select group (bit 9 set, `(cmd & 01774) == 01400`),
@@ -425,15 +494,18 @@ should land first.
   right by 12) — so the retry logic is written against the documented bits but can only be
   *exercised* for those. Say so in the source rather than leaving untestable code looking tested.
 * Error count and retry through `b_errcnt`, `B_ERROR` and `b_resid` on give-up, the v7 way.
-* Also the drum's much smaller version: if a unit is not attached, `033 1`/`033 2` set a bit in the
-  error mask readable at `033 4035` and return without transferring — so `mbstart()` must check it
-  or a missing drum hangs waiting for a completion that never comes.
+* ~~Also the drum's much smaller version~~ — **done in 18b.3**, which had to: without the
+  `EXT_IOERR` poll a missing drum is a hang, not a failed request. `IOERR_DISK(n)` is already in
+  `sys/besm6dev.h` next to `IOERR_DRUM(n)`; the disk's is the same check plus everything below.
 * **Done when** an unattached unit fails the request instead of hanging.
 
 **18b.6. Wiring up and bring-up.** The step that closes 18b.
 
-* `IRQ_ON`, `conf.c`, `nswap`/`swplo`, and the raw devices through `physio()` (`mdread`/`mdwrite`
-  are already the right shape — `physio(mdstrategy, &rmdbuf, dev, B_READ)`).
+* `IRQ_ON`, `conf.c`, and the raw devices through `physio()` (`mdread`/`mdwrite` are already the
+  right shape — `physio(mdstrategy, &rmdbuf, dev, B_READ)`). `nswap`/`swplo` are done: 18b.3 set
+  them to the drums' real 1024 blocks. Note the drum refuses a raw request that is not
+  256-word-aligned at both ends, which is the finest granularity its control word can express —
+  the disk's `DISK_HALFPAGE` makes its own limit 512.
 * Build a root filesystem image, attach it, and boot far enough that `iinit()` mounts it.
 * **Done when** `iinit()` reads the super block *and* `swap()` round-trips a page — the original
   18b criterion, now split across 18b.3 and 18b.4 and re-asserted together here.
@@ -488,10 +560,18 @@ Loose ends the finished work left behind. None blocks 18.
 
 ## Notes for the next standalone SIMH test
 
-Task 18b wanted three — one per step 18b.2, 18b.3 and 18b.4. `ugrp` is the first and is done;
-`mbtest` and `mdtest` remain. What the existing tests cost
-to get right:
+Task 18b wanted three — one per step 18b.2, 18b.3 and 18b.4. `ugrp` and `mbtest` are done;
+`mdtest` remains. What the existing tests cost to get right:
 
+* **A round trip proves nothing about addressing.** Write a pattern, read it back, compare — and
+  a driver that put the data in the wrong place passes, having been consistently wrong twice.
+  `mbtest`'s first version passed with page mode forced on and with `ctlr` nailed to 0. What
+  works is leaving *two different* patterns on the device from two different requests and then
+  reading the region back whole, so the check is about where the boundary between them fell.
+* **A C pointer cannot name anything above word 32767** (`ptrword()`, 15 bits). A test buffer at
+  physical page `040` wrapped silently to address 0 and overwrote low memory. This binds the
+  test, not the kernel — `b_paddr` reaches all 512 Kwords — but any test that inspects what a
+  device deposited has to keep its window in the low 32 Kwords.
 * **`step N`, not `go`.** A broken switch or a lost gate *hangs* rather than failing, and `go` takes
   an address, not a step count. Every `.ini` uses `step 50000000` to turn a hang into a failure.
 * **The interval timer cannot be switched off.** It free-runs at 250 Hz and the SIMH `CLK` device has

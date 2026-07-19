@@ -124,6 +124,10 @@ void scintr(void)
 {
 }
 
+void mbintr(void)
+{
+}
+
 /* text.o is not linked (it would drag in the whole inode layer); nothing here has text. */
 void xlock(struct text *xp)
 {

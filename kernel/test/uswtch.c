@@ -95,6 +95,11 @@ void scintr(void)
     /* no console driver here; ПРП is never enabled, so this must never run */
 }
 
+void mbintr(void)
+{
+    /* no drum driver here either; extintr() names it, nothing arms its bits */
+}
+
 int main()
 {
     int s;

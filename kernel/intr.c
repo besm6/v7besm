@@ -30,6 +30,7 @@
 #include <besm6.h>
 
 void scintr(void);
+void mbintr(void); /* the drum driver's half of the dispatch below (kernel/dev/mb.c) */
 
 /*
  * The frame the 0501 gate built, and the handler that wants it.  besm6.S publishes the
@@ -296,6 +297,17 @@ void extintr(void)
              */
             __besm6_mod(MOD_GRPCLR, ~GRP_TIMER);
             clock((struct trap *)intrframe);
+            continue;
+        }
+        if (grp & (GRP_DRUM1_FREE | GRP_DRUM2_FREE)) {
+            /*
+             * A drum exchange finished.  Nothing is dismissed here and nothing can be:
+             * these are WIRED bits, and the only thing that lowers one is the next
+             * control word the driver issues -- or, when there is no next one,
+             * mgrpoff() taking the bit out of МГРП.  mbintr() does both (kernel/dev/mb.c).
+             * One drum at a time, so it needs no argument to tell it which.
+             */
+            mbintr();
             continue;
         }
         /*

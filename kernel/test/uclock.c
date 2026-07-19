@@ -139,6 +139,12 @@ void scintr(void)
     mask |= F_NOCALL; /* reaching this at all means the dispatch went wrong */
 }
 
+/* Likewise the drum: extintr() names mbintr(), but no drum bit is ever armed here. */
+void mbintr(void)
+{
+    mask |= F_NOCALL;
+}
+
 void wakeup(caddr_t chan)
 {
     nwakeup++;

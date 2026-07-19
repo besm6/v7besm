@@ -11,7 +11,7 @@
  *
  * So this test does two things the drum and disk drivers (18b.3, 18b.4) will need:
  *
- *   Part 1 -- THE DONE-CONDITION.  Forge GRP_DRUM1_FREE, arm it in МГРП, and call
+ *   Part 1 -- THE DONE-CONDITION.  Forge GRP_CHAN3_FREE, arm it in МГРП, and call
  *             extintr().  It must RETURN.  There is no assertion for that -- a failure
  *             here is a hang, which is what ugrp.ini's `step' turns into a failure -- and
  *             the bit must have been taken out of МГРП rather than out of ГРП, because
@@ -24,6 +24,15 @@
  *             call extintr() again.  This one must come out of ГРП and STAY armed in
  *             МГРП -- a guard that disarmed every unhandled source would pass part 1 and
  *             be quietly wrong, deafening the kernel to any device that ever glitches.
+ *
+ * WHY PART 1 FORGES A DISK BIT AND NOT A DRUM ONE.  It used to forge GRP_DRUM1_FREE, the
+ * obvious choice while nothing in the kernel handled it.  Task 18b.3 gave it a handler --
+ * extintr() now dispatches both drum bits to mbintr() -- so forging it would exercise the
+ * drum driver rather than the fallback arm this test is about.  GRP_CHAN3_FREE is the same
+ * kind of bit (wired, and "free" meaning idle) and is still unclaimed, so part 1 moved to
+ * it.  Task 18b.4 gives IT a handler and will have to move this test again -- by then only
+ * a wired bit of a device this kernel does not drive at all will do, of which the tape
+ * channels have seven.
  *
  * Simpler than uclock, which is the other test that links the real intr.o: no gate, no
  * user mode, no forged context.  extintr() is an ordinary C function and is called as one,
@@ -105,6 +114,17 @@ void scintr(void)
     nclock--; /* poison: it would take nclock negative, but nothing asserts on it */
 }
 
+/*
+ * extintr()'s drum arm calls this.  Neither drum bit is forged or armed here -- see the
+ * note above part 1 -- so like scintr() it must never run.  If it ever did, the real
+ * mb.o is not linked and this empty body would leave the wired bit standing and armed,
+ * which ugrp.ini's `step' would report as the hang it is.
+ */
+void mbintr(void)
+{
+    nclock--;
+}
+
 int main(void)
 {
     unsigned mask = 0;
@@ -122,18 +142,18 @@ int main(void)
 
     /* ---- Part 1: the wired bit ---- */
 
-    __besm6_ext(EXT_GRPSET, (unsigned)(GRP_DRUM1_FREE >> 24));
-    mgrpon(GRP_DRUM1_FREE);
-    if (mgrp != (BOOTBITS | GRP_DRUM1_FREE))
+    __besm6_ext(EXT_GRPSET, (unsigned)(GRP_CHAN3_FREE >> 24));
+    mgrpon(GRP_CHAN3_FREE);
+    if (mgrp != (BOOTBITS | GRP_CHAN3_FREE))
         mask |= F_ARM;
 
     extintr(); /* must return; a spin is caught by `step' in ugrp.ini */
 
-    if (mgrp & GRP_DRUM1_FREE)
+    if (mgrp & GRP_CHAN3_FREE)
         mask |= F_WIRED;
     if ((mgrp & BOOTBITS) != BOOTBITS)
         mask |= F_LOST;
-    if (!(__besm6_mod(MOD_GRP, 0) & GRP_DRUM1_FREE))
+    if (!(__besm6_mod(MOD_GRP, 0) & GRP_CHAN3_FREE))
         mask |= F_STUCK;
 
     /* ---- Part 2: an ordinary unhandled flip-flop ---- */

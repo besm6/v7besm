@@ -33,6 +33,18 @@
 #define EXT_DISKSTAT3 04003 /* disk controller 3: read the status register */
 #define EXT_DISKSTAT4 04004 /* disk controller 4: likewise */
 #define EXT_IOERR    04035 /* опрос триггера ОШМ: drum|disk|tape error masks, OR'd */
+
+/*
+ * Bits of the word EXT_IOERR returns.  ONE mask, shared by the drums, the disks and the
+ * tapes -- which is why it lives here and not in sys/besm6disk.h: that header owns one
+ * device family's accumulator layout, this one owns the numbers every device competes for.
+ *
+ * A bit stands when a command was issued to a unit that is NOT ATTACHED; the device then
+ * transfers nothing and raises no completion interrupt, so a driver that does not look
+ * here waits forever.  A successful command clears the bit again.
+ */
+#define IOERR_DRUM(n) (0100 >> (n)) /* drum n (0, 1): 033 1 / 033 2 found nothing there */
+#define IOERR_DISK(n) (020 >> (n))  /* disk controller n likewise -- task 18b.5 */
 #define EXT_READY2   04102 /* read READY2, the peripheral ready flags */
 #define EXT_CONS1    0174  /* Consul 1: print the character in bits 1-8 */
 #define EXT_CONS2    0175  /* Consul 2: print the character in bits 1-8 */

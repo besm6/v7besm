@@ -67,8 +67,16 @@ dev_t rootdev = makedev(0, 56);
 dev_t swapdev = makedev(1, 0); /* the drums are the paging store */
 dev_t pipedev = makedev(0, 56);
 int nldisp    = 1;
+/*
+ * The whole of both drums is swap space: 2 drums * 256 zones * 2 blocks = 1024 blocks,
+ * and dev/mb.c makes the two of them one linear block space so that this is a single
+ * number rather than a per-unit map.
+ *
+ * 1024, not 1023: machdep.c frees blocks 1..nswap into swapmap and then decrements swplo,
+ * so swap block 1 is device block 0 and swap block nswap is device block 1023.
+ */
 daddr_t swplo = 0;
-int nswap     = 32000; /* XXX fiction: two drums hold 1024 blocks.  Task 18b.6 sizes it. */
+int nswap     = 1024;
 
 struct buf buf[NBUF];
 struct file file[NFILE];

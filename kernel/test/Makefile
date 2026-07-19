@@ -14,7 +14,7 @@ NM      = b6nm
 CFLAGS  = -I../../include
 LIBDIR  = $$HOME/.local/share/besm6/lib
 
-PROGS   = hello sctest mmutest uintr utrap usys uclock uswtch usched ugrow biotest ugrp
+PROGS   = hello sctest mmutest uintr utrap usys uclock uswtch usched ugrow biotest ugrp mbtest
 
 all:    $(PROGS)
 
@@ -33,9 +33,10 @@ test:   $(PROGS)
 	besm6 ugrow.ini
 	besm6 biotest.ini
 	besm6 ugrp.ini
+	besm6 mbtest.ini
 
 clean:
-	rm -f *.o *.dis *.nm $(PROGS)
+	rm -f *.o *.dis *.nm *.drum $(PROGS)
 
 hello:  hello.o
 	$(LD) $< -o $@
@@ -132,7 +133,20 @@ ugrp:   crt0.o ugrp.o intr.o psw.o
 	$(DISASM) -c $@ > $@.dis
 	$(NM) -n $@ > $@.nm
 
+# mbtest -- task 18b.3: the drum driver actually moves data.  Links the REAL mb.o and the
+# real intr.o (which is what dispatches the drum's ГРП bits to mbintr()), and stubs only
+# iodone(), physio() and the two handlers intr.c names.  `u' is plain bss in mbtest.c, as
+# in biotest: mbopen() is the only thing in the driver that touches it.  Needs drums
+# attached, so see mbtest.ini.
+mbtest: crt0.o mbtest.o mb.o intr.o psw.o
+	$(LD) crt0.o mbtest.o mb.o intr.o psw.o -o $@ -L$(LIBDIR) -lc
+	$(DISASM) -c $@ > $@.dis
+	$(NM) -n $@ > $@.nm
+
 bio.o: ../dev/bio.c
+	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@
+
+mb.o: ../dev/mb.c
 	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@
 
 slp.o: ../slp.c

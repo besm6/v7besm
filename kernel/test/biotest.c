@@ -202,12 +202,12 @@ int main()
     /*
      * ---- Leg A: swap() ----------------------------------------------------------
      *
-     * A physical word address that no caddr_t can name.  Ask for more than the 037-page
+     * A physical word address that no caddr_t can name.  Ask for more than the one-zone
      * clamp so the while(count) loop issues TWO transfers: the second one is what catches
      * a coreaddr or blkno advanced in the wrong unit.
      */
     nrec = 0;
-    swap(7, SWAPPG * PGSZ, 037 * PGSZ + 100, B_READ);
+    swap(7, SWAPPG * PGSZ, PGSZ + 100, B_READ);
 
     if (nrec != 2)
         return (10);
@@ -222,17 +222,17 @@ int main()
         return (12);
     if (!(rec[0].flags & B_PHYS))
         return (13);
-    if (rec[0].wcount != 037 * PGSZ) /* clamped, and counted in WORDS */
+    if (rec[0].wcount != PGSZ) /* clamped to one drum zone, and counted in WORDS */
         return (14);
     if (rec[0].blkno != 7)
         return (15);
 
     /* Second transfer: the tail, one clamp further into core and wtodb() further along. */
-    if (rec[1].paddr != SWAPPG * PGSZ + 037 * PGSZ)
+    if (rec[1].paddr != SWAPPG * PGSZ + PGSZ)
         return (16);
     if (rec[1].wcount != 100)
         return (17);
-    if (rec[1].blkno != 7 + (daddr_t)wtodb(037 * PGSZ))
+    if (rec[1].blkno != 7 + (daddr_t)wtodb(PGSZ))
         return (18);
 
     /*
