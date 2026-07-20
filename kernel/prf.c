@@ -8,6 +8,7 @@
 #include "sys/seg.h"
 #include "sys/buf.h"
 #include "sys/conf.h"
+#include <besm6.h>
 // clang-format on
 
 /*
@@ -71,7 +72,7 @@ void printn(unsigned long n, int b)
 {
     int prbuf[16]; /* 48-bit unsigned -> up to 16 octal digits */
     int *cp = prbuf;
-    
+
     do {
         *cp++ = "0123456789abcdef"[n % b];
         n /= b;
@@ -93,7 +94,7 @@ void panic(char *s)
     update();
     printf("panic: %s\n", s);
     for (;;)
-        idle();
+        __besm6_stop(0);
 }
 
 /*
