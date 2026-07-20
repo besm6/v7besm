@@ -49,8 +49,9 @@
  * EXT_IOERR instead.  mbstart() therefore polls that mask immediately after the exchange
  * instruction and fails the request rather than arming a completion bit that will never
  * come.  This is the drum's whole error story -- there is no status register and SIMH
- * models no parity, checksum or seek failures -- so unlike the disk (task 18b.5) there is
- * nothing here to retry.
+ * models no parity, checksum or seek failures -- so unlike the disk, which has one and
+ * classifies its failures through it (dev/md.c, task 18b.5), there is nothing here to retry
+ * and nothing to ask.
  *
  * kernel/test/mbtest exercises all of it against SIMH.
  */

@@ -2,7 +2,7 @@
 /* Copyright (c) 2007 Robert Nordier.  All rights reserved. */
 
 /*
- * BESM-6 magnetic disk driver (МД / КМД) -- task 18b.4.
+ * BESM-6 magnetic disk driver (МД / КМД) -- tasks 18b.4 (transfers) and 18b.5 (failures).
  *
  * The disks carry the filesystems: this is major 0, the device rootdev and pipedev name.
  * Swap lives on the drums instead (dev/mb.c) so that paging and filesystem traffic do not
@@ -84,8 +84,28 @@
  * reason: the track-address command to an unattached unit records itself in the error mask
  * at EXT_IOERR and returns WITHOUT scheduling a completion, so nothing ever interrupts.
  * mdstart() polls the mask after the exchange and fails the request instead of arming a bit
- * that will never come.  Everything past that -- the status register at 033 4003, retries
- * through b_errcnt -- is task 18b.5.
+ * that will never come.
+ *
+ * ERRORS, AND THE ONE QUESTION THAT DECIDES HOW TO HANDLE THEM (task 18b.5).  The error
+ * mask says only THAT something failed.  What the driver needs to know is whether the
+ * exchange was refused before it began or attempted and abandoned partway, because that is
+ * what decides whether an interrupt is still on its way:
+ *
+ *   Refused, no completion coming.  An unattached unit, and a WRITE to a read-only one.
+ *   The request fails on the spot -- arming a completion bit here is exactly the hang the
+ *   EXT_IOERR poll exists to prevent -- and retrying is wrong, not just useless.
+ *
+ *   Attempted and failed, completion still due.  A checksum or address-marker failure on
+ *   the real machine; on SIMH, a read of a zone the backing file does not reach.  The
+ *   interrupt arrives regardless, so the retry waits for it and happens in mdintr(), where
+ *   the completion has been consumed and cannot race the re-issued exchange.
+ *
+ * The two are told apart by the STATUS REGISTER at 033 4003 / 033 4004, which is a latch
+ * read in two halves -- and of which SIMH computes only two bits correctly.  The table at
+ * MDST_READY below has that story, including why MDST_ABSENT must never be used as the
+ * presence test it looks like.  Retries are counted in mdtab.b_errcnt, MDRETRY of them, and
+ * a request that runs out fails with B_ERROR, the untransferred remainder in b_resid and a
+ * deverror() line naming the status word -- the v7 arrangement.
  *
  * kernel/test/mdtest exercises all of it against SIMH.
  */
@@ -125,6 +145,75 @@
 #define MDCMD_UNIT  02000 /* bit 11; | (1 << unit) -- bit N selects drive N-1 */
 #define MDCMD_TRACK 04000 /* bit 12; | (zone << 1) | track -- THIS PERFORMS THE TRANSFER */
 
+/*
+ * The status-register commands.  These are the only three that WRITE the register: it is a
+ * latch, not a live sample, and a transfer never touches it (disk_event() raises the ГРП
+ * bit and nothing else).  So the status has to be ASKED for, and what is read without
+ * asking is whatever the last query left behind.
+ *
+ * None of the three touches the ГРП free bit -- they fall through disk_ctl()'s command
+ * switch, unlike unit select, group select and the unknown-command arm, all of which raise
+ * it.  That is what makes it safe to query from inside the error path of a live request.
+ */
+#define MDCMD_STATCLR 010 /* clear the status register */
+#define MDCMD_STATLO  011 /* latch bits 1-12 */
+#define MDCMD_STATHI  031 /* latch bits 13-24 -- RETURNED SHIFTED DOWN BY 12 */
+
+/*
+ * The status register, at the TRUE bit positions of the 24-bit register.
+ *
+ * The two queries return two halves and MDCMD_STATHI's arrives pre-shifted down by twelve,
+ * so mdstat() puts it back where it belongs and everything below compares against these.
+ * Reassembling is not cosmetic: unshifted, MDST_POWERUP >> 12 and MDST_READY are both 0400
+ * and a test for one would silently answer for the other.
+ *
+ * WHICH OF THESE SIMH ACTUALLY COMPUTES -- and the answer is not what the hardware
+ * documentation, or doc/Besm6_Peripherals.md before this task, or kernel/TODO.md's sketch
+ * of it, says.  Only two are usable:
+ *
+ *   MDST_READY     from MDCMD_STATLO.  Correct: it tests UNIT_ATT.
+ *   MDST_READONLY  from MDCMD_STATHI.  Correct: it tests UNIT_RO, on its own `if'.
+ *
+ *   MDST_ABSENT    ALWAYS SET, on every drive, attached or not.  besm6_disk.c tests
+ *                  `md_unit[c->dev].flags & UNIT_DISABLE', and UNIT_DISABLE (02000) is
+ *                  SIMH's "this unit CAN be disabled" capability bit -- every md_unit[]
+ *                  entry declares it in its UDATA -- not UNIT_DIS (04000), "is disabled".
+ *   MDST_POWERUP   NEVER SET: it sits on the `else if' that MDST_ABSENT just took.
+ *
+ * So a driver that read the documentation and used MDST_ABSENT as its presence test would
+ * fail every request on a perfectly good disk.  This driver consults neither, and the
+ * error mask at EXT_IOERR remains the only presence test worth making; MDST_READY only
+ * corroborates it.  Bite-tested -- classify on MDST_ABSENT and kernel/test/mdtest run 1
+ * fails on every drive.  Same shape of trap as the unit mask above: the comment describes
+ * the intent, the code does something else, and only the code runs.
+ *
+ * Everything else here is declared by the simulator and set by nothing, exactly as on the
+ * drum.  They are named because the retry path is written against them for the real
+ * machine's sake, and a reader is owed the fact that those arms never execute under SIMH.
+ */
+#define MDST_SEEK       00000377 /* 8-1: "seek done", one bit per unit */
+#define MDST_READY      00000400 /* 9: the selected unit is ready         -- SIMH sets this */
+#define MDST_SEEK_FAIL  00001000 /* 10: head location unknown */
+#define MDST_CHECKSUM   00002000 /* 11: bad checksum on read */
+#define MDST_FAILURE    00004000 /* 12: failure -- OR of some of the upper bits */
+#define MDST_MAYDAY     00010000 /* 13: unspecified failure */
+#define MDST_NO_AMRK    00020000 /* 14: address marker not found in a revolution */
+#define MDST_WRONG_CYL  00040000 /* 15: wrong address marker */
+#define MDST_WRONG_ID   00100000 /* 16: bad track ID */
+#define MDST_BAD_ACSUM  00200000 /* 17: bad checksum of the address marker */
+#define MDST_UNFINISHED 00400000 /* 18: I/O not finished after a revolution */
+#define MDST_TRK_PARITY 01000000 /* 19: track parity error in two-track I/O */
+#define MDST_READONLY   02000000 /* 20: the unit is read-only           -- SIMH sets this */
+#define MDST_POWERUP    04000000 /* 21: powered up -- DEAD, see above */
+#define MDST_ABSENT    010000000 /* 22: not connected -- ALWAYS SET, see above */
+#define MDST_BUF_ERR   020000000 /* 23: transfer buffer not ready */
+
+/*
+ * How many times one exchange is re-issued before the request is failed.  The v7 figure,
+ * from rk.c and rp.c.
+ */
+#define MDRETRY 10
+
 struct buf rmdbuf;
 struct buf mdtab;
 
@@ -136,8 +225,49 @@ struct buf mdtab;
 static unsigned mddone; /* words of mdtab.b_actf's request already transferred */
 static unsigned mdnw;   /* words the exchange now running will move */
 static unsigned mdarm;  /* the ГРП bit currently armed in МГРП, or 0 */
+static unsigned mderr;  /* the running exchange already failed; its completion is still due */
+
+/*
+ * The status register as of the last failure, reassembled from its two halves.  Not static:
+ * kernel/test/mdtest reads it to check that a write-protected drive was told apart from an
+ * absent one, the way it already reaches into intr.c for mgrp.
+ */
+unsigned mdstatus;
+
+/*
+ * Exchanges re-issued since the driver last started a fresh request.  Diagnostic state --
+ * "did that request come back cleanly, or did it come back after a fight" is worth having
+ * when a drive starts to go -- and the one thing that makes the hard/soft split above
+ * OBSERVABLE.  Without it nothing distinguishes a soft error from a hard one from outside:
+ * both end in a failed request with the same b_resid, and a driver that retried nothing
+ * would look identical.  kernel/test/mdtest run 4 asserts on it for exactly that reason.
+ */
+unsigned mdretries;
 
 static void mdstart(void);
+
+/*
+ * Ask the controller for half of its status register.  `cmd' is MDCMD_STATLO or MDCMD_STATHI.
+ *
+ * ONLY MEANINGFUL WITH A UNIT SELECTED, and both traps here bite silently.  MDCMD_STATLO
+ * with no selection answers ~0 -- every error bit at once -- and MDCMD_STATHI with no
+ * selection does not answer at all, leaving the previous query's value in the latch.  The
+ * caller is safe because mdstart() issues the group and unit selects before every exchange
+ * and the selection outlives it; a query from anywhere else would need its own select first.
+ *
+ * Constant 033 addresses, branching on ctlr, for the reason mdstart() does the same: a
+ * computed __besm6_ext() address is miscompiled by b6cc today (kernel/TODO.md, 18b.3).  The
+ * COMMAND is an accumulator value, so it may be a variable.
+ */
+static unsigned mdstat(unsigned ctlr, unsigned cmd)
+{
+    if (ctlr == 0) {
+        __besm6_ext(EXT_DISKCTL3, cmd);
+        return __besm6_ext(EXT_DISKSTAT3, 0);
+    }
+    __besm6_ext(EXT_DISKCTL4, cmd);
+    return __besm6_ext(EXT_DISKSTAT4, 0);
+}
 
 void mdopen(dev_t dev, int rw)
 {
@@ -173,8 +303,10 @@ void mdstrategy(register struct buf *bp)
     bp->av_forw = NULL;
     s           = spl6();
     dp          = &mdtab;
-    if (dp->b_actf == NULL)
+    if (dp->b_actf == NULL) {
+        mdretries  = 0; /* the count belongs to one request; this one starts a fresh queue */
         dp->b_actf = bp;
+    }
     else
         dp->b_actl->av_forw = bp;
     dp->b_actl = bp;
@@ -263,22 +395,56 @@ static void mdstart(void)
          * forever.  It has to come after the track-address command: that command is what
          * sets the mask, and the control word before it is what cleared it.
          */
-        if ((__besm6_ext(EXT_IOERR, 0) & IOERR_DISK(ctlr)) == 0) {
-            bit = GRP_CHAN3_FREE >> ctlr;
-            if (mdarm != 0 && mdarm != bit)
-                mgrpoff(mdarm); /* the request crossed from one controller to the other */
-            mdarm = bit;
-            mgrpon(bit);
-            mdtab.b_active = 1;
-            return;
+        mderr = 0;
+        if (__besm6_ext(EXT_IOERR, 0) & IOERR_DISK(ctlr)) {
+            /*
+             * It did not.  Ask why, and the answer decides something sharper than a retry
+             * policy: WHETHER A COMPLETION IS STILL COMING.  The mask says only that
+             * something went wrong, and the controller reaches it two quite different ways.
+             *
+             *   No completion.  An unattached unit, and a WRITE to a read-only one, are
+             *   both refused outright -- disk_ctl() sets the mask and returns BEFORE
+             *   arming the completion event.  Nothing was started and nothing will arrive,
+             *   so arming the ГРП bit here would be the hang this poll exists to prevent.
+             *   These are the hard errors, and retrying is not merely futile but wrong.
+             *
+             *   Completion still due.  A transfer that was attempted and failed partway --
+             *   on this simulator, a read of a zone the backing file does not reach; on the
+             *   real machine, a checksum or address-marker failure -- leaves the mask set
+             *   but the event armed, so the interrupt still arrives.  Re-issuing the
+             *   exchange NOW would leave that completion in flight against the new one, so
+             *   the retry belongs in mdintr(), once it has been consumed.  mderr carries
+             *   the fact across.
+             *
+             * MDST_READY is the presence test and MDST_READONLY the write-protect one
+             * because they are the only two bits this simulator computes correctly; the
+             * table above says why MDST_ABSENT and MDST_POWERUP cannot be used.
+             */
+            mdstatus = mdstat(ctlr, MDCMD_STATLO) & 07777;
+            mdstatus |= (mdstat(ctlr, MDCMD_STATHI) & 07777) << 12;
+
+            if ((mdstatus & MDST_READY) == 0 ||
+                ((bp->b_flags & B_READ) == 0 && (mdstatus & MDST_READONLY) != 0)) {
+                /* Hard.  Give up on this request and try the next one. */
+                deverror(bp, mdstatus, mdtab.b_errcnt);
+                bp->b_flags |= B_ERROR;
+                bp->b_resid    = bp->b_wcount - mddone;
+                mddone         = 0;
+                mdtab.b_errcnt = 0;
+                mdtab.b_actf   = bp->av_forw;
+                iodone(bp);
+                continue;
+            }
+            mderr = 1;
         }
 
-        /* No such drive.  Give up on this request and try the next one. */
-        bp->b_flags |= B_ERROR;
-        bp->b_resid  = bp->b_wcount - mddone;
-        mddone       = 0;
-        mdtab.b_actf = bp->av_forw;
-        iodone(bp);
+        bit = GRP_CHAN3_FREE >> ctlr;
+        if (mdarm != 0 && mdarm != bit)
+            mgrpoff(mdarm); /* the request crossed from one controller to the other */
+        mdarm = bit;
+        mgrpon(bit);
+        mdtab.b_active = 1;
+        return;
     }
 
     if (mdarm != 0) {
@@ -311,6 +477,43 @@ void mdintr(void)
     }
 
     bp = mdtab.b_actf;
+
+    /*
+     * The exchange this completion belongs to had already reported an error, and waiting for
+     * the completion before reacting is the whole point of mderr: the transfer was attempted,
+     * so the interrupt was always going to arrive, and re-issuing before consuming it would
+     * have left two completions racing for one armed bit.
+     *
+     * Now it is safe to try again.  mddone is untouched, so mdstart() re-issues exactly the
+     * chunk that failed, and it must NOT disarm first -- the control word it is about to
+     * issue lowers the wired bit by itself, which is the same arm/lower pairing the chaining
+     * path below relies on.
+     *
+     * NONE OF THIS RUNS UNDER SIMH IN THE ORDINARY WAY, and it should not be read as tested
+     * merely because the driver is.  The simulator models no checksum, marker or parity
+     * failure at all; the one route to a soft error is a read of a zone the backing file
+     * does not reach, which is what kernel/test/mdtest's short-image run is for.  On the
+     * real machine this is the arm that matters, and it is written for that machine.
+     */
+    if (mderr) {
+        mderr = 0;
+        if (++mdtab.b_errcnt <= MDRETRY) {
+            mdretries++;
+            mdstart();
+            return;
+        }
+        deverror(bp, mdstatus, mdtab.b_errcnt);
+        bp->b_flags |= B_ERROR;
+        bp->b_resid    = bp->b_wcount - mddone;
+        mddone         = 0;
+        mdtab.b_errcnt = 0;
+        mdtab.b_actf   = bp->av_forw;
+        iodone(bp);
+        mdstart();
+        return;
+    }
+
+    mdtab.b_errcnt = 0; /* this chunk landed; the next one starts its own count */
     mddone += mdnw;
     if (mddone < bp->b_wcount) {
         /*

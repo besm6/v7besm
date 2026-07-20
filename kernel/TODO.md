@@ -7,8 +7,8 @@ I/O — task 18 below.
 
 Where the port stands: `cd kernel && make` links an image that boots under SIMH and reaches
 `panic: iinit`. The hang after that is `panic()`'s own `for(;;) idle()`, which is now a real spin;
-both drivers are now written (tasks 18b.3 and 18b.4) but no root filesystem image exists for
-`iinit()` to mount, which is task 18b.6.
+both drivers are now written and their failures classified (tasks 18b.3, 18b.4 and 18b.5), but no
+root filesystem image exists for `iinit()` to mount, which is task 18b.6.
 
 Read [../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) before starting, and
 [../doc/Intrinsics.md](../doc/Intrinsics.md) for how C reaches `002 «рег»`.
@@ -419,10 +419,12 @@ How it turned out, where that differed from the sketch:
   mask — so without the poll a missing drum is a kernel that waits forever, not a failed
   request. Bite-tested: remove it and `mbtest` run 2 hangs. That is the drum's whole error
   story, so 18b.5 is now purely the disk's.
-  - Worth knowing for 18b.5: `033 4035` also stands after *reading a zone the backing file
+  - This mattered to 18b.5: `033 4035` also stands after *reading a zone the backing file
     does not reach yet* (`drum_read()` in `besm6_drum.c` sets the same bit), so the driver
     reports an unwritten zone as an I/O error. That is right for swap, which always writes
-    before it reads, and it is why `mbtest` writes zone 0 before reading anything.
+    before it reads, and it is why `mbtest` writes zone 0 before reading anything. On the disk
+    the same condition turned out to be the *only* soft error SIMH produces, and so the only
+    way to exercise a retry — `mdtest` run 4 is built on it.
 - **`mbintr()` has an idle guard, and it needed one.** A drum completion with `mbtab.b_active`
   clear cannot happen from this driver, but the bit is wired: returning without disarming
   leaves it standing and `extintr()` calls back forever. Bite-tested: neuter the guard and
@@ -551,18 +553,70 @@ How it turned out, where that differed from the sketch:
 *Not done here, and still 18b.6:* `iinit()` reading a real super block. That needs a root
 filesystem image to exist, which nothing in this tree builds yet.
 
-**18b.5. Disk status and errors.** Split out because the drum has no equivalent and the happy path
-should land first.
+**18b.5. Disk status and errors — DONE.** The disk's failure classification, and the last of 18b's
+driver work. `mdstart()` now asks the controller *why* an exchange failed and acts on the answer;
+`mdintr()` retries when retrying is meaningful.
 
-* Read the status register with `__besm6_ext(EXT_DISKSTAT3, 0)`. SIMH sets only `STATUS_READY` (to
-  command `011`) and `STATUS_ABSENT`/`STATUS_POWERUP`/`STATUS_READONLY` (to command `031`, shifted
-  right by 12) — so the retry logic is written against the documented bits but can only be
-  *exercised* for those. Say so in the source rather than leaving untestable code looking tested.
-* Error count and retry through `b_errcnt`, `B_ERROR` and `b_resid` on give-up, the v7 way.
-* ~~Also the drum's much smaller version~~ — **done in 18b.3**, which had to: without the
-  `EXT_IOERR` poll a missing drum is a hang, not a failed request. `IOERR_DISK(n)` is already in
-  `sys/besm6dev.h` next to `IOERR_DRUM(n)`; the disk's is the same check plus everything below.
-* **Done when** an unattached unit fails the request instead of hanging.
+**Verified by** a clean `make` (`050113`, was `047753` — 232 words), the extended `test/mdtest`,
+and all **14** `test/` SIMH tests passing.
+
+How it turned out, where that differed from the sketch:
+
+- **The sketch's premise about the status register was wrong, and following it would have broken
+  every disk request.** SIMH does *not* set `STATUS_ABSENT`/`STATUS_POWERUP`/`STATUS_READONLY` as
+  this file and `doc/Besm6_Peripherals.md` both claimed. `besm6_disk.c:931` tests
+  `md_unit[c->dev].flags & UNIT_DISABLE`, and `UNIT_DISABLE` (`02000`) is SIMH's *"this unit **can**
+  be disabled"* capability bit — declared in every `md_unit[]` `UDATA` and never cleared — where
+  `UNIT_DIS` (`04000`, *"is disabled"*) was meant. So **`STATUS_ABSENT` stands on every drive alive
+  or dead**, and `STATUS_POWERUP`, sitting on the `else if` it just took, **is never set at all**.
+  Only `STATUS_READY` (command `011`, tests `UNIT_ATT`) and `STATUS_READONLY` (independent `if`) are
+  computed correctly, and those are the only two the driver consults. Exactly the shape of 18b.4's
+  "the unit mask is NOT inverted": documentation describing intent, code doing otherwise, and only
+  the code running. Fixed in the doc too.
+- **The retry does not belong where the sketch put it.** The sketch had `mdstart()` retry in place
+  on a soft error. That is wrong, and the reason is worth keeping: the three ways `disk_fail` gets
+  set are not equivalent. An unattached unit (`:738`) and a write to a read-only one (`:766`)
+  `return` *before* `sim_activate`, so **no completion is ever coming** — those must fail on the
+  spot, and arming is the hang the `EXT_IOERR` poll exists to prevent. But a read that runs off the
+  end of the backing file (`:570`, `:576`) returns *into* `disk_ctl()`, **which arms the completion
+  anyway** — so the interrupt does arrive, and re-issuing on the spot leaves it in flight against
+  the new exchange. So the split is not a retry policy but the physical question *will an interrupt
+  arrive*, and the retry waits for it in `mdintr()`. Bite-tested: retry inline and `mdtest` run 4
+  fails `03000000` — the armed exchange eats a stale completion and the request "succeeds".
+- **The retry path is genuinely exercised, not written blind.** The sketch accepted untestable
+  retry code provided it said so. It turned out testable: run 4 attaches `md20` to an **empty**
+  file, so every read runs off the end — the one soft error this simulator produces. `make test`
+  truncates `mdshort2056.disk` before each run, and the `.ini` attaches it **without `-n`** (with
+  `-n` the simulator would format 1000 zones and the run would silently prove nothing).
+- **`mdretries` had to exist, and adding it is the most useful thing this task did for the test.**
+  A soft error and a hard one end in the same failed request with the same `b_resid`, so nothing
+  observable distinguished them — meaning the whole classification was undefended. The first
+  bite-test found this the honest way: classifying on `STATUS_ABSENT` left runs 1–3 **green**, and
+  the claim that it would fail them, briefly written into the source, was false. Run 4 now asserts
+  the exact count, and that bite-test fails it with `mdretries == 0`.
+- **A third status trap, avoided rather than discovered the hard way.** A status query is only
+  meaningful with a unit selected: command `011` with none answers `~0` — every error bit — and
+  `031` with none does not answer at all, leaving the previous value in the latch. `mdstart()`
+  issues both selects before every exchange and the selection outlives it, so querying from the
+  error path is safe; anywhere else would need its own select. The status commands themselves are
+  safe to issue mid-request: `010`/`011`/`031` fall through `disk_ctl()`'s switch and never touch
+  the wired ГРП bit, unlike the selects and the unknown-command arm.
+- **The two halves are reassembled rather than compared piecemeal.** `MDCMD_STATHI` returns bits
+  13–24 pre-shifted down by twelve, so `md.c` shifts them back and defines `MDST_*` at true
+  register positions. Unshifted, `STATUS_POWERUP >> 12` and `STATUS_READY` are both `0400` and a
+  test for one silently answers for the other.
+- **`b_errcnt` is on `mdtab`, the device header, not on the request buf** — `buf.h` aliases it to
+  `b_resid`, which a live request needs for its real meaning, and the alias block is scoped to queue
+  headers for exactly that reason. This is what v7's `rk.c` does (`rktab.b_errcnt`).
+- **`deverror()` finally has a caller.** It had been sitting unused in `prf.c`. `mdtest` stubs it —
+  the test links no `prf.o` — and counts the calls, so "the driver reported what it refused" is
+  itself checked.
+- **The `.ini` halt PC moved by one word** (`0571` → `0576`, four assertions). It also invalidated
+  the first attempt at bite-test 1, which "failed" run 1 purely because a larger constant shifted
+  the literal pool — a reminder that a bite-test must be read on ACC, not on the halt PC.
+- *Not done, deliberately:* no status poll after a **successful** completion. SIMH never sets a
+  transfer-error bit, so it would be two extra `033`s per exchange guarding a branch that cannot be
+  taken; on real hardware it is where a checksum error would surface, and that is where to add it.
 
 **18b.6. Wiring up and bring-up.** The step that closes 18b.
 
@@ -626,7 +680,8 @@ Loose ends the finished work left behind. None blocks 18.
 ## Notes for the next standalone SIMH test
 
 Task 18b wanted three — one per step 18b.2, 18b.3 and 18b.4 — and all three are written: `ugrp`,
-`mbtest` and `mdtest`. What they cost to get right, for whoever writes the fourth:
+`mbtest` and `mdtest`, the last since extended for 18b.5. What they cost to get right, for whoever
+writes the fourth:
 
 * **A round trip proves nothing about addressing.** Write a pattern, read it back, compare — and
   a driver that put the data in the wrong place passes, having been consistently wrong twice.
@@ -660,6 +715,18 @@ Task 18b wanted three — one per step 18b.2, 18b.3 and 18b.4 — and all three 
 * **Write the bite test, then verify it bites.** `ugrow` was checked both ways before being trusted:
   reintroducing the x86 stack shuffle makes it fail with `020`, and dropping the `sureg()` after the
   growth with `0212`. A geometry test that cannot fail proves nothing about the geometry.
+* **Read a bite test on ACC, never on the halt PC** — and rebuild before believing either. 18b.5's
+  first bite test "failed" run 1 and looked like a clean confirmation; it had merely grown a literal
+  by one word and moved `halt` from `0575` to `0576`, so the `.ini` tripped its *PC* assertion while
+  every check still passed. Run the modified build through a harness that prints PC and ACC
+  separately: a wrong ACC is a broken check, a PC that is neither `halt` nor `fault` is a hang, and
+  a PC one word off is usually just the tax.
+* **Ask what would notice if the code were wrong, and if the answer is "nothing", the test is not
+  finished.** 18b.5 classified disk failures into hard and soft, but both ended in the same failed
+  request with the same `b_resid` — so the entire classification was undefended, and the bite test
+  duly passed runs 1–3 while the source claimed it would fail them. Exposing `mdretries` and
+  asserting the exact count is what closed it. A distinction the test cannot observe is a
+  distinction the test does not check, however much prose surrounds it.
 
 ---
 

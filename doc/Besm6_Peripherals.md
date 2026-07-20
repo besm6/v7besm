@@ -571,8 +571,38 @@ simulated. Bit layout at [besm6_disk.c:47](https://github.com/besm6/simh/blob/ma
 | `010000000` | `STATUS_ABSENT` | The unit is not connected. |
 | `020000000` | `STATUS_BUF_ERR` | Transfer buffer not ready. |
 
-Of these the simulator actually sets only `STATUS_READY` (in response to command `011`) and
-`STATUS_ABSENT` / `STATUS_POWERUP` / `STATUS_READONLY` (in response to `031`, shifted right by 12).
+**Only two of these bits are usable, and neither of the two you would reach for first.** The
+register is written by nothing except commands `010`, `011` and `031` — it is a latch, not a
+sample, and `disk_event()` never touches it, so a completed transfer leaves whatever the last
+query put there. What the three commands actually produce:
+
+| Bit | Set by | Verdict |
+|-----|--------|---------|
+| `STATUS_READY` | `011`, when the unit has `UNIT_ATT` | **Correct.** The only usable presence test. |
+| `STATUS_READONLY` | `031`, when the unit has `UNIT_RO` | **Correct.** On its own `if`, so it survives. |
+| `STATUS_ABSENT` | `031` | **Always set, on every drive.** See below. |
+| `STATUS_POWERUP` | `031` | **Never set.** It is the `else if` that `STATUS_ABSENT` just took. |
+| everything else | nothing | Declared and never assigned; no error condition is simulated. |
+
+`STATUS_ABSENT` is a trap. [besm6_disk.c:931](https://github.com/besm6/simh/blob/master/BESM6/besm6_disk.c#L931)
+tests `md_unit[c->dev].flags & UNIT_DISABLE`, but `UNIT_DISABLE` (`0002000`) is SIMH's *"this unit
+**can** be disabled"* capability bit — every `md_unit[]` entry declares it in its `UDATA`, and
+nothing clears it — where the intent was plainly `UNIT_DIS` (`0004000`), *"is disabled"*. So a
+driver that uses `STATUS_ABSENT` as its presence test, which is what the bit table above invites,
+concludes that every drive in the machine is missing. Use `STATUS_READY`.
+
+Two further traps in the query itself, both silent:
+
+* **A query needs a live unit selection.** Command `011` with no unit selected sets the register to
+  `~0` — every error bit at once. Command `031` with no unit selected `break`s *without assigning*,
+  leaving the previous query's value. Group select resets the selection, so the selects must come
+  first.
+* **`031` returns bits 13–24 shifted right by 12.** So its answers must be shifted back before
+  being compared against the constants above; unshifted, `STATUS_POWERUP >> 12` and `STATUS_READY`
+  are both `0400`.
+
+`kernel/dev/md.c` reassembles the two halves into the true 24-bit register and consults only
+`STATUS_READY` and `STATUS_READONLY`; `kernel/test/mdtest` runs 2–4 exercise all three outcomes.
 
 ### A drive that is not attached never interrupts
 
@@ -580,6 +610,19 @@ The bit-12 track-address command to a disabled or unattached unit sets the contr
 `033 4035` error mask (`020 >> n`) and **returns without scheduling a completion** — no ГРП bit
 ever arrives. A driver that does not poll that mask after the command waits forever, so the poll
 is not optional. This is the same failure mode the drums have, and for the same reason.
+
+**A write to a read-only unit fails the same way** — `disk_fail |= c->mask_fail; return;`, again
+before the completion is armed — so it too must be failed on the spot rather than retried, and
+`STATUS_READONLY` is the only thing that tells the two cases apart. The error mask stands
+identically for both.
+
+**But a failed *transfer* is not like either**, and the difference decides whether a driver may
+re-issue. A read of a zone the backing file does not reach sets the error mask inside
+`disk_read()` / `disk_read_track()`, which return into `disk_ctl()` — and `disk_ctl()` arms the
+completion event anyway. So the interrupt *does* arrive. A driver that reacts to the error mask by
+re-issuing immediately, as it may for the two cases above, leaves that completion in flight
+against the new exchange; the retry has to wait for it. This is the one soft error the simulator
+can be made to produce, and the only way to exercise a retry path against it.
 
 ### Interrupts and service words
 

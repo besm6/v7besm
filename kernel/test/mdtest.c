@@ -1,5 +1,6 @@
 /*
- * mdtest -- the disk driver moves data, through its two-step protocol.  Task 18b.4.
+ * mdtest -- the disk driver moves data, through its two-step protocol (task 18b.4), and
+ * tells its failures apart through the status register (task 18b.5).
  *
  * The mirror of mbtest, and built the same way: this links THE CODE UNDER TEST -- the
  * kernel's own md.o and intr.o -- and stubs only what they name.  No gate and no user mode.
@@ -24,6 +25,19 @@
  *     is what makes the odd-numbered entries of buffers[] legal transfer targets, so it is
  *     not decoration -- check 4.
  *   - GROUPS AND TWO CONTROLLERS behind one major number: checks 5 and 6.
+ *   - THREE KINDS OF FAILURE where the drum has one, which is the whole of task 18b.5.  The
+ *     error mask at 033 4035 says only THAT an exchange failed; the status register is what
+ *     says what to do about it, and the three runs after the first are one shape each:
+ *     a drive that is absent (7), one that is present but write-protected (9-11), and a
+ *     transfer that was attempted and failed partway (12).  The first two are refused before
+ *     the completion is armed and must fail at once; the third still interrupts and must be
+ *     RETRIED, and telling them apart wrongly is a hang or a completion left in flight.
+ *
+ * ONLY TWO STATUS BITS ARE WORTH ASKING FOR, and neither is the obvious one.  SIMH sets
+ * MDST_ABSENT on every drive whether attached or not, and MDST_POWERUP on none -- it tests
+ * SIMH's "can be disabled" capability flag where it means "is disabled" -- so the presence
+ * test is MDST_READY, and MDST_READONLY is the only bit carrying information the error mask
+ * does not.  kernel/dev/md.c has the long version.
  *
  * A ROUND TRIP PROVES NOTHING ABOUT PLACEMENT.  Writing a pattern and reading it back
  * passes whether or not the data went where the block number says -- a driver that is
@@ -57,7 +71,19 @@ void extintr(void);
 void intrinit(void);
 void mgrpon(unsigned bits);
 int spl7(void);
-extern unsigned mgrp; /* intr.c's shadow of МГРП, which cannot be read back */
+extern unsigned mgrp;      /* intr.c's shadow of МГРП, which cannot be read back */
+extern unsigned mdstatus;  /* md.c's reassembled status register, as of the last failure */
+extern unsigned mdretries; /* exchanges md.c re-issued for the current request */
+
+/*
+ * The two status bits SIMH computes correctly, at their true register positions -- the
+ * table in kernel/dev/md.c says why the other fourteen are not worth asking about, and in
+ * particular why MDST_ABSENT is not the presence test it looks like.  Spelled out here
+ * rather than shared through a header for the reason EXT_GRPSET below is: this is one
+ * device's private protocol layer, and sys/besm6disk.h says so in its closing comment.
+ */
+#define MDST_READY    00000400 /* 9: the selected unit is ready */
+#define MDST_READONLY 02000000 /* 20: the selected unit is read-only */
 
 /*
  * увв 031 simulates a ГРП interrupt: GRP |= (ACC & 0xFFFFFF) << 24.  The deterministic
@@ -87,14 +113,17 @@ extern unsigned mgrp; /* intr.c's shadow of МГРП, which cannot be read back 
 #define MODEWORD     (*(volatile unsigned *)0100)
 #define MODE_ALL     0 /* every unit attached */
 #define MODE_MISSING 1 /* md40 -- the controller-4 unit -- detached */
+#define MODE_RDONLY  2 /* md10 re-attached read-only */
+#define MODE_SHORT   3 /* md20 attached to an EMPTY file: every read runs off the end */
 
 /*
- * The three drives, as minor numbers.  The minor IS the simulator's unit subscript
+ * The four drives, as minor numbers.  The minor IS the simulator's unit subscript
  * (bit 5 controller, bits 4-3 group, bits 2-0 drive), which is the point of the map: minor
  * 0 is md00, minor 010 is md10, minor 040 is md40.
  */
 #define UNIT_MD00 000 /* controller 3, group 0, drive 0 */
 #define UNIT_MD10 010 /* controller 3, group 1, drive 0 -- proves the group select */
+#define UNIT_MD20 020 /* controller 3, group 2, drive 0 -- the short image, run 4 */
 #define UNIT_MD40 040 /* controller 4, group 0, drive 0 -- proves the second controller */
 
 /* Patterns.  All distinct, and far enough apart that a wrong offset cannot alias. */
@@ -119,9 +148,19 @@ extern unsigned mgrp; /* intr.c's shadow of МГРП, which cannot be read back 
 #define F_MD00X  0000400 /* ...and it landed on controller 3 instead */
 #define F_NOERR  0001000 /* the missing unit did not report B_ERROR */
 #define F_RESID  0002000 /* ...or did not leave the whole request in b_resid */
-#define F_MODE   0004000 /* the mode word was neither 0 nor 1 */
+#define F_MODE   0004000 /* the mode word named no run this test knows */
 #define F_DONE   0010000 /* a request came back with neither B_DONE nor a hang */
 #define F_IDLE   0020000 /* a completion nobody was waiting for was not disarmed */
+#define F_MISRDY 0040000 /* the MISSING drive was not classified: READY still set, or unreported */
+#define F_ROERR  0100000 /* a write to the READ-ONLY drive was not refused, or not reported */
+#define F_ROSTAT 0200000 /* ...and the status did not say READONLY-but-present */
+#define F_RORD   0400000 /* a READ of the read-only drive failed, or came back wrong */
+#define F_SHORT 01000000 /* an unreadable zone did not fail the request, or was not reported */
+#define F_SHRSD 02000000 /* ...or did not leave the whole request in b_resid */
+#define F_SHRTY 04000000 /* ...or was not RETRIED, which is what makes it a SOFT error */
+
+/* Must match MDRETRY in kernel/dev/md.c -- run 4 asserts the exact retry count. */
+#define MDRETRY 10
 
 /* ------------------------------------------------------------------------- */
 /* The environment kernel/dev/md.c and kernel/intr.c name.                    */
@@ -177,6 +216,20 @@ void physio(void (*strat)(struct buf *), struct buf *bp, int dev, int rw)
 void iodone(register struct buf *bp)
 {
     bp->b_flags |= B_DONE;
+}
+
+/*
+ * md.c reports a failed request through this.  The real one (kernel/prf.c) would drag in
+ * prdev() and the whole of printf(), and prf.o is not linked here; the runs below fail
+ * requests deliberately and often, so it must be a stub rather than an omission.  Counting
+ * the calls costs nothing and gives the read-only and short-image runs a way to insist the
+ * driver actually reported what it refused.
+ */
+static int ndeverror;
+
+void deverror(struct buf *bp, int o1, int o2)
+{
+    ndeverror++;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -278,7 +331,7 @@ int main(void)
     intrinit();
 
     mode = MODEWORD;
-    if (mode != MODE_ALL && mode != MODE_MISSING)
+    if (mode != MODE_ALL && mode != MODE_MISSING && mode != MODE_RDONLY && mode != MODE_SHORT)
         mask |= F_MODE;
 
     /*
@@ -376,8 +429,13 @@ int main(void)
      * md10 is drive 0 of GROUP 1 on the same controller.  Reaching it needs the group-select
      * command to have gone out and to have named group 1; drop it and the controller answers
      * from group 0, i.e. from md00, whose block 0 holds PAT_A rather than PAT_D.
+     *
+     * Skipped in the read-only run, which write-protects this very drive: the round trip
+     * begins with a write, and refusing it is what that run is about.  PAT_D is left on the
+     * drive by the runs that do get here, and run 3 reads it back.
      */
-    mask |= roundtrip(UNIT_MD10, 0, PAT_D, F_GROUP);
+    if (mode != MODE_RDONLY)
+        mask |= roundtrip(UNIT_MD10, 0, PAT_D, F_GROUP);
 
     if (mode == MODE_ALL) {
         /*
@@ -399,7 +457,7 @@ int main(void)
             mask |= F_ERR;
         if (cmprange(0, BSIZEW, PAT_A))
             mask |= F_MD00X;
-    } else {
+    } else if (mode == MODE_MISSING) {
         /*
          * ---- Check 7: a missing drive fails, and does not hang --------------------------
          *
@@ -413,6 +471,94 @@ int main(void)
             mask |= F_NOERR;
         if (mdbuf.b_resid != BSIZEW)
             mask |= F_RESID;
+
+        /*
+         * 7b, and this is task 18b.5's half of it: the driver must have CLASSIFIED the
+         * failure, not merely noticed it.  A drive that is not there answers MDCMD_STATLO
+         * with MDST_READY clear, and that -- not MDST_ABSENT, which SIMH sets on every
+         * drive alive or dead -- is what tells mdstart() no completion is coming and the
+         * request must be failed on the spot rather than retried.
+         */
+        if (mdstatus & MDST_READY)
+            mask |= F_MISRDY;
+        if (ndeverror == 0)
+            mask |= F_MISRDY;
+    } else if (mode == MODE_RDONLY) {
+        /*
+         * ---- Checks 9-11: a WRITE-PROTECTED drive -----------------------------------
+         *
+         * md10 is re-attached read-only for this run.  This is the one error the status
+         * register tells us anything about that the error mask does not: 033 4035 stands
+         * for a missing drive and for a write-protected one alike, and only MDST_READONLY
+         * separates them.  It is also the only failure bit SIMH computes correctly besides
+         * MDST_READY, which is why this run exists at all.
+         *
+         * Like a missing drive, the refusal happens BEFORE the completion is armed
+         * (disk_ctl() sets the error mask and returns), so a driver that armed here would
+         * hang -- `step' in the .ini is what catches that.
+         */
+        fillrange(0, BSIZEW, PAT_A);
+        if (xfer(UNIT_MD10, 0, 0, BSIZEW, B_WRITE) == 0)
+            mask |= F_ROERR;
+        if (mdbuf.b_resid != BSIZEW || ndeverror == 0)
+            mask |= F_ROERR;
+
+        /*
+         * 10: present AND write-protected.  Both halves matter -- MDST_READY separates this
+         * from a drive that is simply absent, and it is the pair that has to be right for
+         * mdstart() to reach the hard-error arm for the read-only reason rather than the
+         * missing-drive one.
+         */
+        if ((mdstatus & MDST_READONLY) == 0 || (mdstatus & MDST_READY) == 0)
+            mask |= F_ROSTAT;
+
+        /*
+         * 11: and it is only the WRITE that is refused.  A read-only drive reads perfectly
+         * well -- disk_ctl() tests UNIT_RO on the write path only -- so md10 block 0 must
+         * still hand back the PAT_D that run 1 left there.  Without this a driver that
+         * failed every request to a read-only drive would pass checks 9 and 10.
+         */
+        clearall();
+        if (xfer(UNIT_MD10, 0, 0, BSIZEW, B_READ))
+            mask |= F_RORD;
+        if (cmprange(0, BSIZEW, PAT_D))
+            mask |= F_RORD;
+    } else {
+        /*
+         * ---- Check 12: a zone the backing file does not reach, and the RETRY path -------
+         *
+         * md20 is attached to an EMPTY file in this run, so every read runs off the end of
+         * it.  This is the one soft error SIMH can be made to produce, and the only reason
+         * mdintr()'s retry arm is testable at all rather than being written blind for the
+         * real machine.
+         *
+         * It is a different shape of failure from checks 7 and 9, and that is the point.
+         * disk_read_track() sets the error mask and returns, but it returns INTO disk_ctl(),
+         * which arms the completion event regardless -- so the interrupt DOES arrive.  A
+         * driver that reacted to the error mask by re-issuing immediately, the way it may
+         * for a missing drive, would leave that completion in flight against the new
+         * exchange.  md.c waits for it (mderr) and retries from mdintr() instead.
+         *
+         * So what this check really asserts is that the request TERMINATES: MDRETRY
+         * attempts, each consuming exactly one completion, and then a clean failure.  Get
+         * the pairing wrong and this hangs or double-counts rather than failing.
+         *
+         * THE RETRY COUNT IS ASSERTED, and it has to be: it is the only thing in the whole
+         * test that can tell a soft error from a hard one.  Both end in the same failed
+         * request with the same b_resid, so without mdretries a driver that classified
+         * everything hard -- which is exactly what using MDST_ABSENT as the presence test
+         * would produce, that bit being set on every drive -- would pass every check here.
+         * Bite-tested: classify on MDST_ABSENT and this run fails with mdretries == 0 while
+         * runs 1-3 stay green.
+         */
+        if (xfer(UNIT_MD20, 0, 0, BSIZEW, B_READ) == 0)
+            mask |= F_SHORT;
+        if (ndeverror == 0)
+            mask |= F_SHORT;
+        if (mdbuf.b_resid != BSIZEW)
+            mask |= F_SHRSD;
+        if (mdretries != MDRETRY)
+            mask |= F_SHRTY;
     }
 
     /*

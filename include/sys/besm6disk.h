@@ -21,7 +21,9 @@
  *
  * The disk's second step -- the 033 023 controller commands -- and its status register
  * are NOT here.  They are a different protocol layer and belong with the code that
- * exercises them (tasks 18b.4 and 18b.5).
+ * exercises them: both now live in kernel/dev/md.c, as MDCMD_* and MDST_*.  That file is
+ * also where to find which status bits this simulator computes correctly, which is fewer
+ * than the hardware documentation lists and not the ones you would guess.
  */
 #ifndef _SYS_BESM6DISK_H
 #define _SYS_BESM6DISK_H

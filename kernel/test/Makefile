@@ -35,6 +35,7 @@ test:   $(PROGS)
 	besm6 biotest.ini
 	besm6 ugrp.ini
 	besm6 mbtest.ini
+	rm -f mdshort2056.disk && : > mdshort2056.disk
 	besm6 mdtest.ini
 
 clean:
@@ -145,9 +146,16 @@ mbtest: crt0.o mbtest.o mb.o intr.o psw.o
 	$(DISASM) -c $@ > $@.dis
 	$(NM) -n $@ > $@.nm
 
-# mdtest -- task 18b.4: the disk driver, and its two-step protocol.  The mirror of mbtest:
-# links the REAL md.o and intr.o and stubs mbintr() instead of mdintr().  Needs disk units
-# attached, and their filenames must carry a volume number in 2048..4095 -- see mdtest.ini.
+# mdtest -- task 18b.4: the disk driver, and its two-step protocol; and task 18b.5: telling
+# its failures apart through the status register.  The mirror of mbtest: links the REAL md.o
+# and intr.o and stubs mbintr() instead of mdintr().  Needs disk units attached, and their
+# filenames must carry a volume number in 2048..4095 -- see mdtest.ini.
+#
+# `make test' truncates mdshort2056.disk to nothing before running it.  Run 4 attaches that
+# file WITHOUT `-n' so it stays empty, which is the only way to make this simulator produce a
+# soft error -- a read that runs off the end of the backing file -- and so the only way the
+# driver's retry path is exercised rather than merely written.  It must be empty on every
+# run: run 4 fails a read against it, and a stale formatted file would silently pass.
 mdtest: crt0.o mdtest.o md.o intr.o psw.o
 	$(LD) crt0.o mdtest.o md.o intr.o psw.o -o $@ -L$(LIBDIR) -lc
 	$(DISASM) -c $@ > $@.dis
