@@ -450,8 +450,50 @@ Two things worth knowing next time:
   `kernel/seg.S` and `kernel/test/mmutest.c`. mmutest's check 13 exists for exactly this and is
   what caught it — the MMU tests are load-bearing for a filesystem change, which is not obvious.
 
-Still absent, and now the blocker for task 18b.6: **there is no `mkfs`**. Nothing in `cmd/`
-writes this layout, so the boot still stops at `panic: iinit`, which remains the correct outcome.
+### DONE: the mkfs — `cmd/fsutil`, installed as `b6fsutil`
+
+This was the blocker for task 18b.6, and it is gone: `b6fsutil` builds a root filesystem in
+this layout from a manifest, checks it (five-pass fsck), lists it, extracts it, and converts
+it into the container SIMH attaches. See [cmd/fsutil/README.md](../cmd/fsutil/README.md).
+
+```sh
+b6fsutil -n -M manifest.txt root.img && b6fsutil -c root.img
+b6fsutil -S root.img md2053.disk        # then: attach md00 md2053.disk
+```
+
+Three things learned building it that this file should record:
+
+**The SIMH disk container is not a flat block file, and nothing here had said so.** SIMH
+stores each word as **eight little-endian bytes with a two-bit tag** above the 48 — an empty
+data word on disk is `0x0002000000000000`, not zero — and **interleaves eight service words
+per zone**, a filesystem block being a half-zone. One drive is 8,256,000 bytes, not
+6,144,000. `b6fsutil -S` converts; `cmd/fsutil/simh.cpp` has the layout, transcribed from
+`besm6_disk.c:380-400` and verified byte-for-byte against what `attach -n` writes.
+
+**`s_isize` is the first data block, not a count of i-list blocks.** `ialloc()` bounds its
+scan with it and `badblock()` rejects `bn < s_isize`, so one too high is a runaway read in
+the kernel rather than a wrong answer. A mkfs ported from a BSD source gets this off by one.
+
+**The free list must be built descending.** `alloc()` pops the superblock cache from the top,
+so the last block freed is the first handed out: freeing from the end of the volume down to
+`s_isize` is what makes the kernel allocate ascending. Built the other way it still passes
+every self-consistency check and lays every file backwards across the platter. Note also that
+the sentinel `free()` plants costs a cache slot, so the first chain block holds only
+`NICFREE-1` real blocks — the first spill on a 2000-block volume lands at block 1680, not 1679.
+
+**`sbcheck()` still has not run for real** (see below), and booting with a root disk attached
+still hangs before `iinit()`. That is a driver/boot-path problem, not a format one, and it is
+now the only thing between here and a mounted root. To close the gap without it,
+`cmd/fsutil/test/kernel_model_test.cpp` is a **second, independent reader** — `sbcheck()`,
+`alloc()`, `bmap()` and `namei()`'s directory loop transcribed again, in the kernel's shape,
+sharing nothing with the tool — and it mounts and walks a real image, including a 2 Mb file
+through the double indirect. Two implementations agreeing is the strongest statement available
+until the hang is fixed.
+
+Next step for 18b.6, and it does **not** need the hang fixed: extend `kernel/test/mdtest` to
+attach a converted image, `bread()` block 1 through the real driver and call the real
+`sbcheck()` on the buffer. That would take the "compiled but never executed" note off this
+file.
 
 ### DONE: the superblock
 
