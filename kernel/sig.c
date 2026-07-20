@@ -340,7 +340,7 @@ int procxmt()
         i = (int)ipc.ip_addr;
         if (i < 0 || i >= USIZE)
             goto error;
-        ipc.ip_data = ((physadr)&u)->r[i];
+        ipc.ip_data = ((int *)&u)[i];
         break;
 
     /* write user I */
@@ -375,7 +375,7 @@ int procxmt()
     case 6:
         /* ip_addr is a word index into the u-area, as in case 3 above */
         i = (int)ipc.ip_addr;
-        p = (int *)&((physadr)&u)->r[i];
+        p = &((int *)&u)[i];
         for (i = 0; i < 16; i++)
             if (p == &u.u_ar0[(unsigned)regloc[i]])
                 goto ok;

@@ -11,9 +11,6 @@
 #ifndef _SYS_TYPES_H
 #define _SYS_TYPES_H
 
-typedef struct {
-    int r[1];
-} *physadr;                   /* physical address */
 typedef long daddr_t;         /* disk address */
 typedef char *caddr_t;        /* core address */
 typedef unsigned short ino_t; /* i-node number */

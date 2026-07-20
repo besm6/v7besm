@@ -43,7 +43,6 @@ extern int uhome;            /* whose u-area is live at UBASE (its p_addr) */
  * maintains this are written up once, at xswap() in kernel/text.c.
  */
 #define NOUHOME 0
-extern physadr lks;          /* pointer to clock device */
 extern daddr_t swplo;        /* block number of swap space */
 extern int nswap;            /* size of swap space */
 extern int updlock;          /* lock for sync */
