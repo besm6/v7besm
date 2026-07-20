@@ -18,11 +18,14 @@
  * packs six to a word (sys/dir.h asserts it), but whether adjacent scalar char
  * members share a word is documented nowhere in doc/ -- and the size of this struct
  * is now load-bearing.  `int' removes the question instead of depending on the
- * answer, at a cost of three words in a block that has eleven spare.
+ * answer, at a cost of three words in a block that has seventeen spare.
  *
- * s_m/s_n/s_tfree/s_tinode are dead here -- v7 says so itself, and this port has no
- * ustat() -- but they stay, because mkfs and fsck will be ported from v7 sources and
- * four words is not worth the divergence.
+ * s_tfree/s_tinode are dead here -- v7 says so itself, and this port has no ustat()
+ * -- but they stay, because mkfs and fsck will be ported from v7 sources.  v7's
+ * s_m/s_n (mkfs's free-list interleave) and s_fname/s_fpack (volume labels, read
+ * only by fsck and friends) are gone: nothing in this port writes them, the
+ * interleave they describe does not survive the first free-list churn, and their six
+ * words are better spent as room to grow.
  */
 struct filsys {
     /* Identity and geometry: checked at mount by sbcheck(), kernel/alloc.c. */
@@ -42,17 +45,12 @@ struct filsys {
     int s_fmod;  /* 11: super block modified flag */
     int s_ronly; /* 12: mounted read-only flag */
 
-    int s_m;          /* 13: interleave factor */
-    int s_n;          /* 14: " " */
-    char s_fname[12]; /* 15..16: file system name */
-    char s_fpack[12]; /* 17..18: file system pack name */
+    int s_nfree;             /* 13: number of addresses in s_free */
+    daddr_t s_free[NICFREE]; /* 14..333: free block list */
+    int s_ninode;            /* 334: number of i-nodes in s_inode */
+    ino_t s_inode[NICINOD];  /* 335..494: free i-node list */
 
-    int s_nfree;             /* 19: number of addresses in s_free */
-    daddr_t s_free[NICFREE]; /* 20..339: free block list */
-    int s_ninode;            /* 340: number of i-nodes in s_inode */
-    ino_t s_inode[NICINOD];  /* 341..500: free i-node list */
-
-    int s_fill[11]; /* 501..511: room to grow; written as zero */
+    int s_fill[17]; /* 495..511: room to grow; written as zero */
 };
 
 /*
