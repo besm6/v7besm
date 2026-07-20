@@ -1,5 +1,4 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
-/* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
 // clang-format off
 #include "sys/types.h"
@@ -103,8 +102,7 @@ void exece()
     nc = (nc + NBPW - 1) & ~(NBPW - 1);
     /*
      * The stack must hold the pointer vector as well as the strings: argc, na pointers,
-     * the two NULLs and the terminating word.  The x86 original sized it from the strings
-     * alone because its vector was carved out of the same downward run.
+     * the two NULLs and the terminating word.
      */
     if (getxfile(ip, nc + (na + 4) * NBPW) || u.u_error)
         goto bad;
@@ -125,7 +123,7 @@ void exece()
      *              the strings, byte-packed six to a word
      *        r15 = the first free word above the block
      *
-     * Two unit rules the x86 original never had to state.  suword() takes a WORD address
+     * Two unit rules.  suword() takes a WORD address
      * -- it masks its caddr_t to the low 15 bits (usermem.S) -- so the pointer vector
      * strides by ONE, not by NBPW; a stride of NBPW would skip six words per pointer.
      * subyte() takes a FAT pointer -- byte offset in bits 47-45 over a word address in bits
@@ -481,11 +479,10 @@ void fork()
     }
     /*
      * Parent and child are told apart by the SECOND return value, r12 (R_VAL2 in
-     * reg.h), which is v7's own answer: 1 in the child, 0 in the parent.  The x86
-     * `u.u_ar0[RET] += 2' -- advance the saved PC past the syscall in one of the two
-     * -- is gone: RET is a WORD address on this machine, so adding 2 skips two whole
-     * instruction words, and there is nothing to skip anyway now that the extracode
-     * gate stores nextpc in ERET (kernel/syscall.c).
+     * reg.h), which is v7's own answer: 1 in the child, 0 in the parent.  Nothing here
+     * advances the saved PC to tell the two apart: the extracode gate already stores
+     * nextpc in ERET (kernel/syscall.c), so there is nothing left to skip -- and RET is
+     * a WORD address on this machine, so bumping it would step whole instruction words.
      *
      * r_val1 alone cannot do it: each side gets the OTHER's pid, which is distinct
      * but not self-identifying.
@@ -534,11 +531,10 @@ void sbreak()
     /*
      * The break stops at virtual page USTKPAGE (070000), where the stack begins: that is
      * estabur()'s `nt + nd > USTKPAGE * PGSZ' check (utab.c), which is why there is no
-     * ceiling spelled out here.  And estabur() assigns u_dsize itself -- unlike the x86
-     * original, whose sizes lived in a separate u_utab[] -- so there is no trailing
-     * `u.u_dsize += d', which would count the change twice.  `d' below is still the delta
-     * the copyseg shuffle needs: data grows in the MIDDLE of the image, so unlike the
-     * stack's, its growth really does move the pages above it.
+     * ceiling spelled out here.  And estabur() assigns u_dsize itself, so there is no
+     * trailing `u.u_dsize += d', which would count the change twice.  `d' below is still
+     * the delta the copyseg shuffle needs: data grows in the MIDDLE of the image, so unlike
+     * the stack's, its growth really does move the pages above it.
      */
     if (estabur(u.u_tsize, u.u_dsize + d, u.u_ssize, u.u_sep, RO))
         return;

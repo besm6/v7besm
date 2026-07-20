@@ -1,8 +1,7 @@
 // Machine-language assist for the BESM-6.
 //
-// This is the BESM-6 counterpart of the x86 machine assist kept in kernel/x86.s
-// (the former mch.s).  It provides the small set of routines and global
-// variables that the machine-independent C kernel cannot express in portable C:
+// This is the machine-dependent half of the kernel: the small set of routines and
+// global variables that the machine-independent C kernel cannot express in portable C:
 // boot-up, the trap/interrupt vector, context switching, fault-safe access to
 // user memory, interrupt masking, and low-level device access.
 //

@@ -10,7 +10,7 @@
  * as the TAIL of the process image.  So growing the stack by one page appends that page at the
  * next higher virtual address and at the end of the image AT THE SAME TIME -- which means every
  * page already in the stack keeps exactly the address it had, and grow() has nothing to move.
- * That is why the new grow() (kernel/sig.c) has no copyseg shuffle where the x86 original did.
+ * That is why grow() (kernel/sig.c) has no copyseg shuffle at all.
  *
  * If that ever stops being true, this test fails: it seeds the ONE stack page the process starts
  * with, grows the stack out from under it, and checks that the page is still there, still at the
@@ -168,7 +168,7 @@ void trap(void)
     /*
      * THE POINT OF THIS TEST.  The stack page that already existed must not have moved: same
      * physical page, same contents, same virtual address.  An implementation that shuffled the
-     * stack the way the x86 grow() did would have slid this page up by one and both of these
+     * stack instead of appending to it would have slid this page up by one and both of these
      * would fail.
      */
     if (*(volatile unsigned *)STKBASE != SENTOLD)

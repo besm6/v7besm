@@ -16,8 +16,8 @@
 //
 // There is NO nofault/trap-recovery path.  Each routine validates its range up front with
 // useracc() (utab.c) -- the BESM-6 replacement for v7's ckr/ckw -- and a range that runs into an
-// unmapped page returns -1 without ever touching user memory.  (No C caller calls useracc; the
-// x86 original called ckr/ckw *inside* the routine, and these do the same with useracc.)
+// unmapped page returns -1 without ever touching user memory.  (No C caller calls useracc: like
+// v7's ckr/ckw, it is invoked from *inside* each routine.)
 //
 // No drainbrz.  РП is never written, so there is no "drain before the РП write" obligation; and
 // copyout's mapped stores are written back through the SAME map that is loaded, so no БРЗ tag
@@ -37,7 +37,7 @@
 // in registers.  Non-reentrant (the bss temps are static), same as uarea.S/seg.S -- no interrupt
 // handler calls these.  r1-r7 are untouched (useracc preserves them for us).
 //
-// copyin/copyout are WORD-ONLY, exactly like the x86 original: they copy nbytes/NBPW whole words.
+// copyin/copyout are WORD-ONLY: they copy nbytes/NBPW whole words.
 // Every caller passes word-aligned addresses and a word-multiple byte count (iomove's NBPW guard,
 // struct copyouts, icode); an unaligned copy stays on the fubyte/subyte byte path in iomove.  The
 // divide by NBPW=6 is a short subtract-6 loop that floors and cannot spin on a non-multiple.

@@ -1,6 +1,3 @@
-/* V7/x86 source code: see www.nordier.com/v7x86 for details. */
-/* Copyright (c) 2007 Robert Nordier.  All rights reserved. */
-
 /*
  * BESM-6 magnetic disk driver (МД / КМД) -- tasks 18b.4 (transfers) and 18b.5 (failures).
  *
@@ -76,8 +73,7 @@
  *      bits 2-0  drive 0-7 within the group
  *
  * There are no partitions.  One drive is 1000 zones = 2000 blocks, about 6 Mb, and swap is
- * on the drums, so a whole-drive filesystem is the honest arrangement; the x86 driver's
- * partition scheme (rootdev was minor 56, an MBR slot number) went with hd.c.
+ * on the drums, so a whole-drive filesystem is the honest arrangement.
  *
  * A MISSING DRIVE DOES NOT HANG THE KERNEL, the same lesson as the drum and for the same
  * reason: the track-address command to an unattached unit records itself in the error mask

@@ -1,5 +1,4 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
-/* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
 #include "sys/besm6dev.h" /* SPSW_* mode-word bits */
 
@@ -38,8 +37,8 @@
 #define NREGFRAME 21 /* words in the trap frame */
 
 /*
- * Semantic aliases used by the C readers.  These are the BESM-6 syscall ABI
- * (doc/Besm6_Calling_Conventions.md, cmd/sim/syscall.cpp), NOT x86 renames:
+ * Semantic aliases used by the C readers.  These follow the BESM-6 syscall ABI
+ * (doc/Besm6_Calling_Conventions.md, cmd/sim/syscall.cpp):
  * a syscall result is ACC, an error is errno-in-r14 (0 on success) with no
  * carry flag, and v7's second result (pipe/wait/getpid/getuid/getgid) is r12.
  */
@@ -48,8 +47,8 @@
 
 /*
  * The saved mode word СПСВ carries РежЭ|РежПр (RUU_EXTRACODE|RUU_INTERRUPT,
- * octal 014); both bits clear iff the interrupted context was user mode.  This
- * replaces the x86 CS-ring test.  See doc/Unix_Context_Switch.md and doc/Memory_Mapping.md.
+ * octal 014); both bits clear iff the interrupted context was user mode.  That test
+ * is the whole of USERMODE().  See doc/Unix_Context_Switch.md and doc/Memory_Mapping.md.
  */
 #define SPSW_MODE      (SPSW_EXTRACODE | SPSW_INTERRUPT) /* РежЭ | РежПр */
 #define USERMODE(spsw) (((spsw) & SPSW_MODE) == 0)

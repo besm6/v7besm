@@ -1,5 +1,4 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
-/* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
 // clang-format off
 #include "sys/types.h"
@@ -19,8 +18,8 @@
 
 /*
  * The kinds of trap this kernel dispatches.  These are OURS, not hardware numbers: the
- * BESM-6 has one internal-interrupt vector (0500) and reports the cause in ГРП, so unlike
- * the x86 there is no vector number to switch on and the gate passes none.  trap() reads
+ * BESM-6 has one internal-interrupt vector (0500) and reports the cause in ГРП, so there
+ * is no vector number to switch on and the gate passes none.  trap() reads
  * ГРП live -- the fault bits are not framed (reg.h) -- and folds it to one of these.
  *
  * There is no T_SYSCALL: an extracode is not reachable through 0500 at all.  The hardware

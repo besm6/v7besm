@@ -139,8 +139,7 @@ See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail, and
   design the machine forces, the hardware rules every part of it obeys, and what is left to do.
 - [doc/Kernel_Assembly_Routines.md](doc/Kernel_Assembly_Routines.md) — the machine-language
   assist: what each routine must do, the contract it owes its C callers, and — routine by
-  routine — what the BESM-6 version (`kernel/besm6.S`) has to do differently from the x86
-  original it is derived from.
+  routine — how `kernel/besm6.S` and its companion files satisfy it.
 - [doc/Unix_Context_Switch.md](doc/Unix_Context_Switch.md) — how this kernel takes an interrupt,
   takes an extracode, saves the CPU context, switches address spaces and gets back out: the four
   gates, the trap frame, the exit through `выпр`, `sureg()` and the u-area copy.
@@ -158,5 +157,9 @@ See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail, and
 
 ## License
 
-The Unix v7 portions are distributed under the Caldera BSD-style license. See
-[COPYRIGHT](COPYRIGHT) for the full notice.
+The BESM-6 port — the toolchain, the retargeted kernel and the documentation — is
+Copyright (c) 2025-2026 Serge Vakulenko, under the MIT license.
+
+The Unix v7 portions it builds on are distributed under the Caldera BSD-style license, and the
+kernel sources descend from Robert Nordier's v7/x86 port, whose modifications carry his own
+BSD-style notice. See [COPYRIGHT](COPYRIGHT) for all of these in full.

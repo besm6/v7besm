@@ -1,6 +1,3 @@
-/* V7/x86 source code: see www.nordier.com/v7x86 for details. */
-/* Copyright (c) 1999 Robert Nordier.  All rights reserved. */
-
 /*
  * Per-process address-space setup.
  *

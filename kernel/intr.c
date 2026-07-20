@@ -48,7 +48,7 @@ void clock(struct trap *tr);
  * Interrupt priority level.
  *
  * The BESM-6 has no priority hierarchy, so rather than pretend to the eight graded levels
- * of the PDP-11 and the x86 port, this kernel has exactly two -- interrupts enabled and
+ * of the PDP-11, this kernel has exactly two -- interrupts enabled and
  * interrupts blocked.  Only spl0 enables; every splN above it blocks.  Callers keep the v7
  * spelling (`s = spl5(); ...; splx(s);`) and still get what they were really after: on a
  * uniprocessor with no atomic instruction, masking interrupts is the only lock there is.
@@ -162,18 +162,17 @@ int spl7(void)
  *
  * THERE IS NO WAIT-FOR-INTERRUPT ON THIS MACHINE.  The only halt is 033 (стоп), which is
  * resumable on real hardware only from the operator's console and which SIMH, dubna and
- * b6sim alike treat as "the run is over" (doc/Besm6_Instruction_Set.md).  So this is a
- * spin, and the flag is what turns it back into `hlt': extintr() clears `idling' after
- * servicing anything at all, so the spin exits on the first interrupt, exactly as the x86
- * original's `hlt' did.  Like `hlt', it spins forever if none ever arrives -- at spl0, with
- * МГРП armed and the interval timer free-running at HZ, one always does.
+ * b6sim alike treat as "the run is over" (doc/Besm6_Instruction_Set.md).  So idle() is a
+ * spin, and the `idling' flag is what gives it an exit: extintr() clears the flag after
+ * servicing anything at all, so the spin ends on the first interrupt.  If none ever
+ * arrives it spins forever -- but at spl0, with МГРП armed and the interval timer
+ * free-running at HZ, one always does.
  *
- * The flag also replaces x86's `waitloc'.  That was the address of the idle `hlt', which
- * clock() compared against the interrupted pc to charge the tick to idle rather than to the
- * kernel; there is no halt instruction here to point at, and a pc comparison would have to
- * be calibrated against what the hardware saves (`tr->ret' is the raw saved IRET, and the
- * saved pc does not name the instruction you would expect -- see trap()).  A flag is exact
- * and cannot drift when the code around it is recompiled.
+ * The flag is also how clock() charges a tick to idle time rather than to the kernel.  It
+ * has to be a flag and not a pc comparison: a pc test would have to be calibrated against
+ * what the hardware saves (`tr->ret' is the raw saved IRET, and the saved pc does not name
+ * the instruction you would expect -- see trap()), whereas a flag is exact and cannot drift
+ * when the code around it is recompiled.
  *
  * spl0() is what actually opens the door, by clearing БлПр; there are no mode bits left for
  * this function to poke, which is why it is C and not besm6.S.
@@ -350,9 +349,8 @@ void extintr(void)
     curipl = s;
 
     /*
-     * Release idle()'s spin.  Any interrupt will do -- this is the machine's stand-in for
-     * the `hlt' the x86 original woke from -- so it is cleared here rather than in any
-     * particular handler.  AFTER the loop, not before it: clock() is called from inside
+     * Release idle()'s spin.  Any interrupt will do, so the flag is cleared here rather
+     * than in any particular handler.  AFTER the loop, not before it: clock() is called from inside
      * the loop and reads `idling' to charge the tick to idle time, so clearing it first
      * would book every idle tick as system time instead.
      */

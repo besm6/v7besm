@@ -228,8 +228,8 @@ Loose ends the finished work left behind. None blocks 18.
   rather than with syscall marshalling. Task 17 fixed the *exec* instance of this — the arg-string
   cursor now carries an explicit `(word, offset)` pair — which is the pattern to copy here.
 * **`addupc()` is a stub**, so `profil()` is inert. Was nominally task 17; left there.
-* **`time` is never seeded from a wall clock.** The x86 CMOS RTC path is gone and this machine has
-  no clock-calendar a program can read, so the epoch starts at 0.
+* **`time` is never seeded from a wall clock.** This machine has no clock-calendar a program can
+  read, so the epoch starts at 0.
 * **`sy_nrarg` is read nowhere** and is documented as vestigial: exactly one argument arrives in a
   register on this machine, for any `narg >= 1`.
 
@@ -269,7 +269,7 @@ writes the fourth:
   sentinel out of a data page main() seeded, rather than spelling it as a constant. (`vtm`'s 15-bit
   immediate is fine; it is part of the instruction.)
 * **Write the bite test, then verify it bites.** `ugrow` was checked both ways before being trusted:
-  reintroducing the x86 stack shuffle makes it fail with `020`, and dropping the `sureg()` after the
+  reintroducing a stack shuffle makes it fail with `020`, and dropping the `sureg()` after the
   growth with `0212`. A geometry test that cannot fail proves nothing about the geometry.
 * **Read a bite test on ACC, never on the halt PC** — and rebuild before believing either. 18b.5's
   first bite test "failed" run 1 and looked like a clean confirmation; it had merely grown a literal
@@ -317,13 +317,13 @@ settling it means settling the on-disk block layout — a different problem.
 
 `BSIZE` is **3072 bytes = 512 words**, but the constants derived from it were never moved:
 `BSHIFT 9` / `BMASK 0777` still describe a 512-*byte* block. So every byte-offset → block
-conversion in the kernel is wrong: `rdwri.c:48-49,111-112`, `nami.c:138-156`, `sys1.c:89-128`
-(the exec arg staging), and `dev/bio.c:492`.
+conversion in the kernel is wrong: `rdwri.c:48-49,111-112`, `nami.c:138-156`, `sys1.c:88-126`
+(the exec arg staging), and `dev/bio.c:491`.
 
 **The indirect-block half of this is now fixed** (done alongside making `param.h`
 assembler-includable). `NINDIR` is `BSIZE/sizeof(daddr_t)` = **512**, but `NMASK 0177` /
-`NSHIFT 7` still said 128, so `bmap()` (`subr.c:68-121`) could only ever index the first
-quarter of each indirect block while `tloop()` (`iget.c:246`) freed all 512 — the two
+`NSHIFT 7` still said 128, so `bmap()` (`subr.c:67-120`) could only ever index the first
+quarter of each indirect block while `tloop()` (`iget.c:245`) freed all 512 — the two
 disagreed about the same on-disk structure. `NMASK` is now `0777` and `NSHIFT` `9`.
 
 That half was separable precisely because **`bmap()` works in block numbers, never byte

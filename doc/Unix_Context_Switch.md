@@ -20,7 +20,7 @@ Three documents divide this territory, and the split is sharp:
   those differences.
 
 [Kernel_Assembly_Routines.md](Kernel_Assembly_Routines.md) is the fourth: it specifies each assembly
-routine's *contract* with its C callers, written against the x86 original as the port's spec. That
+routine's *contract* with its C callers, plus the globals the assist defines. That
 document says what each routine must do; this one walks the path they form.
 
 > **Octal and bit numbering.** Most addresses below are **octal**. BESM-6 numbers bits
@@ -184,7 +184,7 @@ is what makes signal delivery and `exec()`'s "start at the new entry point" work
 mechanism.
 
 Two C-side conveniences ride on the frame. `USERMODE(spsw)` tests `SPSW & 014` (РежЭ | РежПр), both
-clear iff the interrupted context was user — this replaces the x86 CS-ring test. And `BASEPRI(x)` is
+clear iff the interrupted context was user. And `BASEPRI(x)` is
 **permanently 0**, which is a fact about the hardware, not a stub: this kernel has two interrupt
 levels rather than the PDP-11's eight (§9), so anything `clock()` interrupts was by construction
 running at base priority.
@@ -366,7 +366,7 @@ It finds the frame for itself at the link-time constant, and aliases it:
 ```
 
 **The trap kinds are ours, not the hardware's.** The BESM-6 has one internal-interrupt vector and
-reports the cause in ГРП, so unlike the x86 there is no vector number to switch on and the gate
+reports the cause in ГРП, so there is no vector number to switch on and the gate
 passes none:
 
 ```c
@@ -418,8 +418,8 @@ is a one-shot notification and only the dispatched bit is cleared (§9).
   is all ГРП reports (bits 5–9); there is no faulting address to recover. It grows by appending a
   page at the next higher virtual address — which, since `sureg()` lays the stack out as the tail of
   the image, is the same page it appends at the end of the image. So the stack pages already mapped
-  keep their addresses and nothing is copied: the x86 original's `copyseg` shuffle has no
-  counterpart here. `kernel/test/ugrow` is the regression test for exactly that property.
+  keep their addresses and nothing is copied: growing the stack needs no `copyseg` shuffle at
+  all. `kernel/test/ugrow` is the regression test for exactly that property.
 - **`T_INSN` from user** → SIGSEG. **`T_ILL`/`T_CHECK`** → SIGINS. **`T_BREAK`** → SIGTRC.
 - **anything from supervisor** → the `default` arm: dump `acc`/`r13`/`r14`/`r15`, `ret`/`spsw`/`grp`/
   `page`, `R`/`RMR`/`C`, and panic. Per §5, a kernel-mode fault is a kernel bug.
@@ -501,8 +501,9 @@ convention is errno-in-r14, zero on success:
 `badextr()` — every extracode э50–э76 — does none of this: it posts SIGINS and falls into the same
 shared tail (`issig`/`psig`, `setpri`, `qswtch` on `runrun`, `addupc`).
 
-Two v7 idioms disappeared in the port. `fork()` tells parent from child by `r_val2` (r12) rather than
-the x86 `u.u_ar0[RET] += 2` trick — RET is a *word* address and there is nothing to skip. And `exec`
+Two v7 idioms work differently here. `fork()` tells parent from child by `r_val2` (r12), not by
+advancing the saved PC past the syscall — RET is a *word* address and, since the extracode gate
+already stores `nextpc` in ERET, there is nothing to skip. And `exec`
 sets `u.u_ar0[RET] = u.u_exdata.ux_entloc`: exec is an extracode, so the new image starts via `выпр`
 through the frame's RET slot.
 
@@ -539,8 +540,8 @@ the moment `idle()` needed to spin waiting for one.
 **`idle()` is ordinary C**, not assembly, and it is a spin rather than a wait — there is no
 wait-for-interrupt on this machine, and the only halt is `033` («стоп»), which every simulator treats
 as "the run is over". So it spins at spl0 on a `volatile int idling` that `extintr()` clears after
-servicing anything at all. The same flag replaces x86's `waitloc` for `clock()`'s idle accounting,
-because a PC comparison would have to be calibrated against what the hardware saves.
+servicing anything at all. The same flag carries `clock()`'s idle accounting, because a PC
+comparison would have to be calibrated against what the hardware saves.
 
 `clock()` takes its frame from `intrframe`, for the reasons in §5.
 
@@ -702,8 +703,8 @@ pushed, and there is no `b$save` prologue.
 
 ### `resume()` switches the u-area, not the address space
 
-This is the single biggest divergence from the x86 original, where `resume()` **was** the
-address-space switch — and it is what every surviving v7 comment in the tree still gets wrong. The
+`resume()` is **not** the address-space switch — which is what every surviving v7 comment in the
+tree still gets wrong. The
 whole routine is one sentence:
 
 ```

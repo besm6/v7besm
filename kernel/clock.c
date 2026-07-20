@@ -1,5 +1,4 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
-/* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
 // clang-format off
 #include "sys/types.h"
@@ -40,8 +39,7 @@ int lbolt; /* ticks since the last second rolled over: 0..HZ-1, not in `time' */
  *
  * One thing this reads is still inert: addupc() is a stub (besm6.S) and u_prof.pr_scale is 0
  * until profil() works -- task 17.  Idle-time accounting is live, though: `idling' is raised
- * by the idle spin in intr.c and cleared by extintr() once this has run, replacing x86's
- * `waitloc' pc comparison, which had no halt instruction to point at on this machine.
+ * by the idle spin in intr.c and cleared by extintr() once this has run.
  */
 void clock(struct trap *tr)
 {
@@ -102,7 +100,7 @@ out:
             a += 8;
     } else {
         a += 16;
-        if (idling) /* the idle spin, intr.c -- x86 compared the pc against waitloc */
+        if (idling) /* the idle spin, intr.c */
             a += 8;
         u.u_stime++;
     }

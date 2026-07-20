@@ -1,5 +1,4 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
-/* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
 /*
  * This header is #define-only, so that the assembly sources can #include it too
@@ -33,7 +32,7 @@
 #define NCLIST   100            /* max total clist size */
 #define HZ       250            /* Ticks/second: the interval timer free-runs at this
                                    rate (ГРП bit 40; SIMH CLK_TPS) and cannot be
-                                   programmed.  Was 60 in the x86 port. */
+                                   programmed. */
 #define TIMEZONE (5 * 60)       /* Minutes westward from Greenwich */
 #define DSTFLAG  1              /* Daylight Saving Time applies in this locality */
 #define MSGBUFS  128            /* Characters saved from error messages */

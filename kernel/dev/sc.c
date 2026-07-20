@@ -1,6 +1,3 @@
-/* V7/x86 source code: see www.nordier.com/v7x86 for details. */
-/* Copyright (c) 2007 Robert Nordier.  All rights reserved. */
-
 /*
  * System console driver: the BESM-6 Consul-254 operator typewriter.
  *

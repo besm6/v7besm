@@ -1,5 +1,4 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
-/* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
 // clang-format off
 #include "sys/types.h"
@@ -100,9 +99,8 @@ void clkstart()
      * So dismiss whatever the machine accumulated while we were booting -- at 250 Hz
      * there is certainly a tick pending -- and open the interrupt level.
      *
-     * The x86 8253 PIT is gone, and so is the CMOS RTC that seeded `time' from the
-     * wall clock: this machine has no clock-calendar a program can read, so the epoch
-     * still starts at 0 until something sets the date.
+     * Nothing seeds `time' either: this machine has no clock-calendar a program can
+     * read, so the epoch still starts at 0 until something sets the date.
      */
     __besm6_mod(MOD_GRPCLR, ~GRP_TIMER);
     spl0();
@@ -119,7 +117,6 @@ void sendsig(caddr_t p, int signo)
      * The user stack grows UP from 070000 (exec seeds it there; see the arg-block
      * comment in sys1.c), and r15 is a WORD index naming the first free slot -- so a
      * push stores AT r15 and then increments it by one word, not by a byte count.
-     * That is the whole of the x86 "SP - 4" correction.
      *
      * This is the minimal push: one word, the address to resume at.  A full signal
      * frame -- the saved accumulator, R, and a sigreturn path back through it -- is

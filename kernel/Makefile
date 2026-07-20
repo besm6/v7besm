@@ -5,20 +5,6 @@ SYS     = acct.o alloc.o clock.o fio.o iget.o intr.o machdep.o main.o \
 DEV     = bio.o mb.o md.o mem.o partab.o \
           sc.o sr.o sys.o tty.o
 
-# i486: Clang compiler on MacOS
-#LLVMBIN = $(dir $(wildcard /usr/local/Cellar/llvm/22.*/bin/clang-22))
-#AS      = $(LLVMBIN)clang -target i486-unknown-linux-gnu -c
-#CC      = $(LLVMBIN)clang -target i486-unknown-linux-gnu -ffreestanding
-#CFLAGS  = -Os -I../include -DKERNEL -Wall -Werror -Wshadow
-#AR      = ar
-#RANLIB  = :
-#LD      = ld.lld -T unix.ld
-#NM      = $(LLVMBIN)llvm-nm
-#SIZE    = $(LLVMBIN)llvm-size
-#DISASM  = $(LLVMBIN)llvm-objdump -D
-#OBJ     = conf.o x86.o libsys.a libdev.a
-
-# Besm6
 AS      = b6cc -c
 CC      = b6cc
 CFLAGS  = -I../include -DKERNEL

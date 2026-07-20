@@ -1,5 +1,4 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
-/* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
 // clang-format off
 #include "sys/types.h"
@@ -232,8 +231,8 @@ int core()
  * The stack occupies virtual pages USTKPAGE .. USTKPAGE + u_ssize/PGSZ - 1, growing UP, and
  * its physical pages are the tail of the image (sureg(), utab.c).  A new page is therefore
  * appended at BOTH ends at once -- the next higher virtual page and the end of the image --
- * so every existing stack page keeps the address it had.  That is what kills the x86 copyseg
- * shuffle this routine used to do: with an upward stack there is nothing to move.
+ * so every existing stack page keeps the address it had.  With an upward stack there is
+ * nothing to move, so growing the stack needs no copyseg shuffle at all.
  *
  * The ceiling needs no guard of its own: estabur() rejects ns > (NPAGE - USTKPAGE) * PGSZ.
  */
@@ -251,9 +250,8 @@ int grow(unsigned pg)
     if (si < SINCR)
         si = SINCR;
     /*
-     * estabur() assigns u_ssize itself (unlike the x86 original, whose sizes lived in a
-     * separate u_utab[]), so there is no trailing `u.u_ssize += si' here -- that would
-     * count the growth twice.
+     * estabur() assigns u_ssize itself, so there is no trailing `u.u_ssize += si' here
+     * -- that would count the growth twice.
      */
     if (estabur(u.u_tsize, u.u_dsize, u.u_ssize + si, u.u_sep, RO))
         return (0);

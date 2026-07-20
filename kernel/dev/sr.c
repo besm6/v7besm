@@ -1,16 +1,11 @@
-/* V7/x86 source code: see www.nordier.com/v7x86 for details. */
-/* Copyright (c) 1999 Robert Nordier.  All rights reserved. */
-
 /*
  * Serial / terminal driver -- SKELETON.
  *
- * This was the x86 8250 UART driver.  Its character in/out was pure x86 programmed
- * I/O (inb/outb against the UART registers), which the BESM-6 does not have: the
- * terminal lines hang off the machine's multiplexer, reached through the 033 «увв»
- * channel and answering in ПРП/ГРП (doc/Besm6_Peripherals.md).  The x86 register
- * access is gone; the tty/line-discipline scaffolding and the public surface that
- * conf.c wires into cdevsw remain, as stubs, so the kernel builds and links while
- * the real BESM-6 multiplexer driver is written.
+ * The terminal lines hang off the machine's 24-line multiplexer, reached through the
+ * 033 «увв» channel and answering in ПРП/ГРП (doc/Besm6_Peripherals.md).  None of that
+ * is written yet: what is here is the tty/line-discipline scaffolding and the public
+ * surface that conf.c wires into cdevsw, as stubs, so the kernel builds and links while
+ * the real multiplexer driver is written.
  */
 
 // clang-format off

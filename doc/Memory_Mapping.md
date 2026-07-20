@@ -6,9 +6,9 @@ supervisor mode — and, most importantly, how it differs between an *instructio
 load or store*. Those two are not variations on one mechanism; they are two different mechanisms
 that happen to share a page table.
 
-It is the reference the kernel's memory management is written against — the retarget of
-[`kernel/utab.c`](../kernel/utab.c), of the `u`/`pdir`/`upt` placeholders in
-[`kernel/besm6.S`](../kernel/besm6.S), and of the machine-dependent block of
+It is the reference the kernel's memory management is written against —
+[`kernel/utab.c`](../kernel/utab.c), the fixed-address symbols in
+[`kernel/besm6.S`](../kernel/besm6.S), and the machine-dependent block of
 [`include/sys/param.h`](../include/sys/param.h) — just as
 [Besm6_Peripherals.md](Besm6_Peripherals.md) is the reference the drivers in
 [`kernel/dev/`](../kernel/dev/) are written against. It completes a trio: Besm6_Peripherals.md is
@@ -982,10 +982,10 @@ match the *tagged* address, so they follow the current mapping mode.
 ## What this means for the v7 kernel
 
 The section above is advice to any operating system. This one is about *this* one. The kernel in
-[`kernel/`](../kernel/) was derived from a v7/x86 port and arrived carrying 4 KB pages, a two-level
-page table, a physical-memory window and page-table entries with permission bits. **None of those
-exist on the BESM-6**, and the retarget that replaced them is **done** — the table below is now a
-record of where each x86 assumption went, not a forecast.
+[`kernel/`](../kernel/) inherited the memory model every portable Unix of its era assumed: fixed-size
+pages measured in bytes, a page table in memory, a physical-memory window, and permission bits per
+entry. **None of those exist on the BESM-6.** The retarget is **done**; the table below records
+where each concern landed.
 
 The shape it settled into: **the kernel runs unmapped** (БлП = БлЗ = 1), so a kernel address *is* a
 physical address and the image must fit below **`064000`** (`KEND`); **the u-area is a fixed physical
@@ -997,17 +997,17 @@ map**, so a trap switches nothing. `KEND` is derived — `BUFBASE == UBASE - NBU
 [`kernel/TODO.md`](../kernel/TODO.md); the routines are in
 [Kernel_Assembly_Routines.md](Kernel_Assembly_Routines.md).
 
-| The x86 port as inherited | What the BESM-6 required, and where it landed |
+| concern | how it works on this machine |
 |---|---|
-| `PGSZ 4096`, `PGSH 12`, and `ctob`/`btoc` shifting by 12 ([`include/sys/param.h`](../include/sys/param.h)) — a *click* is a 4 KB page | A page is **1 Kword**, and **the click is dead**: it is not re-scaled, it is gone. Every size and address in the kernel is a count of **48-bit words**, and `ctob`/`btoc`/`ctod` are replaced by `btow`/`wtob`/`pground`/`wtodb`. Where the hardware needs a page, the value is a word address that is a multiple of `PGSZ` and the map builder shifts by `PGSH` (10). |
-| `USIZE 2` — a 2-page (8 KB) u-area | **One page, and a physical one**: `u = 076000`, an absolute symbol rather than storage, holding `struct user` (~140 words) with the kernel stack growing up above it. Being outside every process's map is what forces the copy — see `uflush`/`uload` ([`kernel/uarea.S`](../kernel/uarea.S)). |
-| `estabur()` rejects an image above **1023 pages** ([`kernel/utab.c`](../kernel/utab.c)) | There are only **32 virtual pages** — a hard **32 Kword ceiling** on text + data + stack. The u-area is *not* among them, so the user gets all 32. `estabur()`'s `xrw` and `sep` arguments are inert: no read-only page, no I/D separation. |
-| `sureg()` rewrites the 1024-entry `upt[]`, then calls `invd()` to flush the TLB | The whole mapping is **twelve instructions**: eight `рег 020+i` for РП, four `рег 030+j` for РЗ, packed with `__besm6_aux` from the shadow. **`invd()` is deleted, not stubbed** — writing РП refills the TLB in the same breath ([mmu_setrp()](https://github.com/besm6/simh/blob/master/BESM6/besm6_mmu.c#L717)), so a stale translation is not a state the machine can be in and a no-op would only invite someone to wonder when to call it. |
-| `pdir[]`, `physaddr()` walking two levels, the `PHY` window | There is **no page table in memory, no page-table base register, and no page walk** — and РП/РЗ **cannot be read back**. The shadow is `u.u_upt[8]`, eight words each carrying four РП descriptors *and* the matching РЗ byte, so `sureg()` needs no shifting; `physaddr()`/`useracc()` read descriptors back out with `__besm6_apx`. Deleting `pdir`/`upt`/`mem` returned 2563 words of bss. Physical memory above `0100000` is reached by spending virtual pages **1 and 2** on a window — never page 0, which is a black hole in the *virtual* address. |
-| `copyin`/`copyout`/`fubyte`/`suword` fault-catch through `nofault` | Clear **БлП** and address the user through the mapping that is *still loaded* — no window, no page-table switch ([`kernel/usermem.S`](../kernel/usermem.S)). But **this kernel does not take the fault at all**: rather than clearing БлЗ and catching `GRP_OPRND_PROT`, each routine validates up front with `useracc()` against the shadow map and returns `-1`. **There is no `nofault` path anywhere**, which is precisely what lets the trap gate treat any supervisor fault as a kernel bug. |
-| `resume()` reloads `%cr3` to switch address space | **`resume()` switches the u-area and never writes РП** ([`kernel/switch.s`](../kernel/switch.s)) — the kernel runs unmapped, so reloading РП would change nothing it can see, and `sureg()` at the landing sites is what reloads the map. What it must do instead is copy: `uflush()` out to the outgoing home, `uload()` in from the incoming one, with the **БРЗ drained** on both sides. |
-| `RO`/`RW` page-protection bits ([`include/sys/seg.h`](../include/sys/seg.h)) | **There is no read-only page.** РЗ closes a page to *all* data access; a zero РП entry makes it non-executable. Copy-on-write is therefore not directly implementable — `fork()` copies. This is also why **text pages are left open to data**: closing one with РЗ would take the program's own constant pool with it. |
-| The trap frame's faulting address (`%cr2`) | The handler learns the faulting **page**, not the word: ГРП bits 5–9, read live via `__besm6_mod(MOD_GRP, 0)` rather than framed. And the saved PC points *past* the faulting instruction — the two-line fixup is at the top of `trap()`; see [the restart protocol](#the-restart-protocol--read-this-before-writing-a-fault-handler). |
+| page size and the click ([`include/sys/param.h`](../include/sys/param.h)) | A page is **1 Kword**, and **the click is dead**: it is not re-scaled, it is gone. Every size and address in the kernel is a count of **48-bit words**, and `ctob`/`btoc`/`ctod` are replaced by `btow`/`wtob`/`pground`/`wtodb`. Where the hardware needs a page, the value is a word address that is a multiple of `PGSZ` and the map builder shifts by `PGSH` (10). |
+| the u-area | **One page, and a physical one**: `u = 076000`, an absolute symbol rather than storage, holding `struct user` (~140 words) with the kernel stack growing up above it. Being outside every process's map is what forces the copy — see `uflush`/`uload` ([`kernel/uarea.S`](../kernel/uarea.S)). |
+| image size limit ([`kernel/utab.c`](../kernel/utab.c)) | There are only **32 virtual pages** — a hard **32 Kword ceiling** on text + data + stack. The u-area is *not* among them, so the user gets all 32. `estabur()`'s `xrw` and `sep` arguments are inert: no read-only page, no I/D separation. |
+| loading a process's map (`sureg()`) | The whole mapping is **twelve instructions**: eight `рег 020+i` for РП, four `рег 030+j` for РЗ, packed with `__besm6_aux` from the shadow. **There is no TLB flush, not even a no-op** — writing РП refills the TLB in the same breath ([mmu_setrp()](https://github.com/besm6/simh/blob/master/BESM6/besm6_mmu.c#L717)), so a stale translation is not a state the machine can be in and a no-op would only invite someone to wonder when to call it. |
+| finding a physical address, and reaching one | There is **no page table in memory, no page-table base register, and no page walk** — and РП/РЗ **cannot be read back**. The shadow is `u.u_upt[8]`, eight words each carrying four РП descriptors *and* the matching РЗ byte, so `sureg()` needs no shifting; `physaddr()`/`useracc()` read descriptors back out with `__besm6_apx`. Physical memory above `0100000` is reached by spending virtual pages **1 and 2** on a window — never page 0, which is a black hole in the *virtual* address. |
+| touching user memory safely | Clear **БлП** and address the user through the mapping that is *still loaded* — no window, no page-table switch ([`kernel/usermem.S`](../kernel/usermem.S)). But **this kernel does not take the fault at all**: rather than clearing БлЗ and catching `GRP_OPRND_PROT`, each routine validates up front with `useracc()` against the shadow map and returns `-1`. **No access here is ever expected to fault**, which is precisely what lets the trap gate treat any supervisor fault as a kernel bug. |
+| the context switch | **`resume()` switches the u-area and never writes РП** ([`kernel/switch.s`](../kernel/switch.s)) — the kernel runs unmapped, so reloading РП would change nothing it can see, and `sureg()` at the landing sites is what reloads the map. What it must do instead is copy: `uflush()` out to the outgoing home, `uload()` in from the incoming one, with the **БРЗ drained** on both sides. |
+| page protection ([`include/sys/seg.h`](../include/sys/seg.h)) | **There is no read-only page.** РЗ closes a page to *all* data access; a zero РП entry makes it non-executable. Copy-on-write is therefore not directly implementable — `fork()` copies. This is also why **text pages are left open to data**: closing one with РЗ would take the program's own constant pool with it. |
+| reporting a fault's address | The handler learns the faulting **page**, not the word: ГРП bits 5–9, read live via `__besm6_mod(MOD_GRP, 0)` rather than framed. And the saved PC points *past* the faulting instruction — the two-line fixup is at the top of `trap()`; see [the restart protocol](#the-restart-protocol--read-this-before-writing-a-fault-handler). |
 
 Two further consequences reach beyond memory management. The kernel's own text must fit **below
 physical `0100000`**, because supervisor instruction fetch is unconditionally unmapped and an
@@ -1071,7 +1071,7 @@ on the next `run`.
 * [Intrinsics.md](Intrinsics.md) — how C reaches `002 «рег»`: the `__besm6_mod` intrinsic, and
   `__besm6_aux` for assembling a page-register word.
 * [Kernel_Assembly_Routines.md](Kernel_Assembly_Routines.md) — the machine-assist routines this
-  document constrains: `resume`, `copyin`/`copyout`, `invd`, and the boot-time mapping.
+  document constrains: `resume`, `copyin`/`copyout`, and the boot-time mapping.
 * [besm6_mmu.c](https://github.com/besm6/simh/blob/master/BESM6/besm6_mmu.c) — the MMU itself: translation, protection, the caches.
 * [besm6_defs.h](https://github.com/besm6/simh/blob/master/BESM6/besm6_defs.h) — the ПСВ, СПСВ, РУУ and ГРП bit definitions.
 * [besm6_cpu.c](https://github.com/besm6/simh/blob/master/BESM6/besm6_cpu.c) — `cmd_002()`, the trap-to-interrupt handler in `sim_instr()`, and the

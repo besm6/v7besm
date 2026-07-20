@@ -12,9 +12,9 @@
 //
 // WHAT resume() SWITCHES, AND WHAT IT DOES NOT
 //
-// It switches the U-AREA.  It never writes РП.  This is the opposite of the x86 original,
-// where resume() *was* the address-space switch, and it is what every surviving v7 comment
-// in the tree still gets wrong.  Two things changed under it:
+// It switches the U-AREA.  It never writes РП -- resume() is NOT the address-space switch,
+// which is what every surviving v7 comment in the tree still gets wrong.  Two things put it
+// that way:
 //
 //   * The kernel runs unmapped (БлП = БлЗ = 1), so a kernel address IS a physical address
 //     and reloading РП would change nothing the kernel can see.  The map is reloaded by

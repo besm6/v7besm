@@ -66,9 +66,6 @@ struct linesw linesw[] = {
  * subscript, so that a minor number and a SIMH unit name are the same number.  There are no
  * partitions: one drive is 2000 blocks, about 6 Mb, and swap is on the drums.  So minor 0 is
  * controller 3, group 0, drive 0 = SIMH's MD0 unit 0.  dev/md.c has the layout in full.
- *
- * This replaces minor 56, which was an x86 MBR partition slot inherited from hd.c and which
- * nothing on this machine ever interpreted.
  */
 dev_t rootdev = makedev(0, 0);
 dev_t swapdev = makedev(1, 0); /* the drums are the paging store */

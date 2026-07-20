@@ -8,8 +8,8 @@ A port of **Unix v7 to the BESM-6**, a Soviet 48-bit-word mainframe from the 196
 work has two halves:
 
 - **`kernel/` + `include/`** — the Unix v7 kernel itself. Sources are derived from Robert
-  Nordier's v7/x86 port (see the copyright in `kernel/x86.s`, which is the retained x86
-  original and is no longer built). The kernel now **builds as BESM-6 code** with this
+  Nordier's v7/x86 port; the upstream copyright is in the top-level `COPYRIGHT` file.
+  The kernel now **builds as BESM-6 code** with this
   repo's own toolchain (`b6cc`/`b6as`/`b6ld`), and the memory-management retarget is under
   way: see `kernel/TODO.md`, which is the live work plan and records what is done and what
   is not. It does not boot yet — `_start`, the trap gate and the context switch are still
@@ -83,7 +83,7 @@ fixed addresses. `brz.s` is `drainbrz()`, alone in its own file for two reasons:
 written in C (see below), and `kernel/test/` links it directly. `syscall.c` is split out of
 `trap.c` for that second reason alone — it holds the extracode door's C side (`syscall()` and
 `badextr()`), and `kernel/test/usys` links the real thing rather than a copy. `conf.c` is the
-device config table, and `x86.s` is the unbuilt x86 original, kept for reference.
+device config table.
 
 Diagnostic make targets (require the external `cast` tool / C compiler AST dump):
 - `make i` — preprocess each source to `.i`
@@ -197,8 +197,8 @@ the authoritative references and are kept current:
   user-level a.out runner, not full-machine SIMH), its CLI and tracing, the Unix v7
   syscall set, and the `$77 N` extracode syscall trap.
 - `doc/Kernel_Assembly_Routines.md` — the machine-language assist: every routine's contract with
-  its C callers, and — routine by routine — what the BESM-6 version has to do differently. Written
-  against the x86 original (`kernel/x86.s`) as the port's spec for `kernel/besm6.S`.
+  its C callers, the globals the assist defines, and what is deliberately absent. The spec for
+  `kernel/besm6.S` and its six companion files.
 - `doc/Unix_Context_Switch.md` — how *this* kernel takes an interrupt, takes an extracode, saves the
   CPU context, switches address spaces and gets back out: the four gates (`trapgate`/`intrgate`/
   `sysgate`/`badext`), the 21-word `reg.h` trap frame, the shared `intret` exit, `sureg()` and the
