@@ -62,12 +62,12 @@ These are host tools that run on the build machine and emit BESM-6 objects. **Do
 ### Kernel (`kernel/`)
 ```sh
 cd kernel && make          # produces `unix` (BESM-6 a.out), unix.nm and unix.dis
+make run                   # boot it under SIMH (`besm6 unix.ini`)
 make clean
 ```
 The kernel is **not** part of the CMake build. It cross-compiles with the tools this repo
 installs — `b6cc -I../include -DKERNEL`, `b6as`, `b6ld`, `b6ar`/`b6ranlib`, and it links
-against the external c-compiler's libc (`~/.local/share/besm6/lib`). The commented-out
-LLVM/i486 block at the top of the Makefile is the old validation build, kept for reference.
+against the external c-compiler's libc (`~/.local/share/besm6/lib`).
 `make` finishes by printing `b6size -w unix`: the image **must end below `064000`** (`KEND` in
 `include/sys/param.h`), because supervisor instruction fetch is never mapped and the top two
 areas of the unmapped space are spoken for — the u-area at `076000` and, just under it,
@@ -75,8 +75,13 @@ areas of the unmapped space are spoken for — the u-area at `076000` and, just 
 physical areas rather than bss, so they are *not* counted in the `b6size` total; the ceiling is
 derived (`KEND == BUFBASE == UBASE - NBUF*BSIZEW`), so raising `NBUF` lowers it automatically.
 
-The kernel is split into two static libs that are link-pulled so unused code is dropped:
-`libsys.a` (core kernel, `kernel/*.c`) and `libdev.a` (device drivers, `kernel/dev/*.c`).
+The kernel is archived into one link-pulled static lib, `libunix.a`, so unused code is dropped.
+Its three source groups are the Makefile variables `SYS` (core kernel, `kernel/*.c`), `DEV`
+(device drivers, `kernel/dev/*.c`, found through `VPATH`) and `MACH` (the machine-language
+assist). It was once two archives, `libsys.a` and `libdev.a`, with `libsys.a` named *twice* on
+the link line because the drivers call back into the core kernel (`timeout()`, `wakeup()`, …)
+and each archive is scanned once, in order. One archive plus `b6ranlib`'s symbol index resolves
+those back-references in a single scan, so that workaround is gone.
 `besm6.S` is the BESM-6 machine assist — the interrupt/extracode vector block at `0500`/`0501`
 and `0550`–`0577`, plus the routines C cannot express, and
 **`besm6.o` must come first in `OBJ`** so its const contribution pins those vectors at their
@@ -84,12 +89,12 @@ fixed addresses. `brz.s` is `drainbrz()`, alone in its own file for two reasons:
 written in C (see below), and `kernel/test/` links it directly. `syscall.c` is split out of
 `trap.c` for that second reason alone — it holds the extracode door's C side (`syscall()` and
 `badextr()`), and `kernel/test/usys` links the real thing rather than a copy. `conf.c` is the
-device config table.
+device config table, and is C — it belongs to `SYS`, not `MACH`.
 
-Diagnostic make targets (require the external `cast` tool / C compiler AST dump):
-- `make i` — preprocess each source to `.i`
-- `make yaml` — dump `.yaml` for each source
-- `%.ast` — C compiler AST dump (`*.ast` files are committed snapshots)
+The `###` block at the foot of the Makefile is the header dependency list, in the v7 style.
+It is **hand-maintained**: `b6cc` and `b6cpp` implement no `-M`/`-MD` family (both reject those
+flags outright), so nothing regenerates it. Adding a source, or a new `#include` to an existing
+one, means editing that block by hand.
 
 ### Tests
 
@@ -104,6 +109,16 @@ one to copy: it links the kernel's real `utab.o` and `brz.o`, lets `sureg()` pro
 and checks the mapping both from C and by examining РП/РЗ from the `.ini`. **Run every MMU
 test with `set mmu cache`** — the БРЗ write-back hazards are invisible without it, and a
 kernel that only works with the cache off would not have worked on the real machine.
+
+The kernel objects a test links are compiled *into `kernel/test/`* from the sources next door,
+never borrowed from `kernel/`'s own build: the Makefile finds them with suffix-scoped `vpath`
+(`vpath %.c .. ../dev`, and likewise for `%.s`/`%.S`) and compiles them through a static pattern
+rule over `KERNOBJ`, which is what confines `-DKERNEL` to the kernel sources — the test programs
+themselves must not get it. Do **not** replace that with a blanket `VPATH`: it would also search
+for `.o` prerequisites and link `kernel/`'s objects instead of building local ones, and since `..`
+holds a directory named `test`, it would silently turn `make test` into a no-op. Header
+dependencies there are deliberately coarse (every object depends on all of `include/sys/*.h`),
+because no `-M` support exists to do better.
 
 Every `cmd/` component has a GoogleTest suite under `cmd/<tool>/test/`, wired into the
 `build_tests` target and run by `make run` (ctest). The C preprocessor has the most
