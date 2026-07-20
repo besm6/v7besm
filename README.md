@@ -14,30 +14,26 @@ machine's architecture differs from anything modern; the full details live in
 
 ## Approach
 
-The port proceeded in three steps, and is on the third.
+The kernel compiles and links as BESM-6 code with this project's own toolchain and the external
+[cross-compiler](#related-projects), and it **boots on the [SIMH simulator](doc/Simh_Simulator.md)** —
+the authentic full-machine emulator, and the hardware this port ultimately targets. The
+machine-dependent half is retargeted: the memory model, the mapped brackets, `_start`, all three
+trap doors, the timer and the context switch all work, and two processes alternate under the real
+scheduler, each seeing its own u-area, with the user stack growing on demand. The console, drum and
+disk drivers are written and their failure modes classified.
 
-1. **Done — validate the C as i486.** The v7 kernel (derived from Robert Nordier's
-   [v7/x86](http://www.nordier.com/v7x86/) port) was first compiled as a 32-bit i486 ELF binary
-   with modern Clang and strict warnings, to shake the decades-old C into clean, warning-free
-   shape before retargeting.
-2. **Done — build it as BESM-6 code.** The kernel now compiles and links with this project's own
-   toolchain and the external [cross-compiler](#related-projects), into a BESM-6 `a.out`.
-3. **Under way — make it run.** Retarget the machine-dependent half: memory management, boot,
-   traps, and the context switch, and boot the result on the
-   [SIMH simulator](doc/Simh_Simulator.md) — the authentic full-machine emulator, and the
-   hardware this port ultimately runs on. The memory model is settled and the address-space code
-   is real; `_start`, the trap gate and the switch are still skeletons, so the kernel does not
-   boot yet. [kernel/TODO.md](kernel/TODO.md) is the live work plan.
+Boot stops at `panic: iinit` — there is no root filesystem image to mount yet. Building one, and the
+userland above it, is what remains; [kernel/TODO.md](kernel/TODO.md) is the live work plan.
 
-Kernel code that *does* run today runs under SIMH, as standalone tests in
-[kernel/test/](kernel/test/): each links kernel objects against a hand-built environment and lets
-a `.ini` script assert on the machine state afterwards. That is how the MMU code was verified.
+Alongside the running kernel, [kernel/test/](kernel/test/) holds standalone SIMH tests: each links
+kernel objects against a hand-built environment and lets a `.ini` script assert on the machine state
+afterwards. That is how the MMU and the mass-storage drivers were verified.
 
 ## Repository layout
 
 ```text
 kernel/       v7 kernel sources, device drivers (kernel/dev/), and the work plan (TODO.md)
-kernel/test/  standalone SIMH tests: the only way to run kernel code on the target so far
+kernel/test/  standalone SIMH tests for kernel components (MMU, drum, disk)
 include/      v7 system headers (sys/)
 cross/        BESM-6 object/archive format headers (b.out.h, ar.h, ranlib.h)
 cmd/          BESM-6 toolchain: cc, as, ld, cpp, disasm, sim
@@ -54,10 +50,11 @@ doc/          BESM-6 architecture references
 | C preprocessor                | `cmd/cpp`        | ✔ C11, tested, documented               |
 | Disassembler                  | `cmd/disasm`     | ✔ working, tested                       |
 | a.out simulator (Unix v7)     | `cmd/sim`        | ✔ working, tested, documented           |
-| Kernel, built for the BESM-6  | `kernel/`        | ✔ builds and links                      |
+| Kernel, built for the BESM-6  | `kernel/`        | ✔ builds, links and boots under SIMH    |
 | Memory management (the MMU)   | `kernel/utab.c`  | ✔ retargeted, tested under SIMH         |
-| Boot, traps, context switch   | `kernel/besm6.S` | ◐ skeleton — the kernel cannot boot yet |
-| Peripheral drivers            | `kernel/dev/`    | ◐ console done; the rest to do          |
+| Boot, traps, context switch   | `kernel/besm6.S` | ✔ working — processes switch under SIMH |
+| Peripheral drivers            | `kernel/dev/`    | ✔ console, drum and disk                |
+| Root filesystem               | —                | ☐ to do — boot stops at `panic: iinit`  |
 | libc library                  | —                | ☐ to do                                 |
 
 ## Building

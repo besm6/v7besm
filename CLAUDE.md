@@ -9,12 +9,13 @@ work has two halves:
 
 - **`kernel/` + `include/`** — the Unix v7 kernel itself. Sources are derived from Robert
   Nordier's v7/x86 port; the upstream copyright is in the top-level `COPYRIGHT` file.
-  The kernel now **builds as BESM-6 code** with this
-  repo's own toolchain (`b6cc`/`b6as`/`b6ld`), and the memory-management retarget is under
-  way: see `kernel/TODO.md`, which is the live work plan and records what is done and what
-  is not. It does not boot yet — `_start`, the trap gate and the context switch are still
-  skeletons — so the only way to run kernel code on the target machine today is the
-  standalone SIMH tests in `kernel/test/`.
+  The kernel **builds as BESM-6 code** with this
+  repo's own toolchain (`b6cc`/`b6as`/`b6ld`) and **boots under SIMH**: the memory model,
+  `_start`, all three trap doors, the timer and the context switch work, and two processes
+  alternate under the real scheduler. Boot stops at `panic: iinit` — there is no root
+  filesystem image to mount yet. See `kernel/TODO.md`, which is the live work plan and
+  records what is done and *how* it turned out to be done. Kernel components are also
+  exercised piecemeal by the standalone SIMH tests in `kernel/test/`.
 - **`cmd/`** — the BESM-6-specific toolchain being written/ported to eventually build the
   kernel for real BESM-6 hardware: a C compiler driver, an assembler, a linker
   (+ archiver/nm/size/etc.), a C preprocessor, a disassembler, and a user-level a.out
@@ -25,7 +26,7 @@ External pieces this project depends on (not in this repo):
 - BESM-6 C cross-compiler: https://github.com/besm6/c-compiler/
 - BESM-6 hardware simulator (SIMH): https://github.com/besm6/simh/tree/master/BESM6/ — the
   authentic full-machine emulator, distinct from the in-repo user-level `b6sim`. **This is the
-  machine the kernel will boot on**, so it is the target the port aims at, not just a convenience.
+  machine the kernel boots on**, so it is the target the port aims at, not just a convenience.
   It is documented here in `doc/Simh_Simulator.md` (how to build, run, and drive it) and
   `doc/Besm6_Peripherals.md` (how a program talks to its hardware).
 
@@ -77,7 +78,7 @@ derived (`KEND == BUFBASE == UBASE - NBUF*BSIZEW`), so raising `NBUF` lowers it 
 The kernel is split into two static libs that are link-pulled so unused code is dropped:
 `libsys.a` (core kernel, `kernel/*.c`) and `libdev.a` (device drivers, `kernel/dev/*.c`).
 `besm6.S` is the BESM-6 machine assist — the interrupt/extracode vector block at `0500`/`0501`
-and `0550`–`0577`, plus the routines C cannot express; it is still largely a skeleton, and
+and `0550`–`0577`, plus the routines C cannot express, and
 **`besm6.o` must come first in `OBJ`** so its const contribution pins those vectors at their
 fixed addresses. `brz.s` is `drainbrz()`, alone in its own file for two reasons: it cannot be
 written in C (see below), and `kernel/test/` links it directly. `syscall.c` is split out of
@@ -95,9 +96,9 @@ Diagnostic make targets (require the external `cast` tool / C compiler AST dump)
 **Kernel tests run on SIMH** (`cd kernel/test && make test`). They are not host unit tests:
 each is a standalone BESM-6 program that links kernel objects against a hand-built
 environment, plus a `.ini` script that loads it into the real simulator, runs it, and asserts
-on the machine state afterwards. This is the *only* way to run kernel code on the target while
-`besm6.S:_start` is still a stub — `b6sim` runs a user `a.out` with no kernel underneath and
-cannot exercise any of it. `crt0.s` (not libc's) seeds the stack and calls `main()`; the
+on the machine state afterwards. They exercise one kernel component at a time, in isolation from
+a booting kernel — `b6sim` cannot substitute, since it runs a user `a.out` with no kernel
+underneath. `crt0.s` (not libc's) seeds the stack and calls `main()`; the
 program's status is left in the accumulator, where the `.ini` asserts on it. `mmutest` is the
 one to copy: it links the kernel's real `utab.o` and `brz.o`, lets `sureg()` program the MMU,
 and checks the mapping both from C and by examining РП/РЗ from the `.ini`. **Run every MMU
