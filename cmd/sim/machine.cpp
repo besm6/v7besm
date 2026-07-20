@@ -49,8 +49,7 @@ Machine::Machine(Memory &m)
 //
 Machine::~Machine()
 {
-    redirect_trace(nullptr, "");
-    enable_trace("");
+    close_trace();
 }
 
 //

@@ -44,22 +44,6 @@ void Processor::stack_correction()
 }
 
 //
-// Is this instruction ,its,13?
-//
-static inline bool is_its_13(unsigned x)
-{
-    return (x & 077777777) == 0430015;
-}
-
-//
-// Is this instruction 13,vjm,xxx?
-//
-static inline bool is_13_vjm(unsigned x)
-{
-    return (x & 077700000) == 067100000;
-}
-
-//
 // Execute one instruction, placed at address PC+right_instr_flag.
 // Return false to continue the program.
 // Return true when the program is done and the processor is stopped.
@@ -91,15 +75,8 @@ bool Processor::step()
         opcode = (RK >> 12) & 077;
     }
 
-    // Start tracing a C program.
-    // Check the instruction, and if it's the prolog of a C program - enable
-    // tracing of memory, instructions and registers.
-    if (core.PC == 01000 && !core.right_instr_flag && is_its_13(RK) && is_13_vjm(word)) {
-        machine.start_trace_on_exec();
-    }
-
     // Show instruction: address, opcode and mnemonics.
-    machine.trace_instruction(opcode);
+    machine.trace_instruction();
 
     nextpc = ADDR(core.PC + 1);
     if (core.right_instr_flag) {
@@ -118,7 +95,6 @@ bool Processor::step()
     case 000: // зп, atx
         Aex = ADDR(addr + core.M[reg]);
         machine.mem_store(Aex, core.ACC);
-        machine.trace_memory_write_dispak(Aex, core.ACC);
         if (!addr && reg == 017)
             core.M[017] = ADDR(core.M[017] + 1);
         break;
@@ -126,7 +102,6 @@ bool Processor::step()
     case 001: // зпм, stx
         Aex = ADDR(addr + core.M[reg]);
         machine.mem_store(Aex, core.ACC);
-        machine.trace_memory_write_dispak(Aex, core.ACC);
         core.M[017] = ADDR(core.M[017] - 1);
         corr_stack  = 1;
         core.ACC    = machine.mem_load(core.M[017]);
@@ -543,7 +518,7 @@ bool Processor::step()
         core.M[0]   = 0;
         if (reg == 0) {
             // VTM instruction with register 0: enable and disable tracing.
-            Machine::enable_trace(addr);
+            Machine::set_debug(addr != 0);
         }
         break;
 

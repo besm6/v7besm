@@ -49,8 +49,8 @@ public:
     void set_report_status(bool on = true);
 
     // Enable a trace log to stdout or to the specified file.
-    void enable_trace(const char *mode);
-    void set_trace_file(const char *filename, const char *default_mode);
+    void set_debug(bool on = true);
+    void set_trace_file(const char *filename);
 
     // Get the number of simulated instructions.
     static uint64_t get_instr_count();

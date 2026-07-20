@@ -120,10 +120,10 @@ public:
     //
     // Enable trace log to stdout.
     //
-    static void enable_trace(const char *mode)
+    static void set_debug(bool on)
     {
-        if (mode && *mode) {
-            Machine::enable_trace(mode);
+        if (on) {
+            Machine::set_debug(true);
         } else {
             Machine::close_trace();
         }
@@ -132,9 +132,9 @@ public:
     //
     // Enable trace log to the specified file.
     //
-    static void set_trace_file(const char *filename, const char *default_mode)
+    static void set_trace_file(const char *filename)
     {
-        Machine::redirect_trace(filename, default_mode);
+        Machine::redirect_trace(filename);
         Machine::get_trace_stream() << "BESM-6 Simulator (b6sim) Version: " << VERSION_STRING
                                     << "\n";
     }
@@ -210,14 +210,14 @@ void Session::finish()
 //
 // Enable a trace log to stdout or to the specified file.
 //
-void Session::enable_trace(const char *mode)
+void Session::set_debug(bool on)
 {
-    internal->enable_trace(mode);
+    internal->set_debug(on);
 }
 
-void Session::set_trace_file(const char *filename, const char *default_mode)
+void Session::set_trace_file(const char *filename)
 {
-    internal->set_trace_file(filename, default_mode);
+    internal->set_trace_file(filename);
 }
 
 //

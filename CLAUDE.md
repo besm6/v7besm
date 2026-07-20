@@ -194,7 +194,7 @@ the authoritative references and are kept current:
   between, and no C spelling of it survives register allocation — hence `kernel/brz.s`. Check the
   disassembly whenever the *sequence* is the contract, not just the instruction.)
 - `doc/Aout_Simulator.md` — the `cmd/sim` simulator (`b6sim`): what it is (an apout-style
-  user-level a.out runner, not full-machine SIMH), its CLI and trace modes, the Unix v7
+  user-level a.out runner, not full-machine SIMH), its CLI and tracing, the Unix v7
   syscall set, and the `$77 N` extracode syscall trap.
 - `doc/Kernel_Assembly_Routines.md` — the machine-language assist: every routine's contract with
   its C callers, and — routine by routine — what the BESM-6 version has to do differently. Written

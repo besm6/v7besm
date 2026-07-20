@@ -164,7 +164,6 @@ public:
 
     // Print trace info.
     void print_instruction();
-    void print_instruction_dispak();
     void print_registers();
 };
 

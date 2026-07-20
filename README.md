@@ -117,7 +117,7 @@ See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail, and
   booting the DISPAK operating system.
 - [doc/Aout_Simulator.md](doc/Aout_Simulator.md) — the `cmd/sim` simulator (`b6sim`): an
   apout-style user-level runner for BESM-6 `a.out` executables that services Unix v7 system
-  calls; its CLI, trace modes, syscall set, and a worked example.
+  calls; its CLI, tracing, syscall set, and a worked example.
 
 **The toolchain**:
 

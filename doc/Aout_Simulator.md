@@ -177,17 +177,7 @@ b6sim [options...] program
 | `-v`, `--verbose` | Verbose mode (extra detail in the trace log). |
 | `-l NUM`, `--limit=NUM` | Stop with an error after `NUM` instructions (a runaway-loop guard; default 100000000000). |
 | `--trace=FILE` | Write the execution trace to `FILE` instead of standard output. |
-| `-d MODE`, `--debug=MODE` | Turn on tracing; `MODE` is a string of the letters below. |
-
-The `MODE` letters (combine freely, e.g. `-d eir`):
-
-| Letter | Traces |
-|--------|--------|
-| `i` | instructions as they execute |
-| `e` | extracodes — i.e. system calls |
-| `f` | instruction fetches |
-| `r` | register changes |
-| `m` | memory reads and writes |
+| `-d`, `--debug` | Turn on tracing: every instruction as it executes, plus register and memory changes. |
 
 When `b6sim` finishes, its own exit status is the status the program passed to `_exit()`
 (system call 1). So `echo $?` after a run reports the guest program's exit code.
@@ -279,35 +269,44 @@ files on your disk. An unrecognised system-call number stops the simulation with
 Because `b6sim` is an interpreter, it can narrate exactly what the program does. This is the
 main way you debug a misbehaving compiler output or runtime routine.
 
-Trace only the system calls with `-d e`:
+`-d` (or `--debug`) turns the narration on. There is nothing to select: the trace shows every
+instruction as it executes, together with the registers and memory words it changed.
 
 ```console
-$ b6sim -d e hello.out
+$ b6sim -d hello.out
 --- Reset
-00014 L: 00 077 0004 *77 4
-hello
-00015 L: 00 077 0001 *77 1
-```
-
-Trace every instruction with `-d i` (add `r` and `m` to also see register and memory
-changes):
-
-```console
-$ b6sim -d i hello.out
---- Reset
+      M17 = 70000
 00012 L: 00 010 0010 xta 10
-00012 R: 00 003 0020 xts 20
-00013 L: 00 003 0011 xts 11
-00013 R: 16 24 77775 vtm -3(16)
-00014 L: 00 077 0004 *77 4
-hello
+      Memory Read [00010] = 0000 0000 0000 0001
+      ACC = 0000 0000 0000 0001
+      RAU = 04
+00012 R: 00 003 0017 xts 17
+      Memory Write [70000] = 0000 0000 0000 0001
+      Memory Read [00017] = 6400 0000 0000 0015
+      ACC = 6400 0000 0000 0015
+      M17 = 70001
 ...
+00013 R: 00 077 0004 *77 4
+      Memory Read [70000] = 0000 0000 0000 0001
+      Memory Read [70001] = 6400 0000 0000 0015
+hello
+      M17 = 70000
+00014 L: 00 010 0000 xta
+      ACC = 0000 0000 0000 0000
+00014 R: 00 077 0001 *77 1
 ```
 
-Each line shows the word address (octal), whether the left (`L`) or right (`R`) instruction
-of the word is running, the raw encoding, and the disassembled mnemonic. Send a long trace to
-a file with `--trace=trace.log`, and cap a program that might loop forever with, say,
-`--limit=100000`.
+An instruction line shows the word address (octal), whether the left (`L`) or right (`R`)
+instruction of the word is running, the raw encoding, and the disassembled mnemonic; the
+indented lines under it are the memory accesses it made and the registers it changed (only
+those that actually changed). A system call — `*77 4` above — prints its arguments as the
+memory reads that fetch them, and the program's own output (`hello`) appears inline. Send a
+long trace to a file with `--trace=trace.log`, and cap a program that might loop forever with,
+say, `--limit=100000`.
+
+A program can also switch tracing on and off itself: `vtm N,0` — a `VTM` naming register 0 —
+enables the trace for a non-zero `N` and disables it for `N = 0`, which is the way to narrow a
+long run down to the region of interest.
 
 ## 9. Exit status and errors
 
@@ -337,8 +336,8 @@ The intended development loop is short:
 2. Assemble and link it with `b6as` and `b6ld`.
 3. Run it under `b6sim` and compare the output — and the exit status — against what you
    expect (often, against the same program built and run natively).
-4. When something is wrong, re-run with `-d i -d r` (or `-d e` for just the syscalls) and read
-   the trace to see exactly where the machine diverges.
+4. When something is wrong, re-run with `-d` and read the trace to see exactly where the
+   machine diverges.
 
 This is how the compiler back-end and the runtime routines are checked: a routine such as
 `putch` or `exit` is nothing more than a small assembly stub around a `$77 N` extracode (see

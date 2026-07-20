@@ -18,7 +18,7 @@ static const struct option long_options[] = {
     { "verbose",        no_argument,        nullptr,    'v' },
     { "limit",          required_argument,  nullptr,    'l' },
     { "trace",          required_argument,  nullptr,    'T' },
-    { "debug",          required_argument,  nullptr,    'd' },
+    { "debug",          no_argument,        nullptr,    'd' },
     { "status",         no_argument,        nullptr,    's' },
     {},
     // clang-format on
@@ -30,26 +30,19 @@ static const struct option long_options[] = {
 static void print_usage(std::ostream &out, const char *prog_name)
 {
     out << "BESM-6 Simulator (b6sim), Version " << Session::get_version() << "\n";
-    out << "Usage:" << std::endl;
-    out << "    " << prog_name << " [options...] program" << std::endl;
-    out << "Input files:" << std::endl;
-    out << "    program                 BESM-6 a.out executable to run" << std::endl;
-    out << "Options:" << std::endl;
-    out << "    -h, --help              Display available options" << std::endl;
-    out << "    -V, --version           Print the version number and exit" << std::endl;
-    out << "    -v, --verbose           Verbose mode" << std::endl;
+    out << "Usage:\n";
+    out << "    " << prog_name << " [options...] program\n";
+    out << "Input files:\n";
+    out << "    program                 BESM-6 a.out executable to run\n";
+    out << "Options:\n";
+    out << "    -h, --help              Display available options\n";
+    out << "    -V, --version           Print the version number and exit\n";
+    out << "    -v, --verbose           Verbose mode\n";
     out << "    -l NUM, --limit=NUM     Stop after so many instructions (default "
-        << Session::get_default_limit() << ")" << std::endl;
-    out << "    --trace=FILE            Redirect trace to the file" << std::endl;
-    out << "    -d MODE, --debug=MODE   Select debug mode, default irm" << std::endl;
-    out << "    -s, --status            Print program exit status as a signed integer"
-        << std::endl;
-    out << "Debug modes:" << std::endl;
-    out << "    i       Trace instructions" << std::endl;
-    out << "    e       Trace extracodes (syscalls)" << std::endl;
-    out << "    f       Trace fetch" << std::endl;
-    out << "    r       Trace registers" << std::endl;
-    out << "    m       Trace memory read/write" << std::endl;
+        << Session::get_default_limit() << ")\n";
+    out << "    --trace=FILE            Redirect trace to the file\n";
+    out << "    -d, --debug             Trace instructions, registers and memory\n";
+    out << "    -s, --status            Print program exit status as a signed integer\n";
 }
 
 //
@@ -74,7 +67,7 @@ int main(int argc, char *argv[])
 
     // Parse command line options.
     for (;;) {
-        switch (getopt_long(argc, argv, "-hVvl:tT:d:sr", long_options, nullptr)) {
+        switch (getopt_long(argc, argv, "-hVvl:ds", long_options, nullptr)) {
         case EOF:
             break;
 
@@ -118,19 +111,14 @@ int main(int argc, char *argv[])
             }
             continue;
 
-        case 't':
-            // Enable tracing of extracodes, to stdout by default.
-            session.enable_trace("e");
-            continue;
-
         case 'T':
             // Redirect tracing to a file.
-            session.set_trace_file(optarg, "irm");
+            session.set_trace_file(optarg);
             continue;
 
         case 'd':
-            // Set trace options.
-            session.enable_trace(optarg);
+            // Enable tracing to stdout.
+            session.set_debug(true);
             continue;
 
         case 's':

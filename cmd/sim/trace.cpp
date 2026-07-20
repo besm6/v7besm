@@ -4,21 +4,17 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <sstream>
 
 #include "machine.h"
 
 //
 // Flag to enable tracing.
 //
-bool Machine::debug_instructions; // trace machine instuctions
-bool Machine::debug_extracodes;   // trace extracodes (except e75)
-bool Machine::debug_print;        // trace extracode e64
-bool Machine::debug_registers;    // trace CPU registers
-bool Machine::debug_memory;       // trace memory read/write
-bool Machine::debug_fetch;        // trace instruction fetch
-bool Machine::debug_dispak;       // trace in dispak format, to stderr
-bool Machine::debug_cprog;        // trace C program: enable on *execute
+bool Machine::debug_enabled; // trace instructions, registers and memory
+
+// Instruction fetch tracing is dormant: nothing on the command line turns it
+// on.  Set it here by hand when you need to see every word fetched.
+bool Machine::debug_fetch;
 
 //
 // Emit trace to this stream.
@@ -26,83 +22,18 @@ bool Machine::debug_cprog;        // trace C program: enable on *execute
 std::ofstream Machine::trace_stream;
 
 //
-// Enable trace with given modes.
-//  i - trace instructions
-//  e - trace extracodes
-//  f - trace fetch
-//  r - trace registers
-//  m - trace memory read/write
-//  x - trace exceptions
-//  d - trace in dispak format, to stderr
+// Enable or disable tracing of instructions, registers and memory,
+// as requested by the -d option or by a VTM instruction with register 0.
 //
-void Machine::enable_trace(const char *trace_mode)
+void Machine::set_debug(bool on)
 {
-    // Disable all trace options.
-    debug_instructions = false;
-    debug_extracodes   = false;
-    debug_print        = false;
-    debug_registers    = false;
-    debug_memory       = false;
-    debug_fetch        = false;
-    debug_dispak       = false;
-    debug_cprog        = false;
-
-    if (trace_mode) {
-        // Parse the mode string and enable all requested trace flags.
-        for (unsigned i = 0; trace_mode[i]; i++) {
-            char ch = trace_mode[i];
-            switch (ch) {
-            case 'e':
-                debug_extracodes = true;
-                break;
-            case 'm':
-                debug_memory = true;
-                break;
-            case 'i':
-                debug_instructions = true;
-                break;
-            case 'r':
-                debug_registers = true;
-                break;
-            case 'f':
-                debug_fetch = true;
-                break;
-            case 'p':
-                debug_print = true;
-                break;
-            case 'd':
-                debug_dispak = true;
-                break;
-            case 'c':
-                debug_cprog = true;
-                break;
-            default:
-                throw std::runtime_error("Wrong trace option: " + std::string(1, ch));
-            }
-        }
-    }
-}
-
-//
-// Enable trace by bitmask,
-// for example by VTM instruction with register 0.
-//
-void Machine::enable_trace(unsigned bitmask)
-{
-    debug_extracodes   = bitmask & 01;   // -d e
-    debug_memory       = bitmask & 02;   // -d m
-    debug_instructions = bitmask & 04;   // -d i
-    debug_registers    = bitmask & 010;  // -d r
-    debug_fetch        = bitmask & 020;  // -d f
-    debug_print        = bitmask & 040;  // -d p
-    debug_dispak       = bitmask & 0100; // -d d
-    debug_cprog        = bitmask & 0200; // -d c
+    debug_enabled = on;
 }
 
 //
 // Redirect trace output to a given file.
 //
-void Machine::redirect_trace(const char *file_name, const char *default_mode)
+void Machine::redirect_trace(const char *file_name)
 {
     if (trace_stream.is_open()) {
         // Close previous file.
@@ -113,11 +44,11 @@ void Machine::redirect_trace(const char *file_name, const char *default_mode)
         trace_stream.open(file_name);
         if (!trace_stream.is_open())
             throw std::runtime_error("Cannot write to " + std::string(file_name));
-    }
 
-    if (!trace_enabled()) {
-        // Set default mode.
-        enable_trace(default_mode);
+        if (!trace_enabled()) {
+            // A trace file implies tracing.
+            set_debug(true);
+        }
     }
 }
 
@@ -136,24 +67,8 @@ void Machine::close_trace()
         trace_stream.close();
     }
 
-    // Disable trace options.
-    enable_trace("");
-}
-
-//
-// Start tracing a C program.
-//
-void Machine::start_trace_on_exec()
-{
-    if (debug_cprog) {
-        debug_memory       = true;
-        debug_instructions = true;
-        debug_registers    = true;
-        debug_cprog        = false;
-
-        cpu.finish();
-        trace_registers();
-    }
+    // Disable tracing.
+    set_debug(false);
 }
 
 //
@@ -192,20 +107,6 @@ void Machine::print_memory_access(unsigned addr, Word val, const char *opname)
 }
 
 //
-// Print memory write in dispak format.
-// "       00016: store 0003770010053377"
-//
-void Machine::print_memory_write_dispak(unsigned addr, Word val)
-{
-    auto &out       = std::cerr;
-    auto save_flags = out.flags();
-
-    out << std::oct << "       " << std::setfill('0') << std::setw(5) << addr << ": store "
-        << std::setw(16) << val << '\n';
-    out.flags(save_flags);
-}
-
-//
 // Print instruction address, opcode from RK and mnemonics.
 //
 void Processor::print_instruction()
@@ -222,31 +123,6 @@ void Processor::print_instruction()
     out << std::endl;
 
     // Restore.
-    out.flags(save_flags);
-}
-
-//
-// Print instruction in dispak format.
-// "03652: xta 2157(1)          (=6040000000065366) acc=2031463100000000 r[1]=00141"
-//
-void Processor::print_instruction_dispak()
-{
-    auto &out       = std::cerr;
-    auto save_flags = out.flags();
-    auto reg        = RK >> 20;
-    auto addr =
-        (RK & ONEBIT(20)) ? (RK & BITS(15)) : ((RK & BITS(12)) | ((RK & ONEBIT(19)) ? 070000 : 0));
-    auto word = machine.mem_load(ADDR(addr + core.M[reg]));
-    std::ostringstream buf;
-
-    besm6_print_instruction_mnemonics(buf, RK);
-    out << std::oct << std::setfill('0') << std::setw(5) << core.PC << ": " << std::setfill(' ')
-        << std::setw(20) << std::left << buf.str() << " (=" << std::right << std::setfill('0')
-        << std::setw(16) << word << ") acc=" << std::setw(16) << core.ACC;
-    if (reg) {
-        out << " r[" << reg << "]=" << std::setw(5) << core.M[reg];
-    }
-    out << '\n';
     out.flags(save_flags);
 }
 

@@ -42,17 +42,14 @@ private:
     // Trace output.
     static std::ofstream trace_stream;
 
-    // Trace modes.
-    static bool debug_instructions; // trace machine instuctions
-    static bool debug_extracodes;   // trace extracodes (except e75)
-    static bool debug_print;        // trace extracode e64
-    static bool debug_registers;    // trace CPU registers
-    static bool debug_memory;       // trace memory read/write
-    static bool debug_fetch;        // trace instruction fetch
-    static bool debug_dispak;       // trace in dispak format, to stderr
-    static bool debug_cprog;        // trace C program: enable on *execute
-    bool after_call{};              // right after JVM instruction
-    bool after_return{};            // right after UJ(13) instruction
+    // Trace mode: instructions, registers and memory (the -d option).
+    static bool debug_enabled;
+
+    // Instruction fetch tracing, dormant: no option turns it on.
+    static bool debug_fetch;
+
+    bool after_call{};   // right after JVM instruction
+    bool after_return{}; // right after UJ(13) instruction
 
     // Static stuff.
     static const uint64_t DEFAULT_LIMIT;    // Limit of instructions to simulate, by default
@@ -93,18 +90,11 @@ public:
     static void set_verbose(bool on) { verbose = on; }
     static bool get_verbose() { return verbose; }
 
-    // Enable trace output to the given file,
-    // or to std::cout when filename not present.
-    static void enable_trace(const char *mode);
-    static void enable_trace(unsigned bitmask);
-    static void redirect_trace(const char *file_name, const char *default_mode);
+    // Enable trace output to std::cout, or to the given file.
+    static void set_debug(bool on);
+    static void redirect_trace(const char *file_name);
     static void close_trace();
-    void start_trace_on_exec();
-    static bool trace_enabled()
-    {
-        return debug_instructions || debug_extracodes || debug_print || debug_registers ||
-               debug_memory || debug_fetch;
-    }
+    static bool trace_enabled() { return debug_enabled || debug_fetch; }
     void set_after_call() { after_call = true; };
     void set_after_return() { after_return = true; };
 
@@ -150,40 +140,30 @@ public:
 
     static void trace_memory_write(unsigned addr, Word val)
     {
-        if (debug_memory)
+        if (debug_enabled)
             print_memory_access(addr, val, "Write");
-    }
-
-    static void trace_memory_write_dispak(unsigned addr, Word val)
-    {
-        if (debug_dispak)
-            print_memory_write_dispak(addr, val);
     }
 
     static void trace_memory_read(unsigned addr, Word val)
     {
-        if (debug_memory)
+        if (debug_enabled)
             print_memory_access(addr, val, "Read");
     }
 
-    void trace_instruction(unsigned opcode)
+    void trace_instruction()
     {
-        // Print e50...e77 except e75, and also e20, e21.
-        if (debug_instructions || (debug_extracodes && opcode != 075 && is_extracode(opcode)))
+        if (debug_enabled)
             cpu.print_instruction();
-        if (debug_dispak)
-            cpu.print_instruction_dispak();
     }
 
     void trace_registers()
     {
-        if (debug_registers)
+        if (debug_enabled)
             cpu.print_registers();
     }
 
     static void print_fetch(unsigned addr, Word val);
     static void print_memory_access(unsigned addr, Word val, const char *opname);
-    static void print_memory_write_dispak(unsigned addr, Word val);
 };
 
 #endif // DUBNA_MACHINE_H
