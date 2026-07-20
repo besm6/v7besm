@@ -402,3 +402,53 @@ The second is the BESM-6-shaped answer and the one to think about first — but 
 
 Note `wtodb(x) = (x) >> 9` (words → blocks), added in stage 0, is *correct* either way: a block is
 exactly 512 words.
+
+### DONE: the on-disk layout, and how it turned out
+
+`struct dinode` and `struct direct` are redesigned; `BSHIFT`/`BMASK` are **deleted**, not fixed.
+
+**The inode is 16 words, `INOPB` 32 to a block.** Eight words of metadata then
+`daddr_t di_addr[8]` — six direct, one indirect, one double. The old struct was v7 verbatim:
+`char di_addr[40]`, 13 addresses packed 3 bytes each for a 24-bit PDP-11 `daddr_t`, against an
+`INOPB` of 8 that had been true when a dinode was 64 bytes. Here it came to ~15 words, so the
+i-list wasted **77% of every block** — and `iexpand`/`iupdat` were *already broken*, not merely
+wasteful: their open-coded `l3tol`/`ltol3` byte loops assume a 4-byte in-core `daddr_t` and it is
+6, so they wrote 52 bytes into a 78-byte array at the wrong stride. Both are word copies now,
+verified by disassembly to contain no `asx`/`aax` byte-extract sequences at all.
+
+**What made 16 words fit was dropping the third level of indirection**, and it is unreachable
+here rather than merely unlikely: one ЕС-5052 is 2000 blocks, and at `NINDIR` 512 the single
+indirect already spans 518 blocks while the double spans 262 662 — the volume, 130 times over.
+So `NLEVEL` is 2. `bmap()` was already parameterised by the literal `3` in four places and just
+took the constant; `itrunc()` lost one switch arm.
+
+**The directory entry is 4 words, `DIRPB` 128 to a block**, `DIRSIZ` 24 → **18**. Five words
+divided 512 no better than anything else does. `namei()` now works in **entry numbers** — one
+divide by `DIRENTSZ`, then a shift and a mask — which recovers the arithmetic v7 had. It used to
+mask the *byte* offset with `BMASK`, i.e. re-read the block every 512 bytes of a 3072-byte block
+and index from the wrong base in between.
+
+**`BSHIFT`/`BMASK` are gone.** They cannot be repaired — 3072 is not a power of two — so the
+byte-offset sites (`rdwri.c`, `nami.c`, `sys1.c`) divide and take a remainder by `BSIZE`
+explicitly. That is one `b$div` per *block crossing*, which is noise beside the `bread()` it
+guards. `dev/bio.c` turned out never to have used either. The word-domain pair `BWSHIFT`/`BWMASK`
+is what remains, and it is what `9`/`0777` accidentally already spelled.
+
+**`off_t` stays in bytes.** The word-offset idea above is still open and still attractive — it
+would delete the remaining divides — but it changes `read`/`write`/`lseek` semantics and
+`iomove()`'s granularity, and it is user-visible. Separate problem.
+
+Two things worth knowing next time:
+
+* **`_Static_assert` works and has teeth; the `extern int x[1 - 2*(cond)]` idiom does not.**
+  `b6cc` accepts a negative array size without a word, so the classic trick is decorative here.
+  `ino.h` and `dir.h` now assert both the struct size and that `INOPB`/`DIRPB` of them tile a
+  block; checked by deliberately breaking `INOPB` and watching the build fail.
+* **`DIRSIZ` moves `u_upt`.** `struct user` holds `u_dbuf[DIRSIZ]` and a `struct direct` ahead of
+  the shadow page table, whose word offset `uarea.S` and `seg.S` hardcode as `UPT` (b6as has no
+  `offsetof()`). Both shrank by a word, so `UPT` went **35 → 33** in `kernel/uarea.S`,
+  `kernel/seg.S` and `kernel/test/mmutest.c`. mmutest's check 13 exists for exactly this and is
+  what caught it — the MMU tests are load-bearing for a filesystem change, which is not obvious.
+
+Still absent, and now the blocker for task 18b.6: **there is no `mkfs`**. Nothing in `cmd/`
+writes this layout, so the boot still stops at `panic: iinit`, which remains the correct outcome.

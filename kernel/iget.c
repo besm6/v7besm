@@ -96,23 +96,15 @@ loop:
 
 void iexpand(register struct inode *ip, register struct dinode *dp)
 {
-    register char *p1;
-    char *p2;
-    int i;
+    register int i;
 
     ip->i_mode  = dp->di_mode;
     ip->i_nlink = dp->di_nlink;
     ip->i_uid   = dp->di_uid;
     ip->i_gid   = dp->di_gid;
     ip->i_size  = dp->di_size;
-    p1          = (char *)ip->i_un.i_addr;
-    p2          = (char *)dp->di_addr;
-    for (i = 0; i < NADDR; i++) {
-        *p1++ = *p2++;
-        *p1++ = *p2++;
-        *p1++ = *p2++;
-        *p1++ = 0;
-    }
+    for (i = 0; i < NADDR; i++)
+        ip->i_un.i_addr[i] = dp->di_addr[i];
 }
 
 /*
@@ -151,9 +143,7 @@ void iupdat(register struct inode *ip, time_t *ta, time_t *tm)
 {
     register struct buf *bp;
     struct dinode *dp;
-    register char *p1;
-    char *p2;
-    int i;
+    register int i;
 
     if ((ip->i_flag & (IUPD | IACC | ICHG)) != 0) {
         if (getfs(ip->i_dev)->s_ronly)
@@ -170,15 +160,14 @@ void iupdat(register struct inode *ip, time_t *ta, time_t *tm)
         dp->di_uid   = ip->i_uid;
         dp->di_gid   = ip->i_gid;
         dp->di_size  = ip->i_size;
-        p1           = (char *)dp->di_addr;
-        p2           = (char *)ip->i_un.i_addr;
-        for (i = 0; i < NADDR; i++) {
-            *p1++ = *p2++;
-            *p1++ = *p2++;
-            *p1++ = *p2++;
-            if (*p2++ != 0 && (ip->i_mode & IFMT) != IFMPC && (ip->i_mode & IFMT) != IFMPB)
-                printf("iaddress > 2^24\n");
-        }
+        /*
+         * A plain word copy.  v7 packed each address down to three bytes here and
+         * checked the fourth for overflow ("iaddress > 2^24"); a daddr_t is a whole
+         * word on this machine, on disk as in core, so there is nothing to pack and
+         * nothing that can overflow.
+         */
+        for (i = 0; i < NADDR; i++)
+            dp->di_addr[i] = ip->i_un.i_addr[i];
         if (ip->i_flag & IACC)
             dp->di_atime = *ta;
         if (ip->i_flag & IUPD)
@@ -215,20 +204,16 @@ void itrunc(register struct inode *ip)
             continue;
         ip->i_un.i_addr[i] = (daddr_t)0;
         switch (i) {
-        default:
+        default: /* direct */
             free(dev, bn);
             break;
 
-        case NADDR - 3:
+        case NADDR - 2: /* single indirect */
             tloop(dev, bn, 0, 0);
             break;
 
-        case NADDR - 2:
+        case NADDR - 1: /* double indirect */
             tloop(dev, bn, 1, 0);
-            break;
-
-        case NADDR - 1:
-            tloop(dev, bn, 1, 1);
         }
     }
     ip->i_size = 0;

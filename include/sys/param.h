@@ -84,11 +84,9 @@
  */
 
 #define NBPW    6            /* number of bytes in an integer (sizeof(int)) */
-#define BSIZE   3072         /* size of secondary block (bytes, 6144 for besm) */
-#define BSIZEW  512          /* size of secondary block, in words (BSIZE / NBPW) */
-#define NINDIR  512          /* daddr_t per indirect block (BSIZE / sizeof(daddr_t)) */
-#define BMASK   0777         /* BSIZE-1 */
-#define BSHIFT  9            /* LOG2(BSIZE) */
+#define BSIZE   3072         /* size of secondary block, in bytes (BSIZEW * NBPW) */
+#define BSIZEW  512          /* size of secondary block, in words */
+#define NINDIR  512          /* daddr_t per indirect block (BSIZEW / 1) */
 #define NMASK   0777         /* NINDIR-1 */
 #define NSHIFT  9            /* LOG2(NINDIR) */
 #define USIZE   1024         /* size of the u-area, in words (one page) */
@@ -97,9 +95,63 @@
 #define NODEV   (dev_t)(-1)  /* no device */
 #define ROOTINO ((ino_t)2)   /* i number of all roots */
 #define SUPERB  ((daddr_t)1) /* block number of the super block */
-#define DIRSIZ  24           /* max characters per directory (4 words) */
 #define NICINOD 100          /* number of superblock inodes */
 #define NICFREE 50           /* number of superblock free blocks */
+
+/*
+ * There is no BSHIFT/BMASK, and there cannot be: a block is BSIZE == 3072 BYTES,
+ * and 3072 is not a power of two.  v7's pair described a 512-byte block and were
+ * carried into this port unchanged, so every byte-offset -> block conversion in
+ * the kernel was silently wrong by a factor of six.  A byte offset now divides and
+ * takes a remainder by BSIZE explicitly -- once per block crossing, which is noise
+ * beside the bread() it guards.
+ *
+ * The pair below is the WORD-domain one, which is what 9/0777 accidentally already
+ * spelled: a block is 512 words, and that IS a power of two.  Use it for anything
+ * counting words; anything counting bytes divides.
+ */
+#define BWSHIFT 9    /* LOG2(BSIZEW): word offset -> block number */
+#define BWMASK  0777 /* BSIZEW-1: word offset -> offset within block */
+
+/*
+ * The on-disk inode, sys/ino.h.  Sixteen words -- eight of metadata, then eight
+ * disk addresses -- so INOPB of them tile a 512-word block exactly, with no
+ * padding and no straddling.  The 8/8 split is deliberate: `dp + 8' is the address
+ * array, at a power-of-two offset a hand-written mkfs can rely on.
+ *
+ * NADDR is here rather than in sys/inode.h (where v7 kept it) so that the on-disk
+ * struct and the in-core one cannot disagree about how many addresses there are.
+ *
+ * NLEVEL is 2, not v7's 3, because the third level is UNREACHABLE on this machine:
+ * one EC-5052 drive is 2000 blocks, and at NINDIR == 512 the single indirect block
+ * already spans 518 blocks while the double spans 262662 -- the whole volume, 130
+ * times over.  Dropping it is what frees the slots to make the inode 16 words.
+ */
+#define NADDR    8   /* disk addresses in an inode: 6 direct, 1 indirect, 1 double */
+#define NLEVEL   2   /* levels of indirection */
+#define INOPB    32  /* inodes per block: BSIZEW / 16 */
+#define INOSHIFT 5   /* LOG2(INOPB) */
+#define INOMASK  037 /* INOPB-1 */
+
+/*
+ * The directory entry, sys/dir.h: one word of i-number and three of name, so
+ * DIRPB of them tile a block exactly and the offset arithmetic keeps the shifts
+ * v7 had.  DIRSIZ was 24 here (4 words, 5 to an entry), which divides 512 no
+ * better than it divides anything else.
+ *
+ * CHANGING DIRSIZ MOVES u_upt.  struct user holds both u_dbuf[DIRSIZ] and a
+ * struct direct (u_dent) AHEAD of the shadow page table, and uarea.S and seg.S
+ * hardcode that table's word offset as UPT -- b6as has no offsetof().  Going from
+ * 24 to 18 took a word off each, so UPT went 35 -> 33 in kernel/uarea.S,
+ * kernel/seg.S and kernel/test/mmutest.c.  mmutest's check 13 asserts it, which is
+ * how this was caught; keep all four in step.
+ */
+#define DIRSIZ   18   /* max characters per directory name (3 words) */
+#define DIRWORDS 4    /* words in a struct direct */
+#define DIRENTSZ 24   /* bytes in a struct direct (DIRWORDS * NBPW) */
+#define DIRPB    128  /* directory entries per block: BSIZEW / DIRWORDS */
+#define DIRSHIFT 7    /* LOG2(DIRPB) */
+#define DIRMASK  0177 /* DIRPB-1 */
 #define INFSIZE 138          /* size of per-proc info for users */
 #define CBSIZE  28           /* number of chars in a clist block */
 #define CROUND  037          /* clist rounding: sizeof(int *) + CBSIZE - 1*/
@@ -161,11 +213,18 @@
  */
 #define CHANOF(p, n) ((chan_t)((int *)(p) + (n)))
 
+/*
+ * Inumber to disk address, and to the offset within that block.  The `2*INOPB - 1'
+ * bias is v7's, and it places inode 1 at block 2 offset 0 -- the i-list starts
+ * after the boot block and the superblock.  Both are written in terms of INOPB so
+ * that resizing the inode cannot leave them behind, as the hardcoded >>3 and &07
+ * were left behind when the struct stopped being 64 bytes.
+ */
 /* inumber to disk address */
-#define itod(x) (daddr_t)(((x) + 15) >> 3)
+#define itod(x) (daddr_t)(((x) + 2 * INOPB - 1) >> INOSHIFT)
 
 /* inumber to disk offset */
-#define itoo(x) (int)(((x) + 15) & 07)
+#define itoo(x) (int)(((x) + 2 * INOPB - 1) & INOMASK)
 
 /*
  * Major part of a device.  This used to shift through `unsigned', which made

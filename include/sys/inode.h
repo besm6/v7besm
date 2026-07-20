@@ -11,7 +11,11 @@
  * from permanent inode on volume.
  */
 
-#define NADDR  13
+/*
+ * NADDR is in sys/param.h, next to INOPB and NLEVEL: the in-core address array and
+ * the on-disk one in sys/ino.h must be the same length, and a #define in each file
+ * is one edit away from them not being.
+ */
 #define NINDEX 15
 
 struct group {

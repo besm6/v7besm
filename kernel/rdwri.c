@@ -45,8 +45,14 @@ void readi(register struct inode *ip)
     }
 
     do {
-        lbn = bn = u.u_offset >> BSHIFT;
-        on       = u.u_offset & BMASK;
+        /*
+         * A divide and a remainder, not a shift and a mask: BSIZE is 3072 bytes and
+         * 3072 is not a power of two.  One b$div per pass of this loop -- that is,
+         * per block -- which is noise beside the bread() below.  `on' stays a BYTE
+         * offset, because b_addr is a fat pointer and `+ on' is byte arithmetic.
+         */
+        lbn = bn = u.u_offset / BSIZE;
+        on       = u.u_offset % BSIZE;
         n        = min(BSIZE - on, u.u_count);
         if (type != IFBLK && type != IFMPB) {
             diff = ip->i_size - u.u_offset;
@@ -108,8 +114,9 @@ void writei(register struct inode *ip)
         return;
 
     do {
-        bn = u.u_offset >> BSHIFT;
-        on = u.u_offset & BMASK;
+        /* Divide and remainder, not shift and mask; see readi() above. */
+        bn = u.u_offset / BSIZE;
+        on = u.u_offset % BSIZE;
         n  = min(BSIZE - on, u.u_count);
         if (type != IFBLK && type != IFMPB) {
             bn = bmap(ip, bn, B_WRITE);

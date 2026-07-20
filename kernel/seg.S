@@ -69,7 +69,7 @@
 
         .text
 
-UPT    = 35                     // word offset of u_upt in struct user -- mmutest asserts it
+UPT    = 33                     // word offset of u_upt in struct user -- mmutest asserts it
 WSRC   = 02000                  // virtual page 1: the source window (and clearseg's dest)
 WDST   = 04000                  // virtual page 2: the dest window
 

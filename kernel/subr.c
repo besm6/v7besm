@@ -37,9 +37,9 @@ daddr_t bmap(register struct inode *ip, daddr_t bn, int rwflg)
     rablock = 0;
 
     /*
-     * blocks 0..NADDR-4 are direct blocks
+     * blocks 0..NADDR-NLEVEL-1 are direct blocks
      */
-    if (bn < NADDR - 3) {
+    if (bn < NADDR - NLEVEL) {
         i  = bn;
         nb = ip->i_un.i_addr[i];
         if (nb == 0) {
@@ -50,21 +50,21 @@ daddr_t bmap(register struct inode *ip, daddr_t bn, int rwflg)
             ip->i_un.i_addr[i] = nb;
             ip->i_flag |= IUPD | ICHG;
         }
-        if (i < NADDR - 4)
+        if (i < NADDR - NLEVEL - 1)
             rablock = ip->i_un.i_addr[i + 1];
         return (nb);
     }
 
     /*
-     * addresses NADDR-3, NADDR-2, and NADDR-1
-     * have single, double, triple indirect blocks.
-     * the first step is to determine
-     * how many levels of indirection.
+     * addresses NADDR-2 and NADDR-1 have the single
+     * and double indirect blocks.  There is no triple:
+     * see NLEVEL in sys/param.h.  The first step is to
+     * determine how many levels of indirection.
      */
     sh = 0;
     nb = 1;
-    bn -= NADDR - 3;
-    for (j = 3; j > 0; j--) {
+    bn -= NADDR - NLEVEL;
+    for (j = NLEVEL; j > 0; j--) {
         sh += NSHIFT;
         nb <<= NSHIFT;
         if (bn < nb)
@@ -92,7 +92,7 @@ daddr_t bmap(register struct inode *ip, daddr_t bn, int rwflg)
     /*
      * fetch through the indirect blocks
      */
-    for (; j <= 3; j++) {
+    for (; j <= NLEVEL; j++) {
         bp = bread(dev, nb);
         if (bp->b_flags & B_ERROR) {
             brelse(bp);

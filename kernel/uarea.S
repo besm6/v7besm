@@ -68,7 +68,7 @@
 
         .text
 
-UPT    = 35                    // word offset of u_upt in struct user -- mmutest asserts it
+UPT    = 33                    // word offset of u_upt in struct user -- mmutest asserts it
 WHOME  = 02000                  // virtual page 1: the window on the process's u home
 WLIVE  = 04000                  // virtual page 2: the window on the live u-area
 

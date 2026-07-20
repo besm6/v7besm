@@ -86,10 +86,15 @@ void exece()
                     u.u_error = EFAULT;
                 if (u.u_error)
                     goto bad;
-                if ((nc & BMASK) == 0) {
+                /*
+                 * `nc' counts BYTES, and a block is BSIZE == 3072 of them -- not a
+                 * power of two, so this is a remainder and a divide.  Once per 3072
+                 * characters of arg list, against the getblk() it guards.
+                 */
+                if (nc % BSIZE == 0) {
                     if (bp)
                         bawrite(bp);
-                    bp = getblk(swapdev, swplo + bno + (nc >> BSHIFT));
+                    bp = getblk(swapdev, swplo + bno + nc / BSIZE);
                     cp = bp->b_un.b_addr;
                 }
                 nc++;
@@ -148,10 +153,11 @@ void exece()
             break;
         suword((caddr_t)ap, ucp);
         do {
-            if ((nc & BMASK) == 0) {
+            /* `nc' counts bytes; see the matching staging loop above. */
+            if (nc % BSIZE == 0) {
                 if (bp)
                     brelse(bp);
-                bp = bread(swapdev, swplo + bno + (nc >> BSHIFT));
+                bp = bread(swapdev, swplo + bno + nc / BSIZE);
                 cp = bp->b_un.b_addr;
             }
             /* bit numbering is 1-based, so the offset's LSB (acc bit 45) is `1U << 44' */

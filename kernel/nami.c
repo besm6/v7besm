@@ -33,6 +33,7 @@ struct inode *namei(int (*func)(void), int flag)
     int i;
     dev_t d;
     off_t eo;
+    int ent, on;
 
     /*
      * If name starts with '/' start from
@@ -121,7 +122,7 @@ eloop:
                 goto out;
             u.u_pdir = dp;
             if (eo)
-                u.u_offset = eo - sizeof(struct direct);
+                u.u_offset = eo - DIRENTSZ;
             else
                 dp->i_flag |= IUPD | ICHG;
             return (NULL);
@@ -131,15 +132,28 @@ eloop:
     }
 
     /*
+     * Work in ENTRY numbers, not byte offsets.  A struct direct is DIRWORDS words,
+     * so DIRPB of them tile a block exactly and both the block number and the slot
+     * within it are a shift and a mask -- the arithmetic v7 had, recovered.  Only
+     * the byte-offset-to-entry step is a divide, and DIRENTSZ is a constant.
+     *
+     * The old code masked the BYTE offset with BMASK, which described a 512-byte
+     * block while a block is 3072 bytes: it re-read the block every 512 bytes and
+     * indexed from the wrong base in between.
+     */
+    ent = u.u_offset / DIRENTSZ;
+    on  = ent & DIRMASK;
+
+    /*
      * If offset is on a block boundary,
      * read the next directory block.
      * Release previous if it exists.
      */
 
-    if ((u.u_offset & BMASK) == 0) {
+    if (on == 0 || bp == NULL) {
         if (bp != NULL)
             brelse(bp);
-        bp = bread(dp->i_dev, bmap(dp, (daddr_t)(u.u_offset >> BSHIFT), B_READ));
+        bp = bread(dp->i_dev, bmap(dp, (daddr_t)(ent >> DIRSHIFT), B_READ));
         if (bp->b_flags & B_ERROR) {
             brelse(bp);
             goto out;
@@ -154,8 +168,8 @@ eloop:
      * If they do not match, go back to eloop.
      */
 
-    wcopy(bp->b_un.b_addr + (u.u_offset & BMASK), (caddr_t)&u.u_dent, btow(sizeof(struct direct)));
-    u.u_offset += sizeof(struct direct);
+    wcopy((caddr_t)&bp->b_un.b_dir[on], (caddr_t)&u.u_dent, DIRWORDS);
+    u.u_offset += DIRENTSZ;
     if (u.u_dent.d_ino == 0) {
         if (eo == 0)
             eo = u.u_offset;

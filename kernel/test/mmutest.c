@@ -95,7 +95,7 @@ void extintr(void)
  * so it can pick up #defines from sys/param.h yet still cannot compute an offsetof() -- it
  * hardcodes this, and this is what keeps it honest.
  */
-#define UPT 35
+#define UPT 33
 
 int main()
 {

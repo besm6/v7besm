@@ -32,6 +32,7 @@ struct buf {
         caddr_t b_addr;          /* core address */
         struct filsys *b_filsys; /* superblocks */
         struct dinode *b_dino;   /* ilist */
+        struct direct *b_dir;    /* directory block */
         daddr_t *b_daddr;        /* indirect block */
     } b_un;
     daddr_t b_blkno; /* block # on device */
