@@ -146,6 +146,12 @@ void mbintr(void)
     mask |= F_NOCALL;
 }
 
+/* And the disk, for the same reason. */
+void mdintr(void)
+{
+    mask |= F_NOCALL;
+}
+
 void wakeup(caddr_t chan)
 {
     nwakeup++;

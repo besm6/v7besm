@@ -7,7 +7,8 @@ I/O — task 18 below.
 
 Where the port stands: `cd kernel && make` links an image that boots under SIMH and reaches
 `panic: iinit`. The hang after that is `panic()`'s own `for(;;) idle()`, which is now a real spin;
-there is no disk driver yet, which is task 18b.
+both drivers are now written (tasks 18b.3 and 18b.4) but no root filesystem image exists for
+`iinit()` to mount, which is task 18b.6.
 
 Read [../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) before starting, and
 [../doc/Intrinsics.md](../doc/Intrinsics.md) for how C reaches `002 «рег»`.
@@ -429,8 +430,8 @@ How it turned out, where that differed from the sketch:
 - **`ugrp` part 1 had to move.** It forged `GRP_DRUM1_FREE` to prove `extintr()`'s *fallback
   probe* does not spin on a wired bit. That bit now has a handler, so the test moved to
   `GRP_CHAN3_FREE` — same kind of bit, still unclaimed. Bite-tested: point it back and `ugrp`
-  hangs. **18b.4 claims `GRP_CHAN3_FREE` and will have to move it again**, by then to a wired
-  bit of a device this kernel does not drive at all; the tape channels have seven. The drum
+  hangs. (18b.4 duly claimed `GRP_CHAN3_FREE` and moved the test again, to `GRP_CHAN5_FREE` —
+  a tape channel, so that eviction was the last one.) The drum
   half of what `ugrp` used to cover now lives in `mbtest` as check 5, where the real `mb.o` is
   linked and the idle guard is the thing under test rather than the probe.
 - **A round trip is not a test of the mapping, and the first version of `mbtest` was fooled by
@@ -457,38 +458,98 @@ How it turned out, where that differed from the sketch:
   standing tax on any change to shared code and will be paid again; worth replacing with a
   symbol lookup if it is paid much more often.
 
-**18b.4. The disk driver (`dev/md.c`) — the two-step protocol.** The only device in the machine with
-one, and the reason it comes after the drum.
+**18b.4. The disk driver (`dev/md.c`) — DONE.** The two-step protocol, and the last driver 18b
+needs. `mdstrategy()` moves data: four commands per exchange instead of the drum's one
+instruction, a half-zone that is exactly a `BSIZEW` block, and two controllers of four groups
+each behind one major number.
 
-* **Use CONSTANT `__besm6_ext()` addresses** — all four of them. A computed address is broken in
-  b6cc today and fails silently into another device; see 18b.3 above. Branch on the controller.
-* Step 1, `__besm6_ext(EXT_DISK3, cw)`: the exchange control word. *Nothing happens yet.* This call
-  also lowers the controller's ГРП free bit and clears its error flag.
-* Step 2, `__besm6_ext(EXT_DISKCTL3, cmd)`: select group (bit 9 set, `(cmd & 01774) == 01400`),
-  select unit (bit 11 set — bits 1–8 are a one-hot mask in **inverted** order, bit 8 → unit 0 …
-  bit 1 → unit 7), then supply the track address (bit 12 set) — **and that last one is what
-  transfers.** Zone encoding differs by drive size: `(cmd & BITS(11)) << 1` on a 29 MB drive,
-  `(cmd >> 1) & BITS(10)` with bit 1 as the track on a 7.25 MB drive. Fix one and record it.
-* Note from the doc worth carrying into a comment: seek (`001`, `002`) and the plain read/write
-  commands (`003`, `004`) are *logged but do not act* in SIMH — direction comes from step 1 and the
-  transfer is driven entirely by the bit-12 command. Don't build a seek state machine the simulator
-  will not exercise.
-* The minor-number map: unit and partition. `rootdev` is `makedev(0, 56)` and `pipedev` the same
-  today — those numbers came from the x86 driver's partition scheme and need re-deriving against a
-  real BESM-6 disk layout, together with the partition table `mdopen()` validates against.
-* `DISK_HALFZONE` (bit 1) makes one `BSIZEW` block one native transfer — no splitting, unlike the
-  drum.
-* **BLOCKER, found in 18b.1: `buffers[]` is not page-aligned, so a filesystem buffer cannot be a
-  transfer target at all.** `main.c:163` is `char buffers[NBUF][BSIZE]` and the linker puts
-  `buffers` at `044730` = 19416 words, which is not a multiple of 512. The control word names a
-  *page*, with `DISK_HALFPAGE` (512 words) or `DRUM_PARAGRAF` (256) as the only sub-page fields —
-  there is nowhere to put an arbitrary word offset, so `cwpage(bufpaddr(bp) >> PGSH)` would
-  silently transfer to the wrong place. Align `buffers[]` to `BSIZEW`: every buffer then lands on
-  a page or half-page boundary and `DISK_HALFPAGE` expresses the difference exactly. Do this
-  before the first real `mdstrategy()` transfer, not after debugging one.
-* **Done when** `iinit()` reads the super block off an attached `MD0` image without panicking.
-* **Verified by `test/mdtest`** — the command sequence in order, one zone read, service words at
-  `030`–`037`.
+**Verified by** a clean `make` (`047753`, was `047310` — 291 words), the new `test/mdtest`, and
+all **14** `test/` SIMH tests passing. The disk's own trace (`set md0 debug=OPS;DATA`) shows
+exactly the exchanges the test intends:
+
+```
+::: КМД 3: cmd 00004000 = выдача адреса дорожки 0000.0
+::: запись МД 00 полузона 0000.0 память 40000-40777   <- check 1, an even block
+::: КМД 3: cmd 00004001 = выдача адреса дорожки 0000.1
+::: запись МД 00 полузона 0000.1 память 40000-40777   <- check 2, the ODD half of the zone
+::: чтение МД 00 зона 0000 память 40000-41777         <- check 3, the same zone read WHOLE
+::: запись МД 00 полузона 0001.0 память 41000-41777   <- check 4, DISK_HALFPAGE on the write
+::: чтение МД 00 полузона 0001.0 память 40000-40777   <-   ...and read back to the page base
+::: КМД 3: cmd = 00002001, выбор устройства 10        <- check 5, group 1
+::: КМД 4: cmd = 00002001, выбор устройства 40        <- check 6, the second controller
+```
+
+How it turned out, where that differed from the sketch:
+
+- **The blocker was already gone.** `buffers[]` is no longer bss: `besm6.S` names it absolutely
+  (`buffers = u - NBUF*BSIZEW`) and it sits at `064000` = word 26624 = page 26 exactly. Buffer *i*
+  starts at `26624 + 512*i`, so even buffers are page-aligned and odd ones half-page-aligned —
+  which is precisely what `DISK_HALFPAGE` expresses. The old note claiming `044730` described the
+  bss layout and had been stale since that change.
+- **The unit-select mask is NOT inverted, and the sketch repeated the error from the doc.** The
+  simulator's `disk_ctl()` tests `BBIT(8)` → drive 7 down to `BBIT(1)` → drive 0, i.e. plain
+  `1 << unit`. The "bit 8 → unit 0" reading comes from a *comment* in `besm6_disk.c` that
+  contradicts the code directly beneath it, and it had propagated into
+  `doc/Besm6_Peripherals.md`, into `md.c`'s skeleton comment and into this file. All three fixed.
+  Bite-tested: invert the mask and `mdtest` fails with `ACC 0777`.
+- **`DISK_HALFZONE` is dead, so the sketch's "bit 1 makes one block one transfer" was right about
+  the outcome and wrong about the mechanism.** The simulator declares the bit and reads it
+  nowhere; which half of the zone moves comes from **bit 1 of the track-address command**
+  (`c->track = cmd & 1`). Setting it in the control word instead gets the wrong half silently.
+  Bite-tested: `ACC 0420` — the placement check and the cross-controller check, which are exactly
+  the two written to catch a wrong half. `CW_UNIT` is dead on the disk for the same reason;
+  `besm6disk.h` now says so at both fields.
+- **Both transfer modes, as on the drum, but for speed rather than necessity.** A half-zone is a
+  block, so unlike `mbstart()` nothing *forces* a second mode; `CW_PAGE_MODE` is taken when the
+  request is zone-aligned, page-aligned and a whole zone long, which halves the exchanges for a
+  `physio()` page and is what `mdtest` check 3 rides on. Bite-tested: force page mode on and check
+  3 fails.
+- **The command ORDER was corrected, and the correction is NOT defended by the test.** Group and
+  unit select *raise* the controller's ГРП free bit and only the control word lowers it, so
+  arming after "step 1 then step 2" arms on a bit already standing. `mdstart()` therefore issues
+  both selects *before* the control word. But rewriting it the documented way and re-running
+  `mdtest` still passes: SIMH performs the whole transfer synchronously inside the track-address
+  command, so a completion taken early still finds the data in memory. The order is kept because
+  it is right on the real machine, where an early completion is a torn buffer. Written into
+  `md.c`'s header and `mdtest.ini` as a rule this test does *not* prove — the alternative was a
+  comment claiming a guarantee nobody checks.
+- **The `EXT_IOERR` poll carried over unchanged and is still not optional.** An unattached unit
+  records itself in the mask and returns without scheduling a completion, exactly as an
+  unattached drum does. Bite-tested: remove the poll and `mdtest` run 2 hangs at `02230` instead
+  of failing. `mdintr()`'s idle guard likewise — neuter it and run 1 hangs at `02176`.
+- **The minor number is a flat drive index, and there are no partitions.** `minor` is bit 5 the
+  controller, bits 4–3 the group, bits 2–0 the drive — deliberately identical to the simulator's
+  own unit subscript, so a minor number and a SIMH unit name are the same number, which is worth a
+  great deal when a transfer goes somewhere unexpected. `rootdev` and `pipedev` are now
+  `makedev(0, 0)` = `md00`. One drive is 1000 zones = 2000 blocks ≈ 6 Mb and swap is on the drums,
+  so a whole-drive filesystem is the honest first cut; the x86 minor 56 (an MBR slot) is gone.
+- **The drive type is fixed at ЕС-5052 (7.25 Mb), the simulator default**, as the sketch asked.
+  ЕС-5061 (29 Mb) was considered and rejected: `IS_29MB(u)` short-circuits both the read and the
+  write path to a whole-zone transfer and ignores `CW_PAGE_MODE`, so the smallest exchange there
+  is 1024 words while the buffer cache asks for 512 — a block read would splatter over the next
+  buffer. Bridging it needs a bounce buffer with a read-modify-write on every sub-zone write, or a
+  filesystem block of one zone (`BSIZE` 6144 / `BSIZEW` 1024, which `param.h`'s own comment
+  anticipates) — which ripples through `BSHIFT`, `BMASK`, `NINDIR`, `itod`/`itoo`, `mb.c`,
+  `nswap`, `biotest` and the on-disk format. The cost of the choice is capacity: ~6 Mb a drive
+  instead of ~24. `mdtest.ini` says so, because `set md0 ec-5061` breaks the test by design.
+- **No seek state machine**, as the sketch said: `001`–`004` and `006` are logged and do not act,
+  the direction coming from the control word and the transfer from the bit-12 command.
+- **`ugrp` part 1 moved again, and this time for good.** It forged `GRP_CHAN3_FREE`, which now has
+  a handler, so it moved to `GRP_CHAN5_FREE` — tape channel 5. The two earlier bits were chosen
+  because they were *unclaimed yet*, a property with an expiry date; this one is unclaimed because
+  there is no driver to write. `GRP_CHAN5_FREE` was added to `besm6dev.h` for it. The disk half of
+  what `ugrp` used to cover now lives in `mdtest` as check 8, where the real `md.o` is linked.
+- **Five `.ini` files needed their halt PC edited again** (`ugrp`, `uclock`, `uswtch`, `usched`,
+  `mbtest`), all by exactly one word, because four tests gained an `mdintr()` stub and `intr.o`
+  gained a dispatch arm. 18b.3 predicted this tax would be paid again; it was. The value to use is
+  the `halt` symbol from the test's own `.nm`, which the build already generates.
+- **Three disk images, ~8.25 Mb each**, because three drives have to be attached to prove the
+  group and the controller, and `attach -n` formats a whole unit. Their filenames must carry a
+  digit run in 2048..4095 — the simulator scrapes a volume number out of the name and refuses
+  anything else. `make clean` removes `*.disk` alongside `*.drum`.
+
+*Not done here, and still 18b.6:* `iinit()` reading a real super block. That needs a root
+filesystem image to exist, which nothing in this tree builds yet.
 
 **18b.5. Disk status and errors.** Split out because the drum has no equivalent and the happy path
 should land first.
@@ -564,8 +625,8 @@ Loose ends the finished work left behind. None blocks 18.
 
 ## Notes for the next standalone SIMH test
 
-Task 18b wanted three — one per step 18b.2, 18b.3 and 18b.4. `ugrp` and `mbtest` are done;
-`mdtest` remains. What the existing tests cost to get right:
+Task 18b wanted three — one per step 18b.2, 18b.3 and 18b.4 — and all three are written: `ugrp`,
+`mbtest` and `mdtest`. What they cost to get right, for whoever writes the fourth:
 
 * **A round trip proves nothing about addressing.** Write a pattern, read it back, compare — and
   a driver that put the data in the wrong place passes, having been consistently wrong twice.

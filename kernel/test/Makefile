@@ -14,7 +14,8 @@ NM      = b6nm
 CFLAGS  = -I../../include
 LIBDIR  = $$HOME/.local/share/besm6/lib
 
-PROGS   = hello sctest mmutest uintr utrap usys uclock uswtch usched ugrow biotest ugrp mbtest
+PROGS   = hello sctest mmutest uintr utrap usys uclock uswtch usched ugrow biotest ugrp mbtest \
+	  mdtest
 
 all:    $(PROGS)
 
@@ -34,9 +35,10 @@ test:   $(PROGS)
 	besm6 biotest.ini
 	besm6 ugrp.ini
 	besm6 mbtest.ini
+	besm6 mdtest.ini
 
 clean:
-	rm -f *.o *.dis *.nm *.drum $(PROGS)
+	rm -f *.o *.dis *.nm *.drum *.disk $(PROGS)
 
 hello:  hello.o
 	$(LD) $< -o $@
@@ -143,10 +145,21 @@ mbtest: crt0.o mbtest.o mb.o intr.o psw.o
 	$(DISASM) -c $@ > $@.dis
 	$(NM) -n $@ > $@.nm
 
+# mdtest -- task 18b.4: the disk driver, and its two-step protocol.  The mirror of mbtest:
+# links the REAL md.o and intr.o and stubs mbintr() instead of mdintr().  Needs disk units
+# attached, and their filenames must carry a volume number in 2048..4095 -- see mdtest.ini.
+mdtest: crt0.o mdtest.o md.o intr.o psw.o
+	$(LD) crt0.o mdtest.o md.o intr.o psw.o -o $@ -L$(LIBDIR) -lc
+	$(DISASM) -c $@ > $@.dis
+	$(NM) -n $@ > $@.nm
+
 bio.o: ../dev/bio.c
 	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@
 
 mb.o: ../dev/mb.c
+	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@
+
+md.o: ../dev/md.c
 	$(CC) $(CFLAGS) -DKERNEL -c $< -o $@
 
 slp.o: ../slp.c

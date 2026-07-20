@@ -73,12 +73,24 @@
  * test that holds both halves of this comment to account.
  *
  * The complete wired set covers the tape channels too -- doc/Besm6_Peripherals.md,
- * "Wired bits".  Only the four this kernel can raise are named here.
+ * "Wired bits".  Only the four this kernel can raise are named here, plus one it cannot:
+ * see GRP_CHAN5_FREE below.
  */
 #define GRP_DRUM1_FREE 01000000000000000U /* 46: drum 1 exchange finished (wired) */
 #define GRP_DRUM2_FREE 00400000000000000U /* 45: drum 2 exchange finished (wired) */
 #define GRP_CHAN3_FREE 00000002000000000  /* 29: disk controller 3 finished (wired) */
 #define GRP_CHAN4_FREE 00000001000000000  /* 28: disk controller 4 finished (wired) */
+
+/*
+ * A wired bit belonging to a device this kernel does NOT drive: tape channel 5.  It is here
+ * for kernel/test/ugrp, whose part 1 forges a wired bit to prove extintr()'s fallback probe
+ * disarms rather than spins on one -- which needs a bit with no handler, or the test
+ * exercises the handler instead of the probe.  That test has now been evicted twice: it
+ * started on GRP_DRUM1_FREE, moved to GRP_CHAN3_FREE when task 18b.3 gave the drum bits a
+ * handler, and moved here when 18b.4 gave the disk bits one.  Nothing in this kernel can
+ * raise a tape bit, so there is no third eviction coming.
+ */
+#define GRP_CHAN5_FREE 00000000400000000 /* 27: tape channel 5 free (wired, undriven) */
 
 /*
  * The fault bits of ГРП: how an INTERNAL interrupt (vector 0500) says what went wrong.

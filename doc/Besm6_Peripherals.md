@@ -456,9 +456,17 @@ via `033 4035` and return without transferring.
 
 ## Magnetic disks (МД / КМД)
 
-**SIMH device:** `MD0`–`MD7` (8 controllers × 8 units). **Source:** [besm6_disk.c](https://github.com/besm6/simh/blob/master/BESM6/besm6_disk.c).
+**SIMH devices:** `MD0`–`MD7`, 8 units each. **Source:** [besm6_disk.c](https://github.com/besm6/simh/blob/master/BESM6/besm6_disk.c).
+
 **Addresses:** `033 3` / `033 4` (exchange control word), `033 023` / `033 024` (controller
 commands), `033 4003` / `033 4004` (status).
+
+There are **two КМД controllers, not eight**, and the eight SIMH devices are the *groups*
+(линейки) within them: `MD0`–`MD3` are the four groups of controller 3 (`033 3` / `033 023`),
+`MD4`–`MD7` those of controller 4. So the topology is **2 controllers × 4 groups × 8 drives = 64
+drives**, and `disk_ctl()` computes the global drive number as `ctlr * 32 + group * 8 + drive`.
+A driver must therefore issue the *group*-select command before the unit select to reach anything
+outside `MD0`/`MD4`.
 
 The disk is the only device with a genuinely **two-step protocol**, and it is worth spelling out:
 
@@ -476,14 +484,23 @@ Decoded by `disk_io()` at [besm6_disk.c:683](https://github.com/besm6/simh/blob/
 |------|-----------|------|---------|
 | 27–24 | `0740000000` | `DISK_BLOCK` | Memory block number. |
 | 21 | `004000000` | `DISK_READ_SYSDATA` | Read the service words only. |
-| 19 | `001000000` | `DISK_PAGE_MODE` | **1** = whole page; **0** = half a page (one track). |
+| 19 | `001000000` | `DISK_PAGE_MODE` | **1** = whole page; **0** = half a page (one track) — but **ignored on a 29 MB drive**, which always transfers a whole zone. |
 | 18 | `000400000` | `DISK_READ` | **1** = disk → memory; **0** = memory → disk. |
 | 17–13 | `000370000` | `DISK_PAGE` | Memory page number. |
 | 12 | `000004000` | `DISK_HALFPAGE` | Which half of the page (track mode). |
-| 10–8 | `000001600` | `DISK_UNIT` | Unit number. |
-| 1 | `000000001` | `DISK_HALFZONE` | Which half of the zone. |
+| 10–8 | `000001600` | `DISK_UNIT` | Unit number — **dead**, see below. |
+| 1 | `000000001` | `DISK_HALFZONE` | Which half of the zone — **dead**, see below. |
 
 This call also lowers the controller's ГРП "channel free" bit and clears its error flag.
+
+> **Two of those fields are dead, and believing them costs a debugging session.** `DISK_UNIT` and
+> `DISK_HALFZONE` are declared in the simulator and read nowhere. The drive comes from the
+> unit-select command of step 2, and which half of the zone is transferred comes from **bit 1 of
+> the step-2 track-address command** (`c->track = cmd & 1`), not from the control word. A driver
+> that sets `DISK_HALFZONE` gets the wrong half with no diagnostic.
+>
+> `DISK_HALFPAGE` (bit 12) *is* live, but it names the half of the **memory page** — an
+> independent choice from the half of the zone.
 
 ### Step 2 — controller commands (`033 023`, `033 024`)
 
@@ -493,10 +510,20 @@ the top down:
 | Test | Meaning |
 |------|---------|
 | bit 12 set | **Supply the track address — and perform the transfer.** For a 29 MB drive the zone is `(cmd & BITS(11)) << 1`; for a 7.25 MB drive the zone is `(cmd >> 1) & BITS(10)` and bit 1 selects the track. |
-| bit 11 set | **Select a unit.** Bits 1–8 are a **one-hot** unit mask, but inverted in order: bit 8 → unit 0, bit 7 → unit 1, … bit 1 → unit 7. Bit 10 additionally supplies the low bit of the track number on 29 MB drives. |
+| bit 11 set | **Select a unit.** Bits 1–8 are a **one-hot** drive mask: bit 1 → drive 0, bit 2 → drive 1, … bit 8 → drive 7, i.e. `1 << drive`, with the highest set bit winning. Bit 10 additionally supplies the low bit of the *zone* number on 29 MB drives. Selecting a unit **raises** the ГРП free bit. |
 | bit 9 set, `(cmd & 01774) == 01400` | **Select a group** (линейка); bits 1–2 give the group number 0–3. |
 | `cmd == 011050` | **Release the group** — reset to group 0, no unit selected. |
 | otherwise | A **6-bit command** in bits 1–6; see the table below. |
+
+> **The bit order is not inverted, whatever the simulator's own comment says.** The comment above
+> that code in `besm6_disk.c` reads "бит 8 — устройство 0 … бит 1 — устройство 7"; the code
+> directly beneath it tests `BBIT(8)` → drive 7 down to `BBIT(1)` → drive 0. Earlier revisions of
+> this document reproduced the comment. The code is what the machine does.
+
+> **Group select also raises the ГРП free bit**, and it invalidates the current unit selection
+> (the controller's drive number goes back to "none"). Only the step-1 control word lowers the
+> bit. A driver that arms МГРП after issuing its selects therefore arms on a bit that is already
+> standing; `kernel/dev/md.c` issues both selects *before* the control word for that reason.
 
 The 6-bit commands (`cmd & 077`):
 
@@ -547,10 +574,40 @@ simulated. Bit layout at [besm6_disk.c:47](https://github.com/besm6/simh/blob/ma
 Of these the simulator actually sets only `STATUS_READY` (in response to command `011`) and
 `STATUS_ABSENT` / `STATUS_POWERUP` / `STATUS_READONLY` (in response to `031`, shifted right by 12).
 
+### A drive that is not attached never interrupts
+
+The bit-12 track-address command to a disabled or unattached unit sets the controller's bit in the
+`033 4035` error mask (`020 >> n`) and **returns without scheduling a completion** — no ГРП bit
+ever arrives. A driver that does not poll that mask after the command waits forever, so the poll
+is not optional. This is the same failure mode the drums have, and for the same reason.
+
 ### Interrupts and service words
 
 Controller *n* uses ГРП bit `GRP_CHAN3_FREE >> n` — that is, controller 3 uses bit 29, controller 4
 bit 28. The 8 service words of a zone land at memory `030 + 8n`.
+
+In **half-zone (track) mode only four of the eight are touched**, at offset `4 * track` within the
+buffer: words `030`–`033` for track 0 and `034`–`037` for track 1 on controller 3. A whole-zone
+transfer moves all eight.
+
+### Drive types
+
+Two, set per SIMH device (i.e. per group) with `set mdN ec-5052` / `set mdN ec-5061`, and only
+while no unit of that device is attached:
+
+| | ЕС-5052 (7.25 Mb) | ЕС-5061 (29 Mb) |
+|---|---|---|
+| default | **yes** | no |
+| zone from the bit-12 command | `(cmd >> 1) & BITS(10)`, 10 bits | `(cmd & BITS(11)) << 1`, with the low bit from bit 10 of the *unit-select* command |
+| half-zone (track) transfers | yes, 512 words when `DISK_PAGE_MODE` is clear | **no** — always a whole 1024-word zone |
+| zones formatted by `attach -n` | 1000 | 4000 |
+
+The zone *field* addresses more than is formatted (1024 and 4096 respectively); reading past the
+formatted extent sets the error mask rather than failing some other way.
+
+Note the trap in the 29 Mb column: with `DISK_PAGE_MODE` clear the controller still applies the
+`DISK_HALFPAGE` offset to the memory address while transferring a full 1024 words, so the transfer
+straddles the page boundary. On that drive type `DISK_PAGE_MODE` should always be set.
 
 ---
 

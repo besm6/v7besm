@@ -101,6 +101,11 @@ void mbintr(void)
     /* no drum driver here either; extintr() names it, nothing arms its bits */
 }
 
+void mdintr(void)
+{
+    /* nor a disk driver; likewise named by extintr() and likewise never reached */
+}
+
 int main()
 {
     int s;

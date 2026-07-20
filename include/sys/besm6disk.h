@@ -63,9 +63,21 @@
 
 /*
  * Disk-only fields (033 3, 033 4).
+ *
+ * DISK_HALFZONE is a TRAP, and is named here only so that nobody re-derives it from the
+ * hardware documentation and uses it.  The bit exists in the field layout, but the
+ * simulator declares it and reads it nowhere: which half of the zone is transferred comes
+ * from bit 1 of the SECOND step's track-address command (`c->track = cmd & 1' in
+ * disk_ctl(), besm6_disk.c), not from the control word.  A driver that sets it here gets
+ * the wrong half and no diagnostic.  dev/md.c builds the half-zone into MDCMD_TRACK, where
+ * it belongs.  Same story for CW_UNIT above, on the disk: the unit comes from the
+ * controller's unit-select command, and the field in the control word is dead.
+ *
+ * DISK_HALFPAGE, by contrast, is live and does exactly what it says -- but it names the
+ * half of the MEMORY page, which is an independent choice from the half of the zone.
  */
-#define DISK_HALFPAGE 000004000 /* 12: which half of the page, when not PAGE_MODE */
-#define DISK_HALFZONE 000000001 /*  1: which half of the zone */
+#define DISK_HALFPAGE 000004000 /* 12: which half of the memory page, when not PAGE_MODE */
+#define DISK_HALFZONE 000000001 /*  1: DEAD -- see above; use MDCMD_TRACK's bit 1 */
 
 /*
  * A zone is 8 service words plus 1 Kword of data.  The data goes where the control word

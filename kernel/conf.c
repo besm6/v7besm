@@ -61,12 +61,18 @@ struct linesw linesw[] = {
 };
 
 /*
- * XXX minor 56 is an x86 partition number that nothing on this machine interprets --
- * mdstrategy() ignores b_dev entirely.  Task 18b.4 derives the real unit/partition map.
+ * The disk minor number is a flat drive index -- bit 5 the controller, bits 4-3 the group
+ * (линейка), bits 2-0 the drive -- chosen to be identical to the simulator's own unit
+ * subscript, so that a minor number and a SIMH unit name are the same number.  There are no
+ * partitions: one drive is 2000 blocks, about 6 Mb, and swap is on the drums.  So minor 0 is
+ * controller 3, group 0, drive 0 = SIMH's MD0 unit 0.  dev/md.c has the layout in full.
+ *
+ * This replaces minor 56, which was an x86 MBR partition slot inherited from hd.c and which
+ * nothing on this machine ever interpreted.
  */
-dev_t rootdev = makedev(0, 56);
+dev_t rootdev = makedev(0, 0);
 dev_t swapdev = makedev(1, 0); /* the drums are the paging store */
-dev_t pipedev = makedev(0, 56);
+dev_t pipedev = makedev(0, 0);
 int nldisp    = 1;
 /*
  * The whole of both drums is swap space: 2 drums * 256 zones * 2 blocks = 1024 blocks,

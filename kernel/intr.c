@@ -32,6 +32,7 @@
 
 void scintr(void);
 void mbintr(void); /* the drum driver's half of the dispatch below (kernel/dev/mb.c) */
+void mdintr(void); /* and the disk driver's (kernel/dev/md.c) */
 
 /*
  * The frame the 0501 gate built, and the handler that wants it.  besm6.S publishes the
@@ -309,6 +310,16 @@ void extintr(void)
              * One drum at a time, so it needs no argument to tell it which.
              */
             mbintr();
+            continue;
+        }
+        if (grp & (GRP_CHAN3_FREE | GRP_CHAN4_FREE)) {
+            /*
+             * A disk exchange finished.  Wired in the same way as the drum bits above, and
+             * dismissed the same way -- by the next control word mdintr() causes to be
+             * issued, or by its mgrpoff() when there is no next one (kernel/dev/md.c).
+             * One controller at a time, so it needs no argument to tell it which.
+             */
+            mdintr();
             continue;
         }
         /*

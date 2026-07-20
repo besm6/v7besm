@@ -133,6 +133,16 @@ void scintr(void)
 }
 
 /*
+ * extintr()'s disk arm.  md.o is not linked here -- this test is the drum's -- and no disk
+ * bit is ever forged or armed, so like scintr() it must never run.  kernel/test/mdtest is
+ * the mirror image: it links the real md.o and stubs mbintr() instead.
+ */
+void mdintr(void)
+{
+    nclock--;
+}
+
+/*
  * mbread()/mbwrite() name it.  Nothing here goes through the raw path -- physio() would
  * drag in the whole buffer layer and a u-area with a real u_offset -- so this is a stub
  * that must never run.
@@ -373,9 +383,10 @@ int main(void)
      * mbintr()'s idle guard is the only thing that can end this loop.
      *
      * ugrp used to hold this ground with the same forged bit.  Task 18b.3 gave the bit a
-     * handler, so ugrp moved to GRP_CHAN3_FREE to go on testing extintr()'s own fallback
-     * probe, and the drum half of it belongs here now -- with the real mb.o linked, which
-     * ugrp does not have.
+     * handler, so ugrp moved on to go on testing extintr()'s own fallback probe -- first to
+     * GRP_CHAN3_FREE and then, when 18b.4 claimed that one too, to a tape bit -- and the
+     * drum half of it belongs here now, with the real mb.o linked, which ugrp does not have.
+     * kernel/test/mdtest holds the same ground for the disk.
      */
     __besm6_ext(EXT_GRPSET, (unsigned)(GRP_DRUM1_FREE >> 24));
     mgrpon(GRP_DRUM1_FREE);
