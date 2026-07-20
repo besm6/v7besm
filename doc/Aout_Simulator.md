@@ -114,21 +114,36 @@ The `$77 N` trap stands in for the called function, so it also performs the call
 cleanup: on return it decrements `r15` by *N*−1 — the number of arguments the caller pushed
 below `r15` (the *N*th argument travelled in the accumulator and was never pushed). Calls with
 0 or 1 arguments leave `r15` unchanged. Because `r14` is ignored, `b6sim` derives *N* from the
-syscall number itself (each v7 syscall has a fixed arity). This means naked syscall stubs such
-as [`putch.s`](../cmd/sim/tmp/putch.s) — just `$77 N` followed by `13 uj` — need no
-`c/save`/`c/ret` frame to keep the caller's stack balanced.
+syscall number itself (each v7 syscall has a fixed arity). This means a naked syscall stub —
+just `$77 N` followed by `13 uj`, as in [`putch.s`](../cmd/sim/tmp/putch.s) — needs no
+`c/save`/`c/ret` frame to keep the caller's stack balanced. It does, however, have to place the
+extracode carefully:
 
-> **Known divergence from the real machine: the half-word after `$77`.**
-> `b6sim` services `$77` **inline** and carries straight on to the next half-instruction. The
-> real BESM-6 does not: an extracode vectors to `0550`–`0577` and its return register ERET holds
-> a **word** address (`PC + 1`) with no right-instruction indicator, so `выпр` always resumes at
-> the **left half of the next word** — whichever half the extracode itself was in — and anything
-> packed after it in the same word is never executed. See
+> **The half-word after `$77` is discarded.**
+> An extracode vectors to `0550`–`0577` and its return register ERET holds a **word** address
+> (`PC + 1`) with no right-instruction indicator, so `выпр` always resumes at the **left half of
+> the next word** — whichever half the extracode itself was in — and anything packed after it in
+> the same word is never executed. `b6sim` models this. See
 > [Dubna_Context_Switch.md](Dubna_Context_Switch.md) §9 and
-> [Unix_Context_Switch.md](Unix_Context_Switch.md) §8. `putch.s` above is exactly the shape that breaks:
-> with `$77 4` in the left half, its `13 uj` is skipped under the kernel while `b6sim` runs it.
-> Until `b6sim` models this, **do not pack a live instruction after `$77 N` in its word** — the
-> easy way being to put the extracode in the right half — and a stub will behave the same on both.
+> [Unix_Context_Switch.md](Unix_Context_Switch.md) §8.
+>
+> This is a property of the hardware, not of the simulator, so it constrains every caller:
+> **do not pack a live instruction after `$77 N` in its word.** The assembler packs two
+> instructions per word, left half first, and a label forces a word boundary — so what decides
+> the half is the instruction count since that boundary. An odd count leaves the extracode in
+> the right half, where nothing can follow it. When the count does not work out, a `10 utm 0`
+> no-op before the extracode pushes it there; that is what
+> [`kernel/test/crt0s.S`](../kernel/test/crt0s.S) does before each of its `$77`s. A bare label
+> will *not* do the job: text padding is `utc 0`, which loads M16 rather than doing nothing.
+>
+> The stub referred to above is the shape that gets this wrong —
+>
+> ```asm
+> putch:  $77 4           // LEFT half
+>      13 uj              // RIGHT half -- LOST
+> ```
+>
+> — and falls straight through its own return, on the real machine and under `b6sim` alike.
 
 There is not yet a real C startup object (`crt0`) or `libc` in the project, so `b6sim`
 supplies the bare minimum a program needs to start: when it loads an executable it points the

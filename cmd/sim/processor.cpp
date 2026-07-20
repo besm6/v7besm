@@ -507,6 +507,18 @@ bool Processor::step()
         // Only extracode 077 is valid in user mode: the Unix v7 syscall trap
         // (see syscall.cpp).  The syscall number is the executive address.
         Aex = ADDR(addr + core.M[reg]);
+
+        // An extracode returns to the LEFT HALF OF THE NEXT WORD, whichever half
+        // it occupied itself: the hardware return register ERET holds a word
+        // address (PC+1) with no right-instruction indicator, so an instruction
+        // packed after the extracode in its own word is never executed.
+        // See doc/Dubna_Context_Switch.md §9, doc/Unix_Context_Switch.md §8.
+        //
+        // This must precede syscall(): SYS_exec/SYS_exece reload the image and
+        // install a new entry PC, which we must not clobber.
+        core.PC               = nextpc;
+        core.right_instr_flag = false;
+
         syscall(Aex);
         core.set_logical();
         break;

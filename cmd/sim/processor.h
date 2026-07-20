@@ -134,8 +134,13 @@ public:
     // Finalize the processor.
     void finish();
 
-    // Set register value.
-    void set_pc(unsigned val) { core.PC = val; }
+    // Set register value.  Setting the PC from outside names a word, so it
+    // always resumes at the left half -- as every branch on this machine does.
+    void set_pc(unsigned val)
+    {
+        core.PC               = val;
+        core.right_instr_flag = false;
+    }
     void set_m(unsigned index, unsigned val) { core.M[index] = val; }
     void set_rau(unsigned val) { core.RAU = val; }
     void set_acc(Word val) { core.ACC = val; }

@@ -119,7 +119,10 @@ static void run_syscall(Machine &m, unsigned num, const std::vector<Word> &stack
         m.memory.store(STACK + i, stackargs[i]);
     m.cpu.set_m(017, STACK + stackargs.size());
     m.cpu.set_acc(acc);
-    m.memory.store(ENTRY, word(syscall_insn(num), stop_insn()));
+    // The extracode returns to the LEFT half of the next word, so the halt goes
+    // there; the right half beside the $77 is inert padding that never runs.
+    m.memory.store(ENTRY, word(syscall_insn(num), 0));
+    m.memory.store(ENTRY + 1, word(stop_insn(), 0));
     m.cpu.set_pc(ENTRY);
     m.run();
 }
@@ -424,7 +427,8 @@ TEST(Syscall, Break)
     auto run_break = [&](Word addr) {
         machine.cpu.set_m(017, STACK_BASE);
         machine.cpu.set_acc(addr);
-        machine.memory.store(ENTRY, word(syscall_insn(SYS_break), stop_insn()));
+        machine.memory.store(ENTRY, word(syscall_insn(SYS_break), 0));
+        machine.memory.store(ENTRY + 1, word(stop_insn(), 0));
         machine.cpu.set_pc(ENTRY);
         machine.run();
     };
@@ -505,6 +509,50 @@ TEST(Syscall, UnimplementedTerminates)
     machine.cpu.set_pc(ENTRY);
 
     EXPECT_THROW(machine.run(), std::runtime_error);
+}
+
+//
+// An extracode returns to the LEFT HALF of the next word, whichever half it
+// occupied: an instruction packed beside a left-half extracode never executes.
+// See doc/Dubna_Context_Switch.md §9.
+//
+TEST(Cpu, ExtracodeReturnsToLeftHalfOfNextWord)
+{
+    Memory memory;
+    Machine machine{ memory };
+
+    // ENTRY:     $77 20 (getpid) | stop   <- the stop must NOT execute
+    // ENTRY + 1: 13 vtm 077      | stop   <- execution must resume here
+    memory.store(ENTRY, word(syscall_insn(SYS_getpid), stop_insn()));
+    memory.store(ENTRY + 1, word(insn(013, 0240, 077), stop_insn()));
+    machine.cpu.set_pc(ENTRY);
+    machine.run();
+
+    // Had the right half beside the extracode run, the machine would have
+    // halted there and M[11] would still be 0.
+    EXPECT_EQ(machine.cpu.get_m(11), 077u);
+    EXPECT_EQ(machine.cpu.get_m(14), 0u); // getpid succeeded
+}
+
+//
+// An extracode in a RIGHT half is unaffected: the same rule lands it on the next
+// word, which is where the plain half-step would have gone anyway.
+//
+TEST(Cpu, ExtracodeInRightHalfReturnsToNextWord)
+{
+    Memory memory;
+    Machine machine{ memory };
+
+    // ENTRY:     13 vtm 011 | $77 20 (getpid)
+    // ENTRY + 1: 12 vtm 022 | stop
+    memory.store(ENTRY, word(insn(013, 0240, 011), syscall_insn(SYS_getpid)));
+    memory.store(ENTRY + 1, word(insn(012, 0240, 022), stop_insn()));
+    machine.cpu.set_pc(ENTRY);
+    machine.run();
+
+    EXPECT_EQ(machine.cpu.get_m(11), 011u); // ran before the extracode
+    EXPECT_EQ(machine.cpu.get_m(10), 022u); // ran after it
+    EXPECT_EQ(machine.cpu.get_m(14), 0u);
 }
 
 //

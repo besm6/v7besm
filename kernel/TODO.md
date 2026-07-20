@@ -230,12 +230,6 @@ Loose ends the finished work left behind. None blocks 18.
 * **`addupc()` is a stub**, so `profil()` is inert. Was nominally task 17; left there.
 * **`time` is never seeded from a wall clock.** The x86 CMOS RTC path is gone and this machine has
   no clock-calendar a program can read, so the epoch starts at 0.
-* **`b6sim` does not model the extracode left-half return.** An extracode returns to the *left half
-  of the next word* on the real machine, so an instruction packed beside one in a left half is never
-  executed; `b6sim` services `$77` inline and continues to the next half-instruction. See
-  `../doc/Aout_Simulator.md` §3, `../doc/Dubna_Context_Switch.md` §9 and
-  `../doc/Unix_Context_Switch.md` §8. Closing it means auditing every existing `$77` stub for
-  what follows it.
 * **`sy_nrarg` is read nowhere** and is documented as vestigial: exactly one argument arrives in a
   register on this machine, for any `narg >= 1`.
 
