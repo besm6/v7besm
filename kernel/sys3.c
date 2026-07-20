@@ -175,6 +175,12 @@ void smount()
         brelse(bp);
         goto out1;
     }
+    /* Refuse it here rather than let getfs() "repair" it into a full disk later. */
+    if (sbcheck(bp->b_un.b_filsys, dev)) {
+        brelse(bp);
+        u.u_error = EINVAL;
+        goto out1;
+    }
     mp->m_inodp = ip;
     mp->m_dev   = dev;
     mp->m_bufp  = geteblk();

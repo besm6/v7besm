@@ -452,3 +452,52 @@ Two things worth knowing next time:
 
 Still absent, and now the blocker for task 18b.6: **there is no `mkfs`**. Nothing in `cmd/`
 writes this layout, so the boot still stops at `panic: iinit`, which remains the correct outcome.
+
+### DONE: the superblock
+
+`struct filsys` is **exactly one block — 512 words**, and `_Static_assert` holds it there.
+
+v7's layout came to **165 words**, wasting 68% of the block, because `NICINOD 100` and
+`NICFREE 50` were sized for a 512-*byte* block and were never retuned. Filling the block is
+nearly free: the superblock lives in a `geteblk()` buffer held for the life of the mount, and a
+buffer is `BSIZEW` words whether the struct uses them or not. `NICFREE` is now **320** and
+`NICINOD` **160** — split 2:1 toward free blocks because that is the hot path (every write
+allocates blocks; only `creat()` allocates inodes). The free-list chain on a 2000-block drive
+goes from 40 blocks deep to 7.
+
+The lock and flag fields are **`int`, not v7's `char`**. A char *array* packs six to a word, but
+whether adjacent scalar `char` members share one is documented nowhere in `doc/` — and the size
+of this struct is now load-bearing. `int` removes the question rather than depending on the
+answer.
+
+Sizing it to the block fixed a real bug rather than merely tidying: `iinit()` copied
+`btow(sizeof(struct filsys))` = 165 words into a fresh buffer, while `update()` wrote `BSIZEW` =
+512 words of that buffer back to block 1. **347 words of uninitialised buffer went to the disk on
+every sync.** Now the two agree by construction, and the assertion is what keeps them agreeing.
+Two smaller ones went with it: `free()` built its chain block with `getblk()` and no `clrbuf()`,
+so everything past `df_free[]` was stale kernel memory written to disk; and `struct fblk` had
+never been asserted to fit a block, though `alloc()`/`free()` `wcopy()` between it and `s_free[]`
+sizing the copy from the `filsys` side.
+
+**`sbcheck()` (`alloc.c`) is new, and v7 has no equivalent.** It checks `FS_MAGIC`, then the
+geometry words `s_bsize`/`s_inopb`/`s_naddr` against the kernel's own `BSIZEW`/`INOPB`/`NADDR`,
+then `SUPERB < s_isize < s_fsize`, then the two counts. `iinit()` calls it before installing the
+superblock and before seeding the clock from `s_time`; `smount()` calls it and fails `EINVAL`.
+The geometry words are not ceremony — `INOPB` went 8 → 32 and `NADDR` 13 → 8 one commit ago, and
+an image from a `mkfs` one generation out of step would otherwise mount cleanly and read every
+inode from the wrong offset.
+
+Two things did **not** turn out as planned, and both matter for task 18b.6:
+
+* **`sbcheck()` is still unexercised at runtime.** The plan expected the boot panic to change
+  from `iinit` to `no root fs`. It does not: with no disk attached, `bread()` fails first
+  (`err on dev 0/0`) and `iinit()` panics before `sbcheck()` is ever reached. The boot is
+  therefore byte-for-byte unchanged, which is good for regression but means the new code path
+  has only been compiled, not run.
+* **Booting with a root disk attached HANGS**, and this is *pre-existing* — verified by running
+  the same image against the previous commit, which hangs identically. Attach a formatted disk
+  as `md00` (`attach -n md00 <name>2053.disk`; the filename must carry a volume number in
+  2048..4095) and the kernel prints `mem = ...` and then stops, with no panic and no further
+  output. So `bread()` on an *attached* root disk never completes. Whoever picks up 18b.6 will
+  hit this before they hit anything about the filesystem layout — it is a driver or boot-path
+  problem, not a format one.

@@ -129,6 +129,8 @@ void main()
  *
  * panic: iinit -- cannot read the super
  * block. Usually because of an IO error.
+ * panic: no root fs -- block 1 was read, but
+ * it is not a superblock this kernel can use.
  */
 void iinit()
 {
@@ -140,6 +142,20 @@ void iinit()
     cp = geteblk();
     if (u.u_error)
         panic("iinit");
+    /*
+     * Check it BEFORE it is installed in mount[0] and before the clock is set from
+     * s_time below: v7 did neither, so a garbage root ran the system on a garbage
+     * date and was only noticed once something tried to allocate.
+     */
+    if (sbcheck(bp->b_un.b_filsys, rootdev))
+        panic("no root fs");
+    /*
+     * btow(sizeof(struct filsys)) is BSIZEW now that the superblock is exactly one
+     * block, which is what makes this agree with update()'s BSIZEW write-back.  It
+     * used to copy 165 words into a buffer whose other 347 update() then wrote to
+     * the disk unread.  Left derived rather than spelled BSIZEW so it stays honest
+     * if the struct ever changes; filsys.h asserts the two are the same.
+     */
     wcopy(bp->b_un.b_addr, cp->b_un.b_addr, btow(sizeof(struct filsys)));
     brelse(bp);
     mount[0].m_bufp = cp;

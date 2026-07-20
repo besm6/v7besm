@@ -20,6 +20,7 @@ typedef struct fblk *FBLKP;
 int updlock; /* lock for sync */
 
 int badblock(register struct filsys *fp, daddr_t bn, dev_t dev);
+int sbcheck(register struct filsys *fp, dev_t dev);
 
 /*
  * alloc will obtain the next available
@@ -100,7 +101,14 @@ void free(dev_t dev, daddr_t bno)
     }
     if (fp->s_nfree >= NICFREE) {
         fp->s_flock++;
-        bp                                   = getblk(dev, bno);
+        bp = getblk(dev, bno);
+        /*
+         * getblk() does not read, so the buffer still holds whatever it held last.
+         * Only 1 + NICFREE of its 512 words are about to be filled in, and without
+         * this the remaining 191 would be written to the disk as they stand -- old
+         * kernel memory, on every chain block the filesystem ever grows.
+         */
+        clrbuf(bp);
         ((FBLKP)(bp->b_un.b_addr))->df_nfree = fp->s_nfree;
         wcopy((caddr_t)fp->s_free, (caddr_t)((FBLKP)(bp->b_un.b_addr))->df_free,
               btow(sizeof(fp->s_free)));
@@ -126,6 +134,46 @@ int badblock(register struct filsys *fp, daddr_t bn, dev_t dev)
 {
     if (bn < fp->s_isize || bn >= fp->s_fsize) {
         prdev("bad block", dev);
+        return (1);
+    }
+    return (0);
+}
+
+/*
+ * Is this block plausibly a superblock for THIS kernel?  Returns 0 if so, 1 if not.
+ *
+ * v7 has no such test: iinit() and smount() copy block 1 in and believe it, so a
+ * garbage block mounts silently and the first symptom is badblock(), or getfs()'s
+ * "bad count" -- which "repairs" the superblock by zeroing both counts, turning
+ * garbage into a plausible-looking full filesystem.  iinit() even sets the system
+ * clock from an unchecked s_time.
+ *
+ * The geometry words are not ceremony.  These constants are actively in flux in
+ * this port -- INOPB went 8 -> 32 and NADDR 13 -> 8 one commit ago -- and an image
+ * built by a mkfs one generation out of step would otherwise mount perfectly well
+ * and read every inode from the wrong offset.
+ */
+int sbcheck(register struct filsys *fp, dev_t dev)
+{
+    if (fp->s_magic != FS_MAGIC) {
+        prdev("not a filesystem", dev);
+        return (1);
+    }
+    if (fp->s_bsize != BSIZEW || fp->s_inopb != INOPB || fp->s_naddr != NADDR) {
+        prdev("filesystem geometry mismatch", dev);
+        return (1);
+    }
+    /*
+     * The i-list starts just past the superblock and must end before the volume
+     * does.  s_isize bounds ialloc()'s scan loop, so a garbage value here is a
+     * runaway read, not merely a wrong answer.
+     */
+    if (fp->s_isize <= SUPERB || fp->s_isize >= fp->s_fsize) {
+        prdev("bad filesystem size", dev);
+        return (1);
+    }
+    if (fp->s_nfree < 0 || fp->s_nfree > NICFREE || fp->s_ninode < 0 || fp->s_ninode > NICINOD) {
+        prdev("bad free count", dev);
         return (1);
     }
     return (0);

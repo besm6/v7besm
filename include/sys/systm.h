@@ -73,6 +73,7 @@ struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
 void bawrite(struct buf *bp);
 void brelse(struct buf *bp);
 struct filsys *getfs(dev_t dev);
+int sbcheck(struct filsys *fp, dev_t dev); /* 0 = plausible superblock, 1 = reject */
 struct file *getf(int f);
 struct file *falloc(void);
 int uchar(void);

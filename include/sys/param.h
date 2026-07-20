@@ -95,8 +95,34 @@
 #define NODEV   (dev_t)(-1)  /* no device */
 #define ROOTINO ((ino_t)2)   /* i number of all roots */
 #define SUPERB  ((daddr_t)1) /* block number of the super block */
-#define NICINOD 100          /* number of superblock inodes */
-#define NICFREE 50           /* number of superblock free blocks */
+
+/*
+ * The superblock's two caches, sys/filsys.h.  v7's 100 and 50 were sized for a
+ * 512-BYTE block and were never retuned when a block became 512 WORDS: the struct
+ * came to 165 words and wasted 68% of the block it sits in.  Filling that block is
+ * nearly free -- the superblock lives in a geteblk() buffer held for the life of
+ * the mount, and a buffer is BSIZEW words whether the struct uses them or not.
+ *
+ * The split is 2:1 toward free BLOCKS because that is the hot path: every write
+ * allocates blocks, only creat() allocates inodes.  On a 2000-block drive it takes
+ * the free-list chain from 40 blocks deep to 7.
+ *
+ * NICFREE IS BOUNDED ON TWO SIDES, and both are asserted rather than trusted:
+ *   - struct fblk is 1 + NICFREE words and must fit a block (sys/fblk.h).
+ *   - struct filsys must total exactly BSIZEW words (sys/filsys.h).
+ * alloc() and free() wcopy() between s_free[] and df_free[] sizing the copy from
+ * the filsys side, so the two NICFREEs are the same constant by necessity.
+ */
+#define NICINOD 160 /* number of superblock inodes */
+#define NICFREE 320 /* number of superblock free blocks */
+
+/*
+ * Superblock magic.  v7 has none, so a garbage block mounts silently and the first
+ * symptom is getfs()'s "bad count" -- which "repairs" it by zeroing the counts.
+ * Deliberate and unmistakable in an octal dump; 39 bits, so it fits the 40-bit
+ * value field with room to spare.  See sbcheck() in kernel/alloc.c.
+ */
+#define FS_MAGIC 0123456701234
 
 /*
  * There is no BSHIFT/BMASK, and there cannot be: a block is BSIZE == 3072 BYTES,
