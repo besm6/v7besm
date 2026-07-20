@@ -18,8 +18,8 @@
 // clang-format on
 
 extern int edata[], end[]; /* bss spans [edata, end); b6ld defines both boundaries */
-extern int phymem;         /* physical memory size in words (defined in besm6.S) */
 
+int phymem;  /* physical memory size in words; startup() frees it into coremap */
 time_t time; /* time in sec from 1970 */
 int nblkdev;
 int dk_busy;

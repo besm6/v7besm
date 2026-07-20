@@ -13,7 +13,7 @@
  * The drum and the disk share the whole upper half of the layout -- CW_BLOCK, CW_PAGE,
  * CW_READ, CW_PAGE_MODE, CW_UNIT are the same bits in the same places on both -- which is
  * what makes one header sensible even though the two devices get separate drivers
- * (dev/mb.c and dev/md.c; the reasoning is under task 18b in kernel/TODO.md).
+ * (dev/mb.c and dev/md.c, whose headers carry the reasoning).
  *
  * Addresses and bit values are OCTAL; bits are numbered right-to-left from 1, so bit N
  * has the value 2^(N-1).  See doc/Besm6_Peripherals.md, "Magnetic drums" and "Magnetic

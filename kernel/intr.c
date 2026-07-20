@@ -66,9 +66,10 @@ void clock(struct trap *tr);
  *   МГРП is the SOURCE ENABLE.  extintr()'s `grp & mgrp' means "sources this kernel is
  *   listening to right now", which is what that mask was always for.  It is NOT constant:
  *   intrinit() arms the sources that are always live (IRQ_ON), and a driver arms its own
- *   completion bit for the duration of one exchange with mgrpon()/mgrpoff() below.  Task
- *   18b.2 in kernel/TODO.md is why -- the mass-storage "free" bits are WIRED and mean
- *   IDLE, so one left standing in МГРП wedges extintr() the moment the device goes quiet.
+ *   completion bit for the duration of one exchange with mgrpon()/mgrpoff() below.  The
+ *   comment at GRP_DRUM1_FREE in sys/besm6dev.h is why -- the mass-storage "free" bits are
+ *   WIRED and mean IDLE, so one left standing in МГРП wedges extintr() the moment the
+ *   device goes quiet.
  *
  * setipl() still does not touch МГРП, and must not start to.  The level is БлПр alone;
  * making it a per-level МГРП table again would cost a 002 036 write on every spl() and buy

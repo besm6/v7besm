@@ -57,8 +57,7 @@
  * whole 1024-word zone every time, so a 512-word block would splatter over the next buffer;
  * it also splits the zone number across two commands.  Making a filesystem block a whole
  * zone would suit that drive, and include/sys/param.h's own BSIZE comment ("6144 for besm")
- * anticipates it, but it is a filesystem-wide change and not this task's.  kernel/TODO.md
- * under 18b.4 records the reasoning.
+ * anticipates it, but it is a filesystem-wide change and not this driver's.
  *
  * GEOMETRY.  A zone is 8 service words plus 1 Kword of data, and on this drive a zone
  * transfers either whole (CW_PAGE_MODE) or as one half-zone "track" of 512 words.  A
@@ -168,8 +167,8 @@
  * and a test for one would silently answer for the other.
  *
  * WHICH OF THESE SIMH ACTUALLY COMPUTES -- and the answer is not what the hardware
- * documentation, or doc/Besm6_Peripherals.md before this task, or kernel/TODO.md's sketch
- * of it, says.  Only two are usable:
+ * documentation says, nor what doc/Besm6_Peripherals.md said before this driver was
+ * written.  Only two are usable:
  *
  *   MDST_READY     from MDCMD_STATLO.  Correct: it tests UNIT_ATT.
  *   MDST_READONLY  from MDCMD_STATHI.  Correct: it tests UNIT_RO, on its own `if'.
@@ -256,7 +255,7 @@ static void mdstart(void);
  * and the selection outlives it; a query from anywhere else would need its own select first.
  *
  * Constant 033 addresses, branching on ctlr, for the reason mdstart() does the same: a
- * computed __besm6_ext() address is miscompiled by b6cc today (kernel/TODO.md, 18b.3).  The
+ * computed __besm6_ext() address is miscompiled by b6cc today (see mdstart() below).  The
  * COMMAND is an accumulator value, so it may be a variable.
  */
 static unsigned mdstat(unsigned ctlr, unsigned cmd)
@@ -371,8 +370,8 @@ static void mdstart(void)
          * intrinsic one inline instruction; a computed one is supposed to go through r14
          * instead, and b6cc gets that wrong today -- it emits `14 ext 0' while leaving a
          * frame pointer in r14, so the exchange goes to whatever device that address lands
-         * on.  Verified by disassembly when the drum driver was written; see dev/mb.c and
-         * kernel/TODO.md under 18b.3.
+         * on.  Verified by disassembly when the drum driver was written; see dev/mb.c,
+         * which carries the same warning, and doc/Intrinsics.md on the computed form.
          *
          * The order is the one the header comment argues for: both selects (which RAISE the
          * free bit) before the control word (which lowers it), and the track address last.

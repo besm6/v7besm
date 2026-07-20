@@ -192,7 +192,8 @@ static void mbstart(void)
          * instead, and b6cc gets that wrong today -- it emits `14 ext 0' while leaving a
          * frame pointer in r14, so the exchange goes to whatever device that address lands
          * on (a tape controller, when this was first written).  Verified by disassembly and
-         * by stopping SIMH on the instruction; see kernel/TODO.md under 18b.3.
+         * by stopping SIMH on the instruction.  doc/Intrinsics.md documents the computed
+         * form as a fallback for addresses above 07777; it does not work today.
          */
         if (ctlr == 0)
             __besm6_ext(EXT_DRUM1, cw);

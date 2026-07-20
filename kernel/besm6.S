@@ -159,29 +159,12 @@ intrframe: .word 0              // struct trap * -- valid only inside `intrgate'
 
 // _start -- first instruction executed by the kernel.
 //
-// On x86 this brings the CPU from real mode into paged 32-bit protected mode,
-// clears BSS, sizes physical memory (into `phymem`), builds the initial page
-// tables / GDT / IDT, programs the interrupt controller and timer, sets up the
-// per-process u-area and kernel stack, then `call main` and finally drops into
-// user mode running the `icode` bootstrap.
-//
-// TODO: implement BESM-6 bring-up.  The BESM-6 has no x86 real mode, no 8259/8253,
-// and a different MMU, so this is written from scratch.  The required *outputs* of
-// this phase are:
-//   * BSS zeroed, from `edata` up to `end`;
-//   * `phymem` set to the amount of physical memory found;
-//   * the u-area and kernel stack mapped, interrupt vector installed;
-//   * call main();  then enter user mode on the first process (icode).
-
 // _start is deliberately tiny.  Everything the boot phase must do that can be said
 // in C -- zeroing bss and publishing the memory size -- is done at the top of main()
 // (see kernel/main.c).  Only the two things that cannot are here: seeding the stack
 // pointer (r15) before any C runs, and calling main().  The machine resets into the
 // kernel's own mode already (supervisor, unmapped, interrupts off, faults halt --
 // doc/Memory_Mapping.md, "Reset state"), so there is nothing to set up.
-//
-// (bss is zeroed from C rather than here because the size, `end - edata', is a
-// difference of two linker externals that b6as will not assemble -- see main.c.)
 
         .text
         .globl  _start
@@ -596,66 +579,6 @@ intret:
       3 ij                          // return from interrupt via M[033]=IRET
 
 // ============================================================================
-// Interrupt priority level
-// ============================================================================
-//
-// spl0()..spl7() and splx() live in intr.c.  The level is БлПр (ПСВ bit 02000) and
-// nothing else: setipl() sets it to block and clears it to enable, so there are two
-// levels here rather than the PDP-11's eight, and the hardware maintains the level
-// across a gate by itself -- the vector forces БлПр on and `выпр' restores it from
-// СПСВ, which is what the PDP-11's `rtt' does with the priority field of PS.
-//
-// The one piece of it that IS assembly is not here either: БлПр lives in the mode word,
-// so setting it is a read-modify-write of ПСВ and not a `vtm' (which writes the whole
-// register and would clobber БлП/БлЗ along with it).  That is cli()/sti() in kernel/psw.s,
-// where kernel/test/ can link them -- the standing reason nothing testable lives in this
-// file.
-//
-// МГРП (002 036) is NOT the priority.  It is the source enable, and it is dynamic: a
-// driver arms its own completion bit for the length of one exchange, because the
-// mass-storage "free" bits are wired and mean IDLE.  See mgrpon()/mgrpoff() in intr.c.
-
-// ============================================================================
-// Context switch
-// ============================================================================
-//
-// save() and resume() -- and the `uhome' cell they run on -- live in kernel/switch.s,
-// not here, for the same reason as uarea.S/seg.S/usermem.S: kernel/test/uswtch links the
-// real switch, and besm6.o cannot enter a standalone test.  Note what resume() does and
-// does not do on this machine: it switches the U-AREA (a fixed physical page, so it must be
-// copied), never РП.  The map is reloaded by sureg() at the landing sites.  See switch.s.
-//
-// idle() is not in assembly at all.  There is no wait-for-interrupt instruction here -- the
-// only halt is 033 (стоп), which every simulator treats as "the run is over" -- so idling is
-// a spin, and with spl now masking БлПр (intr.c) there are no mode bits left for assembly to
-// poke.  It is ordinary C, next to spl0()/splx() in kernel/intr.c.
-
-// ============================================================================
-// Fault-safe access to user memory
-// ============================================================================
-//
-// fubyte/fuword/subyte/suword/copyin/copyout -- fetch/store a byte or word, or copy
-// a block, across the user/kernel boundary -- live in kernel/usermem.S, not here.
-// On this machine the user's map is already in РП, so the copy needs no window: it
-// just toggles БлП per word (read user mapped, store kernel unmapped, or the reverse)
-// and validates the range up front with useracc() -- there is no `nofault' path.  They
-// are in their own file for the same reason as uarea.S/seg.S: kernel/test/mmutest links
-// the real routines, and besm6.o cannot enter a standalone test.  See usermem.S.
-
-// ============================================================================
-// Floating-point state
-// ============================================================================
-//
-// x86's savfp/restfp/stst are gone with the u-area's FP block.  The BESM-6 has no
-// separate floating-point register file -- the accumulator does float -- so there is no
-// lazy FP context to save around a context switch, and nothing to restore.
-//
-// The arithmetic mode, however, does NOT ride in SPSW across a trap: SPSW carries only
-// БлП/БлЗ/БлПр and the supervisor bits.  The ω-mode and the NTR suppress bits live in the
-// mode register R, which the hardware neither saves nor restores; the trap gate saves R by
-// hand (see intrgate above, and doc/Unix_Context_Switch.md §1).
-
-// ============================================================================
 // Execution profiling
 // ============================================================================
 //
@@ -731,48 +654,8 @@ wz_dn:
      13 uj
 
 // ============================================================================
-// TLB, interrupt flag
-// ============================================================================
-//
-// void invd(void);   -- flush the TLB
-// void cli(void);    -- disable interrupts (block external interrupts)
-// void sti(void);    -- enable interrupts
-//
-// invd flushed the x86 address-translation cache after page-table edits (utab.c); on
-// the BESM-6 it is gone, not stubbed -- writing a page register refills the corresponding
-// TLB entries in the same instruction, so a stale translation cannot happen
-// (doc/Memory_Mapping.md).  The x86 control-register reads ld_cr0/2/3 went with the x86
-// panic dump in trap.c, and the x86 programmed-I/O primitives inb/outb/insw/outsw went
-// with the x86 device drivers: the BESM-6 has no port space, so a peripheral is reached
-// with 033 «увв» / 002 «рег» (doc/Besm6_Peripherals.md), not from here.
-//
-// cli/sti moved to kernel/psw.s.  They are no longer just "around short critical sequences":
-// setipl() (kernel/intr.c) is built on them, БлПр being this kernel's interrupt priority, so
-// every test that links intr.o needs them -- and besm6.o cannot enter a standalone test.
-
-        // invd is gone: on the BESM-6 `reg 020+i' refills the TLB as it writes RP,
-        // so a stale translation is not a state the machine can be in and there is
-        // nothing for utab.c to invalidate (doc/Memory_Mapping.md).
-
-// ============================================================================
 // Global variables and data
 // ============================================================================
-
-        .data
-
-// int phymem -- physical memory size in words (freed into coremap by startup()).
-// main() sets it at boot (kernel/main.c); the kernel runs unmapped and cannot probe
-// the store, so it is the fixed SIMH MEMSIZE rather than a scan.
-        .globl  phymem
-phymem: .word 0                  // set by main() during bring-up
-
-// x86's `waitloc' is gone, not stubbed.  It held the address of the idle `hlt' so clock()
-// could recognise a tick taken while idle by comparing the interrupted pc against it; this
-// machine has no halt to point at, and idle() is C, so the idle spin raises a plain flag
-// (`idling', kernel/intr.c) instead.  A flag is what v7 would have used had it had one --
-// it is exact, where a pc comparison has to be calibrated against what the hardware saves.
-
-// `uhome' moved to kernel/switch.s, with the code that maintains it.
 
 // struct user u -- the per-process user area: struct user at the bottom and the
 // kernel stack growing up from it to 0100000.  It is not in the user's map and it
