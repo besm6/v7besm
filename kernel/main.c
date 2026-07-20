@@ -22,9 +22,9 @@ int phymem;  /* physical memory size in words; startup() frees it into coremap *
 time_t time; /* time in sec from 1970 */
 int nblkdev;
 int dk_busy;
-long dk_numb[3];
-long dk_wds[3];
-long dk_time[32];
+int dk_numb[3];
+int dk_wds[3];
+int dk_time[32];
 struct mount mount[NMOUNT];
 struct inode *rootdir; /* pointer to inode of root directory */
 
@@ -76,7 +76,7 @@ void main()
      * set up system process
      */
 
-    proc[0].p_addr = NPAGE * PGSZ; /* 0100000: the first free word */
+    proc[0].p_addr = NPAGE * PGSZ;   /* 0100000: the first free word */
     uhome          = proc[0].p_addr; /* the live u-area at UBASE is proc[0]'s */
     proc[0].p_size = USIZE;
     proc[0].p_stat = SRUN;
@@ -109,7 +109,7 @@ void main()
 
     if (newproc()) {
         expand(USIZE + (int)pground(btow(szicode)));
-        estabur((unsigned)0, pground(btow(szicode)), (unsigned)0, 0, RO);
+        estabur(0, pground(btow(szicode)), 0, 0, RO);
         copyout((caddr_t)icode, (caddr_t)0, szicode);
         /*
          * Return goes to loc. 0 of user init

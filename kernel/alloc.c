@@ -40,7 +40,7 @@ struct buf *alloc(dev_t dev)
 
     fp = getfs(dev);
     while (fp->s_flock)
-        sleep((caddr_t)&fp->s_flock, PINOD);
+        sleep((chan_t)&fp->s_flock, PINOD);
     do {
         if (fp->s_nfree <= 0)
             goto nospace;
@@ -62,7 +62,7 @@ struct buf *alloc(dev_t dev)
         }
         brelse(bp);
         fp->s_flock = 0;
-        wakeup((caddr_t)&fp->s_flock);
+        wakeup((chan_t)&fp->s_flock);
         if (fp->s_nfree <= 0)
             goto nospace;
     }
@@ -91,7 +91,7 @@ void free(dev_t dev, daddr_t bno)
     fp         = getfs(dev);
     fp->s_fmod = 1;
     while (fp->s_flock)
-        sleep((caddr_t)&fp->s_flock, PINOD);
+        sleep((chan_t)&fp->s_flock, PINOD);
     if (badblock(fp, bno, dev))
         return;
     if (fp->s_nfree <= 0) {
@@ -107,7 +107,7 @@ void free(dev_t dev, daddr_t bno)
         fp->s_nfree = 0;
         bwrite(bp);
         fp->s_flock = 0;
-        wakeup((caddr_t)&fp->s_flock);
+        wakeup((chan_t)&fp->s_flock);
     }
     fp->s_free[fp->s_nfree++] = bno;
     fp->s_fmod                = 1;
@@ -154,7 +154,7 @@ struct inode *ialloc(dev_t dev)
 
     fp = getfs(dev);
     while (fp->s_ilock)
-        sleep((caddr_t)&fp->s_ilock, PINOD);
+        sleep((chan_t)&fp->s_ilock, PINOD);
 loop:
     if (fp->s_ninode > 0) {
         ino = fp->s_inode[--fp->s_ninode];
@@ -204,7 +204,7 @@ loop:
             break;
     }
     fp->s_ilock = 0;
-    wakeup((caddr_t)&fp->s_ilock);
+    wakeup((chan_t)&fp->s_ilock);
     if (fp->s_ninode > 0)
         goto loop;
     prdev("Out of inodes", dev);

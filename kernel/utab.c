@@ -169,7 +169,7 @@ err:
 /*
  * The physical word address a virtual one maps to, or 0 if it is not mapped.
  */
-unsigned physaddr(unsigned addr)
+paddr_t physaddr(int addr)
 {
     unsigned pgno;
 
@@ -187,7 +187,7 @@ unsigned physaddr(unsigned addr)
  * whole nofault machinery disappears.  rw is accepted and ignored: a page is open
  * to data or closed to it, with no read/write distinction to check.
  */
-int useracc(unsigned addr, unsigned count, int rw)
+int useracc(int addr, int count, int rw)
 {
     unsigned v, last;
 
@@ -223,7 +223,7 @@ int useracc(unsigned addr, unsigned count, int rw)
  * Lives here, not in bio.c, because uptget() is static to this file and the buffer
  * cache has no business knowing how a descriptor is packed.
  */
-unsigned physrange(unsigned addr, unsigned count)
+int physrange(int addr, int count)
 {
     unsigned v, last, first;
 

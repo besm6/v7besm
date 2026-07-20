@@ -14,29 +14,30 @@
  * tunable variables
  */
 
-#define NBUF     10             /* size of buffer cache (min 10) */
-#define NINODE   24             /* number of in core inodes (min 24) */
-#define NFILE    50             /* number of in core file structures */
-#define NMOUNT   2              /* number of mountable file systems */
-#define MAXMEM   (NPAGE * PGSZ) /* max core per process, in words */
-#define MAXUPRC  25             /* max processes per user */
-#define SSIZE    PGSZ           /* initial stack size (words) */
-#define SINCR    PGSZ           /* increment of stack (words) */
-#define NOFILE   20             /* max open files per process */
-#define CANBSIZ  256            /* max size of typewriter line */
-#define CMAPSIZ  50             /* size of core allocation area */
-#define SMAPSIZ  50             /* size of swap allocation area */
-#define NCALL    20             /* max simultaneous time callouts */
-#define NPROC    150            /* max number of processes */
-#define NTEXT    40             /* max number of pure texts */
-#define NCLIST   100            /* max total clist size */
-#define HZ       250            /* Ticks/second: the interval timer free-runs at this
-                                   rate (ГРП bit 40; SIMH CLK_TPS) and cannot be
-                                   programmed. */
-#define TIMEZONE (5 * 60)       /* Minutes westward from Greenwich */
-#define DSTFLAG  1              /* Daylight Saving Time applies in this locality */
-#define MSGBUFS  128            /* Characters saved from error messages */
-#define NCARGS   5120           /* # characters in exec arglist */
+#define NBUF    10             /* size of buffer cache (min 10) */
+#define NINODE  24             /* number of in core inodes (min 24) */
+#define NFILE   50             /* number of in core file structures */
+#define NMOUNT  2              /* number of mountable file systems */
+#define MAXMEM  (NPAGE * PGSZ) /* max core per process, in words */
+#define MAXUPRC 25             /* max processes per user */
+#define SSIZE   PGSZ           /* initial stack size (words) */
+#define SINCR   PGSZ           /* increment of stack (words) */
+#define NOFILE  20             /* max open files per process */
+#define CANBSIZ 256            /* max size of typewriter line */
+#define CMAPSIZ 50             /* size of core allocation area */
+#define SMAPSIZ 50             /* size of swap allocation area */
+#define NCALL   20             /* max simultaneous time callouts */
+#define NPROC   150            /* max number of processes */
+#define NTEXT   40             /* max number of pure texts */
+#define NCLIST  100            /* max total clist size */
+#define HZ                                                                      \
+    250                   /* Ticks/second: the interval timer free-runs at this \
+                             rate (ГРП bit 40; SIMH CLK_TPS) and cannot be   \
+                             programmed. */
+#define TIMEZONE (5 * 60) /* Minutes westward from Greenwich */
+#define DSTFLAG  1        /* Daylight Saving Time applies in this locality */
+#define MSGBUFS  128      /* Characters saved from error messages */
+#define NCARGS   5120     /* # characters in exec arglist */
 
 /*
  * priorities
@@ -82,38 +83,53 @@
  * cannot be changed easily
  */
 
-#define NBPW    6                         /* number of bytes in an integer (sizeof(int)) */
-#define BSIZE   3072                      /* size of secondary block (bytes, 6144 for besm) */
-#define BSIZEW  512                       /* size of secondary block, in words (BSIZE / NBPW) */
-#define NINDIR  512                       /* daddr_t per indirect block (BSIZE / sizeof(daddr_t)) */
-#define BMASK   0777                      /* BSIZE-1 */
-#define BSHIFT  9                         /* LOG2(BSIZE) */
-#define NMASK   0777                      /* NINDIR-1 */
-#define NSHIFT  9                         /* LOG2(NINDIR) */
-#define USIZE   1024                      /* size of the u-area, in words (one page) */
-#define NULL    0                         /* zero pointer */
-#define CMASK   0                         /* default mask for file creation */
-#define NODEV   (dev_t)(-1)               /* no device */
-#define ROOTINO ((ino_t)2)                /* i number of all roots */
-#define SUPERB  ((daddr_t)1)              /* block number of the super block */
-#define DIRSIZ  24                        /* max characters per directory (4 words) */
-#define NICINOD 100                       /* number of superblock inodes */
-#define NICFREE 50                        /* number of superblock free blocks */
-#define INFSIZE 138                       /* size of per-proc info for users */
-#define CBSIZE  28                        /* number of chars in a clist block */
-#define CROUND  037                       /* clist rounding: sizeof(int *) + CBSIZE - 1*/
+#define NBPW    6            /* number of bytes in an integer (sizeof(int)) */
+#define BSIZE   3072         /* size of secondary block (bytes, 6144 for besm) */
+#define BSIZEW  512          /* size of secondary block, in words (BSIZE / NBPW) */
+#define NINDIR  512          /* daddr_t per indirect block (BSIZE / sizeof(daddr_t)) */
+#define BMASK   0777         /* BSIZE-1 */
+#define BSHIFT  9            /* LOG2(BSIZE) */
+#define NMASK   0777         /* NINDIR-1 */
+#define NSHIFT  9            /* LOG2(NINDIR) */
+#define USIZE   1024         /* size of the u-area, in words (one page) */
+#define NULL    0            /* zero pointer */
+#define CMASK   0            /* default mask for file creation */
+#define NODEV   (dev_t)(-1)  /* no device */
+#define ROOTINO ((ino_t)2)   /* i number of all roots */
+#define SUPERB  ((daddr_t)1) /* block number of the super block */
+#define DIRSIZ  24           /* max characters per directory (4 words) */
+#define NICINOD 100          /* number of superblock inodes */
+#define NICFREE 50           /* number of superblock free blocks */
+#define INFSIZE 138          /* size of per-proc info for users */
+#define CBSIZE  28           /* number of chars in a clist block */
+#define CROUND  037          /* clist rounding: sizeof(int *) + CBSIZE - 1*/
 
 /*
  * Some macros for units conversion
  */
+/*
+ * Note the absence of `unsigned' below.  On this machine an unsigned add,
+ * subtract, multiply, divide or ordering test is a CALL -- b$uadd, b$udiv,
+ * b$ult and friends -- because the additive unit reads bits 48-42 as an
+ * exponent and a full 48-bit value carries data there.  The signed spellings
+ * are single inline instructions.  See doc/Besm6_Runtime_Library.md.  Every
+ * quantity below is a count or a 15-bit address, so it fits the 41-bit signed
+ * range with room to spare, and `int' is both cheaper and sufficient.
+ */
+/*
+ * Each casts its argument to int first, and that cast is load-bearing: the
+ * commonest argument is a sizeof, which is unsigned, and an unsigned argument
+ * would drag the whole expression -- and every b$uadd/b$udiv it implies -- back
+ * in.  See btow(sizeof ...) in alloc.c, nami.c and main.c.
+ */
 /* bytes to words (six chars pack into one 48-bit word) */
-#define btow(x) (((unsigned)(x) + 5) / 6)
+#define btow(x) (((int)(x) + 5) / 6)
 
 /* words to bytes */
-#define wtob(x) ((x) * 6)
+#define wtob(x) ((int)(x) * 6)
 
 /* round a word count up to a whole page */
-#define pground(x) (((unsigned)(x) + PGSZ - 1) & ~(PGSZ - 1))
+#define pground(x) (((int)(x) + PGSZ - 1) & ~(PGSZ - 1))
 
 /* words to disk blocks (a block is BSIZE == 512 words) */
 #define wtodb(x) ((x) >> 9)
@@ -126,18 +142,39 @@
  * memory above 32767 -- hence struct buf's b_paddr.
  *
  * `aax #077777' is the same idiom in assembly; see usermem.s (fubyte).
+ *
+ * Both take the pointer apart through `unsigned' -- they have to, because the
+ * fields they want live above bit 41 -- but both hand back an `int', so that
+ * the arithmetic done on the result afterwards stays inline.
  */
-#define ptrword(p) ((unsigned)(p) & 077777)     /* bits 15-1: the word address */
-#define ptrbyte(p) (((unsigned)(p) >> 44) & 07) /* bits 47-45: 5 = the word's first byte */
+#define ptrword(p) (int)((unsigned)(p) & 077777)     /* bits 15-1: the word address */
+#define ptrbyte(p) (int)(((unsigned)(p) >> 44) & 07) /* bits 47-45: 5 = the word's first byte */
+
+/*
+ * Derive the n'th distinct sleep channel from an object.  This exists because
+ * pipe.c and fio.c want two or three separate channels per inode, and used to
+ * spell them `(caddr_t)ip + 1' and `(caddr_t)ip + 2' -- BYTE arithmetic on a
+ * fat pointer, which walks the byte-offset field (5 -> 4 -> 3) and leaves the
+ * word address alone.  The three channels were therefore distinguished purely
+ * by bits 47-45, which no longer survive the thin chan_t.  Offsetting by whole
+ * words gives three genuinely different addresses inside the same object.
+ */
+#define CHANOF(p, n) ((chan_t)((int *)(p) + (n)))
 
 /* inumber to disk address */
-#define itod(x) (daddr_t)((((unsigned)(x) + 15) >> 3))
+#define itod(x) (daddr_t)(((x) + 15) >> 3)
 
 /* inumber to disk offset */
 #define itoo(x) (int)(((x) + 15) & 07)
 
-/* major part of a device */
-#define major(x) (int)(((unsigned)(x) >> 8))
+/*
+ * Major part of a device.  This used to shift through `unsigned', which made
+ * major(NODEV) come out as (2^48-1)>>8 rather than -1.  That accidentally
+ * armed every `major(dev) >= n' bounds test against a negative dev, so the
+ * three tests that matter -- bio.c, sys3.c, fio.c -- now reject a negative
+ * major explicitly.  Do not put the cast back without revisiting them.
+ */
+#define major(x) (int)((x) >> 8)
 
 /* minor part of a device */
 #define minor(x) (int)((x) & 0377)

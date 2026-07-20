@@ -42,7 +42,7 @@ void rdwr(register int mode)
     register struct a {
         int fdes;
         char *cbuf;
-        unsigned count;
+        int count;
     } *uap;
 
     uap = (struct a *)u.u_ap;

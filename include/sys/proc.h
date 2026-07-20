@@ -15,14 +15,14 @@ struct proc {
     char p_time;          /* resident time for scheduling */
     char p_cpu;           /* cpu usage for scheduling */
     char p_nice;          /* nice for cpu usage */
-    short p_sig;          /* signals pending to this process */
-    short p_uid;          /* user id, used to direct tty signals */
-    short p_pgrp;         /* name of process group leader */
-    short p_pid;          /* unique process id */
-    short p_ppid;         /* process id of parent */
-    short p_addr;         /* physical address of swappable image (word, page-aligned) */
-    short p_size;         /* size of swappable image (words, a multiple of PGSZ) */
-    caddr_t p_wchan;      /* event process is awaiting */
+    int p_sig;            /* signals pending to this process */
+    int p_uid;            /* user id, used to direct tty signals */
+    int p_pgrp;           /* name of process group leader */
+    int p_pid;            /* unique process id */
+    int p_ppid;           /* process id of parent */
+    paddr_t p_addr;       /* physical address of swappable image (word, page-aligned) */
+    int p_size;           /* size of swappable image (words, a multiple of PGSZ) */
+    chan_t p_wchan;       /* event process is awaiting */
     struct text *p_textp; /* pointer to text structure */
     struct proc *p_link;  /* linked list of running processes */
     int p_clktim;         /* time to alarm clock signal */
@@ -60,12 +60,12 @@ struct xproc {
     char xp_time;    /* resident time for scheduling */
     char xp_cpu;     /* cpu usage for scheduling */
     char xp_nice;    /* nice for cpu usage */
-    short xp_sig;    /* signals pending to this process */
-    short xp_uid;    /* user id, used to direct tty signals */
-    short xp_pgrp;   /* name of process group leader */
-    short xp_pid;    /* unique process id */
-    short xp_ppid;   /* process id of parent */
-    short xp_xstat;  /* Exit status for wait */
+    int xp_sig;      /* signals pending to this process */
+    int xp_uid;      /* user id, used to direct tty signals */
+    int xp_pgrp;     /* name of process group leader */
+    int xp_pid;      /* unique process id */
+    int xp_ppid;     /* process id of parent */
+    int xp_xstat;    /* Exit status for wait */
     time_t xp_utime; /* user time, this proc */
     time_t xp_stime; /* system time, this proc */
 };

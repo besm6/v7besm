@@ -17,8 +17,8 @@
 #include "sys/conf.h"
 // clang-format on
 
-long tk_nin;
-long tk_nout;
+int tk_nin;
+int tk_nout;
 
 char canonb[CANBSIZ]; /* buffer for erase and kill (#@) */
 
@@ -293,7 +293,7 @@ void wflushtty(register struct tty *tp)
     while (tp->t_outq.c_cc && tp->t_state & CARR_ON) {
         (*tp->t_oproc)(tp);
         tp->t_state |= ASLEEP;
-        sleep((caddr_t)&tp->t_outq, TTOPRI);
+        sleep((chan_t)&tp->t_outq, TTOPRI);
     }
     flushtty(tp);
     spl0();
@@ -308,8 +308,8 @@ void flushtty(register struct tty *tp)
 
     while (getc(&tp->t_canq) >= 0)
         ;
-    wakeup((caddr_t)&tp->t_rawq);
-    wakeup((caddr_t)&tp->t_outq);
+    wakeup((chan_t)&tp->t_rawq);
+    wakeup((chan_t)&tp->t_outq);
     s = spl6();
     tp->t_state &= ~TTSTOP;
     (*cdevsw[major(tp->t_dev)].d_stop)(tp);
@@ -340,7 +340,7 @@ int canon(register struct tty *tp)
         if ((tp->t_state & CARR_ON) == 0) {
             return (0);
         }
-        sleep((caddr_t)&tp->t_rawq, TTIPRI);
+        sleep((chan_t)&tp->t_rawq, TTIPRI);
     }
     spl0();
 loop:
@@ -400,7 +400,7 @@ void ttyrend(register struct tty *tp, register char *pb, register char *pe)
     tandem = tp->t_flags & TANDEM;
     if (tp->t_flags & RAW) {
         b_to_q(pb, pe - pb, &tp->t_rawq);
-        wakeup((caddr_t)&tp->t_rawq);
+        wakeup((chan_t)&tp->t_rawq);
     } else {
         tp->t_flags &= ~TANDEM;
         while (pb < pe)
@@ -467,7 +467,7 @@ void ttyinput(register int c, register struct tty *tp)
     if (t_flags & (RAW | CBREAK) || (c == '\n' || c == tun.t_eofc || c == tun.t_brkc)) {
         if ((t_flags & (RAW | CBREAK)) == 0 && putc(0377, &tp->t_rawq) == 0)
             tp->t_delct++;
-        wakeup((caddr_t)&tp->t_rawq);
+        wakeup((chan_t)&tp->t_rawq);
     }
     if (t_flags & ECHO) {
         ttyoutput(c, tp);
@@ -636,9 +636,9 @@ void ttyoutput(register int c, register struct tty *tp)
  * The name of the routine is passed to the timeout
  * subroutine and it is called during a clock interrupt.
  */
-void ttrstrt(caddr_t arg)
+void ttrstrt(carg_t arg)
 {
-    register struct tty *tp = (struct tty *) arg;
+    register struct tty *tp = (struct tty *)arg;
 
     tp->t_state &= ~TIMEOUT;
     ttstart(tp);
@@ -678,12 +678,12 @@ int ttread(register struct tty *tp)
  * Called from the device's write routine after it has
  * calculated the tty-structure given as argument.
  */
-caddr_t ttwrite(register struct tty *tp)
+void ttwrite(register struct tty *tp)
 {
     register int c;
 
     if ((tp->t_state & CARR_ON) == 0)
-        return (NULL);
+        return;
     while (u.u_count) {
         spl5();
         while (tp->t_outq.c_cc > TTHIWAT) {
@@ -691,7 +691,7 @@ caddr_t ttwrite(register struct tty *tp)
             if (tp->t_outq.c_cc == 0)
                 break;
             tp->t_state |= ASLEEP;
-            sleep((caddr_t)&tp->t_outq, TTOPRI);
+            sleep((chan_t)&tp->t_outq, TTOPRI);
         }
         spl0();
         if ((c = cpass()) < 0)
@@ -699,5 +699,5 @@ caddr_t ttwrite(register struct tty *tp)
         ttyoutput(c, tp);
     }
     ttstart(tp);
-    return (NULL);
+    return;
 }

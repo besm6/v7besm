@@ -115,7 +115,7 @@ out:
         ++time;
         spl1();
         runrun++;
-        wakeup((caddr_t)&lbolt);
+        wakeup((chan_t)&lbolt);
         for (pp = &proc[0]; pp < &proc[NPROC]; pp++)
             if (pp->p_stat && pp->p_stat < SZOMB) {
                 if (pp->p_time != 127)
@@ -134,7 +134,7 @@ out:
             }
         if (runin != 0) {
             runin = 0;
-            wakeup((caddr_t)&runin);
+            wakeup((chan_t)&runin);
         }
     }
 }
@@ -153,7 +153,7 @@ out:
  * The panic is there because there is nothing
  * intelligent to be done if an entry won't fit.
  */
-void timeout(void (*fun)(caddr_t), caddr_t arg, int tim)
+void timeout(void (*fun)(carg_t), carg_t arg, int tim)
 {
     register struct callo *p1, *p2;
     register int t;

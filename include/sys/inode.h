@@ -15,14 +15,14 @@
 #define NINDEX 15
 
 struct group {
-    short g_state;
+    int g_state;
     char g_index;
     char g_rot;
     struct group *g_group;
     struct inode *g_inode;
     struct file *g_file;
-    short g_rotmask;
-    short g_datq;
+    int g_rotmask;
+    int g_datq;
 };
 
 struct inode {
@@ -30,11 +30,11 @@ struct inode {
     char i_count;   /* reference count */
     dev_t i_dev;    /* device where inode resides */
     ino_t i_number; /* i number, 1-to-1 with device address */
-    unsigned short i_mode;
-    short i_nlink; /* directory entries */
-    short i_uid;   /* owner */
-    short i_gid;   /* group of owner */
-    off_t i_size;  /* size of file */
+    int i_mode;
+    int i_nlink;  /* directory entries */
+    int i_uid;    /* owner */
+    int i_gid;    /* group of owner */
+    off_t i_size; /* size of file */
     union {
         struct {
             daddr_t addr[NADDR]; /* if normal file/directory */

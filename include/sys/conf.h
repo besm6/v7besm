@@ -39,7 +39,7 @@ extern struct linesw {
     void (*l_open)(dev_t, struct tty *);
     void (*l_close)(struct tty *);
     int (*l_read)(struct tty *);
-    caddr_t (*l_write)(struct tty *);
+    void (*l_write)(struct tty *);
     void (*l_ioctl)(int, struct tty *, caddr_t);
     void (*l_rint)(int, struct tty *);
     void (*l_rend)(struct tty *);

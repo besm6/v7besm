@@ -67,8 +67,8 @@ void closef(register struct file *fp)
     fp->f_count = 0;
     if (flag & FPIPE) {
         ip->i_mode &= ~(IREAD | IWRITE);
-        wakeup((caddr_t)ip + 1);
-        wakeup((caddr_t)ip + 2);
+        wakeup(CHANOF(ip, 1));
+        wakeup(CHANOF(ip, 2));
     }
     iput(ip);
 
@@ -101,21 +101,21 @@ void closef(register struct file *fp)
 void openi(register struct inode *ip, int rw)
 {
     dev_t dev;
-    register unsigned int maj;
+    register int maj;
 
     dev = (dev_t)ip->i_un.i_rdev;
     maj = major(dev);
     switch (ip->i_mode & IFMT) {
     case IFCHR:
     case IFMPC:
-        if (maj >= nchrdev)
+        if (maj < 0 || maj >= nchrdev)
             goto bad;
         (*cdevsw[maj].d_open)(dev, rw);
         break;
 
     case IFBLK:
     case IFMPB:
-        if (maj >= nblkdev)
+        if (maj < 0 || maj >= nblkdev)
             goto bad;
         (*bdevsw[maj].d_open)(dev, rw);
     }

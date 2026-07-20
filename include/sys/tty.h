@@ -41,25 +41,26 @@ struct tc {
 #define t_brkc   t_tc.brkc
 
 struct tty {
-    struct clist t_rawq; /* input chars right off device */
-    struct clist t_canq; /* input chars after erase and kill */
-    struct clist t_outq; /* output list to device */
+    struct clist t_rawq;           /* input chars right off device */
+    struct clist t_canq;           /* input chars after erase and kill */
+    struct clist t_outq;           /* output list to device */
     void (*t_oproc)(struct tty *); /* routine to start output */
     void (*t_iproc)(struct tty *); /* routine to start input */
-    caddr_t t_linep;     /* aux line discipline pointer */
-    caddr_t t_addr;      /* device address */
-    dev_t t_dev;         /* device number */
-    short t_flags;       /* mode, settable by ioctl call */
-    short t_state;       /* internal state, not visible externally */
-    short t_pgrp;        /* process group name */
-    char t_delct;        /* number of delimiters in raw q */
-    char t_line;         /* line discipline */
-    char t_col;          /* printing column of device */
-    char t_erase;        /* erase character */
-    char t_kill;         /* kill character */
-    char t_char;         /* character temporary */
-    char t_ispeed;       /* input speed */
-    char t_ospeed;       /* output speed */
+    int t_addr;                    /* device/line number -- NOT an address: this machine has no
+                                    device address space, devices are named by 033 register
+                                    numbers.  See doc/Besm6_Peripherals.md. */
+    dev_t t_dev;                   /* device number */
+    int t_flags;                   /* mode, settable by ioctl call */
+    int t_state;                   /* internal state, not visible externally */
+    int t_pgrp;                    /* process group name */
+    char t_delct;                  /* number of delimiters in raw q */
+    char t_line;                   /* line discipline */
+    char t_col;                    /* printing column of device */
+    char t_erase;                  /* erase character */
+    char t_kill;                   /* kill character */
+    char t_char;                   /* character temporary */
+    char t_ispeed;                 /* input speed */
+    char t_ospeed;                 /* output speed */
     union {
         struct tc t_tc;
         struct clist t_ctlq;
@@ -168,9 +169,9 @@ struct ttiocb {
 
 #ifdef KERNEL
 int ttread(struct tty *tp);
-caddr_t ttwrite(struct tty *tp);
+void ttwrite(struct tty *tp);
 void ttstart(struct tty *tp);
-void ttrstrt(caddr_t arg);
+void ttrstrt(carg_t arg);
 int ttioccomm(int com, struct tty *tp, caddr_t addr, dev_t dev);
 void flushtty(struct tty *tp);
 void ttyinput(int c, struct tty *tp);

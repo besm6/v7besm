@@ -48,7 +48,7 @@ loop:
         if (ino == ip->i_number && dev == ip->i_dev) {
             if ((ip->i_flag & ILOCK) != 0) {
                 ip->i_flag |= IWANT;
-                sleep((caddr_t)ip, PINOD);
+                sleep((chan_t)ip, PINOD);
                 goto loop;
             }
             if ((ip->i_flag & IMOUNT) != 0) {

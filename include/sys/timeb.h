@@ -5,7 +5,7 @@
  */
 struct timeb {
     time_t time;
-    unsigned short millitm;
-    short timezone;
-    short dstflag;
+    int millitm;
+    int timezone;
+    int dstflag;
 };

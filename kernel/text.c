@@ -83,7 +83,7 @@ void xswap(register struct proc *p, int ff, int os)
     p->p_time = 0;
     if (runout) {
         runout = 0;
-        wakeup((caddr_t)&runout);
+        wakeup((chan_t)&runout);
     }
 }
 
@@ -128,7 +128,7 @@ void xfree()
 void xalloc(register struct inode *ip)
 {
     register struct text *xp;
-    register unsigned ts;
+    register int ts;
     register struct text *xp1;
 
     if (u.u_exdata.ux_tsize == 0)
@@ -169,7 +169,7 @@ void xalloc(register struct inode *ip)
         panic("out of swap space");
     u.u_procp->p_textp = xp;
     xexpand(xp);
-    estabur(ts, (unsigned)0, (unsigned)0, 0, RW);
+    estabur(ts, 0, 0, 0, RW);
     u.u_count  = u.u_exdata.ux_tsize;
     u.u_offset = sizeof(u.u_exdata);
     u.u_base   = 0;
@@ -214,7 +214,7 @@ void xlock(register struct text *xp)
 {
     while (xp->x_flag & XLOCK) {
         xp->x_flag |= XWANT;
-        sleep((caddr_t)xp, PSWP);
+        sleep((chan_t)xp, PSWP);
     }
     xp->x_flag |= XLOCK;
 }
@@ -222,7 +222,7 @@ void xlock(register struct text *xp)
 void xunlock(register struct text *xp)
 {
     if (xp->x_flag & XWANT)
-        wakeup((caddr_t)xp);
+        wakeup((chan_t)xp);
     xp->x_flag &= ~(XLOCK | XWANT);
 }
 

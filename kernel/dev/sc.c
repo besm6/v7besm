@@ -75,7 +75,7 @@ void scopen(dev_t dev, int flag)
         return;
     }
     tp          = &sc;
-    tp->t_addr  = (caddr_t)0;
+    tp->t_addr  = 0;
     tp->t_oproc = scstart;
     if ((tp->t_state & ISOPEN) == 0) {
         tp->t_state = ISOPEN | CARR_ON;
@@ -140,7 +140,7 @@ void scstart(register struct tty *tp)
         if (c >= 0200 && (tp->t_flags & RAW) == 0) {
             /* A delay, not a character: wait it out and come back. */
             tp->t_state |= TIMEOUT;
-            timeout(ttrstrt, (caddr_t)tp, (c & 0177) + 6);
+            timeout(ttrstrt, (carg_t)tp, (c & 0177) + 6);
         } else {
             tp->t_char = c;
             tp->t_state |= BUSY;
@@ -148,7 +148,7 @@ void scstart(register struct tty *tp)
         }
         if (tp->t_outq.c_cc <= TTLOWAT && tp->t_state & ASLEEP) {
             tp->t_state &= ~ASLEEP;
-            wakeup((caddr_t)&tp->t_outq);
+            wakeup((chan_t)&tp->t_outq);
         }
     }
 }

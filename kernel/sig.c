@@ -57,7 +57,9 @@ void signal(register int pgrp, int sig)
  */
 void psignal(register struct proc *p, register int sig)
 {
-    if ((unsigned)sig >= NSIG)
+    /* v7 wrote this as `(unsigned)sig >= NSIG' to fold the negative test in;
+     * here that costs a b$uge call, and the two signed tests are inline. */
+    if (sig < 0 || sig >= NSIG)
         return;
     if (sig)
         p->p_sig |= 1 << (sig - 1);
@@ -108,7 +110,7 @@ loop:
     if (cp->p_ppid != 1)
         for (pp = &proc[0]; pp < &proc[NPROC]; pp++)
             if (pp->p_pid == cp->p_ppid) {
-                wakeup((caddr_t)pp);
+                wakeup((chan_t)pp);
                 cp->p_stat = SSTOP;
                 swtch();
                 if ((cp->p_flag & STRC) == 0 || procxmt())
@@ -190,7 +192,7 @@ int fsig(struct proc *p)
 int core()
 {
     register struct inode *ip;
-    register unsigned s;
+    register int s;
 
     u.u_error = 0;
     u.u_dirp  = "core";
@@ -214,7 +216,7 @@ int core()
         u.u_segflg = 1;
         writei(ip);
         s = u.u_procp->p_size - USIZE;
-        estabur((unsigned)0, s, (unsigned)0, 0, RO);
+        estabur(0, s, 0, 0, RO);
         u.u_base   = 0;
         u.u_count  = wtob(s);
         u.u_segflg = 0;
@@ -236,11 +238,11 @@ int core()
  *
  * The ceiling needs no guard of its own: estabur() rejects ns > (NPAGE - USTKPAGE) * PGSZ.
  */
-int grow(unsigned pg)
+int grow(int pg)
 {
     register int si, i;
     register struct proc *p;
-    register unsigned a;
+    register int a;
 
     if (pg < USTKPAGE || pg >= NPAGE)
         return (0); /* not a stack page at all */
@@ -292,7 +294,7 @@ void ptrace()
 
 found:
     while (ipc.ip_lock)
-        sleep((caddr_t)&ipc, IPCPRI);
+        sleep((chan_t)&ipc, IPCPRI);
     ipc.ip_lock = p->p_pid;
     ipc.ip_data = uap->data;
     ipc.ip_addr = uap->addr;
@@ -300,12 +302,12 @@ found:
     p->p_flag &= ~SWTED;
     setrun(p);
     while (ipc.ip_req > 0)
-        sleep((caddr_t)&ipc, IPCPRI);
+        sleep((chan_t)&ipc, IPCPRI);
     u.u_r.r_val1 = ipc.ip_data;
     if (ipc.ip_req < 0)
         u.u_error = EIO;
     ipc.ip_lock = 0;
-    wakeup((caddr_t)&ipc);
+    wakeup((chan_t)&ipc);
 }
 
 /*
@@ -323,7 +325,7 @@ int procxmt()
         return (0);
     i          = ipc.ip_req;
     ipc.ip_req = 0;
-    wakeup((caddr_t)&ipc);
+    wakeup((chan_t)&ipc);
     switch (i) {
     /* read user I */
     /* read user D */
@@ -377,7 +379,7 @@ int procxmt()
         i = (int)ipc.ip_addr;
         p = &((int *)&u)[i];
         for (i = 0; i < 16; i++)
-            if (p == &u.u_ar0[(unsigned)regloc[i]])
+            if (p == &u.u_ar0[regloc[i]])
                 goto ok;
         /* TODO 17: there is no flags register in the frame; single-step /
          * address-break is М034/М035 (rewritten, not remapped). */

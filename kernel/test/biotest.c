@@ -79,9 +79,9 @@ void extintr(void)
  * is the call 18b's driver will actually make, and the two must agree for a B_PHYS request.
  */
 struct rec {
-    unsigned paddr;
-    unsigned bufpa;
-    unsigned wcount;
+    int paddr;
+    int bufpa;
+    int wcount;
     daddr_t blkno;
     int flags;
 };
@@ -115,14 +115,14 @@ struct bdevsw bdevsw[] = {
 int nblkdev = 1;
 
 struct buf bfreelist;
-dev_t swapdev  = 0;
-daddr_t swplo  = 0;
+dev_t swapdev = 0;
+daddr_t swplo = 0;
 
-void sleep(caddr_t chan, int pri)
+void sleep(chan_t chan, int pri)
 {
     slept = 1;
 }
-void wakeup(caddr_t chan)
+void wakeup(chan_t chan)
 {
 }
 int spl0(void)
@@ -141,9 +141,9 @@ void panic(char *s)
     for (;;)
         ;
 }
-void wzero(void *dst, unsigned nwords)
+void wzero(void *dst, int nwords)
 {
-    register unsigned *p = (unsigned *)dst;
+    register int *p = (int *)dst;
 
     while (nwords-- > 0)
         *p++ = 0;
@@ -161,7 +161,7 @@ void wzero(void *dst, unsigned nwords)
 #define PHYSIO(rw) physio(recstrategy, &pb, 0, (rw))
 
 /* Set up a raw transfer of `nw' words from user virtual word `w'. */
-static void setio(unsigned w, unsigned nw, off_t off)
+static void setio(int w, int nw, off_t off)
 {
     u.u_base   = UPTR(w);
     u.u_count  = wtob(nw);

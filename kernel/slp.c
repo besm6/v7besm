@@ -38,7 +38,7 @@ char curpri;                 /* more scheduling */
  * premature return, and check that the reason for
  * sleeping has gone away.
  */
-void sleep(caddr_t chan, int pri)
+void sleep(chan_t chan, int pri)
 {
     register struct proc *rp;
     register int s, h;
@@ -66,7 +66,7 @@ void sleep(caddr_t chan, int pri)
         spl0();
         if (runin != 0) {
             runin = 0;
-            wakeup((caddr_t)&runin);
+            wakeup((chan_t)&runin);
         }
         swtch();
         if (issig())
@@ -92,7 +92,7 @@ psig:
 /*
  * Wake up all processes sleeping on chan.
  */
-void wakeup(register caddr_t chan)
+void wakeup(register chan_t chan)
 {
     register struct proc *p, *q;
     register int i;
@@ -150,7 +150,7 @@ out:
  */
 void setrun(register struct proc *p)
 {
-    register caddr_t w;
+    register chan_t w;
 
     if (p->p_stat == 0 || p->p_stat == SZOMB)
         panic("Running a dead proc");
@@ -168,7 +168,7 @@ void setrun(register struct proc *p)
         runrun++;
     if (runout != 0 && (p->p_flag & SLOAD) == 0) {
         runout = 0;
-        wakeup((caddr_t)&runout);
+        wakeup((chan_t)&runout);
     }
 }
 
@@ -233,7 +233,7 @@ loop:
      */
     if (outage == -20000) {
         runout++;
-        sleep((caddr_t)&runout, PSWP);
+        sleep((chan_t)&runout, PSWP);
         goto loop;
     }
     spl0();
@@ -288,7 +288,7 @@ loop:
     }
     spl6();
     runin++;
-    sleep((caddr_t)&runin, PSWP);
+    sleep((chan_t)&runin, PSWP);
     goto loop;
 }
 

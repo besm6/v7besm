@@ -47,7 +47,7 @@ void readi(register struct inode *ip)
     do {
         lbn = bn = u.u_offset >> BSHIFT;
         on       = u.u_offset & BMASK;
-        n        = min((unsigned)(BSIZE - on), u.u_count);
+        n        = min(BSIZE - on, u.u_count);
         if (type != IFBLK && type != IFMPB) {
             diff = ip->i_size - u.u_offset;
             if (diff <= 0)
@@ -68,7 +68,7 @@ void readi(register struct inode *ip)
         else
             bp = bread(dev, bn);
         ip->i_un.i_lastr = lbn;
-        n                = min((unsigned)n, BSIZE - wtob(bp->b_resid));
+        n                = min(n, BSIZE - wtob(bp->b_resid));
         if (n != 0)
             iomove(bp->b_un.b_addr + on, n, B_READ);
         brelse(bp);
@@ -110,7 +110,7 @@ void writei(register struct inode *ip)
     do {
         bn = u.u_offset >> BSHIFT;
         on = u.u_offset & BMASK;
-        n  = min((unsigned)(BSIZE - on), u.u_count);
+        n  = min(BSIZE - on, u.u_count);
         if (type != IFBLK && type != IFMPB) {
             bn = bmap(ip, bn, B_WRITE);
             if ((long)bn < 0)
@@ -136,7 +136,7 @@ void writei(register struct inode *ip)
  * Return the logical maximum
  * of the 2 arguments.
  */
-unsigned max(unsigned a, unsigned b)
+int max(int a, int b)
 {
     if (a > b)
         return (a);
@@ -147,7 +147,7 @@ unsigned max(unsigned a, unsigned b)
  * Return the logical minimum
  * of the 2 arguments.
  */
-unsigned min(unsigned a, unsigned b)
+int min(int a, int b)
 {
     if (a < b)
         return (a);

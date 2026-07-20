@@ -88,7 +88,7 @@ loop:
         if (ip->i_count < 2)
             return;
         ip->i_mode |= IREAD;
-        sleep((caddr_t)ip + 2, PPIPE);
+        sleep(CHANOF(ip, 2), PPIPE);
         goto loop;
     }
 
@@ -108,7 +108,7 @@ loop:
         ip->i_size        = 0;
         if (ip->i_mode & IWRITE) {
             ip->i_mode &= ~IWRITE;
-            wakeup((caddr_t)ip + 1);
+            wakeup(CHANOF(ip, 1));
         }
     }
     prele(ip);
@@ -160,7 +160,7 @@ loop:
     if (ip->i_size >= PIPSIZ) {
         ip->i_mode |= IWRITE;
         prele(ip);
-        sleep((caddr_t)ip + 1, PPIPE);
+        sleep(CHANOF(ip, 1), PPIPE);
         goto loop;
     }
 
@@ -173,13 +173,13 @@ loop:
      */
 
     u.u_offset = ip->i_size;
-    u.u_count  = min((unsigned)c, (unsigned)PIPSIZ);
+    u.u_count  = min(c, PIPSIZ);
     c -= u.u_count;
     writei(ip);
     prele(ip);
     if (ip->i_mode & IREAD) {
         ip->i_mode &= ~IREAD;
-        wakeup((caddr_t)ip + 2);
+        wakeup(CHANOF(ip, 2));
     }
     goto loop;
 }
@@ -193,7 +193,7 @@ void plock(register struct inode *ip)
 {
     while (ip->i_flag & ILOCK) {
         ip->i_flag |= IWANT;
-        sleep((caddr_t)ip, PINOD);
+        sleep((chan_t)ip, PINOD);
     }
     ip->i_flag |= ILOCK;
 }
@@ -210,6 +210,6 @@ void prele(register struct inode *ip)
     ip->i_flag &= ~ILOCK;
     if (ip->i_flag & IWANT) {
         ip->i_flag &= ~IWANT;
-        wakeup((caddr_t)ip);
+        wakeup((chan_t)ip);
     }
 }

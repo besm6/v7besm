@@ -93,36 +93,36 @@ extern int *intrframe;
 #define EXT_GRPSET 031U
 
 /* The callout's argument: a value nothing else in the image could plausibly write. */
-#define MAGIC ((caddr_t)0246813U)
+#define MAGIC ((carg_t)0246813U)
 
 /* Fault-mask bits, reported in the accumulator by halt().  Zero means every check passed. */
-#define F_STACK   0000001 /* the stack was not switched: the frame landed on the user r15 */
-#define F_NOCALL  0000002 /* the callout never fired -- the tick did not reach clock() */
-#define F_CALLN   0000004 /* it fired more than once, or with the wrong argument */
-#define F_UTIME   0000010 /* user time was not charged */
-#define F_STIME   0000020 /* system time WAS charged: clock() read the wrong frame */
-#define F_TIME    0000040 /* the second did not roll over (++time) */
-#define F_LBOLT   0000100 /* lbolt did not wrap back below HZ */
-#define F_RUNRUN  0000200 /* the scheduler was not jabbed */
-#define F_WAKEUP  0000400 /* nobody was woken on &lbolt */
-#define F_PTIME   0001000 /* proc[0].p_time was not aged */
-#define F_SIGCLK  0002000 /* the alarm did not fire exactly once, as SIGCLK */
-#define F_SETPRI  0004000 /* setpri() was not called for the aged process */
-#define F_MGRP    0010000 /* extintr() did not restore the ipl: МГРП came back masked */
-#define F_FRAME   0020000 /* the gate published the wrong frame, or disturbed u.u_ar0 */
+#define F_STACK  0000001 /* the stack was not switched: the frame landed on the user r15 */
+#define F_NOCALL 0000002 /* the callout never fired -- the tick did not reach clock() */
+#define F_CALLN  0000004 /* it fired more than once, or with the wrong argument */
+#define F_UTIME  0000010 /* user time was not charged */
+#define F_STIME  0000020 /* system time WAS charged: clock() read the wrong frame */
+#define F_TIME   0000040 /* the second did not roll over (++time) */
+#define F_LBOLT  0000100 /* lbolt did not wrap back below HZ */
+#define F_RUNRUN 0000200 /* the scheduler was not jabbed */
+#define F_WAKEUP 0000400 /* nobody was woken on &lbolt */
+#define F_PTIME  0001000 /* proc[0].p_time was not aged */
+#define F_SIGCLK 0002000 /* the alarm did not fire exactly once, as SIGCLK */
+#define F_SETPRI 0004000 /* setpri() was not called for the aged process */
+#define F_MGRP   0010000 /* extintr() did not restore the ipl: МГРП came back masked */
+#define F_FRAME  0020000 /* the gate published the wrong frame, or disturbed u.u_ar0 */
 
 static unsigned mask;
 
 /*
  * What the stubs and the callout recorded.
  */
-static int ncallout;            /* how many times the callout ran */
-static caddr_t calloutarg;      /* the argument it ran with */
-static int nsig, lastsig;       /* psignal() -- clock() raises SIGCLK when p_clktim expires */
-static int nwakeup;             /* wakeup() calls */
-static caddr_t lastchan;        /* the last channel woken -- must be &lbolt */
-static int nsetpri;             /* setpri() calls */
-static unsigned mgrp_seen;      /* mgrp as extintr() left it, sampled by the callout's successor */
+static int ncallout;       /* how many times the callout ran */
+static carg_t calloutarg;  /* the argument it ran with */
+static int nsig, lastsig;  /* psignal() -- clock() raises SIGCLK when p_clktim expires */
+static int nwakeup;        /* wakeup() calls */
+static chan_t lastchan;    /* the last channel woken -- must be &lbolt */
+static int nsetpri;        /* setpri() calls */
+static unsigned mgrp_seen; /* mgrp as extintr() left it, sampled by the callout's successor */
 
 /* ------------------------------------------------------------------------- */
 /* The environment kernel/clock.c and kernel/intr.c name.                     */
@@ -132,7 +132,7 @@ char runrun;
 char runin;
 time_t time;
 int dk_busy;
-long dk_time[32];
+int dk_time[32];
 
 /* intr.c calls this from prpintr(); no ПРП bit is ever up here, so it must never run. */
 void scintr(void)
@@ -152,7 +152,7 @@ void mdintr(void)
     mask |= F_NOCALL;
 }
 
-void wakeup(caddr_t chan)
+void wakeup(chan_t chan)
 {
     nwakeup++;
     lastchan = chan;
@@ -180,7 +180,7 @@ void panic(char *s)
 }
 
 /* The callout under test. */
-static void tick_fired(caddr_t arg)
+static void tick_fired(carg_t arg)
 {
     ncallout++;
     calloutarg = arg;
@@ -316,7 +316,7 @@ void report(void)
         mask |= F_LBOLT;
     if (runrun == 0)
         mask |= F_RUNRUN;
-    if (nwakeup < 1 || lastchan != (caddr_t)&lbolt)
+    if (nwakeup < 1 || lastchan != (chan_t)&lbolt)
         mask |= F_WAKEUP;
 
     /* ... and swept proc[], aging proc[0] and expiring its alarm exactly once. */

@@ -28,13 +28,13 @@ extern int nblkdev;
  */
 extern int nchrdev;
 
-extern int mpid;             /* generic for unique process id's */
-extern char runin;           /* scheduling flag */
-extern char runout;          /* scheduling flag */
-extern char runrun;          /* scheduling flag */
-extern char curpri;          /* more scheduling */
-extern int maxmem;           /* actual max memory per process */
-extern int uhome;            /* whose u-area is live at UBASE (its p_addr) */
+extern int mpid;    /* generic for unique process id's */
+extern char runin;  /* scheduling flag */
+extern char runout; /* scheduling flag */
+extern char runrun; /* scheduling flag */
+extern char curpri; /* more scheduling */
+extern int maxmem;  /* actual max memory per process */
+extern int uhome;   /* whose u-area is live at UBASE (its p_addr) */
 /*
  * ... or NOUHOME, meaning the live u-area belongs to no in-core image because the image it
  * belonged to has just been freed.  resume() must then load without flushing first, or it
@@ -79,9 +79,9 @@ int uchar(void);
 int schar(void);
 void plock(struct inode *ip);
 void prele(struct inode *ip);
-unsigned min(unsigned a, unsigned b);
+int min(int a, int b);
 void psignal(struct proc *p, int sig);
-void wakeup(caddr_t chan);
+void wakeup(chan_t chan);
 void setrun(struct proc *p);
 void swtch(void);
 void exece(void);
@@ -146,18 +146,18 @@ void nullioctl(dev_t, int, caddr_t, int);
 int suser(void);
 int compress(time_t t);
 void writei(struct inode *ip);
-void sleep(caddr_t chan, int pri);
+void sleep(chan_t chan, int pri);
 void prdev(char *str, dev_t dev);
-void wcopy(const void *src, void *dst, unsigned nwords);
-void wzero(void *dst, unsigned nwords);
+void wcopy(const void *src, void *dst, int nwords);
+void wzero(void *dst, int nwords);
 void clrbuf(struct buf *bp);
 void bwrite(struct buf *bp);
 void panic(char *s);
 void bflush(dev_t dev);
 int spl0(void), spl1(void), spl4(void), spl5(void), spl6(void), spl7(void);
 void splx(int);
-void mprpon(unsigned bits); /* unmask a device's ПРП interrupts (intr.c) */
-void mgrpon(unsigned bits); /* arm a device's ГРП bits for one exchange (intr.c) */
+void mprpon(unsigned bits);  /* unmask a device's ПРП interrupts (intr.c) */
+void mgrpon(unsigned bits);  /* arm a device's ГРП bits for one exchange (intr.c) */
 void mgrpoff(unsigned bits); /* ... and disarm them again; see the pair in intr.c */
 void addupc(int, void *, int);
 int setpri(struct proc *pp);
@@ -168,7 +168,7 @@ void free(dev_t dev, daddr_t bno);
 void bdwrite(struct buf *bp);
 void cli(void);
 void sti(void);
-int grow(unsigned pg); /* pg is a virtual PAGE number, not an address */
+int grow(int pg); /* pg is a virtual PAGE number, not an address */
 int subyte(caddr_t addr, int value);
 int suword(caddr_t addr, int value);
 int fubyte(caddr_t addr);
@@ -179,8 +179,8 @@ void cinit(void);
 int newproc(void);
 void expand(int newsize);
 int estabur(int nt, int nd, int ns, int sep, int xrw);
-int copyout(caddr_t from, caddr_t to, unsigned nbytes);
-int copyin(caddr_t from, caddr_t to, unsigned nbytes);
+int copyout(caddr_t from, caddr_t to, int nbytes);
+int copyin(caddr_t from, caddr_t to, int nbytes);
 void sched(void);
 int access(struct inode *ip, int mode);
 void readi(struct inode *ip);
@@ -197,8 +197,8 @@ void copyseg(int s, int d);
 void clearseg(int d);
 int issig(void);
 int save(label_t);
-void resume(int, label_t); /* a physical word address: 19 bits, not a `short' */
-void intrinit(void);       /* arm the always-live ГРП sources; the level is БлПр (intr.c) */
+void resume(int, label_t);  /* a physical word address: 19 bits, not a `short' */
+void intrinit(void);        /* arm the always-live ГРП sources; the level is БлПр (intr.c) */
 extern volatile int idling; /* set while the idle spin runs; clock() charges idle time */
 int swapin(struct proc *p);
 void xswap(struct proc *p, int ff, int os);
@@ -211,8 +211,8 @@ void sureg(void);
  * it the kernel stack its caller is standing on -- so only resume() may call it.  See
  * kernel/TODO.md, "The u-area invariant".
  */
-void uflush(unsigned paddr);
-void uload(unsigned paddr);
+void uflush(paddr_t paddr);
+void uload(paddr_t paddr);
 int getxfile(struct inode *ip, int nargc);
 void xalloc(struct inode *ip);
 void xfree(void);
@@ -226,10 +226,10 @@ dev_t getmdev(void);
 void xumount(int dev);
 void qswtch(void);
 void psig(void);
-unsigned physaddr(unsigned addr);
-int useracc(unsigned addr, unsigned count, int rw);
-unsigned physrange(unsigned addr, unsigned count);
-void timeout(void (*fun)(caddr_t), caddr_t arg, int tim);
+paddr_t physaddr(int addr);
+int useracc(int addr, int count, int rw);
+int physrange(int addr, int count);
+void timeout(void (*fun)(carg_t), carg_t arg, int tim);
 void deverror(struct buf *bp, int o1, int o2);
 void iodone(struct buf *bp);
 void physio(void (*strat)(struct buf *), struct buf *bp, int dev, int rw);
@@ -241,11 +241,11 @@ void iomove(caddr_t cp, int n, int flag);
  * Instrumentation
  */
 extern int dk_busy;
-extern long dk_time[32];
-extern long dk_numb[3];
-extern long dk_wds[3];
-extern long tk_nin;
-extern long tk_nout;
+extern int dk_time[32];
+extern int dk_numb[3];
+extern int dk_wds[3];
+extern int tk_nin;
+extern int tk_nout;
 
 /*
  * Structure of the system-entry table.

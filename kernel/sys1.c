@@ -184,10 +184,10 @@ bad:
  */
 int getxfile(register struct inode *ip, int nargc)
 {
-    register unsigned ds;
-    register unsigned ts, ss;
+    register int ds;
+    register int ts, ss;
     register int i;
-    long lsize;
+    int lsize;
 
     /*
      * read in first few bytes
@@ -210,13 +210,25 @@ int getxfile(register struct inode *ip, int nargc)
         u.u_error = ENOEXEC;
         goto bad;
     }
+    /*
+     * The segment sizes come straight off the disk, so they are hostile input.
+     * v7 caught a too-large header by letting a 32-bit sum overflow a 16-bit
+     * field and comparing; here every field is one 41-bit word, so that
+     * comparison can never fire and the check had quietly gone dead.  Test the
+     * sizes directly instead -- a negative one would sail through btow() and
+     * pground() and come out as a nonsense map.
+     */
+    if (u.u_exdata.ux_tsize < 0 || u.u_exdata.ux_dsize < 0 || u.u_exdata.ux_bsize < 0) {
+        u.u_error = ENOEXEC;
+        goto bad;
+    }
     if (u.u_exdata.ux_mag == 0407) {
-        lsize               = (long)u.u_exdata.ux_dsize + u.u_exdata.ux_tsize;
-        u.u_exdata.ux_dsize = lsize;
-        if (lsize != u.u_exdata.ux_dsize) { /* check overflow */
+        lsize = u.u_exdata.ux_dsize + u.u_exdata.ux_tsize;
+        if (lsize < 0) { /* sum overflowed 41 bits */
             u.u_error = ENOMEM;
             goto bad;
         }
+        u.u_exdata.ux_dsize = lsize;
         u.u_exdata.ux_tsize = 0;
     } else if (u.u_exdata.ux_mag != 0410) {
         u.u_error = ENOEXEC;
@@ -233,8 +245,8 @@ int getxfile(register struct inode *ip, int nargc)
      * overflow of max sizes
      */
     ts    = pground(btow(u.u_exdata.ux_tsize));
-    lsize = (long)u.u_exdata.ux_dsize + u.u_exdata.ux_bsize;
-    if (lsize != (unsigned)lsize) {
+    lsize = u.u_exdata.ux_dsize + u.u_exdata.ux_bsize;
+    if (lsize < 0) { /* sum overflowed 41 bits */
         u.u_error = ENOMEM;
         goto bad;
     }
@@ -261,7 +273,7 @@ int getxfile(register struct inode *ip, int nargc)
      * read in data segment
      */
 
-    estabur((unsigned)0, ds, (unsigned)0, 0, RO);
+    estabur(0, ds, 0, 0, RO);
     u.u_base   = 0;
     u.u_offset = sizeof(u.u_exdata) + u.u_exdata.ux_tsize;
     u.u_count  = u.u_exdata.ux_dsize;
@@ -300,7 +312,7 @@ void setregs()
         if ((*rp & 1) == 0)
             *rp = 0;
     for (cp = &regloc[0]; cp < &regloc[15];)
-        u.u_ar0[(unsigned)*cp++] = 0;
+        u.u_ar0[*cp++] = 0;
     /* exec is an extracode: the new image starts via `выпр' through ERET, held in RET. */
     u.u_ar0[RET] = u.u_exdata.ux_entloc;
     for (i = 0; i < NOFILE; i++) {
@@ -377,14 +389,14 @@ void exit(int rv)
     ((struct xproc *)p)->xp_stime = u.u_cstime + u.u_stime;
     for (q = &proc[0]; q < &proc[NPROC]; q++)
         if (q->p_ppid == p->p_pid) {
-            wakeup((caddr_t)&proc[1]);
+            wakeup((chan_t)&proc[1]);
             q->p_ppid = 1;
             if (q->p_stat == SSTOP)
                 setrun(q);
         }
     for (q = &proc[0]; q < &proc[NPROC]; q++)
         if (p->p_ppid == q->p_pid) {
-            wakeup((caddr_t)q);
+            wakeup((chan_t)q);
             swtch();
             /* no return */
         }
@@ -434,7 +446,7 @@ loop:
             }
         }
     if (f) {
-        sleep((caddr_t)u.u_procp, PWAIT);
+        sleep((chan_t)u.u_procp, PWAIT);
         goto loop;
     }
     u.u_error = ECHILD;

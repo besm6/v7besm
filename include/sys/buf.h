@@ -27,23 +27,23 @@ struct buf {
     struct buf *av_forw; /* position on free list, */
     struct buf *av_back; /*     if not BUSY*/
     dev_t b_dev;         /* major+minor device name */
-    unsigned b_wcount;   /* transfer count, in WORDS */
+    int b_wcount;        /* transfer count, in WORDS */
     union {
         caddr_t b_addr;          /* core address */
         struct filsys *b_filsys; /* superblocks */
         struct dinode *b_dino;   /* ilist */
         daddr_t *b_daddr;        /* indirect block */
     } b_un;
-    daddr_t b_blkno;      /* block # on device */
-    char b_error;         /* returned after I/O */
-    unsigned int b_resid; /* words not transferred after error */
+    daddr_t b_blkno; /* block # on device */
+    char b_error;    /* returned after I/O */
+    int b_resid;     /* words not transferred after error */
     /*
      * Where the data lives, physically, in WORDS -- valid only when B_PHYS.
      * b_un.b_addr cannot serve: a caddr_t is a fat pointer whose word field is
      * 15 bits, so it cannot name anything above 32767, and physical memory runs
      * to 512 Kwords.  Filled by swap() and physio(); read through bufpaddr().
      */
-    unsigned b_paddr;
+    paddr_t b_paddr;
 };
 
 extern struct buf buf[];     /* The buffer pool itself */
@@ -74,8 +74,7 @@ extern struct buf bfreelist; /* head of available list */
  * field of the fat pointer is the whole answer.  A B_PHYS request carries the address
  * explicitly, because its target may be above the 32767 that field can reach.
  */
-#define bufpaddr(bp) \
-    ((bp)->b_flags & B_PHYS ? (bp)->b_paddr : ptrword((bp)->b_un.b_addr))
+#define bufpaddr(bp) ((bp)->b_flags & B_PHYS ? (bp)->b_paddr : ptrword((bp)->b_un.b_addr))
 
 /*
  * special redeclarations for

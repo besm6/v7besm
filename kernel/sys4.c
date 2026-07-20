@@ -35,7 +35,7 @@ void ftime()
         struct timeb *tp;
     } *uap;
     struct timeb t;
-    register unsigned ms;
+    register int ms;
 
     uap = (struct a *)u.u_ap;
     spl7();
@@ -341,10 +341,10 @@ void times()
 void profil()
 {
     register struct a {
-        short *bufbase;
-        unsigned bufsize;
-        unsigned pcoffset;
-        unsigned pcscale;
+        int *bufbase;
+        int bufsize;
+        int pcoffset;
+        int pcscale;
     } *uap;
 
     uap               = (struct a *)u.u_ap;
@@ -379,7 +379,7 @@ void alarm()
 void pause()
 {
     for (;;)
-        sleep((caddr_t)&u, PSLEP);
+        sleep((chan_t)&u, PSLEP);
 }
 
 /*

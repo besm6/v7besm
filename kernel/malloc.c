@@ -19,7 +19,7 @@
  */
 int malloc(struct map *mp, int size)
 {
-    register unsigned int a;
+    register int a;
     register struct map *bp;
 
     for (bp = mp; bp->m_size; bp++) {
@@ -47,11 +47,11 @@ int malloc(struct map *mp, int size)
 void mfree(struct map *mp, int size, register int a)
 {
     register struct map *bp;
-    register unsigned int t;
+    register int t;
 
     if ((bp = mp) == coremap && runin) {
         runin = 0;
-        wakeup((caddr_t)&runin); /* Wake scheduler when freeing core */
+        wakeup((chan_t)&runin); /* Wake scheduler when freeing core */
     }
     for (; bp->m_addr <= a && bp->m_size != 0; bp++)
         ;

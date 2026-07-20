@@ -250,7 +250,8 @@ dev_t getmdev()
     if ((ip->i_mode & IFMT) != IFBLK)
         u.u_error = ENOTBLK;
     dev = (dev_t)ip->i_un.i_rdev;
-    if (major(dev) >= nblkdev)
+    /* i_rdev comes off the disk, so a hostile mknod can make it negative */
+    if (major(dev) < 0 || major(dev) >= nblkdev)
         u.u_error = ENXIO;
     iput(ip);
     return (dev);

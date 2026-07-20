@@ -21,10 +21,10 @@ struct user {
     label_t u_rsav;       /* save info when exchanging stacks */
     char u_segflg;        /* IO flag: 0:user D; 1:system; 2:user I */
     char u_error;         /* return error code */
-    short u_uid;          /* effective user id */
-    short u_gid;          /* effective group id */
-    short u_ruid;         /* real user id */
-    short u_rgid;         /* real group id */
+    int u_uid;            /* effective user id */
+    int u_gid;            /* effective group id */
+    int u_ruid;           /* real user id */
+    int u_rgid;           /* real group id */
     struct proc *u_procp; /* pointer to proc structure */
     int *u_ap;            /* pointer to arglist */
     union {               /* syscall return values */
@@ -38,7 +38,7 @@ struct user {
 #define r_val1 u_r0.val1
 #define r_val2 u_r0.val2
     caddr_t u_base;       /* base address for IO */
-    unsigned int u_count; /* bytes remaining for IO */
+    int u_count;          /* bytes remaining for IO */
     off_t u_offset;       /* offset in file for IO */
     struct inode *u_cdir; /* pointer to inode of current directory */
     struct inode *u_rdir; /* root directory of current process */
@@ -58,9 +58,9 @@ struct user {
     struct file *u_ofile[NOFILE]; /* pointers to file structures of open files */
     char u_pofile[NOFILE];        /* per-process flags of open files */
     int u_arg[5];                 /* arguments to current system call */
-    unsigned u_tsize;             /* text size (words, a multiple of PGSZ) */
-    unsigned u_dsize;             /* data size (words, a multiple of PGSZ) */
-    unsigned u_ssize;             /* stack size (words, a multiple of PGSZ) */
+    int u_tsize;                  /* text size (words, a multiple of PGSZ) */
+    int u_dsize;                  /* data size (words, a multiple of PGSZ) */
+    int u_ssize;                  /* stack size (words, a multiple of PGSZ) */
     label_t u_qsav;               /* label variable for quits and interrupts */
     label_t u_ssav;               /* label variable for swapping */
     int u_signal[NSIG];           /* disposition of signals */
@@ -70,30 +70,30 @@ struct user {
     time_t u_cstime;              /* sum of childs' stimes */
     int *u_ar0;                   /* address of users saved R0 */
     struct {                      /* profile arguments */
-        short *pr_base;           /* buffer base */
-        unsigned pr_size;         /* buffer size */
-        unsigned pr_off;          /* pc offset */
-        unsigned pr_scale;        /* pc scaling */
+        int *pr_base;             /* buffer base */
+        int pr_size;              /* buffer size */
+        int pr_off;               /* pc offset */
+        int pr_scale;             /* pc scaling */
     } u_prof;
-    char u_intflg;          /* catch intr from sys */
-    char u_sep;             /* flag for I and D separation */
-    struct tty *u_ttyp;     /* controlling tty pointer */
-    dev_t u_ttyd;           /* controlling tty dev */
-    struct {                /* header of executable file */
-        int ux_mag;         /* magic number */
-        unsigned ux_tsize;  /* text size */
-        unsigned ux_dsize;  /* data size */
-        unsigned ux_bsize;  /* bss size */
-        unsigned ux_ssize;  /* symbol table size */
-        unsigned ux_entloc; /* entry location */
-        unsigned ux_unused;
-        unsigned ux_relflg;
+    char u_intflg;      /* catch intr from sys */
+    char u_sep;         /* flag for I and D separation */
+    struct tty *u_ttyp; /* controlling tty pointer */
+    dev_t u_ttyd;       /* controlling tty dev */
+    struct {            /* header of executable file */
+        int ux_mag;     /* magic number */
+        int ux_tsize;   /* text size */
+        int ux_dsize;   /* data size */
+        int ux_bsize;   /* bss size */
+        int ux_ssize;   /* symbol table size */
+        int ux_entloc;  /* entry location */
+        int ux_unused;
+        int ux_relflg;
     } u_exdata;
     char u_comm[DIRSIZ];
     time_t u_start;
     char u_acflag;
-    short u_fpflag; /* unused now, will be later */
-    short u_cmask;  /* mask for file creation */
+    int u_fpflag; /* unused now, will be later */
+    int u_cmask;  /* mask for file creation */
     int u_stack[1];
     /* kernel stack per user
      * grows up from here to

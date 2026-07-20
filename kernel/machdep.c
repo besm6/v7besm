@@ -111,7 +111,7 @@ void clkstart()
  */
 void sendsig(caddr_t p, int signo)
 {
-    register unsigned n;
+    register int n;
 
     /*
      * The user stack grows UP from 070000 (exec seeds it there; see the arg-block

@@ -305,6 +305,68 @@ writes the fourth:
   address wraps to 0 — into the interrupt vectors. Add a depth check in `trap()`/`swtch()` during
   bring-up.
 
+## The scalar types now describe this machine, not the PDP-11
+
+Done as its own pass. `include/sys/types.h` used to carry v7's typedefs verbatim — `long daddr_t`,
+`unsigned short ino_t`, `short dev_t`. On this machine `short`, `int`, `long` and `long long` are
+**the same type** (one word, 41-bit signed), so those spellings never chose a width; the only thing
+they still chose was signedness, and *that* is expensive: signed add/subtract/compare are single
+inline instructions, while unsigned `+ - * / < <= > >=` are **calls** (`b$uadd`, `b$udiv`, `b$ult`,
+…), because the additive unit reads bits 48-42 as an exponent and a 48-bit value carries data there.
+
+How it turned out:
+
+* **Every scalar typedef is now `int`**, and `daddr_t`/`dev_t` are documented as necessarily signed
+  (`bmap()` returns `-1`; `NODEV` is `-1`). The one behavioural change was `ino_t`, which was
+  `unsigned short`.
+* **`unsigned` survives only where the value is genuinely a 48-bit hardware bit pattern** — `u_upt[8]`
+  (МMU page-register words), the ГРП/ПРП masks in `intr.c`, `utab.c`'s descriptors, `trap.c`'s live
+  ГРП, `prf.c`'s `printn`. Everything that is a *count* or an *address* is `int`; physical memory is
+  512 Kwords = 19 bits, which fits 41-bit signed twenty-two bits over.
+* **`btow`/`wtob`/`pground` cast to `int` internally, and that cast is load-bearing** — their
+  commonest argument is a `sizeof`, which is unsigned and would otherwise drag `b$uadd`/`b$udiv`
+  back in at every call site. Undefined-reference count for the `b$u*` family: **33 → 27**, the
+  remainder being the hardware code above.
+* **`caddr_t` was doing four jobs and now does one.** It stays `char *` (a fat pointer) only for
+  genuine byte-granular user buffers. New alongside it: `chan_t` (sleep/wakeup channel), `carg_t`
+  (callout argument) and `paddr_t` (physical word address). `chan_t` and `carg_t` are pointers to
+  **undefined** structs — thin, so the cast is free where `caddr_t` cost a three-instruction
+  fat-pointer conversion at ~56 `sleep`/`wakeup` sites, and dereferencing one is a compile error.
+
+Three bugs fell out of it, all fixed here:
+
+* **`sleep((caddr_t)ip + 1)` in `pipe.c` and `fio.c` was *byte* arithmetic on a fat pointer.** It
+  walks the byte-offset field (5 → 4 → 3) and leaves the word address alone, so a pipe's read and
+  write channels differed *only* in bits 47-45 — invisible to anything that masks a wchan, and
+  destroyed outright by a thin `chan_t`. Now `CHANOF(ip, n)` (`param.h`), which offsets by whole
+  words. Undefined `struct chan` is what turned this from a silent collapse into a build error.
+* **`major()` shifted through `unsigned`,** so `major(NODEV)` was `(2⁴⁸-1)>>8` rather than `-1`.
+  That accidentally armed every `major(dev) >= n` bounds test against a negative device. It is now
+  signed, and the three tests that matter (`bio.c`, `sys3.c`, `fio.c`) reject a negative major
+  explicitly — `sys3.c`'s especially, since `i_rdev` comes off the disk and a hostile `mknod` can
+  set it.
+* **`getxfile()`'s two a.out overflow guards had gone dead.** They caught a too-large header by
+  letting a 32-bit sum overflow a 16-bit field and comparing; with every field one 41-bit word the
+  comparison can never fire. The segment sizes are hostile input (read from disk), so they are now
+  range-checked directly.
+
+Also removed as dead: `t_linep` (written and read nowhere), `ttwrite`/`l_write`'s `caddr_t` return
+(always `NULL`, no caller). `t_addr` became `int` — it held a *line number*, and `(caddr_t)d` on a
+small integer is the same int→fat-pointer defect as `u_dirp` below.
+
+Cost: text 15616 → 15622 words, i.e. the type work paid for itself and the six new bounds checks
+came out roughly free. `kernel/test/biotest.ini`'s expected halt PC moved 00630 → 00627, since the
+const laid down ahead of `_start` shrank; that constant is `_start + 2` and every `.ini` here has
+one like it.
+
+**Left open on purpose.** Roles C2/C3/C4 of the old `caddr_t` — `fuword`/`suword`'s argument,
+`copyin`/`copyout`'s two ends, and `d_ioctl`'s third argument — are still `caddr_t` even though
+`usermem.S` masks the fat part straight off (`aax #077777`) and never uses it. Splitting them wants
+a `uwaddr_t` (user virtual word address) and must be done in one commit for `d_ioctl`, or the
+mismatch will not be diagnosed: an `int` and a pointer are the same word, and `b6cc` converts
+between them with a **silent `COPY`**. That last fact is also why the type split does *not* catch
+the `u_dirp` bug below — it has to be found by grep, not by the build.
+
 ## Still out of scope
 
 The drum and disk drivers (`033` channel programming, `doc/Besm6_Peripherals.md`), the BESM-6

@@ -3,10 +3,10 @@
 struct stat {
     dev_t st_dev;
     ino_t st_ino;
-    unsigned short st_mode;
-    short st_nlink;
-    short st_uid;
-    short st_gid;
+    int st_mode;
+    int st_nlink;
+    int st_uid;
+    int st_gid;
     dev_t st_rdev;
     off_t st_size;
     time_t st_atime;

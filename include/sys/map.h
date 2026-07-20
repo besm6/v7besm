@@ -6,8 +6,8 @@
  * 512 Kword address and a block count fit.
  */
 struct map {
-    short m_size;
-    unsigned short m_addr;
+    int m_size;
+    int m_addr;
 };
 
 extern struct map coremap[CMAPSIZ]; /* space for core allocation */

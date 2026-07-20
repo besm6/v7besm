@@ -4,11 +4,11 @@
  * Structure of the super-block
  */
 struct filsys {
-    unsigned short s_isize;  /* size in blocks of i-list */
+    int s_isize;             /* size in blocks of i-list */
     daddr_t s_fsize;         /* size in blocks of entire volume */
-    short s_nfree;           /* number of addresses in s_free */
+    int s_nfree;             /* number of addresses in s_free */
     daddr_t s_free[NICFREE]; /* free block list */
-    short s_ninode;          /* number of i-nodes in s_inode */
+    int s_ninode;            /* number of i-nodes in s_inode */
     ino_t s_inode[NICINOD];  /* free i-node list */
     char s_flock;            /* lock during free list manipulation */
     char s_ilock;            /* lock during i-list manipulation */
@@ -18,8 +18,8 @@ struct filsys {
     /* remainder not maintained by this version of the system */
     daddr_t s_tfree; /* total free blocks*/
     ino_t s_tinode;  /* total free inodes */
-    short s_m;       /* interleave factor */
-    short s_n;       /* " " */
+    int s_m;         /* interleave factor */
+    int s_n;         /* " " */
     char s_fname[6]; /* file system name */
     char s_fpack[6]; /* file system pack name */
 };
