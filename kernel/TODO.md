@@ -263,10 +263,10 @@ left as it was. What they built, one line each:
 
 ### DONE: the exec argument vector is built out of fat pointers
 
-Not one of the numbered tasks — it is task **0.1** of [`../lib/README.md`](../lib/README.md), the
-user-level libc work plan, and it is recorded here because it is a kernel change. A `crt0` cannot be
-written against a block whose pointers a user program cannot dereference, so this had to be settled
-before anything under `lib/` could be.
+Not one of the numbered tasks — it came out of phase 0 of [`../lib/README.md`](../lib/README.md),
+the user-level libc work plan, and is recorded here because it is a kernel change. A `crt0` cannot
+be written against a block whose pointers a user program cannot dereference, so this had to be
+settled before anything under `lib/` could be.
 
 `exece()` (`sys1.c`) lays the block at the fixed base `USTKPAGE * PGSZ = 070000` — `argc`, the
 `argv[]`/`envp[]` pointers, the two NULLs, then the byte-packed strings, with `r15` seeded just
