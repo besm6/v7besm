@@ -161,17 +161,9 @@ int main(int argc, char **argv, char **envp)
     ok("memcmp differs", memcmp("abcd", "abce", 4) < 0);
     ok("memcmp stops at n", memcmp("abcd", "abce", 3) == 0);
 
-    /*
-     * memcmp must look past a NUL where strcmp would stop.  The two operands are built
-     * here rather than written as "a\0c": the compiler truncates a string literal at an
-     * embedded \0, so the literal would arrive as one byte and the check would pass for
-     * the wrong reason.
-     */
-    strcpy(buf, "a c");
-    strcpy(b2, "a d");
-    buf[1] = b2[1] = 0;
-    ok("memcmp ignores NUL", memcmp(buf, b2, 3) < 0);
-    ok("... where strcmp stops", strcmp(buf, b2) == 0);
+    /* memcmp must look past a NUL where strcmp would stop. */
+    ok("memcmp ignores NUL", memcmp("a\0c", "a\0d", 3) < 0);
+    ok("... where strcmp stops", strcmp("a\0c", "a\0d") == 0);
     q = "abcabc";
     ok("memchr finds", (char *)memchr(q, 'c', 6) == q + 2);
     ok("memchr misses within n", memchr(q, 'c', 2) == 0);

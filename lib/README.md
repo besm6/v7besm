@@ -6,10 +6,6 @@ source file is deleted from `tmp/libc/`, so what is written here is always the w
 *left*; the account of how a landed task turned out is in its commit. Whatever it taught that
 the rest of the library must obey is kept below, under **Ground rules**.
 
-Phase 0 — the ABI defects that had to go before any of this could be written correctly — is
-done, and so is the build skeleton: `lib/rules.mk`, the three Makefiles, `csu/crt0.s`, the
-`sys/exit.s` and `sys/write.s` leaves, and a `hello` that runs under `b6sim`.
-
 ## What this is
 
 `libc` for programs that run **under this kernel**, not for the kernel itself. The kernel needs
@@ -30,11 +26,13 @@ Two source trees feed it:
   the compiler-support routines in `unix/*.s`. This is the *form*: how a BESM-6 C routine
   handles fat pointers, one-word scalars, and the `$77` syscall leaf. `unix/read.s`,
   `unix/write.s`, `unix/crt0.s` are the models for `sys/` and `csu/`.
-  Where it already has a routine, **take it rather than porting the v7 one** — phase 2 took
-  the whole `str*`/`mem*` family and `atoi` that way. Its versions are ANSI already and their
-  signatures match the `<string.h>`/`<stdlib.h>` this same tree supplies, so nothing ends up
-  defined as `int n` where the declaration says `size_t n`. Each copied file says at its head
-  where it came from; a divergence has to be written down there.
+  It is a **source tree to copy from, not a library to link**: that project now installs
+  `libruntime.a` and nothing else, its own libc having been split off as `libc0.a` for its
+  own tests. Where it already has a routine, **take it rather than porting the v7 one** —
+  phase 2 took the whole `str*`/`mem*` family and `atoi` that way. Its versions are ANSI
+  already and their signatures match the `<string.h>`/`<stdlib.h>` this same tree supplies, so
+  nothing ends up defined as `int n` where the declaration says `size_t n`. Each copied file
+  says at its head where it came from; a divergence has to be written down there.
 
 The ported file is deleted from `tmp/libc/` as it lands, so what is left there always names the
 remaining work; `tmp/` goes away entirely at the end.
@@ -139,15 +137,7 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
   wherever the pointer lives — a parameter, an auto, an array element or a file-scope
   variable (`wtc` carries a 15-bit address, so it reaches a global with no `utc` escape).
   A callback needs no special handling: `qsort` keeps its comparison in the file-scope static
-  v7 used. It did not always: the back end used to compile a call through a *file-scope*
-  pointer as `13 vjm <the variable>`, a direct call into the data segment, because nothing in
-  the IR distinguished a function's name from a pointer's. Fixed in the external c-compiler —
-  TAC's `FunCall` now carries an `indirect` flag that the front end sets from the callee's
-  type — so a `libc` built with an older toolchain than that would miscompile.
-- **A string literal is truncated at an embedded `\0`.** `"a\0c"` arrives as the single byte
-  `a`, so anything that must look past a NUL — `memcmp`, `memchr`, `swab` — has to have its
-  operands built at run time. Another one belonging to the compiler rather than to us, and
-  another one to remember before setting out to debug the routine instead.
+  v7 used.
 - **`long` is `int`, one word**, so `atol` *is* `atoi` and is written as a call to it; the
   same collapse is why `lseek` and `stime` shed a word in phase 1. `sizeof(int) == 6` char-units
   and `sizeof(char) == 1`, so `sizeof arr / sizeof arr[0]` still counts elements.
@@ -214,19 +204,7 @@ supplying. The check used to be the only way to tell, since both archives were c
 and named their members `strcpy.o`, `write.o`, `exit.o` alike, so `b6nm` on the result could
 not say whose was pulled; that ambiguity went with the rename, and the check is now exact.
 
-## Phase 1 — crt0, syscall stubs, errno
-
-Done but for profiling. `csu/crt0.s` reads `argc` at `070000` and calls `main`; `sys/cerror.s`
-holds the `errno` word and the arm every stub branches to; `sys/syscalls.tbl` and `sys/mkstub`
-generate the 40 uniform leaves, one object each; and the calls with a shape of their own are
-hand-written beside them — `fork`, `wait`, `pipe`, `getpid`/`getppid`, `getuid`/`geteuid`,
-`getgid`/`getegid`, `time`, `dup`/`dup2`, `exec`/`exece`, `exit`/`_exit` and `sbrk`/`brk`. The
-C wrappers of the `exec` family (`execl`, `execv`, `execle`, `execvp`) are phase 5 with
-`system` and `popen`; `signal` registers a handler and no more, delivery being phase 6.
-
-- `csu/mcrt0.s` waits for profiling.
-
-## Phase 3 — `sbrk` and `malloc`
+## Phase 3 — `malloc`
 
 v7's `gen/malloc.c`, which grows the heap through `sbrk`. Not the c-compiler's allocator: it
 claims the whole span from `end` to `070000` on first use, which would defeat the kernel's
@@ -250,7 +228,8 @@ format (≈10^±18), reusing the c-compiler's `frexp.s`, `ldexp.s` and `modf.c`.
 `execl execv execvp execle`, `system`, `popen`, the `getpwent`/`getgrent` families, `getlogin`,
 `ttyname`, `ttyslot`, `stty`/`gtty`, `times`, `timezone`, `ctime`, `crypt`. `nlist` is rewritten
 against [`../cross/besm6/b.out.h`](../cross/besm6/b.out.h) — the v7 `a.out` layout does not
-apply. `monitor`/`mcount` stay stubs until profiling is wanted.
+apply. `monitor`/`mcount` and `csu/mcrt0.s` — phase 1's one leftover — stay stubs until
+profiling is wanted.
 
 ## Phase 6 — signal delivery
 
