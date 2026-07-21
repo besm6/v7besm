@@ -100,6 +100,42 @@ from the address field: the bare `vtm 2`/`vtm 3` of `test/mmuhelp.s` *enables* i
 effect. A bracket that wants them off must say `02002`/`02003`, and restore ПСВ afterwards
 (`ita 021`/`ati 021` — supervisor takes a 5-bit register number, so `M[021]` is reachable).
 
+### DONE: the doors open the interrupt level, and `intret` shuts it
+
+The hardware forces БлПр on at every vector, and for a long time nothing cleared it: `syscall()`,
+`badextr()` and `trap()` ran from the vector to the closing `выпр` with the clock stopped and every
+device completion held off. v7 does the opposite — the PDP-11 trap path drops the priority to 0
+before dispatching — and this kernel was already written for that: `clock()` takes its frame from
+`intrframe` *specifically* so a tick can nest inside a syscall.
+
+Worse, it was not merely missing but inconsistent, and the inconsistency was a live bug. No gate
+touches `curipl` (`intr.c`), so it still read **0** after a gate had landed in C with БлПр **set**.
+The first `spl` bracket in a syscall therefore opened the door by accident: `sleep()` does
+`s = spl6()` → `s == 0`, and its closing `splx(s)` calls `sti()`. Any syscall that slept reached
+`uj intret` unblocked — and `intret` cannot survive that. Below its first instructions it reloads
+СПСВ and IRET, single registers the hardware overwrites the instant an interrupt is taken, and
+re-stashes into the five shared temp cells. An interrupt in that ~20-instruction window returns the
+user to the wrong mode word.
+
+How it turned out:
+
+* **Three instructions in each synchronous gate**, after the frame fill and before the `13 vjm` —
+  `ita 021` / `aax #075777` / `ati 021`, which is `psw.s:sti()` inlined. Not one instruction
+  earlier: until the frame is complete, СПСВ/ERET and the cells are the only copy of the interrupted
+  context. Unconditional in `trapgate` too, since a fault from supervisor panics anyway.
+* **Three more at the top of `intret`**, the matching `cli`. Enforcing the level in the shared
+  epilogue covers all four doors and any future C tail, where a `cli()` per C exit path would have
+  to be got right once per path forever.
+* **Inlined, not called.** `13 vjm sti` inside a block that uses `sti N` as a *machine instruction* a
+  dozen times over is unreadable; and both literals assemble to a bare 12-bit constant-pool address,
+  so no `мода` is emitted and M[16] is untouched.
+* **`curipl` is not touched by any of it.** It already reads 0 for an entry from user, and `выпр`
+  restores БлПр from СПСВ on the way out — the same asymmetry `extintr()`'s closing repair relies on.
+* **`intrgate` is exempt**: a handler runs at raised level and the return drops it, as `rtt` does.
+* Checked on the machine: `usys` reads ПСВ back inside every dispatched handler (`getpsw()`, new in
+  `psw.s`) and fails with `F_IPL` if БлПр is still set. Deleting the enable makes it fail; that was
+  verified, not assumed.
+
 ### Five hardware rules everything below obeys
 
 1. **РП/РЗ cannot be read back.** The map is a shadow table in memory: `u.u_upt[8]`, eight words,

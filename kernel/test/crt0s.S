@@ -312,6 +312,12 @@ sysgate:
         its     1               // frame[19] := M2    ; A := M1
         xts     save_a          // frame[20] := M1    ; M15 := F+21 (above the frame)
 
+        // --- open the interrupt level for the C call, as kernel/besm6.S does: usys checks from
+        //     inside a sysent stub that БлПр really is clear here (F_IPL) ---
+        ita     021
+        aax     #075777         // clear БлПр: interrupts delivered
+        ati     021
+
      13 vjm     syscall         // kernel/syscall.c -- THE REAL ONE
         uj      intret
 
@@ -353,12 +359,25 @@ badext:
         its     1
         xts     save_a
 
+        // --- open the interrupt level for the C call, as in sysgate ---
+        ita     021
+        aax     #075777         // clear БлПр: interrupts delivered
+        ati     021
+
      13 vjm     badextr         // kernel/syscall.c -- THE REAL ONE
 
         // --- restore: the exact inverse of the fill (kernel/besm6.S:intret).  stx/sti pop
         //     frame[20..0], M15 walking F+21 -> F; old M15, Y, R and A are re-stashed to the
-        //     cells and applied last, in the forced order Y -> A -> R (§7). ---
+        //     cells and applied last, in the forced order Y -> A -> R (§7).
+        //
+        //     It shuts the door first, for the reason the original does: the gates above opened
+        //     the level for their C call, and everything below reloads single registers (СПСВ,
+        //     IRET) and the five shared cells, none of which survives a nested gate. ---
 intret:
+        ita     021             // A := ПСВ
+        aox     #02000          //   set БлПр: external interrupts blocked
+        ati     021
+
         stx                     // A := M1 from frame[20]
         sti     1               // restore M1; A := M2 from frame[19]
         sti     2

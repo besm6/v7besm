@@ -152,4 +152,16 @@
                                     the interrupt has been loaded into the RK register */
 #define SPSW_INTR_DISABLE 02000  /* БлПр - external interrupts disabled */
 
+/*
+ * Bits of ПСВ, the LIVE mode word (register 021).  The low two and БлПр sit where they do in
+ * СПСВ -- `выпр' copies one into the other -- but the rest do not: where СПСВ reports how the
+ * trap was taken, ПСВ carries the halt-on-fault switches.  Only the bits this kernel names are
+ * here; cli()/sti() (kernel/psw.s) own БлПр, and getpsw() is how C reads it back.
+ */
+#define PSW_MMAP_DISABLE 00001  /* БлП  - data mapping disabled */
+#define PSW_PROT_DISABLE 00002  /* БлЗ  - data protection disabled */
+#define PSW_INTR_HALT    00004  /* ПоП  - halt, do not vector, on an internal interrupt */
+#define PSW_CHECK_HALT   00010  /* ПоК  - halt, do not vector, on an instruction check */
+#define PSW_INTR_DISABLE 02000  /* БлПр - external interrupts disabled */
+
 #endif /* _SYS_BESM6DEV_H */

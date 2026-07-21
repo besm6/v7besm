@@ -20,6 +20,11 @@
  *   4. An unimplemented extracode (э50).  Checks badext signals SIGINS and the program resumes
  *      with its machine intact.
  *
+ * Every leg also checks the INTERRUPT LEVEL: each handler reads ПСВ back through getpsw() and the
+ * report fails if БлПр was still set.  The hardware forces it on at the vector, so this is the
+ * assertion that the gate opens it again before dispatching -- v7's spl0()-on-entry, without which
+ * a system call runs to completion with the clock stopped.
+ *
  * usys.ini asserts ACC == 0.  A nonzero ACC names the failing check -- see the F_* bits.
  */
 
@@ -56,6 +61,9 @@ void halt(unsigned mask);
 
 /* brz.s */
 void drainbrz(void);
+
+/* psw.s -- reads ПСВ back, which is the only way to see the interrupt level from C */
+int getpsw(void);
 
 /* Must match the EQUs in crt0s.S. */
 #define R13V   054321U /* forged r13 */
@@ -105,6 +113,7 @@ void drainbrz(void);
 #define F_BADEXT 0010000 /* leg 4: badextr() did not signal SIGINS exactly once */
 #define F_ACC4   0020000 /* leg 4: badext disturbed the machine */
 #define F_R15C   0040000 /* leg 4: badext moved r15 */
+#define F_IPL    0100000 /* a door dispatched with БлПр still set: the level was never opened */
 
 static unsigned mask;
 
@@ -115,6 +124,7 @@ static int ncall;                /* how many sysent handlers ran */
 static int lastcall;             /* the number of the last one */
 static int sawarg[3];            /* leg 2's arguments, in the order the callee saw them */
 static int nsig, lastsig;        /* psignal() from badextr() */
+static int sawpsw;               /* ПСВ as every dispatched handler saw it, OR-ed together */
 
 /* ------------------------------------------------------------------------- */
 /* The environment kernel/syscall.c needs.                                    */
@@ -127,6 +137,7 @@ static int nsig, lastsig;        /* psignal() from badextr() */
 static void stub_two(void)
 {
     ncall++;
+    sawpsw |= getpsw();
     lastcall     = 20;
     u.u_r.r_val1 = VAL1;
     u.u_r.r_val2 = VAL2;
@@ -146,6 +157,7 @@ static void stub_three(void)
     } *uap = (struct a *)u.u_ap;
 
     ncall++;
+    sawpsw |= getpsw();
     lastcall     = 3;
     sawarg[0]    = uap->a1;
     sawarg[1]    = uap->a2;
@@ -157,6 +169,7 @@ static void stub_three(void)
 static void stub_none(void)
 {
     ncall++;
+    sawpsw |= getpsw();
     lastcall = -1;
 }
 
@@ -166,6 +179,7 @@ static void stub_none(void)
 void nosys(void)
 {
     ncall++;
+    sawpsw |= getpsw();
     lastcall  = 0;
     u.u_error = EINVAL;
 }
@@ -234,6 +248,7 @@ void qswtch(void)
 void psignal(struct proc *p, int sig)
 {
     nsig++;
+    sawpsw |= getpsw();
     lastsig = sig;
 }
 
@@ -294,6 +309,15 @@ void report(void)
         mask |= F_ACC4;
     if (s[S_R15C] != (int)USPV - 2)
         mask |= F_R15C;
+
+    /*
+     * Every leg: the gate opened the interrupt level before it dispatched.  БлПр is forced on at
+     * the vector, so a handler that sees it still set means the three instructions in crt0s.S
+     * (kernel/besm6.S over there) went missing -- and a syscall would run to completion with the
+     * clock stopped.  There is no C-visible shadow of this; it has to be read out of ПСВ.
+     */
+    if (sawpsw & PSW_INTR_DISABLE)
+        mask |= F_IPL;
 
     halt(mask); /* never returns */
 }

@@ -205,12 +205,23 @@ trapgate:
         //     is always at [ustkbase] and trap() reads that for itself.  A callee with no
         //     parameters returns M15 unchanged, so it comes back at F+21 -- the epilogue's
         //     precondition, with nothing to fix up. ---
+
+        // --- open the interrupt level for the C call, as kernel/besm6.S does ---
+        ita     021
+        aax     #075777         // clear БлПр: interrupts delivered
+        ati     021
+
      13 vjm     trap            // utrap.c: check the frame, back up the PC, open the page
 
         // --- restore: the exact inverse of the fill (kernel/besm6.S:intret).  stx/sti pop
         //     frame[20..0], M15 walking F+21 -> F; old M15, Y, R and A are re-stashed to the
-        //     cells and applied last, in the forced order Y -> A -> R (§7). ---
+        //     cells and applied last, in the forced order Y -> A -> R (§7).  It shuts the door
+        //     first: the gate opened the level, and nothing below survives a nested gate. ---
 intret:
+        ita     021             // A := ПСВ
+        aox     #02000          //   set БлПр: external interrupts blocked
+        ati     021
+
         stx                     // A := M1 from frame[20]
         sti     1               // restore M1; A := M2 from frame[19]
         sti     2

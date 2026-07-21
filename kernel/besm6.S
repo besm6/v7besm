@@ -95,18 +95,24 @@ MOD  = 020                      // C register / address modifier (М020 = M16)
       : uj badext               // 0576: extracode *76
       : uj sysgate              // 0577: extracode *77 -- the syscall gate
 
-// Temp cells for the two asynchronous gates below -- `intrgate' (0501) and `trapgate' (0500).
-// ONE copy serves both, and that is not an oversight:
+// Temp cells for the four gates below -- `sysgate'/`badext' (0577/0550), `trapgate' (0500) and
+// `intrgate' (0501).  ONE copy serves all four, and that is not an oversight:
 //   * A cell is live only across a gate's prologue and its epilogue; in between (while the C
 //     handler runs) the values already sit in the frame and the cells are dead.
-//   * Both windows run with БлПр set -- the hardware forces it on when it takes the interrupt or
-//     the fault, and only the closing `выпр' clears it -- so no external interrupt can land in
-//     them, and the kernel runs unmapped (БлП = БлЗ = 1), so no fault can either.
-//   * The gates therefore cannot overlap: neither can be re-entered, and neither can preempt
-//     the other's live window.  (A second internal fault taken inside a gate is fatal anyway --
-//     СПСВ and IRET are single registers, not a stack.)
-// The epilogue is shared as well: `trapgate' jumps into `intret' below, which pops the frame and
-// re-applies these cells, so the two gates MUST fill the same five.
+//   * BOTH LIVE WINDOWS RUN WITH БлПр SET, so no external interrupt can land in them, and the
+//     kernel runs unmapped (БлП = БлЗ = 1), so no fault can either.  The two halves get that
+//     guarantee from different places, and the difference matters:
+//       - the PROLOGUE is covered by the hardware, which forces БлПр on when it takes the
+//         interrupt, the fault or the extracode;
+//       - the EPILOGUE covers itself.  The C handler does NOT run blocked -- the three
+//         synchronous gates open the level for it, which is v7's spl0()-on-entry (see the call
+//         sites below) -- and what it leaves behind is not the gate's to predict, so `intret'
+//         re-blocks as its own first act rather than trusting the caller.
+//   * The gates therefore cannot overlap: none can be re-entered, and none can preempt another's
+//     live window.  (A second internal fault taken inside a gate is fatal anyway -- СПСВ and IRET
+//     are single registers, not a stack.)
+// The epilogue is shared as well: all four gates end in `intret' below, which pops the frame and
+// re-applies these cells, so they MUST fill the same five.
 //
 // They live here in .const/.text (they link low -- under 0700, unix.nm) so every cell fits the
 // 12-bit short-address field and the gate reaches them with a bare `atx save_a'.  This is not a
@@ -207,8 +213,22 @@ bhalt:  stop                        // main returned / faulted upstream: resumab
 //     at the top of trap().
 //
 //   * THE STACK SWITCH IS UNCONDITIONAL, as in `trapgate': an extracode only ever comes from user
-//     (the kernel never issues one), so this door never nests, the frame is always at [ustkbase],
-//     and the C side takes void and finds it at u.u_stack.
+//     (the kernel never issues one), so the DOOR never nests, the frame is always at [ustkbase],
+//     and the C side takes void and finds it at u.u_stack.  (What does nest above that frame is an
+//     external interrupt, once the gate opens the level below -- `intrgate's conditional switch is
+//     there precisely for it, and clock() reads its frame out of `intrframe' for the same reason.)
+//
+//   * THE GATE OPENS THE INTERRUPT LEVEL before it calls C.  The hardware forces БлПр on at the
+//     vector, and БлПр is this kernel's interrupt priority (kernel/intr.c), so without the three
+//     instructions below a system call would run to completion with the clock stopped and every
+//     device completion held off -- which is not what v7 does: the PDP-11 trap path drops the
+//     priority to 0 before dispatching.  The enable sits AFTER the fill and not one instruction
+//     earlier, because until the frame is complete СПСВ/ERET and the five cells are the only copy
+//     of the interrupted context and an interrupt would overwrite them (doc/Memory_Mapping.md,
+//     "There is exactly one saved-state slot").  `curipl' is deliberately NOT touched: it already
+//     reads 0 here, because the interrupted user was running at level 0 and no gate moves it.
+//     `trapgate' and `badext' do the same, for the same reason; `intrgate' does not -- a handler
+//     runs at raised level and the return drops it, as `rtt' does on the PDP-11.
 //
 // The two gates are duplicated rather than sharing a body with a discriminator.  Nothing before
 // the frame is filled can tell the doors apart -- the hardware identifies an extracode purely by
@@ -260,6 +280,13 @@ sysgate:
         its     1                   // frame[19] := M2    ; A := M1
         xts     save_a              // frame[20] := M1    ; M15 := F+21 (above the frame); A discarded
 
+        // --- open the interrupt level for the C call: v7's spl0()-on-entry (see the header).
+        //     Safe only here -- the frame is complete, so the five cells and СПСВ/ERET are dead.
+        //     The read-modify-write is psw.s:sti() inlined; A and M16 are both dead. ---
+        ita     021                 // A := ПСВ
+        aax     #075777             //   clear БлПр (077777 & ~02000): interrupts delivered
+        ati     021                 // ПСВ := A
+
      13 vjm     syscall             // syscall.c: marshal the arguments, dispatch, return
 
         uj      intret              // the shared epilogue in `intrgate' below
@@ -308,6 +335,11 @@ badext:
         its     1
         xts     save_a
 
+        // --- open the interrupt level for the C call, as in `sysgate' ---
+        ita     021
+        aax     #075777             // clear БлПр: interrupts delivered
+        ati     021
+
      13 vjm     badextr             // syscall.c: SIGINS
 
         uj      intret
@@ -325,7 +357,7 @@ badext:
 // A fault is asynchronous with respect to the register set -- it can land on any instruction --
 // so the prologue, the FULSAV fill and the call are `intrgate's, instruction for instruction; the
 // header over `intrgate' is the authority for every step of them, and for why R, Y, M[16] and M15
-// must be saved by hand.  Only two things differ:
+// must be saved by hand.  Only three things differ:
 //
 //   * THE STACK SWITCH IS UNCONDITIONAL.  `intrgate' switches M15 only when the interrupted context
 //     was user (СПСВ & 014 == 0), because an external interrupt legitimately nests inside the
@@ -352,6 +384,15 @@ badext:
 //     that faulted, and a plain `выпр' would skip it.  Undoing that is the kernel's job
 //     (doc/Memory_Mapping.md, "The restart protocol").  It is done in C, at the top of trap(),
 //     because the frame is aliased in place and two lines of C beat eight of branchy assembly.
+//
+//   * THE INTERRUPT LEVEL IS OPENED before the call, exactly as in `sysgate' -- see that gate's
+//     header for why, and why not one instruction earlier.  It matters here for the same reason it
+//     matters there: the fault a user process takes most often is the stack-growth fault, and
+//     grow() sleeps.  UNCONDITIONALLY, though `intrgate' discriminates for its stack switch and
+//     could here too.  A fault from supervisor is a kernel bug that ends in panic("trap"), so the
+//     one thing a discriminator would buy -- never opening the level while `curipl' says some
+//     bracket holds it -- protects a context that is about to stop executing anyway, and the price
+//     is a second place where this gate stops being `sysgate' instruction for instruction.
 //
 // The gate does NOT point u.u_ar0 at the frame; trap() does that itself, in C (`u.u_ar0 =
 // (int *)u.u_stack'), for the same reason `intrgate' leaves it alone: doing it here would need a
@@ -400,6 +441,11 @@ trapgate:
         its     2
         its     1                   // frame[19] := M2    ; A := M1
         xts     save_a              // frame[20] := M1    ; M15 := F+21 (above the frame); A discarded
+
+        // --- open the interrupt level for the C call, as in `sysgate' (grow() sleeps) ---
+        ita     021
+        aax     #075777             // clear БлПр: interrupts delivered
+        ati     021
 
      13 vjm     trap                // trap.c: back up the PC, decode ГРП, signal or grow
 
@@ -475,10 +521,15 @@ trapgate:
 // u_ar0 means the USER's saved registers; a tick nested in the kernel frames a KERNEL context, so
 // pointing u_ar0 at it is a small lie even for the length of one call.  A private cell has neither
 // problem.  One cell suffices for the same reason one `save_a' does: БлПр is held from the vector
-// to the closing `выпр', so this gate cannot re-enter itself.
+// to the closing `выпр' -- THIS gate never opens it, unlike the three synchronous ones -- so this
+// gate cannot re-enter itself.
 //
-// Interrupts stay blocked throughout (the hardware sets БлПр on entry, and `выпр` restores the
-// mode word from SPSW on the way out), so one set of temp cells is safe -- intrgate cannot re-enter.
+// Interrupts stay blocked throughout THIS gate: the hardware sets БлПр on entry, nothing here
+// clears it (extintr() and the handlers under it only ever raise the level, and extintr()'s closing
+// repair moves the software shadow alone -- see intr.c), and `выпр' restores the mode word from
+// SPSW on the way out.  That is what makes one set of temp cells safe here.  It is NOT what makes
+// them safe in the three synchronous gates, which do open the level for their C call; there the
+// epilogue re-blocks for itself, at the top of `intret' below.
 //
 // The same gate, and the reasoning behind it, is exercised standalone against SIMH by
 // kernel/test/crt0u.s + uintr.c, which forges user-mode entry so the stack switch is tested.
@@ -541,12 +592,29 @@ extk:                               // M15 = frame base F (ustkbase, or the inte
         //     Y -> A -> R order (§7).  M1-M7 are ABI callee-saved, so their reload is redundant but
         //     keeps the pop symmetric.  A blank-address `stx' stores to word 0, which is discarded.
         //
-        //     `trapgate' (0500) jumps to `intret' rather than carry its own copy: the frame is the
-        //     same reg.h frame, the five cells are the same five, and both doors leave through
-        //     `3 ij' (М033 = IRET).  Its precondition is M15 = F+21 and A dead, which is where the
-        //     C call leaves both gates.  What differs between the doors is entirely upstream --
-        //     the stack-switch rule and the PC fixup -- so there is nothing to parameterise here. ---
+        //     `trapgate' (0500), `sysgate' (0577) and `badext' (0550) jump to `intret' rather than
+        //     carry their own copies: the frame is the same reg.h frame, the five cells are the same
+        //     five, and every door leaves through `3 ij' (М033 = IRET).  Its precondition is
+        //     M15 = F+21 and A dead, which is where the C call leaves all four gates.  What differs
+        //     between the doors is entirely upstream -- the stack-switch rule, the PC fixup, which
+        //     return register the fill reads -- so there is nothing to parameterise here.
+        //
+        //     THE FIRST THING IT DOES IS SHUT THE DOOR, and that is a precondition it enforces
+        //     rather than inherits.  Everything below this point is unrepeatable: `sti SPSW' and
+        //     `sti IRET' reload М027 and М033, single registers that the hardware overwrites the
+        //     instant an interrupt is taken, and the tail re-stashes into the same five cells a
+        //     nested gate would spill into.  `intrgate' arrives here already blocked, but the three
+        //     synchronous gates opened the level for their C call and what the C side left behind is
+        //     not knowable from here -- an spl bracket that ended in splx(0) is enough.  Three
+        //     instructions here cover every door and every future tail; the alternative, a cli in
+        //     each C exit path, would have to be got right once per path forever.  A is dead on
+        //     entry (the `stx' below overwrites it) and M16 is reloaded from frame[5] further
+        //     down. ---
 intret:
+        ita     021                 // A := ПСВ
+        aox     #02000              //   set БлПр: external interrupts blocked (psw.s:cli inlined)
+        ati     021                 // ПСВ := A
+
         stx                         // A := M1 from frame[20]
         sti     1                   // restore M1; A := M2 from frame[19]
         sti     2

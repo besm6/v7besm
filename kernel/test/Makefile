@@ -98,8 +98,9 @@ utrap:  crt0t.o utrap.o utab.o brz.o
 # usys is the third forge test, on the EXTRACODE door (0577/0550).  Unlike uintr and utrap it
 # links the code under test itself -- the kernel's real syscall.o -- which is why that dispatcher
 # lives in its own file (kernel/syscall.c); only the gates are duplicated, into crt0s.S.  It also
-# needs usermem.o for fuword(), which syscall() marshals the arguments with.  See usys.ini.
-usys:   crt0s.o usys.o syscall.o utab.o brz.o usermem.o
+# needs usermem.o for fuword(), which syscall() marshals the arguments with, and psw.o for
+# getpsw(), which is how the stubs check the gate opened the interrupt level.  See usys.ini.
+usys:   crt0s.o usys.o syscall.o utab.o brz.o usermem.o psw.o
 	$(link)
 
 # uclock is the fourth forge test: it takes a real TIMER interrupt in user mode and checks that it

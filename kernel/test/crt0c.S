@@ -211,8 +211,16 @@ extk:                           // M15 = frame base F (ustkbase, or the interrup
      13 vjm     extintr         // kernel/intr.c -- THE REAL ONE
 
 
-        // --- restore: the exact inverse of the fill (kernel/besm6.S:intret) ---
+        // --- restore: the exact inverse of the fill (kernel/besm6.S:intret).  The `cli' it opens
+        //     with is inert in THIS file -- 0501 is the only door here and the hardware has held
+        //     БлПр since the vector -- but the block is kept identical to the kernel's, which is
+        //     what makes the copy auditable by diff.  Over there the synchronous gates open the
+        //     level for their C call and this is what shuts it again. ---
 intret:
+        ita     021             // A := ПСВ
+        aox     #02000          //   set БлПр: external interrupts blocked
+        ati     021
+
         stx                     // A := M1 from frame[20]
         sti     1               // restore M1; A := M2 from frame[19]
         sti     2

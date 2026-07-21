@@ -4,6 +4,7 @@
 //
 // void cli(void);    -- set БлПр: external interrupts blocked
 // void sti(void);    -- clear БлПр: external interrupts delivered
+// int  getpsw(void); -- read ПСВ back
 //
 // On the BESM-6 the global interrupt flag is the БлПр bit (02000) of ПСВ, the mode word
 // M[021].  This is the kernel's INTERRUPT PRIORITY, not merely a guard around short
@@ -33,4 +34,15 @@ sti:                             // clear БлПр -> external interrupts ON
         ita     021              // A := ПСВ
         aax     #075777          //   clear БлПр (077777 & ~02000), keep the other bits
         ati     021              // ПСВ := A
+     13 uj
+
+// ПСВ, unlike РП and РЗ, CAN be read back, and this is the only way to say so in C.  The kernel
+// itself never calls it -- it tracks the level in `curipl' (intr.c) and reads the interrupted mode
+// word out of the trap frame -- so it is dropped from the image by the link-pull of libunix.a.  It
+// exists for kernel/test/usys.c, which asserts from inside a sysent stub that the extracode gate
+// really did open БлПр before dispatching (F_IPL).  Nothing else can check that: the level is a
+// hardware bit, and every C-visible shadow of it would agree either way.
+        .globl  getpsw
+getpsw:
+        ita     021              // A := ПСВ -- the result, in the accumulator
      13 uj

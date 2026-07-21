@@ -69,7 +69,9 @@ document says what each routine must do; this one walks the path they form.
 A trap on this machine is cheap and nearly empty. The hardware:
 
 - forces **БлП, БлЗ and БлПр on** — so the handler runs unmapped, with data protection off and
-  external interrupts blocked;
+  external interrupts blocked. Only the *prologue* keeps that last one: the three synchronous gates
+  clear БлПр once the frame is safe, because a system call must not run with the clock stopped
+  (§10);
 - saves the old mode bits, plus the supervisor bits, in **SPSW** (`M[027]` — the register
   [Memory_Mapping.md](Memory_Mapping.md) and the Russian sources call СПСВ);
 - deposits the return PC in **IRET** (`M[033]`) for an interrupt or fault, or **ERET** (`M[032]`)
@@ -205,10 +207,16 @@ reach: A (it *is* the pipeline register), R and Y (only `rte`/`yta` read them, a
 `M[16]` (must be spilled before the stack switch), and the interrupted М15 (the pipeline's own frame
 pointer, about to be repointed).
 
-**Why one copy serves every gate.** БлПр is held from the vector to the closing `выпр`, and the
-kernel runs unmapped, so no external interrupt and no fault can land inside a gate's live window. The
-gates cannot re-enter themselves and cannot preempt each other. (A second internal fault taken inside
-a gate is fatal regardless — SPSW and IRET are single registers, not a stack.)
+**Why one copy serves every gate.** No external interrupt and no fault can land inside a gate's live
+window, so the gates cannot re-enter themselves and cannot preempt each other. (A second internal
+fault taken inside a gate is fatal regardless — SPSW and IRET are single registers, not a stack.) The
+"no fault" half is the kernel running unmapped. The "no interrupt" half comes from two different
+places, and the difference is the whole of §10's exit rule:
+
+- across the **prologue**, from the hardware, which forces БлПр on at the vector;
+- across the **epilogue**, from the epilogue itself. The cells are dead while the C handler runs,
+  and the handler does *not* run blocked — the three synchronous gates open the level for it — so
+  `intret` re-blocks as its own first act rather than trusting what the C side left behind.
 
 **Why they live in `.text`.** They link below `07777`, so the gate reaches them with a bare 12-bit
 `atx save_a`. This is not a nicety: a `< sym >` escape emits a `мода`/`utc` that loads `M[16]`, so an
@@ -272,8 +280,10 @@ data. Silent corruption, invisible until a device ISR is actually armed.
 An extracode only ever comes from user (the kernel never issues one), and a *fault* from supervisor
 is a kernel bug — the user-access family validates its range up front with `useracc()` and there is no
 `nofault` path anywhere, so `trap()` takes such a fault to the `default` arm and panics. Resetting
-М15 under a panic is harmless. Neither door nests; the frame is always at the link-time constant, and
-neither gate passes anything to C.
+М15 under a panic is harmless. Neither *door* nests; the frame is always at the link-time constant,
+and neither gate passes anything to C. (What does nest above that frame is an external interrupt,
+once the gate opens the level for its C call — which is the case `intrgate`'s conditional switch
+below is there to serve.)
 
 `intrgate` is the exception, because an external interrupt legitimately nests inside the kernel and
 must not have the stack pulled out from under an interrupted C frame:
@@ -317,8 +327,8 @@ for the current register frame. Three reasons it is wrong here:
 - `u_ar0` means the **user's** saved registers. A tick nested in the kernel frames a *kernel*
   context; pointing `u_ar0` at it is a small lie even for the length of one call.
 
-One cell suffices for the same reason one `save_a` does: БлПр is held throughout, so the gate cannot
-re-enter itself.
+One cell suffices for the same reason one `save_a` does: БлПр is held throughout *this* gate — 0501
+is the one door that never opens the level — so the gate cannot re-enter itself.
 
 ## 6. The fill
 
@@ -533,6 +543,13 @@ notification that must not be lost.
 `kernel/psw.s`, a read-modify-write of ПСВ bit `02000` — never a `vtm`, because `vtm N,0` writes БлП,
 БлЗ *and* БлПр together. МГРП is armed once by `intrinit()` and never rewritten.
 
+**The gates open it, as v7's trap path does.** The hardware forces БлПр on at the vector, so
+`sysgate`, `badext` and `trapgate` each clear it again — three instructions, right after the fill —
+before calling C. Without that a system call would run to completion with the clock stopped and
+every device completion held off, which is not what v7 does. `intrgate` does *not*: an interrupt
+handler runs at raised level and the `выпр` drops it, exactly as `rtt` does on the PDP-11. None of
+the four touches `curipl`, which already reads 0 for an entry from user mode.
+
 The two used to be the other way round, and they fought: `spl0()` opened МГРП while БлПр still
 blocked everything, so no interrupt could be taken in kernel mode at all. That became load-bearing
 the moment `idle()` needed to spin waiting for one.
@@ -552,6 +569,9 @@ One epilogue, `intret`, serves all four doors. It is the fill run backwards: `st
 
 ```
 intret:
+        ita     021                 // A := ПСВ
+        aox     #02000              //   set БлПр: external interrupts blocked
+        ati     021
         stx                         // A := M1 from frame[20]
         sti     1                   // restore M1; A := M2 from frame[19]
         ...
@@ -575,6 +595,16 @@ intret:
 Its precondition is М15 = `F+21` and A dead — which is exactly where a C call with no parameters
 leaves every gate, since a callee with no parameters returns М15 unchanged
 ([Besm6_Calling_Conventions.md](Besm6_Calling_Conventions.md)).
+
+**It shuts the door first, and that is a precondition it enforces rather than inherits.** Everything
+below that point is unrepeatable: `sti SPSW` and `sti IRET` reload М027 and М033, single registers
+the hardware overwrites the instant an interrupt is taken, and the tail re-stashes into the same five
+cells a nested gate would spill into. An interrupt anywhere in that window returns the user to the
+wrong mode word. `intrgate` arrives already blocked, but the three synchronous gates opened the level
+for their C call (§9) and what the C side leaves behind is not knowable from here — an `spl` bracket
+ending in `splx(0)` is enough, and `sleep()` contains exactly one. Three instructions at the top
+cover every door and every future tail; the alternative, a `cli()` in each C exit path, would have to
+be got right once per path forever.
 
 **Four details are not obvious**, and all four are Dubna's ([Dubna_Context_Switch.md](Dubna_Context_Switch.md) §7):
 
@@ -791,7 +821,7 @@ hand-built environment, forges user mode, and asserts on machine state from the 
 | Test | Exercises |
 |---|---|
 | `crt0t.S` + `utrap.c` | `trapgate` (0500): faults on a closed page, checks the faulting instruction re-executes after the map is opened — from **both** instruction halves |
-| `crt0s.S` + `usys.c` | `sysgate` (0577) and `badext` (0550): issues `$77 N` with arguments staged the real way, checks ACC / r14 / r12 / r13 and a balanced r15 |
+| `crt0s.S` + `usys.c` | `sysgate` (0577) and `badext` (0550): issues `$77 N` with arguments staged the real way, checks ACC / r14 / r12 / r13 and a balanced r15 — and, in every handler, that the gate cleared БлПр before dispatching (`getpsw()`, §9) |
 | `crt0u.S` + `uintr.c` | `intrgate` (0501), including the conditional stack switch |
 | `mmutest` | `sureg()` programming РП/РЗ, checked from C *and* by examining РП/РЗ from the `.ini` |
 | `uswtch`, `usched`, `uclock` | `save`/`resume`, the scheduler loop, the timer |
