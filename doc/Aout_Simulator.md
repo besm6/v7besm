@@ -248,7 +248,7 @@ field. The six calls with a second result deliver it in `r12` — see [§3](#3-h
 
 | Group | Calls |
 |-------|-------|
-| Process | `exit`, `fork`, `exec`/`exece`, `wait`, `getpid`, `getuid`/`setuid`, `getgid`/`setgid`, `nice`, `kill`, `signal`†, `pause`, `alarm`, `times`, `break` (heap/`sbrk`) |
+| Process | `exit`, `fork`, `exec`/`exece`, `wait`, `getpid`, `getuid`/`setuid`, `getgid`/`setgid`, `nice`, `kill`, `signal`†, `pause`, `alarm`, `times`, `break`¶ (heap/`sbrk`) |
 | Files & I/O | `open`, `creat`, `close`, `read`, `write`, `seek` (`lseek`), `dup`, `pipe`, `stat`/`fstat`, `access`, `stty`/`gtty`‡ |
 | Filesystem | `link`, `unlink`, `chdir`, `chroot`, `chmod`, `chown`, `mknod`, `utime`, `umask`, `sync` |
 | Time | `time`, `ftime`, `stime`§ |
@@ -259,6 +259,11 @@ field. The six calls with a second result deliver it in `r12` — see [§3](#3-h
 host's signal context and returns `EINVAL`.
 ‡ `stty`/`gtty` honour only "is this a terminal?".
 § `stime` cannot set the host clock and quietly succeeds.
+¶ `break` takes a virtual **word** address, not a byte count — the fat-pointer marker and byte
+offset are masked off, so a `char *` and a plain word address are both accepted. The new break is
+rounded up to a whole page, and the call fails with `ENOMEM` if that reaches the stack. The
+kernel's own gate follows the same rule (`sbreak()` in `kernel/sys1.c`), so one `sbrk()` serves
+both.
 
 Files, standard input/output/error, and pipes map straight onto the corresponding host
 descriptors, so a program's output appears in your terminal and the files it creates are real

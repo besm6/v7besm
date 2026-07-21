@@ -560,7 +560,21 @@ void sbreak()
      * set n to new total size
      */
 
-    n = pground(btow((int)((struct a *)u.u_ap)->nsiz));
+    /*
+     * The argument is a virtual WORD address, not a byte count: on a word machine
+     * the break names a word, and cmd/sim/syscall.cpp already read it that way.  v7's
+     * btow() here made the two gates disagree by a factor of six, so it is gone --
+     * libc's sbrk() converts its byte increment with btow() on its own side and hands
+     * the gate a whole number of words.
+     *
+     * ptrword() masks to bits 15-1, which is cmd/sim's `& BITS(15)' spelled in C: a
+     * caller may pass either a fat char * (curbrk) or a plain word address, and the
+     * two implementations of the gate cannot drift.  The byte offset is dropped, so
+     * the ABI is a word-ALIGNED pointer; a mid-word char * floors the break to its
+     * word.  The mask also makes the value non-negative, so the `n < 0' below is now
+     * purely about a break that lands below the text.
+     */
+    n = pground(ptrword(((struct a *)u.u_ap)->nsiz));
     if (!u.u_sep)
         n -= u.u_tsize;
     if (n < 0)

@@ -128,11 +128,26 @@ of marker + offset 5, `(char *)someInt` and `(int)somePtr` to a silent `COPY`, a
 [`../kernel/TODO.md`](../kernel/TODO.md); `mmutest` check 25 asserts the round trip, since
 `exece()` itself cannot run until 18b.6 mounts a root filesystem.
 
-**0.2 `break` disagrees about its argument.** The kernel's `sbreak()` does `btow(nsiz)` — a
-byte count — while `b6sim` masks the argument to 15 bits and treats it as a word address. A
+**0.2 DONE — `break` disagrees about its argument.** The kernel's `sbreak()` did `btow(nsiz)` —
+a byte count — while `b6sim` masks the argument to 15 bits and treats it as a word address. A
 word address is the sensible reading on a word machine and it is what the simulator already
-does; drop the `btow`. `sbrk()` then converts its byte argument itself and hands back a fat
-pointer to the old break.
+does, so the kernel is the side that moved.
+
+*How it turned out.* Not a bare `(int)` cast but `ptrword()`
+([`../include/sys/param.h`](../include/sys/param.h)), which is `& 077777` — `b6sim`'s
+`& BITS(15)` spelled in C, so the two gates now implement one rule literally rather than two
+that happen to agree. The consequence for this library is that **either spelling is legal at
+the gate**: a fat `char *` (which is what `curbrk` naturally is) and a plain word address both
+arrive as the same 15-bit value, and the byte offset is simply dropped. So the ABI is a
+word-*aligned* pointer — a mid-word `char *` floors the break to its word — and the `brk`/`sbrk`
+pair of phase 1 keeps `curbrk` as a real `char *`, converts its byte increment with `btow()`
+itself, calls `brk` with a whole number of words, and hands back the old break as the fat
+pointer it already holds. Everything else about the two gates already agreed and was left
+alone: both round the new break up to a whole page, both refuse growth that reaches the stack at
+`070000` (the kernel through `estabur()`'s `nt + nd > USTKPAGE * PGSZ`), and both return 0.
+`btow()` stays everywhere else in [`../kernel/sys1.c`](../kernel/sys1.c): `struct exec`'s
+segment sizes really are byte counts. `b6sim` is untouched, and its `Syscall.Break` test is now
+the shared spec for both.
 
 **0.3 `b6sim`'s exec ABI is a placeholder** — [`../cmd/sim/machine.cpp`](../cmd/sim/machine.cpp)
 pushes `argc` and leaves `argv` in the accumulator, saying so in its own comment. Teach it (and
