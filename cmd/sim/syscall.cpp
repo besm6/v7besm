@@ -38,6 +38,12 @@
 //
 // Unix v7 system call numbers (kernel/sysent.c).
 //
+// The guest has the same list, by the same names, in include/sys/syscall.h, which is
+// what lib/libc/sys/ issues its extracodes through; keep the two in step by hand.  It
+// cannot simply be #included here: b6sim is a HOST tool, and putting include/ on its
+// -I path would shadow the <stdio.h>, <errno.h>, <sys/stat.h> and <sys/times.h> it
+// includes for real.
+//
 enum {
     SYS_exit   = 1,
     SYS_fork   = 2,

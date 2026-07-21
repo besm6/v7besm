@@ -1,4 +1,4 @@
-# The uniform syscall stubs: `name number', one generated .s and one object each.
+# The uniform syscall stubs: `symbol macro', one generated .S and one object each.
 #
 # A stub is uniform when the call has nothing to do but issue the extracode, hand the
 # accumulator back and branch to cerror if r14 says the call failed.  sys/mkstub turns
@@ -6,11 +6,17 @@
 # argument that must survive the trap, a call that does not return on success -- is
 # hand-written beside this file and is NOT listed here.
 #
-# The numbers are kernel/sysent.c's, which is also where the ARITY lives: the gate
-# reads n-1 arguments from below r15, the nth from the accumulator, and pops the n-1
-# itself.  Nothing in the stub encodes n, so what matters is that the C prototype
-# callers use agrees with sysent[] (and with b6sim's syscall_nargs()).  The prototypes
-# are noted here for that reason -- they are the contract this file cannot express.
+# THE NUMBERS ARE NOT HERE.  Column 2 is the SYS_* macro from include/sys/syscall.h,
+# which the generated stub issues as `$77 SYS_open' -- so the number lives in exactly
+# one place on the guest side.  A second column is needed rather than deriving the
+# macro from the symbol, because three of them differ: lseek issues SYS_seek, _break
+# issues SYS_break, and libc has no symbol spelled exece at all.
+#
+# kernel/sysent.c is also where the ARITY lives: the gate reads n-1 arguments from
+# below r15, the nth from the accumulator, and pops the n-1 itself.  Nothing in the
+# stub encodes n, so what matters is that the C prototype callers use agrees with
+# sysent[] (and with b6sim's syscall_nargs()).  The prototypes are noted here for that
+# reason -- they are the contract this file cannot express.
 #
 # Three notes that would otherwise be re-litigated:
 #
@@ -26,45 +32,45 @@
 #   phase 6 and needs a kernel-side signal frame first, so there is no dvect/tvect
 #   trampoline of the kind the x86 port's sys/signal.s carried.
 #
-# name          number          C prototype
+# symbol        macro           C prototype
 
-read            3               # int read(int fd, char *buf, int n)
-write           4               # int write(int fd, char *buf, int n)
-open            5               # int open(char *path, int mode)
-close           6               # int close(int fd)
-creat           8               # int creat(char *path, int mode)
-link            9               # int link(char *target, char *linkname)
-unlink          10              # int unlink(char *path)
-chdir           12              # int chdir(char *path)
-mknod           14              # int mknod(char *path, int mode, int dev)
-chmod           15              # int chmod(char *path, int mode)
-chown           16              # int chown(char *path, int uid, int gid)
-_break          17              # int _break(char *addr) -- see sbrk.c; `break' is a keyword
-stat            18              # int stat(char *path, struct stat *buf)
-lseek           19              # off_t lseek(int fd, off_t off, int whence)
-mount           21              # int mount(char *spec, char *dir, int rdonly)
-umount          22              # int umount(char *spec)
-setuid          23              # int setuid(int uid)
-stime           25              # int stime(time_t *tp)
-ptrace          26              # int ptrace(int req, int pid, int *addr, int data)
-alarm           27              # int alarm(int sec)
-fstat           28              # int fstat(int fd, struct stat *buf)
-pause           29              # int pause(void)
-utime           30              # int utime(char *path, time_t *times)
-stty            31              # int stty(int fd, struct sgttyb *buf)
-gtty            32              # int gtty(int fd, struct sgttyb *buf)
-access          33              # int access(char *path, int mode)
-nice            34              # int nice(int incr)
-ftime           35              # int ftime(struct timeb *tp)
-sync            36              # int sync(void)
-kill            37              # int kill(int pid, int sig)
-times           43              # int times(struct tms *buf)
-profil          44              # int profil(char *buf, int n, int off, int scale)
-setgid          46              # int setgid(int gid)
-signal          48              # int (*signal(int sig, int (*func)()))()
-acct            51              # int acct(char *path)
-phys            52              # int phys(int segno, int npages, int physaddr)
-lock            53              # int lock(int flag)
-ioctl           54              # int ioctl(int fd, int req, char *argp)
-umask           60              # int umask(int mask)
-chroot          61              # int chroot(char *path)
+read            SYS_read        # int read(int fd, char *buf, int n)
+write           SYS_write       # int write(int fd, char *buf, int n)
+open            SYS_open        # int open(char *path, int mode)
+close           SYS_close       # int close(int fd)
+creat           SYS_creat       # int creat(char *path, int mode)
+link            SYS_link        # int link(char *target, char *linkname)
+unlink          SYS_unlink      # int unlink(char *path)
+chdir           SYS_chdir       # int chdir(char *path)
+mknod           SYS_mknod       # int mknod(char *path, int mode, int dev)
+chmod           SYS_chmod       # int chmod(char *path, int mode)
+chown           SYS_chown       # int chown(char *path, int uid, int gid)
+_break          SYS_break       # int _break(char *addr) -- see sbrk.c; `break' is a keyword
+stat            SYS_stat        # int stat(char *path, struct stat *buf)
+lseek           SYS_seek        # off_t lseek(int fd, off_t off, int whence)
+mount           SYS_mount       # int mount(char *spec, char *dir, int rdonly)
+umount          SYS_umount      # int umount(char *spec)
+setuid          SYS_setuid      # int setuid(int uid)
+stime           SYS_stime       # int stime(time_t *tp)
+ptrace          SYS_ptrace      # int ptrace(int req, int pid, int *addr, int data)
+alarm           SYS_alarm       # int alarm(int sec)
+fstat           SYS_fstat       # int fstat(int fd, struct stat *buf)
+pause           SYS_pause       # int pause(void)
+utime           SYS_utime       # int utime(char *path, time_t *times)
+stty            SYS_stty        # int stty(int fd, struct sgttyb *buf)
+gtty            SYS_gtty        # int gtty(int fd, struct sgttyb *buf)
+access          SYS_access      # int access(char *path, int mode)
+nice            SYS_nice        # int nice(int incr)
+ftime           SYS_ftime       # int ftime(struct timeb *tp)
+sync            SYS_sync        # int sync(void)
+kill            SYS_kill        # int kill(int pid, int sig)
+times           SYS_times       # int times(struct tms *buf)
+profil          SYS_profil      # int profil(char *buf, int n, int off, int scale)
+setgid          SYS_setgid      # int setgid(int gid)
+signal          SYS_signal      # int (*signal(int sig, int (*func)()))()
+acct            SYS_acct        # int acct(char *path)
+phys            SYS_phys        # int phys(int segno, int npages, int physaddr)
+lock            SYS_lock        # int lock(int flag)
+ioctl           SYS_ioctl       # int ioctl(int fd, int req, char *argp)
+umask           SYS_umask       # int umask(int mask)
+chroot          SYS_chroot      # int chroot(char *path)

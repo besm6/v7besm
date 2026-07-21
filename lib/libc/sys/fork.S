@@ -14,11 +14,13 @@
 //
 // fork takes no arguments, so the gate pops nothing and r15 is untouched throughout.
 //
+#include <sys/syscall.h>
+
         .text
         .globl  fork, par_uid, cerror
 
 fork:
-        $77 2                   // SYS_fork
+        $77     SYS_fork
      14 v1m     cerror
      12 vzm     fk_p            // r12 == 0: the parent, and A is already the child's pid
         atx     <par_uid>       // the child: bank the parent's pid ...

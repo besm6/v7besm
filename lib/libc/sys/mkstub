@@ -3,8 +3,12 @@
 # mkstub NAME TABLE -- write the uniform syscall stub for NAME on stdout.
 #
 # Called once per entry of sys/syscalls.tbl by lib/libc/Makefile, which keeps one
-# generated .s and one object per syscall so that b6ranlib's index lets b6ld pull
+# generated .S and one object per syscall so that b6ranlib's index lets b6ld pull
 # only what a program actually calls.
+#
+# The output is .S and not .s because it #includes <sys/syscall.h> for the syscall
+# number: b6cc dispatches a .S through the preprocessor and a .s straight to the
+# assembler (lib/rules.mk).  No number appears in this script or in the table.
 #
 # There is no prologue and no stack adjustment, and that is the point: the C calling
 # convention has already put arguments 1..n-1 below r15 and the last one in the
@@ -20,10 +24,10 @@ if [ -z "$name" ] || [ -z "$tbl" ]; then
     exit 1
 fi
 
-# Strip comments and blank lines, then take the number beside the name.  A missing
-# entry is a Makefile bug, not a user error, so it fails loudly.
-num=`sed -e 's/#.*//' "$tbl" | awk -v n="$name" '$1 == n { print $2; exit }'`
-if [ -z "$num" ]; then
+# Strip comments and blank lines, then take the SYS_* macro beside the name.  A
+# missing entry is a Makefile bug, not a user error, so it fails loudly.
+macro=`sed -e 's/#.*//' "$tbl" | awk -v n="$name" '$1 == n { print $2; exit }'`
+if [ -z "$macro" ]; then
     echo "mkstub: $name: no such entry in $tbl" >&2
     exit 1
 fi
@@ -41,10 +45,12 @@ cat <<EOF
 // r14 came back non-zero.  No prologue, and nothing popped -- the gate stands in for
 // the called function and does the callee's cleanup itself.
 //
+#include <sys/syscall.h>
+
         .text
         .globl  $name, cerror
 $name:
-        \$77 $num
+        \$77     $macro
      14 v1m     cerror
      13 uj
 EOF

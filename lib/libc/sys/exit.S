@@ -14,8 +14,10 @@
 // that runs _cleanup() to flush stdio and then falls through to `_exit', which stays
 // this bare trap.
 //
+#include <sys/syscall.h>
+
         .text
         .globl  exit, _exit
 exit:
 _exit:
-        $77 1                   // SYS_exit
+        $77     SYS_exit

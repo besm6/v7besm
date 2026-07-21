@@ -10,6 +10,11 @@
  * Each row contains the number of arguments expected
  * and a pointer to the routine.
  *
+ * IT IS POSITIONAL: a call's number is its row index here, which is why nothing
+ * generates this file from a list of names.  include/sys/syscall.h puts a SYS_* name
+ * to each row for the assembly leaves in lib/libc/sys/ to issue, and cmd/sim keeps a
+ * third copy as an enum; all three are hand-maintained and must agree.
+ *
  * sy_narg is the arity of the C PROTOTYPE, and it is the only thing that tells the
  * $77 gate where the arguments are: syscall() reads n-1 of them from below the user
  * stack pointer, takes the nth from the accumulator, and pops the n-1 on the caller's

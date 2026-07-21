@@ -10,12 +10,14 @@
 // in the accumulator, which the extracode overwrites, so it is parked before the trap.
 // r9 is scratch -- only r1-r7 are callee-saved.
 //
+#include <sys/syscall.h>
+
         .text
         .globl  pipe, cerror
 
 pipe:
         ati     9               // r9 := fildes, before the trap destroys A
-        $77 42                  // SYS_pipe
+        $77     SYS_pipe
      14 v1m     cerror
 
       9 atx                     // fildes[0] = the read end, already in A

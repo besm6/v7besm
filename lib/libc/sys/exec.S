@@ -14,9 +14,11 @@
 // to the left half of the NEXT word, so an instruction packed beside it would never run
 // and a failing exec would fall through into whatever object the linker put next.
 //
+#include <sys/syscall.h>
+
         .text
         .globl  exec, cerror
 
 exec:
-        $77 11                  // SYS_exec -- returns only on failure
+        $77     SYS_exec        // returns only on failure
         uj      cerror

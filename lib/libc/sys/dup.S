@@ -20,6 +20,8 @@
 // r9 is scratch (only r1-r7 are callee-saved) and fifteen bits are ample for a
 // descriptor -- the kernel keeps six, having spent the rest of the field on this flag.
 //
+#include <sys/syscall.h>
+
         .text
         .globl  dup, dup2, cerror
 
@@ -36,6 +38,6 @@ dup2:
         ita     9               // A := fd2 again
 
 dp_go:
-        $77 41                  // SYS_dup
+        $77     SYS_dup
      14 v1m     cerror
      13 uj

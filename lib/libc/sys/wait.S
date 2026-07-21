@@ -22,12 +22,14 @@
 // Widening it means giving the gate an argument and writing the status through this
 // pointer kernel-side; see lib/README.md, "Ground rules".
 //
+#include <sys/syscall.h>
+
         .text
         .globl  wait, cerror
 
 wait:
         ati     9               // r9 := status, before the trap destroys A
-        $77 7                   // SYS_wait
+        $77     SYS_wait
      14 v1m     cerror
       9 vzm     wt_dn           // wait(0): the caller does not want the status
 

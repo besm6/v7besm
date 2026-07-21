@@ -48,6 +48,15 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
 - **A stub therefore has no prologue.** The C calling convention already places the arguments
   where the gate reads them, so the stub is a bare `$77 N` and a return; `b$save` would move
   them. This is why `sys/` is assembly and not C.
+- **The number is a name, and the leaf is `.S`.** No syscall number is written down anywhere
+  under `lib/`: a leaf says `$77 SYS_write`, from
+  [`../include/sys/syscall.h`](../include/sys/syscall.h), and `sys/syscalls.tbl` maps a libc
+  symbol to the macro it issues (they differ for `lseek`/`SYS_seek` and `_break`/`SYS_break`).
+  That forces the suffix — `b6cc` sends a `.S` through the preprocessor and a `.s` straight to
+  the assembler ([`rules.mk`](rules.mk)) — so a new leaf that traps must be `.S`. `cerror.s`
+  and `csu/crt0.s` stay `.s`: neither issues an extracode. b6as's `#` constant-pool operator
+  passes through cpp untouched (`sys/dup.S` has both `aox #0100` and `$77 SYS_dup`), because a
+  `#` that does not start a line is an ordinary token.
 - **The gate's arity is the C prototype's**, and nothing in the stub carries it: the gate reads
   it from `sysent[].sy_narg` ([`../kernel/sysent.c`](../kernel/sysent.c)) and from
   `syscall_nargs()` ([`../cmd/sim/syscall.cpp`](../cmd/sim/syscall.cpp)), which must agree with

@@ -33,7 +33,9 @@ kernel/test/mdtest
 
 # The uniform syscall stubs lib/libc/Makefile generates from sys/syscalls.tbl, one
 # per line.  They land beside the objects, so this does NOT match the hand-written
-# leaves next door in lib/libc/sys/.
+# leaves next door in lib/libc/sys/.  Both cases: the generator emits .S (the stub
+# includes <sys/syscall.h>), and b6cc leaves a .s behind if ever run with -S.
+lib/libc/*.S
 lib/libc/*.s
 
 # Linked BESM-6 images built by lib/test/Makefile, and the output each run is
