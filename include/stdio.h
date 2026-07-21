@@ -1,6 +1,7 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
-#define BUFSIZ 512
+/* One block, in bytes: BSIZE == BSIZEW * NBPW == 512 words (sys/param.h). */
+#define BUFSIZ 3072
 #define _NFILE 20
 #ifndef FILE
 extern struct _iobuf {

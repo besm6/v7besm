@@ -103,7 +103,8 @@ struct user {
 
 extern struct user u;
 
-/* u_error codes */
+/* u_error codes.  The user-level copy of this list is <errno.h>, which names
+ * the third copy as well; all three must agree number for number. */
 #define EPERM   1
 #define ENOENT  2
 #define ESRCH   3

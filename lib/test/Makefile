@@ -9,7 +9,7 @@
 
 TOP     = ../..
 
-PROGS   = hello
+PROGS   = hello vararg
 
 .PHONY: all test clean
 
@@ -20,6 +20,9 @@ include $(TOP)/lib/rules.mk
 # The library and the startup are order-only: $(link) names them itself, and as
 # ordinary prerequisites $^ would hand them to b6ld a second time.
 hello:  hello.o | $(LIBC)/libc.a $(LIBC)/crt0.o
+	$(link)
+
+vararg: vararg.o | $(LIBC)/libc.a $(LIBC)/crt0.o
 	$(link)
 
 # Run each program and diff its output.  `set -e' keeps it fail-fast, and the run
@@ -39,3 +42,5 @@ clean:
 ###
 # Hand-maintained header dependencies; b6cc has no -M.  hello.c includes nothing:
 # v7 has no <unistd.h> and stdio is phase 4, so it declares write() itself.
+
+vararg.o:	$(TOP)/include/varargs.h

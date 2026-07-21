@@ -211,9 +211,42 @@ documents. `make test` in `lib/` builds both products, links `hello` through the
 runs it under `b6sim` with arguments and diffs the output, which is what pins crt0's `argc`/
 `argv` derivation.
 
-**0.5 Header touch-ups** in [`../include/`](../include/): rewrite `varargs.h` in BESM-6 terms
-(one word per argument, compatible with the compiler's `<stdarg.h>`), set `BUFSIZ` to 3072 in
-`stdio.h`, and reconcile `errno.h` with the error numbers the kernel actually returns.
+**0.5 DONE — header touch-ups** in [`../include/`](../include/): rewrite `varargs.h` in BESM-6
+terms (one word per argument, compatible with the compiler's `<stdarg.h>`), set `BUFSIZ` to 3072
+in `stdio.h`, and reconcile `errno.h` with the error numbers the kernel actually returns.
+
+*How it turned out.* `varargs.h` could only become `<stdarg.h>`. Writing "one word per argument"
+in BESM-6 terms means writing exactly what the compiler's header already says — a `va_list` that
+is a word pointer and a `va_arg` that steps one word — and a second `va_list` typedef beside it
+would only invite the two to disagree, so the file is now a documented `#include <stdarg.h>` and
+nothing else. What it deliberately does **not** define is `va_dcl`/`va_alist`: the K&R form the
+header exists for (`f(va_alist) va_dcl {…}`) is an old-style parameter list, which `b6cc` does
+not parse at all, so leaving them out makes such code fail to compile instead of miscompiling.
+`BUFSIZ` was the easy one — 512 was the PDP-11 block in bytes, and here a block is `BSIZE ==
+3072` bytes. `errno.h` needed no renumbering: its 1–34 already agreed, number for number, with
+the `u_error` block in [`../include/sys/user.h`](../include/sys/user.h) (which is where the
+kernel gets them — no kernel source includes `<errno.h>`) and with `guest_errno()` in
+[`../cmd/sim/syscall.cpp`](../cmd/sim/syscall.cpp). What it lacked was the ANSI `extern int
+errno;` that `cerror` and `perror` need, and a comment naming the other two copies so the
+agreement survives. Every code 1–32 but `EMLINK` is really assigned somewhere in `kernel/`;
+`EMLINK`, `EDOM` and `ERANGE` never are.
+
+The real divergence was one line further down in `b6sim`: `guest_errno()` ended in `default:
+return e`, handing the guest a **host** number for anything outside 1–34 — `ENAMETOOLONG` is 63
+on macOS and 36 on Linux, and `sys_errlist` will have 35 entries, so `perror` could only have
+called it "Unknown error". The conditions a v7 syscall can still provoke on a modern host are
+now folded onto the nearest v7 code (`ENAMETOOLONG`/`ELOOP` → `ENOENT`, `ENOSYS`/`EOPNOTSUPP` →
+`EINVAL`) and everything else onto `EIO`; `Syscall.OpenNameTooLong` in
+[`../cmd/sim/test/sim_test.cpp`](../cmd/sim/test/sim_test.cpp) opens a 600-character path and
+checks that r14 comes back 2. The `ENOTSUP` label has to be `#if`-guarded — it is a second value
+on macOS but the same one as `EOPNOTSUPP` on Linux, where two `case`s of one value would not
+build.
+
+`test/vararg` is the part of this that executes: a list mixing `int` and `char *`, a `va_list`
+handed to a second function the way `vprintf` will hand it, and a `char *` taken back out and
+walked — which is what shows it is still fat. It confirms what phases 1–4 were going to assume
+anyway: `b6cc` accepts the ANSI `(n, ...)` definition, `&last + 1` finds the first variadic
+argument, and one `va_arg` really is one word whatever the type says.
 
 ## Phase 1 — crt0, syscall stubs, errno
 

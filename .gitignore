@@ -34,6 +34,7 @@ kernel/test/mdtest
 # Linked BESM-6 images built by lib/test/Makefile, and the output each run is
 # diffed against its .expected file.
 lib/test/hello
+lib/test/vararg
 lib/test/*.out
 
 # Scratch drum and disk images that kernel/test/mbtest.ini and mdtest.ini create with

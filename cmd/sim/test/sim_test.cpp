@@ -344,6 +344,25 @@ TEST(Syscall, OpenMissing)
 }
 
 //
+// A host errno with no v7 equivalent never reaches the guest.  A path component
+// past NAME_MAX gives ENAMETOOLONG on every modern host -- 63 on macOS, 36 on
+// Linux, neither of them a number include/errno.h defines -- and guest_errno()
+// folds it onto ENOENT: the path names nothing a v7 system could have had.
+//
+TEST(Syscall, OpenNameTooLong)
+{
+    Memory memory;
+    Machine machine{ memory };
+
+    std::string longname = "/" + std::string(600, 'x');
+    Word path            = put_string(memory, 0x300, longname.c_str());
+    run_syscall(machine, SYS_open, { path }, 0);
+
+    EXPECT_EQ(machine.cpu.get_acc(), GUEST_MINUS_ONE);
+    EXPECT_EQ(machine.cpu.get_m(14), 2u); // ENOENT, not the host's ENAMETOOLONG
+}
+
+//
 // creat -> write -> close -> open -> lseek -> read round-trips file contents.
 //
 TEST(Syscall, FileRoundTrip)

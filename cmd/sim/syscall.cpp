@@ -162,7 +162,12 @@ static unsigned syscall_nargs(unsigned num)
 // Map a host errno to the guest's value (include/errno.h).  The classic Unix
 // codes 1..34 are identical on the guest and on every host we build on, so the
 // mapping is mostly the identity; the switch pins the ones that can differ
-// (e.g. EAGAIN on macOS) and passes everything else through unchanged.
+// (e.g. EAGAIN on macOS).
+//
+// Nothing outside 1..34 may reach the guest: v7 has no number for it, and libc's
+// sys_errlist will have 35 entries, so a host-only code would come out of perror
+// as "Unknown error".  The conditions a v7 syscall can plausibly provoke on a
+// modern host are folded onto the nearest v7 code and everything else onto EIO.
 //
 static int guest_errno(int e)
 {
@@ -201,7 +206,22 @@ static int guest_errno(int e)
     case EPIPE:   return 32;
     case EDOM:    return 33;
     case ERANGE:  return 34;
-    default:      return e;
+
+    // A path a v7 system could never have named at all.
+    case ENAMETOOLONG:
+    case ELOOP: return 2; // ENOENT
+
+    // Asked of the host something it declines to do; v7's answer is EINVAL.
+    // ENOTSUP and EOPNOTSUPP are one value on Linux and two on macOS, so the
+    // second label has to be conditional or the switch would not compile.
+#if defined(ENOTSUP) && ENOTSUP != EOPNOTSUPP
+    case ENOTSUP:
+#endif
+    case EOPNOTSUPP:
+    case ENOSYS: return 22; // EINVAL
+
+    // Everything else: a host condition v7 has no number for.
+    default: return 5; // EIO
     }
 }
 

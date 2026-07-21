@@ -92,6 +92,10 @@ The calling convention for a syscall is the ordinary BESM-6 C convention
 ([Besm6_Calling_Conventions.md](Besm6_Calling_Conventions.md)): for a call with *N*
 arguments, arguments 1…*N*−1 sit on the stack just below the stack pointer `r15`, the **last**
 argument is left in the accumulator, the **result** comes back in the accumulator, and **`errno`** (0 on success) comes back in `r14`.
+The value is a **guest** number — one of the 1–34 that [`include/errno.h`](../include/errno.h)
+defines, the same list the kernel assigns from — and never the host's own numbering: `b6sim` maps
+each host `errno` onto it, folding conditions v7 has no number for (`ENAMETOOLONG`, `ELOOP`,
+`ENOSYS` …) onto the nearest v7 code, and the rest onto `EIO`.
 Note that for syscalls `r14` does not have to hold the argument count as a negative number.
 Value of `r14` is ignored on input to syscalls.
 

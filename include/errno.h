@@ -1,8 +1,23 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
 /*
- * Error codes
+ * Error codes.
+ *
+ * This list is the user-level copy, and it is duplicated in two other places
+ * that must stay in step with it, number for number:
+ *
+ *      include/sys/user.h      the `u_error codes' block -- what the kernel
+ *                              itself assigns to u.u_error, and what the $77
+ *                              gate hands back in r14 (kernel/syscall.c).
+ *      cmd/sim/syscall.cpp     guest_errno(), which maps a HOST errno onto
+ *                              these numbers, since b6sim services the syscalls
+ *                              on a machine with a numbering of its own.
+ *
+ * EMLINK is defined for completeness but is never returned by this kernel, and
+ * EDOM/ERANGE are math software, not the kernel: they belong to libm.
  */
+
+extern int errno;
 
 #define EPERM 1
 #define ENOENT 2
