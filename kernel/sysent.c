@@ -9,6 +9,17 @@
  * to the appropriate routine for processing a system call.
  * Each row contains the number of arguments expected
  * and a pointer to the routine.
+ *
+ * sy_narg is the arity of the C PROTOTYPE, and it is the only thing that tells the
+ * $77 gate where the arguments are: syscall() reads n-1 of them from below the user
+ * stack pointer, takes the nth from the accumulator, and pops the n-1 on the caller's
+ * behalf (kernel/syscall.c).  A count that disagrees with the caller reads every
+ * argument from the wrong slot AND drifts the user stack by a word per call.
+ *
+ * Two entries had to shed a word that only the PDP-11 needed: seek's off_t and stime's
+ * time_t were each a two-word `long' there and are one 48-bit word here
+ * (include/sys/types.h), which is also what the handlers' own arg structs say.
+ * cmd/sim/syscall.cpp's syscall_nargs() is the same table for b6sim and must agree.
  */
 struct sysent sysent[64] = {
     { 0, 0, nullsys }, /*  0 = indir */
@@ -30,13 +41,13 @@ struct sysent sysent[64] = {
     { 3, 0, chown },   /* 16 = chown; now 3 args */
     { 1, 0, sbreak },  /* 17 = break */
     { 2, 0, stat },    /* 18 = stat */
-    { 4, 1, seek },    /* 19 = seek; now 3 args */
+    { 3, 1, seek },    /* 19 = seek; 3 args, off_t being one word here */
     { 0, 0, getpid },  /* 20 = getpid */
     { 3, 0, smount },  /* 21 = mount */
     { 1, 0, sumount }, /* 22 = umount */
     { 1, 1, setuid },  /* 23 = setuid */
     { 0, 0, getuid },  /* 24 = getuid */
-    { 2, 2, stime },   /* 25 = stime */
+    { 1, 2, stime },   /* 25 = stime; 1 arg, time_t being one word here */
     { 4, 1, ptrace },  /* 26 = ptrace */
     { 1, 1, alarm },   /* 27 = alarm */
     { 2, 1, fstat },   /* 28 = fstat */

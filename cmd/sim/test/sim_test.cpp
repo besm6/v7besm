@@ -83,6 +83,7 @@ enum {
     SYS_getgid = 47,
     SYS_pipe   = 42,
     SYS_fork   = 2,
+    SYS_dup    = 41,
 };
 
 //
@@ -404,6 +405,51 @@ TEST(Syscall, FileRoundTrip)
 
     run_syscall(machine, SYS_close, {}, (Word)rfd);
     ::unlink(path);
+}
+
+//
+// dup and dup2 share one entry, v7 style: the call always takes TWO arguments,
+// and bit 0100 of the first asks for dup2 with the second naming the target
+// descriptor.  The kernel's dup() reads the same two-field argument struct
+// (kernel/sys3.c), so libc/sys/dup.s pushes the extra word for plain dup too --
+// which is what makes the stack cleanup a one-word pop either way.
+//
+TEST(Syscall, Dup)
+{
+    Memory memory;
+    Machine machine{ memory };
+
+    // A descriptor to duplicate: the read end of a fresh pipe.
+    run_syscall(machine, SYS_pipe, {}, 0);
+    int rfd = (int)machine.cpu.get_acc();
+    int wfd = (int)machine.cpu.get_m(12);
+    ASSERT_GE(rfd, 0);
+
+    // dup(rfd): the 0100 bit clear, the second argument unused.
+    run_syscall(machine, SYS_dup, { (Word)rfd }, 0);
+    int dfd = (int)machine.cpu.get_acc();
+    ASSERT_GE(dfd, 0);
+    EXPECT_NE(dfd, rfd);
+    EXPECT_EQ(machine.cpu.get_m(14), 0u);
+    EXPECT_EQ(machine.cpu.get_m(017), STACK); // two arguments: one word popped
+
+    // dup2(rfd, dfd): the 0100 bit set.  Free the slot first, so the result is
+    // the requested number and not merely a legal one.
+    ::close(dfd);
+    run_syscall(machine, SYS_dup, { (Word)(rfd | 0100) }, (Word)dfd);
+    EXPECT_EQ((int)machine.cpu.get_acc(), dfd);
+    EXPECT_EQ(machine.cpu.get_m(14), 0u);
+
+    // A closed descriptor is -1/EBADF, not a wild duplicate.  63 and not 99:
+    // the first argument keeps only its low six bits, v7 having spent the rest
+    // on the dup2 flag.
+    run_syscall(machine, SYS_dup, { 63 }, 0);
+    EXPECT_EQ(machine.cpu.get_acc(), GUEST_MINUS_ONE);
+    EXPECT_EQ(machine.cpu.get_m(14), 9u); // EBADF
+
+    ::close(rfd);
+    ::close(wfd);
+    ::close(dfd);
 }
 
 //

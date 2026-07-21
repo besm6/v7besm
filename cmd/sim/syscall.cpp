@@ -120,6 +120,14 @@ static unsigned syscall_nargs(unsigned num)
     case SYS_pipe:
         return 0;
 
+    // Two-argument calls that libc calls with fewer C arguments.  dup(fd) is
+    // written dup(fd, 0) and dup2(fd, fd2) as dup(fd | 0100, fd2): v7 hangs
+    // dup2 off the same entry by a bit in the first argument, so the kernel's
+    // dup() reads a two-field arg struct either way (kernel/sys3.c) and the
+    // count here is 2 for both.  libc/sys/dup.s pushes the extra word.
+    case SYS_dup:
+        return 2;
+
     // Three-argument calls.
     case SYS_read:
     case SYS_write:
@@ -334,11 +342,15 @@ void Processor::sys_ok(int64_t result)
 // R_VAL2 in include/sys/reg.h -- so one binary runs on both.
 //
 // NOTE THE WIDTH.  An index register is 15 bits, so a second result above 32767
-// is truncated.  Nothing a v7 guest produces can overflow it (pids stop below
-// 30000, and fds/uids/gids/statuses are far smaller), but a HOST pid can -- so
-// getpid()'s and fork()'s second value may not match the host's getppid() when
-// b6sim runs on a modern system.  The first result is unaffected: it goes to the
-// accumulator, which is a full word.
+// is truncated.  Pids stop below 30000 and fds/uids/gids are far smaller, but a
+// HOST pid can overflow -- so getpid()'s and fork()'s second value may not match
+// the host's getppid() when b6sim runs on a modern system -- and so can a WAIT
+// STATUS: it is (code << 8), which passes 32767 as soon as the exit code passes
+// 127.  Exit codes 128..255 therefore come out of wait() wrong, identically on
+// the kernel and here (u.u_r.r_val2 lands in r12 the same way).  Widening it
+// means giving wait() an argument and writing the status through the caller's
+// pointer, which is a gate change; it is recorded in lib/README.md instead.
+// The first result is unaffected: it goes to the accumulator, a full word.
 //
 void Processor::sys_ok2(int64_t v1, int64_t v2)
 {
@@ -729,10 +741,23 @@ void Processor::syscall(unsigned num)
         break;
     }
 
-    case SYS_dup:
-        // int dup(int fd)
-        sys_ret(::dup((int)sign_extend41(syscall_arg(1, 1))));
+    case SYS_dup: {
+        // int dup(int fd), int dup2(int fd, int fd2)
+        //
+        // One entry for both, v7 style: bit 0100 of the first argument asks for
+        // dup2 and the second argument is then the descriptor to duplicate onto.
+        // The kernel does exactly this (dup() in kernel/sys3.c), so libc always
+        // calls with two arguments and the shape is the same on both.
+        int fd  = (int)sign_extend41(syscall_arg(1, 2));
+        int fd2 = (int)sign_extend41(syscall_arg(2, 2));
+        int m   = fd & ~077;
+        fd &= 077;
+        if (m & 0100)
+            sys_ret(::dup2(fd, fd2));
+        else
+            sys_ret(::dup(fd));
         break;
+    }
 
     case SYS_pipe: {
         // pipe(): no arguments.  The two descriptors come back as the two

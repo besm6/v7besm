@@ -300,7 +300,7 @@ field. The six calls with a second result deliver it in `r12` — see [§3](#3-h
 | Group | Calls |
 |-------|-------|
 | Process | `exit`, `fork`, `exec`/`exece`★, `wait`, `getpid`, `getuid`/`setuid`, `getgid`/`setgid`, `nice`, `kill`, `signal`†, `pause`, `alarm`, `times`, `break`¶ (heap/`sbrk`) |
-| Files & I/O | `open`, `creat`, `close`, `read`, `write`, `seek` (`lseek`), `dup`, `pipe`, `stat`/`fstat`, `access`, `stty`/`gtty`‡ |
+| Files & I/O | `open`, `creat`, `close`, `read`, `write`, `seek` (`lseek`), `dup`/`dup2`✦, `pipe`, `stat`/`fstat`, `access`, `stty`/`gtty`‡ |
 | Filesystem | `link`, `unlink`, `chdir`, `chroot`, `chmod`, `chown`, `mknod`, `utime`, `umask`, `sync` |
 | Time | `time`, `ftime`, `stime`§ |
 | Accepted no-ops | `ioctl`, `lock` |
@@ -314,6 +314,10 @@ one ABI whether it was started from the command line or by another guest. An arg
 host's signal context and returns `EINVAL`.
 ‡ `stty`/`gtty` honour only "is this a terminal?".
 § `stime` cannot set the host clock and quietly succeeds.
+✦ `dup` and `dup2` share one entry, v7 style: the call always takes **two** arguments, and bit
+`0100` of the first asks for `dup2` with the second naming the target descriptor. The kernel's
+`dup()` reads the same two-field argument struct, so `libc/sys/dup.s` pushes the extra word on
+both.
 ¶ `break` takes a virtual **word** address, not a byte count — the fat-pointer marker and byte
 offset are masked off, so a `char *` and a plain word address are both accepted. The new break is
 rounded up to a whole page, and the call fails with `ENOMEM` if that reaches `070000` — the stack

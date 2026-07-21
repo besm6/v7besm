@@ -428,6 +428,26 @@ writes the fourth:
   address wraps to 0 — into the interrupt vectors. Add a depth check in `trap()`/`swtch()` during
   bring-up.
 
+## DONE: two `sysent[]` arities were still counting PDP-11 words
+
+Found while writing `lib/libc/sys/`, which is the first caller of the gate that is not a test.
+`sy_narg` is the arity of the *C prototype*, and it is the only thing that tells `syscall()`
+where the arguments are: it reads `n-1` of them from below the user stack pointer, takes the
+`n`th from the accumulator, and pops the `n-1` on the caller's behalf. A count that disagrees
+with the caller reads every argument from the wrong slot **and** drifts the user stack by a word
+per call.
+
+Two entries still counted a two-word `long` that is one 48-bit word here — `seek` said 4 and
+`stime` said 2, while their own argument structs in `sys2.c`/`sys4.c` have 3 fields and 1. Both
+now match. `cmd/sim/syscall.cpp`'s `syscall_nargs()` is the same table for `b6sim` and had to
+move with it (its `dup` was the mirror-image error: 1 where the kernel has always read a
+two-field struct, v7 hanging `dup2` off the same entry by bit `0100` of the first argument).
+
+`test/usys` is what keeps the two honest — it links the real `syscall()` and checks both the
+marshalling and the stack balance — but it exercises `sysent[3]` and `sysent[20]` only. Nothing
+checks the other sixty rows against their handlers' argument structs; the libc stubs now do, one
+call at a time, from `lib/test/`.
+
 ## The scalar types now describe this machine, not the PDP-11
 
 Done as its own pass. `include/sys/types.h` used to carry v7's typedefs verbatim — `long daddr_t`,
