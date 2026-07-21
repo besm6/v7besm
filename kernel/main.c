@@ -16,9 +16,6 @@
 #include "sys/buf.h"
 // clang-format on
 
-extern int edata[], end[]; /* bss spans [edata, end); b6ld defines both boundaries */
-
-int phymem;  /* physical memory size in words; startup() frees it into coremap */
 time_t time; /* time in sec from 1970 */
 int nblkdev;
 int dk_busy;
@@ -49,29 +46,8 @@ void binit(void);
  */
 void main()
 {
-    /*
-     * Clear bss before anything reads it.  This is _start's work, done here
-     * because the size -- `end - edata', a difference of two linker externals --
-     * is not expressible in b6as; in C the compiler emits the pointer subtraction.
-     * Nothing above has touched bss yet: _start is register-only and so is wzero().
-     * sizeof(int) == 1 word, so `end - edata' is a word count, wzero()'s unit.
-     *
-     * SIMH starts every word at zero, so on the simulator the clear is redundant;
-     * it is kept here, guarded, for the day the kernel boots on real hardware.
-     */
-#define ON_SIMH
-#ifndef ON_SIMH
-    wzero(edata, end - edata);
-#endif
-    /*
-     * Publish the physical memory size (words), which startup() frees into the
-     * coremap.  The kernel runs unmapped (32 Kword reach) and cannot probe the
-     * 512 Kword store; a real scan would need the MMU, so we take the fixed SIMH
-     * MEMSIZE.
-     */
-    phymem = 512 * 1024;
-
     startup();
+
     /*
      * set up system process
      */

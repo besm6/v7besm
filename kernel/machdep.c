@@ -18,7 +18,15 @@
 
 #include <besm6.h>
 
-extern int phymem;
+extern int edata[], end[]; /* bss spans [edata, end); b6ld defines both boundaries */
+
+/*
+ * Publish the physical memory size (words), which startup() frees into the
+ * coremap.  The kernel runs unmapped (32 Kword reach) and cannot probe the
+ * 512 Kword store; a real scan would need the MMU, so we take the fixed SIMH
+ * MEMSIZE.
+ */
+int phymem = 512 * 1024;
 
 int maxmem; /* actual max memory per process */
 
@@ -57,20 +65,36 @@ int szicode = sizeof(icode);
 void startup()
 {
     /*
+     * Clear bss before anything reads it.  This is _start's work, done here
+     * because the size -- `end - edata', a difference of two linker externals --
+     * is not expressible in b6as; in C the compiler emits the pointer subtraction.
+     * Nothing above has touched bss yet: _start is register-only, main() calls us
+     * first, and so is wzero().  sizeof(int) == 1 word, so `end - edata' is a word
+     * count, wzero()'s unit.  phymem is initialized data, so the clear spares it.
+     *
+     * SIMH starts every word at zero, so on the simulator the clear is redundant;
+     * it is kept here, guarded, for the day the kernel boots on real hardware.
+     */
+#define ON_SIMH
+#ifndef ON_SIMH
+    wzero(edata, end - edata);
+#endif
+
+    /*
      * Free all of core above the kernel.  Pages 0..31 -- words 0 through
      * 0100000 -- are the kernel image and the u-area at 076000, and word
      * 0100000 is the first free word.  The first page of the pool is the
      * u-area home of proc[0], which main() claims right after us, so the
      * pool proper starts one page higher.
-     *
-     * phymem is the size of physical memory, in words; main() sets it just
-     * before calling us (kernel/main.c).
      */
+    printf("phys mem  = %d kbytes\n", (phymem * NBPW) >> 10);
     maxmem = phymem - (NPAGE * PGSZ + USIZE);
     mfree(coremap, maxmem, NPAGE * PGSZ + USIZE);
-    printf("mem = %d words\n", maxmem);
+    /* Print before the clamp below: past it maxmem means core per process. */
+    printf("user mem  = %d kbytes\n", (maxmem * NBPW) >> 10);
     if (MAXMEM < maxmem)
         maxmem = MAXMEM;
+    printf("swap size = %d kbytes\n", (nswap * BSIZE) >> 10);
     mfree(swapmap, nswap, 1);
     swplo--;
 }

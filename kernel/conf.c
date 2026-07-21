@@ -71,6 +71,7 @@ dev_t rootdev = makedev(0, 0);
 dev_t swapdev = makedev(1, 0); /* the drums are the paging store */
 dev_t pipedev = makedev(0, 0);
 int nldisp    = 1;
+
 /*
  * The whole of both drums is swap space: 2 drums * 256 zones * 2 blocks = 1024 blocks,
  * and dev/mb.c makes the two of them one linear block space so that this is a single
