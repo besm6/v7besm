@@ -28,6 +28,36 @@
 #endif
 
 //
+// The host environment variables handed to the simulated program, in this order.
+// A guest sees a curated set rather than the whole host environment: a v7 program
+// has no business with the hundreds of variables a modern shell exports, and the
+// block competes for the few thousand words between 070000 and the stack guard.
+//
+// Values are passed through VERBATIM, PATH included.  exec() under b6sim resolves
+// on the host filesystem, so rewriting PATH would hide the very directory the
+// program under test was just built into.
+//
+static const char *const ENV_WHITELIST[] = {
+    "LANG", "LC_ALL",  "TERM",   "SHELL",  "PATH",  "HOME",
+    "USER", "LOGNAME", "TMPDIR", "EDITOR", "PAGER", "MAKEFLAGS",
+};
+
+//
+// Build the guest's envp: "NAME=value" for each whitelisted variable the host
+// has set, skipping the rest.
+//
+static std::vector<std::string> build_envp()
+{
+    std::vector<std::string> envp;
+    for (const char *name : ENV_WHITELIST) {
+        const char *value = ::getenv(name);
+        if (value != nullptr)
+            envp.push_back(std::string(name) + "=" + value);
+    }
+    return envp;
+}
+
+//
 // Internal implementation of the simulation session, hidden from user.
 //
 class Session::Hidden {
@@ -37,6 +67,10 @@ private:
 
     // A name of the a.out program to run.
     std::string program_file;
+
+    // The guest's argv: the program file itself, then whatever followed it on
+    // the command line.
+    std::vector<std::string> program_args;
 
     // Status of the simulation.
     int exit_status{ EXIT_SUCCESS };
@@ -70,9 +104,15 @@ public:
             ::exit(EXIT_FAILURE);
         }
         program_file = filename;
+        program_args.push_back(filename); // argv[0]
     }
 
     const std::string &get_program_file() const { return program_file; }
+
+    //
+    // Append one argument for the simulated program (argv[1] and up).
+    //
+    void add_program_arg(const char *arg) { program_args.push_back(arg); }
 
     //
     // Load and run the a.out program.
@@ -80,7 +120,9 @@ public:
     void run()
     {
         try {
-            machine.load_program(program_file);
+            // Start the program the same way a guest exec() would, so the one
+            // argument block at 070000 is built by the one piece of code.
+            machine.exec(program_file, program_args, build_envp());
             machine.run();
             machine.finish();
 
@@ -175,6 +217,14 @@ Session::~Session() = default;
 void Session::set_program_file(const char *filename)
 {
     internal->set_program_file(filename);
+}
+
+//
+// Append one argument for the simulated program.
+//
+void Session::add_program_arg(const char *arg)
+{
+    internal->add_program_arg(arg);
 }
 
 const std::string &Session::get_program_file()

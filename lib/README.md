@@ -149,11 +149,36 @@ alone: both round the new break up to a whole page, both refuse growth that reac
 segment sizes really are byte counts. `b6sim` is untouched, and its `Syscall.Break` test is now
 the shared spec for both.
 
-**0.3 `b6sim`'s exec ABI is a placeholder** — [`../cmd/sim/machine.cpp`](../cmd/sim/machine.cpp)
-pushes `argc` and leaves `argv` in the accumulator, saying so in its own comment. Teach it (and
-the initial program load) to build the kernel's block at `070000`, so one `crt0` serves the
-simulator and the real machine. Update [`../doc/Aout_Simulator.md`](../doc/Aout_Simulator.md)
-and the ABI tests in `../cmd/sim/test/sim_test.cpp`.
+**0.3 DONE — `b6sim`'s exec ABI was a placeholder.**
+[`../cmd/sim/machine.cpp`](../cmd/sim/machine.cpp) pushed `argc` and left `argv` in the
+accumulator, saying so in its own comment; the initial program load built no block at all, and
+`b6sim` had no way to be given program arguments in the first place. It now builds the kernel's
+block at `070000`, so one `crt0` serves the simulator and the real machine.
+
+*How it turned out.* The register hand-off was **deleted, not replaced**: `setregs()`
+([`../kernel/sys1.c`](../kernel/sys1.c)) zeroes ACC and `r1`–`r14`, and `load_program()` already
+calls `Processor::reset()`, so matching the kernel meant removing the `set_acc`/`set_m(14,…)`
+lines and letting the block at the fixed address be the whole ABI. Two more defects came out of
+the same read. The old builder word-**aligned** every string, so every fat pointer it wrote had
+offset field 5; `exece()` packs them contiguously, six to a word, so all but `argv[0]` normally
+begins mid-word and carries a real byte offset — the pointer has to be taken from the live
+cursor (`5 - byte_index`), which is what `Cpu.ExecArgBlock` pins down with a string set chosen to
+straddle. And `exec()` ended with `program_break = top + 1`, parking the heap break on top of the
+stack region; the break belongs to `load_program()`, above the bss, and `exec()` no longer
+touches it. Once `r15` starts *above* the block, `break`'s ceiling could no longer be the current
+`r15` either — it is `STACK_BASE` now, matching `estabur()`, or the heap would have grown into
+the arguments as the stack climbed.
+
+The initial load and a guest `exec` are one code path: `Session::run()` calls `Machine::exec()`
+rather than `load_program()`. `b6sim` takes program arguments — `b6sim [options] program
+[arguments...]`, with a `+` on the getopt string so parsing stops at the program name and options
+after it reach the guest — and passes a **whitelisted** environment (`LANG`, `LC_ALL`, `TERM`,
+`SHELL`, `PATH`, `HOME`, `USER`, `LOGNAME`, `TMPDIR`, `EDITOR`, `PAGER`, `MAKEFLAGS`, verbatim,
+skipping the unset), since a v7 program has no use for a modern shell's hundreds and the block
+competes for the few thousand words below the stack guard. An arg list past `NCARGS` is refused
+rather than scribbled over the stack. Five `Cpu.Exec*` tests in `../cmd/sim/test/sim_test.cpp`
+cover the layout, the empty block, the cleared registers, the untouched break and the ceiling;
+[`../doc/Aout_Simulator.md`](../doc/Aout_Simulator.md) §3 now carries the block diagram.
 
 **0.4 The build skeleton** — `lib/Makefile`, `lib/libc/Makefile`, the link recipe in one place.
 

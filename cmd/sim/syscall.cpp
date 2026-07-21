@@ -560,10 +560,13 @@ void Processor::syscall(unsigned num)
     case SYS_break: {
         // int break(char *addr): set the program break (word address), rounded up
         // to a page boundary.  The heap may not grow into the stack, so fail if the
-        // page-aligned break reaches M[017].
+        // page-aligned break reaches STACK_BASE -- the kernel's own ceiling
+        // (estabur()'s `nt + nd > USTKPAGE * PGSZ').  Not M[017]: that starts ABOVE
+        // the argument block exec() lays at STACK_BASE, and climbs as the program
+        // runs, so it would let the heap eat the arguments.
         unsigned addr = (unsigned)(syscall_arg(1, 1) & BITS(15));
         addr          = (addr + PAGE_NWORDS - 1) / PAGE_NWORDS * PAGE_NWORDS;
-        if (addr >= core.M[017])
+        if (addr >= STACK_BASE)
             sys_err(ENOMEM);
         else {
             machine.set_program_break(addr);

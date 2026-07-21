@@ -145,10 +145,47 @@ extracode carefully:
 >
 > — and falls straight through its own return, on the real machine and under `b6sim` alike.
 
-There is not yet a real C startup object (`crt0`) or `libc` in the project, so `b6sim`
-supplies the bare minimum a program needs to start: when it loads an executable it points the
-stack pointer `r15` just past the program's data and sets the heap break there too; a program
-begins at its entry point with a usable stack.
+### How a program starts
+
+A program begins at its entry point with a usable stack and its arguments already in memory.
+The stack region is the top of the address space: `r15` starts at `070000` and grows **upward**
+towards the guard word `077777`, while the heap break starts on the first page boundary above
+the bss and grows up towards it from below.
+
+The arguments sit at the **base of the stack**, in a block `b6sim` lays down exactly as the
+kernel's `exece()` does ([`kernel/sys1.c`](../kernel/sys1.c)) — so one `crt0` serves the
+simulator and the real machine:
+
+```
+070000  argc
+        argv[0] .. argv[argc-1]     char * fat pointers
+        0
+        envp[0] .. envp[ne-1]
+        0
+        the strings, byte-packed six to a word, contiguous
+        0                           a closing word; the cursor is rounded up to reach it
+  r15 = the first free word above the block
+```
+
+Three things about it are worth spelling out:
+
+- **`argc` is always at absolute `070000`.** Nothing is handed over in a register — the
+  accumulator and `r1`–`r14` are zero at the entry point, matching the kernel's `setregs()` — so
+  a `crt0` needs no hand-off at all: it reads `argc` from the fixed address and derives
+  `argv` = `070001` and `envp` = `070001 + argc + 1` from it.
+- **The pointer slots stride by one word; only the strings are byte-granular.** They are packed
+  contiguously and are *not* re-aligned between one and the next, so all but `argv[0]` normally
+  begin mid-word and their fat pointers carry a non-zero byte offset (bits 47–45, field 5 naming
+  byte #0). A `crt0` must store what it finds, not rebuild it.
+- **The block is below `r15`, so the program's own stack growth can never walk back over it**,
+  and the heap cannot grow into it either: `break` refuses to cross `070000`.
+
+With no arguments and no environment the block is still four words — `argc` = 0, the two
+vectors' terminating nulls, and the closing word — and `r15` is `070004`.
+
+The same block is built for the initial program load and by `exec`/`exece`: they are one code
+path. There is not yet a `crt0` or `libc` in the project to read it, which is what
+[`lib/README.md`](../lib/README.md) phase 1 builds.
 
 ## 4. Building and installing
 
@@ -165,10 +202,20 @@ as `b6sim`. (See the top-level [README.md](../README.md) for the full build stor
 ## 5. Command line
 
 ```
-b6sim [options...] program
+b6sim [options...] program [arguments...]
 ```
 
 `program` is a BESM-6 `a.out` executable — the output of `b6ld`. Exactly one is required.
+
+**Option parsing stops at `program`.** Everything after it belongs to the simulated program and
+reaches it as `argv[1]` and up, options included — `b6sim -d prog -d` traces `b6sim` and passes
+the second `-d` to `prog`. The program file itself, spelled exactly as you typed it, is `argv[0]`.
+
+The program's environment is *not* the host's. `b6sim` passes a fixed short list of variables,
+in this order and only when the host has them set: `LANG`, `LC_ALL`, `TERM`, `SHELL`, `PATH`,
+`HOME`, `USER`, `LOGNAME`, `TMPDIR`, `EDITOR`, `PAGER`, `MAKEFLAGS`. A v7 program has no use for
+the hundreds of variables a modern shell exports, and the block competes for the few thousand
+words between `070000` and the guard word. Values are passed through verbatim, `PATH` included.
 
 | Option | Effect |
 |--------|--------|
@@ -248,22 +295,27 @@ field. The six calls with a second result deliver it in `r12` — see [§3](#3-h
 
 | Group | Calls |
 |-------|-------|
-| Process | `exit`, `fork`, `exec`/`exece`, `wait`, `getpid`, `getuid`/`setuid`, `getgid`/`setgid`, `nice`, `kill`, `signal`†, `pause`, `alarm`, `times`, `break`¶ (heap/`sbrk`) |
+| Process | `exit`, `fork`, `exec`/`exece`★, `wait`, `getpid`, `getuid`/`setuid`, `getgid`/`setgid`, `nice`, `kill`, `signal`†, `pause`, `alarm`, `times`, `break`¶ (heap/`sbrk`) |
 | Files & I/O | `open`, `creat`, `close`, `read`, `write`, `seek` (`lseek`), `dup`, `pipe`, `stat`/`fstat`, `access`, `stty`/`gtty`‡ |
 | Filesystem | `link`, `unlink`, `chdir`, `chroot`, `chmod`, `chown`, `mknod`, `utime`, `umask`, `sync` |
 | Time | `time`, `ftime`, `stime`§ |
 | Accepted no-ops | `ioctl`, `lock` |
 | Rejected (`EPERM`) | `mount`, `umount`, `ptrace`, `profil`, `acct`, `phys` — not meaningful for a user-level simulator |
 
+★ `exec`/`exece` reload the image and lay the argument block at `070000` described in
+[§3](#how-a-program-starts) — the same code that starts the very first program, so a guest sees
+one ABI whether it was started from the command line or by another guest. An argument list past
+`NCARGS` (5120 bytes, as in the kernel) is refused.
 † `signal` supports only `SIG_DFL` and `SIG_IGN`; a custom guest handler cannot run from the
 host's signal context and returns `EINVAL`.
 ‡ `stty`/`gtty` honour only "is this a terminal?".
 § `stime` cannot set the host clock and quietly succeeds.
 ¶ `break` takes a virtual **word** address, not a byte count — the fat-pointer marker and byte
 offset are masked off, so a `char *` and a plain word address are both accepted. The new break is
-rounded up to a whole page, and the call fails with `ENOMEM` if that reaches the stack. The
-kernel's own gate follows the same rule (`sbreak()` in `kernel/sys1.c`), so one `sbrk()` serves
-both.
+rounded up to a whole page, and the call fails with `ENOMEM` if that reaches `070000` — the stack
+base, and therefore the argument block, not the current `r15` (which starts above the block and
+climbs). The kernel's own gate follows the same rule (`sbreak()` in `kernel/sys1.c`, whose
+ceiling is `estabur()`'s `nt + nd > USTKPAGE * PGSZ`), so one `sbrk()` serves both.
 
 Files, standard input/output/error, and pipes map straight onto the corresponding host
 descriptors, so a program's output appears in your terminal and the files it creates are real
@@ -280,22 +332,22 @@ instruction as it executes, together with the registers and memory words it chan
 ```console
 $ b6sim -d hello.out
 --- Reset
-      M17 = 70000
+      M17 = 70170
 00012 L: 00 010 0010 xta 10
       Memory Read [00010] = 0000 0000 0000 0001
       ACC = 0000 0000 0000 0001
       RAU = 04
 00012 R: 00 003 0017 xts 17
-      Memory Write [70000] = 0000 0000 0000 0001
+      Memory Write [70170] = 0000 0000 0000 0001
       Memory Read [00017] = 6400 0000 0000 0015
       ACC = 6400 0000 0000 0015
-      M17 = 70001
+      M17 = 70171
 ...
 00013 R: 00 077 0004 *77 4
-      Memory Read [70000] = 0000 0000 0000 0001
-      Memory Read [70001] = 6400 0000 0000 0015
+      Memory Read [70170] = 0000 0000 0000 0001
+      Memory Read [70171] = 6400 0000 0000 0015
 hello
-      M17 = 70000
+      M17 = 70170
 00014 L: 00 010 0000 xta
       ACC = 0000 0000 0000 0000
 00014 R: 00 077 0001 *77 1
@@ -308,6 +360,11 @@ those that actually changed). A system call — `*77 4` above — prints its arg
 memory reads that fetch them, and the program's own output (`hello`) appears inline. Send a
 long trace to a file with `--trace=trace.log`, and cap a program that might loop forever with,
 say, `--limit=100000`.
+
+The `M17` at reset is `70170` here rather than `70000` because the stack starts above the
+argument block ([§3](#how-a-program-starts)); the exact value depends on how long the program
+name and the inherited environment variables are, so your own trace will differ in that digit
+and in the stack addresses derived from it.
 
 A program can also switch tracing on and off itself: `vtm N,0` — a `VTM` naming register 0 —
 enables the trace for a non-zero `N` and disables it for `N = 0`, which is the way to narrow a

@@ -111,8 +111,9 @@ public:
     void load_program(const std::string &filename);
 
     // Replace the running image with a new a.out (the exec() Unix syscall):
-    // reload the program, lay argv/envp onto the fresh stack and jump to the
-    // new entry point.  Throws std::runtime_error on a bad/missing file.
+    // reload the program, lay the argument block at the base of the stack the
+    // way the kernel's exece() does, and jump to the new entry point.  Throws
+    // std::runtime_error on a bad/missing file or an oversized argument list.
     void exec(const std::string &filename, const std::vector<std::string> &argv,
               const std::vector<std::string> &envp);
 

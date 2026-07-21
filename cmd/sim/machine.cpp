@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <numeric>
 #include <sstream>
 #include <regex>
 
@@ -293,50 +294,82 @@ void Machine::load_program(const std::string &filename)
 //
 // Replace the running image with a new a.out (the exec() Unix syscall).
 //
-// Reload the executable, then build the argument vector on the fresh stack in
-// the C calling convention for main(argc, argv): the string bodies and the
-// argv[] array (a NUL-terminated list of char* fat pointers) are laid down at
-// the current stack top, argc is pushed onto the stack, and argv is left in the
-// accumulator.  envp is laid down the same way just above argv; there is no
-// established crt0/argv ABI in the toolchain yet, so this is the minimal
-// reasonable convention and is deliberately confined to this one method.
+// Reload the executable, then lay the argument block down at the fixed base
+// STACK_BASE = 070000, exactly as the kernel's exece() does (kernel/sys1.c):
+//
+//      070000  argc
+//              argv[0] .. argv[argc-1]     char* fat pointers
+//              0
+//              envp[0] .. envp[ne-1]
+//              0
+//              the strings, byte-packed six to a word, contiguous
+//              0                           the cursor rounded up to a word
+//        r15 = the first free word above the block
+//
+// The block sits at the BASE of the stack and r15 starts above it, so the
+// program's own stack growth can never walk back over its own arguments, and
+// argc is always at absolute 070000 -- which is how a crt0 finds it with no
+// register hand-off.  Every pointer slot strides by ONE word; only the strings
+// are byte-granular, and they are NOT re-aligned between one and the next, so
+// all but the first argv[i] carries a byte offset in its fat pointer.
+//
+// Nothing is handed over in a register.  The kernel's setregs() zeroes ACC and
+// r1..r14 (regloc[0..14] in kernel/trap.c) and sets only r15 and the return
+// address; load_program() has just called Processor::reset(), which zeroes the
+// whole core, so matching the kernel here means leaving the registers alone.
+// The program break is likewise load_program()'s business: the heap grows above
+// the bss, far below this block.
 //
 void Machine::exec(const std::string &filename, const std::vector<std::string> &argv,
                    const std::vector<std::string> &envp)
 {
+    // The kernel's own ceiling on the arg list: NCARGS in include/sys/param.h.
+    const unsigned MAX_ARG_BYTES = 5120;
+
+    // Every string carries its NUL.
+    auto packed_size = [](const std::vector<std::string> &vec) {
+        return std::accumulate(vec.begin(), vec.end(), 0u, [](unsigned n, const std::string &s) {
+            return n + (unsigned)s.size() + 1;
+        });
+    };
+    const unsigned nbytes = packed_size(argv) + packed_size(envp);
+
+    // argc, the two vectors, their two terminating nulls, then the strings.
+    const unsigned na    = (unsigned)argv.size() + (unsigned)envp.size();
+    const unsigned sbase = STACK_BASE + 1 + na + 2;
+
+    // Both checks come BEFORE the image is replaced, so a rejected exec() returns
+    // to a caller that still exists.  Memory::store is unchecked, so the second one
+    // is what keeps an oversized vector off the stack guard and out of bounds.
+    if (nbytes > MAX_ARG_BYTES)
+        throw std::runtime_error("Argument list too long: " + filename);
+    if (sbase + (nbytes + 5) / 6 + 1 >= STACK_LIMIT)
+        throw std::runtime_error("Argument list does not fit in memory: " + filename);
+
     // Loads the image and seeds PC, the stack pointer and the break.
     load_program(filename);
 
-    // Pack a NUL-terminated argument list starting at word address `top`,
-    // returning the word address of the char*[] vector and advancing `top`.
-    unsigned top = cpu.get_m(017);
-    auto lay_vector = [&](const std::vector<std::string> &vec) -> unsigned {
-        // Vector of fat pointers, one per string plus a terminating null.
-        const unsigned vec_addr = top;
-        top += vec.size() + 1;
-        for (size_t i = 0; i < vec.size(); i++) {
-            // Store the string body, remembering a fat pointer to byte #0.
-            const unsigned str_addr = top;
-            BytePointer bp(memory, str_addr, 0);
-            for (char c : vec[i])
-                bp.put_byte((uint8_t)c);
-            bp.put_byte(0);
-            top = bp.word_addr + (bp.byte_index != 0);
-            // Fat pointer: bit 48 set, offset field 5 (byte #0), word address.
-            const Word fatptr = BIT48 | (5ull << 44) | str_addr;
-            memory.store(vec_addr + i, fatptr);
+    unsigned ap = STACK_BASE;
+    BytePointer up(memory, sbase, 0);
+
+    memory.store(ap, argv.size());
+    for (const auto &vec : { &argv, &envp }) {
+        for (const auto &s : *vec) {
+            // argv[i] / envp[i] is the cursor itself, as a fat pointer: bit 48
+            // set, the byte offset in bits 47..45 (field 5 names byte #0).
+            ap++;
+            memory.store(ap, BIT48 | ((Word)(5 - up.byte_index) << 44) | up.word_addr);
+            for (char c : s)
+                up.put_byte((uint8_t)c);
+            up.put_byte(0);
         }
-        memory.store(vec_addr + vec.size(), 0);
-        return vec_addr;
-    };
+        // The vector's terminating null.
+        ap++;
+        memory.store(ap, 0);
+    }
 
-    const unsigned argv_addr = lay_vector(argv);
-    lay_vector(envp);
-
-    // main(argc, argv): argc on the stack, argv in the accumulator.
-    memory.store(top, argv.size());
-    cpu.set_m(017, top + 1);
-    cpu.set_acc(argv_addr);
-    cpu.set_m(14, (unsigned)-2 & BITS(15)); // r14 = negative argument count (two args)
-    program_break = top + 1;
+    // Round the cursor up: the closing word must not eat a partial string.
+    unsigned ucp = up.word_addr + (up.byte_index != 0);
+    memory.store(ucp, 0);
+    cpu.set_m(017, ucp + 1);
 }

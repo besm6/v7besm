@@ -31,9 +31,10 @@ static void print_usage(std::ostream &out, const char *prog_name)
 {
     out << "BESM-6 Simulator (b6sim), Version " << Session::get_version() << "\n";
     out << "Usage:\n";
-    out << "    " << prog_name << " [options...] program\n";
+    out << "    " << prog_name << " [options...] program [arguments...]\n";
     out << "Input files:\n";
     out << "    program                 BESM-6 a.out executable to run\n";
+    out << "    arguments               passed to the program as argv[1] and up\n";
     out << "Options:\n";
     out << "    -h, --help              Display available options\n";
     out << "    -V, --version           Print the version number and exit\n";
@@ -65,24 +66,15 @@ int main(int argc, char *argv[])
     // Enable wall clock by default.
     Session session;
 
-    // Parse command line options.
+    // Parse command line options.  The leading '+' stops option parsing at the
+    // first non-option, so everything from the program name onwards belongs to
+    // the simulated program: `b6sim -d prog -d' passes the second -d to prog.
     for (;;) {
-        switch (getopt_long(argc, argv, "-hVvl:ds", long_options, nullptr)) {
+        switch (getopt_long(argc, argv, "+hVvl:ds", long_options, nullptr)) {
         case EOF:
             break;
 
         case 0:
-            continue;
-
-        case 1:
-            // Regular argument: the a.out program to run.
-            if (session.get_program_file().empty()) {
-                session.set_program_file(optarg);
-            } else {
-                std::cerr << prog_name << ": error: too many arguments: " << optarg << std::endl;
-                print_usage(std::cout, prog_name);
-                exit(EXIT_FAILURE);
-            }
             continue;
 
         case 'h':
@@ -134,9 +126,15 @@ int main(int argc, char *argv[])
     }
 
     // Must specify a program to run.
-    if (session.get_program_file().empty()) {
+    if (optind >= argc) {
         print_usage(std::cout, prog_name);
         exit(EXIT_FAILURE);
+    }
+
+    // The program file is argv[0] of the simulated program; the rest follow.
+    session.set_program_file(argv[optind]);
+    for (int i = optind + 1; i < argc; i++) {
+        session.add_program_arg(argv[i]);
     }
 
     // Simulate the last session.

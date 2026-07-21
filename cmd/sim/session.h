@@ -28,6 +28,10 @@ public:
     void set_program_file(const std::string &filename) { set_program_file(filename.c_str()); }
     const std::string &get_program_file();
 
+    // Append one argument for the simulated program.  The program file itself
+    // is argv[0] and is added by set_program_file().
+    void add_program_arg(const char *arg);
+
     // Run simulation session with given parameters.
     void run();
 

@@ -571,14 +571,12 @@ TEST(Cpu, IllegalInstructionTerminates)
 }
 
 //
-// After loading an executable the stack pointer r15 (M[017]) is seeded at the
-// base of the reserved stack region, disjoint from the heap.
+// Write a minimal FMAGIC executable: one text word, no const/data/bss.  Its
+// single instruction is never executed -- these tests inspect the loaded image
+// rather than running it.
 //
-TEST(Cpu, StackSeededAtBase)
+static void write_minimal_aout(const char *path)
 {
-    const char *path = "test_stackseed.bout";
-
-    // A minimal FMAGIC executable: one text word, no const/data/bss.
     struct exec hdr = {};
     hdr.a_magic     = FMAGIC;
     hdr.a_text      = 6; // one 6-byte word
@@ -586,13 +584,168 @@ TEST(Cpu, StackSeededAtBase)
     FILE *f         = fopen(path, "wb");
     ASSERT_NE(f, nullptr);
     fputhdr(&hdr, f);
-    fputw(0, f); // the single text word (never executed here)
+    fputw(0, f);
     fclose(f);
+}
+
+//
+// Read a NUL-terminated string through a char* fat pointer, the way the guest's
+// own dereference would: word address in bits 15..1, byte-offset field in bits
+// 47..45 with 5 naming byte #0 (the decode in cmd/sim/syscall.cpp).
+//
+static std::string get_string_at(Memory &m, Word fatptr)
+{
+    BytePointer bp(m, (unsigned)(fatptr & BITS(15)), 5 - (unsigned)((fatptr >> 44) & 7));
+    std::string s;
+    for (;;) {
+        uint8_t c = bp.get_byte();
+        if (c == 0)
+            break;
+        s.push_back((char)c);
+    }
+    return s;
+}
+
+//
+// After loading an executable the stack pointer r15 (M[017]) is seeded at the
+// base of the reserved stack region, disjoint from the heap.  load_program() is
+// the bare image loader: the argument block is exec()'s business.
+//
+TEST(Cpu, StackSeededAtBase)
+{
+    const char *path = "test_stackseed.bout";
+    write_minimal_aout(path);
 
     Memory memory;
     Machine machine{ memory };
     machine.load_program(path);
     EXPECT_EQ(machine.cpu.get_m(017), STACK_BASE);
+
+    std::remove(path);
+}
+
+//
+// exec() lays the kernel's argument block at the fixed base 070000: argc, the
+// argv[] and envp[] vectors of fat pointers each closed by a null word, then the
+// strings packed six to a word, then a closing word; r15 starts just above it.
+// This is exece() in kernel/sys1.c, word for word, so one crt0 serves both.
+//
+TEST(Cpu, ExecArgBlock)
+{
+    const char *path = "test_execblock.bout";
+    write_minimal_aout(path);
+
+    Memory memory;
+    Machine machine{ memory };
+    machine.exec(path, { "prog", "a", "bb" }, { "X=1" });
+
+    // argc, three argv slots, a null, one envp slot, a null.
+    EXPECT_EQ(memory.load(STACK_BASE), 3u);
+    EXPECT_EQ(memory.load(STACK_BASE + 4), 0u);
+    EXPECT_EQ(memory.load(STACK_BASE + 6), 0u);
+
+    // The strings begin just above the vectors, at 070000 + 1 + 4 + 2.
+    const unsigned S = STACK_BASE + 7;
+
+    // Each pointer is the live byte cursor: the strings are NOT re-aligned
+    // between one and the next, so only argv[0] starts at byte #0 (field 5).
+    // "prog\0" fills bytes 0..4 of S, "a\0" straddles into S+1, and so on.
+    EXPECT_EQ(memory.load(STACK_BASE + 1), BIT48 | (5ull << 44) | S);       // "prog"
+    EXPECT_EQ(memory.load(STACK_BASE + 2), BIT48 | (0ull << 44) | S);       // "a"
+    EXPECT_EQ(memory.load(STACK_BASE + 3), BIT48 | (4ull << 44) | (S + 1)); // "bb"
+    EXPECT_EQ(memory.load(STACK_BASE + 5), BIT48 | (1ull << 44) | (S + 1)); // "X=1"
+
+    // What the guest reads back through those pointers.
+    EXPECT_EQ(get_string_at(memory, memory.load(STACK_BASE + 1)), "prog");
+    EXPECT_EQ(get_string_at(memory, memory.load(STACK_BASE + 2)), "a");
+    EXPECT_EQ(get_string_at(memory, memory.load(STACK_BASE + 3)), "bb");
+    EXPECT_EQ(get_string_at(memory, memory.load(STACK_BASE + 5)), "X=1");
+
+    // 14 bytes of strings end mid-word in S+2; the closing word is the next one.
+    EXPECT_EQ(memory.load(S + 3), 0u);
+    EXPECT_EQ(machine.cpu.get_m(017), S + 4);
+
+    std::remove(path);
+}
+
+//
+// With neither arguments nor environment the block is still four words -- argc
+// and the two vectors' nulls and the closing word -- and r15 sits above them.
+//
+TEST(Cpu, ExecEmptyArgBlock)
+{
+    const char *path = "test_execempty.bout";
+    write_minimal_aout(path);
+
+    Memory memory;
+    Machine machine{ memory };
+    machine.exec(path, {}, {});
+
+    for (unsigned i = 0; i < 4; i++)
+        EXPECT_EQ(memory.load(STACK_BASE + i), 0u) << "word " << i;
+    EXPECT_EQ(machine.cpu.get_m(017), STACK_BASE + 4);
+
+    std::remove(path);
+}
+
+//
+// Nothing is handed to the new image in a register: setregs() (kernel/sys1.c)
+// zeroes ACC and r1..r14 and sets only r15 and the return address.
+//
+TEST(Cpu, ExecClearsRegisters)
+{
+    const char *path = "test_execregs.bout";
+    write_minimal_aout(path);
+
+    Memory memory;
+    Machine machine{ memory };
+
+    // Dirty every register the new image must not inherit.
+    machine.cpu.set_acc(0'7777'7777'7777'7777);
+    for (unsigned i = 1; i <= 14; i++)
+        machine.cpu.set_m(i, 077777);
+
+    machine.exec(path, { "prog" }, {});
+
+    EXPECT_EQ(machine.cpu.get_acc(), 0u);
+    for (unsigned i = 1; i <= 14; i++)
+        EXPECT_EQ(machine.cpu.get_m(i), 0u) << "r" << i;
+
+    std::remove(path);
+}
+
+//
+// The argument block lives at the base of the STACK; the heap break stays where
+// load_program() put it, on the first page boundary above the bss.
+//
+TEST(Cpu, ExecKeepsProgramBreak)
+{
+    const char *path = "test_execbreak.bout";
+    write_minimal_aout(path);
+
+    Memory memory;
+    Machine machine{ memory };
+    machine.exec(path, { "prog", "argument" }, { "X=1" });
+
+    EXPECT_EQ(machine.get_program_break(), PAGE_NWORDS);
+
+    std::remove(path);
+}
+
+//
+// An argument list past NCARGS (5120 bytes, include/sys/param.h) is refused
+// rather than scribbled over the stack.
+//
+TEST(Cpu, ExecArgListTooLong)
+{
+    const char *path = "test_execbig.bout";
+    write_minimal_aout(path);
+
+    Memory memory;
+    Machine machine{ memory };
+    std::vector<std::string> argv(6, std::string(1000, 'x'));
+
+    EXPECT_THROW(machine.exec(path, argv, {}), std::runtime_error);
 
     std::remove(path);
 }
