@@ -12,10 +12,12 @@ done, and so is the build skeleton: `lib/rules.mk`, the three Makefiles, `csu/cr
 
 ## What this is
 
-`libc` for programs that run **under this kernel**, not for the kernel itself. The kernel links
-the external c-compiler's `libc.a` for its handful of string routines; user programs need the
-real thing — `crt0`, the syscall stubs, `errno`, `stdio`, `malloc`, the string and conversion
-routines — and after that `libm`, `libtermlib` and `libcurses`.
+`libc` for programs that run **under this kernel**, not for the kernel itself. The kernel needs
+none of it: it defines its own `printf` in [`../kernel/prf.c`](../kernel/prf.c) and references no
+`str*`, `mem*`, `bcopy` or `bzero` anywhere, so it links only `libruntime.a` for the `b$*`
+helpers. User programs need the real thing — `crt0`, the syscall stubs, `errno`, `stdio`,
+`malloc`, the string and conversion routines — and after that `libm`, `libtermlib` and
+`libcurses`.
 
 Two source trees feed it:
 
@@ -117,11 +119,13 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
 - **ANSI, not K&R.** The kernel sources were converted; libc follows. `va_dcl`-style variadic
   definitions do not parse at all, so `printf`, `execl` and the rest become `(fmt, ...)` over
   the compiler's `<stdarg.h>` — where one argument is exactly one word.
-- **The v7 headers win.** [`../cmd/cc/cc.c`](../cmd/cc/cc.c) appends the compiler's
-  `share/besm6/include` *after* the user's `-I`, so `-I../../include` resolves `stdio.h`,
-  `ctype.h`, `errno.h` … from [`../include/`](../include/) while `<stdarg.h>` still resolves.
-  The corollary is that `<string.h>`, `<stdlib.h>` and `<stddef.h>` — which v7 has not got —
-  come from the compiler's tree, prototypes and `size_t` and all. Nothing under `lib/` should
+- **There is one header tree and this repo owns it.** [`../include/`](../include/) holds the v7
+  headers and the C11 ones alike — `<string.h>`, `<stdlib.h>`, `<stddef.h>` and the rest of the
+  freestanding set were adapted from the c-compiler's tree, which no longer installs them, and
+  where the two overlapped (`stdio.h`, `ctype.h`, `errno.h`, `setjmp.h` …) the v7 header stayed.
+  `-I../../include` names it in the source tree, ahead of the installed copy that
+  [`../cmd/cc/cc.c`](../cmd/cc/cc.c) appends to every preprocessor run, so a build here sees what
+  it just edited. Nothing under `lib/` should
   add a header to `include/` merely to declare its own function: a routine that no v7 header
   declares (`index`, `rindex`, `swab`, `mktemp`, `isatty`, `perror`) declares itself at the
   head of its file, exactly as `test/*.c` declares the syscalls it calls.
@@ -174,37 +178,41 @@ lib/
 
 Hand-written Makefiles in the style of [`../kernel/Makefile`](../kernel/Makefile) — `b6cc
 -I../../include`, `b6as`, `b6ar`, `b6ranlib`, and a hand-maintained `###` header-dependency
-block, since `b6cc` has no `-M`. **Not** part of the CMake build; the toolchain must be
-`make install`ed first.
+block, since `b6cc` has no `-M`. **Not** part of the CMake build, and it could not be: these
+are the *installed* `b6*` tools, so `make && make install` at the top level has to come first,
+and `make -C lib install` after — the three-step bootstrap of the top-level
+[`../README.md`](../README.md). `install` here copies `libc.a` and `crt0.o` into
+`<prefix>/share/besm6/lib`, beside `libruntime.a`, which is where `b6cc` looks for both.
 
 A program links against two archives, ours first:
 
 ```sh
-b6ld crt0.o prog.o -L$(TOP)/lib/libc -lc $HOME/.local/share/besm6/lib/libc.a
+b6ld crt0.o prog.o -L$(TOP)/lib/libc -L$HOME/.local/share/besm6/lib -lc -lruntime
 ```
 
-The second archive is the external c-compiler's library, and is reached **only** for the `b$*`
-compiler-support helpers (`b$save`, `b$ret`, `b$mul`, `b$div`, the relational and conversion
-routines) that every compiled function calls. Archives are scanned in order and a member is
-pulled only for a symbol still unresolved, so anything we define ourselves is taken from our
-own library. The one hazard is silent: a routine we forget to port is satisfied from the
-external library instead of failing to link — and `b6nm` on the result cannot tell, because
-both archives name their members `strcpy.o`, `write.o`, `exit.o` and so on. The check that
-does tell is to relink *without* the second archive and read the errors:
+That is what `b6cc` itself puts on the line when it links, and `$(link)` in
+[`rules.mk`](rules.mk) does the same for the programs built here. The second archive is the
+external c-compiler's, and is reached **only** for the `b$*` compiler-support helpers
+(`b$save`, `b$ret`, `b$mul`, `b$div`, the relational and conversion routines) that every
+compiled function calls; it is all that project installs for this toolchain, and the libc, the
+`crt0.o` and the headers are ours.
+
+The order is the contract. An archive is scanned once, where it stands on the line, and a
+member is pulled only for a symbol still unresolved, so `libc.a` must precede `libruntime.a`:
+libc calls the helpers, and no helper calls back into libc (`b6nm libruntime.a` shows its only
+undefined names are `b$*` of its own).
+
+The one hazard is silent: a routine we forget to port is satisfied from the external archive
+instead of failing to link. The check is to relink *without* it and read the errors:
 
 ```sh
 b6ld crt0.o prog.o -o /dev/null -L$(TOP)/lib/libc -lc      # every undefined name must be b$*
 ```
 
 Anything other than a `b$*` in that list is a routine the external library has been quietly
-supplying. Phase 2's four test programs are clean by this test.
-
-It has to be named by **path**, not as a second `-L … -lc`. `b6ld` keeps one *global* list of
-`-L` directories and `-l` searches all of it with first match wins
-([`../cmd/ld/pass1.c`](../cmd/ld/pass1.c), [`../cmd/ld/library.c`](../cmd/ld/library.c)), so
-with both archives named `libc.a` a second `-lc` finds ours again and every `b$*` goes
-undefined. A bare archive path is scanned as a library just the same — `open_input()`
-recognises it by its `ARMAG`.
+supplying. The check used to be the only way to tell, since both archives were called `libc.a`
+and named their members `strcpy.o`, `write.o`, `exit.o` alike, so `b6nm` on the result could
+not say whose was pulled; that ambiguity went with the rename, and the check is now exact.
 
 ## Phase 1 — crt0, syscall stubs, errno
 

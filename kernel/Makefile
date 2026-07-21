@@ -32,8 +32,12 @@ all:    unix
 clean:
 	rm -f *.o *.a *.nm *.dis unix
 
+# -lruntime alone, and never a -lc: the only thing the kernel takes from outside is
+# the b$* compiler-support helpers every compiled function calls.  It defines its own
+# printf in prf.c and references no str*/mem* at all, so lib/libc -- a user-mode
+# library that traps to this very kernel -- has no business on this line.
 unix:   $(OBJ)
-	$(LD) $(OBJ) -o $@ -L$$HOME/.local/share/besm6/lib -lc
+	$(LD) $(OBJ) -o $@ -L$$HOME/.local/share/besm6/lib -lruntime
 	$(NM) -n $@ > $@.nm
 	$(DISASM) $@ > $@.dis
 

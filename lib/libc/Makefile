@@ -46,7 +46,7 @@ STDIO   =                       # phase 4
 
 OBJ     = $(SYS) $(GEN) $(STDIO)
 
-.PHONY: all clean
+.PHONY: all install clean
 
 all:    libc.a $(CSU)
 
@@ -68,6 +68,23 @@ libc.a: $(OBJ)
 	$(AR) cr $@ $^
 	$(RANLIB) $@
 
+# Install beside the c-compiler's libruntime.a, which is where b6cc looks for both:
+# find_crt0() names crt0.o outright and add_default_libdirs() puts a -L on the same
+# directory for the implicit -lc (cmd/cc/cc.c).  PREFIX and LIBDIR come from rules.mk.
+#
+# NOT a CMake install, and it cannot be one: lib/ is built by the INSTALLED toolchain,
+# so b6cc has to exist before libc.a can be compiled at all.  Hence the three-step
+# bootstrap of a fresh checkout -- `make && make install', `make -C lib',
+# `make -C lib install' -- which the top-level README.md spells out.
+#
+# cp -p, and it matters: b6ld calls a randomized archive out of date when the
+# file's mtime is newer than the date stored in its __.SYMDEF member
+# (cmd/ld/library.c), and a plain cp stamps the copy with the time of the copy.
+# Preserving the times keeps b6ranlib's index trustworthy where it lands.
+install: all
+	mkdir -p $(DESTDIR)$(LIBDIR)
+	cp -p libc.a $(CSU) $(DESTDIR)$(LIBDIR)
+
 clean:
 	rm -f *.o *.a $(STUBSRC)
 
@@ -84,9 +101,14 @@ exit.o fork.o wait.o pipe.o getpid.o getuid.o getgid.o time.o dup.o exec.o exece
 
 sbrk.o:		$(TOP)/include/sys/param.h $(TOP)/include/sys/types.h
 
-# gen/.  <string.h> and <stdlib.h> are the COMPILER's -- v7 has neither, and cc appends
-# share/besm6/include after the user's -I -- so they are not named here: nothing in this
-# tree regenerates when they change, and they change with the toolchain, not with us.
+# gen/.  <string.h> and <stdlib.h> used to be the COMPILER's and were deliberately
+# left out of this block; they live in $(TOP)/include now, like every other header
+# here, and change with us, so they are named.
+strcat.o strcmp.o strcpy.o strlen.o strncat.o strncmp.o strncpy.o strchr.o \
+strrchr.o strstr.o strtok.o memcpy.o memmove.o memset.o memcmp.o memchr.o \
+perror.o:	$(TOP)/include/string.h $(TOP)/include/stddef.h
+abs.o atoi.o atol.o qsort.o rand.o: $(TOP)/include/stdlib.h $(TOP)/include/stddef.h
+
 ctype_.o:	$(TOP)/include/ctype.h
 perror.o errlst.o: $(TOP)/include/errno.h
 isatty.o:	$(TOP)/include/sgtty.h

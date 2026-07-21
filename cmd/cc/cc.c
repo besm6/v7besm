@@ -76,10 +76,10 @@ static void vec_free(struct vec *v)
 static bool opt_c;      // -c: compile/assemble only, no link
 static bool opt_S;      // -S: compile to assembly only
 static bool opt_E;      // -E: preprocess only
-static bool opt_g;      // -g: request debug info (currently a no-op; see TODO.md)
-static bool opt_O;      // -O: request optimization (currently a no-op; see TODO.md)
+static bool opt_g;      // -g: request debug info (a no-op; README.md, "Reserved options")
+static bool opt_O;      // -O: request optimization (a no-op; README.md, "Reserved options")
 static bool opt_v;         // -v: echo each sub-command before running it
-static bool opt_nostdlib;  // -nostdlib: skip the standard library dirs and -lc
+static bool opt_nostdlib;  // -nostdlib: skip the library dirs, crt0.o and both -l's
 static bool opt_nostdinc;  // -nostdinc: skip the standard system include dir
 static char *outfile;      // -o NAME: explicit output name
 static char *codegen_dialect;  // -Sbemsh/-Smadlen: dialect flag for b6codegen, or NULL
@@ -266,6 +266,16 @@ static char *find_tool(const char *envvar, const char *name)
     }
     return NULL;
 }
+
+//
+// The three lookups below need no adjusting, and have needed none through two
+// changes of who owns what.  The prefixes are fixed by convention -- ~/.local
+// first, then /usr/local, share/besm6 under either -- and every producer
+// installs there: the top-level CMake puts include/ in the first, lib/libc puts
+// libc.a and crt0.o in the second, and the external c-compiler puts
+// libruntime.a beside them.  A missing file here means a step of the bootstrap
+// has not been run (see the README), never that the search order is wrong.
+//
 
 //
 // Return the default besm6 include directory: <prefix>/share/besm6/include,
@@ -560,8 +570,9 @@ static int compile_one(const char *src)
 //
 // Unless -nostdlib is given, the crt0 startup object (which provides the
 // _start entry point) is located in the standard library directories and
-// linked first; a missing crt0.o is a fatal error.  See TODO.md.  Returns 0
-// on success.
+// linked first; a missing crt0.o is a fatal error.  Two implicit archives
+// close the line, ours then the compiler's.  See README.md, "Linking".
+// Returns 0 on success.
 //
 static int link_objects(void)
 {
@@ -586,8 +597,13 @@ static int link_objects(void)
     if (!opt_nostdlib) {
         char *crt0 = find_crt0();
         if (!crt0) {
+            // Almost always the bootstrap, not a wish for a freestanding link:
+            // crt0.o is built and installed by lib/libc, so it is absent until
+            // `make -C lib install' has run at least once.
             error("crt0.o not found in the standard library directories "
-                  "(~/.local or /usr/local share/besm6/lib); use -nostdlib to link without it");
+                  "(~/.local or /usr/local share/besm6/lib); run `make -C lib && "
+                  "make -C lib install' to build and install the C library, or "
+                  "use -nostdlib to link without it");
             vec_free(&av);
             free(tool);
             return 1;
@@ -600,9 +616,14 @@ static int link_objects(void)
     // references (conventional link order).
     for (size_t i = 0; i < ldflags.len; i++)
         vec_push(&av, ldflags.data[i]);
-    // The implicit C library, unless -nostdlib asked for a freestanding link.
-    if (!opt_nostdlib)
+    // The implicit C library, then the compiler's helper archive, unless
+    // -nostdlib asked for a freestanding link.  libruntime.a is LAST, and the
+    // order is not cosmetic: b6ld scans an archive once, in order, and libc
+    // calls the b$* helpers while no helper calls back into libc.
+    if (!opt_nostdlib) {
         vec_push(&av, "-lc");
+        vec_push(&av, "-lruntime");
+    }
     vec_push(&av, NULL);
 
     int rc = run(tool, av.data);
@@ -630,7 +651,7 @@ static void usage(void)
     printf("    -Ipath          Add a header search directory\n");
     printf("    -Lpath          Add a library search directory (for the linker)\n");
     printf("    -lname          Link against library libname (for the linker)\n");
-    printf("    -nostdlib       Do not use the standard library dirs or -lc\n");
+    printf("    -nostdlib       Do not use the standard library dirs, crt0.o, -lc or -lruntime\n");
     printf("    -nostdinc       Do not add the standard system include directory\n");
     printf("Inputs are dispatched by suffix: .c (compile), "
            ".S (preprocess + assemble), .s (assemble), .o (link).\n");

@@ -23,17 +23,20 @@ SIZE    = b6size -w
 DISASM  = b6disasm
 SIM     = b6sim
 
-# The v7 headers win over the compiler's own: cmd/cc appends share/besm6/include
-# AFTER the user's -I, so stdio.h, ctype.h and errno.h come from include/ here
-# while <stdarg.h> still resolves.  See lib/README.md, "Ground rules".
+# One header tree, and it is ours: include/ holds the v7 headers and the C11 ones
+# alike.  -I names it in the source tree, ahead of the installed copy that cmd/cc
+# appends, so a build here sees what it just edited.  See lib/README.md.
 CFLAGS  = -I$(TOP)/include
 
 # Our library: libc.a and, beside it rather than in it, crt0.o.
 LIBC    = $(TOP)/lib/libc
 
-# The external c-compiler's library, reached ONLY for the b$* compiler-support
-# helpers (b$save, b$ret, b$mul, ...) that every compiled function calls.
-BLIB    = $(HOME)/.local/share/besm6/lib
+# Where `make install' puts them, and where the toolchain looks: the same prefix
+# rule the top-level Makefile uses -- ~/.local if it exists, else /usr/local --
+# and the same share/besm6/lib the c-compiler installs libruntime.a into.  This
+# is also the -L that resolves -lruntime on every link below.
+PREFIX  = $(shell [ -d $$HOME/.local ] && echo $$HOME/.local || echo /usr/local)
+LIBDIR  = $(PREFIX)/share/besm6/lib
 
 # What every program links against besides its own objects.  Name it as an ORDINARY
 # prerequisite (`prog: prog.o $(LIBDEP)') so that rebuilding libc.a relinks every
@@ -45,13 +48,15 @@ LIBDEP  = $(LIBC)/crt0.o $(LIBC)/libc.a
 
 # The link, and its postlude.  A program names its own objects once, as prerequisites.
 #
-# The external library is named by PATH, not by `-L$(BLIB) -lc'.  b6ld keeps ONE
-# global list of -L directories and `-l' searches all of it, first match wins
-# (cmd/ld/pass1.c, cmd/ld/library.c), so with both archives called libc.a a second
-# `-lc' finds ours again and the b$* helpers never resolve.  A bare archive path is
-# scanned as a library just the same (open_input recognizes it by its ARMAG).
+# Two archives, ours first: libc.a here, then the c-compiler's libruntime.a, which is
+# reached ONLY for the b$* compiler-support helpers (b$save, b$ret, b$mul, ...) that
+# every compiled function calls.  The order is the contract -- b6ld scans an archive
+# once, in order (cmd/ld/library.c), libc calls the helpers and no helper calls back --
+# and the two -L directories are searched by both -l's, which is harmless now that the
+# names differ.  They did not always: the external library used to be called libc.a too,
+# and had to be named by absolute path to keep a second `-lc' from finding ours again.
 define link
-$(LD) $(LIBC)/crt0.o $(filter-out $(LIBDEP),$^) -o $@ -L$(LIBC) -lc $(BLIB)/libc.a
+$(LD) $(LIBC)/crt0.o $(filter-out $(LIBDEP),$^) -o $@ -L$(LIBC) -L$(LIBDIR) -lc -lruntime
 $(NM) -n $@ > $@.nm
 $(DISASM) -c $@ > $@.dis
 $(SIZE) $@

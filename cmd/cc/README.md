@@ -49,7 +49,7 @@ Inputs are dispatched by suffix:
 | `-Ipath`      | Add a header search directory                             |
 | `-Lpath`      | Add a library search directory (passed to the linker)     |
 | `-lname`      | Link against library `libname` (passed to the linker)     |
-| `-nostdlib`   | Do not use the standard library dirs, `crt0.o`, or `-lc`  |
+| `-nostdlib`   | No `crt0.o`, no library dirs, no `-lc`/`-lruntime`        |
 | `-nostdinc`   | Do not add the standard system include directory          |
 
 The last stage to run is selected by `-E` (stop after preprocessing), `-S` (stop after code
@@ -74,10 +74,24 @@ When linking (no `-E`/`-S`/`-c`), `b6cc` invokes `b6ld` with `-e _start` and:
   `~/.local/share/besm6/lib` is tried first, then `/usr/local/share/besm6/lib`. A missing
   `crt0.o` is a fatal error;
 - adds the standard library search directories (`-L…`) for those same prefixes;
-- links the implicit C library with `-lc`.
+- closes the line with **two** implicit archives, `-lc` then `-lruntime`.
 
-`-nostdlib` suppresses all of the above for a freestanding link (no `crt0.o`, no lib dirs, no
-`-lc`), so a missing `crt0.o` is not an error in that mode.
+`libc.a` and `crt0.o` are this repository's own, built by [`lib/libc`](../../lib/) and installed
+into `share/besm6/lib` by `make -C lib install`. `libruntime.a` beside them is the external
+[c-compiler](https://github.com/besm6/c-compiler/)'s, and holds the `b$*` compiler-support
+helpers (`b$save`, `b$ret`, `b$mul`, …) that every compiled function calls — it is the one piece
+of the link that cannot come from here.
+
+The order of the two is a contract, not a preference: `b6ld` scans an archive once, where it
+stands on the line, so `libc.a` must come first — libc calls the helpers, and no helper calls
+back into libc.
+
+A "crt0.o not found" error almost always means the library has never been installed, not that a
+freestanding link was wanted; `make -C lib && make -C lib install` is the fix, and the top-level
+[README](../../README.md) has the full three-step bootstrap.
+
+`-nostdlib` suppresses all of the above for a freestanding link (no `crt0.o`, no lib dirs,
+neither `-l`), so a missing `crt0.o` is not an error in that mode.
 
 ## Reserved options
 

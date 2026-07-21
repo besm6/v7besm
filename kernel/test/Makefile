@@ -45,8 +45,11 @@ all:    $(PROGS)
 # list, so each rule names its objects once instead of twice.  Never give a link rule an
 # ordinary non-object prerequisite -- $^ would hand it to b6ld; use an order-only one
 # (`| foo'), which $^ excludes.
+# -lruntime is the b$* helper archive and the only library any of these link; a test
+# program is kernel code with a crt0.s of its own, so a user-mode libc is as wrong
+# here as it is next door in kernel/Makefile.
 define link
-$(LD) $^ -o $@ -L$(LIBDIR) -lc
+$(LD) $^ -o $@ -L$(LIBDIR) -lruntime
 $(DISASM) -c $@ > $@.dis
 $(NM) -n $@ > $@.nm
 endef

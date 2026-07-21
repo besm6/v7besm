@@ -12,6 +12,7 @@
 //
 #include <gtest/gtest.h>
 
+#include <fcntl.h>
 #include <spawn.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -53,9 +54,30 @@ std::string ReadFile(const std::string &path)
     return ss.str();
 }
 
+// Locate a file in the standard BESM-6 library directories, the way the driver
+// does: ~/.local/share/besm6/lib then /usr/local/share/besm6/lib.  Returns an
+// empty string if not found.  Used to tell an uninstalled library (skip) from a
+// broken link (fail).
+std::string FindLibFile(const std::string &name)
+{
+    std::vector<std::string> dirs;
+    if (const char *home = getenv("HOME"))
+        dirs.push_back(std::string(home) + "/.local/share/besm6/lib");
+    dirs.push_back("/usr/local/share/besm6/lib");
+
+    for (const auto &dir : dirs) {
+        std::string path = dir + "/" + name;
+        if (access(path.c_str(), R_OK) == 0)
+            return path;
+    }
+    return {};
+}
+
 // Run argv (NULL-terminated) and return the child's exit code, or -1 on spawn
-// failure / abnormal termination.
-int RunProcess(const std::vector<std::string> &argv)
+// failure / abnormal termination.  With `stdout_file` non-empty, the child's
+// standard output is redirected there -- which is how the -v echo of each
+// sub-command is captured, since run() in cc.c prints it to stdout.
+int RunProcess(const std::vector<std::string> &argv, const std::string &stdout_file = {})
 {
     std::vector<char *> cargv;
     for (const auto &a : argv)
@@ -63,8 +85,21 @@ int RunProcess(const std::vector<std::string> &argv)
         cargv.push_back(const_cast<char *>(a.c_str()));
     cargv.push_back(nullptr);
 
+    posix_spawn_file_actions_t actions;
+    posix_spawn_file_actions_t *pactions = nullptr;
+    if (!stdout_file.empty()) {
+        if (posix_spawn_file_actions_init(&actions) != 0)
+            return -1;
+        pactions = &actions;
+        posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, stdout_file.c_str(),
+                                         O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    }
+
     pid_t pid;
-    if (posix_spawn(&pid, cargv[0], nullptr, nullptr, cargv.data(), environ) != 0)
+    int spawned = posix_spawn(&pid, cargv[0], pactions, nullptr, cargv.data(), environ);
+    if (pactions)
+        posix_spawn_file_actions_destroy(pactions);
+    if (spawned != 0)
         return -1;
 
     int status;
@@ -85,9 +120,10 @@ protected:
         ASSERT_NE(mkdtemp(tmpl), nullptr) << "mkdtemp failed";
         dir = tmpl;
 
-        // Pin the preprocessor and assembler to the freshly built tools.
+        // Pin the preprocessor, assembler and linker to the freshly built tools.
         ASSERT_EQ(setenv("B6CPP", B6CPP_PATH, 1), 0);
         ASSERT_EQ(setenv("B6AS", B6AS_PATH, 1), 0);
+        ASSERT_EQ(setenv("B6LD", B6LD_PATH, 1), 0);
     }
 
     void TearDown() override
@@ -257,6 +293,69 @@ TEST_F(CcDriver, AssembleDotS)
 
     std::string bytes = ReadFile(obj);
     EXPECT_FALSE(bytes.empty()) << "object file is empty";
+}
+
+// The whole pipeline, ending in b6ld: the one path the other tests never take,
+// which is how the driver stayed green through a spell when it could not link at
+// all.  It needs the installed library -- crt0.o and libc.a from `make -C lib
+// install', libruntime.a from the c-compiler -- so it skips when that is absent.
+//
+// Besides the link succeeding, this asserts the ORDER of the two implicit
+// archives.  b6ld scans an archive once where it stands on the line, and libc
+// calls the b$* helpers, so -lc must precede -lruntime; get it backwards and
+// every helper goes undefined.  The check reads the -v echo, which stays
+// meaningful even where the installed libc is stale enough to fail the link.
+TEST_F(CcDriver, LinkExecutable)
+{
+    for (const char *tool : { "b6parse", "b6lower", "b6codegen" }) {
+        if (FindTool(tool).empty())
+            GTEST_SKIP() << tool << " not installed; skipping end-to-end test";
+    }
+    for (const char *lib : { "crt0.o", "libc.a", "libruntime.a" }) {
+        if (FindLibFile(lib).empty())
+            GTEST_SKIP() << lib << " not installed in share/besm6/lib; skipping link test";
+    }
+
+    WriteSource("t.c", "int main(void)\n{\n    return 0;\n}\n");
+
+    std::string src = dir + "/t.c";
+    std::string exe = dir + "/t.b6";
+    std::string log = dir + "/v.log";
+    ASSERT_EQ(RunProcess({ B6CC_COMMAND, "-v", "-o", exe, src }, log), 0) << "b6cc link failed";
+
+    EXPECT_FALSE(ReadFile(exe).empty()) << "executable is empty";
+
+    // run() echoes each argument followed by a space, so the flags appear
+    // surrounded by spaces and cannot be confused with a substring of a path.
+    std::string text = ReadFile(log);
+    size_t libc = text.find(" -lc ");
+    size_t runtime = text.find(" -lruntime ");
+    ASSERT_NE(libc, std::string::npos) << text;
+    ASSERT_NE(runtime, std::string::npos) << text;
+    EXPECT_LT(libc, runtime) << "-lc must precede -lruntime:\n" << text;
+}
+
+// -nostdlib is the escape hatch the link test's requirements imply: no crt0.o,
+// no library directories and neither implicit archive, so it links whatever it
+// was given and nothing else.  Needs no installed library at all.
+TEST_F(CcDriver, LinkNostdlib)
+{
+    WriteSource("x.S", "        .globl _start\n"
+                       "_start: xta 0\n"
+                       "        stop\n");
+
+    std::string src = dir + "/x.S";
+    std::string exe = dir + "/x.b6";
+    std::string log = dir + "/v.log";
+    ASSERT_EQ(RunProcess({ B6CC_COMMAND, "-v", "-nostdlib", "-o", exe, src }, log), 0)
+        << "b6cc -nostdlib link failed";
+
+    EXPECT_FALSE(ReadFile(exe).empty()) << "executable is empty";
+
+    std::string text = ReadFile(log);
+    EXPECT_EQ(text.find(" -lc "), std::string::npos) << text;
+    EXPECT_EQ(text.find(" -lruntime "), std::string::npos) << text;
+    EXPECT_EQ(text.find("crt0.o"), std::string::npos) << text;
 }
 
 } // namespace

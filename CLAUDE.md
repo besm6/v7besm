@@ -59,6 +59,31 @@ compiled with `-Wall -Werror -Wshadow`. Each tool is built under a `b6`-prefixed
 These are host tools that run on the build machine and emit BESM-6 objects. **Do not** invoke `cc`/`clang` by hand or run
 `cmake --build` directly — always go through the top-level `make` targets.
 
+`make install` also installs **`include/`** to `<prefix>/share/besm6/include` — the one system
+header tree, v7 headers and C11 headers alike, which `b6cc` appends to every preprocessor run.
+
+### Library (`lib/`) — the three-step bootstrap
+
+`lib/` is compiled by the *installed* toolchain, so a fresh checkout has an order to it:
+
+```sh
+make && make install        # 1. host tools -- b6cc, b6as, b6ld ... -- and include/
+make -C lib                 # 2. libc.a and crt0.o, built by those tools
+make -C lib install         # 3. into share/besm6/lib, beside libruntime.a
+```
+
+Step 2 needs step 1's headers; step 3 is what makes `b6cc` able to *link* — until it has run,
+`b6cc` compiles and assembles but cannot produce an executable, and `find_crt0()` says so.
+This is why `lib/` is deliberately outside the CMake build and installs from its own Makefile.
+
+The **only** thing this repo does not build is **`libruntime.a`**, the `b$*` compiler-support
+helpers (`b$save`, `b$ret`, `b$mul`, …) that every compiled function calls. It comes from the
+external c-compiler, which installs it and nothing else for this toolchain — the libc, the
+`crt0.o` and the headers are ours. Every link therefore names two archives, **ours first**:
+`-lc -lruntime`, because `b6ld` scans an archive once, in order, libc calls the helpers, and no
+helper calls back into libc. The kernel takes `-lruntime` **alone** — it defines its own
+`printf` in `kernel/prf.c` and uses no other library routine.
+
 ### Kernel (`kernel/`)
 ```sh
 cd kernel && make          # produces `unix` (BESM-6 a.out), unix.nm and unix.dis
@@ -67,7 +92,8 @@ make clean
 ```
 The kernel is **not** part of the CMake build. It cross-compiles with the tools this repo
 installs — `b6cc -I../include -DKERNEL`, `b6as`, `b6ld`, `b6ar`/`b6ranlib`, and it links
-against the external c-compiler's libc (`~/.local/share/besm6/lib`).
+against `libruntime.a` (`~/.local/share/besm6/lib`) for the `b$*` helpers, and nothing else:
+no `-lc`, since it has its own `printf` and calls no library routine.
 `make` finishes by printing `b6size -w unix`: the image **must end below `064000`** (`KEND` in
 `include/sys/param.h`), because supervisor instruction fetch is never mapped and the top two
 areas of the unmapped space are spoken for — the u-area at `076000` and, just under it,
