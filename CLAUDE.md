@@ -219,6 +219,11 @@ the authoritative references and are kept current:
   CPU context, switches address spaces and gets back out: the four gates (`trapgate`/`intrgate`/
   `sysgate`/`badext`), the 21-word `reg.h` trap frame, the shared `intret` exit, `sureg()` and the
   u-area copy in `save()`/`resume()`. Read it before touching `kernel/besm6.S` or `kernel/switch.s`.
+- `doc/Unix_V7_System_Calls.md` — the system calls this kernel implements: the four hand-maintained
+  copies of the list and which one is authoritative, the `$77 N` gate's argument/result convention,
+  a brief entry per call, the rows that are `nullsys`/`nosys`, and the handful of calls whose shape
+  changed because `off_t`/`time_t` are one word and the break names a word. Read it before touching
+  `kernel/sysent.c`, `kernel/syscall.c`, `include/sys/syscall.h` or `lib/libc/sys/`.
 - `doc/Dubna_Context_Switch.md` — the same five questions answered by Dubna, an OS that ran on the
   real machine for two decades. The source of several idioms above (the `its`/`sti` save pipeline,
   the forced Y → A → R restore order, the nine-store БРЗ drain).

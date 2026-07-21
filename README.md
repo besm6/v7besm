@@ -140,6 +140,9 @@ See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail, and
 - [doc/Unix_Context_Switch.md](doc/Unix_Context_Switch.md) — how this kernel takes an interrupt,
   takes an extracode, saves the CPU context, switches address spaces and gets back out: the four
   gates, the trap frame, the exit through `выпр`, `sureg()` and the u-area copy.
+- [doc/Unix_V7_System_Calls.md](doc/Unix_V7_System_Calls.md) — the system calls this kernel
+  implements: the `$77` gate and its argument convention, a brief entry for each call, and where
+  a call had to change shape because the machine is word-addressed.
 - [doc/Dubna_Context_Switch.md](doc/Dubna_Context_Switch.md) — the same five questions answered by
   Dubna, a BESM-6 operating system that ran on the real machine for two decades. The companion
   piece: several of the idioms above are taken from it.
