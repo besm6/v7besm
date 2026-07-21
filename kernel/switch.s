@@ -134,8 +134,9 @@ resume:
         atx     <rpaddr>
         ita     021              // A := ПСВ
         atx     <rpsw>           //   bank the caller's, to be restored exactly
-        aox     #02000           //   set БлПр: interrupts off across BOTH copies
-        ati     021
+        vtm     02003            //   БлП|БлЗ|БлПр: interrupts off across BOTH copies.  The
+                                 //   mode write (register field 0); БлП/БлЗ are already set,
+                                 //   this path being ordinary unmapped kernel code (psw.s).
         xta     <rpaddr>
         aex     <uhome>
         uza     rfast            // paddr == uhome -> the live u-area is already the right one

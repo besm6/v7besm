@@ -11,10 +11,23 @@
 // critical sequences: setipl() in kernel/intr.c is built on these two, and the header there
 // explains why БлПр and not МГРП carries the level.
 //
-// Read-modify-write, never `vtm': a `vtm N,0' writes БлП, БлЗ and БлПр together from its
-// address field, so it would clobber the mapping and protection overrides along with the
-// bit we mean to change.  `ita'/`ati' take a 5-bit register number in supervisor mode, so
-// M[021] is reachable (doc/Memory_Mapping.md).
+// ONE INSTRUCTION EACH, because `уиа' (vtm) with REGISTER FIELD 0 is a mode-word write in
+// supervisor mode: it takes БлП, БлЗ and БлПр straight from the address field and writes all
+// three into ПСВ atomically (doc/Besm6_Instruction_Set.md, 024 VTM; doc/Memory_Mapping.md).
+// It is a MASKED write -- ПоП, ПоК and the write-watch bit are not in the mask and do not
+// move -- and it disturbs neither the accumulator nor ω, unlike the `ita 021'/`ati 021'
+// read-modify-write this used to be.
+//
+// That it writes БлП and БлЗ as well is not a hazard here, it is the point: the kernel runs
+// UNMAPPED WITH PROTECTION OFF (БлП = БлЗ = 1) as a standing invariant, so `02003'/`3' put
+// back exactly what is already there and re-assert the invariant on the way past.
+//
+// THE PRECONDITION THAT BUYS: these two may only be called from ordinary unmapped kernel
+// context.  Every caller is -- setipl() is the only one, reached from the C `spl*' family --
+// and nothing inside a MAPPED bracket may call them: they would slam БлП back on and pull
+// the mapping out from under the copy.  The brackets in uarea.S, seg.S and usermem.S issue
+// their own `vtm 02002'/`vtm 02003' and bank ПСВ with `ita'/`ati' precisely because they must
+// preserve a БлПр they do not know.  This file's job is the opposite one: to set it.
 //
 // Their own file, rather than besm6.S, for the usual reason: besm6.o cannot be linked into a
 // standalone test -- its 0500 vector reaches into the C kernel and its _start seeds no stack
@@ -24,16 +37,12 @@
 
         .globl  cli
 cli:                             // set БлПр -> external interrupts OFF
-        ita     021              // A := ПСВ
-        aox     #02000           //   set БлПр
-        ati     021              // ПСВ := A
+        vtm     02003            // ПСВ := БлП|БлЗ|БлПр (register field 0 = the mode write)
      13 uj
 
         .globl  sti
 sti:                             // clear БлПр -> external interrupts ON
-        ita     021              // A := ПСВ
-        aax     #075777          //   clear БлПр (077777 & ~02000), keep the other bits
-        ati     021              // ПСВ := A
+        vtm     3                // ПСВ := БлП|БлЗ, БлПр clear
      13 uj
 
 // ПСВ, unlike РП and РЗ, CAN be read back, and this is the only way to say so in C.  The kernel

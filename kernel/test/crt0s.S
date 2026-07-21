@@ -314,9 +314,7 @@ sysgate:
 
         // --- open the interrupt level for the C call, as kernel/besm6.S does: usys checks from
         //     inside a sysent stub that БлПр really is clear here (F_IPL) ---
-        ita     021
-        aax     #075777         // clear БлПр: interrupts delivered
-        ati     021
+        vtm     3               // ПСВ := БлП|БлЗ, БлПр clear: interrupts delivered
 
      13 vjm     syscall         // kernel/syscall.c -- THE REAL ONE
         uj      intret
@@ -360,9 +358,7 @@ badext:
         xts     save_a
 
         // --- open the interrupt level for the C call, as in sysgate ---
-        ita     021
-        aax     #075777         // clear БлПр: interrupts delivered
-        ati     021
+        vtm     3               // ПСВ := БлП|БлЗ, БлПр clear: interrupts delivered
 
      13 vjm     badextr         // kernel/syscall.c -- THE REAL ONE
 
@@ -374,9 +370,7 @@ badext:
         //     the level for their C call, and everything below reloads single registers (СПСВ,
         //     IRET) and the five shared cells, none of which survives a nested gate. ---
 intret:
-        ita     021             // A := ПСВ
-        aox     #02000          //   set БлПр: external interrupts blocked
-        ati     021
+        vtm     02003           // ПСВ := БлП|БлЗ|БлПр: external interrupts blocked
 
         stx                     // A := M1 from frame[20]
         sti     1               // restore M1; A := M2 from frame[19]

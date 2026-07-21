@@ -1067,6 +1067,19 @@ M[reg] = V    ; V = offset + C (the address field, without M[reg] contribution)
 Loads M[reg] with the 15-bit value V (the raw offset plus C, not including the current
 M[reg]). This allows loading an absolute value into any modifier register.
 
+**With `reg == 0`, in supervisor mode, this is the mode-word write.** M[0] always reads 0, so the
+register half of the instruction is a no-op and the hardware spends it on ПСВ instead: the БлП
+(`01`), БлЗ (`02`) and БлПр (`02000`) bits of V are written into ПСВ, **all three at once**
+([besm6_cpu.c:1565](https://github.com/besm6/simh/blob/master/BESM6/besm6_cpu.c#L1565)). It is a
+*masked* write — ПоП, ПоК and the write-watch bit are not in the mask and keep their values — and it
+disturbs neither the accumulator nor ω. In user mode there is no side effect at all.
+
+This is the only single-instruction way to change the interrupt level or the mapping override, and
+the kernel uses it as such: `vtm 3` enables interrupts, `vtm 02003` blocks them, `vtm 02002` turns
+mapping on for a `copyin` bracket. See [Memory_Mapping.md](Memory_Mapping.md), "Writing the mode
+bits", and `kernel/psw.s`. Anything *else* in the machine-register file — СПСВ, IRET, ERET, ИБП, ДВП
+— needs the general `040 «уи»` instead.
+
 ---
 
 #### 025 — UTM (слиа) — Add immediate to index register
@@ -1079,6 +1092,12 @@ M[reg] += V    ; V = offset + C
 
 Adds V (raw offset plus C, without the current M[reg]) to M[reg]. The result is truncated
 to 15 bits.
+
+**`reg == 0` in supervisor mode writes the mode bits**, exactly as `024 VTM` does and from the same
+address field — the hardware runs the identical code for both
+([besm6_cpu.c:1581](https://github.com/besm6/simh/blob/master/BESM6/besm6_cpu.c#L1581)). Since M[0]
+reads 0, `слиа V(0)` and `уиа V(0)` are the same instruction in every respect that matters; prefer
+`уиа`, which is what the kernel writes.
 
 ---
 

@@ -176,7 +176,7 @@ intrframe: .word 0              // struct trap * -- valid only inside `intrgate'
 _start:
         // Seed the kernel stack pointer: the top of struct user, growing up to
         // 0100000.  ustkbase (machdep.c) holds &u.u_stack, a link-time constant.
-     15 vtm [ustkbase]              // r15 := kernel stack base (~076214)
+     15 vtm     [ustkbase]          // r15 := kernel stack base (~076214)
      13 vjm     main                // into the C kernel; main() zeroes bss, sizes memory
 bhalt:  stop                        // main returned / faulted upstream: resumable halt
         uj      bhalt
@@ -282,10 +282,9 @@ sysgate:
 
         // --- open the interrupt level for the C call: v7's spl0()-on-entry (see the header).
         //     Safe only here -- the frame is complete, so the five cells and СПСВ/ERET are dead.
-        //     The read-modify-write is psw.s:sti() inlined; A and M16 are both dead. ---
-        ita     021                 // A := ПСВ
-        aax     #075777             //   clear БлПр (077777 & ~02000): interrupts delivered
-        ati     021                 // ПСВ := A
+        //     `vtm' with register field 0 is the mode write: БлП|БлЗ|БлПр from the address
+        //     field, all three at once, nothing else in ПСВ touched.  This is psw.s:sti(). ---
+        vtm     3                   // ПСВ := БлП|БлЗ, БлПр clear: interrupts delivered
 
      13 vjm     syscall             // syscall.c: marshal the arguments, dispatch, return
 
@@ -336,9 +335,7 @@ badext:
         xts     save_a
 
         // --- open the interrupt level for the C call, as in `sysgate' ---
-        ita     021
-        aax     #075777             // clear БлПр: interrupts delivered
-        ati     021
+        vtm     3                   // ПСВ := БлП|БлЗ, БлПр clear: interrupts delivered
 
      13 vjm     badextr             // syscall.c: SIGINS
 
@@ -443,9 +440,7 @@ trapgate:
         xts     save_a              // frame[20] := M1    ; M15 := F+21 (above the frame); A discarded
 
         // --- open the interrupt level for the C call, as in `sysgate' (grow() sleeps) ---
-        ita     021
-        aax     #075777             // clear БлПр: interrupts delivered
-        ati     021
+        vtm     3                   // ПСВ := БлП|БлЗ, БлПр clear: interrupts delivered
 
      13 vjm     trap                // trap.c: back up the PC, decode ГРП, signal or grow
 
@@ -611,9 +606,7 @@ extk:                               // M15 = frame base F (ustkbase, or the inte
         //     entry (the `stx' below overwrites it) and M16 is reloaded from frame[5] further
         //     down. ---
 intret:
-        ita     021                 // A := ПСВ
-        aox     #02000              //   set БлПр: external interrupts blocked (psw.s:cli inlined)
-        ati     021                 // ПСВ := A
+        vtm     02003               // ПСВ := БлП|БлЗ|БлПр: interrupts blocked (psw.s:cli)
 
         stx                         // A := M1 from frame[20]
         sti     1                   // restore M1; A := M2 from frame[19]

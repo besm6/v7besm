@@ -17,7 +17,7 @@ SIMH test. Anything a test has to exercise for real therefore lives in a file of
 | [uarea.S](../kernel/uarea.S) | `uflush`, `uload` — the u-area window bracket |
 | [seg.S](../kernel/seg.S) | `copyseg`, `clearseg` |
 | [usermem.S](../kernel/usermem.S) | `copyin`, `copyout`, `fubyte`, `fuword`, `subyte`, `suword` |
-| [psw.s](../kernel/psw.s) | `cli`, `sti` — the read-modify-write of БлПр — and `getpsw`, which reads ПСВ back |
+| [psw.s](../kernel/psw.s) | `cli`, `sti` — one `vtm` each, the mode-word write — and `getpsw`, which reads ПСВ back |
 | [brz.s](../kernel/brz.s) | `drainbrz` — the nine-store БРЗ drain |
 
 **It is a small body of assembly.** The C compiler has the `<besm6.h>` machine
@@ -250,9 +250,9 @@ PC*; the mode comes from СПСВ either way.
 **`intret` shuts the interrupt door as its own first act**, and that is what makes the shared exit
 safe. The three synchronous gates clear БлПр before calling C — v7's `spl0()`-on-entry, without
 which a system call would run to completion with the clock stopped — so the epilogue cannot assume
-it was entered blocked. It must be: below its first three instructions it reloads СПСВ and IRET,
-single registers the hardware overwrites the instant an interrupt is taken, and re-stashes into the
-five shared temp cells. Enforcing the level there rather than in each C exit path is the difference
+it was entered blocked. It must be: below its opening `vtm 02003` it reloads СПСВ and IRET, single
+registers the hardware overwrites the instant an interrupt is taken, and re-stashes into the five
+shared temp cells. Enforcing the level there rather than in each C exit path is the difference
 between one place to get right and one per path forever.
 
 **The stack switch is the sharp edge.** r15 is **not banked by mode**: there is one stack register
@@ -474,8 +474,8 @@ Three constraints, all of them non-obvious and all of them verified on the machi
   leading one is the standing "drain before every РП write" rule, the trailing one is what makes the
   copy reach memory before the map changes back. `mmutest` fails distinctly on each.
 - **The bracket holds БлПр**, which means saying `vtm 02002`/`02003` rather than a bare `vtm 2`:
-  `vtm N,0` writes БлПр along with БлП and БлЗ, so the plain form *enables* interrupts as a side
-  effect. For `uload` that is fatal — it is overwriting the very page an interrupt would build its
+  the mode write puts БлПр as well as БлП and БлЗ, all three from the address field, so the plain
+  form *enables* interrupts as a side effect. For `uload` that is fatal — it is overwriting the very page an interrupt would build its
   frame in.
 
 That last point is also `uload`'s calling contract: **it destroys its caller's kernel stack frame**,
@@ -535,17 +535,27 @@ int  getpsw(void);                              /* not declared in systm.h -- se
 
 - **Purpose.** Clear and set the interrupt-enable bit. **They are the interrupt priority level
   itself** (§1, §4.1), and every `spl*` is built on them. They live in [psw.s](../kernel/psw.s),
-  and the
-  implementation is a **read-modify-write** of the БлПр bit of ПСВ — `ita 021`, then `aox 02000` or
-  `aax 075777`, then `ati 021`. It is emphatically *not* a `vtm`, which writes the whole mode word
-  and would clobber БлП/БлЗ/ПОП/ПОК along with the bit being changed. (Supervisor mode takes a
-  5-bit register number, which is what makes `M[021]` reachable at all.)
+  and each is **one instruction**: `vtm 02003` and `vtm 3`. With the register field 0, `уиа` is the
+  mode-word write — it takes БлП, БлЗ and БлПр straight from the address field and writes all three
+  into ПСВ atomically ([Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) §024,
+  [Memory_Mapping.md](Memory_Mapping.md)). It is a *masked* write: ПоП, ПоК and the write-watch bit
+  are not in the mask, and neither the accumulator nor ω is disturbed. (This paragraph used to say
+  the opposite — that `vtm` "writes the whole mode word" and would clobber ПоП/ПоК. It does not, and
+  the read-modify-write it argued for is gone.)
 
-  The gates do **not** call these two, though they perform exactly the same read-modify-write: the
-  three synchronous ones inline `sti` before their C call and `intret` inlines `cli` at its top
-  ([Unix_Context_Switch.md](Unix_Context_Switch.md) §10). `13 vjm sti` would be unreadable inside a
-  block where `sti N` is also a *machine instruction* — `intret` uses it a dozen times to restore
-  registers — and the call would clobber r13 for no gain over three inline words.
+  **That it writes БлП and БлЗ too is the point, not a hazard.** The kernel runs unmapped with
+  protection off as a standing invariant, so `02003`/`3` put back what is already there. The
+  precondition that buys is worth stating: `cli`/`sti` may only be called from ordinary unmapped
+  kernel context — never from inside a mapped bracket, which would have its mapping slammed off
+  underneath it. The brackets in [uarea.S](../kernel/uarea.S), [seg.S](../kernel/seg.S) and
+  [usermem.S](../kernel/usermem.S) issue their own `vtm 02002`/`vtm 02003` and bank ПСВ with
+  `ita`/`ati`, because they must preserve a БлПр they do not know.
+
+  The gates **inline the same instruction** rather than call these: the three synchronous ones emit
+  `vtm 3` before their C call and `intret` opens with `vtm 02003`
+  ([Unix_Context_Switch.md](Unix_Context_Switch.md) §10). One instruction beats a call outright, and
+  `13 vjm sti` would be unreadable in a block where `sti N` is also a *machine instruction* —
+  `intret` uses it a dozen times to restore registers.
 
 - **`getpsw` reads ПСВ back**, which is the only way to see the interrupt level from C: unlike РП
   and РЗ, the mode word is readable. The kernel never calls it — it tracks the level in `curipl` and
@@ -614,7 +624,7 @@ the reschedule-pending flag the gates test on the way back to user mode (§3).
 |------------|-------|
 | `bcopy`, `bzero` | **done** — renamed `wcopy`/`wzero` and they take a **word** count, converted by `btow()` at every call site, so the loop has no six-chars-per-word tail |
 | `spl0`…`spl7`, `splx` | **done** — two levels, not eight, and the knob is **БлПр** (via `cli`/`sti`), not МГРП, which is a source enable armed once by `intrinit()`. Putting the level in the mode word is what lets `выпр` restore it on a gate return, as the PDP-11's `rtt` does |
-| `cli`, `sti`, `getpsw` | **done** — [psw.s](../kernel/psw.s); a read-modify-write of БлПр in ПСВ, never a `vtm`, and they carry the whole interrupt priority level. The gates inline the same sequence rather than call it. `getpsw` reads ПСВ back, for the test that checks a gate opened the level |
+| `cli`, `sti`, `getpsw` | **done** — [psw.s](../kernel/psw.s); one `vtm` each (register field 0 = the mode write, §4.7), and they carry the whole interrupt priority level. The gates inline the same instruction rather than call it. `getpsw` reads ПСВ back, for the test that checks a gate opened the level |
 | `fubyte`/`fuword`/`subyte`/`suword`, `copyin`/`copyout` | **done** — [usermem.S](../kernel/usermem.S); **no fault-recovery path**, validation is `useracc()` up front. No window either: the loop toggles БлП per word through the user map that is already loaded. Byte variants do RMW, and mind the fat-pointer marker bit |
 | `copyseg`/`clearseg`, `uflush`/`uload` | **done** — [seg.S](../kernel/seg.S), [uarea.S](../kernel/uarea.S); a two-page window bracket with a БРЗ drain either side (§4.4a) |
 | `save`, `resume` | **done (task 16)** — [kernel/switch.s](../kernel/switch.s); nine slots (r1–r7, r13, r15), and `resume()` switches the **u-area**, not the address space: it never writes РП |

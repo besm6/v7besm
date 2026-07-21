@@ -376,10 +376,13 @@ so an `spl0()` that only opened МГРП would leave БлПр blocking everythin
 be taken in kernel mode at all**. That is invisible for as long as every interrupt arrives in user
 mode, and becomes load-bearing the moment an idle loop has to spin waiting for one.
 
-БлПр lives in the mode word, so it is a **read-modify-write** of ПСВ — not a `vtm`, which writes the
-whole register and would clobber БлП/БлЗ/ПОП/ПОК along with it. That is the one piece here the
-intrinsics do *not* reach; see [`kernel/psw.s`](../kernel/psw.s). What C does express is arming the
-source mask:
+БлПр lives in the mode word, and writing it is a single `vtm` — with the register field 0, `уиа`
+writes БлП, БлЗ and БлПр into ПСВ from its address field, and only those three
+([Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) §024). Cheap as that is, it is the one piece
+here the intrinsics do *not* reach: none of the nine emits `уиа`, and the register field is the whole
+point — an intrinsic would have to guarantee register 0, which is exactly the thing a compiler owns.
+So `cli`/`sti` stay assembly; see [`kernel/psw.s`](../kernel/psw.s). What C does express is arming
+the source mask:
 
 ```c
 #define MOD_MGRP  036               /* 002 036 -- write МГРП */

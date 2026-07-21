@@ -540,11 +540,15 @@ notification that must not be lost.
 
 **`spl` is БлПр, not МГРП.** This kernel has exactly two interrupt levels, not the PDP-11's eight
 (which is why `BASEPRI()` is permanently false, §3). `setipl()` calls `cli()`/`sti()` in
-`kernel/psw.s`, a read-modify-write of ПСВ bit `02000` — never a `vtm`, because `vtm N,0` writes БлП,
-БлЗ *and* БлПр together. МГРП is armed once by `intrinit()` and never rewritten.
+`kernel/psw.s`, and each is a single `vtm`: with the register field 0, `уиа` writes БлП, БлЗ and
+БлПр into ПСВ straight from its address field, all three at once and nothing else touched
+([Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) §024). That it carries БлП/БлЗ along is
+harmless — the kernel runs unmapped with protection off as a standing invariant, so `02003`/`3` put
+back what is already there — but it does mean these may only be called from unmapped kernel context,
+never inside a mapped bracket. МГРП is armed once by `intrinit()` and never rewritten.
 
 **The gates open it, as v7's trap path does.** The hardware forces БлПр on at the vector, so
-`sysgate`, `badext` and `trapgate` each clear it again — three instructions, right after the fill —
+`sysgate`, `badext` and `trapgate` each clear it again — one `vtm 3`, right after the fill —
 before calling C. Without that a system call would run to completion with the clock stopped and
 every device completion held off, which is not what v7 does. `intrgate` does *not*: an interrupt
 handler runs at raised level and the `выпр` drops it, exactly as `rtt` does on the PDP-11. None of
@@ -569,9 +573,7 @@ One epilogue, `intret`, serves all four doors. It is the fill run backwards: `st
 
 ```
 intret:
-        ita     021                 // A := ПСВ
-        aox     #02000              //   set БлПр: external interrupts blocked
-        ati     021
+        vtm     02003               // ПСВ := БлП|БлЗ|БлПр: external interrupts blocked
         stx                         // A := M1 from frame[20]
         sti     1                   // restore M1; A := M2 from frame[19]
         ...
@@ -602,9 +604,9 @@ the hardware overwrites the instant an interrupt is taken, and the tail re-stash
 cells a nested gate would spill into. An interrupt anywhere in that window returns the user to the
 wrong mode word. `intrgate` arrives already blocked, but the three synchronous gates opened the level
 for their C call (§9) and what the C side leaves behind is not knowable from here — an `spl` bracket
-ending in `splx(0)` is enough, and `sleep()` contains exactly one. Three instructions at the top
-cover every door and every future tail; the alternative, a `cli()` in each C exit path, would have to
-be got right once per path forever.
+ending in `splx(0)` is enough, and `sleep()` contains exactly one. One instruction at the top covers
+every door and every future tail; the alternative, a `cli()` in each C exit path, would have to be
+got right once per path forever.
 
 **Four details are not obvious**, and all four are Dubna's ([Dubna_Context_Switch.md](Dubna_Context_Switch.md) §7):
 

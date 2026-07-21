@@ -217,9 +217,7 @@ extk:                           // M15 = frame base F (ustkbase, or the interrup
         //     what makes the copy auditable by diff.  Over there the synchronous gates open the
         //     level for their C call and this is what shuts it again. ---
 intret:
-        ita     021             // A := ПСВ
-        aox     #02000          //   set БлПр: external interrupts blocked
-        ati     021
+        vtm     02003           // ПСВ := БлП|БлЗ|БлПр: external interrupts blocked
 
         stx                     // A := M1 from frame[20]
         sti     1               // restore M1; A := M2 from frame[19]

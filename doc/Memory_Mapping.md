@@ -739,7 +739,19 @@ write-watch bit cannot.
 
 The general route is `040 «уи»`, which in supervisor mode writes any of `M[0]`…`M[037]`, ПСВ
 (`M[021]`) included. Use `уиа` for the mode bits and `уи` for everything else (ERET, IRET, СПСВ,
-ИБП, ДВП).
+ИБП, ДВП). (`слиа`/`utm` carries the identical side effect, from the identical code; with M[0]
+reading 0 the two are the same instruction here. Prefer `уиа`.)
+
+**This kernel writes ПСВ this way and no other.** `cli()`/`sti()` in
+[`kernel/psw.s`](../kernel/psw.s) — which *are* the interrupt priority level, since `setipl()` is
+built on them — are one `vtm 02003` and one `vtm 3`; the four gates in
+[`kernel/besm6.S`](../kernel/besm6.S) inline the same instruction to open the level for their C
+handler and to shut it again in `intret`; and the mapped brackets in `uarea.S`, `seg.S` and
+`usermem.S` toggle БлП with `vtm 02002`/`vtm 02003`. Two consequences follow from the mask covering
+all three bits at once. It is why a bracket must say `02002`/`02003` and not a bare `2`/`3` — the
+plain form would *enable* interrupts as a side effect. And it is why `cli`/`sti` may only be called
+from ordinary unmapped kernel context: they assert БлП = БлЗ = 1, which is the kernel's standing
+invariant everywhere except inside a bracket.
 
 ### Worked examples
 

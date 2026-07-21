@@ -177,18 +177,14 @@ trapgate:
         // --- call trap(): nothing is passed; the frame is always at [ustkbase].  The level is
         //     opened first, as kernel/besm6.S does -- grow() is exactly the sleeping path that
         //     wants it. ---
-        ita     021
-        aax     #075777         // clear БлПр: interrupts delivered
-        ati     021
+        vtm     3               // ПСВ := БлП|БлЗ, БлПр clear: interrupts delivered
 
      13 vjm     trap            // ugrow.c: check the frame, back up the PC, grow the stack
 
         // --- restore: the exact inverse of the fill (kernel/besm6.S:intret).  It shuts the door
         //     first: the gate opened the level, and nothing below survives a nested gate. ---
 intret:
-        ita     021             // A := ПСВ
-        aox     #02000          //   set БлПр: external interrupts blocked
-        ati     021
+        vtm     02003           // ПСВ := БлП|БлЗ|БлПр: external interrupts blocked
 
         stx                     // A := M1 from frame[20]
         sti     1               // restore M1; A := M2 from frame[19]

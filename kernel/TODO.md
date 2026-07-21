@@ -119,16 +119,23 @@ user to the wrong mode word.
 
 How it turned out:
 
-* **Three instructions in each synchronous gate**, after the frame fill and before the `13 vjm` —
-  `ita 021` / `aax #075777` / `ati 021`, which is `psw.s:sti()` inlined. Not one instruction
-  earlier: until the frame is complete, СПСВ/ERET and the cells are the only copy of the interrupted
-  context. Unconditional in `trapgate` too, since a fault from supervisor panics anyway.
-* **Three more at the top of `intret`**, the matching `cli`. Enforcing the level in the shared
+* **One instruction in each synchronous gate**, after the frame fill and before the `13 vjm` —
+  `vtm 3`, which is `psw.s:sti()`. Not one instruction earlier: until the frame is complete,
+  СПСВ/ERET and the cells are the only copy of the interrupted context. Unconditional in `trapgate`
+  too, since a fault from supervisor panics anyway.
+* **One more at the top of `intret`**, the matching `vtm 02003`. Enforcing the level in the shared
   epilogue covers all four doors and any future C tail, where a `cli()` per C exit path would have
   to be got right once per path forever.
-* **Inlined, not called.** `13 vjm sti` inside a block that uses `sti N` as a *machine instruction* a
-  dozen times over is unreadable; and both literals assemble to a bare 12-bit constant-pool address,
-  so no `мода` is emitted and M[16] is untouched.
+* **`vtm` with register field 0 is the mode write** — БлП, БлЗ and БлПр together, straight from the
+  address field, nothing else in ПСВ touched, accumulator and ω untouched. It went in as a
+  three-instruction `ita`/`aax`/`ati` first, because this file and three documents said `vtm` would
+  clobber ПоП/ПоК. It does not: the hardware masks the write to those three bits. `psw.s` now says
+  so, and `doc/Besm6_Instruction_Set.md` §024/§025 documents the feature, which it had omitted.
+* **Inlined, not called.** One instruction beats a call outright, and `13 vjm sti` inside a block
+  that uses `sti N` as a *machine instruction* a dozen times over would be unreadable.
+* **`cli`/`sti` now assert БлП = БлЗ = 1** rather than preserving them, so they may only be called
+  from unmapped kernel context — every caller is. The mapped brackets (`uarea.S`, `seg.S`,
+  `usermem.S`) do their own `vtm` and bank ПСВ, because they must preserve a БлПр they do not know.
 * **`curipl` is not touched by any of it.** It already reads 0 for an entry from user, and `выпр`
   restores БлПр from СПСВ on the way out — the same asymmetry `extintr()`'s closing repair relies on.
 * **`intrgate` is exempt**: a handler runs at raised level and the return drops it, as `rtt` does.

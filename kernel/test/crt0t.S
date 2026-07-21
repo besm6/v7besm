@@ -207,9 +207,7 @@ trapgate:
         //     precondition, with nothing to fix up. ---
 
         // --- open the interrupt level for the C call, as kernel/besm6.S does ---
-        ita     021
-        aax     #075777         // clear БлПр: interrupts delivered
-        ati     021
+        vtm     3               // ПСВ := БлП|БлЗ, БлПр clear: interrupts delivered
 
      13 vjm     trap            // utrap.c: check the frame, back up the PC, open the page
 
@@ -218,9 +216,7 @@ trapgate:
         //     cells and applied last, in the forced order Y -> A -> R (§7).  It shuts the door
         //     first: the gate opened the level, and nothing below survives a nested gate. ---
 intret:
-        ita     021             // A := ПСВ
-        aox     #02000          //   set БлПр: external interrupts blocked
-        ati     021
+        vtm     02003           // ПСВ := БлП|БлЗ|БлПр: external interrupts blocked
 
         stx                     // A := M1 from frame[20]
         sti     1               // restore M1; A := M2 from frame[19]

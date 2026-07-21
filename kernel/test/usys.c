@@ -312,9 +312,9 @@ void report(void)
 
     /*
      * Every leg: the gate opened the interrupt level before it dispatched.  БлПр is forced on at
-     * the vector, so a handler that sees it still set means the three instructions in crt0s.S
-     * (kernel/besm6.S over there) went missing -- and a syscall would run to completion with the
-     * clock stopped.  There is no C-visible shadow of this; it has to be read out of ПСВ.
+     * the vector, so a handler that sees it still set means the `vtm 3' in crt0s.S (kernel/besm6.S
+     * over there) went missing -- and a syscall would run to completion with the clock stopped.
+     * There is no C-visible shadow of this; it has to be read out of ПСВ.
      */
     if (sawpsw & PSW_INTR_DISABLE)
         mask |= F_IPL;
