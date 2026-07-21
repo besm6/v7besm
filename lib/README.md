@@ -70,6 +70,7 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
 lib/
     README.md           this plan
     Makefile            recurses into each library
+    rules.mk            tools, flags, and the link recipe, in one place
     libc/
         Makefile        builds libc.a and crt0.o
         csu/            crt0
@@ -90,15 +91,22 @@ block, since `b6cc` has no `-M`. **Not** part of the CMake build; the toolchain 
 A program links against two archives, ours first:
 
 ```sh
-b6ld crt0.o prog.o -L$(TOP)/lib/libc -lc -L$HOME/.local/share/besm6/lib -lc
+b6ld crt0.o prog.o -L$(TOP)/lib/libc -lc $HOME/.local/share/besm6/lib/libc.a
 ```
 
-The second `-lc` is the external c-compiler's library, and is reached **only** for the `b$*`
+The second archive is the external c-compiler's library, and is reached **only** for the `b$*`
 compiler-support helpers (`b$save`, `b$ret`, `b$mul`, `b$div`, the relational and conversion
 routines) that every compiled function calls. Archives are scanned in order and a member is
 pulled only for a symbol still unresolved, so anything we define ourselves is taken from our
 own library. The one hazard is silent: a routine we forget to port is satisfied from the
 external library instead of failing to link. `b6nm` on the result is the check.
+
+It has to be named by **path**, not as a second `-L … -lc`. `b6ld` keeps one *global* list of
+`-L` directories and `-l` searches all of it with first match wins
+([`../cmd/ld/pass1.c`](../cmd/ld/pass1.c), [`../cmd/ld/library.c`](../cmd/ld/library.c)), so
+with both archives named `libc.a` a second `-lc` finds ours again and every `b$*` goes
+undefined. A bare archive path is scanned as a library just the same — `open_input()`
+recognises it by its `ARMAG`.
 
 ## Phase 0 — foundations
 
@@ -180,7 +188,28 @@ rather than scribbled over the stack. Five `Cpu.Exec*` tests in `../cmd/sim/test
 cover the layout, the empty block, the cleared registers, the untouched break and the ceiling;
 [`../doc/Aout_Simulator.md`](../doc/Aout_Simulator.md) §3 now carries the block diagram.
 
-**0.4 The build skeleton** — `lib/Makefile`, `lib/libc/Makefile`, the link recipe in one place.
+**0.4 DONE — the build skeleton.** `lib/Makefile`, `lib/libc/Makefile`, `lib/test/Makefile`,
+and the link recipe in one place — `lib/rules.mk`, which every library and the test harness
+include after setting `TOP` and declaring their default target.
+
+*How it turned out.* The two-archive recipe this file first carried could not link anything:
+`b6ld` keeps a single global `-L` list searched first-match-first, so the second `-lc` re-found
+*our* `libc.a` and every `b$*` helper went undefined. Naming the external archive by path fixes
+it, and the section above now says so — spelled the old way, `b6ld crt0.o hello.o -L../libc -lc
+-L$HOME/… -lc` still fails on demand, which is how one can check that the path is load-bearing
+rather than cosmetic. The skeleton also could not be
+content-free: `b6ar cr libc.a` with an empty member list is a usage error, so a Makefile with
+nothing to archive cannot even be run, let alone verified. It therefore lands with the smallest
+real content that proves it — `csu/crt0.s`, `sys/exit.s`, `sys/write.s` and `test/hello.c` — and
+phase 1 starts at `cerror`/`errno` rather than at `crt0`. Two smaller things fell out of the
+writing. `crt0` needs no address extension to reach the argument block: a short address field
+covers `[0..07777]` **and** `[070000..077777]`, the segment bit being worth exactly `+070000`,
+so `xta 070000` is one instruction and only the `environ` reference takes a `<sym>` escape. And
+the link rule's `$^` must not see `crt0.o` or `libc.a`, which `$(link)` names itself — they are
+order-only prerequisites, the same trap [`../kernel/test/Makefile`](../kernel/test/Makefile)
+documents. `make test` in `lib/` builds both products, links `hello` through the real recipe,
+runs it under `b6sim` with arguments and diffs the output, which is what pins crt0's `argc`/
+`argv` derivation.
 
 **0.5 Header touch-ups** in [`../include/`](../include/): rewrite `varargs.h` in BESM-6 terms
 (one word per argument, compatible with the compiler's `<stdarg.h>`), set `BUFSIZ` to 3072 in
@@ -188,18 +217,22 @@ cover the layout, the empty block, the cleared registers, the untouched break an
 
 ## Phase 1 — crt0, syscall stubs, errno
 
-The milestone is a `hello` that runs under `b6sim`, prints, and exits with a status.
+The milestone is a `hello` that runs under `b6sim`, prints, and exits with a status. Task 0.4
+reached it: what is left here is everything a program larger than `hello` needs.
 
-- `csu/crt0.s` — read `argc` at `070000`, derive `argv` and `environ` from the block above it,
-  establish the mode register, call `main(argc, argv, envp)`, pass its accumulator to `exit`.
-  (`csu/mcrt0.s` waits for profiling.)
-- `sys/cerror.s` and the `errno` word.
+- ~~`csu/crt0.s`~~ — done in 0.4: reads `argc` at `070000`, derives `argv` and `environ` from
+  the block above it, establishes the mode register, calls `main(argc, argv, envp)`, passes its
+  accumulator to `exit`. (`csu/mcrt0.s` waits for profiling.)
+- `sys/cerror.s` and the `errno` word. The two leaves 0.4 wrote — `sys/exit.s` and
+  `sys/write.s` — ignore r14 and must be revisited once `cerror` exists.
 - `sys/syscalls.tbl` plus a make rule generating the ~40 uniform stubs, one object each so link
   granularity survives. Everything with a different shape is hand-written: `pipe`, `fork`,
   `wait`, `getpid`, `getuid`, `getgid` (the r12 second result), `exit`/`_exit`, `brk`/`sbrk`
   (which keeps `curbrk`), `lseek`, and the `exec` family. `signal` registers a handler and no
   more — delivery is phase 6.
-- `test/hello.c` and a `make test` that runs each test under `b6sim` and diffs its output.
+- ~~`test/hello.c` and a `make test`~~ — done in 0.4. Each program is linked against the real
+  `crt0.o` and `libc.a`, given the arguments in its `.args` file, and diffed against its
+  `.expected` file; adding a test is adding those three files and a name to `PROGS`.
 
 ## Phase 2 — `gen`: strings, ctype, small utilities
 
