@@ -387,19 +387,14 @@ link-time constant, and aliases it:
     u.u_ar0 = (int *)tr;
 ```
 
-**The trap kinds are ours, not the hardware's.** The BESM-6 has one internal-interrupt vector and
-reports the cause in ГРП, so there is no vector number to switch on and the gate
-passes none:
+**The ГРП bit is the trap kind.** The BESM-6 has one internal-interrupt vector and reports the cause
+in ГРП, so there is no vector number to switch on and the gate passes none. v7 folds *its* vector
+numbers into a `T_*` enumeration first, because there the hardware hands over a number that means
+nothing to the kernel; here it hands over the cause itself, so the dispatch below is on the bit
+directly and an enumeration in between would name the same five things twice.
 
-```c
-#define T_DATA  1 /* data protection: touched a closed page */
-#define T_INSN  2 /* instruction protection: fetched from a closed page */
-#define T_ILL   3 /* privileged instruction attempted in user mode */
-#define T_CHECK 4 /* instruction check: the word fetched is not an instruction */
-#define T_BREAK 5 /* address-break match (М034/М035) */
-```
-
-There is deliberately **no `T_SYSCALL`**: an extracode is not reachable through `0500` at all (§2).
+There is deliberately **no trap kind for a system call**: an extracode is not reachable through
+`0500` at all (§2).
 
 ### The PC fixup
 
@@ -419,11 +414,12 @@ Only the *word* is off, and always by one: `SPSW_RIGHT_INSTR` already names whic
 faulted, and it is left alone. The derivation is [Memory_Mapping.md](Memory_Mapping.md), "The restart
 protocol"; `kernel/test/utrap` verifies it from **both** instruction halves.
 
-### Cause decode and dismissal
+### Decode, dismissal and dispatch — one chain
 
-The cause is read live out of ГРП — the fault bits are not framed — and the offending page comes from
-`(grp & GRP_PAGE_MASK) >> GRP_PAGE_SHIFT` for data violations. Dismissal uses `MOD_GRPCLR`, which
-clears the bits that are **zero** in the accumulator (hence the `~GRP_OPRND_PROT` spelling).
+The cause is read live out of ГРП (the fault bits are not framed) and each arm of a single if/else
+chain, in priority order, dismisses its own bit and picks its signal. Dismissal comes first in the
+arm and uses `MOD_GRPCLR`, which clears the bits that are **zero** in the accumulator — hence the
+`~GRP_OPRND_PROT` spelling.
 
 This is Dubna's internal/external asymmetry, taken
 ([Dubna_Context_Switch.md](Dubna_Context_Switch.md) §5): a fault is **not queued** — if the condition
@@ -431,18 +427,18 @@ persists the next instruction re-raises it — so clearing it outright is safe, 
 handled fault bit fires afterwards as a spurious external interrupt. A device interrupt, by contrast,
 is a one-shot notification and only the dispatched bit is cleared (§9).
 
-### Dispatch
-
-- **`T_DATA`** → `grow()` the stack and retry. No signal — this is the normal
-  stack-growth path. `grow()` takes the faulting **page number**, unchanged, because a page number
-  is all ГРП reports (bits 5–9); there is no faulting address to recover. It grows by appending a
-  page at the next higher virtual address — which, since `sureg()` lays the stack out as the tail of
-  the image, is the same page it appends at the end of the image. So the stack pages already mapped
-  keep their addresses and nothing is copied: growing the stack needs no `copyseg` shuffle at
-  all. `kernel/test/ugrow` is the regression test for exactly that property.
-- **`T_INSN`** → SIGSEG. **`T_ILL`/`T_CHECK`** → SIGINS. **`T_BREAK`** → SIGTRC.
-- **nothing pending** → the `default` arm: `dumpregs()` and `panic("trap")`. The machine vectored
-  with no cause we decode.
+- **`GRP_OPRND_PROT`** → `grow()` the stack and retry. No signal — this is the normal
+  stack-growth path, and SIGSEG only if `grow()` declines. `grow()` takes the faulting **page
+  number**, unchanged, because a page number is all ГРП reports (bits 5–9); there is no faulting
+  address to recover. It grows by appending a page at the next higher virtual address — which, since
+  `sureg()` lays the stack out as the tail of the image, is the same page it appends at the end of
+  the image. So the stack pages already mapped keep their addresses and nothing is copied: growing
+  the stack needs no `copyseg` shuffle at all. `kernel/test/ugrow` is the regression test for
+  exactly that property.
+- **`GRP_INSN_PROT`** → SIGSEG. **`GRP_ILL_INSN`/`GRP_INSN_CHECK`** → SIGINS.
+  **`GRP_BREAKPOINT`** → SIGTRC.
+- **nothing pending** → the `else` arm: `dumpregs()` and `panic("trap")`. The machine vectored with
+  no cause we decode.
 
 The tail is shared with the syscall path: `issig()`/`psig()`, `curpri = setpri()`,
 `if (runrun) qswtch()`, `addupc()`.

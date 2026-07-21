@@ -129,7 +129,7 @@ void trap(void)
     if (nfault == 1) {
         /*
          * The store one word past the stack top.  This is the fault the real kernel turns into
-         * a stack growth: T_DATA + USER -> grow(page), with the page as reported.
+         * a stack growth: the GRP_OPRND_PROT arm -> grow(page), with the page as reported.
          */
         if (!(grp & GRP_OPRND_PROT) || page != USTKPAGE + 1)
             mask |= F_PAGE1;

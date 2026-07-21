@@ -282,9 +282,9 @@ Loose ends the finished work left behind. None blocks 18.
   treatment as the `u_dirp` item below.
 * **Single-step / the address-break registers М034/М035.** `ptrace()`'s "set signal and continue,
   one version causing a trace-trap" has no flag bit to set on this machine — there is no EFL/TBIT —
-  so arming it means writing М034/М035, and `procxmt()` has to re-arm after each `T_BREAK`. The
-  sites still carry the old `TODO 17` markers: `sig.c` (cases 6 and 9), `trap.c` (`T_BREAK + USER`)
-  and `GRP_BREAKPOINT` in `include/sys/besm6dev.h`. A `ptrace` feature, not a layout one.
+  so arming it means writing М034/М035, and `procxmt()` has to re-arm after each break match. The
+  sites still carry the old `TODO 17` markers: `sig.c` (cases 6 and 9), `trap.c` (the
+  `GRP_BREAKPOINT` arm) and `GRP_BREAKPOINT` in `include/sys/besm6dev.h`. A `ptrace` feature, not a layout one.
 * **`sendsig()` pushes one word and no more.** The direction and the units are right now, but there
   is no signal frame proper — no saved accumulator or R, and no `sigreturn` path back through it.
   Nothing exercises signal delivery yet; build it when something does.

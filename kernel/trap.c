@@ -15,27 +15,19 @@
 #include <besm6.h>
 
 /*
- * The kinds of trap this kernel dispatches.  These are OURS, not hardware numbers: the
- * BESM-6 has one internal-interrupt vector (0500) and reports the cause in ГРП, so there
- * is no vector number to switch on and the gate passes none.  trap() reads
- * ГРП live -- the fault bits are not framed (reg.h) -- and folds it to one of these.
+ * THE ГРП BIT IS THE TRAP KIND.  The BESM-6 has one internal-interrupt vector (0500) and
+ * reports the cause in ГРП, so there is no vector number to switch on and the gate passes
+ * none; trap() reads ГРП live -- the fault bits are not framed (reg.h) -- and dispatches on
+ * the bit directly.  v7 folds its vector numbers into a T_* enumeration first, because there
+ * the hardware hands over a number that means nothing to the kernel.  Here it hands over the
+ * cause itself, and an enumeration in between would name the same five things twice.
  *
- * There is no T_SYSCALL: an extracode is not reachable through 0500 at all.  The hardware
- * vectors э50-э77 straight to 0550-0577, so the syscall gate is its own door (besm6.S:
- * `sysgate'/`badext') and its C side is kernel/syscall.c.
- *
- * v7 adds a USER bit to the trap number and switches on the sum, because one handler serves
- * both modes there.  Here the GATE splits them -- a fault from supervisor goes to ktrap()
- * below and never comes back -- so everything trap() sees is from user and the bit would
- * label every case alike.
+ * There is no trap kind for a system call, either: an extracode is not reachable through 0500
+ * at all.  The hardware vectors э50-э77 straight to 0550-0577, so the syscall gate is its own
+ * door (besm6.S: `sysgate'/`badext') and its C side is kernel/syscall.c.
  */
-#define T_DATA  1 /* data protection: touched a closed page */
-#define T_INSN  2 /* instruction protection: fetched from a closed page */
-#define T_ILL   3 /* privileged instruction attempted in user mode */
-#define T_CHECK 4 /* instruction check: the word fetched is not an instruction */
-#define T_BREAK 5 /* address-break match (М034/М035) */
 
-/* Every ГРП bit that vectors through 0500 -- the five decoded below. */
+/* Every ГРП bit that vectors through 0500 -- the five trap() decodes. */
 #define GRP_FAULTS (GRP_OPRND_PROT | GRP_INSN_PROT | GRP_ILL_INSN | GRP_INSN_CHECK | GRP_BREAKPOINT)
 
 /*
@@ -127,16 +119,7 @@ void trap(void)
     register struct trap *tr = (struct trap *)u.u_stack;
     register int i           = 0;
     time_t syst;
-    unsigned grp;  /* ГРП, read live: the fault cause */
-    unsigned page; /* the faulting virtual page (data violations only) */
-    int dev;       /* which of the T_* kinds this is */
-
-    /*
-     * Belt and braces: the gate is what guarantees the mode, and everything below assumes
-     * it.  ktrap() does not return.
-     */
-    if (!USERMODE(tr->spsw))
-        ktrap();
+    unsigned grp; /* ГРП, read live: the fault cause */
 
     syst    = u.u_stime;
     u.u_ar0 = (int *)tr;
@@ -161,71 +144,53 @@ void trap(void)
     }
 
     /*
-     * Decode the cause, and dismiss it: MOD_GRPCLR clears the bits that are ZERO in the
-     * accumulator, so a bit left standing could fire afterwards as a spurious external
-     * interrupt if it happens to be unmasked in МГРП.
-     */
-    grp  = __besm6_mod(MOD_GRP, 0);
-    page = 0;
-    if (grp & GRP_OPRND_PROT) {
-        dev  = T_DATA;
-        page = (grp & GRP_PAGE_MASK) >> GRP_PAGE_SHIFT;
-        __besm6_mod(MOD_GRPCLR, ~GRP_OPRND_PROT);
-    } else if (grp & GRP_INSN_PROT) {
-        dev = T_INSN; /* no page is reported for an instruction fault */
-        __besm6_mod(MOD_GRPCLR, ~GRP_INSN_PROT);
-    } else if (grp & GRP_ILL_INSN) {
-        dev = T_ILL;
-        __besm6_mod(MOD_GRPCLR, ~GRP_ILL_INSN);
-    } else if (grp & GRP_INSN_CHECK) {
-        dev = T_CHECK;
-        __besm6_mod(MOD_GRPCLR, ~GRP_INSN_CHECK);
-    } else if (grp & GRP_BREAKPOINT) {
-        dev = T_BREAK;
-        __besm6_mod(MOD_GRPCLR, ~GRP_BREAKPOINT);
-    } else {
-        dev = 0; /* vectored with nothing pending: falls to the panic below */
-    }
-
-    switch (dev) {
-    /*
-     * Trap not expected: the machine vectored with no cause we decode standing in ГРП.
-     * (A fault from kernel mode used to land here too; it goes to ktrap() now.)
-     */
-    default:
-        dumpregs(tr, grp);
-        panic("trap");
-
-    /*
-     * Data protection: the user touched a page that is closed to data.  If the page is
-     * the one just above the stack, grow the stack automatically and retry; the frame's
-     * RET already points back at the faulting instruction (the restart protocol above).
+     * Decode the cause, dismiss it, and pick the signal -- one arm per ГРП bit, in priority
+     * order.  There is no intermediate "trap kind" to switch on a second time: the machine
+     * reports the cause as a bit, and a bit is what this dispatches on.
      *
-     * grow() takes the page as reported -- a page number is all the machine gives us, and
-     * with the stack growing up from USTKPAGE that is exactly what it needs.
+     * Dismissal is MOD_GRPCLR, which clears the bits that are ZERO in the accumulator (hence
+     * the `~' spelling), and it comes first in each arm: a bit left standing could fire
+     * afterwards as a spurious external interrupt if it happens to be unmasked in МГРП.
      */
-    case T_DATA:
-        if (grow(page))
+    grp = __besm6_mod(MOD_GRP, 0);
+    if (grp & GRP_OPRND_PROT) {
+        /*
+         * Data protection: the user touched a page that is closed to data.  If it is the page
+         * just above the stack, grow the stack automatically and retry -- the frame's RET
+         * already points back at the faulting instruction (the restart protocol above).
+         *
+         * grow() takes the page as reported.  A page number is all the machine gives us (ГРП
+         * bits 5-9), and with the stack growing up from USTKPAGE that is exactly what it needs.
+         */
+        __besm6_mod(MOD_GRPCLR, ~GRP_OPRND_PROT);
+        if (grow((grp & GRP_PAGE_MASK) >> GRP_PAGE_SHIFT))
             goto out;
         i = SIGSEG;
-        break;
 
-    case T_INSN: /* instruction fetch from a closed page */
+    } else if (grp & GRP_INSN_PROT) { /* instruction fetch from a closed page */
+        __besm6_mod(MOD_GRPCLR, ~GRP_INSN_PROT);
         i = SIGSEG;
-        break;
 
-    case T_ILL:   /* a privileged instruction in user mode */
-    case T_CHECK: /* the fetched word is not an instruction */
+    } else if (grp & GRP_ILL_INSN) { /* a privileged instruction in user mode */
+        __besm6_mod(MOD_GRPCLR, ~GRP_ILL_INSN);
         i = SIGINS;
-        break;
 
-    case T_BREAK: /* address-break match */
+    } else if (grp & GRP_INSN_CHECK) { /* the word fetched is not an instruction */
+        __besm6_mod(MOD_GRPCLR, ~GRP_INSN_CHECK);
+        i = SIGINS;
+
+    } else if (grp & GRP_BREAKPOINT) { /* address-break match (М034/М035) */
+        __besm6_mod(MOD_GRPCLR, ~GRP_BREAKPOINT);
         i = SIGTRC;
-        /* TODO 17: single-step is the address-break registers М034/М035, not a flag
-         * bit; there is no EFL/TBIT to clear, so re-arming belongs to procxmt(). */
-        break;
+        /* TODO 17: single-step is the address-break registers М034/М035, not a flag bit;
+         * there is no EFL/TBIT to clear, so re-arming belongs to procxmt(). */
 
+    } else {
+        /* Vectored with nothing pending: a cause we do not decode. */
+        dumpregs(tr, grp);
+        panic("trap");
     }
+
     /*
      * If you run elaborate /bin/sh scripts, you'll
      * probably want to disable the following line.
