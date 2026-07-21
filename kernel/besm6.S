@@ -287,9 +287,9 @@ sysgate:
         //     field, all three at once, nothing else in ПСВ touched.  This is psw.s:sti(). ---
         vtm     3                   // ПСВ := БлП|БлЗ, БлПр clear: interrupts delivered
 
-     13 vjm     syscall             // syscall.c: marshal the arguments, dispatch, return
-
-        uj      intret              // the shared epilogue in `intrgate' below
+     13 vtm     intret              // TAIL CALL: syscall.c marshals the arguments, dispatches, and
+        uj      syscall             //   its own `13 uj' returns straight to `intret'.  `vjm'+`uj'
+                                    //   costs a word more (doc/Unix_Context_Switch.md sec 10).
 
 // badext -- extracodes э50-э76, which this kernel does not implement.  `sysgate' verbatim, ending
 // in a different call: badextr() signals SIGINS rather than halting the machine.  Note э20/э60 and
@@ -338,9 +338,8 @@ badext:
         // --- open the interrupt level for the C call, as in `sysgate' ---
         vtm     3                   // ПСВ := БлП|БлЗ, БлПр clear: interrupts delivered
 
-     13 vjm     badextr             // syscall.c: SIGINS
-
-        uj      intret
+     13 vtm     intret              // tail call, as in `sysgate'
+        uj      badextr             // syscall.c: SIGINS
 
 // ============================================================================
 // Internal-interrupt (fault) entry
@@ -370,9 +369,10 @@ badext:
 //     That last sentence is why THE FRAME IS NOT PASSED TO C AT ALL.  Because the switch is
 //     unconditional, the frame base is not a value the gate discovers at run time -- it is the
 //     link-time constant `&u.u_stack', which trap() reads for itself.  So the call is the bare
-//     `13 vjm trap', with no argument to build and no `14 vtm': a callee with NO PARAMETERS returns
-//     M15 unchanged (doc/Besm6_Calling_Conventions.md, "On Return"), and the fill left M15 at
-//     F+21, which is exactly `intret's precondition -- the same way `13 vjm extintr' works below.
+//     tail jump `13 vtm intret' + `uj trap', with no argument to build and no `14 vtm': a callee
+//     with NO PARAMETERS returns M15 unchanged (doc/Besm6_Calling_Conventions.md, "On Return"), and
+//     the fill left M15 at F+21, which is exactly `intret's precondition -- the same way
+//     `13 vjm extintr' works below.  (See `intret' for why the tail jump replaces `vjm'+`uj'.)
 //     The frame is still aliased IN PLACE, which is what reg.h promises its C readers: what
 //     psig()/sendsig() write through u.u_ar0 is what the epilogue reloads into the registers.
 //
@@ -483,14 +483,11 @@ trapgate:
         aax     #(SPSW_INTERRUPT | SPSW_EXTRACODE)
         u1a     ktrap               // РежЭ|РежПр set -> the kernel faulted.  A BRANCH, NOT A CALL:
                                     //   ktrap() never returns, so it needs no return address and
-                                    //   no tail behind it.  M15 is at F+21, which is what a callee
-                                    //   with no parameters expects -- the same state `vjm' hands
-                                    //   over.  trap.c reads the frame at u.u_stack for itself.
+                                    //   no tail behind it.
         vtm     3                   // zero -> from user: ПСВ := БлП|БлЗ, interrupts delivered
 
-     13 vjm     trap                // trap.c: back up the PC, decode ГРП, signal or grow
-
-        uj      intret              // the shared epilogue in `intrgate' below
+     13 vtm     intret              // tail call, as in `sysgate'
+        uj      trap                // trap.c: back up the PC, decode ГРП, signal or grow
 
 // ============================================================================
 // External interrupt entry

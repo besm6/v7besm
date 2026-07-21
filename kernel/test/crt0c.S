@@ -107,8 +107,8 @@ halt:   stop                    // halt with the fault mask in ACC
 // saved: we never go back to user mode, so all this needs is a stack under report().
 toreport:
      15 vtm     kstack
-     13 vjm     report          // uclock.c: check what the tick did, halt(mask)
-        uj      halt0
+     13 vtm     halt0           // tail call: report() halts, so the `uj' is only a safety net
+        uj      report          // uclock.c: check what the tick did, halt(mask)
 
 // ----------------------------------------------------------------------------
 // void gouser(unsigned uentry) -- forge a user context and enter it.

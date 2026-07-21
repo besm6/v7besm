@@ -131,8 +131,8 @@ badintr: stop   01
 // saved: we never go back to user mode, so all this needs is a stack under report().
 toreport:
      15 vtm     kstack
-     13 vjm     report          // usys.c: check the stored words, halt(mask)
-        uj      halt0
+     13 vtm     halt0           // tail call: report() halts, so the `uj' is only a safety net
+        uj      report          // usys.c: check the stored words, halt(mask)
 
 // ----------------------------------------------------------------------------
 // void gouser(unsigned uentry) -- forge a user context and enter it.
@@ -316,8 +316,8 @@ sysgate:
         //     inside a sysent stub that БлПр really is clear here (F_IPL) ---
         vtm     3               // ПСВ := БлП|БлЗ, БлПр clear: interrupts delivered
 
-     13 vjm     syscall         // kernel/syscall.c -- THE REAL ONE
-        uj      intret
+     13 vtm     intret          // tail call, as kernel/besm6.S does: syscall()'s own `13 uj'
+        uj      syscall         //   returns straight to `intret'.  kernel/syscall.c -- THE REAL ONE
 
 // badext -- extracodes э50-э76.  sysgate verbatim, calling badextr() instead.
         .globl  badext

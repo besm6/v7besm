@@ -249,6 +249,12 @@ the frame is filled by a `its`/`sti` pipeline that reads a return register *live
 and `intret` is reused unmodified. Its closing `выпр` index selects only *which register holds the
 PC*; the mode comes from СПСВ either way.
 
+The three synchronous doors get there by **tail call** — `13 vtm intret` then `uj <handler>`, so the
+handler's own `13 uj` returns straight to the epilogue. The C prologue banks the incoming r13
+(`b$save` opens with `its 13`), and `vtm`+`uj` pack into one word where `vjm`+`uj` needs two, since
+`vjm` word-aligns after itself. `intrgate` alone still uses `13 vjm extintr`: it falls through into
+`intret` and has no tail jump to fold.
+
 **`intret` shuts the interrupt door as its own first act**, and that is what makes the shared exit
 safe. The three synchronous gates clear БлПр before calling C — v7's `spl0()`-on-entry, without
 which a system call would run to completion with the clock stopped (`trapgate` only for a fault

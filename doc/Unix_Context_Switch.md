@@ -644,6 +644,18 @@ Its precondition is М15 = `F+21` and A dead — which is exactly where a C call
 leaves every gate, since a callee with no parameters returns М15 unchanged
 ([Besm6_Calling_Conventions.md](Besm6_Calling_Conventions.md)).
 
+**The three synchronous doors reach it by tail call**, not by returning into a `uj`. Each ends
+`13 vtm intret` / `uj <handler>` rather than `13 vjm <handler>` / `uj intret`, so the handler's own
+`13 uj` lands on `intret` directly. It is legal because the C prologue *banks* the incoming r13 —
+`b$save`/`b$save0` open with `its 13`, pushing it before the prologue's own `vjm` overwrites it
+([Besm6_Runtime_Library.md](Besm6_Runtime_Library.md)) — so a C function returns to whatever r13 held
+on entry, and the precondition above is untouched either way. It is also smaller: `vjm` carries the
+assembler's *align-after* flag, because it saves the address of the **word** after its own and so
+may not share that word ([Assembler_Manual.md](Assembler_Manual.md) §9.1); `vtm` and `uj` are both
+plain long-address instructions and pack into one. `intrgate` keeps its `13 vjm extintr` — it *falls
+through* into `intret`, so it has no tail `uj` to fold and the transform would cost it an instruction
+rather than save one.
+
 **It shuts the door first, and that is a precondition it enforces rather than inherits.** Everything
 below that point is unrepeatable: `sti SPSW` and `sti IRET` reload М027 and М033, single registers
 the hardware overwrites the instant an interrupt is taken, and the tail re-stashes into the same five
