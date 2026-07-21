@@ -174,15 +174,15 @@ trapgate:
         its     1               // frame[19] := M2    ; A := M1
         xts     save_a          // frame[20] := M1    ; M15 := F+21 (above the frame)
 
-        // --- call trap(): nothing is passed; the frame is always at [ustkbase].  The level is
-        //     opened first, as kernel/besm6.S does -- grow() is exactly the sleeping path that
-        //     wants it -- but ONLY from user, a supervisor fault being a kernel bug that wants the
-        //     machine left as it found it.  ugrow forges user mode, so it takes the enable. ---
+        // --- pick the door, as kernel/besm6.S does: a supervisor fault branches to ktrap() and
+        //     never comes back, a user fault opens the level (grow() is exactly the sleeping path
+        //     that wants it) and calls trap().  Nothing is passed either way; the frame is always
+        //     at [ustkbase].  ugrow forges user mode, so it must take the second arm -- ugrow.c's
+        //     ktrap() stub raises F_KTRAP if it does not. ---
         ita     SPSW            // A := СПСВ (live)
         aax     #(SPSW_INTERRUPT | SPSW_EXTRACODE)
-        u1a     kbug            // РежЭ|РежПр set -> the kernel faulted: stay blocked
+        u1a     ktrap           // РежЭ|РежПр set -> the kernel faulted.  A branch, not a call
         vtm     3               // zero -> from user: ПСВ := БлП|БлЗ, interrupts delivered
-kbug:
 
      13 vjm     trap            // ugrow.c: check the frame, back up the PC, grow the stack
 

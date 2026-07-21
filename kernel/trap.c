@@ -14,8 +14,6 @@
 
 #include <besm6.h>
 
-#define USER 0200 /* user-mode flag added to dev */
-
 /*
  * The kinds of trap this kernel dispatches.  These are OURS, not hardware numbers: the
  * BESM-6 has one internal-interrupt vector (0500) and reports the cause in ГРП, so there
@@ -25,12 +23,20 @@
  * There is no T_SYSCALL: an extracode is not reachable through 0500 at all.  The hardware
  * vectors э50-э77 straight to 0550-0577, so the syscall gate is its own door (besm6.S:
  * `sysgate'/`badext') and its C side is kernel/syscall.c.
+ *
+ * v7 adds a USER bit to the trap number and switches on the sum, because one handler serves
+ * both modes there.  Here the GATE splits them -- a fault from supervisor goes to ktrap()
+ * below and never comes back -- so everything trap() sees is from user and the bit would
+ * label every case alike.
  */
 #define T_DATA  1 /* data protection: touched a closed page */
 #define T_INSN  2 /* instruction protection: fetched from a closed page */
 #define T_ILL   3 /* privileged instruction attempted in user mode */
 #define T_CHECK 4 /* instruction check: the word fetched is not an instruction */
 #define T_BREAK 5 /* address-break match (М034/М035) */
+
+/* Every ГРП bit that vectors through 0500 -- the five decoded below. */
+#define GRP_FAULTS (GRP_OPRND_PROT | GRP_INSN_PROT | GRP_ILL_INSN | GRP_INSN_CHECK | GRP_BREAKPOINT)
 
 /*
  * Word indices of the user's saved registers in the trap frame (reg.h).
@@ -44,8 +50,68 @@ char regloc[] = {
 };
 
 /*
- * Called from the 0500 gate in besm6.S when the machine takes an internal interrupt --
- * a protection violation, an illegal instruction, an instruction check.
+ * The register dump both panic paths print.  `grp' is passed rather than re-read because
+ * each caller has already dismissed the bit it decoded.
+ *
+ * The faulting page is derived here, not by the caller, so that the rule -- ГРП's bits 5-9
+ * mean a page ONLY for a data violation, and are stale for every other cause -- is written
+ * once and both dumps obey it.
+ */
+static void dumpregs(struct trap *tr, unsigned grp)
+{
+    unsigned page = (grp & GRP_OPRND_PROT) ? (grp & GRP_PAGE_MASK) >> GRP_PAGE_SHIFT : 0;
+
+    printf("acc=%o r13=%o r14=%o r15=%o\n", tr->acc, tr->r13, tr->r14, tr->r15);
+    printf("ret=%o spsw=%o grp=%o page=%o\n", tr->ret, tr->spsw, grp, page);
+    printf("R=%o RMR=%o C=%o\n", tr->rreg, tr->rmr, tr->creg);
+}
+
+/*
+ * A fault taken in SUPERVISOR mode: a kernel bug.  Called from the 0500 gate in besm6.S,
+ * which branches straight here -- `u1a ktrap', not a call -- when СПСВ says the interrupted
+ * context was the kernel.  NEVER RETURNS, which is what lets the gate branch: there is no
+ * return address, no `intret' behind it and no frame to restore.
+ *
+ * The user-access family validates its range up front with useracc() and has no `nofault'
+ * path (usermem.S), so there is nothing here to recover; all this owes anyone is a legible
+ * dump.  It runs with БлПр still set, exactly as the hardware left it -- the gate does not
+ * open the level on this path (see the header over trapgate) -- and it does not need it
+ * open: putchar() is polled output held at spl7 (dev/sc.c).
+ *
+ * It does NOT set u.u_ar0.  That name means the USER's saved registers, and this frame is a
+ * kernel context; on a fault taken inside a syscall, publishing it would destroy the frame
+ * that syscall's psig()/sendsig() still write through -- and panic() below does not stop the
+ * machine before that matters, since update() sleeps and other processes run on.
+ */
+void ktrap(void)
+{
+    struct trap *tr = (struct trap *)u.u_stack;
+    unsigned grp;
+
+    /* Back the PC up (see trap() below), so the dump names the FAULTING instruction. */
+    if (tr->spsw & SPSW_NEXT_RK) {
+        tr->ret--;
+        tr->spsw &= ~SPSW_NEXT_RK;
+    }
+
+    /*
+     * Read the cause, then dismiss EVERY fault bit -- not just the one that fired.  We are
+     * not returning to the faulting context, but we are not stopping the machine either:
+     * panic() calls update(), update() sleeps, and swtch() runs the other processes.  A
+     * fault bit left standing in ГРП would be read live by the next process's trap() and
+     * shadow its real cause, the decode being a priority-ordered if/else.
+     */
+    grp = __besm6_mod(MOD_GRP, 0);
+    __besm6_mod(MOD_GRPCLR, ~GRP_FAULTS);
+
+    dumpregs(tr, grp);
+    panic("kernel trap");
+}
+
+/*
+ * A fault taken in USER mode.  Called from the 0500 gate in besm6.S when the machine takes
+ * an internal interrupt -- a protection violation, an illegal instruction, an instruction
+ * check.  A fault from supervisor never arrives here; the gate sends it to ktrap() above.
  *
  * The gate passes nothing.  Its stack switch is unconditional, so this door never nests
  * and the reg.h frame it built is always at the base of the kernel stack -- the link-time
@@ -63,7 +129,14 @@ void trap(void)
     time_t syst;
     unsigned grp;  /* ГРП, read live: the fault cause */
     unsigned page; /* the faulting virtual page (data violations only) */
-    int dev;       /* the trap kind, plus USER if it came from user mode */
+    int dev;       /* which of the T_* kinds this is */
+
+    /*
+     * Belt and braces: the gate is what guarantees the mode, and everything below assumes
+     * it.  ktrap() does not return.
+     */
+    if (!USERMODE(tr->spsw))
+        ktrap();
 
     syst    = u.u_stime;
     u.u_ar0 = (int *)tr;
@@ -113,20 +186,14 @@ void trap(void)
     } else {
         dev = 0; /* vectored with nothing pending: falls to the panic below */
     }
-    if (USERMODE(tr->spsw))
-        dev |= USER;
 
-    switch (minor(dev)) {
+    switch (dev) {
     /*
-     * Trap not expected.  Either a fault taken in kernel mode -- the user-access
-     * family validates its range up front and has no recovery hook, so that is a
-     * kernel bug -- or a cause we do not decode.
+     * Trap not expected: the machine vectored with no cause we decode standing in ГРП.
+     * (A fault from kernel mode used to land here too; it goes to ktrap() now.)
      */
     default:
-        printf("acc=%o r13=%o r14=%o r15=%o\n", u.u_ar0[ACC], u.u_ar0[R13], u.u_ar0[R14],
-               u.u_ar0[R15]);
-        printf("ret=%o spsw=%o grp=%o page=%o\n", u.u_ar0[RET], u.u_ar0[SPSW], grp, page);
-        printf("R=%o RMR=%o C=%o\n", u.u_ar0[RREG], u.u_ar0[RMR], u.u_ar0[CREG]);
+        dumpregs(tr, grp);
         panic("trap");
 
     /*
@@ -137,22 +204,22 @@ void trap(void)
      * grow() takes the page as reported -- a page number is all the machine gives us, and
      * with the stack growing up from USTKPAGE that is exactly what it needs.
      */
-    case T_DATA + USER:
+    case T_DATA:
         if (grow(page))
             goto out;
         i = SIGSEG;
         break;
 
-    case T_INSN + USER: /* instruction fetch from a closed page */
+    case T_INSN: /* instruction fetch from a closed page */
         i = SIGSEG;
         break;
 
-    case T_ILL + USER:   /* a privileged instruction in user mode */
-    case T_CHECK + USER: /* the fetched word is not an instruction */
+    case T_ILL:   /* a privileged instruction in user mode */
+    case T_CHECK: /* the fetched word is not an instruction */
         i = SIGINS;
         break;
 
-    case T_BREAK + USER: /* address-break match */
+    case T_BREAK: /* address-break match */
         i = SIGTRC;
         /* TODO 17: single-step is the address-break registers М034/М035, not a flag
          * bit; there is no EFL/TBIT to clear, so re-arming belongs to procxmt(). */

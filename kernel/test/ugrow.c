@@ -83,6 +83,7 @@ void drainbrz(void);
 #define F_OLDMAP  0040 /* THE POINT: the pre-existing stack page changed physical address */
 #define F_NFAULT  0100 /* the wrong number of faults arrived */
 #define F_SSIZE   0200 /* u_ssize does not describe the two pages that are now mapped */
+#define F_KTRAP   0400 /* the gate took the SUPERVISOR arm: it read the forged СПСВ wrongly */
 
 static unsigned mask;     /* accumulated failures */
 static unsigned nfault;   /* which fault we are in: 1, 2 */
@@ -181,6 +182,16 @@ void trap(void)
         mask |= F_SSIZE;
 
     halt(mask); /* never returns */
+}
+
+/*
+ * The OTHER door behind 0500 (kernel/trap.c: ktrap()).  crt0g.S branches here when СПСВ says the
+ * fault came from supervisor, which this test never arranges -- gouser() forges a user-mode СПСВ
+ * and both faults come from uprog.  Reaching it means the gate read the mode wrongly.
+ */
+void ktrap(void)
+{
+    halt(mask | F_KTRAP); /* never returns */
 }
 
 int main()

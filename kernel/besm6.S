@@ -111,8 +111,9 @@ MOD  = 020                      // C register / address modifier (М020 = M16)
 //   * The gates therefore cannot overlap: none can be re-entered, and none can preempt another's
 //     live window.  (A second internal fault taken inside a gate is fatal anyway -- СПСВ and IRET
 //     are single registers, not a stack.)
-// The epilogue is shared as well: all four gates end in `intret' below, which pops the frame and
-// re-applies these cells, so they MUST fill the same five.
+// The epilogue is shared as well: every gate that RETURNS ends in `intret' below, which pops the
+// frame and re-applies these cells, so they MUST fill the same five.  (The one path that does not
+// return is `trapgate's supervisor arm, which branches to ktrap() and panics.)
 //
 // They live here in .const/.text (they link low -- under 0700, unix.nm) so every cell fits the
 // 12-bit short-address field and the gate reaches them with a bare `atx save_a'.  This is not a
@@ -389,8 +390,9 @@ badext:
 //
 //     BUT ONLY FOR A FAULT FROM USER, which is the one thing this gate does that `sysgate' does
 //     not.  It reuses `intrgate's discriminator (СПСВ & 014, zero iff the interrupted context was
-//     user) to skip the enable when the fault came from supervisor -- a kernel BUG, on its way to
-//     panic("trap").  That path wants interrupts to stay exactly as it found them, for three
+//     user) -- and the supervisor arm does not merely skip the enable, it takes A DIFFERENT DOOR:
+//     the `u1a' branches to ktrap(), the C routine for a kernel BUG, which dumps and panics and
+//     never returns.  That path wants interrupts to stay exactly as it found them, for three
 //     reasons that only became clear once the console driver was read:
 //
 //       - IT DOES NOT NEED THEM.  The register dump trap() prints is polled output: scputc()
@@ -411,6 +413,19 @@ badext:
 //     costs three instructions and makes the rule sayable: A FAULT FROM SUPERVISOR CHANGES
 //     NOTHING ABOUT THE MACHINE'S INTERRUPT STATE.  (If a kernel-mode fault ever becomes
 //     recoverable -- a `nofault' path, kernel copy-on-write -- revisit this with it.)
+//
+//   * SO THERE ARE TWO DOORS BEHIND THIS ONE VECTOR, and the branch is the whole of the split.
+//     It costs nothing over a branch that merely skipped an instruction -- ktrap() returns to
+//     nobody, so there is no return address to plant and no tail to jump back to -- and it buys
+//     two routines that each say only what is true of them.  trap() sheds v7's USER bit and the
+//     `+ USER' on every case label, because everything reaching it is from user; ktrap() sheds
+//     the signal machinery, the grow() retry, the issig/psig tail, `intret', and the u.u_ar0
+//     assignment (that name means the USER's registers -- publishing a kernel frame under it
+//     would destroy the frame an interrupted syscall still writes through, and panic() does not
+//     stop the machine before that matters: update() sleeps and other processes run on).
+//     ktrap() carries one thing trap() must not: it dismisses EVERY fault bit in ГРП, not just
+//     the one that fired, for that same reason -- a bit left standing would be read live by the
+//     next process's trap() and shadow its real cause.
 //
 // The gate does NOT point u.u_ar0 at the frame; trap() does that itself, in C (`u.u_ar0 =
 // (int *)u.u_stack'), for the same reason `intrgate' leaves it alone: doing it here would need a
@@ -460,14 +475,18 @@ trapgate:
         its     1                   // frame[19] := M2    ; A := M1
         xts     save_a              // frame[20] := M1    ; M15 := F+21 (above the frame); A discarded
 
-        // --- open the interrupt level for the C call, as in `sysgate' (grow() sleeps) -- but
-        //     ONLY from user.  A supervisor fault is a kernel bug whose dump prints polled and
-        //     wants the machine left as it found it; see the header. ---
+        // --- pick the door.  A fault from SUPERVISOR is a kernel bug: it goes to ktrap(), which
+        //     dumps and panics and never comes back, with the interrupt level left exactly as the
+        //     hardware set it.  A fault from USER opens the level (grow() sleeps) and goes to
+        //     trap().  See the header for why the level is not opened on both. ---
         ita     SPSW                // A := СПСВ (still live -- nothing has issued an extracode)
         aax     #(SPSW_INTERRUPT | SPSW_EXTRACODE)
-        u1a     kbug                // РежЭ|РежПр set -> the kernel faulted: stay blocked
+        u1a     ktrap               // РежЭ|РежПр set -> the kernel faulted.  A BRANCH, NOT A CALL:
+                                    //   ktrap() never returns, so it needs no return address and
+                                    //   no tail behind it.  M15 is at F+21, which is what a callee
+                                    //   with no parameters expects -- the same state `vjm' hands
+                                    //   over.  trap.c reads the frame at u.u_stack for itself.
         vtm     3                   // zero -> from user: ПСВ := БлП|БлЗ, interrupts delivered
-kbug:
 
      13 vjm     trap                // trap.c: back up the PC, decode ГРП, signal or grow
 

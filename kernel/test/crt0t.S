@@ -206,14 +206,14 @@ trapgate:
         //     parameters returns M15 unchanged, so it comes back at F+21 -- the epilogue's
         //     precondition, with nothing to fix up. ---
 
-        // --- open the interrupt level for the C call, as kernel/besm6.S does -- but ONLY from
-        //     user: a supervisor fault is a kernel bug whose dump prints polled, and wants the
-        //     machine left as it found it.  utrap forges user mode, so it takes the enable. ---
+        // --- pick the door, as kernel/besm6.S does: a supervisor fault branches to ktrap()
+        //     and never comes back, a user fault opens the level and calls trap().  utrap forges
+        //     user mode, so it must take the second arm -- utrap.c's ktrap() stub raises F_KTRAP
+        //     if it does not. ---
         ita     SPSW            // A := СПСВ (live)
         aax     #(SPSW_INTERRUPT | SPSW_EXTRACODE)
-        u1a     kbug            // РежЭ|РежПр set -> the kernel faulted: stay blocked
+        u1a     ktrap           // РежЭ|РежПр set -> the kernel faulted.  A branch, not a call
         vtm     3               // zero -> from user: ПСВ := БлП|БлЗ, interrupts delivered
-kbug:
 
      13 vjm     trap            // utrap.c: check the frame, back up the PC, open the page
 

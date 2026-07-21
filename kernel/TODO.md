@@ -132,6 +132,20 @@ How it turned out:
   `putchar`'s `splx(s)` re-blocked anyway). The rule is now sayable: **a fault from supervisor
   changes nothing about the machine's interrupt state.** Revisit if a kernel-mode fault ever becomes
   recoverable.
+* **The discriminator picks a ROUTINE, not just a level.** The supervisor arm is `u1a ktrap` — a
+  branch, not a call, `ktrap()` (trap.c) being a kernel bug's dump-and-panic that never returns, so
+  there is no return address to plant and no tail behind it. Each side then says only what is true
+  of it: `trap()` drops v7's `USER` bit and the `+ USER` on every case label, since everything
+  reaching it is from user; `ktrap()` drops the signal machinery, the `grow()` retry, the
+  `issig`/`psig` tail, `intret`, and the `u.u_ar0` assignment (that name means the USER's registers,
+  and publishing a kernel frame under it would destroy the frame an interrupted syscall still writes
+  through). The dump itself is shared as `dumpregs()`, which also owns the rule that ГРП's bits 5–9
+  mean a page only for a data violation.
+* **The non-obvious part: `ktrap()` must dismiss EVERY fault bit in ГРП**, not just the one that
+  fired. `panic()` does not stop the machine — it calls `update()`, which sleeps, so `swtch()` runs
+  the other processes — and a fault bit left standing would be read live by the next process's
+  `trap()` and shadow its real cause, the decode being a priority-ordered if/else. The old shape got
+  this for free, the decode having run before the `default` arm.
 * **One more at the top of `intret`**, the matching `vtm 02003`. Enforcing the level in the shared
   epilogue covers all four doors and any future C tail, where a `cli()` per C exit path would have
   to be got right once per path forever.
@@ -150,9 +164,10 @@ How it turned out:
 * **`intrgate` is exempt**: a handler runs at raised level and the return drops it, as `rtt` does.
 * Checked on the machine, on both doors: `usys` reads ПСВ back inside every dispatched handler and
   `utrap` inside its stub `trap()` (`getpsw()`, new in `psw.s`), each failing with `F_IPL` if БлПр
-  is still set. Both were made to fail on purpose first — deleting `sysgate`'s enable, and forcing
-  `trapgate`'s discriminator to always skip — so the checks are known to bite rather than assumed
-  to. Without the second one, `trapgate`'s branch could go either way and `utrap` would still pass.
+  is still set; and `utrap`/`ugrow` carry a `ktrap()` stub raising `F_KTRAP`, since both forge user
+  mode and must never reach the supervisor arm. Each was made to fail on purpose first — deleting
+  `sysgate`'s enable, deleting `trapgate`'s, and forcing its discriminator to the wrong arm — so the
+  checks are known to bite rather than assumed to, and the three give three distinct signatures.
 
 ### Five hardware rules everything below obeys
 

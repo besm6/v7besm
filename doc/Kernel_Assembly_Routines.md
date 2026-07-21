@@ -138,8 +138,8 @@ is no expected-fault path anywhere in the kernel.
 
 That is not merely a different implementation of the same idea — it is what makes the trap gate
 simple. Since no supervisor-mode fault is ever *expected*, one taken in supervisor mode is by
-definition a kernel bug, so `trapgate` may switch to the kernel stack unconditionally and `trap()`
-may panic on it. See §3, and the corresponding note in
+definition a kernel bug, so `trapgate` may switch to the kernel stack unconditionally and hand it
+to `ktrap()`, a separate C routine that dumps the registers and panics without ever returning. See §3, and the corresponding note in
 [Memory_Mapping.md](Memory_Mapping.md#what-this-means-for-the-v7-kernel), which recommends the
 catch-`GRP_OPRND_PROT` approach that this kernel did not take.
 
@@ -228,7 +228,7 @@ arbitration). The four gates are:
 
 | gate | vector | door |
 |---|---|---|
-| `trapgate` | `0500` | internal fault → `trap()` |
+| `trapgate` | `0500` | internal fault → `trap()` from user, `ktrap()` from supervisor |
 | `intrgate` | `0501` | external interrupt → `extintr()` |
 | `sysgate` | `0577` (э77) | the system call → `syscall()` |
 | `badext` | `0550`–`0576` | every other extracode → `badextr()`, which posts SIGINS |
@@ -239,7 +239,9 @@ and Y, which the hardware does **not** save ([Unix_Context_Switch.md](Unix_Conte
 extracode is a synchronous *call*: the caller owns its live registers, so the gate saves almost
 nothing, and the hardware has already clobbered r14 with the effective address.
 
-**One exit.** All four leave through `intret`, `intrgate`'s restore block. An extracode's return
+**One exit — for everything that comes back.** Every returning path leaves through `intret`,
+`intrgate`'s restore block. The exception is `trapgate`'s supervisor arm, which branches to
+`ktrap()` (below) and panics: nothing is restored because nothing resumes. An extracode's return
 address is in ERET and a fault's in IRET, and Dubna solves this by normalising one into the other
 (`OUTMACRO`, [Dubna_Context_Switch.md](Dubna_Context_Switch.md) §8). **That turned out to be unnecessary here:**
 the frame is filled by a `its`/`sti` pipeline that reads a return register *live*, so `sysgate` is
@@ -277,7 +279,16 @@ a discriminator. Nothing before the frame is filled can tell the doors apart —
 identifies an extracode purely by which vector word it landed on — so sharing would cost a flag and
 a branch to save a block that is otherwise identical.
 
-**The restart fixup lives in C**, at the top of `trap()`, because the frame is aliased in place: the
+**The gate picks the C routine, not just the level.** `СПСВ & 014` is zero *iff* the interrupted
+context was user; the discriminator branches (`u1a ktrap`, a branch rather than a call, since
+`ktrap()` never returns) and only the user arm executes the `vtm 3` that opens the interrupt level.
+So `trap()` sees nothing but user faults — it sheds v7's `USER` bit and the `+ USER` on every case
+label — and `ktrap()` sheds the signal machinery, the `grow()` retry, `intret` and the `u.u_ar0`
+assignment. `ktrap()` carries one obligation `trap()` does not: it dismisses **every** fault bit in
+ГРП rather than the one that fired, because `panic()` → `update()` sleeps and the other processes
+run on, and a bit left standing would shadow the real cause in the next `trap()` decode.
+
+**The restart fixup lives in C**, at the top of `trap()` and of `ktrap()`, because the frame is aliased in place: the
 saved PC is the faulting word plus one and `SPSW_RIGHT_INSTR` already names the half, so the whole
 correction is `tr->ret--` and clearing `SPSW_NEXT_RK`. The derivation and the verified recipe are in
 [Memory_Mapping.md](Memory_Mapping.md#the-restart-protocol--read-this-before-writing-a-fault-handler).

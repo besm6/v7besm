@@ -102,6 +102,7 @@ int getpsw(void);
 #define F_SLOT2  0400 /* fault 2 was skipped, not retried */
 #define F_NFAULT 01000 /* the wrong number of faults arrived */
 #define F_IPL    02000 /* the gate dispatched with БлПр still set: the level was never opened */
+#define F_KTRAP  04000 /* the gate took the SUPERVISOR arm: it read the forged СПСВ wrongly */
 
 static unsigned mask;   /* accumulated failures */
 static unsigned nfault; /* which fault we are in: 1, 2, 3 */
@@ -186,6 +187,18 @@ void trap(void)
      */
     u.u_dsize += PGSZ;
     sureg();
+}
+
+/*
+ * The OTHER door behind 0500 (kernel/trap.c: ktrap()).  crt0t.S branches here when СПСВ says the
+ * fault came from supervisor -- which this test never arranges: gouser() forges a user-mode СПСВ
+ * and every fault below comes from uprog.  Reaching it means the gate's discriminator read the
+ * mode wrongly, so say so and stop; there is nothing to return to, ktrap() being a branch target
+ * and not a call.
+ */
+void ktrap(void)
+{
+    halt(mask | F_KTRAP); /* never returns */
 }
 
 int main()

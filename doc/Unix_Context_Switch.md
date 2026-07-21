@@ -279,8 +279,9 @@ data. Silent corruption, invisible until a device ISR is actually armed.
 
 An extracode only ever comes from user (the kernel never issues one), and a *fault* from supervisor
 is a kernel bug — the user-access family validates its range up front with `useracc()` and there is no
-`nofault` path anywhere, so `trap()` takes such a fault to the `default` arm and panics. Resetting
-М15 under a panic is harmless. Neither *door* nests; the frame is always at the link-time constant,
+`nofault` path anywhere, so the gate routes such a fault to `ktrap()`, which dumps and panics (§7).
+Resetting М15 under a panic is harmless — `ktrap()` wants a known-good stack more than it wants the
+interrupted kernel frames, which nothing will return to. Neither *door* nests; the frame is always at the link-time constant,
 and neither gate passes anything to C. (What does nest above that frame is an external interrupt,
 once the gate opens the level for its C call — which is the case `intrgate`'s conditional switch
 below is there to serve.)
@@ -366,8 +367,19 @@ it is also what makes the door-merge free:
 
 ## 7. A fault, in C
 
-`trap()` ([`kernel/trap.c`](../kernel/trap.c)) is entered with the frame complete and no arguments.
-It finds the frame for itself at the link-time constant, and aliases it:
+**Two routines, one vector.** The gate reads `СПСВ & 014` and dispatches by mode: a fault from user
+goes to `trap()`, a fault from supervisor to `ktrap()`, both in
+[`kernel/trap.c`](../kernel/trap.c). The second is a kernel bug and never returns — which is why the
+gate reaches it with `u1a ktrap`, a branch and not a call: no return address to plant, no tail
+behind it, and no `intret`. Only the user arm executes the `vtm 3` that opens the interrupt level
+(§9).
+
+That split is why `trap()` below has no `USER` bit anywhere in it. v7 adds one to the trap number
+and switches on the sum because one handler serves both modes there; here everything `trap()` sees
+is from user, and the bit would label every case alike.
+
+`trap()` is entered with the frame complete and no arguments. It finds the frame for itself at the
+link-time constant, and aliases it:
 
 ```c
     register struct trap *tr = (struct trap *)u.u_stack;
@@ -421,21 +433,37 @@ is a one-shot notification and only the dispatched bit is cleared (§9).
 
 ### Dispatch
 
-`dev |= USER` if `USERMODE(tr->spsw)`, then:
-
-- **`T_DATA` from user** → `grow()` the stack and retry. No signal — this is the normal
+- **`T_DATA`** → `grow()` the stack and retry. No signal — this is the normal
   stack-growth path. `grow()` takes the faulting **page number**, unchanged, because a page number
   is all ГРП reports (bits 5–9); there is no faulting address to recover. It grows by appending a
   page at the next higher virtual address — which, since `sureg()` lays the stack out as the tail of
   the image, is the same page it appends at the end of the image. So the stack pages already mapped
   keep their addresses and nothing is copied: growing the stack needs no `copyseg` shuffle at
   all. `kernel/test/ugrow` is the regression test for exactly that property.
-- **`T_INSN` from user** → SIGSEG. **`T_ILL`/`T_CHECK`** → SIGINS. **`T_BREAK`** → SIGTRC.
-- **anything from supervisor** → the `default` arm: dump `acc`/`r13`/`r14`/`r15`, `ret`/`spsw`/`grp`/
-  `page`, `R`/`RMR`/`C`, and panic. Per §5, a kernel-mode fault is a kernel bug.
+- **`T_INSN`** → SIGSEG. **`T_ILL`/`T_CHECK`** → SIGINS. **`T_BREAK`** → SIGTRC.
+- **nothing pending** → the `default` arm: `dumpregs()` and `panic("trap")`. The machine vectored
+  with no cause we decode.
 
 The tail is shared with the syscall path: `issig()`/`psig()`, `curpri = setpri()`,
 `if (runrun) qswtch()`, `addupc()`.
+
+### `ktrap()` — the supervisor arm
+
+It does the PC fixup (so the dump names the *faulting* instruction), reads ГРП, calls the shared
+`dumpregs()` — `acc`/`r13`/`r14`/`r15`, `ret`/`spsw`/`grp`/`page`, `R`/`RMR`/`C` — and
+`panic("kernel trap")`, a different string from `trap()`'s so the console says which door it came
+through. Per §5, a kernel-mode fault is a kernel bug: the user-access family validates up front and
+there is no `nofault` path, so there is nothing to recover.
+
+Two things it does *not* share with `trap()`:
+
+- **it does not set `u.u_ar0`.** That name means the *user's* saved registers; this frame is a
+  kernel context, and on a fault taken inside a syscall, publishing it would destroy the frame that
+  syscall's `psig()`/`sendsig()` still write through. `panic()` does not stop the machine before
+  that matters — `update()` sleeps, and the other processes run on.
+- **it dismisses every fault bit in ГРП**, not just the one that fired, for that same reason: a bit
+  left standing would be read live by the next process's `trap()` and shadow its real cause, the
+  decode being a priority-ordered if/else.
 
 ## 8. An extracode, in C
 
@@ -555,8 +583,9 @@ handler runs at raised level and the `выпр` drops it, exactly as `rtt` does 
 them touches `curipl`, which already reads 0 for an entry from user mode.
 
 **`trapgate` opens it only for a fault from user**, and is the one gate that discriminates. It
-reuses the `СПСВ & 014` test `intrgate` uses for its stack switch (§5) and skips the `vtm 3` when
-the fault came from supervisor — a kernel bug, on its way to `panic("trap")`. That path wants the
+reuses the `СПСВ & 014` test `intrgate` uses for its stack switch (§5); the supervisor arm does not
+merely skip the `vtm 3` but branches to a different C routine, `ktrap()` (§7), which panics and
+never returns. That path wants the
 machine left exactly as it was found, because:
 
 - **it does not need interrupts.** The register dump `trap()` prints is polled output — `scputc()`
@@ -843,7 +872,7 @@ hand-built environment, forges user mode, and asserts on machine state from the 
 
 | Test | Exercises |
 |---|---|
-| `crt0t.S` + `utrap.c` | `trapgate` (0500): faults on a closed page, checks the faulting instruction re-executes after the map is opened — from **both** instruction halves — and that the gate opened БлПр for this from-user fault (`getpsw()`, §9) |
+| `crt0t.S` + `utrap.c` | `trapgate` (0500): faults on a closed page, checks the faulting instruction re-executes after the map is opened — from **both** instruction halves — and that the gate took the user arm (a `ktrap()` stub raises `F_KTRAP` if not) with БлПр opened (`getpsw()`, §9) |
 | `crt0s.S` + `usys.c` | `sysgate` (0577) and `badext` (0550): issues `$77 N` with arguments staged the real way, checks ACC / r14 / r12 / r13 and a balanced r15 — and, in every handler, that the gate cleared БлПр before dispatching (`getpsw()`, §9) |
 | `crt0u.S` + `uintr.c` | `intrgate` (0501), including the conditional stack switch |
 | `mmutest` | `sureg()` programming РП/РЗ, checked from C *and* by examining РП/РЗ from the `.ini` |
