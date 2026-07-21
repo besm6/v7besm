@@ -35,7 +35,7 @@ installed later and competes for the file extension.
   `sti:` is a label.
 - **Labels, equates and the location counter** — `name:`, `name = expr`, `. = expr`.
 - **Directives** — `.text` `.const` `.data` `.strng` `.bss` `.org` `.word` `.half` `.ascii`
-  `.globl` `.equ` `.comm`, plus the legacy `.set` that survives in `include/sys.s`.
+  `.globl` `.equ` `.comm`.
 - **Numbers** — decimal by default, `0…` octal, `0x…` hex, `0b…` binary, the `'` digit
   separator and the `0'…` left-aligned form, and the bit-mask literals `.N`, `.[a:b]`, `.[a=b]`.
 - **Operand sigils** — the leading modifier register of `13 uj`, the constant pool `#`, and

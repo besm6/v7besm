@@ -137,7 +137,7 @@
             }
         },
         "directive": {
-            "match": "(?<![A-Za-z0-9_.$\\x{0080}-\\x{FFFF}])(\\.(?:text|const|data|strng|bss|org|word|half|ascii|globl|equ|comm|set))(?![A-Za-z0-9_.$\\x{0080}-\\x{FFFF}])",
+            "match": "(?<![A-Za-z0-9_.$\\x{0080}-\\x{FFFF}])(\\.(?:text|const|data|strng|bss|org|word|half|ascii|globl|equ|comm))(?![A-Za-z0-9_.$\\x{0080}-\\x{FFFF}])",
             "captures": {
                 "1": {
                     "name": "keyword.control.directive.besm6"
