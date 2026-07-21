@@ -28,6 +28,11 @@ Two source trees feed it:
   the compiler-support routines in `unix/*.s`. This is the *form*: how a BESM-6 C routine
   handles fat pointers, one-word scalars, and the `$77` syscall leaf. `unix/read.s`,
   `unix/write.s`, `unix/crt0.s` are the models for `sys/` and `csu/`.
+  Where it already has a routine, **take it rather than porting the v7 one** — phase 2 took
+  the whole `str*`/`mem*` family and `atoi` that way. Its versions are ANSI already and their
+  signatures match the `<string.h>`/`<stdlib.h>` this same tree supplies, so nothing ends up
+  defined as `int n` where the declaration says `size_t n`. Each copied file says at its head
+  where it came from; a divergence has to be written down there.
 
 The ported file is deleted from `tmp/libc/` as it lands, so what is left there always names the
 remaining work; `tmp/` goes away entirely at the end.
@@ -115,6 +120,36 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
 - **The v7 headers win.** [`../cmd/cc/cc.c`](../cmd/cc/cc.c) appends the compiler's
   `share/besm6/include` *after* the user's `-I`, so `-I../../include` resolves `stdio.h`,
   `ctype.h`, `errno.h` … from [`../include/`](../include/) while `<stdarg.h>` still resolves.
+  The corollary is that `<string.h>`, `<stdlib.h>` and `<stddef.h>` — which v7 has not got —
+  come from the compiler's tree, prototypes and `size_t` and all. Nothing under `lib/` should
+  add a header to `include/` merely to declare its own function: a routine that no v7 header
+  declares (`index`, `rindex`, `swab`, `mktemp`, `isatty`, `perror`) declares itself at the
+  head of its file, exactly as `test/*.c` declares the syscalls it calls.
+- **A relational between two `char *` is safe**, even though a fat pointer does *not* sort as
+  a plain word: incrementing one *decreases* the byte offset, which sits above the word address
+  in bits 47–45, so a raw word compare of two pointers into the same word comes out backwards.
+  The compiler lowers `<`/`>` between fat pointers through `b$pdiff`, the same helper as `-`,
+  and tests the sign. `memmove`'s direction test and `qsort`'s partition both depend on it, and
+  `test/strings` overlaps *within one word* on purpose to keep it that way.
+- **A call through a file-scope function pointer does not work.** The back end emits
+  `13 vjm <address of the variable>` — a direct call into the data segment — where the
+  pointer's contents were meant; through an *auto* or a *parameter* it is emitted correctly.
+  So a callback must be held in one: `qsort` passes the comparison down as a parameter rather
+  than parking it in the static v7 used, and anything else with a `(*f)()` in a static must do
+  the same, or copy it into a local first. This is the external c-compiler's bug, not ours;
+  when it is fixed the workaround stays harmless.
+- **A string literal is truncated at an embedded `\0`.** `"a\0c"` arrives as the single byte
+  `a`, so anything that must look past a NUL — `memcmp`, `memchr`, `swab` — has to have its
+  operands built at run time. Another one belonging to the compiler rather than to us, and
+  another one to remember before setting out to debug the routine instead.
+- **`long` is `int`, one word**, so `atol` *is* `atoi` and is written as a call to it; the
+  same collapse is why `lseek` and `stime` shed a word in phase 1. `sizeof(int) == 6` char-units
+  and `sizeof(char) == 1`, so `sizeof arr / sizeof arr[0]` still counts elements.
+- **What links but cannot run yet.** `sleep` needs a `SIGALRM` handler of its own and `abort`
+  raises `SIGIOT`; delivery is phase 6, and `b6sim` answers `signal()` with anything but
+  `SIG_DFL`/`SIG_IGN` with `EINVAL`. Both are in `libc.a` and neither has a test — a test of
+  `abort` would take the simulator down with the program, `b6sim` servicing `kill` by killing
+  its own process.
 
 ## Layout and build
 
@@ -151,7 +186,16 @@ compiler-support helpers (`b$save`, `b$ret`, `b$mul`, `b$div`, the relational an
 routines) that every compiled function calls. Archives are scanned in order and a member is
 pulled only for a symbol still unresolved, so anything we define ourselves is taken from our
 own library. The one hazard is silent: a routine we forget to port is satisfied from the
-external library instead of failing to link. `b6nm` on the result is the check.
+external library instead of failing to link — and `b6nm` on the result cannot tell, because
+both archives name their members `strcpy.o`, `write.o`, `exit.o` and so on. The check that
+does tell is to relink *without* the second archive and read the errors:
+
+```sh
+b6ld crt0.o prog.o -o /dev/null -L$(TOP)/lib/libc -lc      # every undefined name must be b$*
+```
+
+Anything other than a `b$*` in that list is a routine the external library has been quietly
+supplying. Phase 2's four test programs are clean by this test.
 
 It has to be named by **path**, not as a second `-L … -lc`. `b6ld` keeps one *global* list of
 `-L` directories and `-l` searches all of it with first match wins
@@ -171,16 +215,6 @@ C wrappers of the `exec` family (`execl`, `execv`, `execle`, `execvp`) are phase
 `system` and `popen`; `signal` registers a handler and no more, delivery being phase 6.
 
 - `csu/mcrt0.s` waits for profiling.
-
-## Phase 2 — `gen`: strings, ctype, small utilities
-
-`abs atoi atol index rindex strcat strcmp strcpy strlen strncat strncmp strncpy swab qsort rand
-getenv mktemp isatty sleep perror errlst ctype_ abort`, and `setjmp`/`longjmp` rewritten for
-this machine (r5–r7, r13, r15 and the mode word). Where the c-compiler's library already has a
-BESM-6-aware version — `memcpy memmove memset memcmp memchr strchr strrchr strstr strtok` —
-take it rather than porting the v7 one. `qsort` gets a word-wise swap when the element size is
-a multiple of six. `mpx.c`, `pkon.c`, `l3.c`, `fakcu.s` and `ldfps.s` are dropped: PDP-11/x86
-only, or obsolete.
 
 ## Phase 3 — `sbrk` and `malloc`
 
@@ -239,10 +273,17 @@ booting SIMH. `test/` holds one program per area, each linked against the real `
 `libc.a`, given the arguments in its `.args` file, and run with its output diffed against its
 `.expected` file — so adding a test is adding those three files and a name to `PROGS`. `hello`
 covers `argv` as crt0 finds them, `vararg` the one-word argument, `errno` a failing call and the
-`cerror` arm, `procs` the syscalls that answer in r12, and `sbrkt` the break. Still to come are
-`environ`, the string and memory routines, malloc churn, stdio through a real file, and the
-printf/scanf conversions including floats. `b6size -w` on each keeps the image below `070000`
-words.
+`cerror` arm, `procs` the syscalls that answer in r12, `sbrkt` the break, `strings` the string
+and memory routines, `gen` the small utilities, `environ` the vector crt0 computes, and `jmp`
+setjmp/longjmp. Still to come are malloc churn, stdio through a real file, and the printf/scanf
+conversions including floats. `b6size -w` on each keeps the image below `070000` words.
+
+An `.expected` file may record only what the *program* does. Nothing host-dependent may reach
+it — which is why `environ` checks `getenv` against the vector it was handed, entry by entry,
+and prints neither a name nor a count: `b6sim` passes through a whitelist of the host's
+variables (`ENV_WHITELIST` in [`../cmd/sim/session.cpp`](../cmd/sim/session.cpp)), and even
+`MAKEFLAGS` alone would make a count differ between `make test` and the same run by hand. The
+harness captures fd 2 along with fd 1, so `perror`'s output is diffed too.
 
 Nothing here may be linked against a stale library: `$(LIBDEP)` names `crt0.o` and `libc.a` as
 ordinary prerequisites of every program and `$(link)` filters them back out of `$^`, because

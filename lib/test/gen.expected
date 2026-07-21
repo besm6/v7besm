@@ -1,0 +1,41 @@
+ok   abs of a positive
+ok   abs of a negative
+ok   abs of zero
+atoi 1234 1234
+atoi -1234 -1234
+atoi +12 12
+atoi with leading space 42
+atoi of nothing 0
+ok   atol agrees with atoi
+ok   atoi is not 16-bit
+rand 16838 5758 10113 17515 31051
+ok   srand replays the sequence
+ok   rand stays in 0..077777
+qsort of words 0 1 2 3 3 5 8 9
+qsort of pairs 0 100 1 101 2 102 3 103 3 103 5 105 8 108 9 109
+qsort of bytes "abcoqrst"
+qsort unaligned "abcorst"
+isalpha over 0..127 52
+isdigit over 0..127 10
+isspace over 0..127 6
+ispunct over 0..127 32
+iscntrl over 0..127 28
+isxdigit over 0..127 22
+ok   isupper of A
+ok   islower of A
+ok   isalnum of 9
+ok   isprint of space
+ok   isascii of 0200
+ok   toupper
+ok   tolower
+ok   no class for EOF
+ok   mktemp returns its argument
+ok   mktemp kept the prefix
+ok   mktemp replaced every X
+ok   mktemp kept the length
+ok   mktemp names nothing that exists
+ok   isatty of a redirected stdout
+ok   isatty of a bad descriptor
+perror: No such file or directory
+No such file or directory
+done

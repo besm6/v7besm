@@ -1,0 +1,55 @@
+ok   strlen of the empty string
+ok   strlen counts bytes, not words
+ok   strcpy returns its destination
+strcpy+strcat "abcdefghi"
+ok   ... and its length
+strcpy to an unaligned destination "0123456789ab"
+ok   ... left the byte before it alone
+ok   ... and terminated where it should
+strcat onto an unaligned string "xyzzz"
+ok   strncpy pads with NUL to n
+ok   ... and not past n
+strncpy truncates without a NUL "abcd"
+strncat "onetwo"
+ok   strcmp equal
+ok   strcmp less
+ok   strcmp greater
+ok   strcmp on a prefix
+ok   strcmp compares as unsigned
+ok   strncmp stops at n
+ok   strncmp sees the nth byte
+ok   strncmp of nothing
+ok   strcmp across a word boundary
+ok   strchr finds the first
+ok   strrchr finds the last
+ok   strchr misses
+ok   strchr finds the NUL
+ok   index is strchr
+ok   rindex is strrchr
+ok   rindex misses
+ok   strstr finds a substring
+ok   strstr matches to the end
+ok   strstr misses
+ok   strstr of the empty needle
+strtok 1 "a"
+strtok 2 "bb"
+strtok 3 "ccc"
+ok   strtok runs out
+memset "............"
+memset unaligned "..---......."
+ok   memset returns its destination
+memcpy "abcdefghij"
+memcpy unaligned "aabcdfghij"
+memmove backward "ababcdefgh"
+memmove forward "cdefghijij"
+ok   memcmp equal
+ok   memcmp differs
+ok   memcmp stops at n
+ok   memcmp ignores NUL
+ok   ... where strcmp stops
+ok   memchr finds
+ok   memchr misses within n
+swab "badcfe"
+swab in place "badcfe"
+swab leaves an odd byte "badce"
+done

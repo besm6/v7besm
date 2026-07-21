@@ -31,7 +31,17 @@ STUBOBJ = $(STUBS:%=%.o)
 
 SYS     = cerror.o exit.o fork.o wait.o pipe.o getpid.o getuid.o getgid.o \
           time.o dup.o exec.o exece.o sbrk.o $(STUBOBJ)
-GEN     =                       # phase 2
+# The strings, the ctype table and the small utilities.  Where the c-compiler's own
+# library already has a BESM-6-aware ANSI version, it was taken rather than ported --
+# the whole str*/mem* family and atoi -- and each such file says so at its head; the
+# rest are ports of the v7 sources.  setjmp.o is neither: v7's is x86 assembly, so it
+# is written here from the calling convention.
+GEN     = strcat.o strcmp.o strcpy.o strlen.o strncat.o strncmp.o strncpy.o \
+          strchr.o strrchr.o strstr.o strtok.o \
+          memcpy.o memmove.o memset.o memcmp.o memchr.o \
+          abs.o atoi.o atol.o index.o rindex.o swab.o qsort.o rand.o \
+          getenv.o mktemp.o isatty.o sleep.o perror.o errlst.o ctype_.o abort.o \
+          setjmp.o
 STDIO   =                       # phase 4
 
 OBJ     = $(SYS) $(GEN) $(STDIO)
@@ -73,3 +83,12 @@ exit.o fork.o wait.o pipe.o getpid.o getuid.o getgid.o time.o dup.o exec.o exece
 		$(TOP)/include/sys/syscall.h
 
 sbrk.o:		$(TOP)/include/sys/param.h $(TOP)/include/sys/types.h
+
+# gen/.  <string.h> and <stdlib.h> are the COMPILER's -- v7 has neither, and cc appends
+# share/besm6/include after the user's -I -- so they are not named here: nothing in this
+# tree regenerates when they change, and they change with the toolchain, not with us.
+ctype_.o:	$(TOP)/include/ctype.h
+perror.o errlst.o: $(TOP)/include/errno.h
+isatty.o:	$(TOP)/include/sgtty.h
+abort.o:	$(TOP)/include/signal.h
+sleep.o:	$(TOP)/include/signal.h $(TOP)/include/setjmp.h

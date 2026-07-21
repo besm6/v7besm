@@ -1,0 +1,10 @@
+ok   setjmp returns the longjmp's val
+ok   ... and the locals are still readable
+ok   ... including the array
+ok   longjmp(env, 0) arrives as 1
+ok   val is a whole int, not 15 bits
+ok   a negative val survives
+ok   twenty jumps out of a growing recursion
+ok   the stack still works after all of them
+ok   ... and main's own locals are intact
+done

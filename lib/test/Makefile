@@ -9,7 +9,7 @@
 
 TOP     = ../..
 
-PROGS   = hello vararg errno procs sbrkt
+PROGS   = hello vararg errno procs sbrkt strings gen environ jmp
 
 .PHONY: all test clean
 
@@ -35,13 +35,28 @@ procs:  procs.o $(LIBDEP)
 sbrkt:  sbrkt.o $(LIBDEP)
 	$(link)
 
+strings: strings.o $(LIBDEP)
+	$(link)
+
+gen:    gen.o $(LIBDEP)
+	$(link)
+
+environ: environ.o $(LIBDEP)
+	$(link)
+
+jmp:    jmp.o $(LIBDEP)
+	$(link)
+
 # Run each program and diff its output.  `set -e' keeps it fail-fast, and the run
 # itself must exit 0 -- a test reports failure by its status as well as its output.
+#
+# stderr is captured with stdout: perror writes to fd 2 and nothing else may write
+# there, so anything b6sim itself says lands in the diff rather than scrolling past.
 test:   $(PROGS)
 	@set -e; for p in $(PROGS); do \
 		args=`cat $$p.args 2>/dev/null || true`; \
 		echo "b6sim ./$$p $$args"; \
-		$(SIM) ./$$p $$args > $$p.out; \
+		$(SIM) ./$$p $$args > $$p.out 2>&1; \
 		diff -u $$p.expected $$p.out; \
 	done
 	@echo "all tests passed"
@@ -55,3 +70,5 @@ clean:
 
 vararg.o:	$(TOP)/include/varargs.h
 errno.o:	$(TOP)/include/errno.h
+gen.o:		$(TOP)/include/ctype.h
+jmp.o:		$(TOP)/include/setjmp.h

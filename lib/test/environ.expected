@@ -1,0 +1,8 @@
+ok   environ is main's envp
+ok   the environment is not empty
+ok   every entry is NAME=value
+ok   getenv found every one of them
+ok   getenv of an absent name
+ok   getenv of the empty name
+ok   getenv rejects a prefix of a real name
+done
