@@ -406,9 +406,24 @@ BESM-6 instructions come in two formats (see
   address-setup instructions. In the assembler these mnemonics carry the `TLONG` flag.
 
 Two 24-bit instructions pack into one 48-bit word; the assembler fills the left half first,
-then the right. Three long jumps — `vjm`, `ij`, `stop` — additionally carry an *align-after*
-flag: a filler is inserted after them so the next instruction starts a fresh word (`utc 0` in
-text, zeros elsewhere — see [§10](#10-directives); suppressed by `-a`).
+then the right. Some instructions additionally carry an *align-after* flag: a filler is
+inserted after them so the next instruction starts a fresh word (`utc 0` in text, zeros
+elsewhere — see [§10](#10-directives); suppressed by `-a`). Those are the three long jumps
+`vjm`, `ij`, `stop`, **and every extracode** — the short opcodes `050`–`077` and the long
+`020`/`021`.
+
+The extracodes are aligned because the hardware makes it a correctness rule, not a style: an
+extracode returns to the **left half of the next word** whichever half it occupied itself, so
+an instruction packed after one in its own word would never be executed
+([Instruction Set, "Extracodes"](Besm6_Instruction_Set.md#extracodes-opcodes-050077-020-021)).
+Aligning costs nothing — that half was dead space either way — and it lets a syscall stub be
+written as the obvious three instructions:
+
+```
+open:   $77 5                   // takes the whole word ...
+     14 v1m     cerror          // ... so this really runs
+     13 uj
+```
 
 ### 9.2 The mnemonic table
 
@@ -463,7 +478,10 @@ after a sigil (e.g. `$32` is short opcode 032, `@20` is long opcode 020):
 | `$NN` | Short-address instruction with octal opcode `NN` (`val = NN << 12`). |
 | `@NN` | Long-address instruction with octal opcode `NN` (`val = NN << 15`). |
 
-These take the same operand forms as named instructions.
+These take the same operand forms as named instructions. This is also the only way to write an
+extracode, since none of them has a mnemonic — `$77 5` is the Unix system call — and the
+assembler word-aligns after `$50`…`$77`, `@20` and `@21` for the reason given in
+[§9.1](#91-the-two-formats).
 
 ---
 

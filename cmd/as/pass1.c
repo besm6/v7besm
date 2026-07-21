@@ -182,6 +182,29 @@ static long intern_constant(int64_t val, int bs, int extref)
 }
 
 //
+// TALIGN for an extracode, or 0 for anything else.
+//
+// AN EXTRACODE RETURNS TO THE LEFT HALF OF THE NEXT WORD, whichever half it occupied
+// itself: the hardware return register ERET holds a word address (PC+1) and records no
+// right-instruction indicator, unlike a fault.  So an instruction packed AFTER an
+// extracode in the same word is never executed, and nothing downstream can recover it --
+// the half the extracode sat in is not written down anywhere.
+//
+// Aligning after one therefore costs nothing.  If the extracode landed in the right half
+// the segment is already even and align_segment() does nothing at all; if it landed in
+// the left, the half beside it was dead space either way, and filling it with the `utc 0'
+// pad puts the next instruction where the return actually goes.  Same word count, minus
+// the trap.  This is why vjm/ij/stop carry TALIGN too (tables.c): a call's return address
+// is a word address for the same reason.
+//
+// See doc/Besm6_Instruction_Set.md, "Extracodes", and doc/Unix_Context_Switch.md sec 8.
+//
+static int extracode_align(int is_extracode)
+{
+    return is_extracode ? TALIGN : 0;
+}
+
+//
 // Assemble one machine instruction and emit it.  `val` is the base opcode word
 // (from table[] or a raw $NN/@NN), `type` carries the TLONG/TALIGN flags.  The
 // job is to parse the operand and turn it into the instruction's address field
@@ -459,12 +482,15 @@ void generate_code(void)
             assemble_instruction(table[cval].val, table[cval].type, as.regleft);
             break;
         case LSCMD:
-            // Raw short opcode "$NN": opcode in bits 12+.
-            assemble_instruction((long)cval << 12, 0, as.regleft);
+            // Raw short opcode "$NN": opcode in bits 12+.  Opcodes 050-077 are
+            // the extracodes, which align after themselves; see extracode_align().
+            assemble_instruction((long)cval << 12, extracode_align(cval >= 050), as.regleft);
             break;
         case LLCMD:
-            // Raw long opcode "@NN": opcode in bits 15+.
-            assemble_instruction((long)cval << 15, TLONG, as.regleft);
+            // Raw long opcode "@NN": opcode in bits 15+.  Long 020 and 021 are
+            // the extracodes э20 and э21 -- the only two outside the short range.
+            assemble_instruction((long)cval << 15,
+                                 TLONG | extracode_align(cval == 020 || cval == 021), as.regleft);
             break;
         case '.':
             // ".= expr" sets the location counter forward, padding the segment

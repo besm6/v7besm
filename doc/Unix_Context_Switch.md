@@ -557,8 +557,15 @@ putch:  $77 4           // LEFT half
 ```
 
 falls straight through its own return. This is not something the gate can repair — the half is not
-recorded anywhere for it to find — so it is a constraint on every caller. `kernel/test/usys`'s
-`uprog` carries a `10 utm 0` no-op before each extracode for exactly this reason.
+recorded anywhere for it to find — so it is a constraint on every caller.
+
+**`b6as` now honours it for you.** An extracode carries `TALIGN`, the same flag `vjm`/`ij`/`stop`
+have always carried (`cmd/as/pass1.c`, `extracode_align()`), so the assembler word-aligns after one
+and the stub above assembles as written: the trap takes the whole word and the `13 uj` lands where
+the return actually goes. It costs nothing — the half beside a left-half extracode was dead space
+either way — and the `10 utm 0` no-ops `kernel/test/usys`'s `uprog` used to carry for the purpose
+are gone. `-a` suppresses the alignment along with every other. Every stub in `lib/libc/sys/`
+depends on this.
 
 ## 9. An interrupt, in C
 

@@ -4,7 +4,8 @@
 // The engine is driven through assemble(&args), which reads an input file and
 // writes a BESM-6 a.out object.  Each test names its input/output files after
 // the running test (guaranteed unique) and leaves them on disk as debugging
-// artefacts.
+// artefacts -- but in a scratch directory of its own, not in whatever directory
+// the harness happened to be started from.  See use_scratch_dir() below.
 //
 #include <gtest/gtest.h>
 #include <unistd.h>
@@ -12,6 +13,7 @@
 #include <algorithm>
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <stdexcept>
 #include <string>
@@ -50,9 +52,48 @@ static std::string current_test_name()
     return std::string(info->test_suite_name()) + "." + info->name();
 }
 
-// Assemble a multi-line source and return the resulting object file bytes.
-static std::vector<unsigned char> assemble(const std::string &source)
+// Move into a scratch directory, once, before the first test writes anything.
+//
+// The engine takes plain file names and resolves them against the current
+// directory, and the artefacts are deliberately left behind -- they are the first
+// thing to look at when a test fails.  Left in the current directory, though, they
+// litter whatever the harness was started from: ctest runs in the build tree, but
+// running the binary by hand from the repository root would scatter two files per
+// test over the source.  So each run gets its own directory under $TMPDIR, named
+// once on stdout so the artefacts can still be found.
+//
+// Doing this lazily rather than in a gtest Environment keeps it beside the code
+// that needs it, and the binary links GTest::gtest_main, so there is no main() here
+// to put it in.
+static void use_scratch_dir()
 {
+    static bool done = false;
+    if (done)
+        return;
+    done = true;
+
+    const char *tmp  = getenv("TMPDIR");
+    std::string base = (tmp && *tmp) ? tmp : "/tmp";
+    while (base.size() > 1 && base.back() == '/')
+        base.pop_back();
+
+    std::string tmpl = base + "/b6as-test.XXXXXX";
+    std::vector<char> buf(tmpl.begin(), tmpl.end());
+    buf.push_back('\0');
+    if (!mkdtemp(buf.data()))
+        throw std::runtime_error("cannot create a scratch directory under " + base);
+    if (chdir(buf.data()) != 0)
+        throw std::runtime_error(std::string("cannot enter ") + buf.data());
+    printf("Test artefacts: %s\n", buf.data());
+}
+
+// Assemble a multi-line source and return the resulting object file bytes.
+// `aflag` is the CLI's -a: leave the word packing alone instead of aligning after
+// vjm/ij/stop and the extracodes.
+static std::vector<unsigned char> assemble(const std::string &source, int aflag)
+{
+    use_scratch_dir();
+
     std::string base    = current_test_name();
     std::string infile  = base + ".s";
     std::string outfile = base + ".o";
@@ -65,11 +106,24 @@ static std::vector<unsigned char> assemble(const std::string &source)
     struct assembler_args args = {};
     args.infile  = const_cast<char *>(infile.c_str());
     args.outfile = const_cast<char *>(outfile.c_str());
+    args.aflag   = aflag;
     EXPECT_EQ(assemble(&args), 0);
 
     std::ifstream obj(outfile, std::ios::binary);
     return std::vector<unsigned char>((std::istreambuf_iterator<char>(obj)),
                                       std::istreambuf_iterator<char>());
+}
+
+// The usual form: aligned, as the CLI assembles by default.
+static std::vector<unsigned char> assemble(const std::string &source)
+{
+    return assemble(source, 0);
+}
+
+// As the CLI's -a would: no alignment fillers at all.
+static std::vector<unsigned char> assemble_unaligned(const std::string &source)
+{
+    return assemble(source, 1);
 }
 
 // High 24-bit half-word stored at word index `w` of the file (a BESM-6 word is
@@ -134,12 +188,15 @@ static long reloc_half(const std::vector<unsigned char> &b, int seg, int i)
 // Assemble every machine instruction from the assembler's table[] and check the
 // opcode emitted for each one.  Two 24-bit instructions pack into one 48-bit
 // word: the first lands in the high (left, executed-first) half-word, the second
-// in the low half-word.  The three TALIGN instructions (vjm/ij/stop) cause a utc
-// (02200000) filler to be inserted in the low half so the following instruction
-// stays word-aligned.  Text begins at file word 8 (a_entry/HDRSZ).
+// in the low half-word.  TALIGN instructions cause a utc (02200000) filler to be
+// inserted in the low half so the following instruction stays word-aligned; that
+// is vjm/ij/stop, and every EXTRACODE -- the short opcodes 050-077 and the long
+// 020/021 -- since all of those return to the left half of the next word.  So each
+// of the 26 extracodes below occupies a whole word on its own.  Text begins at file
+// word 8 (a_entry/HDRSZ).
 //
 // Every instruction also carries an operand, so this exercises the whole address
-// path without growing the text segment (still 41 words): direct addresses in
+// path (text is 54 words): direct addresses in
 // every number base (decimal, octal 0NNN, hex 0xNN, binary 0bNN), the bit-mask and
 // expression syntaxes, a trailing index and a leading modifier register (reg << 20),
 // backward label references, an equate, and both comment forms (// and a line-start #).  Operands that change the layout
@@ -235,7 +292,7 @@ mid:                        // second label
     // Header sanity, so a gross regression points at the offending field.
     EXPECT_EQ(word_high(got, 0), 0x424553L); // a_magic high half == "BES"
     EXPECT_EQ(word_low(got, 0), 0x4D0107L);  // a_magic low half  == "M" + FMAGIC
-    EXPECT_EQ(word_low(got, 2), 246);  // a_text  == 41 words * 6 bytes
+    EXPECT_EQ(word_low(got, 2), 324); // a_text  == 54 words * 6 bytes
 
     // Short-address instructions (opcodes 000-077, val = opcode << 12).  Each
     // now carries an operand, so the expected value is val | (addr & 07777);
@@ -280,51 +337,80 @@ mid:                        // second label
     EXPECT_EQ(word_low(got, 26), (8L << 20) | 00450000L | 7L);  // 8 j+m 7
     EXPECT_EQ(word_high(got, 27), 00460000L | 050L);  // $46 050
     EXPECT_EQ(word_low(got, 27), 00470000L | 051L);   // $47 051
+    // Each extracode takes a whole word: the opcode in the high half, and the utc
+    // filler (02200000) that pushes the next instruction to a fresh word in the low.
+
     EXPECT_EQ(word_high(got, 28), 00500000L | 052L);  // $50 052
-    EXPECT_EQ(word_low(got, 28), 00510000L | 053L);   // $51 053
-    EXPECT_EQ(word_high(got, 29), 00520000L | 054L);  // $52 054
-    EXPECT_EQ(word_low(got, 29), 00530000L | 055L);   // $53 055
-    EXPECT_EQ(word_high(got, 30), 00540000L | 056L);  // $54 056
-    EXPECT_EQ(word_low(got, 30), 00550000L | 057L);   // $55 057
-    EXPECT_EQ(word_high(got, 31), 00560000L | 060L);  // $56 060
-    EXPECT_EQ(word_low(got, 31), 00570000L | 061L);   // $57 061
-    EXPECT_EQ(word_high(got, 32), 00600000L | 062L);  // $60 062
-    EXPECT_EQ(word_low(got, 32), 00610000L | 063L);   // $61 063
-    EXPECT_EQ(word_high(got, 33), 00620000L | 064L);  // $62 064
-    EXPECT_EQ(word_low(got, 33), 00630000L | 065L);   // $63 065
-    EXPECT_EQ(word_high(got, 34), 00640000L | 066L);  // $64 066
-    EXPECT_EQ(word_low(got, 34), 00650000L | 067L);   // $65 067
-    EXPECT_EQ(word_high(got, 35), 00660000L | 070L);  // $66 070
-    EXPECT_EQ(word_low(got, 35), 00670000L | 071L);   // $67 071
-    EXPECT_EQ(word_high(got, 36), 00700000L | 072L);  // $70 072
-    EXPECT_EQ(word_low(got, 36), 00710000L | 073L);   // $71 073
-    EXPECT_EQ(word_high(got, 37), 00720000L | 074L);  // $72 074
-    EXPECT_EQ(word_low(got, 37), 00730000L | 075L);   // $73 075
-    EXPECT_EQ(word_high(got, 38), 00740000L | 076L);  // $74 076
-    EXPECT_EQ(word_low(got, 38), 00750000L | 077L);   // $75 077
-    EXPECT_EQ(word_high(got, 39), 00760000L | 0100L); // $76 0100
-    EXPECT_EQ(word_low(got, 39), 00770000L | 0101L);  // $77 0101
+    EXPECT_EQ(word_low(got, 28), 02200000L);
+    EXPECT_EQ(word_high(got, 29), 00510000L | 053L);  // $51 053
+    EXPECT_EQ(word_low(got, 29), 02200000L);
+    EXPECT_EQ(word_high(got, 30), 00520000L | 054L);  // $52 054
+    EXPECT_EQ(word_low(got, 30), 02200000L);
+    EXPECT_EQ(word_high(got, 31), 00530000L | 055L);  // $53 055
+    EXPECT_EQ(word_low(got, 31), 02200000L);
+    EXPECT_EQ(word_high(got, 32), 00540000L | 056L);  // $54 056
+    EXPECT_EQ(word_low(got, 32), 02200000L);
+    EXPECT_EQ(word_high(got, 33), 00550000L | 057L);  // $55 057
+    EXPECT_EQ(word_low(got, 33), 02200000L);
+    EXPECT_EQ(word_high(got, 34), 00560000L | 060L);  // $56 060
+    EXPECT_EQ(word_low(got, 34), 02200000L);
+    EXPECT_EQ(word_high(got, 35), 00570000L | 061L);  // $57 061
+    EXPECT_EQ(word_low(got, 35), 02200000L);
+    EXPECT_EQ(word_high(got, 36), 00600000L | 062L); // $60 062
+    EXPECT_EQ(word_low(got, 36), 02200000L);
+    EXPECT_EQ(word_high(got, 37), 00610000L | 063L); // $61 063
+    EXPECT_EQ(word_low(got, 37), 02200000L);
+    EXPECT_EQ(word_high(got, 38), 00620000L | 064L); // $62 064
+    EXPECT_EQ(word_low(got, 38), 02200000L);
+    EXPECT_EQ(word_high(got, 39), 00630000L | 065L); // $63 065
+    EXPECT_EQ(word_low(got, 39), 02200000L);
+    EXPECT_EQ(word_high(got, 40), 00640000L | 066L); // $64 066
+    EXPECT_EQ(word_low(got, 40), 02200000L);
+    EXPECT_EQ(word_high(got, 41), 00650000L | 067L); // $65 067
+    EXPECT_EQ(word_low(got, 41), 02200000L);
+    EXPECT_EQ(word_high(got, 42), 00660000L | 070L); // $66 070
+    EXPECT_EQ(word_low(got, 42), 02200000L);
+    EXPECT_EQ(word_high(got, 43), 00670000L | 071L); // $67 071
+    EXPECT_EQ(word_low(got, 43), 02200000L);
+    EXPECT_EQ(word_high(got, 44), 00700000L | 072L); // $70 072
+    EXPECT_EQ(word_low(got, 44), 02200000L);
+    EXPECT_EQ(word_high(got, 45), 00710000L | 073L); // $71 073
+    EXPECT_EQ(word_low(got, 45), 02200000L);
+    EXPECT_EQ(word_high(got, 46), 00720000L | 074L); // $72 074
+    EXPECT_EQ(word_low(got, 46), 02200000L);
+    EXPECT_EQ(word_high(got, 47), 00730000L | 075L); // $73 075
+    EXPECT_EQ(word_low(got, 47), 02200000L);
+    EXPECT_EQ(word_high(got, 48), 00740000L | 076L); // $74 076
+    EXPECT_EQ(word_low(got, 48), 02200000L);
+    EXPECT_EQ(word_high(got, 49), 00750000L | 077L); // $75 077
+    EXPECT_EQ(word_low(got, 49), 02200000L);
+    EXPECT_EQ(word_high(got, 50), 00760000L | 0100L); // $76 0100
+    EXPECT_EQ(word_low(got, 50), 02200000L);
+    EXPECT_EQ(word_high(got, 51), 00770000L | 0101L); // $77 0101
+    EXPECT_EQ(word_low(got, 51), 02200000L);
 
     // Long-address instructions (opcodes 020-037, val = opcode << 15,
-    // 15-bit address field & 077777).
-    EXPECT_EQ(word_high(got, 40), 02000000L | 040000L); // @20 040000
-    EXPECT_EQ(word_low(got, 40), 02100000L | 041234L);  // @21 041234
-    EXPECT_EQ(word_high(got, 41), 02200000L | 050000L); // utc 050000
-    EXPECT_EQ(word_low(got, 41), 02300000L | 0123L);    // wtc 0123
-    EXPECT_EQ(word_high(got, 42), (2L << 20) | 02400000L | 040000L); // vtm 040000, 2
-    EXPECT_EQ(word_low(got, 42), 02500000L | 010L);     // utm 0b1000 (binary == 010)
-    EXPECT_EQ(word_high(got, 43), 02600000L | 8L);      // uza start (== word 8)
-    EXPECT_EQ(word_low(got, 43), 02700000L | 24L);      // u1a mid   (== word 24)
-    EXPECT_EQ(word_high(got, 44), 03000000L | 0L);      // uj 0
-    EXPECT_EQ(word_low(got, 44), 03100000L | 060000L);  // vjm 060000 (lands low: no filler)
-    EXPECT_EQ(word_high(got, 45), 03200000L | 0123L);   // ij 0123
-    EXPECT_EQ(word_low(got, 45), 02200000L);            // utc filler (align after ij)
-    EXPECT_EQ(word_high(got, 46), 03300000L | 0456L);   // stop 0456
-    EXPECT_EQ(word_low(got, 46), 02200000L);            // utc filler (align after stop)
-    EXPECT_EQ(word_high(got, 47), 03400000L | 070000L); // vzm 070000
-    EXPECT_EQ(word_low(got, 47), 03500000L | 077777L);  // v1m 077777 (max 15-bit)
-    EXPECT_EQ(word_high(got, 48), 03600000L | 012345L); // @36 012345
-    EXPECT_EQ(word_low(got, 48), 03700000L | 24L);      // vlm mid    (== word 24)
+    // 15-bit address field & 077777).  @20 and @21 are extracodes too.
+    EXPECT_EQ(word_high(got, 52), 02000000L | 040000L); // @20 040000
+    EXPECT_EQ(word_low(got, 52), 02200000L);            // utc filler (align after э20)
+    EXPECT_EQ(word_high(got, 53), 02100000L | 041234L); // @21 041234
+    EXPECT_EQ(word_low(got, 53), 02200000L);            // utc filler (align after э21)
+    EXPECT_EQ(word_high(got, 54), 02200000L | 050000L); // utc 050000
+    EXPECT_EQ(word_low(got, 54), 02300000L | 0123L);    // wtc 0123
+    EXPECT_EQ(word_high(got, 55), (2L << 20) | 02400000L | 040000L); // vtm 040000, 2
+    EXPECT_EQ(word_low(got, 55), 02500000L | 010L);     // utm 0b1000 (binary == 010)
+    EXPECT_EQ(word_high(got, 56), 02600000L | 8L);      // uza start (== word 8)
+    EXPECT_EQ(word_low(got, 56), 02700000L | 24L);      // u1a mid   (== word 24)
+    EXPECT_EQ(word_high(got, 57), 03000000L | 0L);      // uj 0
+    EXPECT_EQ(word_low(got, 57), 03100000L | 060000L);  // vjm 060000 (lands low: no filler)
+    EXPECT_EQ(word_high(got, 58), 03200000L | 0123L);   // ij 0123
+    EXPECT_EQ(word_low(got, 58), 02200000L);            // utc filler (align after ij)
+    EXPECT_EQ(word_high(got, 59), 03300000L | 0456L);   // stop 0456
+    EXPECT_EQ(word_low(got, 59), 02200000L);            // utc filler (align after stop)
+    EXPECT_EQ(word_high(got, 60), 03400000L | 070000L); // vzm 070000
+    EXPECT_EQ(word_low(got, 60), 03500000L | 077777L);  // v1m 077777 (max 15-bit)
+    EXPECT_EQ(word_high(got, 61), 03600000L | 012345L); // @36 012345
+    EXPECT_EQ(word_low(got, 61), 03700000L | 24L);      // vlm mid    (== word 24)
 }
 
 // The `ext` mnemonic (opcode 033) assembles to the same word as the raw $33
@@ -334,6 +420,80 @@ TEST(Assemble, ExtMnemonic)
 {
     std::vector<unsigned char> got = assemble("        ext 0246\n");
     EXPECT_EQ(word_high(got, 8), 00330000L | 0246L); // ext 0246
+}
+
+// An extracode word-aligns the segment after itself, so the instruction that
+// follows one always starts a fresh word.
+//
+// This is not tidiness, it is correctness.  An extracode returns to the LEFT HALF
+// OF THE NEXT WORD whichever half it occupied: ERET holds a word address and
+// records no right-instruction indicator, so anything packed after an extracode in
+// its own word would never execute.  Aligning costs nothing -- that half was dead
+// space either way -- and it is what lets lib/libc/sys/ write a syscall stub as the
+// obvious three instructions.  See doc/Besm6_Instruction_Set.md, "Extracodes".
+TEST(Assemble, ExtracodeAligns)
+{
+    // The syscall-stub shape: from a left half, the trap takes the whole word and
+    // the test that follows it lands at the top of the next one.
+    auto got = assemble(R"(
+        $77 5
+     14 v1m 0
+     13 uj
+)");
+    EXPECT_EQ(word_high(got, 8), 00770000L | 5L);              // $77 5
+    EXPECT_EQ(word_low(got, 8), 02200000L);                    // utc filler
+    EXPECT_EQ(word_high(got, 9), (14L << 20) | 03500000L);     // 14 v1m 0
+    EXPECT_EQ(word_low(got, 9), (13L << 20) | 03000000L);      // 13 uj
+    EXPECT_EQ(word_low(got, 2), 12);                           // a_text == 2 words
+
+    // From a RIGHT half nothing is lost and no filler is added: the trap's own word
+    // is already full.  This is the `10 utm 0' idiom kernel/test/crt0s.S uses, and
+    // it must stay exactly as cheap as it was.
+    got = assemble(R"(
+     10 utm 0
+        $77 5
+     14 v1m 0
+     13 uj
+)");
+    EXPECT_EQ(word_high(got, 8), (10L << 20) | 02500000L);     // 10 utm 0
+    EXPECT_EQ(word_low(got, 8), 00770000L | 5L);               // $77 5 -- right half
+    EXPECT_EQ(word_high(got, 9), (14L << 20) | 03500000L);     // 14 v1m 0
+    EXPECT_EQ(word_low(got, 9), (13L << 20) | 03000000L);      // 13 uj
+    EXPECT_EQ(word_low(got, 2), 12);                           // still 2 words
+
+    // The long extracodes э20 and э21 align too -- they are the only two outside
+    // the short 050-077 range.  One assemble each, so no assertion depends on
+    // where the previous instruction happened to leave the half-word cursor.
+    got = assemble("        @20 0\n        xta 1\n");
+    EXPECT_EQ(word_high(got, 8), 02000000L);      // @20
+    EXPECT_EQ(word_low(got, 8), 02200000L);       // utc filler
+    EXPECT_EQ(word_high(got, 9), 00100000L | 1L); // xta 1
+
+    got = assemble("        @21 0\n        xta 1\n");
+    EXPECT_EQ(word_high(got, 8), 02100000L);      // @21
+    EXPECT_EQ(word_low(got, 8), 02200000L);       // utc filler
+    EXPECT_EQ(word_high(got, 9), 00100000L | 1L); // xta 1
+
+    // @36 is the undocumented vzm clone, not an extracode: it keeps packing.
+    got = assemble("        @36 0\n        xta 1\n");
+    EXPECT_EQ(word_high(got, 8), 03600000L);     // @36
+    EXPECT_EQ(word_low(got, 8), 00100000L | 1L); // xta 1, packed beside it
+
+    // Nor are the two illegal opcodes just below the extracode range.
+    got = assemble("        $46 0\n        $47 0\n");
+    EXPECT_EQ(word_high(got, 8), 00460000L); // $46
+    EXPECT_EQ(word_low(got, 8), 00470000L);  // $47, packed beside it
+}
+
+// -a suppresses the alignment, for the one caller that wants the raw packing.
+TEST(Assemble, ExtracodeAlignSuppressed)
+{
+    auto got = assemble_unaligned(R"(
+        $77 5
+     14 v1m 0
+)");
+    EXPECT_EQ(word_high(got, 8), 00770000L | 5L);          // $77 5
+    EXPECT_EQ(word_low(got, 8), (14L << 20) | 03500000L);  // 14 v1m 0, packed beside it
 }
 
 // Header fields live in the low half-word of their file word (a_const = word 1,

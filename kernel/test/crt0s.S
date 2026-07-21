@@ -171,23 +171,20 @@ gouser:
 // out with `ita' and stored full-width to virtual page 2.  NOT into index registers: those are
 // 15 bits and would truncate.
 //
-// AN EXTRACODE ALWAYS RETURNS TO THE **LEFT HALF OF THE NEXT WORD**, and the `10 utm 0' no-ops
-// below exist only to live with that.  ERET is a WORD address: the machine stores PC+1 and saves
-// no right-instruction indicator (unlike a fault, which records SPSW_RIGHT_INSTR), so that is
-// where `выпр' lands whichever half the extracode itself was in -- exactly as `vjm' behaves.
+// AN EXTRACODE ALWAYS RETURNS TO THE **LEFT HALF OF THE NEXT WORD**.  ERET is a WORD address:
+// the machine stores PC+1 and saves no right-instruction indicator (unlike a fault, which
+// records SPSW_RIGHT_INSTR), so that is where `выпр' lands whichever half the extracode itself
+// was in -- exactly as `vjm' behaves.
 //
 // The extracode may sit in EITHER half; what it costs is whatever is packed AFTER it in the same
-// word.  From a left half that instruction is simply never executed -- put `$77' on the left here
-// and the store that follows it is silently skipped, which is not a kernel bug and no gate can
-// undo, because the half is not recorded anywhere.  From a right half nothing is lost, so these
-// no-ops push each extracode there; that is a convention for keeping the test readable, not a
-// hardware rule.  (b6sim does NOT model any of this -- see kernel/TODO.md.)
-//
-// A `:' alignment is not usable instead: the text filler is `utc 0', which loads M[16].
+// word, which is simply never executed and which no gate can recover, the half not being written
+// down anywhere.  B6AS NOW WORD-ALIGNS AFTER AN EXTRACODE (cmd/as/pass1.c, the same TALIGN that
+// vjm/ij/stop carry), so the stores below really run and nothing here has to arrange it -- the
+// `10 utm 0' no-ops this file used to carry for the purpose are gone.  It costs nothing: the half
+// beside a left-half extracode was dead space either way.
         .globl  uprog
 uprog:
         // --- leg 1: a syscall with NO arguments (sysent[20], getpid-shaped) ---------------
-     10 utm     0               // no-op: puts the extracode in the right half (see above)
         $77     20              // r14 := 20 (the effective address) -> sysent[20]
      10 vtm     VS_ACC1
      10 atx     0               // the accumulator: r_val1
@@ -216,7 +213,6 @@ uprog:
      15 atx     -1              // mem[r15-1] := ARG2  (argument 2)
       9 vtm     ARG3
         ita     011             // A := ARG3           (argument 3, the last one)
-     10 utm     0               // no-op: keeps the extracode in the right half
         $77     3
      10 vtm     VS_ACC2
      10 atx     0
@@ -230,7 +226,6 @@ uprog:
         // --- leg 3: a syscall number OUTSIDE sysent[] ------------------------------------
         // 100 >= NSYSENT.  syscall() must RANGE-CHECK rather than mask: a mask (the old
         // `& 077') would fold this onto syscall 36 and run it.
-     10 utm     0               // no-op: keeps the extracode in the right half
         $77     100
      10 vtm     VS_ACC3
      10 atx     0               // must be -1

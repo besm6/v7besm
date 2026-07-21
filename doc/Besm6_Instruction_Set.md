@@ -981,6 +981,28 @@ Extracodes are the system call and mathematical library interface. When executed
 
 All extracodes share this same dispatch mechanism in `Processor::step()`.
 
+> **An extracode returns to the LEFT HALF OF THE NEXT WORD**, whichever half it occupied
+> itself. The hardware return register ERET holds a *word* address (PC + 1) and records no
+> right-instruction indicator — unlike a fault, which sets `SPSW_RIGHT_INSTR` — so an
+> instruction packed **after** the extracode in the same word is silently never executed.
+> Nothing in the handler can undo this: the half the extracode sat in is not recorded
+> anywhere.
+>
+> The cost is therefore whatever follows the extracode in its own word. **`b6as` word-aligns
+> after an extracode** for exactly this reason — the same *align-after* flag `vjm`, `ij` and
+> `stop` carry, for the same reason — so the obvious code is also the correct code:
+>
+> ```
+> open:   $77     5               // takes the whole word ...
+>      14 v1m     cerror          // ... so this really runs
+>      13 uj
+> ```
+>
+> It costs nothing: the half beside a left-half extracode was dead space either way. Only
+> `-a` (or another assembler) turns it off. Every `lib/libc/sys/` stub depends on it; see
+> also [Unix_Context_Switch.md](Unix_Context_Switch.md) §8 and
+> [Dubna_Context_Switch.md](Dubna_Context_Switch.md) §9.
+
 They execute in **user** mode: an extracode is how a program asks the operating system for a
 privileged operation, and the Unix v7 syscall trap `$77 N` rides on exactly this mechanism —
 `N` is the effective address, the accumulator carries the argument, and `M[016]` comes back
