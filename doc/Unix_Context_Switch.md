@@ -552,7 +552,28 @@ never inside a mapped bracket. МГРП is armed once by `intrinit()` and never 
 before calling C. Without that a system call would run to completion with the clock stopped and
 every device completion held off, which is not what v7 does. `intrgate` does *not*: an interrupt
 handler runs at raised level and the `выпр` drops it, exactly as `rtt` does on the PDP-11. None of
-the four touches `curipl`, which already reads 0 for an entry from user mode.
+them touches `curipl`, which already reads 0 for an entry from user mode.
+
+**`trapgate` opens it only for a fault from user**, and is the one gate that discriminates. It
+reuses the `СПСВ & 014` test `intrgate` uses for its stack switch (§5) and skips the `vtm 3` when
+the fault came from supervisor — a kernel bug, on its way to `panic("trap")`. That path wants the
+machine left exactly as it was found, because:
+
+- **it does not need interrupts.** The register dump `trap()` prints is polled output — `scputc()`
+  in `kernel/dev/sc.c` spins on the Consul's ready bit, and `putchar()` wraps it in `spl7()`
+  precisely so `printf()` and `panic()` work "with the scheduler and the tty layer dead";
+- **what comes after opens them itself.** `panic()` calls `update()`, which sleeps on I/O, and
+  `sleep()` does its own `spl0()`. The dump is already out by then — `trap()` prints before it
+  calls `panic()`;
+- **opening them risks the dump**, which is all that path is for. Between the gate and the printf,
+  `clock()` and any armed driver handler would run on top of the structures whose corruption caused
+  the fault; a hang or a second internal fault there (`STOP_DOUBLE_INTR`) loses the diagnostic.
+
+It was unconditional first, on the argument that a context about to panic cannot be harmed. What
+that missed is that `curipl` is not honest on this path either — a fault inside an `spl6` bracket
+leaves it at 6, so the first `putchar`'s `splx(s)` re-blocks after one character and the enable was
+only ever a few instructions wide. The rule the discriminator buys is sayable in one line: **a fault
+from supervisor changes nothing about the machine's interrupt state.**
 
 The two used to be the other way round, and they fought: `spl0()` opened МГРП while БлПр still
 blocked everything, so no interrupt could be taken in kernel mode at all. That became load-bearing
@@ -822,7 +843,7 @@ hand-built environment, forges user mode, and asserts on machine state from the 
 
 | Test | Exercises |
 |---|---|
-| `crt0t.S` + `utrap.c` | `trapgate` (0500): faults on a closed page, checks the faulting instruction re-executes after the map is opened — from **both** instruction halves |
+| `crt0t.S` + `utrap.c` | `trapgate` (0500): faults on a closed page, checks the faulting instruction re-executes after the map is opened — from **both** instruction halves — and that the gate opened БлПр for this from-user fault (`getpsw()`, §9) |
 | `crt0s.S` + `usys.c` | `sysgate` (0577) and `badext` (0550): issues `$77 N` with arguments staged the real way, checks ACC / r14 / r12 / r13 and a balanced r15 — and, in every handler, that the gate cleared БлПр before dispatching (`getpsw()`, §9) |
 | `crt0u.S` + `uintr.c` | `intrgate` (0501), including the conditional stack switch |
 | `mmutest` | `sureg()` programming РП/РЗ, checked from C *and* by examining РП/РЗ from the `.ini` |

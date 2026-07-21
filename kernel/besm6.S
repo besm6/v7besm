@@ -385,11 +385,32 @@ badext:
 //   * THE INTERRUPT LEVEL IS OPENED before the call, exactly as in `sysgate' -- see that gate's
 //     header for why, and why not one instruction earlier.  It matters here for the same reason it
 //     matters there: the fault a user process takes most often is the stack-growth fault, and
-//     grow() sleeps.  UNCONDITIONALLY, though `intrgate' discriminates for its stack switch and
-//     could here too.  A fault from supervisor is a kernel bug that ends in panic("trap"), so the
-//     one thing a discriminator would buy -- never opening the level while `curipl' says some
-//     bracket holds it -- protects a context that is about to stop executing anyway, and the price
-//     is a second place where this gate stops being `sysgate' instruction for instruction.
+//     grow() sleeps.
+//
+//     BUT ONLY FOR A FAULT FROM USER, which is the one thing this gate does that `sysgate' does
+//     not.  It reuses `intrgate's discriminator (СПСВ & 014, zero iff the interrupted context was
+//     user) to skip the enable when the fault came from supervisor -- a kernel BUG, on its way to
+//     panic("trap").  That path wants interrupts to stay exactly as it found them, for three
+//     reasons that only became clear once the console driver was read:
+//
+//       - IT DOES NOT NEED THEM.  The register dump trap() prints is polled output: scputc()
+//         (dev/sc.c) spins on the Consul's ready bit, and putchar() deliberately wraps it in
+//         spl7() -- "printf() and panic() must work with the scheduler and the tty layer dead".
+//       - WHAT COMES AFTER OPENS THEM ITSELF.  panic() calls update(), which sleeps on I/O, and
+//         sleep() does its own spl0().  The dump is already out by then: trap() prints before it
+//         calls panic().
+//       - AND OPENING THEM RISKS THE DUMP, which is the only thing this path exists for.  Between
+//         the gate and the printf, clock() and any armed driver handler would run on top of the
+//         very structures whose corruption caused the fault; a hang or a second internal fault
+//         there (STOP_DOUBLE_INTR) loses the diagnostic entirely.
+//
+//     It was unconditional at first, on the argument that a context about to panic cannot be
+//     harmed.  What that missed is that `curipl' is not honest on this path either -- a fault
+//     inside an spl6 bracket leaves it at 6, so the first putchar's `splx(s)' re-blocks after one
+//     character, and the enable was only ever a few instructions wide there.  The discriminator
+//     costs three instructions and makes the rule sayable: A FAULT FROM SUPERVISOR CHANGES
+//     NOTHING ABOUT THE MACHINE'S INTERRUPT STATE.  (If a kernel-mode fault ever becomes
+//     recoverable -- a `nofault' path, kernel copy-on-write -- revisit this with it.)
 //
 // The gate does NOT point u.u_ar0 at the frame; trap() does that itself, in C (`u.u_ar0 =
 // (int *)u.u_stack'), for the same reason `intrgate' leaves it alone: doing it here would need a
@@ -439,8 +460,14 @@ trapgate:
         its     1                   // frame[19] := M2    ; A := M1
         xts     save_a              // frame[20] := M1    ; M15 := F+21 (above the frame); A discarded
 
-        // --- open the interrupt level for the C call, as in `sysgate' (grow() sleeps) ---
-        vtm     3                   // ПСВ := БлП|БлЗ, БлПр clear: interrupts delivered
+        // --- open the interrupt level for the C call, as in `sysgate' (grow() sleeps) -- but
+        //     ONLY from user.  A supervisor fault is a kernel bug whose dump prints polled and
+        //     wants the machine left as it found it; see the header. ---
+        ita     SPSW                // A := СПСВ (still live -- nothing has issued an extracode)
+        aax     #(SPSW_INTERRUPT | SPSW_EXTRACODE)
+        u1a     kbug                // РежЭ|РежПр set -> the kernel faulted: stay blocked
+        vtm     3                   // zero -> from user: ПСВ := БлП|БлЗ, interrupts delivered
+kbug:
 
      13 vjm     trap                // trap.c: back up the PC, decode ГРП, signal or grow
 

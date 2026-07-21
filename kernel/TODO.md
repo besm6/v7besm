@@ -121,8 +121,17 @@ How it turned out:
 
 * **One instruction in each synchronous gate**, after the frame fill and before the `13 vjm` —
   `vtm 3`, which is `psw.s:sti()`. Not one instruction earlier: until the frame is complete,
-  СПСВ/ERET and the cells are the only copy of the interrupted context. Unconditional in `trapgate`
-  too, since a fault from supervisor panics anyway.
+  СПСВ/ERET and the cells are the only copy of the interrupted context.
+* **`trapgate` opens it only for a fault from user**, reusing `intrgate`'s `СПСВ & 014` test. It
+  was unconditional first, on the argument that a supervisor fault panics anyway. That was wrong on
+  its own terms: the register dump is *polled* output (`scputc()` spins, `putchar()` holds spl7), so
+  that path never needed interrupts; the one thing after it that does — `panic()`'s `update()` —
+  opens them itself through `sleep()`; and opening them lets `clock()` and the drivers run on top of
+  the corrupt state before the dump prints, which risks the only thing that path is for. `curipl`
+  is not honest there either (a fault inside an `spl6` bracket leaves it at 6, so the first
+  `putchar`'s `splx(s)` re-blocked anyway). The rule is now sayable: **a fault from supervisor
+  changes nothing about the machine's interrupt state.** Revisit if a kernel-mode fault ever becomes
+  recoverable.
 * **One more at the top of `intret`**, the matching `vtm 02003`. Enforcing the level in the shared
   epilogue covers all four doors and any future C tail, where a `cli()` per C exit path would have
   to be got right once per path forever.
@@ -139,9 +148,11 @@ How it turned out:
 * **`curipl` is not touched by any of it.** It already reads 0 for an entry from user, and `выпр`
   restores БлПр from СПСВ on the way out — the same asymmetry `extintr()`'s closing repair relies on.
 * **`intrgate` is exempt**: a handler runs at raised level and the return drops it, as `rtt` does.
-* Checked on the machine: `usys` reads ПСВ back inside every dispatched handler (`getpsw()`, new in
-  `psw.s`) and fails with `F_IPL` if БлПр is still set. Deleting the enable makes it fail; that was
-  verified, not assumed.
+* Checked on the machine, on both doors: `usys` reads ПСВ back inside every dispatched handler and
+  `utrap` inside its stub `trap()` (`getpsw()`, new in `psw.s`), each failing with `F_IPL` if БлПр
+  is still set. Both were made to fail on purpose first — deleting `sysgate`'s enable, and forcing
+  `trapgate`'s discriminator to always skip — so the checks are known to bite rather than assumed
+  to. Without the second one, `trapgate`'s branch could go either way and `utrap` would still pass.
 
 ### Five hardware rules everything below obeys
 

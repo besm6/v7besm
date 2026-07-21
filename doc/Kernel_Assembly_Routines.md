@@ -249,8 +249,9 @@ PC*; the mode comes from СПСВ either way.
 
 **`intret` shuts the interrupt door as its own first act**, and that is what makes the shared exit
 safe. The three synchronous gates clear БлПр before calling C — v7's `spl0()`-on-entry, without
-which a system call would run to completion with the clock stopped — so the epilogue cannot assume
-it was entered blocked. It must be: below its opening `vtm 02003` it reloads СПСВ and IRET, single
+which a system call would run to completion with the clock stopped (`trapgate` only for a fault
+taken from user; a supervisor fault is a kernel bug whose dump prints polled and wants the machine
+untouched) — so the epilogue cannot assume it was entered blocked. It must be: below its opening `vtm 02003` it reloads СПСВ and IRET, single
 registers the hardware overwrites the instant an interrupt is taken, and re-stashes into the five
 shared temp cells. Enforcing the level there rather than in each C exit path is the difference
 between one place to get right and one per path forever.

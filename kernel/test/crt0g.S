@@ -176,8 +176,13 @@ trapgate:
 
         // --- call trap(): nothing is passed; the frame is always at [ustkbase].  The level is
         //     opened first, as kernel/besm6.S does -- grow() is exactly the sleeping path that
-        //     wants it. ---
-        vtm     3               // ПСВ := БлП|БлЗ, БлПр clear: interrupts delivered
+        //     wants it -- but ONLY from user, a supervisor fault being a kernel bug that wants the
+        //     machine left as it found it.  ugrow forges user mode, so it takes the enable. ---
+        ita     SPSW            // A := СПСВ (live)
+        aax     #(SPSW_INTERRUPT | SPSW_EXTRACODE)
+        u1a     kbug            // РежЭ|РежПр set -> the kernel faulted: stay blocked
+        vtm     3               // zero -> from user: ПСВ := БлП|БлЗ, interrupts delivered
+kbug:
 
      13 vjm     trap            // ugrow.c: check the frame, back up the PC, grow the stack
 

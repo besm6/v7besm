@@ -90,9 +90,10 @@ uintr:  crt0u.o uintr.o utab.o brz.o
 
 # utrap is uintr's counterpart for the OTHER asynchronous door: it forges a user-mode context
 # (crt0t.o), takes data-protection faults in it, and checks that the 0500 gate framed the machine
-# and that trap() backed the PC up so the faulting instruction re-executed.  See utrap.ini and
+# and that trap() backed the PC up so the faulting instruction re-executed.  psw.o is for getpsw(),
+# which is how the stub trap() checks the gate opened the interrupt level.  See utrap.ini and
 # crt0t.S.
-utrap:  crt0t.o utrap.o utab.o brz.o
+utrap:  crt0t.o utrap.o utab.o brz.o psw.o
 	$(link)
 
 # usys is the third forge test, on the EXTRACODE door (0577/0550).  Unlike uintr and utrap it
