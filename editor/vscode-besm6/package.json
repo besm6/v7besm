@@ -1,0 +1,37 @@
+{
+    "name": "besm6-asm",
+    "displayName": "BESM-6 Assembly",
+    "description": "Syntax highlighting for the BESM-6 assembly language accepted by b6as (Madlen and BEMSH mnemonics).",
+    "version": "0.1.0",
+    "publisher": "besm6",
+    "license": "SEE LICENSE IN ../../COPYRIGHT",
+    "engines": {
+        "vscode": "^1.70.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "contributes": {
+        "languages": [
+            {
+                "id": "besm6",
+                "aliases": [
+                    "BESM-6 Assembly",
+                    "besm6"
+                ],
+                "extensions": [
+                    ".s",
+                    ".S"
+                ],
+                "configuration": "./language-configuration.json"
+            }
+        ],
+        "grammars": [
+            {
+                "language": "besm6",
+                "scopeName": "source.besm6",
+                "path": "./syntaxes/besm6.tmLanguage.json"
+            }
+        ]
+    }
+}

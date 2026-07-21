@@ -1,0 +1,17 @@
+{
+    // Assembly in this tree is BESM-6 Madlen (doc/Assembler_Manual.md), not any host
+    // architecture.  The grammar lives in editor/vscode-besm6/ and already claims .s/.S
+    // on its own; pinning the association here makes it hold for this workspace even if
+    // some other assembler extension is installed later and competes for the extension.
+    //
+    // The extension itself is per-user, not per-workspace -- VSCode has no checked-in way
+    // to install one.  Enable it once with:
+    //
+    //     ln -s "$PWD/editor/vscode-besm6" ~/.vscode/extensions/besm6-asm
+    //
+    // then run "Developer: Reload Window".  See editor/vscode-besm6/README.md.
+    "files.associations": {
+        "*.s": "besm6",
+        "*.S": "besm6"
+    }
+}

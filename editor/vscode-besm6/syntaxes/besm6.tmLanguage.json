@@ -1,0 +1,197 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "BESM-6 Assembly",
+    "scopeName": "source.besm6",
+    "comment": "Grammar for the assembly language accepted by b6as; see doc/Assembler_Manual.md. Mnemonics come from cmd/as/tables.c (Madlen) and cmd/disasm/dis.c (BEMSH).",
+    "patterns": [
+        {
+            "include": "#cpp-line-marker"
+        },
+        {
+            "include": "#cpp-include"
+        },
+        {
+            "include": "#cpp-directive"
+        },
+        {
+            "include": "#hash-comment"
+        },
+        {
+            "include": "#slash-comment"
+        },
+        {
+            "include": "#string"
+        },
+        {
+            "include": "#statement"
+        },
+        {
+            "include": "#label"
+        },
+        {
+            "include": "#equate"
+        },
+        {
+            "include": "#directive"
+        },
+        {
+            "include": "#raw-opcode"
+        },
+        {
+            "include": "#bitmask-range"
+        },
+        {
+            "include": "#number"
+        },
+        {
+            "include": "#bitmask-single"
+        },
+        {
+            "include": "#operator"
+        }
+    ],
+    "repository": {
+        "cpp-line-marker": {
+            "comment": "A cc-style line marker emitted by the preprocessor: # 12 \"file.h\"",
+            "match": "^\\s*#\\s+[0-9]+\\s+\".*$",
+            "name": "comment.line.number-sign.besm6"
+        },
+        "cpp-include": {
+            "comment": ".S files are run through cpp before b6as sees them",
+            "match": "^\\s*(#\\s*include)\\s*(\"[^\"]*\"|<[^>]*>)?",
+            "captures": {
+                "1": {
+                    "name": "keyword.control.directive.include.besm6"
+                },
+                "2": {
+                    "name": "string.quoted.other.include.besm6"
+                }
+            }
+        },
+        "cpp-directive": {
+            "match": "^\\s*(#\\s*(?:define|undef|ifdef|ifndef|if|elif|else|endif|line|error|warning|pragma))(?![A-Za-z0-9_])",
+            "captures": {
+                "1": {
+                    "name": "keyword.control.directive.besm6"
+                }
+            }
+        },
+        "hash-comment": {
+            "comment": "'#' is a comment only at the very start of a line; mid-line it is the constant-pool operator",
+            "match": "^\\s*#.*$",
+            "name": "comment.line.number-sign.besm6"
+        },
+        "slash-comment": {
+            "match": "//.*$",
+            "name": "comment.line.double-slash.besm6"
+        },
+        "string": {
+            "comment": "The operand of .ascii",
+            "begin": "\"",
+            "end": "\"|$",
+            "name": "string.quoted.double.besm6",
+            "patterns": [
+                {
+                    "match": "\\\\(?:[0-7]{1,3}|[ntrbf\\\\\"]|$)",
+                    "name": "constant.character.escape.besm6"
+                },
+                {
+                    "match": "\\\\.",
+                    "name": "invalid.illegal.unknown-escape.besm6"
+                }
+            ]
+        },
+        "statement": {
+            "comment": "[label:] [modreg] mnemonic -- mnemonics are not reserved words, so they are recognised only where an instruction is expected (manual section 5)",
+            "match": "^[ \\t]*(?:([A-Za-z_.$\\x{0080}-\\x{FFFF}][A-Za-z0-9_.$\\x{0080}-\\x{FFFF}]*)[ \\t]*:|:)?[ \\t]*(?:([0-9]{1,2})[ \\t]+)?(?:(stop|vjm|uza|u1a|vzm|v1m|vlm|uj|ij|выпр|стоп|пино|цикл|пио|пб|пв|по|пе)|(a\\+x|a-x|a\\*x|a/x|e\\+x|e-x|e\\+n|e-n|j\\+m|x-a|atx|stx|mod|xts|amx|xta|aax|aex|arx|avx|aox|apx|aux|acx|anx|asx|xtr|rte|yta|ext|asn|ntr|ati|sti|ita|its|mtj|utc|wtc|vtm|utm|вчоб|вчаб|счрж|счмр|слпа|вчпа|слиа|счим|мода|знак|зпм|счм|нтж|слц|или|дел|умн|сбр|рзб|чед|нед|слп|вчп|увв|сда|ржа|уим|счи|уии|сли|уиа|мод|рег|зп|сл|вч|сч|сд|рж|уи|и|э[0-7][0-7]))(?![A-Za-z0-9_.$\\x{0080}-\\x{FFFF}])(?![ \\t]*[:=])",
+            "captures": {
+                "1": {
+                    "name": "entity.name.function.label.besm6"
+                },
+                "2": {
+                    "name": "variable.language.register.besm6"
+                },
+                "3": {
+                    "name": "keyword.control.flow.besm6"
+                },
+                "4": {
+                    "name": "keyword.other.mnemonic.besm6"
+                }
+            }
+        },
+        "label": {
+            "match": "^[ \\t]*([A-Za-z_.$\\x{0080}-\\x{FFFF}][A-Za-z0-9_.$\\x{0080}-\\x{FFFF}]*)[ \\t]*:",
+            "captures": {
+                "1": {
+                    "name": "entity.name.function.label.besm6"
+                }
+            }
+        },
+        "equate": {
+            "comment": "name = expr, and the location-counter assignment . = expr",
+            "match": "^[ \\t]*([A-Za-z_.$\\x{0080}-\\x{FFFF}][A-Za-z0-9_.$\\x{0080}-\\x{FFFF}]*)[ \\t]*(?==[^=])",
+            "captures": {
+                "1": {
+                    "name": "variable.other.constant.besm6"
+                }
+            }
+        },
+        "directive": {
+            "match": "(?<![A-Za-z0-9_.$\\x{0080}-\\x{FFFF}])(\\.(?:text|const|data|strng|bss|org|word|half|ascii|globl|equ|comm|set))(?![A-Za-z0-9_.$\\x{0080}-\\x{FFFF}])",
+            "captures": {
+                "1": {
+                    "name": "keyword.control.directive.besm6"
+                }
+            }
+        },
+        "raw-opcode": {
+            "comment": "$NN short-address, @NN long-address (manual section 9.3)",
+            "match": "(?<![A-Za-z0-9_.$\\x{0080}-\\x{FFFF}])[$@][0-7]{2}(?![0-9])",
+            "name": "keyword.other.opcode.besm6"
+        },
+        "bitmask-range": {
+            "match": "\\.\\[[0-9]+[:=][0-9]+\\]",
+            "name": "constant.numeric.bitmask.besm6"
+        },
+        "number": {
+            "patterns": [
+                {
+                    "match": "(?<![A-Za-z0-9_.$])0[xX]'?[0-9a-fA-F][0-9a-fA-F']*",
+                    "name": "constant.numeric.hex.besm6"
+                },
+                {
+                    "match": "(?<![A-Za-z0-9_.$])0[bB]'?[01][01']*",
+                    "name": "constant.numeric.binary.besm6"
+                },
+                {
+                    "match": "(?<![A-Za-z0-9_.$])0(?:'[0-7]|[0-7])[0-7']*",
+                    "name": "constant.numeric.octal.besm6"
+                },
+                {
+                    "match": "(?<![A-Za-z0-9_.$])[0-9][0-9']*(?:\\.[0-9]+)?",
+                    "name": "constant.numeric.decimal.besm6"
+                }
+            ]
+        },
+        "bitmask-single": {
+            "match": "(?<![A-Za-z0-9_.$])\\.[0-9]+",
+            "name": "constant.numeric.bitmask.besm6"
+        },
+        "operator": {
+            "patterns": [
+                {
+                    "match": "<<|>>|[-+*/%&|^~=]",
+                    "name": "keyword.operator.besm6"
+                },
+                {
+                    "match": "#",
+                    "name": "keyword.operator.constant-pool.besm6"
+                },
+                {
+                    "match": "[<>\\[\\]{}]",
+                    "name": "keyword.operator.address.besm6"
+                }
+            ]
+        }
+    }
+}

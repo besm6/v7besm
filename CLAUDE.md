@@ -303,3 +303,8 @@ kernel includes them via `-I../include`.
 - Comments and identifiers in the toolchain are frequently in **Russian** (BESM-6 is a
   Russian machine); match the surrounding language when editing a given file.
 - Build artifacts (`*.o`, `*.a`, `*.i`, `*.ast`, `*.yaml`, etc.) are git-ignored
+- `editor/vscode-besm6/` is a grammar-only VSCode extension that colors `.s`/`.S` per
+  `doc/Assembler_Manual.md`; its mnemonic tables are transcribed from `cmd/as/tables.c` and
+  `cmd/disasm/dis.c`, so adding a mnemonic there means adding it here too. Install with
+  `ln -s "$PWD/editor/vscode-besm6" ~/.vscode/extensions/besm6-asm` (see its README) — that
+  step is per-user; `.vscode/settings.json` pins the `*.s`/`*.S` association for the workspace.
