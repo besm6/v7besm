@@ -1,0 +1,28 @@
+ok   getpid is positive
+ok   getppid is positive
+ok   getpid and getppid differ
+ok   getpid is stable
+ok   getuid is not negative
+ok   geteuid is not negative
+ok   getgid is not negative
+ok   getegid is not negative
+ok   pipe succeeds
+ok   pipe ends differ
+ok   pipe write
+ok   pipe read
+pipe carried "through"
+ok   dup returns a new descriptor
+ok   the duplicate is the same pipe
+ok   dup round-trip
+ok   dup2 lands on the descriptor asked for
+ok   dup2 gave the same pipe
+ok   dup2 round-trip
+ok   dup of a closed descriptor fails
+ok   time returns a plausible epoch
+ok   time stores through its pointer
+ok   fork returns a child pid to the parent
+ok   wait returns the child
+child status 1792
+ok   child exited 7
+ok   wait with no children fails
+done

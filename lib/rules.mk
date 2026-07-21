@@ -35,10 +35,15 @@ LIBC    = $(TOP)/lib/libc
 # helpers (b$save, b$ret, b$mul, ...) that every compiled function calls.
 BLIB    = $(HOME)/.local/share/besm6/lib
 
-# The link, and its postlude.  $^ is the prerequisite list, so a program names its
-# objects once; crt0.o and the two archives are therefore NOT prerequisites of the
-# rule -- name them order-only (`| $(LIBC)/crt0.o $(LIBC)/libc.a') or $^ would hand
-# them to b6ld a second time.
+# What every program links against besides its own objects.  Name it as an ORDINARY
+# prerequisite (`prog: prog.o $(LIBDEP)') so that rebuilding libc.a relinks every
+# program that uses it; the recipe filters it back out of $^ before handing the list
+# to b6ld, which is what keeps these two from being named twice on the link line.
+# Order-only would read more neatly and be wrong: order-only prerequisites never
+# trigger a rebuild, so a program would go on using the libc it was first linked with.
+LIBDEP  = $(LIBC)/crt0.o $(LIBC)/libc.a
+
+# The link, and its postlude.  A program names its own objects once, as prerequisites.
 #
 # The external library is named by PATH, not by `-L$(BLIB) -lc'.  b6ld keeps ONE
 # global list of -L directories and `-l' searches all of it, first match wins
@@ -46,7 +51,7 @@ BLIB    = $(HOME)/.local/share/besm6/lib
 # `-lc' finds ours again and the b$* helpers never resolve.  A bare archive path is
 # scanned as a library just the same (open_input recognizes it by its ARMAG).
 define link
-$(LD) $(LIBC)/crt0.o $^ -o $@ -L$(LIBC) -lc $(BLIB)/libc.a
+$(LD) $(LIBC)/crt0.o $(filter-out $(LIBDEP),$^) -o $@ -L$(LIBC) -lc $(BLIB)/libc.a
 $(NM) -n $@ > $@.nm
 $(DISASM) -c $@ > $@.dis
 $(SIZE) $@

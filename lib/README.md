@@ -48,6 +48,23 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
 - **A stub therefore has no prologue.** The C calling convention already places the arguments
   where the gate reads them, so the stub is a bare `$77 N` and a return; `b$save` would move
   them. This is why `sys/` is assembly and not C.
+- **The gate's arity is the C prototype's**, and nothing in the stub carries it: the gate reads
+  it from `sysent[].sy_narg` ([`../kernel/sysent.c`](../kernel/sysent.c)) and from
+  `syscall_nargs()` ([`../cmd/sim/syscall.cpp`](../cmd/sim/syscall.cpp)), which must agree with
+  each other and with every caller. A count that disagrees reads every argument from the wrong
+  slot *and* drifts the user stack by a word per call. Two PDP-11 leftovers were fixed this way
+  in phase 1 — `seek` and `stime` each shed the second word of a `long` that is one word here —
+  and `dup` is the reverse case: it is a two-argument gate whichever name you call, so `dup(fd)`
+  pushes a word it does not have and `dup2(fd, fd2)` sets bit `0100` in the first, exactly as v7
+  does.
+- **An extracode returns to the left half of the *next* word.** Whatever is packed after `$77 N`
+  in its own word is never executed, and no gate can recover it — the half is not recorded
+  anywhere. `b6as` now word-aligns after an extracode (the `TALIGN` that `vjm`/`ij`/`stop`
+  already carried), so a stub may be written as the obvious three instructions; but a stub
+  assembled with `-a`, or by any other assembler, may not.
+- **`errno` cannot be read in C at the call site**, only *set* by `cerror`. A stub that forgets
+  the `14 v1m cerror` still returns −1 — the gate puts it there — and only `errno` gives it away,
+  which is what `test/errno` exists to catch.
 - **`errno` cannot be picked up from C.** r14 is caller-saved and the compiler will have
   clobbered it before any C statement runs. The stub itself tests r14 and branches to a shared
   `cerror`, which stores it into `errno` and returns −1. The value is always one of the 34 that
@@ -57,10 +74,20 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
 - **`break` takes a word address**, not a byte count, and drops any byte offset: a fat `char *`
   and a plain word address arrive at the gate as the same 15 bits. So a mid-word `char *` would
   floor the break to its word, and `brk`/`sbrk` keep `curbrk` as a real `char *`, convert the
-  byte increment with `btow()` themselves, call the gate with a whole number of words, and hand
-  back the old break as the fat pointer they already hold. The kernel rounds up to a page and
-  refuses growth that reaches the stack at `070000`; `b6sim`'s `Syscall.Break` is the shared
-  spec.
+  byte increment themselves, call the gate with a whole number of words, and hand back the old
+  break as the fat pointer they already hold. The kernel rounds up to a page and refuses growth
+  that reaches the stack at `070000`; `b6sim`'s `Syscall.Break` is the shared spec.
+- **`sbrk` fails with NULL, not `(char *)-1`.** v7's value would have to be fabricated from an
+  integer, which is the one thing the fat-pointer rule below forbids; the break can never
+  legitimately be word 0, so NULL costs nothing. Phase 3's `malloc` must test for NULL.
+  `sbrk` rounds *up* when growing (`btow()`) and *toward zero* when shrinking — `btow()` is
+  `(x + 5) / 6` and C truncates a negative quotient, so it would free one word too few — and it
+  refuses an increment large enough to wrap the 15-bit word address, which an `int` is wide
+  enough to express and a `char *` is not.
+- **A second result is only 15 bits.** r12 is an index register, so `wait`'s status — `(code <<
+  8)` — is truncated for any exit code above 127. It bites identically on the kernel and under
+  `b6sim`. Widening it means giving `wait` an argument again and writing the status through the
+  caller's pointer kernel-side; until then, exit codes stay small.
 - **`char *` is a fat pointer** — bit 48 set, byte offset in bits 47–45 over a 15-bit word
   address — and `int *` is not. Never fabricate one by casting an integer. Six chars pack into a
   word, `sizeof(int) == 6`, `NBPW == 6`, and `int` is 41 bits signed / 48 unsigned.
@@ -126,18 +153,14 @@ recognises it by its `ARMAG`.
 
 ## Phase 1 — crt0, syscall stubs, errno
 
-The milestone — a `hello` that runs under `b6sim`, prints, and exits with a status — is reached:
-`csu/crt0.s` reads `argc` at `070000`, derives `argv` and `environ` from the block above it,
-establishes the mode register, calls `main(argc, argv, envp)` and passes its accumulator to
-`exit`. What is left here is everything a program larger than `hello` needs.
+Done but for profiling. `csu/crt0.s` reads `argc` at `070000` and calls `main`; `sys/cerror.s`
+holds the `errno` word and the arm every stub branches to; `sys/syscalls.tbl` and `sys/mkstub`
+generate the 40 uniform leaves, one object each; and the calls with a shape of their own are
+hand-written beside them — `fork`, `wait`, `pipe`, `getpid`/`getppid`, `getuid`/`geteuid`,
+`getgid`/`getegid`, `time`, `dup`/`dup2`, `exec`/`exece`, `exit`/`_exit` and `sbrk`/`brk`. The
+C wrappers of the `exec` family (`execl`, `execv`, `execle`, `execvp`) are phase 5 with
+`system` and `popen`; `signal` registers a handler and no more, delivery being phase 6.
 
-- `sys/cerror.s` and the `errno` word. The two leaves already in `sys/` — `exit.s` and
-  `write.s` — ignore r14 and must be revisited once `cerror` exists.
-- `sys/syscalls.tbl` plus a make rule generating the ~40 uniform stubs, one object each so link
-  granularity survives. Everything with a different shape is hand-written: `pipe`, `fork`,
-  `wait`, `getpid`, `getuid`, `getgid` (the r12 second result), `exit`/`_exit`, `brk`/`sbrk`
-  (which keeps `curbrk`), `lseek`, and the `exec` family. `signal` registers a handler and no
-  more — delivery is phase 6.
 - `csu/mcrt0.s` waits for profiling.
 
 ## Phase 2 — `gen`: strings, ctype, small utilities
@@ -206,10 +229,15 @@ v7 syscalls on the host, which is exactly what libc needs and is far faster to i
 booting SIMH. `test/` holds one program per area, each linked against the real `crt0.o` and
 `libc.a`, given the arguments in its `.args` file, and run with its output diffed against its
 `.expected` file — so adding a test is adding those three files and a name to `PROGS`. `hello`
-covers `argv` as crt0 finds them and `vararg` the one-word argument; still to come are
-`environ`, `errno` from a failing `open`, the two-result syscalls, the string and memory
-routines, malloc churn, stdio through a real file, and the printf/scanf conversions including
-floats. `b6size -w` on each keeps the image below `070000` words.
+covers `argv` as crt0 finds them, `vararg` the one-word argument, `errno` a failing call and the
+`cerror` arm, `procs` the syscalls that answer in r12, and `sbrkt` the break. Still to come are
+`environ`, the string and memory routines, malloc churn, stdio through a real file, and the
+printf/scanf conversions including floats. `b6size -w` on each keeps the image below `070000`
+words.
+
+Nothing here may be linked against a stale library: `$(LIBDEP)` names `crt0.o` and `libc.a` as
+ordinary prerequisites of every program and `$(link)` filters them back out of `$^`, because
+order-only prerequisites — which is how this started — never trigger a relink at all.
 
 Once [`../kernel/TODO.md`](../kernel/TODO.md) task 18b.6 lands a root filesystem, the same
 programs are put on it and run under the real kernel on SIMH — which is the first time the

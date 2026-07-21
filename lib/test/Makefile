@@ -9,7 +9,7 @@
 
 TOP     = ../..
 
-PROGS   = hello vararg
+PROGS   = hello vararg errno procs sbrkt
 
 .PHONY: all test clean
 
@@ -17,12 +17,22 @@ all:    $(PROGS)
 
 include $(TOP)/lib/rules.mk
 
-# The library and the startup are order-only: $(link) names them itself, and as
-# ordinary prerequisites $^ would hand them to b6ld a second time.
-hello:  hello.o | $(LIBC)/libc.a $(LIBC)/crt0.o
+# $(LIBDEP) is crt0.o and libc.a, named as ORDINARY prerequisites so that rebuilding
+# the library relinks every program; $(link) filters them back out of $^ before calling
+# b6ld, which is what keeps them from appearing twice on the link line.  See rules.mk.
+hello:  hello.o $(LIBDEP)
 	$(link)
 
-vararg: vararg.o | $(LIBC)/libc.a $(LIBC)/crt0.o
+vararg: vararg.o $(LIBDEP)
+	$(link)
+
+errno:  errno.o $(LIBDEP)
+	$(link)
+
+procs:  procs.o $(LIBDEP)
+	$(link)
+
+sbrkt:  sbrkt.o $(LIBDEP)
 	$(link)
 
 # Run each program and diff its output.  `set -e' keeps it fail-fast, and the run
@@ -40,7 +50,8 @@ clean:
 	rm -f *.o *.nm *.dis *.out $(PROGS)
 
 ###
-# Hand-maintained header dependencies; b6cc has no -M.  hello.c includes nothing:
-# v7 has no <unistd.h> and stdio is phase 4, so it declares write() itself.
+# Hand-maintained header dependencies; b6cc has no -M.  Most of these include nothing:
+# v7 has no <unistd.h> and stdio is phase 4, so each declares the syscalls it calls.
 
 vararg.o:	$(TOP)/include/varargs.h
+errno.o:	$(TOP)/include/errno.h

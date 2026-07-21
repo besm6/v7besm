@@ -1,0 +1,4 @@
+open = -1 errno 2
+close = -1 errno 9
+write
+errno after a good call 9

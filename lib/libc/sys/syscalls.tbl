@@ -1,0 +1,70 @@
+# The uniform syscall stubs: `name number', one generated .s and one object each.
+#
+# A stub is uniform when the call has nothing to do but issue the extracode, hand the
+# accumulator back and branch to cerror if r14 says the call failed.  sys/mkstub turns
+# each line here into exactly that.  Everything else -- a second result in r12, an
+# argument that must survive the trap, a call that does not return on success -- is
+# hand-written beside this file and is NOT listed here.
+#
+# The numbers are kernel/sysent.c's, which is also where the ARITY lives: the gate
+# reads n-1 arguments from below r15, the nth from the accumulator, and pops the n-1
+# itself.  Nothing in the stub encodes n, so what matters is that the C prototype
+# callers use agrees with sysent[] (and with b6sim's syscall_nargs()).  The prototypes
+# are noted here for that reason -- they are the contract this file cannot express.
+#
+# Three notes that would otherwise be re-litigated:
+#
+#   lseek is uniform because off_t is one word here.  sysent[19] said narg 4, a
+#   PDP-11 leftover where the offset was a two-word long; it now says 3, matching
+#   seek()'s own argument struct in kernel/sys2.c.  Same story for stime's time_t.
+#
+#   ptrace needs no `errno = 0' preamble, which v7's sys/ptrace.s had.  -1 is a legal
+#   ptrace result, and on the PDP-11 only the carry flag distinguished it from failure;
+#   here r14 is the authority and says so unambiguously.
+#
+#   signal is uniform because phase 1 registers a handler and no more.  Delivery is
+#   phase 6 and needs a kernel-side signal frame first, so there is no dvect/tvect
+#   trampoline of the kind the x86 port's sys/signal.s carried.
+#
+# name          number          C prototype
+
+read            3               # int read(int fd, char *buf, int n)
+write           4               # int write(int fd, char *buf, int n)
+open            5               # int open(char *path, int mode)
+close           6               # int close(int fd)
+creat           8               # int creat(char *path, int mode)
+link            9               # int link(char *target, char *linkname)
+unlink          10              # int unlink(char *path)
+chdir           12              # int chdir(char *path)
+mknod           14              # int mknod(char *path, int mode, int dev)
+chmod           15              # int chmod(char *path, int mode)
+chown           16              # int chown(char *path, int uid, int gid)
+_break          17              # int _break(char *addr) -- see sbrk.c; `break' is a keyword
+stat            18              # int stat(char *path, struct stat *buf)
+lseek           19              # off_t lseek(int fd, off_t off, int whence)
+mount           21              # int mount(char *spec, char *dir, int rdonly)
+umount          22              # int umount(char *spec)
+setuid          23              # int setuid(int uid)
+stime           25              # int stime(time_t *tp)
+ptrace          26              # int ptrace(int req, int pid, int *addr, int data)
+alarm           27              # int alarm(int sec)
+fstat           28              # int fstat(int fd, struct stat *buf)
+pause           29              # int pause(void)
+utime           30              # int utime(char *path, time_t *times)
+stty            31              # int stty(int fd, struct sgttyb *buf)
+gtty            32              # int gtty(int fd, struct sgttyb *buf)
+access          33              # int access(char *path, int mode)
+nice            34              # int nice(int incr)
+ftime           35              # int ftime(struct timeb *tp)
+sync            36              # int sync(void)
+kill            37              # int kill(int pid, int sig)
+times           43              # int times(struct tms *buf)
+profil          44              # int profil(char *buf, int n, int off, int scale)
+setgid          46              # int setgid(int gid)
+signal          48              # int (*signal(int sig, int (*func)()))()
+acct            51              # int acct(char *path)
+phys            52              # int phys(int segno, int npages, int physaddr)
+lock            53              # int lock(int flag)
+ioctl           54              # int ioctl(int fd, int req, char *argp)
+umask           60              # int umask(int mask)
+chroot          61              # int chroot(char *path)

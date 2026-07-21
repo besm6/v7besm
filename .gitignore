@@ -31,10 +31,18 @@ kernel/test/ugrp
 kernel/test/mbtest
 kernel/test/mdtest
 
+# The uniform syscall stubs lib/libc/Makefile generates from sys/syscalls.tbl, one
+# per line.  They land beside the objects, so this does NOT match the hand-written
+# leaves next door in lib/libc/sys/.
+lib/libc/*.s
+
 # Linked BESM-6 images built by lib/test/Makefile, and the output each run is
 # diffed against its .expected file.
 lib/test/hello
 lib/test/vararg
+lib/test/errno
+lib/test/procs
+lib/test/sbrkt
 lib/test/*.out
 
 # Scratch drum and disk images that kernel/test/mbtest.ini and mdtest.ini create with

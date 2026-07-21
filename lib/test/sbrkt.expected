@@ -1,0 +1,17 @@
+ok   sbrk(0) is not null
+ok   sbrk(0) does not move the break
+ok   sbrk(6) returns the old break
+ok   sbrk(6) advanced by one word
+ok   sbrk(7) returns the old break
+ok   sbrk(7) rounded up to two words
+ok   sbrk(600) returns the old break
+ok   the whole region round-trips
+ok   brk back to the base
+ok   the break is back where it started
+ok   an sbrk that wraps the address space fails
+ok   a failed sbrk does not move the break
+ok   sbrk stops before the stack
+ok   the refused sbrk left the break alone
+ok   brk back to the base again
+ok   the break is back where it started again
+done
