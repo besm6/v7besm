@@ -105,14 +105,28 @@ external library instead of failing to link. `b6nm` on the result is the check.
 Two ABI bugs and a divergence, all found by reading; the libc cannot be written correctly
 around any of them.
 
-**0.1 The exec argument vector holds plain word addresses.**
+**0.1 DONE — the exec argument vector holds plain word addresses.**
 [`../kernel/sys1.c`](../kernel/sys1.c) lays the block at the fixed base `USTKPAGE * PGSZ =
 070000` — `argc`, the `argv[]` pointers, `0`, the `envp[]` pointers, `0`, then the byte-packed
 strings, with `r15` seeded just above — which is exactly what a `crt0` wants, since it needs no
 register hand-off. But the pointers it writes are plain word addresses, and a `char *` must
 carry the fat marker in bit 48. The compiler dereferences a `char *` with `asx`, whose shift
 comes from the operand's exponent field: a plain address asks for a shift of −64 and the load
-reads zero. Fix: `suword()` the fat form. Record it in `kernel/TODO.md`.
+reads zero.
+
+*How it turned out.* One defect was three, all the same mistake. Beyond the vector itself: the
+string cursor was an explicit `(word, offset)` pair that started at offset **0** and counted
+*up*, but offset 0 is byte #5 — the word's **last** — so every word went down LSB-first and
+`argv[0][1]` would have come back as character 11 even with the marker added; and the *staging*
+loop walked the caller's own `argv[i]`, already a fat pointer, with `ap++` on an `int`, stepping
+the word address and reading one byte in six. The fix is not the anticipated `suword()`
+one-liner but the removal of all hand-built pointer arithmetic: one real `char *` cursor, walked
+with `++` (which is `b$pinc`) and stored into the vector as-is. What makes that work — and what
+the rest of this library can now rely on — is that `b6cc` lowers `(caddr_t)(int *)w` to an `aox`
+of marker + offset 5, `(char *)someInt` and `(int)somePtr` to a silent `COPY`, and `p ± 1` to
+`b$pinc`/`b$pdec`. The cast table and the full account are in
+[`../kernel/TODO.md`](../kernel/TODO.md); `mmutest` check 25 asserts the round trip, since
+`exece()` itself cannot run until 18b.6 mounts a root filesystem.
 
 **0.2 `break` disagrees about its argument.** The kernel's `sbreak()` does `btow(nsiz)` — a
 byte count — while `b6sim` masks the argument to 15 bits and treats it as a word address. A

@@ -45,6 +45,12 @@ int maxmem = 512 * 1024; /* words: a fully populated machine */
 static struct proc pr;
 static struct text tx;
 
+/*
+ * A stand-in for one exec argument.  Ten bytes including the NUL, so it spans two words
+ * and its copy has to make the carry b$pinc exists for (offset 0 -> 5, word + 1).
+ */
+static char argstr[] = "/etc/init";
+
 /* mmuhelp.s */
 unsigned peek(unsigned vaddr);
 void poke(unsigned vaddr, unsigned val);
@@ -103,6 +109,7 @@ int main()
     volatile unsigned *up;
     unsigned kbuf[4];
     unsigned uw, w;
+    char *cq;
     int i;
 
     /*
@@ -217,7 +224,8 @@ int main()
 
     uflush(UHOME);
 
-    /* Drained through the map that was loaded when they were made, so they reached the data page. */
+    /* Drained through the map that was loaded when they were made, so they reached the data page.
+     */
     drainbrz();
     for (i = 0; i < 8; i++)
         if (*(volatile unsigned *)(DATAPG * PGSZ + 8 + i) != (unsigned)(PATTERN3 ^ i))
@@ -267,8 +275,8 @@ int main()
     for (i = 0; i < PGSZ; i++)
         up[i] = PATTERN1 ^ i;
 
-    copyseg(UBASE, SEGSRC * PGSZ);          /* low -> high: settles the fill, windows both pages */
-    copyseg(SEGSRC * PGSZ, SEGDST * PGSZ);  /* high -> high: a page above 0100000 to another */
+    copyseg(UBASE, SEGSRC * PGSZ);         /* low -> high: settles the fill, windows both pages */
+    copyseg(SEGSRC * PGSZ, SEGDST * PGSZ); /* high -> high: a page above 0100000 to another */
 
     /*
      * Read SEGDST back.  Map it at virtual page 0 and peek sample words -- not word 0, the
@@ -353,6 +361,29 @@ int main()
     for (i = 0; i < 6; i++)
         if (fubyte(UBYTE(uw, i)) != (int)(0300 | i))
             return (23);
+
+    /*
+     * The exec argument vector's contract (exece(), kernel/sys1.c).  exece() lays each
+     * string down one subyte() at a time through a walking char *, and stores that same
+     * char * into the block as argv[i]; the program then dereferences it directly.  Nothing
+     * can run exec until a root filesystem exists, so round-trip the contract here instead:
+     * the marker and the byte offset must survive suword()/fuword(), and the walk must carry
+     * across the word boundary the string deliberately straddles.
+     */
+    uw = 2 * PGSZ + 56;            /* the argv[0] slot */
+    cq = (caddr_t)(int *)(uw + 1); /* the string, in the words just above it */
+    if (suword((caddr_t)uw, (int)cq) != 0)
+        return (25);
+    for (i = 0; argstr[i] != 0; i++)
+        if (subyte(cq++, argstr[i]) != 0)
+            return (25);
+    /* what came back must be a FAT pointer: byte #0 (offset 5) of the string's first word */
+    cq = (char *)fuword((caddr_t)uw);
+    if (ptrword(cq) != (int)(uw + 1) || ptrbyte(cq) != 5)
+        return (25);
+    for (i = 0; argstr[i] != 0; i++)
+        if (fubyte(cq++) != argstr[i])
+            return (25);
 
     /*
      * An address in an unmapped page (virtual page 10, the hole of check 5) must be rejected with

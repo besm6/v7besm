@@ -38,7 +38,14 @@ void exece()
     register char *cp;
     register struct buf *bp;
     register struct execa *uap;
-    int na, ne, bno, ucp, uco, ap, c;
+    /*
+     * The byte cursor, reused by the two loops below the way `cp' is: the caller's string
+     * while the arguments are staged, the new image's while they are copied back.  It is a
+     * real char * -- a FAT pointer -- so that `up++' is the compiler's own byte step
+     * (b$pinc: walk the offset field 5 -> 0, then carry into the word address).
+     */
+    char *up;
+    int na, ne, bno, ucp, ap, c;
     struct inode *ip;
 
     if ((ip = namei(uchar, 0)) == NULL)
@@ -79,10 +86,20 @@ void exece()
             na++;
             if (ap == -1)
                 u.u_error = EFAULT;
+            /*
+             * `ap' is the CALLER's own char *, and on this machine that is a fat pointer:
+             * marker in bit 48, byte offset in bits 47-45.  Walking it means walking that
+             * offset, which only pointer arithmetic does -- `ap++' on the int would step
+             * the WORD address and read one byte in six (and, with bits 48-42 non-zero,
+             * would be an ADD whose left operand the additive unit reads as an exponent).
+             * The int -> char * conversion below is a bit copy, so the caller's marker and
+             * offset survive it intact.
+             */
+            up = (char *)ap;
             do {
                 if (nc >= NCARGS - 1)
                     u.u_error = E2BIG;
-                if ((c = fubyte((caddr_t)ap++)) < 0)
+                if ((c = fubyte(up++)) < 0)
                     u.u_error = EFAULT;
                 if (u.u_error)
                     goto bad;
@@ -121,26 +138,33 @@ void exece()
      * how a crt0 finds it with no register hand-off.
      *
      *      070000  argc
-     *              argv[0] .. argv[argc-1]     (word addresses of the strings)
+     *              argv[0] .. argv[argc-1]     (FAT pointers to the strings)
      *              0
      *              envp[0] .. envp[ne-1]
      *              0
      *              the strings, byte-packed six to a word
      *        r15 = the first free word above the block
      *
-     * Two unit rules.  suword() takes a WORD address
-     * -- it masks its caddr_t to the low 15 bits (usermem.S) -- so the pointer vector
-     * strides by ONE, not by NBPW; a stride of NBPW would skip six words per pointer.
-     * subyte() takes a FAT pointer -- byte offset in bits 47-45 over a word address in bits
-     * 15-1 (usermem.S again) -- so the string cursor is carried as an explicit (word, offset)
-     * pair: `ucp++' on a plain integer steps whole words and would lay down one character
-     * per word.  The argv[] entries themselves are plain word addresses (offset 0), which is
-     * what a string starting on a word boundary is.
+     * Two units meet here, and only the vector's is unusual.  suword() takes a WORD address
+     * -- it masks its caddr_t to the low 15 bits (usermem.S) -- so the pointer vector strides
+     * by ONE, not by NBPW; a stride of NBPW would skip six words per pointer.  Everything
+     * byte-granular is an ordinary char *: the cursor `up', and the VALUES stored in the
+     * vector, which are that same cursor.  A char * is a fat pointer -- marker in bit 48,
+     * byte offset in bits 47-45 as a right-shift distance, 5 naming the word's first byte --
+     * and a plain word address is not one: it asks `asx' for a shift of -64, so the user's
+     * first dereference of argv[0] would read zero.
+     *
+     * This used to be an explicit (word, offset) pair, and it was wrong twice over.  It
+     * started at offset 0 and counted UP, but offset 0 is byte #5, the word's LAST; the
+     * strings therefore went down LSB-first, the reverse of how six chars pack into a word
+     * and of how the compiler's own ++ walks them.  And no fixed offset could have saved it:
+     * only the first string starts on a word boundary, the rest beginning wherever the
+     * previous one's NUL left off.
      */
-    ap           = USTKPAGE * PGSZ; /* argc, then the pointer vector */
-    ucp          = ap + 1 + na + 2; /* the strings, just above the vector */
-    uco          = 0;               /* byte offset within the word at ucp */
-    u.u_ar0[R15] = ap;              /* provisional; the real value is set below */
+    ap           = USTKPAGE * PGSZ;     /* argc, then the pointer vector */
+    ucp          = ap + 1 + na + 2;     /* the strings, just above the vector */
+    up           = (caddr_t)(int *)ucp; /* ... as a char *: byte #0 of that word */
+    u.u_ar0[R15] = ap;                  /* provisional; the real value is set below */
     suword((caddr_t)ap, na - ne);
     nc = 0;
     for (;;) {
@@ -151,7 +175,7 @@ void exece()
         }
         if (--na < 0)
             break;
-        suword((caddr_t)ap, ucp);
+        suword((caddr_t)ap, (int)up); /* argv[i] / envp[i]: the fat pointer itself */
         do {
             /* `nc' counts bytes; see the matching staging loop above. */
             if (nc % BSIZE == 0) {
@@ -160,18 +184,15 @@ void exece()
                 bp = bread(swapdev, swplo + bno + nc / BSIZE);
                 cp = bp->b_un.b_addr;
             }
-            /* bit numbering is 1-based, so the offset's LSB (acc bit 45) is `1U << 44' */
-            subyte((caddr_t)(((unsigned)uco << 44) | (unsigned)ucp), (c = *cp++));
-            if (++uco == NBPW) {
-                uco = 0;
-                ucp++;
-            }
+            subyte(up++, (c = *cp++));
             nc++;
         } while (c & 0377);
     }
     suword((caddr_t)ap, 0);
-    if (uco)
-        ucp++; /* round the cursor up: the closing word must not eat a partial string */
+    /* round the cursor up: the closing word must not eat a partial string */
+    ucp = ptrword(up);
+    if (ptrbyte(up) != 5)
+        ucp++;
     suword((caddr_t)ucp, 0);
     u.u_ar0[R15] = ucp + 1; /* the first free word; setregs() does not touch r15 */
     setregs();

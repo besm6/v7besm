@@ -261,6 +261,58 @@ left as it was. What they built, one line each:
   18b criterion, now split across 18b.3 and 18b.4 and re-asserted together here.
 * This is also what unblocks the BESM-6 `icode[]` deferred by task 17.
 
+### DONE: the exec argument vector is built out of fat pointers
+
+Not one of the numbered tasks — it is task **0.1** of [`../lib/README.md`](../lib/README.md), the
+user-level libc work plan, and it is recorded here because it is a kernel change. A `crt0` cannot be
+written against a block whose pointers a user program cannot dereference, so this had to be settled
+before anything under `lib/` could be.
+
+`exece()` (`sys1.c`) lays the block at the fixed base `USTKPAGE * PGSZ = 070000` — `argc`, the
+`argv[]`/`envp[]` pointers, the two NULLs, then the byte-packed strings, with `r15` seeded just
+above. That shape was right. What it put *in* the vector was not: three separate places treated a
+`char *` as a plain word address.
+
+* **`argv[i]`/`envp[i]` were bare word addresses.** A `char *` is a fat pointer — marker in bit 48,
+  byte offset in bits 47–45 as a right-shift distance — and the compiler dereferences one with
+  `asx`, whose shift comes from the operand's exponent field. A plain address asks for a shift of
+  −64, so the user's very first `argv[0][0]` would have read zero.
+* **The string cursor ran backwards.** It was an explicit `(word, offset)` pair that started at
+  offset 0 and *incremented*, but offset 0 is byte #5 — the word's **last**. Every word went down
+  LSB-first, the reverse of how six chars pack into a word. Fixing only the marker would not have
+  helped: `argv[0][1]` would have come back as character 11. And no fixed offset could have worked
+  at all, since only the *first* string starts on a word boundary — the rest begin wherever the
+  previous NUL left off.
+* **The staging loop read one byte in six.** `ap = fuword(uap->argp)` is the *caller's* own `char *`,
+  already fat, and `fubyte((caddr_t)ap++)` stepped it as an `int` — the word address, not the byte
+  offset. Worse, that `++` is a signed add on a word whose bits 48–42 are non-zero, which the
+  additive unit reads as an exponent.
+
+All three are now one thing: a real `char *` cursor, `up`, walked with `up++` and stored into the
+vector as-is. The hand-built `(word, offset)` pair is gone, and so is the `1U << 44` shift that
+spelled it. What makes that legal is what `b6cc` does with pointer casts — read out of the external
+compiler (`translator/translate.c: emit_cast`, `backend/besm6/instr.c`), not guessed:
+
+| cast | lowering |
+| --- | --- |
+| `int *` → `char *` | `aox` of marker + offset 5 — byte #0, the word's first |
+| `char *` → `int *` | `aax` low 41 bits — strip marker and offset |
+| `int` ↔ `char *` | silent `COPY` — the fat bits survive verbatim |
+| `char *` ± 1 | call `b$pinc` / `b$pdec` — walk the offset field, carry into the word |
+
+So `(caddr_t)(int *)w` *is* the fat pointer to byte #0 of word `w`, `(char *)ap` keeps a caller's
+pointer intact, and `(int)up` hands the whole fat word to `suword()`. `b$pinc` was already linked
+(`nami.c`'s `u.u_dirp++` pulls it). The end-of-block round-up, which used to test the offset
+variable, now reads the cursor apart with `ptrword()`/`ptrbyte()` from `sys/param.h`.
+
+`exece()` still cannot be *run* — that waits on 18b.6 and a root filesystem — so the contract is
+asserted instead by **`mmutest` check 25**, which replays it against the real `usermem.o`: `suword`
+a walking `char *` as an `argv[0]` slot, lay a ten-byte string down with `subyte(up++, …)` so it
+crosses a word boundary, then `fuword` the pointer back, confirm it decodes to word address + offset
+5, and read the string back byte by byte. Point the cursor at a plain word address instead and the
+check returns 25. `mmutest.ini`'s expected halt PC moved `00604` → `00606` with the constant pool,
+the same way `biotest.ini`'s did.
+
 ---
 
 ## Deferred, owned by no task
@@ -291,11 +343,13 @@ Loose ends the finished work left behind. None blocks 18.
 * **`uflush`/`uload` copy the whole 1024-word page.** Copying only up to the saved r15 —
   `struct user` plus the live stack, typically ~300 words — was planned and never done. It is a
   performance change, not a correctness one.
-* **`u.u_dirp = (caddr_t)u.u_arg[0]` is an `int`→`char *` conversion**, and a `char *` built by hand
-  from an `int` gets the fat-pointer byte-offset field wrong (see `usermem.S`, `fubyte`).
-  Pre-existing, affects every path-taking syscall, and belongs with `iomove()`'s byte handling
-  rather than with syscall marshalling. Task 17 fixed the *exec* instance of this — the arg-string
-  cursor now carries an explicit `(word, offset)` pair — which is the pattern to copy here.
+* **`u.u_dirp = (caddr_t)u.u_arg[0]` is an `int`→`char *` conversion.** Pre-existing, affects every
+  path-taking syscall, and belongs with `iomove()`'s byte handling rather than with syscall
+  marshalling. Re-read it when doing so: the exec work above establishes that this particular
+  conversion is a silent `COPY`, so the caller's marker and byte offset *do* survive it and
+  `namei()`'s `fubyte(u.u_dirp++)` — a genuine `char *` step — is right. What is worth checking is
+  every *other* place an `int` becomes a `char *`, and there the pattern to copy is the one exec now
+  uses: a real `char *` walked by the compiler, never a hand-built `(word, offset)` pair.
 * **`addupc()` is a stub**, so `profil()` is inert. Was nominally task 17; left there.
 * **`time` is never seeded from a wall clock.** This machine has no clock-calendar a program can
   read, so the epoch starts at 0.
@@ -448,7 +502,7 @@ settling it means settling the on-disk block layout — a different problem.
 
 `BSIZE` is **3072 bytes = 512 words**, but the constants derived from it were never moved:
 `BSHIFT 9` / `BMASK 0777` still describe a 512-*byte* block. So every byte-offset → block
-conversion in the kernel is wrong: `rdwri.c:48-49,111-112`, `nami.c:138-156`, `sys1.c:88-126`
+conversion in the kernel is wrong: `rdwri.c:48-49,111-112`, `nami.c:138-156`, `sys1.c:111-114,181-184`
 (the exec arg staging), and `dev/bio.c:491`.
 
 **The indirect-block half of this is now fixed** (done alongside making `param.h`

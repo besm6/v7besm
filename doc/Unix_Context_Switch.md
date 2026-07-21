@@ -245,7 +245,7 @@ growth can never walk back over its arguments:
 
 ```text
    070000   argc                       <- USTKPAGE * PGSZ, a FIXED address
-            argv[0] .. argv[argc-1]       (word addresses of the strings)
+            argv[0] .. argv[argc-1]       (FAT pointers to the strings)
             0
             envp[0] .. envp[ne-1]
             0
@@ -253,11 +253,15 @@ growth can never walk back over its arguments:
       r15 = the first free word above the block
 ```
 
-`argc` sits at a fixed address, so a `crt0` finds the block without a register hand-off. Two unit
-rules apply when building it, and both differ from the byte-addressed original: the pointer vector
-strides by **one word** because `suword()` takes a word address, and the string cursor is a **fat
-pointer** — a byte offset at accumulator bits 47–45 over the word address — because `subyte()` takes
-one. See `exece()` in `kernel/sys1.c`.
+`argc` sits at a fixed address, so a `crt0` finds the block without a register hand-off. Two units
+meet when building it, and only the vector's differs from the byte-addressed original: the pointer
+vector strides by **one word**, because `suword()` takes a word address. Everything byte-granular —
+the cursor that lays the strings down, and the values stored in the vector, which are that same
+cursor — is an ordinary `char *`, which on this machine is a **fat pointer**: the marker in bit 48
+and a byte offset at bits 47–45 over the word address, 5 naming the word's *first* byte. A bare word
+address is not one, and the compiler dereferences a `char *` with `asx`, whose shift comes from the
+operand's exponent field — so a vector of plain addresses would have the user's first `argv[0][0]`
+read zero. See `exece()` in `kernel/sys1.c`, and `mmutest` check 25, which replays the round trip.
 
 ### Why the switch is forced
 
