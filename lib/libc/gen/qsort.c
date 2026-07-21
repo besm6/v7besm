@@ -5,7 +5,8 @@
  * run of elements equal to the pivot in the middle, recurses on the smaller half and
  * loops on the larger, so the recursion depth is logarithmic.
  *
- * TWO BESM-6 NOTES.
+ * TWO BESM-6 NOTES.  Both are about what the machine does to a `char *'; the structure
+ * of the file is v7's, down to the file-scope comparison function.
  *
  * The pointer comparisons (`i < lp', `j > hp') and the difference `l - a' are safe
  * even though a fat pointer does NOT sort as a plain word: incrementing a `char *'
@@ -14,15 +15,6 @@
  * (doc/Besm6_Data_Representation.md).  The compiler knows: it lowers a relational
  * between two fat pointers through b$pdiff, the same helper as `-', and tests the
  * sign of the byte difference.  Nothing here has to work around it.
- *
- * The comparison function is a PARAMETER of qs1 and not the file-scope static v7 kept
- * it in, which is the one structural change.  A call through a file-scope function
- * pointer does not work on this toolchain: the back end emits `13 vjm <address of the
- * variable>' -- a direct call to the pointer's own storage in the data segment --
- * where the pointer's CONTENTS were meant.  Through an auto or a parameter it is
- * emitted correctly, so the fix is to keep the callee in one.  The recursion pays a
- * word per frame for it, and qsort's comparison becomes reentrant into the bargain
- * (its element size does not: qses and qsws are ordinary data and are still static).
  *
  * The exchanges go a WORD at a time when they can, which is the one thing this file
  * adds to v7.  A byte-wise exchange of a six-byte element is six read-modify-writes
@@ -38,12 +30,11 @@
 
 #define NBPW 6 /* bytes per word: sizeof(int) */
 
-typedef int (*qscmp_t)(const void *, const void *);
-
-static int qses; /* element size in bytes */
+static int (*qscmp)(const void *, const void *); /* the caller's comparison */
+static int qses;                                 /* element size in bytes */
 static int qsws; /* ... in words, or 0 when the swap must go byte-wise */
 
-static void qs1(char *a, char *l, qscmp_t qscmp);
+static void qs1(char *a, char *l);
 static void qsexc(char *i, char *j);
 static void qstexc(char *i, char *j, char *k);
 
@@ -51,12 +42,13 @@ void qsort(void *base, size_t n, size_t es, int (*fc)(const void *, const void *
 {
     char *a = base;
 
-    qses = es;
-    qsws = (es % NBPW == 0 && a == (char *)(int *)a) ? es / NBPW : 0;
-    qs1(a, a + n * es, fc);
+    qscmp = fc;
+    qses  = es;
+    qsws  = (es % NBPW == 0 && a == (char *)(int *)a) ? es / NBPW : 0;
+    qs1(a, a + n * es);
 }
 
-static void qs1(char *a, char *l, qscmp_t qscmp)
+static void qs1(char *a, char *l)
 {
     char *i, *j;
     int es;
@@ -108,10 +100,10 @@ start:
 
         if (i == lp) {
             if (lp - a >= l - hp) {
-                qs1(hp + es, l, qscmp);
+                qs1(hp + es, l);
                 l = lp;
             } else {
-                qs1(a, lp, qscmp);
+                qs1(a, lp);
                 a = hp + es;
             }
             goto start;

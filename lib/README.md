@@ -131,13 +131,15 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
   The compiler lowers `<`/`>` between fat pointers through `b$pdiff`, the same helper as `-`,
   and tests the sign. `memmove`'s direction test and `qsort`'s partition both depend on it, and
   `test/strings` overlaps *within one word* on purpose to keep it that way.
-- **A call through a file-scope function pointer does not work.** The back end emits
-  `13 vjm <address of the variable>` — a direct call into the data segment — where the
-  pointer's contents were meant; through an *auto* or a *parameter* it is emitted correctly.
-  So a callback must be held in one: `qsort` passes the comparison down as a parameter rather
-  than parking it in the static v7 used, and anything else with a `(*f)()` in a static must do
-  the same, or copy it into a local first. This is the external c-compiler's bug, not ours;
-  when it is fixed the workaround stays harmless.
+- **A call through a function pointer is a `wtc` of the pointer and a bare `13 vjm`**,
+  wherever the pointer lives — a parameter, an auto, an array element or a file-scope
+  variable (`wtc` carries a 15-bit address, so it reaches a global with no `utc` escape).
+  A callback needs no special handling: `qsort` keeps its comparison in the file-scope static
+  v7 used. It did not always: the back end used to compile a call through a *file-scope*
+  pointer as `13 vjm <the variable>`, a direct call into the data segment, because nothing in
+  the IR distinguished a function's name from a pointer's. Fixed in the external c-compiler —
+  TAC's `FunCall` now carries an `indirect` flag that the front end sets from the callee's
+  type — so a `libc` built with an older toolchain than that would miscompile.
 - **A string literal is truncated at an embedded `\0`.** `"a\0c"` arrives as the single byte
   `a`, so anything that must look past a NUL — `memcmp`, `memchr`, `swab` — has to have its
   operands built at run time. Another one belonging to the compiler rather than to us, and
