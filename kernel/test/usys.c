@@ -60,13 +60,13 @@ void halt(unsigned mask);
 void drainbrz(void);
 
 // Must match the EQUs in crt0s.S.
-#define R13V   054321U // forged r13
-#define USPV   070010U // forged r15, and the physical stack-switch sentinel
-#define KSENT  0333333U
-#define ARG1   01111
-#define ARG2   02222
-#define ARG3   03333
-#define SENTA  07654
+#define R13V  054321U // forged r13
+#define USPV  070010U // forged r15, and the physical stack-switch sentinel
+#define KSENT 0333333U
+#define ARG1  01111
+#define ARG2  02222
+#define ARG3  03333
+#define SENTA 07654
 
 #define IMAGEPG 16 // physical page of the process image (data + stack), free memory
 
@@ -112,11 +112,11 @@ void drainbrz(void);
 static unsigned mask;
 
 // What the stubs recorded.
-static int ncall;                // how many sysent handlers ran
-static int lastcall;             // the number of the last one
-static int sawarg[3];            // leg 2's arguments, in the order the callee saw them
-static int nsig, lastsig;        // psignal() from badextr()
-static int sawpsw;               // PSW as every dispatched handler saw it, OR-ed together
+static int ncall;         // how many sysent handlers ran
+static int lastcall;      // the number of the last one
+static int sawarg[3];     // leg 2's arguments, in the order the callee saw them
+static int nsig, lastsig; // psignal() from badextr()
+static int sawpsw;        // PSW as every dispatched handler saw it, OR-ed together
 
 // -------------------------------------------------------------------------
 // The environment kernel/syscall.c needs.
@@ -173,27 +173,27 @@ void nosys(void)
 // A sysent[] shaped like the kernel's in the two slots the test uses.  NSYSENT entries, so the
 // range check has the same bound it has in the kernel.
 struct sysent sysent[NSYSENT] = {
-    { 0, 0, stub_none }, // 0
-    { 0, 0, stub_none }, // 1
-    { 0, 0, stub_none }, // 2
+    { 0, 0, stub_none },  // 0
+    { 0, 0, stub_none },  // 1
+    { 0, 0, stub_none },  // 2
     { 3, 0, stub_three }, // 3 = read-shaped: THREE arguments
-    { 0, 0, stub_none }, // 4
-    { 0, 0, stub_none }, // 5
-    { 0, 0, stub_none }, // 6
-    { 0, 0, stub_none }, // 7
-    { 0, 0, stub_none }, // 8
-    { 0, 0, stub_none }, // 9
-    { 0, 0, stub_none }, // 10
-    { 0, 0, stub_none }, // 11
-    { 0, 0, stub_none }, // 12
-    { 0, 0, stub_none }, // 13
-    { 0, 0, stub_none }, // 14
-    { 0, 0, stub_none }, // 15
-    { 0, 0, stub_none }, // 16
-    { 0, 0, stub_none }, // 17
-    { 0, 0, stub_none }, // 18
-    { 0, 0, stub_none }, // 19
-    { 0, 0, stub_two },  // 20 = getpid-shaped: NO arguments, TWO results
+    { 0, 0, stub_none },  // 4
+    { 0, 0, stub_none },  // 5
+    { 0, 0, stub_none },  // 6
+    { 0, 0, stub_none },  // 7
+    { 0, 0, stub_none },  // 8
+    { 0, 0, stub_none },  // 9
+    { 0, 0, stub_none },  // 10
+    { 0, 0, stub_none },  // 11
+    { 0, 0, stub_none },  // 12
+    { 0, 0, stub_none },  // 13
+    { 0, 0, stub_none },  // 14
+    { 0, 0, stub_none },  // 15
+    { 0, 0, stub_none },  // 16
+    { 0, 0, stub_none },  // 17
+    { 0, 0, stub_none },  // 18
+    { 0, 0, stub_none },  // 19
+    { 0, 0, stub_two },   // 20 = getpid-shaped: NO arguments, TWO results
     // 21..63 default to { 0, 0, 0 } and are never dispatched by this test
 };
 

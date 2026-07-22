@@ -44,7 +44,7 @@ int *intrframe;
 // Physical layout.  proc[0]'s image is one page at 0100000 -- USIZE words, the u-area and
 // nothing else, exactly as main() sets it up in the real kernel -- and everything above that
 // is free core for newproc() to build the child in.
-#define P0     (32 * PGSZ) // 0100000
+#define P0       (32 * PGSZ) // 0100000
 #define COREBASE (33 * PGSZ)
 #define CORESIZE (16 * PGSZ)
 

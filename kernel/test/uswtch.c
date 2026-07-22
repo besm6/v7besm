@@ -59,16 +59,16 @@ int *intrframe;
 #define sentinel u.u_arg[0]
 
 // Failure bits, mirrored in uswtch.ini's legend.
-#define F_SAVE0   00001 // save() did not return 0 on the direct call
-#define F_REGS    00002 // leg A: r1-r7 did not survive
-#define F_R15     00004 // leg A: r15 did not survive
-#define F_PHASE   00010 // leg B: the alternation did not run to completion
-#define F_SENTB   00020 // leg B: B saw A's sentinel -- the u-area did not switch
-#define F_SENTA   00040 // leg B: A did not get its own u-area back
-#define F_UHOME   00100 // leg B: uhome did not end up where it should
-#define F_IDLE    00200 // leg C: idle() did not return, or `idling' was left set
-#define F_IPL     00400 // leg C: idle() did not restore the level
-#define F_NOTICK  01000 // leg C: no interrupt was ever dispatched
+#define F_SAVE0  00001 // save() did not return 0 on the direct call
+#define F_REGS   00002 // leg A: r1-r7 did not survive
+#define F_R15    00004 // leg A: r15 did not survive
+#define F_PHASE  00010 // leg B: the alternation did not run to completion
+#define F_SENTB  00020 // leg B: B saw A's sentinel -- the u-area did not switch
+#define F_SENTA  00040 // leg B: A did not get its own u-area back
+#define F_UHOME  00100 // leg B: uhome did not end up where it should
+#define F_IDLE   00200 // leg C: idle() did not return, or `idling' was left set
+#define F_IPL    00400 // leg C: idle() did not restore the level
+#define F_NOTICK 01000 // leg C: no interrupt was ever dispatched
 
 static int mask;
 static int phase;  // leg B's state -- in bss, deliberately: see the header
@@ -107,8 +107,8 @@ int main()
     uhome = P0;
     if (regtest(u.u_rsav) != 0)
         mask |= F_SAVE0;
-    if (rt_r1 != 01111 || rt_r2 != 02222 || rt_r3 != 03333 || rt_r4 != 04444 ||
-        rt_r5 != 05555 || rt_r6 != 06666 || rt_r7 != 07777)
+    if (rt_r1 != 01111 || rt_r2 != 02222 || rt_r3 != 03333 || rt_r4 != 04444 || rt_r5 != 05555 ||
+        rt_r6 != 06666 || rt_r7 != 07777)
         mask |= F_REGS;
     if (rt_r15 == 0)
         mask |= F_R15;

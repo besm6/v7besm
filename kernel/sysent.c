@@ -1,8 +1,10 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
+// clang-format off
 #include "sys/types.h"
 #include "sys/param.h"
 #include "sys/systm.h"
+// clang-format on
 
 // This table is the switch used to transfer
 // to the appropriate routine for processing a system call.

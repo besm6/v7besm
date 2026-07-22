@@ -125,27 +125,27 @@ extern unsigned mdretries; // exchanges md.c re-issued for the current request
 #define SYSPAT 0700000000000U
 
 // Fault-mask bits, returned in the accumulator.  Zero means every check passed.
-#define F_ERR    0000001 // a transfer that should have worked reported B_ERROR
-#define F_TRK0   0000002 // the half-zone round trip on an even block came back different
-#define F_SYSW   0000004 // the service words did not survive the round trip
-#define F_TRK1   0000010 // ...on an ODD block
-#define F_MAP    0000020 // reading the zone whole did not show both halves where written
-#define F_HALFP  0000040 // DISK_HALFPAGE did not move the memory side
-#define F_GROUP  0000100 // the group-1 drive round trip came back different
-#define F_CTLR4  0000200 // the controller-4 round trip came back different
-#define F_MD00X  0000400 // ...and it landed on controller 3 instead
-#define F_NOERR  0001000 // the missing unit did not report B_ERROR
-#define F_RESID  0002000 // ...or did not leave the whole request in b_resid
-#define F_MODE   0004000 // the mode word named no run this test knows
-#define F_DONE   0010000 // a request came back with neither B_DONE nor a hang
-#define F_IDLE   0020000 // a completion nobody was waiting for was not disarmed
-#define F_MISRDY 0040000 // the MISSING drive was not classified: READY still set, or unreported
-#define F_ROERR  0100000 // a write to the READ-ONLY drive was not refused, or not reported
-#define F_ROSTAT 0200000 // ...and the status did not say READONLY-but-present
-#define F_RORD   0400000 // a READ of the read-only drive failed, or came back wrong
-#define F_SHORT 01000000 // an unreadable zone did not fail the request, or was not reported
-#define F_SHRSD 02000000 // ...or did not leave the whole request in b_resid
-#define F_SHRTY 04000000 // ...or was not RETRIED, which is what makes it a SOFT error
+#define F_ERR    0000001  // a transfer that should have worked reported B_ERROR
+#define F_TRK0   0000002  // the half-zone round trip on an even block came back different
+#define F_SYSW   0000004  // the service words did not survive the round trip
+#define F_TRK1   0000010  // ...on an ODD block
+#define F_MAP    0000020  // reading the zone whole did not show both halves where written
+#define F_HALFP  0000040  // DISK_HALFPAGE did not move the memory side
+#define F_GROUP  0000100  // the group-1 drive round trip came back different
+#define F_CTLR4  0000200  // the controller-4 round trip came back different
+#define F_MD00X  0000400  // ...and it landed on controller 3 instead
+#define F_NOERR  0001000  // the missing unit did not report B_ERROR
+#define F_RESID  0002000  // ...or did not leave the whole request in b_resid
+#define F_MODE   0004000  // the mode word named no run this test knows
+#define F_DONE   0010000  // a request came back with neither B_DONE nor a hang
+#define F_IDLE   0020000  // a completion nobody was waiting for was not disarmed
+#define F_MISRDY 0040000  // the MISSING drive was not classified: READY still set, or unreported
+#define F_ROERR  0100000  // a write to the READ-ONLY drive was not refused, or not reported
+#define F_ROSTAT 0200000  // ...and the status did not say READONLY-but-present
+#define F_RORD   0400000  // a READ of the read-only drive failed, or came back wrong
+#define F_SHORT  01000000 // an unreadable zone did not fail the request, or was not reported
+#define F_SHRSD  02000000 // ...or did not leave the whole request in b_resid
+#define F_SHRTY  04000000 // ...or was not RETRIED, which is what makes it a SOFT error
 
 // Must match MDRETRY in kernel/dev/md.c -- run 4 asserts the exact retry count.
 #define MDRETRY 10

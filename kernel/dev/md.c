@@ -117,11 +117,11 @@
 #include <besm6.h>
 
 // The geometry, in the unit the track-address command can name: the 512-word half-zone.
-#define MDTRACK BSIZEW                // words in a half-zone -- and in a block
-#define MDTPZ   (PGSZ / MDTRACK)      // 2 half-zones to a zone
-#define MDNZONE 1000                  // zones `attach -n' formats; the field holds 1024
-#define MDNBLK  (MDNZONE * MDTPZ)     // 2000 blocks on one drive
-#define MDNUNIT 64                    // 2 controllers * 4 groups * 8 drives
+#define MDTRACK BSIZEW            // words in a half-zone -- and in a block
+#define MDTPZ   (PGSZ / MDTRACK)  // 2 half-zones to a zone
+#define MDNZONE 1000              // zones `attach -n' formats; the field holds 1024
+#define MDNBLK  (MDNZONE * MDTPZ) // 2000 blocks on one drive
+#define MDNUNIT 64                // 2 controllers * 4 groups * 8 drives
 
 // The controller commands of 033 023 / 033 024.  These live here rather than in
 // sys/besm6disk.h because that header owns the mass-storage family's CONTROL WORD layout --
@@ -176,22 +176,22 @@
 // Everything else here is declared by the simulator and set by nothing, exactly as on the
 // drum.  They are named because the retry path is written against them for the real
 // machine's sake, and a reader is owed the fact that those arms never execute under SIMH.
-#define MDST_SEEK       00000377 // 8-1: "seek done", one bit per unit
-#define MDST_READY      00000400 // 9: the selected unit is ready         -- SIMH sets this
-#define MDST_SEEK_FAIL  00001000 // 10: head location unknown
-#define MDST_CHECKSUM   00002000 // 11: bad checksum on read
-#define MDST_FAILURE    00004000 // 12: failure -- OR of some of the upper bits
-#define MDST_MAYDAY     00010000 // 13: unspecified failure
-#define MDST_NO_AMRK    00020000 // 14: address marker not found in a revolution
-#define MDST_WRONG_CYL  00040000 // 15: wrong address marker
-#define MDST_WRONG_ID   00100000 // 16: bad track ID
-#define MDST_BAD_ACSUM  00200000 // 17: bad checksum of the address marker
-#define MDST_UNFINISHED 00400000 // 18: I/O not finished after a revolution
-#define MDST_TRK_PARITY 01000000 // 19: track parity error in two-track I/O
-#define MDST_READONLY   02000000 // 20: the unit is read-only           -- SIMH sets this
-#define MDST_POWERUP    04000000 // 21: powered up -- DEAD, see above
-#define MDST_ABSENT    010000000 // 22: not connected -- ALWAYS SET, see above
-#define MDST_BUF_ERR   020000000 // 23: transfer buffer not ready
+#define MDST_SEEK       00000377  // 8-1: "seek done", one bit per unit
+#define MDST_READY      00000400  // 9: the selected unit is ready         -- SIMH sets this
+#define MDST_SEEK_FAIL  00001000  // 10: head location unknown
+#define MDST_CHECKSUM   00002000  // 11: bad checksum on read
+#define MDST_FAILURE    00004000  // 12: failure -- OR of some of the upper bits
+#define MDST_MAYDAY     00010000  // 13: unspecified failure
+#define MDST_NO_AMRK    00020000  // 14: address marker not found in a revolution
+#define MDST_WRONG_CYL  00040000  // 15: wrong address marker
+#define MDST_WRONG_ID   00100000  // 16: bad track ID
+#define MDST_BAD_ACSUM  00200000  // 17: bad checksum of the address marker
+#define MDST_UNFINISHED 00400000  // 18: I/O not finished after a revolution
+#define MDST_TRK_PARITY 01000000  // 19: track parity error in two-track I/O
+#define MDST_READONLY   02000000  // 20: the unit is read-only           -- SIMH sets this
+#define MDST_POWERUP    04000000  // 21: powered up -- DEAD, see above
+#define MDST_ABSENT     010000000 // 22: not connected -- ALWAYS SET, see above
+#define MDST_BUF_ERR    020000000 // 23: transfer buffer not ready
 
 // How many times one exchange is re-issued before the request is failed.  The v7 figure,
 // from rk.c and rp.c.
@@ -276,8 +276,7 @@ void mdstrategy(register struct buf *bp)
     if (dp->b_actf == NULL) {
         mdretries  = 0; // the count belongs to one request; this one starts a fresh queue
         dp->b_actf = bp;
-    }
-    else
+    } else
         dp->b_actl->av_forw = bp;
     dp->b_actl = bp;
     if (dp->b_active == 0)

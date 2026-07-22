@@ -48,19 +48,19 @@ static struct proc pr;
 static struct text tx;
 
 // crt0u.s
-extern unsigned uprogadr;      // uprog's link-time word address, as a plain integer
+extern unsigned uprogadr; // uprog's link-time word address, as a plain integer
 void gouser(unsigned uentry);
 
 // brz.s
 void drainbrz(void);
 
 // Must match the EQUs in crt0u.s.
-#define MODVAL 04010U          // virtual data address the forged modifier points at
-#define SENT   0525252U        // the sentinel poked there
-#define USPV   074000U         // forged user r15 == physical stack-switch sentinel page
-#define KSENT  0333333U        // seed value at physical USPV / USPV+1
+#define MODVAL 04010U   // virtual data address the forged modifier points at
+#define SENT   0525252U // the sentinel poked there
+#define USPV   074000U  // forged user r15 == physical stack-switch sentinel page
+#define KSENT  0333333U // seed value at physical USPV / USPV+1
 
-#define IMAGEPG 16             // physical page of the process image (data + stack), free memory
+#define IMAGEPG 16 // physical page of the process image (data + stack), free memory
 
 // увв 031 simulates a ГРП interrupt: GRP |= (ACC & 0xFFFFFF) << 24.  It is the deterministic,
 // self-contained interrupt source this test uses instead of a device -- no console, no timing.
@@ -91,10 +91,10 @@ int main()
     // Build the user map.  uprog runs mapped at virtual page 0, so virtual page 0 must map to
     // uprog's OWN physical page (the real code), not a scratch page.  Text is two pages, data
     // two, stack one -- the same shape mmutest uses.
-    uaddr  = uprogadr;                 // uprog's WORD address (a plain integer from the linker)
-    uentry = uaddr & (PGSZ - 1);       // its offset within virtual page 0
+    uaddr  = uprogadr;           // uprog's WORD address (a plain integer from the linker)
+    uentry = uaddr & (PGSZ - 1); // its offset within virtual page 0
 
-    tx.x_caddr = uaddr & ~(PGSZ - 1);  // map virtual page 0 -> uprog's physical page
+    tx.x_caddr = uaddr & ~(PGSZ - 1); // map virtual page 0 -> uprog's physical page
     tx.x_size  = 2 * PGSZ;
 
     pr.p_addr  = IMAGEPG * PGSZ;

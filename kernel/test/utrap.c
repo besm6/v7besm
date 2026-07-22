@@ -82,15 +82,15 @@ void drainbrz(void);
 #define DBASE (IMAGEPG * PGSZ + USIZE)
 
 // Fault-mask bits, reported in the accumulator by halt().  Zero means every check passed.
-#define F_CREG   0001 // M[16] not preserved across the gate
-#define F_RREG   0002 // R not preserved
-#define F_RMR    0004 // Y (РМР) not preserved
-#define F_R15    0010 // the framed r15 is not the user's
-#define F_STACK  0020 // the stack was not switched: trap()'s frame landed on the user r15
-#define F_USER   0040 // SPSW does not say the fault came from user mode
-#define F_CAUSE  0100 // wrong ГРП cause or wrong faulting page
-#define F_SLOT1  0200 // fault 1 was skipped, not retried (restart protocol)
-#define F_SLOT2  0400 // fault 2 was skipped, not retried
+#define F_CREG   0001  // M[16] not preserved across the gate
+#define F_RREG   0002  // R not preserved
+#define F_RMR    0004  // Y (РМР) not preserved
+#define F_R15    0010  // the framed r15 is not the user's
+#define F_STACK  0020  // the stack was not switched: trap()'s frame landed on the user r15
+#define F_USER   0040  // SPSW does not say the fault came from user mode
+#define F_CAUSE  0100  // wrong ГРП cause or wrong faulting page
+#define F_SLOT1  0200  // fault 1 was skipped, not retried (restart protocol)
+#define F_SLOT2  0400  // fault 2 was skipped, not retried
 #define F_NFAULT 01000 // the wrong number of faults arrived
 #define F_IPL    02000 // the gate dispatched with БлПр still set: the level was never opened
 #define F_KTRAP  04000 // the gate took the SUPERVISOR arm: it read the forged SPSW wrongly
