@@ -1,8 +1,6 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * Structure of a symbol table entry
- */
+// Structure of a symbol table entry
 
 struct symbol {
     char sy_name[8];

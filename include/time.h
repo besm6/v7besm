@@ -1,6 +1,6 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-struct tm { /* see ctime(3) */
+struct tm { // see ctime(3)
     int tm_sec;
     int tm_min;
     int tm_hour;

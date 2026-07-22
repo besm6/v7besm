@@ -1,14 +1,10 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * header file for standalone package
- */
+// header file for standalone package
 
-/*
- * io block: includes an
- * inode, cells for the use of seek, etc,
- * and a buffer.
- */
+// io block: includes an
+// inode, cells for the use of seek, etc,
+// and a buffer.
 struct iob {
     char i_flgs;
     struct inode i_ino;
@@ -27,9 +23,7 @@ struct iob {
 #define F_ALLOC 04
 #define F_FILE 010
 
-/*
- * dev switch
- */
+// dev switch
 struct devsw {
     char *dv_name;
     int (*dv_strategy)();
@@ -39,9 +33,7 @@ struct devsw {
 
 struct devsw devsw[];
 
-/*
- * request codes. Must be the same a F_XXX above
- */
+// request codes. Must be the same a F_XXX above
 #define READ 1
 #define WRITE 2
 
@@ -53,8 +45,6 @@ daddr_t blknos[NBUFS];
 #define NFILES 4
 struct iob iob[NFILES];
 
-/*
- * Set to which 32Kw segment the code is physically running in.
- * Must be set by the users main (or there abouts).
- */
+// Set to which 32Kw segment the code is physically running in.
+// Must be set by the users main (or there abouts).
 int segflag;

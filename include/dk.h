@@ -1,22 +1,16 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * switch commands
- */
+// switch commands
 #define RAM_ON 0226
 #define ROM_ON 0322
 #define R_CNTL 0264
 #define W_CNTL 0170
 
-/*
- * library routine declarations
- */
+// library routine declarations
 extern long cmread();
 extern long ocmread();
 
-/*
- * call setup struct
- */
+// call setup struct
 
 struct dialout {
     char srv;

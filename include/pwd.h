@@ -1,6 +1,6 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-struct passwd { /* see getpwent(3) */
+struct passwd { // see getpwent(3)
     char *pw_name;
     char *pw_passwd;
     int pw_uid;

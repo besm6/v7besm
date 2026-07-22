@@ -1,12 +1,10 @@
-/*
- * <inttypes.h> — format conversion of integer types (C11 §7.8), BESM-6 target.
- *
- * Because every integer type is one word, the length modifiers all collapse:
- * the print/scan format macros use plain "d"/"u"/"o"/"x" with no length prefix
- * (the printf engine ignores 'l'/'h' anyway — see madlen/doprnt.c).
- *
- * TODO: imaxabs/imaxdiv/strtoimax/strtoumax in libc.bin.
- */
+// <inttypes.h> — format conversion of integer types (C11 §7.8), BESM-6 target.
+//
+// Because every integer type is one word, the length modifiers all collapse:
+// the print/scan format macros use plain "d"/"u"/"o"/"x" with no length prefix
+// (the printf engine ignores 'l'/'h' anyway — see madlen/doprnt.c).
+//
+// TODO: imaxabs/imaxdiv/strtoimax/strtoumax in libc.bin.
 #ifndef _INTTYPES_H
 #define _INTTYPES_H
 
@@ -22,7 +20,7 @@ imaxdiv_t imaxdiv(intmax_t numer, intmax_t denom);
 intmax_t  strtoimax(const char *nptr, char **endptr, int base);
 uintmax_t strtoumax(const char *nptr, char **endptr, int base);
 
-/* print format macros */
+// print format macros
 #define PRId8 "d"
 #define PRId16 "d"
 #define PRId32 "d"
@@ -54,7 +52,7 @@ uintmax_t strtoumax(const char *nptr, char **endptr, int base);
 #define PRIXMAX "X"
 #define PRIXPTR "X"
 
-/* scan format macros */
+// scan format macros
 #define SCNd8 "d"
 #define SCNd16 "d"
 #define SCNd32 "d"
@@ -71,4 +69,4 @@ uintmax_t strtoumax(const char *nptr, char **endptr, int base);
 #define SCNxMAX "x"
 #define SCNxPTR "x"
 
-#endif /* _INTTYPES_H */
+#endif // _INTTYPES_H

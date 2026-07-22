@@ -1,32 +1,26 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * Structure for stty and gtty system calls.
- */
+// Structure for stty and gtty system calls.
 
 struct sgttyb {
-    char sg_ispeed; /* input speed */
-    char sg_ospeed; /* output speed */
-    char sg_erase;  /* erase character */
-    char sg_kill;   /* kill character */
-    int sg_flags;   /* mode flags */
+    char sg_ispeed; // input speed
+    char sg_ospeed; // output speed
+    char sg_erase;  // erase character
+    char sg_kill;   // kill character
+    int sg_flags;   // mode flags
 };
 
-/*
- * List of special characters
- */
+// List of special characters
 struct tchars {
-    char t_intrc;  /* interrupt */
-    char t_quitc;  /* quit */
-    char t_startc; /* start output */
-    char t_stopc;  /* stop output */
-    char t_eofc;   /* end-of-file */
-    char t_brkc;   /* input delimiter (like nl) */
+    char t_intrc;  // interrupt
+    char t_quitc;  // quit
+    char t_startc; // start output
+    char t_stopc;  // stop output
+    char t_eofc;   // end-of-file
+    char t_brkc;   // input delimiter (like nl)
 };
 
-/*
- * Modes
- */
+// Modes
 #define TANDEM 01
 #define CBREAK 02
 #define LCASE 04
@@ -44,9 +38,7 @@ struct tchars {
 #define BSDELAY 0100000
 #define ALLDELAY 0177400
 
-/*
- * Delay algorithms
- */
+// Delay algorithms
 #define CR0 0
 #define CR1 010000
 #define CR2 020000
@@ -63,9 +55,7 @@ struct tchars {
 #define BS0 0
 #define BS1 0100000
 
-/*
- * Speeds
- */
+// Speeds
 #define B0 0
 #define B50 1
 #define B75 2
@@ -83,9 +73,7 @@ struct tchars {
 #define EXTA 14
 #define EXTB 15
 
-/*
- * tty ioctl commands
- */
+// tty ioctl commands
 #define TIOCGETD (('t' << 8) | 0)
 #define TIOCSETD (('t' << 8) | 1)
 #define TIOCHPCL (('t' << 8) | 2)

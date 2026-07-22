@@ -1,11 +1,9 @@
-/*
- * <string.h> — string handling (C11 §7.24), BESM-6 target.
- *
- * All functions below are implemented in libc.bin (the str* / mem* family plus
- * strerror).  On BESM-6 char* / void* are FAT pointers: a byte cursor carries
- * its in-word offset, so byte-by-byte traversal works across word boundaries
- * (see doc/Besm6_Data_Representation.md and the b/p* runtime helpers).
- */
+// <string.h> — string handling (C11 §7.24), BESM-6 target.
+//
+// All functions below are implemented in libc.bin (the str* / mem* family plus
+// strerror).  On BESM-6 char* / void* are FAT pointers: a byte cursor carries
+// its in-word offset, so byte-by-byte traversal works across word boundaries
+// (see doc/Besm6_Data_Representation.md and the b/p* runtime helpers).
 #ifndef _STRING_H
 #define _STRING_H
 
@@ -34,4 +32,4 @@ void  *memchr(const void *s, int c, size_t n);
 
 char  *strerror(int errnum);
 
-#endif /* _STRING_H */
+#endif // _STRING_H

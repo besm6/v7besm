@@ -1,17 +1,17 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-#define MAXSIZE 500 /* max size in blocks of dumped files */
-#define NILIST 100  /* max files extracted at once */
-#define BFACT 20    /* tape blocking factor */
+#define MAXSIZE 500 // max size in blocks of dumped files
+#define NILIST 100  // max files extracted at once
+#define BFACT 20    // tape blocking factor
 
-int tden 1600; /* tape density */
-int tlen 2200; /* tape length (feet) */
+int tden 1600; // tape density
+int tlen 2200; // tape length (feet)
 
-char *dump_cmd[] = { /* default args for dump */
+char *dump_cmd[] = { // default args for dump
                      "dump", "i", "/dev/rp0", 0
 };
 
-char *rest_cmd[] = { /* defaults for restor */
+char *rest_cmd[] = { // defaults for restor
                      "restor", "t", 0
 };
 
@@ -52,7 +52,7 @@ struct fhdr {
 #define FMAGIC 012345
 #define SMAGIC 031415
 
-#define DAPTB 127 /* (BSIZE-2*sizeof(short))/sizeof(daddr_t)) */
+#define DAPTB 127 // (BSIZE-2*sizeof(short))/sizeof(daddr_t))
 
 FILE *tmpf;
 

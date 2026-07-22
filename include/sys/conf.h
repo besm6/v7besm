@@ -1,17 +1,15 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-struct buf; /* forward declarations */
+struct buf; // forward declarations
 struct tty;
 
-/*
- * Declaration of block device
- * switch. Each entry (row) is
- * the only link between the
- * main unix code and the driver.
- * The initialization of the
- * device switches is in the
- * file conf.c.
- */
+// Declaration of block device
+// switch. Each entry (row) is
+// the only link between the
+// main unix code and the driver.
+// The initialization of the
+// device switches is in the
+// file conf.c.
 extern struct bdevsw {
     void (*d_open)(dev_t, int);
     void (*d_close)(dev_t, int);
@@ -19,9 +17,7 @@ extern struct bdevsw {
     struct buf *d_tab;
 } bdevsw[];
 
-/*
- * Character device switch.
- */
+// Character device switch.
 extern struct cdevsw {
     void (*d_open)(dev_t, int);
     void (*d_close)(dev_t, int);
@@ -32,9 +28,7 @@ extern struct cdevsw {
     struct tty *d_ttys;
 } cdevsw[];
 
-/*
- * tty line control switch.
- */
+// tty line control switch.
 extern struct linesw {
     void (*l_open)(dev_t, struct tty *);
     void (*l_close)(struct tty *);

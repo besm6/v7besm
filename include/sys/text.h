@@ -1,19 +1,17 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * Text structure.
- * One allocated per pure
- * procedure on swap device.
- * Manipulated by text.c
- */
+// Text structure.
+// One allocated per pure
+// procedure on swap device.
+// Manipulated by text.c
 struct text {
-    int x_daddr;          /* disk address of segment, in blocks (relative to swplo) */
-    int x_caddr;          /* core address, if loaded (word, page-aligned) */
-    int x_size;           /* size (words, a multiple of PGSZ) */
-    struct inode *x_iptr; /* inode of prototype */
-    char x_count;         /* reference count */
-    char x_ccount;        /* number of loaded references */
-    char x_flag;          /* traced, written flags */
+    int x_daddr;          // disk address of segment, in blocks (relative to swplo)
+    int x_caddr;          // core address, if loaded (word, page-aligned)
+    int x_size;           // size (words, a multiple of PGSZ)
+    struct inode *x_iptr; // inode of prototype
+    char x_count;         // reference count
+    char x_ccount;        // number of loaded references
+    char x_flag;          // traced, written flags
 };
 
 extern struct text text[];
@@ -21,8 +19,8 @@ extern struct text text[];
 void xlock(struct text *xp);
 void xunlock(struct text *xp);
 
-#define XTRC  01  /* Text may be written, exclusive use */
-#define XWRIT 02  /* Text written into, must swap out */
-#define XLOAD 04  /* Currently being read from file */
-#define XLOCK 010 /* Being swapped in or out */
-#define XWANT 020 /* Wanted for swapping */
+#define XTRC  01  // Text may be written, exclusive use
+#define XWRIT 02  // Text written into, must swap out
+#define XLOAD 04  // Currently being read from file
+#define XLOCK 010 // Being swapped in or out
+#define XWANT 020 // Wanted for swapping

@@ -1,37 +1,33 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * A clist structure is the head
- * of a linked list queue of characters.
- * The characters are stored in 4-word
- * blocks containing a link and several characters.
- * The routines getc and putc
- * manipulate these structures.
- */
+// A clist structure is the head
+// of a linked list queue of characters.
+// The characters are stored in 4-word
+// blocks containing a link and several characters.
+// The routines getc and putc
+// manipulate these structures.
 struct clist {
-    int c_cc;   /* character count */
-    char *c_cf; /* pointer to first char */
-    char *c_cl; /* pointer to last char */
+    int c_cc;   // character count
+    char *c_cf; // pointer to first char
+    char *c_cl; // pointer to last char
 };
 
-/*
- * A tty structure is needed for
- * each UNIX character device that
- * is used for normal terminal IO.
- * The routines in tty.c handle the
- * common code associated with
- * these structures.
- * The definition and device dependent
- * code is in each driver. (kl.c dc.c dh.c)
- */
+// A tty structure is needed for
+// each UNIX character device that
+// is used for normal terminal IO.
+// The routines in tty.c handle the
+// common code associated with
+// these structures.
+// The definition and device dependent
+// code is in each driver. (kl.c dc.c dh.c)
 
 struct tc {
-    char intrc;  /* interrupt */
-    char quitc;  /* quit */
-    char startc; /* start output */
-    char stopc;  /* stop output */
-    char eofc;   /* end-of-file */
-    char brkc;   /* input delimiter (like nl) */
+    char intrc;  // interrupt
+    char quitc;  // quit
+    char startc; // start output
+    char stopc;  // stop output
+    char eofc;   // end-of-file
+    char brkc;   // input delimiter (like nl)
 };
 #define t_intrc  t_tc.intrc
 #define t_quitc  t_tc.quitc
@@ -41,26 +37,26 @@ struct tc {
 #define t_brkc   t_tc.brkc
 
 struct tty {
-    struct clist t_rawq;           /* input chars right off device */
-    struct clist t_canq;           /* input chars after erase and kill */
-    struct clist t_outq;           /* output list to device */
-    void (*t_oproc)(struct tty *); /* routine to start output */
-    void (*t_iproc)(struct tty *); /* routine to start input */
-    int t_addr;                    /* device/line number -- NOT an address: this machine has no
-                                    device address space, devices are named by 033 register
-                                    numbers.  See doc/Besm6_Peripherals.md. */
-    dev_t t_dev;                   /* device number */
-    int t_flags;                   /* mode, settable by ioctl call */
-    int t_state;                   /* internal state, not visible externally */
-    int t_pgrp;                    /* process group name */
-    char t_delct;                  /* number of delimiters in raw q */
-    char t_line;                   /* line discipline */
-    char t_col;                    /* printing column of device */
-    char t_erase;                  /* erase character */
-    char t_kill;                   /* kill character */
-    char t_char;                   /* character temporary */
-    char t_ispeed;                 /* input speed */
-    char t_ospeed;                 /* output speed */
+    struct clist t_rawq;           // input chars right off device
+    struct clist t_canq;           // input chars after erase and kill
+    struct clist t_outq;           // output list to device
+    void (*t_oproc)(struct tty *); // routine to start output
+    void (*t_iproc)(struct tty *); // routine to start input
+    int t_addr;                    // device/line number -- NOT an address: this machine has no
+                                   // device address space, devices are named by 033 register
+                                   // numbers.  See doc/Besm6_Peripherals.md.
+    dev_t t_dev;                   // device number
+    int t_flags;                   // mode, settable by ioctl call
+    int t_state;                   // internal state, not visible externally
+    int t_pgrp;                    // process group name
+    char t_delct;                  // number of delimiters in raw q
+    char t_line;                   // line discipline
+    char t_col;                    // printing column of device
+    char t_erase;                  // erase character
+    char t_kill;                   // kill character
+    char t_char;                   // character temporary
+    char t_ispeed;                 // input speed
+    char t_ospeed;                 // output speed
     union {
         struct tc t_tc;
         struct clist t_ctlq;
@@ -69,9 +65,7 @@ struct tty {
 
 #define tun tp->t_un
 
-/*
- * structure of arg for ioctl
- */
+// structure of arg for ioctl
 struct ttiocb {
     char ioc_ispeed;
     char ioc_ospeed;
@@ -83,21 +77,21 @@ struct ttiocb {
 #define TTIPRI 28
 #define TTOPRI 29
 
-#define CERASE '#' /* default special characters */
+#define CERASE '#' // default special characters
 #define CEOT   004
 #define CKILL  '@'
-#define CQUIT  034  /* FS, cntl shift L */
-#define CINTR  0177 /* DEL */
-#define CSTOP  023  /* Stop output: ctl-s */
-#define CSTART 021  /* Start output: ctl-q */
+#define CQUIT  034  // FS, cntl shift L
+#define CINTR  0177 // DEL
+#define CSTOP  023  // Stop output: ctl-s
+#define CSTART 021  // Start output: ctl-q
 #define CBRK   0377
 
-/* limits */
+// limits
 #define TTHIWAT 100
 #define TTLOWAT 50
 #define TTYHOG  256
 
-/* modes */
+// modes
 #define TANDEM  01
 #define CBREAK  02
 #define LCASE   04
@@ -112,31 +106,29 @@ struct ttiocb {
 #define CRDELAY 030000
 #define VTDELAY 040000
 
-/* Hardware bits */
+// Hardware bits
 #define DONE    0200
 #define IENABLE 0100
 
-/* Internal state bits */
-#define TIMEOUT 01      /* Delay timeout in progress */
-#define WOPEN   02      /* Waiting for open to complete */
-#define ISOPEN  04      /* Device is open */
-#define FLUSH   010     /* outq has been flushed during DMA */
-#define CARR_ON 020     /* Software copy of carrier-present */
-#define BUSY    040     /* Output in progress */
-#define ASLEEP  0100    /* Wakeup when output done */
-#define XCLUDE  0200    /* exclusive-use flag against open */
-#define TTSTOP  0400    /* Output stopped by ctl-s */
-#define HUPCLS  01000   /* Hang up upon last close */
-#define TBLOCK  02000   /* tandem queue blocked */
-#define DKCMD   04000   /* datakit command channel */
-#define DKMPX   010000  /* datakit user-multiplexed mode */
-#define DKCALL  020000  /* datakit dial mode */
-#define DKLINGR 040000  /* datakit lingering close mode */
-#define CNTLQ   0100000 /* interpret t_un as clist */
+// Internal state bits
+#define TIMEOUT 01      // Delay timeout in progress
+#define WOPEN   02      // Waiting for open to complete
+#define ISOPEN  04      // Device is open
+#define FLUSH   010     // outq has been flushed during DMA
+#define CARR_ON 020     // Software copy of carrier-present
+#define BUSY    040     // Output in progress
+#define ASLEEP  0100    // Wakeup when output done
+#define XCLUDE  0200    // exclusive-use flag against open
+#define TTSTOP  0400    // Output stopped by ctl-s
+#define HUPCLS  01000   // Hang up upon last close
+#define TBLOCK  02000   // tandem queue blocked
+#define DKCMD   04000   // datakit command channel
+#define DKMPX   010000  // datakit user-multiplexed mode
+#define DKCALL  020000  // datakit dial mode
+#define DKLINGR 040000  // datakit lingering close mode
+#define CNTLQ   0100000 // interpret t_un as clist
 
-/*
- * tty ioctl commands
- */
+// tty ioctl commands
 #define TIOCGETD  (('t' << 8) | 0)
 #define TIOCSETD  (('t' << 8) | 1)
 #define TIOCHPCL  (('t' << 8) | 2)

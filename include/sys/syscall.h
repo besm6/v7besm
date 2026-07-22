@@ -1,36 +1,34 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * System call numbers -- the N of the `$77 N' extracode that opens the kernel's
- * gate (kernel/syscall.c, doc/Aout_Simulator.md).
- *
- * kernel/sysent.c is the authority, and it is POSITIONAL: the number of a call is
- * its row index in that array, so this header can only put a name to each row --
- * it cannot drive them.  Change one and change the other.
- *
- * This header is #define-only so that the assembly leaves in lib/libc/sys/ can
- * include it, which is what makes them `.S' rather than `.s' -- b6cc dispatches a
- * .S through the preprocessor and a .s straight to the assembler (lib/rules.mk).
- *
- * THE GAPS ARE DELIBERATE.  Only the calls this kernel implements get a name; the
- * rows that are nullsys or nosys in sysent.c -- 0 (indir), 38 (switch), 39
- * (setpgrp), 40 (tell), 45, 49, 50, 55-58, 62, 63 -- get none, so that naming one
- * cannot be mistaken for implementing it.
- *
- * THREE NAMES ARE THE KERNEL'S, NOT LIBC'S, and are spelled here as sysent.c
- * spells them: SYS_seek is what lseek() issues, SYS_break is what sbrk() issues
- * through the _break() leaf, and SYS_exece is v7's spelling of execve.  Two go the
- * other way, where sysent.c's row comment is an abbreviation rather than a name:
- * SYS_profil is its "44 = prof" and SYS_signal its "48 = sig".  There are
- * deliberately no aliases -- one number, one name, or this header reintroduces the
- * disagreement it exists to remove.  lib/libc/sys/syscalls.tbl is where a libc
- * symbol is mapped to the macro it issues.
- *
- * cmd/sim/syscall.cpp keeps a copy of this list as its own enum, and must be kept
- * in step by hand: b6sim is a HOST tool and cannot have include/ on its -I path,
- * which would shadow the <stdio.h>, <errno.h>, <sys/stat.h> and <sys/times.h> it
- * includes for real.
- */
+// System call numbers -- the N of the `$77 N' extracode that opens the kernel's
+// gate (kernel/syscall.c, doc/Aout_Simulator.md).
+//
+// kernel/sysent.c is the authority, and it is POSITIONAL: the number of a call is
+// its row index in that array, so this header can only put a name to each row --
+// it cannot drive them.  Change one and change the other.
+//
+// This header is #define-only so that the assembly leaves in lib/libc/sys/ can
+// include it, which is what makes them `.S' rather than `.s' -- b6cc dispatches a
+// .S through the preprocessor and a .s straight to the assembler (lib/rules.mk).
+//
+// THE GAPS ARE DELIBERATE.  Only the calls this kernel implements get a name; the
+// rows that are nullsys or nosys in sysent.c -- 0 (indir), 38 (switch), 39
+// (setpgrp), 40 (tell), 45, 49, 50, 55-58, 62, 63 -- get none, so that naming one
+// cannot be mistaken for implementing it.
+//
+// THREE NAMES ARE THE KERNEL'S, NOT LIBC'S, and are spelled here as sysent.c
+// spells them: SYS_seek is what lseek() issues, SYS_break is what sbrk() issues
+// through the _break() leaf, and SYS_exece is v7's spelling of execve.  Two go the
+// other way, where sysent.c's row comment is an abbreviation rather than a name:
+// SYS_profil is its "44 = prof" and SYS_signal its "48 = sig".  There are
+// deliberately no aliases -- one number, one name, or this header reintroduces the
+// disagreement it exists to remove.  lib/libc/sys/syscalls.tbl is where a libc
+// symbol is mapped to the macro it issues.
+//
+// cmd/sim/syscall.cpp keeps a copy of this list as its own enum, and must be kept
+// in step by hand: b6sim is a HOST tool and cannot have include/ on its -I path,
+// which would shadow the <stdio.h>, <errno.h>, <sys/stat.h> and <sys/times.h> it
+// includes for real.
 #ifndef _SYS_SYSCALL_H
 #define _SYS_SYSCALL_H
 
@@ -86,4 +84,4 @@
 #define SYS_umask 60
 #define SYS_chroot 61
 
-#endif /* _SYS_SYSCALL_H */
+#endif // _SYS_SYSCALL_H

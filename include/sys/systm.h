@@ -1,66 +1,56 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * The one include in this header, and it is here for splx() below: that is a macro over
- * __besm6_setpsw(), so every caller of it needs the intrinsic declared, and six of them have
- * no other reason to name <besm6.h>.  Nothing else here depends on it.
- */
+// The one include in this header, and it is here for splx() below: that is a macro over
+// __besm6_setpsw(), so every caller of it needs the intrinsic declared, and six of them have
+// no other reason to name <besm6.h>.  Nothing else here depends on it.
 #include <besm6.h>
 
-/*
- * Random set of variables
- * used by more than one
- * routine.
- */
-extern char canonb[CANBSIZ];  /* buffer for erase and kill (#@) */
-extern struct inode *rootdir; /* pointer to inode of root directory */
-extern struct proc *runq;     /* head of linked list of running processes */
-extern int cputype;           /* type of cpu =40, 45, or 70 */
-extern int lbolt;             /* time of day in 60th not in time */
-extern time_t time;           /* time in sec from 1970 */
+// Random set of variables
+// used by more than one
+// routine.
+extern char canonb[CANBSIZ];  // buffer for erase and kill (#@)
+extern struct inode *rootdir; // pointer to inode of root directory
+extern struct proc *runq;     // head of linked list of running processes
+extern int cputype;           // type of cpu =40, 45, or 70
+extern int lbolt;             // time of day in 60th not in time
+extern time_t time;           // time in sec from 1970
 
-/*
- * Nblkdev is the number of entries
- * (rows) in the block switch. It is
- * set in binit/bio.c by making
- * a pass over the switch.
- * Used in bounds checking on major
- * device numbers.
- */
+// Nblkdev is the number of entries
+// (rows) in the block switch. It is
+// set in binit/bio.c by making
+// a pass over the switch.
+// Used in bounds checking on major
+// device numbers.
 extern int nblkdev;
 
-/*
- * Number of character switch entries.
- * Set by cinit/tty.c
- */
+// Number of character switch entries.
+// Set by cinit/tty.c
 extern int nchrdev;
 
-extern int mpid;    /* generic for unique process id's */
-extern char runin;  /* scheduling flag */
-extern char runout; /* scheduling flag */
-extern char runrun; /* scheduling flag */
-extern char curpri; /* more scheduling */
-extern int maxmem;  /* actual max memory per process */
-extern int uhome;   /* whose u-area is live at UBASE (its p_addr) */
-/*
- * ... or NOUHOME, meaning the live u-area belongs to no in-core image because the image it
- * belonged to has just been freed.  resume() must then load without flushing first, or it
- * would write 1024 words into core that malloc() may already have handed to someone else.
- * 0 is a safe sentinel: no process image ever lives at physical 0.  The rules for who
- * maintains this are written up once, at xswap() in kernel/text.c.
- */
+extern int mpid;    // generic for unique process id's
+extern char runin;  // scheduling flag
+extern char runout; // scheduling flag
+extern char runrun; // scheduling flag
+extern char curpri; // more scheduling
+extern int maxmem;  // actual max memory per process
+extern int uhome;   // whose u-area is live at UBASE (its p_addr)
+// ... or NOUHOME, meaning the live u-area belongs to no in-core image because the image it
+// belonged to has just been freed.  resume() must then load without flushing first, or it
+// would write 1024 words into core that malloc() may already have handed to someone else.
+// 0 is a safe sentinel: no process image ever lives at physical 0.  The rules for who
+// maintains this are written up once, at xswap() in kernel/text.c.
 #define NOUHOME 0
-extern daddr_t swplo;        /* block number of swap space */
-extern int nswap;            /* size of swap space */
-extern int updlock;          /* lock for sync */
-extern daddr_t rablock;      /* block to be read ahead */
-extern char regloc[];        /* locs. of saved user registers (trap.c) */
-extern char msgbuf[MSGBUFS]; /* saved "printf" characters */
-extern dev_t rootdev;        /* device of the root */
-extern dev_t swapdev;        /* swapping device */
-extern dev_t pipedev;        /* pipe device */
-extern int icode[];          /* user init code */
-extern int szicode;          /* its size */
+extern daddr_t swplo;        // block number of swap space
+extern int nswap;            // size of swap space
+extern int updlock;          // lock for sync
+extern daddr_t rablock;      // block to be read ahead
+extern char regloc[];        // locs. of saved user registers (trap.c)
+extern char msgbuf[MSGBUFS]; // saved "printf" characters
+extern dev_t rootdev;        // device of the root
+extern dev_t swapdev;        // swapping device
+extern dev_t pipedev;        // pipe device
+extern int icode[];          // user init code
+extern int szicode;          // its size
 
 daddr_t bmap(struct inode *ip, daddr_t bn, int rwflg);
 struct inode *ialloc(dev_t dev);
@@ -80,7 +70,7 @@ struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
 void bawrite(struct buf *bp);
 void brelse(struct buf *bp);
 struct filsys *getfs(dev_t dev);
-int sbcheck(struct filsys *fp, dev_t dev); /* 0 = plausible superblock, 1 = reject */
+int sbcheck(struct filsys *fp, dev_t dev); // 0 = plausible superblock, 1 = reject
 struct file *getf(int f);
 struct file *falloc(void);
 int uchar(void);
@@ -162,26 +152,22 @@ void clrbuf(struct buf *bp);
 void bwrite(struct buf *bp);
 void panic(char *s);
 void bflush(dev_t dev);
-/*
- * Interrupt priority.  The BESM-6 has one interrupt level, not the PDP-11's eight, so this
- * kernel has exactly two: spl0 enables delivery, everything above it blocks (kernel/intr.c).
- * Only the two ends are real routines; the graded levels v7 callers write are aliases, so
- * `s = spl6(); ... splx(s);' still reads as it always did and still costs one instruction.
- */
-void spl0(void); /* the base level is never saved and restored -- nothing is below it */
+// Interrupt priority.  The BESM-6 has one interrupt level, not the PDP-11's eight, so this
+// kernel has exactly two: spl0 enables delivery, everything above it blocks (kernel/intr.c).
+// Only the two ends are real routines; the graded levels v7 callers write are aliases, so
+// `s = spl6(); ... splx(s);' still reads as it always did and still costs one instruction.
+void spl0(void); // the base level is never saved and restored -- nothing is below it
 int spl1(void);
 #define spl4() spl1()
 #define spl5() spl1()
 #define spl6() spl1()
 #define spl7() spl1()
-/*
- * ... and splx() is the whole of one instruction, so it is a macro too.  `s' is the mode word
- * spl1() handed out, never a level: splx(0) would clear БлП and БлЗ.  See kernel/intr.c.
- */
+// ... and splx() is the whole of one instruction, so it is a macro too.  `s' is the mode word
+// spl1() handed out, never a level: splx(0) would clear БлП and БлЗ.  See kernel/intr.c.
 #define splx(s) __besm6_setpsw(s)
-void mprpon(unsigned bits);  /* unmask a device's ПРП interrupts (intr.c) */
-void mgrpon(unsigned bits);  /* arm a device's ГРП bits for one exchange (intr.c) */
-void mgrpoff(unsigned bits); /* ... and disarm them again; see the pair in intr.c */
+void mprpon(unsigned bits);  // unmask a device's ПРП interrupts (intr.c)
+void mgrpon(unsigned bits);  // arm a device's ГРП bits for one exchange (intr.c)
+void mgrpoff(unsigned bits); // ... and disarm them again; see the pair in intr.c
 void addupc(int, void *, int);
 int setpri(struct proc *pp);
 void xrele(struct inode *ip);
@@ -189,7 +175,7 @@ void printf(char *fmt, ...);
 void ifree(dev_t dev, ino_t ino);
 void free(dev_t dev, daddr_t bno);
 void bdwrite(struct buf *bp);
-int grow(int pg); /* pg is a virtual PAGE number, not an address */
+int grow(int pg); // pg is a virtual PAGE number, not an address
 int subyte(caddr_t addr, int value);
 int suword(caddr_t addr, int value);
 int fubyte(caddr_t addr);
@@ -218,20 +204,18 @@ void copyseg(int s, int d);
 void clearseg(int d);
 int issig(void);
 int save(label_t);
-void resume(int, label_t);  /* a physical word address: 19 bits, not a `short' */
-void intrinit(void);        /* arm the always-live ГРП sources; the level is БлПр (intr.c) */
-extern volatile int idling; /* set while the idle spin runs; clock() charges idle time */
+void resume(int, label_t);  // a physical word address: 19 bits, not a `short'
+void intrinit(void);        // arm the always-live ГРП sources; the level is БлПр (intr.c)
+extern volatile int idling; // set while the idle spin runs; clock() charges idle time
 int swapin(struct proc *p);
 void xswap(struct proc *p, int ff, int os);
 void swap(int blkno, int coreaddr, int count, int rdflg);
 void sureg(void);
-/*
- * The u-area bracket (kernel/uarea.s).  The live u-area is at UBASE; a process's home copy is
- * the first page of its image at p_addr, above 0100000 and out of reach of an unmapped access.
- * uflush() only reads the live page and may be called from C; uload() overwrites it -- and with
- * it the kernel stack its caller is standing on -- so only resume() may call it.  See
- * kernel/TODO.md, "The u-area invariant".
- */
+// The u-area bracket (kernel/uarea.s).  The live u-area is at UBASE; a process's home copy is
+// the first page of its image at p_addr, above 0100000 and out of reach of an unmapped access.
+// uflush() only reads the live page and may be called from C; uload() overwrites it -- and with
+// it the kernel stack its caller is standing on -- so only resume() may call it.  See
+// kernel/TODO.md, "The u-area invariant".
 void uflush(paddr_t paddr);
 void uload(paddr_t paddr);
 int getxfile(struct inode *ip, int nargc);
@@ -258,9 +242,7 @@ void open1(struct inode *ip, int mode, int trf);
 void signal(int pgrp, int sig);
 void iomove(caddr_t cp, int n, int flag);
 
-/*
- * Instrumentation
- */
+// Instrumentation
 extern int dk_busy;
 extern int dk_time[32];
 extern int dk_numb[3];
@@ -268,22 +250,20 @@ extern int dk_wds[3];
 extern int tk_nin;
 extern int tk_nout;
 
-/*
- * Structure of the system-entry table.
- *
- * NSYSENT must match the array bound in kernel/sysent.c: syscall() RANGE-CHECKS
- * the number the user put in the `$77 N' effective address against it rather
- * than masking, so a table and a check that drift apart would dispatch garbage.
- *
- * sy_nrarg is vestigial on this machine and is read nowhere.  It counted the
- * PDP-11's args-already-in-registers; here the count is fixed by the ABI --
- * exactly one argument (the last) arrives in the accumulator for any narg >= 1,
- * and the rest are on the user stack (doc/Besm6_Calling_Conventions.md).
- */
+// Structure of the system-entry table.
+//
+// NSYSENT must match the array bound in kernel/sysent.c: syscall() RANGE-CHECKS
+// the number the user put in the `$77 N' effective address against it rather
+// than masking, so a table and a check that drift apart would dispatch garbage.
+//
+// sy_nrarg is vestigial on this machine and is read nowhere.  It counted the
+// PDP-11's args-already-in-registers; here the count is fixed by the ABI --
+// exactly one argument (the last) arrives in the accumulator for any narg >= 1,
+// and the rest are on the user stack (doc/Besm6_Calling_Conventions.md).
 #define NSYSENT 64
 
 extern struct sysent {
-    char sy_narg;          /* total number of arguments */
-    char sy_nrarg;         /* number of args in registers (unused: see above) */
-    void (*sy_call)(void); /* handler */
+    char sy_narg;          // total number of arguments
+    char sy_nrarg;         // number of args in registers (unused: see above)
+    void (*sy_call)(void); // handler
 } sysent[];

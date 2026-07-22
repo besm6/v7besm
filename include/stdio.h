@@ -1,6 +1,6 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/* One block, in bytes: BSIZE == BSIZEW * NBPW == 512 words (sys/param.h). */
+// One block, in bytes: BSIZE == BSIZEW * NBPW == 512 words (sys/param.h).
 #define BUFSIZ 3072
 #define _NFILE 20
 #ifndef FILE
@@ -22,9 +22,9 @@ extern struct _iobuf {
 #define _IOSTRG 0100
 #define _IORW 0200
 
-/* Guarded: the compiler's <stddef.h> spells it ((void *)0), and a file
- * that includes both would otherwise draw a redefinition warning from b6cpp.
- * Whichever is seen first wins; the two agree on every use. */
+// Guarded: the compiler's <stddef.h> spells it ((void *)0), and a file
+// that includes both would otherwise draw a redefinition warning from b6cpp.
+// Whichever is seen first wins; the two agree on every use.
 #ifndef NULL
 #define NULL 0
 #endif

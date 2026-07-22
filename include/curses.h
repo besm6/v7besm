@@ -1,4 +1,4 @@
-/* 4/17/81 (Berkeley) @(#)curses.h	1.7 */
+// 4/17/81 (Berkeley) @(#)curses.h	1.7
 #ifndef WINDOW
 
 #include <sgtty.h>
@@ -24,17 +24,13 @@
 
 typedef struct sgttyb SGTTY;
 
-/*
- * Capabilities from termcap
- */
+// Capabilities from termcap
 
 extern bool AM, BS, CA, DA, DB, EO, GT, HZ, IN, MI, MS, NC, OS, UL, XN;
 extern char *AL, *BC, *BT, *CD, *CE, *CL, *CM, *DC, *DL, *DM, *DO, *ED, *EI, *HO, *IC, *IM, *IP,
     *LL, *MA, *ND, *SE, *SF, *SO, *SR, *TA, *TE, *TI, *UC, *UE, *UP, *US, *VB, *VE, *VS, PC;
 
-/*
- * From the tty modes...
- */
+// From the tty modes...
 
 extern bool NONL, UPPERCASE, normtty, _pfast;
 
@@ -63,10 +59,8 @@ extern SGTTY _tty;
 
 extern WINDOW *stdscr, *curscr;
 
-/*
- *	Define VOID to stop lint from generating "null effect"
- * comments.
- */
+// 	Define VOID to stop lint from generating "null effect"
+// comments.
 #ifdef lint
 int __void__;
 #define VOID(x) (__void__ = (int)(x))
@@ -74,9 +68,7 @@ int __void__;
 #define VOID(x) (x)
 #endif
 
-/*
- * psuedo functions for standard screen
- */
+// psuedo functions for standard screen
 #define addch(ch) VOID(waddch(stdscr, ch))
 #define getch() VOID(wgetch(stdscr))
 #define addstr(str) VOID(waddstr(stdscr, str))
@@ -95,9 +87,7 @@ int __void__;
 #define standout() VOID(wstandout(stdscr))
 #define standend() VOID(wstandend(stdscr))
 
-/*
- * mv functions
- */
+// mv functions
 #define mvwaddch(win, y, x, ch) VOID(wmove(win, y, x) == ERR ? ERR : waddch(win, ch))
 #define mvwgetch(win, y, x) VOID(wmove(win, y, x) == ERR ? ERR : wgetch(win))
 #define mvwaddstr(win, y, x, str) VOID(wmove(win, y, x) == ERR ? ERR : waddstr(win, str))
@@ -113,9 +103,7 @@ int __void__;
 #define mvdelch(y, x) mvwdelch(stdscr, y, x)
 #define mvinsch(y, x, c) mvwinsch(stdscr, y, x, c)
 
-/*
- * psuedo functions
- */
+// psuedo functions
 
 #define clearok(win, bf) (win->_clear = bf)
 #define leaveok(win, bf) (win->_leave = bf)
