@@ -30,8 +30,8 @@
 // `vtm 2'/`vtm 3' of test/mmuhelp.s would ENABLE interrupts as a side effect.  Here that is
 // fatal: an interrupt taken during uload's copy builds its frame on the kernel stack, which
 // lives in the very page being overwritten, and the copy then walks over the handler's saved
-// registers.  So the bracket runs at 02003/02002 (БлПр set) and puts ПСВ back exactly as it
-// was found -- `ati'/`ita' take a 5-bit register number in supervisor mode, so M[021] = ПСВ
+// registers.  So the bracket runs at 02003/02002 (БлПр set) and puts PSW back exactly as it
+// was found -- `ati'/`ita' take a 5-bit register number in supervisor mode, so M[021] = PSW
 // is reachable.
 //
 // The two drains are not ceremonial, and each covers a different hazard:
@@ -90,8 +90,8 @@ WLIVE  = 04000                  // virtual page 2: the window on the live u-area
 uflush:
      13 mtj     8               // r8 := the return address; drainbrz's `vjm' clobbers r13
         atx     <parg>          // stash paddr -- still unmapped, so this is our own word
-        ita     021             // A := ПСВ
-        ati     011             // r9 := ПСВ, to be put back exactly on the way out
+        ita     021             // A := PSW
+        ati     011             // r9 := PSW, to be put back exactly on the way out
         vtm     02003           // БлП|БлЗ|БлПр: unmapped, unprotected, INTERRUPTS OFF
         xta     <u+UPT>         // A := u.u_upt[0].  РП cannot be read back, so save it.
         atx     <upt0>
@@ -114,7 +114,7 @@ uf1: 10 xta     WLIVE+USIZE-1   // A := the live u-area's word
         xta     <upt0>
         mod     020             // restore РП0..3
         ita     011
-        ati     021             // restore ПСВ (interrupts as the caller had them)
+        ati     021             // restore PSW (interrupts as the caller had them)
       8 mtj     13
      13 uj
 

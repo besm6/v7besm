@@ -135,7 +135,7 @@
 #define CONS2_READY 040  /* 6: Consul 2 is idle */
 
 /*
- * Bits of СПСВ, the saved program status / mode word (register 027), read back
+ * Bits of SPSW, the saved program status / mode word (register 027), read back
  * after a trap.  РежЭ|РежПр == 0 iff the interrupted context was user mode
  * (doc/Unix_Context_Switch.md §3).  Octal, bits numbered right-to-left from 1.
  */
@@ -153,9 +153,9 @@
 #define SPSW_INTR_DISABLE 02000  /* БлПр - external interrupts disabled */
 
 /*
- * Bits of ПСВ, the LIVE mode word (register 021).  The low two and БлПр sit where they do in
- * СПСВ -- `выпр' copies one into the other -- but the rest do not: where СПСВ reports how the
- * trap was taken, ПСВ carries the halt-on-fault switches.  Only the bits this kernel names are
+ * Bits of PSW, the LIVE mode word (register 021).  The low two and БлПр sit where they do in
+ * SPSW -- `выпр' copies one into the other -- but the rest do not: where SPSW reports how the
+ * trap was taken, PSW carries the halt-on-fault switches.  Only the bits this kernel names are
  * here; cli()/sti() (kernel/psw.s) own БлПр, and getpsw() is how C reads it back.
  */
 #define PSW_MMAP_DISABLE 00001  /* БлП  - data mapping disabled */

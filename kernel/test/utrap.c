@@ -61,7 +61,7 @@ void halt(unsigned mask);
 /* brz.s */
 void drainbrz(void);
 
-/* psw.s -- reads ПСВ back, the only way to see the interrupt level from C */
+/* psw.s -- reads PSW back, the only way to see the interrupt level from C */
 int getpsw(void);
 
 /* Must match the EQUs in crt0t.S. */
@@ -96,13 +96,13 @@ int getpsw(void);
 #define F_RMR    0004 /* Y (РМР) not preserved */
 #define F_R15    0010 /* the framed r15 is not the user's */
 #define F_STACK  0020 /* the stack was not switched: trap()'s frame landed on the user r15 */
-#define F_USER   0040 /* СПСВ does not say the fault came from user mode */
+#define F_USER   0040 /* SPSW does not say the fault came from user mode */
 #define F_CAUSE  0100 /* wrong ГРП cause or wrong faulting page */
 #define F_SLOT1  0200 /* fault 1 was skipped, not retried (restart protocol) */
 #define F_SLOT2  0400 /* fault 2 was skipped, not retried */
 #define F_NFAULT 01000 /* the wrong number of faults arrived */
 #define F_IPL    02000 /* the gate dispatched with БлПр still set: the level was never opened */
-#define F_KTRAP  04000 /* the gate took the SUPERVISOR arm: it read the forged СПСВ wrongly */
+#define F_KTRAP  04000 /* the gate took the SUPERVISOR arm: it read the forged SPSW wrongly */
 
 static unsigned mask;   /* accumulated failures */
 static unsigned nfault; /* which fault we are in: 1, 2, 3 */
@@ -139,7 +139,7 @@ void trap(void)
      * The gate opened the interrupt level before dispatching.  БлПр is forced on at the vector,
      * and the gate clears it again -- but only for a fault FROM USER, which is what this test
      * takes.  Without the check the discriminator in crt0t.S could branch either way and utrap
-     * would still pass.  There is no C-visible shadow of the level; it has to be read out of ПСВ.
+     * would still pass.  There is no C-visible shadow of the level; it has to be read out of PSW.
      */
     if (getpsw() & PSW_INTR_DISABLE)
         mask |= F_IPL;
@@ -190,8 +190,8 @@ void trap(void)
 }
 
 /*
- * The OTHER door behind 0500 (kernel/trap.c: ktrap()).  crt0t.S branches here when СПСВ says the
- * fault came from supervisor -- which this test never arranges: gouser() forges a user-mode СПСВ
+ * The OTHER door behind 0500 (kernel/trap.c: ktrap()).  crt0t.S branches here when SPSW says the
+ * fault came from supervisor -- which this test never arranges: gouser() forges a user-mode SPSW
  * and every fault below comes from uprog.  Reaching it means the gate's discriminator read the
  * mode wrongly, so say so and stop; there is nothing to return to, ktrap() being a branch target
  * and not a call.
@@ -245,7 +245,7 @@ int main()
     drainbrz();
 
     /*
-     * Mask every interrupt source: the forged СПСВ enters user mode with БлПр CLEAR, and the
+     * Mask every interrupt source: the forged SPSW enters user mode with БлПр CLEAR, and the
      * interval timer re-arms GRP_TIMER at reset.  Nothing here wants an external interrupt.
      */
     __besm6_mod(MOD_MGRP, 0);

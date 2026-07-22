@@ -262,10 +262,10 @@ int main()
      *
      * Nor is the cli().  The whole design of this test is that the tick stays PENDING until
      * gouser()'s `выпр' enters user mode, so that clock() sees a user frame; that used to be free,
-     * because БлПр was set from crt0c.S's ПСВ = 02003 and nothing in the kernel ever cleared it.
+     * because БлПр was set from crt0c.S's PSW = 02003 and nothing in the kernel ever cleared it.
      * Now spl0() clears it for real, so without the cli() the tick fires here, in kernel mode,
      * inside main().  cli() re-blocks delivery without disturbing curipl, which is what the
-     * splx() in extintr() will restore to; gouser() forges СПСВ = 0, so the `выпр' opens БлПр at
+     * splx() in extintr() will restore to; gouser() forges SPSW = 0, so the `выпр' opens БлПр at
      * the same instant it enters user mode.
      */
     __besm6_mod(MOD_GRPCLR, ~GRP_TIMER);

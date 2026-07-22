@@ -51,7 +51,7 @@ PGSZ    = 02000                 // 1024 words per page (octal)
 // -- forged register values (gouser plants them; usys.c checks what came back) --------------
 RMODE   = 044                   // R: ω = logical (bits 5-3 = 001) + overflow-suppress (bit 6)
 RMR     = 0123456               // Y: a distinctive younger-bits value
-MODVAL  = 04010                 // M[16]: inert (the forged СПСВ does not arm the modifier)
+MODVAL  = 04010                 // M[16]: inert (the forged SPSW does not arm the modifier)
 R13V    = 054321                // r13: the caller's return address.  THE SYSCALL MUST NOT TOUCH
                                 //   IT -- that is why the second result lives in r12 and not
                                 //   here (R_VAL2, include/sys/reg.h).
@@ -112,7 +112,7 @@ VS_R15C = 04013                 //        r15
         .globl  _start
 _start:
      15 vtm     kstack          // main()'s own supervisor stack (the gate uses u.u_stack)
-        vtm     02003           // ПСВ := БлП|БлЗ|БлПр: unmapped, unprotected, INTERRUPTS OFF
+        vtm     02003           // PSW := БлП|БлЗ|БлПр: unmapped, unprotected, INTERRUPTS OFF
      13 vjm     main            // usys.c: build the map, seed the sentinels, call gouser()
 halt0:  stop                    // main() should never return (gouser does not)
         uj      halt0
@@ -141,7 +141,7 @@ toreport:
 // plausibly clobber it (v7 returned its second value in a register, and r13 was the obvious slot
 // until 15d settled on r12).
 //
-// The forged СПСВ is ZERO: mode bits clear (user, mapping and protection ON, interrupts on --
+// The forged SPSW is ZERO: mode bits clear (user, mapping and protection ON, interrupts on --
 // main() masks МГРП, so there is no source), the modifier NOT armed and SPSW_RIGHT_INSTR clear,
 // so `выпр' lands on the LEFT half of uprog's first word.
         .globl  gouser
@@ -149,7 +149,7 @@ gouser:
         ati     IRET            // IRET (M[033]) := uentry -- where `выпр' lands
         xta   #(MODVAL)
         ati     MOD             // M[16] := MODVAL -- inert, but the gate must preserve it
-        xta                     // forged СПСВ := 0 (user mode, nothing armed)
+        xta                     // forged SPSW := 0 (user mode, nothing armed)
         ati     SPSW            //   M[027] := it
      15 vtm     USPV            // r15 := the user stack (mapped: leg 2 pushes below it)
      13 vtm     R13V            // r13 := the caller's return address (gouser does not return)
@@ -262,7 +262,7 @@ uprog:
 // The ONE difference from trapgate is `its ERET' below: the hardware puts an extracode's return
 // address in М032, not М033.  Framing it there means `intret' needs no change at all -- it
 // reloads the slot into IRET and leaves through the same `3 ij', because the `ij' index field
-// only picks WHICH REGISTER holds the PC while the mode comes from СПСВ either way.
+// only picks WHICH REGISTER holds the PC while the mode comes from SPSW either way.
 //
 // The temp cells are addressed BARE (no `< sym >' utc escape): an escape emits a `мода' that
 // loads M[16], which would overwrite the very C register the gate is saving.
@@ -280,7 +280,7 @@ sysgate:
         atx     save_sp
 
         // --- stack switch: UNCONDITIONAL.  An extracode only ever comes from user, so this
-        //     door never nests and needs no `СПСВ & 014' discriminator. ---
+        //     door never nests and needs no `SPSW & 014' discriminator. ---
      15 vtm     [ustkbase]      // M15 := kernel stack base = frame base F
 
         // --- FULSAV: fill the reg.h frame at [M15 ..]; xts/its walk M15 F -> F+21 ---
@@ -288,8 +288,8 @@ sysgate:
         xts     save_r          // frame[0]  := A     ; A := R
         xts     save_y          // frame[1]  := R     ; A := Y
         its     ERET            // frame[2]  := Y     ; A := ERET (M032, live) <-- THE ONE CHANGE
-        its     SPSW            // frame[3]  := RET   ; A := СПСВ (M027, live)
-        xts     save_c          // frame[4]  := СПСВ  ; A := M16
+        its     SPSW            // frame[3]  := RET   ; A := SPSW (M027, live)
+        xts     save_c          // frame[4]  := SPSW  ; A := M16
         xts     save_sp         // frame[5]  := M16   ; A := interrupted M15
         its     14              // frame[6]  := M15   ; A := M14 (live -- the `$77 N' operand)
         its     13              // frame[7]  := M14   ; A := M13 (live)
@@ -309,7 +309,7 @@ sysgate:
 
         // --- open the interrupt level for the C call, as kernel/besm6.S does: usys checks from
         //     inside a sysent stub that БлПр really is clear here (F_IPL) ---
-        vtm     3               // ПСВ := БлП|БлЗ, БлПр clear: interrupts delivered
+        vtm     3               // PSW := БлП|БлЗ, БлПр clear: interrupts delivered
 
      13 vtm     intret          // tail call, as kernel/besm6.S does: syscall()'s own `13 uj'
         uj      syscall         //   returns straight to `intret'.  kernel/syscall.c -- THE REAL ONE
@@ -353,7 +353,7 @@ badext:
         xts     save_a
 
         // --- open the interrupt level for the C call, as in sysgate ---
-        vtm     3               // ПСВ := БлП|БлЗ, БлПр clear: interrupts delivered
+        vtm     3               // PSW := БлП|БлЗ, БлПр clear: interrupts delivered
 
      13 vjm     badextr         // kernel/syscall.c -- THE REAL ONE
 
@@ -362,10 +362,10 @@ badext:
         //     cells and applied last, in the forced order Y -> A -> R (§7).
         //
         //     It shuts the door first, for the reason the original does: the gates above opened
-        //     the level for their C call, and everything below reloads single registers (СПСВ,
+        //     the level for their C call, and everything below reloads single registers (SPSW,
         //     IRET) and the five shared cells, none of which survives a nested gate. ---
 intret:
-        vtm     02003           // ПСВ := БлП|БлЗ|БлПр: external interrupts blocked
+        vtm     02003           // PSW := БлП|БлЗ|БлПр: external interrupts blocked
 
         stx                     // A := M1 from frame[20]
         sti     1               // restore M1; A := M2 from frame[19]
@@ -383,8 +383,8 @@ intret:
         sti     13
         sti     14              // restore M14;  A := M15 from frame[6]
         stx     save_sp         // prepare M15;  A := M16 from frame[5]
-        sti     MOD             // restore C;    A := СПСВ from frame[4]
-        sti     SPSW            // restore СПСВ; A := RET from frame[3]
+        sti     MOD             // restore C;    A := SPSW from frame[4]
+        sti     SPSW            // restore SPSW; A := RET from frame[3]
         sti     IRET            // restore RET into М033 (IRET);  A := Y from frame[2]
         stx     save_y          // prepare Y;    A := R from frame[1]
         stx     save_r          // prepare R;    A := A from frame[0]

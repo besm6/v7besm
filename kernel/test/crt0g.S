@@ -69,7 +69,7 @@ DATADR  = 02000                 // virtual page 1: the data page, where main() s
         .globl  _start
 _start:
      15 vtm     kstack          // seed the kernel stack (the gate switches back to it)
-        vtm     02003           // ПСВ := БлП|БлЗ|БлПр: unmapped, unprotected, INTERRUPTS OFF
+        vtm     02003           // PSW := БлП|БлЗ|БлПр: unmapped, unprotected, INTERRUPTS OFF
      13 vjm     main            // ugrow.c: build the map, seed the sentinel, call gouser()
 halt0:  stop                    // main() should never return (gouser does not)
         uj      halt0
@@ -91,7 +91,7 @@ badintr: stop   01
 // One parameter (uentry, the virtual entry address of uprog) arrives in the accumulator.
 // Runs in supervisor; `выпр' does not return -- control resurfaces in uprog, in user mode.
 //
-// The forged СПСВ is ZERO: mode bits clear (user, mapping and protection ON, interrupts on --
+// The forged SPSW is ZERO: mode bits clear (user, mapping and protection ON, interrupts on --
 // main() masks МГРП, so there is no source), the modifier NOT armed and SPSW_RIGHT_INSTR clear,
 // so `выпр' lands on the LEFT half of uprog's first word.
         .globl  gouser
@@ -99,7 +99,7 @@ gouser:
         ati     IRET            // IRET (M[033]) := uentry -- where `выпр' lands
         xta   #(MODVAL)
         ati     MOD             // M[16] := MODVAL -- inert, but the gate must preserve it
-        xta                     // forged СПСВ := 0 (user mode, nothing armed)
+        xta                     // forged SPSW := 0 (user mode, nothing armed)
         ati     SPSW            //   M[027] := it
      15 vtm     USPV            // r15 := the base of the user stack, as exec seeds it
         ntr     RMODE           // R := RMODE (logical + overflow-suppress)
@@ -147,7 +147,7 @@ trapgate:
         atx     save_sp
 
         // --- stack switch: UNCONDITIONAL.  A fault from supervisor is a kernel bug that ends
-        //     in panic, so this door never nests and needs no `СПСВ & 014' discriminator. ---
+        //     in panic, so this door never nests and needs no `SPSW & 014' discriminator. ---
      15 vtm     [ustkbase]      // M15 := kernel stack base = frame base F
 
         // --- FULSAV: fill the reg.h frame at [M15 ..]; xts/its walk M15 F -> F+21 ---
@@ -155,8 +155,8 @@ trapgate:
         xts     save_r          // frame[0]  := A     ; A := R
         xts     save_y          // frame[1]  := R     ; A := Y
         its     IRET            // frame[2]  := Y     ; A := IRET (M033, live)
-        its     SPSW            // frame[3]  := RET   ; A := СПСВ (M027, live)
-        xts     save_c          // frame[4]  := СПСВ  ; A := M16
+        its     SPSW            // frame[3]  := RET   ; A := SPSW (M027, live)
+        xts     save_c          // frame[4]  := SPSW  ; A := M16
         xts     save_sp         // frame[5]  := M16   ; A := interrupted M15
         its     14              // frame[6]  := M15   ; A := M14 (live)
         its     13              // frame[7]  := M14   ; A := M13 (live)
@@ -179,17 +179,17 @@ trapgate:
         //     that wants it) and calls trap().  Nothing is passed either way; the frame is always
         //     at [ustkbase].  ugrow forges user mode, so it must take the second arm -- ugrow.c's
         //     ktrap() stub raises F_KTRAP if it does not. ---
-        ita     SPSW            // A := СПСВ (live)
+        ita     SPSW            // A := SPSW (live)
         aax     #(SPSW_INTERRUPT | SPSW_EXTRACODE)
         u1a     ktrap           // РежЭ|РежПр set -> the kernel faulted.  A branch, not a call
-        vtm     3               // zero -> from user: ПСВ := БлП|БлЗ, interrupts delivered
+        vtm     3               // zero -> from user: PSW := БлП|БлЗ, interrupts delivered
 
      13 vjm     trap            // ugrow.c: check the frame, back up the PC, grow the stack
 
         // --- restore: the exact inverse of the fill (kernel/besm6.S:intret).  It shuts the door
         //     first: the gate opened the level, and nothing below survives a nested gate. ---
 intret:
-        vtm     02003           // ПСВ := БлП|БлЗ|БлПр: external interrupts blocked
+        vtm     02003           // PSW := БлП|БлЗ|БлПр: external interrupts blocked
 
         stx                     // A := M1 from frame[20]
         sti     1               // restore M1; A := M2 from frame[19]
@@ -207,8 +207,8 @@ intret:
         sti     13
         sti     14              // restore M14;  A := M15 from frame[6]
         stx     save_sp         // prepare M15;  A := M16 from frame[5]
-        sti     MOD             // restore C;    A := СПСВ from frame[4]
-        sti     SPSW            // restore СПСВ; A := RET from frame[3]
+        sti     MOD             // restore C;    A := SPSW from frame[4]
+        sti     SPSW            // restore SPSW; A := RET from frame[3]
         sti     IRET            // restore RET into М033 (IRET);  A := Y from frame[2]
         stx     save_y          // prepare Y;    A := R from frame[1]
         stx     save_r          // prepare R;    A := A from frame[0]

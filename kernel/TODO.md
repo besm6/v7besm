@@ -92,12 +92,12 @@ loop needs no `utc`.
 
 An interrupt taken inside a bracket is harmless *for addressing*: the hardware forces БлП = 1 at the
 vector, so the handler sees the kernel's normal unmapped world and its stack at `076000` resolves
-physically; `выпр` restores БлП from СПСВ and the bracket resumes mapped.
+physically; `выпр` restores БлП from SPSW and the bracket resumes mapped.
 
 It is **not** harmless for `uload`, which is overwriting the page the handler's stack frame is in —
 so that bracket holds БлПр. And note that **`vtm N,0` writes БлПр along with БлП and БлЗ**, all three
 from the address field: the bare `vtm 2`/`vtm 3` of `test/mmuhelp.s` *enables* interrupts as a side
-effect. A bracket that wants them off must say `02002`/`02003`, and restore ПСВ afterwards
+effect. A bracket that wants them off must say `02002`/`02003`, and restore PSW afterwards
 (`ita 021`/`ati 021` — supervisor takes a 5-bit register number, so `M[021]` is reachable).
 
 ### DONE: the doors open the interrupt level, and `intret` shuts it
@@ -113,7 +113,7 @@ touches `curipl` (`intr.c`), so it still read **0** after a gate had landed in C
 The first `spl` bracket in a syscall therefore opened the door by accident: `sleep()` does
 `s = spl6()` → `s == 0`, and its closing `splx(s)` calls `sti()`. Any syscall that slept reached
 `uj intret` unblocked — and `intret` cannot survive that. Below its first instructions it reloads
-СПСВ and IRET, single registers the hardware overwrites the instant an interrupt is taken, and
+SPSW and IRET, single registers the hardware overwrites the instant an interrupt is taken, and
 re-stashes into the five shared temp cells. An interrupt in that ~20-instruction window returns the
 user to the wrong mode word.
 
@@ -121,8 +121,8 @@ How it turned out:
 
 * **One instruction in each synchronous gate**, after the frame fill and before the `13 vjm` —
   `vtm 3`, which is `psw.s:sti()`. Not one instruction earlier: until the frame is complete,
-  СПСВ/ERET and the cells are the only copy of the interrupted context.
-* **`trapgate` opens it only for a fault from user**, reusing `intrgate`'s `СПСВ & 014` test. It
+  SPSW/ERET and the cells are the only copy of the interrupted context.
+* **`trapgate` opens it only for a fault from user**, reusing `intrgate`'s `SPSW & 014` test. It
   was unconditional first, on the argument that a supervisor fault panics anyway. That was wrong on
   its own terms: the register dump is *polled* output (`scputc()` spins, `putchar()` holds spl7), so
   that path never needed interrupts; the one thing after it that does — `panic()`'s `update()` —
@@ -150,7 +150,7 @@ How it turned out:
   epilogue covers all four doors and any future C tail, where a `cli()` per C exit path would have
   to be got right once per path forever.
 * **`vtm` with register field 0 is the mode write** — БлП, БлЗ and БлПр together, straight from the
-  address field, nothing else in ПСВ touched, accumulator and ω untouched. It went in as a
+  address field, nothing else in PSW touched, accumulator and ω untouched. It went in as a
   three-instruction `ita`/`aax`/`ati` first, because this file and three documents said `vtm` would
   clobber ПоП/ПоК. It does not: the hardware masks the write to those three bits. `psw.s` now says
   so, and `doc/Besm6_Instruction_Set.md` §024/§025 documents the feature, which it had omitted.
@@ -158,11 +158,11 @@ How it turned out:
   that uses `sti N` as a *machine instruction* a dozen times over would be unreadable.
 * **`cli`/`sti` now assert БлП = БлЗ = 1** rather than preserving them, so they may only be called
   from unmapped kernel context — every caller is. The mapped brackets (`uarea.S`, `seg.S`,
-  `usermem.S`) do their own `vtm` and bank ПСВ, because they must preserve a БлПр they do not know.
+  `usermem.S`) do their own `vtm` and bank PSW, because they must preserve a БлПр they do not know.
 * **`curipl` is not touched by any of it.** It already reads 0 for an entry from user, and `выпр`
-  restores БлПр from СПСВ on the way out — the same asymmetry `extintr()`'s closing repair relies on.
+  restores БлПр from SPSW on the way out — the same asymmetry `extintr()`'s closing repair relies on.
 * **`intrgate` is exempt**: a handler runs at raised level and the return drops it, as `rtt` does.
-* Checked on the machine, on both doors: `usys` reads ПСВ back inside every dispatched handler and
+* Checked on the machine, on both doors: `usys` reads PSW back inside every dispatched handler and
   `utrap` inside its stub `trap()` (`getpsw()`, new in `psw.s`), each failing with `F_IPL` if БлПр
   is still set; and `utrap`/`ugrow` carry a `ktrap()` stub raising `F_KTRAP`, since both forge user
   mode and must never reach the supervisor arm. Each was made to fail on purpose first — deleting

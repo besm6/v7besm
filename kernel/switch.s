@@ -113,9 +113,9 @@ save:
 //    what makes it name the incoming process.
 //
 //  * THE MASK SPANS BOTH COPIES, NOT EACH ONE.  uflush/uload each hold БлПр internally and
-//    put ПСВ back as they found it; an interrupt landing in the gap between them would build
+//    put PSW back as they found it; an interrupt landing in the gap between them would build
 //    a frame on a kernel stack that has just been flushed and is about to be overwritten.
-//    So resume() sets БлПр itself across the pair and restores the entry ПСВ at the end.
+//    So resume() sets БлПр itself across the pair and restores the entry PSW at the end.
 //    The state it restores belongs to the OUTGOING caller, which is safe because every
 //    landing site re-establishes its own level (sleep()'s splx(s), the spl6()/spl0() in
 //    swtch()'s loop).
@@ -132,7 +132,7 @@ resume:
         atx     <rlbl>           // park lbl (it arrived in the accumulator)
      15 xta     -1               // A := paddr, the one pushed argument
         atx     <rpaddr>
-        ita     021              // A := ПСВ
+        ita     021              // A := PSW
         atx     <rpsw>           //   bank the caller's, to be restored exactly
         vtm     02003            //   БлП|БлЗ|БлПр: interrupts off across BOTH copies.  The
                                  //   mode write (register field 0); БлП/БлЗ are already set,
@@ -174,7 +174,7 @@ rfast:
      14 xta     8
         ati     15               // r15 := the new process's kernel stack pointer
         xta     <rpsw>
-        ati     021              // restore the entry ПСВ (and with it БлПр)
+        ati     021              // restore the entry PSW (and with it БлПр)
         xta     #(1)             // A := 1 -- the matching save() returns nonzero
      13 uj                       // ... and lands there, not in our caller
 
@@ -197,4 +197,4 @@ uhome:  .word 0                  // set to proc[0].p_addr at boot by main() (ker
 
 rpaddr: . = . + 1                // the incoming p_addr, held across the uflush/uload calls
 rlbl:   . = . + 1                // the label pointer, dereferenced only after the uload
-rpsw:   . = . + 1                // the caller's ПСВ, put back before the final jump
+rpsw:   . = . + 1                // the caller's PSW, put back before the final jump

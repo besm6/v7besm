@@ -73,7 +73,7 @@ A trap on this machine is cheap and nearly empty. The hardware:
   clear БлПр once the frame is safe, because a system call must not run with the clock stopped
   (§10);
 - saves the old mode bits, plus the supervisor bits, in **SPSW** (`M[027]` — the register
-  [Memory_Mapping.md](Memory_Mapping.md) and the Russian sources call СПСВ);
+  [Memory_Mapping.md](Memory_Mapping.md) and the Russian sources call SPSW);
 - deposits the return PC in **IRET** (`M[033]`) for an interrupt or fault, or **ERET** (`M[032]`)
   for an extracode;
 - for an extracode, additionally hands the **effective address in `M[14]`**;
@@ -371,7 +371,7 @@ it is also what makes the door-merge free:
 
 ## 7. A fault, in C
 
-**Two routines, one vector.** The gate reads `СПСВ & 014` and dispatches by mode: a fault from user
+**Two routines, one vector.** The gate reads `SPSW & 014` and dispatches by mode: a fault from user
 goes to `trap()`, a fault from supervisor to `ktrap()`, both in
 [`kernel/trap.c`](../kernel/trap.c). The second is a kernel bug and never returns — which is why the
 gate reaches it with `u1a ktrap`, a branch and not a call: no return address to plant, no tail
@@ -576,7 +576,7 @@ notification that must not be lost.
 **`spl` is БлПр, not МГРП.** This kernel has exactly two interrupt levels, not the PDP-11's eight
 (which is why `BASEPRI()` is permanently false, §3). `setipl()` calls `cli()`/`sti()` in
 `kernel/psw.s`, and each is a single `vtm`: with the register field 0, `уиа` writes БлП, БлЗ and
-БлПр into ПСВ straight from its address field, all three at once and nothing else touched
+БлПр into PSW straight from its address field, all three at once and nothing else touched
 ([Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) §024). That it carries БлП/БлЗ along is
 harmless — the kernel runs unmapped with protection off as a standing invariant, so `02003`/`3` put
 back what is already there — but it does mean these may only be called from unmapped kernel context,
@@ -590,7 +590,7 @@ handler runs at raised level and the `выпр` drops it, exactly as `rtt` does 
 them touches `curipl`, which already reads 0 for an entry from user mode.
 
 **`trapgate` opens it only for a fault from user**, and is the one gate that discriminates. It
-reuses the `СПСВ & 014` test `intrgate` uses for its stack switch (§5); the supervisor arm does not
+reuses the `SPSW & 014` test `intrgate` uses for its stack switch (§5); the supervisor arm does not
 merely skip the `vtm 3` but branches to a different C routine, `ktrap()` (§7), which panics and
 never returns. That path wants the
 machine left exactly as it was found, because:
@@ -630,7 +630,7 @@ One epilogue, `intret`, serves all four doors. It is the fill run backwards: `st
 
 ```
 intret:
-        vtm     02003               // ПСВ := БлП|БлЗ|БлПр: external interrupts blocked
+        vtm     02003               // PSW := БлП|БлЗ|БлПр: external interrupts blocked
         stx                         // A := M1 from frame[20]
         sti     1                   // restore M1; A := M2 from frame[19]
         ...
@@ -836,7 +836,7 @@ Four things make it sharper than it reads:
 - **Its own arguments are on the doomed stack.** `paddr` arrives pushed at `r15-1`, inside the page
   `uload()` is about to overwrite, so both arguments must be in their cells *before* the flush.
 - **The mask spans both copies, not each one.** `uflush`/`uload` each hold БлПр internally and restore
-  ПСВ as they found it; an interrupt landing in the gap between them would build a frame on a kernel
+  PSW as they found it; an interrupt landing in the gap between them would build a frame on a kernel
   stack that has just been flushed and is about to be overwritten. So `resume()` holds БлПр itself
   across the pair.
 - **It calls `uload()` from assembly**, as that routine's contract requires — `uload` destroys its

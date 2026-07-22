@@ -361,8 +361,8 @@ The machine has **no priority hierarchy**: an interrupt is delivered when БлП
 `ГРП & МГРП` is non-zero. So there are two levels, not eight, and two registers that could each
 serve as the mask. They are not interchangeable, and the choice matters:
 
-* **БлПр (ПСВ bit `02000`) is the priority.** The hardware already treats it as one — a trap or an
-  extracode forces БлПр on at the vector and `выпр` restores it from СПСВ, so returning through a
+* **БлПр (PSW bit `02000`) is the priority.** The hardware already treats it as one — a trap or an
+  extracode forces БлПр on at the vector and `выпр` restores it from SPSW, so returning through a
   gate re-establishes the level by itself, exactly as the PDP-11's `rtt` does when it reloads the
   priority field of PS.
 * **МГРП is the source enable.** `grp & mgrp` in the dispatcher means "sources this kernel is
@@ -377,7 +377,7 @@ be taken in kernel mode at all**. That is invisible for as long as every interru
 mode, and becomes load-bearing the moment an idle loop has to spin waiting for one.
 
 БлПр lives in the mode word, and writing it is a single `vtm` — with the register field 0, `уиа`
-writes БлП, БлЗ and БлПр into ПСВ from its address field, and only those three
+writes БлП, БлЗ and БлПр into PSW from its address field, and only those three
 ([Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) §024). Cheap as that is, it is the one piece
 here the intrinsics do *not* reach: none of the nine emits `уиа`, and the register field is the whole
 point — an intrinsic would have to guarantee register 0, which is exactly the thing a compiler owns.

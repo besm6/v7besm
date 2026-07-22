@@ -31,8 +31,8 @@
 // reasons as uarea.S: `vtm <mask>' with register field 0 writes БлП, БлЗ and БлПр
 // straight from the address field -- all three -- so the plain `vtm 2'/`vtm 3' of
 // test/mmuhelp.s would ENABLE interrupts as a side effect.  These run at 02003/02002
-// (БлПр set) and put ПСВ back exactly as found (`ita'/`ati' take a 5-bit register
-// number in supervisor mode, so M[021] = ПСВ is reachable).
+// (БлПр set) and put PSW back exactly as found (`ita'/`ati' take a 5-bit register
+// number in supervisor mode, so M[021] = PSW is reachable).
 //
 // The two drains are not ceremonial, and each covers a different hazard -- and a
 // missing one shows up here and nowhere else (task 11):
@@ -93,8 +93,8 @@ copyseg:
         atx     <segd>          // stash d (in A) -- still unmapped, so this is our own word
      15 xta     -1              // A := s, the pushed argument
         atx     <segs>          // stash s
-        ita     021             // A := ПСВ
-        ati     011             // r9 := ПСВ, to be put back exactly on the way out
+        ita     021             // A := PSW
+        ati     011             // r9 := PSW, to be put back exactly on the way out
         vtm     02003           // БлП|БлЗ|БлПр: unmapped, unprotected, INTERRUPTS OFF
         xta     <u+UPT>         // A := u.u_upt[0].  РП cannot be read back, so save it.
         atx     <oldq>
@@ -121,7 +121,7 @@ cp1: 10 xta     WSRC+PGSZ-1     // A := the source page's word, through window 1
         xta     <oldq>
         mod     020             // restore РП0..3
         ita     011
-        ati     021             // restore ПСВ (interrupts as the caller had them)
+        ati     021             // restore PSW (interrupts as the caller had them)
       8 mtj     13
      15 utm     -1              // pop the pushed argument (s)
      13 uj

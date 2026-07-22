@@ -42,7 +42,7 @@
         .globl  _start
 _start:
      15 vtm     ustk            // the u-page stack: see the header
-        vtm     02003           // ПСВ := БлП|БлЗ|БлПр -- unmapped, unprotected, and
+        vtm     02003           // PSW := БлП|БлЗ|БлПр -- unmapped, unprotected, and
                                 //   interrupts OFF.  Leg C opens them itself, through the
                                 //   real intrinit()/spl0(), so that what it proves is that
                                 //   THOSE work and not that the crt0 left the door ajar.
@@ -158,7 +158,7 @@ rt_back:
 // crt0.s's stub verbatim.  extintr() preserves r1-r7 and r15 (that is the ABI) and the
 // hardware saved the PC in M[033], so the accumulator and r8-r14 are all this has to keep.
 // Interrupts stay blocked throughout -- the hardware sets БлПр at the vector and `выпр'
-// restores it from СПСВ -- so one static save area is enough.
+// restores it from SPSW -- so one static save area is enough.
 
 intrgate:
         atx     <sa>

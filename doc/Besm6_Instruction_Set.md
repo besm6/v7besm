@@ -1090,8 +1090,8 @@ Loads M[reg] with the 15-bit value V (the raw offset plus C, not including the c
 M[reg]). This allows loading an absolute value into any modifier register.
 
 **With `reg == 0`, in supervisor mode, this is the mode-word write.** M[0] always reads 0, so the
-register half of the instruction is a no-op and the hardware spends it on ПСВ instead: the БлП
-(`01`), БлЗ (`02`) and БлПр (`02000`) bits of V are written into ПСВ, **all three at once**
+register half of the instruction is a no-op and the hardware spends it on PSW instead: the БлП
+(`01`), БлЗ (`02`) and БлПр (`02000`) bits of V are written into PSW, **all three at once**
 ([besm6_cpu.c:1565](https://github.com/besm6/simh/blob/master/BESM6/besm6_cpu.c#L1565)). It is a
 *masked* write — ПоП, ПоК and the write-watch bit are not in the mask and keep their values — and it
 disturbs neither the accumulator nor ω. In user mode there is no side effect at all.
@@ -1099,7 +1099,7 @@ disturbs neither the accumulator nor ω. In user mode there is no side effect at
 This is the only single-instruction way to change the interrupt level or the mapping override, and
 the kernel uses it as such: `vtm 3` enables interrupts, `vtm 02003` blocks them, `vtm 02002` turns
 mapping on for a `copyin` bracket. See [Memory_Mapping.md](Memory_Mapping.md), "Writing the mode
-bits", and `kernel/psw.s`. Anything *else* in the machine-register file — СПСВ, IRET, ERET, ИБП, ДВП
+bits", and `kernel/psw.s`. Anything *else* in the machine-register file — SPSW, IRET, ERET, ИБП, ДВП
 — needs the general `040 «уи»` instead.
 
 ---
@@ -1207,8 +1207,8 @@ Return is normally accomplished with `UJ M[reg]` which branches to the saved ret
 numbering used by the simulator and by [Memory_Mapping.md](Memory_Mapping.md) — the same
 instruction.
 
-This is the only way out of supervisor mode. It restores the mode bits БлП, БлЗ and БлПр from СПСВ,
-restores the supervisor bits (РежЭ/РежПр) from СПСВ — so returning to user mode means returning with
+This is the only way out of supervisor mode. It restores the mode bits БлП, БлЗ and БлПр from SPSW,
+restores the supervisor bits (РежЭ/РежПр) from SPSW — so returning to user mode means returning with
 both of them clear — and loads the PC from the return-address register named by the low two bits of
 the index field: `M[032]` = ERET for an extracode, `M[033]` = IRET for an interrupt. A shared
 trap-exit path must therefore know which door it came in by.
@@ -1366,7 +1366,7 @@ execute normally.
 extracode or inside an interrupt (РежЭ or РежПр in РУУ); you become one by taking one, and you stop
 being one by executing `выпр`. There is no other door in either direction. Supervisor mode also
 widens the register file from 16 to 32, which is the only reason the kernel can name the mode
-register ПСВ at all. See [Memory_Mapping.md](Memory_Mapping.md#supervisor-mode-versus-user-mode).
+register PSW at all. See [Memory_Mapping.md](Memory_Mapping.md#supervisor-mode-versus-user-mode).
 
 ### Instructions restricted to kernel mode
 

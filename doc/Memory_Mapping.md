@@ -147,7 +147,7 @@ uint32 BAZ[8], TABST, RZ, OLDEST, FLUSH;
 data access. That is the whole of it — a single bit, with no read/write distinction. A page is
 either readable-and-writable or neither.
 
-### ПСВ (PSW) — the two override bits
+### PSW (PSW) — the two override bits
 
 The mode register `M[021]` holds, among other things, the two bits that switch the whole mechanism
 off ([besm6_defs.h:203](https://github.com/besm6/simh/blob/master/BESM6/besm6_defs.h#L203)):
@@ -184,8 +184,8 @@ You are the supervisor **if and only if** you are inside an extracode or inside 
 | `RP[0..7]` | 8 × 48 bits | **РП0**–**РП7** | [besm6_mmu.c:56](https://github.com/besm6/simh/blob/master/BESM6/besm6_mmu.c#L56) | The page table. 4 physical page numbers each. **Write-only.** |
 | `TLB[0..31]` | 32 × 9 bits | — | [besm6_mmu.c:57](https://github.com/besm6/simh/blob/master/BESM6/besm6_mmu.c#L57) | Unpacked copy of РП; what translation actually reads. Not program-visible. |
 | `RZ` | 32 bits | **РЗ** | [besm6_mmu.c:44](https://github.com/besm6/simh/blob/master/BESM6/besm6_mmu.c#L44) | One protection bit per virtual page. Set = closed. **Write-only.** |
-| `M[021]` | 15 bits | **ПСВ** | [besm6_defs.h:192](https://github.com/besm6/simh/blob/master/BESM6/besm6_defs.h#L192) | Holds БлП (bit 1) and БлЗ (bit 2). |
-| `M[027]` | 15 bits | **СПСВ** | [besm6_defs.h:193](https://github.com/besm6/simh/blob/master/BESM6/besm6_defs.h#L193) | Saved ПСВ across a trap. |
+| `M[021]` | 15 bits | **PSW** | [besm6_defs.h:192](https://github.com/besm6/simh/blob/master/BESM6/besm6_defs.h#L192) | Holds БлП (bit 1) and БлЗ (bit 2). |
+| `M[027]` | 15 bits | **SPSW** | [besm6_defs.h:193](https://github.com/besm6/simh/blob/master/BESM6/besm6_defs.h#L193) | Saved PSW across a trap. |
 | `RUU` | 9 bits | **РУУ** | [besm6_defs.h:177](https://github.com/besm6/simh/blob/master/BESM6/besm6_defs.h#L177) | Holds РежЭ/РежПр, i.e. supervisor mode. |
 | `BRZ[0..7]`, `BAZ[0..7]` | 8 × 50 / 8 × 16 | **БРЗ**, **БАЗ** | [besm6_mmu.c:43](https://github.com/besm6/simh/blob/master/BESM6/besm6_mmu.c#L43) | Write-back store cache and its address tags. |
 | `BRS[0..3]`, `BAS[0..3]` | 4 × 50 / 4 × 16 | **БРС**, **БАС** | [besm6_mmu.c:46](https://github.com/besm6/simh/blob/master/BESM6/besm6_mmu.c#L46) | Instruction prefetch buffer. |
@@ -281,7 +281,7 @@ What supervisor mode buys you:
    `STOP_BADCMD` → ГРП bit 13 `GRP_ILL_INSN`.
 4. **The register file widens from 16 to 32.** `040 «уи»` and its relatives index `M[Aex & 037]` in
    supervisor mode but only `M[Aex & 017]` in user mode ([besm6_cpu.c:1401](https://github.com/besm6/simh/blob/master/BESM6/besm6_cpu.c#L1401)).
-   This is the *only* reason the kernel can reach ПСВ (`M[021]`) at all — and hence the only reason
+   This is the *only* reason the kernel can reach PSW (`M[021]`) at all — and hence the only reason
    it can touch БлП and БлЗ. A user program cannot name those registers, so it cannot ask for the
    mapping to be turned off.
 
@@ -301,7 +301,7 @@ an operand.
 |---|---|---|
 | Handler | `mmu_fetch()` [:658](https://github.com/besm6/simh/blob/master/BESM6/besm6_mmu.c#L658) | `mmu_load()` [:499](https://github.com/besm6/simh/blob/master/BESM6/besm6_mmu.c#L499), `mmu_store()` [:400](https://github.com/besm6/simh/blob/master/BESM6/besm6_mmu.c#L400) |
 | **Mapped?** | **Never** in supervisor mode; **always** in user mode. Keyed on `IS_SUPERVISOR(RUU)`. | Whenever **БлП is clear**. Keyed on `PSW_MMAP_DISABLE`, independent of mode. |
-| Can the mode be overridden? | **No.** БлП has no effect on fetch. | **Yes.** БлП is a normal, writable ПСВ bit. |
+| Can the mode be overridden? | **No.** БлП has no effect on fetch. | **Yes.** БлП is a normal, writable PSW bit. |
 | **Protection test** | The РП entry for the page **is zero**. | The **РЗ bit** for the page **is set**. |
 | Protection checker | `mmu_fetch_check()` [:580](https://github.com/besm6/simh/blob/master/BESM6/besm6_mmu.c#L580) | `mmu_protection_check()` [:295](https://github.com/besm6/simh/blob/master/BESM6/besm6_mmu.c#L295) |
 | Applies in supervisor mode? | **No** — never checked. | **Yes**, unless БлЗ is set. |
@@ -462,7 +462,7 @@ Two facts make it possible:
   instructions share a word.
 
 So a handler that intends to retry must reconstruct the faulting instruction's position from
-`SPSW_NEXT_RK` and `SPSW_RIGHT_INSTR` and rewrite `M[IRET]`/`СПСВ` before returning. Get this wrong
+`SPSW_NEXT_RK` and `SPSW_RIGHT_INSTR` and rewrite `M[IRET]`/`SPSW` before returning. Get this wrong
 and a demand-paged program will skip an instruction every time it faults — which is exactly the kind
 of bug that only shows up under memory pressure.
 
@@ -537,7 +537,7 @@ void op_int_1 (const char *msg)
 ```
 — [besm6_cpu.c:1728](https://github.com/besm6/simh/blob/master/BESM6/besm6_cpu.c#L1728)
 
-The old БлП/БлЗ/БлПр and the old supervisor bits go into **СПСВ**; the PC goes into **IRET**
+The old БлП/БлЗ/БлПр and the old supervisor bits go into **SPSW**; the PC goes into **IRET**
 (`M[033]`). Then **БлП, БлЗ and БлПр are all forced on** — mapping off, protection off, external
 interrupts off — and control lands at physical **`0500`** (internal fault) or **`0501`** (external
 interrupt, `op_int_2`, [besm6_cpu.c:1750](https://github.com/besm6/simh/blob/master/BESM6/besm6_cpu.c#L1750)).
@@ -570,7 +570,7 @@ The differences from an interrupt matter:
 * The return address goes to **ERET** (`M[032]`), not IRET.
 * **The effective address is passed to the handler in `M[14]`** — that is the system-call argument
   register.
-* ПСВ is **overwritten** (`=`, not `|=`). ПоК and the write-watch bit are *lost* across an
+* PSW is **overwritten** (`=`, not `|=`). ПоК and the write-watch bit are *lost* across an
   extracode, unlike across an interrupt.
 
 Vectors: extracodes **э50–э77** land at **`0550`–`0577`**; **э20** and **э21** land at **`0560`** and
@@ -596,9 +596,9 @@ case 0320:                                      /* выпр, iret */
 ```
 — [besm6_cpu.c:1637](https://github.com/besm6/simh/blob/master/BESM6/besm6_cpu.c#L1637)
 
-Supervisor-only. It restores БлП, БлЗ and БлПр from СПСВ and restores the supervisor bits from СПСВ
-— so **returning to user mode means returning with СПСВ's РежЭ/РежПр clear.** The mode you go back
-to is whatever was saved, which is why the kernel can edit СПСВ to control where it lands.
+Supervisor-only. It restores БлП, БлЗ and БлПр from SPSW and restores the supervisor bits from SPSW
+— so **returning to user mode means returning with SPSW's РежЭ/РежПр clear.** The mode you go back
+to is whatever was saved, which is why the kernel can edit SPSW to control where it lands.
 
 The **index-register field selects the return address register**: `PC = M[(reg & 3) | 030]`, so
 
@@ -733,16 +733,16 @@ case 0240:                                      /* уиа, vtm */
     }
 ```
 
-The mode bits come straight from the **address field**, so `уиа <mask>(0)` sets ПСВ's БлП/БлЗ/БлПр
+The mode bits come straight from the **address field**, so `уиа <mask>(0)` sets PSW's БлП/БлЗ/БлПр
 to `mask` in a single instruction. Only those three bits can be set this way — ПоП, ПоК and the
 write-watch bit cannot.
 
-The general route is `040 «уи»`, which in supervisor mode writes any of `M[0]`…`M[037]`, ПСВ
-(`M[021]`) included. Use `уиа` for the mode bits and `уи` for everything else (ERET, IRET, СПСВ,
+The general route is `040 «уи»`, which in supervisor mode writes any of `M[0]`…`M[037]`, PSW
+(`M[021]`) included. Use `уиа` for the mode bits and `уи` for everything else (ERET, IRET, SPSW,
 ИБП, ДВП). (`слиа`/`utm` carries the identical side effect, from the identical code; with M[0]
 reading 0 the two are the same instruction here. Prefer `уиа`.)
 
-**This kernel writes ПСВ this way and no other.** `cli()`/`sti()` in
+**This kernel writes PSW this way and no other.** `cli()`/`sti()` in
 [`kernel/psw.s`](../kernel/psw.s) — which *are* the interrupt priority level, since `setipl()` is
 built on them — are one `vtm 02003` and one `vtm 3`; the four gates in
 [`kernel/besm6.S`](../kernel/besm6.S) inline the same instruction to open the level for their C
@@ -974,14 +974,14 @@ with mapping off will do it.
 **10. Watch the extracode vector aliases.** э20/э60 and э21/э61 share vectors `0560`/`0561`. Pick
 one of each pair as the system-call trap and leave the other alone.
 
-**11. Interrupts and extracodes save state differently.** An extracode *overwrites* ПСВ (losing ПоК
+**11. Interrupts and extracodes save state differently.** An extracode *overwrites* PSW (losing ПоК
 and the write-watch bit); an interrupt *ORs* the disable bits in. And an extracode returns via ERET
 (`выпр` with reg ≡ 2), an interrupt via IRET (reg ≡ 3). A single `выпр` in a shared trap-exit path
 must therefore know which door it came in by.
 
-**12. There is exactly one saved-state slot.** СПСВ, ERET and IRET are single registers, not a
+**12. There is exactly one saved-state slot.** SPSW, ERET and IRET are single registers, not a
 stack. Interrupts are disabled on entry (БлПр is forced on), and a second internal fault while
-handling the first is fatal — `STOP_DOUBLE_INTR`. The kernel must save СПСВ/IRET to its own stack
+handling the first is fatal — `STOP_DOUBLE_INTR`. The kernel must save SPSW/IRET to its own stack
 before it does anything that can fault, and before it re-enables interrupts.
 
 **13. Hardware debug registers exist.** ИБП (`M[034]`, КРА) is an execute breakpoint and ДВП
@@ -1085,6 +1085,6 @@ on the next `run`.
 * [Kernel_Assembly_Routines.md](Kernel_Assembly_Routines.md) — the machine-assist routines this
   document constrains: `resume`, `copyin`/`copyout`, and the boot-time mapping.
 * [besm6_mmu.c](https://github.com/besm6/simh/blob/master/BESM6/besm6_mmu.c) — the MMU itself: translation, protection, the caches.
-* [besm6_defs.h](https://github.com/besm6/simh/blob/master/BESM6/besm6_defs.h) — the ПСВ, СПСВ, РУУ and ГРП bit definitions.
+* [besm6_defs.h](https://github.com/besm6/simh/blob/master/BESM6/besm6_defs.h) — the PSW, SPSW, РУУ and ГРП bit definitions.
 * [besm6_cpu.c](https://github.com/besm6/simh/blob/master/BESM6/besm6_cpu.c) — `cmd_002()`, the trap-to-interrupt handler in `sim_instr()`, and the
   supervisor entry/exit paths.

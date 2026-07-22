@@ -20,7 +20,7 @@
  *   4. An unimplemented extracode (э50).  Checks badext signals SIGINS and the program resumes
  *      with its machine intact.
  *
- * Every leg also checks the INTERRUPT LEVEL: each handler reads ПСВ back through getpsw() and the
+ * Every leg also checks the INTERRUPT LEVEL: each handler reads PSW back through getpsw() and the
  * report fails if БлПр was still set.  The hardware forces it on at the vector, so this is the
  * assertion that the gate opens it again before dispatching -- v7's spl0()-on-entry, without which
  * a system call runs to completion with the clock stopped.
@@ -62,7 +62,7 @@ void halt(unsigned mask);
 /* brz.s */
 void drainbrz(void);
 
-/* psw.s -- reads ПСВ back, which is the only way to see the interrupt level from C */
+/* psw.s -- reads PSW back, which is the only way to see the interrupt level from C */
 int getpsw(void);
 
 /* Must match the EQUs in crt0s.S. */
@@ -124,7 +124,7 @@ static int ncall;                /* how many sysent handlers ran */
 static int lastcall;             /* the number of the last one */
 static int sawarg[3];            /* leg 2's arguments, in the order the callee saw them */
 static int nsig, lastsig;        /* psignal() from badextr() */
-static int sawpsw;               /* ПСВ as every dispatched handler saw it, OR-ed together */
+static int sawpsw;               /* PSW as every dispatched handler saw it, OR-ed together */
 
 /* ------------------------------------------------------------------------- */
 /* The environment kernel/syscall.c needs.                                    */
@@ -314,7 +314,7 @@ void report(void)
      * Every leg: the gate opened the interrupt level before it dispatched.  БлПр is forced on at
      * the vector, so a handler that sees it still set means the `vtm 3' in crt0s.S (kernel/besm6.S
      * over there) went missing -- and a syscall would run to completion with the clock stopped.
-     * There is no C-visible shadow of this; it has to be read out of ПСВ.
+     * There is no C-visible shadow of this; it has to be read out of PSW.
      */
     if (sawpsw & PSW_INTR_DISABLE)
         mask |= F_IPL;
@@ -366,7 +366,7 @@ int main()
     drainbrz();
 
     /*
-     * Mask every interrupt source: the forged СПСВ enters user mode with БлПр CLEAR, and the
+     * Mask every interrupt source: the forged SPSW enters user mode with БлПр CLEAR, and the
      * interval timer re-arms GRP_TIMER at reset.  Nothing here wants an external interrupt.
      */
     __besm6_mod(MOD_MGRP, 0);

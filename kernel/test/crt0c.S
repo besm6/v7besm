@@ -42,7 +42,7 @@ PGSZ    = 02000                 // 1024 words per page (octal)
 // -- forged register values (gouser plants them) ---------------------------------------------
 RMODE   = 044                   // R: ω = logical (bits 5-3 = 001) + overflow-suppress (bit 6)
 RMR     = 0123456               // Y: a distinctive younger-bits value
-MODVAL  = 04010                 // M[16]: inert (the forged СПСВ does not arm the modifier)
+MODVAL  = 04010                 // M[16]: inert (the forged SPSW does not arm the modifier)
 USPV    = 070010                // r15: the forged user stack pointer.  It is a TRIPWIRE --
                                 //   physical 070010 is free memory, uclock.c seeds it, and a gate
                                 //   that failed to switch r15 would build the frame right on top.
@@ -92,7 +92,7 @@ intrframe: .word 0              // struct trap * -- valid only inside intrgate
         .globl  _start
 _start:
      15 vtm     kstack          // main()'s own supervisor stack (the gate uses u.u_stack)
-        vtm     02003           // ПСВ := БлП|БлЗ|БлПр: unmapped, unprotected, INTERRUPTS OFF
+        vtm     02003           // PSW := БлП|БлЗ|БлПр: unmapped, unprotected, INTERRUPTS OFF
      13 vjm     main            // uclock.c: build the map, arm the callout, call gouser()
 halt0:  stop                    // main() should never return (gouser does not)
         uj      halt0
@@ -113,7 +113,7 @@ toreport:
 // ----------------------------------------------------------------------------
 // void gouser(unsigned uentry) -- forge a user context and enter it.
 // ----------------------------------------------------------------------------
-// crt0u.S's gouser verbatim.  The forged СПСВ is ZERO: mode bits clear (USER mode -- which is what
+// crt0u.S's gouser verbatim.  The forged SPSW is ZERO: mode bits clear (USER mode -- which is what
 // makes clock() charge u_utime and is the sharpest thing this test checks), mapping and protection
 // ON, БлПр clear so the pending tick fires immediately, the modifier NOT armed, and
 // SPSW_RIGHT_INSTR clear so `выпр' lands on the LEFT half of uprog's first word.
@@ -122,7 +122,7 @@ gouser:
         ati     IRET            // IRET (M[033]) := uentry -- where `выпр' lands
         xta   #(MODVAL)
         ati     MOD             // M[16] := MODVAL -- inert, but the gate must preserve it
-        xta                     // forged СПСВ := 0 (user mode, interrupts ON)
+        xta                     // forged SPSW := 0 (user mode, interrupts ON)
         ati     SPSW            //   M[027] := it
      15 vtm     USPV            // r15 := the user stack / stack-switch tripwire
         ntr     RMODE           // R := RMODE (logical + overflow-suppress)
@@ -174,7 +174,7 @@ intrgate:
         atx     save_sp
 
         // --- stack switch: repoint M15 at the kernel stack ONLY when interrupted from user ---
-        ita     SPSW            // СПСВ -> A
+        ita     SPSW            // SPSW -> A
         aax     #(SPSW_INTERRUPT | SPSW_EXTRACODE)
         u1a     extk            // РежЭ | РежПр -> nested in the kernel: keep M15
      15 vtm     [ustkbase]      // zero -> from user: M15 := kernel stack base
@@ -189,8 +189,8 @@ extk:                           // M15 = frame base F (ustkbase, or the interrup
         xts     save_r          // frame[0]  := A     ; A := R
         xts     save_y          // frame[1]  := R     ; A := Y
         its     IRET            // frame[2]  := Y     ; A := IRET (M033, live)
-        its     SPSW            // frame[3]  := RET   ; A := СПСВ (M027, live)
-        xts     save_c          // frame[4]  := СПСВ  ; A := M16 -- the word USERMODE() reads
+        its     SPSW            // frame[3]  := RET   ; A := SPSW (M027, live)
+        xts     save_c          // frame[4]  := SPSW  ; A := M16 -- the word USERMODE() reads
         xts     save_sp         // frame[5]  := M16   ; A := interrupted M15
         its     14              // frame[6]  := M15   ; A := M14 (live)
         its     13              // frame[7]  := M14   ; A := M13 (live)
@@ -217,7 +217,7 @@ extk:                           // M15 = frame base F (ustkbase, or the interrup
         //     what makes the copy auditable by diff.  Over there the synchronous gates open the
         //     level for their C call and this is what shuts it again. ---
 intret:
-        vtm     02003           // ПСВ := БлП|БлЗ|БлПр: external interrupts blocked
+        vtm     02003           // PSW := БлП|БлЗ|БлПр: external interrupts blocked
 
         stx                     // A := M1 from frame[20]
         sti     1               // restore M1; A := M2 from frame[19]
@@ -235,8 +235,8 @@ intret:
         sti     13
         sti     14              // restore M14;  A := M15 from frame[6]
         stx     save_sp         // prepare M15;  A := M16 from frame[5]
-        sti     MOD             // restore C;    A := СПСВ from frame[4]
-        sti     SPSW            // restore СПСВ; A := RET from frame[3]
+        sti     MOD             // restore C;    A := SPSW from frame[4]
+        sti     SPSW            // restore SPSW; A := RET from frame[3]
         sti     IRET            // restore RET into М033 (IRET);  A := Y from frame[2]
         stx     save_y          // prepare Y;    A := R from frame[1]
         stx     save_r          // prepare R;    A := A from frame[0]

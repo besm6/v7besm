@@ -60,7 +60,7 @@ static void dumpregs(struct trap *tr, unsigned grp)
 
 /*
  * A fault taken in SUPERVISOR mode: a kernel bug.  Called from the 0500 gate in besm6.S,
- * which branches straight here -- `u1a ktrap', not a call -- when СПСВ says the interrupted
+ * which branches straight here -- `u1a ktrap', not a call -- when SPSW says the interrupted
  * context was the kernel.  NEVER RETURNS, which is what lets the gate branch: there is no
  * return address, no `intret' behind it and no frame to restore.
  *

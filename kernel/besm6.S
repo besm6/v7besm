@@ -109,7 +109,7 @@ MOD  = 020                      // C register / address modifier (М020 = M16)
 //         sites below) -- and what it leaves behind is not the gate's to predict, so `intret'
 //         re-blocks as its own first act rather than trusting the caller.
 //   * The gates therefore cannot overlap: none can be re-entered, and none can preempt another's
-//     live window.  (A second internal fault taken inside a gate is fatal anyway -- СПСВ and IRET
+//     live window.  (A second internal fault taken inside a gate is fatal anyway -- SPSW and IRET
 //     are single registers, not a stack.)
 // The epilogue is shared as well: every gate that RETURNS ends in `intret' below, which pops the
 // frame and re-applies these cells, so they MUST fill the same five.  (The one path that does not
@@ -207,7 +207,7 @@ bhalt:  stop                        // main returned / faulted upstream: resumab
 //     already reads a return register live, so it just reads ERET, and `intret' is reused
 //     COMPLETELY UNMODIFIED.  Its `sti IRET' loads that address into М033 and its `3 ij' returns
 //     through it -- which is correct, because the `ij' index field only selects WHICH REGISTER
-//     holds the PC, while the mode (and so user-vs-supervisor) comes from СПСВ either way.
+//     holds the PC, while the mode (and so user-vs-supervisor) comes from SPSW either way.
 //
 //   * NO PC FIXUP.  The extracode gate stores nextpc in ERET, so SPSW_NEXT_RK is never set by this
 //     door and there is nothing to back up -- unlike the fault path, whose two lines of fixup sit
@@ -224,7 +224,7 @@ bhalt:  stop                        // main returned / faulted upstream: resumab
 //     instructions below a system call would run to completion with the clock stopped and every
 //     device completion held off -- which is not what v7 does: the PDP-11 trap path drops the
 //     priority to 0 before dispatching.  The enable sits AFTER the fill and not one instruction
-//     earlier, because until the frame is complete СПСВ/ERET and the five cells are the only copy
+//     earlier, because until the frame is complete SPSW/ERET and the five cells are the only copy
 //     of the interrupted context and an interrupt would overwrite them (doc/Memory_Mapping.md,
 //     "There is exactly one saved-state slot").  `curipl' is deliberately NOT touched: it already
 //     reads 0 here, because the interrupted user was running at level 0 and no gate moves it.
@@ -282,10 +282,10 @@ sysgate:
         xts     save_a              // frame[20] := M1    ; M15 := F+21 (above the frame); A discarded
 
         // --- open the interrupt level for the C call: v7's spl0()-on-entry (see the header).
-        //     Safe only here -- the frame is complete, so the five cells and СПСВ/ERET are dead.
+        //     Safe only here -- the frame is complete, so the five cells and SPSW/ERET are dead.
         //     `vtm' with register field 0 is the mode write: БлП|БлЗ|БлПр from the address
-        //     field, all three at once, nothing else in ПСВ touched.  This is psw.s:sti(). ---
-        vtm     3                   // ПСВ := БлП|БлЗ, БлПр clear: interrupts delivered
+        //     field, all three at once, nothing else in PSW touched.  This is psw.s:sti(). ---
+        vtm     3                   // PSW := БлП|БлЗ, БлПр clear: interrupts delivered
 
      13 vtm     intret              // TAIL CALL: syscall.c marshals the arguments, dispatches, and
         uj      syscall             //   its own `13 uj' returns straight to `intret'.  `vjm'+`uj'
@@ -336,7 +336,7 @@ badext:
         xts     save_a
 
         // --- open the interrupt level for the C call, as in `sysgate' ---
-        vtm     3                   // ПСВ := БлП|БлЗ, БлПр clear: interrupts delivered
+        vtm     3                   // PSW := БлП|БлЗ, БлПр clear: interrupts delivered
 
      13 vtm     intret              // tail call, as in `sysgate'
         uj      badextr             // syscall.c: SIGINS
@@ -357,7 +357,7 @@ badext:
 // must be saved by hand.  Only three things differ:
 //
 //   * THE STACK SWITCH IS UNCONDITIONAL.  `intrgate' switches M15 only when the interrupted context
-//     was user (СПСВ & 014 == 0), because an external interrupt legitimately nests inside the
+//     was user (SPSW & 014 == 0), because an external interrupt legitimately nests inside the
 //     kernel and must not have the stack pulled out from under the interrupted C frame.  A FAULT
 //     from supervisor is a different animal: the user-access family validates its range up front
 //     with useracc() and has no `nofault' path (see usermem.S), so a kernel-mode fault is a kernel
@@ -377,7 +377,7 @@ badext:
 //     psig()/sendsig() write through u.u_ar0 is what the epilogue reloads into the registers.
 //
 //   * THE PC MUST BE BACKED UP.  Before vectoring, the machine advances past the faulting
-//     instruction and records that it did so in СПСВ (SPSW_NEXT_RK, with SPSW_RIGHT_INSTR saying
+//     instruction and records that it did so in SPSW (SPSW_NEXT_RK, with SPSW_RIGHT_INSTR saying
 //     which half of the word faulted) -- so the saved IRET points at the instruction AFTER the one
 //     that faulted, and a plain `выпр' would skip it.  Undoing that is the kernel's job
 //     (doc/Memory_Mapping.md, "The restart protocol").  It is done in C, at the top of trap(),
@@ -389,7 +389,7 @@ badext:
 //     grow() sleeps.
 //
 //     BUT ONLY FOR A FAULT FROM USER, which is the one thing this gate does that `sysgate' does
-//     not.  It reuses `intrgate's discriminator (СПСВ & 014, zero iff the interrupted context was
+//     not.  It reuses `intrgate's discriminator (SPSW & 014, zero iff the interrupted context was
 //     user) -- and the supervisor arm does not merely skip the enable, it takes A DIFFERENT DOOR:
 //     the `u1a' branches to ktrap(), the C routine for a kernel BUG, which dumps and panics and
 //     never returns.  That path wants interrupts to stay exactly as it found them, for three
@@ -479,12 +479,12 @@ trapgate:
         //     dumps and panics and never comes back, with the interrupt level left exactly as the
         //     hardware set it.  A fault from USER opens the level (grow() sleeps) and goes to
         //     trap().  See the header for why the level is not opened on both. ---
-        ita     SPSW                // A := СПСВ (still live -- nothing has issued an extracode)
+        ita     SPSW                // A := SPSW (still live -- nothing has issued an extracode)
         aax     #(SPSW_INTERRUPT | SPSW_EXTRACODE)
         u1a     ktrap               // РежЭ|РежПр set -> the kernel faulted.  A BRANCH, NOT A CALL:
                                     //   ktrap() never returns, so it needs no return address and
                                     //   no tail behind it.
-        vtm     3                   // zero -> from user: ПСВ := БлП|БлЗ, interrupts delivered
+        vtm     3                   // zero -> from user: PSW := БлП|БлЗ, interrupts delivered
 
      13 vtm     intret              // tail call, as in `sysgate'
         uj      trap                // trap.c: back up the PC, decode ГРП, signal or grow
@@ -542,7 +542,7 @@ trapgate:
 // the link-time constant &u.u_stack, and trap()/syscall() just spell it (`(struct trap *)u.u_stack').
 // Here the base is either [ustkbase] or the interrupted kernel r15, known only at run time, so
 // clock() cannot spell it: on a tick nested inside a syscall, u.u_stack holds the SYSCALL's frame,
-// whose СПСВ says user -- clock() would charge u_utime and profile at a stale user PC.  Hence
+// whose SPSW says user -- clock() would charge u_utime and profile at a stale user PC.  Hence
 // `ita 15' / `atx intrframe' at `extk' below.  It costs two instructions and no argument: the call
 // stays the bare `13 vjm extintr', which returns M15 unchanged at F+21, `intret's precondition
 // (doc/Besm6_Calling_Conventions.md, "On Return").
@@ -649,7 +649,7 @@ extk:                               // M15 = frame base F (ustkbase, or the inte
         //     entry (the `stx' below overwrites it) and M16 is reloaded from frame[5] further
         //     down. ---
 intret:
-        vtm     02003               // ПСВ := БлП|БлЗ|БлПр: interrupts blocked (psw.s:cli)
+        vtm     02003               // PSW := БлП|БлЗ|БлПр: interrupts blocked (psw.s:cli)
 
         stx                         // A := M1 from frame[20]
         sti     1                   // restore M1; A := M2 from frame[19]

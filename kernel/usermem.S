@@ -24,7 +24,7 @@
 // hazard.  (A context switch, which does reload РП, drains -- that is resume()'s job, not ours.)
 //
 // The mode-bit discipline is uarea.S's, minus the mod/drain: these run in supervisor mode (they
-// are reached during a syscall/trap), so ita/ati 021 name ПСВ = M[021].  Save ПСВ on entry and
+// are reached during a syscall/trap), so ita/ati 021 name PSW = M[021].  Save PSW on entry and
 // restore it exactly on exit, to preserve the caller's БлПр (interrupt-enable); toggle mapping
 // with `vtm 02002' (БлП clear = map on, БлЗ+БлПр held) and `vtm 02003' (unmapped, БлЗ+БлПр held).
 // Never clear БлЗ.  Interrupts are held off across the copy (БлПр kept set) -- these copies are
@@ -73,7 +73,7 @@ copyin:
      13 vjm     useracc
         aox                     // force logical ω without changing A
         uza     ci_flt          // A == 0 -> the range is bad
-        ita     021             // save ПСВ
+        ita     021             // save PSW
         ati     011             //   in r9
      15 xta     -2
         aax     #077777
@@ -96,7 +96,7 @@ ci_lp:
         uj      ci_lp
 ci_dn:
         ita     011
-        ati     021             // restore ПСВ (interrupts as the caller had them)
+        ati     021             // restore PSW (interrupts as the caller had them)
         xta     <retpc>
         ati     015             // r13 := return address
      15 utm     -2              // pop the two pushed args (from, to)
@@ -129,7 +129,7 @@ copyout:
         aox
         uza     co_flt
         ita     021
-        ati     011             // save ПСВ in r9
+        ati     011             // save PSW in r9
      15 xta     -2
         aax     #077777
         ati     013             // r11 := from_word  (kernel source)
@@ -185,13 +185,13 @@ fuword:
         aax     #077777
         ati     013             // r11 := word
         ita     021
-        ati     011             // save ПСВ
+        ati     011             // save PSW
         vtm     02002
      11 xta                     // A := user word, mapped
         vtm     02003
         atx     <wsav>          // stash it (unmapped)
         ita     011
-        ati     021             // restore ПСВ
+        ati     021             // restore PSW
         xta     <retpc>
         ati     015
         xta     <wsav>          // A := the fetched word
@@ -312,7 +312,7 @@ subyte:
         aax     #077777
         ati     013             // r11 := word
         ita     021
-        ati     011             // save ПСВ
+        ati     011             // save PSW
         vtm     02002
      11 xta                     // A := old word, mapped
         vtm     02003
@@ -332,7 +332,7 @@ subyte:
      11 atx                     // user[word] := new word, mapped
         vtm     02003
         ita     011
-        ati     021             // restore ПСВ
+        ati     021             // restore PSW
         xta     <retpc>
         ati     015
      15 utm     -1

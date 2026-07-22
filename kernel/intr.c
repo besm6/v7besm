@@ -56,10 +56,10 @@ void clock(struct trap *tr);
  * TWO REGISTERS, TWO JOBS.  Delivery needs БлПр clear AND `ГРП & МГРП' non-zero, so either
  * could serve as the mask.  They are not interchangeable, and this kernel divides them:
  *
- *   БлПр (ПСВ bit 02000) is the PRIORITY.  setipl() sets it to block and clears it to
+ *   БлПр (PSW bit 02000) is the PRIORITY.  setipl() sets it to block and clears it to
  *   enable, through cli()/sti() in besm6.S.  It is the right choice because the hardware
  *   already treats it as one: an interrupt or extracode forces БлПр on at the vector and
- *   `выпр' restores it from СПСВ, so a gate return re-establishes the level by itself --
+ *   `выпр' restores it from SPSW, so a gate return re-establishes the level by itself --
  *   exactly what the PDP-11's `rtt' does when it reloads the priority field of PS.  МГРП,
  *   being a separate write-only register outside the mode word, does nothing of the kind.
  *
@@ -263,7 +263,7 @@ static void prpintr(void)
  * of step with БлПр from the very first tick on.
  *
  * The repair is a plain assignment, NOT splx().  splx(0) would call sti() and clear БлПр
- * here, inside the handler, with the interrupted context's state still in СПСВ/IRET -- and
+ * here, inside the handler, with the interrupted context's state still in SPSW/IRET -- and
  * the interval timer free-runs, so the next tick would re-enter this function immediately
  * and keep doing so.  Nothing in the loop below wants delivery open, either: every handler
  * it calls raises the level (spl5/spl1, both of which only ever SET БлПр), and `grp & mgrp'

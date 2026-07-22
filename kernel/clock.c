@@ -33,7 +33,7 @@ int lbolt; /* ticks since the last second rolled over: 0..HZ-1, not in `time' */
  * clock() cannot find it the way trap() does: the interrupt gate's stack switch is
  * conditional, so the frame sits at the base of the kernel stack only when the tick came
  * from user -- when it nested inside a syscall, u.u_stack holds the syscall's frame, whose
- * СПСВ says user, and the USERMODE test below would charge the wrong bucket.  Nor does it
+ * SPSW says user, and the USERMODE test below would charge the wrong bucket.  Nor does it
  * come through u.u_ar0: that names the USER's registers and belongs to whatever the tick
  * interrupted.  See the header over intrgate in besm6.S.
  *

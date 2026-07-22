@@ -9,7 +9,7 @@ context save/restore and MMU reload.
 
 It is the companion to [Memory_Mapping.md](Memory_Mapping.md), and the division between them is
 sharp: **Memory_Mapping.md says what the *hardware* does at a trap** — what goes into SPSW (`M[027]`,
-the register that document and the Russian sources call СПСВ), what
+the register that document and the Russian sources call SPSW), what
 `выпр` restores, which mode bits are forced. **This says what a *kernel* has to do about it** —
 which registers the hardware does *not* save, the order they must be restored in, and the idioms
 that get it done. Where the hardware reference is derived from the
@@ -263,7 +263,7 @@ assembler has an `.org` directive and enforces the placement —
 16516    ,  RTE  , 07777B        .                . A := mode register R      (счрж)
 16517    ,  ATX  ,SAVSR          .                . SAVSR := R
 16518    ,XTA,DISREG.                             . A := DISREG (= 02013)
-16519    ,ATI,21B.OCTAHOB KK,KЧ                   . ПСВ := 02013  "halt on instr-check / number-check"
+16519    ,ATI,21B.OCTAHOB KK,KЧ                   . PSW := 02013  "halt on instr-check / number-check"
 16520    ,  ITA  , 15            .                . A := М15  (the interrupted stack pointer)
 16521    15,VTM,SAVI15                            . М15 := &SAVI15   <- retarget the stack at SMASAV+3
 16522    ,ITS,14                                  . [SAVI15] := old М15 ; A := М14
@@ -460,7 +460,7 @@ restore R.** Software does, and if software forgets, the interrupted program res
 Index field 3, and the hardware computes `PC = M[(reg & 3) | 030]` → `M[033]` = **IRET**. It also
 restores **БлП, БлЗ, БлПр and the supervisor bits from SPSW**, all in one instruction — see
 [Memory_Mapping.md](Memory_Mapping.md), "выпр". So the mode word is *not* restored by any
-instruction in the listing; `ATI 21B` writes the *current* ПСВ, which `выпр` immediately overwrites
+instruction in the listing; `ATI 21B` writes the *current* PSW, which `выпр` immediately overwrites
 from SPSW.
 
 Which means: **the kernel steers `выпр` by editing SPSW.** `dubna.dd:15551-15553` does exactly
@@ -552,7 +552,7 @@ What makes it safe is a house rule, stated in capitals at the top of the file
 ### An aside: `,24,2003B` is not a mystery
 
 It appears ~40 times and looks like `уиа М0, N` — architecturally a no-op, since М0 reads as zero.
-It is not. In **supervisor mode with register 0**, `уиа` writes ПСВ's БлП/БлЗ/БлПр **from the
+It is not. In **supervisor mode with register 0**, `уиа` writes PSW's БлП/БлЗ/БлПр **from the
 address field** — see [Memory_Mapping.md](Memory_Mapping.md), which documents this as the cheapest
 way to flip the mode bits. So:
 

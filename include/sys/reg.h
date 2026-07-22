@@ -14,7 +14,7 @@
 #define RREG 1 /* R   -- ALU mode word (omega + the NTR suppress bits) */
 #define RMR  2 /* Y (РМР) -- younger-bits register */
 #define RET  3 /* return address: IRET (И33) for a fault, ERET (И32) for an extracode */
-#define SPSW 4 /* СПСВ -- saved mode word (М027) */
+#define SPSW 4 /* SPSW -- saved mode word (М027) */
 #define CREG 5 /* М16 = C register M[16] (M[020]), the address modifier */
 
 /* general registers -- stored DESCENDING, М15..М1 at offsets 6..20 */
@@ -46,7 +46,7 @@
 #define R_VAL2  R12 /* second syscall result (pipe/wait/getpid/getuid/getgid) */
 
 /*
- * The saved mode word СПСВ carries РежЭ|РежПр (RUU_EXTRACODE|RUU_INTERRUPT,
+ * The saved mode word SPSW carries РежЭ|РежПр (RUU_EXTRACODE|RUU_INTERRUPT,
  * octal 014); both bits clear iff the interrupted context was user mode.  That test
  * is the whole of USERMODE().  See doc/Unix_Context_Switch.md and doc/Memory_Mapping.md.
  */
