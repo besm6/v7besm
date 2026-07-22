@@ -1114,7 +1114,7 @@ disturbs neither the accumulator nor ω. In user mode there is no side effect at
 This is the only single-instruction way to change the interrupt level or the mapping override, and
 the kernel uses it as such: `vtm 3` enables interrupts, `vtm 02003` blocks them, `vtm 02002` turns
 mapping on for a `copyin` bracket. See [Memory_Mapping.md](Memory_Mapping.md), "Writing the mode
-bits", and `setipl()` in `kernel/intr.c`. Anything *else* in the machine-register file — SPSW, IRET, ERET, ИБП, ДВП
+bits", and the `spl*` routines in `kernel/intr.c`. Anything *else* in the machine-register file — SPSW, IRET, ERET, ИБП, ДВП
 — needs the general `040 «уи»` instead.
 
 C reaches it as `__besm6_maskpsw`, one inline instruction with a compile-time-constant mask

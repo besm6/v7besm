@@ -574,7 +574,7 @@ handled** — the other half of the asymmetry in §7, because a device interrupt
 notification that must not be lost.
 
 **`spl` is БлПр, not МГРП.** This kernel has exactly two interrupt levels, not the PDP-11's eight
-(which is why `BASEPRI()` is permanently false, §3). `setipl()` writes the bit itself, with
+(which is why `BASEPRI()` is permanently false, §3). Each `spl*` writes the bit itself, with
 `__besm6_maskpsw()`, and that is a single `vtm`: with the register field 0, `уиа` writes БлП, БлЗ and
 БлПр into PSW straight from its address field, all three at once and nothing else touched
 ([Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) §024). That it carries БлП/БлЗ along is

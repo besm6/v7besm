@@ -33,7 +33,7 @@ There used to be a seventh file, `psw.s`, holding `cli`, `sti` and `getpsw` — 
 inverse and a mode-word read, one instruction and one `uj` apiece. It failed exactly that test once
 the compiler grew the three PSW intrinsics (`__besm6_maskpsw`, `__besm6_getpsw`, `__besm6_setpsw`),
 each of which lowers to precisely the instruction it wrote by hand, *inline*. It has been retired:
-the level is now set in C, in `setipl()` ([intr.c](../kernel/intr.c)), and §4.7 is its epitaph.
+the level is now set in C, by the `spl*` routines ([intr.c](../kernel/intr.c)), and §4.7 is its epitaph.
 
 Two contracts v7 relied on have **no counterpart here**, and both are noted where they appear:
 there is no `nofault` mechanism at all — validation is `useracc()` up front — and `invd()` does
@@ -164,7 +164,7 @@ range, so there is no level below it to restore and no caller ever saved what it
 Delivery needs БлПр clear **and** `ГРП & МГРП`
 non-zero, so either register could have been the mask, and the kernel divides them:
 
-- **БлПр (PSW bit `02000`) is the priority**, set and cleared by `setipl()`'s one inline `vtm`
+- **БлПр (PSW bit `02000`) is the priority**, set and cleared by one inline `vtm` per `spl`
   ([intr.c](../kernel/intr.c), §4.7). The hardware already treats it as one — a gate forces БлПр on at the
   vector and `выпр` restores it from SPSW, so returning through a gate re-establishes the level by
   itself, exactly as the PDP-11's `rtt` does. МГРП, outside the mode word, does nothing of the kind.
@@ -176,7 +176,7 @@ That is invisible while every interrupt arrives in user mode, and becomes fatal 
 must spin waiting for one. The full argument is at the head of [intr.c](../kernel/intr.c).
 
 There is no soft interrupt queue and no deferred-replay machinery, because two levels need no
-arbitration. **`BASEPRI(x)` is permanently `(0)`** — `setipl()` leaves interrupts
+arbitration. **`BASEPRI(x)` is permanently `(0)`** — the spls leave interrupts
 deliverable only at spl0, so anything `clock()` interrupts was at base priority by construction.
 (Note the v7 name reads backwards: *true* means "was **above** base, skip the callouts".)
 
@@ -332,7 +332,7 @@ void splx(int s);                                                            /* 
 - **Return.** `spl1` returns the **previous** level (an `int` cookie); the idiom is
   `s = spl6(); … ; splx(s);`. **`spl0` returns nothing** — it is the bottom of the range, so
   nothing can be restored *below* it and no caller ever saved what it displaced. `idle()`, which
-  does need the caller's level back, reaches the internal `setipl()` rather than make every other
+  does need the caller's level back, reads the `curipl` shadow itself rather than make every other
   caller pay for a result it drops.
 - **Levels.** Two, not eight: `spl0` = allow all, everything above it = block all. v7's graded
   names survive as macros so the callers below need no editing, but `spl4`…`spl7` all mean
@@ -415,8 +415,8 @@ void idle(void);   /* systm.h:184 */
 - **Purpose.** Called by `swtch()` when no process is runnable: lower the level to allow all
   interrupts and wait until one arrives; then restore the level and return. The scheduler loops
   back and re-scans the run queue.
-- **Side effects.** Temporarily drops to level 0 — through the internal `setipl()`, since it is the
-  one place that needs the displaced level back and `spl0()` is `void` — and raises the global flag **`idling`** so that
+- **Side effects.** Temporarily drops to level 0 — saving `curipl` by hand first, since it is the one
+  place that needs the displaced level back and `spl0()` is `void` — and raises the global flag **`idling`** so that
   `clock()` ([clock.c:90](../kernel/clock.c)) attributes a tick landing here to idle rather than
   to the kernel.
 - **Callers.** `swtch()` ([slp.c:408](../kernel/slp.c)); also `prf.c:94` (panic spin).
@@ -566,21 +566,26 @@ void bzero(void *dst, unsigned len);                   /* systm.h:144 */
 `getpsw`; all three are gone, and what they did is written inline in C. The contract is kept here
 because the *machine* facts behind it — what a register-0 `vtm` does, and the precondition it
 carries — are still load-bearing for [besm6.S](../kernel/besm6.S), the brackets, and anyone reading
-`setipl()`.
+the `spl*` routines.
 
 ```c
-static int setipl(int s)            /* kernel/intr.c -- the whole of what psw.s was */
+void spl0(void)                     /* kernel/intr.c -- the whole of what psw.s was */
+{
+    curipl = 0;
+    __besm6_maskpsw(PSW_KERNEL);                             /* was sti() */
+}
+
+int spl1(void)
 {
     int old = curipl;
-    curipl = s;
-    if (s) __besm6_maskpsw(PSW_KERNEL | PSW_INTR_DISABLE);   /* was cli() */
-    else   __besm6_maskpsw(PSW_KERNEL);                      /* was sti() */
+    curipl = 1;
+    __besm6_maskpsw(PSW_KERNEL | PSW_INTR_DISABLE);          /* was cli() */
     return old;
 }
 ```
 
-- **The interrupt-enable bit is the interrupt priority level itself** (§1, §4.1), and every `spl*`
-  is built on `setipl()`. Setting it is **one instruction** either way: `vtm 02003` and `vtm 3`.
+- **The interrupt-enable bit is the interrupt priority level itself** (§1, §4.1), and each `spl*`
+  writes it directly. Setting it is **one instruction** either way: `vtm 02003` and `vtm 3`.
   With the register field 0, `уиа` is the mode-word write — it takes БлП, БлЗ and БлПр straight from
   the address field and writes all three into PSW atomically
   ([Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) §024,
@@ -609,12 +614,13 @@ static int setipl(int s)            /* kernel/intr.c -- the whole of what psw.s 
 - **Why it could go.** `<besm6.h>` gained `__besm6_maskpsw`/`__besm6_getpsw`/`__besm6_setpsw`
   ([Intrinsics.md](Intrinsics.md) §3.3), each lowering to exactly the instruction `psw.s` wrote by
   hand — a register-0 `vtm` with a constant mask, an `ita 021`, an `ati 021` — with no call around
-  it. So `setipl()` is now two inline `vtm`s, and every `spl*` in the kernel is one call shorter.
+  it. So each `spl*` is now one inline `vtm`, and every one of them is a call shorter.
 
-  **The branch stays**, contrary to what this section used to predict. The mask is an immediate
-  field of the instruction, so `__besm6_maskpsw` demands a compile-time constant and a runtime `s`
-  has to select between two constant-mask instructions. What the move bought is the call, not the
-  branch.
+  **A branch survives, but only in `splx()`.** The mask is an immediate field of the instruction, so
+  `__besm6_maskpsw` demands a compile-time constant and a runtime `s` has to select between two
+  constant-mask instructions. `spl0()` and `spl1()` know their level, so each names its own `vtm`
+  outright; `splx(s)` does not, and keeps the `uza`. The shared `setipl(s)` these were factored
+  through paid for that branch in all four.
 
 - **Reading PSW back** is the only way to see the interrupt level from C: unlike РП and РЗ, the mode
   word is readable, and `__besm6_getpsw()` is one `ita 021`. The kernel never does it — it tracks
@@ -684,8 +690,8 @@ the reschedule-pending flag the gates test on the way back to user mode (§3).
 | routine(s) | state |
 |------------|-------|
 | `bcopy`, `bzero` | **done** — renamed `wcopy`/`wzero` and they take a **word** count, converted by `btow()` at every call site, so the loop has no six-chars-per-word tail |
-| `spl0`…`spl7`, `splx` | **done** — two levels, not eight, so only `spl0()`/`spl1()` are compiled, `spl4()`…`spl7()` are macros for `spl1()`, and `spl0()` is `void` (nothing below it to restore). The knob is **БлПр** (one inline `vtm` in `setipl()`), not МГРП, which is a source enable armed once by `intrinit()`. Putting the level in the mode word is what lets `выпр` restore it on a gate return, as the PDP-11's `rtt` does |
-| `cli`, `sti`, `getpsw` | **retired** — `psw.s` is deleted (§4.7). The PSW intrinsics lower to exactly the same three instructions *inline*, so the level is set in C by `setipl()` and every `spl*` is one call shorter; the gates always inlined the instruction rather than calling it. `__besm6_getpsw()` reads PSW back for the two tests that check a gate opened the level, and needs no object to link |
+| `spl0`…`spl7`, `splx` | **done** — two levels, not eight, so only `spl0()`/`spl1()` are compiled, `spl4()`…`spl7()` are macros for `spl1()`, and `spl0()` is `void` (nothing below it to restore). The knob is **БлПр** (one inline `vtm` per routine), not МГРП, which is a source enable armed once by `intrinit()`. Putting the level in the mode word is what lets `выпр` restore it on a gate return, as the PDP-11's `rtt` does |
+| `cli`, `sti`, `getpsw` | **retired** — `psw.s` is deleted (§4.7). The PSW intrinsics lower to exactly the same three instructions *inline*, so the level is set in C by the `spl*` routines themselves and each is one call shorter; the gates always inlined the instruction rather than calling it. `__besm6_getpsw()` reads PSW back for the two tests that check a gate opened the level, and needs no object to link |
 | `fubyte`/`fuword`/`subyte`/`suword`, `copyin`/`copyout` | **done** — [usermem.S](../kernel/usermem.S); **no fault-recovery path**, validation is `useracc()` up front. No window either: the loop toggles БлП per word through the user map that is already loaded. Byte variants do RMW, and mind the fat-pointer marker bit |
 | `copyseg`/`clearseg`, `uflush`/`uload` | **done** — [seg.S](../kernel/seg.S), [uarea.S](../kernel/uarea.S); a two-page window bracket with a БРЗ drain either side (§4.4a) |
 | `save`, `resume` | **done (task 16)** — [kernel/switch.s](../kernel/switch.s); nine slots (r1–r7, r13, r15), and `resume()` switches the **u-area**, not the address space: it never writes РП |

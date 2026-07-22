@@ -272,7 +272,7 @@ int main()
      *   spl0()      curipl := 0 and БлПр opens -- but МГРП is still empty, so nothing can be
      *               delivered.  It has to be the REAL spl0(): curipl is what extintr() reads and
      *               puts back, and what report()'s spl7() check reads afterwards.
-     *   maskpsw     re-block БлПр without disturbing curipl -- setipl()'s own instruction, issued
+     *   maskpsw     re-block БлПр without disturbing curipl -- the spls' own instruction, issued
      *               behind its back.  From here on the level is closed until gouser()'s forged
      *               SPSW = 0 opens it in user mode.
      *   intrinit()  NOW arm МГРП.  It is not optional: leave it out and extintr()'s `grp & mgrp'
@@ -283,7 +283,7 @@ int main()
      * interval timer is calibrated against the WALL CLOCK (`fast_clk'/`sim_rtcn_calb'), so on the
      * time scale of a test run GRP_TIMER is back up within a few dozen instructions of being
      * dismissed.  It was therefore always pending by the time spl0() cleared БлПр, and the tick
-     * fired inside setipl()'s own `vtm 3', two instructions before the re-block meant to prevent
+     * fired inside spl0()'s own `vtm 3', two instructions before the re-block meant to prevent
      * it.
      *
      * The dismissal comes last, immediately before the tick we raise ourselves, so that what

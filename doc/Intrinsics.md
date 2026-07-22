@@ -288,7 +288,7 @@ no effect at all. ([Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) §024 ha
 for the mask.)
 
 That makes blocking and enabling one instruction each, and this kernel writes them exactly so —
-inline, inside `setipl()` ([kernel/intr.c](../kernel/intr.c)), with `PSW_KERNEL` the two standing
+inline, one apiece in `spl1()` and `spl0()` ([kernel/intr.c](../kernel/intr.c)), with `PSW_KERNEL` the two standing
 bits named in [`sys/besm6dev.h`](../include/sys/besm6dev.h):
 
 ```c
@@ -477,7 +477,7 @@ serve as the mask. They are not interchangeable, and the choice matters:
 * **МГРП is the source enable.** `grp & mgrp` in the dispatcher means "sources this kernel is
   listening to right now", which is what that mask was always for. It is *not* constant: boot arms
   the sources that are always live, and a driver arms its own completion bit for the length of one
-  exchange (`mgrpon()`/`mgrpoff()`, below). It is still not the priority — `setipl()` never
+  exchange (`mgrpon()`/`mgrpoff()`, below). It is still not the priority — no `spl*` ever
   writes it.
 
 Putting the level in МГРП instead looks equivalent and is not: the gates hold БлПр from the vector,
@@ -504,12 +504,17 @@ void intrinit(void)                 /* called once from main(), before the first
     __besm6_mod(MOD_MGRP, mgrp);
 }
 
-static int setipl(int s)            /* the level itself is БлПр, one `vtm' either way */
+void spl0(void)                     /* the level itself is БлПр, one `vtm' either way */
+{
+    curipl = 0;
+    __besm6_maskpsw(PSW_KERNEL);
+}
+
+int spl1(void)
 {
     int old = curipl;
-    curipl = s;
-    if (s) __besm6_maskpsw(PSW_KERNEL | PSW_INTR_DISABLE);
-    else   __besm6_maskpsw(PSW_KERNEL);
+    curipl = 1;
+    __besm6_maskpsw(PSW_KERNEL | PSW_INTR_DISABLE);
     return old;
 }
 
@@ -532,10 +537,11 @@ and disarms it in the handler before `iodone()`. See §6.3 for the exchange itse
 Note `mgrp` is `unsigned`, not `int`: ГРП bit 48 exists and would not survive a 41-bit type. And it
 is a shadow because МГРП, like РП and РЗ, is write-only.
 
-`setipl()`'s branch is not an oversight, and cannot be arithmetic: the mask is an immediate field
-of the instruction, so each arm needs its own constant (§2.3). What the intrinsic buys over the
-out-of-line `cli`/`sti` it replaced is the **call**, on every `spl*` in the kernel — not the
-branch.
+The mask is an immediate field of the instruction and cannot be arithmetic, so each level needs its
+own constant (§2.3). That is why `spl0()` and `spl1()`, which know theirs, are branch-free, while
+`splx(s)` — whose level is a run-time value — has to select between the two instructions with a
+`uza`. What the intrinsic buys over the out-of-line `cli`/`sti` it replaced is the **call**, on
+every `spl*` in the kernel.
 
 This is what [`kernel/intr.c`](../kernel/intr.c) does; the reasoning above is written up there in
 full.
@@ -809,7 +815,7 @@ assembler the kernel is actually built with — names every one of them.
   would not test the intrinsic; it would test the simulator's private meaning for the encoding. So
   the coverage is golden assembly in all three dialects plus `UnixAssembleIntrinsicPsw` (b6as +
   b6ld). The instructions themselves are exercised for real on SIMH, where this kernel's four gates
-  have been running them since the boot came up, and now `setipl()`
+  have been running them since the boot came up, and now the `spl*` routines
   ([intr.c](../kernel/intr.c)) with them — every `spl*` the kernel takes is a `vtm` from
   `__besm6_maskpsw`, and `kernel/test/`'s `uclock`, `usys` and `utrap` assert on the resulting
   level.

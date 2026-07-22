@@ -120,7 +120,7 @@ user to the wrong mode word.
 How it turned out:
 
 * **One instruction in each synchronous gate**, after the frame fill and before the `13 vjm` —
-  `vtm 3`, the mode write `setipl()` now issues from C (then `psw.s:sti()`). Not one instruction earlier: until the frame is complete,
+  `vtm 3`, the mode write `spl0()` now issues from C (then `psw.s:sti()`). Not one instruction earlier: until the frame is complete,
   SPSW/ERET and the cells are the only copy of the interrupted context.
 * **`trapgate` opens it only for a fault from user**, reusing `intrgate`'s `SPSW & 014` test. It
   was unconditional first, on the argument that a supervisor fault panics anyway. That was wrong on
@@ -354,15 +354,17 @@ Loose ends the finished work left behind. None blocks 18.
   (`__besm6_maskpsw`/`__besm6_getpsw`/`__besm6_setpsw`, twelve in `<besm6.h>` where there were nine)
   each lower to exactly the instruction that file wrote by hand — a register-0 `vtm` with a constant
   mask, an `ita 021`, an `ati 021` — so `cli`, `sti` and `getpsw` are gone along with their
-  declarations in `systm.h`. `setipl()` (`intr.c`) issues the two `vtm`s itself, which drops a call
-  from every `spl*`; the two tests that read PSW back call `__besm6_getpsw()` directly, so `psw.o`
+  declarations in `systm.h`. The `spl*` routines (`intr.c`) issue the `vtm`s themselves, which drops a call
+  from each; the two tests that read PSW back call `__besm6_getpsw()` directly, so `psw.o`
   left **eight** link lines in `test/Makefile` as well as `MACH` in `kernel/Makefile`. How it turned
   out, where it differed from the plan above:
-  * **`setipl()` is NOT branch-free**, which the old note predicted. The mask is an immediate field
-    of the instruction, so `__besm6_maskpsw` demands a compile-time *constant* and a runtime `s`
-    must still choose between two constant-mask instructions. The win is the call, not the branch.
+  * **A branch survives, in `splx()` alone**, where the old note predicted none anywhere. The mask is
+    an immediate field of the instruction, so `__besm6_maskpsw` demands a compile-time *constant* and a
+    runtime `s` must still choose between two constant-mask instructions. `spl0()`/`spl1()` know their
+    level and each names one outright; only `splx(s)` branches. (These three were briefly factored
+    through a shared `static setipl(s)`, which paid for the branch in all of them.)
   * **The masks are named, not magic**: `PSW_KERNEL` (`sys/besm6dev.h`) is БлП|БлЗ, the standing
-    unmapped-kernel invariant, so `setipl()` reads `PSW_KERNEL | PSW_INTR_DISABLE` and `PSW_KERNEL`.
+    unmapped-kernel invariant, so the spls read `PSW_KERNEL | PSW_INTR_DISABLE` and `PSW_KERNEL`.
     Its comment carries `psw.s`'s precondition — a mode write may only be issued from ordinary
     unmapped kernel context, never inside a mapped bracket.
   * **This needed a compiler fix, in the external c-compiler.** `PSW_KERNEL | PSW_INTR_DISABLE` is a

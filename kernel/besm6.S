@@ -284,7 +284,7 @@ sysgate:
         // --- open the interrupt level for the C call: v7's spl0()-on-entry (see the header).
         //     Safe only here -- the frame is complete, so the five cells and SPSW/ERET are dead.
         //     `vtm' with register field 0 is the mode write: БлП|БлЗ|БлПр from the address
-        //     field, all three at once, nothing else in PSW touched.  This is setipl()'s own
+        //     field, all three at once, nothing else in PSW touched.  This is spl0()'s own
         //     spl0 instruction -- __besm6_maskpsw(PSW_KERNEL) -- inlined rather than called. ---
         vtm     3                   // PSW := БлП|БлЗ, БлПр clear: interrupts delivered
 
@@ -650,7 +650,7 @@ extk:                               // M15 = frame base F (ustkbase, or the inte
         //     entry (the `stx' below overwrites it) and M16 is reloaded from frame[5] further
         //     down. ---
 intret:
-        vtm     02003               // PSW := БлП|БлЗ|БлПр: interrupts blocked, as setipl() does
+        vtm     02003               // PSW := БлП|БлЗ|БлПр: interrupts blocked, as spl1() does
                                     // it in C with __besm6_maskpsw(PSW_KERNEL|PSW_INTR_DISABLE)
 
         stx                         // A := M1 from frame[20]

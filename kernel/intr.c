@@ -57,7 +57,7 @@ void clock(struct trap *tr);
  * TWO REGISTERS, TWO JOBS.  Delivery needs БлПр clear AND `ГРП & МГРП' non-zero, so either
  * could serve as the mask.  They are not interchangeable, and this kernel divides them:
  *
- *   БлПр (PSW bit 02000) is the PRIORITY.  setipl() sets it to block and clears it to
+ *   БлПр (PSW bit 02000) is the PRIORITY.  spl1() sets it to block and spl0() clears it to
  *   enable.  It is the right choice because the hardware already treats it as one: an
  *   interrupt or extracode forces БлПр on at the vector and
  *   `выпр' restores it from SPSW, so a gate return re-establishes the level by itself --
@@ -68,8 +68,9 @@ void clock(struct trap *tr);
  *   the mode write, which takes БлП, БлЗ and БлПр straight from its own address field -- see
  *   the PSW_KERNEL comment in sys/besm6dev.h for the invariant the other two re-assert, and
  *   doc/Intrinsics.md §3.3.  The mask rides in that address field, so it must be a
- *   compile-time constant: that is why the branch in setipl() stays.  What the intrinsic
- *   bought over the out-of-line cli()/sti() it replaced is the call, not the branch.
+ *   compile-time constant: the two levels are two different instructions, not one instruction
+ *   over a variable.  That is why each spl below writes its own out and only splx(), whose
+ *   level is a run-time value, branches -- a shared setipl(s) had the branch in all four.
  *
  *   МГРП is the SOURCE ENABLE.  extintr()'s `grp & mgrp' means "sources this kernel is
  *   listening to right now", which is what that mask was always for.  It is NOT constant:
@@ -79,11 +80,11 @@ void clock(struct trap *tr);
  *   WIRED and mean IDLE, so one left standing in МГРП wedges extintr() the moment the
  *   device goes quiet.
  *
- * setipl() still does not touch МГРП, and must not start to.  The level is БлПр alone;
- * making it a per-level МГРП table again would cost a 002 036 write on every spl() and buy
- * nothing over two levels -- and it is the arrangement that failed, below.
+ * No spl touches МГРП, and none must start to.  The level is БлПр alone; making it a per-level
+ * МГРП table again would cost a 002 036 write on every spl() and buy nothing over two levels
+ * -- and it is the arrangement that failed, below.
  *
- * It used to be the other way round -- setipl() rewrote МГРП and nothing ever touched БлПр
+ * It used to be the other way round -- the spls rewrote МГРП and nothing ever touched БлПр
  * -- and the two mechanisms fought: the gates hold БлПр from the vector, so spl0() opened
  * МГРП while БлПр still blocked everything, and no interrupt could be taken in kernel mode
  * at all.  That was invisible while the only interrupts arrived in user mode, and became
@@ -104,19 +105,6 @@ static int curipl = 1; /* the machine comes up with interrupts blocked */
 unsigned mgrp; /* shadow of МГРП: it cannot be read back */
 unsigned mprp; /* shadow of МПРП: likewise */
 
-static int setipl(int s)
-{
-    int old;
-
-    old    = curipl;
-    curipl = s;
-    if (s)
-        __besm6_maskpsw(PSW_KERNEL | PSW_INTR_DISABLE); /* set БлПр   -- interrupts blocked */
-    else
-        __besm6_maskpsw(PSW_KERNEL); /* clear БлПр -- delivery enabled */
-    return old;
-}
-
 /*
  * Arm the always-live interrupt sources.  Called once from main(), before the first
  * spl0().  After this the priority rides on БлПр alone; МГРП changes only through
@@ -130,25 +118,40 @@ void intrinit(void)
     __besm6_mod(MOD_MGRP, mgrp);
 }
 
+/*
+ * splx() is the only one of the three that does not know its level at compile time, so it is
+ * the only one that keeps the branch: the mask is the address field of one `уиа', so each arm
+ * is a different instruction and there is nothing to select between at run time but the two
+ * arms themselves.  spl0() and spl1() each name one of them outright.
+ */
 void splx(int s)
 {
-    setipl(s);
+    curipl = s;
+    if (s)
+        __besm6_maskpsw(PSW_KERNEL | PSW_INTR_DISABLE); /* set БлПр   -- interrupts blocked */
+    else
+        __besm6_maskpsw(PSW_KERNEL); /* clear БлПр -- delivery enabled */
 }
 
 /*
  * void, not int: spl0 is the bottom of the range, so the level it displaces can only ever be
  * put back by a splN, never by an splx() of what spl0 returned.  Nothing in the kernel saved
- * it -- idle() below wanted it, and reaches setipl() directly rather than make every other
- * caller pay for a return value it drops.
+ * it -- idle() below wanted it, and takes `curipl' itself rather than make every other caller
+ * pay for a return value it drops.
  */
 void spl0(void)
 {
-    setipl(0);
+    curipl = 0;
+    __besm6_maskpsw(PSW_KERNEL); /* clear БлПр -- delivery enabled */
 }
 
 int spl1(void)
 {
-    return setipl(1);
+    int old = curipl;
+    
+    curipl = 1;
+    __besm6_maskpsw(PSW_KERNEL | PSW_INTR_DISABLE); /* set БлПр -- interrupts blocked */
+    return old;
 }
 
 /*
@@ -169,16 +172,16 @@ int spl1(void)
  * when the code around it is recompiled.
  *
  * Opening the door is a clear of БлПр and nothing else, which is why this is C and not
- * besm6.S.  It goes through setipl() rather than spl0() only because idle() must put the
- * caller's level back, and spl0() is void -- see the comment over it.
+ * besm6.S.  The level is read off `curipl' before spl0() overwrites it, since idle() must put
+ * the caller's back and spl0() is void -- see the comment over it.
  */
 volatile int idling; /* set while the idle spin is running; cleared by extintr() */
 
 void idle(void)
 {
-    int s;
+    int s = curipl;
 
-    s      = setipl(0);
+    spl0();
     idling = 1;
     while (idling)
         ; /* spin */
@@ -252,7 +255,7 @@ static void prpintr(void)
  * What this function owns, on behalf of every handler it calls, is the interrupt priority
  * level.  v7's handlers raise the ipl and let the return from interrupt drop it -- which is
  * what the PDP-11's `rtt' does when it reloads the priority field of PS from the frame, and
- * what `выпр' now does here too, БлПр being the priority (see setipl above).  So the
+ * what `выпр' now does here too, БлПр being the priority (see the spls above).  So the
  * HARDWARE bit needs nothing from us.  `curipl', the software shadow, does: clock() calls
  * spl5()/spl1() and restores neither, so without the repair at the bottom it would drift out
  * of step with БлПр from the very first tick on.

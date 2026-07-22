@@ -162,7 +162,7 @@
  * Bits of PSW, the LIVE mode word (register 021).  The low two and БлПр sit where they do in
  * SPSW -- `выпр' copies one into the other -- but the rest do not: where SPSW reports how the
  * trap was taken, PSW carries the halt-on-fault switches.  Only the bits this kernel names are
- * here.  БлПр is owned by __besm6_maskpsw() -- setipl() in kernel/intr.c is the only writer, and
+ * here.  БлПр is owned by __besm6_maskpsw() -- the spls in kernel/intr.c are the only writers, and
  * the gates in kernel/besm6.S emit the same instruction inline -- and __besm6_getpsw() is how C
  * reads it back, PSW being the one machine register that CAN be read back.
  */
