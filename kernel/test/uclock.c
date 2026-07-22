@@ -35,6 +35,11 @@
  * lbolt back at 0 (so no second rollover, hence no second ++time, p_time++ or SIGCLK), and
  * p_clktim already 0.  Only u_utime can grow, which is why that one check is `>=' and not `=='.
  *
+ * An extra tick in KERNEL mode is another matter, and is what `u_stime == 0' catches: it charges
+ * the wrong bucket and, if it lands before `выпр', fires the callout and rolls the second over on
+ * a frame that was never the user's.  So main() below leaves NO window where БлПр is open in
+ * kernel mode -- see the long comment over the arming sequence, which is ordered for exactly that.
+ *
  * uclock.ini asserts ACC == 0.  A nonzero ACC names the failing check -- see the F_* bits.
  */
 
@@ -252,26 +257,41 @@ int main()
     lbolt = HZ - 1;
 
     /*
-     * Dismiss whatever the free-running interval timer accumulated while we were setting up, arm
-     * the sources, open the interrupt level through the REAL spl0() (so curipl is the one
-     * extintr() will read), then raise the tick by hand.
+     * Open the interrupt level, arm the sources, and raise the tick by hand.  THE ORDER BELOW IS
+     * THE WHOLE POINT, and it is not the obvious one.
      *
-     * intrinit() is not optional: МГРП is armed once, there, and spl0() only clears БлПр.  Leave
-     * it out and extintr()'s `grp & mgrp' sees nothing, the tick is never dispatched, and every
-     * check below fails at once.
+     * The design of this test is that the tick stays PENDING until gouser()'s `выпр' enters user
+     * mode, so that clock() sees a user frame.  Nothing between here and there may take a tick in
+     * KERNEL mode -- one that does charges u_stime (F_STIME), and, worse, fires the callout and
+     * rolls the second over on the wrong tick, so every other check passes for the wrong reason.
      *
-     * Nor is the cli().  The whole design of this test is that the tick stays PENDING until
-     * gouser()'s `выпр' enters user mode, so that clock() sees a user frame; that used to be free,
-     * because БлПр was set from crt0c.S's PSW = 02003 and nothing in the kernel ever cleared it.
-     * Now spl0() clears it for real, so without the cli() the tick fires here, in kernel mode,
-     * inside main().  cli() re-blocks delivery without disturbing curipl, which is what the
-     * splx() in extintr() will restore to; gouser() forges SPSW = 0, so the `выпр' opens БлПр at
-     * the same instant it enters user mode.
+     * That leaves no room for a window.  Delivery needs БлПр clear AND `ГРП & МГРП' non-zero
+     * (kernel/intr.c, "TWO REGISTERS, TWO JOBS"), so the safe order is to move the one while the
+     * other still blocks:
+     *
+     *   spl0()      curipl := 0 and БлПр opens -- but МГРП is still empty, so nothing can be
+     *               delivered.  It has to be the REAL spl0(): curipl is what extintr() reads and
+     *               puts back, and what report()'s spl7() check reads afterwards.
+     *   cli()       re-block БлПр without disturbing curipl.  From here on the level is closed
+     *               until gouser()'s forged SPSW = 0 opens it in user mode.
+     *   intrinit()  NOW arm МГРП.  It is not optional: leave it out and extintr()'s `grp & mgrp'
+     *               sees nothing, the tick is never dispatched, and every check below fails.
+     *
+     * intrinit() before spl0() -- which is what this used to do, and what the kernel's own main()
+     * does, correctly, having nothing forged to protect -- is not a race but a certainty: the SIMH
+     * interval timer is calibrated against the WALL CLOCK (`fast_clk'/`sim_rtcn_calb'), so on the
+     * time scale of a test run GRP_TIMER is back up within a few dozen instructions of being
+     * dismissed.  It was therefore always pending by the time spl0() cleared БлПр, and the tick
+     * fired inside setipl()'s `sti', two instructions before the cli() meant to prevent it.
+     *
+     * The dismissal comes last, immediately before the tick we raise ourselves, so that what
+     * accumulated during all of the above is thrown away and exactly one tick is pending on entry
+     * to user mode.
      */
-    __besm6_mod(MOD_GRPCLR, ~GRP_TIMER);
-    intrinit();
     spl0();
     cli();
+    intrinit();
+    __besm6_mod(MOD_GRPCLR, ~GRP_TIMER);
     __besm6_ext(EXT_GRPSET, (unsigned)(GRP_TIMER >> 24));
 
     gouser(uentry); /* forge the user context and enter it; never returns */
