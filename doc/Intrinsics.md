@@ -107,8 +107,21 @@ compile-time constants; the compiler diagnoses anything else:
 - `__besm6_stop(code)` — `code` is the halt instruction's own 15-bit address field (`0`…`077777`).
 - `__besm6_maskpsw(mask)` — `mask` is the mode write's own 15-bit address field (§3.3).
 
-A constant *expression* is fine — it is folded before the check, so `__besm6_extracode(SYSCALL + 7,
-4, n)` works.
+A constant *expression* is fine, to any depth — all three are folded in the compiler's front end by
+the language's own recursive constant evaluator, before the check and independently of the
+optimizer flags. So `__besm6_extracode(SYSCALL + 7, 4, n)` works, and so does a mask assembled out
+of the named PSW bits:
+
+```c
+#define PSW_KERNEL (PSW_MMAP_DISABLE | PSW_PROT_DISABLE)   /* sys/besm6dev.h */
+
+__besm6_maskpsw(PSW_KERNEL | PSW_INTR_DISABLE);            /* three terms, two levels */
+```
+
+There is no nesting limit to keep in mind. (There was, until the fold moved to the front end: the
+back end's TAC-level folding collapsed one level only, so the two-term form was accepted while the
+three-term form was rejected as "not a constant". The rule looked arbitrary at the call site, which
+is exactly what a compile-time constraint must not do.)
 
 Every other argument may be constant or computed. In particular the register address of
 `__besm6_ext`/`__besm6_mod` may be either, and the hardware genuinely uses both: a constant address
@@ -274,13 +287,17 @@ it disturbs neither the accumulator nor ω, unlike the read-modify-write above. 
 no effect at all. ([Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) §024 has the simh source
 for the mask.)
 
-That makes `cli` and `sti` one instruction each, which is exactly how this kernel writes them by
-hand in [`kernel/psw.s`](../kernel/psw.s):
+That makes blocking and enabling one instruction each, and this kernel writes them exactly so —
+inline, inside `setipl()` ([kernel/intr.c](../kernel/intr.c)), with `PSW_KERNEL` the two standing
+bits named in [`sys/besm6dev.h`](../include/sys/besm6dev.h):
 
 ```c
-void cli(void) { __besm6_maskpsw(02003); }   /* БлП|БлЗ|БлПр — interrupts off */
-void sti(void) { __besm6_maskpsw(3);     }   /* БлП|БлЗ      — interrupts on  */
+__besm6_maskpsw(PSW_KERNEL | PSW_INTR_DISABLE);   /* БлП|БлЗ|БлПр — interrupts off */
+__besm6_maskpsw(PSW_KERNEL);                      /* БлП|БлЗ      — interrupts on  */
 ```
+
+There used to be a `kernel/psw.s` holding a `cli`, an `sti` and a `getpsw`, one instruction and one
+`uj` apiece. It is gone: these three intrinsics say the same thing without the call.
 
 Writing БлП and БлЗ as well is not a hazard, it is the point: a kernel that runs unmapped with
 protection off holds `БлП = БлЗ = 1` as a standing invariant, so `02003`/`3` put back exactly what
@@ -293,7 +310,8 @@ that is why [uarea.S](../kernel/uarea.S), [seg.S](../kernel/seg.S) and
 `ita`/`ati`.
 
 The mask rides in the instruction's own 15-bit address field, so it must be a compile-time
-constant (§2.3, §7).
+constant (§2.3, §7) — a constant *expression* to any depth, which is what lets a kernel build it
+out of named bits (`PSW_KERNEL | PSW_INTR_DISABLE`) rather than write `02003` and hope.
 
 The generated code, and here **the Madlen column is the interesting one**:
 
@@ -469,12 +487,10 @@ mode, and becomes load-bearing the moment an idle loop has to spin waiting for o
 
 БлПр lives in the mode word, and writing it is a single `vtm` — with the register field 0, `уиа`
 writes БлП, БлЗ and БлПр into PSW from its address field, and only those three
-([Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) §024). **C reaches that too, as of
-`__besm6_maskpsw`** (§3.3): `cli()` is `__besm6_maskpsw(02003)` and `sti()` is
-`__besm6_maskpsw(3)`, each one inline instruction with no call around it, and `getpsw()` is
-`__besm6_getpsw()`. [`kernel/psw.s`](../kernel/psw.s) still holds all three, and survives only
-because the four gates inline the same instruction anyway and no caller has been moved over yet;
-nothing about it is unexpressible now. What C already expresses is arming the source mask:
+([Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) §024). **C reaches that too, through
+`__besm6_maskpsw`** (§3.3), one inline instruction with no call around it — which is what let
+`kernel/psw.s` and its `cli`/`sti`/`getpsw` be retired outright. Arming the source mask is C as
+well, so the whole of this is now one file:
 
 ```c
 #define MOD_MGRP  036               /* 002 036 -- write МГРП */
@@ -488,11 +504,12 @@ void intrinit(void)                 /* called once from main(), before the first
     __besm6_mod(MOD_MGRP, mgrp);
 }
 
-static int setipl(int s)            /* the level itself is БлПр, via psw.s */
+static int setipl(int s)            /* the level itself is БлПр, one `vtm' either way */
 {
     int old = curipl;
     curipl = s;
-    if (s) cli(); else sti();
+    if (s) __besm6_maskpsw(PSW_KERNEL | PSW_INTR_DISABLE);
+    else   __besm6_maskpsw(PSW_KERNEL);
     return old;
 }
 
@@ -514,6 +531,11 @@ and disarms it in the handler before `iodone()`. See §6.3 for the exchange itse
 
 Note `mgrp` is `unsigned`, not `int`: ГРП bit 48 exists and would not survive a 41-bit type. And it
 is a shadow because МГРП, like РП and РЗ, is write-only.
+
+`setipl()`'s branch is not an oversight, and cannot be arithmetic: the mask is an immediate field
+of the instruction, so each arm needs its own constant (§2.3). What the intrinsic buys over the
+out-of-line `cli`/`sti` it replaced is the **call**, on every `spl*` in the kernel — not the
+branch.
 
 This is what [`kernel/intr.c`](../kernel/intr.c) does; the reasoning above is written up there in
 full.
@@ -611,15 +633,16 @@ hard errors:
 |---|---|
 | `__besm6_extracode(op, …)` with a non-constant `op` | `__besm6_extracode: the opcode must be a compile-time constant` |
 | `__besm6_extracode(0100, …)` | `__besm6_extracode: opcode 100 is not an extracode (050..077)` |
-| `__besm6_stop(x)` with a non-constant `x` | `intrinsic __besm6_stop takes one argument: a constant halt code in 0..077777` |
-| `__besm6_stop(0100000)` | `intrinsic __besm6_stop: halt code 100000 does not fit the 15-bit address field` |
-| `__besm6_maskpsw(x)` with a non-constant `x` | `intrinsic __besm6_maskpsw takes one argument: a constant mask in 0..077777` |
-| `__besm6_maskpsw(0100000)` | `intrinsic __besm6_maskpsw: mask 100000 does not fit the 15-bit address field` |
+| `__besm6_stop(x)` with a non-constant `x` | `__besm6_stop: the halt code must be a compile-time constant` |
+| `__besm6_stop(0100000)` | `__besm6_stop: halt code 100000 does not fit the 15-bit address field` |
+| `__besm6_maskpsw(x)` with a non-constant `x` | `__besm6_maskpsw: the mask must be a compile-time constant` |
+| `__besm6_maskpsw(0100000)` | `__besm6_maskpsw: mask 100000 does not fit the 15-bit address field` |
 
-The extracode opcode is checked in the front end ([semantic/expressions.c](https://github.com/besm6/c-compiler/blob/main/semantic/expressions.c)),
-early enough that the argument reaches the back end already folded to a literal whatever the
-optimizer does; the halt code and the PSW mask are checked at instruction selection, where a
-constant *expression* has already been folded by the TAC constant folder.
+All three immediate arguments are evaluated, range-checked and folded to a literal in the **front
+end** ([semantic/expressions.c](https://github.com/besm6/c-compiler/blob/main/semantic/expressions.c),
+`fold_immediate_arg0`), so they reach the back end as constants whatever the optimizer does. That is
+where the language's recursive constant-expression evaluator lives, which is why nesting depth does
+not matter (§2.3). Instruction selection re-tests each one, but only as a backstop.
 
 One thing is deliberately *not* an error: an `ext`/`mod` address too large for the 12-bit Format-1
 offset field (above `07777`). No address in the peripherals map is that large, but rather than
@@ -785,8 +808,11 @@ assembler the kernel is actually built with — names every one of them.
   clobber it, and both repurpose the register-0 `vtm` as an instruction-trace toggle. Running one
   would not test the intrinsic; it would test the simulator's private meaning for the encoding. So
   the coverage is golden assembly in all three dialects plus `UnixAssembleIntrinsicPsw` (b6as +
-  b6ld). The instructions themselves are exercised for real on SIMH, where this kernel's
-  [psw.s](../kernel/psw.s) and its four gates have been running them since the boot came up.
+  b6ld). The instructions themselves are exercised for real on SIMH, where this kernel's four gates
+  have been running them since the boot came up, and now `setipl()`
+  ([intr.c](../kernel/intr.c)) with them — every `spl*` the kernel takes is a `vtm` from
+  `__besm6_maskpsw`, and `kernel/test/`'s `uclock`, `usys` and `utrap` assert on the resulting
+  level.
 
 ---
 

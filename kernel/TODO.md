@@ -120,7 +120,7 @@ user to the wrong mode word.
 How it turned out:
 
 * **One instruction in each synchronous gate**, after the frame fill and before the `13 vjm` —
-  `vtm 3`, which is `psw.s:sti()`. Not one instruction earlier: until the frame is complete,
+  `vtm 3`, the mode write `setipl()` now issues from C (then `psw.s:sti()`). Not one instruction earlier: until the frame is complete,
   SPSW/ERET and the cells are the only copy of the interrupted context.
 * **`trapgate` opens it only for a fault from user**, reusing `intrgate`'s `SPSW & 014` test. It
   was unconditional first, on the argument that a supervisor fault panics anyway. That was wrong on
@@ -152,8 +152,8 @@ How it turned out:
 * **`vtm` with register field 0 is the mode write** — БлП, БлЗ and БлПр together, straight from the
   address field, nothing else in PSW touched, accumulator and ω untouched. It went in as a
   three-instruction `ita`/`aax`/`ati` first, because this file and three documents said `vtm` would
-  clobber ПоП/ПоК. It does not: the hardware masks the write to those three bits. `psw.s` now says
-  so, and `doc/Besm6_Instruction_Set.md` §024/§025 documents the feature, which it had omitted.
+  clobber ПоП/ПоК. It does not: the hardware masks the write to those three bits. The kernel sources
+  now say so, and `doc/Besm6_Instruction_Set.md` §024/§025 documents the feature, which it had omitted.
 * **Inlined, not called.** One instruction beats a call outright, and `13 vjm sti` inside a block
   that uses `sti N` as a *machine instruction* a dozen times over would be unreadable.
 * **`cli`/`sti` now assert БлП = БлЗ = 1** rather than preserving them, so they may only be called
@@ -163,7 +163,7 @@ How it turned out:
   restores БлПр from SPSW on the way out — the same asymmetry `extintr()`'s closing repair relies on.
 * **`intrgate` is exempt**: a handler runs at raised level and the return drops it, as `rtt` does.
 * Checked on the machine, on both doors: `usys` reads PSW back inside every dispatched handler and
-  `utrap` inside its stub `trap()` (`getpsw()`, new in `psw.s`), each failing with `F_IPL` if БлПр
+  `utrap` inside its stub `trap()` (`__besm6_getpsw()`; at the time, `getpsw()` in `psw.s`), each failing with `F_IPL` if БлПр
   is still set; and `utrap`/`ugrow` carry a `ktrap()` stub raising `F_KTRAP`, since both forge user
   mode and must never reach the supervisor arm. Each was made to fail on purpose first — deleting
   `sysgate`'s enable, deleting `trapgate`'s, and forcing its discriminator to the wrong arm — so the
@@ -218,7 +218,7 @@ machine state afterwards. Run every MMU test with **`set mmu cache`**.
 
 **`besm6.o` cannot go into a standalone test** — its `0500` vector reaches into the C kernel and its
 `_start` seeds no stack. That is why every routine a test has to link lives in its own file
-(`brz.s`, `uarea.S`, `seg.S`, `usermem.S`, `switch.s`, `psw.s`, `syscall.c`) and why the gates are
+(`brz.s`, `uarea.S`, `seg.S`, `usermem.S`, `switch.s`, `syscall.c`) and why the gates are
 duplicated in the tests' own crt0s.
 
 **Tasks 1–16 are done and their writeups have been removed**; the design they settled on is the
@@ -350,16 +350,35 @@ Loose ends the finished work left behind. None blocks 18.
   `namei()`'s `fubyte(u.u_dirp++)` — a genuine `char *` step — is right. What is worth checking is
   every *other* place an `int` becomes a `char *`, and there the pattern to copy is the one exec now
   uses: a real `char *` walked by the compiler, never a hand-built `(word, offset)` pair.
-* **`psw.s` could be C now.** The compiler grew three PSW intrinsics —
-  `__besm6_maskpsw`/`__besm6_getpsw`/`__besm6_setpsw`, twelve in `<besm6.h>` where there were nine —
-  and each lowers to exactly the instruction `psw.s` writes by hand: a register-0 `vtm` with a
-  constant mask, an `ita 021`, an `ati 021`. So `cli()` is `__besm6_maskpsw(02003)` and `sti()` is
-  `__besm6_maskpsw(3)`, *inline*, which would make `setipl()` in `intr.c` branch-free and drop a
-  call from every `spl*`. `getpsw()` would move with them, to somewhere `kernel/test/usys.c` can
-  still link it. Nothing forces the move — the four gates inline the same instruction regardless,
-  and the file is nine lines — but nothing about it is unexpressible any more. See
-  [../doc/Intrinsics.md](../doc/Intrinsics.md) §3.3 and
-  [../doc/Kernel_Assembly_Routines.md](../doc/Kernel_Assembly_Routines.md) §4.7.
+* **DONE: `psw.s` is retired, and the assist is six files.** The three PSW intrinsics
+  (`__besm6_maskpsw`/`__besm6_getpsw`/`__besm6_setpsw`, twelve in `<besm6.h>` where there were nine)
+  each lower to exactly the instruction that file wrote by hand — a register-0 `vtm` with a constant
+  mask, an `ita 021`, an `ati 021` — so `cli`, `sti` and `getpsw` are gone along with their
+  declarations in `systm.h`. `setipl()` (`intr.c`) issues the two `vtm`s itself, which drops a call
+  from every `spl*`; the two tests that read PSW back call `__besm6_getpsw()` directly, so `psw.o`
+  left **eight** link lines in `test/Makefile` as well as `MACH` in `kernel/Makefile`. How it turned
+  out, where it differed from the plan above:
+  * **`setipl()` is NOT branch-free**, which the old note predicted. The mask is an immediate field
+    of the instruction, so `__besm6_maskpsw` demands a compile-time *constant* and a runtime `s`
+    must still choose between two constant-mask instructions. The win is the call, not the branch.
+  * **The masks are named, not magic**: `PSW_KERNEL` (`sys/besm6dev.h`) is БлП|БлЗ, the standing
+    unmapped-kernel invariant, so `setipl()` reads `PSW_KERNEL | PSW_INTR_DISABLE` and `PSW_KERNEL`.
+    Its comment carries `psw.s`'s precondition — a mode write may only be issued from ordinary
+    unmapped kernel context, never inside a mapped bracket.
+  * **This needed a compiler fix, in the external c-compiler.** `PSW_KERNEL | PSW_INTR_DISABLE` is a
+    three-term OR, and the constant fold lived at TAC level in the back end, where it collapsed
+    **one level only**: the two-term form compiled and the three-term form was rejected as "not a
+    constant". The fold moved to the front end (`semantic/expressions.c`, `fold_immediate_arg0`),
+    which is where the language's recursive constant evaluator lives, and now covers all three
+    intrinsics with an immediate first argument — `maskpsw`, `stop` and `extracode`, the last of
+    which was already folded there and is what showed the way. Nesting depth is no longer a
+    property anyone has to know. Regression tests in `semantic/test/intrinsics_tests.cpp`.
+  * **The four gates are unchanged**: they always inlined `vtm 3`/`vtm 02003` rather than calling
+    into `psw.s`, so nothing in `besm6.S` moved — only comments that named the dead file.
+
+  See [../doc/Intrinsics.md](../doc/Intrinsics.md) §2.3, §3.3 and
+  [../doc/Kernel_Assembly_Routines.md](../doc/Kernel_Assembly_Routines.md) §4.7, which is now that
+  file's epitaph rather than its contract.
 * **DONE, out of the same compiler update: the drivers' computed-address workaround is gone.**
   `mb.c` and `md.c` used to branch on `ctlr` to reach two constant `033` addresses, because `b6cc`
   materialized a computed address into r14 and got it wrong (`14 ext 0` with a frame pointer still

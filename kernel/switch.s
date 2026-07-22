@@ -136,7 +136,8 @@ resume:
         atx     <rpsw>           //   bank the caller's, to be restored exactly
         vtm     02003            //   БлП|БлЗ|БлПр: interrupts off across BOTH copies.  The
                                  //   mode write (register field 0); БлП/БлЗ are already set,
-                                 //   this path being ordinary unmapped kernel code (psw.s).
+                                 //   this path being ordinary unmapped kernel code (the
+                                 //   PSW_KERNEL invariant, sys/besm6dev.h).
         xta     <rpaddr>
         aex     <uhome>
         uza     rfast            // paddr == uhome -> the live u-area is already the right one

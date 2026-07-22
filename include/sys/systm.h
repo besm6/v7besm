@@ -167,8 +167,6 @@ void printf(char *fmt, ...);
 void ifree(dev_t dev, ino_t ino);
 void free(dev_t dev, daddr_t bno);
 void bdwrite(struct buf *bp);
-void cli(void);
-void sti(void);
 int grow(int pg); /* pg is a virtual PAGE number, not an address */
 int subyte(caddr_t addr, int value);
 int suword(caddr_t addr, int value);

@@ -742,9 +742,9 @@ The general route is `040 «уи»`, which in supervisor mode writes any of `M[0
 ИБП, ДВП). (`слиа`/`utm` carries the identical side effect, from the identical code; with M[0]
 reading 0 the two are the same instruction here. Prefer `уиа`.)
 
-**This kernel writes PSW this way and no other.** `cli()`/`sti()` in
-[`kernel/psw.s`](../kernel/psw.s) — which *are* the interrupt priority level, since `setipl()` is
-built on them — are one `vtm 02003` and one `vtm 3`; the four gates in
+**This kernel writes PSW this way and no other.** `setipl()` in
+[`kernel/intr.c`](../kernel/intr.c) — which *is* the interrupt priority level, since every `spl*` is
+built on it — is one `vtm 02003` and one `vtm 3`, inline from `__besm6_maskpsw`; the four gates in
 [`kernel/besm6.S`](../kernel/besm6.S) inline the same instruction to open the level for their C
 handler and to shut it again in `intret`; and the mapped brackets in `uarea.S`, `seg.S` and
 `usermem.S` toggle БлП with `vtm 02002`/`vtm 02003`. Two consequences follow from the mask covering

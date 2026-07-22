@@ -20,8 +20,9 @@
  *   4. An unimplemented extracode (э50).  Checks badext signals SIGINS and the program resumes
  *      with its machine intact.
  *
- * Every leg also checks the INTERRUPT LEVEL: each handler reads PSW back through getpsw() and the
- * report fails if БлПр was still set.  The hardware forces it on at the vector, so this is the
+ * Every leg also checks the INTERRUPT LEVEL: each handler reads PSW back with __besm6_getpsw()
+ * -- the mode word is the one machine register that can be read back -- and the report fails if
+ * БлПр was still set.  The hardware forces it on at the vector, so this is the
  * assertion that the gate opens it again before dispatching -- v7's spl0()-on-entry, without which
  * a system call runs to completion with the clock stopped.
  *
@@ -61,9 +62,6 @@ void halt(unsigned mask);
 
 /* brz.s */
 void drainbrz(void);
-
-/* psw.s -- reads PSW back, which is the only way to see the interrupt level from C */
-int getpsw(void);
 
 /* Must match the EQUs in crt0s.S. */
 #define R13V   054321U /* forged r13 */
@@ -137,7 +135,7 @@ static int sawpsw;               /* PSW as every dispatched handler saw it, OR-e
 static void stub_two(void)
 {
     ncall++;
-    sawpsw |= getpsw();
+    sawpsw |= __besm6_getpsw();
     lastcall     = 20;
     u.u_r.r_val1 = VAL1;
     u.u_r.r_val2 = VAL2;
@@ -157,7 +155,7 @@ static void stub_three(void)
     } *uap = (struct a *)u.u_ap;
 
     ncall++;
-    sawpsw |= getpsw();
+    sawpsw |= __besm6_getpsw();
     lastcall     = 3;
     sawarg[0]    = uap->a1;
     sawarg[1]    = uap->a2;
@@ -169,7 +167,7 @@ static void stub_three(void)
 static void stub_none(void)
 {
     ncall++;
-    sawpsw |= getpsw();
+    sawpsw |= __besm6_getpsw();
     lastcall = -1;
 }
 
@@ -179,7 +177,7 @@ static void stub_none(void)
 void nosys(void)
 {
     ncall++;
-    sawpsw |= getpsw();
+    sawpsw |= __besm6_getpsw();
     lastcall  = 0;
     u.u_error = EINVAL;
 }
@@ -248,7 +246,7 @@ void qswtch(void)
 void psignal(struct proc *p, int sig)
 {
     nsig++;
-    sawpsw |= getpsw();
+    sawpsw |= __besm6_getpsw();
     lastsig = sig;
 }
 

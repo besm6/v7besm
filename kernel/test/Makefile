@@ -93,37 +93,38 @@ uintr:  crt0u.o uintr.o utab.o brz.o
 
 # utrap is uintr's counterpart for the OTHER asynchronous door: it forges a user-mode context
 # (crt0t.o), takes data-protection faults in it, and checks that the 0500 gate framed the machine
-# and that trap() backed the PC up so the faulting instruction re-executed.  psw.o is for getpsw(),
-# which is how the stub trap() checks the gate opened the interrupt level.  See utrap.ini and
-# crt0t.S.
-utrap:  crt0t.o utrap.o utab.o brz.o psw.o
+# and that trap() backed the PC up so the faulting instruction re-executed.  The stub trap() reads
+# PSW back with __besm6_getpsw() to check the gate opened the interrupt level -- an intrinsic, so
+# it needs no object of its own.  See utrap.ini and crt0t.S.
+utrap:  crt0t.o utrap.o utab.o brz.o
 	$(link)
 
 # usys is the third forge test, on the EXTRACODE door (0577/0550).  Unlike uintr and utrap it
 # links the code under test itself -- the kernel's real syscall.o -- which is why that dispatcher
 # lives in its own file (kernel/syscall.c); only the gates are duplicated, into crt0s.S.  It also
-# needs usermem.o for fuword(), which syscall() marshals the arguments with, and psw.o for
-# getpsw(), which is how the stubs check the gate opened the interrupt level.  See usys.ini.
-usys:   crt0s.o usys.o syscall.o utab.o brz.o usermem.o psw.o
+# needs usermem.o for fuword(), which syscall() marshals the arguments with.  The stubs check the
+# gate opened the interrupt level by reading PSW back with __besm6_getpsw(), an intrinsic, so that
+# costs no object.  See usys.ini.
+usys:   crt0s.o usys.o syscall.o utab.o brz.o usermem.o
 	$(link)
 
 # uclock is the fourth forge test: it takes a real TIMER interrupt in user mode and checks that it
 # reached clock().  Like usys it links the code under test rather than a copy -- the kernel's own
 # intr.o (the ГРП dispatch) and clock.o -- and hand-builds only the environment they name; only the
 # gate is duplicated, into crt0c.S.  See uclock.ini.
-uclock: crt0c.o uclock.o clock.o intr.o utab.o brz.o psw.o
+uclock: crt0c.o uclock.o clock.o intr.o utab.o brz.o
 	$(link)
 
 # uswtch -- save()/resume()/idle() and the u-area invariant (task 16).  Links the real
-# switch.o, uarea.o, brz.o, intr.o and psw.o; only clock() and scintr() are stubbed, in
+# switch.o, uarea.o, brz.o and intr.o; only clock() and scintr() are stubbed, in
 # uswtch.c.  crt0w.S puts `u' at the real 076000 and runs main() on the u-page stack.
-uswtch: crt0w.o uswtch.o switch.o uarea.o brz.o intr.o psw.o
+uswtch: crt0w.o uswtch.o switch.o uarea.o brz.o intr.o
 	$(link)
 
 # usched -- newproc() + swtch() alternate between two processes (task 16, "done when").
 # Links the REAL scheduler, slp.o, and lets it drive the switch.  swap/xswap are stubbed in
 # usched.c and must never run: there is no disk yet (task 18).
-usched: crt0w.o usched.o slp.o switch.o uarea.o brz.o intr.o psw.o utab.o seg.o malloc.o
+usched: crt0w.o usched.o slp.o switch.o uarea.o brz.o intr.o utab.o seg.o malloc.o
 	$(link)
 
 # ugrow is task 17's: it forges user mode with a ONE-page stack at USTKPAGE, stores past the
@@ -143,7 +144,7 @@ biotest: crt0.o biotest.o bio.o utab.o brz.o
 # ugrp -- task 18b.2: МГРП is dynamic, and a WIRED ГРП bit does not wedge extintr().  Links
 # the real intr.o and calls extintr() as an ordinary C function, with delivery blocked --
 # no gate and no forged context, so crt0.s is enough.  See ugrp.ini.
-ugrp:   crt0.o ugrp.o intr.o psw.o
+ugrp:   crt0.o ugrp.o intr.o
 	$(link)
 
 # mbtest -- task 18b.3: the drum driver actually moves data.  Links the REAL mb.o and the
@@ -151,7 +152,7 @@ ugrp:   crt0.o ugrp.o intr.o psw.o
 # iodone(), physio() and the two handlers intr.c names.  `u' is plain bss in mbtest.c, as
 # in biotest: mbopen() is the only thing in the driver that touches it.  Needs drums
 # attached, so see mbtest.ini.
-mbtest: crt0.o mbtest.o mb.o intr.o psw.o
+mbtest: crt0.o mbtest.o mb.o intr.o
 	$(link)
 
 # mdtest -- task 18b.4: the disk driver, and its two-step protocol; and task 18b.5: telling
@@ -164,7 +165,7 @@ mbtest: crt0.o mbtest.o mb.o intr.o psw.o
 # soft error -- a read that runs off the end of the backing file -- and so the only way the
 # driver's retry path is exercised rather than merely written.  It must be empty on every
 # run: run 4 fails a read against it, and a stale formatted file would silently pass.
-mdtest: crt0.o mdtest.o md.o intr.o psw.o
+mdtest: crt0.o mdtest.o md.o intr.o
 	$(link)
 
 # A static pattern rule, so -DKERNEL reaches exactly the kernel sources and nothing else.
@@ -187,8 +188,7 @@ $(KERNOBJ): %.o: %.c $(HDRS)
 %.o:    %.S $(HDRS)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# ../brz.s, ../psw.s, ../switch.s and the local crt0.s, hello.s and mmuhelp.s have no
+# ../brz.s, ../switch.s and the local crt0.s, hello.s and mmuhelp.s have no
 # #includes, so no header prerequisite and no cpp.
-# cli/sti: setipl() in intr.c is built on psw.s (БлПр is the interrupt priority).
 %.o:    %.s
 	$(AS) $< -o $@

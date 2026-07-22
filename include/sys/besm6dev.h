@@ -162,12 +162,33 @@
  * Bits of PSW, the LIVE mode word (register 021).  The low two and БлПр sit where they do in
  * SPSW -- `выпр' copies one into the other -- but the rest do not: where SPSW reports how the
  * trap was taken, PSW carries the halt-on-fault switches.  Only the bits this kernel names are
- * here; cli()/sti() (kernel/psw.s) own БлПр, and getpsw() is how C reads it back.
+ * here.  БлПр is owned by __besm6_maskpsw() -- setipl() in kernel/intr.c is the only writer, and
+ * the gates in kernel/besm6.S emit the same instruction inline -- and __besm6_getpsw() is how C
+ * reads it back, PSW being the one machine register that CAN be read back.
  */
 #define PSW_MMAP_DISABLE 00001  /* БлП  - data mapping disabled */
 #define PSW_PROT_DISABLE 00002  /* БлЗ  - data protection disabled */
 #define PSW_INTR_HALT    00004  /* ПоП  - halt, do not vector, on an internal interrupt */
 #define PSW_CHECK_HALT   00010  /* ПоК  - halt, do not vector, on an instruction check */
 #define PSW_INTR_DISABLE 02000  /* БлПр - external interrupts disabled */
+
+/*
+ * The standing invariant: THIS KERNEL RUNS UNMAPPED WITH PROTECTION OFF (БлП = БлЗ = 1).
+ *
+ * `уиа' (vtm) with REGISTER FIELD 0 is a mode-word write in supervisor mode: M[0] always reads 0,
+ * so the register half of the instruction is a no-op and the hardware spends it on PSW instead,
+ * taking БлП, БлЗ and БлПр straight from the address field and writing all three at once.  That is
+ * __besm6_maskpsw(), one instruction, and it is a MASKED write -- ПоП, ПоК and the write-watch bit
+ * are not in the mask and do not move -- disturbing neither the accumulator nor ω.
+ *
+ * So every mask handed to __besm6_maskpsw() carries PSW_KERNEL and re-asserts the invariant on the
+ * way past.  That is the point of it, not a hazard.  THE PRECONDITION IT BUYS: __besm6_maskpsw()
+ * may only be issued from ordinary unmapped kernel context, never from inside a MAPPED bracket --
+ * it would slam БлП back on and pull the mapping out from under the copy.  The brackets in
+ * kernel/uarea.S, kernel/seg.S and kernel/usermem.S issue their own `vtm 02002'/`vtm 02003' and
+ * bank the whole word with `ita'/`ati' precisely because they must preserve a БлПр they do not
+ * know.  See doc/Intrinsics.md §3.3 and doc/Memory_Mapping.md.
+ */
+#define PSW_KERNEL (PSW_MMAP_DISABLE | PSW_PROT_DISABLE)
 
 #endif /* _SYS_BESM6DEV_H */

@@ -17,7 +17,6 @@ SIMH test. Anything a test has to exercise for real therefore lives in a file of
 | [uarea.S](../kernel/uarea.S) | `uflush`, `uload` — the u-area window bracket |
 | [seg.S](../kernel/seg.S) | `copyseg`, `clearseg` |
 | [usermem.S](../kernel/usermem.S) | `copyin`, `copyout`, `fubyte`, `fuword`, `subyte`, `suword` |
-| [psw.s](../kernel/psw.s) | `cli`, `sti` — one `vtm` each, the mode-word write — and `getpsw`, which reads PSW back. The only file here that C could now write for itself (§4.7) |
 | [brz.s](../kernel/brz.s) | `drainbrz` — the nine-store БРЗ drain |
 
 **It is a small body of assembly.** The C compiler has the `<besm6.h>` machine
@@ -30,10 +29,11 @@ that must be entered *with the machine's registers as the hardware left them* (t
 runs with the kernel's own data unaddressable (the brackets), and code where the **sequence** rather
 than the instruction is the contract (`drainbrz`).
 
-`psw.s` is the one file in the table that no longer meets that test. The compiler grew three PSW
-intrinsics — `__besm6_maskpsw`, `__besm6_getpsw`, `__besm6_setpsw` — so `cli`, `sti` and `getpsw`
-are each one *inline* instruction in C now, cheaper than the call they cost today. It survives on
-inertia, not necessity; §4.7 says what moving it would take.
+There used to be a seventh file, `psw.s`, holding `cli`, `sti` and `getpsw` — a mode-word write, its
+inverse and a mode-word read, one instruction and one `uj` apiece. It failed exactly that test once
+the compiler grew the three PSW intrinsics (`__besm6_maskpsw`, `__besm6_getpsw`, `__besm6_setpsw`),
+each of which lowers to precisely the instruction it wrote by hand, *inline*. It has been retired:
+the level is now set in C, in `setipl()` ([intr.c](../kernel/intr.c)), and §4.7 is its epitaph.
 
 Two contracts v7 relied on have **no counterpart here**, and both are noted where they appear:
 there is no `nofault` mechanism at all — validation is `useracc()` up front — and `invd()` does
@@ -161,8 +161,8 @@ atomic instruction, masking interrupts is the only lock there is. Only `spl0` en
 above it blocks. Delivery needs БлПр clear **and** `ГРП & МГРП` non-zero, so either register could
 have been the mask, and the kernel divides them:
 
-- **БлПр (PSW bit `02000`) is the priority**, set and cleared through `cli()`/`sti()`
-  ([psw.s](../kernel/psw.s)). The hardware already treats it as one — a gate forces БлПр on at the
+- **БлПр (PSW bit `02000`) is the priority**, set and cleared by `setipl()`'s one inline `vtm`
+  ([intr.c](../kernel/intr.c), §4.7). The hardware already treats it as one — a gate forces БлПр on at the
   vector and `выпр` restores it from SPSW, so returning through a gate re-establishes the level by
   itself, exactly as the PDP-11's `rtt` does. МГРП, outside the mode word, does nothing of the kind.
 - **МГРП is the source enable**, armed once by `intrinit()` from `main()` and never rewritten.
@@ -329,8 +329,8 @@ void splx(int s);                                                             /*
 - **Callers.** Pervasive: `slp.c` (`sleep`/`wakeup`/`setrq`/`sched`/`swtch` use `spl6`/`spl0`),
   `clock.c:62,105,153`, `prim.c`, and the device drivers (`dev/bio.c`, `dev/tty.c`, `dev/hd.c`,
   `dev/fd.c`, `dev/cd.c`).
-- **Implementation — done**, in [intr.c](../kernel/intr.c) over `cli`/`sti`
-  ([psw.s](../kernel/psw.s)). There are **two levels**, the knob is **БлПр** and not МГРП, and
+- **Implementation — done**, in [intr.c](../kernel/intr.c) over `__besm6_maskpsw`
+  (§4.7). There are **two levels**, the knob is **БлПр** and not МГРП, and
   nothing needs deferring. The v7 spelling and the return-the-old-level contract are preserved
   intact. See §1, "Interrupt priority model", for why the register choice is not free.
 
@@ -548,53 +548,70 @@ void bzero(void *dst, unsigned len);                   /* systm.h:144 */
   A knock-on worth knowing: `DIRSIZ` is now 24, so `struct direct` is 5 words and directory entries
   are word-aligned — which is what lets `nami.c` use the word copy at all.
 
-### 4.7 The interrupt flag — `cli`, `sti`
+### 4.7 The interrupt flag — RETIRED, and now C
+
+**This section documents a file that no longer exists.** `kernel/psw.s` held `cli`, `sti` and
+`getpsw`; all three are gone, and what they did is written inline in C. The contract is kept here
+because the *machine* facts behind it — what a register-0 `vtm` does, and the precondition it
+carries — are still load-bearing for [besm6.S](../kernel/besm6.S), the brackets, and anyone reading
+`setipl()`.
 
 ```c
-void cli(void);                                 /* systm.h:162 */
-void sti(void);                                 /* systm.h:163 */
-int  getpsw(void);                              /* not declared in systm.h -- see below */
+static int setipl(int s)            /* kernel/intr.c -- the whole of what psw.s was */
+{
+    int old = curipl;
+    curipl = s;
+    if (s) __besm6_maskpsw(PSW_KERNEL | PSW_INTR_DISABLE);   /* was cli() */
+    else   __besm6_maskpsw(PSW_KERNEL);                      /* was sti() */
+    return old;
+}
 ```
 
-- **Purpose.** Clear and set the interrupt-enable bit. **They are the interrupt priority level
-  itself** (§1, §4.1), and every `spl*` is built on them. They live in [psw.s](../kernel/psw.s),
-  and each is **one instruction**: `vtm 02003` and `vtm 3`. With the register field 0, `уиа` is the
-  mode-word write — it takes БлП, БлЗ and БлПр straight from the address field and writes all three
-  into PSW atomically ([Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) §024,
+- **The interrupt-enable bit is the interrupt priority level itself** (§1, §4.1), and every `spl*`
+  is built on `setipl()`. Setting it is **one instruction** either way: `vtm 02003` and `vtm 3`.
+  With the register field 0, `уиа` is the mode-word write — it takes БлП, БлЗ and БлПр straight from
+  the address field and writes all three into PSW atomically
+  ([Besm6_Instruction_Set.md](Besm6_Instruction_Set.md) §024,
   [Memory_Mapping.md](Memory_Mapping.md)). It is a *masked* write: ПоП, ПоК and the write-watch bit
   are not in the mask, and neither the accumulator nor ω is disturbed. (This paragraph used to say
   the opposite — that `vtm` "writes the whole mode word" and would clobber ПоП/ПоК. It does not, and
   the read-modify-write it argued for is gone.)
 
   **That it writes БлП and БлЗ too is the point, not a hazard.** The kernel runs unmapped with
-  protection off as a standing invariant, so `02003`/`3` put back what is already there. The
-  precondition that buys is worth stating: `cli`/`sti` may only be called from ordinary unmapped
-  kernel context — never from inside a mapped bracket, which would have its mapping slammed off
-  underneath it. The brackets in [uarea.S](../kernel/uarea.S), [seg.S](../kernel/seg.S) and
-  [usermem.S](../kernel/usermem.S) issue their own `vtm 02002`/`vtm 02003` and bank PSW with
-  `ita`/`ati`, because they must preserve a БлПр they do not know.
+  protection off as a standing invariant — that is what `PSW_KERNEL` names in
+  [sys/besm6dev.h](../include/sys/besm6dev.h) — so `02003`/`3` put back what is already there. The
+  precondition that buys **still holds and still matters**: a mode write may only be issued from
+  ordinary unmapped kernel context, never from inside a mapped bracket, which would have its
+  mapping slammed off underneath it. The brackets in [uarea.S](../kernel/uarea.S),
+  [seg.S](../kernel/seg.S) and [usermem.S](../kernel/usermem.S) issue their own
+  `vtm 02002`/`vtm 02003` and bank PSW with `ita`/`ati`, because they must preserve a БлПр they do
+  not know.
 
-  The gates **inline the same instruction** rather than call these: the three synchronous ones emit
-  `vtm 3` before their C call and `intret` opens with `vtm 02003`
-  ([Unix_Context_Switch.md](Unix_Context_Switch.md) §10). One instruction beats a call outright, and
-  `13 vjm sti` would be unreadable in a block where `sti N` is also a *machine instruction* —
-  `intret` uses it a dozen times to restore registers.
+  The gates **inline the same instruction** rather than call anything: the three synchronous ones
+  emit `vtm 3` before their C call and `intret` opens with `vtm 02003`
+  ([Unix_Context_Switch.md](Unix_Context_Switch.md) §10). That was true while `psw.s` existed and is
+  why it was never load-bearing for them — one instruction beats a call outright, and `13 vjm sti`
+  would be unreadable in a block where `sti N` is also a *machine instruction*, which `intret` uses
+  a dozen times to restore registers.
 
-- **C can now write all three, and this file could go.** `<besm6.h>` gained
-  `__besm6_maskpsw`/`__besm6_getpsw`/`__besm6_setpsw` ([Intrinsics.md](Intrinsics.md) §3.3), each
-  lowering to exactly the instruction below it — a register-0 `vtm` with a constant mask, an
-  `ita 021`, an `ati 021` — with no call around it. `cli()` becomes `__besm6_maskpsw(02003)` and
-  `sti()` becomes `__besm6_maskpsw(3)`, which would make `setipl()` in [intr.c](../kernel/intr.c)
-  branch-free and inline, and `getpsw()` would move to wherever `kernel/test/usys.c` can still see
-  it. Nothing forces the move — the gates inline the instruction regardless, and `psw.s` is nine
-  lines of code — so it is recorded in [kernel/TODO.md](../kernel/TODO.md) rather than done.
+- **Why it could go.** `<besm6.h>` gained `__besm6_maskpsw`/`__besm6_getpsw`/`__besm6_setpsw`
+  ([Intrinsics.md](Intrinsics.md) §3.3), each lowering to exactly the instruction `psw.s` wrote by
+  hand — a register-0 `vtm` with a constant mask, an `ita 021`, an `ati 021` — with no call around
+  it. So `setipl()` is now two inline `vtm`s, and every `spl*` in the kernel is one call shorter.
 
-- **`getpsw` reads PSW back**, which is the only way to see the interrupt level from C: unlike РП
-  and РЗ, the mode word is readable. The kernel never calls it — it tracks the level in `curipl` and
-  reads the *interrupted* mode word out of the trap frame — so `libunix.a`'s link-pull drops it from
-  the image. It exists for `kernel/test/usys.c`, which asserts from inside a `sysent` stub that the
-  extracode gate really did open БлПр before dispatching (`F_IPL`). Nothing else can check that: the
-  level is a hardware bit, and every C-visible shadow of it would agree either way.
+  **The branch stays**, contrary to what this section used to predict. The mask is an immediate
+  field of the instruction, so `__besm6_maskpsw` demands a compile-time constant and a runtime `s`
+  has to select between two constant-mask instructions. What the move bought is the call, not the
+  branch.
+
+- **Reading PSW back** is the only way to see the interrupt level from C: unlike РП and РЗ, the mode
+  word is readable, and `__besm6_getpsw()` is one `ita 021`. The kernel never does it — it tracks
+  the level in `curipl` and reads the *interrupted* mode word out of the trap frame. The callers are
+  in `kernel/test/`: `usys.c` asserts from inside a `sysent` stub, and `utrap.c` from inside its stub
+  `trap()`, that the gate really did open БлПр before dispatching (`F_IPL`). Nothing else can check
+  that — the level is a hardware bit, and every C-visible shadow of it would agree either way. That
+  those two tests needed a symbol to link is what kept `psw.s` alive; an intrinsic needs no object,
+  so `psw.o` left eight link lines in `kernel/test/Makefile` with it.
 
 ### 4.8 What the assist does not contain
 
@@ -655,8 +672,8 @@ the reschedule-pending flag the gates test on the way back to user mode (§3).
 | routine(s) | state |
 |------------|-------|
 | `bcopy`, `bzero` | **done** — renamed `wcopy`/`wzero` and they take a **word** count, converted by `btow()` at every call site, so the loop has no six-chars-per-word tail |
-| `spl0`…`spl7`, `splx` | **done** — two levels, not eight, and the knob is **БлПр** (via `cli`/`sti`), not МГРП, which is a source enable armed once by `intrinit()`. Putting the level in the mode word is what lets `выпр` restore it on a gate return, as the PDP-11's `rtt` does |
-| `cli`, `sti`, `getpsw` | **done** — [psw.s](../kernel/psw.s); one `vtm` each (register field 0 = the mode write, §4.7), and they carry the whole interrupt priority level. The gates inline the same instruction rather than call it. `getpsw` reads PSW back, for the test that checks a gate opened the level. Now expressible in C as well, via the PSW intrinsics (§4.7) |
+| `spl0`…`spl7`, `splx` | **done** — two levels, not eight, and the knob is **БлПр** (one inline `vtm` in `setipl()`), not МГРП, which is a source enable armed once by `intrinit()`. Putting the level in the mode word is what lets `выпр` restore it on a gate return, as the PDP-11's `rtt` does |
+| `cli`, `sti`, `getpsw` | **retired** — `psw.s` is deleted (§4.7). The PSW intrinsics lower to exactly the same three instructions *inline*, so the level is set in C by `setipl()` and every `spl*` is one call shorter; the gates always inlined the instruction rather than calling it. `__besm6_getpsw()` reads PSW back for the two tests that check a gate opened the level, and needs no object to link |
 | `fubyte`/`fuword`/`subyte`/`suword`, `copyin`/`copyout` | **done** — [usermem.S](../kernel/usermem.S); **no fault-recovery path**, validation is `useracc()` up front. No window either: the loop toggles БлП per word through the user map that is already loaded. Byte variants do RMW, and mind the fat-pointer marker bit |
 | `copyseg`/`clearseg`, `uflush`/`uload` | **done** — [seg.S](../kernel/seg.S), [uarea.S](../kernel/uarea.S); a two-page window bracket with a БРЗ drain either side (§4.4a) |
 | `save`, `resume` | **done (task 16)** — [kernel/switch.s](../kernel/switch.s); nine slots (r1–r7, r13, r15), and `resume()` switches the **u-area**, not the address space: it never writes РП |

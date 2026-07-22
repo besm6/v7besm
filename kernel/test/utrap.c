@@ -61,9 +61,6 @@ void halt(unsigned mask);
 /* brz.s */
 void drainbrz(void);
 
-/* psw.s -- reads PSW back, the only way to see the interrupt level from C */
-int getpsw(void);
-
 /* Must match the EQUs in crt0t.S. */
 #define RMODE  044U     /* forged R */
 #define RMRVAL 0123456U /* forged Y (РМР) */
@@ -139,9 +136,11 @@ void trap(void)
      * The gate opened the interrupt level before dispatching.  БлПр is forced on at the vector,
      * and the gate clears it again -- but only for a fault FROM USER, which is what this test
      * takes.  Without the check the discriminator in crt0t.S could branch either way and utrap
-     * would still pass.  There is no C-visible shadow of the level; it has to be read out of PSW.
+     * would still pass.  There is no C-visible shadow of the level; it has to be read out of PSW,
+     * which __besm6_getpsw() does in one instruction -- PSW is the one machine register that CAN
+     * be read back.
      */
-    if (getpsw() & PSW_INTR_DISABLE)
+    if (__besm6_getpsw() & PSW_INTR_DISABLE)
         mask |= F_IPL;
 
     /* Did we come from user mode, on the kernel stack, with the machine intact? */

@@ -284,7 +284,8 @@ sysgate:
         // --- open the interrupt level for the C call: v7's spl0()-on-entry (see the header).
         //     Safe only here -- the frame is complete, so the five cells and SPSW/ERET are dead.
         //     `vtm' with register field 0 is the mode write: БлП|БлЗ|БлПр from the address
-        //     field, all three at once, nothing else in PSW touched.  This is psw.s:sti(). ---
+        //     field, all three at once, nothing else in PSW touched.  This is setipl()'s own
+        //     spl0 instruction -- __besm6_maskpsw(PSW_KERNEL) -- inlined rather than called. ---
         vtm     3                   // PSW := БлП|БлЗ, БлПр clear: interrupts delivered
 
      13 vtm     intret              // TAIL CALL: syscall.c marshals the arguments, dispatches, and
@@ -644,12 +645,13 @@ extk:                               // M15 = frame base F (ustkbase, or the inte
         //     nested gate would spill into.  `intrgate' arrives here already blocked, but the three
         //     synchronous gates opened the level for their C call and what the C side left behind is
         //     not knowable from here -- an spl bracket that ended in splx(0) is enough.  Three
-        //     instructions here cover every door and every future tail; the alternative, a cli in
-        //     each C exit path, would have to be got right once per path forever.  A is dead on
+        //     instructions here cover every door and every future tail; the alternative, a mode
+        //     write in each C exit path, would have to be got right once per path forever.  A is dead on
         //     entry (the `stx' below overwrites it) and M16 is reloaded from frame[5] further
         //     down. ---
 intret:
-        vtm     02003               // PSW := БлП|БлЗ|БлПр: interrupts blocked (psw.s:cli)
+        vtm     02003               // PSW := БлП|БлЗ|БлПр: interrupts blocked, as setipl() does
+                                    // it in C with __besm6_maskpsw(PSW_KERNEL|PSW_INTR_DISABLE)
 
         stx                         // A := M1 from frame[20]
         sti     1                   // restore M1; A := M2 from frame[19]

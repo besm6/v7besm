@@ -57,11 +57,18 @@ void clock(struct trap *tr);
  * could serve as the mask.  They are not interchangeable, and this kernel divides them:
  *
  *   БлПр (PSW bit 02000) is the PRIORITY.  setipl() sets it to block and clears it to
- *   enable, through cli()/sti() in besm6.S.  It is the right choice because the hardware
- *   already treats it as one: an interrupt or extracode forces БлПр on at the vector and
+ *   enable.  It is the right choice because the hardware already treats it as one: an
+ *   interrupt or extracode forces БлПр on at the vector and
  *   `выпр' restores it from SPSW, so a gate return re-establishes the level by itself --
  *   exactly what the PDP-11's `rtt' does when it reloads the priority field of PS.  МГРП,
  *   being a separate write-only register outside the mode word, does nothing of the kind.
+ *
+ *   Setting it costs ONE INSTRUCTION either way.  __besm6_maskpsw() is the register-0 `уиа',
+ *   the mode write, which takes БлП, БлЗ and БлПр straight from its own address field -- see
+ *   the PSW_KERNEL comment in sys/besm6dev.h for the invariant the other two re-assert, and
+ *   doc/Intrinsics.md §3.3.  The mask rides in that address field, so it must be a
+ *   compile-time constant: that is why the branch in setipl() stays.  What the intrinsic
+ *   bought over the out-of-line cli()/sti() it replaced is the call, not the branch.
  *
  *   МГРП is the SOURCE ENABLE.  extintr()'s `grp & mgrp' means "sources this kernel is
  *   listening to right now", which is what that mask was always for.  It is NOT constant:
@@ -103,9 +110,9 @@ static int setipl(int s)
     old    = curipl;
     curipl = s;
     if (s)
-        cli(); /* set БлПр   -- external interrupts blocked */
+        __besm6_maskpsw(PSW_KERNEL | PSW_INTR_DISABLE); /* set БлПр   -- interrupts blocked */
     else
-        sti(); /* clear БлПр -- delivery enabled */
+        __besm6_maskpsw(PSW_KERNEL); /* clear БлПр -- delivery enabled */
     return old;
 }
 
@@ -262,7 +269,7 @@ static void prpintr(void)
  * spl5()/spl1() and restores neither, so without the repair at the bottom it would drift out
  * of step with БлПр from the very first tick on.
  *
- * The repair is a plain assignment, NOT splx().  splx(0) would call sti() and clear БлПр
+ * The repair is a plain assignment, NOT splx().  splx(0) would clear БлПр
  * here, inside the handler, with the interrupted context's state still in SPSW/IRET -- and
  * the interval timer free-runs, so the next tick would re-enter this function immediately
  * and keep doing so.  Nothing in the loop below wants delivery open, either: every handler

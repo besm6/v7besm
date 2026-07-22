@@ -7,7 +7,7 @@ SYS     = acct.o alloc.o clock.o conf.o fio.o iget.o intr.o machdep.o main.o \
 DEV     = bio.o mb.o md.o mem.o partab.o sc.o sr.o sys.o tty.o
 
 # Machine-language assist
-MACH    = brz.o uarea.o seg.o usermem.o switch.o psw.o
+MACH    = brz.o uarea.o seg.o usermem.o switch.o
 
 # besm6.o comes first: the vector block's placement at 0500/0501 depends on its
 # const contribution being the first one in the image.

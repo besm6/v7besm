@@ -922,7 +922,7 @@ address field selects from a wider file that includes the machine's own control 
 which **PSW, the mode word, is at `021`** — carrying БлПр (`02000`, interrupts blocked), БлП (`01`)
 and БлЗ (`02`). So `ita 021` reads the mode word and `ati 021` writes it, and unlike РП and РЗ,
 which are write-only, PSW can be read back this way — the only machine register that can. That is
-what [`kernel/psw.s`](../kernel/psw.s)'s `getpsw()` does, and what the mapped brackets in
+what `__besm6_getpsw()` does for `kernel/test/`, and what the mapped brackets in
 [uarea.S](../kernel/uarea.S), [seg.S](../kernel/seg.S) and [usermem.S](../kernel/usermem.S) use to
 bank a БлПр they do not know. C reaches the pair as `__besm6_getpsw`/`__besm6_setpsw`
 ([Intrinsics.md](Intrinsics.md) §3.3). Note that the *user-level* simulators model only the index
@@ -1114,7 +1114,7 @@ disturbs neither the accumulator nor ω. In user mode there is no side effect at
 This is the only single-instruction way to change the interrupt level or the mapping override, and
 the kernel uses it as such: `vtm 3` enables interrupts, `vtm 02003` blocks them, `vtm 02002` turns
 mapping on for a `copyin` bracket. See [Memory_Mapping.md](Memory_Mapping.md), "Writing the mode
-bits", and `kernel/psw.s`. Anything *else* in the machine-register file — SPSW, IRET, ERET, ИБП, ДВП
+bits", and `setipl()` in `kernel/intr.c`. Anything *else* in the machine-register file — SPSW, IRET, ERET, ИБП, ДВП
 — needs the general `040 «уи»` instead.
 
 C reaches it as `__besm6_maskpsw`, one inline instruction with a compile-time-constant mask
