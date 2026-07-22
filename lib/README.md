@@ -117,10 +117,17 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
 - **ANSI, not K&R.** The kernel sources were converted; libc follows. `va_dcl`-style variadic
   definitions do not parse at all, so `printf`, `execl` and the rest become `(fmt, ...)` over
   the compiler's `<stdarg.h>` — where one argument is exactly one word.
-- **There is one header tree, and this repo owns the hosted half of it.**
-  [`../include/`](../include/) holds the v7 headers plus `<string.h>`, `<stdlib.h>` and
-  `<inttypes.h>` adapted from the c-compiler's tree, and where the two overlapped (`stdio.h`,
-  `ctype.h`, `errno.h`, `setjmp.h` …) the v7 header stayed. The freestanding ten — `<stddef.h>`,
+- **There is one header tree, this repo owns the hosted half of it, and that half is C11.**
+  [`../include/`](../include/) holds the v7 headers plus the C11 ones v7 never had, adapted from
+  the c-compiler's tree; where the two overlapped (`stdio.h`, `ctype.h`, `errno.h`, `setjmp.h` …)
+  the v7 header stayed and was refitted rather than replaced. Four consequences land on code
+  written here: `assert()` is an expression and `<assert.h>` is unguarded on purpose;
+  `toupper`/`tolower` are functions and v7's unconditional macros are `_toupper`/`_tolower`;
+  `isprint(' ')` is now true; and a signal handler is `void (*)(int)`, which is what phase 6 has
+  to deliver. `<stdio.h>` declares the whole phase-4 surface already, so a caller compiles before
+  the routine exists and fails at *link* — which is the point. One name to watch there: v7's
+  `_IONBF` flag bit is spelled `_IOUNBUF` now, because C11 needs `_IONBF` for a `setvbuf` mode.
+  The freestanding ten — `<stddef.h>`,
   `<stdarg.h>`, `<limits.h>`, `<besm6.h>` and the rest — are the *compiler's*, and it installs
   them into the same directory; they are not in this tree at all.
   `-I../../include` names ours in the source tree, ahead of the installed copy that
@@ -241,6 +248,11 @@ handling. The frame has to be designed first — the signal number as an argumen
 accumulator and mode word, and a way back through it — and implemented kernel-side. Only then
 does the libc side follow, and it needs a `dvect`/`tvect`-style trampoline like the x86 port's
 only if the kernel does not deliver the number directly.
+
+**The number is no longer optional.** [`../include/signal.h`](../include/signal.h) declares the
+C11 shape, `void (*signal(int, void (*)(int)))(int)`, so every handler now takes the signal it is
+handling as its one argument and `sleep()` is already written that way. Delivering it is the
+frame's job.
 
 ## Phase 7 — libm, libtermlib, libcurses
 

@@ -1,5 +1,8 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
+#ifndef _SYS_STAT_H
+#define _SYS_STAT_H
+
 struct stat {
     dev_t st_dev;
     ino_t st_ino;
@@ -27,3 +30,5 @@ struct stat {
 #define S_IREAD  0000400 // read permission, owner
 #define S_IWRITE 0000200 // write permission, owner
 #define S_IEXEC  0000100 // execute/search permission, owner
+
+#endif // _SYS_STAT_H

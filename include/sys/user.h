@@ -13,6 +13,9 @@
 // with the proc structure for the
 // same process.
 
+#ifndef _SYS_USER_H
+#define _SYS_USER_H
+
 #define EXCLOSE 01
 
 struct user {
@@ -134,3 +137,5 @@ extern struct user u;
 #define EPIPE   32
 #define EDOM    33
 #define ERANGE  34
+
+#endif // _SYS_USER_H

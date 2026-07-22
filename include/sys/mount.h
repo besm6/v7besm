@@ -3,6 +3,10 @@
 // Mount structure.
 // One allocated on every mount.
 // Used to find the super block.
+
+#ifndef _SYS_MOUNT_H
+#define _SYS_MOUNT_H
+
 struct mount {
     dev_t m_dev;           // device mounted
     struct buf *m_bufp;    // pointer to superblock
@@ -10,3 +14,5 @@ struct mount {
 };
 
 extern struct mount mount[NMOUNT];
+
+#endif // _SYS_MOUNT_H

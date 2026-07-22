@@ -1,0 +1,17 @@
+ok   assert is an expression
+ok   toupper folds a letter
+ok   toupper spares a digit
+ok   _toupper is v7's
+ok   isprint of space
+ok   isgraph of space
+ok   isblank of tab
+ok   HUGE_VAL is this machine's
+ok   LOGHUGE follows it
+PRIdFAST32 is "d"
+ok   errno trio
+ok   SIGABRT is SIGIOT
+ok   SIG_ERR exists
+ok   _IONBF is a mode
+ok   one rounding mode
+ok   one multibyte char
+headers ok

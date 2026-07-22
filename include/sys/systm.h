@@ -3,6 +3,10 @@
 // The one include in this header, and it is here for splx() below: that is a macro over
 // __besm6_setpsw(), so every caller of it needs the intrinsic declared, and six of them have
 // no other reason to name <besm6.h>.  Nothing else here depends on it.
+
+#ifndef _SYS_SYSTM_H
+#define _SYS_SYSTM_H
+
 #include <besm6.h>
 
 // Random set of variables
@@ -267,3 +271,5 @@ extern struct sysent {
     char sy_nrarg;         // number of args in registers (unused: see above)
     void (*sy_call)(void); // handler
 } sysent[];
+
+#endif // _SYS_SYSTM_H

@@ -25,6 +25,10 @@
 // only by fsck and friends) are gone: nothing in this port writes them, the
 // interleave they describe does not survive the first free-list churn, and their six
 // words are better spent as room to grow.
+
+#ifndef _SYS_FILSYS_H
+#define _SYS_FILSYS_H
+
 struct filsys {
     // Identity and geometry: checked at mount by sbcheck(), kernel/alloc.c.
     int s_magic; // 0: FS_MAGIC
@@ -55,3 +59,5 @@ struct filsys {
 // _Static_assert, not `extern int x[1 - 2*(cond)]': b6cc accepts a negative array
 // size without a word, so that idiom is decorative here.  Verified.
 _Static_assert(sizeof(struct filsys) == BSIZE, "the superblock must be exactly one block");
+
+#endif // _SYS_FILSYS_H

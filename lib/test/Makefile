@@ -9,7 +9,7 @@
 
 TOP     = ../..
 
-PROGS   = hello vararg errno procs sbrkt strings gen environ jmp
+PROGS   = hello vararg errno procs sbrkt strings gen environ jmp headers
 
 .PHONY: all test clean
 
@@ -47,6 +47,9 @@ environ: environ.o $(LIBDEP)
 jmp:    jmp.o $(LIBDEP)
 	$(link)
 
+headers: headers.o $(LIBDEP)
+	$(link)
+
 # Run each program and diff its output.  `set -e' keeps it fail-fast, and the run
 # itself must exit 0 -- a test reports failure by its status as well as its output.
 #
@@ -74,3 +77,7 @@ errno.o:	$(TOP)/include/errno.h
 gen.o:		$(TOP)/include/ctype.h $(TOP)/include/stdlib.h
 jmp.o:		$(TOP)/include/setjmp.h
 gen.o jmp.o strings.o environ.o: $(TOP)/include/string.h
+
+# headers.o includes the whole tree, twice, which is the point of it -- so it
+# depends on the whole tree, and there is no shorter way to say that here.
+headers.o:	$(wildcard $(TOP)/include/*.h) $(wildcard $(TOP)/include/sys/*.h)

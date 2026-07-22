@@ -79,11 +79,19 @@
 #define NMASK   0777         // NINDIR-1
 #define NSHIFT  9            // LOG2(NINDIR)
 #define USIZE   1024         // size of the u-area, in words (one page)
-#define NULL    0            // zero pointer
 #define CMASK   0            // default mask for file creation
 #define NODEV   (dev_t)(-1)  // no device
 #define ROOTINO ((ino_t)2)   // i number of all roots
 #define SUPERB  ((daddr_t)1) // block number of the super block
+
+// NULL was in the block above and is out of it now, guarded, exactly as
+// <stdio.h> guards its own: the compiler's <stddef.h> spells it ((void *)0), and
+// a source that includes both would otherwise draw a redefinition error from
+// b6cpp.  Whichever is seen first wins; the two agree on every use.  The kernel
+// sees only this one, having no <stddef.h> anywhere.
+#ifndef NULL
+#define NULL 0 // zero pointer
+#endif
 
 // The superblock's two caches, sys/filsys.h.  v7's 100 and 50 were sized for a
 // 512-BYTE block and were never retuned when a block became 512 WORDS: the struct

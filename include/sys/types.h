@@ -25,9 +25,16 @@
 // MMU page-register word, a GRP/PRP mask).  None of these are.
 typedef int daddr_t; // disk address; bmap() returns -1, so SIGNED
 typedef int ino_t;   // i-node number
-typedef int time_t;  // a time; 41 bits of seconds, so no 2038 problem
 typedef int dev_t;   // device code; NODEV is -1, so SIGNED
 typedef int off_t;   // byte offset in file
+
+// A time; 41 bits of seconds, so no 2038 problem.  <time.h> defines it too --
+// the kernel includes this file and never that one, and a user source may well
+// include both -- so the two share a marker rather than one including the other.
+#ifndef _TIME_T
+#define _TIME_T
+typedef int time_t;
+#endif
 
 typedef char *caddr_t;   // core address -- a FAT pointer; see sys/param.h
 typedef int label_t[10]; // program status: r1-r7, r13, r15

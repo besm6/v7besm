@@ -17,6 +17,10 @@
 // di_addr[0..5] are direct, [6] single indirect, [7] double indirect.  There is no
 // triple indirect: see NLEVEL in sys/param.h for why it cannot be reached here.
 // di_addr[0] doubles as di_rdev for device files, as in v7.
+
+#ifndef _SYS_INO_H
+#define _SYS_INO_H
+
 struct dinode {
     int di_mode;            // 0: mode and type of file
     int di_nlink;           // 1: number of links to file
@@ -38,3 +42,5 @@ struct dinode {
 // NEGATIVE array size without a word, so that trick is decorative here.  Checked.
 _Static_assert(sizeof(struct dinode) == 16 * NBPW, "struct dinode must be 16 words");
 _Static_assert(sizeof(struct dinode) * INOPB == BSIZE, "INOPB dinodes must tile a block");
+
+#endif // _SYS_INO_H

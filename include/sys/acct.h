@@ -2,6 +2,9 @@
 
 // Accounting structures
 
+#ifndef _SYS_ACCT_H
+#define _SYS_ACCT_H
+
 typedef int comp_t; // "floating pt": 3 bits base 8 exp, 13 bits fraction
 struct acct {
     char ac_comm[10]; // Accounting command name
@@ -22,3 +25,5 @@ extern struct inode *acctp; // inode of accounting file
 
 #define AFORK 01 // has executed fork, but no exec
 #define ASU   02 // used super-user privileges
+
+#endif // _SYS_ACCT_H

@@ -18,6 +18,10 @@
 // to perform I/O.
 // Most of the routines which manipulate these things
 // are in bio.c.
+
+#ifndef _SYS_BUF_H
+#define _SYS_BUF_H
+
 struct buf {
     int b_flags;         // see defines below
     struct buf *b_forw;  // headed by d_tab of conf.c
@@ -79,3 +83,5 @@ extern struct buf bfreelist; // head of available list
 #define b_actl   av_back
 #define b_active b_wcount
 #define b_errcnt b_resid
+
+#endif // _SYS_BUF_H

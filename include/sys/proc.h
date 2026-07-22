@@ -6,6 +6,10 @@
 // process may be swapped out.
 // Other per process data (user.h)
 // is swapped with the process.
+
+#ifndef _SYS_PROC_H
+#define _SYS_PROC_H
+
 struct proc {
     char p_stat;
     char p_flag;
@@ -65,3 +69,5 @@ struct xproc {
     time_t xp_utime; // user time, this proc
     time_t xp_stime; // system time, this proc
 };
+
+#endif // _SYS_PROC_H

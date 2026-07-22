@@ -21,20 +21,24 @@
 
 int alarm(int sec);
 int pause(void);
-int (*signal(int sig, int (*func)()))();
 
 static jmp_buf jmp;
 
-static int sleepx(void)
+/*
+ * The handler takes the signal number and returns void, per C11 SS7.14.1.1 and
+ * <signal.h>.  It used to declare signal() itself right here, because v7's
+ * header offered only `int (*signal())();' -- no prototype -- and the number is
+ * ignored: there is one signal this can be entered for.
+ */
+static void sleepx(int sig)
 {
     longjmp(jmp, 1);
-    return 0;
 }
 
 void sleep(unsigned n)
 {
     unsigned altime;
-    int (*alsig)() = SIG_DFL;
+    void (*alsig)(int) = SIG_DFL;
 
     if (n == 0)
         return;

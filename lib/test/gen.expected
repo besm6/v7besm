@@ -24,10 +24,16 @@ isxdigit over 0..127 22
 ok   isupper of A
 ok   islower of A
 ok   isalnum of 9
-ok   isprint of space
 ok   isascii of 0200
+ok   isprint of space
+ok   isgraph of space
+ok   isgraph of A
+ok   isblank
 ok   toupper
 ok   tolower
+ok   toupper of non-letter
+ok   tolower of non-letter
+ok   _toupper unconditional
 ok   no class for EOF
 ok   mktemp returns its argument
 ok   mktemp kept the prefix

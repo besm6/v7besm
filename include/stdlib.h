@@ -1,10 +1,12 @@
-// <stdlib.h> — general utilities (C11 §7.22), BESM-6 target.
+// <stdlib.h> -- general utilities (C11 §7.22), BESM-6 target.
 //
-// Status: exit() and atoi() are implemented in the runtime library (Madlen
-// libc.bin and Unix libc0.a).  The dynamic allocator (malloc/calloc/realloc/
-// free) is implemented in the Unix libc0.a only — it depends on the b6ld/b6sim
-// memory map and is absent from the Madlen libc.bin.  The rest are declared for
-// future implementation (TODO).
+// Adapted from the c-compiler's tree, and the status notes below are now this
+// repo's: what libc.a has, not what that project's libc.bin/libc0.a had.
+//
+// `long' is `int', one word, so several of these collapse onto each other: atol
+// IS atoi and is written as a call to it, labs is abs, and ldiv_t is div_t with
+// a different name.  Each pair is still declared separately, because a portable
+// source names both.
 #ifndef _STDLIB_H
 #define _STDLIB_H
 
@@ -26,39 +28,61 @@ typedef struct {
     long rem;
 } ldiv_t;
 
-// ---- implemented in libc.bin ----
-_Noreturn void exit(int status);
-int atoi(const char *nptr);
+// The largest value MB_CUR_MAX may take (§7.22p3).  One, and it cannot be more:
+// the execution character set is ASCII, one byte per character, and the
+// multibyte conversions of <wchar.h> are the identity on it.
+#define MB_CUR_MAX 1
 
-// ---- implemented in the Unix libc0.a only (absent from Madlen libc.bin) ----
+// ---- implemented in libc.a ----
+_Noreturn void exit(int status);
+_Noreturn void abort(void);
+int atoi(const char *nptr);
+long atol(const char *nptr);
+int abs(int j);
+int rand(void);
+void srand(unsigned seed);
+void qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *));
+char *getenv(const char *name);
+
+// ---- declared for future implementation: the allocator is lib phase 3 (TODO) ----
 void *malloc(size_t size);
 void *calloc(size_t nmemb, size_t size);
 void *realloc(void *ptr, size_t size);
 void free(void *ptr);
 
-// ---- declared for future implementation (TODO) ----
-_Noreturn void abort(void);
-int atexit(void (*func)(void));
+// Every block this allocator returns already starts on a word boundary, and a
+// word is the coarsest alignment the machine has, so aligned_alloc can only ever
+// be malloc with its argument checked.
+void *aligned_alloc(size_t alignment, size_t size);
 
-long atol(const char *nptr);
+// ---- declared for future implementation (TODO) ----
+_Noreturn void _Exit(int status);
+int atexit(void (*func)(void));
+_Noreturn void quick_exit(int status);
+int at_quick_exit(void (*func)(void));
+
 double atof(const char *nptr);
 long strtol(const char *nptr, char **endptr, int base);
 unsigned long strtoul(const char *nptr, char **endptr, int base);
 double strtod(const char *nptr, char **endptr);
 
-int abs(int j);
 long labs(long j);
 div_t div(int numer, int denom);
 ldiv_t ldiv(long numer, long denom);
 
-int rand(void);
-void srand(unsigned seed);
-
-void qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *));
 void *bsearch(const void *key, const void *base, size_t nmemb, size_t size,
               int (*compar)(const void *, const void *));
 
-char *getenv(const char *name);
 int system(const char *command);
+
+// The multibyte group (§7.22.7-8).  The execution character set is ASCII and
+// MB_CUR_MAX is 1, so every one of these is the identity on a single byte; they
+// exist so a portable source that walks a string through them still compiles.
+// wchar_t comes from <stddef.h> above.
+int mblen(const char *s, size_t n);
+int mbtowc(wchar_t *pwc, const char *s, size_t n);
+int wctomb(char *s, wchar_t wc);
+size_t mbstowcs(wchar_t *dest, const char *src, size_t n);
+size_t wcstombs(char *dest, const wchar_t *src, size_t n);
 
 #endif // _STDLIB_H

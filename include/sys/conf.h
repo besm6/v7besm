@@ -1,5 +1,8 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
+#ifndef _SYS_CONF_H
+#define _SYS_CONF_H
+
 struct buf; // forward declarations
 struct tty;
 
@@ -41,3 +44,5 @@ extern struct linesw {
     int (*l_start)();
     int (*l_modem)();
 } linesw[];
+
+#endif // _SYS_CONF_H

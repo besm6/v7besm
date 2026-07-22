@@ -16,10 +16,41 @@ appends to every preprocessor run. So a source with no `-I` of its own still fin
 and no longer does — a copy could only drift out of step with the back end that defines it.
 
 What stays here is everything a *hosted* implementation adds, which is what `lib/libc` backs:
-the v7 headers, plus `string.h`, `stdlib.h` and `inttypes.h` adapted from the compiler's tree
-(it ships those but does not install them). Where the two trees overlapped — `assert.h`,
-`ctype.h`, `errno.h`, `math.h`, `setjmp.h`, `signal.h`, `stdio.h`, `time.h` — the **v7**
-header stays; that is the whole reason this directory exists.
+the v7 headers, plus the C11 headers v7 never had, adapted from the compiler's tree (it ships
+those but does not install them, for exactly this reason). Where the two trees overlap —
+`assert.h`, `ctype.h`, `errno.h`, `math.h`, `setjmp.h`, `signal.h`, `stdio.h`, `time.h` — the
+**v7** header is the one that stays; that is the whole reason this directory exists.
+
+**The hosted set is C11 now**, which it was not: eight of those overlapping headers were still
+the untouched pre-ANSI v7 originals, declaring nothing or declaring it with empty parens, and
+`stdio.h` did not declare `printf` at all — a wall in front of `lib/`'s phase 4, since the front
+end has no implicit declarations. They were rewritten in place: v7's constants, layout and
+extensions kept, every declaration a prototype, and whatever C11 mandates added beside them.
+What that cost is written down in each header, but the four worth knowing here are
+
+- `assert()` is an expression, not a brace block, so it survives an `if`/`else`, and the file is
+  the one header in this tree deliberately left **unguarded** — C11 §7.2 re-examines `NDEBUG` at
+  every inclusion.
+- `toupper`/`tolower` became functions, because the conditional fold C11 requires cannot be a
+  macro that evaluates its argument once. v7's unconditional pair survives as `_toupper`/`_tolower`.
+- `isprint(' ')` is true, which under v7 it was not; the free bit `_B` in `lib/libc/gen/ctype_.c`
+  is what separates `isprint` from `isgraph`.
+- `signal()` takes and returns C11's `void (*)(int)`. That commits phase 6's `sendsig()` to
+  passing the signal number — see `kernel/TODO.md`.
+
+Six headers that were missing outright came over whole: `locale.h`, `fenv.h`, `wchar.h`,
+`wctype.h`, `uchar.h`, `tgmath.h`. Three are refused from that tree on purpose — its `errno.h`
+(a six-entry non-POSIX set, where ours is the kernel's list and is load-bearing in three places),
+its `malloc.h` (the claim-everything allocator `lib/README.md` phase 3 rejects), and its KOI7
+case folding (this terminal is ASCII).
+
+`complex.h`, `stdatomic.h` and `threads.h` are **not** here and never will be: no complex type,
+no atomic instructions, no threads. A hosted implementation owes the program that news, so
+`b6cpp` predefines `__STDC_NO_COMPLEX__`, `__STDC_NO_ATOMICS__`, `__STDC_NO_THREADS__` and
+`__STDC_NO_VLA__` ([`../cmd/cpp/cpp.c`](../cmd/cpp/cpp.c)).
+
+`lib/test/headers.c` is what keeps all of this true: it includes every header in the tree twice
+and checks the handful of behaviours that would otherwise fail silently.
 
 **The dead v7 headers have been pruned**, and two rules say what may come back. A file format
 this toolchain has already replaced is described *once*, under `cross/besm6/` — so `a.out.h`

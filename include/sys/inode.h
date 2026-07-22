@@ -12,6 +12,10 @@
 // NADDR is in sys/param.h, next to INOPB and NLEVEL: the in-core address array and
 // the on-disk one in sys/ino.h must be the same length, and a #define in each file
 // is one edit away from them not being.
+
+#ifndef _SYS_INODE_H
+#define _SYS_INODE_H
+
 #define NINDEX 15
 
 struct group {
@@ -77,3 +81,5 @@ extern struct inode *mpxip;  // mpx virtual inode
 #define IREAD  0400    // read, write, execute permissions
 #define IWRITE 0200
 #define IEXEC  0100
+
+#endif // _SYS_INODE_H

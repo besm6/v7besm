@@ -61,11 +61,20 @@ These are host tools that run on the build machine and emit BESM-6 objects. **Do
 
 `make install` also installs **`include/`** to `<prefix>/share/besm6/include`, the one system
 header tree, which `b6cc` appends to every preprocessor run. That directory has **two owners**:
-this repo ships the hosted half (the v7 headers, `sys/` included, plus `string.h`, `stdlib.h`,
-`inttypes.h`), and the external c-compiler installs the freestanding ten alongside them —
+this repo ships the **hosted** half (the v7 headers, `sys/` included, plus the C11 ones v7 never
+had), and the external c-compiler installs the **freestanding** ten alongside them —
 `stddef.h`, `stdarg.h`, `limits.h`, `float.h`, `stdbool.h`, `stdint.h`, `iso646.h`,
 `stdalign.h`, `stdnoreturn.h` and `besm6.h`. Those describe the compiler's own data model,
 `<stdarg.h>` ABI and intrinsics, so they track the compiler; there is no copy of them here.
+
+The hosted half is **C11**, and [include/README.md](include/README.md) is the account of what
+that cost: `assert()` is an expression and `<assert.h>` is deliberately unguarded,
+`toupper`/`tolower` are functions (v7's unconditional macros are `_toupper`/`_tolower`),
+`isprint(' ')` is true, a signal handler is `void (*)(int)`, and v7's `_IONBF` flag bit is
+`_IOUNBUF` so C11 can have the name for a `setvbuf` mode. `complex.h`/`stdatomic.h`/`threads.h`
+are absent by design and `b6cpp` says so with `__STDC_NO_COMPLEX__`/`_ATOMICS_`/`_THREADS_`
+(plus `__STDC_NO_VLA__`). `lib/test/headers.c` includes the whole tree twice and is what keeps
+it that way.
 
 ### Library (`lib/`) — the three-step bootstrap
 

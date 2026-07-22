@@ -7,9 +7,15 @@
 // (kernel/alloc.c), so a mismatch would silently overrun one of them.  Nothing had
 // ever asserted that this block fits a block, either; NICFREE is now large enough
 // that it is worth saying out loud.
+
+#ifndef _SYS_FBLK_H
+#define _SYS_FBLK_H
+
 struct fblk {
     int df_nfree;
     daddr_t df_free[NICFREE];
 };
 
 _Static_assert(sizeof(struct fblk) <= BSIZE, "a free-list block must fit one block");
+
+#endif // _SYS_FBLK_H

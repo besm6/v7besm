@@ -6,6 +6,10 @@
 // blocks containing a link and several characters.
 // The routines getc and putc
 // manipulate these structures.
+
+#ifndef _SYS_TTY_H
+#define _SYS_TTY_H
+
 struct clist {
     int c_cc;   // character count
     char *c_cf; // pointer to first char
@@ -179,3 +183,5 @@ int getc(struct clist *p);
 int putw(int c, struct clist *p);
 int putc(int c, struct clist *p);
 #endif
+
+#endif // _SYS_TTY_H

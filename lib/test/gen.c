@@ -213,10 +213,32 @@ int main(int argc, char **argv, char **envp)
     ok("isupper of A", isupper('A') != 0);
     ok("islower of A", islower('A') == 0);
     ok("isalnum of 9", isalnum('9') != 0);
-    ok("isprint of space", isprint(' ') == 0); /* v7: space is _S, not _P */
     ok("isascii of 0200", isascii(0200) == 0);
+
+    /*
+     * The space is the character the C11 pair is defined by (SS7.4.1.6, SS7.4.1.8):
+     * printing but not graphic.  This assertion used to read `isprint(' ') == 0'
+     * with the note "v7: space is _S, not _P" -- v7 had one macro for the two
+     * classes and the space fell outside it.  The _B bit added to ctype_.c is
+     * what separates them.
+     */
+    ok("isprint of space", isprint(' ') != 0);
+    ok("isgraph of space", isgraph(' ') == 0);
+    ok("isgraph of A", isgraph('A') != 0);
+    ok("isblank", isblank(' ') && isblank('\t') && !isblank('\n') && !isblank('A'));
+
     ok("toupper", toupper('q') == 'Q');
     ok("tolower", tolower('Q') == 'q');
+
+    /*
+     * The case v7's unconditional macros got wrong: neither is a letter, so each
+     * must come back untouched (SS7.4.2).  v7's toupper('1') was '1' - 'a' + 'A',
+     * which is not a character at all.  _toupper/_tolower still do that, and are
+     * still valid for a caller that has already checked the class.
+     */
+    ok("toupper of non-letter", toupper('1') == '1' && toupper('[') == '[');
+    ok("tolower of non-letter", tolower('1') == '1' && tolower('[') == '[');
+    ok("_toupper unconditional", _toupper('q') == 'Q' && _tolower('Q') == 'q');
 
     /* EOF is subscript -1, the leading zero the table carries for exactly this. */
     ok("no class for EOF", !isalpha(-1) && !isdigit(-1) && !isspace(-1) && !iscntrl(-1));

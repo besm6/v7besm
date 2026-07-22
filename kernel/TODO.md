@@ -340,7 +340,11 @@ Loose ends the finished work left behind. None blocks 18.
   `GRP_BREAKPOINT` arm) and `GRP_BREAKPOINT` in `include/sys/besm6dev.h`. A `ptrace` feature, not a layout one.
 * **`sendsig()` pushes one word and no more.** The direction and the units are right now, but there
   is no signal frame proper — no saved accumulator or R, and no `sigreturn` path back through it.
-  Nothing exercises signal delivery yet; build it when something does.
+  Nothing exercises signal delivery yet; build it when something does. **The frame must carry the
+  signal number as the handler's argument**: `include/signal.h` now declares C11's
+  `void (*signal(int, void (*)(int)))(int)`, so a handler takes the signal it is handling, and
+  `lib/libc/gen/sleep.c` is already written to that shape. This is `lib/README.md` phase 6, and
+  it is blocked here.
 * **`uflush`/`uload` copy the whole 1024-word page.** Copying only up to the saved r15 —
   `struct user` plus the live stack, typically ~300 words — was planned and never done. It is a
   performance change, not a correctness one.

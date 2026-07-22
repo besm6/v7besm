@@ -5,6 +5,10 @@
 // Main use is to hold the read/write
 // pointer associated with each open
 // file.
+
+#ifndef _SYS_FILE_H
+#define _SYS_FILE_H
+
 struct file {
     char f_flag;
     char f_count;          // reference count
@@ -24,3 +28,5 @@ extern struct file file[]; // The file table itself
 #define FMPY    020
 #define FMP     030
 #define FKERNEL 040
+
+#endif // _SYS_FILE_H

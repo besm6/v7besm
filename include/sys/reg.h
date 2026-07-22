@@ -1,5 +1,8 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
+#ifndef _SYS_REG_H
+#define _SYS_REG_H
+
 #include "sys/besm6dev.h" // SPSW_* mode-word bits
 
 // Location of the user's saved registers on the kernel-stack trap frame.
@@ -86,3 +89,5 @@ struct trap {
     int r2;   // 19  М2
     int r1;   // 20  М1
 };
+
+#endif // _SYS_REG_H

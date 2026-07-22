@@ -1,4 +1,8 @@
 // 4/17/81 (Berkeley) @(#)curses.h	1.7
+
+#ifndef _CURSES_H
+#define _CURSES_H
+
 #ifndef WINDOW
 
 #include <sgtty.h>
@@ -129,3 +133,5 @@ WINDOW *initscr(), *newwin(), *subwin();
 char *longname();
 
 #endif
+
+#endif // _CURSES_H

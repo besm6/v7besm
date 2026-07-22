@@ -49,6 +49,7 @@ lib/test/strings
 lib/test/gen
 lib/test/environ
 lib/test/jmp
+lib/test/headers
 lib/test/*.out
 
 # Scratch drum and disk images that kernel/test/mbtest.ini and mdtest.ini create with

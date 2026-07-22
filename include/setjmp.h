@@ -12,10 +12,17 @@
 //      6,7     -- unused; a signal mask when phase 6 needs one --
 //
 // `int' and not `char', so a jmp_buf is a plain word address rather than a fat pointer
-// and goes straight into an index register.  longjmp is deliberately not _Noreturn:
-// that would turn every call site into a tail `uj' for no gain here.
+// and goes straight into an index register.
+//
+// longjmp is deliberately NOT _Noreturn, which is this header's one deviation from
+// C11 §7.13.2.1: declaring it so would turn every call site into a tail `uj' for no
+// gain here, and no caller of longjmp expects it back anyway.
+#ifndef _SETJMP_H
+#define _SETJMP_H
 
 typedef int jmp_buf[8];
 
 int setjmp(jmp_buf env);
 void longjmp(jmp_buf env, int val);
+
+#endif // _SETJMP_H

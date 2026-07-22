@@ -4,6 +4,10 @@
 // One allocated per pure
 // procedure on swap device.
 // Manipulated by text.c
+
+#ifndef _SYS_TEXT_H
+#define _SYS_TEXT_H
+
 struct text {
     int x_daddr;          // disk address of segment, in blocks (relative to swplo)
     int x_caddr;          // core address, if loaded (word, page-aligned)
@@ -24,3 +28,5 @@ void xunlock(struct text *xp);
 #define XLOAD 04  // Currently being read from file
 #define XLOCK 010 // Being swapped in or out
 #define XWANT 020 // Wanted for swapping
+
+#endif // _SYS_TEXT_H

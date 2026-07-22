@@ -2,6 +2,9 @@
 
 // Structure for stty and gtty system calls.
 
+#ifndef _SGTTY_H
+#define _SGTTY_H
+
 struct sgttyb {
     char sg_ispeed; // input speed
     char sg_ospeed; // output speed
@@ -104,3 +107,5 @@ struct tchars {
 #define FIONCLEX  (('f' << 8) | 2)
 #define MXLSTN    (('x' << 8) | 1)
 #define MXNBLK    (('x' << 8) | 2)
+
+#endif // _SGTTY_H

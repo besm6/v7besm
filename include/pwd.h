@@ -1,5 +1,8 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
+#ifndef _PWD_H
+#define _PWD_H
+
 struct passwd { // see getpwent(3)
     char *pw_name;
     char *pw_passwd;
@@ -11,3 +14,5 @@ struct passwd { // see getpwent(3)
     char *pw_dir;
     char *pw_shell;
 };
+
+#endif // _PWD_H
