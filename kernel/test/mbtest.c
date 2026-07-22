@@ -10,7 +10,7 @@
  * with no copy of anything in the middle.
  *
  * Modelled on ugrp, which is the closest idiom in this directory: no gate, no user mode,
- * no forged context.  Delivery is blocked with the real spl7() for the whole run and
+ * no forged context.  Delivery is blocked with the real spl1() for the whole run and
  * extintr() is called by hand in a poll loop, so the interrupt arrives exactly where this
  * file says it does and not between two checks.  crt0.s's own 0501 stub is linked but is
  * never reached.
@@ -53,7 +53,7 @@ void mbstrategy(struct buf *bp);
 void extintr(void);
 void intrinit(void);
 void mgrpon(unsigned bits);
-int spl7(void);
+int spl1(void);
 extern unsigned mgrp; /* intr.c's shadow of МГРП, which cannot be read back */
 
 /*
@@ -266,7 +266,7 @@ int main(void)
      * only thing servicing ГРП: an interrupt taken through crt0.s's gate would run the
      * drum's completion between two checks instead of inside xfer()'s loop.
      */
-    spl7();
+    spl1();
     intrinit();
 
     /*

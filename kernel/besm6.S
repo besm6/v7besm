@@ -409,7 +409,7 @@ badext:
 //
 //     It was unconditional at first, on the argument that a context about to panic cannot be
 //     harmed.  What that missed is that `curipl' is not honest on this path either -- a fault
-//     inside an spl6 bracket leaves it at 6, so the first putchar's `splx(s)' re-blocks after one
+//     inside an spl6 bracket leaves it raised, so the first putchar's `splx(s)' re-blocks after one
 //     character, and the enable was only ever a few instructions wide there.  The discriminator
 //     costs three instructions and makes the rule sayable: A FAULT FROM SUPERVISOR CHANGES
 //     NOTHING ABOUT THE MACHINE'S INTERRUPT STATE.  (If a kernel-mode fault ever becomes

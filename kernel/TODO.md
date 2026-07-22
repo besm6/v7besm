@@ -128,7 +128,7 @@ How it turned out:
   that path never needed interrupts; the one thing after it that does — `panic()`'s `update()` —
   opens them itself through `sleep()`; and opening them lets `clock()` and the drivers run on top of
   the corrupt state before the dump prints, which risks the only thing that path is for. `curipl`
-  is not honest there either (a fault inside an `spl6` bracket leaves it at 6, so the first
+  is not honest there either (a fault inside an `spl6` bracket leaves it raised, so the first
   `putchar`'s `splx(s)` re-blocked anyway). The rule is now sayable: **a fault from supervisor
   changes nothing about the machine's interrupt state.** Revisit if a kernel-mode fault ever becomes
   recoverable.

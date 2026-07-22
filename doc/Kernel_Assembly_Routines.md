@@ -158,8 +158,9 @@ v7 scheme is `spl0` (allow everything) up through `spl7` (block everything); eac
 **Here there are two levels, not eight**, and the v7 spelling survives over them: callers still
 write `s = spl5(); … ; splx(s);` and still get what they were after, since on a uniprocessor with no
 atomic instruction, masking interrupts is the only lock there is. Only `spl0` enables; every `splN`
-above it blocks. Delivery needs БлПр clear **and** `ГРП & МГРП` non-zero, so either register could
-have been the mask, and the kernel divides them:
+above it blocks — so only `spl0()` and `spl1()` are routines, and `spl4()`…`spl7()` are macros for
+`spl1()` in [sys/systm.h](../include/sys/systm.h). Delivery needs БлПр clear **and** `ГРП & МГРП`
+non-zero, so either register could have been the mask, and the kernel divides them:
 
 - **БлПр (PSW bit `02000`) is the priority**, set and cleared by `setipl()`'s one inline `vtm`
   ([intr.c](../kernel/intr.c), §4.7). The hardware already treats it as one — a gate forces БлПр on at the
@@ -315,17 +316,21 @@ callers, and BESM-6 porting notes.
 ### 4.1 Interrupt priority — `spl0`/`spl1`/`spl4`/`spl5`/`spl6`/`spl7`, `splx`
 
 ```c
-int  spl0(void), spl1(void), spl4(void), spl5(void), spl6(void), spl7(void);  /* systm.h:149 */
-void splx(int s);                                                             /* systm.h:150 */
+int  spl0(void), spl1(void);       /* the two real levels                       systm.h:164 */
+#define spl4() spl1()              /* the graded v7 names are aliases for spl1  systm.h:165 */
+#define spl5() spl1()
+#define spl6() spl1()
+#define spl7() spl1()
+void splx(int s);                                                            /* systm.h:169 */
 ```
 
 - **Purpose.** Set the processor interrupt priority level. `splN` sets a fixed level; `splx(s)`
   restores a previously saved one.
 - **Return.** Each `splN` returns the **previous** level (an `int` cookie); the
   idiom is `s = spl6(); … ; splx(s);`.
-- **Levels.** `spl0` = allow all; `spl6` = block scheduler/buffer-critical device interrupts;
-  `spl7` = block everything; `spl5` = block disk/floppy-class devices; `spl1`, `spl4` are
-  intermediate. (`spl4` is declared but currently has no C caller.)
+- **Levels.** Two, not eight: `spl0` = allow all, everything above it = block all. v7's graded
+  names survive as macros so the callers below need no editing, but `spl4`…`spl7` all mean
+  `spl1`, and a saved cookie is only ever 0 or 1.
 - **Callers.** Pervasive: `slp.c` (`sleep`/`wakeup`/`setrq`/`sched`/`swtch` use `spl6`/`spl0`),
   `clock.c:62,105,153`, `prim.c`, and the device drivers (`dev/bio.c`, `dev/tty.c`, `dev/hd.c`,
   `dev/fd.c`, `dev/cd.c`).
@@ -672,7 +677,7 @@ the reschedule-pending flag the gates test on the way back to user mode (§3).
 | routine(s) | state |
 |------------|-------|
 | `bcopy`, `bzero` | **done** — renamed `wcopy`/`wzero` and they take a **word** count, converted by `btow()` at every call site, so the loop has no six-chars-per-word tail |
-| `spl0`…`spl7`, `splx` | **done** — two levels, not eight, and the knob is **БлПр** (one inline `vtm` in `setipl()`), not МГРП, which is a source enable armed once by `intrinit()`. Putting the level in the mode word is what lets `выпр` restore it on a gate return, as the PDP-11's `rtt` does |
+| `spl0`…`spl7`, `splx` | **done** — two levels, not eight, so only `spl0()`/`spl1()` are compiled and `spl4()`…`spl7()` are macros for `spl1()`. The knob is **БлПр** (one inline `vtm` in `setipl()`), not МГРП, which is a source enable armed once by `intrinit()`. Putting the level in the mode word is what lets `выпр` restore it on a gate return, as the PDP-11's `rtt` does |
 | `cli`, `sti`, `getpsw` | **retired** — `psw.s` is deleted (§4.7). The PSW intrinsics lower to exactly the same three instructions *inline*, so the level is set in C by `setipl()` and every `spl*` is one call shorter; the gates always inlined the instruction rather than calling it. `__besm6_getpsw()` reads PSW back for the two tests that check a gate opened the level, and needs no object to link |
 | `fubyte`/`fuword`/`subyte`/`suword`, `copyin`/`copyout` | **done** — [usermem.S](../kernel/usermem.S); **no fault-recovery path**, validation is `useracc()` up front. No window either: the loop toggles БлП per word through the user map that is already loaded. Byte variants do RMW, and mind the fat-pointer marker bit |
 | `copyseg`/`clearseg`, `uflush`/`uload` | **done** — [seg.S](../kernel/seg.S), [uarea.S](../kernel/uarea.S); a two-page window bracket with a БРЗ drain either side (§4.4a) |

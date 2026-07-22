@@ -4,7 +4,7 @@
  *
  * The mirror of mbtest, and built the same way: this links THE CODE UNDER TEST -- the
  * kernel's own md.o and intr.o -- and stubs only what they name.  No gate and no user mode.
- * Delivery is blocked for the whole run with the real spl7() and extintr() is called as an
+ * Delivery is blocked for the whole run with the real spl1() and extintr() is called as an
  * ordinary C function in a poll loop, so every completion arrives inside the request that
  * caused it rather than between two checks.  The path exercised end to end is
  *
@@ -70,7 +70,7 @@ void mdstrategy(struct buf *bp);
 void extintr(void);
 void intrinit(void);
 void mgrpon(unsigned bits);
-int spl7(void);
+int spl1(void);
 extern unsigned mgrp;      /* intr.c's shadow of МГРП, which cannot be read back */
 extern unsigned mdstatus;  /* md.c's reassembled status register, as of the last failure */
 extern unsigned mdretries; /* exchanges md.c re-issued for the current request */
@@ -327,7 +327,7 @@ int main(void)
      * only thing servicing ГРП: an interrupt taken through crt0.s's gate would run a disk
      * completion between two checks instead of inside xfer()'s loop.
      */
-    spl7();
+    spl1();
     intrinit();
 
     mode = MODEWORD;

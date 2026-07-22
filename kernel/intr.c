@@ -49,9 +49,10 @@ void clock(struct trap *tr);
  *
  * The BESM-6 has no priority hierarchy, so rather than pretend to the eight graded levels
  * of the PDP-11, this kernel has exactly two -- interrupts enabled and
- * interrupts blocked.  Only spl0 enables; every splN above it blocks.  Callers keep the v7
- * spelling (`s = spl5(); ...; splx(s);`) and still get what they were really after: on a
- * uniprocessor with no atomic instruction, masking interrupts is the only lock there is.
+ * interrupts blocked.  Only spl0 enables; every splN above it blocks.  So only spl0() and
+ * spl1() exist here; spl4()...spl7() are macros for spl1() in sys/systm.h.  Callers keep
+ * the v7 spelling (`s = spl5(); ...; splx(s);`) and still get what they were really after:
+ * on a uniprocessor with no atomic instruction, masking interrupts is the only lock there is.
  *
  * TWO REGISTERS, TWO JOBS.  Delivery needs БлПр clear AND `ГРП & МГРП' non-zero, so either
  * could serve as the mask.  They are not interchangeable, and this kernel divides them:
@@ -142,26 +143,6 @@ int spl0(void)
 int spl1(void)
 {
     return setipl(1);
-}
-
-int spl4(void)
-{
-    return setipl(4);
-}
-
-int spl5(void)
-{
-    return setipl(5);
-}
-
-int spl6(void)
-{
-    return setipl(6);
-}
-
-int spl7(void)
-{
-    return setipl(7);
 }
 
 /*

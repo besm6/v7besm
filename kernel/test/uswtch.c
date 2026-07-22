@@ -173,8 +173,8 @@ int main()
         mask |= F_IDLE;
     if (nticks == 0)
         mask |= F_NOTICK;
-    /* idle() must put back the level it was called at: spl6 blocks, so spl0() returns 6. */
-    if (spl0() != 6)
+    /* idle() must put back the level it was called at: spl6 is spl1, so spl0() returns 1. */
+    if (spl0() != 1)
         mask |= F_IPL;
     splx(s);
 

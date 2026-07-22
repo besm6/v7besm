@@ -39,7 +39,7 @@
  *
  * Simpler than uclock, which is the other test that links the real intr.o: no gate, no
  * user mode, no forged context.  extintr() is an ordinary C function and is called as one,
- * with delivery blocked throughout by spl7(), so every ГРП bit here arrives when this file
+ * with delivery blocked throughout by spl1(), so every ГРП bit here arrives when this file
  * says it does.  crt0.s's own 0501 stub is linked but is never reached.
  *
  * Bits are forged with `увв 031' (GRP |= (ACC & BITS(24)) << 24), the deterministic source
@@ -62,7 +62,7 @@ void intrinit(void);
 void extintr(void);
 void mgrpon(unsigned bits);
 void mgrpoff(unsigned bits);
-int spl7(void);
+int spl1(void);
 
 /*
  * What intrinit() arms and leaves armed.  Must match IRQ_ON in kernel/intr.c -- the point
@@ -147,7 +147,7 @@ int main(void)
      * the ONLY thing servicing ГРП: a tick arriving through crt0.s's gate in between would
      * service a forged bit before the check that expects it standing.
      */
-    spl7();
+    spl1();
 
     intrinit();
     if (mgrp != BOOTBITS)

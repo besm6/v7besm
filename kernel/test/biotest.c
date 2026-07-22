@@ -129,7 +129,7 @@ int spl0(void)
 {
     return (0);
 }
-int spl6(void)
+int spl1(void)
 {
     return (0);
 }

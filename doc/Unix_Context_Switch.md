@@ -607,7 +607,7 @@ machine left exactly as it was found, because:
 
 It was unconditional first, on the argument that a context about to panic cannot be harmed. What
 that missed is that `curipl` is not honest on this path either — a fault inside an `spl6` bracket
-leaves it at 6, so the first `putchar`'s `splx(s)` re-blocks after one character and the enable was
+leaves it raised, so the first `putchar`'s `splx(s)` re-blocks after one character and the enable was
 only ever a few instructions wide. The rule the discriminator buys is sayable in one line: **a fault
 from supervisor changes nothing about the machine's interrupt state.**
 

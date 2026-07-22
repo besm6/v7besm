@@ -155,7 +155,17 @@ void clrbuf(struct buf *bp);
 void bwrite(struct buf *bp);
 void panic(char *s);
 void bflush(dev_t dev);
-int spl0(void), spl1(void), spl4(void), spl5(void), spl6(void), spl7(void);
+/*
+ * Interrupt priority.  The BESM-6 has one interrupt level, not the PDP-11's eight, so this
+ * kernel has exactly two: spl0 enables delivery, everything above it blocks (kernel/intr.c).
+ * Only the two ends are real routines; the graded levels v7 callers write are aliases, so
+ * `s = spl6(); ... splx(s);' still reads as it always did and still costs one instruction.
+ */
+int spl0(void), spl1(void);
+#define spl4() spl1()
+#define spl5() spl1()
+#define spl6() spl1()
+#define spl7() spl1()
 void splx(int);
 void mprpon(unsigned bits);  /* unmask a device's ПРП interrupts (intr.c) */
 void mgrpon(unsigned bits);  /* arm a device's ГРП bits for one exchange (intr.c) */
