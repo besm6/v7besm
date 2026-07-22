@@ -43,9 +43,9 @@ struct pack {
     short p_isum[8]; // input checksums
     DSYSTEM;
 };
-#define CHECK 0125252
-#define SYN 020
-#define MOD8 7
+#define CHECK     0125252
+#define SYN       020
+#define MOD8      7
 #define ISCNTL(a) ((a & 0300) == 0)
 #define MIN(a, b) ((a < b) ? a : b)
 
@@ -55,41 +55,41 @@ int npbits;
 int pkactive;
 
 // driver state
-#define DEAD 0
-#define INITa 1
-#define INITb 2
-#define INITab 3
-#define LIVE 010
-#define RXMIT 020
-#define RREJ 040
-#define PDEBUG 0200
-#define DRAINO 0400
-#define WAITO 01000
-#define DOWN 02000
-#define RCLOSE 04000
+#define DEAD     0
+#define INITa    1
+#define INITb    2
+#define INITab   3
+#define LIVE     010
+#define RXMIT    020
+#define RREJ     040
+#define PDEBUG   0200
+#define DRAINO   0400
+#define WAITO    01000
+#define DOWN     02000
+#define RCLOSE   04000
 #define BADFRAME 020000
 
 // io buffer states
-#define B_NULL 0
+#define B_NULL  0
 #define B_READY 1
-#define B_SENT 2
+#define B_SENT  2
 #define B_RESID 010
-#define B_COPY 020
-#define B_MARK 040
+#define B_COPY  020
+#define B_MARK  040
 #define B_SHORT 0100
 
 // control messages
 #define CLOSE 1
-#define RJ 2
-#define SRJ 3
-#define RR 4
+#define RJ    2
+#define SRJ   3
+#define RR    4
 #define INITC 5
 #define INITB 6
 #define INITA 7
 
-#define M_RJ 4
-#define M_SRJ 010
-#define M_RR 020
+#define M_RJ    4
+#define M_SRJ   010
+#define M_RR    020
 #define M_INITC 040
 #define M_CLOSE 2
 #define M_INITA 0200

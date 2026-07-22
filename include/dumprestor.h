@@ -1,16 +1,16 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 #define NTREC 20
-#define MLEN 16
-#define MSIZ 4096
+#define MLEN  16
+#define MSIZ  4096
 
-#define TS_TAPE 1
+#define TS_TAPE  1
 #define TS_INODE 2
-#define TS_BITS 3
-#define TS_ADDR 4
-#define TS_END 5
-#define TS_CLRI 6
-#define MAGIC (int)60011
+#define TS_BITS  3
+#define TS_ADDR  4
+#define TS_END   5
+#define TS_CLRI  6
+#define MAGIC    (int)60011
 #define CHECKSUM (int)84446
 struct spcl {
     int c_type;

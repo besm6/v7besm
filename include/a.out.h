@@ -25,12 +25,12 @@ struct nlist {      // symbol table entry
 };
 
 // values for type flag
-#define N_UNDF 0  // undefined
-#define N_ABS 02  // absolute
-#define N_TEXT 04 // text symbol
-#define N_DATA 06 // data symbol
-#define N_BSS 010 // bss symbol
+#define N_UNDF 0   // undefined
+#define N_ABS  02  // absolute
+#define N_TEXT 04  // text symbol
+#define N_DATA 06  // data symbol
+#define N_BSS  010 // bss symbol
 #define N_TYPE 036
-#define N_FN 037      // file name symbol
-#define N_EXT 01      // external bit, or'ed in
+#define N_FN   037    // file name symbol
+#define N_EXT  01     // external bit, or'ed in
 #define FORMAT "%08x" // to print a value

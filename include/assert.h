@@ -17,5 +17,5 @@
     }
 #else
 #define _assert(ex) ;
-#define assert(ex) ;
+#define assert(ex)  ;
 #endif

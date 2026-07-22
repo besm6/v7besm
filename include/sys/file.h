@@ -10,7 +10,7 @@ struct file {
     char f_count;          // reference count
     struct inode *f_inode; // pointer to inode structure
     union {
-        off_t f_offset;      // read/write character pointer
+        off_t f_offset; // read/write character pointer
     } f_un;
 };
 

@@ -18,10 +18,10 @@ struct iob {
     char i_buf[512];
 };
 
-#define F_READ 01
+#define F_READ  01
 #define F_WRITE 02
 #define F_ALLOC 04
-#define F_FILE 010
+#define F_FILE  010
 
 // dev switch
 struct devsw {
@@ -34,7 +34,7 @@ struct devsw {
 struct devsw devsw[];
 
 // request codes. Must be the same a F_XXX above
-#define READ 1
+#define READ  1
 #define WRITE 2
 
 #define NBUFS 4

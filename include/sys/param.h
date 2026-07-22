@@ -157,9 +157,9 @@
 #define DIRPB    128  // directory entries per block: BSIZEW / DIRWORDS
 #define DIRSHIFT 7    // LOG2(DIRPB)
 #define DIRMASK  0177 // DIRPB-1
-#define INFSIZE 138          // size of per-proc info for users
-#define CBSIZE  28           // number of chars in a clist block
-#define CROUND  037          // clist rounding: sizeof(int *) + CBSIZE - 1
+#define INFSIZE  138  // size of per-proc info for users
+#define CBSIZE   28   // number of chars in a clist block
+#define CROUND   037  // clist rounding: sizeof(int *) + CBSIZE - 1
 
 // Some macros for units conversion
 // Note the absence of `unsigned' below.  On this machine an unsigned add,

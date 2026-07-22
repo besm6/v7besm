@@ -16,8 +16,8 @@
 #define CREG 5 // М16 = C register M[16] (M[020]), the address modifier
 
 // general registers -- stored DESCENDING, М15..М1 at offsets 6..20
-#define R15 6  // stack pointer
-#define R14 7  // argument-count / errno register (BESM-6 syscall ABI)
+#define R15 6 // stack pointer
+#define R14 7 // argument-count / errno register (BESM-6 syscall ABI)
 #define R13 8
 #define R12 9
 #define R11 10

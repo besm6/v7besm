@@ -20,19 +20,19 @@
 // compiler folds into the instruction's own address field, leaving one `wtc' beside it
 // (doc/Intrinsics.md §8 -- and the operand order matters, see dev/mb.c).  The `...4' names
 // below are therefore documentation of the map more than they are call sites.
-#define EXT_DRUM1    01    // drum 1: exchange control word -- starts the transfer
-#define EXT_DRUM2    02    // drum 2: likewise
-#define EXT_DISK3    03    // disk controller 3: exchange control word -- sets up only
-#define EXT_DISK4    04    // disk controller 4: likewise
-#define EXT_DISKCTL3 023   // disk controller 3: commands; the track address transfers
-#define EXT_DISKCTL4 024   // disk controller 4: likewise
-#define EXT_PRPCLR   030   // clear ПРП: PRP &= ACC -- a ZERO bit clears
-#define EXT_MPRP     034   // write МПРП, the mask of ПРП (24 bits)
-#define EXT_PRPHI    04030 // read ПРП bits 13-24
-#define EXT_PRPLO    04034 // read ПРП bits 1-12; bits 1-5 always read as 1
+#define EXT_DRUM1     01    // drum 1: exchange control word -- starts the transfer
+#define EXT_DRUM2     02    // drum 2: likewise
+#define EXT_DISK3     03    // disk controller 3: exchange control word -- sets up only
+#define EXT_DISK4     04    // disk controller 4: likewise
+#define EXT_DISKCTL3  023   // disk controller 3: commands; the track address transfers
+#define EXT_DISKCTL4  024   // disk controller 4: likewise
+#define EXT_PRPCLR    030   // clear ПРП: PRP &= ACC -- a ZERO bit clears
+#define EXT_MPRP      034   // write МПРП, the mask of ПРП (24 bits)
+#define EXT_PRPHI     04030 // read ПРП bits 13-24
+#define EXT_PRPLO     04034 // read ПРП bits 1-12; bits 1-5 always read as 1
 #define EXT_DISKSTAT3 04003 // disk controller 3: read the status register
 #define EXT_DISKSTAT4 04004 // disk controller 4: likewise
-#define EXT_IOERR    04035 // опрос триггера ОШМ: drum|disk|tape error masks, OR'd
+#define EXT_IOERR     04035 // опрос триггера ОШМ: drum|disk|tape error masks, OR'd
 
 // Bits of the word EXT_IOERR returns.  ONE mask, shared by the drums, the disks and the
 // tapes -- which is why it lives here and not in sys/besm6disk.h: that header owns one
@@ -43,11 +43,11 @@
 // here waits forever.  A successful command clears the bit again.
 #define IOERR_DRUM(n) (0100 >> (n)) // drum n (0, 1): 033 1 / 033 2 found nothing there
 #define IOERR_DISK(n) (020 >> (n))  // disk controller n likewise -- task 18b.5
-#define EXT_READY2   04102 // read READY2, the peripheral ready flags
-#define EXT_CONS1    0174  // Consul 1: print the character in bits 1-8
-#define EXT_CONS2    0175  // Consul 2: print the character in bits 1-8
-#define EXT_CONS1_RD 04174 // Consul 1: read the typed character
-#define EXT_CONS2_RD 04175 // Consul 2: read the typed character
+#define EXT_READY2    04102         // read READY2, the peripheral ready flags
+#define EXT_CONS1     0174          // Consul 1: print the character in bits 1-8
+#define EXT_CONS2     0175          // Consul 2: print the character in bits 1-8
+#define EXT_CONS1_RD  04174         // Consul 1: read the typed character
+#define EXT_CONS2_RD  04175         // Consul 2: read the typed character
 
 // Bits of ГРП, the main interrupt register.  An external interrupt (vector 0501)
 // fires while GRP & MGRP is non-zero and the PSW does not block interrupts.
@@ -123,6 +123,7 @@
 // Bits of SPSW, the saved program status / mode word (register 027), read back
 // after a trap.  РежЭ|РежПр == 0 iff the interrupted context was user mode
 // (doc/Unix_Context_Switch.md §3).  Octal, bits numbered right-to-left from 1.
+// clang-format off
 #define SPSW_MMAP_DISABLE 00001  // БлП  - data mapping disabled
 #define SPSW_PROT_DISABLE 00002  // БлЗ  - data protection disabled
 #define SPSW_EXTRACODE    00004  // РежЭ - extracode mode
@@ -135,6 +136,7 @@
 #define SPSW_NEXT_RK      01000  // ГД./ДК2 - the instruction following the one that caused
                                  // the interrupt has been loaded into the RK register
 #define SPSW_INTR_DISABLE 02000  // БлПр - external interrupts disabled
+// clang-format on
 
 // Bits of PSW, the LIVE mode word (register 021).  The low two and БлПр sit where they do in
 // SPSW -- `выпр' copies one into the other -- but the rest do not: where SPSW reports how the
@@ -142,11 +144,11 @@
 // here.  БлПр is owned by __besm6_maskpsw() -- the spls in kernel/intr.c are the only writers, and
 // the gates in kernel/besm6.S emit the same instruction inline -- and __besm6_getpsw() is how C
 // reads it back, PSW being the one machine register that CAN be read back.
-#define PSW_MMAP_DISABLE 00001  // БлП  - data mapping disabled
-#define PSW_PROT_DISABLE 00002  // БлЗ  - data protection disabled
-#define PSW_INTR_HALT    00004  // ПоП  - halt, do not vector, on an internal interrupt
-#define PSW_CHECK_HALT   00010  // ПоК  - halt, do not vector, on an instruction check
-#define PSW_INTR_DISABLE 02000  // БлПр - external interrupts disabled
+#define PSW_MMAP_DISABLE 00001 // БлП  - data mapping disabled
+#define PSW_PROT_DISABLE 00002 // БлЗ  - data protection disabled
+#define PSW_INTR_HALT    00004 // ПоП  - halt, do not vector, on an internal interrupt
+#define PSW_CHECK_HALT   00010 // ПоК  - halt, do not vector, on an instruction check
+#define PSW_INTR_DISABLE 02000 // БлПр - external interrupts disabled
 
 // The standing invariant: THIS KERNEL RUNS UNMAPPED WITH PROTECTION OFF (БлП = БлЗ = 1).
 //

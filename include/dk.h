@@ -34,8 +34,8 @@ struct indial {
     char i_other;
     short i_check;
 };
-#define D_SH 1
-#define D_FS 2
+#define D_SH    1
+#define D_FS    2
 #define D_LSTNR 3
 
 struct ring {
