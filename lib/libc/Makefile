@@ -101,13 +101,14 @@ exit.o fork.o wait.o pipe.o getpid.o getuid.o getgid.o time.o dup.o exec.o exece
 
 sbrk.o:		$(TOP)/include/sys/param.h $(TOP)/include/sys/types.h
 
-# gen/.  <string.h> and <stdlib.h> used to be the COMPILER's and were deliberately
-# left out of this block; they live in $(TOP)/include now, like every other header
-# here, and change with us, so they are named.
+# gen/.  <string.h> and <stdlib.h> live in $(TOP)/include and change with us, so they
+# are named.  The <stddef.h> they pull in does not: it is the COMPILER's, installed into
+# share/besm6/include by the c-compiler and outside this tree -- the same reason no
+# <stdarg.h> appears in this block either.
 strcat.o strcmp.o strcpy.o strlen.o strncat.o strncmp.o strncpy.o strchr.o \
 strrchr.o strstr.o strtok.o memcpy.o memmove.o memset.o memcmp.o memchr.o \
-perror.o:	$(TOP)/include/string.h $(TOP)/include/stddef.h
-abs.o atoi.o atol.o qsort.o rand.o: $(TOP)/include/stdlib.h $(TOP)/include/stddef.h
+perror.o:	$(TOP)/include/string.h
+abs.o atoi.o atol.o qsort.o rand.o: $(TOP)/include/stdlib.h
 
 ctype_.o:	$(TOP)/include/ctype.h
 perror.o errlst.o: $(TOP)/include/errno.h

@@ -117,11 +117,13 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
 - **ANSI, not K&R.** The kernel sources were converted; libc follows. `va_dcl`-style variadic
   definitions do not parse at all, so `printf`, `execl` and the rest become `(fmt, ...)` over
   the compiler's `<stdarg.h>` — where one argument is exactly one word.
-- **There is one header tree and this repo owns it.** [`../include/`](../include/) holds the v7
-  headers and the C11 ones alike — `<string.h>`, `<stdlib.h>`, `<stddef.h>` and the rest of the
-  freestanding set were adapted from the c-compiler's tree, which no longer installs them, and
-  where the two overlapped (`stdio.h`, `ctype.h`, `errno.h`, `setjmp.h` …) the v7 header stayed.
-  `-I../../include` names it in the source tree, ahead of the installed copy that
+- **There is one header tree, and this repo owns the hosted half of it.**
+  [`../include/`](../include/) holds the v7 headers plus `<string.h>`, `<stdlib.h>` and
+  `<inttypes.h>` adapted from the c-compiler's tree, and where the two overlapped (`stdio.h`,
+  `ctype.h`, `errno.h`, `setjmp.h` …) the v7 header stayed. The freestanding ten — `<stddef.h>`,
+  `<stdarg.h>`, `<limits.h>`, `<besm6.h>` and the rest — are the *compiler's*, and it installs
+  them into the same directory; they are not in this tree at all.
+  `-I../../include` names ours in the source tree, ahead of the installed copy that
   [`../cmd/cc/cc.c`](../cmd/cc/cc.c) appends to every preprocessor run, so a build here sees what
   it just edited. Nothing under `lib/` should
   add a header to `include/` merely to declare its own function: a routine that no v7 header

@@ -59,8 +59,13 @@ compiled with `-Wall -Werror -Wshadow`. Each tool is built under a `b6`-prefixed
 These are host tools that run on the build machine and emit BESM-6 objects. **Do not** invoke `cc`/`clang` by hand or run
 `cmake --build` directly — always go through the top-level `make` targets.
 
-`make install` also installs **`include/`** to `<prefix>/share/besm6/include` — the one system
-header tree, v7 headers and C11 headers alike, which `b6cc` appends to every preprocessor run.
+`make install` also installs **`include/`** to `<prefix>/share/besm6/include`, the one system
+header tree, which `b6cc` appends to every preprocessor run. That directory has **two owners**:
+this repo ships the hosted half (the v7 headers, `sys/` included, plus `string.h`, `stdlib.h`,
+`inttypes.h`), and the external c-compiler installs the freestanding ten alongside them —
+`stddef.h`, `stdarg.h`, `limits.h`, `float.h`, `stdbool.h`, `stdint.h`, `iso646.h`,
+`stdalign.h`, `stdnoreturn.h` and `besm6.h`. Those describe the compiler's own data model,
+`<stdarg.h>` ABI and intrinsics, so they track the compiler; there is no copy of them here.
 
 ### Library (`lib/`) — the three-step bootstrap
 
@@ -78,9 +83,9 @@ This is why `lib/` is deliberately outside the CMake build and installs from its
 
 The **only** thing this repo does not build is **`libruntime.a`**, the `b$*` compiler-support
 helpers (`b$save`, `b$ret`, `b$mul`, …) that every compiled function calls. It comes from the
-external c-compiler, which installs it and nothing else for this toolchain — the libc, the
-`crt0.o` and the headers are ours. Every link therefore names two archives, **ours first**:
-`-lc -lruntime`, because `b6ld` scans an archive once, in order, libc calls the helpers, and no
+external c-compiler, which installs it and the ten freestanding headers above, and nothing
+else for this toolchain — the libc, the `crt0.o` and the v7 headers are ours. Every link
+therefore names two archives, **ours first**: `-lc -lruntime`, because `b6ld` scans an archive once, in order, libc calls the helpers, and no
 helper calls back into libc. The kernel takes `-lruntime` **alone** — it defines its own
 `printf` in `kernel/prf.c` and uses no other library routine.
 

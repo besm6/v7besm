@@ -22,7 +22,7 @@ extern struct _iobuf {
 #define _IOSTRG 0100
 #define _IORW 0200
 
-/* Guarded: <stddef.h> in this same directory spells it ((void *)0), and a file
+/* Guarded: the compiler's <stddef.h> spells it ((void *)0), and a file
  * that includes both would otherwise draw a redefinition warning from b6cpp.
  * Whichever is seen first wins; the two agree on every use. */
 #ifndef NULL

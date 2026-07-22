@@ -68,8 +68,9 @@ clean:
 # Hand-maintained header dependencies; b6cc has no -M.  Most of these include nothing:
 # v7 has no <unistd.h> and stdio is phase 4, so each declares the syscalls it calls.
 
-vararg.o:	$(TOP)/include/varargs.h $(TOP)/include/stdarg.h
+# <stdarg.h>, which varargs.h is a shim over, is the compiler's and is not named here.
+vararg.o:	$(TOP)/include/varargs.h
 errno.o:	$(TOP)/include/errno.h
 gen.o:		$(TOP)/include/ctype.h $(TOP)/include/stdlib.h
 jmp.o:		$(TOP)/include/setjmp.h
-gen.o jmp.o strings.o environ.o: $(TOP)/include/string.h $(TOP)/include/stddef.h
+gen.o jmp.o strings.o environ.o: $(TOP)/include/string.h

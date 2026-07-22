@@ -23,9 +23,11 @@ SIZE    = b6size -w
 DISASM  = b6disasm
 SIM     = b6sim
 
-# One header tree, and it is ours: include/ holds the v7 headers and the C11 ones
-# alike.  -I names it in the source tree, ahead of the installed copy that cmd/cc
-# appends, so a build here sees what it just edited.  See lib/README.md.
+# One header tree, and the hosted half of it is ours: include/ holds the v7 headers.
+# -I names it in the source tree, ahead of the installed copy that cmd/cc appends, so
+# a build here sees what it just edited.  The freestanding headers -- <stddef.h>,
+# <stdarg.h>, <limits.h>, <besm6.h> ... -- are the compiler's and are reached only
+# through that appended directory.  See lib/README.md.
 CFLAGS  = -I$(TOP)/include
 
 # Our library: libc.a and, beside it rather than in it, crt0.o.

@@ -92,9 +92,12 @@ add_subdirectory(cmd/fsutil)
 
 #
 # The system header tree.  b6cc appends <prefix>/share/besm6/include to every
-# preprocessor run, so this is where an <stdarg.h> or a <besm6.h> compiled with
-# no -I of its own is found.  There is exactly one such tree and this repo owns
-# it: the v7 headers, sys/ included, plus the C11 ones v7 never had.
+# preprocessor run, so this is where a <stdio.h> or a <string.h> compiled with
+# no -I of its own is found.  There is exactly one such tree, and this repo owns
+# the hosted half of it: the v7 headers, sys/ included, plus the few C11 ones
+# libc.a backs.  The freestanding half -- <stddef.h>, <stdarg.h>, <besm6.h> and
+# the rest of those ten -- is installed into the same directory by the external
+# c-compiler, which is what defines them; we do not ship copies.
 #
 # Installed from here rather than from lib/, because these are needed to compile
 # lib/libc itself -- the bootstrap is `make install', then `make -C lib', then
