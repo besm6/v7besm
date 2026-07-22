@@ -587,7 +587,7 @@ never inside a mapped bracket. МГРП is armed once by `intrinit()` and never 
 before calling C. Without that a system call would run to completion with the clock stopped and
 every device completion held off, which is not what v7 does. `intrgate` does *not*: an interrupt
 handler runs at raised level and the `выпр` drops it, exactly as `rtt` does on the PDP-11. None of
-them touches `curipl`, which already reads 0 for an entry from user mode.
+them updates any software shadow of the level, because there is none — PSW is the only copy.
 
 **`trapgate` opens it only for a fault from user**, and is the one gate that discriminates. It
 reuses the `SPSW & 014` test `intrgate` uses for its stack switch (§5); the supervisor arm does not
@@ -606,9 +606,9 @@ machine left exactly as it was found, because:
   the fault; a hang or a second internal fault there (`STOP_DOUBLE_INTR`) loses the diagnostic.
 
 It was unconditional first, on the argument that a context about to panic cannot be harmed. What
-that missed is that `curipl` is not honest on this path either — a fault inside an `spl6` bracket
-leaves it raised, so the first `putchar`'s `splx(s)` re-blocks after one character and the enable was
-only ever a few instructions wide. The rule the discriminator buys is sayable in one line: **a fault
+that missed is that the enable was only ever a few instructions wide anyway — a fault inside an
+`spl6` bracket carries that level in its cookie, so the first `putchar`'s `splx(s)` re-blocks after
+one character. The rule the discriminator buys is sayable in one line: **a fault
 from supervisor changes nothing about the machine's interrupt state.**
 
 The two used to be the other way round, and they fought: `spl0()` opened МГРП while БлПр still

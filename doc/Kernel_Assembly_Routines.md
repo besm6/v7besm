@@ -332,11 +332,15 @@ void splx(int s);                                                            /* 
 - **Return.** `spl1` returns the **previous** level (an `int` cookie); the idiom is
   `s = spl6(); … ; splx(s);`. **`spl0` returns nothing** — it is the bottom of the range, so
   nothing can be restored *below* it and no caller ever saved what it displaced. `idle()`, which
-  does need the caller's level back, reads the `curipl` shadow itself rather than make every other
-  caller pay for a result it drops.
+  does need the caller's level back, reads PSW itself rather than make every other caller pay for a
+  result it drops.
 - **Levels.** Two, not eight: `spl0` = allow all, everything above it = block all. v7's graded
-  names survive as macros so the callers below need no editing, but `spl4`…`spl7` all mean
-  `spl1`, and a saved cookie is only ever 0 or 1.
+  names survive as macros so the callers below need no editing, but `spl4`…`spl7` all mean `spl1`.
+- **The cookie is a PSW word, not a level.** There is no software shadow of the priority — PSW reads
+  back, so БлПр itself is the only copy — and `spl1()` hands out what `ita 021` read, which `splx()`
+  writes back with `ati 021`. So a cookie is opaque: it may not be compared against a level,
+  synthesized, or passed as a constant. **`splx(0)` would clear БлП and БлЗ** and drop the kernel
+  into its own user's address space. Every call site in the kernel passes back a cookie it holds.
 - **Callers.** Pervasive: `slp.c` (`sleep`/`wakeup`/`setrq`/`sched`/`swtch` use `spl6`/`spl0`),
   `clock.c:62,105,153`, `prim.c`, and the device drivers (`dev/bio.c`, `dev/tty.c`, `dev/hd.c`,
   `dev/fd.c`, `dev/cd.c`).
@@ -345,10 +349,11 @@ void splx(int s);                                                            /* 
   nothing needs deferring. The v7 spelling and the return-the-old-level contract are preserved
   intact. See §1, "Interrupt priority model", for why the register choice is not free.
 
-  One consequence that only appeared on the machine: `splx()` inside an interrupt handler must
-  repair the **software shadow only** (`curipl = s`), not the hardware bit. Clearing БлПр with the
-  interrupted state still in SPSW/IRET lets the free-running timer re-enter the handler
-  immediately and forever. Restoring the bit is `выпр`'s job, not `splx()`'s.
+  One consequence that only appeared on the machine: **an interrupt handler must not `splx()` back
+  to the level it interrupted.** Clearing БлПр with the interrupted state still in SPSW/IRET lets the
+  free-running timer re-enter the handler immediately and forever. Restoring the bit is `выпр`'s job,
+  not `splx()`'s, and `extintr()` accordingly leaves the level alone from entry to exit. (It used to
+  end by repairing a software shadow, `curipl = s`; that shadow is gone, and so is the repair.)
 
 ### 4.2 Context switch — `save`, `resume`
 
@@ -415,7 +420,7 @@ void idle(void);   /* systm.h:184 */
 - **Purpose.** Called by `swtch()` when no process is runnable: lower the level to allow all
   interrupts and wait until one arrives; then restore the level and return. The scheduler loops
   back and re-scans the run queue.
-- **Side effects.** Temporarily drops to level 0 — saving `curipl` by hand first, since it is the one
+- **Side effects.** Temporarily drops to level 0 — banking PSW by hand first, since it is the one
   place that needs the displaced level back and `spl0()` is `void` — and raises the global flag **`idling`** so that
   `clock()` ([clock.c:90](../kernel/clock.c)) attributes a tick landing here to idle rather than
   to the kernel.
@@ -571,16 +576,19 @@ the `spl*` routines.
 ```c
 void spl0(void)                     /* kernel/intr.c -- the whole of what psw.s was */
 {
-    curipl = 0;
     __besm6_maskpsw(PSW_KERNEL);                             /* was sti() */
 }
 
 int spl1(void)
 {
-    int old = curipl;
-    curipl = 1;
+    int old = __besm6_getpsw();                              /* was getpsw() */
     __besm6_maskpsw(PSW_KERNEL | PSW_INTR_DISABLE);          /* was cli() */
     return old;
+}
+
+void splx(int s)
+{
+    __besm6_setpsw(s);              /* the general mode write: a run-time level needs it */
 }
 ```
 
@@ -617,17 +625,21 @@ int spl1(void)
   it. So each `spl*` is now one inline `vtm`, and every one of them is a call shorter.
 
   **A branch survives, but only in `splx()`.** The mask is an immediate field of the instruction, so
-  `__besm6_maskpsw` demands a compile-time constant and a runtime `s` has to select between two
-  constant-mask instructions. `spl0()` and `spl1()` know their level, so each names its own `vtm`
-  outright; `splx(s)` does not, and keeps the `uza`. The shared `setipl(s)` these were factored
-  through paid for that branch in all four.
+  `__besm6_maskpsw` demands a compile-time constant. `spl0()` and `spl1()` know their level, so each
+  names its own `vtm` outright. `splx(s)` does not, and rather than branch between the two it takes
+  the *other* mode write — `ati 021`, `__besm6_setpsw()` — and restores the whole word its cookie
+  carries. So all three are one instruction and none of them branches. Note `ati` is the **wider**
+  write of the two: it moves ПоП, ПоК and the write-watch bit as well, which the masked `vtm` leaves
+  alone. Nothing in this kernel touches those three, so a cookie carries them back unchanged.
+  (These routines were briefly factored through a shared `setipl(s)`, which paid for a branch in all
+  four.)
 
 - **Reading PSW back** is the only way to see the interrupt level from C: unlike РП and РЗ, the mode
-  word is readable, and `__besm6_getpsw()` is one `ita 021`. The kernel never does it — it tracks
-  the level in `curipl` and reads the *interrupted* mode word out of the trap frame. The callers are
-  in `kernel/test/`: `usys.c` asserts from inside a `sysent` stub, and `utrap.c` from inside its stub
-  `trap()`, that the gate really did open БлПр before dispatching (`F_IPL`). Nothing else can check
-  that — the level is a hardware bit, and every C-visible shadow of it would agree either way. That
+  word is readable, and `__besm6_getpsw()` is one `ita 021`. That is precisely why the kernel keeps
+  **no** shadow of the level — `spl1()` and `idle()` read the bit itself. The other callers are in
+  `kernel/test/`: `usys.c` asserts from inside a `sysent` stub, `utrap.c` from inside its stub
+  `trap()`, that the gate really did open БлПр before dispatching (`F_IPL`), and `uswtch.c` that
+  `idle()` put the level back. Nothing else can check that — the level is a hardware bit. That
   those two tests needed a symbol to link is what kept `psw.s` alive; an intrinsic needs no object,
   so `psw.o` left eight link lines in `kernel/test/Makefile` with it.
 

@@ -159,8 +159,9 @@ How it turned out:
 * **`cli`/`sti` now assert БлП = БлЗ = 1** rather than preserving them, so they may only be called
   from unmapped kernel context — every caller is. The mapped brackets (`uarea.S`, `seg.S`,
   `usermem.S`) do their own `vtm` and bank PSW, because they must preserve a БлПр they do not know.
-* **`curipl` is not touched by any of it.** It already reads 0 for an entry from user, and `выпр`
-  restores БлПр from SPSW on the way out — the same asymmetry `extintr()`'s closing repair relies on.
+* **No gate touches any shadow of the level**, there being none to touch: `выпр` restores БлПр from
+  SPSW on the way out, and PSW reads back, so the bit is the only copy. (At the time this was written
+  there *was* a shadow, `curipl`, which the gates deliberately left alone; it has since been removed.)
 * **`intrgate` is exempt**: a handler runs at raised level and the return drops it, as `rtt` does.
 * Checked on the machine, on both doors: `usys` reads PSW back inside every dispatched handler and
   `utrap` inside its stub `trap()` (`__besm6_getpsw()`; at the time, `getpsw()` in `psw.s`), each failing with `F_IPL` if БлПр
@@ -358,11 +359,28 @@ Loose ends the finished work left behind. None blocks 18.
   from each; the two tests that read PSW back call `__besm6_getpsw()` directly, so `psw.o`
   left **eight** link lines in `test/Makefile` as well as `MACH` in `kernel/Makefile`. How it turned
   out, where it differed from the plan above:
-  * **A branch survives, in `splx()` alone**, where the old note predicted none anywhere. The mask is
-    an immediate field of the instruction, so `__besm6_maskpsw` demands a compile-time *constant* and a
-    runtime `s` must still choose between two constant-mask instructions. `spl0()`/`spl1()` know their
-    level and each names one outright; only `splx(s)` branches. (These three were briefly factored
-    through a shared `static setipl(s)`, which paid for the branch in all of them.)
+  * **No branch anywhere, which the old note predicted and then a middle draft lost.** The mask is an
+    immediate field of the instruction, so `__besm6_maskpsw` demands a compile-time *constant*.
+    `spl0()`/`spl1()` know their level and each names one outright. `splx(s)` does not, and for a
+    while chose between the two constants with a `uza` — until it turned out not to need the masked
+    write at all: `__besm6_setpsw()` (`ati 021`) writes the whole mode word, so `splx()` just puts
+    back what `spl1()`'s `ita 021` handed out. One instruction each, none of them branching.
+    (These three were briefly factored through a shared `static setipl(s)`, which paid for a branch
+    in all of them.)
+  * **DONE: `curipl` is gone, and with it the last software shadow of the level.** PSW reads back —
+    unlike РП, РЗ, МГРП and МПРП, which is why *those* keep shadows — so the level had two copies
+    that could disagree, and did: `extintr()` had to close with `curipl = s` to repair the drift
+    clock()'s `spl5()`/`spl1()` left, and a fault from supervisor left the shadow raised while the
+    bit said otherwise. Now `spl1()` returns the mode word itself and `splx()` writes it back, so
+    the bit is the only copy and nothing can drift from it. **The cookie is therefore a PSW word,
+    not a small integer** — opaque, never to be compared against a level or synthesized, and
+    `splx(0)` would clear БлП/БлЗ and drop the kernel into its own user's address space. Every call
+    site passes back a cookie it holds; `intr.c`'s header says so where a new one would look.
+  * **`uclock` lost a check to this, and gained nothing back.** It asserted `spl7() == 0` after the
+    tick, i.e. that `extintr()` had repaired the shadow. With no shadow there is no drift to catch,
+    and no hardware bit to read instead: `report()` runs inside `crt0c.S`'s `0500` handler, which
+    never opens the level, so PSW reads `02003` there whatever the tick did. The check is deleted
+    and the comment says why — a constant that always passes is worse than no check at all.
   * **The masks are named, not magic**: `PSW_KERNEL` (`sys/besm6dev.h`) is БлП|БлЗ, the standing
     unmapped-kernel invariant, so the spls read `PSW_KERNEL | PSW_INTR_DISABLE` and `PSW_KERNEL`.
     Its comment carries `psw.s`'s precondition — a mode write may only be issued from ordinary

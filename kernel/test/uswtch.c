@@ -175,9 +175,9 @@ int main()
         mask |= F_NOTICK;
     /*
      * idle() must put back the level it was called at -- spl6 blocks, so БлПр must be up again
-     * now that idle() has returned.  Read the HARDWARE bit rather than `curipl': the shadow is
-     * private to intr.c, and PSW is the one machine register that can be read back, in one
-     * instruction (doc/Intrinsics.md §3.3).  It is also the stronger of the two checks.
+     * now that idle() has returned.  The bit itself is the only copy of the level -- the kernel
+     * keeps no shadow of it -- and PSW is the one machine register that can be read back, in one
+     * instruction (doc/Intrinsics.md §3.3).
      */
     if (!(__besm6_getpsw() & PSW_INTR_DISABLE))
         mask |= F_IPL;

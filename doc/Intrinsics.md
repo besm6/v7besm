@@ -506,16 +506,19 @@ void intrinit(void)                 /* called once from main(), before the first
 
 void spl0(void)                     /* the level itself is БлПр, one `vtm' either way */
 {
-    curipl = 0;
     __besm6_maskpsw(PSW_KERNEL);
 }
 
 int spl1(void)
 {
-    int old = curipl;
-    curipl = 1;
+    int old = __besm6_getpsw();     /* the cookie is the mode word: no shadow is kept */
     __besm6_maskpsw(PSW_KERNEL | PSW_INTR_DISABLE);
     return old;
+}
+
+void splx(int s)                    /* a run-time level cannot ride an immediate field */
+{
+    __besm6_setpsw(s);
 }
 
 void mgrpon(unsigned bits)          /* arm a device's bits for one exchange */
@@ -538,10 +541,11 @@ Note `mgrp` is `unsigned`, not `int`: ГРП bit 48 exists and would not survive
 is a shadow because МГРП, like РП and РЗ, is write-only.
 
 The mask is an immediate field of the instruction and cannot be arithmetic, so each level needs its
-own constant (§2.3). That is why `spl0()` and `spl1()`, which know theirs, are branch-free, while
-`splx(s)` — whose level is a run-time value — has to select between the two instructions with a
-`uza`. What the intrinsic buys over the out-of-line `cli`/`sti` it replaced is the **call**, on
-every `spl*` in the kernel.
+own constant (§2.3). `spl0()` and `spl1()` know theirs and name it. `splx(s)` does not, and rather
+than branch between the two it uses the *general* mode write, `__besm6_setpsw()` — which is why the
+cookie is the whole PSW word and not a small integer, and why `splx(0)` would be a catastrophe
+rather than a level. All three are one instruction and none branches. What the intrinsics buy over
+the out-of-line `cli`/`sti`/`getpsw` they replaced is the **call**, on every `spl*` in the kernel.
 
 This is what [`kernel/intr.c`](../kernel/intr.c) does; the reasoning above is written up there in
 full.

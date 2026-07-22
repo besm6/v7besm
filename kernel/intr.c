@@ -69,8 +69,21 @@ void clock(struct trap *tr);
  *   the PSW_KERNEL comment in sys/besm6dev.h for the invariant the other two re-assert, and
  *   doc/Intrinsics.md §3.3.  The mask rides in that address field, so it must be a
  *   compile-time constant: the two levels are two different instructions, not one instruction
- *   over a variable.  That is why each spl below writes its own out and only splx(), whose
- *   level is a run-time value, branches -- a shared setipl(s) had the branch in all four.
+ *   over a variable.  spl0() and spl1() each name their own outright.  splx() cannot -- its
+ *   level is a run-time value -- so it takes the OTHER mode write, the general `ати' of
+ *   __besm6_setpsw(), and puts back the whole word its cookie carries.
+ *
+ *   WHICH IS WHY THE COOKIE IS A PSW WORD, not a small integer: spl1() hands back what `ита'
+ *   read, and splx() writes exactly that back.  Nothing may compare a cookie against a level,
+ *   synthesize one, or splx() a constant -- splx(0) would clear БлП and БлЗ and drop the kernel
+ *   into its own user's address space.  There is no software shadow of the level to compare
+ *   with either: PSW is the one machine register that reads back, so the hardware bit is the
+ *   only copy, and it is `выпр' on the gate return that restores it.
+ *
+ *   The `ати' is a WIDER WRITE than the `уиа': it also restores ПоП, ПоК and the write-watch
+ *   bit from the cookie, which the masked write leaves alone (see sys/besm6dev.h).  Nothing in
+ *   this kernel touches those three, so a cookie always carries them back unchanged -- but code
+ *   that starts to must not straddle an spl bracket.
  *
  *   МГРП is the SOURCE ENABLE.  extintr()'s `grp & mgrp' means "sources this kernel is
  *   listening to right now", which is what that mask was always for.  It is NOT constant:
@@ -100,8 +113,6 @@ void clock(struct trap *tr);
  */
 #define IRQ_ON (GRP_SLAVE | GRP_TIMER)
 
-static int curipl = 1; /* the machine comes up with interrupts blocked */
-
 unsigned mgrp; /* shadow of МГРП: it cannot be read back */
 unsigned mprp; /* shadow of МПРП: likewise */
 
@@ -109,8 +120,6 @@ unsigned mprp; /* shadow of МПРП: likewise */
  * Arm the always-live interrupt sources.  Called once from main(), before the first
  * spl0().  After this the priority rides on БлПр alone; МГРП changes only through
  * mgrpon()/mgrpoff(), and only for the length of one exchange.
- *
- * Separate from clkstart() because it is not the clock's business.
  */
 void intrinit(void)
 {
@@ -118,38 +127,20 @@ void intrinit(void)
     __besm6_mod(MOD_MGRP, mgrp);
 }
 
-/*
- * splx() is the only one of the three that does not know its level at compile time, so it is
- * the only one that keeps the branch: the mask is the address field of one `уиа', so each arm
- * is a different instruction and there is nothing to select between at run time but the two
- * arms themselves.  spl0() and spl1() each name one of them outright.
- */
 void splx(int s)
 {
-    curipl = s;
-    if (s)
-        __besm6_maskpsw(PSW_KERNEL | PSW_INTR_DISABLE); /* set БлПр   -- interrupts blocked */
-    else
-        __besm6_maskpsw(PSW_KERNEL); /* clear БлПр -- delivery enabled */
+    __besm6_setpsw(s); /* put back the mode word spl1() handed out, БлПр with it */
 }
 
-/*
- * void, not int: spl0 is the bottom of the range, so the level it displaces can only ever be
- * put back by a splN, never by an splx() of what spl0 returned.  Nothing in the kernel saved
- * it -- idle() below wanted it, and takes `curipl' itself rather than make every other caller
- * pay for a return value it drops.
- */
 void spl0(void)
 {
-    curipl = 0;
     __besm6_maskpsw(PSW_KERNEL); /* clear БлПр -- delivery enabled */
 }
 
 int spl1(void)
 {
-    int old = curipl;
-    
-    curipl = 1;
+    int old = __besm6_getpsw();
+
     __besm6_maskpsw(PSW_KERNEL | PSW_INTR_DISABLE); /* set БлПр -- interrupts blocked */
     return old;
 }
@@ -172,14 +163,16 @@ int spl1(void)
  * when the code around it is recompiled.
  *
  * Opening the door is a clear of БлПр and nothing else, which is why this is C and not
- * besm6.S.  The level is read off `curipl' before spl0() overwrites it, since idle() must put
- * the caller's back and spl0() is void -- see the comment over it.
+ * besm6.S.  The mode word is banked by hand first, since idle() must put the caller's level
+ * back and spl0() is void -- see the comment over it.  That `ита'/`ати' pair is what an
+ * s = spl6()/splx(s) bracket is anyway; idle() writes it out only because the level it wants
+ * is 0 and spl0() hands nothing back.
  */
 volatile int idling; /* set while the idle spin is running; cleared by extintr() */
 
 void idle(void)
 {
-    int s = curipl;
+    int s = __besm6_getpsw();
 
     spl0();
     idling = 1;
@@ -252,29 +245,24 @@ static void prpintr(void)
  * Loop until nothing is pending: more than one device can be waiting, and a device
  * can raise a new interrupt while we are servicing another.
  *
- * What this function owns, on behalf of every handler it calls, is the interrupt priority
- * level.  v7's handlers raise the ipl and let the return from interrupt drop it -- which is
- * what the PDP-11's `rtt' does when it reloads the priority field of PS from the frame, and
- * what `выпр' now does here too, БлПр being the priority (see the spls above).  So the
- * HARDWARE bit needs nothing from us.  `curipl', the software shadow, does: clock() calls
- * spl5()/spl1() and restores neither, so without the repair at the bottom it would drift out
- * of step with БлПр from the very first tick on.
+ * THIS FUNCTION DOES NOT TOUCH THE INTERRUPT LEVEL, and does not have to.  v7's handlers raise
+ * the ipl and let the return from interrupt drop it -- which is what the PDP-11's `rtt' does
+ * when it reloads the priority field of PS from the frame, and what `выпр' does here too, БлПр
+ * being the priority (see the spls above).  clock() calls spl5()/spl1() and restores neither;
+ * the gate return puts the interrupted context's level back over the top of that, from SPSW.
  *
- * The repair is a plain assignment, NOT splx().  splx(0) would clear БлПр
- * here, inside the handler, with the interrupted context's state still in SPSW/IRET -- and
- * the interval timer free-runs, so the next tick would re-enter this function immediately
- * and keep doing so.  Nothing in the loop below wants delivery open, either: every handler
- * it calls raises the level (spl5/spl1, both of which only ever SET БлПр), and `grp & mgrp'
- * does not depend on the level -- МГРП is a source mask, not a priority.  That is also why
- * the repair moved to the bottom -- it used to sit at the top of the loop precisely because
- * `& mgrp' could otherwise mask out a device that was pending all along.
- *
- * mgrpoff() below is called from inside this loop and goes through spl7()/splx(), so it
- * moves `curipl' too; the repair at the bottom covers that as well.
+ * It used to end with `curipl = s', repairing a software shadow of the level that the handlers
+ * had moved and the hardware knew nothing about.  The shadow is gone -- PSW reads back, so the
+ * bit itself is the only copy -- and the repair went with it.  What that repair could NOT be
+ * is worth keeping, since the reasoning still binds anything tempted to add one: not splx(),
+ * which would put delivery back the way the interrupted context had it, i.e. OPEN, here inside
+ * the handler with that context still in SPSW/IRET -- and the interval timer free-runs, so the
+ * next tick would re-enter immediately and keep doing so.  Nothing in the loop wants delivery
+ * open: every handler it calls only ever SETS БлПр, and `grp & mgrp' does not depend on the
+ * level at all -- МГРП is a source mask, not a priority.
  */
 void extintr(void)
 {
-    int s = curipl;
     unsigned grp, bit;
 
     for (;;) {
@@ -342,9 +330,6 @@ void extintr(void)
         if (__besm6_mod(MOD_GRP, 0) & bit)
             mgrpoff(bit);
     }
-
-    /* Put the shadow back where the handlers found it -- see the header above. */
-    curipl = s;
 
     /*
      * Release idle()'s spin.  Any interrupt will do, so the flag is cleared here rather

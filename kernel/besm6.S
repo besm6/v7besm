@@ -226,8 +226,8 @@ bhalt:  stop                        // main returned / faulted upstream: resumab
 //     priority to 0 before dispatching.  The enable sits AFTER the fill and not one instruction
 //     earlier, because until the frame is complete SPSW/ERET and the five cells are the only copy
 //     of the interrupted context and an interrupt would overwrite them (doc/Memory_Mapping.md,
-//     "There is exactly one saved-state slot").  `curipl' is deliberately NOT touched: it already
-//     reads 0 here, because the interrupted user was running at level 0 and no gate moves it.
+//     "There is exactly one saved-state slot").  There is nothing else for the gate to update:
+//     the level has no software shadow, PSW being the only copy of it (kernel/intr.c).
 //     `trapgate' and `badext' do the same, for the same reason; `intrgate' does not -- a handler
 //     runs at raised level and the return drops it, as `rtt' does on the PDP-11.
 //
@@ -408,9 +408,9 @@ badext:
 //         there (STOP_DOUBLE_INTR) loses the diagnostic entirely.
 //
 //     It was unconditional at first, on the argument that a context about to panic cannot be
-//     harmed.  What that missed is that `curipl' is not honest on this path either -- a fault
-//     inside an spl6 bracket leaves it raised, so the first putchar's `splx(s)' re-blocks after one
-//     character, and the enable was only ever a few instructions wide there.  The discriminator
+//     harmed.  What that missed is that the enable was only ever a few instructions wide anyway --
+//     a fault inside an spl6 bracket carries that level in its cookie, so the first putchar's
+//     `splx(s)' re-blocks after one character.  The discriminator
 //     costs three instructions and makes the rule sayable: A FAULT FROM SUPERVISOR CHANGES
 //     NOTHING ABOUT THE MACHINE'S INTERRUPT STATE.  (If a kernel-mode fault ever becomes
 //     recoverable -- a `nofault' path, kernel copy-on-write -- revisit this with it.)

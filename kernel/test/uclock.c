@@ -269,12 +269,11 @@ int main()
      * (kernel/intr.c, "TWO REGISTERS, TWO JOBS"), so the safe order is to move the one while the
      * other still blocks:
      *
-     *   spl0()      curipl := 0 and БлПр opens -- but МГРП is still empty, so nothing can be
-     *               delivered.  It has to be the REAL spl0(): curipl is what extintr() reads and
-     *               puts back, and what report()'s spl7() check reads afterwards.
-     *   maskpsw     re-block БлПр without disturbing curipl -- the spls' own instruction, issued
-     *               behind its back.  From here on the level is closed until gouser()'s forged
-     *               SPSW = 0 opens it in user mode.
+     *   spl0()      БлПр opens -- but МГРП is still empty, so nothing can be delivered.
+     *   maskpsw     re-block БлПр.  The spls' own instruction, issued behind their back, which
+     *               is the whole of what an spl is now that the level has no software shadow.
+     *               From here on the level is closed until gouser()'s forged SPSW = 0 opens it
+     *               in user mode.
      *   intrinit()  NOW arm МГРП.  It is not optional: leave it out and extintr()'s `grp & mgrp'
      *               sees nothing, the tick is never dispatched, and every check below fails.
      *
@@ -350,18 +349,24 @@ void report(void)
         mask |= F_SETPRI;
 
     /*
-     * extintr() put back the ipl clock() raised and left.  Two halves, since the ipl moved onto
-     * БлПр and МГРП became a source enable armed once by intrinit():
+     * Nothing rewrote the source mask behind intrinit()'s back: мгрп still reads IRQ_ON.  A
+     * driver that wrote МГРП itself, rather than through mgrpon()/mgrpoff(), would drop every
+     * other device's bits and show up here.
      *
-     *   - mgrp still reads IRQ_ON, i.e. nothing rewrote the source mask behind intrinit()'s back;
-     *   - the LEVEL came back, which is now curipl.  spl7() returns the level it displaces, and
-     *     main() left it at 0 before gouser(), so anything else means clock()'s spl5()/spl1()
-     *     leaked past extintr()'s repair.  (`выпр' restores the hardware bit by itself now; the
-     *     software shadow is what still needs extintr() to fix it.)
+     * THE LEVEL IS NOT CHECKED, and no longer can be.  This used to assert `spl7() == 0' --
+     * that extintr() had put back the ipl clock() raised and left.  What that caught was drift
+     * in `curipl', a SOFTWARE SHADOW of the level, which the handlers moved and the hardware
+     * knew nothing about; extintr() ended with an assignment to repair it.  The shadow is gone
+     * (PSW reads back, so БлПр is the only copy), and with it both the drift and the repair:
+     * clock()'s spl5()/spl1() cannot outlive the gate return, because `выпр' reloads БлПр from
+     * SPSW no matter what the handler did.
+     *
+     * Nor is there anything left to read here instead.  report() runs inside crt0c.S's 0500
+     * handler, which -- unlike the kernel's trapgate -- never opens the level, so PSW reads
+     * 02003 (БлП|БлЗ|БлПр) on this path whatever the tick did before it.  A check on that bit
+     * would be a constant, and a passing one is worse than none.
      */
     if (mgrp_seen != (GRP_SLAVE | GRP_TIMER))
-        mask |= F_MGRP;
-    if (spl7() != 0)
         mask |= F_MGRP;
 
     /*
