@@ -125,9 +125,8 @@ void sleep(chan_t chan, int pri)
 void wakeup(chan_t chan)
 {
 }
-int spl0(void)
+void spl0(void)
 {
-    return (0);
 }
 int spl1(void)
 {

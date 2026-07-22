@@ -135,9 +135,15 @@ void splx(int s)
     setipl(s);
 }
 
-int spl0(void)
+/*
+ * void, not int: spl0 is the bottom of the range, so the level it displaces can only ever be
+ * put back by a splN, never by an splx() of what spl0 returned.  Nothing in the kernel saved
+ * it -- idle() below wanted it, and reaches setipl() directly rather than make every other
+ * caller pay for a return value it drops.
+ */
+void spl0(void)
 {
-    return setipl(0);
+    setipl(0);
 }
 
 int spl1(void)
@@ -162,8 +168,9 @@ int spl1(void)
  * the instruction you would expect -- see trap()), whereas a flag is exact and cannot drift
  * when the code around it is recompiled.
  *
- * spl0() is what actually opens the door, by clearing БлПр; there are no mode bits left for
- * this function to poke, which is why it is C and not besm6.S.
+ * Opening the door is a clear of БлПр and nothing else, which is why this is C and not
+ * besm6.S.  It goes through setipl() rather than spl0() only because idle() must put the
+ * caller's level back, and spl0() is void -- see the comment over it.
  */
 volatile int idling; /* set while the idle spin is running; cleared by extintr() */
 
@@ -171,7 +178,7 @@ void idle(void)
 {
     int s;
 
-    s      = spl0();
+    s      = setipl(0);
     idling = 1;
     while (idling)
         ; /* spin */

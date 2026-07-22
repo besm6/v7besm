@@ -161,7 +161,8 @@ void bflush(dev_t dev);
  * Only the two ends are real routines; the graded levels v7 callers write are aliases, so
  * `s = spl6(); ... splx(s);' still reads as it always did and still costs one instruction.
  */
-int spl0(void), spl1(void);
+void spl0(void); /* the base level is never saved and restored -- nothing is below it */
+int spl1(void);
 #define spl4() spl1()
 #define spl5() spl1()
 #define spl6() spl1()

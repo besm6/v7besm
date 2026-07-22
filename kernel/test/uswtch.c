@@ -173,8 +173,13 @@ int main()
         mask |= F_IDLE;
     if (nticks == 0)
         mask |= F_NOTICK;
-    /* idle() must put back the level it was called at: spl6 is spl1, so spl0() returns 1. */
-    if (spl0() != 1)
+    /*
+     * idle() must put back the level it was called at -- spl6 blocks, so БлПр must be up again
+     * now that idle() has returned.  Read the HARDWARE bit rather than `curipl': the shadow is
+     * private to intr.c, and PSW is the one machine register that can be read back, in one
+     * instruction (doc/Intrinsics.md §3.3).  It is also the stronger of the two checks.
+     */
+    if (!(__besm6_getpsw() & PSW_INTR_DISABLE))
         mask |= F_IPL;
     splx(s);
 
