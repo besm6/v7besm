@@ -250,18 +250,15 @@ static void mdstart(void);
  * caller is safe because mdstart() issues the group and unit selects before every exchange
  * and the selection outlives it; a query from anywhere else would need its own select first.
  *
- * Constant 033 addresses, branching on ctlr, for the reason mdstart() does the same: a
- * computed __besm6_ext() address is miscompiled by b6cc today (see mdstart() below).  The
- * COMMAND is an accumulator value, so it may be a variable.
+ * The controller is selected by ADDING ctlr to the base address, variable first: the two
+ * controllers' registers are adjacent, and that is exactly the shape the compiler folds into
+ * the instruction's own address field (see mdstart() below).  The COMMAND is an accumulator
+ * value, so it may be a variable regardless.
  */
 static unsigned mdstat(unsigned ctlr, unsigned cmd)
 {
-    if (ctlr == 0) {
-        __besm6_ext(EXT_DISKCTL3, cmd);
-        return __besm6_ext(EXT_DISKSTAT3, 0);
-    }
-    __besm6_ext(EXT_DISKCTL4, cmd);
-    return __besm6_ext(EXT_DISKSTAT4, 0);
+    __besm6_ext(ctlr + EXT_DISKCTL3, cmd);
+    return __besm6_ext(ctlr + EXT_DISKSTAT3, 0);
 }
 
 void mdopen(dev_t dev, int rw)
@@ -361,28 +358,20 @@ static void mdstart(void)
         cmd = MDCMD_TRACK | (zone << 1) | track;
 
         /*
-         * Four constant addresses, and not __besm6_ext(EXT_DISK3 + ctlr, cw).  A CONSTANT
-         * address folds into the instruction's own address field, which is what makes the
-         * intrinsic one inline instruction; a computed one is supposed to go through r14
-         * instead, and b6cc gets that wrong today -- it emits `14 ext 0' while leaving a
-         * frame pointer in r14, so the exchange goes to whatever device that address lands
-         * on.  Verified by disassembly when the drum driver was written; see dev/mb.c,
-         * which carries the same warning, and doc/Intrinsics.md on the computed form.
+         * `ctlr +' selects the controller: the two sets of registers are adjacent, and a
+         * VARIABLE PLUS A CONSTANT is the shape the compiler folds into the instruction's
+         * own address field, leaving only `wtc ctlr' beside it.  Written the other way round
+         * it does not fold; see dev/mb.c, which spells out why, and doc/Intrinsics.md §8.
+         * This was once four constant addresses behind an `if', because b6cc used to
+         * materialize a computed address into r14 and got it wrong.
          *
          * The order is the one the header comment argues for: both selects (which RAISE the
          * free bit) before the control word (which lowers it), and the track address last.
          */
-        if (ctlr == 0) {
-            __besm6_ext(EXT_DISKCTL3, MDCMD_GROUP | group);
-            __besm6_ext(EXT_DISKCTL3, MDCMD_UNIT | (1 << unit));
-            __besm6_ext(EXT_DISK3, cw);
-            __besm6_ext(EXT_DISKCTL3, cmd);
-        } else {
-            __besm6_ext(EXT_DISKCTL4, MDCMD_GROUP | group);
-            __besm6_ext(EXT_DISKCTL4, MDCMD_UNIT | (1 << unit));
-            __besm6_ext(EXT_DISK4, cw);
-            __besm6_ext(EXT_DISKCTL4, cmd);
-        }
+        __besm6_ext(ctlr + EXT_DISKCTL3, MDCMD_GROUP | group);
+        __besm6_ext(ctlr + EXT_DISKCTL3, MDCMD_UNIT | (1 << unit));
+        __besm6_ext(ctlr + EXT_DISK3, cw);
+        __besm6_ext(ctlr + EXT_DISKCTL3, cmd);
 
         /*
          * Did the drive take it?  An unattached unit transfers nothing and interrupts

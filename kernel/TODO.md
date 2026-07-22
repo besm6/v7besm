@@ -350,6 +350,24 @@ Loose ends the finished work left behind. None blocks 18.
   `namei()`'s `fubyte(u.u_dirp++)` — a genuine `char *` step — is right. What is worth checking is
   every *other* place an `int` becomes a `char *`, and there the pattern to copy is the one exec now
   uses: a real `char *` walked by the compiler, never a hand-built `(word, offset)` pair.
+* **`psw.s` could be C now.** The compiler grew three PSW intrinsics —
+  `__besm6_maskpsw`/`__besm6_getpsw`/`__besm6_setpsw`, twelve in `<besm6.h>` where there were nine —
+  and each lowers to exactly the instruction `psw.s` writes by hand: a register-0 `vtm` with a
+  constant mask, an `ita 021`, an `ati 021`. So `cli()` is `__besm6_maskpsw(02003)` and `sti()` is
+  `__besm6_maskpsw(3)`, *inline*, which would make `setipl()` in `intr.c` branch-free and drop a
+  call from every `spl*`. `getpsw()` would move with them, to somewhere `kernel/test/usys.c` can
+  still link it. Nothing forces the move — the four gates inline the same instruction regardless,
+  and the file is nine lines — but nothing about it is unexpressible any more. See
+  [../doc/Intrinsics.md](../doc/Intrinsics.md) §3.3 and
+  [../doc/Kernel_Assembly_Routines.md](../doc/Kernel_Assembly_Routines.md) §4.7.
+* **DONE, out of the same compiler update: the drivers' computed-address workaround is gone.**
+  `mb.c` and `md.c` used to branch on `ctlr` to reach two constant `033` addresses, because `b6cc`
+  materialized a computed address into r14 and got it wrong (`14 ext 0` with a frame pointer still
+  in r14). The lowering was rewritten: the address now rides the **C register** — `wtc` reads it
+  straight out of a frame slot or global — and a constant addend folds into the instruction's own
+  address field, so `__besm6_ext(ctlr + EXT_DRUM1, cw)` is three instructions. **Write the variable
+  first**: `EXT_DRUM1 + ctlr` does not fold and costs a `b$uadd` call plus a stack round-trip.
+  Verified by disassembling `unix.dis`.
 * **`addupc()` is a stub**, so `profil()` is inert. Was nominally task 17; left there.
 * **`time` is never seeded from a wall clock.** This machine has no clock-calendar a program can
   read, so the epoch starts at 0.

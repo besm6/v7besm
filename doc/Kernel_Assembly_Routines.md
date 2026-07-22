@@ -17,7 +17,7 @@ SIMH test. Anything a test has to exercise for real therefore lives in a file of
 | [uarea.S](../kernel/uarea.S) | `uflush`, `uload` — the u-area window bracket |
 | [seg.S](../kernel/seg.S) | `copyseg`, `clearseg` |
 | [usermem.S](../kernel/usermem.S) | `copyin`, `copyout`, `fubyte`, `fuword`, `subyte`, `suword` |
-| [psw.s](../kernel/psw.s) | `cli`, `sti` — one `vtm` each, the mode-word write — and `getpsw`, which reads PSW back |
+| [psw.s](../kernel/psw.s) | `cli`, `sti` — one `vtm` each, the mode-word write — and `getpsw`, which reads PSW back. The only file here that C could now write for itself (§4.7) |
 | [brz.s](../kernel/brz.s) | `drainbrz` — the nine-store БРЗ drain |
 
 **It is a small body of assembly.** The C compiler has the `<besm6.h>` machine
@@ -29,6 +29,11 @@ sequence of `__besm6_ext` control words. What stays in assembly is what no intri
 that must be entered *with the machine's registers as the hardware left them* (the gates), code that
 runs with the kernel's own data unaddressable (the brackets), and code where the **sequence** rather
 than the instruction is the contract (`drainbrz`).
+
+`psw.s` is the one file in the table that no longer meets that test. The compiler grew three PSW
+intrinsics — `__besm6_maskpsw`, `__besm6_getpsw`, `__besm6_setpsw` — so `cli`, `sti` and `getpsw`
+are each one *inline* instruction in C now, cheaper than the call they cost today. It survives on
+inertia, not necessity; §4.7 says what moving it would take.
 
 Two contracts v7 relied on have **no counterpart here**, and both are noted where they appear:
 there is no `nofault` mechanism at all — validation is `useracc()` up front — and `invd()` does
@@ -575,6 +580,15 @@ int  getpsw(void);                              /* not declared in systm.h -- se
   `13 vjm sti` would be unreadable in a block where `sti N` is also a *machine instruction* —
   `intret` uses it a dozen times to restore registers.
 
+- **C can now write all three, and this file could go.** `<besm6.h>` gained
+  `__besm6_maskpsw`/`__besm6_getpsw`/`__besm6_setpsw` ([Intrinsics.md](Intrinsics.md) §3.3), each
+  lowering to exactly the instruction below it — a register-0 `vtm` with a constant mask, an
+  `ita 021`, an `ati 021` — with no call around it. `cli()` becomes `__besm6_maskpsw(02003)` and
+  `sti()` becomes `__besm6_maskpsw(3)`, which would make `setipl()` in [intr.c](../kernel/intr.c)
+  branch-free and inline, and `getpsw()` would move to wherever `kernel/test/usys.c` can still see
+  it. Nothing forces the move — the gates inline the instruction regardless, and `psw.s` is nine
+  lines of code — so it is recorded in [kernel/TODO.md](../kernel/TODO.md) rather than done.
+
 - **`getpsw` reads PSW back**, which is the only way to see the interrupt level from C: unlike РП
   and РЗ, the mode word is readable. The kernel never calls it — it tracks the level in `curipl` and
   reads the *interrupted* mode word out of the trap frame — so `libunix.a`'s link-pull drops it from
@@ -642,7 +656,7 @@ the reschedule-pending flag the gates test on the way back to user mode (§3).
 |------------|-------|
 | `bcopy`, `bzero` | **done** — renamed `wcopy`/`wzero` and they take a **word** count, converted by `btow()` at every call site, so the loop has no six-chars-per-word tail |
 | `spl0`…`spl7`, `splx` | **done** — two levels, not eight, and the knob is **БлПр** (via `cli`/`sti`), not МГРП, which is a source enable armed once by `intrinit()`. Putting the level in the mode word is what lets `выпр` restore it on a gate return, as the PDP-11's `rtt` does |
-| `cli`, `sti`, `getpsw` | **done** — [psw.s](../kernel/psw.s); one `vtm` each (register field 0 = the mode write, §4.7), and they carry the whole interrupt priority level. The gates inline the same instruction rather than call it. `getpsw` reads PSW back, for the test that checks a gate opened the level |
+| `cli`, `sti`, `getpsw` | **done** — [psw.s](../kernel/psw.s); one `vtm` each (register field 0 = the mode write, §4.7), and they carry the whole interrupt priority level. The gates inline the same instruction rather than call it. `getpsw` reads PSW back, for the test that checks a gate opened the level. Now expressible in C as well, via the PSW intrinsics (§4.7) |
 | `fubyte`/`fuword`/`subyte`/`suword`, `copyin`/`copyout` | **done** — [usermem.S](../kernel/usermem.S); **no fault-recovery path**, validation is `useracc()` up front. No window either: the loop toggles БлП per word through the user map that is already loaded. Byte variants do RMW, and mind the fat-pointer marker bit |
 | `copyseg`/`clearseg`, `uflush`/`uload` | **done** — [seg.S](../kernel/seg.S), [uarea.S](../kernel/uarea.S); a two-page window bracket with a БРЗ drain either side (§4.4a) |
 | `save`, `resume` | **done (task 16)** — [kernel/switch.s](../kernel/switch.s); nine slots (r1–r7, r13, r15), and `resume()` switches the **u-area**, not the address space: it never writes РП |

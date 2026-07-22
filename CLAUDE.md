@@ -228,11 +228,15 @@ the authoritative references and are kept current:
   the stack, second in the accumulator, result in the accumulator) and the ω-mode/`NTR 3`
   contract every helper must preserve. Sources live in the external c-compiler repo under
   `libc/besm6/unix/`.
-- `doc/Intrinsics.md` — the nine C compiler intrinsics of `<besm6.h>`, **implemented** in the
+- `doc/Intrinsics.md` — the twelve C compiler intrinsics of `<besm6.h>`, **implemented** in the
   external c-compiler, that let the kernel drive the hardware from C instead of assembly: the
-  privileged pair `__besm6_ext` (033 «увв») and `__besm6_mod` (002 «рег»), `__besm6_stop`, the
+  privileged pair `__besm6_ext` (033 «увв») and `__besm6_mod` (002 «рег»), the PSW trio
+  `__besm6_getpsw`/`__besm6_setpsw`/`__besm6_maskpsw` (the mode word at machine register 021, so
+  `kernel/psw.s`'s `cli`/`sti`/`getpsw` are now expressible in C too), `__besm6_stop`, the
   bit-manipulation builtins C has no equivalent for (`apx`/`aux` gather and scatter, `acx`, `anx`,
-  `arx`), and `__besm6_extracode`. Each compiles to a single inline instruction, never a call.
+  `arx`), and `__besm6_extracode`. Each compiles to a single inline instruction, never a call —
+  including a *computed* `ext`/`mod` address, which rides the C register (`wtc`) and folds into one
+  instruction, so a driver may write `__besm6_ext(EXT_DRUM1 + ctlr, cw)`.
   Signatures, semantics, diagnostics, the generated code, and worked examples of an `spl`, an
   interrupt dispatch and a drum read written in C. Read it before writing anything in
   `kernel/dev/` or adding to `kernel/besm6.S` — much of what that file was meant to hold is now

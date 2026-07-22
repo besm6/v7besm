@@ -19,6 +19,12 @@
 
 /*
  * Addresses of the 033 «увв» instruction (__besm6_ext).  Bit 04000 selects a read.
+ *
+ * The two controllers of each kind are ADJACENT, so a driver says `ctlr + EXT_DRUM1' rather
+ * than branching on ctlr to reach two constants: a variable plus a constant is what the
+ * compiler folds into the instruction's own address field, leaving one `wtc' beside it
+ * (doc/Intrinsics.md §8 -- and the operand order matters, see dev/mb.c).  The `...4' names
+ * below are therefore documentation of the map more than they are call sites.
  */
 #define EXT_DRUM1    01    /* drum 1: exchange control word -- starts the transfer */
 #define EXT_DRUM2    02    /* drum 2: likewise */

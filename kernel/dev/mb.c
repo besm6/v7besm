@@ -183,19 +183,22 @@ static void mbstart(void)
         }
 
         /*
-         * Two constant addresses, and not __besm6_ext(EXT_DRUM1 + ctlr, cw).  A CONSTANT
-         * address folds into the instruction's own address field, which is what makes the
-         * intrinsic one inline instruction; a computed one is supposed to go through r14
-         * instead, and b6cc gets that wrong today -- it emits `14 ext 0' while leaving a
-         * frame pointer in r14, so the exchange goes to whatever device that address lands
-         * on (a tape controller, when this was first written).  Verified by disassembly and
-         * by stopping SIMH on the instruction.  doc/Intrinsics.md documents the computed
-         * form as a fallback for addresses above 07777; it does not work today.
+         * A COMPUTED 033 address costs nothing here: the constant folds into the
+         * instruction's own address field and only `ctlr' rides the C register --
+         * `xta cw' / `wtc ctlr' / `ext EXT_DRUM1', three instructions, no worse than the
+         * `if' over two constant addresses this used to be.
+         *
+         * WRITE THE VARIABLE FIRST.  `ctlr + EXT_DRUM1' folds; `EXT_DRUM1 + ctlr' does not
+         * -- it puts the constant in the accumulator and the variable on the stack, which
+         * is the one operand order the peephole cannot fuse, and costs a call to b$uadd
+         * plus a stack round-trip.  Verified by disassembly.
+         *
+         * (b6cc once materialized a computed address into r14 and got it wrong, emitting
+         * `14 ext 0' with a frame pointer still in r14, so the exchange went to whatever
+         * device that address landed on.  That lowering is gone -- the address arrives
+         * through the C register now, never an index register.  doc/Intrinsics.md §8.)
          */
-        if (ctlr == 0)
-            __besm6_ext(EXT_DRUM1, cw);
-        else
-            __besm6_ext(EXT_DRUM2, cw);
+        __besm6_ext(ctlr + EXT_DRUM1, cw);
 
         /*
          * Did the drum take it?  An unattached unit transfers nothing and interrupts
