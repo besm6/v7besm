@@ -21,6 +21,20 @@ the v7 headers, plus `string.h`, `stdlib.h` and `inttypes.h` adapted from the co
 `ctype.h`, `errno.h`, `math.h`, `setjmp.h`, `signal.h`, `stdio.h`, `time.h` — the **v7**
 header stays; that is the whole reason this directory exists.
 
+**The dead v7 headers have been pruned**, and two rules say what may come back. A file format
+this toolchain has already replaced is described *once*, under `cross/besm6/` — so `a.out.h`
+and `ar.h` went, because `b.out.h` and the 30-char `ar_hdr` are the real ones and a second,
+contradicting copy on the default include path is worse than none. A header for hardware this
+machine does not have, or for a utility nobody has ported, gets re-imported from the v7 sources
+*when that work happens* and refitted then — it is not kept as a stub in the meantime. That
+took out the PDP-11 and VAX addresses (`core.h`, `execargs.h`, `saio.h`), the Datakit and uucp
+`pk` driver (`dk.h`, `pack.h`, `sys/prim.h`), DECtape `tp` (`tp_defs.h`), the two dump formats
+(`olddump.h`, `dumprestor.h`), `libmp` (`mp.h`), a stray `symbol.h`, and the two identity
+placeholders (`ident.h` said `research 11/70`, `whoami.h` said `where I am`). Several of them
+would not even compile. What stays that is not yet backed — `math.h`, `curses.h`, `unctrl.h` —
+stays because [`../lib/README.md`](../lib/README.md) names it in phase 7 and will rewrite it
+for this machine's float format.
+
 Types and macros follow the BESM-6 data model
 ([`../doc/Besm6_Data_Representation.md`](../doc/Besm6_Data_Representation.md)): every scalar
 is one 48-bit word, `sizeof(int) == 6`, signed integers are 41-bit and unsigned 48-bit, and
