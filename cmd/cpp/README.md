@@ -84,6 +84,16 @@ accepted and ignored. Leading whitespace before the `#` is allowed (C11 §6.10).
 | `__STDC_HOSTED__` | `1` |
 | `__DATE__` | `"Mmm dd yyyy"` |
 | `__TIME__` | `"hh:mm:ss"` |
+| `__STDC_NO_COMPLEX__` | `1` |
+| `__STDC_NO_ATOMICS__` | `1` |
+| `__STDC_NO_THREADS__` | `1` |
+| `__STDC_NO_VLA__` | `1` |
+
+The four `__STDC_NO_*` macros are §6.10.8.3 conditional-feature macros, and they are what makes
+`__STDC_HOSTED__ 1` honest: §4p6 would otherwise oblige the implementation to ship `<complex.h>`,
+`<stdatomic.h>` and `<threads.h>`, and it ships none of them — the BESM-6 has one native float
+format and no complex type, no atomic instructions, and no threads. `__STDC_NO_VLA__` reports the
+front end, which folds every array dimension to a literal and rejects one it cannot.
 
 All predefined macros are protected: `#define`/`#undef` of them (and `-D`/`-U` on them) is
 rejected per §6.10.8.4. Optional OS/architecture macros (`unix`, `vax`, …) exist as

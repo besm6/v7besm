@@ -19,6 +19,36 @@ TEST_F(Predefined, StdcHostedDefined) {
     EXPECT_TOKENS("#ifdef __STDC_HOSTED__\nHOSTED\n#endif\n", "HOSTED");
 }
 
+// §6.10.8.3: the conditional feature macros.  __STDC_HOSTED__ is 1 above, and
+// §4p6 would then oblige this implementation to supply <complex.h>,
+// <stdatomic.h> and <threads.h>.  It supplies none of them -- the BESM-6 has one
+// native float format and no complex type, no atomic instructions, and no
+// threads under this kernel -- so each absence must be announced here, which is
+// what lets a portable source #ifdef past it rather than fail to find a header.
+TEST_F(Predefined, StdcNoComplexIsOne) {
+    EXPECT_TOKENS("__STDC_NO_COMPLEX__\n", "1");
+}
+
+TEST_F(Predefined, StdcNoAtomicsIsOne) {
+    EXPECT_TOKENS("__STDC_NO_ATOMICS__\n", "1");
+}
+
+TEST_F(Predefined, StdcNoThreadsIsOne) {
+    EXPECT_TOKENS("__STDC_NO_THREADS__\n", "1");
+}
+
+// Not §4p6 -- there is no <vla.h> to miss -- but the front end folds every array
+// dimension to a literal and dies on one it cannot ("Size is not a literal"), so
+// the absence is real and worth announcing on the same footing.
+TEST_F(Predefined, StdcNoVlaIsOne) {
+    EXPECT_TOKENS("__STDC_NO_VLA__\n", "1");
+}
+
+// §6.10.8.4 covers these too: they are predefined, so neither #define nor #undef.
+TEST_F(Predefined, UndefStdcNoComplexDiagnosed) {
+    EXPECT_PP_DIAGNOSES("#undef __STDC_NO_COMPLEX__\n");
+}
+
 // §6.10.8.1: __LINE__ is the current source line number.
 TEST_F(Predefined, LineNumber) {
     // __LINE__ appears on the third line of the snippet.

@@ -28,6 +28,21 @@ static char *do_include(char *p)
     cp = filname;
     if (*cpp.tok_ptr++ == '<') { // special <> syntax
         inctype = 1;
+        // §6.10.2p4 matches the <h-char-sequence> form BEFORE any macro
+        // expansion, so the tokens between the angle brackets are taken
+        // literally however they happen to be spelled.  The bump of false_level
+        // is what says so: lookup_token expands only at level 0 (macro.c), and
+        // without it a header whose basename is also a live macro was rewritten
+        // -- `#define foo bar' turned `#include <foo.h>' into bar.h, and with a
+        // FUNCTION-like macro of that name the directive was mangled outright
+        // and dropped.  <assert.h> is the case that bites in practice: it
+        // defines assert and is not guarded, so it is meant to be included a
+        // second time.
+        //
+        // Only the two quoted forms are literal.  The computed form -- neither
+        // < nor " here -- still expands, which is what reaches the `else' below
+        // and is covered by Include.Computed.
+        ++cpp.false_level;
         for (;;) {
             cpp.out_ptr = cpp.tok_ptr = p;
             p                         = scan_token(p);
@@ -43,6 +58,7 @@ static char *do_include(char *p)
             while (cpp.tok_ptr < p)
                 *cp++ = *cpp.tok_ptr++;
         }
+        --cpp.false_level;
     } else if (cpp.tok_ptr[-1] == '"') { // regular "" syntax
         inctype = 0;
         while (cpp.tok_ptr < p)

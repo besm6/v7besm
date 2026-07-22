@@ -272,6 +272,19 @@ int main(int argc, char *argv[])
     define_symbol("__STDC__=1");           cpp.last_sym->predefined = 1;
     define_symbol("__STDC_VERSION__=201112L"); cpp.last_sym->predefined = 1;
     define_symbol("__STDC_HOSTED__=1");    cpp.last_sym->predefined = 1;
+
+    // C11 §6.10.8.3 conditional feature macros.  __STDC_HOSTED__ is 1 above, so
+    // §4p6 would otherwise oblige this implementation to ship <complex.h>,
+    // <stdatomic.h> and <threads.h>.  It does not and will not: the BESM-6 has
+    // one native float format and no complex type, no atomic instructions, and
+    // no threads under this kernel.  Announcing that here is what lets a
+    // portable source #ifdef its way past all three instead of failing to find
+    // a header.  __STDC_NO_VLA__ likewise: the front end has no variable-length
+    // arrays.
+    define_symbol("__STDC_NO_COMPLEX__=1"); cpp.last_sym->predefined = 1;
+    define_symbol("__STDC_NO_ATOMICS__=1"); cpp.last_sym->predefined = 1;
+    define_symbol("__STDC_NO_THREADS__=1"); cpp.last_sym->predefined = 1;
+    define_symbol("__STDC_NO_VLA__=1");     cpp.last_sym->predefined = 1;
     {
         time_t now    = time((time_t *)0);
         const struct tm *tm = localtime(&now);
