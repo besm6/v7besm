@@ -318,17 +318,20 @@ callers, and BESM-6 porting notes.
 ### 4.1 Interrupt priority — `spl0`/`spl1`/`spl4`/`spl5`/`spl6`/`spl7`, `splx`
 
 ```c
-void spl0(void);                   /* the base level -- void, see below         systm.h:164 */
-int  spl1(void);                   /* the raised level                          systm.h:165 */
-#define spl4() spl1()              /* the graded v7 names are aliases for spl1  systm.h:166 */
+void spl0(void);                   /* the base level -- void, see below         systm.h:171 */
+int  spl1(void);                   /* the raised level                          systm.h:172 */
+#define spl4() spl1()              /* the graded v7 names are aliases for spl1  systm.h:173 */
 #define spl5() spl1()
 #define spl6() spl1()
 #define spl7() spl1()
-void splx(int s);                                                            /* systm.h:170 */
+#define splx(s) __besm6_setpsw(s)  /* one instruction: not a routine at all      systm.h:181 */
 ```
 
 - **Purpose.** Set the processor interrupt priority level. `splN` sets a fixed level; `splx(s)`
-  restores a previously saved one.
+  restores a previously saved one. **`splx` is a macro**, not a routine — it is one `ati 021` and
+  nothing else, so there is no `splx` symbol in the kernel at all. That in turn is why
+  [sys/systm.h](../include/sys/systm.h) opens with the one `#include <besm6.h>` in the tree: six
+  files call `splx()` and have no other reason to name the intrinsics header.
 - **Return.** `spl1` returns the **previous** level (an `int` cookie); the idiom is
   `s = spl6(); … ; splx(s);`. **`spl0` returns nothing** — it is the bottom of the range, so
   nothing can be restored *below* it and no caller ever saved what it displaced. `idle()`, which
@@ -586,10 +589,7 @@ int spl1(void)
     return old;
 }
 
-void splx(int s)
-{
-    __besm6_setpsw(s);              /* the general mode write: a run-time level needs it */
-}
+#define splx(s) __besm6_setpsw(s)   /* the general mode write: a run-time level needs it */
 ```
 
 - **The interrupt-enable bit is the interrupt priority level itself** (§1, §4.1), and each `spl*`
@@ -624,11 +624,11 @@ void splx(int s)
   hand — a register-0 `vtm` with a constant mask, an `ita 021`, an `ati 021` — with no call around
   it. So each `spl*` is now one inline `vtm`, and every one of them is a call shorter.
 
-  **A branch survives, but only in `splx()`.** The mask is an immediate field of the instruction, so
+  **No branch survives anywhere.** The mask is an immediate field of the instruction, so
   `__besm6_maskpsw` demands a compile-time constant. `spl0()` and `spl1()` know their level, so each
   names its own `vtm` outright. `splx(s)` does not, and rather than branch between the two it takes
   the *other* mode write — `ati 021`, `__besm6_setpsw()` — and restores the whole word its cookie
-  carries. So all three are one instruction and none of them branches. Note `ati` is the **wider**
+  carries. Being one instruction with no branch, it is a macro and not a routine. Note `ati` is the **wider**
   write of the two: it moves ПоП, ПоК and the write-watch bit as well, which the masked `vtm` leaves
   alone. Nothing in this kernel touches those three, so a cookie carries them back unchanged.
   (These routines were briefly factored through a shared `setipl(s)`, which paid for a branch in all
@@ -702,7 +702,7 @@ the reschedule-pending flag the gates test on the way back to user mode (§3).
 | routine(s) | state |
 |------------|-------|
 | `bcopy`, `bzero` | **done** — renamed `wcopy`/`wzero` and they take a **word** count, converted by `btow()` at every call site, so the loop has no six-chars-per-word tail |
-| `spl0`…`spl7`, `splx` | **done** — two levels, not eight, so only `spl0()`/`spl1()` are compiled, `spl4()`…`spl7()` are macros for `spl1()`, and `spl0()` is `void` (nothing below it to restore). The knob is **БлПр** (one inline `vtm` per routine), not МГРП, which is a source enable armed once by `intrinit()`. Putting the level in the mode word is what lets `выпр` restore it on a gate return, as the PDP-11's `rtt` does |
+| `spl0`…`spl7`, `splx` | **done** — two levels, not eight, so only `spl0()`/`spl1()` are compiled: `spl4()`…`spl7()` are macros for `spl1()`, `splx()` is a macro for the one `ati 021` that restores a cookie, and `spl0()` is `void` (nothing below it to restore). The knob is **БлПр** (one inline `vtm` per routine), not МГРП, which is a source enable armed once by `intrinit()`. Putting the level in the mode word is what lets `выпр` restore it on a gate return, as the PDP-11's `rtt` does |
 | `cli`, `sti`, `getpsw` | **retired** — `psw.s` is deleted (§4.7). The PSW intrinsics lower to exactly the same three instructions *inline*, so the level is set in C by the `spl*` routines themselves and each is one call shorter; the gates always inlined the instruction rather than calling it. `__besm6_getpsw()` reads PSW back for the two tests that check a gate opened the level, and needs no object to link |
 | `fubyte`/`fuword`/`subyte`/`suword`, `copyin`/`copyout` | **done** — [usermem.S](../kernel/usermem.S); **no fault-recovery path**, validation is `useracc()` up front. No window either: the loop toggles БлП per word through the user map that is already loaded. Byte variants do RMW, and mind the fat-pointer marker bit |
 | `copyseg`/`clearseg`, `uflush`/`uload` | **done** — [seg.S](../kernel/seg.S), [uarea.S](../kernel/uarea.S); a two-page window bracket with a БРЗ drain either side (§4.4a) |

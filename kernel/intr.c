@@ -127,11 +127,6 @@ void intrinit(void)
     __besm6_mod(MOD_MGRP, mgrp);
 }
 
-void splx(int s)
-{
-    __besm6_setpsw(s); /* put back the mode word spl1() handed out, БлПр with it */
-}
-
 void spl0(void)
 {
     __besm6_maskpsw(PSW_KERNEL); /* clear БлПр -- delivery enabled */

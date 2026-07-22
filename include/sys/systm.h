@@ -1,6 +1,13 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
 /*
+ * The one include in this header, and it is here for splx() below: that is a macro over
+ * __besm6_setpsw(), so every caller of it needs the intrinsic declared, and six of them have
+ * no other reason to name <besm6.h>.  Nothing else here depends on it.
+ */
+#include <besm6.h>
+
+/*
  * Random set of variables
  * used by more than one
  * routine.
@@ -167,7 +174,11 @@ int spl1(void);
 #define spl5() spl1()
 #define spl6() spl1()
 #define spl7() spl1()
-void splx(int);
+/*
+ * ... and splx() is the whole of one instruction, so it is a macro too.  `s' is the mode word
+ * spl1() handed out, never a level: splx(0) would clear БлП and БлЗ.  See kernel/intr.c.
+ */
+#define splx(s) __besm6_setpsw(s)
 void mprpon(unsigned bits);  /* unmask a device's ПРП interrupts (intr.c) */
 void mgrpon(unsigned bits);  /* arm a device's ГРП bits for one exchange (intr.c) */
 void mgrpoff(unsigned bits); /* ... and disarm them again; see the pair in intr.c */

@@ -125,15 +125,18 @@ void sleep(chan_t chan, int pri)
 void wakeup(chan_t chan)
 {
 }
+/*
+ * The level is stubbed, but splx() is NOT: it is a macro over `ати' (sys/systm.h), so bio.c's
+ * `s = spl6(); ... splx(s);' brackets write the mode word for real in this test too.  spl1()
+ * must therefore hand back a mode word and not a level -- returning 0, as this did while splx()
+ * was a function that ignored it, would clear БлП and БлЗ and map the kernel's own data.
+ */
 void spl0(void)
 {
 }
 int spl1(void)
 {
-    return (0);
-}
-void splx(int s)
-{
+    return __besm6_getpsw();
 }
 void panic(char *s)
 {

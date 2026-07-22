@@ -366,7 +366,11 @@ Loose ends the finished work left behind. None blocks 18.
     write at all: `__besm6_setpsw()` (`ati 021`) writes the whole mode word, so `splx()` just puts
     back what `spl1()`'s `ita 021` handed out. One instruction each, none of them branching.
     (These three were briefly factored through a shared `static setipl(s)`, which paid for a branch
-    in all of them.)
+    in all of them.) **`splx` is therefore a macro** and has no symbol in the kernel: one `ati 021`
+    is not worth a call. That is what put the tree's only `#include <besm6.h>` into a header —
+    `sys/systm.h` needs it, because six files call `splx()` and name the intrinsics nowhere else.
+    It also made `biotest`'s stubs load-bearing: their `spl1()` returned 0, which was harmless
+    while `splx()` was a stub that ignored it and is a mode word that clears БлП/БлЗ now.
   * **DONE: `curipl` is gone, and with it the last software shadow of the level.** PSW reads back —
     unlike РП, РЗ, МГРП and МПРП, which is why *those* keep shadows — so the level had two copies
     that could disagree, and did: `extintr()` had to close with `curipl = s` to repair the drift

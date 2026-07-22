@@ -673,7 +673,7 @@ the hardware overwrites the instant an interrupt is taken, and the tail re-stash
 cells a nested gate would spill into. An interrupt anywhere in that window returns the user to the
 wrong mode word. `intrgate` arrives already blocked, but the three synchronous gates opened the level
 for their C call (§9) and what the C side leaves behind is not knowable from here — an `spl` bracket
-ending in `splx(0)` is enough, and `sleep()` contains exactly one. One instruction at the top covers
+whose closing `splx()` puts an *open* level back is enough, and `sleep()` contains exactly one. One instruction at the top covers
 every door and every future tail; the alternative, a `cli()` in each C exit path, would have to be
 got right once per path forever.
 

@@ -516,10 +516,7 @@ int spl1(void)
     return old;
 }
 
-void splx(int s)                    /* a run-time level cannot ride an immediate field */
-{
-    __besm6_setpsw(s);
-}
+#define splx(s) __besm6_setpsw(s)   /* a run-time level cannot ride an immediate field */
 
 void mgrpon(unsigned bits)          /* arm a device's bits for one exchange */
 {
@@ -544,7 +541,8 @@ The mask is an immediate field of the instruction and cannot be arithmetic, so e
 own constant (§2.3). `spl0()` and `spl1()` know theirs and name it. `splx(s)` does not, and rather
 than branch between the two it uses the *general* mode write, `__besm6_setpsw()` — which is why the
 cookie is the whole PSW word and not a small integer, and why `splx(0)` would be a catastrophe
-rather than a level. All three are one instruction and none branches. What the intrinsics buy over
+rather than a level. All three are one instruction and none branches; `splx` is a macro on that
+account, and has no symbol in the kernel at all. What the intrinsics buy over
 the out-of-line `cli`/`sti`/`getpsw` they replaced is the **call**, on every `spl*` in the kernel.
 
 This is what [`kernel/intr.c`](../kernel/intr.c) does; the reasoning above is written up there in
