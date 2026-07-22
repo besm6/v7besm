@@ -1,4 +1,4 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // clang-format off
 #include "sys/types.h"
@@ -13,19 +13,15 @@
 #include "sys/seg.h"
 // clang-format on
 
-/*
- * Priority for tracing
- */
+// Priority for tracing
 #define IPCPRI PZERO
 
-/*
- * Tracing variables.
- * Used to pass trace command from
- * parent to child being traced.
- * This data base cannot be
- * shared and is locked
- * per user.
- */
+// Tracing variables.
+// Used to pass trace command from
+// parent to child being traced.
+// This data base cannot be
+// shared and is locked
+// per user.
 struct {
     int ip_lock;
     int ip_req;
@@ -33,13 +29,11 @@ struct {
     int ip_data;
 } ipc;
 
-/*
- * Send the specified signal to
- * all processes with 'pgrp' as
- * process group.
- * Called by tty.c for quits and
- * interrupts.
- */
+// Send the specified signal to
+// all processes with 'pgrp' as
+// process group.
+// Called by tty.c for quits and
+// interrupts.
 void signal(register int pgrp, int sig)
 {
     register struct proc *p;
@@ -51,14 +45,12 @@ void signal(register int pgrp, int sig)
             psignal(p, sig);
 }
 
-/*
- * Send the specified signal to
- * the specified process.
- */
+// Send the specified signal to
+// the specified process.
 void psignal(register struct proc *p, register int sig)
 {
-    /* v7 wrote this as `(unsigned)sig >= NSIG' to fold the negative test in;
-     * here that costs a b$uge call, and the two signed tests are inline. */
+    // v7 wrote this as `(unsigned)sig >= NSIG' to fold the negative test in;
+    // here that costs a b$uge call, and the two signed tests are inline.
     if (sig < 0 || sig >= NSIG)
         return;
     if (sig)
@@ -69,17 +61,15 @@ void psignal(register struct proc *p, register int sig)
         setrun(p);
 }
 
-/*
- * Returns true if the current
- * process has a signal to process.
- * This is asked at least once
- * each time a process enters the
- * system.
- * A signal does not do anything
- * directly to a process; it sets
- * a flag that asks the process to
- * do something to itself.
- */
+// Returns true if the current
+// process has a signal to process.
+// This is asked at least once
+// each time a process enters the
+// system.
+// A signal does not do anything
+// directly to a process; it sets
+// a flag that asks the process to
+// do something to itself.
 int issig()
 {
     register int n;
@@ -95,12 +85,10 @@ int issig()
     return (0);
 }
 
-/*
- * Enter the tracing STOP state.
- * In this state, the parent is
- * informed and the process is able to
- * receive commands from the parent.
- */
+// Enter the tracing STOP state.
+// In this state, the parent is
+// informed and the process is able to
+// receive commands from the parent.
 void stop()
 {
     register struct proc *pp, *cp;
@@ -120,13 +108,11 @@ loop:
     exit(fsig(u.u_procp));
 }
 
-/*
- * Perform the action specified by
- * the current signal.
- * The usual sequence is:
- *	if(issig())
- *		psig();
- */
+// Perform the action specified by
+// the current signal.
+// The usual sequence is:
+// 	if(issig())
+// 		psig();
 void psig()
 {
     register int n, p;
@@ -162,10 +148,8 @@ void psig()
     exit(n);
 }
 
-/*
- * find the signal in bit-position
- * representation in p_sig.
- */
+// find the signal in bit-position
+// representation in p_sig.
 int fsig(struct proc *p)
 {
     register int n, i;
@@ -179,16 +163,14 @@ int fsig(struct proc *p)
     return (0);
 }
 
-/*
- * Create a core image on the file "core"
- * If you are looking for protection glitches,
- * there are probably a wealth of them here
- * when this occurs to a suid command.
- *
- * It writes USIZE block of the
- * user.h area followed by the entire
- * data+stack segments.
- */
+// Create a core image on the file "core"
+// If you are looking for protection glitches,
+// there are probably a wealth of them here
+// when this occurs to a suid command.
+//
+// It writes USIZE block of the
+// user.h area followed by the entire
+// data+stack segments.
 int core()
 {
     register struct inode *ip;
@@ -207,10 +189,8 @@ int core()
     if (!access(ip, IWRITE) && (ip->i_mode & IFMT) == IFREG && u.u_uid == u.u_ruid) {
         itrunc(ip);
         u.u_offset = 0;
-        /*
-         * The u-area is a single page: struct user at the bottom, the kernel
-         * stack above it.  One block.
-         */
+        // The u-area is a single page: struct user at the bottom, the kernel
+        // stack above it.  One block.
         u.u_base   = (caddr_t)&u;
         u.u_count  = wtob(USIZE);
         u.u_segflg = 1;
@@ -226,18 +206,16 @@ int core()
     return (u.u_error == 0);
 }
 
-/*
- * Grow the stack to include the faulting virtual PAGE.  A page number is all the machine
- * reports -- ГРП bits 5-9, see trap.c -- so that is what this takes.  True return if it grew.
- *
- * The stack occupies virtual pages USTKPAGE .. USTKPAGE + u_ssize/PGSZ - 1, growing UP, and
- * its physical pages are the tail of the image (sureg(), utab.c).  A new page is therefore
- * appended at BOTH ends at once -- the next higher virtual page and the end of the image --
- * so every existing stack page keeps the address it had.  With an upward stack there is
- * nothing to move, so growing the stack needs no copyseg shuffle at all.
- *
- * The ceiling needs no guard of its own: estabur() rejects ns > (NPAGE - USTKPAGE) * PGSZ.
- */
+// Grow the stack to include the faulting virtual PAGE.  A page number is all the machine
+// reports -- ГРП bits 5-9, see trap.c -- so that is what this takes.  True return if it grew.
+//
+// The stack occupies virtual pages USTKPAGE .. USTKPAGE + u_ssize/PGSZ - 1, growing UP, and
+// its physical pages are the tail of the image (sureg(), utab.c).  A new page is therefore
+// appended at BOTH ends at once -- the next higher virtual page and the end of the image --
+// so every existing stack page keeps the address it had.  With an upward stack there is
+// nothing to move, so growing the stack needs no copyseg shuffle at all.
+//
+// The ceiling needs no guard of its own: estabur() rejects ns > (NPAGE - USTKPAGE) * PGSZ.
 int grow(int pg)
 {
     register int si, i;
@@ -245,21 +223,19 @@ int grow(int pg)
     register int a;
 
     if (pg < USTKPAGE || pg >= NPAGE)
-        return (0); /* not a stack page at all */
+        return (0); // not a stack page at all
     si = (pg - USTKPAGE + 1) * PGSZ - u.u_ssize;
     if (si <= 0)
-        return (0); /* already mapped: this was not a stack fault */
+        return (0); // already mapped: this was not a stack fault
     if (si < SINCR)
         si = SINCR;
-    /*
-     * estabur() assigns u_ssize itself, so there is no trailing `u.u_ssize += si' here
-     * -- that would count the growth twice.
-     */
+    // estabur() assigns u_ssize itself, so there is no trailing `u.u_ssize += si' here
+    // -- that would count the growth twice.
     if (estabur(u.u_tsize, u.u_dsize, u.u_ssize + si, u.u_sep, RO))
         return (0);
     p = u.u_procp;
     expand(p->p_size + si);
-    /* The new pages are the tail of the grown image; expand() may have relocated it. */
+    // The new pages are the tail of the grown image; expand() may have relocated it.
     a = p->p_addr + p->p_size - si;
     for (i = si; i > 0; i -= PGSZ) {
         clearseg(a);
@@ -268,9 +244,7 @@ int grow(int pg)
     return (1);
 }
 
-/*
- * sys-trace system call.
- */
+// sys-trace system call.
 void ptrace()
 {
     register struct proc *p;
@@ -310,11 +284,9 @@ found:
     wakeup((chan_t)&ipc);
 }
 
-/*
- * Code that the child process
- * executes to implement the command
- * of the parent process in tracing.
- */
+// Code that the child process
+// executes to implement the command
+// of the parent process in tracing.
 int procxmt()
 {
     register int i;
@@ -327,8 +299,8 @@ int procxmt()
     ipc.ip_req = 0;
     wakeup((chan_t)&ipc);
     switch (i) {
-    /* read user I */
-    /* read user D */
+    // read user I
+    // read user D
     case 1:
     case 2:
         if (fubyte((caddr_t)ipc.ip_addr) == -1)
@@ -336,21 +308,19 @@ int procxmt()
         ipc.ip_data = fuword((caddr_t)ipc.ip_addr);
         break;
 
-    /* read u */
+    // read u
     case 3:
-        /* the u-area is one page; ip_addr is a word index into it */
+        // the u-area is one page; ip_addr is a word index into it
         i = (int)ipc.ip_addr;
         if (i < 0 || i >= USIZE)
             goto error;
         ipc.ip_data = ((int *)&u)[i];
         break;
 
-    /* write user I */
-    /* Must set up to allow writing */
+    // write user I
+    // Must set up to allow writing
     case 4:
-        /*
-         * If text, must assure exclusive use
-         */
+        // If text, must assure exclusive use
         if ((xp = u.u_procp->p_textp)) {
             if (xp->x_count != 1 || xp->x_iptr->i_mode & ISVTX)
                 goto error;
@@ -366,45 +336,45 @@ int procxmt()
             xp->x_flag |= XWRIT;
         break;
 
-    /* write user D */
+    // write user D
     case 5:
         if (suword((caddr_t)ipc.ip_addr, 0) < 0)
             goto error;
         suword((caddr_t)ipc.ip_addr, ipc.ip_data);
         break;
 
-    /* write u */
+    // write u
     case 6:
-        /* ip_addr is a word index into the u-area, as in case 3 above */
+        // ip_addr is a word index into the u-area, as in case 3 above
         i = (int)ipc.ip_addr;
         p = &((int *)&u)[i];
         for (i = 0; i < 16; i++)
             if (p == &u.u_ar0[regloc[i]])
                 goto ok;
-        /* TODO 17: there is no flags register in the frame; single-step /
-         * address-break is М034/М035 (rewritten, not remapped). */
+        // TODO 17: there is no flags register in the frame; single-step /
+        // address-break is М034/М035 (rewritten, not remapped).
         goto error;
 
     ok:
         *p = ipc.ip_data;
         break;
 
-    /* set signal and continue */
-    /*  one version causes a trace-trap */
+    // set signal and continue
+    // one version causes a trace-trap
     case 9:
-        /* TODO 17: arm single-step via the address-break registers М034/М035
-         * (not a flag bit).  Falls through to case 7 to set the resume PC. */
+        // TODO 17: arm single-step via the address-break registers М034/М035
+        // (not a flag bit).  Falls through to case 7 to set the resume PC.
     case 7:
         if ((int)ipc.ip_addr != 1)
-            /* The single RET slot holds whichever return the stopping gate saved
-             * (ERET for a syscall stop, IRET for a fault/signal stop). */
+            // The single RET slot holds whichever return the stopping gate saved
+            // (ERET for a syscall stop, IRET for a fault/signal stop).
             u.u_ar0[RET] = (int)ipc.ip_addr;
         u.u_procp->p_sig = 0;
         if (ipc.ip_data)
             psignal(u.u_procp, ipc.ip_data);
         return (1);
 
-    /* force exit */
+    // force exit
     case 8:
         exit(fsig(u.u_procp));
 

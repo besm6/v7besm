@@ -1,12 +1,10 @@
-/*
- * Serial / terminal driver -- SKELETON.
- *
- * The terminal lines hang off the machine's 24-line multiplexer, reached through the
- * 033 «увв» channel and answering in ПРП/ГРП (doc/Besm6_Peripherals.md).  None of that
- * is written yet: what is here is the tty/line-discipline scaffolding and the public
- * surface that conf.c wires into cdevsw, as stubs, so the kernel builds and links while
- * the real multiplexer driver is written.
- */
+// Serial / terminal driver -- SKELETON.
+//
+// The terminal lines hang off the machine's 24-line multiplexer, reached through the
+// 033 «увв» channel and answering in ПРП/ГРП (doc/Besm6_Peripherals.md).  None of that
+// is written yet: what is here is the tty/line-discipline scaffolding and the public
+// surface that conf.c wires into cdevsw, as stubs, so the kernel builds and links while
+// the real multiplexer driver is written.
 
 // clang-format off
 #include "sys/types.h"
@@ -19,29 +17,27 @@
 // clang-format on
 
 #define NSR    2
-#define SSPEED 13 /* 9600 bps */
+#define SSPEED 13 // 9600 bps
 
-/*
- * Speed table (kept: srparam's zero-speed guard indexes it).
- */
+// Speed table (kept: srparam's zero-speed guard indexes it).
 short srstab[] = {
     // clang-format off
-    0,      /* 0 */
-    2304,   /* 50 */
-    1536,   /* 75 */
-    1047,   /* 110 */
-    857,    /* 134.5 */
-    768,    /* 150 */
-    576,    /* 200 */
-    384,    /* 300 */
-    192,    /* 600 */
-    96,     /* 1200 */
-    64,     /* 1800 */
-    48,     /* 2400 */
-    24,     /* 4800 */
-    12,     /* 9600 */
-    6,      /* 19200 */
-    3       /* 38400 */
+    0,      // 0
+    2304,   // 50
+    1536,   // 75
+    1047,   // 110
+    857,    // 134.5
+    768,    // 150
+    576,    // 200
+    384,    // 300
+    192,    // 600
+    96,     // 1200
+    64,     // 1800
+    48,     // 2400
+    24,     // 4800
+    12,     // 9600
+    6,      // 19200
+    3       // 38400
     // clang-format on
 };
 
@@ -61,7 +57,7 @@ void sropen(dev_t dev, int flag)
         return;
     }
     tp          = &sr[d];
-    tp->t_addr  = d; /* line number; the BESM-6 mux address, TBD */
+    tp->t_addr  = d; // line number; the BESM-6 mux address, TBD
     tp->t_oproc = srstart;
     if ((tp->t_state & ISOPEN) == 0) {
         tp->t_state  = CARR_ON;
@@ -91,7 +87,7 @@ void srwrite(dev_t dev)
 
 void srintr(dev_t dev)
 {
-    /* TODO: BESM-6 terminal multiplexer receive/transmit interrupt (ПРП/ГРП). */
+    // TODO: BESM-6 terminal multiplexer receive/transmit interrupt (ПРП/ГРП).
 }
 
 void srioctl(dev_t dev, int cmd, caddr_t addr, int flag)
@@ -119,7 +115,7 @@ void srstart(struct tty *tp)
         } else {
             tp->t_char = c;
             tp->t_state |= BUSY;
-            /* TODO: BESM-6 terminal multiplexer -- transmit `c'. */
+            // TODO: BESM-6 terminal multiplexer -- transmit `c'.
         }
         if (tp->t_outq.c_cc <= TTLOWAT && tp->t_state & ASLEEP) {
             tp->t_state &= ~ASLEEP;
@@ -132,5 +128,5 @@ void srparam(struct tty *tp)
 {
     if (srstab[(unsigned)tp->t_ispeed] == 0)
         return;
-    /* TODO: BESM-6 terminal multiplexer -- program line speed / framing. */
+    // TODO: BESM-6 terminal multiplexer -- program line speed / framing.
 }

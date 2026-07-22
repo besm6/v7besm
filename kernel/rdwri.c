@@ -1,4 +1,4 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // clang-format off
 #include "sys/types.h"
@@ -11,16 +11,14 @@
 #include "sys/conf.h"
 // clang-format on
 
-/*
- * Read the file corresponding to
- * the inode pointed at by the argument.
- * The actual read arguments are found
- * in the variables:
- *	u_base		core address for destination
- *	u_offset	byte offset in file
- *	u_count		number of bytes to read
- *	u_segflg	read to kernel/user/user I
- */
+// Read the file corresponding to
+// the inode pointed at by the argument.
+// The actual read arguments are found
+// in the variables:
+// 	u_base		core address for destination
+// 	u_offset	byte offset in file
+// 	u_count		number of bytes to read
+// 	u_segflg	read to kernel/user/user I
 void readi(register struct inode *ip)
 {
     struct buf *bp;
@@ -45,12 +43,10 @@ void readi(register struct inode *ip)
     }
 
     do {
-        /*
-         * A divide and a remainder, not a shift and a mask: BSIZE is 3072 bytes and
-         * 3072 is not a power of two.  One b$div per pass of this loop -- that is,
-         * per block -- which is noise beside the bread() below.  `on' stays a BYTE
-         * offset, because b_addr is a fat pointer and `+ on' is byte arithmetic.
-         */
+        // A divide and a remainder, not a shift and a mask: BSIZE is 3072 bytes and
+        // 3072 is not a power of two.  One b$div per pass of this loop -- that is,
+        // per block -- which is noise beside the bread() below.  `on' stays a BYTE
+        // offset, because b_addr is a fat pointer and `+ on' is byte arithmetic.
         lbn = bn = u.u_offset / BSIZE;
         on       = u.u_offset % BSIZE;
         n        = min(BSIZE - on, u.u_count);
@@ -81,16 +77,14 @@ void readi(register struct inode *ip)
     } while (u.u_error == 0 && u.u_count != 0 && n > 0);
 }
 
-/*
- * Write the file corresponding to
- * the inode pointed at by the argument.
- * The actual write arguments are found
- * in the variables:
- *	u_base		core address for source
- *	u_offset	byte offset in file
- *	u_count		number of bytes to write
- *	u_segflg	write to kernel/user/user I
- */
+// Write the file corresponding to
+// the inode pointed at by the argument.
+// The actual write arguments are found
+// in the variables:
+// 	u_base		core address for source
+// 	u_offset	byte offset in file
+// 	u_count		number of bytes to write
+// 	u_segflg	write to kernel/user/user I
 void writei(register struct inode *ip)
 {
     struct buf *bp;
@@ -114,7 +108,7 @@ void writei(register struct inode *ip)
         return;
 
     do {
-        /* Divide and remainder, not shift and mask; see readi() above. */
+        // Divide and remainder, not shift and mask; see readi() above.
         bn = u.u_offset / BSIZE;
         on = u.u_offset % BSIZE;
         n  = min(BSIZE - on, u.u_count);
@@ -139,10 +133,8 @@ void writei(register struct inode *ip)
     } while (u.u_error == 0 && u.u_count != 0);
 }
 
-/*
- * Return the logical maximum
- * of the 2 arguments.
- */
+// Return the logical maximum
+// of the 2 arguments.
 int max(int a, int b)
 {
     if (a > b)
@@ -150,10 +142,8 @@ int max(int a, int b)
     return (b);
 }
 
-/*
- * Return the logical minimum
- * of the 2 arguments.
- */
+// Return the logical minimum
+// of the 2 arguments.
 int min(int a, int b)
 {
     if (a < b)
@@ -161,21 +151,19 @@ int min(int a, int b)
     return (b);
 }
 
-/*
- * Move n bytes at byte location
- * &bp->b_un.b_addr[o] to/from (flag) the
- * user/kernel (u.segflg) area starting at u.base.
- * Update all the arguments by the number
- * of bytes moved.
- *
- * There are 2 algorithms,
- * if source address, dest address and count
- * are all even in a user copy,
- * then the machine language copyin/copyout
- * is called.
- * If not, its done byte-by-byte with
- * cpass and passc.
- */
+// Move n bytes at byte location
+// &bp->b_un.b_addr[o] to/from (flag) the
+// user/kernel (u.segflg) area starting at u.base.
+// Update all the arguments by the number
+// of bytes moved.
+//
+// There are 2 algorithms,
+// if source address, dest address and count
+// are all even in a user copy,
+// then the machine language copyin/copyout
+// is called.
+// If not, its done byte-by-byte with
+// cpass and passc.
 void iomove(register caddr_t cp, register int n, int flag)
 {
     register int t;
@@ -196,7 +184,7 @@ void iomove(register caddr_t cp, register int n, int flag)
         u.u_offset += n;
         u.u_count -= n;
         return;
-    } /* XXX even addresses */
+    } // XXX even addresses
     if (flag == B_WRITE) {
         do {
             if ((t = cpass()) < 0)

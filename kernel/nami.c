@@ -1,4 +1,4 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // clang-format off
 #include "sys/types.h"
@@ -11,19 +11,17 @@
 #include "sys/buf.h"
 // clang-format on
 
-struct inode *mpxip; /* mpx virtual inode */
+struct inode *mpxip; // mpx virtual inode
 
-/*
- * Convert a pathname into a pointer to
- * an inode. Note that the inode is locked.
- *
- * func = function called to get next char of name
- *	&uchar if name is in user space
- *	&schar if name is in system space
- * flag = 0 if name is sought
- *	1 if name is to be created
- *	2 if name is to be deleted
- */
+// Convert a pathname into a pointer to
+// an inode. Note that the inode is locked.
+//
+// func = function called to get next char of name
+// 	&uchar if name is in user space
+// 	&schar if name is in system space
+// flag = 0 if name is sought
+// 	1 if name is to be created
+// 	2 if name is to be deleted
 struct inode *namei(int (*func)(void), int flag)
 {
     register struct inode *dp;
@@ -35,10 +33,8 @@ struct inode *namei(int (*func)(void), int flag)
     off_t eo;
     int ent, on;
 
-    /*
-     * If name starts with '/' start from
-     * root; otherwise start from current dir.
-     */
+    // If name starts with '/' start from
+    // root; otherwise start from current dir.
 
     dp = u.u_cdir;
     if ((c = (*func)()) == '/')
@@ -51,21 +47,17 @@ struct inode *namei(int (*func)(void), int flag)
         u.u_error = ENOENT;
 
 cloop:
-    /*
-     * Here dp contains pointer
-     * to last component matched.
-     */
+    // Here dp contains pointer
+    // to last component matched.
 
     if (u.u_error)
         goto out;
     if (c == '\0')
         return (dp);
 
-    /*
-     * If there is another component,
-     * Gather up name into
-     * users' dir buffer.
-     */
+    // If there is another component,
+    // Gather up name into
+    // users' dir buffer.
 
     cp = &u.u_dbuf[0];
     while (c != '/' && c != '\0' && u.u_error == 0) {
@@ -87,10 +79,8 @@ cloop:
     }
 
 seloop:
-    /*
-     * dp must be a directory and
-     * must have X permission.
-     */
+    // dp must be a directory and
+    // must have X permission.
 
     if ((dp->i_mode & IFMT) != IFDIR)
         u.u_error = ENOTDIR;
@@ -98,9 +88,7 @@ seloop:
     if (u.u_error)
         goto out;
 
-    /*
-     * set up to search a directory
-     */
+    // set up to search a directory
     u.u_offset = 0;
     u.u_segflg = 1;
     eo         = 0;
@@ -108,11 +96,9 @@ seloop:
 
 eloop:
 
-    /*
-     * If at the end of the directory,
-     * the search failed. Report what
-     * is appropriate as per flag.
-     */
+    // If at the end of the directory,
+    // the search failed. Report what
+    // is appropriate as per flag.
 
     if (u.u_offset >= dp->i_size) {
         if (bp != NULL)
@@ -131,24 +117,20 @@ eloop:
         goto out;
     }
 
-    /*
-     * Work in ENTRY numbers, not byte offsets.  A struct direct is DIRWORDS words,
-     * so DIRPB of them tile a block exactly and both the block number and the slot
-     * within it are a shift and a mask -- the arithmetic v7 had, recovered.  Only
-     * the byte-offset-to-entry step is a divide, and DIRENTSZ is a constant.
-     *
-     * The old code masked the BYTE offset with BMASK, which described a 512-byte
-     * block while a block is 3072 bytes: it re-read the block every 512 bytes and
-     * indexed from the wrong base in between.
-     */
+    // Work in ENTRY numbers, not byte offsets.  A struct direct is DIRWORDS words,
+    // so DIRPB of them tile a block exactly and both the block number and the slot
+    // within it are a shift and a mask -- the arithmetic v7 had, recovered.  Only
+    // the byte-offset-to-entry step is a divide, and DIRENTSZ is a constant.
+    //
+    // The old code masked the BYTE offset with BMASK, which described a 512-byte
+    // block while a block is 3072 bytes: it re-read the block every 512 bytes and
+    // indexed from the wrong base in between.
     ent = u.u_offset / DIRENTSZ;
     on  = ent & DIRMASK;
 
-    /*
-     * If offset is on a block boundary,
-     * read the next directory block.
-     * Release previous if it exists.
-     */
+    // If offset is on a block boundary,
+    // read the next directory block.
+    // Release previous if it exists.
 
     if (on == 0 || bp == NULL) {
         if (bp != NULL)
@@ -160,13 +142,11 @@ eloop:
         }
     }
 
-    /*
-     * Note first empty directory slot
-     * in eo for possible creat.
-     * String compare the directory entry
-     * and the current component.
-     * If they do not match, go back to eloop.
-     */
+    // Note first empty directory slot
+    // in eo for possible creat.
+    // String compare the directory entry
+    // and the current component.
+    // If they do not match, go back to eloop.
 
     wcopy((caddr_t)&bp->b_un.b_dir[on], (caddr_t)&u.u_dent, DIRWORDS);
     u.u_offset += DIRENTSZ;
@@ -179,11 +159,9 @@ eloop:
         if (u.u_dbuf[i] != u.u_dent.d_name[i])
             goto eloop;
 
-    /*
-     * Here a component matched in a directory.
-     * If there is more pathname, go back to
-     * cloop, otherwise return.
-     */
+    // Here a component matched in a directory.
+    // If there is more pathname, go back to
+    // cloop, otherwise return.
 
     if (bp != NULL)
         brelse(bp);
@@ -216,19 +194,15 @@ out:
     return (NULL);
 }
 
-/*
- * Return the next character from the
- * kernel string pointed at by dirp.
- */
+// Return the next character from the
+// kernel string pointed at by dirp.
 int schar()
 {
     return (*u.u_dirp++ & 0377);
 }
 
-/*
- * Return the next character from the
- * user string pointed at by dirp.
- */
+// Return the next character from the
+// user string pointed at by dirp.
 int uchar()
 {
     register int c;

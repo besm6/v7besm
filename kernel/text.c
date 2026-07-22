@@ -1,4 +1,4 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // clang-format off
 #include "sys/types.h"
@@ -18,47 +18,45 @@ void xexpand(register struct text *xp);
 void xccdec(register struct text *xp);
 void xuntext(register struct text *xp);
 
-/*
- * Swap out process p.
- * The ff flag causes its core to be freed--
- * it may be off when called to create an image for a
- * child process in newproc.
- * Os is the old size of the data area of the process,
- * and is supplied during core expansion swaps.
- *
- * panic: out of swap space
- *
- * ---------------------------------------------------------------------------------------
- * THE U-AREA INVARIANT.  All of it, in one place, because scattering it is a footgun.
- *
- * On this machine the live u-area is a fixed PHYSICAL page at UBASE, not a page mapped at a
- * fixed virtual address, so `u' is NOT part of the current process's image: the copy sitting
- * in the image at p_addr is stale between context switches.  `uhome' names the image the
- * live u-area belongs to, and resume() (kernel/switch.s) keeps the two in step -- it flushes
- * the outgoing u to `uhome' and loads the incoming one, whenever they differ.
- *
- * Which means ANYTHING ELSE THAT READS OR FREES THE CURRENT PROCESS'S IMAGE has to say so.
- * There are five such places, and only two of them are obvious:
- *
- *   1. HERE, below.  swap() DMAs the image straight out of physical memory, so an unflushed
- *      u page would put a stale struct user -- stale u_upt, stale labels, stale kernel stack
- *      -- on the disk.  The test is `p->p_addr == uhome', NOT "p is the current process":
- *      newproc() calls xswap() on the CHILD, whose p_addr is still the parent's image.
- *      Doing it here rather than at the four call sites (sched(), newproc(), expand(),
- *      xexpand()) is what makes those four correct without auditing them.
- *
- *   2. ... and if `ff' says the core is about to be freed, the live u-area is left with no
- *      home at all.  Saying NOUHOME is not tidiness: the next resume() would otherwise flush
- *      1024 words into core that malloc() may already have handed to somebody else.
- *
- *   3. newproc(), which copies the parent's image to build the child's (kernel/slp.c).
- *   4. expand(), which copies the image to a new address -- and skips the u page, because
- *      the live copy is authoritative and it sets uhome to the new address instead.
- *   5. exit(), which frees the image outright (kernel/sys1.c).  Same hazard as 2.
- *
- * A SIXTH, added later and forgotten, will be a very confusing bug.  See kernel/TODO.md.
- * ---------------------------------------------------------------------------------------
- */
+// Swap out process p.
+// The ff flag causes its core to be freed--
+// it may be off when called to create an image for a
+// child process in newproc.
+// Os is the old size of the data area of the process,
+// and is supplied during core expansion swaps.
+//
+// panic: out of swap space
+//
+// ---------------------------------------------------------------------------------------
+// THE U-AREA INVARIANT.  All of it, in one place, because scattering it is a footgun.
+//
+// On this machine the live u-area is a fixed PHYSICAL page at UBASE, not a page mapped at a
+// fixed virtual address, so `u' is NOT part of the current process's image: the copy sitting
+// in the image at p_addr is stale between context switches.  `uhome' names the image the
+// live u-area belongs to, and resume() (kernel/switch.s) keeps the two in step -- it flushes
+// the outgoing u to `uhome' and loads the incoming one, whenever they differ.
+//
+// Which means ANYTHING ELSE THAT READS OR FREES THE CURRENT PROCESS'S IMAGE has to say so.
+// There are five such places, and only two of them are obvious:
+//
+//   1. HERE, below.  swap() DMAs the image straight out of physical memory, so an unflushed
+//      u page would put a stale struct user -- stale u_upt, stale labels, stale kernel stack
+//      -- on the disk.  The test is `p->p_addr == uhome', NOT "p is the current process":
+//      newproc() calls xswap() on the CHILD, whose p_addr is still the parent's image.
+//      Doing it here rather than at the four call sites (sched(), newproc(), expand(),
+//      xexpand()) is what makes those four correct without auditing them.
+//
+//   2. ... and if `ff' says the core is about to be freed, the live u-area is left with no
+//      home at all.  Saying NOUHOME is not tidiness: the next resume() would otherwise flush
+//      1024 words into core that malloc() may already have handed to somebody else.
+//
+//   3. newproc(), which copies the parent's image to build the child's (kernel/slp.c).
+//   4. expand(), which copies the image to a new address -- and skips the u page, because
+//      the live copy is authoritative and it sets uhome to the new address instead.
+//   5. exit(), which frees the image outright (kernel/sys1.c).  Same hazard as 2.
+//
+// A SIXTH, added later and forgotten, will be a very confusing bug.  See kernel/TODO.md.
+// ---------------------------------------------------------------------------------------
 void xswap(register struct proc *p, int ff, int os)
 {
     register int a;
@@ -71,12 +69,12 @@ void xswap(register struct proc *p, int ff, int os)
     p->p_flag |= SLOCK;
     xccdec(p->p_textp);
     if (p->p_addr == uhome)
-        uflush(uhome); /* ... or the image goes to disk with a stale u page */
+        uflush(uhome); // ... or the image goes to disk with a stale u page
     swap(a, p->p_addr, os, B_WRITE);
     if (ff) {
         mfree(coremap, os, p->p_addr);
         if (p->p_addr == uhome)
-            uhome = NOUHOME; /* the home we just flushed to no longer exists */
+            uhome = NOUHOME; // the home we just flushed to no longer exists
     }
     p->p_addr = a;
     p->p_flag &= ~(SLOAD | SLOCK);
@@ -87,10 +85,8 @@ void xswap(register struct proc *p, int ff, int os)
     }
 }
 
-/*
- * relinquish use of the shared text segment
- * of a process.
- */
+// relinquish use of the shared text segment
+// of a process.
 void xfree()
 {
     register struct text *xp;
@@ -115,16 +111,14 @@ void xfree()
         xccdec(xp);
 }
 
-/*
- * Attach to a shared text segment.
- * If there is no shared text, just return.
- * If there is, hook up to it:
- * if it is not currently being used, it has to be read
- * in from the inode (ip); the written bit is set to force it
- * to be written out as appropriate.
- * If it is being used, but is not currently in core,
- * a swap has to be done to get it back.
- */
+// Attach to a shared text segment.
+// If there is no shared text, just return.
+// If there is, hook up to it:
+// if it is not currently being used, it has to be read
+// in from the inode (ip); the written bit is set to force it
+// to be written out as appropriate.
+// If it is being used, but is not currently in core,
+// a swap has to be done to get it back.
 void xalloc(register struct inode *ip)
 {
     register struct text *xp;
@@ -181,12 +175,10 @@ void xalloc(register struct inode *ip)
     xp->x_flag = XWRIT;
 }
 
-/*
- * Assure core for text segment
- * Text must be locked to keep someone else from
- * freeing it in the meantime.
- * x_ccount must be 0.
- */
+// Assure core for text segment
+// Text must be locked to keep someone else from
+// freeing it in the meantime.
+// x_ccount must be 0.
 void xexpand(register struct text *xp)
 {
     if ((xp->x_caddr = malloc(coremap, xp->x_size)) != NULL) {
@@ -204,12 +196,10 @@ void xexpand(register struct text *xp)
     xunlock(xp);
     u.u_procp->p_flag |= SSWAP;
     qswtch();
-    /* no return */
+    // no return
 }
 
-/*
- * Lock and unlock a text segment from swapping
- */
+// Lock and unlock a text segment from swapping
 void xlock(register struct text *xp)
 {
     while (xp->x_flag & XLOCK) {
@@ -226,10 +216,8 @@ void xunlock(register struct text *xp)
     xp->x_flag &= ~(XLOCK | XWANT);
 }
 
-/*
- * Decrement the in-core usage count of a shared text segment.
- * When it drops to zero, free the core space.
- */
+// Decrement the in-core usage count of a shared text segment.
+// When it drops to zero, free the core space.
 void xccdec(register struct text *xp)
 {
     if (xp == NULL || xp->x_ccount == 0)
@@ -245,10 +233,8 @@ void xccdec(register struct text *xp)
     xunlock(xp);
 }
 
-/*
- * free the swap image of all unused saved-text text segments
- * which are from device dev (used by umount system call).
- */
+// free the swap image of all unused saved-text text segments
+// which are from device dev (used by umount system call).
 void xumount(register int dev)
 {
     register struct text *xp;
@@ -258,9 +244,7 @@ void xumount(register int dev)
             xuntext(xp);
 }
 
-/*
- * remove a shared text segment from the text table, if possible.
- */
+// remove a shared text segment from the text table, if possible.
 void xrele(register struct inode *ip)
 {
     register struct text *xp;
@@ -272,10 +256,8 @@ void xrele(register struct inode *ip)
             xuntext(xp);
 }
 
-/*
- * remove text image from the text table.
- * the use count must be zero.
- */
+// remove text image from the text table.
+// the use count must be zero.
 void xuntext(register struct text *xp)
 {
     register struct inode *ip;

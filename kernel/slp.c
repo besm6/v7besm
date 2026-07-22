@@ -1,4 +1,4 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // clang-format off
 #include "sys/types.h"
@@ -14,30 +14,28 @@
 #include "sys/buf.h"
 // clang-format on
 
-#define SQSIZE  0100 /* Must be power of 2 */
+#define SQSIZE  0100 // Must be power of 2
 #define HASH(x) (((int)x >> 5) & (SQSIZE - 1))
 
 struct proc *slpque[SQSIZE];
-struct proc *runq;           /* head of linked list of running processes */
-int mpid;                    /* generic for unique process id's */
-struct map coremap[CMAPSIZ]; /* space for core allocation */
-struct map swapmap[SMAPSIZ]; /* space for swap allocation */
-char runin;                  /* scheduling flag */
-char runout;                 /* scheduling flag */
-char runrun;                 /* scheduling flag */
-char curpri;                 /* more scheduling */
+struct proc *runq;           // head of linked list of running processes
+int mpid;                    // generic for unique process id's
+struct map coremap[CMAPSIZ]; // space for core allocation
+struct map swapmap[SMAPSIZ]; // space for swap allocation
+char runin;                  // scheduling flag
+char runout;                 // scheduling flag
+char runrun;                 // scheduling flag
+char curpri;                 // more scheduling
 
-/*
- * Give up the processor till a wakeup occurs
- * on chan, at which time the process
- * enters the scheduling queue at priority pri.
- * The most important effect of pri is that when
- * pri<=PZERO a signal cannot disturb the sleep;
- * if pri>PZERO signals will be processed.
- * Callers of this routine must be prepared for
- * premature return, and check that the reason for
- * sleeping has gone away.
- */
+// Give up the processor till a wakeup occurs
+// on chan, at which time the process
+// enters the scheduling queue at priority pri.
+// The most important effect of pri is that when
+// pri<=PZERO a signal cannot disturb the sleep;
+// if pri>PZERO signals will be processed.
+// Callers of this routine must be prepared for
+// premature return, and check that the reason for
+// sleeping has gone away.
 void sleep(chan_t chan, int pri)
 {
     register struct proc *rp;
@@ -78,20 +76,16 @@ void sleep(chan_t chan, int pri)
     splx(s);
     return;
 
-    /*
-     * If priority was low (>PZERO) and
-     * there has been a signal,
-     * execute non-local goto to
-     * the qsav location.
-     * (see trap1/trap.c)
-     */
+    // If priority was low (>PZERO) and
+    // there has been a signal,
+    // execute non-local goto to
+    // the qsav location.
+    // (see trap1/trap.c)
 psig:
     resume(u.u_procp->p_addr, u.u_qsav);
 }
 
-/*
- * Wake up all processes sleeping on chan.
- */
+// Wake up all processes sleeping on chan.
 void wakeup(register chan_t chan)
 {
     register struct proc *p, *q;
@@ -121,12 +115,10 @@ void wakeup(register chan_t chan)
     splx(s);
 }
 
-/*
- * when you are sure that it
- * is impossible to get the
- * 'proc on q' diagnostic, the
- * diagnostic loop can be removed.
- */
+// when you are sure that it
+// is impossible to get the
+// 'proc on q' diagnostic, the
+// diagnostic loop can be removed.
 void setrq(struct proc *p)
 {
     register struct proc *q;
@@ -144,20 +136,16 @@ out:
     splx(s);
 }
 
-/*
- * Set the process running;
- * arrange for it to be swapped in if necessary.
- */
+// Set the process running;
+// arrange for it to be swapped in if necessary.
 void setrun(register struct proc *p)
 {
     register chan_t w;
 
     if (p->p_stat == 0 || p->p_stat == SZOMB)
         panic("Running a dead proc");
-    /*
-     * The assignment to w is necessary because of
-     * race conditions. (Interrupt between test and use)
-     */
+    // The assignment to w is necessary because of
+    // race conditions. (Interrupt between test and use)
     if ((w = p->p_wchan)) {
         wakeup(w);
         return;
@@ -172,12 +160,10 @@ void setrun(register struct proc *p)
     }
 }
 
-/*
- * Set user priority.
- * The rescheduling flag (runrun)
- * is set if the priority is better
- * than the currently running process.
- */
+// Set user priority.
+// The rescheduling flag (runrun)
+// is set if the priority is better
+// than the currently running process.
 int setpri(register struct proc *pp)
 {
     register int p;
@@ -192,32 +178,28 @@ int setpri(register struct proc *pp)
     return (p);
 }
 
-/*
- * The main loop of the scheduling (swapping)
- * process.
- * The basic idea is:
- *  see if anyone wants to be swapped in;
- *  swap out processes until there is room;
- *  swap him in;
- *  repeat.
- * The runout flag is set whenever someone is swapped out.
- * Sched sleeps on it awaiting work.
- *
- * Sched sleeps on runin whenever it cannot find enough
- * core (by swapping out or otherwise) to fit the
- * selected swapped process.  It is awakened when the
- * core situation changes and in any case once per second.
- */
+// The main loop of the scheduling (swapping)
+// process.
+// The basic idea is:
+//  see if anyone wants to be swapped in;
+//  swap out processes until there is room;
+//  swap him in;
+//  repeat.
+// The runout flag is set whenever someone is swapped out.
+// Sched sleeps on it awaiting work.
+//
+// Sched sleeps on runin whenever it cannot find enough
+// core (by swapping out or otherwise) to fit the
+// selected swapped process.  It is awakened when the
+// core situation changes and in any case once per second.
 void sched()
 {
     register struct proc *rp, *p;
     register int outage, inage;
     int maxsize;
 
-    /*
-     * find user to swap in;
-     * of users ready, select one out longest
-     */
+    // find user to swap in;
+    // of users ready, select one out longest
 
 loop:
     spl6();
@@ -228,9 +210,7 @@ loop:
             p      = rp;
             outage = rp->p_time - (rp->p_nice - NZERO) * 8;
         }
-    /*
-     * If there is no one there, wait.
-     */
+    // If there is no one there, wait.
     if (outage == -20000) {
         runout++;
         sleep((chan_t)&runout, PSWP);
@@ -238,20 +218,16 @@ loop:
     }
     spl0();
 
-    /*
-     * See if there is core for that process;
-     * if so, swap it in.
-     */
+    // See if there is core for that process;
+    // if so, swap it in.
 
     if (swapin(p))
         goto loop;
 
-    /*
-     * none found.
-     * look around for core.
-     * Select the largest of those sleeping
-     * at bad priority; if none, select the oldest.
-     */
+    // none found.
+    // look around for core.
+    // Select the largest of those sleeping
+    // at bad priority; if none, select the oldest.
 
     spl6();
     p       = NULL;
@@ -275,12 +251,10 @@ loop:
         }
     }
     spl0();
-    /*
-     * Swap found user out if sleeping at bad pri,
-     * or if he has spent at least 2 seconds in core and
-     * the swapped-out process has spent at least 3 seconds out.
-     * Otherwise wait a bit and try again.
-     */
+    // Swap found user out if sleeping at bad pri,
+    // or if he has spent at least 2 seconds in core and
+    // the swapped-out process has spent at least 3 seconds out.
+    // Otherwise wait a bit and try again.
     if (maxsize >= 0 || (outage >= 3 && inage >= 2)) {
         p->p_flag &= ~SLOAD;
         xswap(p, 1, 0);
@@ -292,11 +266,9 @@ loop:
     goto loop;
 }
 
-/*
- * Swap a process in.
- * Allocate data and possible text separately.
- * It would be better to do largest first.
- */
+// Swap a process in.
+// Allocate data and possible text separately.
+// It would be better to do largest first.
 int swapin(register struct proc *p)
 {
     register struct text *xp;
@@ -328,36 +300,30 @@ int swapin(register struct proc *p)
     return (1);
 }
 
-/*
- * put the current process on
- * the Q of running processes and
- * call the scheduler.
- */
+// put the current process on
+// the Q of running processes and
+// call the scheduler.
 void qswtch()
 {
     setrq(u.u_procp);
     swtch();
 }
 
-/*
- * This routine is called to reschedule the CPU.
- * if the calling process is not in RUN state,
- * arrangements for it to restart must have
- * been made elsewhere, usually by calling via sleep.
- * There is a race here. A process may become
- * ready after it has been examined.
- * In this case, idle() will be called and
- * will return in at most 1HZ time.
- * i.e. its not worth putting an spl() in.
- */
+// This routine is called to reschedule the CPU.
+// if the calling process is not in RUN state,
+// arrangements for it to restart must have
+// been made elsewhere, usually by calling via sleep.
+// There is a race here. A process may become
+// ready after it has been examined.
+// In this case, idle() will be called and
+// will return in at most 1HZ time.
+// i.e. its not worth putting an spl() in.
 void swtch()
 {
     register int n;
     register struct proc *p, *q, *pp, *pq;
 
-    /*
-     * If not the idle process, resume the idle process.
-     */
+    // If not the idle process, resume the idle process.
     if (u.u_procp != &proc[0]) {
         if (save(u.u_rsav)) {
             sureg();
@@ -365,17 +331,15 @@ void swtch()
         }
         resume(proc[0].p_addr, u.u_qsav);
     }
-    /*
-     * The first save returns nonzero when proc 0 is resumed
-     * by another process (above); then the second is not done
-     * and the process-search loop is entered.
-     *
-     * The first save returns 0 when swtch is called in proc 0
-     * from sched().  The second save returns 0 immediately, so
-     * in this case too the process-search loop is entered.
-     * Thus when proc 0 is awakened by being made runnable, it will
-     * find itself and resume itself at rsav, and return to sched().
-     */
+    // The first save returns nonzero when proc 0 is resumed
+    // by another process (above); then the second is not done
+    // and the process-search loop is entered.
+    //
+    // The first save returns 0 when swtch is called in proc 0
+    // from sched().  The second save returns 0 immediately, so
+    // in this case too the process-search loop is entered.
+    // Thus when proc 0 is awakened by being made runnable, it will
+    // find itself and resume itself at rsav, and return to sched().
     if (save(u.u_qsav) == 0 && save(u.u_rsav))
         return;
 loop:
@@ -384,9 +348,7 @@ loop:
     pp     = NULL;
     q      = NULL;
     n      = 128;
-    /*
-     * Search for highest-priority runnable process
-     */
+    // Search for highest-priority runnable process
     for (p = runq; p != NULL; p = p->p_link) {
         if ((p->p_stat == SRUN) && (p->p_flag & SLOAD)) {
             if (p->p_pri < n) {
@@ -397,9 +359,7 @@ loop:
         }
         q = p;
     }
-    /*
-     * If no process is runnable, idle.
-     */
+    // If no process is runnable, idle.
     p = pp;
     if (p == NULL) {
         idle();
@@ -412,19 +372,15 @@ loop:
         q->p_link = p->p_link;
     curpri = n;
     spl0();
-    /*
-     * The rsav (ssav) contents are interpreted in the new address space
-     */
+    // The rsav (ssav) contents are interpreted in the new address space
     n = p->p_flag & SSWAP;
     p->p_flag &= ~SSWAP;
     resume(p->p_addr, n ? u.u_ssav : u.u_rsav);
 }
 
-/*
- * Create a new process-- the internal version of
- * sys fork.
- * It returns 1 in the new process, 0 in the old.
- */
+// Create a new process-- the internal version of
+// sys fork.
+// It returns 1 in the new process, 0 in the old.
 int newproc()
 {
     int a1, a2;
@@ -433,12 +389,10 @@ int newproc()
     register int n;
 
     p = NULL;
-    /*
-     * First, just locate a slot for a process
-     * and copy the useful info from this process into it.
-     * The panic "cannot happen" because fork has already
-     * checked for the existence of a slot.
-     */
+    // First, just locate a slot for a process
+    // and copy the useful info from this process into it.
+    // The panic "cannot happen" because fork has already
+    // checked for the existence of a slot.
 retry:
     mpid++;
     if (mpid >= 30000) {
@@ -454,9 +408,7 @@ retry:
     if ((rpp = p) == NULL)
         panic("no procs");
 
-    /*
-     * make proc entry for new proc
-     */
+    // make proc entry for new proc
 
     rip           = u.u_procp;
     up            = rip;
@@ -472,10 +424,8 @@ retry:
     rpp->p_time   = 0;
     rpp->p_cpu    = 0;
 
-    /*
-     * make duplicate entries
-     * where needed
-     */
+    // make duplicate entries
+    // where needed
 
     for (n = 0; n < NOFILE; n++)
         if (u.u_ofile[n] != NULL)
@@ -487,52 +437,42 @@ retry:
     u.u_cdir->i_count++;
     if (u.u_rdir)
         u.u_rdir->i_count++;
-    /*
-     * Partially simulate the environment
-     * of the new process so that when it is actually
-     * created (by copying) it will look right.
-     */
+    // Partially simulate the environment
+    // of the new process so that when it is actually
+    // created (by copying) it will look right.
     rpp         = p;
     u.u_procp   = rpp;
     rip         = up;
     n           = rip->p_size;
     a1          = rip->p_addr;
     rpp->p_size = n;
-    /*
-     * When the resume is executed for the new process,
-     * here's where it will resume.
-     */
+    // When the resume is executed for the new process,
+    // here's where it will resume.
     if (save(u.u_ssav)) {
         sureg();
         return (1);
     }
-    /*
-     * The child is built by copying the parent's image, and the parent's u page in that
-     * image is stale -- the live one is at UBASE.  Flush it, or the child inherits a stale
-     * u_ssav and never returns from the save() just above.
-     *
-     * The window is exact.  AFTER the save(), for that reason; and inside the
-     * `u.u_procp = rpp' ... `u.u_procp = rip' bracket, because the environment partially
-     * simulated up there is precisely what the child is supposed to inherit.  Placed here it
-     * serves both arms below -- the copyseg() loop and the xswap(), which re-flushes
-     * harmlessly.  See the invariant at xswap() in text.c.
-     */
+    // The child is built by copying the parent's image, and the parent's u page in that
+    // image is stale -- the live one is at UBASE.  Flush it, or the child inherits a stale
+    // u_ssav and never returns from the save() just above.
+    //
+    // The window is exact.  AFTER the save(), for that reason; and inside the
+    // `u.u_procp = rpp' ... `u.u_procp = rip' bracket, because the environment partially
+    // simulated up there is precisely what the child is supposed to inherit.  Placed here it
+    // serves both arms below -- the copyseg() loop and the xswap(), which re-flushes
+    // harmlessly.  See the invariant at xswap() in text.c.
     uflush(a1);
     a2 = malloc(coremap, n);
-    /*
-     * If there is not enough core for the
-     * new process, swap out the current process to generate the
-     * copy.
-     */
+    // If there is not enough core for the
+    // new process, swap out the current process to generate the
+    // copy.
     if (a2 == NULL) {
         rip->p_stat = SIDL;
         rpp->p_addr = a1;
         xswap(rpp, 0, 0);
         rip->p_stat = SRUN;
     } else {
-        /*
-         * There is core, so just copy.
-         */
+        // There is core, so just copy.
         rpp->p_addr = a2;
         while (n > 0) {
             copyseg(a1, a2);
@@ -547,19 +487,17 @@ retry:
     return (0);
 }
 
-/*
- * Change the size of the data+stack regions of the process.
- * If the size is shrinking, it's easy-- just release the extra core.
- * If it's growing, and there is core, just allocate it
- * and copy the image, taking care to reset registers to account
- * for the fact that the system's stack has moved.
- * If there is no core, arrange for the process to be swapped
- * out after adjusting the size requirement-- when it comes
- * in, enough core will be allocated.
- *
- * After the expansion, the caller will take care of copying
- * the user's stack towards or away from the data area.
- */
+// Change the size of the data+stack regions of the process.
+// If the size is shrinking, it's easy-- just release the extra core.
+// If it's growing, and there is core, just allocate it
+// and copy the image, taking care to reset registers to account
+// for the fact that the system's stack has moved.
+// If there is no core, arrange for the process to be swapped
+// out after adjusting the size requirement-- when it comes
+// in, enough core will be allocated.
+//
+// After the expansion, the caller will take care of copying
+// the user's stack towards or away from the data area.
 void expand(int newsize)
 {
     register int i, n;
@@ -583,18 +521,16 @@ void expand(int newsize)
         xswap(p, 1, n);
         p->p_flag |= SSWAP;
         qswtch();
-        /* no return */
+        // no return
     }
     p->p_addr = a2;
-    /*
-     * From PGSZ, not 0: page 0 of the image is the u home, and the copy there is stale --
-     * the live u-area is at UBASE and is authoritative.  Copying it would move a stale
-     * struct user to the new image only for the next switch to overwrite it anyway.
-     * Instead the home itself moves, and the live u-area reaches it at that next switch.
-     */
+    // From PGSZ, not 0: page 0 of the image is the u home, and the copy there is stale --
+    // the live u-area is at UBASE and is authoritative.  Copying it would move a stale
+    // struct user to the new image only for the next switch to overwrite it anyway.
+    // Instead the home itself moves, and the live u-area reaches it at that next switch.
     for (i = PGSZ; i < n; i += PGSZ)
         copyseg(a1 + i, a2 + i);
-    uhome = a2; /* before the mfree: a1 is about to stop existing */
+    uhome = a2; // before the mfree: a1 is about to stop existing
     mfree(coremap, n, a1);
-    resume(a2, u.u_ssav); /* paddr == uhome now, so this copies nothing */
+    resume(a2, u.u_ssav); // paddr == uhome now, so this copies nothing
 }

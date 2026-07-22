@@ -1,4 +1,4 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // clang-format off
 #include "sys/types.h"
@@ -17,23 +17,21 @@
 void iexpand(register struct inode *ip, register struct dinode *dp);
 void tloop(dev_t dev, daddr_t bn, int f1, int f2);
 
-/*
- * Look up an inode by device,inumber.
- * If it is in core (in the inode structure),
- * honor the locking protocol.
- * If it is not in core, read it in from the
- * specified device.
- * If the inode is mounted on, perform
- * the indicated indirection.
- * In all cases, a pointer to a locked
- * inode structure is returned.
- *
- * printf warning: no inodes -- if the inode
- *	structure is full
- * panic: no imt -- if the mounted file
- *	system is not in the mount table.
- *	"cannot happen"
- */
+// Look up an inode by device,inumber.
+// If it is in core (in the inode structure),
+// honor the locking protocol.
+// If it is not in core, read it in from the
+// specified device.
+// If the inode is mounted on, perform
+// the indicated indirection.
+// In all cases, a pointer to a locked
+// inode structure is returned.
+//
+// printf warning: no inodes -- if the inode
+// 	structure is full
+// panic: no imt -- if the mounted file
+// 	system is not in the mount table.
+// 	"cannot happen"
 struct inode *iget(dev_t dev, ino_t ino)
 {
     register struct inode *ip;
@@ -79,9 +77,7 @@ loop:
     ip->i_count++;
     ip->i_un.i_lastr = 0;
     bp               = bread(dev, itod(ino));
-    /*
-     * Check I/O errors
-     */
+    // Check I/O errors
     if ((bp->b_flags & B_ERROR) != 0) {
         brelse(bp);
         iput(ip);
@@ -107,13 +103,11 @@ void iexpand(register struct inode *ip, register struct dinode *dp)
         ip->i_un.i_addr[i] = dp->di_addr[i];
 }
 
-/*
- * Decrement reference count of
- * an inode structure.
- * On the last reference,
- * write the inode out and if necessary,
- * truncate and deallocate the file.
- */
+// Decrement reference count of
+// an inode structure.
+// On the last reference,
+// write the inode out and if necessary,
+// truncate and deallocate the file.
 void iput(register struct inode *ip)
 {
     if (ip->i_count == 1) {
@@ -133,12 +127,10 @@ void iput(register struct inode *ip)
     prele(ip);
 }
 
-/*
- * Check accessed and update flags on
- * an inode structure.
- * If any are on, update the inode
- * with the current time.
- */
+// Check accessed and update flags on
+// an inode structure.
+// If any are on, update the inode
+// with the current time.
 void iupdat(register struct inode *ip, time_t *ta, time_t *tm)
 {
     register struct buf *bp;
@@ -160,12 +152,10 @@ void iupdat(register struct inode *ip, time_t *ta, time_t *tm)
         dp->di_uid   = ip->i_uid;
         dp->di_gid   = ip->i_gid;
         dp->di_size  = ip->i_size;
-        /*
-         * A plain word copy.  v7 packed each address down to three bytes here and
-         * checked the fourth for overflow ("iaddress > 2^24"); a daddr_t is a whole
-         * word on this machine, on disk as in core, so there is nothing to pack and
-         * nothing that can overflow.
-         */
+        // A plain word copy.  v7 packed each address down to three bytes here and
+        // checked the fourth for overflow ("iaddress > 2^24"); a daddr_t is a whole
+        // word on this machine, on disk as in core, so there is nothing to pack and
+        // nothing that can overflow.
         for (i = 0; i < NADDR; i++)
             dp->di_addr[i] = ip->i_un.i_addr[i];
         if (ip->i_flag & IACC)
@@ -179,15 +169,13 @@ void iupdat(register struct inode *ip, time_t *ta, time_t *tm)
     }
 }
 
-/*
- * Free all the disk blocks associated
- * with the specified inode structure.
- * The blocks of the file are removed
- * in reverse order. This FILO
- * algorithm will tend to maintain
- * a contiguous free list much longer
- * than FIFO.
- */
+// Free all the disk blocks associated
+// with the specified inode structure.
+// The blocks of the file are removed
+// in reverse order. This FILO
+// algorithm will tend to maintain
+// a contiguous free list much longer
+// than FIFO.
 void itrunc(register struct inode *ip)
 {
     register int i;
@@ -204,15 +192,15 @@ void itrunc(register struct inode *ip)
             continue;
         ip->i_un.i_addr[i] = (daddr_t)0;
         switch (i) {
-        default: /* direct */
+        default: // direct
             free(dev, bn);
             break;
 
-        case NADDR - 2: /* single indirect */
+        case NADDR - 2: // single indirect
             tloop(dev, bn, 0, 0);
             break;
 
-        case NADDR - 1: /* double indirect */
+        case NADDR - 1: // double indirect
             tloop(dev, bn, 1, 0);
         }
     }
@@ -252,9 +240,7 @@ void tloop(dev_t dev, daddr_t bn, int f1, int f2)
     free(dev, bn);
 }
 
-/*
- * Make a new file.
- */
+// Make a new file.
 struct inode *maknode(int mode)
 {
     register struct inode *ip;
@@ -275,11 +261,9 @@ struct inode *maknode(int mode)
     return (ip);
 }
 
-/*
- * Write a directory entry with
- * parameters left as side effects
- * to a call to namei.
- */
+// Write a directory entry with
+// parameters left as side effects
+// to a call to namei.
 void wdir(struct inode *ip)
 {
     if (u.u_pdir->i_nlink <= 0) {

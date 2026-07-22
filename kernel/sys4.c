@@ -1,4 +1,4 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // clang-format off
 #include "sys/types.h"
@@ -12,23 +12,17 @@
 #include "sys/timeb.h"
 // clang-format on
 
-/*
- * Everything in this file is a routine implementing a system call.
- */
+// Everything in this file is a routine implementing a system call.
 void chdirec(register struct inode **ipp);
 
-/*
- * return the current time (old-style entry)
- */
+// return the current time (old-style entry)
 void gtime()
 {
     u.u_r.r_time = time;
 }
 
-/*
- * New time entry-- return TOD with milliseconds, timezone,
- * DST flag
- */
+// New time entry-- return TOD with milliseconds, timezone,
+// DST flag
 void ftime()
 {
     register struct a {
@@ -53,9 +47,7 @@ void ftime()
         u.u_error = EFAULT;
 }
 
-/*
- * Set the time
- */
+// Set the time
 void stime()
 {
     register struct a {
@@ -140,11 +132,9 @@ void nice()
     u.u_procp->p_nice = n;
 }
 
-/*
- * Unlink system call.
- * Hard to avoid races here, especially
- * in unlinking directories.
- */
+// Unlink system call.
+// Hard to avoid races here, especially
+// in unlinking directories.
 void unlink()
 {
     register struct inode *ip, *pp;
@@ -155,10 +145,8 @@ void unlink()
     pp = namei(uchar, 2);
     if (pp == NULL)
         return;
-    /*
-     * Check for unlink(".")
-     * to avoid hanging on the iget
-     */
+    // Check for unlink(".")
+    // to avoid hanging on the iget
     if (pp->i_number == u.u_dent.d_ino) {
         ip = pp;
         ip->i_count++;
@@ -168,15 +156,13 @@ void unlink()
         goto out1;
     if ((ip->i_mode & IFMT) == IFDIR && !suser())
         goto out;
-    /*
-     * Don't unlink a mounted file.
-     */
+    // Don't unlink a mounted file.
     if (ip->i_dev != pp->i_dev) {
         u.u_error = EBUSY;
         goto out;
     }
     if (ip->i_flag & ITEXT)
-        xrele(ip); /* try once to free text */
+        xrele(ip); // try once to free text
     if (ip->i_flag & ITEXT && ip->i_nlink == 1) {
         u.u_error = ETXTBSY;
         goto out;
@@ -354,9 +340,7 @@ void profil()
     u.u_prof.pr_scale = uap->pcscale;
 }
 
-/*
- * alarm clock signal
- */
+// alarm clock signal
 void alarm()
 {
     register struct proc *p;
@@ -372,19 +356,15 @@ void alarm()
     u.u_r.r_val1 = c;
 }
 
-/*
- * indefinite wait.
- * no one should wakeup(&u)
- */
+// indefinite wait.
+// no one should wakeup(&u)
 void pause()
 {
     for (;;)
         sleep((chan_t)&u, PSLEP);
 }
 
-/*
- * mode mask for creation of files
- */
+// mode mask for creation of files
 void umask()
 {
     register struct a {
@@ -398,10 +378,8 @@ void umask()
     u.u_r.r_val1 = t;
 }
 
-/*
- * Set IUPD and IACC times on file.
- * Can't set ICHG.
- */
+// Set IUPD and IACC times on file.
+// Can't set ICHG.
 void utime()
 {
     register struct a {

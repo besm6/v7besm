@@ -1,4 +1,4 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // clang-format off
 #include "sys/types.h"
@@ -19,9 +19,7 @@ struct cblock *cfreelist;
 int cbad;
 int nchrdev;
 
-/*
- * Character list get/put
- */
+// Character list get/put
 int getc(register struct clist *p)
 {
     register struct cblock *bp;
@@ -53,10 +51,8 @@ int getc(register struct clist *p)
     return (c);
 }
 
-/*
- * copy clist to buffer.
- * return number of bytes moved.
- */
+// copy clist to buffer.
+// return number of bytes moved.
 int q_to_b(register struct clist *q, register char *cp, int cc)
 {
     register struct cblock *bp;
@@ -96,11 +92,9 @@ int q_to_b(register struct clist *q, register char *cp, int cc)
     return (cp - acp);
 }
 
-/*
- * Return count of contiguous characters
- * in clist starting at q->c_cf.
- * Stop counting if flag&character is non-null.
- */
+// Return count of contiguous characters
+// in clist starting at q->c_cf.
+// Stop counting if flag&character is non-null.
 int ndqb(register struct clist *q, int flag)
 {
     register int cc;
@@ -135,10 +129,8 @@ out:
     return (cc);
 }
 
-/*
- * Update clist to show that cc characters
- * were removed.  It is assumed that cc < CBSIZE.
- */
+// Update clist to show that cc characters
+// were removed.  It is assumed that cc < CBSIZE.
 void ndflush(register struct clist *q, register int cc)
 {
     register int s;
@@ -218,10 +210,8 @@ int putc(int c, register struct clist *p)
     return (0);
 }
 
-/*
- * copy buffer to clist.
- * return number of bytes not transfered.
- */
+// copy buffer to clist.
+// return number of bytes not transfered.
 int b_to_q(register char *cp, register int cc, struct clist *q)
 {
     register char *cq;
@@ -261,10 +251,8 @@ out:
     return (cc);
 }
 
-/*
- * Initialize clist by freeing all character blocks, then count
- * number of character devices. (Once-only routine)
- */
+// Initialize clist by freeing all character blocks, then count
+// number of character devices. (Once-only routine)
 void cinit()
 {
     register int ccp;
@@ -283,10 +271,8 @@ void cinit()
     nchrdev = ccp;
 }
 
-/*
- * integer (2-byte) get/put
- * using clists
- */
+// integer (2-byte) get/put
+// using clists
 int getw(register struct clist *p)
 {
     register int s;

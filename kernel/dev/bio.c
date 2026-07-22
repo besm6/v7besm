@@ -1,4 +1,4 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // clang-format off
 #include "sys/types.h"
@@ -25,42 +25,36 @@ struct {
 } io_info;
 #endif
 
-/*
- * swap IO headers.
- * they are filled in to point
- * at the desired IO operation.
- */
+// swap IO headers.
+// they are filled in to point
+// at the desired IO operation.
 struct buf swbuf1;
 struct buf swbuf2;
 
-/*
- * The following several routines allocate and free
- * buffers with various side effects.  In general the
- * arguments to an allocate routine are a device and
- * a block number, and the value is a pointer to
- * to the buffer header; the buffer is marked "busy"
- * so that no one else can touch it.  If the block was
- * already in core, no I/O need be done; if it is
- * already busy, the process waits until it becomes free.
- * The following routines allocate a buffer:
- *	getblk
- *	bread
- *	breada
- * Eventually the buffer must be released, possibly with the
- * side effect of writing it out, by using one of
- *	bwrite
- *	bdwrite
- *	bawrite
- *	brelse
- */
+// The following several routines allocate and free
+// buffers with various side effects.  In general the
+// arguments to an allocate routine are a device and
+// a block number, and the value is a pointer to
+// to the buffer header; the buffer is marked "busy"
+// so that no one else can touch it.  If the block was
+// already in core, no I/O need be done; if it is
+// already busy, the process waits until it becomes free.
+// The following routines allocate a buffer:
+// 	getblk
+// 	bread
+// 	breada
+// Eventually the buffer must be released, possibly with the
+// side effect of writing it out, by using one of
+// 	bwrite
+// 	bdwrite
+// 	bawrite
+// 	brelse
 int incore(dev_t dev, daddr_t blkno);
 void iowait(struct buf *bp);
 void notavail(struct buf *bp);
 void geterror(struct buf *bp);
 
-/*
- * Read in (if necessary) the block and return a buffer pointer.
- */
+// Read in (if necessary) the block and return a buffer pointer.
 struct buf *bread(dev_t dev, daddr_t blkno)
 {
     register struct buf *bp;
@@ -82,10 +76,8 @@ struct buf *bread(dev_t dev, daddr_t blkno)
     return (bp);
 }
 
-/*
- * Read in the block, like bread, but also start I/O on the
- * read-ahead block (which is not allocated to the caller)
- */
+// Read in the block, like bread, but also start I/O on the
+// read-ahead block (which is not allocated to the caller)
 struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno)
 {
     register struct buf *bp, *rabp;
@@ -121,10 +113,8 @@ struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno)
     return (bp);
 }
 
-/*
- * Write the buffer, waiting for completion.
- * Then release the buffer.
- */
+// Write the buffer, waiting for completion.
+// Then release the buffer.
 void bwrite(register struct buf *bp)
 {
     register int flag;
@@ -145,14 +135,12 @@ void bwrite(register struct buf *bp)
         geterror(bp);
 }
 
-/*
- * Release the buffer, marking it so that if it is grabbed
- * for another purpose it will be written out before being
- * given up (e.g. when writing a partial block where it is
- * assumed that another write for the same block will soon follow).
- * This can't be done for magtape, since writes must be done
- * in the same order as requested.
- */
+// Release the buffer, marking it so that if it is grabbed
+// for another purpose it will be written out before being
+// given up (e.g. when writing a partial block where it is
+// assumed that another write for the same block will soon follow).
+// This can't be done for magtape, since writes must be done
+// in the same order as requested.
 void bdwrite(register struct buf *bp)
 {
     register struct buf *dp;
@@ -166,18 +154,14 @@ void bdwrite(register struct buf *bp)
     }
 }
 
-/*
- * Release the buffer, start I/O on it, but don't wait for completion.
- */
+// Release the buffer, start I/O on it, but don't wait for completion.
 void bawrite(register struct buf *bp)
 {
     bp->b_flags |= B_ASYNC;
     bwrite(bp);
 }
 
-/*
- * release the buffer, with no I/O implied.
- */
+// release the buffer, with no I/O implied.
 void brelse(register struct buf *bp)
 {
     register struct buf **backp;
@@ -190,7 +174,7 @@ void brelse(register struct buf *bp)
         wakeup((chan_t)&bfreelist);
     }
     if (bp->b_flags & B_ERROR)
-        bp->b_dev = NODEV; /* no assoc. on error */
+        bp->b_dev = NODEV; // no assoc. on error
     s = spl6();
     if (bp->b_flags & B_AGE) {
         backp             = &bfreelist.av_forw;
@@ -209,10 +193,8 @@ void brelse(register struct buf *bp)
     splx(s);
 }
 
-/*
- * See if the block is associated with some buffer
- * (mainly to avoid getting hung up on a wait in breada)
- */
+// See if the block is associated with some buffer
+// (mainly to avoid getting hung up on a wait in breada)
 int incore(dev_t dev, daddr_t blkno)
 {
     register struct buf *bp;
@@ -225,11 +207,9 @@ int incore(dev_t dev, daddr_t blkno)
     return (0);
 }
 
-/*
- * Assign a buffer for the given block.  If the appropriate
- * block is already associated, return it; otherwise search
- * for the oldest non-busy buffer and reassign it.
- */
+// Assign a buffer for the given block.  If the appropriate
+// block is already associated, return it; otherwise search
+// for the oldest non-busy buffer and reassign it.
 struct buf *getblk(dev_t dev, daddr_t blkno)
 {
     register struct buf *bp;
@@ -294,10 +274,8 @@ loop:
     return (bp);
 }
 
-/*
- * get an empty block,
- * not assigned to any particular device
- */
+// get an empty block,
+// not assigned to any particular device
 struct buf *geteblk()
 {
     register struct buf *bp;
@@ -328,10 +306,8 @@ loop:
     return (bp);
 }
 
-/*
- * Wait for I/O completion on the buffer; return errors
- * to the user.
- */
+// Wait for I/O completion on the buffer; return errors
+// to the user.
 void iowait(register struct buf *bp)
 {
     spl6();
@@ -341,10 +317,8 @@ void iowait(register struct buf *bp)
     geterror(bp);
 }
 
-/*
- * Unlink a buffer from the available list and mark it busy.
- * (internal interface)
- */
+// Unlink a buffer from the available list and mark it busy.
+// (internal interface)
 void notavail(register struct buf *bp)
 {
     register int s;
@@ -356,10 +330,8 @@ void notavail(register struct buf *bp)
     splx(s);
 }
 
-/*
- * Mark I/O complete on a buffer, release it if I/O is asynchronous,
- * and wake up anyone waiting for it.
- */
+// Mark I/O complete on a buffer, release it if I/O is asynchronous,
+// and wake up anyone waiting for it.
 void iodone(register struct buf *bp)
 {
     bp->b_flags |= B_DONE;
@@ -371,18 +343,14 @@ void iodone(register struct buf *bp)
     }
 }
 
-/*
- * Zero the core associated with a buffer.
- */
+// Zero the core associated with a buffer.
 void clrbuf(struct buf *bp)
 {
     wzero(bp->b_un.b_addr, BSIZEW);
     bp->b_resid = 0;
 }
 
-/*
- * swap I/O
- */
+// swap I/O
 void swap(int blkno, int coreaddr, register int count, int rdflg)
 {
     register struct buf *bp;
@@ -401,23 +369,19 @@ void swap(int blkno, int coreaddr, register int count, int rdflg)
         bp->b_flags = B_BUSY | B_PHYS | rdflg;
         bp->b_dev   = swapdev;
         tcount      = count;
-        /*
-         * One zone, which is the most one drum exchange can move (dev/mb.c).  A larger
-         * request would only make the driver chain exchanges behind the sleep below,
-         * which is what this loop already does, one buf at a time.  test/biotest.c
-         * asserts on this value in three places, deliberately, to force the two-transfer
-         * case.
-         */
+        // One zone, which is the most one drum exchange can move (dev/mb.c).  A larger
+        // request would only make the driver chain exchanges behind the sleep below,
+        // which is what this loop already does, one buf at a time.  test/biotest.c
+        // asserts on this value in three places, deliberately, to force the two-transfer
+        // case.
         if (tcount > PGSZ)
             tcount = PGSZ;
         bp->b_wcount = tcount;
         bp->b_blkno  = swplo + blkno;
-        /*
-         * coreaddr is a physical word address and does not fit a caddr_t (15-bit
-         * word field); the image it names lives above the unmapped reach.  It needs
-         * no translation and no bracket: the swapper allocates one contiguous run
-         * out of the coremap, so the address is already what the device wants.
-         */
+        // coreaddr is a physical word address and does not fit a caddr_t (15-bit
+        // word field); the image it names lives above the unmapped reach.  It needs
+        // no translation and no bracket: the swapper allocates one contiguous run
+        // out of the coremap, so the address is already what the device wants.
         bp->b_paddr = coreaddr;
         (*bdevsw[major(swapdev)].d_strategy)(bp);
         spl6();
@@ -435,12 +399,10 @@ void swap(int blkno, int coreaddr, register int count, int rdflg)
         panic("IO err in swap");
 }
 
-/*
- * make sure all write-behind blocks
- * on dev (or NODEV for all)
- * are flushed out.
- * (from umount and update)
- */
+// make sure all write-behind blocks
+// on dev (or NODEV for all)
+// are flushed out.
+// (from umount and update)
 void bflush(dev_t dev)
 {
     register struct buf *bp;
@@ -458,53 +420,41 @@ loop:
     spl0();
 }
 
-/*
- * Raw I/O. The arguments are
- *	The strategy routine for the device
- *	A buffer, which will always be a special buffer
- *	  header owned exclusively by the device for this purpose
- *	The device number
- *	Read/write flag
- */
+// Raw I/O. The arguments are
+// 	The strategy routine for the device
+// 	A buffer, which will always be a special buffer
+// 	  header owned exclusively by the device for this purpose
+// 	The device number
+// 	Read/write flag
 void physio(void (*strat)(struct buf *), register struct buf *bp, int dev, int rw)
 {
     register unsigned base;
     unsigned nw, pa;
 
-    /*
-     * The address arrives as a fat pointer.  A device moves whole words to a physical
-     * page, so a transfer that starts mid-word, or does not run a whole number of
-     * words, cannot be expressed at all.
-     */
+    // The address arrives as a fat pointer.  A device moves whole words to a physical
+    // page, so a transfer that starts mid-word, or does not run a whole number of
+    // words, cannot be expressed at all.
     if (ptrbyte(u.u_base) != 5 || (u.u_count % NBPW) != 0)
         goto bad;
     base = ptrword(u.u_base);
     nw   = u.u_count / NBPW;
-    /*
-     * Check address wraparound or zero u.u_count.
-     */
+    // Check address wraparound or zero u.u_count.
     if (nw == 0 || base + nw < base)
         goto bad;
-    /*
-     * Not into the text.  useracc() below deliberately makes no read/write
-     * distinction -- a page is open to data or closed to it -- so without this a raw
-     * read would happily scribble on shared text.
-     */
+    // Not into the text.  useracc() below deliberately makes no read/write
+    // distinction -- a page is open to data or closed to it -- so without this a raw
+    // read would happily scribble on shared text.
     if (base < u.u_tsize)
         goto bad;
-    /*
-     * Check that transfer is either entirely in the
-     * data or in the stack: that is, either
-     * the end is in the data or the start is in the stack.
-     */
+    // Check that transfer is either entirely in the
+    // data or in the stack: that is, either
+    // the end is in the data or the start is in the stack.
     if (base + nw > u.u_tsize + u.u_dsize && base < USTKPAGE * PGSZ)
         goto bad;
-    /*
-     * Mapped, and one contiguous run of physical pages -- which is also what enforces
-     * the NPAGE * PGSZ ceiling, through useracc().  The old code bounded the transfer
-     * with a bare `1024', a page count from a machine whose pages were not these; once
-     * base is masked to its 15 bits that test could never fire at all.
-     */
+    // Mapped, and one contiguous run of physical pages -- which is also what enforces
+    // the NPAGE * PGSZ ceiling, through useracc().  The old code bounded the transfer
+    // with a bare `1024', a page count from a machine whose pages were not these; once
+    // base is masked to its 15 bits that test could never fire at all.
     if ((pa = physrange(base, nw)) == 0)
         goto bad;
     spl6();
@@ -528,19 +478,17 @@ void physio(void (*strat)(struct buf *), register struct buf *bp, int dev, int r
         wakeup((chan_t)bp);
     spl0();
     bp->b_flags &= ~(B_BUSY | B_WANTED);
-    u.u_count = wtob(bp->b_resid); /* b_resid is words, u_count bytes */
+    u.u_count = wtob(bp->b_resid); // b_resid is words, u_count bytes
     geterror(bp);
     return;
 bad:
     u.u_error = EFAULT;
 }
 
-/*
- * Pick up the device's error number and pass it to the user;
- * if there is an error but the number is 0 set a generalized
- * code.  Actually the latter is always true because devices
- * don't yet return specific errors.
- */
+// Pick up the device's error number and pass it to the user;
+// if there is an error but the number is 0 set a generalized
+// code.  Actually the latter is always true because devices
+// don't yet return specific errors.
 void geterror(register struct buf *bp)
 {
     if (bp->b_flags & B_ERROR)

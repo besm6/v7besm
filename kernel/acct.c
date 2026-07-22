@@ -1,4 +1,4 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // clang-format off
 #include "sys/types.h"
@@ -12,9 +12,7 @@
 #include "sys/seg.h"
 // clang-format on
 
-/*
- * Perform process accounting functions.
- */
+// Perform process accounting functions.
 void sysacct()
 {
     register struct inode *ip;
@@ -49,9 +47,7 @@ void sysacct()
     }
 }
 
-/*
- * On exit, write a record on the accounting file.
- */
+// On exit, write a record on the accounting file.
 void acct()
 {
     register int i;
@@ -85,10 +81,8 @@ void acct()
     prele(ip);
 }
 
-/*
- * Produce a pseudo-floating point representation
- * with 3 bits base-8 exponent, 13 bits fraction.
- */
+// Produce a pseudo-floating point representation
+// with 3 bits base-8 exponent, 13 bits fraction.
 int compress(register time_t t)
 {
     register int exp = 0, round = 0;
@@ -108,11 +102,9 @@ int compress(register time_t t)
     return ((exp << 13) + t);
 }
 
-/*
- * lock user into core as much
- * as possible. swapping may still
- * occur if core grows.
- */
+// lock user into core as much
+// as possible. swapping may still
+// occur if core grows.
 void syslock()
 {
     register struct proc *p;

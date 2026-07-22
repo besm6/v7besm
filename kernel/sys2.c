@@ -1,4 +1,4 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // clang-format off
 #include "sys/types.h"
@@ -14,27 +14,21 @@
 void rdwr(int mode);
 void open1(struct inode *ip, int mode, int trf);
 
-/*
- * read system call
- */
+// read system call
 void read()
 {
     rdwr(FREAD);
 }
 
-/*
- * write system call
- */
+// write system call
 void write()
 {
     rdwr(FWRITE);
 }
 
-/*
- * common code for read and write calls:
- * check permissions, set base, count, and offset,
- * and switch out to readi, writei, or pipe code.
- */
+// common code for read and write calls:
+// check permissions, set base, count, and offset,
+// and switch out to readi, writei, or pipe code.
 void rdwr(register int mode)
 {
     register struct file *fp;
@@ -81,9 +75,7 @@ void rdwr(register int mode)
     u.u_r.r_val1 = uap->count - u.u_count;
 }
 
-/*
- * open system call
- */
+// open system call
 void open()
 {
     register struct inode *ip;
@@ -99,9 +91,7 @@ void open()
     open1(ip, ++uap->rwmode, 0);
 }
 
-/*
- * creat system call
- */
+// creat system call
 void creat()
 {
     register struct inode *ip;
@@ -123,11 +113,9 @@ void creat()
         open1(ip, FWRITE, 1);
 }
 
-/*
- * common code for open and creat.
- * Check permissions, allocate an open file structure,
- * and call the device open routine if any.
- */
+// common code for open and creat.
+// Check permissions, allocate an open file structure,
+// and call the device open routine if any.
 void open1(register struct inode *ip, register int mode, int trf)
 {
     register struct file *fp;
@@ -162,9 +150,7 @@ out:
     iput(ip);
 }
 
-/*
- * close system call
- */
+// close system call
 void close()
 {
     register struct file *fp;
@@ -180,9 +166,7 @@ void close()
     closef(fp);
 }
 
-/*
- * seek system call
- */
+// seek system call
 void seek()
 {
     register struct file *fp;
@@ -208,9 +192,7 @@ void seek()
     u.u_r.r_off       = uap->off;
 }
 
-/*
- * link system call
- */
+// link system call
 void link()
 {
     register struct inode *ip, *xp;
@@ -225,14 +207,12 @@ void link()
         return;
     if ((ip->i_mode & IFMT) == IFDIR && !suser())
         goto out;
-    /*
-     * Unlock to avoid possibly hanging the namei.
-     * Sadly, this means races. (Suppose someone
-     * deletes the file in the meantime?)
-     * Nor can it be locked again later
-     * because then there will be deadly
-     * embraces.
-     */
+    // Unlock to avoid possibly hanging the namei.
+    // Sadly, this means races. (Suppose someone
+    // deletes the file in the meantime?)
+    // Nor can it be locked again later
+    // because then there will be deadly
+    // embraces.
     prele(ip);
     u.u_dirp = (caddr_t)uap->linkname;
     xp       = namei(uchar, 1);
@@ -258,9 +238,7 @@ out:
     iput(ip);
 }
 
-/*
- * mknod system call
- */
+// mknod system call
 void mknod()
 {
     register struct inode *ip;
@@ -289,9 +267,7 @@ out:
     iput(ip);
 }
 
-/*
- * access system call
- */
+// access system call
 void saccess()
 {
     register int svuid, svgid;

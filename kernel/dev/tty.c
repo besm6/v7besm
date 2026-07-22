@@ -1,8 +1,6 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * general TTY subroutines
- */
+// general TTY subroutines
 // clang-format off
 #include "sys/types.h"
 #include "sys/param.h"
@@ -20,16 +18,14 @@
 int tk_nin;
 int tk_nout;
 
-char canonb[CANBSIZ]; /* buffer for erase and kill (#@) */
+char canonb[CANBSIZ]; // buffer for erase and kill (#@)
 
 extern char partab[];
 
-/*
- * Input mapping table-- if an entry is non-zero, when the
- * corresponding character is typed preceded by "\" the escape
- * sequence is replaced by the table value.  Mostly used for
- * upper-case only terminals.
- */
+// Input mapping table-- if an entry is non-zero, when the
+// corresponding character is typed preceded by "\" the escape
+// sequence is replaced by the table value.  Mostly used for
+// upper-case only terminals.
 
 char maptab[] = {
     // clang-format off
@@ -52,9 +48,7 @@ char maptab[] = {
     // clang-format on
 };
 
-/*
- * shorthand
- */
+// shorthand
 #define q1 tp->t_rawq
 #define q2 tp->t_canq
 #define q3 tp->t_outq
@@ -64,11 +58,9 @@ void wflushtty(struct tty *tp);
 void ttyblock(struct tty *tp);
 void ttyoutput(int c, struct tty *tp);
 
-/*
- * routine called on first teletype open.
- * establishes a process group for distribution
- * of quits and interrupts from the tty.
- */
+// routine called on first teletype open.
+// establishes a process group for distribution
+// of quits and interrupts from the tty.
 void ttyopen(dev_t dev, register struct tty *tp)
 {
     register struct proc *pp;
@@ -86,9 +78,7 @@ void ttyopen(dev_t dev, register struct tty *tp)
     tp->t_state |= ISOPEN;
 }
 
-/*
- * set default control characters.
- */
+// set default control characters.
 void ttychars(register struct tty *tp)
 {
     tun.t_intrc  = CINTR;
@@ -101,9 +91,7 @@ void ttychars(register struct tty *tp)
     tp->t_kill   = CKILL;
 }
 
-/*
- * clean tp on last close
- */
+// clean tp on last close
 void ttyclose(register struct tty *tp)
 {
     tp->t_pgrp = 0;
@@ -111,9 +99,7 @@ void ttyclose(register struct tty *tp)
     tp->t_state = 0;
 }
 
-/*
- * stty/gtty writearound
- */
+// stty/gtty writearound
 void stty()
 {
     u.u_arg[2] = u.u_arg[1];
@@ -128,11 +114,9 @@ void gtty()
     ioctl();
 }
 
-/*
- * ioctl system call
- * Check legality, execute common code, and switch out to individual
- * device routine.
- */
+// ioctl system call
+// Check legality, execute common code, and switch out to individual
+// device routine.
 void ioctl()
 {
     register struct file *fp;
@@ -166,9 +150,7 @@ void ioctl()
     (*cdevsw[major(dev)].d_ioctl)(dev, uap->cmd, uap->cmarg, fp->f_flag);
 }
 
-/*
- * Common code for several tty ioctl commands
- */
+// Common code for several tty ioctl commands
 int ttioccomm(int com, register struct tty *tp, caddr_t addr, dev_t dev)
 {
     unsigned t;
@@ -176,18 +158,14 @@ int ttioccomm(int com, register struct tty *tp, caddr_t addr, dev_t dev)
     extern int nldisp;
 
     switch (com) {
-    /*
-     * get discipline number
-     */
+    // get discipline number
     case TIOCGETD:
         t = tp->t_line;
         if (copyout((caddr_t)&t, addr, sizeof(t)))
             u.u_error = EFAULT;
         break;
 
-    /*
-     * set line discipline
-     */
+    // set line discipline
     case TIOCSETD:
         if (copyin(addr, (caddr_t)&t, sizeof(t))) {
             u.u_error = EFAULT;
@@ -205,9 +183,7 @@ int ttioccomm(int com, register struct tty *tp, caddr_t addr, dev_t dev)
             tp->t_line = t;
         break;
 
-    /*
-     * prevent more opens on channel
-     */
+    // prevent more opens on channel
     case TIOCEXCL:
         tp->t_state |= XCLUDE;
         break;
@@ -215,9 +191,7 @@ int ttioccomm(int com, register struct tty *tp, caddr_t addr, dev_t dev)
         tp->t_state &= ~XCLUDE;
         break;
 
-    /*
-     * Set new parameters
-     */
+    // Set new parameters
     case TIOCSETP:
         wflushtty(tp);
     case TIOCSETN:
@@ -232,9 +206,7 @@ int ttioccomm(int com, register struct tty *tp, caddr_t addr, dev_t dev)
         tp->t_flags  = iocb.ioc_flags;
         break;
 
-    /*
-     * send current parameters to user
-     */
+    // send current parameters to user
     case TIOCGETP:
         iocb.ioc_ispeed = tp->t_ispeed;
         iocb.ioc_ospeed = tp->t_ospeed;
@@ -245,9 +217,7 @@ int ttioccomm(int com, register struct tty *tp, caddr_t addr, dev_t dev)
             u.u_error = EFAULT;
         break;
 
-        /*
-         * Hang up line on last close
-         */
+        // Hang up line on last close
 
     case TIOCHPCL:
         tp->t_state |= HUPCLS;
@@ -257,17 +227,13 @@ int ttioccomm(int com, register struct tty *tp, caddr_t addr, dev_t dev)
         flushtty(tp);
         break;
 
-    /*
-     * ioctl entries to line discipline
-     */
+    // ioctl entries to line discipline
     case DIOCSETP:
     case DIOCGETP:
         (*linesw[(unsigned)tp->t_line].l_ioctl)(com, tp, addr);
         break;
 
-    /*
-     * set and fetch special characters
-     */
+    // set and fetch special characters
     case TIOCSETC:
         if (copyin(addr, (caddr_t)&tun, sizeof(struct tc)))
             u.u_error = EFAULT;
@@ -284,9 +250,7 @@ int ttioccomm(int com, register struct tty *tp, caddr_t addr, dev_t dev)
     return (1);
 }
 
-/*
- * Wait for output to drain, then flush input waiting.
- */
+// Wait for output to drain, then flush input waiting.
 void wflushtty(register struct tty *tp)
 {
     spl5();
@@ -299,9 +263,7 @@ void wflushtty(register struct tty *tp)
     spl0();
 }
 
-/*
- * flush all TTY queues
- */
+// flush all TTY queues
 void flushtty(register struct tty *tp)
 {
     register int s;
@@ -321,12 +283,10 @@ void flushtty(register struct tty *tp)
     splx(s);
 }
 
-/*
- * transfer raw input list to canonical list,
- * doing erase-kill processing and handling escapes.
- * It waits until a full line has been typed in cooked mode,
- * or until any character has been typed in raw mode.
- */
+// transfer raw input list to canonical list,
+// doing erase-kill processing and handling escapes.
+// It waits until a full line has been typed in cooked mode,
+// or until any character has been typed in raw mode.
 int canon(register struct tty *tp)
 {
     register char *bp;
@@ -390,9 +350,7 @@ loop:
     return (bp - bp1);
 }
 
-/*
- * block transfer input handler.
- */
+// block transfer input handler.
 void ttyrend(register struct tty *tp, register char *pb, register char *pe)
 {
     int tandem;
@@ -411,13 +369,11 @@ void ttyrend(register struct tty *tp, register char *pb, register char *pe)
         ttyblock(tp);
 }
 
-/*
- * Place a character on raw TTY input queue, putting in delimiters
- * and waking up top half as needed.
- * Also echo if required.
- * The arguments are the character and the appropriate
- * tty structure.
- */
+// Place a character on raw TTY input queue, putting in delimiters
+// and waking up top half as needed.
+// Also echo if required.
+// The arguments are the character and the appropriate
+// tty structure.
 void ttyinput(register int c, register struct tty *tp)
 {
     register int t_flags;
@@ -477,9 +433,7 @@ void ttyinput(register int c, register struct tty *tp)
     }
 }
 
-/*
- * Send stop character on input overflow.
- */
+// Send stop character on input overflow.
 void ttyblock(register struct tty *tp)
 {
     register int x;
@@ -498,24 +452,20 @@ void ttyblock(register struct tty *tp)
     }
 }
 
-/*
- * put character on TTY output queue, adding delays,
- * expanding tabs, and handling the CR/NL bit.
- * It is called both from the top half for output, and from
- * interrupt level for echoing.
- * The arguments are the character and the tty structure.
- */
+// put character on TTY output queue, adding delays,
+// expanding tabs, and handling the CR/NL bit.
+// It is called both from the top half for output, and from
+// interrupt level for echoing.
+// The arguments are the character and the tty structure.
 void ttyoutput(register int c, register struct tty *tp)
 {
     register char *colp;
     register int ctype;
 
     tk_nout += 1;
-    /*
-     * Ignore EOT in normal mode to avoid hanging up
-     * certain terminals.
-     * In raw mode dump the char unchanged.
-     */
+    // Ignore EOT in normal mode to avoid hanging up
+    // certain terminals.
+    // In raw mode dump the char unchanged.
 
     if ((tp->t_flags & RAW) == 0) {
         c &= 0177;
@@ -526,9 +476,7 @@ void ttyoutput(register int c, register struct tty *tp)
         return;
     }
 
-    /*
-     * Turn tabs to spaces as required
-     */
+    // Turn tabs to spaces as required
     if (c == '\t' && (tp->t_flags & TBDELAY) == XTABS) {
         c = 8;
         do
@@ -536,10 +484,8 @@ void ttyoutput(register int c, register struct tty *tp)
         while (--c >= 0 && tp->t_col & 07);
         return;
     }
-    /*
-     * for upper-case-only terminals,
-     * generate escapes.
-     */
+    // for upper-case-only terminals,
+    // generate escapes.
     if (tp->t_flags & LCASE) {
         colp = "({)}!|^~'`";
         while (*colp++)
@@ -551,57 +497,53 @@ void ttyoutput(register int c, register struct tty *tp)
         if ('a' <= c && c <= 'z')
             c += 'A' - 'a';
     }
-    /*
-     * turn <nl> to <cr><lf> if desired.
-     */
+    // turn <nl> to <cr><lf> if desired.
     if (c == '\n' && tp->t_flags & CRMOD)
         ttyoutput('\r', tp);
     putc(c, &tp->t_outq);
-    /*
-     * Calculate delays.
-     * The numbers here represent clock ticks
-     * and are not necessarily optimal for all terminals.
-     * The delays are indicated by characters above 0200.
-     * In raw mode there are no delays and the
-     * transmission path is 8 bits wide.
-     */
+    // Calculate delays.
+    // The numbers here represent clock ticks
+    // and are not necessarily optimal for all terminals.
+    // The delays are indicated by characters above 0200.
+    // In raw mode there are no delays and the
+    // transmission path is 8 bits wide.
     colp  = &tp->t_col;
     ctype = partab[c];
     c     = 0;
     switch (ctype & 077) {
-    /* ordinary */
+    // ordinary
     case 0:
         (*colp)++;
 
-    /* non-printing */
+    // non-printing
     case 1:
         break;
 
-    /* backspace */
+    // backspace
     case 2:
         if (*colp)
             (*colp)--;
         break;
 
-    /* newline */
+    // newline
     case 3:
         ctype = (tp->t_flags >> 8) & 03;
-        if (ctype == 1) { /* tty 37 */
+        if (ctype == 1) { // tty 37
             if (*colp) {
                 c = ((unsigned)*colp >> 4) + 3;
                 if (c < 6)
                     c = 6;
             }
-        } else if (ctype == 2) { /* vt05 */
+        } else if (ctype == 2) { // vt05
             c = 6;
         }
         *colp = 0;
         break;
 
-    /* tab */
+    // tab
     case 4:
         ctype = (tp->t_flags >> 10) & 03;
-        if (ctype == 1) { /* tty 37 */
+        if (ctype == 1) { // tty 37
             c = 1 - (*colp | ~07);
             if (c < 5)
                 c = 0;
@@ -610,18 +552,18 @@ void ttyoutput(register int c, register struct tty *tp)
         (*colp)++;
         break;
 
-    /* vertical motion */
+    // vertical motion
     case 5:
-        if (tp->t_flags & VTDELAY) /* tty 37 */
+        if (tp->t_flags & VTDELAY) // tty 37
             c = 0177;
         break;
 
-    /* carriage return */
+    // carriage return
     case 6:
         ctype = (tp->t_flags >> 12) & 03;
-        if (ctype == 1) { /* tn 300 */
+        if (ctype == 1) { // tn 300
             c = 5;
-        } else if (ctype == 2) { /* ti 700 */
+        } else if (ctype == 2) { // ti 700
             c = 10;
         }
         *colp = 0;
@@ -630,12 +572,10 @@ void ttyoutput(register int c, register struct tty *tp)
         putc(c | 0200, &tp->t_outq);
 }
 
-/*
- * Restart typewriter output following a delay
- * timeout.
- * The name of the routine is passed to the timeout
- * subroutine and it is called during a clock interrupt.
- */
+// Restart typewriter output following a delay
+// timeout.
+// The name of the routine is passed to the timeout
+// subroutine and it is called during a clock interrupt.
 void ttrstrt(carg_t arg)
 {
     register struct tty *tp = (struct tty *)arg;
@@ -644,12 +584,10 @@ void ttrstrt(carg_t arg)
     ttstart(tp);
 }
 
-/*
- * Start output on the typewriter. It is used from the top half
- * after some characters have been put on the output queue,
- * from the interrupt routine to transmit the next
- * character, and after a timeout has finished.
- */
+// Start output on the typewriter. It is used from the top half
+// after some characters have been put on the output queue,
+// from the interrupt routine to transmit the next
+// character, and after a timeout has finished.
 void ttstart(register struct tty *tp)
 {
     register int s;
@@ -660,10 +598,8 @@ void ttstart(register struct tty *tp)
     splx(s);
 }
 
-/*
- * Called from device's read routine after it has
- * calculated the tty-structure given as argument.
- */
+// Called from device's read routine after it has
+// calculated the tty-structure given as argument.
 int ttread(register struct tty *tp)
 {
     if ((tp->t_state & CARR_ON) == 0)
@@ -674,10 +610,8 @@ int ttread(register struct tty *tp)
     return (tp->t_rawq.c_cc + tp->t_canq.c_cc);
 }
 
-/*
- * Called from the device's write routine after it has
- * calculated the tty-structure given as argument.
- */
+// Called from the device's write routine after it has
+// calculated the tty-structure given as argument.
 void ttwrite(register struct tty *tp)
 {
     register int c;

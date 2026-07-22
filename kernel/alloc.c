@@ -1,4 +1,4 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // clang-format off
 #include "sys/types.h"
@@ -17,22 +17,20 @@
 
 typedef struct fblk *FBLKP;
 
-int updlock; /* lock for sync */
+int updlock; // lock for sync
 
 int badblock(register struct filsys *fp, daddr_t bn, dev_t dev);
 int sbcheck(register struct filsys *fp, dev_t dev);
 
-/*
- * alloc will obtain the next available
- * free disk block from the free list of
- * the specified device.
- * The super block has up to NICFREE remembered
- * free blocks; the last of these is read to
- * obtain NICFREE more . . .
- *
- * no space on dev x/y -- when
- * the free list is exhausted.
- */
+// alloc will obtain the next available
+// free disk block from the free list of
+// the specified device.
+// The super block has up to NICFREE remembered
+// free blocks; the last of these is read to
+// obtain NICFREE more . . .
+//
+// no space on dev x/y -- when
+// the free list is exhausted.
 struct buf *alloc(dev_t dev)
 {
     daddr_t bno;
@@ -79,11 +77,9 @@ nospace:
     return (NULL);
 }
 
-/*
- * place the specified disk block
- * back on the free list of the
- * specified device.
- */
+// place the specified disk block
+// back on the free list of the
+// specified device.
 void free(dev_t dev, daddr_t bno)
 {
     register struct filsys *fp;
@@ -102,12 +98,10 @@ void free(dev_t dev, daddr_t bno)
     if (fp->s_nfree >= NICFREE) {
         fp->s_flock++;
         bp = getblk(dev, bno);
-        /*
-         * getblk() does not read, so the buffer still holds whatever it held last.
-         * Only 1 + NICFREE of its 512 words are about to be filled in, and without
-         * this the remaining 191 would be written to the disk as they stand -- old
-         * kernel memory, on every chain block the filesystem ever grows.
-         */
+        // getblk() does not read, so the buffer still holds whatever it held last.
+        // Only 1 + NICFREE of its 512 words are about to be filled in, and without
+        // this the remaining 191 would be written to the disk as they stand -- old
+        // kernel memory, on every chain block the filesystem ever grows.
         clrbuf(bp);
         ((FBLKP)(bp->b_un.b_addr))->df_nfree = fp->s_nfree;
         wcopy((caddr_t)fp->s_free, (caddr_t)((FBLKP)(bp->b_un.b_addr))->df_free,
@@ -121,15 +115,13 @@ void free(dev_t dev, daddr_t bno)
     fp->s_fmod                = 1;
 }
 
-/*
- * Check that a block number is in the
- * range between the I list and the size
- * of the device.
- * This is used mainly to check that a
- * garbage file system has not been mounted.
- *
- * bad block on dev x/y -- not in range
- */
+// Check that a block number is in the
+// range between the I list and the size
+// of the device.
+// This is used mainly to check that a
+// garbage file system has not been mounted.
+//
+// bad block on dev x/y -- not in range
 int badblock(register struct filsys *fp, daddr_t bn, dev_t dev)
 {
     if (bn < fp->s_isize || bn >= fp->s_fsize) {
@@ -139,20 +131,18 @@ int badblock(register struct filsys *fp, daddr_t bn, dev_t dev)
     return (0);
 }
 
-/*
- * Is this block plausibly a superblock for THIS kernel?  Returns 0 if so, 1 if not.
- *
- * v7 has no such test: iinit() and smount() copy block 1 in and believe it, so a
- * garbage block mounts silently and the first symptom is badblock(), or getfs()'s
- * "bad count" -- which "repairs" the superblock by zeroing both counts, turning
- * garbage into a plausible-looking full filesystem.  iinit() even sets the system
- * clock from an unchecked s_time.
- *
- * The geometry words are not ceremony.  These constants are actively in flux in
- * this port -- INOPB went 8 -> 32 and NADDR 13 -> 8 one commit ago -- and an image
- * built by a mkfs one generation out of step would otherwise mount perfectly well
- * and read every inode from the wrong offset.
- */
+// Is this block plausibly a superblock for THIS kernel?  Returns 0 if so, 1 if not.
+//
+// v7 has no such test: iinit() and smount() copy block 1 in and believe it, so a
+// garbage block mounts silently and the first symptom is badblock(), or getfs()'s
+// "bad count" -- which "repairs" the superblock by zeroing both counts, turning
+// garbage into a plausible-looking full filesystem.  iinit() even sets the system
+// clock from an unchecked s_time.
+//
+// The geometry words are not ceremony.  These constants are actively in flux in
+// this port -- INOPB went 8 -> 32 and NADDR 13 -> 8 one commit ago -- and an image
+// built by a mkfs one generation out of step would otherwise mount perfectly well
+// and read every inode from the wrong offset.
 int sbcheck(register struct filsys *fp, dev_t dev)
 {
     if (fp->s_magic != FS_MAGIC) {
@@ -163,11 +153,9 @@ int sbcheck(register struct filsys *fp, dev_t dev)
         prdev("filesystem geometry mismatch", dev);
         return (1);
     }
-    /*
-     * The i-list starts just past the superblock and must end before the volume
-     * does.  s_isize bounds ialloc()'s scan loop, so a garbage value here is a
-     * runaway read, not merely a wrong answer.
-     */
+    // The i-list starts just past the superblock and must end before the volume
+    // does.  s_isize bounds ialloc()'s scan loop, so a garbage value here is a
+    // runaway read, not merely a wrong answer.
     if (fp->s_isize <= SUPERB || fp->s_isize >= fp->s_fsize) {
         prdev("bad filesystem size", dev);
         return (1);
@@ -179,17 +167,15 @@ int sbcheck(register struct filsys *fp, dev_t dev)
     return (0);
 }
 
-/*
- * Allocate an unused I node
- * on the specified device.
- * Used with file creation.
- * The algorithm keeps up to
- * NICINOD spare I nodes in the
- * super block. When this runs out,
- * a linear search through the
- * I list is instituted to pick
- * up NICINOD more.
- */
+// Allocate an unused I node
+// on the specified device.
+// Used with file creation.
+// The algorithm keeps up to
+// NICINOD spare I nodes in the
+// super block. When this runs out,
+// a linear search through the
+// I list is instituted to pick
+// up NICINOD more.
 struct inode *ialloc(dev_t dev)
 {
     register struct filsys *fp;
@@ -217,10 +203,8 @@ loop:
             fp->s_fmod = 1;
             return (ip);
         }
-        /*
-         * Inode was allocated after all.
-         * Look some more.
-         */
+        // Inode was allocated after all.
+        // Look some more.
         iput(ip);
         goto loop;
     }
@@ -260,13 +244,11 @@ loop:
     return (NULL);
 }
 
-/*
- * Free the specified I node
- * on the specified device.
- * The algorithm stores up
- * to NICINOD I nodes in the super
- * block and throws away any more.
- */
+// Free the specified I node
+// on the specified device.
+// The algorithm stores up
+// to NICINOD I nodes in the super
+// block and throws away any more.
 void ifree(dev_t dev, ino_t ino)
 {
     register struct filsys *fp;
@@ -280,24 +262,22 @@ void ifree(dev_t dev, ino_t ino)
     fp->s_fmod                  = 1;
 }
 
-/*
- * getfs maps a device number into
- * a pointer to the incore super
- * block.
- * The algorithm is a linear
- * search through the mount table.
- * A consistency check of the
- * in core free-block and i-node
- * counts.
- *
- * bad count on dev x/y -- the count
- *	check failed. At this point, all
- *	the counts are zeroed which will
- *	almost certainly lead to "no space"
- *	diagnostic
- * panic: no fs -- the device is not mounted.
- *	this "cannot happen"
- */
+// getfs maps a device number into
+// a pointer to the incore super
+// block.
+// The algorithm is a linear
+// search through the mount table.
+// A consistency check of the
+// in core free-block and i-node
+// counts.
+//
+// bad count on dev x/y -- the count
+// 	check failed. At this point, all
+// 	the counts are zeroed which will
+// 	almost certainly lead to "no space"
+// 	diagnostic
+// panic: no fs -- the device is not mounted.
+// 	this "cannot happen"
 struct filsys *getfs(dev_t dev)
 {
     register struct mount *mp;
@@ -317,15 +297,13 @@ struct filsys *getfs(dev_t dev)
     return (NULL);
 }
 
-/*
- * update is the internal name of
- * 'sync'. It goes through the disk
- * queues to initiate sandbagged IO;
- * goes through the I nodes to write
- * modified nodes; and it goes through
- * the mount table to initiate modified
- * super blocks.
- */
+// update is the internal name of
+// 'sync'. It goes through the disk
+// queues to initiate sandbagged IO;
+// goes through the I nodes to write
+// modified nodes; and it goes through
+// the mount table to initiate modified
+// super blocks.
 void update()
 {
     register struct inode *ip;

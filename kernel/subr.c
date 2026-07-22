@@ -1,4 +1,4 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // clang-format off
 #include "sys/types.h"
@@ -11,16 +11,14 @@
 #include "sys/buf.h"
 // clang-format on
 
-daddr_t rablock; /* block to be read ahead */
+daddr_t rablock; // block to be read ahead
 
-/*
- * Bmap defines the structure of file system storage
- * by returning the physical block number on a device given the
- * inode and the logical block number in a file.
- * When convenient, it also leaves the physical
- * block number of the next block of the file in rablock
- * for use in read-ahead.
- */
+// Bmap defines the structure of file system storage
+// by returning the physical block number on a device given the
+// inode and the logical block number in a file.
+// When convenient, it also leaves the physical
+// block number of the next block of the file in rablock
+// for use in read-ahead.
 daddr_t bmap(register struct inode *ip, daddr_t bn, int rwflg)
 {
     register int i;
@@ -36,9 +34,7 @@ daddr_t bmap(register struct inode *ip, daddr_t bn, int rwflg)
     dev     = ip->i_dev;
     rablock = 0;
 
-    /*
-     * blocks 0..NADDR-NLEVEL-1 are direct blocks
-     */
+    // blocks 0..NADDR-NLEVEL-1 are direct blocks
     if (bn < NADDR - NLEVEL) {
         i  = bn;
         nb = ip->i_un.i_addr[i];
@@ -55,12 +51,10 @@ daddr_t bmap(register struct inode *ip, daddr_t bn, int rwflg)
         return (nb);
     }
 
-    /*
-     * addresses NADDR-2 and NADDR-1 have the single
-     * and double indirect blocks.  There is no triple:
-     * see NLEVEL in sys/param.h.  The first step is to
-     * determine how many levels of indirection.
-     */
+    // addresses NADDR-2 and NADDR-1 have the single
+    // and double indirect blocks.  There is no triple:
+    // see NLEVEL in sys/param.h.  The first step is to
+    // determine how many levels of indirection.
     sh = 0;
     nb = 1;
     bn -= NADDR - NLEVEL;
@@ -76,9 +70,7 @@ daddr_t bmap(register struct inode *ip, daddr_t bn, int rwflg)
         return ((daddr_t)0);
     }
 
-    /*
-     * fetch the address from the inode
-     */
+    // fetch the address from the inode
     nb = ip->i_un.i_addr[NADDR - j];
     if (nb == 0) {
         if (rwflg == B_READ || (bp = alloc(dev)) == NULL)
@@ -89,9 +81,7 @@ daddr_t bmap(register struct inode *ip, daddr_t bn, int rwflg)
         ip->i_flag |= IUPD | ICHG;
     }
 
-    /*
-     * fetch through the indirect blocks
-     */
+    // fetch through the indirect blocks
     for (; j <= NLEVEL; j++) {
         bp = bread(dev, nb);
         if (bp->b_flags & B_ERROR) {
@@ -115,20 +105,16 @@ daddr_t bmap(register struct inode *ip, daddr_t bn, int rwflg)
             brelse(bp);
     }
 
-    /*
-     * calculate read-ahead.
-     */
+    // calculate read-ahead.
     if (i < NINDIR - 1)
         rablock = bap[i + 1];
     return (nb);
 }
 
-/*
- * Pass back  c  to the user at his location u_base;
- * update u_base, u_count, and u_offset.  Return -1
- * on the last character of the user's read.
- * u_base is in the user address space unless u_segflg is set.
- */
+// Pass back  c  to the user at his location u_base;
+// update u_base, u_count, and u_offset.  Return -1
+// on the last character of the user's read.
+// u_base is in the user address space unless u_segflg is set.
 int passc(register int c)
 {
     if (u.u_segflg)
@@ -143,13 +129,11 @@ int passc(register int c)
     return (u.u_count == 0 ? -1 : 0);
 }
 
-/*
- * Pick up and return the next character from the user's
- * write call at location u_base;
- * update u_base, u_count, and u_offset.  Return -1
- * when u_count is exhausted.  u_base is in the user's
- * address space unless u_segflg is set.
- */
+// Pick up and return the next character from the user's
+// write call at location u_base;
+// update u_base, u_count, and u_offset.  Return -1
+// when u_count is exhausted.  u_base is in the user's
+// address space unless u_segflg is set.
 int cpass()
 {
     register int c;
@@ -168,19 +152,15 @@ int cpass()
     return (c & 0377);
 }
 
-/*
- * Routine which sets a user error; placed in
- * illegal entries in the bdevsw and cdevsw tables.
- */
+// Routine which sets a user error; placed in
+// illegal entries in the bdevsw and cdevsw tables.
 void nodev()
 {
     u.u_error = ENODEV;
 }
 
-/*
- * Null routine; placed in insignificant entries
- * in the bdevsw and cdevsw tables.
- */
+// Null routine; placed in insignificant entries
+// in the bdevsw and cdevsw tables.
 void nulldev()
 {
 }

@@ -1,4 +1,4 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // clang-format off
 #include "sys/types.h"
@@ -19,9 +19,7 @@
 
 void stat1(register struct inode *ip, struct stat *ub, off_t pipeadj);
 
-/*
- * the fstat system call.
- */
+// the fstat system call.
 void fstat()
 {
     register struct file *fp;
@@ -37,9 +35,7 @@ void fstat()
     stat1(fp->f_inode, uap->sb, fp->f_flag & FPIPE ? fp->f_un.f_offset : 0);
 }
 
-/*
- * the stat system call.
- */
+// the stat system call.
 void stat()
 {
     register struct inode *ip;
@@ -56,10 +52,8 @@ void stat()
     iput(ip);
 }
 
-/*
- * The basic routine for fstat and stat:
- * get the inode and pass appropriate parts back.
- */
+// The basic routine for fstat and stat:
+// get the inode and pass appropriate parts back.
 void stat1(register struct inode *ip, struct stat *ub, off_t pipeadj)
 {
     register struct dinode *dp;
@@ -67,9 +61,7 @@ void stat1(register struct inode *ip, struct stat *ub, off_t pipeadj)
     struct stat ds;
 
     iupdat(ip, &time, &time);
-    /*
-     * first copy from inode table
-     */
+    // first copy from inode table
     ds.st_dev   = ip->i_dev;
     ds.st_ino   = ip->i_number;
     ds.st_mode  = ip->i_mode;
@@ -78,9 +70,7 @@ void stat1(register struct inode *ip, struct stat *ub, off_t pipeadj)
     ds.st_gid   = ip->i_gid;
     ds.st_rdev  = (dev_t)ip->i_un.i_rdev;
     ds.st_size  = ip->i_size - pipeadj;
-    /*
-     * next the dates in the disk
-     */
+    // next the dates in the disk
     bp = bread(ip->i_dev, itod(ip->i_number));
     dp = bp->b_un.b_dino;
     dp += itoo(ip->i_number);
@@ -92,9 +82,7 @@ void stat1(register struct inode *ip, struct stat *ub, off_t pipeadj)
         u.u_error = EFAULT;
 }
 
-/*
- * the dup system call.
- */
+// the dup system call.
 void dup()
 {
     register struct file *fp;
@@ -129,9 +117,7 @@ void dup()
     }
 }
 
-/*
- * the mount system call.
- */
+// the mount system call.
 void smount()
 {
     dev_t dev;
@@ -175,7 +161,7 @@ void smount()
         brelse(bp);
         goto out1;
     }
-    /* Refuse it here rather than let getfs() "repair" it into a full disk later. */
+    // Refuse it here rather than let getfs() "repair" it into a full disk later.
     if (sbcheck(bp->b_un.b_filsys, dev)) {
         brelse(bp);
         u.u_error = EINVAL;
@@ -200,9 +186,7 @@ out1:
     iput(ip);
 }
 
-/*
- * the umount system call.
- */
+// the umount system call.
 void sumount()
 {
     dev_t dev;
@@ -216,7 +200,7 @@ void sumount()
     dev = getmdev();
     if (u.u_error)
         return;
-    xumount(dev); /* remove unused sticky files from text table */
+    xumount(dev); // remove unused sticky files from text table
     update();
     for (mp = &mount[0]; mp < &mount[NMOUNT]; mp++)
         if (mp->m_bufp != NULL && dev == mp->m_dev)
@@ -240,11 +224,9 @@ found:
     brelse(bp);
 }
 
-/*
- * Common code for mount and umount.
- * Check that the user's argument is a reasonable
- * thing on which to mount, and return the device number if so.
- */
+// Common code for mount and umount.
+// Check that the user's argument is a reasonable
+// thing on which to mount, and return the device number if so.
 dev_t getmdev()
 {
     dev_t dev;
@@ -256,7 +238,7 @@ dev_t getmdev()
     if ((ip->i_mode & IFMT) != IFBLK)
         u.u_error = ENOTBLK;
     dev = (dev_t)ip->i_un.i_rdev;
-    /* i_rdev comes off the disk, so a hostile mknod can make it negative */
+    // i_rdev comes off the disk, so a hostile mknod can make it negative
     if (major(dev) < 0 || major(dev) >= nblkdev)
         u.u_error = ENXIO;
     iput(ip);

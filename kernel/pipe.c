@@ -1,4 +1,4 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // clang-format off
 #include "sys/types.h"
@@ -11,22 +11,18 @@
 #include "sys/reg.h"
 // clang-format on
 
-/*
- * Max allowable buffering per pipe.
- * This is also the max size of the
- * file created to implement the pipe.
- * If this size is bigger than 5120,
- * pipes will be implemented with large
- * files, which is probably not good.
- */
+// Max allowable buffering per pipe.
+// This is also the max size of the
+// file created to implement the pipe.
+// If this size is bigger than 5120,
+// pipes will be implemented with large
+// files, which is probably not good.
 #define PIPSIZ 4096
 
-/*
- * The sys-pipe entry.
- * Allocate an inode on the root device.
- * Allocate 2 file structures.
- * Put it all together with flags.
- */
+// The sys-pipe entry.
+// Allocate an inode on the root device.
+// Allocate 2 file structures.
+// Put it all together with flags.
 void pipe()
 {
     register struct inode *ip;
@@ -60,9 +56,7 @@ void pipe()
     ip->i_flag   = IACC | IUPD | ICHG;
 }
 
-/*
- * Read call directed to a pipe.
- */
+// Read call directed to a pipe.
 void readp(register struct file *fp)
 {
     register struct inode *ip;
@@ -70,20 +64,14 @@ void readp(register struct file *fp)
     ip = fp->f_inode;
 
 loop:
-    /*
-     * Very conservative locking.
-     */
+    // Very conservative locking.
 
     plock(ip);
-    /*
-     * If nothing in the pipe, wait.
-     */
+    // If nothing in the pipe, wait.
     if (ip->i_size == 0) {
-        /*
-         * If there are not both reader and
-         * writer active, return without
-         * satisfying read.
-         */
+        // If there are not both reader and
+        // writer active, return without
+        // satisfying read.
         prele(ip);
         if (ip->i_count < 2)
             return;
@@ -92,17 +80,13 @@ loop:
         goto loop;
     }
 
-    /*
-     * Read and return
-     */
+    // Read and return
 
     u.u_offset = fp->f_un.f_offset;
     readi(ip);
     fp->f_un.f_offset = u.u_offset;
-    /*
-     * If reader has caught up with writer, reset
-     * offset and size to 0.
-     */
+    // If reader has caught up with writer, reset
+    // offset and size to 0.
     if (fp->f_un.f_offset == ip->i_size) {
         fp->f_un.f_offset = 0;
         ip->i_size        = 0;
@@ -114,9 +98,7 @@ loop:
     prele(ip);
 }
 
-/*
- * Write call directed to a pipe.
- */
+// Write call directed to a pipe.
 void writep(register struct file *fp)
 {
     register int c;
@@ -127,9 +109,7 @@ void writep(register struct file *fp)
 
 loop:
 
-    /*
-     * If all done, return.
-     */
+    // If all done, return.
 
     plock(ip);
     if (c == 0) {
@@ -138,11 +118,9 @@ loop:
         return;
     }
 
-    /*
-     * If there are not both read and
-     * write sides of the pipe active,
-     * return error and signal too.
-     */
+    // If there are not both read and
+    // write sides of the pipe active,
+    // return error and signal too.
 
     if (ip->i_count < 2) {
         prele(ip);
@@ -151,11 +129,9 @@ loop:
         return;
     }
 
-    /*
-     * If the pipe is full,
-     * wait for reads to deplete
-     * and truncate it.
-     */
+    // If the pipe is full,
+    // wait for reads to deplete
+    // and truncate it.
 
     if (ip->i_size >= PIPSIZ) {
         ip->i_mode |= IWRITE;
@@ -164,13 +140,11 @@ loop:
         goto loop;
     }
 
-    /*
-     * Write what is possible and
-     * loop back.
-     * If writing less than PIPSIZ, it always goes.
-     * One can therefore get a file > PIPSIZ if write
-     * sizes do not divide PIPSIZ.
-     */
+    // Write what is possible and
+    // loop back.
+    // If writing less than PIPSIZ, it always goes.
+    // One can therefore get a file > PIPSIZ if write
+    // sizes do not divide PIPSIZ.
 
     u.u_offset = ip->i_size;
     u.u_count  = min(c, PIPSIZ);
@@ -184,11 +158,9 @@ loop:
     goto loop;
 }
 
-/*
- * Lock a pipe.
- * If its already locked,
- * set the WANT bit and sleep.
- */
+// Lock a pipe.
+// If its already locked,
+// set the WANT bit and sleep.
 void plock(register struct inode *ip)
 {
     while (ip->i_flag & ILOCK) {
@@ -198,13 +170,11 @@ void plock(register struct inode *ip)
     ip->i_flag |= ILOCK;
 }
 
-/*
- * Unlock a pipe.
- * If WANT bit is on,
- * wakeup.
- * This routine is also used
- * to unlock inodes in general.
- */
+// Unlock a pipe.
+// If WANT bit is on,
+// wakeup.
+// This routine is also used
+// to unlock inodes in general.
 void prele(register struct inode *ip)
 {
     ip->i_flag &= ~ILOCK;

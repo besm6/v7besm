@@ -1,4 +1,4 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // clang-format off
 #include "sys/types.h"
@@ -14,13 +14,11 @@
 #include "sys/acct.h"
 // clang-format on
 
-/*
- * Convert a user supplied
- * file descriptor into a pointer
- * to a file structure.
- * Only task is to check range
- * of the descriptor.
- */
+// Convert a user supplied
+// file descriptor into a pointer
+// to a file structure.
+// Only task is to check range
+// of the descriptor.
 struct file *getf(register int f)
 {
     register struct file *fp;
@@ -34,17 +32,15 @@ struct file *getf(register int f)
     return (NULL);
 }
 
-/*
- * Internal form of close.
- * Decrement reference count on
- * file structure.
- * Also make sure the pipe protocol
- * does not constipate.
- *
- * Decrement reference count on the inode following
- * removal to the referencing file structure.
- * Call device handler on last close.
- */
+// Internal form of close.
+// Decrement reference count on
+// file structure.
+// Also make sure the pipe protocol
+// does not constipate.
+//
+// Decrement reference count on the inode following
+// removal to the referencing file structure.
+// Call device handler on last close.
 void closef(register struct file *fp)
 {
     register struct inode *ip;
@@ -93,11 +89,9 @@ void closef(register struct file *fp)
     (*cfunc)(dev, flag);
 }
 
-/*
- * openi called to allow handler
- * of special files to initialize and
- * validate before actual IO.
- */
+// openi called to allow handler
+// of special files to initialize and
+// validate before actual IO.
 void openi(register struct inode *ip, int rw)
 {
     dev_t dev;
@@ -125,19 +119,17 @@ bad:
     u.u_error = ENXIO;
 }
 
-/*
- * Check mode permission on inode pointer.
- * Mode is READ, WRITE or EXEC.
- * In the case of WRITE, the
- * read-only status of the file
- * system is checked.
- * Also in WRITE, prototype text
- * segments cannot be written.
- * The mode is shifted to select
- * the owner/group/other fields.
- * The super user is granted all
- * permissions.
- */
+// Check mode permission on inode pointer.
+// Mode is READ, WRITE or EXEC.
+// In the case of WRITE, the
+// read-only status of the file
+// system is checked.
+// Also in WRITE, prototype text
+// segments cannot be written.
+// The mode is shifted to select
+// the owner/group/other fields.
+// The super user is granted all
+// permissions.
 int access(register struct inode *ip, int mode)
 {
     register int m;
@@ -148,7 +140,7 @@ int access(register struct inode *ip, int mode)
             u.u_error = EROFS;
             return (1);
         }
-        if (ip->i_flag & ITEXT) /* try to free text */
+        if (ip->i_flag & ITEXT) // try to free text
             xrele(ip);
         if (ip->i_flag & ITEXT) {
             u.u_error = ETXTBSY;
@@ -169,14 +161,12 @@ int access(register struct inode *ip, int mode)
     return (1);
 }
 
-/*
- * Look up a pathname and test if
- * the resultant inode is owned by the
- * current user.
- * If not, try for super-user.
- * If permission is granted,
- * return inode pointer.
- */
+// Look up a pathname and test if
+// the resultant inode is owned by the
+// current user.
+// If not, try for super-user.
+// If permission is granted,
+// return inode pointer.
 struct inode *owner()
 {
     register struct inode *ip;
@@ -192,10 +182,8 @@ struct inode *owner()
     return (NULL);
 }
 
-/*
- * Test if the current user is the
- * super user.
- */
+// Test if the current user is the
+// super user.
 int suser()
 {
     if (u.u_uid == 0) {
@@ -206,9 +194,7 @@ int suser()
     return (0);
 }
 
-/*
- * Allocate a user file descriptor.
- */
+// Allocate a user file descriptor.
 int ufalloc()
 {
     register int i;
@@ -223,15 +209,13 @@ int ufalloc()
     return (-1);
 }
 
-/*
- * Allocate a user file descriptor
- * and a file structure.
- * Initialize the descriptor
- * to point at the file structure.
- *
- * no file -- if there are no available
- * 	file structures.
- */
+// Allocate a user file descriptor
+// and a file structure.
+// Initialize the descriptor
+// to point at the file structure.
+//
+// no file -- if there are no available
+// 	file structures.
 struct file *falloc()
 {
     register struct file *fp;

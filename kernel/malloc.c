@@ -1,4 +1,4 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // clang-format off
 #include "sys/types.h"
@@ -7,16 +7,14 @@
 #include "sys/map.h"
 // clang-format on
 
-/*
- * Allocate 'size' units from the given
- * map. Return the base of the allocated
- * space.
- * In a map, the addresses are increasing and the
- * list is terminated by a 0 size.
- * The core map unit is one 48-bit word; the swap map
- * unit is one disk block of BSIZE (512) words.
- * Algorithm is first-fit.
- */
+// Allocate 'size' units from the given
+// map. Return the base of the allocated
+// space.
+// In a map, the addresses are increasing and the
+// list is terminated by a 0 size.
+// The core map unit is one 48-bit word; the swap map
+// unit is one disk block of BSIZE (512) words.
+// Algorithm is first-fit.
 int malloc(struct map *mp, int size)
 {
     register int a;
@@ -38,12 +36,10 @@ int malloc(struct map *mp, int size)
     return (0);
 }
 
-/*
- * Free the previously allocated space aa
- * of size units into the specified map.
- * Sort aa into map and combine on
- * one or both ends if possible.
- */
+// Free the previously allocated space aa
+// of size units into the specified map.
+// Sort aa into map and combine on
+// one or both ends if possible.
 void mfree(struct map *mp, int size, register int a)
 {
     register struct map *bp;
@@ -51,7 +47,7 @@ void mfree(struct map *mp, int size, register int a)
 
     if ((bp = mp) == coremap && runin) {
         runin = 0;
-        wakeup((chan_t)&runin); /* Wake scheduler when freeing core */
+        wakeup((chan_t)&runin); // Wake scheduler when freeing core
     }
     for (; bp->m_addr <= a && bp->m_size != 0; bp++)
         ;
