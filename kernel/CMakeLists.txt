@@ -18,22 +18,49 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     project(kernel NONE)
 endif()
 
-# The cross toolchain and the SIMH simulator.  besm6 is only needed to boot/test, so it
-# is optional -- the image builds without it.
-find_program(B6CC     b6cc     REQUIRED)
-find_program(B6AS     b6as     REQUIRED)
-find_program(B6LD     b6ld     REQUIRED)
-find_program(B6AR     b6ar     REQUIRED)
-find_program(B6RANLIB b6ranlib REQUIRED)
-find_program(B6NM     b6nm     REQUIRED)
-find_program(B6SIZE   b6size   REQUIRED)
-find_program(B6DISASM b6disasm REQUIRED)
-find_program(BESM6    besm6)
+# The cross toolchain.  Two modes:
+#  - Integrated in the top-level project, the tools are CMake targets already being built in
+#    build/, so use THOSE -- editing cmd/as, cmd/ld, ... and rebuilding then relinks the
+#    kernel with the fresh tool, no `make install' in between.  b6cc is a driver, though: it
+#    shells out to b6cpp/b6as/b6ld (ours) and b6parse/b6lower/b6codegen (the EXTERNAL
+#    c-compiler, not built here).  B6CC_ENV points the three we build at the build tree via
+#    b6cc's per-tool env overrides; the external passes have no override and resolve from the
+#    install, as they must.
+#  - Standalone (`cmake -S kernel'), no such targets exist, so fall back to the installed
+#    tools found on PATH's standard prefixes, exactly as before.
+if(TARGET b6cc)
+    set(B6CC     $<TARGET_FILE:b6cc>)
+    set(B6AS     $<TARGET_FILE:b6as>)
+    set(B6LD     $<TARGET_FILE:b6ld>)
+    set(B6AR     $<TARGET_FILE:b6ar>)
+    set(B6RANLIB $<TARGET_FILE:b6ranlib>)
+    set(B6NM     $<TARGET_FILE:b6nm>)
+    set(B6SIZE   $<TARGET_FILE:b6size>)
+    set(B6DISASM $<TARGET_FILE:b6disasm>)
+    set(B6CC_ENV ${CMAKE_COMMAND} -E env
+        B6CPP=$<TARGET_FILE:b6cpp> B6AS=$<TARGET_FILE:b6as> B6LD=$<TARGET_FILE:b6ld>)
+else()
+    find_program(B6CC     b6cc     REQUIRED)
+    find_program(B6AS     b6as     REQUIRED)
+    find_program(B6LD     b6ld     REQUIRED)
+    find_program(B6AR     b6ar     REQUIRED)
+    find_program(B6RANLIB b6ranlib REQUIRED)
+    find_program(B6NM     b6nm     REQUIRED)
+    find_program(B6SIZE   b6size   REQUIRED)
+    find_program(B6DISASM b6disasm REQUIRED)
+    set(B6CC_ENV "")
+endif()
 
-# libruntime.a (the b$* helpers) sits beside the compiler's install prefix, so derive it
-# from b6cc rather than hard-coding ~/.local -- this follows ~/.local vs /usr/local.
-get_filename_component(_bin ${B6CC} DIRECTORY)
-get_filename_component(B6LIBDIR ${_bin}/../share/besm6/lib ABSOLUTE)
+# besm6 (the SIMH simulator) is only needed to boot/test, so it stays optional.
+find_program(BESM6 besm6)
+
+# libruntime.a (the b$* helpers) and besm6.h come from the EXTERNAL compiler's install, never
+# the build tree -- so locate the runtime directly rather than deriving it from b6cc (whose
+# build-tree path has no share/besm6/lib beside it).  Required: the kernel cannot link without
+# it.  This is also the top-level guard's signal that the external compiler is installed.
+find_file(B6LIBRUNTIME libruntime.a
+    PATHS $ENV{HOME}/.local/share/besm6/lib /usr/local/share/besm6/lib REQUIRED)
+get_filename_component(B6LIBDIR ${B6LIBRUNTIME} DIRECTORY)
 
 # The one system-header tree, and a coarse dependency on all of sys/: b6cc has no -M, so
 # every object simply depends on every system header (the same trade the test dir makes).
@@ -42,16 +69,23 @@ get_filename_component(KINC ${CMAKE_CURRENT_SOURCE_DIR}/../include ABSOLUTE)
 file(GLOB KHDRS ${KINC}/sys/*.h)
 
 # ---------------------------------------------------------------------------------------
-# Compile one source to an object in the current binary dir.  Dispatches by extension:
+# Compile one source to an object.  Dispatches by extension:
 #   .s        -> b6as, no flags (brz.s/switch.s #include nothing)
 #   .c / .S   -> b6cc -c -I<inc> [ARGN], where .S is preprocessed (cpp -> as) because it
 #               #includes headers.  ARGN carries -DKERNEL for the kernel sources.
+# The object lands in ${B6_OBJDIR} if the caller set it, else the current binary dir -- the
+# test/ subdir sets it per-program so images do not share an object output (which the
+# Makefiles generator would emit into every consuming target and race under `make -j').
 # Sets ${outvar} to the absolute object path.  Defined here so the test/ subdir reuses it.
 # ---------------------------------------------------------------------------------------
 function(b6_obj outvar abssrc)
     get_filename_component(base ${abssrc} NAME_WE)
     get_filename_component(ext ${abssrc} EXT)
-    set(obj ${CMAKE_CURRENT_BINARY_DIR}/${base}.o)
+    if(DEFINED B6_OBJDIR)
+        set(obj ${B6_OBJDIR}/${base}.o)
+    else()
+        set(obj ${CMAKE_CURRENT_BINARY_DIR}/${base}.o)
+    endif()
     if(ext STREQUAL ".s")
         add_custom_command(OUTPUT ${obj}
             COMMAND ${B6AS} ${abssrc} -o ${obj}
@@ -59,7 +93,7 @@ function(b6_obj outvar abssrc)
             COMMENT "b6as ${base}.o" VERBATIM)
     else()
         add_custom_command(OUTPUT ${obj}
-            COMMAND ${B6CC} -c ${ARGN} -I${KINC} ${abssrc} -o ${obj}
+            COMMAND ${B6CC_ENV} ${B6CC} -c ${ARGN} -I${KINC} ${abssrc} -o ${obj}
             DEPENDS ${abssrc} ${KHDRS}
             COMMENT "b6cc ${base}.o" VERBATIM)
     endif()

@@ -108,18 +108,19 @@ install(DIRECTORY include/ DESTINATION share/besm6/include
 
 #
 # The BESM-6 kernel cross-build.  Unlike cmd/, it is NOT compiled by this project's host
-# compiler: it cross-compiles with the *installed* b6* toolchain (this project builds those
-# tools, but the kernel consumes the installed copies) and links against libruntime.a and
-# the installed headers.  It therefore can only be configured once `make install' has
-# populated ~/.local (or /usr/local) -- so guard on b6cc being present rather than failing a
-# fresh configure that has not installed anything yet.  On a fresh tree: `make && make
-# install' (plus lib/), then reconfigure (`make clean && make', or touch this file) and the
-# kernel joins the build.  kernel/ still builds standalone via `cd kernel && make'.
+# compiler: it cross-compiles with the b6* toolchain built above (kernel/CMakeLists.txt uses
+# those in-tree targets directly, so a rebuilt tool relinks the kernel with no reinstall).
+# It still depends on the EXTERNAL c-compiler being installed, though -- b6cc's b6parse/
+# b6lower/b6codegen passes, its <besm6.h>, and libruntime.a all come from ~/.local (or
+# /usr/local) and are not built here.  Guard on that runtime so a fresh tree without the
+# external compiler still configures and builds the cmd/ tools; libruntime.a co-ships with
+# the passes and headers, so its presence is a good single signal.
 #
-find_program(B6CC_INSTALLED b6cc)
-if(B6CC_INSTALLED)
-    message(STATUS "Found installed b6cc: ${B6CC_INSTALLED} -- building kernel/")
+find_file(B6RUNTIME_LIB libruntime.a
+    PATHS $ENV{HOME}/.local/share/besm6/lib /usr/local/share/besm6/lib)
+if(B6RUNTIME_LIB)
+    message(STATUS "Found external runtime ${B6RUNTIME_LIB} -- building kernel/")
     add_subdirectory(kernel)
 else()
-    message(STATUS "kernel/: b6cc not installed; run 'make install' then reconfigure to build it")
+    message(STATUS "kernel/: external compiler runtime (libruntime.a) not installed; skipping")
 endif()

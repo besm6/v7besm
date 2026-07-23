@@ -12,38 +12,38 @@
 
 set(KERNOBJ bio md mb slp malloc syscall sendsig clock intr utab)
 
-# Build one object per basename, once, caching the path in B6OBJ_<base> so an object
-# shared by several programs (utab, brz, intr, ...) is not emitted twice -- a second
-# add_custom_command for the same output is an error.  A macro, so the cache lives in
-# this directory's scope rather than a function's.
-macro(b6_need_obj base)
-    if(NOT DEFINED B6OBJ_${base})
-        b6_find_src(_src ${base})
-        if("${base}" IN_LIST KERNOBJ)
-            b6_obj(_o ${_src} -DKERNEL)
-        else()
-            b6_obj(_o ${_src})
-        endif()
-        set(B6OBJ_${base} ${_o})
-    endif()
-endmacro()
-
 set(TEST_TARGETS "")
 
-# Link a test program from a list of object basenames, then the dis/nm postlude.  The
-# b6ld/b6dis/b6nm commands run in the binary dir and name objects by basename, so -lruntime
-# resolves and the artifacts land beside the executable.  A macro, to share b6_need_obj's
-# directory-scope cache.  besm6 is optional; the .ini test is registered only when present.
+# Compile ${base}.o for program ${prog} into its OWN directory (${prog}.dir), setting -DKERNEL
+# only for the kernel .c sources.  Objects are per-program on purpose: many images share a
+# source (utab, brz, crt0, ...), and a single shared object OUTPUT would be emitted into every
+# consuming target's build rules and race under `make -j' (MAKEFLAGS=-j8), corrupting the file
+# a link then reads.  Recompiling a shared source once per image trades a little build time for
+# a parallel-safe graph.  Sets ${outvar} to the object path.
+function(b6_test_obj outvar prog base)
+    b6_find_src(_src ${base})
+    set(B6_OBJDIR ${CMAKE_CURRENT_BINARY_DIR}/${prog}.dir)
+    if("${base}" IN_LIST KERNOBJ)
+        b6_obj(_o ${_src} -DKERNEL)
+    else()
+        b6_obj(_o ${_src})
+    endif()
+    set(${outvar} ${_o} PARENT_SCOPE)
+endfunction()
+
+# Link a test program from a list of object basenames, then the dis/nm postlude.  Objects are
+# named by full path (they live in ${prog}.dir) and the tools run in the binary dir so the
+# executable and its .dis/.nm land beside the .ini's cwd.  A macro, to append to TEST_TARGETS
+# in directory scope.  besm6 is optional; the .ini test is registered only when present.
 macro(b6_test prog)
-    set(_names "")   # basename.o, for the b6ld command line
-    set(_paths "")   # absolute paths, for DEPENDS
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${prog}.dir)
+    set(_paths "")   # object paths, for the b6ld line and DEPENDS
     foreach(_b ${ARGN})
-        b6_need_obj(${_b})
-        list(APPEND _names ${_b}.o)
-        list(APPEND _paths ${B6OBJ_${_b}})
+        b6_test_obj(_o ${prog} ${_b})
+        list(APPEND _paths ${_o})
     endforeach()
     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${prog}
-        COMMAND ${B6LD} ${_names} -o ${prog} -L${B6LIBDIR} -lruntime
+        COMMAND ${B6LD} ${_paths} -o ${prog} -L${B6LIBDIR} -lruntime
         COMMAND sh -c "${B6DISASM} -c ${prog} > ${prog}.dis"
         COMMAND sh -c "${B6NM} -n ${prog} > ${prog}.nm"
         DEPENDS ${_paths}
@@ -60,12 +60,13 @@ endmacro()
 
 # hello is the odd one out: it links no b$* helpers (no -lruntime) and its .nm is left in
 # symbol order rather than address order.
-b6_need_obj(hello)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/hello.dir)
+b6_test_obj(_hello_o hello hello)
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/hello
-    COMMAND ${B6LD} hello.o -o hello
+    COMMAND ${B6LD} ${_hello_o} -o hello
     COMMAND sh -c "${B6DISASM} -c hello > hello.dis"
     COMMAND sh -c "${B6NM} hello > hello.nm"
-    DEPENDS ${B6OBJ_hello}
+    DEPENDS ${_hello_o}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "b6ld hello" VERBATIM)
 add_custom_target(hello_img DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/hello)
