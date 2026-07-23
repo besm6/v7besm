@@ -1,30 +1,30 @@
-/*
- * pwent -- the accounts and terminal routines, plus crypt.
- *
- * NOTHING OUT OF /etc/passwd REACHES THE OUTPUT, and it cannot: the harness diffs
- * against a checked-in .expected, and the host's account list differs from machine to
- * machine -- on some of them (macOS) the logged-in user is not in the file at all.  So
- * the pw and gr families are tested for SELF-CONSISTENCY instead: every entry the
- * walker yields must be findable again by name and by id, and only the verdict is
- * printed.  A host with no /etc/passwd makes the walk empty and every claim below still
- * true, which is the right answer for a test that is checking the routines and not the
- * machine.
- *
- * The lookup has to be done in two passes.  getpwnam() shares its statics with
- * getpwent() AND rewinds the file underneath it, so a lookup made in the middle of a
- * walk would both clobber the entry in hand and restart the walk.  The names and ids
- * are copied out first; that they must be is itself the contract <pwd.h> states.
- *
- * The terminal three answer for their failure paths here, which is all the simulator
- * can offer: ttyname() reads /dev with read(2), as v7 did and as this kernel will
- * allow, and b6sim's read() is the host's and refuses a directory -- so it is NULL,
- * ttyslot() is 0 and getlogin(), which needs a slot, is NULL.  Under the real kernel
- * with a root filesystem they will have something to say; that run is kernel task
- * 18b.6 and not this one.
- *
- * The crypt vectors are the HOST's crypt(3), not this program's own first output: DES
- * has one right answer and the point is to agree with it.
- */
+//
+// pwent -- the accounts and terminal routines, plus crypt.
+//
+// NOTHING OUT OF /etc/passwd REACHES THE OUTPUT, and it cannot: the harness diffs
+// against a checked-in .expected, and the host's account list differs from machine to
+// machine -- on some of them (macOS) the logged-in user is not in the file at all.  So
+// the pw and gr families are tested for SELF-CONSISTENCY instead: every entry the
+// walker yields must be findable again by name and by id, and only the verdict is
+// printed.  A host with no /etc/passwd makes the walk empty and every claim below still
+// true, which is the right answer for a test that is checking the routines and not the
+// machine.
+//
+// The lookup has to be done in two passes.  getpwnam() shares its statics with
+// getpwent() AND rewinds the file underneath it, so a lookup made in the middle of a
+// walk would both clobber the entry in hand and restart the walk.  The names and ids
+// are copied out first; that they must be is itself the contract <pwd.h> states.
+//
+// The terminal three answer for their failure paths here, which is all the simulator
+// can offer: ttyname() reads /dev with read(2), as v7 did and as this kernel will
+// allow, and b6sim's read() is the host's and refuses a directory -- so it is NULL,
+// ttyslot() is 0 and getlogin(), which needs a slot, is NULL.  Under the real kernel
+// with a root filesystem they will have something to say; that run is kernel task
+// 18b.6 and not this one.
+//
+// The crypt vectors are the HOST's crypt(3), not this program's own first output: DES
+// has one right answer and the point is to agree with it.
+//
 #include <grp.h>
 #include <pwd.h>
 #include <stdio.h>
@@ -57,17 +57,17 @@ int main(void)
     char **m;
     int n, i, bad, mem, fd;
 
-    /* ---- /etc/passwd ---- */
+    // ---- /etc/passwd ----
     printf("--- passwd\n");
     n = 0;
     setpwent();
     while ((pw = getpwent()) != 0 && n < MAXENT) {
-        /*
-         * Entries whose name does not fit are skipped rather than truncated: a
-         * truncated name would not be found again and the check below would report a
-         * failure of this program's buffer.  /etc/passwd on a host may hold comment
-         * lines, which have no colons at all and so become one very long "name".
-         */
+        //
+        // Entries whose name does not fit are skipped rather than truncated: a
+        // truncated name would not be found again and the check below would report a
+        // failure of this program's buffer.  /etc/passwd on a host may hold comment
+        // lines, which have no colons at all and so become one very long "name".
+        //
         if (strlen(pw->pw_name) >= MAXNAME)
             continue;
         strcpy(names[n], pw->pw_name);
@@ -93,12 +93,12 @@ int main(void)
     }
     ok("every entry is found again by uid", bad == 0);
 
-    /*
-     * Two things every entry must have whatever the file says: a name that is not the
-     * empty string, and a shell field that is inside the same line as the name -- the
-     * whole entry is one buffer split in place, so a pointer outside it would mean the
-     * splitting walked off the end.
-     */
+    //
+    // Two things every entry must have whatever the file says: a name that is not the
+    // empty string, and a shell field that is inside the same line as the name -- the
+    // whole entry is one buffer split in place, so a pointer outside it would mean the
+    // splitting walked off the end.
+    //
     bad = 0;
     for (i = 0; i < n; i++) {
         if (names[i][0] == '\0')
@@ -109,14 +109,14 @@ int main(void)
     ok("a name nobody has is not found", getpwnam("no-such-user-at-all") == 0);
     ok("a uid nobody has is not found", getpwuid(-12345) == 0);
 
-    /* setpwent may be called twice, and endpwent on a stream never opened. */
+    // setpwent may be called twice, and endpwent on a stream never opened.
     setpwent();
     setpwent();
     endpwent();
     endpwent();
     ok("setpwent and endpwent are repeatable", 1);
 
-    /* ---- /etc/group ---- */
+    // ---- /etc/group ----
     printf("--- group\n");
     n   = 0;
     mem = 0;
@@ -127,7 +127,7 @@ int main(void)
         strcpy(names[n], gr->gr_name);
         ids[n] = gr->gr_gid;
         n++;
-        /* The member vector must be NULL-terminated inside its own bounds. */
+        // The member vector must be NULL-terminated inside its own bounds.
         for (m = gr->gr_mem; *m != 0; m++) {
             mem++;
             if (mem > MAXENT * 100)
@@ -157,11 +157,11 @@ int main(void)
     ok("a group nobody has is not found", getgrnam("no-such-group-at-all") == 0);
     ok("a gid nobody has is not found", getgrgid(-12345) == 0);
 
-    /* ---- getpw, v7's obsolete one ---- */
+    // ---- getpw, v7's obsolete one ----
     printf("--- getpw\n");
     ok("a uid nobody has fails", getpw(-12345, buf) == 1);
 
-    /* ---- the terminal three ---- */
+    // ---- the terminal three ----
     printf("--- terminals\n");
     fd = open("pwent.c", 0);
     ok("a regular file is not a terminal", fd < 0 || ttyname(fd) == 0);
@@ -171,7 +171,7 @@ int main(void)
     ok("ttyslot has no slot to report", ttyslot() == 0);
     ok("getlogin has no slot to read", getlogin() == 0);
 
-    /* ---- crypt ---- */
+    // ---- crypt ----
     printf("--- crypt\n");
     printf("crypt(\"\",\"..\")          %s\n", crypt("", ".."));
     printf("crypt(\"a\",\"sa\")         %s\n", crypt("a", "sa"));

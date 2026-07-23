@@ -1,16 +1,16 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * jn(n, x), yn(n, x) -- Bessel functions of integer order.
- * v7 extensions, not C11; kept because v7's libm has them.
- *
- * v7's, unchanged but for prototypes.  Both stand entirely on j0/j1 (and y0/y1) and a
- * recurrence, so all the range and precision work is next door in j0.c and j1.c;
- * nothing here touches a coefficient or a threshold.  jn recurs forward for n < x and
- * backward (a continued fraction, then Miller's downward recurrence) for n > x, where
- * forward recurrence would be unstable; yn is stable forward for every n.  The only
- * error case is yn of a non-positive x, which j0.c's y0 also reports: EDOM, -HUGE_VAL.
- */
+//
+// jn(n, x), yn(n, x) -- Bessel functions of integer order.
+// v7 extensions, not C11; kept because v7's libm has them.
+//
+// v7's, unchanged but for prototypes.  Both stand entirely on j0/j1 (and y0/y1) and a
+// recurrence, so all the range and precision work is next door in j0.c and j1.c;
+// nothing here touches a coefficient or a threshold.  jn recurs forward for n < x and
+// backward (a continued fraction, then Miller's downward recurrence) for n > x, where
+// forward recurrence would be unstable; yn is stable forward for every n.  The only
+// error case is yn of a non-positive x, which j0.c's y0 also reports: EDOM, -HUGE_VAL.
+//
 #include <errno.h>
 #include <math.h>
 

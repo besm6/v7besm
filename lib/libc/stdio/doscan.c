@@ -1,32 +1,32 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * The scanning engine behind scanf/fscanf/sscanf, v7's, with three changes forced
- * by the machine and one by C11.
- *
- *   THE ARGUMENT LIST IS A va_list.  v7 walked the caller's parameter block with an
- *   `int **' handed in by scanf(); <stdarg.h> is the only way to do that here.
- *
- *   AN ARGUMENT IS CARRIED AS A RAW WORD, not as a typed pointer.  A `char *' is a
- *   fat pointer and an `int *' is not, so the two cannot share a C type without one
- *   of them being re-decorated on the way through -- and a NULL that acquires the
- *   fat marker stops testing as null.  The word is read with va_arg(ap, int) and
- *   reinterpreted at the point of use, exactly as the printf engine does for %s;
- *   `store' says whether there is an argument at all, since %*d has none.
- *
- *   THE SIZE MODIFIERS COLLAPSE.  short == int == long == one word and float ==
- *   double == one word, so v7's switch on (scale<<4)|size has two arms and not six.
- *   `h', `l' and an upper-case conversion letter are still parsed, and still mean
- *   nothing.
- *
- *   THE CHARACTER-CLASS TABLE IS INDEXED SAFELY.  v7 wrote _sctab[getc(iop)] and
- *   then asked whether the value was EOF, reading _sctab[-1]; and _getccl walked a
- *   `char' subscript into a 128-entry table, which is out of bounds for anything
- *   above 0177.  Both are bounded here.
- *
- * _sctab is file-static because nothing outside reads it -- and %[ writes on it, so
- * a scan with a character class is not re-entrant.  That is v7's bargain too.
- */
+//
+// The scanning engine behind scanf/fscanf/sscanf, v7's, with three changes forced
+// by the machine and one by C11.
+//
+//   THE ARGUMENT LIST IS A va_list.  v7 walked the caller's parameter block with an
+//   `int **' handed in by scanf(); <stdarg.h> is the only way to do that here.
+//
+//   AN ARGUMENT IS CARRIED AS A RAW WORD, not as a typed pointer.  A `char *' is a
+//   fat pointer and an `int *' is not, so the two cannot share a C type without one
+//   of them being re-decorated on the way through -- and a NULL that acquires the
+//   fat marker stops testing as null.  The word is read with va_arg(ap, int) and
+//   reinterpreted at the point of use, exactly as the printf engine does for %s;
+//   `store' says whether there is an argument at all, since %*d has none.
+//
+//   THE SIZE MODIFIERS COLLAPSE.  short == int == long == one word and float ==
+//   double == one word, so v7's switch on (scale<<4)|size has two arms and not six.
+//   `h', `l' and an upper-case conversion letter are still parsed, and still mean
+//   nothing.
+//
+//   THE CHARACTER-CLASS TABLE IS INDEXED SAFELY.  v7 wrote _sctab[getc(iop)] and
+//   then asked whether the value was EOF, reading _sctab[-1]; and _getccl walked a
+//   `char' subscript into a 128-entry table, which is out of bounds for anything
+//   above 0177.  Both are bounded here.
+//
+// _sctab is file-static because nothing outside reads it -- and %[ writes on it, so
+// a scan with a character class is not re-entrant.  That is v7's bargain too.
+//
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,17 +40,17 @@
 #define INT     0
 #define FLOAT   1
 
-#define NUMBUF 64 /* longest run of digits _innum will keep */
+#define NUMBUF 64 // longest run of digits _innum will keep
 
 static char _sctab[128] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, SPC, SPC, 0, 0, 0, 0, 0,   0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0,   0,   0, 0, 0, 0, SPC,
 };
 
-/*
- * A character class, `%[abc]' or `%[^abc]'.  The set is recorded in the STP bit of
- * _sctab and the cursor is returned just past the `]'.
- */
+//
+// A character class, `%[abc]' or `%[^abc]'.  The set is recorded in the STP bit of
+// _sctab and the cursor is returned just past the `]'.
+//
 static const char *_getccl(const char *s)
 {
     int c, t;
@@ -67,7 +67,7 @@ static const char *_getccl(const char *s)
             _sctab[c] |= STP;
     while ((c = *s++ & 0177) != ']') {
         if (c == 0)
-            return s - 1; /* unterminated set: stop at the NUL */
+            return s - 1; // unterminated set: stop at the NUL
         if (t)
             _sctab[c] |= STP;
         else
@@ -76,7 +76,7 @@ static const char *_getccl(const char *s)
     return s;
 }
 
-/* %c, %s and %[: copy characters through.  Returns 1 if anything was stored. */
+// %c, %s and %[: copy characters through.  Returns 1 if anything was stored.
 static int _instr(int raw, int store, int type, int len, FILE *iop, int *eofptr)
 {
     char *ptr;
@@ -88,7 +88,7 @@ static int _instr(int raw, int store, int type, int len, FILE *iop, int *eofptr)
     if (type == 'c' && len == 30000)
         len = 1;
 
-    /* %s skips leading white space; %c and %[ do not. */
+    // %s skips leading white space; %c and %[ do not.
     ignstp = type == 's' ? SPC : 0;
     for (;;) {
         ch = getc(iop);
@@ -122,7 +122,7 @@ static int _instr(int raw, int store, int type, int len, FILE *iop, int *eofptr)
     return 0;
 }
 
-/* One conversion.  Returns 1 if a value was produced (whether or not stored). */
+// One conversion.  Returns 1 if a value was produced (whether or not stored).
 static int _innum(int raw, int store, int type, int len, int size, FILE *iop, int *eofptr)
 {
     char numbuf[NUMBUF];
@@ -205,10 +205,10 @@ static int _innum(int raw, int store, int type, int len, int size, FILE *iop, in
         return 0;
     *np = 0;
 
-    /*
-     * One word per scalar, so `size' -- SHORT, REGULAR or LONG -- has nothing to
-     * choose between.  All that is left is integer against floating.
-     */
+    //
+    // One word per scalar, so `size' -- SHORT, REGULAR or LONG -- has nothing to
+    // choose between.  All that is left is integer against floating.
+    //
     (void)size;
     if (scale == FLOAT)
         **(double **)&raw = atof(numbuf);

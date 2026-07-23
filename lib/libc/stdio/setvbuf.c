@@ -1,15 +1,15 @@
-/*
- * setvbuf -- choose the buffering mode and the buffer (C11 §7.21.5.6).  Not a v7
- * routine: v7 had setbuf() alone, which could only say "this buffer" or "none".
- *
- * _bufsiz exists for this call.  v7 wrote BUFSIZ into _filbuf and _flsbuf outright
- * because setbuf() promised a buffer of exactly that size; here the caller names
- * the size, so the stream has to remember it or overrun what it was given.
- *
- * The three modes are NOT the flag bits of the same family: _IOFBF/_IOLBF/_IONBF
- * are 0/1/2 and _IOUNBUF/_IOLBUF are 04/0400 (include/stdio.h).  The clash is why
- * v7's _IONBF flag bit is spelled _IOUNBUF now.
- */
+//
+// setvbuf -- choose the buffering mode and the buffer (C11 §7.21.5.6).  Not a v7
+// routine: v7 had setbuf() alone, which could only say "this buffer" or "none".
+//
+// _bufsiz exists for this call.  v7 wrote BUFSIZ into _filbuf and _flsbuf outright
+// because setbuf() promised a buffer of exactly that size; here the caller names
+// the size, so the stream has to remember it or overrun what it was given.
+//
+// The three modes are NOT the flag bits of the same family: _IOFBF/_IOLBF/_IONBF
+// are 0/1/2 and _IOUNBUF/_IOLBUF are 04/0400 (include/stdio.h).  The clash is why
+// v7's _IONBF flag bit is spelled _IOUNBUF now.
+//
 #include <stdio.h>
 #include <stdlib.h>
 

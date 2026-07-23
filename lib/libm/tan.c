@@ -1,15 +1,15 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * tan(x) -- the circular tangent (C11 §7.12.4.7).
- *
- * v7's, unchanged but for the prototype.  A series after range reduction (Hart &
- * Cheney #4285, 19.74D).  The one error case is already the machine's: near an odd
- * multiple of pi/2 the reciprocal `1./temp' would divide by a value on its way to
- * zero, so v7 catches temp == 0 and returns HUGE_VAL with ERANGE with the pole's sign
- * -- which is exactly the "would have been an infinity" case this machine has no value
- * for.
- */
+//
+// tan(x) -- the circular tangent (C11 §7.12.4.7).
+//
+// v7's, unchanged but for the prototype.  A series after range reduction (Hart &
+// Cheney #4285, 19.74D).  The one error case is already the machine's: near an odd
+// multiple of pi/2 the reciprocal `1./temp' would divide by a value on its way to
+// zero, so v7 catches temp == 0 and returns HUGE_VAL with ERANGE with the pole's sign
+// -- which is exactly the "would have been an infinity" case this machine has no value
+// for.
+//
 #include <errno.h>
 #include <math.h>
 
@@ -34,7 +34,7 @@ double tan(double arg)
         arg  = -arg;
         sign = -1.;
     }
-    arg = arg * invpi; /* overflow? */
+    arg = arg * invpi; // overflow?
     x   = modf(arg, &e);
     i   = e;
     switch (i % 4) {

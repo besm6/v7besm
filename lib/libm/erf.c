@@ -1,21 +1,21 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * erf(x) -- the error function; erfc(x) -- its complement, 1 - erf(x)
- * (C11 §7.12.8.1, §7.12.8.2).
- *
- * v7's, converted to prototypes.  erfc has an entry of its own, and not just
- * `1 - erf(x)', because for large x that subtraction loses every significant digit --
- * erf(x) is then a hair under 1 and the interesting part of erfc is all in the digits
- * that cancel.  So erf calls erfc for x >= 0.5 and erfc evaluates its own rational fit
- * (Hart & Cheney #5667, 18.72D) directly.
- *
- * v7's forward declaration `double erfc();' inside erf is gone -- <math.h> declares
- * both now -- and so are the two `errno = 0' assignments: there are no error returns
- * here, so there was nothing for them to clear.  The coefficient arrays stay as v7
- * had them, indexed in a Horner loop; b6cc emits an initialized static double array
- * to the constant pool, so the loops need no unrolling.
- */
+//
+// erf(x) -- the error function; erfc(x) -- its complement, 1 - erf(x)
+// (C11 §7.12.8.1, §7.12.8.2).
+//
+// v7's, converted to prototypes.  erfc has an entry of its own, and not just
+// `1 - erf(x)', because for large x that subtraction loses every significant digit --
+// erf(x) is then a hair under 1 and the interesting part of erfc is all in the digits
+// that cancel.  So erf calls erfc for x >= 0.5 and erfc evaluates its own rational fit
+// (Hart & Cheney #5667, 18.72D) directly.
+//
+// v7's forward declaration `double erfc();' inside erf is gone -- <math.h> declares
+// both now -- and so are the two `errno = 0' assignments: there are no error returns
+// here, so there was nothing for them to clear.  The coefficient arrays stay as v7
+// had them, indexed in a Horner loop; b6cc emits an initialized static double array
+// to the constant pool, so the loops need no unrolling.
+//
 #include <math.h>
 
 #define M 7

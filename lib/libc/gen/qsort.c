@@ -1,38 +1,38 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * The v7 quicksort, unchanged in its algorithm: a three-way partition that keeps the
- * run of elements equal to the pivot in the middle, recurses on the smaller half and
- * loops on the larger, so the recursion depth is logarithmic.
- *
- * TWO BESM-6 NOTES.  Both are about what the machine does to a `char *'; the structure
- * of the file is v7's, down to the file-scope comparison function.
- *
- * The pointer comparisons (`i < lp', `j > hp') and the difference `l - a' are safe
- * even though a fat pointer does NOT sort as a plain word: incrementing a `char *'
- * DECREASES its 3-bit byte offset, which lives above the word address in bits 47-45,
- * so a raw word compare of two pointers into the same word would come out backwards
- * (doc/Besm6_Data_Representation.md).  The compiler knows: it lowers a relational
- * between two fat pointers through b$pdiff, the same helper as `-', and tests the
- * sign of the byte difference.  Nothing here has to work around it.
- *
- * The exchanges go a WORD at a time when they can, which is the one thing this file
- * adds to v7.  A byte-wise exchange of a six-byte element is six read-modify-writes
- * of the same word through the fat-pointer helpers; one `int' assignment moves the
- * whole word.  It is only legal when the element size is a whole number of words AND
- * the base is word-aligned, and alignment is testable in C: casting a `char *' to
- * `int *' discards the byte offset and casting back rebuilds it as byte #0, so the
- * round trip is the identity exactly for a pointer that was already at byte #0.  With
- * es a multiple of NBPW an aligned base makes every element aligned, so the test is
- * made once, here, and not in the swap.
- */
+//
+// The v7 quicksort, unchanged in its algorithm: a three-way partition that keeps the
+// run of elements equal to the pivot in the middle, recurses on the smaller half and
+// loops on the larger, so the recursion depth is logarithmic.
+//
+// TWO BESM-6 NOTES.  Both are about what the machine does to a `char *'; the structure
+// of the file is v7's, down to the file-scope comparison function.
+//
+// The pointer comparisons (`i < lp', `j > hp') and the difference `l - a' are safe
+// even though a fat pointer does NOT sort as a plain word: incrementing a `char *'
+// DECREASES its 3-bit byte offset, which lives above the word address in bits 47-45,
+// so a raw word compare of two pointers into the same word would come out backwards
+// (doc/Besm6_Data_Representation.md).  The compiler knows: it lowers a relational
+// between two fat pointers through b$pdiff, the same helper as `-', and tests the
+// sign of the byte difference.  Nothing here has to work around it.
+//
+// The exchanges go a WORD at a time when they can, which is the one thing this file
+// adds to v7.  A byte-wise exchange of a six-byte element is six read-modify-writes
+// of the same word through the fat-pointer helpers; one `int' assignment moves the
+// whole word.  It is only legal when the element size is a whole number of words AND
+// the base is word-aligned, and alignment is testable in C: casting a `char *' to
+// `int *' discards the byte offset and casting back rebuilds it as byte #0, so the
+// round trip is the identity exactly for a pointer that was already at byte #0.  With
+// es a multiple of NBPW an aligned base makes every element aligned, so the test is
+// made once, here, and not in the swap.
+//
 #include <stdlib.h>
 
-#define NBPW 6 /* bytes per word: sizeof(int) */
+#define NBPW 6 // bytes per word: sizeof(int)
 
-static int (*qscmp)(const void *, const void *); /* the caller's comparison */
-static int qses;                                 /* element size in bytes */
-static int qsws; /* ... in words, or 0 when the swap must go byte-wise */
+static int (*qscmp)(const void *, const void *); // the caller's comparison
+static int qses;                                 // element size in bytes
+static int qsws; // ... in words, or 0 when the swap must go byte-wise
 
 static void qs1(char *a, char *l);
 static void qsexc(char *i, char *j);
@@ -114,9 +114,9 @@ start:
     }
 }
 
-/*
- * Exchange the elements at i and j.
- */
+//
+// Exchange the elements at i and j.
+//
 static void qsexc(char *i, char *j)
 {
     char *ri, *rj, c;
@@ -143,9 +143,9 @@ static void qsexc(char *i, char *j)
     } while (--n);
 }
 
-/*
- * Rotate the elements at i, j and k: i <- k <- j <- i.
- */
+//
+// Rotate the elements at i, j and k: i <- k <- j <- i.
+//
 static void qstexc(char *i, char *j, char *k)
 {
     char *ri, *rj, *rk, c;

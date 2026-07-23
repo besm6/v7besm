@@ -1,19 +1,19 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * log(x) -- the natural logarithm; log10(x) -- the base-10 logarithm
- * (C11 §7.12.6.7, §7.12.6.10).
- *
- * v7's, unchanged but for prototypes.  The fit (Hart & Cheney #2705, 19.38D) works on
- * a mantissa reduced to [sqrt(1/2), sqrt(2)] and adds back exp*ln2, so nothing here
- * grows toward the exponent limit and no range gate is needed at the top.  The only
- * error case is the domain one: log of a non-positive number is EDOM, and the value
- * returned is -HUGE_VAL, the most negative finite value rather than a -infinity there
- * is no room for.
- *
- * log10 is log times 1/ln10, in its own entry point but the same file, as v7 keeps
- * it.
- */
+//
+// log(x) -- the natural logarithm; log10(x) -- the base-10 logarithm
+// (C11 §7.12.6.7, §7.12.6.10).
+//
+// v7's, unchanged but for prototypes.  The fit (Hart & Cheney #2705, 19.38D) works on
+// a mantissa reduced to [sqrt(1/2), sqrt(2)] and adds back exp*ln2, so nothing here
+// grows toward the exponent limit and no range gate is needed at the top.  The only
+// error case is the domain one: log of a non-positive number is EDOM, and the value
+// returned is -HUGE_VAL, the most negative finite value rather than a -infinity there
+// is no room for.
+//
+// log10 is log times 1/ln10, in its own entry point but the same file, as v7 keeps
+// it.
+//
 #include <errno.h>
 #include <math.h>
 

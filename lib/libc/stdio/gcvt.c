@@ -1,12 +1,12 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * gcvt -- floating output conversion to a minimal-length string.
- *
- * v7's, unchanged but for the prototypes: it is all decimal digit shuffling over
- * what ecvt() produced, and nothing in it depends on the width of a word.  ecvt is
- * declared here because no header declares it -- it is a v7 extension, not C11.
- */
+//
+// gcvt -- floating output conversion to a minimal-length string.
+//
+// v7's, unchanged but for the prototypes: it is all decimal digit shuffling over
+// what ecvt() produced, and nothing in it depends on the width of a word.  ecvt is
+// declared here because no header declares it -- it is a v7 extension, not C11.
+//
 #include <stdio.h>
 
 char *ecvt(double arg, int ndigits, int *decpt, int *sign);
@@ -24,7 +24,7 @@ char *gcvt(double number, int ndigit, char *buf)
     for (i = ndigit - 1; i > 0 && p1[i] == '0'; i--)
         ndigit--;
     if ((decpt >= 0 && decpt - ndigit > 4) || (decpt < 0 && decpt < -3)) {
-        /* use E-style */
+        // use E-style
         decpt--;
         *p2++ = *p1++;
         *p2++ = '.';

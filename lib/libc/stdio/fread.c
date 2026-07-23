@@ -1,10 +1,10 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * v7 keeps fread and fwrite in one file (stdio/rdwr.c); they are split here
- * because they share nothing, and one function per file is what lets b6ranlib's
- * index pull only the one a program calls.
- */
+//
+// v7 keeps fread and fwrite in one file (stdio/rdwr.c); they are split here
+// because they share nothing, and one function per file is what lets b6ranlib's
+// index pull only the one a program calls.
+//
 #include <stdio.h>
 
 size_t fread(void *ptr, size_t size, size_t count, FILE *iop)

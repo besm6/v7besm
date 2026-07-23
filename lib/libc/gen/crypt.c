@@ -1,38 +1,38 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * crypt, setkey, encrypt -- the password hash, and the DES engine under it.
- *
- * v7's implementation of what was then the Proposed Federal Information Processing
- * Data Encryption Standard (Federal Register, March 17, 1975; 40FR12134), ported as it
- * stands.  It is a bit-at-a-time DES: every array below holds one bit per char, which
- * is why the permutation tables read exactly as the standard prints them and why it is
- * as slow as it is.  Nothing about that is worth improving here -- the point is to
- * produce the same thirteen characters v7 produced, so that an /etc/passwd written by
- * one is readable by the other.
- *
- * SIX CHARS TO A WORD, so the tables are cheaper here than the comment count suggests:
- * S[8][64] is 512 chars, which is 86 words, not 512 of them.  The key schedule
- * KS[16][48] is 128 words.
- *
- * The one thing that had to change is the shape of the declarations: ANSI prototypes,
- * and the inner braces on the two-dimensional initialisers that v7 wrote flat.
- *
- * None of the three is declared by a header -- v7 had none and C11 has no such
- * routines -- so a caller declares them itself.
- */
+//
+// crypt, setkey, encrypt -- the password hash, and the DES engine under it.
+//
+// v7's implementation of what was then the Proposed Federal Information Processing
+// Data Encryption Standard (Federal Register, March 17, 1975; 40FR12134), ported as it
+// stands.  It is a bit-at-a-time DES: every array below holds one bit per char, which
+// is why the permutation tables read exactly as the standard prints them and why it is
+// as slow as it is.  Nothing about that is worth improving here -- the point is to
+// produce the same thirteen characters v7 produced, so that an /etc/passwd written by
+// one is readable by the other.
+//
+// SIX CHARS TO A WORD, so the tables are cheaper here than the comment count suggests:
+// S[8][64] is 512 chars, which is 86 words, not 512 of them.  The key schedule
+// KS[16][48] is 128 words.
+//
+// The one thing that had to change is the shape of the declarations: ANSI prototypes,
+// and the inner braces on the two-dimensional initialisers that v7 wrote flat.
+//
+// None of the three is declared by a header -- v7 had none and C11 has no such
+// routines -- so a caller declares them itself.
+//
 
-/*
- * Every table below is laid out in the rows its own definition has -- seven and six to
- * a row for the permuted choices, four for P, sixteen for the permutations and the S
- * boxes -- which is the only thing that makes them checkable against the standard at
- * all.  clang-format would reflow each into a paragraph of numbers.
- */
-/* clang-format off */
+//
+// Every table below is laid out in the rows its own definition has -- seven and six to
+// a row for the permuted choices, four for P, sixteen for the permutations and the S
+// boxes -- which is the only thing that makes them checkable against the standard at
+// all.  clang-format would reflow each into a paragraph of numbers.
+//
+// clang-format off
 
-/*
- * Initial permutation.
- */
+//
+// Initial permutation.
+//
 static const char IP[] = {
     58, 50, 42, 34, 26, 18, 10, 2, 60, 52, 44, 36, 28, 20, 12, 4,
     62, 54, 46, 38, 30, 22, 14, 6, 64, 56, 48, 40, 32, 24, 16, 8,
@@ -40,9 +40,9 @@ static const char IP[] = {
     61, 53, 45, 37, 29, 21, 13, 5, 63, 55, 47, 39, 31, 23, 15, 7,
 };
 
-/*
- * Final permutation, FP = IP^(-1).
- */
+//
+// Final permutation, FP = IP^(-1).
+//
 static const char FP[] = {
     40, 8, 48, 16, 56, 24, 64, 32, 39, 7, 47, 15, 55, 23, 63, 31,
     38, 6, 46, 14, 54, 22, 62, 30, 37, 5, 45, 13, 53, 21, 61, 29,
@@ -50,10 +50,10 @@ static const char FP[] = {
     34, 2, 42, 10, 50, 18, 58, 26, 33, 1, 41,  9, 49, 17, 57, 25,
 };
 
-/*
- * Permuted-choice 1, from the key bits to C and D.  Bits 8, 16, ... are left out:
- * they are intended for a parity check.
- */
+//
+// Permuted-choice 1, from the key bits to C and D.  Bits 8, 16, ... are left out:
+// they are intended for a parity check.
+//
 static const char PC1_C[] = {
     57, 49, 41, 33, 25, 17,  9,
      1, 58, 50, 42, 34, 26, 18,
@@ -68,16 +68,16 @@ static const char PC1_D[] = {
     21, 13,  5, 28, 20, 12,  4,
 };
 
-/*
- * The sequence of shifts used for the key schedule.
- */
+//
+// The sequence of shifts used for the key schedule.
+//
 static const char shifts[] = {
     1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1,
 };
 
-/*
- * Permuted-choice 2, picking the bits out of C and D that make the key schedule.
- */
+//
+// Permuted-choice 2, picking the bits out of C and D that make the key schedule.
+//
 static const char PC2_C[] = {
     14, 17, 11, 24,  1,  5,
      3, 28, 15,  6, 21, 10,
@@ -92,17 +92,17 @@ static const char PC2_D[] = {
     46, 42, 50, 36, 29, 32,
 };
 
-/*
- * The C and D arrays used to calculate the key schedule, and the schedule itself.
- */
+//
+// The C and D arrays used to calculate the key schedule, and the schedule itself.
+//
 static char C[28];
 static char D[28];
 static char KS[16][48];
 
-/*
- * The E bit-selection table.  E is the working copy crypt() perturbs with the salt; e
- * is the standard's.
- */
+//
+// The E bit-selection table.  E is the working copy crypt() perturbs with the salt; e
+// is the standard's.
+//
 static char E[48];
 static const char e[] = {
     32,  1,  2,  3,  4,  5,
@@ -115,10 +115,10 @@ static const char e[] = {
     28, 29, 30, 31, 32,  1,
 };
 
-/*
- * The eight selection functions.  For some reason they give a 0-origin index, unlike
- * everything else.
- */
+//
+// The eight selection functions.  For some reason they give a 0-origin index, unlike
+// everything else.
+//
 static const char S[8][64] = {
     {
         14,  4, 13,  1,  2, 15, 11,  8,  3, 10,  6, 12,  5,  9,  0,  7,
@@ -170,9 +170,9 @@ static const char S[8][64] = {
     },
 };
 
-/*
- * P is a permutation on the selected combination of the current L and key.
- */
+//
+// P is a permutation on the selected combination of the current L and key.
+//
 static const char P[] = {
     16,  7, 20, 21,
     29, 12, 28, 17,
@@ -184,23 +184,23 @@ static const char P[] = {
     22, 11,  4, 25,
 };
 
-/* clang-format on */
+// clang-format on
 
-/*
- * The current block, divided into two halves.
- *
- * ONE ARRAY, WHERE v7 HAD TWO, and this is the one change that had to be made for the
- * machine rather than for the language.  v7 wrote `static char L[32], R[32];' and then
- * INDEXED PAST THE END OF THE FIRST: encrypt()'s initial permutation runs `L[j]' out to
- * j == 63, and its final one reads back the same way, both relying on the PDP-11 having
- * laid the two arrays adjacent with nothing between them.  Six chars pack into a word
- * here, so a 32-char array occupies six words with four bytes to spare and L[32] is
- * whatever padding follows it, not R[0].  Making them one array of 64 restores exactly
- * the layout the algorithm was written against, and R stays a name for its upper half.
- *
- * The symptom, if this is ever undone, is not a crash: crypt() goes on producing
- * thirteen plausible characters, and they are the wrong ones.
- */
+//
+// The current block, divided into two halves.
+//
+// ONE ARRAY, WHERE v7 HAD TWO, and this is the one change that had to be made for the
+// machine rather than for the language.  v7 wrote `static char L[32], R[32];' and then
+// INDEXED PAST THE END OF THE FIRST: encrypt()'s initial permutation runs `L[j]' out to
+// j == 63, and its final one reads back the same way, both relying on the PDP-11 having
+// laid the two arrays adjacent with nothing between them.  Six chars pack into a word
+// here, so a 32-char array occupies six words with four bytes to spare and L[32] is
+// whatever padding follows it, not R[0].  Making them one array of 64 restores exactly
+// the layout the algorithm was written against, and R stays a name for its upper half.
+//
+// The symptom, if this is ever undone, is not a crash: crypt() goes on producing
+// thirteen plausible characters, and they are the wrong ones.
+//
 static char LR[64];
 #define L (LR)
 #define R (LR + 32)
@@ -208,32 +208,32 @@ static char LR[64];
 static char tempL[32];
 static char f[32];
 
-/*
- * The combination of the key and the input, before selection.
- */
+//
+// The combination of the key and the input, before selection.
+//
 static char preS[48];
 
-/*
- * Set up the key schedule from the key.
- */
+//
+// Set up the key schedule from the key.
+//
 void setkey(const char *key)
 {
     int i, j, k;
     int t;
 
-    /*
-     * First generate C and D by permuting the key.  The low-order bit of each 8-bit
-     * char is not used, so C and D are only 28 bits apiece.
-     */
+    //
+    // First generate C and D by permuting the key.  The low-order bit of each 8-bit
+    // char is not used, so C and D are only 28 bits apiece.
+    //
     for (i = 0; i < 28; i++) {
         C[i] = key[PC1_C[i] - 1];
         D[i] = key[PC1_D[i] - 1];
     }
 
-    /*
-     * To generate Ki, rotate C and D according to the schedule and pick up a
-     * permutation using PC2.
-     */
+    //
+    // To generate Ki, rotate C and D according to the schedule and pick up a
+    // permutation using PC2.
+    //
     for (i = 0; i < 16; i++) {
         for (k = 0; k < shifts[i]; k++) {
             t = C[0];
@@ -245,7 +245,7 @@ void setkey(const char *key)
                 D[j] = D[j + 1];
             D[27] = t;
         }
-        /* C and D are concatenated. */
+        // C and D are concatenated.
         for (j = 0; j < 24; j++) {
             KS[i][j]      = C[PC2_C[j] - 1];
             KS[i][j + 24] = D[PC2_D[j] - 28 - 1];
@@ -253,16 +253,16 @@ void setkey(const char *key)
     }
 }
 
-/*
- * The payoff: encrypt (edflag 0) or decrypt (edflag 1) one 64-bit block, one bit per
- * char, in place.
- */
+//
+// The payoff: encrypt (edflag 0) or decrypt (edflag 1) one 64-bit block, one bit per
+// char, in place.
+//
 void encrypt(char *block, int edflag)
 {
     int i, ii;
     int t, j, k;
 
-    /* Permute the bits of the input. */
+    // Permute the bits of the input.
     for (j = 0; j < 64; j++)
         L[j] = block[IP[j] - 1];
 
@@ -272,23 +272,23 @@ void encrypt(char *block, int edflag)
         else
             i = ii;
 
-        /* Save the R array, which will be the new L. */
+        // Save the R array, which will be the new L.
         for (j = 0; j < 32; j++)
             tempL[j] = R[j];
 
-        /*
-         * Expand R to 48 bits using the E selector, exclusive-or with the current
-         * key bits.
-         */
+        //
+        // Expand R to 48 bits using the E selector, exclusive-or with the current
+        // key bits.
+        //
         for (j = 0; j < 48; j++)
             preS[j] = R[E[j] - 1] ^ KS[i][j];
 
-        /*
-         * The pre-select bits are now considered in 8 groups of 6.  The 8 selection
-         * functions map these 6-bit quantities into 4-bit ones, and the results are
-         * permuted to make f(R, K).  The indexing is peculiar; it could be simplified
-         * by rewriting the tables.
-         */
+        //
+        // The pre-select bits are now considered in 8 groups of 6.  The 8 selection
+        // functions map these 6-bit quantities into 4-bit ones, and the results are
+        // permuted to make f(R, K).  The indexing is peculiar; it could be simplified
+        // by rewriting the tables.
+        //
         for (j = 0; j < 8; j++) {
             t        = 6 * j;
             k        = S[j][(preS[t + 0] << 5) + (preS[t + 1] << 3) + (preS[t + 2] << 2) +
@@ -300,21 +300,21 @@ void encrypt(char *block, int edflag)
             f[t + 3] = (k >> 0) & 01;
         }
 
-        /* The new R is L ^ f(R, K), the f permuted first; the new L is the old R. */
+        // The new R is L ^ f(R, K), the f permuted first; the new L is the old R.
         for (j = 0; j < 32; j++)
             R[j] = L[j] ^ f[P[j] - 1];
         for (j = 0; j < 32; j++)
             L[j] = tempL[j];
     }
 
-    /* The output L and R are reversed. */
+    // The output L and R are reversed.
     for (j = 0; j < 32; j++) {
         t    = L[j];
         L[j] = R[j];
         R[j] = t;
     }
 
-    /* The final output gets the inverse permutation of the very original. */
+    // The final output gets the inverse permutation of the very original.
     for (j = 0; j < 64; j++)
         block[j] = L[FP[j] - 1];
 }
@@ -340,11 +340,11 @@ char *crypt(const char *pw, const char *salt)
     for (i = 0; i < 48; i++)
         E[i] = e[i];
 
-    /*
-     * The two salt characters each swap twelve of E's entries with the twelve
-     * twenty-four places along, which is what makes one password hash to 4096
-     * different strings and stops a dictionary being built once for everybody.
-     */
+    //
+    // The two salt characters each swap twelve of E's entries with the twelve
+    // twenty-four places along, which is what makes one password hash to 4096
+    // different strings and stops a dictionary being built once for everybody.
+    //
     for (i = 0; i < 2; i++) {
         c        = *salt++;
         iobuf[i] = c;

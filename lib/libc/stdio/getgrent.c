@@ -1,20 +1,20 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * setgrent, endgrent, getgrent -- walk /etc/group, one entry at a time.
- *
- * The mirror of stdio/getpwent.c, down to splitting the line in place, and the line
- * buffer is sized the same way and for the same reason: GRLINE, not BUFSIZ, which is
- * 3072 here and describes a disk block rather than a line of text.
- *
- * The member list is the one thing /etc/passwd has no counterpart to: the last field
- * is comma-separated and gr_mem points at a vector built over it.  ONE FIX: v7 sized
- * that vector MAXGRP and then filled it without checking, so a group line with more
- * members than that walked off the end of a file-scope array into whatever bss
- * followed.  Here the walk stops with room for the terminator and the tail is dropped.
- * A 512-byte line cannot hold a hundred names anyway; the bound is the array's, not
- * the format's.
- */
+//
+// setgrent, endgrent, getgrent -- walk /etc/group, one entry at a time.
+//
+// The mirror of stdio/getpwent.c, down to splitting the line in place, and the line
+// buffer is sized the same way and for the same reason: GRLINE, not BUFSIZ, which is
+// 3072 here and describes a disk block rather than a line of text.
+//
+// The member list is the one thing /etc/passwd has no counterpart to: the last field
+// is comma-separated and gr_mem points at a vector built over it.  ONE FIX: v7 sized
+// that vector MAXGRP and then filled it without checking, so a group line with more
+// members than that walked off the end of a file-scope array into whatever bss
+// followed.  Here the walk stops with room for the terminator and the tail is dropped.
+// A 512-byte line cannot hold a hundred names anyway; the bound is the array's, not
+// the format's.
+//
 #include <grp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -49,7 +49,7 @@ void endgrent(void)
     }
 }
 
-/* Terminate the field p points at at the first `c' and return the next one. */
+// Terminate the field p points at at the first `c' and return the next one.
 static char *grskip(char *p, int c)
 {
     while (*p && *p != c)

@@ -1,24 +1,24 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * popen(cmd, mode), pclose(ptr) -- a shell command at the far end of a stream.
- *
- * One file, as malloc/free/realloc are: the two share popen_pid[], which is how
- * pclose() knows whose child to wait for.  v7 sized that table 20 by hand; here it is
- * _NFILE, the same bound findiop() puts on descriptors, since it is indexed by one.
- *
- * Two changes from v7, both forced by <signal.h>: a disposition is `void (*)(int)',
- * and the three saved ones are declared as such rather than as v7's `(*hstat)()'.
- *
- * The wait status is wait()'s raw one and rides back in r12, so an exit code above 127
- * arrives truncated -- see stdio/system.c and lib/README.md.  The child ends with
- * _exit(), which is the bare trap: exit() would flush the stdio buffers it inherited
- * from the parent and print the parent's pending output twice.
- *
- * One deviation: a fork() that fails closes both ends of the pipe before returning
- * NULL.  v7 leaked them, and a caller that retries would run out of descriptors long
- * before it ran out of reasons to retry.
- */
+//
+// popen(cmd, mode), pclose(ptr) -- a shell command at the far end of a stream.
+//
+// One file, as malloc/free/realloc are: the two share popen_pid[], which is how
+// pclose() knows whose child to wait for.  v7 sized that table 20 by hand; here it is
+// _NFILE, the same bound findiop() puts on descriptors, since it is indexed by one.
+//
+// Two changes from v7, both forced by <signal.h>: a disposition is `void (*)(int)',
+// and the three saved ones are declared as such rather than as v7's `(*hstat)()'.
+//
+// The wait status is wait()'s raw one and rides back in r12, so an exit code above 127
+// arrives truncated -- see stdio/system.c and lib/README.md.  The child ends with
+// _exit(), which is the bare trap: exit() would flush the stdio buffers it inherited
+// from the parent and print the parent's pending output twice.
+//
+// One deviation: a fork() that fails closes both ends of the pipe before returning
+// NULL.  v7 leaked them, and a caller that retries would run out of descriptors long
+// before it ran out of reasons to retry.
+//
 #include <signal.h>
 #include <stdio.h>
 
@@ -46,7 +46,7 @@ FILE *popen(const char *cmd, const char *mode)
     myside  = tst(p[WTR], p[RDR]);
     hisside = tst(p[RDR], p[WTR]);
     if ((pid = fork()) == 0) {
-        /* myside and hisside reverse roles in the child */
+        // myside and hisside reverse roles in the child
         close(myside);
         dup2(hisside, tst(0, 1));
         close(hisside);

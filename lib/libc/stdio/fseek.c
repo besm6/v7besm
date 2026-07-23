@@ -1,17 +1,17 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * Seek for the standard library.  Coordinates with buffering.
- *
- * The whole point of the first arm is to seek WITHIN the buffer when the target is
- * already there, without troubling the kernel.  off_t is one word here, so the
- * `long' the prototype names is the same word as the `int' the arithmetic uses and
- * v7's (int) casts on the buffer arithmetic are gone.
- *
- * p is initialised to -1 so that a stream that is neither readable nor writable
- * reports failure rather than whatever the register happened to hold; v7 left it
- * uninitialised.
- */
+//
+// Seek for the standard library.  Coordinates with buffering.
+//
+// The whole point of the first arm is to seek WITHIN the buffer when the target is
+// already there, without troubling the kernel.  off_t is one word here, so the
+// `long' the prototype names is the same word as the `int' the arithmetic uses and
+// v7's (int) casts on the buffer arithmetic are gone.
+//
+// p is initialised to -1 so that a stream that is neither readable nor writable
+// reports failure rather than whatever the register happened to hold; v7 left it
+// uninitialised.
+//
 #include <stdio.h>
 
 long lseek(int fd, long off, int whence);

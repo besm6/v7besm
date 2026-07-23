@@ -1,19 +1,19 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * ecvt/fcvt convert to decimal.  The number of digits is given by ndigits, *decpt
- * receives the position of the decimal point and *sign is 0 for positive, 1 for
- * negative.  ecvt counts ndigits SIGNIFICANT digits; fcvt counts them after the
- * point.  The result is a static buffer, overwritten by the next call.
- *
- * v7's, unchanged: it is decimal digit shuffling over modf(), and nothing in it
- * assumes a width.  Neither routine is C11 -- they are v7 extensions no header
- * declares, so a caller declares them itself, as gcvt() does.
- *
- * The `+.03' fudges are v7's and are still right: modf(fi/10) leaves a fraction
- * within a few ulps of k/10, and adding 0.03 before the multiply lands it on k
- * without ever reaching k+1.
- */
+//
+// ecvt/fcvt convert to decimal.  The number of digits is given by ndigits, *decpt
+// receives the position of the decimal point and *sign is 0 for positive, 1 for
+// negative.  ecvt counts ndigits SIGNIFICANT digits; fcvt counts them after the
+// point.  The result is a static buffer, overwritten by the next call.
+//
+// v7's, unchanged: it is decimal digit shuffling over modf(), and nothing in it
+// assumes a width.  Neither routine is C11 -- they are v7 extensions no header
+// declares, so a caller declares them itself, as gcvt() does.
+//
+// The `+.03' fudges are v7's and are still right: modf(fi/10) leaves a fraction
+// within a few ulps of k/10, and adding 0.03 before the multiply lands it on k
+// without ever reaching k+1.
+//
 #include <math.h>
 
 #define NDIG 80
@@ -38,9 +38,9 @@ static char *cvt(double arg, int ndigits, int *decpt, int *sign, int eflag)
     }
     arg = modf(arg, &fi);
     p1  = &buf[NDIG];
-    /*
-     * Do integer part
-     */
+    //
+    // Do integer part
+    //
     if (fi != 0) {
         p1 = &buf[NDIG];
         while (fi != 0) {

@@ -1,22 +1,22 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * The error messages, indexed by errno.
- *
- * Exactly 36 entries, 0..35, and no more is possible: the value the $77 gate leaves in
- * r14 is always one of the numbers include/errno.h defines.  The kernel assigns from
- * its own copy of the list (include/sys/user.h) and b6sim folds the host's numbering
- * onto the same 32 (guest_errno() in cmd/sim/syscall.cpp), so nothing else can arrive
- * from a syscall.
- *
- * The last three are not kernel codes at all.  33 and 34 -- EDOM and ERANGE -- are math
- * software, and 35 -- EILSEQ -- is the multibyte conversions of <wchar.h>/<uchar.h>;
- * they are here because strerror() and perror() have to be able to name them, and
- * because C11 SS7.5 requires all three to exist.  Nothing sets any of them yet.
- *
- * An array of `char *' is one word per element: a fat pointer fits in a word, marker
- * bit and byte offset and all (doc/Besm6_Data_Representation.md).
- */
+//
+// The error messages, indexed by errno.
+//
+// Exactly 36 entries, 0..35, and no more is possible: the value the $77 gate leaves in
+// r14 is always one of the numbers include/errno.h defines.  The kernel assigns from
+// its own copy of the list (include/sys/user.h) and b6sim folds the host's numbering
+// onto the same 32 (guest_errno() in cmd/sim/syscall.cpp), so nothing else can arrive
+// from a syscall.
+//
+// The last three are not kernel codes at all.  33 and 34 -- EDOM and ERANGE -- are math
+// software, and 35 -- EILSEQ -- is the multibyte conversions of <wchar.h>/<uchar.h>;
+// they are here because strerror() and perror() have to be able to name them, and
+// because C11 SS7.5 requires all three to exist.  Nothing sets any of them yet.
+//
+// An array of `char *' is one word per element: a fat pointer fits in a word, marker
+// bit and byte offset and all (doc/Besm6_Data_Representation.md).
+//
 char *sys_errlist[] = {
     "Error 0",
     "Not owner",

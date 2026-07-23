@@ -1,15 +1,15 @@
-/*
- * tmpnam -- a file name no file has (C11 §7.21.4.4).  Not a v7 routine.
- *
- * It does NOT go through mktemp(): that one fills the trailing X's from the
- * process id and then walks a SINGLE letter, so it can distinguish 26 names and
- * TMP_MAX promises 26^3.  The three letters are counted here instead, and the pid
- * still separates one process's names from another's.
- *
- * "/tmp/t" + at most five pid digits + three letters + NUL is 15 characters, which
- * is inside L_tmpnam.  s == NULL asks for the static buffer, which the next call
- * overwrites -- that is what §7.21.4.4 says happens.
- */
+//
+// tmpnam -- a file name no file has (C11 §7.21.4.4).  Not a v7 routine.
+//
+// It does NOT go through mktemp(): that one fills the trailing X's from the
+// process id and then walks a SINGLE letter, so it can distinguish 26 names and
+// TMP_MAX promises 26^3.  The three letters are counted here instead, and the pid
+// still separates one process's names from another's.
+//
+// "/tmp/t" + at most five pid digits + three letters + NUL is 15 characters, which
+// is inside L_tmpnam.  s == NULL asks for the static buffer, which the next call
+// overwrites -- that is what §7.21.4.4 says happens.
+//
 #include <stdio.h>
 
 int access(const char *path, int mode);
@@ -35,7 +35,7 @@ char *tmpnam(char *s)
         *p++ = 'p';
         *p++ = '/';
         *p++ = 't';
-        /* The pid, most significant digit first. */
+        // The pid, most significant digit first.
         pid = getpid();
         for (i = 10000; i > 1; i /= 10)
             if (pid >= (unsigned)i)
@@ -43,7 +43,7 @@ char *tmpnam(char *s)
         for (; i > 0; i /= 10) {
             *p++ = (pid / i) % 10 + '0';
         }
-        /* Three letters of the sequence: 26^3 names, which is TMP_MAX. */
+        // Three letters of the sequence: 26^3 names, which is TMP_MAX.
         i = seq;
         seq++;
         if (seq >= TMP_MAX)

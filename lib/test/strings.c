@@ -1,40 +1,40 @@
-/*
- * strings -- the str* and mem* family, index/rindex and swab.
- *
- * These are phase 2's bulk, and most of them came from the c-compiler's own library
- * rather than from v7 (lib/README.md).  What is under test here is therefore not the
- * algorithms so much as the FAT POINTER they all walk on: `char *' carries a 3-bit
- * byte offset in bits 47-45 above the word address, and incrementing it DECREASES that
- * offset until it wraps and the word address steps.  So every routine below is given
- * work that starts and ends in the middle of a word, not on the word boundary a
- * declared array begins at -- a loop that quietly walked words instead of bytes would
- * pass every aligned test and fail these.
- *
- * memmove earns its own attention: it chooses its direction with `d < s', and a fat
- * pointer does NOT sort as a plain word (two pointers into the SAME word compare
- * backwards, the offset being the more significant field).  The compiler lowers a
- * pointer relational through b$pdiff rather than comparing the words, and the two
- * overlap cases below are what proves it -- they overlap within one word.
- *
- * Like the rest of test/ it declares write() itself and carries its own put(), stdio
- * being phase 4; it does take strlen from libc, which is the point of the exercise.
- */
+//
+// strings -- the str* and mem* family, index/rindex and swab.
+//
+// These are phase 2's bulk, and most of them came from the c-compiler's own library
+// rather than from v7 (lib/README.md).  What is under test here is therefore not the
+// algorithms so much as the FAT POINTER they all walk on: `char *' carries a 3-bit
+// byte offset in bits 47-45 above the word address, and incrementing it DECREASES that
+// offset until it wraps and the word address steps.  So every routine below is given
+// work that starts and ends in the middle of a word, not on the word boundary a
+// declared array begins at -- a loop that quietly walked words instead of bytes would
+// pass every aligned test and fail these.
+//
+// memmove earns its own attention: it chooses its direction with `d < s', and a fat
+// pointer does NOT sort as a plain word (two pointers into the SAME word compare
+// backwards, the offset being the more significant field).  The compiler lowers a
+// pointer relational through b$pdiff rather than comparing the words, and the two
+// overlap cases below are what proves it -- they overlap within one word.
+//
+// Like the rest of test/ it declares write() itself and carries its own put(), stdio
+// being phase 4; it does take strlen from libc, which is the point of the exercise.
+//
 #include <string.h>
 
 int write(int fd, char *buf, int n);
 
-/* Not ANSI, so no header declares these three: see gen/index.c and gen/swab.c. */
+// Not ANSI, so no header declares these three: see gen/index.c and gen/swab.c.
 char *index(const char *sp, char c);
 char *rindex(const char *sp, char c);
 void swab(const char *from, char *to, int n);
 
-/* One string to the standard output, without stdio (phase 4). */
+// One string to the standard output, without stdio (phase 4).
 static void put(char *s)
 {
     write(1, s, strlen(s));
 }
 
-/* Report a claim by name, so the .expected file reads as a checklist. */
+// Report a claim by name, so the .expected file reads as a checklist.
 static void ok(char *what, int cond)
 {
     put(cond ? "ok   " : "FAIL ");
@@ -42,7 +42,7 @@ static void ok(char *what, int cond)
     put("\n");
 }
 
-/* A string, quoted, so a trailing space or a lost NUL is visible in the diff. */
+// A string, quoted, so a trailing space or a lost NUL is visible in the diff.
 static void show(char *what, char *s)
 {
     put(what);
@@ -57,7 +57,7 @@ int main(int argc, char **argv, char **envp)
     char *p, *q;
     int i;
 
-    /* ---- strlen, strcpy, strcat, on and off the word boundary ---- */
+    // ---- strlen, strcpy, strcat, on and off the word boundary ----
     ok("strlen of the empty string", strlen("") == 0);
     ok("strlen counts bytes, not words", strlen("abcdefghijk") == 11);
 
@@ -67,7 +67,7 @@ int main(int argc, char **argv, char **envp)
     show("strcpy+strcat", buf);
     ok("... and its length", strlen(buf) == 9);
 
-    /* buf+1 is byte #1 of the first word: everything below crosses word ends. */
+    // buf+1 is byte #1 of the first word: everything below crosses word ends.
     strcpy(buf + 1, "0123456789ab");
     show("strcpy to an unaligned destination", buf + 1);
     ok("... left the byte before it alone", buf[0] == 'a');
@@ -77,7 +77,7 @@ int main(int argc, char **argv, char **envp)
     strcat(b2 + 1, "zzz");
     show("strcat onto an unaligned string", b2);
 
-    /* ---- strncpy: truncation, and the NUL padding v7 promises ---- */
+    // ---- strncpy: truncation, and the NUL padding v7 promises ----
     for (i = 0; i < 12; i++)
         buf[i] = '#';
     strncpy(buf, "abc", 8);
@@ -91,7 +91,7 @@ int main(int argc, char **argv, char **envp)
     strncat(buf, "twothree", 3);
     show("strncat", buf);
 
-    /* ---- the comparisons ---- */
+    // ---- the comparisons ----
     ok("strcmp equal", strcmp("abc", "abc") == 0);
     ok("strcmp less", strcmp("abc", "abd") < 0);
     ok("strcmp greater", strcmp("abd", "abc") > 0);
@@ -101,11 +101,11 @@ int main(int argc, char **argv, char **envp)
     ok("strncmp sees the nth byte", strncmp("abcX", "abcY", 4) < 0);
     ok("strncmp of nothing", strncmp("a", "b", 0) == 0);
 
-    /* Unaligned comparands: the same bytes, one of them mid-word. */
+    // Unaligned comparands: the same bytes, one of them mid-word.
     strcpy(buf, "!hello");
     ok("strcmp across a word boundary", strcmp(buf + 1, "hello") == 0);
 
-    /* ---- the searches ---- */
+    // ---- the searches ----
     p = "abcabc";
     ok("strchr finds the first", strchr(p, 'b') == p + 1);
     ok("strrchr finds the last", strrchr(p, 'b') == p + 4);
@@ -120,7 +120,7 @@ int main(int argc, char **argv, char **envp)
     ok("strstr misses", strstr(q, "wordl") == 0);
     ok("strstr of the empty needle", strstr(q, "") == q);
 
-    /* ---- strtok, which keeps its own state between calls ---- */
+    // ---- strtok, which keeps its own state between calls ----
     strcpy(buf, "  a:bb::ccc  ");
     p = strtok(buf, " :");
     show("strtok 1", p);
@@ -130,7 +130,7 @@ int main(int argc, char **argv, char **envp)
     show("strtok 3", p);
     ok("strtok runs out", strtok(0, " :") == 0);
 
-    /* ---- the mem* family ---- */
+    // ---- the mem* family ----
     memset(buf, '.', 12);
     buf[12] = 0;
     show("memset", buf);
@@ -144,11 +144,11 @@ int main(int argc, char **argv, char **envp)
     memcpy(b2 + 1, buf, 4);
     show("memcpy unaligned", b2);
 
-    /*
-     * The two overlap directions, both INSIDE one word, which is where a raw word
-     * comparison of the two pointers would pick the wrong direction and shred the
-     * result.  Backward first (dest above source), then forward.
-     */
+    //
+    // The two overlap directions, both INSIDE one word, which is where a raw word
+    // comparison of the two pointers would pick the wrong direction and shred the
+    // result.  Backward first (dest above source), then forward.
+    //
     strcpy(buf, "abcdefghij");
     memmove(buf + 2, buf, 8);
     buf[10] = 0;
@@ -161,14 +161,14 @@ int main(int argc, char **argv, char **envp)
     ok("memcmp differs", memcmp("abcd", "abce", 4) < 0);
     ok("memcmp stops at n", memcmp("abcd", "abce", 3) == 0);
 
-    /* memcmp must look past a NUL where strcmp would stop. */
+    // memcmp must look past a NUL where strcmp would stop.
     ok("memcmp ignores NUL", memcmp("a\0c", "a\0d", 3) < 0);
     ok("... where strcmp stops", strcmp("a\0c", "a\0d") == 0);
     q = "abcabc";
     ok("memchr finds", (char *)memchr(q, 'c', 6) == q + 2);
     ok("memchr misses within n", memchr(q, 'c', 2) == 0);
 
-    /* ---- swab: adjacent bytes, in place and out of place ---- */
+    // ---- swab: adjacent bytes, in place and out of place ----
     memcpy(buf, "abcdef", 7);
     swab(buf, b2, 6);
     b2[6] = 0;

@@ -1,10 +1,10 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * Return the file offset.  Coordinates with buffering: the kernel's idea of the
- * position is ahead of the caller's by whatever is still sitting in a read buffer,
- * and behind it by whatever is still sitting in a write buffer.
- */
+//
+// Return the file offset.  Coordinates with buffering: the kernel's idea of the
+// position is ahead of the caller's by whatever is still sitting in a read buffer,
+// and behind it by whatever is still sitting in a write buffer.
+//
 #include <stdio.h>
 
 long lseek(int fd, long off, int whence);

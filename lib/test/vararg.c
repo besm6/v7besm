@@ -1,27 +1,27 @@
-/*
- * vararg -- <varargs.h>, and the one-word argument.
- *
- * The header is now a shim over the compiler's <stdarg.h> (see include/varargs.h),
- * so what wants proving is the machine underneath it: an argument -- int or fat
- * char *, indifferently -- is exactly one 48-bit word, arguments sit in ascending
- * words of the caller's parameter block, and one va_arg steps exactly one of them.
- * A list that mixes the two types is therefore the test: if va_arg stepped by
- * sizeof(mode) the way the v7 header did, the ints would come out as addresses.
- *
- * It also hands a va_list to a second function, which is what vprintf will do in
- * phase 4, and it takes a char * back out of a list -- the pointer must still be
- * fat, or put() would walk nothing.
- *
- * Like hello.c it declares write() itself and carries its own output routines:
- * stdio is phase 4 and the string routines phase 2, and taking either from the
- * external c-compiler library instead would be the silent substitution
- * lib/README.md warns about.
- */
+//
+// vararg -- <varargs.h>, and the one-word argument.
+//
+// The header is now a shim over the compiler's <stdarg.h> (see include/varargs.h),
+// so what wants proving is the machine underneath it: an argument -- int or fat
+// char *, indifferently -- is exactly one 48-bit word, arguments sit in ascending
+// words of the caller's parameter block, and one va_arg steps exactly one of them.
+// A list that mixes the two types is therefore the test: if va_arg stepped by
+// sizeof(mode) the way the v7 header did, the ints would come out as addresses.
+//
+// It also hands a va_list to a second function, which is what vprintf will do in
+// phase 4, and it takes a char * back out of a list -- the pointer must still be
+// fat, or put() would walk nothing.
+//
+// Like hello.c it declares write() itself and carries its own output routines:
+// stdio is phase 4 and the string routines phase 2, and taking either from the
+// external c-compiler library instead would be the silent substitution
+// lib/README.md warns about.
+//
 #include <varargs.h>
 
 int write(int fd, char *buf, int n);
 
-/* One string to the standard output, without stdio (phase 4). */
+// One string to the standard output, without stdio (phase 4).
 static void put(char *s)
 {
     char *p = s;
@@ -34,7 +34,7 @@ static void put(char *s)
     write(1, s, n);
 }
 
-/* One decimal digit, taken out of a literal: there is no itoa yet (phase 2). */
+// One decimal digit, taken out of a literal: there is no itoa yet (phase 2).
 static void putdigit(int d)
 {
     char *p = "0123456789";
@@ -55,10 +55,10 @@ static void putnum(int v)
     putdigit(v % 10);
 }
 
-/*
- * n (int, char *) pairs, read from a list this function did not start -- the
- * vprintf shape.  A va_list is one word, so it passes as an ordinary argument.
- */
+//
+// n (int, char *) pairs, read from a list this function did not start -- the
+// vprintf shape.  A va_list is one word, so it passes as an ordinary argument.
+//
 static void vreport(char *label, int n, va_list ap)
 {
     int i;
@@ -82,7 +82,7 @@ static void report(char *label, int n, ...)
     va_end(ap);
 }
 
-/* n ints, added up: the plain case, and the one that walks the most words. */
+// n ints, added up: the plain case, and the one that walks the most words.
 static int sum(int n, ...)
 {
     va_list ap;

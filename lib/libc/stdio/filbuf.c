@@ -1,16 +1,16 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * Refill a read buffer: what the getc() macro falls out to when the count runs out.
- *
- * A string stream (sscanf) never refills -- its whole input was there from the
- * start -- so _IOSTRG returns EOF, which is what stops _doscan().
- *
- * _IOUNBUF is v7's _IONBF; the bit kept its value and gave up its name to C11's
- * setvbuf mode (include/stdio.h).  An unbuffered stream still needs somewhere to
- * put the one byte it reads, hence smallbuf: one char per descriptor, so two
- * unbuffered streams cannot tread on each other.
- */
+//
+// Refill a read buffer: what the getc() macro falls out to when the count runs out.
+//
+// A string stream (sscanf) never refills -- its whole input was there from the
+// start -- so _IOSTRG returns EOF, which is what stops _doscan().
+//
+// _IOUNBUF is v7's _IONBF; the bit kept its value and gave up its name to C11's
+// setvbuf mode (include/stdio.h).  An unbuffered stream still needs somewhere to
+// put the one byte it reads, hence smallbuf: one char per descriptor, so two
+// unbuffered streams cannot tread on each other.
+//
 #include <stdio.h>
 #include <stdlib.h>
 

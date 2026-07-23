@@ -1,19 +1,19 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * j1(x), y1(x) -- Bessel functions of the first and second kinds, order one.
- * v7 extensions, not C11; kept because v7's libm has them.
- *
- * The shape is j0.c's exactly: j1 finite everywhere, y1 a domain error for x <= 0,
- * a rational fit below x = 8 and the asymptotic form above it.  Coefficients are Hart
- * & Cheney (#6050, #6750, #7150, #6447).
- *
- * THE COEFFICIENTS ARE SCALED, for the reason j0.c gives: p1/q1 lead near 1e21 and
- * p4/q4 near 5e23, both past the largest finite value here.  p1/q1 are divided by
- * 10^11 and p4/q4 by 10^13 -- a shift of every literal's decimal exponent, the ratio
- * n/d unchanged.  Each array's factor is on its first line.  p2/q2 and p3/q3 fit and
- * are v7's outright.
- */
+//
+// j1(x), y1(x) -- Bessel functions of the first and second kinds, order one.
+// v7 extensions, not C11; kept because v7's libm has them.
+//
+// The shape is j0.c's exactly: j1 finite everywhere, y1 a domain error for x <= 0,
+// a rational fit below x = 8 and the asymptotic form above it.  Coefficients are Hart
+// & Cheney (#6050, #6750, #7150, #6447).
+//
+// THE COEFFICIENTS ARE SCALED, for the reason j0.c gives: p1/q1 lead near 1e21 and
+// p4/q4 near 5e23, both past the largest finite value here.  p1/q1 are divided by
+// 10^11 and p4/q4 by 10^13 -- a shift of every literal's decimal exponent, the ratio
+// n/d unchanged.  Each array's factor is on its first line.  p2/q2 and p3/q3 fit and
+// are v7's outright.
+//
 #include <errno.h>
 #include <math.h>
 
@@ -22,7 +22,7 @@ static double tpi = .6366197723675813430755350535e0;
 static double pio4 = .7853981633974483096156608458e0;
 
 static double p1[] = {
-    /* scaled by 1e-11 */
+    // scaled by 1e-11
     0.581199354001606143928050809e10,    -.6672106568924916298020941484e9,
     0.2316433580634002297931815435e8,    -.3588817569910106050743641413e6,
     0.2908795263834775409737601689e4,    -.1322983480332126453125473247e2,
@@ -30,7 +30,7 @@ static double p1[] = {
     0.2701122710892323414856790990e-7,
 };
 static double q1[] = {
-    /* scaled by 1e-11 */
+    // scaled by 1e-11
     0.1162398708003212287858529400e11,   0.1185770712190320999837113348e9,
     0.6092061398917521746105196863e6,    0.2081661221307607351240184229e4,
     0.5243710262167649715406728642e1,    0.1013863514358673989967045588e-1,
@@ -62,7 +62,7 @@ static double q3[] = {
     1.0e0,
 };
 static double p4[] = {
-    /* scaled by 1e-13 */
+    // scaled by 1e-13
     -.9963753424306922225996744354e10,   0.2655473831434854326894248968e10,
     -.1212297555414509577913561535e9,    0.2193107339917797592111427556e7,
     -.1965887462722140658820322248e5,    0.9569930239921683481121552788e2,
@@ -70,7 +70,7 @@ static double p4[] = {
     -.2108847540133123652824139923e-6,   0.0,
 };
 static double q4[] = {
-    /* scaled by 1e-13 */
+    // scaled by 1e-13
     0.5082067366941243245314424152e11,   0.5435310377188854170800653097e9,
     0.2954987935897148674290758119e7,    0.1082258259408819552553850180e5,
     0.2976632125647276729292742282e2,    0.6465340881265275571961681500e-1,

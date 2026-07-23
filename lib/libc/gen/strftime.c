@@ -1,27 +1,27 @@
-/*
- * strftime(s, max, fmt, tp) -- a broken-down time as text (C11 §7.27.3.5).
- *
- * No v7 ancestor: v7 had asctime() and nothing else, and the whole of §7.27.3.5 is
- * written here from the standard.  The locale is "C", which is the only locale this
- * system has (<locale.h> offers setlocale and one name), so the E and O modifiers are
- * accepted and ignored -- §7.27.3.5p4 says an unsupported modifier is treated as the
- * unmodified specifier, and in the C locale every alternative form IS the normal one.
- *
- * The compound specifiers -- %c %D %F %r %R %T %x %X -- are expanded by calling the
- * walker on their definition, so each is written once and reads as the standard states
- * it.  The recursion goes exactly one level deep: no expansion contains another.
- *
- * THE RETURN VALUE COUNTS ONLY A COMPLETE RESULT.  §7.27.3.5p3: if the total including
- * the terminating null would exceed maxsize, zero comes back and the array's contents
- * are indeterminate -- so nothing is written past the end and, when maxsize is zero,
- * nothing is written at all, terminator included.
- *
- * %Z and %z ask the system where it is, and the answer comes from ftime(), as
- * gen/ctime.c's localtime() takes it; %Z spells it through timezone(), which is what
- * knows the six names v7 knew.  That is the one heavy reference in this file --
- * timezone() formats the fallback with sprintf, so a program calling strftime links
- * the printf engine whether it prints anything or not.
- */
+//
+// strftime(s, max, fmt, tp) -- a broken-down time as text (C11 §7.27.3.5).
+//
+// No v7 ancestor: v7 had asctime() and nothing else, and the whole of §7.27.3.5 is
+// written here from the standard.  The locale is "C", which is the only locale this
+// system has (<locale.h> offers setlocale and one name), so the E and O modifiers are
+// accepted and ignored -- §7.27.3.5p4 says an unsupported modifier is treated as the
+// unmodified specifier, and in the C locale every alternative form IS the normal one.
+//
+// The compound specifiers -- %c %D %F %r %R %T %x %X -- are expanded by calling the
+// walker on their definition, so each is written once and reads as the standard states
+// it.  The recursion goes exactly one level deep: no expansion contains another.
+//
+// THE RETURN VALUE COUNTS ONLY A COMPLETE RESULT.  §7.27.3.5p3: if the total including
+// the terminating null would exceed maxsize, zero comes back and the array's contents
+// are indeterminate -- so nothing is written past the end and, when maxsize is zero,
+// nothing is written at all, terminator included.
+//
+// %Z and %z ask the system where it is, and the answer comes from ftime(), as
+// gen/ctime.c's localtime() takes it; %Z spells it through timezone(), which is what
+// knows the six names v7 knew.  That is the one heavy reference in this file --
+// timezone() formats the fallback with sprintf, so a program calling strftime links
+// the printf engine whether it prints anything or not.
+//
 #include <sys/timeb.h>
 #include <sys/types.h>
 #include <time.h>
@@ -36,11 +36,11 @@ static const char *mon_name[12] = { "January",   "February", "March",    "April"
                                     "May",       "June",     "July",     "August",
                                     "September", "October",  "November", "December" };
 
-/*
- * The sink.  `over' latches as soon as one character would not fit, and the walk runs
- * on to the end regardless: the count is discarded either way, and stopping early
- * would only make the failure depend on where in the format it happened.
- */
+//
+// The sink.  `over' latches as soon as one character would not fit, and the walk runs
+// on to the end regardless: the count is discarded either way, and stopping early
+// would only make the failure depend on where in the format it happened.
+//
 struct sink {
     char *s;
     size_t max;
@@ -63,10 +63,10 @@ static void puts_(struct sink *k, const char *s)
         put(k, *s++);
 }
 
-/* n right-adjusted in `width' columns, padded with `pad'; width 0 means as it comes. */
+// n right-adjusted in `width' columns, padded with `pad'; width 0 means as it comes.
 static void putnum(struct sink *k, int n, int width, int pad)
 {
-    char buf[16]; /* 41 signed bits is 13 digits, a sign, and slack */
+    char buf[16]; // 41 signed bits is 13 digits, a sign, and slack
     int i = 0, neg = 0;
 
     if (n < 0) {
@@ -94,16 +94,16 @@ static int isleap(int fullyear)
     return fullyear % 400 == 0;
 }
 
-/*
- * ISO 8601 has 53 weeks in a year whose 1 January is a Thursday, and in a leap year
- * whose 1 January is a Wednesday.  jan1() gives that weekday with Sunday counted 0,
- * so Thursday is 4: 1 January 1970 comes out 4, which it was.
- */
+//
+// ISO 8601 has 53 weeks in a year whose 1 January is a Thursday, and in a leap year
+// whose 1 January is a Wednesday.  jan1() gives that weekday with Sunday counted 0,
+// so Thursday is 4: 1 January 1970 comes out 4, which it was.
+//
 static int jan1(int fullyear)
 {
     int y = fullyear - 1;
 
-    return (1 + y + y / 4 - y / 100 + y / 400) % 7; /* 0 = Sunday */
+    return (1 + y + y / 4 - y / 100 + y / 400) % 7; // 0 = Sunday
 }
 
 static int weeks_in(int fullyear)
@@ -115,14 +115,14 @@ static int weeks_in(int fullyear)
     return 52;
 }
 
-/*
- * The ISO 8601 week number, and through *iyear the week-based year it belongs to --
- * which is the calendar year of the week's Thursday, so the first days of January can
- * fall in the last week of the year before.
- */
+//
+// The ISO 8601 week number, and through *iyear the week-based year it belongs to --
+// which is the calendar year of the week's Thursday, so the first days of January can
+// fall in the last week of the year before.
+//
 static int isoweek(const struct tm *t, int *iyear)
 {
-    int wday = (t->tm_wday + 6) % 7; /* Monday = 0 */
+    int wday = (t->tm_wday + 6) % 7; // Monday = 0
     int year = t->tm_year + 1900;
     int week = (t->tm_yday - wday + 10) / 7;
 
@@ -252,11 +252,11 @@ static void conv(struct sink *k, int c, const struct tm *t)
         putnum(k, t->tm_year + 1900, 0, '0');
         return;
     case 'z':
-        /*
-         * ISO 8601 counts east of Greenwich; ftime's timezone counts west, in
-         * minutes, and does not itself know whether daylight time is in effect --
-         * localtime() adds the hour separately, so this does too.
-         */
+        //
+        // ISO 8601 counts east of Greenwich; ftime's timezone counts west, in
+        // minutes, and does not itself know whether daylight time is in effect --
+        // localtime() adds the hour separately, so this does too.
+        //
         ftime(&systime);
         west = systime.timezone - (t->tm_isdst > 0 ? 60 : 0);
         put(k, west > 0 ? '-' : '+');
@@ -273,7 +273,7 @@ static void conv(struct sink *k, int c, const struct tm *t)
         put(k, '%');
         return;
     default:
-        /* Not a specifier: §7.27.3.5 leaves it undefined, so pass it through. */
+        // Not a specifier: §7.27.3.5 leaves it undefined, so pass it through.
         put(k, '%');
         put(k, c);
         return;
@@ -290,7 +290,7 @@ static void walk(struct sink *k, const char *fmt, const struct tm *t)
             continue;
         }
         c = *fmt++;
-        if (c == 'E' || c == 'O') /* C locale: no alternative forms */
+        if (c == 'E' || c == 'O') // C locale: no alternative forms
             c = *fmt++;
         if (c == '\0')
             break;

@@ -1,50 +1,50 @@
-/*
- * The formatting engine behind the whole printf family.
- *
- * NOT v7's.  v7's _doprnt was x86 assembly in the Nordier port (stdio/doprnt.s,
- * with stdio/fltpr.s and ffltpr.s for the floating conversions), so there was
- * nothing to port.  This is the c-compiler's libc/besm6/doprnt.c -- itself derived
- * from the FreeBSD kernel printf -- retargeted here.  What changed:
- *
- *   THE SINK IS A `FILE *'.  The original chose between putbyte() and a caller
- *   buffer through a g_to_buf flag; here everything goes through putc(), and
- *   sprintf/snprintf hand in a v7 _IOSTRG stream over the caller's buffer.  That
- *   buys snprintf's return value for nothing: _flsbuf() drops the byte when such a
- *   stream fills up (stdio/flsbuf.c) while the count below goes on rising, which
- *   is exactly "the number of characters that would have been written".
- *
- *   THE CASE FOLD IS GONE.  The original folded every conversion letter to upper
- *   case because its output device buffered KOI7 and printed upper case only --
- *   '%d' and '%D' both arrived as 'D', and %x/%X, %e/%E, %g/%G were
- *   indistinguishable.  This terminal is ASCII (kernel/dev/sc.c), so the letters
- *   are case-sensitive again: %x is lower-case hex and %X upper, %e/%g print `e'
- *   and %E/%G print `E'.  A null %s prints "(null)", not "(NULL)".
- *
- *   %n was added, and the length modifiers widened to the C11 set.  `long' is
- *   `int' and `double' is `float', one word each, so l/h/hh/ll/L/j/z/t are all
- *   accepted and all ignored -- every argument is one word and va_arg steps by one
- *   word whatever type it is named with.
- *
- * The one thing that must NOT be tidied is the null test in %s: the argument is
- * read as a raw word and only then reinterpreted as a char *, because reading it
- * back through char** would re-decorate a null word into a (nonzero) fat pointer
- * and hide the null.
- *
- * g_iop and g_len are file statics, as the original's sink state was.  Nothing
- * re-enters this engine today; when signal delivery lands (lib phase 6), a handler
- * that calls printf will be the first thing that could.
- */
+//
+// The formatting engine behind the whole printf family.
+//
+// NOT v7's.  v7's _doprnt was x86 assembly in the Nordier port (stdio/doprnt.s,
+// with stdio/fltpr.s and ffltpr.s for the floating conversions), so there was
+// nothing to port.  This is the c-compiler's libc/besm6/doprnt.c -- itself derived
+// from the FreeBSD kernel printf -- retargeted here.  What changed:
+//
+//   THE SINK IS A `FILE *'.  The original chose between putbyte() and a caller
+//   buffer through a g_to_buf flag; here everything goes through putc(), and
+//   sprintf/snprintf hand in a v7 _IOSTRG stream over the caller's buffer.  That
+//   buys snprintf's return value for nothing: _flsbuf() drops the byte when such a
+//   stream fills up (stdio/flsbuf.c) while the count below goes on rising, which
+//   is exactly "the number of characters that would have been written".
+//
+//   THE CASE FOLD IS GONE.  The original folded every conversion letter to upper
+//   case because its output device buffered KOI7 and printed upper case only --
+//   '%d' and '%D' both arrived as 'D', and %x/%X, %e/%E, %g/%G were
+//   indistinguishable.  This terminal is ASCII (kernel/dev/sc.c), so the letters
+//   are case-sensitive again: %x is lower-case hex and %X upper, %e/%g print `e'
+//   and %E/%G print `E'.  A null %s prints "(null)", not "(NULL)".
+//
+//   %n was added, and the length modifiers widened to the C11 set.  `long' is
+//   `int' and `double' is `float', one word each, so l/h/hh/ll/L/j/z/t are all
+//   accepted and all ignored -- every argument is one word and va_arg steps by one
+//   word whatever type it is named with.
+//
+// The one thing that must NOT be tidied is the null test in %s: the argument is
+// read as a raw word and only then reinterpreted as a char *, because reading it
+// back through char** would re-decorate a null word into a (nonzero) fat pointer
+// and hide the null.
+//
+// g_iop and g_len are file statics, as the original's sink state was.  Nothing
+// re-enters this engine today; when signal delivery lands (lib phase 6), a handler
+// that calls printf will be the first thing that could.
+//
 #include <math.h>
 #include <stdio.h>
 
 enum {
-    MAXNBUF  = 32, /* digits buffer: 48-bit octal (16) + sign + prefix + slack  */
-    MAX_DIG  = 12, /* max meaningful significant digits for a 48-bit double     */
-    DEF_PREC = 6,  /* default precision for %f/%e and significant digits for %g */
+    MAXNBUF  = 32, // digits buffer: 48-bit octal (16) + sign + prefix + slack
+    MAX_DIG  = 12, // max meaningful significant digits for a 48-bit double
+    DEF_PREC = 6,  // default precision for %f/%e and significant digits for %g
 };
 
-static FILE *g_iop; /* where the characters go                          */
-static int g_len;   /* characters produced so far -- the return value    */
+static FILE *g_iop; // where the characters go
+static int g_len;   // characters produced so far -- the return value
 
 static void emit(int c)
 {
@@ -60,7 +60,7 @@ static void emit_pad(int c, int count)
     }
 }
 
-/* Map a value 0..15 to its hex digit, in the case the conversion letter asked for. */
+// Map a value 0..15 to its hex digit, in the case the conversion letter asked for.
 static int mkhex(int ch, int upper)
 {
     ch = ch & 15;
@@ -69,13 +69,13 @@ static int mkhex(int ch, int upper)
     return ch + '0';
 }
 
-/*
- * Convert `ul' to base `base' digits, written into nbuf in reverse order.
- * nbuf[0] is a 0 sentinel; digits occupy nbuf[1..].  At least `prec' digits are
- * produced (zero padded).  Returns a pointer to the most-significant digit (so
- * the caller walks downward to nbuf+1 to print MSD..LSD) and stores the digit
- * count in *lenp.
- */
+//
+// Convert `ul' to base `base' digits, written into nbuf in reverse order.
+// nbuf[0] is a 0 sentinel; digits occupy nbuf[1..].  At least `prec' digits are
+// produced (zero padded).  Returns a pointer to the most-significant digit (so
+// the caller walks downward to nbuf+1 to print MSD..LSD) and stores the digit
+// count in *lenp.
+//
 static char *ksprintn(char *nbuf, unsigned ul, int base, int prec, int upper, int *lenp)
 {
     char *p = nbuf;
@@ -90,13 +90,13 @@ static char *ksprintn(char *nbuf, unsigned ul, int base, int prec, int upper, in
     return p;
 }
 
-/*
- * Floating-point conversion (defined at the bottom of the file).  Works on the
- * caller buffer b[0..bsize-1], walking it with char* cursors.  Stores the
- * digits, sets *startidx to the index of the first character, and returns the
- * character count.  b[0] is reserved for a rounding carry.  fmtch is always one
- * of 'f'/'e'/'g' -- lower case -- and expch is the letter an exponent takes.
- */
+//
+// Floating-point conversion (defined at the bottom of the file).  Works on the
+// caller buffer b[0..bsize-1], walking it with char* cursors.  Stores the
+// digits, sets *startidx to the index of the first character, and returns the
+// character count.  b[0] is reserved for a rounding carry.  fmtch is always one
+// of 'f'/'e'/'g' -- lower case -- and expch is the letter an exponent takes.
+//
 static int cvt(double number, int prec, int sharpflag, int *negp, int fmtch, int expch, char *b,
                int bsize, int *startidx);
 
@@ -157,7 +157,7 @@ int _doprnt(const char *fmt, va_list ap, FILE *iop)
             goto reswitch;
         }
         if (c == 'l' || c == 'h' || c == 'L' || c == 'j' || c == 'z' || c == 't') {
-            /* length modifiers: every argument is one word -- accept and ignore */
+            // length modifiers: every argument is one word -- accept and ignore
             goto reswitch;
         }
         if (c == '*') {
@@ -214,9 +214,9 @@ int _doprnt(const char *fmt, va_list ap, FILE *iop)
         }
 
         if (c == 's') {
-            /* Detect a null argument from the raw word, then reconstruct the
-             * char* from it.  Reading it back through char** would re-decorate a
-             * null word into a (nonzero) fat pointer and hide the null. */
+            // Detect a null argument from the raw word, then reconstruct the
+            // char* from it.  Reading it back through char** would re-decorate a
+            // null word into a (nonzero) fat pointer and hide the null.
             n = va_arg(ap, int);
             if (n == 0) {
                 s = "(null)";
@@ -242,7 +242,7 @@ int _doprnt(const char *fmt, va_list ap, FILE *iop)
             continue;
         }
 
-        /* ---- floating point ---- */
+        // ---- floating point ----
         if (c == 'f' || c == 'F' || c == 'e' || c == 'E' || c == 'g' || c == 'G') {
             double d;
             int sidx, slen, expch;
@@ -287,7 +287,7 @@ int _doprnt(const char *fmt, va_list ap, FILE *iop)
             continue;
         }
 
-        /* ---- integer conversions ---- */
+        // ---- integer conversions ----
         if (c == 'd' || c == 'i') {
             ul = va_arg(ap, unsigned);
             if (!sign)
@@ -318,7 +318,7 @@ int _doprnt(const char *fmt, va_list ap, FILE *iop)
             goto nosign;
         }
 
-        /* unknown conversion: echo it verbatim */
+        // unknown conversion: echo it verbatim
         emit('%');
         emit(c);
         continue;
@@ -327,12 +327,12 @@ int _doprnt(const char *fmt, va_list ap, FILE *iop)
         sign  = 0;
         blank = 0;
     number:
-        /*
-         * §7.21.6.1p6: for d,i,o,u,x,X a precision makes the `0' flag ignored.  Only
-         * for those -- %010.2f keeps its zero fill -- which is why the test is here
-         * and not, as in the engine this came from, in the `.' case of the flag
-         * parser, where it silently disarmed the floating conversions too.
-         */
+        //
+        // §7.21.6.1p6: for d,i,o,u,x,X a precision makes the `0' flag ignored.  Only
+        // for those -- %010.2f keeps its zero fill -- which is why the test is here
+        // and not, as in the engine this came from, in the `.' case of the flag
+        // parser, where it silently disarmed the floating conversions too.
+        //
         if (dot)
             padding = ' ';
         if (sign) {
@@ -386,13 +386,13 @@ done:
     return g_len;
 }
 
-/*
- * Round the decimal digits start..end up by one unit in the last place,
- * propagating carries.  `expo' (when non-null) carries the e-format exponent so
- * a carry out of the leading digit bumps it; otherwise an f-format carry extends
- * left into the reserved slot and moves *startp back one.  Mirrors the FreeBSD
- * cvtround.
- */
+//
+// Round the decimal digits start..end up by one unit in the last place,
+// propagating carries.  `expo' (when non-null) carries the e-format exponent so
+// a carry out of the leading digit bumps it; otherwise an f-format carry extends
+// left into the reserved slot and moves *startp back one.  Mirrors the FreeBSD
+// cvtround.
+//
 static void cvtround(double fract, int *expo, char **startp, char *end, int ch, int *negp)
 {
     double tmp;
@@ -417,10 +417,10 @@ static void cvtround(double fract, int *expo, char **startp, char *end, int ch, 
                 break;
             *p = '0';
             if (p == start) {
-                if (expo) { /* e/E: increment exponent */
+                if (expo) { // e/E: increment exponent
                     *p = '1';
                     ++*expo;
-                } else { /* f: prepend a digit into the reserved slot */
+                } else { // f: prepend a digit into the reserved slot
                     --p;
                     *p = '1';
                     --start;
@@ -429,7 +429,7 @@ static void cvtround(double fract, int *expo, char **startp, char *end, int ch, 
             }
         }
     } else if (*negp) {
-        /* "%.3f" of -0.0004 must not print a negative zero */
+        // "%.3f" of -0.0004 must not print a negative zero
         for (;; --p) {
             if (*p == '.')
                 --p;
@@ -442,7 +442,7 @@ static void cvtround(double fract, int *expo, char **startp, char *end, int ch, 
     *startp = start;
 }
 
-/* Append the exponent suffix ("e+NN") at write cursor p; return the new cursor. */
+// Append the exponent suffix ("e+NN") at write cursor p; return the new cursor.
 static char *exponent(char *p, int expin, int expch)
 {
     char eb[8];
@@ -475,12 +475,12 @@ static char *exponent(char *p, int expin, int expch)
     return p;
 }
 
-/*
- * Format the magnitude `number' into b[] for %f/%e/%g.  Walks the buffer with
- * char* cursors.  b[0] is reserved for a rounding carry; formatting runs from
- * b+1.  *startidx receives the index of the first character (0 if a carry
- * extended left); the character count is returned.
- */
+//
+// Format the magnitude `number' into b[] for %f/%e/%g.  Walks the buffer with
+// char* cursors.  b[0] is reserved for a rounding carry; formatting runs from
+// b+1.  *startidx receives the index of the first character (0 if a carry
+// extended left); the character count is returned.
+//
 static int cvt(double number, int precin, int sharpflag, int *negp, int fmtch, int expch, char *b,
                int bsize, int *startidx)
 {
@@ -495,10 +495,10 @@ static int cvt(double number, int precin, int sharpflag, int *negp, int fmtch, i
     fract   = modf(number, &integer);
 
     endp  = b + bsize - 1;
-    start = b + 1; /* reserved rounding slot at b[0] */
+    start = b + 1; // reserved rounding slot at b[0]
     t     = b + 1;
 
-    /* integer part, least-significant first, into the top of the buffer */
+    // integer part, least-significant first, into the top of the buffer
     p = endp - 1;
     while (integer) {
         tmp = modf(integer / 10, &integer);
@@ -598,7 +598,7 @@ static int cvt(double number, int precin, int sharpflag, int *negp, int fmtch, i
         return (int)(t - start);
     }
 
-    /* fmtch == 'g' */
+    // fmtch == 'g'
     if (!prec)
         ++prec;
     if (expcnt > prec || (!expcnt && fract && fract < 0.0001)) {

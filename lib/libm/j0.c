@@ -1,25 +1,25 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * j0(x), y0(x) -- Bessel functions of the first and second kinds, order zero.
- * v7 extensions, not C11; kept because v7's libm has them.
- *
- * j0 is finite everywhere; y0 is a domain error for x <= 0 (EDOM, -HUGE_VAL).  Below
- * x = 8 each is a rational fit; above it, the asymptotic form through pzero/qzero,
- * sqrt, sin and cos.  Coefficients are Hart & Cheney (#5849, #6549, #6949, #6245).
- *
- * THE COEFFICIENTS ARE SCALED.  v7's p1/q1 and p4/q4 lead with values near 5e20 and
- * 4e20 -- past this machine's largest finite 9.22e18, so they cannot even be written
- * as literals here.  Each such pair is divided by 10^10 (its trailing constant, v7's
- * `1.0', becomes 1e-10), which is a pure shift of every literal's decimal exponent and
- * leaves the ratio n/d -- the only thing either polynomial contributes -- unchanged.
- * The comment on each array records the factor.  p2/q2 and p3/q3 already fit and are
- * v7's outright.
- *
- * pzero/qzero are file-scope statics that asympt() fills and j0/y0 read, which is why
- * the four routines share one file: the same arrangement malloc.c and ctime.c take in
- * libc for statics shared between entry points.
- */
+//
+// j0(x), y0(x) -- Bessel functions of the first and second kinds, order zero.
+// v7 extensions, not C11; kept because v7's libm has them.
+//
+// j0 is finite everywhere; y0 is a domain error for x <= 0 (EDOM, -HUGE_VAL).  Below
+// x = 8 each is a rational fit; above it, the asymptotic form through pzero/qzero,
+// sqrt, sin and cos.  Coefficients are Hart & Cheney (#5849, #6549, #6949, #6245).
+//
+// THE COEFFICIENTS ARE SCALED.  v7's p1/q1 and p4/q4 lead with values near 5e20 and
+// 4e20 -- past this machine's largest finite 9.22e18, so they cannot even be written
+// as literals here.  Each such pair is divided by 10^10 (its trailing constant, v7's
+// `1.0', becomes 1e-10), which is a pure shift of every literal's decimal exponent and
+// leaves the ratio n/d -- the only thing either polynomial contributes -- unchanged.
+// The comment on each array records the factor.  p2/q2 and p3/q3 already fit and are
+// v7's outright.
+//
+// pzero/qzero are file-scope statics that asympt() fills and j0/y0 read, which is why
+// the four routines share one file: the same arrangement malloc.c and ctime.c take in
+// libc for statics shared between entry points.
+//
 #include <errno.h>
 #include <math.h>
 
@@ -28,7 +28,7 @@ static double tpi = .6366197723675813430755350535e0;
 static double pio4 = .7853981633974483096156608458e0;
 
 static double p1[] = {
-    /* scaled by 1e-10 */
+    // scaled by 1e-10
     0.4933787251794133561816813446e11,   -.1179157629107610536038440800e11,
     0.6382059341072356562289432465e9,    -.1367620353088171386865416609e8,
     0.1434354939140344111664316553e6,    -.8085222034853793871199468171e3,
@@ -36,7 +36,7 @@ static double p1[] = {
     0.2685786856980014981415848441e-5,
 };
 static double q1[] = {
-    /* scaled by 1e-10 */
+    // scaled by 1e-10
     0.4933787251794133562113278438e11,   0.5428918384092285160200195092e9,
     0.3024635616709462698627330784e7,    0.1127756739679798507056031594e5,
     0.3123043114941213172572469442e2,    0.6699987672982239671814028660e-1,
@@ -68,7 +68,7 @@ static double q3[] = {
     1.0e0,
 };
 static double p4[] = {
-    /* scaled by 1e-10 */
+    // scaled by 1e-10
     -.2750286678629109583701933175e10,   0.6587473275719554925999402049e10,
     -.5247065581112764941297350814e9,    0.1375624316399344078571335453e8,
     -.1648605817185729473122082537e6,    0.1025520859686394284509167421e4,
@@ -76,7 +76,7 @@ static double p4[] = {
     -.4137035497933148554125235152e-5,
 };
 static double q4[] = {
-    /* scaled by 1e-10 */
+    // scaled by 1e-10
     0.3726458838986165881989980e11,      0.4192417043410839973904769661e9,
     0.2392883043499781857439356652e7,    0.9162038034075185262489147968e4,
     0.2613065755041081249568482092e2,    0.5795122640700729537480087915e-1,

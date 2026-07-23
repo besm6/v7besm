@@ -1,9 +1,9 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * fopen() on a descriptor that is already open.  The mode has to be repeated
- * because there is no way to ask the kernel what it was.
- */
+//
+// fopen() on a descriptor that is already open.  The mode has to be repeated
+// because there is no way to ask the kernel what it was.
+//
 #include <stdio.h>
 
 long lseek(int fd, long off, int whence);
@@ -26,7 +26,7 @@ FILE *fdopen(int fd, const char *mode)
 
     case 'a':
         lseek(fd, 0L, SEEK_END);
-        /* No break */
+        // No break
     case 'w':
         iop->_flag |= _IOWRT;
         break;

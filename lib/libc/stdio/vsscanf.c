@@ -1,10 +1,10 @@
-/*
- * vsscanf -- scan a string (C11 §7.21.6.14), and with it sscanf.
- *
- * The source is v7's _IOSTRG stream: a FILE on the stack over the caller's string,
- * with no descriptor behind it.  _filbuf() returns EOF for such a stream
- * (stdio/filbuf.c), so the scan stops at the NUL and never reaches a syscall.
- */
+//
+// vsscanf -- scan a string (C11 §7.21.6.14), and with it sscanf.
+//
+// The source is v7's _IOSTRG stream: a FILE on the stack over the caller's string,
+// with no descriptor behind it.  _filbuf() returns EOF for such a stream
+// (stdio/filbuf.c), so the scan stops at the NUL and never reaches a syscall.
+//
 #include <stdio.h>
 
 int _doscan(FILE *iop, const char *fmt, va_list ap);

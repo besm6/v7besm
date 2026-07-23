@@ -1,9 +1,9 @@
-/* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
+// UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-/*
- * Write one WORD, six bytes, most significant first.  See getw.c.  v7's putw
- * returned nothing; this one answers EOF if the stream went bad.
- */
+//
+// Write one WORD, six bytes, most significant first.  See getw.c.  v7's putw
+// returned nothing; this one answers EOF if the stream went bad.
+//
 #include <stdio.h>
 
 int putw(int w, FILE *iop)
