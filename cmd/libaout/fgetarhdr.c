@@ -5,7 +5,7 @@
 #include "besm6/ar.h"
 #include "besm6/b.out.h"
 
-#define W 6 /* sizeof word of BESM-6 */
+#define W 6 // sizeof word of BESM-6
 
 // Read one archive member header from a stream into *h, decoding the
 // length-prefixed layout shared with getarhdr()/putarhdr(): a 1-byte name

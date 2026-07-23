@@ -6,7 +6,7 @@
 #include "besm6/ar.h"
 #include "besm6/b.out.h"
 
-#define W 6 /* sizeof word of BESM-6 */
+#define W 6 // sizeof word of BESM-6
 
 // Encode one 48-bit word (6 bytes, big-endian) into a buffer.
 static void putword(unsigned char *p, uword_t v)

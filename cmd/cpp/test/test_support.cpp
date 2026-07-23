@@ -143,13 +143,13 @@ static Result RunPreprocessor(const std::string& source,
 Result PreprocessorTest::Preprocess(const std::string& source,
                                     const std::vector<std::string>& extraArgs,
                                     const std::vector<AuxFile>& aux) {
-    return RunPreprocessor(source, extraArgs, aux, /*strict=*/false);
+    return RunPreprocessor(source, extraArgs, aux, false); // strict = false
 }
 
 Result PreprocessorTest::PreprocessStrict(const std::string& source,
                                           const std::vector<std::string>& extraArgs,
                                           const std::vector<AuxFile>& aux) {
-    return RunPreprocessor(source, extraArgs, aux, /*strict=*/true);
+    return RunPreprocessor(source, extraArgs, aux, true); // strict = true
 }
 
 static bool IsWordChar(unsigned char c) { return std::isalnum(c) != 0 || c == '_'; }

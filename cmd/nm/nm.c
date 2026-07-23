@@ -1,9 +1,9 @@
-/*
- *	print symbol tables for
- *      object files (SVS-B)
- *
- *	nm [-goprun] name ...
- */
+//
+// print symbol tables for
+//      object files (SVS-B)
+//
+// nm [-goprun] name ...
+//
 
 #include <ctype.h>
 #include <stdio.h>
@@ -15,7 +15,7 @@
 
 #include "nm.h"
 
-#define N_FORMAT "%05lo" /* octal printf format for a symbol value */
+#define N_FORMAT "%05lo" // octal printf format for a symbol value
 
 #define QUANT 2048
 
@@ -26,7 +26,7 @@ static int globl_flg;
 static int nosort_flg;
 static int prep_flg;
 static int ar_flg;
-static char *progname = "nm"; /* diagnostic prefix: basename of argv[0] */
+static char *progname = "nm"; // diagnostic prefix: basename of argv[0]
 static long off;
 static struct exec hdr;
 static struct ar_hdr arhdr;
@@ -53,13 +53,13 @@ int nm_run(int argc, char **argv)
 {
     int narg;
 
-    /* Derive the diagnostic prefix from argv[0]'s basename (fallback "nm"). */
+    // Derive the diagnostic prefix from argv[0]'s basename (fallback "nm").
     if (argc > 0 && argv[0] && argv[0][0]) {
         char *slash = strrchr(argv[0], '/');
         progname    = slash ? slash + 1 : argv[0];
     }
 
-    /* Reset option state so repeated in-process runs start clean. */
+    // Reset option state so repeated in-process runs start clean.
     numsort_flg = undef_flg = revsort_flg = 0;
     globl_flg = nosort_flg = prep_flg = ar_flg = 0;
 
@@ -67,25 +67,25 @@ int nm_run(int argc, char **argv)
         argv++;
         while (*++*argv)
             switch (**argv) {
-            case 'n': /* sort numerically */
+            case 'n': // sort numerically
                 numsort_flg++;
                 continue;
-            case 'g': /* globl symbols only */
+            case 'g': // globl symbols only
                 globl_flg++;
                 continue;
-            case 'u': /* undefined symbols only */
+            case 'u': // undefined symbols only
                 undef_flg++;
                 continue;
-            case 'r': /* sort in reverse order */
+            case 'r': // sort in reverse order
                 revsort_flg++;
                 continue;
-            case 'p': /* don't sort -- symbol table order */
+            case 'p': // don't sort -- symbol table order
                 nosort_flg++;
                 continue;
-            case 'o': /* prepend a name to each line */
+            case 'o': // prepend a name to each line
                 prep_flg++;
                 continue;
-            default: /* oops */
+            default: // oops
                 fprintf(stderr, "%s: error: unknown flag -%c\n",
                         progname, *argv[0]);
                 return 1;
@@ -118,7 +118,7 @@ int nm_run(int argc, char **argv)
                 arhdr.ar_name = NULL;
                 if (!fgetarhdr(fi, &arhdr))
                     break;
-                /* offset to next element */
+                // offset to next element
                 off = arhdr.ar_size + ftell(fi);
                 if (narg > 1)
                     printf("\n%s:\n", *argv);
@@ -134,10 +134,10 @@ int nm_run(int argc, char **argv)
 
 static void nm(const char *name, int narg)
 {
-    struct nlist sym;          /* current symbol */
-    struct nlist *symp = NULL; /* sym table */
-    int symplen        = 0;    /* sym table length */
-    int symindex       = 0;    /* next free table entry */
+    struct nlist sym;          // current symbol
+    struct nlist *symp = NULL; // sym table
+    int symplen        = 0;    // sym table length
+    int symindex       = 0;    // next free table entry
     int c;
     long n;
 

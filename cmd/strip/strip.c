@@ -1,8 +1,8 @@
-/*
- *      strip file ...          - remove the symbol table and relocation bits
- *                                from BESM-6 a.out objects, rewriting each file
- *                                in place via a temporary file.
- */
+//
+//      strip file ...          - remove the symbol table and relocation bits
+//                                from BESM-6 a.out objects, rewriting each file
+//                                in place via a temporary file.
+//
 
 #include <fcntl.h>
 #include <signal.h>
@@ -15,11 +15,11 @@
 
 #include "strip.h"
 
-#define BUFSZ 8192 /* copy chunk size in bytes */
+#define BUFSZ 8192 // copy chunk size in bytes
 
-static char *progname = "strip"; /* diagnostic prefix: basename of argv[0] */
+static char *progname = "strip"; // diagnostic prefix: basename of argv[0]
 
-/* Copy `size` bytes from `fr` to `to`; returns nonzero on short read/write. */
+// Copy `size` bytes from `fr` to `to`; returns nonzero on short read/write.
 static int copy(const char *name, FILE *fr, FILE *to, long size)
 {
     char buf[BUFSZ];
@@ -41,11 +41,11 @@ static int copy(const char *name, FILE *fr, FILE *to, long size)
     return 0;
 }
 
-/*
- * Strip one object, rewriting it in place through the scratch file `tf`.
- * Returns 0 on success, 1 on a soft error (file left untouched), 2 on a hard
- * error (the file may have been clobbered).
- */
+//
+// Strip one object, rewriting it in place through the scratch file `tf`.
+// Returns 0 on success, 1 on a soft error (file left untouched), 2 on a hard
+// error (the file may have been clobbered).
+//
 static int strip_file(const char *name, FILE *tf)
 {
     struct exec head;
@@ -91,7 +91,7 @@ static int strip_file(const char *name, FILE *tf)
     return status;
 }
 
-/* Print the command-line usage summary. */
+// Print the command-line usage summary.
 static void usage(void)
 {
     printf("Usage:\n");
@@ -106,7 +106,7 @@ int strip_run(int argc, char **argv)
     int status = 0;
     int i;
 
-    /* Derive the diagnostic prefix from argv[0]'s basename (fallback "strip"). */
+    // Derive the diagnostic prefix from argv[0]'s basename (fallback "strip").
     if (argc > 0 && argv[0] && argv[0][0]) {
         char *slash = strrchr(argv[0], '/');
         progname    = slash ? slash + 1 : argv[0];

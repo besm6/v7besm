@@ -4,7 +4,7 @@
 
 #include "besm6/ar.h"
 
-#define W 6 /* sizeof word of BESM-6 */
+#define W 6 // sizeof word of BESM-6
 
 // On-disk size in bytes of an archive member header for the name in *h:
 // a 1-byte length, the name bytes, zero padding up to a whole word, then five

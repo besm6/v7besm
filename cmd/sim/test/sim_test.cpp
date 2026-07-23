@@ -915,6 +915,6 @@ TEST(Syscall, SignalDelivery)
 
     // A caught signal is reset to SIG_DFL as it is delivered, as v7 does (psig()), so
     // signal() now answers with SIG_DFL rather than with the handler.
-    run_syscall(machine, SYS_signal, { SIGTERM_ }, 1 /* SIG_IGN */);
+    run_syscall(machine, SYS_signal, { SIGTERM_ }, 1); // SIG_IGN
     EXPECT_EQ(machine.cpu.get_acc(), 0u);
 }

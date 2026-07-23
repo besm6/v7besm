@@ -1,13 +1,13 @@
-/*
- *      DEMOS SVS-B operating system.
- *
- *      Build the symdef table for fast loading.
- *
- *      Author: S. Vakulenko.
- *      Version of 06.02.90.
- *
- *      Source code taken from UNIX 4.3 BSD.
- */
+//
+//      DEMOS SVS-B operating system.
+//
+//      Build the symdef table for fast loading.
+//
+//      Author: S. Vakulenko.
+//      Version of 06.02.90.
+//
+//      Source code taken from UNIX 4.3 BSD.
+//
 
 #include "symdef.h"
 
@@ -22,9 +22,9 @@
 #include "besm6/b.out.h"
 #include "besm6/ranlib.h"
 
-#include "archive.h" /* ar_run() -- the in-process archiver engine */
+#include "archive.h" // ar_run() -- the in-process archiver engine
 
-#define W 6 /* sizeof word of BESM-6 */
+#define W 6 // sizeof word of BESM-6
 
 #define TABSZ    1000
 #define STRTABSZ (TABSZ * 10)
@@ -42,7 +42,7 @@ static struct ranlib rantab[TABSZ];
 static int tnum;
 static int debug;
 static int justtouch;
-static char *progname = "ranlib"; /* diagnostic prefix: basename of argv[0] */
+static char *progname = "ranlib"; // diagnostic prefix: basename of argv[0]
 
 static int nextel(FILE *af);
 static void fixdate(const char *s);
@@ -50,7 +50,7 @@ static void putrantab(FILE *f);
 static void stash(const struct nlist *s);
 static void fixsize(void);
 
-/* Print the command-line usage summary. */
+// Print the command-line usage summary.
 static void usage(void)
 {
     printf("Usage:\n");
@@ -62,13 +62,13 @@ static void usage(void)
 
 int ranlib_run(int argc, char **argv)
 {
-    /* Derive the diagnostic prefix from argv[0]'s basename (fallback "ranlib"). */
+    // Derive the diagnostic prefix from argv[0]'s basename (fallback "ranlib").
     if (argc > 0 && argv[0] && argv[0][0]) {
         char *slash = strrchr(argv[0], '/');
         progname    = slash ? slash + 1 : argv[0];
     }
 
-    /* Reset state so repeated in-process runs start clean. */
+    // Reset state so repeated in-process runs start clean.
     justtouch = 0;
     debug     = 0;
     tnum      = 0;
@@ -76,7 +76,7 @@ int ranlib_run(int argc, char **argv)
     off       = 0;
     oldoff    = 0;
 
-    /* check for the "-t" flag" */
+    // check for the "-t" flag"
     for (; argc > 1 && argv[1][0] == '-'; --argc, ++argv) {
         char *p;
 
@@ -151,11 +151,11 @@ int ranlib_run(int argc, char **argv)
             fseek(fi, 2 * (exh.a_const + exh.a_text + exh.a_data), 1);
             for (;;) {
                 int n = fgetsym(fi, &sym);
-                if (n == 0) { /* malloc returned 0 */
+                if (n == 0) { // malloc returned 0
                     fprintf(stderr, "%s: error: out of memory\n", progname);
                     exit(1);
                 }
-                if (n == 1) /* end of symtab */
+                if (n == 1) // end of symtab
                     break;
                 if ((sym.n_type & N_EXT) && (sym.n_type & N_TYPE) != N_UNDF)
                     stash(&sym);
@@ -163,7 +163,7 @@ int ranlib_run(int argc, char **argv)
                     free(sym.n_name);
             }
         } while (nextel(fi));
-        fixsize(); /* update ran_off by length of __.SYMTAB */
+        fixsize(); // update ran_off by length of __.SYMTAB
         fclose(fi);
         fo = fopen(tempnm, "w");
         if (!fo) {
@@ -205,7 +205,7 @@ static int nextel(FILE *af)
     return (1);
 }
 
-static void fixdate(const char *s) /* patch time */
+static void fixdate(const char *s) // patch time
 {
     int fd;
 
@@ -234,11 +234,11 @@ static void putrantab(FILE *f)
         if (debug)
             printf("%08lo: %3ld  %s\n", (long)p->ran_off, (long)p->ran_len, p->ran_name);
         fputran(p, f);
-        n += 4 + p->ran_len; /* fputran writes 1 len + 3-byte half-word off + name */
+        n += 4 + p->ran_len; // fputran writes 1 len + 3-byte half-word off + name
         free(p->ran_name);
     }
     tnum = 0;
-    /* pad with nulls */
+    // pad with nulls
     do
         putc(0, f);
     while (++n % W);
@@ -262,11 +262,11 @@ static void fixsize(void)
     long offdelta;
     struct ar_hdr symdef;
 
-    /* On-disk header size of the "__.SYMDEF" member we are about to insert. */
+    // On-disk header size of the "__.SYMDEF" member we are about to insert.
     symdef.ar_name = tempnm;
     offdelta       = arhdrsz(&symdef);
     for (i = 0; i < tnum; ++i)
-        offdelta += rantab[i].ran_len + 4; /* 1 len + 3-byte half-word off + name */
+        offdelta += rantab[i].ran_len + 4; // 1 len + 3-byte half-word off + name
     offdelta = (offdelta + W) / W * W;
     off      = W;
     nextel(fi);
