@@ -45,6 +45,7 @@ lib/test/vararg
 lib/test/errno
 lib/test/procs
 lib/test/sbrkt
+lib/test/malloct
 lib/test/strings
 lib/test/gen
 lib/test/environ

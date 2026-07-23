@@ -93,11 +93,14 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
   that reaches the stack at `070000`; `b6sim`'s `Syscall.Break` is the shared spec.
 - **`sbrk` fails with NULL, not `(char *)-1`.** v7's value would have to be fabricated from an
   integer, which is the one thing the fat-pointer rule below forbids; the break can never
-  legitimately be word 0, so NULL costs nothing. Phase 3's `malloc` must test for NULL.
+  legitimately be word 0, so NULL costs nothing. `malloc` tests for NULL.
   `sbrk` rounds *up* when growing (`btow()`) and *toward zero* when shrinking — `btow()` is
   `(x + 5) / 6` and C truncates a negative quotient, so it would free one word too few — and it
   refuses an increment large enough to wrap the 15-bit word address, which an `int` is wide
-  enough to express and a `char *` is not.
+  enough to express and a `char *` is not. **The break is granted a page at a time** — both
+  the kernel and `b6sim` round it up to 1024 words — so an allocator's growth chunk and the
+  step it backs off by when refused are both a page: anything smaller asks for exactly what
+  was just given, or exactly what was just refused.
 - **A second result is only 15 bits.** r12 is an index register, so `wait`'s status — `(code <<
   8)` — is truncated for any exit code above 127. It bites identically on the kernel and under
   `b6sim`. Widening it means giving `wait` an argument again and writing the status through the
@@ -105,6 +108,19 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
 - **`char *` is a fat pointer** — bit 48 set, byte offset in bits 47–45 over a 15-bit word
   address — and `int *` is not. Never fabricate one by casting an integer. Six chars pack into a
   word, `sizeof(int) == 6`, `NBPW == 6`, and `int` is 41 bits signed / 48 unsigned.
+- **A flag packed into a pointer goes *above* the address, never in bit 0.** A word pointer
+  holds its 15-bit address in bits 15–1 with bits 48–16 zero, so bit 16 — one past the top of
+  the address space — is free, and it stays clear of the bit-48 marker that would make the
+  value look fat. Bit 0 is not free: an address is a *word index*, so a one-word object's
+  neighbour is one away and setting the low bit names it. This is the whole of what had to
+  change in v7's `malloc`, whose `BUSY` flag lives in bit 0 on the PDP-11 — and it is cheap,
+  because the casts it takes are free: pointer↔integer is a bare copy in both directions
+  (every type is one word), and `(char *)` of a word pointer sets the marker with the offset
+  of byte **#0**, so the fat pointer names the word's first byte and casting back recovers it.
+- **A null word pointer cast to `char *` is not a zero word.** The cast sets the marker and an
+  offset over the zero address, so `p == NULL` still answers correctly — the compiler compares
+  the address part alone — but `if (!p)` need not. Return a plain `NULL` from the failure path
+  rather than casting one.
 - **File I/O counts bytes.** `u_count` and `u_offset` are byte counts and `b_addr + on` is fat
   pointer arithmetic ([`../kernel/rdwri.c`](../kernel/rdwri.c)), so stdio's counts are bytes,
   and a block is `BSIZE == 3072` bytes == 512 words.
@@ -213,12 +229,6 @@ supplying. The check used to be the only way to tell, since both archives were c
 and named their members `strcpy.o`, `write.o`, `exit.o` alike, so `b6nm` on the result could
 not say whose was pulled; that ambiguity went with the rename, and the check is now exact.
 
-## Phase 3 — `malloc`
-
-v7's `gen/malloc.c`, which grows the heap through `sbrk`. Not the c-compiler's allocator: it
-claims the whole span from `end` to `070000` on first use, which would defeat the kernel's
-demand-grown break and collide with the stack. Every block returned starts on a word boundary.
-
 ## Phase 4 — `stdio`
 
 The FILE machinery straight from v7 — `data.c`/`_iob`, `filbuf`, `flsbuf`, `fopen`, `fdopen`,
@@ -276,9 +286,10 @@ booting SIMH. `test/` holds one program per area, each linked against the real `
 `libc.a`, given the arguments in its `.args` file, and run with its output diffed against its
 `.expected` file — so adding a test is adding those three files and a name to `PROGS`. `hello`
 covers `argv` as crt0 finds them, `vararg` the one-word argument, `errno` a failing call and the
-`cerror` arm, `procs` the syscalls that answer in r12, `sbrkt` the break, `strings` the string
+`cerror` arm, `procs` the syscalls that answer in r12, `sbrkt` the break, `malloct` the
+allocator, `strings` the string
 and memory routines, `gen` the small utilities, `environ` the vector crt0 computes, and `jmp`
-setjmp/longjmp. Still to come are malloc churn, stdio through a real file, and the printf/scanf
+setjmp/longjmp. Still to come are stdio through a real file, and the printf/scanf
 conversions including floats. `b6size -w` on each keeps the image below `070000` words.
 
 An `.expected` file may record only what the *program* does. Nothing host-dependent may reach

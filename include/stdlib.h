@@ -44,7 +44,8 @@ void srand(unsigned seed);
 void qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *));
 char *getenv(const char *name);
 
-// ---- declared for future implementation: the allocator is lib phase 3 (TODO) ----
+// The allocator: v7's, grown through sbrk() a page at a time.  free(NULL) is a
+// no-op and realloc(NULL, n) is malloc(n), which C11 requires and v7 did not do.
 void *malloc(size_t size);
 void *calloc(size_t nmemb, size_t size);
 void *realloc(void *ptr, size_t size);

@@ -9,7 +9,7 @@
 
 TOP     = ../..
 
-PROGS   = hello vararg errno procs sbrkt strings gen environ jmp headers
+PROGS   = hello vararg errno procs sbrkt malloct strings gen environ jmp headers
 
 .PHONY: all test clean
 
@@ -33,6 +33,9 @@ procs:  procs.o $(LIBDEP)
 	$(link)
 
 sbrkt:  sbrkt.o $(LIBDEP)
+	$(link)
+
+malloct: malloct.o $(LIBDEP)
 	$(link)
 
 strings: strings.o $(LIBDEP)
@@ -76,7 +79,8 @@ vararg.o:	$(TOP)/include/varargs.h
 errno.o:	$(TOP)/include/errno.h
 gen.o:		$(TOP)/include/ctype.h $(TOP)/include/stdlib.h
 jmp.o:		$(TOP)/include/setjmp.h
-gen.o jmp.o strings.o environ.o: $(TOP)/include/string.h
+malloct.o:	$(TOP)/include/stdlib.h
+gen.o jmp.o strings.o environ.o malloct.o: $(TOP)/include/string.h
 
 # headers.o includes the whole tree, twice, which is the point of it -- so it
 # depends on the whole tree, and there is no shorter way to say that here.

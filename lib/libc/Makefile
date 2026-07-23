@@ -36,12 +36,18 @@ SYS     = cerror.o exit.o fork.o wait.o pipe.o getpid.o getuid.o getgid.o \
 # the whole str*/mem* family and atoi -- and each such file says so at its head; the
 # rest are ports of the v7 sources.  setjmp.o is neither: v7's is x86 assembly, so it
 # is written here from the calling convention.
+#
+# malloc.o is v7's allocator and NOT the c-compiler's, which would claim the whole span
+# up to the stack on first use; it holds free() and realloc() too, since the three share
+# the arena statics, the same reason brk/sbrk share one file.  aligned_alloc.o is C11's
+# and has no v7 ancestor.
 GEN     = strcat.o strcmp.o strcpy.o strlen.o strncat.o strncmp.o strncpy.o \
           strchr.o strrchr.o strstr.o strtok.o \
           memcpy.o memmove.o memset.o memcmp.o memchr.o \
           abs.o atoi.o atol.o index.o rindex.o swab.o qsort.o rand.o \
           getenv.o mktemp.o isatty.o sleep.o perror.o errlst.o ctype_.o abort.o \
-          setjmp.o assert.o toupper.o tolower.o isblank.o
+          setjmp.o assert.o toupper.o tolower.o isblank.o \
+          malloc.o calloc.o aligned_alloc.o
 STDIO   =                       # phase 4
 
 OBJ     = $(SYS) $(GEN) $(STDIO)
@@ -109,6 +115,8 @@ strcat.o strcmp.o strcpy.o strlen.o strncat.o strncmp.o strncpy.o strchr.o \
 strrchr.o strstr.o strtok.o memcpy.o memmove.o memset.o memcmp.o memchr.o \
 perror.o assert.o:	$(TOP)/include/string.h
 abs.o atoi.o atol.o qsort.o rand.o: $(TOP)/include/stdlib.h
+malloc.o calloc.o aligned_alloc.o: $(TOP)/include/stdlib.h
+calloc.o:	$(TOP)/include/string.h
 
 ctype_.o toupper.o tolower.o isblank.o: $(TOP)/include/ctype.h
 perror.o errlst.o: $(TOP)/include/errno.h

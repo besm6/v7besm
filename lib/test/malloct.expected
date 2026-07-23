@@ -1,0 +1,30 @@
+ok   malloc returns a block
+ok   every byte of it round-trips
+ok   the block starts on a word boundary
+ok   two live blocks are distinct
+ok   neither disturbs the other
+ok   nor the first block
+ok   malloc(0) returns a block
+ok   a freed block comes straight back
+ok   two freed neighbours coalesce
+churn blocks allocated 200
+ok   every one of them kept its contents
+ok   and kept them until it was freed
+ok   the arena is reusable after the churn
+ok   a request too large for the heap fails
+ok   a request larger than the address space fails
+ok   the allocator still works after a refusal
+ok   calloc returns a block
+ok   calloc zeroed every word of it
+ok   calloc refuses a product that would wrap
+ok   calloc of no elements still returns a block
+ok   cfree releases the block
+ok   realloc grew the block
+ok   ... keeping the old contents
+ok   realloc shrank it
+ok   ... keeping the prefix
+ok   realloc(NULL, n) allocates
+ok   aligned_alloc(6) returns a word-aligned block
+ok   aligned_alloc refuses more than a word
+ok   free(NULL) is a no-op
+done
