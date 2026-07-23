@@ -17,40 +17,9 @@ build/
 # The kernel and its SIMH test programs now build out-of-source into kernel/build/,
 # covered by `build/' above.
 
-# The uniform syscall stubs lib/libc/Makefile generates from sys/syscalls.tbl, one
-# per line.  They land beside the objects, so this does NOT match the hand-written
-# leaves next door in lib/libc/sys/.  Both cases: the generator emits .S (the stub
-# includes <sys/syscall.h>), and b6cc leaves a .s behind if ever run with -S.
-lib/libc/*.S
-lib/libc/*.s
-
-# Linked BESM-6 images built by lib/test/Makefile, and the output each run is
-# diffed against its .expected file.
-lib/test/hello
-lib/test/vararg
-lib/test/errno
-lib/test/procs
-lib/test/sbrkt
-lib/test/malloct
-lib/test/strings
-lib/test/gen
-lib/test/environ
-lib/test/jmp
-lib/test/headers
-lib/test/stdiot
-lib/test/printft
-lib/test/scanft
-lib/test/execs
-lib/test/spawn
-lib/test/timet
-lib/test/pwent
-lib/test/signals
-lib/test/matht
-lib/test/*.out
-
-# Scratch files the stdio tests create and remove; a run that dies part way
-# through leaves one behind.
-lib/test/*.tmp
+# The user libraries and their SIMH/b6sim test programs now build out-of-source into
+# build/lib/, covered by `build/' above -- including the generated syscall stubs, the
+# linked test images, and the .out/.tmp scratch each run leaves behind.
 
 # Scratch drum and disk images that kernel/test/mbtest.ini and mdtest.ini create with
 # `attach -n'.  The disk images are ~8 Mb each and there are three of them.

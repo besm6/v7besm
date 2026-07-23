@@ -1,11 +1,11 @@
 # Unix v7 kernel for the BESM-6.
 #
-# Cross-compiled by the *installed* b6* toolchain (b6cc/b6as/b6ld/b6ar/b6ranlib/
-# b6nm/b6size/b6disasm), which emit BESM-6 a.out -- not host objects -- so this is a
-# `project(... NONE)' build that drives the tools through custom commands rather than
-# CMake's C-language support.  It is standalone and out-of-source: `make install' must
-# have installed the toolchain before it can run.  Its counterpart is `lib/', likewise
-# outside the top-level CMake project for the same reason.
+# Cross-compiled by the b6* toolchain (b6cc/b6as/b6ld/b6ar/b6ranlib/b6nm/b6size/b6disasm),
+# which emit BESM-6 a.out -- not host objects -- so this is a `project(... NONE)' build that
+# drives the tools through custom commands rather than CMake's C-language support.  Integrated,
+# it uses the in-tree tool targets; standalone (`cmake -S kernel') it falls back to the
+# installed tools -- see scripts/BesmCross.cmake.  Its counterpart is `lib/', which shares that
+# module and the same in-tree-vs-installed toolchain story.
 #
 # The image must end below 064000 (KEND); the link ends by printing `b6size -w unix'.
 # Works two ways: standalone (`cd kernel && make', its own project) and as a subdirectory
@@ -18,110 +18,19 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     project(kernel NONE)
 endif()
 
-# The cross toolchain.  Two modes:
-#  - Integrated in the top-level project, the tools are CMake targets already being built in
-#    build/, so use THOSE -- editing cmd/as, cmd/ld, ... and rebuilding then relinks the
-#    kernel with the fresh tool, no `make install' in between.  b6cc is a driver, though: it
-#    shells out to b6cpp/b6as/b6ld (ours) and b6parse/b6lower/b6codegen (the EXTERNAL
-#    c-compiler, not built here).  B6CC_ENV points the three we build at the build tree via
-#    b6cc's per-tool env overrides; the external passes have no override and resolve from the
-#    install, as they must.
-#  - Standalone (`cmake -S kernel'), no such targets exist, so fall back to the installed
-#    tools found on PATH's standard prefixes, exactly as before.
-if(TARGET b6cc)
-    set(B6CC     $<TARGET_FILE:b6cc>)
-    set(B6AS     $<TARGET_FILE:b6as>)
-    set(B6LD     $<TARGET_FILE:b6ld>)
-    set(B6AR     $<TARGET_FILE:b6ar>)
-    set(B6RANLIB $<TARGET_FILE:b6ranlib>)
-    set(B6NM     $<TARGET_FILE:b6nm>)
-    set(B6SIZE   $<TARGET_FILE:b6size>)
-    set(B6DISASM $<TARGET_FILE:b6disasm>)
-    set(B6CC_ENV ${CMAKE_COMMAND} -E env
-        B6CPP=$<TARGET_FILE:b6cpp> B6AS=$<TARGET_FILE:b6as> B6LD=$<TARGET_FILE:b6ld>)
-else()
-    find_program(B6CC     b6cc     REQUIRED)
-    find_program(B6AS     b6as     REQUIRED)
-    find_program(B6LD     b6ld     REQUIRED)
-    find_program(B6AR     b6ar     REQUIRED)
-    find_program(B6RANLIB b6ranlib REQUIRED)
-    find_program(B6NM     b6nm     REQUIRED)
-    find_program(B6SIZE   b6size   REQUIRED)
-    find_program(B6DISASM b6disasm REQUIRED)
-    set(B6CC_ENV "")
+# The cross toolchain, the external runtime, and the b6_obj/b6_find_src helpers all come from
+# the shared module.  Integrated, the top-level project already included it (its variables and
+# functions are inherited here); standalone (`cmake -S kernel'), no parent did, so include it
+# now -- `if(NOT COMMAND b6_obj)' is the "were we included by a parent?" test.
+if(NOT COMMAND b6_obj)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/../scripts/BesmCross.cmake)
 endif()
-
-# besm6 (the SIMH simulator) is only needed to boot/test, so it stays optional.
-find_program(BESM6 besm6)
-
-# libruntime.a (the b$* helpers) and besm6.h come from the EXTERNAL compiler's install, never
-# the build tree -- so locate the runtime directly rather than deriving it from b6cc (whose
-# build-tree path has no share/besm6/lib beside it).  Required: the kernel cannot link without
-# it.  This is also the top-level guard's signal that the external compiler is installed.
-find_file(B6LIBRUNTIME libruntime.a
-    PATHS $ENV{HOME}/.local/share/besm6/lib /usr/local/share/besm6/lib REQUIRED)
-get_filename_component(B6LIBDIR ${B6LIBRUNTIME} DIRECTORY)
 
 # The one system-header tree, and a coarse dependency on all of sys/: b6cc has no -M, so
 # every object simply depends on every system header (the same trade the test dir makes).
 # Absolute, from CMAKE_CURRENT_SOURCE_DIR so it is right whether standalone or integrated.
 get_filename_component(KINC ${CMAKE_CURRENT_SOURCE_DIR}/../include ABSOLUTE)
 file(GLOB KHDRS ${KINC}/sys/*.h)
-
-# ---------------------------------------------------------------------------------------
-# Compile one source to an object.  Dispatches by extension:
-#   .s        -> b6as, no flags (brz.s/switch.s #include nothing)
-#   .c / .S   -> b6cc -c -I<inc> [ARGN], where .S is preprocessed (cpp -> as) because it
-#               #includes headers.  ARGN carries -DKERNEL for the kernel sources.
-# The object lands in ${B6_OBJDIR} if the caller set it, else the current binary dir -- the
-# test/ subdir sets it per-program so images do not share an object output (which the
-# Makefiles generator would emit into every consuming target and race under `make -j').
-# Sets ${outvar} to the absolute object path.  Defined here so the test/ subdir reuses it.
-# ---------------------------------------------------------------------------------------
-function(b6_obj outvar abssrc)
-    get_filename_component(base ${abssrc} NAME_WE)
-    get_filename_component(ext ${abssrc} EXT)
-    if(DEFINED B6_OBJDIR)
-        set(obj ${B6_OBJDIR}/${base}.o)
-    else()
-        set(obj ${CMAKE_CURRENT_BINARY_DIR}/${base}.o)
-    endif()
-    if(ext STREQUAL ".s")
-        add_custom_command(OUTPUT ${obj}
-            COMMAND ${B6AS} ${abssrc} -o ${obj}
-            DEPENDS ${abssrc}
-            COMMENT "b6as ${base}.o" VERBATIM)
-    else()
-        add_custom_command(OUTPUT ${obj}
-            COMMAND ${B6CC_ENV} ${B6CC} -c ${ARGN} -I${KINC} ${abssrc} -o ${obj}
-            DEPENDS ${abssrc} ${KHDRS}
-            COMMENT "b6cc ${base}.o" VERBATIM)
-    endif()
-    set(${outvar} ${obj} PARENT_SCOPE)
-endfunction()
-
-# Find a source by basename, searching local dir, then .., then ../dev -- the CMake
-# equivalent of the test Makefile's `vpath %.c .. ../dev'.  Local wins, so a test's own
-# crt0.s is preferred over any next door.  Used only by test/.
-#
-# file(GLOB) rather than if(EXISTS): on this case-insensitive filesystem EXISTS(crt0t.s)
-# is true because crt0t.S is present, which would route a .S source (needs cpp) to b6as.
-# GLOB returns the entry's REAL case, and STREQUAL below is case-sensitive, so .S and .s
-# are told apart -- the same hazard the old Makefile's `%.o: %.S' comment describes.
-function(b6_find_src outvar base)
-    foreach(dir ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../dev)
-        file(GLOB _cands "${dir}/${base}.*")
-        foreach(cand ${_cands})
-            get_filename_component(_ext ${cand} EXT)
-            if(_ext STREQUAL ".c" OR _ext STREQUAL ".s" OR _ext STREQUAL ".S")
-                get_filename_component(_abs ${cand} ABSOLUTE)
-                set(${outvar} ${_abs} PARENT_SCOPE)
-                return()
-            endif()
-        endforeach()
-    endforeach()
-    message(FATAL_ERROR "b6_find_src: no source for '${base}'")
-endfunction()
 
 # ---------------------------------------------------------------------------------------
 # The kernel image.

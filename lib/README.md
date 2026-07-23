@@ -60,7 +60,8 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
   [`../include/sys/syscall.h`](../include/sys/syscall.h), and `sys/syscalls.tbl` maps a libc
   symbol to the macro it issues (they differ for `lseek`/`SYS_seek` and `_break`/`SYS_break`).
   That forces the suffix — `b6cc` sends a `.S` through the preprocessor and a `.s` straight to
-  the assembler ([`rules.mk`](rules.mk)) — so a new leaf that traps must be `.S`. `cerror.s`
+  the assembler (`b6_obj` in [`../scripts/BesmCross.cmake`](../scripts/BesmCross.cmake)) — so a
+  new leaf that traps must be `.S`. `cerror.s`
   and `csu/crt0.s` stay `.s`: neither issues an extracode. b6as's `#` constant-pool operator
   passes through cpp untouched (`sys/dup.S` has both `aox #0100` and `$77 SYS_dup`), because a
   `#` that does not start a line is an ordinary token.
@@ -269,7 +270,8 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
   libc (and its own cross-calls); nothing in libc calls libm. So `-lm` precedes `-lc`, which is
   where `b6cc` already puts a user `-l` — ahead of the implicit `-lc -lruntime`
   ([`../cmd/cc/cc.c`](../cmd/cc/cc.c)) — so `b6cc prog.c -lm` needs no driver change.
-  [`rules.mk`](rules.mk)'s `$(MLIB)` threads it into `$(link)` for the programs built here.
+  The `b6_libtest` macro in [`test/CMakeLists.txt`](test/CMakeLists.txt) threads `-lm` into the
+  link for the one program (`matht`) that needs it here.
 - **The PDP-11's magic numbers were widths, and had to be rederived.** `sinh`/`tanh`'s `21.` is
   where `exp(−x)` dies against a *56-bit* mantissa; here that is `20·ln2 ≈ 14`. `sin`'s `32764` was
   the largest quarter-turn below a *16-bit* `int`; here the fast integer reduction is good to 2^40,
@@ -304,27 +306,28 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
 ```
 lib/
     README.md           this plan
-    Makefile            recurses into each library
-    rules.mk            tools, flags, and the link recipe, in one place
+    CMakeLists.txt      toolchain + recurses into each library
     libc/
-        Makefile        builds libc.a and crt0.o
+        CMakeLists.txt  builds libc.a and crt0.o (with the mkstub codegen)
         csu/            crt0
         sys/            syscall stubs, cerror, errno
         gen/            strings, ctype, setjmp, malloc, misc
         stdio/          FILE machinery, the formatting engine, the scanning engine
-    test/               programs run under b6sim
+    test/               programs run under b6sim (CMakeLists.txt + run-test.sh)
     libm/               the math library (phase 7, done)
     libtermlib/         \  phase 7, still to do
     libcurses/          /
 ```
 
-Hand-written Makefiles in the style of [`../kernel/Makefile`](../kernel/Makefile) — `b6cc
--I../../include`, `b6as`, `b6ar`, `b6ranlib`, and a hand-maintained `###` header-dependency
-block, since `b6cc` has no `-M`. **Not** part of the CMake build, and it could not be: these
-are the *installed* `b6*` tools, so `make && make install` at the top level has to come first,
-and `make -C lib install` after — the three-step bootstrap of the top-level
-[`../README.md`](../README.md). `install` here copies `libc.a` and `crt0.o` into
-`<prefix>/share/besm6/lib`, beside `libruntime.a`, which is where `b6cc` looks for both.
+Part of the top-level CMake build, as a guarded `add_subdirectory(lib)` in the style of
+[`../kernel/CMakeLists.txt`](../kernel/CMakeLists.txt) — `b6cc -I../include`, `b6as`, `b6ar`,
+`b6ranlib`, driven through custom commands rather than CMake's C support, and sharing the
+[`../scripts/BesmCross.cmake`](../scripts/BesmCross.cmake) toolchain module. Integrated it uses
+the **in-tree** tool targets, so it builds under the top-level `make` with no install-first
+ordering; standalone (`cmake -S lib`) it falls back to the installed tools. There is no `-M` in
+`b6cc`, so every object takes a coarse dependency on the whole `include/` tree. `make install`
+copies `libc.a`, `libm.a` and `crt0.o` into `<prefix>/share/besm6/lib`, beside `libruntime.a`,
+which is where `b6cc` looks for them.
 
 A program links against two archives, ours first:
 
@@ -332,8 +335,8 @@ A program links against two archives, ours first:
 b6ld crt0.o prog.o -L$(TOP)/lib/libc -L$HOME/.local/share/besm6/lib -lc -lruntime
 ```
 
-That is what `b6cc` itself puts on the line when it links, and `$(link)` in
-[`rules.mk`](rules.mk) does the same for the programs built here. The second archive is the
+That is what `b6cc` itself puts on the line when it links, and the `b6_libtest` macro in
+[`test/CMakeLists.txt`](test/CMakeLists.txt) does the same for the programs built here. The second archive is the
 external c-compiler's, and is reached **only** for the `b$*` compiler-support helpers
 (`b$save`, `b$ret`, `b$mul`, `b$div`, the relational and conversion routines) that every
 compiled function calls; it is all that project installs for this toolchain, and the libc, the

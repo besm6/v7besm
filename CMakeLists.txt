@@ -99,28 +99,35 @@ add_subdirectory(cmd/fsutil)
 # the rest of those ten -- is installed into the same directory by the external
 # c-compiler, which is what defines them; we do not ship copies.
 #
-# Installed from here rather than from lib/, because these are needed to compile
-# lib/libc itself -- the bootstrap is `make install', then `make -C lib', then
-# `make -C lib install'.  See lib/libc/Makefile for the other two steps.
+# Installed from here rather than from lib/, which owns only the compiled libc.a/libm.a/crt0.o.
+# lib/ builds against this tree in the source directory (-I../include), so it needs no install
+# ordering: `make' builds the cmd/ tools, the kernel and lib/ together, and `make install'
+# installs the headers here and the archives from lib/.
 #
 install(DIRECTORY include/ DESTINATION share/besm6/include
         FILES_MATCHING PATTERN "*.h")
 
 #
-# The BESM-6 kernel cross-build.  Unlike cmd/, it is NOT compiled by this project's host
-# compiler: it cross-compiles with the b6* toolchain built above (kernel/CMakeLists.txt uses
-# those in-tree targets directly, so a rebuilt tool relinks the kernel with no reinstall).
-# It still depends on the EXTERNAL c-compiler being installed, though -- b6cc's b6parse/
-# b6lower/b6codegen passes, its <besm6.h>, and libruntime.a all come from ~/.local (or
+# The BESM-6 cross-builds: the kernel and the user libraries (lib/).  Unlike cmd/, neither is
+# compiled by this project's host compiler -- both cross-compile with the b6* toolchain built
+# above (they use those in-tree targets directly, so a rebuilt tool relinks them with no
+# reinstall).  Both still depend on the EXTERNAL c-compiler being installed, though -- b6cc's
+# b6parse/b6lower/b6codegen passes, its <besm6.h>, and libruntime.a all come from ~/.local (or
 # /usr/local) and are not built here.  Guard on that runtime so a fresh tree without the
-# external compiler still configures and builds the cmd/ tools; libruntime.a co-ships with
-# the passes and headers, so its presence is a good single signal.
+# external compiler still configures and builds the cmd/ tools; libruntime.a co-ships with the
+# passes and headers, so its presence is a good single signal.
+#
+# scripts/BesmCross.cmake resolves the shared cross toolchain (and the b6_obj/b6_find_src
+# helpers) once for both subdirs; include it here, inside the guard, so kernel/ and lib/ inherit
+# it rather than each resolving the tools itself.
 #
 find_file(B6RUNTIME_LIB libruntime.a
     PATHS $ENV{HOME}/.local/share/besm6/lib /usr/local/share/besm6/lib)
 if(B6RUNTIME_LIB)
-    message(STATUS "Found external runtime ${B6RUNTIME_LIB} -- building kernel/")
+    message(STATUS "Found external runtime ${B6RUNTIME_LIB} -- building kernel/ and lib/")
+    include(scripts/BesmCross.cmake)
     add_subdirectory(kernel)
+    add_subdirectory(lib)
 else()
-    message(STATUS "kernel/: external compiler runtime (libruntime.a) not installed; skipping")
+    message(STATUS "kernel/ and lib/: external compiler runtime (libruntime.a) not installed; skipping")
 endif()

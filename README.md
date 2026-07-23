@@ -74,20 +74,18 @@ make install    # install the tools as b6* into ~/.local (or /usr/local)
 Building requires CMake and a host C/C++ compiler; GoogleTest is fetched
 automatically, and every `cmd/` component has a unit-test suite run by `make run`.
 
-**Library** — a fresh checkout bootstraps in three steps, because `lib/` is compiled by the
-tools that step 1 installs:
+**Library** — `lib/` (`libc.a`, `libm.a`, `crt0.o`) is part of the top-level CMake build,
+cross-compiled by the `b6*` tools built alongside it, so a fresh checkout needs just:
 
 ```sh
-make && make install        # 1. host tools -- b6cc, b6as, b6ld ... -- and include/
-make -C lib                 # 2. libc.a, libm.a and crt0.o, built by those tools
-make -C lib install         # 3. into share/besm6/lib, beside libruntime.a
+make && make install        # cmd/ tools, kernel and lib/; installs include/ + the archives
 ```
 
-Step 2 needs the headers step 1 installs, and step 3 is what makes `b6cc` able to link at
-all: until it has run, `b6cc` can compile and assemble but not produce an executable. The
-one thing this repo does *not* build is `libruntime.a`, the `b$*` compiler-support helpers,
-which come from the [c-compiler](https://github.com/besm6/c-compiler/) and can come from
-nowhere else.
+`make` builds the archives with the in-tree tools, and `make install` puts them into
+`share/besm6/lib`; `crt0.o` landing there is what makes `b6cc` able to link at all (until then
+it can compile and assemble but not produce an executable). The one thing this repo does *not*
+build is `libruntime.a`, the `b$*` compiler-support helpers, which come from the
+[c-compiler](https://github.com/besm6/c-compiler/) and can come from nowhere else.
 
 **Kernel** — cross-compiled for the BESM-6 with `b6cc`/`b6as`/`b6ld`:
 

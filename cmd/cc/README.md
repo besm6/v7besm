@@ -77,7 +77,7 @@ When linking (no `-E`/`-S`/`-c`), `b6cc` invokes `b6ld` with `-e _start` and:
 - closes the line with **two** implicit archives, `-lc` then `-lruntime`.
 
 `libc.a` and `crt0.o` are this repository's own, built by [`lib/libc`](../../lib/) and installed
-into `share/besm6/lib` by `make -C lib install`. `libruntime.a` beside them is the external
+into `share/besm6/lib` by `make install`. `libruntime.a` beside them is the external
 [c-compiler](https://github.com/besm6/c-compiler/)'s, and holds the `b$*` compiler-support
 helpers (`b$save`, `b$ret`, `b$mul`, …) that every compiled function calls — it is the one piece
 of the link that cannot come from here.
@@ -87,8 +87,8 @@ stands on the line, so `libc.a` must come first — libc calls the helpers, and 
 back into libc.
 
 A "crt0.o not found" error almost always means the library has never been installed, not that a
-freestanding link was wanted; `make -C lib && make -C lib install` is the fix, and the top-level
-[README](../../README.md) has the full three-step bootstrap.
+freestanding link was wanted; `make && make install` is the fix (it builds and installs `lib/`
+along with the tools), as the top-level [README](../../README.md) describes.
 
 `-nostdlib` suppresses all of the above for a freestanding link (no `crt0.o`, no lib dirs,
 neither `-l`), so a missing `crt0.o` is not an error in that mode.

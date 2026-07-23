@@ -76,19 +76,24 @@ are absent by design and `b6cpp` says so with `__STDC_NO_COMPLEX__`/`_ATOMICS_`/
 (plus `__STDC_NO_VLA__`). `lib/test/headers.c` includes the whole tree twice and is what keeps
 it that way.
 
-### Library (`lib/`) — the three-step bootstrap
+### Library (`lib/`) — part of the top-level build
 
-`lib/` is compiled by the *installed* toolchain, so a fresh checkout has an order to it:
+`lib/` (`libc.a`, `libm.a`, `crt0.o` and the `b6sim` test harness) is a guarded
+`add_subdirectory(lib)` of the top-level CMake project, cross-compiled by the b6* toolchain
+rather than the host compiler — like `kernel/`, and sharing its `scripts/BesmCross.cmake`
+toolchain module. Integrated it drives the **in-tree** tool targets (`$<TARGET_FILE:b6cc>` …),
+so it no longer needs the toolchain installed first, and the old three-step bootstrap collapses
+to the standard two:
 
 ```sh
-make && make install        # 1. host tools -- b6cc, b6as, b6ld ... -- and include/
-make -C lib                 # 2. libc.a, libm.a and crt0.o, built by those tools
-make -C lib install         # 3. into share/besm6/lib, beside libruntime.a
+make && make install        # builds cmd/ tools, the kernel and lib/; installs include/ + the archives
 ```
 
-Step 2 needs step 1's headers; step 3 is what makes `b6cc` able to *link* — until it has run,
-`b6cc` compiles and assembles but cannot produce an executable, and `find_crt0()` says so.
-This is why `lib/` is deliberately outside the CMake build and installs from its own Makefile.
+`lib/` has **no per-directory Makefiles** (like `cmd/`): `make` builds it, `make install` puts
+`libc.a`/`libm.a`/`crt0.o` into `share/besm6/lib` beside `libruntime.a`, and `make run` runs its
+tests via ctest (label `lib`). It can also be built in isolation with `cmake -S lib -B <dir>`,
+which falls back to the *installed* tools. `crt0.o` is what makes `b6cc` able to *link* — until
+`make install` has run, `find_crt0()` says so.
 
 The **only** thing this repo does not build is **`libruntime.a`**, the `b$*` compiler-support
 helpers (`b$save`, `b$ret`, `b$mul`, …) that every compiled function calls. It comes from the

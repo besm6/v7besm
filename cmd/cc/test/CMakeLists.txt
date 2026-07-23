@@ -6,7 +6,7 @@
 # passes (b6parse/b6lower/b6codegen) are found by the driver under ~/.local/bin |
 # /usr/local/bin, and tests that need them are skipped gracefully when they are
 # not installed.  The link test additionally needs an installed libc.a/crt0.o
-# (`make -C lib install'), and skips without it.
+# (from `make install'), and skips without it.
 #
 add_executable(cc_test cc_test.cpp)
 target_link_libraries(cc_test PRIVATE GTest::gtest_main)
