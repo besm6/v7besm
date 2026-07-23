@@ -41,6 +41,15 @@ extern char _sobuf[];
 extern FILE *_lastbuf;
 
 /*
+ * exit()'s flush hook, defined in gen/cuexit.c and null until something below arms
+ * it.  That indirection is what keeps a program that never writes through a FILE
+ * from linking any of this; the reasoning is written out in cuexit.c.
+ */
+extern void (*_cleanup_hook)(void);
+
+void _cleanup(void); /* defined at the foot of this file */
+
+/*
  * Hand `n' buffered bytes to the kernel and rewind the buffer.  Returns 0, or EOF
  * with _IOERR set -- a short write is an error here, as it is in v7: stdio has no
  * way to tell the caller which putc() failed.
@@ -59,6 +68,16 @@ int _flsbuf(int c, FILE *iop)
 {
     char *base;
     char c1;
+
+    /*
+     * Arm exit()'s flush.  Here and nowhere else: every buffered write in the
+     * library reaches this routine on the first character -- putc misses while
+     * _cnt is zero, and printf, puts, fputs and fwrite all go through putc -- so
+     * by the time any stream holds data that would need flushing, the hook is set.
+     * Reading through a FILE arms nothing, and needs nothing: there is no unwritten
+     * data behind a read buffer, and the kernel closes the descriptors anyway.
+     */
+    _cleanup_hook = _cleanup;
 
     if (iop->_flag & _IORW) {
         iop->_flag |= _IOWRT;

@@ -142,10 +142,17 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
   leaving the engine counting characters it could not store — which is exactly C11's return
   value. The KOI7 upper-case fold the engine arrived with is gone: this terminal is ASCII, so
   `%x`/`%X`, `%e`/`%E` and `%g`/`%G` are three distinct pairs again.
-- **`exit` is C and `_exit` is the bare trap.** `exit` lives in `gen/cuexit.c` and runs
-  `_cleanup()` — which `fclose`s every stream — before calling `_exit`. `crt0.s` tail-jumps to
-  `exit`, so *every* program links the stdio machinery whether it prints or not; v7 makes the
-  same bargain, and a static linker pulling members by symbol cannot make it conditional.
+- **`exit` is C and `_exit` is the bare trap.** `exit` lives in `gen/cuexit.c` and flushes stdio
+  before calling `_exit`; `crt0.s` tail-jumps to it, so `cuexit.o` is in every program ever
+  linked. **It must therefore reach `_cleanup()` through a pointer, never by name.** Calling it
+  outright is what v7 does, and it costs every program the whole of stdio — `_iob`, the two
+  512-word buffers, `malloc`, `free`, `close` — whether it prints or not: `hello` measured 100
+  words through the pointer and 2255 without it. A weak definition does not help and cannot:
+  `b6ld` pulls an archive member only for a symbol still **undefined**
+  (`load_ranlib_members()`, [`../cmd/ld/library.c`](../cmd/ld/library.c)), so a weak no-op would
+  satisfy the reference and keep the real `_cleanup` from ever being pulled. `_flsbuf()` arms
+  the pointer instead, on the first buffered write — the one place every write path passes
+  through. The same rule binds anything else `exit` ever has to call.
 - **The terminal is ASCII**, not KOI7 ([`../kernel/dev/sc.c`](../kernel/dev/sc.c)). The v7
   `ctype` tables carry over unchanged, and the c-compiler's printf engine must *lose* its
   upper-case folding when it is adopted.
