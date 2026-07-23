@@ -1,7 +1,13 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
+// <sys/types.h> is included rather than assumed, for the reason <sys/timeb.h>
+// spells out: dev_t, ino_t, off_t and time_t all come from there, and this file
+// sorts ahead of it in an include list clang-format has put in order.
+
 #ifndef _SYS_STAT_H
 #define _SYS_STAT_H
+
+#include <sys/types.h>
 
 struct stat {
     dev_t st_dev;

@@ -54,6 +54,10 @@ lib/test/headers
 lib/test/stdiot
 lib/test/printft
 lib/test/scanft
+lib/test/execs
+lib/test/spawn
+lib/test/timet
+lib/test/pwent
 lib/test/*.out
 
 # Scratch files the stdio tests create and remove; a run that dies part way

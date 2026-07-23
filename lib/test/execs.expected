@@ -1,0 +1,41 @@
+stage start
+ok   argv[0] is not empty
+ok   execl of a missing file returns
+ok   execl set ENOENT
+ok   execv of a missing file returns
+ok   execv set ENOENT
+ok   execvp of a missing file returns
+ok   execle of a missing file returns
+ok   execlp of a missing file returns
+stage l
+ok   argc is 2
+ok   argv[1] is the stage
+ok   argv[2] is null
+ok   envp is environ
+stage v
+ok   argc is 2
+ok   argv[1] is the stage
+ok   argv[2] is null
+ok   envp is environ
+stage e
+ok   argc is 2
+ok   argv[1] is the stage
+ok   argv[2] is null
+ok   envp is environ
+env EXECS=chained
+env SECOND=two
+ok   getenv finds the handed-over value
+stage p
+ok   argc is 2
+ok   argv[1] is the stage
+ok   argv[2] is null
+ok   envp is environ
+env EXECS=chained
+env SECOND=two
+ok   getenv finds the handed-over value
+stage lp
+ok   argc is 2
+ok   argv[1] is the stage
+ok   argv[2] is null
+ok   envp is environ
+done

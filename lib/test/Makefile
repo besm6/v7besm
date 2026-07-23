@@ -10,7 +10,7 @@
 TOP     = ../..
 
 PROGS   = hello vararg errno procs sbrkt malloct strings gen environ jmp headers \
-          stdiot printft scanft
+          stdiot printft scanft execs spawn timet pwent
 
 .PHONY: all test clean
 
@@ -63,6 +63,20 @@ printft: printft.o $(LIBDEP)
 scanft: scanft.o $(LIBDEP)
 	$(link)
 
+# execs EXECS ITSELF, five times over, which is why it needs no helper program and no
+# .args: it passes the stage name in argv[1] and reads it back out of its own argv.
+execs:  execs.o $(LIBDEP)
+	$(link)
+
+spawn:  spawn.o $(LIBDEP)
+	$(link)
+
+timet:  timet.o $(LIBDEP)
+	$(link)
+
+pwent:  pwent.o $(LIBDEP)
+	$(link)
+
 # Run each program and diff its output.  `set -e' keeps it fail-fast, and the run
 # itself must exit 0 -- a test reports failure by its status as well as its output.
 #
@@ -96,6 +110,16 @@ stdiot.o printft.o scanft.o: $(TOP)/include/stdio.h
 stdiot.o scanft.o: $(TOP)/include/string.h
 printft.o scanft.o: $(TOP)/include/stdlib.h
 scanft.o:	$(TOP)/include/math.h
+
+# Phase 5.  execs, spawn and pwent declare the routines they exercise themselves --
+# exec*, ttyname, ttyslot, getlogin, getpw, crypt and timezone are named by no header,
+# which is lib/README.md's rule for a routine v7 never declared either.
+execs.o spawn.o timet.o pwent.o: $(TOP)/include/stdio.h
+execs.o timet.o pwent.o: $(TOP)/include/string.h
+execs.o spawn.o: $(TOP)/include/stdlib.h
+execs.o:	$(TOP)/include/errno.h
+timet.o:	$(TOP)/include/time.h
+pwent.o:	$(TOP)/include/pwd.h $(TOP)/include/grp.h
 
 # headers.o includes the whole tree, twice, which is the point of it -- so it
 # depends on the whole tree, and there is no shorter way to say that here.

@@ -1,0 +1,127 @@
+--- 0
+gm  1970-01-01 00:00:00 wday 4 yday 0 isdst 0
+asctime Thu Jan  1 00:00:00 1970
+loc 1970-01-01 00:00:00 wday 4 yday 0 isdst 0
+ok   localtime agrees with gmtime at zone 0
+ctime   Thu Jan  1 00:00:00 1970
+mktime  0
+ok   mktime round-trips
+--- 1000000000
+gm  2001-09-09 01:46:40 wday 0 yday 251 isdst 0
+asctime Sun Sep  9 01:46:40 2001
+loc 2001-09-09 01:46:40 wday 0 yday 251 isdst 0
+ok   localtime agrees with gmtime at zone 0
+ctime   Sun Sep  9 01:46:40 2001
+mktime  1000000000
+ok   mktime round-trips
+--- 951782400
+gm  2000-02-29 00:00:00 wday 2 yday 59 isdst 0
+asctime Tue Feb 29 00:00:00 2000
+loc 2000-02-29 00:00:00 wday 2 yday 59 isdst 0
+ok   localtime agrees with gmtime at zone 0
+ctime   Tue Feb 29 00:00:00 2000
+mktime  951782400
+ok   mktime round-trips
+--- 4102444800
+gm  2100-01-01 00:00:00 wday 5 yday 0 isdst 0
+asctime Fri Jan  1 00:00:00 2100
+loc 2100-01-01 00:00:00 wday 5 yday 0 isdst 0
+ok   localtime agrees with gmtime at zone 0
+ctime   Fri Jan  1 00:00:00 2100
+mktime  4102444800
+ok   mktime round-trips
+--- -1
+gm  1969-12-31 23:59:59 wday 3 yday 364 isdst 0
+asctime Wed Dec 31 23:59:59 1969
+loc 1969-12-31 23:59:59 wday 3 yday 364 isdst 0
+ok   localtime agrees with gmtime at zone 0
+ctime   Wed Dec 31 23:59:59 1969
+mktime  -1
+ok   mktime round-trips
+--- 1583020800
+gm  2020-03-01 00:00:00 wday 0 yday 60 isdst 0
+asctime Sun Mar  1 00:00:00 2020
+loc 2020-03-01 00:00:00 wday 0 yday 60 isdst 0
+ok   localtime agrees with gmtime at zone 0
+ctime   Sun Mar  1 00:00:00 2020
+mktime  1583020800
+ok   mktime round-trips
+--- dysize
+ok   1970 has 365 days
+ok   1972 has 366 days
+ok   2000 has 366 days
+ok   2100 has 365 days
+--- mktime normalizing
+normalized 983754000
+nrm 2001-03-05 01:00:00 wday 1 yday 63 isdst 0
+--- difftime
+difftime 1
+ok   difftime is signed
+ok   difftime of equal times is zero
+--- strftime 2020-03-01 00:00:00
+%a   [Sun] 3
+%A   [Sunday] 6
+%b   [Mar] 3
+%B   [March] 5
+%c   [Sun Mar  1 00:00:00 2020] 24
+%C   [20] 2
+%d   [01] 2
+%D   [03/01/20] 8
+%e   [ 1] 2
+%F   [2020-03-01] 10
+%g   [20] 2
+%G   [2020] 4
+%h   [Mar] 3
+%H   [00] 2
+%I   [12] 2
+%j   [061] 3
+%m   [03] 2
+%M   [00] 2
+%n   [
+] 1
+%p   [AM] 2
+%r   [12:00:00 AM] 11
+%R   [00:00] 5
+%S   [00] 2
+%t   [	] 1
+%T   [00:00:00] 8
+%u   [7] 1
+%U   [09] 2
+%V   [09] 2
+%w   [0] 1
+%W   [08] 2
+%x   [03/01/20] 8
+%X   [00:00:00] 8
+%y   [20] 2
+%Y   [2020] 4
+%z   [+0000] 5
+%Z   [GMT] 3
+%%   [%] 1
+%Ey  [20] 2
+%Od  [01] 2
+--- strftime at the year boundary
+%G   [1970] 4
+%V   [01] 2
+%u   [3] 1
+%G   [2099] 4
+%V   [53] 2
+--- strftime bounds
+ok   a result that just fits is written
+ok   and is terminated
+ok   a result one short returns 0
+ok   a zero size returns 0
+--- timezone
+timezone(0,0)    GMT
+timezone(300,0)  EST
+timezone(300,1)  EDT
+timezone(480,0)  PST
+timezone(90,0)   GMT-1:30
+timezone(-90,0)  GMT+1:30
+ok   clock answers
+--- tell
+ok   the scratch file opened
+ok   tell starts at zero
+ok   nine bytes written
+ok   tell follows the write
+ok   tell follows a seek
+done

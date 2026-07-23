@@ -66,6 +66,15 @@ would not even compile. What stays that is not yet backed — `math.h`, `curses.
 stays because [`../lib/README.md`](../lib/README.md) names it in phase 7 and will rewrite it
 for this machine's float format.
 
+The `a.out.h` rule has already cost something, and it was worth it: `nlist()` is the one routine
+of `lib/`'s phase 5 that did **not** land, because a caller of it needs `struct nlist` and there
+is no guest-visible spelling of the b.out format to give it. `cross/besm6/b.out.h` is the real
+description and it is the toolchain's — `cross/` is not installed, `b6cpp` predefines no `besm6`,
+and `<stdint.h>` here has no `int64_t`, so the native branch of `cross/besm6/types.h` does not
+compile yet. Nothing in `lib/` calls `nlist`; the first program that does — `nm`, `ps`, `pstat` —
+is what should settle whether the cross headers become reachable from guest code or a guest
+description is written beside them.
+
 Types and macros follow the BESM-6 data model
 ([`../doc/Besm6_Data_Representation.md`](../doc/Besm6_Data_Representation.md)): every scalar
 is one 48-bit word, `sizeof(int) == 6`, signed integers are 41-bit and unsigned 48-bit, and

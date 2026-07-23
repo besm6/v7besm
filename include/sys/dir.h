@@ -7,10 +7,16 @@
 // does not divide 512.
 //
 // DIRSIZ lives in sys/param.h, which is where sys/user.h reads it for u_dbuf and
-// u_comm.  It is not defaulted here: one home only.
+// u_comm.  It is not defaulted here: one home only -- but it IS included, along
+// with sys/types.h for ino_t, rather than assumed of the caller.  This file
+// cannot compile without either (the assertions below name BSIZE), and it sorts
+// ahead of both in an include list clang-format has put in order.
 
 #ifndef _SYS_DIR_H
 #define _SYS_DIR_H
+
+#include <sys/param.h>
+#include <sys/types.h>
 
 struct direct {
     ino_t d_ino;

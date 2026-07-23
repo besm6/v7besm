@@ -1,0 +1,13 @@
+system status 32512
+ok   system reaped its own child
+ok   system did not disturb wait
+ok   popen r returns a stream
+ok   the read end is at end of file
+ok   and says so
+pclose status 256
+ok   pclose reaped its own child
+ok   popen w returns a stream
+pclose status 256
+ok   pclose reaped the w child too
+ok   no children are left
+done

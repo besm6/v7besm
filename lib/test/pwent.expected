@@ -1,0 +1,33 @@
+--- passwd
+ok   the walk terminates
+ok   every entry is found again by name
+ok   every entry is found again by uid
+ok   no entry has an empty name
+ok   a name nobody has is not found
+ok   a uid nobody has is not found
+ok   setpwent and endpwent are repeatable
+--- group
+ok   the walk terminates
+ok   every member vector is terminated
+ok   every entry is found again by name
+ok   every entry is found again by gid
+ok   a group nobody has is not found
+ok   a gid nobody has is not found
+--- getpw
+ok   a uid nobody has fails
+--- terminals
+ok   a regular file is not a terminal
+ok   ttyname of a closed descriptor is null
+ok   ttyslot has no slot to report
+ok   getlogin has no slot to read
+--- crypt
+crypt("","..")          ..X8NBuQ4l6uQ
+crypt("a","sa")         saZAsH0KCthEE
+crypt("password","Z.")  Z.PgLzdzPW.ro
+crypt("abcdefgh","zz")  zzcHgwjUppv8U
+crypt("abcdefghi","9x") 9x4JIvPW78eFc
+crypt("besm6","aQ")     aQR1E1yZh1bPE
+ok   crypt agrees with the host's DES
+ok   only the first eight characters count
+ok   the salt is the first two characters of the answer
+done

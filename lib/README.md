@@ -35,7 +35,9 @@ Two source trees feed it:
   says at its head where it came from; a divergence has to be written down there.
 
 The ported file is deleted from `tmp/libc/` as it lands, so what is left there always names the
-remaining work; `tmp/` goes away entirely at the end.
+remaining work; `tmp/` goes away entirely at the end. After phase 5 what is left is four files
+and two v7 build scripts: `gen/mon.c`, `crt/mcount.s` and `csu/mcrt0.s`, which stay stubs until
+profiling is wanted, and `gen/nlist.c`, deferred with its header question (see **Ground rules**).
 
 ## Ground rules
 
@@ -179,12 +181,19 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
   The freestanding ten — `<stddef.h>`,
   `<stdarg.h>`, `<limits.h>`, `<besm6.h>` and the rest — are the *compiler's*, and it installs
   them into the same directory; they are not in this tree at all.
+  `<time.h>` is answered in full too, since phase 5: `ctime`/`localtime`/`gmtime`/`asctime` are
+  v7's, and `clock`, `difftime`, `mktime` and `strftime` — which v7 never had — are written from
+  §7.27, so nothing there is declared and missing any more.
   `-I../../include` names ours in the source tree, ahead of the installed copy that
   [`../cmd/cc/cc.c`](../cmd/cc/cc.c) appends to every preprocessor run, so a build here sees what
   it just edited. Nothing under `lib/` should
   add a header to `include/` merely to declare its own function: a routine that no v7 header
-  declares (`index`, `rindex`, `swab`, `mktemp`, `isatty`, `perror`) declares itself at the
-  head of its file, exactly as `test/*.c` declares the syscalls it calls.
+  declares (`index`, `rindex`, `swab`, `mktemp`, `isatty`, `perror`, and phase 5's `exec*`,
+  `ttyname`, `ttyslot`, `getlogin`, `timezone`, `tell` and `crypt`) declares itself at the
+  head of its file, exactly as `test/*.c` declares the syscalls it calls. The exceptions are
+  headers that exist for *nothing but* the routines in question and were merely silent about
+  them, which is a different thing: `<pwd.h>` and `<grp.h>` now name the `getpwent`/`getgrent`
+  families, and `popen`/`pclose` join `getw`/`putw`/`fileno` in `<stdio.h>`'s v7-extension block.
 - **A relational between two `char *` is safe**, even though a fat pointer does *not* sort as
   a plain word: incrementing one *decreases* the byte offset, which sits above the word address
   in bits 47–45, so a raw word compare of two pointers into the same word comes out backwards.
@@ -199,11 +208,37 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
 - **`long` is `int`, one word**, so `atol` *is* `atoi` and is written as a call to it; the
   same collapse is why `lseek` and `stime` shed a word in phase 1. `sizeof(int) == 6` char-units
   and `sizeof(char) == 1`, so `sizeof arr / sizeof arr[0]` still counts elements.
+- **An argument list *is* an `argv[]`, and `execl` copies nothing.** Arguments are pushed in
+  direct order into one contiguous parameter block, one word each, and the compiler's
+  `<stdarg.h>` defines `va_start(ap, last)` as `&last + 1` — so the `va_list` already points at
+  a NULL-terminated array of `char *`, which is exactly what the gate reads. `execl` is three
+  lines and `execle` finds its environment by walking to the terminating null and taking the
+  word after it. That terminator has to be read as a **raw word** (`va_arg(ap, long)`), for the
+  reason `_doprnt` reads `%s` that way: reading a zero word back as a `char *` decorates it into
+  a nonzero fat pointer and the walk never ends.
+- **Where an array's neighbour is not where the PDP-11 left it.** v7's `crypt` declares
+  `static char L[32], R[32]` and then indexes `L[]` out to 63, because on the PDP-11 the two sat
+  adjacent with nothing between. Six chars pack into a word here, so a 32-char array occupies six
+  words with four bytes to spare and `L[32]` is padding. The two are one array of 64 now
+  (`gen/crypt.c`). The failure mode is the dangerous kind: thirteen plausible characters, none
+  of them right — which is why `test/pwent` pins six vectors taken from the **host's** `crypt(3)`
+  and not from this library's own first output.
 - **What links but cannot run yet.** `sleep` needs a `SIGALRM` handler of its own and `abort`
   raises `SIGIOT`; delivery is phase 6, and `b6sim` answers `signal()` with anything but
   `SIG_DFL`/`SIG_IGN` with `EINVAL`. Both are in `libc.a` and neither has a test — a test of
   `abort` would take the simulator down with the program, `b6sim` servicing `kill` by killing
-  its own process.
+  its own process. `getpass` is a third: it opens `/dev/tty` and would sit there waiting to be
+  typed at, which a diff-against-`.expected` harness cannot arrange.
+- **`ttyname` reads a directory with `read()`**, as v7 did and as this kernel will allow, so it
+  answers under the kernel and not under `b6sim`, whose `read()` is the host's and refuses a
+  directory. `ttyslot` and `getlogin` stand on it and are the same story. They are ported and
+  their failure paths are tested; the rest waits on a root filesystem.
+- **Three of phase 5's list turned out to need nothing.** `stty` and `gtty` are real syscalls on
+  this kernel (`sysent[31]`/`sysent[32]`), not v7's `ioctl` writearound, and `times` is a syscall
+  too — all three have been generated leaves since phase 1. And `nlist` is **deferred**: it would
+  need a guest-visible description of the b.out format, `include/README.md` says such a format is
+  described once and under `cross/besm6/`, and nothing here calls it. It comes back with the first
+  program that does — `nm`, `ps`, `pstat` — and the header question gets settled then.
 
 ## Layout and build
 
@@ -262,22 +297,13 @@ supplying. The check used to be the only way to tell, since both archives were c
 and named their members `strcpy.o`, `write.o`, `exit.o` alike, so `b6nm` on the result could
 not say whose was pulled; that ambiguity went with the rename, and the check is now exact.
 
-## Phase 5 — process, accounts, terminals
-
-`execl execv execvp execle`, `system`, `popen`, the `getpwent`/`getgrent` families, `getlogin`,
-`ttyname`, `ttyslot`, `stty`/`gtty`, `times`, `timezone`, `ctime`, `crypt`, `tell`. `nlist` is rewritten
-against [`../cross/besm6/b.out.h`](../cross/besm6/b.out.h) — the v7 `a.out` layout does not
-apply. `monitor`/`mcount` and `csu/mcrt0.s` — phase 1's one leftover — stay stubs until
-profiling is wanted.
-
 ## Phase 6 — signal delivery
 
 Blocked on the kernel. `sendsig()` in [`../kernel/machdep.c`](../kernel/machdep.c) pushes a
 single word and jumps; there is no signal frame, and the handler is not told which signal it is
 handling. The frame has to be designed first — the signal number as an argument, the saved
 accumulator and mode word, and a way back through it — and implemented kernel-side. Only then
-does the libc side follow, and it needs a `dvect`/`tvect`-style trampoline like the x86 port's
-only if the kernel does not deliver the number directly.
+does the libc side follow.
 
 **The number is no longer optional.** [`../include/signal.h`](../include/signal.h) declares the
 C11 shape, `void (*signal(int, void (*)(int)))(int)`, so every handler now takes the signal it is
@@ -310,15 +336,27 @@ covers `argv` as crt0 finds them, `vararg` the one-word argument, `errno` a fail
 allocator, `strings` the string
 and memory routines, `gen` the small utilities, `environ` the vector crt0 computes, `jmp`
 setjmp/longjmp, `stdiot` the FILE machinery through a real file, `printft` every printf
-conversion including floats, and `scanft` scanf and the `atof`/`ecvt`/`gcvt` conversions
-either side of it. `b6size -w` on each keeps the image below `070000` words.
+conversion including floats, `scanft` scanf and the `atof`/`ecvt`/`gcvt` conversions
+either side of it, `execs` the exec family, `spawn` `system` and `popen`, `timet` the whole of
+`<time.h>` plus `tell`, and `pwent` the accounts, the terminal three and `crypt`. `b6size -w` on
+each keeps the image below `070000` words.
+
+`execs` is the one that needs no helper program: **it execs itself**, five times over, once
+through each wrapper, passing the stage name in `argv[1]` and reading it back out of its own
+`argv` — `b6sim` really does load a BESM-6 `a.out` on an exec. A wrapper that built its vector
+wrongly stops the chain dead, and the last stage printed says which one.
 
 An `.expected` file may record only what the *program* does. Nothing host-dependent may reach
 it — which is why `environ` checks `getenv` against the vector it was handed, entry by entry,
 and prints neither a name nor a count: `b6sim` passes through a whitelist of the host's
 variables (`ENV_WHITELIST` in [`../cmd/sim/session.cpp`](../cmd/sim/session.cpp)), and even
 `MAKEFLAGS` alone would make a count differ between `make test` and the same run by hand. The
-harness captures fd 2 along with fd 1, so `perror`'s output is diffed too.
+harness captures fd 2 along with fd 1, so `perror`'s output is diffed too. The same rule shapes
+the phase-5 three: `timet` converts only literal `time_t` values and leans on `b6sim`'s `ftime`
+answering zone 0, `spawn` never starts a shell — `/bin/sh` is not a BESM-6 `a.out`, so the child
+always fails to exec and reports it with the 127 and the 1 those routines chose for the case —
+and `pwent` prints no line of `/etc/passwd` at all, checking instead that every entry the walk
+yields is found again by name and by id.
 
 Nothing here may be linked against a stale library: `$(LIBDEP)` names `crt0.o` and `libc.a` as
 ordinary prerequisites of every program and `$(link)` filters them back out of `$^`, because

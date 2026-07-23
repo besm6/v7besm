@@ -174,6 +174,13 @@ int _flsbuf(int c, FILE *iop);
 int getw(FILE *iop);
 int putw(int w, FILE *iop);
 
+// A shell command at the far end of a stream -- also a v7 extension, and the one
+// pair here that no header of v7's declared.  They are named here rather than at
+// their own file head because a CALLER needs them, and lib/libc/stdio/popen.c is
+// the only place a FILE * and a fork() meet.  pclose returns wait()'s raw status.
+FILE *popen(const char *cmd, const char *mode);
+int pclose(FILE *iop);
+
 #define stdin  (&_iob[0])
 #define stdout (&_iob[1])
 #define stderr (&_iob[2])
