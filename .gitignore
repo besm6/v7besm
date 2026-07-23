@@ -14,23 +14,8 @@ cmd/as/as
 tmp/
 build/
 
-# Linked BESM-6 images built by kernel/test/Makefile.
-kernel/test/hello
-kernel/test/sctest
-kernel/unix
-kernel/test/mmutest
-kernel/test/uintr
-kernel/test/utrap
-kernel/test/usys
-kernel/test/usig
-kernel/test/uclock
-kernel/test/uswtch
-kernel/test/usched
-kernel/test/ugrow
-kernel/test/biotest
-kernel/test/ugrp
-kernel/test/mbtest
-kernel/test/mdtest
+# The kernel and its SIMH test programs now build out-of-source into kernel/build/,
+# covered by `build/' above.
 
 # The uniform syscall stubs lib/libc/Makefile generates from sys/syscalls.tbl, one
 # per line.  They land beside the objects, so this does NOT match the hand-written
