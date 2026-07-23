@@ -41,14 +41,45 @@ SYS     = cerror.o exit.o fork.o wait.o pipe.o getpid.o getuid.o getgid.o \
 # up to the stack on first use; it holds free() and realloc() too, since the three share
 # the arena statics, the same reason brk/sbrk share one file.  aligned_alloc.o is C11's
 # and has no v7 ancestor.
+#
+# cuexit.o is `exit', which is NOT sys/exit.S -- that one keeps `_exit' alone.  The
+# difference between them is the _cleanup() that flushes stdio, and the file carries
+# v7's name because `exit.c' would collide with sys/exit.S in this flat object
+# directory.
+#
+# modf.o, frexp.o and ldexp.o are floating-point but not libm: atof() calls ldexp,
+# and ecvt() and the printf engine call modf, so the CONVERSIONS need them and a
+# program gets them without -lm.  v7's gen/ holds the same three.  modf came from the
+# c-compiler's tree, as the str*/mem* family did; frexp and ldexp came from its .s
+# sources and each says so at its head.
 GEN     = strcat.o strcmp.o strcpy.o strlen.o strncat.o strncmp.o strncpy.o \
           strchr.o strrchr.o strstr.o strtok.o \
           memcpy.o memmove.o memset.o memcmp.o memchr.o \
           abs.o atoi.o atol.o index.o rindex.o swab.o qsort.o rand.o \
           getenv.o mktemp.o isatty.o sleep.o perror.o errlst.o ctype_.o abort.o \
           setjmp.o assert.o toupper.o tolower.o isblank.o \
-          malloc.o calloc.o aligned_alloc.o
-STDIO   =                       # phase 4
+          malloc.o calloc.o aligned_alloc.o cuexit.o \
+          atof.o ecvt.o modf.o frexp.o ldexp.o
+# The FILE machinery, v7's, plus the C11 routines v7 never had -- <stdio.h> declares
+# the whole of §7.21 and libc.a answers all of it.
+#
+# doprnt.o is the exception to "ported from v7": v7's _doprnt was x86 assembly, so
+# this one is the c-compiler's doprnt.c retargeted to a FILE * sink.  Everything in
+# the printf family reaches it through vfprintf.o, and everything in the sprintf
+# family through vsnprintf.o, which builds an _IOSTRG stream over the caller's buffer.
+#
+# The macro pairs of <stdio.h> need function forms as well (C11 §7.1.4), which is
+# what getc.o, putc.o, feof.o and ferror.o are; v7 shipped only getchar and putchar.
+STDIO   = data.o findiop.o endopen.o fopen.o fdopen.o freopen.o filbuf.o flsbuf.o \
+          fseek.o ftell.o rew.o fgetpos.o fsetpos.o \
+          setbuf.o setvbuf.o clrerr.o feof.o ferror.o \
+          fgetc.o fputc.o getc.o putc.o getchar.o putchar.o ungetc.o \
+          fgets.o fputs.o gets.o puts.o fread.o fwrite.o getw.o putw.o \
+          remove.o rename.o tmpnam.o tmpfile.o \
+          doprnt.o printf.o fprintf.o sprintf.o snprintf.o \
+          vprintf.o vfprintf.o vsprintf.o vsnprintf.o \
+          doscan.o scanf.o fscanf.o sscanf.o vscanf.o vfscanf.o vsscanf.o \
+          gcvt.o
 
 OBJ     = $(SYS) $(GEN) $(STDIO)
 
@@ -124,3 +155,18 @@ isatty.o:	$(TOP)/include/sgtty.h
 abort.o:	$(TOP)/include/signal.h
 sleep.o:	$(TOP)/include/signal.h $(TOP)/include/setjmp.h
 assert.o:	$(TOP)/include/assert.h
+cuexit.o:	$(TOP)/include/stdlib.h
+
+# The conversions.  <math.h> is ours and carries LOGHUGE, which atof() reads; <float.h>,
+# which it includes, is the COMPILER's and is outside this tree, so it is not named --
+# the same rule as <stddef.h> above.  frexp.o and ldexp.o are assembly and include
+# nothing at all.
+atof.o ecvt.o modf.o:	$(TOP)/include/math.h
+atof.o:		$(TOP)/include/ctype.h $(TOP)/include/stdlib.h
+
+# stdio/.  Everything here includes <stdio.h>; the rest is what each adds to it.
+$(STDIO):	$(TOP)/include/stdio.h
+filbuf.o flsbuf.o setbuf.o setvbuf.o doscan.o: $(TOP)/include/stdlib.h
+endopen.o:	$(TOP)/include/errno.h
+doprnt.o:	$(TOP)/include/math.h
+doscan.o:	$(TOP)/include/ctype.h

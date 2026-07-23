@@ -2,23 +2,34 @@
 
 // <stdio.h> -- input/output (C11 §7.21).
 //
-// Nothing here is implemented yet.  The FILE machinery is lib phase 4, straight
-// from the v7 sources still sitting in lib/tmp/libc/stdio/, with the formatting
-// engine taken from the c-compiler's doprnt.c instead of v7's x86 assembly.
-// Until then the only routine in libc.a that this header declares is perror(),
-// which writes to fd 2 with write() precisely because there is no stdio yet.
+// Everything below is in libc.a.  The FILE machinery is v7's, from lib/libc/stdio/;
+// the formatting engine is the c-compiler's doprnt.c retargeted to a FILE * sink,
+// because v7's _doprnt was x86 assembly.
 //
 // v7's header declared five functions, all with empty parens, and left the rest
 // to K&R's implicit int -- so it did not declare printf at all.  That is no
-// longer merely untidy: the front end has no implicit declarations, so a phase-4
-// caller would not have compiled.  Everything §7.21 lists is declared below.
+// longer merely untidy: the front end has no implicit declarations, so a caller
+// would not have compiled.  Everything §7.21 lists is declared below.
 //
-// The FILE structure is v7's, unchanged, because the phase-4 sources are v7's
-// and index it directly: _ptr/_cnt/_base/_flag/_file, and _iob[_NFILE] with
-// stdin/stdout/stderr as its first three slots.  Only the SPELLING changed --
-// `#define FILE struct _iobuf' became a typedef, since §7.21.1 wants FILE to be
-// an object type and a macro cannot be one (nor can it be written `FILE *' in a
-// declaration that a `struct _iobuf' typedef would also match).
+// The FILE structure is v7's: _ptr/_cnt/_base/_flag/_file, and _iob[_NFILE] with
+// stdin/stdout/stderr as its first three slots, indexed directly by the v7
+// sources.  Three things changed:
+//
+//   `#define FILE struct _iobuf' became a typedef, since §7.21.1 wants FILE to be
+//   an object type and a macro cannot be one (nor can it be written `FILE *' in a
+//   declaration that a `struct _iobuf' typedef would also match).
+//
+//   _flag is an `int', not v7's `char'.  All eight bits of a char were spoken for
+//   (_IOREAD..._IORW == 01...0200) and line buffering needs a ninth, _IOLBUF.  It
+//   costs nothing: a char STRUCT MEMBER occupies a whole word here anyway -- see
+//   struct sgttyb, four chars in four words.  _file stays a char for the same
+//   reason: widening it would buy nothing.
+//
+//   _bufsiz is new, and setvbuf is why.  v7 wrote BUFSIZ into _filbuf and _flsbuf
+//   outright, because setbuf() was the only way to hand over a buffer and it
+//   promised one of exactly that size; §7.21.5.6 lets a caller name any size, and
+//   a stream that does not remember it would overrun the buffer it was given.
+//   One word, and it makes setvbuf real rather than advisory.
 //
 // BUFSIZ is one disk block in BYTES: BSIZE == BSIZEW * NBPW == 512 words
 // (sys/param.h), and file I/O counts bytes throughout (kernel/rdwri.c).
@@ -26,8 +37,14 @@
 // One collision to know about.  v7 used the name _IONBF for a BIT in _flag; C11
 // uses it for a setvbuf MODE, and the two cannot be the same number.  The flag
 // bit keeps its value under the name _IOUNBUF, and _IOFBF/_IOLBF/_IONBF are the
-// three modes.  Phase 4 must spell the bit _IOUNBUF when it ports filbuf.c,
-// flsbuf.c and setbuf.c, which are the only three files that touch it.
+// three modes.  _IOLBUF is the line-buffered flag bit that answers _IOLBF.
+//
+// HOW LINE BUFFERING WORKS, since the putc macro below shows no sign of it: a
+// line-buffered stream is held at _cnt == 0, so every putc misses and falls into
+// _flsbuf(), which appends the byte and flushes on '\n' or a full buffer.  Only
+// the slow path pays for it, and a fully buffered stream -- stdout redirected to
+// a file, say -- is untouched.  _flsbuf() turns the bit on for stdout when
+// isatty(1); stderr is unbuffered outright, as in v7.
 #ifndef _STDIO_H
 #define _STDIO_H
 
@@ -42,7 +59,8 @@ typedef struct _iobuf {
     char *_ptr;
     int _cnt;
     char *_base;
-    char _flag;
+    int _bufsiz;
+    int _flag;
     char _file;
 } FILE;
 
@@ -61,6 +79,7 @@ typedef int fpos_t;
 #define _IOERR   040
 #define _IOSTRG  0100
 #define _IORW    0200
+#define _IOLBUF  0400 // line buffered; v7 had no such thing
 
 // setvbuf modes (§7.21.5.6).  Not _flag bits -- see the note above.
 #define _IOFBF 0
@@ -77,8 +96,9 @@ typedef int fpos_t;
 // descriptor and no more.  There is no path-length limit in this kernel: namei()
 // walks a component at a time and only the component is bounded, by DIRSIZ.  So
 // FILENAME_MAX is a convention for sizing a caller's buffer, not a kernel
-// number, and 128 is v7's customary one.  TMP_MAX is what mktemp() can actually
-// distinguish: three letters, 26^3.
+// number, and 128 is v7's customary one.  TMP_MAX is what tmpnam() can actually
+// distinguish: three letters, 26^3.  (It counts them itself rather than calling
+// mktemp(), which walks only ONE letter and so could promise 26.)
 #define FOPEN_MAX    _NFILE
 #define FILENAME_MAX 128
 #define L_tmpnam     20
@@ -90,7 +110,6 @@ typedef int fpos_t;
 // ---- implemented in libc.a ----
 void perror(const char *s);
 
-// ---- declared for future implementation: lib phase 4 (TODO) ----
 FILE *fopen(const char *path, const char *mode);
 FILE *freopen(const char *path, const char *mode, FILE *iop);
 FILE *fdopen(int fd, const char *mode);
@@ -148,7 +167,8 @@ FILE *tmpfile(void);
 char *tmpnam(char *s);
 
 // The internal pair the getc/putc macros fall out to, and v7's word-at-a-time
-// pair, which are v7 extensions and not C11.
+// pair, which are v7 extensions and not C11.  A word is SIX bytes here, not the
+// PDP-11's two, so getw/putw move sizeof(int) == NBPW bytes.
 int _filbuf(FILE *iop);
 int _flsbuf(int c, FILE *iop);
 int getw(FILE *iop);

@@ -9,7 +9,8 @@
 
 TOP     = ../..
 
-PROGS   = hello vararg errno procs sbrkt malloct strings gen environ jmp headers
+PROGS   = hello vararg errno procs sbrkt malloct strings gen environ jmp headers \
+          stdiot printft scanft
 
 .PHONY: all test clean
 
@@ -53,6 +54,15 @@ jmp:    jmp.o $(LIBDEP)
 headers: headers.o $(LIBDEP)
 	$(link)
 
+stdiot: stdiot.o $(LIBDEP)
+	$(link)
+
+printft: printft.o $(LIBDEP)
+	$(link)
+
+scanft: scanft.o $(LIBDEP)
+	$(link)
+
 # Run each program and diff its output.  `set -e' keeps it fail-fast, and the run
 # itself must exit 0 -- a test reports failure by its status as well as its output.
 #
@@ -68,7 +78,7 @@ test:   $(PROGS)
 	@echo "all tests passed"
 
 clean:
-	rm -f *.o *.nm *.dis *.out $(PROGS)
+	rm -f *.o *.nm *.dis *.out *.tmp $(PROGS)
 
 ###
 # Hand-maintained header dependencies; b6cc has no -M.  Most of these include nothing:
@@ -81,6 +91,11 @@ gen.o:		$(TOP)/include/ctype.h $(TOP)/include/stdlib.h
 jmp.o:		$(TOP)/include/setjmp.h
 malloct.o:	$(TOP)/include/stdlib.h
 gen.o jmp.o strings.o environ.o malloct.o: $(TOP)/include/string.h
+
+stdiot.o printft.o scanft.o: $(TOP)/include/stdio.h
+stdiot.o scanft.o: $(TOP)/include/string.h
+printft.o scanft.o: $(TOP)/include/stdlib.h
+scanft.o:	$(TOP)/include/math.h
 
 # headers.o includes the whole tree, twice, which is the point of it -- so it
 # depends on the whole tree, and there is no shorter way to say that here.

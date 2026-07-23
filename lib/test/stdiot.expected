@@ -1,0 +1,70 @@
+ok   fopen w
+ok   ftell while buffered 32
+ok   fflush
+ok   ftell after fflush 32
+ok   fclose
+ok   fopen r
+ok   fgets [first line
+]
+ok   ftell after fgets 11
+ok   fgets short [seco]
+ok   fgets rest [nd 22
+]
+ok   getc 116
+ok   ungetc 116
+ok   getc again 116
+ok   fread count 10
+ok   fread data [hird line
+]
+ok   getc '#' 35
+ok   getw 0x112233445566
+ok   getc at eof -1
+ok   feof
+ok   !ferror
+ok   clearerr
+ok   fseek set
+ok   ftell after seek 6
+ok   getc after seek 108
+ok   fseek cur
+ok   getc after cur 115
+ok   fseek end
+ok   ftell from end 32
+ok   fgetpos
+ok   getc at pos 35
+ok   fsetpos
+ok   getc at pos again 35
+ok   ftell after rewind 0
+ok   getc after rewind 102
+ok   ungetc before any read 88
+ok   getc gets it back 88
+ok   fclose r
+ok   open
+ok   fdopen
+ok   fdopen fgets [first line
+]
+ok   fileno agrees with open
+ok   freopen
+ok   freopen fgets [first line
+]
+ok   fopen for setvbuf
+ok   setvbuf
+ok   fully buffered wrote 6 bytes
+ok   fopen for setvbuf
+ok   setvbuf
+ok   line buffered wrote 6 bytes
+ok   fopen for setvbuf
+ok   setvbuf
+ok   un buffered wrote 6 bytes
+ok   setbuf NULL [xy
+]
+ok   rename
+ok   old name gone
+ok   new name there
+ok   remove
+ok   removed
+ok   tmpnam differs
+ok   tmpnam fits L_tmpnam
+ok   tmpfile
+ok   tmpfile round trip [gone when closed
+]
+0 error(s)

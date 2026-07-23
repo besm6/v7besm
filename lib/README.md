@@ -123,7 +123,37 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
   rather than casting one.
 - **File I/O counts bytes.** `u_count` and `u_offset` are byte counts and `b_addr + on` is fat
   pointer arithmetic ([`../kernel/rdwri.c`](../kernel/rdwri.c)), so stdio's counts are bytes,
-  and a block is `BSIZE == 3072` bytes == 512 words.
+  and a block is `BSIZE == 3072` bytes == 512 words. `getw`/`putw`, which move a *word*, move
+  **six** bytes and not the PDP-11's two.
+- **`FILE` grew two fields, and both were free.** `_flag` is an `int` because all eight bits of
+  v7's `char` were spoken for and line buffering needed a ninth (`_IOLBUF`); `_bufsiz` is new
+  because `setvbuf` lets a caller name a size and v7, which had only `setbuf`, wrote `BUFSIZ`
+  into `_filbuf` and `_flsbuf` outright. Neither costs anything: a `char` **struct member**
+  occupies a whole word here anyway — `struct sgttyb` is four chars in four words.
+- **A line-buffered stream is held at `_cnt == 0`.** That is the whole mechanism, and it is why
+  the `putc` macro shows no sign of the mode: every `putc` misses and lands in `_flsbuf`, which
+  appends the byte and writes the line out on `'\n'`. The fully buffered fast path is untouched,
+  and `stdout` takes the mode when `isatty(1)` — where v7 went fully *un*buffered and spent a
+  syscall per character.
+- **`_doprnt` sinks into a `FILE *`, and `_IOSTRG` is what makes `snprintf` count.** The engine
+  is the c-compiler's `doprnt.c`, not v7's x86 assembly; it emits through `putc` and returns the
+  number of characters it produced. `sprintf`/`snprintf` build a v7 `_IOSTRG` stream on the
+  stack over the caller's buffer, and `_flsbuf` **drops** the byte when such a stream fills,
+  leaving the engine counting characters it could not store — which is exactly C11's return
+  value. The KOI7 upper-case fold the engine arrived with is gone: this terminal is ASCII, so
+  `%x`/`%X`, `%e`/`%E` and `%g`/`%G` are three distinct pairs again.
+- **`exit` is C and `_exit` is the bare trap.** `exit` lives in `gen/cuexit.c` and runs
+  `_cleanup()` — which `fclose`s every stream — before calling `_exit`. `crt0.s` tail-jumps to
+  `exit`, so *every* program links the stdio machinery whether it prints or not; v7 makes the
+  same bargain, and a static linker pulling members by symbol cannot make it conditional.
+- **The comma operator does not work.** `(a, b)` evaluates to **`a`** and `b` is never evaluated
+  at all — the inverse of C11 §6.5.17, and with three operands only the first survives. It is a
+  bug in the external c-compiler's `parse_expression()`, which hangs the right operand off the
+  `Expr->next` link that belongs to *argument lists* and then returns the left one; nothing
+  downstream reads it there. `atof` is the one v7 source that used the idiom
+  (`while ((c = *p++), isdigit(c))`) and is written `while (isdigit(c = *p++))` instead.
+  **Nothing here may use the operator** until that is fixed: it fails silently, and
+  `while ((a, b))` with a non-zero `a` simply hangs.
 - **The terminal is ASCII**, not KOI7 ([`../kernel/dev/sc.c`](../kernel/dev/sc.c)). The v7
   `ctype` tables carry over unchanged, and the c-compiler's printf engine must *lose* its
   upper-case folding when it is adopted.
@@ -140,9 +170,13 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
   written here: `assert()` is an expression and `<assert.h>` is unguarded on purpose;
   `toupper`/`tolower` are functions and v7's unconditional macros are `_toupper`/`_tolower`;
   `isprint(' ')` is now true; and a signal handler is `void (*)(int)`, which is what phase 6 has
-  to deliver. `<stdio.h>` declares the whole phase-4 surface already, so a caller compiles before
-  the routine exists and fails at *link* — which is the point. One name to watch there: v7's
+  to deliver. `libc.a` answers every declaration `<stdio.h>` makes, the C11 additions v7 never
+  had included — the v-forms, `snprintf`, `setvbuf`, `fgetpos`/`fsetpos`,
+  `remove`/`rename`/`tmpfile`/`tmpnam` — most of them thin wrappers over the v7 core. One name
+  to watch there: v7's
   `_IONBF` flag bit is spelled `_IOUNBUF` now, because C11 needs `_IONBF` for a `setvbuf` mode.
+  `<math.h>` names three routines that are in **libc** and not the libm of phase 7 — `modf`,
+  `frexp` and `ldexp` — because the conversions need them, and v7 keeps them in `gen/` too.
   The freestanding ten — `<stddef.h>`,
   `<stdarg.h>`, `<limits.h>`, `<besm6.h>` and the rest — are the *compiler's*, and it installs
   them into the same directory; they are not in this tree at all.
@@ -184,7 +218,7 @@ lib/
         csu/            crt0
         sys/            syscall stubs, cerror, errno
         gen/            strings, ctype, setjmp, malloc, misc
-        stdio/          FILE machinery and the formatting engine
+        stdio/          FILE machinery, the formatting engine, the scanning engine
     test/               programs run under b6sim
     libm/               \
     libtermlib/          > phase 7
@@ -229,23 +263,10 @@ supplying. The check used to be the only way to tell, since both archives were c
 and named their members `strcpy.o`, `write.o`, `exit.o` alike, so `b6nm` on the result could
 not say whose was pulled; that ambiguity went with the rename, and the check is now exact.
 
-## Phase 4 — `stdio`
-
-The FILE machinery straight from v7 — `data.c`/`_iob`, `filbuf`, `flsbuf`, `fopen`, `fdopen`,
-`freopen`, `endopen`, `fseek`, `ftell`, `rew`, `fgets`, `fputs`, `gets`, `puts`, `getw`, `putw`,
-`ungetc`, `setbuf`, `clrerr`, `rdwr`, `fgetc`, `fputc`.
-
-The formatting engine is the exception: v7's `doprnt.s`, `fltpr.s` and `ffltpr.s` are x86
-assembly, and the c-compiler's `doprnt.c` already formats BESM-6 floats correctly. Port that
-one to a `FILE *` sink, restoring lower-case output and case-sensitive conversion letters (its
-KOI7 upper-case folding is a Dubna artifact and does not apply here). Then `printf`, `fprintf`,
-`sprintf`, `doscan`/`scanf`, and `ecvt`/`gcvt`/`atof` with the exponent range of the native
-format (≈10^±18), reusing the c-compiler's `frexp.s`, `ldexp.s` and `modf.c`.
-
 ## Phase 5 — process, accounts, terminals
 
 `execl execv execvp execle`, `system`, `popen`, the `getpwent`/`getgrent` families, `getlogin`,
-`ttyname`, `ttyslot`, `stty`/`gtty`, `times`, `timezone`, `ctime`, `crypt`. `nlist` is rewritten
+`ttyname`, `ttyslot`, `stty`/`gtty`, `times`, `timezone`, `ctime`, `crypt`, `tell`. `nlist` is rewritten
 against [`../cross/besm6/b.out.h`](../cross/besm6/b.out.h) — the v7 `a.out` layout does not
 apply. `monitor`/`mcount` and `csu/mcrt0.s` — phase 1's one leftover — stay stubs until
 profiling is wanted.
@@ -288,9 +309,10 @@ booting SIMH. `test/` holds one program per area, each linked against the real `
 covers `argv` as crt0 finds them, `vararg` the one-word argument, `errno` a failing call and the
 `cerror` arm, `procs` the syscalls that answer in r12, `sbrkt` the break, `malloct` the
 allocator, `strings` the string
-and memory routines, `gen` the small utilities, `environ` the vector crt0 computes, and `jmp`
-setjmp/longjmp. Still to come are stdio through a real file, and the printf/scanf
-conversions including floats. `b6size -w` on each keeps the image below `070000` words.
+and memory routines, `gen` the small utilities, `environ` the vector crt0 computes, `jmp`
+setjmp/longjmp, `stdiot` the FILE machinery through a real file, `printft` every printf
+conversion including floats, and `scanft` scanf and the `atof`/`ecvt`/`gcvt` conversions
+either side of it. `b6size -w` on each keeps the image below `070000` words.
 
 An `.expected` file may record only what the *program* does. Nothing host-dependent may reach
 it — which is why `environ` checks `getenv` against the vector it was handed, entry by entry,

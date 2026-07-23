@@ -1,0 +1,41 @@
+ok   [1234 -1234 1234 2322 beef BEEF]
+ok   [[      42][42      ][00000042]]
+ok   [[+42][-42][ 42][-42]]
+ok   [[010][0xff][0XFF][0]]
+ok   [[00042][   00042][00042   ]]
+ok   [[    42][42    ][00042]]
+ok   [[42    ]]
+ok   [7 7 7 7 7]
+ok   [-1099511627775 281474976710655]
+ok   [[abc][       abc][abc       ]]
+ok   [[ab][    ab][ab    ]]
+ok   [[z][  z][z  ][%]]
+ok   [[(null)]]
+ok   [[%q]]
+ok   [0.500000 2.500000 1024.000000]
+ok   [[3][2.50][      2.50][2.50      ][0000002.50]]
+ok   [-0.500000 -2.50]
+ok   [1.024000e+03 1.024000E+03]
+ok   [5.00e-01 5e-01]
+ok   [1024 0.5 1e-06]
+ok   [[2.5][2.50000]]
+ok   [1.000000e+18]
+ok   sprintf count 6
+ok   [abc-42]
+ok   snprintf exact 6
+ok   [abcdef]
+ok   snprintf truncated 6
+ok   [abc]
+ok   snprintf one byte 6
+ok   []
+ok   snprintf size 0 6
+ok   [untouched]
+ok   vsnprintf count 3
+ok   [x=9]
+ok   %n 3
+printf 42 direct 2.50
+fprintf ff
+puts
+fputs
+c
+0 error(s)

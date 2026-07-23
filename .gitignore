@@ -51,7 +51,14 @@ lib/test/gen
 lib/test/environ
 lib/test/jmp
 lib/test/headers
+lib/test/stdiot
+lib/test/printft
+lib/test/scanft
 lib/test/*.out
+
+# Scratch files the stdio tests create and remove; a run that dies part way
+# through leaves one behind.
+lib/test/*.tmp
 
 # Scratch drum and disk images that kernel/test/mbtest.ini and mdtest.ini create with
 # `attach -n'.  The disk images are ~8 Mb each and there are three of them.

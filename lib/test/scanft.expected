@@ -1,0 +1,77 @@
+ok   sscanf %d count 3
+ok     first 12
+ok     second -34
+ok     third 0
+ok   sscanf bases count 3
+ok     octal 511
+ok     hex lower 255
+ok     hex upper 255
+ok   sscanf sizes count 3
+ok     %hd 5
+ok     %d 6
+ok     %ld 7
+ok   sscanf widths count 2
+ok     first two 12
+ok     next three 345
+ok   sscanf suppressed count 2
+ok     after * 22
+ok     and 33
+ok   sscanf literal count 1
+ok     value 9
+ok   sscanf literal mismatch 0
+ok   sscanf empty -1
+ok   sscanf %s count 2
+ok     first [hello]
+ok     second [world]
+ok   sscanf %c count 2
+ok     first is a space 32
+ok     second is a 97
+ok   sscanf %[ count 2
+ok     class [abc]
+ok     digits [123]
+ok   sscanf no ranges 1
+ok     literal 0, - and 9 [9-0]
+ok   sscanf %[^ count 2
+ok     up to comma [abc]
+ok     after comma [def]
+ok   sscanf class to eof 1
+ok     all of it [xyz]
+ok   sscanf mixed count 2
+ok     string [tag]
+ok     number 7
+ok   vsscanf count 2
+ok     number 42
+ok     string [abc]
+ok   sscanf %lf count 2
+ok     first 3.5
+ok     second -0.25
+ok   sscanf exponents count 2
+ok     1e3 1000
+ok     -3.25e2 -325
+ok   atof 0 0
+ok   atof 0.5 0.5
+ok   atof -1024 -1024
+ok   atof leading space 2.5
+ok   atof +2.5 2.5
+ok   atof 1e18 1e+18
+ok   atof 1e-18 1e-18
+ok   atof junk 0
+ok   ecvt digits [12340]
+ok   ecvt decpt 2
+ok   ecvt sign 0
+ok   ecvt small digits [1953]
+ok   ecvt small decpt -2
+ok   ecvt small sign 1
+ok   fcvt digits [12340]
+ok   fcvt decpt 2
+ok   gcvt 1024 [1024]
+ok   gcvt 0.5 [.5]
+ok   gcvt -2.5 [-2.5]
+ok   scanf count 2
+ok     first 100
+ok     second 200
+ok   fscanf count 2
+ok     word [word]
+ok     number 1.5
+ok   scanf at eof -1
+0 error(s)

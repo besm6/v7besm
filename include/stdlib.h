@@ -56,13 +56,17 @@ void free(void *ptr);
 // be malloc with its argument checked.
 void *aligned_alloc(size_t alignment, size_t size);
 
+// ascii to floating, over the native format's range (~10^±18).  It is here and
+// not in <math.h> because C11 puts it here; ecvt/fcvt/gcvt, its inverses, are v7
+// extensions no header declares and a caller declares them itself.
+double atof(const char *nptr);
+
 // ---- declared for future implementation (TODO) ----
 _Noreturn void _Exit(int status);
 int atexit(void (*func)(void));
 _Noreturn void quick_exit(int status);
 int at_quick_exit(void (*func)(void));
 
-double atof(const char *nptr);
 long strtol(const char *nptr, char **endptr, int base);
 unsigned long strtoul(const char *nptr, char **endptr, int base);
 double strtod(const char *nptr, char **endptr);

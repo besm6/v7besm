@@ -39,6 +39,14 @@
 #define M_PI 3.14159265358979
 #define M_E  2.71828182845905
 
+// ---- implemented in libc.a, not libm ----
+// These three are the exponent surgery the CONVERSIONS need -- ecvt(), atof() and
+// the printf engine -- so they are in libc, where v7 keeps them too (its gen/ had
+// modf.s, frexp.s and ldexp.s).  A program gets them without -lm.
+double modf(double x, double *iptr);
+double frexp(double x, int *exp);
+double ldexp(double x, int exp);
+
 // ---- declared for future implementation: libm, lib phase 7 (TODO) ----
 double fabs(double x);
 double floor(double x);
@@ -46,9 +54,6 @@ double ceil(double x);
 double round(double x);
 double trunc(double x);
 double fmod(double x, double y);
-double modf(double x, double *iptr);
-double frexp(double x, int *exp);
-double ldexp(double x, int exp);
 
 double sqrt(double x);
 double pow(double x, double y);
