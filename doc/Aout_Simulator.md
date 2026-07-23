@@ -299,7 +299,7 @@ field. The six calls with a second result deliver it in `r12` — see [§3](#3-h
 
 | Group | Calls |
 |-------|-------|
-| Process | `exit`, `fork`, `exec`/`exece`★, `wait`, `getpid`, `getuid`/`setuid`, `getgid`/`setgid`, `nice`, `kill`, `signal`†, `pause`, `alarm`, `times`, `break`¶ (heap/`sbrk`) |
+| Process | `exit`, `fork`, `exec`/`exece`★, `wait`, `getpid`, `getuid`/`setuid`, `getgid`/`setgid`, `nice`, `kill`, `signal`†, `sigret`†, `pause`, `alarm`, `times`, `break`¶ (heap/`sbrk`) |
 | Files & I/O | `open`, `creat`, `close`, `read`, `write`, `seek` (`lseek`), `dup`/`dup2`✦, `pipe`, `stat`/`fstat`, `access`, `stty`/`gtty`‡ |
 | Filesystem | `link`, `unlink`, `chdir`, `chroot`, `chmod`, `chown`, `mknod`, `utime`, `umask`, `sync` |
 | Time | `time`, `ftime`, `stime`§ |
@@ -310,8 +310,18 @@ field. The six calls with a second result deliver it in `r12` — see [§3](#3-h
 [§3](#how-a-program-starts) — the same code that starts the very first program, so a guest sees
 one ABI whether it was started from the command line or by another guest. An argument list past
 `NCARGS` (5120 bytes, as in the kernel) is refused.
-† `signal` supports only `SIG_DFL` and `SIG_IGN`; a custom guest handler cannot run from the
-host's signal context and returns `EINVAL`.
+† `signal` takes a guest handler, and `b6sim` runs it — on the guest, not on the host. The
+disposition is remembered in `b6sim`'s own table and the host is given a catcher that does nothing
+but record the arrival; the guest's handler is entered at the **end of a serviced extracode**, which
+is where the kernel delivers too (`sysret()` in `kernel/syscall.c`; `clock()` delivers nothing, so a
+guest spinning in user code gets its signal at the next trap on both). Delivery builds the same
+21-word frame on the user stack that `sendsig()` builds, plants the same `$77 SYS_sigret` word above
+it, and enters the handler with the number in the accumulator, `r14 = -1` and `r13` naming that word
+— so `sigret` (45) is a call no program issues and `libc` needs no trampoline of its own. See
+[Unix_Context_Switch.md §10a](Unix_Context_Switch.md#10a-the-signal-frame). Two divergences from the
+kernel, both in `pause`: `b6sim` looks for an already-recorded signal before it blocks (a host
+`pause()` would otherwise wait for a second one), and guest signal numbers are passed to the host
+unchanged, which holds on the BSD-derived hosts `b6sim` is built on.
 ‡ `stty`/`gtty` honour only "is this a terminal?".
 § `stime` cannot set the host clock and quietly succeeds.
 ✦ `dup` and `dup2` share one entry, v7 style: the call always takes **two** arguments, and bit
@@ -424,8 +434,8 @@ it, along with the rest of the toolchain's tests, with `make run`.
 `b6sim` is a user-level model, not the real machine, and deliberately leaves out anything that
 needs a full operating system:
 
-- No custom signal **handlers** (only default/ignore), no `ptrace`, no privileged or device
-  operations, no `mount`.
+- No `ptrace`, no privileged or device operations, no `mount`. Signal **handlers** do run, but only
+  at a syscall return, and a signal number goes to the host as it stands.
 - No separate filesystem — it uses the host's files, users, and permissions directly.
 - One flat program image and one thread of control; `fork` uses the host's `fork`.
 - It does not model instruction timing or the real machine's peripherals — for that, use the

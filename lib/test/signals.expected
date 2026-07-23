@@ -1,0 +1,26 @@
+ok   signal returns the old disposition (SIG_DFL)
+ok   signal returns the handler just installed
+ok   signal rejects SIGKILL
+ok   ...with EINVAL
+ok   raise succeeds
+ok   the handler ran
+ok   the handler was told which signal
+ok   a caught signal was reset to SIG_DFL
+ok   an auto survived the delivery
+ok   a sum built across it is right
+ok   a walked pointer survived
+ok   and what it wrote is intact
+ok   the handler ran once more
+ok   SIG_IGN installs
+ok   an ignored signal runs no handler
+ok   ...and stays ignored
+ok   the outer handler ran
+ok   the inner handler ran
+ok   one frame on top of the other
+ok   pause returns -1 through the frame
+ok   ...with EINTR, likewise
+ok   the alarm was delivered
+ok   with its own number
+ok   a handler may longjmp out of the frame
+ok   sleep returns
+done

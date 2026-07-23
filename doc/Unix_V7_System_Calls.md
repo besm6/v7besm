@@ -25,6 +25,10 @@ Adding or renumbering a call means editing all four — see [§6](#6-adding-a-ca
 **The gaps in `syscall.h` are deliberate.** Only rows this kernel implements get a name, so
 that naming one can never be mistaken for implementing it ([§5](#5-rows-that-are-not-system-calls)).
 
+**One call is in three of the four copies and not the fourth.** `sigret` (45) is issued by an
+instruction the *kernel* assembled and plants on the user stack — the return address of a signal
+handler ([§3](#3-signals)) — so no program ever calls it and `syscalls.tbl` has no leaf for it.
+
 ## 1. How a call is made
 
 A system call is the extracode **`$77 N`**. The hardware vectors э77 straight to `0577` — never
@@ -131,12 +135,24 @@ return a value in `r12` as well as the accumulator.
 
 ## 3. Signals
 
-`signal` (48) is the only signal *call*, but three more of the entries above are signal-shaped:
-`kill` sends, `alarm` arms `SIGALRM`, and `pause` waits. Delivery is the shared tail of both
-extracode doors — `sysret()` in [syscall.c](../kernel/syscall.c) calls `issig()`/`psig()` on
+`signal` (48) is the only signal *call* a program makes, but three more of the entries above are
+signal-shaped: `kill` sends, `alarm` arms `SIGALRM`, and `pause` waits. Delivery is the shared tail
+of both extracode doors — `sysret()` in [syscall.c](../kernel/syscall.c) calls `issig()`/`psig()` on
 every return to user mode, so a signal raised by a call is delivered before that call returns,
 and a signal that interrupts a `sleep()` unwinds through `u.u_qsav` and turns the call into
 `EINTR`.
+
+**`sigret` (45) is the fifth, and no program issues it.** `psig()` calls `sendsig()`
+([kernel/sendsig.c](../kernel/sendsig.c)), which copies the 21-word trap frame onto the user stack,
+plants a `$77 SYS_sigret` word above it — a copy of `sigcode` from
+[kernel/besm6.S](../kernel/besm6.S) — and enters the handler with the signal number in the
+accumulator and that word's address in r13. The handler's own `13 uj` therefore trips the extracode,
+and `sigret()` reloads the frame. It takes no arguments (the frame is at `r15 - (NREGFRAME + 1)`),
+it masks SPSW down to `SPSW_USER` so a forged frame buys nothing, and it sets `u.u_justreturn` so
+that `syscall()` does not write a result over the three registers it has just restored. Two
+consequences for libc: the `signal` stub is a plain generated leaf with no trampoline behind it, and
+a handler is entered by the ordinary one-argument calling convention. The full account is
+[Unix_Context_Switch.md §10a](Unix_Context_Switch.md#10a-the-signal-frame).
 
 ## 4. Where this kernel differs from v7
 
@@ -204,9 +220,10 @@ Sixteen rows of `sysent[]` dispatch to one of two stubs in [kernel/trap.c](../ke
 | 38 | `switch` | `nullsys` — inoperative in v7 too |
 | 39 | `setpgrp` | `nullsys` — not implemented yet |
 | 40 | `tell` | `nosys` — obsolete |
-| 45, 49, 50, 55–58, 62, 63 | unused, USG-reserved, `readwrite`, `mpxchan` | `nosys` |
+| 49, 50, 55–58, 62, 63 | USG-reserved, `readwrite`, `mpxchan` | `nosys` |
 
-None of them has a `SYS_*` name, on purpose. Two more paths reach the same place:
+None of them has a `SYS_*` name, on purpose. Row 45, v7's "unused", is no longer among them: it is
+`sigret` ([§3](#3-signals)). Two more paths reach the same place:
 
 - **An out-of-range number.** `syscall()` dispatches `badsysent` — a private `{0, 0, nosys}` —
   rather than masking the number onto a real row.

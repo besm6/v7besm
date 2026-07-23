@@ -70,6 +70,7 @@ GEN     = strcat.o strcmp.o strcpy.o strlen.o strncat.o strncmp.o strncpy.o \
           memcpy.o memmove.o memset.o memcmp.o memchr.o \
           abs.o atoi.o atol.o index.o rindex.o swab.o qsort.o rand.o \
           getenv.o mktemp.o isatty.o sleep.o perror.o errlst.o ctype_.o abort.o \
+          raise.o \
           setjmp.o assert.o toupper.o tolower.o isblank.o \
           malloc.o calloc.o aligned_alloc.o cuexit.o \
           atof.o ecvt.o modf.o frexp.o ldexp.o \
@@ -179,7 +180,7 @@ calloc.o:	$(TOP)/include/string.h
 ctype_.o toupper.o tolower.o isblank.o: $(TOP)/include/ctype.h
 perror.o errlst.o: $(TOP)/include/errno.h
 isatty.o:	$(TOP)/include/sgtty.h
-abort.o:	$(TOP)/include/signal.h
+abort.o raise.o:	$(TOP)/include/signal.h
 sleep.o:	$(TOP)/include/signal.h $(TOP)/include/setjmp.h
 assert.o:	$(TOP)/include/assert.h
 cuexit.o:	$(TOP)/include/stdlib.h

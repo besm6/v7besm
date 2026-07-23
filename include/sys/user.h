@@ -75,6 +75,7 @@ struct user {
         int pr_scale;             // pc scaling
     } u_prof;
     char u_intflg;      // catch intr from sys
+    char u_justreturn;  // this call restored the frame itself; see sigret(), sendsig.c
     char u_sep;         // flag for I and D separation
     struct tty *u_ttyp; // controlling tty pointer
     dev_t u_ttyd;       // controlling tty dev

@@ -3,13 +3,11 @@
 /*
  * Suspend for n seconds, preserving whatever alarm was already pending.
  *
- * NOT RUNNABLE YET, and it links only.  It needs a handler of its own to be DELIVERED
- * -- sleepx() below -- and signal delivery is phase 6 of lib/README.md, blocked on the
- * kernel: sendsig() in kernel/machdep.c pushes one word and jumps, with no signal frame
- * designed yet.  b6sim is no better: its SYS_signal accepts SIG_DFL and SIG_IGN and
- * answers anything else with EINVAL, because a guest handler cannot be run from a host
- * signal context (cmd/sim/syscall.cpp).  So this is ported now, with the rest of gen,
- * and left untested until the frame exists.
+ * This is the routine that needs a handler of its own to be DELIVERED, and the one that
+ * leaves through a longjmp rather than returning: sleepx() below never comes back to the
+ * signal frame the kernel built, and the process resumes at the setjmp with the stack
+ * unwound past it.  That works because the frame lives on the user stack -- abandoning
+ * it costs nothing (kernel/sendsig.c).
  *
  * The dance around the caller's alarm is v7's and is worth restating: an alarm(1000) is
  * planted first so the old setting can be read out of alarm()'s return value without a

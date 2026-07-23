@@ -338,13 +338,39 @@ Loose ends the finished work left behind. None blocks 18.
   so arming it means writing М034/М035, and `procxmt()` has to re-arm after each break match. The
   sites still carry the old `TODO 17` markers: `sig.c` (cases 6 and 9), `trap.c` (the
   `GRP_BREAKPOINT` arm) and `GRP_BREAKPOINT` in `include/sys/besm6dev.h`. A `ptrace` feature, not a layout one.
-* **`sendsig()` pushes one word and no more.** The direction and the units are right now, but there
-  is no signal frame proper — no saved accumulator or R, and no `sigreturn` path back through it.
-  Nothing exercises signal delivery yet; build it when something does. **The frame must carry the
-  signal number as the handler's argument**: `include/signal.h` now declares C11's
-  `void (*signal(int, void (*)(int)))(int)`, so a handler takes the signal it is handling, and
-  `lib/libc/gen/sleep.c` is already written to that shape. This is `lib/README.md` phase 6, and
-  it is blocked here.
+* **DONE: the signal frame, and `sigret`.** `sendsig()` pushed one word and jumped; it now copies the
+  whole 21-word `reg.h` frame onto the user stack with one `copyout()`, plants a return trampoline
+  above it and enters the handler by the one-argument calling convention — the number in the
+  accumulator, r14 = −1, r13 the trampoline. `sigret()` (row 45, v7's "unused") reloads it. Both live
+  in **`kernel/sendsig.c`**, split out of `machdep.c` for the reason `syscall.c` was split out of
+  `trap.c`: `kernel/test/usig` links the real pair. `doc/Unix_Context_Switch.md` §10a is the account;
+  what differed from the plan, or is worth not re-deriving:
+  * **The trampoline is a word the KERNEL assembled and the USER executes.** `sigcode` in `besm6.S`
+    is one `$77 SYS_sigret`, copied out above the frame, and r13 names the copy — so a handler's
+    ordinary `13 uj` trips the extracode. No opcode encoding is written down in C, and libc keeps its
+    plain generated `signal` stub: no trampoline, no handler table shadowing `u_signal[]`, and
+    `signal()` still returns the true previous disposition. The alternative — a libc-registered
+    trampoline, as the v7/x86 port had — was rejected for that.
+  * **It works because a stored word is instruction-tagged.** The machine tags every store with a
+    свертка and checks it on instruction fetch; in SIMH the tag is `RUU ^ PARITY_INSN`
+    (`besm6_mmu.c`), and this kernel never sets ПКП/ПКЛ (`002 0100`–`0137`, which nothing issues), so
+    the tag comes out `PARITY_INSN`. Should that ever change, a handler's return would raise
+    `GRP_INSN_CHECK` instead of reaching the kernel. `usig` is what proves it.
+  * **A user-mode return path could not have worked at all**, which is why `sigret` is a syscall:
+    which half of a word to resume at lives in SPSW and only `выпр` reloads it. `usig`'s second leg
+    delivers from a fault taken on a **right-half** instruction for exactly this reason.
+  * **SPSW is the one word in the frame not taken on trust.** `sigret()` masks it to `SPSW_USER`
+    (`reg.h`: `SPSW_RIGHT_INSTR | SPSW_MOD_RK`) and takes the mode bits from the live frame, so a
+    forged frame below r15 cannot buy supervisor mode, an unmapped space or a blocked level.
+  * **`R = 7`, not zero, at handler entry** (`RREG_C`, `reg.h`). `setregs()` can leave the frame's R
+    at zero because `ntr 7` is `crt0`'s first instruction; a handler has no `crt0` in front of it, and
+    the first `b$` helper it called would run in the wrong ω.
+  * **`u.u_justreturn`** is new in `struct user`: `syscall()`'s result write-back would overwrite
+    ACC/r12/r14, three of the words just restored — and r14 at a delivery point is the errno a libc
+    stub is about to test. 4.xBSD spells it `u_eosys = JUSTRETURN`.
+  * Delivery is unchanged where it was already right: `psig()` calls `sendsig()`, and the delivery
+    points stay the two the doors already had. `b6sim` implements the same frame at the same point,
+    so `lib/test/signals` runs the whole libc side today (`cmd/sim/syscall.cpp`).
 * **`uflush`/`uload` copy the whole 1024-word page.** Copying only up to the saved r15 —
   `struct user` plus the live stack, typically ~300 words — was planned and never done. It is a
   performance change, not a correctness one.

@@ -104,6 +104,14 @@ private:
     // Process-control syscalls, factored out for readability.
     void sys_exec(unsigned count, bool with_env);
 
+    // Signal delivery (syscall.cpp).  check_signals() runs at the end of every
+    // serviced extracode -- the same place the kernel delivers, in sysret() --
+    // and deliver_signal() builds the signal frame the kernel builds, so that a
+    // guest handler and its `$77 SYS_sigret' return work identically on both.
+    void check_signals();
+    void deliver_signal(unsigned sig);
+    void sys_sigret();
+
     // Print executive address of extracode (tracing).
     void print_executive_address();
 

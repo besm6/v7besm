@@ -13,8 +13,14 @@
 //
 // THE GAPS ARE DELIBERATE.  Only the calls this kernel implements get a name; the
 // rows that are nullsys or nosys in sysent.c -- 0 (indir), 38 (switch), 39
-// (setpgrp), 40 (tell), 45, 49, 50, 55-58, 62, 63 -- get none, so that naming one
+// (setpgrp), 40 (tell), 49, 50, 55-58, 62, 63 -- get none, so that naming one
 // cannot be mistaken for implementing it.
+//
+// ONE NAME IS NOT A CALL ANY PROGRAM MAKES.  Row 45, v7's "unused", is sigreturn:
+// the kernel plants a `$77 SYS_sigret' word on the user stack itself (`sigcode',
+// kernel/besm6.S) as the return address of a signal handler, so the number is issued
+// by an instruction the kernel assembled and there is no libc leaf for it -- it is
+// absent from lib/libc/sys/syscalls.tbl on purpose.  See kernel/sendsig.c.
 //
 // THREE NAMES ARE THE KERNEL'S, NOT LIBC'S, and are spelled here as sysent.c
 // spells them: SYS_seek is what lseek() issues, SYS_break is what sbrk() issues
@@ -73,6 +79,7 @@
 #define SYS_pipe   42
 #define SYS_times  43
 #define SYS_profil 44
+#define SYS_sigret 45
 #define SYS_setgid 46
 #define SYS_getgid 47
 #define SYS_signal 48

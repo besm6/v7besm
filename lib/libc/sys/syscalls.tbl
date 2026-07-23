@@ -28,9 +28,15 @@
 #   ptrace result, and on the PDP-11 only the carry flag distinguished it from failure;
 #   here r14 is the authority and says so unambiguously.
 #
-#   signal is uniform because phase 1 registers a handler and no more.  Delivery is
-#   phase 6 and needs a kernel-side signal frame first, so there is no dvect/tvect
-#   trampoline of the kind the x86 port's sys/signal.s carried.
+#   signal is uniform, and stayed uniform when delivery landed in phase 6, because the
+#   RETURN PATH IS NOT LIBC'S.  The kernel plants its own `$77 SYS_sigret' word on the
+#   user stack as the handler's return address (`sigcode', kernel/besm6.S, copied out by
+#   sendsig()), so there is no dvect/tvect trampoline of the kind the x86 port's
+#   sys/signal.s carried, no handler table shadowing the kernel's, and signal() still
+#   answers with the true previous disposition -- including the SIG_DFL that psig()
+#   resets a caught signal to.  It could not have been libc's: only `выпр' restores
+#   which HALF of a word to resume at, so a user-mode return path cannot resume a
+#   signal taken on a right-half instruction.
 #
 # symbol        macro           C prototype
 

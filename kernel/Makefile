@@ -1,7 +1,8 @@
 # Unix kernel
 SYS     = acct.o alloc.o clock.o conf.o fio.o iget.o intr.o machdep.o main.o \
-          malloc.o nami.o pipe.o prf.o prim.o rdwri.o sig.o slp.o subr.o \
-          sys1.o sys2.o sys3.o sys4.o syscall.o sysent.o text.o trap.o utab.o
+          malloc.o nami.o pipe.o prf.o prim.o rdwri.o sendsig.o sig.o slp.o \
+          subr.o sys1.o sys2.o sys3.o sys4.o syscall.o sysent.o text.o trap.o \
+          utab.o
 
 # Drivers
 DEV     = bio.o mb.o md.o mem.o partab.o sc.o sr.o sys.o tty.o
@@ -113,6 +114,10 @@ prim.o: prim.c ../include/sys/types.h ../include/sys/param.h \
 rdwri.o: rdwri.c ../include/sys/types.h ../include/sys/param.h \
   ../include/sys/systm.h ../include/sys/inode.h ../include/sys/dir.h \
   ../include/sys/user.h ../include/sys/buf.h ../include/sys/conf.h
+sendsig.o: sendsig.c ../include/sys/types.h ../include/sys/param.h \
+  ../include/sys/systm.h ../include/sys/dir.h ../include/sys/user.h \
+  ../include/sys/proc.h ../include/sys/reg.h ../include/sys/besm6dev.h \
+  ../include/sys/seg.h
 sig.o: sig.c ../include/sys/types.h ../include/sys/param.h \
   ../include/sys/systm.h ../include/sys/dir.h ../include/sys/user.h \
   ../include/sys/proc.h ../include/sys/inode.h ../include/sys/reg.h \
@@ -160,7 +165,8 @@ trap.o: trap.c ../include/sys/types.h ../include/sys/param.h \
 utab.o: utab.c ../include/sys/types.h ../include/sys/param.h ../include/sys/systm.h \
   ../include/sys/dir.h ../include/sys/user.h ../include/sys/proc.h \
   ../include/sys/text.h ../include/sys/seg.h
-besm6.o: besm6.S ../include/sys/param.h ../include/sys/besm6dev.h const.s
+besm6.o: besm6.S ../include/sys/param.h ../include/sys/besm6dev.h \
+  ../include/sys/syscall.h const.s
 seg.o: seg.S ../include/sys/param.h
 uarea.o: uarea.S ../include/sys/param.h
 usermem.o: usermem.S ../include/sys/param.h

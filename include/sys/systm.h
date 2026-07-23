@@ -131,6 +131,7 @@ void dup(void);
 void pipe(void);
 void times(void);
 void profil(void);
+void sigret(void); // the return half of the signal frame; kernel/sendsig.c
 void setgid(void);
 void getgid(void);
 void ssig(void);

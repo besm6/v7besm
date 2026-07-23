@@ -50,6 +50,25 @@
 #define SPSW_MODE      (SPSW_EXTRACODE | SPSW_INTERRUPT) // РежЭ | РежПр
 #define USERMODE(spsw) (((spsw) & SPSW_MODE) == 0)
 
+// The AU mode word compiled code runs in: `NTR 3' suppression (bits 1-2) plus ω =
+// logical (bit 3), which is what `ntr 7' establishes and what every b$ helper both
+// expects and restores (doc/Besm6_Runtime_Library.md).  lib/libc/csu/crt0.s issues it
+// as its first instruction, which is why exec() can leave the frame's R at zero -- but
+// A SIGNAL HANDLER IS ENTERED WITH NO crt0 IN FRONT OF IT, so sendsig() has to put the
+// mode word there itself (kernel/sendsig.c).
+#define RREG_C 7
+
+// The SPSW bits a USER may set, and the whole of what sigreturn() (kernel/sendsig.c)
+// takes from the frame it is handed.  They are the two `выпр' reads back that affect
+// how user code resumes: which half of the word to restart at, and whether to re-arm
+// the address modifier from M[16] (which the same frame restores).  Everything else
+// in SPSW says how the trap was TAKEN -- РежЭ|РежПр, БлП|БлЗ|БлПр -- and is forced
+// from the live frame instead, so a forged signal frame cannot buy supervisor mode,
+// an unmapped address space or a blocked interrupt level.  SPSW_NEXT_RK and
+// SPSW_MOD_RR are left out because they are inert on the way out: `выпр' does not
+// read either.
+#define SPSW_USER (SPSW_RIGHT_INSTR | SPSW_MOD_RK)
+
 // BASEPRI(): were we interrupted ABOVE base priority?  Note the sense -- v7's name
 // reads backwards.  True means "the interrupted code was holding a raised spl, so do
 // not run callouts on top of it"; clock() takes the short exit on true.

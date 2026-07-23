@@ -7,12 +7,9 @@
  * characters of a password, so there was never a reason to keep more.
  *
  * The interrupt is caught -- ignored, rather -- for the duration, so that a ^C between
- * turning the echo off and turning it back on cannot leave the terminal deaf.  THAT
- * PART DOES NOT WORK YET: signal delivery is phase 6, and b6sim answers a request for
- * anything but SIG_DFL/SIG_IGN with EINVAL.  SIG_IGN is what this asks for, so the
- * arrangement is sound as far as it goes; what is missing is the kernel's ability to
- * deliver the signal at all, which is the reason ^C would not reach the program in the
- * first place.
+ * turning the echo off and turning it back on cannot leave the terminal deaf.  Only
+ * SIG_IGN is asked for here, so this never needed the signal frame; what it needs is a
+ * terminal, and that is what keeps it untested (below).
  *
  * NOT COVERED BY lib/test/: it opens /dev/tty and would sit there waiting for someone
  * to type, which a diff-against-.expected harness cannot arrange.

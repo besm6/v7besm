@@ -48,6 +48,7 @@
 // through one hardcoded `3 ij' for all of them (see `intret' and include/sys/reg.h).
 #include "sys/param.h"          // UBASE, NBUF, BSIZEW
 #include "sys/besm6dev.h"
+#include "sys/syscall.h"        // SYS_sigret, for the signal trampoline below
 SPSW = 027                      // saved mode word (М027)
 IRET = 033                      // interrupt / fault return address (М033)
 ERET = 032                      // extracode return address (М032)
@@ -682,6 +683,34 @@ intret:
         xta     save_a              // A back (xta does not disturb Y)
         xtr     save_r              // R back -- must be last (a later xta would perturb it)
       3 ij                          // return from interrupt via M[033]=IRET
+
+// ============================================================================
+// The signal-return trampoline
+// ============================================================================
+//
+// int sigcode[1] -- ONE INSTRUCTION WORD, executed in USER mode, and the only piece of
+// this kernel that ever runs there.
+//
+// sendsig() (kernel/sendsig.c) builds a signal frame on the user stack and copies this
+// word out just above it, then enters the handler with r13 -- the return-address
+// register -- naming the copy.  A handler is an ordinary C function and returns with
+// `13 uj', so what it returns TO has to be executable; this is that instruction, and
+// it takes the process straight back into the kernel through the 0577 door, where
+// sigret() reloads the frame.
+//
+// It is assembled here rather than spelled as a constant in C so that NOTHING writes
+// down an opcode encoding: `$77 SYS_sigret' is the same source form libc's syscall
+// leaves use, and the number comes from <sys/syscall.h> like every other.
+//
+// The bare `:' forces word alignment, as it does in the vector table above -- the word
+// is copied out whole and must hold the extracode in its LEFT half.  b6as then TALIGNs
+// after the extracode and fills the right half with an empty instruction, which is
+// never reached: an extracode returns to the left half of the NEXT word, and sigret()
+// does not return here at all.
+      :
+        .globl  sigcode
+sigcode:
+        $77     SYS_sigret
 
 // ============================================================================
 // Execution profiling

@@ -10,7 +10,7 @@
 TOP     = ../..
 
 PROGS   = hello vararg errno procs sbrkt malloct strings gen environ jmp headers \
-          stdiot printft scanft execs spawn timet pwent
+          stdiot printft scanft execs spawn timet pwent signals
 
 .PHONY: all test clean
 
@@ -77,6 +77,11 @@ timet:  timet.o $(LIBDEP)
 pwent:  pwent.o $(LIBDEP)
 	$(link)
 
+# signals takes a second of wall clock: sleep(1) is the one path here that leaves a
+# handler by longjmp and never returns through the signal frame at all.
+signals: signals.o $(LIBDEP)
+	$(link)
+
 # Run each program and diff its output.  `set -e' keeps it fail-fast, and the run
 # itself must exit 0 -- a test reports failure by its status as well as its output.
 #
@@ -118,6 +123,11 @@ execs.o spawn.o timet.o pwent.o: $(TOP)/include/stdio.h
 execs.o timet.o pwent.o: $(TOP)/include/string.h
 execs.o spawn.o: $(TOP)/include/stdlib.h
 execs.o:	$(TOP)/include/errno.h
+
+# Phase 6.  alarm, pause and getpid are declared here, as everywhere else in this
+# directory; signal, raise and sleep come from <signal.h>.
+signals.o:	$(TOP)/include/signal.h $(TOP)/include/setjmp.h \
+		$(TOP)/include/stdio.h $(TOP)/include/errno.h
 timet.o:	$(TOP)/include/time.h
 pwent.o:	$(TOP)/include/pwd.h $(TOP)/include/grp.h
 

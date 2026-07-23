@@ -52,6 +52,7 @@ document says what each routine must do; this one walks the path they form.
   - [9. An interrupt, in C](#9-an-interrupt-in-c)
   - [10. The exit](#10-the-exit)
     - [Why there is no `OUTMACRO`](#why-there-is-no-outmacro)
+  - [10a. The signal frame](#10a-the-signal-frame)
   - [11. Switching address spaces](#11-switching-address-spaces)
     - [The БРЗ drain](#the-брз-drain)
   - [12. Switching processes](#12-switching-processes)
@@ -706,6 +707,75 @@ mode, and so user-vs-supervisor, comes from SPSW either way.
 Dubna's predicted bonus arrived anyway: the syscall return inherits the interrupt epilogue's `runrun`
 and pending-signal checks for free.
 
+## 10a. The signal frame
+
+A caught signal is a **second** context switch layered on the first: the kernel is already on its way
+out through `intret`, and instead of resuming the interrupted instruction it makes the process call a
+function of its own first. [`kernel/sendsig.c`](../kernel/sendsig.c) is both halves of it.
+
+**The frame is the reg.h frame.** `sendsig()` copies the whole 21-word `struct trap` onto the *user*
+stack with one `copyout()`, then plants one more word above it. The user stack grows up and r15 is a
+word index naming the first free slot, so with `n = tr->r15`:
+
+```
+  n .. n+20    the saved struct trap, verbatim
+  n+21         `$77 SYS_sigret'  -- the return trampoline
+  n+22         r15 as the handler sees it
+```
+
+Copying all 21 words rather than a chosen few is what makes a handler that **never returns** safe:
+`sleep()` (`lib/libc/gen/sleep.c`) longjmps out of its `SIGALRM` handler, abandoning the frame where
+it lies, and because the frame is on the user stack that costs nothing.
+
+The handler is then entered by the ordinary calling convention for a function of one argument
+([Besm6_Calling_Conventions.md](Besm6_Calling_Conventions.md)): the number in `tr->acc`, `tr->r14 =
+-1` (the negative argument count), `tr->r13` naming the planted word, `tr->ret` the handler. Two
+registers are set to values that are *not* the interrupted context's and not zero either:
+
+- **`tr->rreg = RREG_C` (7)** — `NTR 3` suppression plus ω = logical, the mode word every `b$` helper
+  expects ([Besm6_Runtime_Library.md](Besm6_Runtime_Library.md)). `exec()` can leave R at zero
+  because `ntr 7` is `crt0`'s first instruction; **a handler has no `crt0` in front of it.**
+- **`tr->spsw &= ~(SPSW_RIGHT_INSTR | SPSW_NEXT_RK | SPSW_MOD_RK | SPSW_MOD_RR)`** — a fault frame can
+  carry any of these, and `выпр` would apply them to the handler's *first* instruction.
+
+**The return path is one instruction, and the kernel plants it.** A handler is an ordinary C function
+and returns with `13 uj`, so r13 has to name something executable. It names a copy of `sigcode`
+([`kernel/besm6.S`](../kernel/besm6.S)) — a single `$77 SYS_sigret` word, assembled by b6as so that no
+opcode encoding is ever written down in C. Two consequences worth stating:
+
+- **libc needs no trampoline and no handler table.** The `signal` stub stays the bare generated leaf,
+  and `signal()` still answers with the true previous disposition, the kernel's own `u_signal[]` —
+  including the `SIG_DFL` that `psig()` resets a caught signal to.
+- **The word must be executable.** It is a word the kernel *stored* into a data page; the machine tags
+  every stored word with a свертка and checks the tag on instruction fetch (in SIMH the tag is
+  `RUU ^ PARITY_INSN`, `besm6_mmu.c`). This kernel never sets ПКП/ПКЛ — they are `002 0100`–`0137`,
+  which nothing issues — so a stored word is instruction-tagged and the fetch passes. `usig` is what
+  proves it; nothing short of the machine could.
+
+**Why the return has to re-enter the kernel at all.** Which half of a word to resume at lives in SPSW
+(`SPSW_RIGHT_INSTR`, §1) and **only `выпр` reloads it**. A signal delivered at a fault return —
+`trap()`'s `psig()` — can interrupt a right-half instruction, and no sequence of user-mode
+instructions can resume one. That is the whole argument for `sigret()` being a syscall.
+
+`sigret()` takes **no arguments**: the handler's epilogue leaves r15 exactly as `sendsig()` set it, so
+the frame is at `r15 - (NREGFRAME + 1)`. It `copyin()`s the 21 words over the live frame, which
+`intret` then reloads. One word is not taken at face value:
+
+```c
+    frame.spsw = (frame.spsw & SPSW_USER) | (tr->spsw & ~SPSW_USER);
+```
+
+`SPSW_USER` ([`reg.h`](../include/sys/reg.h)) is `SPSW_RIGHT_INSTR | SPSW_MOD_RK` — precisely the bits
+`выпр` takes from SPSW that affect how *user* code resumes. The mode bits (РежЭ, РежПр, БлП, БлЗ,
+БлПр) come from the live frame, which is a genuine user-mode SPSW, so a program that issues `$77 45`
+with a forged frame below r15 can rearrange its own registers — which it could do anyway — and cannot
+buy supervisor mode, an unmapped address space or a blocked interrupt level.
+
+**And one flag.** `syscall()` ends by writing the call's result into `tr->acc`, `tr->r12` and
+`tr->r14`, which are three of the words `sigret()` has just restored — r14 above all, since at a
+delivery point it holds the errno a libc stub is about to test. So `sigret()` sets `u.u_justreturn`
+and `syscall()` skips the write-back; 4.xBSD spells the same thing `u_eosys = JUSTRETURN`.
+
 ## 11. Switching address spaces
 
 **A trap switches nothing.** РП always holds the current process's map, and the kernel runs unmapped
@@ -893,14 +963,15 @@ hand-built environment, forges user mode, and asserts on machine state from the 
 |---|---|
 | `crt0t.S` + `utrap.c` | `trapgate` (0500): faults on a closed page, checks the faulting instruction re-executes after the map is opened — from **both** instruction halves — and that the gate took the user arm (a `ktrap()` stub raises `F_KTRAP` if not) with БлПр opened (`getpsw()`, §9) |
 | `crt0s.S` + `usys.c` | `sysgate` (0577) and `badext` (0550): issues `$77 N` with arguments staged the real way, checks ACC / r14 / r12 / r13 and a balanced r15 — and, in every handler, that the gate cleared БлПр before dispatching (`getpsw()`, §9) |
+| `crt0sg.S` + `usig.c` | the signal frame (§10a), through **both** doors: a delivery at a syscall return and one at a fault return taken from a **right-half** instruction. Links the real `sendsig()`/`sigret()` and puts `sigret()` at row 45 of its own `sysent[]`; the handler checks its entry ABI and then wrecks ACC/r9/r11/r12/r14 to prove the restore. The word `sendsig()` plants is really fetched and executed from the user stack — only the machine can show that |
 | `crt0u.S` + `uintr.c` | `intrgate` (0501), including the conditional stack switch |
 | `mmutest` | `sureg()` programming РП/РЗ, checked from C *and* by examining РП/РЗ from the `.ini` |
 | `uswtch`, `usched`, `uclock` | `save`/`resume`, the scheduler loop, the timer |
 
 `besm6.o` cannot enter a standalone test — its `0500` vector reaches into the C kernel and its
 `_start` seeds no stack — which is why `save`/`resume`, `drainbrz`, the u-area bracket and the user
-copies live in their own files, and why `syscall.c` is split out of `trap.c`. The tests link the real
-thing, not a copy.
+copies live in their own files, and why `syscall.c` is split out of `trap.c` and `sendsig.c` out of
+`machdep.c`. The tests link the real thing, not a copy.
 
 **Run every MMU test with `set mmu cache`** (§11).
 

@@ -170,8 +170,9 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
   the v7 header stayed and was refitted rather than replaced. Four consequences land on code
   written here: `assert()` is an expression and `<assert.h>` is unguarded on purpose;
   `toupper`/`tolower` are functions and v7's unconditional macros are `_toupper`/`_tolower`;
-  `isprint(' ')` is now true; and a signal handler is `void (*)(int)`, which is what phase 6 has
-  to deliver. `libc.a` answers every declaration `<stdio.h>` makes, the C11 additions v7 never
+  `isprint(' ')` is now true; and a signal handler is `void (*)(int)`, which is the shape the frame
+  now delivers, `raise()` with it — so `<signal.h>` is answered in full.
+  `libc.a` answers every declaration `<stdio.h>` makes, the C11 additions v7 never
   had included — the v-forms, `snprintf`, `setvbuf`, `fgetpos`/`fsetpos`,
   `remove`/`rename`/`tmpfile`/`tmpnam` — most of them thin wrappers over the v7 core. One name
   to watch there: v7's
@@ -223,12 +224,25 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
   (`gen/crypt.c`). The failure mode is the dangerous kind: thirteen plausible characters, none
   of them right — which is why `test/pwent` pins six vectors taken from the **host's** `crypt(3)`
   and not from this library's own first output.
-- **What links but cannot run yet.** `sleep` needs a `SIGALRM` handler of its own and `abort`
-  raises `SIGIOT`; delivery is phase 6, and `b6sim` answers `signal()` with anything but
-  `SIG_DFL`/`SIG_IGN` with `EINVAL`. Both are in `libc.a` and neither has a test — a test of
-  `abort` would take the simulator down with the program, `b6sim` servicing `kill` by killing
-  its own process. `getpass` is a third: it opens `/dev/tty` and would sit there waiting to be
-  typed at, which a diff-against-`.expected` harness cannot arrange.
+- **A signal handler costs libc nothing, and that is a kernel decision.** Phase 6 added one routine
+  here — `raise` — and changed no other. The kernel builds the signal frame on the user stack and
+  **plants the return path in it**: a `$77 SYS_sigret` word (`sigcode`, `../kernel/besm6.S`) that
+  `sendsig()` copies out above the frame and names in r13, so a handler's ordinary `13 uj` return
+  trips an extracode and `sigret()` reloads the frame. The consequences here are all absences: the
+  `signal` stub stays the plain generated leaf, there is no `dvect`/`tvect` trampoline of the kind
+  the x86 port carried, no libc table shadowing the kernel's `u_signal[]`, and `signal()` therefore
+  still answers with the *true* previous disposition — including the `SIG_DFL` that a caught signal
+  is reset to on delivery. It could not have been libc's work anyway: which half of a word to resume
+  at lives in SPSW and only `выпр` restores it, so a handler interrupted from a right-half
+  instruction can only be resumed by the kernel. **A handler is entered by the ordinary
+  one-argument convention** — the number in the accumulator, r14 = −1, and R = 7, the mode word
+  `crt0` would otherwise have established. See `doc/Unix_Context_Switch.md` §10a.
+- **Two routines still have no test, and neither is about delivery.** `abort` raises `SIGIOT` and
+  leaves it at `SIG_DFL`, and `b6sim` services an uncaught `kill` by killing its own process (the
+  guest pid is the host pid), so a test would take the simulator down with the program and report as
+  a harness crash. `getpass` opens `/dev/tty` and would sit there waiting to be typed at, which a
+  diff-against-`.expected` harness cannot arrange. `sleep`, the third of that list, now runs: it is
+  `test/signals`' last leg.
 - **`ttyname` reads a directory with `read()`**, as v7 did and as this kernel will allow, so it
   answers under the kernel and not under `b6sim`, whose `read()` is the host's and refuses a
   directory. `ttyslot` and `getlogin` stand on it and are the same story. They are ported and
@@ -297,19 +311,6 @@ supplying. The check used to be the only way to tell, since both archives were c
 and named their members `strcpy.o`, `write.o`, `exit.o` alike, so `b6nm` on the result could
 not say whose was pulled; that ambiguity went with the rename, and the check is now exact.
 
-## Phase 6 — signal delivery
-
-Blocked on the kernel. `sendsig()` in [`../kernel/machdep.c`](../kernel/machdep.c) pushes a
-single word and jumps; there is no signal frame, and the handler is not told which signal it is
-handling. The frame has to be designed first — the signal number as an argument, the saved
-accumulator and mode word, and a way back through it — and implemented kernel-side. Only then
-does the libc side follow.
-
-**The number is no longer optional.** [`../include/signal.h`](../include/signal.h) declares the
-C11 shape, `void (*signal(int, void (*)(int)))(int)`, so every handler now takes the signal it is
-handling as its one argument and `sleep()` is already written that way. Delivering it is the
-frame's job.
-
 ## Phase 7 — libm, libtermlib, libcurses
 
 `libm` from the v7 sources, with constants and range checks refitted to the 40-bit mantissa and
@@ -338,7 +339,11 @@ and memory routines, `gen` the small utilities, `environ` the vector crt0 comput
 setjmp/longjmp, `stdiot` the FILE machinery through a real file, `printft` every printf
 conversion including floats, `scanft` scanf and the `atof`/`ecvt`/`gcvt` conversions
 either side of it, `execs` the exec family, `spawn` `system` and `popen`, `timet` the whole of
-`<time.h>` plus `tell`, and `pwent` the accounts, the terminal three and `crypt`. `b6size -w` on
+`<time.h>` plus `tell`, `pwent` the accounts, the terminal three and `crypt`, and `signals` the
+signal frame — the number a handler is given, the context that has to survive a delivery, `SIG_IGN`,
+a handler that raises a second signal from inside itself, `alarm`/`pause` and the `-1`/`EINTR` they
+answer with *after* the handler has run, and `sleep`, whose handler leaves by `longjmp` and never
+returns through the frame at all. It is the one test that takes a second of wall clock. `b6size -w` on
 each keeps the image below `070000` words.
 
 `execs` is the one that needs no helper program: **it execs itself**, five times over, once

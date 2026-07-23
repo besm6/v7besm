@@ -22,6 +22,7 @@ kernel/test/mmutest
 kernel/test/uintr
 kernel/test/utrap
 kernel/test/usys
+kernel/test/usig
 kernel/test/uclock
 kernel/test/uswtch
 kernel/test/usched
@@ -58,6 +59,7 @@ lib/test/execs
 lib/test/spawn
 lib/test/timet
 lib/test/pwent
+lib/test/signals
 lib/test/*.out
 
 # Scratch files the stdio tests create and remove; a run that dies part way

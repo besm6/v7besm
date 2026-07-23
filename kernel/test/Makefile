@@ -32,9 +32,9 @@ vpath %.S ..
 
 # The kernel C sources built for this directory.  Only these get -DKERNEL; the local test
 # programs must not have it, and fall through to the plain %.o: %.c rule below.
-KERNOBJ = bio.o mb.o md.o slp.o malloc.o syscall.o clock.o intr.o utab.o
+KERNOBJ = bio.o mb.o md.o slp.o malloc.o syscall.o sendsig.o clock.o intr.o utab.o
 
-PROGS   = hello sctest mmutest uintr utrap usys uclock uswtch usched ugrow biotest ugrp mbtest \
+PROGS   = hello sctest mmutest uintr utrap usys usig uclock uswtch usched ugrow biotest ugrp mbtest \
 	  mdtest
 
 .PHONY: all test clean
@@ -106,6 +106,13 @@ utrap:  crt0t.o utrap.o utab.o brz.o
 # gate opened the interrupt level by reading PSW back with __besm6_getpsw(), an intrinsic, so that
 # costs no object.  See usys.ini.
 usys:   crt0s.o usys.o syscall.o utab.o brz.o usermem.o
+	$(link)
+
+# usig is the fifth forge test, and the second to link the code under test: kernel/sendsig.o --
+# the signal frame -- beside the real syscall.o, with only the two gates duplicated into
+# crt0sg.S.  It is the only test that goes to user mode, comes back, goes to a DIFFERENT place
+# in user mode and comes back again.  See usig.ini.
+usig:   crt0sg.o usig.o syscall.o sendsig.o utab.o brz.o usermem.o
 	$(link)
 
 # uclock is the fourth forge test: it takes a real TIMER interrupt in user mode and checks that it

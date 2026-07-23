@@ -72,7 +72,10 @@ struct sysent sysent[64] = {
     { 0, 0, pipe },    // 42 = pipe
     { 1, 0, times },   // 43 = times
     { 4, 0, profil },  // 44 = prof
-    { 0, 0, nosys },   // 45 = unused
+    { 0, 0, sigret },  // 45 = sigreturn; v7's "unused".  NO ARGUMENTS on purpose:
+                       //   the frame is at r15 - (NREGFRAME + 1), and a nonzero
+                       //   arity would have syscall() pop r15 before sigret() reads
+                       //   it (kernel/sendsig.c).
     { 1, 1, setgid },  // 46 = setgid
     { 0, 0, getgid },  // 47 = getgid
     { 2, 0, ssig },    // 48 = sig

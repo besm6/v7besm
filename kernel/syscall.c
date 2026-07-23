@@ -110,10 +110,11 @@ void syscall(void)
     if (n >= 2)
         tr->r15 -= n - 1;
 
-    u.u_dirp     = (caddr_t)u.u_arg[0];
-    u.u_r.r_val1 = 0;
-    u.u_r.r_val2 = 0;
-    u.u_ap       = u.u_arg;
+    u.u_dirp       = (caddr_t)u.u_arg[0];
+    u.u_r.r_val1   = 0;
+    u.u_r.r_val2   = 0;
+    u.u_ap         = u.u_arg;
+    u.u_justreturn = 0;
     if (save(u.u_qsav)) {
         // the EINTR path: a signal longjmp'd back here out of sleep()
         if (u.u_error == 0)
@@ -126,13 +127,21 @@ void syscall(void)
     // call is -1 in the accumulator with errno in r14, exactly as b6sim reports it,
     // and a successful one leaves r14 zero.  r13 is untouched either way -- it is
     // the caller's return address (see R_VAL2 in reg.h).
-    if (u.u_error) {
-        tr->acc = -1;
-        tr->r14 = u.u_error;
-    } else {
-        tr->acc = u.u_r.r_val1;
-        tr->r12 = u.u_r.r_val2;
-        tr->r14 = 0;
+    //
+    // Unless the call WAS the frame: sigret() (kernel/sendsig.c) has just reloaded
+    // all 21 words from the signal frame on the user stack, and the three registers
+    // below are three of them.  It says so with u_justreturn, and there is nothing
+    // to report -- the value a handler returns is the interrupted context's, not
+    // this call's.
+    if (!u.u_justreturn) {
+        if (u.u_error) {
+            tr->acc = -1;
+            tr->r14 = u.u_error;
+        } else {
+            tr->acc = u.u_r.r_val1;
+            tr->r12 = u.u_r.r_val2;
+            tr->r14 = 0;
+        }
     }
 
     sysret(tr, syst);

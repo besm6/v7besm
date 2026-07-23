@@ -494,8 +494,12 @@ bool Processor::step()
         core.PC               = nextpc;
         core.right_instr_flag = false;
 
-        syscall(Aex);
+        // An extracode leaves ω logical, and that too is settled BEFORE the call
+        // rather than after it, for the same reason: syscall() may rewrite the whole
+        // machine state -- an exec, a signal delivery, or the sigret that restores an
+        // interrupted context along with the ω it was interrupted in (syscall.cpp).
         core.set_logical();
+        syscall(Aex);
         break;
 
     case 0220: // мода, utc

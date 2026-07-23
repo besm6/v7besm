@@ -86,6 +86,7 @@ enum {
     SYS_pipe   = 42,
     SYS_times  = 43,
     SYS_profil = 44,
+    SYS_sigret = 45,
     SYS_setgid = 46,
     SYS_getgid = 47,
     SYS_signal = 48,
@@ -124,6 +125,10 @@ static unsigned syscall_nargs(unsigned num)
     case SYS_sync:
     case SYS_wait:
     case SYS_pipe:
+    // sigret takes none either, and must not: the signal frame sits just below
+    // r15 where the handler left it, so a pop here would move the frame out
+    // from under the restore (kernel/sendsig.c, kernel/sysent.c row 45).
+    case SYS_sigret:
         return 0;
 
     // Two-argument calls that libc calls with fewer C arguments.  dup(fd) is
@@ -427,6 +432,180 @@ void Processor::sys_exec(unsigned count, bool with_env)
 }
 
 //
+// ---------------------------------------------------------------------------
+// Signal delivery
+// ---------------------------------------------------------------------------
+//
+// The guest runs its own handlers, and the frame it runs them on is the kernel's,
+// word for word (kernel/sendsig.c).  b6sim does what the kernel does:
+//
+//   * signal() records the handler HERE and does not hand it to the host: a guest
+//     handler is guest machine code and cannot run in a host signal context.  What
+//     the host gets instead is sim_sigcatch(), which only records the arrival.
+//   * A pending signal is delivered at the END OF A SERVICED EXTRACODE, which is
+//     where the kernel delivers it too -- psig() runs in sysret() (kernel/syscall.c)
+//     and clock() does not deliver at all, so a guest spinning in user code gets
+//     nothing until it traps.  On both.
+//   * Delivery pushes the 21-word reg.h frame, plants a `$77 SYS_sigret' word above
+//     it, and enters the handler with the number in the accumulator, r14 = -1 and
+//     r13 naming the planted word.  The handler returns into it and lands in
+//     sys_sigret() below.
+//
+// The frame layout is a THIRD hand-maintained copy of include/sys/reg.h, for the same
+// reason the syscall numbers are a second copy of <sys/syscall.h>: b6sim is a host
+// tool and cannot put include/ on its -I path.  Keep them in step.
+//
+enum {
+    GUEST_NSIG = 17, // <signal.h>: signals 1..16
+    NREGFRAME  = 21, // include/sys/reg.h: words in the trap frame
+
+    // Frame word indices.  0 ACC, 1 R, 2 Y, 3 RET, 4 SPSW, 5 M[16], then the
+    // general registers DESCENDING: M15 at 6 ... M1 at 20, so M[i] is at 21 - i.
+    FRAME_ACC  = 0,
+    FRAME_R    = 1,
+    FRAME_Y    = 2,
+    FRAME_RET  = 3,
+    FRAME_SPSW = 4,
+    FRAME_MOD  = 5,
+
+    // The two SPSW bits that say how to resume (include/sys/reg.h, SPSW_USER).
+    SPSW_MOD_RK      = 00020,
+    SPSW_RIGHT_INSTR = 00400,
+
+    // The AU mode word compiled code runs in: `ntr 7', NTR 3 + logical ω
+    // (include/sys/reg.h, RREG_C; doc/Besm6_Runtime_Library.md).
+    RREG_C = 7,
+};
+
+//
+// `$77 SYS_sigret' in the LEFT half of a word -- what kernel/besm6.S assembles as
+// `sigcode' and sendsig() copies onto the user stack.  Short instruction format:
+// bits 24-21 the index register (none), bit 20 clear, bits 18-13 the opcode, bits
+// 12-1 the address (doc/Besm6_Instruction_Set.md, "Format 1").  The right half is
+// never executed: an extracode returns to the left half of the next word.
+//
+static const Word SIGCODE_WORD = (Word)(((077u << 12) | SYS_sigret)) << 24;
+
+//
+// Guest signal dispositions: 0 = SIG_DFL, 1 = SIG_IGN, anything else a guest word
+// address.  Static rather than per-Processor because the host handler below has to
+// reach the pending set, and a host signal handler takes no argument but the number.
+// One simulated process per b6sim, so there is nothing to disambiguate.
+//
+static Word guest_handler[GUEST_NSIG];
+static volatile std::sig_atomic_t sig_pending[GUEST_NSIG];
+
+//
+// The host-side catcher.  It records the arrival and returns, which is also what
+// makes a blocking syscall come back with EINTR -- the guest's handler runs from
+// check_signals() once the syscall has been serviced.
+//
+// Guest signal numbers are v7's and are passed to the host unchanged, as everywhere
+// else in this file (::kill, ::alarm); they agree for everything a v7 program raises
+// on the BSD-derived hosts b6sim is built on.
+//
+static void sim_sigcatch(int sig)
+{
+    if (sig > 0 && sig < (int)GUEST_NSIG)
+        sig_pending[sig] = 1;
+}
+
+//
+// Is a signal the guest catches waiting to be delivered?  pause() asks before it
+// blocks; see there.
+//
+static bool signal_pending()
+{
+    for (unsigned sig = 1; sig < GUEST_NSIG; sig++)
+        if (sig_pending[sig] && guest_handler[sig] > 1)
+            return true;
+    return false;
+}
+
+//
+// Build the signal frame and enter the handler.  Called with the machine state
+// already advanced past the extracode, so what is saved is exactly where the guest
+// would have resumed.
+//
+void Processor::deliver_signal(unsigned sig)
+{
+    unsigned handler = (unsigned)(guest_handler[sig] & BITS(15));
+    unsigned n       = core.M[017]; // first free user word; the stack grows up
+
+    // The interrupted context, in reg.h order.
+    machine.mem_store(n + FRAME_ACC, core.ACC);
+    machine.mem_store(n + FRAME_R, core.RAU);
+    machine.mem_store(n + FRAME_Y, core.RMR);
+    machine.mem_store(n + FRAME_RET, core.PC);
+    machine.mem_store(n + FRAME_SPSW, (core.right_instr_flag ? SPSW_RIGHT_INSTR : 0) |
+                                          (core.apply_mod_reg ? SPSW_MOD_RK : 0));
+    machine.mem_store(n + FRAME_MOD, core.MOD);
+    for (unsigned i = 1; i <= 15; i++)
+        machine.mem_store(n + NREGFRAME - i, core.M[i]);
+
+    // The return path, and the whole of it.
+    machine.mem_store(n + NREGFRAME, SIGCODE_WORD);
+
+    // v7 resets a caught signal to SIG_DFL as it delivers it, except for the two
+    // the tracer owns (psig(), kernel/sig.c: SIGINS = 4 and SIGTRC = 5).
+    if (sig != 4 && sig != 5)
+        guest_handler[sig] = 0;
+
+    core.ACC              = sig;               // the handler's one argument
+    core.M[14]            = ADDR(-1);          // argument count, negative
+    core.M[13]            = n + NREGFRAME;     // return address: the planted word
+    core.M[017]           = n + NREGFRAME + 1; // the handler's frame starts above it
+    core.MOD              = 0;
+    core.apply_mod_reg    = false;
+    core.RAU              = RREG_C; // no crt0 in front of a handler
+    core.PC               = handler;
+    core.right_instr_flag = false;
+}
+
+//
+// Deliver one pending signal, if any.  One per trap is enough: a second stays
+// pending and is delivered at the next one, exactly as p_sig does.
+//
+void Processor::check_signals()
+{
+    for (unsigned sig = 1; sig < GUEST_NSIG; sig++) {
+        if (!sig_pending[sig])
+            continue;
+        sig_pending[sig] = 0;
+        if (guest_handler[sig] > 1) {
+            deliver_signal(sig);
+            return;
+        }
+    }
+}
+
+//
+// sigret(): the syscall the planted trampoline issues, and the only way out of a
+// handler.  It takes no arguments -- the handler's epilogue leaves r15 as delivery
+// set it, so the frame is the 21 words below the trampoline word.
+//
+// Nothing is reported back through the accumulator afterwards, which is why this
+// returns instead of calling sys_ok(): ACC, r12 and r14 are three of the registers
+// just restored.  The kernel says the same thing with u.u_justreturn.
+//
+void Processor::sys_sigret()
+{
+    unsigned n = ADDR(core.M[017] - (NREGFRAME + 1));
+    Word spsw  = machine.mem_load(n + FRAME_SPSW);
+
+    core.ACC = machine.mem_load(n + FRAME_ACC);
+    core.RAU = (unsigned)machine.mem_load(n + FRAME_R) & BITS(6);
+    core.RMR = machine.mem_load(n + FRAME_Y);
+    core.MOD = (unsigned)machine.mem_load(n + FRAME_MOD) & BITS(15);
+    for (unsigned i = 1; i <= 15; i++)
+        core.M[i] = (unsigned)machine.mem_load(n + NREGFRAME - i) & BITS(15);
+
+    core.PC               = (unsigned)machine.mem_load(n + FRAME_RET) & BITS(15);
+    core.right_instr_flag = (spsw & SPSW_RIGHT_INSTR) != 0;
+    core.apply_mod_reg    = (spsw & SPSW_MOD_RK) != 0;
+}
+
+//
 // Dispatch a Unix v7 system call.
 //
 void Processor::syscall(unsigned num)
@@ -685,8 +864,16 @@ void Processor::syscall(unsigned num)
 
     case SYS_pause:
         // int pause(void): returns -1/EINTR when a signal arrives.
-        ::pause();
-        sys_err(errno);
+        //
+        // Look for one that has already arrived FIRST.  sim_sigcatch() only records
+        // it, so a signal raised while the guest was in user code leaves nothing for
+        // ::pause() to wake on and this would hang -- where the kernel's pause()
+        // cannot, its sleep() being woken by the same psignal() that sets p_sig.
+        // check_signals() runs it at the end of the call either way.
+        if (!signal_pending()) {
+            ::pause();
+        }
+        sys_err(EINTR);
         break;
 
     case SYS_utime: {
@@ -793,10 +980,19 @@ void Processor::syscall(unsigned num)
     }
 
     case SYS_signal: {
-        // signal(int sig, void (*func)()): only SIG_DFL/SIG_IGN are supported.
+        // signal(int sig, void (*func)()): the disposition is remembered HERE, and
+        // the host is told only how to react on our behalf -- SIG_DFL and SIG_IGN it
+        // can implement itself, and for a guest handler it gets sim_sigcatch(), which
+        // records the arrival so that check_signals() can run the guest's code at the
+        // next syscall return.  A guest handler is guest machine code and could not
+        // run in a host signal context, which is what used to make this EINVAL.
+        //
+        // The value returned is the previous GUEST disposition, as the kernel's ssig()
+        // returns the previous u_signal[] (kernel/sys4.c) -- including the SIG_DFL that
+        // delivery resets a caught signal to.
         int sig   = (int)sign_extend41(syscall_arg(1, 2));
         Word func = core.ACC & BITS48;
-        if (sig <= 0 || sig >= NSIG) {
+        if (sig <= 0 || sig >= (int)GUEST_NSIG || sig == SIGKILL) {
             sys_err(EINVAL);
             break;
         }
@@ -805,22 +1001,30 @@ void Processor::syscall(unsigned num)
             disp = SIG_DFL;
         else if (func == 1)
             disp = SIG_IGN;
-        else {
-            // Custom guest handlers cannot be run from the host signal context.
-            sys_err(EINVAL);
-            break;
-        }
+        else
+            disp = sim_sigcatch;
+
         // cppcheck wants a "pointer to const" here, but for a function pointer
         // that would be const void (*)(int) -- a pointer to a function returning
         // const void, which signal() cannot be assigned to.
         // cppcheck-suppress constVariablePointer
         void (*old)(int) = ::signal(sig, disp);
-        if (old == SIG_ERR)
+        if (old == SIG_ERR) {
             sys_err(errno);
-        else
-            sys_ok(old == SIG_IGN ? 1 : 0);
+            break;
+        }
+        Word olddisp       = guest_handler[sig];
+        guest_handler[sig] = func;
+        sys_ok((int64_t)olddisp);
         break;
     }
+
+    case SYS_sigret:
+        // The return half of the signal frame.  Nothing is reported: the frame it
+        // has just reloaded holds the accumulator, r12 and r14 the interrupted code
+        // must resume with.
+        sys_sigret();
+        break;
 
     case SYS_umask:
         // int umask(int mask)
@@ -880,4 +1084,9 @@ void Processor::syscall(unsigned num)
     unsigned n = syscall_nargs(num);
     if (n >= 2)
         core.M[017] = ADDR(core.M[017] - (n - 1));
+
+    // ...and then deliver a signal, if one is pending and the guest catches it.
+    // This is the kernel's delivery point -- sysret() in kernel/syscall.c, after
+    // the same stack cleanup -- so the frame is built on the same r15.
+    check_signals();
 }

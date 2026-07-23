@@ -669,6 +669,7 @@ absence is a property of the hardware rather than an omission:
 |--------|---------------|---------|
 | `u` | `extern struct user u;` (user.h) | the per-process user area; holds the kernel stack and per-process state. It is a fixed **physical** page — `u = 076000`, an absolute symbol rather than storage — and therefore has to be **copied** in and out on a context switch (§4.2, §4.4a) |
 | `phymem` | `extern int phymem;` (machdep.c) | physical memory size in **words**; `startup()` frees it into `coremap`. It is asserted rather than probed — `phymem = 512 * 1024` in `main()`, because an unmapped kernel cannot reach the store it would have to write test patterns into (§2) |
+| `sigcode` | `extern int sigcode[];` (sendsig.c) | **one instruction word**, `$77 SYS_sigret`, and the only piece of this kernel that ever executes in user mode. `sendsig()` copies it onto the user stack above the signal frame and enters the handler with r13 naming the copy, so the handler's ordinary `13 uj` return trips the extracode and `sigret()` reloads the frame. It is assembled here, rather than spelled as a constant in C, so that no opcode encoding is written down anywhere — see [Unix_Context_Switch.md §10a](Unix_Context_Switch.md#10a-the-signal-frame) |
 
 There is deliberately **no page table in memory** and so no `pdir`/`upt`/`mem` globals naming
 one: the machine has no page-directory base register and no page walk — the entire mapping is

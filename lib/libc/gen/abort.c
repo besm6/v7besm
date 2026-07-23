@@ -4,10 +4,12 @@
 /*
  * Kill the caller with SIGIOT, which dumps core.
  *
- * Untested, deliberately: b6sim services kill() by killing ITS OWN process (the guest
- * pid is the host pid, cmd/sim/syscall.cpp), so a test of abort() would take the
- * simulator down with the program and report as a harness crash rather than a result.
- * Under the real kernel it will be an ordinary signal, once delivery lands in phase 6.
+ * Untested, deliberately, and for a reason signal delivery did not remove: SIGIOT is
+ * left at SIG_DFL here, and b6sim services a kill() that the guest does not catch by
+ * killing ITS OWN process (the guest pid is the host pid, cmd/sim/syscall.cpp), so a
+ * test of abort() would take the simulator down with the program and report as a
+ * harness crash rather than a result.  Under the real kernel it is an ordinary signal,
+ * and dumps core.
  */
 #include <signal.h>
 

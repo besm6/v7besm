@@ -84,6 +84,9 @@ enum {
     SYS_pipe   = 42,
     SYS_fork   = 2,
     SYS_dup    = 41,
+    SYS_kill   = 37,
+    SYS_sigret = 45,
+    SYS_signal = 48,
 };
 
 //
@@ -847,4 +850,71 @@ TEST(Cpu, StackGuardTrapsLoad)
     machine.cpu.set_pc(ENTRY);
 
     EXPECT_THROW(machine.run(), std::runtime_error);
+}
+
+//
+// Signal delivery: the frame b6sim builds is the kernel's (kernel/sendsig.c), and the
+// handler returns through the `$77 SYS_sigret' word planted just above it.
+//
+// The guest "handler" here is a bare `stop', so the machine halts the moment delivery
+// hands it control and every register can be inspected on the way in.  Running the
+// planted word afterwards is the return path, and the interrupted context has to come
+// back out of it whole.
+//
+TEST(Syscall, SignalDelivery)
+{
+    // include/sys/reg.h, and the third hand-maintained copy of it (syscall.cpp holds
+    // the second).
+    // A trailing underscore on the signal number: <signal.h> owns the bare name.
+    const unsigned NREGFRAME = 21;
+    const unsigned SIGTERM_  = 15;
+    const unsigned HANDLER   = 0x100;
+
+    Memory memory;
+    Machine machine{ memory };
+
+    // The handler halts at once; delivery is what gets us there.
+    memory.store(HANDLER, word(stop_insn(), 0));
+
+    // signal(SIGTERM_, handler): the number is pushed, the handler travels in the
+    // accumulator.  The previous disposition -- SIG_DFL -- comes back.
+    run_syscall(machine, SYS_signal, { SIGTERM_ }, HANDLER);
+    EXPECT_EQ(machine.cpu.get_acc(), 0u);
+    EXPECT_EQ(machine.cpu.get_m(017), STACK);
+
+    // kill(getpid(), SIGTERM_): the host raises it, b6sim records it, and the delivery
+    // happens at the end of the call -- the kernel's point too (sysret()).
+    run_syscall(machine, SYS_kill, { (Word)::getpid() }, SIGTERM_);
+
+    // The entry ABI: the number in the accumulator, r14 = -1 (the negative argument
+    // count, 15 bits wide), r13 the planted word and r15 one above it.
+    EXPECT_EQ(machine.cpu.get_pc(), HANDLER);
+    EXPECT_EQ(machine.cpu.get_acc(), (Word)SIGTERM_);
+    EXPECT_EQ(machine.cpu.get_m(14), 077777u);
+    EXPECT_EQ(machine.cpu.get_m(13), STACK + NREGFRAME);
+    EXPECT_EQ(machine.cpu.get_m(017), STACK + NREGFRAME + 1);
+
+    // The frame itself, at the r15 the call returned on: the accumulator kill() set,
+    // the PC it would have resumed at, and the stack pointer it had.
+    EXPECT_EQ(memory.load(STACK + 0), 0u);         // frame[0]  = ACC: kill returned 0
+    EXPECT_EQ(memory.load(STACK + 3), ENTRY + 1u); // frame[3]  = RET
+    EXPECT_EQ(memory.load(STACK + 6), STACK);      // frame[6]  = r15
+    EXPECT_EQ(memory.load(STACK + 7), 0u);         // frame[7]  = r14: errno, 0 on success
+
+    // And the return path: one word, `$77 SYS_sigret', which is what r13 names.
+    EXPECT_EQ(memory.load(STACK + NREGFRAME), (Word)syscall_insn(SYS_sigret) << 24);
+
+    // Run it.  sigret() reloads the frame, so the machine comes back to the halt after
+    // the kill with everything the handler was free to clobber restored.
+    machine.cpu.set_pc(machine.cpu.get_m(13));
+    machine.run();
+    EXPECT_EQ(machine.cpu.get_pc(), ENTRY + 1u);
+    EXPECT_EQ(machine.cpu.get_acc(), 0u);
+    EXPECT_EQ(machine.cpu.get_m(14), 0u);
+    EXPECT_EQ(machine.cpu.get_m(017), STACK);
+
+    // A caught signal is reset to SIG_DFL as it is delivered, as v7 does (psig()), so
+    // signal() now answers with SIG_DFL rather than with the handler.
+    run_syscall(machine, SYS_signal, { SIGTERM_ }, 1 /* SIG_IGN */);
+    EXPECT_EQ(machine.cpu.get_acc(), 0u);
 }
