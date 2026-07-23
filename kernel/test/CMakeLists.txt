@@ -54,6 +54,7 @@ macro(b6_test prog)
     if(BESM6)
         add_test(NAME ${prog} COMMAND ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}/${prog}.ini
                  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+        set_tests_properties(${prog} PROPERTIES LABELS kernel)
     endif()
 endmacro()
 
@@ -72,6 +73,7 @@ list(APPEND TEST_TARGETS hello_img)
 if(BESM6)
     add_test(NAME hello COMMAND ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}/hello.ini
              WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(hello PROPERTIES LABELS kernel)
 endif()
 
 # The forge tests and driver tests.  Object lists are the old Makefile's per-program rules.
@@ -97,9 +99,16 @@ b6_test(mdtest   crt0 mdtest md intr)
 if(BESM6)
     add_test(NAME mdtest_setup COMMAND sh -c ": > mdshort2056.disk"
              WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(mdtest_setup PROPERTIES FIXTURES_SETUP md_disk)
+    set_tests_properties(mdtest_setup PROPERTIES FIXTURES_SETUP md_disk LABELS kernel)
     set_tests_properties(mdtest       PROPERTIES FIXTURES_REQUIRED md_disk)
 endif()
 
 # Aggregate target the wrapper builds before running ctest (ctest itself never builds).
 add_custom_target(tests DEPENDS ${TEST_TARGETS})
+
+# When built inside the top-level project, hook the images into its build_tests aggregate,
+# so the top-level `make test' (which builds build_tests) and `make run' (ctest) cover the
+# kernel SIMH tests too.
+if(TARGET build_tests)
+    add_dependencies(build_tests ${TEST_TARGETS})
+endif()

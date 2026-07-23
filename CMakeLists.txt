@@ -105,3 +105,21 @@ add_subdirectory(cmd/fsutil)
 #
 install(DIRECTORY include/ DESTINATION share/besm6/include
         FILES_MATCHING PATTERN "*.h")
+
+#
+# The BESM-6 kernel cross-build.  Unlike cmd/, it is NOT compiled by this project's host
+# compiler: it cross-compiles with the *installed* b6* toolchain (this project builds those
+# tools, but the kernel consumes the installed copies) and links against libruntime.a and
+# the installed headers.  It therefore can only be configured once `make install' has
+# populated ~/.local (or /usr/local) -- so guard on b6cc being present rather than failing a
+# fresh configure that has not installed anything yet.  On a fresh tree: `make && make
+# install' (plus lib/), then reconfigure (`make clean && make', or touch this file) and the
+# kernel joins the build.  kernel/ still builds standalone via `cd kernel && make'.
+#
+find_program(B6CC_INSTALLED b6cc)
+if(B6CC_INSTALLED)
+    message(STATUS "Found installed b6cc: ${B6CC_INSTALLED} -- building kernel/")
+    add_subdirectory(kernel)
+else()
+    message(STATUS "kernel/: b6cc not installed; run 'make install' then reconfigure to build it")
+endif()

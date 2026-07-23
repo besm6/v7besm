@@ -8,8 +8,15 @@
 # outside the top-level CMake project for the same reason.
 #
 # The image must end below 064000 (KEND); the link ends by printing `b6size -w unix'.
-cmake_minimum_required(VERSION 3.10)
-project(kernel NONE)
+# Works two ways: standalone (`cd kernel && make', its own project) and as a subdirectory
+# of the top-level CMake project (add_subdirectory(kernel)).  When included, the parent owns
+# the project(), so declare our own only when we are the top of the tree -- and note that
+# CMAKE_SOURCE_DIR then points at the repo root, not here, so paths below use
+# CMAKE_CURRENT_SOURCE_DIR instead.
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    cmake_minimum_required(VERSION 3.10)
+    project(kernel NONE)
+endif()
 
 # The cross toolchain and the SIMH simulator.  besm6 is only needed to boot/test, so it
 # is optional -- the image builds without it.
@@ -30,7 +37,8 @@ get_filename_component(B6LIBDIR ${_bin}/../share/besm6/lib ABSOLUTE)
 
 # The one system-header tree, and a coarse dependency on all of sys/: b6cc has no -M, so
 # every object simply depends on every system header (the same trade the test dir makes).
-set(KINC ${CMAKE_SOURCE_DIR}/../include)
+# Absolute, from CMAKE_CURRENT_SOURCE_DIR so it is right whether standalone or integrated.
+get_filename_component(KINC ${CMAKE_CURRENT_SOURCE_DIR}/../include ABSOLUTE)
 file(GLOB KHDRS ${KINC}/sys/*.h)
 
 # ---------------------------------------------------------------------------------------

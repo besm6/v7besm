@@ -1,34 +1,40 @@
-# Thin wrapper over the CMake build (see CMakeLists.txt).  The real recipes -- how the
-# b6* toolchain compiles, archives and links the kernel -- live there; this only drives it,
-# the same way the top-level Makefile drives the cmd/ build.
+# Thin wrapper over the top-level CMake build, into which kernel/ is now integrated
+# (add_subdirectory(kernel) in ../CMakeLists.txt).  It drives that one build tree
+# (../build) rather than a separate kernel/build/, so `cd kernel && make' and the repo's
+# top-level `make' agree on a single set of artifacts.
+#
+# The kernel cross-compiles with the *installed* b6* toolchain, so the top-level configure
+# only wires kernel/ in once `make install' has run; before that these targets report a
+# missing CMake target -- build and install the toolchain first (see the top-level README).
+# kernel/ can also still be built in isolation: `cmake -S kernel -B <dir> && cmake --build <dir>'.
 #
 # make        -- build the `unix' image (ends by printing `b6size -w unix')
 # make run    -- boot it under SIMH (besm6 unix.ini)
 # make tests  -- build the kernel/test SIMH programs, do not run them
-# make test   -- build and run the test suite via ctest
-# make clean  -- remove build/
-# make debug  -- reconfigure as a Debug build (default is RelWithDebInfo)
+# make test   -- build and run the kernel test suite via ctest (label `kernel')
+# make clean  -- remove the top-level build tree
 
-.PHONY: all run tests test clean debug
+TOP   := ..
+BUILD := $(TOP)/build
 
-all:    build
-	cmake --build build
+.PHONY: all run tests test clean
 
-run:    all
-	cmake --build build --target run
+all: | $(BUILD)
+	cmake --build $(BUILD) --target kernel
 
-tests:  build
-	cmake --build build --target tests
+run: all
+	cmake --build $(BUILD) --target run
 
-test:   tests
-	ctest --test-dir build --output-on-failure
+tests: | $(BUILD)
+	cmake --build $(BUILD) --target tests
+
+test: tests
+	ctest --test-dir $(BUILD) --output-on-failure -L kernel
 
 clean:
-	rm -rf build
+	rm -rf $(BUILD)
 
-debug:
-	rm -rf build
-	cmake -Bbuild -DCMAKE_BUILD_TYPE=Debug
-
-build:
-	cmake -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo
+# Configure the top-level project if its build tree is absent (order-only, so an existing
+# tree is left as configured).  Matches the top-level Makefile's own `build' rule.
+$(BUILD):
+	cd $(TOP) && cmake -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo
