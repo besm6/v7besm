@@ -146,14 +146,6 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
   `_cleanup()` — which `fclose`s every stream — before calling `_exit`. `crt0.s` tail-jumps to
   `exit`, so *every* program links the stdio machinery whether it prints or not; v7 makes the
   same bargain, and a static linker pulling members by symbol cannot make it conditional.
-- **The comma operator does not work.** `(a, b)` evaluates to **`a`** and `b` is never evaluated
-  at all — the inverse of C11 §6.5.17, and with three operands only the first survives. It is a
-  bug in the external c-compiler's `parse_expression()`, which hangs the right operand off the
-  `Expr->next` link that belongs to *argument lists* and then returns the left one; nothing
-  downstream reads it there. `atof` is the one v7 source that used the idiom
-  (`while ((c = *p++), isdigit(c))`) and is written `while (isdigit(c = *p++))` instead.
-  **Nothing here may use the operator** until that is fixed: it fails silently, and
-  `while ((a, b))` with a non-zero `a` simply hangs.
 - **The terminal is ASCII**, not KOI7 ([`../kernel/dev/sc.c`](../kernel/dev/sc.c)). The v7
   `ctype` tables carry over unchanged, and the c-compiler's printf engine must *lose* its
   upper-case folding when it is adopted.

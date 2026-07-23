@@ -8,14 +8,13 @@
  * ldexp).  v7's exponent variable is spelled `dexp' here, because <math.h> declares
  * exp() and the front end has one namespace for both.
  *
- * THE COMMA OPERATOR IS AVOIDED.  v7 writes the three digit loops as
- * `while ((c = *p++), isdigit(c))'; the compiler evaluates a comma expression to its
- * LEFT operand and never evaluates the right at all, so that loop runs while the
- * character is non-zero and reads "3.5" as the three digits 3, -2 and 5.  It is a
- * front-end bug -- parse_expression() hangs the right operand off the Expr->next link
- * that belongs to argument lists, and nothing downstream reads it there.
- * `while (isdigit(c = *p++))' says the same thing and does not depend on it.  See the
- * ground rules in ../../README.md.
+ * The three digit loops are spelled `while (isdigit(c = *p++))' where v7 writes
+ * `while ((c = *p++), isdigit(c))'.  The two say the same thing; this one says it
+ * without the comma operator, which the front end got backwards until recently --
+ * it evaluated such an expression to its LEFT operand and never evaluated the right
+ * at all, so the loop ran while the character was non-zero and read "3.5" as the
+ * three digits 3, -2 and 5.  That is fixed, and the spelling stays: it is shorter,
+ * and it does not depend on the operator being right.
  *
  * Two constants are the machine's rather than the PDP-11's:
  *
