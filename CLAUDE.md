@@ -12,10 +12,12 @@ work has two halves:
   The kernel **builds as BESM-6 code** with this
   repo's own toolchain (`b6cc`/`b6as`/`b6ld`) and **boots under SIMH**: the memory model,
   `_start`, all three trap doors, the timer and the context switch work, and two processes
-  alternate under the real scheduler. Boot stops at `panic: iinit` — there is no root
-  filesystem image to mount yet. See `kernel/TODO.md`, which is the live work plan and
-  records what is done and *how* it turned out to be done. Kernel components are also
-  exercised piecemeal by the standalone SIMH tests in `kernel/test/`.
+  alternate under the real scheduler. Boot stops at `panic: iinit`: `cmd/fsutil` builds root
+  filesystem images, but mounting one hangs, `exec` still reads a PDP-11 a.out header and
+  nothing enters user mode at boot. See `kernel/TODO.md`, the live work plan — the settled
+  design, the hardware rules it obeys, and a sequential task list (numbered from 19, since
+  the source cites the earlier numbers) that ends at a single-user shell. Kernel components
+  are also exercised piecemeal by the standalone SIMH tests in `kernel/test/`.
 - **`cmd/`** — the BESM-6-specific toolchain being written/ported to eventually build the
   kernel for real BESM-6 hardware: a C compiler driver, an assembler, a linker
   (+ archiver/nm/size/etc.), a C preprocessor, a disassembler, and a user-level a.out
@@ -188,9 +190,12 @@ any retargeting work: `CHAR_BIT == 8` but six chars pack into a word, so `sizeof
 from 1 (bit 1 = LSB, bit 48 = MSB). Numbers in BESM-6 contexts are octal. There is no IEEE
 754 — the machine has its own float format.
 
-**The kernel's memory model is settled, and `kernel/TODO.md` is its live work plan** — read
-that file before touching anything under `kernel/` that involves memory, and update it as you
-go (it records what is done, and *how* it turned out to be done, when that differed). The
+**The kernel's memory model is settled, and `kernel/TODO.md` states it** — read that file
+before touching anything under `kernel/` that involves memory, and keep it current as you go.
+It carries the design, the five hardware rules, the u-area invariant, the notes for whoever
+writes the next standalone SIMH test, and the task list for the rest of the port; the
+`DONE: how it turned out` narrative it used to carry lives in the source comments and `doc/`
+instead, which is where new findings belong too. The
 shape of it: the **kernel runs unmapped** (БлП = БлЗ = 1), so a kernel address *is* a physical
 address, and the kernel image plus the u-area plus the buffer cache must fit the low 32 pages,
 because supervisor instruction fetch is never mapped. Two fixed physical areas are carved off

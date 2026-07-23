@@ -1,17 +1,22 @@
-# Retargeting the kernel's memory management to the BESM-6 MMU
+# Bringing the port up: from `panic: iinit` to a single-user shell
 
-A work plan. The memory model, the mapped brackets, boot, all three trap doors, the timer, the
-context switch and the user memory layout are **done**: two processes alternate under the real
-scheduler on SIMH, each seeing its own `u`, and the user stack grows on demand. What remains is
-I/O — task 18 below.
+A work plan. The machine-dependent half of the kernel is **done**: the memory model, the mapped
+brackets, `_start`, all three trap doors, the timer, the context switch, the signal frame and the
+user memory layout all work, two processes alternate under the real scheduler on SIMH, and the
+console, drum and disk drivers are written and their failure modes classified. The on-disk layout
+is settled and `b6fsutil` (`cmd/fsutil/`) builds root filesystem images in it.
+
+What remains is everything above that line: mounting a root, loading a BESM-6 executable, getting
+into user mode, and putting a shell there. That is tasks **19–25** below, in order. Tasks 26–29
+are what is left after the prompt appears.
 
 Where the port stands: `cd kernel && make` links an image that boots under SIMH and reaches
-`panic: iinit`. The hang after that is `panic()`'s own `for(;;) idle()`, which is now a real spin;
-both drivers are now written and their failures classified (tasks 18b.3, 18b.4 and 18b.5), but no
-root filesystem image exists for `iinit()` to mount, which is task 18b.6.
+`panic: iinit`. With a root disk attached it does not panic — it **hangs**, which is task 20.
 
-Read [../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) before starting, and
-[../doc/Intrinsics.md](../doc/Intrinsics.md) for how C reaches `002 «рег»`.
+Read [../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) before touching memory management,
+[../doc/Intrinsics.md](../doc/Intrinsics.md) for how C reaches `002 «рег»` and `033 «увв»`,
+[../doc/Unix_Context_Switch.md](../doc/Unix_Context_Switch.md) for the gates, and
+[../doc/Besm6_Peripherals.md](../doc/Besm6_Peripherals.md) before touching `dev/`.
 
 ---
 
@@ -40,7 +45,7 @@ PHYSICAL, pages 0..31 — the kernel, addressed with БлП = 1 (no translation)
    0        const   (interrupt vector 0500/0501, extracodes 0550-0577, literal pool)
             text    (fetched unmapped: РП is irrelevant to it, always)
             data + bss
-   ...      must all end below 064000 = KEND  (today `end` = 047310, 20168 words)
+   ...      must all end below 064000 = KEND
    064000   BUFFERS ------ buffers[NBUF][BSIZE], NBUF*BSIZEW = 5120 words -----
               a fixed PHYSICAL area, not bss: the drum/disk controllers transfer
               to a physical address.  `buffers = BUFBASE', absolute, in besm6.S;
@@ -90,87 +95,19 @@ silently loses word 0 of whatever it copies. Pages 1 and 2 are also the cheap ch
 quartet 0, and their addresses (`02000`–`05777`) fit the 12-bit short address field, so the copy
 loop needs no `utc`.
 
+(The same black hole is why a user image starts at **word 8**, not word 0 — see task 21.)
+
 An interrupt taken inside a bracket is harmless *for addressing*: the hardware forces БлП = 1 at the
 vector, so the handler sees the kernel's normal unmapped world and its stack at `076000` resolves
 physically; `выпр` restores БлП from SPSW and the bracket resumes mapped.
 
 It is **not** harmless for `uload`, which is overwriting the page the handler's stack frame is in —
 so that bracket holds БлПр. And note that **`vtm N,0` writes БлПр along with БлП and БлЗ**, all three
-from the address field: the bare `vtm 2`/`vtm 3` of `test/mmuhelp.s` *enables* interrupts as a side
-effect. A bracket that wants them off must say `02002`/`02003`, and restore PSW afterwards
-(`ita 021`/`ati 021` — supervisor takes a 5-bit register number, so `M[021]` is reachable).
+from the address field: a bare `vtm 2`/`vtm 3` *enables* interrupts as a side effect. A bracket that
+wants them off must say `02002`/`02003`, and restore PSW afterwards (`ita 021`/`ati 021` — supervisor
+takes a 5-bit register number, so `M[021]` is reachable).
 
-### DONE: the doors open the interrupt level, and `intret` shuts it
-
-The hardware forces БлПр on at every vector, and for a long time nothing cleared it: `syscall()`,
-`badextr()` and `trap()` ran from the vector to the closing `выпр` with the clock stopped and every
-device completion held off. v7 does the opposite — the PDP-11 trap path drops the priority to 0
-before dispatching — and this kernel was already written for that: `clock()` takes its frame from
-`intrframe` *specifically* so a tick can nest inside a syscall.
-
-Worse, it was not merely missing but inconsistent, and the inconsistency was a live bug. No gate
-touches `curipl` (`intr.c`), so it still read **0** after a gate had landed in C with БлПр **set**.
-The first `spl` bracket in a syscall therefore opened the door by accident: `sleep()` does
-`s = spl6()` → `s == 0`, and its closing `splx(s)` calls `sti()`. Any syscall that slept reached
-`uj intret` unblocked — and `intret` cannot survive that. Below its first instructions it reloads
-SPSW and IRET, single registers the hardware overwrites the instant an interrupt is taken, and
-re-stashes into the five shared temp cells. An interrupt in that ~20-instruction window returns the
-user to the wrong mode word.
-
-How it turned out:
-
-* **One instruction in each synchronous gate**, after the frame fill and before the `13 vjm` —
-  `vtm 3`, the mode write `spl0()` now issues from C (then `psw.s:sti()`). Not one instruction earlier: until the frame is complete,
-  SPSW/ERET and the cells are the only copy of the interrupted context.
-* **`trapgate` opens it only for a fault from user**, reusing `intrgate`'s `SPSW & 014` test. It
-  was unconditional first, on the argument that a supervisor fault panics anyway. That was wrong on
-  its own terms: the register dump is *polled* output (`scputc()` spins, `putchar()` holds spl7), so
-  that path never needed interrupts; the one thing after it that does — `panic()`'s `update()` —
-  opens them itself through `sleep()`; and opening them lets `clock()` and the drivers run on top of
-  the corrupt state before the dump prints, which risks the only thing that path is for. `curipl`
-  is not honest there either (a fault inside an `spl6` bracket leaves it raised, so the first
-  `putchar`'s `splx(s)` re-blocked anyway). The rule is now sayable: **a fault from supervisor
-  changes nothing about the machine's interrupt state.** Revisit if a kernel-mode fault ever becomes
-  recoverable.
-* **The discriminator picks a ROUTINE, not just a level.** The supervisor arm is `u1a ktrap` — a
-  branch, not a call, `ktrap()` (trap.c) being a kernel bug's dump-and-panic that never returns, so
-  there is no return address to plant and no tail behind it. Each side then says only what is true
-  of it: `trap()` drops v7's `USER` bit and the `+ USER` on every case label, since everything
-  reaching it is from user; `ktrap()` drops the signal machinery, the `grow()` retry, the
-  `issig`/`psig` tail, `intret`, and the `u.u_ar0` assignment (that name means the USER's registers,
-  and publishing a kernel frame under it would destroy the frame an interrupted syscall still writes
-  through). The dump itself is shared as `dumpregs()`, which also owns the rule that ГРП's bits 5–9
-  mean a page only for a data violation.
-* **The non-obvious part: `ktrap()` must dismiss EVERY fault bit in ГРП**, not just the one that
-  fired. `panic()` does not stop the machine — it calls `update()`, which sleeps, so `swtch()` runs
-  the other processes — and a fault bit left standing would be read live by the next process's
-  `trap()` and shadow its real cause, the decode being a priority-ordered if/else. The old shape got
-  this for free, the decode having run before the `default` arm.
-* **One more at the top of `intret`**, the matching `vtm 02003`. Enforcing the level in the shared
-  epilogue covers all four doors and any future C tail, where a `cli()` per C exit path would have
-  to be got right once per path forever.
-* **`vtm` with register field 0 is the mode write** — БлП, БлЗ and БлПр together, straight from the
-  address field, nothing else in PSW touched, accumulator and ω untouched. It went in as a
-  three-instruction `ita`/`aax`/`ati` first, because this file and three documents said `vtm` would
-  clobber ПоП/ПоК. It does not: the hardware masks the write to those three bits. The kernel sources
-  now say so, and `doc/Besm6_Instruction_Set.md` §024/§025 documents the feature, which it had omitted.
-* **Inlined, not called.** One instruction beats a call outright, and `13 vjm sti` inside a block
-  that uses `sti N` as a *machine instruction* a dozen times over would be unreadable.
-* **`cli`/`sti` now assert БлП = БлЗ = 1** rather than preserving them, so they may only be called
-  from unmapped kernel context — every caller is. The mapped brackets (`uarea.S`, `seg.S`,
-  `usermem.S`) do their own `vtm` and bank PSW, because they must preserve a БлПр they do not know.
-* **No gate touches any shadow of the level**, there being none to touch: `выпр` restores БлПр from
-  SPSW on the way out, and PSW reads back, so the bit is the only copy. (At the time this was written
-  there *was* a shadow, `curipl`, which the gates deliberately left alone; it has since been removed.)
-* **`intrgate` is exempt**: a handler runs at raised level and the return drops it, as `rtt` does.
-* Checked on the machine, on both doors: `usys` reads PSW back inside every dispatched handler and
-  `utrap` inside its stub `trap()` (`__besm6_getpsw()`; at the time, `getpsw()` in `psw.s`), each failing with `F_IPL` if БлПр
-  is still set; and `utrap`/`ugrow` carry a `ktrap()` stub raising `F_KTRAP`, since both forge user
-  mode and must never reach the supervisor arm. Each was made to fail on purpose first — deleting
-  `sysgate`'s enable, deleting `trapgate`'s, and forcing its discriminator to the wrong arm — so the
-  checks are known to bite rather than assumed to, and the three give three distinct signatures.
-
-### Five hardware rules everything below obeys
+### Five hardware rules everything obeys
 
 1. **РП/РЗ cannot be read back.** The map is a shadow table in memory: `u.u_upt[8]`, eight words,
    each carrying four РП descriptors *and* (in bits 21–28 of the even words) the matching РЗ byte —
@@ -197,261 +134,244 @@ switches. A kernel global `uhome` records whose home the live u-area belongs to,
 says it has no home at all — the state `exit()` and a freeing `xswap()` leave behind, without which
 the next `resume()` would flush 1024 words into core `malloc()` may already have handed out.
 
-`resume()` (`switch.s`): if `paddr != uhome`, `uflush(uhome)`, then `uload(paddr)`, then
+`resume()` ([switch.s](switch.s)): if `paddr != uhome`, `uflush(uhome)`, then `uload(paddr)`, then
 `uhome = paddr`. Only then restore r1–r7, r13, r15 from the label — which, being at `076000+n` in
 *every* process, now names the incoming process's saved state. That constant is the whole trick.
 
 **Anything else that reads or frees the current process's image must flush first.** This is the
-sharpest edge in the whole design; it has already bitten twice, and both times the site was one the
-list did not have. The complete rule — all six sites, and why the test belongs inside `xswap()`
-rather than at its call sites — is written up **once**, in the block comment at `xswap()` in
-[text.c](text.c). Add to it there.
+sharpest edge in the whole design; it has bitten twice, and both times the site was one the list did
+not have. The complete rule — all six sites, and why the test belongs inside `xswap()` rather than at
+its call sites — is written up **once**, in the block comment at `xswap()` in [text.c](text.c). Add
+to it there, not here.
 
 ---
 
 ## Tasks
 
-Each task leaves the tree building (`cd kernel && make`). Verification is under **SIMH**
-(`../doc/Simh_Simulator.md`) via `kernel/test/*.ini` — `b6sim` runs a user `a.out` with no kernel
-underneath and cannot exercise any of this. `test/mmutest` is the model to copy: it links the kernel's
-own objects against a hand-built process, checks itself from C, and lets the `.ini` assert on the
-machine state afterwards. Run every MMU test with **`set mmu cache`**.
+Each task leaves the tree building (`cd kernel && make`) and the suite passing
+(`ctest -L kernel`). Verification is under **SIMH** ([../doc/Simh_Simulator.md](../doc/Simh_Simulator.md))
+via `kernel/test/*.ini` — `b6sim` runs a user `a.out` with no kernel underneath and cannot exercise
+any of this. `test/mmutest` is the model to copy: it links the kernel's own objects against a
+hand-built process, checks itself from C, and lets the `.ini` assert on the machine state afterwards.
+Run every MMU test with **`set mmu cache`**.
 
 **`besm6.o` cannot go into a standalone test** — its `0500` vector reaches into the C kernel and its
 `_start` seeds no stack. That is why every routine a test has to link lives in its own file
-(`brz.s`, `uarea.S`, `seg.S`, `usermem.S`, `switch.s`, `syscall.c`) and why the gates are
-duplicated in the tests' own crt0s.
+(`brz.s`, `uarea.S`, `seg.S`, `usermem.S`, `switch.s`, `syscall.c`, `sendsig.c`) and why the gates
+are duplicated in the tests' own crt0s.
 
-**Tasks 1–16 are done and their writeups have been removed**; the design they settled on is the
-section above, and how each turned out is in the source comments and in `../doc/`. The numbering
-below is **left as it was** — task numbers are cited from the source (`seg.S`, `dev/bio.c`,
-`dev/mem.c`, `clock.c`, `trap.c`, `sig.c`, `test/crt0*.S`) and from `doc/`.
+**Tasks 1–18b.5 are done and their writeups have been removed**; the design they settled on is the
+section above, and how each turned out is in the source comments and in `../doc/`. The numbering is
+**left as it was** — task numbers are cited from the source (`seg.S`, `dev/bio.c`, `dev/mem.c`,
+`clock.c`, `trap.c`, `sig.c`, `test/crt0*.S`) and from `doc/` — so the list below starts at 19.
+The one task that was still open, 18b.6 (wiring up and bring-up), has become tasks 19 and 20: its
+`IRQ_ON`, `conf.c` and raw-device half is done, and what is left of it is the root filesystem and
+the hang.
 
-### Stage 4 — process memory and I/O
+### Stage 5 — mount the root filesystem
 
-**Tasks 17, 18a and 18b.1–18b.5 are done and their writeups have been removed**, on the same
-terms as 1–16: how each turned out is in the source comments and in `../doc/`, and the numbering is
-left as it was. What they built, one line each:
+**19. A root image the build produces, and a kernel test that reads it.**
 
-* **17** — `grow()` takes a virtual page and appends a stack page on a data fault (`sig.c`).
-* **18a** — `struct buf` gained the physical word address `b_paddr`, read through `bufpaddr()`
-  (`include/sys/buf.h`), so a transfer can name a page above 32767.
-* **18b.1** — `dev/hd.c` retired into **`dev/mb.c`** (drums, major 1 — swap) and **`dev/md.c`**
-  (disks, major 0 — root, pipedev, filesystems); the `033` map and the ГРП bits into
-  `sys/besm6dev.h`, the exchange control word into `sys/besm6disk.h`. Two drivers rather than one
-  split by minor, because the two are independent channels and only the control word is shared.
-* **18b.2** — МГРП became dynamic: the four mass-storage completion bits are **wired**, so each is
-  armed only around a live exchange (`mgrpon`/`mgrpoff`, `kernel/intr.c`).
-* **18b.3**, **18b.4** — the drum and the disk actually transfer: page mode and chained 256-word
-  sectors on the drum, a four-command two-step protocol and half-zone blocks on the disk.
-* **18b.5** — the disk's status register and its retries: which failures are refused before the
-  completion is armed, and which still interrupt and may be re-issued.
+The harness has to exist before the hang below can be diagnosed, and it is the last piece of
+`cmd/fsutil`'s story that has never run against the kernel.
 
-`test/` gained `ugrp`, `mbtest` and `mdtest` along the way; what they cost to get right is under
-*Notes for the next standalone SIMH test* below.
+* A CMake target that runs `b6fsutil` over a checked-in manifest and `-S`-converts the result into
+  the SIMH container, in the build tree. [../cmd/fsutil/README.md](../cmd/fsutil/README.md) has the
+  manifest grammar and the volume-number rule (the rightmost run of digits in the output name,
+  2048–4095).
+* Device nodes from the start, numbered out of [conf.c](conf.c): `/dev/console` (char 0/0),
+  `/dev/mem`, `/dev/kmem`, `/dev/null` (char 1/0, 1/1, 1/2), `/dev/tty` (char 2/0), `/dev/md0`
+  (block 0/0) and `/dev/rmd0` (char 4/0), `/dev/swap` (block 1/0) and `/dev/rmb0` (char 5/0).
+  Minor numbers for the disk are the SIMH unit subscript — bit 5 the controller, bits 4–3 the
+  group, bits 2–0 the drive.
+* Extend `test/mdtest` to attach that image, `bread()` block 1 through the real driver and call the
+  real `sbcheck()` ([alloc.c](alloc.c)) on the buffer. `sbcheck()` has been compiled but never
+  executed; this is what takes that note off the file, and it gives a known-good reference point
+  strictly below the boot path.
+* **Done when** `ctest -L kernel` builds the image and `mdtest` reads and validates its superblock
+  through the real `md` driver.
 
-**18b.6. Wiring up and bring-up.** The step that closes 18b.
+**20. Find and fix the root-disk boot hang.**
 
-* `IRQ_ON`, `conf.c`, and the raw devices through `physio()` (`mdread`/`mdwrite` are already the
-  right shape — `physio(mdstrategy, &rmdbuf, dev, B_READ)`). `nswap`/`swplo` are done: 18b.3 set
-  them to the drums' real 1024 blocks. Note the drum refuses a raw request that is not
-  256-word-aligned at both ends, which is the finest granularity its control word can express —
-  the disk's `DISK_HALFPAGE` makes its own limit 512.
-* Build a root filesystem image, attach it, and boot far enough that `iinit()` mounts it.
-* **Done when** `iinit()` reads the super block *and* `swap()` round-trips a page — the original
-  18b criterion, now split across 18b.3 and 18b.4 and re-asserted together here.
-* This is also what unblocks the BESM-6 `icode[]` deferred by task 17.
+Attach a formatted image as `md00` and the kernel prints the `startup()` lines and then stops — no
+panic, no further output. So `bread(rootdev, SUPERB)` never completes. It is *pre-existing*: the
+same image hangs identically against older commits, so it is not a filesystem-format problem.
 
-### DONE: the exec argument vector is built out of fat pointers
+With task 19 in hand the bisection is short, because the driver and `sbcheck()` are then known good
+in isolation. What boot adds over `mdtest` is the suspect list:
 
-Not one of the numbered tasks — it came out of phase 0 of [`../lib/README.md`](../lib/README.md),
-the user-level libc work plan, and is recorded here because it is a kernel change. A `crt0` cannot
-be written against a block whose pointers a user program cannot dereference, so this had to be
-settled before anything under `lib/` could be.
+* the `extintr()` → `mdintr()` dispatch and the wired-bit arming order around `mgrpon()`/`mgrpoff()`
+  ([intr.c](intr.c), [dev/md.c](dev/md.c));
+* `iinit()` sleeping in **proc 0, before `newproc()`** — `swtch()`'s double-`save()` arm
+  ([slp.c](slp.c)) is the only path that runs at boot and is exercised by no test;
+* `idle()`'s spin never being released (`idling` is cleared only after `extintr()`'s loop);
+* `extintr()` wedging on a **wired** ГРП bit rather than never being entered at all. The four
+  mass-storage "free" bits mean *idle*, so one standing in МГРП outside an exchange re-fires
+  forever and cannot be dismissed — the failure this loop's fallback probe exists to catch, and it
+  looks exactly like a hang with no output. Distinguish the two cases first: whether the handler is
+  never reached, or reached without end.
 
-`exece()` (`sys1.c`) lays the block at the fixed base `USTKPAGE * PGSZ = 070000` — `argc`, the
-`argv[]`/`envp[]` pointers, the two NULLs, then the byte-packed strings, with `r15` seeded just
-above. That shape was right. What it put *in* the vector was not: three separate places treated a
-`char *` as a plain word address.
+Method: `set cpu debug` + `set debug "unix.trace"` in a copy of [unix.ini](unix.ini), and **`step N`
+rather than `go`**, so a hang fails instead of hanging. And watch the trap that has caught this
+before: **`attach -n` creates an empty container** — the boot `.ini` must attach the converted image
+*without* `-n`, or the kernel reads a hole.
 
-* **`argv[i]`/`envp[i]` were bare word addresses.** A `char *` is a fat pointer — marker in bit 48,
-  byte offset in bits 47–45 as a right-shift distance — and the compiler dereferences one with
-  `asx`, whose shift comes from the operand's exponent field. A plain address asks for a shift of
-  −64, so the user's very first `argv[0][0]` would have read zero.
-* **The string cursor ran backwards.** It was an explicit `(word, offset)` pair that started at
-  offset 0 and *incremented*, but offset 0 is byte #5 — the word's **last**. Every word went down
-  LSB-first, the reverse of how six chars pack into a word. Fixing only the marker would not have
-  helped: `argv[0][1]` would have come back as character 11. And no fixed offset could have worked
-  at all, since only the *first* string starts on a word boundary — the rest begin wherever the
-  previous NUL left off.
-* **The staging loop read one byte in six.** `ap = fuword(uap->argp)` is the *caller's* own `char *`,
-  already fat, and `fubyte((caddr_t)ap++)` stepped it as an `int` — the word address, not the byte
-  offset. Worse, that `++` is a signed add on a word whose bits 48–42 are non-zero, which the
-  additive unit reads as an exponent.
+* **Done when** `iinit()` installs the superblock, `time` is seeded from `s_time`, and the boot
+  reaches the icode with no panic — plus an automated case in `test/` that boots `unix` with the
+  image attached and asserts on the outcome, so this cannot silently regress.
 
-All three are now one thing: a real `char *` cursor, `up`, walked with `up++` and stored into the
-vector as-is. The hand-built `(word, offset)` pair is gone, and so is the `1U << 44` shift that
-spelled it. What makes that legal is what `b6cc` does with pointer casts — read out of the external
-compiler (`translator/translate.c: emit_cast`, `backend/besm6/instr.c`), not guessed:
+### Stage 6 — run a user program
 
-| cast | lowering |
-| --- | --- |
-| `int *` → `char *` | `aox` of marker + offset 5 — byte #0, the word's first |
-| `char *` → `int *` | `aax` low 41 bits — strip marker and offset |
-| `int` ↔ `char *` | silent `COPY` — the fat bits survive verbatim |
-| `char *` ± 1 | call `b$pinc` / `b$pdec` — walk the offset field, carry into the word |
+**21. Retarget `exec` to the BESM-6 `a.out`.**
 
-So `(caddr_t)(int *)w` *is* the fat pointer to byte #0 of word `w`, `(char *)ap` keeps a caller's
-pointer intact, and `(int)up` hands the whole fat word to `suword()`. `b$pinc` was already linked
-(`nami.c`'s `u.u_dirp++` pulls it). The end-of-block round-up, which used to test the offset
-variable, now reads the cursor apart with `ptrword()`/`ptrbyte()` from `sys/param.h`.
+`getxfile()` ([sys1.c](sys1.c)) is still PDP-11: it reads an eight-field `u_exdata`
+([../include/sys/user.h](../include/sys/user.h)) and tests `ux_mag` against `0407`/`0410`. The
+toolchain emits something else — [../cross/besm6/b.out.h](../cross/besm6/b.out.h): a 48-byte,
+eight-word header of `magic/const/text/data/bss/syms/entry/flag`, with **four** segments. Nothing
+`b6ld` produces can be exec'd today.
 
-`exece()` still cannot be *run* — that waits on 18b.6 and a root filesystem — so the contract is
-asserted instead by **`mmutest` check 25**, which replays it against the real `usermem.o`: `suword`
-a walking `char *` as an `argv[0]` slot, lay a ten-byte string down with `subyte(up++, …)` so it
-crosses a word boundary, then `fuword` the pointer back, confirm it decodes to word address + offset
-5, and read the string back byte by byte. Point the cursor at a plain word address instead and the
-check returns 25. `mmutest.ini`'s expected halt PC moved `00604` → `00606` with the constant pool,
-the same way `biotest.ini`'s did.
+Do not re-derive the layout — it exists as running code. `Machine::exec()` in
+[../cmd/sim/machine.cpp](../cmd/sim/machine.cpp) loads exactly what `ld.corigin`/`torigin`/`dorigin`
+in [../cmd/ld/ld.c](../cmd/ld/ld.c) laid out. Transcribe it:
+
+* **`ux_mag` must be `unsigned`.** `FMAGIC` is `02044252323200407` — 48 bits — and an `int` here is
+  41. Equality on an unsigned is a plain word compare, so this costs nothing; a signed field would
+  silently truncate and match the wrong files.
+* **The image begins at word 8.** `BADDR = HDRSZ/W = 8` ([../cmd/ld/intern.h](../cmd/ld/intern.h)),
+  so a word's file offset *equals* its virtual word address for const and text. Words 0–7 are the
+  header hole — which is also what keeps every program clear of the virtual-word-0 black hole,
+  since `sureg()` maps text from virtual page 0.
+* **`NMAGIC`**: the read-only region is `pground(8 + a_const/W + a_text/W)` words and data is
+  page-aligned above it, matching the linker's `ALIGN(dorigin, 1024)`. **`FMAGIC`**: one writable
+  region from word 8, `u_tsize = 0`.
+* Sites: `getxfile()` and `setregs()` in [sys1.c](sys1.c) — the `u.u_base = 0` /
+  `u.u_offset = sizeof(u.u_exdata) + ux_tsize` pair becomes const-origin-relative, and
+  `u.u_ar0[RET] = ux_entloc` is already a word address in the new header — and `xalloc()`
+  ([text.c](text.c)), which reads the shared text with the same origin and sizes `x_size` from it.
+* Keep the hostile-input range checks that replaced v7's dead 16-bit overflow guards: the segment
+  sizes come off the disk.
+* **Done when** an executable built by `b6ld` and placed on the image is loaded and entered. The
+  practical check is task 22's first `exec`; confirm the *placement* by dumping core from the `.ini`
+  and comparing against `b6disasm` of the file.
+
+**22. Enter user mode, and a BESM-6 `icode[]`.**
+
+Two holes that are really one. `main()` returns in process 1 expecting to land at the icode, but
+`_start` in [besm6.S](besm6.S) has nothing behind its `vjm main` but `bhalt: stop` — so process 1
+halts the machine. And `icode[]` ([machdep.c](machdep.c)) is still literal **x86** machine code.
+
+* Give `_start` the second half v7's has: on return from `main()`, build the user frame and leave
+  through `выпр` at the icode entry — user PSW, `R = 7` (`RREG_C`, the rule `sendsig()` already
+  established: a program with no `crt0` in front of it must not start in ω 0), `r15` above the
+  argument block. [../doc/Unix_Context_Switch.md](../doc/Unix_Context_Switch.md) is the contract.
+* Write the icode **in assembly, in `besm6.S`**, exactly the way `sigcode` is done there: nothing
+  writes down an opcode encoding, and `$77 SYS_exece` takes its number from `<sys/syscall.h>` like
+  every other caller. It execs `/etc/init` with a one-entry argv and loops on failure.
+* `main()`'s `copyout((caddr_t)icode, (caddr_t)0, szicode)` moves to the const origin — word 8, not
+  0 — and `expand`/`estabur` size from there.
+* **Done when** process 1 leaves the kernel, the `$77` gate takes an `exece` from real user code,
+  and a *missing* `/etc/init` produces a visible failure rather than a halt.
+
+**23. The console as a controlling terminal.**
+
+`dev/sc.c` and `dev/tty.c` are written, and `sctest` exercises the driver against SIMH. What has
+never run is the path under a booting kernel: `scopen()` through `cdevsw[0]`, the `u.u_ttyp` /
+`u.u_ttyd` acquisition in `ttyopen()` ([dev/tty.c](dev/tty.c)), the `/dev/tty` indirection in
+[dev/sys.c](dev/sys.c), interrupt-driven input `scintr()` → `ttyinput()` → `canon()`, and
+`ttwrite()` output interleaving with the polled `putchar()` that `printf` uses behind the tty
+layer's back.
+
+* The line is `raw` on the simulator side and the tty runs `CRMOD`, so the kernel is the only thing
+  translating line endings — see the header comment in [dev/sc.c](dev/sc.c).
+* **Done when** a program on the image reads a typed line from `/dev/console` and echoes it, with
+  erase/kill and `^D` behaving, and `/dev/tty` opening to the same terminal.
+
+### Stage 7 — the userland
+
+**24. `rootfs/` — the tree the image is built from.**
+
+A new top-level `rootfs/`, cross-built by the same CMake machinery `lib/` uses
+([../scripts/BesmCross.cmake](../scripts/BesmCross.cmake) and the in-tree `b6*` targets), staging
+into **`build/rootfs/`**, which task 19's manifest reads with `source build/rootfs/…`:
+
+* `rootfs/init/` — a v7-shaped `/etc/init`: single-user, `/dev/console` on fds 0/1/2,
+  `fork`+`exec` of `/bin/sh`, `wait` and respawn.
+* `rootfs/sh/` — the shell. Start with a minimal one (word splitting, `fork`/`exec`/`wait`,
+  redirection, `cd`, `exit`) to get a prompt at all, then port v7's `sh` once the syscalls have been
+  shaken out by task 25.
+* `rootfs/bin/` — enough to prove the prompt: `cat`, `echo`, `ls`, `pwd`.
+* `rootfs/etc/` — the static files (`passwd`, `rc`, `motd`).
+
+Every program links `crt0.o … -lc -lruntime`, in that order — the archive-scan contract in
+[../lib/README.md](../lib/README.md) — and must fit the 32-page user space with the stack based at
+`070000` (`b6size -w`).
+
+**25. Boot to the prompt, and shake the syscalls out.**
+
+* `make run` boots with the image attached and gives a shell on the SIMH console.
+* Then run the `lib/test/` programs — which today run only under `b6sim` — from the image, under the
+  real kernel. This is the first time the `$77` gate is driven from user mode by anything but the
+  kernel's own tests, and it is where `sysent[]`'s sixty untested rows meet their handlers'
+  argument structs. `procs`, `execs`, `spawn`, `signals`, `sbrkt` and `stdiot` are the ones that
+  bite; `b6sim` and the kernel disagreeing is a bug in one of them, and the `.expected` files say
+  which.
+* `sync`, then `b6fsutil -c` on the image afterwards. A clean fsck after a session that wrote is the
+  end-to-end statement that the filesystem half works.
+* **Done when** the image survives boot → shell → create and write files → `sync` → fsck clean, as a
+  ctest case.
+
+### Stage 8 — after the prompt
+
+Ordered, but none of it blocks the shell.
+
+**26. Swapping and shared text under load.** `sched()`/`xswap()` through the drum with more
+processes than core, and two processes sharing one binary's text. The code is written and `usched`
+covers the scheduler in isolation, but nothing has ever swapped a real image, and `swap()` on the
+drum has only ever moved a forged page. This is also where the u-area invariant above gets its first
+real workout.
+
+**27. `/dev/mem` and `/dev/kmem`.** Minors 0 and 1 are `ENXIO` in [dev/mem.c](dev/mem.c); minor 2
+(`/dev/null`) works. `/dev/mem` must reach a physical page above `0100000`, which needs a
+`copyseg`-style mapped bracket ([seg.S](seg.S) is the worked example) — or, simpler and with no new
+assembly, a bounce through a page-aligned kernel buffer using `copyseg()` itself, whose БРЗ drains
+are already in the right places. `/dev/kmem` is direct below the unmapped reach.
+
+**28. The leftovers.** Each is small, independent, and has been deferred deliberately:
+
+* **`addupc()` is a stub** ([besm6.S](besm6.S)), so `profil()` is inert.
+* **Single-step / the address-break registers М034/М035.** `ptrace()`'s "continue with a trace trap"
+  has no flag bit on this machine — no EFL/TBIT — so arming it means writing М034/М035, and
+  `procxmt()` must re-arm after each match. The sites carry `TODO 17` markers: [sig.c](sig.c)
+  (cases 6 and 9), [trap.c](trap.c) (the `GRP_BREAKPOINT` arm) and `GRP_BREAKPOINT` in
+  [../include/sys/besm6dev.h](../include/sys/besm6dev.h).
+* **`iomove()` tests alignment with `n & (NBPW - 1)`** ([rdwri.c](rdwri.c)) and `NBPW` is 6 — not a
+  power of two, so the mask is meaningless and the fast `copyin`/`copyout` path is taken more or
+  less at random. Marked `/* XXX even addresses */` in the v7 original. Correctness is unaffected;
+  it is a performance bug, and it wants the same real-`char *` treatment `exece()`'s argument block
+  got.
+* **`uflush`/`uload` copy the whole 1024-word page.** Copying only up to the saved `r15` —
+  `struct user` plus the live stack, typically ~300 words — was planned and never done.
+* **No kernel-stack guard page.** `r15` grows up from ≈ `076214` to `0100000`, and past that a
+  15-bit address wraps to 0 — into the interrupt vectors. A depth check in `trap()`/`swtch()` is the
+  cheap answer.
+* **Every other `int` → `char *` conversion.** `u.u_dirp = (caddr_t)u.u_arg[0]` is fine — that cast
+  is a silent `COPY`, so the caller's marker and byte offset survive and `namei()`'s
+  `fubyte(u.u_dirp++)` is right. What is *not* checked is everywhere else that fabricates a pointer
+  from a small integer. It has to be found by grep: an `int` and a pointer are the same word here,
+  and `b6cc` converts between them without a word.
+* **`off_t` is in bytes.** Making file offsets word counts would delete the remaining `b$div` calls
+  at every block crossing and is the BESM-6-shaped answer, but it is user-visible and changes
+  `read`/`write`/`lseek` and `iomove()`'s granularity. Separate problem, wants its own plan.
+
+**29. Multiuser.** [dev/sr.c](dev/sr.c) is a skeleton: the tty scaffolding and the `cdevsw` surface
+exist, and nothing behind them talks to the 24-line multiplexer. That driver, then `getty`/`login`
+and a multiuser `init`, is where the road continues past this file.
 
 ---
 
-## Deferred, owned by no task
-
-Loose ends the finished work left behind. None blocks 18.
-
-* **/dev/mem and /dev/kmem (`dev/mem.c`).** Split out of 18a, which it shares no code with: the
-  `b_paddr` work is about `struct buf`, and `mmread`/`mmwrite` never touch one. Minors 0 and 1 are
-  stubbed to `ENXIO` today; minor 2 (/dev/null) works. /dev/mem must reach a physical page above
-  `0100000`, which needs a `copyseg`-style mapped bracket (`kernel/seg.S` is the worked example) —
-  or, simpler and with no new assembly, a bounce through a page-aligned kernel buffer using
-  `copyseg()` itself, whose БРЗ drains are already in the right places. /dev/kmem is direct below
-  the unmapped reach. Nothing opens either yet: `iinit()` still panics, so there are no device
-  nodes, and nothing on the path to a booting kernel needs them.
-* **`iomove()` tests alignment with `n & (NBPW - 1)`** (`rdwri.c`), and `NBPW` is 6 — not a power of
-  two, so the mask is meaningless and the fast `copyin`/`copyout` path is taken more or less at
-  random. Marked `/* XXX even addresses */` in the v7 original. Correctness is unaffected (the
-  byte-at-a-time path is right); it is a performance bug, and it wants the same `(word, offset)`
-  treatment as the `u_dirp` item below.
-* **Single-step / the address-break registers М034/М035.** `ptrace()`'s "set signal and continue,
-  one version causing a trace-trap" has no flag bit to set on this machine — there is no EFL/TBIT —
-  so arming it means writing М034/М035, and `procxmt()` has to re-arm after each break match. The
-  sites still carry the old `TODO 17` markers: `sig.c` (cases 6 and 9), `trap.c` (the
-  `GRP_BREAKPOINT` arm) and `GRP_BREAKPOINT` in `include/sys/besm6dev.h`. A `ptrace` feature, not a layout one.
-* **DONE: the signal frame, and `sigret`.** `sendsig()` pushed one word and jumped; it now copies the
-  whole 21-word `reg.h` frame onto the user stack with one `copyout()`, plants a return trampoline
-  above it and enters the handler by the one-argument calling convention — the number in the
-  accumulator, r14 = −1, r13 the trampoline. `sigret()` (row 45, v7's "unused") reloads it. Both live
-  in **`kernel/sendsig.c`**, split out of `machdep.c` for the reason `syscall.c` was split out of
-  `trap.c`: `kernel/test/usig` links the real pair. `doc/Unix_Context_Switch.md` §10a is the account;
-  what differed from the plan, or is worth not re-deriving:
-  * **The trampoline is a word the KERNEL assembled and the USER executes.** `sigcode` in `besm6.S`
-    is one `$77 SYS_sigret`, copied out above the frame, and r13 names the copy — so a handler's
-    ordinary `13 uj` trips the extracode. No opcode encoding is written down in C, and libc keeps its
-    plain generated `signal` stub: no trampoline, no handler table shadowing `u_signal[]`, and
-    `signal()` still returns the true previous disposition. The alternative — a libc-registered
-    trampoline, as the v7/x86 port had — was rejected for that.
-  * **It works because a stored word is instruction-tagged.** The machine tags every store with a
-    свертка and checks it on instruction fetch; in SIMH the tag is `RUU ^ PARITY_INSN`
-    (`besm6_mmu.c`), and this kernel never sets ПКП/ПКЛ (`002 0100`–`0137`, which nothing issues), so
-    the tag comes out `PARITY_INSN`. Should that ever change, a handler's return would raise
-    `GRP_INSN_CHECK` instead of reaching the kernel. `usig` is what proves it.
-  * **A user-mode return path could not have worked at all**, which is why `sigret` is a syscall:
-    which half of a word to resume at lives in SPSW and only `выпр` reloads it. `usig`'s second leg
-    delivers from a fault taken on a **right-half** instruction for exactly this reason.
-  * **SPSW is the one word in the frame not taken on trust.** `sigret()` masks it to `SPSW_USER`
-    (`reg.h`: `SPSW_RIGHT_INSTR | SPSW_MOD_RK`) and takes the mode bits from the live frame, so a
-    forged frame below r15 cannot buy supervisor mode, an unmapped space or a blocked level.
-  * **`R = 7`, not zero, at handler entry** (`RREG_C`, `reg.h`). `setregs()` can leave the frame's R
-    at zero because `ntr 7` is `crt0`'s first instruction; a handler has no `crt0` in front of it, and
-    the first `b$` helper it called would run in the wrong ω.
-  * **`u.u_justreturn`** is new in `struct user`: `syscall()`'s result write-back would overwrite
-    ACC/r12/r14, three of the words just restored — and r14 at a delivery point is the errno a libc
-    stub is about to test. 4.xBSD spells it `u_eosys = JUSTRETURN`.
-  * Delivery is unchanged where it was already right: `psig()` calls `sendsig()`, and the delivery
-    points stay the two the doors already had. `b6sim` implements the same frame at the same point,
-    so `lib/test/signals` runs the whole libc side today (`cmd/sim/syscall.cpp`).
-* **`uflush`/`uload` copy the whole 1024-word page.** Copying only up to the saved r15 —
-  `struct user` plus the live stack, typically ~300 words — was planned and never done. It is a
-  performance change, not a correctness one.
-* **`u.u_dirp = (caddr_t)u.u_arg[0]` is an `int`→`char *` conversion.** Pre-existing, affects every
-  path-taking syscall, and belongs with `iomove()`'s byte handling rather than with syscall
-  marshalling. Re-read it when doing so: the exec work above establishes that this particular
-  conversion is a silent `COPY`, so the caller's marker and byte offset *do* survive it and
-  `namei()`'s `fubyte(u.u_dirp++)` — a genuine `char *` step — is right. What is worth checking is
-  every *other* place an `int` becomes a `char *`, and there the pattern to copy is the one exec now
-  uses: a real `char *` walked by the compiler, never a hand-built `(word, offset)` pair.
-* **DONE: `psw.s` is retired, and the assist is six files.** The three PSW intrinsics
-  (`__besm6_maskpsw`/`__besm6_getpsw`/`__besm6_setpsw`, twelve in `<besm6.h>` where there were nine)
-  each lower to exactly the instruction that file wrote by hand — a register-0 `vtm` with a constant
-  mask, an `ita 021`, an `ati 021` — so `cli`, `sti` and `getpsw` are gone along with their
-  declarations in `systm.h`. The `spl*` routines (`intr.c`) issue the `vtm`s themselves, which drops a call
-  from each; the two tests that read PSW back call `__besm6_getpsw()` directly, so `psw.o`
-  left **eight** link lines in `test/Makefile` as well as `MACH` in `kernel/Makefile`. How it turned
-  out, where it differed from the plan above:
-  * **No branch anywhere, which the old note predicted and then a middle draft lost.** The mask is an
-    immediate field of the instruction, so `__besm6_maskpsw` demands a compile-time *constant*.
-    `spl0()`/`spl1()` know their level and each names one outright. `splx(s)` does not, and for a
-    while chose between the two constants with a `uza` — until it turned out not to need the masked
-    write at all: `__besm6_setpsw()` (`ati 021`) writes the whole mode word, so `splx()` just puts
-    back what `spl1()`'s `ita 021` handed out. One instruction each, none of them branching.
-    (These three were briefly factored through a shared `static setipl(s)`, which paid for a branch
-    in all of them.) **`splx` is therefore a macro** and has no symbol in the kernel: one `ati 021`
-    is not worth a call. That is what put the tree's only `#include <besm6.h>` into a header —
-    `sys/systm.h` needs it, because six files call `splx()` and name the intrinsics nowhere else.
-    It also made `biotest`'s stubs load-bearing: their `spl1()` returned 0, which was harmless
-    while `splx()` was a stub that ignored it and is a mode word that clears БлП/БлЗ now.
-  * **DONE: `curipl` is gone, and with it the last software shadow of the level.** PSW reads back —
-    unlike РП, РЗ, МГРП and МПРП, which is why *those* keep shadows — so the level had two copies
-    that could disagree, and did: `extintr()` had to close with `curipl = s` to repair the drift
-    clock()'s `spl5()`/`spl1()` left, and a fault from supervisor left the shadow raised while the
-    bit said otherwise. Now `spl1()` returns the mode word itself and `splx()` writes it back, so
-    the bit is the only copy and nothing can drift from it. **The cookie is therefore a PSW word,
-    not a small integer** — opaque, never to be compared against a level or synthesized, and
-    `splx(0)` would clear БлП/БлЗ and drop the kernel into its own user's address space. Every call
-    site passes back a cookie it holds; `intr.c`'s header says so where a new one would look.
-  * **`uclock` lost a check to this, and gained nothing back.** It asserted `spl7() == 0` after the
-    tick, i.e. that `extintr()` had repaired the shadow. With no shadow there is no drift to catch,
-    and no hardware bit to read instead: `report()` runs inside `crt0c.S`'s `0500` handler, which
-    never opens the level, so PSW reads `02003` there whatever the tick did. The check is deleted
-    and the comment says why — a constant that always passes is worse than no check at all.
-  * **The masks are named, not magic**: `PSW_KERNEL` (`sys/besm6dev.h`) is БлП|БлЗ, the standing
-    unmapped-kernel invariant, so the spls read `PSW_KERNEL | PSW_INTR_DISABLE` and `PSW_KERNEL`.
-    Its comment carries `psw.s`'s precondition — a mode write may only be issued from ordinary
-    unmapped kernel context, never inside a mapped bracket.
-  * **This needed a compiler fix, in the external c-compiler.** `PSW_KERNEL | PSW_INTR_DISABLE` is a
-    three-term OR, and the constant fold lived at TAC level in the back end, where it collapsed
-    **one level only**: the two-term form compiled and the three-term form was rejected as "not a
-    constant". The fold moved to the front end (`semantic/expressions.c`, `fold_immediate_arg0`),
-    which is where the language's recursive constant evaluator lives, and now covers all three
-    intrinsics with an immediate first argument — `maskpsw`, `stop` and `extracode`, the last of
-    which was already folded there and is what showed the way. Nesting depth is no longer a
-    property anyone has to know. Regression tests in `semantic/test/intrinsics_tests.cpp`.
-  * **The four gates are unchanged**: they always inlined `vtm 3`/`vtm 02003` rather than calling
-    into `psw.s`, so nothing in `besm6.S` moved — only comments that named the dead file.
-
-  See [../doc/Intrinsics.md](../doc/Intrinsics.md) §2.3, §3.3 and
-  [../doc/Kernel_Assembly_Routines.md](../doc/Kernel_Assembly_Routines.md) §4.7, which is now that
-  file's epitaph rather than its contract.
-* **DONE, out of the same compiler update: the drivers' computed-address workaround is gone.**
-  `mb.c` and `md.c` used to branch on `ctlr` to reach two constant `033` addresses, because `b6cc`
-  materialized a computed address into r14 and got it wrong (`14 ext 0` with a frame pointer still
-  in r14). The lowering was rewritten: the address now rides the **C register** — `wtc` reads it
-  straight out of a frame slot or global — and a constant addend folds into the instruction's own
-  address field, so `__besm6_ext(ctlr + EXT_DRUM1, cw)` is three instructions. **Write the variable
-  first**: `EXT_DRUM1 + ctlr` does not fold and costs a `b$uadd` call plus a stack round-trip.
-  Verified by disassembling `unix.dis`.
-* **`addupc()` is a stub**, so `profil()` is inert. Was nominally task 17; left there.
-* **`time` is never seeded from a wall clock.** This machine has no clock-calendar a program can
-  read, so the epoch starts at 0.
-* **`sy_nrarg` is read nowhere** and is documented as vestigial: exactly one argument arrives in a
-  register on this machine, for any `narg >= 1`.
-
 ## Notes for the next standalone SIMH test
 
-Task 18b wanted three — one per step 18b.2, 18b.3 and 18b.4 — and all three are written: `ugrp`,
-`mbtest` and `mdtest`, the last since extended for 18b.5. What they cost to get right, for whoever
-writes the fourth:
+What the ones already in [test/](test/) cost to get right. Read this before writing the next.
 
 * **A round trip proves nothing about addressing.** Write a pattern, read it back, compare — and
   a driver that put the data in the wrong place passes, having been consistently wrong twice.
@@ -469,8 +389,7 @@ writes the fourth:
   assertion to tolerate exactly one — a draft `p_cpu >= 1` check once passed *only because* a second
   tick arrived after the aging code zeroed it.
 * **Gate temp cells go in `.text`, not `.bss`, once the image's bss passes `010000`** — the gate must
-  use a bare 12-bit `atx save_a`, which cannot reach further. `crt0c.S` does this; `crt0u.S` and
-  `crt0s.S` did not have to.
+  use a bare 12-bit `atx save_a`, which cannot reach further. `crt0c.S` does this.
 * **`mmutest` owns the БРЗ-drain bite test**, not `uswtch`: dropping `uload`'s post-copy drain passes
   `uswtch` and still fails `mmutest` (code 17). Know which test proves which hazard before trusting
   one.
@@ -480,300 +399,74 @@ writes the fourth:
 * **A forged `uprog` cannot use the literal pool.** It runs mapped at virtual page 0, but the pool
   lives in the crt0's `.const` at *physical* page 0, which is not what virtual page 0 maps to — a
   `#(...)` operand reads whatever happens to be there. `ugrow`'s uprog therefore *reads* its
-  sentinel out of a data page main() seeded, rather than spelling it as a constant. (`vtm`'s 15-bit
-  immediate is fine; it is part of the instruction.)
+  sentinel out of a data page `main()` seeded, rather than spelling it as a constant. (`vtm`'s
+  15-bit immediate is fine; it is part of the instruction.)
 * **Write the bite test, then verify it bites.** `ugrow` was checked both ways before being trusted:
   reintroducing a stack shuffle makes it fail with `020`, and dropping the `sureg()` after the
   growth with `0212`. A geometry test that cannot fail proves nothing about the geometry.
-* **Read a bite test on ACC, never on the halt PC** — and rebuild before believing either. 18b.5's
-  first bite test "failed" run 1 and looked like a clean confirmation; it had merely grown a literal
-  by one word and moved `halt` from `0575` to `0576`, so the `.ini` tripped its *PC* assertion while
-  every check still passed. Run the modified build through a harness that prints PC and ACC
-  separately: a wrong ACC is a broken check, a PC that is neither `halt` nor `fault` is a hang, and
-  a PC one word off is usually just the tax.
+* **Read a bite test on ACC, never on the halt PC** — and rebuild before believing either. A "failed"
+  run once turned out to have merely grown a literal by one word, moving `halt` from `0575` to
+  `0576` so the `.ini` tripped its *PC* assertion while every check still passed. Run the modified
+  build through a harness that prints PC and ACC separately: a wrong ACC is a broken check, a PC
+  that is neither `halt` nor `fault` is a hang, and a PC one word off is usually just the tax.
 * **Ask what would notice if the code were wrong, and if the answer is "nothing", the test is not
   finished.** 18b.5 classified disk failures into hard and soft, but both ended in the same failed
   request with the same `b_resid` — so the entire classification was undefended, and the bite test
-  duly passed runs 1–3 while the source claimed it would fail them. Exposing `mdretries` and
-  asserting the exact count is what closed it. A distinction the test cannot observe is a
-  distinction the test does not check, however much prose surrounds it.
+  duly passed while the source claimed it would fail. Exposing `mdretries` and asserting the exact
+  count is what closed it. A distinction the test cannot observe is a distinction the test does not
+  check, however much prose surrounds it.
 
----
+## Gotchas worth not re-deriving
+
+Facts that cost real time to establish and are not written down in `doc/`.
+
+* **A computed `033`/`002` address must have the variable first.** `__besm6_ext(ctlr + EXT_DISKCTL3, cw)`
+  folds into one instruction — the address rides the C register (`wtc`) and the constant folds into
+  the instruction's address field. Written `EXT_DISKCTL3 + ctlr` it does *not* fold and costs a
+  `b$uadd` call plus a stack round-trip. See [dev/md.c](dev/md.c), [dev/mb.c](dev/mb.c),
+  [../doc/Intrinsics.md](../doc/Intrinsics.md) §8.
+* **The intrinsics with an immediate first argument demand a compile-time constant**, so
+  `__besm6_maskpsw()` cannot take a run-time level: that is why `splx()` uses `__besm6_setpsw()`
+  (`ati 021`) and writes back the whole mode word its cookie carries. **The spl cookie is a PSW
+  word, not a small integer** — never compare one against a level, never synthesize one, and never
+  `splx(0)`, which would clear БлП/БлЗ and drop the kernel into its own user's address space.
+* **`_Static_assert` works and has teeth; `extern int x[1 - 2*(cond)]` does not.** `b6cc` accepts a
+  negative array size without a word, so the classic trick is decorative here. `ino.h`, `dir.h` and
+  `filsys.h` use the real thing.
+* **`DIRSIZ` moves `u_upt`.** `struct user` holds `u_dbuf[DIRSIZ]` and a `struct direct` ahead of the
+  shadow page table, whose word offset [uarea.S](uarea.S), [seg.S](seg.S) and `test/mmutest.c`
+  hardcode as `UPT` (b6as has no `offsetof()`). mmutest's check 13 exists for exactly this — which
+  makes the MMU tests load-bearing for a filesystem change, and that is not obvious.
+* **A `char *` is a fat pointer** — marker in bit 48, byte offset in bits 47–45 — and the compiler
+  walks one with `b$pinc`/`b$pdec`. Never build one out of a `(word, offset)` pair by hand; the
+  worked example is `exece()`'s argument block ([sys1.c](sys1.c)), asserted by `mmutest` check 25.
+  `(caddr_t)(int *)w` is the fat pointer to byte #0 of word `w`.
+* **Unsigned arithmetic is calls.** `+ - * / < <= > >=` on an unsigned are `b$uadd`, `b$udiv`,
+  `b$ult`, … because the additive unit reads bits 48–42 as an exponent. Every scalar typedef is
+  therefore `int`; `unsigned` survives only where the value is genuinely a 48-bit hardware bit
+  pattern (`u_upt[]`, the ГРП/ПРП masks, the a.out magic).
+* **The SIMH disk container is not a flat block file.** Each word is eight little-endian bytes with a
+  two-bit tag above the 48 (an empty data word is `0x0002000000000000`, not zero), and eight service
+  words are interleaved per zone. One drive is 8,256,000 bytes against the flat image's 6,144,000.
+  `b6fsutil -S` converts; `cmd/fsutil/simh.cpp` has the layout.
+* **`s_isize` is the first data block, not a count of i-list blocks**, and **the free list must be
+  built descending** — `alloc()` pops the superblock cache from the top, so an ascending build lays
+  every file backwards across the platter while passing every self-consistency check.
 
 ## Known consequences, accepted
 
 * **A context switch copies the u-area twice** (out to the old home, in from the new): 1024 words
-  each way, or ~300 with the "copy only up to the saved r15" optimisation. This is the cost of an
-  unmapped kernel; in exchange the trap path costs *nothing* and `copyin` needs no window.
-* **The u-area invariant is a footgun, and it has already bitten twice.** Scoping task 16 found a
-  fifth site the original four-bullet list had missed (`xswap()` on `newproc()`'s child), which is
-  why the test lives inside `xswap()` instead of trusting callers. Doing the work then found a
-  **sixth** — `exit()`, which frees the current process's image and leaves the live u-area with no
-  home at all — and that one *corrupts memory* rather than merely wasting a copy, which is what
-  forced the `NOUHOME` state. A seventh, added later and forgotten, will still be a very confusing
-  bug. The whole rule lives in one block comment at `xswap()` in `text.c`; add to it there.
+  each way, or ~300 with the optimisation in task 28. This is the cost of an unmapped kernel; in
+  exchange the trap path costs *nothing* and `copyin` needs no window.
+* **The u-area invariant is a footgun.** It has bitten twice, and a seventh site added later and
+  forgotten will still be a very confusing bug. The whole rule lives in one block comment at
+  `xswap()` in [text.c](text.c).
 * **`copyin`/`copyout` toggle БлП per word** (~2× a plain copy), and the fat-`char *` byte edges are
-  read-modify-write. Reworking `iomove()` for word-aligned bulk I/O is worth doing, but it is an
-  orthogonal problem and not part of this work.
-* **No kernel-stack guard page.** r15 grows up from ≈ `076214` to `0100000`, and past that a 15-bit
-  address wraps to 0 — into the interrupt vectors. Add a depth check in `trap()`/`swtch()` during
-  bring-up.
-
-## DONE: two `sysent[]` arities were still counting PDP-11 words
-
-Found while writing `lib/libc/sys/`, which is the first caller of the gate that is not a test.
-`sy_narg` is the arity of the *C prototype*, and it is the only thing that tells `syscall()`
-where the arguments are: it reads `n-1` of them from below the user stack pointer, takes the
-`n`th from the accumulator, and pops the `n-1` on the caller's behalf. A count that disagrees
-with the caller reads every argument from the wrong slot **and** drifts the user stack by a word
-per call.
-
-Two entries still counted a two-word `long` that is one 48-bit word here — `seek` said 4 and
-`stime` said 2, while their own argument structs in `sys2.c`/`sys4.c` have 3 fields and 1. Both
-now match. `cmd/sim/syscall.cpp`'s `syscall_nargs()` is the same table for `b6sim` and had to
-move with it (its `dup` was the mirror-image error: 1 where the kernel has always read a
-two-field struct, v7 hanging `dup2` off the same entry by bit `0100` of the first argument).
-
-`test/usys` is what keeps the two honest — it links the real `syscall()` and checks both the
-marshalling and the stack balance — but it exercises `sysent[3]` and `sysent[20]` only. Nothing
-checks the other sixty rows against their handlers' argument structs; the libc stubs now do, one
-call at a time, from `lib/test/`.
-
-## The scalar types now describe this machine, not the PDP-11
-
-Done as its own pass. `include/sys/types.h` used to carry v7's typedefs verbatim — `long daddr_t`,
-`unsigned short ino_t`, `short dev_t`. On this machine `short`, `int`, `long` and `long long` are
-**the same type** (one word, 41-bit signed), so those spellings never chose a width; the only thing
-they still chose was signedness, and *that* is expensive: signed add/subtract/compare are single
-inline instructions, while unsigned `+ - * / < <= > >=` are **calls** (`b$uadd`, `b$udiv`, `b$ult`,
-…), because the additive unit reads bits 48-42 as an exponent and a 48-bit value carries data there.
-
-How it turned out:
-
-* **Every scalar typedef is now `int`**, and `daddr_t`/`dev_t` are documented as necessarily signed
-  (`bmap()` returns `-1`; `NODEV` is `-1`). The one behavioural change was `ino_t`, which was
-  `unsigned short`.
-* **`unsigned` survives only where the value is genuinely a 48-bit hardware bit pattern** — `u_upt[8]`
-  (МMU page-register words), the ГРП/ПРП masks in `intr.c`, `utab.c`'s descriptors, `trap.c`'s live
-  ГРП, `prf.c`'s `printn`. Everything that is a *count* or an *address* is `int`; physical memory is
-  512 Kwords = 19 bits, which fits 41-bit signed twenty-two bits over.
-* **`btow`/`wtob`/`pground` cast to `int` internally, and that cast is load-bearing** — their
-  commonest argument is a `sizeof`, which is unsigned and would otherwise drag `b$uadd`/`b$udiv`
-  back in at every call site. Undefined-reference count for the `b$u*` family: **33 → 27**, the
-  remainder being the hardware code above.
-* **`caddr_t` was doing four jobs and now does one.** It stays `char *` (a fat pointer) only for
-  genuine byte-granular user buffers. New alongside it: `chan_t` (sleep/wakeup channel), `carg_t`
-  (callout argument) and `paddr_t` (physical word address). `chan_t` and `carg_t` are pointers to
-  **undefined** structs — thin, so the cast is free where `caddr_t` cost a three-instruction
-  fat-pointer conversion at ~56 `sleep`/`wakeup` sites, and dereferencing one is a compile error.
-
-Three bugs fell out of it, all fixed here:
-
-* **`sleep((caddr_t)ip + 1)` in `pipe.c` and `fio.c` was *byte* arithmetic on a fat pointer.** It
-  walks the byte-offset field (5 → 4 → 3) and leaves the word address alone, so a pipe's read and
-  write channels differed *only* in bits 47-45 — invisible to anything that masks a wchan, and
-  destroyed outright by a thin `chan_t`. Now `CHANOF(ip, n)` (`param.h`), which offsets by whole
-  words. Undefined `struct chan` is what turned this from a silent collapse into a build error.
-* **`major()` shifted through `unsigned`,** so `major(NODEV)` was `(2⁴⁸-1)>>8` rather than `-1`.
-  That accidentally armed every `major(dev) >= n` bounds test against a negative device. It is now
-  signed, and the three tests that matter (`bio.c`, `sys3.c`, `fio.c`) reject a negative major
-  explicitly — `sys3.c`'s especially, since `i_rdev` comes off the disk and a hostile `mknod` can
-  set it.
-* **`getxfile()`'s two a.out overflow guards had gone dead.** They caught a too-large header by
-  letting a 32-bit sum overflow a 16-bit field and comparing; with every field one 41-bit word the
-  comparison can never fire. The segment sizes are hostile input (read from disk), so they are now
-  range-checked directly.
-
-Also removed as dead: `t_linep` (written and read nowhere), `ttwrite`/`l_write`'s `caddr_t` return
-(always `NULL`, no caller). `t_addr` became `int` — it held a *line number*, and `(caddr_t)d` on a
-small integer is the same int→fat-pointer defect as `u_dirp` below.
-
-Cost: text 15616 → 15622 words, i.e. the type work paid for itself and the six new bounds checks
-came out roughly free. `kernel/test/biotest.ini`'s expected halt PC moved 00630 → 00627, since the
-const laid down ahead of `_start` shrank; that constant is `_start + 2` and every `.ini` here has
-one like it.
-
-**Left open on purpose.** Roles C2/C3/C4 of the old `caddr_t` — `fuword`/`suword`'s argument,
-`copyin`/`copyout`'s two ends, and `d_ioctl`'s third argument — are still `caddr_t` even though
-`usermem.S` masks the fat part straight off (`aax #077777`) and never uses it. Splitting them wants
-a `uwaddr_t` (user virtual word address) and must be done in one commit for `d_ioctl`, or the
-mismatch will not be diagnosed: an `int` and a pointer are the same word, and `b6cc` converts
-between them with a **silent `COPY`**. That last fact is also why the type split does *not* catch
-the `u_dirp` bug below — it has to be found by grep, not by the build.
-
-## Still out of scope
-
-The drum and disk drivers (`033` channel programming, `doc/Besm6_Peripherals.md`), the BESM-6
-`icode[]`, and the byte-granularity of `iomove()`.
-
-### The disk-block constants are the *other* half-converted unit
-
-Found while doing stage 0, and left alone: this is the filesystem axis, not the MMU retarget, and
-settling it means settling the on-disk block layout — a different problem.
-
-`BSIZE` is **3072 bytes = 512 words**, but the constants derived from it were never moved:
-`BSHIFT 9` / `BMASK 0777` still describe a 512-*byte* block. So every byte-offset → block
-conversion in the kernel is wrong: `rdwri.c:48-49,111-112`, `nami.c:138-156`, `sys1.c:111-114,181-184`
-(the exec arg staging), and `dev/bio.c:491`.
-
-**The indirect-block half of this is now fixed** (done alongside making `param.h`
-assembler-includable). `NINDIR` is `BSIZE/sizeof(daddr_t)` = **512**, but `NMASK 0177` /
-`NSHIFT 7` still said 128, so `bmap()` (`subr.c:67-120`) could only ever index the first
-quarter of each indirect block while `tloop()` (`iget.c:245`) freed all 512 — the two
-disagreed about the same on-disk structure. `NMASK` is now `0777` and `NSHIFT` `9`.
-
-That half was separable precisely because **`bmap()` works in block numbers, never byte
-offsets**: 512 entries per indirect block *is* a power of two, so a mask and a shift express
-it exactly. It is `BSHIFT`/`BMASK` — the byte-offset conversions — that are stuck on 3072
-not being a power of two. `NINDIR` is also now spelled as a literal `512` rather than
-`BSIZE/sizeof(daddr_t)`, because `param.h` may no longer contain `sizeof`.
-
-A 3072-byte block is **not a power of two**, so the shifts and masks cannot survive in that form:
-either the byte offsets divide and modulo by `BSIZE`, or the filesystem's offsets themselves become
-word counts (`BSHIFT`/`BMASK` then describe 512 words, which is what they accidentally already say).
-The second is the BESM-6-shaped answer and the one to think about first — but it reaches into
-`filsys.h`, `ino.h`, `struct direct` and the on-disk inode, so it wants a plan of its own.
-
-Note `wtodb(x) = (x) >> 9` (words → blocks), added in stage 0, is *correct* either way: a block is
-exactly 512 words.
-
-### DONE: the on-disk layout, and how it turned out
-
-`struct dinode` and `struct direct` are redesigned; `BSHIFT`/`BMASK` are **deleted**, not fixed.
-
-**The inode is 16 words, `INOPB` 32 to a block.** Eight words of metadata then
-`daddr_t di_addr[8]` — six direct, one indirect, one double. The old struct was v7 verbatim:
-`char di_addr[40]`, 13 addresses packed 3 bytes each for a 24-bit PDP-11 `daddr_t`, against an
-`INOPB` of 8 that had been true when a dinode was 64 bytes. Here it came to ~15 words, so the
-i-list wasted **77% of every block** — and `iexpand`/`iupdat` were *already broken*, not merely
-wasteful: their open-coded `l3tol`/`ltol3` byte loops assume a 4-byte in-core `daddr_t` and it is
-6, so they wrote 52 bytes into a 78-byte array at the wrong stride. Both are word copies now,
-verified by disassembly to contain no `asx`/`aax` byte-extract sequences at all.
-
-**What made 16 words fit was dropping the third level of indirection**, and it is unreachable
-here rather than merely unlikely: one ЕС-5052 is 2000 blocks, and at `NINDIR` 512 the single
-indirect already spans 518 blocks while the double spans 262 662 — the volume, 130 times over.
-So `NLEVEL` is 2. `bmap()` was already parameterised by the literal `3` in four places and just
-took the constant; `itrunc()` lost one switch arm.
-
-**The directory entry is 4 words, `DIRPB` 128 to a block**, `DIRSIZ` 24 → **18**. Five words
-divided 512 no better than anything else does. `namei()` now works in **entry numbers** — one
-divide by `DIRENTSZ`, then a shift and a mask — which recovers the arithmetic v7 had. It used to
-mask the *byte* offset with `BMASK`, i.e. re-read the block every 512 bytes of a 3072-byte block
-and index from the wrong base in between.
-
-**`BSHIFT`/`BMASK` are gone.** They cannot be repaired — 3072 is not a power of two — so the
-byte-offset sites (`rdwri.c`, `nami.c`, `sys1.c`) divide and take a remainder by `BSIZE`
-explicitly. That is one `b$div` per *block crossing*, which is noise beside the `bread()` it
-guards. `dev/bio.c` turned out never to have used either. The word-domain pair `BWSHIFT`/`BWMASK`
-is what remains, and it is what `9`/`0777` accidentally already spelled.
-
-**`off_t` stays in bytes.** The word-offset idea above is still open and still attractive — it
-would delete the remaining divides — but it changes `read`/`write`/`lseek` semantics and
-`iomove()`'s granularity, and it is user-visible. Separate problem.
-
-Two things worth knowing next time:
-
-* **`_Static_assert` works and has teeth; the `extern int x[1 - 2*(cond)]` idiom does not.**
-  `b6cc` accepts a negative array size without a word, so the classic trick is decorative here.
-  `ino.h` and `dir.h` now assert both the struct size and that `INOPB`/`DIRPB` of them tile a
-  block; checked by deliberately breaking `INOPB` and watching the build fail.
-* **`DIRSIZ` moves `u_upt`.** `struct user` holds `u_dbuf[DIRSIZ]` and a `struct direct` ahead of
-  the shadow page table, whose word offset `uarea.S` and `seg.S` hardcode as `UPT` (b6as has no
-  `offsetof()`). Both shrank by a word, so `UPT` went **35 → 33** in `kernel/uarea.S`,
-  `kernel/seg.S` and `kernel/test/mmutest.c`. mmutest's check 13 exists for exactly this and is
-  what caught it — the MMU tests are load-bearing for a filesystem change, which is not obvious.
-
-### DONE: the mkfs — `cmd/fsutil`, installed as `b6fsutil`
-
-This was the blocker for task 18b.6, and it is gone: `b6fsutil` builds a root filesystem in
-this layout from a manifest, checks it (five-pass fsck), lists it, extracts it, and converts
-it into the container SIMH attaches. See [cmd/fsutil/README.md](../cmd/fsutil/README.md).
-
-```sh
-b6fsutil -n -M manifest.txt root.img && b6fsutil -c root.img
-b6fsutil -S root.img md2053.disk        # then: attach md00 md2053.disk
-```
-
-Three things learned building it that this file should record:
-
-**The SIMH disk container is not a flat block file, and nothing here had said so.** SIMH
-stores each word as **eight little-endian bytes with a two-bit tag** above the 48 — an empty
-data word on disk is `0x0002000000000000`, not zero — and **interleaves eight service words
-per zone**, a filesystem block being a half-zone. One drive is 8,256,000 bytes, not
-6,144,000. `b6fsutil -S` converts; `cmd/fsutil/simh.cpp` has the layout, transcribed from
-`besm6_disk.c:380-400` and verified byte-for-byte against what `attach -n` writes.
-
-**`s_isize` is the first data block, not a count of i-list blocks.** `ialloc()` bounds its
-scan with it and `badblock()` rejects `bn < s_isize`, so one too high is a runaway read in
-the kernel rather than a wrong answer. A mkfs ported from a BSD source gets this off by one.
-
-**The free list must be built descending.** `alloc()` pops the superblock cache from the top,
-so the last block freed is the first handed out: freeing from the end of the volume down to
-`s_isize` is what makes the kernel allocate ascending. Built the other way it still passes
-every self-consistency check and lays every file backwards across the platter. Note also that
-the sentinel `free()` plants costs a cache slot, so the first chain block holds only
-`NICFREE-1` real blocks — the first spill on a 2000-block volume lands at block 1680, not 1679.
-
-**`sbcheck()` still has not run for real** (see below), and booting with a root disk attached
-still hangs before `iinit()`. That is a driver/boot-path problem, not a format one, and it is
-now the only thing between here and a mounted root. To close the gap without it,
-`cmd/fsutil/test/kernel_model_test.cpp` is a **second, independent reader** — `sbcheck()`,
-`alloc()`, `bmap()` and `namei()`'s directory loop transcribed again, in the kernel's shape,
-sharing nothing with the tool — and it mounts and walks a real image, including a 2 Mb file
-through the double indirect. Two implementations agreeing is the strongest statement available
-until the hang is fixed.
-
-Next step for 18b.6, and it does **not** need the hang fixed: extend `kernel/test/mdtest` to
-attach a converted image, `bread()` block 1 through the real driver and call the real
-`sbcheck()` on the buffer. That would take the "compiled but never executed" note off this
-file.
-
-### DONE: the superblock
-
-`struct filsys` is **exactly one block — 512 words**, and `_Static_assert` holds it there.
-
-v7's layout came to **165 words**, wasting 68% of the block, because `NICINOD 100` and
-`NICFREE 50` were sized for a 512-*byte* block and were never retuned. Filling the block is
-nearly free: the superblock lives in a `geteblk()` buffer held for the life of the mount, and a
-buffer is `BSIZEW` words whether the struct uses them or not. `NICFREE` is now **320** and
-`NICINOD` **160** — split 2:1 toward free blocks because that is the hot path (every write
-allocates blocks; only `creat()` allocates inodes). The free-list chain on a 2000-block drive
-goes from 40 blocks deep to 7.
-
-The lock and flag fields are **`int`, not v7's `char`**. A char *array* packs six to a word, but
-whether adjacent scalar `char` members share one is documented nowhere in `doc/` — and the size
-of this struct is now load-bearing. `int` removes the question rather than depending on the
-answer.
-
-Sizing it to the block fixed a real bug rather than merely tidying: `iinit()` copied
-`btow(sizeof(struct filsys))` = 165 words into a fresh buffer, while `update()` wrote `BSIZEW` =
-512 words of that buffer back to block 1. **347 words of uninitialised buffer went to the disk on
-every sync.** Now the two agree by construction, and the assertion is what keeps them agreeing.
-Two smaller ones went with it: `free()` built its chain block with `getblk()` and no `clrbuf()`,
-so everything past `df_free[]` was stale kernel memory written to disk; and `struct fblk` had
-never been asserted to fit a block, though `alloc()`/`free()` `wcopy()` between it and `s_free[]`
-sizing the copy from the `filsys` side.
-
-**`sbcheck()` (`alloc.c`) is new, and v7 has no equivalent.** It checks `FS_MAGIC`, then the
-geometry words `s_bsize`/`s_inopb`/`s_naddr` against the kernel's own `BSIZEW`/`INOPB`/`NADDR`,
-then `SUPERB < s_isize < s_fsize`, then the two counts. `iinit()` calls it before installing the
-superblock and before seeding the clock from `s_time`; `smount()` calls it and fails `EINVAL`.
-The geometry words are not ceremony — `INOPB` went 8 → 32 and `NADDR` 13 → 8 one commit ago, and
-an image from a `mkfs` one generation out of step would otherwise mount cleanly and read every
-inode from the wrong offset.
-
-Two things did **not** turn out as planned, and both matter for task 18b.6:
-
-* **`sbcheck()` is still unexercised at runtime.** The plan expected the boot panic to change
-  from `iinit` to `no root fs`. It does not: with no disk attached, `bread()` fails first
-  (`err on dev 0/0`) and `iinit()` panics before `sbcheck()` is ever reached. The boot is
-  therefore byte-for-byte unchanged, which is good for regression but means the new code path
-  has only been compiled, not run.
-* **Booting with a root disk attached HANGS**, and this is *pre-existing* — verified by running
-  the same image against the previous commit, which hangs identically. Attach a formatted disk
-  as `md00` (`attach -n md00 <name>2053.disk`; the filename must carry a volume number in
-  2048..4095) and the kernel prints `mem = ...` and then stops, with no panic and no further
-  output. So `bread()` on an *attached* root disk never completes. Whoever picks up 18b.6 will
-  hit this before they hit anything about the filesystem layout — it is a driver or boot-path
-  problem, not a format one.
+  read-modify-write. Reworking `iomove()` for word-aligned bulk I/O is task 28.
+* **`time` is never seeded from a wall clock.** This machine has no clock-calendar a program can
+  read, so the epoch starts at 0 and `iinit()` takes the superblock's `s_time`.
+* **`sy_nrarg` is read nowhere** and is vestigial: exactly one argument arrives in a register on this
+  machine, for any `narg >= 1`.
+* **There is no read-only user page.** РЗ closes a page to reads as well as writes, so a closed text
+  page would take the program's own constant pool with it. `estabur()`'s `xrw` argument, and `sep`,
+  are accepted and ignored.

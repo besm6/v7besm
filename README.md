@@ -22,8 +22,10 @@ trap doors, the timer and the context switch all work, and two processes alterna
 scheduler, each seeing its own u-area, with the user stack growing on demand. The console, drum and
 disk drivers are written and their failure modes classified.
 
-Boot stops at `panic: iinit` — there is no root filesystem image to mount yet. Building one, and the
-userland above it, is what remains; [kernel/TODO.md](kernel/TODO.md) is the live work plan.
+Boot stops at `panic: iinit`: `b6fsutil` (`cmd/fsutil/`) builds root filesystem images in the
+kernel's own on-disk layout, but mounting one still hangs. That, then loading a BESM-6 executable,
+entering user mode and putting a shell there, is what remains — [kernel/TODO.md](kernel/TODO.md) is
+the live work plan, a sequential list that ends at a single-user prompt on the SIMH console.
 
 Alongside the running kernel, [kernel/test/](kernel/test/) holds standalone SIMH tests: each links
 kernel objects against a hand-built environment and lets a `.ini` script assert on the machine state
@@ -54,8 +56,11 @@ doc/          BESM-6 architecture references
 | Memory management (the MMU)   | `kernel/utab.c`  | ✔ retargeted, tested under SIMH         |
 | Boot, traps, context switch   | `kernel/besm6.S` | ✔ working — processes switch under SIMH |
 | Peripheral drivers            | `kernel/dev/`    | ✔ console, drum and disk                |
-| Root filesystem               | —                | ☐ to do — boot stops at `panic: iinit`  |
-| libc library                  | —                | ☐ to do                                 |
+| Filesystem image builder      | `cmd/fsutil`     | ✔ working, tested, documented           |
+| libc / libm / crt0            | `lib/`           | ✔ built and tested under `b6sim`        |
+| Mounting a root filesystem    | `kernel/`        | ☐ to do — boot hangs before `iinit()`   |
+| `exec` of a BESM-6 `a.out`    | `kernel/sys1.c`  | ☐ to do — still the PDP-11 header       |
+| Userland (`init`, `sh`)       | —                | ☐ to do                                 |
 
 ## Building
 
@@ -145,8 +150,9 @@ See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail, and
 
 **The kernel**:
 
-- [kernel/TODO.md](kernel/TODO.md) — the live work plan for the memory-management retarget: the
-  design the machine forces, the hardware rules every part of it obeys, and what is left to do.
+- [kernel/TODO.md](kernel/TODO.md) — the live work plan: the design the machine forces, the hardware
+  rules every part of it obeys, and the sequential list of what is left to do, from mounting a root
+  filesystem to a single-user shell.
 - [doc/Kernel_Assembly_Routines.md](doc/Kernel_Assembly_Routines.md) — the machine-language
   assist: what each routine must do, the contract it owes its C callers, and — routine by
   routine — how `kernel/besm6.S` and its companion files satisfy it.
