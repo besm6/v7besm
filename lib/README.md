@@ -1,420 +1,154 @@
 # The user-level libraries
 
-A work plan, in the same spirit as [`../kernel/TODO.md`](../kernel/TODO.md): it says what is to
-be built here and in what order. A task is struck from this file as it lands, exactly as its
-source file is deleted from `tmp/libc/`, so what is written here is always the work that is
-*left*; the account of how a landed task turned out is in its commit. Whatever it taught that
-the rest of the library must obey is kept below, under **Ground rules**.
+`libc` and `libm` for programs that run **under this kernel** — the C library a Unix v7 user
+program links against, ported from v7 to the BESM-6 and refitted to C11. The kernel itself uses
+none of it: it has its own `printf` in [`../kernel/prf.c`](../kernel/prf.c) and links only
+`libruntime.a` for the `b$*` compiler-support helpers. The declarations these libraries answer
+come from [`../include/`](../include/), the one system-header tree, whose hosted half this repo
+owns.
 
-## What this is
+## Layout
 
-`libc` for programs that run **under this kernel**, not for the kernel itself. The kernel needs
-none of it: it defines its own `printf` in [`../kernel/prf.c`](../kernel/prf.c) and references no
-`str*`, `mem*`, `bcopy` or `bzero` anywhere, so it links only `libruntime.a` for the `b$*`
-helpers. User programs need the real thing — `crt0`, the syscall stubs, `errno`, `stdio`,
-`malloc`, the string and conversion routines — and after that `libm`, `libtermlib` and
-`libcurses`.
+```text
+lib/
+    CMakeLists.txt      toolchain setup; recurses into each library
+    libc/               libc.a and crt0.o
+        csu/            crt0
+        sys/            syscall stubs, cerror, errno, the exec wrappers, sbrk
+        gen/            strings, ctype, setjmp, malloc, conversions, <time.h>, misc
+        stdio/          FILE machinery, the printf and scanf engines, the accounts
+    libm/               libm.a — the math library
+    test/              programs run under b6sim (CMakeLists.txt + run-test.sh)
+```
 
-Two source trees feed it:
+One function per file, so `b6ranlib`'s index lets `b6ld` pull only what a program actually
+calls. `crt0.o` sits beside the archive rather than in it: a program's startup is named on the
+link line, never pulled by symbol, exactly as v7 keeps it in `/lib/crt0.o`.
 
-- **[`tmp/libc/`](tmp/libc/)** — Unix v7 libc as ported to x86 by Robert Nordier (`csu`, `crt`,
-  `gen`, `stdio`, `sys`; ≈5200 lines). This is the *content*: the algorithms, the v7 semantics,
-  the file-by-file decomposition. Its machine-dependent parts (`.s` files, `doprnt.s`,
-  `fltpr.s`, `setjmp.s`, every `sys/*.s`) are x86 and are rewritten, not ported.
-- **`~/Project/Besm-6/c-compiler/libc/besm6/`** — a small BESM-6-native libc written for this
-  same toolchain: a full printf engine (`doprnt.c`), `malloc.c`, the `mem*`/`str*` family, and
-  the compiler-support routines in `unix/*.s`. This is the *form*: how a BESM-6 C routine
-  handles fat pointers, one-word scalars, and the `$77` syscall leaf. `unix/read.s`,
-  `unix/write.s`, `unix/crt0.s` are the models for `sys/` and `csu/`.
-  It is a **source tree to copy from, not a library to link**: that project now installs
-  `libruntime.a` and nothing else, its own libc having been split off as `libc0.a` for its
-  own tests. Where it already has a routine, **take it rather than porting the v7 one** —
-  phase 2 took the whole `str*`/`mem*` family and `atoi` that way. Its versions are ANSI
-  already and their signatures match the `<string.h>`/`<stdlib.h>` this same tree supplies, so
-  nothing ends up defined as `int n` where the declaration says `size_t n`. Each copied file
-  says at its head where it came from; a divergence has to be written down there.
+`libtermlib` (termcap) and `libcurses` are not written yet, though
+[`../include/curses.h`](../include/curses.h) and [`../include/unctrl.h`](../include/unctrl.h)
+are already in the tree.
 
-The ported file is deleted from `tmp/libc/` as it lands, so what is left there always names the
-remaining work; `tmp/` goes away entirely at the end. After phase 5 what is left is four files
-and two v7 build scripts: `gen/mon.c`, `crt/mcount.s` and `csu/mcrt0.s`, which stay stubs until
-profiling is wanted, and `gen/nlist.c`, deferred with its header question (see **Ground rules**).
+## The syscall stubs
 
-## Ground rules
+Most leaves are **generated**: [`libc/sys/syscalls.tbl`](libc/sys/syscalls.tbl) lists
+`symbol macro` per line, and `libc/sys/mkstub` turns each into one `.S` and one object. Adding
+a syscall is adding a line and nothing else. Hand-written beside the table are the calls that
+cannot be uniform — a second result in r12, an argument that must survive the trap, or no
+return on success — plus `cerror.s`, `sbrk.c` and the C `exec*` wrappers.
+
+**No syscall number is written down under `lib/`.** Column 2 of the table is the `SYS_*` macro
+of [`../include/sys/syscall.h`](../include/sys/syscall.h), and a stub issues `$77 SYS_write`;
+that is what forces the `.S` suffix, since `b6cc` sends a `.S` through the preprocessor and a
+`.s` straight to the assembler.
+
+The gate's **arity is the C prototype's**, and nothing in the stub carries it: the kernel reads
+it from `sysent[].sy_narg` ([`../kernel/sysent.c`](../kernel/sysent.c)) and `b6sim` from
+`syscall_nargs()` ([`../cmd/sim/syscall.cpp`](../cmd/sim/syscall.cpp)). Those two and every
+caller must agree — a count that disagrees reads the arguments from the wrong slots and drifts
+the user stack by a word per call.
+
+On failure the gate leaves the error number in r14. Since r14 is caller-saved and unreadable
+from C, each stub tests it and branches to the shared `cerror`
+([`libc/sys/cerror.s`](libc/sys/cerror.s)), which stores it into `errno` — defined in that same
+file — and returns −1.
+
+## Building and linking
+
+`lib/` is part of the top-level CMake build (a guarded `add_subdirectory(lib)`), cross-compiled
+by the `b6*` toolchain rather than the host compiler, driven through custom commands and sharing
+[`../scripts/BesmCross.cmake`](../scripts/BesmCross.cmake). Integrated it uses the **in-tree**
+tool targets, so no install has to happen first; standalone (`cmake -S lib -B …`) it falls back
+to the installed ones. From the repo root:
+
+```sh
+make            # builds cmd/, lib/ and the kernel
+make install    # copies libc.a, libm.a and crt0.o into <prefix>/share/besm6/lib
+make test       # builds the test images
+make run        # runs them (ctest; the library tests carry the label `lib')
+```
+
+A program links against two or three archives, **ours first**:
+
+```sh
+b6ld crt0.o prog.o -o prog -L…/lib -lm -lc -lruntime      # -lm only if it needs it
+```
+
+That is what `b6cc` puts on the line itself. The order is a contract: `b6ld` scans an archive
+once, where it stands, and pulls a member only for a symbol still undefined. libm calls into
+libc (`errno`, `frexp`, `ldexp`, `modf`), libc calls the `b$*` helpers, and neither calls back.
+`libruntime.a` comes from the external
+[c-compiler](https://github.com/besm6/c-compiler/) and supplies **nothing but** those helpers.
+
+One hazard is silent: a routine missing from `libc.a` can be satisfied from `libruntime.a`
+instead of failing to link. Relink without it and read the errors — every undefined name must
+be a `b$*`:
+
+```sh
+b6ld crt0.o prog.o -o /dev/null -L…/libc -lc
+```
+
+## BESM-6 facts this code obeys
 
 Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
-`Besm6_Calling_Conventions.md` above all. The consequences that bite in libc specifically:
+`Besm6_Calling_Conventions.md` above all. What bites in libc specifically:
 
-- **The syscall gate is `$77 N`.** Arguments 1…N−1 sit just below `r15`, the last one is in the
-  accumulator, the result comes back in the accumulator, **`errno` in r14** (zero on success —
-  there is no carry flag), and a second result, where v7 has one, in **r12**
-  (`pipe`, `wait`, `getpid`, `getuid`, `getgid`). Both implementations of the gate agree:
-  [`../kernel/syscall.c`](../kernel/syscall.c) and
-  [`../cmd/sim/syscall.cpp`](../cmd/sim/syscall.cpp).
-- **A stub must not pop the stack.** The gate stands in for the called function and performs the
-  callee's cleanup itself — `tr->r15 -= n - 1` in the kernel, the same in `b6sim`.
-- **A stub therefore has no prologue.** The C calling convention already places the arguments
-  where the gate reads them, so the stub is a bare `$77 N` and a return; `b$save` would move
-  them. This is why `sys/` is assembly and not C.
-- **The number is a name, and the leaf is `.S`.** No syscall number is written down anywhere
-  under `lib/`: a leaf says `$77 SYS_write`, from
-  [`../include/sys/syscall.h`](../include/sys/syscall.h), and `sys/syscalls.tbl` maps a libc
-  symbol to the macro it issues (they differ for `lseek`/`SYS_seek` and `_break`/`SYS_break`).
-  That forces the suffix — `b6cc` sends a `.S` through the preprocessor and a `.s` straight to
-  the assembler (`b6_obj` in [`../scripts/BesmCross.cmake`](../scripts/BesmCross.cmake)) — so a
-  new leaf that traps must be `.S`. `cerror.s`
-  and `csu/crt0.s` stay `.s`: neither issues an extracode. b6as's `#` constant-pool operator
-  passes through cpp untouched (`sys/dup.S` has both `aox #0100` and `$77 SYS_dup`), because a
-  `#` that does not start a line is an ordinary token.
-- **The gate's arity is the C prototype's**, and nothing in the stub carries it: the gate reads
-  it from `sysent[].sy_narg` ([`../kernel/sysent.c`](../kernel/sysent.c)) and from
-  `syscall_nargs()` ([`../cmd/sim/syscall.cpp`](../cmd/sim/syscall.cpp)), which must agree with
-  each other and with every caller. A count that disagrees reads every argument from the wrong
-  slot *and* drifts the user stack by a word per call. Two PDP-11 leftovers were fixed this way
-  in phase 1 — `seek` and `stime` each shed the second word of a `long` that is one word here —
-  and `dup` is the reverse case: it is a two-argument gate whichever name you call, so `dup(fd)`
-  pushes a word it does not have and `dup2(fd, fd2)` sets bit `0100` in the first, exactly as v7
-  does.
-- **An extracode returns to the left half of the *next* word.** Whatever is packed after `$77 N`
-  in its own word is never executed, and no gate can recover it — the half is not recorded
-  anywhere. `b6as` now word-aligns after an extracode (the `TALIGN` that `vjm`/`ij`/`stop`
-  already carried), so a stub may be written as the obvious three instructions; but a stub
-  assembled with `-a`, or by any other assembler, may not.
-- **`errno` cannot be read in C at the call site**, only *set* by `cerror`. A stub that forgets
-  the `14 v1m cerror` still returns −1 — the gate puts it there — and only `errno` gives it away,
-  which is what `test/errno` exists to catch.
-- **`errno` cannot be picked up from C.** r14 is caller-saved and the compiler will have
-  clobbered it before any C statement runs. The stub itself tests r14 and branches to a shared
-  `cerror`, which stores it into `errno` and returns −1. The value is always one of the 34 that
-  [`../include/errno.h`](../include/errno.h) defines — the kernel assigns from its own copy in
-  [`../include/sys/user.h`](../include/sys/user.h), and `b6sim` maps the host's numbering onto
-  the same list — so `sys_errlist` needs 35 entries and no more.
-- **`break` takes a word address**, not a byte count, and drops any byte offset: a fat `char *`
-  and a plain word address arrive at the gate as the same 15 bits. So a mid-word `char *` would
-  floor the break to its word, and `brk`/`sbrk` keep `curbrk` as a real `char *`, convert the
-  byte increment themselves, call the gate with a whole number of words, and hand back the old
-  break as the fat pointer they already hold. The kernel rounds up to a page and refuses growth
-  that reaches the stack at `070000`; `b6sim`'s `Syscall.Break` is the shared spec.
-- **`sbrk` fails with NULL, not `(char *)-1`.** v7's value would have to be fabricated from an
-  integer, which is the one thing the fat-pointer rule below forbids; the break can never
-  legitimately be word 0, so NULL costs nothing. `malloc` tests for NULL.
-  `sbrk` rounds *up* when growing (`btow()`) and *toward zero* when shrinking — `btow()` is
-  `(x + 5) / 6` and C truncates a negative quotient, so it would free one word too few — and it
-  refuses an increment large enough to wrap the 15-bit word address, which an `int` is wide
-  enough to express and a `char *` is not. **The break is granted a page at a time** — both
-  the kernel and `b6sim` round it up to 1024 words — so an allocator's growth chunk and the
-  step it backs off by when refused are both a page: anything smaller asks for exactly what
-  was just given, or exactly what was just refused.
-- **A second result is only 15 bits.** r12 is an index register, so `wait`'s status — `(code <<
-  8)` — is truncated for any exit code above 127. It bites identically on the kernel and under
-  `b6sim`. Widening it means giving `wait` an argument again and writing the status through the
-  caller's pointer kernel-side; until then, exit codes stay small.
-- **`char *` is a fat pointer** — bit 48 set, byte offset in bits 47–45 over a 15-bit word
-  address — and `int *` is not. Never fabricate one by casting an integer. Six chars pack into a
-  word, `sizeof(int) == 6`, `NBPW == 6`, and `int` is 41 bits signed / 48 unsigned.
-- **A flag packed into a pointer goes *above* the address, never in bit 0.** A word pointer
-  holds its 15-bit address in bits 15–1 with bits 48–16 zero, so bit 16 — one past the top of
-  the address space — is free, and it stays clear of the bit-48 marker that would make the
-  value look fat. Bit 0 is not free: an address is a *word index*, so a one-word object's
-  neighbour is one away and setting the low bit names it. This is the whole of what had to
-  change in v7's `malloc`, whose `BUSY` flag lives in bit 0 on the PDP-11 — and it is cheap,
-  because the casts it takes are free: pointer↔integer is a bare copy in both directions
-  (every type is one word), and `(char *)` of a word pointer sets the marker with the offset
-  of byte **#0**, so the fat pointer names the word's first byte and casting back recovers it.
-- **A null word pointer cast to `char *` is not a zero word.** The cast sets the marker and an
-  offset over the zero address, so `p == NULL` still answers correctly — the compiler compares
-  the address part alone — but `if (!p)` need not. Return a plain `NULL` from the failure path
-  rather than casting one.
-- **File I/O counts bytes.** `u_count` and `u_offset` are byte counts and `b_addr + on` is fat
-  pointer arithmetic ([`../kernel/rdwri.c`](../kernel/rdwri.c)), so stdio's counts are bytes,
-  and a block is `BSIZE == 3072` bytes == 512 words. `getw`/`putw`, which move a *word*, move
-  **six** bytes and not the PDP-11's two.
-- **`FILE` grew two fields, and both were free.** `_flag` is an `int` because all eight bits of
-  v7's `char` were spoken for and line buffering needed a ninth (`_IOLBUF`); `_bufsiz` is new
-  because `setvbuf` lets a caller name a size and v7, which had only `setbuf`, wrote `BUFSIZ`
-  into `_filbuf` and `_flsbuf` outright. Neither costs anything: a `char` **struct member**
-  occupies a whole word here anyway — `struct sgttyb` is four chars in four words.
-- **A line-buffered stream is held at `_cnt == 0`.** That is the whole mechanism, and it is why
-  the `putc` macro shows no sign of the mode: every `putc` misses and lands in `_flsbuf`, which
-  appends the byte and writes the line out on `'\n'`. The fully buffered fast path is untouched,
-  and `stdout` takes the mode when `isatty(1)` — where v7 went fully *un*buffered and spent a
-  syscall per character.
-- **`_doprnt` sinks into a `FILE *`, and `_IOSTRG` is what makes `snprintf` count.** The engine
-  is the c-compiler's `doprnt.c`, not v7's x86 assembly; it emits through `putc` and returns the
-  number of characters it produced. `sprintf`/`snprintf` build a v7 `_IOSTRG` stream on the
-  stack over the caller's buffer, and `_flsbuf` **drops** the byte when such a stream fills,
-  leaving the engine counting characters it could not store — which is exactly C11's return
-  value. The KOI7 upper-case fold the engine arrived with is gone: this terminal is ASCII, so
-  `%x`/`%X`, `%e`/`%E` and `%g`/`%G` are three distinct pairs again.
-- **`exit` is C and `_exit` is the bare trap.** `exit` lives in `gen/cuexit.c` and flushes stdio
-  before calling `_exit`; `crt0.s` tail-jumps to it, so `cuexit.o` is in every program ever
-  linked. **It must therefore reach `_cleanup()` through a pointer, never by name.** Calling it
-  outright is what v7 does, and it costs every program the whole of stdio — `_iob`, the two
-  512-word buffers, `malloc`, `free`, `close` — whether it prints or not: `hello` measured 100
-  words through the pointer and 2255 without it. A weak definition does not help and cannot:
-  `b6ld` pulls an archive member only for a symbol still **undefined**
-  (`load_ranlib_members()`, [`../cmd/ld/library.c`](../cmd/ld/library.c)), so a weak no-op would
-  satisfy the reference and keep the real `_cleanup` from ever being pulled. `_flsbuf()` arms
-  the pointer instead, on the first buffered write — the one place every write path passes
-  through. The same rule binds anything else `exit` ever has to call.
-- **The terminal is ASCII**, not KOI7 ([`../kernel/dev/sc.c`](../kernel/dev/sc.c)). The v7
-  `ctype` tables carry over unchanged, and the c-compiler's printf engine must *lose* its
-  upper-case folding when it is adopted.
-- **The user address space is 32 pages** with the stack based at `070000`, so text + data + bss
-  must fit below that. One function per file, so `b6ranlib`'s index lets `b6ld` pull only what a
-  program actually calls.
-- **ANSI, not K&R.** The kernel sources were converted; libc follows. `va_dcl`-style variadic
-  definitions do not parse at all, so `printf`, `execl` and the rest become `(fmt, ...)` over
-  the compiler's `<stdarg.h>` — where one argument is exactly one word.
-- **There is one header tree, this repo owns the hosted half of it, and that half is C11.**
-  [`../include/`](../include/) holds the v7 headers plus the C11 ones v7 never had, adapted from
-  the c-compiler's tree; where the two overlapped (`stdio.h`, `ctype.h`, `errno.h`, `setjmp.h` …)
-  the v7 header stayed and was refitted rather than replaced. Four consequences land on code
-  written here: `assert()` is an expression and `<assert.h>` is unguarded on purpose;
-  `toupper`/`tolower` are functions and v7's unconditional macros are `_toupper`/`_tolower`;
-  `isprint(' ')` is now true; and a signal handler is `void (*)(int)`, which is the shape the frame
-  now delivers, `raise()` with it — so `<signal.h>` is answered in full.
-  `libc.a` answers every declaration `<stdio.h>` makes, the C11 additions v7 never
-  had included — the v-forms, `snprintf`, `setvbuf`, `fgetpos`/`fsetpos`,
-  `remove`/`rename`/`tmpfile`/`tmpnam` — most of them thin wrappers over the v7 core. One name
-  to watch there: v7's
-  `_IONBF` flag bit is spelled `_IOUNBUF` now, because C11 needs `_IONBF` for a `setvbuf` mode.
-  `<math.h>` names three routines that are in **libc** and not the libm of phase 7 — `modf`,
-  `frexp` and `ldexp` — because the conversions need them, and v7 keeps them in `gen/` too.
-  The freestanding ten — `<stddef.h>`,
-  `<stdarg.h>`, `<limits.h>`, `<besm6.h>` and the rest — are the *compiler's*, and it installs
-  them into the same directory; they are not in this tree at all.
-  `<time.h>` is answered in full too, since phase 5: `ctime`/`localtime`/`gmtime`/`asctime` are
-  v7's, and `clock`, `difftime`, `mktime` and `strftime` — which v7 never had — are written from
-  §7.27, so nothing there is declared and missing any more.
-  `-I../../include` names ours in the source tree, ahead of the installed copy that
-  [`../cmd/cc/cc.c`](../cmd/cc/cc.c) appends to every preprocessor run, so a build here sees what
-  it just edited. Nothing under `lib/` should
-  add a header to `include/` merely to declare its own function: a routine that no v7 header
-  declares (`index`, `rindex`, `swab`, `mktemp`, `isatty`, `perror`, and phase 5's `exec*`,
-  `ttyname`, `ttyslot`, `getlogin`, `timezone`, `tell` and `crypt`) declares itself at the
-  head of its file, exactly as `test/*.c` declares the syscalls it calls. The exceptions are
-  headers that exist for *nothing but* the routines in question and were merely silent about
-  them, which is a different thing: `<pwd.h>` and `<grp.h>` now name the `getpwent`/`getgrent`
-  families, and `popen`/`pclose` join `getw`/`putw`/`fileno` in `<stdio.h>`'s v7-extension block.
-- **A relational between two `char *` is safe**, even though a fat pointer does *not* sort as
-  a plain word: incrementing one *decreases* the byte offset, which sits above the word address
-  in bits 47–45, so a raw word compare of two pointers into the same word comes out backwards.
-  The compiler lowers `<`/`>` between fat pointers through `b$pdiff`, the same helper as `-`,
-  and tests the sign. `memmove`'s direction test and `qsort`'s partition both depend on it, and
-  `test/strings` overlaps *within one word* on purpose to keep it that way.
-- **A call through a function pointer is a `wtc` of the pointer and a bare `13 vjm`**,
-  wherever the pointer lives — a parameter, an auto, an array element or a file-scope
-  variable (`wtc` carries a 15-bit address, so it reaches a global with no `utc` escape).
-  A callback needs no special handling: `qsort` keeps its comparison in the file-scope static
-  v7 used.
-- **`long` is `int`, one word**, so `atol` *is* `atoi` and is written as a call to it; the
-  same collapse is why `lseek` and `stime` shed a word in phase 1. `sizeof(int) == 6` char-units
-  and `sizeof(char) == 1`, so `sizeof arr / sizeof arr[0]` still counts elements.
-- **An argument list *is* an `argv[]`, and `execl` copies nothing.** Arguments are pushed in
-  direct order into one contiguous parameter block, one word each, and the compiler's
-  `<stdarg.h>` defines `va_start(ap, last)` as `&last + 1` — so the `va_list` already points at
-  a NULL-terminated array of `char *`, which is exactly what the gate reads. `execl` is three
-  lines and `execle` finds its environment by walking to the terminating null and taking the
-  word after it. That terminator has to be read as a **raw word** (`va_arg(ap, long)`), for the
-  reason `_doprnt` reads `%s` that way: reading a zero word back as a `char *` decorates it into
-  a nonzero fat pointer and the walk never ends.
-- **Where an array's neighbour is not where the PDP-11 left it.** v7's `crypt` declares
-  `static char L[32], R[32]` and then indexes `L[]` out to 63, because on the PDP-11 the two sat
-  adjacent with nothing between. Six chars pack into a word here, so a 32-char array occupies six
-  words with four bytes to spare and `L[32]` is padding. The two are one array of 64 now
-  (`gen/crypt.c`). The failure mode is the dangerous kind: thirteen plausible characters, none
-  of them right — which is why `test/pwent` pins six vectors taken from the **host's** `crypt(3)`
-  and not from this library's own first output.
-- **A signal handler costs libc nothing, and that is a kernel decision.** Phase 6 added one routine
-  here — `raise` — and changed no other. The kernel builds the signal frame on the user stack and
-  **plants the return path in it**: a `$77 SYS_sigret` word (`sigcode`, `../kernel/besm6.S`) that
-  `sendsig()` copies out above the frame and names in r13, so a handler's ordinary `13 uj` return
-  trips an extracode and `sigret()` reloads the frame. The consequences here are all absences: the
-  `signal` stub stays the plain generated leaf, there is no `dvect`/`tvect` trampoline of the kind
-  the x86 port carried, no libc table shadowing the kernel's `u_signal[]`, and `signal()` therefore
-  still answers with the *true* previous disposition — including the `SIG_DFL` that a caught signal
-  is reset to on delivery. It could not have been libc's work anyway: which half of a word to resume
-  at lives in SPSW and only `выпр` restores it, so a handler interrupted from a right-half
-  instruction can only be resumed by the kernel. **A handler is entered by the ordinary
-  one-argument convention** — the number in the accumulator, r14 = −1, and R = 7, the mode word
-  `crt0` would otherwise have established. See `doc/Unix_Context_Switch.md` §10a.
-- **Two routines still have no test, and neither is about delivery.** `abort` raises `SIGIOT` and
-  leaves it at `SIG_DFL`, and `b6sim` services an uncaught `kill` by killing its own process (the
-  guest pid is the host pid), so a test would take the simulator down with the program and report as
-  a harness crash. `getpass` opens `/dev/tty` and would sit there waiting to be typed at, which a
-  diff-against-`.expected` harness cannot arrange. `sleep`, the third of that list, now runs: it is
-  `test/signals`' last leg.
-- **`ttyname` reads a directory with `read()`**, as v7 did and as this kernel will allow, so it
-  answers under the kernel and not under `b6sim`, whose `read()` is the host's and refuses a
-  directory. `ttyslot` and `getlogin` stand on it and are the same story. They are ported and
-  their failure paths are tested; the rest waits on a root filesystem.
-- **Three of phase 5's list turned out to need nothing.** `stty` and `gtty` are real syscalls on
-  this kernel (`sysent[31]`/`sysent[32]`), not v7's `ioctl` writearound, and `times` is a syscall
-  too — all three have been generated leaves since phase 1. And `nlist` is **deferred**: it would
-  need a guest-visible description of the b.out format, `include/README.md` says such a format is
-  described once and under `cross/besm6/`, and nothing here calls it. It comes back with the first
-  program that does — `nm`, `ps`, `pstat` — and the header question gets settled then.
-
-### Phase 7: libm
-
-- **Overflow is a fault; underflow is a silent zero, and the two are not symmetric.** An exponent
-  that rises past 2^63 raises `MSG_ARITH_OVERFLOW` and the program dies
-  ([`../cmd/sim/arithmetic.cpp`](../cmd/sim/arithmetic.cpp), same on the real machine); one that
-  falls below 2^-63 quietly becomes machine zero. So `HUGE_VAL` is a value a routine *returns*,
-  never one it *computes*: every range gate is placed **before** the arithmetic that would
-  overflow and is checked strictly. This is the whole content of the port. `exp`'s v7 `maxf` of 45
-  was past `ln(DBL_MAX) = 43.668` and computing `exp(45)` faulted; it is two gates now, at 43.6 and
-  −44.3. `test/matht`'s range block exists to catch a gate one ulp too loose — the symptom is not a
-  wrong number but a dead program, and the missing `ok` lines say where.
-- **The link order is `-lm -lc -lruntime`.** libm calls `errno`, `frexp`, `ldexp` and `modf` in
-  libc (and its own cross-calls); nothing in libc calls libm. So `-lm` precedes `-lc`, which is
-  where `b6cc` already puts a user `-l` — ahead of the implicit `-lc -lruntime`
-  ([`../cmd/cc/cc.c`](../cmd/cc/cc.c)) — so `b6cc prog.c -lm` needs no driver change.
-  The `b6_libtest` macro in [`test/CMakeLists.txt`](test/CMakeLists.txt) threads `-lm` into the
-  link for the one program (`matht`) that needs it here.
-- **The PDP-11's magic numbers were widths, and had to be rederived.** `sinh`/`tanh`'s `21.` is
-  where `exp(−x)` dies against a *56-bit* mantissa; here that is `20·ln2 ≈ 14`. `sin`'s `32764` was
-  the largest quarter-turn below a *16-bit* `int`; here the fast integer reduction is good to 2^40,
-  the mantissa width and the same `two40` `modf` keys on. `sqrt`'s `1L<<30` scaling loop was an
-  `ldexp` written out because the PDP-11 had none in the library; ours is four exact instructions.
-- **Three routines are not v7's.** `fmod` had no v7 ancestor — the file in `tmp/` was an fdlibm
-  IEEE import, useless on a machine with no `uint32_t` view of a `double` — so it is written from a
-  scale-and-subtract loop over `frexp`/`ldexp`, exact by Sterbenz. `fma` is C11 and exact by a
-  20-bit mantissa split (Dekker's `TwoProduct` with the split done by `modf`/`ldexp`, not by the
-  textbook `2^20+1` constant, which needs round-to-nearest and this machine forces the low bit
-  instead). `trunc`/`round`/`copysign`/`fmin`/`fmax` are C11 too, a few lines each.
-- **`gamma` was dropped, `erf`/`erfc` gained declarations.** `gamma` is the one v7 libm source that
-  never reached `tmp/`, nothing calls it, it is not C11; `<math.h>` no longer declares it, and the
-  choice between v7's `signgam` form and C11's `tgamma`/`lgamma` waits for the first caller. The
-  reverse for `erf`/`erfc`: the source was always in `tmp/` and v7's `<math.h>` declared both, ours
-  silently did not.
-- **j0/j1's leading coefficients did not fit, so they are scaled.** Both Bessel fits open with
-  values near 5×10^20…5×10^23, past the largest finite 9.22×10^18 — they cannot be written as
-  literals at all. Each numerator/denominator *pair* is divided by a power of ten (a shift of every
-  literal's decimal exponent), which leaves the ratio `n/d` — the only thing either polynomial
-  contributes — unchanged. The factor is noted on each array. `b6cc` emits an initialized
-  file-scope `double` array to the constant pool, so the Horner loops of `erf`/`j0`/`j1` needed no
-  unrolling.
-- **`long` is `int`, and it bit `pow`.** `pow`'s integer-exponent test rounds `arg2` through `int`;
-  a 41-bit `int` cannot hold an exponent that ranges to 2^63, so the conversion is guarded by
-  `fabs(arg2) < two40` first (anything larger is integral already). Same collapse the phase-1
-  syscalls saw. And two files rename a local `exp` to `dexp` — the front end has one namespace for
-  objects and functions, and `<math.h>` has declared `exp()` — exactly as `atof.c` already did.
-
-## Layout and build
-
-```
-lib/
-    README.md           this plan
-    CMakeLists.txt      toolchain + recurses into each library
-    libc/
-        CMakeLists.txt  builds libc.a and crt0.o (with the mkstub codegen)
-        csu/            crt0
-        sys/            syscall stubs, cerror, errno
-        gen/            strings, ctype, setjmp, malloc, misc
-        stdio/          FILE machinery, the formatting engine, the scanning engine
-    test/               programs run under b6sim (CMakeLists.txt + run-test.sh)
-    libm/               the math library (phase 7, done)
-    libtermlib/         \  phase 7, still to do
-    libcurses/          /
-```
-
-Part of the top-level CMake build, as a guarded `add_subdirectory(lib)` in the style of
-[`../kernel/CMakeLists.txt`](../kernel/CMakeLists.txt) — `b6cc -I../include`, `b6as`, `b6ar`,
-`b6ranlib`, driven through custom commands rather than CMake's C support, and sharing the
-[`../scripts/BesmCross.cmake`](../scripts/BesmCross.cmake) toolchain module. Integrated it uses
-the **in-tree** tool targets, so it builds under the top-level `make` with no install-first
-ordering; standalone (`cmake -S lib`) it falls back to the installed tools. There is no `-M` in
-`b6cc`, so every object takes a coarse dependency on the whole `include/` tree. `make install`
-copies `libc.a`, `libm.a` and `crt0.o` into `<prefix>/share/besm6/lib`, beside `libruntime.a`,
-which is where `b6cc` looks for them.
-
-A program links against two archives, ours first:
-
-```sh
-b6ld crt0.o prog.o -L$(TOP)/lib/libc -L$HOME/.local/share/besm6/lib -lc -lruntime
-```
-
-That is what `b6cc` itself puts on the line when it links, and the `b6_libtest` macro in
-[`test/CMakeLists.txt`](test/CMakeLists.txt) does the same for the programs built here. The second archive is the
-external c-compiler's, and is reached **only** for the `b$*` compiler-support helpers
-(`b$save`, `b$ret`, `b$mul`, `b$div`, the relational and conversion routines) that every
-compiled function calls; it is all that project installs for this toolchain, and the libc, the
-`crt0.o` and the headers are ours.
-
-The order is the contract. An archive is scanned once, where it stands on the line, and a
-member is pulled only for a symbol still unresolved, so `libc.a` must precede `libruntime.a`:
-libc calls the helpers, and no helper calls back into libc (`b6nm libruntime.a` shows its only
-undefined names are `b$*` of its own).
-
-The one hazard is silent: a routine we forget to port is satisfied from the external archive
-instead of failing to link. The check is to relink *without* it and read the errors:
-
-```sh
-b6ld crt0.o prog.o -o /dev/null -L$(TOP)/lib/libc -lc      # every undefined name must be b$*
-```
-
-Anything other than a `b$*` in that list is a routine the external library has been quietly
-supplying. The check used to be the only way to tell, since both archives were called `libc.a`
-and named their members `strcpy.o`, `write.o`, `exit.o` alike, so `b6nm` on the result could
-not say whose was pulled; that ambiguity went with the rename, and the check is now exact.
-
-## Phase 7 — libm, libtermlib, libcurses
-
-`libm` landed: the v7 math sources refitted to the 40-bit mantissa and the 2^±63 exponent, one
-archive `libm/libm.a`, exercised by `test/matht`. What that took is in **Ground rules** below.
-Still to do: `libtermlib` (termcap) and `libcurses`; [`../include/curses.h`](../include/curses.h)
-and [`../include/unctrl.h`](../include/unctrl.h) are already in the tree. Each is a separate
-archive built by the same recursion and exercised by the same `b6sim` harness.
-
-## Porting checklist, per file
-
-K&R → ANSI prototypes · clang-format · no 16- or 32-bit width assumptions · `sizeof(int) == 6`
-and `NBPW == 6` · `char *` is fat and `int *` is not · octal in BESM-6 contexts · one function
-per file · comments in the repo's voice, saying *why* a BESM-6 deviation was necessary.
+- **The syscall gate is `$77 N`**: arguments 1…N−1 just below `r15`, the last in the
+  accumulator, the result in the accumulator, the error number in r14, and a second result —
+  `pipe`, `wait`, `getpid`, `getuid`, `getgid` — in r12, which is an index register and so only
+  15 bits wide. The gate performs the callee's stack cleanup, so a stub must **not** pop the
+  stack and has **no prologue**; that is why `sys/` is assembly.
+- **`char *` is a fat pointer** — marker bit 48, byte offset in bits 47–45 over a 15-bit word
+  address — and `int *` is not. Never fabricate one by casting an integer, and never rely on a
+  raw word compare: incrementing a fat pointer *decreases* the offset field, and the compiler
+  lowers `<`/`>` through `b$pdiff`.
+- **A flag packed into a word pointer goes above the address**, in bit 16, never in bit 0: an
+  address is a *word index*, so bit 0 names the neighbouring word. This is what `malloc`'s
+  `BUSY` bit had to become.
+- **Every scalar is one word.** `sizeof(int) == 6` char-units, `NBPW == 6`, `long` *is* `int`
+  (so `atol` is a call to `atoi`), and one `va_arg` is exactly one word.
+- **`break` takes a word address** and is granted a page at a time, so `brk`/`sbrk` keep the
+  break as a real `char *`, convert the byte increment themselves, and grow or shrink by a page.
+  `sbrk` fails with `NULL`, not `(char *)-1`, which cannot be fabricated here.
+- **File I/O counts bytes.** A block is `BSIZE == 3072` bytes (512 words), and `getw`/`putw`
+  move **six** bytes, not the PDP-11's two.
+- **stdio.** A line-buffered stream is held at `_cnt == 0` — every `putc` misses into `_flsbuf`,
+  which writes the line out on `'\n'` — and `stdout` takes that mode when `isatty(1)`.
+  `sprintf`/`snprintf` build an `_IOSTRG` stream over the caller's buffer, where `_flsbuf`
+  *drops* the overflowing byte and leaves the engine counting, which is C11's return value.
+  v7's `_IONBF` flag bit is spelled `_IOUNBUF`, because C11 needs that name for a `setvbuf` mode.
+- **`exit` reaches `_cleanup()` through a pointer**, armed by `_flsbuf` on the first buffered
+  write, never by name: `crt0` tail-jumps to `exit`, so naming `_cleanup` outright would pull
+  the whole of stdio into every program that never prints.
+- **The terminal is ASCII**, not KOI7, so the v7 `ctype` tables carry over unchanged. The user
+  address space is 32 pages with the stack based at `070000`, so text + data + bss must fit
+  below it (`b6size -w`).
+- **libm: overflow is a fault, underflow is a silent zero.** An exponent past 2^63 kills the
+  program; one below 2^−63 quietly becomes zero. So `HUGE_VAL` is a value a routine *returns*,
+  never one it computes, and every range gate sits **before** the arithmetic that would
+  overflow. `frexp`, `ldexp` and `modf` live in libc, not libm, because the conversions need
+  them.
+- **ANSI prototypes, clang-format, octal in BESM-6 contexts**, and a comment saying *why*
+  wherever the code deviates from v7.
 
 ## Testing
 
-`b6sim` is the harness until a root filesystem exists — it runs a user `a.out` and services the
-v7 syscalls on the host, which is exactly what libc needs and is far faster to iterate on than
-booting SIMH. `test/` holds one program per area, each linked against the real `crt0.o` and
-`libc.a`, given the arguments in its `.args` file, and run with its output diffed against its
-`.expected` file — so adding a test is adding those three files and a name to `PROGS`. `hello`
-covers `argv` as crt0 finds them, `vararg` the one-word argument, `errno` a failing call and the
-`cerror` arm, `procs` the syscalls that answer in r12, `sbrkt` the break, `malloct` the
-allocator, `strings` the string
-and memory routines, `gen` the small utilities, `environ` the vector crt0 computes, `jmp`
-setjmp/longjmp, `stdiot` the FILE machinery through a real file, `printft` every printf
-conversion including floats, `scanft` scanf and the `atof`/`ecvt`/`gcvt` conversions
-either side of it, `execs` the exec family, `spawn` `system` and `popen`, `timet` the whole of
-`<time.h>` plus `tell`, `pwent` the accounts, the terminal three and `crypt`, and `signals` the
-signal frame — the number a handler is given, the context that has to survive a delivery, `SIG_IGN`,
-a handler that raises a second signal from inside itself, `alarm`/`pause` and the `-1`/`EINTR` they
-answer with *after* the handler has run, and `sleep`, whose handler leaves by `longjmp` and never
-returns through the frame at all. It is the one test that takes a second of wall clock. `b6size -w` on
-each keeps the image below `070000` words.
+`b6sim` is the harness until a root filesystem exists: it runs one user `a.out` and services the
+v7 syscalls on the host, which is exactly what libc needs and is far faster than booting SIMH.
+[`test/`](test/) holds one program per area — `hello`, `vararg`, `errno`, `procs`, `sbrkt`,
+`malloct`, `strings`, `gen`, `environ`, `jmp`, `headers`, `stdiot`, `printft`, `scanft`,
+`execs`, `spawn`, `timet`, `pwent`, `signals`, `matht`. Each is linked against the real `crt0.o`
+and `libc.a`, run with the arguments in its `.args` file, and its output — fd 1 and fd 2 both —
+diffed against its `.expected` file by [`test/run-test.sh`](test/run-test.sh).
 
-`execs` is the one that needs no helper program: **it execs itself**, five times over, once
-through each wrapper, passing the stage name in `argv[1]` and reading it back out of its own
-`argv` — `b6sim` really does load a BESM-6 `a.out` on an exec. A wrapper that built its vector
-wrongly stops the chain dead, and the last stage printed says which one.
+Adding a test is adding `<name>.c`, `<name>.expected`, optionally `<name>.args`, and a
+`b6_libtest(<name>)` line to [`test/CMakeLists.txt`](test/CMakeLists.txt).
 
-An `.expected` file may record only what the *program* does. Nothing host-dependent may reach
-it — which is why `environ` checks `getenv` against the vector it was handed, entry by entry,
-and prints neither a name nor a count: `b6sim` passes through a whitelist of the host's
-variables (`ENV_WHITELIST` in [`../cmd/sim/session.cpp`](../cmd/sim/session.cpp)), and even
-`MAKEFLAGS` alone would make a count differ between `make test` and the same run by hand. The
-harness captures fd 2 along with fd 1, so `perror`'s output is diffed too. The same rule shapes
-the phase-5 three: `timet` converts only literal `time_t` values and leans on `b6sim`'s `ftime`
-answering zone 0, `spawn` never starts a shell — `/bin/sh` is not a BESM-6 `a.out`, so the child
-always fails to exec and reports it with the 127 and the 1 those routines chose for the case —
-and `pwent` prints no line of `/etc/passwd` at all, checking instead that every entry the walk
-yields is found again by name and by id.
+An `.expected` file may record only what the *program* does; nothing host-dependent may reach
+it. That is why `environ` checks `getenv` against the vector it was handed instead of printing
+names or counts, `timet` converts only literal `time_t` values, `spawn` never starts a real
+shell, and `pwent` prints no line of `/etc/passwd`.
 
-Nothing here may be linked against a stale library: `$(LIBDEP)` names `crt0.o` and `libc.a` as
-ordinary prerequisites of every program and `$(link)` filters them back out of `$^`, because
-order-only prerequisites — which is how this started — never trigger a relink at all.
-
-Once [`../kernel/TODO.md`](../kernel/TODO.md) task 18b.6 lands a root filesystem, the same
-programs are put on it and run under the real kernel on SIMH — which is the first time the
-`$77` gate is exercised from user mode by anything but the kernel's own tests.
+Once [`../kernel/TODO.md`](../kernel/TODO.md) lands a root filesystem, these same programs go
+on it and run under the real kernel on SIMH — the first time the `$77` gate is exercised from
+user mode by anything but the kernel's own tests.
