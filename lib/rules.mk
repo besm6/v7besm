@@ -33,6 +33,19 @@ CFLAGS  = -I$(TOP)/include
 # Our library: libc.a and, beside it rather than in it, crt0.o.
 LIBC    = $(TOP)/lib/libc
 
+# libm.a, the math library.  A program that uses it sets MLIB (below) to name it on
+# the link line and lists $(LIBMDEP) as an ordinary prerequisite, exactly as it does
+# for libc.  Most programs use neither, so MLIB is empty by default and the link line
+# is unchanged for them.
+LIBM    = $(TOP)/lib/libm
+LIBMDEP = $(LIBM)/libm.a
+
+# The math library on the link line, or nothing.  A program that calls libm overrides
+# this per target -- `matht: MLIB = -L$(LIBM) -lm' -- and $(link) drops MLIB in ahead
+# of -lc.  The order is the contract: libm calls errno/frexp/ldexp/modf in libc and
+# libc calls nothing back, so -lm must precede -lc (b6ld scans each archive once).
+MLIB    =
+
 # Where `make install' puts them, and where the toolchain looks: the same prefix
 # rule the top-level Makefile uses -- ~/.local if it exists, else /usr/local --
 # and the same share/besm6/lib the c-compiler installs libruntime.a into.  This
@@ -46,6 +59,8 @@ LIBDIR  = $(PREFIX)/share/besm6/lib
 # to b6ld, which is what keeps these two from being named twice on the link line.
 # Order-only would read more neatly and be wrong: order-only prerequisites never
 # trigger a rebuild, so a program would go on using the libc it was first linked with.
+# A program that uses libm adds $(LIBMDEP) to its prerequisites too; $(link) filters
+# that one out as well, so it likewise never lands on the line twice.
 LIBDEP  = $(LIBC)/crt0.o $(LIBC)/libc.a
 
 # The link, and its postlude.  A program names its own objects once, as prerequisites.
@@ -58,7 +73,7 @@ LIBDEP  = $(LIBC)/crt0.o $(LIBC)/libc.a
 # names differ.  They did not always: the external library used to be called libc.a too,
 # and had to be named by absolute path to keep a second `-lc' from finding ours again.
 define link
-$(LD) $(LIBC)/crt0.o $(filter-out $(LIBDEP),$^) -o $@ -L$(LIBC) -L$(LIBDIR) -lc -lruntime
+$(LD) $(LIBC)/crt0.o $(filter-out $(LIBDEP) $(LIBMDEP),$^) $(MLIB) -o $@ -L$(LIBC) -L$(LIBDIR) -lc -lruntime
 $(NM) -n $@ > $@.nm
 $(DISASM) -c $@ > $@.dis
 $(SIZE) $@

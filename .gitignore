@@ -60,6 +60,7 @@ lib/test/spawn
 lib/test/timet
 lib/test/pwent
 lib/test/signals
+lib/test/matht
 lib/test/*.out
 
 # Scratch files the stdio tests create and remove; a run that dies part way

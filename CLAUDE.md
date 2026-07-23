@@ -82,7 +82,7 @@ it that way.
 
 ```sh
 make && make install        # 1. host tools -- b6cc, b6as, b6ld ... -- and include/
-make -C lib                 # 2. libc.a and crt0.o, built by those tools
+make -C lib                 # 2. libc.a, libm.a and crt0.o, built by those tools
 make -C lib install         # 3. into share/besm6/lib, beside libruntime.a
 ```
 

@@ -7,7 +7,7 @@
 # `test' is both a target here and a directory next to it; .PHONY is what keeps
 # make from judging the directory up to date and skipping the run.
 
-LIBS    = libc
+LIBS    = libc libm
 DIRS    = $(LIBS) test
 
 .PHONY: all test install clean

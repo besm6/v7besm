@@ -62,9 +62,10 @@ took out the PDP-11 and VAX addresses (`core.h`, `execargs.h`, `saio.h`), the Da
 `pk` driver (`dk.h`, `pack.h`, `sys/prim.h`), DECtape `tp` (`tp_defs.h`), the two dump formats
 (`olddump.h`, `dumprestor.h`), `libmp` (`mp.h`), a stray `symbol.h`, and the two identity
 placeholders (`ident.h` said `research 11/70`, `whoami.h` said `where I am`). Several of them
-would not even compile. What stays that is not yet backed — `math.h`, `curses.h`, `unctrl.h` —
-stays because [`../lib/README.md`](../lib/README.md) names it in phase 7 and will rewrite it
-for this machine's float format.
+would not even compile. `math.h` used to be on this list; it is backed now, by `lib/libm`
+(phase 7). What stays that is not yet backed — `curses.h`, `unctrl.h` —
+stays because [`../lib/README.md`](../lib/README.md) names it in the rest of phase 7 and will
+rewrite it for this machine.
 
 The `a.out.h` rule has already cost something, and it was worth it: `nlist()` is the one routine
 of `lib/`'s phase 5 that did **not** land, because a caller of it needs `struct nlist` and there

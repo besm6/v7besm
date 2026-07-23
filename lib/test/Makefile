@@ -10,7 +10,7 @@
 TOP     = ../..
 
 PROGS   = hello vararg errno procs sbrkt malloct strings gen environ jmp headers \
-          stdiot printft scanft execs spawn timet pwent signals
+          stdiot printft scanft execs spawn timet pwent signals matht
 
 .PHONY: all test clean
 
@@ -82,6 +82,12 @@ pwent:  pwent.o $(LIBDEP)
 signals: signals.o $(LIBDEP)
 	$(link)
 
+# matht is the one program here that links libm.  MLIB names it, and $(LIBMDEP) is an
+# ordinary prerequisite so a rebuilt libm.a relinks it; $(link) filters both back out.
+matht:  MLIB = -L$(LIBM) -lm
+matht:  matht.o $(LIBDEP) $(LIBMDEP)
+	$(link)
+
 # Run each program and diff its output.  `set -e' keeps it fail-fast, and the run
 # itself must exit 0 -- a test reports failure by its status as well as its output.
 #
@@ -134,3 +140,6 @@ pwent.o:	$(TOP)/include/pwd.h $(TOP)/include/grp.h
 # headers.o includes the whole tree, twice, which is the point of it -- so it
 # depends on the whole tree, and there is no shorter way to say that here.
 headers.o:	$(wildcard $(TOP)/include/*.h) $(wildcard $(TOP)/include/sys/*.h)
+
+# Phase 7.  matht drives libm; <math.h> is ours and <errno.h> gives it EDOM/ERANGE.
+matht.o:	$(TOP)/include/math.h $(TOP)/include/errno.h $(TOP)/include/stdio.h

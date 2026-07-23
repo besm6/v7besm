@@ -1,0 +1,66 @@
+ok sin2+cos2
+ok tan=sin/cos
+ok exp(log)
+ok log(exp)
+ok log10(1000)
+ok sqrt^2
+ok hypot(3,4)
+ok asin(sin)
+ok acos(cos)
+ok atan(tan)
+ok atan2 ++
+ok atan2 +-
+ok atan2 --
+ok atan2 -+
+ok pow(2,10)
+ok pow(9,.5)
+ok pow=exp(y logx)
+ok pow(-2,3)
+ok tanh=sinh/cosh
+ok cosh2-sinh2
+ok erf+erfc
+ok erf(-x)
+ok jn0=j0
+ok jn1=j1
+ok jn recur
+ok jn recur3
+ok yn recur
+ok fabs
+ok copysign -
+ok copysign +
+ok fmin
+ok fmax
+ok floor 2.5
+ok floor -2.5
+ok ceil 2.5
+ok ceil -2.5
+ok trunc 2.7
+ok trunc -2.7
+ok round 2.5
+ok round -2.5
+ok round 2.4
+ok round -2.4
+ok fmod 7,3
+ok fmod -7,3
+ok fmod 7.5,2
+ok fmod 2^42,3
+ok fmod 2^42,5
+ok fma exact
+ok fma value
+ok fma keeps bit
+ok exp finite
+ok exp overflow
+ok exp underflow
+ok sinh finite
+ok sinh overflow
+ok cosh overflow
+ok log 0
+ok log -1
+ok sqrt -1
+ok asin 2
+ok acos 2
+ok fmod x,0
+ok pow 0,0
+ok y0 0
+ok yn 2,-1
+0 error(s)

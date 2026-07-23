@@ -254,6 +254,51 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
   described once and under `cross/besm6/`, and nothing here calls it. It comes back with the first
   program that does — `nm`, `ps`, `pstat` — and the header question gets settled then.
 
+### Phase 7: libm
+
+- **Overflow is a fault; underflow is a silent zero, and the two are not symmetric.** An exponent
+  that rises past 2^63 raises `MSG_ARITH_OVERFLOW` and the program dies
+  ([`../cmd/sim/arithmetic.cpp`](../cmd/sim/arithmetic.cpp), same on the real machine); one that
+  falls below 2^-63 quietly becomes machine zero. So `HUGE_VAL` is a value a routine *returns*,
+  never one it *computes*: every range gate is placed **before** the arithmetic that would
+  overflow and is checked strictly. This is the whole content of the port. `exp`'s v7 `maxf` of 45
+  was past `ln(DBL_MAX) = 43.668` and computing `exp(45)` faulted; it is two gates now, at 43.6 and
+  −44.3. `test/matht`'s range block exists to catch a gate one ulp too loose — the symptom is not a
+  wrong number but a dead program, and the missing `ok` lines say where.
+- **The link order is `-lm -lc -lruntime`.** libm calls `errno`, `frexp`, `ldexp` and `modf` in
+  libc (and its own cross-calls); nothing in libc calls libm. So `-lm` precedes `-lc`, which is
+  where `b6cc` already puts a user `-l` — ahead of the implicit `-lc -lruntime`
+  ([`../cmd/cc/cc.c`](../cmd/cc/cc.c)) — so `b6cc prog.c -lm` needs no driver change.
+  [`rules.mk`](rules.mk)'s `$(MLIB)` threads it into `$(link)` for the programs built here.
+- **The PDP-11's magic numbers were widths, and had to be rederived.** `sinh`/`tanh`'s `21.` is
+  where `exp(−x)` dies against a *56-bit* mantissa; here that is `20·ln2 ≈ 14`. `sin`'s `32764` was
+  the largest quarter-turn below a *16-bit* `int`; here the fast integer reduction is good to 2^40,
+  the mantissa width and the same `two40` `modf` keys on. `sqrt`'s `1L<<30` scaling loop was an
+  `ldexp` written out because the PDP-11 had none in the library; ours is four exact instructions.
+- **Three routines are not v7's.** `fmod` had no v7 ancestor — the file in `tmp/` was an fdlibm
+  IEEE import, useless on a machine with no `uint32_t` view of a `double` — so it is written from a
+  scale-and-subtract loop over `frexp`/`ldexp`, exact by Sterbenz. `fma` is C11 and exact by a
+  20-bit mantissa split (Dekker's `TwoProduct` with the split done by `modf`/`ldexp`, not by the
+  textbook `2^20+1` constant, which needs round-to-nearest and this machine forces the low bit
+  instead). `trunc`/`round`/`copysign`/`fmin`/`fmax` are C11 too, a few lines each.
+- **`gamma` was dropped, `erf`/`erfc` gained declarations.** `gamma` is the one v7 libm source that
+  never reached `tmp/`, nothing calls it, it is not C11; `<math.h>` no longer declares it, and the
+  choice between v7's `signgam` form and C11's `tgamma`/`lgamma` waits for the first caller. The
+  reverse for `erf`/`erfc`: the source was always in `tmp/` and v7's `<math.h>` declared both, ours
+  silently did not.
+- **j0/j1's leading coefficients did not fit, so they are scaled.** Both Bessel fits open with
+  values near 5×10^20…5×10^23, past the largest finite 9.22×10^18 — they cannot be written as
+  literals at all. Each numerator/denominator *pair* is divided by a power of ten (a shift of every
+  literal's decimal exponent), which leaves the ratio `n/d` — the only thing either polynomial
+  contributes — unchanged. The factor is noted on each array. `b6cc` emits an initialized
+  file-scope `double` array to the constant pool, so the Horner loops of `erf`/`j0`/`j1` needed no
+  unrolling.
+- **`long` is `int`, and it bit `pow`.** `pow`'s integer-exponent test rounds `arg2` through `int`;
+  a 41-bit `int` cannot hold an exponent that ranges to 2^63, so the conversion is guarded by
+  `fabs(arg2) < two40` first (anything larger is integral already). Same collapse the phase-1
+  syscalls saw. And two files rename a local `exp` to `dexp` — the front end has one namespace for
+  objects and functions, and `<math.h>` has declared `exp()` — exactly as `atof.c` already did.
+
 ## Layout and build
 
 ```
@@ -268,8 +313,8 @@ lib/
         gen/            strings, ctype, setjmp, malloc, misc
         stdio/          FILE machinery, the formatting engine, the scanning engine
     test/               programs run under b6sim
-    libm/               \
-    libtermlib/          > phase 7
+    libm/               the math library (phase 7, done)
+    libtermlib/         \  phase 7, still to do
     libcurses/          /
 ```
 
@@ -313,11 +358,11 @@ not say whose was pulled; that ambiguity went with the rename, and the check is 
 
 ## Phase 7 — libm, libtermlib, libcurses
 
-`libm` from the v7 sources, with constants and range checks refitted to the 40-bit mantissa and
-the 2^±63 exponent — no infinities, no NaNs, no denormals to fall back on. Then `libtermlib`
-(termcap) and `libcurses`; [`../include/curses.h`](../include/curses.h) and
-[`../include/unctrl.h`](../include/unctrl.h) are already in the tree. Each is a separate archive
-built by the same recursion and exercised by the same `b6sim` harness.
+`libm` landed: the v7 math sources refitted to the 40-bit mantissa and the 2^±63 exponent, one
+archive `libm/libm.a`, exercised by `test/matht`. What that took is in **Ground rules** below.
+Still to do: `libtermlib` (termcap) and `libcurses`; [`../include/curses.h`](../include/curses.h)
+and [`../include/unctrl.h`](../include/unctrl.h) are already in the tree. Each is a separate
+archive built by the same recursion and exercised by the same `b6sim` harness.
 
 ## Porting checklist, per file
 

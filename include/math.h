@@ -2,9 +2,11 @@
 
 // <math.h> -- mathematics (C11 §7.12).
 //
-// Nothing here is implemented yet: libm is lib phase 7, which refits the v7
-// sources to the 40-bit mantissa and the 2^±63 exponent.  What the header can do
-// now is state the target's arithmetic honestly, which v7's could not.
+// Everything below is answered by lib/libm (libm.a), the v7 sources refitted to
+// the 40-bit mantissa and the 2^±63 exponent, except for the three marked as
+// living in libc.  A program that calls any of them links with -lm, which b6cc
+// places ahead of the implicit -lc: libm calls errno, frexp, ldexp and modf, and
+// libc calls nothing back.
 //
 // float == double == long double.  There is one native floating format, one word
 // wide, so the single double-typed entry point serves every floating type and
@@ -17,6 +19,13 @@
 // anything to classify.  A routine that would have returned an infinity sets
 // ERANGE and returns HUGE_VAL, which is the largest finite value and not a
 // distinguished one.
+//
+// And HUGE_VAL is a value a routine RETURNS, never one it computes.  The two
+// ends of the exponent range are not symmetric: an exponent that falls below
+// 2^-63 quietly becomes machine zero, but one that rises past 2^63 raises an
+// arithmetic-overflow fault and the program dies.  So every range check in libm
+// is made BEFORE the arithmetic that would overflow, and is strict -- see
+// lib/README.md.
 //
 // v7's HUGE was 1.701411733192644270e38 -- the PDP-11's largest float, twenty
 // orders of magnitude past this machine's 9.223372036846553e18, so it could not
@@ -47,7 +56,7 @@ double modf(double x, double *iptr);
 double frexp(double x, int *exp);
 double ldexp(double x, int exp);
 
-// ---- declared for future implementation: libm, lib phase 7 (TODO) ----
+// ---- implemented in libm.a ----
 double fabs(double x);
 double floor(double x);
 double ceil(double x);
@@ -78,9 +87,17 @@ double fmin(double x, double y);
 double fmax(double x, double y);
 double fma(double x, double y, double z);
 
-// v7 extensions, not C11: the gamma function and the Bessel family.  Kept
-// because v7's libm has them and phase 7 ports them.
-double gamma(double x);
+// v7 extensions, not C11: the error function and the Bessel family.  v7's
+// <math.h> declared erf and erfc and ours did not, which was an oversight -- the
+// sources were always there.
+//
+// v7's gamma() is NOT here.  It is the one routine of v7's libm whose source
+// never reached this tree, nothing in the repo calls it, it is not C11 and
+// <tgmath.h> does not name it either.  It comes back with the first program that
+// wants it, and the choice between v7's log-gamma-plus-signgam and C11's
+// tgamma/lgamma gets made then.
+double erf(double x);
+double erfc(double x);
 double j0(double x);
 double j1(double x);
 double jn(int n, double x);
