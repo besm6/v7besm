@@ -138,6 +138,7 @@ if(B6RUNTIME_LIB)
     #
     add_custom_target(rootfs)
     add_subdirectory(cmd/init)
+    add_subdirectory(cmd/sh)
 else()
     message(STATUS "kernel/, lib/ and the rootfs: external compiler runtime (libruntime.a) not installed; skipping")
 endif()

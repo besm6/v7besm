@@ -108,4 +108,16 @@ struct tchars {
 #define MXLSTN    (('x' << 8) | 1)
 #define MXNBLK    (('x' << 8) | 2)
 
+// The three gates the structures and commands above exist for.  v7 declared them in no
+// header at all -- every source that called one wrote its own extern, as
+// lib/libc/gen/isatty.c still does -- so the commands were reachable only by writing
+// the prototype out again beside them.  All three are real syscalls here: stty and gtty
+// are rows 31 and 32 of sysent[], and ioctl is row 54 (kernel/dev/tty.c).
+//
+// ioctl's third argument is whatever the command's structure is; char * is v7's
+// spelling of that and what the kernel's ioctl() reads it as.
+int ioctl(int fd, int cmd, char *arg);
+int stty(int fd, struct sgttyb *arg);
+int gtty(int fd, struct sgttyb *arg);
+
 #endif // _SGTTY_H

@@ -48,7 +48,7 @@ thing**, and knowing which one you are touching is most of what the build layout
 - **host tools** — `cmd/*`, compiled by the build machine's C/C++ compiler, run there;
 - **cross-built BESM-6 artifacts** — `kernel/` and `lib/`, compiled by the `b6*` toolchain
   above through `b6_obj()` in `scripts/BesmCross.cmake`;
-- **native BESM-6 programs** — `cmd/init` today, linked against libc by `b6_prog()` and
+- **native BESM-6 programs** — `cmd/init` and `cmd/sh` today, linked against libc by `b6_prog()` and
   staged into `build/rootfs/` for the disk image the kernel mounts.
 
 The last two are guarded on the **external** c-compiler's `libruntime.a` being installed;
@@ -119,13 +119,14 @@ therefore names two archives, **ours first**: `-lc -lruntime`, because `b6ld` sc
 helper calls back into libc. The kernel takes `-lruntime` **alone** — it defines its own
 `printf` in `kernel/prf.c` and uses no other library routine.
 
-### Native BESM-6 programs (`cmd/init`, → `build/rootfs/`)
+### Native BESM-6 programs (`cmd/init`, `cmd/sh` → `build/rootfs/`)
 
-The third category, and the newest. `cmd/init` is a **`cmd/` subdirectory that is not a host
-tool**: `init.c` is the Unix v7 `/etc/init`, compiled by the `b6*` toolchain and staged as
-`build/rootfs/etc/init` — the `/etc/init` of the root filesystem the kernel mounts. It is
-added from inside the `libruntime.a` guard, *after* `lib/`, not with the other `cmd/`
-subdirectories, because it links against the libc built there.
+The third category, and the newest. These are **`cmd/` subdirectories that are not host
+tools**: `cmd/init/init.c` is the Unix v7 `/etc/init` and `cmd/sh/` is S. R. Bourne's v7
+shell, both compiled by the `b6*` toolchain and staged as `build/rootfs/etc/init` and
+`build/rootfs/bin/sh` — the root filesystem the kernel mounts. They are added from inside
+the `libruntime.a` guard, *after* `lib/`, not with the other `cmd/` subdirectories, because
+they link against the libc built there.
 
 The machinery is one function, `b6_prog()` in `scripts/BesmCross.cmake`, so a further native
 program is one call:
@@ -146,9 +147,16 @@ succeeds and only the running program misbehaves.
 
 The C dialect is the thing that bites when porting v7 userland: **`b6parse` is strict C11**.
 No implicit `int`, no K&R parameter lists, no untyped `register i;`. Every v7 source needs
-that mechanical modernization before it compiles; `cmd/init/README.md` is the worked example,
-and `cmd/cpp/TODO.md` is the plan for the next program (with three external-compiler bugs of
-its own still in the way).
+that mechanical modernization before it compiles; `cmd/init/README.md` is the small worked
+example and `cmd/sh/README.md` the large one, and `cmd/cpp/TODO.md` is the plan for the next
+program (with three external-compiler bugs of its own still in the way).
+
+**`cmd/sh/README.md` is the one to read before porting anything else from v7 userland.** The
+C11 work is mechanical; what is not is that a v7 source assumes an `int` and a `char *` are
+the same thing, and on this machine they are not. It names the three hazards that follow from
+that — a flag packed into bit 0 of a pointer, a bit mask used to round to a word when
+`BYTESPERWORD` is 6, and casts to a node pointer that *floor* rather than round — with the
+fix for each.
 
 `build/rootfs/` is staged only — nothing installs it, and `kernel/test/root.manifest` still
 names the task-23 stand-in `kernel/test/coninit.S` as the image's `/etc/init` until there is a
@@ -221,7 +229,8 @@ dependencies there are deliberately coarse (every object depends on all of `incl
 because no `-M` support exists to do better.
 
 `make run` runs everything; the ctest **labels** carve it up — `kernel` (SIMH), `lib` (the
-libc programs under `b6sim`) and `rootfs` (the size checks on the staged native programs).
+libc programs under `b6sim`), `rootfs` (the size checks on the staged native programs) and
+`sh` (the shell's own scripts under `b6sim`, which also carry the `rootfs` label).
 
 Every `cmd/` component has a GoogleTest suite under `cmd/<tool>/test/`, wired into the
 `build_tests` target and run by `make run` (ctest). The C preprocessor has the most

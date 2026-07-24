@@ -1,0 +1,35 @@
+export a
+readonly assigned
+export b
+export a
+readonly assigned
+export b
+0022
+IFS= 	
+
+a=one
+aftershift=beta
+alsonosuch=stored
+argc=3
+argv0=./smoke.sh
+assigned=stored
+b=two
+branch=then
+defaulted=fallback
+double=cooked one
+escaped=$a
+first=alpha
+i=r
+ifprobe=taken
+joined=one-two
+loop=pqr
+matched=case-pqr
+replaced=present
+setflags=
+single=raw $a and no substitution
+sourced=yes
+spaced=one   two
+star=alpha beta gamma
+status=0
+untilprobe=set
+whilecount=stopped

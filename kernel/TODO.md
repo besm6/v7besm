@@ -218,9 +218,14 @@ targets) and staged into **`build/rootfs/`**, which the root-image manifest
 * **`cmd/init/` — done.** The v7 `/etc/init`, ported to C11 and staged as
   `build/rootfs/etc/init`; with no `/etc/ttys` on the image it is exactly the single-user
   loop this task asked for. See [../cmd/init/README.md](../cmd/init/README.md).
-* `cmd/sh/` — the shell. Start with a minimal one (word splitting, `fork`/`exec`/`wait`,
-  redirection, `cd`, `exit`) to get a prompt at all, then port v7's `sh` once the syscalls have been
-  shaken out by task 25.
+* **`cmd/sh/` — done.** S. R. Bourne's v7 shell, ported to C11 and staged as
+  `build/rootfs/bin/sh`; 7,647 words of the 28,672. This task had proposed writing a *minimal*
+  shell first and porting v7's only after task 25 had shaken the syscalls out. That turned out
+  not to be worth it: every call the shell makes is a real one in `sysent.c`, so the whole
+  program went across at once. See [../cmd/sh/README.md](../cmd/sh/README.md) — in particular
+  the three fat-pointer hazards it lists, since the same ones will be in every v7 source that
+  follows, and the two places where the port had to change what the shell *does* rather than
+  how it says it.
 * `cmd/cat/`, `cmd/echo/`, `cmd/ls/`, `cmd/pwd/` — enough to prove the prompt.
 * `etc/` — the static files (`passwd`, `rc`, `motd`).
 * Last: point `test/root.manifest` at `build/rootfs/etc/init` instead of `coninit`, once
