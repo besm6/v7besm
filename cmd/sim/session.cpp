@@ -17,16 +17,6 @@
 #include "machine.h"
 #include "memory.h"
 
-#ifdef _WIN32
-#include <io.h>
-#define ISATTY _isatty
-#define FILENO _fileno
-#else
-#include <unistd.h>
-#define ISATTY isatty
-#define FILENO fileno
-#endif
-
 //
 // The host environment variables handed to the simulated program, in this order.
 // A guest sees a curated set rather than the whole host environment: a v7 program
@@ -76,18 +66,6 @@ private:
     int exit_status{ EXIT_SUCCESS };
 
 public:
-    //
-    // Instantiate the session.
-    //
-    explicit Hidden()
-    {
-        // Enable progress message only when error output goes to a user terminal.
-        if (ISATTY(FILENO(stdin))) {
-            // Print a progress message on stderr every few seconds.
-            machine.enable_progress_message(true);
-        }
-    }
-
     //
     // Get status of simulation: either EXIT_SUCCESS (0) or
     // EXIT_FAILURE in case of errors.
@@ -150,9 +128,14 @@ public:
 
     //
     // Enable verbose mode.
-    // Print more details to the trace log.
+    // Print more details to the trace log, and the periodic progress
+    // message on stderr; both are off by default.
     //
-    void set_verbose(bool on) { machine.set_verbose(on); }
+    void set_verbose(bool on)
+    {
+        machine.set_verbose(on);
+        machine.enable_progress_message(on);
+    }
 
     //
     // Print the program exit status as a signed integer (--status option).

@@ -38,7 +38,7 @@ static void print_usage(std::ostream &out, const char *prog_name)
     out << "Options:\n";
     out << "    -h, --help              Display available options\n";
     out << "    -V, --version           Print the version number and exit\n";
-    out << "    -v, --verbose           Verbose mode\n";
+    out << "    -v, --verbose           Verbose mode; also print a periodic progress message\n";
     out << "    -l NUM, --limit=NUM     Stop after so many instructions (default "
         << Session::get_default_limit() << ")\n";
     out << "    --trace=FILE            Redirect trace to the file\n";
@@ -63,7 +63,6 @@ int main(int argc, char *argv[])
     sim_progname = prog_name;
 
     // Instantiate the session.
-    // Enable wall clock by default.
     Session session;
 
     // Parse command line options.  The leading '+' stops option parsing at the
