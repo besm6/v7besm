@@ -37,20 +37,9 @@
 
 static int errors;
 
-//
-// printf cannot print LONG_MIN: the engine negates the value into an unsigned and
-// -LONG_MIN does not exist in 41 bits (lib/libc/stdio/doprnt.c), so it comes out
-// mangled.  Name it instead -- it is the interesting value here anyway.
-//
-static void shownum(long v)
-{
-    if (v == LONG_MIN)
-        printf("LONG_MIN");
-    else
-        printf("%ld", v);
-}
-
-// One strtol case: value, tail offset and errno, all three at once.
+// One strtol case: value, tail offset and errno, all three at once.  %ld prints
+// LONG_MIN correctly (doprnt.c takes the magnitude in unsigned arithmetic), so
+// the -1099511627776 rows read as the number they are.
 static void tl(const char *s, int base, long want, int wantend, int wanterr)
 {
     char *e;
@@ -62,16 +51,11 @@ static void tl(const char *s, int base, long want, int wantend, int wanterr)
     err   = errno; // before printf: the first one calls isatty and leaves ENOTTY behind
     end   = (int)(e - s);
     if (v == want && end == wantend && err == wanterr) {
-        printf("ok   strtol(\"%s\", %d) = ", s, base);
-        shownum(v);
-        printf(" end +%d errno %d\n", end, err);
+        printf("ok   strtol(\"%s\", %d) = %ld end +%d errno %d\n", s, base, v, end, err);
         return;
     }
-    printf("FAIL strtol(\"%s\", %d) = ", s, base);
-    shownum(v);
-    printf(" end +%d errno %d, want ", end, err);
-    shownum(want);
-    printf(" end +%d errno %d\n", wantend, wanterr);
+    printf("FAIL strtol(\"%s\", %d) = %ld end +%d errno %d, want %ld end +%d errno %d\n", s, base,
+           v, end, err, want, wantend, wanterr);
     errors++;
 }
 

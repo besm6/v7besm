@@ -98,6 +98,12 @@ static void integers(void)
     // 41 signed value bits, 48 unsigned ones.
     sprintf(b, "%d %u", -1099511627775L, 281474976710655U);
     chk("-1099511627775 281474976710655", b);
+
+    // LONG_MIN is -2^40, one past the positive end, and the magnitude the engine
+    // prints cannot be -(int)ul: that would overflow a 41-bit signed negate.  The
+    // magnitude is taken in unsigned arithmetic instead (doprnt.c), so this prints.
+    sprintf(b, "%d %ld", -1099511627776L, -1099511627776L);
+    chk("-1099511627776 -1099511627776", b);
 }
 
 static void strings(void)

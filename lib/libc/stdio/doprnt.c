@@ -338,7 +338,17 @@ int _doprnt(const char *fmt, va_list ap, FILE *iop)
         if (sign) {
             if ((int)ul < 0) {
                 neg = '-';
-                ul  = (unsigned)(-(int)ul);
+                //
+                // The magnitude, in unsigned arithmetic -- NOT -(int)ul.  A
+                // signed value is a 41-bit field with bits 48..42 zero
+                // (doc/Besm6_Data_Representation.md), so negating it as a signed
+                // int overflows on LONG_MIN (2^40 has no positive twin in 41
+                // bits) and negating the raw word as unsigned is wrong for every
+                // negative (the word is not a true 48-bit two's complement).  The
+                // raw word of a negative x is x + 2^41, so 2^41 - it is |x|, which
+                // for x in [LONG_MIN, -1] lands in [1, 2^40] and always fits.
+                //
+                ul = (unsigned)2199023255552UL - ul; // 2^41 - ul
             } else if (sign < 0) {
                 neg = '+';
             } else if (blank) {
