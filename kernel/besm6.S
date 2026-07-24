@@ -253,10 +253,8 @@ _start:
         vtm     02003               // PSW := БлП|БлЗ|БлПр: interrupts blocked
      15 vtm     USTKPAGE*PGSZ       // r15 := 070000, the base of the user stack (sys/param.h)
       9 vtm     icode               // r9 := the icode's entry -- its own link address
-        ita     9                   // A := it (r9 is scratch: nothing has run since main())
-        ati     IRET                // М033 := entry: where `выпр' lands
-        xta                         // A := 0 (word 0 always reads 0, as in wcopy below)
-        ati     SPSW                // М027 := 0: user mode, mapping AND protection ON, and
+      9 mtj     IRET                // М033 := entry: where `выпр' lands
+        mtj     SPSW                // М027 := 0: user mode, mapping AND protection ON, and
                                     //   БлПр clear so the clock runs.  `выпр' also drops
                                     //   ПоП/ПоК -- it OVERWRITES PSW from SPSW rather than
                                     //   OR-ing (doc/Memory_Mapping.md, "Return: выпр") -- so
@@ -267,9 +265,7 @@ _start:
                                     //   program with no crt0 in front of it must not start in
                                     //   ω 0 -- the rule sendsig() already established.  LAST,
                                     //   because `xta'/`ita' set ω themselves.
-      3 ij                          // выпр: into the icode, in user mode.  Nothing follows:
-                                    //   `выпр' is an unconditional transfer, so a halt behind
-                                    //   it would only be reachable if the machine were broken.
+      3 ij                          // выпр: into the icode, in user mode.
 
 // ============================================================================
 // Extracode entry
