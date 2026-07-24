@@ -25,8 +25,7 @@
 //
 #include <stdio.h>
 #include <stdlib.h>
-
-int wait(int *status);
+#include <sys/wait.h>
 
 static void ok(const char *what, int cond)
 {

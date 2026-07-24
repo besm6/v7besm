@@ -20,10 +20,10 @@
 // Like hello.c it declares its syscalls itself and carries its own output routines.
 //
 
+#include <sys/wait.h>
 #include <unistd.h>
 
 int time(int *tloc);
-int wait(int *status);
 
 // One string to the standard output, without stdio (phase 4).
 static void put(char *s)

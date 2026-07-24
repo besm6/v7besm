@@ -16,8 +16,6 @@
 #include <signal.h>
 #include <unistd.h>
 
-int kill(int pid, int sig);
-
 int raise(int sig)
 {
     return kill(getpid(), sig);

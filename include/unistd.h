@@ -17,10 +17,10 @@
 //   - `sbrk'/`brk' keep `char *', matching lib/libc/sys/sbrk.c, which counts the
 //     break in whole char units; `void *' would not match the definition.
 //
-// What is NOT here: `open'/`creat' -- those are <fcntl.h>, which this tree now has.
-// Nor `mknod', `chmod', `umask', `stat'/`fstat': they await a <sys/stat.h> it does
-// not, and their callers still declare them at the head of the file, as everyone
-// here once did.
+// What is NOT here, and where it went instead: `open'/`creat' are <fcntl.h>;
+// `mknod', `chmod', `umask' and `stat'/`fstat' are <sys/stat.h>, beside the mode
+// bits and the struct they are about; `wait' is <sys/wait.h>, beside the macros
+// that take its status apart.  This tree now has all three of those headers.
 #ifndef _UNISTD_H
 #define _UNISTD_H
 

@@ -23,6 +23,8 @@
 #ifndef _SIGNAL_H
 #define _SIGNAL_H
 
+#include <sys/types.h> // pid_t, for kill()
+
 // §7.14: an object that can be written from a handler without a data race.  One
 // word, like everything else, and there is nothing finer to choose.
 typedef int sig_atomic_t;
@@ -52,6 +54,11 @@ typedef int sig_atomic_t;
 #define SIG_ERR ((void (*)(int)) - 1)
 
 void (*signal(int sig, void (*func)(int)))(int);
+
+// Send a signal.  v7's kill() is POSIX's, negative pids included: pid 0 signals
+// every process in the sender's process group, and -1 every process the sender
+// may signal (kernel/sig.c).  /etc/init leans on that -1 at shutdown.
+int kill(pid_t pid, int sig);
 
 // ---- declared for future implementation: lib phase 6 (TODO) ----
 // raise(sig) is kill(getpid(), sig); it waits on delivery, like everything else

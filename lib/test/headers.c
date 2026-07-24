@@ -62,6 +62,7 @@
 #include <sys/param.h>
 #include <sys/dir.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 // Again, all of it.  See above.
 #include <assert.h>
@@ -88,6 +89,7 @@
 #include <sys/param.h>
 #include <sys/dir.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 //
 // <tgmath.h> is included last and alone: every one of its macros shadows a

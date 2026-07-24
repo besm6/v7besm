@@ -21,9 +21,8 @@
 //
 #include <signal.h>
 #include <stdlib.h>
+#include <sys/wait.h>
 #include <unistd.h>
-
-int wait(int *status);
 
 int system(const char *s)
 {

@@ -3,6 +3,12 @@
 // <sys/types.h> is included rather than assumed, for the reason <sys/timeb.h>
 // spells out: dev_t, ino_t, off_t and time_t all come from there, and this file
 // sorts ahead of it in an include list clang-format has put in order.
+//
+// The five calls at the foot are the ones <unistd.h> deliberately left out --
+// they belong beside `struct stat' and the mode bits, and this is that file.
+// The symbols and arities are the contract in lib/libc/sys/syscalls.tbl and the
+// gate in kernel/sysent.c; the numbers are in <sys/syscall.h>.  The modes are
+// plain `int': this kernel has no mode_t, and <fcntl.h> says the same of open().
 
 #ifndef _SYS_STAT_H
 #define _SYS_STAT_H
@@ -36,5 +42,23 @@ struct stat {
 #define S_IREAD  0000400 // read permission, owner
 #define S_IWRITE 0000200 // write permission, owner
 #define S_IEXEC  0000100 // execute/search permission, owner
+
+// Not for the kernel side: it includes this header for `struct stat', and all five of
+// these names are ALSO its own system-call handlers -- `void stat(void)' and friends,
+// declared in <sys/systm.h> and defined in kernel/sys3.c.  Same spelling, opposite side
+// of the gate.  sys/map.h and sys/tty.h split their two audiences the same way.
+//
+// Two conditions rather than one, because -DKERNEL alone does not identify that side:
+// the standalone tests in kernel/test/ link kernel objects and include <sys/systm.h>,
+// but are compiled WITHOUT -DKERNEL (kernel/test/CMakeLists.txt says why).  Having
+// included systm.h is the honest signal, and the v7 include order every kernel-side
+// source here follows -- types, param, systm, then the rest -- puts it first.
+#if !defined(KERNEL) && !defined(_SYS_SYSTM_H)
+int stat(const char *path, struct stat *buf);
+int fstat(int fd, struct stat *buf);
+int chmod(const char *path, int mode);
+int mknod(const char *path, int mode, dev_t dev);
+int umask(int mask);
+#endif
 
 #endif // _SYS_STAT_H

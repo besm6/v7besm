@@ -21,14 +21,8 @@
 //
 #include <signal.h>
 #include <stdio.h>
-
-int pipe(int *fildes);
-int fork(void);
-int close(int fd);
-int dup2(int fd, int fd2);
-int execl(const char *name, ...);
-int wait(int *status);
-_Noreturn void _exit(int status);
+#include <sys/wait.h>
+#include <unistd.h>
 
 #define tst(a, b) (*mode == 'r' ? (b) : (a))
 #define RDR       0

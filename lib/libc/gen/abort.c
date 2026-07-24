@@ -14,8 +14,6 @@
 #include <signal.h>
 #include <unistd.h>
 
-int kill(int pid, int sig);
-
 void abort(void)
 {
     kill(getpid(), SIGIOT);

@@ -25,9 +25,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-int fstat(int fd, struct stat *buf);
-int stat(const char *path, struct stat *buf);
-
 static const char dev[] = "/dev/";
 
 //

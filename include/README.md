@@ -90,5 +90,14 @@ primitives that `lib/libc/sys` backs, gathered from the per-file syscall declara
 caller used to carry. `open`/`creat` are **not** in it — they live in `<fcntl.h>`, a hosted
 header this tree also adds, alongside the three v7 `O_RDONLY`/`O_WRONLY`/`O_RDWR` modes (and
 nothing more: this kernel has no `fcntl` system call, and `open()` honours no flag above
-`O_RDWR`). `chmod`/`stat` are not in either — they await a `<sys/stat.h>` this tree does not
-have yet.
+`O_RDWR`). `chmod`/`stat`/`fstat`/`mknod`/`umask` are not in either — they are in
+`<sys/stat.h>`, beside `struct stat` and the mode bits they are about. `wait()` likewise has
+`<sys/wait.h>`, a header this tree adds for the `W*` macros that take a v7 status word apart
+(`kill()` is in `<signal.h>`, where C11 puts it).
+
+Those three `sys/` prototypes carry a guard the rest of the tree does not:
+`#if !defined(KERNEL) && !defined(_SYS_SYSTM_H)`. `stat`, `chmod` and `wait` name *two*
+different functions in this repo — the libc leaf and the kernel's system-call handler
+(`void stat(void)`, `<sys/systm.h>`) — and both sides include `<sys/stat.h>` for the struct.
+`-DKERNEL` alone does not tell them apart, because the standalone tests in `kernel/test/`
+link kernel objects but compile **without** it; having included `<sys/systm.h>` does.
