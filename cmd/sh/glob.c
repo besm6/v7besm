@@ -20,36 +20,39 @@
 //
 #include "defs.h"
 
-// temp files and io
-INT ioset;
-IOPTR iotemp; // files to be deleted sometime
-IOPTR iopend; // documents waiting to be read at NL
+// See defs.h, where each of these is declared and described.  Only the one-line
+// reminders are repeated here.
 
-// substitution
-INT dolc;
-STRING *dolv;
-DOLPTR argfor;
-ARGPTR gchain;
+// --- where the shell prints, and what it must clean up ---
+INT ioset;    // a redirection has already claimed descriptor 0 for this command
+IOPTR iotemp; // here-document temp files created so far, to be unlinked
+IOPTR iopend; // here-documents promised on this line, whose text has not been read yet
 
-// words, as word() hands them to cmd()
-INT wdval;
-INT wdnum;
-ARGPTR wdarg;
-INT wdset;
-BOOL reserv;
+// --- the positional parameters ---
+INT dolc;      // $#
+STRING *dolv;  // $0, $1, $2, ...
+DOLPTR argfor; // parameter lists a running `for' loop is holding on to
+ARGPTR gchain; // the argument words built so far for the command being assembled
 
-// special names -- $0, $?, $#, $! and $$
-STRING cmdadr;
-STRING exitadr;
-STRING dolladr;
-STRING pcsadr;
-STRING pidadr;
+// --- what the lexer last read ---
+INT wdval;    // the symbol: 0 for an ordinary word, else a code from sym.h
+INT wdnum;    // the digit in front of a redirection, as in `2>file'
+ARGPTR wdarg; // the word itself, when wdval is 0
+INT wdset;    // the word looks like `name=value'
+BOOL reserv;  // the parser will accept a reserved word here
 
-// transput
-STRING tmpnam;
-INT serial;
-INT peekc;
-STRING comdiv;
+// --- the parameters that are not variables ---
+STRING cmdadr;  // $0
+STRING exitadr; // $?
+STRING dolladr; // $#
+STRING pcsadr;  // $!
+STRING pidadr;  // $$
+
+// --- reading input ---
+STRING tmpnam; // where the serial number goes in tmpout[]
+INT serial;    // counts here-documents, so each gets its own temp file
+INT peekc;     // one character of lexer pushback
+STRING comdiv; // the command string given with -c
 
 //
 // comdivset: whether -c was given.  v7 kept that fact in `comdiv' alone by writing
@@ -60,24 +63,25 @@ STRING comdiv;
 //
 BOOL comdivset;
 
-// set by trim(), read by copy() -- defined in both io.c and service.c in v7
+// Set by trim(): the string it just processed contained a quoted character.  Defined in
+// both io.c and service.c in v7.
 BOOL nosubst;
 
-// flags
+// Every option in force, one bit each -- see the noexec/intflg/... list in defs.h.
 INT flags;
 
-// error exits from various parts of the shell
-jmp_buf subshell;
-jmp_buf errshell;
+// --- the two long jumps (defs.h) ---
+jmp_buf subshell; // back to the top of main(), when a file turns out to be a script
+jmp_buf errshell; // back to the prompt, from any fatal error
 
-// fault handling
+// Some signal has fired and has not been dealt with yet.
 BOOL trapnote;
 
-// execflgs
-INT exitval;
-BOOL execbrk;
-INT loopcnt;
-INT breakcnt;
+// --- how the tree walker keeps its place ---
+INT exitval;  // the last command's exit status
+BOOL execbrk; // `break'/`continue' asked to stop walking
+INT loopcnt;  // how many loops are running
+INT breakcnt; // how many more levels `break N' has to unwind
 
 //
 // The expression stack (stak.h).  v7 declared all four in that header and defined none

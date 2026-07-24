@@ -12,6 +12,7 @@
 
 #include "defs.h"
 
+// Defined below.
 static STRING execs(STRING ap, STRING t[]);
 static void gsort(STRING from[], STRING to[]);
 static INT split(STRING s);
@@ -38,6 +39,14 @@ static INT split(STRING s);
 
 // ======== service routines for `execute' ========
 
+//
+// Perform a command's redirections: open each file and move the descriptor into place.
+//
+// Runs down the chain the parser built, doing them in order -- which is why `>f 2>&1'
+// and `2>&1 >f' mean different things.  The kinds are: a here-document (IODOC, whose
+// text is already in a temp file), a descriptor move as in `2>&1' (IOMOV), an append
+// (IOAPP), a plain `>' and a plain `<'.
+//
 void initio(IOPTR iop)
 {
     STRING ion;
@@ -77,6 +86,13 @@ void initio(IOPTR iop)
     }
 }
 
+//
+// Which directories to look for a command in.
+//
+// A name containing a slash is used as written, so the answer is the empty path.
+// Otherwise it is PATH, or a fixed default if PATH is unset.  A restricted shell refuses
+// slashed names outright, which is what stops the user escaping it by naming /bin/sh.
+//
 STRING getpath(STRING s)
 {
     STRING path;
@@ -94,6 +110,10 @@ STRING getpath(STRING s)
     return nullstr; // not reached: failed() does not return
 }
 
+//
+// Try to open `name' in each directory of `path' in turn, and return the first that
+// works, or -1.  Used by the `.' built-in to find a script.
+//
 INT pathopen(STRING path, STRING name)
 {
     UFD f;
@@ -131,9 +151,21 @@ STRING catpath(STRING path, STRING name)
     return path;
 }
 
+// The message to report if the search below runs out of directories: "not found"
+// normally, but "cannot execute" once some directory has produced a file that existed
+// and simply would not run -- which is the more useful complaint of the two.
 static STRING xecmsg;
+
+// The environment vector for the exec, built once before the search rather than at each
+// candidate.
 static STRING *xecenv;
 
+//
+// Run an external command: search PATH for it and exec it.
+//
+// Only returns if nothing could be run, and then only to report why.  A successful exec
+// replaces this process, so there is nothing to come back to.
+//
 void execa(STRING at[])
 {
     STRING path;
@@ -150,6 +182,16 @@ void execa(STRING at[])
     }
 }
 
+//
+// Try ONE directory of the path: build the full name and exec it.
+//
+// Returns the rest of the path to keep searching with, so execa()'s loop walks the whole
+// of PATH by calling this until it returns null.  It returns at all only when the exec
+// failed, and what it does then depends on why: a file that is not a binary is assumed
+// to be a SHELL SCRIPT and is read by this shell instead (the ENOEXEC case, which jumps
+// back to the top of main), an outright error is reported, and a plain "no such file"
+// simply moves on to the next directory.
+//
 static STRING execs(STRING ap, STRING t[])
 {
     STRING p, prefix;
@@ -203,11 +245,17 @@ static STRING execs(STRING ap, STRING t[])
     return 0;
 }
 
-// for processes to be waited for
+// The children this shell still has to wait for -- background commands, and the members
+// of a pipeline.  A fixed twenty; past that the oldest is forgotten rather than the list
+// overrun.
 #define MAXP 20
-static INT pwlist[MAXP];
-static INT pwc;
+static INT pwlist[MAXP]; // their process ids, 0 for an empty slot
+static INT pwc;          // how many are in the list
 
+//
+// Forget every child.  A newly forked child does this at once: the processes its parent
+// was waiting for are not its business.
+//
 void postclr(void)
 {
     INT *pw = pwlist;
@@ -217,6 +265,9 @@ void postclr(void)
     pwc = 0;
 }
 
+//
+// Remember one more child to wait for.
+//
 void post(INT pcsid)
 {
     INT *pw = pwlist;
@@ -232,6 +283,13 @@ void post(INT pcsid)
     }
 }
 
+//
+// Wait for child `i' -- or, when i is -1, for all of them, which is the `wait' built-in.
+//
+// Reports any child that died on a signal ("Killed", "Quit", ...) unless the signal was
+// one the user obviously caused, such as an interrupt.  Sets $? from the result: the
+// child's own exit status normally, or 0200 plus the signal number if it was killed.
+//
 void await(INT i)
 {
     INT rc = 0, wx = 0;
@@ -303,6 +361,14 @@ void await(INT i)
 //
 // Strip the quoting bit from a string, recording in `nosubst' whether any was set.
 //
+//
+// Strip the quoting marker off every character of a string, now that quoting has done
+// its work, and record in `nosubst' whether there was any.
+//
+// The lexer sets bit 0200 on each quoted character so that later stages leave it alone;
+// this is where that mark comes off, just before the text is used as a real file name or
+// argument.
+//
 void trim(STRING at)
 {
     STRING p;
@@ -318,6 +384,10 @@ void trim(STRING at)
     nosubst = q & QUOTE;
 }
 
+//
+// macro() then trim(): expand a word and then take the quote marks off it.  The usual
+// pair, for a word about to be used as a file name.
+//
 STRING mactrim(STRING s)
 {
     STRING t = macro(s);
@@ -327,6 +397,13 @@ STRING mactrim(STRING s)
 
 //
 // Turn the gchain into an argv, sorting each marked group.
+//
+//
+// Turn the chain of argument words into the argv vector a child gets.
+//
+// The chain is in reverse order, so the vector is filled from the end backwards.  Each
+// group of words that came from one wildcard -- the groups the ARGMK bit marks -- is
+// sorted as it is passed, which is why `echo *' comes out in alphabetical order.
 //
 STRING *scan(INT argn)
 {
@@ -350,6 +427,10 @@ STRING *scan(INT argn)
     return comargn;
 }
 
+//
+// Sort a run of strings into alphabetical order.  A shell sort: cheap to write, no extra
+// memory, and quite good enough for the number of files one wildcard matches.
+//
 static void gsort(STRING from[], STRING to[])
 {
     INT k, m, n;
@@ -382,6 +463,12 @@ static void gsort(STRING from[], STRING to[])
 
 // ======== Argument list generation ========
 
+//
+// Expand a command's arguments and return how many words came out.
+//
+// Each word written on the command line goes through macro() for $ substitution and then
+// split(), which may turn it into several words or none.
+//
 INT getarg(COMPTR ac)
 {
     ARGPTR argp;
@@ -398,6 +485,14 @@ INT getarg(COMPTR ac)
     return count;
 }
 
+//
+// Split an already-expanded string into words at the IFS characters, and expand each
+// word against the file system.
+//
+// This is the second half of what happens to `$x': the value is substituted first, and
+// only THEN split, which is why an unquoted variable holding "a b" becomes two
+// arguments and a quoted one stays as a single argument.  Empty pieces are dropped.
+//
 static INT split(STRING s)
 {
     STRING argp;

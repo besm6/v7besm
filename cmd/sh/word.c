@@ -15,8 +15,22 @@
 #include "defs.h"
 #include "sym.h"
 
+// Defined below.
 static INT readb(void);
 
+//
+// Read the next word or operator from the input -- the shell's lexer.
+//
+// An ordinary word is built up on the expression stack a character at a time, until a
+// character arrives that cannot be part of one (a space, a newline, an operator).  It is
+// left in `wdarg' and 0 is returned.  Anything else -- ; & | < > ( ) and the reserved
+// words -- returns a symbol number instead, and the parser in cmd.c switches on it.
+//
+// Two jobs are done on the way past.  Quoting is resolved here, not later: a quoted
+// character gets bit 0200 set so that the rest of the shell knows not to treat it as a
+// wildcard or a word separator.  And a word that looks like `name=value' sets `wdset',
+// so the parser can tell an assignment from an argument.
+//
 INT word(void)
 {
     CHAR c, d;
@@ -90,6 +104,13 @@ INT word(void)
     return wdval;
 }
 
+//
+// Read the next character, dealing with a backslash in front of it.
+//
+// Backslash-newline vanishes and the line continues.  Backslash-anything-else marks the
+// character as quoted.  `quote' is the quote character currently open, if any, since a
+// backslash means less inside double quotes than outside them.
+//
 INT nextc(CHAR quote)
 {
     CHAR c, d;
@@ -107,6 +128,14 @@ INT nextc(CHAR quote)
     return d;
 }
 
+//
+// Read one raw character of input.  Everything the shell reads comes through here.
+//
+// It takes from, in order: the one-character pushback the lexer left; the current input
+// buffer; and failing that a fresh read from the file.  At the end of an input it pops
+// back to whatever was reading before -- so `.' and `eval' end by simply running out --
+// and reports end of file only when there is nothing left to pop.
+//
 INT readc(void)
 {
     CHAR c;
@@ -147,6 +176,11 @@ retry:
     return c;
 }
 
+//
+// Refill the input buffer.  A read interrupted by a signal is retried rather than
+// treated as end of file, which is what lets a trap fire while the shell sits waiting
+// for the user to type something.
+//
 static INT readb(void)
 {
     SHFILE f = standin;

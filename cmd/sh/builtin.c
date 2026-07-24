@@ -9,6 +9,11 @@
 //
 #include "defs.h"
 
+//
+// Called for every command name that is not one of the shell's own.  Returning 0 means
+// "not a built-in" and sends execute() off to fork and exec the thing.  Add a command
+// here and it runs inside the shell, like cd does.
+//
 INT builtin(INT argn, STRING *com)
 {
     (void)argn;

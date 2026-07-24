@@ -10,6 +10,12 @@
 //
 #include "defs.h"
 
+//
+// Table 1: what each character means to the LEXER.  One entry per character, holding the
+// T_* bits from ctype.h -- is it a space, does it end a word, does it start a quote, is
+// it one of ; & | < >.  A table lookup rather than a chain of comparisons, because
+// word() asks about every character it reads.
+//
 char _ctype1[] = {
     /*	000	001	002	003	004	005	006	007	*/
     _EOF, 0, 0, 0, 0, 0, 0, 0,
@@ -58,6 +64,11 @@ char _ctype1[] = {
     0, 0, 0, 0, _BAR, 0, 0, 0
 };
 
+//
+// Table 2: what each character means to $ SUBSTITUTION and to filename matching -- is it
+// a digit, a letter, one of the * ? [ wildcards, one of the - = + ? that follow a name
+// inside ${...}.
+//
 char _ctype2[] = {
     /*	000	001	002	003	004	005	006	007	*/
     0, 0, 0, 0, 0, 0, 0, 0,

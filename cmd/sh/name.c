@@ -14,18 +14,39 @@
 
 #include "defs.h"
 
+// Defined below.
 static BOOL chkid(STRING nam);
 static void namwalk(NAMPTR np);
 static STRING staknam(NAMPTR n);
 
+//
+// The seven variables that always exist, pre-built rather than allocated: the shell reads
+// them itself, so they have to be there before the first script line runs.  Each holds a
+// left child, a right child and a name; the values start empty.  They are hand-arranged
+// into a balanced tree, whose root is the `namep' below.
+//
 NAMNOD ps2nod  = { (NAMPTR)NIL, (NAMPTR)NIL, ps2name },
        fngnod  = { (NAMPTR)NIL, (NAMPTR)NIL, fngname },
        pathnod = { (NAMPTR)NIL, (NAMPTR)NIL, pathname },
        ifsnod = { (NAMPTR)NIL, (NAMPTR)NIL, ifsname }, ps1nod = { &pathnod, &ps2nod, ps1name },
        homenod = { &fngnod, &ifsnod, homename }, mailnod = { &homenod, &ps1nod, mailname };
 
+//
+// THE NAME TREE: every shell variable, kept as a binary search tree ordered by name, so
+// that a lookup is a few comparisons rather than a walk of the whole list and so that
+// `set' can print them in order for free (namwalk() visits left, self, right).
+//
+// The seven nodes above are built in rather than allocated, because the shell reads them
+// itself and they must exist before any script runs.  They are hand-arranged into a
+// balanced tree, with mailnod at the root.
+//
 NAMPTR namep = &mailnod;
 
+//
+// Look a word up in one of the keyword tables and return its number, or 0 if it is not
+// there.  Comparing the first character before calling cf() is the whole optimisation:
+// most words fail on it.
+//
 INT syslook(STRING w, SYSPTR syswds)
 {
     CHAR first;
@@ -43,6 +64,11 @@ INT syslook(STRING w, SYSPTR syswds)
     return 0;
 }
 
+//
+// Perform a whole list of `name=value' assignments -- the ones written in front of a
+// command, as in `TZ=UTC LANG=C date'.  xp is the attribute to give each variable, which
+// is N_EXPORT when the command is about to be exec'd so that it inherits them.
+//
 void setlist(ARGPTR arg, INT xp)
 {
     while (arg) {
@@ -59,6 +85,13 @@ void setlist(ARGPTR arg, INT xp)
     }
 }
 
+//
+// Perform one `name=value' assignment.
+//
+// The `=' is temporarily overwritten with a NUL so that the name can be looked up
+// without copying it, then put back.  Anything that is not a valid variable name is an
+// error.
+//
 void setname(STRING argi, INT xp)
 {
     STRING argscan = argi;
@@ -82,18 +115,28 @@ void setname(STRING argi, INT xp)
     failed(argi, notid);
 }
 
+//
+// Replace the string at *a with a fresh copy of v, freeing whatever was there.
+//
 void replace(STRING *a, STRING v)
 {
     shfree((BLKPTR)*a);
     *a = make(v);
 }
 
+//
+// Give a variable a value only if it does not have one yet.  How the shell supplies the
+// defaults for IFS, PS1 and PS2 without overriding what the user set.
+//
 void dfault(NAMPTR n, STRING v)
 {
     if (n->namval == 0)
         assign(n, v);
 }
 
+//
+// Assign to a variable, refusing if it was made readonly.
+//
 void assign(NAMPTR n, STRING v)
 {
     if (n->namflg & N_RDONLY)
@@ -102,6 +145,17 @@ void assign(NAMPTR n, STRING v)
         replace(&n->namval, v);
 }
 
+//
+// The `read' built-in: read one line of input and split it across the named variables.
+//
+// The split is at the characters in IFS.  The LAST name gets everything that is left,
+// separators and all, and any names beyond the words available are set to the empty
+// string.  Returns 1 at end of file, which is what makes `while read x' terminate.
+//
+// The lseek at the end matters: the shell buffers its input, so it has usually read
+// further than the line it just consumed, and this pushes the file back to where the
+// line ended -- otherwise a command run afterwards would find its input already eaten.
+//
 INT readvar(STRING *names)
 {
     SHFILEBLK fb;
@@ -155,12 +209,19 @@ INT readvar(STRING *names)
     return rc;
 }
 
+//
+// Set a string to the decimal form of a number.  How $?, $# and $$ are kept up to date.
+//
 void assnum(STRING *p, INT i)
 {
     itos(i);
     replace(p, numbuf);
 }
 
+//
+// Copy a string into the arena so that it outlives the expression stack, which is reused
+// by the very next command.  A null in gives a null back.
+//
 STRING make(STRING v)
 {
     STRING p;
@@ -172,6 +233,13 @@ STRING make(STRING v)
     return 0;
 }
 
+//
+// Find a variable by name in the name tree, adding it if it is not there.
+//
+// Always returns a node, so callers never test for failure: an unset variable is a node
+// with a null value, not a missing node.  A name that is not a valid identifier is an
+// error rather than a new variable.
+//
 NAMPTR lookup(STRING nam)
 {
     NAMPTR nscan = namep;
@@ -201,6 +269,10 @@ NAMPTR lookup(STRING nam)
     return *prev                  = nscan;
 }
 
+//
+// Is this a legal variable name -- a letter or underscore, then letters, underscores and
+// digits?
+//
 static BOOL chkid(STRING nam)
 {
     CHAR *cp = nam;
@@ -216,14 +288,25 @@ static BOOL chkid(STRING nam)
     return TRUE;
 }
 
+// The function namscan() is walking the tree with.  A global because namwalk() recurses
+// and passing it down every level would buy nothing.
 static void (*namfn)(NAMPTR);
 
+//
+// Call fn once for every variable, in alphabetical order.  Four things use it: printing
+// them (`set'), printing their attributes (`export'), counting them and copying them out
+// for a child's environment.
+//
 void namscan(void (*fn)(NAMPTR))
 {
     namfn = fn;
     namwalk(namep);
 }
 
+//
+// Walk the tree in order -- left subtree, this node, right subtree -- which is what
+// visits the names alphabetically.
+//
 static void namwalk(NAMPTR np)
 {
     if (np) {
@@ -233,6 +316,10 @@ static void namwalk(NAMPTR np)
     }
 }
 
+//
+// Print one variable as `name=value'.  What `set' with no arguments does.  A variable
+// with no value is skipped.
+//
 void printnam(NAMPTR n)
 {
     STRING s;
@@ -246,6 +333,10 @@ void printnam(NAMPTR n)
     }
 }
 
+//
+// Build "name=value" on the expression stack, in the form a child's environment wants,
+// and reserve the space it took.
+//
 static STRING staknam(NAMPTR n)
 {
     STRING p;
@@ -264,6 +355,15 @@ static STRING staknam(NAMPTR n)
     return getstak(p + 1 - ADR(stakbot));
 }
 
+//
+// Bring one variable's exported copy into step with its value, just before an exec.
+//
+// A variable has two strings: the value this shell sees, and the copy the environment
+// holds.  If it is exported, the environment copy is refreshed from the value; if it is
+// not, the value is refreshed from the environment copy -- which is how a variable that
+// was inherited but never exported keeps its original value for the child while the
+// shell's own change stays private.
+//
 void exname(NAMPTR n)
 {
     if (n->namflg & N_EXPORT) {
@@ -275,6 +375,10 @@ void exname(NAMPTR n)
     }
 }
 
+//
+// Print one variable's attributes, as `export readonly NAME'.  What `export' and
+// `readonly' with no arguments do.  Variables with neither attribute print nothing.
+//
 void printflg(NAMPTR n)
 {
     if (n->namflg & N_EXPORT) {
@@ -294,6 +398,10 @@ void printflg(NAMPTR n)
 //
 // v7's getenv(): read the environment vector into the name tree.
 //
+//
+// Read the environment this shell was started with into the name tree, so that $HOME and
+// the rest are ordinary variables from then on.  Called once, at startup.
+//
 void readenv(void)
 {
     STRING *e = environ;
@@ -302,16 +410,24 @@ void readenv(void)
         setname(*e++, N_ENVNAM);
 }
 
+// Running count for countnam(), below.
 static INT namec;
 
+//
+// namscan() helper: count the variables, so that shenv() knows how big a vector to make.
+//
 void countnam(NAMPTR n)
 {
     (void)n;
     namec++;
 }
 
+// Where pushnam() is writing, below.
 static STRING *argnam;
 
+//
+// namscan() helper: copy one variable into the vector shenv() is building.
+//
 void pushnam(NAMPTR n)
 {
     if (n->namval)
@@ -320,6 +436,11 @@ void pushnam(NAMPTR n)
 
 //
 // v7's setenv(): build the environment vector for an exec, on the stack.
+//
+//
+// Build the environment vector to hand to a child: a null-terminated array of
+// "name=value" strings, on the expression stack.  Two passes, because the vector has to
+// be allocated before it can be filled and only a walk can say how many there are.
 //
 STRING *shenv(void)
 {

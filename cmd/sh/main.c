@@ -20,7 +20,13 @@
 //
 #define TIMEOUT 0
 
-UFD output           = 2;
+// Where the shell's own messages go.  Starts as standard error, and exfile() moves it to
+// descriptor 11 so that a command's redirections cannot capture the prompt or the
+// diagnostics.
+UFD output = 2;
+// Whether main() has been through its startup once already.  It can be re-entered: when
+// a command turns out to be a script rather than a binary, execs() jumps back to the
+// setjmp below, and the profile must not be read a second time.
 static BOOL beenhere = FALSE;
 
 //
@@ -31,12 +37,27 @@ static BOOL beenhere = FALSE;
 //
 CHAR tmpout[TMPNAM + NUMBUF + NUMBUF] = "/tmp/sh-";
 
+// The bottom of the input stack: the shell's own input, the one that is never popped.
 static SHFILEBLK stdfile;
+
+// The input the shell is reading commands from right now.  push() and pop() move it.
 SHFILE standin = &stdfile;
 
+// Defined below.
 static void exfile(BOOL prof);
 static void Ldup(INT fa, INT fb);
 
+//
+// Start the shell up and hand over to the command loop.
+//
+// In order: set up memory and signals; read the environment into the name tree; read the
+// shell's own options; work out where commands are to come from -- a script named on the
+// command line, a string after -c, or standard input; and, for a login shell, run
+// .profile first.
+//
+// The setjmp in the middle is what execs() jumps back to when a command turns out to be
+// a shell script: everything after it is done a second time, over the new input.
+//
 int main(int c, char **v)
 {
     INT rflag = ttyflg;
@@ -112,6 +133,18 @@ int main(int c, char **v)
     done();
 }
 
+//
+// THE COMMAND LOOP: read a command, run it, repeat until end of input.
+//
+// Before the loop it settles two things.  The shell's own input and output are moved to
+// high descriptor numbers, out of the way of any redirection a command may do.  And it
+// decides whether this shell is INTERACTIVE -- whether both input and output are
+// terminals -- which is what turns on the prompt, the mail check and the idle timeout,
+// and which makes an error return to the prompt instead of ending the shell.
+//
+// The setjmp is where every error lands.  `prof' says this is the .profile being read,
+// in which case an error abandons it rather than the whole shell.
+//
 static void exfile(BOOL prof)
 {
     L_INT mailtime = 0;
@@ -186,12 +219,21 @@ static void exfile(BOOL prof)
     }
 }
 
+//
+// Print the continuation prompt (PS2, "> " by default) when an interactive user has
+// typed a newline in the middle of a command that is not finished yet.
+//
 void chkpr(CHAR eor)
 {
     if ((flags & prompt) && standin->fstak == 0 && eor == NL)
         prs(ps2nod.namval);
 }
 
+//
+// Build the here-document temp file name out of this shell's process id, so that two
+// shells running at once cannot use the same files.  tmpfil() adds a serial number after
+// it for each here-document.
+//
 void settmp(void)
 {
     itos(getpid());

@@ -6,7 +6,11 @@
 //
 #include "defs.h"
 
+// Defined below.
 static STRING *copyargs(STRING from[], INT n);
+
+// The current list of positional parameters, reference-counted.  setargs() replaces it;
+// useargs() takes a reference so that a `for' loop can keep walking the old one.
 static DOLPTR dolh;
 
 //
@@ -18,11 +22,20 @@ static DOLPTR dolh;
 //
 CHAR flagadr[12];
 
+// The option letters, and the flag bit each one sets.  The two arrays are parallel: the
+// bit for a letter is flagval[] at the same subscript.  Both end with 0.
 CHAR flagchar[] = { 'x', 'n', 'v', 't', 's', 'i', 'e', 'r', 'k', 'u', 0 };
-INT flagval[]   = {
+// The bit each of those letters sets; same subscript as flagchar[] above.
+INT flagval[] = {
     execpr, noexec, readpr, oneflg, stdflg, intflg, errflg, rshflg, keyflg, setflg, 0
 };
 
+//
+// Read the shell's own options off the front of the command line.
+//
+// Handles `sh -x', `sh -xv' and `sh -c "command"'; anything else is left alone for the
+// script.  Returns how many arguments remain, and fills in $- along the way.
+//
 INT options(INT argc, STRING *argv)
 {
     STRING cp;
@@ -67,6 +80,12 @@ INT options(INT argc, STRING *argv)
     return argc;
 }
 
+//
+// Replace the positional parameters $1, $2, ... with a new list.
+//
+// The strings are copied into the arena, because the vector handed in usually lives on
+// the expression stack and will not survive the next command.
+//
 void setargs(STRING argi[])
 {
     // count args
@@ -85,6 +104,10 @@ void setargs(STRING argi[])
     assnum(&dolladr, dolc = argn - 1);
 }
 
+//
+// Drop one reference to a saved parameter list, freeing it and its strings when the last
+// user lets go.  Returns the next list on the chain.
+//
 DOLPTR freeargs(DOLPTR blk)
 {
     STRING *argp;
@@ -102,6 +125,10 @@ DOLPTR freeargs(DOLPTR blk)
     return argr;
 }
 
+//
+// Copy n argument strings into one arena block: the reference count, then the vector,
+// then a null to end it.  Sets dolv to the vector and returns the block.
+//
 static STRING *copyargs(STRING from[], INT n)
 {
     STRING *np = (STRING *)shalloc(sizeof(STRING *) * n + 3 * BYTESPERWORD);
@@ -118,6 +145,11 @@ static STRING *copyargs(STRING from[], INT n)
     return pp;
 }
 
+//
+// Abandon everything the shell was in the middle of -- the `for' loops' saved parameter
+// lists, and any input files it had stacked up.  Called on the way out of an error, so
+// that the prompt starts clean.
+//
 void clearup(void)
 {
     // force `for' $* lists to go away
@@ -129,6 +161,10 @@ void clearup(void)
         ;
 }
 
+//
+// Take one more reference to the current parameter list and put it on the `for' chain,
+// so that a loop walking $* survives the body running `set'.
+//
 DOLPTR useargs(void)
 {
     if (dolh) {

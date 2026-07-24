@@ -18,16 +18,23 @@
 //
 CHAR numbuf[NUMBUF];
 
+// Print one newline.
 void newline(void)
 {
     prc(NL);
 }
 
+// Print one space.
 void blank(void)
 {
     prc(SP);
 }
 
+//
+// Print the prefix that goes in front of every diagnostic: the name the shell was
+// invoked as, then ": ", so a message reads "sh: cannot open".  An interactive shell
+// skips it -- at a prompt the user knows who is talking.
+//
 void prp(void)
 {
     if ((flags & prompt) == 0 && cmdadr) {
@@ -36,6 +43,10 @@ void prp(void)
     }
 }
 
+//
+// Print a string.  length() counts the NUL, hence the -1.  A null pointer prints
+// nothing, which is what lets callers pass an unset variable straight in.
+//
 void prs(STRING as)
 {
     STRING s = as;
@@ -58,6 +69,11 @@ void prc(CHAR c)
         write(output, &c, 1);
 }
 
+//
+// Print a length of time as the `times' built-in wants it: "1h2m3s", with the hours left
+// out when there are none.  The argument is in sixtieths of a second, which is the unit
+// the system counts processor time in, and the +30 rounds to the nearest second.
+//
 void prt(L_INT t)
 {
     INT hr, min, sec;
@@ -77,6 +93,7 @@ void prt(L_INT t)
     prc('s');
 }
 
+// Print a number in decimal.
 void prn(INT n)
 {
     itos(n);

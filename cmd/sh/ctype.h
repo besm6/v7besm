@@ -10,7 +10,12 @@
  *
  */
 
-/* table 1 */
+/*
+ * The shell classifies a character by looking it up in one of two tables in ctype.c and
+ * testing a bit, rather than by comparing it against a list.  These are the bits.
+ *
+ * Table 1 is what the LEXER needs to know.
+ */
 #define T_SUB 01
 #define T_MET 02
 #define T_SPC 04
@@ -20,7 +25,7 @@
 #define T_QOT 0100
 #define T_ESC 0200
 
-/* table 2 */
+/* Table 2 is what $ SUBSTITUTION and filename matching need to know. */
 #define T_BRC 01
 #define T_DEF 02
 #define T_AST 04
@@ -30,7 +35,10 @@
 #define T_IDC 0100
 #define T_SET 0200
 
-/* for single chars */
+/*
+ * The entry for one character, spelled by what the character is rather than by which
+ * bits it has.  ctype.c's tables are written out in these.
+ */
 #define _TAB  (T_SPC)
 #define _SPC  (T_SPC)
 #define _UPC  (T_IDC)
@@ -64,13 +72,23 @@
 #define _AT   (T_AST)
 #define _QU   (T_DEF | T_FNG | T_SHN)
 
-/* abbreviations for tests */
+/* Two combinations asked for often enough to be worth naming. */
 #define _IDCH (T_IDC | T_DIG)
 #define _META (T_SPC | T_DIP | T_MET | T_EOR)
 
 extern char _ctype1[];
 
-/* nb these args are not call by value !!!! */
+/*
+ * The tests themselves.
+ *
+ * Each is (c & QUOTE) == 0 first: a QUOTED character is never special, whatever it is,
+ * and -- because && stops as soon as it has its answer -- the table is never subscripted
+ * with the out-of-range value a quoted character has.  That short circuit is load
+ * bearing, not an optimisation.
+ *
+ * NB THESE ARGS ARE NOT CALL BY VALUE !!!!  They are macros: an argument with a side
+ * effect, such as *p++, is evaluated more than once.
+ */
 #define space(c)   (((c) & QUOTE) == 0 && _ctype1[c] & (T_SPC))
 #define eofmeta(c) (((c) & QUOTE) == 0 && _ctype1[c] & (_META | T_EOF))
 #define qotchar(c) (((c) & QUOTE) == 0 && _ctype1[c] & (T_QOT))

@@ -25,10 +25,41 @@
 #include "defs.h"
 #include "sym.h"
 
+// The pid of the child just forked, or 0 in the child itself.  A file-scope variable
+// rather than a local because execute() recurses and v7 wanted the innermost value; it
+// is read again as soon as it is set, so the sharing does no harm.
 static INT parent;
 
 // ======== command execution ========
 
+//
+// Walk one node of the parse tree and do what it says.  THE HEART OF THE SHELL.
+//
+// It recurses into the children, so running `if a; then b | c; fi' is one call per node.
+// The big switch is on the kind of node:
+//
+//	TCOM		a simple command -- and the one that falls through to TFORK
+//	TFORK		run something in a child process
+//	TPAR		( ... )
+//	TFIL		a | b
+//	TLST		a; b
+//	TAND, TORF	a && b, a || b
+//	TFOR, TWH, TUN	for, while, until
+//	TIF		if
+//	TSW		case
+//
+// TCOM does the built-ins itself in an inner switch -- cd, set, export and the rest have
+// to run in THIS process, since a child's chdir or assignment would be thrown away when
+// it exited.  Anything that is not a built-in falls through into TFORK and is run as a
+// separate program.
+//
+// `execflg' says the caller has no more use for this process, so the command may replace
+// it outright instead of forking -- what makes the last stage of a pipeline cheap.  pf1
+// and pf2 are the pipes to read from and write to, or NULL.  Returns the exit status.
+//
+// The stack position is saved on the way in and restored on the way out, so that every
+// command hands back the scratch space it used no matter how it left.
+//
 INT execute(TREPTR argt, INT execflg, INT *pf1, INT *pf2)
 {
     // `stakbot' is preserved by this routine
@@ -442,6 +473,14 @@ INT execute(TREPTR argt, INT execflg, INT *pf1, INT *pf2)
 // the `eval' call site, laundering a pointer through an int for feval to pick up again.
 // They are separate parameters here: `fd' is a descriptor or 0, `args' is eval's
 // argument vector or NULL.
+//
+//
+// Run shell commands from somewhere other than the current input.
+//
+// From the string `s' -- which is `eval', a trap command, and the `-c' option -- or from
+// the already-open descriptor `fd', which is the `.' built-in reading a script.  The
+// input is pushed, the commands are parsed and run, and the input is popped, so that
+// whatever was being read before carries on untouched.
 //
 void execexp(STRING s, UFD fd, STRING *args)
 {

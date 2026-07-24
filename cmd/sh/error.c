@@ -15,6 +15,10 @@
 
 #include "defs.h"
 
+//
+// Rewrite $? from the exit status of the command that just finished.  Called after every
+// one of them.
+//
 void exitset(void)
 {
     assnum(&exitadr, exitval);
@@ -30,6 +34,10 @@ void sigchk(void)
         exitsh(SIGFAIL);
 }
 
+//
+// Report "sh: s1: s2" and abandon the command.  s2 may be null, in which case only s1 is
+// printed -- that is what error() below is.  DOES NOT RETURN.
+//
 _Noreturn void failed(STRING s1, STRING s2)
 {
     prp();
@@ -42,6 +50,9 @@ _Noreturn void failed(STRING s1, STRING s2)
     exitsh(ERROR);
 }
 
+//
+// Report "sh: s" and abandon the command.  DOES NOT RETURN.
+//
 _Noreturn void error(STRING s)
 {
     failed(s, NIL);
@@ -73,6 +84,10 @@ _Noreturn void exitsh(INT xno)
     _exit(exitval);
 }
 
+//
+// Leave the shell for good: run the trap the user set for exit (`trap cmd 0'), remove the
+// here-document temp files, and exit with the status in `exitval'.  DOES NOT RETURN.
+//
 _Noreturn void done(void)
 {
     STRING t;
@@ -87,6 +102,18 @@ _Noreturn void done(void)
 
 //
 // Unlink the here-document temp files above `base'.
+//
+// v7 declared base an IOPTR and compared it against iotemp directly, but tdystak()
+// calls this with a stack address -- a char *.  On this machine those are not the same
+// kind of pointer at all (a fat one and a bare word address), so the parameter says
+// which it is and the comparison converts the other side.
+//
+//
+// Unlink the here-document temp files above `base'.
+//
+// Each here-document in a command gets a file in /tmp holding its text, and this is what
+// removes them once the command is finished with; `base' says how far back to go, so
+// that a nested command does not delete the files of the one that contains it.
 //
 // v7 declared base an IOPTR and compared it against iotemp directly, but tdystak()
 // calls this with a stack address -- a char *.  On this machine those are not the same

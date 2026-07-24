@@ -37,11 +37,28 @@
 #define clearbusy(p) ((BLKPTR)((POS)(p) & ~(POS)BUSY))
 #define busy(x)      testbusy((x)->word)
 
+// How much to ask the system for at a time.  It grows as the shell turns out to need
+// more (stak.c), so a long script does not make hundreds of small requests.
 POS brkincr = BRKINCR;
 
-BLKPTR blokp;   // current search pointer
-BLKPTR bloktop; // top of arena (last blok); seeded by the first addblok()
+// Where the next search starts.  A circular first fit does not begin at the beginning:
+// it carries on from wherever the last one stopped, which spreads the wear and makes
+// freeing and immediately reallocating the same size cheap.
+BLKPTR blokp;
 
+// The last block of the arena, and so the top of it.  The expression stack lives
+// directly above this, which is why growing the arena has to move the stack.  Seeded by
+// the first addblok().
+BLKPTR bloktop;
+
+//
+// Hand out nbytes char-units of memory.
+//
+// The search walks the chain of blocks from wherever it left off, merging any run of
+// free ones it passes, until it finds a gap big enough or comes back round to where it
+// started.  If nothing fits, it grows the arena and tries once more.  It never returns
+// null: it either succeeds or reports "no space" and abandons the command.
+//
 ADDRESS shalloc(POS nbytes)
 {
     // Header word plus payload, rounded up to whole words.  v7 wrote
@@ -156,6 +173,14 @@ void addblok(POS reqd)
     stakbas = stakbot = stakadr;
 }
 
+//
+// Give a block back.
+//
+// Nothing is merged here -- the block is only marked free, and the next search will
+// coalesce it with its neighbours.  Leaving the search pointer ON the freed block is
+// deliberate: the commonest pattern is to free something and immediately allocate
+// something the same size, and this way that hits at once.
+//
 void shfree(BLKPTR ap)
 {
     BLKPTR p = ap;

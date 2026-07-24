@@ -24,8 +24,18 @@
 
 #include "defs.h"
 
+// Defined below.
 static void addg(STRING as1, STRING as2, STRING as3);
 
+//
+// Expand one word against the file system, and return how many names came out.
+//
+// `as' is a word such as "/usr/*/bin/x".  If it holds no wildcard the answer is 0 and
+// the caller uses the word as written.  Otherwise the word is split at the last slash,
+// the directory part is opened, every entry matching the pattern part is added to the
+// argument chain, and -- if there was a slash AFTER the wildcard -- each of those
+// results is expanded again, which is what `rflg' and the `rescan' variable are for.
+//
 INT expand(STRING as, INT rflg)
 {
     INT count, dirf;
@@ -230,6 +240,10 @@ static void addg(STRING as1, STRING as2, STRING as3)
     makearg(endstak(s2));
 }
 
+//
+// Put one finished word on the front of the chain of arguments being built for this
+// command.  scan() later walks the chain backwards to produce the argv.
+//
 void makearg(STRING args)
 {
     ((ARGPTR)args)->argnxt = gchain;

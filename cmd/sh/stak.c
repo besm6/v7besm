@@ -14,6 +14,8 @@
 //
 #include "defs.h"
 
+// The start of the item being built.  Points at the empty string until the first
+// addblok() gives the stack somewhere real to live.
 STKPTR stakbot = nullstr;
 
 // ======== storage allocation ========
@@ -68,6 +70,11 @@ void growstak(void)
         brkincr += BRKPAGE;
 }
 
+//
+// Where the stack is now, to be handed to tdystak() later to unwind back to.  execute()
+// takes one of these on the way in and uses it on the way out, so that each command
+// hands back the scratch space it used.
+//
 STKPTR savstak(void)
 {
     // v7 asserted staktop==stakbot here, through a macro defined as `;'.
@@ -116,6 +123,10 @@ void stakchk(void)
         setbrk(-BRKINCR);
 }
 
+//
+// Copy a string onto the stack and finish the item in one go: locstak() to get room,
+// movstr() to fill it, endstak() to commit it.
+//
 STKPTR cpystak(STKPTR x)
 {
     return endstak(movstr(x, locstak()));

@@ -20,6 +20,11 @@
 
 #include "defs.h"
 
+//
+// Move the break by `incr' char-units -- positive to get more memory, negative to give
+// some back -- and record in `brkend' how far the shell's memory now reaches.  Returns
+// 1 if the system granted it and 0 if it refused.
+//
 INT setbrk(INT incr)
 {
     BYTPTR a = sbrk(incr);

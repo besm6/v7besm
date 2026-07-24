@@ -48,36 +48,42 @@
 #include <sys/param.h>
 #include <sys/types.h>
 
-// error exits from various parts of shell
-#define ERROR   1
-#define SYNBAD  2
-#define SIGFAIL 3
-#define SIGFLG  0200
+// The exit statuses the shell gives itself when something goes wrong.
+#define ERROR   1    // any ordinary failure -- cannot open, not found, ...
+#define SYNBAD  2    // a syntax error in the input
+#define SIGFAIL 3    // a signal arrived and there was no trap for it
+#define SIGFLG  0200 // added to a signal number to make the $? of a child it killed
 
-// command tree
-#define FPRS   020
-#define FINT   040
-#define FAMP   0100
-#define FPIN   0400
-#define FPOU   01000
-#define FPCL   02000
-#define FCMD   04000
-#define COMMSK 017
+//
+// A parse-tree node's type word holds the KIND in its low four bits and these flags
+// above them, so that one word says both what the node is and how it is to be run.
+//
+#define FPRS   020   // print the child's pid, as an interactive shell does for `&'
+#define FINT   040   // ignore interrupts, and read /dev/null: a `&' command
+#define FAMP   0100  // started with `&': do not wait for it
+#define FPIN   0400  // its input is a pipe
+#define FPOU   01000 // its output is a pipe
+#define FPCL   02000 // close the pipe in the parent once the child has it
+#define FCMD   04000 // a command rather than a control structure
+#define COMMSK 017   // the low bits: which of the T* kinds below this node is
 
-#define TCOM  0
-#define TPAR  1
-#define TFIL  2
-#define TLST  3
-#define TIF   4
-#define TWH   5
-#define TUN   6
-#define TSW   7
-#define TAND  8
-#define TORF  9
-#define TFORK 10
-#define TFOR  11
+// The kinds of parse-tree node.  execute() switches on these; mode.h has the struct for
+// each one.
+#define TCOM  0  // a simple command: a name and its arguments
+#define TPAR  1  // ( ... )
+#define TFIL  2  // a | b
+#define TLST  3  // a; b
+#define TIF   4  // if ... then ... else ... fi
+#define TWH   5  // while ... do ... done
+#define TUN   6  // until ... do ... done
+#define TSW   7  // case ... in ... esac
+#define TAND  8  // a && b
+#define TORF  9  // a || b
+#define TFORK 10 // run the child node in a separate process
+#define TFOR  11 // for ... do ... done
 
-// execute table
+// The built-in commands, numbered.  syslook() turns a command name into one of these and
+// execute()'s inner switch runs it here rather than forking.
 #define SYSSET    1
 #define SYSCD     2
 #define SYSEXEC   3
@@ -98,22 +104,29 @@
 #define SYSTST    18
 #define SYSUMASK  19
 
-// used for input and output of shell
+// Where the shell moves its OWN input and output at startup, well out of the range a
+// user's redirection is likely to name, so that a command cannot capture the prompt or
+// read the script out from under the shell.
 #define INIO 10
 #define OTIO 11
 
-// io nodes
-#define USERIO 10
-#define IOUFD  15
-#define IODOC  16
-#define IOPUT  32
-#define IOAPP  64
-#define IOMOV  128
-#define IORDW  256
-#define INPIPE 0
-#define OTPIPE 1
+//
+// A redirection's `iofile' word: which descriptor in the low bits, and what kind of
+// redirection above them.
+//
+#define USERIO 10  // the highest descriptor a user may name in a redirection
+#define IOUFD  15  // mask for the descriptor number itself
+#define IODOC  16  // a here-document: <<WORD
+#define IOPUT  32  // output: >
+#define IOAPP  64  // append rather than truncate: >>
+#define IOMOV  128 // move a descriptor: >&2, or close it: >&-
+#define IORDW  256 // open for both reading and writing: <>
 
-// arg list terminator
+// A pipe() fills in two descriptors; these name them.
+#define INPIPE 0 // the end to read from
+#define OTPIPE 1 // the end to write to
+
+// What marks the end of an argument vector -- a null pointer, as execve wants it.
 #define ENDARGS 0
 
 //
@@ -122,9 +135,11 @@
 //
 #define TRUE   (-1)
 #define FALSE  0
-#define LOBYTE 0377
-#define STRIP  0177
-#define QUOTE  0200
+#define LOBYTE 0377 // mask for one byte
+#define STRIP  0177 // mask that takes the quoting mark OFF a character
+#define QUOTE \
+    0200 // the bit that marks a character as quoted, so that later stages
+         // leave it alone: no splitting, no wildcard, no substitution
 
 // SHEOF, not EOF: <stdio.h> in this tree spells EOF as -1, and if it were ever reached
 // the include order would decide whether word() can end a script at all.
@@ -139,9 +154,9 @@
 #include "mode.h"
 #include "name.h"
 
-#define attrib(n, f) (n->namflg |= f)
-#define closepipe(x) (close(x[INPIPE]), close(x[OTPIPE]))
-#define eq(a, b)     (cf(a, b) == 0)
+#define attrib(n, f) (n->namflg |= f)                     // give a variable an attribute
+#define closepipe(x) (close(x[INPIPE]), close(x[OTPIPE])) // close both ends of a pipe
+#define eq(a, b)     (cf(a, b) == 0)                      // are two strings equal?
 #define max(a, b)    ((a) > (b) ? (a) : (b))
 
 //
@@ -180,319 +195,690 @@
 //
 extern char end[];
 
-// ======== the globals, defined in glob.c unless noted ========
+// ======== the globals, defined in glob.c unless the comment names another file ========
 
-// temp files and io
+// --- where the shell's own messages go, and the files it must clean up ---
+
+// The descriptor the shell PRINTS ON.  Not 1: exfile() moves the original standard error
+// to descriptor 11 at startup (OTIO) so that a command's redirections cannot capture the
+// shell's own diagnostics or its prompt.
 extern UFD output; // main.c
-extern INT ioset;
-extern IOPTR iotemp; // files to be deleted sometime
-extern IOPTR iopend; // documents waiting to be read at NL
 
-// substitution
+// Non-zero once a redirection has touched descriptor 0 for the command being built, so
+// that a background command does not also get /dev/null attached to its input.
+extern INT ioset;
+
+// The chain of here-document temp files created so far.  rmtemp() unlinks them.
+extern IOPTR iotemp;
+
+// Here-documents whose text has been PROMISED (`cmd <<WORD') but not yet read.  The
+// lexer collects them when it reaches the end of the line -- which is where the text
+// actually starts.
+extern IOPTR iopend;
+
+// --- the positional parameters, and argument generation ---
+
+// $# : how many positional parameters there are.
 extern INT dolc;
+
+// $1, $2, ... : the vector of them.  dolv[0] is $0, the name the shell was invoked as.
 extern STRING *dolv;
+
+// The `for' loops' saved parameter lists, kept alive while a loop is running so that a
+// `set' inside the body cannot pull the list out from under it.
 extern DOLPTR argfor;
+
+// The chain of argument words built so far for the command being assembled.  scan()
+// turns it into the argv the child gets.  ITS LOW-ORDER TAG BIT IS NOT BIT 0 -- see
+// service.c's ARGMK.
 extern ARGPTR gchain;
 
-// string constants -- msg.c
-extern MSG atline;
-extern MSG readmsg;
-extern MSG colon;
-extern MSG minus;
-extern MSG nullstr;
-extern MSG sptbnl;
-extern MSG unexpected;
-extern MSG endoffile;
-extern MSG synmsg;
+// --- fixed strings the shell prints (msg.c) ---
 
-// name tree and words
+extern MSG atline;     // " at line " -- part of the syntax error report
+extern MSG readmsg;    // "> " -- the default PS2, the continuation prompt
+extern MSG colon;      // ": " -- the separator in "sh: something: message"
+extern MSG minus;      // "-" -- tested against a redirection target, as in `2>&-'
+extern MSG nullstr;    // "" -- the empty string, used wherever one is needed
+extern MSG sptbnl;     // " \t\n" -- the default IFS, the word separators
+extern MSG unexpected; // " unexpected" -- the tail of the syntax error report
+extern MSG endoffile;  // "end of file" -- how the parser names the EOF symbol
+extern MSG synmsg;     // "syntax error"
+
+// --- the keyword tables, and what the lexer last read ---
+
+// The reserved words: if, then, else, for, do, done, case ... Each maps to a symbol
+// number that the parser switches on.
 extern SYSNOD reserved[]; // msg.c
+
+// The built-in commands: cd, set, export, trap, exit ... Each maps to a SYS* number that
+// execute()'s inner switch runs directly instead of forking.
 extern SYSNOD commands[]; // msg.c
+
+// The symbol word() just read: 0 for an ordinary word, otherwise a reserved-word or
+// operator code from sym.h.  The parser reads nothing else.
 extern INT wdval;
+
+// The digit in front of a redirection, as in `2>file' -- 2 here.  0 if there was none.
 extern INT wdnum;
+
+// The ordinary word word() just read, when wdval is 0.
 extern ARGPTR wdarg;
+
+// Non-zero if that word looks like an assignment (`name=value') rather than a command
+// argument, so that `a=1 b=2 cmd' can set variables just for cmd.
 extern INT wdset;
+
+// Set by the parser before calling word() to say "a reserved word is legal HERE".
+// `echo if' must not be parsed as an `if' statement, and this is what stops it.
 extern BOOL reserv;
 
-// prompting -- msg.c
-extern MSG stdprompt;
-extern MSG supprompt;
-extern MSG profile;
+// --- prompting (msg.c) ---
 
-// built in names -- name.c
-extern NAMNOD fngnod;
-extern NAMNOD ifsnod;
-extern NAMNOD homenod;
-extern NAMNOD mailnod;
-extern NAMNOD pathnod;
-extern NAMNOD ps1nod;
-extern NAMNOD ps2nod;
+extern MSG stdprompt; // "$ " -- PS1 for an ordinary user
+extern MSG supprompt; // "# " -- PS1 for the super-user, so root looks different
+extern MSG profile;   // ".profile" -- the login script a `-' shell reads first
 
-// special names
-extern MSG flagadr; // args.c
-extern STRING cmdadr;
-extern STRING exitadr;
-extern STRING dolladr;
-extern STRING pcsadr;
-extern STRING pidadr;
+// --- the shell variables that always exist (name.c) ---
+//
+// These seven are pre-built nodes of the name tree rather than ordinary entries, because
+// the shell itself reads them and they must be there before any script runs.
 
+extern NAMNOD fngnod;  // FILEMATCH
+extern NAMNOD ifsnod;  // IFS -- the characters that separate words
+extern NAMNOD homenod; // HOME -- where a bare `cd' goes
+extern NAMNOD mailnod; // MAIL -- the file watched for "you have mail"
+extern NAMNOD pathnod; // PATH -- the directories a command is looked for in
+extern NAMNOD ps1nod;  // PS1 -- the main prompt
+extern NAMNOD ps2nod;  // PS2 -- the continuation prompt
+
+// --- the parameters that are not variables ---
+//
+// $-, $0, $?, $#, $! and $$ are not in the name tree: the shell keeps each as a plain
+// string and rewrites it when the value changes.
+
+extern MSG flagadr;    // $- : the letters of the options in force (args.c)
+extern STRING cmdadr;  // $0 : the name the shell, or the script, was invoked as
+extern STRING exitadr; // $? : the last command's exit status, in decimal
+extern STRING dolladr; // $# : how many positional parameters, in decimal
+extern STRING pcsadr;  // $! : the pid of the last `&' command, in decimal
+extern STRING pidadr;  // $$ : this shell's own pid, in decimal
+
+// ":/bin:/usr/bin" -- the PATH used when the variable is unset.  The leading empty entry
+// means "the current directory first".
 extern MSG defpath; // msg.c
 
-// names always present -- msg.c
-extern MSG mailname;
-extern MSG homename;
-extern MSG pathname;
-extern MSG fngname;
-extern MSG ifsname;
-extern MSG ps1name;
-extern MSG ps2name;
+// --- the names of those variables, as strings (msg.c) ---
 
-// transput
+extern MSG mailname; // "MAIL"
+extern MSG homename; // "HOME"
+extern MSG pathname; // "PATH"
+extern MSG fngname;  // "FILEMATCH"
+extern MSG ifsname;  // "IFS"
+extern MSG ps1name;  // "PS1"
+extern MSG ps2name;  // "PS2"
+
+// --- reading input ---
+
+// "/tmp/sh" followed by this shell's pid and a serial number: the name of the next
+// here-document temp file.  settmp() writes the pid in, tmpfil() the serial.
 extern CHAR tmpout[]; // main.c
+
+// Where in tmpout[] the serial number goes -- just past the pid.
 extern STRING tmpnam;
+
+// Counts up so that each here-document in one shell gets a different temp file.
 extern INT serial;
+
+// Where the pid starts in tmpout[]: the length of "/tmp/sh".
 #define TMPNAM 7
+
+// THE INPUT STACK.  standin is the file the shell is reading commands from, and each
+// one points at the one it interrupted (fstak), so that `.', `eval' and a here-document
+// can read from somewhere else and then hand control back.  push() and pop() work it.
 extern SHFILE standin; // main.c
+
+// Shorthands for the two fields of the current input that the whole shell reads.
 #define input (standin->fdes)
 #define eof   (standin->feof)
-extern INT peekc;
-extern STRING comdiv;
-extern BOOL comdivset; // see main.c: v7 decremented the null comdiv instead
-extern MSG devnull;    // msg.c
-extern BOOL nosubst;   // set by trim()
 
-// flags
-#define noexec  01
-#define intflg  02
-#define prompt  04
-#define setflg  010
-#define errflg  020
-#define ttyflg  040
-#define forked  0100
-#define oneflg  0200
-#define rshflg  0400
-#define waiting 01000
-#define stdflg  02000
-#define execpr  04000
-#define readpr  010000
-#define keyflg  020000
+// One character of pushback: the lexer often has to look at the next character to decide
+// what the current one meant, and this is where it puts it back.  Bit MARK is set so
+// that a pushed-back NUL is still distinguishable from "nothing pushed back".
+extern INT peekc;
+
+// The command string given with -c, as in `sh -c "echo hi"'.
+extern STRING comdiv;
+
+// Whether -c was given at all.  A separate flag because comdiv itself may legitimately
+// be a null pointer; see main.c, where v7 instead decremented the null.
+extern BOOL comdivset;
+
+extern MSG devnull; // "/dev/null" -- what a `&' command gets for input (msg.c)
+
+// Set by trim(): whether the string it just processed contained any quoted character.
+// A here-document whose terminator was quoted (`<<\EOF') is copied literally.
+extern BOOL nosubst;
+
+// --- the option flags, one bit each ---
+//
+// Most come from the command line (`sh -x'); the shell sets the rest itself as it learns
+// about its situation.  args.c's flagchar[]/flagval[] pair the letters with the bits.
+
+#define noexec 01  // -n: parse but do not run.  Syntax check only.
+#define intflg 02  // -i: interactive, whatever the input turns out to be
+#define prompt 04  // print a prompt before each command (the shell sets this)
+#define setflg 010 // -u: an unset variable is an error, not an empty string
+#define errflg 020 // -e: exit as soon as any command fails
+#define ttyflg 040 // input and output are both terminals (the shell sets this)
+#define forked \
+    0100            // this process is a CHILD; it may exit rather than return to the
+                    // prompt (the shell sets this)
+#define oneflg 0200 // -t: read and run one command, then exit
+#define rshflg \
+    0400 // restricted shell: no cd, no /-in-a-command-name, no output
+         // redirection
+#define waiting \
+    01000             // sitting at the prompt with nothing to do, so the timeout alarm
+                      // may log this shell out (the shell sets this)
+#define stdflg 02000  // -s: read commands from standard input
+#define execpr 04000  // -x: print each command before running it
+#define readpr 010000 // -v: print each input line as it is read
+#define keyflg \
+    020000 // -k: `name=value' anywhere in a command is an assignment, not
+           // just at the front
+
+// All of the above, OR-ed together.
 extern INT flags;
 
-// error exits from various parts of shell
+// --- the two long jumps ---
+//
+// A `longjmp' abandons whatever the shell was doing and resumes at the matching
+// `setjmp', however deep the call stack had become.  The shell has two places worth
+// resuming at.
+
+// Back to the top of main(), used when a file turns out to be a SCRIPT rather than a
+// binary: the shell must start over reading it, from wherever exec() failed.
 extern jmp_buf subshell;
+
+// Back to the command loop, used by every fatal error: an interactive shell prints the
+// message and goes back to the prompt rather than exiting.
 extern jmp_buf errshell;
 
-// fault handling
+// --- growing the arena ---
+
 #include "brkincr.h"
+
+// How much memory to ask the system for at a time, in char-units.  It grows as the shell
+// turns out to need more, up to BRKMAX, so that a big script does not make hundreds of
+// small requests.
 extern POS brkincr; // blok.c
 
+// The range of signal numbers `trap' will accept.  0 is not a signal: it is the
+// pseudo-trap that runs when the shell exits.
 #define MINTRAP 0
 #define MAXTRAP 17
 
-#define INTR    2
-#define QUIT    3
-#define MEMF    11
-#define ALARM   14
-#define KILL    15
-#define TRAPSET 2
-#define SIGSET  4
-#define SIGMOD  8
+// The four signals the shell itself cares about.
+#define INTR  2  // SIGINT -- the interrupt key
+#define QUIT  3  // SIGQUIT -- the quit key
+#define MEMF  11 // SIGSEGV -- out of memory; fault() grows the arena and carries on
+#define ALARM 14 // SIGALRM -- the idle timeout at the prompt
+#define KILL  15 // SIGTERM
 
+// The three bits kept per signal in trapflg[] below.
+#define TRAPSET 2 // it fired, and the user has a `trap' command for it to run
+#define SIGSET  4 // it fired, and there is no trap: the shell should give up
+#define SIGMOD \
+    8 // the shell CHANGED this signal's disposition, so a child must have it
+      // put back before exec
+
+// Non-zero when some signal has fired and has not been dealt with yet.  The shell tests
+// this at safe points rather than doing the work inside the handler.
 extern BOOL trapnote;
-extern STRING trapcom[]; // fault.c
-extern BOOL trapflg[];   // fault.c
 
-// name tree and words
+// The command string the user gave to `trap', one per signal.  Null if none.
+extern STRING trapcom[]; // fault.c
+
+// TRAPSET/SIGSET/SIGMOD for each signal.
+extern BOOL trapflg[]; // fault.c
 
 // Room for the decimal form of an INT: thirteen digits of a 41-bit signed value, a sign
 // and a NUL.  v7's numbuf was six bytes, which was all a 16-bit int ever needed.
 #define NUMBUF 16
-extern CHAR numbuf[];   // print.c
-extern MSG export;      // msg.c
-extern MSG readonly;    // msg.c
+
+// Where itos() leaves the decimal form of a number, and prn() prints it from.  One
+// shared buffer, so a second conversion overwrites the first.
+extern CHAR numbuf[]; // print.c
+
+extern MSG export;   // "export" -- both the built-in's name and its listing prefix
+extern MSG readonly; // "readonly" -- likewise
+
+// One message per signal, for reporting how a child died: "Killed", "Quit", ... A null
+// entry means "say nothing", which is why an interrupted command prints no fuss.
 extern STRING sysmsg[]; // msg.c
 
-// execflgs
+// --- how the tree walker keeps its place ---
+
+// The exit status of the last command; what $? is made from.
 extern INT exitval;
+
+// Set by `break' and `continue' to say "stop walking the tree and unwind": positive to
+// break out, negative to go round again.  Every loop in execute() tests it.
 extern BOOL execbrk;
+
+// How many loops are running, so that `break' outside one can be ignored.
 extern INT loopcnt;
+
+// How many more levels `break 2' still has to break out of.
 extern INT breakcnt;
 
-// messages -- msg.c
-extern MSG mailmsg;
-extern MSG coredump;
-extern MSG badopt;
-extern MSG badparam;
-extern MSG badsub;
-extern MSG nospace;
-extern MSG notfound;
-extern MSG badtrap;
-extern MSG baddir;
-extern MSG badshift;
-extern MSG illegal;
-extern MSG restricted;
-extern MSG execpmsg;
-extern MSG notid;
-extern MSG wtfailed;
-extern MSG badcreate;
-extern MSG piperr;
-extern MSG badopen;
-extern MSG badnum;
-extern MSG arglist;
-extern MSG txtbsy;
-extern MSG toobig;
-extern MSG badexec;
-extern MSG badfile;
+// --- the error messages (msg.c) ---
+
+extern MSG mailmsg;    // "you have mail\n"
+extern MSG coredump;   // " - core dumped"
+extern MSG badopt;     // "bad option(s)"
+extern MSG badparam;   // "parameter not set" -- from ${x?} or -u
+extern MSG badsub;     // "bad substitution" -- a malformed ${...}
+extern MSG nospace;    // "no space" -- out of memory
+extern MSG notfound;   // "not found" -- no such command on PATH
+extern MSG badtrap;    // "bad trap" -- a signal number out of range
+extern MSG baddir;     // "bad directory" -- cd failed
+extern MSG badshift;   // "cannot shift" -- shift with no parameters left
+extern MSG illegal;    // "illegal io" -- a built-in cannot be redirected
+extern MSG restricted; // "restricted" -- barred by the -r shell
+extern MSG execpmsg;   // "+ " -- the prefix -x puts on each command it echoes
+extern MSG notid;      // "is not an identifier" -- a bad variable name
+extern MSG wtfailed;   // "is read only" -- assignment to a readonly variable
+extern MSG badcreate;  // "cannot create" -- a `>' failed
+extern MSG piperr;     // "cannot make pipe"
+extern MSG badopen;    // "cannot open" -- a `<' failed
+extern MSG badnum;     // "bad number" -- a numeric argument was not numeric
+extern MSG arglist;    // "arg list too long"
+extern MSG txtbsy;     // "text busy" -- the file is being written
+extern MSG toobig;     // "too big" -- the program will not fit in memory
+extern MSG badexec;    // "cannot execute" -- found, but not runnable
+extern MSG badfile;    // "bad file number" -- a redirection named a silly descriptor
 
 // ======== the functions ========
 
-// args.c
+// --- args.c: the command line and the positional parameters ---
+
+// Read the shell's own options off the command line and set `flags'; return how many
+// arguments are left for the script.
 INT options(INT argc, STRING *argv);
+
+// Replace $1, $2, ... with a new list, copying it into the arena.
 void setargs(STRING argi[]);
+
+// Drop one reference to a saved parameter list, freeing it when the last goes.
 DOLPTR freeargs(DOLPTR blk);
+
+// Abandon everything the shell was in the middle of: `for' lists and stacked inputs.
+// Called on the way out of an error.
 void clearup(void);
+
+// Take one more reference to the current parameter list, so that a `for' loop can walk
+// it while the body is free to call `set'.
 DOLPTR useargs(void);
 
 //
-// blok.c.  v7 named these alloc()/free() and then `#define alloc malloc' in this
-// header, so the shell's own arena DEFINED malloc and free.  That works only as long as
-// nothing drags libc's malloc.o into the link, and half of stdio references it.  The
-// shell keeps its own allocator under its own names instead, and libc's is free to
-// coexist unreferenced.
+// --- blok.c: the shell's own memory allocator ---
 //
+// v7 named these alloc()/free() and then `#define alloc malloc' in this header, so the
+// shell's own arena DEFINED malloc and free.  That works only as long as nothing drags
+// libc's malloc.o into the link, and half of stdio references it.  The shell keeps its
+// own allocator under its own names instead, and libc's is free to coexist unreferenced.
+//
+
+// Hand out `nbytes' char-units of arena, growing it if need be.  Never returns null: it
+// grows or it reports "no space" and gives up.
 ADDRESS shalloc(POS nbytes);
+
+// Grow the arena by at least `reqd' char-units and move the expression stack up on top
+// of the new space.
 void addblok(POS reqd);
+
+// Give a block back.  Coalescing happens later, during a search.
 void shfree(BLKPTR ap);
 
-// builtin.c
+// --- builtin.c ---
+
+// The hook for locally added built-in commands.  Returns 0 -- "not mine, go and fork".
 INT builtin(INT argn, STRING *com);
 
-// cmd.c
+// --- cmd.c: the parser ---
+
+// Wrap a piece of the tree in a node that says "run this in a child process".
 TREPTR makefork(INT flgs, TREPTR i);
+
+// Parse one complete command and return the tree for it.  `sym' is the symbol that must
+// close it (`fi' for an if, 0 at the top level); `flg' says whether a newline ends it and
+// whether emptiness is allowed.
 TREPTR cmd(INT sym, INT flg);
 
-// error.c
+// --- error.c: giving up ---
+
+// Rewrite $? from `exitval'.  Called after every command.
 void exitset(void);
+
+// Give up if a signal has fired and there is no trap to handle it.  Called at every
+// point where stopping is safe.
 void sigchk(void);
+
+// Print "sh: s1: s2" and abandon the command.  DOES NOT RETURN.
 _Noreturn void failed(STRING s1, STRING s2);
+
+// Print "sh: s" and abandon the command.  DOES NOT RETURN.
 _Noreturn void error(STRING s);
+
+// Abandon the command with status `xno': back to the prompt if interactive, otherwise
+// out of the shell altogether.  DOES NOT RETURN.
 _Noreturn void exitsh(INT xno);
+
+// Leave the shell for good: run the exit trap, remove the temp files, exit.  DOES NOT
+// RETURN.
 _Noreturn void done(void);
+
+// Unlink the here-document temp files created above stack position `base'.
 void rmtemp(STKPTR base);
 
-// expand.c
+// --- expand.c: filename generation ---
+
+// Expand one word against the file system, adding every match to the argument chain, and
+// return how many there were.  0 means "no wildcards, or nothing matched" and the word
+// stands as written.
 INT expand(STRING as, INT rflg);
+
+// Does name `s' match pattern `p'?  The pattern language is *, ? and [...].
 INT gmatch(STRING s, STRING p);
+
+// Push one finished word onto the chain of arguments for this command.
 void makearg(STRING args);
 
-// fault.c
+// --- fault.c: signals ---
+
+// THE SIGNAL HANDLER.  Records that the signal fired -- or, for a memory fault, grows
+// the arena on the spot.
 void fault(INT sig);
+
+// Set up the signals a shell always wants at startup.
 void stdsigs(void);
+
+// Ignore signal n; return whether it was ALREADY ignored, which tells the shell it was
+// started that way and must leave it alone.
 INT ignsig(INT n);
+
+// Catch signal n with fault(), unless it was already being ignored.
 void getsig(INT n);
+
+// Put every signal back the way the parent had it.  A child does this before exec.
 void oldsigs(void);
+
+// Forget the trap on signal i and restore the default handling.
 void clrsig(INT i);
+
+// Run the trap commands for whatever fired since the last check.  Called between
+// commands, never inside the handler.
 void chktrap(void);
 
-// io.c
+// --- io.c: descriptors, and the input stack ---
+
+// Point the current input at descriptor `fd' and empty its buffer.
 void initf(UFD fd);
+
+// Point the current input at a STRING instead of a file -- how `eval' and $(...) read
+// text that is already in memory.  Returns true if there was nothing to read.
 INT estabf(STRING s);
+
+// Start reading from `af', remembering where we were.
 void push(SHFILE af);
+
+// Go back to the input we came from; false if there is none.
 INT pop(void);
+
+// Make a pipe, or give up with "cannot make pipe".
 void chkpipe(INT *pv);
+
+// Open a file for reading, or give up with "cannot open".
 INT chkopen(STRING idf);
+
+// Move descriptor f1 onto f2 and close f1 -- what `2>&1' does.
 void shrename(INT f1, INT f2); // ISO C owns the name `rename'
+
+// Create a file for writing, or give up with "cannot create".
 INT create(STRING s);
+
+// Create the next here-document temp file and return its descriptor.
 INT tmpfil(void);
+
+// Read a here-document out of the input and into a temp file.
 void copy(IOPTR ioparg);
 
-// macro.c
+// --- macro.c: $ substitution ---
+
+// Expand $ and "" in a string, leaving the result on the expression stack.
 STRING macro(STRING as);
+
+// Copy descriptor `in' to descriptor `ot', expanding $ on the way: a here-document that
+// was not quoted.
 void subst(INT in, INT ot);
 
-// main.c
+// --- main.c ---
+
+// Print the continuation prompt, if this is an interactive shell and the line is not
+// finished.
 void chkpr(CHAR eor);
+
+// Build the here-document temp file name out of this shell's pid.
 void settmp(void);
 
-// name.c
+// --- name.c: the variables ---
+
+// Look a word up in a keyword table (`reserved' or `commands'); 0 if it is not there.
 INT syslook(STRING w, SYSPTR syswds);
+
+// Perform a list of `name=value' assignments.
 void setlist(ARGPTR arg, INT xp);
+
+// Perform one `name=value' assignment, giving the variable the attributes in xp.
 void setname(STRING argi, INT xp);
+
+// Replace the string at *a with a fresh copy of v, freeing the old one.
 void replace(STRING *a, STRING v);
+
+// Give a variable a value only if it has none yet.
 void dfault(NAMPTR n, STRING v);
+
+// Assign to a variable, refusing if it is readonly.
 void assign(NAMPTR n, STRING v);
+
+// The `read' built-in: read one line and split it across the named variables.
 INT readvar(STRING *names);
+
+// Set a string to the decimal form of a number -- how $? and $# are kept.
 void assnum(STRING *p, INT i);
+
+// Copy a string into the arena so that it outlives the expression stack.
 STRING make(STRING v);
+
+// Find a variable by name in the name tree, creating it if it is not there.
 NAMPTR lookup(STRING nam);
+
+// Call `fn' once for every variable, in alphabetical order.
 void namscan(void (*fn)(NAMPTR));
+
+// Print one variable as `name=value'.  What `set' with no arguments uses.
 void printnam(NAMPTR n);
+
+// Bring one variable's exported copy into step with its value, ready for an exec.
 void exname(NAMPTR n);
+
+// Print one variable's export/readonly attributes.  What `export' with no arguments uses.
 void printflg(NAMPTR n);
-void readenv(void);  // v7 called this getenv(); libc owns that name
+
+// Read the environment this shell was started with into the name tree.
+void readenv(void); // v7 called this getenv(); libc owns that name
+
+// Build the environment vector to hand to a child, on the expression stack.
 STRING *shenv(void); // ... and this one setenv()
+
+// namscan() helpers: count the variables, then copy them out.
 void countnam(NAMPTR n);
 void pushnam(NAMPTR n);
 
-// print.c
-void newline(void);
-void blank(void);
+// --- print.c: output and number conversion ---
+
+void newline(void); // print one newline
+void blank(void);   // print one space
+
+// Print "sh: " -- the prefix on every diagnostic, so the user knows who is complaining.
 void prp(void);
-void prs(STRING as);
-void prc(CHAR c);
+
+void prs(STRING as); // print a string
+void prc(CHAR c);    // print one character
+
+// Print a time in the h/m/s form the `times' built-in uses.
 void prt(L_INT t);
+
+// Print a number in decimal.
 void prn(INT n);
+
+// Convert a number to decimal in numbuf[].
 void itos(INT n);
+
+// Convert a decimal string to a number, giving up with "bad number" if it is not one.
 INT stoi(STRING icp);
 
-// service.c
+// --- service.c: running a command ---
+
+// Perform a command's redirections: open the files and move the descriptors.
 void initio(IOPTR iop);
+
+// The list of directories to look for a command in -- PATH, or a fixed default.
 STRING getpath(STRING s);
+
+// Try to open `name' in each directory of `path' in turn; the descriptor, or -1.
 INT pathopen(STRING path, STRING name);
+
+// Join one directory of `path' to `name' on the expression stack; return what is left of
+// the path.
 STRING catpath(STRING path, STRING name);
+
+// Run an external command: search PATH and exec it.  Only returns on failure -- and then
+// only to report it.
 void execa(STRING at[]);
+
+// Forget every child this shell was waiting for.  A new child does this after forking.
 void postclr(void);
+
+// Remember one more child to wait for.
 void post(INT pcsid);
+
+// Wait for child `i' -- or for all of them, if -1 -- reporting any that died on a signal
+// and setting $? from the result.
 void await(INT i);
+
+// Strip the marker bit off every character of a string, now that quoting has done its
+// work; record in `nosubst' whether there was any.
 void trim(STRING at);
+
+// macro() then trim(): the usual pair, for a word that is about to be used as a name.
 STRING mactrim(STRING s);
+
+// Turn the chain of argument words into the argv a child gets, sorting each group of
+// filename matches.
 STRING *scan(INT argn);
+
+// Expand a command's arguments -- $ substitution, word splitting, wildcards -- and
+// return how many words came out.
 INT getarg(COMPTR ac);
 
-// setbrk.c
+// --- setbrk.c ---
+
+// Move the program break by `incr' char-units and record where it reaches; 0 if the
+// system refused.
 INT setbrk(INT incr);
 
-// stak.c
+// --- stak.c: the expression stack ---
+//
+// Scratch space for words, arguments and parse-tree nodes, sitting on top of the arena.
+
+// Reserve `asize' char-units and return the start of them.
 STKPTR getstak(INT asize);
+
+// Start building an item.  Returns where to write, having first made sure there is room.
 STKPTR locstak(void);
+
+// The current position, to be handed to tdystak() later to unwind back to.
 STKPTR savstak(void);
+
+// Finish the item that locstak() started, at `argp'; return its address.
 STKPTR endstak(STRING argp);
+
+// Throw the stack back to position x, returning to the arena anything the heap has since
+// grown over.  This is how the shell forgets one command's working storage.
 void tdystak(STKPTR x);
+
+// Give memory back to the system if the stack is sitting on a lot of slack.
 void stakchk(void);
+
+// Copy a string onto the stack and finish the item in one go.
 STKPTR cpystak(STKPTR x);
 
-// string.c
+// --- string.c: the shell's own string routines ---
+//
+// Not libc's, and the differences matter: see the file.
+
+// Copy a to b; return a pointer to the NUL that was written, so that copies can be
+// chained end to end.
 STRING movstr(STRING a, STRING b);
+
+// Does character c occur anywhere in string s?
 INT any(CHAR c, STRING s);
+
+// Compare two strings: negative, zero or positive, like strcmp.
 INT cf(STRING s1, STRING s2);
+
+// The length of a string INCLUDING its terminating NUL.
 INT length(STRING as);
 
-// word.c
+// --- word.c: the lexer ---
+
+// Read the next word or operator from the input.  Leaves an ordinary word in `wdarg' and
+// returns 0; otherwise returns the operator's symbol number.
 INT word(void);
+
+// Read the next character, handling backslash escapes.  `quote' is the quote character
+// currently open, or 0.
 INT nextc(CHAR quote);
+
+// Read one raw character of input, refilling the buffer and popping the input stack as
+// needed.  Everything the shell reads comes through here.
 INT readc(void);
 
 //
-// xec.c.  execute() is v7's one genuinely variadic function: it is written with four
-// parameters and called with two, three or four, which K&R allowed and C11 does not.
-// It takes four now, and the pipe-less call sites pass NULL twice.
+// --- xec.c: running the tree the parser built ---
 //
+// execute() is v7's one genuinely variadic function: it is written with four parameters
+// and called with two, three or four, which K&R allowed and C11 does not.  It takes four
+// now, and the pipe-less call sites pass NULL twice.
+//
+
+// Walk one node of the parse tree and do what it says, recursing into the children.
+// This is the heart of the shell.  `execflg' says the caller will not need this process
+// afterwards, so a command may exec in place rather than forking; pf1 and pf2 are the
+// pipes to read from and write to, or NULL.  Returns the exit status.
 INT execute(TREPTR argt, INT execflg, INT *pf1, INT *pf2);
 
 //
 // execexp() had the same shape in miniature: v7 declared its second parameter a file
 // descriptor and then passed it a STRING * from the `eval' builtin, laundering a
 // pointer through an int.  The two uses are separate parameters here.
+//
+// Run shell commands from somewhere other than the current input: from the string `s'
+// (`eval', and a trap), or from the already-open descriptor `fd' (the `.' built-in).
+// `args' is eval's argument vector, or NULL.
 //
 void execexp(STRING s, UFD fd, STRING *args);
 

@@ -14,6 +14,7 @@
 #include "defs.h"
 #include "sym.h"
 
+// Defined below.
 static IOPTR inout(IOPTR lastio);
 static void chkword(void);
 static void chksym(INT sym);
@@ -26,6 +27,10 @@ static INT skipnl(void);
 static void prsym(INT sym);
 _Noreturn static void synbad(void);
 
+//
+// Wrap a piece of the tree in a node that says "run this in a child process".  flgs adds
+// the details: FAMP for `&', FPIN/FPOU for the ends of a pipe.
+//
 TREPTR makefork(INT flgs, TREPTR i)
 {
     FORKPTR t;
@@ -37,6 +42,10 @@ TREPTR makefork(INT flgs, TREPTR i)
     return (TREPTR)t;
 }
 
+//
+// Join two commands into one node: `a; b', `a && b', `a || b', `a | b'.  A missing side
+// is a syntax error -- there is no such thing as `a &&' with nothing after it.
+//
 static TREPTR makelist(INT type, TREPTR i, TREPTR r)
 {
     LSTPTR t;
@@ -58,6 +67,16 @@ static TREPTR makelist(INT type, TREPTR i, TREPTR r)
 //	list
 //	list & [ cmd ]
 //	list [ ; cmd ]
+//
+//
+// Parse one complete command and return the tree for it.
+//
+// This is the top of the grammar, and it recurses: a `;' or `&' is followed by another
+// whole command, which is how `a; b; c' becomes a chain of list nodes.
+//
+// `sym' is the symbol that must close this command -- FISYM inside an `if', 0 at the top
+// level -- and checking it is how an unterminated `if' is caught.  `flg' says whether a
+// newline may end the command (NLFLG) and whether an empty one is allowed (MTFLG).
 //
 TREPTR cmd(INT sym, INT flg)
 {
@@ -105,6 +124,9 @@ TREPTR cmd(INT sym, INT flg)
 //	list && term
 //	list || term
 //
+//
+// Parse a sequence joined by && and ||, which bind more tightly than `;'.
+//
 static TREPTR list(INT flg)
 {
     TREPTR r;
@@ -120,6 +142,10 @@ static TREPTR list(INT flg)
 // term
 //	item
 //	item |^ term
+//
+//
+// Parse a pipeline: `a | b | c'.  Binds more tightly than && and ||.  Each stage becomes
+// a fork node, one writing into the pipe and the next reading from it.
 //
 static TREPTR term(INT flg)
 {
@@ -137,6 +163,10 @@ static TREPTR term(INT flg)
         return t;
 }
 
+//
+// Parse the arms of a `case': `pattern | pattern) commands ;;', over and over until the
+// closing `esac'.  Recurses once per arm.
+//
 static REGPTR syncase(INT esym)
 {
     skipnl();
@@ -175,6 +205,19 @@ static REGPTR syncase(INT esym)
 //	for ... while ... do ... done
 //	case ... in ... esac
 //	begin ... end
+//
+//
+// Parse ONE command -- the smallest complete thing the grammar has:
+//
+//	( cmd ) [ < in ] [ > out ]
+//	word word* [ < in ] [ > out ]
+//	if ... then ... else ... fi
+//	for ... / while ... do ... done
+//	case ... in ... esac
+//	{ ... }
+//
+// `flag' says whether redirections may appear before the command as well as after it.
+// Everything here is a switch on the symbol the lexer left in wdval.
 //
 static TREPTR item(BOOL flag)
 {
@@ -302,6 +345,11 @@ static TREPTR item(BOOL flag)
     return t;
 }
 
+//
+// Read the next symbol, stepping over any newlines first -- inside a compound command a
+// newline is just layout.  RETURNS THE SYMBOL, and one caller depends on it; see the
+// note at the `for' case above.
+//
 static INT skipnl(void)
 {
     while (reserv++, word() == NL)
@@ -309,6 +357,10 @@ static INT skipnl(void)
     return wdval;
 }
 
+//
+// Parse the redirections attached to a command and build the chain of them, newest
+// first.  Recurses so that `<a >b 2>&1' all end up on one command.
+//
 static IOPTR inout(IOPTR lastio)
 {
     INT iof;
@@ -359,12 +411,21 @@ static IOPTR inout(IOPTR lastio)
     return iop;
 }
 
+//
+// Read the next symbol and insist that it is an ordinary word.  Used where the grammar
+// allows nothing else, as after `for'.
+//
 static void chkword(void)
 {
     if (word())
         synbad();
 }
 
+//
+// Insist that the symbol just read is the one expected -- `then' after the condition of
+// an `if', and so on.  sym may be several symbols OR-ed together where more than one is
+// allowed.
+//
 static void chksym(INT sym)
 {
     INT x = sym & wdval;
@@ -373,6 +434,11 @@ static void chksym(INT sym)
         synbad();
 }
 
+//
+// Print a symbol the way the user wrote it, for the syntax error message: looking a
+// reserved word back up in the table, and spelling a newline as the word "newline"
+// rather than printing one.
+//
 static void prsym(INT sym)
 {
     if (sym & SYMFLG) {
@@ -392,6 +458,10 @@ static void prsym(INT sym)
     }
 }
 
+//
+// Report a syntax error and abandon the command.  Names the offending symbol, and the
+// line it was on when the input was a file rather than a terminal.  DOES NOT RETURN.
+//
 _Noreturn static void synbad(void)
 {
     prp();

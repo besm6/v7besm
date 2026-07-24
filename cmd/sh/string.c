@@ -11,6 +11,12 @@
 //
 #include "defs.h"
 
+//
+// Copy string a to b, and return a pointer to the NUL that was written -- NOT to the
+// start of b, as strcpy would.  That is what lets copies be chained: the result of one
+// movstr() is where the next one starts writing, so a name, an `=' and a value can be
+// laid down end to end without measuring anything.
+//
 STRING movstr(STRING a, STRING b)
 {
     while ((*b++ = *a++) != 0)
@@ -18,6 +24,10 @@ STRING movstr(STRING a, STRING b)
     return --b;
 }
 
+//
+// Does character c occur anywhere in string s?  Used mostly to ask whether a character
+// is one of the word separators in IFS.
+//
 INT any(CHAR c, STRING s)
 {
     CHAR d;
@@ -29,6 +39,10 @@ INT any(CHAR c, STRING s)
     return FALSE;
 }
 
+//
+// Compare two strings, like strcmp: negative if s1 sorts first, 0 if they are equal,
+// positive otherwise.  The `eq' macro in defs.h is this against 0.
+//
 INT cf(STRING s1, STRING s2)
 {
     while (*s1++ == *s2) {
@@ -38,6 +52,11 @@ INT cf(STRING s1, STRING s2)
     return *--s1 - *s2;
 }
 
+//
+// The length of a string INCLUDING its terminating NUL -- one more than strlen would
+// say.  Callers rely on that: prs() prints length(s)-1 characters, and make() asks for
+// length(v) bytes and gets room for the NUL as well.  A null pointer counts as 0.
+//
 INT length(STRING as)
 {
     STRING s = as;

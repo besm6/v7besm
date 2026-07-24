@@ -9,9 +9,16 @@
 #include "defs.h"
 #include "sym.h"
 
-static CHAR quote;  // used locally
-static CHAR quoted; // used locally
+// The bit to OR into every character being copied: 0200 while inside double quotes,
+// 0 outside.  Marking each character as it goes past is how the shell remembers, later,
+// which parts of a word were quoted and so must not be split or matched as a wildcard.
+static CHAR quote;
 
+// Whether any double quote was seen at all.  A word written "" expands to an empty
+// argument, which must survive; a word that was simply empty does not.
+static CHAR quoted;
+
+// Defined below.
 static INT getch(CHAR endch);
 static void comsubst(void);
 static void flush(INT ot);
@@ -37,6 +44,12 @@ static void copyto(CHAR endch)
 //
 // Skip characters up to }
 //
+//
+// Throw away characters up to endch, honouring nested quotes and ${...}.
+//
+// Used for the half of ${name-word} that is NOT wanted: in `${x-y}' with x set, y still
+// has to be scanned past correctly, but nothing in it should be evaluated.
+//
 static void skipto(CHAR endch)
 {
     CHAR c;
@@ -61,6 +74,23 @@ static void skipto(CHAR endch)
         error(badsub);
 }
 
+//
+// Read the next character of an expansion, doing the $ substitutions as it goes.
+//
+// This is where ${...} is implemented.  When it meets a `$' it works out what is being
+// named -- a variable, a positional parameter, or one of $$ $! $# $? $- -- and then what
+// is being asked for:
+//
+//	${x}		the value
+//	${x-word}	the value, or `word' if x is unset
+//	${x=word}	likewise, and assign `word' to x as well
+//	${x+word}	`word', but only if x IS set
+//	${x?word}	the value, or fail with `word' as the message
+//
+// The value's characters are pushed on the expression stack from inside here, so the
+// caller only ever sees ordinary text come back.  A backquote hands off to comsubst()
+// and a double quote flips the `quote' bit above.
+//
 static INT getch(CHAR endch)
 {
     CHAR d;
@@ -205,6 +235,14 @@ retry:
 //
 // Strip "" and do $ substitution.  Leaves the result on top of the stack.
 //
+//
+// Expand $ and "" in a string, leaving the result on the expression stack.
+//
+// The trick is that the string is PUSHED AS AN INPUT and read back through the ordinary
+// lexer machinery, so that substitution needs no scanner of its own -- and so that a
+// value which itself contains a `$' is not expanded a second time, since the reading
+// stops when the string does.
+//
 STRING macro(STRING as)
 {
     BOOL savqu = quoted;
@@ -227,6 +265,14 @@ STRING macro(STRING as)
 
 //
 // Command substitution.
+//
+//
+// Command substitution: `command` .
+//
+// The text between the backquotes is collected, parsed as a shell command, and run in a
+// child with its output going down a pipe this shell reads.  What comes back becomes the
+// value of the expansion, with trailing newlines removed -- which is why ``x=`pwd`''
+// does not put a newline in x.
 //
 static void comsubst(void)
 {
@@ -277,6 +323,14 @@ static void comsubst(void)
 //
 // Copy `in' to `ot', expanding as it goes: the here-document with substitution.
 //
+//
+// Copy descriptor `in' to descriptor `ot', expanding $ on the way.
+//
+// This is an unquoted here-document: its text is read out of the temp file, run through
+// getch() so that $ and backquotes take effect, and written to the pipe or file the
+// command will read.  The output is batched CPYSIZ characters at a time rather than
+// written a character at a time.
+//
 void subst(INT in, INT ot)
 {
     CHAR c;
@@ -298,6 +352,9 @@ void subst(INT in, INT ot)
     pop();
 }
 
+//
+// Write out what subst() has accumulated on the stack, and empty it again.
+//
 static void flush(INT ot)
 {
     write(ot, stakbot, staktop - stakbot);

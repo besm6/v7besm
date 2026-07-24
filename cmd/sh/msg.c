@@ -9,6 +9,8 @@
 #include "defs.h"
 #include "sym.h"
 
+// Bourne's own version stamp, kept as it was.  Nothing reads it; it is here so that the
+// string appears in the binary, which is how one used to tell builds apart.
 MSG version = "\nVERSION sys137	DATE 1978 Nov 6 14:29:22\n";
 
 /* error messages */
@@ -64,6 +66,11 @@ MSG supprompt  = "# ";
 MSG profile    = ".profile";
 
 /* tables */
+//
+// The reserved words, and the symbol number the parser knows each by.  syslook() searches
+// this whenever a word is read in a position where the grammar would accept a keyword --
+// which is why `echo if' still echoes the word `if'.
+//
 SYSNOD reserved[] = {
     { "in", INSYM },    { "esac", ESSYM }, { "case", CASYM },  { "for", FORSYM },
     { "done", ODSYM },  { "if", IFSYM },   { "while", WHSYM }, { "do", DOSYM },
@@ -71,6 +78,11 @@ SYSNOD reserved[] = {
     { "until", UNSYM }, { "{", BRSYM },    { "}", KTSYM },     { 0, 0 },
 };
 
+//
+// How to describe a child that died on a signal, one entry per signal number.  A NULL
+// entry means SAY NOTHING -- which is why interrupting a command prints no complaint,
+// while one that dies of a bus error does.
+//
 STRING sysmsg[] = {
     0,
     "Hangup",
@@ -91,8 +103,13 @@ STRING sysmsg[] = {
     "Signal 16",
 };
 
-MSG export        = "export";
-MSG readonly      = "readonly";
+MSG export   = "export";
+MSG readonly = "readonly";
+//
+// The built-in commands: the ones execute() runs in THIS process rather than forking for.
+// They have to be built in -- a `cd' or an assignment done in a child would be thrown
+// away when the child exited.
+//
 SYSNOD commands[] = {
     { "cd", SYSCD },
     { "read", SYSREAD },
