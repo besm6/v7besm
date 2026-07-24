@@ -1,44 +1,73 @@
-; Boot the whole kernel with a root filesystem attached -- task 20.
+; Boot the whole kernel with a root filesystem attached, into USER MODE -- tasks 20 and 22.
 ;
 ; Every other test in this directory links a handful of kernel objects against a forged
 ; environment and drives one component.  This one links nothing: it loads the real `unix'
 ; image (built one directory up by kernel/CMakeLists.txt) with the same root2048.disk that
 ; fstest reads, and lets main() run the actual boot -- startup(), intrinit(), binit(),
-; iinit(), iget() of the root, newproc() -- to the point where process 1 returns.
+; iinit(), iget() of the root, newproc() -- and then lets process 1 leave the kernel.
 ;
-; WHAT REACHING `bhalt' PROVES.  _start (kernel/besm6.S) has nothing behind its `vjm main'
-; but `bhalt: stop' (task 22 is not done), so process 1 halts the machine there on return
-; from main().  main() returns ONLY if iinit() did not panic: bread(rootdev, SUPERB) must
-; complete without B_ERROR (else panic "iinit"), sbcheck() must accept the superblock (else
-; panic "no root fs"), and iget(rootdev, ROOTINO) must read the root inode.  So a run that
-; stops at `bhalt' has installed the superblock, seeded `time' from s_time, and reached the
-; icode hand-off -- the whole of task 20's "done when".  A panic stops in panic()'s own
-; `stop' loop at a different PC; a hang runs the step count out somewhere in idle()/extintr().
-; Only the success path stops at `bhalt'.
+; WHAT REACHING `spin' PROVES.  It is the icode's failure loop (kernel/besm6.S), and to get
+; there process 1 has to have gone the whole way:
+;   * main() returned, so iinit() did not panic -- bread(rootdev, SUPERB) completed without
+;     B_ERROR (else panic "iinit"), sbcheck() accepted the superblock (else panic "no root
+;     fs"), and iget(rootdev, ROOTINO) read the root inode.  That is task 20's "done when",
+;     and this test is still the regression guard for the b_un.b_addr fat-pointer fix (before
+;     it, sbcheck() mis-read s_bsize and panicked, stopping in panic()'s own `stop' loop);
+;   * _start's second half forged a user context and left through `выпр', so РП really maps
+;     the image copyout() wrote and the machine really entered user mode;
+;   * the icode executed out of that copy, so copyout() put the words where РП says they are;
+;   * `$77 SYS_exec' vectored to 0577, the gate framed the machine, syscall() marshalled the
+;     arguments and exec() ran namei() over a user-space `char *' -- the first system call
+;     this kernel has ever taken from real user code;
+;   * and it came back through the frame, since the icode is executing at all.
 ;
-; This is exactly the fat-pointer union pun (task 20): before the b_un.b_addr cast fix,
-; sbcheck() read the fat-marked b_filsys, mis-read s_bsize and panicked "no root fs" -- so
-; this case stops at panic() rather than `bhalt', and the assertion below fails.  It is the
-; regression guard for that fix.
+; ACC and r14 say WHICH way it came back.  There is no /etc/init on the image -- the userland
+; is task 24 -- so the expected outcome is the failure one: ACC = -1 (an int is 41 bits, so
+; that is 41 ones) and r14 = ENOENT (2), the errno-in-r14 convention (include/sys/reg.h;
+; there is no carry bit on this machine).  BEWARE THE REGISTER NAMES: SIMH numbers index
+; registers in OCTAL, so r14 is `M16' and r15 is `M17'.
+;
+; WHEN /etc/init APPEARS (task 24) THIS TEST CHANGES MEANING: a successful exec never returns
+; to the icode, so `spin' is never reached and the breakpoint below never fires.  Rewrite it
+; then to assert on init instead; do not just raise the step count.
+;
+; `break', so the run stops the instant PC reaches the loop.  Without it the step budget would
+; expire wherever the clock happened to leave the machine -- often inside the timer interrupt,
+; a few instructions from `spin' but not at it.
+;
+; `step', not `go': a hang must fail the run instead of hanging it -- `go' has no step bound.
+;
+; `set mmu cache' is new with task 22: the boot now programs РП (estabur -> sureg) and writes
+; user memory through the map (copyout), so the БРЗ write-back is worth modelling here.
+;
+; WHAT THIS TEST DOES NOT CHECK: main()'s drainbrz() after the copyout.  Deleting it leaves
+; this test passing, because main()'s epilogue and _start's tail happen to issue enough kernel
+; stores to evict the icode's lines by age before the выпр.  The drain is not decoration --
+; breaking on the instruction after the copyout shows seven of the nine words still in
+; BRZ0-BRZ7 with memory reading zero -- but that measurement is written up at the call site in
+; main.c, and this test cannot see it.  Do not read a PASS here as a verdict on the drain.
 ;
 ; `attach -r', and emphatically NOT `-n' (the trap TODO.md warns about): -r because the image
 ; is a build artifact, and no -n because `attach -n' CREATES AND FORMATS an empty container,
 ; on which sbcheck() would fail and the boot would panic.
 ;
-; `step', not `go': a hang must fail the run instead of hanging it -- `go' has no step bound.
-;
-; @BHALT@ is `bhalt' pulled from unix.nm by genboot.cmake at build time.  It is a LINKED
-; address that moves as the kernel's const pool grows, which is why this file is generated
-; rather than hardcoded -- unlike fstest.ini, whose object set is small and stable.
+; The console is deliberately NOT attached: the kernel's printf output has no reader here, and
+; `make run' (kernel/unix.ini) is where you watch a boot.  @SPIN@ and @BHALT@ are pulled from
+; unix.nm by genboot.cmake at build time -- they are LINKED addresses that move as the kernel
+; grows, which is why this file is generated rather than hardcoded.
 
 reset
 set cpu latin
+set mmu cache
 
 load ../unix
 attach -r md00 root2048.disk
+break @SPIN@
 step 50000000
 
-if (PC != @BHALT@) echof "FAIL: boot did not reach the icode hand-off (bhalt=@BHALT@). A PC in panic()'s stop loop means iinit() panicked (no root fs / iinit) -- e.g. the b_un.b_addr fat-pointer fix was reverted; any other PC is a hang. PC:"; ex PC; exit 1
+if (PC != @SPIN@) echof "FAIL: boot did not reach the icode's failure loop (spin=@SPIN@). PC=@BHALT@ (bhalt) means process 1 never left the kernel; a PC in panic()'s stop loop means iinit() panicked (no root fs / iinit) -- e.g. the b_un.b_addr fat-pointer fix was reverted; the step count running out is a hang, in idle() if the exec slept and never woke. PC:"; ex PC; exit 1
+if (ACC != 037777777777777) echof "FAIL: boot reached the icode, but exec did not report failure in ACC (expected -1, i.e. 41 ones). ACC:"; ex ACC; exit 1
+if (M16 != 2) echof "FAIL: boot reached the icode, but r14 (SIMH M16) is not ENOENT -- exec failed somewhere other than namei(). r14:"; ex M16; exit 1
 
-echof "PASS: boot -- the kernel read and validated the root superblock, seeded time from s_time, and reached the icode hand-off with no panic and no hang"
+echof "PASS: boot -- the kernel mounted the root, entered user mode at the icode, took $77 exec from user code, and reported ENOENT for the missing /etc/init"
 quit

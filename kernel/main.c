@@ -27,6 +27,7 @@ struct inode *rootdir; // pointer to inode of root directory
 
 void iinit(void);
 void binit(void);
+void drainbrz(void); // brz.s
 
 // Initialization code.
 // Called from cold start routine as
@@ -44,6 +45,8 @@ void binit(void);
 // 	cannot be executed.
 void main()
 {
+    register int nw, nd; // the icode's size, and the data region that has to hold it
+
     startup();
 
     // set up system process
@@ -76,11 +79,38 @@ void main()
     // with system process
 
     if (newproc()) {
-        expand(USIZE + (int)pground(btow(szicode)));
-        estabur(0, pground(btow(szicode)), 0, 0, RO);
-        copyout((caddr_t)icode, (caddr_t)0, szicode);
-        // Return goes to loc. 0 of user init
-        // code just copied out.
+        // Process 1: give it the icode and return, which _start (kernel/besm6.S) turns into
+        // the first entry into user mode.
+        //
+        // THE ICODE IS COPIED TO THE ADDRESS IT WAS LINKED AT -- src and dst are the same
+        // number, and only the side of БлП they are read and written on tells them apart --
+        // so its own labels are correct in the user's space too.  besm6.S says why that is
+        // the only way it can name anything.  The data region therefore has to cover word 0
+        // up through the end of the block, not just the block's length.
+        nw = eicode - icode;                       // words of icode (sizeof(int) == 1 word)
+        nd = pground(ptrword((caddr_t)icode) + nw);
+
+        expand(USIZE + nd + SSIZE);
+        estabur(0, nd, SSIZE, 0, RO);
+        copyout((caddr_t)icode, (caddr_t)icode, wtob(nw));
+
+        // Drain the БРЗ write cache before anything can FETCH what we just stored.  The
+        // copyout stores were made MAPPED and are still in the cache, and the instruction
+        // path does not look there: it reads memory directly (besm6_mmu.c, mmu_prefetch vs
+        // mmu_store).  A data read WOULD find them -- it is only the fetch that has to be fed.
+        //
+        // Measured, with `set mmu cache' and a breakpoint on the instruction after the
+        // copyout: of the nine icode words, TWO had reached memory and SEVEN were still in
+        // BRZ0-BRZ7, with the user's page reading zero where they belong.  The boot survives
+        // without this call today only because main()'s own epilogue and _start's tail then
+        // issue enough kernel stores to evict all eight lines by age before the выпр -- an
+        // accident of instruction count, not a guarantee, and one a bigger icode or a
+        // different epilogue would take away.  Nothing in the suite bites it (see
+        // test/boot.ini.in); the argument is the measurement above.
+        //
+        // exec() gets the same drain for free from the estabur() that follows its readi();
+        // this path has no estabur() behind its copyout(), so it drains for itself.
+        drainbrz();
         return;
     }
     sched();
@@ -126,6 +156,7 @@ void iinit()
     fp->s_ronly     = 0;
     if (time == 0)
         time = fp->s_time;
+    printf ("root size = %d kbytes\n", fp->s_fsize * BSIZE / 1024);
 }
 
 // This is the set of buffers proper, whose heads

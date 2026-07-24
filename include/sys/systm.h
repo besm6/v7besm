@@ -53,8 +53,11 @@ extern char msgbuf[MSGBUFS]; // saved "printf" characters
 extern dev_t rootdev;        // device of the root
 extern dev_t swapdev;        // swapping device
 extern dev_t pipedev;        // pipe device
-extern int icode[];          // user init code
-extern int szicode;          // its size
+// The user bootstrap (kernel/besm6.S), and the word past its end: main() sizes the copy as
+// `eicode - icode' rather than from a szicode of its own, the way machdep.c sizes bss from
+// `end - edata'.  Both are array declarations so that the NAME is the address.
+extern int icode[];  // user init code
+extern int eicode[]; // ... and the first word past it
 
 daddr_t bmap(struct inode *ip, daddr_t bn, int rwflg);
 struct inode *ialloc(dev_t dev);

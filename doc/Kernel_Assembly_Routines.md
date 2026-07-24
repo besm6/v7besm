@@ -189,20 +189,24 @@ dismisses the tick accumulated during boot and calls `spl0()`. v7 userland that 
 
 ## 2. Boot / initialization path (`_start`)
 
-`_start` ([besm6.S](../kernel/besm6.S)) is the kernel entry point, and it is **two
-instructions**: seed r15 from `machdep.c`'s `int *const ustkbase = &u.u_stack[0]` (≈ `076214`)
-and call `main()`.
+`_start` ([besm6.S](../kernel/besm6.S)) is the kernel entry point, and it is **two halves**. The
+first is **two instructions**: seed r15 from `machdep.c`'s `int *const ustkbase = &u.u_stack[0]`
+(≈ `076214`) and call `main()`. The second is the **first entry into user mode**, which `main()`
+returns into — nine instructions that forge SPSW, IRET, r15 and R and leave through `выпр`, the one
+path into user mode that does not go through `intret`. It is spelled out in
+[Unix_Context_Switch.md §10b](Unix_Context_Switch.md#10b-the-first-entry-into-user-mode).
 
-There is almost nothing for it to do. The machine **resets straight into the kernel's own
-mode** — supervisor, with mapping, protection and interrupts all off
+There is almost nothing for the first half to do. The machine **resets straight into the kernel's
+own mode** — supervisor, with mapping, protection and interrupts all off
 ([Memory_Mapping.md](Memory_Mapping.md#reset-state)) — so there is no mode to enter and no MMU
 to bring up. The vector block is not *built* at boot but *laid out by the linker* at fixed
 addresses in the const segment, which is why
-[besm6.o must come first](../kernel/Makefile) in the link order.
+[besm6.o must come first](../kernel/CMakeLists.txt) in the link order.
 
 What a boot path must still deliver is: a zeroed BSS, a known `phymem`, a live trap vector, and
-a first transition into user mode running `icode` ([machdep.c:26](../kernel/machdep.c)). The
-first two happen **in C, at the top of `main()`**, and neither for stylistic reasons:
+a first transition into user mode running `icode` (the globals table in §12, and
+[besm6.S](../kernel/besm6.S) itself). The first two happen **in C, at the top of `main()`**, and
+neither for stylistic reasons:
 
 - Bss-zero is `wzero(edata, end - edata)` — `b6ld` defines the boundary symbol `end`, the first
   word past the whole image, as soon as something references it (see
@@ -669,6 +673,7 @@ absence is a property of the hardware rather than an omission:
 |--------|---------------|---------|
 | `u` | `extern struct user u;` (user.h) | the per-process user area; holds the kernel stack and per-process state. It is a fixed **physical** page — `u = 076000`, an absolute symbol rather than storage — and therefore has to be **copied** in and out on a context switch (§4.2, §4.4a) |
 | `phymem` | `extern int phymem;` (machdep.c) | physical memory size in **words**; `startup()` frees it into `coremap`. It is asserted rather than probed — `phymem = 512 * 1024` in `main()`, because an unmapped kernel cannot reach the store it would have to write test patterns into (§2) |
+| `icode`, `eicode` | `extern int icode[], eicode[];` (systm.h) | the **user bootstrap**: `xta`/`xts` staging `"/etc/init"` and a one-entry argv, `$77 SYS_exec`, and a `uj` to itself for the failure return. `main()` copies it into process 1's image and `_start` enters it (§2). It is assembled rather than spelled as a constant for `sigcode`'s reason — no opcode encoding is written down anywhere — and **copied to the address it was linked at**, which is the only way it can name its own string and argv vector: `b6as` rejects `label - label`, there is no PC-relative addressing, and the constant pool sits in the *kernel's* const segment at physical page 0, which is not what the user's virtual page 0 maps to. `eicode` sizes the copy (`eicode - icode`), the way `end - edata` sizes bss; it names a placeholder word, since b6ld requires a const symbol to name a word its own file contributed |
 | `sigcode` | `extern int sigcode[];` (sendsig.c) | **one instruction word**, `$77 SYS_sigret`, and the only piece of this kernel that ever executes in user mode. `sendsig()` copies it onto the user stack above the signal frame and enters the handler with r13 naming the copy, so the handler's ordinary `13 uj` return trips the extracode and `sigret()` reloads the frame. It is assembled here, rather than spelled as a constant in C, so that no opcode encoding is written down anywhere — see [Unix_Context_Switch.md §10a](Unix_Context_Switch.md#10a-the-signal-frame) |
 
 There is deliberately **no page table in memory** and so no `pdir`/`upt`/`mem` globals naming
@@ -709,7 +714,7 @@ the reschedule-pending flag the gates test on the way back to user mode (§3).
 | `copyseg`/`clearseg`, `uflush`/`uload` | **done** — [seg.S](../kernel/seg.S), [uarea.S](../kernel/uarea.S); a two-page window bracket with a БРЗ drain either side (§4.4a) |
 | `save`, `resume` | **done (task 16)** — [kernel/switch.s](../kernel/switch.s); nine slots (r1–r7, r13, r15), and `resume()` switches the **u-area**, not the address space: it never writes РП |
 | `idle` | **done (task 16)** — no wait-for-interrupt exists, so it is a spin released by `extintr()`, written in C over the `idling` flag |
-| `_start`, trap/interrupt/extracode dispatch (§2–3) | **done** — `_start` is two instructions (the machine resets into the kernel's own mode) with bss-zero and `phymem` in C; dispatch is four gates, two save disciplines and one shared exit (§3) |
+| `_start`, trap/interrupt/extracode dispatch (§2–3) | **done** — `_start` is two instructions in (the machine resets into the kernel's own mode) with bss-zero and `phymem` in C, plus nine on the way out: the hand-forged first entry into user mode at `icode` ([Unix_Context_Switch.md §10b](Unix_Context_Switch.md#10b-the-first-entry-into-user-mode)). Dispatch is four gates, two save disciplines and one shared exit (§3) |
 | `addupc` | **still a stub**, so `profil(2)` is inert — same histogram logic when wanted, adjusting the fixed-point scale and word addressing |
 | port I/O, TLB flush, FP context | **not present, by design** — see §4.8 |
 

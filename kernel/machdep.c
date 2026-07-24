@@ -37,21 +37,10 @@ int maxmem; // actual max memory per process
 // a symbol+offset -- into the static relocation, so we can spell it directly.
 int *const ustkbase = &u.u_stack[0];
 
-// Icode is the hex bootstrap
-// program executed in user mode
-// to bring up the system.
-int icode[] = {
-    0x186a106a, // push $initp; push $init
-    0xbb8006a,  // push $0; mov $11,eax
-    0xcd000000, // int $0x30
-    0xfeeb30,   // jmp .
-    0x18,       // initp: init; 0
-    0x0,        //
-    0x6374652f, // init: </etc/init\0>
-    0x696e692f, //
-    0x74        //
-};
-int szicode = sizeof(icode);
+// icode[] -- the user bootstrap v7 kept here as a hex blob -- is BESM-6 assembly now, in
+// kernel/besm6.S beside sigcode, for the reason sigcode is there: nothing in this port writes
+// down an opcode encoding, and `$77 SYS_exec' takes its number from <sys/syscall.h> like every
+// other caller.  main() copies it into process 1's image and _start enters it.
 
 // Machine-dependent startup code
 void startup()

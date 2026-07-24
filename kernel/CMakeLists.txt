@@ -82,7 +82,8 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/unix
 add_custom_target(kernel ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/unix)
 
 # `make run' boots the freshly-linked image under SIMH (distinct from the top-level
-# `make run', which runs unit tests).  Prints `mem = ...' then stops at `panic: iinit'.
+# `make run', which runs unit tests).  Prints the memory sizes and the root size, then
+# runs on in user mode -- see unix.ini.
 if(BESM6)
     add_custom_target(run
         COMMAND ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}/unix.ini
@@ -92,3 +93,9 @@ endif()
 
 enable_testing()
 add_subdirectory(test)
+
+# unix.ini attaches test/root2048.disk, so `make run' needs the root image built as well as
+# the kernel.  The target comes from test/, hence the dependency here rather than above.
+if(BESM6)
+    add_dependencies(run rootimg)
+endif()

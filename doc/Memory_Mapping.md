@@ -890,10 +890,19 @@ Four words (`BRS[4]`) with tags (`BAS[4]`) and their own LRU, filled by `mmu_pre
 ([besm6_mmu.c:601](https://github.com/besm6/simh/blob/master/BESM6/besm6_mmu.c#L601)). The CPU speculatively prefetches the next instruction word
 each cycle ([besm6_cpu.c:1063](https://github.com/besm6/simh/blob/master/BESM6/besm6_cpu.c#L1063)).
 
-**БРС is not coherent with БРЗ.** A word written through the write cache can still be fetched stale
-from the prefetch buffer. Any kernel that writes instructions and then executes them — `exec`,
-signal trampolines, loading an overlay, patching a jump — must ensure the writes have reached memory
-and the prefetch buffer no longer holds the old copy.
+**БРС is not coherent with БРЗ, and neither is the fetch path itself.** `mmu_prefetch()` checks
+`BAS[]` and then reads `memory[addr]` — it never consults `BRZ[]` — so a word the write cache is
+still holding is fetched **stale from memory**, whether or not the prefetch buffer has an old copy
+of it. A data load does look in БРЗ, which is what makes this so quiet: the kernel can read back
+exactly what it wrote and the user still executes garbage. Any kernel that writes instructions and
+then executes them — `exec`, signal trampolines, loading an overlay, patching a jump — must drain
+the write cache first.
+
+> Measured in this port, with `set mmu cache` and a breakpoint on the instruction after the
+> `copyout` of the nine-word icode: **two words had reached memory and seven were still in
+> `BRZ0`–`BRZ7`**, with the destination page reading zero where they belong. The drains are
+> `drainbrz()` in `main()` (the icode) and in `sendsig()` (the planted `$77 SYS_sigret` word);
+> `exec` inherits one from the `estabur()` that closes `getxfile()`.
 
 The speculative prefetch performs **no protection check** — `mmu_prefetch(addr, 0)` is called with
 `actual == 0` and translates without consulting РЗ or the РП-zero rule. All checking happens in

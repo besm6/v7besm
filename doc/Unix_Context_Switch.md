@@ -53,6 +53,7 @@ document says what each routine must do; this one walks the path they form.
   - [10. The exit](#10-the-exit)
     - [Why there is no `OUTMACRO`](#why-there-is-no-outmacro)
   - [10a. The signal frame](#10a-the-signal-frame)
+  - [10b. The first entry into user mode](#10b-the-first-entry-into-user-mode)
   - [11. Switching address spaces](#11-switching-address-spaces)
     - [The БРЗ drain](#the-брз-drain)
   - [12. Switching processes](#12-switching-processes)
@@ -776,6 +777,53 @@ buy supervisor mode, an unmapped address space or a blocked interrupt level.
 delivery point it holds the errno a libc stub is about to test. So `sigret()` sets `u.u_justreturn`
 and `syscall()` skips the write-back; 4.xBSD spells the same thing `u_eosys = JUSTRETURN`.
 
+**The planted word is drained before it can be fetched** — `sendsig()` calls `drainbrz()` right
+after the `copyout`/`suword`. The store was made *mapped* and is therefore still in the БРЗ write
+cache, which the instruction path never consults (§11). A data read would find it; the handler's
+closing `13 uj` is a *fetch*.
+
+## 10b. The first entry into user mode
+
+Everything above is a *return* to user mode: the frame exists because a gate built it, and `intret`
+puts it back. The very first entry has no frame to return through, so `_start`
+([`kernel/besm6.S`](../kernel/besm6.S)) forges one by hand. It is the only path into user mode that
+does not go through `intret`, and it is nine instructions:
+
+```
+        vtm     02003               // PSW := БлП|БлЗ|БлПр: interrupts blocked
+     15 vtm     USTKPAGE*PGSZ       // r15 := 070000, the base of the user stack
+      9 vtm     icode               // r9 := the icode's entry -- its own link address
+        ita     9                   // A := it
+        ati     IRET                // М033 := entry: where `выпр' lands
+        xta                         // A := 0
+        ati     SPSW                // М027 := 0: user mode, mapping and protection ON, БлПр clear
+        ntr     7                   // R := RREG_C
+      3 ij                          // выпр: into the icode, in user mode
+```
+
+`main()` returns here, and only in process 1 — process 0 goes to `sched()` and never comes back.
+Four things about it are worth stating:
+
+- **It shuts the door first**, exactly as `intret` does and for the same reason (§10). `clkstart()`
+  has already called `spl0()`, so the level is open, and SPSW is a single register: an interrupt
+  landing between the `ati SPSW` and the `выпр` would overwrite the forged mode word. Worse, it
+  would arrive with М15 already repointed at the *user* stack while SPSW still says supervisor —
+  so `intrgate`'s conditional switch (§5) would keep that value and build its frame on physical
+  `070000`, in the middle of the kernel image.
+- **`выпр` clears ПоП and ПоК by itself.** It *overwrites* PSW from SPSW rather than OR-ing into it
+  ([Memory_Mapping.md](Memory_Mapping.md), "Return: `выпр`"), and neither halt-on-fault bit is in
+  SPSW. So the reset state's "a fault stops the simulator" mode ends exactly here — at the first
+  instruction that needs faults to vector instead.
+- **`ntr 7` is last**, because `xta`/`ita` set ω themselves. It is `RREG_C`
+  ([`reg.h`](../include/sys/reg.h)), the same value `sendsig()` plants for the same reason: a
+  program with no `crt0` in front of it must not start in ω 0.
+- **The icode is copied to the address it was linked at.** `main()` does
+  `copyout((caddr_t)icode, (caddr_t)icode, …)`: src is a kernel address, dst a user one, and only
+  the side of БлП they are read and written on tells them apart. That is not a flourish — it is the
+  only way the icode can name its own string and argv vector, since `b6as` rejects `label - label`,
+  there is no PC-relative addressing, and the constant pool belongs to the *kernel's* const segment
+  at physical page 0, which is not what virtual page 0 maps to.
+
 ## 11. Switching address spaces
 
 **A trap switches nothing.** РП always holds the current process's map, and the kernel runs unmapped
@@ -842,6 +890,19 @@ Call sites: before every РП write in `sureg()`, and **twice each** inside `ufl
 (`kernel/uarea.S`) — before stealing the window (the kernel's own stores were tagged physical, so the
 mapped copy would miss them) and after the copy (whose stores were tagged virtual and must go out
 while the window is still installed).
+
+**And before user code fetches a word the kernel wrote through the map**, which is the second half
+of the rule and not obvious from the first. A data load consults БРЗ; **an instruction fetch does
+not** — `mmu_prefetch()` reads memory directly (`besm6_mmu.c`), so a word `copyout()` has just
+written reads back correctly as data and can still be fetched as garbage. Two call sites:
+`main()`'s icode copy (§10b) and `sendsig()`'s planted trampoline word (§10a). `exec()` needs no
+call of its own — the `estabur()` that closes `getxfile()` drains after the `readi()`.
+
+Measured, with a breakpoint on the instruction after `main()`'s `copyout`: of the icode's nine
+words, **two had reached memory and seven were still in `BRZ0`–`BRZ7`**, with the user's page
+reading zero where they belong. The boot survives without the drain only because the epilogue's own
+stores then evict all eight lines by age — an accident of instruction count, which is why the
+argument for that call is the measurement and not a red-to-green test.
 
 > **The hazard is invisible under default SIMH.** Run every MMU test with `set mmu cache`. A kernel
 > that only worked with the cache off would not have worked on the real machine.
@@ -955,9 +1016,12 @@ The `sureg()` on the returned-nonzero arm is what makes `resume()`'s not touchin
 
 ## 13. How it is verified
 
-The kernel now boots on SIMH and **two processes alternate under the real scheduler, each seeing its
-own `u`**. Below that, each door has a standalone test that links the *real* kernel objects against a
-hand-built environment, forges user mode, and asserts on machine state from the `.ini` script:
+The kernel now boots on SIMH, **two processes alternate under the real scheduler, each seeing its
+own `u`**, and **process 1 leaves the kernel and takes a system call from real user code**
+(`kernel/test/boot`: it asserts that the machine parks in the icode's failure loop with `-1` in ACC
+and `ENOENT` in r14, the missing `/etc/init` reported through the frame). Below that, each door has
+a standalone test that links the *real* kernel objects against a hand-built environment, forges user
+mode, and asserts on machine state from the `.ini` script:
 
 | Test | Exercises |
 |---|---|

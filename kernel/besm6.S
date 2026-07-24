@@ -96,6 +96,60 @@ MOD  = 020                      // C register / address modifier (М020 = M16)
       : uj badext               // 0576: extracode *76
       : uj sysgate              // 0577: extracode *77 -- the syscall gate
 
+// ============================================================================
+// The user bootstrap
+// ============================================================================
+//
+// int icode[] -- the program process 1 runs in USER mode to bring the system up.  It execs
+// /etc/init with a one-entry argv and, since a successful exec never comes back, everything
+// after the extracode is the failure path.
+//
+// IT IS COPIED TO ITS OWN LINK ADDRESS.  main() (kernel/main.c) does
+// `copyout((caddr_t)icode, (caddr_t)icode, ...)': the block runs at exactly the virtual
+// address it was assembled at, so `iname'/`iargv'/`istr' below are ordinary relocatable
+// symbols and nothing here is a hand-counted offset.  That is not a flourish -- it is the
+// only way to name an address from inside this block at all:
+//
+//   * b6as rejects `label - label' (Assembler_Manual.md sec 7, "Relocation constraints"), so a
+//     self-relative offset cannot be written down;
+//   * there is no PC-relative addressing to recover a base from;
+//   * and the CONSTANT POOL IS UNREACHABLE from here.  `#(...)' names a word in the kernel's
+//     const segment at PHYSICAL page 0, while virtual page 0 in this context is the user's
+//     own image -- so a pool operand would read whatever happens to lie there.  Every value
+//     below is therefore a `.word' inside the block or an instruction immediate.
+//
+// It cannot live at word 8 (BADDR) the way a real a.out image does: words 010-077 are the
+// device service-word area (see the `.org 0100' above), which the root mount overwrites long
+// before main() gets to copy anything out.  0600, just past the extracode vectors, is the
+// first address that is both free and low enough to keep the user image one page.
+//
+// b6as word-aligns after an extracode (Unix_Context_Switch.md sec 8), so the `uj' below really
+// is the next instruction executed when exec fails -- the right half of the extracode's own
+// word is never reached and needs no filler.
+        .globl  icode, eicode
+icode:
+        xta     iname           // A := (char *)"/etc/init"    -- argument 1
+        xts     iargvp          // push it; A := (char **)argv -- argument 2, the last one
+        $77     SYS_exec        // exec(name, argv): returns ONLY on failure
+spin:   uj      spin            // ... and with no /etc/init there is nothing left to try
+
+// `iname' and `iargv[0]' are FAT pointers -- marker in bit 48, byte offset in bits 47-45, 5
+// naming the word's first byte (doc/Besm6_Data_Representation.md sec 7) -- because that is what
+// namei() walks with fubyte().  A bare word address would ask `asx' for a shift of -64 and read
+// zero.  The parentheses are load-bearing: `|' binds LOOSER than `+', so without them the
+// relocatable term reaches `|' and b6as says "too complex expression".
+iname:  .word   (.48 | .47 | .45) + istr        // char *  -- byte #0 of the string
+iargvp: .word   iargv                           // char ** -- a plain word address
+iargv:  .word   (.48 | .47 | .45) + istr        // argv[0]
+        .word   0                               // argv[1] = NULL
+istr:   .ascii  "/etc/init"                     // zero-padded to a word: NUL-terminated
+eicode: .word   0                               // main() sizes the copy as eicode - icode.
+                                                //   The word is a PLACEHOLDER and is never
+                                                //   copied: b6ld requires a const symbol to
+                                                //   name a word its own file contributed
+                                                //   (cmd/ld/symtab.c), so the end label needs
+                                                //   something to sit on.
+
 // Temp cells for the four gates below -- `sysgate'/`badext' (0577/0550), `trapgate' (0500) and
 // `intrgate' (0501).  ONE copy serves all four, and that is not an oversight:
 //   * A cell is live only across a gate's prologue and its epilogue; in between (while the C
@@ -164,14 +218,19 @@ intrframe: .word 0              // struct trap * -- valid only inside `intrgate'
 // Kernel entry point
 // ============================================================================
 
-// _start -- first instruction executed by the kernel.
+// _start -- first instruction executed by the kernel, and the last one before user mode.
 //
-// _start is deliberately tiny.  Everything the boot phase must do that can be said
-// in C -- zeroing bss and publishing the memory size -- is done at the top of main()
-// (see kernel/main.c).  Only the two things that cannot are here: seeding the stack
-// pointer (r15) before any C runs, and calling main().  The machine resets into the
+// It is two halves, as v7's is.  The FIRST is deliberately tiny: everything the boot phase
+// must do that can be said in C -- zeroing bss and publishing the memory size -- is done at
+// the top of main() (see kernel/main.c), so only the two things that cannot are here, seeding
+// the stack pointer (r15) before any C runs and calling main().  The machine resets into the
 // kernel's own mode already (supervisor, unmapped, interrupts off, faults halt --
 // doc/Memory_Mapping.md, "Reset state"), so there is nothing to set up.
+//
+// The SECOND half is the first entry into user mode, and the one path into it that does not
+// go through `intret': main() returns only in process 1, having copied the icode above into
+// that process's image and loaded its map, and this forges the four registers `выпр' does not
+// take from a frame and leaves.  See doc/Unix_Context_Switch.md.
 
         .text
         .globl  _start
@@ -180,7 +239,36 @@ _start:
         // 0100000.  ustkbase (machdep.c) holds &u.u_stack, a link-time constant.
      15 vtm     [ustkbase]          // r15 := kernel stack base (~076214)
      13 vjm     main                // into the C kernel; main() zeroes bss, sizes memory
-bhalt:  stop                        // main returned / faulted upstream: resumable halt
+
+        // --- into user mode, at the icode.  main() returns HERE, and only in process 1;
+        //     process 0 goes to sched() and never comes back. ---
+        //
+        // SHUT THE DOOR FIRST, for the reason `intret' does (doc/Unix_Context_Switch.md
+        // sec 10): clkstart() has already called spl0(), so the level is open, and everything
+        // below is unrepeatable.  An external interrupt landing in this window would overwrite
+        // the SPSW being forged -- SPSW is a single register, not a stack -- and worse, it
+        // would arrive with M15 already repointed at the USER stack while SPSW still says
+        // supervisor, so `intrgate's conditional switch would keep that value and build its
+        // frame on physical 070000, in the middle of the kernel image.
+        vtm     02003               // PSW := БлП|БлЗ|БлПр: interrupts blocked
+     15 vtm     USTKPAGE*PGSZ       // r15 := 070000, the base of the user stack (sys/param.h)
+      9 vtm     icode               // r9 := the icode's entry -- its own link address
+        ita     9                   // A := it (r9 is scratch: nothing has run since main())
+        ati     IRET                // М033 := entry: where `выпр' lands
+        xta                         // A := 0 (word 0 always reads 0, as in wcopy below)
+        ati     SPSW                // М027 := 0: user mode, mapping AND protection ON, and
+                                    //   БлПр clear so the clock runs.  `выпр' also drops
+                                    //   ПоП/ПоК -- it OVERWRITES PSW from SPSW rather than
+                                    //   OR-ing (doc/Memory_Mapping.md, "Return: выпр") -- so
+                                    //   the reset's "a fault halts the machine" mode ends
+                                    //   exactly here, where a fault must start vectoring.
+        ntr     7                   // R := RREG_C (include/sys/reg.h): NTR 3 suppression plus
+                                    //   ω = logical, the mode word compiled code runs in.  A
+                                    //   program with no crt0 in front of it must not start in
+                                    //   ω 0 -- the rule sendsig() already established.  LAST,
+                                    //   because `xta'/`ita' set ω themselves.
+      3 ij                          // выпр: into the icode, in user mode
+bhalt:  stop                        // not reached -- `выпр' does not come back
         uj      bhalt
 
 // ============================================================================

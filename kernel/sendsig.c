@@ -45,6 +45,9 @@
 // An array so that the name is the address, as with edata[]/end[] in machdep.c.
 extern int sigcode[];
 
+// kernel/brz.s: flush the БРЗ write cache.  See the call below for why a frame builder wants it.
+void drainbrz(void);
+
 // Let a process handle a signal by simulating a call.
 //
 // `p' is the handler (u.u_signal[signo], already vetted by psig()), and the frame is
@@ -83,6 +86,14 @@ void sendsig(caddr_t p, int signo)
     if (copyout((caddr_t)tr, (caddr_t)n, wtob(NREGFRAME)) < 0 ||
         suword((caddr_t)(n + NREGFRAME), sigcode[0]) < 0)
         exit(SIGKIL);
+
+    // The word just planted is one the handler EXECUTES, and the store that planted it was
+    // MAPPED -- so it is sitting in the БРЗ write cache, which the instruction path does not
+    // consult: it reads memory directly (besm6_mmu.c, mmu_prefetch vs mmu_store).  Drain
+    // before the handler's `13 uj' can reach it.  The 21 frame words below it need no such
+    // care -- sigret() reads them back as DATA, and a data read does look in the cache.
+    // Same rule, and the same two lines, as main()'s icode copy.
+    drainbrz();
 
     tr->acc  = signo;             // the handler's one argument
     tr->r14  = -1;                // argument count, negative, per the convention
