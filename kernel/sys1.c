@@ -30,6 +30,24 @@ void exec()
     exece();
 }
 
+// Announce a failed exec that nobody else can report.  A caller with a stdout prints its
+// own message; process 1 at boot has none -- it inherits proc[0]'s empty u_ofile[] -- so
+// the icode's exec of /etc/init (kernel/besm6.S) would otherwise fail into a silent spin.
+// Called from both of exece()'s exits, and quiet unless a call actually failed.
+static void execerr(void)
+{
+    char name[DIRSIZ + 1];
+
+    if (u.u_error == 0 || u.u_ofile[1] != NULL)
+        return;
+    // u_dbuf is the last path component namei() looked at -- "init" for /etc/init -- and is
+    // NUL-padded only when the component is shorter than DIRSIZ, so copy and terminate.
+    // DIRSIZ is three words exactly (param.h), which is what lets wcopy() do the copy.
+    wcopy((caddr_t)u.u_dbuf, (caddr_t)name, btow(DIRSIZ));
+    name[DIRSIZ] = '\0';
+    printf("exec %s: error %d\n", name, u.u_error);
+}
+
 void exece()
 {
     register int nc;
@@ -44,8 +62,10 @@ void exece()
     int na, ne, bno, ucp, ap, c;
     struct inode *ip;
 
-    if ((ip = namei(uchar, 0)) == NULL)
+    if ((ip = namei(uchar, 0)) == NULL) {
+        execerr(); // the boot case: no such file, and no stdout to say so on
         return;
+    }
     bno = 0;
     bp  = 0;
     if (access(ip, IEXEC))
@@ -190,6 +210,7 @@ bad:
     if (bno)
         mfree(swapmap, (NCARGS + BSIZE - 1) / BSIZE, bno);
     iput(ip);
+    execerr(); // the success path lands here too; execerr() tests u_error itself
 }
 
 // Read in and set up memory for executed file.

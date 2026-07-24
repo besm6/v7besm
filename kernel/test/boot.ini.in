@@ -51,8 +51,9 @@
 ; is a build artifact, and no -n because `attach -n' CREATES AND FORMATS an empty container,
 ; on which sbcheck() would fail and the boot would panic.
 ;
-; The console is deliberately NOT attached: the kernel's printf output has no reader here, and
-; `make run' (kernel/unix.ini) is where you watch a boot.  @SPIN@ is pulled from unix.nm by
+; The console is deliberately NOT attached: the kernel's printf output has no reader here -- so
+; execerr()'s `exec init: error 2' (sys1.c) goes nowhere in this run, and the assertions below
+; are on the registers instead.  `make run' (kernel/unix.ini) is where you watch a boot.  @SPIN@ is pulled from unix.nm by
 ; genboot.cmake at build time -- it is a LINKED address that moves as the kernel grows, which
 ; is why this file is generated rather than hardcoded.
 

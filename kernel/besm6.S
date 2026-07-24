@@ -115,7 +115,8 @@ icode:
         xta     iname           // A := (char *)"/etc/init"    -- argument 1
         xts     iargvp          // push it; A := (char **)argv -- argument 2, the last one
         $77     SYS_exec        // exec(name, argv): returns ONLY on failure
-spin:   uj      spin            // ... and with no /etc/init there is nothing left to try
+spin:   uj      spin            // nothing left to try -- and nothing to say it with, since
+                                //   process 1 has no stdout: execerr() (sys1.c) prints for us
 
 // `iname' and `iargv[0]' are FAT pointers -- marker in bit 48, byte offset 5 in bits 47-45,
 // naming byte #0 -- because that is what namei() walks with fubyte().  The parentheses are
