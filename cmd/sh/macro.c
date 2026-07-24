@@ -318,11 +318,18 @@ static void comsubst(void)
     pop();
 }
 
-#define CPYSIZ 512
+//
+// How much subst() accumulates before it writes.
+//
+// ONE DISK BLOCK, which is what v7 meant by it too -- it wrote 512, and BSIZE on the
+// PDP-11 was 512 bytes.  A block here is 3072 bytes (BSIZEW 512 words times NBPW 6), so
+// carrying the literal across would have been a sixth of a block and, worse, 85 1/3
+// WORDS: not a whole number of them, so every flush would hand the kernel a byte count
+// that is not a word multiple and take the slow path through iomove().  <stdio.h> sets
+// BUFSIZ from BSIZE for the same reason and says so.
+//
+#define CPYSIZ BSIZE
 
-//
-// Copy `in' to `ot', expanding as it goes: the here-document with substitution.
-//
 //
 // Copy descriptor `in' to descriptor `ot', expanding $ on the way.
 //

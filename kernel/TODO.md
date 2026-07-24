@@ -219,7 +219,7 @@ targets) and staged into **`build/rootfs/`**, which the root-image manifest
   `build/rootfs/etc/init`; with no `/etc/ttys` on the image it is exactly the single-user
   loop this task asked for. See [../cmd/init/README.md](../cmd/init/README.md).
 * **`cmd/sh/` — done.** S. R. Bourne's v7 shell, ported to C11 and staged as
-  `build/rootfs/bin/sh`; 7,647 words of the 28,672. This task had proposed writing a *minimal*
+  `build/rootfs/bin/sh`; 7,648 words of the 28,672. This task had proposed writing a *minimal*
   shell first and porting v7's only after task 25 had shaken the syscalls out. That turned out
   not to be worth it: every call the shell makes is a real one in `sysent.c`, so the whole
   program went across at once. See [../cmd/sh/README.md](../cmd/sh/README.md) — in particular

@@ -1,0 +1,14 @@
+IFS= 	
+
+one=first EXPANDED line
+two=second line
+v=EXPANDED
+IFS= 	
+
+raw=first $v line
+v=EXPANDED
+IFS= 	
+
+last=line099 EXPANDED padding padding padding
+line=
+v=EXPANDED

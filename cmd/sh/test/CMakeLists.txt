@@ -26,6 +26,12 @@ endmacro()
 b6_shtest(smoke)
 b6_shtest(syntax)
 
+# Here-documents, and with them the only file redirection b6sim can reach: a built-in
+# cannot be redirected, but a ( ) SUBSHELL can, and the built-ins inside it still print.
+# Covers subst() and copy(), including a document longer than CPYSIZ so that the flush
+# boundary is crossed.
+b6_shtest(heredoc)
+
 # The one that guards the arena and the break.  Without chkstak() (stak.h) this script
 # does not print `no space' -- it runs off the end of the break and out of the address
 # space, because the memory fault v7 relied on to grow the arena mid-push is not

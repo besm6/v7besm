@@ -13,7 +13,7 @@ Part of the ordinary top-level build; there is nothing to invoke separately.
 
 ```sh
 make            # builds build/rootfs/bin/sh among everything else
-make run        # runs its size check and its three b6sim tests, with the rest
+make run        # runs its size check and its four b6sim tests, with the rest
 ```
 
 Two conditions gate it, both shared with `kernel/` and `lib/`: the external
@@ -22,8 +22,8 @@ the link is `crt0.o *.o -lc -lruntime` in that order. [`CMakeLists.txt`](CMakeLi
 `b6_prog()` call plus `-I.`, which matters: `defs.h` includes `"ctype.h"`, and that must resolve
 to the shell's own character tables rather than the C11 `<ctype.h>` in the system tree.
 
-It uses **7,647 words of the 28,672** available, with the highest relocatable symbol at word
-7,655 of the 32,767 a 15-bit pointer reaches.
+It uses **7,648 words of the 28,672** available, with the highest relocatable symbol at word
+7,656 of the 32,767 a 15-bit pointer reaches.
 
 ## What the port changed
 
@@ -109,7 +109,10 @@ direct` is four words with `DIRSIZ` 18, not v7's sixteen bytes with `DIRSIZ` 14,
 [`expand.c`](expand.c) hardcoded both. `execve` is spelled `exece`. `itos()` printed at most five
 digits and turned a negative into a very large positive; an `INT` here holds a 41-bit signed
 value. `prc()`'s parameter must stay a `char`: `&c` on a standalone `char` is a fat pointer at
-byte #5, and widening it to `int` would make every `prc()` write a NUL.
+byte #5, and widening it to `int` would make every `prc()` write a NUL. And `CPYSIZ`, the amount
+`subst()` buffers, was 512 because that was one PDP-11 disk block; here a block is `BSIZE`, 3,072
+bytes, and 512 is not even a whole number of words — the same conversion `<stdio.h>` makes for
+`BUFSIZ`, and it is written as `BSIZE` now rather than as a number.
 
 Names that collided with libc: the arena's `alloc`/`free` (v7 `#define`d them to `malloc`/`free`,
 so the shell *defined* both) are `shalloc`/`shfree`; `getenv`/`setenv` are `readenv`/`shenv`;
@@ -136,35 +139,41 @@ of room in a 28-page address space:
 
 ## Tests
 
-Three, under `b6sim`, run by `make run` (ctest labels `sh` and `rootfs`):
+Four, under `b6sim`, run by `make run` (ctest labels `sh` and `rootfs`):
 
 | test | what it covers |
 |---|---|
 | `sh_smoke` | sourcing with `.`, assignment, `${-}`/`${+}`/`${=}` substitution, quoting, positional parameters and `shift`, `if`/`for`/`case`/`while`/`until`, `export`/`readonly`/`umask`/`trap`/`set`, and the exit status |
 | `sh_syntax` | the parser's error path — a truncated `if` |
+| `sh_heredoc` | here-documents: `copy()` and `subst()`, a quoted terminator, and a document longer than `CPYSIZ` so the flush boundary is crossed — and with them `fork`, a subshell and file redirection |
 | `sh_nospace` | the arena and the break, to exhaustion |
 
 `b6sim` runs one BESM-6 `a.out` and services its syscalls on the host, which is enough for the
 lexer, the parser, macro expansion, the name tree and — underneath all of them — the arena and
 the expression stack, which is where this port's pointer work lives.
 
-**What it cannot reach**, and why:
+`fork`, pipes and file redirection **are** reachable, which is not obvious and was worth
+finding: v7's shell refuses to redirect a built-in (`illegal io` in [`xec.c`](xec.c)), but a
+`( )` **subshell** may be redirected and the built-ins inside it still print. `sh_heredoc` is
+built on that, and it is what covers `copy()`, `subst()`, `initio()` and the fork path.
 
-* **`fork`, `exec` and pipes.** `b6sim` loads BESM-6 executables, so the shell has nothing to
-  exec; there is no external command yet either way.
-* **File redirection.** v7's shell refuses to redirect a built-in (`illegal io` in
-  [`xec.c`](xec.c)), and built-ins are the only things that produce output here.
+**What is still out of reach**, and why:
+
+* **`exec`.** `b6sim` loads BESM-6 executables, so the shell has nothing to exec; there is no
+  external command on the image yet either way. A command name only ever reaches "not found".
 * **Globbing.** [`expand.c`](expand.c) reads directories with `read()` and parses `struct direct`;
   under `b6sim` that is a host directory in a host format, so the read fails and the pattern is
   left literal.
 * **Traps and interrupts.** `b6sim`'s `signal()` implements only `SIG_DFL` and `SIG_IGN`.
 
-All four wait for the real kernel under SIMH — `kernel/TODO.md`, task 25 — which is also where
+All three wait for the real kernel under SIMH — `kernel/TODO.md`, task 25 — which is also where
 the memory-fault path above gets its first real exercise.
 
 Two notes on the fixtures. They contain **no `#` comments**: the v7 shell has none (they arrived
-with System III), so a `#` line is a command, and a stray backquote in one starts a command
-substitution that runs to end of file. And the runner clears the environment with `env -i`,
+with System III), so a `#` line is a command. What stands in for one is a `:` line — but its
+words are still *parsed*, so a stray backquote in one starts a command substitution that runs to
+end of file, and a parenthesis is a syntax error. And the runner clears the environment with
+`env -i`,
 because `b6sim` hands the guest a whitelist of the host's variables, the shell reads all of them
 into its name tree at startup, and `set` prints the tree.
 
