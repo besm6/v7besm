@@ -853,7 +853,7 @@ wz_dn:
         .globl  u
         u = UBASE
 
-// char buffers[NBUF][BSIZE] -- page aligned buffers for disk I/O.  Declared `extern' in
+// int buffers[NBUF][BSIZEW] -- page aligned buffers for disk I/O.  Declared `extern' in
 // main.c: like `u' this is a fixed physical area, not bss, so the storage is named here.
         .globl  buffers
         buffers = u - NBUF*BSIZEW

@@ -33,23 +33,22 @@
 // be: mdstrategy() refuses a transfer whose memory side is not half-zone grained, and
 // bufpaddr() of a cache buffer is just the word address of b_addr.  Ordinary bss
 // would land wherever the linker put it and be refused.  BUFPAGE also has to stay below
-// word 32767, since a caddr_t's word field is 15 bits (ptrword(), sys/param.h).
+// word 32767, since a C pointer's word field is 15 bits (ptrword(), sys/param.h).
 //
-// READ struct buf's block ONLY through a cast off b_addr.  This is what the test found the
-// first time it ran, and it was a kernel bug, not a test one -- the sites were all over
-// main.c, alloc.c, iget.c, sys3.c, subr.c and nami.c, and none had ever executed (task 20).
-// b_addr is a caddr_t, a FAT pointer: marker in bit 48, byte offset in bits 47-45.  Assigning
-// it to a plain word pointer keeps those bits, and the compiler adds a field's offset to it
-// with `a+x' -- the ADDITIVE unit, which reads bits 48-42 as an exponent.  Adding 1 to a value
-// with bit 48 set is a floating-point add of a number too small to matter: the result is the
-// pointer, unchanged.  So the misread `fp->s_bsize' silently returned s_magic, every field
-// past offset 0 read offset 0, and nothing faulted.
+// b_addr IS A WORD POINTER, and it is this test that is the reason.  The first time the
+// file ran, b_addr was a caddr_t -- a FAT pointer, marker in bit 48, byte offset in bits
+// 47-45 -- and every reader of a block as a struct was a kernel bug: main.c, alloc.c,
+// iget.c, sys3.c, subr.c and nami.c, none of which had ever executed (task 20).  Assigning
+// a fat pointer to a plain word pointer keeps those bits, and the compiler adds a field's
+// offset to it with `a+x' -- the ADDITIVE unit, which reads bits 48-42 as an exponent.
+// Adding 1 to a value with bit 48 set is a floating-point add of a number too small to
+// matter: the result is the pointer, unchanged.  So the misread `fp->s_bsize' silently
+// returned s_magic, every field past offset 0 read offset 0, and nothing faulted.
 //
-//      fp = (struct dinode *)bp->b_addr;   // BROKEN if bp came from a plain word pointer;
-//      fp = (struct filsys *)bp->b_addr;   // right: the cast off b_addr strips the marker
-//
-// The cast is one `aax' against a mask, and it is what every line below does.  v7's named
-// union members (b_filsys/b_dino/…) that invited the wrong spelling are gone (sys/buf.h).
+// The fix was first an explicit cast at each of ~13 sites, and then the type itself
+// (sys/buf.h): a word pointer has no marker, so `(struct filsys *)bp->b_addr' is a plain
+// reinterpretation and the wrong spelling no longer exists to be written.  v7's named
+// union members (b_filsys/b_dino/…) that invited it are gone too.
 //
 // WHAT WOULD NOTICE IF THE CODE WERE WRONG -- the checks that exist for that reason alone:
 //
@@ -275,7 +274,7 @@ static void bufinit(void)
     for (i = 0; i < NBUF; i++) {
         bp                       = &buf[i];
         bp->b_dev                = NODEV;
-        bp->b_addr          = (caddr_t)(int *)(BUFWORD + i * BSIZEW);
+        bp->b_addr               = (int *)(BUFWORD + i * BSIZEW);
         bp->b_back               = &bfreelist;
         bp->b_forw               = bfreelist.b_forw;
         bfreelist.b_forw->b_back = bp;

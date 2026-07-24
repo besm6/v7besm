@@ -46,7 +46,8 @@ void readi(register struct inode *ip)
         // A divide and a remainder, not a shift and a mask: BSIZE is 3072 bytes and
         // 3072 is not a power of two.  One b$div per pass of this loop -- that is,
         // per block -- which is noise beside the bread() below.  `on' stays a BYTE
-        // offset, because b_addr is a fat pointer and `+ on' is byte arithmetic.
+        // offset: b_addr is a word pointer, so the `+ on' below is byte arithmetic on
+        // the caddr_t it is cast to first, which starts at the block's first byte.
         lbn = bn = u.u_offset / BSIZE;
         on       = u.u_offset % BSIZE;
         n        = min(BSIZE - on, u.u_count);
@@ -72,7 +73,7 @@ void readi(register struct inode *ip)
         ip->i_un.i_lastr = lbn;
         n                = min(n, BSIZE - wtob(bp->b_resid));
         if (n != 0)
-            iomove(bp->b_addr + on, n, B_READ);
+            iomove((caddr_t)bp->b_addr + on, n, B_READ);
         brelse(bp);
     } while (u.u_error == 0 && u.u_count != 0 && n > 0);
 }
@@ -122,7 +123,7 @@ void writei(register struct inode *ip)
             bp = getblk(dev, bn);
         else
             bp = bread(dev, bn);
-        iomove(bp->b_addr + on, n, B_WRITE);
+        iomove((caddr_t)bp->b_addr + on, n, B_WRITE);
         if (u.u_error != 0)
             brelse(bp);
         else

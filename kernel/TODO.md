@@ -338,15 +338,16 @@ What the ones already in [test/](test/) cost to get right. Read this before writ
   `0576` so the `.ini` tripped its *PC* assertion while every check still passed. Run the modified
   build through a harness that prints PC and ACC separately: a wrong ACC is a broken check, a PC
   that is neither `halt` nor `fault` is a hang, and a PC one word off is usually just the tax.
-* **A punned union member reads word 0 and does not fault.** `fstest` reads `struct buf`'s block
-  through `b_un.b_addr` cast to the right pointer type, never through `b_un.b_filsys`/`b_dino`/…,
-  because `b_addr` is a *fat* pointer (`caddr_t`) and the regular-pointer members reinterpret its
-  bit-48 marker as a large exponent — so `fp->s_bsize` silently returned `s_magic` and every
-  member past offset 0 came back as offset 0, with no fault to mark it. The cast
-  `(struct filsys *)bp->b_un.b_addr` is one `aax` and clears the marker
-  (`doc/Besm6_Data_Representation.md §7`). The kernel's own mount/inode path had the same pun in
-  ~13 places (since fixed); a test that reads a buffer as a struct must cast, or it checks nothing
-  but offset 0.
+* **A punned union member reads word 0 and does not fault.** `fstest` found this: `b_addr` was
+  a *fat* pointer (`caddr_t`), and reading `struct buf`'s block through `b_un.b_filsys`/`b_dino`/…
+  reinterpreted its bit-48 marker as a large exponent — so `fp->s_bsize` silently returned
+  `s_magic` and every member past offset 0 came back as offset 0, with no fault to mark it. The
+  kernel's own mount/inode path had the pun in ~13 places. Fixed twice: first with an explicit
+  `(struct filsys *)` cast at each site (one `aax`, clearing the marker,
+  `doc/Besm6_Data_Representation.md §7`), then by making `b_addr` an `int *` so there is no marker
+  to strip and the wrong spelling cannot be written (`sys/buf.h`). The general lesson stands:
+  a fat pointer stored where a word pointer is read is silent, not fatal — check the *type*,
+  and prefer the one that makes the bad spelling impossible.
 * **Ask what would notice if the code were wrong, and if the answer is "nothing", the test is not
   finished.** 18b.5 classified disk failures into hard and soft, but both ended in the same failed
   request with the same `b_resid` — so the entire classification was undefended, and the bite test

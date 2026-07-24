@@ -102,7 +102,9 @@ void exece()
                     if (bp)
                         bawrite(bp);
                     bp = getblk(swapdev, swplo + bno + nc / BSIZE);
-                    cp = bp->b_addr;
+                    // b_addr is a word pointer; the cast makes a byte cursor at the
+                    // block's first byte (offset 5), which is what `*cp++' walks.
+                    cp = (caddr_t)bp->b_addr;
                 }
                 nc++;
                 *cp++ = c;
@@ -168,7 +170,7 @@ void exece()
                 if (bp)
                     brelse(bp);
                 bp = bread(swapdev, swplo + bno + nc / BSIZE);
-                cp = bp->b_addr;
+                cp = (caddr_t)bp->b_addr; // byte cursor; see the staging loop above
             }
             subyte(up++, (c = *cp++));
             nc++;

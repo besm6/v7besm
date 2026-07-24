@@ -165,7 +165,7 @@ void iinit()
 // as arguments to the I/O routines to describe
 // I/O to be done-- e.g. swbuf for
 // swapping.
-extern char buffers[NBUF][BSIZE];
+extern int buffers[NBUF][BSIZEW];
 
 // Initialize the buffer I/O system by freeing
 // all buffers and setting all device buffer lists to empty.
@@ -180,7 +180,7 @@ void binit()
     for (i = 0; i < NBUF; i++) {
         bp                       = &buf[i];
         bp->b_dev                = NODEV;
-        bp->b_addr          = buffers[i];
+        bp->b_addr               = buffers[i];
         bp->b_back               = &bfreelist;
         bp->b_forw               = bfreelist.b_forw;
         bfreelist.b_forw->b_back = bp;
