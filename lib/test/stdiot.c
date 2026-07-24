@@ -28,11 +28,9 @@
 // The scratch file is created here and removed at the end, so a run leaves nothing
 // behind and the .expected file stays host-independent.
 //
+#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
-
-// v7 has no <unistd.h> and include/ has none either; a caller declares its own.
-int open(const char *path, int mode);
 
 #define FNAME "stdiot.tmp"
 #define GNAME "stdiot2.tmp"
@@ -186,7 +184,7 @@ static void reopen(void)
     char buf[80];
     int fd;
 
-    fd = open(FNAME, 0);
+    fd = open(FNAME, O_RDONLY);
     ok("open", fd >= 0);
     f = fdopen(fd, "r");
     ok("fdopen", f != NULL);

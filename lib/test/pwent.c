@@ -27,6 +27,7 @@
 //
 #include <grp.h>
 #include <pwd.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -34,7 +35,6 @@
 int ttyslot(void);
 int getpw(int uid, char buf[]);
 char *crypt(const char *pw, const char *salt);
-int open(const char *path, int mode);
 
 #define MAXENT  64
 #define MAXNAME 32
@@ -161,7 +161,7 @@ int main(void)
 
     // ---- the terminal three ----
     printf("--- terminals\n");
-    fd = open("pwent.c", 0);
+    fd = open("pwent.c", O_RDONLY);
     ok("a regular file is not a terminal", fd < 0 || ttyname(fd) == 0);
     if (fd >= 0)
         close(fd);

@@ -26,11 +26,11 @@
 // perror writes to fd 2, which is why the harness captures stderr as well as stdout.
 //
 #include <ctype.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-int open(char *path, int mode);
 char *mktemp(char *as);
 void perror(const char *s);
 char *index(const char *sp, char c);
@@ -249,14 +249,14 @@ int main(int argc, char **argv, char **envp)
     ok("mktemp kept the prefix", strncmp(tmpl, "/tmp/gen", 8) == 0);
     ok("mktemp replaced every X", index(tmpl, 'X') == 0);
     ok("mktemp kept the length", strlen(tmpl) == 14);
-    ok("mktemp names nothing that exists", open(tmpl, 0) == -1);
+    ok("mktemp names nothing that exists", open(tmpl, O_RDONLY) == -1);
 
     // ---- isatty: the harness redirects both descriptors to a file ----
     ok("isatty of a redirected stdout", isatty(1) == 0);
     ok("isatty of a bad descriptor", isatty(63) == 0);
 
     // ---- perror, on fd 2, after a call that really failed ----
-    open("/no/such/file", 0);
+    open("/no/such/file", O_RDONLY);
     perror("perror");
     perror("");
 

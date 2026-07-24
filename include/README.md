@@ -87,5 +87,8 @@ prototypes without cost.
 
 `unistd.h` is a hosted header this tree adds (v7 predated it): the low-level I/O and process
 primitives that `lib/libc/sys` backs, gathered from the per-file syscall declarations each
-caller used to carry. `open`/`creat`/`chmod`/`stat` are **not** in it — they await an
-`<fcntl.h>`/`<sys/stat.h>` this tree does not have yet.
+caller used to carry. `open`/`creat` are **not** in it — they live in `<fcntl.h>`, a hosted
+header this tree also adds, alongside the three v7 `O_RDONLY`/`O_WRONLY`/`O_RDWR` modes (and
+nothing more: this kernel has no `fcntl` system call, and `open()` honours no flag above
+`O_RDWR`). `chmod`/`stat` are not in either — they await a `<sys/stat.h>` this tree does not
+have yet.

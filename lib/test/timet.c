@@ -29,13 +29,13 @@
 // that is the one thing here that would differ between two runs.
 //
 #include <stdio.h>
+#include <fcntl.h>
 #include <string.h>
 #include <time.h>
 
 char *timezone(int zone, int dst);
 int dysize(int y);
 int tell(int f);
-int creat(const char *path, int mode);
 int close(int fd);
 int unlink(const char *path);
 int write(int fd, const char *buf, int n);

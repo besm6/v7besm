@@ -18,9 +18,8 @@
 // lib/README.md warns about.
 //
 #include <errno.h>
+#include <fcntl.h>
 #include <unistd.h>
-
-int open(char *path, int mode);
 
 // One string to the standard output, without stdio (phase 4).
 static void put(char *s)
@@ -77,7 +76,7 @@ int main(int argc, char **argv, char **envp)
     // instead would set bits 48-42 and fail this comparison while still printing "-1".
     //
     errno = 0;
-    r     = open("/no/such/file", 0);
+    r     = open("/no/such/file", O_RDONLY);
     report("open", r);
     if (r != -1)
         put("BAD: open of a missing file succeeded\n");

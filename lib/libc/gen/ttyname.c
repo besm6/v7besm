@@ -17,6 +17,7 @@
 //
 // No header declares it; a caller declares it itself.
 //
+#include <fcntl.h>
 #include <string.h>
 #include <sys/dir.h>
 #include <sys/param.h>
@@ -24,7 +25,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-int open(const char *path, int mode);
 int fstat(int fd, struct stat *buf);
 int stat(const char *path, struct stat *buf);
 
@@ -54,7 +54,7 @@ char *ttyname(int f)
         return NULL;
     if ((fsb.st_mode & S_IFMT) != S_IFCHR)
         return NULL;
-    if ((df = open(dev, 0)) < 0)
+    if ((df = open(dev, O_RDONLY)) < 0)
         return NULL;
 
     while (read(df, (char *)&db, sizeof db) == sizeof db) {

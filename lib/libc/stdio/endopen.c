@@ -4,15 +4,13 @@
 // The half of fopen()/freopen() that does the opening: attach `file' to the slot
 // `iop', already chosen by the caller.
 //
-// close() and lseek() come from <unistd.h>; open() and creat() are still declared
-// here, since this tree has no <fcntl.h> for them yet.
+// close() and lseek() come from <unistd.h>; open(), creat() and the O_* modes from
+// <fcntl.h>.
 //
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>
-
-int open(const char *path, int mode);
-int creat(const char *path, int mode);
 
 //
 // "w+" and "a+" have to be created and then reopened for reading as well: creat()
@@ -25,7 +23,7 @@ static int create(const char *file, int rw)
     f = creat(file, 0666);
     if (rw && f >= 0) {
         close(f);
-        f = open(file, 2);
+        f = open(file, O_RDWR);
     }
     return f;
 }
@@ -45,7 +43,7 @@ FILE *_endopen(const char *file, const char *mode, FILE *iop)
         break;
 
     case 'a':
-        if ((f = open(file, rw ? 2 : 1)) < 0) {
+        if ((f = open(file, rw ? O_RDWR : O_WRONLY)) < 0) {
             if (errno == ENOENT)
                 f = create(file, rw);
         }
@@ -53,7 +51,7 @@ FILE *_endopen(const char *file, const char *mode, FILE *iop)
         break;
 
     case 'r':
-        f = open(file, rw ? 2 : 0);
+        f = open(file, rw ? O_RDWR : O_RDONLY);
         break;
 
     default:

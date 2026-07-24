@@ -22,10 +22,9 @@
 //
 // No header declares it; a caller declares it itself.
 //
+#include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
-
-int open(const char *path, int mode);
 
 #define TTYLINE 32
 
@@ -64,7 +63,7 @@ int ttyslot(void)
         p = tp;
     else
         p++;
-    if ((tf = open(ttys, 0)) < 0)
+    if ((tf = open(ttys, O_RDONLY)) < 0)
         return 0;
 
     s = 0;

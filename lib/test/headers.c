@@ -34,6 +34,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <fenv.h>
 #include <inttypes.h>
 #include <locale.h>
@@ -66,6 +67,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <fenv.h>
 #include <inttypes.h>
 #include <locale.h>
@@ -181,6 +183,9 @@ int main(void)
     // <unistd.h>: the three standard descriptors and the OR-able access modes.
     ok("stderr is descriptor 2", STDERR_FILENO == 2);
     ok("access modes are bits", (R_OK | W_OK | X_OK) == 7 && F_OK == 0);
+
+    // <fcntl.h>: the three v7 open() modes, 0/1/2 as the kernel's ++mode expects.
+    ok("open modes are 0/1/2", O_RDONLY == 0 && O_WRONLY == 1 && O_RDWR == 2);
 
     // One locale, and the degenerate float environment.
     ok("one rounding mode", FE_TONEAREST == 0 && FE_ALL_EXCEPT == 0);

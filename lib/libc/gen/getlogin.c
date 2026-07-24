@@ -17,11 +17,11 @@
 //
 // No header declares it; a caller declares it itself.
 //
+#include <fcntl.h>
 #include <utmp.h>
 #include <unistd.h>
 
 int ttyslot(void);
-int open(const char *path, int mode);
 
 static const char UTMP[] = "/etc/utmp";
 
@@ -44,7 +44,7 @@ char *getlogin(void)
 
     if ((me = ttyslot()) == 0)
         return 0;
-    if ((uf = open(UTMP, 0)) < 0)
+    if ((uf = open(UTMP, O_RDONLY)) < 0)
         return 0;
     lseek(uf, me * (int)sizeof ubuf, 0);
     if (read(uf, (char *)&ubuf, sizeof ubuf) != sizeof ubuf) {
