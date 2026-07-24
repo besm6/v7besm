@@ -13,12 +13,15 @@ work has two halves:
   repo's own toolchain (`b6cc`/`b6as`/`b6ld`) and **boots under SIMH**: the memory model,
   `_start`, all three trap doors, the timer and the context switch work, and two processes
   alternate under the real scheduler. With no root disk, boot stops at `panic: iinit`; with
-  `root3072.disk` attached it mounts the root, hands process 1 the icode and **enters user mode**,
-  where `$77 SYS_exec` comes back through the gate with `ENOENT` because there is no `/etc/init`
-  on the image yet (`kernel/test/boot` guards all of that). What is missing above that line is the
-  userland: a console that is a controlling terminal, then `/etc/init` and a shell.
-  See `kernel/TODO.md`, the live work plan — the settled
-  design, the hardware rules it obeys, and a sequential task list (numbered from 19, since
+  `root3072.disk` and a drum attached it mounts the root, hands process 1 the icode, **enters
+  user mode**, execs `/etc/init` and **talks to a terminal** — reading typed lines from
+  `/dev/console`, honouring erase, kill and `^D`, and answering through `/dev/tty`
+  (`kernel/test/boot` and `kernel/test/console` guard all of that; `cd kernel && make run` is
+  where you type at it). The drums must be attached to exec anything: they are `swapdev`, and
+  `exece()` stages the argument list in swap. What is missing above that line is the userland
+  proper — the `/etc/init` on the image is a stand-in (`kernel/test/coninit.S`) until a real
+  one and a shell arrive. See `kernel/TODO.md`, the live work plan — the settled
+  design, the hardware rules it obeys, and a sequential task list (numbered from 24, since
   the source cites the earlier numbers) that ends at a single-user shell. Kernel components
   are also exercised piecemeal by the standalone SIMH tests in `kernel/test/`.
 - **`cmd/`** — the BESM-6-specific toolchain being written/ported to eventually build the

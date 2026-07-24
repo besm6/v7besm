@@ -6,21 +6,29 @@ user memory layout all work, two processes alternate under the real scheduler on
 console, drum and disk drivers are written and their failure modes classified. The on-disk layout
 is settled and `b6fsutil` (`cmd/fsutil/`) builds root filesystem images in it.
 
-What remains is putting a shell in user mode. That is tasks **23–25** below, in order.
+What remains is putting a shell in user mode. That is tasks **24–25** below, in order.
 Tasks 26–29 are what is left after the prompt appears.
 
 Where the port stands: `cd kernel && make` links an image that boots under SIMH. With no root
-disk it reaches `panic: iinit`; **with `root3072.disk` attached it boots through `iinit()`, hands
-process 1 the icode and enters user mode**, where `$77 SYS_exec` comes back through the gate with
-`ENOENT` because the image has no `/etc/init` yet — printed on the console as `exec init: error 2`
-by `execerr()` ([sys1.c](sys1.c)), since process 1 has no stdout of its own to report on, and then
-the icode spins (tasks 20, 21 and 22 are done). The next open
-work is task 23, the console as a controlling terminal. The harness the boot is checked against:
-the build produces a root
-image (`kernel/test/root.manifest` → `root3072.disk`), `kernel/test/fstest` reads its superblock and
-root inode through the real `md` driver, the real buffer cache and the real `sbcheck()` (strictly
-below the boot path), and `kernel/test/boot` boots the whole `unix` image with that disk attached,
-asserting that process 1 leaves the kernel and that the exec reports ENOENT.
+disk it reaches `panic: iinit`; **with `root3072.disk` and a drum attached it boots through
+`iinit()`, hands process 1 the icode, enters user mode, execs `/etc/init` and holds a
+conversation with whoever is at the console** — reading typed lines, honouring erase, kill and
+`^D`, and answering through `/dev/tty` (tasks 20 through 23 are done). The `/etc/init` on the
+image is a stand-in, `kernel/test/coninit.S`, until task 24 puts a real one there. `make run`
+is where you talk to it.
+
+**The drums must be attached to exec anything**, which is new with task 23 and easy to be
+caught by: they are `swapdev` ([conf.c](conf.c)), and `exece()` stages the argument list in
+swap — `getblk`/`bawrite` in, `bread` out — before it ever touches the new image. With no
+drum that `bread` comes back `B_ERROR` and every exec fails with `exec init: error 5` (EIO).
+Every `.ini` that boots therefore says `attach -n drum0 …`.
+
+The harness the boot is checked against: the build produces a root image
+(`kernel/test/root.manifest` → `root3072.disk`, now carrying `/etc/init`),
+`kernel/test/fstest` reads its superblock and root inode through the real `md` driver, the
+real buffer cache and the real `sbcheck()` (strictly below the boot path), `kernel/test/boot`
+boots the whole `unix` image with that disk attached and asserts that init's banner reaches
+the console, and `kernel/test/console` types at init and checks what comes back.
 
 Read [../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) before touching memory management,
 [../doc/Intrinsics.md](../doc/Intrinsics.md) for how C reaches `002 «рег»` and `033 «увв»`,
@@ -179,33 +187,20 @@ Run every MMU test with **`set mmu cache`**.
 (`brz.s`, `uarea.S`, `seg.S`, `usermem.S`, `switch.s`, `syscall.c`, `sendsig.c`) and why the gates
 are duplicated in the tests' own crt0s.
 
-**Tasks 1–22 are done and their writeups have been removed**; the design they settled on is the
+**Tasks 1–23 are done and their writeups have been removed**; the design they settled on is the
 section above, and how each turned out is in the source comments and in `../doc/`. The numbering is
 **left as it was** — task numbers are cited from the source (`seg.S`, `dev/bio.c`, `dev/mem.c`,
 `clock.c`, `trap.c`, `sig.c`, `test/crt0*.S`, `test/fstest.c`, `sys1.c`, `text.c`) and from `doc/`
-— so the list below starts at 23. The one task that was still open, 18b.6 (wiring up and bring-up),
+— so the list below starts at 24. The one task that was still open, 18b.6 (wiring up and bring-up),
 became tasks 19 and 20. Since then the root filesystem mounts (task 20 — its bug a fat-pointer
 `b_un` pun, now written up on the union in [../include/sys/buf.h](../include/sys/buf.h)), `exec`
-reads the BESM-6 `a.out` (task 21 — `getxfile()`/`xalloc()` and `u_exdata`), and process 1 runs in
+reads the BESM-6 `a.out` (task 21 — `getxfile()`/`xalloc()` and `u_exdata`), process 1 runs in
 user mode (task 22 — the icode and `_start`'s second half in [besm6.S](besm6.S), and the drain in
 [main.c](main.c); the icode is copied to the address it was *linked* at, which is what lets it name
-its own string and argv vector at all).
-
-### Stage 6 — run a user program
-
-**23. The console as a controlling terminal.**
-
-`dev/sc.c` and `dev/tty.c` are written, and `sctest` exercises the driver against SIMH. What has
-never run is the path under a booting kernel: `scopen()` through `cdevsw[0]`, the `u.u_ttyp` /
-`u.u_ttyd` acquisition in `ttyopen()` ([dev/tty.c](dev/tty.c)), the `/dev/tty` indirection in
-[dev/sys.c](dev/sys.c), interrupt-driven input `scintr()` → `ttyinput()` → `canon()`, and
-`ttwrite()` output interleaving with the polled `putchar()` that `printf` uses behind the tty
-layer's back.
-
-* The line is `raw` on the simulator side and the tty runs `CRMOD`, so the kernel is the only thing
-  translating line endings — see the header comment in [dev/sc.c](dev/sc.c).
-* **Done when** a program on the image reads a typed line from `/dev/console` and echoes it, with
-  erase/kill and `^D` behaving, and `/dev/tty` opening to the same terminal.
+its own string and argv vector at all), and the console became a controlling terminal (task 23 —
+the clists, which had to be rewritten because v7 finds a character's block by masking its byte
+address and a `char *` here is a fat pointer; the account is in [prim.c](prim.c), the program that
+proves it is `test/coninit.S`, and `test/console` is what types at it).
 
 ### Stage 7 — the userland
 
@@ -306,6 +301,22 @@ What the ones already in [test/](test/) cost to get right. Read this before writ
   device deposited has to keep its window in the low 32 Kwords.
 * **`step N`, not `go`.** A broken switch or a lost gate *hangs* rather than failing, and `go` takes
   an address, not a step count. Every `.ini` uses `step 50000000` to turn a hang into a failure.
+* **A test that needs a TYPED line drives it with `expect`/`send`**, which is what `console.ini`
+  does and the only way to reach the top half of the tty code. Three things make it work and are
+  worth not re-deriving. Injected input arrives through `sim_poll_kbd()`, which serves it *before*
+  it looks at the real keyboard — so the dialogue runs under ctest with no terminal on stdin, and
+  a plain pipe into `besm6` does **not** work as a substitute. A match **halts** the simulator and
+  then runs the rule's action, so each action has to end with its own `step N` to set the machine
+  going again; the run is then bounded by the ctest `TIMEOUT` rather than by one step budget, and
+  the trailing `echof …; exit 1` after the last `step` is what a never-fired rule falls into.
+  And `-c` is **CLEARALL**, not "compare literally" — a bare `expect "…"` already matches the
+  quoted bytes exactly, and `-c` on any but the last rule would throw the others away.
+  ([../doc/Simh_Simulator.md](../doc/Simh_Simulator.md) has the corrected summary.)
+* **Make the test cross the boundary it is about.** `console.ini`'s first three lines are five
+  characters long and never leave the first clist block, so the whole of the block-chaining code
+  — the half of `prim.c` that had to be rewritten — went untouched by them. The fourth line is 48
+  characters against a `CBSIZE` of 30 for exactly that reason. Ask what the sizes in the test are
+  relative to the sizes in the code, not just whether the answer came back right.
 * **The interval timer cannot be switched off.** It free-runs at 250 Hz and the SIMH `CLK` device has
   no `DEV_DISABLE`, so no `.ini` can stop it and a second tick may land mid-run. Phrase every
   assertion to tolerate exactly one — a draft `p_cpu >= 1` check once passed *only because* a second
@@ -350,6 +361,15 @@ What the ones already in [test/](test/) cost to get right. Read this before writ
   to strip and the wrong spelling cannot be written (`sys/buf.h`). The general lesson stands:
   a fat pointer stored where a word pointer is read is silent, not fatal — check the *type*,
   and prefer the one that makes the bad spelling impossible.
+* **The same trap, a second time: `(int)cp & MASK` on a `char *` is meaningless here.** v7's
+  clists found a character's block, and its offset within it, by masking the low bits of a byte
+  address — `(int)bp & ~CROUND`, `((int)p->c_cf & CROUND) == 0`. A fat pointer keeps its byte
+  offset in bits 47–45, so the mask reaches five bits of the *word* address instead: the boundary
+  test fires once every 32 words rather than once per block, and the block-base recovery hands the
+  free list a pointer into the middle of some other block. Walking the cursor was never the
+  problem (`cp++` is the compiler's `b$pinc`) — arithmetic on the pointer *value* is. Rewritten
+  with explicit indices, `CROUND` deleted; see [prim.c](prim.c). **Grep for the pattern before
+  trusting any other v7 file that queues bytes.**
 * **Ask what would notice if the code were wrong, and if the answer is "nothing", the test is not
   finished.** 18b.5 classified disk failures into hard and soft, but both ended in the same failed
   request with the same `b_resid` — so the entire classification was undefended, and the bite test

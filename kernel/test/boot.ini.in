@@ -1,13 +1,14 @@
-; Boot the whole kernel with a root filesystem attached, into USER MODE -- tasks 20 and 22.
+; Boot the whole kernel with a root filesystem attached, into USER MODE, and run /etc/init.
 ;
 ; Every other test in this directory links a handful of kernel objects against a forged
 ; environment and drives one component.  This one links nothing: it loads the real `unix'
 ; image (built one directory up by kernel/CMakeLists.txt) with the same root3072.disk that
 ; fstest reads, and lets main() run the actual boot -- startup(), intrinit(), binit(),
-; iinit(), iget() of the root, newproc() -- and then lets process 1 leave the kernel.
+; iinit(), iget() of the root, newproc() -- and then lets process 1 leave the kernel and
+; exec the program the image carries.
 ;
-; WHAT REACHING `spin' PROVES.  It is the icode's failure loop (kernel/besm6.S), and to get
-; there process 1 has to have gone the whole way:
+; WHAT THE BANNER PROVES.  `console init' is the first thing /etc/init writes
+; (kernel/test/coninit.S), and for it to appear at all, everything below had to work:
 ;   * main() returned, so iinit() did not panic -- bread(rootdev, SUPERB) completed without
 ;     B_ERROR (else panic "iinit"), sbcheck() accepted the superblock (else panic "no root
 ;     fs"), and iget(rootdev, ROOTINO) read the root inode.  That is task 20's "done when",
@@ -17,27 +18,25 @@
 ;     the image copyout() wrote and the machine really entered user mode;
 ;   * the icode executed out of that copy, so copyout() put the words where РП says they are;
 ;   * `$77 SYS_exec' vectored to 0577, the gate framed the machine, syscall() marshalled the
-;     arguments and exec() ran namei() over a user-space `char *' -- the first system call
-;     this kernel has ever taken from real user code;
-;   * and it came back through the frame, since the icode is executing at all.
+;     arguments and exec() ran namei() over a user-space `char *' -- and this time namei()
+;     FOUND the file, getxfile() read the BESM-6 a.out and setregs() started it (task 21);
+;   * and coninit's own `$77 SYS_open' and `$77 SYS_write' reached cdevsw[0], so scopen()
+;     ran, ttyopen() took the terminal and ttwrite() put characters on the wire -- task 23's
+;     opening move.
 ;
-; ACC and r14 say WHICH way it came back.  There is no /etc/init on the image -- the userland
-; is task 24 -- so the expected outcome is the failure one: ACC = -1 (an int is 41 bits, so
-; that is 41 ones) and r14 = ENOENT (2), the errno-in-r14 convention (include/sys/reg.h;
-; there is no carry bit on this machine).  BEWARE THE REGISTER NAMES: SIMH numbers index
-; registers in OCTAL, so r14 is `M16' and r15 is `M17'.
+; THIS TEST USED TO ASSERT THE OPPOSITE.  With no /etc/init on the image the exec came back
+; with ENOENT and the icode fell into its `spin' loop, which is what the assertions checked.
+; Task 23 put an init there, so `spin' is now the FAILURE case; the breakpoint below is kept
+; purely to diagnose it, since ACC and r14 there say exactly why exec() refused the file.
 ;
-; WHEN /etc/init APPEARS (task 24) THIS TEST CHANGES MEANING: a successful exec never returns
-; to the icode, so `spin' is never reached and the breakpoint below never fires.  Rewrite it
-; then to assert on init instead; do not just raise the step count.
-;
-; `break', so the run stops the instant PC reaches the loop.  Without it the step budget would
-; expire wherever the clock happened to leave the machine -- often inside the timer interrupt,
-; a few instructions from `spin' but not at it.
+; WHAT THIS TEST DOES NOT DO IS TALK TO INIT.  It watches for the banner and stops.  The
+; typed line, the erase and kill characters, ^D and /dev/tty belong to console.ini next door.
+; Keeping them apart keeps the diagnosis apart too: a failure here says "the kernel never got
+; a user program running", a failure there says "the line discipline is wrong".
 ;
 ; `step', not `go': a hang must fail the run instead of hanging it -- `go' has no step bound.
 ;
-; `set mmu cache' is new with task 22: the boot now programs РП (estabur -> sureg) and writes
+; `set mmu cache' is needed since task 22: the boot programs РП (estabur -> sureg) and writes
 ; user memory through the map (copyout), so the БРЗ write-back is worth modelling here.
 ;
 ; WHAT THIS TEST DOES NOT CHECK: main()'s drainbrz() after the copyout.  Deleting it leaves
@@ -51,24 +50,40 @@
 ; is a build artifact, and no -n because `attach -n' CREATES AND FORMATS an empty container,
 ; on which sbcheck() would fail and the boot would panic.
 ;
-; The console is deliberately NOT attached: the kernel's printf output has no reader here -- so
-; execerr()'s `exec init: error 2' (sys1.c) goes nowhere in this run, and the assertions below
-; are on the registers instead.  `make run' (kernel/unix.ini) is where you watch a boot.  @SPIN@ is pulled from unix.nm by
-; genboot.cmake at build time -- it is a LINKED address that moves as the kernel grows, which
-; is why this file is generated rather than hardcoded.
+; THE DRUMS MUST BE ATTACHED TO EXEC ANYTHING.  They are swapdev (conf.c), and exece()
+; stages the argument list there -- getblk/bawrite on the way in, bread on the way back --
+; before it ever touches the new image.  With no drum that bread comes back B_ERROR and the
+; exec fails with EIO, which is what this test found the first time it was run with an
+; /etc/init to exec.  Here `-n' IS right: the drums are scratch and want to start empty.
+; Their names are this test's own, since ctest runs the SIMH tests in parallel and console.ini
+; needs a swap area of its own.
+;
+; THE CONSOLE IS ATTACHED NOW, and has to be -- the assertion is what init printed on it.
+; `set tty25 raw' first, so the bytes go out untranslated (see the header of kernel/dev/sc.c)
+; and `expect' sees the ASCII the kernel actually emitted.  Console output reaches the expect
+; machinery through sim_putchar -> tmxr_putc_ln -> sim_exp_check, so no logging is needed.
+;
+; @SPIN@ is pulled from unix.nm by genboot.cmake at build time -- it is a LINKED address that
+; moves as the kernel grows, which is why this file is generated rather than hardcoded.
 
 reset
 set cpu latin
 set mmu cache
+set tty25 raw
 
-load ../unix
+attach tty25 console
 attach -r md00 root3072.disk
+attach -n drum0 boot0.drum
+attach -n drum1 boot1.drum
+load ../unix
+
+expect -c "console init" echof "PASS: boot -- the kernel mounted the root, entered user mode, exec'd /etc/init and it wrote on the console"; quit
 break @SPIN@
 step 50000000
 
-if (PC != @SPIN@) echof "FAIL: boot did not reach the icode's failure loop (spin=@SPIN@). A PC in panic()'s stop loop means iinit() panicked (no root fs / iinit) -- e.g. the b_un.b_addr fat-pointer fix was reverted; a PC in the kernel means process 1 never left it, and if the step count ran out it hung, in idle() if the exec slept and never woke. Look the PC up in unix.nm. PC:"; ex PC; exit 1
-if (ACC != 037777777777777) echof "FAIL: boot reached the icode, but exec did not report failure in ACC (expected -1, i.e. 41 ones). ACC:"; ex ACC; exit 1
-if (M16 != 2) echof "FAIL: boot reached the icode, but r14 (SIMH M16) is not ENOENT -- exec failed somewhere other than namei(). r14:"; ex M16; exit 1
-
-echof "PASS: boot -- the kernel mounted the root, entered user mode at the icode, took $77 exec from user code, and reported ENOENT for the missing /etc/init"
-quit
+; Only reached when the expect never fired.  BEWARE THE REGISTER NAMES: SIMH numbers index
+; registers in OCTAL, so r14 is `M16' and r15 is `M17'.
+if (PC == @SPIN@) echof "FAIL: exec of /etc/init failed, and the icode fell into its spin loop. r14 (SIMH M16) is the errno: 2 ENOENT means the image carries no /etc/init (is coninit staged? see root.manifest), 8 ENOEXEC means getxfile() rejected the a.out header, 13 EACCES means the mode is not executable. ACC and r14:"; ex ACC; ex M16; exit 1
+echof "FAIL: the boot never printed init's banner. A PC in panic()'s stop loop means iinit() panicked (no root fs / iinit) -- e.g. the b_un.b_addr fat-pointer fix was reverted; a PC in the kernel means process 1 never left it, and if the step count ran out it hung, in idle() if something slept and never woke. Look the PC up in unix.nm. PC:"
+ex PC
+exit 1

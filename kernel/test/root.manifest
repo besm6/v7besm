@@ -2,10 +2,15 @@
 # which `-S' then converts into the SIMH container test/CMakeLists.txt attaches as md00.
 # Grammar: cmd/fsutil/README.md.
 #
-# Today this is the tree and the device nodes and nothing else: there is no userland to
-# stage yet, so no entry carries a `source' line.  Task 24 fills /bin, /etc and the shell
-# in, and task 20 is what first boots a kernel against this image; until then the only
-# reader is kernel/test/fstest, which checks the superblock and the root inode.
+# The tree, the device nodes, and one program: /etc/init, which is kernel/test/coninit.S
+# (task 23) and is what makes the console a controlling terminal by opening it.  Its
+# `source' is a bare filename, resolved against b6fsutil's working directory, which is the
+# test BUILD directory where coninit is linked -- see kernel/test/CMakeLists.txt.  Task 24
+# fills /bin and the shell in and replaces this init with a real one.
+#
+# Two tests read this image: kernel/test/fstest, which checks the superblock and the root
+# inode below the boot path, and kernel/test/boot + kernel/test/console, which boot a
+# kernel against it.
 #
 # THE DEVICE NUMBERS ARE kernel/conf.c's, and that file is the authority: the major is the
 # row index in bdevsw[] (0 md, 1 mb) or cdevsw[] (0 console, 1 mem, 2 tty, 3 sr, 4 rmd,
@@ -29,6 +34,12 @@ dir /usr
 
 dir /tmp
 mode 0777
+
+# ---- the program the icode execs ------------------------------------------------
+
+file /etc/init          # kernel/test/coninit.S -- the task-23 console program
+source coninit
+mode 0755
 
 # ---- character devices ----------------------------------------------------------
 

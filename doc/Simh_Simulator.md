@@ -698,8 +698,22 @@ the machine from the front panel and by scripting the operator console:
   bring the printer online, wait for printing to finish).
 * Results are written to `output.txt`.
 
-`expect` supports `-r` (regex), `-p` (persistent — stays armed after firing), and `-c` (exact
-substring); `send after=N "..."` injects characters after N simulated cycles.
+A bare `expect "text"` matches the quoted byte string **exactly**; `-r` asks for a regular
+expression instead. `-p` makes the rule persistent (it stays armed after firing), and `-c`
+means **clear all other rules** once this one matches — not "compare literally", which is
+what the wording here used to say. Without `-p` a rule is removed as soon as it fires, so a
+sequence of rules armed together fires once each, in whatever order the output produces them.
+
+A match **halts the simulator** and then runs the rule's action, which is an ordinary
+command list — so an action typically ends with its own `go` or `step` to set the machine
+going again. `send "..."` injects keystrokes (C-style escapes: `\r`, `\004`, `\x04`);
+`send after=N "..."` waits N simulated cycles first, and `delay=N` spaces the characters out.
+
+Injected input arrives through `sim_poll_kbd()`, which serves it **before** it looks at the
+real keyboard — so a scripted dialogue works with no terminal on stdin, which is what lets
+`kernel/test/console.ini` run under ctest. Console output reaches the matcher through
+`sim_putchar` → `tmxr_putc_ln` → `sim_exp_check`, so nothing has to be logged for `expect`
+to see it.
 
 ### Regression tests
 

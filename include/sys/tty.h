@@ -2,18 +2,28 @@
 
 // A clist structure is the head
 // of a linked list queue of characters.
-// The characters are stored in 4-word
-// blocks containing a link and several characters.
+// The characters are stored in blocks containing a link word and CBSIZE chars.
 // The routines getc and putc
 // manipulate these structures.
 
 #ifndef _SYS_TTY_H
 #define _SYS_TTY_H
 
+// The block itself is private to kernel/prim.c: nothing else has any business
+// knowing how the characters are laid out inside one.
+struct cblock;
+
+// v7 carried two `char *' cursors here and found the enclosing block, and the
+// block boundary, by masking their byte addresses.  That cannot be done on this
+// machine -- a `char *' is a fat pointer whose byte offset lives in bits 47-45,
+// not in the low bits of an address -- so the cursors are a block pointer plus an
+// index into it.  See the header of kernel/prim.c.
 struct clist {
-    int c_cc;   // character count
-    char *c_cf; // pointer to first char
-    char *c_cl; // pointer to last char
+    int c_cc;            // character count
+    struct cblock *c_hd; // block holding the next char out; NULL when empty
+    struct cblock *c_tl; // block holding the next free slot; NULL when empty
+    int c_hix;           // index in c_hd of the next char out
+    int c_tix;           // index in c_tl of the next free slot
 };
 
 // A tty structure is needed for
@@ -180,7 +190,6 @@ void nulltioctl(int, struct tty *, caddr_t);
 int q_to_b(struct clist *q, char *cp, int cc);
 int b_to_q(char *cp, int cc, struct clist *q);
 int getc(struct clist *p);
-int putw(int c, struct clist *p);
 int putc(int c, struct clist *p);
 #endif
 

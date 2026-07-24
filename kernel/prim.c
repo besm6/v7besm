@@ -1,12 +1,47 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
+// Character lists -- the queues the tty layer holds typed and printing characters in.
+//
+// A clist is a linked chain of blocks drawn from one shared pool, `cfree[NCLIST]'.  The
+// head names the block and the slot the next character comes OUT of, the tail the block
+// and the slot the next one goes IN to; a block is returned to `cfreelist' the moment its
+// last character leaves.  That much is v7's design and is unchanged.
+//
+// WHAT IS NOT V7 IS HOW A CURSOR IS SPELLED, and it had to change.  v7 kept two `char *'
+// cursors, `c_cf' and `c_cl', and derived everything else from their integer values:
+//
+//      bp = (struct cblock *)((int)bp & ~CROUND);   // which block is this cursor in?
+//      if (((int)p->c_cf & CROUND) == 0)            // did it just leave that block?
+//
+// Both work on a byte-addressed machine where a cblock is power-of-two sized and
+// aligned, so the low bits of a character's address ARE its offset within the block.
+// Here they are neither correct nor nearly correct.  A `char *' on the BESM-6 is a FAT
+// POINTER -- marker in bit 48, byte offset in bits 47-45, word address in bits 15-1
+// (doc/Besm6_Data_Representation.md, "Fat pointer") -- so `(int)cp & 037' masks five
+// bits of the WORD address and says nothing whatever about which of the word's six
+// characters the cursor names.  The boundary test would fire once every 32 words rather
+// than once per block, and the block-base recovery would hand the free list a pointer
+// into the middle of some other block.  Walking a cursor (`c_cf++') was always fine --
+// that is the compiler's own b$pinc -- it is only arithmetic ON the pointer value that
+// cannot survive.
+//
+// So a cursor here is a block pointer plus an int index (sys/tty.h), the boundary test is
+// `ix == CBSIZE', and CROUND is gone from sys/param.h.  Same trap as the b_un.b_addr fat
+// pointer fstest found: a fat pointer stored where a word address is read back is silent,
+// never fatal, so prefer the spelling that makes the bad one impossible.
+//
+// ndqb()/ndflush() -- v7's "how many characters lie contiguously from here" pair -- are
+// gone with the pointer arithmetic that was their only reason to exist.  They serve a
+// driver that hands a run of a block straight to DMA hardware; the Consul takes one
+// character per `ext' (kernel/dev/sc.c) and nothing in this kernel called them.  getw()/
+// putw() on a clist went the same way: unused, and the names are stdio's.
+
 // clang-format off
 #include "sys/types.h"
 #include "sys/param.h"
 #include "sys/tty.h"
 #include "sys/systm.h"
 #include "sys/conf.h"
-#include "sys/buf.h"
 // clang-format on
 
 struct cblock {
@@ -16,10 +51,9 @@ struct cblock {
 
 struct cblock cfree[NCLIST];
 struct cblock *cfreelist;
-int cbad;
 int nchrdev;
 
-// Character list get/put
+// Take one character off the front of a clist.  -1 if it is empty.
 int getc(register struct clist *p)
 {
     register struct cblock *bp;
@@ -27,273 +61,103 @@ int getc(register struct clist *p)
 
     s = spl6();
     if (p->c_cc <= 0) {
-        c       = -1;
         p->c_cc = 0;
-        p->c_cf = p->c_cl = NULL;
-    } else {
-        c = *p->c_cf++ & 0377;
-        if (--p->c_cc <= 0) {
-            bp         = (struct cblock *)(p->c_cf - 1);
-            bp         = (struct cblock *)((int)bp & ~CROUND);
-            p->c_cf    = NULL;
-            p->c_cl    = NULL;
-            bp->c_next = cfreelist;
-            cfreelist  = bp;
-        } else if (((int)p->c_cf & CROUND) == 0) {
-            bp = (struct cblock *)(p->c_cf);
-            bp--;
-            p->c_cf    = bp->c_next->c_info;
-            bp->c_next = cfreelist;
-            cfreelist  = bp;
-        }
+        p->c_hd = p->c_tl = NULL;
+        splx(s);
+        return (-1);
+    }
+    bp = p->c_hd;
+    c  = bp->c_info[p->c_hix++] & 0377;
+    if (--p->c_cc == 0) {
+        // The queue just emptied: the head block is also the tail, and both
+        // cursors start again from nothing.
+        p->c_hd = p->c_tl = NULL;
+        bp->c_next        = cfreelist;
+        cfreelist         = bp;
+    } else if (p->c_hix == CBSIZE) {
+        // The head block is spent but characters remain, so the chain has a
+        // next block -- putc() never advances the tail without linking one.
+        p->c_hd    = bp->c_next;
+        p->c_hix   = 0;
+        bp->c_next = cfreelist;
+        cfreelist  = bp;
     }
     splx(s);
     return (c);
 }
 
-// copy clist to buffer.
-// return number of bytes moved.
-int q_to_b(register struct clist *q, register char *cp, int cc)
-{
-    register struct cblock *bp;
-    register int s;
-    char *acp;
-
-    if (cc <= 0)
-        return (0);
-    s = spl6();
-    if (q->c_cc <= 0) {
-        q->c_cc = 0;
-        q->c_cf = q->c_cl = NULL;
-        return (0);
-    }
-    acp = cp;
-    cc++;
-
-    while (--cc) {
-        *cp++ = *q->c_cf++;
-        if (--q->c_cc <= 0) {
-            bp      = (struct cblock *)(q->c_cf - 1);
-            bp      = (struct cblock *)((int)bp & ~CROUND);
-            q->c_cf = q->c_cl = NULL;
-            bp->c_next        = cfreelist;
-            cfreelist         = bp;
-            break;
-        }
-        if (((int)q->c_cf & CROUND) == 0) {
-            bp = (struct cblock *)(q->c_cf);
-            bp--;
-            q->c_cf    = bp->c_next->c_info;
-            bp->c_next = cfreelist;
-            cfreelist  = bp;
-        }
-    }
-    splx(s);
-    return (cp - acp);
-}
-
-// Return count of contiguous characters
-// in clist starting at q->c_cf.
-// Stop counting if flag&character is non-null.
-int ndqb(register struct clist *q, int flag)
-{
-    register int cc;
-    int s;
-
-    s = spl6();
-    if (q->c_cc <= 0) {
-        cc = -q->c_cc;
-        goto out;
-    }
-    cc = ((int)q->c_cf + CBSIZE) & ~CROUND;
-    cc -= (int)q->c_cf;
-    if (q->c_cc < cc)
-        cc = q->c_cc;
-    if (flag) {
-        register char *p, *end;
-
-        p   = q->c_cf;
-        end = p;
-        end += cc;
-        while (p < end) {
-            if (*p & flag) {
-                cc = (int)p;
-                cc -= (int)q->c_cf;
-                break;
-            }
-            p++;
-        }
-    }
-out:
-    splx(s);
-    return (cc);
-}
-
-// Update clist to show that cc characters
-// were removed.  It is assumed that cc < CBSIZE.
-void ndflush(register struct clist *q, register int cc)
-{
-    register int s;
-
-    s = spl6();
-    if (q->c_cc < 0) {
-        if (q->c_cf != NULL) {
-            q->c_cc += cc;
-            q->c_cf += cc;
-            goto out;
-        }
-        q->c_cc = 0;
-        goto out;
-    }
-    if (q->c_cc == 0) {
-        goto out;
-    }
-    if (cc > CBSIZE || cc <= 0) {
-        cbad++;
-        goto out;
-    }
-    q->c_cc -= cc;
-    q->c_cf += cc;
-    if (((int)q->c_cf & CROUND) == 0) {
-        register struct cblock *bp;
-
-        bp = (struct cblock *)(q->c_cf) - 1;
-        if (bp->c_next) {
-            q->c_cf = bp->c_next->c_info;
-        } else {
-            q->c_cf = q->c_cl = NULL;
-        }
-        bp->c_next = cfreelist;
-        cfreelist  = bp;
-    } else if (q->c_cc == 0) {
-        register struct cblock *bp;
-        q->c_cf    = (char *)((int)q->c_cf & ~CROUND);
-        bp         = (struct cblock *)(q->c_cf);
-        bp->c_next = cfreelist;
-        cfreelist  = bp;
-        q->c_cf = q->c_cl = NULL;
-    }
-out:
-    splx(s);
-}
-
+// Put one character on the end of a clist.  -1 if the block pool is exhausted,
+// which is the caller's cue to drop the character (ttyinput) or to sleep (ttwrite).
 int putc(int c, register struct clist *p)
 {
     register struct cblock *bp;
-    register char *cp;
     register int s;
 
     s = spl6();
-    if ((cp = p->c_cl) == NULL || p->c_cc < 0) {
+    if (p->c_tl == NULL || p->c_tix == CBSIZE) {
         if ((bp = cfreelist) == NULL) {
             splx(s);
             return (-1);
         }
         cfreelist  = bp->c_next;
         bp->c_next = NULL;
-        p->c_cf = cp = bp->c_info;
-    } else if (((int)cp & CROUND) == 0) {
-        bp = (struct cblock *)cp - 1;
-        if ((bp->c_next = cfreelist) == NULL) {
-            splx(s);
-            return (-1);
+        if (p->c_tl == NULL) {
+            p->c_hd  = bp;
+            p->c_hix = 0;
+            p->c_cc  = 0;
+        } else {
+            p->c_tl->c_next = bp;
         }
-        bp         = bp->c_next;
-        cfreelist  = bp->c_next;
-        bp->c_next = NULL;
-        cp         = bp->c_info;
+        p->c_tl  = bp;
+        p->c_tix = 0;
     }
-    *cp++ = c;
+    p->c_tl->c_info[p->c_tix++] = c;
     p->c_cc++;
-    p->c_cl = cp;
     splx(s);
     return (0);
 }
 
-// copy buffer to clist.
-// return number of bytes not transfered.
+// Copy a clist into a buffer; return the number of characters moved.
+int q_to_b(register struct clist *q, register char *cp, register int cc)
+{
+    register int c, n;
+
+    for (n = 0; n < cc; n++) {
+        if ((c = getc(q)) < 0)
+            break;
+        *cp++ = c;
+    }
+    return (n);
+}
+
+// Copy a buffer into a clist; return the number of characters NOT transferred,
+// which is nonzero only when the block pool ran dry.
 int b_to_q(register char *cp, register int cc, struct clist *q)
 {
-    register char *cq;
-    register struct cblock *bp;
-    register int s, acc;
-
     if (cc <= 0)
         return (0);
-    acc = cc;
-
-    s = spl6();
-    if ((cq = q->c_cl) == NULL || q->c_cc < 0) {
-        if ((bp = cfreelist) == NULL)
-            goto out;
-        cfreelist  = bp->c_next;
-        bp->c_next = NULL;
-        q->c_cf = cq = bp->c_info;
-    }
-
-    while (cc) {
-        if (((int)cq & CROUND) == 0) {
-            bp = (struct cblock *)cq - 1;
-            if ((bp->c_next = cfreelist) == NULL)
-                goto out;
-            bp         = bp->c_next;
-            cfreelist  = bp->c_next;
-            bp->c_next = NULL;
-            cq         = bp->c_info;
-        }
-        *cq++ = *cp++;
+    while (cc > 0) {
+        if (putc(*cp++, q) < 0)
+            break;
         cc--;
     }
-out:
-    q->c_cl = cq;
-    q->c_cc += acc - cc;
-    splx(s);
     return (cc);
 }
 
-// Initialize clist by freeing all character blocks, then count
-// number of character devices. (Once-only routine)
+// Initialize clists by freeing all character blocks, then count the character
+// devices. (Once-only routine)
 void cinit()
 {
-    register int ccp;
     register struct cblock *cp;
     register struct cdevsw *cdp;
+    register int n;
 
-    ccp = (int)cfree;
-    ccp = (ccp + CROUND) & ~CROUND;
-    for (cp = (struct cblock *)ccp; cp <= &cfree[NCLIST - 1]; cp++) {
+    for (cp = cfree; cp < &cfree[NCLIST]; cp++) {
         cp->c_next = cfreelist;
         cfreelist  = cp;
     }
-    ccp = 0;
+    n = 0;
     for (cdp = cdevsw; cdp->d_open; cdp++)
-        ccp++;
-    nchrdev = ccp;
-}
-
-// integer (2-byte) get/put
-// using clists
-int getw(register struct clist *p)
-{
-    register int s;
-
-    if (p->c_cc <= 1)
-        return (-1);
-    s = getc(p);
-    return (s | (getc(p) << 8));
-}
-
-int putw(int c, register struct clist *p)
-{
-    register int s;
-
-    s = spl6();
-    if (cfreelist == NULL) {
-        splx(s);
-        return (-1);
-    }
-    putc(c, p);
-    putc(c >> 8, p);
-    splx(s);
-    return (0);
+        n++;
+    nchrdev = n;
 }

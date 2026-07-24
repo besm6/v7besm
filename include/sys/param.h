@@ -165,9 +165,15 @@
 #define DIRPB    128  // directory entries per block: BSIZEW / DIRWORDS
 #define DIRSHIFT 7    // LOG2(DIRPB)
 #define DIRMASK  0177 // DIRPB-1
-#define INFSIZE  138  // size of per-proc info for users
-#define CBSIZE   28   // number of chars in a clist block
-#define CROUND   037  // clist rounding: sizeof(int *) + CBSIZE - 1
+#define INFSIZE  138 // size of per-proc info for users
+// Chars in a clist block: 30 is five words exactly, chars packing six to a word, so a
+// `struct cblock' is the link word plus five and nothing is wasted.  v7's companion
+// CROUND is GONE -- it existed so that a clist cursor could find its own block, and its
+// enclosing block's base, by masking the low bits of a BYTE address.  A `char *' here is
+// a fat pointer (marker in bit 48, byte offset in bits 47-45), so a mask of its integer
+// value names bits of the WORD address and says nothing about the byte within it.
+// kernel/prim.c keeps indices instead; the header there is the full account.
+#define CBSIZE   30
 
 // Some macros for units conversion
 // Note the absence of `unsigned' below.  On this machine an unsigned add,

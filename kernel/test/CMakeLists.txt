@@ -95,7 +95,28 @@ b6_test(mdtest   crt0 mdtest md intr)
 b6_test(fstest   crt0 fstest bio md alloc intr utab brz)
 
 # ---------------------------------------------------------------------------------------
-# The root filesystem image fstest reads (task 19).
+# coninit -- the /etc/init the root image carries (task 23).
+# ---------------------------------------------------------------------------------------
+#
+# Unlike everything above, this is a USER-MODE program: it runs under the booted kernel,
+# reached through the icode's `$77 SYS_exec', and is what turns the console into a
+# controlling terminal by asking for one.  So it gets neither b6_test (which would
+# register a .ini test of its own and link -lruntime) nor a crt0: the test crt0s here are
+# supervisor-mode scaffolding and libc is task 25's business.  Its own object is the whole
+# program, which is why `_start' must be its first text word -- b6ld takes a_entry from
+# the start of text unless told otherwise (cmd/ld/output.c).
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/coninit.dir)
+b6_test_obj(_coninit_o coninit coninit)
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/coninit
+    COMMAND ${B6LD} ${_coninit_o} -o coninit
+    COMMAND sh -c "${B6DISASM} -c coninit > coninit.dis"
+    COMMAND sh -c "${B6NM} -n coninit > coninit.nm"
+    DEPENDS ${_coninit_o}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "b6ld coninit" VERBATIM)
+
+# ---------------------------------------------------------------------------------------
+# The root filesystem image fstest reads (task 19) and the kernel boots (tasks 20, 23).
 # ---------------------------------------------------------------------------------------
 #
 # b6fsutil (cmd/fsutil/) builds a v7 filesystem in the FLAT container -- blocks of 512
@@ -128,6 +149,7 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/root.img
     COMMAND ${B6FSUTIL} -n -s 2000 -T ${ROOTTIME}
             -M ${CMAKE_CURRENT_SOURCE_DIR}/root.manifest root.img
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/root.manifest
+            ${CMAKE_CURRENT_BINARY_DIR}/coninit
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "b6fsutil root.img" VERBATIM)
 
@@ -149,20 +171,26 @@ add_test(NAME rootimg_check COMMAND ${B6FSUTIL} -c root.img
 set_tests_properties(rootimg_check PROPERTIES LABELS kernel)
 
 # ---------------------------------------------------------------------------------------
-# boot -- the whole kernel booting with the root image attached (task 20).
+# boot and console -- the whole kernel booting with the root image attached (tasks 20, 23).
 # ---------------------------------------------------------------------------------------
 #
-# Links nothing of its own: it loads the real `unix' image built one directory up by
-# kernel/CMakeLists.txt, attaches the same root3072.disk fstest reads, and asserts that process 1
-# leaves the kernel and parks in the icode's failure loop (`spin') with ENOENT for the missing
-# /etc/init -- rather than panicking (no root fs), stopping anywhere in the kernel or hanging.
-# Still the regression guard for the b_un.b_addr fat-pointer fix, and now for the whole path into
-# user mode.  See boot.ini.in for the full story, including what it does NOT check.
+# Neither links anything of its own: both load the real `unix' image built one directory up by
+# kernel/CMakeLists.txt and attach the same root3072.disk fstest reads.  `boot' asserts that
+# process 1 leaves the kernel, execs the /etc/init the image carries, and that init's banner
+# reaches the console -- rather than panicking (no root fs), falling into the icode's failure
+# loop, stopping anywhere in the kernel or hanging.  It is still the regression guard for the
+# b_un.b_addr fat-pointer fix and for the whole path into user mode.
+#
+# `console' goes on from there and holds a conversation with init: it types a line, checks the
+# echo and the erase/kill/^D processing, and waits for the sign-off init writes through
+# /dev/tty.  Split from `boot' so that a failure says WHICH half broke.  See both .ini files
+# for the full story, including what they do NOT check.
 #
 # `spin' is a LINKED address that moves as the kernel grows, so boot.ini is
-# GENERATED from unix.nm at build time (genboot.cmake) rather than hardcoded.  The generation
-# depends on the `kernel' target so the image and its .nm exist first, and the `boot' test
-# needs root3072.disk (rootimg) in its cwd -- both are pulled in below.
+# GENERATED from unix.nm at build time (genboot.cmake) rather than hardcoded.  console.ini
+# names no kernel address and is used from the source directory as it stands.  The generation
+# depends on the `kernel' target so the image and its .nm exist first, and both tests need
+# root3072.disk (rootimg) in their cwd -- all pulled in below.
 if(BESM6)
     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/boot.ini
         COMMAND ${CMAKE_COMMAND} -DNM=${CMAKE_CURRENT_BINARY_DIR}/../unix.nm
@@ -180,6 +208,14 @@ if(BESM6)
     add_test(NAME boot COMMAND ${BESM6} ${CMAKE_CURRENT_BINARY_DIR}/boot.ini
              WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(boot PROPERTIES LABELS kernel)
+
+    # console.ini restarts the machine from inside each `expect' action, so its run is bounded
+    # by wall clock rather than by one step budget: a TIMEOUT is what turns a wedged dialogue
+    # into a failure.  It needs the kernel image and the disk just as `boot' does, which the
+    # bootini target above already pulls in.
+    add_test(NAME console COMMAND ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}/console.ini
+             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(console PROPERTIES LABELS kernel TIMEOUT 300)
 endif()
 
 # `make test' truncates mdshort3076.disk to nothing before running mdtest: run 4 attaches
