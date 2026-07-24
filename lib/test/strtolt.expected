@@ -1,0 +1,57 @@
+ok   strtol("1234", 10) = 1234 end +4 errno 0
+ok   strtol("-1234", 10) = -1234 end +5 errno 0
+ok   strtol("+12", 10) = 12 end +3 errno 0
+ok   strtol("   42abc", 10) = 42 end +5 errno 0
+ok   strtol("abc", 10) = 0 end +0 errno 0
+ok   strtol("", 10) = 0 end +0 errno 0
+ok   strtol("   ", 10) = 0 end +0 errno 0
+ok   strtol("-", 10) = 0 end +0 errno 0
+ok   strtol("0", 10) = 0 end +1 errno 0
+ok   strtol("777", 8) = 511 end +3 errno 0
+ok   strtol("0777", 8) = 511 end +4 errno 0
+ok   strtol("ff", 16) = 255 end +2 errno 0
+ok   strtol("FF", 16) = 255 end +2 errno 0
+ok   strtol("0xff", 16) = 255 end +4 errno 0
+ok   strtol("0XfF", 16) = 255 end +4 errno 0
+ok   strtol("1011", 2) = 11 end +4 errno 0
+ok   strtol("z", 36) = 35 end +1 errno 0
+ok   strtol("Zz", 36) = 1295 end +2 errno 0
+ok   strtol("129", 9) = 11 end +2 errno 0
+ok   strtol("0", 0) = 0 end +1 errno 0
+ok   strtol("077", 0) = 63 end +3 errno 0
+ok   strtol("09", 0) = 0 end +1 errno 0
+ok   strtol("0x1f", 0) = 31 end +4 errno 0
+ok   strtol("18", 0) = 18 end +2 errno 0
+ok   strtol("-0x10", 0) = -16 end +5 errno 0
+ok   strtol(" -0X1f", 0) = -31 end +6 errno 0
+ok   strtol("0x", 16) = 0 end +1 errno 0
+ok   strtol("0x", 0) = 0 end +1 errno 0
+ok   strtol("0xg", 0) = 0 end +1 errno 0
+ok   strtol("1099511627775", 10) = 1099511627775 end +13 errno 0
+ok   strtol("1099511627776", 10) = 1099511627775 end +13 errno 34
+ok   strtol("-1099511627776", 10) = LONG_MIN end +14 errno 0
+ok   strtol("-1099511627777", 10) = LONG_MIN end +14 errno 34
+ok   strtol("999999999999999999", 10) = 1099511627775 end +18 errno 34
+ok   strtol("0xffffffffff", 0) = 1099511627775 end +12 errno 0
+ok   strtol("0x10000000000", 0) = 1099511627775 end +13 errno 34
+ok   strtol("10", 1) = 0 end +0 errno 22
+ok   strtol("10", 37) = 0 end +0 errno 22
+ok   strtol("10", -5) = 0 end +0 errno 22
+ok   strtoul("0", 10) = 0 end +1 errno 0
+ok   strtoul("42", 10) = 42 end +2 errno 0
+ok   strtoul("4294967296", 10) = 4294967296 end +10 errno 0
+ok   strtoul("281474976710655", 10) = 281474976710655 end +15 errno 0
+ok   strtoul("281474976710656", 10) = 281474976710655 end +15 errno 34
+ok   strtoul("-1", 10) = 281474976710655 end +2 errno 0
+ok   strtoul("-2", 10) = 281474976710654 end +2 errno 0
+ok   strtoul("0xffffffffffff", 0) = 281474976710655 end +14 errno 0
+ok   strtoul("0x1000000000000", 0) = 281474976710655 end +15 errno 34
+ok   strtoul("0777", 0) = 511 end +4 errno 0
+ok   strtoul("zz", 36) = 1295 end +2 errno 0
+ok   strtoul("10", 1) = 0 end +0 errno 22
+ok   every white-space character is skipped
+ok   a null endptr is accepted
+ok   a null endptr is accepted by strtoul
+ok   strtol agrees with atoi
+ok   errno is left alone on success
+0 errors

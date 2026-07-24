@@ -120,6 +120,12 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
 - **`exit` reaches `_cleanup()` through a pointer**, armed by `_flsbuf` on the first buffered
   write, never by name: `crt0` tail-jumps to `exit`, so naming `_cleanup` outright would pull
   the whole of stdio into every program that never prints.
+- **A signed value cast to unsigned is not widened.** An integer is a 41-bit two's complement
+  field with bits 48–42 zero, and the front end reinterprets rather than sign-extends:
+  `(unsigned long)(-1L)` is 2^41−1, *not* `ULONG_MAX`. So the BSD idiom of carrying a signed
+  limit through an `unsigned long` — `-(unsigned long)LONG_MIN`, or `acc = LONG_MIN` on an
+  unsigned accumulator — reads wrong here. `gen/strtol.c` keeps every cast value-preserving
+  instead, and builds the negative end out of `(unsigned long)LONG_MAX + 1`.
 - **The terminal is ASCII**, not KOI7, so the v7 `ctype` tables carry over unchanged. The user
   address space is 32 pages with the stack based at `070000`, so text + data + bss must fit
   below it (`b6size -w`).
@@ -136,8 +142,9 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
 `b6sim` is the harness until a root filesystem exists: it runs one user `a.out` and services the
 v7 syscalls on the host, which is exactly what libc needs and is far faster than booting SIMH.
 [`test/`](test/) holds one program per area — `hello`, `vararg`, `errno`, `procs`, `sbrkt`,
-`malloct`, `strings`, `gen`, `environ`, `jmp`, `headers`, `stdiot`, `printft`, `scanft`,
-`execs`, `spawn`, `timet`, `pwent`, `signals`, `matht`. Each is linked against the real `crt0.o`
+`malloct`, `strings`, `gen`, `strtolt`, `environ`, `jmp`, `headers`, `stdiot`, `printft`,
+`scanft`, `execs`, `spawn`, `timet`, `pwent`, `signals`, `matht`. Each is linked against the
+real `crt0.o`
 and `libc.a`, run with the arguments in its `.args` file, and its output — fd 1 and fd 2 both —
 diffed against its `.expected` file by [`test/run-test.sh`](test/run-test.sh).
 

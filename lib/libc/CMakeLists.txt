@@ -67,7 +67,7 @@ set(LIBC_OBJ
     # GEN
     strcat strcmp strcpy strlen strncat strncmp strncpy strchr strrchr strstr strtok
     memcpy memmove memset memcmp memchr
-    abs atoi atol index rindex swab qsort rand
+    abs atoi atol strtol strtoul index rindex swab qsort rand
     getenv mktemp isatty sleep perror errlst ctype_ abort raise
     setjmp assert toupper tolower isblank
     malloc calloc aligned_alloc cuexit

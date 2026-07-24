@@ -38,6 +38,14 @@ _Noreturn void exit(int status);
 _Noreturn void abort(void);
 int atoi(const char *nptr);
 long atol(const char *nptr);
+
+// The full conversions atoi/atol are the short form of: base 0 or 2..36, the
+// unconverted tail through endptr, and ERANGE on overflow.  `long' is one 41-bit
+// word and `unsigned long' the whole 48, so the two limits are far apart and
+// LONG_MIN is one past -LONG_MAX; strtol answers for both ends.  An out-of-range
+// base is EINVAL, which C11 leaves undefined and POSIX permits.
+long strtol(const char *nptr, char **endptr, int base);
+unsigned long strtoul(const char *nptr, char **endptr, int base);
 int abs(int j);
 int rand(void);
 void srand(unsigned seed);
@@ -67,8 +75,6 @@ int atexit(void (*func)(void));
 _Noreturn void quick_exit(int status);
 int at_quick_exit(void (*func)(void));
 
-long strtol(const char *nptr, char **endptr, int base);
-unsigned long strtoul(const char *nptr, char **endptr, int base);
 double strtod(const char *nptr, char **endptr);
 
 long labs(long j);
