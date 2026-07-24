@@ -149,7 +149,10 @@ Verified against the real simulator: `format()` matches `attach -n` byte for byt
 a populated image survives a flat → SIMH → flat round trip unchanged, and SIMH
 attaches the result at the correct geometry.
 
-**Not yet verified: an actual kernel mount.** `kernel/TODO.md` records that
-`sbcheck()` has never executed — booting with a root disk attached hangs before
-`iinit()` for reasons that predate this tool. The kernel-model test exists
-precisely so this work could be finished and checked without waiting on that.
+**Read by the kernel.** `kernel/test/fstest` builds an image from
+`kernel/test/root.manifest`, `-S`-converts it, and reads its superblock and root
+inode back through the kernel's *own* `bread()`, buffer cache and `sbcheck()`
+(`kernel/alloc.c`) under SIMH — the first time `sbcheck()` has executed, and the
+close of the loop the kernel-model test (`test/kernel_model_test.cpp`) stood in
+for. A full boot mount still hangs (`kernel/TODO.md` task 20), but the driver and
+the superblock check are now known good in isolation, strictly below that path.

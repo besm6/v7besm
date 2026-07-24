@@ -1,0 +1,80 @@
+# The root filesystem the kernel mounts -- what `b6fsutil -n -M' builds into root.img,
+# which `-S' then converts into the SIMH container test/CMakeLists.txt attaches as md00.
+# Grammar: cmd/fsutil/README.md.
+#
+# Today this is the tree and the device nodes and nothing else: there is no userland to
+# stage yet, so no entry carries a `source' line.  Task 24 fills /bin, /etc and the shell
+# in, and task 20 is what first boots a kernel against this image; until then the only
+# reader is kernel/test/fstest, which checks the superblock and the root inode.
+#
+# THE DEVICE NUMBERS ARE kernel/conf.c's, and that file is the authority: the major is the
+# row index in bdevsw[] (0 md, 1 mb) or cdevsw[] (0 console, 1 mem, 2 tty, 3 sr, 4 rmd,
+# 5 rmb).  A node here that names a row conf.c does not have opens onto nothing.
+#
+# For the disk, the MINOR IS THE SIMULATOR'S UNIT SUBSCRIPT -- bit 5 the controller, bits
+# 4-3 the group (линейка), bits 2-0 the drive -- so /dev/md0's minor 0 is SIMH's md00, and
+# a minor number and an `attach' line are the same number.  There are no partitions: one
+# EC-5052 drive is 2000 blocks and swap lives on the drums (/dev/swap, block major 1).
+
+default
+owner 0
+group 0
+dirmode 0755
+filemode 0644
+
+dir /bin
+dir /dev
+dir /etc
+dir /usr
+
+dir /tmp
+mode 0777
+
+# ---- character devices ----------------------------------------------------------
+
+cdev /dev/console       # cdevsw[0]: the operator's console, dev/sc.c
+major 0
+minor 0
+mode 0622
+
+cdev /dev/mem           # cdevsw[1] minor 0: physical memory, dev/mem.c
+major 1
+minor 0
+mode 0640
+
+cdev /dev/kmem          # cdevsw[1] minor 1: kernel virtual memory
+major 1
+minor 1
+mode 0640
+
+cdev /dev/null          # cdevsw[1] minor 2: the bit bucket
+major 1
+minor 2
+mode 0666
+
+cdev /dev/tty           # cdevsw[2]: the controlling terminal, dev/sys.c
+major 2
+minor 0
+mode 0666
+
+cdev /dev/rmd0          # cdevsw[4]: the raw disk, dev/md.c
+major 4
+minor 0
+mode 0600
+
+cdev /dev/rmb0          # cdevsw[5]: the raw drum, dev/mb.c
+major 5
+minor 0
+mode 0600
+
+# ---- block devices --------------------------------------------------------------
+
+bdev /dev/md0           # bdevsw[0]: the root disk -- rootdev = makedev(0, 0)
+major 0
+minor 0
+mode 0600
+
+bdev /dev/swap          # bdevsw[1]: the drums -- swapdev = makedev(1, 0)
+major 1
+minor 0
+mode 0600

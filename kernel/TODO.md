@@ -7,11 +7,15 @@ console, drum and disk drivers are written and their failure modes classified. T
 is settled and `b6fsutil` (`cmd/fsutil/`) builds root filesystem images in it.
 
 What remains is everything above that line: mounting a root, loading a BESM-6 executable, getting
-into user mode, and putting a shell there. That is tasks **19–25** below, in order. Tasks 26–29
+into user mode, and putting a shell there. That is tasks **20–25** below, in order. Tasks 26–29
 are what is left after the prompt appears.
 
 Where the port stands: `cd kernel && make` links an image that boots under SIMH and reaches
 `panic: iinit`. With a root disk attached it does not panic — it **hangs**, which is task 20.
+The harness that hang is diagnosed against already exists: the build produces a root image
+(`kernel/test/root.manifest` → `root2048.disk`) and `kernel/test/fstest` reads its superblock and
+root inode through the real `md` driver, the real buffer cache and the real `sbcheck()` — a
+known-good reference point strictly below the boot path.
 
 Read [../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) before touching memory management,
 [../doc/Intrinsics.md](../doc/Intrinsics.md) for how C reaches `002 «рег»` and `033 «увв»`,
@@ -160,44 +164,40 @@ Run every MMU test with **`set mmu cache`**.
 (`brz.s`, `uarea.S`, `seg.S`, `usermem.S`, `switch.s`, `syscall.c`, `sendsig.c`) and why the gates
 are duplicated in the tests' own crt0s.
 
-**Tasks 1–18b.5 are done and their writeups have been removed**; the design they settled on is the
+**Tasks 1–19 are done and their writeups have been removed**; the design they settled on is the
 section above, and how each turned out is in the source comments and in `../doc/`. The numbering is
 **left as it was** — task numbers are cited from the source (`seg.S`, `dev/bio.c`, `dev/mem.c`,
-`clock.c`, `trap.c`, `sig.c`, `test/crt0*.S`) and from `doc/` — so the list below starts at 19.
-The one task that was still open, 18b.6 (wiring up and bring-up), has become tasks 19 and 20: its
-`IRQ_ON`, `conf.c` and raw-device half is done, and what is left of it is the root filesystem and
-the hang.
+`clock.c`, `trap.c`, `sig.c`, `test/crt0*.S`, `test/fstest.c`) and from `doc/` — so the list below
+starts at 20. The one task that was still open, 18b.6 (wiring up and bring-up), became tasks 19 and
+20: its `IRQ_ON`, `conf.c`, raw-device and root-filesystem-harness halves are done (`test/fstest`
+builds a root image and reads its superblock through the real driver and `sbcheck()`), and what is
+left of it is the hang.
 
 ### Stage 5 — mount the root filesystem
 
-**19. A root image the build produces, and a kernel test that reads it.**
-
-The harness has to exist before the hang below can be diagnosed, and it is the last piece of
-`cmd/fsutil`'s story that has never run against the kernel.
-
-* A CMake target that runs `b6fsutil` over a checked-in manifest and `-S`-converts the result into
-  the SIMH container, in the build tree. [../cmd/fsutil/README.md](../cmd/fsutil/README.md) has the
-  manifest grammar and the volume-number rule (the rightmost run of digits in the output name,
-  2048–4095).
-* Device nodes from the start, numbered out of [conf.c](conf.c): `/dev/console` (char 0/0),
-  `/dev/mem`, `/dev/kmem`, `/dev/null` (char 1/0, 1/1, 1/2), `/dev/tty` (char 2/0), `/dev/md0`
-  (block 0/0) and `/dev/rmd0` (char 4/0), `/dev/swap` (block 1/0) and `/dev/rmb0` (char 5/0).
-  Minor numbers for the disk are the SIMH unit subscript — bit 5 the controller, bits 4–3 the
-  group, bits 2–0 the drive.
-* Extend `test/mdtest` to attach that image, `bread()` block 1 through the real driver and call the
-  real `sbcheck()` ([alloc.c](alloc.c)) on the buffer. `sbcheck()` has been compiled but never
-  executed; this is what takes that note off the file, and it gives a known-good reference point
-  strictly below the boot path.
-* **Done when** `ctest -L kernel` builds the image and `mdtest` reads and validates its superblock
-  through the real `md` driver.
-
 **20. Find and fix the root-disk boot hang.**
+
+**Start here — `test/fstest` uncovered a live bug on this exact path.** `struct buf`'s
+`b_un` is a union of a fat `caddr_t b_addr` and several regular word pointers (`b_filsys`,
+`b_dino`, `b_dir`, `b_daddr`). `binit()` fills it through `b_addr = buffers[i]`, storing a **fat**
+pointer (bit 48 set, byte offset in 47–45). Reading it back through any of the regular-pointer
+members leaves bit 48 set on what the compiler treats as a plain word pointer, so member access
+past offset 0 mis-arithmetics (the additive unit reads bit 48 as an exponent and `+1` vanishes)
+and silently returns **word 0 of the block** for every field. Offset 0 reads correctly, which is
+the trap: `sbcheck()`'s first test is `s_magic` at offset 0 and passes, the second is `s_bsize`
+at offset 1 and reads `s_magic` instead. `fstest` works around it with the cast
+`(struct filsys *)bp->b_un.b_addr` (`doc/Besm6_Data_Representation.md §7` — the cast clears the
+marker), and this is `iinit()`'s own idiom at [main.c:112](main.c) `sbcheck(bp->b_un.b_filsys,
+…)`. The punned members appear at ~13 sites — [main.c](main.c), [alloc.c](alloc.c),
+[iget.c](iget.c), [sys3.c](sys3.c), [subr.c](subr.c), [nami.c](nami.c) — all on the mount/inode
+path, none of them yet executed. Fix them the way `fstest` does, and note that no test but
+`fstest` covers any of them.
 
 Attach a formatted image as `md00` and the kernel prints the `startup()` lines and then stops — no
 panic, no further output. So `bread(rootdev, SUPERB)` never completes. It is *pre-existing*: the
 same image hangs identically against older commits, so it is not a filesystem-format problem.
 
-With task 19 in hand the bisection is short, because the driver and `sbcheck()` are then known good
+With `fstest` in hand the bisection is short, because the driver and `sbcheck()` are known good
 in isolation. What boot adds over `mdtest` is the suspect list:
 
 * the `extintr()` → `mdintr()` dispatch and the wired-bit arming order around `mgrpon()`/`mgrpoff()`
@@ -292,7 +292,8 @@ layer's back.
 
 A new top-level `rootfs/`, cross-built by the same CMake machinery `lib/` uses
 ([../scripts/BesmCross.cmake](../scripts/BesmCross.cmake) and the in-tree `b6*` targets), staging
-into **`build/rootfs/`**, which task 19's manifest reads with `source build/rootfs/…`:
+into **`build/rootfs/`**, which the root-image manifest (`test/root.manifest`) reads with
+`source build/rootfs/…`:
 
 * `rootfs/init/` — a v7-shaped `/etc/init`: single-user, `/dev/console` on fds 0/1/2,
   `fork`+`exec` of `/bin/sh`, `wait` and respawn.
@@ -409,6 +410,15 @@ What the ones already in [test/](test/) cost to get right. Read this before writ
   `0576` so the `.ini` tripped its *PC* assertion while every check still passed. Run the modified
   build through a harness that prints PC and ACC separately: a wrong ACC is a broken check, a PC
   that is neither `halt` nor `fault` is a hang, and a PC one word off is usually just the tax.
+* **A punned union member reads word 0 and does not fault.** `fstest` reads `struct buf`'s block
+  through `b_un.b_addr` cast to the right pointer type, never through `b_un.b_filsys`/`b_dino`/…,
+  because `b_addr` is a *fat* pointer (`caddr_t`) and the regular-pointer members reinterpret its
+  bit-48 marker as a large exponent — so `fp->s_bsize` silently returned `s_magic` and every
+  member past offset 0 came back as offset 0, with no fault to mark it. The cast
+  `(struct filsys *)bp->b_un.b_addr` is one `aax` and clears the marker
+  (`doc/Besm6_Data_Representation.md §7`). The kernel's own mount/inode path has the same pun in
+  ~13 places (task 20); a test that reads a buffer as a struct must cast, or it checks nothing but
+  offset 0.
 * **Ask what would notice if the code were wrong, and if the answer is "nothing", the test is not
   finished.** 18b.5 classified disk failures into hard and soft, but both ended in the same failed
   request with the same `b_resid` — so the entire classification was undefended, and the bite test

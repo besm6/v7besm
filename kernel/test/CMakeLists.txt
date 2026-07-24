@@ -10,7 +10,7 @@
 # .c sources get -DKERNEL (KERNOBJ); the local test programs and the .S/.s assist must
 # not, matching the old Makefile's static-pattern rule.
 
-set(KERNOBJ bio md mb slp malloc syscall sendsig clock intr utab)
+set(KERNOBJ alloc bio md mb slp malloc syscall sendsig clock intr utab)
 
 set(TEST_TARGETS "")
 
@@ -92,6 +92,60 @@ b6_test(biotest  crt0 biotest bio utab brz)
 b6_test(ugrp     crt0 ugrp intr)
 b6_test(mbtest   crt0 mbtest mb intr)
 b6_test(mdtest   crt0 mdtest md intr)
+b6_test(fstest   crt0 fstest bio md alloc intr utab brz)
+
+# ---------------------------------------------------------------------------------------
+# The root filesystem image fstest reads (task 19).
+# ---------------------------------------------------------------------------------------
+#
+# b6fsutil (cmd/fsutil/) builds a v7 filesystem in the FLAT container -- blocks of 512
+# six-byte words -- and `-S' converts that into the one SIMH attaches, which stores each
+# word as eight little-endian bytes with a two-bit tag and interleaves eight service words
+# per zone.  Both are kept: the flat one is what `-c' checks and what `od' can read, the
+# SIMH one is what the simulator gets.
+#
+# b6fsutil is a HOST tool, not part of the cross toolchain, so it is resolved here rather
+# than in scripts/BesmCross.cmake -- but with the same two modes: the in-tree target when
+# this directory is configured inside the top-level project, the installed tool when the
+# kernel is configured on its own (`cmake -S kernel').  Naming the target through
+# $<TARGET_FILE:> also gives the custom command its build-order dependency for free.
+if(TARGET b6fsutil)
+    set(B6FSUTIL $<TARGET_FILE:b6fsutil>)
+else()
+    find_program(B6FSUTIL b6fsutil REQUIRED)
+endif()
+
+# The volume number is the rightmost run of digits in the SIMH filename, 2048..4095 --
+# scraped by `attach' itself, so the name IS the volume.  2048 keeps clear of mdtest's
+# 2053-2056.  ROOTTIME is the -T stamp: it makes the image byte-reproducible, and fstest.c
+# asserts on it (its ROOTTIME must match this one) so that a stale or hand-made file
+# cannot pass for the image this build just wrote.  -s 2000 is one EC-5052 drive, the
+# default, spelled out because fstest.c checks s_fsize against it.
+set(ROOTTIME 1000000000)
+
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/root.img
+    COMMAND ${B6FSUTIL} -n -s 2000 -T ${ROOTTIME}
+            -M ${CMAKE_CURRENT_SOURCE_DIR}/root.manifest root.img
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/root.manifest
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "b6fsutil root.img" VERBATIM)
+
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/root2048.disk
+    COMMAND ${B6FSUTIL} -S root.img root2048.disk
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/root.img
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "b6fsutil -S root2048.disk" VERBATIM)
+
+add_custom_target(rootimg DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/root2048.disk)
+list(APPEND TEST_TARGETS rootimg)
+
+# The image is self-consistent before any kernel touches it.  Cheap, and it keeps a
+# b6fsutil regression from arriving disguised as a driver bug in fstest.  Not guarded by
+# BESM6: it is a host check on a host tool's output, and runs whether or not the simulator
+# is installed.
+add_test(NAME rootimg_check COMMAND ${B6FSUTIL} -c root.img
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(rootimg_check PROPERTIES LABELS kernel)
 
 # `make test' truncates mdshort2056.disk to nothing before running mdtest: run 4 attaches
 # it WITHOUT -n so it stays empty, the only way to make the simulator produce a soft error
