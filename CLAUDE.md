@@ -13,7 +13,7 @@ work has two halves:
   repo's own toolchain (`b6cc`/`b6as`/`b6ld`) and **boots under SIMH**: the memory model,
   `_start`, all three trap doors, the timer and the context switch work, and two processes
   alternate under the real scheduler. With no root disk, boot stops at `panic: iinit`; with
-  `root2048.disk` attached it mounts the root, hands process 1 the icode and **enters user mode**,
+  `root3072.disk` attached it mounts the root, hands process 1 the icode and **enters user mode**,
   where `$77 SYS_exec` comes back through the gate with `ENOENT` because there is no `/etc/init`
   on the image yet (`kernel/test/boot` guards all of that). What is missing above that line is the
   userland: a console that is a controlling terminal, then `/etc/init` and a shell.

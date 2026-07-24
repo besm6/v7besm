@@ -10,14 +10,14 @@ What remains is putting a shell in user mode. That is tasks **23–25** below, i
 Tasks 26–29 are what is left after the prompt appears.
 
 Where the port stands: `cd kernel && make` links an image that boots under SIMH. With no root
-disk it reaches `panic: iinit`; **with `root2048.disk` attached it boots through `iinit()`, hands
+disk it reaches `panic: iinit`; **with `root3072.disk` attached it boots through `iinit()`, hands
 process 1 the icode and enters user mode**, where `$77 SYS_exec` comes back through the gate with
 `ENOENT` because the image has no `/etc/init` yet — printed on the console as `exec init: error 2`
 by `execerr()` ([sys1.c](sys1.c)), since process 1 has no stdout of its own to report on, and then
 the icode spins (tasks 20, 21 and 22 are done). The next open
 work is task 23, the console as a controlling terminal. The harness the boot is checked against:
 the build produces a root
-image (`kernel/test/root.manifest` → `root2048.disk`), `kernel/test/fstest` reads its superblock and
+image (`kernel/test/root.manifest` → `root3072.disk`), `kernel/test/fstest` reads its superblock and
 root inode through the real `md` driver, the real buffer cache and the real `sbcheck()` (strictly
 below the boot path), and `kernel/test/boot` boots the whole `unix` image with that disk attached,
 asserting that process 1 leaves the kernel and that the exec reports ENOENT.

@@ -94,7 +94,7 @@ endif()
 enable_testing()
 add_subdirectory(test)
 
-# unix.ini attaches test/root2048.disk, so `make run' needs the root image built as well as
+# unix.ini attaches test/root3072.disk, so `make run' needs the root image built as well as
 # the kernel.  The target comes from test/, hence the dependency here rather than above.
 if(BESM6)
     add_dependencies(run rootimg)

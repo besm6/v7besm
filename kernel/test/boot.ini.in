@@ -2,7 +2,7 @@
 ;
 ; Every other test in this directory links a handful of kernel objects against a forged
 ; environment and drives one component.  This one links nothing: it loads the real `unix'
-; image (built one directory up by kernel/CMakeLists.txt) with the same root2048.disk that
+; image (built one directory up by kernel/CMakeLists.txt) with the same root3072.disk that
 ; fstest reads, and lets main() run the actual boot -- startup(), intrinit(), binit(),
 ; iinit(), iget() of the root, newproc() -- and then lets process 1 leave the kernel.
 ;
@@ -62,7 +62,7 @@ set cpu latin
 set mmu cache
 
 load ../unix
-attach -r md00 root2048.disk
+attach -r md00 root3072.disk
 break @SPIN@
 step 50000000
 

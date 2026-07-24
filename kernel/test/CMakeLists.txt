@@ -116,9 +116,10 @@ else()
 endif()
 
 # The volume number is the rightmost run of digits in the SIMH filename, 2048..4095 --
-# scraped by `attach' itself, so the name IS the volume.  2048 keeps clear of mdtest's
-# 2053-2056.  ROOTTIME is the -T stamp: it makes the image byte-reproducible, and fstest.c
-# asserts on it (its ROOTTIME must match this one) so that a stale or hand-made file
+# scraped by `attach' itself, so the name IS the volume.  This project numbers its images
+# from 3072 up, well clear of the real DISPAK volumes down at 2048-2063; 3072 keeps clear
+# of mdtest's 3073-3076.  ROOTTIME is the -T stamp: it makes the image byte-reproducible,
+# and fstest.c asserts on it (its ROOTTIME must match this one) so that a stale or hand-made file
 # cannot pass for the image this build just wrote.  -s 2000 is one EC-5052 drive, the
 # default, spelled out because fstest.c checks s_fsize against it.
 set(ROOTTIME 1000000000)
@@ -130,13 +131,13 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/root.img
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "b6fsutil root.img" VERBATIM)
 
-add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/root2048.disk
-    COMMAND ${B6FSUTIL} -S root.img root2048.disk
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/root3072.disk
+    COMMAND ${B6FSUTIL} -S root.img root3072.disk
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/root.img
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMENT "b6fsutil -S root2048.disk" VERBATIM)
+    COMMENT "b6fsutil -S root3072.disk" VERBATIM)
 
-add_custom_target(rootimg DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/root2048.disk)
+add_custom_target(rootimg DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/root3072.disk)
 list(APPEND TEST_TARGETS rootimg)
 
 # The image is self-consistent before any kernel touches it.  Cheap, and it keeps a
@@ -152,7 +153,7 @@ set_tests_properties(rootimg_check PROPERTIES LABELS kernel)
 # ---------------------------------------------------------------------------------------
 #
 # Links nothing of its own: it loads the real `unix' image built one directory up by
-# kernel/CMakeLists.txt, attaches the same root2048.disk fstest reads, and asserts that process 1
+# kernel/CMakeLists.txt, attaches the same root3072.disk fstest reads, and asserts that process 1
 # leaves the kernel and parks in the icode's failure loop (`spin') with ENOENT for the missing
 # /etc/init -- rather than panicking (no root fs), stopping anywhere in the kernel or hanging.
 # Still the regression guard for the b_un.b_addr fat-pointer fix, and now for the whole path into
@@ -161,7 +162,7 @@ set_tests_properties(rootimg_check PROPERTIES LABELS kernel)
 # `spin' is a LINKED address that moves as the kernel grows, so boot.ini is
 # GENERATED from unix.nm at build time (genboot.cmake) rather than hardcoded.  The generation
 # depends on the `kernel' target so the image and its .nm exist first, and the `boot' test
-# needs root2048.disk (rootimg) in its cwd -- both are pulled in below.
+# needs root3072.disk (rootimg) in its cwd -- both are pulled in below.
 if(BESM6)
     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/boot.ini
         COMMAND ${CMAKE_COMMAND} -DNM=${CMAKE_CURRENT_BINARY_DIR}/../unix.nm
@@ -181,12 +182,12 @@ if(BESM6)
     set_tests_properties(boot PROPERTIES LABELS kernel)
 endif()
 
-# `make test' truncates mdshort2056.disk to nothing before running mdtest: run 4 attaches
+# `make test' truncates mdshort3076.disk to nothing before running mdtest: run 4 attaches
 # it WITHOUT -n so it stays empty, the only way to make the simulator produce a soft error
 # (a read off the end of the file) and so the only exercise the driver's retry path gets.
 # A ctest setup fixture recreates it empty in the binary dir before every mdtest run.
 if(BESM6)
-    add_test(NAME mdtest_setup COMMAND sh -c ": > mdshort2056.disk"
+    add_test(NAME mdtest_setup COMMAND sh -c ": > mdshort3076.disk"
              WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(mdtest_setup PROPERTIES FIXTURES_SETUP md_disk LABELS kernel)
     set_tests_properties(mdtest       PROPERTIES FIXTURES_REQUIRED md_disk)
