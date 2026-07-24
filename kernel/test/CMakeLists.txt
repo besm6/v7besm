@@ -154,11 +154,11 @@ set_tests_properties(rootimg_check PROPERTIES LABELS kernel)
 # Links nothing of its own: it loads the real `unix' image built one directory up by
 # kernel/CMakeLists.txt, attaches the same root2048.disk fstest reads, and asserts that process 1
 # leaves the kernel and parks in the icode's failure loop (`spin') with ENOENT for the missing
-# /etc/init -- rather than panicking (no root fs), halting at `bhalt' (never reached user mode) or
-# hanging.  Still the regression guard for the b_un.b_addr fat-pointer fix, and now for the whole
-# path into user mode.  See boot.ini.in for the full story, including what it does NOT check.
+# /etc/init -- rather than panicking (no root fs), stopping anywhere in the kernel or hanging.
+# Still the regression guard for the b_un.b_addr fat-pointer fix, and now for the whole path into
+# user mode.  See boot.ini.in for the full story, including what it does NOT check.
 #
-# `spin' and `bhalt' are LINKED addresses that move as the kernel grows, so boot.ini is
+# `spin' is a LINKED address that moves as the kernel grows, so boot.ini is
 # GENERATED from unix.nm at build time (genboot.cmake) rather than hardcoded.  The generation
 # depends on the `kernel' target so the image and its .nm exist first, and the `boot' test
 # needs root2048.disk (rootimg) in its cwd -- both are pulled in below.

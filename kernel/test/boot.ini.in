@@ -52,9 +52,9 @@
 ; on which sbcheck() would fail and the boot would panic.
 ;
 ; The console is deliberately NOT attached: the kernel's printf output has no reader here, and
-; `make run' (kernel/unix.ini) is where you watch a boot.  @SPIN@ and @BHALT@ are pulled from
-; unix.nm by genboot.cmake at build time -- they are LINKED addresses that move as the kernel
-; grows, which is why this file is generated rather than hardcoded.
+; `make run' (kernel/unix.ini) is where you watch a boot.  @SPIN@ is pulled from unix.nm by
+; genboot.cmake at build time -- it is a LINKED address that moves as the kernel grows, which
+; is why this file is generated rather than hardcoded.
 
 reset
 set cpu latin
@@ -65,7 +65,7 @@ attach -r md00 root2048.disk
 break @SPIN@
 step 50000000
 
-if (PC != @SPIN@) echof "FAIL: boot did not reach the icode's failure loop (spin=@SPIN@). PC=@BHALT@ (bhalt) means process 1 never left the kernel; a PC in panic()'s stop loop means iinit() panicked (no root fs / iinit) -- e.g. the b_un.b_addr fat-pointer fix was reverted; the step count running out is a hang, in idle() if the exec slept and never woke. PC:"; ex PC; exit 1
+if (PC != @SPIN@) echof "FAIL: boot did not reach the icode's failure loop (spin=@SPIN@). A PC in panic()'s stop loop means iinit() panicked (no root fs / iinit) -- e.g. the b_un.b_addr fat-pointer fix was reverted; a PC in the kernel means process 1 never left it, and if the step count ran out it hung, in idle() if the exec slept and never woke. Look the PC up in unix.nm. PC:"; ex PC; exit 1
 if (ACC != 037777777777777) echof "FAIL: boot reached the icode, but exec did not report failure in ACC (expected -1, i.e. 41 ones). ACC:"; ex ACC; exit 1
 if (M16 != 2) echof "FAIL: boot reached the icode, but r14 (SIMH M16) is not ENOENT -- exec failed somewhere other than namei(). r14:"; ex M16; exit 1
 

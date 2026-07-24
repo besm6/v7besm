@@ -3,11 +3,9 @@
 # link-time values that shift with the kernel), as:
 #   cmake -DNM=<unix.nm> -DIN=<boot.ini.in> -DOUT=<boot.ini> -P genboot.cmake
 #
-# The symbols, both in kernel/besm6.S:
-#   spin   -- the icode's failure loop: where process 1 parks when exec("/etc/init") fails,
-#             which is the state boot.ini asserts (there is no /etc/init until task 24).
-#   bhalt  -- the halt behind _start's `выпр'.  Unreachable by design, so it is the OTHER
-#             thing the .ini can name: stopping there means process 1 never left the kernel.
+# One symbol today: `spin' (kernel/besm6.S), the icode's failure loop -- where process 1 parks
+# when exec("/etc/init") fails, which is the state boot.ini asserts (there is no /etc/init
+# until task 24).  The loop below is a list so a second one costs a word, not a rewrite.
 #
 # b6nm prints "ADDR t <name>" in octal and we take ADDR verbatim, so the .ini's octal
 # `if (PC != <addr>)' compares like with like.
@@ -17,7 +15,7 @@ if(NOT EXISTS "${NM}")
 endif()
 
 set(_report "")
-foreach(_sym spin bhalt)
+foreach(_sym spin)
     file(STRINGS "${NM}" _lines REGEX "[ \t]${_sym}$")
     list(LENGTH _lines _n)
     if(NOT _n EQUAL 1)

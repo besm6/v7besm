@@ -267,9 +267,9 @@ _start:
                                     //   program with no crt0 in front of it must not start in
                                     //   ω 0 -- the rule sendsig() already established.  LAST,
                                     //   because `xta'/`ita' set ω themselves.
-      3 ij                          // выпр: into the icode, in user mode
-bhalt:  stop                        // not reached -- `выпр' does not come back
-        uj      bhalt
+      3 ij                          // выпр: into the icode, in user mode.  Nothing follows:
+                                    //   `выпр' is an unconditional transfer, so a halt behind
+                                    //   it would only be reachable if the machine were broken.
 
 // ============================================================================
 // Extracode entry
