@@ -2,18 +2,21 @@
 
 ## Context
 
-Every product of this repo today falls into one of two categories:
+Every product of this repo falls into one of three categories:
 
 - **host tools** — `cmd/*`, compiled by the host C/C++ compiler, run on the build machine;
 - **cross-built BESM-6 artifacts** — `kernel/` and `lib/`, compiled by the `b6*` toolchain
   through `b6_obj()` in [../../scripts/BesmCross.cmake](../../scripts/BesmCross.cmake), from
-  sources that exist only to run on the BESM-6.
+  sources that exist only to run on the BESM-6;
+- **native BESM-6 programs** — [`cmd/init`](../init/README.md), linked against libc by
+  `b6_prog()` and staged into `build/rootfs/` for the disk image.
 
-There is no third: **a BESM-6 program built from the same sources as a host tool**. `cmd/cpp` is
-the natural first one — plain C, needs only libc, and a preprocessor that runs on the target is
-the first step toward a self-hosting toolchain. This plan adds exactly that one program,
-`build/rootfs/usr/bin/cpp`, from the existing `cmd/cpp/*.c`, behind an opt-in `make rootfs`
-target. The default build is untouched.
+What is still missing is the *fourth* thing this document is about: **a BESM-6 program built from
+the same sources as a host tool**. `cmd/cpp` is the natural first one — plain C, needs only
+libc, and a preprocessor that runs on the target is the first step toward a self-hosting
+toolchain. This plan adds exactly that one program, `build/rootfs/usr/bin/cpp`, from the existing
+`cmd/cpp/*.c`. Since `cmd/init` landed, the machinery for it is a single `b6_prog()` call (§5)
+and the plan is all blockers.
 
 **The build machinery is the easy 20%.** The real content of this plan is a set of blockers
 found by actually running `b6cc -c` over all eight sources — every one below is reproduced with
@@ -39,8 +42,8 @@ Two things claimed in an earlier draft turned out already handled and are **not*
 ([../../lib/libc/CMakeLists.txt](../../lib/libc/CMakeLists.txt) `LIBC_OBJ`, with
 `lib/test/strtolt`). Once headers resolve, `direct.c`'s `strtol` compiles fine.
 
-Intended outcome: `make rootfs` produces `build/rootfs/usr/bin/cpp`; a ctest runs it under
-`b6sim` and asserts its output matches the host `b6cpp` byte-for-byte.
+Intended outcome: `make` produces `build/rootfs/usr/bin/cpp` beside `etc/init`; a ctest runs it
+under `b6sim` and asserts its output matches the host `b6cpp` byte-for-byte.
 
 ## Approach
 
@@ -98,7 +101,7 @@ Wrap the four constants at [defs.h:50-56](defs.h#L50):
 
 ```c
 #ifdef besm6
-// 32K-word address space, 4K-word stack: see rootfs/README.md.  This profile does
+// 32K-word address space, 4K-word stack: see ../init/README.md.  This profile does
 // NOT meet the C11 §5.2.4.1 minima (4095 macros, 4095-char logical lines).
 #define BUFSIZ  2048
 #define SBSIZE  8192
@@ -119,53 +122,32 @@ with `BUFSIZ` too).
 non-conforming, and [README.md](README.md) must record that `test/`'s C11 conformance results
 apply to the **host** build only.
 
-### 5. `rootfs/CMakeLists.txt` — the native link
+### 5. The native link — **already built, one call**
 
-New top-level directory, one file, deliberately minimal (no generic helper; a second native
-program would justify one). It mirrors [../../lib/test/CMakeLists.txt](../../lib/test/CMakeLists.txt)'s
-`b6_libtest` macro:
+*This step is done, by [`cmd/init`](../init/README.md), which became the first native program
+instead of `cpp`.* `b6_prog()` in [../../scripts/BesmCross.cmake](../../scripts/BesmCross.cmake)
+is the generic helper this section said a second native program would justify, and the staging
+root `build/rootfs/` exists. All that remains here is a `cmd/cpp/CMakeLists.txt` addition:
 
 ```cmake
-set(SRC ${CMAKE_SOURCE_DIR}/cmd/cpp)
-set(STAGE ${CMAKE_BINARY_DIR}/rootfs/usr/bin)
-get_filename_component(LIBC_DIR ${CMAKE_BINARY_DIR}/lib/libc ABSOLUTE)
-set(KINC ${CMAKE_SOURCE_DIR}/include)                 # so b6_obj finds <stdio.h> etc.
-file(GLOB KHDRS ${KINC}/*.h ${KINC}/sys/*.h)
-
-foreach(f cpp buffer scan direct macro diag parser yylex)
-    b6_obj(o ${SRC}/${f}.c -I${SRC})
-    list(APPEND OBJS ${o})
-endforeach()
-
-add_custom_command(OUTPUT ${STAGE}/cpp
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${STAGE}
-    COMMAND ${B6LD} ${LIBC_DIR}/crt0.o ${OBJS} -o ${STAGE}/cpp
-            -L${LIBC_DIR} -L${B6LIBDIR} -lc -lruntime
-    COMMAND ${B6SIZE} -w ${STAGE}/cpp
-    DEPENDS ${OBJS} ${LIBC_DIR}/crt0.o ${LIBC_DIR}/libc.a)
-
-add_custom_target(rootfs DEPENDS ${STAGE}/cpp)        # NOT `ALL'
-add_dependencies(rootfs libc)
+b6_prog(cpp DEST usr/bin/cpp
+        CFLAGS -I${CMAKE_CURRENT_SOURCE_DIR}
+        SOURCES cpp.c buffer.c scan.c direct.c macro.c diag.c parser.c yylex.c)
 ```
 
-Link order is the archive-scan contract from [../../lib/README.md](../../lib/README.md):
-`crt0.o`, objects, then `-lc -lruntime`. `b6size -w` at the end is the size report, as the kernel
-link does it.
+with `KINC`/`KHDRS` set beside it as `cmd/init/CMakeLists.txt` does, and the directory added
+inside the top-level `if(B6RUNTIME_LIB)` guard after `add_subdirectory(lib)`.
 
-Wire it into [../../CMakeLists.txt](../../CMakeLists.txt) **after** `add_subdirectory(lib)`,
-inside the existing `if(B6RUNTIME_LIB)` guard (it needs `b6cc`, `libruntime.a`, libc). Because
-the target is not `ALL`, `make` and `make test` do not build it.
+Two differences from what this section originally planned, both settled by `cmd/init`:
 
-Top-level [../../Makefile](../../Makefile): add
-
-```make
-rootfs: build
-	$(MAKE) -Cbuild rootfs
-	ctest --test-dir build -L rootfs
-```
-
-and change `run:` to `ctest --test-dir build -LE rootfs`, so the default test run does not try to
-execute an image that was never built.
+- **It builds by default**, not behind an opt-in `make rootfs`; `b6_prog()` marks its target
+  `ALL`. No top-level `Makefile` change, and `make run` runs the `rootfs`-labelled tests with
+  everything else. (The host `cmd/cpp` build and this one are separate targets in the same
+  directory — the host tool is `b6cpp`, this is `build/rootfs/usr/bin/cpp`.)
+- **The size ceilings are enforced, not merely reported.** `b6_prog()` registers
+  `rootfs_cpp_size`, running `scripts/check-size.sh` against 28,672 words of
+  `const+text+data+bss` and a 32,767-word symbol ceiling — which is exactly blockers **L1** and
+  **L2** above, turned into a test. Expect it to fail until §4's size profile lands.
 
 ### 6. The test: native cpp must agree with host cpp
 
@@ -183,17 +165,17 @@ function-like macros, `#if`/`#elif`, `#`/`##`, and a local `#include`; must avoi
 
 ### 7. Documentation
 
-- `rootfs/README.md` — the third build category; the three ceilings (32,767-word pointer reach,
-  28-page text+data+bss, 4,096-word stack); the non-conforming profile and why; `make rootfs`.
-- [../../CLAUDE.md](../../CLAUDE.md) — a paragraph on the third category and the `rootfs` target.
-  Its "Kernel" section is also **stale** — it says the kernel keeps a hand-written Makefile and is
-  not part of the CMake build, but [../../kernel/Makefile](../../kernel/Makefile) is now a thin
-  wrapper over `add_subdirectory(kernel)`; fix that while in the file.
+- [README.md](README.md) — a "Building for the BESM-6" section: the non-conforming size profile
+  and why, and the three ceilings (32,767-word pointer reach, 28-page text+data+bss, 4,096-word
+  stack). The build category itself is documented in [../init/README.md](../init/README.md).
+- [../../CLAUDE.md](../../CLAUDE.md) — its "Native BESM-6 programs" section already describes
+  the category and `b6_prog()`; add `cpp` as the second one, and the size profile as the first
+  time the ceilings actually bound a program.
 - [README.md](README.md) — the `besm6` predefine, the host-only scope of the conformance suite,
   and a short "Building for the BESM-6" note listing the workarounds and their upstream issue
   numbers.
-- [../../kernel/TODO.md](../../kernel/TODO.md#L207) — task 24 already names `build/rootfs/`; note
-  its staging root now exists.
+- [../../kernel/TODO.md](../../kernel/TODO.md#L207) — task 24 names `build/rootfs/`; note that
+  `usr/bin/cpp` now sits in it beside `etc/init`.
 
 ## Order of work (gates first)
 
@@ -203,22 +185,21 @@ function-like macros, `#if`/`#elif`, `#`/`##`, and a local `#include`; must avoi
 3. Confirm all eight sources compile with `-I ../../include`.
 4. **Predefine + size profile** (§3, §4); check `b6size -w` puts text+data+bss under 28,672
    words and no symbol exceeds word 32,767.
-5. `rootfs/CMakeLists.txt`, the `rootfs` target, Makefile wiring (§5).
+5. The `b6_prog()` call (§5) — one block in `cmd/cpp/CMakeLists.txt`.
 6. Fixture, `run-test.sh`, ctest (§6).
 7. Docs (§7).
 
 ## Verification
 
 ```sh
-make && make install          # unchanged: host tools, kernel, lib still build
-make run                      # unchanged: default suite green, rootfs excluded (-LE rootfs)
-make rootfs                   # builds build/rootfs/usr/bin/cpp and runs the rootfs test
+make && make install          # host tools, kernel, lib, AND build/rootfs/usr/bin/cpp
+make run                      # the whole suite, the rootfs label included
 ```
 
-- `b6size -w build/rootfs/usr/bin/cpp` — text+data+bss **under 28,672 words** (the link prints
-  it). Close to the ceiling means the §4 profile needs another notch down.
-- `b6nm -n build/rootfs/usr/bin/cpp | tail` — no symbol above word 32,767.
-- `ctest --test-dir build -L rootfs` — native output equals host output exactly.
+- `ctest --test-dir build -L rootfs` — two things now: `rootfs_cpp_size` (the ceilings, from
+  `b6_prog()`) and the output-agreement test of §6. Close to the ceiling in the size test's
+  report means the §4 profile needs another notch down.
+- `b6nm -n build/rootfs/usr/bin/cpp | tail` — by hand, for where the space went.
 - `build/cmd/cpp/test/cpp_test` — the host C11 suite still passes in full; the `besm6` predefine
   and the split declarators must be invisible to the host build. (Its cases are registered
   individually by `gtest_discover_tests`, so there is no single ctest label; run the binary or
@@ -231,7 +212,7 @@ likely to exhaust the reduced `SYMSIZ`.
 
 ## Out of scope
 
-No generic `b6_prog()` helper, no other `cmd/` tool built natively, no userland (`init`, `sh`,
+No other `cmd/` tool built natively, no userland beyond the `init` that is already there (`sh`,
 `bin/*`), no change to `kernel/test/root.manifest` — the image is staged, not yet put on a disk.
 Those are [../../kernel/TODO.md](../../kernel/TODO.md#L207) task 24; this plan leaves the staging
 root ready for them. The three upstream compiler fixes (B1–B3) live in a **separate repo**; this

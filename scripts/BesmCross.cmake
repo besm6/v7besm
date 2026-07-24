@@ -1,7 +1,8 @@
 # Shared BESM-6 cross-toolchain resolution for the CMake builds that DON'T use the host
-# compiler -- the kernel and the user libraries.  Both emit BESM-6 a.out through the b6*
-# tools rather than through CMake's C-language support, and both need the same things: the
-# tools themselves, the external compiler's libruntime.a, and the two compile/find helpers.
+# compiler -- the kernel, the user libraries, and the native user programs under cmd/.
+# All three emit BESM-6 a.out through the b6* tools rather than through CMake's C-language
+# support, and all need the same things: the tools themselves, the external compiler's
+# libruntime.a, and the compile/find/link helpers.
 # This file is that common half, so it lives in one place and is included by
 #   - the top-level CMakeLists.txt (once, inside the libruntime guard), whence its variables
 #     and functions are inherited by add_subdirectory(kernel)/add_subdirectory(lib); and
@@ -9,6 +10,10 @@
 #     and so includes it directly (guarded by `if(NOT COMMAND b6_obj)').
 # include_guard is belt-and-suspenders against a second include reaching here.
 include_guard(GLOBAL)
+
+# This directory, captured at include time: b6_prog() runs check-size.sh from here, and
+# CMAKE_CURRENT_LIST_DIR inside a function would name the CALLER's list file instead.
+set(B6_SCRIPTS_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 # The cross toolchain.  Two modes:
 #  - Integrated in the top-level project, the tools are CMake targets already being built in
@@ -56,6 +61,19 @@ find_program(BESM6 besm6)
 find_file(B6LIBRUNTIME libruntime.a
     PATHS $ENV{HOME}/.local/share/besm6/lib /usr/local/share/besm6/lib REQUIRED)
 get_filename_component(B6LIBDIR ${B6LIBRUNTIME} DIRECTORY)
+
+# Where b6_prog() stages the native user programs, and where their libc comes from.  The
+# staging tree is a root filesystem in the making -- build/rootfs/etc/init is what ends up
+# as /etc/init on the disk image (kernel/test/root.manifest) -- so nothing but files bound
+# for the image may be written into it; the .nm/.dis listings stay in the build dir.
+# Both are overridable, so a standalone `cmake -S lib' with its own binary tree, or a
+# caller staging elsewhere, is not forced into this layout.
+if(NOT DEFINED B6_ROOTFS)
+    set(B6_ROOTFS ${CMAKE_BINARY_DIR}/rootfs)
+endif()
+if(NOT DEFINED B6_LIBC_DIR)
+    set(B6_LIBC_DIR ${CMAKE_BINARY_DIR}/lib/libc)
+endif()
 
 # ---------------------------------------------------------------------------------------
 # Compile one source to an object.  Dispatches by extension:
@@ -110,4 +128,70 @@ function(b6_find_src outvar base)
         endforeach()
     endforeach()
     message(FATAL_ERROR "b6_find_src: no source for '${base}'")
+endfunction()
+
+# ---------------------------------------------------------------------------------------
+# Build one NATIVE BESM-6 user program and stage it into the root filesystem tree.
+#
+#   b6_prog(<name> DEST <path under ${B6_ROOTFS}> SOURCES <src>... [CFLAGS <flag>...])
+#
+# This is the third kind of thing this repo builds, beside the host tools of cmd/ and the
+# freestanding artifacts of kernel/: a program compiled by the b6* toolchain, linked
+# against the libc built in lib/, and destined for the disk image the kernel mounts.
+# cmd/init is the first; cmd/cpp (see cmd/cpp/TODO.md) is meant to be the second.
+#
+# Defines a target b6prog_<name> producing ${B6_ROOTFS}/<DEST>, makes the aggregate
+# `rootfs' target depend on it if that target exists, and registers one ctest,
+# rootfs_<name>_size (label `rootfs'), asserting the program fits the user address space.
+#
+# THE LINK ORDER IS A CONTRACT, not a style: crt0.o, then the objects, then -lc -lruntime.
+# b6ld scans each archive exactly once, in order; libc calls the b$* helpers and no helper
+# calls back into libc (lib/README.md).
+#
+# The caller must have set KINC/KHDRS, which b6_obj reads from its scope.
+# ---------------------------------------------------------------------------------------
+function(b6_prog name)
+    cmake_parse_arguments(P "" "DEST" "SOURCES;CFLAGS" ${ARGN})
+    if(NOT P_DEST OR NOT P_SOURCES)
+        message(FATAL_ERROR "b6_prog(${name}): DEST and SOURCES are both required")
+    endif()
+
+    # One object directory per program, for the reason b6_obj's comment gives: a shared
+    # object rule is emitted into every consuming target by the Makefiles generator and
+    # races under `make -j'.  Also lets two programs share a source basename.
+    set(B6_OBJDIR ${CMAKE_CURRENT_BINARY_DIR}/${name}.dir)
+    file(MAKE_DIRECTORY ${B6_OBJDIR})
+    set(objs "")
+    foreach(src ${P_SOURCES})
+        get_filename_component(abs ${src} ABSOLUTE)
+        b6_obj(obj ${abs} ${P_CFLAGS})
+        list(APPEND objs ${obj})
+    endforeach()
+
+    set(out ${B6_ROOTFS}/${P_DEST})
+    get_filename_component(outdir ${out} DIRECTORY)
+    add_custom_command(OUTPUT ${out}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${outdir}
+        COMMAND ${B6LD} ${B6_LIBC_DIR}/crt0.o ${objs} -o ${out}
+                -L${B6_LIBC_DIR} -L${B6LIBDIR} -lc -lruntime
+        COMMAND sh -c "${B6NM} -n ${out} > ${name}.nm"
+        COMMAND sh -c "${B6DISASM} -c ${out} > ${name}.dis"
+        DEPENDS ${objs} ${B6_LIBC_DIR}/crt0.o ${B6_LIBC_DIR}/libc.a
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMENT "b6ld ${P_DEST}" VERBATIM)
+
+    add_custom_target(b6prog_${name} ALL DEPENDS ${out})
+    # libc lives in another directory scope, so the file dependency above is not enough to
+    # order the two -- as lib/test/CMakeLists.txt does for the same reason.
+    add_dependencies(b6prog_${name} libc)
+    if(TARGET rootfs)
+        add_dependencies(rootfs b6prog_${name})
+    endif()
+
+    # 28 pages of image (32 less the four the stack takes at 070000) and a 15-bit pointer
+    # reach: doc/Memory_Mapping.md, and kernel/TODO.md task 24.
+    add_test(NAME rootfs_${name}_size
+        COMMAND sh ${B6_SCRIPTS_DIR}/check-size.sh
+                ${B6SIZE} ${B6NM} ${out} 28672 32767)
+    set_tests_properties(rootfs_${name}_size PROPERTIES LABELS rootfs)
 endfunction()

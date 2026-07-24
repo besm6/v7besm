@@ -40,11 +40,19 @@ External pieces this project depends on (not in this repo):
 
 ## Building
 
-Two separate build systems. The **`cmd/` toolchain** builds with a **top-level CMake
-project**, driven through a thin top-level `Makefile`; there are no per-component
-Makefiles under `cmd/` anymore (everything is configured by the root `CMakeLists.txt`).
-The **kernel** keeps its own hand-written Makefile, and cross-compiles with the toolchain
-built here — so `make install` must have run before the kernel can be built.
+**One CMake project**, driven through a thin top-level `Makefile`; there are no
+per-component Makefiles under `cmd/` or `lib/` anymore, and the ones in `kernel/` and
+`kernel/test/` are thin wrappers over the same `build/` tree. It produces **three kinds of
+thing**, and knowing which one you are touching is most of what the build layout means:
+
+- **host tools** — `cmd/*`, compiled by the build machine's C/C++ compiler, run there;
+- **cross-built BESM-6 artifacts** — `kernel/` and `lib/`, compiled by the `b6*` toolchain
+  above through `b6_obj()` in `scripts/BesmCross.cmake`;
+- **native BESM-6 programs** — `cmd/init` today, linked against libc by `b6_prog()` and
+  staged into `build/rootfs/` for the disk image the kernel mounts.
+
+The last two are guarded on the **external** c-compiler's `libruntime.a` being installed;
+without it the tree still configures and builds the `cmd/` tools alone.
 
 ### Toolchain (`cmd/`) — top-level build
 
@@ -94,7 +102,7 @@ so it no longer needs the toolchain installed first, and the old three-step boot
 to the standard two:
 
 ```sh
-make && make install        # builds cmd/ tools, the kernel and lib/; installs include/ + the archives
+make && make install        # builds cmd/ tools, the kernel, lib/ and build/rootfs/; installs include/ + the archives
 ```
 
 `lib/` has **no per-directory Makefiles** (like `cmd/`): `make` builds it, `make install` puts
@@ -111,14 +119,52 @@ therefore names two archives, **ours first**: `-lc -lruntime`, because `b6ld` sc
 helper calls back into libc. The kernel takes `-lruntime` **alone** — it defines its own
 `printf` in `kernel/prf.c` and uses no other library routine.
 
+### Native BESM-6 programs (`cmd/init`, → `build/rootfs/`)
+
+The third category, and the newest. `cmd/init` is a **`cmd/` subdirectory that is not a host
+tool**: `init.c` is the Unix v7 `/etc/init`, compiled by the `b6*` toolchain and staged as
+`build/rootfs/etc/init` — the `/etc/init` of the root filesystem the kernel mounts. It is
+added from inside the `libruntime.a` guard, *after* `lib/`, not with the other `cmd/`
+subdirectories, because it links against the libc built there.
+
+The machinery is one function, `b6_prog()` in `scripts/BesmCross.cmake`, so a further native
+program is one call:
+
+```cmake
+b6_prog(init DEST etc/init SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/init.c)
+```
+
+It compiles each source with `b6_obj()` into a per-program object dir, links
+`crt0.o … -lc -lruntime` (that order is the archive-scan contract), writes only the finished
+program into `${B6_ROOTFS}` — the `.nm`/`.dis` listings stay in the build dir, since that tree
+becomes a disk image — and registers one ctest, `rootfs_<name>_size` (label `rootfs`), running
+`scripts/check-size.sh`. That check is the guard rail for the two **user** address-space
+ceilings, which are not the kernel's: `const+text+data+bss` must fit **28,672 words** (32 pages
+less the four the stack takes at `070000`) and no relocatable symbol may sit above word
+**32,767**, the reach of a 15-bit pointer. Both failures are otherwise silent — the link
+succeeds and only the running program misbehaves.
+
+The C dialect is the thing that bites when porting v7 userland: **`b6parse` is strict C11**.
+No implicit `int`, no K&R parameter lists, no untyped `register i;`. Every v7 source needs
+that mechanical modernization before it compiles; `cmd/init/README.md` is the worked example,
+and `cmd/cpp/TODO.md` is the plan for the next program (with three external-compiler bugs of
+its own still in the way).
+
+`build/rootfs/` is staged only — nothing installs it, and `kernel/test/root.manifest` still
+names the task-23 stand-in `kernel/test/coninit.S` as the image's `/etc/init` until there is a
+`/bin/sh` for the real one to exec (`kernel/TODO.md`, tasks 24–25).
+
 ### Kernel (`kernel/`)
 ```sh
 cd kernel && make          # produces `unix` (BESM-6 a.out), unix.nm and unix.dis
 make run                   # boot it under SIMH (`besm6 unix.ini`)
 make clean
 ```
-The kernel is **not** part of the CMake build. It cross-compiles with the tools this repo
-installs — `b6cc -I../include -DKERNEL`, `b6as`, `b6ld`, `b6ar`/`b6ranlib`, and it links
+The kernel **is** part of the CMake build — `kernel/Makefile` is a thin wrapper that drives
+the top-level `build/` tree (`--target kernel`), and `add_subdirectory(kernel)` sits inside
+the `libruntime.a` guard. It cross-compiles with the **in-tree** tool targets, so a rebuilt
+`b6as` relinks it with no `make install` in between — `b6cc -I../include -DKERNEL`, `b6as`,
+`b6ld`, `b6ar`/`b6ranlib`, linking
 against `libruntime.a` (`~/.local/share/besm6/lib`) for the `b$*` helpers, and nothing else:
 no `-lc`, since it has its own `printf` and calls no library routine.
 `make` finishes by printing `b6size -w unix`: the image **must end below `064000`** (`KEND` in
@@ -164,14 +210,18 @@ test with `set mmu cache`** — the БРЗ write-back hazards are invisible with
 kernel that only works with the cache off would not have worked on the real machine.
 
 The kernel objects a test links are compiled *into `kernel/test/`* from the sources next door,
-never borrowed from `kernel/`'s own build: the Makefile finds them with suffix-scoped `vpath`
-(`vpath %.c .. ../dev`, and likewise for `%.s`/`%.S`) and compiles them through a static pattern
-rule over `KERNOBJ`, which is what confines `-DKERNEL` to the kernel sources — the test programs
-themselves must not get it. Do **not** replace that with a blanket `VPATH`: it would also search
-for `.o` prerequisites and link `kernel/`'s objects instead of building local ones, and since `..`
-holds a directory named `test`, it would silently turn `make test` into a no-op. Header
+never borrowed from `kernel/`'s own build: `b6_find_src()` locates them by basename, searching
+`. .. ../dev` (the CMake equivalent of a Makefile's `vpath`), and `b6_test_obj()` compiles them
+into the *program's own* object dir with `-DKERNEL` applied only to the names in `KERNOBJ` —
+**the test programs themselves must not get it**, which is why `<sys/stat.h>` and
+`<sys/wait.h>` key their user-side prototypes on `_SYS_SYSTM_H` as well as on `KERNEL`. The
+per-program object dir is not tidiness: many images share a source, and one shared object
+output would be emitted into every consuming target and race under `make -j`. Header
 dependencies there are deliberately coarse (every object depends on all of `include/sys/*.h`),
 because no `-M` support exists to do better.
+
+`make run` runs everything; the ctest **labels** carve it up — `kernel` (SIMH), `lib` (the
+libc programs under `b6sim`) and `rootfs` (the size checks on the staged native programs).
 
 Every `cmd/` component has a GoogleTest suite under `cmd/<tool>/test/`, wired into the
 `build_tests` target and run by `make run` (ctest). The C preprocessor has the most

@@ -14,8 +14,9 @@ disk it reaches `panic: iinit`; **with `root3072.disk` and a drum attached it bo
 `iinit()`, hands process 1 the icode, enters user mode, execs `/etc/init` and holds a
 conversation with whoever is at the console** — reading typed lines, honouring erase, kill and
 `^D`, and answering through `/dev/tty` (tasks 20 through 23 are done). The `/etc/init` on the
-image is a stand-in, `kernel/test/coninit.S`, until task 24 puts a real one there. `make run`
-is where you talk to it.
+image is still the stand-in `kernel/test/coninit.S`: the real one is built —
+`build/rootfs/etc/init`, from [../cmd/init](../cmd/init) — but it execs `/bin/sh`, so it goes
+on the image when task 24's shell does. `make run` is where you talk to it.
 
 **The drums must be attached to exec anything**, which is new with task 23 and easy to be
 caught by: they are `swapdev` ([conf.c](conf.c)), and `exece()` stages the argument list in
@@ -204,24 +205,38 @@ proves it is `test/coninit.S`, and `test/console` is what types at it).
 
 ### Stage 7 — the userland
 
-**24. `rootfs/` — the tree the image is built from.**
+**24. `build/rootfs/` — the tree the image is built from.**
 
-A new top-level `rootfs/`, cross-built by the same CMake machinery `lib/` uses
-([../scripts/BesmCross.cmake](../scripts/BesmCross.cmake) and the in-tree `b6*` targets), staging
-into **`build/rootfs/`**, which the root-image manifest (`test/root.manifest`) reads with
-`source build/rootfs/…`:
+The userland sources live in **`cmd/`**, beside the host tools rather than in a top-level
+`rootfs/` as this task first proposed — `cmd/` is where v7 kept its commands, and the staging
+tree is a build artifact, not a source tree. They are cross-built by the same CMake machinery
+`lib/` uses ([../scripts/BesmCross.cmake](../scripts/BesmCross.cmake) and the in-tree `b6*`
+targets) and staged into **`build/rootfs/`**, which the root-image manifest
+(`test/root.manifest`) will read with `source ../../rootfs/…` (its `source` is resolved against
+`b6fsutil`'s working directory, the kernel test build dir).
 
-* `rootfs/init/` — a v7-shaped `/etc/init`: single-user, `/dev/console` on fds 0/1/2,
-  `fork`+`exec` of `/bin/sh`, `wait` and respawn.
-* `rootfs/sh/` — the shell. Start with a minimal one (word splitting, `fork`/`exec`/`wait`,
+* **`cmd/init/` — done.** The v7 `/etc/init`, ported to C11 and staged as
+  `build/rootfs/etc/init`; with no `/etc/ttys` on the image it is exactly the single-user
+  loop this task asked for. See [../cmd/init/README.md](../cmd/init/README.md).
+* `cmd/sh/` — the shell. Start with a minimal one (word splitting, `fork`/`exec`/`wait`,
   redirection, `cd`, `exit`) to get a prompt at all, then port v7's `sh` once the syscalls have been
   shaken out by task 25.
-* `rootfs/bin/` — enough to prove the prompt: `cat`, `echo`, `ls`, `pwd`.
-* `rootfs/etc/` — the static files (`passwd`, `rc`, `motd`).
+* `cmd/cat/`, `cmd/echo/`, `cmd/ls/`, `cmd/pwd/` — enough to prove the prompt.
+* `etc/` — the static files (`passwd`, `rc`, `motd`).
+* Last: point `test/root.manifest` at `build/rootfs/etc/init` instead of `coninit`, once
+  there is a `/bin/sh` for it to exec. `test/console` asserts on coninit's echo, so that test
+  changes with it.
 
-Every program links `crt0.o … -lc -lruntime`, in that order — the archive-scan contract in
-[../lib/README.md](../lib/README.md) — and must fit the 32-page user space with the stack based at
-`070000` (`b6size -w`).
+Each program is one `b6_prog()` call, which links `crt0.o … -lc -lruntime` in that order — the
+archive-scan contract in [../lib/README.md](../lib/README.md) — and registers a ctest
+(`scripts/check-size.sh`, label `rootfs`) asserting it fits the 28 pages of user image space
+below the stack at `070000`, with no symbol past the 15-bit pointer reach.
+
+**Porting v7 sources is not a copy.** `b6parse` is strict C11: no implicit `int`, no K&R
+parameter lists, no untyped `register i;`, and a signal handler is `void (*)(int)`. Expect the
+same mechanical modernization `cmd/init/init.c` carries a note about — and expect missing
+declarations, since each v7 source used to declare its own syscalls (that is what added
+`kill()` to `<signal.h>`, `<sys/wait.h>`, and the five prototypes in `<sys/stat.h>`).
 
 **25. Boot to the prompt, and shake the syscalls out.**
 

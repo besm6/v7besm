@@ -3,9 +3,10 @@
 # (../build) rather than a separate kernel/build/, so `cd kernel && make' and the repo's
 # top-level `make' agree on a single set of artifacts.
 #
-# The kernel cross-compiles with the *installed* b6* toolchain, so the top-level configure
-# only wires kernel/ in once `make install' has run; before that these targets report a
-# missing CMake target -- build and install the toolchain first (see the top-level README).
+# The kernel cross-compiles with the IN-TREE b6* tool targets, so no `make install' of this
+# repo is needed first.  What the top-level configure does need is the EXTERNAL c-compiler:
+# it wires kernel/ in only when that compiler's libruntime.a is installed, and before then
+# these targets report a missing CMake target.
 # kernel/ can also still be built in isolation: `cmake -S kernel -B <dir> && cmake --build <dir>'.
 #
 # make        -- build the `unix' image (ends by printing `b6size -w unix')

@@ -108,10 +108,12 @@ install(DIRECTORY include/ DESTINATION share/besm6/include
         FILES_MATCHING PATTERN "*.h")
 
 #
-# The BESM-6 cross-builds: the kernel and the user libraries (lib/).  Unlike cmd/, neither is
-# compiled by this project's host compiler -- both cross-compile with the b6* toolchain built
+# The BESM-6 cross-builds: the kernel, the user libraries (lib/), and the native user
+# programs staged into build/rootfs/ (cmd/init, and whatever joins it -- b6_prog() in
+# scripts/BesmCross.cmake).  Unlike the cmd/ tools above, none is
+# compiled by this project's host compiler -- all cross-compile with the b6* toolchain built
 # above (they use those in-tree targets directly, so a rebuilt tool relinks them with no
-# reinstall).  Both still depend on the EXTERNAL c-compiler being installed, though -- b6cc's
+# reinstall).  All still depend on the EXTERNAL c-compiler being installed, though -- b6cc's
 # b6parse/b6lower/b6codegen passes, its <besm6.h>, and libruntime.a all come from ~/.local (or
 # /usr/local) and are not built here.  Guard on that runtime so a fresh tree without the
 # external compiler still configures and builds the cmd/ tools; libruntime.a co-ships with the
@@ -124,10 +126,18 @@ install(DIRECTORY include/ DESTINATION share/besm6/include
 find_file(B6RUNTIME_LIB libruntime.a
     PATHS $ENV{HOME}/.local/share/besm6/lib /usr/local/share/besm6/lib)
 if(B6RUNTIME_LIB)
-    message(STATUS "Found external runtime ${B6RUNTIME_LIB} -- building kernel/ and lib/")
+    message(STATUS "Found external runtime ${B6RUNTIME_LIB} -- building kernel/, lib/ and the rootfs")
     include(scripts/BesmCross.cmake)
     add_subdirectory(kernel)
     add_subdirectory(lib)
+
+    #
+    # The staged root filesystem, build/rootfs/ -- the tree that becomes the disk image the
+    # kernel mounts (kernel/test/root.manifest).  `rootfs' is the aggregate every b6_prog()
+    # hangs itself on; the programs come after lib/, since each links against its libc.
+    #
+    add_custom_target(rootfs)
+    add_subdirectory(cmd/init)
 else()
-    message(STATUS "kernel/ and lib/: external compiler runtime (libruntime.a) not installed; skipping")
+    message(STATUS "kernel/, lib/ and the rootfs: external compiler runtime (libruntime.a) not installed; skipping")
 endif()
