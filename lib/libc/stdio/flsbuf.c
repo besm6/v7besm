@@ -32,10 +32,7 @@
 //
 #include <stdio.h>
 #include <stdlib.h>
-
-int write(int fd, const char *buf, int n);
-int close(int fd);
-int isatty(int fd);
+#include <unistd.h>
 
 extern char _sobuf[];
 extern FILE *_lastbuf;

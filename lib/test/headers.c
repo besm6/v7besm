@@ -45,6 +45,7 @@
 #include <string.h>
 #include <time.h>
 #include <uchar.h>
+#include <unistd.h>
 #include <varargs.h>
 #include <wchar.h>
 #include <wctype.h>
@@ -76,6 +77,7 @@
 #include <string.h>
 #include <time.h>
 #include <uchar.h>
+#include <unistd.h>
 #include <varargs.h>
 #include <wchar.h>
 #include <wctype.h>
@@ -92,8 +94,6 @@
 //
 #include <tgmath.h>
 // clang-format on
-
-int write(int fd, const char *buf, int n);
 
 // The compile-time form of assert, under the <assert.h> spelling of it.
 static_assert(sizeof(int) == 6, "a word is six char-units");
@@ -177,6 +177,10 @@ int main(void)
 
     // setvbuf modes are not _flag bits; see the note in <stdio.h>.
     ok("_IONBF is a mode", _IONBF != _IOUNBUF && _IOFBF == 0);
+
+    // <unistd.h>: the three standard descriptors and the OR-able access modes.
+    ok("stderr is descriptor 2", STDERR_FILENO == 2);
+    ok("access modes are bits", (R_OK | W_OK | X_OK) == 7 && F_OK == 0);
 
     // One locale, and the degenerate float environment.
     ok("one rounding mode", FE_TONEAREST == 0 && FE_ALL_EXCEPT == 0);

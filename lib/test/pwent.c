@@ -29,14 +29,12 @@
 #include <pwd.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
-char *ttyname(int f);
 int ttyslot(void);
-char *getlogin(void);
 int getpw(int uid, char buf[]);
 char *crypt(const char *pw, const char *salt);
 int open(const char *path, int mode);
-int close(int fd);
 
 #define MAXENT  64
 #define MAXNAME 32

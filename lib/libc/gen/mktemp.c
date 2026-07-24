@@ -8,8 +8,7 @@
 // "/" -- a name no creat() can take -- when all 26 letters are spoken for.  v7's
 // bargain, kept as it stands: it is a race, and every caller has always known it.
 //
-int access(const char *path, int mode);
-int getpid(void);
+#include <unistd.h>
 
 char *mktemp(char *as)
 {

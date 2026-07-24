@@ -20,22 +20,10 @@
 // Like hello.c it declares its syscalls itself and carries its own output routines.
 //
 
-int write(int fd, char *buf, int n);
-int read(int fd, char *buf, int n);
-int close(int fd);
-int dup(int fd);
-int dup2(int fd, int fd2);
+#include <unistd.h>
+
 int time(int *tloc);
-int getpid(void);
-int getppid(void);
-int getuid(void);
-int geteuid(void);
-int getgid(void);
-int getegid(void);
-int fork(void);
 int wait(int *status);
-int pipe(int *fildes);
-void _exit(int status);
 
 // One string to the standard output, without stdio (phase 4).
 static void put(char *s)

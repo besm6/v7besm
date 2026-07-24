@@ -18,12 +18,10 @@
 // No header declares it; a caller declares it itself.
 //
 #include <utmp.h>
+#include <unistd.h>
 
 int ttyslot(void);
 int open(const char *path, int mode);
-int read(int fd, char *buf, int n);
-int close(int fd);
-int lseek(int fd, int off, int whence);
 
 static const char UTMP[] = "/etc/utmp";
 

@@ -18,10 +18,9 @@
 // lib/README.md warns about.
 //
 #include <errno.h>
+#include <unistd.h>
 
-int write(int fd, char *buf, int n);
 int open(char *path, int mode);
-int close(int fd);
 
 // One string to the standard output, without stdio (phase 4).
 static void put(char *s)

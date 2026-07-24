@@ -11,9 +11,7 @@
 // overwrites -- that is what §7.21.4.4 says happens.
 //
 #include <stdio.h>
-
-int access(const char *path, int mode);
-int getpid(void);
+#include <unistd.h>
 
 static char stat_buf[L_tmpnam];
 

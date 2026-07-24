@@ -21,12 +21,9 @@
 //
 #include <signal.h>
 #include <stdlib.h>
+#include <unistd.h>
 
-int fork(void);
 int wait(int *status);
-int execl(const char *name, ...);
-int access(const char *path, int mode);
-_Noreturn void _exit(int status);
 
 int system(const char *s)
 {

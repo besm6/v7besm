@@ -23,11 +23,9 @@
 // No header declares it; a caller declares it itself.
 //
 #include <string.h>
+#include <unistd.h>
 
-char *ttyname(int f);
 int open(const char *path, int mode);
-int read(int fd, char *buf, int n);
-int close(int fd);
 
 #define TTYLINE 32
 

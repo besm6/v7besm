@@ -79,4 +79,13 @@ description is written beside them.
 Types and macros follow the BESM-6 data model
 ([`../doc/Besm6_Data_Representation.md`](../doc/Besm6_Data_Representation.md)): every scalar
 is one 48-bit word, `sizeof(int) == 6`, signed integers are 41-bit and unsigned 48-bit, and
-`float` == `double` == `long double` with no infinities, NaNs or denormals.
+`float` == `double` == `long double` with no infinities, NaNs or denormals. `size_t` is one
+place this bites: the freestanding `<stddef.h>` makes it **signed** here — a deliberate
+departure from C11 §7.19 — because unsigned arithmetic is a library call and no addressable
+object needs the extra bit, so `<unistd.h>`'s `read`/`write` read as the plain POSIX
+prototypes without cost.
+
+`unistd.h` is a hosted header this tree adds (v7 predated it): the low-level I/O and process
+primitives that `lib/libc/sys` backs, gathered from the per-file syscall declarations each
+caller used to carry. `open`/`creat`/`chmod`/`stat` are **not** in it — they await an
+`<fcntl.h>`/`<sys/stat.h>` this tree does not have yet.

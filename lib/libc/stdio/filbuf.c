@@ -13,8 +13,7 @@
 //
 #include <stdio.h>
 #include <stdlib.h>
-
-int read(int fd, char *buf, int n);
+#include <unistd.h>
 
 int _filbuf(FILE *iop)
 {

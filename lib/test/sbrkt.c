@@ -15,9 +15,7 @@
 // exercises.  Like hello.c it declares what it calls and carries its own output.
 //
 
-int write(int fd, char *buf, int n);
-char *sbrk(int incr);
-int brk(char *addr);
+#include <unistd.h>
 
 // One string to the standard output, without stdio (phase 4).
 static void put(char *s)

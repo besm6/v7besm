@@ -22,11 +22,9 @@
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <unistd.h>
 
-int isatty(int fd);
 int open(const char *path, int mode);
-int read(int fd, char *buf, int n);
-int close(int fd);
 int fstat(int fd, struct stat *buf);
 int stat(const char *path, struct stat *buf);
 

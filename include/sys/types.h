@@ -28,6 +28,15 @@ typedef int ino_t;   // i-node number
 typedef int dev_t;   // device code; NODEV is -1, so SIGNED
 typedef int off_t;   // byte offset in file
 
+// The POSIX scalar typedefs <unistd.h> and friends are spelled in.  Each is one
+// word, and -- as above -- the spelling chooses only signedness, so they are all
+// the inline-cheap signed `int'.  ssize_t is signed precisely so a byte count can
+// carry read()/write()'s -1; the id types never do arithmetic worth an unsigned.
+typedef int ssize_t; // a byte count, or -1 on error
+typedef int pid_t;   // process id
+typedef int uid_t;   // user id
+typedef int gid_t;   // group id
+
 // A time; 41 bits of seconds, so no 2038 problem.  <time.h> defines it too --
 // the kernel includes this file and never that one, and a user source may well
 // include both -- so the two share a marker rather than one including the other.

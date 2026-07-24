@@ -25,6 +25,7 @@
 //
 
 #include <sys/param.h>
+#include <unistd.h>
 
 //
 // The linker's end-of-bss symbol (b6ld defines it in cmd/ld/ld.c), declared as an array

@@ -39,12 +39,7 @@
 #include <setjmp.h>
 #include <signal.h>
 #include <stdio.h>
-
-// No header declares these four: <signal.h> names signal and raise and no more.
-int alarm(int sec);
-int pause(void);
-int getpid(void);
-void sleep(unsigned n);
+#include <unistd.h>
 
 static int caught[NSIG]; // how many times each signal was handled
 static int number;       // the argument the last handler was given

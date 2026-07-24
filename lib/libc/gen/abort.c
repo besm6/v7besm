@@ -12,8 +12,8 @@
 // and dumps core.
 //
 #include <signal.h>
+#include <unistd.h>
 
-int getpid(void);
 int kill(int pid, int sig);
 
 void abort(void)

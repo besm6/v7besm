@@ -14,8 +14,8 @@
 // unsuccessful" -- the same thing said two ways.
 //
 #include <signal.h>
+#include <unistd.h>
 
-int getpid(void);
 int kill(int pid, int sig);
 
 int raise(int sig)

@@ -28,11 +28,10 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
-int write(int fd, char *buf, int n);
 int open(char *path, int mode);
 char *mktemp(char *as);
-int isatty(int fd);
 void perror(const char *s);
 char *index(const char *sp, char c);
 

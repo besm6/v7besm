@@ -55,16 +55,9 @@
 // v7 would fault on the first and corrupt the arena on the second.
 //
 #include <stdlib.h>
+#include <unistd.h>
 
-//
-// sbrk() is declared by no header -- v7 has no <unistd.h> -- so it is declared where it
-// is used, as lib/README.md's ground rules require.  IT FAILS WITH NULL, not with
-// (char *)-1: v7's value would have to be fabricated from an integer, and a fat pointer
-// cannot be (lib/libc/sys/sbrk.c).
-//
-char *sbrk(int incr);
-
-// v7's donation entry point.  No header declares it there either.
+// v7's donation entry point.  No header declares it.
 void ialloc(char *qq, size_t nbytes);
 
 //

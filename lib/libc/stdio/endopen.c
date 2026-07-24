@@ -4,17 +4,15 @@
 // The half of fopen()/freopen() that does the opening: attach `file' to the slot
 // `iop', already chosen by the caller.
 //
-// The syscalls are declared here rather than in a header: v7 has no <unistd.h> and
-// neither does include/, so a routine that calls one says so at its head.  off_t is
-// one word, so lseek() takes three arguments and not the PDP-11's four.
+// close() and lseek() come from <unistd.h>; open() and creat() are still declared
+// here, since this tree has no <fcntl.h> for them yet.
 //
 #include <errno.h>
 #include <stdio.h>
+#include <unistd.h>
 
 int open(const char *path, int mode);
 int creat(const char *path, int mode);
-int close(int fd);
-long lseek(int fd, long off, int whence);
 
 //
 // "w+" and "a+" have to be created and then reopened for reading as well: creat()

@@ -9,6 +9,7 @@
 // what both gates write (kernel/dev/tty.c, cmd/sim/syscall.cpp).
 //
 #include <sgtty.h>
+#include <unistd.h>
 
 int gtty(int fd, struct sgttyb *buf);
 
