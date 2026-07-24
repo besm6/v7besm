@@ -10,12 +10,13 @@ What remains is everything above that line: mounting a root, loading a BESM-6 ex
 into user mode, and putting a shell there. That is tasks **20–25** below, in order. Tasks 26–29
 are what is left after the prompt appears.
 
-Where the port stands: `cd kernel && make` links an image that boots under SIMH and reaches
-`panic: iinit`. With a root disk attached it does not panic — it **hangs**, which is task 20.
-The harness that hang is diagnosed against already exists: the build produces a root image
-(`kernel/test/root.manifest` → `root2048.disk`) and `kernel/test/fstest` reads its superblock and
-root inode through the real `md` driver, the real buffer cache and the real `sbcheck()` — a
-known-good reference point strictly below the boot path.
+Where the port stands: `cd kernel && make` links an image that boots under SIMH. With no root
+disk it reaches `panic: iinit`; **with `root2048.disk` attached it now boots through `iinit()`
+to the icode hand-off** (task 20 is done — see Stage 5). The next open work is task 21, retargeting
+`exec` to the BESM-6 `a.out`. The harness the boot is checked against: the build produces a root
+image (`kernel/test/root.manifest` → `root2048.disk`), `kernel/test/fstest` reads its superblock and
+root inode through the real `md` driver, the real buffer cache and the real `sbcheck()` (strictly
+below the boot path), and `kernel/test/boot` boots the whole `unix` image with that disk attached.
 
 Read [../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) before touching memory management,
 [../doc/Intrinsics.md](../doc/Intrinsics.md) for how C reaches `002 «рег»` and `033 «увв»`,
@@ -175,50 +176,36 @@ left of it is the hang.
 
 ### Stage 5 — mount the root filesystem
 
-**20. Find and fix the root-disk boot hang.**
+**20. Find and fix the root-disk boot hang. — DONE.**
 
-**Start here — `test/fstest` uncovered a live bug on this exact path.** `struct buf`'s
-`b_un` is a union of a fat `caddr_t b_addr` and several regular word pointers (`b_filsys`,
-`b_dino`, `b_dir`, `b_daddr`). `binit()` fills it through `b_addr = buffers[i]`, storing a **fat**
-pointer (bit 48 set, byte offset in 47–45). Reading it back through any of the regular-pointer
-members leaves bit 48 set on what the compiler treats as a plain word pointer, so member access
-past offset 0 mis-arithmetics (the additive unit reads bit 48 as an exponent and `+1` vanishes)
-and silently returns **word 0 of the block** for every field. Offset 0 reads correctly, which is
-the trap: `sbcheck()`'s first test is `s_magic` at offset 0 and passes, the second is `s_bsize`
-at offset 1 and reads `s_magic` instead. `fstest` works around it with the cast
-`(struct filsys *)bp->b_un.b_addr` (`doc/Besm6_Data_Representation.md §7` — the cast clears the
-marker), and this is `iinit()`'s own idiom at [main.c:112](main.c) `sbcheck(bp->b_un.b_filsys,
-…)`. The punned members appear at ~13 sites — [main.c](main.c), [alloc.c](alloc.c),
-[iget.c](iget.c), [sys3.c](sys3.c), [subr.c](subr.c), [nami.c](nami.c) — all on the mount/inode
-path, none of them yet executed. Fix them the way `fstest` does, and note that no test but
-`fstest` covers any of them.
+There was **no hang** left in the tree. Booting `unix` with `root2048.disk` attached (`attach -r
+md00 …`, and emphatically **not** `-n`, which formats an empty container) ran `bread(rootdev,
+SUPERB)` to completion and then **panicked `no root fs`** — deterministic, reproduced by dumping
+`panicstr`. The hang the older writeup described (a `bread` that never returns) was already gone,
+resolved by the interrupt/driver/`fstest`-era work in the commits before this one; what remained on
+this exact path was the fat-pointer union pun below, which reads as a panic, not a hang. The full
+`extintr → mdintr → iodone → wakeup` delivery and the proc-0 `sleep → swtch → idle` dance turned out
+correct as written; the boot now reaches the icode hand-off (`bhalt`) with the superblock installed
+and `time` seeded from `s_time`.
 
-Attach a formatted image as `md00` and the kernel prints the `startup()` lines and then stops — no
-panic, no further output. So `bread(rootdev, SUPERB)` never completes. It is *pre-existing*: the
-same image hangs identically against older commits, so it is not a filesystem-format problem.
+**The bug was a fat-pointer pun.** `struct buf`'s `b_un` is a union of a fat `caddr_t b_addr` and
+several regular word pointers. `binit()` fills it through `b_addr = buffers[i]` (bit-48 marker set);
+reading it back through `b_filsys`/`b_dino`/`b_dir`/`b_daddr` leaves the marker on what b6cc treats
+as a plain word pointer. It adds a field offset to the whole 48-bit value on the additive unit —
+which reads bit 48 as a floating exponent — *before* truncating to the 15-bit word address, so any
+offset `!= 0` collapses back and reads **word 0** of the block (offset 0 alone survives). `sbcheck()`
+passes on `s_magic` (offset 0) and then reads `s_magic` again for `s_bsize` (offset 1) → `no root
+fs`. Verified by disassembly and a `b6sim` run; the account now lives on the `b_un` union in
+[../include/sys/buf.h](../include/sys/buf.h) and in `doc/Besm6_Data_Representation.md §7`. Fixed at
+all 13 sites — [main.c](main.c), [iget.c](iget.c), [sys3.c](sys3.c), [nami.c](nami.c),
+[subr.c](subr.c), [alloc.c](alloc.c) — by reading the block through `(type *)bp->b_un.b_addr`, the
+cast `fstest` and `alloc.c`'s free-block code already used. `fstest` was still the only test to
+touch any of them.
 
-With `fstest` in hand the bisection is short, because the driver and `sbcheck()` are known good
-in isolation. What boot adds over `mdtest` is the suspect list:
-
-* the `extintr()` → `mdintr()` dispatch and the wired-bit arming order around `mgrpon()`/`mgrpoff()`
-  ([intr.c](intr.c), [dev/md.c](dev/md.c));
-* `iinit()` sleeping in **proc 0, before `newproc()`** — `swtch()`'s double-`save()` arm
-  ([slp.c](slp.c)) is the only path that runs at boot and is exercised by no test;
-* `idle()`'s spin never being released (`idling` is cleared only after `extintr()`'s loop);
-* `extintr()` wedging on a **wired** ГРП bit rather than never being entered at all. The four
-  mass-storage "free" bits mean *idle*, so one standing in МГРП outside an exchange re-fires
-  forever and cannot be dismissed — the failure this loop's fallback probe exists to catch, and it
-  looks exactly like a hang with no output. Distinguish the two cases first: whether the handler is
-  never reached, or reached without end.
-
-Method: `set cpu debug` + `set debug "unix.trace"` in a copy of [unix.ini](unix.ini), and **`step N`
-rather than `go`**, so a hang fails instead of hanging. And watch the trap that has caught this
-before: **`attach -n` creates an empty container** — the boot `.ini` must attach the converted image
-*without* `-n`, or the kernel reads a hole.
-
-* **Done when** `iinit()` installs the superblock, `time` is seeded from `s_time`, and the boot
-  reaches the icode with no panic — plus an automated case in `test/` that boots `unix` with the
-  image attached and asserts on the outcome, so this cannot silently regress.
+The regression guard is [test/boot.ini](test/boot.ini) (generated from `boot.ini.in` via
+`genboot.cmake`, since `bhalt` is a linked address that shifts as the kernel grows): it boots the
+real `unix` with the image attached, `step`s so a hang fails rather than hangs, and asserts the boot
+reaches `bhalt`. Reverting the cast fix stops it at `panic()` instead, and the case fails — verified.
 
 ### Stage 6 — run a user program
 

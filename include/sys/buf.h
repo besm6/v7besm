@@ -30,18 +30,24 @@ struct buf {
     struct buf *av_back; // if not BUSY
     dev_t b_dev;         // major+minor device name
     int b_wcount;        // transfer count, in WORDS
-    union {
-        caddr_t b_addr;          // core address
-        struct filsys *b_filsys; // superblocks
-        struct dinode *b_dino;   // ilist
-        struct direct *b_dir;    // directory block
-        daddr_t *b_daddr;        // indirect block
-    } b_un;
-    daddr_t b_blkno; // block # on device
-    char b_error;    // returned after I/O
-    int b_resid;     // words not transferred after error
+    daddr_t b_blkno;     // block # on device
+    int b_error;         // returned after I/O
+    int b_resid;         // words not transferred after error
+
+    // Core address of the block's data.  
+    // v7 spelled this a union of a caddr_t and one word-pointer type per
+    // kind of block (b_filsys/b_dino/b_dir/b_daddr); those are gone, because on this machine
+    // they were a footgun.  binit() fills b_addr with a FAT pointer (bit-48 marker, byte
+    // offset in 47-45), and reading it back through a plain word pointer keeps the marker:
+    // b6cc adds a field offset to the whole 48-bit value on the additive unit -- which reads
+    // bit 48 as a floating exponent -- BEFORE truncating to the 15-bit word address, so any
+    // offset != 0 collapses back and silently returns word 0 of the block, with no fault
+    // (offset 0 alone survives).  To read the block as a struct, cast b_addr, which clears the
+    // marker: `((struct filsys *)bp->b_addr)->s_bsize' (doc/Besm6_Data_Representation.md §7).
+    caddr_t b_addr; 
+
     // Where the data lives, physically, in WORDS -- valid only when B_PHYS.
-    // b_un.b_addr cannot serve: a caddr_t is a fat pointer whose word field is
+    // b_addr cannot serve: a caddr_t is a fat pointer whose word field is
     // 15 bits, so it cannot name anything above 32767, and physical memory runs
     // to 512 Kwords.  Filled by swap() and physio(); read through bufpaddr().
     paddr_t b_paddr;
@@ -71,7 +77,7 @@ extern struct buf bfreelist; // head of available list
 // A kernel buffer is unmapped, so its address IS its physical address and the word
 // field of the fat pointer is the whole answer.  A B_PHYS request carries the address
 // explicitly, because its target may be above the 32767 that field can reach.
-#define bufpaddr(bp) ((bp)->b_flags & B_PHYS ? (bp)->b_paddr : ptrword((bp)->b_un.b_addr))
+#define bufpaddr(bp) ((bp)->b_flags & B_PHYS ? (bp)->b_paddr : ptrword((bp)->b_addr))
 
 // special redeclarations for
 // the head of the queue per

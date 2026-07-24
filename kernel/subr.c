@@ -88,7 +88,7 @@ daddr_t bmap(register struct inode *ip, daddr_t bn, int rwflg)
             brelse(bp);
             return ((daddr_t)0);
         }
-        bap = bp->b_un.b_daddr;
+        bap = (daddr_t *)bp->b_addr;
         sh -= NSHIFT;
         i  = (bn >> sh) & NMASK;
         nb = bap[i];

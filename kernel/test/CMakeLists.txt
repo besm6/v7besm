@@ -147,6 +147,38 @@ add_test(NAME rootimg_check COMMAND ${B6FSUTIL} -c root.img
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(rootimg_check PROPERTIES LABELS kernel)
 
+# ---------------------------------------------------------------------------------------
+# boot -- the whole kernel booting with the root image attached (task 20).
+# ---------------------------------------------------------------------------------------
+#
+# Links nothing of its own: it loads the real `unix' image built one directory up by
+# kernel/CMakeLists.txt, attaches the same root2048.disk fstest reads, and asserts the boot
+# reaches the icode hand-off (`bhalt') rather than panicking (no root fs) or hanging -- the
+# regression guard for the b_un.b_addr fat-pointer fix.  See boot.ini.in for the full story.
+#
+# bhalt is a LINKED address that moves as the kernel's const pool grows, so boot.ini is
+# GENERATED from unix.nm at build time (genboot.cmake) rather than hardcoded.  The generation
+# depends on the `kernel' target so the image and its .nm exist first, and the `boot' test
+# needs root2048.disk (rootimg) in its cwd -- both are pulled in below.
+if(BESM6)
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/boot.ini
+        COMMAND ${CMAKE_COMMAND} -DNM=${CMAKE_CURRENT_BINARY_DIR}/../unix.nm
+                -DIN=${CMAKE_CURRENT_SOURCE_DIR}/boot.ini.in
+                -DOUT=${CMAKE_CURRENT_BINARY_DIR}/boot.ini
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/genboot.cmake
+        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/../unix.nm
+                ${CMAKE_CURRENT_SOURCE_DIR}/boot.ini.in
+                ${CMAKE_CURRENT_SOURCE_DIR}/genboot.cmake
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMENT "gen boot.ini" VERBATIM)
+    add_custom_target(bootini DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/boot.ini)
+    add_dependencies(bootini kernel rootimg)  # the image to boot, and the disk to attach
+    list(APPEND TEST_TARGETS bootini)
+    add_test(NAME boot COMMAND ${BESM6} ${CMAKE_CURRENT_BINARY_DIR}/boot.ini
+             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(boot PROPERTIES LABELS kernel)
+endif()
+
 # `make test' truncates mdshort2056.disk to nothing before running mdtest: run 4 attaches
 # it WITHOUT -n so it stays empty, the only way to make the simulator produce a soft error
 # (a read off the end of the file) and so the only exercise the driver's retry path gets.

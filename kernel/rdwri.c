@@ -72,7 +72,7 @@ void readi(register struct inode *ip)
         ip->i_un.i_lastr = lbn;
         n                = min(n, BSIZE - wtob(bp->b_resid));
         if (n != 0)
-            iomove(bp->b_un.b_addr + on, n, B_READ);
+            iomove(bp->b_addr + on, n, B_READ);
         brelse(bp);
     } while (u.u_error == 0 && u.u_count != 0 && n > 0);
 }
@@ -122,7 +122,7 @@ void writei(register struct inode *ip)
             bp = getblk(dev, bn);
         else
             bp = bread(dev, bn);
-        iomove(bp->b_un.b_addr + on, n, B_WRITE);
+        iomove(bp->b_addr + on, n, B_WRITE);
         if (u.u_error != 0)
             brelse(bp);
         else
@@ -152,7 +152,7 @@ int min(int a, int b)
 }
 
 // Move n bytes at byte location
-// &bp->b_un.b_addr[o] to/from (flag) the
+// &bp->b_addr[o] to/from (flag) the
 // user/kernel (u.segflg) area starting at u.base.
 // Update all the arguments by the number
 // of bytes moved.

@@ -72,7 +72,7 @@ void stat1(register struct inode *ip, struct stat *ub, off_t pipeadj)
     ds.st_size  = ip->i_size - pipeadj;
     // next the dates in the disk
     bp = bread(ip->i_dev, itod(ip->i_number));
-    dp = bp->b_un.b_dino;
+    dp = (struct dinode *)bp->b_addr;
     dp += itoo(ip->i_number);
     ds.st_atime = dp->di_atime;
     ds.st_mtime = dp->di_mtime;
@@ -162,7 +162,7 @@ void smount()
         goto out1;
     }
     // Refuse it here rather than let getfs() "repair" it into a full disk later.
-    if (sbcheck(bp->b_un.b_filsys, dev)) {
+    if (sbcheck((struct filsys *)bp->b_addr, dev)) {
         brelse(bp);
         u.u_error = EINVAL;
         goto out1;
@@ -170,8 +170,8 @@ void smount()
     mp->m_inodp = ip;
     mp->m_dev   = dev;
     mp->m_bufp  = geteblk();
-    wcopy((caddr_t)bp->b_un.b_addr, mp->m_bufp->b_un.b_addr, BSIZEW);
-    fp          = mp->m_bufp->b_un.b_filsys;
+    wcopy((caddr_t)bp->b_addr, mp->m_bufp->b_addr, BSIZEW);
+    fp          = (struct filsys *)mp->m_bufp->b_addr;
     fp->s_ilock = 0;
     fp->s_flock = 0;
     fp->s_ronly = uap->ronly & 1;

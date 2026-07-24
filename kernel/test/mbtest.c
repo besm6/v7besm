@@ -152,7 +152,7 @@ static struct buf mbbuf;
 // One request, start to finish.  Returns B_ERROR (0 when the transfer worked).
 //
 // B_PHYS with b_paddr is how swap() addresses a transfer, and the only form the drum
-// driver's alignment rules were written against; a plain b_un.b_addr would work too, this
+// driver's alignment rules were written against; a plain b_addr would work too, this
 // page being below the 32767 a caddr_t can name, but it would not be what the real caller
 // does.
 static int xfer(daddr_t blk, unsigned nw, int rw)

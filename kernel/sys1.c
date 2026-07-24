@@ -102,7 +102,7 @@ void exece()
                     if (bp)
                         bawrite(bp);
                     bp = getblk(swapdev, swplo + bno + nc / BSIZE);
-                    cp = bp->b_un.b_addr;
+                    cp = bp->b_addr;
                 }
                 nc++;
                 *cp++ = c;
@@ -168,7 +168,7 @@ void exece()
                 if (bp)
                     brelse(bp);
                 bp = bread(swapdev, swplo + bno + nc / BSIZE);
-                cp = bp->b_un.b_addr;
+                cp = bp->b_addr;
             }
             subyte(up++, (c = *cp++));
             nc++;

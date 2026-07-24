@@ -148,7 +148,7 @@ eloop:
     // and the current component.
     // If they do not match, go back to eloop.
 
-    wcopy((caddr_t)&bp->b_un.b_dir[on], (caddr_t)&u.u_dent, DIRWORDS);
+    wcopy((caddr_t)&((struct direct *)bp->b_addr)[on], (caddr_t)&u.u_dent, DIRWORDS);
     u.u_offset += DIRENTSZ;
     if (u.u_dent.d_ino == 0) {
         if (eo == 0)

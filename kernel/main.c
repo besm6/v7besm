@@ -109,18 +109,18 @@ void iinit()
     // Check it BEFORE it is installed in mount[0] and before the clock is set from
     // s_time below: v7 did neither, so a garbage root ran the system on a garbage
     // date and was only noticed once something tried to allocate.
-    if (sbcheck(bp->b_un.b_filsys, rootdev))
+    if (sbcheck((struct filsys *)bp->b_addr, rootdev))
         panic("no root fs");
     // btow(sizeof(struct filsys)) is BSIZEW now that the superblock is exactly one
     // block, which is what makes this agree with update()'s BSIZEW write-back.  It
     // used to copy 165 words into a buffer whose other 347 update() then wrote to
     // the disk unread.  Left derived rather than spelled BSIZEW so it stays honest
     // if the struct ever changes; filsys.h asserts the two are the same.
-    wcopy(bp->b_un.b_addr, cp->b_un.b_addr, btow(sizeof(struct filsys)));
+    wcopy(bp->b_addr, cp->b_addr, btow(sizeof(struct filsys)));
     brelse(bp);
     mount[0].m_bufp = cp;
     mount[0].m_dev  = rootdev;
-    fp              = cp->b_un.b_filsys;
+    fp              = (struct filsys *)cp->b_addr;
     fp->s_flock     = 0;
     fp->s_ilock     = 0;
     fp->s_ronly     = 0;
@@ -149,7 +149,7 @@ void binit()
     for (i = 0; i < NBUF; i++) {
         bp                       = &buf[i];
         bp->b_dev                = NODEV;
-        bp->b_un.b_addr          = buffers[i];
+        bp->b_addr          = buffers[i];
         bp->b_back               = &bfreelist;
         bp->b_forw               = bfreelist.b_forw;
         bfreelist.b_forw->b_back = bp;

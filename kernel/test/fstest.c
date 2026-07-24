@@ -31,25 +31,25 @@
 // THE BUFFER CACHE IS AT A FIXED PHYSICAL PAGE, exactly as it is in the kernel, where
 // `buffers = BUFBASE' is an absolute symbol rather than bss (kernel/besm6.S).  It has to
 // be: mdstrategy() refuses a transfer whose memory side is not half-zone grained, and
-// bufpaddr() of a cache buffer is just the word address of b_un.b_addr.  Ordinary bss
+// bufpaddr() of a cache buffer is just the word address of b_addr.  Ordinary bss
 // would land wherever the linker put it and be refused.  BUFPAGE also has to stay below
 // word 32767, since a caddr_t's word field is 15 bits (ptrword(), sys/param.h).
 //
-// NEVER READ struct buf's b_un THROUGH ANY MEMBER BUT b_addr.  This is what the test found
-// the first time it ran, and it is a kernel bug, not a test one -- the sites are all over
-// main.c, alloc.c, iget.c and nami.c, and none of them has ever executed.  b_un.b_addr is
-// a caddr_t, a FAT pointer: marker in bit 48, byte offset in bits 47-45.  Reading the same
-// word back as b_un.b_filsys / b_dino / b_dir / b_daddr hands those bits to code that
-// thinks it has a plain word pointer, and the compiler adds a member's offset to it with
-// `a+x' -- the ADDITIVE unit, which reads bits 48-42 as an exponent.  Adding 1 to a value
-// with bit 48 set is a floating-point add of a number too small to matter: the result is
-// the pointer, unchanged.  So `fp->s_bsize' silently returns s_magic, every member of
-// every struct view of a buffer reads offset 0, and nothing faults.
+// READ struct buf's block ONLY through a cast off b_addr.  This is what the test found the
+// first time it ran, and it was a kernel bug, not a test one -- the sites were all over
+// main.c, alloc.c, iget.c, sys3.c, subr.c and nami.c, and none had ever executed (task 20).
+// b_addr is a caddr_t, a FAT pointer: marker in bit 48, byte offset in bits 47-45.  Assigning
+// it to a plain word pointer keeps those bits, and the compiler adds a field's offset to it
+// with `a+x' -- the ADDITIVE unit, which reads bits 48-42 as an exponent.  Adding 1 to a value
+// with bit 48 set is a floating-point add of a number too small to matter: the result is the
+// pointer, unchanged.  So the misread `fp->s_bsize' silently returned s_magic, every field
+// past offset 0 read offset 0, and nothing faulted.
 //
-//      fp = bp->b_un.b_filsys;                        // BROKEN, silently
-//      fp = (struct filsys *)bp->b_un.b_addr;         // right: the cast strips the marker
+//      fp = (struct dinode *)bp->b_addr;   // BROKEN if bp came from a plain word pointer;
+//      fp = (struct filsys *)bp->b_addr;   // right: the cast off b_addr strips the marker
 //
-// The cast is one `aax' against a mask, and it is what every line below does.
+// The cast is one `aax' against a mask, and it is what every line below does.  v7's named
+// union members (b_filsys/b_dino/…) that invited the wrong spelling are gone (sys/buf.h).
 //
 // WHAT WOULD NOTICE IF THE CODE WERE WRONG -- the checks that exist for that reason alone:
 //
@@ -275,7 +275,7 @@ static void bufinit(void)
     for (i = 0; i < NBUF; i++) {
         bp                       = &buf[i];
         bp->b_dev                = NODEV;
-        bp->b_un.b_addr          = (caddr_t)(int *)(BUFWORD + i * BSIZEW);
+        bp->b_addr          = (caddr_t)(int *)(BUFWORD + i * BSIZEW);
         bp->b_back               = &bfreelist;
         bp->b_forw               = bfreelist.b_forw;
         bfreelist.b_forw->b_back = bp;
@@ -308,7 +308,7 @@ int main(void)
     bp = bread(rootdev, SUPERB);
     if (bp->b_flags & B_ERROR)
         return (F_RDERR);
-    fp = (struct filsys *)bp->b_un.b_addr;
+    fp = (struct filsys *)bp->b_addr;
 
     // ---- Check 2: sbcheck(), the point of the exercise ------------------------------
     if (sbcheck(fp, rootdev) != 0)
@@ -351,7 +351,7 @@ int main(void)
     if (!incore(rootdev, SUPERB))
         mask |= F_CACHE;
     bp2 = bread(rootdev, SUPERB);
-    if (bp2 != bp || ((struct filsys *)bp2->b_un.b_addr)->s_magic != CACHEPAT)
+    if (bp2 != bp || ((struct filsys *)bp2->b_addr)->s_magic != CACHEPAT)
         mask |= F_CACHE;
     brelse(bp2);
 
@@ -363,7 +363,7 @@ int main(void)
     bp = bread(rootdev, (daddr_t)0);
     if (bp->b_flags & B_ERROR)
         mask |= F_RDERR;
-    if (sbcheck((struct filsys *)bp->b_un.b_addr, rootdev) == 0)
+    if (sbcheck((struct filsys *)bp->b_addr, rootdev) == 0)
         mask |= F_BITE;
     if (nprdev != 1)
         mask |= F_QUIET;
@@ -377,7 +377,7 @@ int main(void)
     bp = bread(rootdev, itod(ROOTINO));
     if (bp->b_flags & B_ERROR)
         mask |= F_RDERR;
-    dp = (struct dinode *)bp->b_un.b_addr + itoo(ROOTINO);
+    dp = (struct dinode *)bp->b_addr + itoo(ROOTINO);
     if ((dp->di_mode & S_IFMT) != S_IFDIR || dp->di_nlink < 2)
         mask |= F_ROOTI;
     brelse(bp);

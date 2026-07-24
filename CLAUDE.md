@@ -12,8 +12,9 @@ work has two halves:
   The kernel **builds as BESM-6 code** with this
   repo's own toolchain (`b6cc`/`b6as`/`b6ld`) and **boots under SIMH**: the memory model,
   `_start`, all three trap doors, the timer and the context switch work, and two processes
-  alternate under the real scheduler. Boot stops at `panic: iinit`: `cmd/fsutil` builds root
-  filesystem images, but mounting one hangs, `exec` still reads a PDP-11 a.out header and
+  alternate under the real scheduler. With no root disk, boot stops at `panic: iinit`; with
+  `root2048.disk` attached it now mounts the root and reaches the icode hand-off (`kernel/test/boot`
+  guards this). What is still missing above that line: `exec` still reads a PDP-11 a.out header and
   nothing enters user mode at boot. See `kernel/TODO.md`, the live work plan — the settled
   design, the hardware rules it obeys, and a sequential task list (numbered from 19, since
   the source cites the earlier numbers) that ends at a single-user shell. Kernel components

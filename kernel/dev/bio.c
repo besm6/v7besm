@@ -346,7 +346,7 @@ void iodone(register struct buf *bp)
 // Zero the core associated with a buffer.
 void clrbuf(struct buf *bp)
 {
-    wzero(bp->b_un.b_addr, BSIZEW);
+    wzero(bp->b_addr, BSIZEW);
     bp->b_resid = 0;
 }
 

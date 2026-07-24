@@ -83,7 +83,7 @@ loop:
         iput(ip);
         return (NULL);
     }
-    dp = bp->b_un.b_dino;
+    dp = (struct dinode *)bp->b_addr;
     dp += itoo(ino);
     iexpand(ip, dp);
     brelse(bp);
@@ -145,7 +145,7 @@ void iupdat(register struct inode *ip, time_t *ta, time_t *tm)
             brelse(bp);
             return;
         }
-        dp = bp->b_un.b_dino;
+        dp = (struct dinode *)bp->b_addr;
         dp += itoo(ip->i_number);
         dp->di_mode  = ip->i_mode;
         dp->di_nlink = ip->i_nlink;
@@ -223,7 +223,7 @@ void tloop(dev_t dev, daddr_t bn, int f1, int f2)
                 brelse(bp);
                 return;
             }
-            bap = bp->b_un.b_daddr;
+            bap = (daddr_t *)bp->b_addr;
         }
         nb = bap[i];
         if (nb == (daddr_t)0)

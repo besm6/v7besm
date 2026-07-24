@@ -55,8 +55,8 @@ struct buf *alloc(dev_t dev)
         fp->s_flock++;
         bp = bread(dev, bno);
         if ((bp->b_flags & B_ERROR) == 0) {
-            fp->s_nfree = ((FBLKP)(bp->b_un.b_addr))->df_nfree;
-            wcopy((caddr_t)((FBLKP)(bp->b_un.b_addr))->df_free, (caddr_t)fp->s_free,
+            fp->s_nfree = ((FBLKP)(bp->b_addr))->df_nfree;
+            wcopy((caddr_t)((FBLKP)(bp->b_addr))->df_free, (caddr_t)fp->s_free,
                   btow(sizeof(fp->s_free)));
         }
         brelse(bp);
@@ -103,8 +103,8 @@ void free(dev_t dev, daddr_t bno)
         // this the remaining 191 would be written to the disk as they stand -- old
         // kernel memory, on every chain block the filesystem ever grows.
         clrbuf(bp);
-        ((FBLKP)(bp->b_un.b_addr))->df_nfree = fp->s_nfree;
-        wcopy((caddr_t)fp->s_free, (caddr_t)((FBLKP)(bp->b_un.b_addr))->df_free,
+        ((FBLKP)(bp->b_addr))->df_nfree = fp->s_nfree;
+        wcopy((caddr_t)fp->s_free, (caddr_t)((FBLKP)(bp->b_addr))->df_free,
               btow(sizeof(fp->s_free)));
         fp->s_nfree = 0;
         bwrite(bp);
@@ -217,7 +217,7 @@ loop:
             ino += INOPB;
             continue;
         }
-        dp = bp->b_un.b_dino;
+        dp = (struct dinode *)bp->b_addr;
         for (i = 0; i < INOPB; i++) {
             if (dp->di_mode != 0)
                 goto cont;
@@ -285,7 +285,7 @@ struct filsys *getfs(dev_t dev)
 
     for (mp = &mount[0]; mp < &mount[NMOUNT]; mp++)
         if (mp->m_bufp != NULL && mp->m_dev == dev) {
-            fp = mp->m_bufp->b_un.b_filsys;
+            fp = (struct filsys *)mp->m_bufp->b_addr;
             if (fp->s_nfree > NICFREE || fp->s_ninode > NICINOD) {
                 prdev("bad count", dev);
                 fp->s_nfree  = 0;
@@ -316,7 +316,7 @@ void update()
     updlock++;
     for (mp = &mount[0]; mp < &mount[NMOUNT]; mp++)
         if (mp->m_bufp != NULL) {
-            fp = mp->m_bufp->b_un.b_filsys;
+            fp = (struct filsys *)mp->m_bufp->b_addr;
             if (fp->s_fmod == 0 || fp->s_ilock != 0 || fp->s_flock != 0 || fp->s_ronly != 0)
                 continue;
             bp = getblk(mp->m_dev, SUPERB);
@@ -324,7 +324,7 @@ void update()
                 continue;
             fp->s_fmod = 0;
             fp->s_time = time;
-            wcopy((caddr_t)fp, bp->b_un.b_addr, BSIZEW);
+            wcopy((caddr_t)fp, bp->b_addr, BSIZEW);
             bwrite(bp);
         }
     for (ip = &inode[0]; ip < &inode[NINODE]; ip++)

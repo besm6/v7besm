@@ -1,0 +1,44 @@
+; Boot the whole kernel with a root filesystem attached -- task 20.
+;
+; Every other test in this directory links a handful of kernel objects against a forged
+; environment and drives one component.  This one links nothing: it loads the real `unix'
+; image (built one directory up by kernel/CMakeLists.txt) with the same root2048.disk that
+; fstest reads, and lets main() run the actual boot -- startup(), intrinit(), binit(),
+; iinit(), iget() of the root, newproc() -- to the point where process 1 returns.
+;
+; WHAT REACHING `bhalt' PROVES.  _start (kernel/besm6.S) has nothing behind its `vjm main'
+; but `bhalt: stop' (task 22 is not done), so process 1 halts the machine there on return
+; from main().  main() returns ONLY if iinit() did not panic: bread(rootdev, SUPERB) must
+; complete without B_ERROR (else panic "iinit"), sbcheck() must accept the superblock (else
+; panic "no root fs"), and iget(rootdev, ROOTINO) must read the root inode.  So a run that
+; stops at `bhalt' has installed the superblock, seeded `time' from s_time, and reached the
+; icode hand-off -- the whole of task 20's "done when".  A panic stops in panic()'s own
+; `stop' loop at a different PC; a hang runs the step count out somewhere in idle()/extintr().
+; Only the success path stops at `bhalt'.
+;
+; This is exactly the fat-pointer union pun (task 20): before the b_un.b_addr cast fix,
+; sbcheck() read the fat-marked b_filsys, mis-read s_bsize and panicked "no root fs" -- so
+; this case stops at panic() rather than `bhalt', and the assertion below fails.  It is the
+; regression guard for that fix.
+;
+; `attach -r', and emphatically NOT `-n' (the trap TODO.md warns about): -r because the image
+; is a build artifact, and no -n because `attach -n' CREATES AND FORMATS an empty container,
+; on which sbcheck() would fail and the boot would panic.
+;
+; `step', not `go': a hang must fail the run instead of hanging it -- `go' has no step bound.
+;
+; @BHALT@ is `bhalt' pulled from unix.nm by genboot.cmake at build time.  It is a LINKED
+; address that moves as the kernel's const pool grows, which is why this file is generated
+; rather than hardcoded -- unlike fstest.ini, whose object set is small and stable.
+
+reset
+set cpu latin
+
+load ../unix
+attach -r md00 root2048.disk
+step 50000000
+
+if (PC != @BHALT@) echof "FAIL: boot did not reach the icode hand-off (bhalt=@BHALT@). A PC in panic()'s stop loop means iinit() panicked (no root fs / iinit) -- e.g. the b_un.b_addr fat-pointer fix was reverted; any other PC is a hang. PC:"; ex PC; exit 1
+
+echof "PASS: boot -- the kernel read and validated the root superblock, seeded time from s_time, and reached the icode hand-off with no panic and no hang"
+quit
