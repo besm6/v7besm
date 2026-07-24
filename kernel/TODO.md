@@ -12,8 +12,9 @@ are what is left after the prompt appears.
 
 Where the port stands: `cd kernel && make` links an image that boots under SIMH. With no root
 disk it reaches `panic: iinit`; **with `root2048.disk` attached it now boots through `iinit()`
-to the icode hand-off** (task 20 is done — see Stage 5). The next open work is task 21, retargeting
-`exec` to the BESM-6 `a.out`. The harness the boot is checked against: the build produces a root
+to the icode hand-off** (task 20 is done — see Stage 5). `exec` now reads the BESM-6 `a.out`
+header (task 21 is done — see Stage 6). The next open work is task 22, entering user mode with a
+BESM-6 `icode[]`. The harness the boot is checked against: the build produces a root
 image (`kernel/test/root.manifest` → `root2048.disk`), `kernel/test/fstest` reads its superblock and
 root inode through the real `md` driver, the real buffer cache and the real `sbcheck()` (strictly
 below the boot path), and `kernel/test/boot` boots the whole `unix` image with that disk attached.
@@ -209,37 +210,36 @@ reaches `bhalt`. Reverting the cast fix stops it at `panic()` instead, and the c
 
 ### Stage 6 — run a user program
 
-**21. Retarget `exec` to the BESM-6 `a.out`.**
+**21. Retarget `exec` to the BESM-6 `a.out`. — DONE.**
 
-`getxfile()` ([sys1.c](sys1.c)) is still PDP-11: it reads an eight-field `u_exdata`
-([../include/sys/user.h](../include/sys/user.h)) and tests `ux_mag` against `0407`/`0410`. The
-toolchain emits something else — [../cross/besm6/b.out.h](../cross/besm6/b.out.h): a 48-byte,
-eight-word header of `magic/const/text/data/bss/syms/entry/flag`, with **four** segments. Nothing
-`b6ld` produces can be exec'd today.
-
-Do not re-derive the layout — it exists as running code. `Machine::exec()` in
+`getxfile()` ([sys1.c](sys1.c)) and `xalloc()` ([text.c](text.c)) now read the BESM-6 8-word
+`a.out` header ([../cross/besm6/b.out.h](../cross/besm6/b.out.h),
+`magic/const/text/data/bss/syms/entry/flag`, four segments) instead of the PDP-11 one. The layout
+was transcribed from the running code, not re-derived: `Machine::load_program()` in
 [../cmd/sim/machine.cpp](../cmd/sim/machine.cpp) loads exactly what `ld.corigin`/`torigin`/`dorigin`
-in [../cmd/ld/ld.c](../cmd/ld/ld.c) laid out. Transcribe it:
+in [../cmd/ld/ld.c](../cmd/ld/ld.c) lays out, and the kernel's derived `ts`/`ds`/entry agree with it
+word for word. How it turned out:
 
-* **`ux_mag` must be `unsigned`.** `FMAGIC` is `02044252323200407` — 48 bits — and an `int` here is
-  41. Equality on an unsigned is a plain word compare, so this costs nothing; a signed field would
-  silently truncate and match the wrong files.
-* **The image begins at word 8.** `BADDR = HDRSZ/W = 8` ([../cmd/ld/intern.h](../cmd/ld/intern.h)),
-  so a word's file offset *equals* its virtual word address for const and text. Words 0–7 are the
-  header hole — which is also what keeps every program clear of the virtual-word-0 black hole,
-  since `sureg()` maps text from virtual page 0.
-* **`NMAGIC`**: the read-only region is `pground(8 + a_const/W + a_text/W)` words and data is
-  page-aligned above it, matching the linker's `ALIGN(dorigin, 1024)`. **`FMAGIC`**: one writable
-  region from word 8, `u_tsize = 0`.
-* Sites: `getxfile()` and `setregs()` in [sys1.c](sys1.c) — the `u.u_base = 0` /
-  `u.u_offset = sizeof(u.u_exdata) + ux_tsize` pair becomes const-origin-relative, and
-  `u.u_ar0[RET] = ux_entloc` is already a word address in the new header — and `xalloc()`
-  ([text.c](text.c)), which reads the shared text with the same origin and sizes `x_size` from it.
-* Keep the hostile-input range checks that replaced v7's dead 16-bit overflow guards: the segment
-  sizes come off the disk.
-* **Done when** an executable built by `b6ld` and placed on the image is loaded and entered. The
-  practical check is task 22's first `exec`; confirm the *placement* by dumping core from the `.ini`
-  and comparing against `b6disasm` of the file.
+* **`u_exdata` is the header.** [../include/sys/user.h](../include/sys/user.h) now mirrors
+  `struct exec`: `unsigned ux_mag` (a full 48-bit word — a signed 41-bit field would truncate
+  `FMAGIC` and match the wrong files), then `ux_csize/ux_tsize/ux_dsize/ux_bsize/ux_ssize/
+  ux_entloc/ux_relflg`. It stays 8 words, so `sizeof(u.u_exdata) == HDRSZ` and the header read is
+  unchanged. `FMAGIC`/`NMAGIC`/`BADDR` are a documented duplicate in
+  [../include/sys/param.h](../include/sys/param.h) (the kernel build cannot reach `cross/`).
+* **The image begins at word `BADDR == 8`.** A word's file offset equals its virtual word address
+  for const/text, so reads land at `u_base == u_offset`. Words 0–7 are the header hole, which keeps
+  every program clear of the virtual-word-0 black hole (`sureg()` maps text from virtual page 0).
+* **The hole belongs to whichever region is first.** `NMAGIC`: read-only region =
+  `pground(BADDR + btow(const + text))` words (`ts`), data page-aligned above it, matching the
+  linker's `ALIGN(dorigin,1024)`; the hole is inside `ts`. `FMAGIC`: one writable region from word
+  `BADDR`, `ts == 0` (const+text folded into `ux_dsize`, `ux_csize`/`ux_tsize` zeroed so `xalloc()`
+  is skipped); the hole falls into the data region, added by `ds = pground(btow(...) + BADDR)` and
+  read into word `BADDR` via `(caddr_t)(int *)BADDR`.
+* `setregs()` needed no change — `u.u_ar0[RET] = ux_entloc` is already the word entry address. The
+  hostile-input range checks (now including `ux_csize`) are kept: the sizes come off the disk.
+* **Verified** build + no regression only: `cd kernel && make` (image ends at `050223`, below
+  `KEND`) and `make test` (all 19, incl. `boot`/`mmutest`/`fstest`) pass. Actual placement in core
+  and entry are proved by task 22, which supplies `_start`'s second half and the `icode[]`.
 
 **22. Enter user mode, and a BESM-6 `icode[]`.**
 

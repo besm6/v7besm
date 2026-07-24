@@ -200,12 +200,11 @@ int getxfile(register struct inode *ip, int nargc)
     register int i;
     int lsize;
 
-    // read in first few bytes
-    // of file for segment
-    // sizes:
-    // ux_mag = 407/410/...
-    //  407 is plain executable
-    //  410 is RO text
+    // read in the 8-word BESM-6 a.out header (cross/besm6/b.out.h) for the
+    // segment sizes.  sizeof(u.u_exdata) == HDRSZ == BADDR words, so this reads
+    // exactly the header and leaves the file cursor at the const segment.
+    //  ux_mag = FMAGIC  impure: one writable region from word BADDR
+    //         = NMAGIC  pure:   read-only const+text, page-aligned data
 
     u.u_base   = (caddr_t)&u.u_exdata;
     u.u_count  = sizeof(u.u_exdata);
@@ -225,19 +224,24 @@ int getxfile(register struct inode *ip, int nargc)
     // comparison can never fire and the check had quietly gone dead.  Test the
     // sizes directly instead -- a negative one would sail through btow() and
     // pground() and come out as a nonsense map.
-    if (u.u_exdata.ux_tsize < 0 || u.u_exdata.ux_dsize < 0 || u.u_exdata.ux_bsize < 0) {
+    if (u.u_exdata.ux_csize < 0 || u.u_exdata.ux_tsize < 0 || u.u_exdata.ux_dsize < 0 ||
+        u.u_exdata.ux_bsize < 0) {
         u.u_error = ENOEXEC;
         goto bad;
     }
-    if (u.u_exdata.ux_mag == 0407) {
-        lsize = u.u_exdata.ux_dsize + u.u_exdata.ux_tsize;
+    if (u.u_exdata.ux_mag == FMAGIC) {
+        // Impure: const+text share the single writable region with data.  Fold
+        // them into ux_dsize and zero the read-only sizes, so ts comes out 0 and
+        // xalloc() (no shared text) is skipped.
+        lsize = u.u_exdata.ux_csize + u.u_exdata.ux_tsize + u.u_exdata.ux_dsize;
         if (lsize < 0) { // sum overflowed 41 bits
             u.u_error = ENOMEM;
             goto bad;
         }
         u.u_exdata.ux_dsize = lsize;
+        u.u_exdata.ux_csize = 0;
         u.u_exdata.ux_tsize = 0;
-    } else if (u.u_exdata.ux_mag != 0410) {
+    } else if (u.u_exdata.ux_mag != NMAGIC) {
         u.u_error = ENOEXEC;
         goto bad;
     }
@@ -249,13 +253,20 @@ int getxfile(register struct inode *ip, int nargc)
     // find text and data sizes
     // try them out for possible
     // overflow of max sizes
-    ts    = pground(btow(u.u_exdata.ux_tsize));
+    //
+    // The read-only region (NMAGIC) is the header hole + const + text, so ts
+    // carries the BADDR-word hole; the image begins at word BADDR (cross/besm6/
+    // b.out.h).  Under FMAGIC ux_tsize is 0, so ts is 0 and the hole falls into
+    // the data region instead -- `ts ? 0 : BADDR' below adds it there.
+    ts    = u.u_exdata.ux_tsize
+                ? pground(BADDR + btow(u.u_exdata.ux_csize + u.u_exdata.ux_tsize))
+                : 0;
     lsize = u.u_exdata.ux_dsize + u.u_exdata.ux_bsize;
     if (lsize < 0) { // sum overflowed 41 bits
         u.u_error = ENOMEM;
         goto bad;
     }
-    ds = pground(btow(lsize));
+    ds = pground(btow(lsize) + (ts ? 0 : BADDR));
     ss = SSIZE + pground(btow(nargc));
     if (estabur(ts, ds, ss, 0, RO))
         goto bad;
@@ -273,10 +284,17 @@ int getxfile(register struct inode *ip, int nargc)
     xalloc(ip);
 
     // read in data segment
+    //
+    // const-origin-relative: the data image sits in the file just past the header
+    // hole + const + text, and estabur(0,ds,0) remaps the data region to virtual 0
+    // for the read.  Under FMAGIC (ts == 0) the folded blob starts at word BADDR,
+    // so it must land at word BADDR, skipping the header hole -- (caddr_t)(int*)BADDR
+    // is the fat pointer to byte #0 of that word (mmutest check 25).  Under NMAGIC
+    // ux_csize/ux_tsize are the real const/text sizes and the base is virtual 0.
 
     estabur(0, ds, 0, 0, RO);
-    u.u_base   = 0;
-    u.u_offset = sizeof(u.u_exdata) + u.u_exdata.ux_tsize;
+    u.u_base   = ts ? (caddr_t)0 : (caddr_t)(int *)BADDR;
+    u.u_offset = sizeof(u.u_exdata) + u.u_exdata.ux_csize + u.u_exdata.ux_tsize;
     u.u_count  = u.u_exdata.ux_dsize;
     readi(ip);
     // set SUID/SGID protections, if no tracing

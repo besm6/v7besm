@@ -157,16 +157,21 @@ void xalloc(register struct inode *ip)
     xp->x_iptr   = ip;
     ip->i_flag |= ITEXT;
     ip->i_count++;
-    ts         = pground(btow(u.u_exdata.ux_tsize));
+    // The shared read-only region is the header hole + const + text (cross/besm6/
+    // b.out.h); it is read into word BADDR, so ts carries the BADDR-word hole and
+    // the const image lands where its file offset (HDRSZ) equals its word address.
+    // Words 0..BADDR-1 of the page are left unread -- harmless: no program names
+    // them and virtual word 0 is the black hole regardless.
+    ts         = pground(BADDR + btow(u.u_exdata.ux_csize + u.u_exdata.ux_tsize));
     xp->x_size = ts;
     if ((xp->x_daddr = malloc(swapmap, (int)wtodb(ts))) == NULL)
         panic("out of swap space");
     u.u_procp->p_textp = xp;
     xexpand(xp);
     estabur(ts, 0, 0, 0, RW);
-    u.u_count  = u.u_exdata.ux_tsize;
+    u.u_count  = u.u_exdata.ux_csize + u.u_exdata.ux_tsize;
     u.u_offset = sizeof(u.u_exdata);
-    u.u_base   = 0;
+    u.u_base   = (caddr_t)(int *)BADDR;
     u.u_segflg = 2;
     u.u_procp->p_flag |= SLOCK;
     readi(ip);

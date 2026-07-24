@@ -248,6 +248,14 @@
 #define UBASE    076000 // the u-area: the last page of the kernel space
 #define USTKPAGE 28     // first page of the user stack (070000)
 
+// BESM-6 a.out magic numbers and image base -- must match cross/besm6/b.out.h
+// (the kernel build cannot reach cross/, so these are a documented duplicate).
+// getxfile() (kernel/sys1.c) reads the 8-word header into u.u_exdata, whose
+// sizeof is HDRSZ == BADDR words.
+#define FMAGIC 02044252323200407U // impure: one writable region from word BADDR
+#define NMAGIC 02044252323200410U // pure:   read-only const+text, page-aligned data
+#define BADDR  8                  // HDRSZ/W: image begins at word 8 (header hole 0..7)
+
 // The buffer cache, and the ceiling it puts on the kernel image.
 //
 // buffers[NBUF][BSIZE] is not bss: like the u-area it is a fixed physical area, carved

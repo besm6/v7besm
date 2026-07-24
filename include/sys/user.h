@@ -79,15 +79,15 @@ struct user {
     char u_sep;         // flag for I and D separation
     struct tty *u_ttyp; // controlling tty pointer
     dev_t u_ttyd;       // controlling tty dev
-    struct {            // header of executable file
-        int ux_mag;     // magic number
-        int ux_tsize;   // text size
-        int ux_dsize;   // data size
-        int ux_bsize;   // bss size
-        int ux_ssize;   // symbol table size
-        int ux_entloc;  // entry location
-        int ux_unused;
-        int ux_relflg;
+    struct {              // header of executable file (cross/besm6/b.out.h)
+        unsigned ux_mag;  // a_magic  -- MUST be unsigned: FMAGIC is 48 bits, an int is 41
+        int ux_csize;     // a_const  const segment size, bytes
+        int ux_tsize;     // a_text   text  segment size, bytes
+        int ux_dsize;     // a_data   data  segment size, bytes
+        int ux_bsize;     // a_bss    bss   size, bytes
+        int ux_ssize;     // a_syms   symbol table size, bytes (unused by exec)
+        int ux_entloc;    // a_entry  entry point, a WORD address
+        int ux_relflg;    // a_flag
     } u_exdata;
     char u_comm[DIRSIZ];
     time_t u_start;
