@@ -7,11 +7,31 @@
 #include <array>
 #include <chrono>
 #include <memory>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "processor.h"
 
 class Machine {
+public:
+    //
+    // Why an exec() failed, in the terms the GUEST has to see it in.
+    //
+    // The distinction that matters is ENOENT against ENOEXEC.  A Unix shell asks for a
+    // command, and if exec comes back ENOEXEC -- the file is there and readable but is
+    // not a binary -- it assumes a SHELL SCRIPT and reads the file itself.  That is how
+    // a script runs at all on a v7 system: neither this simulator nor the kernel
+    // implements `#!', because v7 had no such thing.  Reporting ENOENT for a file that
+    // exists collapses the two cases and the script silently becomes "not found"
+    // (kernel/sys1.c's getxfile() gets this right, so the two would disagree).
+    //
+    class ExecError : public std::runtime_error {
+    public:
+        ExecError(int e, const std::string &what) : std::runtime_error(what), err(e) {}
+        int err; // the errno the guest should see
+    };
+
 private:
     // Simulate this number of instructions.
     uint64_t instr_limit{ DEFAULT_LIMIT };
@@ -113,7 +133,8 @@ public:
     // Replace the running image with a new a.out (the exec() Unix syscall):
     // reload the program, lay the argument block at the base of the stack the
     // way the kernel's exece() does, and jump to the new entry point.  Throws
-    // std::runtime_error on a bad/missing file or an oversized argument list.
+    // ExecError, carrying the errno the guest should see, on a bad or missing file or
+    // an oversized argument list.
     void exec(const std::string &filename, const std::vector<std::string> &argv,
               const std::vector<std::string> &envp);
 

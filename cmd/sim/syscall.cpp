@@ -422,9 +422,18 @@ void Processor::sys_exec(unsigned count, bool with_env)
         // On success the image is replaced and execution continues at the new
         // entry point; exec() sets ACC/M[14] for the main(argc, argv) call.
         machine.exec(path, argv, envp);
-    } catch (const std::exception &) {
+    } catch (const Machine::ExecError &e) {
         // Failure returns to the C caller, so clean up its pushed arguments
         // exactly as the common tail in Processor::syscall would.
+        //
+        // The errno comes from the exception rather than being ENOENT for everything:
+        // a shell asked to run a file that exists but is not a binary must be told
+        // ENOEXEC, because that is its signal to read the file as a SHELL SCRIPT.
+        // Collapsing the two made every script "not found" (see Machine::ExecError).
+        sys_err(e.err);
+        if (count >= 2)
+            core.M[017] = ADDR(core.M[017] - (count - 1));
+    } catch (const std::exception &) {
         sys_err(ENOENT);
         if (count >= 2)
             core.M[017] = ADDR(core.M[017] - (count - 1));

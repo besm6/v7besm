@@ -310,6 +310,15 @@ field. The six calls with a second result deliver it in `r12` — see [§3](#3-h
 [§3](#how-a-program-starts) — the same code that starts the very first program, so a guest sees
 one ABI whether it was started from the command line or by another guest. An argument list past
 `NCARGS` (5120 bytes, as in the kernel) is refused.
+
+  A **failed** `exec` reports *why*, and the distinction matters more than it looks: a file that
+  is absent gives `ENOENT`, but one that exists and is readable and simply is not a BESM-6
+  `a.out` gives **`ENOEXEC`**. That is a Unix shell's signal to treat the file as a **shell
+  script** and read it itself — the only way a script runs on a v7 system, since there is no
+  `#!` here (v7 had none, and neither `getxfile()` in [`kernel/sys1.c`](../kernel/sys1.c) nor
+  `b6sim` implements one). Collapsing the two, as `b6sim` once did, makes every script "not
+  found" and puts the simulator at odds with the kernel. `ENOMEM` and `E2BIG` are reported for
+  an image that will not fit and an argument list that will not.
 † `signal` takes a guest handler, and `b6sim` runs it — on the guest, not on the host. The
 disposition is remembered in `b6sim`'s own table and the host is given a catcher that does nothing
 but record the arrival; the guest's handler is entered at the **end of a serviced extracode**, which
@@ -398,7 +407,9 @@ long run down to the region of interest.
   simulation keeps running.
 - A **fatal machine error** stops the simulation and prints a diagnostic to standard error.
   These include an illegal instruction, an unimplemented system call, running past the
-  `--limit`, or a file that is not a BESM-6 `a.out`:
+  `--limit`, or a file that is not a BESM-6 `a.out` named on the **command line** — the same
+  file reached through `exec` is an ordinary `ENOEXEC` failure the guest may handle, not a
+  fatal one:
 
   ```console
   $ b6sim not-a-program

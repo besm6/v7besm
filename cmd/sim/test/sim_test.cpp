@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -734,6 +735,55 @@ TEST(Cpu, ExecArgBlock)
     EXPECT_EQ(machine.cpu.get_m(017), S + 4);
 
     std::remove(path);
+}
+
+//
+// WHY exec() FAILED, not merely that it did.
+//
+// The guest is a Unix program, and the distinction between ENOENT and ENOEXEC is one it
+// acts on: a shell that gets ENOEXEC -- the file is there and readable, but is not a
+// binary -- concludes it is looking at a SHELL SCRIPT and reads the file itself.  That
+// is the only way a script runs on a v7 system, since there is no `#!' (neither
+// getxfile() in kernel/sys1.c nor this simulator implements one, because v7 had none).
+//
+// Reporting ENOENT for both, as sys_exec() once did, makes every script "not found" --
+// and makes b6sim disagree with the kernel, which gets it right.
+//
+TEST(Cpu, ExecErrorIsENOEXEC)
+{
+    const char *path = "test_execscript.sh";
+
+    // A file that exists and is readable, but is not a BESM-6 a.out.
+    FILE *f = fopen(path, "wb");
+    ASSERT_NE(f, nullptr);
+    fputs("echo hello\n", f);
+    fclose(f);
+
+    Memory memory;
+    Machine machine{ memory };
+    try {
+        machine.exec(path, { path }, {});
+        FAIL() << "exec of a non-binary should have thrown";
+    } catch (const Machine::ExecError &e) {
+        EXPECT_EQ(e.err, ENOEXEC);
+    }
+
+    std::remove(path);
+}
+
+//
+// A file that is not there at all is the other case, and must stay ENOENT.
+//
+TEST(Cpu, ExecErrorIsENOENT)
+{
+    Memory memory;
+    Machine machine{ memory };
+    try {
+        machine.exec("test_no_such_file_at_all.bout", {}, {});
+        FAIL() << "exec of a missing file should have thrown";
+    } catch (const Machine::ExecError &e) {
+        EXPECT_EQ(e.err, ENOENT);
+    }
 }
 
 //

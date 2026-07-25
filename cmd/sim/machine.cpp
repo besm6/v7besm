@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -226,7 +227,7 @@ void Machine::load_program(const std::string &filename)
 
     FILE *file = fopen(filename.c_str(), "rb");
     if (file == nullptr) {
-        throw std::runtime_error("Cannot open " + filename);
+        throw ExecError(ENOENT, "Cannot open " + filename);
     }
 
     // Read and validate the header. word_t is 64-bit in the cross build, so the
@@ -236,7 +237,7 @@ void Machine::load_program(const std::string &filename)
     // cppcheck-suppress compareValueOutOfTypeRangeError
     if (!fgethdr(file, &hdr) || N_BADMAG(hdr)) {
         fclose(file);
-        throw std::runtime_error("Not a BESM-6 a.out binary: " + filename);
+        throw ExecError(ENOEXEC, "Not a BESM-6 a.out binary: " + filename);
     }
 
     const unsigned nconst = hdr.a_const / W;
@@ -258,7 +259,7 @@ void Machine::load_program(const std::string &filename)
     if (borigin + nbss > STACK_BASE) {
         // The image (and the heap that grows above it) must stay below the stack.
         fclose(file);
-        throw std::runtime_error("Program does not fit in memory: " + filename);
+        throw ExecError(ENOMEM, "Program does not fit in memory: " + filename);
     }
 
     cpu.reset();
@@ -342,9 +343,9 @@ void Machine::exec(const std::string &filename, const std::vector<std::string> &
     // to a caller that still exists.  Memory::store is unchecked, so the second one
     // is what keeps an oversized vector off the stack guard and out of bounds.
     if (nbytes > MAX_ARG_BYTES)
-        throw std::runtime_error("Argument list too long: " + filename);
+        throw ExecError(E2BIG, "Argument list too long: " + filename);
     if (sbase + (nbytes + 5) / 6 + 1 >= STACK_LIMIT)
-        throw std::runtime_error("Argument list does not fit in memory: " + filename);
+        throw ExecError(E2BIG, "Argument list does not fit in memory: " + filename);
 
     // Loads the image and seeds PC, the stack pointer and the break.
     load_program(filename);
