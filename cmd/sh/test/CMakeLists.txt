@@ -32,6 +32,13 @@ b6_shtest(syntax)
 # boundary is crossed.
 b6_shtest(heredoc)
 
+# fork and exec of another SHELL SCRIPT, which is how a v7 system runs one at all: there
+# is no `#!' here -- neither the kernel's getxfile() nor b6sim implements it, because v7
+# had no such thing -- so exec comes back ENOEXEC and the shell reads the file itself
+# (the ENOEXEC case in service.c).  Covers arguments, PATH search, exit status and a
+# child that forks in turn.
+b6_shtest(script)
+
 # The one that guards the arena and the break.  Without chkstak() (stak.h) this script
 # does not print `no space' -- it runs off the end of the break and out of the address
 # space, because the memory fault v7 relied on to grow the arena mid-push is not

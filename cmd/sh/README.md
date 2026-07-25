@@ -13,7 +13,7 @@ Part of the ordinary top-level build; there is nothing to invoke separately.
 
 ```sh
 make            # builds build/rootfs/bin/sh among everything else
-make run        # runs its size check and its four b6sim tests, with the rest
+make run        # runs its size check and its five b6sim tests, with the rest
 ```
 
 Two conditions gate it, both shared with `kernel/` and `lib/`: the external
@@ -139,13 +139,14 @@ of room in a 28-page address space:
 
 ## Tests
 
-Four, under `b6sim`, run by `make run` (ctest labels `sh` and `rootfs`):
+Five, under `b6sim`, run by `make run` (ctest labels `sh` and `rootfs`):
 
 | test | what it covers |
 |---|---|
 | `sh_smoke` | sourcing with `.`, assignment, `${-}`/`${+}`/`${=}` substitution, quoting, positional parameters and `shift`, `if`/`for`/`case`/`while`/`until`, `export`/`readonly`/`umask`/`trap`/`set`, and the exit status |
 | `sh_syntax` | the parser's error path — a truncated `if` |
 | `sh_heredoc` | here-documents: `copy()` and `subst()`, a quoted terminator, and a document longer than `CPYSIZ` so the flush boundary is crossed — and with them `fork`, a subshell and file redirection |
+| `sh_script` | running another shell script: arguments, PATH search, exit status, and a child that forks in turn |
 | `sh_nospace` | the arena and the break, to exhaustion |
 
 `b6sim` runs one BESM-6 `a.out` and services its syscalls on the host, which is enough for the
@@ -157,10 +158,29 @@ finding: v7's shell refuses to redirect a built-in (`illegal io` in [`xec.c`](xe
 `( )` **subshell** may be redirected and the built-ins inside it still print. `sh_heredoc` is
 built on that, and it is what covers `copy()`, `subst()`, `initio()` and the fork path.
 
+**So is running another shell script**, which is the whole of `sh_script`. It is worth being
+precise about how, because it is not what a modern reader expects:
+
+> **There is no `#!` on this system.** The shebang is a 4.xBSD invention; v7 had none, and
+> neither this kernel's `getxfile()` ([`kernel/sys1.c`](../../kernel/sys1.c)) nor `b6sim`
+> implements it. What runs a script is the **shell**: `exec` comes back `ENOEXEC` — the file
+> exists and is readable but is not a binary — and `execs()` in [`service.c`](service.c) takes
+> that as "this is a script", points its own input at the file and `longjmp`s back to the top of
+> `main()`. The forked child *becomes* the shell that runs it.
+>
+> A `#!/bin/sh` line is therefore not a comment and not magic: it is a command, it is not found,
+> and it prints one spurious error per run before the script carries on. Do not put one in a
+> script for this system.
+
+Making that work needed a fix in `b6sim`, not in the shell: `sys_exec()` was reporting `ENOENT`
+for *every* exec failure, including "not a BESM-6 a.out". A shell told `ENOENT` concludes the
+file does not exist and reports "not found", so no script could ever run — while the kernel,
+which gets it right, would have run it. `Machine::ExecError` now carries the errno.
+
 **What is still out of reach**, and why:
 
-* **`exec`.** `b6sim` loads BESM-6 executables, so the shell has nothing to exec; there is no
-  external command on the image yet either way. A command name only ever reaches "not found".
+* **Executing a compiled program.** There is no external BESM-6 binary on the image yet, so a
+  command name that is not a script only ever reaches "not found".
 * **Globbing.** [`expand.c`](expand.c) reads directories with `read()` and parses `struct direct`;
   under `b6sim` that is a host directory in a host format, so the read fails and the pattern is
   left literal.
