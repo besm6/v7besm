@@ -33,9 +33,21 @@ int maxmem; // actual max memory per process
 // context switch reloads r15 from the saved label thereafter.
 //
 // u_stack is the last member of struct user, so this points at UBASE +
-// wordsizeof(struct user) - 1 (~076214).  b6cc now folds &u.u_stack[0] --
+// wordsizeof(struct user) - 1 (~074214).  b6cc now folds &u.u_stack[0] --
 // a symbol+offset -- into the static relocation, so we can spell it directly.
+//
+// 884 of the words above it are SAVED (they are inside the USIZE the context
+// switch copies, which ends at 075777); the 1024 above that are overflow, and
+// running there is only safe as long as the process does not leave the CPU.
+// The rule is at UBASE in <sys/param.h>.
 int *const ustkbase = &u.u_stack[0];
+
+// The geometry that rule depends on: one saved page, one overflow page, ending
+// exactly at the top of the unmapped reach.  A negative array size buys nothing
+// here (b6cc accepts one), but _Static_assert has teeth.  It cannot live in
+// <sys/param.h>, which kernel/uarea.S #includes as assembly.
+_Static_assert(UBASE + 2 * USIZE == 0100000,
+               "the u-area must be one saved page plus one overflow page, ending at 0100000");
 
 // icode[] -- the user bootstrap v7 kept here as a hex blob -- is BESM-6 assembly now, in
 // kernel/besm6.S beside sigcode, for the reason sigcode is there: nothing in this port writes
@@ -60,10 +72,11 @@ void startup()
 #endif
 
     // Free all of core above the kernel.  Pages 0..31 -- words 0 through
-    // 0100000 -- are the kernel image and the u-area at 076000, and word
-    // 0100000 is the first free word.  The first page of the pool is the
-    // u-area home of proc[0], which main() claims right after us, so the
-    // pool proper starts one page higher.
+    // 0100000 -- are the kernel image, the buffer cache and the two u-area
+    // pages at 074000, and word 0100000 is the first free word.  The first
+    // page of the pool is the u-area home of proc[0], which main() claims
+    // right after us, so the pool proper starts one page higher.  Only USIZE
+    // is subtracted, not the whole u-area: the overflow page is nobody's home.
     printf("phys mem  = %d kbytes\n", (phymem * NBPW) >> 10);
     maxmem = phymem - (NPAGE * PGSZ + USIZE);
     mfree(coremap, maxmem, NPAGE * PGSZ + USIZE);

@@ -44,7 +44,7 @@
 // clang-format on
 
 // The kernel globals bio.o and utab.o refer to.  In the kernel `u' is an absolute symbol
-// at 076000 and maxmem is counted by startup(); here they are just storage.
+// at 074000 and maxmem is counted by startup(); here they are just storage.
 struct user u;
 int maxmem = 512 * 1024; // words: a fully populated machine
 

@@ -6,25 +6,29 @@
 # the prompt, plus the static files of /etc.  Task 24 put them here.
 #
 # /etc/init IS STILL kernel/test/coninit.S, THE TASK-23 STAND-IN, and task 24's last step --
-# naming build/rootfs/etc/init instead -- is deliberately NOT taken.  It is not that the
-# userland is missing: cmd/init and cmd/sh are built, staged, and sitting on this image one
-# line away.  It is that THE KERNEL STACK IS NOT BIG ENOUGH TO RUN THEM.  Measured, by
-# sampling a local's address in clock() and reading the maximum back out of memory:
+# naming build/rootfs/etc/init instead -- is not taken here.  The reason is no longer the
+# kernel: task 25a fixed the kernel stack (UBASE moved down a page to 074000, so the stack
+# has 1908 words instead of 880 and the 15-bit wrap at 0100000 is out of reach), and a
+# throwaway run with `source ../../rootfs/etc/init' in this slot boots to the shell's root
+# prompt and runs `ls /bin'.  What is left is task 25b's work, which is HERE and next door
+# rather than in the kernel: flipping this line means rewriting kernel/test/console's whole
+# dialogue, which asserts on coninit's `line> ' prompt and its echo, and the disk is
+# attached -r so nothing can be written yet.  They change together or not at all.
+#
+# For the record, the measurement that made 25a necessary -- by sampling a local's address
+# in clock() and reading the maximum back out of memory, which is a tick-sampled LOWER
+# bound on the true peak:
 #
 #     coninit as /etc/init      max SP 077510   184 words of headroom
 #     the real init + a stub sh max SP 077531   167 words
 #     /bin/sh as process 1      max SP 077623   109 words
 #
-# The stack grows UP from about 076214 and CANNOT pass 0100000 -- that is the reach of a
-# 15-bit pointer, so r15 wraps to 0 and the kernel writes its frames over the interrupt
-# vectors.  The deep points are ordinary code (uptget, getblk, mdstrategy), so this is not a
-# runaway recursion; the port simply uses ~790 of the ~880 words the u-area page leaves for
-# a stack, and one nested interrupt frame on top of that is enough.  Booting the real init
-# fails with `panic: kernel trap' and r15 = 0 or 010 in the dump.
-#
-# The fix is a bigger u-area (kernel/TODO.md, task 25), which is a memory-model change --
-# uarea.S and seg.S steal one window per page -- and wants its own plan and its own mmutest
-# work.  Until then coninit stays, and kernel/test/console keeps asserting on its echo.
+# The deep points are ordinary code (uptget, getblk, mdstrategy), so it was not a runaway
+# recursion; the port simply used ~790 of the ~880 words the one u-area page left for a
+# stack, and one nested interrupt frame on top of that was enough.  Booting the real init
+# failed with `panic: kernel trap' and r15 = 0 or 010 in the dump.  Watchpoints under SIMH
+# have since put the true peak at 076100-076177 -- 948-1011 words -- which is why 880 could
+# not work.  kernel/TODO.md task 25a has the whole account.
 #
 # coninit is built next door either way: it is the one user program on this system that
 # links neither crt0 nor libc, so it is what a console failure gets bisected against.
@@ -71,9 +75,8 @@ mode 0777
 # ---- the program the icode execs, and the shell it will exec in turn -------------
 #
 # `source coninit' is a bare filename because it is resolved against b6fsutil's working
-# directory, the kernel test BUILD directory, which is where coninit is linked.  When the
-# stack question above is answered this becomes `source ../../rootfs/etc/init', and
-# kernel/test/console changes with it.
+# directory, the kernel test BUILD directory, which is where coninit is linked.  Task 25b
+# makes this `source ../../rootfs/etc/init', and kernel/test/console changes with it.
 
 file /etc/init          # kernel/test/coninit.S -- the task-23 stand-in; see the header
 source coninit

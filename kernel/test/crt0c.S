@@ -11,7 +11,7 @@
 //
 // Two consequences follow from linking the real intr.c, and both shape this file:
 //   * extintr() reads and writes `u.u_ar0', so `u' must be the real `struct user' -- reserved
-//     here in .bss (in the kernel it is the absolute page at 076000), with `ustkbase' pointed at
+//     here in .bss (in the kernel it is the absolute page at 074000), with `ustkbase' pointed at
 //     u.u_stack by main(), exactly as crt0s.S does.  The gate's stack is then inside `u', which
 //     is where clock()'s C frames want to be.
 //   * intrgate publishes the frame base in `intrframe' for clock() to read, so that cell is
@@ -264,7 +264,7 @@ ustkbase: .word 0
 uprogadr: .word uprog
 
         .bss
-// The u-area.  In the kernel this is the absolute page at 076000; here it is ordinary storage.  It
+// The u-area.  In the kernel this is the absolute page at 074000; here it is ordinary storage.  It
 // must hold `struct user' AND the kernel stack that grows up from u.u_stack -- the 21-word frame,
 // then extintr(), clock(), the callout and timeout() -- so two pages, as in crt0s.S.
         .globl  u

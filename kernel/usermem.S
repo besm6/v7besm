@@ -29,7 +29,7 @@
 // with `vtm 02002' (БлП clear = map on, БлЗ+БлПр held) and `vtm 02003' (unmapped, БлЗ+БлПр held).
 // Never clear БлЗ.  Interrupts are held off across the copy (БлПр kept set) -- these copies are
 // small; the shape stays identical to the proven uflush/uload.  While mapping is on the routine's
-// own bss is unaddressable (virtual 076000+ then names the user's page), so the copy is
+// own bss is unaddressable (virtual 074000+ then names the user's page), so the copy is
 // REGISTER-ONLY: pointers and counter in index registers, the word in A.
 //
 // useracc is a `vjm' call, which clobbers r13 and every r8..r14; so the return address, the word

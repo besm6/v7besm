@@ -369,7 +369,7 @@ int main(void)
     // ---- Check 4: DISK_HALFPAGE ---------------------------------------------------------
     //
     // The memory side on a half-page boundary, which is what an ODD entry of buffers[] is:
-    // buffers is page-aligned at 064000 and each buffer is BSIZEW long, so buffer 1 starts
+    // buffers is page-aligned at 062000 and each buffer is BSIZEW long, so buffer 1 starts
     // half a page in.  Without this bit those five buffers could not be transfer targets.
     //
     // Write block 2 (zone 1, track 0 -- a fresh zone) from the UPPER half of the page,

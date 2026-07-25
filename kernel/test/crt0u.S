@@ -49,6 +49,10 @@ MODVAL  = 04010                 // M[16]: a virtual data address (page 2, offset
 SENT    = 0525252               // the word uintr.c pokes at virtual MODVAL.
 USPV    = 074000                // r15: an (unmapped) user-stack value; also the PHYSICAL page
                                 //   where extintr()'s frame lands if the switch is missing.
+                                //   NOT the u-area, which is UBASE = 074000 in the kernel: this
+                                //   test declares `u' in bss and links no uarea.o, so the page
+                                //   is ordinary scratch here.  The addresses coincide, the
+                                //   meanings do not.
 KSENT   = 0333333               // uintr.c seeds physical USPV/USPV+1 with this; extintr() on the
                                 //   user r15 would overwrite it.
 

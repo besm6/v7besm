@@ -53,10 +53,16 @@ everything below `0100000`, which is exactly the reach of an unmapped data acces
 costs nothing: the hardware forces БлП/БлЗ on at the vector, which is already the kernel's mode.
 Entry and exit touch no mapping register.
 
-**The u-area is the last page of the kernel space** — physical `076000`–`077777`, holding
+**The u-area is the last two pages of the kernel space** — physical `074000`–`077777`, holding
 `struct user` and, above it, the per-process kernel stack growing up to `0100000`. `struct user` is
 therefore at a fixed *physical* page, and is **copied in and out on a context switch**. That is the
 price of an unmapped kernel, and it is the one we pay.
+
+**Only the first of those two pages is copied** — `USIZE` words from `UBASE`, i.e. `074000`–`075777`.
+The page above it is stack **overflow**: the stack may grow into it and run there correctly, but it
+is in no process image and no context switch saves it, so a process that reaches `sleep()` or
+`swtch()` with `r15` above `076000` loses those frames. Task 25a; the rule is written once, at
+`UBASE` in [../include/sys/param.h](../include/sys/param.h).
 
 **Mapping is enabled only inside a few short assembly brackets** — to touch a user page
 (`copyin`/`copyout`/`fubyte`/…), and to reach a physical page above `0100000` (`copyseg`/`clearseg`,
@@ -68,14 +74,16 @@ PHYSICAL, pages 0..31 — the kernel, addressed with БлП = 1 (no translation)
    0        const   (interrupt vector 0500/0501, extracodes 0550-0577, literal pool)
             text    (fetched unmapped: РП is irrelevant to it, always)
             data + bss
-   ...      must all end below 064000 = KEND
-   064000   BUFFERS ------ buffers[NBUF][BSIZE], NBUF*BSIZEW = 5120 words -----
+   ...      must all end below 062000 = KEND
+   062000   BUFFERS ------ buffers[NBUF][BSIZE], NBUF*BSIZEW = 5120 words -----
               a fixed PHYSICAL area, not bss: the drum/disk controllers transfer
               to a physical address.  `buffers = BUFBASE', absolute, in besm6.S;
               main.c declares it `extern'.  Raising NBUF lowers KEND with it.
-   076000   U AREA  ------ the last page of the kernel space -----------------
-              struct user     (~140 words)   `u = 076000`, an absolute symbol
-              kernel stack    (~880 words, grows UP to 0100000)
+   074000   U AREA, saved half ---- USIZE words: what a switch copies --------
+              struct user     (~140 words)   `u = 074000`, an absolute symbol
+              kernel stack    (884 words, grows UP past 075777 into...)
+   076000   U AREA, overflow ------ 1024 words, saved by NOTHING -------------
+              the stack may run here but must not SLEEP here (task 25a)
    0100000  end of the unmapped reach; everything above is the page pool
 
 РП — the current process's map, 32 pages, loaded by sureg()
@@ -102,14 +110,14 @@ page — are stepped by `PGSZ` by every loop that calls them.
 ### The mapped brackets
 
 Each is a short assembly routine that runs **entirely out of index registers**: while mapping is on,
-the kernel's own data — including its stack — is not addressable, because virtual `076000` then
-names the *user's* page 31.
+the kernel's own data — including its stack — is not addressable, because virtual `074000` then
+names the *user's* page 30.
 
 | bracket | why | what it maps |
 |---|---|---|
 | `copyin`/`copyout`/`fubyte`/`fuword`/`subyte`/`suword` | reach a user page | nothing — the user's map is already loaded. The loop toggles БлП per word: read the user word mapped, store it to the kernel buffer unmapped. |
 | `copyseg`/`clearseg` | reach a physical page above `0100000` | steals virtual pages 1–2 as windows (one `mod 020`), restores the quartet from `u.u_upt[]` afterwards |
-| `uflush()`/`uload()` | save/restore the u-area across a context switch | steals virtual page 1 for the process's u home and virtual page 2 for the live u-area (physical page 31); both live in quartet 0, so one `mod 020` steals them and one puts them back |
+| `uflush()`/`uload()` | save/restore the **saved half** of the u-area across a context switch | steals virtual page 1 for the process's u home and virtual page 2 for the live u-area (the physical page `UBASE` names — the descriptor is derived from `UBASE`, not spelled, so it cannot drift from the geometry); both live in quartet 0, so one `mod 020` steals them and one puts them back |
 
 **Never virtual page 0.** A store to virtual address 0 is dropped and a load returns 0:
 `mmu_store()`/`mmu_load()` test `addr == 0` *before* translation and before the "already physical"
@@ -123,7 +131,7 @@ header hole occupies words 0–7, so nothing the program touches lands on the vi
 See `getxfile()` in [sys1.c](sys1.c).)
 
 An interrupt taken inside a bracket is harmless *for addressing*: the hardware forces БлП = 1 at the
-vector, so the handler sees the kernel's normal unmapped world and its stack at `076000` resolves
+vector, so the handler sees the kernel's normal unmapped world and its stack at `074000` resolves
 physically; `выпр` restores БлП from SPSW and the bracket resumes mapped.
 
 It is **not** harmless for `uload`, which is overwriting the page the handler's stack frame is in —
@@ -162,13 +170,13 @@ takes a 5-bit register number, so `M[021]` is reachable).
 
 ### The u-area invariant
 
-The live u-area is at `076000`; the copy in the process's image at `p_addr` is stale between
+The live u-area is at `074000`; the copy in the process's image at `p_addr` is stale between
 switches. A kernel global `uhome` records whose home the live u-area belongs to, and `NOUHOME` (0)
 says it has no home at all — the state `exit()` and a freeing `xswap()` leave behind, without which
 the next `resume()` would flush 1024 words into core `malloc()` may already have handed out.
 
 `resume()` ([switch.s](switch.s)): if `paddr != uhome`, `uflush(uhome)`, then `uload(paddr)`, then
-`uhome = paddr`. Only then restore r1–r7, r13, r15 from the label — which, being at `076000+n` in
+`uhome = paddr`. Only then restore r1–r7, r13, r15 from the label — which, being at `074000+n` in
 *every* process, now names the incoming process's saved state. That constant is the whole trick.
 
 **Anything else that reads or frees the current process's image must flush first.** This is the
@@ -260,42 +268,72 @@ declarations, since each v7 source used to declare its own syscalls (that is wha
 
 **25. THE KERNEL STACK. Then boot to the prompt, and shake the syscalls out.**
 
-**25a. The kernel stack is too small to run the userland, and that is the whole of what is in
-the way.** Put the real `/etc/init` on the image and the boot dies with `panic: kernel trap`
-and **`r15 = 0`** (or `010`) in the dump — a stack pointer that has grown past `0100000`, which
-a 15-bit pointer cannot name, and wrapped to zero. What follows is written over the interrupt
-vectors, and the machine then either fetches a non-instruction from address 2
-(`GRP_INSN_CHECK`) or takes a `GRP_DIVZERO` inside a `b$` byte helper called from `clock()`.
-Both were observed; both are the same fault.
+**25a. The kernel stack was too small to run the userland. DONE — `UBASE` is `074000`.**
+Before it, putting the real `/etc/init` on the image killed the boot with `panic: kernel trap`
+and **`r15 = 0`** (or `010`) in the dump — a stack pointer that had grown past `0100000`, which
+a 15-bit pointer cannot name, and wrapped to zero. What follows was written over the interrupt
+vectors, and the machine then either fetched a non-instruction from address 2
+(`GRP_INSN_CHECK`) or took a `GRP_DIVZERO` inside a `b$` byte helper called from `clock()`.
+Both were observed; both were the same fault.
 
-The measurement, made by sampling `(int)&local` in `clock()`, recording the maximum in a global
-and reading it back out of memory afterwards with `ex` — **not** by printing it, because
+The measurement that found it sampled `(int)&local` in `clock()`, recorded the maximum in a
+global and read it back out of memory afterwards with `ex` — **not** by printing it, because
 `printf()` from `clock()` is itself enough frame to tip the balance and the probe then measures
 its own crash:
 
 | `/etc/init` is … | max kernel SP | headroom below `0100000` |
 |---|---|---|
-| `coninit` (what the image carries today) | `077510` | **184 words** |
+| `coninit` | `077510` | 184 words |
 | the real `init`, with a stub for `/bin/sh` | `077531` | 167 words |
 | `/bin/sh` itself, as process 1 | `077623` | **109 words** |
 
 The deep points are `uptget`, `getblk` and `mdstrategy` — ordinary disk I/O, not a runaway
-recursion. The stack starts at about `076214`, so the port already uses ~790 of the ~880 words
-the u-area page leaves it, and **one nested interrupt frame is enough to go over**. The
-`coninit` row is the important one: today's *passing* configuration has 184 words of margin, so
-this was always true and the userland merely made it visible.
+recursion. The stack started at about `076214`, so the port used ~790 of the ~880 words the
+u-area page left it, and **one nested interrupt frame was enough to go over**.
 
-The fix is more stack, and the only way to get it is to move the stack's *base* down, since its
-top is fixed by the pointer width. That means a **two-page u-area** (`USIZE` 2048, `UBASE`
-075000), and it is a memory-model change, not a constant: `uflush`/`uload` in [uarea.S](uarea.S)
-steal one virtual window per page and copy `USIZE` words; [seg.S](seg.S) shares the quartet-0
-trick; `KEND`/`BUFBASE` move with `UBASE`; `mmutest` hardcodes `UPT` and check 13 exists for
-exactly this class of change; and every process image grows by 1024 words while every context
-switch copies 1024 more. Give it its own plan and its own bite test — and note that task 28's
-"no kernel-stack guard page" stops being a nicety the moment the geometry changes, because a
-depth check is how you would know the new margin is real.
+**What it turned out to be: one line of geometry, not a memory-model change.** `UBASE` moved
+down one page to `074000` and `USIZE` **stayed 1024**. The u-area now spans two pages, but only
+the first is per-process state — what `uflush`/`uload` copy and what a process image reserves at
+`p_addr` — so *nothing else moved*: `sureg()`, `expand()`, `exece()`, `core()`, `machdep.c`'s
+`maxmem`, every `p_size = USIZE + n*PGSZ` in [test/](test/) and `uarea.S`'s two-window quartet-0
+bracket are all untouched. Because the stack grows **up**, the unsaved page is the top one, so
+it is pure overflow reserve rather than a hole in the middle. `KEND`/`BUFBASE` derived down with
+`UBASE` to `062000`, costing the kernel image a page of ceiling it had to spare (20308 words
+against 25600). This is *not* the `USIZE 2048`/`UBASE 075000` two-page u-area this task used to
+propose: that would have grown every image by 1024 words, doubled the switch copy, and forced
+`uarea.S` out of quartet 0 — a two-page u-area needs four window pages and quartet 0 has only
+three usable, virtual page 0 being the black hole. (And `075000` is not page-aligned.)
+
+The one real code change is [uarea.S](uarea.S)'s live-window descriptor, which used to spell
+physical page 31 as the literal `.[11:15]`. It is `#(UBASE)` now — the k=2 field is
+`(page & 037) << 10`, so for any page under 32 the descriptor **is** `UBASE` — because a
+hardcoded page there fails *silently*: the bracket would have windowed the overflow page while
+the copy loop read the saved one. `mmutest` bites on exactly that (checks 15/16), and so do
+`usched` and `console`; verified by putting `.[11:15]` back and watching all three fail.
+
+**The new margin, measured under SIMH rather than argued.** With the real `init` and `/bin/sh`
+on the image the boot reaches the shell's root prompt, `/bin/sh` runs `ls /bin`, and:
+
+* peak kernel `r15` is between `076100` and `076177` — 948–1011 words deep, so 64–127 words into
+  the overflow page, with ≥896 words still below `0100000`. Found with SIMH write watchpoints on
+  ranges of the overflow page (`break -w 0176000-0177777`): `mmu_store()` ORs `0100000` into the
+  address *before* `sim_brk_test`, so such a break fires only on an **unmapped** store, i.e. only
+  on a kernel stack frame. The deepest frames are `mdstart+3` and `b$save`/`b$pinc`.
+* the deepest `resume()` in that whole run had `r15 = 075302`, 318 words *below* the overflow
+  page, across 34 context switches (`break <resume>; ex M17`). So no process ever left the CPU
+  with frames in the unsaved page — which is the design working as intended, since the frames
+  that do go up there belong to interrupt handlers and to non-sleeping driver code.
+* note the old table was a **tick-sampled lower bound**: the true peak is ~200 words deeper than
+  the 775 words `clock()` happened to catch, which is why 880 words were not enough.
+
+Left undone deliberately: no kernel-stack depth check (see task 28), and `test/root.manifest`
+still names `coninit` — flipping it is 25b, below.
 
 **25b. Then the prompt, and the syscalls.**
+
+25a's throwaway run already got as far as the first two lines below — the boot reaches `"# "` and
+`ls /bin` works — so what is left here is turning that into the committed image and the asserted
+dialogue, not finding out whether it works.
 
 * `make run` boots with the image attached and gives a shell on the SIMH console.
 * `test/root.manifest` names `build/rootfs/etc/init`, and **`test/console` changes with it** —
@@ -350,9 +388,15 @@ are already in the right places. `/dev/kmem` is direct below the unmapped reach.
   got.
 * **`uflush`/`uload` copy the whole 1024-word page.** Copying only up to the saved `r15` —
   `struct user` plus the live stack, typically ~300 words — was planned and never done.
-* **No kernel-stack guard page.** `r15` grows up from ≈ `076214` to `0100000`, and past that a
-  15-bit address wraps to 0 — into the interrupt vectors. A depth check in `trap()`/`swtch()` is the
-  cheap answer.
+* **No kernel-stack guard page, and none is possible.** `r15` grows up from ≈ `074214` to
+  `0100000`, and past that a 15-bit address wraps to 0 — into the interrupt vectors. The kernel
+  runs unmapped, so neither РП nor РЗ applies to it: the only mechanisms are a software depth
+  check or the simulator. Task 25a made the wrap unreachable by any measured path but left two
+  things worth a comparison each: `if ((int)&local >= 0100000 - MARGIN) panic("kstack")` for the
+  wrap, and — the one 25a's geometry actually needs — `if ((int)&local >= UBASE + USIZE)` in
+  `sleep()`, which is where a frame in the overflow page would be silently lost (see the
+  consequences list). Under SIMH both are already observable without kernel code, with
+  `break -w` on the overflow page and `break <resume>; ex M17`; 25a's writeup has the recipe.
 * **Every other `int` → `char *` conversion.** `u.u_dirp = (caddr_t)u.u_arg[0]` is fine — that cast
   is a silent `COPY`, so the caller's marker and byte offset survive and `namei()`'s
   `fubyte(u.u_dirp++)` is right. What is *not* checked is everywhere else that fabricates a pointer
@@ -513,7 +557,14 @@ Facts that cost real time to establish and are not written down in `doc/`.
 
 * **A context switch copies the u-area twice** (out to the old home, in from the new): 1024 words
   each way, or ~300 with the optimisation in task 28. This is the cost of an unmapped kernel; in
-  exchange the trap path costs *nothing* and `copyin` needs no window.
+  exchange the trap path costs *nothing* and `copyin` needs no window. It stayed 1024 after task
+  25a, which bought the stack a second page without copying it.
+* **Kernel-stack frames above `076000` are not saved.** The overflow page (task 25a) is where a
+  deep path's interrupt frames live, and interrupt handlers never sleep, so the workload measured
+  does not lose anything: at peak the stack reaches `076100`–`076177`, while the deepest `resume()`
+  in a boot → `/etc/rc` → shell → `ls /bin` run had `r15 = 075302`, 318 words below the boundary.
+  A path that sleeps deeper than 884 words would silently lose those frames. Task 28 has the
+  one-line detector.
 * **The u-area invariant is a footgun.** It has bitten twice, and a seventh site added later and
   forgotten will still be a very confusing bug. The whole rule lives in one block comment at
   `xswap()` in [text.c](text.c).

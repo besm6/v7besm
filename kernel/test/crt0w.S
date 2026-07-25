@@ -6,15 +6,18 @@
 // here runs in the kernel's own world.  What it does instead is put the machine into the
 // shape the switch assumes, which the other tests never had to:
 //
-//   * `u' IS THE REAL u-AREA, at physical 076000.  It has to be: uarea.S windows the live
-//     u-area as physical page 31 (a hardcoded descriptor), so a `u' declared as ordinary
-//     bss the way crt0c.S declares it would have uflush() copying the wrong page.  `u' is
-//     therefore an absolute symbol here exactly as in kernel/besm6.S.
+//   * `u' IS THE REAL u-AREA, at physical 074000.  It has to be: uarea.S windows the live
+//     u-area as the physical page UBASE is in (page 30), a descriptor derived from UBASE
+//     and from nothing else, so a `u' declared as ordinary bss the way crt0c.S declares it
+//     would have uflush() copying the wrong page.  `u' is therefore an absolute symbol here
+//     exactly as in kernel/besm6.S.
 //
-//   * MAIN RUNS ON THE u-PAGE STACK, at 076400 -- past struct user (~140 words) and with
-//     ~768 words of room below 0100000.  This matters: resume() reloads the u page out from
-//     under its own caller, so a test running on some other stack would never exercise the
-//     thing that makes the switch delicate.
+//   * MAIN RUNS ON THE u-PAGE STACK, at 074400 -- past struct user (~140 words), with ~768
+//     words below the end of the SAVED page (075777) and 1024 more of overflow above that
+//     (task 25a; see UBASE in <sys/param.h>).  This matters: resume() reloads the u page out
+//     from under its own caller, so a test running on some other stack would never exercise
+//     the thing that makes the switch delicate -- and main()'s frames must stay in the saved
+//     half for leg B's sentinel to mean anything.
 //
 // The 0501 gate is crt0.s's short save, not the kernel's FULSAV: extintr() is an ordinary C
 // function that preserves r1-r7 and r15, so the accumulator and r8-r14 are all that is left
@@ -25,7 +28,7 @@
 #include "sys/param.h"            // UBASE
 
         u     = UBASE             // the real u-area, as in kernel/besm6.S
-        ustk  = UBASE + 0400      // main()'s stack, inside the u page and past struct user
+        ustk  = UBASE + 0400      // main()'s stack, inside the SAVED u page and past struct user
 
         .globl  u
 

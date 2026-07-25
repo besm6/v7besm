@@ -54,9 +54,10 @@ static unsigned uptget(int v)
 
 // Rebuild the shadow map from the process's sizes and load it into РП and РЗ.
 //
-// The image at p_addr is the u-area page, then data, then stack; the text is
-// separate when it is shared.  The u page is NOT in the map -- it lives at a fixed
-// physical address and the kernel reaches it unmapped.
+// The image at p_addr is the u-area page (USIZE words -- the saved half only, so
+// the image head is one page whatever the u-area's span), then data, then stack;
+// the text is separate when it is shared.  The u page is NOT in the map -- it
+// lives at a fixed physical address and the kernel reaches it unmapped.
 //
 // Writing РП here is safe precisely because the kernel runs unmapped: changing the
 // map changes nothing about how the kernel addresses its own memory.

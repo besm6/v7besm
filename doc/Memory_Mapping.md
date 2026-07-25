@@ -1009,9 +1009,9 @@ entry. **None of those exist on the BESM-6.** The retarget is **done**; the tabl
 where each concern landed.
 
 The shape it settled into: **the kernel runs unmapped** (БлП = БлЗ = 1), so a kernel address *is* a
-physical address and the image must fit below **`064000`** (`KEND`); **the u-area is a fixed physical
-page** at `076000` and is copied in and out on a context switch; **the buffer cache
-`buffers[NBUF][BSIZE]` is a fixed physical area** at `064000`–`076000`, out of bss because the drum
+physical address and the image must fit below **`062000`** (`KEND`); **the u-area is two fixed
+physical pages** at `074000`, of which the first is copied in and out on a context switch; **the buffer cache
+`buffers[NBUF][BSIZE]` is a fixed physical area** at `062000`–`074000`, out of bss because the drum
 and disk controllers transfer to a physical address; and **РП always holds the current process's
 map**, so a trap switches nothing. `KEND` is derived — `BUFBASE == UBASE - NBUF*BSIZEW` — so raising
 `NBUF` lowers the ceiling with it. The design is written up in
@@ -1021,7 +1021,7 @@ map**, so a trap switches nothing. `KEND` is derived — `BUFBASE == UBASE - NBU
 | concern | how it works on this machine |
 |---|---|
 | page size and the click ([`include/sys/param.h`](../include/sys/param.h)) | A page is **1 Kword**, and **the click is dead**: it is not re-scaled, it is gone. Every size and address in the kernel is a count of **48-bit words**, and `ctob`/`btoc`/`ctod` are replaced by `btow`/`wtob`/`pground`/`wtodb`. Where the hardware needs a page, the value is a word address that is a multiple of `PGSZ` and the map builder shifts by `PGSH` (10). |
-| the u-area | **One page, and a physical one**: `u = 076000`, an absolute symbol rather than storage, holding `struct user` (~140 words) with the kernel stack growing up above it. Being outside every process's map is what forces the copy — see `uflush`/`uload` ([`kernel/uarea.S`](../kernel/uarea.S)). |
+| the u-area | **Two pages, and physical ones**: `u = 074000`, an absolute symbol rather than storage, holding `struct user` (~140 words) with the kernel stack growing up above it to `0100000`. Only the first page (`USIZE` words) is per-process state and copied; the second is stack overflow that no context switch saves, so a process must not *sleep* in it (task 25a). Being outside every process's map is what forces the copy — see `uflush`/`uload` ([`kernel/uarea.S`](../kernel/uarea.S)). |
 | image size limit ([`kernel/utab.c`](../kernel/utab.c)) | There are only **32 virtual pages** — a hard **32 Kword ceiling** on text + data + stack. The u-area is *not* among them, so the user gets all 32. `estabur()`'s `xrw` and `sep` arguments are inert: no read-only page, no I/D separation. |
 | loading a process's map (`sureg()`) | The whole mapping is **twelve instructions**: eight `рег 020+i` for РП, four `рег 030+j` for РЗ, packed with `__besm6_aux` from the shadow. **There is no TLB flush, not even a no-op** — writing РП refills the TLB in the same breath ([mmu_setrp()](https://github.com/besm6/simh/blob/master/BESM6/besm6_mmu.c#L717)), so a stale translation is not a state the machine can be in and a no-op would only invite someone to wonder when to call it. |
 | finding a physical address, and reaching one | There is **no page table in memory, no page-table base register, and no page walk** — and РП/РЗ **cannot be read back**. The shadow is `u.u_upt[8]`, eight words each carrying four РП descriptors *and* the matching РЗ byte, so `sureg()` needs no shifting; `physaddr()`/`useracc()` read descriptors back out with `__besm6_apx`. Physical memory above `0100000` is reached by spending virtual pages **1 and 2** on a window — never page 0, which is a black hole in the *virtual* address. |

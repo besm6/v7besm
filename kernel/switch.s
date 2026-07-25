@@ -23,11 +23,11 @@
 //     correct as they stand: slp.c's second save() falls into the process-search loop and
 //     resumes someone else, and proc 0 has no user map worth loading.
 //
-//   * The u-area is a fixed PHYSICAL page at 076000, not a fixed virtual one, so it has to
+//   * The u-area is a fixed PHYSICAL page at 074000, not a fixed virtual one, so it has to
 //     be COPIED: out to the outgoing process's home, in from the incoming one's.  That is
 //     uflush()/uload() (uarea.S), and it is the price of an unmapped kernel.
 //
-// The label pointer survives the swap by being a constant: u.u_qsav is 076000+n in EVERY
+// The label pointer survives the swap by being a constant: u.u_qsav is 074000+n in EVERY
 // process, so the pointer may be captured before the copy and dereferenced after it, by
 // which time its CONTENTS are the incoming process's.  That is the whole trick.
 //
@@ -186,7 +186,7 @@ rfast:
         .data
 
 // int uhome -- the p_addr whose u-area is the one currently live at UBASE.  The live u-area
-// is at 076000 and the copy in the process's image is stale between switches; resume()
+// is at 074000 and the copy in the process's image is stale between switches; resume()
 // flushes and reloads when it finds uhome != the incoming p_addr.  NOUHOME (0) means the
 // live u-area belongs to no in-core image, because the image it belonged to has just been
 // freed -- see the rules at xswap() in text.c.  No image ever lives at physical 0, so 0 is

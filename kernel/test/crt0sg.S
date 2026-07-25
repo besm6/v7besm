@@ -404,7 +404,7 @@ save_y:  . = . + 1
 save_c:  . = . + 1
 save_sp: . = . + 1
 
-// The u-area.  In the kernel this is the absolute page at 076000; here it is ordinary storage,
+// The u-area.  In the kernel this is the absolute page at 074000; here it is ordinary storage,
 // big enough for `struct user' AND the kernel stack that grows up from u.u_stack.
         .globl  u
 u:      . = . + 4096

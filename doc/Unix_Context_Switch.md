@@ -178,8 +178,8 @@ that slot into IRET and leaves through one hardcoded `3 ij` for all four. §10 e
 correct.
 
 **It lives at a link-time constant.** The kernel stack is the top of `struct user`, and
-`ustkbase` (`machdep.c`) is `&u.u_stack[0]` — with the u-area a fixed physical page at `076000`, that
-is ≈ `076214`. `_start` seeds М15 with it, and `trapgate`/`sysgate`/`badext` reload it on every entry.
+`ustkbase` (`machdep.c`) is `&u.u_stack[0]` — with the u-area fixed at `074000`, that is ≈ `074214`,
+leaving 884 words of *saved* stack and then 1024 more of unsaved overflow below `0100000`. `_start` seeds М15 with it, and `trapgate`/`sysgate`/`badext` reload it on every entry.
 
 **It is aliased in place, not copied.** `trap()` and `syscall()` reach it as
 `(struct trap *)u.u_stack` and point `u.u_ar0` at it. So a register that `trap()`, `psig()` or
@@ -274,13 +274,13 @@ stack — the switch is free. **The BESM-6 has one stack register, М15, shared 
 So when the interrupt lands in user code, М15 holds the user stack pointer — and the trap has just
 forced **БлП on**, so supervisor data is unmapped. That
 value is now a **physical** word index at ≈ `070000`, *inside the kernel image, below the u-area at
-`076000`*. The C handler's prologue would write its frame straight into the kernel's own text and
+`074000`*. The C handler's prologue would write its frame straight into the kernel's own text and
 data. Silent corruption, invisible until a device ISR is actually armed.
 
 `trapgate` and `sysgate` switch **unconditionally**:
 
 ```
-     15 vtm     [ustkbase]          // M15 := kernel stack base (~076214) = frame base F
+     15 vtm     [ustkbase]          // M15 := kernel stack base (~074214) = frame base F
 ```
 
 An extracode only ever comes from user (the kernel never issues one), and a *fault* from supervisor
@@ -299,7 +299,7 @@ must not have the stack pulled out from under an interrupted C frame:
         ita     SPSW                // SPSW -> A
         aax     #(SPSW_INTERRUPT | SPSW_EXTRACODE)
         u1a     extk                // РежЭ|РежПр set -> nested in the kernel: keep M15
-     15 vtm     [ustkbase]          // zero -> from user: M15 := kernel stack base (~076214)
+     15 vtm     [ustkbase]          // zero -> from user: M15 := kernel stack base (~074214)
 extk:                               // M15 = frame base F (ustkbase, or the interrupted kernel SP)
 ```
 
@@ -951,11 +951,11 @@ Two things changed underneath it:
   user already calls on the `save()`-returned-nonzero arm (`slp.c`, `text.c`). The two landing sites
   without one are correct as they stand: `slp.c`'s second `save()` falls into the process-search loop
   and resumes someone else, and proc 0 has no user map worth loading.
-- **The u-area is a fixed *physical* page at `076000`, not a fixed virtual one**, so it has to be
+- **The u-area is fixed *physical* storage at `074000`, not a fixed virtual page**, so it has to be
   **copied**: out to the outgoing process's home, in from the incoming one's. That is
   `uflush()`/`uload()` (`kernel/uarea.S`), and it is the price of an unmapped kernel.
 
-> **The label pointer survives the swap by being a constant.** `u.u_qsav` is `076000+n` in *every*
+> **The label pointer survives the swap by being a constant.** `u.u_qsav` is `074000+n` in *every*
 > process, so the pointer may be captured before the copy and dereferenced after it — by which time
 > its **contents** are the incoming process's. That is the whole trick.
 
@@ -981,7 +981,7 @@ page 0** — a store to virtual 0 is dropped and a load returns 0, which would s
 
 ### The u-area invariant
 
-`uhome` names the `p_addr` whose u-area is the one currently live at `076000`; the copy in the
+`uhome` names the `p_addr` whose u-area is the one currently live at `074000`; the copy in the
 process's own image is **stale between switches**. So anything that reads or frees the current
 process's image must flush first. The rule is written up once, at `xswap()` in `text.c`, and
 [`kernel/TODO.md`](../kernel/TODO.md) ("The u-area invariant") lists the sites that obey it —
@@ -1043,7 +1043,7 @@ copies live in their own files, and why `syscall.c` is split out of `trap.c` and
 
 | Dubna | Ours |
 |---|---|
-| ИПЗ, the per-task block | the u-area, a **single fixed physical page** at `076000` (§12) |
+| ИПЗ, the per-task block | the u-area, **fixed physical storage** at `074000` — one saved page plus an unsaved overflow page (§12) |
 | `SMASAV`, the global short-save scratch | the trap frame on the kernel stack, plus five temp cells (§4) |
 | `FULSAV` / `RETURN` (§6, §7 there) | `trapgate` … `intret` (§6, §10) |
 | `SAVIND` (§12 there) | `save()` — [`kernel/switch.s`](../kernel/switch.s) |

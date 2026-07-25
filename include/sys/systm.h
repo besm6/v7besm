@@ -221,6 +221,7 @@ void swap(int blkno, int coreaddr, int count, int rdflg);
 void sureg(void);
 // The u-area bracket (kernel/uarea.s).  The live u-area is at UBASE; a process's home copy is
 // the first page of its image at p_addr, above 0100000 and out of reach of an unmapped access.
+// USIZE words: the saved page only, never the overflow page above it (see UBASE in param.h).
 // uflush() only reads the live page and may be called from C; uload() overwrites it -- and with
 // it the kernel stack its caller is standing on -- so only resume() may call it.  See
 // kernel/TODO.md, "The u-area invariant".

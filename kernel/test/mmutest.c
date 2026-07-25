@@ -34,7 +34,7 @@
 // clang-format on
 
 // The kernel globals utab.o refers to.  In the kernel `u' is an absolute symbol at
-// 076000 and maxmem is counted by startup(); here they are just storage.
+// 074000 and maxmem is counted by startup(); here they are just storage.
 struct user u;
 int maxmem = 512 * 1024; // words: a fully populated machine
 
@@ -173,10 +173,16 @@ int main()
     if ((char *)u.u_upt - (char *)&u != UPT * sizeof(int))
         return (13);
 
-    // Fill the live u-area at UBASE.  The kernel reaches it unmapped, and so can we: 076000 is
-    // word 32256, inside the 15-bit word field of a pointer.  The pattern is non-zero at word
+    // Fill the live u-area at UBASE.  The kernel reaches it unmapped, and so can we: 074000 is
+    // word 30720, inside the 15-bit word field of a pointer.  The pattern is non-zero at word
     // 0 on purpose -- a window on virtual page 0 would silently drop exactly that word, which
     // is why uarea.S windows pages 1 and 2 instead.
+    //
+    // USIZE words, so this is exactly the SAVED page of the u-area (074000-075777) -- the half
+    // a context switch copies.  The overflow page above it (076000-077777, task 25a) is not
+    // part of any process image and is deliberately not exercised here: there is nothing to
+    // round-trip.  Note that this leg is what pins uarea.S's live-window descriptor to UBASE:
+    // window the wrong physical page and the fill and the copy no longer name the same words.
     up = (volatile unsigned *)UBASE;
     for (i = 0; i < USIZE; i++)
         up[i] = PATTERN2 ^ i;

@@ -186,10 +186,10 @@ the `libruntime.a` guard. It cross-compiles with the **in-tree** tool targets, s
 `b6ld`, `b6ar`/`b6ranlib`, linking
 against `libruntime.a` (`~/.local/share/besm6/lib`) for the `b$*` helpers, and nothing else:
 no `-lc`, since it has its own `printf` and calls no library routine.
-`make` finishes by printing `b6size -w unix`: the image **must end below `064000`** (`KEND` in
+`make` finishes by printing `b6size -w unix`: the image **must end below `062000`** (`KEND` in
 `include/sys/param.h`), because supervisor instruction fetch is never mapped and the top two
-areas of the unmapped space are spoken for — the u-area at `076000` and, just under it,
-`buffers[NBUF][BSIZE]` from `064000` to `076000` (`doc/Memory_Mapping.md`). Both are fixed
+areas of the unmapped space are spoken for — the two u-area pages at `074000` and, just under them,
+`buffers[NBUF][BSIZE]` from `062000` to `074000` (`doc/Memory_Mapping.md`). Both are fixed
 physical areas rather than bss, so they are *not* counted in the `b6size` total; the ceiling is
 derived (`KEND == BUFBASE == UBASE - NBUF*BSIZEW`), so raising `NBUF` lowers it automatically.
 
@@ -275,9 +275,10 @@ instead, which is where new findings belong too. The
 shape of it: the **kernel runs unmapped** (БлП = БлЗ = 1), so a kernel address *is* a physical
 address, and the kernel image plus the u-area plus the buffer cache must fit the low 32 pages,
 because supervisor instruction fetch is never mapped. Two fixed physical areas are carved off
-the top of that space, so the **image itself must end below `064000`** (`KEND`): the **u-area,
-a fixed physical page at `076000`** (`u` is an absolute symbol, not storage), copied in and out
-on a context switch; and **`buffers[NBUF][BSIZE]` at `064000`–`076000`** (`buffers = BUFBASE`,
+the top of that space, so the **image itself must end below `062000`** (`KEND`): the **u-area, two
+fixed physical pages at `074000`** (`u` is an absolute symbol, not storage), of which the first —
+`USIZE` words — is copied in and out on a context switch while the second is unsaved kernel-stack
+overflow; and **`buffers[NBUF][BSIZE]` at `062000`–`074000`** (`buffers = BUFBASE`,
 likewise absolute, declared `extern` in `main.c`), out of bss because the drum and disk
 controllers transfer to a *physical* address. **РП always holds the current process's map**, so
 a trap switches nothing.

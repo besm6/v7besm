@@ -41,7 +41,7 @@
 
 #include <besm6.h>
 
-// The kernel globals utab.o refers to.  In the kernel `u' is absolute at 076000 and maxmem is
+// The kernel globals utab.o refers to.  In the kernel `u' is absolute at 074000 and maxmem is
 // counted at boot; here they are ordinary storage (as in mmutest, uintr and utrap).
 struct user u;
 int maxmem = 512 * 1024;
@@ -61,6 +61,8 @@ void drainbrz(void);
 // Must match the EQUs in crt0g.S.
 #define USPV    070000U // forged r15: the base of the user stack
 #define GROWADR 072000U // virtual page 29: one word past the stack top
+// DONEADR is a VIRTUAL address, unrelated to the kernel's UBASE, which is the same number as a
+// physical one.  This test declares `u' in bss and links no uarea.o, so nothing collides.
 #define DONEADR 074000U // virtual page 30: never opened
 #define DATADR  02000U  // virtual page 1: the data page
 
@@ -94,7 +96,7 @@ static unsigned oldstkph; // physical address of the stack page, sampled BEFORE 
 
 // The fault handler, reached from crt0g.S's trapgate -- the same C signature the real kernel's
 // trap() has.  See utrap.c for why the frame is found at `ustkbase' here rather than at
-// u.u_stack: `u' above is ordinary storage, not the fixed page at 076000.
+// u.u_stack: `u' above is ordinary storage, not the fixed page at 074000.
 void trap(void)
 {
     struct trap *tr = (struct trap *)ustkbase;

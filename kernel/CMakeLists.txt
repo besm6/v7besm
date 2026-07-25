@@ -7,7 +7,7 @@
 # installed tools -- see scripts/BesmCross.cmake.  Its counterpart is `lib/', which shares that
 # module and the same in-tree-vs-installed toolchain story.
 #
-# The image must end below 064000 (KEND); the link ends by printing `b6size -w unix'.
+# The image must end below 062000 (KEND); the link ends by printing `b6size -w unix'.
 # Works two ways: standalone (`cd kernel && make', its own project) and as a subdirectory
 # of the top-level CMake project (add_subdirectory(kernel)).  When included, the parent owns
 # the project(), so declare our own only when we are the top of the tree -- and note that

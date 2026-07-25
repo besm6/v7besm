@@ -1,19 +1,29 @@
 //
 // uflush / uload -- save and restore the u-area across a context switch.
 //
-// void uflush(unsigned paddr);         // the live u-area (076000) -> the process's home
-// void uload (unsigned paddr);         // the process's home -> the live u-area (076000)
+// void uflush(unsigned paddr);         // the live u-area (074000) -> the process's home
+// void uload (unsigned paddr);         // the process's home -> the live u-area (074000)
 //
 // The kernel runs unmapped, so a kernel address IS a physical address -- and an unmapped
-// access reaches only the low 32 Kwords.  The live u-area is the last page of that reach,
-// physical 076000 (page 31); a process's home copy sits at the head of its image at p_addr,
+// access reaches only the low 32 Kwords.  The live u-area is at the top of that reach,
+// physical 074000 (page 30); a process's home copy sits at the head of its image at p_addr,
 // which is a page ABOVE 0100000 and cannot be named by an unmapped access at all.  The only
 // way to reach it is to spend a virtual page on a window and turn mapping on.
 //
 // So both routines are the same bracket:
 //
 //      virtual page 1 (02000-03777)  ->  the process's u home,  paddr >> 10
-//      virtual page 2 (04000-05777)  ->  physical page 31, the live u-area
+//      virtual page 2 (04000-05777)  ->  the live u-area,       UBASE >> 10
+//
+// EXACTLY ONE PAGE IS COPIED, and the u-area is two pages long.  074000-075777 is the saved
+// half -- `struct user' and the kernel stack that has to survive a context switch -- and it
+// is what USIZE names, what a process image reserves at p_addr and what these two routines
+// move.  076000-077777 is stack OVERFLOW: the stack may grow into it and run there
+// correctly, but nothing copies it, so a process that reaches sleep() or swtch() with r15
+// up there loses those frames to whatever runs next.  Task 25a: the page exists to absorb
+// the nested interrupt frame that used to push r15 past 0100000 and wrap it to zero, and an
+// interrupt handler never sleeps, so it always unwinds before the process can leave the CPU.
+// The full statement of the hazard is at UBASE in <sys/param.h>; do not spread it around.
 //
 // Both descriptors live in quartet 0 -- u.u_upt[0], virtual pages 0..3 -- so stealing the
 // window is ONE `mod 020', and so is putting it back.  Both window addresses are below 4096,
@@ -64,7 +74,7 @@
 // real routines: besm6.o cannot go into a standalone test (its 0500 vector reaches into the C
 // kernel, and _start seeds no stack).  Same reason as brz.s, which it calls.
 
-#include "sys/param.h"          // USIZE
+#include "sys/param.h"          // USIZE, UBASE
 
         .text
 
@@ -77,11 +87,20 @@ WLIVE  = 04000                  // virtual page 2: the window on the live u-area
 // deposits a left-aligned source into the mask's set bits, which is what utab.c does too.
 //
 //      RPHOME  .46|.42|.38|.34|.30|.[6:10]   k=1: virtual page 1, the whole descriptor
-//      RPLIVE  .[11:15]                      k=2: virtual page 2 -> physical 31 (037 << 10)
+//      RPLIVE  #(UBASE)                      k=2: virtual page 2 -> the live u-area's page
 //
-// These are written out at each use rather than equated: a symbol's value is only 24 bits, so
-// `RPHOME = .46 | ...' would silently truncate to its low half (verified -- the mask came out
-// 01740, the scattered bits gone).  An inline `#(expr)' is evaluated in the full 48.
+// RPLIVE is a constant, since the live u-area is at a fixed physical address -- and it is
+// UBASE itself, which is not a coincidence worth re-deriving.  The k=2 field is bits 11-15,
+// i.e. (page & 037) << 10, and its bits 6-10 (the ones scattered above bit 28) are zero for
+// any page under 64.  UBASE is page-aligned and below 0100000, so its page number is under
+// 32: (UBASE >> 10) << 10 == UBASE, and no scattered bits are needed.  Written that way, the
+// descriptor cannot drift from the geometry -- it used to be spelled `.[11:15]', which is
+// 076000, and moving UBASE a page down in task 25a would have left it silently windowing the
+// OVERFLOW page while the copy loop read the saved one.
+//
+// The masks are written out at each use rather than equated: a symbol's value is only 24 bits,
+// so `RPHOME = .46 | ...' would silently truncate to its low half (verified -- the mask came
+// out 01740, the scattered bits gone).  An inline `#(expr)' is evaluated in the full 48.
 
 // ----------------------------------------------------------------------------
 // void uflush(unsigned paddr) -- the live u-area out to the process's home.
@@ -101,7 +120,7 @@ uflush:
                                 //   `asn' shifts by (addr & 0177) - 64, and a POSITIVE count
                                 //   shifts RIGHT -- so a left shift by 28 is 64-28, not 64+28.
         aux     #(.46|.42|.38|.34|.30|.[6:10])   // scattered into virtual page 1's descriptor
-        aox     #.[11:15]       // + virtual page 2 -> physical 31, the live u-area
+        aox     #(UBASE)        // + virtual page 2 -> the live u-area: see RPLIVE above
         mod     020             // РП0..3 := the window quartet
         vtm     02002           // clear БлП: data now goes through РП.  Registers only below:
                                 //   the kernel's own data is not addressable while it is on.
@@ -137,7 +156,7 @@ uload:
         xta     <parg>
         asn     64-28           // left by 28: see the note in uflush
         aux     #(.46|.42|.38|.34|.30|.[6:10])
-        aox     #.[11:15]
+        aox     #(UBASE)
         mod     020
         vtm     02002
         vtm     1-USIZE, 10

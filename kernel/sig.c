@@ -189,8 +189,10 @@ int core()
     if (!access(ip, IWRITE) && (ip->i_mode & IFMT) == IFREG && u.u_uid == u.u_ruid) {
         itrunc(ip);
         u.u_offset = 0;
-        // The u-area is a single page: struct user at the bottom, the kernel
-        // stack above it.  One block.
+        // The SAVED u-area is a single page: struct user at the bottom, the
+        // kernel stack above it.  Two blocks (USIZE / BSIZEW).  The overflow
+        // page above it is not part of the image and is not dumped -- a core
+        // file has whatever frames were in the saved half.
         u.u_base   = (caddr_t)&u;
         u.u_count  = wtob(USIZE);
         u.u_segflg = 1;

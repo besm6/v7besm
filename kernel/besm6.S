@@ -219,7 +219,7 @@ intrframe: .word 0              // struct trap * -- valid only inside `intrgate'
 _start:
         // Seed the kernel stack pointer: the top of struct user, growing up to
         // 0100000.  ustkbase (machdep.c) holds &u.u_stack, a link-time constant.
-     15 vtm     [ustkbase]          // r15 := kernel stack base (~076214)
+     15 vtm     [ustkbase]          // r15 := kernel stack base (~074214)
      13 vjm     main                // into the C kernel; main() zeroes bss, sizes memory
 
         // --- into user mode, at the icode.  main() returns HERE, and only in process 1;
@@ -310,7 +310,7 @@ sysgate:
         atx     save_sp
 
         // --- stack switch: unconditional (see the header) ---
-     15 vtm     [ustkbase]          // M15 := kernel stack base (~076214) = frame base F
+     15 vtm     [ustkbase]          // M15 := kernel stack base (~074214) = frame base F
 
         // --- fill the reg.h frame at [M15 ..] -- `trapgate's pipeline, with `its ERET' ---
         xta     save_a
@@ -505,7 +505,7 @@ trapgate:
         atx     save_sp
 
         // --- stack switch: unconditional (see the header) ---
-     15 vtm     [ustkbase]          // M15 := kernel stack base (~076214) = frame base F
+     15 vtm     [ustkbase]          // M15 := kernel stack base (~074214) = frame base F
 
         // --- fill the reg.h frame at [M15 ..] -- `intrgate's pipeline verbatim ---
         xta     save_a
@@ -645,7 +645,7 @@ intrgate:
         ita     SPSW                // SPSW -> A
         aax     #(SPSW_INTERRUPT | SPSW_EXTRACODE)
         u1a     extk                // РежЭ|РежПр set -> nested in the kernel: keep M15
-     15 vtm     [ustkbase]          // zero -> from user: M15 := kernel stack base (~076214)
+     15 vtm     [ustkbase]          // zero -> from user: M15 := kernel stack base (~074214)
 extk:                               // M15 = frame base F (ustkbase, or the interrupted kernel SP)
 
         // --- publish the frame base for clock() (see the header) ---

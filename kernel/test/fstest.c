@@ -131,7 +131,7 @@ void intrinit(void);
 // The environment bio.o, md.o, alloc.o, intr.o and utab.o name.
 // -------------------------------------------------------------------------
 
-// In the kernel `u' is the absolute page at 076000 and maxmem is counted by startup();
+// In the kernel `u' is the absolute page at 074000 and maxmem is counted by startup();
 // here they are just storage.  Nothing below maps anything, so bss will do.
 struct user u;
 int maxmem = 512 * 1024;

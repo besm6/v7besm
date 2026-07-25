@@ -78,7 +78,7 @@
 #define NINDIR  512          // daddr_t per indirect block (BSIZEW / 1)
 #define NMASK   0777         // NINDIR-1
 #define NSHIFT  9            // LOG2(NINDIR)
-#define USIZE   1024         // size of the u-area, in words (one page)
+#define USIZE   1024         // size of the SAVED u-area, in words (one page); see UBASE
 #define CMASK   0            // default mask for file creation
 #define NODEV   (dev_t)(-1)  // no device
 #define ROOTINO ((ino_t)2)   // i number of all roots
@@ -250,8 +250,31 @@
 #define PGSH 10   // LOG2(PGSZ)
 #define PGSZ 1024 // words per page
 
-#define NPAGE    32     // virtual pages per process
-#define UBASE    076000 // the u-area: the last page of the kernel space
+#define NPAGE    32 // virtual pages per process
+
+// The u-area occupies the last TWO pages of the kernel space, 074000-077777, but only
+// the FIRST of them is per-process state: `struct user' at the bottom (140 words) and
+// the kernel stack growing UP through it.  USIZE words from UBASE are what uflush()/
+// uload() copy on a context switch and what every process image reserves at p_addr.
+//
+// The page above the saved one, 076000-077777, is OVERFLOW: the stack may grow into it
+// and code running there is perfectly correct, but the words are in no process image
+// and are NOT copied by a context switch.  That is the whole of task 25a.  Before it,
+// the u-area was one page at 076000 and the stack had ~880 words below the 0100000
+// ceiling -- where a 15-bit r15 wraps to 0 and the kernel writes its frames over the
+// interrupt vectors.  /bin/sh as process 1 peaked 109 words short of that, so one
+// nested interrupt frame killed the boot.  Moving UBASE down a page leaves the saved
+// stack the same size and puts 1024 words of room above it, which is exactly what an
+// interrupt frame needs: an interrupt handler never sleeps, so it always unwinds out of
+// the overflow page before the process can leave the CPU.
+//
+// THE HAZARD, stated once: a process that reaches sleep() or swtch() with r15 above
+// 076000 loses those frames, because uflush() copies only USIZE words and another
+// process then runs deep on the same physical page.  There is no fault and no
+// diagnostic.  It takes a path 884+ words deep AT A SLEEP POINT to do it -- 109 words
+// deeper than anything measured -- and kernel/TODO.md task 28 says how it would be
+// detected.  See kernel/uarea.S and include/sys/user.h.
+#define UBASE    074000 // the u-area: the last two pages of the kernel space
 #define USTKPAGE 28     // first page of the user stack (070000)
 
 // BESM-6 a.out magic numbers and image base -- must match cross/besm6/b.out.h
@@ -265,7 +288,8 @@
 // The buffer cache, and the ceiling it puts on the kernel image.
 //
 // buffers[NBUF][BSIZE] is not bss: like the u-area it is a fixed physical area, carved
-// out of the top of the kernel's unmapped space just under UBASE.  kernel/besm6.S names
+// out of the top of the kernel's unmapped space just under UBASE -- so it moved down with
+// UBASE in task 25a, and the kernel image lost a page of ceiling with it.  kernel/besm6.S names
 // it (`buffers = u - NBUF*BSIZEW'); main.c declares it `extern'.  It lives outside bss
 // because the drum and disk controllers transfer whole zones to a physical address, so
 // the buffers must sit at an address the kernel can name without translation.
@@ -273,7 +297,7 @@
 // KEND is therefore BUFBASE, not UBASE: const + text + data + bss must all end below it.
 // `make' prints `b6size -w unix' so the total can be checked against this line.  Both are
 // derived, so raising NBUF moves the ceiling down and cannot silently disagree with it.
-#define BUFBASE (UBASE - NBUF * BSIZEW) // base of buffers[][]: 064000 at NBUF == 10
+#define BUFBASE (UBASE - NBUF * BSIZEW) // base of buffers[][]: 062000 at NBUF == 10
 #define KEND    BUFBASE                 // the kernel image must end below this
 
 #endif // _SYS_PARAM_H

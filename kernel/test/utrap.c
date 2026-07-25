@@ -40,7 +40,7 @@
 
 #include <besm6.h>
 
-// The kernel globals utab.o refers to.  In the kernel `u' is absolute at 076000 and maxmem is
+// The kernel globals utab.o refers to.  In the kernel `u' is absolute at 074000 and maxmem is
 // counted at boot; here they are ordinary storage (as in mmutest and uintr).
 struct user u;
 int maxmem = 512 * 1024;
@@ -61,6 +61,8 @@ void drainbrz(void);
 #define RMODE  044U     // forged R
 #define RMRVAL 0123456U // forged Y (РМР)
 #define MODVAL 04010U   // forged M[16]
+// USPV is scratch, NOT the kernel's u-area, which is at the same number (UBASE = 074000): `u' is
+// ordinary bss in this test and no uarea.o is linked.
 #define USPV   074000U  // forged r15, and the physical stack-switch sentinel page
 #define KSENT  0333333U // seed value at physical USPV / USPV+1
 #define VSLOT1 04000U   // virtual page 2: where uprog reports the fault-1 retry
@@ -103,7 +105,7 @@ static unsigned nfault; // which fault we are in: 1, 2, 3
 // is found at the base of the stack the gate switched to.
 //
 // This is where the test must diverge in SPELLING, though not in logic.  kernel/trap.c says
-// `u.u_stack', because there the u-area is the fixed page at 076000 and its tail IS the
+// `u.u_stack', because there the u-area is the fixed page at 074000 and its tail IS the
 // kernel stack; here `u' above is ordinary storage that utab.o wants and the gate's stack is
 // crt0t.S's `kstack', named by the same `ustkbase' cell the gate loads M15 from.
 void trap(void)

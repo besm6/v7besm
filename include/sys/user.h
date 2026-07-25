@@ -7,11 +7,14 @@
 // while the process is swapped.
 // The user block is one page, USIZE
 // words, at the physical address
-// UBASE (076000) -- the last page of
-// the kernel space; contains the system
+// UBASE (074000); contains the system
 // stack per user; is cross referenced
 // with the proc structure for the
-// same process.
+// same process.  The kernel space ends
+// one page higher: the stack may grow
+// past USIZE into 076000-077777, which
+// is NOT saved by a context switch.
+// See UBASE in <sys/param.h>.
 
 #ifndef _SYS_USER_H
 #define _SYS_USER_H
@@ -96,8 +99,9 @@ struct user {
     int u_cmask;  // mask for file creation
     int u_stack[1];
     // kernel stack per user
-    // grows up from here to
-    // u + USIZE words (0100000)
+    // grows up from here; saved to
+    // u + USIZE words (075777), then
+    // overflow to 0100000 -- see above
 };
 
 extern struct user u;

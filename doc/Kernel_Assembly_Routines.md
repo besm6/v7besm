@@ -191,7 +191,7 @@ dismisses the tick accumulated during boot and calls `spl0()`. v7 userland that 
 
 `_start` ([besm6.S](../kernel/besm6.S)) is the kernel entry point, and it is **two halves**. The
 first is **two instructions**: seed r15 from `machdep.c`'s `int *const ustkbase = &u.u_stack[0]`
-(≈ `076214`) and call `main()`. The second is the **first entry into user mode**, which `main()`
+(≈ `074214`) and call `main()`. The second is the **first entry into user mode**, which `main()`
 returns into — nine instructions that forge SPSW, IRET, r15 and R and leave through `выпр`, the one
 path into user mode that does not go through `intret`. It is spelled out in
 [Unix_Context_Switch.md §10b](Unix_Context_Switch.md#10b-the-first-entry-into-user-mode).
@@ -414,7 +414,7 @@ These are the heart of process switching — the v7 `savu`/`aretu`/`resume` prim
   map is reloaded by `sureg()`, which every landing site that returns to user already calls on
   the `save()`-returned-nonzero arm); and the u-area is a fixed *physical* page, so it has to be
   **copied** — `uflush()` out to the outgoing home, `uload()` in from the incoming one. The label
-  pointer survives that copy by being the constant `076000 + n` in every process, which is why it
+  pointer survives that copy by being the constant `074000 + n` in every process, which is why it
   may be captured before the swap and dereferenced after it. The kernel-side rules for who must
   flush and when are written up once, at `xswap()` in [text.c](../kernel/text.c).
 
@@ -501,6 +501,9 @@ void uflush(unsigned paddr);                /* live u-area -> the process's home
 void uload(unsigned paddr);                 /* the process's home -> live u-area  */
 ```
 
+`uflush`/`uload` move `USIZE` words from `UBASE` — the **saved** page of the two-page u-area. The
+page above it is kernel-stack overflow, in no process image and copied by nothing (task 25a).
+
 These are the characteristic BESM-6 routine, and the shape recurs wherever the kernel must
 reach memory it cannot normally address.
 
@@ -516,7 +519,10 @@ Three constraints, all of them non-obvious and all of them verified on the machi
   and a load returns 0; the test is on the *virtual* address, before translation, so the black hole
   follows the window wherever page 0 is mapped. A window there silently loses word 0 of whatever it
   copies. Pages 1 and 2 are also the cheap pair: they share quartet 0, so one `mod 020` steals both,
-  and their addresses fit the 12-bit short address field, so the copy loop needs no `utc`.
+  and their addresses fit the 12-bit short address field, so the copy loop needs no `utc`. The
+  *live* side of `uarea.S`'s pair is a constant descriptor, and it is spelled `#(UBASE)` rather than
+  as a page number: the k=2 field is `(page & 037) << 10`, so for any page below 32 the descriptor
+  *is* `UBASE`, and writing it that way is what keeps it from drifting when the geometry moves.
 - **The БРЗ is drained on both sides of the copy**, and the two drains cover different hazards — the
   leading one is the standing "drain before every РП write" rule, the trailing one is what makes the
   copy reach memory before the map changes back. `mmutest` fails distinctly on each.
@@ -671,7 +677,7 @@ absence is a property of the hardware rather than an omission:
 
 | symbol | C declaration | meaning |
 |--------|---------------|---------|
-| `u` | `extern struct user u;` (user.h) | the per-process user area; holds the kernel stack and per-process state. It is a fixed **physical** page — `u = 076000`, an absolute symbol rather than storage — and therefore has to be **copied** in and out on a context switch (§4.2, §4.4a) |
+| `u` | `extern struct user u;` (user.h) | the per-process user area; holds the kernel stack and per-process state. It is fixed **physical** storage — `u = 074000`, an absolute symbol rather than storage — and therefore has to be **copied** in and out on a context switch (§4.2, §4.4a). Two pages: `uflush`/`uload` move the first `USIZE` words, and the page above them is kernel-stack overflow that nothing saves |
 | `phymem` | `extern int phymem;` (machdep.c) | physical memory size in **words**; `startup()` frees it into `coremap`. It is asserted rather than probed — `phymem = 512 * 1024` in `main()`, because an unmapped kernel cannot reach the store it would have to write test patterns into (§2) |
 | `icode`, `eicode` | `extern int icode[], eicode[];` (systm.h) | the **user bootstrap**: `xta`/`xts` staging `"/etc/init"` and a one-entry argv, `$77 SYS_exec`, and a `uj` to itself for the failure return. `main()` copies it into process 1's image and `_start` enters it (§2). It is assembled rather than spelled as a constant for `sigcode`'s reason — no opcode encoding is written down anywhere — and **copied to the address it was linked at**, which is the only way it can name its own string and argv vector: `b6as` rejects `label - label`, there is no PC-relative addressing, and the constant pool sits in the *kernel's* const segment at physical page 0, which is not what the user's virtual page 0 maps to. `eicode` sizes the copy (`eicode - icode`), the way `end - edata` sizes bss; it names a placeholder word, since b6ld requires a const symbol to name a word its own file contributed |
 | `sigcode` | `extern int sigcode[];` (sendsig.c) | **one instruction word**, `$77 SYS_sigret`, and the only piece of this kernel that ever executes in user mode. `sendsig()` copies it onto the user stack above the signal frame and enters the handler with r13 naming the copy, so the handler's ordinary `13 uj` return trips the extracode and `sigret()` reloads the frame. It is assembled here, rather than spelled as a constant in C, so that no opcode encoding is written down anywhere — see [Unix_Context_Switch.md §10a](Unix_Context_Switch.md#10a-the-signal-frame) |

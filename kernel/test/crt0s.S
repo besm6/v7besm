@@ -24,7 +24,7 @@
 //
 // That has one consequence worth stating: syscall() finds its frame at `u.u_stack', so the gate's
 // stack MUST be inside `u'.  `u' is therefore reserved here in .bss (in the kernel it is the
-// absolute page at 076000), and usys.c points `ustkbase' at u.u_stack before entering user mode.
+// absolute page at 074000), and usys.c points `ustkbase' at u.u_stack before entering user mode.
 //
 // The pieces:
 //   * main() (usys.c) programs a user map with sureg(), seeds the sentinels, points ustkbase at
@@ -420,7 +420,7 @@ save_y:  . = . + 1
 save_c:  . = . + 1
 save_sp: . = . + 1
 
-// The u-area.  In the kernel this is the absolute page at 076000 (besm6.S: `u = 076000'); here it
+// The u-area.  In the kernel this is the absolute page at 074000 (besm6.S: `u = 074000'); here it
 // is ordinary storage, because a standalone test has no fixed page to give it.  It must be big
 // enough for `struct user' AND the kernel stack that grows up from u.u_stack -- the frame plus
 // syscall()'s C frames -- so two pages, twice what the kernel allots.

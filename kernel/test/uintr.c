@@ -39,7 +39,7 @@
 
 #include <besm6.h>
 
-// The kernel globals utab.o refers to.  In the kernel `u' is absolute at 076000 and maxmem is
+// The kernel globals utab.o refers to.  In the kernel `u' is absolute at 074000 and maxmem is
 // counted at boot; here they are ordinary storage (as in mmutest).
 struct user u;
 int maxmem = 512 * 1024;
@@ -54,7 +54,8 @@ void gouser(unsigned uentry);
 // brz.s
 void drainbrz(void);
 
-// Must match the EQUs in crt0u.s.
+// Must match the EQUs in crt0u.s.  USPV is scratch, NOT the kernel's u-area, which is at the same
+// number (UBASE = 074000): `u' is ordinary bss in this test and no uarea.o is linked.
 #define MODVAL 04010U   // virtual data address the forged modifier points at
 #define SENT   0525252U // the sentinel poked there
 #define USPV   074000U  // forged user r15 == physical stack-switch sentinel page

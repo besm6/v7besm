@@ -3,7 +3,7 @@
 // The fifth standalone SIMH test, and the third (after usys and uclock) to link the code
 // under test rather than a copy: the kernel's own switch.o (save/resume), uarea.o
 // (uflush/uload), brz.o (drainbrz) and intr.o (spl/idle/extintr), with only
-// the environment hand-built.  crt0w.S puts `u' at the real 076000 and runs main() on the
+// the environment hand-built.  crt0w.S puts `u' at the real 074000 and runs main() on the
 // u-page stack, because resume() reloads that very page out from under its caller.
 //
 // Three legs:
@@ -37,7 +37,7 @@
 #include <besm6.h>
 
 // From crt0w.S: the register-file probe and the cells it reports through.  `u' comes from
-// there too, as the absolute symbol 076000 -- this file must not define it.
+// there too, as the absolute symbol 074000 -- this file must not define it.
 int regtest(label_t lab);
 void halt(int status);
 void drainbrz(void);

@@ -48,6 +48,8 @@ RMR     = 0123456               // Y: a distinctive younger-bits value.
 MODVAL  = 04010                 // M[16]: an inert value (the forged SPSW does NOT arm the
                                 //   modifier here -- uprog names its own addresses through r14).
 USPV    = 074000                // r15: an (unmapped) user-stack value; also the PHYSICAL page
+                                //   -- scratch, not the kernel's u-area at UBASE = 074000:
+                                //   `u' is bss here and no uarea.o is linked.
                                 //   where trap()'s frame would land if the gate failed to switch.
 KSENT   = 0333333               // utrap.c seeds physical USPV/USPV+1 with this.
 

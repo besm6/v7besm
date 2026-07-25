@@ -47,7 +47,9 @@ MODVAL  = 04010                 // M[16]: inert, but the gate must preserve it
 USTK    = 070000                // virtual page 28: the stack base -- the ONE page that exists
 USPV    = USTK                  // forged r15, as exec() now seeds it
 GROWADR = 072000                // virtual page 29: one word past the stack top -- FAULT 1
-DONEADR = 074000                // virtual page 30: never opened -- FAULT 2, the "done" signal
+DONEADR = 074000                // virtual page 30: never opened -- FAULT 2, the "done" signal.
+                                //   VIRTUAL: the same number as the kernel's UBASE, but that
+                                //   one is physical and this test never maps it.
 DATADR  = 02000                 // virtual page 1: the data page, where main() seeds SENTNEW
 
 // ----------------------------------------------------------------------------
