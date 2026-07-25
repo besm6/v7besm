@@ -37,7 +37,8 @@ one `NAMEBUF` constant.
 
 Not testable under `b6sim`, for the same reason [`cmd/ls`](../ls/README.md) is not: it reads
 directories, and `b6sim` maps `read()` onto the host, where a directory descriptor refuses to
-be read. It gets its size check (`rootfs_pwd_size`, label `rootfs`) and is exercised under
-SIMH at `kernel/TODO.md` task 25.
+be read. It gets its size check (`rootfs_pwd_size`, label `rootfs`) and is exercised under the
+real kernel by [`kernel/test/console`](../../kernel/test/console.ini), which types `pwd` at the
+shell and expects `/`.
 
 `pwd.1` is the v7 manual page, kept as it was.

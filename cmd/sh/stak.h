@@ -45,7 +45,8 @@
 //
 // The arrangement is kept, but it cannot be the only one.  It needs the kernel to
 // restart the faulting instruction, which is a property of this port's trap path that
-// nothing has demonstrated yet (kernel/TODO.md, task 25); and under b6sim there is no
+// nothing has demonstrated yet -- the shell runs under the real kernel now, but no test in
+// kernel/test/ drives it into a growth fault; and under b6sim there is no
 // signal delivery at all -- its signal() implements only SIG_DFL and SIG_IGN -- so a
 // value larger than the current slack walks straight out of the address space instead.
 // The test costs a compare on the common path.

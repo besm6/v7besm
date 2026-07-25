@@ -186,8 +186,10 @@ which gets it right, would have run it. `Machine::ExecError` now carries the err
   left literal.
 * **Traps and interrupts.** `b6sim`'s `signal()` implements only `SIG_DFL` and `SIG_IGN`.
 
-All three wait for the real kernel under SIMH — `kernel/TODO.md`, task 25 — which is also where
-the memory-fault path above gets its first real exercise.
+All three need the real kernel, which this shell now runs on: `kernel/test/console` types at it
+and `kernel/test/session` has it write files. Neither globs, sends a signal or grows the stack
+into a fault, though, so all three — and the memory-fault path above — are still undriven, and
+those are the stages to add.
 
 Two notes on the fixtures. They contain **no `#` comments**: the v7 shell has none (they arrived
 with System III), so a `#` line is a command. What stands in for one is a `:` line — but its

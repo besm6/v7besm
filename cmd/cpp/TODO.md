@@ -174,7 +174,7 @@ function-like macros, `#if`/`#elif`, `#`/`##`, and a local `#include`; must avoi
 - [README.md](README.md) — the `besm6` predefine, the host-only scope of the conformance suite,
   and a short "Building for the BESM-6" note listing the workarounds and their upstream issue
   numbers.
-- [../../kernel/TODO.md](../../kernel/TODO.md#L207) — task 24 names `build/rootfs/`; note that
+- [../../kernel/TODO.md](../../kernel/TODO.md) — task 24 named `build/rootfs/`; note that
   `usr/bin/cpp` now sits in it beside `etc/init`.
 
 ## Order of work (gates first)
@@ -214,6 +214,6 @@ likely to exhaust the reduced `SYMSIZ`.
 
 No other `cmd/` tool built natively, no userland beyond the `init` that is already there (`sh`,
 `bin/*`), no change to `root.manifest` — the image is staged, not yet put on a disk.
-Those are [../../kernel/TODO.md](../../kernel/TODO.md#L207) task 24; this plan leaves the staging
+Those are [../../kernel/TODO.md](../../kernel/TODO.md) task 24; this plan leaves the staging
 root ready for them. The three upstream compiler fixes (B1–B3) live in a **separate repo**; this
 plan files them and works around them locally, but landing them there is its own task.

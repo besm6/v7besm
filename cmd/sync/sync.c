@@ -18,7 +18,7 @@
 // flushes the cache on a timer -- so a session that writes files leaves them in delayed-
 // write buffers until something forces them out.  kernel/test/session is the test that
 // cares: it writes, runs this, and then fscks the container to prove that what the kernel
-// said it wrote is what the disk actually holds (kernel/TODO.md, task 25b).
+// said it wrote is what the disk actually holds.
 //
 #include <unistd.h>
 

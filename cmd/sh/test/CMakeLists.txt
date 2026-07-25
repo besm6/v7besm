@@ -5,7 +5,7 @@
 # built-ins -- and, underneath all of them, the arena and the expression stack, which is
 # where this port's BESM-6 pointer work lives.  It is NOT enough to reach fork, exec,
 # pipes, file redirection, globbing or traps; ../README.md says why, one by one.  Those
-# wait for the real kernel under SIMH (kernel/TODO.md, task 25).
+# need the real kernel under SIMH, where the shell now runs but no test drives them yet.
 
 # The shell b6_prog() staged.  Named through B6_ROOTFS rather than a relative path,
 # since that is the variable that decides where it went.

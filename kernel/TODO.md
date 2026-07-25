@@ -1,47 +1,36 @@
-# Bringing the port up: from `panic: iinit` to a single-user shell
+# The BESM-6 Unix port: the design, and what is left
 
-A work plan. The machine-dependent half of the kernel is **done**: the memory model, the mapped
-brackets, `_start`, all three trap doors, the timer, the context switch, the signal frame and the
-user memory layout all work, two processes alternate under the real scheduler on SIMH, and the
-console, drum and disk drivers are written and their failure modes classified. The on-disk layout
-is settled and `b6fsutil` (`cmd/fsutil/`) builds root filesystem images in it.
+The machine-dependent half of the kernel is **done**, and so is everything under a shell:
+`cd kernel && make` links an image that boots under SIMH, mounts `root3072.disk`, execs the
+real `/etc/init`, which forks `/bin/sh` — and you get a prompt. Type at it: the shell runs
+`cat`, `echo`, `ls`, `pwd` and `sync` off the disk, the kernel does the erase, kill and `^D`,
+`^D` takes init round through `/etc/rc` to a fresh prompt, and a session that writes files and
+calls `sync` leaves an image that fscks clean. `make run` is where you talk to it.
 
-**Tasks 24 and 25 are done: the port reaches a single-user shell.** Tasks 26–29 are what is
-left after the prompt, and none of them blocks it.
+This file is the live work plan — the settled design, the hardware rules it obeys, the tasks
+that remain, and the things that cost real time to establish. Keep it current, but keep
+*findings* in the source comments and in `../doc/`: that is where the writeups of the finished
+tasks went, and where new ones belong.
 
-Where the port stands: `cd kernel && make` links an image that boots under SIMH. With no root
-disk it reaches `panic: iinit`; **with `root3072.disk` and a drum attached it boots through
-`iinit()`, hands process 1 the icode, enters user mode, execs the real `/etc/init`, which
-forks `/bin/sh` — and you get a prompt.** Type at it: the shell runs `cat`, `echo`, `ls`,
-`pwd` and `sync` off the disk, the kernel does the erase, kill and `^D` (tasks 20 through 23),
-and `^D` takes init round through `/etc/rc` — the motd appears — to a fresh prompt. The
-session can **write**: create files, `sync`, and the image fscks clean. `make run` is where
-you talk to it.
+**The drums must be attached to exec anything**: they are `swapdev` ([conf.c](conf.c)), and
+`exece()` stages the argument list in swap — `getblk`/`bawrite` in, `bread` out — before it
+ever touches the new image. With no drum that `bread` comes back `B_ERROR` and every exec
+fails with `exec init: error 5` (EIO). Every `.ini` that boots therefore says
+`attach -n drum0 …`.
 
-The userland is **built and on the image** — `/etc/init`, `/bin/sh`, `/bin/cat`, `/bin/echo`,
-`/bin/ls`, `/bin/pwd`, `/bin/sync`, `/etc/rc`, `/etc/motd`, `/etc/passwd` (tasks 24 and 25b).
-
-**The drums must be attached to exec anything**, which is new with task 23 and easy to be
-caught by: they are `swapdev` ([conf.c](conf.c)), and `exece()` stages the argument list in
-swap — `getblk`/`bawrite` in, `bread` out — before it ever touches the new image. With no
-drum that `bread` comes back `B_ERROR` and every exec fails with `exec init: error 5` (EIO).
-Every `.ini` that boots therefore says `attach -n drum0 …`.
-
-The harness the boot is checked against: the build produces a root image
-([../root.manifest](../root.manifest) → `root3072.disk`), `kernel/test/fstest` reads its
-superblock and root inode through the real `md` driver, the real buffer cache and the real
-`sbcheck()` (strictly below the boot path), and then three tests boot the whole `unix` image
-against it, each going one step past the last —
+Four tests cover the image the build produces ([../root.manifest](../root.manifest) →
+`root3072.disk`). `fstest` reads its superblock and root inode through the real `md` driver,
+the real buffer cache and the real `sbcheck()`, strictly below the boot path; the other three
+boot the whole `unix` image against it, each going one step past the last, which is what keeps
+the diagnosis apart — a failure in `boot` says the kernel never got a user program running, one
+in `console` says the line discipline is wrong, one in `session` says the filesystem or a
+driver is.
 
 | test | asserts |
 |---|---|
 | `boot` | process 1 leaves the kernel, execs `/etc/init`, which forks `/bin/sh`, and the shell **prompts** |
 | `console` | a typed dialogue with that shell: erase, kill, a line longer than a clist block, `>/dev/tty`, `pwd`, `ls /bin`, and `^D` round through `/etc/rc` to the next prompt |
 | `session` | the shell **writes** — files, an inode past its direct blocks, `sync` — and the host then fscks the container and diffs what was written |
-
-— which keeps the diagnosis apart: a failure in `boot` says the kernel never got a user
-program running, one in `console` says the line discipline is wrong, one in `session` says the
-filesystem or a driver is.
 
 Read [../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) before touching memory management,
 [../doc/Intrinsics.md](../doc/Intrinsics.md) for how C reaches `002 «рег»` and `033 «увв»`,
@@ -216,206 +205,12 @@ Run every MMU test with **`set mmu cache`**.
 (`brz.s`, `uarea.S`, `seg.S`, `usermem.S`, `switch.s`, `syscall.c`, `sendsig.c`) and why the gates
 are duplicated in the tests' own crt0s.
 
-**Tasks 1–23 are done and their writeups have been removed**; the design they settled on is the
-section above, and how each turned out is in the source comments and in `../doc/`. The numbering is
-**left as it was** — task numbers are cited from the source (`seg.S`, `dev/bio.c`, `dev/mem.c`,
-`clock.c`, `trap.c`, `sig.c`, `test/crt0*.S`, `test/fstest.c`, `sys1.c`, `text.c`) and from `doc/`
-— so the list below starts at 24. The one task that was still open, 18b.6 (wiring up and bring-up),
-became tasks 19 and 20. Since then the root filesystem mounts (task 20 — its bug a fat-pointer
-`b_un` pun, now written up on the union in [../include/sys/buf.h](../include/sys/buf.h)), `exec`
-reads the BESM-6 `a.out` (task 21 — `getxfile()`/`xalloc()` and `u_exdata`), process 1 runs in
-user mode (task 22 — the icode and `_start`'s second half in [besm6.S](besm6.S), and the drain in
-[main.c](main.c); the icode is copied to the address it was *linked* at, which is what lets it name
-its own string and argv vector at all), and the console became a controlling terminal (task 23 —
-the clists, which had to be rewritten because v7 finds a character's block by masking its byte
-address and a `char *` here is a fat pointer; the account is in [prim.c](prim.c), the program that
-proves it was `test/coninit.S`, and `test/console` is what typed at it).
-
-### Stage 7 — the userland
-
-**24. `build/rootfs/` — the tree the image is built from. DONE.**
-
-The userland sources live in **`cmd/`**, beside the host tools rather than in a top-level
-`rootfs/` as this task first proposed — `cmd/` is where v7 kept its commands, and the staging
-tree is a build artifact, not a source tree. They are cross-built by the same CMake machinery
-`lib/` uses ([../scripts/BesmCross.cmake](../scripts/BesmCross.cmake) and the in-tree `b6*`
-targets) and staged into **`build/rootfs/`**, which the root-image manifest
-([../root.manifest](../root.manifest)) reads with `source ../../rootfs/…` (its `source` is
-resolved against `b6fsutil`'s working directory, the kernel test build dir — which is why the
-manifest could move to the top of the tree in 25b without a path in it changing).
-
-* **`cmd/init/`** — the v7 `/etc/init`, ported to C11 and staged as `build/rootfs/etc/init`;
-  with no `/etc/ttys` on the image it is exactly the single-user loop this task asked for.
-  1,207 words. See [../cmd/init/README.md](../cmd/init/README.md).
-* **`cmd/sh/`** — S. R. Bourne's v7 shell, staged as `build/rootfs/bin/sh`; 7,648 words of the
-  28,672. This task had proposed writing a *minimal* shell first and porting v7's only after
-  task 25 had shaken the syscalls out. That turned out not to be worth it: every call the shell
-  makes is a real one in `sysent.c`, so the whole program went across at once. See
-  [../cmd/sh/README.md](../cmd/sh/README.md) — in particular the three fat-pointer hazards it
-  lists, since the same ones are in every v7 source that follows.
-* **`cmd/cat/`, `cmd/echo/`, `cmd/ls/`, `cmd/pwd/`, `cmd/sync/`** — enough to prove the
-  prompt. 4,781 / 2,331 / 7,678 / 4,069 / 625 words (`sync` joined them in 25b, which needed a
-  way to flush the cache from the prompt; there is no `update(8)` on this system). [../cmd/ls/README.md](../cmd/ls/README.md) is the one worth
-  reading: `ls` is where the machine reaches furthest into a v7 source after the shell, and it
-  found a **fourth** fat-pointer hazard to add to that list — `<` between two `char *` does not
-  order correctly, because the byte offset sits above the word address and *decrements* as the
-  pointer advances.
-* **`etc/`** — `passwd` (v7's), `motd`, and `rc`, which had to be rewritten: the v7/x86 script
-  mounts `/dev/hd0e` and runs `mount`, `update`, `cron`, `date`, `rm` and `accton`, none of
-  which exist here. It prints the motd and says what each deleted line is waiting on. Note the
-  two things that constrain anything written for `/etc/rc`: `runcom()` gives the script
-  descriptors 0/1/2 on the root *directory*, so anything meant to be seen must redirect to
-  `/dev/console` itself; and the v7 shell has **no `#` comment**, so a `:` line stands in for
-  one — and its words are still *parsed*, which rules out a backquote, a parenthesis or an
-  apostrophe even inside one.
-Each program is one `b6_prog()` call, which links `crt0.o … -lc -lruntime` in that order — the
-archive-scan contract in [../lib/README.md](../lib/README.md) — and registers a ctest
-(`scripts/check-size.sh`, label `rootfs`) asserting it fits the 28 pages of user image space
-below the stack at `070000`, with no symbol past the 15-bit pointer reach.
-
-**Porting v7 sources is not a copy.** `b6parse` is strict C11: no implicit `int`, no K&R
-parameter lists, no untyped `register i;`, and a signal handler is `void (*)(int)`. Expect the
-same mechanical modernization `cmd/init/init.c` carries a note about — and expect missing
-declarations, since each v7 source used to declare its own syscalls (that is what added
-`kill()` to `<signal.h>`, `<sys/wait.h>`, and the five prototypes in `<sys/stat.h>`).
-
-**25. THE KERNEL STACK. Then boot to the prompt. DONE, but for 25c.**
-
-**25a. The kernel stack was too small to run the userland. DONE — `UBASE` is `074000`.**
-Before it, putting the real `/etc/init` on the image killed the boot with `panic: kernel trap`
-and **`r15 = 0`** (or `010`) in the dump — a stack pointer that had grown past `0100000`, which
-a 15-bit pointer cannot name, and wrapped to zero. What follows was written over the interrupt
-vectors, and the machine then either fetched a non-instruction from address 2
-(`GRP_INSN_CHECK`) or took a `GRP_DIVZERO` inside a `b$` byte helper called from `clock()`.
-Both were observed; both were the same fault.
-
-The measurement that found it sampled `(int)&local` in `clock()`, recorded the maximum in a
-global and read it back out of memory afterwards with `ex` — **not** by printing it, because
-`printf()` from `clock()` is itself enough frame to tip the balance and the probe then measures
-its own crash:
-
-| `/etc/init` is … | max kernel SP | headroom below `0100000` |
-|---|---|---|
-| `coninit` | `077510` | 184 words |
-| the real `init`, with a stub for `/bin/sh` | `077531` | 167 words |
-| `/bin/sh` itself, as process 1 | `077623` | **109 words** |
-
-The deep points are `uptget`, `getblk` and `mdstrategy` — ordinary disk I/O, not a runaway
-recursion. The stack started at about `076214`, so the port used ~790 of the ~880 words the
-u-area page left it, and **one nested interrupt frame was enough to go over**.
-
-**What it turned out to be: one line of geometry, not a memory-model change.** `UBASE` moved
-down one page to `074000` and `USIZE` **stayed 1024**. The u-area now spans two pages, but only
-the first is per-process state — what `uflush`/`uload` copy and what a process image reserves at
-`p_addr` — so *nothing else moved*: `sureg()`, `expand()`, `exece()`, `core()`, `machdep.c`'s
-`maxmem`, every `p_size = USIZE + n*PGSZ` in [test/](test/) and `uarea.S`'s two-window quartet-0
-bracket are all untouched. Because the stack grows **up**, the unsaved page is the top one, so
-it is pure overflow reserve rather than a hole in the middle. `KEND`/`BUFBASE` derived down with
-`UBASE` to `062000`, costing the kernel image a page of ceiling it had to spare (20308 words
-against 25600). This is *not* the `USIZE 2048`/`UBASE 075000` two-page u-area this task used to
-propose: that would have grown every image by 1024 words, doubled the switch copy, and forced
-`uarea.S` out of quartet 0 — a two-page u-area needs four window pages and quartet 0 has only
-three usable, virtual page 0 being the black hole. (And `075000` is not page-aligned.)
-
-The one real code change is [uarea.S](uarea.S)'s live-window descriptor, which used to spell
-physical page 31 as the literal `.[11:15]`. It is `#(UBASE)` now — the k=2 field is
-`(page & 037) << 10`, so for any page under 32 the descriptor **is** `UBASE` — because a
-hardcoded page there fails *silently*: the bracket would have windowed the overflow page while
-the copy loop read the saved one. `mmutest` bites on exactly that (checks 15/16), and so do
-`usched` and `console`; verified by putting `.[11:15]` back and watching all three fail.
-
-**The new margin, measured under SIMH rather than argued.** With the real `init` and `/bin/sh`
-on the image the boot reaches the shell's root prompt, `/bin/sh` runs `ls /bin`, and:
-
-* peak kernel `r15` is between `076100` and `076177` — 948–1011 words deep, so 64–127 words into
-  the overflow page, with ≥896 words still below `0100000`. Found with SIMH write watchpoints on
-  ranges of the overflow page (`break -w 0176000-0177777`): `mmu_store()` ORs `0100000` into the
-  address *before* `sim_brk_test`, so such a break fires only on an **unmapped** store, i.e. only
-  on a kernel stack frame. The deepest frames are `mdstart+3` and `b$save`/`b$pinc`.
-* the deepest `resume()` in that whole run had `r15 = 075302`, 318 words *below* the overflow
-  page, across 34 context switches (`break <resume>; ex M17`). So no process ever left the CPU
-  with frames in the unsaved page — which is the design working as intended, since the frames
-  that do go up there belong to interrupt handlers and to non-sleeping driver code.
-* note the old table was a **tick-sampled lower bound**: the true peak is ~200 words deeper than
-  the 775 words `clock()` happened to catch, which is why 880 words were not enough.
-
-Left undone deliberately: no kernel-stack depth check (see task 28).
-
-**25b. The prompt, and what it dragged out of the drivers. DONE.**
-
-25a's throwaway run had already reached `"# "` and run `ls /bin`, so this task was meant to be
-bookkeeping: commit the image, rewrite the dialogue. It was — until the last bullet, which was
-where writing to the disk got tested for the first time and turned up two real bugs below the
-filesystem. Both are fixed here; both are worth reading before touching a driver.
-
-**The image, and where the manifest went.** `/etc/init` is `build/rootfs/etc/init` — the real
-`cmd/init` — and `/bin/sync` joined the commands, because a session that writes needs a way to
-flush the cache and there is no `update(8)`. The manifest moved out of `kernel/test/` to
-[../root.manifest](../root.manifest), at the top of the tree: every `file` line in it names
-`build/rootfs/`, which `cmd/` and `etc/` stage, so it stopped being a `kernel/test` file when
-task 24 landed. **`b6fsutil`'s working directory did not move with it** — it is still
-`build/kernel/test`, where `root.img` and `root3072.disk` have to land for the `.ini`s to
-attach them — and a `source` resolves against the process's cwd, not against the manifest's own
-location, so no path inside the file changed.
-
-`coninit` came off the image and lost its test, but is **still built**: it is the only user
-program here that links neither `crt0` nor libc, so it is what a console failure gets bisected
-against. It goes back on a scratch copy with `b6fsutil -a`, three commands spelled out in
-[test/CMakeLists.txt](test/CMakeLists.txt) — the same graft `run-session.sh` uses to get its
-script onto the image without a manifest line.
-
-**Three tests, each a step past the last.** `boot`'s `expect` is the shell's root prompt now,
-`"# "` (`supprompt`; `cmd/sh/main.c` picks it for uid 0) — the first thing anything writes,
-since init has no banner and `/etc/rc` does not run until the first shell has exited.
-`console` holds the dialogue: `echo ab#c` for CERASE, `x@echo yz` for CKILL, a 48-character
-line so the clists must chain blocks, `echo … >/dev/tty` for the `/dev/tty` indirection reached
-by a real `open()` in a *forked child*, `pwd` and `ls /bin` for two commands `b6sim` can never
-run, and `^D` — after which the shell exits, init loops, `/etc/rc` runs, the motd appears and
-the prompt comes back, which is the one assertion covering the whole cycle through process 1.
-Every `expect` after the first is the tail of the previous stage plus the next prompt, because
-every prompt looks alike and a rule matching a bare `"# "` would fire early.
-
-`session` is new and is the "done when": `run-session.sh` grafts a script onto its own
-converted copy of the image, boots it **writable**, has the shell create files — including one
-copy of `/bin/ls`, big enough to need its indirect block — and call `sync`; then on the host it
-converts the container back, runs `b6fsutil -c` over it, extracts it, diffs the file the
-session built against `session.expected` and `cmp`s the copy against the original out of the
-same image. Volume numbers: 3072 is the pristine artifact, `mdtest` owns 3073–3076, `session`
-3077, `console` 3078, and 3079 is what the coninit graft above suggests. `boot` alone still
-attaches `-r`, and deliberately — a read-only boot is the assertion that the path to the first
-prompt writes nothing.
-
-**Bug 1: the disk driver never wrote the sector header.** The eight service words of a zone
-live at a fixed physical address per controller, and the exchange moves them in *both*
-directions — a read fills them from the platter, **a write puts them back**. `md.c` had never
-touched them, so every zone the kernel wrote got the header of whatever zone was read last: on
-a real drive, a sector nobody would ever find again. Nothing noticed, because SIMH seeks by
-zone number and never reads the address back — it took converting the written container to a
-flat image afterwards for `b6fsutil` to say so. `mdstart()` now stores the block number in bits
-48–37 of the first word of the half-zone's four before every write, and leaves the other three
-(the volume mark, the userid, the checksum) as the last read brought them in, which is the
-buffer behaving as the hardware leaves it. `mdtest` checks 1 and 2 assert exactly that split.
-
-**Bug 2: a device reads memory, and memory is not the write cache.** With the header stored two
-instructions before the `033`, it was still in БРЗ when the controller transferred — so the
-platter got the *previous* header and the fix appeared to do nothing. This is the same hazard
-as rule 3 above, one step further out: it applies to **any** write exchange whose last touch of
-the buffer was fewer than eight stores ago, which is an inode update or a partly filled block
-as much as a header, and it would show as a lost update rather than as a bad address. Both
-mass-storage drivers now `drainbrz()` on the write path. Invisible under default SIMH; the run
-that found it passed with `set mmu nocache` and failed with `set mmu cache`.
-
-**And a compiler bug, found by the test written for bug 1.** `1U << 36` constant-folded to
-`020` — the shift count masked to 36 & 31, the host's width, on a machine where an unsigned is
-48 bits — while the identical shift by a *variable* was right, so the driver worked and only a
-comparison against a literal failed. Fixed in the external c-compiler
-(`optimize/const_fold.c`: the mask became a target-derived width, and an out-of-range count
-folds to 0 as the BESM-6 shift unit gives), with four tests. Worth remembering as a shape: a
-constant folder that disagrees with the code generator is worse than no folder, and it can
-disagree only where the host's widths and the target's differ.
-
-**What did not get done here: the `lib/test` programs under the real kernel.** That was 25b's
-third bullet and is now task 25c, below.
+**Tasks 1 through 25b are done and their writeups have been removed**; the design they settled
+on is the section above, and how each turned out is in the source comments and in `../doc/`.
+The numbering is **left as it was** — task numbers are cited from the source (`seg.S`,
+`uarea.S`, `sys1.c`, `text.c`, `trap.c`, `sig.c`, `clock.c`, `dev/md.c`, `dev/bio.c`,
+`dev/mem.c`, `test/crt0*.S`, `test/mdtest.c`, `../include/sys/param.h`, the `.ini` files) and
+from `doc/` — so the list below starts where it does, with the one piece task 25b set aside.
 
 **25c. The `lib/test` programs under the real kernel.**
 
@@ -460,11 +255,6 @@ under the 28,672-word ceiling (`pwent` is the largest at 7,560).
 **Done when** each program's output from the image matches a checked-in expectation, as a ctest
 case, with any divergence from the `b6sim` run explained rather than papered over.
 
-### Stage 8 — after the prompt
-
-Ordered, but none of it blocks the shell; 25c above does not either, and is only numbered
-where it is because it is what 25b set aside.
-
 **26. Swapping and shared text under load.** `sched()`/`xswap()` through the drum with more
 processes than core, and two processes sharing one binary's text. The code is written and `usched`
 covers the scheduler in isolation, but nothing has ever swapped a real image, and `swap()` on the
@@ -497,10 +287,12 @@ are already in the right places. `/dev/kmem` is direct below the unmapped reach.
   runs unmapped, so neither РП nor РЗ applies to it: the only mechanisms are a software depth
   check or the simulator. Task 25a made the wrap unreachable by any measured path but left two
   things worth a comparison each: `if ((int)&local >= 0100000 - MARGIN) panic("kstack")` for the
-  wrap, and — the one 25a's geometry actually needs — `if ((int)&local >= UBASE + USIZE)` in
+  wrap, and — the one the geometry actually needs — `if ((int)&local >= UBASE + USIZE)` in
   `sleep()`, which is where a frame in the overflow page would be silently lost (see the
-  consequences list). Under SIMH both are already observable without kernel code, with
-  `break -w` on the overflow page and `break <resume>; ex M17`; 25a's writeup has the recipe.
+  consequences list). Under SIMH both are already observable without kernel code: a write
+  watchpoint on the overflow page (`break -w 0176000-0177777`) fires only on an unmapped store,
+  i.e. only on a kernel stack frame, because `mmu_store()` ORs `0100000` into the address before
+  `sim_brk_test`; and `break <resume>; ex M17` samples the depth at every context switch.
 * **Every other `int` → `char *` conversion.** `u.u_dirp = (caddr_t)u.u_arg[0]` is fine — that cast
   is a silent `COPY`, so the caller's marker and byte offset survive and `namei()`'s
   `fubyte(u.u_dirp++)` is right. What is *not* checked is everywhere else that fabricates a pointer
@@ -542,11 +334,13 @@ What the ones already in [test/](test/) cost to get right. Read this before writ
   And `-c` is **CLEARALL**, not "compare literally" — a bare `expect "…"` already matches the
   quoted bytes exactly, and `-c` on any but the last rule would throw the others away.
   ([../doc/Simh_Simulator.md](../doc/Simh_Simulator.md) has the corrected summary.)
-* **Make the test cross the boundary it is about.** `console.ini`'s first three lines are five
-  characters long and never leave the first clist block, so the whole of the block-chaining code
-  — the half of `prim.c` that had to be rewritten — went untouched by them. The fourth line is 48
-  characters against a `CBSIZE` of 30 for exactly that reason. Ask what the sizes in the test are
-  relative to the sizes in the code, not just whether the answer came back right.
+* **Make the test cross the boundary it is about.** `console.ini`'s short lines never leave the
+  first clist block, so the whole of the block-chaining code — the half of `prim.c` that had to
+  be rewritten — goes untouched by them; one stage types 48 characters against a `CBSIZE` of 30
+  for exactly that reason. `session.sh` copies `/bin/ls` for the same kind of reason: 33 KB is
+  the smallest file that must reach through an inode's indirect block, six direct addresses
+  covering only 18 KB. Ask what the sizes in the test are relative to the sizes in the code, not
+  just whether the answer came back right.
 * **The interval timer cannot be switched off.** It free-runs at 250 Hz and the SIMH `CLK` device has
   no `DEV_DISABLE`, so no `.ini` can stop it and a second tick may land mid-run. Phrase every
   assertion to tolerate exactly one — a draft `p_cpu >= 1` check once passed *only because* a second
@@ -652,7 +446,20 @@ Facts that cost real time to establish and are not written down in `doc/`.
 * **The SIMH disk container is not a flat block file.** Each word is eight little-endian bytes with a
   two-bit tag above the 48 (an empty data word is `0x0002000000000000`, not zero), and eight service
   words are interleaved per zone. One drive is 8,256,000 bytes against the flat image's 6,144,000.
-  `b6fsutil -S` converts; `cmd/fsutil/simh.cpp` has the layout.
+  `b6fsutil -S` converts; `cmd/fsutil/simh.cpp` has the layout. Converting a container the kernel
+  has *written* back to flat is the only check on those service words there is, which is how
+  `session` found the disk driver never maintaining them.
+* **The compiler folds a shift by a constant against the target's width — now.** `1u << 36` used
+  to fold to `020`, the count masked to 36 & 31 on a machine where an unsigned is 48 bits, while
+  the identical shift by a *variable* was right: code worked and only a comparison against a
+  literal failed. Fixed in the external c-compiler (`optimize/const_fold.c`), so **a stale
+  `b6parse`/`b6lower` brings it back**, silently and only above bit 32. `test/mdtest.c` is where
+  it surfaced.
+* **The v7 shell has no comment character, and a `:` line is still PARSED.** Every word of it is,
+  so a backquote, an apostrophe, a parenthesis, a `$`, a `;` or a redirection inside what looks
+  like a comment is a syntax error or a command run — a semicolon mid-sentence runs the rest of
+  the line. This cost two round trips on `kernel/test/session.sh`; `etc/rc` says it at length.
+  It binds anything written for the image, including 25c's driver script.
 * **`s_isize` is the first data block, not a count of i-list blocks**, and **the free list must be
   built descending** — `alloc()` pops the superblock cache from the top, so an ascending build lays
   every file backwards across the platter while passing every self-consistency check.

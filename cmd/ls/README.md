@@ -132,7 +132,8 @@ Only the size check, and deliberately: **`ls` cannot be tested under `b6sim`.** 
 directory with `fread()` and parses `struct direct` out of it, and `b6sim` maps `read()` onto
 the host, where a directory descriptor refuses to be read at all. That is the same limitation
 [`cmd/sh/README.md`](../sh/README.md) records for `expand.c`'s globbing, and it clears the day
-the command runs on the real kernel under SIMH — `kernel/TODO.md`, task 25, where `ls /bin` is
-one of the stages of the console dialogue.
+the command runs on the real kernel under SIMH, which it now does: `ls /bin` is one of the
+stages of [`kernel/test/console`](../../kernel/test/console.ini)'s dialogue, and the six names it
+prints are the assertion.
 
 `ls.1` is the v7 manual page, kept as it was. Its block counts are now `BSIZE` ones; see above.
