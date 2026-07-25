@@ -121,8 +121,22 @@ extern unsigned mdretries; // exchanges md.c re-issued for the current request
 #define PAT_D 0400000U // block 0 of md10
 #define PAT_E 0500000U // block 0 of md40
 
-// An arbitrary recognizable pattern for the service words.
+// An arbitrary recognizable pattern for the service words.  It has to stay clear of the
+// sector-address field, bits 48-37, because the driver owns that field and this pattern is
+// what the checks below expect to find UNTOUCHED beside it.
 #define SYSPAT 0700000000000U
+
+// Where the sector's own address sits in the first of a half-zone's four service words --
+// mdstart()'s MDSYS_ADDR, and the field b6fsutil's SIMH converter reads back.
+//
+// The checks below shift the value DOWN rather than the expectation up, which keeps every
+// constant in this file small and readable.  It was once a workaround as well: the external
+// compiler folded `1U << 36' to 020, the shift count taken modulo 32 as though an unsigned
+// were 32 bits rather than this machine's 48, so a comparison against the literal failed
+// while the identical shift by a VARIABLE -- mdstart()'s `blk << MDSYS_ADDR' -- was right.
+// Fixed in the compiler (optimize/const_fold.c, const_shift_bits); this test is what found
+// it, and either spelling works now.
+#define SYSADDR 36
 
 // Fault-mask bits, returned in the accumulator.  Zero means every check passed.
 #define F_ERR    0000001  // a transfer that should have worked reported B_ERROR
@@ -313,6 +327,14 @@ int main(void)
     // the eight -- 030-033 for track 0, 034-037 for track 1 -- so seeding those four before
     // the write and clobbering them before the read proves the fixed low-memory buffer is
     // real, that it is the controller filling it, and that the driver picked track 0.
+    //
+    // THE FIRST OF THE FOUR IS THE DRIVER'S, since task 25b, and is expected NOT to
+    // survive: it is the sector's own address, and mdstart() stores the block number there
+    // before every write (dev/md.c).  The pattern in the other three is the volume mark and
+    // the checksum, which the driver leaves alone, so what comes back off the platter is
+    // the block number followed by the seed -- and a driver that stopped maintaining the
+    // address, or one that overwrote more of the header than it owns, fails here.  The
+    // block number is 0 in this check; check 2 is where the assertion has teeth.
     for (i = 0; i < 4; i++)
         SYSDATA[i] = SYSPAT + i;
 
@@ -328,7 +350,9 @@ int main(void)
         mask |= F_ERR;
     if (cmprange(0, BSIZEW, PAT_A))
         mask |= F_TRK0;
-    for (i = 0; i < 4; i++)
+    if (SYSDATA[0] >> SYSADDR != 0)
+        mask |= F_SYSW;
+    for (i = 1; i < 4; i++)
         if (SYSDATA[i] != SYSPAT + i)
             mask |= F_SYSW;
 
@@ -341,14 +365,30 @@ int main(void)
     //
     // Memory stays at the base of the page: the two halves of the transfer are chosen
     // independently, and pinning one while moving the other is what keeps them separable.
+    //
+    // And the OTHER four service words, 034-037, which is where the driver's sector address
+    // has a value worth reading: block 1.  A driver that wrote the address into the wrong
+    // half of the buffer would leave check 1's four alone and fail here; one that did not
+    // write it at all would hand back the seed.
+    for (i = 4; i < 8; i++)
+        SYSDATA[i] = SYSPAT + i;
+
     fillrange(0, BSIZEW, PAT_B);
     if (xfer(UNIT_MD00, 1, 0, BSIZEW, B_WRITE))
         mask |= F_ERR;
     clearall();
+    for (i = 4; i < 8; i++)
+        SYSDATA[i] = 0;
+
     if (xfer(UNIT_MD00, 1, 0, BSIZEW, B_READ))
         mask |= F_ERR;
     if (cmprange(0, BSIZEW, PAT_B))
         mask |= F_TRK1;
+    if (SYSDATA[4] >> SYSADDR != 1)
+        mask |= F_SYSW;
+    for (i = 5; i < 8; i++)
+        if (SYSDATA[i] != SYSPAT + i)
+            mask |= F_SYSW;
 
     // ---- Check 3: WHERE the two halves landed, and page mode ---------------------------
     //

@@ -55,15 +55,17 @@ needs right now: shut everything down, a shell on `/dev/console`, `/etc/rc`, and
 when the shell exits. `getty`, `login` and the multi-user half wait on a terminal driver —
 [`../../kernel/TODO.md`](../../kernel/TODO.md), task 29.
 
-It is **built and staged but not yet the image's `/etc/init`**. `/bin/sh` exists now, and this
-init has been run under the real kernel against a stub shell: it forks, opens `/dev/console`,
-`dup`s, execs, waits, runs `/etc/rc` and cycles — all of it works. What stops the manifest
-naming it is one floor below: **the kernel stack is not big enough to run the real shell.**
-Booting it grows `r15` past `0100000`, which a 15-bit pointer cannot name, so it wraps to 0 and
-the kernel writes its frames over the interrupt vectors — `panic: kernel trap`. The
-measurement and the fix (a two-page u-area) are task 25 in
-[`../../kernel/TODO.md`](../../kernel/TODO.md). Until then `kernel/test/root.manifest` keeps
-naming the task-23 stand-in `kernel/test/coninit.S`, which `kernel/test/console` asserts on.
+It **is the image's `/etc/init`** (task 25b). Under the real kernel it forks, opens
+`/dev/console`, `dup`s, execs `/bin/sh`, waits, runs `/etc/rc` and cycles — the boot reaches the
+shell's root prompt, `# `, and that prompt is what [`kernel/test/boot`](../../kernel/test/boot.ini.in)
+asserts. [`kernel/test/console`](../../kernel/test/console.ini) goes a step further and sends `^D`
+at the shell, which drives one whole turn of the loop: the shell exits, `runcom()` runs
+`/etc/rc`, the motd appears, and `single()` prompts again.
+
+Getting here needed one thing below this program: **the kernel stack was not big enough to run
+the real shell**, and booting it wrapped `r15` past `0100000` into the interrupt vectors. The
+measurement and the fix — `UBASE` down one page, so the u-area spans two — are task 25a in
+[`../../kernel/TODO.md`](../../kernel/TODO.md).
 
 ## The ceilings
 

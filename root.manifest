@@ -1,51 +1,37 @@
 # The root filesystem the kernel mounts -- what `b6fsutil -n -M' builds into root.img,
-# which `-S' then converts into the SIMH container test/CMakeLists.txt attaches as md00.
-# Grammar: cmd/fsutil/README.md.
+# which `-S' then converts into the SIMH container kernel/test/CMakeLists.txt attaches as
+# md00.  Grammar: cmd/fsutil/README.md.
 #
-# The tree, the device nodes, and the USERLAND -- /bin/sh and the four commands that prove
-# the prompt, plus the static files of /etc.  Task 24 put them here.
+# The tree, the device nodes, and the USERLAND -- /etc/init, /bin/sh and the five commands
+# that prove the prompt, plus the static files of /etc.  Task 24 put them here and task 25b
+# flipped the last line, /etc/init, from the task-23 stand-in to the real one.
 #
-# /etc/init IS STILL kernel/test/coninit.S, THE TASK-23 STAND-IN, and task 24's last step --
-# naming build/rootfs/etc/init instead -- is not taken here.  The reason is no longer the
-# kernel: task 25a fixed the kernel stack (UBASE moved down a page to 074000, so the stack
-# has 1908 words instead of 880 and the 15-bit wrap at 0100000 is out of reach), and a
-# throwaway run with `source ../../rootfs/etc/init' in this slot boots to the shell's root
-# prompt and runs `ls /bin'.  What is left is task 25b's work, which is HERE and next door
-# rather than in the kernel: flipping this line means rewriting kernel/test/console's whole
-# dialogue, which asserts on coninit's `line> ' prompt and its echo, and the disk is
-# attached -r so nothing can be written yet.  They change together or not at all.
+# WHY THIS FILE LIVES AT THE TOP OF THE TREE and not in kernel/test/ beside the CMakeLists
+# that runs b6fsutil over it: every `file' below but none of the directories comes out of
+# build/rootfs/, which is staged by cmd/init, cmd/sh, cmd/{cat,echo,ls,pwd,sync} and etc/.
+# The image is the whole project's, and it is the top-level CMakeLists.txt that draws the
+# `rootimg depends on rootfs' edge, since kernel/ is configured before rootfs exists.
 #
-# For the record, the measurement that made 25a necessary -- by sampling a local's address
-# in clock() and reading the maximum back out of memory, which is a tick-sampled LOWER
-# bound on the true peak:
+# WHAT DOES NOT MOVE WITH IT is b6fsutil's working directory: it is still the kernel test
+# BUILD directory, because that is where root.img and root3072.disk have to land for the
+# .ini files to attach them.  A `source' is resolved against THE PROCESS'S CWD, not against
+# this file's own location, so moving the manifest changed no path below.  From
+# build/kernel/test/, `../../rootfs' is build/rootfs/, and that holds for any build
+# directory, since both ends are under CMAKE_BINARY_DIR.
 #
-#     coninit as /etc/init      max SP 077510   184 words of headroom
-#     the real init + a stub sh max SP 077531   167 words
-#     /bin/sh as process 1      max SP 077623   109 words
-#
-# The deep points are ordinary code (uptget, getblk, mdstrategy), so it was not a runaway
-# recursion; the port simply used ~790 of the ~880 words the one u-area page left for a
-# stack, and one nested interrupt frame on top of that was enough.  Booting the real init
-# failed with `panic: kernel trap' and r15 = 0 or 010 in the dump.  Watchpoints under SIMH
-# have since put the true peak at 076100-076177 -- 948-1011 words -- which is why 880 could
-# not work.  kernel/TODO.md task 25a has the whole account.
-#
-# coninit is built next door either way: it is the one user program on this system that
-# links neither crt0 nor libc, so it is what a console failure gets bisected against.
-#
-# EVERY `source' NAMES build/rootfs/, and by a relative path, because b6fsutil resolves one
-# against its own working directory -- the kernel test BUILD directory, which
-# kernel/test/CMakeLists.txt sets.  From build/kernel/test/, `../../rootfs' is
-# build/rootfs/, and that holds for any build directory, since both ends are under
-# CMAKE_BINARY_DIR.  build/rootfs/ is staged by b6_prog() (scripts/BesmCross.cmake) for the
-# programs and by etc/CMakeLists.txt for the text files; the top-level CMakeLists.txt draws
-# the `rootimg depends on rootfs' edge, since kernel/ is configured before rootfs exists.
-#
-# CONSEQUENCE: this manifest is now dependent on the top-level project.  A standalone
+# CONSEQUENCE: this manifest depends on the top-level project.  A standalone
 # `cmake -S kernel' can still build and boot the kernel, but it cannot build root.img,
 # because nothing there stages a build/rootfs/ for these paths to point at.
 #
-# Two tests read this image: kernel/test/fstest, which checks the superblock and the root
+# NOTHING WRITES THIS IMAGE IN PLACE.  root.img and root3072.disk are build artifacts, and
+# the one test that needs a writable filesystem -- kernel/test/session, which creates files,
+# runs sync(2) and then fscks what reached the disk -- converts its own copy at its own
+# volume number first (kernel/test/run-session.sh).  The same trick, `b6fsutil -a', is how
+# that test gets its script onto the image without a line here, and how coninit can be put
+# back as /etc/init by hand when a console failure needs bisecting against a program that
+# links neither crt0 nor libc.
+#
+# Three tests read this image: kernel/test/fstest, which checks the superblock and the root
 # inode below the boot path, and kernel/test/boot + kernel/test/console, which boot a
 # kernel against it.
 #
@@ -73,13 +59,9 @@ dir /tmp
 mode 0777
 
 # ---- the program the icode execs, and the shell it will exec in turn -------------
-#
-# `source coninit' is a bare filename because it is resolved against b6fsutil's working
-# directory, the kernel test BUILD directory, which is where coninit is linked.  Task 25b
-# makes this `source ../../rootfs/etc/init', and kernel/test/console changes with it.
 
-file /etc/init          # kernel/test/coninit.S -- the task-23 stand-in; see the header
-source coninit
+file /etc/init          # cmd/init: the v7 /etc/init
+source ../../rootfs/etc/init
 mode 0755
 
 file /bin/sh            # cmd/sh: S. R. Bourne's shell
@@ -102,6 +84,10 @@ mode 0755
 
 file /bin/pwd           # cmd/pwd
 source ../../rootfs/bin/pwd
+mode 0755
+
+file /bin/sync          # cmd/sync -- what flushes the buffer cache before the machine stops
+source ../../rootfs/bin/sync
 mode 0755
 
 # ---- the static files of /etc ----------------------------------------------------

@@ -64,6 +64,8 @@
 
 #include <besm6.h>
 
+void drainbrz(void); // brz.s -- the nine stores that flush the write cache
+
 // The geometry, in the one unit the control word can address: the 256-word sector.
 #define MBSECT  256                         // words in a sector -- the finest addressable unit
 #define MBSPP   (PGSZ / MBSECT)             // 4 sectors to a zone
@@ -182,6 +184,19 @@ static void mbstart(void)
         // `14 ext 0' with a frame pointer still in r14, so the exchange went to whatever
         // device that address landed on.  That lowering is gone -- the address arrives
         // through the C register now, never an index register.  doc/Intrinsics.md §8.)
+        // DRAIN THE БРЗ BEFORE A WRITE: the controller reads MEMORY, and the CPU's eight
+        // write registers are not memory.  Any write whose last touch of the buffer was
+        // fewer than eight stores ago would otherwise put the PREVIOUS contents of those
+        // words on the drum, and the drum is swapdev -- so what is lost is a page of a
+        // process image or a word of an exec argument list, and only under `set mmu cache'.
+        // dev/md.c found this the hard way and says more about it; the drum has the same
+        // hazard for the same reason, and no test has caught it yet only because a swap
+        // page is always a whole page written long after it was filled.
+        //
+        // Reads need none of it: nothing in the cache is stale when the DEVICE is writing.
+        if ((bp->b_flags & B_READ) == 0)
+            drainbrz();
+
         __besm6_ext(ctlr + EXT_DRUM1, cw);
 
         // Did the drum take it?  An unattached unit transfers nothing and interrupts

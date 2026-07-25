@@ -257,6 +257,23 @@ always land at a **fixed, hardwired address in low memory**, one buffer per cont
 Note that the two tape buffers are each **shared by two channels** — there are four tape channels
 but only two buffers.
 
+**The buffer is bidirectional, and that is a trap.** A read fills it from the platter; a **write
+puts it back**, so the service words a write records are whatever the driver left in those eight
+words — not something the controller derives from the exchange. The first word of each half-zone
+group is the **sector's own address**, the block number in bits 48–37, and it is what the drive
+matches when it seeks; the second holds the volume's magic mark and number, the third and fourth a
+userid and the address checksum. A driver that never writes the buffer records the address of
+whatever zone it *read* last, producing a sector no drive would find again. `kernel/dev/md.c`
+maintains the address before every write and leaves the other three as the last read brought them
+in, which is the buffer behaving as the hardware leaves it.
+
+**And the buffer must be in memory when the exchange starts.** The controller reads memory
+directly; the CPU's eight БРЗ write registers are not memory. Any store made fewer than eight
+stores before the `033` — the header words above, but equally the tail of a partly filled data
+buffer — is still in the cache, and what reaches the platter is the *previous* contents of those
+words. Both drivers therefore call `drainbrz()` before a write exchange. The hazard is invisible
+under default SIMH and appears under `set mmu cache`.
+
 ---
 
 ## Interrupt registers ГРП and ПРП

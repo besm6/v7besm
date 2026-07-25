@@ -6,22 +6,20 @@ user memory layout all work, two processes alternate under the real scheduler on
 console, drum and disk drivers are written and their failure modes classified. The on-disk layout
 is settled and `b6fsutil` (`cmd/fsutil/`) builds root filesystem images in it.
 
-What remains is putting a shell in user mode. That is tasks **24–25** below, in order.
-Tasks 26–29 are what is left after the prompt appears.
+**Tasks 24 and 25 are done: the port reaches a single-user shell.** Tasks 26–29 are what is
+left after the prompt, and none of them blocks it.
 
 Where the port stands: `cd kernel && make` links an image that boots under SIMH. With no root
 disk it reaches `panic: iinit`; **with `root3072.disk` and a drum attached it boots through
-`iinit()`, hands process 1 the icode, enters user mode, execs `/etc/init` and holds a
-conversation with whoever is at the console** — reading typed lines, honouring erase, kill and
-`^D`, and answering through `/dev/tty` (tasks 20 through 23 are done). `make run` is where you
-talk to it.
+`iinit()`, hands process 1 the icode, enters user mode, execs the real `/etc/init`, which
+forks `/bin/sh` — and you get a prompt.** Type at it: the shell runs `cat`, `echo`, `ls`,
+`pwd` and `sync` off the disk, the kernel does the erase, kill and `^D` (tasks 20 through 23),
+and `^D` takes init round through `/etc/rc` — the motd appears — to a fresh prompt. The
+session can **write**: create files, `sync`, and the image fscks clean. `make run` is where
+you talk to it.
 
-The userland is **built and on the image** — `/bin/sh`, `/bin/cat`, `/bin/echo`, `/bin/ls`,
-`/bin/pwd`, `/etc/rc`, `/etc/motd`, `/etc/passwd` (task 24). The `/etc/init` is still the
-stand-in `kernel/test/coninit.S`, and the reason is **not** that the real one is missing: it is
-built, staged and one manifest line away. It is that **the kernel stack is not big enough to
-run it**. That measurement, and what to do about it, is task 25 below — it is now the single
-thing between this port and a prompt.
+The userland is **built and on the image** — `/etc/init`, `/bin/sh`, `/bin/cat`, `/bin/echo`,
+`/bin/ls`, `/bin/pwd`, `/bin/sync`, `/etc/rc`, `/etc/motd`, `/etc/passwd` (tasks 24 and 25b).
 
 **The drums must be attached to exec anything**, which is new with task 23 and easy to be
 caught by: they are `swapdev` ([conf.c](conf.c)), and `exece()` stages the argument list in
@@ -30,11 +28,20 @@ drum that `bread` comes back `B_ERROR` and every exec fails with `exec init: err
 Every `.ini` that boots therefore says `attach -n drum0 …`.
 
 The harness the boot is checked against: the build produces a root image
-(`kernel/test/root.manifest` → `root3072.disk`, now carrying `/etc/init`),
-`kernel/test/fstest` reads its superblock and root inode through the real `md` driver, the
-real buffer cache and the real `sbcheck()` (strictly below the boot path), `kernel/test/boot`
-boots the whole `unix` image with that disk attached and asserts that init's banner reaches
-the console, and `kernel/test/console` types at init and checks what comes back.
+([../root.manifest](../root.manifest) → `root3072.disk`), `kernel/test/fstest` reads its
+superblock and root inode through the real `md` driver, the real buffer cache and the real
+`sbcheck()` (strictly below the boot path), and then three tests boot the whole `unix` image
+against it, each going one step past the last —
+
+| test | asserts |
+|---|---|
+| `boot` | process 1 leaves the kernel, execs `/etc/init`, which forks `/bin/sh`, and the shell **prompts** |
+| `console` | a typed dialogue with that shell: erase, kill, a line longer than a clist block, `>/dev/tty`, `pwd`, `ls /bin`, and `^D` round through `/etc/rc` to the next prompt |
+| `session` | the shell **writes** — files, an inode past its direct blocks, `sync` — and the host then fscks the container and diffs what was written |
+
+— which keeps the diagnosis apart: a failure in `boot` says the kernel never got a user
+program running, one in `console` says the line discipline is wrong, one in `session` says the
+filesystem or a driver is.
 
 Read [../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) before touching memory management,
 [../doc/Intrinsics.md](../doc/Intrinsics.md) for how C reaches `002 «рег»` and `033 «увв»`,
@@ -162,6 +169,14 @@ takes a 5-bit register number, so `M[021]` is reachable).
    two of its nine words were in memory and **seven were still in `BRZ0`–`BRZ7`**. `exec()` gets
    the drain for free from the `estabur()` that follows its `readi()`; `main()`'s icode copy and
    `sendsig()`'s planted trampoline word drain for themselves.
+
+   **And before a DEVICE reads memory.** A drum or disk write exchange transfers out of memory,
+   not out of the write cache, so any store made fewer than eight stores before the `033` is
+   still in БРЗ and the platter gets the previous contents of those words. Both mass-storage
+   drivers drain on the write path ([dev/md.c](dev/md.c), [dev/mb.c](dev/mb.c)); the disk's
+   sector header, stored two instructions before the exchange, is what made it visible, and
+   `kernel/test/session` is what caught it. Note that a *read* needs nothing: the device is the
+   writer, and the transfer lands in memory the CPU has not touched.
 4. **There is nothing to invalidate** — writing РП refills the TLB in the same instruction, so a stale
    translation is not a state the machine can be in. v7's `invd()` is deleted, not stubbed.
 5. **A fault reports the faulting *page* (ГРП bits 5–9), and the saved PC points *past* the faulting
@@ -214,19 +229,20 @@ user mode (task 22 — the icode and `_start`'s second half in [besm6.S](besm6.S
 its own string and argv vector at all), and the console became a controlling terminal (task 23 —
 the clists, which had to be rewritten because v7 finds a character's block by masking its byte
 address and a `char *` here is a fat pointer; the account is in [prim.c](prim.c), the program that
-proves it is `test/coninit.S`, and `test/console` is what types at it).
+proves it was `test/coninit.S`, and `test/console` is what typed at it).
 
 ### Stage 7 — the userland
 
-**24. `build/rootfs/` — the tree the image is built from. DONE, but for its last line.**
+**24. `build/rootfs/` — the tree the image is built from. DONE.**
 
 The userland sources live in **`cmd/`**, beside the host tools rather than in a top-level
 `rootfs/` as this task first proposed — `cmd/` is where v7 kept its commands, and the staging
 tree is a build artifact, not a source tree. They are cross-built by the same CMake machinery
 `lib/` uses ([../scripts/BesmCross.cmake](../scripts/BesmCross.cmake) and the in-tree `b6*`
 targets) and staged into **`build/rootfs/`**, which the root-image manifest
-(`test/root.manifest`) reads with `source ../../rootfs/…` (its `source` is resolved against
-`b6fsutil`'s working directory, the kernel test build dir).
+([../root.manifest](../root.manifest)) reads with `source ../../rootfs/…` (its `source` is
+resolved against `b6fsutil`'s working directory, the kernel test build dir — which is why the
+manifest could move to the top of the tree in 25b without a path in it changing).
 
 * **`cmd/init/`** — the v7 `/etc/init`, ported to C11 and staged as `build/rootfs/etc/init`;
   with no `/etc/ttys` on the image it is exactly the single-user loop this task asked for.
@@ -237,8 +253,9 @@ targets) and staged into **`build/rootfs/`**, which the root-image manifest
   makes is a real one in `sysent.c`, so the whole program went across at once. See
   [../cmd/sh/README.md](../cmd/sh/README.md) — in particular the three fat-pointer hazards it
   lists, since the same ones are in every v7 source that follows.
-* **`cmd/cat/`, `cmd/echo/`, `cmd/ls/`, `cmd/pwd/`** — enough to prove the prompt. 4,781 /
-  2,331 / 7,678 / 4,069 words. [../cmd/ls/README.md](../cmd/ls/README.md) is the one worth
+* **`cmd/cat/`, `cmd/echo/`, `cmd/ls/`, `cmd/pwd/`, `cmd/sync/`** — enough to prove the
+  prompt. 4,781 / 2,331 / 7,678 / 4,069 / 625 words (`sync` joined them in 25b, which needed a
+  way to flush the cache from the prompt; there is no `update(8)` on this system). [../cmd/ls/README.md](../cmd/ls/README.md) is the one worth
   reading: `ls` is where the machine reaches furthest into a v7 source after the shell, and it
   found a **fourth** fat-pointer hazard to add to that list — `<` between two `char *` does not
   order correctly, because the byte offset sits above the word address and *decrements* as the
@@ -251,10 +268,6 @@ targets) and staged into **`build/rootfs/`**, which the root-image manifest
   `/dev/console` itself; and the v7 shell has **no `#` comment**, so a `:` line stands in for
   one — and its words are still *parsed*, which rules out a backquote, a parenthesis or an
   apostrophe even inside one.
-* **Not done: point `test/root.manifest` at `build/rootfs/etc/init` instead of `coninit`.**
-  Blocked, and by the kernel rather than by the userland — see task 25, which is now that one
-  problem.
-
 Each program is one `b6_prog()` call, which links `crt0.o … -lc -lruntime` in that order — the
 archive-scan contract in [../lib/README.md](../lib/README.md) — and registers a ctest
 (`scripts/check-size.sh`, label `rootfs`) asserting it fits the 28 pages of user image space
@@ -266,7 +279,7 @@ same mechanical modernization `cmd/init/init.c` carries a note about — and exp
 declarations, since each v7 source used to declare its own syscalls (that is what added
 `kill()` to `<signal.h>`, `<sys/wait.h>`, and the five prototypes in `<sys/stat.h>`).
 
-**25. THE KERNEL STACK. Then boot to the prompt, and shake the syscalls out.**
+**25. THE KERNEL STACK. Then boot to the prompt. DONE, but for 25c.**
 
 **25a. The kernel stack was too small to run the userland. DONE — `UBASE` is `074000`.**
 Before it, putting the real `/etc/init` on the image killed the boot with `panic: kernel trap`
@@ -326,40 +339,131 @@ on the image the boot reaches the shell's root prompt, `/bin/sh` runs `ls /bin`,
 * note the old table was a **tick-sampled lower bound**: the true peak is ~200 words deeper than
   the 775 words `clock()` happened to catch, which is why 880 words were not enough.
 
-Left undone deliberately: no kernel-stack depth check (see task 28), and `test/root.manifest`
-still names `coninit` — flipping it is 25b, below.
+Left undone deliberately: no kernel-stack depth check (see task 28).
 
-**25b. Then the prompt, and the syscalls.**
+**25b. The prompt, and what it dragged out of the drivers. DONE.**
 
-25a's throwaway run already got as far as the first two lines below — the boot reaches `"# "` and
-`ls /bin` works — so what is left here is turning that into the committed image and the asserted
-dialogue, not finding out whether it works.
+25a's throwaway run had already reached `"# "` and run `ls /bin`, so this task was meant to be
+bookkeeping: commit the image, rewrite the dialogue. It was — until the last bullet, which was
+where writing to the disk got tested for the first time and turned up two real bugs below the
+filesystem. Both are fixed here; both are worth reading before touching a driver.
 
-* `make run` boots with the image attached and gives a shell on the SIMH console.
-* `test/root.manifest` names `build/rootfs/etc/init`, and **`test/console` changes with it** —
-  it asserts on `coninit`'s echo today. The dialogue it becomes is the same one and proves
-  more at each stage: `echo ab#c` for CERASE, `x@echo yz` for CKILL, a line longer than
-  `CBSIZE` (30) so the clists must chain blocks, `echo … >/dev/tty` for the `/dev/tty`
-  indirection reached by a real `open()` rather than a hand-written syscall, `pwd` and
-  `ls /bin` for the two commands `b6sim` can never test, and `^D` — after which the shell
-  exits, `init` loops, `/etc/rc` runs and **the motd appears**, which is the one assertion
-  that covers the whole cycle back through process 1. `boot.ini.in`'s `expect` becomes the
-  shell's root prompt, `"# "` (`supprompt`; `main.c` picks it for uid 0).
-* Then run the `lib/test/` programs — which today run only under `b6sim` — from the image, under the
-  real kernel. This is the first time the `$77` gate is driven from user mode by anything but the
-  kernel's own tests, and it is where `sysent[]`'s sixty untested rows meet their handlers'
-  argument structs. `procs`, `execs`, `spawn`, `signals`, `sbrkt` and `stdiot` are the ones that
-  bite; `b6sim` and the kernel disagreeing is a bug in one of them, and the `.expected` files say
-  which.
-* `sync`, then `b6fsutil -c` on the image afterwards. A clean fsck after a session that wrote is the
-  end-to-end statement that the filesystem half works. Note that `boot.ini`/`console.ini` attach
-  the disk `-r` today, so nothing can be written until that changes with them.
-* **Done when** the image survives boot → shell → create and write files → `sync` → fsck clean, as a
-  ctest case.
+**The image, and where the manifest went.** `/etc/init` is `build/rootfs/etc/init` — the real
+`cmd/init` — and `/bin/sync` joined the commands, because a session that writes needs a way to
+flush the cache and there is no `update(8)`. The manifest moved out of `kernel/test/` to
+[../root.manifest](../root.manifest), at the top of the tree: every `file` line in it names
+`build/rootfs/`, which `cmd/` and `etc/` stage, so it stopped being a `kernel/test` file when
+task 24 landed. **`b6fsutil`'s working directory did not move with it** — it is still
+`build/kernel/test`, where `root.img` and `root3072.disk` have to land for the `.ini`s to
+attach them — and a `source` resolves against the process's cwd, not against the manifest's own
+location, so no path inside the file changed.
+
+`coninit` came off the image and lost its test, but is **still built**: it is the only user
+program here that links neither `crt0` nor libc, so it is what a console failure gets bisected
+against. It goes back on a scratch copy with `b6fsutil -a`, three commands spelled out in
+[test/CMakeLists.txt](test/CMakeLists.txt) — the same graft `run-session.sh` uses to get its
+script onto the image without a manifest line.
+
+**Three tests, each a step past the last.** `boot`'s `expect` is the shell's root prompt now,
+`"# "` (`supprompt`; `cmd/sh/main.c` picks it for uid 0) — the first thing anything writes,
+since init has no banner and `/etc/rc` does not run until the first shell has exited.
+`console` holds the dialogue: `echo ab#c` for CERASE, `x@echo yz` for CKILL, a 48-character
+line so the clists must chain blocks, `echo … >/dev/tty` for the `/dev/tty` indirection reached
+by a real `open()` in a *forked child*, `pwd` and `ls /bin` for two commands `b6sim` can never
+run, and `^D` — after which the shell exits, init loops, `/etc/rc` runs, the motd appears and
+the prompt comes back, which is the one assertion covering the whole cycle through process 1.
+Every `expect` after the first is the tail of the previous stage plus the next prompt, because
+every prompt looks alike and a rule matching a bare `"# "` would fire early.
+
+`session` is new and is the "done when": `run-session.sh` grafts a script onto its own
+converted copy of the image, boots it **writable**, has the shell create files — including one
+copy of `/bin/ls`, big enough to need its indirect block — and call `sync`; then on the host it
+converts the container back, runs `b6fsutil -c` over it, extracts it, diffs the file the
+session built against `session.expected` and `cmp`s the copy against the original out of the
+same image. Volume numbers: 3072 is the pristine artifact, `mdtest` owns 3073–3076, `session`
+3077, `console` 3078, and 3079 is what the coninit graft above suggests. `boot` alone still
+attaches `-r`, and deliberately — a read-only boot is the assertion that the path to the first
+prompt writes nothing.
+
+**Bug 1: the disk driver never wrote the sector header.** The eight service words of a zone
+live at a fixed physical address per controller, and the exchange moves them in *both*
+directions — a read fills them from the platter, **a write puts them back**. `md.c` had never
+touched them, so every zone the kernel wrote got the header of whatever zone was read last: on
+a real drive, a sector nobody would ever find again. Nothing noticed, because SIMH seeks by
+zone number and never reads the address back — it took converting the written container to a
+flat image afterwards for `b6fsutil` to say so. `mdstart()` now stores the block number in bits
+48–37 of the first word of the half-zone's four before every write, and leaves the other three
+(the volume mark, the userid, the checksum) as the last read brought them in, which is the
+buffer behaving as the hardware leaves it. `mdtest` checks 1 and 2 assert exactly that split.
+
+**Bug 2: a device reads memory, and memory is not the write cache.** With the header stored two
+instructions before the `033`, it was still in БРЗ when the controller transferred — so the
+platter got the *previous* header and the fix appeared to do nothing. This is the same hazard
+as rule 3 above, one step further out: it applies to **any** write exchange whose last touch of
+the buffer was fewer than eight stores ago, which is an inode update or a partly filled block
+as much as a header, and it would show as a lost update rather than as a bad address. Both
+mass-storage drivers now `drainbrz()` on the write path. Invisible under default SIMH; the run
+that found it passed with `set mmu nocache` and failed with `set mmu cache`.
+
+**And a compiler bug, found by the test written for bug 1.** `1U << 36` constant-folded to
+`020` — the shift count masked to 36 & 31, the host's width, on a machine where an unsigned is
+48 bits — while the identical shift by a *variable* was right, so the driver worked and only a
+comparison against a literal failed. Fixed in the external c-compiler
+(`optimize/const_fold.c`: the mask became a target-derived width, and an out-of-range count
+folds to 0 as the BESM-6 shift unit gives), with four tests. Worth remembering as a shape: a
+constant folder that disagrees with the code generator is worse than no folder, and it can
+disagree only where the host's widths and the target's differ.
+
+**What did not get done here: the `lib/test` programs under the real kernel.** That was 25b's
+third bullet and is now task 25c, below.
+
+**25c. The `lib/test` programs under the real kernel.**
+
+Run the twenty-one programs in [../lib/test/](../lib/test/) — which today run only under
+`b6sim` — from the disk image, under the booted kernel. This is the first time the `$77` gate
+is driven from user mode by anything but the kernel's own tests, and it is where `sysent[]`'s
+sixty largely untested rows meet their handlers' argument structs. `b6sim` and the kernel
+disagreeing is a bug in one of them.
+
+**The mechanism is already settled**, by 25b: write the output to the image and check it on the
+host. `kernel/test/run-session.sh` is the worked example end to end — graft what the run needs
+onto a private copy with `b6fsutil -a`, boot it writable, then `-S` back to flat, `-x` and
+`diff` against a checked-in expectation. A driver script on the image runs each program with
+its output redirected to a file; nothing needs a console log, and the byte-for-byte discipline
+of `lib/test/*.expected` carries over unchanged.
+
+**Staging is two edits per program**, as for any image file: a `b6_prog()`-style rule putting
+it in `build/rootfs/` (say under `usr/test/`) and a line in `root.manifest`. Note the two
+CMake helpers are complementary and neither does both halves — `b6_prog()` stages and
+size-checks but never runs; `b6_libtest()` runs but never size-checks. Every program is well
+under the 28,672-word ceiling (`pwent` is the largest at 7,560).
+
+**The expectations will not all transfer, and these are the ones to look at first:**
+
+* **`spawn` needs rewriting, not re-recording.** Its whole premise is that `/bin/sh` *fails* to
+  exec — true under `b6sim`, where the host's shell is not a BESM-6 `a.out`. Here it succeeds,
+  so `system()` runs, `status` is not `127*256`, and `popen("r")` returns data instead of EOF.
+* **`hello` and `execs` pin `argv[0]`.** `hello.expected` contains the literal `./hello`, the
+  path the harness types; `execs` execs *itself* five times through `argv[0]` and its `execvp`
+  stage relies on that name containing a slash.
+* **`gen` expects `isatty(1) == 0`**, which is true only because the harness redirects stdout to
+  a file — keep the redirection and it stays true.
+* **`pwent`'s `ttyname()`** records the failure answers, because `b6sim`'s `read()` refuses a
+  directory; with a real `/dev` it may succeed.
+* **`environ`** degenerates to a vacuous pass: it is written to print counts and verdicts rather
+  than names, but the environment the kernel gives it is not `b6sim`'s curated whitelist.
+* **`timet`** pins zone 0 and no daylight saving, which is a property of `b6sim`'s `ftime()`;
+  the kernel's must answer the same or the file changes.
+* **`stdiot`, `scanft` and `timet` write temporary files** in the cwd and in `/tmp`; both must be
+  writable on the image, which they are (`/tmp` is mode 0777 in the manifest).
+
+**Done when** each program's output from the image matches a checked-in expectation, as a ctest
+case, with any divergence from the `b6sim` run explained rather than papered over.
 
 ### Stage 8 — after the prompt
 
-Ordered, but none of it blocks the shell.
+Ordered, but none of it blocks the shell; 25c above does not either, and is only numbered
+where it is because it is what 25b set aside.
 
 **26. Swapping and shared text under load.** `sched()`/`xswap()` through the drum with more
 processes than core, and two processes sharing one binary's text. The code is written and `usched`

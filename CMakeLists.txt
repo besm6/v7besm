@@ -133,8 +133,8 @@ if(B6RUNTIME_LIB)
 
     #
     # The staged root filesystem, build/rootfs/ -- the tree that becomes the disk image the
-    # kernel mounts (kernel/test/root.manifest).  `rootfs' is the aggregate every b6_prog()
-    # hangs itself on; the programs come after lib/, since each links against its libc.
+    # kernel mounts (root.manifest, at the top of the tree).  `rootfs' is the aggregate every
+    # b6_prog() hangs itself on; the programs come after lib/, since each links against its libc.
     #
     add_custom_target(rootfs)
     add_subdirectory(cmd/init)
@@ -143,6 +143,7 @@ if(B6RUNTIME_LIB)
     add_subdirectory(cmd/echo)
     add_subdirectory(cmd/ls)
     add_subdirectory(cmd/pwd)
+    add_subdirectory(cmd/sync)
     add_subdirectory(etc)
 
     #

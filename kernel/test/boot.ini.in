@@ -7,8 +7,11 @@
 ; iinit(), iget() of the root, newproc() -- and then lets process 1 leave the kernel and
 ; exec the program the image carries.
 ;
-; WHAT THE BANNER PROVES.  `console init' is the first thing /etc/init writes
-; (kernel/test/coninit.S), and for it to appear at all, everything below had to work:
+; WHAT THE PROMPT PROVES.  `# ' is the v7 shell's root prompt -- supprompt in cmd/sh/msg.c,
+; which cmd/sh/main.c picks over `$ ' because getuid() is 0 -- and it is the FIRST thing any
+; program writes on the console: init has no banner of its own, and /etc/rc does not run
+; until the first shell has exited (cmd/init/init.c: shutdown, single, runcom, multiple).
+; For those two characters to appear at all, everything below had to work:
 ;   * main() returned, so iinit() did not panic -- bread(rootdev, SUPERB) completed without
 ;     B_ERROR (else panic "iinit"), sbcheck() accepted the superblock (else panic "no root
 ;     fs"), and iget(rootdev, ROOTINO) read the root inode.  That is task 20's "done when",
@@ -20,19 +23,24 @@
 ;   * `$77 SYS_exec' vectored to 0577, the gate framed the machine, syscall() marshalled the
 ;     arguments and exec() ran namei() over a user-space `char *' -- and this time namei()
 ;     FOUND the file, getxfile() read the BESM-6 a.out and setregs() started it (task 21);
-;   * and coninit's own `$77 SYS_open' and `$77 SYS_write' reached cdevsw[0], so scopen()
-;     ran, ttyopen() took the terminal and ttwrite() put characters on the wire -- task 23's
-;     opening move.
+;   * /etc/init ran a whole C program under this kernel -- crt0, libc, sbrk, signal, open,
+;     close, dup -- and then FORKED and EXEC'D A SECOND ONE, so the fork path, the swap-backed
+;     argument staging in exece() and a second address space all work (task 25b);
+;   * and the shell's own open of /dev/console and its write reached cdevsw[0], so scopen()
+;     ran, ttyopen() took the terminal and ttwrite() put characters on the wire.
 ;
-; THIS TEST USED TO ASSERT THE OPPOSITE.  With no /etc/init on the image the exec came back
-; with ENOENT and the icode fell into its `spin' loop, which is what the assertions checked.
-; Task 23 put an init there, so `spin' is now the FAILURE case; the breakpoint below is kept
-; purely to diagnose it, since ACC and r14 there say exactly why exec() refused the file.
+; THIS TEST HAS ASSERTED THREE DIFFERENT THINGS.  With no /etc/init on the image the exec came
+; back with ENOENT and the icode fell into its `spin' loop, which is what it used to check;
+; task 23 put coninit there and the assertion became its `console init' banner; task 25b put
+; the real init there and it is the shell's prompt now.  `spin' is still the FAILURE case, and
+; the breakpoint below is kept purely to diagnose it, since ACC and r14 there say exactly why
+; exec() refused the file.
 ;
-; WHAT THIS TEST DOES NOT DO IS TALK TO INIT.  It watches for the banner and stops.  The
-; typed line, the erase and kill characters, ^D and /dev/tty belong to console.ini next door.
-; Keeping them apart keeps the diagnosis apart too: a failure here says "the kernel never got
-; a user program running", a failure there says "the line discipline is wrong".
+; WHAT THIS TEST DOES NOT DO IS TALK TO THE SHELL.  It watches for the prompt and stops.  The
+; typed line, the erase and kill characters, ^D and /dev/tty belong to console.ini next door,
+; and writing files belongs to session.ini beside it.  Keeping them apart keeps the diagnosis
+; apart too: a failure here says "the kernel never got a user program running", a failure
+; there says "the line discipline is wrong".
 ;
 ; `step', not `go': a hang must fail the run instead of hanging it -- `go' has no step bound.
 ;
@@ -50,6 +58,12 @@
 ; is a build artifact, and no -n because `attach -n' CREATES AND FORMATS an empty container,
 ; on which sbcheck() would fail and the boot would panic.
 ;
+; THIS IS THE ONE TEST THAT STILL ATTACHES root3072.disk ITSELF, and read-only, which is an
+; assertion of its own: the path from _start to the shell's first prompt WRITES NOTHING.
+; console.ini and session.ini go further and need a writable unit, so each converts its own
+; copy of root.img at its own volume number -- see kernel/test/CMakeLists.txt.  If an `md'
+; write error ever appears in this test's console stream, this attach becomes a copy too.
+;
 ; THE DRUMS MUST BE ATTACHED TO EXEC ANYTHING.  They are swapdev (conf.c), and exece()
 ; stages the argument list there -- getblk/bawrite on the way in, bread on the way back --
 ; before it ever touches the new image.  With no drum that bread comes back B_ERROR and the
@@ -58,7 +72,7 @@
 ; Their names are this test's own, since ctest runs the SIMH tests in parallel and console.ini
 ; needs a swap area of its own.
 ;
-; THE CONSOLE IS ATTACHED NOW, and has to be -- the assertion is what init printed on it.
+; THE CONSOLE IS ATTACHED NOW, and has to be -- the assertion is what the shell printed on it.
 ; `set tty25 raw' first, so the bytes go out untranslated (see the header of kernel/dev/sc.c)
 ; and `expect' sees the ASCII the kernel actually emitted.  Console output reaches the expect
 ; machinery through sim_putchar -> tmxr_putc_ln -> sim_exp_check, so no logging is needed.
@@ -77,13 +91,13 @@ attach -n drum0 boot0.drum
 attach -n drum1 boot1.drum
 load ../unix
 
-expect -c "console init" echof "PASS: boot -- the kernel mounted the root, entered user mode, exec'd /etc/init and it wrote on the console"; quit
+expect -c "# " echof "PASS: boot -- the kernel mounted the root, entered user mode, exec'd /etc/init, which forked /bin/sh, and the shell prompted"; quit
 break @SPIN@
 step 50000000
 
 ; Only reached when the expect never fired.  BEWARE THE REGISTER NAMES: SIMH numbers index
 ; registers in OCTAL, so r14 is `M16' and r15 is `M17'.
-if (PC == @SPIN@) echof "FAIL: exec of /etc/init failed, and the icode fell into its spin loop. r14 (SIMH M16) is the errno: 2 ENOENT means the image carries no /etc/init (is coninit staged? see root.manifest), 8 ENOEXEC means getxfile() rejected the a.out header, 13 EACCES means the mode is not executable. ACC and r14:"; ex ACC; ex M16; exit 1
-echof "FAIL: the boot never printed init's banner. A PC in panic()'s stop loop means iinit() panicked (no root fs / iinit) -- e.g. the b_un.b_addr fat-pointer fix was reverted; a PC in the kernel means process 1 never left it, and if the step count ran out it hung, in idle() if something slept and never woke. Look the PC up in unix.nm. PC:"
+if (PC == @SPIN@) echof "FAIL: exec of /etc/init failed, and the icode fell into its spin loop. r14 (SIMH M16) is the errno: 2 ENOENT means the image carries no /etc/init (does ../../root.manifest still name build/rootfs/etc/init, and did rootfs stage it?), 8 ENOEXEC means getxfile() rejected the a.out header, 13 EACCES means the mode is not executable. ACC and r14:"; ex ACC; ex M16; exit 1
+echof "FAIL: the boot never reached the shell's root prompt. A PC in panic()'s stop loop means iinit() panicked (no root fs / iinit) -- e.g. the b_un.b_addr fat-pointer fix was reverted; a PC in the kernel means process 1 never left it, and if the step count ran out it hung, in idle() if something slept and never woke. If init ran but the shell did not, the exec of /bin/sh failed inside single() and said nothing. Look the PC up in unix.nm. PC:"
 ex PC
 exit 1

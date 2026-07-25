@@ -14,16 +14,18 @@ work has two halves:
   `_start`, all three trap doors, the timer and the context switch work, and two processes
   alternate under the real scheduler. With no root disk, boot stops at `panic: iinit`; with
   `root3072.disk` and a drum attached it mounts the root, hands process 1 the icode, **enters
-  user mode**, execs `/etc/init` and **talks to a terminal** — reading typed lines from
-  `/dev/console`, honouring erase, kill and `^D`, and answering through `/dev/tty`
-  (`kernel/test/boot` and `kernel/test/console` guard all of that; `cd kernel && make run` is
-  where you type at it). The drums must be attached to exec anything: they are `swapdev`, and
-  `exece()` stages the argument list in swap. What is missing above that line is the userland
-  proper — the `/etc/init` on the image is a stand-in (`kernel/test/coninit.S`) until a real
-  one and a shell arrive. See `kernel/TODO.md`, the live work plan — the settled
-  design, the hardware rules it obeys, and a sequential task list (numbered from 24, since
-  the source cites the earlier numbers) that ends at a single-user shell. Kernel components
-  are also exercised piecemeal by the standalone SIMH tests in `kernel/test/`.
+  user mode**, execs `/etc/init` — the real v7 one — and **gives you a shell**: `/bin/sh`
+  prompts with `# ` on the console, runs `ls`, `pwd`, `cat` and `echo` off the disk, honours
+  the kernel's erase, kill and `^D`, and on `^D` cycles back through `/etc/rc` to a fresh
+  prompt. It also **writes**: create files, `sync`, and the image fscks clean. Three tests
+  guard that ladder — `kernel/test/boot` (the prompt appears), `kernel/test/console` (a typed
+  dialogue with the shell) and `kernel/test/session` (files written, `sync`, then a host-side
+  fsck and diff) — and `cd kernel && make run` is where you type at it yourself. The drums
+  must be attached to exec anything: they are `swapdev`, and `exece()` stages the argument
+  list in swap. See `kernel/TODO.md`, the live work plan — the settled design, the hardware
+  rules it obeys, and a sequential task list (numbered from 24, since the source cites the
+  earlier numbers) that runs on past the shell. Kernel components are also exercised
+  piecemeal by the standalone SIMH tests in `kernel/test/`.
 - **`cmd/`** — the BESM-6-specific toolchain being written/ported to eventually build the
   kernel for real BESM-6 hardware: a C compiler driver, an assembler, a linker
   (+ archiver/nm/size/etc.), a C preprocessor, a disassembler, and a user-level a.out
@@ -48,7 +50,7 @@ thing**, and knowing which one you are touching is most of what the build layout
 - **host tools** — `cmd/*`, compiled by the build machine's C/C++ compiler, run there;
 - **cross-built BESM-6 artifacts** — `kernel/` and `lib/`, compiled by the `b6*` toolchain
   above through `b6_obj()` in `scripts/BesmCross.cmake`;
-- **native BESM-6 programs** — `cmd/{init,sh,cat,echo,ls,pwd}`, linked against libc by `b6_prog()`
+- **native BESM-6 programs** — `cmd/{init,sh,cat,echo,ls,pwd,sync}`, linked against libc by `b6_prog()`
   and staged into `build/rootfs/` (with the static files of `etc/`) for the disk image the
   kernel mounts.
 
@@ -120,13 +122,13 @@ therefore names two archives, **ours first**: `-lc -lruntime`, because `b6ld` sc
 helper calls back into libc. The kernel takes `-lruntime` **alone** — it defines its own
 `printf` in `kernel/prf.c` and uses no other library routine.
 
-### Native BESM-6 programs (`cmd/{init,sh,cat,echo,ls,pwd}` + `etc/` → `build/rootfs/`)
+### Native BESM-6 programs (`cmd/{init,sh,cat,echo,ls,pwd,sync}` + `etc/` → `build/rootfs/`)
 
 The third category, and the newest. These are **`cmd/` subdirectories that are not host
 tools**: `cmd/init/init.c` is the Unix v7 `/etc/init`, `cmd/sh/` is S. R. Bourne's v7 shell,
-and `cmd/cat`, `cmd/echo`, `cmd/ls`, `cmd/pwd` are the four commands that prove the prompt —
-all compiled by the `b6*` toolchain and staged into `build/rootfs/` as `etc/init` and
-`bin/{sh,cat,echo,ls,pwd}`. Alongside them `etc/` (the top-level directory, not `cmd/etc`)
+and `cmd/cat`, `cmd/echo`, `cmd/ls`, `cmd/pwd`, `cmd/sync` are the five commands that prove the
+prompt — all compiled by the `b6*` toolchain and staged into `build/rootfs/` as `etc/init` and
+`bin/{sh,cat,echo,ls,pwd,sync}`. Alongside them `etc/` (the top-level directory, not `cmd/etc`)
 stages the static files `motd`, `passwd` and `rc`, which are copied rather than compiled.
 Together that tree is the root filesystem the kernel mounts. All of it is added from inside
 the `libruntime.a` guard, *after* `lib/`, not with the other `cmd/` subdirectories, because
@@ -165,13 +167,16 @@ the byte offset sits above the word address and *decrements* as the pointer adva
 there is no relational helper. (`-` is fine; `b$pdiff` decodes both operands.) Each names the
 fix.
 
-`build/rootfs/` is staged only — nothing installs it. `kernel/test/root.manifest` reads it
-with `source ../../rootfs/…`, resolved against `b6fsutil`'s working directory, and the
-`rootimg`-depends-on-`rootfs` edge is drawn at the foot of the top-level `CMakeLists.txt`,
-because `kernel/` is configured before the `rootfs` target exists. One entry does **not** come
-from there: the image's `/etc/init` is still the task-23 stand-in `kernel/test/coninit.S`,
-because the kernel stack is not big enough to run the real one — the measurement is in
-`root.manifest`'s header and in `kernel/TODO.md`, task 25.
+`build/rootfs/` is staged only — nothing installs it. **`root.manifest` at the top of the
+tree** reads it with `source ../../rootfs/…`, resolved against `b6fsutil`'s *working
+directory* (`build/kernel/test`) rather than against the manifest's own location — which is
+why moving the file changed no path in it. The `rootimg`-depends-on-`rootfs` edge is drawn at
+the foot of the top-level `CMakeLists.txt`, because `kernel/` is configured before the
+`rootfs` target exists. Every `file` entry now comes from `build/rootfs/`, `/etc/init`
+included; `kernel/test/coninit.S`, the task-23 stand-in that used to hold that slot, is still
+built but is on no image and drives no test — it is the libc-free reference program a console
+failure gets bisected against, and `kernel/test/CMakeLists.txt` gives the `b6fsutil -a`
+commands that put it back on a scratch copy.
 
 ### Kernel (`kernel/`)
 ```sh
@@ -226,7 +231,18 @@ program's status is left in the accumulator, where the `.ini` asserts on it. `mm
 one to copy: it links the kernel's real `utab.o` and `brz.o`, lets `sureg()` program the MMU,
 and checks the mapping both from C and by examining РП/РЗ from the `.ini`. **Run every MMU
 test with `set mmu cache`** — the БРЗ write-back hazards are invisible without it, and a
-kernel that only works with the cache off would not have worked on the real machine.
+kernel that only works with the cache off would not have worked on the real machine. That
+applies past the MMU: **a device reads memory, not the write cache**, so a driver must drain
+the БРЗ before a write exchange — `kernel/test/session` is what found the disk driver doing
+neither that nor maintaining the sector header it writes from that memory.
+
+**Three of them boot the whole kernel** rather than forging an environment, and they form a
+ladder: `boot` asserts the shell's root prompt appears; `console` types a dialogue at that
+shell; `session` has the shell write files and `sync`, then converts the container back on the
+host, fscks it and diffs what the session wrote (`kernel/test/run-session.sh`). `boot` attaches
+the pristine `root3072.disk` read-only — which is an assertion in itself, the boot path writing
+nothing — and the other two each convert their own copy at their own volume number, so no test
+ever writes a build artifact.
 
 The kernel objects a test links are compiled *into `kernel/test/`* from the sources next door,
 never borrowed from `kernel/`'s own build: `b6_find_src()` locates them by basename, searching

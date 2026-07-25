@@ -213,7 +213,7 @@ likely to exhaust the reduced `SYMSIZ`.
 ## Out of scope
 
 No other `cmd/` tool built natively, no userland beyond the `init` that is already there (`sh`,
-`bin/*`), no change to `kernel/test/root.manifest` — the image is staged, not yet put on a disk.
+`bin/*`), no change to `root.manifest` — the image is staged, not yet put on a disk.
 Those are [../../kernel/TODO.md](../../kernel/TODO.md#L207) task 24; this plan leaves the staging
 root ready for them. The three upstream compiler fixes (B1–B3) live in a **separate repo**; this
 plan files them and works around them locally, but landing them there is its own task.

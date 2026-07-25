@@ -205,12 +205,12 @@ into its name tree at startup, and `set` prints the tree.
   signal-killed child as `0200|sig`, which is itself in the truncated range.
 * **Most `TIOC*` ioctls land in `nullioctl`** until there is a terminal multiplexer driver
   (`kernel/TODO.md`, task 29).
-* **It is on the disk image, but nothing execs it yet.** `kernel/test/root.manifest` carries
-  this shell as `/bin/sh`, and `cmd/init` as well — but the image's `/etc/init` is still the
-  task-23 stand-in `kernel/test/coninit.S`, because **the kernel stack is not big enough to run
-  the real one**. Booting it wraps `r15` past `0100000` and panics; the measurement, and the
-  two-page u-area that answers it, are task 25 in
-  [`../../kernel/TODO.md`](../../kernel/TODO.md). Flipping the manifest is one line, and it
-  changes `kernel/test/console`, which asserts on `coninit`'s echo behaviour.
+* **It runs.** [`root.manifest`](../../root.manifest) carries this shell as `/bin/sh` and
+  `cmd/init` as `/etc/init`, and since task 25b the boot reaches this shell's root prompt on the
+  console. `kernel/test/console` holds a conversation with it — erase, kill, a line longer than a
+  clist block, `>/dev/tty`, `pwd`, `ls /bin`, `^D` — and `kernel/test/session` has it write files
+  and `sync`, after which the host fscks what reached the disk. Getting here needed the kernel
+  stack, which was not big enough to run this program: task 25a in
+  [`../../kernel/TODO.md`](../../kernel/TODO.md) has that account.
 
 `sh.1` is the v7 manual page, kept as it was.

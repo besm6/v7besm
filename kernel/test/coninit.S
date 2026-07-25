@@ -1,21 +1,22 @@
-// coninit.S -- the program that stands in for /etc/init while task 23 is being brought
-// up: it opens the console, echoes typed lines back, and signs off through /dev/tty.
+// coninit.S -- the program that stood in for /etc/init while task 23 was brought up: it
+// opens the console, echoes typed lines back, and signs off through /dev/tty.
 //
-// This is the ONLY way the console can be exercised as a CONTROLLING TERMINAL.  sctest
+// It was the first way the console could be exercised as a CONTROLLING TERMINAL.  sctest
 // next door drives the same typewriter, but from a standalone image with no kernel
-// underneath -- it reaches the `ext' instructions and nothing above them.  What has never
-// run is scopen() through cdevsw[0], ttyopen()'s u.u_ttyp/u.u_ttyd acquisition, the
-// interrupt path scintr() -> ttyinput() -> canon(), ttwrite()'s output queue, and the
-// /dev/tty indirection in kernel/dev/sys.c.  All of that needs a USER PROCESS asking for
-// it, and the only user process this kernel has at boot is the one the icode execs.
+// underneath -- it reaches the `ext' instructions and nothing above them.  What could not
+// run without a user process is scopen() through cdevsw[0], ttyopen()'s u.u_ttyp/u.u_ttyd
+// acquisition, the interrupt path scintr() -> ttyinput() -> canon(), ttwrite()'s output
+// queue, and the /dev/tty indirection in kernel/dev/sys.c; and the only user process this
+// kernel has at boot is the one the icode execs.
 //
-// So the root image carries this as /etc/init (kernel/test/root.manifest), the icode's
-// `$77 SYS_exec' finds it, and test/console.ini types at it.  Task 24 replaces it with a
-// real v7-shaped init and this file goes away.
+// IT IS NO LONGER ON THE DISK IMAGE, and nothing runs it.  Task 25b put the real
+// cmd/init there and kernel/test/console holds the same dialogue with /bin/sh instead --
+// through fork and exec of real commands, which proves strictly more.
 //
-// IT LINKS NOTHING -- no crt0, no libc.  Not for economy: libc under the real kernel is
-// task 25's shakeout, and task 23 must not fail for its reasons.  Everything here is the
-// bare $77 gate, so a failure is the console path's or nobody's.
+// IT IS STILL BUILT, AND THAT IS THE POINT.  It links NOTHING -- no crt0, no libc -- so
+// when the console dialogue breaks, this is what says whether the fault is in the kernel's
+// terminal path or in everything the shell drags in behind it.  Put it back by hand on a
+// scratch copy of the image; kernel/test/CMakeLists.txt gives the three b6fsutil commands.
 //
 // THE CALLING CONVENTION IS THE GATE'S (doc/Besm6_Calling_Conventions.md, kernel/syscall.c):
 // arguments 1..n-1 are pushed below r15 with `xts', the LAST one is left in the
@@ -27,7 +28,8 @@
 // every other register zero -- including R, the AU mode word -- so `ntr 7' is the first
 // instruction, exactly as lib/libc/csu/crt0.s does it for a C program.
 //
-// Run: cd kernel && make test  (test/console.ini), or `make run' and type at it.
+// Run: graft it in as /etc/init on a copy of the image and boot that; nothing builds a
+// .ini for it any more.
 
 #include <sys/syscall.h>
 

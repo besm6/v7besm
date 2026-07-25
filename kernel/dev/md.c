@@ -116,12 +116,27 @@
 
 #include <besm6.h>
 
+void drainbrz(void); // brz.s -- the nine stores that flush the write cache
+
 // The geometry, in the unit the track-address command can name: the 512-word half-zone.
 #define MDTRACK BSIZEW            // words in a half-zone -- and in a block
 #define MDTPZ   (PGSZ / MDTRACK)  // 2 half-zones to a zone
 #define MDNZONE 1000              // zones `attach -n' formats; the field holds 1024
 #define MDNBLK  (MDNZONE * MDTPZ) // 2000 blocks on one drive
 #define MDNUNIT 64                // 2 controllers * 4 groups * 8 drives
+
+// The service-word buffer, at a FIXED PHYSICAL ADDRESS the hardware wires in: 030-037 for
+// controller 3 and 040-047 for controller 4 (doc/Besm6_Peripherals.md).  The kernel runs
+// unmapped, so a physical word address is an ordinary word pointer -- an `int *' here is a
+// bare 15-bit word address with no byte offset, unlike a `char *'
+// (doc/Besm6_Data_Representation.md §7), so the cast means exactly what it says.
+//
+// This is a driver register, not memory anyone else may use: sys/param.h's memory map has
+// nothing below the kernel image, and these eight words per controller are why.
+#define MDSYS       ((int *)030) // controller 3's buffer; controller 4's is 8 words on
+#define MDSYSWORDS  8           // service words to a zone
+#define MDSYSHALF   4           // ... of which a half-zone transfer moves four
+#define MDSYS_ADDR  36          // the sector address sits in bits 48-37 of the first word
 
 // The controller commands of 033 023 / 033 024.  These live here rather than in
 // sys/besm6disk.h because that header owns the mass-storage family's CONTROL WORD layout --
@@ -300,6 +315,7 @@ static void mdstart(void)
 {
     register struct buf *bp;
     unsigned pa, blk, dev, ctlr, group, unit, zone, track, cw, cmd, bit;
+    int *sys;
 
     while ((bp = mdtab.b_actf) != NULL) {
         pa  = bufpaddr(bp) + mddone;
@@ -329,6 +345,61 @@ static void mdstart(void)
             mdnw = MDTRACK;
         }
         cmd = MDCMD_TRACK | (zone << 1) | track;
+
+        // THE SECTOR HEADER IS WRITTEN FROM MEMORY, so a write has to supply it.  A zone's
+        // eight service words live at a fixed physical address per controller -- 030 + 8n,
+        // doc/Besm6_Peripherals.md -- and the exchange moves them along with the data in
+        // BOTH directions: a read fills the four at 4*track from the platter, a write puts
+        // them back.  They are not the buffer cache's and not bp's; they are the drive's
+        // own sector header, and the driver owns the copy in the buffer between exchanges,
+        // exactly as the hardware leaves it.
+        //
+        // The first word of each four is THE SECTOR'S OWN ADDRESS, the block number in
+        // bits 48-37, and it is the field the drive matches when it looks for a track.  It
+        // changes with every exchange, so it is the one this driver must maintain.  Words
+        // 1-3 -- the volume's magic mark and number, the userid and the address checksum --
+        // are the same on every zone of a pack and are left exactly as the last read
+        // brought them in, which is the buffer behaving as it does on the machine.
+        //
+        // Until task 25b nothing wrote this at all, so every zone the kernel wrote got the
+        // address of whatever zone had been read last: a header no drive would ever find
+        // again.  Under SIMH nothing notices, because the simulator seeks by zone number
+        // and never reads the address back -- it took kernel/test/session, which converts
+        // the written container back to a flat image afterwards, for anything to say so.
+        //
+        // (An open edge, deliberately left: a half-zone slot that has never been READ has a
+        // zero magic mark, and a write then stores that zero.  Every boot reads the
+        // superblock and the i-list before it writes anything, so both slots are primed
+        // long before this matters -- but a driver that filled the mark itself would need
+        // to be told the volume number, which nothing on this system knows.)
+        if ((bp->b_flags & B_READ) == 0) {
+            sys = MDSYS + ctlr * MDSYSWORDS;
+            if (cw & CW_PAGE_MODE) {
+                // A whole zone moves all eight words: both half-zones, both addresses.
+                sys[0]         = (int)(zone * MDTPZ) << MDSYS_ADDR;
+                sys[MDSYSHALF] = (int)(zone * MDTPZ + 1) << MDSYS_ADDR;
+            } else {
+                sys[track * MDSYSHALF] = (int)blk << MDSYS_ADDR;
+            }
+
+            // AND DRAIN THE БРЗ, because the controller reads MEMORY and the CPU's write
+            // cache is not memory.  The eight write registers hold the last eight stores;
+            // the two or three instructions between the header above and the `ext' below
+            // are nowhere near enough to age them out, so without this drain the platter
+            // gets the header the buffer held BEFORE this exchange -- which is exactly
+            // what kernel/test/session saw, and only under `set mmu cache'.
+            //
+            // It covers the data as well, and that is not incidental.  Any write whose
+            // last touch of the buffer was fewer than eight stores ago has the same
+            // problem -- an inode update, a directory slot, a partly filled block -- and
+            // it would show up as a lost update rather than as a bad header.  The drain
+            // belongs to every write exchange, not just to the ones that changed the
+            // header, which is why it sits here and not next to the stores above.
+            //
+            // Reads need none of it: nothing in the cache is stale when the DEVICE is the
+            // writer, and the transfer lands in memory the CPU has not touched.
+            drainbrz();
+        }
 
         // `ctlr +' selects the controller: the two sets of registers are adjacent, and a
         // VARIABLE PLUS A CONSTANT is the shape the compiler folds into the instruction's

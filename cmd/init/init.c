@@ -30,9 +30,12 @@
 // returns as soon as the open fails and multiple() falls straight through -- so this
 // init is exactly the single-user loop the port needs: shutdown, a shell on
 // /dev/console, /etc/rc, and around again when the shell exits.  getty and the
-// multi-user half wait on a terminal driver (kernel/TODO.md, task 29).  Until /bin/sh
-// exists on the image, single()'s execl fails and the child exits at once, so the loop
-// spins: the disk manifest keeps naming the task-23 coninit until the shell arrives.
+// multi-user half wait on a terminal driver (kernel/TODO.md, task 29).
+//
+// It IS the image's /etc/init since task 25b, and the boot reaches /bin/sh's root prompt.
+// kernel/test/boot asserts that prompt; kernel/test/console types at the shell and then
+// sends ^D, which is what drives one whole turn of the loop above -- the shell exits,
+// runcom() runs /etc/rc, the motd appears and single() prompts again.
 //
 #include <fcntl.h>
 #include <setjmp.h>

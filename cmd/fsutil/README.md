@@ -150,7 +150,7 @@ a populated image survives a flat → SIMH → flat round trip unchanged, and SI
 attaches the result at the correct geometry.
 
 **Read by the kernel.** `kernel/test/fstest` builds an image from
-`kernel/test/root.manifest`, `-S`-converts it, and reads its superblock and root
+`root.manifest`, `-S`-converts it, and reads its superblock and root
 inode back through the kernel's *own* `bread()`, buffer cache and `sbcheck()`
 (`kernel/alloc.c`) under SIMH — the first time `sbcheck()` has executed, and the
 close of the loop the kernel-model test (`test/kernel_model_test.cpp`) stood in

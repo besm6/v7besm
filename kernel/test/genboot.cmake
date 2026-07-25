@@ -4,8 +4,9 @@
 #   cmake -DNM=<unix.nm> -DIN=<boot.ini.in> -DOUT=<boot.ini> -P genboot.cmake
 #
 # One symbol today: `spin' (kernel/besm6.S), the icode's failure loop -- where process 1 parks
-# when exec("/etc/init") fails, which is the state boot.ini asserts (there is no /etc/init
-# until task 24).  The loop below is a list so a second one costs a word, not a rewrite.
+# when exec("/etc/init") fails.  boot.ini used to ASSERT that state, back when the image
+# carried no /etc/init; it is the failure case now, and the breakpoint is kept to diagnose it.
+# The loop below is a list so a second symbol costs a word, not a rewrite.
 #
 # b6nm prints "ADDR t <name>" in octal and we take ADDR verbatim, so the .ini's octal
 # `if (PC != <addr>)' compares like with like.

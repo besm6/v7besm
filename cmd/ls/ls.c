@@ -3,7 +3,7 @@
 //
 // ls -- list a file or a directory.
 //
-// The v7 program, and the largest of the four commands task 24 puts on the image.  The C11
+// The v7 program, and the largest of the commands task 24 put on the image.  The C11
 // pass is the usual one -- prototypes, explicit return types, `static' on everything
 // file-local, no untyped `register t;' -- and on top of it are the changes the MACHINE and
 // the FILESYSTEM force.  Each of these is a silent failure if it is missed: the link
