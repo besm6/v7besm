@@ -11,7 +11,7 @@ names from [`cmd/disasm/dis.c`](../../cmd/disasm/dis.c), so `b6disasm -b` output
 ## Install
 
 ```sh
-ln -s "$PWD/editor/vscode-besm6" ~/.vscode/extensions/besm6-asm     # from the repo root
+ln -s "$PWD/scripts/vscode-besm6" ~/.vscode/extensions/besm6-asm     # from the repo root
 ```
 
 Then run **Developer: Reload Window** from the command palette. The status bar should read

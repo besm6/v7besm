@@ -60,6 +60,8 @@ cmd/           BESM-6 toolchain (cc, as, ld, cpp, disasm, sim, fsutil) and the n
 etc/           the static files of the image: group, motd, passwd, rc
 root.manifest  what all of that is assembled into: the root filesystem the kernel mounts
 cross/         BESM-6 object/archive format headers (b.out.h, ar.h, ranlib.h)
+scripts/       the shared CMake cross-toolchain module, build checks, and a VSCode
+               grammar for BESM-6 assembly (scripts/vscode-besm6/)
 doc/           BESM-6 architecture references
 ```
 
