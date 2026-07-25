@@ -128,15 +128,26 @@ find_file(B6RUNTIME_LIB libruntime.a
 if(B6RUNTIME_LIB)
     message(STATUS "Found external runtime ${B6RUNTIME_LIB} -- building kernel/, lib/ and the rootfs")
     include(scripts/BesmCross.cmake)
-    add_subdirectory(kernel)
-    add_subdirectory(lib)
 
     #
     # The staged root filesystem, build/rootfs/ -- the tree that becomes the disk image the
     # kernel mounts (root.manifest, at the top of the tree).  `rootfs' is the aggregate every
     # b6_prog() hangs itself on; the programs come after lib/, since each links against its libc.
     #
-    add_custom_target(rootfs)
+    # DECLARED BEFORE add_subdirectory(lib), not after it as it used to be, because lib/test
+    # now stages its programs onto the image too (as /usr/test/*, task 25c) and hangs them on
+    # this target through the same `if(TARGET rootfs)' guard b6_prog() uses.  An aggregate with
+    # no dependencies of its own can be created anywhere; only the guards care.
+    #
+    # ALL, so that a plain `make' stages the whole tree.  It matters since lib/test joined:
+    # those programs are staged by their EXISTING image targets (lib_<name>_img, a POST_BUILD
+    # copy), and those live in the test aggregate rather than in ALL -- so without this,
+    # `make' alone would leave build/rootfs/usr/test empty and only `make test' would fill it.
+    add_custom_target(rootfs ALL)
+
+    add_subdirectory(kernel)
+    add_subdirectory(lib)
+
     add_subdirectory(cmd/init)
     add_subdirectory(cmd/sh)
     add_subdirectory(cmd/cat)

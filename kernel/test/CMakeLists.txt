@@ -187,6 +187,7 @@ get_filename_component(ROOT_MANIFEST ${CMAKE_CURRENT_SOURCE_DIR}/../../root.mani
 
 set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/init
+    ${B6_ROOTFS}/etc/group
     ${B6_ROOTFS}/etc/motd
     ${B6_ROOTFS}/etc/passwd
     ${B6_ROOTFS}/etc/rc
@@ -196,6 +197,16 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/ls
     ${B6_ROOTFS}/bin/pwd
     ${B6_ROOTFS}/bin/sync)
+
+# ...and /usr/test, the lib/test programs (task 25c).  The list is lib/test's, since that is
+# where they are linked and staged; naming it from one file is what keeps the manifest, this
+# dependency list and the ctest cases below from drifting apart.  Read by a path relative to
+# this directory so that a standalone `cmake -S kernel' still configures -- it cannot build
+# root.img anyway, for the reason ../../root.manifest's header gives.
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../lib/test/progs.cmake)
+foreach(_p ${B6_LIBTEST_IMAGE})
+    list(APPEND ROOTFS_FILES ${B6_ROOTFS}/usr/test/${_p})
+endforeach()
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/root.img
     COMMAND ${B6FSUTIL} -n -s 2000 -T ${ROOTTIME}
@@ -222,11 +233,11 @@ add_test(NAME rootimg_check COMMAND ${B6FSUTIL} -c root.img
 set_tests_properties(rootimg_check PROPERTIES LABELS kernel)
 
 # ---------------------------------------------------------------------------------------
-# boot, console and session -- the whole kernel booting with the root image attached
-# (tasks 20, 23, 25b).
+# boot, console, session and libtest -- the whole kernel booting with the root image
+# attached (tasks 20, 23, 25b, 25c).
 # ---------------------------------------------------------------------------------------
 #
-# None of the three links anything of its own: each loads the real `unix' image built one
+# None of the four links anything of its own: each loads the real `unix' image built one
 # directory up by kernel/CMakeLists.txt, against the filesystem fstest reads.  They go one
 # step further than the last at every stage, which is what keeps a failure diagnosable:
 #
@@ -239,10 +250,14 @@ set_tests_properties(rootimg_check PROPERTIES LABELS kernel)
 #            /etc/rc and prompts again.
 #   session  writes files, runs sync(2), and then the HOST fscks what reached the disk and
 #            diffs a file the session wrote.  See run-session.sh.
+#   libtest  runs the twenty-one lib/test programs off /usr/test and diffs each one's
+#            output against the very file b6sim is held to.  Everything above it is the
+#            kernel's own code exercising itself; this is user programs written against
+#            libc, so it is where sysent[]'s rows meet a real caller.  See run-libtest.sh.
 #
 # WHICH DISK EACH ONE ATTACHES.  root3072.disk is the pristine build artifact and nothing
 # writes it: `boot' attaches it -r, which is an assertion in itself -- the boot path needs no
-# writes.  The other two need a writable unit and get a converted copy of root.img at a volume
+# writes.  The other three need a writable unit and get a converted copy of root.img at a volume
 # number of their own (3072 is the artifact, mdtest owns 3073-3076).  For `console' that is
 # not because it writes files but because it execs six programs, and an i_atime write-back
 # forced by buffer pressure must not land on a read-only unit and put an `md' error message
@@ -298,6 +313,48 @@ if(BESM6)
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(session PROPERTIES LABELS kernel TIMEOUT 600)
+
+    # ---------------------------------------------------------------------------------
+    # libtest -- the twenty-one lib/test programs, run off the image by the booted kernel
+    # (task 25c).
+    # ---------------------------------------------------------------------------------
+    #
+    # One boot produces all the output and one ctest case adjudicates each program, which
+    # is why this is a FIXTURE and not a script like `session': there twenty-one diffs
+    # would collapse into a single red case, and a divergence in `timet' would be
+    # indistinguishable from a kernel that never reached the prompt.  So run-libtest.sh
+    # stops once it has extracted the disk, and everything downstream of it is its own
+    # case, requiring the fixture.
+    #
+    # WHICH EXPECTATION EACH CASE USES.  lib/test/<name>.expected -- the very file b6sim is
+    # held to -- unless kernel/test/libtest/<name>.expected exists, in which case that one
+    # wins.  The default is deliberate: an unchanged expectation is a POSITIVE result, the
+    # statement that the kernel and the simulator answered a real program identically.  An
+    # override file's existence is the statement that they cannot, and its header says why.
+    add_test(NAME libtest_run
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-libtest.sh
+                ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(libtest_run PROPERTIES FIXTURES_SETUP libtest
+                         LABELS kernel TIMEOUT 1200)
+
+    # The structural half, as in run-session.sh: forty-two execs and twenty-odd files
+    # written, and the filesystem still checks out.
+    add_test(NAME libtest_fsck COMMAND ${B6FSUTIL} -c libafter.img
+             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(libtest_fsck PROPERTIES FIXTURES_REQUIRED libtest LABELS kernel)
+
+    foreach(_p ${B6_LIBTEST_IMAGE})
+        set(_exp ${CMAKE_CURRENT_SOURCE_DIR}/libtest/${_p}.expected)
+        if(NOT EXISTS ${_exp})
+            set(_exp ${CMAKE_CURRENT_SOURCE_DIR}/../../lib/test/${_p}.expected)
+        endif()
+        add_test(NAME libtest_${_p}
+                 COMMAND diff -u ${_exp} libtest.out/tmp/${_p}.out
+                 WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+        set_tests_properties(libtest_${_p} PROPERTIES FIXTURES_REQUIRED libtest
+                             LABELS kernel)
+    endforeach()
 endif()
 
 # `make test' truncates mdshort3076.disk to nothing before running mdtest: run 4 attaches

@@ -158,21 +158,44 @@ int min(int a, int b)
 // Update all the arguments by the number
 // of bytes moved.
 //
-// There are 2 algorithms,
-// if source address, dest address and count
-// are all even in a user copy,
-// then the machine language copyin/copyout
-// is called.
-// If not, its done byte-by-byte with
-// cpass and passc.
+// There are 2 algorithms.  If source address, dest address and count are all WORD-ALIGNED
+// in a user copy, the machine-language copyin/copyout is called; if not, it is done
+// byte-by-byte with cpass and passc.
+//
+// THE ALIGNMENT TEST IS NOT v7's, AND v7's WAS A SILENT DATA-CORRUPTION BUG HERE.  The
+// original asked `(n & (NBPW-1)) == 0 && ((int)cp & (NBPW-1)) == 0 && ...' -- a low-bit
+// mask, which works on a PDP-11 where NBPW is 2 and an address is a byte address.  Neither
+// half survives the move to this machine:
+//
+//   - NBPW is 6, which is NOT A POWER OF TWO, so `n & 5' is not `n % 6'.  It accepts 24 and
+//     26 alike and rejects 6 and 18.
+//   - a caddr_t is a FAT POINTER, and its byte offset lives in bits 47-45 (param.h,
+//     doc/Besm6_Data_Representation.md section 7).  `(int)cp & 5' therefore tests bits 1
+//     and 3 of the WORD ADDRESS and cannot see the byte offset at all.
+//
+// So the guard passed on unaligned buffers roughly one time in eight, and copyin/copyout --
+// which are WORD-ONLY, masking the pointer with `aax #077777' and dropping the byte offset
+// (usermem.S says so in its header) -- then wrote n/6 whole words at the word the pointer
+// happened to lie in.  The result is a write whose data lands up to five bytes early and
+// whose last bytes are never written at all: a stretch of the file shifted, then zeros.
+//
+// It is deterministic, it is rare enough to look like anything but an alignment bug, and it
+// was invisible until user programs with byte-granular stdio buffers ran on the image --
+// kernel/test/libtest (task 25c) found it in gen, strings, sbrkt and stdiot on its first
+// run.  kernel/TODO.md task 28 listed this as a PERFORMANCE bug ("correctness is
+// unaffected"); it was not.
+//
+// The test below is the one the fast path actually needs, and it is what usermem.S's header
+// says its callers guarantee: a real modulo, and both pointers standing on byte #0 of their
+// word.  ptrbyte() yields the shift field, in which 5 IS the word's first byte.  The `% NBPW'
+// costs one b$div per block, against 3072 bytes moved.
 void iomove(register caddr_t cp, register int n, int flag)
 {
     register int t;
 
     if (n == 0)
         return;
-    if (u.u_segflg != 1 && (n & (NBPW - 1)) == 0 && ((int)cp & (NBPW - 1)) == 0 &&
-        ((int)u.u_base & (NBPW - 1)) == 0) {
+    if (u.u_segflg != 1 && n % NBPW == 0 && ptrbyte(cp) == 5 && ptrbyte(u.u_base) == 5) {
         if (flag == B_WRITE)
             t = copyin(u.u_base, (caddr_t)cp, n);
         else
@@ -185,7 +208,7 @@ void iomove(register caddr_t cp, register int n, int flag)
         u.u_offset += n;
         u.u_count -= n;
         return;
-    } // XXX even addresses
+    }
     if (flag == B_WRITE) {
         do {
             if ((t = cpass()) < 0)

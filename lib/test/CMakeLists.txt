@@ -1,9 +1,23 @@
-# Test programs for the user-level libraries, run under b6sim.
+# Test programs for the user-level libraries, run under b6sim AND on the disk image.
 #
-# b6sim is the harness until a root filesystem exists: it runs one user a.out and services the
-# v7 syscalls on the host, far faster than booting SIMH.  Each program is linked against the
-# real crt0.o and libc.a, run, and its output diffed against the checked-in .expected file (see
-# run-test.sh); a program that needs arguments lists them in a matching .args file.
+# b6sim runs one user a.out and services the v7 syscalls on the host, far faster than booting
+# SIMH.  Each program is linked against the real crt0.o and libc.a, run, and its output diffed
+# against the checked-in .expected file (see run-test.sh); a program that needs arguments lists
+# them in a matching .args file.
+#
+# SINCE TASK 25c THE SAME IMAGES ALSO GO ON THE ROOT FILESYSTEM, as /usr/test/<name>, and the
+# booted kernel runs them from there (kernel/test/libtest.{sh,ini}, run-libtest.sh).  That is
+# where sysent[]'s rows meet a real caller: under b6sim every syscall is the host's, and a
+# kernel bug cannot show.  The two runs share ONE LINKED IMAGE -- staged by a copy, not by a
+# second link -- so a difference between them can only be the harness, never the compiler.
+#
+# The two halves used to belong to two helpers that each did one of them: b6_prog() in
+# scripts/BesmCross.cmake stages and size-checks but never runs, b6_libtest() ran but never
+# size-checked.  b6_libtest() now does both, which also sidesteps b6_prog()'s one gap -- it
+# cannot link -lm, and matht needs it.
+#
+# progs.cmake carries the list of what goes on the image, because kernel/test/CMakeLists.txt
+# needs the same list and is configured in another directory.
 
 # The sibling libraries' build outputs -- crt0.o and libc.a next door in ../libc, libm.a in
 # ../libm.  Normalized so the `..' does not reach the b6ld command line.
@@ -15,10 +29,26 @@ set(LIBM_A ${LIBM_DIR}/libm.a)
 
 set(TEST_TARGETS "")
 
+include(${CMAKE_CURRENT_SOURCE_DIR}/progs.cmake)
+
 # Link one test program: crt0.o first, its own object, then the libraries.  Link order is the
 # contract -- [-lm] then -lc then -lruntime, b6ld scanning each archive once (libm calls into
 # libc, libc into libruntime, never back).  Pass `libm' in ARGN for the one program that needs
 # it.  add_dependencies pins the sibling libraries ahead of the link across directory scopes.
+#
+# Then, unless the program is one of the two that belongs to a single world, STAGE the linked
+# image into ${B6_ROOTFS}/usr/test/ for the disk picture, and register the size check that
+# every program on that image gets.  ARGN also takes:
+#
+#   SIMONLY    b6sim test, no staging   -- spawn, whose premise is that /bin/sh cannot be exec'd
+#   IMAGEONLY  staging, no b6sim test   -- shellt, which needs a shell that really starts
+#
+# THE STAGED FILE IS A COPY OF THE LINKED ONE, not a second link.  Two links of one source
+# could drift (b6_prog() and this macro do not pass identical flags), and then a divergence
+# between the b6sim run and the kernel run would have a third possible cause.  A copy makes
+# `the same bytes ran in both places' a fact rather than an assumption.  It also keeps the
+# .nm/.dis listings and the scratch files each run leaves behind out of ${B6_ROOTFS}, which
+# becomes a disk image and may hold nothing but what belongs on it.
 macro(b6_libtest prog)
     b6_obj(_o ${CMAKE_CURRENT_SOURCE_DIR}/${prog}.c)
     set(_mlib "")
@@ -43,11 +73,44 @@ macro(b6_libtest prog)
     add_custom_target(lib_${prog}_img DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${prog})
     add_dependencies(lib_${prog}_img libc ${_extra_lib})
     list(APPEND TEST_TARGETS lib_${prog}_img)
-    if(B6SIM)
+    if(B6SIM AND NOT "IMAGEONLY" IN_LIST _argn)
         add_test(NAME lib_${prog}
             COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-test.sh ${B6SIM} ${CMAKE_CURRENT_SOURCE_DIR} ${prog}
             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
         set_tests_properties(lib_${prog} PROPERTIES LABELS lib)
+    endif()
+
+    # The disk-image half: copy the image just linked into ${B6_ROOTFS}/usr/test/.
+    #
+    # A POST_BUILD STEP ON lib_${prog}_img RATHER THAN A TARGET OF ITS OWN, and the reason is
+    # the one b6_obj()'s comment gives about shared objects.  A second custom target consuming
+    # ${CMAKE_CURRENT_BINARY_DIR}/${prog} would make the Makefiles generator emit the b6ld rule
+    # into BOTH targets' build.make, so `make -j' could run two links onto the same output at
+    # once -- and it would need its own add_dependencies(... libc) besides, since a file-level
+    # DEPENDS does not order two directory scopes.  Hanging the copy off the target that
+    # already builds the file has neither problem.
+    #
+    # copy_if_different, so an unchanged program does not re-stamp the file and re-trigger the
+    # whole disk image; `rootfs' is the aggregate every stager hangs on, and the top-level
+    # CMakeLists.txt creates it BEFORE add_subdirectory(lib) so that this guard is true here.
+    if(NOT "SIMONLY" IN_LIST _argn)
+        add_custom_command(TARGET lib_${prog}_img POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${B6_ROOTFS}/usr/test
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${CMAKE_CURRENT_BINARY_DIR}/${prog} ${B6_ROOTFS}/usr/test/${prog}
+            COMMENT "stage usr/test/${prog}" VERBATIM)
+        if(TARGET rootfs)
+            add_dependencies(rootfs lib_${prog}_img)
+        endif()
+
+        # The two USER address-space ceilings, as b6_prog() checks them: 28 pages of image
+        # (32 less the four the stack takes at 070000) and the 15-bit reach of a pointer.
+        # Both failures are otherwise silent -- the link succeeds and only the running
+        # program misbehaves.  pwent is the largest of these at 7,560 words.
+        add_test(NAME rootfs_${prog}_size
+            COMMAND sh ${B6_SCRIPTS_DIR}/check-size.sh
+                    ${B6SIZE} ${B6NM} ${B6_ROOTFS}/usr/test/${prog} 28672 32767)
+        set_tests_properties(rootfs_${prog}_size PROPERTIES LABELS rootfs)
     endif()
 endmacro()
 
@@ -67,7 +130,8 @@ b6_libtest(stdiot)
 b6_libtest(printft)
 b6_libtest(scanft)
 b6_libtest(execs)
-b6_libtest(spawn)
+b6_libtest(spawn SIMONLY)
+b6_libtest(shellt IMAGEONLY)
 b6_libtest(timet)
 b6_libtest(pwent)
 b6_libtest(signals)

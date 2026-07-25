@@ -7,6 +7,11 @@ real `/etc/init`, which forks `/bin/sh` — and you get a prompt. Type at it: th
 `^D` takes init round through `/etc/rc` to a fresh prompt, and a session that writes files and
 calls `sync` leaves an image that fscks clean. `make run` is where you talk to it.
 
+The **libc** is under it now too: the twenty-one programs of [../lib/test/](../lib/test/) run
+off `/usr/test` on the image and produce, byte for byte, the output they produce under `b6sim`
+— stdio, `malloc`, `setjmp`, the exec family, signals, `<time.h>`, the passwd file and a shell
+started through `system()`/`popen()`.
+
 This file is the live work plan — the settled design, the hardware rules it obeys, the tasks
 that remain, and the things that cost real time to establish. Keep it current, but keep
 *findings* in the source comments and in `../doc/`: that is where the writeups of the finished
@@ -18,19 +23,20 @@ ever touches the new image. With no drum that `bread` comes back `B_ERROR` and e
 fails with `exec init: error 5` (EIO). Every `.ini` that boots therefore says
 `attach -n drum0 …`.
 
-Four tests cover the image the build produces ([../root.manifest](../root.manifest) →
+Five tests cover the image the build produces ([../root.manifest](../root.manifest) →
 `root3072.disk`). `fstest` reads its superblock and root inode through the real `md` driver,
-the real buffer cache and the real `sbcheck()`, strictly below the boot path; the other three
+the real buffer cache and the real `sbcheck()`, strictly below the boot path; the other four
 boot the whole `unix` image against it, each going one step past the last, which is what keeps
 the diagnosis apart — a failure in `boot` says the kernel never got a user program running, one
 in `console` says the line discipline is wrong, one in `session` says the filesystem or a
-driver is.
+driver is, and one in `libtest` says a system call is.
 
 | test | asserts |
 |---|---|
 | `boot` | process 1 leaves the kernel, execs `/etc/init`, which forks `/bin/sh`, and the shell **prompts** |
 | `console` | a typed dialogue with that shell: erase, kill, a line longer than a clist block, `>/dev/tty`, `pwd`, `ls /bin`, and `^D` round through `/etc/rc` to the next prompt |
 | `session` | the shell **writes** — files, an inode past its direct blocks, `sync` — and the host then fscks the container and diffs what was written |
+| `libtest` | the twenty-one [../lib/test/](../lib/test/) programs run off `/usr/test`, and each one's output matches **the same `.expected` file `b6sim` is held to** |
 
 Read [../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) before touching memory management,
 [../doc/Intrinsics.md](../doc/Intrinsics.md) for how C reaches `002 «рег»` and `033 «увв»`,
@@ -205,55 +211,12 @@ Run every MMU test with **`set mmu cache`**.
 (`brz.s`, `uarea.S`, `seg.S`, `usermem.S`, `switch.s`, `syscall.c`, `sendsig.c`) and why the gates
 are duplicated in the tests' own crt0s.
 
-**Tasks 1 through 25b are done and their writeups have been removed**; the design they settled
+**Tasks 1 through 25c are done and their writeups have been removed**; the design they settled
 on is the section above, and how each turned out is in the source comments and in `../doc/`.
 The numbering is **left as it was** — task numbers are cited from the source (`seg.S`,
 `uarea.S`, `sys1.c`, `text.c`, `trap.c`, `sig.c`, `clock.c`, `dev/md.c`, `dev/bio.c`,
 `dev/mem.c`, `test/crt0*.S`, `test/mdtest.c`, `../include/sys/param.h`, the `.ini` files) and
-from `doc/` — so the list below starts where it does, with the one piece task 25b set aside.
-
-**25c. The `lib/test` programs under the real kernel.**
-
-Run the twenty-one programs in [../lib/test/](../lib/test/) — which today run only under
-`b6sim` — from the disk image, under the booted kernel. This is the first time the `$77` gate
-is driven from user mode by anything but the kernel's own tests, and it is where `sysent[]`'s
-sixty largely untested rows meet their handlers' argument structs. `b6sim` and the kernel
-disagreeing is a bug in one of them.
-
-**The mechanism is already settled**, by 25b: write the output to the image and check it on the
-host. `kernel/test/run-session.sh` is the worked example end to end — graft what the run needs
-onto a private copy with `b6fsutil -a`, boot it writable, then `-S` back to flat, `-x` and
-`diff` against a checked-in expectation. A driver script on the image runs each program with
-its output redirected to a file; nothing needs a console log, and the byte-for-byte discipline
-of `lib/test/*.expected` carries over unchanged.
-
-**Staging is two edits per program**, as for any image file: a `b6_prog()`-style rule putting
-it in `build/rootfs/` (say under `usr/test/`) and a line in `root.manifest`. Note the two
-CMake helpers are complementary and neither does both halves — `b6_prog()` stages and
-size-checks but never runs; `b6_libtest()` runs but never size-checks. Every program is well
-under the 28,672-word ceiling (`pwent` is the largest at 7,560).
-
-**The expectations will not all transfer, and these are the ones to look at first:**
-
-* **`spawn` needs rewriting, not re-recording.** Its whole premise is that `/bin/sh` *fails* to
-  exec — true under `b6sim`, where the host's shell is not a BESM-6 `a.out`. Here it succeeds,
-  so `system()` runs, `status` is not `127*256`, and `popen("r")` returns data instead of EOF.
-* **`hello` and `execs` pin `argv[0]`.** `hello.expected` contains the literal `./hello`, the
-  path the harness types; `execs` execs *itself* five times through `argv[0]` and its `execvp`
-  stage relies on that name containing a slash.
-* **`gen` expects `isatty(1) == 0`**, which is true only because the harness redirects stdout to
-  a file — keep the redirection and it stays true.
-* **`pwent`'s `ttyname()`** records the failure answers, because `b6sim`'s `read()` refuses a
-  directory; with a real `/dev` it may succeed.
-* **`environ`** degenerates to a vacuous pass: it is written to print counts and verdicts rather
-  than names, but the environment the kernel gives it is not `b6sim`'s curated whitelist.
-* **`timet`** pins zone 0 and no daylight saving, which is a property of `b6sim`'s `ftime()`;
-  the kernel's must answer the same or the file changes.
-* **`stdiot`, `scanft` and `timet` write temporary files** in the cwd and in `/tmp`; both must be
-  writable on the image, which they are (`/tmp` is mode 0777 in the manifest).
-
-**Done when** each program's output from the image matches a checked-in expectation, as a ctest
-case, with any divergence from the `b6sim` run explained rather than papered over.
+from `doc/` — so the list below starts where it does.
 
 **26. Swapping and shared text under load.** `sched()`/`xswap()` through the drum with more
 processes than core, and two processes sharing one binary's text. The code is written and `usched`
@@ -275,11 +238,13 @@ are already in the right places. `/dev/kmem` is direct below the unmapped reach.
   `procxmt()` must re-arm after each match. The sites carry `TODO 17` markers: [sig.c](sig.c)
   (cases 6 and 9), [trap.c](trap.c) (the `GRP_BREAKPOINT` arm) and `GRP_BREAKPOINT` in
   [../include/sys/besm6dev.h](../include/sys/besm6dev.h).
-* **`iomove()` tests alignment with `n & (NBPW - 1)`** ([rdwri.c](rdwri.c)) and `NBPW` is 6 — not a
-  power of two, so the mask is meaningless and the fast `copyin`/`copyout` path is taken more or
-  less at random. Marked `/* XXX even addresses */` in the v7 original. Correctness is unaffected;
-  it is a performance bug, and it wants the same real-`char *` treatment `exece()`'s argument block
-  got.
+* **`iomove()`'s alignment test is fixed, and what remains is the bulk copy.** The v7 mask was
+  a *correctness* bug, not the performance bug this list used to call it — see the block comment
+  at `iomove()` in [rdwri.c](rdwri.c). What is still open is the other half of task 28's original
+  point: `copyin`/`copyout` toggle БлП per word and the fat-`char *` byte edges are
+  read-modify-write, so an unaligned `read`/`write` still goes byte-by-byte through
+  `cpass`/`passc`. Reworking it for word-aligned bulk I/O wants the same real-`char *` treatment
+  `exece()`'s argument block got.
 * **`uflush`/`uload` copy the whole 1024-word page.** Copying only up to the saved `r15` —
   `struct user` plus the live stack, typically ~300 words — was planned and never done.
 * **No kernel-stack guard page, and none is possible.** `r15` grows up from ≈ `074214` to
@@ -394,6 +359,15 @@ What the ones already in [test/](test/) cost to get right. Read this before writ
   problem (`cp++` is the compiler's `b$pinc`) — arithmetic on the pointer *value* is. Rewritten
   with explicit indices, `CROUND` deleted; see [prim.c](prim.c). **Grep for the pattern before
   trusting any other v7 file that queues bytes.**
+* **A TEST THAT RE-USES ANOTHER HARNESS'S EXPECTATION FILE IS WORTH MORE THAN ONE OF ITS OWN.**
+  `libtest` diffs each program against the very `lib/test/*.expected` that `b6sim` is held to,
+  and the plan for it allowed for a `kernel/test/libtest/<name>.expected` to override any that
+  could not transfer. **In the end not one override was needed** — every divergence turned out
+  to be a kernel bug, and both were fixed rather than recorded. That is the whole argument for
+  the shape: had each program been given a freshly recorded kernel-side expectation, both bugs
+  would have been checked in as the correct answer, and the suite would have been green and
+  worthless. Prefer an expectation that some *independent* implementation already has to
+  satisfy, and treat needing a new one as evidence rather than as a chore.
 * **Ask what would notice if the code were wrong, and if the answer is "nothing", the test is not
   finished.** 18b.5 classified disk failures into hard and soft, but both ended in the same failed
   request with the same `b_resid` — so the entire classification was undefended, and the bite test
@@ -428,6 +402,25 @@ Facts that cost real time to establish and are not written down in `doc/`.
   archive, so after reinstalling it you must `rm build/kernel/unix` to force a relink.
   The window is a few instructions wide, so no test in either tree reliably bites it: the
   argument is the source plus the traced failure, not a red-to-green case.
+* **v7 PACKS FLAGS INTO SPARE LOW BITS OF ADDRESSES, and this machine has none.** Both bugs
+  `libtest` found on its first run were this one pattern in two different disguises, and both
+  had been sitting in code that every other test walked straight past:
+  * `setregs()`'s `(*rp & 1) == 0` read bit 0 of a signal disposition as "ignored"
+    ([sys1.c](sys1.c)). A PDP-11 function is at an even byte address; **a BESM-6 address is a
+    word index and is odd half the time**, so every handler at an odd address survived `exec`
+    into a program that knew nothing about it. Measured: `/bin/sh`'s `fault()` is at `03331`,
+    so five signals arrived at every command the shell started pointing into hyperspace.
+  * `iomove()`'s `(int)cp & (NBPW - 1)` ([rdwri.c](rdwri.c)) masked the low bits of a fat
+    pointer's *word address* while the byte offset sits in bits 47–45, so the word-only
+    `copyin`/`copyout` fast path was taken on unaligned buffers about one time in eight and
+    silently dropped up to five bytes per call.
+
+  The rule: **on this machine a flag in a pointer has to be a separate field, and a mask on
+  `(int)ptr` is almost always wrong.** `prim.c`'s clists and `sh`'s parse nodes are the two
+  already written up; grep for `& 1`, `& ~1`, `& (NBPW - 1)` and `& CROUND`-shaped masks before
+  trusting any other v7 file. Note how each was found: not by review, but by a *user program*
+  doing something ordinary — and neither reproduced under `b6sim`, where the host serves the
+  system call and the kernel's copy never runs.
 * **`_Static_assert` works and has teeth; `extern int x[1 - 2*(cond)]` does not.** `b6cc` accepts a
   negative array size without a word, so the classic trick is decorative here. `ino.h`, `dir.h` and
   `filsys.h` use the real thing.
@@ -482,7 +475,10 @@ Facts that cost real time to establish and are not written down in `doc/`.
 * **`copyin`/`copyout` toggle БлП per word** (~2× a plain copy), and the fat-`char *` byte edges are
   read-modify-write. Reworking `iomove()` for word-aligned bulk I/O is task 28.
 * **`time` is never seeded from a wall clock.** This machine has no clock-calendar a program can
-  read, so the epoch starts at 0 and `iinit()` takes the superblock's `s_time`.
+  read, so the epoch starts at 0 and `iinit()` takes the superblock's `s_time`. `TIMEZONE` and
+  `DSTFLAG` are therefore **0** rather than v7's US Eastern ([../include/sys/param.h](../include/sys/param.h)):
+  an offset on top of an invented epoch says nothing, and zero makes `ftime()` agree with
+  `b6sim`, which is what lets `lib/test/timet` be one file for both harnesses.
 * **`sy_nrarg` is read nowhere** and is vestigial: exactly one argument arrives in a register on this
   machine, for any `narg >= 1`.
 * **There is no read-only user page.** РЗ closes a page to reads as well as writes, so a closed text

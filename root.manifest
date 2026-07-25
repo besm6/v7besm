@@ -4,7 +4,8 @@
 #
 # The tree, the device nodes, and the USERLAND -- /etc/init, /bin/sh and the five commands
 # that prove the prompt, plus the static files of /etc.  Task 24 put them here and task 25b
-# flipped the last line, /etc/init, from the task-23 stand-in to the real one.
+# flipped the last line, /etc/init, from the task-23 stand-in to the real one.  Task 25c
+# added /usr/test, the twenty-one lib/test programs that b6sim also runs.
 #
 # WHY THIS FILE LIVES AT THE TOP OF THE TREE and not in kernel/test/ beside the CMakeLists
 # that runs b6fsutil over it: every `file' below but none of the directories comes out of
@@ -54,6 +55,7 @@ dir /bin
 dir /dev
 dir /etc
 dir /usr
+dir /usr/test
 
 dir /tmp
 mode 0777
@@ -109,6 +111,109 @@ mode 0644
 file /etc/passwd        # v7's, read by `ls -l' to turn a uid into a name; etc/passwd
 source ../../rootfs/etc/passwd
 mode 0644
+
+file /etc/group         # the groups /etc/passwd's gids name; etc/group
+source ../../rootfs/etc/group
+mode 0644
+
+# ---- the library test programs, task 25c ------------------------------------------
+#
+# lib/test/*.c, the same twenty-one images b6sim runs (lib/test/CMakeLists.txt), staged
+# into build/rootfs/usr/test/ by b6_libtest() and run HERE by the booted kernel --
+# kernel/test/libtest.sh drives them, kernel/test/run-libtest.sh diffs what they wrote.
+# Under b6sim every syscall is the host's; this is where sysent[] meets a real caller.
+#
+# THE LIST IS ALSO IN lib/test/progs.cmake, which is what kernel/test/CMakeLists.txt reads
+# for ROOTFS_FILES and for the per-program ctest cases.  A manifest is a static file and
+# can be generated from nothing, so these stanzas are the one copy kept by hand; adding a
+# program means editing both.
+#
+# spawn is NOT here and shellt is: spawn's premise is that /bin/sh cannot be exec'd, which
+# is true only under b6sim, and shellt is the other half of it -- see either source.
+
+file /usr/test/hello
+source ../../rootfs/usr/test/hello
+mode 0755
+
+file /usr/test/vararg
+source ../../rootfs/usr/test/vararg
+mode 0755
+
+file /usr/test/errno
+source ../../rootfs/usr/test/errno
+mode 0755
+
+file /usr/test/procs
+source ../../rootfs/usr/test/procs
+mode 0755
+
+file /usr/test/sbrkt
+source ../../rootfs/usr/test/sbrkt
+mode 0755
+
+file /usr/test/malloct
+source ../../rootfs/usr/test/malloct
+mode 0755
+
+file /usr/test/strings
+source ../../rootfs/usr/test/strings
+mode 0755
+
+file /usr/test/gen
+source ../../rootfs/usr/test/gen
+mode 0755
+
+file /usr/test/strtolt
+source ../../rootfs/usr/test/strtolt
+mode 0755
+
+file /usr/test/environ
+source ../../rootfs/usr/test/environ
+mode 0755
+
+file /usr/test/jmp
+source ../../rootfs/usr/test/jmp
+mode 0755
+
+file /usr/test/headers
+source ../../rootfs/usr/test/headers
+mode 0755
+
+file /usr/test/stdiot
+source ../../rootfs/usr/test/stdiot
+mode 0755
+
+file /usr/test/printft
+source ../../rootfs/usr/test/printft
+mode 0755
+
+file /usr/test/scanft
+source ../../rootfs/usr/test/scanft
+mode 0755
+
+file /usr/test/execs
+source ../../rootfs/usr/test/execs
+mode 0755
+
+file /usr/test/shellt
+source ../../rootfs/usr/test/shellt
+mode 0755
+
+file /usr/test/timet
+source ../../rootfs/usr/test/timet
+mode 0755
+
+file /usr/test/pwent
+source ../../rootfs/usr/test/pwent
+mode 0755
+
+file /usr/test/signals
+source ../../rootfs/usr/test/signals
+mode 0755
+
+file /usr/test/matht
+source ../../rootfs/usr/test/matht
+mode 0755
 
 # ---- character devices ----------------------------------------------------------
 

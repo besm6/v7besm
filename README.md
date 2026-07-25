@@ -18,72 +18,101 @@ The kernel compiles and links as BESM-6 code with this project's own toolchain a
 [cross-compiler](#related-projects), and it **boots on the [SIMH simulator](doc/Simh_Simulator.md)** —
 the authentic full-machine emulator, and the hardware this port ultimately targets. The
 machine-dependent half is retargeted: the memory model, the mapped brackets, `_start`, all three
-trap doors, the timer and the context switch all work, and two processes alternate under the real
+trap doors, the timer and the context switch all work, and processes alternate under the real
 scheduler, each seeing its own u-area, with the user stack growing on demand. The console, drum and
 disk drivers are written and their failure modes classified.
 
-Boot stops at `panic: iinit`: `b6fsutil` (`cmd/fsutil/`) builds root filesystem images in the
-kernel's own on-disk layout, but mounting one still hangs. That, then loading a BESM-6 executable,
-entering user mode and putting a shell there, is what remains — [kernel/TODO.md](kernel/TODO.md) is
-the live work plan, a sequential list that ends at a single-user prompt on the SIMH console.
+**It boots to a shell.** `b6fsutil` (`cmd/fsutil/`) builds a root filesystem image in the kernel's
+own on-disk layout; the kernel mounts it, hands process 1 the icode, **enters user mode** and execs
+`/etc/init` — the real v7 one — which forks `/bin/sh` and prompts with `# ` on the SIMH console.
+Type at it: the shell runs `cat`, `echo`, `ls`, `pwd` and `sync` off the disk, the kernel does the
+erase, kill and end-of-file processing, and `^D` takes init round through `/etc/rc` to a fresh
+prompt. It also **writes** — create files, `sync`, and the image fscks clean on the host afterwards.
+
+The **libc runs on it too**: the test programs of [lib/test/](lib/test/) live on the image as
+`/usr/test/*` and produce there, byte for byte, the same output they produce under
+`b6sim` — stdio, `malloc`, `setjmp`, the exec family, signals, `<time.h>`, the passwd file, and a
+shell started through `system()`/`popen()`. Running one suite under two independent harnesses is
+what turns a disagreement into a bug report: under `b6sim` every system call is served by the host,
+so a kernel fault cannot show, and the two answering differently means one of them is wrong.
+
+What remains is swapping and shared text under load, `/dev/mem`, and the multi-user road —
+`getty`, `login`, and a driver for the 24-line terminal multiplexer.
+[kernel/TODO.md](kernel/TODO.md) is the live work plan: the design the machine forces, the hardware
+rules every part of it obeys, and a sequential list of what is left.
 
 Alongside the running kernel, [kernel/test/](kernel/test/) holds standalone SIMH tests: each links
 kernel objects against a hand-built environment and lets a `.ini` script assert on the machine state
-afterwards. That is how the MMU and the mass-storage drivers were verified.
+afterwards. That is how the MMU and the mass-storage drivers were verified. Four more boot the whole
+kernel against the disk image, each going one step past the last, so that a failure names its own
+layer: the prompt appears, a typed dialogue works, a session writes files that fsck clean, and the
+libc suite runs off the image.
 
 ## Repository layout
 
 ```text
-kernel/       v7 kernel sources, device drivers (kernel/dev/), and the work plan (TODO.md)
-kernel/test/  standalone SIMH tests for kernel components (MMU, drum, disk)
-include/      v7 system headers (sys/)
-cross/        BESM-6 object/archive format headers (b.out.h, ar.h, ranlib.h)
-cmd/          BESM-6 toolchain: cc, as, ld, cpp, disasm, sim
-doc/          BESM-6 architecture references
+kernel/        v7 kernel sources, device drivers (kernel/dev/), and the work plan (TODO.md)
+kernel/test/   SIMH tests: standalone component tests, and four that boot the whole kernel
+include/       v7 system headers (sys/), the hosted half of the C11 header tree
+lib/           libc, libm and crt0, cross-compiled; lib/test/ is the suite that exercises them
+cmd/           BESM-6 toolchain (cc, as, ld, cpp, disasm, sim, fsutil) and the native
+               programs that go on the disk image (init, sh, cat, echo, ls, pwd, sync)
+etc/           the static files of the image: group, motd, passwd, rc
+root.manifest  what all of that is assembled into: the root filesystem the kernel mounts
+cross/         BESM-6 object/archive format headers (b.out.h, ar.h, ranlib.h)
+doc/           BESM-6 architecture references
 ```
 
 ## Components and status
 
-| Component                     | Location         | Status                                  |
-|-------------------------------|------------------|-----------------------------------------|
-| C compiler driver             | `cmd/cc`         | ✔ working, tested, documented           |
-| Assembler (AT&T / Madlen)     | `cmd/as`         | ✔ working, tested, documented           |
-| Linker + binutils             | `cmd/ld`         | ✔ working, tested, documented           |
-| C preprocessor                | `cmd/cpp`        | ✔ C11, tested, documented               |
-| Disassembler                  | `cmd/disasm`     | ✔ working, tested                       |
-| a.out simulator (Unix v7)     | `cmd/sim`        | ✔ working, tested, documented           |
-| Kernel, built for the BESM-6  | `kernel/`        | ✔ builds, links and boots under SIMH    |
-| Memory management (the MMU)   | `kernel/utab.c`  | ✔ retargeted, tested under SIMH         |
-| Boot, traps, context switch   | `kernel/besm6.S` | ✔ working — processes switch under SIMH |
-| Peripheral drivers            | `kernel/dev/`    | ✔ console, drum and disk                |
-| Filesystem image builder      | `cmd/fsutil`     | ✔ working, tested, documented           |
-| libc / libm / crt0            | `lib/`           | ✔ built and tested under `b6sim`        |
-| Mounting a root filesystem    | `kernel/`        | ☐ to do — boot hangs before `iinit()`   |
-| `exec` of a BESM-6 `a.out`    | `kernel/sys1.c`  | ☐ to do — still the PDP-11 header       |
-| Userland (`init`, `sh`)       | —                | ☐ to do                                 |
+| Component                     | Location           | Status                                      |
+|-------------------------------|--------------------|---------------------------------------------|
+| C compiler driver             | `cmd/cc`           | ✔ working, tested, documented               |
+| Assembler (AT&T / Madlen)     | `cmd/as`           | ✔ working, tested, documented               |
+| Linker + binutils             | `cmd/ld`           | ✔ working, tested, documented               |
+| C preprocessor                | `cmd/cpp`          | ✔ C11, tested, documented                   |
+| Disassembler                  | `cmd/disasm`       | ✔ working, tested                           |
+| a.out simulator (Unix v7)     | `cmd/sim`          | ✔ working, tested, documented               |
+| Filesystem image builder      | `cmd/fsutil`       | ✔ working, tested, documented               |
+| Kernel, built for the BESM-6  | `kernel/`          | ✔ builds, links and boots under SIMH        |
+| Memory management (the MMU)   | `kernel/utab.c`    | ✔ retargeted, tested under SIMH             |
+| Boot, traps, context switch   | `kernel/besm6.S`   | ✔ working — processes switch under SIMH     |
+| Peripheral drivers            | `kernel/dev/`      | ✔ console, drum and disk                    |
+| Mounting a root filesystem    | `kernel/`          | ✔ mounts, reads and writes; fscks clean     |
+| `exec` of a BESM-6 `a.out`    | `kernel/sys1.c`    | ✔ user mode, argv/envp, shared text         |
+| System calls                  | `kernel/sysent.c`  | ✔ the v7 set, exercised from the image      |
+| libc / libm / crt0            | `lib/`             | ✔ tested under `b6sim` **and** on the image |
+| Userland (`init`, `sh`, …)    | `cmd/`             | ✔ v7 init, Bourne shell, five commands      |
+| Single-user shell prompt      | —                  | ✔ **it prompts, and you can type at it**    |
+| Swapping and shared text      | `kernel/text.c`    | ☐ to do — written, never run under load     |
+| `/dev/mem`, `/dev/kmem`       | `kernel/dev/mem.c` | ☐ to do — minors 0 and 1 give `ENXIO`       |
+| Multi-user (`getty`, `login`) | `kernel/dev/sr.c`  | ☐ to do — the multiplexer is a skeleton     |
 
 ## Building
 
-The `cmd/` toolchain builds with a top-level CMake project (driven through a thin
-`Makefile`); the kernel has its own Makefile and cross-compiles with the tools that build
-installs, so the toolchain comes first.
+**One CMake project**, driven through a thin top-level `Makefile`. It builds three kinds of
+thing: the `cmd/` host tools, the cross-built BESM-6 artifacts (`kernel/`, `lib/`), and the
+native BESM-6 programs staged into `build/rootfs/` for the disk image. The cross-builds use the
+**in-tree** tool targets, so a rebuilt `b6as` relinks the kernel with no `make install` in
+between; the Makefiles under `kernel/` and `lib/` are thin wrappers over the same `build/` tree.
 
 **Toolchain** — from the repo root:
 
 ```sh
-make            # configure and build every cmd/ tool into build/
-make run        # build and run the unit tests (ctest)
+make            # configure and build everything into build/
+make run        # run every test (ctest)
 make install    # install the tools as b6* into ~/.local (or /usr/local)
 ```
 
 Building requires CMake and a host C/C++ compiler; GoogleTest is fetched
 automatically, and every `cmd/` component has a unit-test suite run by `make run`.
 
-**Library** — `lib/` (`libc.a`, `libm.a`, `crt0.o`) is part of the top-level CMake build,
-cross-compiled by the `b6*` tools built alongside it, so a fresh checkout needs just:
+**Library and root filesystem** — `lib/` (`libc.a`, `libm.a`, `crt0.o`) is part of the same
+build, cross-compiled by the `b6*` tools built alongside it, and so is `build/rootfs/`, the tree
+that becomes the disk image. A fresh checkout needs just:
 
 ```sh
-make && make install        # cmd/ tools, kernel and lib/; installs include/ + the archives
+make && make install    # tools, kernel, lib/ and rootfs/; installs include/ + the archives
 ```
 
 `make` builds the archives with the in-tree tools, and `make install` puts them into
@@ -95,11 +124,15 @@ build is `libruntime.a`, the `b$*` compiler-support helpers, which come from the
 **Kernel** — cross-compiled for the BESM-6 with `b6cc`/`b6as`/`b6ld`:
 
 ```sh
-cd kernel && make          # produces `unix`, a BESM-6 a.out, plus unix.nm and unix.dis
-cd kernel/test && make test   # run the kernel's SIMH tests
+cd kernel && make            # produces `unix`, a BESM-6 a.out, plus unix.nm and unix.dis
+cd kernel && make run        # boot it under SIMH and type at the shell yourself
+cd kernel/test && make test  # run the kernel's SIMH tests
 ```
 
-The kernel tests need the [SIMH simulator](doc/Simh_Simulator.md) on the path as `besm6`.
+The kernel tests need the [SIMH simulator](doc/Simh_Simulator.md) on the path as `besm6`; they
+are not host unit tests but BESM-6 programs the real simulator runs. `ctest` labels carve the
+suite up — `kernel` (SIMH), `lib` (the libc programs under `b6sim`), `rootfs` (size checks on
+the programs staged for the image) and `sh` (the shell's own scripts).
 
 See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail, and
 [kernel/TODO.md](kernel/TODO.md) for the state of the retarget.
@@ -121,9 +154,9 @@ See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail, and
   physical one, the page registers РП and the protection register РЗ, why an instruction fetch is
   protected differently from a data load, supervisor mode and the extracode/interrupt gates into
   it, and how a fault is reported. The reference the kernel's memory management is written against.
-- [doc/Intrinsics.md](doc/Intrinsics.md) — the nine `<besm6.h>` compiler intrinsics that let the
-  kernel issue `002 «рег»`, `033 «увв»` and the bit-manipulation instructions from C rather than
-  assembly.
+- [doc/Intrinsics.md](doc/Intrinsics.md) — the twelve `<besm6.h>` compiler intrinsics that let the
+  kernel issue `002 «рег»`, `033 «увв»`, the PSW instructions and the bit-manipulation
+  instructions from C rather than assembly.
 
 **The target** — where the kernel runs:
 
@@ -151,8 +184,8 @@ See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail, and
 **The kernel**:
 
 - [kernel/TODO.md](kernel/TODO.md) — the live work plan: the design the machine forces, the hardware
-  rules every part of it obeys, and the sequential list of what is left to do, from mounting a root
-  filesystem to a single-user shell.
+  rules every part of it obeys, what each SIMH test is really asserting, and the sequential list of
+  what is left to do — swapping under load, `/dev/mem`, and the road to multi-user.
 - [doc/Kernel_Assembly_Routines.md](doc/Kernel_Assembly_Routines.md) — the machine-language
   assist: what each routine must do, the contract it owes its C callers, and — routine by
   routine — how `kernel/besm6.S` and its companion files satisfy it.

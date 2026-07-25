@@ -10,7 +10,7 @@
 # commands -- not because anything here needs the cross toolchain, but because B6_ROOTFS and
 # the `rootfs' aggregate are defined there.
 
-set(B6_ETC motd passwd rc)
+set(B6_ETC group motd passwd rc)
 
 set(_staged "")
 foreach(f ${B6_ETC})

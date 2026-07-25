@@ -1,0 +1,22 @@
+command processor 1
+echoed by the shell
+system status 0
+ok   system reaped its own child
+ok   system did not disturb wait
+ok   the redirected command succeeded
+ok   and the file holds what it echoed
+exit status 768
+ok   a non-zero exit comes back shifted
+ok   popen r returns a stream
+ok   the pipe carried the line
+popen r read "piped through the shell
+"
+ok   and nothing followed it
+pclose status 0
+ok   pclose reaped its own child
+ok   popen w returns a stream
+pclose status 0
+ok   pclose reaped the w child too
+ok   and cat wrote what it was given
+ok   no children are left
+done

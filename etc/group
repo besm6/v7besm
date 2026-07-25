@@ -1,0 +1,4 @@
+other::1:root,daemon
+sys::2:sys
+bin::3:bin,guest
+uucp::4:uucp

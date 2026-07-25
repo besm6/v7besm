@@ -17,10 +17,13 @@ work has two halves:
   user mode**, execs `/etc/init` — the real v7 one — and **gives you a shell**: `/bin/sh`
   prompts with `# ` on the console, runs `ls`, `pwd`, `cat` and `echo` off the disk, honours
   the kernel's erase, kill and `^D`, and on `^D` cycles back through `/etc/rc` to a fresh
-  prompt. It also **writes**: create files, `sync`, and the image fscks clean. Three tests
+  prompt. It also **writes**: create files, `sync`, and the image fscks clean. And the whole
+  **libc runs on it**: the twenty-one `lib/test/` programs live on the image as `/usr/test/*`
+  and produce there, byte for byte, the output they produce under `b6sim`. Four tests
   guard that ladder — `kernel/test/boot` (the prompt appears), `kernel/test/console` (a typed
-  dialogue with the shell) and `kernel/test/session` (files written, `sync`, then a host-side
-  fsck and diff) — and `cd kernel && make run` is where you type at it yourself. The drums
+  dialogue with the shell), `kernel/test/session` (files written, `sync`, then a host-side
+  fsck and diff) and `kernel/test/libtest` (the libc suite run off the image, one ctest case
+  per program) — and `cd kernel && make run` is where you type at it yourself. The drums
   must be attached to exec anything: they are `swapdev`, and `exece()` stages the argument
   list in swap. See `kernel/TODO.md`, the live work plan — the settled design, the hardware
   rules it obeys, and a sequential task list (numbered from 24, since the source cites the
@@ -129,10 +132,14 @@ tools**: `cmd/init/init.c` is the Unix v7 `/etc/init`, `cmd/sh/` is S. R. Bourne
 and `cmd/cat`, `cmd/echo`, `cmd/ls`, `cmd/pwd`, `cmd/sync` are the five commands that prove the
 prompt — all compiled by the `b6*` toolchain and staged into `build/rootfs/` as `etc/init` and
 `bin/{sh,cat,echo,ls,pwd,sync}`. Alongside them `etc/` (the top-level directory, not `cmd/etc`)
-stages the static files `motd`, `passwd` and `rc`, which are copied rather than compiled.
+stages the static files `group`, `motd`, `passwd` and `rc`, which are copied rather than
+compiled. `lib/test/` stages a third group, `usr/test/*` — the twenty-one libc test programs,
+the same linked images `b6sim` runs, copied rather than linked a second time so that both
+harnesses provably run the same bytes.
 Together that tree is the root filesystem the kernel mounts. All of it is added from inside
 the `libruntime.a` guard, *after* `lib/`, not with the other `cmd/` subdirectories, because
-each program links against the libc built there.
+each program links against the libc built there. (The `rootfs` aggregate every stager hangs
+itself on is therefore declared *before* `add_subdirectory(lib)`.)
 
 The machinery is one function, `b6_prog()` in `scripts/BesmCross.cmake`, so a further native
 program is one call:
@@ -258,6 +265,16 @@ because no `-M` support exists to do better.
 `make run` runs everything; the ctest **labels** carve it up — `kernel` (SIMH), `lib` (the
 libc programs under `b6sim`), `rootfs` (the size checks on the staged native programs) and
 `sh` (the shell's own scripts under `b6sim`, which also carry the `rootfs` label).
+
+**The libc suite runs twice, and that is the point.** `lib/test/*.c` is built once and both
+run under `b6sim` (label `lib`) and staged onto the disk image, where `kernel/test/libtest`
+runs it off `/usr/test` under the booted kernel (label `kernel`) and diffs each program
+against **the same `.expected` file**. Under `b6sim` every system call is the host's, so a
+kernel bug cannot show; the two harnesses disagreeing means one of them is wrong. Task 25c's
+first run found two, both in code nothing else had exercised. Two programs are in one
+world only — `spawn` needs a `/bin/sh` that *cannot* be exec'd and `shellt` one that can — and
+`b6_libtest()`'s `SIMONLY`/`IMAGEONLY` keywords say which. Adding a program means one
+`b6_libtest()` call, a name in `lib/test/progs.cmake` and a stanza in `root.manifest`.
 
 Every `cmd/` component has a GoogleTest suite under `cmd/<tool>/test/`, wired into the
 `build_tests` target and run by `make run` (ctest). The C preprocessor has the most

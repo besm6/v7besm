@@ -346,8 +346,30 @@ void setregs()
     register char *cp;
     register int i;
 
+    //
+    // Reset every CAUGHT signal to SIG_DFL and leave every IGNORED one alone -- the rule
+    // exec has had since v6, and what makes a shell's `trap' survive into the command it
+    // starts while a handler address, meaningless in the new image, does not.
+    //
+    // u_signal[n] is 0 for SIG_DFL, 1 for SIG_IGN and the handler's address otherwise.
+    // v7 asked `(*rp & 1) == 0' here, reading BIT 0 as the ignore flag -- sound on a
+    // PDP-11, where a function lives at an even byte address and bit 0 is therefore free.
+    // ON THIS MACHINE AN ADDRESS IS A WORD INDEX and is odd exactly half the time, so that
+    // test called every handler at an odd address `ignored' and let it through exec into a
+    // program that knows nothing about it.  Measured: /bin/sh's fault() is at 03331, odd,
+    // so every command the shell started inherited 03331 as its disposition for SIGINT,
+    // SIGQUIT, SIGSEGV, SIGALRM and SIGTERM -- five live handler slots pointing at whatever
+    // that word happened to hold in the NEW image.  Nothing had raised one of those signals
+    // at a program started from the shell until kernel/test/libtest ran lib/test/signals
+    // there (task 25c), which reported it as `signal returns the old disposition (SIG_DFL)'
+    // failing on its very first line.
+    //
+    // The rest of the kernel already spells the question correctly -- issig() asks
+    // `u.u_signal[n] != 1' (sig.c) and exit() assigns the literal 1 (below) -- so this was
+    // the one site that still read the bit.  Compare against the value, not the bit.
+    //
     for (rp = &u.u_signal[0]; rp < &u.u_signal[NSIG]; rp++)
-        if ((*rp & 1) == 0)
+        if (*rp != 1)
             *rp = 0;
     for (cp = &regloc[0]; cp < &regloc[15];)
         u.u_ar0[*cp++] = 0;

@@ -29,8 +29,22 @@
 // Ticks/second: the interval timer free-runs at this rate (ГРП bit 40; SIMH CLK_TPS)
 // and cannot be programmed.
 #define HZ       250
-#define TIMEZONE (5 * 60) // Minutes westward from Greenwich
-#define DSTFLAG  1        // Daylight Saving Time applies in this locality
+//
+// The zone ftime() reports, in minutes westward from Greenwich, and whether daylight
+// saving applies here.  v7 shipped 5*60 and 1 -- US Eastern -- and this machine answers
+// ZERO to both, deliberately.
+//
+// There is no clock-calendar a program can read on a BESM-6, so `time' is never seeded
+// from a wall clock: it starts at the superblock's s_time and counts ticks from there
+// (kernel/TODO.md, "Known consequences").  A five-hour offset on top of an invented
+// epoch is a fiction laid over a fiction, and it would put localtime() an hour and a
+// half of arithmetic away from gmtime() for no gain.  Zero also makes the kernel agree
+// with b6sim, whose ftime() answers 0/0 (cmd/sim/syscall.cpp), so lib/test/timet.c gives
+// the same transcript under both harnesses -- which is the whole point of running it
+// under both (kernel/test/libtest, task 25c).
+//
+#define TIMEZONE 0        // Minutes westward from Greenwich
+#define DSTFLAG  0        // Daylight Saving Time applies in this locality
 #define MSGBUFS  128      // Characters saved from error messages
 #define NCARGS   5120     // # characters in exec arglist
 
