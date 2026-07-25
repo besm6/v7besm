@@ -139,6 +139,22 @@ if(B6RUNTIME_LIB)
     add_custom_target(rootfs)
     add_subdirectory(cmd/init)
     add_subdirectory(cmd/sh)
+    add_subdirectory(cmd/cat)
+    add_subdirectory(cmd/echo)
+    add_subdirectory(cmd/ls)
+    add_subdirectory(cmd/pwd)
+    add_subdirectory(etc)
+
+    #
+    # The disk image is built out of build/rootfs/, and kernel/test/ was configured above --
+    # before any of it existed -- so this edge cannot be drawn there: add_dependencies()
+    # needs both targets to be defined, and `rootfs' is not, that early.  It is drawn here,
+    # where both are.  Without it a parallel build can run b6fsutil over a rootfs that is
+    # only half staged.
+    #
+    if(TARGET rootimg)
+        add_dependencies(rootimg rootfs)
+    endif()
 else()
     message(STATUS "kernel/, lib/ and the rootfs: external compiler runtime (libruntime.a) not installed; skipping")
 endif()

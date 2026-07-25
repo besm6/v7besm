@@ -2,11 +2,44 @@
 # which `-S' then converts into the SIMH container test/CMakeLists.txt attaches as md00.
 # Grammar: cmd/fsutil/README.md.
 #
-# The tree, the device nodes, and one program: /etc/init, which is kernel/test/coninit.S
-# (task 23) and is what makes the console a controlling terminal by opening it.  Its
-# `source' is a bare filename, resolved against b6fsutil's working directory, which is the
-# test BUILD directory where coninit is linked -- see kernel/test/CMakeLists.txt.  Task 24
-# fills /bin and the shell in and replaces this init with a real one.
+# The tree, the device nodes, and the USERLAND -- /bin/sh and the four commands that prove
+# the prompt, plus the static files of /etc.  Task 24 put them here.
+#
+# /etc/init IS STILL kernel/test/coninit.S, THE TASK-23 STAND-IN, and task 24's last step --
+# naming build/rootfs/etc/init instead -- is deliberately NOT taken.  It is not that the
+# userland is missing: cmd/init and cmd/sh are built, staged, and sitting on this image one
+# line away.  It is that THE KERNEL STACK IS NOT BIG ENOUGH TO RUN THEM.  Measured, by
+# sampling a local's address in clock() and reading the maximum back out of memory:
+#
+#     coninit as /etc/init      max SP 077510   184 words of headroom
+#     the real init + a stub sh max SP 077531   167 words
+#     /bin/sh as process 1      max SP 077623   109 words
+#
+# The stack grows UP from about 076214 and CANNOT pass 0100000 -- that is the reach of a
+# 15-bit pointer, so r15 wraps to 0 and the kernel writes its frames over the interrupt
+# vectors.  The deep points are ordinary code (uptget, getblk, mdstrategy), so this is not a
+# runaway recursion; the port simply uses ~790 of the ~880 words the u-area page leaves for
+# a stack, and one nested interrupt frame on top of that is enough.  Booting the real init
+# fails with `panic: kernel trap' and r15 = 0 or 010 in the dump.
+#
+# The fix is a bigger u-area (kernel/TODO.md, task 25), which is a memory-model change --
+# uarea.S and seg.S steal one window per page -- and wants its own plan and its own mmutest
+# work.  Until then coninit stays, and kernel/test/console keeps asserting on its echo.
+#
+# coninit is built next door either way: it is the one user program on this system that
+# links neither crt0 nor libc, so it is what a console failure gets bisected against.
+#
+# EVERY `source' NAMES build/rootfs/, and by a relative path, because b6fsutil resolves one
+# against its own working directory -- the kernel test BUILD directory, which
+# kernel/test/CMakeLists.txt sets.  From build/kernel/test/, `../../rootfs' is
+# build/rootfs/, and that holds for any build directory, since both ends are under
+# CMAKE_BINARY_DIR.  build/rootfs/ is staged by b6_prog() (scripts/BesmCross.cmake) for the
+# programs and by etc/CMakeLists.txt for the text files; the top-level CMakeLists.txt draws
+# the `rootimg depends on rootfs' edge, since kernel/ is configured before rootfs exists.
+#
+# CONSEQUENCE: this manifest is now dependent on the top-level project.  A standalone
+# `cmake -S kernel' can still build and boot the kernel, but it cannot build root.img,
+# because nothing there stages a build/rootfs/ for these paths to point at.
 #
 # Two tests read this image: kernel/test/fstest, which checks the superblock and the root
 # inode below the boot path, and kernel/test/boot + kernel/test/console, which boot a
@@ -35,11 +68,58 @@ dir /usr
 dir /tmp
 mode 0777
 
-# ---- the program the icode execs ------------------------------------------------
+# ---- the program the icode execs, and the shell it will exec in turn -------------
+#
+# `source coninit' is a bare filename because it is resolved against b6fsutil's working
+# directory, the kernel test BUILD directory, which is where coninit is linked.  When the
+# stack question above is answered this becomes `source ../../rootfs/etc/init', and
+# kernel/test/console changes with it.
 
-file /etc/init          # kernel/test/coninit.S -- the task-23 console program
+file /etc/init          # kernel/test/coninit.S -- the task-23 stand-in; see the header
 source coninit
 mode 0755
+
+file /bin/sh            # cmd/sh: S. R. Bourne's shell
+source ../../rootfs/bin/sh
+mode 0755
+
+# ---- enough commands to prove the prompt -----------------------------------------
+
+file /bin/cat           # cmd/cat -- and what /etc/rc uses to print the motd
+source ../../rootfs/bin/cat
+mode 0755
+
+file /bin/echo          # cmd/echo
+source ../../rootfs/bin/echo
+mode 0755
+
+file /bin/ls            # cmd/ls
+source ../../rootfs/bin/ls
+mode 0755
+
+file /bin/pwd           # cmd/pwd
+source ../../rootfs/bin/pwd
+mode 0755
+
+# ---- the static files of /etc ----------------------------------------------------
+#
+# /etc/rc is 0644, NOT 0755: runcom() in cmd/init/init.c execs `sh /etc/rc', never the
+# script itself.  There is no `#!' on this system -- the shebang is a 4.xBSD invention, and
+# neither getxfile() nor b6sim implements it -- so a script is never executed directly;
+# either the shell is told to read it, or exec comes back ENOEXEC and the shell reads it
+# anyway (cmd/sh/README.md).
+
+file /etc/rc            # the boot script; etc/rc
+source ../../rootfs/etc/rc
+mode 0644
+
+file /etc/motd          # the message of the day, printed by /etc/rc; etc/motd
+source ../../rootfs/etc/motd
+mode 0644
+
+file /etc/passwd        # v7's, read by `ls -l' to turn a uid into a name; etc/passwd
+source ../../rootfs/etc/passwd
+mode 0644
 
 # ---- character devices ----------------------------------------------------------
 

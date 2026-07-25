@@ -105,6 +105,13 @@ b6_test(fstest   crt0 fstest bio md alloc intr utab brz)
 # supervisor-mode scaffolding and libc is task 25's business.  Its own object is the whole
 # program, which is why `_start' must be its first text word -- b6ld takes a_entry from
 # the start of text unless told otherwise (cmd/ld/output.c).
+#
+# IT IS NO LONGER ON THE DISK IMAGE.  Task 24 put the real cmd/init and cmd/sh there, and
+# root.manifest names those.  coninit is still built, and deliberately: it is the only
+# user program on this system that links neither crt0 nor libc, so when the console
+# dialogue breaks it is what says whether the fault is in the kernel's terminal path or in
+# everything the shell drags in behind it.  Building it also keeps the source from rotting.
+# Nothing depends on it now, hence the target of its own.
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/coninit.dir)
 b6_test_obj(_coninit_o coninit coninit)
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/coninit
@@ -114,6 +121,10 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/coninit
     DEPENDS ${_coninit_o}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "b6ld coninit" VERBATIM)
+# The target may NOT be called `coninit': a phony target whose name is also a file in the
+# same directory is a rule make considers satisfied by the file being there.
+add_custom_target(coninitprog ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/coninit)
+list(APPEND TEST_TARGETS coninitprog)
 
 # ---------------------------------------------------------------------------------------
 # The root filesystem image fstest reads (task 19) and the kernel boots (tasks 20, 23).
@@ -145,10 +156,32 @@ endif()
 # default, spelled out because fstest.c checks s_fsize against it.
 set(ROOTTIME 1000000000)
 
+#
+# WHAT root.img IS BUILT OUT OF.  Every `file' entry in the manifest but one names a path
+# under build/rootfs/ -- relative to this directory, since that is b6fsutil's cwd.  Listing
+# those files here is what makes editing a command, or the motd, rebuild the image; the
+# build-ORDER edge (rootfs must be staged before b6fsutil runs) cannot be drawn here at
+# all, because `rootfs' does not exist yet when this directory is configured, and is drawn
+# instead at the foot of the top-level CMakeLists.txt.
+#
+# Adding a program to the image therefore means two edits: the manifest, and this list.
+#
+# The one exception is coninit, built above and still the image's /etc/init -- root.manifest
+# says at length why the real one is not there yet.
+set(ROOTFS_FILES
+    ${B6_ROOTFS}/etc/motd
+    ${B6_ROOTFS}/etc/passwd
+    ${B6_ROOTFS}/etc/rc
+    ${B6_ROOTFS}/bin/sh
+    ${B6_ROOTFS}/bin/cat
+    ${B6_ROOTFS}/bin/echo
+    ${B6_ROOTFS}/bin/ls
+    ${B6_ROOTFS}/bin/pwd)
+
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/root.img
     COMMAND ${B6FSUTIL} -n -s 2000 -T ${ROOTTIME}
             -M ${CMAKE_CURRENT_SOURCE_DIR}/root.manifest root.img
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/root.manifest
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/root.manifest ${ROOTFS_FILES}
             ${CMAKE_CURRENT_BINARY_DIR}/coninit
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "b6fsutil root.img" VERBATIM)

@@ -48,8 +48,9 @@ thing**, and knowing which one you are touching is most of what the build layout
 - **host tools** — `cmd/*`, compiled by the build machine's C/C++ compiler, run there;
 - **cross-built BESM-6 artifacts** — `kernel/` and `lib/`, compiled by the `b6*` toolchain
   above through `b6_obj()` in `scripts/BesmCross.cmake`;
-- **native BESM-6 programs** — `cmd/init` and `cmd/sh` today, linked against libc by `b6_prog()` and
-  staged into `build/rootfs/` for the disk image the kernel mounts.
+- **native BESM-6 programs** — `cmd/{init,sh,cat,echo,ls,pwd}`, linked against libc by `b6_prog()`
+  and staged into `build/rootfs/` (with the static files of `etc/`) for the disk image the
+  kernel mounts.
 
 The last two are guarded on the **external** c-compiler's `libruntime.a` being installed;
 without it the tree still configures and builds the `cmd/` tools alone.
@@ -119,14 +120,17 @@ therefore names two archives, **ours first**: `-lc -lruntime`, because `b6ld` sc
 helper calls back into libc. The kernel takes `-lruntime` **alone** — it defines its own
 `printf` in `kernel/prf.c` and uses no other library routine.
 
-### Native BESM-6 programs (`cmd/init`, `cmd/sh` → `build/rootfs/`)
+### Native BESM-6 programs (`cmd/{init,sh,cat,echo,ls,pwd}` + `etc/` → `build/rootfs/`)
 
 The third category, and the newest. These are **`cmd/` subdirectories that are not host
-tools**: `cmd/init/init.c` is the Unix v7 `/etc/init` and `cmd/sh/` is S. R. Bourne's v7
-shell, both compiled by the `b6*` toolchain and staged as `build/rootfs/etc/init` and
-`build/rootfs/bin/sh` — the root filesystem the kernel mounts. They are added from inside
+tools**: `cmd/init/init.c` is the Unix v7 `/etc/init`, `cmd/sh/` is S. R. Bourne's v7 shell,
+and `cmd/cat`, `cmd/echo`, `cmd/ls`, `cmd/pwd` are the four commands that prove the prompt —
+all compiled by the `b6*` toolchain and staged into `build/rootfs/` as `etc/init` and
+`bin/{sh,cat,echo,ls,pwd}`. Alongside them `etc/` (the top-level directory, not `cmd/etc`)
+stages the static files `motd`, `passwd` and `rc`, which are copied rather than compiled.
+Together that tree is the root filesystem the kernel mounts. All of it is added from inside
 the `libruntime.a` guard, *after* `lib/`, not with the other `cmd/` subdirectories, because
-they link against the libc built there.
+each program links against the libc built there.
 
 The machinery is one function, `b6_prog()` in `scripts/BesmCross.cmake`, so a further native
 program is one call:
@@ -151,16 +155,23 @@ that mechanical modernization before it compiles; `cmd/init/README.md` is the sm
 example and `cmd/sh/README.md` the large one, and `cmd/cpp/TODO.md` is the plan for the next
 program (with three external-compiler bugs of its own still in the way).
 
-**`cmd/sh/README.md` is the one to read before porting anything else from v7 userland.** The
-C11 work is mechanical; what is not is that a v7 source assumes an `int` and a `char *` are
-the same thing, and on this machine they are not. It names the three hazards that follow from
-that — a flag packed into bit 0 of a pointer, a bit mask used to round to a word when
-`BYTESPERWORD` is 6, and casts to a node pointer that *floor* rather than round — with the
-fix for each.
+**`cmd/sh/README.md` is the one to read before porting anything else from v7 userland**, and
+`cmd/ls/README.md` next. The C11 work is mechanical; what is not is that a v7 source assumes
+an `int` and a `char *` are the same thing, and on this machine they are not. `sh`'s names
+three hazards that follow from that — a flag packed into bit 0 of a pointer, a bit mask used
+to round to a word when `BYTESPERWORD` is 6, and casts to a node pointer that *floor* rather
+than round — and `ls`'s adds a fourth: **`<` between two `char *` does not order them**, since
+the byte offset sits above the word address and *decrements* as the pointer advances, and
+there is no relational helper. (`-` is fine; `b$pdiff` decodes both operands.) Each names the
+fix.
 
-`build/rootfs/` is staged only — nothing installs it, and `kernel/test/root.manifest` still
-names the task-23 stand-in `kernel/test/coninit.S` as the image's `/etc/init` until there is a
-`/bin/sh` for the real one to exec (`kernel/TODO.md`, tasks 24–25).
+`build/rootfs/` is staged only — nothing installs it. `kernel/test/root.manifest` reads it
+with `source ../../rootfs/…`, resolved against `b6fsutil`'s working directory, and the
+`rootimg`-depends-on-`rootfs` edge is drawn at the foot of the top-level `CMakeLists.txt`,
+because `kernel/` is configured before the `rootfs` target exists. One entry does **not** come
+from there: the image's `/etc/init` is still the task-23 stand-in `kernel/test/coninit.S`,
+because the kernel stack is not big enough to run the real one — the measurement is in
+`root.manifest`'s header and in `kernel/TODO.md`, task 25.
 
 ### Kernel (`kernel/`)
 ```sh

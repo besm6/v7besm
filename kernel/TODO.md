@@ -13,10 +13,15 @@ Where the port stands: `cd kernel && make` links an image that boots under SIMH.
 disk it reaches `panic: iinit`; **with `root3072.disk` and a drum attached it boots through
 `iinit()`, hands process 1 the icode, enters user mode, execs `/etc/init` and holds a
 conversation with whoever is at the console** — reading typed lines, honouring erase, kill and
-`^D`, and answering through `/dev/tty` (tasks 20 through 23 are done). The `/etc/init` on the
-image is still the stand-in `kernel/test/coninit.S`: the real one is built —
-`build/rootfs/etc/init`, from [../cmd/init](../cmd/init) — but it execs `/bin/sh`, so it goes
-on the image when task 24's shell does. `make run` is where you talk to it.
+`^D`, and answering through `/dev/tty` (tasks 20 through 23 are done). `make run` is where you
+talk to it.
+
+The userland is **built and on the image** — `/bin/sh`, `/bin/cat`, `/bin/echo`, `/bin/ls`,
+`/bin/pwd`, `/etc/rc`, `/etc/motd`, `/etc/passwd` (task 24). The `/etc/init` is still the
+stand-in `kernel/test/coninit.S`, and the reason is **not** that the real one is missing: it is
+built, staged and one manifest line away. It is that **the kernel stack is not big enough to
+run it**. That measurement, and what to do about it, is task 25 below — it is now the single
+thing between this port and a prompt.
 
 **The drums must be attached to exec anything**, which is new with task 23 and easy to be
 caught by: they are `swapdev` ([conf.c](conf.c)), and `exece()` stages the argument list in
@@ -205,32 +210,42 @@ proves it is `test/coninit.S`, and `test/console` is what types at it).
 
 ### Stage 7 — the userland
 
-**24. `build/rootfs/` — the tree the image is built from.**
+**24. `build/rootfs/` — the tree the image is built from. DONE, but for its last line.**
 
 The userland sources live in **`cmd/`**, beside the host tools rather than in a top-level
 `rootfs/` as this task first proposed — `cmd/` is where v7 kept its commands, and the staging
 tree is a build artifact, not a source tree. They are cross-built by the same CMake machinery
 `lib/` uses ([../scripts/BesmCross.cmake](../scripts/BesmCross.cmake) and the in-tree `b6*`
 targets) and staged into **`build/rootfs/`**, which the root-image manifest
-(`test/root.manifest`) will read with `source ../../rootfs/…` (its `source` is resolved against
+(`test/root.manifest`) reads with `source ../../rootfs/…` (its `source` is resolved against
 `b6fsutil`'s working directory, the kernel test build dir).
 
-* **`cmd/init/` — done.** The v7 `/etc/init`, ported to C11 and staged as
-  `build/rootfs/etc/init`; with no `/etc/ttys` on the image it is exactly the single-user
-  loop this task asked for. See [../cmd/init/README.md](../cmd/init/README.md).
-* **`cmd/sh/` — done.** S. R. Bourne's v7 shell, ported to C11 and staged as
-  `build/rootfs/bin/sh`; 7,648 words of the 28,672. This task had proposed writing a *minimal*
-  shell first and porting v7's only after task 25 had shaken the syscalls out. That turned out
-  not to be worth it: every call the shell makes is a real one in `sysent.c`, so the whole
-  program went across at once. See [../cmd/sh/README.md](../cmd/sh/README.md) — in particular
-  the three fat-pointer hazards it lists, since the same ones will be in every v7 source that
-  follows, and the two places where the port had to change what the shell *does* rather than
-  how it says it.
-* `cmd/cat/`, `cmd/echo/`, `cmd/ls/`, `cmd/pwd/` — enough to prove the prompt.
-* `etc/` — the static files (`passwd`, `rc`, `motd`).
-* Last: point `test/root.manifest` at `build/rootfs/etc/init` instead of `coninit`, once
-  there is a `/bin/sh` for it to exec. `test/console` asserts on coninit's echo, so that test
-  changes with it.
+* **`cmd/init/`** — the v7 `/etc/init`, ported to C11 and staged as `build/rootfs/etc/init`;
+  with no `/etc/ttys` on the image it is exactly the single-user loop this task asked for.
+  1,207 words. See [../cmd/init/README.md](../cmd/init/README.md).
+* **`cmd/sh/`** — S. R. Bourne's v7 shell, staged as `build/rootfs/bin/sh`; 7,648 words of the
+  28,672. This task had proposed writing a *minimal* shell first and porting v7's only after
+  task 25 had shaken the syscalls out. That turned out not to be worth it: every call the shell
+  makes is a real one in `sysent.c`, so the whole program went across at once. See
+  [../cmd/sh/README.md](../cmd/sh/README.md) — in particular the three fat-pointer hazards it
+  lists, since the same ones are in every v7 source that follows.
+* **`cmd/cat/`, `cmd/echo/`, `cmd/ls/`, `cmd/pwd/`** — enough to prove the prompt. 4,781 /
+  2,331 / 7,678 / 4,069 words. [../cmd/ls/README.md](../cmd/ls/README.md) is the one worth
+  reading: `ls` is where the machine reaches furthest into a v7 source after the shell, and it
+  found a **fourth** fat-pointer hazard to add to that list — `<` between two `char *` does not
+  order correctly, because the byte offset sits above the word address and *decrements* as the
+  pointer advances.
+* **`etc/`** — `passwd` (v7's), `motd`, and `rc`, which had to be rewritten: the v7/x86 script
+  mounts `/dev/hd0e` and runs `mount`, `update`, `cron`, `date`, `rm` and `accton`, none of
+  which exist here. It prints the motd and says what each deleted line is waiting on. Note the
+  two things that constrain anything written for `/etc/rc`: `runcom()` gives the script
+  descriptors 0/1/2 on the root *directory*, so anything meant to be seen must redirect to
+  `/dev/console` itself; and the v7 shell has **no `#` comment**, so a `:` line stands in for
+  one — and its words are still *parsed*, which rules out a backquote, a parenthesis or an
+  apostrophe even inside one.
+* **Not done: point `test/root.manifest` at `build/rootfs/etc/init` instead of `coninit`.**
+  Blocked, and by the kernel rather than by the userland — see task 25, which is now that one
+  problem.
 
 Each program is one `b6_prog()` call, which links `crt0.o … -lc -lruntime` in that order — the
 archive-scan contract in [../lib/README.md](../lib/README.md) — and registers a ctest
@@ -243,9 +258,55 @@ same mechanical modernization `cmd/init/init.c` carries a note about — and exp
 declarations, since each v7 source used to declare its own syscalls (that is what added
 `kill()` to `<signal.h>`, `<sys/wait.h>`, and the five prototypes in `<sys/stat.h>`).
 
-**25. Boot to the prompt, and shake the syscalls out.**
+**25. THE KERNEL STACK. Then boot to the prompt, and shake the syscalls out.**
+
+**25a. The kernel stack is too small to run the userland, and that is the whole of what is in
+the way.** Put the real `/etc/init` on the image and the boot dies with `panic: kernel trap`
+and **`r15 = 0`** (or `010`) in the dump — a stack pointer that has grown past `0100000`, which
+a 15-bit pointer cannot name, and wrapped to zero. What follows is written over the interrupt
+vectors, and the machine then either fetches a non-instruction from address 2
+(`GRP_INSN_CHECK`) or takes a `GRP_DIVZERO` inside a `b$` byte helper called from `clock()`.
+Both were observed; both are the same fault.
+
+The measurement, made by sampling `(int)&local` in `clock()`, recording the maximum in a global
+and reading it back out of memory afterwards with `ex` — **not** by printing it, because
+`printf()` from `clock()` is itself enough frame to tip the balance and the probe then measures
+its own crash:
+
+| `/etc/init` is … | max kernel SP | headroom below `0100000` |
+|---|---|---|
+| `coninit` (what the image carries today) | `077510` | **184 words** |
+| the real `init`, with a stub for `/bin/sh` | `077531` | 167 words |
+| `/bin/sh` itself, as process 1 | `077623` | **109 words** |
+
+The deep points are `uptget`, `getblk` and `mdstrategy` — ordinary disk I/O, not a runaway
+recursion. The stack starts at about `076214`, so the port already uses ~790 of the ~880 words
+the u-area page leaves it, and **one nested interrupt frame is enough to go over**. The
+`coninit` row is the important one: today's *passing* configuration has 184 words of margin, so
+this was always true and the userland merely made it visible.
+
+The fix is more stack, and the only way to get it is to move the stack's *base* down, since its
+top is fixed by the pointer width. That means a **two-page u-area** (`USIZE` 2048, `UBASE`
+075000), and it is a memory-model change, not a constant: `uflush`/`uload` in [uarea.S](uarea.S)
+steal one virtual window per page and copy `USIZE` words; [seg.S](seg.S) shares the quartet-0
+trick; `KEND`/`BUFBASE` move with `UBASE`; `mmutest` hardcodes `UPT` and check 13 exists for
+exactly this class of change; and every process image grows by 1024 words while every context
+switch copies 1024 more. Give it its own plan and its own bite test — and note that task 28's
+"no kernel-stack guard page" stops being a nicety the moment the geometry changes, because a
+depth check is how you would know the new margin is real.
+
+**25b. Then the prompt, and the syscalls.**
 
 * `make run` boots with the image attached and gives a shell on the SIMH console.
+* `test/root.manifest` names `build/rootfs/etc/init`, and **`test/console` changes with it** —
+  it asserts on `coninit`'s echo today. The dialogue it becomes is the same one and proves
+  more at each stage: `echo ab#c` for CERASE, `x@echo yz` for CKILL, a line longer than
+  `CBSIZE` (30) so the clists must chain blocks, `echo … >/dev/tty` for the `/dev/tty`
+  indirection reached by a real `open()` rather than a hand-written syscall, `pwd` and
+  `ls /bin` for the two commands `b6sim` can never test, and `^D` — after which the shell
+  exits, `init` loops, `/etc/rc` runs and **the motd appears**, which is the one assertion
+  that covers the whole cycle back through process 1. `boot.ini.in`'s `expect` becomes the
+  shell's root prompt, `"# "` (`supprompt`; `main.c` picks it for uid 0).
 * Then run the `lib/test/` programs — which today run only under `b6sim` — from the image, under the
   real kernel. This is the first time the `$77` gate is driven from user mode by anything but the
   kernel's own tests, and it is where `sysent[]`'s sixty untested rows meet their handlers'
@@ -253,7 +314,8 @@ declarations, since each v7 source used to declare its own syscalls (that is wha
   bite; `b6sim` and the kernel disagreeing is a bug in one of them, and the `.expected` files say
   which.
 * `sync`, then `b6fsutil -c` on the image afterwards. A clean fsck after a session that wrote is the
-  end-to-end statement that the filesystem half works.
+  end-to-end statement that the filesystem half works. Note that `boot.ini`/`console.ini` attach
+  the disk `-r` today, so nothing can be written until that changes with them.
 * **Done when** the image survives boot → shell → create and write files → `sync` → fsck clean, as a
   ctest case.
 

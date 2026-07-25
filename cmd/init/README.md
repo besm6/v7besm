@@ -55,11 +55,15 @@ needs right now: shut everything down, a shell on `/dev/console`, `/etc/rc`, and
 when the shell exits. `getty`, `login` and the multi-user half wait on a terminal driver —
 [`../../kernel/TODO.md`](../../kernel/TODO.md), task 29.
 
-It is **not yet on the disk image**. `kernel/test/root.manifest` still names the task-23
-stand-in `kernel/test/coninit.S` as `/etc/init`, for two reasons: `kernel/test/console`
-asserts on that program's echo behaviour, and until `/bin/sh` exists, `single()`'s `execl`
-fails, the child exits at once, and this init spins. Putting it on the image is task 24/25's
-last step, once there is a shell for it to exec.
+It is **built and staged but not yet the image's `/etc/init`**. `/bin/sh` exists now, and this
+init has been run under the real kernel against a stub shell: it forks, opens `/dev/console`,
+`dup`s, execs, waits, runs `/etc/rc` and cycles — all of it works. What stops the manifest
+naming it is one floor below: **the kernel stack is not big enough to run the real shell.**
+Booting it grows `r15` past `0100000`, which a 15-bit pointer cannot name, so it wraps to 0 and
+the kernel writes its frames over the interrupt vectors — `panic: kernel trap`. The
+measurement and the fix (a two-page u-area) are task 25 in
+[`../../kernel/TODO.md`](../../kernel/TODO.md). Until then `kernel/test/root.manifest` keeps
+naming the task-23 stand-in `kernel/test/coninit.S`, which `kernel/test/console` asserts on.
 
 ## The ceilings
 

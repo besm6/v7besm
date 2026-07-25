@@ -1,0 +1,11 @@
+БЭСМ-6 / UNIX Version 7 (ef7c6e-main, 24 Jul 2026)
+
+Core is 32K words.  One troff at a time, please.
+
+/tmp is not saved and is cleared at boot. cc(1): char 8 bits,
+6 per word; int and long 48. A char * is a word address plus
+a byte offset.
+
+Console in UTF-8 prints Cyrillic correctly. File names are
+18 Latin characters. No vi(1) here -- ed(1) is on the system
+and learn(1) will teach it.
