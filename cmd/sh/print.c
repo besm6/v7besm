@@ -71,15 +71,22 @@ void prc(CHAR c)
 
 //
 // Print a length of time as the `times' built-in wants it: "1h2m3s", with the hours left
-// out when there are none.  The argument is in sixtieths of a second, which is the unit
-// the system counts processor time in, and the +30 rounds to the nearest second.
+// out when there are none.
+//
+// THE ARGUMENT IS IN CLOCK TICKS, AND A TICK HERE IS NOT A SIXTIETH.  v7 divided by a
+// literal 60 because a PDP-11 ticked at 60 Hz; this machine's interval timer free-runs at
+// HZ = 250 (<sys/param.h>, which defs.h already includes) and times(2) hands back the
+// kernel's raw tick counts -- u_utime and friends, unscaled.  So the literal 60 reported
+// every duration 4.17 times too large: a command that burned a second of CPU printed
+// "0m4s".  The first two 60s below were that conversion and are HZ now; the three after
+// them are seconds per minute and minutes per hour, and stay.  HZ/2 rounds to nearest.
 //
 void prt(L_INT t)
 {
     INT hr, min, sec;
 
-    t += 30;
-    t /= 60;
+    t += HZ / 2;
+    t /= HZ;
     sec = t % 60;
     t /= 60;
     min = t % 60;

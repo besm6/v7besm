@@ -121,7 +121,9 @@ both, and they are not comparable in cost:
    handler must not defer.
 6. **No polling clock.** `vt_clk()` reschedules itself at the line rate and calls `mux_receive()`
    whether or not `GRP_SERIAL` is enabled in МГРП. Do **not** unmask `GRP_SERIAL`; there is nothing
-   for the kernel to do at bit rate.
+   for the kernel to do at bit rate. Nor `GRP_SLOW_CLK` (ГРП bit 10, 62.5 Hz), which is what the
+   historical OS used to prod terminal I/O — the mux is interrupt-driven through ПРП here, so there
+   is nothing to prod. README.md's gotchas say why that bit is not the Unix tick either.
 7. **Raise `NSR`** from 2 to the number of lines wanted and add the nodes to
    [../root.manifest](../root.manifest) — `cdev /dev/tty01`… against `cdevsw[3]`, minor = line
    number.

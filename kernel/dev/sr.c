@@ -110,8 +110,12 @@ void srstart(struct tty *tp)
         return;
     if ((c = getc(&tp->t_outq)) >= 0) {
         if (c >= 0200 && (tp->t_flags & RAW) == 0) {
+            // A delay, not a character.  The count is in v7's SIXTIETHS, out of
+            // ttyoutput()'s table (dev/tty.c); timeout() counts in this machine's
+            // ticks, HZ to the second.  Same scaling, and the same reasoning, as
+            // dev/sc.c -- the 60 there is v7's clock rate, not a minute.
             tp->t_state |= TIMEOUT;
-            timeout(ttrstrt, (carg_t)tp, (c & 0177) + 6);
+            timeout(ttrstrt, (carg_t)tp, ((c & 0177) + 6) * HZ / 60);
         } else {
             tp->t_char = c;
             tp->t_state |= BUSY;

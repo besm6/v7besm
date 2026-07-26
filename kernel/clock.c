@@ -14,6 +14,12 @@
 
 #define SCHMAG 8 / 10
 
+// Ticks between two accruals of p_cpu.  HZ/60 rounded: this machine's tick is four
+// times v7's, and p_cpu is the one thing in the kernel that cares.  See the block
+// comment at the accrual below -- it must be a power of two, and the mask there
+// assumes it.
+#define CPUTICK 4
+
 int lbolt; // ticks since the last second rolled over: 0..HZ-1, not in `time'
 
 // clock is called straight from
@@ -96,8 +102,33 @@ out:
     }
     dk_time[a] += 1;
     pp = u.u_procp;
-    if (++pp->p_cpu == 0)
-        pp->p_cpu--;
+
+    // ACCRUE p_cpu ONE TICK IN FOUR, NOT EVERY TICK.  The pair of rates below is
+    // v7's and only one half of it is a tick count: p_cpu goes UP once per tick here
+    // and is decayed by SCHMAG (8/10) once per SECOND in the arm just below.  So the
+    // value a process settles at is the fixed point of x = (x + f*rate)*8/10, i.e.
+    // 4*f*rate, where f is its share of the CPU and `rate' is how often this line
+    // runs.  v7 ran it at 60 Hz: a CPU hog settled at 240, just under the 255 the
+    // char saturates at, and setpri()'s p_cpu/16 (slp.c) spread 0%..100% of the CPU
+    // across sixteen priorities.  That band IS the scheduler's resolution.
+    //
+    // At HZ = 250 the fixed point is 1000, and 255 is reached at f = 0.255: every
+    // process above a quarter of the CPU pins p_cpu and setpri() cannot tell any two
+    // of them apart.  The decay is per second and cannot be rescaled -- it is what
+    // makes p_time, alarm() and the lightning bolt seconds -- so the accrual is the
+    // half that has to move.  One tick in CPUTICK puts the rate at 63/s and the
+    // fixed point at 252, back inside v7's band.
+    //
+    // `lbolt' is still this second's count BEFORE the ++ below, so it runs 0..HZ-1
+    // and the mask fires on 0, 4, ... 248: 63 times a second.  A mask, not a %: a
+    // modulo by anything but a power of two is a b$div call on this machine.
+    //
+    // Switching the kernel to the machine's 62.5 Hz slow clock (ГРП bit 10) would
+    // buy exactly this and nothing else, at the price of an HZ that is no longer
+    // exact -- see kernel/README.md, "Gotchas worth not re-deriving".
+    if ((lbolt & (CPUTICK - 1)) == 0)
+        if (++pp->p_cpu == 0)
+            pp->p_cpu--;
     if (++lbolt >= HZ) {
         if (BASEPRI(0))
             return;

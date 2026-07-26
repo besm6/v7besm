@@ -127,8 +127,20 @@ void scstart(register struct tty *tp)
     if ((c = getc(&tp->t_outq)) >= 0) {
         if (c >= 0200 && (tp->t_flags & RAW) == 0) {
             // A delay, not a character: wait it out and come back.
+            //
+            // The count came out of ttyoutput()'s delay table (dev/tty.c), which is
+            // v7's and is written in SIXTIETHS -- the PDP-11's tick.  timeout() counts
+            // in this machine's ticks, HZ of them to the second, so the table's numbers
+            // have to be scaled here or every delay is four times too short.  The 60 is
+            // v7's clock rate, not a minute; scaling at the two consumers keeps the
+            // table itself legible as the v7 table it is.
+            //
+            // Unreachable as the console is opened today: scopen() sets ECHO|CRMOD|XTABS
+            // and every arm of that table reads a delay field this leaves zero, so `c'
+            // is never non-zero and tty.c never queues a delay byte.  A program that
+            // sets the delay bits through TIOCSETP reaches it.
             tp->t_state |= TIMEOUT;
-            timeout(ttrstrt, (carg_t)tp, (c & 0177) + 6);
+            timeout(ttrstrt, (carg_t)tp, ((c & 0177) + 6) * HZ / 60);
         } else {
             tp->t_char = c;
             tp->t_state |= BUSY;

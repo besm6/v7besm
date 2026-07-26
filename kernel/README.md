@@ -309,6 +309,15 @@ What the ones already in [test/](test/) cost to get right:
   so an unmasked comparison changes when you recompile — mask with `&07777777777777777`), and no
   space may appear inside the condition token. `ex <addr>` prints it untagged and is what FAIL
   diagnostics should use. `test/swap.ini.in` is the worked example.
+* **`make` is not enough before `ctest`: use `make test` (or `make run`).** `swap.ini` is *generated*
+  from `unix.nm` by `genboot.cmake`, because the `phymem` it deposits and the three counters it
+  asserts on are link-time addresses. That generation hangs off `build_tests`, which plain `make`
+  does not build — so a kernel change followed by a bare `make; ctest` runs the **previous** kernel's
+  addresses. The deposit then lands on whatever now lives at the old `phymem`, and the failure looks
+  nothing like the cause: the banner reports a *full* machine (the squeeze silently missed) and the
+  boot dies later with `exec : error 2`, as the corrupted word takes its toll. One `p_cpu` line in
+  [clock.c](clock.c) moved every symbol after it and cost a stash-and-rebuild to diagnose. If a
+  generated-`.ini` test fails right after a kernel edit, check the `.ini` before the kernel.
 * **Read a bite test on ACC, never on the halt PC** — and rebuild before believing either. A "failed"
   run once turned out to have grown a literal by one word, moving `halt` from `0575` to `0576` so the
   `.ini` tripped its *PC* assertion while every check passed.
@@ -341,6 +350,34 @@ What the ones already in [test/](test/) cost to get right:
 
 Facts that cost real time to establish and are not in `doc/`.
 
+* **The machine has a second, slower clock, and this kernel deliberately does not use it.**
+  `fast_clk()` (SIMH `besm6_cpu.c`) raises `GRP_TIMER` (ГРП bit 40) 250 times a second and, off the
+  same counter, `GRP_SLOW_CLK` (ГРП **bit 10**) every fourth tick — 62.5 Hz. It is not one of
+  `GRP_WIRED_BITS`, so `MOD_GRPCLR` dismisses it exactly as it does the fast one, and the historical
+  OS used it (undocumented, a later addition) to prod terminal I/O. Taking it as the Unix tick was
+  evaluated and **rejected**, for three reasons and one trap:
+  * **There is no overhead to save.** A tick costs ~150 instructions end to end (`intrgate`,
+    `extintr()`, `clock()`'s fast path). The whole boot to a shell prompt takes about **25 clock
+    interrupts** — `boot` runs 1.16 s against `hello`'s 1.06 s process-startup floor, so ~0.1 s of it
+    is simulation — and the heaviest test in the suite, `libtest`, takes ~3000 against a `TIMEOUT` of
+    1200 s. Three quarters of nothing is nothing.
+  * **62.5 is not an integer, and `HZ` must be** (`lbolt >= HZ`, `lbolt -= HZ`, `(1000*ms)/HZ` in
+    `ftime()`, `CLOCKS_PER_SEC`). 62 makes `sleep`/`alarm`/`timeout` fire *early*; 63 makes `time`
+    run 0.79% slow. Either way the tick stops being exact, which it is today — the change *creates*
+    an error class, on a machine with no calendar to correct against, and drops `ftime()`'s
+    resolution from 4 ms to 16 ms.
+  * **`033 031` cannot forge bit 10.** The interrupt-imitation port is `GRP |= (ACC & BITS(24)) << 24`
+    — bits 25–48 only. `test/uclock` delivers exactly one tick at a chosen instant by forging bit 40;
+    on the slow clock it could not, and the one test of the tick path would have to wait on wall
+    clock instead.
+  * **The trap:** arming bit 10 while leaving `extintr()`'s `GRP_TIMER` arm in place leaves the kernel
+    running on the 250 Hz bit, with the slow bit merely also dismissed — and **every test still
+    passes**. Anyone revisiting this must write the ratio test (arm only the slow bit, poll bit 40
+    unarmed, assert `fast == 4*slow ± 1`) *first*.
+
+  What the slow clock would actually have bought — v7's `p_cpu` equilibrium — was taken instead by
+  dividing in software, in the one place that wanted 60 Hz semantics: see `CPUTICK` in
+  [clock.c](clock.c).
 * **A computed `033`/`002` address must have the variable first.** `__besm6_ext(ctlr + EXT_DISKCTL3,
   cw)` folds into one instruction — the address rides the C register (`wtc`) and the constant folds
   into the address field. Written `EXT_DISKCTL3 + ctlr` it does *not* fold and costs a `b$uadd` call
@@ -449,6 +486,16 @@ Facts that cost real time to establish and are not in `doc/`.
   `DSTFLAG` are therefore **0** rather than v7's US Eastern: an offset on top of an invented epoch
   says nothing, and zero makes `ftime()` agree with `b6sim`, which is what lets `lib/test/timet` be
   one file for both harnesses.
+* **The tick is four times v7's, and two things are scaled for it by hand.** `HZ` is 250 because the
+  interval timer free-runs at 250 Hz and cannot be programmed, so a tick is exact but is not the
+  sixtieth every v7 constant assumes. `p_cpu` accrues one tick in four (`CPUTICK`, [clock.c](clock.c))
+  because its decay is per *second* and cannot move; `ttyoutput()`'s delay table keeps v7's numbers
+  and is scaled by `HZ/60` where it is consumed ([dev/sc.c](dev/sc.c), [dev/sr.c](dev/sr.c)).
+  `CLOCKS_PER_SEC` in `<time.h>` is a hand-copy of `HZ` that `lib/libc/gen/clock.c` `_Static_assert`s.
+  One consequence is **left unfixed**: `acct(2)`'s `compress()` ([acct.c](acct.c)) has a 13-bit
+  mantissa, so a CPU time past 8191 ticks loses low bits — ~33 s here against v7's ~136 s. Nothing on
+  the image calls `acct(2)` (`acctp` is set only by `sysacct()`), so it is recorded rather than
+  scaled; the fix, when something does, is to divide by `HZ/60` on the way into `compress()`.
 * **The tail of an image grown by `expand()` reads back as zeros.** v7 promised nothing there and
   nothing reads it, but this machine cannot leave those blocks unwritten at all, so `xswap()` writes
   zeros — a contract stronger than v7's, asserted by `test/uswap` leg 0.
