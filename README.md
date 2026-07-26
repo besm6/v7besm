@@ -36,10 +36,10 @@ shell started through `system()`/`popen()`. Running one suite under two independ
 what turns a disagreement into a bug report: under `b6sim` every system call is served by the host,
 so a kernel fault cannot show, and the two answering differently means one of them is wrong.
 
-What remains is swapping and shared text under load, `/dev/mem`, and the multi-user road —
-`getty`, `login`, and a driver for the 24-line terminal multiplexer.
-[kernel/TODO.md](kernel/TODO.md) is the live work plan: the design the machine forces, the hardware
-rules every part of it obeys, and a sequential list of what is left.
+What remains is the multi-user road — `getty`, `login`, and a driver for the 24-line terminal
+multiplexer — and a handful of smaller leftovers. [kernel/README.md](kernel/README.md) is the
+reference: the design the machine forces and the hardware rules every part of it obeys.
+[kernel/TODO.md](kernel/TODO.md) is the work plan, task by task.
 
 Alongside the running kernel, [kernel/test/](kernel/test/) holds standalone SIMH tests: each links
 kernel objects against a hand-built environment and lets a `.ini` script assert on the machine state
@@ -51,7 +51,8 @@ libc suite runs off the image.
 ## Repository layout
 
 ```text
-kernel/        v7 kernel sources, device drivers (kernel/dev/), and the work plan (TODO.md)
+kernel/        v7 kernel sources, device drivers (kernel/dev/), the design (README.md) and
+               the work plan (TODO.md)
 kernel/test/   SIMH tests: standalone component tests, and four that boot the whole kernel
 include/       v7 system headers (sys/), the hosted half of the C11 header tree
 lib/           libc, libm and crt0, cross-compiled; lib/test/ is the suite that exercises them
@@ -137,7 +138,7 @@ suite up — `kernel` (SIMH), `lib` (the libc programs under `b6sim`), `rootfs` 
 the programs staged for the image) and `sh` (the shell's own scripts).
 
 See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail, and
-[kernel/TODO.md](kernel/TODO.md) for the state of the retarget.
+[kernel/README.md](kernel/README.md) for the state of the retarget.
 
 ## Documentation
 
@@ -185,9 +186,11 @@ See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail, and
 
 **The kernel**:
 
-- [kernel/TODO.md](kernel/TODO.md) — the live work plan: the design the machine forces, the hardware
-  rules every part of it obeys, what each SIMH test is really asserting, and the sequential list of
-  what is left to do — swapping under load, `/dev/mem`, and the road to multi-user.
+- [kernel/README.md](kernel/README.md) — the reference: the design the machine forces, the hardware
+  rules every part of it obeys, what each SIMH test is really asserting, what a standalone test
+  costs to get right, and the consequences deliberately accepted.
+- [kernel/TODO.md](kernel/TODO.md) — the work plan: the road to multi-user, and the smaller
+  leftovers, one scoped task each.
 - [doc/Kernel_Assembly_Routines.md](doc/Kernel_Assembly_Routines.md) — the machine-language
   assist: what each routine must do, the contract it owes its C callers, and — routine by
   routine — how `kernel/besm6.S` and its companion files satisfy it.

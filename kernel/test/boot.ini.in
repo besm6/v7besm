@@ -54,7 +54,7 @@
 ; BRZ0-BRZ7 with memory reading zero -- but that measurement is written up at the call site in
 ; main.c, and this test cannot see it.  Do not read a PASS here as a verdict on the drain.
 ;
-; `attach -r', and emphatically NOT `-n' (the trap TODO.md warns about): -r because the image
+; `attach -r', and emphatically NOT `-n' (the trap README.md warns about): -r because the image
 ; is a build artifact, and no -n because `attach -n' CREATES AND FORMATS an empty container,
 ; on which sbcheck() would fail and the boot would panic.
 ;

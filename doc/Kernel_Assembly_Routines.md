@@ -219,7 +219,7 @@ neither for stylistic reasons:
   test pattern. The number is the machine's, not a measurement.
 
 `uhome` is initialised in `main()` immediately after `proc[0].p_addr`; see
-[TODO.md](../kernel/TODO.md), "The u-area invariant". `make run` with
+[README.md](../kernel/README.md), "The u-area invariant". `make run` with
 [kernel/unix.ini](../kernel/unix.ini) boots the image under SIMH.
 
 ---
@@ -715,7 +715,7 @@ levels and the level lives in the saved mode word (§1).
 
 | symbol | meaning |
 |--------|---------|
-| `uhome` | physical address whose u-area is currently live in the fixed page; the cell `resume()` consults to decide whether to flush and reload. Defined in [switch.s](../kernel/switch.s), initialised in `main()`; see [TODO.md](../kernel/TODO.md), "The u-area invariant" |
+| `uhome` | physical address whose u-area is currently live in the fixed page; the cell `resume()` consults to decide whether to flush and reload. Defined in [switch.s](../kernel/switch.s), initialised in `main()`; see [README.md](../kernel/README.md), "The u-area invariant" |
 
 Two C globals are contract-*adjacent* — declared in `systm.h`, but read or written by the
 assembly: **`idling`** (raised by the idle spin, cleared by `extintr()`; §4.3) and **`runrun`**,

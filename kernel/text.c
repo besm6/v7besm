@@ -63,7 +63,7 @@ int ntextjoin;
 //      the live copy is authoritative and it sets uhome to the new address instead.
 //   5. exit(), which frees the image outright (kernel/sys1.c).  Same hazard as 2.
 //
-// A SIXTH, added later and forgotten, will be a very confusing bug.  See kernel/TODO.md.
+// A SIXTH, added later and forgotten, will be a very confusing bug.  See kernel/README.md.
 // ---------------------------------------------------------------------------------------
 void xswap(register struct proc *p, int ff, int os)
 {

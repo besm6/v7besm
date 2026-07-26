@@ -260,4 +260,4 @@ None of them has a `SYS_*` name, on purpose. Row 45, v7's "unused", is no longer
 - [Aout_Simulator.md §7](Aout_Simulator.md#7-system-calls) — the same set as `b6sim` services it.
 - [lib/README.md](../lib/README.md) — the libc side: `crt0`, the stubs, `cerror`, and the work
   that is left.
-- [kernel/TODO.md](../kernel/TODO.md) — the state of the port.
+- [kernel/README.md](../kernel/README.md) — the state of the port.

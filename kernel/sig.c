@@ -353,7 +353,7 @@ int procxmt()
         for (i = 0; i < 16; i++)
             if (p == &u.u_ar0[regloc[i]])
                 goto ok;
-        // TODO 17: there is no flags register in the frame; single-step /
+        // TODO 33: there is no flags register in the frame; single-step /
         // address-break is М034/М035 (rewritten, not remapped).
         goto error;
 
@@ -364,7 +364,7 @@ int procxmt()
     // set signal and continue
     // one version causes a trace-trap
     case 9:
-        // TODO 17: arm single-step via the address-break registers М034/М035
+        // TODO 33: arm single-step via the address-break registers М034/М035
         // (not a flag bit).  Falls through to case 7 to set the resume PC.
     case 7:
         if ((int)ipc.ip_addr != 1)

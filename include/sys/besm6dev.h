@@ -96,7 +96,7 @@
 #define GRP_INSN_CHECK 0040000  // 15: word not tagged as an instruction; also a jump to 0
 #define GRP_INSN_PROT  0020000  // 14: instruction fetch from a zero-descriptor page
 #define GRP_ILL_INSN   0010000  // 13: privileged instruction attempted in user mode
-#define GRP_BREAKPOINT 0004000  // 12: address-break match (М034/М035) -- TODO 17 single-step
+#define GRP_BREAKPOINT 0004000  // 12: address-break match (М034/М035) -- TODO 33 single-step
 #define GRP_PAGE_MASK  0000760  // 9-5: the faulting virtual page; recover it with >> 4
 #define GRP_PAGE_SHIFT 4
 

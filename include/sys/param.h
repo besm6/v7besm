@@ -36,7 +36,7 @@
 //
 // There is no clock-calendar a program can read on a BESM-6, so `time' is never seeded
 // from a wall clock: it starts at the superblock's s_time and counts ticks from there
-// (kernel/TODO.md, "Known consequences").  A five-hour offset on top of an invented
+// (kernel/README.md, "Known consequences").  A five-hour offset on top of an invented
 // epoch is a fiction laid over a fiction, and it would put localtime() an hour and a
 // half of arithmetic away from gmtime() for no gain.  Zero also makes the kernel agree
 // with b6sim, whose ftime() answers 0/0 (cmd/sim/syscall.cpp), so lib/test/timet.c gives
@@ -286,7 +286,7 @@
 // 076000 loses those frames, because uflush() copies only USIZE words and another
 // process then runs deep on the same physical page.  There is no fault and no
 // diagnostic.  It takes a path 884+ words deep AT A SLEEP POINT to do it -- 109 words
-// deeper than anything measured -- and kernel/TODO.md task 28 says how it would be
+// deeper than anything measured -- and kernel/TODO.md task 31 says how it would be
 // detected.  See kernel/uarea.S and include/sys/user.h.
 #define UBASE    074000 // the u-area: the last two pages of the kernel space
 #define USTKPAGE 28     // first page of the user stack (070000)

@@ -243,7 +243,7 @@ void sureg(void);
 // USIZE words: the saved page only, never the overflow page above it (see UBASE in param.h).
 // uflush() only reads the live page and may be called from C; uload() overwrites it -- and with
 // it the kernel stack its caller is standing on -- so only resume() may call it.  See
-// kernel/TODO.md, "The u-area invariant".
+// kernel/README.md, "The u-area invariant".
 void uflush(paddr_t paddr);
 void uload(paddr_t paddr);
 int getxfile(struct inode *ip, int nargc);

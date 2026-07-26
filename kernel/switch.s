@@ -31,7 +31,7 @@
 // process, so the pointer may be captured before the copy and dereferenced after it, by
 // which time its CONTENTS are the incoming process's.  That is the whole trick.
 //
-// See kernel/TODO.md ("The u-area invariant") and doc/Memory_Mapping.md.  The invariant's
+// See kernel/README.md ("The u-area invariant") and doc/Memory_Mapping.md.  The invariant's
 // C-side rules -- who must flush, and when -- are written up once, at xswap() in text.c.
 
         .text

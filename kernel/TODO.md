@@ -1,571 +1,339 @@
-# The BESM-6 Unix port: the design, and what is left
+# The BESM-6 Unix port: what is left
 
-The machine-dependent half of the kernel is **done**, and so is everything under a shell:
-`cd kernel && make` links an image that boots under SIMH, mounts `root3072.disk`, execs the
-real `/etc/init`, which forks `/bin/sh` — and you get a prompt. Type at it: the shell runs
-`cat`, `echo`, `ls`, `pwd` and `sync` off the disk, the kernel does the erase, kill and `^D`,
-`^D` takes init round through `/etc/rc` to a fresh prompt, and a session that writes files and
-calls `sync` leaves an image that fscks clean. `make run` is where you talk to it.
+The work plan. **[README.md](README.md) is the reference** — where the port stands, the design it
+settled on, the five hardware rules, the u-area invariant, what a standalone SIMH test costs to get
+right, the gotchas, and the consequences deliberately accepted. Read it before starting any task
+below; nothing here repeats it.
 
-The **libc** is under it now too: the programs of [../lib/test/](../lib/test/) run off
-`/usr/test` on the image and produce, byte for byte, the output they produce under `b6sim`
-— stdio, `malloc`, `setjmp`, the exec family, signals, `<time.h>`, the passwd file and a shell
-started through `system()`/`popen()`.  Twenty-three of them are on the image; `memt`, one of the
-two that run there only, is not a libc test at all but the user-mode half of `/dev/mem`'s.
+Each task leaves the tree building (`cd kernel && make`) and the suite passing (`ctest -L kernel`).
+Verification is under SIMH via `test/*.ini` — `b6sim` runs a user `a.out` with no kernel underneath
+and cannot exercise any of this. `test/mmutest` is the model to copy, and every MMU test runs with
+`set mmu cache`; README.md's "Writing a standalone SIMH test" is the rest of that story, including
+why `besm6.o` cannot go into one.
 
-This file is the live work plan — the settled design, the hardware rules it obeys, the tasks
-that remain, and the things that cost real time to establish. Keep it current, but keep
-*findings* in the source comments and in `../doc/`: that is where the writeups of the finished
-tasks went, and where new ones belong.
+**Tasks 1 through 27 are done and their writeups have been removed**; the design they settled on is
+README.md, and how each turned out is in the source comments and in [../doc/](../doc/). The
+numbering is **left as it was** — task numbers are cited from the sources and from `doc/`.
 
-**The drums must be attached to exec anything**: they are `swapdev` ([conf.c](conf.c)), and
-`exece()` stages the argument list in swap — `getblk`/`bawrite` in, `bread` out — before it
-ever touches the new image. With no drum that `bread` comes back `B_ERROR` and every exec
-fails with `exec init: error 5` (EIO). Every `.ini` that boots therefore says
-`attach -n drum0 …`.
+Task 29 is the road ahead and is the size of everything before it. 28 and 30–34 are small,
+independent, and were deferred deliberately.
 
-Six tests cover the image the build produces ([../root.manifest](../root.manifest) →
-`root3072.disk`). `fstest` reads its superblock and root inode through the real `md` driver,
-the real buffer cache and the real `sbcheck()`, strictly below the boot path; the other five
-boot the whole `unix` image against it, each going one step past the last, which is what keeps
-the diagnosis apart — a failure in `boot` says the kernel never got a user program running, one
-in `console` says the line discipline is wrong, one in `session` says the filesystem or a
-driver is, one in `libtest` says a system call is, and one in `swap` says the swapper is.
-
-| test | asserts |
-|---|---|
-| `boot` | process 1 leaves the kernel, execs `/etc/init`, which forks `/bin/sh`, and the shell **prompts** |
-| `console` | a typed dialogue with that shell: erase, kill, a line longer than a clist block, `>/dev/tty`, `pwd`, `ls /bin`, and `^D` round through `/etc/rc` to the next prompt |
-| `session` | the shell **writes** — files, an inode past its direct blocks, `sync` — and the host then fscks the container and diffs what was written |
-| `libtest` | the twenty-three [../lib/test/](../lib/test/) programs run off `/usr/test`, and each one's output matches **the same `.expected` file `b6sim` is held to** (`memt` and `shellt` excepted: they run here only) |
-| `swap` | the same kernel on a machine of **31 pages** (`phymem` deposited before the boot), running more processes than fit: `sched()`/`newproc()` swap through the drum, two processes share one binary's text, and the counters say so |
-
-Read [../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) before touching memory management,
-[../doc/Intrinsics.md](../doc/Intrinsics.md) for how C reaches `002 «рег»` and `033 «увв»`,
-[../doc/Unix_Context_Switch.md](../doc/Unix_Context_Switch.md) for the gates, and
-[../doc/Besm6_Peripherals.md](../doc/Besm6_Peripherals.md) before touching `dev/`.
+| | task | size |
+|---|---|---|
+| 28 | a bulk copy path for unaligned `read`/`write` | medium, high risk |
+| 29 | multiuser: the terminal driver, `getty`/`login`, a test | large |
+| 30 | copy only the live part of the u-area | small, measurable win |
+| 31 | the kernel-stack depth check | small |
+| 32 | `profil()`: implement `addupc()` or make it fail | small; the decision is the task |
+| 33 | `ptrace` single-step | small now, blocked after |
+| 34 | the `int` ↔ pointer audit | open-ended |
 
 ---
 
-## The design
+## 28. A bulk copy path for unaligned `read`/`write`
 
-**The kernel runs unmapped.** БлП = 1 and БлЗ = 1 the whole time the kernel is in control, so a
-kernel address *is* a physical address. The kernel image occupies the **first 32 physical pages** —
-everything below `0100000`, which is exactly the reach of an unmapped data access.
+**Where.** `iomove()` in [rdwri.c](rdwri.c); `copyin`/`copyout` in [usermem.S](usermem.S);
+`useracc()` in [utab.c](utab.c).
 
-**РП always holds the current process's map.** The kernel never programs a map of its own, so a trap
-costs nothing: the hardware forces БлП/БлЗ on at the vector, which is already the kernel's mode.
-Entry and exit touch no mapping register.
+**What is wrong.** `copyin`/`copyout` are **word-only**: they mask the pointer with `aax #077777`
+and drop the byte offset entirely. `iomove()` therefore takes them only when `n % NBPW == 0` and
+both pointers stand on byte #0 of their word, and otherwise moves the block **one byte at a time**
+through `cpass`/`passc` — that is one `fubyte`/`subyte` per byte, each a full `useracc()` range check
+plus a mode-toggle bracket. Every stdio buffer is byte-granular, so the slow path is the ordinary
+one for user I/O; the fast path is taken essentially only by the kernel's own struct copies.
 
-**The u-area is the last two pages of the kernel space** — physical `074000`–`077777`, holding
-`struct user` and, above it, the per-process kernel stack growing up to `0100000`. `struct user` is
-therefore at a fixed *physical* page, and is **copied in and out on a context switch**. That is the
-price of an unmapped kernel, and it is the one we pay.
+(The alignment *test* is no longer the bug it was. v7's `(n & (NBPW-1)) == 0 && (int)cp & (NBPW-1)`
+was silent data corruption here — `NBPW` is 6, not a power of two, and a `caddr_t`'s byte offset
+lives in bits 47–45, so the mask could not see it. The block comment at `iomove()` is the writeup.)
 
-**Only the first of those two pages is copied** — `USIZE` words from `UBASE`, i.e. `074000`–`075777`.
-The page above it is stack **overflow**: the stack may grow into it and run there correctly, but it
-is in no process image and no context switch saves it, so a process that reaches `sleep()` or
-`swtch()` with `r15` above `076000` loses those frames. Task 25a; the rule is written once, at
-`UBASE` in [../include/sys/param.h](../include/sys/param.h).
+**What to do.**
 
-**Mapping is enabled only inside a few short assembly brackets** — to touch a user page
-(`copyin`/`copyout`/`fubyte`/…), and to reach a physical page above `0100000` (`copyseg`/`clearseg`,
-and the u-area save/restore itself).
+1. **Measure first.** Add a counter on each arm of `iomove()`, boot, run `test/session` and
+   `libtest`, and read the two numbers out with `ex`. The work below is only worth doing if the byte
+   arm dominates, and the measurement belongs in the commit message either way.
+2. Give `copyin`/`copyout` byte offsets. The tractable case is **equal phase** — both pointers at
+   the same byte within their word — which is the common one, and needs only a partial leading word,
+   the existing whole-word loop, and a partial trailing word, each edge a read-modify-write on the
+   destination side. The general case is a shifting copy across word boundaries; leave it on the
+   `cpass`/`passc` path until the measurement says otherwise.
+3. `iomove()` then calls the bulk path whenever the phases match, whatever `n` is.
 
-```text
-PHYSICAL, pages 0..31 — the kernel, addressed with БлП = 1 (no translation)
+**How to verify.** Write the bite test first. A new standalone `test/umem` (crt0 plus `usermem`,
+`utab` and `brz`, in the shape of `mmutest`) with a forged user map, covering all 6 × 6 start phases
+× lengths 0–13 and one copy that crosses a page boundary, and asserting the bytes *outside* the
+range are untouched — the last is the part a round trip would miss. Then `libtest` and `session`
+must be byte-identical, and they are the ones that found the previous bug here.
 
-   0        const   (interrupt vector 0500/0501, extracodes 0550-0577, literal pool)
-            text    (fetched unmapped: РП is irrelevant to it, always)
-            data + bss
-   ...      must all end below 062000 = KEND
-   062000   BUFFERS ------ buffers[NBUF][BSIZE], NBUF*BSIZEW = 5120 words -----
-              a fixed PHYSICAL area, not bss: the drum/disk controllers transfer
-              to a physical address.  `buffers = BUFBASE', absolute, in besm6.S;
-              main.c declares it `extern'.  Raising NBUF lowers KEND with it.
-   074000   U AREA, saved half ---- USIZE words: what a switch copies --------
-              struct user     (~140 words)   `u = 074000`, an absolute symbol
-              kernel stack    (884 words, grows UP past 075777 into...)
-   076000   U AREA, overflow ------ 1024 words, saved by NOTHING -------------
-              the stack may run here but must not SLEEP here (task 25a)
-   0100000  end of the unmapped reach; everything above is the page pool
+**Size.** Medium, and higher risk than it looks: this routine has already produced one silent
+data-corruption bug. Do not touch it without the bite test.
 
-РП — the current process's map, 32 pages, loaded by sureg()
+---
 
-   page  0..     user text (physical page != 0), data, bss, break growing up
-   page 28..31   user stack, base 070000, grows UP to the 0100000 ceiling
-   unallocated pages: РП = 0 (non-executable) and РЗ bit set (no data access)
+## 29. Multiuser
 
-   The user gets all 32 pages. The u-area is not in this map — it is physical.
+Today the machine has one terminal, the operator's Consul ([dev/sc.c](dev/sc.c)), and `/etc/init`
+runs the single-user loop only: with no `/etc/ttys` on the image `merge()` returns as soon as the
+open fails and `multiple()` falls straight through. [dev/sr.c](dev/sr.c) is a skeleton — the tty
+scaffolding and the `cdevsw` surface exist, and nothing behind them talks to the multiplexer.
+
+Three pieces, in order. 29a is kernel work and is the interesting one; 29b is userland ports in the
+[../cmd/sh/README.md](../cmd/sh/README.md) mould; 29c is the test that makes the other two mean
+something.
+
+### 29a. The terminal driver
+
+**Pick the interface: the serial multiplexor, not the telegraph channels.** The `TTY` device offers
+both, and they are not comparable in cost:
+
+* The **24 telegraph lines** (`033 0140` write, `033 4100` read) are bit-serial and polled — one bit
+  per line per bit time, with the start / 8 data / stop framing run in software off `GRP_SERIAL`
+  (ГРП bit 19, raised only if already enabled in МГРП) at `set tty rate` Hz. That is an interrupt
+  per bit per line and a software UART in the kernel.
+* The **serial multiplexor** (`033 0143` write, `033 4143` read, `033 0153` clear) is
+  character-at-a-time and interrupt-driven, reporting in ПРП — which is exactly the shape of the
+  Consul, and exactly the path [intr.c](intr.c)'s `prpintr()` already dispatches. `dev/sr.c` becomes
+  `dev/sc.c` with a line number in the syllable.
+
+**The work.**
+
+1. **[../include/sys/besm6dev.h](../include/sys/besm6dev.h)** gains the registers and bits, in the
+   existing naming: `EXT_MUX 0143` (write a syllable), `EXT_MUX_RD 04143` (read the syllable back),
+   `EXT_MUXCLR 0153` (clear the interface), `PRP_MUX_INPUT 0100` (bit 7) and `PRP_MUX_DONE 040`
+   (bit 6).
+2. **Syllable format**, 16 bits: line number in bits 9–16, character in bits 1–7. Bit 15 (`040000`)
+   marks a **control** syllable; with bit 8 (`0200`) also set it is a line-status request, answered
+   in the syllable register with the receive state in bit 4 and raising `PRP_MUX_INPUT`; without it,
+   bit 4 set **disables** reception on the line and clear enables it. An input syllable carries the
+   line in bits 9–16 and the character in 1–7 with **odd parity in bit 8**, so the driver masks
+   `0177`.
+3. **`srintr()` beside `scintr()`** in `prpintr()`, and `mprpon(PRP_MUX_INPUT | PRP_MUX_DONE)`.
+   `GRP_SLAVE` is already unmasked for the Consul, and the ordering rule is the same one `intr.c`
+   states: clear the ПРП bit *before* dismissing `GRP_SLAVE`, or the handler storms.
+4. **Output is one engine for all 24 lines.** `PRP_MUX_DONE` does not say which line finished. So
+   keep **one character in flight** across the whole device, remember whose it was, and on each DONE
+   complete that line and round-robin to the next line with a non-empty `t_outq`. `t_addr` already
+   holds the line number. Per-line `BUSY` in `t_state` is not enough by itself.
+5. **Input is one register for all 24 lines, and reading it does not free it.** `033 4143` returns
+   the syllable but leaves the simulator's busy flag set; only `033 0153` clears it — and that also
+   zeroes the syllable, clears `PRP_MUX_INPUT` and *raises* `PRP_MUX_DONE`. So the receive path is
+   read → clear → absorb the DONE the clear itself raised. While the register is busy the simulator
+   collects from no line at all; characters are not lost (they wait in the telnet buffer) but the
+   handler must not defer.
+6. **No polling clock.** `vt_clk()` reschedules itself at the line rate and calls `mux_receive()`
+   whether or not `GRP_SERIAL` is enabled in МГРП. Do **not** unmask `GRP_SERIAL`; there is nothing
+   for the kernel to do at bit rate.
+7. **Raise `NSR`** from 2 to the number of lines wanted and add the nodes to
+   [../root.manifest](../root.manifest) — `cdev /dev/tty01`… against `cdevsw[3]`, minor = line
+   number.
+
+**Two simulator conditions that will look like driver bugs.**
+
+* A line is served only if it is **attached** (`attach tty3 4203`) *and* carries the **`mux` unit
+  flag** (`set tty3 mux`). Without both, `mux_receive()` skips it and nothing says why.
+* On the mux path the **simulator echoes** the character back to the line itself, and folds DEL to
+  BS, before handing it to the kernel — unlike the Consul path. An `sr` line must therefore run with
+  the kernel's `ECHO` **off** or every character doubles. Decide this before writing `srparam()`,
+  because it changes what the `t_flags` default is.
+
+**Also fix while there.** [../doc/Besm6_Peripherals.md](../doc/Besm6_Peripherals.md) says `033 0153`
+"sets bit 6 of МПРП". It sets bit 6 of **ПРП** (`PRP_MUX_DONE`) — `mux_clear()` in `besm6_tty.c`
+touches no mask.
+
+**How to verify.** `test/srtest`, in the shape of `sctest`: link `sr` + `tty` + `prim` + `partab`
+against a crt0, attach two mux lines, and drive the *device* (not a booted kernel) — send a
+character out on line 2 and one on line 3 and assert both arrive on the right lines, which a
+single-line test cannot distinguish. That is the same "leave two different patterns and read the
+region back whole" argument `mbtest` needed.
+
+**Size.** Medium. The driver is small; the register semantics above are the whole of the risk.
+
+### 29b. `getty`, `login`, and `/etc/ttys`
+
+Two more native programs in the `b6_prog()` mould, `cmd/getty` and `cmd/login`, ported from v7 —
+strict C11, and the `int`-is-not-a-`char *` hazards that
+[../cmd/sh/README.md](../cmd/sh/README.md) and [../cmd/ls/README.md](../cmd/ls/README.md) enumerate.
+The libc side is already there: `crypt`, `getpwnam`/`getpwent`, `ttyname`, `getlogin` and
+`<utmp.h>` are all in [../lib/libc/](../lib/libc/), which `init.c` already uses.
+
+* **`/etc/ttys`** joins the static files in [../etc/](../etc/) and gets a `file` line in
+  `root.manifest`. One line per enabled terminal: `'1'` to run a getty, then the character handed to
+  getty as its speed selector, then the device name — the format `rline()` in
+  [../cmd/init/init.c](../cmd/init/init.c) already parses.
+* **`/etc/passwd`** gets a real encrypted field. Start with an empty password so a failure is in one
+  place at a time, then add one and keep the plaintext in the test script, not in the image.
+* **`init`'s multiuser half needs no work** — `merge()`, `multiple()` and `dfork()` are the v7 ones
+  and are already ported; they simply have nothing to read today. Expect the first bug to be in what
+  `merge()` does on a *second* pass, which is the half no single-user boot has ever run.
+* Both programs are subject to the `rootfs_<name>_size` ceilings (28,672 words of address space, no
+  relocatable symbol above word 32,767), registered automatically by `b6_prog()`.
+
+**Size.** Medium, and mostly mechanical — but do it *after* 29a, so that a login that never prompts
+is a userland bug and not a driver one.
+
+### 29c. The multiuser test
+
+`test/multiuser`: boot the full kernel with two mux lines attached, log in on both, and assert that
+a logout brings a fresh `login:` — which is what proves `init`'s `multiple()` loop, the piece no
+existing test reaches.
+
+SIMH's `expect`/`send` **do work per line** — the `<device>:<line>,"string"` form, e.g.
+`expect TTY:3,"login: "` and `send TTY:3,"root\r"` (`_tmxr_locate_line_send_expect()` in
+`sim_tmxr.c`). The open question to settle first is how to get the line **connected** without a human
+telnet client, since `mux_receive()` skips a line whose `conn` is 0: the candidates are a host-side
+helper alongside the simulator (`run-session.sh` already establishes that pattern), TMXR's loopback
+mode if the BESM-6 `TTY` device exposes a `set` modifier for it, and `attach ttyN Connect=…`.
+Resolve that before writing anything else, because it decides the shape of the whole test.
+
+Note README.md's caveat about `send` dropping a character under parallel ctest: a `send`-driven test
+that fails once and passes when re-run alone has said nothing.
+
+**Size.** Small once the connection question is answered; blocked on it until then.
+
+---
+
+## 30. Copy only the live part of the u-area
+
+`uflush`/`uload` ([uarea.S](uarea.S)) copy the whole `USIZE` = 1024-word page, twice per context
+switch. The live content is `struct user` (~140 words) plus the stack **below** `r15` — the stack
+grows up, so everything above `r15` is dead. Measured: the deepest `resume()` in a boot →
+`/etc/rc` → shell → `ls /bin` run had `r15 = 075302`, i.e. 706 words live; a typical one is ~300.
+
+**What to do.** Pass a word count. `uflush` knows it — the current `r15`. `uload` does not, and
+cannot be told by `resume()`, which has not yet read the incoming process's state: it must store the
+count *into* the saved page at a fixed offset (a new `u_stkdepth` in `struct user`, or a word next to
+the resume label) and read it back through the `WHOME` window before the copy. Round the count up to
+a whole number of words and leave slack.
+
+**Where it bites.** The count must cover the deepest frame that can ever be *resumed*, not the one
+current when `uflush` runs. Those are the same thing while interrupts are off — which `uload` already
+requires and `uflush` should assert — but they stop being the same the moment anything calls `uflush`
+with delivery open. `DIRSIZ` moving `u_upt` is the other trap: `UPT` is hardcoded in `uarea.S`,
+`seg.S` and `mmutest.c`, and any new field in `struct user` moves it.
+
+**How to verify.** `uswtch` and `mmutest` unchanged; add a leg that writes a sentinel just below
+`r15` and another well above it, switches away and back, and asserts the first survives — and that
+the second does *not* have to. Then `boot` and `swap`, which are where a lost frame shows up as a
+hang rather than a failure.
+
+**Size.** Small, and the payoff is on every context switch. It is the only item on this list with a
+measurable win in the ordinary path.
+
+---
+
+## 31. The kernel-stack depth check
+
+There is **no guard page and none is possible.** `r15` grows up from ≈ `074214` to `0100000`, and
+past that a 15-bit address wraps to 0 — into the interrupt vectors. The kernel runs unmapped, so
+neither РП nor РЗ applies to it; the only mechanisms are a software depth check or the simulator.
+Task 25a made the wrap unreachable by any measured path, but two one-line checks were left unwritten:
+
+```c
+if ((int)&local >= UBASE + USIZE)   panic("kstack");   /* in sleep() — the one the geometry needs */
+if ((int)&local >= 0100000 - MARGIN) panic("kstack");  /* the wrap */
 ```
 
-### Shared text, and what the paging store owes it
+The first is the important one: `sleep()` (and `swtch()`) is exactly where a frame in the overflow
+page is silently lost, because `uflush()` copies only `USIZE` words and another process then runs deep
+on the same physical page. There is no fault and no diagnostic — see README.md's consequences list.
 
-**A pure (`NMAGIC`) binary's const+text is one shared region**, loaded once and mapped into every
-process running it; an impure (`FMAGIC`) one has none at all, because `getxfile()` folds const and
-text into data and forces `ux_tsize` to 0, at which point `xalloc()` returns on its first line. So
-until task 26 linked something `-n`, the whole of [text.c](text.c) was unreachable. Two images are
-pure now — `/bin/sh` and `/usr/test/puret` — and `b6_prog()`/`b6_libtest()` take a `PURE` keyword
-for a third.
+**Decide first whether it earns its keep**, because SIMH already observes both without kernel code: a
+write watchpoint on the overflow page (`break -w 0176000-0177777`) fires only on an *unmapped* store,
+i.e. only on a kernel stack frame, because `mmu_store()` ORs `0100000` into the address before
+`sim_brk_test`; and `break <resume>; ex M17` samples the depth at every switch. The argument for the
+runtime check is that it fires on a real workload nobody is watching, and it costs one comparison per
+sleep.
 
-"Pure" here means **shared, not protected**. РЗ closes a page to reads as well as writes, so a
-read-only text page would take the program's own constant pool with it; `estabur()`'s `xrw` is
-accepted and ignored. What it buys is one copy of the text in core, which on a 31-page machine is
-the difference between four processes and none.
+**How to verify.** A standalone test that forges a deep frame and sleeps in it must panic; without
+that, the check is decorative. A test that cannot fail proves nothing about the geometry.
 
-**A swap slot must be written in full before it is read.** On the PDP-11 a block that had never been
-written read back as whatever was on the platter, which v7 relied on: `expand()` raises `p_size`,
-swaps out only the *old* size, and `swapin()` reads the new one back — the tail being uninitialized
-data that `clearseg()`/`grow()` overwrite anyway. Here a drum zone the container has never reached
-is an **I/O error**, and `swap()` panics. `xswap()` therefore zero-fills the tail of the slot before
-it lets go of the core; the rule and the reason are at the call site.
-
-### The click is dead
-
-v7's "click" (a 4 KB page as a unit of counting) has no place on a word-addressed machine, and is
-gone. Every size and every address in the kernel is counted in **48-bit words**: `p_addr`, `p_size`,
-`x_caddr`, `x_size`, `u_tsize`/`u_dsize`/`u_ssize`, the coremap, `USIZE`. Where the hardware needs a
-page, the value is a word address that is a multiple of `PGSZ` (1024), and the map builder shifts by
-`PGSH` (10). `ctob`/`btoc`/`ctod` are replaced by `btow`/`wtob`/`pground`/`wtodb`; the swapmap still
-counts disk blocks (512 words), only the coremap changed unit.
-
-A page is no longer the unit of counting, so `copyseg`/`clearseg` — which still move exactly one
-page — are stepped by `PGSZ` by every loop that calls them.
-
-### The mapped brackets
-
-Each is a short assembly routine that runs **entirely out of index registers**: while mapping is on,
-the kernel's own data — including its stack — is not addressable, because virtual `074000` then
-names the *user's* page 30.
-
-| bracket | why | what it maps |
-|---|---|---|
-| `copyin`/`copyout`/`fubyte`/`fuword`/`subyte`/`suword` | reach a user page | nothing — the user's map is already loaded. The loop toggles БлП per word: read the user word mapped, store it to the kernel buffer unmapped. |
-| `copyseg`/`clearseg` | reach a physical page above `0100000` | steals virtual pages 1–2 as windows (one `mod 020`), restores the quartet from `u.u_upt[]` afterwards |
-| `uflush()`/`uload()` | save/restore the **saved half** of the u-area across a context switch | steals virtual page 1 for the process's u home and virtual page 2 for the live u-area (the physical page `UBASE` names — the descriptor is derived from `UBASE`, not spelled, so it cannot drift from the geometry); both live in quartet 0, so one `mod 020` steals them and one puts them back |
-
-**Never virtual page 0.** A store to virtual address 0 is dropped and a load returns 0:
-`mmu_store()`/`mmu_load()` test `addr == 0` *before* translation and before the "already physical"
-tag, so the black hole is in the **virtual** address, whatever page 0 is mapped to. A window there
-silently loses word 0 of whatever it copies. Pages 1 and 2 are also the cheap choice: they share
-quartet 0, and their addresses (`02000`–`05777`) fit the 12-bit short address field, so the copy
-loop needs no `utc`.
-
-(The same black hole is why a user image starts at **word 8** (`BADDR`), not word 0: the a.out
-header hole occupies words 0–7, so nothing the program touches lands on the virtual-word-0 sink.
-See `getxfile()` in [sys1.c](sys1.c).)
-
-An interrupt taken inside a bracket is harmless *for addressing*: the hardware forces БлП = 1 at the
-vector, so the handler sees the kernel's normal unmapped world and its stack at `074000` resolves
-physically; `выпр` restores БлП from SPSW and the bracket resumes mapped.
-
-It is **not** harmless for `uload`, which is overwriting the page the handler's stack frame is in —
-so that bracket holds БлПр. And note that **`vtm N,0` writes БлПр along with БлП and БлЗ**, all three
-from the address field: a bare `vtm 2`/`vtm 3` *enables* interrupts as a side effect. A bracket that
-wants them off must say `02002`/`02003`, and restore PSW afterwards (`ita 021`/`ati 021` — supervisor
-takes a 5-bit register number, so `M[021]` is reachable).
-
-### Five hardware rules everything obeys
-
-1. **РП/РЗ cannot be read back.** The map is a shadow table in memory: `u.u_upt[8]`, eight words,
-   each carrying four РП descriptors *and* (in bits 21–28 of the even words) the matching РЗ byte —
-   so `sureg()` is 8 × `рег 020+i` plus 4 × `рег 030+j` with no shifting.
-2. **The kernel keeps БлЗ set (protection off).** РЗ is consulted even when mapping is off, against
-   `addr >> 10`, so a kernel running unmapped with the previous process's РЗ loaded would fault on
-   its own bss. The hardware sets БлЗ at the vector — never clear it, not even in a bracket.
-3. **Drain the БРЗ write cache before every РП write** — nine consecutive stores to physical 1–7
-   with mapping off. (Stores made *unmapped* are tagged physical and survive a map change; stores
-   made *mapped* — by the user, or inside a bracket — are tagged virtual and do not.) The hazard is
-   invisible under default SIMH and fatal under `set mmu cache`. `drainbrz()` is the one routine in
-   the kernel that **has to be assembly** — see [brz.s](brz.s) for why C cannot express it — and
-   `test/mmutest` is what proves the drain is load-bearing.
-
-   **And before user code FETCHES a word the kernel wrote through the map.** The instruction path
-   does not consult the write cache — `mmu_prefetch()` reads memory directly, while a data load
-   does look in БРЗ — so a word `copyout()` has just written can be read back correctly as data
-   and still be fetched as garbage. Measured: right after `main()`'s `copyout()` of the icode,
-   two of its nine words were in memory and **seven were still in `BRZ0`–`BRZ7`**. `exec()` gets
-   the drain for free from the `estabur()` that follows its `readi()`; `main()`'s icode copy and
-   `sendsig()`'s planted trampoline word drain for themselves.
-
-   **And before a DEVICE reads memory.** A drum or disk write exchange transfers out of memory,
-   not out of the write cache, so any store made fewer than eight stores before the `033` is
-   still in БРЗ and the platter gets the previous contents of those words. Both mass-storage
-   drivers drain on the write path ([dev/md.c](dev/md.c), [dev/mb.c](dev/mb.c)); the disk's
-   sector header, stored two instructions before the exchange, is what made it visible, and
-   `kernel/test/session` is what caught it. Note that a *read* needs nothing: the device is the
-   writer, and the transfer lands in memory the CPU has not touched.
-4. **There is nothing to invalidate** — writing РП refills the TLB in the same instruction, so a stale
-   translation is not a state the machine can be in. v7's `invd()` is deleted, not stubbed.
-5. **A fault reports the faulting *page* (ГРП bits 5–9), and the saved PC points *past* the faulting
-   instruction.** Anything that means to retry — stack growth — must back the PC up using
-   `SPSW_NEXT_RK` and `SPSW_RIGHT_INSTR`.
-
-### The u-area invariant
-
-The live u-area is at `074000`; the copy in the process's image at `p_addr` is stale between
-switches. A kernel global `uhome` records whose home the live u-area belongs to, and `NOUHOME` (0)
-says it has no home at all — the state `exit()` and a freeing `xswap()` leave behind, without which
-the next `resume()` would flush 1024 words into core `malloc()` may already have handed out.
-
-`resume()` ([switch.s](switch.s)): if `paddr != uhome`, `uflush(uhome)`, then `uload(paddr)`, then
-`uhome = paddr`. Only then restore r1–r7, r13, r15 from the label — which, being at `074000+n` in
-*every* process, now names the incoming process's saved state. That constant is the whole trick.
-
-**Anything else that reads or frees the current process's image must flush first.** This is the
-sharpest edge in the whole design; it has bitten twice, and both times the site was one the list did
-not have. The complete rule — all six sites, and why the test belongs inside `xswap()` rather than at
-its call sites — is written up **once**, in the block comment at `xswap()` in [text.c](text.c). Add
-to it there, not here.
+**Size.** Small.
 
 ---
 
-## Tasks
+## 32. `profil()`: implement `addupc()` or make it fail
 
-Each task leaves the tree building (`cd kernel && make`) and the suite passing
-(`ctest -L kernel`). Verification is under **SIMH** ([../doc/Simh_Simulator.md](../doc/Simh_Simulator.md))
-via `kernel/test/*.ini` — `b6sim` runs a user `a.out` with no kernel underneath and cannot exercise
-any of this. `test/mmutest` is the model to copy: it links the kernel's own objects against a
-hand-built process, checks itself from C, and lets the `.ini` assert on the machine state afterwards.
-Run every MMU test with **`set mmu cache`**.
+`addupc()` is a stub ([besm6.S](besm6.S):773), so `profil(2)` is accepted, records nothing, and says
+nothing. Its three callers ([clock.c](clock.c), [syscall.c](syscall.c), [trap.c](trap.c)) are all
+guarded by `u.u_prof.pr_scale`, so today the stub is never reached with work to do.
 
-**`besm6.o` cannot go into a standalone test** — its `0500` vector reaches into the C kernel and its
-`_start` seeds no stack. That is why every routine a test has to link lives in its own file
-(`brz.s`, `uarea.S`, `seg.S`, `usermem.S`, `switch.s`, `syscall.c`, `sendsig.c`) and why the gates
-are duplicated in the tests' own crt0s.
+**Decide the direction first.** Nothing in userland profiles: there is no `monitor()` or `mcount()`
+in [../lib/libc/](../lib/libc/), `b6cc` has no `-p`, and no `prof(1)` is ported. So the cheap honest
+move is to make `profil()` fail — `EINVAL` for a non-zero scale — and delete the stub, leaving one
+line saying what would have to exist first. Implementing it is only worth doing behind a libc
+`monitor()` and a host-side `prof`.
 
-**Tasks 1 through 27 are done and their writeups have been removed**; the design they settled
-on is the section above, and how each turned out is in the source comments and in `../doc/`.
-The numbering is **left as it was** — task numbers are cited from the source (`seg.S`,
-`uarea.S`, `sys1.c`, `text.c`, `trap.c`, `sig.c`, `clock.c`, `dev/md.c`, `dev/bio.c`,
-`dev/mem.c`, `test/crt0*.S`, `test/mdtest.c`, `../include/sys/param.h`, the `.ini` files) and
-from `doc/` — so the list below starts where it does.
+**If it is implemented:** v7's `addupc` indexes an array of 16-bit shorts by a byte offset, scaling
+`pc` by a 16-bit binary fraction. Neither survives: the profile buffer here is an array of **words**,
+and the bucket index is a word index, so `pr_scale`'s definition and `<sys/user.h>`'s `struct uprof`
+have to be restated before any code is written. The update also lands in the *user's* buffer while
+the kernel is unmapped, so it goes through `fuword`/`suword`, not a store — and it happens at clock
+interrupt, so it must not fault.
 
-**28. The leftovers.** Each is small, independent, and has been deferred deliberately:
-
-* **`addupc()` is a stub** ([besm6.S](besm6.S)), so `profil()` is inert.
-* **Single-step / the address-break registers М034/М035.** `ptrace()`'s "continue with a trace trap"
-  has no flag bit on this machine — no EFL/TBIT — so arming it means writing М034/М035, and
-  `procxmt()` must re-arm after each match. The sites carry `TODO 17` markers: [sig.c](sig.c)
-  (cases 6 and 9), [trap.c](trap.c) (the `GRP_BREAKPOINT` arm) and `GRP_BREAKPOINT` in
-  [../include/sys/besm6dev.h](../include/sys/besm6dev.h).
-* **`iomove()`'s alignment test is fixed, and what remains is the bulk copy.** The v7 mask was
-  a *correctness* bug, not the performance bug this list used to call it — see the block comment
-  at `iomove()` in [rdwri.c](rdwri.c). What is still open is the other half of task 28's original
-  point: `copyin`/`copyout` toggle БлП per word and the fat-`char *` byte edges are
-  read-modify-write, so an unaligned `read`/`write` still goes byte-by-byte through
-  `cpass`/`passc`. Reworking it for word-aligned bulk I/O wants the same real-`char *` treatment
-  `exece()`'s argument block got.
-* **`uflush`/`uload` copy the whole 1024-word page.** Copying only up to the saved `r15` —
-  `struct user` plus the live stack, typically ~300 words — was planned and never done.
-* **No kernel-stack guard page, and none is possible.** `r15` grows up from ≈ `074214` to
-  `0100000`, and past that a 15-bit address wraps to 0 — into the interrupt vectors. The kernel
-  runs unmapped, so neither РП nor РЗ applies to it: the only mechanisms are a software depth
-  check or the simulator. Task 25a made the wrap unreachable by any measured path but left two
-  things worth a comparison each: `if ((int)&local >= 0100000 - MARGIN) panic("kstack")` for the
-  wrap, and — the one the geometry actually needs — `if ((int)&local >= UBASE + USIZE)` in
-  `sleep()`, which is where a frame in the overflow page would be silently lost (see the
-  consequences list). Under SIMH both are already observable without kernel code: a write
-  watchpoint on the overflow page (`break -w 0176000-0177777`) fires only on an unmapped store,
-  i.e. only on a kernel stack frame, because `mmu_store()` ORs `0100000` into the address before
-  `sim_brk_test`; and `break <resume>; ex M17` samples the depth at every context switch.
-* **Every other `int` → `char *` conversion.** `u.u_dirp = (caddr_t)u.u_arg[0]` is fine — that cast
-  is a silent `COPY`, so the caller's marker and byte offset survive and `namei()`'s
-  `fubyte(u.u_dirp++)` is right. What is *not* checked is everywhere else that fabricates a pointer
-  from a small integer. It has to be found by grep: an `int` and a pointer are the same word here,
-  and `b6cc` converts between them without a word.
-* **`off_t` is in bytes.** Making file offsets word counts would delete the remaining `b$div` calls
-  at every block crossing and is the BESM-6-shaped answer, but it is user-visible and changes
-  `read`/`write`/`lseek` and `iomove()`'s granularity. Separate problem, wants its own plan.
-
-**29. Multiuser.** [dev/sr.c](dev/sr.c) is a skeleton: the tty scaffolding and the `cdevsw` surface
-exist, and nothing behind them talks to the 24-line multiplexer. That driver, then `getty`/`login`
-and a multiuser `init`, is where the road continues past this file.
+**Size.** Small either way; the decision is the whole task.
 
 ---
 
-## Notes for the next standalone SIMH test
+## 33. `ptrace` single-step
 
-What the ones already in [test/](test/) cost to get right. Read this before writing the next.
+Marked `TODO 33` at [sig.c](sig.c) (cases 6 and 9), [trap.c](trap.c) (the `GRP_BREAKPOINT` arm) and
+`GRP_BREAKPOINT` in [../include/sys/besm6dev.h](../include/sys/besm6dev.h).
 
-* **A round trip proves nothing about addressing.** Write a pattern, read it back, compare — and
-  a driver that put the data in the wrong place passes, having been consistently wrong twice.
-  `mbtest`'s first version passed with page mode forced on and with `ctlr` nailed to 0. What
-  works is leaving *two different* patterns on the device from two different requests and then
-  reading the region back whole, so the check is about where the boundary between them fell.
-* **A C pointer cannot name anything above word 32767** (`ptrword()`, 15 bits). A test buffer at
-  physical page `040` wrapped silently to address 0 and overwrote low memory. This binds the
-  test, not the kernel — `b_paddr` reaches all 512 Kwords — but any test that inspects what a
-  device deposited has to keep its window in the low 32 Kwords.
-* **`step N`, not `go`.** A broken switch or a lost gate *hangs* rather than failing, and `go` takes
-  an address, not a step count. Every `.ini` uses `step 50000000` to turn a hang into a failure.
-* **A test that needs a TYPED line drives it with `expect`/`send`**, which is what `console.ini`
-  does and the only way to reach the top half of the tty code. Three things make it work and are
-  worth not re-deriving. Injected input arrives through `sim_poll_kbd()`, which serves it *before*
-  it looks at the real keyboard — so the dialogue runs under ctest with no terminal on stdin, and
-  a plain pipe into `besm6` does **not** work as a substitute. A match **halts** the simulator and
-  then runs the rule's action, so each action has to end with its own `step N` to set the machine
-  going again; the run is then bounded by the ctest `TIMEOUT` rather than by one step budget, and
-  the trailing `echof …; exit 1` after the last `step` is what a never-fired rule falls into.
-  And `-c` is **CLEARALL**, not "compare literally" — a bare `expect "…"` already matches the
-  quoted bytes exactly, and `-c` on any but the last rule would throw the others away.
-  ([../doc/Simh_Simulator.md](../doc/Simh_Simulator.md) has the corrected summary.)
-* **`send` DROPS A CHARACTER now and then, and it is not the kernel.** Under a parallel ctest
-  run (`CTEST_PARALLEL_LEVEL=8`, eight simulators at once) `session` fails perhaps one run in
-  four with `s: not found` — the shell really did receive `s` where the script sent
-  `sh /etc/session`, so a keystroke was lost between `send` and the console driver, not merely
-  its echo. Measured on an unmodified tree, so a `send`-driven test that fails once and passes
-  when re-run alone has said nothing. Re-run before believing it, the way the ACC/PC note below
-  says to rebuild before believing a halt address.
-* **Make the test cross the boundary it is about.** `console.ini`'s short lines never leave the
-  first clist block, so the whole of the block-chaining code — the half of `prim.c` that had to
-  be rewritten — goes untouched by them; one stage types 48 characters against a `CBSIZE` of 30
-  for exactly that reason. `session.sh` copies `/bin/ls` for the same kind of reason: 33 KB is
-  the smallest file that must reach through an inode's indirect block, six direct addresses
-  covering only 18 KB. Ask what the sizes in the test are relative to the sizes in the code, not
-  just whether the answer came back right.
-* **The interval timer cannot be switched off.** It free-runs at 250 Hz and the SIMH `CLK` device has
-  no `DEV_DISABLE`, so no `.ini` can stop it and a second tick may land mid-run. Phrase every
-  assertion to tolerate exactly one — a draft `p_cpu >= 1` check once passed *only because* a second
-  tick arrived after the aging code zeroed it.
-* **Gate temp cells go in `.text`, not `.bss`, once the image's bss passes `010000`** — the gate must
-  use a bare 12-bit `atx save_a`, which cannot reach further. `crt0c.S` does this.
-* **`mmutest` owns the БРЗ-drain bite test**, not `uswtch`: dropping `uload`'s post-copy drain passes
-  `uswtch` and still fails `mmutest` (code 17). Know which test proves which hazard before trusting
-  one.
-* **A user program reports back through a deliberate data-protection fault, not `стоп`.** In user
-  mode `стоп` re-dispatches as extracode э63 and check-halts under the reset ПоК; a data fault
-  ignores ПоП/ПоК and always vectors.
-* **A forged `uprog` cannot use the literal pool.** It runs mapped at virtual page 0, but the pool
-  lives in the crt0's `.const` at *physical* page 0, which is not what virtual page 0 maps to — a
-  `#(...)` operand reads whatever happens to be there. `ugrow`'s uprog therefore *reads* its
-  sentinel out of a data page `main()` seeded, rather than spelling it as a constant. (`vtm`'s
-  15-bit immediate is fine; it is part of the instruction.)
-* **Write the bite test, then verify it bites.** `ugrow` was checked both ways before being trusted:
-  reintroducing a stack shuffle makes it fail with `020`, and dropping the `sureg()` after the
-  growth with `0212`. A geometry test that cannot fail proves nothing about the geometry.
-* **When a hazard is a RACE, say so instead of pretending a green test covers it.** Two of task
-  22's findings cannot be turned into a bite test at all. `main()`'s `drainbrz()` can be deleted
-  and `boot` still passes, because the epilogue's own stores happen to evict the icode's lines
-  first; the argument for it is a *measurement* — break on the instruction after the `copyout`
-  and `ex BRZ0`–`BRZ7`, which showed seven of nine words still in the cache with memory reading
-  zero. And the `b$padd` reentrancy bug (above) reproduced as a hang once, then stopped
-  reproducing when unrelated code motion shifted the tick's alignment by a few instructions.
-  Measure the state directly, write the measurement down at the call site, and mark the test as
-  *not* covering it — `test/boot.ini.in` says so in as many words.
-* **A `.ini` CAN assert on a kernel variable, but not in the parenthesised form.** `if (...)`
-  goes through SIMH's expression evaluator, which knows registers, environment variables and
-  literals and cannot name an address. The bare form reads memory: `if <addr> <cond>`. Two
-  traps in it. The word comes back **50 bits wide** — the top two are the parity tag
-  `mmu_store()` wrote, and that tag is 0 or 1 depending on which half-word the storing
-  instruction sat in, so an unmasked comparison is wrong in a way that changes when you
-  recompile; mask with `&07777777777777777`. And no space may appear inside the condition
-  token. `ex <addr>` prints it untagged and is what the FAIL diagnostics should use.
-  `test/swap.ini.in` is the worked example.
-* **An `expect` action that does not `step` hands control back to the script.** Every action but
-  the last has to end with its own `step` to set the machine going again — but the last one can
-  `goto` a label instead, and the commands there run with the machine stopped, which is how a
-  boot-level test asserts on memory after its load has finished. Falling through would also be
-  what a run that merely exhausted its step budget does, so the `goto` is what tells the two
-  apart.
-* **The test crt0s' interrupt gate must save the C register (М020), and `crt0w.S` did not.**
-  `wtc`/`utc` arm the address modifier for the *next* instruction only, and b6cc routinely emits
-  the pair in two different words — so an interrupt lands between them. The hardware does its
-  half (`op_int_2` records `SPSW_MOD_RK`, and `выпр` re-arms from М020 on the way back) but it
-  re-arms from *whatever is there*, and every handler writes it. The symptom is a lost store,
-  one word, no fault: with М020 left at 0 the store addresses virtual word 0, the black hole.
-  `uswap`'s fill loop lost exactly one word of a 4096-word image per run, at an index that moved
-  whenever anything else in the file changed. `kernel/besm6.S` always did this right and
-  `test/crt0u.S` is what holds it to it; the short gates simply did not.
-* **A gate's temp cells must be reachable by a BARE address, which is why they go in `.text`.**
-  This is sharper than it looks: `< sym >` assembles as `мода` (utc) *plus* the instruction, and
-  `utc` loads М020 — so `atx <sa>` as the gate's first instruction destroys the very C register
-  the gate is about to save, before it can save it. A bare address is 12 bits and cannot reach a
-  bss that the linked kernel objects have pushed past `010000`. `crt0c.S` and `crt0w.S` both keep
-  their cells in `.text` now, as `kernel/besm6.S` always has.
-* **Read a bite test on ACC, never on the halt PC** — and rebuild before believing either. A "failed"
-  run once turned out to have merely grown a literal by one word, moving `halt` from `0575` to
-  `0576` so the `.ini` tripped its *PC* assertion while every check still passed. Run the modified
-  build through a harness that prints PC and ACC separately: a wrong ACC is a broken check, a PC
-  that is neither `halt` nor `fault` is a hang, and a PC one word off is usually just the tax.
-* **A punned union member reads word 0 and does not fault.** `fstest` found this: `b_addr` was
-  a *fat* pointer (`caddr_t`), and reading `struct buf`'s block through `b_un.b_filsys`/`b_dino`/…
-  reinterpreted its bit-48 marker as a large exponent — so `fp->s_bsize` silently returned
-  `s_magic` and every member past offset 0 came back as offset 0, with no fault to mark it. The
-  kernel's own mount/inode path had the pun in ~13 places. Fixed twice: first with an explicit
-  `(struct filsys *)` cast at each site (one `aax`, clearing the marker,
-  `doc/Besm6_Data_Representation.md §7`), then by making `b_addr` an `int *` so there is no marker
-  to strip and the wrong spelling cannot be written (`sys/buf.h`). The general lesson stands:
-  a fat pointer stored where a word pointer is read is silent, not fatal — check the *type*,
-  and prefer the one that makes the bad spelling impossible.
-* **The same trap, a second time: `(int)cp & MASK` on a `char *` is meaningless here.** v7's
-  clists found a character's block, and its offset within it, by masking the low bits of a byte
-  address — `(int)bp & ~CROUND`, `((int)p->c_cf & CROUND) == 0`. A fat pointer keeps its byte
-  offset in bits 47–45, so the mask reaches five bits of the *word* address instead: the boundary
-  test fires once every 32 words rather than once per block, and the block-base recovery hands the
-  free list a pointer into the middle of some other block. Walking the cursor was never the
-  problem (`cp++` is the compiler's `b$pinc`) — arithmetic on the pointer *value* is. Rewritten
-  with explicit indices, `CROUND` deleted; see [prim.c](prim.c). **Grep for the pattern before
-  trusting any other v7 file that queues bytes.**
-* **A TEST THAT RE-USES ANOTHER HARNESS'S EXPECTATION FILE IS WORTH MORE THAN ONE OF ITS OWN.**
-  `libtest` diffs each program against the very `lib/test/*.expected` that `b6sim` is held to,
-  and the plan for it allowed for a `kernel/test/libtest/<name>.expected` to override any that
-  could not transfer. **In the end not one override was needed** — every divergence turned out
-  to be a kernel bug, and both were fixed rather than recorded. That is the whole argument for
-  the shape: had each program been given a freshly recorded kernel-side expectation, both bugs
-  would have been checked in as the correct answer, and the suite would have been green and
-  worthless. Prefer an expectation that some *independent* implementation already has to
-  satisfy, and treat needing a new one as evidence rather than as a chore.
-* **Ask what would notice if the code were wrong, and if the answer is "nothing", the test is not
-  finished.** 18b.5 classified disk failures into hard and soft, but both ended in the same failed
-  request with the same `b_resid` — so the entire classification was undefended, and the bite test
-  duly passed while the source claimed it would fail. Exposing `mdretries` and asserting the exact
-  count is what closed it. A distinction the test cannot observe is a distinction the test does not
-  check, however much prose surrounds it.
+**Why it is not a flag bit.** v7's `PT_STEP` sets the PDP-11 T-bit and the hardware traps after one
+instruction. This machine has no such bit. What it has is a pair of debug registers
+([../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) §13): **ИБП** (`M[034]`, КРА) is an *execute
+breakpoint* — one address — and **ДВП** (`M[035]`, ЗПСЧ) is a data watchpoint with `PSW_WRITE_WATCH`
+selecting write- or read-match. They raise ГРП bits 12, 16 and 17, and they match the *tagged*
+address, so they follow the current mapping mode.
 
-## Gotchas worth not re-deriving
+A breakpoint register is not a single-step: stepping with it means decoding the instruction at the
+resume PC, computing the successor and arming `M[034]` on it — and a conditional branch has two
+successors against one register. So `PT_STEP` needs either an instruction decoder in the kernel or a
+different contract with the debugger.
 
-Facts that cost real time to establish and are not written down in `doc/`.
+**Today it is worse than unimplemented: it lies.** `procxmt()` case 9 falls through to case 7 and
+resumes the process with no trap armed, so a debugger waits forever for a stop that will never come.
 
-* **A computed `033`/`002` address must have the variable first.** `__besm6_ext(ctlr + EXT_DISKCTL3, cw)`
-  folds into one instruction — the address rides the C register (`wtc`) and the constant folds into
-  the instruction's address field. Written `EXT_DISKCTL3 + ctlr` it does *not* fold and costs a
-  `b$uadd` call plus a stack round-trip. See [dev/md.c](dev/md.c), [dev/mb.c](dev/mb.c),
-  [../doc/Intrinsics.md](../doc/Intrinsics.md) §8.
-* **The intrinsics with an immediate first argument demand a compile-time constant**, so
-  `__besm6_maskpsw()` cannot take a run-time level: that is why `splx()` uses `__besm6_setpsw()`
-  (`ati 021`) and writes back the whole mode word its cookie carries. **The spl cookie is a PSW
-  word, not a small integer** — never compare one against a level, never synthesize one, and never
-  `splx(0)`, which would clear БлП/БлЗ and drop the kernel into its own user's address space.
-* **The `b$` pointer helpers had to be made REENTRANT before the first exec could run**, and the
-  fix is in the *external* c-compiler, not here. `b$padd`, `b$pinc`, `b$pdec`, `b$pdiff` and
-  `b$stb` kept their working values in static `.bss` (the Madlen originals' `,base,` cells), so a
-  clock tick landing inside one — and `clock()` touches `char` members of its own — ran a handler
-  whose helper overwrote them, and the interrupted call finished with the handler's values.
-  Observed as: `iget()` reading `ip->i_flag` through a pointer that had turned into a pointer to
-  `proc[]`, so the root inode looked locked, `IWANT` was set, process 1 slept and the machine
-  idled forever. No fault, no diagnostic. They keep their temporaries in a stack frame now
-  (`libc/besm6/unix/b_p*.s`, `b_stb.s` — the shape `b$umul` always had). **A stale
-  `libruntime.a` brings the bug back**, and note that `kernel/`'s link does not depend on that
-  archive, so after reinstalling it you must `rm build/kernel/unix` to force a relink.
-  The window is a few instructions wide, so no test in either tree reliably bites it: the
-  argument is the source plus the traced failure, not a red-to-green case.
-* **v7 PACKS FLAGS INTO SPARE LOW BITS OF ADDRESSES, and this machine has none.** Both bugs
-  `libtest` found on its first run were this one pattern in two different disguises, and both
-  had been sitting in code that every other test walked straight past:
-  * `setregs()`'s `(*rp & 1) == 0` read bit 0 of a signal disposition as "ignored"
-    ([sys1.c](sys1.c)). A PDP-11 function is at an even byte address; **a BESM-6 address is a
-    word index and is odd half the time**, so every handler at an odd address survived `exec`
-    into a program that knew nothing about it. Measured: `/bin/sh`'s `fault()` is at `03331`,
-    so five signals arrived at every command the shell started pointing into hyperspace.
-  * `iomove()`'s `(int)cp & (NBPW - 1)` ([rdwri.c](rdwri.c)) masked the low bits of a fat
-    pointer's *word address* while the byte offset sits in bits 47–45, so the word-only
-    `copyin`/`copyout` fast path was taken on unaligned buffers about one time in eight and
-    silently dropped up to five bytes per call.
+**Do this much now** (small, and independent of everything above): make case 9 return `EIO` rather
+than fall through, and say so in one comment at each of the three sites.
 
-  The rule: **on this machine a flag in a pointer has to be a separate field, and a mask on
-  `(int)ptr` is almost always wrong.** `prim.c`'s clists and `sh`'s parse nodes are the two
-  already written up; grep for `& 1`, `& ~1`, `& (NBPW - 1)` and `& CROUND`-shaped masks before
-  trusting any other v7 file. Note how each was found: not by review, but by a *user program*
-  doing something ordinary — and neither reproduced under `b6sim`, where the host serves the
-  system call and the kernel's copy never runs.
-* **`_Static_assert` works and has teeth; `extern int x[1 - 2*(cond)]` does not.** `b6cc` accepts a
-  negative array size without a word, so the classic trick is decorative here. `ino.h`, `dir.h` and
-  `filsys.h` use the real thing.
-* **`DIRSIZ` moves `u_upt`.** `struct user` holds `u_dbuf[DIRSIZ]` and a `struct direct` ahead of the
-  shadow page table, whose word offset [uarea.S](uarea.S), [seg.S](seg.S) and `test/mmutest.c`
-  hardcode as `UPT` (b6as has no `offsetof()`). mmutest's check 13 exists for exactly this — which
-  makes the MMU tests load-bearing for a filesystem change, and that is not obvious.
-* **A `char *` is a fat pointer** — marker in bit 48, byte offset in bits 47–45 — and the compiler
-  walks one with `b$pinc`/`b$pdec`. Never build one out of a `(word, offset)` pair by hand; the
-  worked example is `exece()`'s argument block ([sys1.c](sys1.c)), asserted by `mmutest` check 25.
-  `(caddr_t)(int *)w` is the fat pointer to byte #0 of word `w`.
-* **Unsigned arithmetic is calls.** `+ - * / < <= > >=` on an unsigned are `b$uadd`, `b$udiv`,
-  `b$ult`, … because the additive unit reads bits 48–42 as an exponent. Every scalar typedef is
-  therefore `int`; `unsigned` survives only where the value is genuinely a 48-bit hardware bit
-  pattern (`u_upt[]`, the ГРП/ПРП masks, the a.out magic).
-* **The SIMH disk container is not a flat block file.** Each word is eight little-endian bytes with a
-  two-bit tag above the 48 (an empty data word is `0x0002000000000000`, not zero), and eight service
-  words are interleaved per zone. One drive is 8,256,000 bytes against the flat image's 6,144,000.
-  `b6fsutil -S` converts; `cmd/fsutil/simh.cpp` has the layout. Converting a container the kernel
-  has *written* back to flat is the only check on those service words there is, which is how
-  `session` found the disk driver never maintaining them.
-* **The compiler folds a shift by a constant against the target's width — now.** `1u << 36` used
-  to fold to `020`, the count masked to 36 & 31 on a machine where an unsigned is 48 bits, while
-  the identical shift by a *variable* was right: code worked and only a comparison against a
-  literal failed. Fixed in the external c-compiler (`optimize/const_fold.c`), so **a stale
-  `b6parse`/`b6lower` brings it back**, silently and only above bit 32. `test/mdtest.c` is where
-  it surfaced.
-* **The v7 shell has no comment character, and a `:` line is still PARSED.** Every word of it is,
-  so a backquote, an apostrophe, a parenthesis, a `$`, a `;` or a redirection inside what looks
-  like a comment is a syntax error or a command run — a semicolon mid-sentence runs the rest of
-  the line. This cost two round trips on `kernel/test/session.sh`; `etc/rc` says it at length.
-  It binds anything written for the image, including 25c's driver script.
-* **A DRUM ZONE THAT HAS NEVER BEEN WRITTEN IS A READ ERROR, not garbage.** SIMH's
-  `besm6_drum.c` fails the short `fread` and raises the same `drum_fail` an *unattached* drum
-  raises, which `dev/mb.c`'s `EXT_IOERR` poll cannot tell apart — so it becomes `B_ERROR` and
-  `swap()` panics. The distinction that matters: a **hole inside** the container reads back as
-  zeros with no error, because the file is sparse; only a read **past the highest zone ever
-  written** fails. With `-n` drums that start at zero length, that is exactly where the first
-  grown image lands. Fixed by making `xswap()` write the whole slot (see the design section);
-  the reason it was never seen before is that nothing had ever grown a process under pressure.
-* **`deposit phymem` before `go` is the memory-pressure knob**, and the banner is its receipt.
-  `phymem` (machdep.c) is one initialized word with one reference, and `startup()` derives
-  `maxmem`, the coremap extent and the two banner lines from it — so a `.ini` can model a
-  smaller machine exactly without touching the shipped kernel. It has to: a full machine frees
-  479 pages of core against 512 pages of swap, so filling core needs about as many processes as
-  there is swap to hold them and the swapper never runs. Always `expect` the `user mem =` line
-  as well, or a deposit that missed leaves a test that quietly runs on a full machine.
-* **`b6ld -n` had never been used, and did not work.** Two bugs, both silent. The pad it writes
-  between text and data was not counted in `a_text`, so every reader — `b6sim`'s loader, `b6nm`,
-  and the kernel's `getxfile()`/`xalloc()` — computed the data segment's file offset and load
-  address from a text that was short by the pad, and the image came up empty. And `etext` was
-  left at the unpadded end, disagreeing with the header. Note while fixing anything there that
-  **`ld.torigin` and `ld.dorigin` are running cursors during pass 2** (pass2.c advances them per
-  input file): in `finish_output()` they are the *ends* of their segments, which is why the pad
-  loop reads oddly and must not be "corrected", while `setup_output()` runs before pass 2 and
-  sees the pristine origins.
-* **`s_isize` is the first data block, not a count of i-list blocks**, and **the free list must be
-  built descending** — `alloc()` pops the superblock cache from the top, so an ascending build lays
-  every file backwards across the platter while passing every self-consistency check.
+**The rest is blocked on a user.** No debugger is ported — no `adb`, no `sdb` — so there is nothing
+to hold an implementation to. When one arrives, the design question to settle first is whether to
+offer hardware breakpoints as their own `ptrace` request (`M[034]` armed at an address, re-armed by
+`procxmt()` after each match, since there is no flag to clear) or to keep v7's ABI and pay for the
+decoder.
 
-## Known consequences, accepted
+**Size.** Small now; the full version is a task of its own and should be re-scoped when a debugger
+exists.
 
-* **A context switch copies the u-area twice** (out to the old home, in from the new): 1024 words
-  each way, or ~300 with the optimisation in task 28. This is the cost of an unmapped kernel; in
-  exchange the trap path costs *nothing* and `copyin` needs no window. It stayed 1024 after task
-  25a, which bought the stack a second page without copying it.
-* **Kernel-stack frames above `076000` are not saved.** The overflow page (task 25a) is where a
-  deep path's interrupt frames live, and interrupt handlers never sleep, so the workload measured
-  does not lose anything: at peak the stack reaches `076100`–`076177`, while the deepest `resume()`
-  in a boot → `/etc/rc` → shell → `ls /bin` run had `r15 = 075302`, 318 words below the boundary.
-  A path that sleeps deeper than 884 words would silently lose those frames. Task 28 has the
-  one-line detector.
-* **The u-area invariant is a footgun.** It has bitten twice, and a seventh site added later and
-  forgotten will still be a very confusing bug. The whole rule lives in one block comment at
-  `xswap()` in [text.c](text.c).
-* **`copyin`/`copyout` toggle БлП per word** (~2× a plain copy), and the fat-`char *` byte edges are
-  read-modify-write. Reworking `iomove()` for word-aligned bulk I/O is task 28.
-* **`time` is never seeded from a wall clock.** This machine has no clock-calendar a program can
-  read, so the epoch starts at 0 and `iinit()` takes the superblock's `s_time`. `TIMEZONE` and
-  `DSTFLAG` are therefore **0** rather than v7's US Eastern ([../include/sys/param.h](../include/sys/param.h)):
-  an offset on top of an invented epoch says nothing, and zero makes `ftime()` agree with
-  `b6sim`, which is what lets `lib/test/timet` be one file for both harnesses.
-* **The tail of an image grown by `expand()` reads back as zeros.** v7 promised nothing there
-  and nothing reads it — `getxfile()` clearsegs the new image, `grow()` copies the stack into it
-  — but this machine cannot leave those blocks unwritten at all, so `xswap()` writes zeros and
-  the contract is now stronger than v7's, and asserted (`test/uswap` leg 0).
-* **`dev/mb.c`'s `drainbrz()` cannot be made to bite, and `test/uswap` says so.** Deleting it
-  leaves the suite green, and the reason is structural: the БРЗ is eight lines evicted by age,
-  and between the last store that fills a swap page and the `033` that hands it to the
-  controller lie far more than eight kernel stores. `dev/md.c` is where the same hazard *did*
-  bite, and the difference is that its sector header is stored two instructions before the
-  exchange. The drain stays — a future caller need not leave eight stores behind it — but no
-  test covers it, and `uswap.ini` says as much rather than implying otherwise.
-* **`sy_nrarg` is read nowhere** and is vestigial: exactly one argument arrives in a register on this
-  machine, for any `narg >= 1`.
-* **There is no read-only user page.** РЗ closes a page to reads as well as writes, so a closed text
-  page would take the program's own constant pool with it. `estabur()`'s `xrw` argument, and `sep`,
-  are accepted and ignored. A **pure** (`NMAGIC`) binary's text is therefore *shared* but still
-  writable by every sharer, and `XWRIT` in `struct text` is the only thing that keeps a modified
-  text from being silently discarded. What `-n` buys here is core, not safety.
+---
+
+## 34. The `int` ↔ pointer audit
+
+Both bugs `libtest` found on its first run were one pattern in two disguises — **v7 packs flags into
+spare low bits of addresses, and this machine has none** — and both sat in code every other test
+walked straight past. The rule and the two worked examples are in README.md's gotchas. What is *not*
+done is the sweep.
+
+**What to look for.** Two distinct mistakes:
+
+* **A mask on `(int)ptr`.** A `caddr_t` is a fat pointer — marker in bit 48, byte offset in bits
+  47–45 — so `(int)cp & MASK` reaches bits of the *word* address and cannot see the byte offset at
+  all. Grep for `& 1`, `& ~1`, `& (NBPW - 1)` and `& CROUND`-shaped masks. `prim.c`'s clists and
+  `sh`'s parse nodes are the two already fixed.
+* **A pointer fabricated from a small integer.** `u.u_dirp = (caddr_t)u.u_arg[0]`
+  ([syscall.c](syscall.c)) is fine — that cast is a silent `COPY`, so the caller's marker and byte
+  offset survive and `namei()`'s `fubyte(u.u_dirp++)` is right. Everywhere *else* has to be checked
+  one site at a time: `(caddr_t)ipc.ip_addr` in [sig.c](sig.c) (four sites) is a `ptrace` client's
+  address and is only right if a word address is what the ABI promises, which nothing states today.
+  An `int` and a pointer are the same word here and `b6cc` converts between them without a word.
+
+**Deliverable.** A pass over `kernel/*.c` and `kernel/dev/*.c` recording, per site, which of the two
+things the integer is; the fixes; and the ABI sentence for `ptrace`'s `ip_addr` written down in
+[../doc/Unix_V7_System_Calls.md](../doc/Unix_V7_System_Calls.md).
+
+**How to verify.** Neither of the two known bugs reproduced under `b6sim`, where the host serves the
+system call and the kernel's copy never runs, and neither was found by review — both were found by a
+*user program* doing something ordinary. So the check on this task is a user-level program that
+exercises the site, run under `libtest`, not an inspection.
+
+**Size.** Open-ended; do it in one sitting per file and stop when the grep is clean.

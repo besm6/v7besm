@@ -64,8 +64,9 @@ at the shell, which drives one whole turn of the loop: the shell exits, `runcom(
 
 Getting here needed one thing below this program: **the kernel stack was not big enough to run
 the real shell**, and booting it wrapped `r15` past `0100000` into the interrupt vectors. The
-measurement and the fix — `UBASE` down one page, so the u-area spans two — are task 25a in
-[`../../kernel/TODO.md`](../../kernel/TODO.md).
+measurement and the fix — `UBASE` down one page, so the u-area spans two — are written up at
+`UBASE` in [`../../include/sys/param.h`](../../include/sys/param.h); the geometry it produced is
+in [`../../kernel/README.md`](../../kernel/README.md).
 
 ## The ceilings
 

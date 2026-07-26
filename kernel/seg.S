@@ -52,7 +52,7 @@
 //
 // Both drains run with mapping off, which is what the nine stores to physical 1-7
 // require.  The hazard is invisible under default SIMH and fatal under `set mmu cache'.
-// See doc/Memory_Mapping.md, and kernel/TODO.md, "Five hardware rules".
+// See doc/Memory_Mapping.md, and kernel/README.md, "Five hardware rules".
 //
 // copyphys() is the same bracket once more, with the two windows opened at an OFFSET into
 // their pages and a word count instead of a whole page: it is what dev/mem.c moves /dev/mem

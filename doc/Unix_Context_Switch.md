@@ -984,7 +984,7 @@ page 0** — a store to virtual 0 is dropped and a load returns 0, which would s
 `uhome` names the `p_addr` whose u-area is the one currently live at `074000`; the copy in the
 process's own image is **stale between switches**. So anything that reads or frees the current
 process's image must flush first. The rule is written up once, at `xswap()` in `text.c`, and
-[`kernel/TODO.md`](../kernel/TODO.md) ("The u-area invariant") lists the sites that obey it —
+[`kernel/README.md`](../kernel/README.md) ("The u-area invariant") lists the sites that obey it —
 `xswap()` itself (testing `p->p_addr == uhome`, *not* "p is current", because `newproc()` calls
 `xswap()` on the child), the `NOUHOME` case, `newproc()`, `expand()` and `exit()`.
 
@@ -1070,6 +1070,6 @@ which door they came in by. Worth revisiting only if the interrupt path ever sho
 and a context switch just repoints `ГУС` at the incoming task's block — nothing is copied. Ours is
 *copied*: the u-area is a single fixed physical page shared across tasks, so `resume()` must
 `uflush()` the old and `uload()` the new. That is the price of a one-page u-area, and it is the one we
-chose to pay ([`kernel/TODO.md`](../kernel/TODO.md), "Known consequences, accepted"). So Dubna's
+chose to pay ([`kernel/README.md`](../kernel/README.md), "Known consequences, accepted"). So Dubna's
 `SAVIND` is a closer model for our `save()` than its `BOCИПД` is for our `resume()` — the register
 half transfers directly, the u-area half does not.

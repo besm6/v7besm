@@ -17,7 +17,7 @@
 // was measured rather than assumed, and uswap.ini says why at length.
 //
 // THE IMAGES LIVE IN LOW CORE, below the 32767 a C pointer can name (the second note in
-// kernel/TODO.md's list for the next standalone test).  They are page-aligned words out of
+// kernel/README.md's list for the next standalone test).  They are page-aligned words out of
 // the real coremap, seeded from `end' upwards, so malloc() hands out addresses this file can
 // both hand to the drum as a physical address and read back with an ordinary `int *'.  A
 // swapper image above 0100000 is mbtest's and biotest's business; what is under test here is

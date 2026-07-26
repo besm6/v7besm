@@ -33,10 +33,11 @@ work has two halves:
   per program) and `kernel/test/swap` (more processes than core, asserted through the kernel's
   own counters) — and `cd kernel && make run` is where you type at it yourself. The drums
   must be attached to exec anything: they are `swapdev`, and `exece()` stages the argument
-  list in swap. See `kernel/TODO.md`, the live work plan — the settled design, the hardware
-  rules it obeys, and a sequential task list (numbered from 24, since the source cites the
-  earlier numbers) that runs on past the shell. Kernel components are also exercised
-  piecemeal by the standalone SIMH tests in `kernel/test/`.
+  list in swap. See `kernel/README.md`, the reference — the settled design, the hardware rules
+  it obeys, what a standalone SIMH test costs to get right, and the consequences accepted —
+  and `kernel/TODO.md`, the work plan: a scoped task each for the road past the shell
+  (numbered from 28, since the sources cite the earlier numbers). Kernel components are also
+  exercised piecemeal by the standalone SIMH tests in `kernel/test/`.
 - **`cmd/`** — the BESM-6-specific toolchain being written/ported to eventually build the
   kernel for real BESM-6 hardware: a C compiler driver, an assembler, a linker
   (+ archiver/nm/size/etc.), a C preprocessor, a disassembler, and a user-level a.out
@@ -313,10 +314,10 @@ any retargeting work: `CHAR_BIT == 8` but six chars pack into a word, so `sizeof
 from 1 (bit 1 = LSB, bit 48 = MSB). Numbers in BESM-6 contexts are octal. There is no IEEE
 754 — the machine has its own float format.
 
-**The kernel's memory model is settled, and `kernel/TODO.md` states it** — read that file
+**The kernel's memory model is settled, and `kernel/README.md` states it** — read that file
 before touching anything under `kernel/` that involves memory, and keep it current as you go.
-It carries the design, the five hardware rules, the u-area invariant, the notes for whoever
-writes the next standalone SIMH test, and the task list for the rest of the port; the
+It carries the design, the five hardware rules, the u-area invariant, and the notes for whoever
+writes the next standalone SIMH test; `kernel/TODO.md` beside it carries what is left. The
 `DONE: how it turned out` narrative it used to carry lives in the source comments and `doc/`
 instead, which is where new findings belong too. The
 shape of it: the **kernel runs unmapped** (БлП = БлЗ = 1), so a kernel address *is* a physical

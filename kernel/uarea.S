@@ -58,7 +58,7 @@
 //
 // Both drains run with mapping off, which is what the nine stores to physical 1-7 require.
 // The hazard is invisible under default SIMH and fatal under `set mmu cache'.
-// See doc/Memory_Mapping.md, and kernel/TODO.md, "The u-area invariant".
+// See doc/Memory_Mapping.md, and kernel/README.md, "The u-area invariant".
 //
 // Contracts:
 //  * `paddr' is a PAGE-ALIGNED physical word address (p_addr always is).

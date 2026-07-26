@@ -212,7 +212,8 @@ into its name tree at startup, and `set` prints the tree.
   console. `kernel/test/console` holds a conversation with it — erase, kill, a line longer than a
   clist block, `>/dev/tty`, `pwd`, `ls /bin`, `^D` — and `kernel/test/session` has it write files
   and `sync`, after which the host fscks what reached the disk. Getting here needed the kernel
-  stack, which was not big enough to run this program: task 25a in
-  [`../../kernel/TODO.md`](../../kernel/TODO.md) has that account.
+  stack, which was not big enough to run this program: the geometry is in
+  [`../../kernel/README.md`](../../kernel/README.md) and the account at `UBASE` in
+  [`../../include/sys/param.h`](../../include/sys/param.h).
 
 `sh.1` is the v7 manual page, kept as it was.

@@ -22,7 +22,7 @@
 // IT RUNS IN BOTH WORLDS, and that is the point of the arrangement: under b6sim the loader
 // is cmd/sim/machine.cpp and every system call is the host's, while off /usr/test it is
 // getxfile() and the real thing.  One .expected file holds both to the same answer, so a
-// disagreement is a bug in one of them rather than a fact about either (kernel/TODO.md).
+// disagreement is a bug in one of them rather than a fact about either (kernel/README.md).
 //
 // SECOND JOB: kernel/test/swap runs three copies of this program AT ONCE.  Each is given a
 // digit as argv[1], writes it into its own data segment, and prints it back -- so a kernel
@@ -98,7 +98,7 @@ int main(int argc, char **argv)
     // THE FIRST WORD OF THE DATA SEGMENT.  This is the check the program was written for.
     // getxfile() remaps the data region to read it, and if it reads it to virtual 0 the
     // first word is swallowed: a store to virtual word 0 is DROPPED and a load returns 0,
-    // whatever page 0 is mapped to (kernel/TODO.md, "Never virtual page 0").  Under FMAGIC
+    // whatever page 0 is mapped to (kernel/README.md, "Never virtual page 0").  Under FMAGIC
     // the base is BADDR = 8 and the hole is never touched; under NMAGIC it is the very
     // first word of the segment, so exactly one initialized variable comes back zero and
     // nothing faults.  `firstword' is this file's first initializer, and the assertion

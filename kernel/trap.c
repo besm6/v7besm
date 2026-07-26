@@ -164,7 +164,7 @@ void trap(void)
     } else if (grp & GRP_BREAKPOINT) { // address-break match (М034/М035)
         __besm6_mod(MOD_GRPCLR, ~GRP_BREAKPOINT);
         i = SIGTRC;
-        // TODO 17: single-step is the address-break registers М034/М035, not a flag bit;
+        // TODO 33: single-step is the address-break registers М034/М035, not a flag bit;
         // there is no EFL/TBIT to clear, so re-arming belongs to procxmt().
 
     } else {

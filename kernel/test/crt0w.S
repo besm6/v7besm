@@ -36,7 +36,7 @@
 //
 // The symptom is a lost or misplaced STORE, one word, no fault: with M[020] left at 0 the
 // `atx' addresses virtual word 0, which is the black hole (a store there is dropped and a
-// load returns 0 -- kernel/TODO.md, "Never virtual page 0").  uswap's fill loop is the first
+// load returns 0 -- kernel/README.md, "Never virtual page 0").  uswap's fill loop is the first
 // test code to run a long `wtc'-per-iteration loop with the timer open, and it lost exactly
 // one word of a 4096-word image per run, at an index that moved whenever anything else in
 // the file changed.  kernel/besm6.S has always done this right (`ita MOD' ... `sti MOD'),

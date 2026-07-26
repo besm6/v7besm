@@ -1015,7 +1015,7 @@ physical pages** at `074000`, of which the first is copied in and out on a conte
 and disk controllers transfer to a physical address; and **РП always holds the current process's
 map**, so a trap switches nothing. `KEND` is derived — `BUFBASE == UBASE - NBUF*BSIZEW` — so raising
 `NBUF` lowers the ceiling with it. The design is written up in
-[`kernel/TODO.md`](../kernel/TODO.md); the routines are in
+[`kernel/README.md`](../kernel/README.md); the routines are in
 [Kernel_Assembly_Routines.md](Kernel_Assembly_Routines.md).
 
 | concern | how it works on this machine |
