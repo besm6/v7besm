@@ -15,7 +15,7 @@ SIMH test. Anything a test has to exercise for real therefore lives in a file of
 | [besm6.S](../kernel/besm6.S) | `_start`, the vector block at `0500`/`0501` and `0550`–`0577`, and the four gates: `trapgate`, `intrgate`, `sysgate`, `badext` |
 | [switch.s](../kernel/switch.s) | `save`, `resume`, and the `uhome` cell |
 | [uarea.S](../kernel/uarea.S) | `uflush`, `uload` — the u-area window bracket |
-| [seg.S](../kernel/seg.S) | `copyseg`, `clearseg` |
+| [seg.S](../kernel/seg.S) | `copyseg`, `clearseg`, `copyphys` |
 | [usermem.S](../kernel/usermem.S) | `copyin`, `copyout`, `fubyte`, `fuword`, `subyte`, `suword` |
 | [brz.s](../kernel/brz.s) | `drainbrz` — the nine-store БРЗ drain |
 
@@ -492,11 +492,12 @@ int copyout(caddr_t from, caddr_t to, unsigned nbytes);  /* systm.h:177 */
   `int*`→`char*` conversion produces a usable pointer. See
   [Besm6_Data_Representation.md](Besm6_Data_Representation.md).
 
-### 4.4a The mapped brackets — `copyseg`, `clearseg`, `uflush`, `uload`
+### 4.4a The mapped brackets — `copyseg`, `clearseg`, `copyphys`, `uflush`, `uload`
 
 ```c
 void copyseg(unsigned from, unsigned to);   /* one page, word addresses */
 void clearseg(unsigned addr);
+void copyphys(unsigned from, unsigned to, int nwords);
 void uflush(unsigned paddr);                /* live u-area -> the process's home */
 void uload(unsigned paddr);                 /* the process's home -> live u-area  */
 ```
@@ -534,6 +535,19 @@ Three constraints, all of them non-obvious and all of them verified on the machi
 That last point is also `uload`'s calling contract: **it destroys its caller's kernel stack frame**,
 so only `resume()` — assembly, keeping its state in registers — may call it. `uflush()` only reads
 the live page and is safe from C.
+
+`copyphys` (task 27) is the same bracket opened at an **offset** into each page and counted in
+words, which is what `/dev/mem` needs: a read asks for a physical word, not a page, and no
+`caddr_t` can name one above `0100000`. Its page numbers are scattered into the quartet exactly as
+`copyseg`'s are; the word within each page is OR'd onto the window base, the running addresses live
+in `r11`/`r12`, and the count is in `r10` (`ati`, then `vzm`/`utm -1` — `usermem.S`'s loop, inside
+`uflush`'s bracket). Two constraints follow from having one window per side, and
+[dev/mem.c](../kernel/dev/mem.c) chops every transfer against both:
+
+- **neither run may cross a page boundary**, and
+- **neither may lie in physical page 0** — a zero РП descriptor *is* the hardware's "not mapped", so
+  page 0 cannot be windowed at all. It is below the unmapped reach anyway, where the caller needs
+  no window.
 
 ### 4.5 Profiling — `addupc`
 
@@ -717,7 +731,7 @@ the reschedule-pending flag the gates test on the way back to user mode (§3).
 | `spl0`…`spl7`, `splx` | **done** — two levels, not eight, so only `spl0()`/`spl1()` are compiled: `spl4()`…`spl7()` are macros for `spl1()`, `splx()` is a macro for the one `ati 021` that restores a cookie, and `spl0()` is `void` (nothing below it to restore). The knob is **БлПр** (one inline `vtm` per routine), not МГРП, which is a source enable armed once by `intrinit()`. Putting the level in the mode word is what lets `выпр` restore it on a gate return, as the PDP-11's `rtt` does |
 | `cli`, `sti`, `getpsw` | **retired** — `psw.s` is deleted (§4.7). The PSW intrinsics lower to exactly the same three instructions *inline*, so the level is set in C by the `spl*` routines themselves and each is one call shorter; the gates always inlined the instruction rather than calling it. `__besm6_getpsw()` reads PSW back for the two tests that check a gate opened the level, and needs no object to link |
 | `fubyte`/`fuword`/`subyte`/`suword`, `copyin`/`copyout` | **done** — [usermem.S](../kernel/usermem.S); **no fault-recovery path**, validation is `useracc()` up front. No window either: the loop toggles БлП per word through the user map that is already loaded. Byte variants do RMW, and mind the fat-pointer marker bit |
-| `copyseg`/`clearseg`, `uflush`/`uload` | **done** — [seg.S](../kernel/seg.S), [uarea.S](../kernel/uarea.S); a two-page window bracket with a БРЗ drain either side (§4.4a) |
+| `copyseg`/`clearseg`/`copyphys`, `uflush`/`uload` | **done** — [seg.S](../kernel/seg.S), [uarea.S](../kernel/uarea.S); a two-page window bracket with a БРЗ drain either side (§4.4a). `copyphys` (task 27) takes an offset and a word count instead of a page, and is what `/dev/mem` reads and writes core through |
 | `save`, `resume` | **done (task 16)** — [kernel/switch.s](../kernel/switch.s); nine slots (r1–r7, r13, r15), and `resume()` switches the **u-area**, not the address space: it never writes РП |
 | `idle` | **done (task 16)** — no wait-for-interrupt exists, so it is a spin released by `extintr()`, written in C over the `idling` flag |
 | `_start`, trap/interrupt/extracode dispatch (§2–3) | **done** — `_start` is two instructions in (the machine resets into the kernel's own mode) with bss-zero and `phymem` in C, plus nine on the way out: the hand-forged first entry into user mode at `icode` ([Unix_Context_Switch.md §10b](Unix_Context_Switch.md#10b-the-first-entry-into-user-mode)). Dispatch is four gates, two save disciplines and one shared exit (§3) |

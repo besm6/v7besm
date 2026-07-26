@@ -37,6 +37,7 @@ extern char runout; // scheduling flag
 extern char runrun; // scheduling flag
 extern char curpri; // more scheduling
 extern int maxmem;  // actual max memory per process
+extern int phymem;  // words of physical core (machdep.c); the length of /dev/mem
 extern int uhome;   // whose u-area is live at UBASE (its p_addr)
 // ... or NOUHOME, meaning the live u-area belongs to no in-core image because the image it
 // belonged to has just been freed.  resume() must then load without flushing first, or it
@@ -224,6 +225,10 @@ void sendsig(caddr_t p, int signo);
 int core(void);
 void copyseg(int s, int d);
 void clearseg(int d);
+// n words between two PHYSICAL word addresses, through the same mapped window copyseg uses
+// (kernel/seg.S).  Neither run may cross a page boundary, and neither may lie in physical
+// page 0 -- dev/mem.c, its only caller, chops against both.
+void copyphys(paddr_t s, paddr_t d, int n);
 int issig(void);
 int save(label_t);
 void resume(int, label_t);  // a physical word address: 19 bits, not a `short'

@@ -13,11 +13,15 @@
 #           which is true on the host and false on the image.
 #   shellt  runs on the image ONLY, and is the other half of that: system() and popen()
 #           with a shell that really does start.
-# So `spawn' is absent below and `shellt' is present, and the count stays at 21 either way.
+#   memt    runs on the image ONLY, and is not a libc test at all: it is the user-mode half
+#           of the memory driver's (kernel/dev/mem.c, task 27), and this is where a program
+#           can be run off /usr/test by a real kernel for the price of one b6_libtest() call.
+# So `spawn' is absent below and the other two are present: 22 names here, 22 b6sim cases
+# next door.
 #
 # The order is the order kernel/test/libtest.sh runs them in, which is the order
 # lib/test/CMakeLists.txt registers them in: roughly the order libc was built up, so a
 # failure early in the list is a failure in something everything after it depends on.
 set(B6_LIBTEST_IMAGE
     hello vararg errno procs sbrkt malloct strings gen strtolt environ jmp headers
-    stdiot printft scanft execs shellt timet pwent signals matht puret)
+    stdiot printft scanft execs shellt memt timet pwent signals matht puret)

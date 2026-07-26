@@ -11,11 +11,15 @@
 : no parenthesis, no dollar, no semicolon and no redirection may appear even in such a
 : line.  session.sh learned it twice over and /etc/rc says it at length.
 :
-: WHAT THIS PROVES.  The twenty-one programs of lib/test run under b6sim, where every
-: system call is served by the HOST -- so a bug in this kernel cannot show there.  Here
-: they run on the real thing, and the same .expected files adjudicate.  This is the first
-: time the extracode gate is driven from user mode by anything but the kernel own tests
-: and the six commands of /bin, and it is where sysent rows meet a real caller.
+: WHAT THIS PROVES.  Twenty-one of the programs of lib/test also run under b6sim, where
+: every system call is served by the HOST -- so a bug in this kernel cannot show there.
+: Here they run on the real thing, and the same .expected files adjudicate.  This is the
+: first time the extracode gate is driven from user mode by anything but the kernel own
+: tests and the six commands of /bin, and it is where sysent rows meet a real caller.
+:
+: TWO OF THE TWENTY-THREE ARE HERE ONLY.  shellt needs a /bin/sh that really starts, and
+: memt reads the kernel own memory through /dev/kmem and its own image through /dev/mem --
+: neither of which exists under b6sim.  See lib/test/progs.cmake.
 :
 : FOUR THINGS BELOW ARE LOAD-BEARING, and each matches lib/test/run-test.sh so that the
 : expectation files transfer unchanged:
@@ -100,6 +104,9 @@ echo ok execs >/dev/console
 
 ./shellt >/tmp/shellt.out 2>&1
 echo ok shellt >/dev/console
+
+./memt >/tmp/memt.out 2>&1
+echo ok memt >/dev/console
 
 ./timet >/tmp/timet.out 2>&1
 echo ok timet >/dev/console

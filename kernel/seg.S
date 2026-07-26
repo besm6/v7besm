@@ -1,8 +1,9 @@
 //
-// copyseg / clearseg -- copy and zero one physical page.
+// copyseg / clearseg / copyphys -- copy and zero physical memory.
 //
-// void copyseg(unsigned s, unsigned d);   // one page, s -> d
-// void clearseg(unsigned d);              // one page, d := 0
+// void copyseg(unsigned s, unsigned d);           // one page, s -> d
+// void clearseg(unsigned d);                      // one page, d := 0
+// void copyphys(unsigned s, unsigned d, int n);   // n words, s -> d, within one page each
 //
 // The arguments are PAGE-ALIGNED physical word addresses (p_addr, and the stack/data
 // page addresses derived from it, always are).  The kernel runs unmapped, so a kernel
@@ -53,11 +54,19 @@
 // require.  The hazard is invisible under default SIMH and fatal under `set mmu cache'.
 // See doc/Memory_Mapping.md, and kernel/TODO.md, "Five hardware rules".
 //
+// copyphys() is the same bracket once more, with the two windows opened at an OFFSET into
+// their pages and a word count instead of a whole page: it is what dev/mem.c moves /dev/mem
+// through, since a caddr_t cannot name the physical word a read asks for.  Its extra
+// contract is that neither run may cross a page boundary -- one window per side is all the
+// quartet holds -- and that neither may lie in physical page 0, whose descriptor value 0 IS
+// the hardware's "not mapped" and cannot be windowed at all.  Page 0 is below the unmapped
+// reach anyway, where the caller needs no window.
+//
 // Contracts:
-//  * `s' and `d' are PAGE-ALIGNED physical word addresses.
+//  * `s' and `d' are PAGE-ALIGNED physical word addresses (copyphys: any word address).
 //  * On return РП is exactly as it was found: the old quartet 0 is read before the copy
 //    and put back after.  The current process's map is otherwise untouched.
-//  * Neither is reentrant (the bss temps are static), and neither touches r1-r7 or r15.
+//  * None is reentrant (the bss temps are static and shared), and none touches r1-r7 or r15.
 //  * copyseg needs no `s == d' guard: no caller ever passes equal addresses, and a page
 //    copied to itself through two windows is idempotent anyway.
 //
@@ -160,8 +169,81 @@ cl1: 10 atx     WSRC+PGSZ-1     // zero the dest page, through window 1
       8 mtj     13
      13 uj                      // one parameter (d, in A): nothing pushed to pop
 
+// ----------------------------------------------------------------------------
+// void copyphys(unsigned s, unsigned d, int n) -- copy n words, s -> d.
+// ----------------------------------------------------------------------------
+// copyseg's bracket with three differences, and nothing else changes:
+//
+//   * the windows are opened at an offset.  The page numbers are scattered into the quartet
+//     exactly as above; the WORD within each page comes from the low ten bits of the
+//     argument, OR'd onto the window base -- WSRC and WDST are page-aligned and the offset
+//     is below PGSZ, so `aox' is the addition.
+//   * the loop is counted from a register (`ati 012' then `vzm'/`utm -1'), the way
+//     usermem.S's copies are, rather than by a `vlm' over a constant span.
+//   * the running addresses live in r11 and r12 and are stepped by `utm 1', since the
+//     12-bit address field cannot hold a computed one.
+//
+// n >= 1 words; NEITHER RUN MAY CROSS A PAGE BOUNDARY and neither may lie in physical page 0
+// (see the header).  dev/mem.c chops every transfer against both, and against the size of
+// its bounce buffer.
+        .globl  copyphys
+copyphys:
+     13 mtj     8               // r8 := the return address; drainbrz's `vjm' clobbers r13
+        atx     <segn>          // stash n (in A) -- still unmapped, so these are our own words
+     15 xta     -2
+        atx     <segs>          // stash s, the first pushed argument
+     15 xta     -1
+        atx     <segd>          // stash d, the second
+        ita     021             // A := PSW
+        ati     011             // r9 := PSW, to be put back exactly on the way out
+        vtm     02003           // БлП|БлЗ|БлПр: unmapped, unprotected, INTERRUPTS OFF
+        xta     <u+UPT>         // A := u.u_upt[0].  РП cannot be read back, so save it.
+        atx     <oldq>
+     13 vjm     drainbrz        // flush БРЗ through the CURRENT map, before we change it
+        xta     <segs>
+        asn     64-28           // A := (s >> 10) << 38, left-aligned: see copyseg
+        aux     #(.46|.42|.38|.34|.30|.[6:10])   // source page into virtual page 1
+        atx     <segq>
+        xta     <segd>
+        asn     64-28
+        aux     #(.47|.43|.39|.35|.31|.[11:15])  // dest page into virtual page 2
+        aox     <segq>          // combine the two windows into one quartet
+        mod     020             // РП0..3 := the window quartet
+        // The two running pointers and the counter, computed while the kernel's own data is
+        // still addressable.  Nothing below this may touch memory outside the windows.
+        xta     <segs>
+        aax     #(PGSZ-1)       // the word within the source page
+        aox     #(WSRC)         // ...at the source window
+        ati     013             // r11 := the source address
+        xta     <segd>
+        aax     #(PGSZ-1)
+        aox     #(WDST)
+        ati     014             // r12 := the dest address
+        xta     <segn>
+        ati     012             // r10 := the word count
+        vtm     02002           // clear БлП: data now goes through РП
+cp2: 10 vzm     cp3
+     11 xta                     // A := the source word, through window 1
+     12 atx                     // ...store it into the dest, through window 2
+     11 utm     1
+     12 utm     1
+     10 utm     -1
+        uj      cp2
+cp3:    vtm     02003           // set БлП: back to physical addressing
+     13 vjm     drainbrz        // write the copy back through the window, before it goes away
+        xta     <oldq>
+        mod     020             // restore РП0..3
+        ita     011
+        ati     021             // restore PSW (interrupts as the caller had them)
+      8 mtj     13
+     15 utm     -2              // pop the two pushed arguments (s, d)
+     13 uj
+
         .bss
+// Shared by all three routines: none of them is reentrant, and no two are ever in flight
+// at once (nothing here sleeps, and no interrupt handler calls any of them).
 segs:   . = . + 1               // the s argument, held across the drainbrz calls
 segd:   . = . + 1               // the d argument
+segn:   . = . + 1               // copyphys: the word count
 segq:   . = . + 1               // the window quartet we build
 oldq:   . = . + 1               // the quartet we stole, to put back

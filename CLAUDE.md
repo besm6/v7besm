@@ -18,11 +18,15 @@ work has two halves:
   prompts with `# ` on the console, runs `ls`, `pwd`, `cat` and `echo` off the disk, honours
   the kernel's erase, kill and `^D`, and on `^D` cycles back through `/etc/rc` to a fresh
   prompt. It also **writes**: create files, `sync`, and the image fscks clean. And the whole
-  **libc runs on it**: the twenty-two `lib/test/` programs live on the image as `/usr/test/*`
+  **libc runs on it**: the `lib/test/` programs live on the image as `/usr/test/*`
   and produce there, byte for byte, the output they produce under `b6sim`. And it **swaps**:
   squeeze the machine to 31 pages and `sched()`/`newproc()` move real images through the drum,
   while `/bin/sh` and `/usr/test/puret` — the two binaries linked pure — share one copy of their
-  text between processes. Five tests
+  text between processes. **`/dev/mem` and `/dev/kmem` work** too: a program reads its own
+  `struct user` out of the kernel at `074000`, follows `u_procp` to its proc entry, and then
+  reads *and writes* its own image at a physical address above `0100000` — which no unmapped
+  access can name, so the driver goes through `copyphys()`, `kernel/seg.S`'s mapped window.
+  Five tests
   guard that ladder — `kernel/test/boot` (the prompt appears), `kernel/test/console` (a typed
   dialogue with the shell), `kernel/test/session` (files written, `sync`, then a host-side
   fsck and diff), `kernel/test/libtest` (the libc suite run off the image, one ctest case
@@ -137,7 +141,7 @@ and `cmd/cat`, `cmd/echo`, `cmd/ls`, `cmd/pwd`, `cmd/sync` are the five commands
 prompt — all compiled by the `b6*` toolchain and staged into `build/rootfs/` as `etc/init` and
 `bin/{sh,cat,echo,ls,pwd,sync}`. Alongside them `etc/` (the top-level directory, not `cmd/etc`)
 stages the static files `group`, `motd`, `passwd` and `rc`, which are copied rather than
-compiled. `lib/test/` stages a third group, `usr/test/*` — the twenty-two libc test programs,
+compiled. `lib/test/` stages a third group, `usr/test/*` — the twenty-three test programs,
 the same linked images `b6sim` runs, copied rather than linked a second time so that both
 harnesses provably run the same bytes.
 Together that tree is the root filesystem the kernel mounts. All of it is added from inside
@@ -279,10 +283,12 @@ run under `b6sim` (label `lib`) and staged onto the disk image, where `kernel/te
 runs it off `/usr/test` under the booted kernel (label `kernel`) and diffs each program
 against **the same `.expected` file**. Under `b6sim` every system call is the host's, so a
 kernel bug cannot show; the two harnesses disagreeing means one of them is wrong. Task 25c's
-first run found two, both in code nothing else had exercised. Two programs are in one
-world only — `spawn` needs a `/bin/sh` that *cannot* be exec'd and `shellt` one that can — and
-`b6_libtest()`'s `SIMONLY`/`IMAGEONLY` keywords say which. Adding a program means one
-`b6_libtest()` call, a name in `lib/test/progs.cmake` and a stanza in `root.manifest`.
+first run found two, both in code nothing else had exercised. Three programs are in one
+world only — `spawn` needs a `/bin/sh` that *cannot* be exec'd, `shellt` one that can, and
+`memt` (which is not a libc test at all, but `/dev/mem`'s user-mode half) needs a kernel whose
+memory it can read — and `b6_libtest()`'s `SIMONLY`/`IMAGEONLY` keywords say which. Adding a
+program means one `b6_libtest()` call, a name in `lib/test/progs.cmake`, a stanza in
+`root.manifest` and a line in `kernel/test/libtest.sh` with its `expect` rule.
 
 Every `cmd/` component has a GoogleTest suite under `cmd/<tool>/test/`, wired into the
 `build_tests` target and run by `make run` (ctest). The C preprocessor has the most

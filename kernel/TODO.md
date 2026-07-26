@@ -7,10 +7,11 @@ real `/etc/init`, which forks `/bin/sh` — and you get a prompt. Type at it: th
 `^D` takes init round through `/etc/rc` to a fresh prompt, and a session that writes files and
 calls `sync` leaves an image that fscks clean. `make run` is where you talk to it.
 
-The **libc** is under it now too: the twenty-two programs of [../lib/test/](../lib/test/) run
-off `/usr/test` on the image and produce, byte for byte, the output they produce under `b6sim`
+The **libc** is under it now too: the programs of [../lib/test/](../lib/test/) run off
+`/usr/test` on the image and produce, byte for byte, the output they produce under `b6sim`
 — stdio, `malloc`, `setjmp`, the exec family, signals, `<time.h>`, the passwd file and a shell
-started through `system()`/`popen()`.
+started through `system()`/`popen()`.  Twenty-three of them are on the image; `memt`, one of the
+two that run there only, is not a libc test at all but the user-mode half of `/dev/mem`'s.
 
 This file is the live work plan — the settled design, the hardware rules it obeys, the tasks
 that remain, and the things that cost real time to establish. Keep it current, but keep
@@ -36,7 +37,7 @@ driver is, one in `libtest` says a system call is, and one in `swap` says the sw
 | `boot` | process 1 leaves the kernel, execs `/etc/init`, which forks `/bin/sh`, and the shell **prompts** |
 | `console` | a typed dialogue with that shell: erase, kill, a line longer than a clist block, `>/dev/tty`, `pwd`, `ls /bin`, and `^D` round through `/etc/rc` to the next prompt |
 | `session` | the shell **writes** — files, an inode past its direct blocks, `sync` — and the host then fscks the container and diffs what was written |
-| `libtest` | the twenty-two [../lib/test/](../lib/test/) programs run off `/usr/test`, and each one's output matches **the same `.expected` file `b6sim` is held to** |
+| `libtest` | the twenty-three [../lib/test/](../lib/test/) programs run off `/usr/test`, and each one's output matches **the same `.expected` file `b6sim` is held to** (`memt` and `shellt` excepted: they run here only) |
 | `swap` | the same kernel on a machine of **31 pages** (`phymem` deposited before the boot), running more processes than fit: `sched()`/`newproc()` swap through the drum, two processes share one binary's text, and the counters say so |
 
 Read [../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) before touching memory management,
@@ -233,18 +234,12 @@ Run every MMU test with **`set mmu cache`**.
 (`brz.s`, `uarea.S`, `seg.S`, `usermem.S`, `switch.s`, `syscall.c`, `sendsig.c`) and why the gates
 are duplicated in the tests' own crt0s.
 
-**Tasks 1 through 26 are done and their writeups have been removed**; the design they settled
+**Tasks 1 through 27 are done and their writeups have been removed**; the design they settled
 on is the section above, and how each turned out is in the source comments and in `../doc/`.
 The numbering is **left as it was** — task numbers are cited from the source (`seg.S`,
 `uarea.S`, `sys1.c`, `text.c`, `trap.c`, `sig.c`, `clock.c`, `dev/md.c`, `dev/bio.c`,
 `dev/mem.c`, `test/crt0*.S`, `test/mdtest.c`, `../include/sys/param.h`, the `.ini` files) and
 from `doc/` — so the list below starts where it does.
-
-**27. `/dev/mem` and `/dev/kmem`.** Minors 0 and 1 are `ENXIO` in [dev/mem.c](dev/mem.c); minor 2
-(`/dev/null`) works. `/dev/mem` must reach a physical page above `0100000`, which needs a
-`copyseg`-style mapped bracket ([seg.S](seg.S) is the worked example) — or, simpler and with no new
-assembly, a bounce through a page-aligned kernel buffer using `copyseg()` itself, whose БРЗ drains
-are already in the right places. `/dev/kmem` is direct below the unmapped reach.
 
 **28. The leftovers.** Each is small, independent, and has been deferred deliberately:
 
@@ -315,6 +310,13 @@ What the ones already in [test/](test/) cost to get right. Read this before writ
   And `-c` is **CLEARALL**, not "compare literally" — a bare `expect "…"` already matches the
   quoted bytes exactly, and `-c` on any but the last rule would throw the others away.
   ([../doc/Simh_Simulator.md](../doc/Simh_Simulator.md) has the corrected summary.)
+* **`send` DROPS A CHARACTER now and then, and it is not the kernel.** Under a parallel ctest
+  run (`CTEST_PARALLEL_LEVEL=8`, eight simulators at once) `session` fails perhaps one run in
+  four with `s: not found` — the shell really did receive `s` where the script sent
+  `sh /etc/session`, so a keystroke was lost between `send` and the console driver, not merely
+  its echo. Measured on an unmodified tree, so a `send`-driven test that fails once and passes
+  when re-run alone has said nothing. Re-run before believing it, the way the ACC/PC note below
+  says to rebuild before believing a halt address.
 * **Make the test cross the boundary it is about.** `console.ini`'s short lines never leave the
   first clist block, so the whole of the block-chaining code — the half of `prim.c` that had to
   be rewritten — goes untouched by them; one stage types 48 characters against a `CBSIZE` of 30

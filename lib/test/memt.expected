@@ -1,0 +1,19 @@
+ok   /dev/null opens
+ok   a read of it is at EOF
+ok   a write of it is swallowed whole
+ok   /dev/kmem opens
+ok   the u-area reads back whole
+ok   its u_uid is our uid
+ok   its u_gid is our gid
+ok   this image is impure, so virtual 0 is p_addr + USIZE
+ok   u_procp names our proc entry
+ok   our image lives above the unmapped reach
+ok   /dev/mem opens
+ok   both devices read the low words
+ok   and they agree over the kernel's const segment
+ok   a read crossing KREACH returns both words
+ok   and its first word is the one kmem shows
+ok   /dev/kmem ends at the unmapped reach
+ok   /dev/mem ends at the end of core
+ok   /dev/mem finds our own word above 0100000
+ok   a write through /dev/mem reaches it

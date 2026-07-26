@@ -291,6 +291,14 @@
 #define UBASE    074000 // the u-area: the last two pages of the kernel space
 #define USTKPAGE 28     // first page of the user stack (070000)
 
+// The top of the unmapped reach: one past the last word an unmapped access can
+// name -- and, not by coincidence, the reach of a C pointer's 15-bit word field.  The
+// kernel space ends exactly here, at the top of the u-area's overflow page (machdep.c
+// asserts that geometry), so this is derived rather than written down twice.  Physical
+// memory above it exists and is where every process image lives; reaching it takes a
+// mapped window (kernel/seg.S).
+#define KREACH 0100000
+
 // BESM-6 a.out magic numbers and image base -- must match cross/besm6/b.out.h
 // (the kernel build cannot reach cross/, so these are a documented duplicate).
 // getxfile() (kernel/sys1.c) reads the 8-word header into u.u_exdata, whose

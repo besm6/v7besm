@@ -129,7 +129,9 @@ mode 0644
 # program means editing both.
 #
 # spawn is NOT here and shellt is: spawn's premise is that /bin/sh cannot be exec'd, which
-# is true only under b6sim, and shellt is the other half of it -- see either source.
+# is true only under b6sim, and shellt is the other half of it -- see either source.  memt
+# is here for the same reason and is not a libc test at all: it reads the kernel's own
+# memory through /dev/kmem and its own image through /dev/mem, neither of which b6sim has.
 #
 # puret is the one PURE (NMAGIC) program among them, and one of only two images on this
 # disk whose text the kernel can share at all -- /bin/sh is the other.  Task 26.
@@ -200,6 +202,10 @@ mode 0755
 
 file /usr/test/shellt
 source ../../rootfs/usr/test/shellt
+mode 0755
+
+file /usr/test/memt
+source ../../rootfs/usr/test/memt
 mode 0755
 
 file /usr/test/timet

@@ -5,8 +5,10 @@
 // in supervisor mode -- reset leaves РежЭ set -- which is what makes `mod' (002 рег)
 // legal, so the kernel's address-space code can be exercised with no kernel under it.
 //
-// Two halves: sureg() builds and loads a map (checks 1-12), and then uflush()/uload()
-// round-trip a u-area through a page above 0100000 (checks 13-17, task 10).
+// Two halves: sureg() builds and loads a map (checks 1-12), and then the mapped brackets --
+// uflush()/uload() round-tripping a u-area through a page above 0100000 (checks 13-17, task
+// 10), copyseg()/clearseg() (18-19, task 11), copyphys() (26-28, task 27) -- and the
+// user-memory copies on top of them (20-25, task 12).
 //
 // The map it builds:
 //
@@ -267,6 +269,63 @@ int main()
         return (19);
     if (peek(PGSZ - 1) != 0)
         return (19);
+
+    // Task 27: copyphys() -- the same bracket, opened at an OFFSET into each page and
+    // counted in words.  It is what /dev/mem is read and written through (kernel/dev/mem.c),
+    // so what has to be shown is that a PARTIAL run lands where it was asked to and nowhere
+    // else: the words on either side of it must survive.
+    //
+    // SEGSRC still holds PATTERN1 ^ i (only SEGDST was cleared above), and UBASE is the low
+    // page we can read back unmapped.  Restore the part of it check 18 left alone first --
+    // clearseg and the copies above did not touch it, but say so rather than assume it.
+    up = (volatile unsigned *)UBASE;
+    for (i = 0; i < PGSZ; i++)
+        up[i] = PATTERN1 ^ i;
+
+    // High -> low: 50 words from the middle of a page above 0100000 into the middle of the
+    // live u-area page.  That an ORDINARY UNMAPPED LOAD sees the result is the trailing
+    // drain: the copy's stores were made mapped, under a virtual tag.
+    copyphys(SEGSRC * PGSZ + 100, UBASE + 200, 50);
+    for (i = 0; i < 50; i++)
+        if (up[200 + i] != (unsigned)(PATTERN1 ^ (100 + i)))
+            return (26);
+    if (up[199] != (unsigned)(PATTERN1 ^ 199) || up[250] != (unsigned)(PATTERN1 ^ 250))
+        return (26); // the run overran its ends
+
+    // Low -> high, with a different pattern so that a copy landing in the wrong place cannot
+    // pass by holding what was already there.  Then the two edge cases the driver's chopping
+    // is there to produce: a run that ENDS on the last word of a page, and one that STARTS
+    // at word 0 of one.
+    for (i = 0; i < 40; i++)
+        up[300 + i] = PATTERN3 ^ i;
+    copyphys(UBASE + 300, SEGDST * PGSZ + 700, 40);
+    copyphys(UBASE + PGSZ - 3, SEGDST * PGSZ + PGSZ - 3, 3);
+    copyphys(UBASE, SEGDST * PGSZ, 4);
+
+    // Word 0 of SEGDST cannot be peeked -- virtual address 0 is the black hole -- so bring it
+    // back the other way, one word, and read THAT unmapped.
+    copyphys(SEGDST * PGSZ, UBASE + 400, 1);
+    if (up[400] != (unsigned)PATTERN1)
+        return (28);
+
+    // Everything else about SEGDST, read through the map at virtual page 0.
+    tx.x_caddr = SEGDST * PGSZ;
+    sureg();
+    for (i = 0; i < 40; i++)
+        if (peek(700 + i) != (unsigned)(PATTERN3 ^ i))
+            return (27);
+    if (peek(699) != 0 || peek(740) != 0)
+        return (27); // clearseg's zeros on either side of the run
+    for (i = 1; i <= 3; i++)
+        if (peek(PGSZ - i) != (unsigned)(PATTERN1 ^ (PGSZ - i)))
+            return (28);
+    if (peek(PGSZ - 4) != 0)
+        return (28);
+    for (i = 1; i <= 3; i++)
+        if (peek(i) != (unsigned)(PATTERN1 ^ i))
+            return (28);
+    if (peek(4) != 0)
+        return (28);
 
     // Put the map back, so the .ini's РП/РЗ assertions describe the state it expects.
     tx.x_caddr = TEXTPG * PGSZ;

@@ -18,7 +18,7 @@ test:   build
 	$(MAKE) -Cbuild build_tests
 
 run:    test
-	ctest --test-dir build
+	ctest --test-dir build --progress
 
 install: all
 	@prefix=$$( [ -d "$$HOME/.local" ] && echo "$$HOME/.local" || echo /usr/local ); \
