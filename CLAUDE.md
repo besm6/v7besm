@@ -18,12 +18,16 @@ work has two halves:
   prompts with `# ` on the console, runs `ls`, `pwd`, `cat` and `echo` off the disk, honours
   the kernel's erase, kill and `^D`, and on `^D` cycles back through `/etc/rc` to a fresh
   prompt. It also **writes**: create files, `sync`, and the image fscks clean. And the whole
-  **libc runs on it**: the twenty-one `lib/test/` programs live on the image as `/usr/test/*`
-  and produce there, byte for byte, the output they produce under `b6sim`. Four tests
+  **libc runs on it**: the twenty-two `lib/test/` programs live on the image as `/usr/test/*`
+  and produce there, byte for byte, the output they produce under `b6sim`. And it **swaps**:
+  squeeze the machine to 31 pages and `sched()`/`newproc()` move real images through the drum,
+  while `/bin/sh` and `/usr/test/puret` — the two binaries linked pure — share one copy of their
+  text between processes. Five tests
   guard that ladder — `kernel/test/boot` (the prompt appears), `kernel/test/console` (a typed
   dialogue with the shell), `kernel/test/session` (files written, `sync`, then a host-side
-  fsck and diff) and `kernel/test/libtest` (the libc suite run off the image, one ctest case
-  per program) — and `cd kernel && make run` is where you type at it yourself. The drums
+  fsck and diff), `kernel/test/libtest` (the libc suite run off the image, one ctest case
+  per program) and `kernel/test/swap` (more processes than core, asserted through the kernel's
+  own counters) — and `cd kernel && make run` is where you type at it yourself. The drums
   must be attached to exec anything: they are `swapdev`, and `exece()` stages the argument
   list in swap. See `kernel/TODO.md`, the live work plan — the settled design, the hardware
   rules it obeys, and a sequential task list (numbered from 24, since the source cites the
@@ -133,7 +137,7 @@ and `cmd/cat`, `cmd/echo`, `cmd/ls`, `cmd/pwd`, `cmd/sync` are the five commands
 prompt — all compiled by the `b6*` toolchain and staged into `build/rootfs/` as `etc/init` and
 `bin/{sh,cat,echo,ls,pwd,sync}`. Alongside them `etc/` (the top-level directory, not `cmd/etc`)
 stages the static files `group`, `motd`, `passwd` and `rc`, which are copied rather than
-compiled. `lib/test/` stages a third group, `usr/test/*` — the twenty-one libc test programs,
+compiled. `lib/test/` stages a third group, `usr/test/*` — the twenty-two libc test programs,
 the same linked images `b6sim` runs, copied rather than linked a second time so that both
 harnesses provably run the same bytes.
 Together that tree is the root filesystem the kernel mounts. All of it is added from inside
@@ -243,12 +247,16 @@ applies past the MMU: **a device reads memory, not the write cache**, so a drive
 the БРЗ before a write exchange — `kernel/test/session` is what found the disk driver doing
 neither that nor maintaining the sector header it writes from that memory.
 
-**Three of them boot the whole kernel** rather than forging an environment, and they form a
+**Five of them boot the whole kernel** rather than forging an environment, and they form a
 ladder: `boot` asserts the shell's root prompt appears; `console` types a dialogue at that
 shell; `session` has the shell write files and `sync`, then converts the container back on the
-host, fscks it and diffs what the session wrote (`kernel/test/run-session.sh`). `boot` attaches
+host, fscks it and diffs what the session wrote (`kernel/test/run-session.sh`); `libtest` runs
+the libc suite off the image; and `swap` deposits a much smaller `phymem` before the boot and
+runs more processes than the coremap holds, asserting afterwards on the kernel's own
+`nswapout`/`nswapin`/`ntextjoin` counters — a load test that cannot say swapping happened is a
+load test that passes on a machine with room to spare. `boot` attaches
 the pristine `root3072.disk` read-only — which is an assertion in itself, the boot path writing
-nothing — and the other two each convert their own copy at their own volume number, so no test
+nothing — and the others each convert their own copy at their own volume number, so no test
 ever writes a build artifact.
 
 The kernel objects a test links are compiled *into `kernel/test/`* from the sources next door,

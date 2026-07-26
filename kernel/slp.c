@@ -22,6 +22,10 @@ struct proc *runq;           // head of linked list of running processes
 int mpid;                    // generic for unique process id's
 struct map coremap[CMAPSIZ]; // space for core allocation
 struct map swapmap[SMAPSIZ]; // space for swap allocation
+
+// The swap-in half of the traffic counters; the other four are kernel/text.c's, and
+// <sys/systm.h> says what they are for.
+int nswapin;
 char runin;                  // scheduling flag
 char runout;                 // scheduling flag
 char runrun;                 // scheduling flag
@@ -286,13 +290,16 @@ int swapin(register struct proc *p)
                 return (0);
             }
             xp->x_caddr = x;
-            if ((xp->x_flag & XLOAD) == 0)
+            if ((xp->x_flag & XLOAD) == 0) {
                 swap(xp->x_daddr, x, xp->x_size, B_READ);
+                ntextin++;
+            }
         }
         xp->x_ccount++;
         xunlock(xp);
     }
     swap(p->p_addr, a, p->p_size, B_READ);
+    nswapin++;
     mfree(swapmap, wtodb(p->p_size), p->p_addr);
     p->p_addr = a;
     p->p_flag |= SLOAD;

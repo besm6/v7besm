@@ -20,4 +20,4 @@
 # failure early in the list is a failure in something everything after it depends on.
 set(B6_LIBTEST_IMAGE
     hello vararg errno procs sbrkt malloct strings gen strtolt environ jmp headers
-    stdiot printft scanft execs shellt timet pwent signals matht)
+    stdiot printft scanft execs shellt timet pwent signals matht puret)

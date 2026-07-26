@@ -78,6 +78,10 @@ static struct inode fakecdir;
 
 int maxmem;
 int mpid;
+// slp.o's swapin() counts the text segments it reads off the paging store; the counter
+// itself belongs to kernel/text.c, which this test does not link (it would drag in the
+// whole inode layer).  Nothing here has a text, so nothing ever increments it.
+int ntextin;
 char runrun, runin, runout;
 char curpri;
 struct proc *runq;

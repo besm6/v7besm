@@ -1,0 +1,95 @@
+; swap -- more processes than core, and two of them sharing one binary's text.
+;
+; Task 26's "done when", and the fifth test that boots the whole kernel.  Where `session'
+; has the shell write files and `libtest' runs the library suite one program at a time,
+; this one squeezes the machine until the swapper has to work, and then asks the kernel
+; itself whether it did.  kernel/test/swap.sh is the load; run-swap.sh drives the whole
+; thing and checks on the host what came back.
+;
+; GENERATED FROM swap.ini.in by genboot.cmake, because every address below is a link-time
+; value that moves as the kernel grows.  Four symbols: `phymem', which is deposited, and
+; the three counters, which are asserted.
+;
+; ---------------------------------------------------------------------------------------
+; THE PRESSURE KNOB, and why it is a deposit rather than a kernel change.
+;
+; kernel/machdep.c has `int phymem = 512 * 1024' -- plain initialized data, one reference,
+; and startup() derives everything else from it: maxmem, the extent it frees into the
+; coremap, and the two banner lines below.  So one `deposit' before `go' models a smaller
+; machine exactly, and the kernel that ships is untouched.
+;
+; It has to be a deposit because the numbers do not otherwise meet.  A full machine frees
+; 479 pages of core against 512 pages of swap -- core is very nearly as large as the paging
+; store -- so filling core needs about as many processes as there is swap to hold them, and
+; the swapper would never run.  @PHYMEM@ = 0200000 is 64 pages, of which the kernel image,
+; the buffer cache and the u-area take 33, leaving 31 for user images.
+;
+; THE BANNER IS THE RECEIPT.  `user mem = 186 kbytes' is 31744 words; the expect below is
+; what makes a deposit that silently missed -- a moved symbol, a typo in the address -- a
+; failure here rather than a test that quietly runs on a full machine and swaps nothing.
+;
+; The floor is not far below: estabur() refuses any process bigger than maxmem, and both
+; binaries here are pure -- /bin/sh is 4 private pages over a 7-page shared text, puret 4
+; over 1 -- so much under 24 pages of core and execs start failing with ENOMEM instead of
+; swapping.  If you lower this, watch for `sh: cannot execute' on the console rather than
+; for a hang.  (Impure, /bin/sh was ten pages a copy, and this number was chosen then.)
+; ---------------------------------------------------------------------------------------
+;
+; THE COUNTERS, and why the `if' below is spelled the way it is.  The parenthesised form
+; every other .ini uses -- `if (PC != 0611)' -- goes through SIMH's expression evaluator,
+; which knows registers, environment variables and literals and CANNOT name a memory
+; address.  The bare form does: `if <addr> <cond>' reads the word (scp.c, get_aval).  What
+; it reads is 50 bits wide, though -- the top two are the parity tag mmu_store() wrote, and
+; that tag is 0 or 1 depending on which half-word the storing instruction sat in -- so the
+; comparison has to mask to 48 bits with `&07777777777777777'.  No space may appear inside
+; the condition token.  `ex' prints the value untagged and is right for the diagnostics.
+;
+; The three counters are what stop this test from passing for the wrong reason.  A load
+; test that only checks the machine survived cannot tell a kernel that swapped from one
+; that had room to spare, and shared text that was never joined looks exactly like text
+; that was copied.  kernel/test/uswap asserts the same counters against known traffic, so
+; a counter that counted the wrong thing fails there first.
+;
+; THE DISK IS WRITABLE and is this test's own copy at volume 3081 (run-swap.sh converts it);
+; the drums are this test's own too, since ctest runs the SIMH tests in parallel.
+
+reset
+set cpu latin
+set mmu cache
+set tty25 raw
+
+attach tty25 console
+attach md00 root3081.disk
+attach -n drum0 swap0.drum
+attach -n drum1 swap1.drum
+load ../unix
+
+deposit @PHYMEM@ 0200000
+
+; Each `expect' HALTS the simulator and then runs its action, so every action but the last
+; has to end with a `step' of its own to set the machine going again.  The last one does not:
+; it jumps to the checks below, which run with the machine stopped.  A `goto' rather than
+; falling through, because falling through would also be what a run that merely exhausted its
+; step budget did, and the whole point of the FAIL block is to tell those two apart.
+
+expect "user mem  = 186 kbytes" echof "swap: core squeezed to 31 pages, as deposited"; step 50000000
+expect "# " send "sh /etc/swap\r"; step 50000000
+expect "swap done" goto checks
+
+step 50000000
+
+echof "FAIL: swap -- the load never finished.  The last marker above says how far it got: no `user mem' line means the deposit is wrong, no prompt means the boot is, and no `swap done' means the load itself hung or died.  PC:"
+ex PC
+exit 1
+
+:checks
+echof "swap: the load finished"
+if @NSWAPOUT@&07777777777777777==0 echof "FAIL: swap -- nothing was ever swapped OUT.  Either the deposit above did not take (the `user mem' line would have failed first), or the load no longer outgrows the coremap.  nswapout:"; ex @NSWAPOUT@; exit 1
+if @NSWAPIN@&07777777777777777==0 echof "FAIL: swap -- something went out to the drum and nothing came back, so sched() never found a swapped-out process runnable.  nswapin:"; ex @NSWAPIN@; exit 1
+if @NTEXTJOIN@&07777777777777777==0 echof "FAIL: swap -- no second process ever attached to a text already in text[].  Are /bin/sh and /usr/test/puret still linked PURE?  getxfile() forces ux_tsize to 0 for an FMAGIC image and xalloc() returns on its first line, so an impure image shares nothing at all.  ntextjoin:"; ex @NTEXTJOIN@; exit 1
+
+echof "PASS: swap -- more processes than core, swapped out and back, sharing one text"
+ex @NSWAPOUT@
+ex @NSWAPIN@
+ex @NTEXTJOIN@
+quit

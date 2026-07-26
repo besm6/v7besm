@@ -247,7 +247,18 @@ void assign_addresses(void)
     cmsize  = 0;
     if (ld.dflag || !ld.rflag) {
         define_symbol(ld.p_econst, ld.csize / W, N_EXT + N_CONST);
-        define_symbol(ld.p_etext, ld.tsize / W, N_EXT + N_TEXT);
+        // etext follows the HEADER's text size, padding and all.  Under -n the image is
+        // padded out to the data origin (output.c), a_text counts the padding because every
+        // reader derives the data segment's file offset and load address from it, and a
+        // symbol that stopped short of it would make `etext' and the header disagree about
+        // where the text ends.  So under -n etext IS the data origin.  The origins are laid
+        // out below and cannot be used here -- these values are segment-RELATIVE and the
+        // loop further down adds the base -- hence the repeated `basaddr + csize / W'.
+        define_symbol(ld.p_etext,
+                      ld.nflag ? ALIGN(ld.basaddr + ld.csize / W + ld.tsize / W, 1024) -
+                                     (ld.basaddr + ld.csize / W)
+                               : ld.tsize / W,
+                      N_EXT + N_TEXT);
         define_symbol(ld.p_edata, ld.dsize / W, N_EXT + N_DATA);
         define_symbol(ld.p_ebss, ld.bsize / W, N_EXT + N_BSS);
         define_symbol(ld.p_end, ld.bsize / W, N_EXT + N_BSS);

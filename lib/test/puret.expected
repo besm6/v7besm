@@ -1,0 +1,15 @@
+ok   the image starts at word BADDR
+ok   text ends below data
+ok   data begins on a page boundary
+ok   bss ends above data
+ok   the first data word survived the load
+ok   the rest of data survived too
+ok   a const string survived
+ok   bss is zero at entry
+ok   a bss array is zero at entry
+ok   data is writable
+ok   bss is writable
+ok   a bss array is writable
+ok   the break starts above bss
+id 0
+done

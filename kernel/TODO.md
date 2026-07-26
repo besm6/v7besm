@@ -7,7 +7,7 @@ real `/etc/init`, which forks `/bin/sh` — and you get a prompt. Type at it: th
 `^D` takes init round through `/etc/rc` to a fresh prompt, and a session that writes files and
 calls `sync` leaves an image that fscks clean. `make run` is where you talk to it.
 
-The **libc** is under it now too: the twenty-one programs of [../lib/test/](../lib/test/) run
+The **libc** is under it now too: the twenty-two programs of [../lib/test/](../lib/test/) run
 off `/usr/test` on the image and produce, byte for byte, the output they produce under `b6sim`
 — stdio, `malloc`, `setjmp`, the exec family, signals, `<time.h>`, the passwd file and a shell
 started through `system()`/`popen()`.
@@ -23,20 +23,21 @@ ever touches the new image. With no drum that `bread` comes back `B_ERROR` and e
 fails with `exec init: error 5` (EIO). Every `.ini` that boots therefore says
 `attach -n drum0 …`.
 
-Five tests cover the image the build produces ([../root.manifest](../root.manifest) →
+Six tests cover the image the build produces ([../root.manifest](../root.manifest) →
 `root3072.disk`). `fstest` reads its superblock and root inode through the real `md` driver,
-the real buffer cache and the real `sbcheck()`, strictly below the boot path; the other four
+the real buffer cache and the real `sbcheck()`, strictly below the boot path; the other five
 boot the whole `unix` image against it, each going one step past the last, which is what keeps
 the diagnosis apart — a failure in `boot` says the kernel never got a user program running, one
 in `console` says the line discipline is wrong, one in `session` says the filesystem or a
-driver is, and one in `libtest` says a system call is.
+driver is, one in `libtest` says a system call is, and one in `swap` says the swapper is.
 
 | test | asserts |
 |---|---|
 | `boot` | process 1 leaves the kernel, execs `/etc/init`, which forks `/bin/sh`, and the shell **prompts** |
 | `console` | a typed dialogue with that shell: erase, kill, a line longer than a clist block, `>/dev/tty`, `pwd`, `ls /bin`, and `^D` round through `/etc/rc` to the next prompt |
 | `session` | the shell **writes** — files, an inode past its direct blocks, `sync` — and the host then fscks the container and diffs what was written |
-| `libtest` | the twenty-one [../lib/test/](../lib/test/) programs run off `/usr/test`, and each one's output matches **the same `.expected` file `b6sim` is held to** |
+| `libtest` | the twenty-two [../lib/test/](../lib/test/) programs run off `/usr/test`, and each one's output matches **the same `.expected` file `b6sim` is held to** |
+| `swap` | the same kernel on a machine of **31 pages** (`phymem` deposited before the boot), running more processes than fit: `sched()`/`newproc()` swap through the drum, two processes share one binary's text, and the counters say so |
 
 Read [../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) before touching memory management,
 [../doc/Intrinsics.md](../doc/Intrinsics.md) for how C reaches `002 «рег»` and `033 «увв»`,
@@ -96,6 +97,27 @@ PHYSICAL, pages 0..31 — the kernel, addressed with БлП = 1 (no translation)
 
    The user gets all 32 pages. The u-area is not in this map — it is physical.
 ```
+
+### Shared text, and what the paging store owes it
+
+**A pure (`NMAGIC`) binary's const+text is one shared region**, loaded once and mapped into every
+process running it; an impure (`FMAGIC`) one has none at all, because `getxfile()` folds const and
+text into data and forces `ux_tsize` to 0, at which point `xalloc()` returns on its first line. So
+until task 26 linked something `-n`, the whole of [text.c](text.c) was unreachable. Two images are
+pure now — `/bin/sh` and `/usr/test/puret` — and `b6_prog()`/`b6_libtest()` take a `PURE` keyword
+for a third.
+
+"Pure" here means **shared, not protected**. РЗ closes a page to reads as well as writes, so a
+read-only text page would take the program's own constant pool with it; `estabur()`'s `xrw` is
+accepted and ignored. What it buys is one copy of the text in core, which on a 31-page machine is
+the difference between four processes and none.
+
+**A swap slot must be written in full before it is read.** On the PDP-11 a block that had never been
+written read back as whatever was on the platter, which v7 relied on: `expand()` raises `p_size`,
+swaps out only the *old* size, and `swapin()` reads the new one back — the tail being uninitialized
+data that `clearseg()`/`grow()` overwrite anyway. Here a drum zone the container has never reached
+is an **I/O error**, and `swap()` panics. `xswap()` therefore zero-fills the tail of the slot before
+it lets go of the core; the rule and the reason are at the call site.
 
 ### The click is dead
 
@@ -211,18 +233,12 @@ Run every MMU test with **`set mmu cache`**.
 (`brz.s`, `uarea.S`, `seg.S`, `usermem.S`, `switch.s`, `syscall.c`, `sendsig.c`) and why the gates
 are duplicated in the tests' own crt0s.
 
-**Tasks 1 through 25c are done and their writeups have been removed**; the design they settled
+**Tasks 1 through 26 are done and their writeups have been removed**; the design they settled
 on is the section above, and how each turned out is in the source comments and in `../doc/`.
 The numbering is **left as it was** — task numbers are cited from the source (`seg.S`,
 `uarea.S`, `sys1.c`, `text.c`, `trap.c`, `sig.c`, `clock.c`, `dev/md.c`, `dev/bio.c`,
 `dev/mem.c`, `test/crt0*.S`, `test/mdtest.c`, `../include/sys/param.h`, the `.ini` files) and
 from `doc/` — so the list below starts where it does.
-
-**26. Swapping and shared text under load.** `sched()`/`xswap()` through the drum with more
-processes than core, and two processes sharing one binary's text. The code is written and `usched`
-covers the scheduler in isolation, but nothing has ever swapped a real image, and `swap()` on the
-drum has only ever moved a forged page. This is also where the u-area invariant above gets its first
-real workout.
 
 **27. `/dev/mem` and `/dev/kmem`.** Minors 0 and 1 are `ENXIO` in [dev/mem.c](dev/mem.c); minor 2
 (`/dev/null`) works. `/dev/mem` must reach a physical page above `0100000`, which needs a
@@ -335,6 +351,36 @@ What the ones already in [test/](test/) cost to get right. Read this before writ
   reproducing when unrelated code motion shifted the tick's alignment by a few instructions.
   Measure the state directly, write the measurement down at the call site, and mark the test as
   *not* covering it — `test/boot.ini.in` says so in as many words.
+* **A `.ini` CAN assert on a kernel variable, but not in the parenthesised form.** `if (...)`
+  goes through SIMH's expression evaluator, which knows registers, environment variables and
+  literals and cannot name an address. The bare form reads memory: `if <addr> <cond>`. Two
+  traps in it. The word comes back **50 bits wide** — the top two are the parity tag
+  `mmu_store()` wrote, and that tag is 0 or 1 depending on which half-word the storing
+  instruction sat in, so an unmasked comparison is wrong in a way that changes when you
+  recompile; mask with `&07777777777777777`. And no space may appear inside the condition
+  token. `ex <addr>` prints it untagged and is what the FAIL diagnostics should use.
+  `test/swap.ini.in` is the worked example.
+* **An `expect` action that does not `step` hands control back to the script.** Every action but
+  the last has to end with its own `step` to set the machine going again — but the last one can
+  `goto` a label instead, and the commands there run with the machine stopped, which is how a
+  boot-level test asserts on memory after its load has finished. Falling through would also be
+  what a run that merely exhausted its step budget does, so the `goto` is what tells the two
+  apart.
+* **The test crt0s' interrupt gate must save the C register (М020), and `crt0w.S` did not.**
+  `wtc`/`utc` arm the address modifier for the *next* instruction only, and b6cc routinely emits
+  the pair in two different words — so an interrupt lands between them. The hardware does its
+  half (`op_int_2` records `SPSW_MOD_RK`, and `выпр` re-arms from М020 on the way back) but it
+  re-arms from *whatever is there*, and every handler writes it. The symptom is a lost store,
+  one word, no fault: with М020 left at 0 the store addresses virtual word 0, the black hole.
+  `uswap`'s fill loop lost exactly one word of a 4096-word image per run, at an index that moved
+  whenever anything else in the file changed. `kernel/besm6.S` always did this right and
+  `test/crt0u.S` is what holds it to it; the short gates simply did not.
+* **A gate's temp cells must be reachable by a BARE address, which is why they go in `.text`.**
+  This is sharper than it looks: `< sym >` assembles as `мода` (utc) *plus* the instruction, and
+  `utc` loads М020 — so `atx <sa>` as the gate's first instruction destroys the very C register
+  the gate is about to save, before it can save it. A bare address is 12 bits and cannot reach a
+  bss that the linked kernel objects have pushed past `010000`. `crt0c.S` and `crt0w.S` both keep
+  their cells in `.text` now, as `kernel/besm6.S` always has.
 * **Read a bite test on ACC, never on the halt PC** — and rebuild before believing either. A "failed"
   run once turned out to have merely grown a literal by one word, moving `halt` from `0575` to
   `0576` so the `.ini` tripped its *PC* assertion while every check still passed. Run the modified
@@ -453,6 +499,30 @@ Facts that cost real time to establish and are not written down in `doc/`.
   like a comment is a syntax error or a command run — a semicolon mid-sentence runs the rest of
   the line. This cost two round trips on `kernel/test/session.sh`; `etc/rc` says it at length.
   It binds anything written for the image, including 25c's driver script.
+* **A DRUM ZONE THAT HAS NEVER BEEN WRITTEN IS A READ ERROR, not garbage.** SIMH's
+  `besm6_drum.c` fails the short `fread` and raises the same `drum_fail` an *unattached* drum
+  raises, which `dev/mb.c`'s `EXT_IOERR` poll cannot tell apart — so it becomes `B_ERROR` and
+  `swap()` panics. The distinction that matters: a **hole inside** the container reads back as
+  zeros with no error, because the file is sparse; only a read **past the highest zone ever
+  written** fails. With `-n` drums that start at zero length, that is exactly where the first
+  grown image lands. Fixed by making `xswap()` write the whole slot (see the design section);
+  the reason it was never seen before is that nothing had ever grown a process under pressure.
+* **`deposit phymem` before `go` is the memory-pressure knob**, and the banner is its receipt.
+  `phymem` (machdep.c) is one initialized word with one reference, and `startup()` derives
+  `maxmem`, the coremap extent and the two banner lines from it — so a `.ini` can model a
+  smaller machine exactly without touching the shipped kernel. It has to: a full machine frees
+  479 pages of core against 512 pages of swap, so filling core needs about as many processes as
+  there is swap to hold them and the swapper never runs. Always `expect` the `user mem =` line
+  as well, or a deposit that missed leaves a test that quietly runs on a full machine.
+* **`b6ld -n` had never been used, and did not work.** Two bugs, both silent. The pad it writes
+  between text and data was not counted in `a_text`, so every reader — `b6sim`'s loader, `b6nm`,
+  and the kernel's `getxfile()`/`xalloc()` — computed the data segment's file offset and load
+  address from a text that was short by the pad, and the image came up empty. And `etext` was
+  left at the unpadded end, disagreeing with the header. Note while fixing anything there that
+  **`ld.torigin` and `ld.dorigin` are running cursors during pass 2** (pass2.c advances them per
+  input file): in `finish_output()` they are the *ends* of their segments, which is why the pad
+  loop reads oddly and must not be "corrected", while `setup_output()` runs before pass 2 and
+  sees the pristine origins.
 * **`s_isize` is the first data block, not a count of i-list blocks**, and **the free list must be
   built descending** — `alloc()` pops the superblock cache from the top, so an ascending build lays
   every file backwards across the platter while passing every self-consistency check.
@@ -479,8 +549,21 @@ Facts that cost real time to establish and are not written down in `doc/`.
   `DSTFLAG` are therefore **0** rather than v7's US Eastern ([../include/sys/param.h](../include/sys/param.h)):
   an offset on top of an invented epoch says nothing, and zero makes `ftime()` agree with
   `b6sim`, which is what lets `lib/test/timet` be one file for both harnesses.
+* **The tail of an image grown by `expand()` reads back as zeros.** v7 promised nothing there
+  and nothing reads it — `getxfile()` clearsegs the new image, `grow()` copies the stack into it
+  — but this machine cannot leave those blocks unwritten at all, so `xswap()` writes zeros and
+  the contract is now stronger than v7's, and asserted (`test/uswap` leg 0).
+* **`dev/mb.c`'s `drainbrz()` cannot be made to bite, and `test/uswap` says so.** Deleting it
+  leaves the suite green, and the reason is structural: the БРЗ is eight lines evicted by age,
+  and between the last store that fills a swap page and the `033` that hands it to the
+  controller lie far more than eight kernel stores. `dev/md.c` is where the same hazard *did*
+  bite, and the difference is that its sector header is stored two instructions before the
+  exchange. The drain stays — a future caller need not leave eight stores behind it — but no
+  test covers it, and `uswap.ini` says as much rather than implying otherwise.
 * **`sy_nrarg` is read nowhere** and is vestigial: exactly one argument arrives in a register on this
   machine, for any `narg >= 1`.
 * **There is no read-only user page.** РЗ closes a page to reads as well as writes, so a closed text
   page would take the program's own constant pool with it. `estabur()`'s `xrw` argument, and `sep`,
-  are accepted and ignored.
+  are accepted and ignored. A **pure** (`NMAGIC`) binary's text is therefore *shared* but still
+  writable by every sharer, and `XWRIT` in `struct text` is the only thing that keeps a modified
+  text from being silently discarded. What `-n` buys here is core, not safety.

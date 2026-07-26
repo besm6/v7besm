@@ -355,6 +355,13 @@ void swap(int blkno, int coreaddr, register int count, int rdflg)
 {
     register struct buf *bp;
     register int tcount;
+    // The error latch.  b_flags is REASSIGNED at the top of every chunk below -- it has to
+    // be, B_DONE has to go -- and that clears a B_ERROR the previous chunk set, so without
+    // this only the LAST exchange of a transfer could ever reach the panic.  An image is up
+    // to 32 chunks, so a failure three pages in used to come back "successful" with most of
+    // a stale process in core.  v7 had the same shape and got away with it: its swap() moved
+    // the whole image in one request.
+    int err = 0;
 
     bp = &swbuf1;
     if (bp->b_flags & B_BUSY)
@@ -387,6 +394,7 @@ void swap(int blkno, int coreaddr, register int count, int rdflg)
         spl6();
         while ((bp->b_flags & B_DONE) == 0)
             sleep((chan_t)bp, PSWP);
+        err |= bp->b_flags & B_ERROR;
         count -= tcount;
         coreaddr += tcount;
         blkno += wtodb(tcount);
@@ -395,7 +403,7 @@ void swap(int blkno, int coreaddr, register int count, int rdflg)
         wakeup((chan_t)bp);
     spl0();
     bp->b_flags &= ~(B_BUSY | B_WANTED);
-    if (bp->b_flags & B_ERROR)
+    if (err)
         panic("IO err in swap");
 }
 

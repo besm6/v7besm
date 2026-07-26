@@ -10,7 +10,7 @@
 # .c sources get -DKERNEL (KERNOBJ); the local test programs and the .S/.s assist must
 # not, matching the old Makefile's static-pattern rule.
 
-set(KERNOBJ alloc bio md mb slp malloc syscall sendsig clock intr utab)
+set(KERNOBJ alloc bio md mb slp text malloc syscall sendsig clock intr utab)
 
 set(TEST_TARGETS "")
 
@@ -87,6 +87,7 @@ b6_test(usig     crt0sg usig syscall sendsig utab brz usermem)
 b6_test(uclock   crt0c uclock clock intr utab brz)
 b6_test(uswtch   crt0w uswtch switch uarea brz intr)
 b6_test(usched   crt0w usched slp switch uarea brz intr utab seg malloc)
+b6_test(uswap    crt0w uswap slp text bio mb malloc switch uarea seg brz intr utab)
 b6_test(ugrow    crt0g ugrow utab brz seg)
 b6_test(biotest  crt0 biotest bio utab brz)
 b6_test(ugrp     crt0 ugrp intr)
@@ -250,7 +251,7 @@ set_tests_properties(rootimg_check PROPERTIES LABELS kernel)
 #            /etc/rc and prompts again.
 #   session  writes files, runs sync(2), and then the HOST fscks what reached the disk and
 #            diffs a file the session wrote.  See run-session.sh.
-#   libtest  runs the twenty-one lib/test programs off /usr/test and diffs each one's
+#   libtest  runs the twenty-two lib/test programs off /usr/test and diffs each one's
 #            output against the very file b6sim is held to.  Everything above it is the
 #            kernel's own code exercising itself; this is user programs written against
 #            libc, so it is where sysent[]'s rows meet a real caller.  See run-libtest.sh.
@@ -271,6 +272,7 @@ set_tests_properties(rootimg_check PROPERTIES LABELS kernel)
 if(BESM6)
     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/boot.ini
         COMMAND ${CMAKE_COMMAND} -DNM=${CMAKE_CURRENT_BINARY_DIR}/../unix.nm
+                "-DSYMS=spin"
                 -DIN=${CMAKE_CURRENT_SOURCE_DIR}/boot.ini.in
                 -DOUT=${CMAKE_CURRENT_BINARY_DIR}/boot.ini
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/genboot.cmake
@@ -315,12 +317,43 @@ if(BESM6)
     set_tests_properties(session PROPERTIES LABELS kernel TIMEOUT 600)
 
     # ---------------------------------------------------------------------------------
-    # libtest -- the twenty-one lib/test programs, run off the image by the booted kernel
+    # swap -- more processes than core, and two of them sharing one binary's text
+    # (task 26).
+    # ---------------------------------------------------------------------------------
+    #
+    # The same script shape as `session', for the same reason, and one thing more: its .ini
+    # is GENERATED, because it deposits a smaller `phymem' before the boot and asserts on
+    # three kernel counters afterwards, and all four are link-time addresses.  So swap.ini
+    # comes out of the build directory while session.ini and console.ini are used from the
+    # source directory as they stand.  swap.ini.in says why each of the four is there.
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/swap.ini
+        COMMAND ${CMAKE_COMMAND} -DNM=${CMAKE_CURRENT_BINARY_DIR}/../unix.nm
+                "-DSYMS=phymem;nswapout;nswapin;ntextjoin"
+                -DIN=${CMAKE_CURRENT_SOURCE_DIR}/swap.ini.in
+                -DOUT=${CMAKE_CURRENT_BINARY_DIR}/swap.ini
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/genboot.cmake
+        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/../unix.nm
+                ${CMAKE_CURRENT_SOURCE_DIR}/swap.ini.in
+                ${CMAKE_CURRENT_SOURCE_DIR}/genboot.cmake
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMENT "gen swap.ini" VERBATIM)
+    add_custom_target(swapini DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/swap.ini)
+    add_dependencies(swapini kernel rootimg)
+    list(APPEND TEST_TARGETS swapini)
+
+    add_test(NAME swap
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-swap.sh
+                ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(swap PROPERTIES LABELS kernel TIMEOUT 900)
+
+    # ---------------------------------------------------------------------------------
+    # libtest -- the twenty-two lib/test programs, run off the image by the booted kernel
     # (task 25c).
     # ---------------------------------------------------------------------------------
     #
     # One boot produces all the output and one ctest case adjudicates each program, which
-    # is why this is a FIXTURE and not a script like `session': there twenty-one diffs
+    # is why this is a FIXTURE and not a script like `session': there twenty-two diffs
     # would collapse into a single red case, and a divergence in `timet' would be
     # indistinguishable from a kernel that never reached the prompt.  So run-libtest.sh
     # stops once it has extracted the disk, and everything downstream of it is its own

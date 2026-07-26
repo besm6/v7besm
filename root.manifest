@@ -5,7 +5,7 @@
 # The tree, the device nodes, and the USERLAND -- /etc/init, /bin/sh and the five commands
 # that prove the prompt, plus the static files of /etc.  Task 24 put them here and task 25b
 # flipped the last line, /etc/init, from the task-23 stand-in to the real one.  Task 25c
-# added /usr/test, the twenty-one lib/test programs that b6sim also runs.
+# added /usr/test, the twenty-two lib/test programs that b6sim also runs.
 #
 # WHY THIS FILE LIVES AT THE TOP OF THE TREE and not in kernel/test/ beside the CMakeLists
 # that runs b6fsutil over it: every `file' below but none of the directories comes out of
@@ -118,7 +118,7 @@ mode 0644
 
 # ---- the library test programs, task 25c ------------------------------------------
 #
-# lib/test/*.c, the same twenty-one images b6sim runs (lib/test/CMakeLists.txt), staged
+# lib/test/*.c, the same twenty-two images b6sim runs (lib/test/CMakeLists.txt), staged
 # into build/rootfs/usr/test/ by b6_libtest() and run HERE by the booted kernel --
 # kernel/test/libtest.sh drives them, kernel/test/run-libtest.sh diffs what they wrote.
 # Under b6sim every syscall is the host's; this is where sysent[] meets a real caller.
@@ -130,6 +130,9 @@ mode 0644
 #
 # spawn is NOT here and shellt is: spawn's premise is that /bin/sh cannot be exec'd, which
 # is true only under b6sim, and shellt is the other half of it -- see either source.
+#
+# puret is the one PURE (NMAGIC) program among them, and one of only two images on this
+# disk whose text the kernel can share at all -- /bin/sh is the other.  Task 26.
 
 file /usr/test/hello
 source ../../rootfs/usr/test/hello
@@ -213,6 +216,15 @@ mode 0755
 
 file /usr/test/matht
 source ../../rootfs/usr/test/matht
+mode 0755
+
+# puret is the only PURE (NMAGIC) image on the disk, and the only reason kernel/text.c's
+# xalloc()/xexpand()/xccdec() run at all: getxfile() forces ux_tsize to 0 for an FMAGIC
+# image, so every other program here has no shared text to share.  kernel/test/swap runs
+# three copies of it at once.
+
+file /usr/test/puret
+source ../../rootfs/usr/test/puret
 mode 0755
 
 # ---- character devices ----------------------------------------------------------

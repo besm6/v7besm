@@ -737,6 +737,43 @@ decimal unless written with a leading `0` (octal). See
 [BESM6/tests/README.md](https://github.com/besm6/simh/blob/master/BESM6/tests/README.md) for how
 to run and add tests.
 
+### Asserting on memory, not just registers
+
+`IF` and `ASSERT` accept **two different** kinds of condition, and only one of them can name a
+memory address.
+
+* **Parenthesised** — `if (PC != 032013)` — goes through SIMH's C-style expression evaluator
+  (`sim_eval_expression`), which resolves *registers, environment variables and literals* only.
+  This is the form the BESM-6 test suite uses throughout, and it cannot read memory at all.
+* **Bare** — `if <addr><cond> <action>` — falls through to the search-specifier path
+  (`get_asearch`/`get_aval` in `scp.c`), which examines the address in the default device's
+  address space. `{<dev>}` may prefix it; the radix is the device's, i.e. octal here.
+
+Two things bite in the bare form on this machine:
+
+* **The word comes back 50 bits wide.** `cpu_examine` hands over `memory[addr]` including the
+  two parity-tag bits, and `mmu_store()` writes that tag as `RUU ^ PARITY_INSN` — so it is 0 or
+  1 depending on which half-word the *storing* instruction sat in, and it changes when the
+  program is recompiled. Mask it off: `if 045530&07777777777777777==0 …`. `EXAMINE` prints the
+  value untagged, so `ex <addr>` is the right thing for the diagnostic that follows.
+* **No space may appear inside the condition token**, because `get_glyph` splits on space.
+
+`DEPOSIT` is the other half of the same idea: `deposit <addr> <octal>` after `load` and before
+the machine starts overrides an initialized variable in the loaded image. `v7besm`'s
+`kernel/test/swap.ini` uses both — it deposits a smaller `phymem` to model a machine too small
+for its workload, then asserts on the kernel's swap counters afterwards. Note that a deposit
+that silently missed (a moved symbol, a mistyped address) leaves a test that passes for the
+wrong reason, so pair it with an `expect` on something the new value makes the program print.
+
+### `expect` actions, `step` and `goto`
+
+An `expect` rule that fires **halts** the simulator and then runs its action, so each action has
+to end with its own `step N` to set the machine going again — except the last, which may
+`goto <label>` instead and let the rest of the command file run with the machine stopped. That
+is how a test asserts on memory *after* the program under test has finished. Falling off the end
+of the rules is not the same thing: that is also what a run which merely exhausted its step
+budget does, so the two want telling apart.
+
 ---
 
 ## Output files

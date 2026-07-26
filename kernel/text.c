@@ -18,6 +18,14 @@ void xexpand(register struct text *xp);
 void xccdec(register struct text *xp);
 void xuntext(register struct text *xp);
 
+// The swapper's traffic counters, declared in <sys/systm.h>, defined here because four of
+// the five events are this file's.  They are what a load test asserts on; see the comment
+// over them in the header for why a test needs them at all.
+int nswapout;
+int ntextin;
+int ntextout;
+int ntextjoin;
+
 // Swap out process p.
 // The ff flag causes its core to be freed--
 // it may be off when called to create an image for a
@@ -59,7 +67,7 @@ void xuntext(register struct text *xp);
 // ---------------------------------------------------------------------------------------
 void xswap(register struct proc *p, int ff, int os)
 {
-    register int a;
+    register int a, n;
 
     if (os == 0)
         os = p->p_size;
@@ -71,6 +79,33 @@ void xswap(register struct proc *p, int ff, int os)
     if (p->p_addr == uhome)
         uflush(uhome); // ... or the image goes to disk with a stale u page
     swap(a, p->p_addr, os, B_WRITE);
+    nswapout++;
+    //
+    // A SWAP SLOT MUST BE WRITTEN IN FULL BEFORE IT IS READ, and this is the one path where
+    // it would not be.  expand() (kernel/slp.c) raises p_size to the NEW size and then calls
+    // us with the OLD one in os, because the old size is all the core there is; swapin()
+    // then reads p_size words back.  On the PDP-11 the tail came back as whatever the disk
+    // happened to hold, and v7 did not care -- getxfile() clearsegs the new image and grow()
+    // copies the stack into it, so nothing ever reads those words.
+    //
+    // On this machine a block that has never been written is not garbage, it is an I/O
+    // ERROR: the drum container grows only as far as the highest zone ever written, a read
+    // past that fails (SIMH's besm6_drum.c fails the short fread), dev/mb.c's EXT_IOERR poll
+    // cannot tell that from a missing drum, and swap() panics with "IO err in swap".  So the
+    // first process ever to grow under memory pressure killed the machine.
+    //
+    // Zero rather than don't-care because it costs nothing here and is assertable:
+    // kernel/test/uswap's first leg is this exact call and checks the tail comes back zero.
+    // Only expand() passes os < p_size and it always passes ff, so the page we clear is one
+    // the mfree() below is about to take back; the `ff' test keeps a future !ff caller from
+    // having its live image zeroed, at the price of an unspecified (but readable) tail.
+    //
+    // `n', not `os': the mfree() below frees os words of CORE, and there are only os of them.
+    for (n = os; n < p->p_size; n += PGSZ) {
+        if (ff)
+            clearseg(p->p_addr);
+        swap(a + wtodb(n), p->p_addr, PGSZ, B_WRITE);
+    }
     if (ff) {
         mfree(coremap, os, p->p_addr);
         if (p->p_addr == uhome)
@@ -136,6 +171,7 @@ void xalloc(register struct inode *ip)
         }
         if (xp->x_iptr == ip) {
             xlock(xp);
+            ntextjoin++; // a second process on one binary's text: what task 26 is about
             xp->x_count++;
             u.u_procp->p_textp = xp;
             if (xp->x_ccount == 0)
@@ -187,8 +223,10 @@ void xalloc(register struct inode *ip)
 void xexpand(register struct text *xp)
 {
     if ((xp->x_caddr = malloc(coremap, xp->x_size)) != NULL) {
-        if ((xp->x_flag & XLOAD) == 0)
+        if ((xp->x_flag & XLOAD) == 0) {
             swap(xp->x_daddr, xp->x_caddr, xp->x_size, B_READ);
+            ntextin++;
+        }
         xp->x_ccount++;
         xunlock(xp);
         return;
@@ -232,6 +270,7 @@ void xccdec(register struct text *xp)
         if (xp->x_flag & XWRIT) {
             xp->x_flag &= ~XWRIT;
             swap(xp->x_daddr, xp->x_caddr, xp->x_size, B_WRITE);
+            ntextout++;
         }
         mfree(coremap, xp->x_size, xp->x_caddr);
     }

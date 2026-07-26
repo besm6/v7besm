@@ -1,22 +1,27 @@
-# Generate boot.ini from boot.ini.in, substituting each kernel symbol the script asserts on
-# with its linked address, read out of unix.nm.  Run at build time (the addresses are
-# link-time values that shift with the kernel), as:
-#   cmake -DNM=<unix.nm> -DIN=<boot.ini.in> -DOUT=<boot.ini> -P genboot.cmake
+# Generate a .ini from a .ini.in, substituting each kernel symbol the script names with its
+# linked address, read out of unix.nm.  Run at build time (the addresses are link-time values
+# that shift with the kernel), as:
+#   cmake -DNM=<unix.nm> "-DSYMS=a;b;c" -DIN=<x.ini.in> -DOUT=<x.ini> -P genboot.cmake
 #
-# One symbol today: `spin' (kernel/besm6.S), the icode's failure loop -- where process 1 parks
-# when exec("/etc/init") fails.  boot.ini used to ASSERT that state, back when the image
-# carried no /etc/init; it is the failure case now, and the breakpoint is kept to diagnose it.
-# The loop below is a list so a second symbol costs a word, not a rewrite.
+# Two consumers.  boot.ini wants `spin' (kernel/besm6.S), the icode's failure loop -- where
+# process 1 parks when exec("/etc/init") fails; boot.ini used to ASSERT that state, back when
+# the image carried no /etc/init, and the breakpoint is kept to diagnose it.  swap.ini wants
+# `phymem', which it DEPOSITS a smaller value into to squeeze the coremap, and the swapper's
+# traffic counters, which it asserts are non-zero afterwards.
 #
-# b6nm prints "ADDR t <name>" in octal and we take ADDR verbatim, so the .ini's octal
-# `if (PC != <addr>)' compares like with like.
+# b6nm prints "ADDR t <name>" in octal and we take ADDR verbatim, so both the .ini's octal
+# `if (PC != <addr>)' and its `deposit <addr> <octal>' compare and write like with like.
 
 if(NOT EXISTS "${NM}")
     message(FATAL_ERROR "genboot: ${NM} does not exist -- the kernel image must be linked first")
 endif()
 
 set(_report "")
-foreach(_sym spin)
+if(NOT DEFINED SYMS)
+    message(FATAL_ERROR "genboot: no SYMS given")
+endif()
+
+foreach(_sym ${SYMS})
     file(STRINGS "${NM}" _lines REGEX "[ \t]${_sym}$")
     list(LENGTH _lines _n)
     if(NOT _n EQUAL 1)

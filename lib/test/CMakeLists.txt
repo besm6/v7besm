@@ -42,6 +42,7 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/progs.cmake)
 #
 #   SIMONLY    b6sim test, no staging   -- spawn, whose premise is that /bin/sh cannot be exec'd
 #   IMAGEONLY  staging, no b6sim test   -- shellt, which needs a shell that really starts
+#   PURE       link -n (NMAGIC)         -- puret, the one program that is about shared text
 #
 # THE STAGED FILE IS A COPY OF THE LINKED ONE, not a second link.  Two links of one source
 # could drift (b6_prog() and this macro do not pass identical flags), and then a divergence
@@ -61,8 +62,13 @@ macro(b6_libtest prog)
         set(_extra_dep ${LIBM_A})
         set(_extra_lib libm)
     endif()
+    # PURE: see b6_prog() in scripts/BesmCross.cmake for what NMAGIC means to this kernel.
+    set(_pure "")
+    if("PURE" IN_LIST _argn)
+        set(_pure -n)
+    endif()
     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${prog}
-        COMMAND ${B6LD} ${CRT0} ${_o} ${_mlib} -o ${prog} -L${LIBC_DIR} -L${B6LIBDIR} -lc -lruntime
+        COMMAND ${B6LD} ${_pure} ${CRT0} ${_o} ${_mlib} -o ${prog} -L${LIBC_DIR} -L${B6LIBDIR} -lc -lruntime
         COMMAND sh -c "${B6NM} -n ${prog} > ${prog}.nm"
         COMMAND sh -c "${B6DISASM} -c ${prog} > ${prog}.dis"
         DEPENDS ${_o} ${CRT0} ${LIBC_A} ${_extra_dep}
@@ -136,6 +142,7 @@ b6_libtest(timet)
 b6_libtest(pwent)
 b6_libtest(signals)
 b6_libtest(matht libm)
+b6_libtest(puret PURE)
 
 # Aggregate target the top-level `make test' builds before ctest runs (ctest never builds).
 add_custom_target(lib_tests DEPENDS ${TEST_TARGETS})

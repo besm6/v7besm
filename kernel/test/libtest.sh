@@ -113,5 +113,16 @@ echo ok signals >/dev/console
 ./matht >/tmp/matht.out 2>&1
 echo ok matht >/dev/console
 
+: puret is the PURE image -- linked NMAGIC -- and the only one on the disk whose text the
+: kernel shares rather than copies.  It runs last because it is the newest, and because a
+: failure here means the exec path rather than a library routine.
+:
+: NO PARENTHESES IN A COLON LINE.  The v7 shell has no comment character and parses every
+: word of one, so a bracket here is a subshell and a syntax error.  This file learned that
+: the same way etc/rc and kernel/test/session.sh did.
+
+./puret >/tmp/puret.out 2>&1
+echo ok puret >/dev/console
+
 sync
 echo libtest done >/dev/console

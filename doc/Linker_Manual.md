@@ -107,7 +107,7 @@ while `-T` and `-l` take the rest of the **same** argument.
 | `-S` | — | Strip absolute and debug symbols (everything that is not a segment-relative local or a global). |
 | `-r` | — | Retain relocation records and produce a relocatable output that can be linked again; do **not** define common symbols (unless `-d` is also given). |
 | `-s` | — | Discard **all** symbols. Implies `-x`. |
-| `-n` | — | Pure procedure: mark the text segment read-only (`NMAGIC`) and page-align the data segment. |
+| `-n` | — | Pure procedure: mark the text as a shareable segment (`NMAGIC`), pad it to a page and page-align the data. |
 | `-d` | — | Define common symbols even under `-r`. |
 | `-t` | — | Trace progress. Repeating it (`-t -t`, `-t -t -t`) raises the verbosity: file names, then per-segment biases and section markers, then every half-word before/after relocation. |
 
@@ -257,6 +257,24 @@ The base address of const (`corigin`) is `ld.basaddr`, which defaults to `BADDR`
 The bss commons sit right after data (`cmorigin = dorigin + dsize/W`), then the files' own bss
 (`borigin`).
 
+**Under `-n` the padding between text and data is part of the text**, in the file and in the
+header alike: `finish_output()` writes it into the text buffer, `a_text` counts it, and `etext`
+is therefore the *data* origin. That is not cosmetic — every reader (the `b6sim` loader, `b6nm`,
+and a kernel's `exec`) derives both the data segment's file offset and its load address from
+`const + text`, so a pad written but not declared makes the image load from the middle of its
+own padding. Note when working in this area that **`ld.torigin` and `ld.dorigin` are running
+cursors during pass 2** (`pass2.c` advances them per input file), so in `finish_output()` they
+are the *ends* of their segments, while `setup_output()` runs before pass 2 and sees the
+pristine origins.
+
+**What `-n` means to a v7 kernel on this machine** is *sharing*, not protection. The read-only
+region is the header hole + const + text, which `exec` loads once into a `struct text` and maps
+into every process running the binary; `getxfile()` computes its size as
+`pground(BADDR + btow(csize + tsize))`, which is exactly `dorigin`. There is no read-only user
+page on the BESM-6 — the protection register closes a page to reads as well as writes, and a
+closed text page would take the program's own constant pool with it — so a shared text segment
+is writable by every sharer, and "pure" buys core, not safety.
+
 ---
 
 ## 5. Symbols and resolution
@@ -333,7 +351,7 @@ The linker defines five **boundary symbols** that programs use to find the end o
 | Symbol | Value |
 |--------|-------|
 | `econst` | first word past the const segment |
-| `etext` | first word past the text segment |
+| `etext` | first word past the text segment — **including `-n`'s page padding**, so under `-n` it is the data origin |
 | `edata` | first word past the data segment |
 | `ebss` | first word past the bss segment |
 | `end` | first word past everything |

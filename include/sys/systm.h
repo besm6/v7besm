@@ -44,6 +44,20 @@ extern int uhome;   // whose u-area is live at UBASE (its p_addr)
 // 0 is a safe sentinel: no process image ever lives at physical 0.  The rules for who
 // maintains this are written up once, at xswap() in kernel/text.c.
 #define NOUHOME 0
+
+// Swapper and shared-text traffic counters.  They exist to be OBSERVED: a load test that
+// only checks the machine survived cannot tell a kernel that swapped from one that never
+// filled core, and a shared text that was never joined looks exactly like one that was.
+// kernel/test/swap asserts each of these is non-zero, which is what stops it from passing
+// for the wrong reason -- the same argument mdretries in kernel/dev/md.c was added for.
+// Plain ints: every site runs in the swapper or at spl6, and a lost count is not a bug
+// worth an spl bracket.
+extern int nswapout;  // xswap():  images written to the paging store (kernel/text.c)
+extern int nswapin;   // swapin(): images read back (kernel/slp.c)
+extern int ntextin;   // text segments read off the paging store
+extern int ntextout;  // ... and written to it, by the last in-core sharer leaving
+extern int ntextjoin; // xalloc(): a process attached to a text already in text[]
+
 extern daddr_t swplo;        // block number of swap space
 extern int nswap;            // size of swap space
 extern int updlock;          // lock for sync

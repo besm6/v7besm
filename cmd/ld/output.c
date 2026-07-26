@@ -51,7 +51,12 @@ void setup_output(void)
     }
     ld.filhdr.a_magic = ld.nflag ? NMAGIC : FMAGIC;
     ld.filhdr.a_const = ld.csize;
-    ld.filhdr.a_text  = ld.tsize;
+    // -n pads the text image up to the data origin (finish_output below), and that padding
+    // is part of the file, so a_text has to count it: every reader -- b6sim's loader, b6nm,
+    // and the kernel's getxfile()/xalloc() -- derives both the data segment's file offset
+    // and its load address from const + text.  With the pad written but not declared, the
+    // data was read from the middle of the padding and the whole image came up empty.
+    ld.filhdr.a_text = ld.nflag ? (ld.dorigin - ld.torigin) * W : ld.tsize;
     ld.filhdr.a_data  = ld.dsize;
     ld.filhdr.a_bss   = ld.bsize;
     ld.filhdr.a_syms  = ALIGN(ld.ssize, W);
@@ -95,6 +100,13 @@ void finish_output(void)
         long n;
 
         // Pad the text segment up to a page boundary.
+        //
+        // `ld.torigin' IS the end of the text here, not its start: pass2 advances torigin
+        // and dorigin per input file (pass2.c), so by the time this runs they are cursors
+        // sitting just past the last byte each segment received.  Which is why this pads
+        // the right amount and why it must not be rewritten to look like it computes one
+        // -- the matching a_text in setup_output above has to use the PRISTINE origins,
+        // because it runs before pass2.
         n = ld.torigin;
         while (n & 01777) {
             n++;

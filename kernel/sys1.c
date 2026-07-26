@@ -308,15 +308,26 @@ int getxfile(register struct inode *ip, int nargc)
 
     // read in data segment
     //
-    // const-origin-relative: the data image sits in the file just past the header
-    // hole + const + text, and estabur(0,ds,0) remaps the data region to virtual 0
-    // for the read.  Under FMAGIC (ts == 0) the folded blob starts at word BADDR,
-    // so it must land at word BADDR, skipping the header hole -- (caddr_t)(int*)BADDR
-    // is the fat pointer to byte #0 of that word (mmutest check 25).  Under NMAGIC
-    // ux_csize/ux_tsize are the real const/text sizes and the base is virtual 0.
+    // The data image sits in the file just past the header hole + const + text, and it is
+    // read WHERE IT WILL LIVE: estabur(ts, ds, 0) maps the text (already loaded by xalloc()
+    // just above) and puts the data region right after it, so u_base is the data's own
+    // final virtual address.  Under FMAGIC ts is 0, the folded const+text+data blob starts
+    // at word BADDR, and this reduces to the old estabur(0, ds, 0) with base BADDR --
+    // skipping the header hole, which is what mmutest check 25 is about.
+    //
+    // UNDER NMAGIC THE BASE MUST NOT BE ZERO, and this used to remap the data to virtual 0
+    // and read it to `(caddr_t)0'.  Two things were wrong with that and both were silent.
+    // Virtual word 0 is the black hole -- a store there is dropped and a load returns 0,
+    // whatever page 0 is mapped to -- so the first word of the data segment vanished, one
+    // initialized variable coming back zero with no fault to mark it.  And `(caddr_t)0' is
+    // not a fat pointer: its byte field is 0 where byte #0 of a word is 5, so iomove()'s
+    // word-aligned fast path (kernel/rdwri.c) was skipped and the whole segment went
+    // through passc() a byte at a time, landing shifted.  `(caddr_t)(int *)ts' is the fat
+    // pointer to byte #0 of word ts, and ts is page-aligned and non-zero for a pure image.
+    // lib/test/puret checks its own first data word for exactly this.
 
-    estabur(0, ds, 0, 0, RO);
-    u.u_base   = ts ? (caddr_t)0 : (caddr_t)(int *)BADDR;
+    estabur(ts, ds, 0, 0, RO);
+    u.u_base   = (caddr_t)(int *)(ts ? ts : BADDR);
     u.u_offset = sizeof(u.u_exdata) + u.u_exdata.ux_csize + u.u_exdata.ux_tsize;
     u.u_count  = u.u_exdata.ux_dsize;
     readi(ip);

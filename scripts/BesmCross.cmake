@@ -151,9 +151,22 @@ endfunction()
 # The caller must have set KINC/KHDRS, which b6_obj reads from its scope.
 # ---------------------------------------------------------------------------------------
 function(b6_prog name)
-    cmake_parse_arguments(P "" "DEST" "SOURCES;CFLAGS" ${ARGN})
+    cmake_parse_arguments(P "PURE" "DEST" "SOURCES;CFLAGS" ${ARGN})
     if(NOT P_DEST OR NOT P_SOURCES)
         message(FATAL_ERROR "b6_prog(${name}): DEST and SOURCES are both required")
+    endif()
+
+    # PURE -> b6ld -n -> NMAGIC: const+text become a SHARED TEXT SEGMENT and data is pushed
+    # to the next page boundary.  On this machine "pure" means shared, not protected -- РЗ
+    # closes a page to reads as well as writes, so a read-only text page would take the
+    # program's own constant pool with it, and estabur() ignores the distinction.  What it
+    # buys is one copy of the text in core however many processes are running the binary,
+    # which is the only thing that makes kernel/text.c's xalloc/xexpand/xccdec reachable at
+    # all: getxfile() forces ux_tsize to 0 for an FMAGIC image and xalloc() returns at once.
+    if(P_PURE)
+        set(_pure -n)
+    else()
+        set(_pure "")
     endif()
 
     # One object directory per program, for the reason b6_obj's comment gives: a shared
@@ -172,7 +185,7 @@ function(b6_prog name)
     get_filename_component(outdir ${out} DIRECTORY)
     add_custom_command(OUTPUT ${out}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${outdir}
-        COMMAND ${B6LD} ${B6_LIBC_DIR}/crt0.o ${objs} -o ${out}
+        COMMAND ${B6LD} ${_pure} ${B6_LIBC_DIR}/crt0.o ${objs} -o ${out}
                 -L${B6_LIBC_DIR} -L${B6LIBDIR} -lc -lruntime
         COMMAND sh -c "${B6NM} -n ${out} > ${name}.nm"
         COMMAND sh -c "${B6DISASM} -c ${out} > ${name}.dis"

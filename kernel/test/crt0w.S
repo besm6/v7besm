@@ -20,15 +20,34 @@
 //     half for leg B's sentinel to mean anything.
 //
 // The 0501 gate is crt0.s's short save, not the kernel's FULSAV: extintr() is an ordinary C
-// function that preserves r1-r7 and r15, so the accumulator and r8-r14 are all that is left
-// to save.  No frame is built, hence `intrframe' is a plain cell (uswtch.c defines it) and
-// this test's clock() stub ignores it.
+// function that preserves r1-r7 and r15, so the accumulator, r8-r14 -- and the C register --
+// are all that is left to save.  No frame is built, hence `intrframe' is a plain cell
+// (uswtch.c defines it) and this test's clock() stub ignores it.
+//
+// THE C REGISTER IS PART OF "ALL THAT IS LEFT", and this file said otherwise until uswap.
+// `wtc'/`utc' arm M[020] for the NEXT instruction only, and the two are often in different
+// words -- b6cc emits `7 wtc 4' as the right half of one word and the `atx' it modifies as
+// the left half of the next -- so an interrupt lands between them.  The hardware copes with
+// its half: op_int_2 records SPSW_MOD_RK and `выпр' re-arms the modifier from M[020] on the
+// way back (besm6_cpu.c).  It re-arms it from WHATEVER IS THERE, though, so a handler that
+// writes M[020] and does not put it back leaves the interrupted instruction with the wrong
+// address -- and `wtc' is how the compiler reaches a computed address, so extintr() and
+// everything under it does write it.
+//
+// The symptom is a lost or misplaced STORE, one word, no fault: with M[020] left at 0 the
+// `atx' addresses virtual word 0, which is the black hole (a store there is dropped and a
+// load returns 0 -- kernel/TODO.md, "Never virtual page 0").  uswap's fill loop is the first
+// test code to run a long `wtc'-per-iteration loop with the timer open, and it lost exactly
+// one word of a 4096-word image per run, at an index that moved whenever anything else in
+// the file changed.  kernel/besm6.S has always done this right (`ita MOD' ... `sti MOD'),
+// and kernel/test/crt0u.S is the test that holds it to it; this gate simply did not.
 //
 
 #include "sys/param.h"            // UBASE
 
         u     = UBASE             // the real u-area, as in kernel/besm6.S
         ustk  = UBASE + 0400      // main()'s stack, inside the SAVED u page and past struct user
+        MOD   = 020               // C register / address modifier (М020 = M16)
 
         .globl  u
 
@@ -60,6 +79,24 @@ halt:   stop
 // An internal interrupt means we faulted; halt somewhere the .ini can recognise.
 fault:  stop    07777
         uj      fault
+
+// THE GATE'S TEMP CELLS LIVE HERE, in .text behind fault's endless loop, and not in .bss --
+// the same move crt0c.S made and for a sharper reason.  A `< sym >' escape assembles as a
+// `мода' (utc) plus the instruction, and utc LOADS M[020]: so `atx <sa>' as the gate's first
+// instruction overwrites the C register of the instruction we interrupted before anything can
+// save it.  A bare address is 12 bits and cannot reach this image's .bss, which the linked
+// kernel objects push past 010000; .text starts at ~0630, so here they are reachable.
+// kernel/besm6.S keeps its five in .text for the same reason.  Nothing falls into them.
+
+sa:     .word 0                 // A
+sc:     .word 0                 // M16 -- the C register / address modifier
+s8:     .word 0
+s9:     .word 0
+s10:    .word 0
+s11:    .word 0
+s12:    .word 0
+s13:    .word 0
+s14:    .word 0
 
 // ----------------------------------------------------------------------------
 // int regtest(label_t lab) -- leg A: do all nine slots survive a save()/resume()?
@@ -164,51 +201,46 @@ rt_back:
 // restores it from SPSW -- so one static save area is enough.
 
 intrgate:
-        atx     <sa>
+        atx     sa              // BARE addresses throughout -- see the header and the cells
+        ita     MOD             // the C register, before anything below can arm one
+        atx     sc
         ita     010
-        atx     <s8>
+        atx     s8
         ita     011
-        atx     <s9>
+        atx     s9
         ita     012
-        atx     <s10>
+        atx     s10
         ita     013
-        atx     <s11>
+        atx     s11
         ita     014
-        atx     <s12>
+        atx     s12
         ita     015
-        atx     <s13>
+        atx     s13
         ita     016
-        atx     <s14>
+        atx     s14
 
      13 vjm     extintr
 
-        xta     <s14>
+        xta     s14
         ati     016
-        xta     <s13>
+        xta     s13
         ati     015
-        xta     <s12>
+        xta     s12
         ati     014
-        xta     <s11>
+        xta     s11
         ati     013
-        xta     <s10>
+        xta     s10
         ati     012
-        xta     <s9>
+        xta     s9
         ati     011
-        xta     <s8>
+        xta     s8
         ati     010
-        xta     <sa>
+        xta     sc              // C last but one: `выпр' re-arms the modifier from M[020]
+        ati     MOD             //   when SPSW says the interrupted instruction was waiting
+        xta     sa              //   for one, so it has to be back before the `ij'
       3 ij                      // выпр
 
         .bss
-
-sa:     . = . + 1
-s8:     . = . + 1
-s9:     . = . + 1
-s10:    . = . + 1
-s11:    . = . + 1
-s12:    . = . + 1
-s13:    . = . + 1
-s14:    . = . + 1
 
 rt_lab: . = . + 1               // regtest's argument
 rt_ret: . = . + 1               // ...and its own return address

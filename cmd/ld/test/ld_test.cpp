@@ -53,6 +53,22 @@ static long word_low(const std::vector<unsigned char> &b, int w)
     return ((long)b[o] << 16) | ((long)b[o + 1] << 8) | b[o + 2];
 }
 
+// Run "ld -n -o image obj..." -- the pure (NMAGIC) layout.  Same shape as link_files().
+static int link_pure(const std::string &image, const std::vector<std::string> &objs)
+{
+    static char a0[] = "ld";
+    static char an[] = "-n";
+    static char a1[] = "-o";
+    std::vector<std::string> names{ image };
+    names.insert(names.end(), objs.begin(), objs.end());
+
+    std::vector<char *> argv{ a0, an, a1 };
+    std::transform(names.begin(), names.end(), std::back_inserter(argv),
+                   [](std::string &s) { return &s[0]; });
+    argv.push_back(nullptr);
+    return ld_link((int)argv.size() - 1, argv.data());
+}
+
 // Read a whole file into a byte vector.
 static std::vector<unsigned char> read_file(const std::string &path)
 {
@@ -477,6 +493,50 @@ TEST(Link, LiteralMergesOntoConstDataWord)
 // object; assign_addresses() must then define all five, and must not treat those
 // dangling references as grounds for forcing -r on (were it to, the image would
 // keep its relocation records and read_symbols() would look at the wrong offset).
+// -n: the pure layout.  The padding between text and data is part of the text -- in the file,
+// in a_text, and in etext -- and every reader derives the data segment's file offset and its
+// load address from const + text.  It was written into the file but left out of both the
+// header and the symbol, so a pure image loaded from the middle of its own padding and came
+// up empty; nothing had ever used -n, so nothing said so.
+TEST(Link, PureLayoutPadsTextIntoTheHeader)
+{
+    std::string base = current_test_name();
+    std::string ofile = base + ".o", image = base + ".out";
+
+    // 2 const words and 1 text word, so corigin = 8, torigin = 10, and the data has to be
+    // pushed all the way to 1024.
+    assemble_to(base + ".s", ofile,
+                "        .globl etext, edata\n"
+                "        .const\n"
+                "cw:     .word 1, 2\n"
+                "        .data\n"
+                "dw:     .word 7\n"
+                "        .text\n"
+                "        .globl f\n"
+                "f:      uj f\n");
+
+    ASSERT_EQ(link_pure(image, { ofile }), 0);
+
+    auto img  = read_file(image);
+    auto syms = read_symbols(img);
+
+    // NMAGIC, not FMAGIC.
+    EXPECT_EQ((word_high(img, 0) << 24) | word_low(img, 0), 02044252323200410L);
+
+    // a_text counts the pad: torigin is 8 + 2 = 10 and dorigin is 1024, so the text segment
+    // the header describes is 1014 words.
+    EXPECT_EQ(word_low(img, 2), (1024L - 10) * 6);
+    EXPECT_EQ(word_low(img, 1), 2L * 6); // a_const, unchanged
+    EXPECT_EQ(word_low(img, 3), 1L * 6); // a_data, unchanged
+
+    // etext agrees with it, so it IS the data origin, and edata follows from there.
+    EXPECT_EQ(find_symbol(syms, "etext").value, 1024L);
+    EXPECT_EQ(find_symbol(syms, "edata").value, 1025L);
+
+    // And the padding is really in the file: header + const + text + data + symbols.
+    EXPECT_GE(img.size(), (size_t)(8 * 6 + 2 * 6 + (1024 - 10) * 6 + 1 * 6));
+}
+
 TEST(Link, DefinesBoundarySymbols)
 {
     std::string base = current_test_name();
