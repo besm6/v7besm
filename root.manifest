@@ -5,7 +5,8 @@
 # The tree, the device nodes, and the USERLAND -- /etc/init, /bin/sh and the five commands
 # that prove the prompt, plus the static files of /etc.  Task 24 put them here and task 25b
 # flipped the last line, /etc/init, from the task-23 stand-in to the real one.  Task 25c
-# added /usr/test, the twenty-two lib/test programs that b6sim also runs.
+# added /usr/test, the lib/test programs that b6sim also runs; the termcap port added
+# /etc/termcap and termcapt beside them, which are lib/libtermcap's rather than libc's.
 #
 # WHY THIS FILE LIVES AT THE TOP OF THE TREE and not in kernel/test/ beside the CMakeLists
 # that runs b6fsutil over it: every `file' below but none of the directories comes out of
@@ -116,9 +117,18 @@ file /etc/group         # the groups /etc/passwd's gids name; etc/group
 source ../../rootfs/etc/group
 mode 0644
 
+# The terminal capability database, read by tgetent() in lib/libtermcap.  BSD's
+# termcap.small verbatim -- five entries, no `dumb', and vt100's `if=' names a tabset file
+# that is not on this image; lib/libtermcap/README.md says why none of that is edited out.
+# /usr/test/termcapt reads it from here, and reads THE SAME FILE (etc/termcap in the source
+# tree) under b6sim through $TERMCAP.
+file /etc/termcap       # the terminal capability database; etc/termcap
+source ../../rootfs/etc/termcap
+mode 0644
+
 # ---- the library test programs, task 25c ------------------------------------------
 #
-# lib/test/*.c, the same twenty-two images b6sim runs (lib/test/CMakeLists.txt), staged
+# lib/test/*.c, the same twenty-three images b6sim runs (lib/test/CMakeLists.txt), staged
 # into build/rootfs/usr/test/ by b6_libtest() and run HERE by the booted kernel --
 # kernel/test/libtest.sh drives them, kernel/test/run-libtest.sh diffs what they wrote.
 # Under b6sim every syscall is the host's; this is where sysent[] meets a real caller.
@@ -222,6 +232,13 @@ mode 0755
 
 file /usr/test/matht
 source ../../rootfs/usr/test/matht
+mode 0755
+
+# termcapt is lib/libtermcap's, not libc's, and it is here for the reason memt is: the
+# thing it reads -- /etc/termcap, above -- exists on this image and nowhere else.  Under
+# b6sim it is handed the same file out of the source tree instead (lib/test/termcapt.args).
+file /usr/test/termcapt
+source ../../rootfs/usr/test/termcapt
 mode 0755
 
 # puret is the only PURE (NMAGIC) image on the disk, and the only reason kernel/text.c's

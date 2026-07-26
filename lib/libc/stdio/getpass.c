@@ -14,10 +14,22 @@
 // NOT COVERED BY lib/test/: it opens /dev/tty and would sit there waiting for someone
 // to type, which a diff-against-.expected harness cannot arrange.
 //
-// Two changes from v7: the dispositions are `void (*)(int)' per <signal.h>, and the
-// prompt goes out through fputs() rather than fprintf(), which passed a caller's string
-// as a format -- harmless in 1979 and a hole worth closing now that stdio has a real
-// printf engine behind it.
+// Three changes from v7: the dispositions are `void (*)(int)' per <signal.h>, the prompt
+// goes out through fputs() rather than fprintf(), which passed a caller's string as a
+// format -- harmless in 1979 and a hole worth closing now that stdio has a real printf
+// engine behind it -- and THE BOUND ON THE COPY IS AN INDEX.
+//
+// That last one was not tidying up.  v7 wrote `for (p = pbuf; ...) if (p < &pbuf[8])
+// *p++ = c;', and `<' BETWEEN TWO char * VALUES DOES NOT ORDER THEM ON THIS MACHINE.  A
+// fat pointer carries its byte offset in bits 47-45 and its word address in bits 15-1, and
+// the offset DECREMENTS as the pointer advances (../../../doc/Besm6_Data_Representation.md);
+// there is no relational helper, so `<' compiles to an integer comparison of the whole
+// word and the offset field dominates the address field.  pbuf is nine characters, so p
+// starts at byte #0 of its first word (offset field 5) while &pbuf[8] is byte #2 of the
+// second (offset field 3) -- the test was FALSE on the very first iteration, nothing was
+// ever stored, and getpass() returned the empty string every time.  The note below on why
+// lib/test/ does not cover this is also why nothing caught it.
+// ../../../cmd/ls/README.md names the hazard; lib/libtermcap/termcap.c had four more.
 //
 // No header declares it; a caller declares it itself.
 //
@@ -31,8 +43,7 @@ int stty(int fd, struct sgttyb *buf);
 char *getpass(const char *prompt)
 {
     struct sgttyb ttyb;
-    int flags, c;
-    char *p;
+    int flags, c, n;
     FILE *fi;
     static char pbuf[9];
     void (*sig)(int);
@@ -49,11 +60,11 @@ char *getpass(const char *prompt)
     stty(fileno(fi), &ttyb);
 
     fputs(prompt, stderr);
-    for (p = pbuf; (c = getc(fi)) != '\n' && c != EOF;) {
-        if (p < &pbuf[8])
-            *p++ = c;
+    for (n = 0; (c = getc(fi)) != '\n' && c != EOF;) {
+        if (n < 8)
+            pbuf[n++] = c;
     }
-    *p = '\0';
+    pbuf[n] = '\0';
     fputs("\n", stderr);
 
     ttyb.sg_flags = flags;

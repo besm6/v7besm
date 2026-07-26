@@ -109,7 +109,7 @@ it that way.
 
 ### Library (`lib/`) — part of the top-level build
 
-`lib/` (`libc.a`, `libm.a`, `crt0.o` and the `b6sim` test harness) is a guarded
+`lib/` (`libc.a`, `libm.a`, `libtermcap.a`, `crt0.o` and the `b6sim` test harness) is a guarded
 `add_subdirectory(lib)` of the top-level CMake project, cross-compiled by the b6* toolchain
 rather than the host compiler — like `kernel/`, and sharing its `scripts/BesmCross.cmake`
 toolchain module. Integrated it drives the **in-tree** tool targets (`$<TARGET_FILE:b6cc>` …),
@@ -121,10 +121,24 @@ make && make install        # builds cmd/ tools, the kernel, lib/ and build/root
 ```
 
 `lib/` has **no per-directory Makefiles** (like `cmd/`): `make` builds it, `make install` puts
-`libc.a`/`libm.a`/`crt0.o` into `share/besm6/lib` beside `libruntime.a`, and `make run` runs its
+`libc.a`/`libm.a`/`libtermcap.a`/`crt0.o` into `share/besm6/lib` beside `libruntime.a`, and `make run` runs its
 tests via ctest (label `lib`). It can also be built in isolation with `cmake -S lib -B <dir>`,
 which falls back to the *installed* tools. `crt0.o` is what makes `b6cc` able to *link* — until
 `make install` has run, `find_crt0()` says so.
+
+**`lib/libtermcap/`** is the third archive, and the newest: the 4.xBSD termcap library —
+`tgetent`/`tgetnum`/`tgetflag`/`tgetstr`, `tgoto` and `tputs` — reading the `/etc/termcap` that
+`etc/` stages onto the disk image (BSD's `termcap.small`, verbatim). It is declared by
+`include/term.h`, a header this repo added and v7 had none of, and it links **`-ltermcap` before
+`-lc`** for the same one-scan reason `-lm` does. `lib/libtermcap/README.md` is the account, and
+what it is mostly about is **four `char *` comparisons that had to go**: termcap is nothing but
+buffer cursors, and `<` between two `char *` does not order them here (see `cmd/ls/README.md`),
+so every one of `p < tbuf`, `cp > bp`, `cp >= bp+BUFSIZ` is an `int` count now. That same hazard
+was live in `lib/libc/stdio/getpass.c`, where it made `getpass()` return the empty string every
+time; fixed in the same pass. `tputs` deliberately emits **no padding** — nothing on this machine
+can be overrun — which is also why the library defines neither `PC` nor `ospeed`. `libcurses` is
+the next thing up (`lib/tmp/libcurses/`, still K&R), and `include/curses.h` has been waiting for
+it all along.
 
 The **only** thing this repo does not build is **`libruntime.a`**, the `b$*` compiler-support
 helpers (`b$save`, `b$ret`, `b$mul`, …) that every compiled function calls. It comes from the
@@ -141,8 +155,8 @@ tools**: `cmd/init/init.c` is the Unix v7 `/etc/init`, `cmd/sh/` is S. R. Bourne
 and `cmd/cat`, `cmd/echo`, `cmd/ls`, `cmd/pwd`, `cmd/sync` are the five commands that prove the
 prompt — all compiled by the `b6*` toolchain and staged into `build/rootfs/` as `etc/init` and
 `bin/{sh,cat,echo,ls,pwd,sync}`. Alongside them `etc/` (the top-level directory, not `cmd/etc`)
-stages the static files `group`, `motd`, `passwd` and `rc`, which are copied rather than
-compiled. `lib/test/` stages a third group, `usr/test/*` — the twenty-three test programs,
+stages the static files `group`, `motd`, `passwd`, `rc` and `termcap`, which are copied rather
+than compiled. `lib/test/` stages a third group, `usr/test/*` — the twenty-four test programs,
 the same linked images `b6sim` runs, copied rather than linked a second time so that both
 harnesses provably run the same bytes.
 Together that tree is the root filesystem the kernel mounts. All of it is added from inside
@@ -287,7 +301,10 @@ kernel bug cannot show; the two harnesses disagreeing means one of them is wrong
 first run found two, both in code nothing else had exercised. Three programs are in one
 world only — `spawn` needs a `/bin/sh` that *cannot* be exec'd, `shellt` one that can, and
 `memt` (which is not a libc test at all, but `/dev/mem`'s user-mode half) needs a kernel whose
-memory it can read — and `b6_libtest()`'s `SIMONLY`/`IMAGEONLY` keywords say which. Adding a
+memory it can read — and `b6_libtest()`'s `SIMONLY`/`IMAGEONLY` keywords say which. `termcapt` is
+not a libc test either: it is `lib/libtermcap`'s, and it runs in both worlds because it is handed
+its database as `argv[1]` — `/etc/termcap` on the image, and *the same file* out of the source
+tree under `b6sim`, where a `.args` file's `@srcdir@` is substituted by `run-test.sh`. Adding a
 program means one `b6_libtest()` call, a name in `lib/test/progs.cmake`, a stanza in
 `root.manifest` and a line in `kernel/test/libtest.sh` with its `expect` rule.
 

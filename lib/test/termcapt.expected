@@ -1,0 +1,84 @@
+--- part 1: $TERMCAP is an entry
+tgetent tt                    1
+tgetent tt-test               1
+tgetent termcap port test terminal      1
+tgetent tt                    1
+tgetnum co                   40
+tgetnum li                   12
+tgetnum ug                    0
+tgetnum pa                   64
+tgetnum xx                   -1
+tgetnum NC                   -1
+tgetflag am                   1
+tgetflag bs                   1
+tgetflag xx                   0
+tgetflag NC                   0
+cl                       ^L
+ce                       ^[[K
+ts                       ^[:^J^M^I^H^L^\A
+xx                       (none)
+zz                       (none)
+tgoto(%i%d;%dr,4,9) = 10;5r
+tgoto(^[[%i%d;%dH,0,0) = ^[[1;1H
+tgoto(%d;%d,7,123) = 123;7
+tgoto(%2;%2,7,8) = 08;07
+tgoto(%3;%3,7,8) = 008;007
+tgoto(%r%d;%d,7,8) = 7;8
+tgoto(%.%.,5,6) = ^F^E
+tgoto(%+ %+ ,5,6) = &%
+tgoto(%%%d,0,42) = %42
+tgoto(%B%d;%d,0,42) = 66;0
+tgoto(%D%d;%d,0,42) = 22;0
+tgoto(%>2c%d;%d,0,1) = 1;0
+tgoto(%>^A^B%d;%d,0,5) = 7;0
+tgoto(%q,1,2) = OOPS
+tgoto((none),1,2) = OOPS
+tputs(pd,1) = ^[[K
+tputs(ps,3) = ^[M
+tputs(pf,1) = ^[D
+tputs(ce,1) = ^[[K
+--- part 2: $TERMCAP is a file name
+tgetent cons25                1
+strlen(buf)                 751
+tgetnum co                   80
+tgetnum li                   25
+tgetflag am                   1
+cl                       ^[[H^[[J
+cm                       ^[[%i%d;%dH
+kD                       \177
+bl                       ^G
+tgetent ansi                  1
+tgetnum li                   25
+tgetent ansi80x25             1
+tgetnum li                   25
+tgetent vt100                 1
+tgetnum li                   24
+tgetflag xn                   1
+tgetflag bw                   0
+cl                       50^[[H^[[J
+do                       2^[[B
+if                       /usr/share/tabset/vt100
+tputs(cl,1) = ^[[H^[[J
+tputs(sf,24) = ^[D
+tgoto(^[[%i%d;%dH,39,11) = ^[[12;40H
+tgetent dec vt100             1
+tgetnum li                   24
+tgetent xterm                 1
+strlen(buf)                 844
+tgetnum co                   80
+tgetnum li                   24
+tgetnum kn                   12
+cl                       ^[[H^[[2J
+k1                       ^[OP
+as                       ^[(0
+tgetent linux                 1
+tgetnum co                   80
+tgetent xterm-basic           1
+strlen(buf)                 630
+tgetnum co                   80
+tgetent xterm-color           0
+tgetent notaterminal          0
+tgetent vt10                  0
+tgetent xter                  0
+tgetent #                     0
+--- 0 errors

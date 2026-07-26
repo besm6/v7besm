@@ -67,6 +67,15 @@ would not even compile. `math.h` used to be on this list; it is backed now, by `
 stays because [`../lib/README.md`](../lib/README.md) names it in the rest of phase 7 and will
 rewrite it for this machine.
 
+**`term.h` is a header this repo added and v7 had none of.** termlib shipped as three `.c` files
+and nothing else, so every caller wrote its own `char *tgetstr();` beside the call — which is how
+`curses.h` above still declares nothing of what it uses. It is here because
+[`../lib/libtermcap/`](../lib/libtermcap/) backs it, and because on this machine a missed
+`char *` return is a fat pointer truncated to a word address rather than a value that merely
+looks wrong, so a prototype the definition is checked against is worth more than v7 fidelity.
+It deliberately declares no `PC` and no `ospeed`: this `tputs` emits no padding, and the names
+stay free for the curses that defines them itself.
+
 The `a.out.h` rule has already cost something, and it was worth it: `nlist()` is the one routine
 of `lib/`'s phase 5 that did **not** land, because a caller of it needs `struct nlist` and there
 is no guest-visible spelling of the b.out format to give it. `cross/besm6/b.out.h` is the real

@@ -1,6 +1,6 @@
 # The user-level libraries
 
-`libc` and `libm` for programs that run **under this kernel** — the C library a Unix v7 user
+`libc`, `libm` and `libtermcap` for programs that run **under this kernel** — the C library a Unix v7 user
 program links against, ported from v7 to the BESM-6 and refitted to C11. The kernel itself uses
 none of it: it has its own `printf` in [`../kernel/prf.c`](../kernel/prf.c) and links only
 `libruntime.a` for the `b$*` compiler-support helpers. The declarations these libraries answer
@@ -18,6 +18,7 @@ lib/
         gen/            strings, ctype, setjmp, malloc, conversions, <time.h>, misc
         stdio/          FILE machinery, the printf and scanf engines, the accounts
     libm/               libm.a — the math library
+    libtermcap/         libtermcap.a — termcap, plus termcap.3 and its own README
     test/              programs run under b6sim (CMakeLists.txt + run-test.sh)
 ```
 
@@ -25,9 +26,12 @@ One function per file, so `b6ranlib`'s index lets `b6ld` pull only what a progra
 calls. `crt0.o` sits beside the archive rather than in it: a program's startup is named on the
 link line, never pulled by symbol, exactly as v7 keeps it in `/lib/crt0.o`.
 
-`libtermlib` (termcap) and `libcurses` are not written yet, though
+`libtermcap` landed with [`../include/term.h`](../include/term.h) and the `/etc/termcap` that
+[`../etc/`](../etc/) stages onto the disk image; [`libtermcap/README.md`](libtermcap/README.md) is
+its account, and the four `char *` comparisons it had to delete are the reason it has one.
+**`libcurses` is still not written** — `lib/tmp/libcurses/` holds v7's, K&R throughout — though
 [`../include/curses.h`](../include/curses.h) and [`../include/unctrl.h`](../include/unctrl.h)
-are already in the tree.
+have been in the tree all along waiting for it.
 
 ## The syscall stubs
 
@@ -63,20 +67,21 @@ to the installed ones. From the repo root:
 
 ```sh
 make            # builds cmd/, lib/ and the kernel
-make install    # copies libc.a, libm.a and crt0.o into <prefix>/share/besm6/lib
+make install    # copies libc.a, libm.a, libtermcap.a and crt0.o into <prefix>/share/besm6/lib
 make test       # builds the test images
 make run        # runs them (ctest; the library tests carry the label `lib')
 ```
 
-A program links against two or three archives, **ours first**:
+A program links against two to four archives, **ours first**:
 
 ```sh
-b6ld crt0.o prog.o -o prog -L…/lib -lm -lc -lruntime      # -lm only if it needs it
+b6ld crt0.o prog.o -o prog -L…/lib -lm -ltermcap -lc -lruntime   # -lm/-ltermcap if it needs them
 ```
 
 That is what `b6cc` puts on the line itself. The order is a contract: `b6ld` scans an archive
 once, where it stands, and pulls a member only for a symbol still undefined. libm calls into
-libc (`errno`, `frexp`, `ldexp`, `modf`), libc calls the `b$*` helpers, and neither calls back.
+libc (`errno`, `frexp`, `ldexp`, `modf`), libtermcap calls into libc (`getenv`, `open`, `read`,
+`write`, the string routines), libc calls the `b$*` helpers, and none of them calls back.
 `libruntime.a` comes from the external
 [c-compiler](https://github.com/besm6/c-compiler/) and supplies **nothing but** those helpers.
 
@@ -143,18 +148,21 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
 v7 syscalls on the host, which is exactly what libc needs and is far faster than booting SIMH.
 [`test/`](test/) holds one program per area — `hello`, `vararg`, `errno`, `procs`, `sbrkt`,
 `malloct`, `strings`, `gen`, `strtolt`, `environ`, `jmp`, `headers`, `stdiot`, `printft`,
-`scanft`, `execs`, `spawn`, `timet`, `pwent`, `signals`, `matht`. Each is linked against the
-real `crt0.o`
+`scanft`, `execs`, `spawn`, `timet`, `pwent`, `signals`, `matht`, `termcapt`. Each is linked
+against the real `crt0.o`
 and `libc.a`, run with the arguments in its `.args` file, and its output — fd 1 and fd 2 both —
 diffed against its `.expected` file by [`test/run-test.sh`](test/run-test.sh).
 
 Adding a test is adding `<name>.c`, `<name>.expected`, optionally `<name>.args`, and a
-`b6_libtest(<name>)` line to [`test/CMakeLists.txt`](test/CMakeLists.txt).
+`b6_libtest(<name>)` line to [`test/CMakeLists.txt`](test/CMakeLists.txt). A `.args` file may
+write `@srcdir@`, which `run-test.sh` substitutes with the source directory — that is how
+`termcapt` names a file in the tree by absolute path.
 
 An `.expected` file may record only what the *program* does; nothing host-dependent may reach
 it. That is why `environ` checks `getenv` against the vector it was handed instead of printing
 names or counts, `timet` converts only literal `time_t` values, `spawn` never starts a real
-shell, and `pwent` prints no line of `/etc/passwd`.
+shell, `pwent` prints no line of `/etc/passwd`, and `termcapt` replaces its own `environ` rather
+than let a `$TERMCAP` in the developer's shell decide what it reads.
 
 Once [`../kernel/TODO.md`](../kernel/TODO.md) lands a root filesystem, these same programs go
 on it and run under the real kernel on SIMH — the first time the `$77` gate is exercised from

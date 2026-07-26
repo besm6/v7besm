@@ -120,6 +120,15 @@ echo ok signals >/dev/console
 ./matht >/tmp/matht.out 2>&1
 echo ok matht >/dev/console
 
+: termcapt is not a libc test: it is lib/libtermcap's, and the argument is load-bearing.
+: /etc/termcap is the database it reads, and it must be named because tgetent treats a
+: relative TERMCAP as an entry rather than a file name.  Under b6sim the same program is
+: handed the SAME FILE out of the source tree, which is what lets one expectation file
+: adjudicate both runs -- see lib/test/termcapt.args and the source's own header.
+
+./termcapt /etc/termcap >/tmp/termcapt.out 2>&1
+echo ok termcapt >/dev/console
+
 : puret is the PURE image -- linked NMAGIC -- and the only one on the disk whose text the
 : kernel shares rather than copies.  It runs last because it is the newest, and because a
 : failure here means the exec path rather than a library routine.

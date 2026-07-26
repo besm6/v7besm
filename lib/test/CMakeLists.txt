@@ -20,21 +20,25 @@
 # needs the same list and is configured in another directory.
 
 # The sibling libraries' build outputs -- crt0.o and libc.a next door in ../libc, libm.a in
-# ../libm.  Normalized so the `..' does not reach the b6ld command line.
+# ../libm, libtermcap.a in ../libtermcap.  Normalized so the `..' does not reach the b6ld
+# command line.
 get_filename_component(LIBC_DIR ${CMAKE_CURRENT_BINARY_DIR}/../libc ABSOLUTE)
 get_filename_component(LIBM_DIR ${CMAKE_CURRENT_BINARY_DIR}/../libm ABSOLUTE)
-set(CRT0   ${LIBC_DIR}/crt0.o)
-set(LIBC_A ${LIBC_DIR}/libc.a)
-set(LIBM_A ${LIBM_DIR}/libm.a)
+get_filename_component(LIBTC_DIR ${CMAKE_CURRENT_BINARY_DIR}/../libtermcap ABSOLUTE)
+set(CRT0    ${LIBC_DIR}/crt0.o)
+set(LIBC_A  ${LIBC_DIR}/libc.a)
+set(LIBM_A  ${LIBM_DIR}/libm.a)
+set(LIBTC_A ${LIBTC_DIR}/libtermcap.a)
 
 set(TEST_TARGETS "")
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/progs.cmake)
 
 # Link one test program: crt0.o first, its own object, then the libraries.  Link order is the
-# contract -- [-lm] then -lc then -lruntime, b6ld scanning each archive once (libm calls into
-# libc, libc into libruntime, never back).  Pass `libm' in ARGN for the one program that needs
-# it.  add_dependencies pins the sibling libraries ahead of the link across directory scopes.
+# contract -- [-lm] [-ltermcap] then -lc then -lruntime, b6ld scanning each archive once (libm
+# and libtermcap call into libc, libc into libruntime, never back).  Pass `libm' or `libtermcap'
+# in ARGN for the programs that need one.
+# add_dependencies pins the sibling libraries ahead of the link across directory scopes.
 #
 # Then, unless the program is one of the two that belongs to a single world, STAGE the linked
 # image into ${B6_ROOTFS}/usr/test/ for the disk picture, and register the size check that
@@ -62,6 +66,11 @@ macro(b6_libtest prog)
         set(_mlib -L${LIBM_DIR} -lm)
         set(_extra_dep ${LIBM_A})
         set(_extra_lib libm)
+    endif()
+    if("libtermcap" IN_LIST _argn)
+        list(APPEND _mlib -L${LIBTC_DIR} -ltermcap)
+        list(APPEND _extra_dep ${LIBTC_A})
+        list(APPEND _extra_lib libtermcap)
     endif()
     # PURE: see b6_prog() in scripts/BesmCross.cmake for what NMAGIC means to this kernel.
     set(_pure "")
@@ -144,6 +153,7 @@ b6_libtest(timet)
 b6_libtest(pwent)
 b6_libtest(signals)
 b6_libtest(matht libm)
+b6_libtest(termcapt libtermcap)
 b6_libtest(puret PURE)
 
 # Aggregate target the top-level `make test' builds before ctest runs (ctest never builds).
