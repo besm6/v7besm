@@ -12,8 +12,9 @@ make the machine usable. [../etc/rc](../etc/rc) says so in its own words:
 
 The sources are v7's own, under
 [tmp/v7x86-0.8a/usr/src/cmd/](tmp/v7x86-0.8a/usr/src/cmd/) — 119 single-file programs and 29
-directories of larger ones. This file says which are worth porting, in what order, and what each
-will cost.
+directories of larger ones. That tree is **not in the repository**: `tmp/` is git-ignored, and it
+is an unpacked reference copy. This file says which of its programs are worth porting, in what
+order, and what each will cost.
 
 **Read these two first, and do not expect the tasks below to repeat them:**
 [sh/README.md](sh/README.md) is the porting manual — what a v7 source assumes that is not true
@@ -27,6 +28,51 @@ source comments and from `doc/`, and a bare number would be ambiguous forever af
 and it leaves the program **on the image** — staged into `build/rootfs/`, named in
 [../root.manifest](../root.manifest), and asserted by a test. A port is not done when it
 compiles.
+
+## The sources are already here
+
+**Every program named by C1–C8 and C10 is in this directory**, one directory per program, in the
+shape the port will build it from — the source, whatever auxiliary files come with it, and the
+manual page. They are **verbatim upstream copies**: unbuilt, unmodified, not a line of C11 work
+done, so the first diff on any of them is the porting diff. A task starts by writing a
+`CMakeLists.txt`, not by fetching anything.
+
+**A directory is part of the build when it holds a `CMakeLists.txt`**, and none of these does.
+That is the only marker; `../CMakeLists.txt` names its subdirectories one by one and none of these
+is among them.
+
+Four things about the copies:
+
+* **The v7 `makefile` came along** for each multi-file program (`sed`, `tar`, `make`, `m4`, `awk`,
+  `dc`) as the record of its source list and flags. It is a PDP-11 recipe, kept for reading and
+  replaced by a `CMakeLists.txt`; nothing runs it.
+* **Ten programs have no manual page of their own.** Eight are documented inside another
+  program's page, which was *not* duplicated — [rm/rm.1](rm/rm.1) covers `rmdir`,
+  [chown/chown.1](chown/chown.1) covers `chgrp`, [mount/mount.1m](mount/mount.1m) covers `umount`,
+  [grep/grep.1](grep/grep.1) covers `fgrep` and `egrep`, [diff/diff.1](diff/diff.1) covers
+  `diffh`, [at/at.1](at/at.1) covers `atrun`, and [sa/sa.1m](sa/sa.1m) covers `accton`. **`yes`
+  and `dmesg` have no page anywhere in v7** and need one written from scratch.
+* **The file-format pages are in [../include/man/](../include/man/)**, not here: `acct.5`,
+  `dir.5`, `environ.5`, `filsys.5`, `group.5`, `mtab.5`, `passwd.5`, `ttys.5`, `types.5`,
+  `utmp.5` document what the headers in `../include/` declare rather than what a program does.
+  **Five of them are nothing but `.so /usr/include/…` of a header** and there is no
+  `/usr/include` here — the same problem [../lib/libc/man/](../lib/libc/man/) solved by writing
+  the structure out, and the structures differ on this machine (`DIRSIZ` 18, one-word `off_t`
+  and `time_t`). v7's other eight `man5` pages were left behind: `a.out.5` and `ar.5` describe a
+  PDP-11 format ([../doc/Linker_Manual.md](../doc/Linker_Manual.md) and
+  [../doc/Archiver_Manual.md](../doc/Archiver_Manual.md) are this machine's), and the rest belong
+  to programs the exclusion table drops.
+* **Two data files** came with their programs, because neither program does anything without one:
+  [units/units](units/units) (the 484-line conversion table) and [cron/crontab](cron/crontab).
+  `calendar` has none — what this reference tree holds under that name is an x86 binary, not the
+  database, so `/usr/lib/calendar` must be written or found elsewhere.
+
+The `.y`, `.l` and header-ish files (`awk/awk.def`, `make/defs`, and the four `.y` grammars) carry
+**no v7 copyright banner**, unlike the 117 `.c` sources that do. The top-level `COPYRIGHT` covers
+them; do not add one.
+
+C9's programs are **not** here and never will be: they are this repo's own C sources built a
+second time, not ports. See C9.
 
 | | task | what it buys | size |
 |---|---|---|---|
@@ -205,8 +251,9 @@ was run in both worlds it found two bugs nothing else had exercised.
 
 ### 10. The manual page comes with the source
 
-Each v7 command ships its `.1` beside the `.c`. Keep it with the port and follow the
-[../lib/libc/man/](../lib/libc/man/) precedent: **correct it in place** — ANSI SYNOPSIS, every
+Each v7 command ships its `.1`, and it is **already in the program's directory** — see "The
+sources are already here" above, including the ten programs that have no page of their own.
+Follow the [../lib/libc/man/](../lib/libc/man/) precedent: **correct it in place** — ANSI SYNOPSIS, every
 wrong claim fixed where it stands and marked `Note:`, block counts in 3072-byte blocks, `DIRSIZ`
 18 where it shows. Nothing installs any of them; they are read with `nroff -man`. A `README.md`
 is worth writing only when the port *taught* something, which is the standard `sh` and `ls` set.
