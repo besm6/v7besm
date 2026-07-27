@@ -13,7 +13,7 @@ Part of the ordinary top-level build; there is nothing to invoke separately.
 
 ```sh
 make            # builds build/rootfs/bin/sh among everything else
-make run        # runs its size check and its five b6sim tests, with the rest
+make run        # runs its size check and its six b6sim tests, with the rest
 ```
 
 Two conditions gate it, both shared with `kernel/` and `lib/`: the external
@@ -22,12 +22,13 @@ the link is `crt0.o *.o -lc -lruntime` in that order. [`CMakeLists.txt`](CMakeLi
 `b6_prog()` call plus `-I.`, which matters: `defs.h` includes `"ctype.h"`, and that must resolve
 to the shell's own character tables rather than the C11 `<ctype.h>` in the system tree.
 
-It uses **7,648 words of the 28,672** available, with the highest relocatable symbol at word
-7,656 of the 32,767 a 15-bit pointer reaches.
+It uses **7,928 words of the 28,672** available, with the highest relocatable symbol at word
+7,936 of the 32,767 a 15-bit pointer reaches.
 
 ## What the port changed
 
-The sources are v7's, and the shell they build is v7's. Two separate kinds of change were needed.
+The sources are v7's, and the shell they build is v7's bar one deliberate addition — the comment
+character, below. Two separate kinds of change were needed to get there.
 
 ### C11
 
@@ -119,10 +120,42 @@ so the shell *defined* both) are `shalloc`/`shfree`; `getenv`/`setenv` are `read
 `io.c`'s two-integer `rename` is `shrename`; `FILE`, `BUFSIZ` and `EOF` are `SHFILE`, `SHBUFSIZ`
 and `SHEOF`, since `<stdio.h>` spells the last two 3072 and −1 and either would be silent.
 
-### Two changes of substance
+### Three changes of substance
 
-Everything above preserves what the shell does. These two do not, and both are about running out
-of room in a 28-page address space:
+Everything above preserves what the shell does. These three do not. Two are about running out of
+room in a 28-page address space; the first is a feature v7 had not got.
+
+* **The comment character.** A `#` where a word would start now begins a comment that runs to end
+  of line, wherever the shell reads. That arrived in System III, and it is taken
+  here because what it replaces is worse than ugly: the v7 stand-in for a comment is a `:` line,
+  and **its words are still parsed**, so a backquote in one starts a command substitution that
+  runs to end of file and a parenthesis is a syntax error. Every script on this image was written
+  around that.
+
+  The whole of it is six lines in [`word.c`](word.c), between the whitespace skip and the
+  `eofmeta()` test — the one place a `#` can be seen at the start of a word, and the only place it
+  needs to be seen. A `#` anywhere else has already been taken by the word loop (`echo a#b` is
+  literal), by the two quoting arms, or by `nextc()`'s backslash, which hands it back as `0243`
+  and never as `'#'`; `$#` is `macro.c`'s and here-document bodies are `copy()`'s, and neither goes
+  through `word()`. **Neither character table changes.** All eight bits of `_ctype1` are taken and
+  the only reusable one, `T_MET`, would make `eofmeta('#')` true — which breaks `echo a#b` *and*
+  sends `#` down the symbol path; a `c == COMCHAR` compare costs nothing, and measurably nothing:
+  the linked image is the same size to the word.
+
+  Three details in those six lines are contracts. It reads with `readc()` and not `nextc()`, which
+  would eat a `\`-newline and pull the next line into the comment. It stops on `SHEOF` as well as
+  `NL`, since `readc()` returns `SHEOF` for ever once the input is spent — without that a comment
+  on an unterminated last line spins. And it *falls through* with the newline in hand rather than
+  looping back, which is what makes a comment line indistinguishable from an empty one, pending
+  here-document flush included. `test/comment.sh` drives all three, and ends without a final
+  newline on purpose.
+
+  **One thing it does not get you: a comment you can type.** On this console `#` is *also* the
+  erase character — `CERASE` in [`include/sys/tty.h`](../../include/sys/tty.h), v7's default — so
+  the line discipline eats it, and the character in front of it, before the shell is handed
+  anything. `kernel/test/console` has asserted that since task 25b: it types `echo ab#c` and the
+  shell prints `ac`. Comments are a *script* feature here until something can change the erase
+  character, which wants an `stty` this image has not got.
 
 * **`gmatch()` recursed once per character** of an unbounded pattern. The user stack is four
   pages, and a pattern of a few hundred characters would have run off it with no diagnostic. Its
@@ -139,7 +172,7 @@ of room in a 28-page address space:
 
 ## Tests
 
-Five, under `b6sim`, run by `make run` (ctest labels `sh` and `rootfs`):
+Six, under `b6sim`, run by `make run` (ctest labels `sh` and `rootfs`):
 
 | test | what it covers |
 |---|---|
@@ -147,6 +180,7 @@ Five, under `b6sim`, run by `make run` (ctest labels `sh` and `rootfs`):
 | `sh_syntax` | the parser's error path — a truncated `if` |
 | `sh_heredoc` | here-documents: `copy()` and `subst()`, a quoted terminator, and a document longer than `CPYSIZ` so the flush boundary is crossed — and with them `fork`, a subshell and file redirection |
 | `sh_script` | running another shell script: arguments, PATH search, exit status, and a child that forks in turn |
+| `sh_comment` | the `#` comment character: where it does *not* start one (inside a word, inside either quote, after a backslash, in `$#`, in a here-document body), the `\`-newline that must not continue it, and the unterminated last line that must not spin |
 | `sh_nospace` | the arena and the break, to exhaustion |
 
 `b6sim` runs one BESM-6 `a.out` and services its syscalls on the host, which is enough for the
@@ -168,9 +202,9 @@ precise about how, because it is not what a modern reader expects:
 > that as "this is a script", points its own input at the file and `longjmp`s back to the top of
 > `main()`. The forked child *becomes* the shell that runs it.
 >
-> A `#!/bin/sh` line is therefore not a comment and not magic: it is a command, it is not found,
-> and it prints one spurious error per run before the script carries on. Do not put one in a
-> script for this system.
+> A `#!/bin/sh` line is therefore not magic, and it does nothing: since this shell has a comment
+> character it is simply a comment. It used to be a command that was not found, printing one
+> spurious error per run, which is why nothing on this image carries one.
 
 Making that work needed a fix in `b6sim`, not in the shell: `sys_exec()` was reporting `ENOENT`
 for *every* exec failure, including "not a BESM-6 a.out". A shell told `ENOENT` concludes the
@@ -191,13 +225,17 @@ and `kernel/test/session` has it write files. Neither globs, sends a signal or g
 into a fault, though, so all three — and the memory-fault path above — are still undriven, and
 those are the stages to add.
 
-Two notes on the fixtures. They contain **no `#` comments**: the v7 shell has none (they arrived
-with System III), so a `#` line is a command. What stands in for one is a `:` line — but its
-words are still *parsed*, so a stray backquote in one starts a command substitution that runs to
-end of file, and a parenthesis is a syntax error. And the runner clears the environment with
-`env -i`,
+Two notes on the fixtures. They are commented with `#`, which they were not until this shell had
+one — the `:` lines they used to carry are what the comment character replaced, and converting
+them back was the first check that it works. And the runner clears the environment with `env -i`,
 because `b6sim` hands the guest a whitelist of the host's variables, the shell reads all of them
 into its name tree at startup, and `set` prints the tree.
+
+A third: **there is no `echo` here.** No external program can be exec'd under `b6sim`, so a
+fixture that wants to report something leaves it in a variable and ends with `set`. `comment.sh`
+is written that way, and the one thing it cannot show is a command substitution's *value* —
+`` `umask` `` prints where it stands rather than being captured, which is `b6sim`'s pipe and not
+the shell.
 
 ## Known limits
 
@@ -216,4 +254,6 @@ into its name tree at startup, and `set` prints the tree.
   [`../../kernel/README.md`](../../kernel/README.md) and the account at `UBASE` in
   [`../../include/sys/param.h`](../../include/sys/param.h).
 
-`sh.1` is the v7 manual page, kept as it was.
+`sh.1` is the v7 manual page, corrected in place on the [`lib/libc/man/`](../../lib/libc/man/)
+precedent: one addition, a `Comments.` paragraph marked `Note:` as the deviation from v7 that it
+is. Nothing installs it; read it with `nroff -man`.

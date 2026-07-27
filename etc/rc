@@ -1,19 +1,17 @@
-: /etc/rc -- the boot script, run by /etc/init as sh /etc/rc.
-:
-: THERE IS NO TERMINAL HERE.  runcom in cmd/init/init.c gives this script
-: descriptors 0, 1 and 2 on the root DIRECTORY, which can be neither read
-: nor written, so every line meant to be seen must redirect to /dev/console
-: for itself.
-:
-: THE V7 SHELL HAS NO COMMENT CHARACTER -- that arrived with System III, so
-: a line beginning with a hash is a COMMAND, and not found.  A colon is the
-: null built-in and is what stands in for one; but its words are still
-: PARSED, so no backquote, no parenthesis, no apostrophe and no redirection
-: may appear even in a line like this one.
+# /etc/rc -- the boot script, run by /etc/init as sh /etc/rc.
+#
+# THERE IS NO TERMINAL HERE.  runcom in cmd/init/init.c gives this script
+# descriptors 0, 1 and 2 on the root DIRECTORY, which can be neither read
+# nor written, so every line meant to be seen must redirect to /dev/console
+# for itself.
+#
+# The hash is a real comment: this shell has one, which v7's had not -- see
+# cmd/sh/README.md.  So this file no longer has to be written in `:' lines
+# whose words are still parsed.
 
 cat /etc/motd >/dev/console
 
-: What the v7 rc did next all wants a program this system has not got yet:
-: fsck, mount, rm, date, cron, update, accton.  Each line comes back as its
-: command is ported.  There is nothing to mount in any case -- one EC-5052
-: drive is the whole of the store, and swap lives on the drums.
+# What the v7 rc did next all wants a program this system has not got yet:
+# fsck, mount, rm, date, cron, update, accton.  Each line comes back as its
+# command is ported.  There is nothing to mount in any case -- one EC-5052
+# drive is the whole of the store, and swap lives on the drums.

@@ -31,6 +31,8 @@ static INT readb(void);
 // wildcard or a word separator.  And a word that looks like `name=value' sets `wdset',
 // so the parser can tell an assignment from an argument.
 //
+// A third, which v7 had not got: a COMMENT is discarded here.  See COMCHAR below.
+//
 INT word(void)
 {
     CHAR c, d;
@@ -42,6 +44,26 @@ INT word(void)
 
     while (c = nextc(0), space(c))
         ;
+    //
+    // A `#' WHERE A WORD WOULD START begins a comment, which runs to end of line.  This is
+    // the one place it can be tested and the only place it needs to be: a `#' anywhere else
+    // has already been taken by the loop below (so `echo a#b' is literal), by the quoting
+    // arms, or by nextc()'s backslash (which returns it as 0243, never as '#').  Nothing
+    // in the character tables changes, and $# is untouched -- macro.c reads that one.
+    //
+    // Three things here are contracts, not taste:
+    //  - readc(), not nextc(): nextc() eats a `\'-newline as a line continuation and would
+    //    pull the next line into the comment;
+    //  - stop on SHEOF as well as NL: readc() returns SHEOF forever once the input is
+    //    spent, so a comment on an unterminated last line would spin;
+    //  - FALL THROUGH with the newline in hand rather than looping back to the space skip.
+    //    That is what makes a comment line indistinguishable from an empty one below --
+    //    including the pending here-document flush, which fires on the newline.
+    //
+    if (c == COMCHAR) {
+        while ((c = readc()) != NL && c != SHEOF)
+            ;
+    }
     if (!eofmeta(c)) {
         do {
             chkstak(argp);

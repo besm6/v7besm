@@ -151,6 +151,16 @@
 #define MINUS '-'
 #define COLON ':'
 
+// The comment character.  NOT v7 -- the Bourne shell got one in System III, and this port
+// takes it: without it a `#' line is a command that is not found, and the stand-in is a
+// `:' line whose words are still PARSED, so a backquote in one starts a command
+// substitution that runs to end of file.  word() is where it is honoured.
+//
+// It is a SCRIPT feature in practice: on the console this same character is CERASE
+// (<sys/tty.h>), so the line discipline eats a typed `#' -- and the character before it --
+// long before the shell sees the line.  kernel/test/console asserts exactly that.
+#define COMCHAR '#'
+
 #include "mode.h"
 #include "name.h"
 

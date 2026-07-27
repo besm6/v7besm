@@ -449,6 +449,50 @@ matches any
 character lexically between the pair.
 .PD
 .PP
+.B Comments.
+.br
+.B Note:
+this is not v7.
+A word beginning with
+.B #
+begins a
+.IR comment ,
+and the
+.B #
+and everything up to the following newline are discarded.
+The comment character reached the shell in System III;
+it is taken here because the v7 stand-in for one, a
+.B :
+line, still has its words
+.IR parsed ,
+so that a backquote in such a line starts a command substitution
+that runs to end of file
+and a parenthesis is a syntax error.
+The rule applies wherever the shell reads.
+On this system's console, however, a comment cannot be
+.I typed \|:
+.B #
+is also the terminal's erase character
+.RB ( CERASE
+in
+.BR <sys/tty.h> ),
+so the line discipline consumes it, and the character before it,
+before the shell is handed the line at all.
+A
+.B #
+that is not where a word would begin is an ordinary character:
+.B echo a#b
+prints
+.BR a#b ,
+and a
+.B #
+inside quotes, after a backslash, in
+.B $#
+or in the body of a here-document is untouched.
+A first line reading
+.B #!/bin/sh
+is therefore a comment, and not, as it once was here, a command that is not found.
+.PP
 .B Quoting.
 .br
 The following characters have a special meaning to the shell

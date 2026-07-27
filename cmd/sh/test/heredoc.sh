@@ -1,12 +1,10 @@
-: here-documents - the path through subst in macro.c and copy in io.c
-: a built-in cannot be redirected, but a subshell can, and the built-ins
-: inside it still print - which is what makes this testable under b6sim
-: no parens or backquotes in these lines: the v7 shell has no comments,
-: so a colon line is a real command and its words are really parsed
+# here-documents - the path through subst in macro.c and copy in io.c
+# a built-in cannot be redirected, but a subshell can, and the built-ins
+# inside it still print - which is what makes this testable under b6sim
 
 v=EXPANDED
 
-: 1 - an ordinary here-document has dollar substituted in it
+# 1 - an ordinary here-document has dollar substituted in it
 (
 read one
 read two
@@ -16,7 +14,7 @@ first $v line
 second line
 EOF
 
-: 2 - a QUOTED terminator makes it literal, so the dollar stays as written
+# 2 - a QUOTED terminator makes it literal, so the dollar stays as written
 (
 read raw
 set
@@ -24,8 +22,8 @@ set
 first $v line
 EOF
 
-: 3 - longer than CPYSIZ, so subst flushes part way through and the
-: boundary has to fall in the right place
+# 3 - longer than CPYSIZ, so subst flushes part way through and the
+# boundary has to fall in the right place
 (
 while read line
 do last=$line

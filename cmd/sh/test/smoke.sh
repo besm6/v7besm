@@ -1,6 +1,6 @@
-: no comments in this file on purpose - see README.md
-: the v7 shell has no hash comment, and a stray backquote would start a command
-: substitution that runs to end of file
+# the shell's own smoke test: sourcing, substitution, quoting, the control
+# structures, the built-ins and the exit status.  comment.sh covers the hash
+# itself; here it is just how a comment is written
 
 . ./smoke.inc.sh
 

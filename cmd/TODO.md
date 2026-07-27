@@ -214,8 +214,10 @@ are the four to measure early rather than late.
 3. A stanza in [../root.manifest](../root.manifest): `mode`, `file /bin/<x>`, `source
    ../../rootfs/bin/<x>`. Paths there resolve against `b6fsutil`'s working directory
    (`build/kernel/test`), not against the manifest.
-4. A line in [../etc/rc](../etc/rc) if the boot script wants it — remembering that the v7 shell
-   **has no comment character** and that `/etc/rc` runs with no terminal.
+4. A line in [../etc/rc](../etc/rc) if the boot script wants it — remembering that `/etc/rc` runs
+   with **no terminal**, so anything meant to be seen redirects to `/dev/console` for itself.
+   (The other rule that used to stand here is gone: this shell takes `#` as a comment character,
+   which v7's had not — see [sh/README.md](sh/README.md).)
 5. The test, per §9.
 
 The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**. Nothing planned here comes close to
@@ -331,8 +333,9 @@ All five except `time` test cleanly under `b6sim`.
 Not a port: as each of C1 and C2 lands, un-comment the line of [../etc/rc](../etc/rc) that wanted
 it, and extend `kernel/test/boot`'s expectations accordingly. **This is the visible progress
 indicator for the whole file** — the boot script getting longer is what "the system is becoming
-usable" looks like from the console. Mind the two rules the file's own header states: no comment
-character, and no terminal on descriptors 0–2.
+usable" looks like from the console. Mind the rule the file's own header states: no terminal on
+descriptors 0–2. (It used to state two; the shell has a `#` comment character now, so `/etc/rc`
+is written in real comments and the second rule is retired.)
 
 **Size.** Small ×8, and it should be possible to do the whole task in one sitting once C1 has
 established the staging rhythm.

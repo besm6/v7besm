@@ -1,0 +1,17 @@
+IFS= 	
+
+h1=one # not a comment: this is document text
+h2=two
+0022
+IFS= 	
+
+argc=0
+bs=before
+bsafter=after
+dq=a # b
+esc=a#b
+lit=a#b
+semi=one
+semi2=two
+sq=a # b
+sub=
