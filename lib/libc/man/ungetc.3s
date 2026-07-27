@@ -1,0 +1,48 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH UNGETC 3S
+.SH NAME
+ungetc \- push character back into input stream
+.SH SYNOPSIS
+.B #include <stdio.h>
+.PP
+.B int ungetc(int c, FILE *stream);
+.SH DESCRIPTION
+.I Ungetc
+pushes the character
+.I c
+back on an input stream.
+That character will be returned by the next
+.I getc
+call on that stream.
+.I Ungetc
+returns
+.IR c .
+.PP
+One character of pushback is guaranteed provided
+something has been read from the stream and the stream is
+actually buffered.
+Attempts to push EOF are rejected.
+.PP
+.IR  Fseek (3)
+erases all memory of pushed back characters.
+.SH "SEE ALSO"
+getc(3), setbuf(3), fseek(3), stdio(3)
+.SH DIAGNOSTICS
+.I Ungetc
+returns
+.SM
+.B EOF
+if it can't push a character back.
+.SH BESM-6 NOTES
+One v7 bug is fixed here rather than carried.  v7 would step the stream's
+.I _ptr
+back off a
+.I null
+base for a stream nothing had read from yet.  On the PDP-11 that produced a wild
+address; here a null word pointer is word 0, and the store lands
+.B in memory the program owns
+\- there is no trap to catch it.  The routine refuses the pushback instead.
+.SH FILES
+share/besm6/lib/libc.a
+.br
+lib/libc/stdio/ungetc.c

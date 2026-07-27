@@ -1,0 +1,43 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH "CHDIR" 2 
+.SH NAME
+chdir, chroot \- change default directory
+.SH SYNOPSIS
+.B int chdir(const char *dirname);
+.PP
+.B int chroot(const char *dirname);
+.SH DESCRIPTION
+.I Dirname
+is the address of the pathname of a directory, terminated by a null byte.
+.I Chdir
+causes this directory
+to become the current working directory,
+the starting point for path names not beginning with `/'.
+.PP
+.I Chroot
+sets the root directory, the
+starting point for path names beginning with `/'.
+The call is restricted to the super-user.
+.SH "SEE ALSO"
+cd(1)
+.SH DIAGNOSTICS
+Zero is returned if the directory is changed; \-1
+is returned
+if the given name is not that of a directory
+or is not searchable.
+.SH ASSEMBLER
+.B Note:
+v7's page gave the PDP-11 form here \- a decimal call number and a
+`\fBsys\fP \fIname\fP; \fIarg\fP ...' line.  Neither is how a call is made on this
+machine.  The gate is one extracode \-
+.B $77 SYS_chdir,
+.B SYS_chroot
+\- and the C calling convention has already put the arguments where it reads them:
+1..n\-1 below r15, the last in the accumulator, the result in the accumulator, the
+error number in r14.
+.PP
+.B The numbering itself is v7's, unchanged.
+The macro is defined in <sys/syscall.h>, which is the only place a syscall number
+appears on the user side.  See
+.IR intro (2)
+for the whole contract.

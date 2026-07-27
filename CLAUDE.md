@@ -126,6 +126,30 @@ tests via ctest (label `lib`). It can also be built in isolation with `cmake -S 
 which falls back to the *installed* tools. `crt0.o` is what makes `b6cc` able to *link* — until
 `make install` has run, `find_crt0()` says so.
 
+**All four archives now have their own README, and that is where the reasoning lives** — read the
+one for the library you are touching before touching it. `lib/libc/README.md` is the long one, in
+proportion to the library (183 objects, 12,126 words): the `$77` gate contract and why `lib/libc/sys/`
+is assembly and not C, every place a fat pointer or a one-word `long` forced a change (`malloc`'s
+`BUSY` bit at bit 16, `sbrk`'s `NULL`, `crypt`'s `L[32]`, `execle`'s raw-word terminator, `strtol`'s
+value-preserving casts), stdio's line buffering and `_IOSTRG`, the `_cleanup`-through-a-pointer
+measurement that is the difference between a 100-word `hello` and a 2,255-word one, and eleven
+upstream bugs fixed rather than carried. `lib/libm/README.md` is the short one, because that port
+has a single theme: **overflow is a fault and not an infinity**, so `HUGE_VAL` is a value a routine
+*returns* and never one it computes, and every range gate sits *before* the arithmetic — plus the
+PDP-11 magic numbers that were mantissa widths (`sinh`'s 21 → 14, `sin`'s 32764 → 2^40), the
+j0/j1 coefficients that could not be written as literals at all, and an `fma` whose split cannot
+be Dekker's because this machine rounds by forcing the low bit.
+
+**The v7 manual pages are in the tree too**, beside the libraries they document and **corrected in
+place** on `termcap.3`'s precedent — every SYNOPSIS ANSI, every wrong claim fixed where it stands
+and marked `Note:`, and the C11 routines v7 lacked folded into the page that owns them.
+`lib/libc/man/` holds 86 (sections 2 and 3) and `lib/libm/` its six `.3m`. Two structural edits
+worth knowing: every `.SH ASSEMBLER` section is replaced, `intro.2` now carrying the whole `$77`
+contract and each page pointing at it; and the four pages that pulled a header in with
+`.so /usr/include/…` have their structures written out, there being no `/usr/include` here.
+**Nothing installs any of them** — no `CMakeLists.txt` in `lib/` has a man rule — so they are read
+with `nroff -man`.
+
 **`lib/libtermcap/`** is the third archive, and the newest: the 4.xBSD termcap library —
 `tgetent`/`tgetnum`/`tgetflag`/`tgetstr`, `tgoto` and `tputs` — reading the `/etc/termcap` that
 `etc/` stages onto the disk image (BSD's `termcap.small`, verbatim). It is declared by

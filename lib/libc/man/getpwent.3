@@ -1,0 +1,127 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH GETPWENT 3
+.SH NAME
+getpwent, getpwuid, getpwnam, setpwent, endpwent
+\- get password file entry
+.SH SYNOPSIS
+.B #include <pwd.h>
+.PP
+.B struct passwd *getpwent(void);
+.PP
+.B struct passwd *getpwuid(int uid);
+.PP
+.B struct passwd *getpwnam(const char *name);
+.PP
+.B void setpwent(void);
+.PP
+.B void endpwent(void);
+.SH DESCRIPTION
+.I Getpwent,
+.I getpwuid
+and
+.I getpwnam
+each return a pointer to an object with the
+following structure
+containing the broken-out
+fields of a line in the password file.
+.RS
+.PP
+.nf
+struct passwd {
+    char *pw_name;
+    char *pw_passwd;
+    int   pw_uid;
+    int   pw_gid;
+    int   pw_quota;
+    char *pw_comment;
+    char *pw_gecos;
+    char *pw_dir;
+    char *pw_shell;
+};
+.ft R
+.ad
+.fi
+.RE
+.PP
+.B Note:
+v7's page pulled this in with a
+.B .so
+of the installed header.  It is written out here, because there is no installed
+/usr/include on this system \- the one header tree is
+share/besm6/include.
+.PP
+The fields
+.I pw_quota
+and
+.I pw_comment
+are unused; the others have meanings described in
+.IR passwd (5).
+.I Getpwent
+sets them to 0 and "" respectively, as v7's did.
+.PP
+.I Getpwent
+reads the next
+line (opening the file if necessary);
+.I setpwent
+rewinds the file;
+.I endpwent
+closes it.
+.PP
+.I Getpwuid
+and
+.I getpwnam
+search from the beginning until a matching
+.I uid
+or
+.I name
+is found
+(or until EOF is encountered).
+.PP
+.B Note:
+<pwd.h> declares all five now.  v7's header declared the struct alone and left
+the routines to K&R's implicit
+.BR int ;
+there is no implicit anything here.  This header and <grp.h> are the deliberate
+exceptions to the tree's rule that a routine no v7 header declares should declare
+itself at its own file head \- they are not headers added to declare a function,
+they are the headers these functions were always part of.
+.SH FILES
+/etc/passwd
+.br
+share/besm6/lib/libc.a, lib/libc/stdio/getpwent.c, getpwnam.c, getpwuid.c
+.SH "SEE ALSO"
+getlogin(3), getgrent(3), passwd(5), getpw(3)
+.SH DIAGNOSTICS
+Null pointer
+(0) returned on EOF or error.
+.SH BUGS
+All information
+is contained in a static area
+so it must be copied if it is
+to be saved.
+.B Every pointer in the struct aims into one shared line buffer,
+and so does the struct itself; the next call overwrites both.
+.SH BESM-6 NOTES
+The line buffer is
+.B PWLINE
+characters, not BUFSIZ.
+.PP
+v7 wrote
+.BR "char line[BUFSIZ+1]" ,
+where its BUFSIZ was 512 bytes.
+.B BUFSIZ is 3072 here
+\- one disk block, in bytes \- so spelling it that way would put 513 words of bss
+in this file and another 513 next door in
+.IR getgrent (3).
+It looks like tidying and is not.
+.PP
+One v7 bug is fixed rather than carried.  A line with fewer than three colons
+walked off the end of the caller's buffer: v7 guarded two of its field walks
+against a `\\n' that cannot be there, the line having already been stripped.  The
+walks are bounded now.
+.PP
+lib/test/pwent is the test, and it prints
+.I no line of /etc/passwd at all:
+it checks instead that every entry the walk yields is found again by name and by
+id, because an expectation file may record only what the program does and nothing
+host-dependent.

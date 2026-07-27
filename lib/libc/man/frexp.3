@@ -1,0 +1,101 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH FREXP 3
+.SH NAME
+frexp, ldexp, modf \- split into mantissa and exponent
+.SH SYNOPSIS
+.B #include <math.h>
+.PP
+.B double frexp(double value, int *eptr);
+.PP
+.B double ldexp(double value, int exp);
+.PP
+.B double modf(double value, double *iptr);
+.SH DESCRIPTION
+.I Frexp
+returns the mantissa of a double
+.I value
+as a double quantity,
+.I x,
+of magnitude less than 1
+and stores an integer
+.I n
+such that
+.I value
+=
+.IR x *2** n
+indirectly through
+.I eptr.
+.PP
+.I Ldexp
+returns the quantity
+.IR value *2** exp.
+.PP
+.I Modf
+returns the fractional part of
+.I value
+and stores the integer part indirectly
+through
+.I iptr.
+.B Note:
+v7's page said "positive fractional part".  Both parts carry the
+.I sign of value,
+which is the split C11 sec 7.12.6.12 requires and the one
+.IR trunc (3)
+and
+.IR round (3)
+are built on.
+.SH SEE ALSO
+exp(3), floor(3), ecvt(3), atof(3)
+.SH BESM-6 NOTES
+.SS These three are in libc, not libm
+They are the exponent surgery the
+.I conversions
+need \-
+.IR atof (3),
+.IR ecvt (3)
+and the
+.IR printf (3)
+engine \- so a program gets them
+.B without \-lm,
+which is also where v7 keeps them.  <math.h> declares them under a banner saying
+so.
+.SS Both are exact, and libm leans on that
+.I Frexp
+is twelve instructions and
+.I ldexp
+six, ports of the external c-compiler's Madlen originals.  There is no
+approximation in either: the exponent field is bits 48..42 of the word, biased by
+64, so
+.I frexp
+shifts it down and masks and
+.I ldexp
+ORs a new one in and multiplies.
+.PP
+.B Ldexp does no range check whatever.
+It keeps only the low seven bits of its argument, so an out-of-range
+.I exp
+aliases modulo 128 and the result is nonsense rather than an error.  That is what
+.IR exp (3)'s
+lower range gate stands between a caller and, and it is the reason that gate is
+not cosmetic.
+.SS modf knows where the fractional bits run out
+Any magnitude at or above
+.B 2**40
+is already integral in a 40-bit mantissa, so
+.I modf
+returns a zero fraction there and the integer part unchanged.  Below that the
+integer part fits in a 41-bit
+.BR int ,
+so a truncating round trip through
+.B int
+recovers it exactly.
+.PP
+That 2**40 is the constant
+.IR sin (3)
+and
+.IR pow (3)
+in libm key on by name, and it is defined here.
+.SH FILES
+share/besm6/lib/libc.a
+.br
+lib/libc/gen/frexp.s, ldexp.s, modf.c

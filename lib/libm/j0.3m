@@ -1,0 +1,94 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH J0 3M
+.SH NAME
+j0, j1, jn, y0, y1, yn, erf, erfc \- bessel and error functions
+.SH SYNOPSIS
+.B #include <math.h>
+.PP
+.B double j0(double x);
+.PP
+.B double j1(double x);
+.PP
+.B double jn(int n, double x);
+.PP
+.B double y0(double x);
+.PP
+.B double y1(double x);
+.PP
+.B double yn(int n, double x);
+.PP
+.B double erf(double x);
+.PP
+.B double erfc(double x);
+.SH DESCRIPTION
+These functions calculate Bessel functions of the first
+and second kinds for real arguments and integer orders.
+.PP
+.B Note:
+.I erf
+and
+.I erfc
+are documented here because they have no page of their own and the two families
+share the same provenance and the same fits.
+.I Erf
+returns the error function of
+.IR x ;
+.I erfc
+returns 1 \- erf(x), computed directly rather than by that subtraction \- for
+large
+.I x
+every significant digit of the result lies in the digits that would cancel.
+Both are v7 extensions and not C11.  v7's <math.h> declared them and this tree's
+silently did not, which was an oversight: the sources were always there.
+.SH SEE ALSO
+exp(3), floor(3), intro(2)
+.SH DIAGNOSTICS
+Non-positive arguments cause
+.I y0, y1,
+and
+.I yn
+to return \-HUGE_VAL
+and set
+.I errno
+to EDOM.
+.B Note:
+v7 said "negative"; zero is a domain error too, and the value returned is the
+most negative finite value this machine has, not a \-infinity it has not.
+.PP
+.I J0, j1, jn, erf
+and
+.I erfc
+are finite everywhere and have no error return.
+.SH BESM-6 NOTES
+.SS The leading coefficients did not fit, so they are scaled
+This is the whole of the port for these two files.  v7's rational fits for
+.I j0
+and
+.I j1
+open with coefficients near 5e20 to 5e23, and the largest finite value on this
+machine is 9.223e18 \-
+.B so they cannot be written as literals at all.
+.PP
+Each numerator/denominator
+.I pair
+is divided by a power of ten (10**10, 10**11 or 10**13, noted on each array's
+first line), which is a pure shift of every literal's decimal exponent and leaves
+the ratio n/d \- the only thing either polynomial contributes \- unchanged.  The
+pairs that already fit are v7's outright.
+.PP
+The Horner loops needed no unrolling:
+.I b6cc
+emits an initialized file-scope
+.B double
+array to the constant pool.
+.SS gamma is absent
+v7's
+.I gamma
+is the one routine of its libm whose source never reached this tree.  Nothing
+here calls it, it is not C11, and <tgmath.h> does not name it either.  It comes
+back with the first program that wants it, and the choice between v7's
+log-gamma-plus-signgam and C11's tgamma/lgamma gets made then.
+.SH FILES
+share/besm6/lib/libm.a
+.br
+lib/libm/j0.c, j1.c, jn.c, erf.c

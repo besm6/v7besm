@@ -1,0 +1,72 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH FERROR 3S
+.SH NAME
+feof, ferror, clearerr, fileno \- stream status inquiries
+.SH SYNOPSIS
+.B #include <stdio.h>
+.PP
+.B int feof(FILE *stream);
+.PP
+.B int ferror(FILE *stream);
+.PP
+.B void clearerr(FILE *stream);
+.PP
+.B int fileno(FILE *stream);
+.SH DESCRIPTION
+.I Feof
+returns non-zero when end of file is read on the named input
+.I stream,
+otherwise zero.
+.PP
+.I Ferror
+returns non-zero when an error has occurred reading or writing
+the named
+.I stream,
+otherwise zero.
+Unless cleared by
+.I clearerr,
+the error indication lasts until
+the stream is closed.
+.PP
+.I Clearerr
+resets the error indication on the named
+.I stream.
+.B Note:
+v7's own page spelled it
+.I clrerr
+in the text and
+.I clearerr
+in the synopsis.  The name is
+.IR clearerr ;
+the source file is called
+.I clrerr.c
+because the object directory is flat.
+.PP
+.I Fileno
+returns the integer file descriptor
+associated with the
+.I stream,
+see
+.IR  open (2).
+It is POSIX rather than C11, and is here because v7 has it and v7 code uses it.
+.PP
+These functions
+are implemented as macros;
+they cannot be redeclared.
+.B Note:
+.IR feof ,
+.I ferror
+and
+.I clearerr
+also exist as real functions, which is C11 sec 7.1.4 \- a macro may be suppressed
+by parenthesising the name, and there must be something to call when it is.  Each
+of the three evaluates its argument exactly once, unlike
+.IR getc (3)
+and
+.IR putc (3).
+.SH "SEE ALSO"
+fopen(3), open(2), stdio(3)
+.SH FILES
+share/besm6/lib/libc.a
+.br
+lib/libc/stdio/feof.c, ferror.c, clrerr.c

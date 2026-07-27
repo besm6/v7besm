@@ -1,0 +1,97 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH FSEEK 3S
+.SH NAME
+fseek, ftell, rewind, fgetpos, fsetpos \- reposition a stream
+.SH SYNOPSIS
+.B #include <stdio.h>
+.PP
+.B int fseek(FILE *stream, long offset, int ptrname);
+.PP
+.B long ftell(FILE *stream);
+.PP
+.B void rewind(FILE *stream);
+.PP
+.B int fgetpos(FILE *stream, fpos_t *pos);
+.PP
+.B int fsetpos(FILE *stream, const fpos_t *pos);
+.SH DESCRIPTION
+.I Fseek
+sets the position of the next input or output
+operation on the
+.IR stream .
+The new position is at the signed distance
+.I offset
+bytes
+from the beginning, the current position, or the end of the file,
+according as
+.I ptrname
+has the value 0, 1, or 2.
+.B Note:
+SEEK_SET, SEEK_CUR and SEEK_END are those three values, and <stdio.h> defines
+them; v7 wrote the digits.
+.PP
+.I Fseek
+undoes any effects of
+.IR  ungetc (3).
+.PP
+.I Ftell
+returns the current value of the offset relative to the beginning
+of the file associated with the named
+.IR stream .
+It is measured in bytes on UNIX;
+on some other systems it is a magic cookie,
+and the only foolproof way to obtain an
+.I offset
+for
+.IR fseek .
+.PP
+.I Rewind(stream)
+is equivalent to
+.I "fseek(stream, 0L, 0)."
+.PP
+.B Note:
+.I fgetpos
+and
+.I fsetpos
+are C11 and had no v7 ancestor.  They save and restore a position through an
+.BR fpos_t ,
+which is the portable spelling of the same thing:
+.I fgetpos
+records where the stream stands and
+.I fsetpos
+puts it back.  Each returns 0 on success and a non-zero value on failure.
+.B Fpos_t is an int here
+\- one word, the same
+.B off_t
+the kernel counts bytes in \- because v7 had no such type and used a
+.B long
+for a file offset, which is also one word.
+.SH "SEE ALSO"
+lseek(2),
+fopen(3),
+stdio(3)
+.SH DIAGNOSTICS
+.I Fseek
+returns \-1 for improper seeks.
+.SH BESM-6 NOTES
+An offset is
+.B one word,
+not the PDP-11's pair.
+.B long
+is
+.B int
+here, and so is
+.BR off_t ,
+which is why
+.IR lseek (2)
+lost an argument that v7's gate carried.
+.PP
+One v7 bug is fixed here rather than carried:
+.I fseek
+left its resolved position uninitialised on a path that could reach the return,
+so a seek that took that path reported a position that was never computed.  It
+is initialised to \-1 now.
+.SH FILES
+share/besm6/lib/libc.a
+.br
+lib/libc/stdio/fseek.c, ftell.c, rew.c, fgetpos.c, fsetpos.c

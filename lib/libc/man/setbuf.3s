@@ -1,0 +1,112 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH SETBUF 3S
+.SH NAME
+setbuf, setvbuf \- assign buffering to a stream
+.SH SYNOPSIS
+.B #include <stdio.h>
+.PP
+.B void setbuf(FILE *stream, char *buf);
+.PP
+.B int setvbuf(FILE *stream, char *buf, int mode, size_t size);
+.SH DESCRIPTION
+.I Setbuf
+is used after a stream has been opened but before it
+is read or written.
+It causes the character array
+.I buf
+to be used instead of an automatically allocated buffer.
+If
+.I buf
+is the constant pointer
+.SM
+.B NULL,
+input/output will be completely unbuffered.
+.PP
+A manifest constant
+.SM
+.B BUFSIZ
+tells how big an array is needed:
+.PP
+.in +10
+char buf[BUFSIZ];
+.PP
+.B Note:
+BUFSIZ is 3072 here, one disk block in
+.I bytes.
+A page that says 512 is a PDP-11 page.
+.PP
+.B Note:
+.I setvbuf
+is C11 and had no v7 ancestor.  It says the same thing as
+.I setbuf
+and two more besides: the
+.I mode
+is _IOFBF (fully buffered), _IOLBF (line buffered) or _IONBF (unbuffered), and
+.I size
+is the size of
+.IR buf ,
+which need not be BUFSIZ.  A null
+.I buf
+with a buffered mode makes
+.I setvbuf
+allocate one of
+.I size
+bytes itself.  It returns 0, or a non-zero value if the mode is not one of the
+three or the size is zero.
+.PP
+.B These three modes are not flag bits,
+and in particular _IONBF is not the flag of that name in v7's <stdio.h>: the
+modes are 0, 1 and 2, while the flag bits are 04 and 0400.  That collision is
+why v7's _IONBF flag bit is spelled _IOUNBUF now.
+.PP
+A buffer is normally obtained from
+.IR  malloc (3)
+upon the first
+.I getc
+or
+.IR  putc (3)
+on the file,
+except that the standard error stream
+.I stderr
+is normally not buffered.
+.PP
+.B Note:
+v7 said output streams directed to terminals are not buffered either.  Here they
+are
+.I line
+buffered \-
+.I stdout
+takes _IOLBF when
+.IR isatty (3)
+says so \- which costs one system call per line where v7 spent one per character.
+See
+.IR stdio (3)
+for the mechanism, since the
+.I putc
+macro shows no sign of it.
+.SH "SEE ALSO"
+fopen(3), getc(3), putc(3), malloc(3), stdio(3)
+.SH BESM-6 NOTES
+.SS `buf == NULL', never `!buf'
+A null
+.B char *
+is
+.I not
+a zero word here: the cast that makes a pointer fat sets the marker bit over the
+zero address, so the word is non-zero while the pointer still compares equal to
+NULL.  The compiler compares the address part for
+.BR == ,
+which is what makes the first spelling right and the second unreliable.  Both
+routines are written the first way.
+.SS _bufsiz exists for setvbuf
+v7 wrote BUFSIZ into the buffering code outright, because
+.I setbuf
+was the only way to hand a buffer over and it promised one of exactly that size.
+A caller that names its own size needs the stream to remember it, or the next
+flush overruns the buffer it was given.  One word, and it makes
+.I setvbuf
+real rather than advisory.
+.SH FILES
+share/besm6/lib/libc.a
+.br
+lib/libc/stdio/setbuf.c, setvbuf.c

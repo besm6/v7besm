@@ -12,12 +12,13 @@ owns.
 ```text
 lib/
     CMakeLists.txt      toolchain setup; recurses into each library
-    libc/               libc.a and crt0.o
+    libc/               libc.a and crt0.o, plus man/ and its own README
         csu/            crt0
         sys/            syscall stubs, cerror, errno, the exec wrappers, sbrk
         gen/            strings, ctype, setjmp, malloc, conversions, <time.h>, misc
         stdio/          FILE machinery, the printf and scanf engines, the accounts
-    libm/               libm.a — the math library
+        man/            the v7 manual pages, sections 2 and 3
+    libm/               libm.a — the math library, plus its .3m pages and its own README
     libtermcap/         libtermcap.a — termcap, plus termcap.3 and its own README
     libcurses/          libcurses.a — 4.3BSD curses, plus curses.3 and its own README
     test/              programs run under b6sim (CMakeLists.txt + run-test.sh)
@@ -26,6 +27,15 @@ lib/
 One function per file, so `b6ranlib`'s index lets `b6ld` pull only what a program actually
 calls. `crt0.o` sits beside the archive rather than in it: a program's startup is named on the
 link line, never pulled by symbol, exactly as v7 keeps it in `/lib/crt0.o`.
+
+**Each of the four has its own README, and that is where the reasoning lives.**
+[`libc/README.md`](libc/README.md) is the long one, in proportion to the library: the `$77` gate
+contract and why `sys/` is assembly, every place a fat pointer or a one-word `long` forced a
+change, stdio's line buffering, the `_cleanup`-through-a-pointer measurement that is the
+difference between a 100-word `hello` and a 2,255-word one, and the eleven upstream bugs fixed
+rather than carried. [`libm/README.md`](libm/README.md) is the short one, because that port has a
+single theme — overflow is a *fault* and not an infinity, so `HUGE_VAL` is a value a routine
+returns and never one it computes, and every range gate sits before the arithmetic.
 
 `libtermcap` landed with [`../include/term.h`](../include/term.h) and the `/etc/termcap` that
 [`../etc/`](../etc/) stages onto the disk image; [`libtermcap/README.md`](libtermcap/README.md) is

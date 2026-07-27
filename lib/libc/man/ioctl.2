@@ -1,0 +1,109 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH IOCTL 2
+.SH NAME
+ioctl, stty, gtty \- control device
+.SH SYNOPSIS
+.B #include <sgtty.h>
+.PP
+.B int ioctl(int fildes, int request, char *argp);
+.PP
+.B int stty(int fildes, struct sgttyb *argp);
+.PP
+.B int gtty(int fildes, struct sgttyb *argp);
+.SH DESCRIPTION
+.I Ioctl
+performs a variety of functions
+on character special files (devices).
+The writeups of various devices
+in section 4 discuss how
+.I ioctl
+applies to them.
+.PP
+For certain status setting and status inquiries
+about terminal devices, the functions
+.I stty
+and
+.I gtty
+are equivalent to
+.RS
+.B ioctl(fildes, TIOCSETP, argp)
+.br
+.B ioctl(fildes, TIOCGETP, argp)
+.RE
+.LP
+respectively; see
+.IR tty (4).
+.PP
+The following two calls, however, apply to any open file:
+.PP
+.RS
+.B ioctl(fildes, FIOCLEX, NULL);
+.br
+.B ioctl(fildes, FIONCLEX, NULL);
+.RE
+.LP
+The first causes the file to be closed automatically during
+a successful
+.I exec
+operation;
+the second reverses the effect of the first.
+.PP
+.B Note:
+.B stty and gtty are real system calls here, not the ioctl write-arounds v7 made
+.BR them .
+They have gate numbers of their own and generated stubs of their own, and have
+had since the syscall stubs first landed.
+.SH "SEE ALSO"
+stty(1), tty(4), exec(2)
+.SH DIAGNOSTICS
+Zero is returned if the call was successful;
+\-1 if the file descriptor does not refer to
+the kind of file for which it was intended.
+.SH BUGS
+Strictly speaking,
+since 
+.I ioctl
+may be extended in different ways to devices with
+different properties,
+.I argp
+should have an open-ended declaration like
+.IP
+.B union { struct sgttyb
+.RB ... ;
+\&...
+.B } *argp;
+.PP
+.SH BESM-6 NOTES
+.B struct sgttyb is five words \- four chars, each occupying a word of its own,
+.B and an int.
+A
+.B char
+struct member takes a whole word here, so nothing about that structure is packed
+and there is no unpacking to do.
+.PP
+.B Note:
+under b6sim,
+.I ioctl
+is an unconditional no-op that answers success and changes nothing, while the
+real console is ECHO|CRMOD|XTABS.  A program whose output depends on tty modes
+therefore cannot have one expectation for both harnesses; the curses tests split
+along exactly that line.
+.PP
+The important thing is that the size is fixed by `struct sgttyb'.
+.SH ASSEMBLER
+.B Note:
+v7's page gave the PDP-11 form here \- a decimal call number and a
+`\fBsys\fP \fIname\fP; \fIarg\fP ...' line.  Neither is how a call is made on this
+machine.  The gate is one extracode \-
+.B $77 SYS_ioctl,
+.B SYS_stty,
+.B SYS_gtty
+\- and the C calling convention has already put the arguments where it reads them:
+1..n\-1 below r15, the last in the accumulator, the result in the accumulator, the
+error number in r14.
+.PP
+.B The numbering itself is v7's, unchanged.
+The macro is defined in <sys/syscall.h>, which is the only place a syscall number
+appears on the user side.  See
+.IR intro (2)
+for the whole contract.

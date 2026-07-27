@@ -1,0 +1,120 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH SETJMP 3
+.SH NAME
+setjmp, longjmp \- non-local goto
+.SH SYNOPSIS
+.B #include <setjmp.h>
+.PP
+.B int setjmp(jmp_buf env);
+.PP
+.B void longjmp(jmp_buf env, int val);
+.SH DESCRIPTION
+These routines are useful for dealing with errors
+and interrupts encountered in
+a low-level subroutine of a program.
+.PP
+.I Setjmp
+saves its stack environment in
+.I env
+for later use by
+.I longjmp.
+It returns value 0.
+.PP
+.I Longjmp
+restores the environment saved by the last call of
+.IR setjmp .
+It then returns in such a way that execution
+continues as if the call of
+.I setjmp
+had just returned the value
+.I val
+to the function that invoked
+.I setjmp,
+which must not itself have returned in the interim.
+All accessible data have values as of the time
+.I longjmp
+was called.
+.PP
+.B Note:
+.I longjmp
+is deliberately
+.I not
+declared
+.BR _Noreturn ,
+which is <setjmp.h>'s one departure from C11 sec 7.13.2.1.  Declaring it so would
+turn every call site into a tail jump for no gain here, and no caller expects it
+back in any case.
+.SH "SEE ALSO"
+signal(2)
+.SH FILES
+share/besm6/lib/libc.a
+.br
+lib/libc/gen/setjmp.s, include/setjmp.h
+.SH BESM-6 NOTES
+.SS Written from the calling convention, not ported
+v7's is x86 assembly in the port these sources came from, and the c-compiler's
+library has none at all.  It is the same problem the kernel's context switch
+solves one level down, minus everything that made that hard: no u-area to copy,
+no address space to swap, no interrupts to mask.
+.SS The buffer
+.B jmp_buf
+is
+.BR "int[8]" ,
+as on every v7 machine, but what goes into it is this machine's, and only
+setjmp.s may touch it:
+.PP
+.RS
+.nf
+0     r13         the return address into setjmp's caller
+1     r15         the stack pointer at the call
+2,3,4 r5,r6,r7    the callee-saved registers compiled code uses
+5     R           the AU mode register
+6,7   \- unused \-
+.fi
+.RE
+.PP
+It is
+.B int
+and not
+.BR char ,
+so a
+.B jmp_buf
+is a plain word address rather than a fat pointer and goes straight into an index
+register.
+.SS Only r5..r7 of the callee-saved set
+The convention says r1..r7 must be preserved, but the compiler-support prologue
+saves exactly r5, r6 and r7, and compiled code allocates nothing below r5 \- what
+a disassembly shows is r6 and r7 as the parameter and auto pointers, r8..r12 as
+expression scratch, and r13/r14/r15.  A function that clobbered r1..r4 across a
+call would already break an ordinary return, so there is nothing here for
+.I setjmp
+to save that the prologue does not.
+.SS Neither routine has a prologue
+.I Setjmp
+has one parameter, so it arrives in the accumulator, nothing is pushed, and r15
+at entry is already the caller's: a callee whose arguments were all in registers
+pops nothing.
+.I Longjmp
+never returns, so its one pushed argument is never popped \- r15 comes from the
+buffer.
+.PP
+.I Longjmp
+restores the index registers with
+.BR wtc / vtm ,
+which is why
+.I val
+never has to leave the accumulator.
+.SS Why R is saved at all
+The ABI fixes R = 7 at every call boundary, so the R a
+.I longjmp
+is entered with is by construction the R its
+.I setjmp
+is entitled to return with \- the slot ought to be unnecessary.  It is kept
+because a program may
+.I longjmp out of a signal handler,
+and a handler is not a call boundary.  It costs one word.  lib/test/signals ends
+on exactly that case:
+.IR sleep (3),
+whose handler leaves by
+.I longjmp
+and never returns through the frame at all.

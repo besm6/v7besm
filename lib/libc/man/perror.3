@@ -1,0 +1,81 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH PERROR 3
+.SH NAME
+perror, sys_errlist, sys_nerr \- system error messages
+.SH SYNOPSIS
+.B #include <stdio.h>
+.PP
+.B void perror(const char *s);
+.PP
+.B extern int sys_nerr;
+.br
+.B extern char *sys_errlist[];
+.SH DESCRIPTION
+.I Perror
+produces a short error message
+on the standard error file
+describing the last error encountered during a call
+to the system from a C program.
+First the argument string
+.I s
+is printed, then a colon, then the message and a new-line.
+Most usefully, the argument string is the name
+of the program which incurred the error.
+The error number is taken from the external variable
+.I errno
+(see
+.IR intro (2)),
+which is set when errors occur but not cleared when
+non-erroneous calls are made.
+.PP
+To simplify variant formatting
+of messages, the vector of message strings
+.I sys_errlist
+is provided;
+.I errno
+can be used as an index in this table to get the
+message string without the newline.
+.I Sys_nerr
+is the number of messages provided for in the table;
+it should be checked because new
+error codes may be added to the system before
+they are added to the table.
+.SH "SEE ALSO"
+intro(2)
+.SH FILES
+share/besm6/lib/libc.a
+.br
+lib/libc/gen/perror.c, errlst.c, include/errno.h
+.SH BESM-6 NOTES
+.SS The table is 36 entries, and no more is possible
+The value the
+.B $77
+gate leaves in r14 is always one of the numbers <errno.h> defines: the kernel
+assigns from its own copy of the list, and b6sim folds the host's numbering onto
+the same set.  Nothing else can arrive from a system call, so a
+.I sys_nerr
+check can never fail on a kernel error \- which is not to say it should be
+dropped.
+.PP
+.B The last three are not kernel codes at all.
+33 and 34 \- EDOM and ERANGE \- are set by libm, and 35 \- EILSEQ \- belongs to
+the multibyte conversions.  They are in the table because C11 sec 7.5 requires
+all three to exist and
+.I perror
+must be able to name them.  Nothing sets EILSEQ yet.
+.SS An array of char * is one word per element
+A fat pointer fits in a word, marker bit and byte offset and all, so this table
+costs 36 words and not 36 pointers' worth of anything larger.
+.SS errno cannot be read at the call site in C
+r14 is caller-saved and the compiler loads it with the negative argument count
+before every call, so any C statement between the system call and the test would
+have destroyed it.  Each stub tests r14 itself and branches to a shared
+.I cerror,
+which stores the value into
+.I errno
+and returns \-1.
+.B That is the whole reason lib/libc/sys is assembly and not C,
+and it is why a stub that forgets the branch still returns \-1 \- the gate puts
+it there \- with only
+.I errno
+to give it away.

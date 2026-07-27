@@ -1,0 +1,45 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH SWAB 3
+.SH NAME
+swab \- swap bytes
+.SH SYNOPSIS
+.B void swab(const char *from, char *to, int nbytes);
+.SH DESCRIPTION
+.I Swab
+copies
+.I nbytes
+bytes pointed to by
+.I from
+to the position pointed to by
+.I to,
+exchanging adjacent even and odd bytes.
+It is useful for carrying binary data between
+PDP11's and other machines.
+.I Nbytes
+should be even.
+.PP
+.B Note:
+it is declared by no header \- v7 had none and C11 has no such routine \- so a
+caller declares it itself.
+.SH FILES
+share/besm6/lib/libc.a
+.br
+lib/libc/gen/swab.c
+.SH BESM-6 NOTES
+.B Rewritten over bytes, because there is no 16-bit unit on this machine.
+.PP
+v7 wrote this loop over
+.BR "short *" ,
+swapping the halves of a 16-bit word.
+.B short
+is an alias for
+.B int
+here \- one 48-bit word \- so the v7 loop would swap the halves of a
+.I word
+and mean nothing to any caller.
+.PP
+The routine still does what its name and its purpose say: it exchanges adjacent
+.I bytes,
+pairwise, which is what a program reading PDP-11 data needs.  An odd
+.I nbytes
+leaves the last byte alone.

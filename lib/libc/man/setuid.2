@@ -1,0 +1,35 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH SETUID 2 
+.SH NAME
+setuid, setgid \- set user and group ID
+.SH SYNOPSIS
+.B int setuid(int uid);
+.PP
+.B int setgid(int gid);
+.SH DESCRIPTION
+The user ID (group ID) of the current process is set to
+the argument.
+Both the effective and the real ID are set.
+These calls are only permitted to the super-user
+or if the argument is the real ID.
+.SH "SEE ALSO"
+getuid(2)
+.SH DIAGNOSTICS
+Zero is returned if the user (group) ID is set;
+\-1 is returned otherwise.
+.SH ASSEMBLER
+.B Note:
+v7's page gave the PDP-11 form here \- a decimal call number and a
+`\fBsys\fP \fIname\fP; \fIarg\fP ...' line.  Neither is how a call is made on this
+machine.  The gate is one extracode \-
+.B $77 SYS_setuid,
+.B SYS_setgid
+\- and the C calling convention has already put the arguments where it reads them:
+1..n\-1 below r15, the last in the accumulator, the result in the accumulator, the
+error number in r14.
+.PP
+.B The numbering itself is v7's, unchanged.
+The macro is defined in <sys/syscall.h>, which is the only place a syscall number
+appears on the user side.  See
+.IR intro (2)
+for the whole contract.

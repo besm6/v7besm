@@ -1,0 +1,159 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH FOPEN 3S
+.SH NAME
+fopen, freopen, fdopen, tmpfile, tmpnam, remove, rename \- open, name and remove
+a stream's file
+.SH SYNOPSIS
+.B #include <stdio.h>
+.PP
+.B FILE *fopen(const char *filename, const char *type);
+.PP
+.B FILE *freopen(const char *filename, const char *type, FILE *stream);
+.PP
+.B FILE *fdopen(int fildes, const char *type);
+.PP
+.B FILE *tmpfile(void);
+.PP
+.B char *tmpnam(char *s);
+.PP
+.B int remove(const char *filename);
+.PP
+.B int rename(const char *from, const char *to);
+.SH DESCRIPTION
+.I Fopen
+opens the file named by
+.I filename
+and associates a stream with it.
+.I Fopen
+returns a pointer to be used to identify
+the stream in subsequent operations.
+.PP
+.I Type
+is a character string having one of the following values:
+.TP 5
+"r"
+open for reading
+.ns
+.TP 5
+"w"
+create for writing
+.ns
+.TP 5
+"a"
+append: open for writing at end
+of file, or create for writing
+.PP
+.B Note:
+a `+' may follow any of the three, opening the stream for update.
+.B "w+"
+and
+.B "a+"
+are created and then reopened, because
+.IR creat (2)
+leaves the descriptor write-only.  A `b' is accepted and ignored: there are no
+text and binary streams here, only bytes.
+.PP
+.I Freopen
+substitutes the named file in place
+of the open
+.IR stream .
+It returns the original value of
+.IR stream .
+The original stream is closed.
+.PP
+.I Freopen
+is typically used to attach the preopened
+constant names,
+.B stdin, stdout, stderr,
+to specified files.
+.PP
+.I Fdopen
+associates a stream with a file descriptor obtained from
+.I open, dup, creat,
+or
+.IR pipe (2).
+The
+.I type
+of the stream must agree with the mode of the open file.
+.PP
+.B Note:
+the four that follow are C11 and had no v7 ancestor.
+.PP
+.I Tmpfile
+creates a temporary file open for update and returns a stream on it.  The name is
+.I unlinked
+as soon as the stream holds the descriptor, so the file has no name from then on
+and the kernel frees the inode when the last reference goes \- which is either
+.IR fclose (3)
+or the cleanup that
+.IR exit (3)
+runs.  Nothing is left behind even if the program dies on a signal.
+.PP
+.I Tmpnam
+generates a file name that no existing file has, in a buffer of at least
+.B L_tmpnam
+characters; a null
+.I s
+asks for a static buffer that the next call overwrites.  It can distinguish
+.B TMP_MAX
+names.
+.PP
+.B Note:
+.I tmpnam
+does
+.I not
+go through
+.IR mktemp (3).
+That routine fills its trailing X's from the process id and then walks a
+.I single
+letter, so it can distinguish 26 names where TMP_MAX promises 26**3.
+.I Tmpnam
+counts three letters of its own, and the pid still separates one process's names
+from another's.
+.PP
+.I Remove
+deletes a file;
+.I rename
+changes its name.  Both return 0 on success and a non-zero value on failure, and
+both are thin wrappers over
+.IR unlink (2)
+and
+.IR link (2)/ unlink (2).
+.SH "SEE ALSO"
+open(2),
+fclose(3),
+setbuf(3),
+mktemp(3),
+stdio(3)
+.SH DIAGNOSTICS
+.I Fopen,
+.I freopen,
+.I fdopen
+and
+.I tmpfile
+return the pointer
+.SM
+.B NULL
+if
+.I filename
+cannot be accessed.
+.I Tmpnam
+returns NULL if it cannot find an unused name.
+.SH BUGS
+.I Fdopen
+is not portable to systems other than UNIX.
+.SH BESM-6 NOTES
+FOPEN_MAX is _NFILE, which is also NOFILE in <sys/param.h>: one
+.B FILE
+per descriptor and no more.
+.PP
+.B There is no path-length limit in this kernel.
+.IR Namei ()
+walks a component at a time and only the component is bounded, by DIRSIZ.  So
+FILENAME_MAX is a convention for sizing a caller's buffer and not a kernel
+number; it is v7's customary 128.
+.SH FILES
+share/besm6/lib/libc.a
+.br
+lib/libc/stdio/fopen.c, freopen.c, fdopen.c, endopen.c, findiop.c, tmpfile.c,
+tmpnam.c, remove.c, rename.c

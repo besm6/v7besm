@@ -1,0 +1,140 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH INTRO 3
+.SH NAME
+intro \- introduction to library functions
+.SH SYNOPSIS
+.B #include <stdio.h>
+.PP
+.B #include <math.h>
+.SH DESCRIPTION
+This section describes functions that may be found
+in various libraries, other than those functions
+that directly invoke UNIX system primitives,
+which are described in section 2.
+Functions are divided into various libraries distinguished
+by the section number at the top of the page:
+.TP 6n
+(3)
+These functions, together with those of section 2 and those
+marked (3S), constitute library
+.I libc,
+which is automatically loaded by the C compiler
+.IR b6cc (1).
+The link editor
+.IR b6ld (1)
+searches this library under the `\-lc' option.
+Declarations for some of these functions may be obtained
+from include files indicated on the appropriate pages.
+.B Note:
+there is no Fortran compiler here.
+.TP
+(3M)
+These functions constitute the math library,
+.I libm.
+The link editor searches this library under the `\-lm' option.
+Declarations for these functions may be obtained from
+the include file <math.h>.
+.B Note:
+its pages live in lib/libm, not here.
+.TP
+(3S)
+These functions constitute the
+`standard I/O package',
+see
+.IR stdio (3).
+These functions are in the library
+.I libc
+already mentioned.
+Declarations for these functions may be obtained from
+the include file <stdio.h>.
+.TP
+(3X)
+Various
+specialized libraries have not been given distinctive
+captions.
+The files in which these libraries are found are named
+on the appropriate pages.
+.B Note:
+the two that exist here are
+.I libtermcap
+and
+.IR libcurses ,
+whose pages live in lib/libtermcap and lib/libcurses.
+.SH FILES
+share/besm6/lib/libc.a
+.br
+share/besm6/lib/libm.a, libtermcap.a, libcurses.a
+.br
+share/besm6/lib/crt0.o, libruntime.a
+.SH SEE ALSO
+stdio(3),
+b6nm(1), b6ld(1), b6cc(1), intro(2)
+.SH DIAGNOSTICS
+Functions in the math library (3M) may return
+conventional values when the function is undefined for the
+given arguments or when the value is not representable.
+In these cases the external variable
+.I errno
+(see
+.IR intro (2))
+is set to the value EDOM
+or ERANGE.
+.B Note:
+EDOM and ERANGE are defined in <errno.h>, not in <math.h> as v7's page said.
+.PP
+.B Note:
+"when the value is not representable" is sharper here than it was on the PDP-11.
+This machine has
+.I no infinities and no NaNs,
+so a routine that would have returned one returns HUGE_VAL \- the largest
+.I finite
+value, and not a distinguished one.  And an exponent that overflows 2**63 is an
+arithmetic
+.I fault
+that ends the program, so every range check in libm is made
+.I before
+the arithmetic rather than after it.  See exp(3M).
+.SH ASSEMBLER
+v7's page gave a PDP-11 calling sequence here.  The convention on this machine is
+in doc/Besm6_Calling_Conventions.md: arguments are pushed in direct order below
+r15, the
+.I last
+one is left in the accumulator, r14 holds the negative argument count, r13 the
+return address, and the result comes back in the accumulator.
+.PP
+.B Note:
+one consequence shows up on several pages in section 2.  A system-call stub has
+.I no prologue and does not pop the stack,
+because the C convention has already put the arguments where the gate reads them
+and the gate performs the callee's cleanup itself.  That is why lib/libc/sys is
+assembly and not C.
+.SH BESM-6 NOTES
+.SS Link order is a contract
+.PP
+.RS
+.nf
+crt0.o objects... [\-lm] [\-lcurses] [\-ltermcap] \-lc \-lruntime
+.fi
+.RE
+.PP
+.I B6ld
+scans each archive exactly once, where it stands, and pulls a member only for a
+symbol still undefined.  libm calls into libc, libcurses calls into libtermcap
+and libc, libtermcap calls into libc, libc calls the compiler-support helpers of
+libruntime, and
+.B none of them calls back.
+.PP
+.I Libruntime.a
+comes from the external c-compiler and supplies nothing but those helpers.  The
+libc, the crt0.o and the headers are this repository's.
+.SS One hazard is silent
+A routine missing from libc.a can be satisfied from libruntime.a instead of
+failing to link.  Relink without it and read the errors \- every undefined name
+must be a
+.BR b$* :
+.PP
+.RS
+.nf
+b6ld crt0.o prog.o \-o /dev/null \-L.../libc \-lc
+.fi
+.RE

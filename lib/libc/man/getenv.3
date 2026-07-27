@@ -1,0 +1,74 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH GETENV 3
+.SH NAME
+getenv \- value for environment name
+.SH SYNOPSIS
+.B #include <stdlib.h>
+.PP
+.B char *getenv(const char *name);
+.SH DESCRIPTION
+.I Getenv
+searches the environment list
+(see
+.IR environ (5))
+for a string of the form
+.IB name = value
+and returns
+.I value
+if such a string is present, otherwise 0 (NULL).
+.SH SEE ALSO
+environ(5), exec(2), end(3)
+.SH FILES
+share/besm6/lib/libc.a
+.br
+lib/libc/gen/getenv.c, lib/libc/csu/crt0.s
+.SH BESM-6 NOTES
+.SS Where environ comes from
+Nothing is handed to a program in a register.  Both gates \- the kernel's
+.IR exece ()
+and b6sim's loader \- lay the argument block at the fixed base
+.B 070000
+and zero every register but the stack pointer, which is already seeded and must
+not be touched.
+.PP
+.I Crt0
+reads
+.I argc
+from that word and computes
+.PP
+.RS
+.nf
+environ = &block[argc + 2]
+.fi
+.RE
+.PP
+\- past
+.I argc
+itself, the
+.I argc
+pointers, and the null that terminates the
+.B argv[]
+vector.
+.I Environ
+is one word of bss defined there.
+.SS Every slot strides by one word
+A
+.B char *
+is a fat pointer and carries a byte offset, but a
+.B "char **"
+is a plain word address \- which is what
+.I argv
+and
+.I envp
+are here \- so walking the vector is ordinary word indexing and no decoding is
+involved.
+.SS The environment is not a good thing to write a test against
+lib/test/environ checks
+.I getenv
+against the vector it was handed, entry by entry, and prints
+.B neither a name nor a count.
+Under b6sim the environment is a whitelisted slice of the host's, so even
+MAKEFLAGS alone would make a count differ between a run under
+.I make
+and the same run by hand.  An expectation file may record only what the program
+does.

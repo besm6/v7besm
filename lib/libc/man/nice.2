@@ -1,0 +1,49 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH NICE 2 
+.SH NAME
+nice \- set program priority
+.SH SYNOPSIS
+.B int nice(int incr);
+.SH DESCRIPTION
+The scheduling
+priority of the process is augmented by
+.IR incr .
+Positive priorities get less
+service than normal.
+Priority 10 is recommended to users
+who wish to execute long-running programs
+without flak from the administration.
+.PP
+Negative increments are ignored except on behalf of 
+the super-user.
+The priority is limited to the range
+\-20 (most urgent) to 20 (least).
+.PP
+The priority of a process is
+passed to a child process by
+.IR fork (2).
+For a privileged process to return to normal priority
+from an unknown state,
+.I nice
+should be called successively with arguments
+\-40 (goes to priority \-20 because of truncation),
+20 (to get to 0),
+then 0 (to maintain compatibility with previous versions
+of this call).
+.SH "SEE ALSO"
+nice(1)
+.SH ASSEMBLER
+.B Note:
+v7's page gave the PDP-11 form here \- a decimal call number and a
+`\fBsys\fP \fIname\fP; \fIarg\fP ...' line.  Neither is how a call is made on this
+machine.  The gate is one extracode \-
+.B $77 SYS_nice
+\- and the C calling convention has already put the arguments where it reads them:
+1..n\-1 below r15, the last in the accumulator, the result in the accumulator, the
+error number in r14.
+.PP
+.B The numbering itself is v7's, unchanged.
+The macro is defined in <sys/syscall.h>, which is the only place a syscall number
+appears on the user side.  See
+.IR intro (2)
+for the whole contract.

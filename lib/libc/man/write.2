@@ -1,0 +1,57 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH WRITE 2
+.SH NAME
+write \- write on a file
+.SH SYNOPSIS
+.B #include <unistd.h>
+.PP
+.B int write(int fildes, const char *buffer, int nbytes);
+.SH DESCRIPTION
+A file descriptor is a word returned from a
+successful
+.I open,
+.I creat,
+.I dup,
+or
+.IR pipe (2)
+call.
+.PP
+.I Buffer
+is the address of
+.I nbytes
+contiguous
+bytes which are written on the output file.
+The number of characters actually written is returned.
+It should be regarded as an error
+if this is not the same as requested.
+.PP
+Writes which are multiples
+of a block long and begin on a block boundary
+in the file
+are more efficient than any others.
+.B Note:
+v7 said 512 characters.
+.B A block is BSIZE == 3072 bytes here,
+which is 512
+.I words.
+.SH "SEE ALSO"
+creat(2), open(2), pipe(2)
+.SH DIAGNOSTICS
+Returns
+\-1 on error: bad descriptor, buffer address, or
+count; physical I/O errors.
+.SH ASSEMBLER
+.B Note:
+v7's page gave the PDP-11 form here \- a decimal call number and a
+`\fBsys\fP \fIname\fP; \fIarg\fP ...' line.  Neither is how a call is made on this
+machine.  The gate is one extracode \-
+.B $77 SYS_write
+\- and the C calling convention has already put the arguments where it reads them:
+1..n\-1 below r15, the last in the accumulator, the result in the accumulator, the
+error number in r14.
+.PP
+.B The numbering itself is v7's, unchanged.
+The macro is defined in <sys/syscall.h>, which is the only place a syscall number
+appears on the user side.  See
+.IR intro (2)
+for the whole contract.

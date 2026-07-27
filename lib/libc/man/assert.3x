@@ -1,0 +1,112 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH ASSERT 3X
+.SH NAME
+assert, static_assert \-
+program verification
+.SH SYNOPSIS
+.B #include <assert.h>
+.PP
+.B void assert(scalar expression);
+.PP
+.B static_assert(constant-expression, string-literal);
+.SH DESCRIPTION
+.PP
+.I Assert
+is a macro that indicates
+.I expression
+is expected to be true at this point in the program.
+It writes a diagnostic to the standard
+.I error
+file and calls
+.IR abort (3)
+when
+.I expression
+is false (0).
+Compiling with the
+.IR b6cc (1)
+option
+.SM
+.B \-DNDEBUG
+effectively deletes
+.I assert
+from the program.
+.PP
+.B Note:
+v7's page said it "causes an exit(2) with a diagnostic comment on the standard
+output".  Two corrections there:
+.B the diagnostic goes to fd 2,
+and the macro calls
+.I abort
+rather than
+.BR exit(1) ,
+which C11 sec 7.2.1.1 requires and which is worth having \- v7's
+.B exit(1)
+was indistinguishable from an ordinary failure.
+.PP
+.B Note:
+.I static_assert
+is C11 and had no v7 ancestor.  It is a macro spelling of the
+.B _Static_assert
+keyword, which the front end implements, so it costs nothing.
+.SH DIAGNOSTICS
+`Assertion failed:
+.I expression,
+file
+.I f,
+line
+.I n'
+.PP
+.B Note:
+v7 printed the file and line only.
+.I F
+is the source file and
+.I n
+the source line number
+of the
+.I assert
+statement.
+.SH FILES
+share/besm6/lib/libc.a
+.br
+lib/libc/gen/assert.c, include/assert.h
+.SH SEE ALSO
+abort(3)
+.SH BESM-6 NOTES
+.SS <assert.h> is deliberately unguarded, and it is the only such header here
+C11 sec 7.2 says NDEBUG is re-examined at
+.I every
+inclusion, so a source may include the header, define NDEBUG, and include it
+again to turn assertions off for the rest of the translation unit.  An include
+guard would silently defeat that, so the file opens with
+.B #undef assert
+instead.
+.SS assert is an expression
+v7's macro expanded to a
+.I brace block,
+so
+.B "if (p) assert(q); else ..."
+was a syntax error and
+.B "assert(q), f()"
+would not parse at all.  C11 sec 7.2.1.1 requires a
+.B void
+expression, and this one is a conditional.
+.PP
+v7's macro also called
+.I fprintf
+and
+.I exit
+without declaring either, which no longer compiles: the front end has no implicit
+declarations.
+.SS The handler writes with write(), not through stdio
+There is no stdio dependency here at all, and that is deliberate: an assertion
+failure is exactly the moment not to depend on a buffered stream, which is the
+thing most likely to be broken already.
+.IR Perror (3)
+writes the same way and for the same reason.
+.PP
+Nothing is #included by <assert.h> either \-
+.B _Noreturn
+is a keyword and the handler is declared in the header \- so a source that
+asserts need not drag in stdio or stdlib to do it.
+.SS _assert is kept
+v7's alias, for the v7 sources that still spell it that way.

@@ -1,0 +1,98 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH LSEEK 2
+.SH NAME
+lseek, tell \- move read/write pointer
+.SH SYNOPSIS
+.B long lseek(int fildes, long offset, int whence);
+.PP
+.B long tell(int fildes);
+.SH DESCRIPTION
+The file
+descriptor refers to a file open for reading or writing.
+The read (resp. write) pointer for the file is set as follows:
+.IP
+If
+.I whence
+is 0, the pointer is set to
+.I offset
+bytes.
+.IP
+If
+.I whence
+is 1, the pointer is set to its current location plus
+.IR offset .
+.IP
+If
+.I whence
+is 2, the pointer is set to the size of the
+file plus
+.IR offset .
+.PP
+The returned value is the resulting pointer location.
+.PP
+The obsolete function
+.IR tell ( fildes )
+is identical to
+.IR lseek ( "fildes, 0L, 1" ).
+.PP
+Seeking far beyond the end of a file, then writing,
+creates a gap or `hole', which occupies no
+physical space and reads as zeros.
+.SH "SEE ALSO"
+open(2), creat(2), fseek(3)
+.SH DIAGNOSTICS
+\-1
+is returned for
+an undefined file descriptor,
+seek on a pipe,
+or seek to a position before the beginning of file.
+.SH BUGS
+.I Lseek
+is a no-op on character special files.
+.SH BESM-6 NOTES
+.B An offset is one word, and the gate lost an argument because of it.
+.PP
+.B off_t
+is
+.B int
+is
+.BR long ,
+all one 48-bit word, so v7's two-word offset collapses to one.  The kernel's
+.I sysent
+entry said the call takes four arguments \- a PDP-11 leftover where the offset was
+a two-word
+.B long
+\- and it says three now, matching the argument struct the kernel's own
+.IR seek ()
+reads.
+.PP
+.B That count is the contract nothing else can express.
+A stub carries no arity; the kernel reads it from
+.I sysent
+and b6sim from its own table, and every caller's prototype must agree with both.
+A count that disagrees reads the arguments from the wrong slots
+.I and
+drifts the caller's stack by a word per call.  See
+.IR intro (2).
+.PP
+.I Tell
+is declared by no header \- v7 had none \- so a caller declares it itself.
+.IR Stime (2)
+shed an argument in exactly the same way, its
+.B time_t
+having been two PDP-11 words.
+.SH ASSEMBLER
+.B Note:
+v7's page gave the PDP-11 form here \- a decimal call number and a
+`\fBsys\fP \fIname\fP; \fIarg\fP ...' line.  Neither is how a call is made on this
+machine.  The gate is one extracode \-
+.B $77 SYS_seek
+\- and the C calling convention has already put the arguments where it reads them:
+1..n\-1 below r15, the last in the accumulator, the result in the accumulator, the
+error number in r14.
+.PP
+.B The numbering itself is v7's, unchanged.
+The macro is defined in <sys/syscall.h>, which is the only place a syscall number
+appears on the user side.  See
+.IR intro (2)
+for the whole contract.

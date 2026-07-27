@@ -1,0 +1,87 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH QSORT 3
+.SH NAME
+qsort \- quicker sort
+.SH SYNOPSIS
+.B #include <stdlib.h>
+.PP
+.B void qsort(void *base, size_t nel, size_t width,
+.B "        int (*compar)(const void *, const void *));"
+.SH DESCRIPTION
+.I Qsort
+is an implementation
+of the quicker-sort algorithm.
+The first argument is a pointer to the base of the data;
+the second is the number of elements;
+the third is the width of an element
+in bytes;
+the last is the name of the comparison routine
+to be called with two arguments which are pointers
+to the elements being compared.
+The routine must return
+an integer less than, equal to, or greater than 0
+according as the first argument is to be considered
+less than, equal to, or greater than the second.
+.SH "SEE ALSO"
+sort(1), string(3)
+.SH BESM-6 NOTES
+.SS The width is in bytes, and a word is six of them
+So sorting an array of
+.B int
+means
+.BR "width = sizeof(int) = 6" ,
+not 2 and not 4.  A page that says otherwise is quoting a different machine.
+.SS The pointer comparisons are safe, and that is not luck
+.I Qsort
+compares partition cursors
+.RB ( "i < lp" ", " "j > hp" )
+and takes a difference
+.RB ( "l \- a" ),
+and a fat
+.B char *
+does
+.I not
+sort as a plain word: incrementing one
+.B decreases
+its 3-bit byte offset, which sits above the word address.
+.PP
+.B The compiler knows.
+It lowers a relational between two fat pointers through
+.BR b$pdiff ,
+the same helper as
+.BR \- ,
+and tests the sign.  So this file is v7's arithmetic, unchanged.  See
+.IR getpass (3)
+for the case where the same operator
+.I does
+give the wrong answer, and why.
+.SS The exchanges go a word at a time when they can
+This is the one thing this file adds to v7, and the alignment test is expressible
+in C: casting a
+.B char *
+to an
+.B "int *"
+discards the byte offset, and casting back rebuilds it as byte #0, so
+.B the round trip is the identity exactly for a pointer that was already at
+.B byte #0.
+Two such pointers and a width that is a whole number of words mean the swap can
+move words.
+.SS The comparison lives in a file-scope static, as v7 has it
+That is worth recording because for a time it could not.  A toolchain defect made
+a call through a file-scope function pointer fail, and the routine had to carry
+its comparison through a parameter instead.  It is fixed upstream, and the
+structural change it forced is gone.
+.PP
+The durable fact underneath: a call through a function pointer is a
+.B wtc
+of the pointer and a bare
+.BR "13 vjm" ,
+wherever the pointer lives \- a parameter, an auto, an array element or a
+file-scope variable.
+.B wtc
+carries a 15-bit address, so it reaches a global with no address escape, and a
+callback needs no special handling at all.
+.SH FILES
+share/besm6/lib/libc.a
+.br
+lib/libc/gen/qsort.c

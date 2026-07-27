@@ -1,0 +1,55 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH OPEN 2
+.SH NAME
+open \- open for reading or writing
+.SH SYNOPSIS
+.B #include <fcntl.h>
+.PP
+.B int open(const char *name, int mode);
+.SH DESCRIPTION
+.I Open
+opens the file
+.I name
+for reading
+(if
+.I mode
+is 0),
+writing (if
+.I mode
+is 1) or for both reading and writing
+(if
+.I mode
+is 2).
+.B Note:
+<fcntl.h> names those three O_RDONLY, O_WRONLY and O_RDWR.  v7 had no such
+header and its page wrote the digits.
+.I Name
+is the address of a string of ASCII characters representing
+a path name, terminated by a null character.
+.PP
+The file is positioned at the beginning (byte 0).
+The returned file descriptor must be used for subsequent calls
+for other input-output functions on the file.
+.SH "SEE ALSO"
+creat(2), read(2), write(2), dup(2), close(2)
+.SH DIAGNOSTICS
+The value \-1 is returned
+if the file does not exist,
+if one of the necessary directories
+does not exist or is unreadable, if the file is not
+readable (resp. writable), or if too many files are open.
+.SH ASSEMBLER
+.B Note:
+v7's page gave the PDP-11 form here \- a decimal call number and a
+`\fBsys\fP \fIname\fP; \fIarg\fP ...' line.  Neither is how a call is made on this
+machine.  The gate is one extracode \-
+.B $77 SYS_open
+\- and the C calling convention has already put the arguments where it reads them:
+1..n\-1 below r15, the last in the accumulator, the result in the accumulator, the
+error number in r14.
+.PP
+.B The numbering itself is v7's, unchanged.
+The macro is defined in <sys/syscall.h>, which is the only place a syscall number
+appears on the user side.  See
+.IR intro (2)
+for the whole contract.

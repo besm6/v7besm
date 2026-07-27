@@ -1,0 +1,65 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH TIMES 2
+.SH NAME
+times \- get process times
+.SH SYNOPSIS
+.B #include <sys/times.h>
+.PP
+.B int times(struct tms *buffer);
+.SH DESCRIPTION
+.I Times
+returns time-accounting information
+for the current process
+and for the terminated child processes
+of the current process.
+All times are in 1/HZ seconds.
+.B Note:
+.B HZ is 250 here,
+which is what this kernel programs the clock to and what CLOCKS_PER_SEC in
+<time.h> is defined as.
+.PP
+After the call, the buffer will appear as follows:
+.PP
+.nf
+struct tms {
+	time_t	tms_utime;	/* user time */
+	time_t	tms_stime;	/* system time */
+	time_t	tms_cutime;	/* user time, children */
+	time_t	tms_cstime;	/* system time, children */
+};
+.PP
+.fi
+.B Note:
+v7's page called the struct
+.I tbuffer
+and its members
+.IR proc_user_time
+and so on.  The names here are the ones <sys/times.h> declares, which are the
+names v7's own kernel and successors use.
+The children times are the sum
+of the children's process times and
+their children's times.
+.SH "SEE ALSO"
+time(1), time(2), ctime(3)
+.PP
+.B Note:
+<sys/times.h> declares
+.I times
+now; v7 declared it in no header and every caller wrote its own extern.  The
+declaration is guarded, because the kernel has a handler of the same name with a
+different shape and the two must never both be in scope.
+.SH ASSEMBLER
+.B Note:
+v7's page gave the PDP-11 form here \- a decimal call number and a
+`\fBsys\fP \fIname\fP; \fIarg\fP ...' line.  Neither is how a call is made on this
+machine.  The gate is one extracode \-
+.B $77 SYS_times
+\- and the C calling convention has already put the arguments where it reads them:
+1..n\-1 below r15, the last in the accumulator, the result in the accumulator, the
+error number in r14.
+.PP
+.B The numbering itself is v7's, unchanged.
+The macro is defined in <sys/syscall.h>, which is the only place a syscall number
+appears on the user side.  See
+.IR intro (2)
+for the whole contract.

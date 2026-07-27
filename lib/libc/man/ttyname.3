@@ -1,0 +1,87 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH TTYNAME 3
+.SH NAME
+ttyname, isatty, ttyslot \- find name of a terminal
+.SH SYNOPSIS
+.B char *ttyname(int fildes);
+.PP
+.B int isatty(int fildes);
+.PP
+.B int ttyslot(void);
+.SH DESCRIPTION
+.I Ttyname
+returns a pointer to the null-terminated path name
+of the terminal device associated with file descriptor
+.IR fildes .
+.PP
+.I Isatty
+returns 1 if
+.I fildes
+is associated with a terminal device, 0 otherwise.
+.PP
+.I Ttyslot
+returns the number of the entry in the
+.IR ttys (5)
+file for the control terminal of the
+current process.
+.PP
+.B Note:
+none of the three is declared by a header \- v7 had none and C11 has no such
+routines \- so a caller declares them itself.
+.SH FILES
+/dev/*
+.br
+/etc/ttys
+.br
+share/besm6/lib/libc.a, lib/libc/gen/ttyname.c, isatty.c, ttyslot.c
+.SH SEE ALSO
+ioctl(2), ttys(5), getlogin(3), stty(2)
+.SH DIAGNOSTICS
+.I Ttyname
+returns a null pointer (0) if
+.I fildes
+does not describe a terminal device in directory `/dev'.
+.PP
+.I Ttyslot
+returns 0 if `/etc/ttys' is inaccessible or if
+it cannot determine the control terminal.
+.SH BUGS
+The return value points to static data
+whose content is overwritten by each call.
+.SH BESM-6 NOTES
+.SS Reading a directory is an ordinary read(2) here
+As it was in v7, and as this kernel allows.  The consequence is worth knowing
+before writing a test:
+.B ttyname works under the kernel and not under b6sim,
+whose
+.I read
+is the host's and refuses a directory.
+.I Ttyslot
+and
+.IR getlogin (3)
+stand on it and are the same story.  Their failure paths are what the b6sim
+suite covers; the rest is exercised off the disk image.
+.PP
+The directory buffer is sized from
+.B DIRSIZ
+rather than v7's flat 32, since DIRSIZ is
+.B 18
+here and not 14.
+.SS isatty
+.B struct sgttyb is five words here
+\- four chars, each occupying a word of its own, and an
+.BR int .
+That is the shape
+.IR gtty (2)
+fills, and there is no packing to undo.
+.SS Two v7 bugs fixed rather than carried
+.I Ttyname
+copied the directory entry onto the end of "/dev/" with an unbounded
+.IR strcat ,
+which a long enough entry overran.
+.PP
+.I Ttyslot
+tested for the end of its buffer
+.I after
+storing the character, so a line of exactly 32 characters wrote one past the
+array.

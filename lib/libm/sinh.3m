@@ -1,0 +1,74 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH SINH 3M
+.SH NAME
+sinh, cosh, tanh \- hyperbolic functions
+.SH SYNOPSIS
+.B #include <math.h>
+.PP
+.B double sinh(double x);
+.PP
+.B double cosh(double x);
+.PP
+.B double tanh(double x);
+.SH DESCRIPTION
+These functions compute the designated hyperbolic functions
+for real arguments.
+.SH SEE ALSO
+exp(3), sin(3), intro(2)
+.SH DIAGNOSTICS
+.I Sinh
+and
+.I cosh
+return HUGE_VAL of appropriate sign
+when the correct value would overflow, and set
+.I errno
+to ERANGE.
+.B Note:
+v7's page did not mention
+.IR errno .
+The value comes from
+.IR exp (3),
+which is where the gate is; see BESM-6 NOTES.
+.PP
+.I Tanh
+is bounded by 1 and has no error return.
+.SH BESM-6 NOTES
+.SS The thresholds were mantissa widths, and had to be rederived
+For a large argument the exp(\-x) term stops contributing and all three routines
+drop it.  v7 puts that point at
+.BR 21 ,
+which is where it dies against a
+.I 56-bit
+PDP-11 mantissa.  The mantissa here is 40 bits, so the term dies at
+20*ln2 = 13.86: past |x| = 14, exp(\-2x) is already below 2**\-40, and exp(x) \-
+exp(\-x) and exp(x) agree to the last bit.
+.B All three routines switch at 14.
+.SS The large branch is spelled exp(x \- ln2), not exp(x)/2
+Identical arithmetic, and the difference is which routine raises the error.
+.PP
+.IR Exp (3)
+gates its own argument at 43.6 = ln(DBL_MAX), so
+.B exp(x)/2
+would come back as a saturated HUGE_VAL/2 for
+.I x
+in (43.6, 44.3] \- where the true
+.IR sinh ,
+being half of exp(x), is still perfectly representable.  Writing it
+.B exp(x \- ln2)
+moves
+.IR exp 's
+gate out to x = 44.3 = ln(2*DBL_MAX), which is exactly where
+.I sinh
+itself overflows, and lets
+.I exp
+raise the ERANGE at the right place.
+.PP
+This matters more here than it would elsewhere, because on this machine an
+overflow past 2**63 is an arithmetic fault that
+.B kills the program,
+not an infinity to return.  A gate one tenth too loose does not produce a wrong
+number; it produces no number at all.
+.SH FILES
+share/besm6/lib/libm.a
+.br
+lib/libm/sinh.c, tanh.c

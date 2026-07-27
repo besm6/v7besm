@@ -1,0 +1,52 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH GETUID 2
+.SH NAME
+getuid, getgid, geteuid, getegid \- get user and group identity
+.SH SYNOPSIS
+.B #include <unistd.h>
+.PP
+.B uid_t getuid(void);
+.PP
+.B uid_t geteuid(void);
+.PP
+.B gid_t getgid(void);
+.PP
+.B gid_t getegid(void);
+.SH DESCRIPTION
+.I Getuid
+returns the real user ID of the current process,
+.I geteuid
+the effective user ID.
+The real user ID identifies the person who is logged in,
+in contradistinction to the effective user ID, which
+determines his access permission at the moment.
+It is thus useful to programs which operate using
+the `set user ID' mode, to find out who invoked them.
+.PP
+.I Getgid
+returns the real group ID,
+.I getegid
+the effective group ID.
+.SH "SEE ALSO"
+setuid(2), getpid(2)
+.SH BESM-6 NOTES
+.B Two extracodes, four entry points.
+Each gate returns the real id in the accumulator and the effective one in r12, so
+each pair is two labels on one hand-written stub.  See
+.IR intro (2).
+.SH ASSEMBLER
+.B Note:
+v7's page gave the PDP-11 form here \- a decimal call number and a
+`\fBsys\fP \fIname\fP; \fIarg\fP ...' line.  Neither is how a call is made on this
+machine.  The gate is one extracode \-
+.B $77 SYS_getuid,
+.B SYS_getgid
+\- and the C calling convention has already put the arguments where it reads them:
+1..n\-1 below r15, the last in the accumulator, the result in the accumulator, the
+error number in r14.
+.PP
+.B The numbering itself is v7's, unchanged.
+The macro is defined in <sys/syscall.h>, which is the only place a syscall number
+appears on the user side.  See
+.IR intro (2)
+for the whole contract.

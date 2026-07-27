@@ -1,0 +1,126 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH ATOF 3
+.SH NAME
+atof, atoi, atol, strtol, strtoul \- convert ASCII to numbers
+.SH SYNOPSIS
+.B #include <stdlib.h>
+.PP
+.B double atof(const char *nptr);
+.PP
+.B int atoi(const char *nptr);
+.PP
+.B long atol(const char *nptr);
+.PP
+.B long strtol(const char *nptr, char **endptr, int base);
+.PP
+.B unsigned long strtoul(const char *nptr, char **endptr, int base);
+.SH DESCRIPTION
+These functions convert a string pointed to by
+.I nptr
+to floating, integer, and long integer
+representation respectively.
+The first unrecognized character ends the string.
+.PP
+.I Atof
+recognizes an optional string of tabs and spaces,
+then an optional sign, then
+a string of digits optionally containing a decimal
+point, then an optional `e' or `E' followed
+by an optionally signed integer.
+.PP
+.I Atoi
+and
+.I atol
+recognize an optional string of tabs and spaces,
+then an optional sign, then a string of
+digits.
+.PP
+.B Note:
+.I strtol
+and
+.I strtoul
+are C11 and had no v7 ancestor.  Each converts an initial subject sequence in
+.I base
+(2 to 36, or 0 to take the base from a leading "0x" or "0"), stores a pointer to
+the first unconverted character through
+.I endptr
+if that is not NULL, and reports overflow by returning the appropriate limit
+with
+.I errno
+set to ERANGE.  They are what a caller should use where
+.I atoi
+has "no provisions for overflow".
+.SH SEE ALSO
+scanf(3), ecvt(3), string(3)
+.SH BUGS
+There are no provisions for overflow
+.I in the atoi family.
+.SH BESM-6 NOTES
+.SS atol is a call to atoi
+.B long
+is
+.B int
+here \- one word \- so the two conversions cannot differ by so much as an
+overflow.  One word is also all the system-call gate carries, which is why
+.IR lseek (2)
+and
+.IR stime (2)
+each shed an argument v7's gate had.
+.SS The limits are asymmetric and narrow
+.B long
+is 41 bits signed, so LONG_MAX is 2**40\-1 and LONG_MIN is \-2**40, while an
+.B "unsigned long"
+is the full 48 bits.  A page that quotes the PDP-11's 32767 or 2147483647 is
+quoting a different machine.
+.SS No signed value is ever reinterpreted as unsigned
+An integer here is a 41-bit two's-complement field with bits 48..42
+.IR zero ,
+so the raw word of a negative value is
+.I not
+its 48-bit two's complement.  BSD's scanner builds its negative cutoff as
+.B "\-(unsigned long)LONG_MIN"
+and assigns LONG_MIN into an unsigned accumulator; both depend on how the front
+end widens a sign, and here it
+.I reinterprets
+rather than sign-extends \-
+.B (unsigned long)(\-1L) is 2**41\-1, not ULONG_MAX.
+.PP
+Every cast in
+.I strtol
+is value-preserving instead: the negative cutoff is
+.BR "(unsigned long)LONG_MAX + 1" ,
+and LONG_MIN is returned as the constant and never as
+.BR "\-(long)acc" ,
+the accumulator holding 2**40 there, which no
+.B long
+can.
+.SS Two C11 fixes to the scanner it came from
+"0x" with no hex digit after it converts the 0 and stops at the `x'.  BSD
+consumes the prefix, finds nothing, and reports the whole input unconsumed.
+.PP
+A base outside 0 and 2..36 gives EINVAL.  C11 leaves it undefined and BSD scans
+on regardless.
+.SS atof's constants are this machine's
+.I Big
+is 2**40, not v7's 2**56, and LOGHUGE is 19 rather than 39 \- both mantissa and
+exponent widths, and both wrong if carried over.  The local exponent variable is
+spelled
+.I dexp
+because the front end has one namespace for objects and functions and <math.h>
+has declared
+.IR exp ().
+.PP
+.I Atof
+also avoids the comma operator, which the front end evaluated to its
+.I left
+operand for a time \- so
+.B "while (isdigit(c = *p++))"
+read "3.5" as the three digits 3, \-2 and 5.  That is fixed upstream and the
+spelling is now a preference rather than a workaround.
+.SS strtoul is a second copy of the scanner, deliberately
+One member per function is what lets the archive index pull only the one a
+program calls, and a shared core would come along with either.
+.SH FILES
+share/besm6/lib/libc.a
+.br
+lib/libc/gen/atof.c, atoi.c, atol.c, strtol.c, strtoul.c

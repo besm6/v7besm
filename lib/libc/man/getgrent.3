@@ -1,0 +1,128 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH GETGRENT 3
+.SH NAME
+getgrent, getgrgid, getgrnam, setgrent, endgrent \- get group file entry
+.SH SYNOPSIS
+.B #include <grp.h>
+.PP
+.B struct group *getgrent(void);
+.PP
+.B struct group *getgrgid(int gid);
+.PP
+.B struct group *getgrnam(const char *name);
+.PP
+.B void setgrent(void);
+.PP
+.B void endgrent(void);
+.SH DESCRIPTION
+.I Getgrent,
+.I getgrgid
+and
+.I getgrnam
+each return pointers
+to an object
+with the following structure
+containing the broken-out
+fields of a line in the group file.
+.RS
+.PP
+.nf
+struct group {
+    char  *gr_name;
+    char  *gr_passwd;
+    int    gr_gid;
+    char **gr_mem;
+};
+.fi
+.RE
+.PP
+.B Note:
+v7's page pulled this in with a
+.B .so
+of the installed header.  It is written out here, because there is no installed
+/usr/include on this system \- the one header tree is
+share/besm6/include.  <grp.h> declares all five routines too; v7's declared the
+struct alone, leaving the rest to K&R's implicit
+.BR int .
+.PP
+The members of this structure are:
+.TP
+gr_name
+The name of the group.
+.br
+.ns
+.TP
+gr_passwd
+The encrypted password of the group.
+.br
+.ns
+.TP
+gr_gid
+The numerical group-ID.
+.br
+.ns
+.TP
+gr_mem
+Null-terminated vector
+of pointers to the individual
+member names.
+.PP
+.I Getgrent
+simply reads the next
+line while
+.I getgrgid
+and
+.I getgrnam
+search until a matching
+.I gid
+or
+.I name
+is found
+(or until EOF is encountered).
+Each routine picks up
+where the others leave off
+so successive calls may be used
+to search the entire file.
+.PP
+A call to
+.I setgrent
+has the effect of rewinding
+the group file
+to allow
+repeated searches.
+.I Endgrent
+may be called to
+close the group file
+when processing is complete.
+.SH FILES
+/etc/group
+.br
+share/besm6/lib/libc.a, lib/libc/stdio/getgrent.c, getgrnam.c, getgrgid.c
+.SH "SEE ALSO"
+getlogin(3), getpwent(3), group(5)
+.SH DIAGNOSTICS
+A null pointer
+(0) is returned on EOF or error.
+.SH BUGS
+All information
+is contained in a static area
+so it must be copied if it is
+to be saved.
+.B The struct, the strings and the member vector are all overwritten by the next
+.BR call .
+.SH BESM-6 NOTES
+The line buffer is
+.BR GRLINE ,
+not BUFSIZ, for the reason
+.IR getpwent (3)
+gives: BUFSIZ is 3072 here and describes a disk block rather than a line of text.
+.PP
+One v7 bug is fixed rather than carried, and it is in the member list \- the one
+field /etc/passwd has no counterpart to.  v7 sized the
+.I gr_mem
+vector at MAXGRP and then
+.B filled it without checking,
+so a group line with more members than that walked off the end of a file-scope
+array into whatever bss followed it.  The walk stops with room for the terminator
+now, and the tail is dropped.  A 512-byte line cannot hold a hundred names in any
+case; the bound is the array's, not the format's.

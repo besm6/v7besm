@@ -1,0 +1,128 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH SIN 3M
+.SH NAME
+sin, cos, tan, asin, acos, atan, atan2 \- trigonometric functions
+.SH SYNOPSIS
+.B #include <math.h>
+.PP
+.B double sin(double x);
+.PP
+.B double cos(double x);
+.PP
+.B double tan(double x);
+.PP
+.B double asin(double x);
+.PP
+.B double acos(double x);
+.PP
+.B double atan(double x);
+.PP
+.B double atan2(double y, double x);
+.SH DESCRIPTION
+.I Sin, cos
+and
+.I tan
+return trigonometric functions of radian arguments.
+The magnitude of the argument should be checked
+by the caller to make sure the result is meaningful.
+.PP
+.I Asin
+returns the arc sin in the range \-\(*p/2 to \(*p/2.
+.PP
+.I Acos
+returns the arc cosine in the range
+0 to \(*p.
+.PP
+.I Atan
+returns the arc tangent of
+.I x
+in the range \-\(*p/2 to \(*p/2.
+.PP
+.I Atan2
+returns the arc tangent of
+.I y/x
+in the range \-\(*p to \(*p.
+.B Note:
+v7's page named the arguments the other way round and called the result the arc
+tangent of
+.IR x/y .
+The routine is the same one; the names here are C11's, and <math.h> declares it
+.BR "atan2(double y, double x)" .
+.SH SEE ALSO
+exp(3), sinh(3), intro(2)
+.SH DIAGNOSTICS
+Arguments of magnitude greater than 1
+cause
+.I asin
+and
+.I acos
+to return value 0;
+.I errno
+is set to EDOM.
+The value of
+.I tan
+at its singular points is HUGE_VAL with the sign of the pole, and
+.I errno
+is set to ERANGE.
+.B Note:
+that is the "would have been an infinity" case, for which this machine has no
+value; HUGE_VAL is the largest finite one.
+.PP
+Nothing on this page can overflow.
+.I Atan
+and
+.I atan2
+evaluate their fit on an argument reduced to [\-0.414, 0.414], and
+.I asin
+and
+.I acos
+reduce to
+.I atan
+after their range check, so no error return but the two above exists.
+.SH BUGS
+The value of
+.I tan
+for arguments greater than about 2**40 is garbage.
+.B Note:
+v7 said 2**31, which was its own mantissa and integer widths speaking.  Here the
+reduction carries the integer part of x/\(*p through an
+.BR int ,
+which holds 41 bits, and above 2**40 a
+.B double
+has no fractional bits left in any case.
+.SH BESM-6 NOTES
+.SS The reduction crossover was a width, not a bound
+v7's
+.I sin
+reads
+.BR "if (x > 32764)" ,
+and that number is not mathematical: it is the last multiple of the quarter-turn
+below 2**15, past which the PDP-11's
+.B int
+overflowed, so above it v7 fell back on a slower reduction through
+.IR modf (3).
+.PP
+Here
+.B int
+is 41 bits, and the real point past which the fast integer reduction loses bits
+is 2**40 \- the width of the mantissa, and the same constant
+.I modf
+itself keys on.  The crossover moves out to 2**40 accordingly, so the fast path
+serves the whole range a program is likely to ask for.  A magnitude past 2**40
+has no fractional turn left to speak of anyway.
+.SS atan needed one line of C11
+v7's first line of
+.I atan.c
+reads
+.BR "double static sq2p1" ,
+which this front end rejects: the storage class has to precede the type.  The
+routine is otherwise unchanged, the closing
+.B if ((y + x) == y)
+test of
+.I atan2
+included \- that is v7's way of asking whether the angle is a right angle, and it
+works here for the same reason it worked on the PDP-11.
+.SH FILES
+share/besm6/lib/libm.a
+.br
+lib/libm/sin.c, tan.c, asin.c, atan.c
