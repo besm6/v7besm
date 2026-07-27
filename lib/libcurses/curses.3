@@ -41,21 +41,39 @@ This is the 4.3BSD library, ported.  See
 in the source tree for the whole account; what a caller needs to know is this.
 .PP
 .I bool
-is not defined by
-.IR <curses.h> .
+is C11's
+.IR _Bool ,
+not a macro.
 4.3BSD spelled the boolean capabilities and window flags
 .IR bool ,
-which was a macro for
+which was its own macro for
 .IR int ;
-here they are declared
-.I int
-outright, because a
+.I <curses.h>
+includes
+.I <stdbool.h>
+and declares them with the real type instead.  Redefining the name was not open to it \-
+a
 .I bool
-macro would collide with
-.IR <stdbool.h> ,
-and C11
+macro of its own would collide with the one
+.I <stdbool.h>
+already has, in either inclusion order.
+On this machine
 .I _Bool
-is not something the compiler back end can lower.
+occupies a whole word like every other scalar, so nothing changes size, and
+converting any scalar to it is a zero test, so such an object never holds anything but
+0 or 1.
+.I TRUE
+and
+.I FALSE
+are
+.I true
+and
+.IR false ;
+.I ERR
+and
+.I OK
+are return codes and remain
+.IR int .
 .PP
 The tty-mode routines \-
 .IR raw() ,

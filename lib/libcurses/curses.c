@@ -19,10 +19,10 @@
 //
 #include "internal.h"
 
-int _echoit  = TRUE,  // set if stty indicates ECHO
-    _rawmode  = FALSE, // set if stty indicates RAW mode
-    My_term   = FALSE, // set if the user specifies the terminal type
-    _endwin   = FALSE; // set if endwin() has been called
+bool _echoit = TRUE,  // set if stty indicates ECHO
+    _rawmode = FALSE, // set if stty indicates RAW mode
+    My_term  = FALSE, // set if the user specifies the terminal type
+    _endwin  = FALSE; // set if endwin() has been called
 
 char ttytype[50];              // long name of the tty
 char *Def_term    = "unknown"; // default terminal type
@@ -36,7 +36,7 @@ WINDOW *stdscr = NULL, *curscr = NULL;
 
 SGTTY _tty; // tty modes
 
-int AM, BS, CA, DA, DB, EO, HC, HZ, IN, MI, MS, NC, NS, OS, UL, XB, XN, XT, XS, XX;
+bool AM, BS, CA, DA, DB, EO, HC, HZ, IN, MI, MS, NC, NS, OS, UL, XB, XN, XT, XS, XX;
 char *AL, *BC, *BT, *CD, *CE, *CL, *CM, *CR, *CS, *DC, *DL, *DM, *DO, *ED, *EI, *K0, *K1,
     *K2, *K3, *K4, *K5, *K6, *K7, *K8, *K9, *HO, *IC, *IM, *IP, *KD, *KE, *KH, *KL, *KR, *KS,
     *KU, *LL, *MA, *ND, *NL, *RC, *SC, *SE, *SF, *SO, *SR, *TA, *TE, *TI, *UC, *UE, *UP, *US,
@@ -44,4 +44,4 @@ char *AL, *BC, *BT, *CD, *CE, *CL, *CM, *CR, *CS, *DC, *DL, *DM, *DO, *ED, *EI, 
 char PC; // see the header comment: written by setterm(), read by nothing
 
 // From the tty modes, via gettmode().
-int GT, NONL, normtty, _pfast;
+bool GT, NONL, normtty, _pfast;

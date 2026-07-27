@@ -27,7 +27,7 @@
 #include <string.h>
 #include <term.h>
 
-static int *sflags[] = { &AM, &BS, &DA, &DB, &EO, &HC, &HZ, &IN, &MI, &MS,
+static bool *sflags[] = { &AM, &BS, &DA, &DB, &EO, &HC, &HZ, &IN, &MI, &MS,
                           &NC, &NS, &OS, &UL, &XB, &XN, &XT, &XS, &XX };
 
 static char *_PC,
@@ -77,7 +77,7 @@ void gettmode(void)
 static void zap(void)
 {
     register char *namp;
-    register int **fp;
+    register bool **fp;
     register char ***sp;
 
     namp = "ambsdadbeohchzinmimsncnsosulxbxnxtxsxx";

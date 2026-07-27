@@ -30,7 +30,7 @@
 
 static short ly, lx;
 
-static int curwin;
+static bool curwin;
 
 WINDOW *_win = NULL;
 

@@ -7,7 +7,7 @@
 //
 #include "internal.h"
 
-void idlok(WINDOW *win, int bf)
+void idlok(WINDOW *win, bool bf)
 {
     if (bf)
         win->_flags |= _IDLINE;

@@ -1,13 +1,13 @@
 # libcurses — 4.3BSD screen handling on the BESM-6
 
 Windows, a screen image, and the cursor motion that reconciles the two. Thirty-nine sources,
-**5,314 words** of object code all told, built on [`../libtermcap`](../libtermcap/) and
+**5,311 words** of object code all told, built on [`../libtermcap`](../libtermcap/) and
 reading the `/etc/termcap` that [`../../etc/`](../../etc/) stages onto the root filesystem.
 It is the library `../../include/curses.h` and `../../include/unctrl.h` had been waiting for
 since before there was a termcap to stand on.
 
-The four largest objects are where the work is: `refresh.o` (856 words) is the screen-diff
-engine, `cr_put.o` (667) the motion optimiser, `cr_tty.o` (636) the terminal description and
+The four largest objects are where the work is: `refresh.o` (857 words) is the screen-diff
+engine, `cr_put.o` (667) the motion optimiser, `cr_tty.o` (639) the terminal description and
 `newwin.o` (454) the allocator. One function group per file, so `b6ranlib`'s index lets a
 program pay only for what it calls.
 
@@ -61,28 +61,52 @@ of the API, and this front end has no implicit declarations, so `overlay`, `wins
 points were each a hard error at their first caller — and drops `UPPERCASE`, which 4.3BSD
 declared and never defined.
 
-## `bool` is spelled `int`, and that took three attempts
+## `bool` is C11's, and this library is the first `_Bool` in the tree
 
-4.3BSD wrote `#define bool int`. Three things rule out every obvious way to keep the name:
+4.3BSD wrote `#define bool int` and used the name for every window flag and every boolean
+capability. `<curses.h>` includes `<stdbool.h>` and declares them `bool` — the real type, not
+a macro of our own — so `curses.c`, `cr_tty.c`, `idlok.c`, `getch.c` and `refresh.c` read the
+way Berkeley wrote them.
 
-- **`#define bool int` collides with `<stdbool.h>`.** Different replacement lists for the
-  same macro is a constraint violation (C11 §6.10.3p2) in *either* inclusion order, and
-  `<stdbool.h>` is one of the ten freestanding headers on the default include path. A
-  program including both would take a diagnostic through no fault of its own.
-- **C11 `bool` does not compile here.** `b6lower` answers
-  `Fatal error: ast_type_to_tac_type: unsupported type kind 1` for a `_Bool` object of any
-  storage class. The front end parses the type and `get_size()` has a case for it, but the
-  lowering pass does not. Nothing in this tree had used `_Bool` before, so nothing had found
-  out. A three-line program with one `bool` global reproduces it.
-- **And if it compiled it would still be the odd one out.** `sizeof(_Bool)` is **one
-  char-unit** here, not one word like every other scalar
-  ([`../../doc/Besm6_Data_Representation.md`](../../doc/Besm6_Data_Representation.md)) — so
-  a `bool` member would be a sub-word object and `bool *` a fat pointer, and `cr_tty.c`'s
-  `static int *sflags[]` is written through exactly that way.
+**That was not true when the port landed**, and the route here is worth recording because
+nothing else in the tree had ever named `_Bool`. Two compiler defects and a layout objection
+stood in the way, and the port shipped with `int` in every one of those places:
 
-So the declarations say `int`, which is what 4.3BSD's `bool` expanded to anyway, and no name
-is claimed. A program that wants the BSD spelling can `#define bool int` itself, as long as
-it does not also want `<stdbool.h>`.
+- **`b6lower` could not lower it.** `Fatal error: ast_type_to_tac_type: unsupported type kind
+  1` for a `_Bool` object of any storage class — file-scope, `static`, array, pointer or
+  `typedef`. The front end parsed the type and `get_size()` had a case for it; the lowering
+  pass had none. A three-line program with one `bool` global reproduced it.
+- **Conversion to `_Bool` did not normalise.** `bool b = 5;` stored 5, against C11 §6.3.1.2.
+  Boolean contexts still worked, because `!b` and `if (b)` re-test against zero; what broke
+  was `b == 1`, `b + b` and printing — and `cr_put.c` compares `AM` and `_pfast` against `0`
+  in three places.
+- **And `sizeof(_Bool)` was one char-unit**, not one word like every other scalar, which
+  would have made a `bool` member a sub-word object and `bool *` a **fat pointer** —
+  and `cr_tty.c`'s table of pointers-to-flags is written through exactly that way.
+
+All three are fixed upstream, in c-compiler commit `2fcd322`. `_Bool` now has **int's
+representation**: `bool_size`/`bool_align` of 6 and 6 on this target, so `sizeof(bool)` is one
+word ([`../../doc/Besm6_Data_Representation.md`](../../doc/Besm6_Data_Representation.md)) and
+`bool *` is an ordinary word pointer. Note that the carrier is `int` and **not** the
+`unsigned char` the bug report proposed: the char TAC kinds mean byte-packed storage and fat
+byte pointers, which is the very thing that ruled `_Bool` out here. And `emit_bool_normalize()`
+now runs on every conversion path — assignment, initialisation, argument passing, return,
+explicit cast, `++`/`--` — so a `bool` object never holds anything but 0 or 1.
+
+**Keeping BSD's own `#define bool int` was never an option and still is not.** A different
+replacement list for a macro `<stdbool.h>` also defines is a constraint violation (C11
+§6.10.3p2) in *either* inclusion order, and `<stdbool.h>` is one of the ten freestanding
+headers the external compiler puts on the default include path; a program including both would
+take a diagnostic through no fault of its own. Using the type instead of redefining the name
+sidesteps the question. `TRUE` and `FALSE` are `true` and `false` now for the same reason —
+they are the boolean constants — while `ERR` and `OK` stay `int`, being return codes.
+
+The cost is four words: `cr_tty.o` 636 → 639 and `refresh.o` 856 → 857, which is
+`emit_bool_normalize()` — a `b$ne` zero test — on the two `int`-valued stores,
+`*(*fp++) = tgetflag(namp)` and `curwin = (win == curscr)`. The store itself is still a plain
+`atx`. `getch.o` came back 7 words *smaller*, so the library is 5,311 words rather than 5,314.
+`LINES`, `COLS`, `_tty_ch` and `_res_flg` stay `int` and must: `_res_flg` holds the sgtty flag
+word, not a flag.
 
 ## Eleven `char *` comparisons had to go
 

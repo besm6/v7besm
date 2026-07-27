@@ -9,28 +9,21 @@
 // trailing semicolon that breaks every if/else chain in the library; and the tty-mode macros
 // went from stty()/gtty() to ioctl().  The sources won.  See ../lib/libcurses/README.md.
 //
-// THERE IS NO `bool' HERE AT ALL, and that is the one place this header does not simply
-// follow the sources.  4.3BSD wrote `#define bool int' and used it for every flag and every
-// boolean capability.  Two things rule that spelling out and a third rules out the obvious
-// replacement:
+// `bool' HERE IS C11's, NOT A MACRO OF OUR OWN.  4.3BSD wrote `#define bool int' and used the
+// name for every window flag and every boolean capability; this header includes <stdbool.h>
+// and lets the declarations mean the real type.  That works out exactly, because on this
+// machine _Bool is a WHOLE WORD like every other scalar -- sizeof(bool) is 6
+// (../doc/Besm6_Data_Representation.md) -- so nothing below changes size or offset, and
+// `bool *' is an ordinary word pointer, which is what cr_tty.c's table of pointers-to-flags
+// needs.  Conversion to bool is a zero test (C11 6.3.1.2), so these objects only ever hold 0
+// or 1 and the `if (AM == 0)'-style tests in cr_put.c say what they look like they say.
 //
-//   - `#define bool int' collides with <stdbool.h>'s `#define bool _Bool'.  Different
-//     replacement lists is a constraint violation (C11 6.10.3p2) in EITHER inclusion order,
-//     and <stdbool.h> is one of the ten freestanding headers on the default include path,
-//     so a program including both gets a diagnostic through no fault of its own.
-//   - C11 `bool' does not compile.  b6lower answers `ast_type_to_tac_type: unsupported type
-//     kind 1' for a _Bool object of any storage class: the front end parses the type and
-//     get_size() has an entry for it, but the lowering pass has no case.  Nothing in this
-//     tree used _Bool before, so nothing had found that out.
-//   - And if it did compile it would still be the odd one out: sizeof(_Bool) is ONE
-//     CHAR-UNIT here, not one word like every other scalar
-//     (../doc/Besm6_Data_Representation.md), so a `bool' member would be a sub-word object
-//     and `bool *' a fat pointer -- cr_tty.c's table of pointers-to-flags is written through
-//     exactly that way.
-//
-// So the declarations below say `int', which is what 4.3BSD's `bool' expanded to anyway, and
-// no name is claimed.  A program that wants the BSD spelling can `#define bool int' itself,
-// as long as it does not also want <stdbool.h>.
+// Keeping BSD's own `#define bool int' would not have worked: a different replacement list
+// for a macro <stdbool.h> also defines is a constraint violation (C11 6.10.3p2) in EITHER
+// inclusion order, and <stdbool.h> is one of the ten freestanding headers the external
+// compiler puts on the default include path.  A program including both would take a
+// diagnostic through no fault of its own.  Using the type instead of redefining the name
+// avoids that question entirely.  See ../lib/libcurses/README.md.
 //
 // THE CAPABILITY NAMES ARE GLOBALS, and two of them are libtermcap's business rather than
 // this library's.  <term.h> deliberately declares neither `PC' nor `ospeed' -- that tputs
@@ -46,12 +39,15 @@
 #define _CURSES_H
 
 #include <sgtty.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <term.h>
 #include <unctrl.h>
 
-#define TRUE  (1)
-#define FALSE (0)
+// TRUE and FALSE are the boolean constants; ERR and OK are RETURN CODES and stay int, which
+// is also why OK is 1 and ERR is 0 rather than the other way about.
+#define TRUE  true
+#define FALSE false
 #define ERR   (0)
 #define OK    (1)
 
@@ -73,7 +69,7 @@
 typedef struct sgttyb SGTTY;
 
 // Capabilities read out of /etc/termcap by setterm(), in lib/libcurses/cr_tty.c.
-extern int AM, BS, CA, DA, DB, EO, HC, HZ, IN, MI, MS, NC, NS, OS, UL, XB, XN, XT, XS, XX;
+extern bool AM, BS, CA, DA, DB, EO, HC, HZ, IN, MI, MS, NC, NS, OS, UL, XB, XN, XT, XS, XX;
 extern char *AL, *BC, *BT, *CD, *CE, *CL, *CM, *CR, *CS, *DC, *DL, *DM, *DO, *ED, *EI, *K0,
     *K1, *K2, *K3, *K4, *K5, *K6, *K7, *K8, *K9, *HO, *IC, *IM, *IP, *KD, *KE, *KH, *KL, *KR,
     *KS, *KU, *LL, *MA, *ND, *NL, *RC, *SC, *SE, *SF, *SO, *SR, *TA, *TE, *TI, *UC, *UE, *UP,
@@ -87,7 +83,7 @@ extern char PC;
 // nothing here ever assigns it: on Berkeley systems tset(1) was what set it, and there is no
 // tset in this tree.  (v7's UPPERCASE is gone -- it was declared and never defined, so any
 // program that named it failed to link.)
-extern int GT, NONL, normtty, _pfast;
+extern bool GT, NONL, normtty, _pfast;
 
 struct _win_st {
     short _cury, _curx;
@@ -95,9 +91,9 @@ struct _win_st {
     short _begy, _begx;
     short _flags;
     short _ch_off; // a subwindow's column offset into its parent's _firstch/_lastch
-    int _clear;
-    int _leave;
-    int _scroll;
+    bool _clear;
+    bool _leave;
+    bool _scroll;
     char **_y;
     short *_firstch;
     short *_lastch;
@@ -106,7 +102,7 @@ struct _win_st {
 
 #define WINDOW struct _win_st
 
-extern int My_term, _echoit, _rawmode, _endwin;
+extern bool My_term, _echoit, _rawmode, _endwin;
 
 extern char *Def_term, ttytype[];
 
@@ -224,7 +220,7 @@ int scroll(WINDOW *win);
 void box(WINDOW *win, char vert, char hor);
 char *wstandout(WINDOW *win);
 char *wstandend(WINDOW *win);
-void idlok(WINDOW *win, int bf);
+void idlok(WINDOW *win, bool bf);
 
 // Input.
 int wgetch(WINDOW *win);

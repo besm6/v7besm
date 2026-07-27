@@ -84,6 +84,11 @@ Bit:  48                                       2  1
 `false` is stored as all-zero; `true` has bit 1 set. The representation is consistent
 with integer arithmetic: a boolean `true` compares equal to the integer 1.
 
+That invariant is maintained on conversion, not merely assumed: converting any scalar to
+`bool` is a zero test (C11 §6.3.1.2), so `bool b = 5;` stores 1, and arithmetic on a
+`bool` promotes it to `int` first. `sizeof(bool)` is therefore 6 like every other scalar —
+a one-byte `bool` would mean packed storage and fat byte pointers on this machine.
+
 ---
 
 ## 4. Character Types
@@ -431,6 +436,7 @@ For how integer **constants** are sized and why a `U` suffix alone keeps all 48 
 
 ```c
 sizeof(char)        == 1
+sizeof(bool)        == 6
 sizeof(short)       == 6
 sizeof(int)         == 6
 sizeof(long)        == 6

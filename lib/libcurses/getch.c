@@ -18,7 +18,7 @@
 
 int wgetch(WINDOW *win)
 {
-    int weset = FALSE;
+    bool weset = FALSE;
     int inp;
 
     if (!win->_scroll && (win->_flags & _FULLWIN) && win->_curx == win->_maxx - 1 &&

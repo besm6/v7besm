@@ -139,7 +139,7 @@ time; fixed in the same pass. `tputs` deliberately emits **no padding** — noth
 can be overrun — which is also why the library defines neither `PC` nor `ospeed`.
 
 **`lib/libcurses/`** is the fourth archive and termcap's first consumer: **4.3BSD curses**, 39
-sources and 5,314 words, linking **`-lcurses` before `-ltermcap` before `-lc`** for the same
+sources and 5,311 words, linking **`-lcurses` before `-ltermcap` before `-lc`** for the same
 one-scan reason. Two things about it are worth knowing before touching anything nearby.
 **`include/curses.h` was replaced**, not kept — what stood there was v7's `1.7 (4/17/81)`, and it
 is ABI-incompatible with these sources in five ways (`struct _win_st` grew three members, every
@@ -149,10 +149,13 @@ And **eleven `char *` comparisons** had to go rather than libtermcap's four, bec
 almost entirely buffer cursors; the two in `refresh.c` decide whether clearing to end of line is
 cheaper than printing the blanks. `lib/libcurses/README.md` is the account, and it also records
 six upstream bugs fixed — three of them memory corruption, including a `_id_subwins()` that
-wrote one word in front of a heap block. Note that **`bool` is spelled `int`** there: `#define
-bool int` collides with `<stdbool.h>`, and C11 `_Bool` does not survive `b6lower`
-(`ast_type_to_tac_type: unsupported type kind 1`) — libcurses would have been the first `_Bool`
-user in the tree.
+wrote one word in front of a heap block. It is also **the tree's first and only `_Bool` user**:
+`<curses.h>` includes `<stdbool.h>` and the flags and boolean capabilities are `bool`, which is
+the type and not a macro — BSD's own `#define bool int` would collide with `<stdbool.h>`'s in
+either inclusion order. That took two fixes in the external compiler (c-compiler `2fcd322`,
+prompted from here): `b6lower` could not lower `_Bool` at all, and conversion to it did not
+normalise to 0/1. `_Bool` now has **int's representation** — one word, so `bool *` is an
+ordinary word pointer, which `cr_tty.c`'s table of pointers-to-flags requires.
 
 The **only** thing this repo does not build is **`libruntime.a`**, the `b$*` compiler-support
 helpers (`b$save`, `b$ret`, `b$mul`, …) that every compiled function calls. It comes from the
