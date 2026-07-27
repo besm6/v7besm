@@ -1,0 +1,18 @@
+ok   we start as root
+ok   /bin/mkdir is setuid root
+ok   /bin/rmdir is setuid root
+ok   /tmp is a directory
+ok   guest ran /bin/mkdir to a normal exit
+ok   the directory exists, so the effective uid became root
+ok   it is owned by guest, so the real uid stayed guest's
+ok   and carries guest's group
+ok   its mode is 0777
+ok   its link count is 2, so it has both . and ..
+ok   and the parent gained a link
+ok   mknod as guest is refused
+ok   unlink of a directory as guest is refused
+ok   and guest cannot climb back to root
+ok   so nothing was created behind the refusal
+ok   guest ran /bin/rmdir to a normal exit
+ok   the directory is gone
+ok   and the parent has its link count back

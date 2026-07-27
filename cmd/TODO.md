@@ -3,9 +3,10 @@
 The work plan for **`cmd/`** — the v7 commands this port has not got yet. It is the companion of
 [../kernel/TODO.md](../kernel/TODO.md), which carries the kernel's own list, and it starts where
 that one's task 24 left off: the machine boots, mounts a root filesystem, execs `/etc/init` and
-gives a shell prompt, with exactly **six programs** on the image beside it — `sh`, `cat`, `echo`,
-`ls`, `pwd` and `sync`. Those six were chosen because they *prove the prompt*, not because they
-make the machine usable. [../etc/rc](../etc/rc) says so in its own words:
+gives a shell prompt, with **eight programs** on the image beside it — `sh`, `cat`, `echo`, `ls`,
+`pwd`, `sync`, and the `mkdir` and `rmdir` that are the first two able to *change* anything. Those
+were chosen because they *prove the prompt*, not because they make the machine usable.
+[../etc/rc](../etc/rc) says the rest in its own words:
 
 > What the v7 rc did next all wants a program this system has not got yet: fsck, mount, rm,
 > date, cron, update, accton.
@@ -33,13 +34,13 @@ compiles.
 
 **Every program named by C1–C8 and C10 is in this directory**, one directory per program, in the
 shape the port will build it from — the source, whatever auxiliary files come with it, and the
-manual page. They are **verbatim upstream copies**: unbuilt, unmodified, not a line of C11 work
-done, so the first diff on any of them is the porting diff. A task starts by writing a
-`CMakeLists.txt`, not by fetching anything.
+manual page. Every one still listed below is a **verbatim upstream copy**: unbuilt, unmodified,
+not a line of C11 work done, so the first diff on any of them is the porting diff. A task starts
+by writing a `CMakeLists.txt`, not by fetching anything.
 
-**A directory is part of the build when it holds a `CMakeLists.txt`**, and none of these does.
-That is the only marker; `../CMakeLists.txt` names its subdirectories one by one and none of these
-is among them.
+**A directory is part of the build when it holds a `CMakeLists.txt`**, and only the ported ones
+do — `mkdir/` and `rmdir/` today. That is the only marker; `../CMakeLists.txt` names its
+subdirectories one by one.
 
 Four things about the copies:
 
@@ -76,7 +77,7 @@ second time, not ports. See C9.
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C1 | the file-management set — `mkdir` `rmdir` `rm` `ln` `mv` `cp` `chmod` `chown` `chgrp` `touch` | a filesystem you can change | small ×10 |
+| C1 | the file-management set — `rm` `ln` `mv` `cp` `chmod` `chown` `chgrp` `touch` | a filesystem you can change | small ×8 |
 | C2 | the small utilities `sh` and `/etc/rc` want — `date` `sleep` `kill` `test` `basename` `tty` `time` `yes` | shell scripts that do something | small ×8 |
 | C3 | **`ed`** | authoring text *on* the machine | large, and the pivot |
 | C4 | filesystem maintenance — `df` `du` `dd` `mkfs` `fsck` `icheck` `dcheck` `ncheck` `clri` `quot` `mount` `umount` | a system that maintains itself | large |
@@ -197,6 +198,8 @@ Anything that walks directories — `rm -r`, `du`, `find`, `ncheck`, `dcheck`, `
 | `sh` | 121 | 7,039 | 637 | 131 | **7,928** |
 | `ls` | 110 | 4,632 | 298 | 2,638 | **7,678** |
 | `cat` | 83 | 2,989 | 165 | 1,544 | **4,781** |
+| `rmdir` | 81 | 2,868 | 208 | 1,033 | **4,190** |
+| `mkdir` | 79 | 2,746 | 180 | 1,033 | **4,038** |
 | `init` | 27 | 820 | 37 | 323 | **1,207** |
 
 Most of `cat` is libc's stdio, and `sh` is the largest v7 command bar the ones C9 and C10 name —
@@ -223,15 +226,22 @@ are the four to measure early rather than late.
 The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**. Nothing planned here comes close to
 filling it.
 
-### 8. Setuid works, and two of these programs need it
+### 8. Setuid works, and it is asserted
 
 `mkdir` calls `mknod(d, 040777, 0)` and `rmdir` calls `unlink` on `.` and `..`; both are
 super-user operations, and both programs are **setuid root** in v7. The kernel honours `ISUID` in
 `getxfile()` ([../kernel/sys1.c](../kernel/sys1.c), the SUID/SGID block), and `b6fsutil` carries
 the bit through: a manifest `mode 04755` reaches the inode as `IFREG | (mode & 07777)`
 (`cmd/fsutil/command.cpp`), and 07777 includes 04000. So the manifest stanza is the whole of the
-work — but it is **the first setuid program on this image**, so C1a should assert the transition
-happened rather than assume it.
+work, and no source change was needed anywhere to make it work.
+
+**Which is exactly why it had to be asserted rather than assumed**, and the trap is that
+`getxfile()` takes the ISUID branch only `if (u.u_uid != 0)` — while every shell here is root's,
+`init` execing `/bin/sh` with no `getty` and no `login` behind it. So a setuid program typed at
+the console prompt exercises no setuid code at all. [../lib/test/suidt.c](../lib/test/suidt.c) is
+the answer: the only thing on the image that makes a non-root process, dropping to uid 7 and
+execing `/bin/mkdir`. **Anything else here that wants the bit follows that pattern**, and
+[mkdir/README.md](mkdir/README.md) is the account.
 
 ### 9. Which world a test runs in
 
@@ -264,31 +274,24 @@ is worth writing only when the port *taught* something, which is the standard `s
 
 ## C1. The file-management set
 
-**Why first.** There is no way to make a directory, remove a file, rename one or change a mode on
-the running machine. Everything else in this file assumes these exist.
+**Why first.** There is no way to remove a file, rename one or change a mode on the running
+machine. Everything else in this file assumes these exist.
 
-All ten are small, none uses `long`, and the grep for `char *` ordering comes back clean on all
+All eight are small, none uses `long`, and the grep for `char *` ordering comes back clean on all
 but `basename`-adjacent string work. What they *do* all touch is directories, so **none of them
 can be tested under `b6sim`** — every test here is a SIMH dialogue in the `kernel/test/console`
 mould, or a `session`-style write-then-fsck.
-
-### C1a. `mkdir`, `rmdir` — and the first setuid programs
-
-`mkdir.c` (73 lines) and `rmdir.c` (106). `mkdir` is `mknod(040777)` followed by linking `.` and
-`..` into place and `chmod`ing down; `rmdir` unlinks `name/..`, `name/.` and then `name`. Both
-need super-user, hence §8 above, and the manifest stanzas are `mode 04755`.
-
-Do these two first and alone, so that "setuid works on this image" is established before anything
-else depends on it. The test asserts the directory appears with the right link count, and that a
-non-root shell can still use both.
 
 ### C1b. `rm`, `ln`, `mv`, `cp`
 
 `rm.c` (164), `ln.c` (58), `mv.c` (299), `cp.c` (92). **The order inside the task is forced by two
 `execl`s:**
 
-* `rm -r` execs `/bin/rmdir` (`rm.c:150`), so C1a must be on the image first.
+* `rm -r` execs `/bin/rmdir` (`rm.c:150`), which is already on the image, so that one is satisfied.
 * `mv` across devices execs `/bin/cp` (`mv.c:107`), so `cp` lands before `mv`.
+
+`rm.1` is also `rmdir`'s manual page; its `Rmdir` half is already corrected in place and the `rm`
+half is untouched. This task owns the rest.
 
 `rm` and `mv` both read directories — §5 — and `mv` calls `setuid(getuid())` at entry, which is
 the v7 way of refusing to be setuid; keep it. `mv.c` is the only one with any real logic (the
@@ -676,5 +679,6 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 
 ## Where to start
 
-C1a. It is two small programs, it establishes setuid on the image, and it is the first time this
-system can make a directory of its own.
+C1b. `mkdir` and `rmdir` are already on the image, so `rm -r` has the `/bin/rmdir` it execs and
+setuid is established and asserted (§8) — and nothing else in this file can be tested properly on
+a filesystem that cannot be changed.

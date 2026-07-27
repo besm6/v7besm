@@ -8,10 +8,13 @@
 # added /usr/test, the lib/test programs that b6sim also runs; the termcap port added
 # /etc/termcap and termcapt beside them, which are lib/libtermcap's rather than libc's, and
 # the curses port added cursest and curstty, which are lib/libcurses' and read the same file.
+# Task C1a (cmd/TODO.md) added /bin/mkdir and /bin/rmdir, which are the first entries here
+# to carry a mode the staging tree cannot express: they are SETUID ROOT.
 #
 # WHY THIS FILE LIVES AT THE TOP OF THE TREE and not in kernel/test/ beside the CMakeLists
 # that runs b6fsutil over it: every `file' below but none of the directories comes out of
-# build/rootfs/, which is staged by cmd/init, cmd/sh, cmd/{cat,echo,ls,pwd,sync} and etc/.
+# build/rootfs/, which is staged by cmd/init, cmd/sh, cmd/{cat,echo,ls,mkdir,pwd,rmdir,sync}
+# and etc/.
 # The image is the whole project's, and it is the top-level CMakeLists.txt that draws the
 # `rootimg depends on rootfs' edge, since kernel/ is configured before rootfs exists.
 #
@@ -94,6 +97,32 @@ file /bin/sync          # cmd/sync -- what flushes the buffer cache before the m
 source ../../rootfs/bin/sync
 mode 0755
 
+# ---- and the two that can change the tree: THE FIRST SETUID PROGRAMS HERE ---------
+#
+# `mode 04755' -- 04000 is ISUID, and it is the whole of the work.  b6fsutil carries it
+# through: manifest.cpp parses the number as an octal literal and add_file() writes
+# `IFREG | (mode & 07777)' into the inode, and 07777 includes 04000.  The kernel end is
+# getxfile()'s SUID block in kernel/sys1.c.
+#
+# WHY THEY NEED IT.  There is no mkdir(2) or rmdir(2) on this system; a directory is built
+# and taken apart by hand, and every call that does so is gated on suser() -- mknod(), the
+# directory arm of link(), and the directory arm of unlink().  Neither program grants more
+# than that: each makes its own access() check against the REAL uid on the parent directory
+# first, so root is borrowed for the three calls and for nothing else.  cmd/mkdir/README.md
+# is the account.
+#
+# NOTHING IN build/rootfs/ CARRIES A MODE -- the staged file is an ordinary 0755 build
+# artifact and this line is the only place the bit exists.  Which is why rootimg_setuid
+# (kernel/test/CMakeLists.txt) reads it back off the finished image rather than trusting it.
+
+file /bin/mkdir         # cmd/mkdir -- SETUID ROOT: mknod(2) and link(2) on a directory
+source ../../rootfs/bin/mkdir
+mode 04755
+
+file /bin/rmdir         # cmd/rmdir -- SETUID ROOT: unlink(2) on a directory
+source ../../rootfs/bin/rmdir
+mode 04755
+
 # ---- the static files of /etc ----------------------------------------------------
 #
 # /etc/rc is 0644, NOT 0755: runcom() in cmd/init/init.c execs `sh /etc/rc', never the
@@ -143,6 +172,9 @@ mode 0644
 # is true only under b6sim, and shellt is the other half of it -- see either source.  memt
 # is here for the same reason and is not a libc test at all: it reads the kernel's own
 # memory through /dev/kmem and its own image through /dev/mem, neither of which b6sim has.
+# Nor is suidt: it drops to uid 7 and execs the two setuid programs above, which is the only
+# way anything on this image reaches getxfile()'s ISUID branch.  It is 0755 itself -- the
+# program that TESTS the bit must not carry it, or the drop it depends on would not happen.
 #
 # puret is the one PURE (NMAGIC) program among them, and one of only two images on this
 # disk whose text the kernel can share at all -- /bin/sh is the other.  Task 26.
@@ -217,6 +249,10 @@ mode 0755
 
 file /usr/test/memt
 source ../../rootfs/usr/test/memt
+mode 0755
+
+file /usr/test/suidt     # 0755 and not 04755: see the note above
+source ../../rootfs/usr/test/suidt
 mode 0755
 
 file /usr/test/timet

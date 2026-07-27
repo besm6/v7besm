@@ -16,10 +16,13 @@
 #   memt    runs on the image ONLY, and is not a libc test at all: it is the user-mode half
 #           of the memory driver's (kernel/dev/mem.c, task 27), and this is where a program
 #           can be run off /usr/test by a real kernel for the price of one b6_libtest() call.
+#   suidt   runs on the image ONLY, and is cmd/mkdir's and cmd/rmdir's (task C1a): it drops
+#           to uid 7 and execs them, which is the only way to reach getxfile()'s ISUID branch
+#           on a system whose every shell is root's.  There is no /bin/mkdir under b6sim.
 #   curstty runs on the image ONLY, and is lib/libcurses': it reads and writes the console's
 #           tty modes, and b6sim's ioctl is an unconditional no-op that changes nothing, so
 #           the two harnesses could not share an expectation.
-# So `spawn' is absent below and the other three are present: 26 names here, 24 b6sim cases
+# So `spawn' is absent below and the other four are present: 27 names here, 24 b6sim cases
 # next door.
 #
 # NOR IS EVERY NAME HERE A libc TEST any more.  termcapt is lib/libtermcap's and cursest and
@@ -32,5 +35,5 @@
 # failure early in the list is a failure in something everything after it depends on.
 set(B6_LIBTEST_IMAGE
     hello vararg errno procs sbrkt malloct strings gen strtolt environ jmp headers
-    stdiot printft scanft execs shellt memt timet pwent signals matht termcapt cursest
-    curstty puret)
+    stdiot printft scanft execs shellt memt suidt timet pwent signals matht termcapt
+    cursest curstty puret)

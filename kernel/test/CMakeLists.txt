@@ -197,7 +197,9 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/cat
     ${B6_ROOTFS}/bin/echo
     ${B6_ROOTFS}/bin/ls
+    ${B6_ROOTFS}/bin/mkdir
     ${B6_ROOTFS}/bin/pwd
+    ${B6_ROOTFS}/bin/rmdir
     ${B6_ROOTFS}/bin/sync)
 
 # ...and /usr/test, the lib/test programs (task 25c).  The list is lib/test's, since that is
@@ -233,6 +235,24 @@ list(APPEND TEST_TARGETS rootimg)
 add_test(NAME rootimg_check COMMAND ${B6FSUTIL} -c root.img
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(rootimg_check PROPERTIES LABELS kernel)
+
+# THE SETUID BIT, READ BACK OFF THE FINISHED IMAGE (task C1a).  /bin/mkdir and /bin/rmdir
+# are the only files here whose mode the staging tree cannot carry -- build/rootfs/bin/mkdir
+# is an ordinary 0755 build artifact, and 04755 exists in ../../root.manifest and nowhere
+# else -- so nothing but the image itself can say whether ISUID survived.  `-v -v' prints
+# one line per path: type, mode in octal, uid/gid, size, inode and link count.
+#
+# WHAT THIS SEPARATES.  A setuid failure has two possible homes: b6fsutil dropping the bit
+# when it writes the inode, and getxfile() ignoring it when it execs.  lib/test/suidt covers
+# the second, but only under a booted kernel; this one covers the first, costs milliseconds,
+# and -- like rootimg_check, and unlike everything below -- runs whether or not SIMH is
+# installed.  Grep rather than a diff, so that a size or an i-number in the same line does
+# not make it a maintenance burden.
+add_test(NAME rootimg_setuid
+    COMMAND sh -c "${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/mkdir$' && \
+                   ${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/rmdir$'"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(rootimg_setuid PROPERTIES LABELS kernel)
 
 # ---------------------------------------------------------------------------------------
 # boot, console, session and libtest -- the whole kernel booting with the root image
@@ -292,7 +312,9 @@ if(BESM6)
     # console.ini restarts the machine from inside each `expect' action, so its run is bounded
     # by wall clock rather than by one step budget: a TIMEOUT is what turns a wedged dialogue
     # into a failure.  It needs the kernel image and the disk just as `boot' does, which the
-    # bootini target above already pulls in.
+    # bootini target above already pulls in.  The TIMEOUT is per DIALOGUE, not per stage, so
+    # it grows with the script: 300 seconds covered the eight stages of task 25b, and task C1a
+    # added four more (mkdir, ls, rmdir, ls).
     #
     # Its own writable copy of the filesystem is made by a setup fixture, in the shape
     # mdtest_setup uses below.  `-S' takes the direction from the input, so this is the flat
@@ -303,7 +325,7 @@ if(BESM6)
     set_tests_properties(console_setup PROPERTIES FIXTURES_SETUP console_disk LABELS kernel)
     add_test(NAME console COMMAND ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}/console.ini
              WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(console PROPERTIES LABELS kernel TIMEOUT 300
+    set_tests_properties(console PROPERTIES LABELS kernel TIMEOUT 450
                          FIXTURES_REQUIRED console_disk)
 
     # session -- the end-to-end statement task 25b asks for: boot, shell, create and write

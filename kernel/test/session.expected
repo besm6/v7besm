@@ -3,8 +3,15 @@ hello
 cat
 echo
 ls
+mkdir
 pwd
+rmdir
 sh
 sync
+/tmp/d
+rmdir: cannot remove current directory
+rmdir: cannot remove . or ..
+rmdir: /tmp not empty
 big
+d
 session.log

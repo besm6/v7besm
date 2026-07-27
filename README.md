@@ -57,7 +57,8 @@ kernel/test/   SIMH tests: standalone component tests, and four that boot the wh
 include/       v7 system headers (sys/), the hosted half of the C11 header tree
 lib/           libc, libm and crt0, cross-compiled; lib/test/ is the suite that exercises them
 cmd/           BESM-6 toolchain (cc, as, ld, cpp, disasm, sim, fsutil) and the native
-               programs that go on the disk image (init, sh, cat, echo, ls, pwd, sync)
+               programs that go on the disk image (init, sh, cat, echo, ls, mkdir,
+               pwd, rmdir, sync)
 etc/           the static files of the image: group, motd, passwd, rc
 root.manifest  what all of that is assembled into: the root filesystem the kernel mounts
 cross/         BESM-6 object/archive format headers (b.out.h, ar.h, ranlib.h)
@@ -85,7 +86,7 @@ doc/           BESM-6 architecture references
 | `exec` of a BESM-6 `a.out`    | `kernel/sys1.c`    | ✔ user mode, argv/envp, shared text         |
 | System calls                  | `kernel/sysent.c`  | ✔ the v7 set, exercised from the image      |
 | libc / libm / crt0            | `lib/`             | ✔ tested under `b6sim` **and** on the image |
-| Userland (`init`, `sh`, …)    | `cmd/`             | ✔ v7 init, Bourne shell, five commands      |
+| Userland (`init`, `sh`, …)    | `cmd/`             | ✔ v7 init, Bourne shell, seven commands     |
 | Single-user shell prompt      | —                  | ✔ **it prompts, and you can type at it**    |
 | Swapping and shared text      | `kernel/text.c`    | ☐ to do — written, never run under load     |
 | `/dev/mem`, `/dev/kmem`       | `kernel/dev/mem.c` | ☐ to do — minors 0 and 1 give `ENXIO`       |

@@ -55,8 +55,49 @@ whether to examine each directory.
 .I Rmdir
 removes entries for the named directories,
 which must be empty.
+.PP
+.B Note:
+.I rmdir
+is
+.B set\-user\-id to root
+on this system, for
+.IR mkdir (1)'s
+reason turned round: there is no
+.I rmdir
+system call, the directory is taken apart with three
+.IR unlink (2)s
+\- of
+.RB ` name/.. ',
+.RB ` name/. '
+and
+.I name
+itself \- and
+.I unlink
+of a directory is refused to anyone but the super\-user.
+The bit is granted in
+.I root.manifest
+at the top of the source tree, as mode 04755.  As in
+.IR mkdir ,
+the permission that actually decides is the program's own
+.IR access (2)
+check on the parent, made against the
+.B real
+user id.
+.PP
+.B Note:
+.I rmdir
+refuses to remove a name whose last component is
+.B .
+or
+.BR .. ,
+and refuses to remove the directory the process is standing in.  v7's
+.I rmdir
+made the first check on the whole path rather than on the last component, so it
+was not made at all for a qualified name such as `rmdir foo/.'; that is repaired
+here.
 .SH "SEE ALSO"
-unlink(2)
+unlink(2),
+mkdir(1)
 .SH DIAGNOSTICS
 Generally self-explanatory.
 It is forbidden to remove the file `..' merely to avoid the
