@@ -129,6 +129,19 @@ echo ok matht >/dev/console
 ./termcapt /etc/termcap >/tmp/termcapt.out 2>&1
 echo ok termcapt >/dev/console
 
+: cursest belongs to lib/libcurses, and its argument is /etc/termcap for the same reason
+: termcapt takes one.  It sets My_term itself, so initscr never calls gettmode and never
+: asks this console what its modes are -- which is what lets one expectation adjudicate
+: this run and the b6sim one, since b6sim answers every ioctl with success and does
+: nothing while here the console is really ECHO plus CRMOD plus XTABS.  Those flags
+: change which cursor motion curses emits.
+:
+: NO APOSTROPHE IN A COLON LINE, any more than a parenthesis.  The v7 shell parses every
+: word of one, so a lone quote swallows the rest of the file and the script simply stops.
+
+./cursest /etc/termcap >/tmp/cursest.out 2>&1
+echo ok cursest >/dev/console
+
 : puret is the PURE image -- linked NMAGIC -- and the only one on the disk whose text the
 : kernel shares rather than copies.  It runs last because it is the newest, and because a
 : failure here means the exec path rather than a library routine.
@@ -139,6 +152,17 @@ echo ok termcapt >/dev/console
 
 ./puret >/tmp/puret.out 2>&1
 echo ok puret >/dev/console
+
+: curstty is the other half of cursest, and it runs HERE ONLY: it is the tty modes cursest
+: has to switch off -- gettmode, savetty, resetty, raw, cbreak, echo and nl on a real
+: terminal -- and what it asserts is the console this kernel opens in sc.c.
+:
+: IT RUNS LAST ON PURPOSE.  gettmode clears XTABS on the console and only endwin puts it
+: back, so if it ever dies the only thing left running against a changed console is one
+: echo and the sync below.
+
+./curstty /etc/termcap >/tmp/curstty.out 2>&1
+echo ok curstty >/dev/console
 
 sync
 echo libtest done >/dev/console

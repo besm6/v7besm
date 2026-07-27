@@ -1,5 +1,5 @@
 #!/bin/sh
-# Boot the kernel and let the shell run the twenty-four /usr/test programs off the image,
+# Boot the kernel and let the shell run the twenty-six /usr/test programs off the image,
 # then bring the disk back to the host so that each program's output can be diffed.
 # Task 25c: the same programs b6sim runs, run by the real kernel, held to the same files.
 #
@@ -7,7 +7,7 @@
 # directory as the working directory -- where root.img and ../unix already are.
 #
 # THIS SCRIPT IS THE SETUP FIXTURE AND NOTHING ELSE.  It stops once libtest.out/ exists;
-# the fsck and the twenty-four diffs are ctest cases of their own (libtest_fsck,
+# the fsck and the twenty-six diffs are ctest cases of their own (libtest_fsck,
 # libtest_<name>), so a single program's disagreement names itself instead of being
 # reported as "libtest failed".  That is the one way this differs from run-session.sh,
 # where the sequence IS the test and there is one thing to check at the end.

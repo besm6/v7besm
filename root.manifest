@@ -6,7 +6,8 @@
 # that prove the prompt, plus the static files of /etc.  Task 24 put them here and task 25b
 # flipped the last line, /etc/init, from the task-23 stand-in to the real one.  Task 25c
 # added /usr/test, the lib/test programs that b6sim also runs; the termcap port added
-# /etc/termcap and termcapt beside them, which are lib/libtermcap's rather than libc's.
+# /etc/termcap and termcapt beside them, which are lib/libtermcap's rather than libc's, and
+# the curses port added cursest and curstty, which are lib/libcurses' and read the same file.
 #
 # WHY THIS FILE LIVES AT THE TOP OF THE TREE and not in kernel/test/ beside the CMakeLists
 # that runs b6fsutil over it: every `file' below but none of the directories comes out of
@@ -128,7 +129,7 @@ mode 0644
 
 # ---- the library test programs, task 25c ------------------------------------------
 #
-# lib/test/*.c, the same twenty-three images b6sim runs (lib/test/CMakeLists.txt), staged
+# lib/test/*.c, the same twenty-four images b6sim runs (lib/test/CMakeLists.txt), staged
 # into build/rootfs/usr/test/ by b6_libtest() and run HERE by the booted kernel --
 # kernel/test/libtest.sh drives them, kernel/test/run-libtest.sh diffs what they wrote.
 # Under b6sim every syscall is the host's; this is where sysent[] meets a real caller.
@@ -239,6 +240,21 @@ mode 0755
 # b6sim it is handed the same file out of the source tree instead (lib/test/termcapt.args).
 file /usr/test/termcapt
 source ../../rootfs/usr/test/termcapt
+mode 0755
+
+# cursest and curstty are lib/libcurses', and they read /etc/termcap for termcapt's reason.
+# cursest runs in both worlds: it sets My_term so that initscr() never calls gettmode(),
+# which is what makes b6sim and this kernel agree -- b6sim's ioctl is a no-op and this
+# console is ECHO|CRMOD|XTABS, so GT and NONL would otherwise differ and change the cursor
+# motion curses emits.  curstty is the half that follows from that: it does NOT set My_term,
+# and therefore runs HERE ONLY.  It is also the LAST program libtest.sh runs, because
+# gettmode() clears XTABS on the real console and only endwin() puts it back.
+file /usr/test/cursest
+source ../../rootfs/usr/test/cursest
+mode 0755
+
+file /usr/test/curstty
+source ../../rootfs/usr/test/curstty
 mode 0755
 
 # puret is the only PURE (NMAGIC) image on the disk, and the only reason kernel/text.c's

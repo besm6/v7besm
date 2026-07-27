@@ -1,8 +1,9 @@
 // The termcap library: /etc/termcap and the capabilities read out of it.
 //
 // V7 HAD NO SUCH HEADER.  termlib shipped as three .c files and nothing else, so every
-// caller wrote its own `char *tgetstr();' beside the call -- which is how curses.h in
-// this tree still declares nothing of what it uses through _puts().  This one is the
+// caller wrote its own `char *tgetstr();' beside the call -- which is how the v7 curses.h
+// that used to stand in this directory declared nothing of what it used through _puts().
+// The 4.3BSD one that replaced it includes this header instead.  This one is the
 // repo's, and it exists because lib/libtermcap/termcap.c includes it: a prototype the
 // definition is checked against is worth more here than v7 fidelity, since on this
 // machine a missed `char *' return is a fat pointer truncated to a word address (see
@@ -13,8 +14,9 @@
 // is no serial line here -- the Consul-254 runs at model speed and SIMH hands a character
 // over as fast as the driver offers it -- so lib/libtermcap/tputs.c parses the delay
 // (it has to: the digits are part of the capability string) and emits no padding at all.
-// Nothing therefore reads a line speed, and the names stay free for v7's curses.c, which
-// defines `char PC;' itself.
+// Nothing therefore reads a line speed, and the names stay free for lib/libcurses, whose
+// curses.c defines `char PC;' and whose cr_tty.c defines `short ospeed' -- both written
+// there and read by nothing, exactly as 4.xBSD divided the work.
 //
 // The argument types are v7's `char *', not `const char *'.  tgetstr() writes through
 // its second argument and tgoto()'s result is a static buffer, so the API is not

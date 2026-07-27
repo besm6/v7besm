@@ -1,0 +1,883 @@
+--- unctrl
+  000: ^@ ^A ^B ^C ^D ^E ^F ^G ^H ^I ^J ^K ^L ^M ^N ^O
+  020: ^P ^Q ^R ^S ^T ^U ^V ^W ^X ^Y ^Z ^[ ^\ ^] ^^ ^_
+  040:   ! " # $ % & ' ( ) * + , - . /
+  060: 0 1 2 3 4 5 6 7 8 9 : ; < = > ?
+  100: @ A B C D E F G H I J K L M N O
+  120: P Q R S T U V W X Y Z [ \ ] ^ _
+  140: ` a b c d e f g h i j k l m n o
+  160: p q r s t u v w x y z { | } ~ ^?
+unctrl('A'|_STANDOUT)          A
+
+================ terminal vt100 ================
+initscr:
+  initscr != NULL                     1
+
+stdscr: 24x80 at (0,0) flags=027 choff=0 cur=(0,0) clear=0 leave=0 scroll=0
+  (24 blank rows)
+  firstch: -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+  lastch:  -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+curscr: 24x80 at (0,0) flags=07 clear=1
+--- descriptions
+ttytype                        dec-vt100
+CA                             1
+LINES                          24
+COLS                           80
+ttytype stable across setterm       0
+longname                       dec-vt100
+fullname                       dec vt100
+--- windows
+newwin != NULL                      1
+newwin non-blank cells              0
+top-level _orig == NULL             1
+top-level _nextp == self            1
+top-level _ch_off                   0
+subwin != NULL                      1
+sub _orig == parent                 1
+sub _nextp == parent                1
+parent _nextp == sub                1
+sub _ch_off                         2
+parent sees sub's write             1
+clrtoeol kept 0..7                  0
+clrtoeol blanked 8..19              0
+after clrtoeol: 6x20 at (4,10) flags=00 choff=0 cur=(0,8) clear=0 leave=0 scroll=0
+   0 |01234567            |
+   1 |  SUB               |
+  (4 blank rows)
+  firstch: 0 2 -1 -1 -1 -1
+  lastch:  19 4 -1 -1 -1 -1
+delch shifted left                  1
+delch blanked last col              1
+insch inserted                      1
+insch dropped last col              1
+after clrtobot: 6x20 at (4,10) flags=00 choff=0 cur=(2,4) clear=0 leave=0 scroll=0
+   0 |01234567            |
+   1 |  SUB               |
+   2 |ZBCD                |
+  (3 blank rows)
+  firstch: 0 2 0 0 -1 -1
+  lastch:  19 4 19 9 -1 -1
+deleteln rotated                    1
+deleteln blanked last               0
+insertln blanked row 0              0
+insertln pushed down                1
+sub deleteln moved chars            1
+sub deleteln blanked last           0
+erase left non-blank rows           0
+erase cury                          0
+erase curx                          0
+--- overlay and overwrite
+wstandout available                 1
+overlay copied non-blank            1
+overlay kept b under blank          1
+overlay copied standout             1
+b after overlay: 4x10 at (0,0) flags=00 choff=0 cur=(1,7) clear=0 leave=0 scroll=0
+   1 |ABzCDz{S}zzz|
+  (3 blank rows)
+  firstch: -1 0 -1 -1
+  lastch:  -1 9 -1 -1
+overwrite copied blank too          1
+b after overwrite: 4x10 at (0,0) flags=00 choff=0 cur=(2,0) clear=0 leave=0 scroll=0
+   1 |AB CD {S}   |
+  (3 blank rows)
+  firstch: 0 0 0 0
+  lastch:  10 10 10 10
+--- printw and scanw
+wprintw                             1
+mvwprintw                           1
+wprintw == mvwprintw                0
+printw window: 6x40 at (0,0) flags=00 choff=0 cur=(1,17) clear=0 leave=0 scroll=0
+   0 |42 str Z 100 ff %                       |
+   1 |42 str Z 100 ff %                       |
+  (4 blank rows)
+  firstch: 0 0 -1 -1 -1 -1
+  lastch:  16 16 -1 -1 -1 -1
+printw                              1
+mvprintw                            1
+printw == mvprintw                  0
+wscanw count                        3
+wscanw a                           42
+wscanw b                            7
+wscanw s                       hello
+mvwscanw count                      3
+mvwscanw a                         13
+mvwscanw b                          9
+wgetstr at end of input             0
+--- painting
+initial refresh of stdscr:
+  ^[[H^[[J42 str Z 100 ff %^[[H^[[B42 str Z 100 ff %
+refresh after one line of text:
+  ^[[3;1Hthe quick brown fox jumps over the lazy dog
+refresh after one changed cell:
+  ^[[3;11HB
+refresh after clrtoeol (CE decision):
+  ^[[3;21H^[[K
+refresh with standout:
+  ^[[5;6H^[[7mLOUD^[[mquiet
+refresh of a 3x12 window at (8,20):
+  ^[[9;21H|----------|^[[10;21H|boxed     |^[[11;21H|----------|^[[10;27
+  H
+boxed window: 3x12 at (8,20) flags=00 choff=0 cur=(1,6) clear=0 leave=0 scroll=0
+   0 ||----------||
+   1 ||boxed     ||
+   2 ||----------||
+  (0 blank rows)
+  firstch: -1 -1 -1
+  lastch:  0 0 0
+refresh after clear:
+  ^[[H^[[J
+--- mvcur grid
+mvcur (0,0)->(0,0):
+  
+mvcur (0,0)->(0,7):
+  ^[[1;8H
+mvcur (0,0)->(0,79):
+  ^[[1;80H
+mvcur (0,0)->(5,0):
+  ^[[6;1H
+mvcur (0,0)->(5,7):
+  ^[[6;8H
+mvcur (0,0)->(5,79):
+  ^[[6;80H
+mvcur (0,0)->(23,0):
+  ^[[24;1H
+mvcur (0,0)->(23,7):
+  ^[[24;8H
+mvcur (0,0)->(23,79):
+  ^[[24;80H
+mvcur (0,7)->(0,0):
+  ^[[H
+mvcur (0,7)->(0,7):
+  
+mvcur (0,7)->(0,79):
+  ^[[1;80H
+mvcur (0,7)->(5,0):
+  ^[[6;1H
+mvcur (0,7)->(5,7):
+  ^[[6;8H
+mvcur (0,7)->(5,79):
+  ^[[6;80H
+mvcur (0,7)->(23,0):
+  ^[[24;1H
+mvcur (0,7)->(23,7):
+  ^[[24;8H
+mvcur (0,7)->(23,79):
+  ^[[24;80H
+mvcur (0,79)->(0,0):
+  ^[[H
+mvcur (0,79)->(0,7):
+  ^[[1;8H
+mvcur (0,79)->(0,79):
+  
+mvcur (0,79)->(5,0):
+  ^[[6;1H
+mvcur (0,79)->(5,7):
+  ^[[6;8H
+mvcur (0,79)->(5,79):
+  ^[[6;80H
+mvcur (0,79)->(23,0):
+  ^[[24;1H
+mvcur (0,79)->(23,7):
+  ^[[24;8H
+mvcur (0,79)->(23,79):
+  ^[[24;80H
+mvcur (5,0)->(0,0):
+  ^[[H
+mvcur (5,0)->(0,7):
+  ^[[1;8H
+mvcur (5,0)->(0,79):
+  ^[[1;80H
+mvcur (5,0)->(5,0):
+  
+mvcur (5,0)->(5,7):
+  ^[[6;8H
+mvcur (5,0)->(5,79):
+  ^[[6;80H
+mvcur (5,0)->(23,0):
+  ^[[24;1H
+mvcur (5,0)->(23,7):
+  ^[[24;8H
+mvcur (5,0)->(23,79):
+  ^[[24;80H
+mvcur (5,7)->(0,0):
+  ^[[H
+mvcur (5,7)->(0,7):
+  ^[[1;8H
+mvcur (5,7)->(0,79):
+  ^[[1;80H
+mvcur (5,7)->(5,0):
+  ^M
+mvcur (5,7)->(5,7):
+  
+mvcur (5,7)->(5,79):
+  ^[[6;80H
+mvcur (5,7)->(23,0):
+  ^[[24;1H
+mvcur (5,7)->(23,7):
+  ^[[24;8H
+mvcur (5,7)->(23,79):
+  ^[[24;80H
+mvcur (5,79)->(0,0):
+  ^[[H
+mvcur (5,79)->(0,7):
+  ^[[1;8H
+mvcur (5,79)->(0,79):
+  ^[[1;80H
+mvcur (5,79)->(5,0):
+  ^M
+mvcur (5,79)->(5,7):
+  ^[[6;8H
+mvcur (5,79)->(5,79):
+  
+mvcur (5,79)->(23,0):
+  ^[[24;1H
+mvcur (5,79)->(23,7):
+  ^[[24;8H
+mvcur (5,79)->(23,79):
+  ^[[24;80H
+mvcur (23,0)->(0,0):
+  ^[[H
+mvcur (23,0)->(0,7):
+  ^[[1;8H
+mvcur (23,0)->(0,79):
+  ^[[1;80H
+mvcur (23,0)->(5,0):
+  ^[[6;1H
+mvcur (23,0)->(5,7):
+  ^[[6;8H
+mvcur (23,0)->(5,79):
+  ^[[6;80H
+mvcur (23,0)->(23,0):
+  
+mvcur (23,0)->(23,7):
+  ^[[24;8H
+mvcur (23,0)->(23,79):
+  ^[[24;80H
+mvcur (23,7)->(0,0):
+  ^[[H
+mvcur (23,7)->(0,7):
+  ^[[1;8H
+mvcur (23,7)->(0,79):
+  ^[[1;80H
+mvcur (23,7)->(5,0):
+  ^[[6;1H
+mvcur (23,7)->(5,7):
+  ^[[6;8H
+mvcur (23,7)->(5,79):
+  ^[[6;80H
+mvcur (23,7)->(23,0):
+  ^M
+mvcur (23,7)->(23,7):
+  
+mvcur (23,7)->(23,79):
+  ^[[24;80H
+mvcur (23,79)->(0,0):
+  ^[[H
+mvcur (23,79)->(0,7):
+  ^[[1;8H
+mvcur (23,79)->(0,79):
+  ^[[1;80H
+mvcur (23,79)->(5,0):
+  ^[[6;1H
+mvcur (23,79)->(5,7):
+  ^[[6;8H
+mvcur (23,79)->(5,79):
+  ^[[6;80H
+mvcur (23,79)->(23,0):
+  ^M
+mvcur (23,79)->(23,7):
+  ^[[24;8H
+mvcur (23,79)->(23,79):
+  
+endwin:
+  
+_endwin                             1
+
+================ terminal cons25 ================
+initscr:
+  ^[[=2Sinitscr != NULL                     1
+
+stdscr: 25x80 at (0,0) flags=027 choff=0 cur=(0,0) clear=0 leave=0 scroll=0
+  (25 blank rows)
+  firstch: -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+  lastch:  -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+curscr: 25x80 at (0,0) flags=07 clear=1
+--- descriptions
+ttytype                        ansi
+CA                             1
+LINES                          25
+COLS                           80
+ttytype stable across setterm       0
+longname                       ansi
+fullname                       ansi80x25
+--- windows
+newwin != NULL                      1
+newwin non-blank cells              0
+top-level _orig == NULL             1
+top-level _nextp == self            1
+top-level _ch_off                   0
+subwin != NULL                      1
+sub _orig == parent                 1
+sub _nextp == parent                1
+parent _nextp == sub                1
+sub _ch_off                         2
+parent sees sub's write             1
+clrtoeol kept 0..7                  0
+clrtoeol blanked 8..19              0
+after clrtoeol: 6x20 at (4,10) flags=00 choff=0 cur=(0,8) clear=0 leave=0 scroll=0
+   0 |01234567            |
+   1 |  SUB               |
+  (4 blank rows)
+  firstch: 0 2 -1 -1 -1 -1
+  lastch:  19 4 -1 -1 -1 -1
+delch shifted left                  1
+delch blanked last col              1
+insch inserted                      1
+insch dropped last col              1
+after clrtobot: 6x20 at (4,10) flags=00 choff=0 cur=(2,4) clear=0 leave=0 scroll=0
+   0 |01234567            |
+   1 |  SUB               |
+   2 |ZBCD                |
+  (3 blank rows)
+  firstch: 0 2 0 0 -1 -1
+  lastch:  19 4 19 9 -1 -1
+deleteln rotated                    1
+deleteln blanked last               0
+insertln blanked row 0              0
+insertln pushed down                1
+sub deleteln moved chars            1
+sub deleteln blanked last           0
+erase left non-blank rows           0
+erase cury                          0
+erase curx                          0
+--- overlay and overwrite
+wstandout available                 1
+overlay copied non-blank            1
+overlay kept b under blank          1
+overlay copied standout             1
+b after overlay: 4x10 at (0,0) flags=00 choff=0 cur=(1,7) clear=0 leave=0 scroll=0
+   1 |ABzCDz{S}zzz|
+  (3 blank rows)
+  firstch: -1 0 -1 -1
+  lastch:  -1 9 -1 -1
+overwrite copied blank too          1
+b after overwrite: 4x10 at (0,0) flags=00 choff=0 cur=(2,0) clear=0 leave=0 scroll=0
+   1 |AB CD {S}   |
+  (3 blank rows)
+  firstch: 0 0 0 0
+  lastch:  10 10 10 10
+--- printw and scanw
+wprintw                             1
+mvwprintw                           1
+wprintw == mvwprintw                0
+printw window: 6x40 at (0,0) flags=00 choff=0 cur=(1,17) clear=0 leave=0 scroll=0
+   0 |42 str Z 100 ff %                       |
+   1 |42 str Z 100 ff %                       |
+  (4 blank rows)
+  firstch: 0 0 -1 -1 -1 -1
+  lastch:  16 16 -1 -1 -1 -1
+printw                              1
+mvprintw                            1
+printw == mvprintw                  0
+wscanw count                        3
+wscanw a                           42
+wscanw b                            7
+wscanw s                       hello
+mvwscanw count                      3
+mvwscanw a                         13
+mvwscanw b                          9
+wgetstr at end of input             0
+--- painting
+initial refresh of stdscr:
+  ^[[=2S^[[H^[[J42 str Z 100 ff %^[[2;1H42 str Z 100 ff %
+refresh after one line of text:
+  ^[[3;1Hthe quick brown fox jumps over the lazy dog
+refresh after one changed cell:
+  ^[[3;11HB
+refresh after clrtoeol (CE decision):
+  ^[[3;21H^[[K
+refresh with standout:
+  ^[[5;6H^[[7mLOUD^[[27mquiet
+refresh of a 3x12 window at (8,20):
+  ^[[9;21H|----------|^[[10;21H|boxed     |^[[11;21H|----------|^[[10;27
+  H
+boxed window: 3x12 at (8,20) flags=00 choff=0 cur=(1,6) clear=0 leave=0 scroll=0
+   0 ||----------||
+   1 ||boxed     ||
+   2 ||----------||
+  (0 blank rows)
+  firstch: -1 -1 -1
+  lastch:  0 0 0
+refresh after clear:
+  ^[[H^[[J
+--- mvcur grid
+mvcur (0,0)->(0,0):
+  
+mvcur (0,0)->(0,7):
+  ^[[1;8H
+mvcur (0,0)->(0,79):
+  ^[[1;80H
+mvcur (0,0)->(5,0):
+  ^[[6;1H
+mvcur (0,0)->(5,7):
+  ^[[6;8H
+mvcur (0,0)->(5,79):
+  ^[[6;80H
+mvcur (0,0)->(23,0):
+  ^[[24;1H
+mvcur (0,0)->(23,7):
+  ^[[24;8H
+mvcur (0,0)->(23,79):
+  ^[[24;80H
+mvcur (0,7)->(0,0):
+  ^[[H
+mvcur (0,7)->(0,7):
+  
+mvcur (0,7)->(0,79):
+  ^[[1;80H
+mvcur (0,7)->(5,0):
+  ^[[6;1H
+mvcur (0,7)->(5,7):
+  ^[[6;8H
+mvcur (0,7)->(5,79):
+  ^[[6;80H
+mvcur (0,7)->(23,0):
+  ^[[24;1H
+mvcur (0,7)->(23,7):
+  ^[[24;8H
+mvcur (0,7)->(23,79):
+  ^[[24;80H
+mvcur (0,79)->(0,0):
+  ^[[H
+mvcur (0,79)->(0,7):
+  ^[[1;8H
+mvcur (0,79)->(0,79):
+  
+mvcur (0,79)->(5,0):
+  ^[[6;1H
+mvcur (0,79)->(5,7):
+  ^[[6;8H
+mvcur (0,79)->(5,79):
+  ^[[6;80H
+mvcur (0,79)->(23,0):
+  ^[[24;1H
+mvcur (0,79)->(23,7):
+  ^[[24;8H
+mvcur (0,79)->(23,79):
+  ^[[24;80H
+mvcur (5,0)->(0,0):
+  ^[[H
+mvcur (5,0)->(0,7):
+  ^[[1;8H
+mvcur (5,0)->(0,79):
+  ^[[1;80H
+mvcur (5,0)->(5,0):
+  
+mvcur (5,0)->(5,7):
+  ^[[6;8H
+mvcur (5,0)->(5,79):
+  ^[[6;80H
+mvcur (5,0)->(23,0):
+  ^[[24;1H
+mvcur (5,0)->(23,7):
+  ^[[24;8H
+mvcur (5,0)->(23,79):
+  ^[[24;80H
+mvcur (5,7)->(0,0):
+  ^[[H
+mvcur (5,7)->(0,7):
+  ^[[1;8H
+mvcur (5,7)->(0,79):
+  ^[[1;80H
+mvcur (5,7)->(5,0):
+  ^M
+mvcur (5,7)->(5,7):
+  
+mvcur (5,7)->(5,79):
+  ^[[6;80H
+mvcur (5,7)->(23,0):
+  ^[[24;1H
+mvcur (5,7)->(23,7):
+  ^[[24;8H
+mvcur (5,7)->(23,79):
+  ^[[24;80H
+mvcur (5,79)->(0,0):
+  ^[[H
+mvcur (5,79)->(0,7):
+  ^[[1;8H
+mvcur (5,79)->(0,79):
+  ^[[1;80H
+mvcur (5,79)->(5,0):
+  ^M
+mvcur (5,79)->(5,7):
+  ^[[6;8H
+mvcur (5,79)->(5,79):
+  
+mvcur (5,79)->(23,0):
+  ^[[24;1H
+mvcur (5,79)->(23,7):
+  ^[[24;8H
+mvcur (5,79)->(23,79):
+  ^[[24;80H
+mvcur (23,0)->(0,0):
+  ^[[H
+mvcur (23,0)->(0,7):
+  ^[[1;8H
+mvcur (23,0)->(0,79):
+  ^[[1;80H
+mvcur (23,0)->(5,0):
+  ^[[6;1H
+mvcur (23,0)->(5,7):
+  ^[[6;8H
+mvcur (23,0)->(5,79):
+  ^[[6;80H
+mvcur (23,0)->(23,0):
+  
+mvcur (23,0)->(23,7):
+  ^[[24;8H
+mvcur (23,0)->(23,79):
+  ^[[24;80H
+mvcur (23,7)->(0,0):
+  ^[[H
+mvcur (23,7)->(0,7):
+  ^[[1;8H
+mvcur (23,7)->(0,79):
+  ^[[1;80H
+mvcur (23,7)->(5,0):
+  ^[[6;1H
+mvcur (23,7)->(5,7):
+  ^[[6;8H
+mvcur (23,7)->(5,79):
+  ^[[6;80H
+mvcur (23,7)->(23,0):
+  ^M
+mvcur (23,7)->(23,7):
+  
+mvcur (23,7)->(23,79):
+  ^[[24;80H
+mvcur (23,79)->(0,0):
+  ^[[H
+mvcur (23,79)->(0,7):
+  ^[[1;8H
+mvcur (23,79)->(0,79):
+  ^[[1;80H
+mvcur (23,79)->(5,0):
+  ^[[6;1H
+mvcur (23,79)->(5,7):
+  ^[[6;8H
+mvcur (23,79)->(5,79):
+  ^[[6;80H
+mvcur (23,79)->(23,0):
+  ^M
+mvcur (23,79)->(23,7):
+  ^[[24;8H
+mvcur (23,79)->(23,79):
+  
+endwin:
+  ^[[=S
+_endwin                             1
+
+================ terminal notaterminal ================
+initscr:
+  initscr != NULL                     1
+
+stdscr: 24x80 at (0,0) flags=07 choff=0 cur=(0,0) clear=0 leave=0 scroll=0
+  (24 blank rows)
+  firstch: -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+  lastch:  -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+curscr: 24x80 at (0,0) flags=07 clear=1
+--- descriptions
+ttytype                        dumb
+CA                             0
+LINES                          24
+COLS                           80
+ttytype stable across setterm       0
+--- windows
+newwin != NULL                      1
+newwin non-blank cells              0
+top-level _orig == NULL             1
+top-level _nextp == self            1
+top-level _ch_off                   0
+subwin != NULL                      1
+sub _orig == parent                 1
+sub _nextp == parent                1
+parent _nextp == sub                1
+sub _ch_off                         2
+parent sees sub's write             1
+clrtoeol kept 0..7                  0
+clrtoeol blanked 8..19              0
+after clrtoeol: 6x20 at (4,10) flags=00 choff=0 cur=(0,8) clear=0 leave=0 scroll=0
+   0 |01234567            |
+   1 |  SUB               |
+  (4 blank rows)
+  firstch: 0 2 -1 -1 -1 -1
+  lastch:  19 4 -1 -1 -1 -1
+delch shifted left                  1
+delch blanked last col              1
+insch inserted                      1
+insch dropped last col              1
+after clrtobot: 6x20 at (4,10) flags=00 choff=0 cur=(2,4) clear=0 leave=0 scroll=0
+   0 |01234567            |
+   1 |  SUB               |
+   2 |ZBCD                |
+  (3 blank rows)
+  firstch: 0 2 0 0 -1 -1
+  lastch:  19 4 19 9 -1 -1
+deleteln rotated                    1
+deleteln blanked last               0
+insertln blanked row 0              0
+insertln pushed down                1
+sub deleteln moved chars            1
+sub deleteln blanked last           0
+erase left non-blank rows           0
+erase cury                          0
+erase curx                          0
+--- overlay and overwrite
+wstandout available                 0
+overlay copied non-blank            1
+overlay kept b under blank          1
+overlay copied standout             1
+b after overlay: 4x10 at (0,0) flags=00 choff=0 cur=(1,7) clear=0 leave=0 scroll=0
+   1 |ABzCDzSzzz|
+  (3 blank rows)
+  firstch: -1 0 -1 -1
+  lastch:  -1 9 -1 -1
+overwrite copied blank too          1
+b after overwrite: 4x10 at (0,0) flags=00 choff=0 cur=(2,0) clear=0 leave=0 scroll=0
+   1 |AB CD S   |
+  (3 blank rows)
+  firstch: 0 0 0 0
+  lastch:  10 10 10 10
+--- printw and scanw
+wprintw                             1
+mvwprintw                           1
+wprintw == mvwprintw                0
+printw window: 6x40 at (0,0) flags=00 choff=0 cur=(1,17) clear=0 leave=0 scroll=0
+   0 |42 str Z 100 ff %                       |
+   1 |42 str Z 100 ff %                       |
+  (4 blank rows)
+  firstch: 0 0 -1 -1 -1 -1
+  lastch:  16 16 -1 -1 -1 -1
+printw                              1
+mvprintw                            1
+printw == mvprintw                  0
+wscanw count                        3
+wscanw a                           42
+wscanw b                            7
+wscanw s                       hello
+mvwscanw count                      3
+mvwscanw a                         13
+mvwscanw b                          9
+wgetstr at end of input             0
+--- painting
+initial refresh of stdscr:
+  ^J42 str Z 100 ff %^J42 str Z 100 ff %
+refresh after one line of text:
+  ^J^Jthe quick brown fox jumps over the lazy dog
+refresh after one changed cell:
+  ^J^M          B
+refresh after clrtoeol (CE decision):
+  ^J         
+refresh with standout:
+  ^J^J^J     LOUDquiet
+refresh of a 3x12 window at (8,20):
+  ^J^J^J^J^J                    |----------|^J                    |boxed
+       |^J                    |----------|^M                    |-----
+boxed window: 3x12 at (8,20) flags=00 choff=0 cur=(1,6) clear=0 leave=0 scroll=0
+   0 ||----------||
+   1 ||boxed     ||
+   2 ||----------||
+  (0 blank rows)
+  firstch: -1 -1 -1
+  lastch:  0 0 0
+refresh after clear:
+  
+--- mvcur grid
+mvcur (0,0)->(0,0):
+  
+mvcur (0,0)->(0,7):
+         
+mvcur (0,0)->(0,79):
+                                                                        
+           
+mvcur (0,0)->(5,0):
+  ^J^J^J^J^J
+mvcur (0,0)->(5,7):
+  ^J^J^J^J^J       
+mvcur (0,0)->(5,79):
+  ^J^J^J^J^J                                                            
+                     
+mvcur (0,0)->(23,0):
+  ^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J
+mvcur (0,0)->(23,7):
+  ^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J       
+mvcur (0,0)->(23,79):
+  ^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J                        
+                                                         
+mvcur (0,7)->(0,0):
+  ^M
+mvcur (0,7)->(0,7):
+  
+mvcur (0,7)->(0,79):
+                                                                        
+    
+mvcur (0,7)->(5,0):
+  ^J^J^J^J^J
+mvcur (0,7)->(5,7):
+  ^J^J^J^J^J       
+mvcur (0,7)->(5,79):
+  ^J^J^J^J^J                                                            
+                     
+mvcur (0,7)->(23,0):
+  ^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J
+mvcur (0,7)->(23,7):
+  ^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J       
+mvcur (0,7)->(23,79):
+  ^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J                        
+                                                         
+mvcur (0,79)->(0,0):
+  ^M
+mvcur (0,79)->(0,7):
+  ^M       
+mvcur (0,79)->(0,79):
+  
+mvcur (0,79)->(5,0):
+  ^J^J^J^J^J
+mvcur (0,79)->(5,7):
+  ^J^J^J^J^J       
+mvcur (0,79)->(5,79):
+  ^J^J^J^J^J                                                            
+                     
+mvcur (0,79)->(23,0):
+  ^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J
+mvcur (0,79)->(23,7):
+  ^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J       
+mvcur (0,79)->(23,79):
+  ^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J                        
+                                                         
+mvcur (5,0)->(0,0):
+  
+mvcur (5,0)->(0,7):
+         
+mvcur (5,0)->(0,79):
+                                                                        
+           
+mvcur (5,0)->(5,0):
+  
+mvcur (5,0)->(5,7):
+         
+mvcur (5,0)->(5,79):
+                                                                        
+           
+mvcur (5,0)->(23,0):
+  ^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J
+mvcur (5,0)->(23,7):
+  ^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J       
+mvcur (5,0)->(23,79):
+  ^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J                                  
+                                               
+mvcur (5,7)->(0,0):
+  ^M
+mvcur (5,7)->(0,7):
+  
+mvcur (5,7)->(0,79):
+                                                                        
+    
+mvcur (5,7)->(5,0):
+  ^M
+mvcur (5,7)->(5,7):
+  
+mvcur (5,7)->(5,79):
+                                                                        
+    
+mvcur (5,7)->(23,0):
+  ^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J
+mvcur (5,7)->(23,7):
+  ^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J       
+mvcur (5,7)->(23,79):
+  ^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J                                  
+                                               
+mvcur (5,79)->(0,0):
+  ^M
+mvcur (5,79)->(0,7):
+  ^M       
+mvcur (5,79)->(0,79):
+  
+mvcur (5,79)->(5,0):
+  ^M
+mvcur (5,79)->(5,7):
+  ^M       
+mvcur (5,79)->(5,79):
+  
+mvcur (5,79)->(23,0):
+  ^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J
+mvcur (5,79)->(23,7):
+  ^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J       
+mvcur (5,79)->(23,79):
+  ^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J^J                                  
+                                               
+mvcur (23,0)->(0,0):
+  
+mvcur (23,0)->(0,7):
+         
+mvcur (23,0)->(0,79):
+                                                                        
+           
+mvcur (23,0)->(5,0):
+  
+mvcur (23,0)->(5,7):
+         
+mvcur (23,0)->(5,79):
+                                                                        
+           
+mvcur (23,0)->(23,0):
+  
+mvcur (23,0)->(23,7):
+         
+mvcur (23,0)->(23,79):
+                                                                        
+           
+mvcur (23,7)->(0,0):
+  ^M
+mvcur (23,7)->(0,7):
+  
+mvcur (23,7)->(0,79):
+                                                                        
+    
+mvcur (23,7)->(5,0):
+  ^M
+mvcur (23,7)->(5,7):
+  
+mvcur (23,7)->(5,79):
+                                                                        
+    
+mvcur (23,7)->(23,0):
+  ^M
+mvcur (23,7)->(23,7):
+  
+mvcur (23,7)->(23,79):
+                                                                        
+    
+mvcur (23,79)->(0,0):
+  ^M
+mvcur (23,79)->(0,7):
+  ^M       
+mvcur (23,79)->(0,79):
+  
+mvcur (23,79)->(5,0):
+  ^M
+mvcur (23,79)->(5,7):
+  ^M       
+mvcur (23,79)->(5,79):
+  
+mvcur (23,79)->(23,0):
+  ^M
+mvcur (23,79)->(23,7):
+  ^M       
+mvcur (23,79)->(23,79):
+  
+endwin:
+  
+_endwin                             1
+
+--- 0 errors

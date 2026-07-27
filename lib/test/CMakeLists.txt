@@ -25,19 +25,23 @@
 get_filename_component(LIBC_DIR ${CMAKE_CURRENT_BINARY_DIR}/../libc ABSOLUTE)
 get_filename_component(LIBM_DIR ${CMAKE_CURRENT_BINARY_DIR}/../libm ABSOLUTE)
 get_filename_component(LIBTC_DIR ${CMAKE_CURRENT_BINARY_DIR}/../libtermcap ABSOLUTE)
+get_filename_component(LIBCU_DIR ${CMAKE_CURRENT_BINARY_DIR}/../libcurses ABSOLUTE)
 set(CRT0    ${LIBC_DIR}/crt0.o)
 set(LIBC_A  ${LIBC_DIR}/libc.a)
 set(LIBM_A  ${LIBM_DIR}/libm.a)
 set(LIBTC_A ${LIBTC_DIR}/libtermcap.a)
+set(LIBCU_A ${LIBCU_DIR}/libcurses.a)
 
 set(TEST_TARGETS "")
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/progs.cmake)
 
 # Link one test program: crt0.o first, its own object, then the libraries.  Link order is the
-# contract -- [-lm] [-ltermcap] then -lc then -lruntime, b6ld scanning each archive once (libm
-# and libtermcap call into libc, libc into libruntime, never back).  Pass `libm' or `libtermcap'
-# in ARGN for the programs that need one.
+# contract -- [-lm] [-lcurses] [-ltermcap] then -lc then -lruntime, b6ld scanning each archive
+# once (libm, libcurses and libtermcap call into libc, libc into libruntime, never back).  Pass
+# `libm', `libcurses' or `libtermcap' in ARGN for the programs that need one.  libcurses comes
+# ahead of libtermcap because curses is what calls tgetent/tgetstr/tgoto/tputs and termcap calls
+# nothing back; a program that names libcurses must name libtermcap too.
 # add_dependencies pins the sibling libraries ahead of the link across directory scopes.
 #
 # Then, unless the program is one of the two that belongs to a single world, STAGE the linked
@@ -66,6 +70,12 @@ macro(b6_libtest prog)
         set(_mlib -L${LIBM_DIR} -lm)
         set(_extra_dep ${LIBM_A})
         set(_extra_lib libm)
+    endif()
+    # Before the libtermcap arm, so that -lcurses precedes -ltermcap on the command line.
+    if("libcurses" IN_LIST _argn)
+        list(APPEND _mlib -L${LIBCU_DIR} -lcurses)
+        list(APPEND _extra_dep ${LIBCU_A})
+        list(APPEND _extra_lib libcurses)
     endif()
     if("libtermcap" IN_LIST _argn)
         list(APPEND _mlib -L${LIBTC_DIR} -ltermcap)
@@ -154,6 +164,8 @@ b6_libtest(pwent)
 b6_libtest(signals)
 b6_libtest(matht libm)
 b6_libtest(termcapt libtermcap)
+b6_libtest(cursest libcurses libtermcap)
+b6_libtest(curstty libcurses libtermcap IMAGEONLY)
 b6_libtest(puret PURE)
 
 # Aggregate target the top-level `make test' builds before ctest runs (ctest never builds).

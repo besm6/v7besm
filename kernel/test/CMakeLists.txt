@@ -252,7 +252,7 @@ set_tests_properties(rootimg_check PROPERTIES LABELS kernel)
 #            /etc/rc and prompts again.
 #   session  writes files, runs sync(2), and then the HOST fscks what reached the disk and
 #            diffs a file the session wrote.  See run-session.sh.
-#   libtest  runs the twenty-four /usr/test programs off the image and diffs each one's
+#   libtest  runs the twenty-six /usr/test programs off the image and diffs each one's
 #            output against the very file b6sim is held to.  Everything above it is the
 #            kernel's own code exercising itself; this is user programs written against
 #            libc, so it is where sysent[]'s rows meet a real caller.  See run-libtest.sh.
@@ -349,12 +349,12 @@ if(BESM6)
     set_tests_properties(swap PROPERTIES LABELS kernel TIMEOUT 900)
 
     # ---------------------------------------------------------------------------------
-    # libtest -- the twenty-four /usr/test programs, run off the image by the booted kernel
+    # libtest -- the twenty-six /usr/test programs, run off the image by the booted kernel
     # (task 25c).
     # ---------------------------------------------------------------------------------
     #
     # One boot produces all the output and one ctest case adjudicates each program, which
-    # is why this is a FIXTURE and not a script like `session': there twenty-four diffs
+    # is why this is a FIXTURE and not a script like `session': there twenty-six diffs
     # would collapse into a single red case, and a divergence in `timet' would be
     # indistinguishable from a kernel that never reached the prompt.  So run-libtest.sh
     # stops once it has extracted the disk, and everything downstream of it is its own

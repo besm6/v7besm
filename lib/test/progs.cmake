@@ -16,16 +16,21 @@
 #   memt    runs on the image ONLY, and is not a libc test at all: it is the user-mode half
 #           of the memory driver's (kernel/dev/mem.c, task 27), and this is where a program
 #           can be run off /usr/test by a real kernel for the price of one b6_libtest() call.
-# So `spawn' is absent below and the other two are present: 24 names here, 23 b6sim cases
+#   curstty runs on the image ONLY, and is lib/libcurses': it reads and writes the console's
+#           tty modes, and b6sim's ioctl is an unconditional no-op that changes nothing, so
+#           the two harnesses could not share an expectation.
+# So `spawn' is absent below and the other three are present: 26 names here, 24 b6sim cases
 # next door.
 #
-# NOR IS EVERY NAME HERE A libc TEST any more.  termcapt is lib/libtermcap's, and is here
-# for the reason memt is: the disk image is the only place its /etc/termcap exists.  Under
-# b6sim it reads the same file out of the source tree, named by lib/test/termcapt.args.
+# NOR IS EVERY NAME HERE A libc TEST any more.  termcapt is lib/libtermcap's and cursest and
+# curstty are lib/libcurses', and they are here for the reason memt is: the disk image is the
+# only place their /etc/termcap exists.  Under b6sim the two that run there read the same
+# file out of the source tree, named by lib/test/<name>.args.
 #
 # The order is the order kernel/test/libtest.sh runs them in, which is the order
 # lib/test/CMakeLists.txt registers them in: roughly the order libc was built up, so a
 # failure early in the list is a failure in something everything after it depends on.
 set(B6_LIBTEST_IMAGE
     hello vararg errno procs sbrkt malloct strings gen strtolt environ jmp headers
-    stdiot printft scanft execs shellt memt timet pwent signals matht termcapt puret)
+    stdiot printft scanft execs shellt memt timet pwent signals matht termcapt cursest
+    curstty puret)

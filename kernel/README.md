@@ -56,7 +56,7 @@ Six tests cover the image the build produces ([../root.manifest](../root.manifes
 | `boot` | process 1 leaves the kernel, execs `/etc/init`, which forks `/bin/sh`, and the shell **prompts** |
 | `console` | a typed dialogue with that shell: erase, kill, a line longer than a clist block, `>/dev/tty`, `pwd`, `ls /bin`, and `^D` round through `/etc/rc` to the next prompt |
 | `session` | the shell **writes** — files, an inode past its direct blocks, `sync` — and the host then fscks the container and diffs what was written |
-| `libtest` | the twenty-three [../lib/test/](../lib/test/) programs run off `/usr/test`, each matching **the same `.expected` file `b6sim` is held to** (`memt` and `shellt` run here only) |
+| `libtest` | the twenty-five [../lib/test/](../lib/test/) programs run off `/usr/test`, each matching **the same `.expected` file `b6sim` is held to** (`memt` and `shellt` run here only) |
 | `swap` | the same kernel on a machine of **31 pages** (`phymem` deposited before the boot), running more processes than fit: `sched()`/`newproc()` swap through the drum, two processes share one text, and the counters say so |
 
 `boot` attaches the pristine disk read-only — an assertion in itself — and the others each convert

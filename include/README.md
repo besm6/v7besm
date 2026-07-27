@@ -63,18 +63,21 @@ took out the PDP-11 and VAX addresses (`core.h`, `execargs.h`, `saio.h`), the Da
 (`olddump.h`, `dumprestor.h`), `libmp` (`mp.h`), a stray `symbol.h`, and the two identity
 placeholders (`ident.h` said `research 11/70`, `whoami.h` said `where I am`). Several of them
 would not even compile. `math.h` used to be on this list; it is backed now, by `lib/libm`
-(phase 7). What stays that is not yet backed — `curses.h`, `unctrl.h` —
-stays because [`../lib/README.md`](../lib/README.md) names it in the rest of phase 7 and will
-rewrite it for this machine.
+(phase 7), and so are `curses.h` and `unctrl.h`, by
+[`../lib/libcurses/`](../lib/libcurses/). **`curses.h` was replaced rather than kept**: what
+stood here was v7's `1.7 (4/17/81)` and the sources that landed are 4.3BSD's, which differ in
+the shape of `struct _win_st`, in every window flag bit, and in whether the tty-mode macros go
+through `stty()` or `ioctl()`. Nothing had ever compiled against the old one, so nothing broke;
+the account is in [`../lib/libcurses/README.md`](../lib/libcurses/README.md).
 
 **`term.h` is a header this repo added and v7 had none of.** termlib shipped as three `.c` files
-and nothing else, so every caller wrote its own `char *tgetstr();` beside the call — which is how
-`curses.h` above still declares nothing of what it uses. It is here because
+and nothing else, so every caller wrote its own `char *tgetstr();` beside the call — which is what
+the v7 `curses.h` did before it was replaced. It is here because
 [`../lib/libtermcap/`](../lib/libtermcap/) backs it, and because on this machine a missed
 `char *` return is a fat pointer truncated to a word address rather than a value that merely
 looks wrong, so a prototype the definition is checked against is worth more than v7 fidelity.
 It deliberately declares no `PC` and no `ospeed`: this `tputs` emits no padding, and the names
-stay free for the curses that defines them itself.
+stay free for `lib/libcurses`, which defines both and reads neither.
 
 The `a.out.h` rule has already cost something, and it was worth it: `nlist()` is the one routine
 of `lib/`'s phase 5 that did **not** land, because a caller of it needs `struct nlist` and there

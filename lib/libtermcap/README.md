@@ -5,10 +5,12 @@
 termlib, ported from the reference copy in `lib/tmp/libtermlib/`; [`../README.md`](../README.md)
 listed it as not written yet, and this is it.
 
-It exists to be linked against, and the first consumer will be `lib/tmp/libcurses/` — v7's
-curses, still K&R and untouched. [`../../include/curses.h`](../../include/curses.h) and
-[`../../include/unctrl.h`](../../include/unctrl.h) have been in the tree all along waiting for
-that; nothing here presumes it.
+It exists to be linked against, and its first consumer is now
+[`../libcurses/`](../libcurses/) — 4.3BSD curses, which calls every routine here.
+[`../../include/curses.h`](../../include/curses.h) and
+[`../../include/unctrl.h`](../../include/unctrl.h) had been in the tree all along waiting for
+that, though `curses.h` had to be replaced when it came: what stood there was v7's, and the
+sources are Berkeley's later ones.
 
 ## Building and linking
 
@@ -107,8 +109,10 @@ would print them. But it is only stepped over — v7 converted the digits, the f
 `*` into a number, and there is nothing left here to read one.
 
 The consequence worth knowing: `PC` and `ospeed` are **not defined by this library**, which
-leaves both names free. v7's curses defines `char PC;` in `curses.c` and sets `ospeed` from the
-`sgttyb` in `cr_tty.c`, and would collide with a termlib that defined either.
+leaves both names free. [`../libcurses/curses.c`](../libcurses/curses.c) defines `char PC;` and
+[`../libcurses/cr_tty.c`](../libcurses/cr_tty.c) sets `ospeed` from the `sgttyb`, as 4.xBSD had
+them, and would collide with a termlib that defined either. Both are written there and read by
+nothing, which is the price of the division and is cheap at two words.
 
 ## Two v7 bugs fixed rather than carried
 

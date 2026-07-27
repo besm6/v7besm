@@ -1,0 +1,39 @@
+--- before initscr
+_tty_ch                        01
+--- after initscr
+_tty_ch                        00
+_res_flg                       06030
+sg_flags (XTABS cleared)       030
+GT (no XTABS on console)       00
+NONL (CRMOD on console)        00
+_pfast                         00
+LINES                          24
+COLS                           80
+--- mode changes
+initial                        flags=030     echoit=1 rawmode=0 pfast=0
+cbreak                         flags=032     echoit=1 rawmode=1 pfast=0
+cbreak set CBREAK              02
+cbreak set _rawmode            01
+nocbreak                       flags=030     echoit=1 rawmode=0 pfast=0
+nocbreak cleared CBREAK        00
+noecho                         flags=020     echoit=0 rawmode=0 pfast=0
+noecho cleared ECHO            00
+noecho cleared _echoit         00
+echo                           flags=030     echoit=1 rawmode=0 pfast=0
+echo set ECHO                  010
+raw                            flags=070     echoit=1 rawmode=1 pfast=1
+raw set RAW                    040
+noraw                          flags=030     echoit=1 rawmode=0 pfast=0
+noraw cleared RAW              00
+nonl                           flags=010     echoit=1 rawmode=0 pfast=1
+nonl cleared CRMOD             00
+nl                             flags=030     echoit=1 rawmode=0 pfast=0
+nl set CRMOD                   020
+erasechar                      043
+killchar                       0100
+savetty _res_flg               030
+after resetty                  flags=030     echoit=1 rawmode=1 pfast=1
+resetty restored               030
+_endwin                        01
+
+--- 0 errors

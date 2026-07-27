@@ -50,6 +50,8 @@
 #include <varargs.h>
 #include <wchar.h>
 #include <wctype.h>
+#include <curses.h>
+#include <unctrl.h>
 
 //
 // The sys/ headers are NOT self-sufficient and are not meant to be: sys/dir.h
@@ -84,6 +86,8 @@
 #include <varargs.h>
 #include <wchar.h>
 #include <wctype.h>
+#include <curses.h>
+#include <unctrl.h>
 
 #include <sys/types.h>
 #include <sys/param.h>
