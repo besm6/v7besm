@@ -169,6 +169,27 @@ bit; the full word represents a value from 0 to 2⁴⁸ − 1.
 |----------|-------|
 | `UINT_MAX` | 2⁴⁸ − 1 = 281,474,976,710,655 |
 
+#### Deviation from C11 §6.3.1.3p2 (signed → unsigned)
+
+C11 §6.3.1.3p2 says a signed value converted to an unsigned type is adjusted
+modulo one more than the maximum unsigned value — so `(unsigned long)-1` should be
+`ULONG_MAX` = 2⁴⁸ − 1. **BESM-6 does not do this.** Because signed `int`/`long`
+occupies only bits 41–1 (bits 42–48 are zero) while `unsigned` uses all 48 bits, a
+same-width signed→unsigned conversion is a pure reinterpretation of the word — no
+sign extension fills bits 42–48. A negative source therefore keeps its 41-bit
+pattern instead of becoming `value + 2⁴⁸`:
+
+```c
+unsigned long a = (unsigned long)-1;   // 2^41 - 1 = 2,199,023,255,551
+                                       // NOT ULONG_MAX (2^48 - 1)
+```
+
+This is an intentional consequence of keeping signed integers in 41 bits (which
+simplifies bitwise ops and shifts). The conversion is emitted as a bare `COPY`
+(see `emit_cast` in `translator/translate.c` and the width-conversion note in
+`backend/besm6/instr.c`). To obtain a full 48-bit value, start from an unsigned
+type rather than converting a negative signed one.
+
 ### Integer constants and literal suffixes
 
 The width rules above apply to integer *constants* as well. At code emission a signed
