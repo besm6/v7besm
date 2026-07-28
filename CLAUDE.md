@@ -19,7 +19,10 @@ work has two halves:
   the kernel's erase, kill and `^D`, and on `^D` cycles back through `/etc/rc` to a fresh
   prompt. It also **writes**: create files, make and remove directories with a **setuid-root**
   `mkdir`/`rmdir` (`ISUID` really does change a uid at exec — `lib/test/suidt` drops to uid 7
-  and proves it), `sync`, and the image fscks clean. And the whole
+  and proves it), `sync`, and the image fscks clean. And it **rearranges** what it wrote:
+  `cp`, `ln`, `rm` — `rm -r` execing that same setuid `/bin/rmdir` — and a `mv` that is the
+  third setuid program, because renaming a directory into another parent is four `link`/`unlink`
+  calls no ordinary user may make and a link count nothing but an fsck can check. And the whole
   **libc runs on it**: the `lib/test/` programs live on the image as `/usr/test/*`
   and produce there, byte for byte, the output they produce under `b6sim`. And it **swaps**:
   squeeze the machine to 31 pages and `sched()`/`newproc()` move real images through the drum,
@@ -28,10 +31,11 @@ work has two halves:
   `struct user` out of the kernel at `074000`, follows `u_procp` to its proc entry, and then
   reads *and writes* its own image at a physical address above `0100000` — which no unmapped
   access can name, so the driver goes through `copyphys()`, `kernel/seg.S`'s mapped window.
-  Five tests
+  Six tests
   guard that ladder — `kernel/test/boot` (the prompt appears), `kernel/test/console` (a typed
   dialogue with the shell), `kernel/test/session` (files written, `sync`, then a host-side
-  fsck and diff), `kernel/test/libtest` (the libc suite run off the image, one ctest case
+  fsck and diff), `kernel/test/files` (the file-management set rearranging a tree, fscked on
+  the host afterwards), `kernel/test/libtest` (the libc suite run off the image, one ctest case
   per program) and `kernel/test/swap` (more processes than core, asserted through the kernel's
   own counters) — and `cd kernel && make run` is where you type at it yourself. The drums
   must be attached to exec anything: they are `swapdev`, and `exece()` stages the argument
@@ -64,7 +68,7 @@ thing**, and knowing which one you are touching is most of what the build layout
 - **host tools** — `cmd/*`, compiled by the build machine's C/C++ compiler, run there;
 - **cross-built BESM-6 artifacts** — `kernel/` and `lib/`, compiled by the `b6*` toolchain
   above through `b6_obj()` in `scripts/BesmCross.cmake`;
-- **native BESM-6 programs** — `cmd/{init,sh,cat,echo,ls,mkdir,pwd,rmdir,sync}`, linked against libc by `b6_prog()`
+- **native BESM-6 programs** — `cmd/{init,sh,cat,cp,echo,ln,ls,mkdir,mv,pwd,rm,rmdir,sync}`, linked against libc by `b6_prog()`
   and staged into `build/rootfs/` (with the static files of `etc/`) for the disk image the
   kernel mounts.
 
@@ -191,16 +195,20 @@ therefore names two archives, **ours first**: `-lc -lruntime`, because `b6ld` sc
 helper calls back into libc. The kernel takes `-lruntime` **alone** — it defines its own
 `printf` in `kernel/prf.c` and uses no other library routine.
 
-### Native BESM-6 programs (`cmd/{init,sh,cat,echo,ls,mkdir,pwd,rmdir,sync}` + `etc/` → `build/rootfs/`)
+### Native BESM-6 programs (`cmd/{init,sh,cat,cp,echo,ln,ls,mkdir,mv,pwd,rm,rmdir,sync}` + `etc/` → `build/rootfs/`)
 
 The third category, and the newest. These are **`cmd/` subdirectories that are not host
 tools**: `cmd/init/init.c` is the Unix v7 `/etc/init`, `cmd/sh/` is S. R. Bourne's v7 shell,
 and `cmd/cat`, `cmd/echo`, `cmd/ls`, `cmd/pwd`, `cmd/sync` are the five commands that prove the
-prompt, with `cmd/mkdir` and `cmd/rmdir` (task C1a) the first two that can *change* the tree —
+prompt, with `cmd/mkdir` and `cmd/rmdir` (task C1a) the first two that can *change* the tree and
+`cmd/cp`, `cmd/ln`, `cmd/mv`, `cmd/rm` (task C1b) the four that can rearrange it —
 all compiled by the `b6*` toolchain and staged into `build/rootfs/` as `etc/init` and
-`bin/{sh,cat,echo,ls,mkdir,pwd,rmdir,sync}`. Those last two are **setuid root** on the image,
-which is a property of [root.manifest](root.manifest) alone (`mode 04755`) since nothing under
-`build/rootfs/` carries a mode; see [cmd/mkdir/README.md](cmd/mkdir/README.md).
+`bin/{sh,cat,cp,echo,ln,ls,mkdir,mv,pwd,rm,rmdir,sync}`. **`mkdir`, `mv` and `rmdir` are setuid
+root** on the image, which is a property of [root.manifest](root.manifest) alone (`mode 04755`)
+since nothing under `build/rootfs/` carries a mode; see
+[cmd/mkdir/README.md](cmd/mkdir/README.md) for the general account and
+[cmd/mv/README.md](cmd/mv/README.md) for the one program that is setuid for only *part* of what
+it does.
 Alongside them `etc/` (the top-level directory, not `cmd/etc`)
 stages the static files `group`, `motd`, `passwd`, `rc` and `termcap`, which are copied rather
 than compiled. `lib/test/` stages a third group, `usr/test/*` — the twenty-seven test programs,
@@ -348,7 +356,8 @@ kernel bug cannot show; the two harnesses disagreeing means one of them is wrong
 first run found two, both in code nothing else had exercised. Four programs are in one
 world only — `spawn` needs a `/bin/sh` that *cannot* be exec'd, `shellt` one that can,
 `memt` (which is not a libc test at all, but `/dev/mem`'s user-mode half) needs a kernel whose
-memory it can read, and `suidt` (not a libc test either, but `cmd/mkdir`'s and `cmd/rmdir`'s)
+memory it can read, and `suidt` (not a libc test either, but `cmd/mkdir`'s, `cmd/mv`'s and
+`cmd/rmdir`'s)
 needs a kernel that can drop it to uid 7 and a `/bin/mkdir` to exec — and `b6_libtest()`'s
 `SIMONLY`/`IMAGEONLY` keywords say which. `termcapt` is
 not a libc test either: it is `lib/libtermcap`'s, and it runs in both worlds because it is handed

@@ -32,6 +32,18 @@ when the
 .B \-f
 (force) option is given.
 .PP
+.B Note:
+nor when the standard input is
+.B not
+a terminal.
+.I Rm
+sets
+.B \-f
+for itself in that case \- there being nobody to answer \- which v7's page never
+said, and which is what makes
+.I rm
+usable from a shell script.
+.PP
 If a designated file is a directory,
 an error comment is printed unless the optional
 argument
@@ -42,6 +54,34 @@ In that case,
 recursively deletes the
 entire contents of the specified directory,
 and the directory itself.
+.PP
+.B Note:
+`and the directory itself' is done by
+.B forking and execing /bin/rmdir,
+which is where the privilege for it comes from:
+.IR unlink (2)
+of a directory is refused to anyone but the super\-user, and
+.I /bin/rmdir
+is set\-user\-id root (see below).
+.I Rm
+is
+.B not
+setuid and does not need to be \- but
+.B rm \-r will not work if /bin/rmdir is missing,
+and will say so.  (v7 tried
+.I /usr/bin/rmdir
+as well; there is no
+.I /usr/bin
+on this system, and that second attempt is kept and is dead.)
+.PP
+.B Note:
+.B rm \-r
+holds one file descriptor open per level of nesting, and
+.B NOFILE
+is 20 (include/sys/param.h), so it stops at twenty levels deep.  This was as true
+of v7 as it is here.  The recursion also builds each path in a 100\-character
+buffer, and refuses a name that will not fit \- v7 built it with no bound at all,
+which mattered rather more in a routine that recurses on what it builds.
 .PP
 If the
 .B \-i
@@ -97,9 +137,45 @@ was not made at all for a qualified name such as `rmdir foo/.'; that is repaired
 here.
 .SH "SEE ALSO"
 unlink(2),
-mkdir(1)
+mkdir(1),
+cp(1),
+mv(1),
+ln(1)
 .SH DIAGNOSTICS
 Generally self-explanatory.
 It is forbidden to remove the file `..' merely to avoid the
 antisocial consequences of inadvertently doing something like
 `rm \-r .*'.
+.PP
+.B Note:
+.I rm
+exits with the number of files it failed on, and this now includes a directory
+that
+.I /bin/rmdir
+failed to remove.  In v7 it did not:
+.I rm
+added the child's raw
+.IR wait (2)
+status to its error count, and a normal exit stores its code in the
+.B high
+byte, so a failed
+.I rmdir
+contributed 0400 and
+.I rm
+exited 0 \- reporting success for a directory that is still there.
+.PP
+.B Note:
+.IR rm 's
+own messages go to the standard
+.B output
+and not to the standard error, which is v7's and is inconsistent with
+.IR cp (1)
+and
+.IR mv (1);
+only `cannot remove `..'' goes to the standard error.  They are flushed before
+each question is read, which they were not \- the standard output is line
+buffered to a terminal on this system, so under
+.B \-i
+the question used to sit in the buffer while
+.I rm
+waited for an answer to something the user had not been shown.

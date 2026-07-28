@@ -81,8 +81,16 @@ file /bin/cat           # cmd/cat -- and what /etc/rc uses to print the motd
 source ../../rootfs/bin/cat
 mode 0755
 
+file /bin/cp            # cmd/cp -- and what cmd/mv execs for a move across devices
+source ../../rootfs/bin/cp
+mode 0755
+
 file /bin/echo          # cmd/echo
 source ../../rootfs/bin/echo
+mode 0755
+
+file /bin/ln            # cmd/ln
+source ../../rootfs/bin/ln
 mode 0755
 
 file /bin/ls            # cmd/ls
@@ -93,23 +101,32 @@ file /bin/pwd           # cmd/pwd
 source ../../rootfs/bin/pwd
 mode 0755
 
+file /bin/rm            # cmd/rm -- NOT setuid: `rm -r' execs /bin/rmdir, which is
+source ../../rootfs/bin/rm
+mode 0755
+
 file /bin/sync          # cmd/sync -- what flushes the buffer cache before the machine stops
 source ../../rootfs/bin/sync
 mode 0755
 
-# ---- and the two that can change the tree: THE FIRST SETUID PROGRAMS HERE ---------
+# ---- and the three that can change a DIRECTORY: THE SETUID PROGRAMS HERE ----------
 #
 # `mode 04755' -- 04000 is ISUID, and it is the whole of the work.  b6fsutil carries it
 # through: manifest.cpp parses the number as an octal literal and add_file() writes
 # `IFREG | (mode & 07777)' into the inode, and 07777 includes 04000.  The kernel end is
 # getxfile()'s SUID block in kernel/sys1.c.
 #
-# WHY THEY NEED IT.  There is no mkdir(2) or rmdir(2) on this system; a directory is built
-# and taken apart by hand, and every call that does so is gated on suser() -- mknod(), the
-# directory arm of link(), and the directory arm of unlink().  Neither program grants more
-# than that: each makes its own access() check against the REAL uid on the parent directory
-# first, so root is borrowed for the three calls and for nothing else.  cmd/mkdir/README.md
-# is the account.
+# WHY THEY NEED IT.  There is no mkdir(2), rmdir(2) or rename(2) on this system; a directory
+# is built, taken apart and re-parented by hand, and every call that does so is gated on
+# suser() -- mknod(), the directory arm of link(), and the directory arm of unlink().  None of
+# the three programs grants more than that: each makes its own access() check against the REAL
+# uid on the parent directory first, so root is borrowed for those calls and for nothing else.
+# cmd/mkdir/README.md is the general account and cmd/mv/README.md is mv's.
+#
+# mv is the one to look at twice, because it is the only one that is setuid for SOME of what
+# it does: mv.c returns into mvdir() before it reaches setuid(getuid()), so a directory rename
+# keeps the borrowed root and every other form of mv drops it first.  Moving that one line
+# would hand root to a plain file move.
 #
 # NOTHING IN build/rootfs/ CARRIES A MODE -- the staged file is an ordinary 0755 build
 # artifact and this line is the only place the bit exists.  Which is why rootimg_setuid
@@ -117,6 +134,10 @@ mode 0755
 
 file /bin/mkdir         # cmd/mkdir -- SETUID ROOT: mknod(2) and link(2) on a directory
 source ../../rootfs/bin/mkdir
+mode 04755
+
+file /bin/mv            # cmd/mv -- SETUID ROOT: link(2) and unlink(2) on a directory
+source ../../rootfs/bin/mv
 mode 04755
 
 file /bin/rmdir         # cmd/rmdir -- SETUID ROOT: unlink(2) on a directory

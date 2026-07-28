@@ -63,6 +63,12 @@ int chroot(const char *path);
 int chown(const char *path, uid_t uid, gid_t gid);
 int sync(void);
 
+// utime() takes a TWO-ELEMENT time_t VECTOR -- `accessed' then `updated' -- and not POSIX's
+// `struct utimbuf'.  That is the kernel's own interface: sys4.c copyin()s `time_t tv[2]', and
+// lib/libc/man/utime.2 has said so since it was corrected.  There is no <utime.h> in this
+// tree, v7 having had none, so the declaration lives here with the other file-system calls.
+int utime(const char *file, const time_t timep[2]);
+
 // Processes.  exece() is v7's spelling of execve, and the symbol libc backs.
 pid_t fork(void);
 _Noreturn void _exit(int status);

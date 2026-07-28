@@ -2,11 +2,11 @@
 // suidt -- the set-user-id bit: that it is on the image, and that exec honours it.
 //
 // THIS PROGRAM RUNS ON THE DISK IMAGE ONLY, never under b6sim, and like memt.c next door it
-// is not a libc test at all.  It belongs to cmd/mkdir and cmd/rmdir (task C1a), the first two
-// setuid-root programs this system has, and it is here for the reason memt is: /usr/test is
-// where a program can be run off the image by a booted kernel for the price of one
-// b6_libtest() call.  b6sim could not run it in any case -- there is no /bin/mkdir on the
-// build machine, and no kernel underneath to change a uid.
+// is not a libc test at all.  It belongs to cmd/mkdir and cmd/rmdir (task C1a) and to cmd/mv
+// (task C1b) -- the three setuid-root programs this system has -- and it is here for the
+// reason memt is: /usr/test is where a program can be run off the image by a booted kernel
+// for the price of one b6_libtest() call.  b6sim could not run it in any case -- there is no
+// /bin/mkdir on the build machine, and no kernel underneath to change a uid.
 //
 // WHY IT HAS TO EXIST.  getxfile() honours ISUID only for a caller that is not already root:
 //
@@ -33,9 +33,26 @@
 // Neither half is worth much without the other: a root child would satisfy the first, and a
 // kernel that ignored ISUID would fail it.
 //
-// AND THE NEGATIVE CONTROL, in a child of the same uid that execs nothing: mknod() and
-// unlink()-of-a-directory must come back EPERM.  Without it, "the directory appeared" would
-// be consistent with a kernel that let anybody call mknod.
+// AND THE SAME ARGUMENT FOR mv, which task C1b made the third setuid program (cmd/mv/README.md
+// is the account).  Renaming a directory is link() and unlink() on a directory, both
+// suser()-only, so the same one call proves both halves again: the new name existing proves
+// the effective uid became 0, and its still being owned by 7 proves the real uid never was.
+// mv is exercised on BOTH of mvdir()'s branches, because they are different code and only one
+// of them is dangerous:
+//
+//   * a rename inside one parent is a link and an unlink, and `..' still points where it
+//     should;
+//   * a move to a DIFFERENT parent is four calls -- link, unlink, unlink target/.., link
+//     parent target/.. -- and a link count it gets wrong reads back perfectly until an fsck.
+//
+// The link counts of both parents are asserted here for that reason.  kernel/test/files is
+// the same path run as root with b6fsutil -c behind it; this is the same path run by a
+// process that has no privilege of its own.
+//
+// AND THE NEGATIVE CONTROL, in a child of the same uid that execs nothing: mknod(), link()-of-
+// a-directory and unlink()-of-a-directory must all come back EPERM.  Without it, "the
+// directory appeared" would be consistent with a kernel that let anybody call mknod, and "the
+// directory moved" with one that let anybody link a directory.
 //
 // WHAT MAY REACH THE .expected FILE: verdicts only, as in memt.  No uid, no mode, no
 // i-number, no pid -- every number this program learns is compared against one it already
@@ -61,13 +78,18 @@
 #define NOBODY 7
 #define NOGRP  3
 
-#define DIR  "/tmp/suidt.d"  // what the setuid mkdir is asked to make
-#define NOPE "/tmp/suidt.nc" // what the negative control is refused
+#define DIR   "/tmp/suidt.d"  // what the setuid mkdir is asked to make
+#define DIR2  "/tmp/suidt.e"  // ...what the setuid mv renames it to, in the same parent
+#define SUB   DIR2 "/sub"     // ...a directory inside that one
+#define MOVED "/tmp/suidt.s"  // ...and where mv re-parents it to, which is the hard branch
+#define NOPE  "/tmp/suidt.nc" // what the negative control is refused
+#define NOLNK "/tmp/suidt.nl" // ...and the link it is refused
 
 // The bits the negative-control child reports through its exit status.
 #define NC_MKNOD  1 // mknod() as uid 7 was refused with EPERM
 #define NC_UNLINK 2 // unlink() of a directory as uid 7 was refused with EPERM
 #define NC_SETUID 4 // setuid(0) after setuid(7) was refused -- the drop is irreversible
+#define NC_LINK   8 // link() of a directory as uid 7 was refused with EPERM
 
 static void ok(const char *what, int cond)
 {
@@ -87,9 +109,10 @@ static int becomeguest(void)
 }
 
 // Run one command as guest and hand back its wait status, or -1 if the fork or the drop
-// failed.  stdout is a file here (libtest.sh redirects it), so it must be flushed before
-// the fork or the child would inherit a copy of the buffer.
-static int rundropped(const char *path, const char *arg)
+// failed.  A null `arg2' makes it a one-argument command, which is what mkdir and rmdir take
+// and mv does not.  stdout is a file here (libtest.sh redirects it), so it must be flushed
+// before the fork or the child would inherit a copy of the buffer.
+static int rundropped(const char *path, const char *arg, const char *arg2)
 {
     int pid, status;
 
@@ -100,12 +123,21 @@ static int rundropped(const char *path, const char *arg)
     if (pid == 0) {
         if (becomeguest() < 0)
             _exit(126);
-        execl(path, path, arg, (char *)0);
+        if (arg2 == NULL)
+            execl(path, path, arg, (char *)0);
+        else
+            execl(path, path, arg, arg2, (char *)0);
         _exit(127); // the exec failed -- no such program, or no permission to run it
     }
     while (wait(&status) != pid)
         ;
     return status;
+}
+
+// Did that child exec the setuid program and come back with a zero status?
+static int ranok(int status)
+{
+    return status >= 0 && WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
 int main(void)
@@ -122,6 +154,8 @@ int main(void)
     // where it comes from -- `mode 04755' -- and nothing in build/rootfs/ carries it.
     ok("/bin/mkdir is setuid root",
        stat("/bin/mkdir", &st) == 0 && (st.st_mode & 07777) == 04755 && st.st_uid == 0);
+    ok("/bin/mv is setuid root",
+       stat("/bin/mv", &st) == 0 && (st.st_mode & 07777) == 04755 && st.st_uid == 0);
     ok("/bin/rmdir is setuid root",
        stat("/bin/rmdir", &st) == 0 && (st.st_mode & 07777) == 04755 && st.st_uid == 0);
 
@@ -131,9 +165,8 @@ int main(void)
     tmpnlink = st.st_nlink;
 
     // THE TRANSITION.  A uid-7 process execs the setuid mkdir.
-    status = rundropped("/bin/mkdir", DIR);
-    ok("guest ran /bin/mkdir to a normal exit",
-       status >= 0 && WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    status = rundropped("/bin/mkdir", DIR, NULL);
+    ok("guest ran /bin/mkdir to a normal exit", ranok(status));
 
     if (stat(DIR, &st) < 0) {
         ok("the directory exists, so the effective uid became root", 0);
@@ -157,6 +190,8 @@ int main(void)
             b |= NC_MKNOD;
         if (unlink(DIR "/..") < 0 && errno == EPERM)
             b |= NC_UNLINK;
+        if (link(DIR, NOLNK) < 0 && errno == EPERM)
+            b |= NC_LINK;
         if (setuid(0) < 0)
             b |= NC_SETUID;
         _exit(b);
@@ -166,14 +201,45 @@ int main(void)
     bits = WIFEXITED(status) ? WEXITSTATUS(status) : 0;
     ok("mknod as guest is refused", (bits & NC_MKNOD) != 0);
     ok("unlink of a directory as guest is refused", (bits & NC_UNLINK) != 0);
+    ok("link to a directory as guest is refused", (bits & NC_LINK) != 0);
     ok("and guest cannot climb back to root", (bits & NC_SETUID) != 0);
-    ok("so nothing was created behind the refusal", stat(NOPE, &st) < 0);
+    ok("so nothing was created behind the refusals", stat(NOPE, &st) < 0 && stat(NOLNK, &st) < 0);
+
+    // THE THIRD SETUID PROGRAM, on the easier of mvdir()'s two branches: a rename inside one
+    // parent, which is a link and an unlink and leaves `..' alone.  /tmp's link count must
+    // therefore NOT move.
+    status = rundropped("/bin/mv", DIR, DIR2);
+    ok("guest ran /bin/mv to a normal exit", ranok(status));
+    ok("the renamed directory exists, so the effective uid became root again",
+       stat(DIR2, &st) == 0 && (st.st_mode & S_IFMT) == S_IFDIR);
+    ok("it is still owned by guest, so mv never granted the real uid", st.st_uid == NOBODY);
+    ok("its link count is still 2", st.st_nlink == 2);
+    ok("the old name is gone", stat(DIR, &st) < 0);
+    ok("and a rename within one parent left that parent's link count alone",
+       stat("/tmp", &st) == 0 && st.st_nlink == tmpnlink + 1);
+
+    // ...and on the branch that matters: a move to a DIFFERENT parent, which is four calls
+    // and is the only place in this task where a mistake is silent.  Both parents' link
+    // counts are the assertion -- the old one must give up the `..' the new one gains.
+    status = rundropped("/bin/mkdir", SUB, NULL);
+    ok("guest made a subdirectory to move", ranok(status));
+    ok("so its parent gained a link", stat(DIR2, &st) == 0 && st.st_nlink == 3);
+
+    status = rundropped("/bin/mv", SUB, MOVED);
+    ok("guest ran /bin/mv across parents to a normal exit", ranok(status));
+    ok("the moved directory exists", stat(MOVED, &st) == 0 && (st.st_mode & S_IFMT) == S_IFDIR);
+    ok("it is still owned by guest", st.st_uid == NOBODY);
+    ok("and still has both . and ..", st.st_nlink == 2);
+    ok("the old name is gone", stat(SUB, &st) < 0);
+    ok("the old parent gave up its link", stat(DIR2, &st) == 0 && st.st_nlink == 2);
+    ok("and the new parent took it", stat("/tmp", &st) == 0 && st.st_nlink == tmpnlink + 2);
 
     // And back the other way, through the other setuid program.
-    status = rundropped("/bin/rmdir", DIR);
-    ok("guest ran /bin/rmdir to a normal exit",
-       status >= 0 && WIFEXITED(status) && WEXITSTATUS(status) == 0);
-    ok("the directory is gone", stat(DIR, &st) < 0);
+    status = rundropped("/bin/rmdir", MOVED, NULL);
+    ok("guest ran /bin/rmdir on the moved directory", ranok(status));
+    status = rundropped("/bin/rmdir", DIR2, NULL);
+    ok("guest ran /bin/rmdir on the renamed one", ranok(status));
+    ok("both directories are gone", stat(MOVED, &st) < 0 && stat(DIR2, &st) < 0);
     ok("and the parent has its link count back", stat("/tmp", &st) == 0 && st.st_nlink == tmpnlink);
 
     return 0;

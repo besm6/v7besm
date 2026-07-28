@@ -1,5 +1,6 @@
 ok   we start as root
 ok   /bin/mkdir is setuid root
+ok   /bin/mv is setuid root
 ok   /bin/rmdir is setuid root
 ok   /tmp is a directory
 ok   guest ran /bin/mkdir to a normal exit
@@ -11,8 +12,25 @@ ok   its link count is 2, so it has both . and ..
 ok   and the parent gained a link
 ok   mknod as guest is refused
 ok   unlink of a directory as guest is refused
+ok   link to a directory as guest is refused
 ok   and guest cannot climb back to root
-ok   so nothing was created behind the refusal
-ok   guest ran /bin/rmdir to a normal exit
-ok   the directory is gone
+ok   so nothing was created behind the refusals
+ok   guest ran /bin/mv to a normal exit
+ok   the renamed directory exists, so the effective uid became root again
+ok   it is still owned by guest, so mv never granted the real uid
+ok   its link count is still 2
+ok   the old name is gone
+ok   and a rename within one parent left that parent's link count alone
+ok   guest made a subdirectory to move
+ok   so its parent gained a link
+ok   guest ran /bin/mv across parents to a normal exit
+ok   the moved directory exists
+ok   it is still owned by guest
+ok   and still has both . and ..
+ok   the old name is gone
+ok   the old parent gave up its link
+ok   and the new parent took it
+ok   guest ran /bin/rmdir on the moved directory
+ok   guest ran /bin/rmdir on the renamed one
+ok   both directories are gone
 ok   and the parent has its link count back

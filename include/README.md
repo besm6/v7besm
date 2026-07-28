@@ -105,7 +105,11 @@ nothing more: this kernel has no `fcntl` system call, and `open()` honours no fl
 `O_RDWR`). `chmod`/`stat`/`fstat`/`mknod`/`umask` are not in either — they are in
 `<sys/stat.h>`, beside `struct stat` and the mode bits they are about. `wait()` likewise has
 `<sys/wait.h>`, a header this tree adds for the `W*` macros that take a v7 status word apart
-(`kill()` is in `<signal.h>`, where C11 puts it).
+(`kill()` is in `<signal.h>`, where C11 puts it). `utime()` **is** in `<unistd.h>`, with the
+other file-system calls, and there is no `<utime.h>`: it takes a two-element `time_t` vector
+rather than POSIX's `struct utimbuf`, because that is what the kernel `copyin`s
+(`kernel/sys4.c`), and `lib/libc/man/utime.2` has said so since it was corrected. It had no
+declaration anywhere until `cmd/mv` needed one.
 
 Those three `sys/` prototypes carry a guard the rest of the tree does not:
 `#if !defined(KERNEL) && !defined(_SYS_SYSTM_H)`. `stat`, `chmod` and `wait` name *two*

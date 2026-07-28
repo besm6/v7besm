@@ -1,10 +1,14 @@
 hello
 /
 cat
+cp
 echo
+ln
 ls
 mkdir
+mv
 pwd
+rm
 rmdir
 sh
 sync

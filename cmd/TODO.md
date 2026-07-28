@@ -77,7 +77,7 @@ second time, not ports. See C9.
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C1 | the file-management set — `rm` `ln` `mv` `cp` `chmod` `chown` `chgrp` `touch` | a filesystem you can change | small ×8 |
+| C1 | the file-management set — ~~`rm` `ln` `mv` `cp`~~ `chmod` `chown` `chgrp` `touch` | a filesystem you can change | small ×4 left |
 | C2 | the small utilities `sh` and `/etc/rc` want — `date` `sleep` `kill` `test` `basename` `tty` `time` `yes` | shell scripts that do something | small ×8 |
 | C3 | **`ed`** | authoring text *on* the machine | large, and the pivot |
 | C4 | filesystem maintenance — `df` `du` `dd` `mkfs` `fsck` `icheck` `dcheck` `ncheck` `clri` `quot` `mount` `umount` | a system that maintains itself | large |
@@ -282,21 +282,13 @@ but `basename`-adjacent string work. What they *do* all touch is directories, so
 can be tested under `b6sim`** — every test here is a SIMH dialogue in the `kernel/test/console`
 mould, or a `session`-style write-then-fsck.
 
-### C1b. `rm`, `ln`, `mv`, `cp`
-
-`rm.c` (164), `ln.c` (58), `mv.c` (299), `cp.c` (92). **The order inside the task is forced by two
-`execl`s:**
-
-* `rm -r` execs `/bin/rmdir` (`rm.c:150`), which is already on the image, so that one is satisfied.
-* `mv` across devices execs `/bin/cp` (`mv.c:107`), so `cp` lands before `mv`.
-
-`rm.1` is also `rmdir`'s manual page; its `Rmdir` half is already corrected in place and the `rm`
-half is untouched. This task owns the rest.
-
-`rm` and `mv` both read directories — §5 — and `mv` calls `setuid(getuid())` at entry, which is
-the v7 way of refusing to be setuid; keep it. `mv.c` is the only one with any real logic (the
-rename-a-directory dance of link/unlink pairs, which must be checked against a kernel whose
-`link` on a directory is super-user-only).
+**C1b is done**, and it left the mould C1c should follow: `kernel/test/files` (its own disk
+volume, its own grafted script, `b6fsutil -c` behind it) is where a program that changes the
+tree is asserted, and [../lib/test/suidt.c](../lib/test/suidt.c) is where one that needs a
+privilege transition is. `mv` joined `mkdir` and `rmdir` as a setuid-root program;
+[mv/README.md](mv/README.md) is the account, and the surprise in it was not the pointer work —
+there was none — but an upstream `strcat` into an uninitialized buffer, in the middle of the
+four-call directory re-parent, with every signal ignored.
 
 ### C1c. `chmod`, `chown`, `chgrp`, `touch`
 
@@ -679,6 +671,11 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 
 ## Where to start
 
-C1b. `mkdir` and `rmdir` are already on the image, so `rm -r` has the `/bin/rmdir` it execs and
-setuid is established and asserted (§8) — and nothing else in this file can be tested properly on
-a filesystem that cannot be changed.
+C1c, which finishes C1. The tree can now be rearranged — `cp`, `ln`, `mv` and `rm` are on the
+image and `kernel/test/files` holds them to a five-pass fsck — but nothing on the machine can
+change a mode, an owner or a time, so `chmod`, `chown`, `chgrp` and `touch` are the four that
+close the set. They are the cheapest programs left and they land in a test harness that already
+exists: one more block in `kernel/test/files.sh` rather than a new SIMH test.
+
+C2 after it, for the reason that file's own entry gives — `/etc/rc` is still nine-tenths a
+comment, and a shell without `test` cannot write a conditional.

@@ -12,6 +12,11 @@
 cat /etc/motd >/dev/console
 
 # What the v7 rc did next all wants a program this system has not got yet:
-# fsck, mount, rm, date, cron, update, accton.  Each line comes back as its
+# fsck, mount, date, cron, update, accton.  Each line comes back as its
 # command is ported.  There is nothing to mount in any case -- one EC-5052
 # drive is the whole of the store, and swap lives on the drums.
+#
+# rm left that list with task C1b, and so did cp, ln and mv -- but the only
+# line of the v7 rc that used rm cleared /tmp of an editor's leftovers, and
+# nothing on this image writes there except the tests.  It comes back with
+# ed (task C3), which is the first program that will.

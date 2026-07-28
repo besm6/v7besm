@@ -195,10 +195,14 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/termcap
     ${B6_ROOTFS}/bin/sh
     ${B6_ROOTFS}/bin/cat
+    ${B6_ROOTFS}/bin/cp
     ${B6_ROOTFS}/bin/echo
+    ${B6_ROOTFS}/bin/ln
     ${B6_ROOTFS}/bin/ls
     ${B6_ROOTFS}/bin/mkdir
+    ${B6_ROOTFS}/bin/mv
     ${B6_ROOTFS}/bin/pwd
+    ${B6_ROOTFS}/bin/rm
     ${B6_ROOTFS}/bin/rmdir
     ${B6_ROOTFS}/bin/sync)
 
@@ -236,11 +240,12 @@ add_test(NAME rootimg_check COMMAND ${B6FSUTIL} -c root.img
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(rootimg_check PROPERTIES LABELS kernel)
 
-# THE SETUID BIT, READ BACK OFF THE FINISHED IMAGE (task C1a).  /bin/mkdir and /bin/rmdir
-# are the only files here whose mode the staging tree cannot carry -- build/rootfs/bin/mkdir
-# is an ordinary 0755 build artifact, and 04755 exists in ../../root.manifest and nowhere
-# else -- so nothing but the image itself can say whether ISUID survived.  `-v -v' prints
-# one line per path: type, mode in octal, uid/gid, size, inode and link count.
+# THE SETUID BIT, READ BACK OFF THE FINISHED IMAGE (task C1a, and /bin/mv since C1b).
+# /bin/mkdir, /bin/mv and /bin/rmdir are the only files here whose mode the staging tree
+# cannot carry -- build/rootfs/bin/mkdir is an ordinary 0755 build artifact, and 04755 exists
+# in ../../root.manifest and nowhere else -- so nothing but the image itself can say whether
+# ISUID survived.  `-v -v' prints one line per path: type, mode in octal, uid/gid, size,
+# inode and link count.
 #
 # WHAT THIS SEPARATES.  A setuid failure has two possible homes: b6fsutil dropping the bit
 # when it writes the inode, and getxfile() ignoring it when it execs.  lib/test/suidt covers
@@ -250,6 +255,7 @@ set_tests_properties(rootimg_check PROPERTIES LABELS kernel)
 # not make it a maintenance burden.
 add_test(NAME rootimg_setuid
     COMMAND sh -c "${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/mkdir$' && \
+                   ${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/mv$' && \
                    ${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/rmdir$'"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(rootimg_setuid PROPERTIES LABELS kernel)
@@ -338,6 +344,18 @@ if(BESM6)
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(session PROPERTIES LABELS kernel TIMEOUT 600)
+
+    # files -- the same statement one step further on, for task C1b: boot, shell, and then
+    # cp, ln, mv and rm rearranging the tree that `session' could only create.  Its own
+    # script and its own volume (3082) rather than more lines in session.sh, because the
+    # question it asks is a different one -- mv(1) renaming a directory into another parent
+    # is four calls, and a link count it gets wrong is invisible to everything except the
+    # five-pass fsck run-files.sh ends with.  C1c and C5 belong here as they land.
+    add_test(NAME files
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-files.sh
+                ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(files PROPERTIES LABELS kernel TIMEOUT 900)
 
     # ---------------------------------------------------------------------------------
     # swap -- more processes than core, and two of them sharing one binary's text
