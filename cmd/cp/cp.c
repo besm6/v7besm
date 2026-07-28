@@ -7,7 +7,7 @@
 // source, fstat it for the mode, build the target name if the target is a directory, refuse a
 // copy onto the same inode, creat() and then read/write until the source runs out.
 //
-// cp lands before mv in task C1b (../TODO.md) and not by taste: mv's cross-device path is a
+// cp lands before mv in task C1b (../README.md) and not by taste: mv's cross-device path is a
 // literal execl("/bin/cp", ...) (../mv/mv.c), so mv is only half a program until this one is
 // on the image.  That path is in fact unreachable here -- one EC-5052 is the whole store, so
 // link() never comes back EXDEV -- but the dependency is in the source and is honoured.

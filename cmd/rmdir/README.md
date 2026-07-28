@@ -81,7 +81,7 @@ number — the read loop is `sizeof dir` throughout — so it ported unchanged.
 ## Documentation
 
 `rmdir` has **no manual page of its own** in v7 and gets none here: it is documented inside
-[`cmd/rm/rm.1`](../rm/rm.1), which `cmd/TODO.md` records as a deliberate decision. The `Rmdir`
+[`cmd/rm/rm.1`](../rm/rm.1), which `cmd/README.md` records as a deliberate decision. The `Rmdir`
 half of that page was corrected here; task C1b corrected the `rm` half, so the page is now
 whole. It records there that `rm -r` removes an emptied directory by execing **this** program,
 which is where its privilege for that comes from — `rm` itself is not setuid and does not need

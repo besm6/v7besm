@@ -5,7 +5,7 @@
 //
 // The v7 program, unchanged in what it does: parse one mode argument -- absolute octal, or
 // symbolic [ugoa][+-=][rwxstugo] in comma-separated clauses -- and hand the result to
-// chmod(2) for each file named after it.  The first of task C1c's four (../TODO.md), and the
+// chmod(2) for each file named after it.  The first of task C1c's four (../README.md), and the
 // only one of them that is a parser rather than a wrapper.
 //
 // The C11 pass is the usual one (../init/README.md is the worked example): a prototype and an

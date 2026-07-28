@@ -90,7 +90,7 @@ which 55 run on the real machine under SIMH and six of those boot the whole kern
 skeleton, so there is no `getty` and no `login` ([kernel/TODO.md](kernel/TODO.md) task 29). Six
 smaller kernel items were deferred deliberately and are listed beside it. The rest of the v7
 userland — `ed`, `fsck`, the text filters, and eventually the toolchain rebuilt on the machine
-itself — is [cmd/TODO.md](cmd/TODO.md).
+itself — is [cmd/TODO.md](cmd/TODO.md), with [cmd/README.md](cmd/README.md) as its porting manual.
 
 ## Building
 

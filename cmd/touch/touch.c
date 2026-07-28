@@ -5,7 +5,7 @@
 //
 // The v7 program in what it does from the outside: for each name, bring its date up to now,
 // and create the file if it does not exist unless -c said not to.  The last of task C1c's four
-// (../TODO.md).
+// (../README.md).
 //
 // THE MIDDLE OF IT IS DELIBERATELY NOT v7's, and this is the one divergence in task C1c.  v7's
 // touch has no utime(2) in it at all: it opens the file O_RDWR, reads its first byte, seeks

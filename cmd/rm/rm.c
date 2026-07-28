@@ -35,7 +35,7 @@
 //     name it builds, so the path grows one component per level and the sprintf has no idea
 //     how deep it is.  ../mkdir/mkdir.c and ../rmdir/rmdir.c each bounded their equivalent for
 //     the same reason -- the 4,096-word stack at 070000 is the one address-space ceiling
-//     nothing checks (../TODO.md, the porting recipe) -- and neither of those recursed.
+//     nothing checks (../README.md, the porting recipe) -- and neither of those recursed.
 //
 //  3. A FAILED rmdir MADE rm EXIT SUCCESSFULLY.  `errcode += rmdir(arg, iflg)' added a raw
 //     wait(2) status word to an exit code, and a normal exit stores its code in the HIGH byte

@@ -7,7 +7,7 @@
 // reading it as a decimal number or by looking it up in /etc/group with getgrnam(3), and hand
 // each file named after it to chown(2) -- keeping the owner it already had.  There is no
 // chgrp(2); the group is the third argument of chown(2), which is why this program and
-// ../chown/chown.c are the same program with two fields exchanged.  Task C1c (../TODO.md).
+// ../chown/chown.c are the same program with two fields exchanged.  Task C1c (../README.md).
 //
 // IT HAS NO MANUAL PAGE OF ITS OWN, and never had: v7 documented it inside chown(1), so
 // ../chown/chown.1 is the page for both -- the arrangement ../rm/rm.1 has with rmdir.

@@ -256,8 +256,13 @@ that mechanical modernization before it compiles; `cmd/init/README.md` is the sm
 example and `cmd/sh/README.md` the large one, and `cmd/cpp/TODO.md` is the plan for the next
 program (with three external-compiler bugs of its own still in the way).
 
-**`cmd/sh/README.md` is the one to read before porting anything else from v7 userland**, and
-`cmd/ls/README.md` next. The C11 work is mechanical; what is not is that a v7 source assumes
+**`cmd/README.md` is the manual for porting anything else from v7 userland** — what is already
+in that directory, the ten-point porting recipe every task is written on top of (the `char *`
+ordering hazard, the one-word `long`, the 3072-byte block, `DIRSIZ` 18, the three address-space
+ceilings, how a program gets onto the image, which of the two harnesses tests it, and what the
+manual page owes), and what task C1 taught. `cmd/TODO.md` beside it is only the work plan and
+deliberately repeats none of it. **Read `cmd/sh/README.md` and `cmd/ls/README.md` first**,
+though: the C11 work is mechanical; what is not is that a v7 source assumes
 an `int` and a `char *` are the same thing, and on this machine they are not. `sh`'s names
 three hazards that follow from that — a flag packed into bit 0 of a pointer, a bit mask used
 to round to a word when `BYTESPERWORD` is 6, and casts to a node pointer that *floor* rather

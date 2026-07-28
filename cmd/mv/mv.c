@@ -66,7 +66,7 @@
 //
 //  5. THREE MORE UNBOUNDED COPIES, none of them as sharp as the first but all of the same
 //     shape -- argv strings into 100-byte automatics, against a 4,096-word stack that nothing
-//     checks (../TODO.md, the porting recipe).  v7's one length test, `strlen(target) >
+//     checks (../README.md, the porting recipe).  v7's one length test, `strlen(target) >
 //     MAXN-DIRSIZ-2', checked the target but not the component being appended to it, and
 //     dname() returns a pointer into argv where nothing bounds a component at DIRSIZ.  Each
 //     is now checked against the sum it actually builds.  (That test's own arithmetic changed

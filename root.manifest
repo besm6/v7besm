@@ -9,7 +9,7 @@
 # added /usr/test, the lib/test programs that b6sim also runs; the termcap port added
 # /etc/termcap and termcapt beside them, which are lib/libtermcap's rather than libc's, and
 # the curses port added cursest and curstty, which are lib/libcurses' and read the same file.
-# Task C1a (cmd/TODO.md) added /bin/mkdir and /bin/rmdir, which are the first entries here
+# Task C1a (cmd/README.md) added /bin/mkdir and /bin/rmdir, which are the first entries here
 # to carry a mode the staging tree cannot express: they are SETUID ROOT.  Task C1b added
 # /bin/{cp,ln,mv,rm} and a third setuid program in mv, and task C1c added
 # /bin/{chgrp,chmod,chown,touch} -- the four that change an inode rather than a directory,

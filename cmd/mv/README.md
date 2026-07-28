@@ -46,7 +46,7 @@ if ((s1.st_mode & S_IFMT) == S_IFDIR) {
 setuid(getuid());                     /* every other form runs as the real user */
 ```
 
-`cmd/TODO.md`'s C1b entry read that call as "the v7 way of refusing to be setuid", which is
+Task C1b read that call as "the v7 way of refusing to be setuid", which is
 what it amounts to on a system where `/bin/mv` is 0755 — v7's own arrangement, under which
 `mv d1 d2` simply did not work for an ordinary user. Here the bit is granted, so the line
 becomes load-bearing rather than decorative: **moving it above the `mvdir` return would break

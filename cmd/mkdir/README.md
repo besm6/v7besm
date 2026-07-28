@@ -99,7 +99,7 @@ the `EPERM` from `mknod` arriving where it should.
 
 * **Neither buffer was bounded.** v7 copies an `argv` string into `char[128]` with `strcpy()`
   and then `strcat()`s onto it. On this machine that walks off the frame, and the 4,096 words of
-  stack at `070000` are the one ceiling **nothing checks** (`cmd/TODO.md` §6). Harmless when
+  stack at `070000` are the one ceiling **nothing checks** (`cmd/README.md` §6). Harmless when
   nothing could reach `mkdir` but the person typing it; not harmless in a program that runs with
   an effective uid of 0. One length test covers both buffers.
 

@@ -39,7 +39,7 @@
 //
 //  2. Neither buffer was bounded.  v7 copies an argv string into char[128] with strcpy() and
 //     then strcat()s onto it, and on this machine that walks off the frame -- and the 4,096
-//     words of stack at 070000 are the one ceiling nothing checks (cmd/TODO.md section 6).
+//     words of stack at 070000 are the one ceiling nothing checks (cmd/README.md section 6).
 //     That was harmless when nothing could reach mkdir but the person typing it; it is not
 //     harmless in a program that runs with an effective uid of 0.  One length test now covers
 //     both buffers, `d' plus "/.." plus the NUL being the longest thing either holds.

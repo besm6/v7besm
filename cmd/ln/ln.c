@@ -5,7 +5,7 @@
 //
 // The v7 program, unchanged in what it does: find the last component of the target's path,
 // use it as the new name if none was given, refuse a directory unless -f, and make one
-// link(2).  The smallest of task C1b's four (../TODO.md).
+// link(2).  The smallest of task C1b's four (../README.md).
 //
 // The C11 pass is the usual one (../init/README.md is the worked example): a prototype and an
 // explicit return type on main(), the pre-ANSI `char *rindex();' deleted, `#include "stdio.h"'
@@ -19,7 +19,7 @@
 // ONE CHANGE BEYOND THE MECHANICAL PASS: the sprintf() that builds "directory/name" was
 // unbounded into a 100-byte automatic, and both of its operands come from argv.  That is the
 // hazard ../mkdir/mkdir.c and ../rmdir/rmdir.c each bounded in their turn -- the 4,096-word
-// stack at 070000 is the one address-space ceiling nothing checks (../TODO.md, the porting
+// stack at 070000 is the one address-space ceiling nothing checks (../README.md, the porting
 // recipe).  One length test, and ln.1 says so.
 //
 // WHAT DID NOT NEED CHANGING, AND WAS CHECKED.  No long, no %D, no struct direct -- ln never
