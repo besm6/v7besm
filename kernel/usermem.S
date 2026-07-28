@@ -37,10 +37,25 @@
 // in registers.  Non-reentrant (the bss temps are static), same as uarea.S/seg.S -- no interrupt
 // handler calls these.  r1-r7 are untouched (useracc preserves them for us).
 //
-// copyin/copyout are WORD-ONLY: they copy nbytes/NBPW whole words.
-// Every caller passes word-aligned addresses and a word-multiple byte count (iomove's NBPW guard,
-// struct copyouts, icode); an unaligned copy stays on the fubyte/subyte byte path in iomove.  The
-// divide by NBPW=6 is a short subtract-6 loop that floors and cannot spin on a non-multiple.
+// copyin/copyout are WORD-ONLY: they mask the pointer with `aax #077777', dropping the fat
+// pointer's byte-offset field entirely, and copy nbytes/NBPW whole words.  The divide by NBPW=6 is
+// a short subtract-6 loop that floors and cannot spin on a non-multiple.
+//
+// THEY STAY WORD-ONLY DELIBERATELY, AND TEACHING THEM THE BYTE OFFSET WOULD CORRUPT MEMORY.  On
+// this machine `(caddr_t)<some int>' is a silent bit COPY, not a conversion: the marker bit stays
+// clear and the offset field reads 0 -- which, since 5 is the word's FIRST byte and 0 its last,
+// looks like BYTE #5.  Three live callers pass exactly that and are correct only because the mask
+// erases it: sendsig() and sigret() (sendsig.c) both build a user stack address out of tr->r15,
+// and kernel/test/mmutest passes `(caddr_t)uw' from an unsigned.  Honour the field here and each
+// of them silently starts five bytes into the word.  Clearing that whole class of site is
+// kernel/TODO.md's `int'-vs-pointer audit, and it is open.
+//
+// SO THE BYTE OFFSETS ARE PEELED ONE LEVEL UP, in copyinb()/copyoutb() (kernel/ucopy.c), which is
+// what iomove() calls: they square both pointers up to a word boundary with subyte/fubyte, hand
+// this routine only whole words standing on byte #0, and peel the tail the same way.  Everything
+// that reaches HERE therefore has word-aligned addresses and a word-multiple byte count -- ucopy.c
+// arranges it, and the struct copyouts and icode have it by construction.  kernel/test/umem is
+// where that contract is driven over every phase there is.
 //
 // This lives in its own file rather than in besm6.S so that kernel/test/mmutest can link the real
 // routines: besm6.o cannot go into a standalone test (its 0500 vector reaches into the C kernel,

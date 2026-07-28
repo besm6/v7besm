@@ -11,16 +11,15 @@ and cannot exercise any of this. `test/mmutest` is the model to copy, and every 
 `set mmu cache`; README.md's "Writing a standalone SIMH test" is the rest of that story, including
 why `besm6.o` cannot go into one.
 
-**Tasks 1 through 27 are done and their writeups have been removed**; the design they settled on is
+**Tasks 1 through 28 are done and their writeups have been removed**; the design they settled on is
 README.md, and how each turned out is in the source comments and in [../doc/](../doc/). The
 numbering is **left as it was** — task numbers are cited from the sources and from `doc/`.
 
-Task 29 is the road ahead and is the size of everything before it. 28 and 30–34 are small,
-independent, and were deferred deliberately.
+Task 29 is the road ahead and is the size of everything before it. 30–36 are small, independent,
+and were deferred deliberately.
 
 | | task | size |
 |---|---|---|
-| 28 | a bulk copy path for unaligned `read`/`write` | medium, high risk |
 | 29 | multiuser: the terminal driver, `getty`/`login`, a test | large |
 | 30 | copy only the live part of the u-area | small, measurable win |
 | 31 | the kernel-stack depth check | small |
@@ -28,45 +27,7 @@ independent, and were deferred deliberately.
 | 33 | `ptrace` single-step | small now, blocked after |
 | 34 | the `int` ↔ pointer audit | open-ended |
 | 35 | the character `send` drops — find it, and see what it costs | small to measure, unknown to fix |
-
----
-
-## 28. A bulk copy path for unaligned `read`/`write`
-
-**Where.** `iomove()` in [rdwri.c](rdwri.c); `copyin`/`copyout` in [usermem.S](usermem.S);
-`useracc()` in [utab.c](utab.c).
-
-**What is wrong.** `copyin`/`copyout` are **word-only**: they mask the pointer with `aax #077777`
-and drop the byte offset entirely. `iomove()` therefore takes them only when `n % NBPW == 0` and
-both pointers stand on byte #0 of their word, and otherwise moves the block **one byte at a time**
-through `cpass`/`passc` — that is one `fubyte`/`subyte` per byte, each a full `useracc()` range check
-plus a mode-toggle bracket. Every stdio buffer is byte-granular, so the slow path is the ordinary
-one for user I/O; the fast path is taken essentially only by the kernel's own struct copies.
-
-(The alignment *test* is no longer the bug it was. v7's `(n & (NBPW-1)) == 0 && (int)cp & (NBPW-1)`
-was silent data corruption here — `NBPW` is 6, not a power of two, and a `caddr_t`'s byte offset
-lives in bits 47–45, so the mask could not see it. The block comment at `iomove()` is the writeup.)
-
-**What to do.**
-
-1. **Measure first.** Add a counter on each arm of `iomove()`, boot, run `test/session` and
-   `libtest`, and read the two numbers out with `ex`. The work below is only worth doing if the byte
-   arm dominates, and the measurement belongs in the commit message either way.
-2. Give `copyin`/`copyout` byte offsets. The tractable case is **equal phase** — both pointers at
-   the same byte within their word — which is the common one, and needs only a partial leading word,
-   the existing whole-word loop, and a partial trailing word, each edge a read-modify-write on the
-   destination side. The general case is a shifting copy across word boundaries; leave it on the
-   `cpass`/`passc` path until the measurement says otherwise.
-3. `iomove()` then calls the bulk path whenever the phases match, whatever `n` is.
-
-**How to verify.** Write the bite test first. A new standalone `test/umem` (crt0 plus `usermem`,
-`utab` and `brz`, in the shape of `mmutest`) with a forged user map, covering all 6 × 6 start phases
-× lengths 0–13 and one copy that crosses a page boundary, and asserting the bytes *outside* the
-range are untouched — the last is the part a round trip would miss. Then `libtest` and `session`
-must be byte-identical, and they are the ones that found the previous bug here.
-
-**Size.** Medium, and higher risk than it looks: this routine has already produced one silent
-data-corruption bug. Do not touch it without the bite test.
+| 36 | the shifting copy: the half of the byte path task 28 could not reach | medium, high risk |
 
 ---
 
@@ -398,3 +359,52 @@ the five parallel-`ctest` runs for the load half.
 
 **Size.** Small to measure, and the measurement is most of the value. The fix is unknown until
 step 1 answers which side of the boundary it is on.
+
+---
+
+## 36. The shifting copy
+
+**Where.** `copyinb`/`copyoutb` in [ucopy.c](ucopy.c), and whatever machine assist they end up
+calling.
+
+**What is left.** Task 28 gave `iomove()` a bulk path, and it reaches the **in-phase** case only —
+both pointers standing on the same byte of their respective words, so that after a partial leading
+word the middle is whole words on both sides. Out of phase, every word of the transfer straddles
+two on the other side, and the copy is still one `fubyte`/`subyte` per byte: a `useracc()` range
+walk and a mode-toggle bracket for six bits of payload.
+
+**How much it is.** `nioshift` (systm.h; `libtest.ini.in` prints it on every run) said **94,805
+bytes** of `libtest`'s 1,253,598, against 871 left on the in-phase arm and 1,157,922 through the
+bulk path. So this is now the *whole* of what `iomove()` still moves a byte at a time, and it is
+7.6% of the traffic and a much larger share of the time. `session` is 2,894 bytes, unchanged by
+task 28 and unchanged by anything since.
+
+**Where it comes from**, which is worth knowing before optimising it: the kernel-side pointer is
+`(caddr_t)bp->b_addr + on` with `on = u_offset % BSIZE`, so its phase walks with the file offset,
+while the user's buffer stays put. `read(fd, buf, 100)` in a loop lands here on every call after
+the first. A program whose transfers are multiples of six never does.
+
+**What to do.** Two candidates, and the first is much the cheaper:
+
+1. **Word-at-a-time in C, through `fuword`/`suword`.** For `copyinb`, read whole user words with
+   `fuword` and split them in C — one `useracc()` per six bytes instead of six. For `copyoutb`,
+   assemble each user word from the kernel bytes and `suword` it, reading the old word back with
+   `fuword` only for the two partial end words. Roughly 3–6× on the same arm, no assembly, and the
+   masks are the ones `ucopy.c` already reasons about.
+2. **A funnel shift in `usermem.S`.** `asx`/`asn` shift `[A, Y]` as one 96-bit quantity and `yta`
+   reads `Y` back, so a two-instruction shift-and-carry per word is available; it is used nowhere
+   in this kernel today. Faster than (1) and the only way to get the mode-toggle bracket down to
+   one per word — but it is assembly, in the file whose header explains why it stays word-only, and
+   `copyinb`/`copyoutb` would have to hand it the two phases explicitly rather than mask them away.
+
+Do (1) first and re-read `nioshift`; (2) is only worth it if the counter says so afterwards.
+
+**How to verify.** [test/umem](test/umem.c) **already covers this**, and covering it is why its
+matrix is 6 × 6 and not 6: every unequal `(ku, kk)` pair is an out-of-phase transfer, at lengths
+0–13 and at 200, with the whole destination window compared against an independent oracle so that
+a shift that lands one byte out is caught wherever it lands. The `.ini` header lists the mutations
+that made it bite. So this task's bite test is written; what a new implementation must do is fail
+`umem` when it is wrong, which the existing mutation list already demonstrates it does.
+
+**Size.** Medium for (1), and higher risk than it looks — this is the same routine that produced
+one silent data-corruption bug already, and the reason `umem` exists.

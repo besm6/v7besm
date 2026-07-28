@@ -37,6 +37,24 @@
 ; WHY THE SHELL IS TOLD TO READ THE SCRIPT: there is no `#!' on this system -- the shebang
 ; is a 4.xBSD invention, and neither getxfile() nor b6sim implements it -- so `sh /etc/libtest'
 ; is how a script runs, exactly as runcom() in cmd/init/init.c execs `sh /etc/rc'.
+;
+; AND THIS .ini IS GENERATED, like swap.ini and for the same reason: it asserts on three
+; kernel counters and those are link-time addresses.  genboot.cmake substitutes them; the
+; file is read out of the BUILD directory, not the source one.
+;
+; What the counters are for.  iomove() (kernel/rdwri.c) hands every user transfer to
+; copyinb()/copyoutb() (kernel/ucopy.c), which peel the partial words at each end and give
+; the whole-word middle to the machine-language copyin/copyout.  Whether that middle is ever
+; REACHED is invisible from the outside -- a kernel that peeled all 3072 bytes of every block
+; one at a time would produce identical output, only slowly -- so this run asserts that the
+; bulk path carried something, exactly as swap.ini asserts that something was swapped.  That
+; is also the only defence there is for `if (lead == NBPW) lead = 0;' in ucopy.c, which
+; kernel/test/umem provably cannot see (its header says so).
+;
+; The other two are printed and not asserted, because they are a MEASUREMENT and not a
+; contract: nioedge is what the peels cost (hundreds of bytes, against a million through the
+; middle) and nioshift is what is left to win -- the transfers whose two pointers stand on
+; different bytes of their words, which need a shifting copy this kernel does not have.
 
 reset
 set cpu latin
@@ -77,10 +95,23 @@ expect "ok termcapt" step 1000000000
 expect "ok cursest" step 1000000000
 expect "ok puret"   step 1000000000
 expect "ok curstty" step 1000000000
-expect "libtest done" echof "PASS: libtest -- the shell ran all twenty-seven /usr/test programs off the image and called sync(2)"; quit
+; The last rule does NOT step: it jumps to the checks below, which run with the machine
+; stopped.  A `goto' rather than falling through, because falling through is also what a run
+; that merely exhausted its step budget does, and the FAIL block exists to tell those apart.
+expect "libtest done" goto counters
 
 step 1000000000
 
 echof "FAIL: the libtest run never finished. The last `ok <name>' above names the last program that COMPLETED, so the one after it in kernel/test/libtest.sh is the one that hung or died. Look the PC up in ../unix.nm for a kernel fault, or in build/lib/test/<name>.nm for a fault in the program. PC:"
 ex PC
 exit 1
+
+:counters
+if @NIOBULK@&07777777777777777==0 echof "FAIL: libtest -- iomove() never reached the bulk copy path, so every one of the million-odd bytes above went through the kernel one at a time.  The output would be identical; only the time would differ.  Either copyinb/copyoutb (kernel/ucopy.c) stopped squaring the pointers up to a word boundary, or nothing on the image does a transfer of six bytes or more any more.  niobulk:"; ex @NIOBULK@; exit 1
+
+echof "PASS: libtest -- the shell ran all twenty-seven /usr/test programs off the image and called sync(2)"
+echof "libtest: iomove bytes -- bulk, then the in-phase peels, then what is left out of phase"
+ex @NIOBULK@
+ex @NIOEDGE@
+ex @NIOSHIFT@
+quit

@@ -158,9 +158,10 @@ int min(int a, int b)
 // Update all the arguments by the number
 // of bytes moved.
 //
-// There are 2 algorithms.  If source address, dest address and count are all WORD-ALIGNED
-// in a user copy, the machine-language copyin/copyout is called; if not, it is done
-// byte-by-byte with cpass and passc.
+// There are 2 algorithms.  A user copy goes to copyinb/copyoutb (ucopy.c), which take the
+// byte offsets apart and hand the machine-language copyin/copyout whole words; a KERNEL copy
+// -- u_segflg 1, where u_base is a kernel address and there is no boundary to cross -- is
+// done byte-by-byte with cpass and passc.
 //
 // THE ALIGNMENT TEST IS NOT v7's, AND v7's WAS A SILENT DATA-CORRUPTION BUG HERE.  The
 // original asked `(n & (NBPW-1)) == 0 && ((int)cp & (NBPW-1)) == 0 && ...' -- a low-bit
@@ -182,24 +183,55 @@ int min(int a, int b)
 // It is deterministic, it is rare enough to look like anything but an alignment bug, and it
 // was invisible until user programs with byte-granular stdio buffers ran on the image --
 // kernel/test/libtest (task 25c) found it in gen, strings, sbrkt and stdiot on its first
-// run.  kernel/TODO.md task 28 listed this as a PERFORMANCE bug ("correctness is
-// unaffected"); it was not.
+// run.  The task that fixed the alignment TEST listed this as a PERFORMANCE bug ("correctness
+// is unaffected"); it was not.
 //
-// The test below is the one the fast path actually needs, and it is what usermem.S's header
-// says its callers guarantee: a real modulo, and both pointers standing on byte #0 of their
-// word.  ptrbyte() yields the shift field, in which 5 IS the word's first byte.  The `% NBPW'
-// costs one b$div per block, against 3072 bytes moved.
+// THE ALIGNMENT TEST IS GONE FROM HERE ENTIRELY, and that is the point of the bulk path.  It
+// used to be the fast path's admission criterion; it is now a decision copyinb/copyoutb make
+// for themselves, one word at a time, where kernel/test/umem can drive it directly.  This
+// routine no longer knows what a phase is.
+//
+// WHAT THAT COST WAS, measured before the change with a counter on each arm (the three are
+// still there, in ucopy.c, and libtest asserts on them).  Bytes through iomove():
+//
+//                     bulk             byte, in phase    byte, out of phase
+//      session      361,296 (97.4%)      6,736 (1.8%)       2,894 (0.8%)
+//      libtest    1,088,562 (86.8%)     70,231 (5.6%)      94,805 (7.6%)
+//
+// So the premise the task was written on -- "the slow path is the ordinary one for user I/O"
+// -- was wrong: BUFSIZ is 3072, which is BSIZE, so an ordinary stdio transfer is already
+// block-aligned and word-aligned and always took the bulk arm.  What the byte arm carries is
+// the REMAINDER: the tail of a file, and every program that reads or writes in units that are
+// not multiples of six.  It is 13% of the bytes and far more than 13% of the time, since a
+// byte on that arm costs a useracc() walk and a mode-toggle bracket of its own.
+//
+// Of that byte arm this change reaches the IN-PHASE half only -- 43% of it under libtest --
+// and reaches it completely: at most ten byte operations per 3072-byte block instead of 3072.
+// The out-of-phase half needs a shifting copy across word boundaries, which is a machine
+// assist this kernel does not have; nioshift is what says how much is still on the table.
+//
+// EFAULT ACCOUNTING CHANGED, deliberately.  The byte arm used to advance u_base/u_count/
+// u_offset per byte, so a fault left a partial account; copyinb/copyoutb validate the whole
+// range up front and are all-or-nothing, so nothing is advanced at all.  Nothing observes it
+// -- rdwr() discards r_val1 once u_error is set -- and the new behaviour is the one
+// usermem.S's header already promised for copyin/copyout.
+//
+// AND ONE LATENT INCONSISTENCY GOES WITH IT.  u_segflg 2 (xalloc(), text.c) is a USER access,
+// and passed the old `!= 1' guard as one -- but if the block had been unaligned it would have
+// fallen through to cpass()/passc(), which test `if (u.u_segflg)' and would have done a
+// KERNEL store into the user's address as if it were a pointer.  It never happened only
+// because a_const and a_text are multiples of six.  Now 2 never reaches that path at all.
 void iomove(register caddr_t cp, register int n, int flag)
 {
     register int t;
 
     if (n == 0)
         return;
-    if (u.u_segflg != 1 && n % NBPW == 0 && ptrbyte(cp) == 5 && ptrbyte(u.u_base) == 5) {
+    if (u.u_segflg != 1) {
         if (flag == B_WRITE)
-            t = copyin(u.u_base, (caddr_t)cp, n);
+            t = copyinb(u.u_base, (caddr_t)cp, n);
         else
-            t = copyout((caddr_t)cp, u.u_base, n);
+            t = copyoutb((caddr_t)cp, u.u_base, n);
         if (t) {
             u.u_error = EFAULT;
             return;

@@ -10,7 +10,7 @@
 # .c sources get -DKERNEL (KERNOBJ); the local test programs and the .S/.s assist must
 # not, matching the old Makefile's static-pattern rule.
 
-set(KERNOBJ alloc bio md mb slp text malloc syscall sendsig clock intr utab)
+set(KERNOBJ alloc bio md mb slp text malloc syscall sendsig clock intr ucopy utab)
 
 set(TEST_TARGETS "")
 
@@ -80,6 +80,7 @@ endif()
 # The forge tests and driver tests.  Object lists are the old Makefile's per-program rules.
 b6_test(sctest   crt0 sctest)
 b6_test(mmutest  crt0 mmutest mmuhelp utab brz uarea seg usermem)
+b6_test(umem     crt0 umem mmuhelp utab brz usermem ucopy)
 b6_test(uintr    crt0u uintr utab brz)
 b6_test(utrap    crt0t utrap utab brz)
 b6_test(usys     crt0s usys syscall utab brz usermem)
@@ -507,6 +508,25 @@ if(BESM6)
     # wins.  The default is deliberate: an unchanged expectation is a POSITIVE result, the
     # statement that the kernel and the simulator answered a real program identically.  An
     # override file's existence is the statement that they cannot, and its header says why.
+    #
+    # Its .ini is GENERATED, like swap's and for the same reason: it asserts that iomove()'s
+    # bulk copy path was reached (niobulk non-zero) and prints the other two counters, and all
+    # three are link-time addresses.  See libtest.ini.in.
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/libtest.ini
+        COMMAND ${CMAKE_COMMAND} -DNM=${CMAKE_CURRENT_BINARY_DIR}/../unix.nm
+                "-DSYMS=niobulk;nioedge;nioshift"
+                -DIN=${CMAKE_CURRENT_SOURCE_DIR}/libtest.ini.in
+                -DOUT=${CMAKE_CURRENT_BINARY_DIR}/libtest.ini
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/genboot.cmake
+        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/../unix.nm
+                ${CMAKE_CURRENT_SOURCE_DIR}/libtest.ini.in
+                ${CMAKE_CURRENT_SOURCE_DIR}/genboot.cmake
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMENT "gen libtest.ini" VERBATIM)
+    add_custom_target(libtestini DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libtest.ini)
+    add_dependencies(libtestini kernel rootimg)
+    list(APPEND TEST_TARGETS libtestini)
+
     add_test(NAME libtest_run
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-libtest.sh
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}

@@ -466,8 +466,9 @@ int copyout(caddr_t from, caddr_t to, unsigned nbytes);  /* systm.h:177 */
   (§1).
 - **Callers.** `fuword` reads syscall arguments in `trap.c:129`; `suword`/`subyte` write results
   and signal frames (`sendsig` in `machdep.c:106`, `sig.c`, `sys1.c`); `copyin`/`copyout` are the
-  core of `iomove` ([rdwri.c:180](../kernel/rdwri.c)), `exec`/`icode` setup (`main.c:88`,
-  `sys3.c`, `sys4.c`), and tty I/O (`dev/tty.c`).
+  core of `copyinb`/`copyoutb` ([ucopy.c](../kernel/ucopy.c)), which `iomove`
+  ([rdwri.c](../kernel/rdwri.c)) calls for every user transfer, and are called directly by the
+  `exec`/`icode` setup (`main.c:88`, `sys3.c`, `sys4.c`) and tty I/O (`dev/tty.c`).
 - **BESM-6 notes — done**, in [usermem.S](../kernel/usermem.S). The return contracts are preserved
   exactly; the mechanism is not.
 
@@ -481,9 +482,17 @@ int copyout(caddr_t from, caddr_t to, unsigned nbytes);  /* systm.h:177 */
   itself, and a range running into a zero descriptor returns the clean C `-1` — the compiler's own
   `-1`, not 48 ones, so `fubyte(…) == -1` matches at a C caller.
 
-  **`copyin`/`copyout` are word-only**: they copy `nbytes / NBPW`
-  whole words, every caller passes a word-aligned address and a word-multiple count, and an
-  unaligned copy stays on the `fubyte`/`subyte` byte path inside `iomove`.
+  **`copyin`/`copyout` are word-only, and stay that way on purpose**: they mask the pointer with
+  `aax #077777`, dropping the fat pointer's byte-offset field, and copy `nbytes / NBPW` whole words.
+  Teaching them the offset would corrupt memory rather than merely change their reach — three
+  callers pass a `caddr_t` built from an `int` (`sendsig`/`sigret`, and `mmutest`), and since that
+  cast is a silent bit copy the offset field reads **0, which is byte #5 and not byte #0**; the mask
+  is what saves them. So the byte offsets are peeled one level up, in `copyinb`/`copyoutb`
+  ([ucopy.c](../kernel/ucopy.c)), which square both pointers to a word boundary with
+  `subyte`/`fubyte`, hand these routines only whole words on byte #0, and peel the tail the same
+  way. That covers the **in-phase** case — both pointers on the same byte of their words; out of
+  phase every word straddles two on the other side and the transfer is still byte-at-a-time.
+  `kernel/test/umem` drives all of it, and `kernel/TODO.md` task 36 is the rest.
 
   The byte variants do emulate sub-word access by read-modify-write, as predicted — but note the
   **fat-pointer marker bit (48) is load-bearing**. `fubyte` extracts its byte with `asx` on the

@@ -4,7 +4,9 @@
 # Task 25c: the same programs b6sim runs, run by the real kernel, held to the same files.
 #
 # Invoked by ctest as: run-libtest.sh B6FSUTIL BESM6 SRCDIR, with the kernel test BUILD
-# directory as the working directory -- where root.img and ../unix already are.
+# directory as the working directory -- where root.img, ../unix and the GENERATED libtest.ini
+# already are.  The .ini is generated (genboot.cmake substitutes three kernel counter
+# addresses into it), so like swap.ini it is taken from the build directory and not $srcdir.
 #
 # THIS SCRIPT IS THE SETUP FIXTURE AND NOTHING ELSE.  It stops once libtest.out/ exists;
 # the fsck and the twenty-seven diffs are ctest cases of their own (libtest_fsck,
@@ -38,7 +40,7 @@ cp root.img libtest.img
 "$b6fsutil" -a libtest.img /etc/libtest "$srcdir/libtest.sh"
 "$b6fsutil" -S --volume=3080 libtest.img root3080.disk
 
-"$besm6" "$srcdir/libtest.ini"
+"$besm6" ./libtest.ini
 
 # What reached the disk.  libtest_fsck checks the structure and libtest_<name> the
 # contents; both work on what this leaves behind.

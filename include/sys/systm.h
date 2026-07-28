@@ -59,6 +59,13 @@ extern int ntextin;   // text segments read off the paging store
 extern int ntextout;  // ... and written to it, by the last in-core sharer leaving
 extern int ntextjoin; // xalloc(): a process attached to a text already in text[]
 
+// iomove() traffic, in BYTES, by the arm that carried it (kernel/ucopy.c).  Same argument as
+// the counters above: a copy path that is never taken looks exactly like one that is, and the
+// split between the two byte arms is what says how much is left to win.
+extern int niobulk;  // whole words through copyin/copyout, both pointers on byte #0
+extern int nioedge;  // byte-at-a-time, squaring up the two ends of an in-phase transfer
+extern int nioshift; // byte-at-a-time, phases DIFFERENT -- needs a shifting copy, or nothing
+
 extern daddr_t swplo;        // block number of swap space
 extern int nswap;            // size of swap space
 extern int updlock;          // lock for sync
@@ -211,6 +218,10 @@ void expand(int newsize);
 int estabur(int nt, int nd, int ns, int sep, int xrw);
 int copyout(caddr_t from, caddr_t to, int nbytes);
 int copyin(caddr_t from, caddr_t to, int nbytes);
+// ... and the byte-granular pair over them (kernel/ucopy.c), which is what iomove() calls:
+// these honour the fat pointers' byte offsets, where copyin/copyout mask them away.
+int copyoutb(caddr_t from, caddr_t to, int nbytes);
+int copyinb(caddr_t from, caddr_t to, int nbytes);
 void sched(void);
 int access(struct inode *ip, int mode);
 void readi(struct inode *ip);

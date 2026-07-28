@@ -56,7 +56,7 @@ Six tests cover the image the build produces ([../root.manifest](../root.manifes
 | `boot` | process 1 leaves the kernel, execs `/etc/init`, which forks `/bin/sh`, and the shell **prompts** |
 | `console` | a typed dialogue with that shell: erase, kill, a line longer than a clist block, `>/dev/tty`, `pwd`, `ls /bin`, and `^D` round through `/etc/rc` to the next prompt |
 | `session` | the shell **writes** — files, an inode past its direct blocks, `sync` — and the host then fscks the container and diffs what was written |
-| `libtest` | the twenty-five [../lib/test/](../lib/test/) programs run off `/usr/test`, each matching **the same `.expected` file `b6sim` is held to** (`memt` and `shellt` run here only) |
+| `libtest` | the twenty-five [../lib/test/](../lib/test/) programs run off `/usr/test`, each matching **the same `.expected` file `b6sim` is held to** (`memt` and `shellt` run here only) — and `iomove()`'s own counters say the bulk copy path carried it |
 | `swap` | the same kernel on a machine of **31 pages** (`phymem` deposited before the boot), running more processes than fit: `sched()`/`newproc()` swap through the drum, two processes share one text, and the counters say so |
 
 `boot` attaches the pristine disk read-only — an assertion in itself — and the others each convert
@@ -261,6 +261,12 @@ What the ones already in [test/](test/) cost to get right:
   clist block, so one stage types 48 characters against a `CBSIZE` of 30 on purpose; `session.sh`
   copies `/bin/ls` because 33 KB is the smallest file that must reach through an inode's indirect
   block. Ask what the sizes in the test are relative to the sizes in the code.
+* **A forged map's adjacent virtual pages may be physically adjacent too**, and then a test that
+  crosses the boundary between them proves nothing — the copy comes out right even if the mapping is
+  ignored entirely. `mmutest`'s two data pages are virtual 2–3 over physical 17–18, so `umem` puts
+  its page-crossing case at the *text/data* boundary instead, virtual 1 → 2 over physical 21 → 17,
+  and asserts the two pages are **not** neighbours before trusting the leg. Same argument as the
+  round-trip bullet above, one level down: ask what about the machine the test would still need.
 * **Ask what would notice if the code were wrong.** 18b.5 classified disk failures into hard and
   soft, but both ended in the same failed request with the same `b_resid`, so the classification was
   undefended and the bite test duly passed while the source claimed it would fail. Exposing
@@ -483,8 +489,17 @@ Facts that cost real time to establish and are not in `doc/`.
 * **The u-area invariant is a footgun.** It has bitten twice, and a seventh site added later and
   forgotten will still be a very confusing bug. The whole rule lives in one block comment at
   `xswap()` in [text.c](text.c).
-* **`copyin`/`copyout` toggle БлП per word** (~2× a plain copy), and the fat-`char *` byte edges are
-  read-modify-write, so an unaligned `read`/`write` goes byte-by-byte. Task 28.
+* **`copyin`/`copyout` toggle БлП per word** (~2× a plain copy), and they are **word-only on
+  purpose** — `usermem.S`'s header names the three callers that pass a pointer built from an `int`,
+  whose byte-offset field reads as byte #5 and which the `aax #077777` mask is what saves. The byte
+  offsets are peeled a level up, in `copyinb`/`copyoutb` ([ucopy.c](ucopy.c)), so an unaligned
+  `read`/`write` costs at most ten byte operations per 3072-byte block instead of 3072 — **but only
+  when the two pointers are IN PHASE**, on the same byte of their respective words. Out of phase
+  the transfer is still byte-by-byte, because every word of it straddles two on the other side and
+  nothing short of a machine-language funnel shift (`asx`/`yta`, used nowhere in this kernel) will
+  do. Measured under `libtest`: 87% of the bytes were already going through the bulk path, the
+  in-phase remainder fell from 70,231 bytes to 871, and 94,805 bytes — 7.6% of the traffic — are
+  still moved one at a time. `nioshift` is what says so on every run, and that is the open half.
 * **`off_t` stays a byte count.** Making file offsets word counts is the BESM-6-shaped answer and
   would delete a `b$div` at every block crossing — but `BSIZE` is 3072 and not a power of two either
   way, the divide is **one per block** against 3072 bytes moved (`readi()` says so at the site), and
