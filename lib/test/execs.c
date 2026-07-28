@@ -27,18 +27,13 @@
 // Nothing host-dependent reaches the output: the environment printed is the one this
 // program handed over, and argv[0] is what the harness typed.
 //
+// All five wrappers and `environ' come out of <unistd.h>; execvp() and execlp() were the
+// two this tree used to have to declare by hand, and task C2b put them in the header.
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-int execl(const char *name, ...);
-int execv(const char *path, char **argv);
-int execle(const char *name, ...);
-int execvp(const char *name, char **argv);
-int execlp(const char *name, ...);
-
-extern char **environ;
+#include <unistd.h>
 
 #define MISSING "./no-such-program"
 

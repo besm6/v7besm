@@ -194,6 +194,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/rc
     ${B6_ROOTFS}/etc/termcap
     ${B6_ROOTFS}/bin/sh
+    ${B6_ROOTFS}/bin/basename
     ${B6_ROOTFS}/bin/cat
     ${B6_ROOTFS}/bin/chgrp
     ${B6_ROOTFS}/bin/chmod
@@ -211,7 +212,13 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/rmdir
     ${B6_ROOTFS}/bin/sleep
     ${B6_ROOTFS}/bin/sync
-    ${B6_ROOTFS}/bin/touch)
+    ${B6_ROOTFS}/bin/test
+    ${B6_ROOTFS}/bin/time
+    ${B6_ROOTFS}/bin/touch
+    ${B6_ROOTFS}/bin/tty
+    ${B6_ROOTFS}/bin/yes)
+# /bin/[ is deliberately absent: it is a `link' stanza in the manifest, not a staged file,
+# so there is nothing here for the image to depend on.  rootimg_link below is what holds it.
 
 # ...and /usr/test, the lib/test programs (task 25c).  The list is lib/test's, since that is
 # where they are linked and staged; naming it from one file is what keeps the manifest, this
@@ -266,6 +273,26 @@ add_test(NAME rootimg_setuid
                    ${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/rmdir$'"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(rootimg_setuid PROPERTIES LABELS kernel)
+
+# THE HARD LINK, READ BACK OFF THE FINISHED IMAGE (task C2b).  /bin/[ is /bin/test -- the
+# same inode under two names -- and it is the only link on this image and the only entry in
+# ../../root.manifest that names no `source'.  Nothing in build/rootfs/ corresponds to it, so
+# it is invisible to ROOTFS_FILES above and to every size check; the image is again the only
+# thing that can say whether it is there.
+#
+# WHY IT MATTERS RATHER THAN BEING DECORATION: cmd/test/test.c looks at argv[0] and requires a
+# closing `]' when it was entered by that name, so with no link that branch is unreachable and
+# `[ -f x ]' in a shell script is a command not found.  kernel/test/utils.sh types it.
+#
+# The two assertions are `both paths report nlink 2' and `everything before the path is
+# identical between them' -- which is type, mode, owner, size and INODE, so the second is what
+# actually says they are one file.  Same shape as rootimg_setuid: it runs whether or not SIMH
+# is installed, and it costs milliseconds.
+add_test(NAME rootimg_link
+    COMMAND sh -c "${B6FSUTIL} -v -v root.img | grep -E ' /bin/(test|\\[)$' | grep -c 'nlink 2 ' | grep -qx 2 && \
+                   ${B6FSUTIL} -v -v root.img | grep -E ' /bin/(test|\\[)$' | sed 's| /bin/.*||' | sort -u | grep -c . | grep -qx 1"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(rootimg_link PROPERTIES LABELS kernel)
 
 # ---------------------------------------------------------------------------------------
 # boot, console, session and libtest -- the whole kernel booting with the root image
@@ -403,7 +430,15 @@ if(BESM6)
     #
     # The oracle is a diff of what the programs PRINTED, with the seconds field masked by
     # run-utils.sh -- the same "keep only the reproducible columns" projection files uses over
-    # `b6fsutil -v -v', and for the same reason.  C2b joins this test as it lands.
+    # `b6fsutil -v -v', and for the same reason.
+    #
+    # TASK C2b JOINED IT, which is what the second half of utils.sh is: tty(1) naming the
+    # console (b6sim cannot read a directory, so it answers the opposite there), test(1)
+    # branching through both its names -- `[' being the image's one hard link, which
+    # rootimg_link checks from the host side -- yes(1) stopped by a SIGPIPE down THE FIRST
+    # PIPELINE this image has ever run, and time(1) forking, execing and reading times(2),
+    # with its three intervals masked like date's seconds and its exit status diffed as it
+    # stands.  C5 belongs here too, as it lands.
     add_test(NAME utils
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-utils.sh
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}

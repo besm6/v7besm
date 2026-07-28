@@ -1,10 +1,13 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
-.TH TIME 1 
+.TH TIME 1
 .SH NAME
 time \- time a command
 .SH SYNOPSIS
 .B time
 command
+[
+argument ...
+]
 .SH DESCRIPTION
 The
 given command is executed; after it is complete,
@@ -12,16 +15,45 @@ given command is executed; after it is complete,
 prints the elapsed time during the command, the time
 spent in the system, and the time spent in execution
 of the command.
-Times are reported in seconds.
+Times are reported in hours, minutes, seconds and tenths of a second, with leading
+zeros suppressed.
 .PP
-The execution time can depend on what kind of memory
-the program happens to land in;
-the user time in MOS is often half what it is in core.
+.B Note:
+v7's page said `Times are reported in seconds', which was never quite what the program
+printed.
 .PP
 The times are printed on the diagnostic output stream.
+.PP
+The exit status is the command's own.
+.B Note:
+v7's page did not say so.
+.SH "BESM-6 NOTES"
+.SS A tick is a 250th of a second, not a 60th
+.IR Times (2)
+counts in 1/HZ seconds and
+.B HZ is 250 here,
+where the PDP-11's line clock ran at 60.  Both places v7's source built that number in \-
+the conversion of elapsed seconds to ticks, and the leading entry of the radix table that
+decodes ticks back into tenths \- are derived from
+.B CLOCKS_PER_SEC
+now.  The printed layout is unchanged.
+.SS The separators are no longer NUL bytes
+v7's
+.I printt
+held \e0 in its separator tables to mean `nothing between these two digits', and printed
+it anyway.  On a terminal that is invisible, which is the only place v7 looked; in a file
+it is a NUL, which is what
+.B "time cmd 2>log"
+produces.  Fixed: the separator is emitted only when there is one.
+.SS The paragraph about MOS and core is gone
+It said that execution time depends on which kind of memory the program lands in, and that
+user time in MOS is often half what it is in core.  That is PDP-11/45 hardware, and this
+machine has none of it.
 .SH BUGS
-Elapsed time is accurate to the second,
-while the CPU times are measured
-to the 60th second.
+Elapsed time is accurate to the second, being the difference of two
+.IR time (2)
+calls, while the CPU times are measured to the 250th.
 Thus the sum of the CPU times can be up to a second larger
 than the elapsed time.
+.SH "SEE ALSO"
+times(2), time(2)

@@ -16,3 +16,28 @@ Sat Feb  3 04:05:SS GMT 2001
 date: bad conversion
 date: bad conversion
 Wed Jan  2 03:04:SS GMT 1980
+ls
+ls
+/dev/console
+tty status 0
+test found /etc/passwd
+test -d and -r agree
+test says x is not y
+test -t 0 status 0
+test 1 -eq 2 status 1
+test: ] missing
+bracket unterminated status 127
+hi
+hello
+/no/such/command: No such file or directory
+
+real MASKED
+user MASKED
+sys MASKED
+time status 1
+
+real MASKED
+user MASKED
+sys MASKED
+time status 0
+time status 2

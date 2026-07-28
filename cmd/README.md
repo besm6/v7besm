@@ -32,8 +32,9 @@ single-file programs and 29 directories of larger ones. That tree is **not in th
 
 **A directory is part of the build when it holds a `CMakeLists.txt`**, and only the ported ones
 do — the ten of task C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`, `mv/`, `rm/`,
-`rmdir/`, `touch/`) and the three of C2a (`date/`, `kill/`, `sleep/`) today. That is the only marker; [../CMakeLists.txt](../CMakeLists.txt) names
-its subdirectories one by one.
+`rmdir/`, `touch/`), the three of C2a (`date/`, `kill/`, `sleep/`) and the five of C2b
+(`basename/`, `test/`, `time/`, `tty/`, `yes/`) today. That is the only marker;
+[../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.
 
 Four things about the copies:
 
@@ -118,6 +119,7 @@ candidates, as they stand today:
 | `sed/sed1.c` | three, all `sp >= &genbuf[LBSIZE]` |
 | `pr.c` | two, both `>= &buffer[BUFS]` |
 | ~~`date.c`~~ | ~~one — `sp < ep`~~ — **found and fixed**, task C2a: it bounded the in-place reversal of `argv[1]`, and is an index pair now |
+| ~~`basename.c`~~ | ~~**two**, not the one this table used to claim — `p1>p2 && p3>argv[2]`~~ — **found and fixed**, task C2b: both are in the *same expression*, the backwards suffix compare, and both are index counts now |
 
 And the counterexample, because it is what makes the hazard hard to see: **`sort.c`'s record
 arena is clean.** `lp`, `hp`, `i`, `j`, `k` in `qsort()` are `char **` — thin word pointers that
@@ -188,17 +190,28 @@ Anything that walks directories — `rm -r`, `du`, `find`, `ncheck`, `dcheck`, `
 | `ls` | 110 | 4,632 | 298 | 2,638 | **7,678** |
 | `cat` | 83 | 2,989 | 165 | 1,544 | **4,781** |
 | `chgrp` | 85 | 3,211 | 344 | 1,236 | **4,876** |
+| `time` | 85 | 3,088 | 340 | 1,041 | **4,554** |
 | `date` | 99 | 3,348 | 265 | 1,041 | **4,753** |
 | `kill` | 78 | 2,619 | 311 | 1,032 | **4,040** |
 | `rmdir` | 81 | 2,868 | 208 | 1,033 | **4,190** |
 | `mkdir` | 79 | 2,746 | 180 | 1,033 | **4,038** |
+| `tty` | 80 | 2,644 | 159 | 1,032 | **3,915** |
 | `sleep` | 78 | 2,531 | 155 | 1,040 | **3,804** |
 | `touch` | 77 | 2,560 | 160 | 1,032 | **3,829** |
+| `yes` | 76 | 2,452 | 152 | 1,032 | **3,712** |
+| `basename` | 35 | 1,162 | 147 | 1,030 | **2,374** |
 | `init` | 27 | 820 | 37 | 323 | **1,207** |
+| `test` | 22 | 886 | 49 | 7 | **964** |
 
 Most of `cat` is libc's stdio, and `sh` is the largest v7 command bar the ones tasks C9 and C10
 name — so nothing before task C6 is in danger of the first ceiling. `fsck`, `sort`, `awk` and
 `make` are the four to measure early rather than late.
+
+**The bottom two rows say what stdio costs.** Every program above `basename` links `printf`
+and a `FILE` buffer, which is the ~1,030 words of bss and most of the text they have in common;
+`test` links neither — its whole output is four `write(2)` calls — and is a twelfth the size of
+`cat`. That is the difference `lib/libc/README.md` measures for `hello`, seen from the other
+end.
 
 **The stack is where a fixed buffer goes wrong, and every port so far has had to bound one.**
 `mkdir`, `rmdir`, `ln`, `cp` and `mv` each build a path in a fixed automatic that v7 filled with
@@ -269,14 +282,19 @@ Two harnesses, and choosing wrong wastes the effort:
   `ls` has no `b6sim` test) and it cannot exec `/bin/…`, because no such path exists on the build
   machine. Two more limits C2a ran into: **`stime(2)` is a no-op that reports success**, so a
   program that sets global state cannot be asserted there at all; and **`kill(2)` is the build
-  machine's own**, so no case may name a pid.
+  machine's own**, so no case may name a pid. And three C2b ran into: there is **no stdin**, so
+  a case cannot feed a filter (nothing needed it yet — C5 will, and extending the harness with
+  a `<case>.in` is the obvious way); a program that **does not terminate** cannot be a case at
+  all, however it is invoked, which is why `yes` has no `test/` directory; and **`argv[0]` is
+  the staged path**, so a program that dispatches on the name it was called by — `test` and
+  `[` — can only be tested through one of its names here.
 * **SIMH**, under the booted kernel. `kernel/test/console` is the model for a typed dialogue,
   `kernel/test/libtest` for running a program off `/usr/test` and diffing it against a
   `.expected`, `kernel/test/session` for anything that must *write* and then be fscked on the
   host afterwards, `kernel/test/files` for anything that changes a tree or an inode, and
-  `kernel/test/utils` (task C2a) for anything that touches the clock, a signal or another
-  process. Each grafts its script onto its own copy of the image at its own volume number; 3083
-  is the highest used.
+  `kernel/test/utils` (tasks C2a and C2b) for anything that touches the clock, a signal,
+  another process or a pipe. Each grafts its script onto its own copy of the image at its own
+  volume number; 3083 is the highest used.
 
 Most of task C5 lands in the first; C1, C3, C4 and C6 land in the second. Where a program can run
 in both, **do both** — the first time the libc suite was run in both worlds it found two bugs
@@ -330,3 +348,38 @@ ignored; `rm` had a `%.14s`; `touch` had a `main()` that fell off the end. But `
 `stat()` is *defensive* rather than a visible bug — `stat` and `chown` resolve through the same
 `namei()`, so the stale field could never reach a successful call — and its source header says so
 in those words. Claiming more than the fix does is worse than carrying the bug.
+
+---
+
+## What task C2 taught
+
+C2a put `date`, `kill` and `sleep` on the image and C2b `basename`, `test`, `time`, `tty` and
+`yes`; [kernel/test/utils.sh](../kernel/test/utils.sh) holds all eight. Four findings outlive
+the task, and two of them are about this machine rather than about any program.
+
+**An exit status above 127 does not survive `wait(2)`.** A status is `(code << 8)` and it comes
+back through r12, a fifteen-bit index register
+([../lib/libc/sys/wait.S](../lib/libc/sys/wait.S) states it), so `test`'s `exit(255)` reaches
+the shell's `$?` as **127**. It was left at 255 rather than lowered: the truncation reaches
+every program that exits above 127, and hiding a general limitation behind one local divergence
+is worse than recording it. [test/README.md](test/README.md) is the account, and the same
+finding is what makes the two harnesses disagree — under `b6sim` the *host* does the waiting
+and really does report 255.
+
+**A magic number can be spread across two expressions that share no variable.** `time` builds
+the PDP-11's 60 Hz clock into a multiplier and into the leading entry of a radix table, and
+nothing in `printt` suggests that entry is a clock rate. Grepping for `HZ` finds neither.
+[time/README.md](time/README.md) is the account; `od`, `sort` and `dd` are flagged in
+[TODO.md](TODO.md) for the same kind of trouble.
+
+**A hard link is invisible to the whole build.** `/bin/[` is `/bin/test` — the first `link`
+stanza [../root.manifest](../root.manifest) has ever carried, and without it the `argv[0]`
+branch of `test.c` is unreachable code. Nothing stages it, nothing sizes it, nothing depends on
+it; only the finished image can say it is there, which is why `rootimg_link` exists beside
+`rootimg_setuid`. Same argument, same shape — see [test/README.md](test/README.md).
+
+**Some programs cannot be a `b6sim` case at all**, and the three reasons are now in §9: no
+stdin, no `argv[0]` control, and no way to bound a program that does not terminate. `yes` is
+the third, and what tests it is a pipeline — **the first this image has ever run**, since
+nothing in `kernel/test/` or [sh/test/](sh/test/) had used `|`. It worked first time, which is
+worth writing down precisely because it might not have.

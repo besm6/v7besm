@@ -8,10 +8,16 @@
 # about the clock.  The rule is kept by SETTING the time before printing it: every date
 # below prints an instant this script chose, and run-utils.sh masks the seconds field
 # afterwards, because a second can pass between the stime(2) and the print and no test
-# should be a coin toss.
+# should be a coin toss.  time(1)'s three intervals are masked in the same place, and there
+# is no way to choose those in advance at all.
 #
-# STDOUT AND STDERR ARE NEVER MIXED IN ONE COMMAND.  All three of these programs report on
-# stdout, which is v7's choice; see the head of each source.
+# STDOUT AND STDERR ARE NEVER MIXED IN ONE COMMAND.  Everything C2a brought reports on
+# stdout, which is v7's choice; time(1) alone reports on stderr, also v7's, so it is the one
+# block below whose redirections name descriptor 2.  See the head of each source.
+#
+# TASK C2a WROTE THE FIRST HALF -- date, sleep and kill, the three that are about the
+# machine rather than a file -- and task C2b appended the second: basename, tty, test with
+# its second name `[', yes, and time.  The order is kill, sleep, date, then C2b's five.
 #
 # WHAT IS DELIBERATELY NOT ASSERTED, and why:
 #
@@ -24,6 +30,10 @@
 #   asserts instead is stronger and costs nothing: `sleep 60' is killed, and if the signal
 #   had not arrived the step budget in utils.ini would run out rather than the script
 #   finishing.
+#
+#   HOW LONG ANYTHING TOOK.  time(1) is here for its exit status, its failed-exec diagnostic
+#   and the fact that it forks, execs, waits and reads times(2) at all.  The numbers it
+#   prints are masked; a test that asserted them would assert the speed of the host.
 
 echo utils begin >/tmp/utils.log
 
@@ -85,6 +95,97 @@ date 8013010000 >>/tmp/utils.log
 # ...and back to the first instant, so that what the image carries away is a time this
 # script chose rather than the last thing it happened to test.
 date 8001020304 >>/tmp/utils.log
+
+# ---- basename: two lines, because cmd/basename/test covers the argument grammar under
+# b6sim and there is nothing here a kernel decides.  What this adds is that the IMAGE's copy
+# runs -- the same bytes, on the machine that is going to use them.  The second line is the
+# suffix strip, which is where the two char * comparisons used to be (cmd/README.md §2).
+basename /bin/ls >>/tmp/utils.log
+basename /usr/src/cmd/ls.c .c >>/tmp/utils.log
+
+# ---- tty: THE ANSWER b6sim CANNOT GIVE.  ttyname(3) finds a name by reading /dev as a
+# directory, which the simulator's host read(2) refuses, so cmd/tty/test asserts `not a tty'
+# and this asserts the other side of the same program.  /dev/console and not /dev/tty because
+# the match is by i-number: the shell running this script still has the console on descriptor
+# 0 (a script argument goes to descriptor 10, cmd/sh/main.c), and only one entry in /dev is
+# that inode.
+tty >>/tmp/utils.log
+tty -s
+echo tty status $? >>/tmp/utils.log
+
+# ---- test, and `[' -- THE POINT OF TASK C2b.  Everything above this line is a command with
+# its arguments; this is the first block in any script on this image that BRANCHES, because
+# until now there was nothing to branch on: this shell has no built-in test.
+#
+# `[' IS THE ASSERTION THAT THE HARD LINK IS THERE.  It is /bin/test's second name and
+# nothing else on this image is a link at all (../../root.manifest); rootimg_link checks the
+# inode on the host and this checks that the shell can find and run it.  The last of them
+# leaves the `]' off on purpose, which is the one diagnostic only this spelling can produce.
+#
+# -t 0 IS TRUE HERE, for the reason the tty block above gives.
+#
+# AND THE 127 AT THE END IS NOT A TYPO.  test(1) exits 255 on a syntax error, as v7's did and
+# as test.1 says -- but no caller on this machine can see that number.  A wait status is
+# (code << 8) and it comes back through r12, a fifteen-bit index register, so every exit code
+# from 128 up arrives truncated (lib/libc/sys/wait.S states it, and cmd/sh/service.c's
+# await() repeats it): 255 << 8 loses its top bit and the shell reads 127.  That is the
+# system's ABI and not this program's business -- it is why the two b6sim cases next door,
+# where the host does the waiting, really do see 255.  cmd/test/README.md is the account.
+if [ -f /etc/passwd ]
+then
+	echo test found /etc/passwd >>/tmp/utils.log
+else
+	echo test missed /etc/passwd >>/tmp/utils.log
+fi
+if [ -d /tmp -a -r /etc/motd ]
+then
+	echo test -d and -r agree >>/tmp/utils.log
+fi
+if [ x = y ]
+then
+	echo test says x is y >>/tmp/utils.log
+else
+	echo test says x is not y >>/tmp/utils.log
+fi
+[ -t 0 ]
+echo test -t 0 status $? >>/tmp/utils.log
+test 1 -eq 2
+echo test 1 -eq 2 status $? >>/tmp/utils.log
+[ 1 -eq 1 2>>/tmp/utils.log
+echo bracket unterminated status $? >>/tmp/utils.log
+
+# ---- yes, AND THE FIRST PIPELINE THIS IMAGE HAS EVER RUN.
+#
+# Nothing in kernel/test/ or cmd/sh/test/ had used `|' before this line, so the `echo hi |
+# cat' below is here on purpose and is not padding: if pipes or SIGPIPE are broken, it fails
+# first and separately, and a failure of the line after it is then really about yes(1).
+#
+# THAT SECOND LINE IS THE ONLY WAY TO TEST yes AT ALL.  The program has no terminating
+# condition -- see cmd/yes/CMakeLists.txt on why it has no b6sim case -- so something has to
+# stop it, and what stops it is the reader going away: the shell's `read' builtin takes one
+# line and exits, the next write gets EPIPE and a SIGPIPE with it (kernel/pipe.c), and the
+# default disposition kills the writer.  The shell says nothing about signal 13 (its sysmsg[]
+# entry is deliberately null, cmd/sh/msg.c), so the console stays clean.
+echo hi | cat >>/tmp/utils.log
+yes hello | { read x; echo $x >>/tmp/utils.log; }
+
+# ---- time: the first program here that forks, execs and MEASURES.
+#
+# THE THREE INTERVALS ARE NOT REPRODUCIBLE and run-utils.sh masks them, exactly as it masks
+# date's seconds and for the same reason.  What is diffed as it stands is everything around
+# them: the failed exec's diagnostic, which is strerror()'s and not v7's unchecked
+# sys_errlist[] subscript, and the EXIT STATUS -- which is the child's, shifted down by
+# time(1), so `time kill' reporting 2 is the assertion that a status passes through.
+#
+# stderr and stdout are never mixed in one command, which is why the first two lines below
+# redirect only descriptor 2 (this program reports on the diagnostic output, as v7 put it)
+# and the third throws both away.
+time /no/such/command 2>>/tmp/utils.log
+echo time status $? >>/tmp/utils.log
+time sleep 1 2>>/tmp/utils.log
+echo time status $? >>/tmp/utils.log
+time kill >/dev/null 2>/dev/null
+echo time status $? >>/tmp/utils.log
 
 # Last, as in session.sh and files.sh: there is no update daemon here, so nothing else
 # flushes the cache.

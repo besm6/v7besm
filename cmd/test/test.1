@@ -5,6 +5,10 @@ test \-  condition command
 .SH SYNOPSIS
 .B test
 expr
+.PP
+.B [
+expr
+.B ]
 .SH DESCRIPTION
 .I test
 evaluates the expression
@@ -14,6 +18,17 @@ non zero exit status is returned.
 .I test
 returns a non zero exit if there are no arguments.
 .PP
+.B Note:
+v7's page gave only the first of the two SYNOPSIS lines, although the program has
+always accepted both.
+.B "/bin/[ is /bin/test"
+\- one inode with two names, and the only hard link on this system's root filesystem.
+Entered by that name the program requires a closing
+.BR ] ,
+and complains
+.B "test: ] missing"
+if it is absent.
+.PP
 The following primitives are used to construct
 .IR expr .
 .TP 9n
@@ -22,7 +37,17 @@ true if the file exists and is readable.
 .TP 
 .BR \-w " file"
 true if the file exists and is writable.
-.TP 
+.PP
+.B Note:
+those two are answered by opening the file and closing it again rather than by
+.IR access (2),
+so they report on the
+.I effective
+user and not the real one.  That is v7's implementation, and it is kept.  It matters here
+because every shell on this system is the super-user's, which can open anything:
+.B \-w
+is true of a file with no write permission at all.
+.TP 9n
 .BR \-f " file"
 true if the file exists and is not a directory.
 .TP 
@@ -63,12 +88,21 @@ if the strings
 and
 .I s2
 are not equal.
-.TP 
+.TP
 s1
 true if
 .I s1
 is not the null string.
-.TP 
+.TP
+.BR \-l " s1"
+the length of the string
+.IR s1 ,
+for use on the left of one of the integer comparisons below \-
+.B "test \-l abcde \-eq 5"
+is true.
+.B Note:
+v7's page did not document this primary, although the program has always had it.
+.TP
 .RB n1 " \-eq " n2
 true if the integers
 .I n1
@@ -112,5 +146,22 @@ arguments to
 .IR test .
 Notice also that parentheses are meaningful
 to the Shell and must be escaped.
+.SH DIAGNOSTICS
+An expression that does not parse produces one of
+.BR "test: argument expected" ,
+.BR "test: ) expected" ,
+.B "test: ] missing"
+or
+.BR "test: unknown operator " x
+on the diagnostic output, and an exit status of 255.
+.PP
+.B Note:
+.B "no caller on this machine can see that 255."
+A wait status is the exit code shifted left by eight and it is returned through r12, a
+fifteen-bit index register, so every code from 128 up arrives truncated: the Shell's
+.B $?
+reads 127.  See
+.IR wait (2).
+Exit statuses 0 and 1 \- the answers this program exists to give \- are unaffected.
 .SH "SEE ALSO"
-sh(1), find(1)
+sh(1), find(1), wait(2)

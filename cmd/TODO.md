@@ -12,10 +12,12 @@ it**, and a task names only what is unusual about itself. **A bare `§N` below i
 that file's porting recipe** — §2 the `char *` ordering hazard, §4 the 3072-byte block, §6 the
 address-space ceilings, and so on.
 
-**Tasks C1 and C2a are done and their writeups have been removed**; what C1 taught is
-README.md's closing section. Nineteen commands are on the image, so the tree can be built,
-rearranged and re-permissioned from the console, and the machine can say what time it is, wait
-and signal. [../etc/rc](../etc/rc) says what is still missing in its own words:
+**Tasks C1, C2a and C2b are done and their writeups have been removed**; what each taught is
+README.md's two closing sections. Twenty-four commands are on the image — twenty-five entries
+in `/bin`, since `[` is `test` under a second name — so the tree can be built, rearranged and
+re-permissioned from the console, the machine can say what time it is, wait and signal, and a
+shell script can finally **branch**. [../etc/rc](../etc/rc) says what is still missing in its
+own words:
 
 > What the v7 rc did next all wants a program this system has not got yet: fsck, mount, date,
 > cron, update, accton.
@@ -33,7 +35,7 @@ compiles.
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C2 | the small utilities `sh` and `/etc/rc` want — `test` `basename` `tty` `time` `yes`, and reviving `/etc/rc` (`date` `sleep` `kill` are done) | shell scripts that do something | small ×5 |
+| C2 | reviving `/etc/rc` — all that is left of it, the eight small utilities `sh` and `/etc/rc` wanted being done | a boot script that does something | small |
 | C3 | **`ed`** | authoring text *on* the machine | large, and the pivot |
 | C4 | filesystem maintenance — `df` `du` `dd` `mkfs` `fsck` `icheck` `dcheck` `ncheck` `clri` `quot` `mount` `umount` | a system that maintains itself | large |
 | C5 | the text filters — `wc` `cmp` `sum` `tee` `split` `rev` `tr` `uniq` `comm` `tail` `od` `look` `col` `grep` `fgrep` `sort` `sed` `pr` `diff` `cal` `tsort` `join` `find` `file` | the corpus everything else is tested against | medium ×24 |
@@ -56,6 +58,10 @@ something the task names.
 `test` cannot write a conditional. These are the cheapest programs in the tree and most of them
 run under `b6sim`, so this is also where the userland test corpus starts.
 
+**The programs are all on the image now** — C2a's `date`, `kill` and `sleep`, C2b's `basename`,
+`test` (and `[`), `time`, `tty` and `yes` — so the only part of this task still open is C2c
+below. What the two halves taught is README.md's closing section.
+
 **C2a built the two harnesses the rest of the task uses, and neither needs inventing again**:
 `b6_progtest()` in [../scripts/BesmCross.cmake](../scripts/BesmCross.cmake) with
 [../scripts/run-prog-test.sh](../scripts/run-prog-test.sh), which runs a *staged* program under
@@ -63,14 +69,6 @@ run under `b6sim`, so this is also where the userland test corpus starts.
 and `kernel/test/utils`, the SIMH test that is C2's home under the booted kernel — append to
 [../kernel/test/utils.sh](../kernel/test/utils.sh) and its `.expected`. Do both where a program
 can do both, per README.md §9.
-
-### C2b. `test`, `basename`, `tty`, `yes`, `time`
-
-`test.c` (191) is the one that matters — it is what makes shell scripts branch, and the v7 shell
-has no built-in for it. `basename.c` (31, one pointer comparison), `tty.c` (20), `yes.c` (8),
-`time.c` (80, `times(2)` plus a `fork`/`exec`).
-
-All five except `time` test cleanly under `b6sim`.
 
 ### C2c. Revive `/etc/rc`
 
@@ -427,10 +425,13 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 
 ## Where to start
 
-C2b, now that C1 and C2a are done. `/etc/rc` is still nine-tenths a comment explaining what it
-cannot do, and a shell without `test` cannot write a conditional — which is the one program in
-this document that changes what a *script* can be.
+C2c, and it is an afternoon: `/etc/rc` is still nine-tenths a comment explaining what it cannot
+do, and three of the six programs that comment names — `date` among them — are now on the
+image. It is also the only task left that is *visible from the console*.
 
-Most of what is left in C2 runs under `b6sim`, which is the other reason to take it next: the
-harness that does not need a two-minute boot is built now (C2a), and this is where the userland
-regression corpus grows into it.
+Then C3. `test` has landed, so a script can branch; what it still cannot do is exist — every
+file on this image was written on the build host. `ed` is what changes that, and it is the
+precondition for C9 meaning anything.
+
+C5 stays the cheap one, and the harness for it is built: `b6_progtest()` needs no boot, and
+README.md §9 now records the three things it cannot do, all of which C5 will meet.

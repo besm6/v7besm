@@ -17,6 +17,16 @@ and prints the result on the standard output.
 It is normally used inside substitution marks \`\ \`
 in shell procedures.
 .PP
+.B Note:
+the suffix is compared backwards and the comparison stops as soon as
+.I either
+string runs out, so a suffix longer than what is left of the name still strips \-
+.B "basename c .c"
+prints an empty line.  That is v7's behaviour and its page did not mention it.
+With no arguments at all,
+.I basename
+prints an empty line and exits 1; otherwise it exits 0.
+.PP
 This shell procedure invoked with the argument
 .I /usr/src/cmd/cat.c
 compiles the named file and moves the output to

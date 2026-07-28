@@ -1,5 +1,7 @@
 hello
 /
+[
+basename
 cat
 chgrp
 chmod
@@ -18,7 +20,11 @@ rmdir
 sh
 sleep
 sync
+test
+time
 touch
+tty
+yes
 /tmp/d
 rmdir: cannot remove current directory
 rmdir: cannot remove . or ..

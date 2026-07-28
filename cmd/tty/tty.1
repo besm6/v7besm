@@ -1,11 +1,39 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
-.TH TTY 1 
+.TH TTY 1
 .SH NAME
 tty \- get terminal name
 .SH SYNOPSIS
 .B tty
+[
+.B \-s
+]
 .SH DESCRIPTION
 .I Tty
-prints the pathname of the user's terminal.
+prints the pathname of the user's terminal \- the name in
+.B /dev
+of whatever is open on the standard input.
+.PP
+.B \-s
+prints nothing; the answer is the exit status alone, which is what a shell script
+wants.
+.B Note:
+v7's page documented neither the option nor the status, although the program has always
+had both.
 .SH DIAGNOSTICS
 `not a tty' if the standard input file is not a terminal.
+.SH "EXIT STATUS"
+0 if the standard input is a terminal, 1 if it is not.
+.SH FILES
+.ta \w'/dev  'u
+/dev	searched for the name
+.SH "SEE ALSO"
+ttyname(3)
+.SH BUGS
+There is no way back from a device number to a name, so
+.IR ttyname (3)
+reads
+.B /dev
+and compares i-numbers.  A terminal that is not in
+.B /dev
+has no name, and one that is there twice answers with whichever entry comes first in the
+directory.

@@ -40,7 +40,7 @@ cp root.img utils.img
 mkdir utils.out
 "$b6fsutil" -x utilsafter.img utils.out
 
-# THE SECONDS ARE MASKED, and nothing else is.
+# TWO THINGS ARE MASKED, AND NOTHING ELSE IS: date's seconds field, and time's intervals.
 #
 # date(1) prints the instant it has just set, but it re-reads the clock through time(2) to
 # do it, and the guest tick can roll over between the stime(2) and the read.  That would
@@ -51,5 +51,18 @@ mkdir utils.out
 #
 # The times in utils.sh are chosen away from any minute or day boundary, so a one-second
 # slip cannot reach a field this leaves alone.
-sed -e 's/\([0-9][0-9]:[0-9][0-9]:\)[0-9][0-9]/\1SS/' utils.out/tmp/utils.log >utils.log
+#
+# time(1) is the harder case, because there is nothing to choose in advance: its three lines
+# report how long a command actually took, on a simulator, on whatever machine is running the
+# build.  So the whole numeric field goes, and each line is kept only as far as its label.
+# What that leaves diffed is everything that is really about the program -- that it printed
+# three intervals in the right order and got that far at all -- while the surrounding lines,
+# the failed exec's diagnostic and every `time status N', are compared as they stand.  A
+# time(1) whose arithmetic broke would still pass this; cmd/time/README.md says where that is
+# covered instead.
+sed -e 's/\([0-9][0-9]:[0-9][0-9]:\)[0-9][0-9]/\1SS/' \
+    -e 's/^real[ 0-9:.]*$/real MASKED/' \
+    -e 's/^user[ 0-9:.]*$/user MASKED/' \
+    -e 's/^sys[ 0-9:.]*$/sys MASKED/' \
+    utils.out/tmp/utils.log >utils.log
 diff -u "$srcdir/utils.expected" utils.log

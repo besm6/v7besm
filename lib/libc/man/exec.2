@@ -13,6 +13,10 @@ execl, execv, execle, exece, execlp, execvp, exec, environ  \- execute a file
 .PP
 .B int exece(const char *name, char *const argv[], char *const envp[]);
 .PP
+.B int execlp(const char *file, const char *arg0, ...);
+.PP
+.B int execvp(const char *file, char *const argv[]);
+.PP
 .B extern char **environ;
 .SH DESCRIPTION
 .B Note:

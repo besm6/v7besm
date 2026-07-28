@@ -3,7 +3,8 @@
 # md00.  Grammar: cmd/fsutil/README.md.
 #
 # The tree, the device nodes, and the USERLAND -- /etc/init, /bin/sh, the five commands that
-# prove the prompt and the ten of the file-management set, plus the static files of /etc.
+# prove the prompt, the ten of the file-management set and the eight small utilities of task
+# C2, plus the static files of /etc.
 # Task 24 put them here and task 25b
 # flipped the last line, /etc/init, from the task-23 stand-in to the real one.  Task 25c
 # added /usr/test, the lib/test programs that b6sim also runs; the termcap port added
@@ -15,13 +16,16 @@
 # /bin/{chgrp,chmod,chown,touch} -- the four that change an inode rather than a directory,
 # and the four that finished the file-management set.  None of THOSE is setuid: chmod(2) is
 # gated on owner(), which admits the file's owner, and chown(2) on suser(), which is the rule
-# that stops a user giving a file away.
+# that stops a user giving a file away.  Task C2a added /bin/{date,kill,sleep} -- the clock, a
+# signal and an alarm -- and task C2b /bin/{basename,test,time,tty,yes}, none of them setuid
+# either, together with THE FIRST HARD LINK this file has ever carried: /bin/[ is /bin/test.
 #
 # WHY THIS FILE LIVES AT THE TOP OF THE TREE and not in kernel/test/ beside the CMakeLists
 # that runs b6fsutil over it: every `file' below but none of the directories comes out of
-# build/rootfs/, which is staged by cmd/init, cmd/sh,
-# cmd/{cat,chgrp,chmod,chown,cp,echo,ln,ls,mkdir,mv,pwd,rm,rmdir,sync,touch}, lib/test and
-# etc/.
+# build/rootfs/, which is staged by cmd/init, cmd/sh, cmd/{basename,cat,chgrp,chmod,chown,cp,
+# date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}, lib/test and
+# etc/.  The one exception is /bin/[, which comes out of no directory at all: it is a `link'
+# stanza and its inode is /bin/test's.
 # The image is the whole project's, and it is the top-level CMakeLists.txt that draws the
 # `rootimg depends on rootfs' edge, since kernel/ is configured before rootfs exists.
 #
@@ -84,6 +88,10 @@ mode 0755
 
 # ---- enough commands to prove the prompt -----------------------------------------
 
+file /bin/basename      # cmd/basename
+source ../../rootfs/bin/basename
+mode 0755
+
 file /bin/cat           # cmd/cat -- and what /etc/rc uses to print the motd
 source ../../rootfs/bin/cat
 mode 0755
@@ -140,9 +148,38 @@ file /bin/sync          # cmd/sync -- what flushes the buffer cache before the m
 source ../../rootfs/bin/sync
 mode 0755
 
+file /bin/test          # cmd/test -- what lets a shell script branch; see /bin/[ below
+source ../../rootfs/bin/test
+mode 0755
+
+file /bin/time          # cmd/time -- times(2) in 250ths of a second here, not the PDP-11's 60ths
+source ../../rootfs/bin/time
+mode 0755
+
 file /bin/touch         # cmd/touch -- utime(2) here, not v7's rewrite-a-byte; see cmd/touch
 source ../../rootfs/bin/touch
 mode 0755
+
+file /bin/tty           # cmd/tty -- ttyname(3), which reads /dev as a directory
+source ../../rootfs/bin/tty
+mode 0755
+
+file /bin/yes           # cmd/yes -- the only program here that a SIGPIPE has to stop
+source ../../rootfs/bin/yes
+mode 0755
+
+# ---- and the one file that is a second NAME rather than a second file -------------
+#
+# THE ONLY HARD LINK ON THIS IMAGE, added by task C2b.  /bin/[ is /bin/test: the same inode
+# with a link count of 2, which is v7's arrangement and not a convenience -- cmd/test/test.c
+# looks at argv[0] and requires a closing `]' when it was entered by this name, so without the
+# link that branch of the program is unreachable code.  `link' takes a `target' and no
+# `source' or `mode': there is nothing to copy in and nothing to set, the inode being the
+# other entry's already (cmd/fsutil/manifest.cpp resolves links last, so the order here does
+# not matter).  kernel/test's rootimg_link asserts the two share an inode once the image is
+# built, for the same reason rootimg_setuid exists: nothing but the finished image can say.
+link /bin/[
+target /bin/test
 
 # ---- and the three that can change a DIRECTORY: THE SETUID PROGRAMS HERE ----------
 #

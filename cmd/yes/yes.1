@@ -1,0 +1,39 @@
+.\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.TH YES 1
+.SH NAME
+yes \- print a string repeatedly
+.SH SYNOPSIS
+.B yes
+[
+string
+]
+.SH DESCRIPTION
+.I Yes
+writes
+.I string
+followed by a newline to the standard output, over and over, until it is stopped.  With no
+argument the string is
+.BR y .
+.PP
+It is a filter's answer to a program that asks questions: piping
+.I yes
+into a command supplies the same reply to each of them.
+.PP
+.B Note:
+.B this page is new.
+.I Yes
+is one of the two commands in the v7
+.B /usr/src/cmd
+tree that came with no manual page anywhere in the system; the other is dmesg.
+The program is eight lines and v7 evidently did not think it needed one.
+.SH DIAGNOSTICS
+None.
+.SH BUGS
+.I Yes
+has no terminating condition of its own.
+What normally stops it is the reader at the far end of its pipe going away, which costs it
+a SIGPIPE; a
+.I yes
+whose output is a file or a terminal runs until it is killed.
+.SH "SEE ALSO"
+kill(1), pipe(2), signal(2)

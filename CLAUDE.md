@@ -38,7 +38,14 @@ work has two halves:
   *deliver*, and `kill` sends a signal that `sh`'s `wait` reports back as `0200|signo`. That
   `date` also names years past 1999 is a deliberate divergence: v7 wrote `year += 1900` flat, so
   the only program that can set this machine's clock could not name the century its `time_t`
-  reaches into. And the whole
+  reaches into. And a **shell script can branch**: `test` is on the image, under both its names
+  — `[` is a `link` stanza in `root.manifest` and the only hard link there is, without which the
+  `argv[0]` half of the program is unreachable code — beside `basename`, `tty`, a `time` whose
+  PDP-11 60 Hz arithmetic had to be rebuilt for this machine's 250, and a `yes` that nothing but
+  a `SIGPIPE` can stop, which is what put **the first pipeline this image has ever run** into
+  `kernel/test/utils.sh`. One finding from that set reaches past it: an **exit status above 127
+  does not survive `wait(2)`** here, the status being `(code << 8)` returned through fifteen-bit
+  r12, so `test`'s `exit(255)` reaches `$?` as 127 (`cmd/test/README.md`). And the whole
   **libc runs on it**: the `lib/test/` programs live on the image as `/usr/test/*`
   and produce there, byte for byte, the output they produce under `b6sim`. And it **swaps**:
   squeeze the machine to 31 pages and `sched()`/`newproc()` move real images through the drum,
@@ -55,7 +62,9 @@ work has two halves:
   of `b6fsutil -v -v`), `kernel/test/libtest` (the libc suite run off the image, one ctest case
   per program), `kernel/test/swap` (more processes than core, asserted through the kernel's
   own counters) and `kernel/test/utils` (the clock moved and read back, an alarm delivered, a
-  background process killed) — and `cd kernel && make run` is where you type at it yourself. The drums
+  background process killed, a script branching on `test` through both its names, a terminal
+  named, a `yes` stopped by a broken pipe and a command timed) — and `cd kernel && make run` is
+  where you type at it yourself. The drums
   must be attached to exec anything: they are `swapdev`, and `exece()` stages the argument
   list in swap. See `kernel/README.md`, the reference — the settled design, the hardware rules
   it obeys, what a standalone SIMH test costs to get right, and the consequences accepted —
@@ -86,7 +95,7 @@ thing**, and knowing which one you are touching is most of what the build layout
 - **host tools** — `cmd/*`, compiled by the build machine's C/C++ compiler, run there;
 - **cross-built BESM-6 artifacts** — `kernel/` and `lib/`, compiled by the `b6*` toolchain
   above through `b6_obj()` in `scripts/BesmCross.cmake`;
-- **native BESM-6 programs** — `cmd/{init,sh,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,touch}`, linked against libc by `b6_prog()`
+- **native BESM-6 programs** — `cmd/{init,sh,basename,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`, linked against libc by `b6_prog()`
   and staged into `build/rootfs/` (with the static files of `etc/`) for the disk image the
   kernel mounts.
 
@@ -213,7 +222,7 @@ therefore names two archives, **ours first**: `-lc -lruntime`, because `b6ld` sc
 helper calls back into libc. The kernel takes `-lruntime` **alone** — it defines its own
 `printf` in `kernel/prf.c` and uses no other library routine.
 
-### Native BESM-6 programs (`cmd/{init,sh,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,touch}` + `etc/` → `build/rootfs/`)
+### Native BESM-6 programs (`cmd/{init,sh,basename,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}` + `etc/` → `build/rootfs/`)
 
 The third category, and the newest. These are **`cmd/` subdirectories that are not host
 tools**: `cmd/init/init.c` is the Unix v7 `/etc/init`, `cmd/sh/` is S. R. Bourne's v7 shell,
@@ -227,13 +236,19 @@ deliberately does not do what v7's did (`utime(2)`, not a rewritten first byte) 
 `cmd/date`, `cmd/sleep`, `cmd/kill` (task C2a) the three that are about the *machine* rather
 than the filesystem: the clock, an alarm, and a signal to another process.  Not setuid either,
 and `date` emphatically not — `stime(2)` is `suser()`-gated and that gate is the whole reason a
-user cannot move the clock. All compiled by the `b6*` toolchain and staged into `build/rootfs/` as `etc/init` and
-`bin/{sh,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,touch}`. **`mkdir`, `mv` and `rmdir` are setuid
+user cannot move the clock. Last, `cmd/test`, `cmd/basename`, `cmd/tty`, `cmd/time` and
+`cmd/yes` (task C2b) are the five the *shell* wanted, `test` above all: this shell has no
+built-in for it, so nothing on this machine could branch until it arrived. All compiled by the
+`b6*` toolchain and staged into `build/rootfs/` as `etc/init` and
+`bin/{sh,basename,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`. **`mkdir`, `mv` and `rmdir` are setuid
 root** on the image, which is a property of [root.manifest](root.manifest) alone (`mode 04755`)
 since nothing under `build/rootfs/` carries a mode; see
 [cmd/mkdir/README.md](cmd/mkdir/README.md) for the general account and
 [cmd/mv/README.md](cmd/mv/README.md) for the one program that is setuid for only *part* of what
-it does.
+it does. **`/bin/[` is the one file on the image that is a second *name* rather than a second
+file** — a `link` stanza in the manifest, `/bin/test`'s inode, and the only hard link there is;
+[cmd/test/README.md](cmd/test/README.md) is the account, and `kernel/test`'s `rootimg_link`
+asserts it off the finished image because nothing else in the build can see it.
 Alongside them `etc/` (the top-level directory, not `cmd/etc`)
 stages the static files `group`, `motd`, `passwd`, `rc` and `termcap`, which are copied rather
 than compiled. `lib/test/` stages a third group, `usr/test/*` — the twenty-seven test programs,

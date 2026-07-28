@@ -70,11 +70,17 @@ int sync(void);
 int utime(const char *file, const time_t timep[2]);
 
 // Processes.  exece() is v7's spelling of execve, and the symbol libc backs.
+//
+// execlp() and execvp() are libc's own $PATH-searching forms (lib/libc/gen/), and they are
+// declared HERE for the first time: v7 put them in no header at all, so every caller in this
+// tree used to open with a declaration of its own.  exec.2 has named them all along.
 pid_t fork(void);
 _Noreturn void _exit(int status);
 int execl(const char *path, const char *arg0, ...);
 int execle(const char *path, const char *arg0, ...);
+int execlp(const char *file, const char *arg0, ...);
 int execv(const char *path, char *const argv[]);
+int execvp(const char *file, char *const argv[]);
 int exece(const char *path, char *const argv[], char *const envp[]);
 extern char **environ; // crt0's; see lib/libc/gen/getenv.c
 
