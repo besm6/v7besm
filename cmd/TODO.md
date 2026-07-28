@@ -12,17 +12,16 @@ it**, and a task names only what is unusual about itself. **A bare `§N` below i
 that file's porting recipe** — §2 the `char *` ordering hazard, §4 the 3072-byte block, §6 the
 address-space ceilings, and so on.
 
-**Tasks C1, C2a and C2b are done and their writeups have been removed**; what each taught is
+**Tasks C1 and C2 are done and their writeups have been removed**; what each taught is
 README.md's two closing sections. Twenty-four commands are on the image — twenty-five entries
 in `/bin`, since `[` is `test` under a second name — so the tree can be built, rearranged and
 re-permissioned from the console, the machine can say what time it is, wait and signal, and a
-shell script can finally **branch**. [../etc/rc](../etc/rc) says what is still missing in its
-own words:
-
-> What the v7 rc did next all wants a program this system has not got yet: fsck, mount, date,
-> cron, update, accton.
-
-`date` is now one it has — reviving that line is task C2c below, with the rest of them.
+shell script can finally **branch**. [../etc/rc](../etc/rc) is a boot script that does
+something: it prints the motd and then the date, which is a literal to the minute because the
+boot clock is the image's own `-T` stamp, and `kernel/test/console` asserts both. What it
+still wants is what the file itself now names — `fsck` and `mount` (C4), `cron` and `update`
+(C10), `accton` (C8), and the `rm -f /tmp/*` line that comes back with `ed` (C3), which is the
+first program on this machine that will write there.
 
 **Task numbers carry a `C`** — `C2a`, `C4d`, … — because `kernel/TODO.md`'s 1–34 are cited from
 source comments and from `doc/`, and a bare number would be ambiguous forever after. The
@@ -35,7 +34,6 @@ compiles.
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C2 | reviving `/etc/rc` — all that is left of it, the eight small utilities `sh` and `/etc/rc` wanted being done | a boot script that does something | small |
 | C3 | **`ed`** | authoring text *on* the machine | large, and the pivot |
 | C4 | filesystem maintenance — `df` `du` `dd` `mkfs` `fsck` `icheck` `dcheck` `ncheck` `clri` `quot` `mount` `umount` | a system that maintains itself | large |
 | C5 | the text filters — `wc` `cmp` `sum` `tee` `split` `rev` `tr` `uniq` `comm` `tail` `od` `look` `col` `grep` `fgrep` `sort` `sed` `pr` `diff` `cal` `tsort` `join` `find` `file` | the corpus everything else is tested against | medium ×24 |
@@ -45,53 +43,10 @@ compiles.
 | C9 | self-hosting — native `cpp`, `as`, `ld`, the binutils, `cc` | building the system on itself | large |
 | C10 | the rest of the manual — `make` `m4` `awk` `bc` `dc` `expr` `egrep` `units` `crypt` `at` `cron` `calendar` `update` | a system worth using | open-ended |
 
-C2 through C4 are the ones that matter: they take the machine from *keeping files* to *being a
+C3 and C4 are the ones that matter: they take the machine from *keeping files* to *being a
 computer that can author text and repair its own filesystem*. C5 is cheap and pays for itself in
 test coverage. C7 is one program and can be taken at any time; C6, C8 and C9 are each gated on
 something the task names.
-
----
-
-## C2. The small utilities the shell and `/etc/rc` want
-
-**Why.** `/etc/rc` is nine-tenths a comment explaining what it cannot do yet, and a shell without
-`test` cannot write a conditional. These are the cheapest programs in the tree and most of them
-run under `b6sim`, so this is also where the userland test corpus starts.
-
-**The programs are all on the image now** — C2a's `date`, `kill` and `sleep`, C2b's `basename`,
-`test` (and `[`), `time`, `tty` and `yes` — so the only part of this task still open is C2c
-below. What the two halves taught is README.md's closing section.
-
-**C2a built the two harnesses the rest of the task uses, and neither needs inventing again**:
-`b6_progtest()` in [../scripts/BesmCross.cmake](../scripts/BesmCross.cmake) with
-[../scripts/run-prog-test.sh](../scripts/run-prog-test.sh), which runs a *staged* program under
-`b6sim` against a `.args`/`.expected`/`.status` triple in `cmd/<x>/test/` (ctest label `cmd`);
-and `kernel/test/utils`, the SIMH test that is C2's home under the booted kernel — append to
-[../kernel/test/utils.sh](../kernel/test/utils.sh) and its `.expected`. Do both where a program
-can do both, per README.md §9.
-
-### C2c. Revive `/etc/rc`
-
-Not a port: as each of C1 and C2 lands, un-comment the line of [../etc/rc](../etc/rc) that wanted
-it, and extend `kernel/test/boot`'s expectations accordingly. **This is the visible progress
-indicator for the whole file** — the boot script getting longer is what "the system is becoming
-usable" looks like from the console. Mind the rule the file's own header states: no terminal on
-descriptors 0–2. (It used to state two; the shell has a `#` comment character now, so `/etc/rc`
-is written in real comments and the second rule is retired.)
-
-**`date`'s line has one cost worth knowing before it is written**, and it is why C2a left
-`/etc/rc` alone rather than adding it. The boot clock is the root superblock's `s_time`
-(`main.c`'s `if (time == 0) time = fp->s_time`), and `b6fsutil` stamps that when it builds the
-image — but it stamps it with a *fixed* value, `-T 1784967780` from `kernel/test/CMakeLists.txt`'s
-`ROOTTIME`, so the date is 2026-07-25 08:23:00 GMT on every build and `fstest` asserts it. What
-`date >/dev/console` cannot print reproducibly is the **seconds** field alone: SIMH's 250 Hz tick
-is calibrated against the host's clock, so the guest seconds elapsed by the time `/etc/rc` runs
-vary from run to run. Everything to the left of it is a literal — `Sat Jul 25 08:23:` — and
-`run-utils.sh`'s `sed` mask is the precedent for the rest. Nothing else in the file has that
-property.
-
-**Size.** Small ×5 now, and it should be possible to do the rest in one sitting: task C1
-established the staging rhythm ([README.md](README.md) §7) and C2a the two test harnesses.
 
 ---
 
@@ -324,11 +279,12 @@ assumptions that have no counterpart here — this kernel's u-area is two fixed 
 replace its middle.
 
 The rest, in order of value: `dmesg.c` (116) — needs the kernel to keep a message ring, which
-`prf.c` does not do yet, so it carries a small kernel task with it; `nice.c` (28) — trivial and
-independent of `nlist`, do it in C2 if convenient; `pstat.c` (385) and `iostat.c` (289) — both
-deeply tied to kernel structures and both worth rewriting rather than porting; `ac.c` (251),
-`sa.c` (489), `accton.c` (16) — process accounting, which the kernel's `acct()` supports, and which
-nothing needs.
+`prf.c` does not do yet, so it carries a small kernel task with it; `nice.c` (28) — trivial,
+independent of `nlist`, and takeable on its own at any time; `pstat.c` (385) and `iostat.c` (289)
+— both deeply tied to kernel structures and both worth rewriting rather than porting; `ac.c`
+(251), `sa.c` (489), `accton.c` (16) — process accounting, which the kernel's `acct()` supports,
+and which nothing needs. `accton` is one of the five [../etc/rc](../etc/rc) still names, and the
+only one of them this task owns.
 
 **Size.** Medium, and front-loaded: `nlist` is the task, the rest follows.
 
@@ -400,8 +356,8 @@ decision before either is started, not during.
 | `egrep.y` | | 594 | yacc; finishes C5c |
 | `units.c` | | 466 | needs `/usr/lib/units` staged |
 | `crypt.c`, `makekey.c` | | 93 + 21 | libc's `crypt` already exists |
-| `at.c`, `atrun.c`, `cron.c`, `calendar.c` | scheduling | 307 + 110 + 254 + 54 | want a running multiuser system and a correct clock; after C6 |
-| `update.c` | periodic `sync` | 38 | trivial, and `/etc/rc` wants it — could go in C2 |
+| `at.c`, `atrun.c`, `cron.c`, `calendar.c` | scheduling | 307 + 110 + 254 + 54 | want a running multiuser system and a correct clock; after C6. `cron` is one of the five [../etc/rc](../etc/rc) still names |
+| `update.c` | periodic `sync` | 38 | trivial, and [../etc/rc](../etc/rc) names it — but it is a **daemon**, and `/etc/rc` runs on every pass through `init`'s loop, so weigh a second copy per pass before adding the line |
 | `strip`, `size`, `nm` | | | **not these** — see C9 |
 
 ---
@@ -429,13 +385,10 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 
 ## Where to start
 
-C2c, and it is an afternoon: `/etc/rc` is still nine-tenths a comment explaining what it cannot
-do, and three of the six programs that comment names — `date` among them — are now on the
-image. It is also the only task left that is *visible from the console*.
-
-Then C3. `test` has landed, so a script can branch; what it still cannot do is exist — every
-file on this image was written on the build host. `ed` is what changes that, and it is the
-precondition for C9 meaning anything.
+C3. `test` has landed, so a script can branch; what it still cannot do is exist — every file on
+this image was written on the build host. `ed` is what changes that, and it is the precondition
+for C9 meaning anything. It is also the next thing that will be *visible from the console*,
+which is the property `/etc/rc` had and has now spent.
 
 C5 stays the cheap one, and the harness for it is built: `b6_progtest()` needs no boot, and
 README.md §9 now records the three things it cannot do, all of which C5 will meet.

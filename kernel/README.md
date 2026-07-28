@@ -290,9 +290,18 @@ What the ones already in [test/](test/) cost to get right:
   action can exploit, using `goto` instead, so the commands at the label run with the machine stopped.
   That is how a boot-level test asserts on memory, and it is also what distinguishes a finished run
   from one that merely exhausted its step budget.
-* **`send` DROPS A CHARACTER now and then, and it is not the kernel.** Under `CTEST_PARALLEL_LEVEL=8`
-  `session` fails perhaps one run in four with `s: not found` — the shell really received `s` where
-  the script sent `sh /etc/session`. Measured on an unmodified tree. Re-run before believing it.
+* **`send` DROPS A CHARACTER.** Under `CTEST_PARALLEL_LEVEL=8` `session` fails perhaps one run in
+  four with `s: not found` — the shell really received `s` where the script sent
+  `sh /etc/session`. Measured on an unmodified tree. Re-run before believing it. This bullet used
+  to end "and it is not the kernel"; that half is **withdrawn** — the drop also happens on an idle
+  machine, reproducibly, on the *first* character of a send issued straight out of an `expect`, and
+  an input overrun in `scintr()` is one of the two candidate mechanisms. `console.ini` pays
+  `send after=20000` to avoid it and its header says why; **[TODO.md](TODO.md) task 35** is the
+  measurement that would settle it.
+* **Never end an `expect`/`send` file on a rule a bare prompt satisfies.** All the rules are armed
+  at once, so when a stage stalls the run falls through to that one at the next prompt and reports
+  PASS. `console.ini` was doing exactly that, and had been passing without running its last four
+  stages; the drop above is what was stalling it. Its closing rule is a unique string now.
 * **The interval timer cannot be switched off.** It free-runs at 250 Hz and the SIMH `CLK` device has
   no `DEV_DISABLE`, so a second tick may land mid-run. Phrase every assertion to tolerate exactly one
   — a draft `p_cpu >= 1` check once passed *only because* a second tick arrived after the aging code

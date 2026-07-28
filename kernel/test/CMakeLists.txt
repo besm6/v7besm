@@ -344,6 +344,12 @@ set_tests_properties(rootimg_link PROPERTIES LABELS kernel)
 # own timing is calibrated against the host clock, so oversubscribing the machine shifts the
 # ratio between them -- but that has not been confirmed, and the lock treats the symptom.)
 #
+# SINCE TASK C2c THERE IS A SECOND CASE, and it is NOT load-dependent: console.ini dropped the
+# FIRST character of one send on every run of an idle machine, and `send after=20000' fixed it.
+# That file now carries the delay on every send; THESE FIVE DO NOT.  So this lock has not been
+# re-measured against a paced send, and it may be buying nothing -- ../TODO.md task 35 is that
+# measurement, and it is the task that owns the whole question.
+#
 # MEASURED, since a lock that bought nothing would be worth removing: five full `ctest' runs
 # on one machine, twice.  Without it, two of the five failed this way and the suite took 47-49
 # seconds; with it, none of five failed -- nor any of ten further `ctest -L kernel' runs -- and

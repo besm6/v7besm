@@ -16,8 +16,9 @@ work has two halves:
   `root3072.disk` and a drum attached it mounts the root, hands process 1 the icode, **enters
   user mode**, execs `/etc/init` — the real v7 one — and **gives you a shell**: `/bin/sh`
   prompts with `# ` on the console, runs `ls`, `pwd`, `cat` and `echo` off the disk, honours
-  the kernel's erase, kill and `^D`, and on `^D` cycles back through `/etc/rc` to a fresh
-  prompt. It also **writes**: create files, make and remove directories with a **setuid-root**
+  the kernel's erase, kill and `^D`, and on `^D` cycles back through `/etc/rc` — which prints
+  the motd and then the **date**, a literal to the minute because the boot clock is the image's
+  own `-T` stamp — to a fresh prompt. It also **writes**: create files, make and remove directories with a **setuid-root**
   `mkdir`/`rmdir` (`ISUID` really does change a uid at exec — `lib/test/suidt` drops to uid 7
   and proves it), `sync`, and the image fscks clean. And it **rearranges** what it wrote:
   `cp`, `ln`, `rm` — `rm -r` execing that same setuid `/bin/rmdir` — and a `mv` that is the
@@ -56,7 +57,8 @@ work has two halves:
   access can name, so the driver goes through `copyphys()`, `kernel/seg.S`'s mapped window.
   Seven tests
   guard that ladder — `kernel/test/boot` (the prompt appears), `kernel/test/console` (a typed
-  dialogue with the shell), `kernel/test/session` (files written, `sync`, then a host-side
+  dialogue with the shell, and the only one that reaches `/etc/rc`, whose motd and date it
+  asserts), `kernel/test/session` (files written, `sync`, then a host-side
   fsck and diff), `kernel/test/files` (the file-management set rearranging a tree and
   then re-permissioning it, fscked on the host afterwards and its modes and owners diffed out
   of `b6fsutil -v -v`), `kernel/test/libtest` (the libc suite run off the image, one ctest case

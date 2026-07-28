@@ -10,13 +10,34 @@
 # whose words are still parsed.
 
 cat /etc/motd >/dev/console
+date >/dev/console
 
-# What the v7 rc did next all wants a program this system has not got yet:
-# fsck, mount, date, cron, update, accton.  Each line comes back as its
-# command is ported.  There is nothing to mount in any case -- one EC-5052
-# drive is the whole of the store, and swap lives on the drums.
+# WHAT THE DATE SAYS, AND WHY IT IS THE SAME EVERY TIME.  This machine has no
+# clock-calendar a program can read (include/sys/param.h), so main.c's iinit()
+# seeds `time' from the root superblock's s_time -- and b6fsutil stamps that
+# with -T ROOTTIME when it builds the image (kernel/test/CMakeLists.txt).  On a
+# build image this line therefore prints `Sat Jul 25 08:23:0X GMT 2026', and
+# the seconds are the only field the boot drift can move: everything left of
+# them is a literal, and 08:23:00 is 37 seconds clear of a minute roll.
+#
+# WHICH TEST SEES IT is kernel/test/console and only that one.  /etc/rc does
+# not run until the first shell has exited (cmd/init/init.c: shutdown, single,
+# runcom, multiple), and console.ini is the one test that types the ^D that
+# gets there; kernel/test/boot quits on the first prompt, with the disk still
+# attached read-only.  console.ini's expect stops just short of the seconds.
+#
+# What the v7 rc did next still wants a program this system has not got yet:
+# fsck and mount (task C4), cron and update (C10), accton (C8).  Each line
+# comes back as its command is ported.  There is nothing to mount in any case
+# -- one EC-5052 drive is the whole of the store, and swap lives on the drums.
 #
 # rm left that list with task C1b, and so did cp, ln and mv -- but the only
 # line of the v7 rc that used rm cleared /tmp of an editor's leftovers, and
 # nothing on this image writes there except the tests.  It comes back with
 # ed (task C3), which is the first program that will.
+#
+# TWO MORE LINES OF THE v7 rc COULD RUN TODAY AND DELIBERATELY DO NOT.
+# `cat /dev/null >/etc/utmp' would write the root filesystem on every boot,
+# and nothing reads utmp until task C6 brings login, who and the rest of it.
+# `PATH=/bin:/usr/bin' names a directory that does not exist here, and the
+# shell's own default path already reaches /bin.

@@ -232,7 +232,11 @@ exception to date, and only because it has no buffer at all — it walks `argv[1
 4. A line in [../etc/rc](../etc/rc) if the boot script wants it — remembering that `/etc/rc` runs
    with **no terminal**, so anything meant to be seen redirects to `/dev/console` for itself.
    (The other rule that used to stand here is gone: this shell takes `#` as a comment character,
-   which v7's had not — see [sh/README.md](sh/README.md).)
+   which v7's had not — see [sh/README.md](sh/README.md).) The line's *assertion* has exactly one
+   home, `kernel/test/console`: `/etc/rc` does not run until the first shell has exited
+   (`init/init.c`: `shutdown, single, runcom, multiple`), and console is the only test that types
+   the `^D` that gets there. `kernel/test/boot` quits on the first prompt, with the disk still
+   attached read-only.
 5. The test, per §9.
 
 Two lists have to grow with the program, and nothing catches them but a failing test:
@@ -354,8 +358,10 @@ in those words. Claiming more than the fix does is worse than carrying the bug.
 ## What task C2 taught
 
 C2a put `date`, `kill` and `sleep` on the image and C2b `basename`, `test`, `time`, `tty` and
-`yes`; [kernel/test/utils.sh](../kernel/test/utils.sh) holds all eight. Four findings outlive
-the task, and two of them are about this machine rather than about any program.
+`yes`; [kernel/test/utils.sh](../kernel/test/utils.sh) holds all eight. C2c then spent one of
+them: [../etc/rc](../etc/rc) prints the date now as well as the motd, which is the whole of what
+the boot script was waiting for from this task. Five findings outlive it, and three of them are
+about this machine rather than about any program.
 
 **An exit status above 127 does not survive `wait(2)`.** A status is `(code << 8)` and it comes
 back through r12, a fifteen-bit index register
@@ -383,3 +389,11 @@ stdin, no `argv[0]` control, and no way to bound a program that does not termina
 the third, and what tests it is a pipeline — **the first this image has ever run**, since
 nothing in `kernel/test/` or [sh/test/](sh/test/) had used `|`. It worked first time, which is
 worth writing down precisely because it might not have.
+
+**Anything `/etc/rc` prints from the clock is a literal to the minute.** There is no
+clock-calendar here, so `main.c`'s `iinit()` seeds `time` from the root superblock's `s_time` and
+`b6fsutil` stamps that with `-T ${ROOTTIME}` — the same number `kernel/test/fstest.c` asserts. So
+the boot date is a build constant, `Sat Jul 25 08:23:0X GMT 2026`, and only the `X` moves: a
+whole run advances the guest clock about two seconds. `console.ini` therefore asserts it by
+*truncating the match* short of the seconds, where `run-utils.sh` masks them with `sed` — the
+same projection, chosen differently because a SIMH `expect` has no host-side stream to filter.

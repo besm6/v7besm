@@ -112,7 +112,8 @@ file /bin/cp            # cmd/cp -- and what cmd/mv execs for a move across devi
 source ../../rootfs/bin/cp
 mode 0755
 
-file /bin/date          # cmd/date -- NOT setuid: stime(2) is suser()-gated, and that is the point
+file /bin/date          # cmd/date -- what /etc/rc prints after the motd; NOT setuid, stime(2)
+                        # being suser()-gated, and that is the point
 source ../../rootfs/bin/date
 mode 0755
 

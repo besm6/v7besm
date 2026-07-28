@@ -27,6 +27,7 @@ independent, and were deferred deliberately.
 | 32 | `profil()`: implement `addupc()` or make it fail | small; the decision is the task |
 | 33 | `ptrace` single-step | small now, blocked after |
 | 34 | the `int` ↔ pointer audit | open-ended |
+| 35 | the character `send` drops — find it, and see what it costs | small to measure, unknown to fix |
 
 ---
 
@@ -187,7 +188,9 @@ mode if the BESM-6 `TTY` device exposes a `set` modifier for it, and `attach tty
 Resolve that before writing anything else, because it decides the shape of the whole test.
 
 Note README.md's caveat about `send` dropping a character under parallel ctest: a `send`-driven test
-that fails once and passes when re-run alone has said nothing.
+that fails once and passes when re-run alone has said nothing. **Task 35 below is that caveat's
+own task** — it also carries the reproducible case, the `after=` that hides it, and the rule about
+never ending such a file on a bare-prompt `expect`. Read it before writing 29c's dialogue.
 
 **Size.** Small once the connection question is answered; blocked on it until then.
 
@@ -339,3 +342,59 @@ system call and the kernel's copy never runs, and neither was found by review �
 exercises the site, run under `libtest`, not an inspection.
 
 **Size.** Open-ended; do it in one sitting per file and stop when the grep is clean.
+
+---
+
+## 35. The character `send` drops
+
+**What is known, and it is more than it was.** Every test that types at the guest —
+`console`, `session`, `files`, `libtest`, `utils`, `swap` — loses a character out of a `send`
+sometimes. That much was already written down twice, in README.md's SIMH notes and in the
+`RESOURCE_LOCK simh_boot` comment in [test/CMakeLists.txt](test/CMakeLists.txt), and both attribute
+it to **host load**: `session` failing one run in four under `CTEST_PARALLEL_LEVEL=8` with
+`s: not found` for a sent `sh /etc/session`.
+
+Task C2c found a case that is **not** load-dependent and reproduces every time. In `console.ini`,
+`send "rmdir /tmp/d\r"` arrived as `mdir /tmp/d` on every run of the file, on an idle machine — the
+**first** character of the send and no other. Two things establish the shape of it:
+
+* prefixing a throwaway character (`send "Zrmdir …"`) makes `rmdir` arrive intact and the `Z` is the
+  one eaten, so it is positional, not a corruption of that byte;
+* `send after=20000 "…"` — 20,000 cycles before the first character — makes it deliver reliably,
+  five runs for five.
+
+`console.ini` carries `after=20000` on every `send` now and says so at length in its header. **The
+other five `.ini` files do not**, and they are the ones the lock was measured against.
+
+**Why it went unnoticed for so long is worth its own sentence**, because it is the more useful
+finding: `console.ini`'s last rule was a bare `expect "# "`. All SIMH rules are armed at once, so a
+stalled stage simply fell through to it at the next prompt and the test printed PASS — it had been
+passing without running its last four stages. That rule is unique now. **Check every
+`expect`/`send` test for a final rule a bare prompt can satisfy** before trusting a green run here.
+
+**What to do.**
+
+1. **Find where the character goes.** Not established, and the two candidate mechanisms sit on
+   opposite sides of the boundary. One is an input overrun in the guest: `scintr()`
+   ([dev/sc.c](dev/sc.c)) takes one character per ПРП interrupt out of a single register, so a
+   second arriving before the first is read has nowhere to wait — and if that is it, then it is a
+   **driver** bug that a real operator typing fast would also hit, not a test artifact. The other is
+   the simulator: `send` delivers at an instruction-count rate while the console's timing is
+   calibrated against the host clock, which is the guess `test/CMakeLists.txt` already records.
+   `sctest` is the place to tell them apart — it drives the Consul with no kernel underneath, so
+   feeding it two characters closer together than one interrupt service answers the first question
+   on its own.
+2. **Then decide what the delay is worth.** If `after=` is enough, put it on the other five files
+   and **re-run the RESOURCE_LOCK measurement**: five full `ctest` runs with and without
+   `simh_boot`, which is exactly how the lock earned its place. It costs about fifteen seconds a
+   suite, and it was bought to treat this symptom. If the delay makes the lock unnecessary, both
+   the lock and its comment come out.
+3. Whatever the answer, correct README.md's "`send` DROPS A CHARACTER now and then, and it is not
+   the kernel" — the second half of that sentence is exactly what has not been established.
+
+**How to verify.** A fix is only a fix if the drop can be *made to happen first*: remove the
+`after=` from `console.ini` and confirm `rmdir` still arrives as `mdir`, which takes one run. Then
+the five parallel-`ctest` runs for the load half.
+
+**Size.** Small to measure, and the measurement is most of the value. The fix is unknown until
+step 1 answers which side of the boundary it is on.
