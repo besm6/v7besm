@@ -298,6 +298,28 @@ set_tests_properties(rootimg_setuid PROPERTIES LABELS kernel)
 # forced by buffer pressure must not land on a read-only unit and put an `md' error message
 # into the very stream the expects are matching.
 #
+# THEY DO NOT RUN CONCURRENTLY WITH EACH OTHER, and the RESOURCE_LOCK below is why.  Each of
+# these seven drives the guest by typing at it -- `expect "# " send "sh /etc/files\r"' -- and
+# under load SIMH DROPS CHARACTERS out of that send: the failures read `h: not found' for a
+# sent `sh' and `eco: not found' for an `echo', so the shell is being handed a truncated line
+# and the test then fails as "never reached its last line".  Nothing in the guest, in the disk
+# images or in the volume numbering is shared -- each test has its own of all three; it is the
+# HOST that is contended, which is the whole of what has been established.  (The mechanism is
+# not: the likely one is that `send' delivers at an instruction-count rate while the console's
+# own timing is calibrated against the host clock, so oversubscribing the machine shifts the
+# ratio between them -- but that has not been confirmed, and the lock treats the symptom.)
+#
+# MEASURED, since a lock that bought nothing would be worth removing: five full `ctest' runs
+# on one machine, twice.  Without it, two of the five failed this way and the suite took 47-49
+# seconds; with it, none of five failed -- nor any of ten further `ctest -L kernel' runs -- and
+# the suite takes about 62.  Fifteen seconds for a suite that does not lie.
+#
+# `simh_boot' is therefore a lock and not a fixture: they are independent tests that must not
+# OVERLAP, which is a different statement from one needing another to have run.  ctest still
+# runs everything else in parallel around them, and the standalone SIMH tests above (mmutest,
+# fstest, the u* programs) are deliberately NOT in the lock -- they assert on machine state
+# from their .ini rather than on a typed dialogue, so they have nothing to drop.
+#
 # `spin' is a LINKED address that moves as the kernel grows, so boot.ini is
 # GENERATED from unix.nm at build time (genboot.cmake) rather than hardcoded.  console.ini
 # and session.ini name no kernel address and are used from the source directory as they
@@ -320,7 +342,7 @@ if(BESM6)
     list(APPEND TEST_TARGETS bootini)
     add_test(NAME boot COMMAND ${BESM6} ${CMAKE_CURRENT_BINARY_DIR}/boot.ini
              WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(boot PROPERTIES LABELS kernel)
+    set_tests_properties(boot PROPERTIES LABELS kernel RESOURCE_LOCK simh_boot)
 
     # console.ini restarts the machine from inside each `expect' action, so its run is bounded
     # by wall clock rather than by one step budget: a TIMEOUT is what turns a wedged dialogue
@@ -339,7 +361,7 @@ if(BESM6)
     add_test(NAME console COMMAND ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}/console.ini
              WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(console PROPERTIES LABELS kernel TIMEOUT 450
-                         FIXTURES_REQUIRED console_disk)
+                         FIXTURES_REQUIRED console_disk RESOURCE_LOCK simh_boot)
 
     # session -- the end-to-end statement task 25b asks for: boot, shell, create and write
     # files, sync, fsck clean.  Three programs have to run in order (b6fsutil to build and
@@ -350,7 +372,7 @@ if(BESM6)
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-session.sh
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(session PROPERTIES LABELS kernel TIMEOUT 600)
+    set_tests_properties(session PROPERTIES LABELS kernel TIMEOUT 600 RESOURCE_LOCK simh_boot)
 
     # files -- the same statement one step further on, for tasks C1b and C1c: boot, shell, and
     # then cp, ln, mv and rm rearranging the tree that `session' could only create, followed by
@@ -369,7 +391,7 @@ if(BESM6)
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-files.sh
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(files PROPERTIES LABELS kernel TIMEOUT 1800)
+    set_tests_properties(files PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
     # utils -- task C2's small utilities, on its own volume (3083).  Its own script again,
     # because the question is a third one: `session' asks whether files can be created,
@@ -386,7 +408,7 @@ if(BESM6)
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-utils.sh
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(utils PROPERTIES LABELS kernel TIMEOUT 1800)
+    set_tests_properties(utils PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
     # ---------------------------------------------------------------------------------
     # swap -- more processes than core, and two of them sharing one binary's text
@@ -417,7 +439,7 @@ if(BESM6)
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-swap.sh
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(swap PROPERTIES LABELS kernel TIMEOUT 900)
+    set_tests_properties(swap PROPERTIES LABELS kernel TIMEOUT 900 RESOURCE_LOCK simh_boot)
 
     # ---------------------------------------------------------------------------------
     # libtest -- the twenty-six /usr/test programs, run off the image by the booted kernel
@@ -441,7 +463,7 @@ if(BESM6)
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(libtest_run PROPERTIES FIXTURES_SETUP libtest
-                         LABELS kernel TIMEOUT 1200)
+                         LABELS kernel TIMEOUT 1200 RESOURCE_LOCK simh_boot)
 
     # The structural half, as in run-session.sh: forty-two execs and twenty-odd files
     # written, and the filesystem still checks out.
