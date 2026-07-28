@@ -165,9 +165,110 @@ or
 .B g.
 .PP
 Only the owner of a file (or the super-user) may change its mode.
+That rule is
+.IR chmod (2)'s
+and not this program's: the call goes through
+.B owner()
+in kernel/fio.c, which admits the file's owner as well as root.
+.I Chmod
+is therefore
+.B not
+a set-user-ID program, unlike
+.IR mkdir (1),
+.IR mv (1)
+and
+.IR rmdir (1)
+on this system.
+.PP
+.B Note:
+.B "chmod +s"
+does nothing at all, here and in v7 alike, and the sentence above understates it.
+With
+.I who
+omitted the default is
+.B a
+less the file creation mask, which is
+.B 01777;
+.B s
+is
+.B 06000;
+and the two have no bit in common.  The letter
+.B s
+is not merely `only useful' with
+.B u
+or
+.BR g ,
+it is inert without them.
+.PP
+.B Note:
+.B "chmod +t"
+does work \- the sticky bit
+.B 01000
+is inside
+.B 01777
+\- but only for the super-user.
+.IR Chmod (2)
+here reads
+.PP
+.RS
+.B "if (u.u_uid) uap->fmode &= ~ISVTX;"
+.RE
+.PP
+\- kernel/sys4.c \- so an ordinary owner's
+.B "chmod +t"
+succeeds and silently changes nothing.
+.PP
+.B Note:
+the omitted-\c
+.I who
+default depends on
+.IR umask (2),
+and on this system the initial mask
+.RB ( CMASK
+in <sys/param.h>) is
+.BR 0 ,
+while no shell here has a
+.B umask
+builtin.  So the default is plainly
+.B a
+today, and every mode this port's tests predict rests on that.
+.PP
+.B Note:
+the mode argument is parsed
+.B once, before any file is opened,
+so an unparsable mode changes nothing rather than half of what was named.
+An absolute mode out of range is not diagnosed:
+.I chmod
+accumulates it and
+.IR chmod (2)
+masks it with
+.BR 07777 .
+.SH DIAGNOSTICS
+.I Chmod
+exits with the number of files it could not change, or
+.B 255
+for a usage error or an unparsable mode.  All four messages go to the standard
+error, unlike
+.IR chown (1)'s
+and
+.IR ln (1)'s.
+.PP
+.B Usage: chmod [ugoa][+-=][rwxstugo] file ...
+.PP
+.B chmod: invalid mode
+.PP
+.BI "chmod: can't access " name
+\- the file could not be
+.IR stat ed.
+.PP
+.BI "chmod: can't change " name
+\- the file was found and
+.IR chmod (2)
+refused it.
 .SH "SEE ALSO"
 ls(1),
 chmod(2),
 chown (1),
 stat(2),
+touch(1),
 umask(2)

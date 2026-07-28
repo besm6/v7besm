@@ -6,10 +6,12 @@ that one's task 24 left off: the machine boots, mounts a root filesystem, execs 
 gives a shell prompt, with **eight programs** on the image beside it — `sh`, `cat`, `echo`, `ls`,
 `pwd`, `sync`, and the `mkdir` and `rmdir` that are the first two able to *change* anything. Those
 were chosen because they *prove the prompt*, not because they make the machine usable.
-[../etc/rc](../etc/rc) says the rest in its own words:
+**C1 has since landed** and there are sixteen now — the file-management set joined them, so the
+tree can be rearranged and re-permissioned from the console. [../etc/rc](../etc/rc) says what
+is still missing in its own words:
 
-> What the v7 rc did next all wants a program this system has not got yet: fsck, mount, rm,
-> date, cron, update, accton.
+> What the v7 rc did next all wants a program this system has not got yet: fsck, mount, date,
+> cron, update, accton.
 
 The sources are v7's own, under
 [tmp/v7x86-0.8a/usr/src/cmd/](tmp/v7x86-0.8a/usr/src/cmd/) — 119 single-file programs and 29
@@ -39,7 +41,8 @@ not a line of C11 work done, so the first diff on any of them is the porting dif
 by writing a `CMakeLists.txt`, not by fetching anything.
 
 **A directory is part of the build when it holds a `CMakeLists.txt`**, and only the ported ones
-do — `mkdir/` and `rmdir/` today. That is the only marker; `../CMakeLists.txt` names its
+do — the ten of C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`, `mv/`, `rm/`,
+`rmdir/`, `touch/`) today. That is the only marker; `../CMakeLists.txt` names its
 subdirectories one by one.
 
 Four things about the copies:
@@ -77,7 +80,7 @@ second time, not ports. See C9.
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C1 | the file-management set — ~~`rm` `ln` `mv` `cp`~~ `chmod` `chown` `chgrp` `touch` | a filesystem you can change | small ×4 left |
+| C1 | ~~the file-management set — `rm` `ln` `mv` `cp` `chmod` `chown` `chgrp` `touch`~~ | ~~a filesystem you can change~~ | **done** |
 | C2 | the small utilities `sh` and `/etc/rc` want — `date` `sleep` `kill` `test` `basename` `tty` `time` `yes` | shell scripts that do something | small ×8 |
 | C3 | **`ed`** | authoring text *on* the machine | large, and the pivot |
 | C4 | filesystem maintenance — `df` `du` `dd` `mkfs` `fsck` `icheck` `dcheck` `ncheck` `clri` `quot` `mount` `umount` | a system that maintains itself | large |
@@ -272,31 +275,38 @@ is worth writing only when the port *taught* something, which is the standard `s
 
 ---
 
-## C1. The file-management set
+## C1. The file-management set — done
 
-**Why first.** There is no way to remove a file, rename one or change a mode on the running
-machine. Everything else in this file assumes these exist.
+All eight are on the image and [kernel/test/files](../kernel/test/files.sh) holds them to it:
+`cp`, `ln`, `mv` and `rm` rearrange the tree that `session` could only create, and `chmod`,
+`chown`, `chgrp` and `touch` change what its files *are*. Three findings from it outlive the
+task, and every later task that asserts anything about a file's metadata will meet them:
 
-All eight are small, none uses `long`, and the grep for `char *` ordering comes back clean on all
-but `basename`-adjacent string work. What they *do* all touch is directories, so **none of them
-can be tested under `b6sim`** — every test here is a SIMH dialogue in the `kernel/test/console`
-mould, or a `session`-style write-then-fsck.
+* **A mode and an owner cannot be asserted in the guest.** `ls -l` prints them and prints a date
+  beside them, and `files.sh`'s rule is that only reproducible things reach the log. So
+  `run-files.sh` asks the *image* instead — `b6fsutil -v -v` piped through an `awk` that keeps
+  the type, the mode, the uid/gid and the path, sorted, diffed against `files.modes`. That is a
+  **closed** assertion over the whole of `/tmp`, so a mode nothing asked to change fails the run
+  too, and it is the reusable half of C1c.
+* **The guest clock advances about two seconds over a whole `files` run** — compare `root.img`'s
+  superblock `Last update` with `filesafter.img`'s. Seventy-odd programs therefore execute
+  inside two ticks of a one-second `mtime`, no two commands in a script are a tick apart, and
+  `ls -t` between two files the script made is a coin toss (`ls.c`'s `compar()` returns 0 on
+  equal times, into a `qsort` that is not stable). **The only way to see a time change is a gap
+  you put there yourself**: `b6fsutil -T <far-off> -a` grafts a fixture dated a generation away,
+  and touching it moves it by decades rather than by ticks.
+* **`touch` is the one deliberate divergence in C1.** v7's calls no `utime(2)` — it opens the
+  file `O_RDWR`, reads its first byte and writes it back. This port calls `utime(2)`;
+  `cmd/touch/touch.c`'s header and a rewritten `touch.1` are the account. (An earlier draft of
+  this file asserted that v7's `touch` used `utime(2)`. It did not.)
 
-**C1b is done**, and it left the mould C1c should follow: `kernel/test/files` (its own disk
-volume, its own grafted script, `b6fsutil -c` behind it) is where a program that changes the
-tree is asserted, and [../lib/test/suidt.c](../lib/test/suidt.c) is where one that needs a
-privilege transition is. `mv` joined `mkdir` and `rmdir` as a setuid-root program;
-[mv/README.md](mv/README.md) is the account, and the surprise in it was not the pointer work —
-there was none — but an upstream `strcat` into an uninitialized buffer, in the middle of the
-four-call directory re-parent, with every signal ignored.
-
-### C1c. `chmod`, `chown`, `chgrp`, `touch`
-
-`chmod.c` (179 — symbolic mode parsing is the whole of it), `chown.c` (57), `chgrp.c` (55),
-`touch.c` (72). `chown`/`chgrp` read `/etc/passwd` and `/etc/group` through `getpwnam`/`getgrnam`,
-both already in libc. `touch` uses `utime(2)`, which the kernel has.
-
-**Size.** Small ×10. Expect the whole task to be dominated by the tests, not the ports.
+`mv` joined `mkdir` and `rmdir` as a setuid-root program — [mv/README.md](mv/README.md) is the
+account, and the surprise in it was not the pointer work (there was none) but an upstream
+`strcat` into an uninitialized buffer in the middle of the four-call directory re-parent. **None
+of C1c's four is setuid**, and none should be: `chmod(2)` is gated on `owner()`, which admits
+the file's owner, and `chown(2)` on `suser()`, which is the rule that stops a user giving a file
+away. `chmod` is also the only port in C1a–C1c that needed **no bounds check**, having no buffer
+at all.
 
 ---
 
@@ -671,11 +681,10 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 
 ## Where to start
 
-C1c, which finishes C1. The tree can now be rearranged — `cp`, `ln`, `mv` and `rm` are on the
-image and `kernel/test/files` holds them to a five-pass fsck — but nothing on the machine can
-change a mode, an owner or a time, so `chmod`, `chown`, `chgrp` and `touch` are the four that
-close the set. They are the cheapest programs left and they land in a test harness that already
-exists: one more block in `kernel/test/files.sh` rather than a new SIMH test.
+C2, now that C1 is done. The filesystem can be built, rearranged and re-permissioned from the
+console — but `/etc/rc` is still nine-tenths a comment explaining what it cannot do, and a shell
+without `test` cannot write a conditional. C2a's `date` is also the first program that would
+give the two-second finding above somewhere to be fixed rather than worked around.
 
-C2 after it, for the reason that file's own entry gives — `/etc/rc` is still nine-tenths a
-comment, and a shell without `test` cannot write a conditional.
+Most of C2 runs under `b6sim`, which is the other reason to take it next: it is where the
+userland regression corpus starts, in the harness that does not need a two-minute boot.

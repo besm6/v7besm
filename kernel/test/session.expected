@@ -1,6 +1,9 @@
 hello
 /
 cat
+chgrp
+chmod
+chown
 cp
 echo
 ln
@@ -12,6 +15,7 @@ rm
 rmdir
 sh
 sync
+touch
 /tmp/d
 rmdir: cannot remove current directory
 rmdir: cannot remove . or ..

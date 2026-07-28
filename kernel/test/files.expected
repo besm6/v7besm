@@ -31,3 +31,18 @@ m1
 sub2
 m3
 motd
+chmod: can't access /tmp/c/nosuch
+unknown user id: nosuchuser
+unknown group: nosuchgroup
+/tmp/c/nosuch: No such file or directory
+touch: file /tmp/c/nonew does not exist.
+Cannot touch /tmp/nosuchdir/x
+a
+b
+d
+e
+new
+/etc/aprobe
+/etc/zprobe
+/etc/zprobe
+/etc/aprobe

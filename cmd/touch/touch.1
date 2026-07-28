@@ -1,7 +1,7 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
-.TH TOUCH 1 
+.TH TOUCH 1
 .SH NAME
-touch \- update date last modified of a file
+touch \- update the date of a file
 .SH SYNOPSIS
 .B touch
 [
@@ -10,10 +10,9 @@ touch \- update date last modified of a file
 file ...
 .SH DESCRIPTION
 .I Touch
-attempts to set the modified date of each
-.I file.
-This is done by reading a character from the file
-and writing it back.
+sets the accessed and modified dates of each
+.I file
+to the current time.
 .PP
 If a
 .I file
@@ -21,3 +20,90 @@ does not exist,
 an attempt will be made to create it unless the
 .B \-c
 option is specified.
+.PP
+.B Note:
+this DESCRIPTION is not v7's, because this program is not quite v7's.
+v7's
+.I touch
+moved a date by
+.B "reading a character from the file and writing it back"
+\- it did not call
+.IR utime (2)
+at all \- and its page said so.  This port calls
+.IR utime (2),
+which is a deliberate divergence and the only one in its task.  What v7's
+method cost:
+.IP \(bu 3
+it needed read
+.B and
+write permission, so a file its own owner could not open for writing could not
+be dated at all;
+.IP \(bu 3
+it re-created, and so truncated, any file of zero length, there being no byte
+in one to rewrite;
+.IP \(bu 3
+it put a write down a path where nothing was meant to change, so a full
+filesystem could make it fail halfway.
+.PP
+None of that is true here.  In exchange,
+.I touch
+now sets
+.B both
+dates rather than the modified one alone, and it is gated by
+.IR utime (2)'s
+own rule \- the caller must be the file's owner or the super-user \- rather
+than by the file's write permission.  See
+.IR utime (2),
+whose second argument on this system is a two-element
+.B time_t
+vector,
+.I accessed
+then
+.IR updated ,
+and not
+.BR "struct utimbuf" .
+.PP
+.B Note:
+.B \-c
+is positional.  The argument list is scanned once, so a
+.B \-c
+written after a file name affects only the names that follow it, and
+.B "touch a \-c b"
+creates
+.I a
+and refuses
+.IR b .
+The SYNOPSIS above implies otherwise; the program is v7's in this and was left
+alone.
+.PP
+.B Note:
+a file
+.I touch
+creates has mode
+.BR 0666 ,
+less the file creation mask \- and the initial mask
+.RB ( CMASK
+in <sys/param.h>) is
+.B 0
+on this system, with no
+.B umask
+builtin in any shell here.  So it is world-writable.
+.SH DIAGNOSTICS
+.I Touch
+exits with the number of files it could not date.  v7's exited with whatever
+happened to be in the accumulator; both messages go to the standard error, and
+their inconsistent forms are v7's and were kept.
+.PP
+.BI "touch: file " name " does not exist."
+\-
+.B \-c
+was given.
+.PP
+.BI "Cannot touch " name
+\- the file could not be created, or
+.IR utime (2)
+refused it.
+.SH "SEE ALSO"
+chmod(1),
+ls(1),
+utime(2)

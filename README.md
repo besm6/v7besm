@@ -25,9 +25,12 @@ disk drivers are written and their failure modes classified.
 **It boots to a shell.** `b6fsutil` (`cmd/fsutil/`) builds a root filesystem image in the kernel's
 own on-disk layout; the kernel mounts it, hands process 1 the icode, **enters user mode** and execs
 `/etc/init` — the real v7 one — which forks `/bin/sh` and prompts with `# ` on the SIMH console.
-Type at it: the shell runs `cat`, `echo`, `ls`, `pwd` and `sync` off the disk, the kernel does the
+Type at it: the shell runs sixteen commands off the disk, the kernel does the
 erase, kill and end-of-file processing, and `^D` takes init round through `/etc/rc` to a fresh
 prompt. It also **writes** — create files, `sync`, and the image fscks clean on the host afterwards.
+And it **keeps** files: `mkdir`, `rmdir`, `cp`, `ln`, `mv` and `rm` build and rearrange the tree
+(three of them setuid root, because there is no `mkdir(2)` or `rename(2)` here), while `chmod`,
+`chown`, `chgrp` and `touch` change what a file *is*.
 
 The **libc runs on it too**: the test programs of [lib/test/](lib/test/) live on the image as
 `/usr/test/*` and produce there, byte for byte, the same output they produce under
@@ -43,23 +46,25 @@ reference: the design the machine forces and the hardware rules every part of it
 
 Alongside the running kernel, [kernel/test/](kernel/test/) holds standalone SIMH tests: each links
 kernel objects against a hand-built environment and lets a `.ini` script assert on the machine state
-afterwards. That is how the MMU and the mass-storage drivers were verified. Four more boot the whole
+afterwards. That is how the MMU and the mass-storage drivers were verified. Six more boot the whole
 kernel against the disk image, each going one step past the last, so that a failure names its own
-layer: the prompt appears, a typed dialogue works, a session writes files that fsck clean, and the
-libc suite runs off the image.
+layer: the prompt appears, a typed dialogue works, a session writes files that fsck clean, the
+file-management set rearranges a tree and re-permissions it, the libc suite runs off the image, and
+a machine squeezed below its own working set swaps real processes through the drum.
 
 ## Repository layout
 
 ```text
 kernel/        v7 kernel sources, device drivers (kernel/dev/), the design (README.md) and
                the work plan (TODO.md)
-kernel/test/   SIMH tests: standalone component tests, and four that boot the whole kernel
+kernel/test/   SIMH tests: standalone component tests, and six that boot the whole kernel
 include/       v7 system headers (sys/), the hosted half of the C11 header tree
-lib/           libc, libm and crt0, cross-compiled; lib/test/ is the suite that exercises them
+lib/           libc, libm, libtermcap, libcurses and crt0, cross-compiled; lib/test/ is
+               the suite that exercises them
 cmd/           BESM-6 toolchain (cc, as, ld, cpp, disasm, sim, fsutil) and the native
-               programs that go on the disk image (init, sh, cat, echo, ls, mkdir,
-               pwd, rmdir, sync)
-etc/           the static files of the image: group, motd, passwd, rc
+               programs that go on the disk image (init, sh, cat, chgrp, chmod,
+               chown, cp, echo, ln, ls, mkdir, mv, pwd, rm, rmdir, sync, touch)
+etc/           the static files of the image: group, motd, passwd, rc, termcap
 root.manifest  what all of that is assembled into: the root filesystem the kernel mounts
 cross/         BESM-6 object/archive format headers (b.out.h, ar.h, ranlib.h)
 scripts/       the shared CMake cross-toolchain module, build checks, and a VSCode
@@ -67,30 +72,25 @@ scripts/       the shared CMake cross-toolchain module, build checks, and a VSCo
 doc/           BESM-6 architecture references
 ```
 
-## Components and status
+## Status
 
-| Component                     | Location           | Status                                      |
-|-------------------------------|--------------------|---------------------------------------------|
-| C compiler driver             | `cmd/cc`           | ✔ working, tested, documented               |
-| Assembler (AT&T / Madlen)     | `cmd/as`           | ✔ working, tested, documented               |
-| Linker + binutils             | `cmd/ld`           | ✔ working, tested, documented               |
-| C preprocessor                | `cmd/cpp`          | ✔ C11, tested, documented                   |
-| Disassembler                  | `cmd/disasm`       | ✔ working, tested                           |
-| a.out simulator (Unix v7)     | `cmd/sim`          | ✔ working, tested, documented               |
-| Filesystem image builder      | `cmd/fsutil`       | ✔ working, tested, documented               |
-| Kernel, built for the BESM-6  | `kernel/`          | ✔ builds, links and boots under SIMH        |
-| Memory management (the MMU)   | `kernel/utab.c`    | ✔ retargeted, tested under SIMH             |
-| Boot, traps, context switch   | `kernel/besm6.S`   | ✔ working — processes switch under SIMH     |
-| Peripheral drivers            | `kernel/dev/`      | ✔ console, drum and disk                    |
-| Mounting a root filesystem    | `kernel/`          | ✔ mounts, reads and writes; fscks clean     |
-| `exec` of a BESM-6 `a.out`    | `kernel/sys1.c`    | ✔ user mode, argv/envp, shared text         |
-| System calls                  | `kernel/sysent.c`  | ✔ the v7 set, exercised from the image      |
-| libc / libm / crt0            | `lib/`             | ✔ tested under `b6sim` **and** on the image |
-| Userland (`init`, `sh`, …)    | `cmd/`             | ✔ v7 init, Bourne shell, seven commands     |
-| Single-user shell prompt      | —                  | ✔ **it prompts, and you can type at it**    |
-| Swapping and shared text      | `kernel/text.c`    | ☐ to do — written, never run under load     |
-| `/dev/mem`, `/dev/kmem`       | `kernel/dev/mem.c` | ☐ to do — minors 0 and 1 give `ENXIO`       |
-| Multi-user (`getty`, `login`) | `kernel/dev/sr.c`  | ☐ to do — the multiplexer is a skeleton     |
+**It runs single-user, and everything in this table is tested** — `make run` is 535 cases, of
+which 55 run on the real machine under SIMH and six of those boot the whole kernel.
+
+|part|where|what works|
+|---|---|---|
+|Toolchain|`cmd/`|`cc`, `as`, `ld`, `cpp`, `disasm`, the binutils, `b6sim` and `b6fsutil` — each working, unit-tested and documented|
+|Kernel|`kernel/`|boots under SIMH: the MMU, the three trap doors, the context switch, console/drum/disk drivers, the v7 system-call set, swapping and shared text, `/dev/mem` and `/dev/kmem`|
+|Filesystem|`kernel/`|mounts a root, reads and writes it, and the image fscks clean on the host afterwards|
+|Libraries|`lib/`|libc, libm, libtermcap, libcurses and `crt0.o` — the suite runs under `b6sim` **and** off the disk image, diffed against the same expectations|
+|Userland|`cmd/`|the v7 `/etc/init`, the Bourne shell, and sixteen commands — three of them setuid root|
+|The prompt|—|**it prompts, and you can type at it**|
+
+**Not there yet.** Multi-user is the one large piece: the 24-line terminal multiplexer is a
+skeleton, so there is no `getty` and no `login` ([kernel/TODO.md](kernel/TODO.md) task 29). Six
+smaller kernel items were deferred deliberately and are listed beside it. The rest of the v7
+userland — `ed`, `fsck`, the text filters, and eventually the toolchain rebuilt on the machine
+itself — is [cmd/TODO.md](cmd/TODO.md).
 
 ## Building
 
@@ -111,7 +111,8 @@ make install    # install the tools as b6* into ~/.local (or /usr/local)
 Building requires CMake and a host C/C++ compiler; GoogleTest is fetched
 automatically, and every `cmd/` component has a unit-test suite run by `make run`.
 
-**Library and root filesystem** — `lib/` (`libc.a`, `libm.a`, `crt0.o`) is part of the same
+**Library and root filesystem** — `lib/` (`libc.a`, `libm.a`, `libtermcap.a`, `libcurses.a`,
+`crt0.o`) is part of the same
 build, cross-compiled by the `b6*` tools built alongside it, and so is `build/rootfs/`, the tree
 that becomes the disk image. A fresh checkout needs just:
 

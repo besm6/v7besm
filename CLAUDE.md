@@ -22,7 +22,16 @@ work has two halves:
   and proves it), `sync`, and the image fscks clean. And it **rearranges** what it wrote:
   `cp`, `ln`, `rm` — `rm -r` execing that same setuid `/bin/rmdir` — and a `mv` that is the
   third setuid program, because renaming a directory into another parent is four `link`/`unlink`
-  calls no ordinary user may make and a link count nothing but an fsck can check. And the whole
+  calls no ordinary user may make and a link count nothing but an fsck can check. And it
+  **changes what a file is**, not merely where it lives: `chmod` (the whole symbolic grammar,
+  and the only port in the set that needed no bounds check, having no buffer), `chown` and
+  `chgrp` — neither setuid, because `chown(2)` is `suser()`-gated and that gate is what stops a
+  user giving a file away — and a `touch` that calls `utime(2)` where v7's rewrote the file's
+  first byte, the one deliberate divergence in the set. Their modes and owners are asserted on
+  the *host*, out of `b6fsutil -v -v`, because `ls -l` prints a date beside them and no time
+  here is reproducible: the guest clock advances about two seconds over a whole `files` run, so
+  `ls -t` between two files a script made is a coin toss and only a fixture grafted with
+  `b6fsutil -T <far-off>` can show a `touch` moving anything. And the whole
   **libc runs on it**: the `lib/test/` programs live on the image as `/usr/test/*`
   and produce there, byte for byte, the output they produce under `b6sim`. And it **swaps**:
   squeeze the machine to 31 pages and `sched()`/`newproc()` move real images through the drum,
@@ -34,8 +43,9 @@ work has two halves:
   Six tests
   guard that ladder — `kernel/test/boot` (the prompt appears), `kernel/test/console` (a typed
   dialogue with the shell), `kernel/test/session` (files written, `sync`, then a host-side
-  fsck and diff), `kernel/test/files` (the file-management set rearranging a tree, fscked on
-  the host afterwards), `kernel/test/libtest` (the libc suite run off the image, one ctest case
+  fsck and diff), `kernel/test/files` (the file-management set rearranging a tree and
+  then re-permissioning it, fscked on the host afterwards and its modes and owners diffed out
+  of `b6fsutil -v -v`), `kernel/test/libtest` (the libc suite run off the image, one ctest case
   per program) and `kernel/test/swap` (more processes than core, asserted through the kernel's
   own counters) — and `cd kernel && make run` is where you type at it yourself. The drums
   must be attached to exec anything: they are `swapdev`, and `exece()` stages the argument
@@ -68,7 +78,7 @@ thing**, and knowing which one you are touching is most of what the build layout
 - **host tools** — `cmd/*`, compiled by the build machine's C/C++ compiler, run there;
 - **cross-built BESM-6 artifacts** — `kernel/` and `lib/`, compiled by the `b6*` toolchain
   above through `b6_obj()` in `scripts/BesmCross.cmake`;
-- **native BESM-6 programs** — `cmd/{init,sh,cat,cp,echo,ln,ls,mkdir,mv,pwd,rm,rmdir,sync}`, linked against libc by `b6_prog()`
+- **native BESM-6 programs** — `cmd/{init,sh,cat,chgrp,chmod,chown,cp,echo,ln,ls,mkdir,mv,pwd,rm,rmdir,sync,touch}`, linked against libc by `b6_prog()`
   and staged into `build/rootfs/` (with the static files of `etc/`) for the disk image the
   kernel mounts.
 
@@ -195,15 +205,19 @@ therefore names two archives, **ours first**: `-lc -lruntime`, because `b6ld` sc
 helper calls back into libc. The kernel takes `-lruntime` **alone** — it defines its own
 `printf` in `kernel/prf.c` and uses no other library routine.
 
-### Native BESM-6 programs (`cmd/{init,sh,cat,cp,echo,ln,ls,mkdir,mv,pwd,rm,rmdir,sync}` + `etc/` → `build/rootfs/`)
+### Native BESM-6 programs (`cmd/{init,sh,cat,chgrp,chmod,chown,cp,echo,ln,ls,mkdir,mv,pwd,rm,rmdir,sync,touch}` + `etc/` → `build/rootfs/`)
 
 The third category, and the newest. These are **`cmd/` subdirectories that are not host
 tools**: `cmd/init/init.c` is the Unix v7 `/etc/init`, `cmd/sh/` is S. R. Bourne's v7 shell,
 and `cmd/cat`, `cmd/echo`, `cmd/ls`, `cmd/pwd`, `cmd/sync` are the five commands that prove the
-prompt, with `cmd/mkdir` and `cmd/rmdir` (task C1a) the first two that can *change* the tree and
-`cmd/cp`, `cmd/ln`, `cmd/mv`, `cmd/rm` (task C1b) the four that can rearrange it —
+prompt, with `cmd/mkdir` and `cmd/rmdir` (task C1a) the first two that can *change* the tree,
+`cmd/cp`, `cmd/ln`, `cmd/mv`, `cmd/rm` (task C1b) the four that can rearrange it, and
+`cmd/chmod`, `cmd/chown`, `cmd/chgrp`, `cmd/touch` (task C1c) the four that change an *inode*
+rather than a directory — none of those last four setuid, since `chmod(2)` is gated on
+`owner()` and `chown(2)` on `suser()`, and `cmd/touch` the one program in the set that
+deliberately does not do what v7's did (`utime(2)`, not a rewritten first byte) —
 all compiled by the `b6*` toolchain and staged into `build/rootfs/` as `etc/init` and
-`bin/{sh,cat,cp,echo,ln,ls,mkdir,mv,pwd,rm,rmdir,sync}`. **`mkdir`, `mv` and `rmdir` are setuid
+`bin/{sh,cat,chgrp,chmod,chown,cp,echo,ln,ls,mkdir,mv,pwd,rm,rmdir,sync,touch}`. **`mkdir`, `mv` and `rmdir` are setuid
 root** on the image, which is a property of [root.manifest](root.manifest) alone (`mode 04755`)
 since nothing under `build/rootfs/` carries a mode; see
 [cmd/mkdir/README.md](cmd/mkdir/README.md) for the general account and

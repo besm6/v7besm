@@ -2,19 +2,26 @@
 # which `-S' then converts into the SIMH container kernel/test/CMakeLists.txt attaches as
 # md00.  Grammar: cmd/fsutil/README.md.
 #
-# The tree, the device nodes, and the USERLAND -- /etc/init, /bin/sh and the five commands
-# that prove the prompt, plus the static files of /etc.  Task 24 put them here and task 25b
+# The tree, the device nodes, and the USERLAND -- /etc/init, /bin/sh, the five commands that
+# prove the prompt and the ten of the file-management set, plus the static files of /etc.
+# Task 24 put them here and task 25b
 # flipped the last line, /etc/init, from the task-23 stand-in to the real one.  Task 25c
 # added /usr/test, the lib/test programs that b6sim also runs; the termcap port added
 # /etc/termcap and termcapt beside them, which are lib/libtermcap's rather than libc's, and
 # the curses port added cursest and curstty, which are lib/libcurses' and read the same file.
 # Task C1a (cmd/TODO.md) added /bin/mkdir and /bin/rmdir, which are the first entries here
-# to carry a mode the staging tree cannot express: they are SETUID ROOT.
+# to carry a mode the staging tree cannot express: they are SETUID ROOT.  Task C1b added
+# /bin/{cp,ln,mv,rm} and a third setuid program in mv, and task C1c added
+# /bin/{chgrp,chmod,chown,touch} -- the four that change an inode rather than a directory,
+# and the four that finished the file-management set.  None of THOSE is setuid: chmod(2) is
+# gated on owner(), which admits the file's owner, and chown(2) on suser(), which is the rule
+# that stops a user giving a file away.
 #
 # WHY THIS FILE LIVES AT THE TOP OF THE TREE and not in kernel/test/ beside the CMakeLists
 # that runs b6fsutil over it: every `file' below but none of the directories comes out of
-# build/rootfs/, which is staged by cmd/init, cmd/sh, cmd/{cat,echo,ls,mkdir,pwd,rmdir,sync}
-# and etc/.
+# build/rootfs/, which is staged by cmd/init, cmd/sh,
+# cmd/{cat,chgrp,chmod,chown,cp,echo,ln,ls,mkdir,mv,pwd,rm,rmdir,sync,touch}, lib/test and
+# etc/.
 # The image is the whole project's, and it is the top-level CMakeLists.txt that draws the
 # `rootimg depends on rootfs' edge, since kernel/ is configured before rootfs exists.
 #
@@ -81,6 +88,18 @@ file /bin/cat           # cmd/cat -- and what /etc/rc uses to print the motd
 source ../../rootfs/bin/cat
 mode 0755
 
+file /bin/chgrp         # cmd/chgrp -- reads /etc/group; NOT setuid, chown(2) is suser()-gated
+source ../../rootfs/bin/chgrp
+mode 0755
+
+file /bin/chmod         # cmd/chmod -- NOT setuid: chmod(2) is gated on owner(), not suser()
+source ../../rootfs/bin/chmod
+mode 0755
+
+file /bin/chown         # cmd/chown -- reads /etc/passwd; NOT setuid, chown(2) is suser()-gated
+source ../../rootfs/bin/chown
+mode 0755
+
 file /bin/cp            # cmd/cp -- and what cmd/mv execs for a move across devices
 source ../../rootfs/bin/cp
 mode 0755
@@ -107,6 +126,10 @@ mode 0755
 
 file /bin/sync          # cmd/sync -- what flushes the buffer cache before the machine stops
 source ../../rootfs/bin/sync
+mode 0755
+
+file /bin/touch         # cmd/touch -- utime(2) here, not v7's rewrite-a-byte; see cmd/touch
+source ../../rootfs/bin/touch
 mode 0755
 
 # ---- and the three that can change a DIRECTORY: THE SETUID PROGRAMS HERE ----------

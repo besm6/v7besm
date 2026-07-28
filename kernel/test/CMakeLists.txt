@@ -195,6 +195,9 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/termcap
     ${B6_ROOTFS}/bin/sh
     ${B6_ROOTFS}/bin/cat
+    ${B6_ROOTFS}/bin/chgrp
+    ${B6_ROOTFS}/bin/chmod
+    ${B6_ROOTFS}/bin/chown
     ${B6_ROOTFS}/bin/cp
     ${B6_ROOTFS}/bin/echo
     ${B6_ROOTFS}/bin/ln
@@ -204,7 +207,8 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/pwd
     ${B6_ROOTFS}/bin/rm
     ${B6_ROOTFS}/bin/rmdir
-    ${B6_ROOTFS}/bin/sync)
+    ${B6_ROOTFS}/bin/sync
+    ${B6_ROOTFS}/bin/touch)
 
 # ...and /usr/test, the lib/test programs (task 25c).  The list is lib/test's, since that is
 # where they are linked and staged; naming it from one file is what keeps the manifest, this
@@ -345,17 +349,24 @@ if(BESM6)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(session PROPERTIES LABELS kernel TIMEOUT 600)
 
-    # files -- the same statement one step further on, for task C1b: boot, shell, and then
-    # cp, ln, mv and rm rearranging the tree that `session' could only create.  Its own
-    # script and its own volume (3082) rather than more lines in session.sh, because the
-    # question it asks is a different one -- mv(1) renaming a directory into another parent
-    # is four calls, and a link count it gets wrong is invisible to everything except the
-    # five-pass fsck run-files.sh ends with.  C1c and C5 belong here as they land.
+    # files -- the same statement one step further on, for tasks C1b and C1c: boot, shell, and
+    # then cp, ln, mv and rm rearranging the tree that `session' could only create, followed by
+    # chmod, chown, chgrp and touch changing what its files ARE.  Its own script and its own
+    # volume (3082) rather than more lines in session.sh, because the question it asks is a
+    # different one -- mv(1) renaming a directory into another parent is four calls, and a link
+    # count it gets wrong is invisible to everything except the five-pass fsck run-files.sh
+    # ends with.
+    #
+    # C1c added a SECOND host-side oracle beside that fsck, and it is the more reusable half:
+    # `b6fsutil -v -v' sorted into files.modes, which is where a mode and an owner are
+    # asserted.  They cannot be asserted in the guest -- `ls -l' prints a date and no time on
+    # this machine is reproducible -- and the same will be true of every later task that
+    # touches a timestamp.  C5 belongs here as it lands.
     add_test(NAME files
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-files.sh
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(files PROPERTIES LABELS kernel TIMEOUT 900)
+    set_tests_properties(files PROPERTIES LABELS kernel TIMEOUT 1800)
 
     # ---------------------------------------------------------------------------------
     # swap -- more processes than core, and two of them sharing one binary's text
