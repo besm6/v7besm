@@ -1,0 +1,46 @@
+#!/bin/sh
+# Run one native BESM-6 program under b6sim with a fixed argument list, and diff what comes
+# out against the checked-in expectation.  Invoked by ctest as:
+#
+#	run-prog-test.sh SIM SRCDIR PROG NAME
+#
+# where PROG is the program as it was STAGED FOR THE DISK IMAGE (build/rootfs/bin/x).  That
+# is deliberate and is lib/test's property too: the bytes this harness runs are the bytes
+# the kernel will run, not a second link of the same sources.
+#
+# Optional SRCDIR/NAME.args holds the arguments (one line, split on whitespace by the shell,
+# with @srcdir@ substituted as lib/test/run-test.sh does); optional SRCDIR/NAME.status holds
+# the exit status expected, 0 if absent -- a program that reports through its status alone
+# would otherwise be untested.  SRCDIR/NAME.expected is the output, stdout and stderr
+# together.
+#
+# ENV -i, for the reason cmd/sh/test/run-sh-test.sh gives: b6sim hands the guest whichever
+# of a whitelist of host variables happen to be set (ENV_WHITELIST in cmd/sim/session.cpp),
+# so an emptied environment is the only one that is the same on every machine.
+#
+# WHAT MAY BE TESTED HERE.  b6sim services every system call on the HOST, so a case may
+# assert only what is reproducible there: argument handling, diagnostics, exit status.
+# Anything that touches global machine state belongs under the booted kernel instead --
+# b6sim's stime() is a no-op that reports success, and its kill() goes straight to the
+# build machine's, so no case here may send a signal to a real pid.  See kernel/test/utils.
+set -e
+sim=$1
+srcdir=$2
+prog=$3
+name=$4
+
+args=$(sed -e "s|@srcdir@|$srcdir|g" "$srcdir/$name.args" 2>/dev/null || true)
+want=$(cat "$srcdir/$name.status" 2>/dev/null || echo 0)
+
+set +e
+env -i "$sim" "$prog" $args > "$name.out" 2>&1
+got=$?
+set -e
+
+if [ "$got" != "$want" ]; then
+    echo "$name: exit status $got, expected $want" >&2
+    cat "$name.out" >&2
+    exit 1
+fi
+
+diff -u "$srcdir/$name.expected" "$name.out"

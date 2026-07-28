@@ -199,7 +199,9 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/chmod
     ${B6_ROOTFS}/bin/chown
     ${B6_ROOTFS}/bin/cp
+    ${B6_ROOTFS}/bin/date
     ${B6_ROOTFS}/bin/echo
+    ${B6_ROOTFS}/bin/kill
     ${B6_ROOTFS}/bin/ln
     ${B6_ROOTFS}/bin/ls
     ${B6_ROOTFS}/bin/mkdir
@@ -207,6 +209,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/pwd
     ${B6_ROOTFS}/bin/rm
     ${B6_ROOTFS}/bin/rmdir
+    ${B6_ROOTFS}/bin/sleep
     ${B6_ROOTFS}/bin/sync
     ${B6_ROOTFS}/bin/touch)
 
@@ -367,6 +370,23 @@ if(BESM6)
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(files PROPERTIES LABELS kernel TIMEOUT 1800)
+
+    # utils -- task C2's small utilities, on its own volume (3083).  Its own script again,
+    # because the question is a third one: `session' asks whether files can be created,
+    # `files' whether they can be rearranged, and this one asks about three things that are
+    # not files at all -- the system clock (date, through stime(2)), an alarm that has to be
+    # DELIVERED (sleep, through libc's alarm/pause/longjmp dance), and a signal sent from one
+    # process to another (kill).  b6sim can assert none of the three, which is why the
+    # cmd_date_*/cmd_sleep_*/cmd_kill_* cases beside the sources cover only argument handling.
+    #
+    # The oracle is a diff of what the programs PRINTED, with the seconds field masked by
+    # run-utils.sh -- the same "keep only the reproducible columns" projection files uses over
+    # `b6fsutil -v -v', and for the same reason.  C2b joins this test as it lands.
+    add_test(NAME utils
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-utils.sh
+                ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(utils PROPERTIES LABELS kernel TIMEOUT 1800)
 
     # ---------------------------------------------------------------------------------
     # swap -- more processes than core, and two of them sharing one binary's text

@@ -179,6 +179,14 @@ int main(int argc, char **argv, char **envp)
     swab(buf, buf, 5);
     show("swab leaves an odd byte", buf);
 
+    // ---- strerror: the one <string.h> routine that reads a table rather than a
+    // string.  It is bounded where v7's callers were not (gen/strerror.c), so both
+    // ends of the range are asked here as well as an ordinary entry.
+    show("strerror(0)", strerror(0));
+    show("strerror(ENOENT)", strerror(2));
+    show("strerror(-1)", strerror(-1));
+    show("strerror(30000)", strerror(30000));
+
     put("done\n");
     return 0;
 }

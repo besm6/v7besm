@@ -12,13 +12,15 @@ it**, and a task names only what is unusual about itself. **A bare `§N` below i
 that file's porting recipe** — §2 the `char *` ordering hazard, §4 the 3072-byte block, §6 the
 address-space ceilings, and so on.
 
-**Task C1 is done and its writeup has been removed**; what it taught is README.md's closing
-section. Sixteen commands are on the image, so the tree can be built, rearranged and
-re-permissioned from the console. [../etc/rc](../etc/rc) says what is still missing in its own
-words:
+**Tasks C1 and C2a are done and their writeups have been removed**; what C1 taught is
+README.md's closing section. Nineteen commands are on the image, so the tree can be built,
+rearranged and re-permissioned from the console, and the machine can say what time it is, wait
+and signal. [../etc/rc](../etc/rc) says what is still missing in its own words:
 
 > What the v7 rc did next all wants a program this system has not got yet: fsck, mount, date,
 > cron, update, accton.
+
+`date` is now one it has — reviving that line is task C2c below, with the rest of them.
 
 **Task numbers carry a `C`** — `C2a`, `C4d`, … — because `kernel/TODO.md`'s 1–34 are cited from
 source comments and from `doc/`, and a bare number would be ambiguous forever after. The
@@ -31,7 +33,7 @@ compiles.
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C2 | the small utilities `sh` and `/etc/rc` want — `date` `sleep` `kill` `test` `basename` `tty` `time` `yes` | shell scripts that do something | small ×8 |
+| C2 | the small utilities `sh` and `/etc/rc` want — `test` `basename` `tty` `time` `yes`, and reviving `/etc/rc` (`date` `sleep` `kill` are done) | shell scripts that do something | small ×5 |
 | C3 | **`ed`** | authoring text *on* the machine | large, and the pivot |
 | C4 | filesystem maintenance — `df` `du` `dd` `mkfs` `fsck` `icheck` `dcheck` `ncheck` `clri` `quot` `mount` `umount` | a system that maintains itself | large |
 | C5 | the text filters — `wc` `cmp` `sum` `tee` `split` `rev` `tr` `uniq` `comm` `tail` `od` `look` `col` `grep` `fgrep` `sort` `sed` `pr` `diff` `cal` `tsort` `join` `find` `file` | the corpus everything else is tested against | medium ×24 |
@@ -54,14 +56,13 @@ something the task names.
 `test` cannot write a conditional. These are the cheapest programs in the tree and most of them
 run under `b6sim`, so this is also where the userland test corpus starts.
 
-### C2a. `date`, `sleep`, `kill`
-
-`date.c` (165), `sleep.c` (23), `kill.c` (42). `date` is the interesting one: it sets the clock
-with `stime(2)` (one word here, not two — see [../doc/Unix_V7_System_Calls.md](../doc/Unix_V7_System_Calls.md)),
-formats with `ctime`, and consults the `timezone` already in libc. It also has one `char *`
-comparison to check. `date` without arguments belongs in `/etc/rc`; `date` *with* them is the
-first program that changes global machine state, so its test asserts the clock moved and moved
-back.
+**C2a built the two harnesses the rest of the task uses, and neither needs inventing again**:
+`b6_progtest()` in [../scripts/BesmCross.cmake](../scripts/BesmCross.cmake) with
+[../scripts/run-prog-test.sh](../scripts/run-prog-test.sh), which runs a *staged* program under
+`b6sim` against a `.args`/`.expected`/`.status` triple in `cmd/<x>/test/` (ctest label `cmd`);
+and `kernel/test/utils`, the SIMH test that is C2's home under the booted kernel — append to
+[../kernel/test/utils.sh](../kernel/test/utils.sh) and its `.expected`. Do both where a program
+can do both, per README.md §9.
 
 ### C2b. `test`, `basename`, `tty`, `yes`, `time`
 
@@ -80,8 +81,15 @@ usable" looks like from the console. Mind the rule the file's own header states:
 descriptors 0–2. (It used to state two; the shell has a `#` comment character now, so `/etc/rc`
 is written in real comments and the second rule is retired.)
 
-**Size.** Small ×8, and it should be possible to do the whole task in one sitting: task C1
-established the staging rhythm and [README.md](README.md) §7 writes it down.
+**`date`'s line has one cost worth knowing before it is written**, and it is why C2a left
+`/etc/rc` alone rather than adding it: the boot clock is the root superblock's `s_time`
+(`main.c`'s `if (time == 0) time = fp->s_time`), and `b6fsutil` stamps that when it builds the
+image. So `date >/dev/console` in `/etc/rc` prints a different string on every build, and
+`kernel/test/boot` has to match a pattern rather than a literal. Nothing else in the file has
+that property.
+
+**Size.** Small ×5 now, and it should be possible to do the rest in one sitting: task C1
+established the staging rhythm ([README.md](README.md) §7) and C2a the two test harnesses.
 
 ---
 
@@ -419,10 +427,10 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 
 ## Where to start
 
-C2, now that C1 is done. The filesystem can be built, rearranged and re-permissioned from the
-console — but `/etc/rc` is still nine-tenths a comment explaining what it cannot do, and a shell
-without `test` cannot write a conditional. C2a's `date` is also the first program that would give
-[README.md](README.md)'s two-second clock finding somewhere to be fixed rather than worked around.
+C2b, now that C1 and C2a are done. `/etc/rc` is still nine-tenths a comment explaining what it
+cannot do, and a shell without `test` cannot write a conditional — which is the one program in
+this document that changes what a *script* can be.
 
-Most of C2 runs under `b6sim`, which is the other reason to take it next: it is where the
-userland regression corpus starts, in the harness that does not need a two-minute boot.
+Most of what is left in C2 runs under `b6sim`, which is the other reason to take it next: the
+harness that does not need a two-minute boot is built now (C2a), and this is where the userland
+regression corpus grows into it.

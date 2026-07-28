@@ -1,0 +1,18 @@
+utils begin
+usage: kill [ -signo ] pid ...
+usage: kill [ -signo ] pid ...
+32000: No such process
+kill status 143
+arg count
+bad character
+slept
+Wed Jan  2 03:04:SS GMT 1980
+Wed Jan  2 03:04:SS GMT 1980
+Wed Jan  2 03:04:SS GMT 1980
+Fri Dec 31 01:02:SS GMT 1999
+Tue Feb 29 01:02:SS GMT 2000
+Wed Mar  1 01:02:SS GMT 2000
+Sat Feb  3 04:05:SS GMT 2001
+date: bad conversion
+date: bad conversion
+Wed Jan  2 03:04:SS GMT 1980

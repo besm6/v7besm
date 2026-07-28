@@ -31,7 +31,14 @@ work has two halves:
   the *host*, out of `b6fsutil -v -v`, because `ls -l` prints a date beside them and no time
   here is reproducible: the guest clock advances about two seconds over a whole `files` run, so
   `ls -t` between two files a script made is a coin toss and only a fixture grafted with
-  `b6fsutil -T <far-off>` can show a `touch` moving anything. And the whole
+  `b6fsutil -T <far-off>` can show a `touch` moving anything. And it **knows what time it is,
+  waits, and signals**: `date` sets the clock through `stime(2)` — which takes the `time_t` by
+  *value* here, the gate having shed a word with the PDP-11's two-word `long`, and which no
+  caller had ever exercised until this one — `sleep` waits on an alarm the kernel has to
+  *deliver*, and `kill` sends a signal that `sh`'s `wait` reports back as `0200|signo`. That
+  `date` also names years past 1999 is a deliberate divergence: v7 wrote `year += 1900` flat, so
+  the only program that can set this machine's clock could not name the century its `time_t`
+  reaches into. And the whole
   **libc runs on it**: the `lib/test/` programs live on the image as `/usr/test/*`
   and produce there, byte for byte, the output they produce under `b6sim`. And it **swaps**:
   squeeze the machine to 31 pages and `sched()`/`newproc()` move real images through the drum,
@@ -40,14 +47,15 @@ work has two halves:
   `struct user` out of the kernel at `074000`, follows `u_procp` to its proc entry, and then
   reads *and writes* its own image at a physical address above `0100000` — which no unmapped
   access can name, so the driver goes through `copyphys()`, `kernel/seg.S`'s mapped window.
-  Six tests
+  Seven tests
   guard that ladder — `kernel/test/boot` (the prompt appears), `kernel/test/console` (a typed
   dialogue with the shell), `kernel/test/session` (files written, `sync`, then a host-side
   fsck and diff), `kernel/test/files` (the file-management set rearranging a tree and
   then re-permissioning it, fscked on the host afterwards and its modes and owners diffed out
   of `b6fsutil -v -v`), `kernel/test/libtest` (the libc suite run off the image, one ctest case
-  per program) and `kernel/test/swap` (more processes than core, asserted through the kernel's
-  own counters) — and `cd kernel && make run` is where you type at it yourself. The drums
+  per program), `kernel/test/swap` (more processes than core, asserted through the kernel's
+  own counters) and `kernel/test/utils` (the clock moved and read back, an alarm delivered, a
+  background process killed) — and `cd kernel && make run` is where you type at it yourself. The drums
   must be attached to exec anything: they are `swapdev`, and `exece()` stages the argument
   list in swap. See `kernel/README.md`, the reference — the settled design, the hardware rules
   it obeys, what a standalone SIMH test costs to get right, and the consequences accepted —
@@ -78,7 +86,7 @@ thing**, and knowing which one you are touching is most of what the build layout
 - **host tools** — `cmd/*`, compiled by the build machine's C/C++ compiler, run there;
 - **cross-built BESM-6 artifacts** — `kernel/` and `lib/`, compiled by the `b6*` toolchain
   above through `b6_obj()` in `scripts/BesmCross.cmake`;
-- **native BESM-6 programs** — `cmd/{init,sh,cat,chgrp,chmod,chown,cp,echo,ln,ls,mkdir,mv,pwd,rm,rmdir,sync,touch}`, linked against libc by `b6_prog()`
+- **native BESM-6 programs** — `cmd/{init,sh,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,touch}`, linked against libc by `b6_prog()`
   and staged into `build/rootfs/` (with the static files of `etc/`) for the disk image the
   kernel mounts.
 
@@ -144,7 +152,7 @@ which falls back to the *installed* tools. `crt0.o` is what makes `b6cc` able to
 
 **All four archives now have their own README, and that is where the reasoning lives** — read the
 one for the library you are touching before touching it. `lib/libc/README.md` is the long one, in
-proportion to the library (183 objects, 12,126 words): the `$77` gate contract and why `lib/libc/sys/`
+proportion to the library (184 objects, 12,137 words): the `$77` gate contract and why `lib/libc/sys/`
 is assembly and not C, every place a fat pointer or a one-word `long` forced a change (`malloc`'s
 `BUSY` bit at bit 16, `sbrk`'s `NULL`, `crypt`'s `L[32]`, `execle`'s raw-word terminator, `strtol`'s
 value-preserving casts), stdio's line buffering and `_IOSTRG`, the `_cleanup`-through-a-pointer
@@ -205,7 +213,7 @@ therefore names two archives, **ours first**: `-lc -lruntime`, because `b6ld` sc
 helper calls back into libc. The kernel takes `-lruntime` **alone** — it defines its own
 `printf` in `kernel/prf.c` and uses no other library routine.
 
-### Native BESM-6 programs (`cmd/{init,sh,cat,chgrp,chmod,chown,cp,echo,ln,ls,mkdir,mv,pwd,rm,rmdir,sync,touch}` + `etc/` → `build/rootfs/`)
+### Native BESM-6 programs (`cmd/{init,sh,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,touch}` + `etc/` → `build/rootfs/`)
 
 The third category, and the newest. These are **`cmd/` subdirectories that are not host
 tools**: `cmd/init/init.c` is the Unix v7 `/etc/init`, `cmd/sh/` is S. R. Bourne's v7 shell,
@@ -215,9 +223,12 @@ prompt, with `cmd/mkdir` and `cmd/rmdir` (task C1a) the first two that can *chan
 `cmd/chmod`, `cmd/chown`, `cmd/chgrp`, `cmd/touch` (task C1c) the four that change an *inode*
 rather than a directory — none of those last four setuid, since `chmod(2)` is gated on
 `owner()` and `chown(2)` on `suser()`, and `cmd/touch` the one program in the set that
-deliberately does not do what v7's did (`utime(2)`, not a rewritten first byte) —
-all compiled by the `b6*` toolchain and staged into `build/rootfs/` as `etc/init` and
-`bin/{sh,cat,chgrp,chmod,chown,cp,echo,ln,ls,mkdir,mv,pwd,rm,rmdir,sync,touch}`. **`mkdir`, `mv` and `rmdir` are setuid
+deliberately does not do what v7's did (`utime(2)`, not a rewritten first byte) — and
+`cmd/date`, `cmd/sleep`, `cmd/kill` (task C2a) the three that are about the *machine* rather
+than the filesystem: the clock, an alarm, and a signal to another process.  Not setuid either,
+and `date` emphatically not — `stime(2)` is `suser()`-gated and that gate is the whole reason a
+user cannot move the clock. All compiled by the `b6*` toolchain and staged into `build/rootfs/` as `etc/init` and
+`bin/{sh,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,touch}`. **`mkdir`, `mv` and `rmdir` are setuid
 root** on the image, which is a property of [root.manifest](root.manifest) alone (`mode 04755`)
 since nothing under `build/rootfs/` carries a mode; see
 [cmd/mkdir/README.md](cmd/mkdir/README.md) for the general account and

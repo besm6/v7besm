@@ -25,12 +25,14 @@ disk drivers are written and their failure modes classified.
 **It boots to a shell.** `b6fsutil` (`cmd/fsutil/`) builds a root filesystem image in the kernel's
 own on-disk layout; the kernel mounts it, hands process 1 the icode, **enters user mode** and execs
 `/etc/init` — the real v7 one — which forks `/bin/sh` and prompts with `# ` on the SIMH console.
-Type at it: the shell runs sixteen commands off the disk, the kernel does the
+Type at it: the shell runs nineteen commands off the disk, the kernel does the
 erase, kill and end-of-file processing, and `^D` takes init round through `/etc/rc` to a fresh
 prompt. It also **writes** — create files, `sync`, and the image fscks clean on the host afterwards.
 And it **keeps** files: `mkdir`, `rmdir`, `cp`, `ln`, `mv` and `rm` build and rearrange the tree
 (three of them setuid root, because there is no `mkdir(2)` or `rename(2)` here), while `chmod`,
-`chown`, `chgrp` and `touch` change what a file *is*.
+`chown`, `chgrp` and `touch` change what a file *is*. And it **knows what time it is**: `date`
+sets the clock, `sleep` waits on an alarm the kernel delivers, and `kill` signals another
+process.
 
 The **libc runs on it too**: the test programs of [lib/test/](lib/test/) live on the image as
 `/usr/test/*` and produce there, byte for byte, the same output they produce under
@@ -46,24 +48,26 @@ reference: the design the machine forces and the hardware rules every part of it
 
 Alongside the running kernel, [kernel/test/](kernel/test/) holds standalone SIMH tests: each links
 kernel objects against a hand-built environment and lets a `.ini` script assert on the machine state
-afterwards. That is how the MMU and the mass-storage drivers were verified. Six more boot the whole
+afterwards. That is how the MMU and the mass-storage drivers were verified. Seven more boot the whole
 kernel against the disk image, each going one step past the last, so that a failure names its own
 layer: the prompt appears, a typed dialogue works, a session writes files that fsck clean, the
-file-management set rearranges a tree and re-permissions it, the libc suite runs off the image, and
-a machine squeezed below its own working set swaps real processes through the drum.
+file-management set rearranges a tree and re-permissions it, the libc suite runs off the image,
+a machine squeezed below its own working set swaps real processes through the drum, and the small
+utilities move the clock, wait on an alarm and kill a background process.
 
 ## Repository layout
 
 ```text
 kernel/        v7 kernel sources, device drivers (kernel/dev/), the design (README.md) and
                the work plan (TODO.md)
-kernel/test/   SIMH tests: standalone component tests, and six that boot the whole kernel
+kernel/test/   SIMH tests: standalone component tests, and seven that boot the whole kernel
 include/       v7 system headers (sys/), the hosted half of the C11 header tree
 lib/           libc, libm, libtermcap, libcurses and crt0, cross-compiled; lib/test/ is
                the suite that exercises them
 cmd/           BESM-6 toolchain (cc, as, ld, cpp, disasm, sim, fsutil) and the native
                programs that go on the disk image (init, sh, cat, chgrp, chmod,
-               chown, cp, echo, ln, ls, mkdir, mv, pwd, rm, rmdir, sync, touch)
+               chown, cp, date, echo, kill, ln, ls, mkdir, mv, pwd, rm, rmdir,
+               sleep, sync, touch)
 etc/           the static files of the image: group, motd, passwd, rc, termcap
 root.manifest  what all of that is assembled into: the root filesystem the kernel mounts
 cross/         BESM-6 object/archive format headers (b.out.h, ar.h, ranlib.h)

@@ -1,7 +1,7 @@
 # libc — the Unix v7 C library on the BESM-6
 
-`libc.a` and `crt0.o`: the C library a user program under this kernel links against. 183
-objects, **12,126 words**, 145 sources over 7,174 lines. It answers every declaration
+`libc.a` and `crt0.o`: the C library a user program under this kernel links against. 184
+objects, **12,137 words**, 144 sources over 7,202 lines. It answers every declaration
 [`../../include/`](../../include/)'s hosted half makes — which is C11, not K&R, so a good deal
 of it is newer than v7.
 
@@ -412,6 +412,24 @@ handler has no opportunity to. See [`../../doc/Unix_Context_Switch.md`](../../do
 | [`stdio/fseek.c`](stdio/fseek.c) | the resolved position left uninitialised | a seek reports a position never computed |
 | [`stdio/popen.c`](stdio/popen.c) | a failed `fork` leaks both pipe ends | a program that retries runs out of descriptors |
 | [`stdio/doscan.c`](stdio/doscan.c) | `_sctab[getc(iop)]` read before the EOF test, and `%[` walking a `char` subscript into a 128-entry table | `_sctab[-1]`, and out of bounds for any byte above 0177 — reachable, `char` being unsigned here |
+
+## A declaration is not a definition, and nothing here catches that
+
+`<string.h>` has declared **`strerror`**, **`strcoll`** and **`strxfrm`** since the header tree
+went C11, and until task C2a *none of the three was defined anywhere*. Nothing noticed, and
+nothing could have: [`../test/headers.c`](../test/headers.c) includes every header twice, which
+proves a header parses and says nothing about what libc contains, and a declaration with no
+definition costs a link error only when somebody calls it. `cmd/kill` was the first caller
+`strerror` had ever had.
+
+[`gen/strerror.c`](gen/strerror.c) exists now — it is the bound test `perror` was already doing
+open-coded, and `perror` is written in terms of it, so the two cannot name the same `errno`
+differently. **`strcoll` and `strxfrm` are still only declarations**; in the C locale they are
+`strcmp` and a `strncpy`-plus-length, and the first caller can write them.
+
+The general point is worth keeping: **the header tree is a promise the library has to be
+checked against separately.** `lib/test/*.c` is that check, and a routine no test names is a
+routine that may not be there.
 
 ## What is absent, and why
 

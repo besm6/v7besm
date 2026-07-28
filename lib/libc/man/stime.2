@@ -5,14 +5,21 @@ stime \- set time
 .SH SYNOPSIS
 .B #include <sys/types.h>
 .PP
-.B int stime(const time_t *tp);
+.B int stime(time_t t);
 .SH DESCRIPTION
 .I Stime
 sets the system's idea of the time and date.
-Time, pointed to by
-.I tp,
+.I T
 is measured in seconds from 0000 GMT Jan 1, 1970.
 Only the super-user may use this call.
+.PP
+.B Note:
+v7's page took a POINTER here, and so did this one and the prototype in
+lib/libc/sys/syscalls.tbl until
+.IR date (1)
+became the first caller there had ever been.  It is a VALUE on this machine, for
+the reason the notes below give: the gate reads one word out of the argument list
+and the generated stub dereferences nothing.
 .SH "SEE ALSO"
 date(1), time(2), ctime(3)
 .SH DIAGNOSTICS

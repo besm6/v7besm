@@ -32,7 +32,7 @@ single-file programs and 29 directories of larger ones. That tree is **not in th
 
 **A directory is part of the build when it holds a `CMakeLists.txt`**, and only the ported ones
 do — the ten of task C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`, `mv/`, `rm/`,
-`rmdir/`, `touch/`) today. That is the only marker; [../CMakeLists.txt](../CMakeLists.txt) names
+`rmdir/`, `touch/`) and the three of C2a (`date/`, `kill/`, `sleep/`) today. That is the only marker; [../CMakeLists.txt](../CMakeLists.txt) names
 its subdirectories one by one.
 
 Four things about the copies:
@@ -117,7 +117,7 @@ candidates, as they stand today:
 | `grep.c` | three — `ep >= &expbuf[ESIZE]`, `sp > cstart`, `lp >= curlp` |
 | `sed/sed1.c` | three, all `sp >= &genbuf[LBSIZE]` |
 | `pr.c` | two, both `>= &buffer[BUFS]` |
-| `date.c` | one — `sp < ep` |
+| ~~`date.c`~~ | ~~one — `sp < ep`~~ — **found and fixed**, task C2a: it bounded the in-place reversal of `argv[1]`, and is an index pair now |
 
 And the counterexample, because it is what makes the hazard hard to see: **`sort.c`'s record
 arena is clean.** `lp`, `hp`, `i`, `j`, `k` in `qsort()` are `char **` — thin word pointers that
@@ -188,8 +188,11 @@ Anything that walks directories — `rm -r`, `du`, `find`, `ncheck`, `dcheck`, `
 | `ls` | 110 | 4,632 | 298 | 2,638 | **7,678** |
 | `cat` | 83 | 2,989 | 165 | 1,544 | **4,781** |
 | `chgrp` | 85 | 3,211 | 344 | 1,236 | **4,876** |
+| `date` | 99 | 3,348 | 265 | 1,041 | **4,753** |
+| `kill` | 78 | 2,619 | 311 | 1,032 | **4,040** |
 | `rmdir` | 81 | 2,868 | 208 | 1,033 | **4,190** |
 | `mkdir` | 79 | 2,746 | 180 | 1,033 | **4,038** |
+| `sleep` | 78 | 2,531 | 155 | 1,040 | **3,804** |
 | `touch` | 77 | 2,560 | 160 | 1,032 | **3,829** |
 | `init` | 27 | 820 | 37 | 323 | **1,207** |
 
@@ -255,14 +258,25 @@ privilege before reaching for `04755`.
 Two harnesses, and choosing wrong wastes the effort:
 
 * **`b6sim`** runs one BESM-6 `a.out` and services its syscalls on the *host*. Good for filters —
-  stdin, stdout, files by relative path — and [sh/test/](sh/test/) is the pattern to copy
-  (`run-sh-test.sh`, one `.expected` per case). It **cannot** read a directory (a host directory
-  descriptor refuses `read`, which is why `ls` has no `b6sim` test) and it cannot exec `/bin/…`,
-  because no such path exists on the build machine.
+  stdin, stdout, files by relative path. **`b6_progtest(<prog> <case>)` is the harness** (task
+  C2a, [../scripts/BesmCross.cmake](../scripts/BesmCross.cmake) and
+  [../scripts/run-prog-test.sh](../scripts/run-prog-test.sh)): one call per case, files
+  `<case>.args` / `<case>.expected` / optional `<case>.status` in `cmd/<x>/test/`, ctest name
+  `cmd_<x>_<case>` under label **`cmd`**. It runs the program **as staged for the image**, so the
+  bytes under test are the image's. [sh/test/](sh/test/) is the other shape — a whole shell
+  *script* per case — and is what to copy when the thing under test is the shell.
+  b6sim **cannot** read a directory (a host directory descriptor refuses `read`, which is why
+  `ls` has no `b6sim` test) and it cannot exec `/bin/…`, because no such path exists on the build
+  machine. Two more limits C2a ran into: **`stime(2)` is a no-op that reports success**, so a
+  program that sets global state cannot be asserted there at all; and **`kill(2)` is the build
+  machine's own**, so no case may name a pid.
 * **SIMH**, under the booted kernel. `kernel/test/console` is the model for a typed dialogue,
   `kernel/test/libtest` for running a program off `/usr/test` and diffing it against a
   `.expected`, `kernel/test/session` for anything that must *write* and then be fscked on the
-  host afterwards, and `kernel/test/files` for anything that changes a tree or an inode.
+  host afterwards, `kernel/test/files` for anything that changes a tree or an inode, and
+  `kernel/test/utils` (task C2a) for anything that touches the clock, a signal or another
+  process. Each grafts its script onto its own copy of the image at its own volume number; 3083
+  is the highest used.
 
 Most of task C5 lands in the first; C1, C3, C4 and C6 land in the second. Where a program can run
 in both, **do both** — the first time the libc suite was run in both worlds it found two bugs

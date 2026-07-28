@@ -1,11 +1,15 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 .TH PERROR 3
 .SH NAME
-perror, sys_errlist, sys_nerr \- system error messages
+perror, strerror, sys_errlist, sys_nerr \- system error messages
 .SH SYNOPSIS
 .B #include <stdio.h>
 .PP
 .B void perror(const char *s);
+.PP
+.B #include <string.h>
+.PP
+.B char *strerror(int errnum);
 .PP
 .B extern int sys_nerr;
 .br
@@ -40,12 +44,29 @@ is the number of messages provided for in the table;
 it should be checked because new
 error codes may be added to the system before
 they are added to the table.
+.PP
+.B Note:
+.I strerror
+is C11's name for that lookup and is the one to use \- it does the
+.I sys_nerr
+check for the caller and answers
+.RB `` "Unknown error" ''
+for anything outside the table, including a negative number.
+.I Perror
+is written in terms of it, so the two can never name the same
+.I errno
+differently.  v7 had no
+.I strerror
+at all; a program that wanted the text indexed
+.I sys_errlist
+itself, unchecked.
+The string it returns must not be modified.
 .SH "SEE ALSO"
 intro(2)
 .SH FILES
 share/besm6/lib/libc.a
 .br
-lib/libc/gen/perror.c, errlst.c, include/errno.h
+lib/libc/gen/perror.c, strerror.c, errlst.c, include/errno.h
 .SH BESM-6 NOTES
 .SS The table is 36 entries, and no more is possible
 The value the
@@ -62,6 +83,8 @@ dropped.
 the multibyte conversions.  They are in the table because C11 sec 7.5 requires
 all three to exist and
 .I perror
+and
+.I strerror
 must be able to name them.  Nothing sets EILSEQ yet.
 .SS An array of char * is one word per element
 A fat pointer fits in a word, marker bit and byte offset and all, so this table

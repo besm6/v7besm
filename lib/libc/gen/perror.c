@@ -10,22 +10,20 @@
 // hand back -1 and leave this printing the PREVIOUS error.  That is what test/errno is
 // for.
 //
+// The message comes from strerror() (gen/strerror.c) rather than from sys_errlist[] here,
+// so the bound test exists once and the two cannot name the same errno differently.
+//
 #include <errno.h>
 #include <string.h>
 
 int write(int fd, const char *buf, int n);
-
-extern int sys_nerr;
-extern char *sys_errlist[];
 
 void perror(const char *s)
 {
     char *c;
     int n;
 
-    c = "Unknown error";
-    if (errno < sys_nerr)
-        c = sys_errlist[errno];
+    c = strerror(errno);
     n = strlen(s);
     if (n) {
         write(2, s, n);

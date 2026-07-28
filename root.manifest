@@ -104,8 +104,16 @@ file /bin/cp            # cmd/cp -- and what cmd/mv execs for a move across devi
 source ../../rootfs/bin/cp
 mode 0755
 
+file /bin/date          # cmd/date -- NOT setuid: stime(2) is suser()-gated, and that is the point
+source ../../rootfs/bin/date
+mode 0755
+
 file /bin/echo          # cmd/echo
 source ../../rootfs/bin/echo
+mode 0755
+
+file /bin/kill          # cmd/kill -- NOT setuid: kill(2) matches uids for anyone but root
+source ../../rootfs/bin/kill
 mode 0755
 
 file /bin/ln            # cmd/ln
@@ -122,6 +130,10 @@ mode 0755
 
 file /bin/rm            # cmd/rm -- NOT setuid: `rm -r' execs /bin/rmdir, which is
 source ../../rootfs/bin/rm
+mode 0755
+
+file /bin/sleep         # cmd/sleep -- a decimal parse around libc's sleep(3): alarm + pause
+source ../../rootfs/bin/sleep
 mode 0755
 
 file /bin/sync          # cmd/sync -- what flushes the buffer cache before the machine stops

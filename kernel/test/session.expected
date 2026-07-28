@@ -5,7 +5,9 @@ chgrp
 chmod
 chown
 cp
+date
 echo
+kill
 ln
 ls
 mkdir
@@ -14,6 +16,7 @@ pwd
 rm
 rmdir
 sh
+sleep
 sync
 touch
 /tmp/d

@@ -52,4 +52,8 @@ ok   memchr misses within n
 swab "badcfe"
 swab in place "badcfe"
 swab leaves an odd byte "badce"
+strerror(0) "Error 0"
+strerror(ENOENT) "No such file or directory"
+strerror(-1) "Unknown error"
+strerror(30000) "Unknown error"
 done

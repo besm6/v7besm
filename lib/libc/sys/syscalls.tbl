@@ -57,7 +57,7 @@ lseek           SYS_seek        # off_t lseek(int fd, off_t off, int whence)
 mount           SYS_mount       # int mount(char *spec, char *dir, int rdonly)
 umount          SYS_umount      # int umount(char *spec)
 setuid          SYS_setuid      # int setuid(int uid)
-stime           SYS_stime       # int stime(time_t *tp)
+stime           SYS_stime       # int stime(time_t t) -- a VALUE: see the note above
 ptrace          SYS_ptrace      # int ptrace(int req, int pid, int *addr, int data)
 alarm           SYS_alarm       # int alarm(int sec)
 fstat           SYS_fstat       # int fstat(int fd, struct stat *buf)

@@ -208,3 +208,31 @@ function(b6_prog name)
                 ${B6SIZE} ${B6NM} ${out} 28672 32767)
     set_tests_properties(rootfs_${name}_size PROPERTIES LABELS rootfs)
 endfunction()
+
+# ---------------------------------------------------------------------------------------
+# Register one b6sim case for a program built by b6_prog().
+#
+#   b6_progtest(<prog> <case>)
+#
+# Runs the STAGED program -- ${B6_ROOTFS}/bin/<prog>, the very bytes that go on the disk
+# image -- under b6sim with the arguments in <case>.args, and diffs its combined output
+# against <case>.expected, checking <case>.status on the way.  ../run-prog-test.sh is the
+# harness and its header states what may and may not be asserted there; lib/test's
+# b6_libtest()/run-test.sh is the model, and cmd/README.md §9 the reason there are two
+# worlds at all.
+#
+# The ctest name is cmd_<prog>_<case> and the label is `cmd', so `ctest -L cmd' is the
+# userland regression corpus without a two-minute boot.  Files live in cmd/<prog>/test/.
+# ---------------------------------------------------------------------------------------
+function(b6_progtest prog case)
+    add_test(NAME cmd_${prog}_${case}
+        COMMAND sh ${B6_SCRIPTS_DIR}/run-prog-test.sh
+                ${B6SIM} ${CMAKE_CURRENT_SOURCE_DIR} ${B6_ROOTFS}/bin/${prog} ${case}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(cmd_${prog}_${case} PROPERTIES LABELS cmd)
+    # `make test' builds build_tests and nothing else, so the program the case runs has to
+    # be hung on it -- ctest does not build.
+    if(TARGET build_tests AND TARGET b6prog_${prog})
+        add_dependencies(build_tests b6prog_${prog})
+    endif()
+endfunction()
