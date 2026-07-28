@@ -27,11 +27,11 @@ cp root.img files.img
 "$b6fsutil" -a files.img /etc/files "$srcdir/files.sh"
 
 # Two more fixtures, and their CONTENT is irrelevant -- their DATE is the whole point.  `-T
-# 2000000000' stamps them 2033, a generation ahead of the 1000000000 this image and everything
-# the guest writes carries, and files.sh touches one of the two.  That is the only way this
-# machine can see touch(1) move a time at all: the guest clock advances about two seconds over
-# the whole run, so no two commands in the script are one mtime tick apart.  files.sh says it
-# at length.
+# 2000000000' stamps them 2033-05-18, seven years ahead of the 1784967780 -- 2026-07-25 -- this
+# image and everything the guest writes carries, and files.sh touches one of the two.  That is
+# the only way this machine can see touch(1) move a time at all: the guest clock advances about
+# two seconds over the whole run, so no two commands in the script are one mtime tick apart.
+# files.sh says it at length.
 "$b6fsutil" -T 2000000000 -a files.img /etc/aprobe "$srcdir/files.sh"
 "$b6fsutil" -T 2000000000 -a files.img /etc/zprobe "$srcdir/files.sh"
 

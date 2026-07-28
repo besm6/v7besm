@@ -167,7 +167,15 @@ endif()
 # and fstest.c asserts on it (its ROOTTIME must match this one) so that a stale or hand-made file
 # cannot pass for the image this build just wrote.  -s 2000 is one EC-5052 drive, the
 # default, spelled out because fstest.c checks s_fsize against it.
-set(ROOTTIME 1000000000)
+#
+# THE STAMP IS ALSO THE BOOT CLOCK, which is why it is a date somebody chose rather than a
+# round number.  This machine has no clock-calendar a program can read (<sys/param.h>), so
+# main.c's iinit() seeds `time' from the superblock's s_time -- and that is this value.  It
+# is 2026-07-25 08:23:00 GMT, the day this Unix first booted to a shell prompt.  The guest
+# prints GMT and only GMT (TIMEZONE and DSTFLAG are both 0), so `date' on the image says
+# `Sat Jul 25 08:23:0X GMT 2026'; the seconds field is the only one the boot drift can move,
+# and 08:23:00 is 37 seconds clear of a minute roll.
+set(ROOTTIME 1784967780)
 
 #
 # WHAT root.img IS BUILT OUT OF.  Every `file' entry in the manifest names a path under

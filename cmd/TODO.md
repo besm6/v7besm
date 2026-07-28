@@ -80,11 +80,15 @@ descriptors 0–2. (It used to state two; the shell has a `#` comment character 
 is written in real comments and the second rule is retired.)
 
 **`date`'s line has one cost worth knowing before it is written**, and it is why C2a left
-`/etc/rc` alone rather than adding it: the boot clock is the root superblock's `s_time`
+`/etc/rc` alone rather than adding it. The boot clock is the root superblock's `s_time`
 (`main.c`'s `if (time == 0) time = fp->s_time`), and `b6fsutil` stamps that when it builds the
-image. So `date >/dev/console` in `/etc/rc` prints a different string on every build, and
-`kernel/test/boot` has to match a pattern rather than a literal. Nothing else in the file has
-that property.
+image — but it stamps it with a *fixed* value, `-T 1784967780` from `kernel/test/CMakeLists.txt`'s
+`ROOTTIME`, so the date is 2026-07-25 08:23:00 GMT on every build and `fstest` asserts it. What
+`date >/dev/console` cannot print reproducibly is the **seconds** field alone: SIMH's 250 Hz tick
+is calibrated against the host's clock, so the guest seconds elapsed by the time `/etc/rc` runs
+vary from run to run. Everything to the left of it is a literal — `Sat Jul 25 08:23:` — and
+`run-utils.sh`'s `sed` mask is the precedent for the rest. Nothing else in the file has that
+property.
 
 **Size.** Small ×5 now, and it should be possible to do the rest in one sitting: task C1
 established the staging rhythm ([README.md](README.md) §7) and C2a the two test harnesses.

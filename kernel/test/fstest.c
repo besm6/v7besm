@@ -94,7 +94,7 @@ void intrinit(void);
 // The image test/CMakeLists.txt builds, and the two numbers it is built with.  KEEP THESE
 // IN STEP WITH THAT FILE: ROOTTIME is its -T stamp and ROOTBLKS its -s size.  The pairing
 // is deliberate and is the whole of check 4 -- see the header.
-#define ROOTTIME 1000000000
+#define ROOTTIME 1784967780 // 2026-07-25 08:23:00 GMT
 #define ROOTBLKS 2000
 
 // Where the buffer cache lives: physical page 021, word 042000.  Page-aligned, so buffer i

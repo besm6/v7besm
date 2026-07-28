@@ -137,9 +137,9 @@ ls /tmp/c >>/tmp/files.log
 # two commands in this script are a tick apart, `ls -t' between two files it made is a coin
 # toss (cmd/ls/ls.c's compar() returns 0 on equal times, into a qsort that is not stable),
 # and asking for one would be asking for a test that fails at random.  So run-files.sh grafts
-# /etc/aprobe and /etc/zprobe dated 2033 -- `b6fsutil -T 2000000000 -a' -- a generation ahead
-# of the 2001 stamp this image and everything the guest writes carries.  Touching one of them
-# drags it back thirty-two years, and THAT is a gap no tick granularity can blur.
+# /etc/aprobe and /etc/zprobe dated 2033 -- `b6fsutil -T 2000000000 -a' -- seven years ahead
+# of the 2026-07-25 stamp this image and everything the guest writes carries.  Touching one of
+# them drags it back those seven years, and THAT is a gap no tick granularity can blur.
 #
 # The two listings are printed together on purpose: plain ls gives the alphabetical order and
 # `ls -t' must give the opposite one.  If touch did nothing, the two lines would agree.
