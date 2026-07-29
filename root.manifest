@@ -53,8 +53,10 @@
 # kernel against it.
 #
 # THE DEVICE NUMBERS ARE kernel/conf.c's, and that file is the authority: the major is the
-# row index in bdevsw[] (0 md, 1 mb) or cdevsw[] (0 console, 1 mem, 2 tty, 3 sr, 4 rmd,
-# 5 rmb).  A node here that names a row conf.c does not have opens onto nothing.
+# row index in bdevsw[] (0 md, 1 mb) or cdevsw[] (0 console, 1 mem, 2 tty, 3 rmd, 4 rmb).
+# A node here that names a row conf.c does not have opens onto nothing.  Major 0 is the
+# only one with more than one minor that matters: dev/sc.c drives BOTH Consul typewriters,
+# minor 0 being the operator's and minor 1 the second terminal.
 #
 # For the disk, the MINOR IS THE SIMULATOR'S UNIT SUBSCRIPT -- bit 5 the controller, bits
 # 4-3 the group (линейка), bits 2-0 the drive -- so /dev/md0's minor 0 is SIMH's md00, and
@@ -398,9 +400,23 @@ mode 0755
 
 # ---- character devices ----------------------------------------------------------
 
-cdev /dev/console       # cdevsw[0]: the operator's console, dev/sc.c
+cdev /dev/console       # cdevsw[0] minor 0: the operator's console, dev/sc.c
 major 0
 minor 0
+mode 0622
+
+# The same device as /dev/console, under the name /etc/ttys and getty use.  A SEPARATE
+# INODE, not a link, and that is deliberate: ttyname(3) (lib/libc/gen/ttyname.c) scans
+# /dev matching the I-NUMBER, so each name reports itself.  One inode under two names
+# would make the answer depend on directory order.
+cdev /dev/tty0          # cdevsw[0] minor 0: Consul 1, again
+major 0
+minor 0
+mode 0622
+
+cdev /dev/tty1          # cdevsw[0] minor 1: Consul 2, the second terminal
+major 0
+minor 1
 mode 0622
 
 cdev /dev/mem           # cdevsw[1] minor 0: physical memory, dev/mem.c
@@ -423,13 +439,13 @@ major 2
 minor 0
 mode 0666
 
-cdev /dev/rmd0          # cdevsw[4]: the raw disk, dev/md.c
-major 4
+cdev /dev/rmd0          # cdevsw[3]: the raw disk, dev/md.c
+major 3
 minor 0
 mode 0600
 
-cdev /dev/rmb0          # cdevsw[5]: the raw drum, dev/mb.c
-major 5
+cdev /dev/rmb0          # cdevsw[4]: the raw drum, dev/mb.c
+major 4
 minor 0
 mode 0600
 

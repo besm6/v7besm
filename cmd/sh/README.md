@@ -243,8 +243,9 @@ the shell.
   arrives truncated ([`lib/libc/sys/wait.S`](../../lib/libc/sys/wait.S)). That is the kernel ABI,
   not something `cmd/sh` can repair, and it bites twice: `await()` builds `$?` for a
   signal-killed child as `0200|sig`, which is itself in the truncated range.
-* **Most `TIOC*` ioctls land in `nullioctl`** until there is a terminal multiplexer driver
-  (`kernel/TODO.md`, task 29).
+* **Only the `TIOC*` ioctls `ttioccomm()` implements do anything.** `dev/sc.c`'s `scioctl()` hands
+  everything to it and answers `ENOTTY` to the rest; a Consul typewriter has no line speed and no
+  modem control for the others to reach.
 * **It runs.** [`root.manifest`](../../root.manifest) carries this shell as `/bin/sh` and
   `cmd/init` as `/etc/init`, and since task 25b the boot reaches this shell's root prompt on the
   console. `kernel/test/console` holds a conversation with it — erase, kill, a line longer than a

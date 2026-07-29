@@ -15,12 +15,11 @@ why `besm6.o` cannot go into one.
 README.md, and how each turned out is in the source comments and in [../doc/](../doc/). The
 numbering is **left as it was** — task numbers are cited from the sources and from `doc/`.
 
-Task 29 is the road ahead and is the size of everything before it. 30–36 are small, independent,
-and were deferred deliberately.
+Task 29 is the road ahead. 30–36 are small, independent, and were deferred deliberately.
 
 | | task | size |
 |---|---|---|
-| 29 | multiuser: the terminal driver, `getty`/`login`, a test | large |
+| 29 | multiuser: `getty`/`login` and a two-terminal test (the driver is done) | medium |
 | 30 | copy only the live part of the u-area | small, measurable win |
 | 31 | the kernel-stack depth check | small |
 | 32 | `profil()`: implement `addupc()` or make it fail | small; the decision is the task |
@@ -33,83 +32,43 @@ and were deferred deliberately.
 
 ## 29. Multiuser
 
-Today the machine has one terminal, the operator's Consul ([dev/sc.c](dev/sc.c)), and `/etc/init`
-runs the single-user loop only: with no `/etc/ttys` on the image `merge()` returns as soon as the
-open fails and `multiple()` falls straight through. [dev/sr.c](dev/sr.c) is a skeleton — the tty
-scaffolding and the `cdevsw` surface exist, and nothing behind them talks to the multiplexer.
+The machine has **two** Consul-254 typewriters and, since 29a, [dev/sc.c](dev/sc.c) drives both:
+`/dev/console` (also `/dev/tty0`) is Consul 1 and `/dev/tty1` is Consul 2. What is still
+single-user is `/etc/init`, which runs the single-user loop only: with no `/etc/ttys` on the image
+`merge()` returns as soon as the open fails and `multiple()` falls straight through.
 
-Three pieces, in order. 29a is kernel work and is the interesting one; 29b is userland ports in the
-[../cmd/sh/README.md](../cmd/sh/README.md) mould; 29c is the test that makes the other two mean
-something.
+Two pieces left. 29b is userland ports in the [../cmd/sh/README.md](../cmd/sh/README.md) mould;
+29c is the test that makes them mean something.
 
-### 29a. The terminal driver
+### 29a. The terminal driver — DONE
 
-**Pick the interface: the serial multiplexor, not the telegraph channels.** The `TTY` device offers
-both, and they are not comparable in cost:
+**The second terminal is the second Consul, not the serial multiplexor and not the telegraph
+lines.** The multiplexor would have wanted new registers, a syllable encoder, one
+character-in-flight round-robin across 24 lines and a receive register that reading does not free;
+the telegraph channels would have wanted a software UART clocked per bit per line. Neither buys
+anything a *second* terminal does not, and the machine already had one:
+[../include/sys/besm6dev.h](../include/sys/besm6dev.h) has carried `EXT_CONS2`, `EXT_CONS2_RD`,
+`PRP_CONS2_INPUT`, `PRP_CONS2_DONE` and `CONS2_READY` all along.
 
-* The **24 telegraph lines** (`033 0140` write, `033 4100` read) are bit-serial and polled — one bit
-  per line per bit time, with the start / 8 data / stop framing run in software off `GRP_SERIAL`
-  (ГРП bit 19, raised only if already enabled in МГРП) at `set tty rate` Hz. That is an interrupt
-  per bit per line and a software UART in the kernel.
-* The **serial multiplexor** (`033 0143` write, `033 4143` read, `033 0153` clear) is
-  character-at-a-time and interrupt-driven, reporting in ПРП — which is exactly the shape of the
-  Consul, and exactly the path [intr.c](intr.c)'s `prpintr()` already dispatches. `dev/sr.c` becomes
-  `dev/sc.c` with a line number in the syllable.
+How it turned out is in the source — `dev/sc.c`'s header for the driver, `test/sctest.ini`'s for
+the test — but three things are worth keeping here because the next driver meets them again.
 
-**The work.**
+* **The hardware numbering decided the shape.** `EXT_CONS1`/`EXT_CONS2` are adjacent and each ПРП
+  pair is one bit apart, so a variable unit folds into the instruction's own address field
+  (`../doc/Intrinsics.md` §8, the `dev/mb.c` pattern) and one driver serves both lines. `READY2`
+  does not follow: Consul 2 is bit **6**, not bit 7, so the ready bits are a table.
+* **ПРП is read live, so a masked bit is still seen.** The machine comes up with "printing
+  finished" standing for *both* typewriters and `scinit()` dismisses only the line being opened, so
+  Consul 2's stood from reset. The first console interrupt of the boot then "completed" a tty whose
+  `t_oproc` was still zero — a jump to 0, `GRP_INSN_CHECK`, a kernel trap before the root was
+  mounted. `scintr()` skips a line without `ISOPEN` for that reason.
+* **`sctest` could not have caught it**, because it drives the hardware and does not link the
+  driver; `test/boot` did, on the first run. The division is worth remembering when the next
+  device test is written: a standalone test covers the registers, and only a booting one covers
+  what the kernel does with them.
 
-1. **[../include/sys/besm6dev.h](../include/sys/besm6dev.h)** gains the registers and bits, in the
-   existing naming: `EXT_MUX 0143` (write a syllable), `EXT_MUX_RD 04143` (read the syllable back),
-   `EXT_MUXCLR 0153` (clear the interface), `PRP_MUX_INPUT 0100` (bit 7) and `PRP_MUX_DONE 040`
-   (bit 6).
-2. **Syllable format**, 16 bits: line number in bits 9–16, character in bits 1–7. Bit 15 (`040000`)
-   marks a **control** syllable; with bit 8 (`0200`) also set it is a line-status request, answered
-   in the syllable register with the receive state in bit 4 and raising `PRP_MUX_INPUT`; without it,
-   bit 4 set **disables** reception on the line and clear enables it. An input syllable carries the
-   line in bits 9–16 and the character in 1–7 with **odd parity in bit 8**, so the driver masks
-   `0177`.
-3. **`srintr()` beside `scintr()`** in `prpintr()`, and `mprpon(PRP_MUX_INPUT | PRP_MUX_DONE)`.
-   `GRP_SLAVE` is already unmasked for the Consul, and the ordering rule is the same one `intr.c`
-   states: clear the ПРП bit *before* dismissing `GRP_SLAVE`, or the handler storms.
-4. **Output is one engine for all 24 lines.** `PRP_MUX_DONE` does not say which line finished. So
-   keep **one character in flight** across the whole device, remember whose it was, and on each DONE
-   complete that line and round-robin to the next line with a non-empty `t_outq`. `t_addr` already
-   holds the line number. Per-line `BUSY` in `t_state` is not enough by itself.
-5. **Input is one register for all 24 lines, and reading it does not free it.** `033 4143` returns
-   the syllable but leaves the simulator's busy flag set; only `033 0153` clears it — and that also
-   zeroes the syllable, clears `PRP_MUX_INPUT` and *raises* `PRP_MUX_DONE`. So the receive path is
-   read → clear → absorb the DONE the clear itself raised. While the register is busy the simulator
-   collects from no line at all; characters are not lost (they wait in the telnet buffer) but the
-   handler must not defer.
-6. **No polling clock.** `vt_clk()` reschedules itself at the line rate and calls `mux_receive()`
-   whether or not `GRP_SERIAL` is enabled in МГРП. Do **not** unmask `GRP_SERIAL`; there is nothing
-   for the kernel to do at bit rate. Nor `GRP_SLOW_CLK` (ГРП bit 10, 62.5 Hz), which is what the
-   historical OS used to prod terminal I/O — the mux is interrupt-driven through ПРП here, so there
-   is nothing to prod. README.md's gotchas say why that bit is not the Unix tick either.
-7. **Raise `NSR`** from 2 to the number of lines wanted and add the nodes to
-   [../root.manifest](../root.manifest) — `cdev /dev/tty01`… against `cdevsw[3]`, minor = line
-   number.
-
-**Two simulator conditions that will look like driver bugs.**
-
-* A line is served only if it is **attached** (`attach tty3 4203`) *and* carries the **`mux` unit
-  flag** (`set tty3 mux`). Without both, `mux_receive()` skips it and nothing says why.
-* On the mux path the **simulator echoes** the character back to the line itself, and folds DEL to
-  BS, before handing it to the kernel — unlike the Consul path. An `sr` line must therefore run with
-  the kernel's `ECHO` **off** or every character doubles. Decide this before writing `srparam()`,
-  because it changes what the `t_flags` default is.
-
-**Also fix while there.** [../doc/Besm6_Peripherals.md](../doc/Besm6_Peripherals.md) says `033 0153`
-"sets bit 6 of МПРП". It sets bit 6 of **ПРП** (`PRP_MUX_DONE`) — `mux_clear()` in `besm6_tty.c`
-touches no mask.
-
-**How to verify.** `test/srtest`, in the shape of `sctest`: link `sr` + `tty` + `prim` + `partab`
-against a crt0, attach two mux lines, and drive the *device* (not a booted kernel) — send a
-character out on line 2 and one on line 3 and assert both arrive on the right lines, which a
-single-line test cannot distinguish. That is the same "leave two different patterns and read the
-region back whole" argument `mbtest` needed.
-
-**Size.** Medium. The driver is small; the register semantics above are the whole of the risk.
+`dev/sr.c` — the multiplexor skeleton — is **gone**, and with it `cdevsw[3]`, so `rmd` and `rmb`
+moved to majors 3 and 4.
 
 ### 29b. `getty`, `login`, and `/etc/ttys`
 
@@ -122,7 +81,10 @@ The libc side is already there: `crypt`, `getpwnam`/`getpwent`, `ttyname`, `getl
 * **`/etc/ttys`** joins the static files in [../etc/](../etc/) and gets a `file` line in
   `root.manifest`. One line per enabled terminal: `'1'` to run a getty, then the character handed to
   getty as its speed selector, then the device name — the format `rline()` in
-  [../cmd/init/init.c](../cmd/init/init.c) already parses.
+  [../cmd/init/init.c](../cmd/init/init.c) already parses. Two lines here, `console` and `tty1`,
+  and the second is the whole point: `/dev/tty1` exists on the image but nothing has ever opened
+  it, so the first `getty` on it is also the first time the driver's minor-1 path runs under a
+  kernel at all.
 * **`/etc/passwd`** gets a real encrypted field. Start with an empty password so a failure is in one
   place at a time, then add one and keep the plaintext in the test script, not in the image.
 * **`init`'s multiuser half needs no work** — `merge()`, `multiple()` and `dfork()` are the v7 ones
@@ -136,17 +98,40 @@ is a userland bug and not a driver one.
 
 ### 29c. The multiuser test
 
-`test/multiuser`: boot the full kernel with two mux lines attached, log in on both, and assert that
-a logout brings a fresh `login:` — which is what proves `init`'s `multiple()` loop, the piece no
+`test/multiuser`: boot the full kernel with both Consuls in use, log in on both, and assert that a
+logout brings a fresh `login:` — which is what proves `init`'s `multiple()` loop, the piece no
 existing test reaches.
 
-SIMH's `expect`/`send` **do work per line** — the `<device>:<line>,"string"` form, e.g.
-`expect TTY:3,"login: "` and `send TTY:3,"root\r"` (`_tmxr_locate_line_send_expect()` in
-`sim_tmxr.c`). The open question to settle first is how to get the line **connected** without a human
-telnet client, since `mux_receive()` skips a line whose `conn` is 0: the candidates are a host-side
-helper alongside the simulator (`run-session.sh` already establishes that pattern), TMXR's loopback
-mode if the BESM-6 `TTY` device exposes a `set` modifier for it, and `attach ttyN Connect=…`.
-Resolve that before writing anything else, because it decides the shape of the whole test.
+**The open question is how to drive Consul 2 from a script**, and it is worth settling before
+anything else is written, because it decides the shape of the whole test. What is now known:
+
+* Consul 1 is line **tty25** and Consul 2 is line **tty26** (`besm6_tty.c`, `consul_print()`:
+  `line_num = dev_num + TTY_MAX + 1`).
+* Every test today drives Consul 1 with **bare** `expect`/`send`, because `attach tty25 console`
+  binds it to the simulator's own stdin/stdout and **bypasses `tmxr_attach` entirely**. A
+  consequence to know before trying the obvious: `expect TTY:25,…` does *not* work in that
+  configuration — the per-line `SEND`/`EXPECT` structures are only allocated when the mux has been
+  through `tmxr_attach`.
+* Merely `set tty26 consul` is not a second terminal: an un-attached line shares the one SIMH
+  console with Consul 1 — same stdout, same `sim_poll_kbd()` — and `consul_receive()` polls dev 0
+  before dev 1, so Consul 1 takes every keystroke.
+* An independently drivable Consul 2 therefore needs `attach tty Line=26,<port>` and a connected
+  client; then `expect TTY:26,"…"` / `send TTY:26,"…"` do work
+  (`_tmxr_locate_line_send_expect()` in `sim_tmxr.c`). Getting the client there without a human is
+  the remaining problem, and a host-side helper alongside the simulator is the candidate with a
+  precedent — `run-session.sh` already establishes that pattern. TMXR loopback is **out**: it feeds
+  the guest's own output back as input.
+* Two traps in the connect path have been **fixed in the simulator** rather than worked around, and
+  the fix is what makes a raw Consul 2 usable at all: a `set tty26 raw` issued before the client
+  connected used to be discarded by `reset_line()`, and every new connection injected a `'\3'`
+  into the receive buffer, which on a Consul line arrives at the guest as a typed ^C. Both are
+  conditional on the line being raw now. Anything written here must be run against a simulator
+  new enough to have that.
+
+Note also that an unattached Consul still *raises its interrupts* — `consul_print()` lowers
+`READY2` and `consul_receive()` raises "printing finished" whether or not the line is connected,
+and only the character is discarded. That is what lets `test/sctest` exercise both typewriters with
+one console attached, and it is also why a half-configured line fails silently rather than loudly.
 
 Note README.md's caveat about `send` dropping a character under parallel ctest: a `send`-driven test
 that fails once and passes when re-run alone has said nothing. **Task 35 below is that caveat's

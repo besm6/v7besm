@@ -44,8 +44,9 @@ shell started through `system()`/`popen()`. Running one suite under two independ
 what turns a disagreement into a bug report: under `b6sim` every system call is served by the host,
 so a kernel fault cannot show, and the two answering differently means one of them is wrong.
 
-What remains is the multi-user road — `getty`, `login`, and a driver for the 24-line terminal
-multiplexer — and a handful of smaller leftovers. [kernel/README.md](kernel/README.md) is the
+What remains is the multi-user road — `getty`, `login` and `/etc/ttys`, now that the kernel drives
+**both** of the machine's Consul typewriters and there is a second terminal to log in on — and a
+handful of smaller leftovers. [kernel/README.md](kernel/README.md) is the
 reference: the design the machine forces and the hardware rules every part of it obeys.
 [kernel/TODO.md](kernel/TODO.md) is the work plan, task by task.
 
@@ -94,8 +95,9 @@ which 55 run on the real machine under SIMH and six of those boot the whole kern
 |Userland|`cmd/`|the v7 `/etc/init`, the Bourne shell, and sixteen commands — three of them setuid root|
 |The prompt|—|**it prompts, and you can type at it**|
 
-**Not there yet.** Multi-user is the one large piece: the 24-line terminal multiplexer is a
-skeleton, so there is no `getty` and no `login` ([kernel/TODO.md](kernel/TODO.md) task 29). Six
+**Not there yet.** Multi-user is the one large piece: the second terminal exists — `/dev/tty1`, the
+machine's other Consul typewriter — but there is no `getty` and no `login` yet, so nothing opens it
+([kernel/TODO.md](kernel/TODO.md) task 29). Six
 smaller kernel items were deferred deliberately and are listed beside it. The rest of the v7
 userland — `ed`, `fsck`, the text filters, and eventually the toolchain rebuilt on the machine
 itself — is [cmd/TODO.md](cmd/TODO.md), with [cmd/README.md](cmd/README.md) as its porting manual.

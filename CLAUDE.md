@@ -48,7 +48,13 @@ work has two halves:
   does not survive `wait(2)`** here, the status being `(code << 8)` returned through fifteen-bit
   r12, so `test`'s `exit(255)` reaches `$?` as 127 (`cmd/test/README.md`). And the whole
   **libc runs on it**: the `lib/test/` programs live on the image as `/usr/test/*`
-  and produce there, byte for byte, the output they produce under `b6sim`. And it **swaps**:
+  and produce there, byte for byte, the output they produce under `b6sim`. And it has **a second
+  terminal**: `kernel/dev/sc.c` drives *both* of the machine's Consul-254 typewriters as
+  `cdevsw[0]` minors 0 and 1 — one driver rather than two because their `ext` addresses are
+  adjacent and their ПРП bits one apart, so a variable unit folds into the instruction — which
+  puts `/dev/tty1` on the image beside `/dev/console`, waiting for the `getty` that task 29b
+  brings. (That is what became of the 24-line multiplexor `dev/sr.c` was a skeleton for; `sr.c` is
+  gone, and `rmd`/`rmb` moved to majors 3 and 4 behind it.) And it **swaps**:
   squeeze the machine to 31 pages and `sched()`/`newproc()` move real images through the drum,
   while `/bin/sh` and `/usr/test/puret` — the two binaries linked pure — share one copy of their
   text between processes. **`/dev/mem` and `/dev/kmem` work** too: a program reads its own

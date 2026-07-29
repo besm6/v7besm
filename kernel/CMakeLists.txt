@@ -42,7 +42,7 @@ set(KSRC
     acct.c alloc.c clock.c conf.c fio.c iget.c intr.c machdep.c main.c malloc.c
     nami.c pipe.c prf.c prim.c rdwri.c sendsig.c sig.c slp.c subr.c sys1.c sys2.c
     sys3.c sys4.c syscall.c sysent.c text.c trap.c ucopy.c utab.c
-    dev/bio.c dev/mb.c dev/md.c dev/mem.c dev/partab.c dev/sc.c dev/sr.c dev/sys.c dev/tty.c
+    dev/bio.c dev/mb.c dev/md.c dev/mem.c dev/partab.c dev/sc.c dev/sys.c dev/tty.c
     brz.s uarea.S seg.S usermem.S switch.s)
 
 set(KOBJS "")        # absolute object paths, for DEPENDS

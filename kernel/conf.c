@@ -32,24 +32,23 @@ struct bdevsw bdevsw[] = {
 void scopen(dev_t, int), scclose(dev_t, int);
 void scread(dev_t), scwrite(dev_t);
 void scioctl(dev_t, int, caddr_t, int);
+extern struct tty sc[];
 void mmread(dev_t), mmwrite(dev_t);
 void syopen(dev_t, int);
 void syread(dev_t), sywrite(dev_t);
 void sysioctl(dev_t, int, caddr_t, int);
-void sropen(dev_t, int), srclose(dev_t, int);
-void srread(dev_t), srwrite(dev_t);
-void srioctl(dev_t, int, caddr_t, int);
-extern struct tty sr[];
 void mdread(dev_t), mdwrite(dev_t);
 void mbread(dev_t), mbwrite(dev_t);
 
+// Row 0 carries BOTH Consul typewriters -- minor 0 is /dev/console (and /dev/tty0),
+// minor 1 is /dev/tty1 -- so dev/sc.c is the only terminal driver here and there is
+// no separate major for the second line.  See its header for why one driver.
 struct cdevsw cdevsw[] = {
-    { scopen, scclose, scread, scwrite, scioctl, nulldstop, 0 },       // console = 0
+    { scopen, scclose, scread, scwrite, scioctl, nulldstop, sc },      // console = 0
     { nullopen, nullclose, mmread, mmwrite, nullioctl, nulldstop, 0 }, // mem = 1
     { syopen, nullclose, syread, sywrite, sysioctl, nulldstop, 0 },    // tty = 2
-    { sropen, srclose, srread, srwrite, srioctl, nulldstop, sr },      // sr = 3
-    { mdopen, nullclose, mdread, mdwrite, nullioctl, nulldstop, 0 },   // md = 4
-    { mbopen, nullclose, mbread, mbwrite, nullioctl, nulldstop, 0 },   // mb = 5
+    { mdopen, nullclose, mdread, mdwrite, nullioctl, nulldstop, 0 },   // md = 3
+    { mbopen, nullclose, mbread, mbwrite, nullioctl, nulldstop, 0 },   // mb = 4
     {},
 };
 

@@ -514,7 +514,7 @@ Facts that cost real time to establish and are not in `doc/`.
   interval timer free-runs at 250 Hz and cannot be programmed, so a tick is exact but is not the
   sixtieth every v7 constant assumes. `p_cpu` accrues one tick in four (`CPUTICK`, [clock.c](clock.c))
   because its decay is per *second* and cannot move; `ttyoutput()`'s delay table keeps v7's numbers
-  and is scaled by `HZ/60` where it is consumed ([dev/sc.c](dev/sc.c), [dev/sr.c](dev/sr.c)).
+  and is scaled by `HZ/60` where it is consumed ([dev/sc.c](dev/sc.c)).
   `CLOCKS_PER_SEC` in `<time.h>` is a hand-copy of `HZ` that `lib/libc/gen/clock.c` `_Static_assert`s.
   One consequence is **left unfixed**: `acct(2)`'s `compress()` ([acct.c](acct.c)) has a 13-bit
   mantissa, so a CPU time past 8191 ticks loses low bits — ~33 s here against v7's ~136 s. Nothing on

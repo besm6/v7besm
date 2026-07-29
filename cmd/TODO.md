@@ -100,7 +100,7 @@ Everything in this task encodes the on-disk layout, and there is a rule for that
 **`_Static_assert` against `<sys/param.h>` rather than re-deriving the constants**, which is what
 [fsutil/params.cpp](fsutil/params.cpp) does on the host side and why a kernel that retunes `INOPB`
 or `DIRSIZ` breaks the build instead of the images. The raw devices these need are already on the
-image — `/dev/rmd0` and `/dev/rmb0`, `cdevsw[4]` and `[5]`.
+image — `/dev/rmd0` and `/dev/rmb0`, `cdevsw[3]` and `[4]`.
 
 ### C4a. `df`, `du`, `quot`
 
@@ -213,9 +213,9 @@ the highest.
 
 ## C6. Multiuser userland
 
-**Gated on [../kernel/TODO.md](../kernel/TODO.md) task 29a** — the terminal driver. There is one
-terminal today, the operator's Consul, and `dev/sr.c` is a skeleton. Nothing in this task can be
-tested until 29a lands.
+**No longer gated on a driver.** Kernel task 29a is done: `dev/sc.c` drives **both** Consul
+typewriters, so the image has a second terminal — `/dev/tty1` — for a `getty` to sit on. What is
+still missing above it is `/etc/ttys` and the two programs, which is kernel task 29b.
 
 **Kernel task 29b is the first half of this task seen from the other side** and should not be
 duplicated: it covers `getty`, `login` and `/etc/ttys`, and records that the libc side is already
@@ -225,8 +225,8 @@ in place — `crypt`, `getpwnam`/`getpwent`, `ttyname`, `getlogin` and `<utmp.h>
 * `getty.c` (240) and `login.c` (151) — kernel 29b.
 * `passwd.c` (172), `su.c` (52), `newgrp.c` (57) — the account trio; `passwd` needs a writable
   `/etc/passwd` and the `crypt` already in libc.
-* `stty.c` (303) — reads and writes the `sgttyb` the kernel's `sc.c`/`sr.c` implement. Its capability
-  list must be cut down to what those drivers actually honour rather than carried whole.
+* `stty.c` (303) — reads and writes the `sgttyb` the kernel's `sc.c` implements. Its capability
+  list must be cut down to what that driver actually honours rather than carried whole.
 * `who.c` (64), `write.c` (186), `wall.c` (70), `mesg.c` (57) — the social four, all `/etc/utmp`.
 * `mail.c` (556) — only if `/usr/spool/mail` is wanted; it is the one program here with no reason
   to exist on a single-terminal machine.
@@ -370,7 +370,7 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 |---|---|---|
 | `troff/`, `eqn/`, `neqn/`, `tbl/`, `refer/`, `deroff.c`, `prep/`, `checkeq.c`, `ptx.c`, `spell/` | 8,266 + 1,726 + 1,677 + 2,434 + 4,874 + 496 + 589 + 101 + 553 + 625 | The typesetting suite. `troff` alone is larger than everything in C1–C4 together, it drives a CAT phototypesetter that does not exist, and **there is no `nroff` in this source tree at all** — only `troff`. This repo's own manual pages are read with the *host* `nroff`, which is the right answer for the foreseeable future. `spell` additionally needs its whole word list. |
 | `tp/`, `dump.c`, `restor.c`, `dumpdir.c` | 800 + 641 + 1,150 + 475 | Tape. **This kernel has no tape driver** and no `bdevsw`/`cdevsw` row for one, and all four are built around a tape's sequential access rather than merely willing to use it — `dump`/`restor` are a filesystem-level backup pair whose whole design is the reel. `tp` is the pre-`tar` archiver and is superseded by it in any case. If a magnetic-tape driver is ever written (a `kernel/TODO.md` item nobody has raised; [../doc/Besm6_Peripherals.md](../doc/Besm6_Peripherals.md) is the reference), reconsider `dump`/`restor` and not the other two. |
-| `uucp/`, `cu.c` | 6,415 + 541 | Dial-out over a modem link nothing models. `cu` becomes conceivable if the serial multiplexor (kernel 29a) is ever wired to something outside. |
+| `uucp/`, `cu.c` | 6,415 + 541 | Dial-out over a modem link nothing models. `cu` becomes conceivable only if the machine's serial multiplexor is ever driven and wired to something outside; no kernel task proposes that. |
 | `lpr/`, `vpr.c` | 1,315 + 334 | Printer spooling. **Worth revisiting:** SIMH *does* model the АЦПУ drum printer, so `lpr` becomes a small task the day a kernel printer driver exists — which is a `kernel/TODO.md` item nobody has written yet. |
 | `graph.c`, `plot/`, `spline.c`, `tc.c`, `tk.c` | 695 + 608 + 335 + 638 + 250 | Plotters and Tektronix terminals; no hardware, and the output would go nowhere. |
 | `learn/` | 1,066 | Needs the entire `/usr/lib/learn` lesson corpus, which is not in this tree. |

@@ -201,8 +201,9 @@ These are the facts a reader cannot get from a v7 manual page.
   rest of the libc work ([lib/README.md](../lib/README.md)).
 
 - **`ioctl` and `stty`/`gtty` reach only what the drivers implement** —
-  [kernel/dev/](../kernel/dev/) has the console, `sy`, memory, drum and disk. There is no
-  terminal multiplexer driver yet, so most `TIOC*` commands land in `nullioctl`.
+  [kernel/dev/](../kernel/dev/) has the two Consul typewriters (`sc`), `sy`, memory, drum and disk.
+  A `TIOC*` command outside the set `ttioccomm()` implements gets `ENOTTY`: a Consul has no line
+  speed and no modem control behind the rest of them.
 
 `b6sim` implements the same set at user level, but not identically: `mount`, `umount`, `ptrace`,
 `profil`, `acct` and `phys` are refused with `EPERM`, `ioctl` and `lock` are accepted no-ops, and
