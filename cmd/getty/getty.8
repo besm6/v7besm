@@ -1,24 +1,21 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
-.TH GETTY 8 
+.TH GETTY 8
 .SH NAME
-getty  \- set typewriter mode
+getty  \- set typewriter mode and read a login name
 .SH SYNOPSIS
 .B /etc/getty
-[ char ]
+[
+.I char
+]
 .SH DESCRIPTION
 .I Getty
 is invoked
 by
 .IR  init (8)
-immediately after a typewriter is opened
-following a dial-up.
+immediately after a typewriter is opened.
 It reads the user's login name and calls
 .IR login (1)
 with the name as argument.
-While reading the name
-.I getty
-attempts to adapt the system to the speed and type of terminal
-being used.
 .PP
 .I Init
 calls
@@ -27,11 +24,13 @@ with a single character argument taken from
 the
 .IR ttys (5)
 file entry for the terminal line.
-This argument determines a sequence of line speeds through which
-.I getty
-cycles, and also the `login:' greeting message,
-which can contain character sequences to put various kinds of
-terminals in useful states.
+That argument selects an entry of a table built into
+.IR getty ,
+giving the modes the line is set to while the name is read,
+the modes it is left in for
+.IR login ,
+and the `login:' greeting message.
+An argument naming no entry selects the first.
 .PP
 The user's name is terminated by a new-line or
 carriage-return character.
@@ -45,42 +44,61 @@ and if the name is nonempty, the
 system is told to map any future upper-case characters
 into the corresponding lower-case characters.
 .PP
-If the terminal's `break' key is depressed,
+Finally,
+.I login
+is called with the user's name as argument.
+.SH "THIS MACHINE"
+.B Note:
+the table has ONE entry, `0', and it describes the Consul-254 typewriter,
+which is the only kind of terminal this machine has.
+The line is read RAW and handed to
+.I login
+as ECHO|CRMOD|XTABS, which is what the driver
+.RI ( sc (4),
+kernel/dev/sc.c) sets on a first open.
+.PP
+v7's table had thirteen entries of PDP-11 baud rates, and none of it
+survives, because none of it describes a parallel character-at-a-time
+typewriter:
+.TP
+speeds
+There is no baud rate.
+.I Sg_ispeed
+and
+.I sg_ospeed
+are stored by
+.IR ioctl (2)
+and read by nothing, so v7's `3' entry \- which probed the connect
+speed and chose a table from it \- could only ever have read back B0.
+The
+.B break
+key, which in v7 made
 .I getty
-cycles to the next speed appropriate to the type of line
-and prints the greeting message again.
-.PP
-Finally, login is called with the user's name as argument.
-.PP
-The following arguments from the
-.I ttys
-file are understood.
+cycle to the next speed in the entry's chain, has nothing to cycle to
+and no way to be pressed.
 .TP
-0
-Cycles through 300-1200-150-110 baud.
-Useful as a default for dialup lines accessed by a variety
-of terminals.
+delays
+The CR, NL, TAB and FF delay bits are honoured by this kernel: they
+queue a delay byte that the driver turns into a
+.IR timeout (9).
+They exist for a carriage that needs time to return, which this one
+does not, so no entry here sets them.
 .TP
-\-
-Intended for an on-line Teletype model 33, for example
-an operator's console.
+parity
+The driver sends and receives seven bits, so ANYP, EVENP and ODDP
+describe nothing.
+v7's
+.I getty
+also ORed an even-parity bit into every character it printed, from a
+128-byte table; that table is gone.
 .TP
-1
-Optimized for a 150-baud Teletype model 37.
-.TP
-2
-Intended for an on-line 9600-baud terminal, for example
-the Textronix 4104.
-.TP
-3
-Starts at 1200 baud, cycles to 300 and back.
-Useful with 212 datasets where most terminals
-run at 1200 speed.
-.TP
-5
-Same as `3' but starts at 300.
-.TP
-4
-Useful for on-line console DECwriter (LA36).
+LCASE
+The Consul's own character code has no lower-case Latin letters, so the
+line runs in ASCII and the driver does not fold case.
+A
+.I getty
+that set LCASE would undo that.
+.SH FILES
+/etc/ttys
 .SH "SEE ALSO"
 init(8), login(1), ioctl(2), ttys(5)

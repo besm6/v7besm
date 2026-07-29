@@ -32,10 +32,19 @@
 //
 // WHAT IS AND IS NOT TESTED.  kernel/test/sctest exercises both Consuls at the
 // device level -- the polled path, the interrupt path, and that the two lines do
-// not steal each other's ПРП bits or ready bits.  Above that, only unit 0 is
-// covered: every booting test types at /dev/console.  The tty-layer path through
-// scopen(dev, 1) and ttwrite() on minor 1 is first exercised by task 29c, which is
-// the multiuser test; until then /dev/tty1 has no getty on it and nothing opens it.
+// not steal each other's ПРП bits or ready bits.  Above that, kernel/test/login
+// (task 29b) puts /etc/ttys on the image, so init forks a getty per line and the
+// tty-layer path through scopen(dev, 1) and ttwrite() on minor 1 really runs under
+// a kernel -- but that test drives Consul 1 only, and the second line's output goes
+// to a telnet listener nobody connects to.  So minor 1 is OPENED and WRITTEN and
+// never READ.  Driving it end to end is task 29c.
+//
+// ALSO NOT COVERED, and it is the one this driver should be judged on: getty reads
+// a login name in RAW mode, one read(2) and one write(2) per character, and that is
+// the first thing on this machine to take input faster than a shell does.  It needs
+// `send delay=' in login.ini where a shell needs none, which is evidence that
+// scintr()'s one-character register overruns -- task 35, and a bug a fast typist
+// would meet too, not a test artifact.
 //
 // doc/Besm6_Peripherals.md has the register map, doc/Intrinsics.md the intrinsics.
 

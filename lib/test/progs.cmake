@@ -22,7 +22,10 @@
 #   curstty runs on the image ONLY, and is lib/libcurses': it reads and writes the console's
 #           tty modes, and b6sim's ioctl is an unconditional no-op that changes nothing, so
 #           the two harnesses could not share an expectation.
-# So `spawn' is absent below and the other four are present: 27 names here, 24 b6sim cases
+#   ttyt    runs on the image ONLY, and is the half pwent had to give up when kernel task 29b
+#           put /etc/ttys on the image: ttyname(0), ttyslot() and getlogin() answered the same
+#           in both worlds only while that file was missing.
+# So `spawn' is absent below and the other five are present: 28 names here, 24 b6sim cases
 # next door.
 #
 # NOR IS EVERY NAME HERE A libc TEST any more.  termcapt is lib/libtermcap's and cursest and
@@ -35,5 +38,5 @@
 # failure early in the list is a failure in something everything after it depends on.
 set(B6_LIBTEST_IMAGE
     hello vararg errno procs sbrkt malloct strings gen strtolt environ jmp headers
-    stdiot printft scanft execs shellt memt suidt timet pwent signals matht termcapt
+    stdiot printft scanft execs shellt memt suidt timet pwent ttyt signals matht termcapt
     cursest curstty puret)

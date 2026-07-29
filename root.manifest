@@ -19,12 +19,16 @@
 # that stops a user giving a file away.  Task C2a added /bin/{date,kill,sleep} -- the clock, a
 # signal and an alarm -- and task C2b /bin/{basename,test,time,tty,yes}, none of them setuid
 # either, together with THE FIRST HARD LINK this file has ever carried: /bin/[ is /bin/test.
+# Kernel task 29b added the three entries that make this a MULTI-USER image: /etc/getty,
+# /bin/login and the /etc/ttys that sends init looking for them -- plus /usr/guest, the first
+# directory here that is not root's, and /usr/test/ttyt, which asserts that ttyslot(3) can now
+# find a line in that file.
 #
 # WHY THIS FILE LIVES AT THE TOP OF THE TREE and not in kernel/test/ beside the CMakeLists
 # that runs b6fsutil over it: every `file' below but none of the directories comes out of
-# build/rootfs/, which is staged by cmd/init, cmd/sh, cmd/{basename,cat,chgrp,chmod,chown,cp,
-# date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}, lib/test and
-# etc/.  The one exception is /bin/[, which comes out of no directory at all: it is a `link'
+# build/rootfs/, which is staged by cmd/init, cmd/sh, cmd/getty, cmd/login,
+# cmd/{basename,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,
+# sync,test,time,touch,tty,yes}, lib/test and etc/.  The one exception is /bin/[, which comes out of no directory at all: it is a `link'
 # stanza and its inode is /bin/test's.
 # The image is the whole project's, and it is the top-level CMakeLists.txt that draws the
 # `rootimg depends on rootfs' edge, since kernel/ is configured before rootfs exists.
@@ -50,7 +54,9 @@
 #
 # Three tests read this image: kernel/test/fstest, which checks the superblock and the root
 # inode below the boot path, and kernel/test/boot + kernel/test/console, which boot a
-# kernel against it.
+# kernel against it.  kernel/test/login boots a copy too and is the one that WRITES the most
+# of it -- /etc/utmp made and filled in, and a device node's owner changed by login(1) -- which
+# is why run-login.sh fscks what comes back and diffs four inodes out of `b6fsutil -v -v'.
 #
 # THE DEVICE NUMBERS ARE kernel/conf.c's, and that file is the authority: the major is the
 # row index in bdevsw[] (0 md, 1 mb) or cdevsw[] (0 console, 1 mem, 2 tty, 3 rmd, 4 rmb).
@@ -78,10 +84,25 @@ dir /usr/test
 dir /tmp
 mode 0777
 
+# guest's home, and the first directory here that is not root's.  login(1) chdir()s to the
+# pw_dir field of /etc/passwd and prints `No directory' if it cannot, so the account is only
+# usable because this exists -- and being uid 7's is what lets a non-root shell write in it.
+dir /usr/guest
+owner 7
+group 3
+
 # ---- the program the icode execs, and the shell it will exec in turn -------------
 
 file /etc/init          # cmd/init: the v7 /etc/init
 source ../../rootfs/etc/init
+mode 0755
+
+# /etc/getty and NOT /bin/getty: cmd/init/init.c's `char getty[] = "/etc/getty"' is the path
+# init execs, and nothing looks anywhere else.  It is the second program of task 29b, and the
+# one that makes /etc/ttys below mean something.  0755 and not setuid -- init is root and this
+# is its child.
+file /etc/getty         # cmd/getty: the login: prompt, one per enabled line of /etc/ttys
+source ../../rootfs/etc/getty
 mode 0755
 
 file /bin/sh            # cmd/sh: S. R. Bourne's shell
@@ -129,6 +150,15 @@ mode 0755
 
 file /bin/ln            # cmd/ln
 source ../../rootfs/bin/ln
+mode 0755
+
+# NOT SETUID, and it is the entry on this list where that is worth a second look, because
+# login is the one program here that really does change uid: /etc/getty execs it as root and
+# setuid() hands the terminal to whoever answered the prompt.  The privilege is INHERITED, not
+# borrowed -- so 0755, as the v7 tree ships it.  Making it setuid would let any user re-run it
+# from a shell, which is cmd/su's job (task C6).
+file /bin/login         # cmd/login: crypt(3), and the first non-root shell on this machine
+source ../../rootfs/bin/login
 mode 0755
 
 file /bin/ls            # cmd/ls
@@ -241,6 +271,17 @@ mode 0644
 
 file /etc/group         # the groups /etc/passwd's gids name; etc/group
 source ../../rootfs/etc/group
+mode 0644
+
+# THE FILE THAT TURNS THIS INTO A MULTI-USER SYSTEM, and the whole of what task 29b had to
+# add beyond two programs.  cmd/init/init.c's merge() reads it and forks an /etc/getty per
+# enabled line; without it merge() returns at the failed open, multiple() falls straight
+# through, and the boot is the single-user loop this port lived in until now.  Two lines,
+# `console' and `tty1' -- the two Consuls, dev/sc.c's minors 0 and 1.  Format: ttys(5)
+# (include/man/ttys.5) and rline() in cmd/init/init.c.  It is also what makes ttyslot(3)
+# answer, and therefore getlogin(3): lib/test/ttyt is the assertion of that.
+file /etc/ttys          # the terminal lines a getty sits on; etc/ttys
+source ../../rootfs/etc/ttys
 mode 0644
 
 # The terminal capability database, read by tgetent() in lib/libtermcap.  BSD's
@@ -357,6 +398,13 @@ mode 0755
 
 file /usr/test/pwent
 source ../../rootfs/usr/test/pwent
+mode 0755
+
+# ttyt is pwent's other half, and is here rather than in both worlds because /etc/ttys is:
+# ttyname(0), ttyslot() and getlogin() answer for their failure paths under b6sim and for
+# real here.  Task 29b.
+file /usr/test/ttyt
+source ../../rootfs/usr/test/ttyt
 mode 0755
 
 file /usr/test/signals

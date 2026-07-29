@@ -1,240 +1,241 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
-#
-/*
- * getty -- adapt to terminal speed on dialup, and call login
- */
-
+//
+// /etc/getty -- open a terminal, read a login name, and become /bin/login.
+//
+//      getty [ selector ]
+//
+// One of task 29b's two (../../kernel/TODO.md).  /etc/init forks one of these per enabled
+// line of /etc/ttys and execs it as `execl("/etc/getty", "-", "<selector>", 0)' with
+// descriptors 0, 1 and 2 already open on the terminal (cmd/init/init.c, dfork()).  This
+// program sets the line's modes, prints `login: ', reads a name, sets the modes a user wants
+// rather than the ones a name is read under, and execs /bin/login with the name as argv[1].
+// It never returns: login replaces it, the shell replaces login, and when the user logs out
+// that one process finally exits and init starts a fresh getty here.
+//
+// THE SPEED TABLE IS THIS MACHINE'S, AND THAT IS THE ONE DELIBERATE DIVERGENCE.  v7's itab[]
+// is thirteen entries of PDP-11 baud rates -- B110 through B9600, with parity, delay and
+// LCASE bits chosen per terminal, and a `nname' successor to fall to when a name comes back
+// garbled at the wrong speed.  None of that describes a Consul-254.  It is a PARALLEL,
+// character-at-a-time typewriter: there is no baud rate to guess and nothing to fall to.
+// Concretely, in this kernel:
+//
+//   - sg_ispeed/sg_ospeed are inert.  ttioccomm() (kernel/dev/tty.c) stores them and hands
+//     them back and NOTHING between reads them, so v7's `case '3'' speed probe --
+//     ioctl(TIOCGETP) and a test against B300 -- reads back B0 on every line, always.  It is
+//     gone with the speeds themselves.
+//
+//   - the delay bits are worse than useless.  ttyoutput() turns CR0..CR3, NL0..NL3, TAB1 and
+//     FF1 into a queued delay byte and scstart() (kernel/dev/sc.c) into a timeout() -- a path
+//     that file's header calls unreachable "as the console is opened today", and which v7's
+//     table would put into the boot path of every test in the suite for the sake of a
+//     carriage that this machine's terminal does not have to wait for.
+//
+//   - parity is not carried.  scstart() sends `c & 0177' and scintr() masks the same way, so
+//     ANYP/EVENP/ODDP describe nothing.  v7's partab[] -- 128 bytes of even-parity flags that
+//     putchr() ORed into every character it wrote -- is gone for the same reason.
+//
+//   - LCASE would fold this terminal's lower case away.  The Consul's own code (GOST-10859)
+//     has no lower-case Latin at all, which is why dev/sc.c runs the SIMH line `raw' and
+//     speaks ASCII; a getty that turned LCASE on would undo that.
+//
+// So the table is ONE ENTRY, and it keeps v7's shape rather than collapsing into two
+// constants: init still passes a selector character, ttys(5) still defines the column, and a
+// second kind of terminal is one line here.  An unknown selector falls back to itab[0], which
+// is v7's rule and is now also the only outcome.
+//
+// The C11 pass is the rest of the diff, and is the mechanical one ../README.md §1 describes:
+// prototypes, explicit return types, static on everything but main.  Two things in it are not
+// mechanical:
+//
+//   - §2, THE POINTER COMPARISONS.  getname() bounded its buffer with `np >= &name[16]' and
+//     `np > name' over a char *, and a relational operator between two char * gives the wrong
+//     answer here -- the byte offset sits above the word address and DECREMENTS as the
+//     pointer advances.  Both are an int index now.  This is the bug class that made
+//     getpass() return the empty string for months (lib/libc/README.md).
+//
+//   - v7's local puts() collided with the C11 name.  It is putmsg() here.  Nothing in this
+//     program uses stdio -- read() and write() are the whole of its I/O -- and keeping it
+//     that way is what makes it small.  _exit() rather than exit() for the same reason: there
+//     is nothing buffered to flush and <stdlib.h> need not be opened at all.
+//
+// ONE UPSTREAM BUG FIXED, and it is the same comparison seen from the other side.  v7 broke
+// out of getname()'s loop on `np >= &name[16]' and then wrote `*np = 0' -- so a name of
+// exactly sixteen characters stored the terminator at name[16], one past the array.  The
+// bound here is NAMESIZE - 1, which leaves the room the terminator needs.
+//
+// The modes it sets, and why they are these:
+//
+//   iflags = RAW while the name is read, so that getname() sees the typed CR itself.  In RAW
+//     the kernel echoes nothing and translates nothing, so every character on the screen is
+//     one putmsg()/putchr() put there and every message here carries its own \r.
+//
+//   fflags = ECHO|CRMOD|XTABS, which is EXACTLY what scopen() sets on a first open.  A line
+//     handed to login is therefore in the state the rest of this system assumes, and CRMOD
+//     is not optional: the SIMH line is raw on the far side, so if the kernel does not turn a
+//     typed CR into a newline nothing will.
+//
+// NOT SETUID.  init runs as root and this is its child; there is no privilege to acquire.
+//
 #include <sgtty.h>
 #include <signal.h>
-#define ERASE	'#'
-#define KILL	'@'
+#include <unistd.h>
 
-struct sgttyb tmode;
-struct tchars tchars = { '\177', '\034', '\021', '\023', '\004', '\377' };
+#define ERASE '#' // what login and the kernel's ttychars() both use
+#define KILL  '@'
+#define EOT   004 // ^D at the login: prompt means "go away"
 
-struct	tab {
-	char	tname;		/* this table name */
-	char	nname;		/* successor table name */
-	int	iflags;		/* initial flags */
-	int	fflags;		/* final flags */
-	int	ispeed;		/* input speed */
-	int	ospeed;		/* output speed */
-	char	*message;	/* login message */
-} itab[] = {
+// The name buffer.  Sixteen is v7's; login truncates to eight, and getname() below will not
+// store past this.
+#define NAMESIZE 16
 
-/* table '0'-1-2-3 300,1200,150,110 */
+static struct sgttyb tmode;
 
-	'0', 1,
-	ANYP+RAW+NL1+CR1, ANYP+ECHO+CR1,
-	B300, B300,
-	"\n\r\033;\007login: ",
+// The special characters, set once per getty.  TIOCSETC writes the kernel's ONE GLOBAL `tun'
+// (kernel/dev/tty.c), not a per-line copy -- v7's arrangement, carried faithfully -- so this
+// is a system-wide statement and not a property of this terminal.  The values are the ones
+// ttychars() already installs; setting them again costs one syscall and means a getty started
+// after something else has moved them puts them back.
+static struct tchars tchars = { '\177', '\034', '\021', '\023', '\004', '\377' };
 
-	1, 2,
-	ANYP+RAW+NL1+CR1, ANYP+XTABS+ECHO+CRMOD+FF1,
-	B1200, B1200,
-	"\n\r\033;login: ",
-
-	2, 3,
-	ANYP+RAW+NL1+CR1, EVENP+ECHO+FF1+CR2+TAB1+NL1,
-	B150, B150,
-	"\n\r\033:\006\006\017login: ",
-
-	3, '0',
-	ANYP+RAW+NL1+CR1, ANYP+ECHO+CRMOD+XTABS+LCASE+CR1,
-	B110, B110,
-	"\n\rlogin: ",
-
-/* table '-' -- Console TTY 110 */
-	'-', '-',
-	ANYP+RAW+NL1+CR1, ANYP+ECHO+CRMOD+XTABS+LCASE+CR1,
-	B110, B110,
-	"\n\rlogin: ",
-
-/* table '1' -- 150 */
-	'1', '1',
-	ANYP+RAW+NL1+CR1, EVENP+ECHO+FF1+CR2+TAB1+NL1,
-	B150, B150,
-	"\n\r\033:\006\006\017login: ",
-
-/* table '2' -- 9600 */
-	'2', '2',
-	ANYP+RAW+NL1+CR1, ANYP+XTABS+ECHO+CRMOD+FF1,
-	B9600, B9600,
-	"\n\r\033;login: ",
-
-/* table '3'-'5' -- 1200,300 */
-	'3', '5',
-	ANYP+RAW+NL1+CR1, ANYP+XTABS+ECHO+CRMOD+FF1,
-	B1200, B1200,
-	"\n\r\033;login: ",
-
-/* table '5'-'3' -- 300,1200 */
-	'5', '3',
-	ANYP+RAW+NL1+CR1, ANYP+ECHO+CR1,
-	B300, B300,
-	"\n\r\033;\007login: ",
-
-/* table '4' -- Console Decwriter */
-	'4', '4',
-	ANYP+RAW, ANYP+ECHO+CRMOD+XTABS,
-	B300, B300,
-	"\n\rlogin: ",
-
-/* table 'i' -- Interdata Console */
-	'i', 'i',
-	RAW+CRMOD, CRMOD+ECHO+LCASE,
-	0, 0,
-	"\n\rlogin: ",
-
-/* table 'l' -- LSI Chess Terminal */
-	'l', 'l',
-	ANYP+RAW/*+HUPCL*/, ANYP+ECHO/*+HUPCL*/,
-	B300, B300,
-	"*",
-/* table '6' -- 2400 11/23 line */
-	'6', '6',
-	ANYP+RAW+NL1+CR1, ANYP+ECHO,
-	B2400, B2400,
-	"\n\rlogin: ",
-
+// One kind of terminal: what to select it by, what to leave the line as while the name is
+// read, what to leave it as for login, and what to print.  `nname' is the entry to fall to
+// when the name comes back unusable, which with one entry is itself.
+struct tab {
+    char tname;          // this table's selector, as it appears in /etc/ttys column 2
+    char nname;          // successor selector, tried when getname() fails
+    int iflags;          // modes while the name is read
+    int fflags;          // modes handed on to login
+    const char *message; // the login prompt
 };
 
-#define	NITAB	sizeof itab/sizeof itab[0]
-#define	EOT	04		/* EOT char */
-
-char	name[16];
-int	crmod;
-int	upper;
-int	lower;
-
-char partab[] = {
-	0001,0201,0201,0001,0201,0001,0001,0201,
-	0202,0004,0003,0205,0005,0206,0201,0001,
-	0201,0001,0001,0201,0001,0201,0201,0001,
-	0001,0201,0201,0001,0201,0001,0001,0201,
-	0200,0000,0000,0200,0000,0200,0200,0000,
-	0000,0200,0200,0000,0200,0000,0000,0200,
-	0000,0200,0200,0000,0200,0000,0000,0200,
-	0200,0000,0000,0200,0000,0200,0200,0000,
-	0200,0000,0000,0200,0000,0200,0200,0000,
-	0000,0200,0200,0000,0200,0000,0000,0200,
-	0000,0200,0200,0000,0200,0000,0000,0200,
-	0200,0000,0000,0200,0000,0200,0200,0000,
-	0000,0200,0200,0000,0200,0000,0000,0200,
-	0200,0000,0000,0200,0000,0200,0200,0000,
-	0200,0000,0000,0200,0000,0200,0200,0000,
-	0000,0200,0200,0000,0200,0000,0000,0201
+static const struct tab itab[] = {
+    // '0' -- the Consul-254, and ttys(5) says '0' is what a normal line carries.
+    { '0', '0', RAW, ECHO | CRMOD | XTABS, "\r\nlogin: " },
 };
 
-main(argc, argv)
-char **argv;
+#define NITAB (int)(sizeof itab / sizeof itab[0])
+
+static char name[NAMESIZE];
+static int crmod; // the name ended with a CR, so the user's terminal wants CRMOD
+static int upper; // the name had capitals and no lower case: an upper-case-only terminal
+static int lower;
+
+static int getname(void);
+static void putmsg(const char *s);
+static void putchr(int cc);
+
+int main(int argc, char **argv)
 {
-	register struct tab *tabp;
-	int tname;
+    const struct tab *tabp;
+    int i, tname;
 
-	tname = '0';
-	if (argc > 1)
-		tname = argv[1][0];
-	switch (tname) {
+    tname = '0';
+    if (argc > 1)
+        tname = argv[1][0];
 
-	case '3':		/* adapt to connect speed (212) */
-		ioctl(0, TIOCGETP, &tmode);
-		if (tmode.sg_ispeed==B300)
-			tname = '0';
-		else
-			tname = '3';
-		break;
-	}
-	for (;;) {
-		for(tabp = itab; tabp < &itab[NITAB]; tabp++)
-			if(tabp->tname == tname)
-				break;
-		if(tabp >= &itab[NITAB])
-			tabp = itab;
-		tmode.sg_flags = tabp->iflags;
-		tmode.sg_ispeed = tabp->ispeed;
-		tmode.sg_ospeed = tabp->ospeed;
-		ioctl(0, TIOCSETP, &tmode);
-		ioctl(0, TIOCSETC, &tchars);
-		puts(tabp->message);
-		if(getname()) {
-			tmode.sg_erase = ERASE;
-			tmode.sg_kill = KILL;
-			tmode.sg_flags = tabp->fflags;
-			if(crmod)
-				tmode.sg_flags |= CRMOD;
-			if(upper)
-				tmode.sg_flags |= LCASE;
-			if(lower)
-				tmode.sg_flags &= ~LCASE;
-			stty(0, &tmode);
-			putchr('\n');
-			execl("/bin/login", "login", name, 0);
-			exit(1);
-		}
-		tname = tabp->nname;
-	}
+    for (;;) {
+        // Find the selector's entry, or fall back to the first -- v7's rule, and with one
+        // entry it is the only outcome.
+        tabp = &itab[0];
+        for (i = 0; i < NITAB; i++)
+            if (itab[i].tname == tname) {
+                tabp = &itab[i];
+                break;
+            }
+
+        tmode.sg_flags = tabp->iflags;
+        ioctl(0, TIOCSETP, (char *)&tmode);
+        ioctl(0, TIOCSETC, (char *)&tchars);
+        putmsg(tabp->message);
+
+        if (getname()) {
+            tmode.sg_erase = ERASE;
+            tmode.sg_kill  = KILL;
+            tmode.sg_flags = tabp->fflags;
+            if (crmod)
+                tmode.sg_flags |= CRMOD;
+            if (upper)
+                tmode.sg_flags |= LCASE;
+            if (lower)
+                tmode.sg_flags &= ~LCASE;
+            stty(0, &tmode);
+            putchr('\n');
+            execl("/bin/login", "login", name, (char *)0);
+            _exit(1); // no /bin/login; init will try again
+        }
+        tname = tabp->nname;
+    }
 }
 
-getname()
+//
+// Read one login name into name[], echoing it as it comes.  Returns 1 when there is a name to
+// hand to login and 0 when the line should be set up again from the top.
+//
+// The line is RAW here, so nothing is echoed and nothing is translated by the kernel: erase,
+// kill and the end of the line are this loop's business, and so is every character that
+// appears on the terminal.
+//
+static int getname(void)
 {
-	register char *np;
-	register c;
-	char cs;
+    int n, c;
+    char cs;
 
-	crmod = 0;
-	upper = 0;
-	lower = 0;
-	np = name;
-	for (;;) {
-		if (read(0, &cs, 1) <= 0)
-			exit(0);
-		if ((c = cs&0177) == 0)
-			return(0);
-		if (c==EOT)
-			exit(1);
-		if (c=='\r' || c=='\n' || np >= &name[16])
-			break;
-		putchr(cs);
-		if (c>='a' && c <='z')
-			lower++;
-		else if (c>='A' && c<='Z') {
-			upper++;
-			c += 'a'-'A';
-		} else if (c==ERASE) {
-			if (np > name)
-				np--;
-			continue;
-		} else if (c==KILL) {
-			putchr('\r');
-			putchr('\n');
-			np = name;
-			continue;
-		} else if(c == ' ')
-			c = '_';
-		*np++ = c;
-	}
-	*np = 0;
-	if (c == '\r')
-		crmod++;
-	return(1);
+    crmod = 0;
+    upper = 0;
+    lower = 0;
+    n     = 0;
+    for (;;) {
+        if (read(0, &cs, 1) <= 0)
+            _exit(0); // the line went away
+        c = cs & 0177;
+        if (c == 0)
+            return (0); // a null: try the next table
+        if (c == EOT)
+            _exit(1);
+        // §2: n is an int index.  `np >= &name[16]' was a relational between two char *,
+        // which does not order them on this machine.
+        if (c == '\r' || c == '\n' || n >= NAMESIZE - 1)
+            break;
+        putchr(cs);
+        if (c >= 'a' && c <= 'z') {
+            lower++;
+        } else if (c >= 'A' && c <= 'Z') {
+            upper++;
+            c += 'a' - 'A';
+        } else if (c == ERASE) {
+            if (n > 0)
+                n--;
+            continue;
+        } else if (c == KILL) {
+            putchr('\r');
+            putchr('\n');
+            n = 0;
+            continue;
+        } else if (c == ' ') {
+            c = '_';
+        }
+        name[n++] = c;
+    }
+    name[n] = 0;
+    if (c == '\r')
+        crmod++;
+    return (1);
 }
 
-puts(as)
-char *as;
+static void putmsg(const char *s)
 {
-	register char *s;
-
-	s = as;
-	while (*s)
-		putchr(*s++);
+    while (*s)
+        putchr(*s++);
 }
 
-putchr(cc)
+//
+// One character to the terminal.  v7 ORed in partab[]'s even-parity bit here; this machine
+// carries no parity (kernel/dev/sc.c sends `c & 0177'), so the byte goes out as it stands.
+//
+static void putchr(int cc)
 {
-	char c;
-	c = cc;
-	c |= partab[c&0177] & 0200;
-	write(1, &c, 1);
+    char c = cc;
+
+    write(1, &c, 1);
 }

@@ -15,10 +15,11 @@
 # first time the extracode gate is driven from user mode by anything but the kernel own
 # tests and the eight commands of /bin, and it is where sysent rows meet a real caller.
 #
-# FOUR OF THE TWENTY-SEVEN ARE HERE ONLY.  shellt needs a /bin/sh that really starts; memt
+# FIVE OF THE TWENTY-EIGHT ARE HERE ONLY.  shellt needs a /bin/sh that really starts; memt
 # reads the kernel own memory through /dev/kmem and its own image through /dev/mem; suidt
-# drops to uid 7 and execs /bin/mkdir, which no host has; and curstty needs a console whose
-# tty modes are real.  See lib/test/progs.cmake.
+# drops to uid 7 and execs /bin/mkdir, which no host has; curstty needs a console whose
+# tty modes are real; and ttyt needs the /dev the host will not let it read and the /etc/ttys
+# the host has none of.  See lib/test/progs.cmake.
 #
 # FOUR THINGS BELOW ARE LOAD-BEARING, and each matches lib/test/run-test.sh so that the
 # expectation files transfer unchanged:
@@ -115,6 +116,12 @@ echo ok timet >/dev/console
 
 ./pwent >/tmp/pwent.out 2>&1
 echo ok pwent >/dev/console
+
+# NOT redirected the same way by accident: descriptor 0 stays the shell's terminal here as it
+# does for every program above, and that is the whole premise of ttyt -- ttyname(0) has an
+# answer only because of it.
+./ttyt >/tmp/ttyt.out 2>&1
+echo ok ttyt >/dev/console
 
 ./signals >/tmp/signals.out 2>&1
 echo ok signals >/dev/console

@@ -18,8 +18,6 @@ ok   a uid nobody has fails
 --- terminals
 ok   a regular file is not a terminal
 ok   ttyname of a closed descriptor is null
-ok   ttyslot has no slot to report
-ok   getlogin has no slot to read
 --- crypt
 crypt("","..")          ..X8NBuQ4l6uQ
 crypt("a","sa")         saZAsH0KCthEE

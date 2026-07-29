@@ -13,12 +13,14 @@ that file's porting recipe** — §2 the `char *` ordering hazard, §4 the 3072-
 address-space ceilings, and so on.
 
 **Tasks C1 and C2 are done and their writeups have been removed**; what each taught is
-README.md's two closing sections. Twenty-four commands are on the image — twenty-five entries
-in `/bin`, since `[` is `test` under a second name — so the tree can be built, rearranged and
-re-permissioned from the console, the machine can say what time it is, wait and signal, and a
-shell script can finally **branch**. [../etc/rc](../etc/rc) is a boot script that does
-something: it prints the motd and then the date, which is a literal to the minute because the
-boot clock is the image's own `-T` stamp, and `kernel/test/console` asserts both. What it
+README.md's two closing sections. Twenty-five commands are on the image — twenty-six entries
+in `/bin`, since `[` is `test` under a second name, plus `/etc/getty` beside them — so the tree
+can be built, rearranged and re-permissioned from the console, the machine can say what time it
+is, wait and signal, a shell script can finally **branch**, and since kernel task 29b there is
+a `login:` prompt on each Consul and a shell that need not be root's.
+[../etc/rc](../etc/rc) is a boot script that does something: it prints the motd and then the
+date, which is a literal to the minute because the boot clock is the image's own `-T` stamp,
+and `kernel/test/console` asserts both. What it
 still wants is what the file itself now names — `fsck` and `mount` (C4), `cron` and `update`
 (C10), `accton` (C8), and the `rm -f /tmp/*` line that comes back with `ed` (C3), which is the
 first program on this machine that will write there.
@@ -37,7 +39,7 @@ compiles.
 | C3 | **`ed`** | authoring text *on* the machine | large, and the pivot |
 | C4 | filesystem maintenance — `df` `du` `dd` `mkfs` `fsck` `icheck` `dcheck` `ncheck` `clri` `quot` `mount` `umount` | a system that maintains itself | large |
 | C5 | the text filters — `wc` `cmp` `sum` `tee` `split` `rev` `tr` `uniq` `comm` `tail` `od` `look` `col` `grep` `fgrep` `sort` `sed` `pr` `diff` `cal` `tsort` `join` `find` `file` | the corpus everything else is tested against | medium ×24 |
-| C6 | multiuser userland — `getty` `login` `passwd` `su` `newgrp` `stty` `who` `write` `wall` `mesg` `mail` | more than one person | medium; gated on kernel 29a |
+| C6 | multiuser userland — `passwd` `su` `newgrp` `stty` `who` `write` `wall` `mesg` `mail` | more than one person | medium; unblocked |
 | C7 | `tar` | getting data on and off without `b6fsutil` | medium |
 | C8 | inspection — `ps` `dmesg` `pstat` `iostat` `nice`, `ac` `sa` `accton` | seeing what the machine is doing | medium; needs `nlist(3)` |
 | C9 | self-hosting — native `cpp`, `as`, `ld`, the binutils, `cc` | building the system on itself | large |
@@ -213,26 +215,33 @@ the highest.
 
 ## C6. Multiuser userland
 
-**No longer gated on a driver.** Kernel task 29a is done: `dev/sc.c` drives **both** Consul
-typewriters, so the image has a second terminal — `/dev/tty1` — for a `getty` to sit on. What is
-still missing above it is `/etc/ttys` and the two programs, which is kernel task 29b.
+**Unblocked, and half of it is already done.** Kernel 29a gave the image a second terminal
+(`/dev/tty1`, `dev/sc.c` driving both Consuls) and kernel 29b put the userland on top of it:
+[getty/](getty/) and [login/](login/) are ported and on the image, `/etc/ttys` is staged from
+[../etc/](../etc/), `/etc/passwd` carries a real encrypted field, `init`'s `merge()`/`multiple()`
+half runs at last, and `kernel/test/login` logs in and out over the console. **Do not duplicate
+that**: read [getty/README.md](getty/README.md) and [login/README.md](login/README.md) first —
+between them they cover the speed table this machine does not have, the privilege order that must
+not be tidied, and the stdio change that makes a prompt with no newline invisible.
 
-**Kernel task 29b is the first half of this task seen from the other side** and should not be
-duplicated: it covers `getty`, `login` and `/etc/ttys`, and records that the libc side is already
-in place — `crypt`, `getpwnam`/`getpwent`, `ttyname`, `getlogin` and `<utmp.h>` all exist and
-`init.c` already uses them. When 29b is done, this task is what remains.
+What remains is the rest of the manual pages that assume more than one person:
 
-* `getty.c` (240) and `login.c` (151) — kernel 29b.
-* `passwd.c` (172), `su.c` (52), `newgrp.c` (57) — the account trio; `passwd` needs a writable
-  `/etc/passwd` and the `crypt` already in libc.
+* `passwd.c` (172), `su.c` (52), `newgrp.c` (57) — the account trio, and the first two are where
+  the setuid bit `login` deliberately does **not** carry has to go. `passwd` needs a writable
+  `/etc/passwd`; both need the `crypt` libc already has and `login` has now exercised.
 * `stty.c` (303) — reads and writes the `sgttyb` the kernel's `sc.c` implements. Its capability
-  list must be cut down to what that driver actually honours rather than carried whole.
+  list must be cut down to what that driver actually honours rather than carried whole, which is
+  the same cut [getty/README.md](getty/README.md) records making to the speed table, and for the
+  same reasons: no baud rate, no parity, no delays, no LCASE.
 * `who.c` (64), `write.c` (186), `wall.c` (70), `mesg.c` (57) — the social four, all `/etc/utmp`.
-* `mail.c` (556) — only if `/usr/spool/mail` is wanted; it is the one program here with no reason
-  to exist on a single-terminal machine.
+  That file now exists and is written: `init`'s `merge()` creates it and `login` writes a record,
+  and `lib/test/ttyt` asserts the `ttyslot(3)` they all index it by. `who` is the cheapest of the
+  four and the first one worth doing, being the only reader `/etc/utmp` still lacks.
+* `mail.c` (556) — only if `/usr/spool/mail` is wanted. `login` already probes for it with
+  `access()` and quietly finds nothing.
 
-**Size.** Medium, and mostly mechanical once the driver works — but do not start it before 29a, or
-a `login` that never prompts is indistinguishable from a driver that never delivers a character.
+**Size.** Medium, and mostly mechanical now that the terminal, the accounts and the login path are
+all proven.
 
 ---
 

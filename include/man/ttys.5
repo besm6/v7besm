@@ -31,6 +31,27 @@ or which have special characteristics.
 will have to be fixed in such cases.)
 The remainder of the line is the terminal's entry
 in the device directory, /dev.
+.PP
+.B Note:
+on this machine the second character selects an entry of a table built into
+.IR getty (8)
+that has exactly one entry, describing the Consul-254 typewriter \- there being
+no other kind of terminal here and no baud rate to recognise.
+A character naming no entry selects that one anyway, so the column is
+carried rather than used.
+.I /etc/ttys
+holds two lines,
+.B 10console
+and
+.BR 10tty1 ,
+one per Consul.
+.PP
+.B Note:
+the file is also read by
+.IR ttyslot (3),
+which counts its lines to find the terminal's slot in /etc/utmp.
+A line added or removed here therefore moves every later terminal's
+accounting record.
 .SH FILES
 /etc/ttys
 .SH "SEE ALSO"

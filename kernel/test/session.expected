@@ -11,6 +11,7 @@ date
 echo
 kill
 ln
+login
 ls
 mkdir
 mv

@@ -1,62 +1,105 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
-.TH LOGIN 1 
+.TH LOGIN 1
 .SH NAME
 login  \-  sign on
 .SH SYNOPSIS
 .B login
-[ username ]
+[
+.I username
+]
 .SH DESCRIPTION
 The
 .I login
 command
 is used when a user initially
-signs on, or it may be used at any time to change
-from one user to another.
-The latter case is the one summarized above and
-described here.
-See `How to Get Started' for how to dial up initially.
+signs on.
+It is normally reached by
+.IR getty (8),
+which reads the name and passes it as the argument above.
 .PP
 If
 .I login
 is invoked without an argument,
 it asks for a user name, and, if
 appropriate, a password.
-Echoing is turned off (if possible) during the typing of the password,
+Echoing is turned off during the typing of the password,
 so it will not appear on the written record of the
 session.
+A name that is not in the password file is still asked for a password
+and still refused: this is deliberate, since a
+.I login
+that skipped the prompt would say which names exist.
 .PP
 After a successful login,
 accounting files are updated and
 the user is informed of the
 existence of
-.I .mail
-and message-of-the-day files.
+mail and message-of-the-day files.
 .I Login
 initializes the user and group IDs and the working directory,
 then executes a command interpreter (usually
 .IR  sh (1))
 according to specifications found in a password file.
-Argument 0 of the command interpreter is `\-sh.
+Argument 0 of the command interpreter is `\-sh'.
+.SH "THIS MACHINE"
+.B Note:
+three of the files below are not on this system, and each fails
+quietly rather than being cut out of the program:
+.TP
+/usr/adm/wtmp
+The permanent login history.
+Nothing reads it \- there is no
+.I last
+here \- so it is not on the image and the append is skipped.
+.TP
+/usr/spool/mail
+There is no
+.IR mail (1),
+so `You have mail.' never prints.
+.TP
+/usr/bin
+Named by the PATH
+.I login
+exports, and empty of meaning: the shell's own default already
+reaches /bin.
 .PP
-Login is recognized by
+.B Note:
+v7 says
+.I login
+`may be used at any time to change from one user to another'.
+Not here.
+That use needs the program to be set-user-ID root, and it is not \-
+.IR getty (8)
+is already root and hands the privilege on.
+The command that changes user is
+.IR su (1),
+which is not yet ported.
+.PP
+.B Note:
+v7 says
+.I login
+`is recognized by
 .IR sh (1)
-and executed directly (without forking).
+and executed directly (without forking)'.
+That was the pre-Bourne shell.
+.IR Sh (1)
+here has no such built-in and forks like any other command.
 .SH FILES
-.ta \w'/usr/adm/wtmp\ \ 'u
+.ta \w'/usr/spool/mail/*\ \ 'u
 /etc/utmp	accounting
 .br
-/usr/adm/wtmp	accounting
+/usr/adm/wtmp	accounting; absent here
 .br
-/usr/mail/*	mail
+/usr/spool/mail/*	mail; absent here
 .br
 /etc/motd	message-of-the-day
 .br
 /etc/passwd	password file
 .SH "SEE ALSO"
-init(8), newgrp(1), getty(8), mail(1), passwd(1), passwd(5)
+init(8), newgrp(1), getty(8), mail(1), passwd(1), passwd(5), ttys(5)
 .SH DIAGNOSTICS
 `Login incorrect,'
 if the name or the password is bad.
 .br
-`No Shell', `cannot open password file', `no directory':
-consult a programming counselor.
+`No directory', if the account's home directory cannot be reached;
+`No shell', if the command interpreter cannot be executed.

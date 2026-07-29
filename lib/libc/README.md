@@ -523,12 +523,19 @@ leaves it at `SIG_DFL`, and `b6sim` services an uncaught `kill` by killing *its 
 guest pid is the host pid — so a test would take the simulator down with the program and report as
 a harness crash rather than a result. `getpass` opens `/dev/tty` and would sit there waiting to be
 typed at, which a diff-against-`.expected` harness cannot arrange; that is also why its bug went
-unnoticed for as long as it did.
+unnoticed for as long as it did. **It does have a caller now**, which is not the same thing as a
+test but is more than it had: `/bin/login` (kernel task 29b) reads its password through it, and
+`kernel/test/login` types a wrong one and then a right one, so both answers are exercised on a
+real terminal even though no `.expected` adjudicates the routine itself.
 
 **And one family works under the kernel and not under `b6sim`:** `ttyname` reads a directory with
 an ordinary `read()`, as v7 did and as this kernel allows, while `b6sim`'s `read` is the host's
-and refuses a directory. `ttyslot` and `getlogin` stand on it and are the same story; their
-failure paths are what the `b6sim` side covers.
+and refuses a directory. `ttyslot` and `getlogin` stand on it and are the same story. The failure
+paths are what the `b6sim` side covers, and until kernel task 29b that was all any side covered:
+`ttyslot` answered 0 everywhere for want of an `/etc/ttys` to count. That file is on the image
+now, so the two harnesses disagree — which is why the positive answers moved out of
+[`../test/pwent.c`](../test/pwent.c), which adjudicates both worlds against one expectation, and
+into `../test/ttyt.c`, which runs on the image alone.
 
 ## The manual pages
 

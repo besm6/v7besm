@@ -37,7 +37,11 @@ date >/dev/console
 # ed (task C3), which is the first program that will.
 #
 # TWO MORE LINES OF THE v7 rc COULD RUN TODAY AND DELIBERATELY DO NOT.
-# `cat /dev/null >/etc/utmp' would write the root filesystem on every boot,
-# and nothing reads utmp until task C6 brings login, who and the rest of it.
+# `cat /dev/null >/etc/utmp' is redundant rather than premature now: /etc/utmp
+# IS read and written since kernel task 29b -- login writes a record and getty's
+# death blanks it -- but init's own merge() truncates the file with creat() on
+# every pass into multi-user, which happens after this script and does the same
+# job.  A line here would only write the root filesystem twice per boot.
 # `PATH=/bin:/usr/bin' names a directory that does not exist here, and the
-# shell's own default path already reaches /bin.
+# shell's own default path already reaches /bin.  (login exports that same
+# string to every user, for the same reason: it is v7's, kept verbatim.)

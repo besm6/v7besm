@@ -197,11 +197,13 @@ get_filename_component(ROOT_MANIFEST ${CMAKE_CURRENT_SOURCE_DIR}/../../root.mani
 
 set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/init
+    ${B6_ROOTFS}/etc/getty
     ${B6_ROOTFS}/etc/group
     ${B6_ROOTFS}/etc/motd
     ${B6_ROOTFS}/etc/passwd
     ${B6_ROOTFS}/etc/rc
     ${B6_ROOTFS}/etc/termcap
+    ${B6_ROOTFS}/etc/ttys
     ${B6_ROOTFS}/bin/sh
     ${B6_ROOTFS}/bin/basename
     ${B6_ROOTFS}/bin/cat
@@ -213,6 +215,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/echo
     ${B6_ROOTFS}/bin/kill
     ${B6_ROOTFS}/bin/ln
+    ${B6_ROOTFS}/bin/login
     ${B6_ROOTFS}/bin/ls
     ${B6_ROOTFS}/bin/mkdir
     ${B6_ROOTFS}/bin/mv
@@ -335,7 +338,7 @@ set_tests_properties(rootimg_link PROPERTIES LABELS kernel)
 # into the very stream the expects are matching.
 #
 # THEY DO NOT RUN CONCURRENTLY WITH EACH OTHER, and the RESOURCE_LOCK below is why.  Each of
-# these seven drives the guest by typing at it -- `expect "# " send "sh /etc/files\r"' -- and
+# these eight drives the guest by typing at it -- `expect "# " send "sh /etc/files\r"' -- and
 # under load SIMH DROPS CHARACTERS out of that send: the failures read `h: not found' for a
 # sent `sh' and `eco: not found' for an `echo', so the shell is being handed a truncated line
 # and the test then fails as "never reached its last line".  Nothing in the guest, in the disk
@@ -347,9 +350,22 @@ set_tests_properties(rootimg_link PROPERTIES LABELS kernel)
 #
 # SINCE TASK C2c THERE IS A SECOND CASE, and it is NOT load-dependent: console.ini dropped the
 # FIRST character of one send on every run of an idle machine, and `send after=20000' fixed it.
-# That file now carries the delay on every send; THESE FIVE DO NOT.  So this lock has not been
-# re-measured against a paced send, and it may be buying nothing -- ../TODO.md task 35 is that
-# measurement, and it is the task that owns the whole question.
+# That file now carries the delay on every send; THE OTHER FIVE DO NOT.  So this lock has not
+# been re-measured against a paced send, and it may be buying nothing -- ../TODO.md task 35 is
+# that measurement, and it is the task that owns the whole question.
+#
+# AND SINCE TASK 29b A THIRD, which is the first one that points at a mechanism.  login.ini
+# needed `delay=' -- the gap between the characters AFTER the first -- as well, and without it
+# the SECOND character went, every run, on an idle machine.  What is different there is the
+# guest: /etc/getty reads the login name in RAW mode, one read(2) and one write(2) per
+# character from user mode, where every other file here types at a shell in canonical mode and
+# the kernel fills a clist before waking anybody.  The same simulator at the same rate feeds a
+# shell without loss and a getty with it, which is what an input overrun in dev/sc.c predicts
+# and a host-clock artifact does not.  login.ini's header is the account.
+#
+# THE FIXED TELNET PORT IS ANOTHER REASON FOR THE LOCK, and a harder one: login.ini binds 4199
+# for the second Consul, so two of these running at once would not merely drop a character,
+# they would fail to attach.  Anything else that wants a port here must take the lock too.
 #
 # MEASURED, since a lock that bought nothing would be worth removing: five full `ctest' runs
 # on one machine, twice.  Without it, two of the five failed this way and the suite took 47-49
@@ -435,7 +451,8 @@ if(BESM6)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(files PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
-    # utils -- task C2's small utilities, on its own volume (3083).  Its own script again,
+    # utils -- task C2's small utilities, on its own volume (3083, and login owns 3084).  Its
+    # own script again,
     # because the question is a third one: `session' asks whether files can be created,
     # `files' whether they can be rearranged, and this one asks about three things that are
     # not files at all -- the system clock (date, through stime(2)), an alarm that has to be
@@ -459,6 +476,29 @@ if(BESM6)
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(utils PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
+
+    # login -- MULTI-USER, on its own volume (3084).  Task 29b, and the question is a fifth
+    # one: everything above types at the single-user shell init hands out, and this one types
+    # at a getty.  /etc/ttys, /etc/getty and /bin/login, crypt(3) against /etc/passwd, the
+    # /etc/utmp nothing had ever written, init's multiple() respawn loop -- which no other test
+    # in this suite can reach, having no child of init to put in it -- and a shell belonging to
+    # uid 7, which is the first non-root shell this port has ever produced.
+    #
+    # A SCRIPT rather than a bare .ini, for run-session.sh's reason: the dialogue proves what
+    # the operator sees and the host has to be asked about the rest.  /etc/utmp exists only
+    # because merge() made it, and /dev/console ends up owned by guest only because login's
+    # chown() ran before it dropped root -- neither is visible from the console, and the second
+    # is the only assertion in the tree that login's one privileged call happened at all.
+    #
+    # It also configures BOTH Consuls -- a telnet listener on 4199 for the second, so that
+    # /dev/tty1 is a terminal a human can reach rather than a discarded line.  Only Consul 1 is
+    # driven; driving the second from a script is task 29c.  The fixed port is safe only
+    # because of the RESOURCE_LOCK below.
+    add_test(NAME login
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-login.sh
+                ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(login PROPERTIES LABELS kernel TIMEOUT 600 RESOURCE_LOCK simh_boot)
 
     # ---------------------------------------------------------------------------------
     # swap -- more processes than core, and two of them sharing one binary's text

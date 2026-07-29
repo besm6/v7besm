@@ -1,5 +1,5 @@
 #!/bin/sh
-# Boot the kernel and let the shell run the twenty-seven /usr/test programs off the image,
+# Boot the kernel and let the shell run the twenty-eight /usr/test programs off the image,
 # then bring the disk back to the host so that each program's output can be diffed.
 # Task 25c: the same programs b6sim runs, run by the real kernel, held to the same files.
 #
@@ -9,7 +9,7 @@
 # addresses into it), so like swap.ini it is taken from the build directory and not $srcdir.
 #
 # THIS SCRIPT IS THE SETUP FIXTURE AND NOTHING ELSE.  It stops once libtest.out/ exists;
-# the fsck and the twenty-seven diffs are ctest cases of their own (libtest_fsck,
+# the fsck and the twenty-eight diffs are ctest cases of their own (libtest_fsck,
 # libtest_<name>), so a single program's disagreement names itself instead of being
 # reported as "libtest failed".  That is the one way this differs from run-session.sh,
 # where the sequence IS the test and there is one thing to check at the end.

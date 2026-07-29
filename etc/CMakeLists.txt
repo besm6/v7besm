@@ -10,11 +10,16 @@
 # commands -- not because anything here needs the cross toolchain, but because B6_ROOTFS and
 # the `rootfs' aggregate are defined there.
 
+# ttys is the newest, and the only one here that CHANGES WHAT THE MACHINE DOES rather than what
+# it says: cmd/init's merge() reads it and forks a getty per enabled line, so with this file on
+# the image the boot no longer ends in a single-user shell (kernel task 29b).  Two lines, one
+# per Consul; the format is include/man/ttys.5 and rline() in cmd/init/init.c.
+
 # termcap is BSD's termcap.small, verbatim, and lib/libtermcap/README.md says what it does
 # and does not describe.  It is also the file lib/test/termcapt reads under b6sim -- through
 # $TERMCAP, naming THIS source copy -- so that the b6sim run and the run off the image
 # adjudicate against one expectation.
-set(B6_ETC group motd passwd rc termcap)
+set(B6_ETC group motd passwd rc termcap ttys)
 
 set(_staged "")
 foreach(f ${B6_ETC})

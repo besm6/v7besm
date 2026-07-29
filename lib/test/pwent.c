@@ -15,12 +15,14 @@
 // walk would both clobber the entry in hand and restart the walk.  The names and ids
 // are copied out first; that they must be is itself the contract <pwd.h> states.
 //
-// The terminal three answer for their failure paths here, which is all the simulator
-// can offer: ttyname() reads /dev with read(2), as v7 did and as this kernel will
-// allow, and b6sim's read() is the host's and refuses a directory -- so it is NULL,
-// ttyslot() is 0 and getlogin(), which needs a slot, is NULL.  Under the real kernel
-// with a root filesystem they will have something to say; that run is kernel task
-// 18b.6 and not this one.
+// TWO OF THE TERMINAL ROUTINES ANSWER FOR THEIR FAILURE PATHS HERE, and that is all a
+// program running in both worlds can say about them: ttyname() reads /dev with read(2),
+// as v7 did and as this kernel allows, and b6sim's read() is the host's and refuses a
+// directory -- so a descriptor that is not a terminal, and a descriptor that is not
+// open, are NULL on both.  ttyslot() and getlogin() are NOT here any more.  They used
+// to be, answering 0 and NULL in both worlds, but only because /etc/ttys was missing;
+// kernel task 29b put it on the image and the two worlds now disagree.  Their real
+// answers are ttyt's, which runs on the image only.
 //
 // The crypt vectors are the HOST's crypt(3), not this program's own first output: DES
 // has one right answer and the point is to agree with it.
@@ -32,7 +34,6 @@
 #include <string.h>
 #include <unistd.h>
 
-int ttyslot(void);
 int getpw(int uid, char buf[]);
 char *crypt(const char *pw, const char *salt);
 
@@ -166,8 +167,12 @@ int main(void)
     if (fd >= 0)
         close(fd);
     ok("ttyname of a closed descriptor is null", ttyname(31) == 0);
-    ok("ttyslot has no slot to report", ttyslot() == 0);
-    ok("getlogin has no slot to read", getlogin() == 0);
+    // ttyslot() AND getlogin() USED TO BE ASSERTED HERE and are not any more.  They answered
+    // zero and NULL in both worlds only because /etc/ttys did not exist; kernel task 29b put
+    // it on the image, so ttyslot() now finds `console' on line 1 under the booted kernel
+    // while it still finds nothing under b6sim -- and this program adjudicates BOTH runs
+    // against one .expected, so it can no longer be the one that says.  Their positive
+    // answers moved to ttyt, which is image-only for that reason.
 
     // ---- crypt ----
     printf("--- crypt\n");

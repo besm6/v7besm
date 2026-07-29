@@ -25,7 +25,7 @@ disk drivers are written and their failure modes classified.
 **It boots to a shell.** `b6fsutil` (`cmd/fsutil/`) builds a root filesystem image in the kernel's
 own on-disk layout; the kernel mounts it, hands process 1 the icode, **enters user mode** and execs
 `/etc/init` — the real v7 one — which forks `/bin/sh` and prompts with `# ` on the SIMH console.
-Type at it: the shell runs twenty-four commands off the disk, the kernel does the
+Type at it: the shell runs twenty-five commands off the disk, the kernel does the
 erase, kill and end-of-file processing, and `^D` takes init round through `/etc/rc` to a fresh
 prompt. It also **writes** — create files, `sync`, and the image fscks clean on the host afterwards.
 And it **keeps** files: `mkdir`, `rmdir`, `cp`, `ln`, `mv` and `rm` build and rearrange the tree
@@ -37,6 +37,14 @@ could do — `[` is its second name and the image's one hard link — while `bas
 apart, `tty` names the terminal, `time` forks a command and measures it against a 250 Hz clock,
 and `yes` runs until a `SIGPIPE` down a pipeline stops it.
 
+And it is **multi-user**. `^D` at that first prompt now carries init past `/etc/rc` and into the
+state a Unix spends its life in: `/etc/ttys` names both Consul typewriters, `/etc/getty` puts a
+`login:` on each, `/bin/login` checks a password through `crypt(3)`, writes `/etc/utmp`, hands the
+terminal over and execs a shell — and when that shell exits, init respawns the getty for the next
+person. The prompt comes back `$ ` rather than `# `, which is this machine's **first shell that
+does not belong to root**: until now `init` exec'd `/bin/sh` directly and every process above the
+icode ran as uid 0.
+
 The **libc runs on it too**: the test programs of [lib/test/](lib/test/) live on the image as
 `/usr/test/*` and produce there, byte for byte, the same output they produce under
 `b6sim` — stdio, `malloc`, `setjmp`, the exec family, signals, `<time.h>`, the passwd file, and a
@@ -44,8 +52,8 @@ shell started through `system()`/`popen()`. Running one suite under two independ
 what turns a disagreement into a bug report: under `b6sim` every system call is served by the host,
 so a kernel fault cannot show, and the two answering differently means one of them is wrong.
 
-What remains is the multi-user road — `getty`, `login` and `/etc/ttys`, now that the kernel drives
-**both** of the machine's Consul typewriters and there is a second terminal to log in on — and a
+What remains of the multi-user road is one test: the second Consul is a real terminal with a getty
+already sitting on it, reachable over telnet, but nothing drives it from a script yet. That and a
 handful of smaller leftovers. [kernel/README.md](kernel/README.md) is the
 reference: the design the machine forces and the hardware rules every part of it obeys.
 [kernel/TODO.md](kernel/TODO.md) is the work plan, task by task.

@@ -1,0 +1,11 @@
+--- ttyname
+ttyname(0) /dev/console
+ok   standard input is a terminal
+ok   and it is the console
+ok   a descriptor that is not open has no name
+--- ttyslot
+ttyslot() 1
+ok   the console is line 1 of /etc/ttys
+--- getlogin
+ok   nobody is logged in on it yet
+done

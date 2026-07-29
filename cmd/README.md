@@ -32,8 +32,9 @@ single-file programs and 29 directories of larger ones. That tree is **not in th
 
 **A directory is part of the build when it holds a `CMakeLists.txt`**, and only the ported ones
 do — the ten of task C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`, `mv/`, `rm/`,
-`rmdir/`, `touch/`), the three of C2a (`date/`, `kill/`, `sleep/`) and the five of C2b
-(`basename/`, `test/`, `time/`, `tty/`, `yes/`) today. That is the only marker;
+`rmdir/`, `touch/`), the three of C2a (`date/`, `kill/`, `sleep/`), the five of C2b
+(`basename/`, `test/`, `time/`, `tty/`, `yes/`) and the two of kernel task 29b (`getty/`,
+`login/`) today. That is the only marker;
 [../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.
 
 Four things about the copies:
@@ -188,6 +189,7 @@ Anything that walks directories — `rm -r`, `du`, `find`, `ncheck`, `dcheck`, `
 |---|---|---|---|---|---|
 | `sh` | 121 | 7,039 | 637 | 131 | **7,928** |
 | `ls` | 110 | 4,632 | 298 | 2,638 | **7,678** |
+| `login` | 106 | 5,063 | 408 | 1,321 | **6,898** |
 | `cat` | 83 | 2,989 | 165 | 1,544 | **4,781** |
 | `chgrp` | 85 | 3,211 | 344 | 1,236 | **4,876** |
 | `time` | 85 | 3,088 | 340 | 1,041 | **4,554** |
@@ -202,16 +204,18 @@ Anything that walks directories — `rm -r`, `du`, `find`, `ncheck`, `dcheck`, `
 | `basename` | 35 | 1,162 | 147 | 1,030 | **2,374** |
 | `init` | 27 | 820 | 37 | 323 | **1,207** |
 | `test` | 22 | 886 | 49 | 7 | **964** |
+| `getty` | 34 | 361 | 28 | 11 | **434** |
 
 Most of `cat` is libc's stdio, and `sh` is the largest v7 command bar the ones tasks C9 and C10
 name — so nothing before task C6 is in danger of the first ceiling. `fsck`, `sort`, `awk` and
 `make` are the four to measure early rather than late.
 
-**The bottom two rows say what stdio costs.** Every program above `basename` links `printf`
+**The bottom three rows say what stdio costs.** Every program above `basename` links `printf`
 and a `FILE` buffer, which is the ~1,030 words of bss and most of the text they have in common;
-`test` links neither — its whole output is four `write(2)` calls — and is a twelfth the size of
-`cat`. That is the difference `lib/libc/README.md` measures for `hello`, seen from the other
-end.
+`test` and `getty` link neither — `test`'s whole output is four `write(2)` calls and `getty`'s is
+one `write(2)` per character — so `getty` is the smallest program on the image, an eleventh the
+size of `cat`. That is the difference `lib/libc/README.md` measures for `hello`, seen from the
+other end.
 
 **The stack is where a fixed buffer goes wrong, and every port so far has had to bound one.**
 `mkdir`, `rmdir`, `ln`, `cp` and `mv` each build a path in a fixed automatic that v7 filled with
@@ -258,11 +262,19 @@ through: a manifest `mode 04755` reaches the inode as `IFREG | (mode & 07777)`
 work, and no source change was needed anywhere to make it work.
 
 **Which is exactly why it had to be asserted rather than assumed**, and the trap is that
-`getxfile()` takes the ISUID branch only `if (u.u_uid != 0)` — while every shell here is root's,
-`init` execing `/bin/sh` with no `getty` and no `login` behind it. So a setuid program typed at
-the console prompt exercises no setuid code at all. [../lib/test/suidt.c](../lib/test/suidt.c) is
-the answer: the only thing on the image that makes a non-root process, dropping to uid 7 and
-execing `/bin/mkdir`. **Anything else that wants the bit follows that pattern**, and
+`getxfile()` takes the ISUID branch only `if (u.u_uid != 0)`. That used to be unreachable from a
+prompt: **every shell on this machine was root's**, `init` execing `/bin/sh` with no `getty` and
+no `login` behind it, so a setuid program typed at the console exercised no setuid code at all.
+[../lib/test/suidt.c](../lib/test/suidt.c) is the answer that was written for it, and is still
+the assertion: the program drops to uid 7 itself and execs `/bin/mkdir`, so the transition is
+made deliberately rather than depended on.
+
+**Kernel task 29b changed the premise but not the practice.** [login/](login/) is on the image
+now, so a shell can belong to somebody other than root — `kernel/test/login` logs `guest` in and
+the prompt comes back `$ ` rather than `# ` — and a setuid program run from *that* shell really
+does take the ISUID branch. It is still not the way to test one: a bit asserted through a login
+dialogue is asserted through `getty`, `login`, `crypt` and `/etc/passwd` as well, and any of them
+failing looks the same. **Anything that wants the bit follows `suidt`'s pattern**, and
 [mkdir/README.md](mkdir/README.md) is the account.
 
 **Most programs do not want it.** `chmod(2)` is gated on `owner()`, which admits the file's owner,
@@ -297,8 +309,11 @@ Two harnesses, and choosing wrong wastes the effort:
   `.expected`, `kernel/test/session` for anything that must *write* and then be fscked on the
   host afterwards, `kernel/test/files` for anything that changes a tree or an inode, and
   `kernel/test/utils` (tasks C2a and C2b) for anything that touches the clock, a signal,
-  another process or a pipe. Each grafts its script onto its own copy of the image at its own
-  volume number; 3083 is the highest used.
+  another process or a pipe, and `kernel/test/login` (kernel task 29b) for anything that needs a
+  terminal's *modes* or a process that is not root's. Each has its own copy of the image at its
+  own volume number; 3084 is the highest used. All but `login` graft a script onto that copy
+  with `b6fsutil -a`, and `login` is the exception because what it tests is the thing that reads
+  what is typed: it types every character it needs.
 
 Most of task C5 lands in the first; C1, C3, C4 and C6 land in the second. Where a program can run
 in both, **do both** — the first time the libc suite was run in both worlds it found two bugs

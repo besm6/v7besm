@@ -302,8 +302,12 @@ What the ones already in [test/](test/) cost to get right:
   to end "and it is not the kernel"; that half is **withdrawn** — the drop also happens on an idle
   machine, reproducibly, on the *first* character of a send issued straight out of an `expect`, and
   an input overrun in `scintr()` is one of the two candidate mechanisms. `console.ini` pays
-  `send after=20000` to avoid it and its header says why; **[TODO.md](TODO.md) task 35** is the
-  measurement that would settle it.
+  `send after=20000` to avoid it and its header says why. **`login.ini` pays `delay=` on top of
+  that**, because a `getty` reading a name in RAW mode loses the *second* character too — one
+  `read(2)` and one `write(2)` per character from user mode, where a shell in canonical mode takes
+  the same stream whole. That is the first evidence favouring the overrun over the timing
+  artifact; **[TODO.md](TODO.md) task 35** is still the measurement that would settle it, and
+  `login.ini` is now the cheapest way to make the drop happen on demand.
 * **Never end an `expect`/`send` file on a rule a bare prompt satisfies.** All the rules are armed
   at once, so when a stage stalls the run falls through to that one at the next prompt and reports
   PASS. `console.ini` was doing exactly that, and had been passing without running its last four

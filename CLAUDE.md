@@ -52,19 +52,34 @@ work has two halves:
   terminal**: `kernel/dev/sc.c` drives *both* of the machine's Consul-254 typewriters as
   `cdevsw[0]` minors 0 and 1 — one driver rather than two because their `ext` addresses are
   adjacent and their ПРП bits one apart, so a variable unit folds into the instruction — which
-  puts `/dev/tty1` on the image beside `/dev/console`, waiting for the `getty` that task 29b
-  brings. (That is what became of the 24-line multiplexor `dev/sr.c` was a skeleton for; `sr.c` is
-  gone, and `rmd`/`rmb` moved to majors 3 and 4 behind it.) And it **swaps**:
+  puts `/dev/tty1` on the image beside `/dev/console`. (That is what became of the 24-line
+  multiplexor `dev/sr.c` was a skeleton for; `sr.c` is
+  gone, and `rmd`/`rmb` moved to majors 3 and 4 behind it.) And, task 29b, it is
+  **multi-user**: `/etc/ttys` names both typewriters, `merge()` in the v7 `init` — code that had
+  never run here, having had nothing to read — forks an `/etc/getty` on each, and `/bin/login`
+  checks a password through `crypt(3)` against a real encrypted field in `/etc/passwd`, writes
+  `/etc/utmp`, `chown`s the terminal *before* it drops root, and execs a shell. Log out and
+  `multiple()` respawns the getty for the next person. The prompt comes back **`$ ` rather than
+  `# `**, which is the point: until now `init` exec'd `/bin/sh` directly and every process above
+  the icode was root's, so `getxfile()`'s `ISUID` branch could only be reached by a program that
+  dropped privilege on purpose (`lib/test/suidt`). Two divergences worth knowing — `getty`'s
+  thirteen-entry PDP-11 speed table is **one entry** here, since a Consul has no baud rate, no
+  parity, no delays and no lower case to fold (`cmd/getty/README.md`), and `login` needs an
+  `fflush()` v7 did not, this libc's stdout being line-buffered on a terminal where v7's was
+  unbuffered, so a prompt with no newline never arrived (`cmd/login/README.md`). And it **swaps**:
   squeeze the machine to 31 pages and `sched()`/`newproc()` move real images through the drum,
   while `/bin/sh` and `/usr/test/puret` — the two binaries linked pure — share one copy of their
   text between processes. **`/dev/mem` and `/dev/kmem` work** too: a program reads its own
   `struct user` out of the kernel at `074000`, follows `u_procp` to its proc entry, and then
   reads *and writes* its own image at a physical address above `0100000` — which no unmapped
   access can name, so the driver goes through `copyphys()`, `kernel/seg.S`'s mapped window.
-  Seven tests
+  Eight tests
   guard that ladder — `kernel/test/boot` (the prompt appears), `kernel/test/console` (a typed
   dialogue with the shell, and the only one that reaches `/etc/rc`, whose motd and date it
-  asserts), `kernel/test/session` (files written, `sync`, then a host-side
+  asserts, ending on the `login:` the first getty puts there), `kernel/test/login` (that prompt
+  typed at: an unknown name refused, root logged in, the shell exited and the getty respawned,
+  guest logged in to a non-root shell, then a host-side fsck and the four inodes only the host
+  can see), `kernel/test/session` (files written, `sync`, then a host-side
   fsck and diff), `kernel/test/files` (the file-management set rearranging a tree and
   then re-permissioning it, fscked on the host afterwards and its modes and owners diffed out
   of `b6fsutil -v -v`), `kernel/test/libtest` (the libc suite run off the image, one ctest case
@@ -103,7 +118,7 @@ thing**, and knowing which one you are touching is most of what the build layout
 - **host tools** — `cmd/*`, compiled by the build machine's C/C++ compiler, run there;
 - **cross-built BESM-6 artifacts** — `kernel/` and `lib/`, compiled by the `b6*` toolchain
   above through `b6_obj()` in `scripts/BesmCross.cmake`;
-- **native BESM-6 programs** — `cmd/{init,sh,basename,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`, linked against libc by `b6_prog()`
+- **native BESM-6 programs** — `cmd/{init,getty,login,sh,basename,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`, linked against libc by `b6_prog()`
   and staged into `build/rootfs/` (with the static files of `etc/`) for the disk image the
   kernel mounts.
 
@@ -230,7 +245,7 @@ therefore names two archives, **ours first**: `-lc -lruntime`, because `b6ld` sc
 helper calls back into libc. The kernel takes `-lruntime` **alone** — it defines its own
 `printf` in `kernel/prf.c` and uses no other library routine.
 
-### Native BESM-6 programs (`cmd/{init,sh,basename,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}` + `etc/` → `build/rootfs/`)
+### Native BESM-6 programs (`cmd/{init,getty,login,sh,basename,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}` + `etc/` → `build/rootfs/`)
 
 The third category, and the newest. These are **`cmd/` subdirectories that are not host
 tools**: `cmd/init/init.c` is the Unix v7 `/etc/init`, `cmd/sh/` is S. R. Bourne's v7 shell,
@@ -246,9 +261,15 @@ than the filesystem: the clock, an alarm, and a signal to another process.  Not 
 and `date` emphatically not — `stime(2)` is `suser()`-gated and that gate is the whole reason a
 user cannot move the clock. Last, `cmd/test`, `cmd/basename`, `cmd/tty`, `cmd/time` and
 `cmd/yes` (task C2b) are the five the *shell* wanted, `test` above all: this shell has no
-built-in for it, so nothing on this machine could branch until it arrived. All compiled by the
-`b6*` toolchain and staged into `build/rootfs/` as `etc/init` and
-`bin/{sh,basename,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`. **`mkdir`, `mv` and `rmdir` are setuid
+built-in for it, so nothing on this machine could branch until it arrived. Last again,
+`cmd/getty` and `cmd/login` (kernel task 29b) are the two that make the machine multi-user, and
+they are the only pair here where one execs the other: `init` execs `/etc/getty`, getty execs
+`/bin/login`, login execs the shell, all in one process, which is why a logout is that process
+exiting and `init`'s `multiple()` starting a fresh getty. Neither is setuid, and `login`
+emphatically not — it is *handed* root by getty rather than borrowing it, and the setuid version
+is `su` (task C6). All compiled by the
+`b6*` toolchain and staged into `build/rootfs/` as `etc/init`, `etc/getty` and
+`bin/{sh,basename,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,login,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`. **`mkdir`, `mv` and `rmdir` are setuid
 root** on the image, which is a property of [root.manifest](root.manifest) alone (`mode 04755`)
 since nothing under `build/rootfs/` carries a mode; see
 [cmd/mkdir/README.md](cmd/mkdir/README.md) for the general account and
@@ -258,8 +279,10 @@ file** — a `link` stanza in the manifest, `/bin/test`'s inode, and the only ha
 [cmd/test/README.md](cmd/test/README.md) is the account, and `kernel/test`'s `rootimg_link`
 asserts it off the finished image because nothing else in the build can see it.
 Alongside them `etc/` (the top-level directory, not `cmd/etc`)
-stages the static files `group`, `motd`, `passwd`, `rc` and `termcap`, which are copied rather
-than compiled. `lib/test/` stages a third group, `usr/test/*` — the twenty-seven test programs,
+stages the static files `group`, `motd`, `passwd`, `rc`, `termcap` and `ttys`, which are copied
+rather than compiled — `ttys` being the one that changes what the machine *does* rather than what
+it says, since `init` reads it and forks a getty per line.
+`lib/test/` stages a third group, `usr/test/*` — the twenty-eight test programs,
 the same linked images `b6sim` runs, copied rather than linked a second time so that both
 harnesses provably run the same bytes.
 Together that tree is the root filesystem the kernel mounts. All of it is added from inside
