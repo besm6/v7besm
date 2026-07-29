@@ -187,6 +187,51 @@ echo time status $? >>/tmp/utils.log
 time kill >/dev/null 2>/dev/null
 echo time status $? >>/tmp/utils.log
 
+# ---- task C11: the shell carries eight bits.  THIS IS THE HALF b6sim CANNOT REACH.
+#
+# cmd/sh/test/utf8.sh has the quoting, the substitution, the here-documents and the byte
+# 0377, all of it asserted through `set' because b6sim has no exec worth the name and reads
+# a HOST directory when the shell globs.  What is left for here is exactly the two things
+# that needs a kernel: an argument crossing exece() into another program, and filename
+# generation over a real directory.
+#
+# Until this task, /bin/sh marked a quoted character by setting bit 0200 of it and trim()
+# cleared that bit from every word on its way to argv -- so `cat' carried Cyrillic and
+# `echo' turned it into ASCII.  The mark is a byte of its own now (cmd/sh/defs.h).
+#
+# The names are Cyrillic in both components, so the directory half of a pattern goes through
+# the same path as the pattern half.  `?' and `[...]' are put to ASCII characters on purpose:
+# this globber matches BYTES, so `?' is one byte and not one letter, and a class over a
+# two-byte letter would match half of it.  cmd/sh/test/utf8.sh asserts that reading.
+mkdir /tmp/юникод
+echo привет >/tmp/юникод/файл1
+echo мир >/tmp/юникод/файл2
+cat /tmp/юникод/файл1 /tmp/юникод/файл2 >>/tmp/utils.log
+
+# An argument, unquoted and quoted, reaching a program that did not parse it.
+echo привет мир >>/tmp/utils.log
+a=привет
+echo "$a" мир >>/tmp/utils.log
+echo '$a привет' >>/tmp/utils.log
+
+# ... and reaching one that COMPARES it: test(1) is the only program here that looks at
+# what an argument says rather than printing it.
+[ "$a" = привет ]
+echo utf8 test status $? >>/tmp/utils.log
+
+# Filename generation.  The third of these is the rescan path -- a pattern with a `/' after
+# the wildcard, which makes expand() call itself once per name the first pass turned up.
+echo /tmp/юникод/фа* >>/tmp/utils.log
+echo /tmp/юникод/файл? >>/tmp/utils.log
+echo /tmp/юник*/файл[12] >>/tmp/utils.log
+
+# A quoted wildcard is a character and not a pattern, so this one matches nothing and the
+# word stands as written.
+echo '/tmp/юникод/*' >>/tmp/utils.log
+
+rm /tmp/юникод/файл1 /tmp/юникод/файл2
+rmdir /tmp/юникод
+
 # Last, as in session.sh and files.sh: there is no update daemon here, so nothing else
 # flushes the cache.
 sync

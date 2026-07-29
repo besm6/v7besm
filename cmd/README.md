@@ -331,14 +331,27 @@ happened once: `touch` — see "What task C1 taught" below. A `README.md` is wor
 structural — a new privilege transition, a new hazard — which is the standard `sh`, `ls`, `mkdir`
 and `mv` met and `cp`, `ln` and `rm` did not.
 
-### 11. The terminal carries eight bits; the shell does not
+### 11. Everything carries eight bits, and a `char` is unsigned
 
 The console path is byte-transparent in both directions and this machine's text is UTF-8
-([../kernel/dev/sc.c](../kernel/dev/sc.c)), so a program that reads its own input or writes its own
-output carries Cyrillic. What it cannot do is receive it as an **argument**: `/bin/sh` marks a
-quoted character with bit `0200` and `trim()` clears that bit from every character of every word
-([sh/service.c](sh/service.c)), so `cat` works where `echo` mangles. Test anything that must be
-8-bit clean through a pipe or a file, not through the shell's word expansion.
+([../kernel/dev/sc.c](../kernel/dev/sc.c)); so are the clists, the filesystem and — since task
+C11 — `/bin/sh`, which used to mark a quoted character with bit `0200` and clear that bit from
+every word on its way to `argv`. A Cyrillic string now survives being typed, being written, being
+stored, being globbed and being passed as an **argument**. Nothing has to be routed around the
+shell any more.
+
+What that leaves is a rule about **your** program, and it is the one v7 sources break: `char` is
+unsigned here, so a byte above `0177` is a value in `128..255` and not a negative number — but
+v7 code masks with `0177`, tests `c > 0` to mean "not EOF", or indexes a 128-entry table with a
+character. All three are silent on ASCII and wrong on the first Cyrillic byte. The shell's own
+account of what that cost is [sh/README.md](sh/README.md)'s C11 section; the short form is that a
+table indexed by a character must have **256** entries, and a mask that throws away the eighth
+bit is almost always a bug.
+
+Two things that follow, and are worth knowing before writing a test: the shell's pattern
+language matches **bytes**, so `?` is one byte and not one letter; and the terminal driver
+refuses a typed `0377` ([../kernel/dev/tty.c](../kernel/dev/tty.c)), which is the raw queue's
+delimiter — a script read from disk may contain one, a console user cannot type one.
 
 ---
 

@@ -25,6 +25,14 @@ for f in "$srcdir/$name".*.sh; do
     [ -e "$f" ] && cp "$f" .
 done
 
+# /bin/echo COMES ALONG, and it is the only binary that does.  b6sim resolves PATH against
+# the HOST filesystem, so a bare `echo' in a script would find the host's ELF /bin/echo,
+# fail to exec it, and be read back as a shell script; but b6sim does fork and exec a real
+# BESM-6 a.out, so a copy named ./echo beside the script works.  It is here because `set'
+# -- every other script's oracle -- shows what the name tree holds and cannot show what
+# reached ARGV, which is the one thing utf8.sh has to assert.
+cp "$(dirname "$sh")/echo" . 2>/dev/null || true
+
 args=$(cat "$srcdir/$name.args" 2>/dev/null || true)
 want=$(cat "$srcdir/$name.status" 2>/dev/null || echo 0)
 

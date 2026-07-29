@@ -50,6 +50,15 @@ b6_shtest(script)
 # SHEOF at an unterminated last line, which is why the fixture has no final newline.
 b6_shtest(comment)
 
+# Task C11: the shell carries eight bits.  v7 marked a quoted character by setting bit
+# 0200 of it and trim() cleared that bit from every word on its way to argv, so a byte of
+# UTF-8 came out as an ASCII letter; the mark is a QESC byte in front of the character now
+# (defs.h).  Covers the four ways of quoting, substitution, splitting, `case', both kinds
+# of here-document, command substitution, and the byte 0377 itself -- the one value the
+# stored form has to write twice.  This is also the only fixture here that execs anything:
+# `set' cannot show what reached ARGV, so run-sh-test.sh brings ./echo along.
+b6_shtest(utf8)
+
 # The one that guards the arena and the break.  Without chkstak() (stak.h) this script
 # does not print `no space' -- it runs off the end of the break and out of the address
 # space, because the memory fault v7 relied on to grow the arena mid-push is not

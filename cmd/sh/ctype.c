@@ -4,9 +4,14 @@
 //
 // The shell's own character tables -- not <ctype.h>'s, and not named like them.
 //
-// 128 entries each, which is the whole range the shell ever indexes them with: every
-// test in ctype.h is guarded by (c & QUOTE) == 0, so a quoted character (bit 0200 set,
-// which is how word() marks one) short-circuits before the subscript is evaluated.
+// 256 ENTRIES EACH, and v7 had 128.  The extra half is all zeroes and buys nothing but
+// safety, which is the point: v7 could stop at 128 because the quoting mark was bit 0200
+// OF THE CHARACTER, so the (c & QUOTE) == 0 test in front of every subscript in ctype.h
+// doubled as the bounds check -- no character with that bit set ever reached a table.
+// Here the mark is a byte of its own (defs.h) and `char' is unsigned, so a Cyrillic byte
+// arrives as an ordinary subscript in 0200..0377 and the guard says nothing about it.
+// Nothing above 0177 is special to the shell, so the upper half is zero, but it has to
+// EXIST.  126 words, and the alternative is a range test at seventeen call sites.
 //
 #include "defs.h"
 
@@ -16,7 +21,7 @@
 // it one of ; & | < >.  A table lookup rather than a chain of comparisons, because
 // word() asks about every character it reads.
 //
-char _ctype1[] = {
+char _ctype1[256] = {
     /*	000	001	002	003	004	005	006	007	*/
     _EOF, 0, 0, 0, 0, 0, 0, 0,
 
@@ -62,6 +67,8 @@ char _ctype1[] = {
 
     /*	x	y	z	{	|	}	~	del	*/
     0, 0, 0, 0, _BAR, 0, 0, 0
+
+    // 0200..0377 are left to the zero fill: nothing above 0177 is special to the lexer.
 };
 
 //
@@ -69,7 +76,7 @@ char _ctype1[] = {
 // a digit, a letter, one of the * ? [ wildcards, one of the - = + ? that follow a name
 // inside ${...}.
 //
-char _ctype2[] = {
+char _ctype2[256] = {
     /*	000	001	002	003	004	005	006	007	*/
     0, 0, 0, 0, 0, 0, 0, 0,
 
@@ -115,4 +122,9 @@ char _ctype2[] = {
 
     /*	x	y	z	{	|	}	~	del	*/
     _LPC, _LPC, _LPC, _CBR, 0, _CKT, 0, 0
+
+    // 0200..0377 are left to the zero fill.  A Cyrillic byte is deliberately NOT a letter
+    // here: T_IDC decides what may appear in a $name, and a variable's name is an
+    // identifier in the v7 sense.  It is the variable's VALUE that had to become
+    // eight-bit clean, not its name.
 };

@@ -472,10 +472,18 @@ _Noreturn static void synbad(void)
     }
     prs(colon);
     prc(LQ);
-    if (wdval)
+    if (wdval) {
         prsym(wdval);
-    else
+    } else {
+        //
+        // The offending word is printed at a TERMINAL, so the quoting marks come off it
+        // first -- it is still in the stored form here (defs.h) and a QESC byte on the
+        // screen is noise.  Trimming in place is safe because this word is dead: the
+        // exitsh() below abandons the command it belonged to.
+        //
+        trim(wdarg->argval);
         prs(wdarg->argval);
+    }
     prc(RQ);
     prs(unexpected);
     newline();

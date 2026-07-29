@@ -9,32 +9,60 @@
 #include "defs.h"
 #include "sym.h"
 
-// The bit to OR into every character being copied: 0200 while inside double quotes,
+// The bit to OR into every character being copied: QUOTE while inside double quotes,
 // 0 outside.  Marking each character as it goes past is how the shell remembers, later,
 // which parts of a word were quoted and so must not be split or matched as a wildcard.
-static CHAR quote;
+//
+// IT MUST BE AN INT.  v7 held it in a CHAR because the mark was bit 0200 of the character
+// and fitted; the mark is far above the byte now (defs.h), and a CHAR here would make
+// `quote ^= QUOTE' a no-op and take out every double quote in the shell in silence.
+static INT quote;
 
 // Whether any double quote was seen at all.  A word written "" expands to an empty
 // argument, which must survive; a word that was simply empty does not.
 static CHAR quoted;
 
+//
+// Whether what is being built is a WORD or a BUFFER, which decides whether the characters
+// pushed below are encoded (defs.h) or laid down as they stand.
+//
+// macro() is building a word on the expression stack, so the stored form applies and
+// trim() will decode it later.  subst() is filling a buffer that flush() hands straight to
+// write(), so nothing may go into it that the command reading it did not ask for.  The two
+// share every routine in this file, which is why the difference is a flag and not a
+// parameter.
+//
+static BOOL encoding;
+
 // Defined below.
-static INT getch(CHAR endch);
+static INT getch(INT endch);
 static void comsubst(void);
 static void flush(INT ot);
-static void skipto(CHAR endch);
+static void skipto(INT endch);
+
+//
+// Push one character of expansion output -- see `encoding' above.
+//
+static void pushout(INT c)
+{
+    if (encoding) {
+        pushq(c);
+    } else {
+        chkstak(staktop);
+        pushstak(c & LOBYTE);
+    }
+}
 
 //
 // v7 declared this LOCAL STRING and never returned anything from it; both callers
 // ignore the result, so it says void.
 //
-static void copyto(CHAR endch)
+static void copyto(INT endch)
 {
-    CHAR c;
+    INT c;
 
     while ((c = getch(endch)) != endch && c) {
-        chkstak(staktop);
-        pushstak(c | quote);
+        pushout(c | quote);
     }
     zerostak();
     if (c != endch)
@@ -50,9 +78,11 @@ static void copyto(CHAR endch)
 // Used for the half of ${name-word} that is NOT wanted: in `${x-y}' with x set, y still
 // has to be scanned past correctly, but nothing in it should be evaluated.
 //
-static void skipto(CHAR endch)
+// A quoted character cannot close anything: readc() hands the mark back with it, so
+// `${x-a\}b}' skips past the escaped brace the way it should.
+static void skipto(INT endch)
 {
-    CHAR c;
+    INT c;
 
     while ((c = readc()) && c != endch) {
         switch (c) {
@@ -91,9 +121,9 @@ static void skipto(CHAR endch)
 // caller only ever sees ordinary text come back.  A backquote hands off to comsubst()
 // and a double quote flips the `quote' bit above.
 //
-static INT getch(CHAR endch)
+static INT getch(INT endch)
 {
-    CHAR d;
+    INT d;
 
 retry:
     d = readc();
@@ -190,20 +220,35 @@ retry:
             if (v) {
                 if (c != '+') {
                     for (;;) {
-                        while ((c = *v++) != 0) {
-                            chkstak(staktop);
-                            pushstak(c | quote);
-                        }
+                        //
+                        // A VALUE COMES OUT OF THE NAME TREE RAW -- see defs.h's third
+                        // invariant -- so every byte of it is encoded on the way onto the
+                        // stack.  Without that a 0377 in somebody's data would be read
+                        // back by trim() as a quoting mark and eat the byte after it.
+                        //
+                        while ((c = *v++) != 0)
+                            pushout(c | quote);
                         if (dolg == 0 || (++dolg > dolc)) {
                             break;
                         } else {
                             v = dolv[dolg];
-                            chkstak(staktop);
-                            pushstak(SP | (*id == '*' ? quote : 0));
+                            pushout(SP | (*id == '*' ? quote : 0));
                         }
                     }
                 }
             } else if (argp) {
+                //
+                // argp is the ${x?word} / ${x=word} tail, which copyto() has just left on
+                // the stack in the STORED form.  It is about to be printed, or to become a
+                // variable's value, and both want plain text.  (Under subst() copyto()
+                // pushed plain text already, so there is nothing to take off.)
+                //
+                // v7 ASSIGNED IT MARKED, which is why this is a deliberate divergence and
+                // not a bug fix: there, ${x=a\ b} put a 0200-marked space in x and a later
+                // $x came out as one word.  The name tree holds raw values here.
+                //
+                if (encoding)
+                    trim(argp);
                 if (c == '?')
                     failed(id, *argp ? argp : badparam);
                 else if (c == '=') {
@@ -245,21 +290,35 @@ retry:
 //
 STRING macro(STRING as)
 {
-    BOOL savqu = quoted;
-    CHAR savq  = quote;
+    BOOL savqu  = quoted;
+    BOOL savenc = encoding;
+    INT savq    = quote;
     SHFILEHDR fb;
 
     push((SHFILE)&fb);
     estabf(as);
+    //
+    // THE WORD IS IN THE STORED FORM and is about to be read back through the lexer, so
+    // readc() has to decode it; and what comes out is a word again, so the pushes below
+    // have to encode.  These are the two halves of defs.h's second invariant, and they are
+    // separate flags because subst() wants the first without the second.
+    //
+    standin->fencd = TRUE;
+    encoding       = TRUE;
     usestak();
     quote  = 0;
     quoted = 0;
     copyto(0);
     pop();
-    if (quoted && (stakbot == staktop))
-        pushstak(QUOTE);
-    quote  = savq;
-    quoted = savqu;
+    if (quoted && (stakbot == staktop)) {
+        // "" -- an empty word that must survive.  A lone QESC before the terminator is
+        // what v7 spelled as a lone 0200, and every decoder reads it as `nothing'.
+        chkstak(staktop);
+        pushstak(QESC);
+    }
+    quote    = savq;
+    quoted   = savqu;
+    encoding = savenc;
     return fixstak();
 }
 
@@ -277,14 +336,18 @@ STRING macro(STRING as)
 static void comsubst(void)
 {
     SHFILEBLK cb;
-    CHAR d;
+    INT d, lastnonnl;
     STKPTR savptr = fixstak();
 
     usestak();
-    while ((d = readc()) != SQUOTE && d) {
-        chkstak(staktop);
-        pushstak(d);
-    }
+    //
+    // The body is collected out of the word being expanded, which is encoded, so readc()
+    // hands back decoded characters and a quoted backquote does not end the collection.
+    // It goes back down in the stored form because trim() below is what turns it into the
+    // command text -- pushq() and not pushout(), because that is true under subst() too.
+    //
+    while ((d = readc()) != SQUOTE && d)
+        pushq(d);
 
     {
         STRING argc;
@@ -304,17 +367,26 @@ static void comsubst(void)
     }
     tdystak(savptr);
     staktop = movstr(savptr, stakbot);
+    //
+    // THE TRAILING NEWLINES ARE TRIMMED FORWARD, not backward.  v7 walked back down the
+    // stack popping bytes that looked like a newline, and this encoding cannot be read
+    // backwards at all: inside double quotes every output byte is laid down as `QESC d',
+    // so the byte in front of a newline is a mark, and a byte 0377 in the output is laid
+    // down as `QESC QESC', so the byte in front of a mark may be a payload.  Remembering
+    // where the last non-newline ended costs one integer and no scan.
+    //
+    // It also fixes something v7 got wrong by accident: its loop stopped at `stakbot', so
+    // the text ALREADY on the stack in front of the backquote could be eaten too if it
+    // happened to end in a newline.  The floor here is where that text ends.
+    //
+    lastnonnl = relstak();
     while ((d = readc()) != 0) {
-        chkstak(staktop);
-        pushstak(d | quote);
+        pushout(d | quote);
+        if ((d & LOBYTE) != NL)
+            lastnonnl = relstak();
     }
     await(0);
-    while (stakbot != staktop) {
-        if ((*--staktop & STRIP) != NL) {
-            ++staktop;
-            break;
-        }
-    }
+    setstak(lastnonnl);
     pop();
 }
 
@@ -340,14 +412,24 @@ static void comsubst(void)
 //
 void subst(INT in, INT ot)
 {
-    CHAR c;
+    INT c;
+    BOOL savenc = encoding;
     SHFILEBLK fb;
     INT count = CPYSIZ;
 
     push((SHFILE)&fb);
     initf(in);
+    //
+    // THE TEMP FILE IS ENCODED and what comes out of here is not.  copy() wrote it in the
+    // stored form (io.c) so that a backslash in the body still means something by the time
+    // it is read back; this is where the marks come off, and the command on the far end of
+    // `ot' gets the bytes the user wrote.  v7 did the same job with a `& 0177' on the way
+    // past, which is what cost an unquoted here-document its eighth bit.
+    //
+    standin->fencd = TRUE;
+    encoding       = FALSE;
     // DQUOTE used to stop it from quoting
-    while ((c = (getch(DQUOTE) & STRIP)) != 0) {
+    while ((c = (getch(DQUOTE) & LOBYTE)) != 0) {
         chkstak(staktop);
         pushstak(c);
         if (--count == 0) {
@@ -356,6 +438,7 @@ void subst(INT in, INT ot)
         }
     }
     flush(ot);
+    encoding = savenc;
     pop();
 }
 

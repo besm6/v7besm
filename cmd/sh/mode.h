@@ -117,6 +117,7 @@ struct fileblk {
     UFD fdes;            // the descriptor, or -1 if reading from a string
     POS flin;            // which line we are on, for the syntax error report
     BOOL feof;           // nothing left to read here
+    BOOL fencd;          // this input is ENCODED text -- see below
     INT fsiz;            // how much to read at a time: a bufferful, or one character
                          // when input is a terminal, so that no typing is swallowed
     STRING fnxt;         // the next character of the buffer to hand out
@@ -127,6 +128,15 @@ struct fileblk {
 };
 
 //
+// fencd IS NOT v7's, and it is the second of defs.h's three invariants made mechanical.
+// Script text is raw: a 0377 in it is a byte of somebody's data.  Two inputs are not --
+// the word macro() pushes and re-reads through the lexer, and the here-document temp
+// file, which copy() writes in the stored form so that a backslash in an unquoted
+// here-document still means something when subst() reads it back.  readc() decodes QESC
+// only when this flag is set, and it is set by exactly those two places.
+//
+
+//
 // The same thing WITHOUT the buffer, for reading from a string rather than a file.
 // Every field lines up with struct fileblk above, and macro() allocates one of these on
 // the C stack to save the sixty-odd bytes the buffer would cost on every substitution.
@@ -135,6 +145,7 @@ struct filehdr {
     UFD fdes;
     POS flin;
     BOOL feof;
+    BOOL fencd;
     INT fsiz;
     STRING fnxt;
     STRING fend;

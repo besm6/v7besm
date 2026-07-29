@@ -1,0 +1,105 @@
+IFS= 	
+
+alsonosuch=сохранённый
+assigned=сохранённый
+backslashed=$plain
+braced=приветтся
+class=yes
+copied=сохранённый
+count=3
+defaulted=запасной
+double=привет
+escaped=привет
+first=раз
+gap=один два
+inquotes=один привет два
+joined=привет-привет
+literal=$plain
+loop=-альфа-бета-гамма
+one=первый привет
+one_byte=no
+plain=привет
+quoted_star=yes
+quoted_star_wild=no
+single=привет
+spaced=один   два
+star=раз два три
+star_head=yes
+star_tail=yes
+two=второй $plain
+w=гамма
+IFS= 	
+
+alsonosuch=сохранённый
+assigned=сохранённый
+backslashed=$plain
+braced=приветтся
+class=yes
+copied=сохранённый
+count=3
+defaulted=запасной
+double=привет
+escaped=привет
+first=раз
+gap=один два
+inquotes=один привет два
+joined=привет-привет
+literal=$plain
+loop=-альфа-бета-гамма
+one_byte=no
+plain=привет
+quoted_star=yes
+quoted_star_wild=no
+raw=третий $plain
+single=привет
+spaced=один   два
+star=раз два три
+star_head=yes
+star_tail=yes
+w=гамма
+привет
+привет
+привет $plain
+привет
+один два три
+раз два три
+a�b
+a�b
+a  b
+a  b
+IFS= 	
+
+alsonosuch=сохранённый
+assigned=сохранённый
+backslashed=$plain
+braced=приветтся
+class=yes
+copied=сохранённый
+count=3
+defaulted=запасной
+double=привет
+empty=
+escaped=привет
+ffdouble=a�b
+ffesc=a�b
+ffplain=a�b
+ffsingle=a�b
+first=раз
+gap=один два
+inquotes=один привет два
+joined=привет-привет
+literal=$plain
+loop=-альфа-бета-гамма
+one_byte=no
+plain=привет
+quoted_star=yes
+quoted_star_wild=no
+single=привет
+spaced=один   два
+star=раз два три
+star_head=yes
+star_tail=yes
+sub=привет мир
+subq=раз
+два
+w=гамма

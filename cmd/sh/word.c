@@ -4,11 +4,16 @@
 //
 // Character handling for command lines: the shell's lexer.
 //
-// QUOTING RIDES IN BIT 0200 of each character, and that works here for the reason it
-// worked on the PDP-11 even though `char' is signed there and unsigned here: every test
-// in ctype.h checks (c & QUOTE) == 0 first and short-circuits, so a marked character is
-// never used as a table subscript.  What changes is only the sign of the intermediate,
-// which nothing looks at.
+// QUOTING DOES NOT RIDE IN BIT 0200 here, and defs.h is where that is set out.  v7 marked
+// a quoted character by setting the top bit of it, which costs the eighth bit of every
+// byte the shell handles -- and this machine's text is UTF-8, so that bit is data.  A
+// character in flight carries the mark in a bit far above the byte; a character on the
+// stack carries it as a QESC byte in front.  This file is where both are produced:
+// nextc() puts the in-flight mark on, and word() calls pushq() to lay the stored form
+// down.
+//
+// It is also where the stored form is READ back, because macro() pushes a word as an
+// input and re-reads it through readc().  That is what the fencd flag is for.
 //
 #include <unistd.h>
 
@@ -35,7 +40,7 @@ static INT readb(void);
 //
 INT word(void)
 {
-    CHAR c, d;
+    INT c, d;
     CHAR *argp = locstak() + BYTESPERWORD;
     INT alpha  = 1;
 
@@ -70,23 +75,36 @@ INT word(void)
             if (c == LITERAL) {
                 *argp++ = DQUOTE;
                 while ((c = readc()) && c != LITERAL) {
-                    chkstak(argp);
-                    *argp++ = c | QUOTE;
+                    argp = putq(argp, c | QUOTE);
                     chkpr(c);
                 }
                 chkstak(argp);
                 *argp++ = DQUOTE;
             } else {
-                *argp++ = c;
+                argp = putq(argp, c);
                 if (c == '=')
                     wdset |= alpha;
                 if (!alphanum(c))
                     alpha = 0;
                 if (qotchar(c)) {
+                    //
+                    // Inside "..." or `...` the quotes THEMSELVES are copied and macro.c
+                    // marks what is between them later, when it re-reads the word; only a
+                    // backslash escape is marked here, by nextc().  Either way putq() is
+                    // what lays the character down, so a literal QESC in the text is
+                    // doubled and cannot be read back as a mark.
+                    //
                     d = c;
-                    do {
+                    while ((c = nextc(d)) != 0) {
+                        argp = putq(argp, c);
+                        if (c == d)
+                            break;
+                        chkpr(c);
+                    }
+                    if (c == 0) {
                         chkstak(argp);
-                    } while ((*argp++ = (c = nextc(d))) && c != d && (chkpr(c), 1));
+                        *argp++ = 0;
+                    }
                 }
             }
         } while (c = nextc(0), !eofmeta(c));
@@ -133,9 +151,9 @@ INT word(void)
 // character as quoted.  `quote' is the quote character currently open, if any, since a
 // backslash means less inside double quotes than outside them.
 //
-INT nextc(CHAR quote)
+INT nextc(INT quote)
 {
-    CHAR c, d;
+    INT c, d;
 
     if ((d = readc()) == ESCAPE) {
         if ((c = readc()) == NL) {
@@ -151,24 +169,20 @@ INT nextc(CHAR quote)
 }
 
 //
-// Read one raw character of input.  Everything the shell reads comes through here.
+// Read one BYTE of input, with no interpretation at all.
 //
-// It takes from, in order: the one-character pushback the lexer left; the current input
-// buffer; and failing that a fresh read from the file.  At the end of an input it pops
-// back to whatever was reading before -- so `.' and `eval' end by simply running out --
-// and reports end of file only when there is nothing left to pop.
+// It takes from the current input buffer, and failing that from a fresh read of the file.
+// At the end of an input it reports end of file, which is what lets `.' and `eval' finish
+// by simply running out.
 //
-INT readc(void)
+static INT readraw(void)
 {
-    CHAR c;
+    INT c;
     INT len;
     SHFILE f;
 
 retry:
-    if (peekc) {
-        c     = peekc;
-        peekc = 0;
-    } else if (f = standin, f->fnxt != f->fend) {
+    if (f = standin, f->fnxt != f->fend) {
         if ((c = *f->fnxt++) == 0) {
             if (f->feval) {
                 if (estabf(*f->feval++))
@@ -176,7 +190,7 @@ retry:
                 else
                     c = SP;
             } else {
-                goto retry; // = c=readc();
+                goto retry; // = c=readraw();
             }
         }
         if (flags & readpr && standin->fstak == 0)
@@ -194,6 +208,50 @@ retry:
     } else {
         f->fend = (f->fnxt = f->fbuf) + len;
         goto retry;
+    }
+    return c;
+}
+
+//
+// Read the next character of input.  Everything the shell reads comes through here.
+//
+// It takes from the one-character pushback the lexer left, and failing that from readraw()
+// above.
+//
+// IT IS ALSO THE ONE DECODER OF THE STORED FORM, on the two inputs that carry it (mode.h:
+// fencd).  That is one site rather than three: skipto() and comsubst()'s collector read
+// with readc() and no interpretation of their own, and if the decoding lived in getch()
+// instead then a quoted `}' would close a ${...} and a quoted backquote would truncate a
+// command substitution.
+//
+// TWO THINGS HERE ARE CONTRACTS, not tidiness:
+//
+//   - THE PAYLOAD IS FETCHED WITH readraw() AND NOT WITH readc().  A payload is a byte and
+//     nothing else; fetching it through the decoder makes `QESC QESC' -- a literal 0377 --
+//     eat the character after it instead of standing for itself.  readraw() is also why
+//     the pair may straddle a buffer boundary, which it can: a here-document temp file is
+//     read SHBUFSIZ bytes at a time.
+//   - THE PUSHBACK IS RETURNED BEFORE THE TEST, not after.  peekc holds a character that
+//     has already been through here once, so a pushed-back literal 0377 must not be read
+//     as a mark a second time.  (v7 dropped MARK by truncating into a CHAR; the quote bit
+//     lives above the byte now, so the mask is written out.)
+//
+INT readc(void)
+{
+    INT c;
+
+    if (peekc) {
+        c     = peekc & ~MARK;
+        peekc = 0;
+        return c;
+    }
+    c = readraw();
+    if (c == QESC && standin->fencd) {
+        c = readraw();
+        if (c == 0)
+            return 0; // a lone QESC at the end: the empty quoted word
+        if (c != QESC)
+            c |= QUOTE; // QESC QESC is a literal 0377, not a quoted character
     }
     return c;
 }

@@ -36,10 +36,12 @@
 // in besm6_tty.c now computes none and truncates nothing.  Against an older simulator
 // the symptom is garbage on input from the first character, not silence.
 //
-// TWO LIMITS ARE ABOVE THIS DRIVER.  /bin/sh's trim() clears bit 0200 from every word
-// character, its quoting mark (cmd/sh/service.c), so `cat' carries UTF-8 and `echo'
-// mangles it.  And task 35's input register now drops a piece of a character rather than
-// a whole one.
+// ONE LIMIT IS ABOVE THIS DRIVER, and it used to be two.  Task 35's input register drops
+// a piece of a character now rather than a whole one.  The other -- /bin/sh clearing bit
+// 0200 from every word character, its quoting mark, so that `cat' carried UTF-8 and
+// `echo' mangled it -- is gone: task C11 moved the mark out of the character (cmd/sh/defs.h),
+// and kernel/test/utils drives a Cyrillic argument through exece() and through filename
+// generation to prove it.
 //
 // WHAT IS AND IS NOT TESTED.  kernel/test/sctest exercises both Consuls at the
 // device level -- the polled path, the interrupt path, and that the two lines do

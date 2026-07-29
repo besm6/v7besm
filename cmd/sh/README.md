@@ -13,7 +13,7 @@ Part of the ordinary top-level build; there is nothing to invoke separately.
 
 ```sh
 make            # builds build/rootfs/bin/sh among everything else
-make run        # runs its size check and its six b6sim tests, with the rest
+make run        # runs its size check and its seven b6sim tests, with the rest
 ```
 
 Two conditions gate it, both shared with `kernel/` and `lib/`: the external
@@ -22,8 +22,8 @@ the link is `crt0.o *.o -lc -lruntime` in that order. [`CMakeLists.txt`](CMakeLi
 `b6_prog()` call plus `-I.`, which matters: `defs.h` includes `"ctype.h"`, and that must resolve
 to the shell's own character tables rather than the C11 `<ctype.h>` in the system tree.
 
-It uses **7,928 words of the 28,672** available, with the highest relocatable symbol at word
-7,936 of the 32,767 a 15-bit pointer reaches.
+It uses **7,971 words of the 28,672** available, with the highest relocatable symbol at word
+7,979 of the 32,767 a 15-bit pointer reaches.
 
 ## What the port changed
 
@@ -120,6 +120,84 @@ so the shell *defined* both) are `shalloc`/`shfree`; `getenv`/`setenv` are `read
 `io.c`'s two-integer `rename` is `shrename`; `FILE`, `BUFSIZ` and `EOF` are `SHFILE`, `SHBUFSIZ`
 and `SHEOF`, since `<stdio.h>` spells the last two 3072 and −1 and either would be silent.
 
+### Eight bits — where the quoting mark went (task C11)
+
+This is the largest single change in the port and the only one that touches every file that
+handles a character. **v7 marked a quoted character by setting bit `0200` of it**, and
+`trim()` cleared that bit from every word on its way to `argv`. That costs the eighth bit of
+every byte the shell handles. Below the shell this machine is byte-transparent in both
+directions and its text is UTF-8 ([`kernel/dev/sc.c`](../../kernel/dev/sc.c)) — so `cat` carried
+Cyrillic and `echo привет` did not, because the argument reached `/bin/echo` with every second
+byte bent into an ASCII letter. `0200` was overloaded a second time in
+[`expand.c`](expand.c), as an internal "this position held a `/`", and the mark was written
+**into the here-document temp file** as well as onto the stack.
+
+**The mark is a byte of its own now, and there are two representations of it.** Keeping them
+apart is the whole of the design; [`defs.h`](defs.h) states it and this is the summary.
+
+*In flight* — a character in an `INT`: a register, a return value, `peekc` — the mark is still a
+bit, `QUOTE`, moved from `0200` up to `01000000`. That value is not free choice: `wdval` and
+`peekc` share one integer space with `SYMFLG`, `EOFSYM`, `SYMREP` and `MARK`
+([`sym.h`](sym.h)), and it sits clear of all four, so no argument about which branches are
+reachable has to be made. An `INT` is a 48-bit word; the headroom costs nothing.
+
+*In storage* — the expression stack, the `argnod` words built on it, and the here-document temp
+file — the mark is a **prefix byte `QESC`, `0377`**:
+
+| | stored as |
+|---|---|
+| an ordinary byte `c` | `c` |
+| a quoted character `c` | `QESC c` |
+| a literal `0377`, quoted or not | `QESC QESC` |
+| the empty quoted word (`""`) | a lone `QESC` just before the terminator |
+
+A bare `QESC` never appears except in that last case, which every decoder reads as "contributes
+nothing, end of string" — it is exactly what v7 spelled as a lone `0200`, and `macro()` still
+pushes it for the same reason: `x=""; echo "$x"` must produce an empty *argument* and not no
+argument. Quoted and unquoted `0377` deliberately share one encoding, because the quotedness of
+`0377` cannot be observed (it is not a metacharacter, not a glob character, not in the default
+IFS) and collapsing them is what makes `nosubst` derivable: *a `QESC` whose payload is not
+`QESC`*.
+
+**Three invariants**, each of which is a thing that will break if it is forgotten:
+
+1. **The stack holds encoded text.** Anything entering it from outside — a variable's value, a
+   command substitution's output, a directory entry's name, a here-document line — is encoded on
+   the way in by `putq()` ([`stak.c`](stak.c)). `trim()` ([`service.c`](service.c)) is the one
+   decoder on the way out to `argv`, and `nextq()` ([`string.c`](string.c)) is the one reader
+   everything else uses.
+2. **Script text is never encoded.** `readc()` decodes only when the input it is reading is
+   flagged `fencd` ([`mode.h`](mode.h)) — which is `macro()`'s re-read of a word it pushed, and
+   `subst()`'s read of a here-document temp file, and nothing else. A `0377` in a script is a
+   byte of somebody's data. And a parse-tree `argval` is never mutated, which is what lets
+   `trim()` compact in place: `macro()` runs over the same word again on every pass of a loop.
+3. **The name tree holds raw values.** Two v7 paths stored a *marked* value and are normalised
+   here; both are behaviour changes and are listed under Known limits below.
+
+Two of the rewrites are worth naming, because in both cases the v7 code cannot simply be
+adjusted:
+
+* **Nothing may be scanned backwards any more.** In a variable-width encoding a byte is a
+  payload or a mark according to what stands in front of it, so `expand()`'s search back from
+  the first metacharacter for the directory slash is one forward pass now, and `comsubst()`'s
+  walk back over trailing newlines is an offset remembered on the way forward. That second one
+  is not a stylistic preference: inside `"` `` ` `` … `` ` `` `"` every output byte is laid down
+  as `QESC d`, so the byte before a newline is a mark; and a `0377` in the output is laid down
+  as `QESC QESC`, so the byte before a mark may be a payload.
+* **The character tables are 256 entries, and this is the sharpest edge in the task.** v7 could
+  stop at 128 because the `(c & QUOTE) == 0` test in front of every subscript in
+  [`ctype.h`](ctype.h) *was* the bounds check — no marked character ever reached a table. The
+  mark is above the byte now, so a Cyrillic byte arrives as an ordinary subscript in
+  `0200..0377`. Nothing above `0177` is special to the shell, so the upper half is zero; it has
+  to exist. 126 words, against a range test at seventeen call sites.
+
+Two things the encoding costs, and one it does not. It costs a byte per quoted character on the
+stack, which the arena absorbs; it costs **43 words of image**, taking the shell from 7,928 to
+7,971 of the 28,672 available. It does not cost the pattern language anything, but it does make
+one of its properties visible for the first time: **`?` and `[...]` match a BYTE**, so `приве?`
+does not match `привет`, whose last letter is two bytes. That is the honest reading of an
+eight-bit-clean v7 globber and `test/utf8.sh` asserts it rather than working around it.
+
 ### Three changes of substance
 
 Everything above preserves what the shell does. These three do not. Two are about running out of
@@ -172,7 +250,7 @@ room in a 28-page address space; the first is a feature v7 had not got.
 
 ## Tests
 
-Six, under `b6sim`, run by `make run` (ctest labels `sh` and `rootfs`):
+Seven, under `b6sim`, run by `make run` (ctest labels `sh` and `rootfs`):
 
 | test | what it covers |
 |---|---|
@@ -181,6 +259,7 @@ Six, under `b6sim`, run by `make run` (ctest labels `sh` and `rootfs`):
 | `sh_heredoc` | here-documents: `copy()` and `subst()`, a quoted terminator, and a document longer than `CPYSIZ` so the flush boundary is crossed — and with them `fork`, a subshell and file redirection |
 | `sh_script` | running another shell script: arguments, PATH search, exit status, and a child that forks in turn |
 | `sh_comment` | the `#` comment character: where it does *not* start one (inside a word, inside either quote, after a backslash, in `$#`, in a here-document body), the `\`-newline that must not continue it, and the unterminated last line that must not spin |
+| `sh_utf8` | task C11: the four ways of quoting a Cyrillic word, substitution, splitting, `case` with `*`/`?`/`[...]` and a quoted wildcard, both kinds of here-document, command substitution, the empty quoted word, and the byte `0377` -- the one value the stored form has to write twice |
 | `sh_nospace` | the arena and the break, to exhaustion |
 
 `b6sim` runs one BESM-6 `a.out` and services its syscalls on the host, which is enough for the
@@ -239,6 +318,21 @@ the shell.
 
 ## Known limits
 
+* **Two v7 behaviours changed when the name tree was normalised to raw values** (task C11's third
+  invariant, above). Both are corners, both are deliberate, and both are the same corner: v7
+  stored a *marked* value and so remembered, after the fact, which of its characters had been
+  quoted.
+  * `read x` fed `a\ b` stored a marked space, and a later `$x` therefore expanded to **one**
+    word. It stores a plain space here, and `$x` expands to two. `"$x"` is one word either way,
+    which is what a script that cares should say.
+  * `${x=a\ b}` assigned the marked text as well as expanding it, with the same consequence.
+    [`macro.c`](macro.c) trims before the `assign()`.
+
+  Leaving them as they were is not available: a half-encoded name tree makes the value push in
+  `macro.c` wrong whichever way it is written — encode unconditionally and these two values are
+  encoded twice, pass them through and a `0377` arriving from the environment is read as a mark.
+* **`?` and `[...]` match one BYTE, not one character**, so `приве?` does not match `привет`.
+  See the C11 section above; `test/utf8.sh` asserts it.
 * **`wait()`'s status comes back in r12, a 15-bit index register**, so an exit code of 128 or more
   arrives truncated ([`lib/libc/sys/wait.S`](../../lib/libc/sys/wait.S)). That is the kernel ABI,
   not something `cmd/sh` can repair, and it bites twice: `await()` builds `$?` for a

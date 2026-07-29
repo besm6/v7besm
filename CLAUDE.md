@@ -100,7 +100,9 @@ work has two halves:
   per program), `kernel/test/swap` (more processes than core, asserted through the kernel's
   own counters) and `kernel/test/utils` (the clock moved and read back, an alarm delivered, a
   background process killed, a script branching on `test` through both its names, a terminal
-  named, a `yes` stopped by a broken pipe and a command timed) — and `cd kernel && make run` is
+  named, a `yes` stopped by a broken pipe, a command timed, and — task C11 — a Cyrillic word
+  crossing `exece()` into another program and a Cyrillic pattern globbed against a real
+  directory) — and `cd kernel && make run` is
   where you type at it yourself. The drums
   must be attached to exec anything: they are `swapdev`, and `exece()` stages the argument
   list in swap. See `kernel/README.md`, the reference — the settled design, the hardware rules
@@ -328,11 +330,23 @@ example and `cmd/sh/README.md` the large one, and `cmd/cpp/TODO.md` is the plan 
 program (with three external-compiler bugs of its own still in the way).
 
 **`cmd/README.md` is the manual for porting anything else from v7 userland** — what is already
-in that directory, the ten-point porting recipe every task is written on top of (the `char *`
+in that directory, the eleven-point porting recipe every task is written on top of (the `char *`
 ordering hazard, the one-word `long`, the 3072-byte block, `DIRSIZ` 18, the three address-space
 ceilings, how a program gets onto the image, which of the two harnesses tests it, and what the
 manual page owes), and what task C1 taught. `cmd/TODO.md` beside it is only the work plan and
-deliberately repeats none of it. **Read `cmd/sh/README.md` and `cmd/ls/README.md` first**,
+deliberately repeats none of it.
+
+And, task C11, the shell is **eight-bit transparent** (the task number, not the language
+standard the next paragraph is about): v7 marked a quoted character by setting
+bit `0200` of it and `trim()` cleared that bit from every word on its way to `argv`, so `cat`
+carried Cyrillic and `echo привет` did not. The mark is a prefix byte now — `QESC`, `0377` —
+with an in-flight bit far above the character, the two `_ctype` tables grew to 256 entries
+because the old `(c & QUOTE) == 0` guard *was* their bounds check, and `expand.c` lost the
+second thing `0200` meant there (a sentinel for a `/`), since a variable-width encoding cannot
+be scanned backwards. `cmd/sh/README.md` is the account, `cmd/sh/test/utf8.sh` the fast half of
+the proof and `kernel/test/utils.sh` the half that needs a kernel.
+
+**Read `cmd/sh/README.md` and `cmd/ls/README.md` first**,
 though: the C11 work is mechanical; what is not is that a v7 source assumes
 an `int` and a `char *` are the same thing, and on this machine they are not. `sh`'s names
 three hazards that follow from that — a flag packed into bit 0 of a pointer, a bit mask used

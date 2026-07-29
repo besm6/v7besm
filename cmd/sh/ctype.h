@@ -76,15 +76,17 @@
 #define _IDCH (T_IDC | T_DIG)
 #define _META (T_SPC | T_DIP | T_MET | T_EOR)
 
-extern char _ctype1[];
+extern char _ctype1[256];
 
 /*
  * The tests themselves.
  *
- * Each is (c & QUOTE) == 0 first: a QUOTED character is never special, whatever it is,
- * and -- because && stops as soon as it has its answer -- the table is never subscripted
- * with the out-of-range value a quoted character has.  That short circuit is load
- * bearing, not an optimisation.
+ * Each is (c & QUOTE) == 0 first: a QUOTED character is never special, whatever it is.
+ * In v7 that test did a second job -- QUOTE was bit 0200 OF THE CHARACTER, so the short
+ * circuit was also the bounds check on a 128-entry table.  It is not any more: QUOTE is a
+ * bit far above the byte (defs.h) and an eight-bit character reaches the subscript on its
+ * own.  THE TABLES ARE 256 ENTRIES BECAUSE OF THAT, and shrinking them back reintroduces
+ * an out-of-bounds read for every byte above 0177.
  *
  * NB THESE ARGS ARE NOT CALL BY VALUE !!!!  They are macros: an argument with a side
  * effect, such as *p++, is evaluated more than once.
@@ -97,7 +99,7 @@ extern char _ctype1[];
 #define subchar(c) (((c) & QUOTE) == 0 && _ctype1[c] & (T_SUB | T_QOT))
 #define escchar(c) (((c) & QUOTE) == 0 && _ctype1[c] & (T_ESC))
 
-extern char _ctype2[];
+extern char _ctype2[256];
 
 #define digit(c)    (((c) & QUOTE) == 0 && _ctype2[c] & (T_DIG))
 #define fngchar(c)  (((c) & QUOTE) == 0 && _ctype2[c] & (T_FNG))

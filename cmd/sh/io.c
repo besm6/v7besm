@@ -25,6 +25,7 @@ void initf(UFD fd)
     f->feval          = 0;
     f->flin           = 1;
     f->feof           = FALSE;
+    f->fencd          = FALSE; // raw until somebody says otherwise -- see mode.h
 }
 
 //
@@ -55,6 +56,7 @@ void push(SHFILE af)
     (f = af)->fstak = standin;
     f->feof         = 0;
     f->feval        = 0;
+    f->fencd        = 0; // the block is usually a C-stack local: see mode.h
     standin         = f;
 }
 
@@ -147,9 +149,6 @@ INT tmpfil(void)
 //
 // Read a here-document out of the input and into a temp file.
 //
-//
-// Read a here-document out of the input and into a temp file.
-//
 // A here-document is the `<<WORD' form: the lines that follow, up to one holding just
 // WORD, become the command's standard input.  They are read now, at the end of the
 // command line where the text starts, and stashed in /tmp -- the command has not been
@@ -161,15 +160,18 @@ INT tmpfil(void)
 //
 void copy(IOPTR ioparg)
 {
-    CHAR c, *ends;
+    INT c;
+    CHAR *ends;
     CHAR *cline, *clinep;
+    BOOL literal;
     INT fd;
     IOPTR iop;
 
     if ((iop = ioparg) != 0) {
         copy(iop->iolst);
-        ends = mactrim(iop->ioname);
-        if (nosubst)
+        ends    = mactrim(iop->ioname);
+        literal = nosubst;
+        if (literal)
             iop->iofile &= ~IODOC;
         fd          = tmpfil();
         iop->ioname = cpystak(tmpout);
@@ -180,12 +182,30 @@ void copy(IOPTR ioparg)
         for (;;) {
             clinep = cline;
             chkpr(NL);
-            while (c = (nosubst ? readc() : nextc(*ends)), !eolchar(c)) {
-                chkstak(clinep);
-                *clinep++ = c;
+            while (c = (literal ? readc() : nextc(*ends)), !eolchar(c)) {
+                //
+                // THE TEMP FILE IS WRITTEN IN THE STORED FORM when it is going to be read
+                // back by subst() -- which is exactly when the terminator was NOT quoted,
+                // since a quoted one clears IODOC above and hands the file to the command
+                // as it stands.  nextc() marks a backslash escape, and that mark has to
+                // survive the round trip through the file or `\$x' in a <<EOF body starts
+                // being substituted.  v7 could let it: its mark fitted in the byte, and it
+                // took it off again with a `& 0177' in subst().
+                //
+                if (literal) {
+                    chkstak(clinep);
+                    *clinep++ = c;
+                } else {
+                    clinep = putq(clinep, c);
+                }
             }
             chkstak(clinep);
             *clinep = 0;
+            //
+            // The terminator is compared against the RAW line, so a line the encoder
+            // touched cannot match one -- which is right: `\EOF' is not `EOF'.  The
+            // comparison was already this strict in v7, for the same reason.
+            //
             if (eof || eq(cline, ends))
                 break;
             chkstak(clinep);

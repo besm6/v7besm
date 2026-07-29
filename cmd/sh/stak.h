@@ -59,6 +59,16 @@
 
 void growstak(void);
 
+//
+// Write one character in the STORED form -- see defs.h.  pushstak() above puts a byte
+// down as it stands and is right for text that is already encoded; putq() is what
+// encodes.  It bounds-checks itself, for both bytes, so a caller must NOT chkstak() in
+// front of it.  pushq() is the same thing for an item being built through staktop.
+//
+STRING putq(STRING p, INT c);
+
+#define pushq(c) (staktop = putq(staktop, (c)))
+
 // Used to address an item left on the top of the stack (very temporary)
 #define curstak() (staktop)
 

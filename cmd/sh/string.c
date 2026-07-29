@@ -25,10 +25,47 @@ STRING movstr(STRING a, STRING b)
 }
 
 //
+// Read one character out of encoded text, advancing *p past however many bytes it took.
+//
+// This is the other half of stak.c's pushq() and the only decoder in the shell: trim(),
+// gmatch(), expand() and addg() all read through it, so the QESC NUL case -- an empty
+// quoted word, which is what `""' leaves behind -- is handled once, here, rather than
+// four times.  A lone QESC at the end of a string is not a prefix with nothing after it;
+// it IS the string.
+//
+INT nextq(STRING *p)
+{
+    STRING s = *p;
+    INT c    = *s++;
+
+    if (c == QESC) {
+        c = *s++;
+        if (c == 0) {
+            *p = s - 1; // the empty quoted word: stop ON the terminator
+            return 0;
+        }
+        //
+        // QESC QESC is a literal 0377 and NOT a quoted character -- see defs.h.  The
+        // difference is invisible to everything except nosubst, which is exactly why the
+        // two were collapsed onto one encoding.
+        //
+        if (c != QESC)
+            c |= QUOTE;
+    }
+    *p = s;
+    return c;
+}
+
+//
 // Does character c occur anywhere in string s?  Used mostly to ask whether a character
 // is one of the word separators in IFS.
 //
-INT any(CHAR c, STRING s)
+// c IS AN INT.  It arrives still carrying the in-flight QUOTE bit -- from nextc(0) in
+// readvar(), and from nextq() -- and a quoted space must not be found in IFS.  v7 could
+// declare it a char because the mark rode inside the byte; truncating it here would make
+// `read x' fed a backslash-space split the line.
+//
+INT any(INT c, STRING s)
 {
     CHAR d;
 

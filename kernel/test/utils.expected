@@ -41,3 +41,13 @@ user MASKED
 sys MASKED
 time status 0
 time status 2
+привет
+мир
+привет мир
+привет мир
+$a привет
+utf8 test status 0
+/tmp/юникод/файл1 /tmp/юникод/файл2
+/tmp/юникод/файл1 /tmp/юникод/файл2
+/tmp/юникод/файл1 /tmp/юникод/файл2
+/tmp/юникод/*

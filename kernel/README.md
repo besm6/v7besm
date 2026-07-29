@@ -572,16 +572,18 @@ Facts that cost real time to establish and are not in `doc/`.
   mantissa, so a CPU time past 8191 ticks loses low bits — ~33 s here against v7's ~136 s. Nothing on
   the image calls `acct(2)` (`acctp` is set only by `sysacct()`), so it is recorded rather than
   scaled; the fix, when something does, is to divide by `HZ/60` on the way into `compress()`.
-* **The terminal path is eight bits wide, and the shell is not.** `dev/sc.c` and `dev/tty.c` pass
+* **The terminal path is eight bits wide, and so, since task C11, is the shell.** `dev/sc.c` and `dev/tty.c` pass
   every byte whole in both directions, so the console carries UTF-8 — `/etc/motd` opens in Cyrillic
   and `kernel/test/multi`'s transcript asserts it. Two things follow. v7's **delays are gone**: bit
   0200 of a queued byte was a delay count and cannot also be data, and nothing on this machine has a
   carriage to wait for, so `ttyoutput()` computes columns only and `TIMEOUT`/`ttrstrt()` have no
   producer left. And **`0377` is refused on input**, being the raw queue's own delimiter and `CBRK`
   both — no UTF-8 byte is ever `0377`, so nothing is lost, but without the guard `t_delct` goes
-  negative and the line wedges. The limit is above the kernel: `/bin/sh` marks a quoted character
-  with bit 0200 and `trim()` strips it from every word, so `cat` carries Cyrillic and `echo` mangles
-  it. This also **couples the kernel to the simulator** — a raw Consul line in `besm6_tty.c` must
+  negative and the line wedges. The limit that used to sit above the kernel is gone: `/bin/sh`
+  marked a quoted character with bit 0200 and `trim()` stripped it from every word, so `cat`
+  carried Cyrillic and `echo` mangled it; task C11 moved that mark out of the character
+  (`cmd/sh/defs.h`), and `kernel/test/utils` drives a Cyrillic argument through `exece()` and
+  through filename generation. This also **couples the kernel to the simulator** — a raw Consul line in `besm6_tty.c` must
   synthesise no parity and truncate nothing, and against an older one the symptom is garbage on
   input from the first character typed.
 * **The tail of an image grown by `expand()` reads back as zeros.** v7 promised nothing there and

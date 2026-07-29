@@ -359,29 +359,39 @@ void await(INT i)
 }
 
 //
-// Strip the quoting bit from a string, recording in `nosubst' whether any was set.
+// Take the quoting marks off a string, now that quoting has done its work, and record in
+// `nosubst' whether there were any.
 //
+// THIS IS THE ONE DECODER ON THE WAY OUT -- defs.h's first invariant.  Everything above it
+// works in the stored form; below it are exece(), open(), stat() and the user's eyes, and
+// they get the bytes that were written.  It compacts IN PLACE, which is safe on two
+// counts: the decoded text is never longer than the encoded text, and no parse-tree word
+// is ever passed here -- only stack items that macro(), split() or scan() have just built,
+// which is what lets a `for' loop expand the same word again on the next pass.
 //
-// Strip the quoting marker off every character of a string, now that quoting has done
-// its work, and record in `nosubst' whether there was any.
-//
-// The lexer sets bit 0200 on each quoted character so that later stages leave it alone;
-// this is where that mark comes off, just before the text is used as a real file name or
-// argument.
+// nosubst counts REAL marks.  v7 set it from the OR of every character against 0200, and
+// one Cyrillic letter in a here-document terminator would have turned substitution off in
+// the body; a QESC QESC pair is a literal 0377 and deliberately does not count.
 //
 void trim(STRING at)
 {
-    STRING p;
-    CHAR c;
-    CHAR q = 0;
+    STRING p, q;
+    BOOL quoted = 0;
+    INT c;
 
-    if ((p = at) != 0) {
-        while ((c = *p) != 0) {
-            *p++ = c & STRIP;
-            q |= c;
+    if ((p = q = at) != 0) {
+        while (*q) {
+            // A QESC QESC pair is a literal 0377 and not a quoted character; a QESC with
+            // nothing after it is the empty quoted word, and that one does count.
+            if (*q == QESC && q[1] != QESC)
+                quoted++;
+            if ((c = nextq(&q)) == 0)
+                break;
+            *p++ = c;
         }
+        *p = 0;
     }
-    nosubst = q & QUOTE;
+    nosubst = quoted;
 }
 
 //
@@ -416,6 +426,16 @@ STRING *scan(INT argn)
 
     while (argp) {
         *--comargn = argp->argval;
+        //
+        // THE FIRST WORD IS NOT TRIMMED, and that is v7's, not an oversight of this task:
+        // the chain runs backwards, so the last iteration is com[0], and the test below
+        // skips it.  What it means is that a command NAME with a quoted character in it
+        // reaches the child as argv[0] in the stored form -- execs() trims the path it
+        // actually execs (above), so the program still runs and only its own idea of its
+        // name is odd.  Trimming here would fix that and would also make `"cd"' reach the
+        // built-in table, which is a change to what the shell does; xec.c patches the same
+        // quirk by hand for `for'.
+        //
         if ((argp = argp->argnxt) != 0)
             trim(*comargn);
         if (argp == 0 || argmarked(argp)) {
@@ -500,19 +520,46 @@ static INT split(STRING s)
     INT count = 0;
 
     for (;;) {
+        BOOL atend;
+
         sigchk();
         argp = locstak() + BYTESPERWORD;
-        while ((c = *s++, !any(c, ifsnod.namval) && c)) {
-            chkstak(argp);
-            *argp++ = c;
+        //
+        // The word is copied in the STORED FORM, pair and all: this routine only decides
+        // where the boundaries are, and expand() and trim() still have to read what it
+        // leaves.  Which is why the IFS test is put to the DECODED character -- a quoted
+        // space carries the mark and so is not a separator, and that is the mechanism by
+        // which "$x" stays one word.
+        //
+        // `atend' replaces v7's `s--'.  It stopped by backing the cursor over the terminator
+        // so that the next round would meet it again; the cursor is simply LEFT on the
+        // terminator here, which a variable-width encoding can do and a `--' cannot.
+        //
+        atend = 1;
+        while (*s) {
+            if (*s == QESC && s[1] == 0) {
+                //
+                // "" -- the empty quoted word.  It has to reach argv as an empty argument
+                // rather than as no argument at all, so the lone QESC is carried through
+                // as it stands and trim() is what finally makes it empty.
+                //
+                chkstak(argp);
+                *argp++ = QESC;
+                s++;
+                break;
+            }
+            c = nextq(&s);
+            if (any(c, ifsnod.namval)) {
+                atend = 0;
+                break;
+            }
+            argp = putq(argp, c);
         }
         if (argp == staktop + BYTESPERWORD) {
-            if (c)
+            if (!atend)
                 continue;
             else
                 return count;
-        } else if (c == 0) {
-            s--;
         }
         if ((c = expand(((ARGPTR)(argp = endstak(argp)))->argval, 0)) != 0) {
             count += c;

@@ -160,7 +160,16 @@ INT readvar(STRING *names)
 {
     SHFILEBLK fb;
     SHFILE f = &fb;
-    CHAR c;
+    //
+    // AN INT, AND THE VALUE STORED IS RAW.  nextc() marks a backslash escape, and the mark
+    // has to be visible to any() below or `read x' fed `a\ b' would split the line; but it
+    // must NOT reach the name tree, which holds plain values (defs.h's third invariant),
+    // so pushstak()'s byte store is what takes it off again.
+    //
+    // v7 stored the marked byte, so its `read x' on `a\ b' gave an x that a later $x
+    // expanded to ONE word.  That is a deliberate divergence -- see cmd/sh/README.md.
+    //
+    INT c;
     INT rc   = 0;
     NAMPTR n = lookup(*names++); // done now to avoid storage mess
 

@@ -71,6 +71,36 @@ void growstak(void)
 }
 
 //
+// Write one character at `p' in the stored form defs.h describes -- a quoted character,
+// and a literal QESC whether quoted or not, become the two bytes QESC c -- and return the
+// cursor past it.
+//
+// EVERY CHARACTER THAT REACHES THE STACK FROM OUTSIDE GOES THROUGH HERE -- a variable's
+// value, a command substitution's output, a directory entry's name, a here-document line.
+// That is the first of defs.h's three invariants, and it is what stops a raw 0377 in
+// someone's data being read back later as a quoting mark.
+//
+// It takes a CURSOR rather than working on staktop, because half the shell builds its
+// items through a local pointer (word(), split(), addg(), copy()) and only the other half
+// pushes through staktop; stak.h's pushq() is this for the second kind.
+//
+// It does its own bounds check, for TWO bytes.  chkstak() promises one, and endstak()
+// then writes the terminator without any check at all, so a caller that tested once and
+// laid down a pair would run off the break at one byte in six.
+//
+STRING putq(STRING p, INT c)
+{
+    if ((c & QUOTE) || (c & LOBYTE) == QESC) {
+        chkstak(p + 1);
+        *p++ = QESC;
+    } else {
+        chkstak(p);
+    }
+    *p++ = c;
+    return p;
+}
+
+//
 // Where the stack is now, to be handed to tdystak() later to unwind back to.  execute()
 // takes one of these on the way in and uses it on the way out, so that each command
 // hands back the scratch space it used.

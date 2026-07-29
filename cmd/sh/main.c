@@ -223,7 +223,7 @@ static void exfile(BOOL prof)
 // Print the continuation prompt (PS2, "> " by default) when an interactive user has
 // typed a newline in the middle of a command that is not finished yet.
 //
-void chkpr(CHAR eor)
+void chkpr(INT eor)
 {
     if ((flags & prompt) && standin->fstak == 0 && eor == NL)
         prs(ps2nod.namval);

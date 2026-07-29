@@ -136,10 +136,55 @@
 #define TRUE   (-1)
 #define FALSE  0
 #define LOBYTE 0377 // mask for one byte
-#define STRIP  0177 // mask that takes the quoting mark OFF a character
-#define QUOTE \
-    0200 // the bit that marks a character as quoted, so that later stages
-         // leave it alone: no splitting, no wildcard, no substitution
+
+//
+// ======== HOW A QUOTED CHARACTER IS MARKED ========
+//
+// v7 put the mark in BIT 0200 OF THE CHARACTER ITSELF and took it off again with a
+// `& 0177'.  That costs the eighth bit of every byte the shell handles, and this machine
+// needs it: the console is a byte pipe and its text is UTF-8 (kernel/dev/sc.c), so `echo
+// привет' reached /bin/echo with every second byte bent into an ASCII letter.
+//
+// The mark is a BYTE OF ITS OWN here, and there are two representations of it.  Keeping
+// them apart is the whole of the design.
+//
+// IN FLIGHT -- a character held in an INT: a register, a function's return value, peekc.
+// The mark is the bit QUOTE below.  Its value is not arbitrary: wdval and peekc share one
+// integer space with SYMFLG, EOFSYM, SYMREP and MARK (sym.h), and QUOTE is placed clear of
+// all four so that no argument about which branches are reachable has to be made.  An INT
+// is a 48-bit word, so the headroom is free.
+//
+// IN STORAGE -- the expression stack, the argnod words built on it, and the here-document
+// temp file: the mark is a PREFIX BYTE, QESC.
+//
+//	an ordinary byte c		c
+//	a quoted character c		QESC c
+//	a literal 0377, quoted or not	QESC QESC
+//	the empty quoted word ("")	a lone QESC just before the terminator
+//
+// So a bare QESC never appears except in that last case, which every decoder reads as
+// `contributes nothing, end of string' -- it is what v7 spelled QUOTE|0 == 0200 and
+// macro() still pushes for the same reason.  Quoted and unquoted 0377 share ONE encoding
+// deliberately: the quotedness of 0377 cannot be observed (it is not a metacharacter, not
+// a glob character and not in the default IFS), and collapsing them is what makes nosubst
+// derivable -- `a QESC whose payload is not QESC was seen'.  See service.c's trim().
+//
+// Three invariants hold this together:
+//
+//   - THE STACK HOLDS ENCODED TEXT.  Anything entering it from outside -- a variable's
+//     value, a command substitution's output, a directory entry's name, a here-document
+//     line -- is encoded on the way in by pushq().  trim() is the one decoder on the way
+//     out to argv.
+//   - SCRIPT TEXT IS NEVER ENCODED.  readc() decodes only when the input it is reading was
+//     flagged as an encoded one (mode.h's fencd), which is macro()'s re-read of a word it
+//     pushed and subst()'s read of a here-document temp file.  And a parse-tree argval is
+//     never mutated -- macro() re-runs over the same word on every loop iteration -- which
+//     is what makes trim()'s in-place compaction safe.
+//   - THE NAME TREE HOLDS RAW VALUES.  Not true in v7: `read' and ${x=word} both stored a
+//     marked value.  Both are normalised here; see cmd/sh/README.md.
+//
+#define QUOTE 01000000 // in flight: this character is quoted
+#define QESC  0377     // in storage: the next byte is a quoted character
 
 // SHEOF, not EOF: <stdio.h> in this tree spells EOF as -1, and if it were ever reached
 // the include order would decide whether word() can end a script at all.
@@ -368,6 +413,11 @@ extern MSG devnull; // "/dev/null" -- what a `&' command gets for input (msg.c)
 
 // Set by trim(): whether the string it just processed contained any quoted character.
 // A here-document whose terminator was quoted (`<<\EOF') is copied literally.
+//
+// v7 computed this as the OR of every character against 0200, which on an eight-bit-clean
+// machine goes true for any text at all with a high byte in it -- one Cyrillic letter in a
+// here-document terminator and the body stopped being substituted.  It counts QESC pairs
+// now, and a QESC QESC pair (a literal 0377) is not one of them.
 extern BOOL nosubst;
 
 // --- the option flags, one bit each ---
@@ -678,7 +728,7 @@ void subst(INT in, INT ot);
 
 // Print the continuation prompt, if this is an interactive shell and the line is not
 // finished.
-void chkpr(CHAR eor);
+void chkpr(INT eor);
 
 // Build the here-document temp file name out of this shell's pid.
 void settmp(void);
@@ -789,8 +839,8 @@ void post(INT pcsid);
 // and setting $? from the result.
 void await(INT i);
 
-// Strip the marker bit off every character of a string, now that quoting has done its
-// work; record in `nosubst' whether there was any.
+// Take the quoting marks off a string, now that quoting has done its work: decode the
+// QESC pairs in place and record in `nosubst' whether there was a real one.
 void trim(STRING at);
 
 // macro() then trim(): the usual pair, for a word that is about to be used as a name.
@@ -844,8 +894,15 @@ STKPTR cpystak(STKPTR x);
 // chained end to end.
 STRING movstr(STRING a, STRING b);
 
-// Does character c occur anywhere in string s?
-INT any(CHAR c, STRING s);
+// Does character c occur anywhere in string s?  c is an INT and not a CHAR because the
+// callers hand it one still carrying the in-flight QUOTE bit: a quoted space must NOT be
+// found in IFS, and truncating it here would split the word.
+INT any(INT c, STRING s);
+
+// Read one character out of encoded text, advancing *p past however many bytes it took.
+// The result carries QUOTE if it was marked; 0 means end of string, which includes the
+// lone QESC that stands for an empty quoted word.
+INT nextq(STRING *p);
 
 // Compare two strings: negative, zero or positive, like strcmp.
 INT cf(STRING s1, STRING s2);
@@ -861,7 +918,7 @@ INT word(void);
 
 // Read the next character, handling backslash escapes.  `quote' is the quote character
 // currently open, or 0.
-INT nextc(CHAR quote);
+INT nextc(INT quote);
 
 // Read one raw character of input, refilling the buffer and popping the input stack as
 // needed.  Everything the shell reads comes through here.
