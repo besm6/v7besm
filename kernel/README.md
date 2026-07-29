@@ -47,7 +47,7 @@ maintained**: `b6cc` and `b6cpp` implement no `-M` family, so nothing regenerate
 
 ## The tests
 
-Six tests cover the image the build produces ([../root.manifest](../root.manifest) →
+These cover the image the build produces ([../root.manifest](../root.manifest) →
 `root3072.disk`), each going one step past the last, which is what keeps the diagnosis apart.
 
 | test | asserts |
@@ -56,13 +56,31 @@ Six tests cover the image the build produces ([../root.manifest](../root.manifes
 | `boot` | process 1 leaves the kernel, execs `/etc/init`, which forks `/bin/sh`, and the shell **prompts** |
 | `console` | a typed dialogue with that shell: erase, kill, a line longer than a clist block, `>/dev/tty`, `pwd`, `ls /bin`, and `^D` round through `/etc/rc` to the next prompt |
 | `session` | the shell **writes** — files, an inode past its direct blocks, `sync` — and the host then fscks the container and diffs what was written |
-| `libtest` | the twenty-five [../lib/test/](../lib/test/) programs run off `/usr/test`, each matching **the same `.expected` file `b6sim` is held to** (`memt` and `shellt` run here only) — and `iomove()`'s own counters say the bulk copy path carried it |
+| `files` | the file-management set rearranges a tree and then re-permissions it; the modes and owners are diffed on the host, out of `b6fsutil -v -v` |
+| `utils` | the clock moved and read back, an alarm delivered, a background process killed, a script branching on `test`, and the first pipeline this image has run |
+| `libtest` | the [../lib/test/](../lib/test/) programs run off `/usr/test`, each matching **the same `.expected` file `b6sim` is held to** (`memt` and `shellt` run here only) — and `iomove()`'s own counters say the bulk copy path carried it |
+| `login` | multi-user: `/etc/ttys`, a getty per line, a password through `crypt(3)`, `/etc/utmp`, and `multiple()` respawning the getty a logout killed — all on Consul 1 |
+| `multi` | **two people logged in at once**, one per Consul: root on `/dev/console` and guest on `/dev/tty1`, each shell naming its own terminal, guest's file read by root's shell, and two different non-zero owners on two terminal nodes at the sync |
 | `swap` | the same kernel on a machine of **31 pages** (`phymem` deposited before the boot), running more processes than fit: `sched()`/`newproc()` swap through the drum, two processes share one text, and the counters say so |
 
 `boot` attaches the pristine disk read-only — an assertion in itself — and the others each convert
 their own copy at their own volume number, so no test ever writes a build artifact. The rest of
 [test/](test/) exercises one kernel component at a time against a hand-built environment; see
 "Writing a standalone SIMH test" below.
+
+**`multi` is the one test with a host program of its own**, [test/ttyhost.c](test/ttyhost.c), and
+the reason is worth knowing before the next test wants a second terminal. `attach tty25 console`
+binds Consul 1 to the simulator's own stdin/stdout, which is what lets bare `expect`/`send` drive
+it; Consul 2 is a mux line, and `vt_puts()` (`besm6_tty.c`) discards everything the guest prints to
+it while nothing is connected. Two things had to be fixed in the simulator rather than worked
+around: `vt_getc()` tested only `TMXR_VALID`, so a character injected by `send TTY:n,"…"` — which
+SCP tags `SCPE_KFLAG` — was dequeued and dropped, making `send` a silent no-op on every BESM-6 mux
+line; and `attach tty26 4199` does **not** bind line 26, `tty_attach()` passing the string to
+`tmxr_attach()` so that the connection goes to the lowest free line, which is line 1. Even with
+both fixed, a *listener* is wrong for a test: the accept happens in a poll that runs at most once
+per second of host time, i.e. after `merge()` has forked the getty and that getty has prompted into
+the void. So `ttyhost` binds the port before the simulator starts and `multi.ini` has the simulator
+**dial out** (`Line=26,Connect=…`), which connects while the .ini is being parsed.
 
 ## Reading list
 
@@ -296,6 +314,16 @@ What the ones already in [test/](test/) cost to get right:
   action can exploit, using `goto` instead, so the commands at the label run with the machine stopped.
   That is how a boot-level test asserts on memory, and it is also what distinguishes a finished run
   from one that merely exhausted its step budget.
+* **A rule armed after its data has gone by never fires**, and the run then stalls somewhere later
+  rather than failing where the mistake is. With one stream that costs nothing — the simulator is
+  stopped at every match, so the next rule is always armed before the guest can answer. With **two**
+  (`multi.ini`) it is the whole design problem: while one line's `step` is running the other line is
+  free to print. Sequence the two so that only one is ever talking, and make the hand-over a rule on
+  the *other* line. Actions are pushed ahead of whatever is already pending (`sim_brk_setact`), so
+  two rules matching at once is safe; a bare `send`, though, is issued at parse time, before `go`.
+* **A second terminal is a mux line and needs a client**, `expect TTY:26,`/`send TTY:26,` rather than
+  the bare forms, and the simulator dialling out to a host program rather than listening. See "The
+  tests" above — the reasoning is all in `test/multi.ini`'s and `test/ttyhost.c`'s headers.
 * **`send` DROPS A CHARACTER.** Under `CTEST_PARALLEL_LEVEL=8` `session` fails perhaps one run in
   four with `s: not found` — the shell really received `s` where the script sent
   `sh /etc/session`. Measured on an unmodified tree. Re-run before believing it. This bullet used

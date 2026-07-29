@@ -73,13 +73,27 @@ work has two halves:
   `struct user` out of the kernel at `074000`, follows `u_procp` to its proc entry, and then
   reads *and writes* its own image at a physical address above `0100000` — which no unmapped
   access can name, so the driver goes through `copyphys()`, `kernel/seg.S`'s mapped window.
-  Eight tests
+  And, task 29c, **two people are logged in at once**: root on `/dev/console` and guest on
+  `/dev/tty1`, each shell naming its own terminal through `ttyname(3)`'s match by i-number,
+  guest's file read by root's shell, and the disk afterwards carrying two *different* non-zero
+  owners on two terminal nodes at the same instant — which no single session can produce, `login`
+  chowning its terminal before it drops root and `init`'s `dfork()` chowning it back on every
+  respawn. Driving the second typewriter needed two fixes in the simulator, both real bugs:
+  `vt_getc()` accepted only the tag SIMH puts on a character that came off the *socket*, so
+  `send TTY:n,"…"` was a silent no-op on every BESM-6 mux line, and `attach tty26 4199` binds the
+  *mux* rather than line 26, handing the connection to line 1. Even fixed, a listener is wrong for
+  a test — the accept poll runs once a second of host time, which is after the getty has prompted
+  into the void — so `kernel/test/ttyhost.c`, the one host-compiled C program under `kernel/`,
+  binds a port and the simulator **dials out** to it while the `.ini` is still being parsed.
+  Nine tests
   guard that ladder — `kernel/test/boot` (the prompt appears), `kernel/test/console` (a typed
   dialogue with the shell, and the only one that reaches `/etc/rc`, whose motd and date it
   asserts, ending on the `login:` the first getty puts there), `kernel/test/login` (that prompt
   typed at: an unknown name refused, root logged in, the shell exited and the getty respawned,
   guest logged in to a non-root shell, then a host-side fsck and the four inodes only the host
-  can see), `kernel/test/session` (files written, `sync`, then a host-side
+  can see), `kernel/test/multi` (both typewriters driven at once, the second through a socket
+  `ttyhost` holds open, with a transcript of what Consul 2 printed diffed on the host beside the
+  modes that prove the two sessions overlapped), `kernel/test/session` (files written, `sync`, then a host-side
   fsck and diff), `kernel/test/files` (the file-management set rearranging a tree and
   then re-permissioning it, fscked on the host afterwards and its modes and owners diffed out
   of `b6fsutil -v -v`), `kernel/test/libtest` (the libc suite run off the image, one ctest case
@@ -92,7 +106,7 @@ work has two halves:
   list in swap. See `kernel/README.md`, the reference — the settled design, the hardware rules
   it obeys, what a standalone SIMH test costs to get right, and the consequences accepted —
   and `kernel/TODO.md`, the work plan: a scoped task each for the road past the shell
-  (numbered from 28, since the sources cite the earlier numbers). Kernel components are also
+  (numbered from 30, since the sources cite the earlier numbers). Kernel components are also
   exercised piecemeal by the standalone SIMH tests in `kernel/test/`.
 - **`cmd/`** — the BESM-6-specific toolchain being written/ported to eventually build the
   kernel for real BESM-6 hardware: a C compiler driver, an assembler, a linker

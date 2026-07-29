@@ -15,11 +15,10 @@ why `besm6.o` cannot go into one.
 README.md, and how each turned out is in the source comments and in [../doc/](../doc/). The
 numbering is **left as it was** — task numbers are cited from the sources and from `doc/`.
 
-Task 29 is the road ahead. 30–36 are small, independent, and were deferred deliberately.
+30–36 are small, independent, and were deferred deliberately.
 
 | | task | size |
 |---|---|---|
-| 29 | multiuser: the two-terminal test (the driver and the userland are done) | small |
 | 30 | copy only the live part of the u-area | small, measurable win |
 | 31 | the kernel-stack depth check | small |
 | 32 | `profil()`: implement `addupc()` or make it fail | small; the decision is the task |
@@ -27,105 +26,6 @@ Task 29 is the road ahead. 30–36 are small, independent, and were deferred del
 | 34 | the `int` ↔ pointer audit | open-ended |
 | 35 | the character `send` drops — find it, and see what it costs | small to measure, unknown to fix |
 | 36 | the shifting copy: the half of the byte path task 28 could not reach | medium, high risk |
-
----
-
-## 29. Multiuser
-
-The machine has **two** Consul-254 typewriters and, since 29a, [dev/sc.c](dev/sc.c) drives both:
-`/dev/console` (also `/dev/tty0`) is Consul 1 and `/dev/tty1` is Consul 2. Since 29b the system
-is genuinely multi-user: `/etc/ttys` is on the image, `merge()` forks an `/etc/getty` per line,
-`/bin/login` checks a password through `crypt(3)` and hands the terminal over, and `test/login`
-walks the whole of it — an unknown name asked for a password and refused, root logged in, the
-shell it got exited and the getty **respawned** by `multiple()`, and then guest logged in with no
-password to the first non-root shell this port has ever produced.
-[../cmd/getty/README.md](../cmd/getty/README.md) and [../cmd/login/README.md](../cmd/login/README.md)
-are the accounts, and the second of them is why `cmd/README.md` §8 no longer says every shell here
-is root's.
-
-**One piece left**, and it is a test rather than a program.
-
-### 29a. The terminal driver — DONE
-
-**The second terminal is the second Consul, not the serial multiplexor and not the telegraph
-lines.** The multiplexor would have wanted new registers, a syllable encoder, one
-character-in-flight round-robin across 24 lines and a receive register that reading does not free;
-the telegraph channels would have wanted a software UART clocked per bit per line. Neither buys
-anything a *second* terminal does not, and the machine already had one:
-[../include/sys/besm6dev.h](../include/sys/besm6dev.h) has carried `EXT_CONS2`, `EXT_CONS2_RD`,
-`PRP_CONS2_INPUT`, `PRP_CONS2_DONE` and `CONS2_READY` all along.
-
-How it turned out is in the source — `dev/sc.c`'s header for the driver, `test/sctest.ini`'s for
-the test — but three things are worth keeping here because the next driver meets them again.
-
-* **The hardware numbering decided the shape.** `EXT_CONS1`/`EXT_CONS2` are adjacent and each ПРП
-  pair is one bit apart, so a variable unit folds into the instruction's own address field
-  (`../doc/Intrinsics.md` §8, the `dev/mb.c` pattern) and one driver serves both lines. `READY2`
-  does not follow: Consul 2 is bit **6**, not bit 7, so the ready bits are a table.
-* **ПРП is read live, so a masked bit is still seen.** The machine comes up with "printing
-  finished" standing for *both* typewriters and `scinit()` dismisses only the line being opened, so
-  Consul 2's stood from reset. The first console interrupt of the boot then "completed" a tty whose
-  `t_oproc` was still zero — a jump to 0, `GRP_INSN_CHECK`, a kernel trap before the root was
-  mounted. `scintr()` skips a line without `ISOPEN` for that reason.
-* **`sctest` could not have caught it**, because it drives the hardware and does not link the
-  driver; `test/boot` did, on the first run. The division is worth remembering when the next
-  device test is written: a standalone test covers the registers, and only a booting one covers
-  what the kernel does with them.
-
-`dev/sr.c` — the multiplexor skeleton — is **gone**, and with it `cdevsw[3]`, so `rmd` and `rmb`
-moved to majors 3 and 4.
-
-### 29c. The multiuser test
-
-`test/login` covers everything this task was scoped for **except the second terminal**: a getty on
-each Consul, a password checked, and a logout bringing a fresh `login:` — which is `multiple()`,
-the loop no other test reaches. What is left is to drive **Consul 2** as well, and prove that two
-people can be logged in at once on the two typewriters.
-
-**The connection question is answered.** `test/login.ini` already carries the configuration:
-
-```
-set tty26 raw
-attach tty26 4199        ; listen for telnet connections on TCP port 4199
-```
-
-and a getty is already sitting on `/dev/tty1` waiting for a client. `telnet localhost 4199` during
-a hand run reaches it and logs in for real. What is *not* answered is how to get a client there
-**without a human** and synchronise it with SIMH's own `expect` halts — a host-side helper beside
-the simulator, in `run-session.sh`'s mould, is the shape with a precedent. Notes that survive from
-the survey and are still worth having:
-
-* Consul 1 is line **tty25** and Consul 2 is line **tty26** (`besm6_tty.c`, `consul_print()`:
-  `line_num = dev_num + TTY_MAX + 1`).
-* Every test today drives Consul 1 with **bare** `expect`/`send`, because `attach tty25 console`
-  binds it to the simulator's own stdin/stdout and **bypasses `tmxr_attach` entirely**. A
-  consequence to know before trying the obvious: `expect TTY:25,…` does *not* work in that
-  configuration — the per-line `SEND`/`EXPECT` structures are only allocated when the mux has been
-  through `tmxr_attach`. On line 26, which *is* attached, `expect TTY:26,"…"` / `send TTY:26,"…"`
-  do work (`_tmxr_locate_line_send_expect()` in `sim_tmxr.c`) once a client has connected.
-* **An unattached line is not a second terminal.** It still raises its interrupts —
-  `consul_print()` lowers `READY2` and `consul_receive()` raises "printing finished" whether or not
-  the line is connected, which is what lets `test/sctest` exercise both typewriters with one console
-  attached — but `vt_puts()` returns early on `!t->conn`, so nothing it prints goes anywhere and
-  nothing typed can reach it. A half-configured line therefore fails **silently** rather than
-  loudly. TMXR loopback is out for a different reason: it feeds the guest's own output back as
-  input.
-* Two traps in the connect path have been **fixed in the simulator** rather than worked around, and
-  the fix is what makes a raw Consul 2 usable at all: a `set tty26 raw` issued before the client
-  connected used to be discarded by `reset_line()`, and every new connection injected a `'\3'`
-  into the receive buffer, which on a Consul line arrives at the guest as a typed ^C. Both are
-  conditional on the line being raw now. Anything written here must be run against a simulator
-  new enough to have that.
-* `test/login.ini`'s fixed port is safe only because every booting test holds
-  `RESOURCE_LOCK simh_boot`. Two of them at once would fail to bind it.
-
-**Read `test/login.ini`'s header before writing the dialogue**, and task 35 below with it. Both of
-this suite's known `send` hazards bite here: the `after=` every booting test carries, and the
-`delay=` that `login.ini` had to add on top of it because a getty reads the name RAW, one character
-per round trip through user mode. Nothing in that file may end on a rule a bare prompt satisfies,
-and with two terminals in one stream that rule gets harder rather than easier.
-
-**Size.** Small, and no longer blocked.
 
 ---
 
@@ -310,6 +210,17 @@ in a clist before waking anybody. So the same simulator, at the same default rat
 without loss and a getty with it — which is what the input-overrun hypothesis below predicts and
 the timing-artifact one does not. **Start step 1 from there**, and note that 20000 is a delay that
 works, not a measured minimum.
+
+Task 29c added a **second place to measure it, on the other side of the mux boundary**.
+`send TTY:n,"…"` used to be a silent no-op on a BESM-6 line — `vt_getc()` (`besm6_tty.c`) tested
+only `TMXR_VALID`, the tag `tmxr_getc_ln()` puts on a character that came off the *socket*, while
+SCP tags an injected one `SCPE_KFLAG` and the byte was dequeued and dropped. With that fixed,
+`test/multi` types at a RAW getty on **line 26**, whose characters arrive through
+`tmxr_getc_ln()`/`consul_receive()` rather than through `sim_poll_kbd()`. Two paths into the same
+`scintr()` is exactly the discriminator step 1 wants: if the drop is the driver's single input
+register, both lines lose characters at the same rate; if it is the console's host-clock timing,
+only line 25 does. Neither has been measured — `multi.ini` simply carries the same
+`after=`/`delay=` as `login.ini` — but the experiment is now one file away.
 
 **Why it went unnoticed for so long is worth its own sentence**, because it is the more useful
 finding: `console.ini`'s last rule was a bare `expect "# "`. All SIMH rules are armed at once, so a

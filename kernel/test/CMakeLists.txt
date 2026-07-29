@@ -338,7 +338,7 @@ set_tests_properties(rootimg_link PROPERTIES LABELS kernel)
 # into the very stream the expects are matching.
 #
 # THEY DO NOT RUN CONCURRENTLY WITH EACH OTHER, and the RESOURCE_LOCK below is why.  Each of
-# these eight drives the guest by typing at it -- `expect "# " send "sh /etc/files\r"' -- and
+# these nine drives the guest by typing at it -- `expect "# " send "sh /etc/files\r"' -- and
 # under load SIMH DROPS CHARACTERS out of that send: the failures read `h: not found' for a
 # sent `sh' and `eco: not found' for an `echo', so the shell is being handed a truncated line
 # and the test then fails as "never reached its last line".  Nothing in the guest, in the disk
@@ -363,9 +363,10 @@ set_tests_properties(rootimg_link PROPERTIES LABELS kernel)
 # shell without loss and a getty with it, which is what an input overrun in dev/sc.c predicts
 # and a host-clock artifact does not.  login.ini's header is the account.
 #
-# THE FIXED TELNET PORT IS ANOTHER REASON FOR THE LOCK, and a harder one: login.ini binds 4199
-# for the second Consul, so two of these running at once would not merely drop a character,
-# they would fail to attach.  Anything else that wants a port here must take the lock too.
+# THE FIXED PORTS ARE ANOTHER REASON FOR THE LOCK, and a harder one: login.ini listens on 4199
+# for the second Consul and multi.ini dials out to 4200, so two of these running at once would
+# not merely drop a character, they would fail to bind.  Anything else that wants a port here
+# must take the lock too.
 #
 # MEASURED, since a lock that bought nothing would be worth removing: five full `ctest' runs
 # on one machine, twice.  Without it, two of the five failed this way and the suite took 47-49
@@ -491,14 +492,41 @@ if(BESM6)
     # is the only assertion in the tree that login's one privileged call happened at all.
     #
     # It also configures BOTH Consuls -- a telnet listener on 4199 for the second, so that
-    # /dev/tty1 is a terminal a human can reach rather than a discarded line.  Only Consul 1 is
-    # driven; driving the second from a script is task 29c.  The fixed port is safe only
-    # because of the RESOURCE_LOCK below.
+    # /dev/tty1 is a terminal a HUMAN can reach rather than a discarded line.  Only Consul 1 is
+    # driven here; the two-terminal dialogue is `multi' below.  The fixed port is safe only
+    # because of the RESOURCE_LOCK.
     add_test(NAME login
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-login.sh
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(login PROPERTIES LABELS kernel TIMEOUT 600 RESOURCE_LOCK simh_boot)
+
+    # ---------------------------------------------------------------------------------
+    # multi -- TWO PEOPLE LOGGED IN AT ONCE, on the two Consul typewriters, on its own volume
+    # (3085).  Task 29c, and what it adds to login is the second terminal: root on
+    # /dev/console and guest on /dev/tty1, each shell naming its own line, guest's file read by
+    # root's shell, and NEITHER LOGGING OUT -- so the disk afterwards carries two different
+    # non-zero owners on two terminal nodes at the same instant, which no single session can
+    # produce however it is driven.
+    #
+    # IT NEEDS A HOST PROGRAM, and it is the only test here that does.  Consul 1 is bound to the
+    # simulator's own stdin/stdout by `attach tty25 console'; Consul 2 is a mux line, and
+    # besm6_tty.c's vt_puts() discards everything printed to it while nothing is connected.
+    # ttyhost binds a port, the simulator DIALS OUT to it as multi.ini is parsed -- before `go',
+    # which is what removes the race against the once-a-second connection poll -- and it writes
+    # down what Consul 2 printed.  It types nothing: multi.ini drives both lines, with
+    # `send TTY:26,' for the second.  ttyhost.c's header is the account.
+    #
+    # `ttyhost' is a HOST executable, the one in this directory: everything else here is BESM-6
+    # code built by the b6* toolchain.  It is not installed.
+    add_executable(ttyhost ${CMAKE_CURRENT_SOURCE_DIR}/ttyhost.c)
+    list(APPEND TEST_TARGETS ttyhost)
+
+    add_test(NAME multi
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-multi.sh
+                ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR} $<TARGET_FILE:ttyhost>
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(multi PROPERTIES LABELS kernel TIMEOUT 600 RESOURCE_LOCK simh_boot)
 
     # ---------------------------------------------------------------------------------
     # swap -- more processes than core, and two of them sharing one binary's text
