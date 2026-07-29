@@ -88,7 +88,9 @@ work has two halves:
   Nine tests
   guard that ladder — `kernel/test/boot` (the prompt appears), `kernel/test/console` (a typed
   dialogue with the shell, and the only one that reaches `/etc/rc`, whose motd and date it
-  asserts, ending on the `login:` the first getty puts there), `kernel/test/login` (that prompt
+  asserts, ending on the `login:` the first getty puts there — **currently `DISABLED`**, since it
+  fails about one run in three for reasons that are the simulator's rather than the kernel's;
+  `kernel/TODO.md` task 35 owns it), `kernel/test/login` (that prompt
   typed at: an unknown name refused, root logged in, the shell exited and the getty respawned,
   guest logged in to a non-root shell, then a host-side fsck and the four inodes only the host
   can see), `kernel/test/multi` (both typewriters driven at once, the second through a socket

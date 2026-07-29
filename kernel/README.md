@@ -54,10 +54,10 @@ These cover the image the build produces ([../root.manifest](../root.manifest) �
 |---|---|
 | `fstest` | the superblock and root inode read through the real `md` driver, buffer cache and `sbcheck()`, strictly below the boot path |
 | `boot` | process 1 leaves the kernel, execs `/etc/init`, which forks `/bin/sh`, and the shell **prompts** |
-| `console` | a typed dialogue with that shell: erase, kill, a line longer than a clist block, `>/dev/tty`, `pwd`, `ls /bin`, and `^D` round through `/etc/rc` to the next prompt |
+| `console` | a typed dialogue with that shell: erase, kill, a line longer than a clist block, `>/dev/tty`, `pwd`, `ls /bin`, and `^D` round through `/etc/rc` to the next prompt. **`DISABLED` — it fails about one run in three, always the same way, and nothing the guest does explains it; TODO.md task 35 owns it and `test/CMakeLists.txt` carries the measurement** |
 | `session` | the shell **writes** — files, an inode past its direct blocks, `sync` — and the host then fscks the container and diffs what was written |
 | `files` | the file-management set rearranges a tree and then re-permissions it; the modes and owners are diffed on the host, out of `b6fsutil -v -v` |
-| `utils` | the clock moved and read back, an alarm delivered, a background process killed, a script branching on `test`, and the first pipeline this image has run |
+| `utils` | the clock moved and read back, an alarm delivered, a background process killed, a script branching on `test`, the first pipeline this image has run, and a Cyrillic word carried through `exece()` and through filename generation |
 | `libtest` | the [../lib/test/](../lib/test/) programs run off `/usr/test`, each matching **the same `.expected` file `b6sim` is held to** (`memt` and `shellt` run here only) — and `iomove()`'s own counters say the bulk copy path carried it |
 | `login` | multi-user: `/etc/ttys`, a getty per line, a password through `crypt(3)`, `/etc/utmp`, and `multiple()` respawning the getty a logout killed — all on Consul 1 |
 | `multi` | **two people logged in at once**, one per Consul: root on `/dev/console` and guest on `/dev/tty1`, each shell naming its own terminal, guest's file read by root's shell, and two different non-zero owners on two terminal nodes at the sync |

@@ -422,6 +422,36 @@ if(BESM6)
     set_tests_properties(console PROPERTIES LABELS kernel TIMEOUT 450
                          FIXTURES_REQUIRED console_disk RESOURCE_LOCK simh_boot)
 
+    #
+    # DISABLED, AND NOT BECAUSE IT IS WRONG.  It fails about one run in three -- measured at
+    # two failures in six on an otherwise untouched tree -- always the same way: the LAST
+    # expect never fires, `Step expired' at PC 37037, with /etc/rc's motd printed and its
+    # date line still to come.  Every other stage of the dialogue passes first.
+    #
+    # What makes that worth suspending rather than fixing here is that it is not
+    # deterministic, and a SIMH step budget ought to be: the same image, the same script and
+    # the same instruction count should reach the same place every time.  Something in the
+    # run is taking its timing from the host -- the console poll is the obvious suspect --
+    # and until that is understood, an intermittent failure in the one test everybody runs
+    # teaches people to ignore a red result, which costs more than this test earns.
+    #
+    # NOTHING ELSE COVERS WHAT IT COVERS, so this is a debt and not a deletion: the typed
+    # dialogue, erase and kill, a line longer than a clist block, /dev/tty from a forked
+    # child, and the only assertion in the tree on /etc/rc's motd and boot date.  `login'
+    # still types at a getty and `utils' still runs a script off the image, so the shell and
+    # the console driver are not unwatched -- but the keystroke path is.
+    #
+    # RUN IT BY HAND from the test build directory:
+    #
+    #	cd build/kernel/test && besm6 ../../../kernel/test/console.ini
+    #
+    # not with `ctest -R console', which cannot run a disabled test -- though that command
+    # is still worth giving, because console_setup is deliberately LEFT ENABLED and is what
+    # refreshes the root3078.disk the line above attaches.  The script echoes its own
+    # PASS/FAIL line either way.  Re-enable this as soon as the wobble is explained.
+    #
+    set_tests_properties(console PROPERTIES DISABLED TRUE)
+
     # session -- the end-to-end statement task 25b asks for: boot, shell, create and write
     # files, sync, fsck clean.  Three programs have to run in order (b6fsutil to build and
     # graft the disk, besm6 to hold the session, b6fsutil again to convert back, check and

@@ -23,7 +23,7 @@ numbering is **left as it was** — task numbers are cited from the sources and 
 | 32 | `profil()`: implement `addupc()` or make it fail | small; the decision is the task |
 | 33 | `ptrace` single-step | small now, blocked after |
 | 34 | the `int` ↔ pointer audit | open-ended |
-| 35 | the character `send` drops — find it, and see what it costs | small to measure, unknown to fix |
+| 35 | the guest's timing is not reproducible — the dropped `send` character, and the disabled `console` test | small to measure, unknown to fix |
 | 36 | the shifting copy: the half of the byte path task 28 could not reach | medium, high risk |
 
 ---
@@ -193,6 +193,24 @@ register, both lines lose characters at the same rate; if it is the console's ho
 only line 25 does. Neither has been measured — `multi.ini` simply carries the same
 `after=`/`delay=` as `login.ini` — but the experiment is now one file away.
 
+Task C11 left the **first symptom that is not a lost character**, and it is the one that says the
+mechanism is not merely cosmetic: `test/console` fails about **one run in three** — two in six,
+measured on an otherwise untouched tree, with `cmd/sh` reverted to its previous commit, so it is
+nothing the shell did. It is always the same failure. Every stage of the dialogue passes, and then
+the **last** expect never fires: `Step expired` at PC `37037`, with `/etc/rc`'s motd printed and its
+date line still to come. **`test/console` is DISABLED because of it** (`test/CMakeLists.txt`), which
+is a real hole — nothing else in the tree covers the typed keystroke path, erase and kill, or the
+motd and boot date — and re-enabling it is the deliverable this task now owes.
+
+What makes it worth more than the earlier three is that **a step budget ought to be
+deterministic**. The same image, the same script and the same instruction count should reach the
+same instruction every time; that they do not means something in the run is timed against the host
+rather than counted, which is precisely candidate mechanism 2 below, and this is a much cheaper
+experiment than the character drop: no `send` is involved in the failing stage at all, only
+`^D` → `init` → `/etc/rc`. **Start here rather than at step 1** if the aim is to tell the two
+mechanisms apart, and note what it implies — if instruction counts are not reproducible, then every
+`step N` budget in `kernel/test/` is a wall-clock timeout wearing a disguise.
+
 **Why it went unnoticed for so long is worth its own sentence**, because it is the more useful
 finding: `console.ini`'s last rule was a bare `expect "# "`. All SIMH rules are armed at once, so a
 stalled stage simply fell through to it at the next prompt and the test printed PASS — it had been
@@ -218,10 +236,16 @@ passing without running its last four stages. That rule is unique now. **Check e
    `simh_boot`, which is exactly how the lock earned its place. It costs about fifteen seconds a
    suite, and it was bought to treat this symptom. If the delay makes the lock unnecessary, both
    the lock and its comment come out.
-3. Whatever the answer, correct README.md's "`send` DROPS A CHARACTER now and then, and it is not
+3. **Re-enable `test/console`.** It is disabled, not deleted, and the property is one line in
+   `test/CMakeLists.txt` with the measurement written beside it. Nothing else asserts the typed
+   keystroke path, erase and kill, `/dev/tty` from a forked child, or `/etc/rc`'s motd and boot
+   date, so the suite is thinner than it looks until this comes back.
+4. Whatever the answer, correct README.md's "`send` DROPS A CHARACTER now and then, and it is not
    the kernel" — the second half of that sentence is exactly what has not been established.
 
-**How to verify.** A fix is only a fix if the drop can be *made to happen first*: remove the
+**How to verify.** A fix is only a fix if the fault can be *made to happen first*. For the
+step-budget half that is free: take the `DISABLED` property off `test/console` and run
+`ctest -R console` six times, which is how the one-in-three was measured. For the drop, remove the
 `after=` from `console.ini` and confirm `rmdir` still arrives as `mdir`, which takes one run. Then
 the five parallel-`ctest` runs for the load half.
 
