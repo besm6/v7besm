@@ -1,6 +1,8 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-//
+// 128 entries of ASCII: the low six bits are the character's class, which is all
+// ttyoutput() reads, and the top bit is an even parity this machine does not carry.
+// Never subscript it above 0177 -- see dev/tty.c.
 
 char partab[] = {
     // clang-format off

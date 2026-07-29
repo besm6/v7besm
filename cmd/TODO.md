@@ -371,6 +371,21 @@ decision before either is started, not during.
 
 ---
 
+## C11. `sh` cannot carry an eight-bit byte
+
+The terminal, the clists, `canon()` and the filesystem are all 8-bit clean now, and the console
+speaks UTF-8 ([../kernel/dev/sc.c](../kernel/dev/sc.c)). The shell is the one thing in the path
+that is not: `QUOTE` is `0200` ([sh/defs.h](sh/defs.h)) and `trim()` ([sh/service.c](sh/service.c))
+clears that bit from every character of every word on its way to `argv`. So `cat` carries Cyrillic
+and `echo привет` mangles it.
+
+The fix is not one line. The quoting mark has to move out of the character — a parallel flag array
+over the expression stack, or a wider `CHAR` on a machine whose word is 48 bits anyway — and it
+touches `word.c`, `macro.c`, `expand.c`, `service.c` and both `ctype` tables. Measure the word
+ceiling before choosing: the shell is already the largest program on the image.
+
+---
+
 ## Not ported, and why
 
 Each row is a decision that can be re-examined; the line count is there so it can be.

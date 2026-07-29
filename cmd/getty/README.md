@@ -22,14 +22,13 @@ baud rate to guess, no `break` key, and nothing to fall back to. Concretely, in 
   `scopen()` leaves them at `B0` because `struct tty sc[NSC]` is bss. v7's `'3'` entry probed
   the connect speed with `TIOCGETP` and chose a table from the answer — here that probe reads
   back `B0` on every line, always. It is gone with the speeds.
-* **The delay bits are worse than inert.** `ttyoutput()` turns `CR1`, `NL1`, `TAB1` and `FF1`
-  into a queued delay byte and `scstart()` turns that into a `timeout()`. `sc.c`'s own header
-  calls that arm unreachable "as the console is opened today" — and v7's table would have made
-  it reachable in the boot path of every test in the suite, to give a carriage time to return
-  on a terminal that does not have one.
-* **Parity is not carried.** `scstart()` sends `c & 0177` and `scintr()` masks the same way, so
-  `ANYP`/`EVENP`/`ODDP` describe nothing. v7's `partab[]` — 128 bytes of even-parity flags that
-  `putchr()` ORed into every character — went with them.
+* **The delay bits describe nothing.** `ttyoutput()` generates no delays at all any more: the
+  terminal path is eight bits wide, so a queued byte above `0177` is data and cannot also be a
+  delay count. Nothing was lost — there is no carriage on this terminal to wait for. (When this
+  was written the mechanism was still there and `sc.c`'s header already called it unreachable.)
+* **Parity is not carried.** The Consul line is a byte pipe and all eight bits belong to the
+  kernel, so `ANYP`/`EVENP`/`ODDP` describe nothing. v7's `partab[]` — 128 bytes of even-parity
+  flags that `putchr()` ORed into every character — went with them.
 * **`LCASE` would undo the driver.** The Consul's own code (GOST-10859) has no lower-case Latin
   letters at all, which is why `sc.c` runs the SIMH line `raw` and speaks ASCII. A `getty` that
   turned `LCASE` on would fold that away.

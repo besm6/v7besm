@@ -545,13 +545,25 @@ Facts that cost real time to establish and are not in `doc/`.
 * **The tick is four times v7's, and two things are scaled for it by hand.** `HZ` is 250 because the
   interval timer free-runs at 250 Hz and cannot be programmed, so a tick is exact but is not the
   sixtieth every v7 constant assumes. `p_cpu` accrues one tick in four (`CPUTICK`, [clock.c](clock.c))
-  because its decay is per *second* and cannot move; `ttyoutput()`'s delay table keeps v7's numbers
-  and is scaled by `HZ/60` where it is consumed ([dev/sc.c](dev/sc.c)).
+  because its decay is per *second* and cannot move. (v7's other scaled-by-hand constant was
+  `ttyoutput()`'s delay table; there are no delays any more — see below.)
   `CLOCKS_PER_SEC` in `<time.h>` is a hand-copy of `HZ` that `lib/libc/gen/clock.c` `_Static_assert`s.
   One consequence is **left unfixed**: `acct(2)`'s `compress()` ([acct.c](acct.c)) has a 13-bit
   mantissa, so a CPU time past 8191 ticks loses low bits — ~33 s here against v7's ~136 s. Nothing on
   the image calls `acct(2)` (`acctp` is set only by `sysacct()`), so it is recorded rather than
   scaled; the fix, when something does, is to divide by `HZ/60` on the way into `compress()`.
+* **The terminal path is eight bits wide, and the shell is not.** `dev/sc.c` and `dev/tty.c` pass
+  every byte whole in both directions, so the console carries UTF-8 — `/etc/motd` opens in Cyrillic
+  and `kernel/test/multi`'s transcript asserts it. Two things follow. v7's **delays are gone**: bit
+  0200 of a queued byte was a delay count and cannot also be data, and nothing on this machine has a
+  carriage to wait for, so `ttyoutput()` computes columns only and `TIMEOUT`/`ttrstrt()` have no
+  producer left. And **`0377` is refused on input**, being the raw queue's own delimiter and `CBRK`
+  both — no UTF-8 byte is ever `0377`, so nothing is lost, but without the guard `t_delct` goes
+  negative and the line wedges. The limit is above the kernel: `/bin/sh` marks a quoted character
+  with bit 0200 and `trim()` strips it from every word, so `cat` carries Cyrillic and `echo` mangles
+  it. This also **couples the kernel to the simulator** — a raw Consul line in `besm6_tty.c` must
+  synthesise no parity and truncate nothing, and against an older one the symptom is garbage on
+  input from the first character typed.
 * **The tail of an image grown by `expand()` reads back as zeros.** v7 promised nothing there and
   nothing reads it, but this machine cannot leave those blocks unwritten at all, so `xswap()` writes
   zeros — a contract stronger than v7's, asserted by `test/uswap` leg 0.

@@ -74,7 +74,7 @@ built a second time, not ports. See [TODO.md](TODO.md).
 
 ## The porting recipe
 
-Ten things that are true of **every** port. They are collected here so that no task in
+Eleven things that are true of **every** port. They are collected here so that no task in
 [TODO.md](TODO.md) has to say them again; a task names only what is unusual about *it*.
 
 ### 1. The C11 pass, which is mechanical
@@ -330,6 +330,15 @@ a page rather than correct it only when the DESCRIPTION itself stopped being tru
 happened once: `touch` — see "What task C1 taught" below. A `README.md` is worth writing only when the port *taught* something
 structural — a new privilege transition, a new hazard — which is the standard `sh`, `ls`, `mkdir`
 and `mv` met and `cp`, `ln` and `rm` did not.
+
+### 11. The terminal carries eight bits; the shell does not
+
+The console path is byte-transparent in both directions and this machine's text is UTF-8
+([../kernel/dev/sc.c](../kernel/dev/sc.c)), so a program that reads its own input or writes its own
+output carries Cyrillic. What it cannot do is receive it as an **argument**: `/bin/sh` marks a
+quoted character with bit `0200` and `trim()` clears that bit from every character of every word
+([sh/service.c](sh/service.c)), so `cat` works where `echo` mangles. Test anything that must be
+8-bit clean through a pipe or a file, not through the shell's word expansion.
 
 ---
 

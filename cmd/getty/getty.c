@@ -25,15 +25,15 @@
 //     ioctl(TIOCGETP) and a test against B300 -- reads back B0 on every line, always.  It is
 //     gone with the speeds themselves.
 //
-//   - the delay bits are worse than useless.  ttyoutput() turns CR0..CR3, NL0..NL3, TAB1 and
-//     FF1 into a queued delay byte and scstart() (kernel/dev/sc.c) into a timeout() -- a path
-//     that file's header calls unreachable "as the console is opened today", and which v7's
-//     table would put into the boot path of every test in the suite for the sake of a
-//     carriage that this machine's terminal does not have to wait for.
+//   - the delay bits describe nothing.  ttyoutput() no longer generates delays at all: the
+//     terminal path is eight bits wide, so a queued byte above 0177 is data and cannot also
+//     be a delay count (kernel/dev/tty.c).  Nothing was lost -- there is no carriage on this
+//     machine's terminal to wait for.
 //
-//   - parity is not carried.  scstart() sends `c & 0177' and scintr() masks the same way, so
-//     ANYP/EVENP/ODDP describe nothing.  v7's partab[] -- 128 bytes of even-parity flags that
-//     putchr() ORed into every character it wrote -- is gone for the same reason.
+//   - parity is not carried.  The Consul line is a byte pipe and all eight bits are the
+//     kernel's own (kernel/dev/sc.c), so ANYP/EVENP/ODDP describe nothing.  v7's partab[] --
+//     128 bytes of even-parity flags that putchr() ORed into every character it wrote -- is
+//     gone for the same reason.
 //
 //   - LCASE would fold this terminal's lower case away.  The Consul's own code (GOST-10859)
 //     has no lower-case Latin at all, which is why dev/sc.c runs the SIMH line `raw' and
@@ -188,7 +188,9 @@ static int getname(void)
     for (;;) {
         if (read(0, &cs, 1) <= 0)
             _exit(0); // the line went away
-        c = cs & 0177;
+        // Eight bits: the line is a byte pipe (kernel/dev/sc.c) and 0177 would cut a
+        // UTF-8 character in half.  Everything tested below is ASCII.
+        c = cs & 0377;
         if (c == 0)
             return (0); // a null: try the next table
         if (c == EOT)
@@ -231,7 +233,8 @@ static void putmsg(const char *s)
 
 //
 // One character to the terminal.  v7 ORed in partab[]'s even-parity bit here; this machine
-// carries no parity (kernel/dev/sc.c sends `c & 0177'), so the byte goes out as it stands.
+// carries no parity -- the line is eight bits of data (kernel/dev/sc.c) -- so the byte goes
+// out as it stands.
 //
 static void putchr(int cc)
 {

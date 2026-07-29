@@ -114,6 +114,9 @@ struct ttiocb {
 #define RAW     040
 #define ODDP    0100
 #define EVENP   0200
+// The three delay fields are inert: still settable, but ttyoutput() generates no delays
+// on an eight-bit line (kernel/dev/tty.c).  TBDELAY is not one -- it is XTABS, and tab
+// expansion is live.
 #define NLDELAY 001400
 #define TBDELAY 006000
 #define XTABS   006000
@@ -125,7 +128,8 @@ struct ttiocb {
 #define IENABLE 0100
 
 // Internal state bits
-#define TIMEOUT 01      // Delay timeout in progress
+#define TIMEOUT 01      // Delay timeout in progress -- nothing sets it now (no delays);
+                        // kept for v7's numbering and for pstat(8).
 #define WOPEN   02      // Waiting for open to complete
 #define ISOPEN  04      // Device is open
 #define FLUSH   010     // outq has been flushed during DMA
@@ -177,7 +181,6 @@ struct ttiocb {
 int ttread(struct tty *tp);
 void ttwrite(struct tty *tp);
 void ttstart(struct tty *tp);
-void ttrstrt(carg_t arg);
 int ttioccomm(int com, struct tty *tp, caddr_t addr, dev_t dev);
 void flushtty(struct tty *tp);
 void ttyinput(int c, struct tty *tp);

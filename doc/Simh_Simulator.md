@@ -520,7 +520,7 @@ set together, e.g. `set tty1 unicode,authbs` or `set tty1 qwerty,authbs`.
 | `unicode` | UTF-8 in and out. |
 | `jcuken`  | Type Russian using the standard ЙЦУКЕН keyboard layout mapped onto Latin keys. |
 | `qwerty`  | Type Russian as transliterated Latin letters: `Q`=я, `W`=в, `Y`=ы, `J`=й, `X`=ь, `C`=ц, `V`=ж, `` ` ``=ю, `~`=ч, `{`=ш, `}`=щ, `|`=э. |
-| `raw`     | No conversion; bytes pass through unchanged. |
+| `raw`     | No conversion; bytes pass through unchanged. On the two Consul lines this is literally eight bits both ways — no truncation on output, no parity bit synthesised on input — so the guest owns the character set. `v7besm`'s kernel depends on that to carry UTF-8. |
 
 **Terminal type:**
 

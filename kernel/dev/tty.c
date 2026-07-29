@@ -313,6 +313,10 @@ loop:
             }
             if (bp[-1] != '\\') {
                 if (c == tp->t_erase) {
+                    // One character, not one byte: back over a UTF-8 sequence's
+                    // continuation bytes first.  On ASCII the loop runs zero times.
+                    while (bp > &canonb[2] && (bp[-1] & 0300) == 0200)
+                        bp--;
                     if (bp > &canonb[2])
                         bp--;
                     continue;
@@ -322,7 +326,9 @@ loop:
                 if (c == tun.t_eofc)
                     continue;
             } else {
-                mc = maptab[c];
+                // maptab[] is 128 entries of ASCII: a UTF-8 byte has none, and is stored
+                // as it stands.
+                mc = (c < 0200) ? maptab[c] : 0;
                 if (c == tp->t_erase || c == tp->t_kill)
                     mc = c;
                 if (mc && (mc == c || (tp->t_flags & LCASE))) {
@@ -384,7 +390,16 @@ void ttyinput(register int c, register struct tty *tp)
     if (t_flags & TANDEM)
         ttyblock(tp);
     if ((t_flags & RAW) == 0) {
-        c &= 0177;
+        // Eight bits, not seven: the line carries UTF-8 and bit 8 is data (dev/sc.c).
+        // Every character compared for below is ASCII, and no byte of a multi-byte
+        // character is.
+        //
+        // 0377 IS THE EXCEPTION.  It is this queue's own line delimiter (the putc(0377)
+        // below, read back by canon()) and also CBRK, which it compares equal to, `char'
+        // being unsigned here -- so as data it would be counted twice and t_delct would
+        // go negative, wedging the terminal.  No UTF-8 byte is ever 0377, so drop it.
+        if (c == 0377)
+            return;
         if (tp->t_state & TTSTOP) {
             if (c == tun.t_startc) {
                 tp->t_state &= ~TTSTOP;
@@ -452,15 +467,14 @@ void ttyblock(register struct tty *tp)
     }
 }
 
-// put character on TTY output queue, adding delays,
-// expanding tabs, and handling the CR/NL bit.
+// put character on TTY output queue, expanding tabs and handling the CR/NL bit.
+// (v7 added delays here too; see the tail of the function for where they went.)
 // It is called both from the top half for output, and from
 // interrupt level for echoing.
 // The arguments are the character and the tty structure.
 void ttyoutput(register int c, register struct tty *tp)
 {
     register char *colp;
-    register int ctype;
 
     tk_nout += 1;
     // Ignore EOT in normal mode to avoid hanging up
@@ -468,7 +482,7 @@ void ttyoutput(register int c, register struct tty *tp)
     // In raw mode dump the char unchanged.
 
     if ((tp->t_flags & RAW) == 0) {
-        c &= 0177;
+        c &= 0377; // eight bits wide in cooked mode too -- see the tail of this function
         if (c == CEOT)
             return;
     } else {
@@ -501,16 +515,21 @@ void ttyoutput(register int c, register struct tty *tp)
     if (c == '\n' && tp->t_flags & CRMOD)
         ttyoutput('\r', tp);
     putc(c, &tp->t_outq);
-    // Calculate delays.
-    // The numbers here represent clock ticks
-    // and are not necessarily optimal for all terminals.
-    // The delays are indicated by characters above 0200.
-    // In raw mode there are no delays and the
-    // transmission path is 8 bits wide.
-    colp  = &tp->t_col;
-    ctype = partab[c];
-    c     = 0;
-    switch (ctype & 077) {
+
+    // COLUMN BOOKKEEPING, AND NOTHING ELSE.  v7 also computed a delay here and queued it
+    // as a byte with bit 8 set; that is gone, because on an eight-bit line (dev/sc.c) a
+    // queued byte is data and bit 8 cannot also be a mark.  Nothing on this machine has a
+    // carriage to wait for -- the finding that took the padding out of lib/libtermcap.
+    //
+    // A UTF-8 byte has no partab[] entry (128 ASCII classes), and only a lead byte moves
+    // the column: `привет' is six columns, so a tab after it stops where the eye says.
+    colp = &tp->t_col;
+    if (c >= 0200) {
+        if ((c & 0300) != 0200)
+            (*colp)++;
+        return;
+    }
+    switch (partab[c] & 077) {
     // ordinary
     case 0:
         (*colp)++;
@@ -527,61 +546,23 @@ void ttyoutput(register int c, register struct tty *tp)
 
     // newline
     case 3:
-        ctype = (tp->t_flags >> 8) & 03;
-        if (ctype == 1) { // tty 37
-            if (*colp) {
-                c = ((unsigned)*colp >> 4) + 3;
-                if (c < 6)
-                    c = 6;
-            }
-        } else if (ctype == 2) { // vt05
-            c = 6;
-        }
         *colp = 0;
         break;
 
     // tab
     case 4:
-        ctype = (tp->t_flags >> 10) & 03;
-        if (ctype == 1) { // tty 37
-            c = 1 - (*colp | ~07);
-            if (c < 5)
-                c = 0;
-        }
         *colp |= 07;
         (*colp)++;
         break;
 
     // vertical motion
     case 5:
-        if (tp->t_flags & VTDELAY) // tty 37
-            c = 0177;
         break;
 
     // carriage return
     case 6:
-        ctype = (tp->t_flags >> 12) & 03;
-        if (ctype == 1) { // tn 300
-            c = 5;
-        } else if (ctype == 2) { // ti 700
-            c = 10;
-        }
         *colp = 0;
     }
-    if (c)
-        putc(c | 0200, &tp->t_outq);
-}
-
-// Restart typewriter output following a delay
-// timeout.
-// The name of the routine is passed to the timeout
-// subroutine and it is called during a clock interrupt.
-void ttrstrt(carg_t arg)
-{
-    register struct tty *tp = (struct tty *)arg;
-
-    tp->t_state &= ~TIMEOUT;
-    ttstart(tp);
 }
 
 // Start output on the typewriter. It is used from the top half
@@ -593,7 +574,8 @@ void ttstart(register struct tty *tp)
     register int s;
 
     s = spl5();
-    if ((tp->t_state & (TIMEOUT | TTSTOP | BUSY)) == 0)
+    // v7 tested TIMEOUT too; nothing sets it now that there are no delays (sys/tty.h).
+    if ((tp->t_state & (TTSTOP | BUSY)) == 0)
         (*tp->t_oproc)(tp);
     splx(s);
 }

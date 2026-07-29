@@ -24,11 +24,22 @@
 //
 //   - scintr()'s receive arm, which hands a typed character to ttyinput().
 //
-// The character codes are ASCII.  The authentic Consul code is GOST-10859, but it
-// has no lowercase Latin letters, which a Unix console cannot do without; the SIMH
-// line is therefore configured `raw' (see kernel/test/sctest.ini) and the bytes go
-// out untranslated.  Because nothing then translates line endings for us either,
-// the tty must run with CRMOD -- see scopen().
+// THE LINE IS A BYTE PIPE, EIGHT BITS WIDE, AND THE KERNEL OWNS THE CHARACTER SET.  The
+// authentic Consul code is GOST-10859, but it has no lowercase Latin letters, which a
+// Unix console cannot do without; the SIMH line is therefore configured `raw' (see
+// kernel/test/sctest.ini) and the bytes go out untranslated -- ASCII below 0200, UTF-8
+// above it, /etc/motd opening in Cyrillic.  Because nothing translates line endings for
+// us either, the tty must run with CRMOD -- see scopen().
+//
+// THAT COSTS THE PARITY BIT AND COUPLES THIS FILE TO THE SIMULATOR: bit 8 of the read
+// register is odd parity on the real device (doc/Besm6_Peripherals.md), and a raw line
+// in besm6_tty.c now computes none and truncates nothing.  Against an older simulator
+// the symptom is garbage on input from the first character, not silence.
+//
+// TWO LIMITS ARE ABOVE THIS DRIVER.  /bin/sh's trim() clears bit 0200 from every word
+// character, its quoting mark (cmd/sh/service.c), so `cat' carries UTF-8 and `echo'
+// mangles it.  And task 35's input register now drops a piece of a character rather than
+// a whole one.
 //
 // WHAT IS AND IS NOT TESTED.  kernel/test/sctest exercises both Consuls at the
 // device level -- the polled path, the interrupt path, and that the two lines do
@@ -167,30 +178,15 @@ void scstart(register struct tty *tp)
 {
     register int c;
 
-    if (tp->t_state & (TIMEOUT | BUSY | TTSTOP))
+    if (tp->t_state & (BUSY | TTSTOP))
         return;
     if ((c = getc(&tp->t_outq)) >= 0) {
-        if (c >= 0200 && (tp->t_flags & RAW) == 0) {
-            // A delay, not a character: wait it out and come back.
-            //
-            // The count came out of ttyoutput()'s delay table (dev/tty.c), which is
-            // v7's and is written in SIXTIETHS -- the PDP-11's tick.  timeout() counts
-            // in this machine's ticks, HZ of them to the second, so the table's numbers
-            // have to be scaled here or every delay is four times too short.  The 60 is
-            // v7's clock rate, not a minute; scaling at the two consumers keeps the
-            // table itself legible as the v7 table it is.
-            //
-            // Unreachable as the console is opened today: scopen() sets ECHO|CRMOD|XTABS
-            // and every arm of that table reads a delay field this leaves zero, so `c'
-            // is never non-zero and tty.c never queues a delay byte.  A program that
-            // sets the delay bits through TIOCSETP reaches it.
-            tp->t_state |= TIMEOUT;
-            timeout(ttrstrt, (carg_t)tp, ((c & 0177) + 6) * HZ / 60);
-        } else {
-            tp->t_char = c;
-            tp->t_state |= BUSY;
-            __besm6_ext(SC_PRINT(tp->t_addr), c & 0177);
-        }
+        // Every byte in the queue is data.  v7 read one above 0177 as a delay count and
+        // set a timeout() instead of printing it; ttyoutput() queues no delays now
+        // (dev/tty.c), because bit 8 belongs to the character.
+        tp->t_char = c;
+        tp->t_state |= BUSY;
+        __besm6_ext(SC_PRINT(tp->t_addr), c & 0377);
         if (tp->t_outq.c_cc <= TTLOWAT && tp->t_state & ASLEEP) {
             tp->t_state &= ~ASLEEP;
             wakeup((chan_t)&tp->t_outq);
@@ -235,8 +231,9 @@ void scintr(void)
             continue;
         if (prp & SC_INPUT(unit)) {
             __besm6_ext(EXT_PRPCLR, ~(unsigned)SC_INPUT(unit));
-            // Bits 1-7 are the character; bit 8 is odd parity, not data.
-            ttyinput(__besm6_ext(SC_READ(unit), 0) & 0177, tp);
+            // All eight bits are data.  On the authentic device bit 8 is odd parity; a
+            // `raw' SIMH line computes none and delivers the byte whole.
+            ttyinput(__besm6_ext(SC_READ(unit), 0) & 0377, tp);
         }
         if (prp & SC_DONE(unit)) {
             __besm6_ext(EXT_PRPCLR, ~(unsigned)SC_DONE(unit));
@@ -262,7 +259,7 @@ static void scputc(int c)
     for (i = SC_SPIN; i; i--) // has the previous character printed?
         if (__besm6_ext(EXT_READY2, 0) & scready[0])
             break;
-    __besm6_ext(SC_PRINT(0), c & 0177);
+    __besm6_ext(SC_PRINT(0), c & 0377);
     for (i = SC_SPIN; i; i--) // has ours?
         if (__besm6_ext(EXT_READY2, 0) & scready[0])
             break;

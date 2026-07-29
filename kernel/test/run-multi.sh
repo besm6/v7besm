@@ -76,13 +76,16 @@ wait $host
 
 # What Consul 2 printed.  Three things come out of it.  The simulator's own connect banners:
 # `Encoding is RAW' and the WRU line are constant, the third carries a ctime and a port.  The CRs:
-# the line is in cooked mode with CRMOD from the moment getty execs login.  And every byte outside
-# printable ASCII, mapped to `?' so that multi.expected stays a text file -- the first line of
-# /etc/motd is Cyrillic, and a RAW Consul carries the machine's own 7-bit codes rather than the
-# UTF-8 a `set tty26 vt' line would be given.  It is reproducible either way; it is simply not
-# readable, and this test is not the place to assert the character set.
+# the line is in cooked mode with CRMOD from the moment getty execs login.  And control characters,
+# mapped to `?' so that multi.expected stays a text file.
+#
+# HIGH BYTES ARE KEPT, and that is an assertion.  A raw Consul is a byte pipe and the guest supplies
+# the character set (kernel/dev/sc.c): the first line of /etc/motd is Cyrillic, so if the transcript
+# reads `БЭСМ-6' then every stage of the path -- ttyoutput, the clist, scstart, consul_print and the
+# socket -- carried all eight bits.  It used to read `P?P-P!P?-6', which is that line with bit 8
+# struck off each byte, and this filter used to flatten what was left.
 sed -e '/^Encoding is /d' -e '/Break to sim> prompt character/d' -e '/ from 127\.0\.0\.1:/d' \
-    multi.tty1.raw | tr -d '\r' | LC_ALL=C tr -c '\11\12\40-\176' '?' >multi.tty1
+    multi.tty1.raw | tr -d '\r' | LC_ALL=C tr -c '\11\12\40-\176\200-\377' '?' >multi.tty1
 diff -u "$srcdir/multi.expected" multi.tty1
 
 "$b6fsutil" -S root3085.disk multiafter.img
