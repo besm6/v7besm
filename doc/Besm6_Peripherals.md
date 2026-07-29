@@ -955,10 +955,11 @@ The two Consul-254 typewriters are **parallel** — a whole character at a time:
 * **`033 4174` / `033 4175`** — `consul_read()`. Returns the last character typed in bits 1–7, with
   an **odd-parity bit in bit 8**.
 
-> **On a line `set raw` the simulator carries eight data bits and computes no parity**, in both
+> **On a line `set raw8` the simulator carries eight data bits and computes no parity**, in both
 > directions: the guest owns the character set. That is what `kernel/dev/sc.c` depends on to put
 > UTF-8 on the console, and it is a divergence from the authentic device, whose GOST-10859 code is
-> seven bits plus parity. The 7-bit-plus-parity behaviour stands on every non-raw line.
+> seven bits plus parity. The 7-bit-plus-parity behaviour stands on every other line, plain `raw`
+> included — `raw` suppresses the character-set translation, not the width and not the parity.
 
 Interrupts: `PRP_CONS1_INPUT` / `PRP_CONS2_INPUT` (bits 12/11) — a character was typed;
 `PRP_CONS1_DONE` / `PRP_CONS2_DONE` (bits 10/9) — printing finished. Ready bits `CONS_READY` in

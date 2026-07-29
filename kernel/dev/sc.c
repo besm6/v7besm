@@ -26,14 +26,15 @@
 //
 // THE LINE IS A BYTE PIPE, EIGHT BITS WIDE, AND THE KERNEL OWNS THE CHARACTER SET.  The
 // authentic Consul code is GOST-10859, but it has no lowercase Latin letters, which a
-// Unix console cannot do without; the SIMH line is therefore configured `raw' (see
+// Unix console cannot do without; the SIMH line is therefore configured `raw8' (see
 // kernel/test/sctest.ini) and the bytes go out untranslated -- ASCII below 0200, UTF-8
 // above it, /etc/motd opening in Cyrillic.  Because nothing translates line endings for
 // us either, the tty must run with CRMOD -- see scopen().
 //
 // THAT COSTS THE PARITY BIT AND COUPLES THIS FILE TO THE SIMULATOR: bit 8 of the read
-// register is odd parity on the real device (doc/Besm6_Peripherals.md), and a raw line
-// in besm6_tty.c now computes none and truncates nothing.  Against an older simulator
+// register is odd parity on the real device (doc/Besm6_Peripherals.md), and a raw8 line
+// in besm6_tty.c computes none and truncates nothing.  Plain `raw' will not do: it keeps
+// the 7-bits-plus-parity contract.  Against an older simulator, one with no raw8 at all,
 // the symptom is garbage on input from the first character, not silence.
 //
 // ONE LIMIT IS ABOVE THIS DRIVER, and it used to be two.  Task 35's input register drops
@@ -126,7 +127,7 @@ void scopen(dev_t dev, int flag)
     if ((tp->t_state & ISOPEN) == 0) {
         tp->t_state = ISOPEN | CARR_ON;
         // CRMOD is what makes ttyoutput() send CR before NL and ttyinput() turn a
-        // typed CR into NL.  The line is raw on the simulator side, so if the
+        // typed CR into NL.  The line is raw8 on the simulator side, so if the
         // kernel does not do this nothing will.
         //
         // ECHO on BOTH lines: the simulator does no local echo on the Consul path
@@ -234,7 +235,7 @@ void scintr(void)
         if (prp & SC_INPUT(unit)) {
             __besm6_ext(EXT_PRPCLR, ~(unsigned)SC_INPUT(unit));
             // All eight bits are data.  On the authentic device bit 8 is odd parity; a
-            // `raw' SIMH line computes none and delivers the byte whole.
+            // `raw8' SIMH line computes none and delivers the byte whole.
             ttyinput(__besm6_ext(SC_READ(unit), 0) & 0377, tp);
         }
         if (prp & SC_DONE(unit)) {

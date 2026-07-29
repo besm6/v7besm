@@ -56,7 +56,7 @@
 reset
 set cpu latin
 set mmu cache
-set tty25 raw
+set tty25 raw8
 
 attach tty25 console
 attach md00 root3081.disk

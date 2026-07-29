@@ -73,7 +73,7 @@
 ; needs a swap area of its own.
 ;
 ; THE CONSOLE IS ATTACHED NOW, and has to be -- the assertion is what the shell printed on it.
-; `set tty25 raw' first, so the bytes go out untranslated (see the header of kernel/dev/sc.c)
+; `set tty25 raw8' first, so the bytes go out untranslated (see the header of kernel/dev/sc.c)
 ; and `expect' sees the ASCII the kernel actually emitted.  Console output reaches the expect
 ; machinery through sim_putchar -> tmxr_putc_ln -> sim_exp_check, so no logging is needed.
 ;
@@ -83,7 +83,7 @@
 reset
 set cpu latin
 set mmu cache
-set tty25 raw
+set tty25 raw8
 
 attach tty25 console
 attach -r md00 root3072.disk

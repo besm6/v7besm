@@ -583,8 +583,9 @@ Facts that cost real time to establish and are not in `doc/`.
   marked a quoted character with bit 0200 and `trim()` stripped it from every word, so `cat`
   carried Cyrillic and `echo` mangled it; task C11 moved that mark out of the character
   (`cmd/sh/defs.h`), and `kernel/test/utils` drives a Cyrillic argument through `exece()` and
-  through filename generation. This also **couples the kernel to the simulator** — a raw Consul line in `besm6_tty.c` must
-  synthesise no parity and truncate nothing, and against an older one the symptom is garbage on
+  through filename generation. This also **couples the kernel to the simulator** — a `raw8` Consul line in `besm6_tty.c` must
+  synthesise no parity and truncate nothing (plain `raw` keeps the authentic 7-bits-plus-parity
+  contract and will not do), and against an older one the symptom is garbage on
   input from the first character typed.
 * **The tail of an image grown by `expand()` reads back as zeros.** v7 promised nothing there and
   nothing reads it, but this machine cannot leave those blocks unwritten at all, so `xswap()` writes

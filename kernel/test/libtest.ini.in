@@ -31,7 +31,7 @@
 ; EIO.  See boot.ini.in, which says it at length.  Named for this test because ctest runs
 ; the SIMH tests in parallel and each wants a swap area of its own.
 ;
-; `set mmu cache' and `set tty25 raw' for the reasons boot.ini.in and console.ini give.
+; `set mmu cache' and `set tty25 raw8' for the reasons boot.ini.in and console.ini give.
 ; `step', not `go': a hang must fail the run instead of hanging it.
 ;
 ; WHY THE SHELL IS TOLD TO READ THE SCRIPT: there is no `#!' on this system -- the shebang
@@ -59,7 +59,7 @@
 reset
 set cpu latin
 set mmu cache
-set tty25 raw
+set tty25 raw8
 
 attach tty25 console
 attach md00 root3080.disk

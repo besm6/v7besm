@@ -520,7 +520,8 @@ set together, e.g. `set tty1 unicode,authbs` or `set tty1 qwerty,authbs`.
 | `unicode` | UTF-8 in and out. |
 | `jcuken`  | Type Russian using the standard ЙЦУКЕН keyboard layout mapped onto Latin keys. |
 | `qwerty`  | Type Russian as transliterated Latin letters: `Q`=я, `W`=в, `Y`=ы, `J`=й, `X`=ь, `C`=ц, `V`=ж, `` ` ``=ю, `~`=ч, `{`=ш, `}`=щ, `|`=э. |
-| `raw`     | No conversion; bytes pass through unchanged. On the two Consul lines this is literally eight bits both ways — no truncation on output, no parity bit synthesised on input — so the guest owns the character set. `v7besm`'s kernel depends on that to carry UTF-8. |
+| `raw`     | No conversion; bytes pass through unchanged. The authentic seven-bits-plus-parity contract of the hardware still holds: a code above `0177` is dropped on input, output is masked to `0177`, and the Consul and mux lines synthesise the odd-parity bit. |
+| `raw8`    | The same, but literally eight bits both ways — no truncation on output, nothing above `0177` dropped on input, no parity bit synthesised — so the guest owns the character set. A connecting client also gets no `^C` injected, the byte there being data rather than a request. `v7besm`'s kernel depends on all of that to carry UTF-8, which is why every `.ini` here says `set tty25 raw8`. |
 
 **Terminal type:**
 

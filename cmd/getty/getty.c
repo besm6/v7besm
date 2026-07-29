@@ -36,7 +36,7 @@
 //     gone for the same reason.
 //
 //   - LCASE would fold this terminal's lower case away.  The Consul's own code (GOST-10859)
-//     has no lower-case Latin at all, which is why dev/sc.c runs the SIMH line `raw' and
+//     has no lower-case Latin at all, which is why dev/sc.c runs the SIMH line `raw8' and
 //     speaks ASCII; a getty that turned LCASE on would undo that.
 //
 // So the table is ONE ENTRY, and it keeps v7's shape rather than collapsing into two
