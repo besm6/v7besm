@@ -1,0 +1,16 @@
+a
+alpha
+beta
+.
+w write.tmp
+f
+1,$p
+a
+gamma
+.
+w write.tmp
+e write.tmp
+1,$p
+=
+W write.tmp
+q

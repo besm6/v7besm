@@ -166,6 +166,15 @@ int rename(const char *from, const char *to);
 FILE *tmpfile(void);
 char *tmpnam(char *s);
 
+// mktemp() is v7's and not C11's, and no header of v7's declared it either -- every
+// caller wrote `char *mktemp();' at its own head, which the strict front end will not
+// take.  It is named here rather than beside tmpnam() being C11 because that is the
+// routine it belongs with: it fills the trailing run of `X' in the caller's own buffer
+// and returns it, so the argument must be WRITABLE.  A string literal is not, this
+// machine's literals living in the read-only const segment -- see cmd/ed/README.md, which
+// is where that bit the first caller.
+char *mktemp(char *as);
+
 // The internal pair the getc/putc macros fall out to, and v7's word-at-a-time
 // pair, which are v7 extensions and not C11.  A word is SIX bytes here, not the
 // PDP-11's two, so getw/putw move sizeof(int) == NBPW bytes.

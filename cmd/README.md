@@ -33,8 +33,8 @@ single-file programs and 29 directories of larger ones. That tree is **not in th
 **A directory is part of the build when it holds a `CMakeLists.txt`**, and only the ported ones
 do — the ten of task C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`, `mv/`, `rm/`,
 `rmdir/`, `touch/`), the three of C2a (`date/`, `kill/`, `sleep/`), the five of C2b
-(`basename/`, `test/`, `time/`, `tty/`, `yes/`) and the two of kernel task 29b (`getty/`,
-`login/`) today. That is the only marker;
+(`basename/`, `test/`, `time/`, `tty/`, `yes/`), the one of C3 (`ed/`) and the two of kernel
+task 29b (`getty/`, `login/`) today. That is the only marker;
 [../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.
 
 Four things about the copies:
@@ -114,7 +114,7 @@ candidates, as they stand today:
 | source | `char *` comparisons |
 |---|---|
 | `sort.c` | **fifteen** — all in `cmp()` and `newfile()`: `pa<la`, `ipa>pa`, `cp>=ce`, `cp < tspace+ntext`, … |
-| `ed.c` | **ten** — `p >= &linebuf[LBSIZE-2]`, `sp >= &genbuf[LBSIZE]` ×3, `ep >= &expbuf[ESIZE]` ×3, … |
+| ~~`ed.c`~~ | ~~**ten**~~ — **twenty**, and this table undercounted by half; the two `-x` took with it left nineteen to rewrite. **Found and fixed, task C3**: they are index counts and `int` differences now, and [ed/README.md](ed/README.md) lists them. Every one bounds a buffer the regex engine or the substitute path writes into |
 | `fgrep.c` | four — `p > &buf[512]` ×2, `p <= nlp`, `nlp < &buf[1024]` |
 | `grep.c` | three — `ep >= &expbuf[ESIZE]`, `sp > cstart`, `lp >= curlp` |
 | `sed/sed1.c` | three, all `sp >= &genbuf[LBSIZE]` |
@@ -190,6 +190,7 @@ Anything that walks directories — `rm -r`, `du`, `find`, `ncheck`, `dcheck`, `
 | `sh` | 121 | 7,039 | 637 | 131 | **7,928** |
 | `ls` | 110 | 4,632 | 298 | 2,638 | **7,678** |
 | `login` | 106 | 5,063 | 408 | 1,321 | **6,898** |
+| `ed` | 95 | 4,027 | 50 | 633 | **4,805** |
 | `cat` | 83 | 2,989 | 165 | 1,544 | **4,781** |
 | `chgrp` | 85 | 3,211 | 344 | 1,236 | **4,876** |
 | `time` | 85 | 3,088 | 340 | 1,041 | **4,554** |
@@ -216,6 +217,12 @@ and a `FILE` buffer, which is the ~1,030 words of bss and most of the text they 
 one `write(2)` per character — so `getty` is the smallest program on the image, an eleventh the
 size of `cat`. That is the difference `lib/libc/README.md` measures for `hello`, seen from the
 other end.
+
+**And `ed` is the third angle on it**, being the one *large* program that pays nothing either:
+it has no format string at all (`putd()` over `write(2)`), so its 4,027 words of text — 1,038
+more than `cat`'s — come with 911 words *less* bss, and the two totals land twenty-four words
+apart despite `ed` being five times the source. When measuring a candidate against the ceiling,
+ask what it prints with before extrapolating from a line count.
 
 **The stack is where a fixed buffer goes wrong, and every port so far has had to bound one.**
 `mkdir`, `rmdir`, `ln`, `cp` and `mv` each build a path in a fixed automatic that v7 filled with
@@ -298,20 +305,30 @@ Two harnesses, and choosing wrong wastes the effort:
   `ls` has no `b6sim` test) and it cannot exec `/bin/…`, because no such path exists on the build
   machine. Two more limits C2a ran into: **`stime(2)` is a no-op that reports success**, so a
   program that sets global state cannot be asserted there at all; and **`kill(2)` is the build
-  machine's own**, so no case may name a pid. And three C2b ran into: there is **no stdin**, so
-  a case cannot feed a filter (nothing needed it yet — C5 will, and extending the harness with
-  a `<case>.in` is the obvious way); a program that **does not terminate** cannot be a case at
-  all, however it is invoked, which is why `yes` has no `test/` directory; and **`argv[0]` is
-  the staged path**, so a program that dispatches on the name it was called by — `test` and
-  `[` — can only be tested through one of its names here.
+  machine's own**, so no case may name a pid. And two C2b ran into: a program that **does not
+  terminate** cannot be a case at all, however it is invoked, which is why `yes` has no `test/`
+  directory; and **`argv[0]` is the staged path**, so a program that dispatches on the name it
+  was called by — `test` and `[` — can only be tested through one of its names here.
+  **A third is gone: there is stdin now.** C2b recorded that a case could not feed a filter and
+  named `<case>.in` as the obvious fix; task C3 made it, because `ed` reads its whole command
+  language on standard input and nothing else about it could have been tested cheaply. The file
+  is redirected in when it exists and `/dev/null` when it does not, and C5's filters inherit it.
+  Two rules come with it, both consequences of `ed`'s `error()`, and
+  [ed/README.md](ed/README.md) is the account: the redirection is from a **file** and not a
+  pipe, because `error()` does an `lseek(0, 0, SEEK_END)` to discard the rest of a script and
+  only a seekable descriptor can answer that — and therefore **one error per case**, since
+  everything after the first diagnostic *is* that discarded remainder. `cmd_ed_badcmd` is the
+  case that asserts the discard rather than merely living with it.
 * **SIMH**, under the booted kernel. `kernel/test/console` is the model for a typed dialogue,
   `kernel/test/libtest` for running a program off `/usr/test` and diffing it against a
   `.expected`, `kernel/test/session` for anything that must *write* and then be fscked on the
   host afterwards, `kernel/test/files` for anything that changes a tree or an inode, and
   `kernel/test/utils` (tasks C2a and C2b) for anything that touches the clock, a signal,
   another process or a pipe, and `kernel/test/login` (kernel task 29b) for anything that needs a
-  terminal's *modes* or a process that is not root's. Each has its own copy of the image at its
-  own volume number; 3084 is the highest used. All but `login` graft a script onto that copy
+  terminal's *modes* or a process that is not root's, and `kernel/test/edit` (task C3) for
+  anything that must *author* a file rather than merely write to one — it is also the only test
+  that runs a **here-document** under the booted kernel. Each has its own copy of the image at
+  its own volume number; **3086 is the highest used** (`multi` took 3085 and `edit` 3086). All but `login` graft a script onto that copy
   with `b6fsutil -a`, and `login` is the exception because what it tests is the thing that reads
   what is typed: it types every character it needs.
 
@@ -421,9 +438,10 @@ branch of `test.c` is unreachable code. Nothing stages it, nothing sizes it, not
 it; only the finished image can say it is there, which is why `rootimg_link` exists beside
 `rootimg_setuid`. Same argument, same shape — see [test/README.md](test/README.md).
 
-**Some programs cannot be a `b6sim` case at all**, and the three reasons are now in §9: no
-stdin, no `argv[0]` control, and no way to bound a program that does not terminate. `yes` is
-the third, and what tests it is a pipeline — **the first this image has ever run**, since
+**Some programs cannot be a `b6sim` case at all**, and the reasons are in §9: no `argv[0]`
+control, and no way to bound a program that does not terminate. (There were three; **task C3
+lifted the first**, `<case>.in`, and §9 records what came with it.) `yes` is the last of them,
+and what tests it is a pipeline — **the first this image has ever run**, since
 nothing in `kernel/test/` or [sh/test/](sh/test/) had used `|`. It worked first time, which is
 worth writing down precisely because it might not have.
 
@@ -434,3 +452,41 @@ the boot date is a build constant, `Sat Jul 25 08:23:0X GMT 2026`, and only the 
 whole run advances the guest clock about two seconds. `console.ini` therefore asserts it by
 *truncating the match* short of the seconds, where `run-utils.sh` masks them with `sed` — the
 same projection, chosen differently because a SIMH `expect` has no host-side stream to filter.
+
+---
+
+## What task C3 taught
+
+`ed` is on the image, and [../kernel/test/edit.sh](../kernel/test/edit.sh) holds it there. It is
+the largest single-file port so far and the one the plan called the pivot, so most of what it
+taught is in [ed/README.md](ed/README.md) rather than here. Four findings are general.
+
+**A source can be wrong about itself, and this file was wrong about `ed` twice.** §2's table
+said ten `char *` comparisons; there are twenty. [TODO.md](TODO.md)'s brief for the task said
+the character classes were a `CCL` bitmap and warned that widening it would be the third thing
+to bite; `ed` has no bitmap at all — that is `grep`'s and `sed`'s, and the warning has been
+moved to task C5, where it is true. Both were written from a survey rather than from the code.
+**The count is worth re-grepping at the start of a task, and a warning worth confirming before
+budgeting for it**, because the second kind of error is the expensive one: it sends the work at
+a problem that is not there and leaves the real one (`rhsbuf`'s escape bit) unnamed.
+
+**A harness limitation can be a one-line fix that nobody had needed yet.** §9 had carried "there
+is no stdin" as a fact about `b6sim` since task C2b. It was a fact about
+[../scripts/run-prog-test.sh](../scripts/run-prog-test.sh), which never redirected one, and the
+fix is four lines. `ed` forced it because a program whose entire command language arrives on
+stdin has *no* cheap test otherwise — nineteen cases that now run in a tenth of a second each
+would have been nineteen two-minute boots. **When a limit is stated of a harness rather than of
+the machine, check which it actually is** before designing around it.
+
+**`error()`-style recovery interacts with the harness, and the interaction is the assertion.**
+`ed` discards the rest of its input after any diagnostic — `lseek(0, 0, SEEK_END)` — which makes
+the input **have to be a file rather than a pipe**, allows **one error per case**, and means a
+program cannot be driven by a here-document naming a file that does not exist, because the seek
+takes the document with it. All three are properties of a program's error handling reaching out
+into how it can be tested, and none was visible before there was something to test.
+
+**A here-document runs under the booted kernel.** Nothing in `kernel/test/` or
+[sh/test/](sh/test/) had used one there — the shell writes it to `/tmp/sh-<pid><serial>` and
+unlinks it at once (`cmd/sh/io.c`) — and `kernel/test/edit` is built out of seven of them. It
+worked first time, which is the same thing task C2b said about the first pipeline and worth
+writing down for the same reason.

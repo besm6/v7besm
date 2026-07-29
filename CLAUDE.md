@@ -85,7 +85,21 @@ work has two halves:
   a test — the accept poll runs once a second of host time, which is after the getty has prompted
   into the void — so `kernel/test/ttyhost.c`, the one host-compiled C program under `kernel/`,
   binds a port and the simulator **dials out** to it while the `.ini` is still being parsed.
-  Nine tests
+  And, task C3, **it can author text of its own**: `/bin/ed` is on the image, so a shell script,
+  an `/etc/ttys` or a C source need no longer be written on the build host and staged in —
+  which is the precondition for the self-hosting task meaning anything. Two things about that
+  port are worth knowing before touching anything near it. It is **eight-bit transparent**,
+  and it had to be: v7's `getfile()` calls `error()` on any byte with `0200` set, so that
+  editor could not so much as *open* `/etc/motd`, 365 bytes of UTF-8 that `cat` has always
+  printed — and `getchr()`'s `& 0177` folded a Cyrillic capital's second byte onto `020`–`057`,
+  so `Ъ` arrived as `P*` and a Cyrillic letter typed into a *regular expression* became a
+  metacharacter. The mark that `compsub()` kept in bit `0200` of a replacement byte is a
+  `QESC` prefix now, exactly as the shell's is. And **`-x` is gone**, the one deliberate
+  divergence: it execs a `/usr/lib/makekey` that is not on this image and is in no plan to be.
+  `cmd/ed/README.md` is the account, and it also records that this file's own porting recipe
+  was wrong about `ed` twice — ten `char *` comparisons where there are twenty, and a `CCL`
+  bitmap that belongs to `grep` and `sed` and that `ed` does not have at all.
+  Ten tests
   guard that ladder — `kernel/test/boot` (the prompt appears), `kernel/test/console` (a typed
   dialogue with the shell, and the only one that reaches `/etc/rc`, whose motd and date it
   asserts, ending on the `login:` the first getty puts there — **currently `DISABLED`**, since it
@@ -100,11 +114,17 @@ work has two halves:
   then re-permissioning it, fscked on the host afterwards and its modes and owners diffed out
   of `b6fsutil -v -v`), `kernel/test/libtest` (the libc suite run off the image, one ctest case
   per program), `kernel/test/swap` (more processes than core, asserted through the kernel's
-  own counters) and `kernel/test/utils` (the clock moved and read back, an alarm delivered, a
+  own counters), `kernel/test/utils` (the clock moved and read back, an alarm delivered, a
   background process killed, a script branching on `test` through both its names, a terminal
   named, a `yes` stopped by a broken pipe, a command timed, and — task C11 — a Cyrillic word
   crossing `exece()` into another program and a Cyrillic pattern globbed against a real
-  directory) — and `cd kernel && make run` is
+  directory) and `kernel/test/edit` (task C3: a file authored from nothing, two more edited
+  that `cat` had written, `/etc/motd` read and written straight back and `cmp`'d **on the host
+  against the original out of the same extracted image** — which is the whole assertion and
+  needs no checked-in fixture — three copies of it substituted into Cyrillic through `ed`'s own
+  512-byte temp-file pager, a shell forked out of `ed`'s `!`, and a closed listing of `/tmp`
+  proving nothing leaked; it is also the only test that runs a **here-document** under the
+  booted kernel, which nothing had done before) — and `cd kernel && make run` is
   where you type at it yourself. The drums
   must be attached to exec anything: they are `swapdev`, and `exece()` stages the argument
   list in swap. See `kernel/README.md`, the reference — the settled design, the hardware rules
@@ -136,7 +156,7 @@ thing**, and knowing which one you are touching is most of what the build layout
 - **host tools** — `cmd/*`, compiled by the build machine's C/C++ compiler, run there;
 - **cross-built BESM-6 artifacts** — `kernel/` and `lib/`, compiled by the `b6*` toolchain
   above through `b6_obj()` in `scripts/BesmCross.cmake`;
-- **native BESM-6 programs** — `cmd/{init,getty,login,sh,basename,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`, linked against libc by `b6_prog()`
+- **native BESM-6 programs** — `cmd/{init,getty,login,sh,basename,cat,chgrp,chmod,chown,cp,date,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`, linked against libc by `b6_prog()`
   and staged into `build/rootfs/` (with the static files of `etc/`) for the disk image the
   kernel mounts.
 
@@ -263,7 +283,7 @@ therefore names two archives, **ours first**: `-lc -lruntime`, because `b6ld` sc
 helper calls back into libc. The kernel takes `-lruntime` **alone** — it defines its own
 `printf` in `kernel/prf.c` and uses no other library routine.
 
-### Native BESM-6 programs (`cmd/{init,getty,login,sh,basename,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}` + `etc/` → `build/rootfs/`)
+### Native BESM-6 programs (`cmd/{init,getty,login,sh,basename,cat,chgrp,chmod,chown,cp,date,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}` + `etc/` → `build/rootfs/`)
 
 The third category, and the newest. These are **`cmd/` subdirectories that are not host
 tools**: `cmd/init/init.c` is the Unix v7 `/etc/init`, `cmd/sh/` is S. R. Bourne's v7 shell,
@@ -279,7 +299,13 @@ than the filesystem: the clock, an alarm, and a signal to another process.  Not 
 and `date` emphatically not — `stime(2)` is `suser()`-gated and that gate is the whole reason a
 user cannot move the clock. Last, `cmd/test`, `cmd/basename`, `cmd/tty`, `cmd/time` and
 `cmd/yes` (task C2b) are the five the *shell* wanted, `test` above all: this shell has no
-built-in for it, so nothing on this machine could branch until it arrived. Last again,
+built-in for it, so nothing on this machine could branch until it arrived. Then `cmd/ed`
+(task C3) is the one that changes what the machine *is* rather than what it can say about
+itself — the first program here that can author text, and so the precondition for task C9. It
+is eight-bit transparent where v7's refused any file with a byte above `0177`, its `-x`
+encrypting mode is dropped as the one deliberate divergence in the port, and it is the one
+large program on this image that links **no stdio at all** (`putd()` over `write(2)`), which is
+why 1,764 lines come out within twenty-four words of `cat`. Last again,
 `cmd/getty` and `cmd/login` (kernel task 29b) are the two that make the machine multi-user, and
 they are the only pair here where one execs the other: `init` execs `/etc/getty`, getty execs
 `/bin/login`, login execs the shell, all in one process, which is why a logout is that process
@@ -287,7 +313,7 @@ exiting and `init`'s `multiple()` starting a fresh getty. Neither is setuid, and
 emphatically not — it is *handed* root by getty rather than borrowing it, and the setuid version
 is `su` (task C6). All compiled by the
 `b6*` toolchain and staged into `build/rootfs/` as `etc/init`, `etc/getty` and
-`bin/{sh,basename,cat,chgrp,chmod,chown,cp,date,echo,kill,ln,login,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`. **`mkdir`, `mv` and `rmdir` are setuid
+`bin/{sh,basename,cat,chgrp,chmod,chown,cp,date,echo,ed,kill,ln,login,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`. **`mkdir`, `mv` and `rmdir` are setuid
 root** on the image, which is a property of [root.manifest](root.manifest) alone (`mode 04755`)
 since nothing under `build/rootfs/` carries a mode; see
 [cmd/mkdir/README.md](cmd/mkdir/README.md) for the general account and

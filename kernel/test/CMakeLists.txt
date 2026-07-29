@@ -213,6 +213,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/cp
     ${B6_ROOTFS}/bin/date
     ${B6_ROOTFS}/bin/echo
+    ${B6_ROOTFS}/bin/ed
     ${B6_ROOTFS}/bin/kill
     ${B6_ROOTFS}/bin/ln
     ${B6_ROOTFS}/bin/login
@@ -507,6 +508,25 @@ if(BESM6)
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(utils PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
+
+    # edit -- ed(1) ON A RUNNING SYSTEM, on its own volume (3086).  Task C3, and the question
+    # is the one none of the tests above can ask: everything they assert was written on the
+    # BUILD HOST and staged in by b6fsutil, and this is the test that says the guest no longer
+    # needs it.  /etc/edit authors a file from nothing, edits two that cat wrote, and reads and
+    # rewrites the one file on this image that v7's ed would have refused outright -- /etc/motd,
+    # 365 bytes of UTF-8, which getfile()'s `c & 0200' test made a `?' and nothing else.
+    #
+    # The nineteen cmd_ed_* cases next door cover the command language and the regex engine
+    # under b6sim, on the same staged bytes; what needs a kernel is a /tmp of this machine's
+    # own, a `!' with a real /bin/sh to exec, files long enough to splice a line across two of
+    # ed's 512-byte temp blocks against a real disk, and a filesystem to fsck afterwards.
+    # run-edit.sh's two cmps are the strongest statement in it and need no checked-in fixture:
+    # they compare what ed wrote against the original out of the same extracted image.
+    add_test(NAME edit
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-edit.sh
+                ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(edit PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
     # login -- MULTI-USER, on its own volume (3084).  Task 29b, and the question is a fifth
     # one: everything above types at the single-user shell init hands out, and this one types

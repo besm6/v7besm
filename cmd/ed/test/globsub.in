@@ -1,0 +1,15 @@
+a
+xx
+yy
+xx
+.
+g/x/s/x/A\
+B/
+1,$p
+=
+3s/y/Y\
+Z/p
+1,$p
+=
+w globsub.tmp
+q

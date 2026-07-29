@@ -12,18 +12,24 @@ it**, and a task names only what is unusual about itself. **A bare `§N` below i
 that file's porting recipe** — §2 the `char *` ordering hazard, §4 the 3072-byte block, §6 the
 address-space ceilings, and so on.
 
-**Tasks C1 and C2 are done and their writeups have been removed**; what each taught is
-README.md's two closing sections. Twenty-five commands are on the image — twenty-six entries
+**Tasks C1, C2 and C3 are done and their writeups have been removed**; what each taught is
+README.md's three closing sections. Twenty-six commands are on the image — twenty-seven entries
 in `/bin`, since `[` is `test` under a second name, plus `/etc/getty` beside them — so the tree
 can be built, rearranged and re-permissioned from the console, the machine can say what time it
 is, wait and signal, a shell script can finally **branch**, and since kernel task 29b there is
-a `login:` prompt on each Consul and a shell that need not be root's.
+a `login:` prompt on each Consul and a shell that need not be root's. **And since C3 the machine
+can write its own text**: `ed` is on the image, so a shell script, an `/etc/ttys` or a C source
+need no longer come from the build host — which is the precondition for C9 meaning anything.
 [../etc/rc](../etc/rc) is a boot script that does something: it prints the motd and then the
 date, which is a literal to the minute because the boot clock is the image's own `-T` stamp,
 and `kernel/test/console` asserts both. What it
 still wants is what the file itself now names — `fsck` and `mount` (C4), `cron` and `update`
-(C10), `accton` (C8), and the `rm -f /tmp/*` line that comes back with `ed` (C3), which is the
-first program on this machine that will write there.
+(C10) and `accton` (C8). The `rm -f /tmp/*` line is a fifth, and it is now waiting on a
+*kernel* task rather than on this file: `ed` has arrived and really is the first program that
+writes to `/tmp`, but §7 step 4 gives a line in `/etc/rc` exactly one home for its assertion —
+`kernel/test/console` — and that test is `DISABLED` (kernel task 35). An unasserted line in the
+boot script three tests walk through is worse than an honest deferral, so `etc/rc` says so and
+the line comes back with task 35.
 
 **Task numbers carry a `C`** — `C2a`, `C4d`, … — because `kernel/TODO.md`'s 1–34 are cited from
 source comments and from `doc/`, and a bare number would be ambiguous forever after. The
@@ -36,7 +42,6 @@ compiles.
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C3 | **`ed`** | authoring text *on* the machine | large, and the pivot |
 | C4 | filesystem maintenance — `df` `du` `dd` `mkfs` `fsck` `icheck` `dcheck` `ncheck` `clri` `quot` `mount` `umount` | a system that maintains itself | large |
 | C5 | the text filters — `wc` `cmp` `sum` `tee` `split` `rev` `tr` `uniq` `comm` `tail` `od` `look` `col` `grep` `fgrep` `sort` `sed` `pr` `diff` `cal` `tsort` `join` `find` `file` | the corpus everything else is tested against | medium ×24 |
 | C6 | multiuser userland — `passwd` `su` `newgrp` `stty` `who` `write` `wall` `mesg` `mail` | more than one person | medium; unblocked |
@@ -45,50 +50,10 @@ compiles.
 | C9 | self-hosting — native `cpp`, `as`, `ld`, the binutils, `cc` | building the system on itself | large |
 | C10 | the rest of the manual — `make` `m4` `awk` `bc` `dc` `expr` `egrep` `units` `crypt` `at` `cron` `calendar` `update` | a system worth using | open-ended |
 
-C3 and C4 are the ones that matter: they take the machine from *keeping files* to *being a
-computer that can author text and repair its own filesystem*. C5 is cheap and pays for itself in
+C4 is now the one that matters: C3 took the machine from *keeping files* to *authoring text*,
+and C4 is the other half — *repairing its own filesystem*. C5 is cheap and pays for itself in
 test coverage. C7 is one program and can be taken at any time; C6, C8 and C9 are each gated on
 something the task names.
-
----
-
-## C3. `ed` — the editor
-
-**Why it is its own task, and why it is the pivot.** Nothing can be *authored* on this machine.
-Every file on the image was written on the build host and staged in; the moment `ed` runs, the
-BESM-6 can produce text of its own — a shell script, an `/etc/ttys`, a C source — and that is the
-precondition for C9 meaning anything at all.
-
-`ed.c` is 1,764 lines and self-contained: its own regular-expression engine, its own temp-file
-paging, `setjmp`/`signal` for the interrupt handling, a `realloc`'d array of line pointers
-(`nlall`, growing by 512), and no dependency outside libc. `/tmp` is already on the image at mode
-0777.
-
-**What will bite, in order:**
-
-1. **Ten `char *` relational comparisons**, listed in §2 — the densest concentration in the whole
-   survey, and every one of them bounds a buffer that regex or substitution is writing into. Each
-   is silent corruption, not a fault. Rewrite them all as index counts, as
-   [../kernel/prim.c](../kernel/prim.c) and `ls`'s `makename()` did, *before* trying to run
-   anything.
-2. **`char *` versus `int *` in the same program.** `zero`/`dot`/`dol`/`addr1`/`addr2` are `int *`
-   — thin word pointers that compare and subtract correctly — while `linebuf`, `genbuf` and
-   `expbuf` cursors are fat. The file mixes them freely and the two behave differently; do not
-   assume a fix for one shape applies to the other.
-3. **The compiled-expression encoding.** `expbuf` packs opcodes and character classes into a
-   `char` array with `CCL` bitmap arithmetic (`1 << (c & 07)`, `c >> 3`). That is byte work inside
-   a fat-pointer buffer and it is exactly the shape §2 warns about.
-4. `long count;` and the `lseek` prototype at the head of the file — §3.
-5. `ed`'s temp file blocks are its own 512-byte ones; **do not** "fix" them to `BSIZE` (§4).
-
-**How to verify.** A SIMH dialogue in the `kernel/test/console` mould: `a`, a few lines, `.`,
-`w /tmp/x`, `q`, then `cat` the result — and then the reverse, editing a file `cat` wrote. Follow
-it with a `session`-style run so that what `ed` wrote is fscked on the host. A regex torture case
-(anchors, `*`, back-references, character classes, the `s///g` path) belongs in the same script,
-because the engine is where the pointer work concentrates.
-
-**Size.** Large — the largest single-file port in this document, and the one whose failures will
-be silent. Budget the same care `sh` got.
 
 ---
 
@@ -181,6 +146,14 @@ comparison.
 four in `fgrep` (one of which, `smax >= &w[MAXSIZ-1]`, is over a `struct words *` and must be left
 alone) — and a few `long`s. `egrep` is a yacc grammar and is deferred to C10 with the others.
 
+**The `CCL` bitmap lives here, and this task inherited the warning C3's brief carried by
+mistake.** `grep.c` packs a character class into 128 bits — sixteen bytes, addressed
+`1 << (c & 07)` at `c >> 3` — and so does `sed`. That is byte work inside a fat-pointer buffer,
+it is exactly the shape §2 describes, and **it has to become 32 bytes** if a class is to hold a
+byte above `0177`, which §11 says it must. `ed` was thought to do the same and does not: its
+classes are an enumerated byte list with a count byte, so it was byte-capable already and needed
+none of this. See [ed/README.md](ed/README.md), which says what that mistake cost.
+
 ### C5d. `sort`
 
 `sort.c` (903). The heavyweight of the phase: `sbrk`, eight `signal` calls for temp-file cleanup,
@@ -192,9 +165,12 @@ the harness is established when the hard one arrives.
 
 ### C5e. `sed`
 
-`sed/` (1,690 lines: `sed0.c`, `sed1.c` and `sed.h`). Same regex family as `ed`, so **do it after C3** and reuse
-what that taught — including the three `char *` comparisons in `sed1.c`, which are the same
-`genbuf` bound `ed` has.
+`sed/` (1,690 lines: `sed0.c`, `sed1.c` and `sed.h`). The same regex family as `ed`, and **C3 is
+done**, so [ed/README.md](ed/README.md) is the thing to read first: the three `char *`
+comparisons in `sed1.c` are the same `genbuf` bound `ed` had, and the `QESC` prefix that replaced
+bit `0200` in `ed`'s replacement text is the pattern for `sed`'s. But `sed` **does** have the
+`CCL` bitmap `ed` turned out not to (see C5c), so budget for widening that here rather than
+expecting the `ed` diff to have covered it.
 
 ### C5f. `pr`, `diff`, `cal`, `tsort`, `join`, `find`, `file`
 
@@ -394,10 +370,15 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 
 ## Where to start
 
-C3. `test` has landed, so a script can branch; what it still cannot do is exist — every file on
-this image was written on the build host. `ed` is what changes that, and it is the precondition
-for C9 meaning anything. It is also the next thing that will be *visible from the console*,
-which is the property `/etc/rc` had and has now spent.
+C4, or C5 if a week is what is free rather than a month.
 
-C5 stays the cheap one, and the harness for it is built: `b6_progtest()` needs no boot, and
-README.md §9 now records the three things it cannot do, all of which C5 will meet.
+C3 has landed, so the machine can author text — and what it cannot do is look after the
+filesystem it is authoring into. `kernel/test/edit` fscks what `ed` wrote **on the host**, with
+`b6fsutil`, exactly as `kernel/test/session` has always done; the guest still cannot examine its
+own store, make a new one, or mount anything. C4 is that, and C4c before C4d because a `fsck`
+with nothing to fix is only half tested.
+
+C5 stays the cheap one, and the harness for it is now **complete**: `b6_progtest()` needs no
+boot, and C3 gave it the `<case>.in` that C2b's writeup said the filters would want, so a filter
+can finally be fed. README.md §9 records what is left that it cannot do — two things now, not
+three.

@@ -224,6 +224,11 @@ endfunction()
 # The ctest name is cmd_<prog>_<case> and the label is `cmd', so `ctest -L cmd' is the
 # userland regression corpus without a two-minute boot.  Files live in cmd/<prog>/test/.
 # ---------------------------------------------------------------------------------------
+# One b6sim case: files <case>.args (arguments, @srcdir@ substituted), <case>.in (standard
+# input, /dev/null when absent -- task C3, for ed, whose whole command language arrives there),
+# <case>.expected (stdout and stderr together) and <case>.status (the exit status, 0 when
+# absent), all in cmd/<prog>/test/.  See scripts/run-prog-test.sh, which is the harness, and
+# cmd/README.md SS9 for which of the two worlds a case belongs in.
 function(b6_progtest prog case)
     add_test(NAME cmd_${prog}_${case}
         COMMAND sh ${B6_SCRIPTS_DIR}/run-prog-test.sh

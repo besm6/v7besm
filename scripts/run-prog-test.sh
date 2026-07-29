@@ -14,6 +14,14 @@
 # would otherwise be untested.  SRCDIR/NAME.expected is the output, stdout and stderr
 # together.
 #
+# STANDARD INPUT comes from optional SRCDIR/NAME.in, and from /dev/null when there is no such
+# file.  Until task C3 there was none of either: `env -i' passed the ctest harness's own
+# stdin through, so nothing could feed a program and nothing was reading anyway.  ed(1) is
+# the first program here that takes its whole COMMAND LANGUAGE on stdin, which is what made
+# the addition worth making -- cmd/README.md SS9 had named it as the obvious one -- and task
+# C5's filters will all want it.  A case's file is fed verbatim: no @srcdir@ substitution,
+# since an input stream is data and not a command line.
+#
 # ENV -i, for the reason cmd/sh/test/run-sh-test.sh gives: b6sim hands the guest whichever
 # of a whitelist of host variables happen to be set (ENV_WHITELIST in cmd/sim/session.cpp),
 # so an emptied environment is the only one that is the same on every machine.
@@ -32,8 +40,13 @@ name=$4
 args=$(sed -e "s|@srcdir@|$srcdir|g" "$srcdir/$name.args" 2>/dev/null || true)
 want=$(cat "$srcdir/$name.status" 2>/dev/null || echo 0)
 
+stdin=/dev/null
+if [ -f "$srcdir/$name.in" ]; then
+    stdin="$srcdir/$name.in"
+fi
+
 set +e
-env -i "$sim" "$prog" $args > "$name.out" 2>&1
+env -i "$sim" "$prog" $args < "$stdin" > "$name.out" 2>&1
 got=$?
 set -e
 

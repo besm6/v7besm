@@ -1,0 +1,14 @@
+a
+apple
+banana
+cherry
+apricot
+blueberry
+.
+g/^a/p
+v/^a/p
+g/rr/s/rr/RR/
+1,$p
+g/^b/d
+1,$p
+=

@@ -1,0 +1,17 @@
+a
+one two one two
+aXbXcXd
+plain
+back\slash
+.
+1s/one/ONE/p
+1s/two/[&]/p
+2s/X/-/gp
+2s/-/=/p
+3s/plain/&&&/p
+1,$s/^/> /
+1,$p
+4s/\\/+/p
+3s/> //p
+3s/plainplainplain/\&literal/p
+3s/&literal/one\\two/p

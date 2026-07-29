@@ -9,7 +9,7 @@ ed \- text editor
 [
 .B \-
 ] [
-.B \-x
+.B \-q
 ] [ name ]
 .SH DESCRIPTION
 .I Ed
@@ -25,11 +25,9 @@ command (see below)\| on the named file; that is to say,
 the file is read into
 .I ed's
 buffer so that it can be edited.
-If 
+Note:
 .B \-x
-is present, an
-.I x
-command is simulated first to handle an encrypted file.
+is not implemented on this system; see BUGS.
 The optional
 .B \-
 suppresses the printing
@@ -39,6 +37,13 @@ of character counts by
 and
 .I w
 commands.
+.PP
+Note: the optional
+.B \-q
+restores the quit signal to its default action, so that a quit dumps core instead of being
+ignored, and turns the character counts back on.
+.I Ed
+has always accepted it and v7's page never mentioned it.
 .PP
 .I Ed
 operates on a copy of any file it is editing; changes made
@@ -407,8 +412,20 @@ The address form `\(fm\fIx\fR' then addresses this line.
 The list command
 prints the addressed lines in an unambiguous way:
 non-graphic characters are
-printed in two-digit octal,
+printed in three-digit octal,
 and long lines are folded.
+Note: v7 printed
+.I two
+octal digits, which is what made DEL come out as `\e?7' rather than `\e177' \- the
+.B BUGS
+entry for it is gone because the escape is three digits here.
+A tab prints as `\-\eb>' and a backspace as `\-\eb<', as before.
+Note: a byte above 0177 is
+.I not
+non-graphic on this machine and prints as itself, so a UTF-8 line lists as the text
+it is rather than as a run of escapes; see the note under
+.B DESCRIPTION
+below.
 The
 .I l
 command may be placed on the same line after any non-i/o
@@ -558,17 +575,6 @@ This command is the same as
 .I w,
 except that the addressed lines are appended to the file.
 .TP 5
-x
-A key string is demanded from the standard input.
-Later
-.I r, e
-and
-.I w
-commands will encrypt and decrypt the text 
-with this key by the algorithm of 
-.IR crypt (1).
-An explicitly empty key turns off encryption.
-.TP 5
 ($)\|=
 The line number of the addressed line is typed.
 `\fB.\fR' is unchanged by this command.
@@ -594,15 +600,59 @@ Some size limitations:
 512 characters per line,
 256 characters per global command list,
 64 characters per file name,
+512 characters per compiled regular expression,
 and 128K characters in the temporary file.
 The limit on the number of lines depends on the amount of core:
 each line takes 1 word.
+.PP
+Note: four of those numbers need a word on this machine.
+A word is 48 bits, so the line table costs six bytes a line \- but the
+.I temporary file
+binds first, at 255 blocks of 512 bytes with every line rounded up to a four-byte slot:
+about 32,640 lines, whatever core is free.
+The regular-expression limit was 128 in v7 and is 512 here, because a compiled
+expression holds the members of a
+.RB ` [ \|.\|.\|.\| ] '
+class laid out literally and a UTF-8 letter costs two bytes of it; a class may still hold
+no more than 255 bytes, that count being one byte of the compiled form.
+The file-name limit is
+.I enforced
+now \- v7 checked the global command list and not this one, and wrote past the end of its
+buffer instead.
 .PP
 When reading a file,
 .I ed
 discards ASCII NUL characters
 and all characters after the last newline.
-It refuses to read files containing non-ASCII characters.
+.PP
+Note: v7's
+.I ed
+also
+.I refused
+to read a file containing any byte above 0177, which on this machine would have meant
+refusing every file
+.IR cat (1)
+can print \- the console, the filesystem and
+.IR sh (1)
+all carry eight bits and this machine's text is UTF-8.
+This
+.I ed
+is eight-bit transparent instead: a byte above 0177 is data in the buffer, in a pattern,
+in a replacement, in
+.I l
+output and on the way back to a file.
+Two consequences follow, and they are
+.IR sh (1)'s
+rule for its own pattern language:
+.B the regular expressions match bytes.
+.RB ` . '
+and
+.RB ` [^\|.\|.\|.\|] '
+match one byte and not one character, a
+.RB ` * '
+after a multi-byte character repeats that character's last byte, and a range written
+between two multi-byte characters is a range of bytes and does not mean what it looks
+like \- list the members instead.
 .SH FILES
 /tmp/e*
 .br
@@ -616,11 +666,17 @@ B. W. Kernighan,
 .I Advanced editing on UNIX
 .br
 sed(1), crypt(1)
+.br
+Note: neither is on this system yet \- see BUGS.
 .SH DIAGNOSTICS
 `?name' for inaccessible file;
 `?' for
 errors in commands;
-`?TMP' for temporary file overflow.
+`?TMP' for temporary file overflow;
+`?MEM?' when the line table cannot grow.
+Note: v7's page listed the first three and not the last, which
+.I ed
+has always been able to print.
 .PP
 To protect against throwing away valuable work,
 a
@@ -636,9 +692,32 @@ or
 .I e
 will be obeyed regardless.
 .SH BUGS
-The 
+Note:
+.B \-x,
+the
+.I x
+command and the whole of the
+.IR crypt (1)
+algorithm are
+.I not implemented
+on this system, and this is the one deliberate divergence in the port.
+.I /usr/lib/makekey,
+which v7's
+.I ed
+execs to derive a key, is not on this image and is in no plan to be, so the mode could
+never have worked;
+.IR crypt (1)
+itself is not ported either.
+.B \-x
+is accepted and ignored, and
+.I x
+is an unknown command and prints `?'.
+.br
+Note: the entry that stood here saying the
 .I l
-command mishandles DEL.
+command mishandles DEL is gone \-
+.I l
+prints three octal digits now, so DEL lists as `\e177'.
 .br
 A
 .I !

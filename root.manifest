@@ -144,6 +144,12 @@ file /bin/echo          # cmd/echo
 source ../../rootfs/bin/echo
 mode 0755
 
+file /bin/ed            # cmd/ed -- task C3, and THE FIRST PROGRAM ON THIS IMAGE THAT WRITES
+                        # TO /tmp: its temp file is /tmp/e<pid><letter>, in 512-byte blocks
+                        # of ed's own (cmd/README.md SS4), unlinked on a clean quit.
+source ../../rootfs/bin/ed
+mode 0755
+
 file /bin/kill          # cmd/kill -- NOT setuid: kill(2) matches uids for anyone but root
 source ../../rootfs/bin/kill
 mode 0755

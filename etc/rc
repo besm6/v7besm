@@ -33,8 +33,20 @@ date >/dev/console
 #
 # rm left that list with task C1b, and so did cp, ln and mv -- but the only
 # line of the v7 rc that used rm cleared /tmp of an editor's leftovers, and
-# nothing on this image writes there except the tests.  It comes back with
-# ed (task C3), which is the first program that will.
+# THE EDITOR HAS ARRIVED: task C3 put ed on the image, whose temp file is
+# /tmp/e<pid><letter>, and the motd two lines up has always claimed that /tmp
+# is cleared at boot.  So `rm -f /tmp/*' is a line this file now wants.
+#
+# What it is waiting on is not ed but an ASSERTION.  cmd/README.md SS7 step 4
+# gives a line in this script exactly one home for one -- kernel/test/console,
+# the only test that types the ^D that gets here -- and console is DISABLED
+# (kernel/TODO.md task 35).  An unasserted line in the boot script that three
+# enabled tests walk through is worse than an honest deferral, so the line
+# comes back with task 35 and not before.  Note also that `rm -f' is silent on
+# a missing name and on an unmatched glob but NOT on a directory (cmd/rm/rm.c
+# prints for that whatever -f says), and kernel/test/session leaves /tmp/d
+# behind deliberately -- so whoever adds the line redirects it, or checks that
+# every test reaching /etc/rc leaves /tmp free of directories first.
 #
 # TWO MORE LINES OF THE v7 rc COULD RUN TODAY AND DELIBERATELY DO NOT.
 # `cat /dev/null >/etc/utmp' is redundant rather than premature now: /etc/utmp

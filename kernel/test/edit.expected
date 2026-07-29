@@ -1,0 +1,50 @@
+edit start
+61
+Строка первая
+line two
+Строка третья
+365
+12
+389
+389
+| Core is 32K words.  One troff at a time, please.
+12
+365
+
+БЭСМ-6 UNIX Version 7
+
+Core is 32K words.  One troff at a time, please.
+
+/tmp is not saved and is cleared at boot. cc(1): char 8 bits,
+6 per word; int and long 48. A char * is a word address plus
+a byte offset.
+
+Console in UTF-8 prints Cyrillic correctly. File names are
+18 Latin characters. No vi(1) here -- ed(1) is on the system
+and learn(1) will teach it.
+365
+12
+365
+1095
+36
+1095
+36
+1113
+61
+Строка первая
+Строка ПЕРВАЯ
+Строка третья-третья
+Строка ПЕРВАЯ
+line two
+Строка третья-третья
+74
+74
+shell escape ok
+!
+edit.log
+m1
+motd.ed
+poem
+three
+three.ed
+three.ed2

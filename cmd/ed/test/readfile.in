@@ -1,0 +1,9 @@
+1,$p
+=
+$r readfile.fix
+1,$p
+=
+0r readfile.fix
+1,$p
+=
+q

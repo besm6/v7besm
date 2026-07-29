@@ -9,6 +9,7 @@ chown
 cp
 date
 echo
+ed
 kill
 ln
 login

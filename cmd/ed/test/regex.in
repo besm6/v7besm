@@ -1,0 +1,25 @@
+a
+aaabbb
+foo
+xbary
+abcabc
+hello world
+[bracket]
+a-b
+.
+/^aaa/p
+/bbb$/p
+/^foo$/p
+/f.o/p
+/a*b/p
+/[abc]*d*/p
+/[^aeiou]bar/p
+/\(abc\)\1/p
+/\(ab\)\1*c/p
+/[]x]/p
+/[a-]/p
+/o wor/p
+1s/a*/A/p
+4s/\(abc\)\(abc\)/\2-\1/p
+3s/b\(a\)r/B\1R/p
+6s/\(.\)\(.\)/\2\1/p
