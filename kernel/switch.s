@@ -25,7 +25,9 @@
 //
 //   * The u-area is a fixed PHYSICAL page at 074000, not a fixed virtual one, so it has to
 //     be COPIED: out to the outgoing process's home, in from the incoming one's.  That is
-//     uflush()/uload() (uarea.S), and it is the price of an unmapped kernel.
+//     uflush()/uload() (uarea.S), and it is the price of an unmapped kernel.  Only the LIVE
+//     part moves -- `struct user' plus the stack below r15, about half the page -- and the
+//     length travels in the page as u_stkdepth; see uarea.S, which owns that contract.
 //
 // The label pointer survives the swap by being a constant: u.u_qsav is 074000+n in EVERY
 // process, so the pointer may be captured before the copy and dereferenced after it, by
@@ -90,7 +92,10 @@ save:
         ita     13
      14 atx     7                // slot 7 := r13, the caller's return address
         ita     15
-     14 atx     8                // slot 8 := r15, the kernel stack pointer
+     14 atx     8                // slot 8 := r15, the kernel stack pointer.  Since task 30
+                                 //   this is also a length: the uflush() that saves this
+                                 //   page must run from a frame at least this deep, or the
+                                 //   frames between are not copied.  See uarea.S.
         xta                      // A := 0 -- the direct return
      13 uj
 
@@ -121,8 +126,8 @@ save:
 //    swtch()'s loop).
 //
 //  * IT CALLS uload() FROM ASSEMBLY, as that routine's contract requires: uload destroys its
-//    caller's frame, so it keeps all its state in r8/r9/r10 and static cells and never
-//    touches r15.  Which is also why r8/r9/r10 are off limits here, across both calls.
+//    caller's frame, so it keeps all its state in r8/r9/r10/r12 and static cells and never
+//    touches r15.  Which is also why r8/r9/r10/r12 are off limits here, across both calls.
 //
 // resume() never returns, so the pushed argument is never popped and r13 is dead on entry;
 // r15 comes from the label.

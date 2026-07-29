@@ -107,11 +107,15 @@ mode. Entry and exit touch no mapping register.
 is therefore at a fixed *physical* page and is **copied in and out on a context switch**. That is
 the price of an unmapped kernel, and it is the one we pay.
 
-**Only the first of those two pages is copied** — `USIZE` words from `UBASE`. The page above it is
-stack **overflow**: the stack may grow into it and run there correctly, but it is in no process
-image and no context switch saves it, so a process that reaches `sleep()` or `swtch()` with `r15`
-above `076000` loses those frames ([TODO.md](TODO.md) task 31). The rule is written once, at
-`UBASE` in [../include/sys/param.h](../include/sys/param.h).
+**Only the first of those two pages is copied**, and only as far as it is live — everything below
+`r15`, since the stack grows up and the words above it are frames that have returned. `USIZE` is
+the ceiling, not the amount; the count travels in the page as `u_stkdepth` and the contract is
+written once, in [uarea.S](uarea.S). Measured here: 516 words at the shell's first prompt, 392
+after the whole libc suite. The page above the saved one is stack **overflow**: the stack may grow
+into it and run there correctly, but it is in no process image and no context switch saves it, so a
+process that reaches `sleep()` or `swtch()` with `r15` above `076000` loses those frames
+([TODO.md](TODO.md) task 31). That rule is written once, at `UBASE` in
+[../include/sys/param.h](../include/sys/param.h).
 
 **Mapping is enabled only inside a few short assembly brackets** — to touch a user page
 (`copyin`/`copyout`/`fubyte`/…), and to reach a physical page above `0100000` (`copyseg`/`clearseg`,
@@ -128,9 +132,10 @@ PHYSICAL, pages 0..31 — the kernel, addressed with БлП = 1 (no translation)
               a fixed PHYSICAL area, not bss: the drum/disk controllers transfer
               to a physical address.  `buffers = BUFBASE', absolute, in besm6.S;
               main.c declares it `extern'.  Raising NBUF lowers KEND with it.
-   074000   U AREA, saved half ---- USIZE words: what a switch copies --------
-              struct user     (~140 words)   `u = 074000`, an absolute symbol
-              kernel stack    (884 words, grows UP past 075777 into...)
+   074000   U AREA, saved half ---- USIZE words: the CEILING on a switch's copy
+              struct user     (~142 words)   `u = 074000`, an absolute symbol
+              kernel stack    (883 words, grows UP past 075777 into...)
+              a switch copies as far as r15 has reached, ~half of it in practice
    076000   U AREA, overflow ------ 1024 words, saved by NOTHING -------------
               the stack may run here but must not SLEEP here (TODO.md task 31)
    0100000  end of the unmapped reach; everything above is the page pool
@@ -183,7 +188,7 @@ names the *user's* page 30.
 |---|---|---|
 | `copyin`/`copyout`/`fubyte`/`fuword`/`subyte`/`suword` | reach a user page | nothing — the user's map is already loaded. The loop toggles БлП per word: read the user word mapped, store it to the kernel buffer unmapped. |
 | `copyseg`/`clearseg` | reach a physical page above `0100000` | steals virtual pages 1–2 as windows (one `mod 020`), restores the quartet from `u.u_upt[]` afterwards |
-| `uflush()`/`uload()` | save/restore the **saved half** of the u-area across a context switch | steals virtual page 1 for the process's u home and virtual page 2 for the live u-area (the descriptor is derived from `UBASE`, not spelled, so it cannot drift from the geometry); both live in quartet 0, so one `mod 020` steals them and one puts them back |
+| `uflush()`/`uload()` | save/restore the **live part** of the u-area's saved half across a context switch | steals virtual page 1 for the process's u home and virtual page 2 for the live u-area (the descriptor is derived from `UBASE`, not spelled, so it cannot drift from the geometry); both live in quartet 0, so one `mod 020` steals them and one puts them back. `uflush` measures `r15`, copies that far and records the count in the home at `u_stkdepth`; `uload` reads it back through the window before copying |
 
 **Never virtual page 0.** A store to virtual address 0 is dropped and a load returns 0:
 `mmu_store()`/`mmu_load()` test `addr == 0` *before* translation, so the black hole is in the
@@ -237,11 +242,20 @@ reachable).
 The live u-area is at `074000`; the copy in the process's image at `p_addr` is stale between
 switches. A kernel global `uhome` records whose home the live u-area belongs to, and `NOUHOME` (0)
 says it has no home at all — the state `exit()` and a freeing `xswap()` leave behind, without which
-the next `resume()` would flush 1024 words into core `malloc()` may already have handed out.
+the next `resume()` would flush a dead process's u-area into core `malloc()` may already have
+handed out.
 
 `resume()` ([switch.s](switch.s)): if `paddr != uhome`, `uflush(uhome)`, then `uload(paddr)`, then
 `uhome = paddr`. Only then restore r1–r7, r13, r15 from the label — which, being at `074000+n` in
 *every* process, now names the incoming process's saved state. That constant is the whole trick.
+
+**A flush also freezes a length.** Since task 30 `uflush()` copies only as far as `r15` has
+reached, so it must be called from a frame at least as deep as every label armed in the page it is
+saving — otherwise the frames in between are never written and the `resume()` that lands in one of
+them returns onto a stack that does not exist. Every caller obeys it and two do so exactly:
+`newproc()`'s `save(u.u_ssav)` and `uflush(a1)` run from the same frame with the same `r15`. That
+is what `SLACK` in [uarea.S](uarea.S) is for, and the second clause at `xswap()` is where the rule
+is written down.
 
 **Anything else that reads or frees the current process's image must flush first.** This is the
 sharpest edge in the whole design; it has bitten twice, and both times the site was one the list
@@ -510,9 +524,15 @@ Facts that cost real time to establish and are not in `doc/`.
 
 ## Known consequences, accepted
 
-* **A context switch copies the u-area twice** (out to the old home, in from the new): 1024 words
-  each way, or ~300 with [TODO.md](TODO.md) task 30. This is the cost of an unmapped kernel; in
-  exchange the trap path costs *nothing* and `copyin` needs no window.
+* **A context switch copies the u-area twice** (out to the old home, in from the new): as far as
+  `r15` has reached each way, measured at 392–516 words of the 1024-word page (task 30). This is
+  the cost of an unmapped kernel; in exchange the trap path costs *nothing* and `copyin` needs no
+  window.
+* **The dead tail of the live u-area belongs to whoever ran before.** `uload()` writes only the
+  live part, so the words above `u_stkdepth` are the previously resumed process's kernel stack.
+  `core()` dumps the whole `USIZE` page ([sig.c](sig.c)) and `ptrace`'s u-area window reads the
+  same words, so both can show another process's dead frames. The dump size is part of the core
+  file's layout and every offset past it would move, so this is accepted rather than fixed.
 * **Kernel-stack frames above `076000` are not saved.** The overflow page is where a deep path's
   interrupt frames live, and interrupt handlers never sleep, so the measured workload loses nothing:
   at peak the stack reaches `076100`–`076177`, while the deepest `resume()` in a boot → `/etc/rc` →

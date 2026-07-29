@@ -56,7 +56,7 @@ int ntextjoin;
 //
 //   2. ... and if `ff' says the core is about to be freed, the live u-area is left with no
 //      home at all.  Saying NOUHOME is not tidiness: the next resume() would otherwise flush
-//      1024 words into core that malloc() may already have handed to somebody else.
+//      up to 1024 words into core that malloc() may already have handed to somebody else.
 //
 //   3. newproc(), which copies the parent's image to build the child's (kernel/slp.c).
 //   4. expand(), which copies the image to a new address -- and skips the u page, because
@@ -64,6 +64,15 @@ int ntextjoin;
 //   5. exit(), which frees the image outright (kernel/sys1.c).  Same hazard as 2.
 //
 // A SIXTH, added later and forgotten, will be a very confusing bug.  See kernel/README.md.
+//
+// AND A SECOND CLAUSE, since task 30: a uflush() also freezes a LENGTH.  It copies as far as
+// r15 has reached and records that in the page, so it must be called from a frame at least as
+// deep as every label armed in the page it is saving -- otherwise the frames between are not
+// copied and the resume() that lands in one of them returns onto a stack that was never
+// written.  Every caller obeys it today, two of them exactly (see kernel/uarea.S).  Note that
+// the `p->p_addr == uhome' test above deliberately admits a caller flushing SOMEBODY ELSE'S
+// home; such a caller is running on its own stack and has no way to know how deep that
+// process was, so a new one has to be thought about rather than just added.
 // ---------------------------------------------------------------------------------------
 void xswap(register struct proc *p, int ff, int os)
 {

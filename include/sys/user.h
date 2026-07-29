@@ -10,10 +10,13 @@
 // UBASE (074000); contains the system
 // stack per user; is cross referenced
 // with the proc structure for the
-// same process.  The kernel space ends
-// one page higher: the stack may grow
-// past USIZE into 076000-077777, which
-// is NOT saved by a context switch.
+// same process.  A context switch
+// copies it as far as the stack is
+// live -- u_stkdepth words, never
+// more than USIZE.  The kernel space
+// ends one page higher: the stack may
+// grow past USIZE into 076000-077777,
+// which is NOT saved at all.
 // See UBASE in <sys/param.h>.
 
 #ifndef _SYS_USER_H
@@ -57,6 +60,14 @@ struct user {
     // back, so this is the only copy of the mapping.  See sureg() in utab.c and
     // doc/Memory_Mapping.md, "Programming the MMU".
     unsigned u_upt[8];
+    // How many words of this u-area the last uflush() copied: struct user plus the
+    // live kernel stack (everything below r15), rounded up by a margin.  Written by
+    // uflush() into the SAVED copy and read back by uload() before it copies, so the
+    // count travels inside the page it describes -- see kernel/uarea.S.  In the live
+    // copy it is whatever uload() brought in, i.e. the depth this process was loaded
+    // with, not its depth now.  Its word offset is hardcoded in the assembly as
+    // USTKD = UPT + 8, so it must stay immediately after u_upt[].
+    int u_stkdepth;
     struct file *u_ofile[NOFILE]; // pointers to file structures of open files
     char u_pofile[NOFILE];        // per-process flags of open files
     int u_arg[5];                 // arguments to current system call
@@ -99,8 +110,9 @@ struct user {
     int u_cmask;  // mask for file creation
     int u_stack[1];
     // kernel stack per user
-    // grows up from here; saved to
-    // u + USIZE words (075777), then
+    // grows up from here; saved as far
+    // as r15 has reached (u_stkdepth,
+    // at most u + USIZE = 075777), then
     // overflow to 0100000 -- see above
 };
 

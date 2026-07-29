@@ -495,7 +495,8 @@ address, and the kernel image plus the u-area plus the buffer cache must fit the
 because supervisor instruction fetch is never mapped. Two fixed physical areas are carved off
 the top of that space, so the **image itself must end below `062000`** (`KEND`): the **u-area, two
 fixed physical pages at `074000`** (`u` is an absolute symbol, not storage), of which the first —
-`USIZE` words — is copied in and out on a context switch while the second is unsaved kernel-stack
+`USIZE` words, and of those only the ones below `r15`, the count riding in the page as
+`u_stkdepth` — is copied in and out on a context switch while the second is unsaved kernel-stack
 overflow; and **`buffers[NBUF][BSIZE]` at `062000`–`074000`** (`buffers = BUFBASE`,
 likewise absolute, declared `extern` in `main.c`), out of bss because the drum and disk
 controllers transfer to a *physical* address. **РП always holds the current process's map**, so

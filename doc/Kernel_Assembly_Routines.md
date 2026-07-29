@@ -511,8 +511,20 @@ void uflush(unsigned paddr);                /* live u-area -> the process's home
 void uload(unsigned paddr);                 /* the process's home -> live u-area  */
 ```
 
-`uflush`/`uload` move `USIZE` words from `UBASE` — the **saved** page of the two-page u-area. The
-page above it is kernel-stack overflow, in no process image and copied by nothing (task 25a).
+`uflush`/`uload` move at most `USIZE` words from `UBASE` — the **saved** page of the two-page
+u-area. The page above it is kernel-stack overflow, in no process image and copied by nothing
+(task 25a).
+
+**They move only the live part of it** (task 30). The kernel stack grows *up* from `ustkbase`, so
+everything above `r15` is a frame that has already returned: `uflush` measures `r15`, copies that
+many words and writes the count into the home page at `u_stkdepth`, and `uload` reads it back
+through the window before its own copy — the length travels inside the page it describes, so
+`uload` cannot name words no `uflush` produced. Measured: 392–516 words of 1024. Two consequences
+worth knowing. The count is a statement about **call depth**, so `uflush(H)` may only be called
+from a frame at least as deep as every label armed in `H`; `newproc()` satisfies that exactly and
+nothing else has more than a word of margin. And an `r15` outside `[UBASE, UBASE + 2*USIZE)` — a
+standalone test, whose `crt0` puts the stack in low bss — or one in the overflow page falls back
+on copying the whole page, which is what these routines did before.
 
 These are the characteristic BESM-6 routine, and the shape recurs wherever the kernel must
 reach memory it cannot normally address.
@@ -700,7 +712,7 @@ absence is a property of the hardware rather than an omission:
 
 | symbol | C declaration | meaning |
 |--------|---------------|---------|
-| `u` | `extern struct user u;` (user.h) | the per-process user area; holds the kernel stack and per-process state. It is fixed **physical** storage — `u = 074000`, an absolute symbol rather than storage — and therefore has to be **copied** in and out on a context switch (§4.2, §4.4a). Two pages: `uflush`/`uload` move the first `USIZE` words, and the page above them is kernel-stack overflow that nothing saves |
+| `u` | `extern struct user u;` (user.h) | the per-process user area; holds the kernel stack and per-process state. It is fixed **physical** storage — `u = 074000`, an absolute symbol rather than storage — and therefore has to be **copied** in and out on a context switch (§4.2, §4.4a). Two pages: `uflush`/`uload` move the live part of the first — `u_stkdepth` words, at most `USIZE` — and the page above them is kernel-stack overflow that nothing saves |
 | `phymem` | `extern int phymem;` (machdep.c) | physical memory size in **words**; `startup()` frees it into `coremap`. It is asserted rather than probed — `phymem = 512 * 1024` in `main()`, because an unmapped kernel cannot reach the store it would have to write test patterns into (§2) |
 | `icode`, `eicode` | `extern int icode[], eicode[];` (systm.h) | the **user bootstrap**: `xta`/`xts` staging `"/etc/init"` and a one-entry argv, `$77 SYS_exec`, and a `uj` to itself for the failure return. `main()` copies it into process 1's image and `_start` enters it (§2). It is assembled rather than spelled as a constant for `sigcode`'s reason — no opcode encoding is written down anywhere — and **copied to the address it was linked at**, which is the only way it can name its own string and argv vector: `b6as` rejects `label - label`, there is no PC-relative addressing, and the constant pool sits in the *kernel's* const segment at physical page 0, which is not what the user's virtual page 0 maps to. `eicode` sizes the copy (`eicode - icode`), the way `end - edata` sizes bss; it names a placeholder word, since b6ld requires a const symbol to name a word its own file contributed |
 | `sigcode` | `extern int sigcode[];` (sendsig.c) | **one instruction word**, `$77 SYS_sigret`, and the only piece of this kernel that ever executes in user mode. `sendsig()` copies it onto the user stack above the signal frame and enters the handler with r13 naming the copy, so the handler's ordinary `13 uj` return trips the extracode and `sigret()` reloads the frame. It is assembled here, rather than spelled as a constant in C, so that no opcode encoding is written down anywhere — see [Unix_Context_Switch.md §10a](Unix_Context_Switch.md#10a-the-signal-frame) |

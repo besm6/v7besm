@@ -953,7 +953,11 @@ Two things changed underneath it:
   and resumes someone else, and proc 0 has no user map worth loading.
 - **The u-area is fixed *physical* storage at `074000`, not a fixed virtual page**, so it has to be
   **copied**: out to the outgoing process's home, in from the incoming one's. That is
-  `uflush()`/`uload()` (`kernel/uarea.S`), and it is the price of an unmapped kernel.
+  `uflush()`/`uload()` (`kernel/uarea.S`), and it is the price of an unmapped kernel. Only the
+  **live** part moves — `struct user` plus the stack below `r15`, since the stack grows up — and the
+  length travels in the page as `u_stkdepth`, which is what makes a switch about half the copy it
+  used to be (task 30). `uarea.S` owns that contract, including the rule that a flush may only be
+  made from a frame as deep as the labels in the page it saves.
 
 > **The label pointer survives the swap by being a constant.** `u.u_qsav` is `074000+n` in *every*
 > process, so the pointer may be captured before the copy and dereferenced after it — by which time
@@ -1069,7 +1073,7 @@ which door they came in by. Worth revisiting only if the interrupt path ever sho
 **The one difference that matters.** Each Dubna task has its **own** ИПЗ page, separately allocated,
 and a context switch just repoints `ГУС` at the incoming task's block — nothing is copied. Ours is
 *copied*: the u-area is a single fixed physical page shared across tasks, so `resume()` must
-`uflush()` the old and `uload()` the new. That is the price of a one-page u-area, and it is the one we
-chose to pay ([`kernel/README.md`](../kernel/README.md), "Known consequences, accepted"). So Dubna's
+`uflush()` the old and `uload()` the new — about half a page each way since task 30, but never
+nothing. That is the price of a one-page u-area, and it is the one we chose to pay ([`kernel/README.md`](../kernel/README.md), "Known consequences, accepted"). So Dubna's
 `SAVIND` is a closer model for our `save()` than its `BOCИПД` is for our `resume()` — the register
 half transfers directly, the u-area half does not.

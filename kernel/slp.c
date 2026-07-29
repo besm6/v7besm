@@ -468,6 +468,14 @@ retry:
     // simulated up there is precisely what the child is supposed to inherit.  Placed here it
     // serves both arms below -- the copyseg() loop and the xswap(), which re-flushes
     // harmlessly.  See the invariant at xswap() in text.c.
+    //
+    // It is exact in a second sense since task 30, and this is the pair with the least room
+    // in the kernel: uflush() copies only as far as r15 has reached, and save() and uflush()
+    // are called from THIS frame, each with one argument, which the ABI passes in the
+    // accumulator with nothing pushed -- so the r15 the child will resume on and the r15 the
+    // flush measures are the same word.  Move either call into a helper and the child's
+    // stack is truncated below its own label.  SLACK in kernel/uarea.S is the margin this
+    // does not have.
     uflush(a1);
     a2 = malloc(coremap, n);
     // If there is not enough core for the
@@ -535,6 +543,11 @@ void expand(int newsize)
     // the live u-area is at UBASE and is authoritative.  Copying it would move a stale
     // struct user to the new image only for the next switch to overwrite it anyway.
     // Instead the home itself moves, and the live u-area reaches it at that next switch.
+    //
+    // So a2's page 0 is malloc() garbage until the first uflush() to it, and since task 30
+    // that includes its u_stkdepth -- a garbage LENGTH, which uload() has to defend against
+    // and does.  What keeps it out of reach here is `uhome = a2' below: the resume() on the
+    // next line then takes the fast path and copies nothing.  Nothing may switch between.
     for (i = PGSZ; i < n; i += PGSZ)
         copyseg(a1 + i, a2 + i);
     uhome = a2; // before the mfree: a1 is about to stop existing

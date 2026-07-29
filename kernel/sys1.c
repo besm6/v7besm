@@ -442,7 +442,7 @@ void exit(int rv)
     mfree(coremap, p->p_size, p->p_addr);
     // The image this process's u-area calls home has just ceased to exist, and the live
     // u-area at UBASE is still ours until swtch() below hands the machine over.  Say so, or
-    // the resume() inside that swtch() flushes 1024 words of a dead process into core that
+    // the resume() inside that swtch() flushes a dead process's u-area into core that
     // malloc() may already have given away.  See the invariant at xswap() in text.c.
     if (p->p_addr == uhome)
         uhome = NOUHOME;

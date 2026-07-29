@@ -12,12 +12,15 @@
 //     would have uflush() copying the wrong page.  `u' is therefore an absolute symbol here
 //     exactly as in kernel/besm6.S.
 //
-//   * MAIN RUNS ON THE u-PAGE STACK, at 074400 -- past struct user (~140 words), with ~768
+//   * MAIN RUNS ON THE u-PAGE STACK, at 074400 -- past struct user (~142 words), with ~768
 //     words below the end of the SAVED page (075777) and 1024 more of overflow above that
 //     (task 25a; see UBASE in <sys/param.h>).  This matters: resume() reloads the u page out
 //     from under its own caller, so a test running on some other stack would never exercise
 //     the thing that makes the switch delicate -- and main()'s frames must stay in the saved
-//     half for leg B's sentinel to mean anything.
+//     half for leg B's sentinel to mean anything.  It matters twice since task 30: uflush()
+//     copies only as far as r15 has reached, so a real u-page stack is what makes the count
+//     here a real one (~300 words).  mmutest's stack is in low bss and takes uflush's
+//     out-of-range arm instead, which is why leg D lives in this test and not in that one.
 //
 // The 0501 gate is crt0.s's short save, not the kernel's FULSAV: extintr() is an ordinary C
 // function that preserves r1-r7 and r15, so the accumulator, r8-r14 -- and the C register --

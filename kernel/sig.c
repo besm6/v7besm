@@ -193,6 +193,14 @@ int core()
         // kernel stack above it.  Two blocks (USIZE / BSIZEW).  The overflow
         // page above it is not part of the image and is not dumped -- a core
         // file has whatever frames were in the saved half.
+        //
+        // The whole page, not u_stkdepth words: the size is part of the core
+        // file's layout and every offset past it would move.  Since task 30
+        // that means the tail above the live depth holds whatever the
+        // PREVIOUSLY resumed process left on the stack, where before it held
+        // this process's own dead frames.  Accepted, and noted in
+        // kernel/README.md's consequences list; ptrace's u-area window
+        // (procxmt() below) reads the same words and says the same thing.
         u.u_base   = (caddr_t)&u;
         u.u_count  = wtob(USIZE);
         u.u_segflg = 1;

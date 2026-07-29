@@ -36,10 +36,11 @@ int maxmem; // actual max memory per process
 // wordsizeof(struct user) - 1 (~074214).  b6cc now folds &u.u_stack[0] --
 // a symbol+offset -- into the static relocation, so we can spell it directly.
 //
-// 884 of the words above it are SAVED (they are inside the USIZE the context
-// switch copies, which ends at 075777); the 1024 above that are overflow, and
-// running there is only safe as long as the process does not leave the CPU.
-// The rule is at UBASE in <sys/param.h>.
+// 883 of the words above it are SAVABLE (they are inside the USIZE ceiling on
+// what a context switch copies, which ends at 075777) -- and of those, the ones
+// actually copied are the ones below r15, which is the whole of task 30.  The
+// 1024 above 075777 are overflow, and running there is only safe as long as the
+// process does not leave the CPU.  The rule is at UBASE in <sys/param.h>.
 int *const ustkbase = &u.u_stack[0];
 
 // The geometry that rule depends on: one saved page, one overflow page, ending

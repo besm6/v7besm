@@ -41,7 +41,7 @@ extern int phymem;  // words of physical core (machdep.c); the length of /dev/me
 extern int uhome;   // whose u-area is live at UBASE (its p_addr)
 // ... or NOUHOME, meaning the live u-area belongs to no in-core image because the image it
 // belonged to has just been freed.  resume() must then load without flushing first, or it
-// would write 1024 words into core that malloc() may already have handed to someone else.
+// would write a dead u-area into core that malloc() may already have handed to someone else.
 // 0 is a safe sentinel: no process image ever lives at physical 0.  The rules for who
 // maintains this are written up once, at xswap() in kernel/text.c.
 #define NOUHOME 0
@@ -251,10 +251,12 @@ void swap(int blkno, int coreaddr, int count, int rdflg);
 void sureg(void);
 // The u-area bracket (kernel/uarea.s).  The live u-area is at UBASE; a process's home copy is
 // the first page of its image at p_addr, above 0100000 and out of reach of an unmapped access.
-// USIZE words: the saved page only, never the overflow page above it (see UBASE in param.h).
-// uflush() only reads the live page and may be called from C; uload() overwrites it -- and with
-// it the kernel stack its caller is standing on -- so only resume() may call it.  See
-// kernel/README.md, "The u-area invariant".
+// At most USIZE words -- the saved page only, never the overflow page above it (see UBASE in
+// param.h) -- and in practice far fewer: uflush() copies as far as r15 has reached and leaves
+// the count in u_stkdepth for uload() to read back (task 30).  uflush() only reads the live
+// page and may be called from C, but ONLY from a frame at least as deep as the labels armed in
+// it; uload() overwrites the live page -- and with it the kernel stack its caller is standing
+// on -- so only resume() may call it.  See kernel/README.md, "The u-area invariant".
 void uflush(paddr_t paddr);
 void uload(paddr_t paddr);
 int getxfile(struct inode *ip, int nargc);

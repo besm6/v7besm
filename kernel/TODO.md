@@ -15,46 +15,16 @@ why `besm6.o` cannot go into one.
 README.md, and how each turned out is in the source comments and in [../doc/](../doc/). The
 numbering is **left as it was** — task numbers are cited from the sources and from `doc/`.
 
-30–36 are small, independent, and were deferred deliberately.
+31–36 are small, independent, and were deferred deliberately.
 
 | | task | size |
 |---|---|---|
-| 30 | copy only the live part of the u-area | small, measurable win |
 | 31 | the kernel-stack depth check | small |
 | 32 | `profil()`: implement `addupc()` or make it fail | small; the decision is the task |
 | 33 | `ptrace` single-step | small now, blocked after |
 | 34 | the `int` ↔ pointer audit | open-ended |
 | 35 | the character `send` drops — find it, and see what it costs | small to measure, unknown to fix |
 | 36 | the shifting copy: the half of the byte path task 28 could not reach | medium, high risk |
-
----
-
-## 30. Copy only the live part of the u-area
-
-`uflush`/`uload` ([uarea.S](uarea.S)) copy the whole `USIZE` = 1024-word page, twice per context
-switch. The live content is `struct user` (~140 words) plus the stack **below** `r15` — the stack
-grows up, so everything above `r15` is dead. Measured: the deepest `resume()` in a boot →
-`/etc/rc` → shell → `ls /bin` run had `r15 = 075302`, i.e. 706 words live; a typical one is ~300.
-
-**What to do.** Pass a word count. `uflush` knows it — the current `r15`. `uload` does not, and
-cannot be told by `resume()`, which has not yet read the incoming process's state: it must store the
-count *into* the saved page at a fixed offset (a new `u_stkdepth` in `struct user`, or a word next to
-the resume label) and read it back through the `WHOME` window before the copy. Round the count up to
-a whole number of words and leave slack.
-
-**Where it bites.** The count must cover the deepest frame that can ever be *resumed*, not the one
-current when `uflush` runs. Those are the same thing while interrupts are off — which `uload` already
-requires and `uflush` should assert — but they stop being the same the moment anything calls `uflush`
-with delivery open. `DIRSIZ` moving `u_upt` is the other trap: `UPT` is hardcoded in `uarea.S`,
-`seg.S` and `mmutest.c`, and any new field in `struct user` moves it.
-
-**How to verify.** `uswtch` and `mmutest` unchanged; add a leg that writes a sentinel just below
-`r15` and another well above it, switches away and back, and asserts the first survives — and that
-the second does *not* have to. Then `boot` and `swap`, which are where a lost frame shows up as a
-hang rather than a failure.
-
-**Size.** Small, and the payoff is on every context switch. It is the only item on this list with a
-measurable win in the ordinary path.
 
 ---
 
@@ -71,8 +41,9 @@ if ((int)&local >= 0100000 - MARGIN) panic("kstack");  /* the wrap */
 ```
 
 The first is the important one: `sleep()` (and `swtch()`) is exactly where a frame in the overflow
-page is silently lost, because `uflush()` copies only `USIZE` words and another process then runs deep
-on the same physical page. There is no fault and no diagnostic — see README.md's consequences list.
+page is silently lost, because `uflush()` copies at most `USIZE` words — it clamps there, task 30
+having left that threshold exactly where it was — and another process then runs deep on the same
+physical page. There is no fault and no diagnostic — see README.md's consequences list.
 
 **Decide first whether it earns its keep**, because SIMH already observes both without kernel code: a
 write watchpoint on the overflow page (`break -w 0176000-0177777`) fires only on an *unmapped* store,

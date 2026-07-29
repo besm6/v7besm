@@ -52,7 +52,10 @@ void main()
     // set up system process
 
     proc[0].p_addr = NPAGE * PGSZ;   // 0100000: the first free word
-    uhome          = proc[0].p_addr; // the live u-area at UBASE is proc[0]'s
+    uhome          = proc[0].p_addr; // the live u-area at UBASE is proc[0]'s.  It is also
+                                     // what keeps the first switch from uload()ing a home
+                                     // nobody has ever uflush()ed -- and therefore a length
+                                     // nobody has ever written (kernel/uarea.S, task 30).
     proc[0].p_size = USIZE;
     proc[0].p_stat = SRUN;
     proc[0].p_flag |= SLOAD | SSYS;

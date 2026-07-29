@@ -6,7 +6,7 @@
 // the environment hand-built.  crt0w.S puts `u' at the real 074000 and runs main() on the
 // u-page stack, because resume() reloads that very page out from under its caller.
 //
-// Three legs:
+// Four legs:
 //
 //   A  save()/resume() through the FAST path (paddr == uhome, nothing copied): do the nine
 //      label slots come back?  Driven from crt0w.S's regtest(), since C cannot spend r1-r7.
@@ -20,6 +20,12 @@
 //      released by extintr() clearing `idling' -- and must leave the level as it found it.
 //      This is also the first time in this tree that an interrupt is taken in KERNEL mode:
 //      until БлПр became the ipl (task 16d-pre), the gates held it and nothing could be.
+//
+//   D  task 30: a switch copies only what is LIVE.  Two sentinels in the stack region of the
+//      u page, one below r15 and one far above it, ride leg B's alternation.  The low one
+//      must come back; the high one must NOT, because B scribbles over it and nothing copies
+//      it.  This leg is only meaningful here: crt0w.S runs main() on the u-page stack, so
+//      this test's r15 is a real depth, where mmutest's is in low bss and gets the whole page.
 //
 // The phase counter lives in ordinary bss, NOT in the u-area: leg B swaps the u-area under
 // itself, so a phase kept there would be swapped too and the alternation would never end.
@@ -58,17 +64,32 @@ int *intrframe;
 // The sentinel rides in a struct user field this test has no other use for.
 #define sentinel u.u_arg[0]
 
+// Leg D's two probes, as word offsets into the u page.  Both are in the kernel-stack region
+// -- past struct user (~142 words) -- and both are inside the SAVED page (< USIZE).  DEEP is
+// below crt0w.S's stack base at 0400, so it is under every r15 this test can reach and under
+// every count; HIGH is far above one (main()'s r15 is around 0420, so the count is ~300).
+#define DEEP   0300  // 192: struct user has ended, crt0w.S's stack base (0400) has not begun
+#define HIGH   01700 // 960: dead space, three times any count this test produces
+#define SENT_D 0707070
+#define SENT_H 0171717
+
+// The live u-area, addressed as words.  The kernel runs unmapped, so 074000 is reachable.
+#define UPAGE ((volatile unsigned *)UBASE)
+
 // Failure bits, mirrored in uswtch.ini's legend.
-#define F_SAVE0  00001 // save() did not return 0 on the direct call
-#define F_REGS   00002 // leg A: r1-r7 did not survive
-#define F_R15    00004 // leg A: r15 did not survive
-#define F_PHASE  00010 // leg B: the alternation did not run to completion
-#define F_SENTB  00020 // leg B: B saw A's sentinel -- the u-area did not switch
-#define F_SENTA  00040 // leg B: A did not get its own u-area back
-#define F_UHOME  00100 // leg B: uhome did not end up where it should
-#define F_IDLE   00200 // leg C: idle() did not return, or `idling' was left set
-#define F_IPL    00400 // leg C: idle() did not restore the level
-#define F_NOTICK 01000 // leg C: no interrupt was ever dispatched
+#define F_SAVE0  000001 // save() did not return 0 on the direct call
+#define F_REGS   000002 // leg A: r1-r7 did not survive
+#define F_R15    000004 // leg A: r15 did not survive
+#define F_PHASE  000010 // leg B: the alternation did not run to completion
+#define F_SENTB  000020 // leg B: B saw A's sentinel -- the u-area did not switch
+#define F_SENTA  000040 // leg B: A did not get its own u-area back
+#define F_UHOME  000100 // leg B: uhome did not end up where it should
+#define F_IDLE   000200 // leg C: idle() did not return, or `idling' was left set
+#define F_IPL    000400 // leg C: idle() did not restore the level
+#define F_NOTICK 001000 // leg C: no interrupt was ever dispatched
+#define F_DEEP   002000 // leg D: a live stack word below r15 was lost
+#define F_NOCOPY 004000 // leg D: a dead word far above r15 came back -- the whole page moved
+#define F_DEPTH  010000 // leg D: u_stkdepth is not a plausible partial count
 
 static int mask;
 static int phase;  // leg B's state -- in bss, deliberately: see the header
@@ -113,6 +134,12 @@ int main()
     if (rt_r15 == 0)
         mask |= F_R15;
 
+    // Leg D rides on leg B, and its two probes go in before anything is flushed, so that
+    // BOTH homes carry them.  DEEP is inside every copy, HIGH is inside none: see the
+    // #defines.  B will scribble over both, and only DEEP may come back.
+    UPAGE[DEEP] = SENT_D;
+    UPAGE[HIGH] = SENT_H;
+
     // Leg B.  Build P1's home out of the live u-area, so that it holds a label that is valid
     // to resume through -- this is newproc() in miniature, and the flush has to happen just
     // after the save() for exactly newproc()'s reason.  The sentinel is set BEFORE the
@@ -133,6 +160,11 @@ int main()
             mask |= F_SENTB;
         if (uhome != P1)
             mask |= F_UHOME;
+        // Leg D, B's half: scribble over both probes.  DEEP is below B's own r15, so the
+        // switch back has to restore A's value over it; HIGH is dead space in a page nobody
+        // copies that far, so what B leaves there is what A must find.
+        UPAGE[DEEP] = ~SENT_D;
+        UPAGE[HIGH] = 0;
         phase = 2;
         resume(P0, u.u_rsav); // ... and back again
     }
@@ -143,6 +175,17 @@ int main()
             mask |= F_SENTA;
         if (uhome != P0)
             mask |= F_UHOME;
+        // Leg D.  The live word came back; the dead one did not, and must still hold what B
+        // put there.  If the copy were the whole page again, F_NOCOPY is what would say so.
+        if (UPAGE[DEEP] != SENT_D)
+            mask |= F_DEEP;
+        if (UPAGE[HIGH] != 0)
+            mask |= F_NOCOPY;
+        // And the count itself is a plausible partial one: past struct user (it has to be --
+        // u_stkdepth is in there) and well short of HIGH, which is what makes the two checks
+        // above mean what they say.
+        if (u.u_stkdepth <= (int)(sizeof(struct user) / sizeof(int)) || u.u_stkdepth >= HIGH)
+            mask |= F_DEPTH;
     } else {
         mask |= F_PHASE;
     }

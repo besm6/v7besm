@@ -86,10 +86,12 @@ void extintr(void)
 #define SEGSRC 41
 #define SEGDST 42
 
-// The word offset of u_upt in struct user.  kernel/uarea.S is preprocessed but not compiled,
-// so it can pick up #defines from sys/param.h yet still cannot compute an offsetof() -- it
-// hardcodes this, and this is what keeps it honest.
-#define UPT 33
+// The word offsets of u_upt and u_stkdepth in struct user.  kernel/uarea.S is preprocessed
+// but not compiled, so it can pick up #defines from sys/param.h yet still cannot compute an
+// offsetof() -- it hardcodes these, and this is what keeps it honest.  u_stkdepth sits
+// immediately after u_upt[8] so that the two can only drift together (task 30).
+#define UPT   33
+#define USTKD (UPT + 8)
 
 int main()
 {
@@ -174,17 +176,23 @@ int main()
     // garbage into РП0..3, which is a much more confusing failure than this one.
     if ((char *)u.u_upt - (char *)&u != UPT * sizeof(int))
         return (13);
+    if ((char *)&u.u_stkdepth - (char *)&u != USTKD * sizeof(int))
+        return (18);
 
     // Fill the live u-area at UBASE.  The kernel reaches it unmapped, and so can we: 074000 is
     // word 30720, inside the 15-bit word field of a pointer.  The pattern is non-zero at word
     // 0 on purpose -- a window on virtual page 0 would silently drop exactly that word, which
     // is why uarea.S windows pages 1 and 2 instead.
     //
-    // USIZE words, so this is exactly the SAVED page of the u-area (074000-075777) -- the half
-    // a context switch copies.  The overflow page above it (076000-077777, task 25a) is not
-    // part of any process image and is deliberately not exercised here: there is nothing to
-    // round-trip.  Note that this leg is what pins uarea.S's live-window descriptor to UBASE:
-    // window the wrong physical page and the fill and the copy no longer name the same words.
+    // USIZE words, so this is exactly the SAVED page of the u-area (074000-075777).  A switch
+    // in the kernel copies only as far as r15 has reached (task 30), but THIS program's stack
+    // is in low bss (crt0.s), nowhere near the u-area, so uflush takes its out-of-range arm
+    // and moves the whole page -- which is what makes the round trip below a full-page one,
+    // and makes this leg the only test of that arm.  The overflow page above it (076000-077777,
+    // task 25a) is not part of any process image and is deliberately not exercised here: there
+    // is nothing to round-trip.  Note that this leg is what pins uarea.S's live-window
+    // descriptor to UBASE: window the wrong physical page and the fill and the copy no longer
+    // name the same words.
     up = (volatile unsigned *)UBASE;
     for (i = 0; i < USIZE; i++)
         up[i] = PATTERN2 ^ i;
@@ -223,9 +231,19 @@ int main()
 
     // The whole page must come back as it was flushed: the dirty head, then the settled tail.
     // Word 0 included -- it is the one a virtual-page-0 window would have lost.
-    for (i = 0; i < USIZE; i++)
+    //
+    // Except word USTKD, which uflush overwrote in the home with the number of words it
+    // copied and uload has just brought back.  Asserting it is USIZE is asserting that the
+    // out-of-range arm ran: nothing else in the suite has a stack outside the u-area.
+    for (i = 0; i < USIZE; i++) {
+        if (i == USTKD) {
+            if (up[i] != (unsigned)USIZE)
+                return (15);
+            continue;
+        }
         if (up[i] != (unsigned)((i < 8 ? PATTERN1 : PATTERN2) ^ i))
             return (15);
+    }
 
     // And the copy really went to physical UHOME, above 0100000 -- not to some page the two
     // routines happen to share.  Map the home page at virtual page 0 and read it back.  Word 5,

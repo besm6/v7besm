@@ -92,7 +92,9 @@
 #define NINDIR  512          // daddr_t per indirect block (BSIZEW / 1)
 #define NMASK   0777         // NINDIR-1
 #define NSHIFT  9            // LOG2(NINDIR)
-#define USIZE   1024         // size of the SAVED u-area, in words (one page); see UBASE
+#define USIZE   1024         // size of the SAVED u-area, in words (one page); see UBASE.
+                             //   A context switch copies at most this much and usually about
+                             //   half of it -- as far as r15 has reached (kernel/uarea.S)
 #define CMASK   0            // default mask for file creation
 #define NODEV   (dev_t)(-1)  // no device
 #define ROOTINO ((ino_t)2)   // i number of all roots
@@ -267,9 +269,11 @@
 #define NPAGE    32 // virtual pages per process
 
 // The u-area occupies the last TWO pages of the kernel space, 074000-077777, but only
-// the FIRST of them is per-process state: `struct user' at the bottom (140 words) and
-// the kernel stack growing UP through it.  USIZE words from UBASE are what uflush()/
-// uload() copy on a context switch and what every process image reserves at p_addr.
+// the FIRST of them is per-process state: `struct user' at the bottom (~142 words) and
+// the kernel stack growing UP through it.  USIZE words from UBASE are what every process
+// image reserves at p_addr and the CEILING on what uflush()/uload() copy on a context
+// switch; what they actually copy is everything below r15, since the stack grows up and
+// the words above it are frames that have returned (task 30, kernel/uarea.S).
 //
 // The page above the saved one, 076000-077777, is OVERFLOW: the stack may grow into it
 // and code running there is perfectly correct, but the words are in no process image
@@ -283,8 +287,9 @@
 // the overflow page before the process can leave the CPU.
 //
 // THE HAZARD, stated once: a process that reaches sleep() or swtch() with r15 above
-// 076000 loses those frames, because uflush() copies only USIZE words and another
-// process then runs deep on the same physical page.  There is no fault and no
+// 076000 loses those frames, because uflush() copies at most USIZE words -- it clamps
+// there -- and another process then runs deep on the same physical page.  Task 30 left
+// that threshold exactly where it was.  There is no fault and no
 // diagnostic.  It takes a path 884+ words deep AT A SLEEP POINT to do it -- 109 words
 // deeper than anything measured -- and kernel/TODO.md task 31 says how it would be
 // detected.  See kernel/uarea.S and include/sys/user.h.
