@@ -36,6 +36,7 @@
 #include "sys/proc.h"
 #include "sys/reg.h"
 #include "sys/seg.h"
+#include "sys/signal.h"
 #include "sys/systm.h"
 #include "sys/text.h"
 #include "sys/types.h"
@@ -90,7 +91,7 @@ void drainbrz(void);
 
 // The two signals the legs deliver.  Any two distinct numbers would do; these are the ones a
 // user program actually sees.
-#define SIG1 SIGTRM
+#define SIG1 SIGTERM
 #define SIG2 SIGINT
 
 // Fault-mask bits, reported in the accumulator by halt().  Zero means every check passed.

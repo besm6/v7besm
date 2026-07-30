@@ -8,6 +8,7 @@
 #include "sys/proc.h"
 #include "sys/reg.h"
 #include "sys/seg.h"
+#include "sys/signal.h"
 #include "sys/systm.h"
 #include "sys/types.h"
 #include "sys/user.h"
@@ -145,23 +146,23 @@ void trap(void)
         __besm6_mod(MOD_GRPCLR, ~GRP_OPRND_PROT);
         if (grow((grp & GRP_PAGE_MASK) >> GRP_PAGE_SHIFT))
             goto out;
-        i = SIGSEG;
+        i = SIGSEGV;
 
     } else if (grp & GRP_INSN_PROT) { // instruction fetch from a closed page
         __besm6_mod(MOD_GRPCLR, ~GRP_INSN_PROT);
-        i = SIGSEG;
+        i = SIGSEGV;
 
     } else if (grp & GRP_ILL_INSN) { // a privileged instruction in user mode
         __besm6_mod(MOD_GRPCLR, ~GRP_ILL_INSN);
-        i = SIGINS;
+        i = SIGILL;
 
     } else if (grp & GRP_INSN_CHECK) { // the word fetched is not an instruction
         __besm6_mod(MOD_GRPCLR, ~GRP_INSN_CHECK);
-        i = SIGINS;
+        i = SIGILL;
 
     } else if (grp & GRP_BREAKPOINT) { // address-break match (М034/М035)
         __besm6_mod(MOD_GRPCLR, ~GRP_BREAKPOINT);
-        i = SIGTRC;
+        i = SIGTRAP;
         // TODO 33: single-step is the address-break registers М034/М035, not a flag bit;
         // there is no EFL/TBIT to clear, so re-arming belongs to procxmt().
 

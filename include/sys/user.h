@@ -27,10 +27,11 @@
 // tag will not do -- this header genuinely cannot compile without sys/dir.h ahead of it, and
 // sys/dir.h sorts first anyway.  param.h and types.h come with it, and are named regardless:
 // a header should say what it uses, and sys/dir.h is not in the business of promising them.
-#include <sys/dir.h>   // struct direct
-#include <sys/errno.h> // the u_error codes -- one home, and this is not it
-#include <sys/param.h> // DIRSIZ, NOFILE, NSIG
-#include <sys/types.h> // label_t, off_t, time_t, caddr_t, dev_t
+#include <sys/dir.h>    // struct direct
+#include <sys/errno.h>  // the u_error codes -- one home, and this is not it
+#include <sys/param.h>  // DIRSIZ, NOFILE
+#include <sys/signal.h> // NSIG
+#include <sys/types.h>  // label_t, off_t, time_t, caddr_t, dev_t
 
 #define EXCLOSE 01
 

@@ -6,6 +6,7 @@
 #include "sys/proc.h"
 #include "sys/reg.h"
 #include "sys/seg.h"
+#include "sys/signal.h"
 #include "sys/systm.h"
 #include "sys/text.h"
 #include "sys/types.h"
@@ -125,20 +126,20 @@ void psig()
     rp->p_sig &= ~(1 << (n - 1));
     if ((p = u.u_signal[n]) != 0) {
         u.u_error = 0;
-        if (n != SIGINS && n != SIGTRC)
+        if (n != SIGILL && n != SIGTRAP)
             u.u_signal[n] = 0;
         sendsig((caddr_t)p, n);
         return;
     }
     switch (n) {
     case SIGQUIT:
-    case SIGINS:
-    case SIGTRC:
+    case SIGILL:
+    case SIGTRAP:
     case SIGIOT:
     case SIGEMT:
-    case SIGFPT:
+    case SIGFPE:
     case SIGBUS:
-    case SIGSEG:
+    case SIGSEGV:
     case SIGSYS:
         if (core())
             n += 0200;

@@ -2,11 +2,8 @@
 
 // <signal.h> -- signal handling (C11 §7.14).
 //
-// The numbers are v7's, all fifteen of them, and NSIG stays 17: they are the
-// kernel's (kernel/sig.c, kernel/machdep.c) and b6sim's (cmd/sim/syscall.cpp),
-// and C11 §7.14 requires only six of them and permits the rest.  SIGABRT is the
-// one name C11 asks for that v7 spelled otherwise -- it is signal 6, which v7
-// calls SIGIOT -- so it is an alias and not a new number.
+// The numbers, NSIG and the three dispositions are in <sys/signal.h>, their one
+// home, which the kernel reads too; this file adds what only the user side wants.
 //
 // The TYPES are C11's, not v7's, and that is the change here.  v7 declared
 // `int (*signal())();' -- no prototype at all, a handler returning int, and a
@@ -23,35 +20,12 @@
 #ifndef _SIGNAL_H
 #define _SIGNAL_H
 
-#include <sys/types.h> // pid_t, for kill()
+#include <sys/signal.h> // NSIG, the signal numbers, SIG_DFL/SIG_IGN/SIG_ERR
+#include <sys/types.h>  // pid_t, for kill()
 
 // §7.14: an object that can be written from a handler without a data race.  One
 // word, like everything else, and there is nothing finer to choose.
 typedef int sig_atomic_t;
-
-#define NSIG 17
-
-#define SIGHUP  1  // hangup
-#define SIGINT  2  // interrupt
-#define SIGQUIT 3  // quit
-#define SIGILL  4  // illegal instruction (not reset when caught)
-#define SIGTRAP 5  // trace trap (not reset when caught)
-#define SIGIOT  6  // IOT instruction
-#define SIGEMT  7  // EMT instruction
-#define SIGFPE  8  // floating point exception
-#define SIGKILL 9  // kill (cannot be caught or ignored)
-#define SIGBUS  10 // bus error
-#define SIGSEGV 11 // segmentation violation
-#define SIGSYS  12 // bad argument to system call
-#define SIGPIPE 13 // write on a pipe with no one to read it
-#define SIGALRM 14 // alarm clock
-#define SIGTERM 15 // software termination signal from kill
-
-#define SIGABRT SIGIOT // C11's name for what v7 calls SIGIOT; abort() raises it
-
-#define SIG_DFL ((void (*)(int))0)
-#define SIG_IGN ((void (*)(int))1)
-#define SIG_ERR ((void (*)(int)) - 1)
 
 void (*signal(int sig, void (*func)(int)))(int);
 

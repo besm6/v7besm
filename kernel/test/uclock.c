@@ -17,7 +17,7 @@
 //     `u_stime == 0' is the sharpest single check in the file: it fails if the frame pointer is
 //     stale, garbage, or the syscall-style guess at u.u_stack.
 //   * THE SECOND ROLLS OVER.  lbolt is seeded at HZ-1, so this tick takes the `++lbolt >= HZ' arm:
-//     ++time, runrun, wakeup(&lbolt), and the proc[] sweep that ages p_time and fires SIGCLK.
+//     ++time, runrun, wakeup(&lbolt), and the proc[] sweep that ages p_time and fires SIGALRM.
 //   * МГРП SURVIVES.  clock() leaves spl1 behind and nothing in the return-from-interrupt path
 //     restores the level (`выпр' restores БлПр, not МГРП), so extintr() has to.  If it does not,
 //     mgrp comes back 0 and the machine is deaf from the first tick on.
@@ -31,7 +31,7 @@
 // ONE EXTRA TICK IS POSSIBLE and every check above tolerates it.  The BESM-6 interval timer
 // free-runs at 250 Hz and re-arms itself; the SIMH CLK device carries no DEV_DISABLE flag, so no
 // `.ini' can stop it.  A second tick would find the callout already compacted out of callout[],
-// lbolt back at 0 (so no second rollover, hence no second ++time, p_time++ or SIGCLK), and
+// lbolt back at 0 (so no second rollover, hence no second ++time, p_time++ or SIGALRM), and
 // p_clktim already 0.  Only u_utime can grow, which is why that one check is `>=' and not `=='.
 //
 // An extra tick in KERNEL mode is another matter, and is what `u_stime == 0' catches: it charges
@@ -50,6 +50,7 @@
 #include "sys/proc.h"
 #include "sys/reg.h"
 #include "sys/seg.h"
+#include "sys/signal.h"
 #include "sys/systm.h"
 #include "sys/text.h"
 #include "sys/types.h"
@@ -93,27 +94,27 @@ extern int *intrframe;
 #define MAGIC ((carg_t)0246813U)
 
 // Fault-mask bits, reported in the accumulator by halt().  Zero means every check passed.
-#define F_STACK  0000001 // the stack was not switched: the frame landed on the user r15
-#define F_NOCALL 0000002 // the callout never fired -- the tick did not reach clock()
-#define F_CALLN  0000004 // it fired more than once, or with the wrong argument
-#define F_UTIME  0000010 // user time was not charged
-#define F_STIME  0000020 // system time WAS charged: clock() read the wrong frame
-#define F_TIME   0000040 // the second did not roll over (++time)
-#define F_LBOLT  0000100 // lbolt did not wrap back below HZ
-#define F_RUNRUN 0000200 // the scheduler was not jabbed
-#define F_WAKEUP 0000400 // nobody was woken on &lbolt
-#define F_PTIME  0001000 // proc[0].p_time was not aged
-#define F_SIGCLK 0002000 // the alarm did not fire exactly once, as SIGCLK
-#define F_SETPRI 0004000 // setpri() was not called for the aged process
-#define F_MGRP   0010000 // extintr() did not restore the ipl: МГРП came back masked
-#define F_FRAME  0020000 // the gate published the wrong frame, or disturbed u.u_ar0
+#define F_STACK   0000001 // the stack was not switched: the frame landed on the user r15
+#define F_NOCALL  0000002 // the callout never fired -- the tick did not reach clock()
+#define F_CALLN   0000004 // it fired more than once, or with the wrong argument
+#define F_UTIME   0000010 // user time was not charged
+#define F_STIME   0000020 // system time WAS charged: clock() read the wrong frame
+#define F_TIME    0000040 // the second did not roll over (++time)
+#define F_LBOLT   0000100 // lbolt did not wrap back below HZ
+#define F_RUNRUN  0000200 // the scheduler was not jabbed
+#define F_WAKEUP  0000400 // nobody was woken on &lbolt
+#define F_PTIME   0001000 // proc[0].p_time was not aged
+#define F_SIGALRM 0002000 // the alarm did not fire exactly once
+#define F_SETPRI  0004000 // setpri() was not called for the aged process
+#define F_MGRP    0010000 // extintr() did not restore the ipl: МГРП came back masked
+#define F_FRAME   0020000 // the gate published the wrong frame, or disturbed u.u_ar0
 
 static unsigned mask;
 
 // What the stubs and the callout recorded.
 static int ncallout;       // how many times the callout ran
 static carg_t calloutarg;  // the argument it ran with
-static int nsig, lastsig;  // psignal() -- clock() raises SIGCLK when p_clktim expires
+static int nsig, lastsig;  // psignal() -- clock() raises SIGALRM when p_clktim expires
 static int nwakeup;        // wakeup() calls
 static chan_t lastchan;    // the last channel woken -- must be &lbolt
 static int nsetpri;        // setpri() calls
@@ -315,8 +316,8 @@ void report(void)
     // ... and swept proc[], aging proc[0] and expiring its alarm exactly once.
     if (proc[0].p_time != 1)
         mask |= F_PTIME;
-    if (nsig != 1 || lastsig != SIGCLK)
-        mask |= F_SIGCLK;
+    if (nsig != 1 || lastsig != SIGALRM)
+        mask |= F_SIGALRM;
     if (nsetpri < 1)
         mask |= F_SETPRI;
 

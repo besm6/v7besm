@@ -234,7 +234,7 @@ uprog:
      10 atx     0               // must be EINVAL, from nosys()
 
         // --- leg 4: an extracode we do not implement -------------------------------------
-        // э50 -> 0550 -> badext -> badextr(), which signals SIGINS and returns.  The machine
+        // э50 -> 0550 -> badext -> badextr(), which signals SIGILL and returns.  The machine
         // must come back untouched and the program must keep running.
       9 vtm     SENTA
         ita     011             // A := SENTA

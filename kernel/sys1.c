@@ -9,6 +9,7 @@
 #include "sys/proc.h"
 #include "sys/reg.h"
 #include "sys/seg.h"
+#include "sys/signal.h"
 #include "sys/systm.h"
 #include "sys/types.h"
 #include "sys/user.h"
@@ -337,7 +338,7 @@ int getxfile(register struct inode *ip, int nargc)
         if (ip->i_mode & ISGID)
             u.u_gid = ip->i_gid;
     } else
-        psignal(u.u_procp, SIGTRC);
+        psignal(u.u_procp, SIGTRAP);
     u.u_tsize = ts;
     u.u_dsize = ds;
     u.u_ssize = ss;

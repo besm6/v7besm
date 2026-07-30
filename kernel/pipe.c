@@ -5,6 +5,7 @@
 #include "sys/inode.h"
 #include "sys/param.h"
 #include "sys/reg.h"
+#include "sys/signal.h"
 #include "sys/systm.h"
 #include "sys/types.h"
 #include "sys/user.h"

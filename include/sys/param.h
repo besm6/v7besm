@@ -74,26 +74,9 @@
 #define PSLEP  40
 #define PUSER  50
 
-// signals
-// dont change
-
-#define NSIG 17
-
-#define SIGHUP  1  // hangup
-#define SIGINT  2  // interrupt (rubout)
-#define SIGQUIT 3  // quit (FS)
-#define SIGINS  4  // illegal instruction
-#define SIGTRC  5  // trace or breakpoint
-#define SIGIOT  6  // iot
-#define SIGEMT  7  // emt
-#define SIGFPT  8  // floating exception
-#define SIGKIL  9  // kill, uncatchable termination
-#define SIGBUS  10 // bus error
-#define SIGSEG  11 // segmentation violation
-#define SIGSYS  12 // bad system call
-#define SIGPIPE 13 // end of pipe
-#define SIGCLK  14 // alarm clock
-#define SIGTRM  15 // Catchable termination
+// The signal numbers, NSIG included, used to be written out here as well as in
+// <signal.h>.  They are in <sys/signal.h> now, their one home, which both sides
+// include -- see the comment there.
 
 // fundamental constants of the implementation--
 // cannot be changed easily

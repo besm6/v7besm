@@ -139,7 +139,7 @@ word it lands on*:
 | `trapgate` | `0500`, internal fault | `trap()`, `trap.c` | full save; **unconditional** stack switch; PC fixup in C |
 | `intrgate` | `0501`, external (ГРП) | `extintr()`, `intr.c` | full save; **conditional** switch; publishes `intrframe` |
 | `sysgate` | `0577` (э77) | `syscall()`, `syscall.c` | full save; unconditional switch; no PC fixup |
-| `badext` | `0550`–`0576` | `badextr()`, `syscall.c` | as `sysgate`; posts SIGINS |
+| `badext` | `0550`–`0576` | `badextr()`, `syscall.c` | as `sysgate`; posts SIGILL |
 
 Note the aliases: **э20/э60 and э21/э61 share one vector word each** (the hardware maps `э20`/`э21`
 to `0540 + (opcode >> 3)`), and a user `стоп` arrives as **э63**.
@@ -434,15 +434,15 @@ handled fault bit fires afterwards as a spurious external interrupt. A device in
 is a one-shot notification and only the dispatched bit is cleared (§9).
 
 - **`GRP_OPRND_PROT`** → `grow()` the stack and retry. No signal — this is the normal
-  stack-growth path, and SIGSEG only if `grow()` declines. `grow()` takes the faulting **page
+  stack-growth path, and SIGSEGV only if `grow()` declines. `grow()` takes the faulting **page
   number**, unchanged, because a page number is all ГРП reports (bits 5–9); there is no faulting
   address to recover. It grows by appending a page at the next higher virtual address — which, since
   `sureg()` lays the stack out as the tail of the image, is the same page it appends at the end of
   the image. So the stack pages already mapped keep their addresses and nothing is copied: growing
   the stack needs no `copyseg` shuffle at all. `kernel/test/ugrow` is the regression test for
   exactly that property.
-- **`GRP_INSN_PROT`** → SIGSEG. **`GRP_ILL_INSN`/`GRP_INSN_CHECK`** → SIGINS.
-  **`GRP_BREAKPOINT`** → SIGTRC.
+- **`GRP_INSN_PROT`** → SIGSEGV. **`GRP_ILL_INSN`/`GRP_INSN_CHECK`** → SIGILL.
+  **`GRP_BREAKPOINT`** → SIGTRAP.
 - **nothing pending** → the `else` arm: `dumpregs()` and `panic("trap")`. The machine vectored with
   no cause we decode.
 
@@ -538,7 +538,7 @@ convention is errno-in-r14, zero on success:
     }
 ```
 
-`badextr()` — every extracode э50–э76 — does none of this: it posts SIGINS and falls into the same
+`badextr()` — every extracode э50–э76 — does none of this: it posts SIGILL and falls into the same
 shared tail (`issig`/`psig`, `setpri`, `qswtch` on `runrun`, `addupc`).
 
 Two v7 idioms work differently here. `fork()` tells parent from child by `r_val2` (r12), not by

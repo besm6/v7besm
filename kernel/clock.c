@@ -6,6 +6,7 @@
 #include "sys/proc.h"
 #include "sys/reg.h"
 #include "sys/seg.h"
+#include "sys/signal.h"
 #include "sys/systm.h"
 #include "sys/types.h"
 #include "sys/user.h"
@@ -142,7 +143,7 @@ out:
                     pp->p_time++;
                 if (pp->p_clktim)
                     if (--pp->p_clktim == 0)
-                        psignal(pp, SIGCLK);
+                        psignal(pp, SIGALRM);
                 a = (pp->p_cpu & 0377) * SCHMAG + pp->p_nice - NZERO;
                 if (a < 0)
                     a = 0;

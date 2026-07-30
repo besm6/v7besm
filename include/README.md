@@ -79,6 +79,20 @@ numbers. `<sgtty.h>` and `<sys/tty.h>` are still a pair of this kind, and worse 
 `06000` in one and `006000` in the other, a token difference and not just spacing — but nothing
 includes both.
 
+**The signal numbering has one home too, `<sys/signal.h>`**, on that precedent. v7 wrote it out
+twice as well — in `<signal.h>` for the user and in `<sys/param.h>` for the kernel — and here the
+two copies agreed character for character, so `b6cpp` had no complaint and nine of the macros
+were simply written twice. The other seven were worse than duplicates: they were a second *name*
+for a number that already had one, v7's kernel spellings `SIGINS`, `SIGTRC`, `SIGFPT`, `SIGKIL`,
+`SIGSEG`, `SIGCLK` and `SIGTRM` beside the standard `SIGILL`, `SIGTRAP`, `SIGFPE`, `SIGKILL`,
+`SIGSEGV`, `SIGALRM` and `SIGTERM`. Those seven are **gone rather than aliased**: the kernel now
+names a signal by the same spelling the user does, so no signal in this tree has two names.
+`<sys/signal.h>` holds `NSIG`, the fifteen numbers and `SIG_DFL`/`SIG_IGN`/`SIG_ERR` and nothing
+else — `#define`-only, like `<sys/errno.h>` — while `<signal.h>` adds `sig_atomic_t` and the
+prototypes and `<sys/user.h>` takes `NSIG` from the same file `kernel/sig.c` does. The one
+remaining copy is again not a header: the numbers b6sim answers `signal(2)` with, in
+[`../cmd/sim/syscall.cpp`](../cmd/sim/syscall.cpp).
+
 **The dead v7 headers have been pruned**, and two rules say what may come back. A file format
 this toolchain has already replaced is described *once*, under `cross/besm6/` — so `a.out.h`
 and `ar.h` went, because `b.out.h` and the 30-char `ar_hdr` are the real ones and a second,

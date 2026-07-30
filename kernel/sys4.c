@@ -5,6 +5,7 @@
 #include "sys/param.h"
 #include "sys/proc.h"
 #include "sys/reg.h"
+#include "sys/signal.h"
 #include "sys/systm.h"
 #include "sys/timeb.h"
 #include "sys/types.h"
@@ -267,7 +268,7 @@ void ssig()
 
     uap = (struct a *)u.u_ap;
     a   = uap->signo;
-    if (a <= 0 || a >= NSIG || a == SIGKIL) {
+    if (a <= 0 || a >= NSIG || a == SIGKILL) {
         u.u_error = EINVAL;
         return;
     }

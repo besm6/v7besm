@@ -84,7 +84,7 @@ return a value in `r12` as well as the accumulator.
 | 37 | `int kill(int pid, int sig)` | `kill` — [sys4.c](../kernel/sys4.c) | Send a signal: to one process, to the caller's process group (`pid == 0`), or — for the superuser — to everything but the first two processes (`pid == -1`). `ESRCH` if nothing matched. |
 | 43 | `int times(struct tms *buf)` | `times` — [sys4.c](../kernel/sys4.c) | Copy out the four accumulated times (user, system, children's user, children's system) from the u-area. |
 | 44 | `int profil(char *buf, int n, int off, int scale)` | `profil` — [sys4.c](../kernel/sys4.c) | Record the profiling buffer in the u-area; the clock's `addupc()` and the trap-return path fill it. A zero scale turns profiling off. |
-| 48 | `int (*signal(int sig, int (*f)()))()` | `ssig` — [sys4.c](../kernel/sys4.c) | Set the disposition of a signal and return the previous one, clearing any pending instance. `EINVAL` for signal 0, out-of-range signals, and `SIGKIL`. |
+| 48 | `int (*signal(int sig, int (*f)()))()` | `ssig` — [sys4.c](../kernel/sys4.c) | Set the disposition of a signal and return the previous one, clearing any pending instance. `EINVAL` for signal 0, out-of-range signals, and `SIGKILL`. |
 | 51 | `int acct(char *path)` | `sysacct` — [acct.c](../kernel/acct.c) | Superuser: start writing process-accounting records to `path` (a regular file), or stop when `path` is null. `EBUSY` if accounting is already on. |
 | 52 | `int phys(int segno, int npages, int physaddr)` | `sysphys` — [machdep.c](../kernel/machdep.c) | Map physical addresses into the user's space. Superuser-checked and then always `EINVAL` — see [§4](#4-where-this-kernel-differs-from-v7). |
 | 53 | `int lock(int flag)` | `syslock` — [acct.c](../kernel/acct.c) | Superuser: set or clear `SULOCK`, asking the swapper to keep this process in core. |
@@ -229,7 +229,7 @@ None of them has a `SYS_*` name, on purpose. Row 45, v7's "unused", is no longer
 - **An out-of-range number.** `syscall()` dispatches `badsysent` — a private `{0, 0, nosys}` —
   rather than masking the number onto a real row.
 - **A neighbouring extracode.** э50–э76 vector to `badext`, whose C side `badextr()` sends
-  `SIGINS`. Two things arrive there that do not look like extracodes: э20/э60 and э21/э61 share
+  `SIGILL`. Two things arrive there that do not look like extracodes: э20/э60 and э21/э61 share
   a vector word each, and a user `стоп` is re-dispatched as э63.
 
 ## 6. Adding a call

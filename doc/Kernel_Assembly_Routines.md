@@ -243,7 +243,7 @@ arbitration). The four gates are:
 | `trapgate` | `0500` | internal fault → `trap()` from user, `ktrap()` from supervisor |
 | `intrgate` | `0501` | external interrupt → `extintr()` |
 | `sysgate` | `0577` (э77) | the system call → `syscall()` |
-| `badext` | `0550`–`0576` | every other extracode → `badextr()`, which posts SIGINS |
+| `badext` | `0550`–`0576` | every other extracode → `badextr()`, which posts SIGILL |
 
 **Two save disciplines.** A fault or an interrupt lands between arbitrary instructions, so the
 interrupted code owns *every* register and the gate must save the full visible machine — including R

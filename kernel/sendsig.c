@@ -35,6 +35,7 @@
 #include "sys/proc.h"
 #include "sys/reg.h"
 #include "sys/seg.h"
+#include "sys/signal.h"
 #include "sys/systm.h"
 #include "sys/types.h"
 #include "sys/user.h"
@@ -83,7 +84,7 @@ void sendsig(caddr_t p, int signo)
     // instead; exit() does not come back.
     if (copyout((caddr_t)tr, (caddr_t)n, wtob(NREGFRAME)) < 0 ||
         suword((caddr_t)(n + NREGFRAME), sigcode[0]) < 0)
-        exit(SIGKIL);
+        exit(SIGKILL);
 
     // The word just planted is one the handler EXECUTES, and the store that planted it was
     // MAPPED -- so it is sitting in the БРЗ write cache, which the instruction path does not

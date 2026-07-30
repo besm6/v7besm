@@ -16,7 +16,7 @@
 //      ascending u_arg[0..2] the callee expects, and that it popped the two pushed words.
 //   3. A syscall number outside sysent[].  Checks it is range-checked, not masked: -1 in the
 //      accumulator and EINVAL in r14, from nosys().
-//   4. An unimplemented extracode (э50).  Checks badext signals SIGINS and the program resumes
+//   4. An unimplemented extracode (э50).  Checks badext signals SIGILL and the program resumes
 //      with its machine intact.
 //
 // Every leg also checks the INTERRUPT LEVEL: each handler reads PSW back with __besm6_getpsw()
@@ -35,6 +35,7 @@
 #include "sys/proc.h"
 #include "sys/reg.h"
 #include "sys/seg.h"
+#include "sys/signal.h"
 #include "sys/systm.h"
 #include "sys/text.h"
 #include "sys/types.h"
@@ -102,7 +103,7 @@ void drainbrz(void);
 #define F_ERR2   0001000 // leg 2: the 3-argument call reported an error
 #define F_RANGE  0002000 // leg 3: an out-of-range number was masked instead of range-checked
 #define F_ERR3   0004000 // leg 3: not EINVAL, so nosys() did not run
-#define F_BADEXT 0010000 // leg 4: badextr() did not signal SIGINS exactly once
+#define F_BADEXT 0010000 // leg 4: badextr() did not signal SIGILL exactly once
 #define F_ACC4   0020000 // leg 4: badext disturbed the machine
 #define F_R15C   0040000 // leg 4: badext moved r15
 #define F_IPL    0100000 // a door dispatched with БлПр still set: the level was never opened
@@ -281,7 +282,7 @@ void report(void)
         mask |= F_ERR3;
 
     // Leg 4: badext signalled and left everything alone.
-    if (nsig != 1 || lastsig != SIGINS)
+    if (nsig != 1 || lastsig != SIGILL)
         mask |= F_BADEXT;
     if (s[S_ACC4] != SENTA)
         mask |= F_ACC4;

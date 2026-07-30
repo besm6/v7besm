@@ -9,6 +9,7 @@
 #include "sys/param.h"
 #include "sys/proc.h"
 #include "sys/seg.h"
+#include "sys/signal.h"
 #include "sys/systm.h"
 #include "sys/types.h"
 #include "sys/user.h"
@@ -192,7 +193,7 @@ void xalloc(register struct inode *ip)
     }
     if ((xp = xp1) == NULL) {
         printf("out of text");
-        psignal(u.u_procp, SIGKIL);
+        psignal(u.u_procp, SIGKILL);
         return;
     }
     xp->x_flag   = XLOAD | XLOCK;

@@ -348,7 +348,7 @@ sysgate:
                                     //   costs a word more (doc/Unix_Context_Switch.md sec 10).
 
 // badext -- extracodes э50-э76, which this kernel does not implement.  `sysgate' verbatim, ending
-// in a different call: badextr() signals SIGINS rather than halting the machine.  Note э20/э60 and
+// in a different call: badextr() signals SIGILL rather than halting the machine.  Note э20/э60 and
 // э21/э61 alias to one vector word each, and a user `стоп' arrives here as э63.
 
         .globl  badext
@@ -395,7 +395,7 @@ badext:
         vtm     3                   // PSW := БлП|БлЗ, БлПр clear: interrupts delivered
 
      13 vtm     intret              // tail call, as in `sysgate'
-        uj      badextr             // syscall.c: SIGINS
+        uj      badextr             // syscall.c: SIGILL
 
 // ============================================================================
 // Internal-interrupt (fault) entry

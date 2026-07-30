@@ -70,6 +70,7 @@
 #include <sys/dir.h>
 #include <sys/errno.h>
 #include <sys/param.h>
+#include <sys/signal.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/user.h>
@@ -101,6 +102,7 @@
 #include <sys/dir.h>
 #include <sys/errno.h>
 #include <sys/param.h>
+#include <sys/signal.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/user.h>

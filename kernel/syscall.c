@@ -19,6 +19,7 @@
 #include "sys/proc.h"
 #include "sys/reg.h"
 #include "sys/seg.h"
+#include "sys/signal.h"
 #include "sys/systm.h"
 #include "sys/types.h"
 #include "sys/user.h"
@@ -160,6 +161,6 @@ void badextr(void)
     syst    = u.u_stime;
     u.u_ar0 = (int *)tr;
 
-    psignal(u.u_procp, SIGINS);
+    psignal(u.u_procp, SIGILL);
     sysret(tr, syst);
 }

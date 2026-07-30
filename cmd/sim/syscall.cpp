@@ -557,7 +557,7 @@ void Processor::deliver_signal(unsigned sig)
     machine.mem_store(n + NREGFRAME, SIGCODE_WORD);
 
     // v7 resets a caught signal to SIG_DFL as it delivers it, except for the two
-    // the tracer owns (psig(), kernel/sig.c: SIGINS = 4 and SIGTRC = 5).
+    // the tracer owns (psig(), kernel/sig.c: SIGILL = 4 and SIGTRAP = 5).
     if (sig != 4 && sig != 5)
         guest_handler[sig] = 0;
 
