@@ -8,6 +8,8 @@ chmod
 chown
 cp
 date
+df
+du
 echo
 ed
 kill

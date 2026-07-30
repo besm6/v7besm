@@ -33,6 +33,36 @@ Absence of either causes an entry to be generated for
 each directory only.
 .PP
 A file which has two links to it is only counted once.
+.SH "BLOCKS ARE 3072 BYTES"
+.B "Note:"
+a block on this machine is
+.B 3072
+bytes \- 512 words of 48 bits \- so every number
+.I du
+prints is one sixth of what the same tree would have shown on a PDP\-11.
+There is no
+.I BSHIFT
+to go with it; 3072 is not a power of two.
+.IR Ls (1)
+counts the same block in its
+.B \-s
+and
+.B total
+output, and
+.IR df (1M)
+and
+.IR quot (1M)
+report in it too.
+.PP
+.B "Note:"
+the count is derived from each file's
+.I size
+and so charges a file for the holes in it and not for its indirect blocks \- the same
+approximation
+.IR quot (1M)
+makes.
+.IR Icheck (1M)
+is the program that would count blocks actually allocated, and is not ported.
 .SH BUGS
 Non-directories
 given as arguments (not under
@@ -42,3 +72,11 @@ option) are not listed.
 If there are too many distinct linked files,
 .I du
 counts the excess files multiply.
+.br
+.B "Note:"
+a path longer than 256 characters, or one grown past that by the walk, is refused with
+.B "--path too long"
+and skipped.
+v7 appended one component per directory level into a fixed buffer with no test of any kind.
+.SH "SEE ALSO"
+df(1M), quot(1M), ls(1)

@@ -99,7 +99,29 @@ work has two halves:
   `cmd/ed/README.md` is the account, and it also records that this file's own porting recipe
   was wrong about `ed` twice — ten `char *` comparisons where there are twenty, and a `CCL`
   bitmap that belongs to `grep` and `sed` and that `ed` does not have at all.
-  Ten tests
+  And, task C4a, **it can measure the store it lives on**: `df`, `du` and `quot` are on the
+  image, the first programs here that report on the filesystem rather than change it — `df`
+  counting the free list by draining it exactly as the kernel's `alloc()` does, `du` walking a
+  tree and charging for a hard link once, `quot` sweeping the whole i-list by owner. Two of the
+  three go through the **raw disk**, and that is what the task was really about:
+  `open`/`lseek`/`read` on `/dev/rmd0` is not the v7 call sequence it looks like, because
+  `physio()` and `mdstrategy()` impose four conditions between them — the buffer at byte #0 of a
+  word, the count a whole number of `BSIZE`s, the buffer's *word address* a multiple of
+  `MDTRACK` (512 words, the disk's half-zone), and the seek block-aligned. Three of the four are
+  an `EFAULT`; the fourth is **silent**, `physio()` truncating the offset and reading the wrong
+  block. Nothing in C asks for that alignment, so the idiom is an over-sized `bss` array stepped
+  forward with `(int)ptr` — a word pointer *is* a word address here — and obeying the rules made
+  the programs *smaller*, `quot`'s 4,096-word `itab[256]` disappearing because one block already
+  is `INOPB` inodes. `cmd/df/README.md` is the account, and the rest of C4 — `dd`, `mkfs`,
+  `fsck`, `icheck` — takes the same path. It also settled how a program that reports on a whole
+  filesystem is *asserted*: not against a checked-in table, which would have to be re-typed
+  whenever anything joined `/bin`, but against numbers the host **recomputes** from the finished
+  image — and to the **console** rather than to a file, since a `quot` writing to `/tmp` counts
+  the file it is about to fill. Three upstream bugs went with it: `du` scanning its hard-link
+  table one slot past what it had filled, `quot` writing one element past `du[NUID]`, and
+  `quot`'s `qsort` comparator calling `strcmp()` on two `NULL`s — which a PDP-11 forgave,
+  address 0 being readable there, and which here dereferences word 0.
+  Eleven tests
   guard that ladder — `kernel/test/boot` (the prompt appears), `kernel/test/console` (a typed
   dialogue with the shell, and the only one that reaches `/etc/rc`, whose motd and date it
   asserts, ending on the `login:` the first getty puts there — **currently `DISABLED`**, since it
@@ -124,7 +146,14 @@ work has two halves:
   needs no checked-in fixture — three copies of it substituted into Cyrillic through `ed`'s own
   512-byte temp-file pager, a shell forked out of `ed`'s `!`, and a closed listing of `/tmp`
   proving nothing leaked; it is also the only test that runs a **here-document** under the
-  booted kernel, which nothing had done before) — and `cd kernel && make run` is
+  booted kernel, which nothing had done before) and `kernel/test/fsinfo` (task C4a: a tree of
+  known sizes with a hard link across two directories that `du` charges for **once**, and then
+  the superblock and the whole i-list read off the raw device — with `df`'s free count and
+  `quot`'s per-uid sums diffed against figures the host **recomputes**, out of `b6fsutil -c -v`
+  and an `awk` over `b6fsutil -v -v`, so that neither has to be re-typed when a program joins
+  `/bin`; it is the only test that captures the **console transcript** as part of its oracle,
+  which it must, since a program that measures a filesystem cannot write its answer into one)
+  — and `cd kernel && make run` is
   where you type at it yourself. The drums
   must be attached to exec anything: they are `swapdev`, and `exece()` stages the argument
   list in swap. See `kernel/README.md`, the reference — the settled design, the hardware rules
@@ -156,7 +185,7 @@ thing**, and knowing which one you are touching is most of what the build layout
 - **host tools** — `cmd/*`, compiled by the build machine's C/C++ compiler, run there;
 - **cross-built BESM-6 artifacts** — `kernel/` and `lib/`, compiled by the `b6*` toolchain
   above through `b6_obj()` in `scripts/BesmCross.cmake`;
-- **native BESM-6 programs** — `cmd/{init,getty,login,sh,basename,cat,chgrp,chmod,chown,cp,date,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`, linked against libc by `b6_prog()`
+- **native BESM-6 programs** — `cmd/{init,getty,login,quot,sh,basename,cat,chgrp,chmod,chown,cp,date,df,du,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`, linked against libc by `b6_prog()`
   and staged into `build/rootfs/` (with the static files of `etc/`) for the disk image the
   kernel mounts.
 
@@ -283,7 +312,7 @@ therefore names two archives, **ours first**: `-lc -lruntime`, because `b6ld` sc
 helper calls back into libc. The kernel takes `-lruntime` **alone** — it defines its own
 `printf` in `kernel/prf.c` and uses no other library routine.
 
-### Native BESM-6 programs (`cmd/{init,getty,login,sh,basename,cat,chgrp,chmod,chown,cp,date,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}` + `etc/` → `build/rootfs/`)
+### Native BESM-6 programs (`cmd/{init,getty,login,quot,sh,basename,cat,chgrp,chmod,chown,cp,date,df,du,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}` + `etc/` → `build/rootfs/`)
 
 The third category, and the newest. These are **`cmd/` subdirectories that are not host
 tools**: `cmd/init/init.c` is the Unix v7 `/etc/init`, `cmd/sh/` is S. R. Bourne's v7 shell,
@@ -305,15 +334,21 @@ itself — the first program here that can author text, and so the precondition 
 is eight-bit transparent where v7's refused any file with a byte above `0177`, its `-x`
 encrypting mode is dropped as the one deliberate divergence in the port, and it is the one
 large program on this image that links **no stdio at all** (`putd()` over `write(2)`), which is
-why 1,764 lines come out within twenty-four words of `cat`. Last again,
+why 1,764 lines come out within twenty-four words of `cat`. Then `cmd/df`, `cmd/du` and `cmd/quot`
+(task C4a) are the first three that report on the filesystem rather than change it, and the
+first two here to read a **device**: `df` and `quot` go through `/dev/rmd0` and so through
+`physio()`, whose four alignment conditions are what that task was really about
+(`cmd/df/README.md`). `quot` is the only one of the three in `/etc` rather than `/bin`, being
+section 1M and root-only, and none of the three is setuid — `/dev/rmd0` is mode 0600 because
+that one node is every file's contents. Last again,
 `cmd/getty` and `cmd/login` (kernel task 29b) are the two that make the machine multi-user, and
 they are the only pair here where one execs the other: `init` execs `/etc/getty`, getty execs
 `/bin/login`, login execs the shell, all in one process, which is why a logout is that process
 exiting and `init`'s `multiple()` starting a fresh getty. Neither is setuid, and `login`
 emphatically not — it is *handed* root by getty rather than borrowing it, and the setuid version
 is `su` (task C6). All compiled by the
-`b6*` toolchain and staged into `build/rootfs/` as `etc/init`, `etc/getty` and
-`bin/{sh,basename,cat,chgrp,chmod,chown,cp,date,echo,ed,kill,ln,login,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`. **`mkdir`, `mv` and `rmdir` are setuid
+`b6*` toolchain and staged into `build/rootfs/` as `etc/init`, `etc/getty`, `etc/quot` and
+`bin/{sh,basename,cat,chgrp,chmod,chown,cp,date,df,du,echo,ed,kill,ln,login,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`. **`mkdir`, `mv` and `rmdir` are setuid
 root** on the image, which is a property of [root.manifest](root.manifest) alone (`mode 04755`)
 since nothing under `build/rootfs/` carries a mode; see
 [cmd/mkdir/README.md](cmd/mkdir/README.md) for the general account and

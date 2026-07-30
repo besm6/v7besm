@@ -1,0 +1,19 @@
+fsinfo start
+---du---
+2	/tmp/fs/sub
+6	/tmp/fs
+---du-a---
+1	/tmp/fs/one
+2	/tmp/fs/big
+1	/tmp/fs/sub/two
+2	/tmp/fs/sub
+6	/tmp/fs
+---du-s---
+6	/tmp/fs
+---du-file---
+1	/tmp/fs/one
+---du-bad---
+cannot chdir()
+---end---
+fs
+fsinfo.log

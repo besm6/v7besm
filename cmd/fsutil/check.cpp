@@ -340,6 +340,11 @@ void Checker::pass4_free_list()
     // kernel does not maintain it -- so a mismatch is a warning about the figure
     // `-v' prints, not about the filesystem.
     //
+    // The count itself is not reported here: run() prints it at the foot of a clean run,
+    // out of the freed[] bitmap this loop fills, as `N blocks in use, M free'.  THAT LINE
+    // IS AN ORACLE and not only a summary -- cmd/df on the guest reports the same M by
+    // doing this same walk, and kernel/test/run-fsinfo.sh diffs the two.
+    //
     if (count != fs.sb.tfree && opt.verbose)
         *os << "note: s_tfree says " << fs.sb.tfree << " free blocks, the list holds " << count
             << "\n";

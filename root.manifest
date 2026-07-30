@@ -105,6 +105,14 @@ file /etc/getty         # cmd/getty: the login: prompt, one per enabled line of 
 source ../../rootfs/etc/getty
 mode 0755
 
+# /etc AND NOT /bin, which is v7's placement and the reason the two `ls /bin' expectations
+# in kernel/test did not have to grow for this one.  quot is section 1M: it sweeps the whole
+# i-list off /dev/rmd0, so it needs root and is of no use to anybody else.  NOT setuid, for
+# the reason df is not -- see /bin/df above and cmd/df/README.md.
+file /etc/quot          # cmd/quot -- blocks per uid, by sweeping the i-list off /dev/rmd0
+source ../../rootfs/etc/quot
+mode 0755
+
 file /bin/sh            # cmd/sh: S. R. Bourne's shell
 source ../../rootfs/bin/sh
 mode 0755
@@ -138,6 +146,20 @@ mode 0755
 file /bin/date          # cmd/date -- what /etc/rc prints after the motd; NOT setuid, stime(2)
                         # being suser()-gated, and that is the point
 source ../../rootfs/bin/date
+mode 0755
+
+# The two of task C4a that live in /bin.  Both report in 3072-byte blocks, so their numbers
+# are a sixth of a PDP-11's; /etc/quot is the third and is further down, being root-only.
+# df is NOT setuid and must not become one -- it reads /dev/rmd0, which is mode 0600 because
+# that one node is every file's contents -- so it works for root and nobody else.  du opens
+# no device at all and works for anybody.  cmd/df/README.md is the account of the four
+# alignment rules a raw read here obeys.
+file /bin/df            # cmd/df -- free blocks, by walking the free list off /dev/rmd0
+source ../../rootfs/bin/df
+mode 0755
+
+file /bin/du            # cmd/du -- blocks per directory, by stat(2) and a directory walk
+source ../../rootfs/bin/du
 mode 0755
 
 file /bin/echo          # cmd/echo

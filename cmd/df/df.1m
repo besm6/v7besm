@@ -1,5 +1,5 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
-.TH DF 1M 
+.TH DF 1M
 .SH NAME
 df \- disk free
 .SH SYNOPSIS
@@ -14,7 +14,75 @@ If no file system is specified,
 the free space on all of
 the normally mounted file systems
 is printed.
+.PP
+.B "Note:"
+a
+.I filesystem
+here is the name of a
+.IR device ,
+not of a mount point: there is no
+.IR /etc/mtab ,
+.IR mount (1M)
+not being ported.
+The count is obtained by walking the free list itself, block by block, exactly as the
+kernel's
+.IR alloc ()
+drains it.
+The superblock's
+.I s_tfree
+field is
+.B not
+consulted and must not be: it is dead in this port and nothing maintains it.
+.SH "BLOCKS ARE 3072 BYTES"
+.B "Note:"
+a block on this machine is
+.B 3072
+bytes \- 512 words of 48 bits \- so every number
+.I df
+prints is one sixth of what the same filesystem would have shown on a PDP\-11.
+There is no
+.I BSHIFT
+to go with it; 3072 is not a power of two.
+.IR Ls (1)
+counts the same block in its
+.B \-s
+and
+.B total
+output.
+.SH "SUPER-USER ONLY"
+.B "Note:"
+.I df
+reads the raw disk, and
+.I /dev/rmd0
+is mode 0600 because that one node is the contents of every file on the volume.
+So this program works for the super-user and for nobody else.
+It is deliberately
+.B not
+set-user-id: a set-uid
+.I df
+would hand the whole filesystem to anyone able to think of an offset.
 .SH FILES
-Default file systems vary with installation.
+.I /dev/rmd0
+\- the raw disk, and the default when no
+.I filesystem
+is named.
+There is one EC\-5052 drive of 2000 blocks and there are no partitions; swap is on the
+drums.
+.SH DIAGNOSTICS
+.B "cannot open"
+names a device that could not be read;
+.I df
+goes on to the next argument and exits 0 either way, which is v7's behaviour and is kept.
+.PP
+.B "bad free count"
+and
+.B "bad free block"
+mean the free list is corrupt at the block named, and the number printed up to that point
+is a lower bound rather than an answer.
 .SH "SEE ALSO"
-icheck(1)
+du(1), quot(1M), ls(1)
+.br
+.B "Note:"
+v7's SEE ALSO named
+.IR icheck (1M),
+which is not ported.

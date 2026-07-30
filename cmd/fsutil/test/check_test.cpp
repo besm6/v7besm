@@ -70,6 +70,27 @@ int check(const char *path, std::string *text = nullptr)
     return n;
 }
 
+//
+// The same, with -v, which is a different question: `check()' above leaves Options at its
+// default and so sees none of pass 4's reporting.
+//
+int check_verbose(const char *path, std::string *text)
+{
+    Filesystem fs;
+    fs.open(path, false);
+
+    Options opt;
+    opt.verbose = 1;
+    Checker chk(fs, opt);
+
+    std::ostringstream out;
+    const int n = chk.run(out);
+    *text       = out.str();
+
+    fs.close();
+    return n;
+}
+
 struct Scratch {
     const char *path;
     const char *scratch;
@@ -93,6 +114,41 @@ TEST(Check, FreshImageIsClean)
 
     std::string text;
     EXPECT_EQ(check(img.path, &text), 0) << text;
+}
+
+//
+// A clean `-v' run ends with `N blocks in use, M free', counted out of the bitmaps passes
+// 1 and 4 fill.  THAT LINE IS AN ORACLE AND NOT ONLY A SUMMARY, which is why it is pinned
+// here: cmd/df on the guest reports the same M by draining the free list exactly as
+// pass4_free_list() walks it, and kernel/test/run-fsinfo.sh diffs the two numbers.  Task
+// C4a leans on the format of this line; nothing did before it.
+//
+// M is checked against s_tfree rather than against a literal: this tool writes both, so a
+// literal would only assert how big the fixture happens to be.  That the two agree at all
+// is the second half of the assertion -- a disagreement prints a `note:' and would mean
+// the free list and the bookkeeping had parted company.
+//
+TEST(Check, VerboseReportsTheFreeBlockCount)
+{
+    Scratch img("ck_free.img", "ck_free.dat");
+
+    std::string text;
+    ASSERT_EQ(check_verbose(img.path, &text), 0) << text;
+
+    Filesystem fs;
+    fs.open(img.path, false);
+    const int64_t tfree = fs.sb.tfree;
+    const int64_t isize = fs.sb.isize, fsize = fs.sb.fsize;
+    fs.close();
+
+    // Every data block is either in use or free on a clean image, so the two numbers on
+    // that line have to add up to the data area.
+    const int64_t inuse = fsize - isize - tfree;
+    EXPECT_NE(
+        text.find(std::to_string(inuse) + " blocks in use, " + std::to_string(tfree) + " free\n"),
+        std::string::npos)
+        << text;
+    EXPECT_EQ(text.find("note: s_tfree"), std::string::npos) << text;
 }
 
 //

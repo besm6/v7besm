@@ -33,8 +33,8 @@ single-file programs and 29 directories of larger ones. That tree is **not in th
 **A directory is part of the build when it holds a `CMakeLists.txt`**, and only the ported ones
 do — the ten of task C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`, `mv/`, `rm/`,
 `rmdir/`, `touch/`), the three of C2a (`date/`, `kill/`, `sleep/`), the five of C2b
-(`basename/`, `test/`, `time/`, `tty/`, `yes/`), the one of C3 (`ed/`) and the two of kernel
-task 29b (`getty/`, `login/`) today. That is the only marker;
+(`basename/`, `test/`, `time/`, `tty/`, `yes/`), the one of C3 (`ed/`), the three of C4a
+(`df/`, `du/`, `quot/`) and the two of kernel task 29b (`getty/`, `login/`) today. That is the only marker;
 [../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.
 
 Four things about the copies:
@@ -145,8 +145,9 @@ all call `sbrk` and are the places to expect them.
   consumes no argument** — so it desynchronises every later conversion in the same format string.
   v7 wrote `%D` freely. `ls` had two.
 
-Sources carrying the most `long`: `ps.c` (17), `od.c` (10), `cmp.c` (7), `find.c` (7), `du.c` (5),
-`strip.c` (5), `nm.c` (4), `grep.c` (4).
+Sources carrying the most `long`: `ps.c` (17), `od.c` (10), `cmp.c` (7), `find.c` (7),
+~~`du.c` (5)~~ (**done, task C4a** — all five were `int`), `strip.c` (5), `nm.c` (4),
+`grep.c` (4).
 
 The other direction is worth a glance too: **plain `char` is unsigned here**
 ([../doc/Besm6_Data_Representation.md](../doc/Besm6_Data_Representation.md)), so the
@@ -162,7 +163,9 @@ outright that there cannot be a `BSHIFT`/`BMASK` to go with it. So every `>>9`, 
 that means *a filesystem block* is wrong and becomes a divide or a remainder. (`BWSHIFT` 9 and
 `BWMASK` 0777 exist, and are **word** offsets within a block, which is a different quantity.)
 `ls -s` and its `total` line already count 3072-byte blocks and print a sixth of what a PDP-11
-printed; `df`, `du`, `quot` and `dd` will do the same, and their manual pages must say so.
+printed; **`df`, `du` and `quot` do too since task C4a**, each with a `BLOCKS ARE 3072 BYTES`
+section in its manual page, and `dd` will when it lands. Two of the three met `BSHIFT` as a
+*compile error*, which is the best way to meet it.
 
 A program's *own* file blocking is its own business: `ed`'s temp file is `512`-byte blocks by its
 own choice and stays that way.
@@ -191,6 +194,9 @@ Anything that walks directories — `rm -r`, `du`, `find`, `ncheck`, `dcheck`, `
 | `ls` | 110 | 4,632 | 298 | 2,638 | **7,678** |
 | `login` | 106 | 5,063 | 408 | 1,321 | **6,898** |
 | `ed` | 95 | 4,027 | 50 | 633 | **4,805** |
+| `quot` | 102 | 5,208 | 227 | 4,375 | **9,912** |
+| `du` | 83 | 3,041 | 198 | 3,132 | **6,454** |
+| `df` | 80 | 2,633 | 177 | 2,570 | **5,460** |
 | `cat` | 83 | 2,989 | 165 | 1,544 | **4,781** |
 | `chgrp` | 85 | 3,211 | 344 | 1,236 | **4,876** |
 | `time` | 85 | 3,088 | 340 | 1,041 | **4,554** |
@@ -302,8 +308,16 @@ Two harnesses, and choosing wrong wastes the effort:
   bytes under test are the image's. [sh/test/](sh/test/) is the other shape — a whole shell
   *script* per case — and is what to copy when the thing under test is the shell.
   b6sim **cannot** read a directory (a host directory descriptor refuses `read`, which is why
-  `ls` has no `b6sim` test) and it cannot exec `/bin/…`, because no such path exists on the build
-  machine. Two more limits C2a ran into: **`stime(2)` is a no-op that reports success**, so a
+  `ls` and, since C4a, `du` have no `b6sim` test) and it cannot exec `/bin/…`, because no such
+  path exists on the build machine.
+  **But it can be handed a whole filesystem**, which task C4a found and which nothing had
+  needed: a program that reads a *device* reads a file, and a flat `b6fsutil` image is one, so
+  [df/test/](df/test/) builds a small one at build time and `df` and `quot` walk its real free
+  list and real i-list with no boot. C4c and C4d inherit it.
+  A fourth limit came with that, and it is about the *host* rather than the simulator:
+  **`getpwent(3)` opens the literal `/etc/passwd`**, so under `b6sim` a program that maps a uid
+  to a name reads the build machine's password file and no case may assert what comes back.
+  There is no uid to steer around it — see [df/README.md](df/README.md). Two more limits C2a ran into: **`stime(2)` is a no-op that reports success**, so a
   program that sets global state cannot be asserted there at all; and **`kill(2)` is the build
   machine's own**, so no case may name a pid. And two C2b ran into: a program that **does not
   terminate** cannot be a case at all, however it is invoked, which is why `yes` has no `test/`
@@ -327,8 +341,11 @@ Two harnesses, and choosing wrong wastes the effort:
   another process or a pipe, and `kernel/test/login` (kernel task 29b) for anything that needs a
   terminal's *modes* or a process that is not root's, and `kernel/test/edit` (task C3) for
   anything that must *author* a file rather than merely write to one — it is also the only test
-  that runs a **here-document** under the booted kernel. Each has its own copy of the image at
-  its own volume number; **3086 is the highest used** (`multi` took 3085 and `edit` 3086). All but `login` graft a script onto that copy
+  that runs a **here-document** under the booted kernel — and `kernel/test/fsinfo` (task C4a)
+  for anything that reads a **device**, or that reports about the filesystem as a whole; it is
+  the only one that captures the **console transcript** as part of its oracle, and the only one
+  whose oracles are *recomputed* rather than checked in. Each has its own copy of the image at
+  its own volume number; **3087 is the highest used** (`edit` took 3086 and `fsinfo` 3087). All but `login` graft a script onto that copy
   with `b6fsutil -a`, and `login` is the exception because what it tests is the thing that reads
   what is typed: it types every character it needs.
 
@@ -490,3 +507,42 @@ into how it can be tested, and none was visible before there was something to te
 unlinks it at once (`cmd/sh/io.c`) — and `kernel/test/edit` is built out of seven of them. It
 worked first time, which is the same thing task C2b said about the first pipeline and worth
 writing down for the same reason.
+
+---
+
+## What task C4a taught
+
+`df`, `du` and `quot` are on the image and [../kernel/test/fsinfo.sh](../kernel/test/fsinfo.sh)
+holds them there. They are the first programs here that *measure* the filesystem rather than
+change it, and most of what the port taught is in [df/README.md](df/README.md), which is the
+account of the raw-device path the whole of the rest of C4 will take. Four findings are general.
+
+**Reading a device is not reading a file, and three of the four ways to get it wrong are
+`EFAULT`.** `physio()` and `mdstrategy()` require the buffer to start at byte #0 of a word, the
+count to be a whole number of `BSIZE`s and the buffer's *word address* to be a multiple of 512;
+the fourth condition, a block-aligned seek, is **silent** — `physio()` truncates the offset and
+reads the wrong block. C has no way to ask for the alignment, so the idiom is an over-sized
+`bss` array stepped forward with `(int)ptr`, which is a word address here. **Obeying the rules
+made both programs smaller**, which is worth expecting rather than dreading: `quot`'s 4,096-word
+`itab[256]` disappeared, one block already being `INOPB` inodes.
+
+**An expectation that is a property of the whole image should be recomputed, not checked in.**
+`run-files.sh` diffs `b6fsutil -v -v` against a checked-in `files.modes`, which is right there —
+those modes are what the test set. `df`'s and `quot`'s numbers are not: they move whenever a
+program joins `/bin`, so a checked-in table would be a file somebody has to update for a reason
+unconnected with the test. `run-fsinfo.sh` derives both from the finished image instead. **Ask
+which kind of number an oracle is holding** before writing it down.
+
+**A program that measures a filesystem cannot write its answer into one.** `quot >/tmp/x` counts
+`/tmp/x` at the size it had before `quot`'s output reached it; `df >/tmp/x` samples the free list
+before the block that output needs is allocated. Either report, on disk, disagrees with the disk
+by its own size. Both write to `/dev/console` instead, and `run-fsinfo.sh` captures the
+transcript — which no test here had done. Anything self-referential inherits this.
+
+**Two silent parsing traps on the host side, and the first run hit both.** The console runs with
+`XTABS`, so a tab a program emits reaches the transcript as spaces and a report cannot be split
+on one. And `b6fsutil -v -v` is *two* reports — the superblock summary, then the tree — so an
+`awk` that does not skip the preamble reads `Magic: 0123456701234` as an object with no third
+field, invents a uid-0 entry, and comes out one file ahead of the guest. **The guest was right
+and the oracle was wrong**, which is the failure mode a recomputing oracle has and a checked-in
+one does not; budget for debugging the oracle, not just the program.

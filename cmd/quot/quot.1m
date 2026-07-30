@@ -20,6 +20,13 @@ The following options are available:
 Cause the pipeline
 .B "ncheck filesystem | sort +0n | quot \-n filesystem
 to produce a list of all files and their owners.
+.B "Note:"
+neither
+.IR ncheck (1M)
+nor
+.IR sort (1)
+is on this machine yet, so this mode has no producer for its input here; it reads whatever
+standard input offers, in that format.
 .TP
 .B \-c
 Print three columns giving file size in blocks, number of
@@ -28,11 +35,63 @@ in that size or smaller file.
 .TP
 .B \-f
 Print count of number of files as well as space owned by each user.
+.SH "BLOCKS ARE 3072 BYTES"
+.B "Note:"
+a block on this machine is
+.B 3072
+bytes \- 512 words of 48 bits \- so every number
+.I quot
+prints is one sixth of what the same filesystem would have shown on a PDP\-11.
+There is no
+.I BSHIFT
+to go with it; 3072 is not a power of two.
+.IR Df (1M),
+.IR du (1)
+and
+.IR ls (1)
+report in the same block.
+.SH "SUPER-USER ONLY"
+.B "Note:"
+.I quot
+sweeps the raw disk's i\-list, and
+.I /dev/rmd0
+is mode 0600 because that one node is the contents of every file on the volume.
+So this program works for the super-user and for nobody else.
+It is deliberately
+.B not
+set-user-id.
 .SH FILES
-Default file system varies with system.
+.I /dev/rmd0
+\- the raw disk, and the default when no
+.I filesystem
+is named.
+There is one EC\-5052 drive and there are no partitions.
 .br
-/etc/passwd to get user names
+.I /etc/passwd
+to get user names.
+A uid with no entry there is reported as
+.BI # n\fR.
+.SH DIAGNOSTICS
+.B "cannot open"
+names a device that could not be read;
+.I quot
+goes on to the next argument and exits 0 either way, which is v7's behaviour and is kept.
 .SH "SEE ALSO"
-ls(1), du(1)
+ls(1), du(1), df(1M)
 .SH BUGS
 Holes in files are counted as if they actually occupied space.
+.br
+.B "Note:"
+and, for the same reason, a file's indirect blocks are
+.B not
+counted: the figure comes from the inode's
+.I size
+rather than from its addresses.
+.IR Icheck (1M)
+would count what is really allocated, and is not ported.
+.br
+.B "Note:"
+uids at or above 300 are not reported at all, and the totals are not cleared between
+filesystems, so
+.B "quot a b"
+gives running sums.  Both are v7's, and neither can arise here: there is one filesystem.

@@ -21,6 +21,15 @@
 #ifndef _SYS_INO_H
 #define _SYS_INO_H
 
+// sys/param.h and sys/types.h are INCLUDED, not assumed of the caller -- sys/dir.h's
+// precedent, and for its reason: this file cannot compile without either, the struct
+// naming NADDR and the scalar typedefs and the assertions below naming NBPW, INOPB and
+// BSIZE.  Requiring an include order is requiring something no compiler checks.  It is
+// also the only way that order survives clang-format, which sorts a block of <> includes
+// alphabetically and so puts this header ahead of the two it depends on.
+#include <sys/param.h>
+#include <sys/types.h>
+
 struct dinode {
     int di_mode;            // 0: mode and type of file
     int di_nlink;           // 1: number of links to file

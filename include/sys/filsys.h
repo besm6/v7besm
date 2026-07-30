@@ -29,6 +29,15 @@
 #ifndef _SYS_FILSYS_H
 #define _SYS_FILSYS_H
 
+// sys/param.h and sys/types.h are INCLUDED, not assumed of the caller -- sys/dir.h's
+// precedent, and for its reason: this file cannot compile without either, the struct
+// naming NICFREE, NICINOD and the scalar typedefs and the assertion below naming BSIZE.
+// Requiring an include order is requiring something no compiler checks.  It is also the
+// only way that order survives clang-format, which sorts a block of <> includes
+// alphabetically and so puts this header ahead of the two it depends on.
+#include <sys/param.h>
+#include <sys/types.h>
+
 struct filsys {
     // Identity and geometry: checked at mount by sbcheck(), kernel/alloc.c.
     int s_magic; // 0: FS_MAGIC

@@ -212,14 +212,19 @@ endfunction()
 # ---------------------------------------------------------------------------------------
 # Register one b6sim case for a program built by b6_prog().
 #
-#   b6_progtest(<prog> <case>)
+#   b6_progtest(<prog> <case> [DEST <path under ${B6_ROOTFS}>])
 #
-# Runs the STAGED program -- ${B6_ROOTFS}/bin/<prog>, the very bytes that go on the disk
-# image -- under b6sim with the arguments in <case>.args, and diffs its combined output
-# against <case>.expected, checking <case>.status on the way.  ../run-prog-test.sh is the
-# harness and its header states what may and may not be asserted there; lib/test's
+# Runs the STAGED program -- ${B6_ROOTFS}/bin/<prog> by default, the very bytes that go on
+# the disk image -- under b6sim with the arguments in <case>.args, and diffs its combined
+# output against <case>.expected, checking <case>.status on the way.  ../run-prog-test.sh is
+# the harness and its header states what may and may not be asserted there; lib/test's
 # b6_libtest()/run-test.sh is the model, and cmd/README.md §9 the reason there are two
 # worlds at all.
+#
+# DEST names the staged path when it is not bin/<prog>, and must be the same string the
+# program's own b6_prog() call was given.  Task C4a's quot(1) is the first to need it -- it
+# is /etc/quot, being a section-1M program that reads the raw device -- and the rest of C4
+# (mkfs, fsck, icheck, dcheck, ncheck, clri, mount, umount) is /etc too.
 #
 # The ctest name is cmd_<prog>_<case> and the label is `cmd', so `ctest -L cmd' is the
 # userland regression corpus without a two-minute boot.  Files live in cmd/<prog>/test/.
@@ -230,9 +235,13 @@ endfunction()
 # absent), all in cmd/<prog>/test/.  See scripts/run-prog-test.sh, which is the harness, and
 # cmd/README.md SS9 for which of the two worlds a case belongs in.
 function(b6_progtest prog case)
+    cmake_parse_arguments(T "" "DEST" "" ${ARGN})
+    if(NOT T_DEST)
+        set(T_DEST bin/${prog})
+    endif()
     add_test(NAME cmd_${prog}_${case}
         COMMAND sh ${B6_SCRIPTS_DIR}/run-prog-test.sh
-                ${B6SIM} ${CMAKE_CURRENT_SOURCE_DIR} ${B6_ROOTFS}/bin/${prog} ${case}
+                ${B6SIM} ${CMAKE_CURRENT_SOURCE_DIR} ${B6_ROOTFS}/${T_DEST} ${case}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(cmd_${prog}_${case} PROPERTIES LABELS cmd)
     # `make test' builds build_tests and nothing else, so the program the case runs has to

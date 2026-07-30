@@ -1,0 +1,60 @@
+# The fixture filesystem df's and quot's b6sim cases report on -- task C4a.
+#
+# NOT AN IMAGE ANYTHING BOOTS.  It exists because df(1) and quot(1) read a FILESYSTEM, and
+# a flat b6fsutil image is an ordinary host file, so those two are the first programs here
+# that can be tested under b6sim against real on-disk structure rather than only for their
+# argument handling.  ../../ls/README.md's limitation -- b6sim cannot read a directory --
+# is what keeps du(1) out of that world; neither of these reads one.
+#
+# ../../../root.manifest is the real one and this is deliberately nothing like it: no
+# device nodes (b6fsutil needs no kernel to make them, but nothing here looks at one), no
+# programs, and 200 blocks rather than 2000.  What it has instead is FILE SIZES CHOSEN FOR
+# THE ARITHMETIC, since a block is 3072 bytes and every number both programs print is a
+# division by it:
+#
+#   /small       64 bytes -- well inside one block
+#   /mid       3072 bytes -- EXACTLY one block, the off-by-one either program could make
+#   /big       9216 bytes -- three blocks, and DELIBERATELY still direct: NADDR is 8 with
+#                            six direct, and an indirect block is one quot does not count,
+#                            di_size being what it divides.  That gap is icheck(1)'s
+#                            question, task C4e, and this fixture does not prejudge it
+#   /other     1536 bytes -- half a block
+#   /d/nested   128 bytes -- and a directory to reach it through
+#
+# THE THREE OWNERS ARE THE POINT OF THE quot CASES.  0 is root, which is uid 0 on every
+# host that has ever run this build, so `quot' may print the name.  201 and 202 are in no
+# host /etc/passwd, so quot's `#%d' fallback prints the number -- which is the only way a
+# per-uid report can be diffed under a harness whose getpwent(3) reads THE BUILD MACHINE's
+# password file.  cmd/quot/test/CMakeLists.txt says the same thing from the other end.
+#
+# The sources are generated at configure time into fsimg.d/ by CMakeLists.txt beside this
+# file -- they are runs of one 64-byte line, so nothing binary is checked in -- and the
+# paths below resolve against b6fsutil's WORKING_DIRECTORY, which is the test's build
+# directory, exactly as ../../../root.manifest's resolve against kernel/test's.
+
+default
+owner 0
+group 0
+dirmode 0755
+filemode 0644
+
+dir /d
+
+file /small
+source fsimg.d/small
+
+file /mid
+owner 201
+source fsimg.d/mid
+
+file /big
+owner 201
+source fsimg.d/big
+
+file /other
+owner 202
+source fsimg.d/other
+
+file /d/nested
+owner 202
+source fsimg.d/nested

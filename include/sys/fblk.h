@@ -11,6 +11,15 @@
 #ifndef _SYS_FBLK_H
 #define _SYS_FBLK_H
 
+// sys/param.h and sys/types.h are INCLUDED, not assumed of the caller -- sys/dir.h's
+// precedent, and for its reason: this file cannot compile without either, the struct
+// naming NICFREE and daddr_t and the assertion below naming BSIZE.  Requiring an include
+// order is requiring something no compiler checks.  It is also the only way that order
+// survives clang-format, which sorts a block of <> includes alphabetically and so puts
+// this header ahead of the two it depends on.
+#include <sys/param.h>
+#include <sys/types.h>
+
 struct fblk {
     int df_nfree;
     daddr_t df_free[NICFREE];

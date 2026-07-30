@@ -198,6 +198,7 @@ get_filename_component(ROOT_MANIFEST ${CMAKE_CURRENT_SOURCE_DIR}/../../root.mani
 set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/init
     ${B6_ROOTFS}/etc/getty
+    ${B6_ROOTFS}/etc/quot
     ${B6_ROOTFS}/etc/group
     ${B6_ROOTFS}/etc/motd
     ${B6_ROOTFS}/etc/passwd
@@ -212,6 +213,8 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/chown
     ${B6_ROOTFS}/bin/cp
     ${B6_ROOTFS}/bin/date
+    ${B6_ROOTFS}/bin/df
+    ${B6_ROOTFS}/bin/du
     ${B6_ROOTFS}/bin/echo
     ${B6_ROOTFS}/bin/ed
     ${B6_ROOTFS}/bin/kill
@@ -527,6 +530,32 @@ if(BESM6)
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(edit PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
+
+    # fsinfo -- THE GUEST MEASURING ITS OWN FILESYSTEM, on its own volume (3087).  Task C4a,
+    # and the question is one none of the tests above can ask: every one of them asks what
+    # the guest can DO to the filesystem and then asks the HOST whether the result is still
+    # one.  This asks whether the guest can say anything about the store it is living on --
+    # df(1) counting the free list off the raw device, du(1) walking a tree, quot(1)
+    # sweeping the whole i-list -- and nothing before it could.
+    #
+    # What needs a kernel here is the RAW DEVICE PATH.  The cmd_df_* and cmd_quot_* cases
+    # next door run the same bytes against a fixture filesystem under b6sim in a tenth of a
+    # second, but b6sim's read(2) is the host's, so none of the four alignment rules
+    # physio() and mdstrategy() impose exists there -- cmd/df/README.md is the account.  du
+    # cannot run there at all, reading directories as ls(1) does.
+    #
+    # TWO OF ITS FOUR ORACLES RECOMPUTE RATHER THAN REMEMBER, which is the reusable half of
+    # this task and the answer to a problem run-files.sh's checked-in files.modes has: df's
+    # and quot's numbers are about the WHOLE image and move whenever a program joins /bin.
+    # So they are not checked in -- the host works them out again from the finished image,
+    # `b6fsutil -c -v' for the free count and an awk over `b6fsutil -v -v' for the per-uid
+    # sums.  It also captures the CONSOLE, which no test here did before, because a program
+    # that measures the filesystem cannot write its answer into it without changing it.
+    add_test(NAME fsinfo
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-fsinfo.sh
+                ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(fsinfo PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
     # login -- MULTI-USER, on its own volume (3084).  Task 29b, and the question is a fifth
     # one: everything above types at the single-user shell init hands out, and this one types
