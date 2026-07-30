@@ -17,8 +17,13 @@ work has two halves:
   user mode**, execs `/etc/init` — the real v7 one — and **gives you a shell**: `/bin/sh`
   prompts with `# ` on the console, runs `ls`, `pwd`, `cat` and `echo` off the disk, honours
   the kernel's erase, kill and `^D`, and on `^D` cycles back through `/etc/rc` — which prints
-  the motd and then the **date**, a literal to the minute because the boot clock is the image's
-  own `-T` stamp — to a fresh prompt. It also **writes**: create files, make and remove directories with a **setuid-root**
+  the **date**, a literal to the minute because the boot clock is the image's
+  own `-T` stamp — to a fresh prompt. That prompt no longer arrives unannounced: `init`'s
+  `single()` says which mode the machine is in and what `^D` does, a divergence from a v7
+  whose operator had just typed the boot line by hand (`cmd/init/README.md`). The motd is
+  `login(1)`'s alone since task 29b; `/etc/rc` cat'd it to the console until it became the
+  second copy within a second or two, and the wording of the banner that replaced it is
+  constrained by every `expect` in `kernel/test` — no `#`, and no line ending in `.`. It also **writes**: create files, make and remove directories with a **setuid-root**
   `mkdir`/`rmdir` (`ISUID` really does change a uid at exec — `lib/test/suidt` drops to uid 7
   and proves it), `sync`, and the image fscks clean. And it **rearranges** what it wrote:
   `cp`, `ln`, `rm` — `rm -r` execing that same setuid `/bin/rmdir` — and a `mv` that is the
@@ -129,7 +134,7 @@ work has two halves:
   address 0 being readable there, and which here dereferences word 0.
   Eleven tests
   guard that ladder — `kernel/test/boot` (the prompt appears), `kernel/test/console` (a typed
-  dialogue with the shell, and the only one that reaches `/etc/rc`, whose motd and date it
+  dialogue with the shell, and the only one that reaches `/etc/rc`, whose date it
   asserts, ending on the `login:` the first getty puts there — **currently `DISABLED`**, since it
   fails about one run in three for reasons that are the simulator's rather than the kernel's;
   `kernel/TODO.md` task 35 owns it), `kernel/test/login` (that prompt

@@ -450,8 +450,10 @@ in those words. Claiming more than the fix does is worse than carrying the bug.
 
 C2a put `date`, `kill` and `sleep` on the image and C2b `basename`, `test`, `time`, `tty` and
 `yes`; [kernel/test/utils.sh](../kernel/test/utils.sh) holds all eight. C2c then spent one of
-them: [../etc/rc](../etc/rc) prints the date now as well as the motd, which is the whole of what
-the boot script was waiting for from this task. Five findings outlive it, and three of them are
+them: [../etc/rc](../etc/rc) prints the date now, which is the whole of what the boot script was
+waiting for from this task. (It printed the motd as well until task 29b gave the system a
+`login(1)` that prints it per session; the boot script's copy was then the second on the console
+within a second or two, and went.) Five findings outlive it, and three of them are
 about this machine rather than about any program.
 
 **An exit status above 127 does not survive `wait(2)`.** A status is `(code << 8)` and it comes

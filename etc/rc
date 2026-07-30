@@ -1,15 +1,5 @@
 # /etc/rc -- the boot script, run by /etc/init as sh /etc/rc.
-#
-# THERE IS NO TERMINAL HERE.  runcom in cmd/init/init.c gives this script
-# descriptors 0, 1 and 2 on the root DIRECTORY, which can be neither read
-# nor written, so every line meant to be seen must redirect to /dev/console
-# for itself.
-#
-# The hash is a real comment: this shell has one, which v7's had not -- see
-# cmd/sh/README.md.  So this file no longer has to be written in `:' lines
-# whose words are still parsed.
 
-cat /etc/motd >/dev/console
 date >/dev/console
 
 # WHAT THE DATE SAYS, AND WHY IT IS THE SAME EVERY TIME.  This machine has no
@@ -17,8 +7,7 @@ date >/dev/console
 # seeds `time' from the root superblock's s_time -- and b6fsutil stamps that
 # with -T ROOTTIME when it builds the image (kernel/test/CMakeLists.txt).  On a
 # build image this line therefore prints `Sat Jul 25 08:23:0X GMT 2026', and
-# the seconds are the only field the boot drift can move: everything left of
-# them is a literal, and 08:23:00 is 37 seconds clear of a minute roll.
+# the seconds are the only field the boot drift can move.
 #
 # WHICH TEST SEES IT is kernel/test/console and only that one.  /etc/rc does
 # not run until the first shell has exited (cmd/init/init.c: shutdown, single,
@@ -34,8 +23,8 @@ date >/dev/console
 # rm left that list with task C1b, and so did cp, ln and mv -- but the only
 # line of the v7 rc that used rm cleared /tmp of an editor's leftovers, and
 # THE EDITOR HAS ARRIVED: task C3 put ed on the image, whose temp file is
-# /tmp/e<pid><letter>, and the motd two lines up has always claimed that /tmp
-# is cleared at boot.  So `rm -f /tmp/*' is a line this file now wants.
+# /tmp/e<pid><letter>, and /etc/motd has always claimed that /tmp is cleared at
+# boot.  So `rm -f /tmp/*' is a line this file now wants.
 #
 # What it is waiting on is not ed but an ASSERTION.  cmd/README.md SS7 step 4
 # gives a line in this script exactly one home for one -- kernel/test/console,

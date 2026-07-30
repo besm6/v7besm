@@ -35,7 +35,7 @@
 // It IS the image's /etc/init since task 25b, and the boot reaches /bin/sh's root prompt.
 // kernel/test/boot asserts that prompt; kernel/test/console types at the shell and then
 // sends ^D, which is what drives one whole turn of the loop above -- the shell exits,
-// runcom() runs /etc/rc, the motd appears and single() prompts again.
+// runcom() runs /etc/rc, the boot date appears and single() prompts again.
 //
 // THE ONE DIVERGENCE IN BEHAVIOUR is the banner single() writes ahead of that prompt; see
 // `banner' below for why a port that boots itself needs one where v7 did not.

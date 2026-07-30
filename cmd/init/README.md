@@ -86,7 +86,8 @@ It **is the image's `/etc/init`** (task 25b). Under the real kernel it forks, op
 shell's root prompt, `# `, and that prompt is what [`kernel/test/boot`](../../kernel/test/boot.ini.in)
 asserts. [`kernel/test/console`](../../kernel/test/console.ini) goes a step further and sends `^D`
 at the shell, which drives one whole turn of the loop: the shell exits, `runcom()` runs
-`/etc/rc`, the motd appears, and `single()` prompts again.
+`/etc/rc`, the boot date appears, and — since there is an `/etc/ttys` now — `merge()` puts a
+getty on each Consul rather than `single()` prompting again.
 
 Getting here needed one thing below this program: **the kernel stack was not big enough to run
 the real shell**, and booting it wrapped `r15` past `0100000` into the interrupt vectors. The
