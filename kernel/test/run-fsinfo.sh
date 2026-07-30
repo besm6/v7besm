@@ -77,11 +77,18 @@ mkdir fsinfo.out
 # Oracle 2.  The guest printed the same number twice -- once from its default device list
 # and once from an explicit /dev/rmd0 -- and both must equal the host's.
 #
-want=$(sed -n 's/^[0-9]* blocks in use, \([0-9]*\) free$/\1/p' fsinfo.check)
-if [ -z "$want" ]; then
+# THE TWO SIDES ARE IN DIFFERENT UNITS, deliberately.  b6fsutil counts FILESYSTEM blocks --
+# it is an inspector, and the rest of its report is on-disk block numbers -- while df(1M)
+# reports the 1024-byte block cmd/README.md SS4 describes, KBPB of them per filesystem block.
+# Converting here, once, in the place that already knows both sides, is better than making
+# b6fsutil mix units inside one report.
+KBPB=3
+blocks=$(sed -n 's/^[0-9]* blocks in use, \([0-9]*\) free$/\1/p' fsinfo.check)
+if [ -z "$blocks" ]; then
     echo "run-fsinfo.sh: b6fsutil -c -v printed no block accounting -- see fsinfo.check" >&2
     exit 1
 fi
+want=$((blocks * KBPB))
 # The console has CR line endings; strip them before matching.
 got=$(tr -d '\r' <fsinfo.console |
       sed -n '/^---df---$/,/^---quot---$/s/^\/dev\/rmd0 \([0-9]*\)$/\1/p')
@@ -91,11 +98,12 @@ if [ -z "$got" ]; then
 fi
 for n in $got; do
     if [ "$n" != "$want" ]; then
-        echo "run-fsinfo.sh: df says $n free blocks, the host's free-list walk says $want" >&2
+        echo "run-fsinfo.sh: df says $n free 1K-blocks, the host's free-list walk says" \
+             "$want ($blocks filesystem blocks x $KBPB)" >&2
         exit 1
     fi
 done
-echo "run-fsinfo.sh: df and b6fsutil agree on $want free blocks (from $(echo $got | wc -w | tr -d " ") df runs)"
+echo "run-fsinfo.sh: df and b6fsutil agree on $want free 1K-blocks ($blocks filesystem blocks) from $(echo $got | wc -w | tr -d " ") df runs"
 
 #
 # Oracle 3.  quot -f prints `blocks<TAB>files<TAB>name', sorted by blocks; the host's table
@@ -153,7 +161,11 @@ tr -d '\r' <fsinfo.console |
             u = o[1] + 0
             if (u >= 300)                       # quot ignores uids at or above NUID
                 next
-            blocks[u] += int((size + 3071) / 3072)
+            # ceil into FILESYSTEM blocks, then out into the reported unit -- the same
+            # two steps, in the same order, that quot makes.  3072 is the block on the
+            # disk and 3 is KBPB; neither is the other.  (No apostrophes in here: the awk
+            # program is single-quoted and one would end it.)
+            blocks[u] += int((size + 3071) / 3072) * 3
             files[u]++
         }
         END {

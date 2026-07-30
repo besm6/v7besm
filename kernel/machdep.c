@@ -76,14 +76,14 @@ void startup()
     // page of the pool is the u-area home of proc[0], which main() claims
     // right after us, so the pool proper starts one page higher.  Only USIZE
     // is subtracted, not the whole u-area: the overflow page is nobody's home.
-    printf("phys mem  = %d kbytes\n", (phymem * NBPW) >> 10);
+    printf("phys mem  = %d kbytes\n", phymem * NBPW / KBYTE);
     maxmem = phymem - (NPAGE * PGSZ + USIZE);
     mfree(coremap, maxmem, NPAGE * PGSZ + USIZE);
     // Print before the clamp below: past it maxmem means core per process.
-    printf("user mem  = %d kbytes\n", (maxmem * NBPW) >> 10);
+    printf("user mem  = %d kbytes\n", maxmem * NBPW / KBYTE);
     if (MAXMEM < maxmem)
         maxmem = MAXMEM;
-    printf("swap size = %d kbytes\n", (nswap * BSIZE) >> 10);
+    printf("swap size = %d kbytes\n", nswap * BSIZE / KBYTE);
     mfree(swapmap, nswap, 1);
     swplo--;
 }

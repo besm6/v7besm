@@ -41,11 +41,11 @@ function(fsimg_file name nlines)
 endfunction()
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fsimg.d)
-fsimg_file(small 1)     #    64 bytes -- inside one block
-fsimg_file(mid 48)      #  3072 bytes -- exactly one block
-fsimg_file(big 144)     #  9216 bytes -- three, all direct
-fsimg_file(other 24)    #  1536 bytes -- half a block
-fsimg_file(nested 2)    #   128 bytes -- inside one, under a directory
+fsimg_file(small 1)     #    64 bytes -- 1 block, reported as 3
+fsimg_file(mid 48)      #  3072 bytes -- exactly 1 block, reported as 3: the off-by-one
+fsimg_file(big 144)     #  9216 bytes -- 3 blocks, all direct, reported as 9
+fsimg_file(other 24)    #  1536 bytes -- half a block, so 1, reported as 3
+fsimg_file(nested 2)    #   128 bytes -- 1 block under a directory, reported as 3
 
 # The manifest's `source' paths resolve against the WORKING_DIRECTORY below, which is why
 # fsimg.d/ is generated into the build tree and named relatively -- the same arrangement
@@ -64,5 +64,7 @@ if(TARGET build_tests)
     add_dependencies(build_tests df_fsimg)
 endif()
 
-b6_progtest(df image)   # the free list of a real filesystem, walked and counted
+b6_progtest(df image)   # the free list of a real filesystem, walked and counted -- in the
+                        # 1024-byte block df REPORTS in, so 555 where the image has 185
+                        # free filesystem blocks.  b6fsutil -v says the latter.
 b6_progtest(df nodev)   # the diagnostic, and that v7's df still exits 0 after it

@@ -9,8 +9,13 @@
 // which is what separates it from df(1) and quot(1) beside it -- see ../df/README.md for
 // what those two had to learn about the raw disk, none of which applies here.
 //
-// A BLOCK IS 3072 BYTES HERE, so every number this prints is a sixth of what a PDP-11
-// printed.  du.1 says so; ../README.md SS4 is the rule.
+// A BLOCK IS 1024 BYTES IN WHAT THIS PRINTS, and 3072 in what it counts.  The filesystem's
+// block is BSIZE == 3072; this reports KBPB == 3 of them per block (sys/param.h), so that a
+// number means something without knowing BSIZE.  Two consequences worth expecting: every
+// count is a MULTIPLE OF 3, the smallest thing that can be allocated being one 3072-byte
+// block; and a number is half a PDP-11's rather than a sixth, v7's block having been 512
+// bytes.  THE MULTIPLY IS AT THE printf and nowhere else -- every count in this file is a
+// filesystem block until it is printed.  du.1 says so; ../README.md SS4 is the rule.
 //
 // WHAT THE PORT HAD TO CHANGE, beyond the mechanical C11 pass.  Three of these are about
 // one fact -- a struct direct is FOUR WORDS, 24 bytes, where v7's was 16 -- and the first
@@ -81,6 +86,7 @@
 // them tile a block.
 _Static_assert(sizeof(struct direct) == DIRENTSZ, "a directory entry must be DIRENTSZ bytes");
 _Static_assert(BSIZE % sizeof(struct direct) == 0, "entries must tile a block");
+_Static_assert(BSIZE % KBYTE == 0, "a block must be a whole number of reported blocks");
 
 #define EQ(x, y) (strcmp(x, y) == 0)
 #define ML       1000 // distinct multiply-linked files remembered; du.1's second BUG
@@ -144,7 +150,7 @@ int main(int argc, char **argv)
 
         blocks = descend(path, *np ? np : ".");
         if (Sflag)
-            printf("%d\t%s\n", blocks, path);
+            printf("%d\t%s\n", blocks * KBPB, path);
     } while (++i < argc);
 
     exit(0);
@@ -188,7 +194,7 @@ static int descend(char *np, char *fname)
 
     if ((Statb.st_mode & S_IFMT) != S_IFDIR) {
         if (Aflag)
-            printf("%d\t%s\n", blocks, np);
+            printf("%d\t%s\n", blocks * KBPB, np);
         return blocks;
     }
 
@@ -258,7 +264,7 @@ static int descend(char *np, char *fname)
     }
     np[endoff] = '\0';
     if (!Sflag)
-        printf("%d\t%s\n", blocks, np);
+        printf("%d\t%s\n", blocks * KBPB, np);
 ret:
     if (dir)
         close(dir);

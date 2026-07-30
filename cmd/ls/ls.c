@@ -19,8 +19,15 @@
 //
 // A BLOCK IS BSIZE == 3072 BYTES.  nblock() was `(size+511)>>9', 512-byte blocks, and there
 // is no BSHIFT/BMASK to replace the shift with -- 3072 is not a power of two, and
-// sys/param.h says so in as many words.  It is a divide now.  CONSEQUENCE: `ls -s' and the
-// `total' line count 3072-byte blocks, so the numbers are a sixth of what a PDP-11 printed.
+// sys/param.h says so in as many words.  It is a divide now.
+//
+// BUT `ls -s' AND `total' REPORT IN 1024-BYTE BLOCKS, not in that one: they print KBPB == 3
+// of them per filesystem block (sys/param.h), which is what df(1M), du(1) and quot(1M) do
+// too, so that a number means something without knowing BSIZE.  Two consequences worth
+// expecting: every count is a MULTIPLE OF 3, the smallest thing that can be allocated being
+// one 3072-byte block; and a number is now half a PDP-11's rather than a sixth, v7's block
+// having been 512 bytes.  The multiply is at the printf -- nblock() and tblocks stay in
+// filesystem blocks.
 //
 // ISARG IS S_IFREG.  v7 packed its own flag 0100000 into lflags beside `st_mode & ~S_IFMT'
 // and got away with it because lflags was a 16-bit short, so the complement cleared the
@@ -266,7 +273,7 @@ int main(int argc, char *argv[])
             if (fflg == 0)
                 qsort(slastp, lastp - slastp, sizeof *lastp, compar);
             if (lflg || sflg)
-                printf("total %d\n", tblocks);
+                printf("total %d\n", tblocks * KBPB);
             for (ep1 = slastp; ep1 < lastp; ep1++)
                 pentry(*ep1);
         } else
@@ -290,7 +297,7 @@ static void pentry(struct lbuf *ap)
     if (iflg)
         printf("%5d ", p->lnum);
     if (sflg)
-        printf("%4d ", nblock(p->lsize));
+        printf("%4d ", nblock(p->lsize) * KBPB);
 
     if (lflg) {
         putchar(p->ltype);
@@ -372,9 +379,12 @@ static int getname(int uid, char *buf, int bufsz)
 }
 
 //
-// A byte count in blocks, rounded up.  A block is BSIZE == 3072 bytes here, which is not a
-// power of two, so this is a divide where v7 had a shift.  See the header: the numbers `ls -s'
-// prints are therefore a sixth of a PDP-11's.
+// A byte count in FILESYSTEM blocks, rounded up.  A block is BSIZE == 3072 bytes here, which
+// is not a power of two, so this is a divide where v7 had a shift.
+//
+// It is deliberately not in the unit `ls -s' prints, and tblocks accumulates what it returns:
+// the multiply by KBPB happens at the two printfs and nowhere else, so that this function and
+// that accumulator both keep meaning what their names say.  See the header.
 //
 static int nblock(off_t size)
 {

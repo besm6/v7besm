@@ -165,6 +165,34 @@ for the meaning of this mode.
 When the sizes of the files in a directory
 are listed, a total count of blocks,
 including indirect blocks is printed.
+.SH "BLOCKS ARE 1024 BYTES"
+.B "Note:"
+the block
+.B \-s
+and the
+.B total
+line count in is
+.B 1024
+bytes.
+It is not this machine's filesystem block, which is
+.B 3072
+bytes \- 512 words of 48 bits \- and is three of them.
+.PP
+So every size
+.B \-s
+prints is a
+.B multiple of three,
+the smallest thing that can be allocated being one 3072-byte block: a one-byte file costs
+three.
+And the numbers are
+.B half
+what a PDP\-11 printed, v7 having counted in 512-byte blocks.
+.PP
+.IR Df (1M),
+.IR du (1)
+and
+.IR quot (1M)
+report in the same block.
 .SH FILES
 /etc/passwd to get user ID's for
 `ls \-l'.

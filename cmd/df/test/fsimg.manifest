@@ -9,17 +9,28 @@
 # ../../../root.manifest is the real one and this is deliberately nothing like it: no
 # device nodes (b6fsutil needs no kernel to make them, but nothing here looks at one), no
 # programs, and 200 blocks rather than 2000.  What it has instead is FILE SIZES CHOSEN FOR
-# THE ARITHMETIC, since a block is 3072 bytes and every number both programs print is a
-# division by it:
+# THE ARITHMETIC: every number both programs print is a ceil-divide by the 3072-byte
+# filesystem block, multiplied by KBPB into the 1024-byte block they REPORT in
+# (../../README.md SS4).  The sizes probe the divide; the multiply is why the third column
+# below is always three times the second.
 #
-#   /small       64 bytes -- well inside one block
-#   /mid       3072 bytes -- EXACTLY one block, the off-by-one either program could make
-#   /big       9216 bytes -- three blocks, and DELIBERATELY still direct: NADDR is 8 with
-#                            six direct, and an indirect block is one quot does not count,
-#                            di_size being what it divides.  That gap is icheck(1)'s
-#                            question, task C4e, and this fixture does not prejudge it
-#   /other     1536 bytes -- half a block
-#   /d/nested   128 bytes -- and a directory to reach it through
+#                      bytes   blocks   reported
+#   /small                64        1          3   well inside one block
+#   /mid                3072        1          3   EXACTLY one block: the off-by-one
+#   /big                9216        3          9   three blocks, and DELIBERATELY still
+#                                                  direct -- NADDR is 8 with six direct,
+#                                                  and an indirect block is one quot does
+#                                                  not count, di_size being what it
+#                                                  divides.  That gap is icheck(1)'s
+#                                                  question, task C4e, and this fixture
+#                                                  does not prejudge it
+#   /other              1536        1          3   half a block, and so a whole one
+#   /d/nested            128        1          3   and a directory to reach it through
+#
+# /mid IS THE ONE THAT MATTERS.  It is exactly one block, so a ceil-divide that was off by
+# one either way moves it to 0 or 2 and the histogram changes shape.  Note it reports 3,
+# the same as /small's 64 bytes: a reported block is smaller than an allocated one, so the
+# smallest non-empty file still costs three.
 #
 # THE THREE OWNERS ARE THE POINT OF THE quot CASES.  0 is root, which is uid 0 on every
 # host that has ever run this build, so `quot' may print the name.  201 and 202 are in no

@@ -102,7 +102,13 @@ work has two halves:
   And, task C4a, **it can measure the store it lives on**: `df`, `du` and `quot` are on the
   image, the first programs here that report on the filesystem rather than change it — `df`
   counting the free list by draining it exactly as the kernel's `alloc()` does, `du` walking a
-  tree and charging for a hard link once, `quot` sweeping the whole i-list by owner. Two of the
+  tree and charging for a hard link once, `quot` sweeping the whole i-list by owner. All three
+  **report in 1024-byte blocks**, and so does `ls -s` since the same task: they count the
+  filesystem's 3072-byte block and print `KBPB` — three — of them per block at the `printf`
+  and nowhere else, so a number means something without knowing `BSIZE`, every number is a
+  multiple of three, and a number is half a PDP-11's rather than a sixth. `quot -c` is what
+  fixes *where* the multiply goes: its histogram is indexed by a block count, so converting at
+  the source would cut what the table covers to a third. Two of the
   three go through the **raw disk**, and that is what the task was really about:
   `open`/`lseek`/`read` on `/dev/rmd0` is not the v7 call sequence it looks like, because
   `physio()` and `mdstrategy()` impose four conditions between them — the buffer at byte #0 of a
@@ -397,7 +403,8 @@ program (with three external-compiler bugs of its own still in the way).
 
 **`cmd/README.md` is the manual for porting anything else from v7 userland** — what is already
 in that directory, the eleven-point porting recipe every task is written on top of (the `char *`
-ordering hazard, the one-word `long`, the 3072-byte block, `DIRSIZ` 18, the three address-space
+ordering hazard, the one-word `long`, the 3072-byte block and the 1024-byte one reported in its
+place, `DIRSIZ` 18, the three address-space
 ceilings, how a program gets onto the image, which of the two harnesses tests it, and what the
 manual page owes), and what task C1 taught. `cmd/TODO.md` beside it is only the work plan and
 deliberately repeats none of it.

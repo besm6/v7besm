@@ -43,9 +43,15 @@ echo fsinfo start >/tmp/fsinfo.log
 # ---- 1.  A TREE OF KNOWN SIZE.  Every file here is either a here-document this script
 # wrote or a concatenation of /etc/motd, so the byte counts are the test's own and not the
 # image's -- except motd's 365, which sets `big'.  TWELVE copies, 4,380 bytes: that is two
-# blocks, and it stays two blocks for any motd between 257 and 512 bytes, so the margin is
-# wide on both sides.  edit.expected already depends on motd's length, so this is not a new
-# kind of dependency, only a much less sensitive one.
+# FILESYSTEM blocks, and it stays two for any motd between 257 and 512 bytes, so the margin
+# is wide on both sides.  edit.expected already depends on motd's length, so this is not a
+# new kind of dependency, only a much less sensitive one.
+#
+# THE MARGIN IS THE SAME WIDTH IN THE REPORTED UNIT, and that is not a coincidence: du(1)
+# counts filesystem blocks and multiplies by KBPB at the printf, so `big' reports 6 and the
+# bucket it sits in is still the 3073..6144-byte one.  Had the port divided sizes by 1024
+# instead, every file here would sit on its own boundary and this margin would be a third
+# as wide.  ../../cmd/df/README.md is the account.
 mkdir /tmp/fs
 cat >/tmp/fs/one <<\!
 one
@@ -63,7 +69,7 @@ a single line
 # same inode under two names, in two different directories, and du(1) must charge for it
 # once.  It counts it where it MEETS it first -- /tmp/fs/big, since that directory is read
 # before sub is descended into -- so `link' below is worth zero blocks and the total is not
-# two blocks larger for its being there.
+# six larger for its being there.
 #
 # THE PROOF OF THAT IS AN ABSENCE, and it is worth pointing at because a missing line reads
 # like an accident: /tmp/fs/sub/link does not appear in the `du -a' listing at all.
@@ -82,6 +88,16 @@ echo ---du-a--- >>/tmp/fsinfo.log
 du -a /tmp/fs >>/tmp/fsinfo.log
 echo ---du-s--- >>/tmp/fsinfo.log
 du -s /tmp/fs >>/tmp/fsinfo.log
+
+# ---- 2a.  ls -s OVER THE SAME TREE, because it counts the same block and nothing else in
+# the suite asserts that it does.  The three sizes here must be the three du printed for the
+# same objects, and the `total' must be their sum -- which is the whole point of moving all
+# four programs to one unit in the same change.  It is here rather than in a test of its own
+# because the tree is already built and the assertion is a diff of two adjacent blocks in one
+# log.  (`ls' is also the only one of the four with no b6sim case at all: it reads a
+# directory, which b6sim's host read(2) refuses.)
+echo ---ls-s--- >>/tmp/fsinfo.log
+ls -s /tmp/fs >>/tmp/fsinfo.log
 
 # A non-directory argument, which prints nothing without -a -- du.1's first BUG, asserted
 # rather than merely documented -- and then the same file with -a, which does print.

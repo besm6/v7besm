@@ -11,9 +11,13 @@
 // sys/filsys.h says so.  The walk is the same one Checker::pass4_free_list() performs on
 // the host in cmd/fsutil/check.cpp, which is what lets a test compare the two.
 //
-// A BLOCK IS 3072 BYTES HERE, so the number this prints is a sixth of what a PDP-11
-// printed.  df.1m says so; ../README.md SS4 is the general rule, and ../ls/README.md is
-// the precedent (`ls -s' counts the same block).
+// A BLOCK IS 1024 BYTES IN WHAT THIS PRINTS, and 3072 in what it counts.  The filesystem's
+// block is BSIZE == 3072; this reports KBPB == 3 of them per block (sys/param.h), so that a
+// number means something without knowing BSIZE.  Two consequences worth expecting: every
+// count is a MULTIPLE OF 3, the smallest thing that can be allocated being one 3072-byte
+// block; and a number is half a PDP-11's rather than a sixth, v7's block having been 512
+// bytes.  THE MULTIPLY IS AT THE printf and nowhere else -- every count in this file is a
+// filesystem block until it is printed.  df.1m says so; ../README.md SS4 is the general rule.
 //
 // WHAT THE PORT HAD TO CHANGE, beyond the mechanical C11 pass:
 //
@@ -75,6 +79,7 @@
 // one block, sys/fblk.h that a chain block fits inside one.
 _Static_assert(BSIZE == BSIZEW * NBPW, "a block must be BSIZEW words of NBPW bytes");
 _Static_assert(1 + NICFREE <= BSIZEW, "a chain block must fit the block buffer");
+_Static_assert(BSIZE % KBYTE == 0, "a block must be a whole number of reported blocks");
 
 // mdstrategy()'s half-zone, which is also a block: kernel/dev/md.c refuses a transfer
 // whose physical address is not a multiple of it.  A page is PGSZ words and mapping
@@ -153,7 +158,10 @@ static void dfree(char *file)
     i = 0;
     while (alloc())
         i++;
-    printf("%s %d\n", file, i);
+    // KBPB, because a reported block is 1024 bytes and a filesystem block is three of
+    // them (sys/param.h).  The count itself stays in filesystem blocks: it is what alloc()
+    // pops and what b6fsutil's pass 4 counts, and the two are diffed against each other.
+    printf("%s %d\n", file, i * KBPB);
     close(fi);
 }
 

@@ -33,22 +33,41 @@ The superblock's
 field is
 .B not
 consulted and must not be: it is dead in this port and nothing maintains it.
-.SH "BLOCKS ARE 3072 BYTES"
+.SH "BLOCKS ARE 1024 BYTES"
 .B "Note:"
-a block on this machine is
-.B 3072
-bytes \- 512 words of 48 bits \- so every number
+the block
 .I df
-prints is one sixth of what the same filesystem would have shown on a PDP\-11.
-There is no
+counts in is
+.B 1024
+bytes.
+It is not this machine's filesystem block, which is
+.B 3072
+bytes \- 512 words of 48 bits \- and is three of them.
+.PP
+Two things follow.
+Every number
+.I df
+prints is a
+.B multiple of three,
+the smallest thing that can be allocated being one 3072-byte block: a one-byte file
+costs three.
+And the numbers are
+.B half
+what a PDP\-11 printed, v7 having counted in 512-byte blocks \- not a sixth, which is what
+they were when this program counted in the filesystem block.
+.PP
+.B "Note:"
+there is no
 .I BSHIFT
-to go with it; 3072 is not a power of two.
-.IR Ls (1)
-counts the same block in its
-.B \-s
+on this machine and there cannot be, 3072 not being a power of two; the conversion is a
+divide by the filesystem block and then a multiply, and both live in
+.IR sys/param.h .
+.PP
+.IR Du (1),
+.IR quot (1M)
 and
-.B total
-output.
+.IR ls (1)
+report in the same block.
 .SH "SUPER-USER ONLY"
 .B "Note:"
 .I df

@@ -148,8 +148,9 @@ file /bin/date          # cmd/date -- what /etc/rc prints after the motd; NOT se
 source ../../rootfs/bin/date
 mode 0755
 
-# The two of task C4a that live in /bin.  Both report in 3072-byte blocks, so their numbers
-# are a sixth of a PDP-11's; /etc/quot is the third and is further down, being root-only.
+# The two of task C4a that live in /bin.  Both report in 1024-byte blocks -- three per
+# filesystem block, so their numbers are half a PDP-11's and always a multiple of three;
+# /etc/quot is the third and is further down, being root-only.
 # df is NOT setuid and must not become one -- it reads /dev/rmd0, which is mode 0600 because
 # that one node is every file's contents -- so it works for root and nobody else.  du opens
 # no device at all and works for anybody.  cmd/df/README.md is the account of the four

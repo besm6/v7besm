@@ -141,6 +141,27 @@
 #define BWSHIFT 9    // LOG2(BSIZEW): word offset -> block number
 #define BWMASK  0777 // BSIZEW-1: word offset -> offset within block
 
+// THE UNIT A BLOCK COUNT IS REPORTED IN, which is not the unit it is stored in.
+// df(1M), du(1), quot(1M) and ls(1) all count filesystem blocks internally and print
+// KBPB of them per block, so that what they say means something without knowing
+// BSIZE -- v7's commands printed filesystem blocks too, but v7's block was 512 bytes
+// and this one is six times that.  kernel/main.c and machdep.c report the same way.
+//
+// KBYTE IS BYTES, and that has to be said out loud: PGSZ and USIZE are also 1024 and
+// are 1024 WORDS, which is 6144 bytes and two filesystem blocks.  The three are not
+// the same quantity and nothing may alias them.
+//
+// 1024 has no word-domain spelling here -- it is 170 2/3 words -- so unlike BSIZE
+// there is no shift or mask to go with it, and unlike BSIZE it never names anything
+// on the disk.  It is a presentation unit and appears only at a printf; cmd/README.md
+// SS4 is the rule for a program that reports one.
+//
+// KBPB is derived rather than written as 3, so that retuning BSIZE cannot leave four
+// programs quietly lying.  Each of them asserts BSIZE % KBYTE == 0; the assertion
+// cannot live here, this header being #define-only (see its head).
+#define KBYTE 1024            // bytes in a REPORTED block
+#define KBPB  (BSIZE / KBYTE) // reported blocks per filesystem block: 3
+
 // The on-disk inode, sys/ino.h.  Sixteen words -- eight of metadata, then eight
 // disk addresses -- so INOPB of them tile a 512-word block exactly, with no
 // padding and no straddling.  The 8/8 split is deliberate: `dp + 8' is the address

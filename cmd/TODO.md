@@ -9,7 +9,8 @@ gives a shell prompt.
 porting recipe, the hazards a v7 source walks into on this machine, how a program gets onto the
 image and which harness tests it. Read it before starting any task below; **nothing here repeats
 it**, and a task names only what is unusual about itself. **A bare `§N` below is a section of
-that file's porting recipe** — §2 the `char *` ordering hazard, §4 the 3072-byte block, §6 the
+that file's porting recipe** — §2 the `char *` ordering hazard, §4 the 3072-byte block and the
+1024-byte one reported in its place, §6 the
 address-space ceilings, and so on.
 
 **Tasks C1, C2, C3 and C4a are done and their writeups have been removed**; what each taught is

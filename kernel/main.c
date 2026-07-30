@@ -157,7 +157,9 @@ void iinit()
     fp->s_ronly     = 0;
     if (time == 0)
         time = fp->s_time;
-    printf("root size = %d kbytes\n", fp->s_fsize * BSIZE / 1024);
+    // KBYTE, not a bare 1024: it is the same reported unit df(1M) prints in, and
+    // sys/param.h is its one home.  machdep.c's three lines below say it the same way.
+    printf("root size = %d kbytes\n", fp->s_fsize * BSIZE / KBYTE);
 }
 
 // This is the set of buffers proper, whose heads

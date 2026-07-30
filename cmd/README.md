@@ -156,19 +156,38 @@ The other direction is worth a glance too: **plain `char` is unsigned here**
 adjustment, because an `int` occupies bits 41–1 and an `unsigned` all 48. Prefer `int` wherever
 v7 wrote `unsigned` for no reason.
 
-### 4. A filesystem block is 3072 bytes, and there is no `BSHIFT`
+### 4. A filesystem block is 3072 bytes; a *reported* one is 1024
 
 `BSIZE` is 3072 — not a power of two, and [../include/sys/param.h](../include/sys/param.h) says
 outright that there cannot be a `BSHIFT`/`BMASK` to go with it. So every `>>9`, `<<9` and `&0777`
 that means *a filesystem block* is wrong and becomes a divide or a remainder. (`BWSHIFT` 9 and
 `BWMASK` 0777 exist, and are **word** offsets within a block, which is a different quantity.)
-`ls -s` and its `total` line already count 3072-byte blocks and print a sixth of what a PDP-11
-printed; **`df`, `du` and `quot` do too since task C4a**, each with a `BLOCKS ARE 3072 BYTES`
-section in its manual page, and `dd` will when it lands. Two of the three met `BSHIFT` as a
-*compile error*, which is the best way to meet it.
+Two of task C4a's three programs met `BSHIFT` as a *compile error*, which is the best way to
+meet it.
 
-A program's *own* file blocking is its own business: `ed`'s temp file is `512`-byte blocks by its
-own choice and stays that way.
+**But a count REPORTED TO A USER is not in that unit.** `df`, `du`, `quot` and `ls -s` all
+count filesystem blocks internally and then print `KBPB` — three — of them per block, so that
+what they print is in **1024-byte blocks** and means something without knowing `BSIZE`.
+`KBYTE` and `KBPB` are in [../include/sys/param.h](../include/sys/param.h) beside `BSIZE`, and
+`KBPB` is derived from it so that retuning the block size cannot leave four programs quietly
+lying. Three rules come with it, and a port that reports blocks should follow all three:
+
+* **The multiply goes at the `printf`, and nowhere else.** Every count stays in filesystem
+  blocks right up to the moment it is printed, so a variable called `blocks` holds blocks.
+  `quot -c` is what forces this rather than style: its histogram is *indexed* by a file's block
+  count, and converting at the source would cut what `TSIZE` covers to a third while making two
+  buckets in three unreachable.
+* **Assert the unit divides.** `_Static_assert(BSIZE % KBYTE == 0, …)`, beside whatever layout
+  assertions the program already carries. 3072 is three KiB exactly today; nothing but that
+  assertion says it must stay so.
+* **Say it in the manual page**, in a `BLOCKS ARE 1024 BYTES` section — the unit, that the
+  filesystem's block is three of them, that every count is therefore a multiple of three, and
+  that the numbers are *half* a PDP-11's rather than a sixth, v7 having counted 512-byte
+  blocks. All four pages have one; `ls.1`, which had never stated a unit at all, got one too.
+
+**A block that is a program's own business is neither of these and is converted to neither.**
+`ed`'s temp file is 512-byte blocks by its own choice and stays that way; so do `tar`'s record
+and `tail -b`, which [TODO.md](TODO.md) already rules on, and `dd`'s `bs=` is the user's.
 
 ### 5. `DIRSIZ` is 18
 
@@ -358,7 +377,8 @@ nothing else had exercised.
 Each v7 command ships its `.1`, and it is **already in the program's directory** — see "The
 sources are already here" above, including the ten programs that have no page of their own.
 Follow the [../lib/libc/man/](../lib/libc/man/) precedent: **correct it in place** — ANSI SYNOPSIS,
-every wrong claim fixed where it stands and marked `Note:`, block counts in 3072-byte blocks,
+every wrong claim fixed where it stands and marked `Note:`, block counts in the 1024-byte block
+§4 describes,
 `DIRSIZ` 18 where it shows. Nothing installs any of them; they are read with `nroff -man`. Rewrite
 a page rather than correct it only when the DESCRIPTION itself stopped being true, which has
 happened once: `touch` — see "What task C1 taught" below. A `README.md` is worth writing only when the port *taught* something

@@ -33,36 +33,41 @@ Absence of either causes an entry to be generated for
 each directory only.
 .PP
 A file which has two links to it is only counted once.
-.SH "BLOCKS ARE 3072 BYTES"
+.SH "BLOCKS ARE 1024 BYTES"
 .B "Note:"
-a block on this machine is
-.B 3072
-bytes \- 512 words of 48 bits \- so every number
+the block
 .I du
-prints is one sixth of what the same tree would have shown on a PDP\-11.
-There is no
-.I BSHIFT
-to go with it; 3072 is not a power of two.
-.IR Ls (1)
-counts the same block in its
-.B \-s
-and
-.B total
-output, and
-.IR df (1M)
-and
-.IR quot (1M)
-report in it too.
+counts in is
+.B 1024
+bytes.
+It is not this machine's filesystem block, which is
+.B 3072
+bytes \- 512 words of 48 bits \- and is three of them.
+.PP
+Two things follow.
+Every number
+.I du
+prints is a
+.B multiple of three,
+the smallest thing that can be allocated being one 3072-byte block: a one-byte file
+costs three.
+And the numbers are
+.B half
+what a PDP\-11 printed, v7 having counted in 512-byte blocks \- not a sixth, which is what
+they were when this program counted in the filesystem block.
 .PP
 .B "Note:"
-the count is derived from each file's
-.I size
-and so charges a file for the holes in it and not for its indirect blocks \- the same
-approximation
+there is no
+.I BSHIFT
+on this machine and there cannot be, 3072 not being a power of two; the conversion is a
+divide by the filesystem block and then a multiply, and both live in
+.IR sys/param.h .
+.PP
+.IR Df (1M),
 .IR quot (1M)
-makes.
-.IR Icheck (1M)
-is the program that would count blocks actually allocated, and is not ported.
+and
+.IR ls (1)
+report in the same block.
 .SH BUGS
 Non-directories
 given as arguments (not under

@@ -62,8 +62,12 @@ answer [`kernel/prim.c`](../../kernel/prim.c) reached for the clists. **Subtract
   becomes.
 * **A block is `BSIZE` = 3072 bytes.** `nblock()` was `(size + 511) >> 9`, and there is no
   `BSHIFT`/`BMASK` to replace the shift with — 3072 is not a power of two, and
-  `sys/param.h` says so outright. It is a divide now. **`ls -s` and the `total` line therefore
-  count 3072-byte blocks, so the numbers are a sixth of what a PDP-11 printed.**
+  `sys/param.h` says so outright. It is a divide now. **`ls -s` and the `total` line report in
+  1024-byte blocks**, three per filesystem block: `nblock()` and `tblocks` still hold
+  filesystem blocks and the multiply by `KBPB` is at the two `printf`s, which is the rule
+  [../README.md](../README.md) §4 states for all four programs that report a block count. Two
+  consequences: every number is a multiple of three, and it is *half* a PDP-11's rather than a
+  sixth. (It counted the filesystem block until task C4a moved all four to one unit.)
 * **`DIRSIZ` is 18, not 14**, and `struct direct` is four words with a full-word `d_ino`. So
   `lname[15]` is `lname[DIRSIZ + 1]` and `%.14s` is `%s`.
 
@@ -136,4 +140,6 @@ the command runs on the real kernel under SIMH, which it now does: `ls /bin` is 
 stages of [`kernel/test/console`](../../kernel/test/console.ini)'s dialogue, and the six names it
 prints are the assertion.
 
-`ls.1` is the v7 manual page, kept as it was. Its block counts are now `BSIZE` ones; see above.
+`ls.1` is the v7 manual page, corrected in place. It never stated a block size at all — a gap,
+since v7's was 512 and this one is not — so task C4a gave it the `BLOCKS ARE 1024 BYTES` section
+its three siblings have.

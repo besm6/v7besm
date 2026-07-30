@@ -10,10 +10,17 @@
 // running i-number against an ncheck(1) listing on standard input.  ncheck is task C4e and
 // is not on this image yet; quot.1m says so.
 //
-// A BLOCK IS 3072 BYTES HERE, so every number this prints is a sixth of what a PDP-11
-// printed.  quot.1m says so; ../README.md SS4 is the rule.  Holes are still counted, as
-// v7's BUGS section says: di_size is what this divides, so a file's indirect blocks are
-// not counted and its holes are.  icheck(1) is the program that asks the other question.
+// A BLOCK IS 1024 BYTES IN WHAT THIS PRINTS, and 3072 in what it counts.  The filesystem's
+// block is BSIZE == 3072; this reports KBPB == 3 of them per block (sys/param.h), so that a
+// number means something without knowing BSIZE.  Two consequences worth expecting: every
+// count is a MULTIPLE OF 3, the smallest thing that can be allocated being one 3072-byte
+// block; and a number is half a PDP-11's rather than a sixth, v7's block having been 512
+// bytes.  THE MULTIPLY IS AT THE printf and nowhere else -- every count in this file is a
+// filesystem block until it is printed.  quot.1m says so; ../README.md SS4 is the rule.
+//
+// Holes are still counted, as v7's BUGS section says: di_size is what this divides, so a
+// file's indirect blocks are not counted and its holes are.  icheck(1) is the program that
+// asks the other question.
 //
 // THE READ IS THE INTERESTING PART, and it is df(1)'s: a raw transfer through /dev/rmd0
 // goes physio() -> mdstrategy(), and those two impose four rules v7 knows nothing about --
@@ -89,6 +96,7 @@
 // tile a block -- which is exactly what lets the block buffer BE the i-node table.
 _Static_assert(BSIZE == BSIZEW * NBPW, "a block must be BSIZEW words of NBPW bytes");
 _Static_assert(INOPB * sizeof(struct dinode) == BSIZE, "INOPB dinodes must tile a block");
+_Static_assert(BSIZE % KBYTE == 0, "a block must be a whole number of reported blocks");
 
 // mdstrategy()'s half-zone, which is also a block: kernel/dev/md.c refuses a transfer whose
 // physical address is not a multiple of it.  A page is PGSZ words and mapping preserves the
@@ -329,19 +337,29 @@ static void report(void)
         return;
     if (cflg) {
         int t = 0;
+        //
+        // THE BUCKET INDEX STAYS A FILESYSTEM BLOCK COUNT and only the printed columns
+        // are multiplied, which is the whole reason this program converts at the printf
+        // rather than at the source.  Index the histogram in reported blocks instead and
+        // TSIZE covers a third of the file sizes it used to, while two buckets in three
+        // can never be occupied -- a file's size in KiB is always a multiple of KBPB.
+        //
+        // Columns one and three are block counts; column two is a count of FILES and is
+        // not touched.
+        //
         for (i = 0; i < TSIZE - 1; i++)
             if (sizes[i]) {
                 t += i * sizes[i];
-                printf("%d\t%d\t%d\n", i, sizes[i], t);
+                printf("%d\t%d\t%d\n", i * KBPB, sizes[i], t * KBPB);
             }
-        printf("%d\t%d\t%d\n", TSIZE - 1, sizes[TSIZE - 1], overflow + t);
+        printf("%d\t%d\t%d\n", (TSIZE - 1) * KBPB, sizes[TSIZE - 1], (overflow + t) * KBPB);
         return;
     }
     qsort(du, NUID, sizeof(du[0]), qcmp);
     for (i = 0; i < NUID; i++) {
         if (du[i].blocks == 0)
             return;
-        printf("%5d\t", du[i].blocks);
+        printf("%5d\t", du[i].blocks * KBPB);
         if (fflg)
             printf("%5d\t", du[i].nfiles);
         if (du[i].name)

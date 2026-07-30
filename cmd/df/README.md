@@ -5,7 +5,6 @@ programs on this image that can say anything about the filesystem they live on. 
 before them could *change* the store; these measure it.
 
 The C11 pass over each source is described in that file's own header and is not repeated here.
-Neither is the block arithmetic, which is [../README.md](../README.md) §4 applied three times.
 **What the port taught is below, and only the first section is about `df`** — the rest belongs to
 whatever reads a device next, which is the whole of the rest of C4.
 
@@ -73,6 +72,32 @@ Both programs call `sync()` before reading, as v7's did. On the raw path that is
 rather than cautious: the read bypasses the buffer cache that the mounted filesystem is still
 writing through, so without it `df` counts a free list the kernel has already moved on from.
 
+## The unit they report in is not the unit they count in
+
+They count **filesystem blocks**, 3072 bytes, and they print **1024-byte** ones — `KBPB` of them
+per block, `KBPB` being 3 because 3072 is exactly three KiB.
+[../README.md](../README.md) §4 is the rule and [../../include/sys/param.h](../../include/sys/param.h)
+is where `KBYTE` and `KBPB` live, beside the `BSIZE` `KBPB` is derived from. What is worth
+recording here is *why the multiply is at the `printf`* rather than where the size is divided,
+because it looks like a stylistic choice and is not:
+
+**`quot -c` decides it.** That histogram is `sizes[TSIZE]` **indexed by a file's block count**.
+Convert at the source and every index triples: `TSIZE` covers a third of the file sizes it used
+to, and two buckets in three can never be occupied, a size in KiB always being a multiple of 3.
+Convert at the print and the index stays a block count, `TSIZE` is untouched, and the column that
+needs the new unit — the first — gets it. Everything else follows for free: no accumulator
+changes width, `du`'s recursion still returns blocks, `quot`'s sort key is still a block count so
+the ordering cannot shift, and every variable named `blocks` still holds blocks.
+
+Two things to expect of the output, and both are worth checking by eye after any change here:
+**every number is a multiple of three**, the smallest allocation being one 3072-byte block; and
+a number is **half** a PDP-11's, not a sixth, v7 having counted 512-byte blocks.
+
+`ls -s` and its `total` line moved with them, so the same file cannot read 1 under one command
+and 3 under another. `b6fsutil` deliberately did **not**: it is a filesystem inspector and the
+rest of its report is on-disk block numbers, so `run-fsinfo.sh` converts once, in the one place
+that already knows both sides.
+
 ## Two harnesses, and a third thing neither of them is
 
 `df` and `quot` are the first programs in `cmd/` that can be tested under `b6sim` against **real
@@ -108,7 +133,8 @@ them is the reusable half of this task.
 the ones the test set. `df`'s and `quot`'s numbers are not like that: they move whenever anything
 is added to `/bin`, so a checked-in table would be a file somebody has to update by hand for a
 reason unconnected to the test. So the host works them out again — `b6fsutil -c -v`'s
-`N blocks in use, M free` for `df`, an `awk` over `b6fsutil -v -v` for `quot`'s per-uid sums —
+`N blocks in use, M free` for `df` (times `KBPB`, that count being in filesystem blocks),
+an `awk` over `b6fsutil -v -v` for `quot`'s per-uid sums —
 and nothing needs touching as the image grows. `du`'s numbers *are* about a tree the test built,
 so those are checked in, and nothing in the log is masked.
 

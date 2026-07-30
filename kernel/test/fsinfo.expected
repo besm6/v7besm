@@ -1,17 +1,22 @@
 fsinfo start
 ---du---
-2	/tmp/fs/sub
-6	/tmp/fs
+6	/tmp/fs/sub
+18	/tmp/fs
 ---du-a---
-1	/tmp/fs/one
-2	/tmp/fs/big
-1	/tmp/fs/sub/two
-2	/tmp/fs/sub
-6	/tmp/fs
+3	/tmp/fs/one
+6	/tmp/fs/big
+3	/tmp/fs/sub/two
+6	/tmp/fs/sub
+18	/tmp/fs
 ---du-s---
-6	/tmp/fs
+18	/tmp/fs
+---ls-s---
+total 12
+   6 big
+   3 one
+   3 sub
 ---du-file---
-1	/tmp/fs/one
+3	/tmp/fs/one
 ---du-bad---
 cannot chdir()
 ---end---

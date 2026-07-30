@@ -50,9 +50,12 @@ endif()
 
 # DEST, because quot is /etc/quot and not /bin/quot -- see ../CMakeLists.txt.
 #
-# `sizes' is the whole of the arithmetic: the fixture has a file of EXACTLY one block and
-# one of exactly three, so a ceil-divide by 3072 that was off by one either way would move a
-# count.  Six one-block objects and one three-block file is the shape to check against
+# `sizes' is the whole of the arithmetic, and it exercises BOTH halves of it: the fixture has
+# a file of EXACTLY one filesystem block and one of exactly three, so a ceil-divide by 3072
+# that was off by one either way would move a count -- and the first and third columns are
+# then multiplied into the 1024-byte block quot REPORTS in, while the second, a count of
+# FILES, is not.  So the expected `3  6  18' is six one-block objects: 6 files, 6 blocks, 18
+# reported.  Six one-block objects and one three-block file is the shape to check against
 # ../../df/test/fsimg.manifest by hand if this ever changes.
 b6_progtest(quot sizes DEST etc/quot) # -c: the histogram, which looks at no name at all
 b6_progtest(quot nodev DEST etc/quot) # the diagnostic, and that v7's quot still exits 0
