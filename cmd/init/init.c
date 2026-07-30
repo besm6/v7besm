@@ -37,6 +37,9 @@
 // sends ^D, which is what drives one whole turn of the loop above -- the shell exits,
 // runcom() runs /etc/rc, the motd appears and single() prompts again.
 //
+// THE ONE DIVERGENCE IN BEHAVIOUR is the banner single() writes ahead of that prompt; see
+// `banner' below for why a port that boots itself needs one where v7 did not.
+//
 #include <fcntl.h>
 #include <setjmp.h>
 #include <signal.h>
@@ -63,6 +66,22 @@ char utmp[]  = "/etc/utmp";     // who is logged in RIGHT NOW -- one record per 
 char wtmpf[] = "/usr/adm/wtmp"; // the permanent log of logins and logouts, appended to
 char ctty[]  = "/dev/console";  // the operator's terminal, where the single-user shell goes
 char dev[]   = "/dev/";         // the directory every terminal's device file lives in
+
+// What single() says before it hands the console to the shell, and a DIVERGENCE from v7,
+// which printed nothing at all here: on a PDP-11 the operator had just typed the boot line
+// by hand and knew what state the machine was in.  Here the machine boots itself, the only
+// thing on the console is the kernel's four size lines, and the bare `# ' that follows says
+// neither that this is single-user nor how to leave it.  So init says both.
+//
+// THE PUNCTUATION IS LOAD-BEARING, and this is the whole cost of the divergence.  Every
+// SIMH test in kernel/test arms all its `expect' rules before the machine starts, and any
+// of them can fire on anything in the console stream -- so this text must not contain a
+// substring any test waits for.  Two rules follow: no `#' (the shell's `# ' prompt, which
+// every test's first rule waits for), and NO LINE MAY END IN `.' -- kernel/test/edit waits
+// for `.\r\n', the line that ends an ed append.  The first draft ended `go multi-user.' and
+// fired that rule before the shell had even prompted, sending a `Z' into the boot.  Check a
+// reworded banner against `grep -h "^expect" kernel/test/*.ini*'.
+char banner[] = "\nSingle-user mode -- type ^D to run /etc/rc and go multi-user\n";
 
 // One accounting record, reused as scratch by rmut() for both files above.  A global, not
 // a local, because it is 5 words and v7 counted stack.
@@ -206,6 +225,13 @@ static void single(void)
         open(ctty, O_RDWR);
         dup(0);
         dup(0);
+
+        // Say what state the machine is in, before the shell's prompt appears with no
+        // explanation of itself.  write(2) and not stdio: this program links none of it,
+        // and one write is one exchange on the Consul.  It goes here rather than in the
+        // parent because shutdown() closed every descriptor init had -- the console is
+        // open in this child alone -- and it is the child that is about to prompt.
+        write(1, banner, sizeof(banner) - 1);
 
         // Become the shell.  Its argv[0] is "-", which is how a shell is told it is a
         // LOGIN shell: it reads the profile and prints a prompt.

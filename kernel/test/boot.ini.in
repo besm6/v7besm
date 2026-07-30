@@ -8,9 +8,11 @@
 ; exec the program the image carries.
 ;
 ; WHAT THE PROMPT PROVES.  `# ' is the v7 shell's root prompt -- supprompt in cmd/sh/msg.c,
-; which cmd/sh/main.c picks over `$ ' because getuid() is 0 -- and it is the FIRST thing any
-; program writes on the console: init has no banner of its own, and /etc/rc does not run
-; until the first shell has exited (cmd/init/init.c: shutdown, single, runcom, multiple).
+; which cmd/sh/main.c picks over `$ ' because getuid() is 0 -- and it is the SECOND thing on
+; the console: single() writes its `Single-user mode' banner first (cmd/init/init.c, a
+; divergence from v7, which announced nothing), and /etc/rc does not run until the first
+; shell has exited (cmd/init/init.c: shutdown, single, runcom, multiple).  That banner
+; deliberately contains no `#', so this expect cannot fire on it.
 ; For those two characters to appear at all, everything below had to work:
 ;   * main() returned, so iinit() did not panic -- bread(rootdev, SUPERB) completed without
 ;     B_ERROR (else panic "iinit"), sbcheck() accepted the superblock (else panic "no root

@@ -55,6 +55,32 @@ needs right now: shut everything down, a shell on `/dev/console`, `/etc/rc`, and
 when the shell exits. `getty`, `login` and the multi-user half wait on a terminal driver —
 [`../../kernel/TODO.md`](../../kernel/TODO.md), task 29.
 
+## The one divergence: the single-user banner
+
+`single()` writes a line of its own before it execs the shell:
+
+```text
+Single-user mode -- type ^D to run /etc/rc and go multi-user
+```
+
+v7 printed nothing here, and could afford to: on a PDP-11 the operator had just typed the
+boot line by hand and knew exactly what state the machine was in. This machine boots itself,
+so everything on the console is the kernel's four size lines and then a bare `# ` — which
+says neither that this is single-user nor what the shell is waiting for. The banner says both.
+
+Two properties of the *text* are load-bearing, and anyone rewording it inherits them. Every
+SIMH test in [`../../kernel/test`](../../kernel/test) arms all of its `expect` rules before
+the machine starts, and any rule can fire on anything in the console stream. So the banner
+must contain **no `#`** — every test's first rule waits for the shell's `# ` prompt — and
+**no line of it may end in `.`**, because `kernel/test/edit` waits for `.\r\n`, the line that
+ends an `ed` append. The first draft ended `go multi-user.` and fired that rule before the
+shell had prompted, sending a `Z` into the middle of the boot. Check a new wording against
+`grep -h '^expect' kernel/test/*.ini*` before believing a green suite.
+
+It is a `write(2)` and not `printf`: init links no stdio, and it goes in the *child*, after
+the three descriptors are opened, because `shutdown()` closed every descriptor init itself
+had — the console is open in that child alone.
+
 It **is the image's `/etc/init`** (task 25b). Under the real kernel it forks, opens
 `/dev/console`, `dup`s, execs `/bin/sh`, waits, runs `/etc/rc` and cycles — the boot reaches the
 shell's root prompt, `# `, and that prompt is what [`kernel/test/boot`](../../kernel/test/boot.ini.in)

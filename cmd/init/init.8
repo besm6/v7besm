@@ -25,6 +25,23 @@ If the shell terminates,
 .I init
 comes up multi-user and the process described below is started.
 .PP
+Note: on this machine
+.I init
+announces that state before the shell prompts \-
+.RB `` "Single-user mode \-\- type ^D to run /etc/rc and go multi-user" '' \-
+which the PDP-11
+.I init
+did not.
+There the operator had just typed the boot line by hand;
+here the machine boots itself, and the bare
+.RB `` "# " ''
+prompt says neither where it is nor how to leave it.
+The wording is constrained: the SIMH tests in
+.I kernel/test
+watch the console stream, so the banner must contain no
+.RB `` # ''
+and no line of it may end in a period.
+.PP
 When
 .I init
 comes up multiuser,
