@@ -36,11 +36,44 @@ There the operator had just typed the boot line by hand;
 here the machine boots itself, and the bare
 .RB `` "# " ''
 prompt says neither where it is nor how to leave it.
-The wording is constrained: the SIMH tests in
+.PP
+Note: by the same argument
+.I init
+announces every other state change it makes.
+It says
+.RB `` "Going multi-user \-\- running /etc/rc and then a getty per terminal line" ''
+before it runs that script;
+it says why it has come back to the single-user prompt when
+.I /etc/ttys
+cannot be read, when no line in it is enabled,
+when nothing is left running on any line,
+when a hangup arrives on the console,
+and when a process refuses to die within the minute
+.I init
+allows it;
+and it reports a shell or a
+.IR getty (8)
+it could not execute.
+Each of those is silent on the PDP\-11, and three of them are
+indistinguishable there from a boot that has simply gone quiet.
+.PP
+Note: the wording and the placement are both constrained,
+because the SIMH tests in
 .I kernel/test
-watch the console stream, so the banner must contain no
-.RB `` # ''
-and no line of it may end in a period.
+watch the console stream.
+No message may contain a
+.RB `` # '',
+no line of one may end in a period,
+and nothing may be written between the date
+.I /etc/rc
+prints and the first
+.RB `` "login: " ''
+prompt \-
+which is why the multi-user line comes before that script
+rather than after it.
+See
+.I cmd/init/README.md
+for the full set and the reason each message comes out of a forked child.
 .PP
 When
 .I init

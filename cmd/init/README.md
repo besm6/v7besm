@@ -47,39 +47,81 @@ The port also needed four declarations the header tree did not have: `kill()` (n
 one word on this machine, so the record's layout is unchanged, but `time()` takes a `time_t *`
 and the `long` did not compile.
 
-## What it does today, and what it does not
+## What it does today
 
-With no `/etc/ttys` on the root image, `merge()` returns as soon as the open fails and
-`multiple()` falls straight through. So this init is exactly the single-user loop the port
-needs right now: shut everything down, a shell on `/dev/console`, `/etc/rc`, and around again
-when the shell exits. `getty`, `login` and the multi-user half wait on a terminal driver —
-[`../../kernel/TODO.md`](../../kernel/TODO.md), task 29.
+The whole cycle runs. `/etc/ttys` names both Consuls (kernel task 29b), so `merge()` forks an
+`/etc/getty` on each, `/bin/login` checks a password, and `multiple()` puts a fresh getty on the
+line when a user logs out. Shut everything down, a shell on `/dev/console`, `/etc/rc`, a getty
+per line, and around again on a hangup — [`kernel/test/login`](../../kernel/test/login.ini) and
+[`kernel/test/multi`](../../kernel/test/multi.ini) drive it end to end.
 
-## The one divergence: the single-user banner
+## The one divergence: init says what it is doing
 
-`single()` writes a line of its own before it execs the shell:
+v7's init said nothing, anywhere, and could afford to: on a PDP-11 the operator had just typed
+the boot line by hand and knew exactly what state the machine was in. This machine boots
+itself, so everything on the console is the kernel's four size lines and then a bare `# ` —
+which says neither that this is single-user nor what the shell is waiting for. So `single()`
+writes a line of its own before it execs the shell, and by the same argument every other state
+change this program makes says so too. Three of them are otherwise indistinguishable from a
+working boot that has gone quiet: a missing `/etc/ttys`, an `/etc/ttys` that enables nothing,
+and a system whose gettys have all died are three silent trips back to the single-user prompt in
+v7.
 
-```text
-Single-user mode -- type ^D to run /etc/rc and go multi-user
-```
+| When | What the console says |
+| --- | --- |
+| `single()`, before the shell | `Single-user mode -- type ^D to run /etc/rc and go multi-user` |
+| `runcom()`, before `/etc/rc` | `Going multi-user -- running /etc/rc and then a getty per terminal line` |
+| `merge()` cannot open `/etc/ttys` | `No /etc/ttys to read -- no terminal line can be brought up` |
+| `merge()` finds no usable line | `No line of /etc/ttys is enabled -- nobody can log in` |
+| `multiple()` runs out of children | `Nothing is left running on any terminal line -- going back to single-user` |
+| `SIGHUP` on the console | `Hangup on the console -- taking the system down to single-user` |
+| `shutdown()`'s 60-second alarm | `A process would not die in 60 seconds -- starting the cycle over` |
+| `execl` of the shell failed | `init: cannot execute /bin/sh` |
+| `execl` of the getty failed | `init: cannot execute /etc/getty`, on that line's terminal |
 
-v7 printed nothing here, and could afford to: on a PDP-11 the operator had just typed the
-boot line by hand and knew exactly what state the machine was in. This machine boots itself,
-so everything on the console is the kernel's four size lines and then a bare `# ` — which
-says neither that this is single-user nor what the shell is waiting for. The banner says both.
+State announcements read in the banner's voice; the two failures carry the program's name, as a
+Unix program reporting its own trouble. Every one is a `write(2)` and not `printf`: init links no
+stdio.
 
-Two properties of the *text* are load-bearing, and anyone rewording it inherits them. Every
-SIMH test in [`../../kernel/test`](../../kernel/test) arms all of its `expect` rules before
-the machine starts, and any rule can fire on anything in the console stream. So the banner
-must contain **no `#`** — every test's first rule waits for the shell's `# ` prompt — and
-**no line of it may end in `.`**, because `kernel/test/edit` waits for `.\r\n`, the line that
-ends an `ed` append. The first draft ended `go multi-user.` and fired that rule before the
-shell had prompted, sending a `Z` into the middle of the boot. Check a new wording against
-`grep -h '^expect' kernel/test/*.ini*` before believing a green suite.
+### Three rules any further message inherits
 
-It is a `write(2)` and not `printf`: init links no stdio, and it goes in the *child*, after
-the three descriptors are opened, because `shutdown()` closed every descriptor init itself
-had — the console is open in that child alone.
+**Two are about the text.** Every SIMH test in [`../../kernel/test`](../../kernel/test) arms all
+of its `expect` rules before the machine starts, and any rule can fire on anything in the console
+stream. So no message may contain **`#`** — every test's first rule waits for the shell's `# `
+prompt — and **no line may end in `.`**, because `kernel/test/edit` waits for `.\r\n`, the line
+that ends an `ed` append. The first draft of the banner ended `go multi-user.` and fired that rule
+before the shell had prompted, sending a `Z` into the middle of the boot. `edit.ini` has three
+more rules that short, so no line may end in `a`, `ed` or `?` either. Check a new wording against
+`grep -h '^ *expect' kernel/test/*.ini kernel/test/*.ini.in | sort -u` before believing a green
+suite.
+
+**The third is about placement, and it is why the multi-user line comes *before* `/etc/rc`
+rather than at the transition it describes.** `login.ini`, `multi.ini` and `console.ini` each
+match `GMT 2026\r\n\r\nlogin: ` as one string — the tail of the date `/etc/rc` prints, then the
+first getty's prompt — so nothing may be written between those two events. Ahead of `/etc/rc` is
+the last moment the announcement can be made, and the `login: ` is left to announce the arrival
+itself.
+
+### Why it all comes out of a child
+
+`ttyopen()` in [`../../kernel/dev/tty.c`](../../kernel/dev/tty.c) makes the first process to open
+a terminal the leader of its process group, and nothing ever clears `p_pgrp` again. An init that
+opened `/dev/console` even once would therefore carry `p_pgrp = 1` for the life of the system;
+every process would inherit it, and no shell, `getty` or `login` could claim a terminal after
+that — `t_pgrp` would stay 0, so a `^C` would go to process group 0, and `u_ttyp` would stay
+unset, so `/dev/tty` would answer `ENXIO` for every process on the machine. **So init's parent
+opens nothing, ever.**
+
+`single()`'s and `dfork()`'s children have the terminal on descriptor 1 already and write
+straight to it; `runcom()`'s child has only the root directory there, so `tell()` opens the
+console, writes and closes it — closing because `single()`'s child needs *its* open to land on
+descriptor 0 for the two `dup()`s to fill 1 and 2. The five messages that arise in the *parent*
+are left in `pending`, which `single()`'s child says just ahead of the banner: every one of them
+is a reason the machine is on its way back to that prompt, so that is where they belong.
+It also means the first pass through `main()` adds nothing to the boot stream, which is what
+[`kernel/test/boot`](../../kernel/test/boot.ini.in) asserts on. The one event left unremarked is
+a `SIGINT` making `merge()` re-read `/etc/ttys`: it is in the parent and leads nowhere near a
+prompt, so saying it would cost a fork of its own.
 
 It **is the image's `/etc/init`** (task 25b). Under the real kernel it forks, opens
 `/dev/console`, `dup`s, execs `/bin/sh`, waits, runs `/etc/rc` and cycles — the boot reaches the

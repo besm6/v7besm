@@ -26,19 +26,20 @@
 // wrote `long'.  Same word, but time() takes a `time_t *', so the `long' would not
 // compile.
 //
-// WHAT IT DOES ON THIS MACHINE TODAY.  With no /etc/ttys on the root image, merge()
-// returns as soon as the open fails and multiple() falls straight through -- so this
-// init is exactly the single-user loop the port needs: shutdown, a shell on
-// /dev/console, /etc/rc, and around again when the shell exits.  getty and the
-// multi-user half wait on a terminal driver (kernel/TODO.md, task 29).
+// WHAT IT DOES ON THIS MACHINE TODAY.  The whole cycle runs: /etc/ttys names both Consuls
+// (kernel task 29b), so merge() forks an /etc/getty on each, /bin/login checks a password,
+// and multiple() respawns the getty when a user logs out.
 //
 // It IS the image's /etc/init since task 25b, and the boot reaches /bin/sh's root prompt.
 // kernel/test/boot asserts that prompt; kernel/test/console types at the shell and then
 // sends ^D, which is what drives one whole turn of the loop above -- the shell exits,
-// runcom() runs /etc/rc, the boot date appears and single() prompts again.
+// runcom() runs /etc/rc, the boot date appears, and merge() puts a getty on each Consul.
+// kernel/test/login and kernel/test/multi carry on from there.
 //
-// THE ONE DIVERGENCE IN BEHAVIOUR is the banner single() writes ahead of that prompt; see
-// `banner' below for why a port that boots itself needs one where v7 did not.
+// THE ONE DIVERGENCE IN BEHAVIOUR is that this init SAYS WHAT IT IS DOING, on the console,
+// at each state change it makes; v7 said nothing anywhere.  See `banner' below for why a
+// port that boots itself needs that where v7 did not, and for the three rules any further
+// message must obey.
 //
 #include <fcntl.h>
 #include <setjmp.h>
@@ -67,21 +68,50 @@ char wtmpf[] = "/usr/adm/wtmp"; // the permanent log of logins and logouts, appe
 char ctty[]  = "/dev/console";  // the operator's terminal, where the single-user shell goes
 char dev[]   = "/dev/";         // the directory every terminal's device file lives in
 
-// What single() says before it hands the console to the shell, and a DIVERGENCE from v7,
-// which printed nothing at all here: on a PDP-11 the operator had just typed the boot line
-// by hand and knew what state the machine was in.  Here the machine boots itself, the only
-// thing on the console is the kernel's four size lines, and the bare `# ' that follows says
-// neither that this is single-user nor how to leave it.  So init says both.
+// WHAT INIT SAYS ON THE CONSOLE, and a DIVERGENCE from v7, which said nothing anywhere: on
+// a PDP-11 the operator had just typed the boot line by hand and knew what state the machine
+// was in.  Here the machine boots itself, the only thing on the console is the kernel's four
+// size lines, and the bare `# ' that follows says neither that this is single-user nor how to
+// leave it.  So init says both -- and, by the same argument, says every other state change it
+// makes, since each one is otherwise indistinguishable from a working boot that has gone
+// quiet.  A missing /etc/ttys, an /etc/ttys with no usable line and a system whose gettys
+// have all died are three silent trips back to this prompt in v7; here each says which it is.
 //
 // THE PUNCTUATION IS LOAD-BEARING, and this is the whole cost of the divergence.  Every
 // SIMH test in kernel/test arms all its `expect' rules before the machine starts, and any
-// of them can fire on anything in the console stream -- so this text must not contain a
-// substring any test waits for.  Two rules follow: no `#' (the shell's `# ' prompt, which
+// of them can fire on anything in the console stream -- so no text here may contain a
+// substring a test waits for.  Two rules follow: no `#' (the shell's `# ' prompt, which
 // every test's first rule waits for), and NO LINE MAY END IN `.' -- kernel/test/edit waits
-// for `.\r\n', the line that ends an ed append.  The first draft ended `go multi-user.' and
-// fired that rule before the shell had even prompted, sending a `Z' into the boot.  Check a
-// reworded banner against `grep -h "^expect" kernel/test/*.ini*'.
-char banner[] = "\nSingle-user mode -- type ^D to run /etc/rc and go multi-user\n";
+// for `.\r\n', the line that ends an ed append.  The first draft of the banner ended
+// `go multi-user.' and fired that rule before the shell had even prompted, sending a `Z'
+// into the boot.  edit.ini has three more bare rules of that kind, so no line may end in
+// `a', `ed' or `?' either, and the longer literals rule out `$ ', `login: ', `Password',
+// `GMT 2026' and the tests' own markers.  Check a reworded message against
+// `grep -h "^ *expect" kernel/test/*.ini kernel/test/*.ini.in | sort -u'.
+//
+// A THIRD RULE IS ABOUT PLACEMENT rather than wording, and costs a message its obvious spot:
+// nothing may be printed between /etc/rc's date and the first getty's prompt, because three
+// tests match those bytes as one string (`GMT 2026\r\n\r\nlogin: ').  So the multi-user
+// announcement goes ahead of /etc/rc rather than after it, where the transition really
+// happens, and the `login: ' that follows is left to announce the arrival itself.
+//
+// One string per message, as v7 wrote its file names: one copy each, not one per use.
+char banner[]  = "\nSingle-user mode -- type ^D to run /etc/rc and go multi-user\n";
+char multi[]   = "\nGoing multi-user -- running /etc/rc and then a getty per terminal line\n";
+char nottys[]  = "\nNo /etc/ttys to read -- no terminal line can be brought up\n";
+char nolines[] = "\nNo line of /etc/ttys is enabled -- nobody can log in\n";
+char allgone[] = "\nNothing is left running on any terminal line -- going back to single-user\n";
+char hupmsg[]  = "\nHangup on the console -- taking the system down to single-user\n";
+char almmsg[]  = "\nA process would not die in 60 seconds -- starting the cycle over\n";
+char nosh[]    = "init: cannot execute /bin/sh\n";
+char nogetty[] = "init: cannot execute /etc/getty\n";
+
+// Why init is on its way back to the single-user prompt: one of the five messages above,
+// set where the event happens and said by single()'s child, just ahead of the banner.  It
+// is a pointer rather than a flag because the events are spread over three functions and
+// none of them can write the console itself -- see tell().  Null means "nothing to say",
+// which is the state on the first pass through main(), so the boot stream is unchanged.
+char *pending;
 
 // One accounting record, reused as scratch by rmut() for both files above.  A global, not
 // a local, because it is 5 words and v7 counted stack.
@@ -124,7 +154,9 @@ static void maktty(char *lin);    // build "/dev/NAME" in tty[]
 static int get(void);             // read one character of /etc/ttys
 static void dfork(struct tab *p); // start a getty on one line
 static void rmut(struct tab *p);  // record in utmp/wtmp that a line was logged out
-static void reset(int sig);       // the SIGHUP handler
+static void reset(int sig);       // the SIGHUP and SIGALRM handler
+static void tell(char *msg);      // say one message on the console, from a child
+static int slen(char *s);         // strlen(), for the messages tell() is handed
 
 //
 // Process 1, and the whole of what init does.  The kernel starts this program at boot and
@@ -205,6 +237,14 @@ static void shutdown(void)
 static void single(void)
 {
     int pid;
+    char *why;
+
+    // Whatever set `pending' is the reason the machine is back here, and the child below
+    // says it ahead of the banner.  TAKEN AND CLEARED IN THE PARENT: fork() copies memory,
+    // so a child that cleared it would leave the parent's copy set and repeat the message on
+    // every later pass.  The child inherits `why' across the fork, which is all it needs.
+    why     = pending;
+    pending = 0;
 
     pid = fork();
     if (pid == 0) {
@@ -226,17 +266,25 @@ static void single(void)
         dup(0);
         dup(0);
 
-        // Say what state the machine is in, before the shell's prompt appears with no
-        // explanation of itself.  write(2) and not stdio: this program links none of it,
-        // and one write is one exchange on the Consul.  It goes here rather than in the
-        // parent because shutdown() closed every descriptor init had -- the console is
-        // open in this child alone -- and it is the child that is about to prompt.
+        // Say why the machine came back here, if anything knows, and then say what state it
+        // is in -- before the shell's prompt appears with no explanation of itself.  write(2)
+        // and not stdio: this program links none of it, and one write is one exchange on the
+        // Consul.  Both go here rather than in the parent because shutdown() closed every
+        // descriptor init had -- the console is open in this child alone -- and it is the
+        // child that is about to prompt.
+        if (why != 0)
+            write(1, why, slen(why));
         write(1, banner, sizeof(banner) - 1);
 
         // Become the shell.  Its argv[0] is "-", which is how a shell is told it is a
         // LOGIN shell: it reads the profile and prints a prompt.
         execl(shell, minus, (char *)0);
-        exit(0); // only reached if the exec failed -- no /bin/sh, say
+
+        // Only reached if the exec failed -- no /bin/sh, say.  Worth a word, because init
+        // then runs this whole cycle again and the console would otherwise show nothing but
+        // the banner appearing over and over.
+        write(1, nosh, sizeof(nosh) - 1);
+        exit(0);
     }
 
     // ---- the parent ----  Wait for that particular child to exit.  Other children may
@@ -256,6 +304,13 @@ static void runcom(void)
 
     pid = fork();
     if (pid == 0) {
+        // Announce the transition, and announce it HERE.  This is the one place in the
+        // program that can: the console has to be opened to be written, only a child may
+        // open it (tell()), and the bytes /etc/rc is about to print end in a string three
+        // tests match whole -- so ahead of /etc/rc is the last moment the announcement can
+        // be made.  tell() closes what it opened, leaving descriptor 0 free below.
+        tell(multi);
+
         // The script needs three descriptors but has no terminal to put them on -- this
         // stage runs unattended.  Opening the root DIRECTORY is v7's way of filling slots
         // 0, 1 and 2 with something harmless: a directory can be neither read nor written
@@ -267,6 +322,10 @@ static void runcom(void)
         // "sh /etc/rc": argv[0] is the shell's own name this time, not "-", so it is an
         // ordinary shell running a script rather than a login shell.
         execl(shell, shell, runc, (char *)0);
+
+        // The exec failed, and the three descriptors above go nowhere -- so the console has
+        // to be opened again to say so.
+        tell(nosh);
         exit(0);
     }
     while (wait((int *)0) != pid)
@@ -292,11 +351,16 @@ static void multiple(void)
 
         // -1 means there are no children left to wait for -- nothing is running on any
         // line, so there is nothing to keep this state alive.  Back to main(), which
-        // shuts down and offers the single-user shell again.  This is what happens on
-        // this port today, since /etc/ttys is not on the disk yet and merge() started
-        // no gettys at all.
-        if (pid == -1)
+        // shuts down and offers the single-user shell again.
+        //
+        // Note why on the way, unless merge() has already said something more precise:
+        // when it is a missing or empty /etc/ttys that emptied the line table, its own
+        // message is the useful one and this generic line must not overwrite it.
+        if (pid == -1) {
+            if (pending == 0)
+                pending = allgone;
             return;
+        }
 
         // Find whose line that was, note the logout, and start a getty there again.
         for (p = &itab[0]; p < &itab[TABSIZ]; p++)
@@ -448,7 +512,7 @@ static int get(void)
 static void merge(int sig)
 {
     struct tab *p, *q;
-    int i;
+    int i, n;
 
     (void)sig;
 
@@ -463,8 +527,13 @@ static void merge(int sig)
     signal(SIGINT, merge);
 
     fi = open(ifile, O_RDONLY);
-    if (fi < 0) // no /etc/ttys: nothing to start, and no lines are wanted
+    if (fi < 0) {
+        // No /etc/ttys: nothing to start, and no lines are wanted.  multiple() will find
+        // itself with no children and come straight back to single-user, so leave the
+        // reason where single() will say it.
+        pending = nottys;
         return;
+    }
 
     q = &itab[0]; // the border starts at the beginning -- nothing is sorted yet
     while (rline()) {
@@ -506,10 +575,21 @@ static void merge(int sig)
         term(q);
 
     // And now the actual work: a getty on every line that has a name but nothing running.
-    // Lines that already had one were never touched, which is exactly the intent.
+    // Lines that already had one were never touched, which is exactly the intent.  n counts
+    // the lines that are up, whether this pass started them or an earlier one did.
+    n = 0;
     for (p = &itab[0]; p < &itab[TABSIZ]; p++)
-        if (p->line[0] != 0 && p->pid == 0)
-            dfork(p);
+        if (p->line[0] != 0) {
+            n++;
+            if (p->pid == 0)
+                dfork(p);
+        }
+
+    // A file that exists and enables nothing is the harder case to diagnose of the two:
+    // every line was either marked '0' or named a terminal rline() could not open, and the
+    // machine is about to drop back to single-user looking exactly as if it had never tried.
+    if (n == 0)
+        pending = nolines;
 }
 
 //
@@ -546,7 +626,14 @@ static void dfork(struct tab *p)
         tty[0] = p->comn;
         tty[1] = 0;
         execl(getty, minus, tty, (char *)0);
-        exit(0); // the exec failed; give up on this line for now
+
+        // The exec failed, and this line is the right place to say so -- descriptor 1 is
+        // the terminal whoever is waiting for a prompt is sitting at.  IT WILL REPEAT: the
+        // exit below is a death multiple() answers with another dfork(), so a missing
+        // /etc/getty prints this line as fast as the terminal can take it.  That loop is
+        // v7's and is not new; all that is new is that it can be seen.
+        write(1, nogetty, sizeof(nogetty) - 1);
+        exit(0);
     }
 
     // ---- the parent ----  Remember who is on this line, and carry straight on.
@@ -613,10 +700,57 @@ static void rmut(struct tab *p)
 // hangup on the console takes the machine back to single-user, and an alarm that goes off
 // in shutdown() rescues init from waiting on a process that will not die.
 //
-// The argument is unused; C11 requires every handler to accept the signal number.
+// The argument is what tells the two apart, so the console can say which happened.  C11
+// requires every handler to accept the signal number and this kernel really does pass it
+// (kernel/sendsig.c leaves it in the accumulator, the convention's last-argument register),
+// which is why one handler serves both dispositions.  Nothing is written here -- a handler
+// has no console and could not open one anyway (see tell()); single() says it a moment later.
 //
 static void reset(int sig)
 {
-    (void)sig;
+    pending = (sig == SIGHUP) ? hupmsg : almmsg;
     longjmp(sjbuf, 1);
+}
+
+//
+// Say one message on the console, for a child that has no descriptor on it.
+//
+// ONLY EVER FROM A CHILD, and this is the one hard rule in this file.  ttyopen()
+// (kernel/dev/tty.c) makes the first process to open a terminal the leader of its process
+// group, and nothing ever clears p_pgrp again: an init that opened /dev/console even once
+// would carry p_pgrp = 1 for the life of the system, every process would inherit it, and no
+// shell, getty or login could claim a terminal after that.  t_pgrp would stay 0, so a ^C
+// would be delivered to process group 0, and u_ttyp would stay unset, so /dev/tty would
+// answer ENXIO for every process on the machine.  So init's PARENT opens nothing, ever --
+// which is what `pending' above is for, and why an interrupt that makes merge() re-read
+// /etc/ttys goes unremarked: that event is in the parent and leads nowhere near a prompt, so
+// saying it would cost a fork of its own.
+//
+// Closing is not tidiness either: single()'s child needs its own open() of the console to
+// land on descriptor 0 for the two dup()s to fill 1 and 2.
+//
+static void tell(char *msg)
+{
+    int f;
+
+    f = open(ctty, O_WRONLY);
+    if (f >= 0) {
+        write(f, msg, slen(msg));
+        close(f);
+    }
+}
+
+//
+// strlen(), for the two places a message arrives as a pointer rather than as the array it was
+// declared -- tell()'s argument and single()'s `why'.  Everything else writes sizeof() - 1.
+// Spelled out by hand, as maktty() spells strcpy/strcat: v7 wrote this program to link no
+// library routine but the system calls, and it still does.
+//
+static int slen(char *s)
+{
+    int i;
+
+    for (i = 0; s[i] != 0; i++)
+        ;
+    return (i);
 }
