@@ -23,7 +23,7 @@ numbering is **left as it was** — task numbers are cited from the sources and 
 | 32 | `profil()`: implement `addupc()` or make it fail | small; the decision is the task |
 | 33 | `ptrace` single-step | small now, blocked after |
 | 34 | the `int` ↔ pointer audit | open-ended |
-| 35 | the guest's timing is not reproducible — the dropped `send` character, and the disabled `console` test | small to measure, unknown to fix |
+| 35 | the guest's timing is not reproducible — the dropped `send` character, and the disabled `console` and `edit` tests | small to measure, unknown to fix |
 | 36 | the shifting copy: the half of the byte path task 28 could not reach | medium, high risk |
 
 ---
@@ -211,6 +211,19 @@ experiment than the character drop: no `send` is involved in the failing stage a
 mechanisms apart, and note what it implies — if instruction counts are not reproducible, then every
 `step N` budget in `kernel/test/` is a wall-clock timeout wearing a disguise.
 
+**A second test is disabled for the same reason now**, and its signature goes the other way.
+`test/edit` fails **two runs in six** on an otherwise idle tree — measured — always at the same
+place: the scripted stage passes in full and prints `edit done`, and then the *first* typed
+`send after=20000 "ed\r"` comes back echoed as **`e d`**, a byte standing between the two
+characters of a two-character send, so the `expect "ed\r\n"` on the next line never matches and
+the run spends its budget in the idle loop (`Step expired` at `01024`). Every case above **loses**
+a character; this one has **gained** one, on a `send` that already carries `after=`. That is a
+discriminator, and a cheap one: an input overrun in `scintr()` cannot manufacture a byte, while a
+host-timed console echo interleaved with the guest's own output can. `test/CMakeLists.txt` carries
+the transcript and the by-hand command, and note what disabling this one costs that disabling
+`console` did not — `edit` is a *script*, so the three host-side oracles at the end of
+`run-edit.sh` go with it, the fsck and the two `cmp`s against `/etc/motd`.
+
 **Why it went unnoticed for so long is worth its own sentence**, because it is the more useful
 finding: `console.ini`'s last rule was a bare `expect "# "`. All SIMH rules are armed at once, so a
 stalled stage simply fell through to it at the next prompt and the test printed PASS — it had been
@@ -236,18 +249,20 @@ passing without running its last four stages. That rule is unique now. **Check e
    `simh_boot`, which is exactly how the lock earned its place. It costs about fifteen seconds a
    suite, and it was bought to treat this symptom. If the delay makes the lock unnecessary, both
    the lock and its comment come out.
-3. **Re-enable `test/console`.** It is disabled, not deleted, and the property is one line in
-   `test/CMakeLists.txt` with the measurement written beside it. Nothing else asserts the typed
-   keystroke path, erase and kill, `/dev/tty` from a forked child, or `/etc/rc`'s motd and boot
-   date, so the suite is thinner than it looks until this comes back.
+3. **Re-enable `test/console` and `test/edit`.** Both are disabled, not deleted, and each property
+   is one line in `test/CMakeLists.txt` with its measurement written beside it. Nothing else asserts
+   the typed keystroke path, erase and kill, `/dev/tty` from a forked child, or `/etc/rc`'s motd and
+   boot date; and nothing else runs `ed` under a real kernel or fscks what it wrote. The suite is
+   thinner than it looks until both come back.
 4. Whatever the answer, correct README.md's "`send` DROPS A CHARACTER now and then, and it is not
    the kernel" — the second half of that sentence is exactly what has not been established.
 
 **How to verify.** A fix is only a fix if the fault can be *made to happen first*. For the
 step-budget half that is free: take the `DISABLED` property off `test/console` and run
-`ctest -R console` six times, which is how the one-in-three was measured. For the drop, remove the
-`after=` from `console.ini` and confirm `rmdir` still arrives as `mdir`, which takes one run. Then
-the five parallel-`ctest` runs for the load half.
+`ctest -R console` six times, which is how the one-in-three was measured, and the same off
+`test/edit` for the two-in-six. For the drop, remove the `after=` from `console.ini` and confirm
+`rmdir` still arrives as `mdir`, which takes one run. Then the five parallel-`ctest` runs for the
+load half.
 
 **Size.** Small to measure, and the measurement is most of the value. The fix is unknown until
 step 1 answers which side of the boundary it is on.

@@ -197,6 +197,14 @@ on a tty it fails harmlessly and the editor must go on reading. The `1,$p` typed
 is what says it did. The dialogue ends with `Q`, so it writes nothing and the three host-side
 oracles see exactly what the script left them.
 
+That typed stage is also why the test is **`DISABLED`** as it stands. It fails two runs in six on
+an idle tree, always on the *first* send of the dialogue and never inside the scripted half:
+`send "ed\r"` is echoed back as `e d`, so the `expect` that follows cannot match. It is the same
+wobble that took `console` out — `../../kernel/TODO.md` task 35 owns both, and
+`../../kernel/test/CMakeLists.txt` carries the transcript and the command to run this one by hand.
+Nothing about `ed` is implicated: the nineteen cases above still run on every build, and the
+by-hand run passes about two times in three.
+
 Two findings from writing it:
 
 * **`ed` must not be given a file that does not exist** in a here-document. The startup read

@@ -540,6 +540,42 @@ if(BESM6)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(edit PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
+    #
+    # DISABLED, on `console' above's precedent and for the same reason: the keystroke path is
+    # not reproducible.  Two failures in six runs on an otherwise idle tree, always at the
+    # same place and always with the same signature -- the SCRIPTED stage passes in full and
+    # prints `edit done', and then the FIRST typed send dies:
+    #
+    #	edit done
+    #	#e d
+    #	Step expired, "СчАС": 01024
+    #
+    # `send after=20000 "ed\r"' comes back echoed as `e d', a byte standing between the two
+    # characters of a two-character send, so `expect "ed\r\n"' on the next line cannot match
+    # and the run spends its step budget in the idle loop.  Note which way this one goes: the
+    # three cases in ../TODO.md task 35 all LOSE a character, and this transcript has gained
+    # one -- which is another discriminator for that task, not a new problem.
+    #
+    # WHAT GOES WITH IT is more than went with `console', and that is the cost: this test is a
+    # SCRIPT, not an .ini, so disabling it also suspends the three host-side oracles at the end
+    # of run-edit.sh -- the fsck and the two `cmp's against /etc/motd out of the same extracted
+    # image, which are the strongest statement in the file.  The nineteen cmd_ed_* cases next
+    # door still cover the command language and the regex engine under b6sim on the same bytes,
+    # so `ed' itself is not unwatched; what is suspended is ed under a real kernel -- a /tmp of
+    # this machine's own, a `!' with a real /bin/sh, the 512-byte temp-file pager against a real
+    # disk, and the typed dialogue that drives the editor from the Consul in Cyrillic.
+    #
+    # RUN IT BY HAND from the test build directory, where it passes about two runs in three:
+    #
+    #	cd build/kernel/test && sh ../../../kernel/test/run-edit.sh b6fsutil besm6 ../../../kernel/test
+    #
+    # not with `ctest -R edit', which cannot run a disabled test -- and unlike `console' there
+    # is no companion fixture left enabled, the script doing its own disk conversion.  It prints
+    # its own PASS/FAIL line either way.  Re-enable this with `console', the wobble being one
+    # question and not two.
+    #
+    set_tests_properties(edit PROPERTIES DISABLED TRUE)
+
     # fsinfo -- THE GUEST MEASURING ITS OWN FILESYSTEM, on its own volume (3087).  Task C4a,
     # and the question is one none of the tests above can ask: every one of them asks what
     # the guest can DO to the filesystem and then asks the HOST whether the result is still

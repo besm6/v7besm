@@ -146,7 +146,10 @@ work has two halves:
   needs no checked-in fixture — three copies of it substituted into Cyrillic through `ed`'s own
   512-byte temp-file pager, a shell forked out of `ed`'s `!`, and a closed listing of `/tmp`
   proving nothing leaked; it is also the only test that runs a **here-document** under the
-  booted kernel, which nothing had done before) and `kernel/test/fsinfo` (task C4a: a tree of
+  booted kernel, which nothing had done before — and it too is **currently `DISABLED`**, failing
+  two runs in six on the *typed* stage that follows all of that, which is `console`'s wobble
+  again and so also task 35's; run it by hand, and note that disabling a script rather than an
+  `.ini` suspends its host-side fsck and `cmp`s with it) and `kernel/test/fsinfo` (task C4a: a tree of
   known sizes with a hard link across two directories that `du` charges for **once**, and then
   the superblock and the whole i-list read off the raw device — with `df`'s free count and
   `quot`'s per-uid sums diffed against figures the host **recomputes**, out of `b6fsutil -c -v`
