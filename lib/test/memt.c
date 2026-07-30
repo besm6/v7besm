@@ -27,15 +27,13 @@
 #include <unistd.h>
 
 // The kernel's own view of itself.  <sys/user.h> and <sys/proc.h> have never been included
-// by a user program before this one; they need <sys/types.h>, <sys/param.h> and
-// <sys/dir.h> ahead of them, which is the order kernel/test/mmutest.c uses too.
-// clang-format off
-#include <sys/types.h>
+// by a user program before this one; each now includes what it needs, so the order below is
+// only alphabetical.  param.h and types.h are named because this file uses them too --
+// UBASE, USIZE, NBPW and off_t -- not to prop the other two up.
 #include <sys/param.h>
-#include <sys/dir.h>
-#include <sys/user.h>
 #include <sys/proc.h>
-// clang-format on
+#include <sys/types.h>
+#include <sys/user.h>
 
 #define MAGIC1 0525252 // what this program plants in `magic'
 #define MAGIC2 0123456 // what the kernel is asked to put there instead

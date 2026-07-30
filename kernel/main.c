@@ -1,20 +1,18 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
-#include "sys/dir.h"
-#include "sys/user.h"
-#include "sys/filsys.h"
-#include "sys/mount.h"
-#include "sys/map.h"
-#include "sys/proc.h"
-#include "sys/inode.h"
-#include "sys/seg.h"
-#include "sys/conf.h"
 #include "sys/buf.h"
-// clang-format on
+#include "sys/conf.h"
+#include "sys/dir.h"
+#include "sys/filsys.h"
+#include "sys/inode.h"
+#include "sys/map.h"
+#include "sys/mount.h"
+#include "sys/param.h"
+#include "sys/proc.h"
+#include "sys/seg.h"
+#include "sys/systm.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 time_t time; // time in sec from 1970
 int nblkdev;
@@ -90,7 +88,7 @@ void main()
         // so its own labels are correct in the user's space too.  besm6.S says why that is
         // the only way it can name anything.  The data region therefore has to cover word 0
         // up through the end of the block, not just the block's length.
-        nw = eicode - icode;                       // words of icode (sizeof(int) == 1 word)
+        nw = eicode - icode; // words of icode (sizeof(int) == 1 word)
         nd = pground(ptrword((caddr_t)icode) + nw);
 
         expand(USIZE + nd + SSIZE);
@@ -159,7 +157,7 @@ void iinit()
     fp->s_ronly     = 0;
     if (time == 0)
         time = fp->s_time;
-    printf ("root size = %d kbytes\n", fp->s_fsize * BSIZE / 1024);
+    printf("root size = %d kbytes\n", fp->s_fsize * BSIZE / 1024);
 }
 
 // This is the set of buffers proper, whose heads

@@ -68,3 +68,10 @@ AllowAllParametersOfDeclarationOnNextLine: false
 
 AlignConsecutiveAssignments: true
 AlignConsecutiveMacros: true
+
+#
+# The scalar typedefs of <sys/types.h>.  Without this clang-format cannot tell a cast
+# from a bitwise and, and writes `(caddr_t) & (x)' where the source says `(caddr_t)&(x)'.
+# Requires clang-format 17 or newer.
+#
+TypeNames: [caddr_t, chan_t, carg_t, comp_t, daddr_t, ino_t, label_t, paddr_t]

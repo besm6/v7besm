@@ -1,19 +1,17 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-// clang-format off
-#include "sys/types.h"
+#include "sys/buf.h"
+#include "sys/conf.h"
+#include "sys/dir.h"
+#include "sys/fblk.h"
+#include "sys/filsys.h"
+#include "sys/ino.h"
+#include "sys/inode.h"
+#include "sys/mount.h"
 #include "sys/param.h"
 #include "sys/systm.h"
-#include "sys/mount.h"
-#include "sys/filsys.h"
-#include "sys/fblk.h"
-#include "sys/conf.h"
-#include "sys/buf.h"
-#include "sys/inode.h"
-#include "sys/ino.h"
-#include "sys/dir.h"
+#include "sys/types.h"
 #include "sys/user.h"
-// clang-format on
 
 typedef struct fblk *FBLKP;
 

@@ -9,6 +9,8 @@
 #ifndef _SYS_FILE_H
 #define _SYS_FILE_H
 
+#include <sys/types.h> // off_t -- included, not assumed; see sys/dir.h
+
 struct file {
     char f_flag;
     char f_count;          // reference count

@@ -1,11 +1,9 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-// clang-format off
-#include "sys/types.h"
+#include "sys/map.h"
 #include "sys/param.h"
 #include "sys/systm.h"
-#include "sys/map.h"
-// clang-format on
+#include "sys/types.h"
 
 // Allocate 'size' units from the given
 // map. Return the base of the allocated

@@ -1,19 +1,18 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // general TTY subroutines
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
-#include "sys/dir.h"
-#include "sys/user.h"
 #include "sys/tty.h"
-#include "sys/proc.h"
-#include "sys/inode.h"
-#include "sys/file.h"
-#include "sys/reg.h"
+
 #include "sys/conf.h"
-// clang-format on
+#include "sys/dir.h"
+#include "sys/file.h"
+#include "sys/inode.h"
+#include "sys/param.h"
+#include "sys/proc.h"
+#include "sys/reg.h"
+#include "sys/systm.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 int tk_nin;
 int tk_nout;

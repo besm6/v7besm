@@ -1,18 +1,16 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
+#include "sys/buf.h"
 #include "sys/dir.h"
-#include "sys/user.h"
-#include "sys/proc.h"
-#include "sys/text.h"
-#include "sys/map.h"
 #include "sys/file.h"
 #include "sys/inode.h"
-#include "sys/buf.h"
-// clang-format on
+#include "sys/map.h"
+#include "sys/param.h"
+#include "sys/proc.h"
+#include "sys/systm.h"
+#include "sys/text.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 #define SQSIZE  0100 // Must be power of 2
 #define HASH(x) (((int)x >> 5) & (SQSIZE - 1))
@@ -26,10 +24,10 @@ struct map swapmap[SMAPSIZ]; // space for swap allocation
 // The swap-in half of the traffic counters; the other four are kernel/text.c's, and
 // <sys/systm.h> says what they are for.
 int nswapin;
-char runin;                  // scheduling flag
-char runout;                 // scheduling flag
-char runrun;                 // scheduling flag
-char curpri;                 // more scheduling
+char runin;  // scheduling flag
+char runout; // scheduling flag
+char runrun; // scheduling flag
+char curpri; // more scheduling
 
 // Give up the processor till a wakeup occurs
 // on chan, at which time the process

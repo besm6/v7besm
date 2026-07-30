@@ -38,13 +38,11 @@
 // NOT REACHABLE FROM AN INTERRUPT HANDLER, because usermem.S's scratch cells are static and
 // this calls into them.  Same restriction the routines it calls already carry.
 
-// clang-format off
-#include "sys/types.h"
+#include "sys/dir.h"
 #include "sys/param.h"
 #include "sys/systm.h"
-#include "sys/dir.h"
+#include "sys/types.h"
 #include "sys/user.h"
-// clang-format on
 
 // iomove() traffic, in BYTES, by the arm that carried it.  They exist to be OBSERVED, on the
 // same argument as the swapper's counters in systm.h: a bulk path that is never taken looks

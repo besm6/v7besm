@@ -28,7 +28,8 @@
 //      b6cc -I../../include -DNDEBUG -c headers.c
 //
 // clang-format is off over the inclusions and must stay off: it sorts an #include
-// block, and both the repetition and the sys/ ordering below are the test.
+// block, and it would fold the repetition below -- which IS the test -- into one copy
+// of each name, and move <tgmath.h> out of last place.
 //
 // clang-format off
 #include <assert.h>
@@ -54,16 +55,24 @@
 #include <unctrl.h>
 
 //
-// The sys/ headers are NOT self-sufficient and are not meant to be: sys/dir.h
-// needs ino_t from sys/types.h and DIRSIZ from sys/param.h, and says at its head
-// that it will not default either -- one home only.  So they go in the order the
-// kernel includes them in, types before param before the rest, and that ordering
-// is itself part of what this test pins down.
+// The sys/ headers, in the order clang-format would sort them into -- which is
+// deliberately NOT the v7 one: sys/dir.h comes ahead of the sys/param.h and
+// sys/types.h it needs.  It compiles because each of them now includes what it
+// uses, and requiring an include order is requiring something no compiler checks.
+// <sys/user.h> beside <errno.h> above is a test in itself: the two carried
+// separate copies of the errno numbering until <sys/errno.h> became its one home,
+// and any translation unit naming both of these headers used to fail.
 //
-#include <sys/types.h>
-#include <sys/param.h>
+// THE LIST DOES NOT GROW WITHOUT CHECKING.  <sys/tty.h> is the one that cannot
+// join it: it spells XTABS as 006000 where <sgtty.h> spells it 06000, and b6cpp
+// rejects a macro redefinition whose replacement text is not character-identical.
+//
 #include <sys/dir.h>
+#include <sys/errno.h>
+#include <sys/param.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/user.h>
 #include <sys/wait.h>
 
 // Again, all of it.  See above.
@@ -89,10 +98,12 @@
 #include <curses.h>
 #include <unctrl.h>
 
-#include <sys/types.h>
-#include <sys/param.h>
 #include <sys/dir.h>
+#include <sys/errno.h>
+#include <sys/param.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/user.h>
 #include <sys/wait.h>
 
 //

@@ -33,9 +33,9 @@
 // pointer, in which case the status is discarded -- wait.S tests for that.
 //
 // Not for the kernel side, which has a `void wait(void)' of its own on the other side of
-// the gate (<sys/systm.h>, kernel/sys1.c).  The W* macros above are for both.  On the two
-// conditions rather than one, see the same guard in <sys/stat.h>.
-#if !defined(KERNEL) && !defined(_SYS_SYSTM_H)
+// the gate (<sys/systm.h>, kernel/sys1.c).  The W* macros above are for both.  On the one
+// condition rather than the two this used to carry, see the same guard in <sys/stat.h>.
+#ifndef KERNEL
 pid_t wait(int *status);
 #endif
 

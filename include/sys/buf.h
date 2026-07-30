@@ -22,6 +22,12 @@
 #ifndef _SYS_BUF_H
 #define _SYS_BUF_H
 
+// Included, not assumed of the caller; see sys/dir.h.  param.h is for ptrword() in
+// bufpaddr() at the foot, which is only needed where the macro expands -- named here
+// anyway, because this header is what wrote the macro.
+#include <sys/param.h> // ptrword
+#include <sys/types.h> // dev_t, daddr_t, paddr_t
+
 struct buf {
     int b_flags;         // see defines below
     struct buf *b_forw;  // headed by d_tab of conf.c

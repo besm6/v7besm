@@ -22,6 +22,16 @@
 #ifndef _SYS_USER_H
 #define _SYS_USER_H
 
+// Included, not assumed of the caller; see sys/dir.h.  That one is the hard case in this
+// directory: u_dent below holds a `struct direct' BY VALUE, so a forward declaration of the
+// tag will not do -- this header genuinely cannot compile without sys/dir.h ahead of it, and
+// sys/dir.h sorts first anyway.  param.h and types.h come with it, and are named regardless:
+// a header should say what it uses, and sys/dir.h is not in the business of promising them.
+#include <sys/dir.h>   // struct direct
+#include <sys/errno.h> // the u_error codes -- one home, and this is not it
+#include <sys/param.h> // DIRSIZ, NOFILE, NSIG
+#include <sys/types.h> // label_t, off_t, time_t, caddr_t, dev_t
+
 #define EXCLOSE 01
 
 struct user {
@@ -117,42 +127,5 @@ struct user {
 };
 
 extern struct user u;
-
-// u_error codes.  The user-level copy of this list is <errno.h>, which names
-// the third copy as well; all three must agree number for number.
-#define EPERM   1
-#define ENOENT  2
-#define ESRCH   3
-#define EINTR   4
-#define EIO     5
-#define ENXIO   6
-#define E2BIG   7
-#define ENOEXEC 8
-#define EBADF   9
-#define ECHILD  10
-#define EAGAIN  11
-#define ENOMEM  12
-#define EACCES  13
-#define EFAULT  14
-#define ENOTBLK 15
-#define EBUSY   16
-#define EEXIST  17
-#define EXDEV   18
-#define ENODEV  19
-#define ENOTDIR 20
-#define EISDIR  21
-#define EINVAL  22
-#define ENFILE  23
-#define EMFILE  24
-#define ENOTTY  25
-#define ETXTBSY 26
-#define EFBIG   27
-#define ENOSPC  28
-#define ESPIPE  29
-#define EROFS   30
-#define EMLINK  31
-#define EPIPE   32
-#define EDOM    33
-#define ERANGE  34
 
 #endif // _SYS_USER_H

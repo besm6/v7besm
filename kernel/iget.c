@@ -1,18 +1,16 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-// clang-format off
-#include "sys/types.h"
+#include "sys/buf.h"
+#include "sys/conf.h"
+#include "sys/dir.h"
+#include "sys/filsys.h"
+#include "sys/ino.h"
+#include "sys/inode.h"
+#include "sys/mount.h"
 #include "sys/param.h"
 #include "sys/systm.h"
-#include "sys/mount.h"
-#include "sys/dir.h"
+#include "sys/types.h"
 #include "sys/user.h"
-#include "sys/inode.h"
-#include "sys/ino.h"
-#include "sys/filsys.h"
-#include "sys/conf.h"
-#include "sys/buf.h"
-// clang-format on
 
 void iexpand(register struct inode *ip, register struct dinode *dp);
 void tloop(dev_t dev, daddr_t bn, int f1, int f2);

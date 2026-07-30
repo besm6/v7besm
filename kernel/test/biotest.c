@@ -30,18 +30,16 @@
 // main() returns 0 on success; a nonzero return names the check that failed, and
 // biotest.ini asserts on it.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
-#include "sys/dir.h"
-#include "sys/user.h"
 #include "sys/buf.h"
 #include "sys/conf.h"
+#include "sys/dir.h"
+#include "sys/param.h"
 #include "sys/proc.h"
-#include "sys/text.h"
 #include "sys/seg.h"
-// clang-format on
+#include "sys/systm.h"
+#include "sys/text.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 // The kernel globals bio.o and utab.o refer to.  In the kernel `u' is an absolute symbol
 // at 074000 and maxmem is counted by startup(); here they are just storage.

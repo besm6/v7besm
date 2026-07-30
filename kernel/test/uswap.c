@@ -27,27 +27,21 @@
 // free-core region between the write and the read, so a swap() that transferred nothing
 // cannot pass by finding the pattern still sitting where it left it.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
-#include "sys/map.h"
-#include "sys/dir.h"
-#include "sys/user.h"
-#include "sys/proc.h"
-#include "sys/inode.h"
-#include "sys/text.h"
 #include "sys/buf.h"
 #include "sys/conf.h"
+#include "sys/dir.h"
+#include "sys/inode.h"
+#include "sys/map.h"
+#include "sys/param.h"
+#include "sys/proc.h"
 #include "sys/seg.h"
-// clang-format on
+#include "sys/systm.h"
+#include "sys/text.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 void halt(int status);
 struct trap;
-
-// map.h hides these behind #ifdef KERNEL, and a test compiles without it.
-int malloc(struct map *mp, int size);
-void mfree(struct map *mp, int size, int a);
 
 // text.c keeps these two to itself -- no header declares them, because until now nothing
 // outside that file had any business calling them.  This test does: they are the two ends
@@ -104,7 +98,7 @@ struct bdevsw bdevsw[] = {
     { mbopen, 0, mbstrategy, &mbtab },
     {},
 };
-int nblkdev  = 1;
+int nblkdev   = 1;
 dev_t swapdev = 0;
 daddr_t swplo;
 int nswap = 1024; // as kernel/conf.c: 2 drums * 256 zones * 2 blocks
@@ -470,8 +464,7 @@ static void legtext(void)
 
     // The first sharer leaves.  Nothing may happen: the text is still in core for the other.
     xccdec(xp);
-    if (xp->x_ccount != 1 || ntextout != out0 || xp->x_caddr != caddr ||
-        (xp->x_flag & XWRIT) == 0)
+    if (xp->x_ccount != 1 || ntextout != out0 || xp->x_caddr != caddr || (xp->x_flag & XWRIT) == 0)
         mask |= F_TCC;
 
     // The last one leaves.  Now it is written out and the core is freed.
@@ -483,7 +476,7 @@ static void legtext(void)
 
     // A later sharer arrives and finds x_ccount zero, which is xalloc()'s xexpand() arm.
     // xexpand() is called with the text LOCKED and unlocks it itself.
-    in0        = ntextin;
+    in0 = ntextin;
     xp->x_flag |= XLOCK;
     xexpand(xp);
     if (xp->x_ccount != 1 || ntextin != in0 + 1 || (xp->x_flag & XLOCK))

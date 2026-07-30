@@ -41,21 +41,19 @@
 //
 // uclock.ini asserts ACC == 0.  A nonzero ACC names the failing check -- see the F_* bits.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
+#include <besm6.h>
+
+#include "sys/besm6dev.h"
 #include "sys/callo.h"
 #include "sys/dir.h"
-#include "sys/user.h"
+#include "sys/param.h"
 #include "sys/proc.h"
-#include "sys/text.h"
 #include "sys/reg.h"
 #include "sys/seg.h"
-#include "sys/besm6dev.h"
-// clang-format on
-
-#include <besm6.h>
+#include "sys/systm.h"
+#include "sys/text.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 // `u' is NOT defined here, unlike in mmutest/uintr: crt0c.S reserves it, because extintr() and
 // clock() run on the stack that grows out of u.u_stack and it needs room.  maxmem is what utab.o

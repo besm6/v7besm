@@ -1,10 +1,22 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // This header is #define-only, so that the assembly sources can #include it too
-// and stop hand-copying its constants -- see sys/besm6dev.h, which is kept the
-// same way.  Nothing here may expand to C text: no typedef, no declaration, and
-// no `sizeof' (b6as has no such operator).  The scalar typedefs that used to sit
-// at the end of this file are in sys/types.h; include that first if you need them.
+// and stop hand-copying its constants -- see sys/besm6dev.h and sys/syscall.h, which
+// are kept the same way.  Nothing here may expand to C text: no typedef, no
+// declaration, and no `sizeof' (b6as has no such operator).  The scalar typedefs that
+// used to sit at the end of this file are in sys/types.h.
+//
+// So this file INCLUDES NOTHING, and needs nothing.  Every other header in this
+// directory includes what it uses (sys/dir.h says why); this is the one that stands
+// alone by emitting no C text at all, which makes it order-insensitive by
+// construction.  Five macro bodies below do name typedefs -- dev_t in NODEV and
+// makedev(), ino_t in ROOTINO, daddr_t in SUPERB and itod(), chan_t in CHANOF() --
+// but a macro body is only text until it is expanded, and every expansion site is
+// inside a function body, where sys/types.h is in scope.
+//
+// Do not bracket the file in `#ifndef __ASSEMBLER__' to let it grow a typedef: b6cpp
+// predefines no such macro and b6cc passes none for a .S, so the bracket would be
+// permanently false.  Adding one means changing the compiler driver.
 #ifndef _SYS_PARAM_H
 #define _SYS_PARAM_H
 

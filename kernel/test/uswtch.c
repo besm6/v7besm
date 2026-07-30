@@ -30,17 +30,15 @@
 // The phase counter lives in ordinary bss, NOT in the u-area: leg B swaps the u-area under
 // itself, so a phase kept there would be swapped too and the alternation would never end.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
-#include "sys/dir.h"
-#include "sys/user.h"
-#include "sys/proc.h"
-#include "sys/besm6dev.h"
-// clang-format on
-
 #include <besm6.h>
+
+#include "sys/besm6dev.h"
+#include "sys/dir.h"
+#include "sys/param.h"
+#include "sys/proc.h"
+#include "sys/systm.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 // From crt0w.S: the register-file probe and the cells it reports through.  `u' comes from
 // there too, as the absolute symbol 074000 -- this file must not define it.
@@ -165,7 +163,7 @@ int main()
         // copies that far, so what B leaves there is what A must find.
         UPAGE[DEEP] = ~SENT_D;
         UPAGE[HIGH] = 0;
-        phase = 2;
+        phase       = 2;
         resume(P0, u.u_rsav); // ... and back again
     }
 

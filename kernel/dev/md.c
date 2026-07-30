@@ -103,18 +103,16 @@
 //
 // kernel/test/mdtest exercises all of it against SIMH.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
-#include "sys/buf.h"
-#include "sys/dir.h"
-#include "sys/user.h"
+#include <besm6.h>
+
 #include "sys/besm6dev.h"
 #include "sys/besm6disk.h"
-// clang-format on
-
-#include <besm6.h>
+#include "sys/buf.h"
+#include "sys/dir.h"
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 void drainbrz(void); // brz.s -- the nine stores that flush the write cache
 
@@ -133,10 +131,10 @@ void drainbrz(void); // brz.s -- the nine stores that flush the write cache
 //
 // This is a driver register, not memory anyone else may use: sys/param.h's memory map has
 // nothing below the kernel image, and these eight words per controller are why.
-#define MDSYS       ((int *)030) // controller 3's buffer; controller 4's is 8 words on
-#define MDSYSWORDS  8           // service words to a zone
-#define MDSYSHALF   4           // ... of which a half-zone transfer moves four
-#define MDSYS_ADDR  36          // the sector address sits in bits 48-37 of the first word
+#define MDSYS      ((int *)030) // controller 3's buffer; controller 4's is 8 words on
+#define MDSYSWORDS 8            // service words to a zone
+#define MDSYSHALF  4            // ... of which a half-zone transfer moves four
+#define MDSYS_ADDR 36           // the sector address sits in bits 48-37 of the first word
 
 // The controller commands of 033 023 / 033 024.  These live here rather than in
 // sys/besm6disk.h because that header owns the mass-storage family's CONTROL WORD layout --

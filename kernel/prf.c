@@ -1,15 +1,14 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-// clang-format off
+#include <besm6.h>
 #include <stdarg.h>
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
-#include "sys/seg.h"
+
 #include "sys/buf.h"
 #include "sys/conf.h"
-#include <besm6.h>
-// clang-format on
+#include "sys/param.h"
+#include "sys/seg.h"
+#include "sys/systm.h"
+#include "sys/types.h"
 
 // In case console is off,
 // panicstr contains argument to last

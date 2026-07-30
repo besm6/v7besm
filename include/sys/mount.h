@@ -7,6 +7,9 @@
 #ifndef _SYS_MOUNT_H
 #define _SYS_MOUNT_H
 
+#include <sys/param.h> // NMOUNT -- included, not assumed; see sys/dir.h
+#include <sys/types.h> // dev_t
+
 struct mount {
     dev_t m_dev;           // device mounted
     struct buf *m_bufp;    // pointer to superblock

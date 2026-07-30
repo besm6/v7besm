@@ -28,20 +28,18 @@
 //
 // usig.ini asserts ACC == 0.  A nonzero ACC names the failing check -- see the F_* bits.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
+#include <besm6.h>
+
+#include "sys/besm6dev.h"
 #include "sys/dir.h"
-#include "sys/user.h"
+#include "sys/param.h"
 #include "sys/proc.h"
-#include "sys/text.h"
 #include "sys/reg.h"
 #include "sys/seg.h"
-#include "sys/besm6dev.h"
-// clang-format on
-
-#include <besm6.h>
+#include "sys/systm.h"
+#include "sys/text.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 // `u' is NOT defined here: crt0sg.S reserves it, because the real syscall() and the real
 // sendsig() both find the frame at u.u_stack and that stack needs room to grow.

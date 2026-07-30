@@ -51,18 +51,16 @@
 //
 // kernel/test/mbtest exercises all of it against SIMH.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
-#include "sys/buf.h"
-#include "sys/dir.h"
-#include "sys/user.h"
+#include <besm6.h>
+
 #include "sys/besm6dev.h"
 #include "sys/besm6disk.h"
-// clang-format on
-
-#include <besm6.h>
+#include "sys/buf.h"
+#include "sys/dir.h"
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 void drainbrz(void); // brz.s -- the nine stores that flush the write cache
 

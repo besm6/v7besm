@@ -27,20 +27,18 @@
 //
 // usys.ini asserts ACC == 0.  A nonzero ACC names the failing check -- see the F_* bits.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
+#include <besm6.h>
+
+#include "sys/besm6dev.h"
 #include "sys/dir.h"
-#include "sys/user.h"
+#include "sys/param.h"
 #include "sys/proc.h"
-#include "sys/text.h"
 #include "sys/reg.h"
 #include "sys/seg.h"
-#include "sys/besm6dev.h"
-// clang-format on
-
-#include <besm6.h>
+#include "sys/systm.h"
+#include "sys/text.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 // `u' is NOT defined here, unlike in mmutest/uintr/utrap: crt0s.S reserves it, because the real
 // syscall() finds its frame at u.u_stack and that stack needs room to grow.  maxmem is what

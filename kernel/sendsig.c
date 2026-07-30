@@ -29,17 +29,15 @@
 //     kernel.  That is why sigret() is a syscall and not a few instructions in
 //     libc, and why libc needs no trampoline of its own at all.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
+#include "sys/besm6dev.h"
 #include "sys/dir.h"
-#include "sys/user.h"
+#include "sys/param.h"
 #include "sys/proc.h"
 #include "sys/reg.h"
 #include "sys/seg.h"
-#include "sys/besm6dev.h"
-// clang-format on
+#include "sys/systm.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 // kernel/besm6.S: one word, `$77 SYS_sigret', copied to the user stack below.
 // An array so that the name is the address, as with edata[]/end[] in machdep.c.

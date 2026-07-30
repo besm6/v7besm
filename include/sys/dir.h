@@ -11,6 +11,14 @@
 // with sys/types.h for ino_t, rather than assumed of the caller.  This file
 // cannot compile without either (the assertions below name BSIZE), and it sorts
 // ahead of both in an include list clang-format has put in order.
+//
+// THAT IS THE RULE FOR THIS WHOLE DIRECTORY, not a habit of this one file: every
+// header here includes what it uses, because requiring an include order is
+// requiring something no compiler checks and no formatter preserves.  v7 required
+// one -- types, param, systm, then the rest -- and the kernel's sources had to
+// bracket their include blocks in `// clang-format off' to keep it.  They no longer
+// do.  sys/param.h is the one header that includes nothing, and it earns that by
+// emitting no C text at all; its head comment says so.
 
 #ifndef _SYS_DIR_H
 #define _SYS_DIR_H

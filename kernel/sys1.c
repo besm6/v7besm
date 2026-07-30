@@ -1,19 +1,17 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
-#include "sys/map.h"
-#include "sys/dir.h"
-#include "sys/user.h"
-#include "sys/proc.h"
-#include "sys/buf.h"
-#include "sys/reg.h"
-#include "sys/inode.h"
-#include "sys/seg.h"
 #include "sys/acct.h"
-// clang-format on
+#include "sys/buf.h"
+#include "sys/dir.h"
+#include "sys/inode.h"
+#include "sys/map.h"
+#include "sys/param.h"
+#include "sys/proc.h"
+#include "sys/reg.h"
+#include "sys/seg.h"
+#include "sys/systm.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 // exec system call, with and without environments.
 struct execa {
@@ -281,9 +279,7 @@ int getxfile(register struct inode *ip, int nargc)
     // carries the BADDR-word hole; the image begins at word BADDR (cross/besm6/
     // b.out.h).  Under FMAGIC ux_tsize is 0, so ts is 0 and the hole falls into
     // the data region instead -- `ts ? 0 : BADDR' below adds it there.
-    ts    = u.u_exdata.ux_tsize
-                ? pground(BADDR + btow(u.u_exdata.ux_csize + u.u_exdata.ux_tsize))
-                : 0;
+    ts = u.u_exdata.ux_tsize ? pground(BADDR + btow(u.u_exdata.ux_csize + u.u_exdata.ux_tsize)) : 0;
     lsize = u.u_exdata.ux_dsize + u.u_exdata.ux_bsize;
     if (lsize < 0) { // sum overflowed 41 bits
         u.u_error = ENOMEM;

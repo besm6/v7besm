@@ -1,16 +1,14 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
 #include "sys/dir.h"
-#include "sys/user.h"
-#include "sys/reg.h"
 #include "sys/inode.h"
+#include "sys/param.h"
 #include "sys/proc.h"
+#include "sys/reg.h"
+#include "sys/systm.h"
 #include "sys/timeb.h"
-// clang-format on
+#include "sys/types.h"
+#include "sys/user.h"
 
 // Everything in this file is a routine implementing a system call.
 void chdirec(register struct inode **ipp);

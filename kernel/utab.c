@@ -12,17 +12,16 @@
 //
 // Read doc/Memory_Mapping.md, "Programming the MMU", before touching any of this.
 
-// clang-format off
 #include <besm6.h>
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
+
 #include "sys/dir.h"
-#include "sys/user.h"
+#include "sys/param.h"
 #include "sys/proc.h"
-#include "sys/text.h"
 #include "sys/seg.h"
-// clang-format on
+#include "sys/systm.h"
+#include "sys/text.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 // The accumulator bits page k of a quartet contributes to, most significant first:
 // its bit 10 at acc 45+k, bit 9 at 41+k, bit 8 at 37+k, bit 7 at 33+k, bit 6 at

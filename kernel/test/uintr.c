@@ -25,19 +25,17 @@
 // uintr.ini asserts ACC == 0.  A nonzero ACC names the failing check (1 M[16], 2 R, 4 Y,
 // 010 r15 value, 020 stack-switch).
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
-#include "sys/dir.h"
-#include "sys/user.h"
-#include "sys/proc.h"
-#include "sys/text.h"
-#include "sys/seg.h"
-#include "sys/besm6dev.h"
-// clang-format on
-
 #include <besm6.h>
+
+#include "sys/besm6dev.h"
+#include "sys/dir.h"
+#include "sys/param.h"
+#include "sys/proc.h"
+#include "sys/seg.h"
+#include "sys/systm.h"
+#include "sys/text.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 // The kernel globals utab.o refers to.  In the kernel `u' is absolute at 074000 and maxmem is
 // counted at boot; here they are ordinary storage (as in mmutest).

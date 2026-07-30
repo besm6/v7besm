@@ -40,7 +40,7 @@ What that cost is written down in each header, but the four worth knowing here a
 
 Six headers that were missing outright came over whole: `locale.h`, `fenv.h`, `wchar.h`,
 `wctype.h`, `uchar.h`, `tgmath.h`. Three are refused from that tree on purpose — its `errno.h`
-(a six-entry non-POSIX set, where ours is the kernel's list and is load-bearing in three places),
+(a six-entry non-POSIX set, where ours is the kernel's list and is load-bearing on both sides),
 its `malloc.h` (the claim-everything allocator `lib/README.md` phase 3 rejects), and its KOI7
 case folding (this terminal is ASCII).
 
@@ -51,6 +51,33 @@ no atomic instructions, no threads. A hosted implementation owes the program tha
 
 `lib/test/headers.c` is what keeps all of this true: it includes every header in the tree twice
 and checks the handful of behaviours that would otherwise fail silently.
+
+**Every header in this tree stands alone**, `sys/` included, and that is new. v7's `sys/`
+headers assumed the caller had included the right ones first, in the right order — `types.h`,
+`param.h`, `systm.h`, then the rest — so `<sys/user.h>` would not compile without `<sys/dir.h>`
+in front of it and `<sys/inode.h>` needed `NADDR` from somewhere else. Every one of them now
+includes what it uses, which is the only form of the requirement a compiler checks, and the
+only one that survives a formatter: clang-format sorts an include list alphabetically, which
+puts `sys/dir.h` ahead of both headers it depends on. The kernel's sources used to carry their
+include blocks inside a `// clang-format off` bracket for exactly that reason; none of them
+does now. `<sys/param.h>` is the single exception to the "includes what it uses" rule, and it
+proves it: it is `#define`-only so that `kernel/*.S` can include it too, emits no C text at
+all, and so needs nothing to be order-insensitive. Its head comment says why the obvious
+`#ifndef __ASSEMBLER__` escape is not available.
+
+**The errno numbering has one home, `<sys/errno.h>`.** v7 wrote it out twice — in `<errno.h>`
+for the user and in `<sys/user.h>`'s `u_error codes` block for the kernel — and this port
+inherited both. They had already drifted in the only way that matters here: `b6cpp` rejects a
+macro redefinition unless the replacement text is *character*-identical, and clang-format's
+`AlignConsecutiveMacros` had given `EDOM` and `ERANGE` different columns in the two files, so a
+translation unit naming both headers did not compile. Now `<sys/errno.h>` holds the numbers and
+nothing else — `#define`-only, so either side of the `KERNEL` gate may include it — `<errno.h>`
+adds the `errno` object C11 §7.5 wants and includes it, and `<sys/user.h>` reads the same file
+the kernel does. The one remaining copy is not a header: `guest_errno()` in
+[`../cmd/sim/syscall.cpp`](../cmd/sim/syscall.cpp), which maps a *host* errno onto these
+numbers. `<sgtty.h>` and `<sys/tty.h>` are still a pair of this kind, and worse — `XTABS` is
+`06000` in one and `006000` in the other, a token difference and not just spacing — but nothing
+includes both.
 
 **The dead v7 headers have been pruned**, and two rules say what may come back. A file format
 this toolchain has already replaced is described *once*, under `cross/besm6/` — so `a.out.h`
@@ -111,9 +138,13 @@ rather than POSIX's `struct utimbuf`, because that is what the kernel `copyin`s
 (`kernel/sys4.c`), and `lib/libc/man/utime.2` has said so since it was corrected. It had no
 declaration anywhere until `cmd/mv` needed one.
 
-Those three `sys/` prototypes carry a guard the rest of the tree does not:
-`#if !defined(KERNEL) && !defined(_SYS_SYSTM_H)`. `stat`, `chmod` and `wait` name *two*
-different functions in this repo — the libc leaf and the kernel's system-call handler
-(`void stat(void)`, `<sys/systm.h>`) — and both sides include `<sys/stat.h>` for the struct.
-`-DKERNEL` alone does not tell them apart, because the standalone tests in `kernel/test/`
-link kernel objects but compile **without** it; having included `<sys/systm.h>` does.
+Those three `sys/` prototypes carry a guard the rest of the tree does not: `#ifndef KERNEL`.
+`stat`, `chmod` and `wait` name *two* different functions in this repo — the libc leaf and the
+kernel's system-call handler (`void stat(void)`, `<sys/systm.h>`) — and both sides include
+`<sys/stat.h>` for the struct. `KERNEL` means **"this translation unit is kernel-side"**, not
+"this object goes in the kernel image", which is why the standalone programs in `kernel/test/`
+are compiled with it too: they link kernel objects and include `<sys/systm.h>`. The guard used
+to carry a second condition, `!defined(_SYS_SYSTM_H)`, precisely because they were not — and
+that was an include *order* requirement wearing another header's guard macro as a disguise,
+which held only for as long as every kernel source happened to include `<sys/systm.h>` ahead
+of `<sys/stat.h>`. `sys/stat.h` sorts first.

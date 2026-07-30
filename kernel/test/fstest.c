@@ -65,20 +65,18 @@
 //
 // fstest.ini asserts ACC == 0.  A nonzero ACC names the failing check -- see the F_* bits.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
-#include "sys/dir.h"
-#include "sys/user.h"
 #include "sys/buf.h"
 #include "sys/conf.h"
-#include "sys/mount.h"
-#include "sys/inode.h"
+#include "sys/dir.h"
 #include "sys/filsys.h"
 #include "sys/ino.h"
+#include "sys/inode.h"
+#include "sys/mount.h"
+#include "sys/param.h"
 #include "sys/stat.h"
-// clang-format on
+#include "sys/systm.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 // The code under test.
 struct buf *bread(dev_t dev, daddr_t blkno);
@@ -101,8 +99,8 @@ void intrinit(void);
 // starts on a page or a half-page boundary and DISK_HALFPAGE can express it; clear of this
 // image; and below the 32767 a caddr_t can name.  NBUF * BSIZEW = 5120 words, so it ends
 // at 052000, well short of that ceiling.
-#define BUFPAGE  021
-#define BUFWORD  (BUFPAGE * PGSZ)
+#define BUFPAGE 021
+#define BUFWORD (BUFPAGE * PGSZ)
 
 // A word in the const-segment hole between the service-word buffers (010-067) and the
 // interrupt vectors at 0500: nothing in the image occupies it, so panic() can drop a
@@ -333,8 +331,7 @@ int main(void)
     // sbcheck() bounds these from above; a fresh mkfs must also have put something in
     // them, or the volume was built empty and every check above passed on a superblock
     // nothing could be allocated from.
-    if (fp->s_nfree <= 0 || fp->s_nfree > NICFREE || fp->s_ninode <= 0 ||
-        fp->s_ninode > NICINOD)
+    if (fp->s_nfree <= 0 || fp->s_nfree > NICFREE || fp->s_ninode <= 0 || fp->s_ninode > NICINOD)
         mask |= F_FREE;
 
     // ---- Check 6: prdev() said nothing, and the cache holds the block ----------------

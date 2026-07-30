@@ -1,15 +1,13 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
 // 	indirect driver for controlling tty.
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
 #include "sys/conf.h"
 #include "sys/dir.h"
-#include "sys/user.h"
-#include "sys/tty.h"
+#include "sys/param.h"
 #include "sys/proc.h"
-// clang-format on
+#include "sys/tty.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 void syopen(dev_t dev, int flag)
 {

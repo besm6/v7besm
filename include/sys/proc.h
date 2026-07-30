@@ -10,6 +10,8 @@
 #ifndef _SYS_PROC_H
 #define _SYS_PROC_H
 
+#include <sys/types.h> // paddr_t, chan_t, time_t -- included, not assumed; see sys/dir.h
+
 struct proc {
     char p_stat;
     char p_flag;

@@ -31,15 +31,13 @@
 // dropped, before translation and before the "already physical" tag (kernel/seg.S says
 // where).  It holds an interrupt vector, so nothing is lost but the illusion of reading it.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
-#include "sys/dir.h"
-#include "sys/user.h"
 #include "sys/buf.h"
 #include "sys/conf.h"
-// clang-format on
+#include "sys/dir.h"
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 // Words moved per bracket on the windowed path.  Each costs two БРЗ drains and two РП
 // writes, so this trades kernel bss against brackets per block: 64 words is eight of them

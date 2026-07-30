@@ -1,16 +1,14 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
 #include "sys/callo.h"
-#include "sys/seg.h"
 #include "sys/dir.h"
-#include "sys/user.h"
+#include "sys/param.h"
 #include "sys/proc.h"
 #include "sys/reg.h"
-// clang-format on
+#include "sys/seg.h"
+#include "sys/systm.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 #define SCHMAG 8 / 10
 
@@ -20,7 +18,8 @@
 // assumes it.
 #define CPUTICK 4
 
-int lbolt; // ticks since the last second rolled over: 0..HZ-1, not in `time'
+int lbolt;                   // ticks since the last second rolled over: 0..HZ-1, not in `time'
+struct callo callout[NCALL]; // the callout table; sys/callo.h only declares it
 
 // clock is called straight from
 // the real time clock interrupt.

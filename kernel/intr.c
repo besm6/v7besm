@@ -19,14 +19,12 @@
 // See doc/Besm6_Peripherals.md for the registers and doc/Intrinsics.md for the
 // intrinsics; kernel/test/sctest.c exercises this path against SIMH.
 
-// clang-format off
-#include "sys/types.h"
+#include <besm6.h>
+
+#include "sys/besm6dev.h"
 #include "sys/param.h"
 #include "sys/systm.h"
-#include "sys/besm6dev.h"
-// clang-format on
-
-#include <besm6.h>
+#include "sys/types.h"
 
 void scintr(void);
 void mbintr(void); // the drum driver's half of the dispatch below (kernel/dev/mb.c)

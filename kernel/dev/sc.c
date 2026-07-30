@@ -62,18 +62,16 @@
 //
 // doc/Besm6_Peripherals.md has the register map, doc/Intrinsics.md the intrinsics.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
+#include <besm6.h>
+
+#include "sys/besm6dev.h"
 #include "sys/conf.h"
 #include "sys/dir.h"
-#include "sys/user.h"
-#include "sys/tty.h"
+#include "sys/param.h"
 #include "sys/systm.h"
-#include "sys/besm6dev.h"
-// clang-format on
-
-#include <besm6.h>
+#include "sys/tty.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 // The two typewriters, as this driver's unit numbers: 0 is Consul 1, 1 is Consul 2.
 #define NSC 2

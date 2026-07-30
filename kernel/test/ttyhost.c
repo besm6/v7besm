@@ -33,12 +33,12 @@
  * is the peer closing at `quit'.
  */
 #include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
 #include <errno.h>
+#include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 int main(int argc, char **argv)
@@ -47,10 +47,10 @@ int main(int argc, char **argv)
         fprintf(stderr, "usage: %s PORT OUTFILE READYFILE TIMEOUT\n", argv[0]);
         return 2;
     }
-    int port = atoi(argv[1]);
-    const char *outfile = argv[2];
+    int port              = atoi(argv[1]);
+    const char *outfile   = argv[2];
     const char *readyfile = argv[3];
-    int timeout = atoi(argv[4]);
+    int timeout           = atoi(argv[4]);
     if (port <= 0 || timeout <= 0) {
         fprintf(stderr, "ttyhost: bad port or timeout\n");
         return 2;
@@ -66,9 +66,9 @@ int main(int argc, char **argv)
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
+    addr.sin_family      = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = htons((unsigned short)port);
+    addr.sin_port        = htons((unsigned short)port);
     if (bind(srv, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         fprintf(stderr, "ttyhost: bind %d: %s\n", port, strerror(errno));
         return 1;
@@ -87,7 +87,7 @@ int main(int argc, char **argv)
     fclose(ready);
 
     struct timeval tv;
-    tv.tv_sec = timeout;
+    tv.tv_sec  = timeout;
     tv.tv_usec = 0;
     setsockopt(srv, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
@@ -107,7 +107,7 @@ int main(int argc, char **argv)
     for (;;) {
         char buf[4096];
         ssize_t n = read(conn, buf, sizeof(buf));
-        if (n == 0)             /* the simulator quit and closed the line */
+        if (n == 0) /* the simulator quit and closed the line */
             break;
         if (n < 0) {
             if (errno == EINTR)

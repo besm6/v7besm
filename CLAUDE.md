@@ -466,10 +466,12 @@ written in C (see below), and `kernel/test/` links it directly. `syscall.c` is s
 `badextr()`), and `kernel/test/usys` links the real thing rather than a copy. `conf.c` is the
 device config table, and is C — it belongs to `SYS`, not `MACH`.
 
-The `###` block at the foot of the Makefile is the header dependency list, in the v7 style.
-It is **hand-maintained**: `b6cc` and `b6cpp` implement no `-M`/`-MD` family (both reject those
-flags outright), so nothing regenerates it. Adding a source, or a new `#include` to an existing
-one, means editing that block by hand.
+Header dependencies are **coarse, not computed**: `b6cc` and `b6cpp` implement no `-M`/`-MD`
+family (both reject those flags outright), so `kernel/CMakeLists.txt` globs
+`include/sys/*.h` and every object depends on every system header. Adding a source, or an
+`#include` to an existing one, needs no bookkeeping; adding a **new header file** needs a
+re-configure, since `file(GLOB)` runs at configure time. (The hand-maintained `###`
+dependency list this used to describe went with the hand-written Makefile, in `da35740`.)
 
 ### Tests
 
@@ -503,9 +505,12 @@ ever writes a build artifact.
 The kernel objects a test links are compiled *into `kernel/test/`* from the sources next door,
 never borrowed from `kernel/`'s own build: `b6_find_src()` locates them by basename, searching
 `. .. ../dev` (the CMake equivalent of a Makefile's `vpath`), and `b6_test_obj()` compiles them
-into the *program's own* object dir with `-DKERNEL` applied only to the names in `KERNOBJ` —
-**the test programs themselves must not get it**, which is why `<sys/stat.h>` and
-`<sys/wait.h>` key their user-side prototypes on `_SYS_SYSTM_H` as well as on `KERNEL`. The
+into the *program's own* object dir with `-DKERNEL` — **everything there gets it** except the
+user-mode `coninit`, because `KERNEL` means "this translation unit is kernel-side" and not
+"this object goes in the kernel image", and these programs include `<sys/systm.h>`. (It used
+to be applied only to the kernel sources, which is why `<sys/stat.h>`, `<sys/times.h>` and
+`<sys/wait.h>` once keyed their user-side prototypes on `_SYS_SYSTM_H` as well — an include
+*order* dependency wearing systm.h's guard macro as a disguise, now gone.) The
 per-program object dir is not tidiness: many images share a source, and one shared object
 output would be emitted into every consuming target and race under `make -j`. Header
 dependencies there are deliberately coarse (every object depends on all of `include/sys/*.h`),
@@ -727,11 +732,27 @@ interrupt registers bit by bit; `doc/Memory_Mapping.md` has the MMU, supervisor 
 reports; `doc/Simh_Simulator.md` covers driving the simulator itself.
 
 **`include/` is the Unix v7 system-header tree** (`sys/` plus libc-style headers). The
-kernel includes them via `-I../include`.
+kernel includes them via `-I../include`. **Every header in it stands alone and includes what
+it uses**, so an include list here is a set and not a sequence — v7's `sys/` order (`types.h`,
+`param.h`, `systm.h`, then the rest) is gone, along with the `// clang-format off` brackets
+that used to protect it in every kernel source. Two consequences worth knowing before adding
+a header or an `#include`: `<sys/param.h>` is the one that includes nothing, and must stay
+`#define`-only because `kernel/*.S` includes it (there is no `__ASSEMBLER__` here); and
+**`b6cpp` rejects a macro redefinition whose replacement text is not character-identical**, so
+two headers defining the same name must not merely agree on the value — they must agree
+character for character, alignment included. That is why the errno numbering has exactly one
+home, `<sys/errno.h>`, which `<errno.h>` and `<sys/user.h>` both include; `<sgtty.h>` and
+`<sys/tty.h>` are still an unfixed pair of that kind. See [include/README.md](include/README.md).
 
 ## Conventions
 
-- C sources use clang-format (`.clang-format` at repo root).
+- C sources use clang-format (`.clang-format` at repo root). It sorts include blocks, and
+  nothing under `kernel/` brackets one against that any more. Two cautions: the tree was
+  formatted with a clang-format older than 22, so running it over a file nobody has touched
+  produces a few lines of trailing-comment and macro-alignment churn; and it must **not** be
+  run over `include/`, where re-spacing a `#define` changes what `b6cpp` compares when the
+  same macro is defined twice. `TypeNames:` in the config lists the `<sys/types.h>` scalars,
+  without which a cast like `(caddr_t)&x` is misread as a bitwise and.
 - Comments and identifiers in the toolchain are frequently in **Russian** (BESM-6 is a
   Russian machine); match the surrounding language when editing a given file.
 - Build artifacts (`*.o`, `*.a`, `*.i`, `*.ast`, `*.yaml`, etc.) are git-ignored

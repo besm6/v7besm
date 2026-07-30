@@ -7,6 +7,8 @@
 #ifndef _SYS_MAP_H
 #define _SYS_MAP_H
 
+#include <sys/param.h> // CMAPSIZ, SMAPSIZ -- included, not assumed; see sys/dir.h
+
 struct map {
     int m_size;
     int m_addr;

@@ -3,6 +3,8 @@
 #ifndef _SYS_CONF_H
 #define _SYS_CONF_H
 
+#include <sys/types.h> // dev_t, caddr_t -- included, not assumed; see sys/dir.h
+
 struct buf; // forward declarations
 struct tty;
 

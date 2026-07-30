@@ -19,24 +19,18 @@
 // The counters live in ordinary bss, NOT in the u-area, for the reason uswtch's phase does:
 // the u-area is swapped underneath them.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
-#include "sys/map.h"
 #include "sys/dir.h"
-#include "sys/user.h"
-#include "sys/proc.h"
 #include "sys/inode.h"
+#include "sys/map.h"
+#include "sys/param.h"
+#include "sys/proc.h"
+#include "sys/systm.h"
 #include "sys/text.h"
-// clang-format on
+#include "sys/types.h"
+#include "sys/user.h"
 
 void halt(int status);
 struct trap;
-
-// map.h hides these behind #ifdef KERNEL, and a test compiles without it.
-int malloc(struct map *mp, int size);
-void mfree(struct map *mp, int size, int a);
 
 // intr.c hands this to clock(); no frame is built here.
 int *intrframe;

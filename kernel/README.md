@@ -42,8 +42,19 @@ between. The link takes `-lruntime` **alone** — the kernel defines its own `pr
 mapped and the top of the unmapped space is spoken for — see the map below. The kernel is
 archived into one link-pulled `libunix.a` so unused code is dropped; `besm6.o` must come **first**
 in `OBJ` so its const contribution pins the interrupt/extracode vectors at their fixed addresses.
-The `###` block at the foot of the Makefile is the header dependency list and is **hand-
-maintained**: `b6cc` and `b6cpp` implement no `-M` family, so nothing regenerates it.
+Header dependencies are **deliberately coarse**: `b6cc` and `b6cpp` implement no `-M` family,
+so nothing can compute them, and [CMakeLists.txt](CMakeLists.txt) settles for
+`file(GLOB KHDRS …/include/sys/*.h)` — every object depends on every system header. Adding an
+`#include` to a source or a header therefore needs no bookkeeping at all; adding a **new header
+file** needs a re-configure, the glob being evaluated at configure time. (The hand-maintained
+`###` dependency list this paragraph used to describe went with the Makefile it sat at the foot
+of, in `da35740`; `Makefile` here is now a nine-line wrapper over the top-level `build/` tree.)
+
+Include blocks in these sources are **sorted, and carry no `// clang-format off`**. They used
+to: v7's `sys/` headers required the caller to include them in dependency order, which a
+formatter that sorts alphabetically destroys. Every header under `../include/sys/` now includes
+what it uses, so the order is nobody's business — see [../include/README.md](../include/README.md),
+and `sys/dir.h`'s head comment for the rule.
 
 ## The tests
 

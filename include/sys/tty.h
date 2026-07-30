@@ -9,6 +9,14 @@
 #ifndef _SYS_TTY_H
 #define _SYS_TTY_H
 
+#include <sys/types.h> // dev_t, caddr_t -- included, not assumed; see sys/dir.h
+
+// DO NOT INCLUDE THIS HEADER AND <sgtty.h> IN ONE TRANSLATION UNIT.  They share some
+// thirty-five names, and XTABS is 006000 here where <sgtty.h> spells it 06000 -- b6cpp
+// rejects a macro redefinition whose replacement text is not character-identical, so the
+// two do not compile together.  Nothing includes both today.  The errno numbering was a
+// pair of this kind until <sys/errno.h> became its one home; this one is still waiting.
+
 // The block itself is private to kernel/prim.c: nothing else has any business
 // knowing how the characters are laid out inside one.
 struct cblock;

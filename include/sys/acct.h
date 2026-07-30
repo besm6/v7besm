@@ -5,6 +5,8 @@
 #ifndef _SYS_ACCT_H
 #define _SYS_ACCT_H
 
+#include <sys/types.h> // time_t, dev_t -- included, not assumed; see sys/dir.h
+
 typedef int comp_t; // "floating pt": 3 bits base 8 exp, 13 bits fraction
 struct acct {
     char ac_comm[10]; // Accounting command name

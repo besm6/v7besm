@@ -1,15 +1,13 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
+#include "sys/buf.h"
+#include "sys/dir.h"
 #include "sys/inode.h"
 #include "sys/mount.h"
-#include "sys/dir.h"
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/types.h"
 #include "sys/user.h"
-#include "sys/buf.h"
-// clang-format on
 
 struct inode *mpxip; // mpx virtual inode
 

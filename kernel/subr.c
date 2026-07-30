@@ -1,15 +1,13 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-// clang-format off
-#include "sys/types.h"
+#include "sys/buf.h"
+#include "sys/conf.h"
+#include "sys/dir.h"
+#include "sys/inode.h"
 #include "sys/param.h"
 #include "sys/systm.h"
-#include "sys/conf.h"
-#include "sys/inode.h"
-#include "sys/dir.h"
+#include "sys/types.h"
 #include "sys/user.h"
-#include "sys/buf.h"
-// clang-format on
 
 daddr_t rablock; // block to be read ahead
 

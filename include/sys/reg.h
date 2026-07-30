@@ -3,7 +3,7 @@
 #ifndef _SYS_REG_H
 #define _SYS_REG_H
 
-#include "sys/besm6dev.h" // SPSW_* mode-word bits
+#include <sys/besm6dev.h> // SPSW_* mode-word bits
 
 // Location of the user's saved registers on the kernel-stack trap frame.
 // Usage is u.u_ar0[XX].  u.u_ar0 points at frame word 0 (the accumulator), so

@@ -1,15 +1,13 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
 #include "sys/dir.h"
-#include "sys/user.h"
-#include "sys/inode.h"
 #include "sys/file.h"
+#include "sys/inode.h"
+#include "sys/param.h"
 #include "sys/reg.h"
-// clang-format on
+#include "sys/systm.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 // Max allowable buffering per pipe.
 // This is also the max size of the

@@ -14,16 +14,14 @@
 // It vectors э50-э77 straight to 0550-0577, one word each, and hands the handler
 // the effective address in r14.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
 #include "sys/dir.h"
-#include "sys/user.h"
+#include "sys/param.h"
 #include "sys/proc.h"
 #include "sys/reg.h"
 #include "sys/seg.h"
-// clang-format on
+#include "sys/systm.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 // Dispatched when the user names a syscall number outside sysent[].  The number
 // is the effective address of a `$77 N', which the user can index-modify to any

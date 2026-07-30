@@ -51,17 +51,15 @@
 //
 // mdtest.ini asserts ACC == 0.  A nonzero ACC names the failing check -- see the F_* bits.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/buf.h"
-#include "sys/dir.h"
-#include "sys/user.h"
+#include <besm6.h>
+
 #include "sys/besm6dev.h"
 #include "sys/besm6disk.h"
-// clang-format on
-
-#include <besm6.h>
+#include "sys/buf.h"
+#include "sys/dir.h"
+#include "sys/param.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 // md.c and intr.c, the code under test.
 void mdstrategy(struct buf *bp);

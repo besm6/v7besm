@@ -178,7 +178,8 @@ static unsigned syscall_nargs(unsigned num)
 }
 
 //
-// Map a host errno to the guest's value (include/errno.h).  The classic Unix
+// Map a host errno to the guest's value (include/sys/errno.h, the one home of the
+// guest's numbering; this function is the only other copy).  The classic Unix
 // codes 1..34 are identical on the guest and on every host we build on, so the
 // mapping is mostly the identity; the switch pins the ones that can differ
 // (e.g. EAGAIN on macOS).

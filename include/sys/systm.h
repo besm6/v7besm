@@ -1,13 +1,32 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-// The one include in this header, and it is here for splx() below: that is a macro over
-// __besm6_setpsw(), so every caller of it needs the intrinsic declared, and six of them have
-// no other reason to name <besm6.h>.  Nothing else here depends on it.
+// sys/param.h and sys/types.h are INCLUDED, not assumed of the caller -- sys/dir.h's
+// precedent, and for its reason: this file cannot compile without either, the externs below
+// naming CANBSIZ and MSGBUFS and the prototypes naming nine of the scalar typedefs.
+// <besm6.h> is here for splx(): that is a macro over __besm6_setpsw(), so every caller of it
+// needs the intrinsic declared, and six of them have no other reason to name <besm6.h>.
 
 #ifndef _SYS_SYSTM_H
 #define _SYS_SYSTM_H
 
 #include <besm6.h>
+#include <sys/param.h>
+#include <sys/types.h>
+
+// The five structures this header only ever names THROUGH A POINTER.  These declarations
+// are load-bearing, not decoration: a struct tag first named inside a function prototype's
+// parameter list is declared in PROTOTYPE SCOPE -- a type distinct from the one sys/inode.h
+// goes on to define at file scope -- so without them every `struct inode *' below would be a
+// different type from every caller's, and b6cc does not say so.  Pointers are all that is
+// wanted, so the five headers themselves stay out: 48 of the 51 kernel translation units
+// include this one, and most want none of the ~60 macros those carry.  sys/conf.h and
+// sys/tty.h declare theirs the same way, their function-pointer members having parameter
+// lists too.
+struct buf;
+struct file;
+struct filsys;
+struct inode;
+struct proc;
 
 // Random set of variables
 // used by more than one

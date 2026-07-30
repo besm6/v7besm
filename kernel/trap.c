@@ -1,18 +1,16 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
+#include <besm6.h>
+
+#include "sys/besm6dev.h"
 #include "sys/dir.h"
-#include "sys/user.h"
+#include "sys/param.h"
 #include "sys/proc.h"
 #include "sys/reg.h"
 #include "sys/seg.h"
-#include "sys/besm6dev.h"
-// clang-format on
-
-#include <besm6.h>
+#include "sys/systm.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 // THE ГРП BIT IS THE TRAP KIND.  The BESM-6 has one internal-interrupt vector (0500) and
 // reports the cause in ГРП, so there is no vector number to switch on and the gate passes

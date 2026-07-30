@@ -48,12 +48,14 @@ struct stat {
 // declared in <sys/systm.h> and defined in kernel/sys3.c.  Same spelling, opposite side
 // of the gate.  sys/map.h and sys/tty.h split their two audiences the same way.
 //
-// Two conditions rather than one, because -DKERNEL alone does not identify that side:
-// the standalone tests in kernel/test/ link kernel objects and include <sys/systm.h>,
-// but are compiled WITHOUT -DKERNEL (kernel/test/CMakeLists.txt says why).  Having
-// included systm.h is the honest signal, and the v7 include order every kernel-side
-// source here follows -- types, param, systm, then the rest -- puts it first.
-#if !defined(KERNEL) && !defined(_SYS_SYSTM_H)
+// KERNEL is the whole of the test, and it means "this translation unit is kernel-side"
+// rather than "this object goes in the kernel image": the standalone programs in
+// kernel/test/ link kernel objects and include <sys/systm.h>, so they are compiled with
+// -DKERNEL too.  This guard used to carry a second condition, `!defined(_SYS_SYSTM_H)',
+// because they were not -- an include ORDER dependency wearing systm.h's own guard macro
+// as a disguise, and one that held only for as long as every kernel source happened to
+// include <sys/systm.h> ahead of this file.  `sys/stat.h' sorts BEFORE `sys/systm.h'.
+#ifndef KERNEL
 int stat(const char *path, struct stat *buf);
 int fstat(int fd, struct stat *buf);
 int chmod(const char *path, int mode);

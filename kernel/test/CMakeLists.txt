@@ -6,16 +6,25 @@
 # the ctest case).  Reuses b6_obj/b6_find_src from the parent CMakeLists.
 #
 # Kernel objects are compiled HERE from the sources next door (never borrowed from
-# kernel/'s own build), found by b6_find_src searching `. .. ../dev'.  Only the kernel
-# .c sources get -DKERNEL (KERNOBJ); the local test programs and the .S/.s assist must
-# not, matching the old Makefile's static-pattern rule.
-
-set(KERNOBJ alloc bio md mb slp text malloc syscall sendsig clock intr ucopy utab)
+# kernel/'s own build), found by b6_find_src searching `. .. ../dev'.
+#
+# EVERYTHING here gets -DKERNEL, the local test programs as much as the kernel sources
+# they link, because KERNEL means "this translation unit is kernel-side" and not "this
+# object goes in the kernel image": these programs include <sys/systm.h> and so stand on
+# the kernel's side of the gates in <sys/stat.h>, <sys/times.h> and <sys/wait.h>, where
+# `stat', `times' and `wait' name syscall handlers rather than libc's leaves.  Until the
+# headers were made self-contained those gates carried a second condition on systm.h's own
+# include guard, which is what let this directory go without the flag; that was an include
+# ORDER dependency in disguise, and it is gone (include/README.md).
+#
+# coninit is the exception: a USER-MODE program that runs under the booted kernel.  The .s
+# members need no exclusion -- b6_obj routes those to b6as, which never sees ARGN.
+set(USERSIDE coninit)
 
 set(TEST_TARGETS "")
 
-# Compile ${base}.o for program ${prog} into its OWN directory (${prog}.dir), setting -DKERNEL
-# only for the kernel .c sources.  Objects are per-program on purpose: many images share a
+# Compile ${base}.o for program ${prog} into its OWN directory (${prog}.dir), with -DKERNEL
+# for everything but the user-mode programs.  Objects are per-program on purpose: many images share a
 # source (utab, brz, crt0, ...), and a single shared object OUTPUT would be emitted into every
 # consuming target's build rules and race under `make -j' (MAKEFLAGS=-j8), corrupting the file
 # a link then reads.  Recompiling a shared source once per image trades a little build time for
@@ -23,10 +32,10 @@ set(TEST_TARGETS "")
 function(b6_test_obj outvar prog base)
     b6_find_src(_src ${base})
     set(B6_OBJDIR ${CMAKE_CURRENT_BINARY_DIR}/${prog}.dir)
-    if("${base}" IN_LIST KERNOBJ)
-        b6_obj(_o ${_src} -DKERNEL)
-    else()
+    if("${base}" IN_LIST USERSIDE)
         b6_obj(_o ${_src})
+    else()
+        b6_obj(_o ${_src} -DKERNEL)
     endif()
     set(${outvar} ${_o} PARENT_SCOPE)
 endfunction()

@@ -36,13 +36,11 @@
 // character per `ext' (kernel/dev/sc.c) and nothing in this kernel called them.  getw()/
 // putw() on a clist went the same way: unused, and the names are stdio's.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/tty.h"
-#include "sys/systm.h"
 #include "sys/conf.h"
-// clang-format on
+#include "sys/param.h"
+#include "sys/systm.h"
+#include "sys/tty.h"
+#include "sys/types.h"
 
 struct cblock {
     struct cblock *c_next;

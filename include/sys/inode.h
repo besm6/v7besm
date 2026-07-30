@@ -16,6 +16,9 @@
 #ifndef _SYS_INODE_H
 #define _SYS_INODE_H
 
+#include <sys/param.h> // NADDR -- included, not assumed; see sys/dir.h
+#include <sys/types.h> // dev_t, ino_t, off_t, daddr_t
+
 #define NINDEX 15
 
 struct group {

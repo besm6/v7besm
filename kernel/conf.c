@@ -1,18 +1,17 @@
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
-#include "sys/buf.h"
-#include "sys/tty.h"
 #include "sys/conf.h"
-#include "sys/proc.h"
-#include "sys/text.h"
+
+#include "sys/acct.h"
+#include "sys/buf.h"
 #include "sys/dir.h"
-#include "sys/user.h"
 #include "sys/file.h"
 #include "sys/inode.h"
-#include "sys/acct.h"
-// clang-format on
+#include "sys/param.h"
+#include "sys/proc.h"
+#include "sys/systm.h"
+#include "sys/text.h"
+#include "sys/tty.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 void mdopen(dev_t, int);
 void mdstrategy(struct buf *);

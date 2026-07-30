@@ -1,15 +1,13 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
 #include "sys/dir.h"
-#include "sys/user.h"
-#include "sys/reg.h"
 #include "sys/file.h"
 #include "sys/inode.h"
-// clang-format on
+#include "sys/param.h"
+#include "sys/reg.h"
+#include "sys/systm.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 void rdwr(int mode);
 void open1(struct inode *ip, int mode, int trf);

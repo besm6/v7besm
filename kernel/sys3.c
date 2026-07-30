@@ -1,21 +1,19 @@
 // UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 
-// clang-format off
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/systm.h"
-#include "sys/mount.h"
-#include "sys/ino.h"
-#include "sys/reg.h"
 #include "sys/buf.h"
-#include "sys/filsys.h"
-#include "sys/dir.h"
-#include "sys/user.h"
-#include "sys/inode.h"
-#include "sys/file.h"
 #include "sys/conf.h"
+#include "sys/dir.h"
+#include "sys/file.h"
+#include "sys/filsys.h"
+#include "sys/ino.h"
+#include "sys/inode.h"
+#include "sys/mount.h"
+#include "sys/param.h"
+#include "sys/reg.h"
 #include "sys/stat.h"
-// clang-format on
+#include "sys/systm.h"
+#include "sys/types.h"
+#include "sys/user.h"
 
 void stat1(register struct inode *ip, struct stat *ub, off_t pipeadj);
 
