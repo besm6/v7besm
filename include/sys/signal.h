@@ -13,16 +13,18 @@
 // were literal duplicates that survived only because b6cpp compares replacement text
 // and the two copies happened to agree character for character, and the other seven
 // were a second NAME for a number that already had one -- v7's kernel spellings
-// SIGINS, SIGTRC, SIGFPT, SIGKIL, SIGSEG, SIGCLK and SIGTRM.  Those seven are gone
-// rather than aliased: the kernel names a signal by the same spelling the user does,
-// SIGILL and not SIGINS, so nothing here has two names.  One copy cannot drift from
-// itself.
+// SIGINS, SIGTRC, SIGFPT, SIGKIL, SIGSEG, SIGCLK and SIGTRM, and with them SIGIOT,
+// which was signal 6 under an alias named SIGABRT.  All eight are gone rather than
+// aliased: every signal here has exactly ONE name, the kernel spells it the way the
+// user does -- SIGILL and not SIGINS, SIGABRT and not SIGIOT -- and one copy cannot
+// drift from itself.
 //
 // The numbers are v7's, all fifteen of them, and NSIG stays 17: they are the kernel's
 // (kernel/sig.c, kernel/machdep.c) and b6sim's (cmd/sim/syscall.cpp), and C11 §7.14
-// requires only six of them and permits the rest.  SIGABRT is the one name C11 asks
-// for that v7 spelled otherwise -- it is signal 6, which v7 calls SIGIOT -- so it is
-// an alias and not a new number.
+// requires only six of them and permits the rest.  Signal 6 is the one C11 spells
+// otherwise than v7 did, and C11's name is the one kept: v7 called it SIGIOT after the
+// PDP-11 IOT instruction, which this machine has not got, while SIGABRT is what §7.14
+// requires and what abort() raises.  The NUMBER is still v7's.
 #ifndef _SYS_SIGNAL_H
 #define _SYS_SIGNAL_H
 
@@ -33,7 +35,7 @@
 #define SIGQUIT 3  // quit
 #define SIGILL  4  // illegal instruction (not reset when caught)
 #define SIGTRAP 5  // trace trap (not reset when caught)
-#define SIGIOT  6  // IOT instruction
+#define SIGABRT 6  // abort() -- v7's SIGIOT, the PDP-11 IOT instruction
 #define SIGEMT  7  // EMT instruction
 #define SIGFPE  8  // floating point exception
 #define SIGKILL 9  // kill (cannot be caught or ignored)
@@ -43,8 +45,6 @@
 #define SIGPIPE 13 // write on a pipe with no one to read it
 #define SIGALRM 14 // alarm clock
 #define SIGTERM 15 // software termination signal from kill
-
-#define SIGABRT SIGIOT // C11's name for what v7 calls SIGIOT; abort() raises it
 
 #define SIG_DFL ((void (*)(int))0)
 #define SIG_IGN ((void (*)(int))1)

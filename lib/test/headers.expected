@@ -9,7 +9,7 @@ ok   HUGE_VAL is this machine's
 ok   LOGHUGE follows it
 PRIdFAST32 is "d"
 ok   errno trio
-ok   SIGABRT is SIGIOT
+ok   SIGABRT is 6
 ok   SIG_ERR exists
 ok   _IONBF is a mode
 ok   stderr is descriptor 2

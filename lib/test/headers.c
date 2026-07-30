@@ -192,8 +192,9 @@ int main(void)
     // The C11 mandatory errno trio, EILSEQ being the one v7 lacked.
     ok("errno trio", EDOM == 33 && ERANGE == 34 && EILSEQ == 35);
 
-    // The signal names C11 asks for, over v7's numbering.
-    ok("SIGABRT is SIGIOT", SIGABRT == SIGIOT && SIGABRT == 6);
+    // The signal names C11 asks for, over v7's numbering: 6 is v7's number for the
+    // signal abort() raises, under C11's name for it -- v7's SIGIOT is not defined.
+    ok("SIGABRT is 6", SIGABRT == 6);
     ok("SIG_ERR exists", SIG_ERR != SIG_DFL && SIG_ERR != SIG_IGN);
 
     // setvbuf modes are not _flag bits; see the note in <stdio.h>.

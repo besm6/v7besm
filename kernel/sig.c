@@ -135,7 +135,7 @@ void psig()
     case SIGQUIT:
     case SIGILL:
     case SIGTRAP:
-    case SIGIOT:
+    case SIGABRT:
     case SIGEMT:
     case SIGFPE:
     case SIGBUS:

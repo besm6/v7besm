@@ -12,7 +12,7 @@ abort, raise \- terminate abnormally, or send a signal to oneself
 .B int raise(int sig);
 .SH DESCRIPTION
 .I Abort
-sends SIGIOT to the calling process.
+sends SIGABRT to the calling process.
 This causes a signal that normally terminates
 the process with a core dump, which may be used for debugging.
 .PP
@@ -21,9 +21,11 @@ v7's page said "executes the PDP11 IOT instruction".  There is no such
 instruction here and none is needed \-
 .I abort
 is
-.B kill(getpid(), SIGIOT)
-and always was on machines other than the PDP-11.  SIGIOT is left at SIG_DFL, so
-the kernel dumps core for it.
+.B kill(getpid(), SIGABRT)
+and always was on machines other than the PDP-11.  Not even the NAME of that
+instruction is left: signal 6 is SIGABRT here and v7's SIGIOT is not defined
+.RI ( signal (2)).
+SIGABRT is left at SIG_DFL, so the kernel dumps core for it.
 .PP
 .B Note:
 .I raise

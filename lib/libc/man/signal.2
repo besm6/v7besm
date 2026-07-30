@@ -28,7 +28,7 @@ SIGINT	2	interrupt
 SIGQUIT	3*	quit
 SIGILL	4*	illegal instruction (not reset when caught)
 SIGTRAP	5*	trace trap (not reset when caught)
-SIGIOT	6*	IOT instruction
+SIGABRT	6*	abort(3); v7 called it SIGIOT
 SIGEMT	7*	EMT instruction
 SIGFPE	8*	floating point exception
 SIGKILL	9	kill (cannot be caught or ignored)
@@ -47,11 +47,12 @@ if not caught or ignored.
 .B Note:
 the numbers are v7's, all fifteen, and NSIG stays 17.  C11 sec 7.14 requires only
 six of them and permits the rest.
-.B SIGABRT is an alias for SIGIOT
-\- signal 6 \- and not a new number: it is the one name C11 asks for that v7 spells
-otherwise, and
+.B Signal 6 is SIGABRT and nothing else:
+v7 called it SIGIOT, after a PDP-11 instruction this machine has not got, and that
+name is not defined here \- the number is still v7's, and
 .IR abort (3)
-raises it.
+raises it.  Every signal above has exactly one name; the kernel spells them the way
+this page does.
 .PP
 .B There is no job control here.
 No SIGTSTP, no SIGWINCH, no signal set or mask; the list above is the whole of it.

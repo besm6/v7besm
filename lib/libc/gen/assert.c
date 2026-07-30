@@ -14,7 +14,7 @@
 // writes the same way and for the same reason.
 //
 // abort(), not exit(1): SS7.2.1.1 says the handler calls abort, and v7's exit(1)
-// was indistinguishable from an ordinary failure.  abort() raises SIGIOT, which
+// was indistinguishable from an ordinary failure.  abort() raises SIGABRT, which
 // this kernel will dump core for once signal delivery lands in phase 6; until
 // then it is still the loudest available way to stop.
 //

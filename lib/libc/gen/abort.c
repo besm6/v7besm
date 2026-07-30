@@ -2,9 +2,11 @@
 // Copyright (c) 1998 Robert Nordier.  All rights reserved.
 
 //
-// Kill the caller with SIGIOT, which dumps core.
+// Kill the caller with SIGABRT, which dumps core.  That is signal 6, which v7 called
+// SIGIOT after a PDP-11 instruction this machine has not got; only C11's name is
+// defined here (<sys/signal.h>).
 //
-// Untested, deliberately, and for a reason signal delivery did not remove: SIGIOT is
+// Untested, deliberately, and for a reason signal delivery did not remove: SIGABRT is
 // left at SIG_DFL here, and b6sim services a kill() that the guest does not catch by
 // killing ITS OWN process (the guest pid is the host pid, cmd/sim/syscall.cpp), so a
 // test of abort() would take the simulator down with the program and report as a
@@ -16,5 +18,5 @@
 
 void abort(void)
 {
-    kill(getpid(), SIGIOT);
+    kill(getpid(), SIGABRT);
 }

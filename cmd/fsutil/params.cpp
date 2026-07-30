@@ -50,13 +50,15 @@ constexpr Word magic   = FS_MAGIC;
 
 //
 // param.h is the WHOLE kernel's tunable header, not just the filesystem's, so a
-// handful of its macros collide with the host's.  Each is dropped explicitly
-// rather than silenced with a -Wno- flag: if a future param.h grows another
-// clash, the build names it.
+// macro of its own can collide with the host's.  It is dropped explicitly rather
+// than silenced with a -Wno- flag: if a future param.h grows another clash, the
+// build names it.
 //
 //   NULL    param.h:93 spells it `0'; the C++ library has its own.
-//   NSIG    the kernel's signal count (17), not the host's.
-//   SIGIOT  the kernel's number; the host defines it as SIGABRT.
+//
+// NSIG and SIGIOT used to be undefined here as well, and are not any more: the
+// signal numbering left param.h for sys/signal.h, which this file does not include
+// and has no reason to.  Nothing to collide with, so nothing to undefine.
 //
 // The path is spelled out rather than reached through an -I, and that is
 // deliberate.  include/ is the kernel's FULL system-header tree -- it has its own
@@ -65,8 +67,6 @@ constexpr Word magic   = FS_MAGIC;
 // compiling.  (Tried; the failure is a wall of errors from inside libc++.)  One
 // relative include reaches the one file that is wanted and poisons nothing.
 #undef NULL
-#undef NSIG
-#undef SIGIOT
 #include "../../include/sys/param.h"
 
 //

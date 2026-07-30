@@ -518,7 +518,7 @@ converts only literal `time_t` values; `spawn` never starts a real shell; and `p
 line of `/etc/passwd`, checking instead that every entry the walk yields is found again by name
 and by id. The harness captures fd 2 along with fd 1, so `perror`'s output is diffed too.
 
-**Two routines have no test, and neither absence is an oversight.** `abort` raises `SIGIOT` and
+**Two routines have no test, and neither absence is an oversight.** `abort` raises `SIGABRT` and
 leaves it at `SIG_DFL`, and `b6sim` services an uncaught `kill` by killing *its own* process — the
 guest pid is the host pid — so a test would take the simulator down with the program and report as
 a harness crash rather than a result. `getpass` opens `/dev/tty` and would sit there waiting to be
