@@ -75,9 +75,7 @@ nothing else — `#define`-only, so either side of the `KERNEL` gate may include
 adds the `errno` object C11 §7.5 wants and includes it, and `<sys/user.h>` reads the same file
 the kernel does. The one remaining copy is not a header: `guest_errno()` in
 [`../cmd/sim/syscall.cpp`](../cmd/sim/syscall.cpp), which maps a *host* errno onto these
-numbers. `<sgtty.h>` and `<sys/tty.h>` are still a pair of this kind, and worse — `XTABS` is
-`06000` in one and `006000` in the other, a token difference and not just spacing — but nothing
-includes both.
+numbers.
 
 **The signal numbering has one home too, `<sys/signal.h>`**, on that precedent. v7 wrote it out
 twice as well — in `<signal.h>` for the user and in `<sys/param.h>` for the kernel — and here the
@@ -92,6 +90,27 @@ else — `#define`-only, like `<sys/errno.h>` — while `<signal.h>` adds `sig_a
 prototypes and `<sys/user.h>` takes `NSIG` from the same file `kernel/sig.c` does. The one
 remaining copy is again not a header: the numbers b6sim answers `signal(2)` with, in
 [`../cmd/sim/syscall.cpp`](../cmd/sim/syscall.cpp).
+
+**And the terminal interface has one home, `<sys/ttyio.h>`** — the last pair of this kind, and
+the largest: `<sgtty.h>` and `<sys/tty.h>` wrote out the same sixteen mode flags, the same thirty
+`ioctl` command numbers, and the same two structures *under a second set of member names apiece*
+(`struct ttiocb` for `sgttyb`, `struct tc` for `tchars`). Three separate things stopped the two
+compiling together, and v7 itself is the source of the first two. `XTABS` was `06000` in one and
+`006000` in the other, a token difference and not just spacing. `('t' << 8) | 16` had two *names*
+— `TIOCTSTP` in `<sgtty.h>`, `TIOCFLUSH` in `<sys/tty.h>` — and only `TIOCFLUSH` survives, the
+one the kernel implements and `tty(4)` documents, on the same "gone rather than aliased" rule the
+signal spellings got. The third left no diagnostic to read at all: `<sys/tty.h>`'s accessor macros
+`t_intrc`…`t_brkc` rewrote the *member declarations* of `<sgtty.h>`'s `struct tchars`, whose
+members are spelled exactly that. Now `<sys/ttyio.h>` holds the structures and the numbers and no
+prototypes, so either side of the `KERNEL` gate may include it; `<sgtty.h>` adds the three gates
+`ioctl`/`stty`/`gtty` and nothing else, and no kernel source names it — those three are also the
+names of the kernel's own handlers, in `<sys/systm.h>`, and it is `<sys/tty.h>` the kernel
+includes; and `<sys/tty.h>` keeps the `clist`, the `tty` and the driver interface. What is
+left elsewhere is not a copy of the numbering — b6sim answers every `ioctl` with a bare success —
+but it does hard-code the *shape*: `gtty` there zeroes five words, which is `struct sgttyb`
+([`../cmd/sim/syscall.cpp`](../cmd/sim/syscall.cpp)). Both headers are in
+[`../lib/test/headers.c`](../lib/test/headers.c) now, which is the only thing that keeps them
+honest.
 
 **The dead v7 headers have been pruned**, and two rules say what may come back. A file format
 this toolchain has already replaced is described *once*, under `cross/besm6/` — so `a.out.h`

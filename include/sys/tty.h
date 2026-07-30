@@ -9,13 +9,16 @@
 #ifndef _SYS_TTY_H
 #define _SYS_TTY_H
 
+#include <sys/ttyio.h> // struct sgttyb, struct tchars, the modes and the TIOC* commands
 #include <sys/types.h> // dev_t, caddr_t -- included, not assumed; see sys/dir.h
 
-// DO NOT INCLUDE THIS HEADER AND <sgtty.h> IN ONE TRANSLATION UNIT.  They share some
-// thirty-five names, and XTABS is 006000 here where <sgtty.h> spells it 06000 -- b6cpp
-// rejects a macro redefinition whose replacement text is not character-identical, so the
-// two do not compile together.  Nothing includes both today.  The errno numbering was a
-// pair of this kind until <sys/errno.h> became its one home; this one is still waiting.
+// What this header holds is the kernel's half: the character queues, the tty structure
+// the drivers hang off cdevsw[], its internal state, and the driver interface.  The half
+// a program can see -- the mode flags, the ioctl command numbers and the two structures
+// they name -- was written out a second time here until <sys/ttyio.h> became its one
+// home, on the precedent of <sys/errno.h>.  The head comment there is the account,
+// including the two places v7's own two copies had drifted.  Both this header and
+// <sgtty.h> may now appear in one translation unit, and lib/test/headers.c does that.
 
 // The block itself is private to kernel/prim.c: nothing else has any business
 // knowing how the characters are laid out inside one.
@@ -43,21 +46,6 @@ struct clist {
 // The definition and device dependent
 // code is in each driver. (kl.c dc.c dh.c)
 
-struct tc {
-    char intrc;  // interrupt
-    char quitc;  // quit
-    char startc; // start output
-    char stopc;  // stop output
-    char eofc;   // end-of-file
-    char brkc;   // input delimiter (like nl)
-};
-#define t_intrc  t_tc.intrc
-#define t_quitc  t_tc.quitc
-#define t_startc t_tc.startc
-#define t_stopc  t_tc.stopc
-#define t_eofc   t_tc.eofc
-#define t_brkc   t_tc.brkc
-
 struct tty {
     struct clist t_rawq;           // input chars right off device
     struct clist t_canq;           // input chars after erase and kill
@@ -80,21 +68,19 @@ struct tty {
     char t_ispeed;                 // input speed
     char t_ospeed;                 // output speed
     union {
-        struct tc t_tc;
+        struct tchars t_tc; // v7 spelled this `struct tc', a second copy of tchars
         struct clist t_ctlq;
     } t_un;
 };
 
-#define tun tp->t_un
-
-// structure of arg for ioctl
-struct ttiocb {
-    char ioc_ispeed;
-    char ioc_ospeed;
-    char ioc_erase;
-    char ioc_kill;
-    int ioc_flags;
-};
+#ifdef KERNEL
+// The special characters of the current tty, in the driver's own `tp'.  It names the
+// union MEMBER rather than the union, which is what lets the six t_intrc..t_brkc
+// accessor macros v7 had here go: with one structure there is nothing left to rename,
+// and those macros would have rewritten struct tchars' own member declarations.  Kernel
+// side only -- it is a lowercase macro naming a caller's local variable.
+#define tun tp->t_un.t_tc
+#endif
 
 #define TTIPRI 28
 #define TTOPRI 29
@@ -112,24 +98,6 @@ struct ttiocb {
 #define TTHIWAT 100
 #define TTLOWAT 50
 #define TTYHOG  256
-
-// modes
-#define TANDEM  01
-#define CBREAK  02
-#define LCASE   04
-#define ECHO    010
-#define CRMOD   020
-#define RAW     040
-#define ODDP    0100
-#define EVENP   0200
-// The three delay fields are inert: still settable, but ttyoutput() generates no delays
-// on an eight-bit line (kernel/dev/tty.c).  TBDELAY is not one -- it is XTABS, and tab
-// expansion is live.
-#define NLDELAY 001400
-#define TBDELAY 006000
-#define XTABS   006000
-#define CRDELAY 030000
-#define VTDELAY 040000
 
 // Hardware bits
 #define DONE    0200
@@ -153,37 +121,6 @@ struct ttiocb {
 #define DKCALL  020000  // datakit dial mode
 #define DKLINGR 040000  // datakit lingering close mode
 #define CNTLQ   0100000 // interpret t_un as clist
-
-// tty ioctl commands
-#define TIOCGETD  (('t' << 8) | 0)
-#define TIOCSETD  (('t' << 8) | 1)
-#define TIOCHPCL  (('t' << 8) | 2)
-#define TIOCMODG  (('t' << 8) | 3)
-#define TIOCMODS  (('t' << 8) | 4)
-#define TIOCGETP  (('t' << 8) | 8)
-#define TIOCSETP  (('t' << 8) | 9)
-#define TIOCSETN  (('t' << 8) | 10)
-#define TIOCEXCL  (('t' << 8) | 13)
-#define TIOCNXCL  (('t' << 8) | 14)
-#define TIOCFLUSH (('t' << 8) | 16)
-#define TIOCSETC  (('t' << 8) | 17)
-#define TIOCGETC  (('t' << 8) | 18)
-#define DIOCLSTN  (('d' << 8) | 1)
-#define DIOCNTRL  (('d' << 8) | 2)
-#define DIOCMPX   (('d' << 8) | 3)
-#define DIOCNMPX  (('d' << 8) | 4)
-#define DIOCSCALL (('d' << 8) | 5)
-#define DIOCRCALL (('d' << 8) | 6)
-#define DIOCPGRP  (('d' << 8) | 7)
-#define DIOCGETP  (('d' << 8) | 8)
-#define DIOCSETP  (('d' << 8) | 9)
-#define DIOCLOSE  (('d' << 8) | 10)
-#define DIOCTIME  (('d' << 8) | 11)
-#define DIOCRESET (('d' << 8) | 12)
-#define FIOCLEX   (('f' << 8) | 1)
-#define FIONCLEX  (('f' << 8) | 2)
-#define MXLSTN    (('x' << 8) | 1)
-#define MXNBLK    (('x' << 8) | 2)
 
 #ifdef KERNEL
 int ttread(struct tty *tp);

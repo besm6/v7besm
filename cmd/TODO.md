@@ -230,7 +230,9 @@ What remains is the rest of the manual pages that assume more than one person:
 * `stty.c` (303) — reads and writes the `sgttyb` the kernel's `sc.c` implements. Its capability
   list must be cut down to what that driver actually honours rather than carried whole, which is
   the same cut [getty/README.md](getty/README.md) records making to the speed table, and for the
-  same reasons: no baud rate, no parity, no delays, no LCASE.
+  same reasons: no baud rate, no parity, no delays, no LCASE. One name it uses is gone rather
+  than renamed: `('t' << 8) | 16` is `TIOCFLUSH` here and nothing else, v7's `<sgtty.h>` spelling
+  `TIOCTSTP` having been dropped when the two tty headers were folded onto `<sys/ttyio.h>`.
 * `who.c` (64), `write.c` (186), `wall.c` (70), `mesg.c` (57) — the social four, all `/etc/utmp`.
   That file now exists and is written: `init`'s `merge()` creates it and `login` writes a record,
   and `lib/test/ttyt` asserts the `ttyslot(3)` they all index it by. `who` is the cheapest of the

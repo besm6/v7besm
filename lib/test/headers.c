@@ -41,6 +41,7 @@
 #include <locale.h>
 #include <math.h>
 #include <setjmp.h>
+#include <sgtty.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,15 +64,20 @@
 // separate copies of the errno numbering until <sys/errno.h> became its one home,
 // and any translation unit naming both of these headers used to fail.
 //
-// THE LIST DOES NOT GROW WITHOUT CHECKING.  <sys/tty.h> is the one that cannot
-// join it: it spells XTABS as 006000 where <sgtty.h> spells it 06000, and b6cpp
-// rejects a macro redefinition whose replacement text is not character-identical.
+// THE LIST DOES NOT GROW WITHOUT CHECKING.  <sys/tty.h> could not join it until
+// <sys/ttyio.h> existed: it and <sgtty.h> wrote out the same thirty-five names, and
+// spelled XTABS as 006000 where <sgtty.h> said 06000 -- b6cpp rejects a macro
+// redefinition whose replacement text is not character-identical.  <sgtty.h> is in
+// the list above -- <curses.h> would have pulled it in anyway -- so the two of them
+// standing here IS the assertion that the pair is fixed.
 //
 #include <sys/dir.h>
 #include <sys/errno.h>
 #include <sys/param.h>
 #include <sys/signal.h>
 #include <sys/stat.h>
+#include <sys/tty.h>
+#include <sys/ttyio.h>
 #include <sys/types.h>
 #include <sys/user.h>
 #include <sys/wait.h>
@@ -86,6 +92,7 @@
 #include <locale.h>
 #include <math.h>
 #include <setjmp.h>
+#include <sgtty.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -104,6 +111,8 @@
 #include <sys/param.h>
 #include <sys/signal.h>
 #include <sys/stat.h>
+#include <sys/tty.h>
+#include <sys/ttyio.h>
 #include <sys/types.h>
 #include <sys/user.h>
 #include <sys/wait.h>

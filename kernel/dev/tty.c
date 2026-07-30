@@ -154,7 +154,7 @@ void ioctl()
 int ttioccomm(int com, register struct tty *tp, caddr_t addr, dev_t dev)
 {
     unsigned t;
-    struct ttiocb iocb;
+    struct sgttyb iocb; // v7 had a second copy of this under the name `struct ttiocb'
     extern int nldisp;
 
     switch (com) {
@@ -199,20 +199,20 @@ int ttioccomm(int com, register struct tty *tp, caddr_t addr, dev_t dev)
             u.u_error = EFAULT;
             return (1);
         }
-        tp->t_ispeed = iocb.ioc_ispeed;
-        tp->t_ospeed = iocb.ioc_ospeed;
-        tp->t_erase  = iocb.ioc_erase;
-        tp->t_kill   = iocb.ioc_kill;
-        tp->t_flags  = iocb.ioc_flags;
+        tp->t_ispeed = iocb.sg_ispeed;
+        tp->t_ospeed = iocb.sg_ospeed;
+        tp->t_erase  = iocb.sg_erase;
+        tp->t_kill   = iocb.sg_kill;
+        tp->t_flags  = iocb.sg_flags;
         break;
 
     // send current parameters to user
     case TIOCGETP:
-        iocb.ioc_ispeed = tp->t_ispeed;
-        iocb.ioc_ospeed = tp->t_ospeed;
-        iocb.ioc_erase  = tp->t_erase;
-        iocb.ioc_kill   = tp->t_kill;
-        iocb.ioc_flags  = tp->t_flags;
+        iocb.sg_ispeed = tp->t_ispeed;
+        iocb.sg_ospeed = tp->t_ospeed;
+        iocb.sg_erase  = tp->t_erase;
+        iocb.sg_kill   = tp->t_kill;
+        iocb.sg_flags  = tp->t_flags;
         if (copyout((caddr_t)&iocb, addr, sizeof(iocb)))
             u.u_error = EFAULT;
         break;
@@ -233,14 +233,15 @@ int ttioccomm(int com, register struct tty *tp, caddr_t addr, dev_t dev)
         (*linesw[(unsigned)tp->t_line].l_ioctl)(com, tp, addr);
         break;
 
-    // set and fetch special characters
+    // Set and fetch special characters.  Same word either way, but b6cc folds
+    // &tp->t_un into the pointer arithmetic and puts &tun through a frame slot.
     case TIOCSETC:
-        if (copyin(addr, (caddr_t)&tun, sizeof(struct tc)))
+        if (copyin(addr, (caddr_t)&tp->t_un, sizeof(tun)))
             u.u_error = EFAULT;
         break;
 
     case TIOCGETC:
-        if (copyout((caddr_t)&tun, addr, sizeof(struct tc)))
+        if (copyout((caddr_t)&tp->t_un, addr, sizeof(tun)))
             u.u_error = EFAULT;
         break;
 
