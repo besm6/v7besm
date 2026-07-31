@@ -1,0 +1,20 @@
+
+unrefdir.img
+** Phase 1 - Check Blocks and Sizes
+** Phase 2 - Check Pathnames
+** Phase 3 - Check Connectivity
+UNREF DIR  I=6  OWNER=U MODE=40755
+SIZE=72 MTIME=Nov 14 22:13 2023 
+RECONNECT?  yes
+
+DIR I=6 CONNECTED. PARENT WAS I=5
+
+** Phase 4 - Check Reference Counts
+LINK COUNT DIR I=5  OWNER=U MODE=40755
+SIZE=72 MTIME=Nov 14 22:13 2023  COUNT 3 SHOULD BE 2
+ADJUST?  yes
+
+** Phase 5 - Check Free List 
+11 files 51 blocks 531 free
+
+***** FILE SYSTEM WAS MODIFIED *****

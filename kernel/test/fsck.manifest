@@ -1,0 +1,36 @@
+# The filesystem kernel/test/fsck damages and then has the guest repair -- task C4d.
+#
+# IT IS NOT THE ROOT.  This goes on the SECOND drive, the one kernel/test/mkfs introduced,
+# because a repair is a WRITE and the volume being written must be one the run can afford
+# to have wrecked.  The root is checked too, read-only and last; fsck.sh says why in that
+# order.
+#
+# Deliberately small and deliberately shaped: what is here is what the damage in
+# simh.damage reaches, and nothing else.
+#
+#   /lost+found   the reconnect target.  Empty, which is enough -- see root.manifest's
+#                 stanza for the same directory and cmd/fsck/fsck.1m's corrected BUGS.
+#   /d/e/f        the file whose directory entry is removed, three levels down so that
+#                 descend() has something to walk on the way to it.
+#   /motd         one more file, so the i-list and the free list are not trivial.
+#
+# The `source' paths resolve against b6fsutil's working directory, build/kernel/test, as
+# ../../root.manifest's do.  /etc/motd is used because it is already staged there and its
+# contents do not matter -- nothing compares them; this test's oracle is `b6fsutil -c'.
+
+default
+owner 0
+group 0
+dirmode 0755
+filemode 0644
+
+dir /lost+found
+dir /d
+dir /d/e
+
+file /motd
+source ../../rootfs/etc/motd
+
+file /d/e/f
+owner 7
+source ../../rootfs/etc/motd

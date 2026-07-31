@@ -1,0 +1,71 @@
+# The fixture filesystem fsck's b6sim cases repair -- task C4d.
+#
+# WHY THIS IS NOT ../../df/test/fsimg.img.  ../../TODO.md says C4d should copy df's fixture
+# rather than build a second, and for `dd' (C4b) that was right: dd does not care what is
+# in the blocks it moves.  fsck does.  df's fixture has no lost+found, no hard link, no
+# device node, no indirect block and nothing nested below depth 1, so the reconnect path,
+# the link-count path, ftypeok()'s device arms and iblock() are all unreachable from it --
+# and it cannot be extended, because cmd/df/test/image.expected asserts a literal free
+# count that any addition would move.  So there are two fixtures, and the `clean' case
+# runs against DF's, which makes the pair a cross-check rather than a duplication: two
+# independently built filesystems that must both come out clean, and a free count fsck
+# arrives at by walking the list that must equal the one df prints.
+#
+# WHAT EACH ENTRY IS FOR.  Every one of these is reached by a damage case; nothing here is
+# decoration.
+#
+#   /lost+found      the reconnect target.  An ORDINARY EMPTY DIRECTORY, which is the
+#                    interesting part: fsck.1m says one must first create files in it and
+#                    delete them again, and that is not true here.  linkup() rounds
+#                    di_size up to a whole block and the rest of the block is zeros --
+#                    b6fsutil's dir.cpp starts from `Block b{}', the kernel's alloc() calls
+#                    clrbuf() -- and a block holds DIRPB (128) entries, so a fresh
+#                    lost+found has 126 empty slots.  fsck.1m is corrected rather than
+#                    carried.
+#   /big             21,504 bytes = 7 blocks, which is one MORE than the six direct
+#                    addresses (NADDR 8, NLEVEL 2), so it has a single indirect block and
+#                    iblock() runs.  df's fixture stops deliberately at three blocks.
+#   /etc/passwd      a file with a hard link, so a link count above 1 exists for the
+#                    `linkcnt' case to be wrong about.
+#   /etc/passwd.bak  that link.
+#   /dev/tty         a device node, so ckinode()'s SPECIAL arm is taken -- di_addr[0] IS
+#                    the device number there, and walking it as a block number is the bug
+#                    cmd/fsutil/check.cpp has a test of its own for.
+#   /d/e/f           three levels, so descend() recurses and a `..' can be wrong two deep.
+#
+# 200 blocks, and a fixed timestamp, for ../../df/test/fsimg.manifest's reasons: the image
+# must be byte-reproducible or a free count is not an expectation.  The `source' paths
+# resolve against b6fsutil's working directory, which is this test's build directory.
+
+default
+owner 0
+group 0
+dirmode 0755
+filemode 0644
+
+dir /lost+found
+dir /etc
+dir /d
+dir /d/e
+
+file /big
+source fsckimg.d/big
+
+file /small
+owner 201
+source fsckimg.d/small
+
+file /etc/passwd
+source fsckimg.d/small
+
+link /etc/passwd.bak
+target /etc/passwd
+
+file /d/e/f
+owner 202
+source fsckimg.d/small
+
+cdev /dev/tty
+major 5
+minor 0
+mode 0620

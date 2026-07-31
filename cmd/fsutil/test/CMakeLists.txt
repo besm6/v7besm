@@ -15,6 +15,7 @@ add_executable(fsutil_test
     command_test.cpp
     kernel_model_test.cpp
     check_test.cpp
+    damage_test.cpp
 )
 target_link_libraries(fsutil_test PRIVATE fsengine GTest::gtest_main)
 gtest_discover_tests(fsutil_test PROPERTIES RUN_SERIAL TRUE)

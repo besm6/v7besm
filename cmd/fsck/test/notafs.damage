@@ -1,0 +1,4 @@
+# Not a filesystem at all.  v7's fsck never looked at s_magic -- it had none to look at --
+# and would have walked this happily; cmd/fsutil/check.cpp and the kernel's own sbcheck()
+# both refuse it.  This is the case where the two tools used to disagree.
+sb.magic=0

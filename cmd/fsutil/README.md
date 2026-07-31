@@ -110,6 +110,27 @@ created on demand. `b6fsutil` can also generate a manifest from a host tree.
 | `-v` | verbose; twice also lists the tree |
 | `-T N` | fixed timestamp, for reproducible output |
 | `-S` | convert between the flat and SIMH containers |
+| `-D spec` | corrupt one word, on purpose. Repeatable |
+
+### `-D` — damaging an image deliberately
+
+`-c` is the host's fsck and `cmd/fsck` is the guest's, and neither can be trusted until it
+has been handed something broken. `-D` writes **one word**, named symbolically so that no
+test script has to re-derive `itod()`, `INOPB` or `DIRENTSZ` for itself:
+
+```sh
+b6fsutil -D sb.nfree=999    img   # a superblock field
+b6fsutil -D i5.nlink=7      img   # an inode field: mode nlink uid gid size *time addr0..7
+b6fsutil -D e2.3=9999       img   # the i-number of entry 3 of directory inode 2
+b6fsutil -D b12.0=0         img   # word 0 of block 12, for damage no field name describes
+```
+
+A value is decimal, or octal with a leading `0` — a mode has to be writable the way the rest
+of the world spells one. Each poke is logged to standard output. Two things it does that
+nothing else in the tool does, both deliberate: it writes the raw word rather than going
+through `to_word()`, whose range check would refuse the interesting values; and it does
+**not** `sync()`, since that would rewrite block 1 from the in-core mirror and quietly undo
+any damage to the superblock. See `damage.h`.
 
 ## Source layout
 
@@ -127,6 +148,7 @@ created on demand. `b6fsutil` can also generate a manifest from a host tree.
 | `manifest.cpp` | the manifest parser and host-tree scanner |
 | `command.cpp` | paths: namei, add, list, extract |
 | `check.cpp` | fsck |
+| `damage.cpp` | the `-D` verb: one word, written wrongly on purpose |
 
 Two invariants worth preserving:
 

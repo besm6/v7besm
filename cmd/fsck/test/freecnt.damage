@@ -1,0 +1,2 @@
+# A free-list count outside 1..NICFREE.  freechk() gives up and phase 6 rebuilds.
+sb.nfree=999

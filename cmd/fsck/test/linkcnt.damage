@@ -1,0 +1,2 @@
+# /etc/passwd (ino 9) has two links; claim nine.  Phase 4 ADJUSTs it back.
+i9.nlink=9

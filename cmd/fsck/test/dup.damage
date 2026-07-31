@@ -1,0 +1,6 @@
+# /small (ino 8) claims THE ROOT DIRECTORY'S block.  Block 6 is not a guess: it is the
+# first data block (s_isize), and mkfs allocates the root's directory block first, so this
+# spec cannot drift when the manifest changes.  It reaches phase 1's DUP, the phase 1b
+# rescan that only a dup provokes, phase 2's DUP/BAD entry removal, phase 4's clri(), and
+# then the free-list salvage -- /small's own block is left accounted for nowhere.
+i8.addr0=6

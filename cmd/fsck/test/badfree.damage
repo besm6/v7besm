@@ -1,0 +1,2 @@
+# A block outside the volume, in the superblock's cached free list.
+sb.free3=1999

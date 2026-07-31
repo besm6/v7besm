@@ -128,7 +128,22 @@ work has two halves:
   writes a filesystem onto a second drive, which is the first time `kernel/dev/md.c`'s
   `mdwrite()` has ever run and the first time this machine has had two disks. A write obeys all
   four conditions above and a fifth of its own, and the second drive turned up a bug one drive
-  could not hold — both in `cmd/mkfs/README.md`. It also settled how a program that reports on a whole
+  could not hold — both in `cmd/mkfs/README.md`. **And since task C4d it can put a filesystem
+  right**: `/etc/fsck` is on the image, so the machine takes a volume that is wrong, works out
+  what is wrong with it and repairs it over that same write path — an orphaned file reconnected
+  into a `/lost+found` the root now carries, and in phase 6 the whole free list of a 2000-block
+  volume laid down again, which is the longest run of raw writes anything here performs. Then it
+  reads **the filesystem it is running on**, read-only, and pronounces it sound, three
+  independent measurements of that volume's free space agreeing — `fsck`'s, `df`'s and the
+  host's. Its oracle is the tool that had been fscking every image in this tree from outside:
+  `cmd/fsutil/check.cpp` implements the same checks in host C++, sharing no line with the guest,
+  so a filesystem damaged by a new `b6fsutil -D` verb can be handed to both and every
+  disagreement is a bug in one of them. Four turned up, three of them in `fsck` — a free-inode
+  count one too high on every clean filesystem this system ever made (inode 1 exists and can
+  never be allocated), a superblock magic number v7's `fsck` never looked at, and a reconnected
+  file that could have been left unreachable by `namei()`; the fourth is a field the two
+  deliberately differ about, and the harness marks it rather than hiding it
+  (`cmd/fsck/README.md`). It also settled how a program that reports on a whole
   filesystem is *asserted*: not against a checked-in table, which would have to be re-typed
   whenever anything joined `/bin`, but against numbers the host **recomputes** from the finished
   image — and to the **console** rather than to a file, since a `quot` writing to `/tmp` counts
@@ -136,7 +151,7 @@ work has two halves:
   table one slot past what it had filled, `quot` writing one element past `du[NUID]`, and
   `quot`'s `qsort` comparator calling `strcmp()` on two `NULL`s — which a PDP-11 forgave,
   address 0 being readable there, and which here dereferences word 0.
-  Thirteen tests
+  Fourteen tests
   guard that ladder — `kernel/test/boot` (the prompt appears), `kernel/test/console` (a typed
   dialogue with the shell, and the only one that reaches `/etc/rc`, whose date it
   asserts, ending on the `login:` the first getty puts there — **currently `DISABLED`**, since it
@@ -188,6 +203,15 @@ work has two halves:
   a **byte-for-byte `cmp` against `b6fsutil -n`**, available because the guest program and the
   host tool are transcriptions of each other and the only thing between them is a timestamp six
   bytes into the superblock, which the host reads back out of the guest's own output)
+  and `kernel/test/fsck` (task C4d: the only test here whose scratch pack arrives with something
+  deliberately **wrong** on it — built and then broken on the host with `b6fsutil -D`, so it is
+  attached *without* `-n`, which would format away the thing under test — and the only one that
+  examines the filesystem the machine is **running on**: `fsck -y /dev/rmd1` repairs an orphan
+  and salvages a whole free list over the write path, a second pass finds nothing, and then
+  `fsck -n /dev/rmd0` reads the mounted root and its free count is held against `df`'s and
+  against the host's. That last check is sound only while nothing allocates a block after
+  `fsck`'s `sync(2)`, which is a property of the *order* of `kernel/test/fsck.sh` and not of any
+  program, so that file's header says so in the imperative)
   — and `cd kernel && make run` is
   where you type at it yourself. The drums
   must be attached to exec anything: they are `swapdev`, and `exece()` stages the argument
@@ -220,7 +244,7 @@ thing**, and knowing which one you are touching is most of what the build layout
 - **host tools** — `cmd/*`, compiled by the build machine's C/C++ compiler, run there;
 - **cross-built BESM-6 artifacts** — `kernel/` and `lib/`, compiled by the `b6*` toolchain
   above through `b6_obj()` in `scripts/BesmCross.cmake`;
-- **native BESM-6 programs** — `cmd/{init,getty,login,mkfs,quot,sh,basename,cat,chgrp,chmod,chown,cp,date,dd,df,du,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`, linked against libc by `b6_prog()`
+- **native BESM-6 programs** — `cmd/{init,getty,login,fsck,mkfs,quot,sh,basename,cat,chgrp,chmod,chown,cp,date,dd,df,du,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`, linked against libc by `b6_prog()`
   and staged into `build/rootfs/` (with the static files of `etc/`) for the disk image the
   kernel mounts.
 
@@ -347,7 +371,7 @@ therefore names two archives, **ours first**: `-lc -lruntime`, because `b6ld` sc
 helper calls back into libc. The kernel takes `-lruntime` **alone** — it defines its own
 `printf` in `kernel/prf.c` and uses no other library routine.
 
-### Native BESM-6 programs (`cmd/{init,getty,login,mkfs,quot,sh,basename,cat,chgrp,chmod,chown,cp,date,dd,df,du,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}` + `etc/` → `build/rootfs/`)
+### Native BESM-6 programs (`cmd/{init,getty,login,fsck,mkfs,quot,sh,basename,cat,chgrp,chmod,chown,cp,date,dd,df,du,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}` + `etc/` → `build/rootfs/`)
 
 The third category, and the newest. These are **`cmd/` subdirectories that are not host
 tools**: `cmd/init/init.c` is the Unix v7 `/etc/init`, `cmd/sh/` is S. R. Bourne's v7 shell,
@@ -403,7 +427,23 @@ onto another's and nothing may write block 0 of a pack this system did not label
 `MDNBLK` need not be duplicated into a guest program, because reading the *last* block before
 writing the first lets `mdstrategy()` answer — which is safe only because the superblock is
 written last. Its oracle is byte-exact in both worlds: `b6fsutil -n` builds the same image and
-the only thing between them is a timestamp six bytes into the superblock.
+the only thing between them is a timestamp six bytes into the superblock. Then `cmd/fsck`
+(task C4d) is the one that *repairs* a filesystem, and the first program here that writes one
+it did not make — the top of the C4 ladder and, at **10,842 words**, the largest thing on the
+image, measured before it was ported because `cmd/TODO.md` held splitting it in reserve and it
+turned out not to need it. It came out a third shorter than v7's 1,684 lines, almost all of the
+deletion being one thing: v7 carries a whole second implementation of itself — a scratch file,
+a buffer pool, an LRU search and a second arm in three map accessors — for the case where its
+tables will not fit in 54 Kb, and here they are 1,300 words of `calloc`. Two of those deletions
+were forced rather than merely available, the arena being unalignable and the multi-block i-list
+sweep being a transfer `physio()` refuses. Its own findings are `cmd/fsck/README.md`'s: the
+indirect-block buffer cannot be one static per level, because `pass2` descends into a
+subdirectory from inside the *parent's* `iblock()` and two walks of a level are live at once —
+so it is one shared buffer re-fetched each iteration, which is the idiom v7's own `dirscan()`
+already uses on `fileblk` for exactly that reason; and `hotroot` never fired, `rootdev` being
+`makedev(0,0)` while `/dev/rmd0`'s `st_rdev` is `makedev(3,0)`, so the raw name is mapped back
+to the block one as 4.xBSD's `unrawname()` does rather than by duplicating `cdevsw[]`'s pairing
+into a user program.
 Last again,
 `cmd/getty` and `cmd/login` (kernel task 29b) are the two that make the machine multi-user, and
 they are the only pair here where one execs the other: `init` execs `/etc/getty`, getty execs
@@ -411,7 +451,7 @@ they are the only pair here where one execs the other: `init` execs `/etc/getty`
 exiting and `init`'s `multiple()` starting a fresh getty. Neither is setuid, and `login`
 emphatically not — it is *handed* root by getty rather than borrowing it, and the setuid version
 is `su` (task C6). All compiled by the
-`b6*` toolchain and staged into `build/rootfs/` as `etc/init`, `etc/getty`, `etc/mkfs`, `etc/quot` and
+`b6*` toolchain and staged into `build/rootfs/` as `etc/init`, `etc/getty`, `etc/fsck`, `etc/mkfs`, `etc/quot` and
 `bin/{sh,basename,cat,chgrp,chmod,chown,cp,date,dd,df,du,echo,ed,kill,ln,login,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`. **`mkdir`, `mv` and `rmdir` are setuid
 root** on the image, which is a property of [root.manifest](root.manifest) alone (`mode 04755`)
 since nothing under `build/rootfs/` carries a mode; see

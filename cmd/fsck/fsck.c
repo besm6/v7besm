@@ -1,1684 +1,1583 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
-#include <stdio.h>
+//
+// fsck -- file system consistency check and interactive repair.
+//
+//	/etc/fsck [ -y ] [ -n ] [ -s ] [ -S ] filesystem ...
+//
+// THE FIRST PROGRAM HERE THAT CAN REPAIR A FILESYSTEM.  Task C4a gave the machine df, du
+// and quot, which measure its store; C4b gave dd, which moves it; C4c gave mkfs, which
+// makes one.  Until this program it was still b6fsutil on the HOST that checked everything
+// those wrote.  Its opposite number is cmd/fsutil/check.cpp, which implements the same
+// checks there, and the two are each other's oracle: cmd/fsck/test/ damages an image with
+// `b6fsutil -D', has this program repair it, and requires `b6fsutil -c' to then find
+// nothing.  ../fsck/README.md is the account of what that comparison turned up.
+//
+// THE MEMORY MANAGEMENT IS GONE, and it is most of what shrank.  v7 sized an arena from
+// MAXDATA -- which is #ifdef pdp11/i386/vax/interdata, so this file did not compile at all
+// -- and when the arena would not hold the maps it fell back to a SCRATCH FILE, with a
+// buffer pool, an LRU search(), and a second arm in each of domap()/dostate()/dolncnt()
+// reading a map through that pool.  All of it exists because a PDP-11 had 54 Kb.  This
+// machine's drive is 2000 blocks (kernel/dev/md.c) and a default i-list is one inode per
+// two blocks, so every map together is about 1,300 words: they are calloc'd from the
+// superblock's own numbers, a failure is a refusal rather than a fallback, and the pool,
+// the scratch file, the -t option and the second arm of three functions all go.  ../mkfs
+// lost its prototype language the same way and for the same reason.
+//
+// THE RAW DEVICE is the other half.  A transfer through /dev/rmd0 goes physio() ->
+// mdstrategy() and those two impose four conditions v7 knows nothing about, listed in
+// ../df/README.md; two of them are conditions v7's fsck BREAKS.  It read into sbrk'd
+// memory at whatever alignment that gave, and its i-list cache read NINOBLK..MAXRAW blocks
+// -- 11 to 110 -- at a time into the middle of that arena.  Here every read and every
+// write is ONE BSIZE BLOCK into one of four buffers cut from a single aligned bss array,
+// and there is no i-list cache: ginode() reads the block the inode is in, as v7 does when
+// its own raw path is off.  The fifth condition, the one only a write can break -- physio()
+// refuses a base below u.u_tsize, so a raw write may never be sourced from the text -- is
+// ../mkfs/README.md's, and this program cannot break it either: every buffer is bss.
+//
+// FOUR BUFFERS, NOT FIVE, and the one that is not there is worth knowing about.  v7's
+// iblock() declares `BUFAREA ib' as an AUTOMATIC, which is 515 words of frame per level of
+// indirection against a 4,096-word stack nothing checks (../README.md SS6).  An aligned
+// buffer cannot be an automatic here, so the obvious fix is one static per level -- and it
+// is wrong: pass2 descends into a subdirectory from inside dirscan(), which is inside the
+// PARENT's iblock(), so two walks of the same level are live at once and would share it.
+// What is here instead is one shared indirect buffer re-fetched on every iteration, which
+// is exactly the idiom v7's own dirscan() already uses on fileblk for exactly this reason.
+// getblk() returns immediately when the block is still there, so it costs nothing.
+//
+// THE ON-DISK SHAPE DIFFERS FROM v7's IN FOUR PLACES, and each deletes code:
+//
+//   * NADDR is 8 and NLEVEL is 2 -- six direct, one single, one double, and no triple.
+//     Carried unchanged, v7's `&iaddrs[NADDR-3]' and `for(n=1;n<4;n++)' would have read
+//     direct block di_addr[5] as an indirect block.
+//   * A daddr_t is a whole word, so di_addr is daddr_t[NADDR] and l3tol() -- which this
+//     libc does not have, being a PDP-11 artefact -- is a copy loop.  The local copy
+//     itself STAYS: descend() reloads inoblk through ginode() and would invalidate dp.
+//   * There is no BSHIFT and no BMASK.  A block is 3072 bytes, which is not a power of
+//     two, so every `blk<<BSHIFT' is a multiply and every `x&BMASK' a remainder.
+//   * struct filsys has no s_m/s_n and no s_fname/s_fpack (sys/filsys.h).  So the
+//     "File System:/Volume:" line goes, and phase 6 rebuilds the free list the way
+//     ../mkfs/mkfs.c builds it -- descending, no cylinder interleave -- which deletes
+//     stype(), the -s/-S ARGUMENT, and a 584-word stack frame (flg[500] + addr[500]).
+//
+// s_tfree AND s_tinode ARE DEAD FIELDS HERE.  mkfs sets them and the kernel maintains
+// neither, so on any volume that has been written to they are stale by construction.  v7
+// offers to FIX both; this reports them as a note and offers nothing, because a value
+// nothing maintains is not repaired by writing it once -- and because the offer would fire
+// on every check of a live root.  cmd/fsutil/check.cpp makes the same call and says the
+// same thing about it.  Phase 6 does set them, being in the superblock it is rewriting
+// anyway.
+//
+// WHAT IT REPORTS IN.  The summary and "N BLK(S) MISSING" are MEASUREMENTS, so they are
+// printed in 1024-byte blocks -- KBPB of them per filesystem block, ../README.md SS4 --
+// and the free count can therefore be compared with df(1M)'s, which kernel/test/fsck does.
+// A block NUMBER in a diagnostic is not a measurement and stays exactly as it is on the
+// disk, and neither is a count of events ("N BAD BLKS IN FREE LIST").  fsck.1m has the
+// section SS4 requires.
+//
+// NO /etc/checklist, the one deliberate divergence in the argument handling: v7 with no
+// argument reads a list of filesystems from that file, and this system has one filesystem
+// and no such file.  A device argument is required.  fsck.1m says so.
+//
+// NOT SETUID, and it must not become so, for /etc/mkfs's and /etc/quot's reason: /dev/rmd0
+// is mode 0600 because that one node is every file's contents, and this program writes it.
+// ../README.md SS8.
+//
+
 #include <ctype.h>
-#include <sys/param.h>
-#include <sys/filsys.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/dir.h>
 #include <sys/fblk.h>
+#include <sys/filsys.h>
 #include <sys/ino.h>
-#include <sys/inode.h>
+#include <sys/param.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
 
-typedef	int	(*SIG_TYP)();
+// getpw(3) declares itself at its caller, as v7 left it and as getpass(3) does.
+int getpw(int uid, char buf[]);
 
-#define NDIRECT	(BSIZE/sizeof(struct direct))
-#define SPERB	(BSIZE/sizeof(short))
+// What this file's arithmetic assumes of the layout, asserted rather than re-derived
+// (../TODO.md, task C4).  The headers carry the rest.
+_Static_assert(BSIZE == BSIZEW * NBPW, "a block must be BSIZEW words of NBPW bytes");
+_Static_assert(BSIZE % KBYTE == 0, "a block must be a whole number of reported blocks");
+_Static_assert(1 + NICFREE <= BSIZEW, "a chain block must fit the block buffer");
+_Static_assert(INOPB * sizeof(struct dinode) == BSIZE, "INOPB dinodes must tile a block");
+_Static_assert(DIRPB * sizeof(struct direct) == BSIZE, "DIRPB entries must tile a block");
+_Static_assert(NINDIR * sizeof(daddr_t) == BSIZE, "NINDIR addresses must tile a block");
+_Static_assert(NADDR > NLEVEL, "an inode must have at least one direct block");
 
-#define NO	0
-#define YES	1
+// mdstrategy()'s half-zone, which is also a block: kernel/dev/md.c refuses a transfer whose
+// physical address is not a multiple of it.  A page is PGSZ words and mapping preserves the
+// offset within a page, so aligning the virtual address aligns the physical one.
+#define MDALIGN BSIZEW
+_Static_assert(PGSZ % MDALIGN == 0, "a page must be a whole number of MDALIGNs");
 
-#define	MAXDUP	10		/* limit on dup blks (per inode) */
-#define	MAXBAD	10		/* limit on bad blks (per inode) */
+#define NO  0
+#define YES 1
 
-#define STEPSIZE	9	/* default step for freelist spacing */
-#define CYLSIZE		400	/* default cyl size for spacing */
-#define MAXCYL		500	/* maximum cylinder size */
+#define MAXDUP 10 // limit on dup blks (per inode)
+#define MAXBAD 10 // limit on bad blks (per inode)
 
-#define BITSPB	8		/* number bits per byte */
-#define BITSHIFT	3	/* log2(BITSPB) */
-#define BITMASK	07		/* BITSPB-1 */
-#define LSTATE	2		/* bits per inode state */
-#define STATEPB	(BITSPB/LSTATE)	/* inode states per byte */
-#define USTATE	0		/* inode not allocated */
-#define FSTATE	01		/* inode is file */
-#define DSTATE	02		/* inode is directory */
-#define CLEAR	03		/* inode is to be cleared */
-#define SMASK	03		/* mask for inode state */
+#define BITSPB   8 // bits per byte in the block maps
+#define BITSHIFT 3 // log2(BITSPB)
+#define BITMASK  07
 
-typedef struct dinode	DINODE;
-typedef struct direct	DIRECT;
+#define LSTATE  2 // bits per inode state
+#define STATEPB (BITSPB / LSTATE)
+#define USTATE  0  // inode not allocated
+#define FSTATE  01 // inode is file
+#define DSTATE  02 // inode is directory
+#define CLEAR   03 // inode is to be cleared
+#define SMASK   03
 
-#define ALLOC	((dp->di_mode & IFMT) != 0)
-#define DIR	((dp->di_mode & IFMT) == IFDIR)
-#define REG	((dp->di_mode & IFMT) == IFREG)
-#define BLK	((dp->di_mode & IFMT) == IFBLK)
-#define CHR	((dp->di_mode & IFMT) == IFCHR)
-#define MPC	((dp->di_mode & IFMT) == IFMPC)
-#define MPB	((dp->di_mode & IFMT) == IFMPB)
-#define SPECIAL	(BLK || CHR || MPC || MPB)
+#define DUPTBLSIZE 100 // num of dup blocks to remember
+#define MAXLNCNT   20  // num zero link cnts to remember
 
-#define NINOBLK	11		/* num blks for raw reading */
-#define MAXRAW	110		/* largest raw read (in blks) */
-daddr_t	startib;		/* blk num of first in raw area */
-unsigned niblk;			/* num of blks in raw area */
+// The path built during phase 2, and the bound v7 did not have.  It accumulates one
+// component per directory level with no check of any kind in the original -- ../README.md
+// SS6's "every port so far has had to bound one".  The room left is measured by SUBTRACTING
+// two char pointers, never by comparing them: SS2, and `-' is the operation that works.
+#define PATHLEN  256
+#define PATHROOM (PATHLEN - 1 - (int)(pathp - pathname))
 
-struct bufarea {
-	struct bufarea	*b_next;		/* must be first */
-	daddr_t	b_bno;
-	union {
-		char	b_buf[BSIZE];		/* buffer space */
-		short	b_lnks[SPERB];		/* link counts */
-		daddr_t	b_indir[NINDIR];	/* indirect block */
-		struct filsys b_fs;		/* super block */
-		struct fblk b_fb;		/* free block */
-		struct dinode b_dinode[INOPB];	/* inode block */
-		DIRECT b_dir[NDIRECT];		/* directory */
-	} b_un;
-	char	b_dirty;
-};
+typedef struct dinode DINODE;
+typedef struct direct DIRECT;
 
-typedef struct bufarea BUFAREA;
+#define ALLOC   ((dp->di_mode & S_IFMT) != 0)
+#define DIR     ((dp->di_mode & S_IFMT) == S_IFDIR)
+#define BLK     ((dp->di_mode & S_IFMT) == S_IFBLK)
+#define CHR     ((dp->di_mode & S_IFMT) == S_IFCHR)
+#define MPC     ((dp->di_mode & S_IFMT) == S_IFMPC)
+#define MPB     ((dp->di_mode & S_IFMT) == S_IFMPB)
+#define SPECIAL (BLK || CHR || MPC || MPB)
 
-BUFAREA	inoblk;			/* inode blocks */
-BUFAREA	fileblk;		/* other blks in filesys */
-BUFAREA	sblk;			/* file system superblock */
-BUFAREA	*poolhead;		/* ptr to first buffer in pool */
+// A block buffer.  v7 wrapped a union of every shape a block can have; here the storage is
+// an aligned int array outside the struct (it has to be -- see the head comment) and the
+// shapes are casts through b_addr.  df.c reads a chain block through the same cast.
+typedef struct bufarea {
+    daddr_t b_bno;
+    int *b_addr;
+    int b_dirty;
+} BUFAREA;
 
-#define initbarea(x)	(x)->b_dirty = 0;(x)->b_bno = (daddr_t)-1
-#define dirty(x)	(x)->b_dirty = 1
-#define inodirty()	inoblk.b_dirty = 1
-#define fbdirty()	fileblk.b_dirty = 1
-#define sbdirty()	sblk.b_dirty = 1
+#define NBUFS 4 // sblk, fileblk, inoblk, indblk
 
-#define freeblk		fileblk.b_un.b_fb
-#define dirblk		fileblk.b_un
-#define superblk	sblk.b_un.b_fs
+// The one transfer area.  NBUFS blocks of BSIZEW words, plus the slack the alignment step
+// needs: where bss lands is the linker's business and nothing in C can ask for a 512-word
+// boundary.  Consecutive slots stay aligned, one block being exactly MDALIGN words.
+static int rawbuf[NBUFS * BSIZEW + MDALIGN];
 
-struct filecntl {
-	int	rfdes;
-	int	wfdes;
-	int	mod;
-};
+static BUFAREA sblk;    // the superblock
+static BUFAREA fileblk; // a directory block, or a free-list chain block
+static BUFAREA inoblk;  // a block of the i-list
+static BUFAREA indblk;  // an indirect block, at any level -- see the head comment
 
-struct filecntl	dfile;		/* file descriptors for filesys */
-struct filecntl	sfile;		/* file descriptors for scratch file */
+#define initbarea(x) ((x)->b_dirty = 0, (x)->b_bno = (daddr_t)-1)
+#define inodirty()   (inoblk.b_dirty = 1)
+#define fbdirty()    (fileblk.b_dirty = 1)
+#define sbdirty()    (sblk.b_dirty = 1)
 
-typedef unsigned MEMSIZE;
+#define superblk (*(struct filsys *)sblk.b_addr)
+#define freeblk  (*(struct fblk *)fileblk.b_addr)
+#define dirblk   ((DIRECT *)fileblk.b_addr)
+#define inodes   ((DINODE *)inoblk.b_addr)
 
-MEMSIZE	memsize;		/* amt of memory we got */
-#ifdef pdp11
-#define MAXDATA	((MEMSIZE)54*1024)
-#endif
-#ifdef i386
-#define	MAXDATA ((MEMSIZE)400*1024)
-#endif
-#if vax
-#define	MAXDATA ((MEMSIZE)400*1024)
-#endif
-#if interdata
-#define	MAXDATA ((MEMSIZE)400*1024)
-#endif
+// The device.  One name, two descriptors -- v7 opened the same path twice, and so does
+// this: a read-only open cannot be upgraded and -n must not acquire the write one at all.
+static int rfd = -1;
+static int wfd = -1;
+static int modified; // anything written?  drives the closing banner
 
-#define	DUPTBLSIZE	100	/* num of dup blocks to remember */
-daddr_t	duplist[DUPTBLSIZE];	/* dup block table */
-daddr_t	*enddup;		/* next entry in dup table */
-daddr_t	*muldup;		/* multiple dups part of table */
+static daddr_t duplist[DUPTBLSIZE];
+static daddr_t *enddup;
+static daddr_t *muldup;
 
-#define MAXLNCNT	20	/* num zero link cnts to remember */
-ino_t	badlncnt[MAXLNCNT];	/* table of inos with zero link cnts */
-ino_t	*badlnp;		/* next entry in table */
+static ino_t badlncnt[MAXLNCNT];
+static ino_t *badlnp;
 
-char	sflag;			/* salvage free block list */
-char	csflag;			/* salvage free block list (conditional) */
-char	nflag;			/* assume a no response */
-char	yflag;			/* assume a yes response */
-char	tflag;			/* scratch file specified */
-char	rplyflag;		/* any questions asked? */
-char	hotroot;		/* checking root device */
-char	rawflg;			/* read raw device */
-char	rmscr;			/* remove scratch file when done */
-char	fixfree;		/* corrupted free list */
-char	*membase;		/* base of memory we get */
-char	*blkmap;		/* ptr to primary blk allocation map */
-char	*freemap;		/* ptr to secondary blk allocation map */
-char	*statemap;		/* ptr to inode state table */
-char	*pathp;			/* pointer to pathname position */
-char	*thisname;		/* ptr to current pathname component */
-char	*srchname;		/* name being searched for in dir */
-char	pathname[200];
-char	scrfile[80];
-char	*lfname =	"lost+found";
-char	*checklist =	"/etc/checklist";
+static int sflag;    // salvage free block list
+static int csflag;   // salvage free block list (conditional)
+static int nflag;    // assume a no response
+static int yflag;    // assume a yes response
+static int rplyflag; // any questions asked?
+static int hotroot;  // checking the mounted root
+static int fixfree;  // corrupted free list
 
-short	*lncntp;		/* ptr to link count table */
+static char *blkmap;   // one bit per block: seen in a file
+static char *freemap;  // one bit per block: seen in the free list
+static char *statemap; // two bits per inode
+static int *lncntp;    // one link count per inode
 
-int	cylsize;		/* num blocks per cylinder */
-int	stepsize;		/* num blocks for spacing purposes */
-int	badblk;			/* num of bad blks seen (per inode) */
-int	dupblk;			/* num of dup blks seen (per inode) */
-int	(*pfunc)();		/* function to call to chk blk */
+static char *pathp;    // where the next component goes
+static char *thisname; // the component being examined
+static char *srchname; // name being searched for in a directory
+static char pathname[PATHLEN];
+static const char *lfname = "lost+found";
 
-ino_t	inum;			/* inode we are currently working on */
-ino_t	imax;			/* number of inodes */
-ino_t	parentdir;		/* i number of parent directory */
-ino_t	lastino;		/* hiwater mark of inodes */
-ino_t	lfdir;			/* lost & found directory */
-ino_t	orphan;			/* orphaned inode */
+static int badblk; // num of bad blks seen (per inode)
+static int dupblk; // num of dup blks seen (per inode)
 
-off_t	filsize;		/* num blks seen in file */
-off_t	maxblk;			/* largest logical blk in file */
-off_t	bmapsz;			/* num chars in blkmap */
+// The two walk callbacks.  v7 had ONE untyped `int (*pfunc)()' called with a daddr_t by
+// the ADDR walks and with a DIRECT * by the DATA walks; C11 has no such pointer, and
+// this splits it rather than casting at every call.  Which one is live is decided by
+// ckinode()'s flg, exactly as it was.
+static int (*pfunc)(daddr_t blk);
+static int (*dfunc)(DIRECT *dirp);
 
-daddr_t	smapblk;		/* starting blk of state map */
-daddr_t	lncntblk;		/* starting blk of link cnt table */
-daddr_t	fmapblk;		/* starting blk of free map */
-daddr_t	n_free;			/* number of free blocks */
-daddr_t	n_blks;			/* number of blocks used */
-daddr_t	n_files;		/* number of files seen */
-daddr_t	fmin;			/* block number of the first data block */
-daddr_t	fmax;			/* number of blocks in the volume */
+static ino_t inum;      // inode we are currently working on
+static ino_t imax;      // number of inodes
+static ino_t parentdir; // i number of parent directory
+static ino_t lastino;   // hiwater mark of inodes
+static ino_t lfdir;     // lost & found directory
+static ino_t orphan;    // orphaned inode
 
-#define howmany(x,y)	(((x)+((y)-1))/(y))
-#define roundup(x,y)	((((x)+((y)-1))/(y))*(y))
-#define outrange(x)	(x < fmin || x >= fmax)
-#define zapino(x)	clear((char *)(x),sizeof(DINODE))
+static off_t filsize; // num blks seen in file
+static off_t bmapsz;  // num chars in a block map
 
-#define setlncnt(x)	dolncnt(x,0)
-#define getlncnt()	dolncnt(0,1)
-#define declncnt()	dolncnt(0,2)
+static daddr_t n_free;  // number of free blocks
+static daddr_t n_blks;  // number of blocks used
+static daddr_t n_files; // number of files seen
+static daddr_t fmin;    // block number of the first data block
+static daddr_t fmax;    // number of blocks in the volume
 
-#define setbmap(x)	domap(x,0)
-#define getbmap(x)	domap(x,1)
-#define clrbmap(x)	domap(x,2)
+#define howmany(x, y) (((x) + ((y) - 1)) / (y))
+#define roundup(x, y) ((((x) + ((y) - 1)) / (y)) * (y))
+#define outrange(x)   ((x) < fmin || (x) >= fmax)
+#define zapino(x)     clear((char *)(x), sizeof(DINODE))
 
-#define setfmap(x)	domap(x,0+4)
-#define getfmap(x)	domap(x,1+4)
-#define clrfmap(x)	domap(x,2+4)
+#define setlncnt(x) dolncnt(x, 0)
+#define getlncnt()  dolncnt(0, 1)
+#define declncnt()  dolncnt(0, 2)
 
-#define setstate(x)	dostate(x,0)
-#define getstate()	dostate(0,1)
+#define setbmap(x) domap(x, 0)
+#define getbmap(x) domap(x, 1)
+#define clrbmap(x) domap(x, 2)
 
-#define DATA	1
-#define ADDR	0
-#define ALTERD	010
-#define KEEPON	04
-#define SKIP	02
-#define STOP	01
+#define setfmap(x) domap(x, 0 + 4)
+#define getfmap(x) domap(x, 1 + 4)
 
-int	(*signal())();
-long	lseek();
-long	time();
-DINODE	*ginode();
-BUFAREA	*getblk();
-BUFAREA	*search();
-int	dirscan();
-int	findino();
-int	catch();
-int	mkentry();
-int	chgdd();
-int	pass1();
-int	pass1b();
-int	pass2();
-int	pass3();
-int	pass4();
-int	pass5();
+#define setstate(x) dostate(x, 0)
+#define getstate()  dostate(0, 1)
 
-main(argc,argv)
-int	argc;
-char	*argv[];
+#define DATA   1
+#define ADDR   0
+#define ALTERD 010
+#define KEEPON 04
+#define SKIP   02
+#define STOP   01
+
+static void check(char *dev);
+static int setup(char *dev);
+static int ckinode(DINODE *dp, int flg);
+static int iblock(daddr_t blk, int ilevel, int flg);
+static int pass1(daddr_t blk);
+static int pass1b(daddr_t blk);
+static int pass2(DIRECT *dirp);
+static int pass4(daddr_t blk);
+static int pass5(daddr_t blk);
+static int findino(DIRECT *dirp);
+static int mkentry(DIRECT *dirp);
+static int chgdd(DIRECT *dirp);
+static int dirscan(daddr_t blk);
+static void blkerr(const char *s, daddr_t blk);
+static void descend(void);
+static int direrr(const char *s);
+static void adjust(int lcnt);
+static void clri(const char *s, int flg);
+static DINODE *ginode(void);
+static int ftypeok(DINODE *dp);
+static int reply(const char *s);
+static int getline(FILE *fp, char *loc, int maxlen);
+static int dostate(int s, int flg);
+static int domap(daddr_t blk, int flg);
+static int dolncnt(int val, int flg);
+static BUFAREA *getblk(BUFAREA *bp, daddr_t blk);
+static void flush(BUFAREA *bp);
+static void rwerr(const char *s, daddr_t blk);
+static void sizechk(DINODE *dp);
+static void ckfini(void);
+static void pinode(void);
+static void copy(char *fp, char *tp, int size);
+static void freechk(void);
+static void makefree(void);
+static void clear(char *p, int cnt);
+static int linkup(void);
+static int israwroot(const char *dev, dev_t rootdev);
+static int bread(int *buf, daddr_t blk);
+static int bwrite(int *buf, daddr_t blk);
+static void catch(int sig);
+static void errexit(void);
+
+int main(int argc, char **argv)
 {
-	register FILE *fp;
-	register n;
-	register char *p;
-	char filename[50];
-	char *sbrk();
+    int *p;
+    int i;
 
-	sync();
-	while(--argc > 0 && **++argv == '-') {
-		switch(*++*argv) {
-			case 't':
-			case 'T':
-				tflag++;
-				if(**++argv == '-' || --argc <= 0)
-					errexit("Bad -t option\n");
-				p = scrfile;
-				while(*p++ = **argv)
-					(*argv)++;
-				break;
-			case 's':	/* salvage flag */
-				stype(++*argv);
-				sflag++;
-				break;
-			case 'S':	/* conditional salvage */
-				stype(++*argv);
-				csflag++;
-				break;
-			case 'n':	/* default no answer flag */
-			case 'N':
-				nflag++;
-				yflag = 0;
-				break;
-			case 'y':	/* default yes answer flag */
-			case 'Y':
-				yflag++;
-				nflag = 0;
-				break;
-			default:
-				errexit("%c option?\n",**argv);
-		}
-	}
-	if(nflag && (sflag || csflag))
-		errexit("Incompatible options: -n and -%s\n",sflag?"s":"S");
-	if(sflag && csflag)
-		sflag = 0;
-	memsize = (MEMSIZE)sbrk(0);
-	memsize = MAXDATA - memsize - sizeof(int);
-	while(memsize >= 2*sizeof(BUFAREA) &&
-		(membase = sbrk(memsize)) == (char *)-1)
-		memsize -= 1024;
-	if(memsize < 2*sizeof(BUFAREA))
-		errexit("Can't get memory\n");
-#define SIG_IGN	(int (*)())1
-	if (signal(SIGINT, SIG_IGN) != SIG_IGN)
-		signal(SIGINT, catch);
-	if(argc) {		/* arg list has file names */
-		while(argc-- > 0)
-			check(*argv++);
-	}
-	else {			/* use default checklist */
-		if((fp = fopen(checklist,"r")) == NULL)
-			errexit("Can't open checklist file: %s\n",checklist);
-		while(getline(fp,filename,sizeof(filename)) != EOF)
-			check(filename);
-		fclose(fp);
-	}
-	exit(0);
+    // The four block buffers.  An `int *' IS a word address on this machine, so the
+    // alignment is ordinary arithmetic; a loop rather than a mask because it runs once and
+    // because a mask over a negation would depend on how a negative word is spelled here.
+    // df.c, quot.c and mkfs.c all step the same way.
+    p = rawbuf;
+    while ((int)p % MDALIGN != 0)
+        p++;
+    sblk.b_addr    = p;
+    fileblk.b_addr = p + BSIZEW;
+    inoblk.b_addr  = p + 2 * BSIZEW;
+    indblk.b_addr  = p + 3 * BSIZEW;
+
+    sync();
+
+    while (--argc > 0 && **++argv == '-') {
+        switch ((*argv)[1]) {
+        case 's': // salvage the free list
+        case 'S': // ... only if nothing else was wrong
+            if ((*argv)[1] == 's')
+                sflag++;
+            else
+                csflag++;
+            break;
+        case 'n':
+        case 'N':
+            nflag++;
+            yflag = 0;
+            break;
+        case 'y':
+        case 'Y':
+            yflag++;
+            nflag = 0;
+            break;
+        default:
+            printf("%c option?\n", (*argv)[1]);
+            errexit();
+        }
+    }
+    if (nflag && (sflag || csflag)) {
+        printf("Incompatible options: -n and -%s\n", sflag ? "s" : "S");
+        errexit();
+    }
+    if (sflag && csflag)
+        sflag = 0;
+
+    // v7 with no argument read /etc/checklist.  There is no such file here and one
+    // filesystem to name; fsck.1m records the divergence.
+    if (argc <= 0) {
+        fprintf(stderr, "usage: /etc/fsck [ -y ] [ -n ] [ -s ] [ -S ] filesystem ...\n");
+        return 1;
+    }
+
+    if (signal(SIGINT, SIG_IGN) != SIG_IGN)
+        signal(SIGINT, catch);
+
+    for (i = 0; i < argc; i++)
+        check(argv[i]);
+
+    return 0;
 }
 
-
-/* VARARGS1 */
-error(s1,s2,s3,s4)
-char *s1;
+//
+// One filesystem, all six phases.
+//
+static void check(char *dev)
 {
-	printf(s1,s2,s3,s4);
+    DINODE *dp;
+    int n;
+    ino_t *blp;
+    ino_t savino;
+    daddr_t blk;
+
+    if (setup(dev) == NO)
+        return;
+
+    printf("** Phase 1 - Check Blocks and Sizes\n");
+    pfunc = pass1;
+    for (inum = 1; inum <= imax; inum++) {
+        if ((dp = ginode()) == NULL)
+            continue;
+        if (ALLOC) {
+            lastino = inum;
+            if (ftypeok(dp) == NO) {
+                printf("UNKNOWN FILE TYPE I=%d", inum);
+                if (reply("CLEAR") == YES) {
+                    zapino(dp);
+                    inodirty();
+                }
+                continue;
+            }
+            n_files++;
+            if (setlncnt(dp->di_nlink) <= 0) {
+                if (badlnp < &badlncnt[MAXLNCNT])
+                    *badlnp++ = inum;
+                else {
+                    printf("LINK COUNT TABLE OVERFLOW");
+                    if (reply("CONTINUE") == NO)
+                        errexit();
+                }
+            }
+            setstate(DIR ? DSTATE : FSTATE);
+            badblk = dupblk = 0;
+            filsize         = 0;
+            ckinode(dp, ADDR);
+            if ((n = getstate()) == DSTATE || n == FSTATE)
+                sizechk(dp);
+        } else if (dp->di_mode != 0) {
+            printf("PARTIALLY ALLOCATED INODE I=%d", inum);
+            if (reply("CLEAR") == YES) {
+                zapino(dp);
+                inodirty();
+            }
+        }
+    }
+
+    if (enddup != &duplist[0]) {
+        printf("** Phase 1b - Rescan For More DUPS\n");
+        pfunc = pass1b;
+        for (inum = 1; inum <= lastino; inum++) {
+            if (getstate() != USTATE && (dp = ginode()) != NULL)
+                if (ckinode(dp, ADDR) & STOP)
+                    break;
+        }
+    }
+
+    printf("** Phase 2 - Check Pathnames\n");
+    inum     = ROOTINO;
+    thisname = pathp = pathname;
+    *pathp           = 0;
+    dfunc            = pass2;
+    switch (getstate()) {
+    case USTATE:
+        printf("ROOT INODE UNALLOCATED. TERMINATING.\n");
+        errexit();
+        break;
+    case FSTATE:
+        printf("ROOT INODE NOT DIRECTORY");
+        if (reply("FIX") == NO || (dp = ginode()) == NULL)
+            errexit();
+        dp->di_mode &= ~S_IFMT;
+        dp->di_mode |= S_IFDIR;
+        inodirty();
+        setstate(DSTATE);
+        descend();
+        break;
+    case DSTATE:
+        descend();
+        break;
+    case CLEAR:
+        printf("DUPS/BAD IN ROOT INODE\n");
+        if (reply("CONTINUE") == NO)
+            errexit();
+        setstate(DSTATE);
+        descend();
+        break;
+    }
+
+    printf("** Phase 3 - Check Connectivity\n");
+    for (inum = ROOTINO; inum <= lastino; inum++) {
+        if (getstate() == DSTATE) {
+            dfunc    = findino;
+            srchname = "..";
+            savino   = inum;
+            do {
+                orphan = inum;
+                if ((dp = ginode()) == NULL)
+                    break;
+                filsize   = dp->di_size;
+                parentdir = 0;
+                ckinode(dp, DATA);
+                if ((inum = parentdir) == 0)
+                    break;
+            } while (getstate() == DSTATE);
+            inum = orphan;
+            if (linkup() == YES) {
+                thisname = pathp = pathname;
+                *pathp++         = '?';
+                *pathp           = 0;
+                dfunc            = pass2;
+                descend();
+            }
+            inum = savino;
+        }
+    }
+
+    printf("** Phase 4 - Check Reference Counts\n");
+    pfunc = pass4;
+    for (inum = ROOTINO; inum <= lastino; inum++) {
+        switch (getstate()) {
+        case FSTATE:
+            if ((n = getlncnt()))
+                adjust(n);
+            else {
+                for (blp = badlncnt; blp < badlnp; blp++)
+                    if (*blp == inum) {
+                        clri("UNREF", YES);
+                        break;
+                    }
+            }
+            break;
+        case DSTATE:
+            clri("UNREF", YES);
+            break;
+        case CLEAR:
+            clri("BAD/DUP", YES);
+            break;
+        }
+    }
+
+    // s_tinode is a dead field here (see the head comment): reported, never offered as a
+    // repair.
+    //
+    // NOTE THE `- 1', WHICH IS NOT v7's ARITHMETIC.  v7 compares against imax - n_files,
+    // counting every i-number in the list that is not in use.  INODE 1 IS NOT ONE OF
+    // THEM: ialloc() refuses to hand out anything below ROOTINO (kernel/alloc.c), so it
+    // is a slot that exists and can never be filled, and ../mkfs/mkfs.c seeds the field
+    // as ninodes-2 -- "everything but inode 1, which cannot be allocated, and the root,
+    // which is in use" -- as does cmd/fsutil/create.cpp.  Carried unchanged, v7's formula
+    // is one too high and this note fires on every clean filesystem this system ever
+    // made.  It is the first disagreement between fsck and its oracle that this port
+    // found, and fsck was the one that was wrong; ../fsck/README.md has the rest.
+    if (imax - n_files - 1 != superblk.s_tinode)
+        printf("note: s_tinode says %d free inodes, the i-list holds %d\n", superblk.s_tinode,
+               imax - n_files - 1);
+
+    flush(&fileblk);
+
+    printf("** Phase 5 - Check Free List ");
+    if (sflag || (csflag && rplyflag == 0)) {
+        printf("(Ignored)\n");
+        fixfree = 1;
+    } else {
+        printf("\n");
+        copy(blkmap, freemap, (int)bmapsz);
+        badblk = dupblk  = 0;
+        freeblk.df_nfree = superblk.s_nfree;
+        for (n = 0; n < NICFREE; n++)
+            freeblk.df_free[n] = superblk.s_free[n];
+        freechk();
+        if (badblk)
+            printf("%d BAD BLKS IN FREE LIST\n", badblk);
+        if (dupblk)
+            printf("%d DUP BLKS IN FREE LIST\n", dupblk);
+        if (fixfree == 0) {
+            if ((n_blks + n_free) != (fmax - fmin)) {
+                printf("%d BLK(S) MISSING\n", (fmax - fmin - n_blks - n_free) * KBPB);
+                fixfree = 1;
+            } else if (n_free != superblk.s_tfree)
+                printf("note: s_tfree says %d free blocks, the list holds %d\n", superblk.s_tfree,
+                       n_free);
+        }
+        if (fixfree) {
+            printf("BAD FREE LIST");
+            if (reply("SALVAGE") == NO)
+                fixfree = 0;
+        }
+    }
+
+    if (fixfree) {
+        printf("** Phase 6 - Salvage Free List\n");
+        makefree();
+        n_free = superblk.s_tfree;
+    }
+
+    // KBPB at the printf and nowhere else: n_blks and n_free are filesystem blocks up to
+    // this line, which is ../README.md SS4's rule and ../df/README.md's account of why.
+    printf("%d files %d blocks %d free\n", n_files, n_blks * KBPB, n_free * KBPB);
+
+    // The two dead counters, left correct on the way out.  This is not offered as a
+    // repair and is not one -- nothing maintains them, so they will drift again with the
+    // next write -- but the superblock is being rewritten anyway and there is no reason
+    // to leave in it a number this run has just recomputed.
+    if (modified) {
+        superblk.s_tinode = imax - n_files - 1; // the `- 1' is inode 1; see phase 4
+        superblk.s_tfree  = n_free;
+        superblk.s_time   = time((time_t *)0);
+        sbdirty();
+    }
+    ckfini();
+    sync();
+
+    // v7's spin, kept.  The kernel's in-core superblock is now older than the disk's and
+    // letting it be written back would undo the repair, so there is nothing this program
+    // can do but refuse to return.  pause() rather than v7's `for(;;);': a busy loop here
+    // spends a SIMH `step' budget that a test may be counting on.
+    if (modified && hotroot) {
+        printf("\n***** BOOT UNIX (NO SYNC!) *****\n");
+        for (;;)
+            pause();
+    }
+    if (modified)
+        printf("\n***** FILE SYSTEM WAS MODIFIED *****\n");
 }
 
-
-/* VARARGS1 */
-errexit(s1,s2,s3,s4)
-char *s1;
+//
+// Open the device, read its superblock, and size the maps from it.
+//
+static int setup(char *dev)
 {
-	error(s1,s2,s3,s4);
-	exit(8);
+    dev_t rootdev;
+    struct stat statarea;
+
+    if (stat("/", &statarea) < 0) {
+        printf("Can't stat root\n");
+        errexit();
+    }
+    rootdev = statarea.st_dev;
+
+    if (stat(dev, &statarea) < 0) {
+        printf("Can't stat %s\n", dev);
+        return NO;
+    }
+    hotroot = 0;
+
+    switch (statarea.st_mode & S_IFMT) {
+    case S_IFBLK:
+    case S_IFCHR:
+        break;
+    case S_IFREG:
+        // A PLAIN FILE IS A FILESYSTEM IMAGE, and checking one is how this port tests
+        // this program -- cmd/fsck/test/ runs it under b6sim, where the special is an
+        // ordinary host file.  v7 asked "OK?" here, and reply() answers *no* whenever -n
+        // is set, so the read-only case, which is the most useful one there is, could not
+        // have been run at all.  fsck.1m records the divergence.
+        break;
+    default:
+        if (reply("file is not a block or character device; OK") == NO)
+            return NO;
+        break;
+    }
+
+    // AM I CHECKING THE FILESYSTEM I AM STANDING ON?  v7 asked ustat(2) and, failing
+    // that, compared the root's st_dev with this device's st_rdev.  ustat(2) does not
+    // exist here (the v7/x86 source had already stubbed it to -1), and the comparison
+    // cannot work for the RAW node, which is the one fsck is normally pointed at:
+    // rootdev is makedev(0,0) (kernel/conf.c) while /dev/rmd0's st_rdev is makedev(3,0).
+    // So the raw name is mapped back to the block one, as 4.xBSD's unrawname() does.
+    // The alternative would be to write cdevsw[]'s raw-to-block pairing into a user
+    // program, which ../TODO.md forbids.
+    if ((statarea.st_mode & S_IFMT) == S_IFBLK && statarea.st_rdev == rootdev)
+        hotroot++;
+    else if ((statarea.st_mode & S_IFMT) == S_IFCHR && israwroot(dev, rootdev))
+        hotroot++;
+
+    if ((rfd = open(dev, O_RDONLY)) < 0) {
+        printf("Can't open %s\n", dev);
+        return NO;
+    }
+    printf("\n%s", dev);
+    if (nflag || (wfd = open(dev, O_WRONLY)) < 0) {
+        wfd = -1;
+        printf(" (NO WRITE)");
+    }
+    printf("\n");
+
+    fixfree  = 0;
+    modified = 0;
+    n_files = n_blks = n_free = 0;
+    muldup = enddup = &duplist[0];
+    badlnp          = &badlncnt[0];
+    lfdir           = 0;
+    rplyflag        = 0;
+    initbarea(&sblk);
+    initbarea(&fileblk);
+    initbarea(&inoblk);
+    initbarea(&indblk);
+
+    if (getblk(&sblk, SUPERB) == NULL) {
+        ckfini();
+        return NO;
+    }
+    // THE FOUR GEOMETRY WORDS FIRST, which v7's fsck does not look at -- it had none to
+    // look at.  sbcheck() (kernel/alloc.c) refuses to mount a superblock that fails these
+    // and cmd/fsutil/check.cpp refuses to check one, so a fsck that accepted it would be
+    // the one program of the three with an opinion of its own.  That was a real
+    // disagreement between this program and its oracle; ../fsck/README.md lists the rest.
+    if (superblk.s_magic != FS_MAGIC) {
+        printf("%s: not a filesystem\n", dev);
+        ckfini();
+        return NO;
+    }
+    if (superblk.s_bsize != BSIZEW || superblk.s_inopb != INOPB || superblk.s_naddr != NADDR) {
+        printf("%s: filesystem geometry mismatch\n", dev);
+        printf("bsize %d inopb %d naddr %d; this system wants %d %d %d\n", superblk.s_bsize,
+               superblk.s_inopb, superblk.s_naddr, BSIZEW, INOPB, NADDR);
+        ckfini();
+        return NO;
+    }
+
+    imax = ((ino_t)superblk.s_isize - (SUPERB + 1)) * INOPB;
+    fmin = (daddr_t)superblk.s_isize; // first data blk num
+    fmax = superblk.s_fsize;          // first invalid blk num
+    if (fmin >= fmax || (imax / INOPB) != ((ino_t)superblk.s_isize - (SUPERB + 1))) {
+        printf("Size check: fsize %d isize %d\n", superblk.s_fsize, superblk.s_isize);
+        ckfini();
+        return NO;
+    }
+
+    // The maps, sized from the superblock rather than from an arena.  See the head
+    // comment: this is what v7's scratch file, buffer pool and second code path were for,
+    // and 2000 blocks with 1000 inodes needs about 1,300 words of them.
+    bmapsz   = howmany(fmax, BITSPB);
+    blkmap   = calloc((unsigned)bmapsz, 1);
+    freemap  = calloc((unsigned)bmapsz, 1);
+    statemap = calloc((unsigned)howmany(imax + 1, STATEPB), 1);
+    lncntp   = calloc((unsigned)(imax + 1), sizeof(*lncntp));
+    if (blkmap == NULL || freemap == NULL || statemap == NULL || lncntp == NULL) {
+        printf("Can't get memory\n");
+        ckfini();
+        return NO;
+    }
+    return YES;
 }
 
-
-check(dev)
-char *dev;
+//
+// Walk one inode's blocks: the six direct addresses, then NLEVEL of indirection.
+//
+static int ckinode(DINODE *dp, int flg)
 {
-	register DINODE *dp;
-	register n;
-	register ino_t *blp;
-	ino_t savino;
-	daddr_t blk;
-	BUFAREA *bp1, *bp2;
+    daddr_t iaddrs[NADDR];
+    daddr_t *ap;
+    int (*func)(daddr_t blk);
+    int ret, n, i;
 
-	if(setup(dev) == NO)
-		return;
+    if (SPECIAL)
+        return KEEPON;
 
+    // v7's l3tol(): the addresses were three packed bytes each there and are whole words
+    // here, so this is a copy.  It is still a COPY and not a walk of dp->di_addr, because
+    // descend() reloads inoblk through ginode() and dp would stop pointing at this inode.
+    for (i = 0; i < NADDR; i++)
+        iaddrs[i] = dp->di_addr[i];
 
-	printf("** Phase 1 - Check Blocks and Sizes\n");
-	pfunc = pass1;
-	for(inum = 1; inum <= imax; inum++) {
-		if((dp = ginode()) == NULL)
-			continue;
-		if(ALLOC) {
-			lastino = inum;
-			if(ftypeok(dp) == NO) {
-				printf("UNKNOWN FILE TYPE I=%u",inum);
-				if(reply("CLEAR") == YES) {
-					zapino(dp);
-					inodirty();
-				}
-				continue;
-			}
-			n_files++;
-			if(setlncnt(dp->di_nlink) <= 0) {
-				if(badlnp < &badlncnt[MAXLNCNT])
-					*badlnp++ = inum;
-				else {
-					printf("LINK COUNT TABLE OVERFLOW");
-					if(reply("CONTINUE") == NO)
-						errexit("");
-				}
-			}
-			setstate(DIR ? DSTATE : FSTATE);
-			badblk = dupblk = 0;
-			filsize = 0;
-			maxblk = 0;
-			ckinode(dp,ADDR);
-			if((n = getstate()) == DSTATE || n == FSTATE)
-				sizechk(dp);
-		}
-		else if(dp->di_mode != 0) {
-			printf("PARTIALLY ALLOCATED INODE I=%u",inum);
-			if(reply("CLEAR") == YES) {
-				zapino(dp);
-				inodirty();
-			}
-		}
-	}
-
-
-	if(enddup != &duplist[0]) {
-		printf("** Phase 1b - Rescan For More DUPS\n");
-		pfunc = pass1b;
-		for(inum = 1; inum <= lastino; inum++) {
-			if(getstate() != USTATE && (dp = ginode()) != NULL)
-				if(ckinode(dp,ADDR) & STOP)
-					break;
-		}
-	}
-	if(rawflg) {
-		if(inoblk.b_dirty)
-			bwrite(&dfile,membase,startib,(int)niblk*BSIZE);
-		inoblk.b_dirty = 0;
-		if(poolhead) {
-			clear(membase,niblk*BSIZE);
-			for(bp1 = poolhead;bp1->b_next;bp1 = bp1->b_next);
-			bp2 = &((BUFAREA *)membase)[(niblk*BSIZE)/sizeof(BUFAREA)];
-			while(--bp2 >= (BUFAREA *)membase) {
-				initbarea(bp2);
-				bp2->b_next = bp1->b_next;
-				bp1->b_next = bp2;
-			}
-		}
-		rawflg = 0;
-
-	}
-
-
-	printf("** Phase 2 - Check Pathnames\n");
-	inum = ROOTINO;
-	thisname = pathp = pathname;
-	pfunc = pass2;
-	switch(getstate()) {
-		case USTATE:
-			errexit("ROOT INODE UNALLOCATED. TERMINATING.\n");
-		case FSTATE:
-			printf("ROOT INODE NOT DIRECTORY");
-			if(reply("FIX") == NO || (dp = ginode()) == NULL)
-				errexit("");
-			dp->di_mode &= ~IFMT;
-			dp->di_mode |= IFDIR;
-			inodirty();
-			setstate(DSTATE);
-		case DSTATE:
-			descend();
-			break;
-		case CLEAR:
-			printf("DUPS/BAD IN ROOT INODE\n");
-			if(reply("CONTINUE") == NO)
-				errexit("");
-			setstate(DSTATE);
-			descend();
-	}
-
-
-	printf("** Phase 3 - Check Connectivity\n");
-	for(inum = ROOTINO; inum <= lastino; inum++) {
-		if(getstate() == DSTATE) {
-			pfunc = findino;
-			srchname = "..";
-			savino = inum;
-			do {
-				orphan = inum;
-				if((dp = ginode()) == NULL)
-					break;
-				filsize = dp->di_size;
-				parentdir = 0;
-				ckinode(dp,DATA);
-				if((inum = parentdir) == 0)
-					break;
-			} while(getstate() == DSTATE);
-			inum = orphan;
-			if(linkup() == YES) {
-				thisname = pathp = pathname;
-				*pathp++ = '?';
-				pfunc = pass2;
-				descend();
-			}
-			inum = savino;
-		}
-	}
-
-
-	printf("** Phase 4 - Check Reference Counts\n");
-	pfunc = pass4;
-	for(inum = ROOTINO; inum <= lastino; inum++) {
-		switch(getstate()) {
-			case FSTATE:
-				if(n = getlncnt())
-					adjust((short)n);
-				else {
-					for(blp = badlncnt;blp < badlnp; blp++)
-						if(*blp == inum) {
-							clri("UNREF",YES);
-							break;
-						}
-				}
-				break;
-			case DSTATE:
-				clri("UNREF",YES);
-				break;
-			case CLEAR:
-				clri("BAD/DUP",YES);
-		}
-	}
-#ifndef interdata
-	if(imax - n_files != superblk.s_tinode) {
-		printf("FREE INODE COUNT WRONG IN SUPERBLK");
-		if(reply("FIX") == YES) {
-			superblk.s_tinode = imax - n_files;
-			sbdirty();
-		}
-	}
-#endif
-	flush(&dfile,&fileblk);
-
-
-	printf("** Phase 5 - Check Free List ");
-	if(sflag || (csflag && rplyflag == 0)) {
-		printf("(Ignored)\n");
-		fixfree = 1;
-	}
-	else {
-		printf("\n");
-		if(freemap)
-			copy(blkmap,freemap,(MEMSIZE)bmapsz);
-		else {
-			for(blk = 0; blk < fmapblk; blk++) {
-				bp1 = getblk((BUFAREA *)NULL,blk);
-				bp2 = getblk((BUFAREA *)NULL,blk+fmapblk);
-				copy(bp1->b_un.b_buf,bp2->b_un.b_buf,BSIZE);
-				dirty(bp2);
-			}
-		}
-		badblk = dupblk = 0;
-		freeblk.df_nfree = superblk.s_nfree;
-		for(n = 0; n < NICFREE; n++)
-			freeblk.df_free[n] = superblk.s_free[n];
-		freechk();
-		if(badblk)
-			printf("%d BAD BLKS IN FREE LIST\n",badblk);
-		if(dupblk)
-			printf("%d DUP BLKS IN FREE LIST\n",dupblk);
-		if(fixfree == 0) {
-			if((n_blks+n_free) != (fmax-fmin)) {
-				printf("%ld BLK(S) MISSING\n",
-					fmax-fmin-n_blks-n_free);
-				fixfree = 1;
-			}
-			else if(n_free != superblk.s_tfree) {
-#ifndef interdata
-				printf("FREE BLK COUNT WRONG IN SUPERBLK");
-				if(reply("FIX") == YES) {
-					superblk.s_tfree = n_free;
-					sbdirty();
-				}
-#endif
-			}
-		}
-		if(fixfree) {
-			printf("BAD FREE LIST");
-			if(reply("SALVAGE") == NO)
-				fixfree = 0;
-		}
-	}
-
-
-	if(fixfree) {
-		printf("** Phase 6 - Salvage Free List\n");
-		makefree();
-		n_free = superblk.s_tfree;
-	}
-
-
-	printf("%ld files %ld blocks %ld free\n",
-		n_files,n_blks,n_free);
-	if(dfile.mod) {
-		time(&superblk.s_time);
-		sbdirty();
-	}
-	ckfini();
-	sync();
-	if(dfile.mod && hotroot) {
-		printf("\n***** BOOT UNIX (NO SYNC!) *****\n");
-		for(;;);
-	}
-	if(dfile.mod)
-		printf("\n***** FILE SYSTEM WAS MODIFIED *****\n");
+    func = (flg == ADDR) ? pfunc : dirscan;
+    for (ap = iaddrs; ap < &iaddrs[NADDR - NLEVEL]; ap++) {
+        if (*ap && ((ret = (*func)(*ap)) & STOP))
+            return ret;
+    }
+    for (n = 1; n <= NLEVEL; n++) {
+        if (*ap && ((ret = iblock(*ap, n, flg)) & STOP))
+            return ret;
+        ap++;
+    }
+    return KEEPON;
 }
 
-
-ckinode(dp,flg)
-DINODE *dp;
-register flg;
+//
+// One indirect block, at level `ilevel'.
+//
+// THE BLOCK IS RE-FETCHED ON EVERY ITERATION and that is not redundant: the callback can
+// descend into a subdirectory, which walks its own indirect blocks through this same
+// buffer.  getblk() is free when the block is still there.  dirscan() below does the same
+// thing for the same reason; v7 avoided it here with a 515-word automatic, which is not
+// available to a buffer that must be MDALIGN-aligned.
+//
+static int iblock(daddr_t blk, int ilevel, int flg)
 {
-	register daddr_t *ap;
-	register ret;
-	int (*func)(), n;
-	daddr_t	iaddrs[NADDR];
+    int (*func)(daddr_t b);
+    int i, n;
+    daddr_t addr;
 
-	if(SPECIAL)
-		return(KEEPON);
-	l3tol(iaddrs,dp->di_addr,NADDR);
-	func = (flg == ADDR) ? pfunc : dirscan;
-	for(ap = iaddrs; ap < &iaddrs[NADDR-3]; ap++) {
-		if(*ap && (ret = (*func)(*ap)) & STOP)
-			return(ret);
-	}
-	for(n = 1; n < 4; n++) {
-		if(*ap && (ret = iblock(*ap,n,flg)) & STOP)
-			return(ret);
-		ap++;
-	}
-	return(KEEPON);
+    if (flg == ADDR) {
+        func = pfunc;
+        if (((n = (*func)(blk)) & KEEPON) == 0)
+            return n;
+    } else
+        func = dirscan;
+
+    if (outrange(blk)) // protect thyself
+        return SKIP;
+
+    ilevel--;
+    for (i = 0; i < NINDIR; i++) {
+        if (getblk(&indblk, blk) == NULL)
+            return SKIP;
+        addr = ((daddr_t *)indblk.b_addr)[i];
+        if (addr == 0)
+            continue;
+        n = (ilevel > 0) ? iblock(addr, ilevel, flg) : (*func)(addr);
+        if (n & STOP)
+            return n;
+    }
+    return KEEPON;
 }
 
-
-iblock(blk,ilevel,flg)
-daddr_t blk;
-register ilevel;
+static int pass1(daddr_t blk)
 {
-	register daddr_t *ap;
-	register n;
-	int (*func)();
-	BUFAREA ib;
+    daddr_t *dlp;
 
-	if(flg == ADDR) {
-		func = pfunc;
-		if(((n = (*func)(blk)) & KEEPON) == 0)
-			return(n);
-	}
-	else
-		func = dirscan;
-	if(outrange(blk))		/* protect thyself */
-		return(SKIP);
-	initbarea(&ib);
-	if(getblk(&ib,blk) == NULL)
-		return(SKIP);
-	ilevel--;
-	for(ap = ib.b_un.b_indir; ap < &ib.b_un.b_indir[NINDIR]; ap++) {
-		if(*ap) {
-			if(ilevel > 0) {
-				n = iblock(*ap,ilevel,flg);
-			}
-			else
-				n = (*func)(*ap);
-			if(n & STOP)
-				return(n);
-		}
-	}
-	return(KEEPON);
+    if (outrange(blk)) {
+        blkerr("BAD", blk);
+        if (++badblk >= MAXBAD) {
+            printf("EXCESSIVE BAD BLKS I=%d", inum);
+            if (reply("CONTINUE") == NO)
+                errexit();
+            return STOP;
+        }
+        return SKIP;
+    }
+    if (getbmap(blk)) {
+        blkerr("DUP", blk);
+        if (++dupblk >= MAXDUP) {
+            printf("EXCESSIVE DUP BLKS I=%d", inum);
+            if (reply("CONTINUE") == NO)
+                errexit();
+            return STOP;
+        }
+        if (enddup >= &duplist[DUPTBLSIZE]) {
+            printf("DUP TABLE OVERFLOW.");
+            if (reply("CONTINUE") == NO)
+                errexit();
+            return STOP;
+        }
+        for (dlp = duplist; dlp < muldup; dlp++) {
+            if (*dlp == blk) {
+                *enddup++ = blk;
+                break;
+            }
+        }
+        if (dlp >= muldup) {
+            *enddup++ = *muldup;
+            *muldup++ = blk;
+        }
+    } else {
+        n_blks++;
+        setbmap(blk);
+    }
+    filsize++;
+    return KEEPON;
 }
 
-
-pass1(blk)
-daddr_t blk;
+static int pass1b(daddr_t blk)
 {
-	register daddr_t *dlp;
+    daddr_t *dlp;
 
-	if(outrange(blk)) {
-		blkerr("BAD",blk);
-		if(++badblk >= MAXBAD) {
-			printf("EXCESSIVE BAD BLKS I=%u",inum);
-			if(reply("CONTINUE") == NO)
-				errexit("");
-			return(STOP);
-		}
-		return(SKIP);
-	}
-	if(getbmap(blk)) {
-		blkerr("DUP",blk);
-		if(++dupblk >= MAXDUP) {
-			printf("EXCESSIVE DUP BLKS I=%u",inum);
-			if(reply("CONTINUE") == NO)
-				errexit("");
-			return(STOP);
-		}
-		if(enddup >= &duplist[DUPTBLSIZE]) {
-			printf("DUP TABLE OVERFLOW.");
-			if(reply("CONTINUE") == NO)
-				errexit("");
-			return(STOP);
-		}
-		for(dlp = duplist; dlp < muldup; dlp++) {
-			if(*dlp == blk) {
-				*enddup++ = blk;
-				break;
-			}
-		}
-		if(dlp >= muldup) {
-			*enddup++ = *muldup;
-			*muldup++ = blk;
-		}
-	}
-	else {
-		n_blks++;
-		setbmap(blk);
-	}
-	filsize++;
-	return(KEEPON);
+    if (outrange(blk))
+        return SKIP;
+    for (dlp = duplist; dlp < muldup; dlp++) {
+        if (*dlp == blk) {
+            blkerr("DUP", blk);
+            *dlp    = *--muldup;
+            *muldup = blk;
+            return muldup == duplist ? STOP : KEEPON;
+        }
+    }
+    return KEEPON;
 }
 
-
-pass1b(blk)
-daddr_t blk;
+static int pass2(DIRECT *dirp)
 {
-	register daddr_t *dlp;
+    int n, i;
+    DINODE *dp;
 
-	if(outrange(blk))
-		return(SKIP);
-	for(dlp = duplist; dlp < muldup; dlp++) {
-		if(*dlp == blk) {
-			blkerr("DUP",blk);
-			*dlp = *--muldup;
-			*muldup = blk;
-			return(muldup == duplist ? STOP : KEEPON);
-		}
-	}
-	return(KEEPON);
+    if ((inum = dirp->d_ino) == 0)
+        return KEEPON;
+
+    // The name, bounded.  v7 walked `p < &dirp->d_name[DIRSIZ]' -- a comparison between
+    // two char pointers, which does not order them here (../README.md SS2) -- and appended
+    // to pathname with no bound at all.
+    thisname = pathp;
+    for (i = 0; i < DIRSIZ && PATHROOM > 0; i++) {
+        if (dirp->d_name[i] == 0)
+            break;
+        *pathp++ = dirp->d_name[i];
+    }
+    *pathp = 0;
+
+    n = NO;
+    if (inum > imax || inum < ROOTINO)
+        n = direrr("I OUT OF RANGE");
+    else {
+    again:
+        switch (getstate()) {
+        case USTATE:
+            n = direrr("UNALLOCATED");
+            break;
+        case CLEAR:
+            if ((n = direrr("DUP/BAD")) == YES)
+                break;
+            if ((dp = ginode()) == NULL)
+                break;
+            setstate(DIR ? DSTATE : FSTATE);
+            goto again;
+        case FSTATE:
+            declncnt();
+            break;
+        case DSTATE:
+            declncnt();
+            descend();
+            break;
+        }
+    }
+    pathp  = thisname;
+    *pathp = 0;
+    if (n == NO)
+        return KEEPON;
+    dirp->d_ino = 0;
+    return KEEPON | ALTERD;
 }
 
-
-pass2(dirp)
-register DIRECT *dirp;
+static int pass4(daddr_t blk)
 {
-	register char *p;
-	register n;
-	DINODE *dp;
+    daddr_t *dlp;
 
-	if((inum = dirp->d_ino) == 0)
-		return(KEEPON);
-	thisname = pathp;
-	for(p = dirp->d_name; p < &dirp->d_name[DIRSIZ]; )
-		if((*pathp++ = *p++) == 0) {
-			--pathp;
-			break;
-		}
-	*pathp = 0;
-	n = NO;
-	if(inum > imax || inum < ROOTINO)
-		n = direrr("I OUT OF RANGE");
-	else {
-	again:
-		switch(getstate()) {
-			case USTATE:
-				n = direrr("UNALLOCATED");
-				break;
-			case CLEAR:
-				if((n = direrr("DUP/BAD")) == YES)
-					break;
-				if((dp = ginode()) == NULL)
-					break;
-				setstate(DIR ? DSTATE : FSTATE);
-				goto again;
-			case FSTATE:
-				declncnt();
-				break;
-			case DSTATE:
-				declncnt();
-				descend();
-		}
-	}
-	pathp = thisname;
-	if(n == NO)
-		return(KEEPON);
-	dirp->d_ino = 0;
-	return(KEEPON|ALTERD);
+    if (outrange(blk))
+        return SKIP;
+    if (getbmap(blk)) {
+        for (dlp = duplist; dlp < enddup; dlp++)
+            if (*dlp == blk) {
+                *dlp = *--enddup;
+                return KEEPON;
+            }
+        clrbmap(blk);
+        n_blks--;
+    }
+    return KEEPON;
 }
 
-
-pass4(blk)
-daddr_t blk;
+static int pass5(daddr_t blk)
 {
-	register daddr_t *dlp;
-
-	if(outrange(blk))
-		return(SKIP);
-	if(getbmap(blk)) {
-		for(dlp = duplist; dlp < enddup; dlp++)
-			if(*dlp == blk) {
-				*dlp = *--enddup;
-				return(KEEPON);
-			}
-		clrbmap(blk);
-		n_blks--;
-	}
-	return(KEEPON);
+    if (outrange(blk)) {
+        fixfree = 1;
+        if (++badblk >= MAXBAD) {
+            printf("EXCESSIVE BAD BLKS IN FREE LIST.");
+            if (reply("CONTINUE") == NO)
+                errexit();
+            return STOP;
+        }
+        return SKIP;
+    }
+    if (getfmap(blk)) {
+        fixfree = 1;
+        if (++dupblk >= DUPTBLSIZE) {
+            printf("EXCESSIVE DUP BLKS IN FREE LIST.");
+            if (reply("CONTINUE") == NO)
+                errexit();
+            return STOP;
+        }
+    } else {
+        n_free++;
+        setfmap(blk);
+    }
+    return KEEPON;
 }
 
-
-pass5(blk)
-daddr_t blk;
+// A block number is an on-disk quantity, not a measurement: no KBPB here.  SS4.
+static void blkerr(const char *s, daddr_t blk)
 {
-	if(outrange(blk)) {
-		fixfree = 1;
-		if(++badblk >= MAXBAD) {
-			printf("EXCESSIVE BAD BLKS IN FREE LIST.");
-			if(reply("CONTINUE") == NO)
-				errexit("");
-			return(STOP);
-		}
-		return(SKIP);
-	}
-	if(getfmap(blk)) {
-		fixfree = 1;
-		if(++dupblk >= DUPTBLSIZE) {
-			printf("EXCESSIVE DUP BLKS IN FREE LIST.");
-			if(reply("CONTINUE") == NO)
-				errexit("");
-			return(STOP);
-		}
-	}
-	else {
-		n_free++;
-		setfmap(blk);
-	}
-	return(KEEPON);
+    printf("%d %s I=%d\n", blk, s, inum);
+    setstate(CLEAR); // mark for possible clearing
 }
 
-
-blkerr(s,blk)
-daddr_t blk;
-char *s;
+static void descend(void)
 {
-	printf("%ld %s I=%u\n",blk,s,inum);
-	setstate(CLEAR);	/* mark for possible clearing */
+    DINODE *dp;
+    char *savname;
+    off_t savsize;
+
+    setstate(FSTATE);
+    if ((dp = ginode()) == NULL)
+        return;
+    savname = thisname;
+    if (PATHROOM > 0)
+        *pathp++ = '/';
+    *pathp  = 0;
+    savsize = filsize;
+    filsize = dp->di_size;
+    ckinode(dp, DATA);
+    thisname = savname;
+    // v7 wrote `*--pathp = 0' unconditionally, which walks off the front of the buffer if
+    // the `/' above was not appended.  The guard is a SUBTRACTION and not `pathp >
+    // pathname': that would be the very comparison SS2 forbids, on the two pointers this
+    // function spends its life moving.
+    if (pathp - pathname > 0)
+        --pathp;
+    *pathp  = 0;
+    filsize = savsize;
 }
 
-
-descend()
+//
+// Every entry of one directory block.  The block is re-read each time round because the
+// callback may descend and replace it, which is v7's own reason.
+//
+static int dirscan(daddr_t blk)
 {
-	register DINODE *dp;
-	register char *savname;
-	off_t savsize;
+    int i, n;
+    DIRECT direntry;
 
-	setstate(FSTATE);
-	if((dp = ginode()) == NULL)
-		return;
-	savname = thisname;
-	*pathp++ = '/';
-	savsize = filsize;
-	filsize = dp->di_size;
-	ckinode(dp,DATA);
-	thisname = savname;
-	*--pathp = 0;
-	filsize = savsize;
+    if (outrange(blk)) {
+        filsize -= BSIZE;
+        return SKIP;
+    }
+    for (i = 0; i < DIRPB && filsize > 0; i++, filsize -= sizeof(DIRECT)) {
+        if (getblk(&fileblk, blk) == NULL) {
+            filsize -= (DIRPB - i) * sizeof(DIRECT);
+            return SKIP;
+        }
+        // v7 copied the entry out and back byte by byte, backwards, through two
+        // comparisons of char pointers (SS2).  An entry is four words and assigning one
+        // is a word copy.
+        direntry = dirblk[i];
+        if ((n = (*dfunc)(&direntry)) & ALTERD) {
+            if (getblk(&fileblk, blk) != NULL) {
+                dirblk[i] = direntry;
+                fbdirty();
+            } else
+                n &= ~ALTERD;
+        }
+        if (n & STOP)
+            return n;
+    }
+    return filsize > 0 ? KEEPON : STOP;
 }
 
-
-dirscan(blk)
-daddr_t blk;
+static int direrr(const char *s)
 {
-	register DIRECT *dirp;
-	register char *p1, *p2;
-	register n;
-	DIRECT direntry;
+    DINODE *dp;
 
-	if(outrange(blk)) {
-		filsize -= BSIZE;
-		return(SKIP);
-	}
-	for(dirp = dirblk.b_dir; dirp < &dirblk.b_dir[NDIRECT] &&
-		filsize > 0; dirp++, filsize -= sizeof(DIRECT)) {
-		if(getblk(&fileblk,blk) == NULL) {
-			filsize -= (&dirblk.b_dir[NDIRECT]-dirp)*sizeof(DIRECT);
-			return(SKIP);
-		}
-		p1 = &dirp->d_name[DIRSIZ];
-		p2 = &direntry.d_name[DIRSIZ];
-		while(p1 > (char *)dirp)
-			*--p2 = *--p1;
-		if((n = (*pfunc)(&direntry)) & ALTERD) {
-			if(getblk(&fileblk,blk) != NULL) {
-				p1 = &dirp->d_name[DIRSIZ];
-				p2 = &direntry.d_name[DIRSIZ];
-				while(p1 > (char *)dirp)
-					*--p1 = *--p2;
-				fbdirty();
-			}
-			else
-				n &= ~ALTERD;
-		}
-		if(n & STOP)
-			return(n);
-	}
-	return(filsize > 0 ? KEEPON : STOP);
+    printf("%s ", s);
+    pinode();
+    if ((dp = ginode()) != NULL && ftypeok(dp))
+        printf("\n%s=%s", DIR ? "DIR" : "FILE", pathname);
+    else
+        printf("\nNAME=%s", pathname);
+    return reply("REMOVE");
 }
 
-
-direrr(s)
-char *s;
+static void adjust(int lcnt)
 {
-	register DINODE *dp;
+    DINODE *dp;
 
-	printf("%s ",s);
-	pinode();
-	if((dp = ginode()) != NULL && ftypeok(dp))
-		printf("\n%s=%s",DIR?"DIR":"FILE",pathname);
-	else
-		printf("\nNAME=%s",pathname);
-	return(reply("REMOVE"));
+    if ((dp = ginode()) == NULL)
+        return;
+    if (dp->di_nlink == lcnt) {
+        if (linkup() == NO)
+            clri("UNREF", NO);
+    } else {
+        printf("LINK COUNT %s", (lfdir == inum) ? lfname : (DIR ? "DIR" : "FILE"));
+        pinode();
+        printf(" COUNT %d SHOULD BE %d", dp->di_nlink, dp->di_nlink - lcnt);
+        if (reply("ADJUST") == YES) {
+            dp->di_nlink -= lcnt;
+            inodirty();
+        }
+    }
 }
 
-
-adjust(lcnt)
-register short lcnt;
+static void clri(const char *s, int flg)
 {
-	register DINODE *dp;
+    DINODE *dp;
 
-	if((dp = ginode()) == NULL)
-		return;
-	if(dp->di_nlink == lcnt) {
-		if(linkup() == NO)
-			clri("UNREF",NO);
-	}
-	else {
-		printf("LINK COUNT %s",
-			(lfdir==inum)?lfname:(DIR?"DIR":"FILE"));
-		pinode();
-		printf(" COUNT %d SHOULD BE %d",
-			dp->di_nlink,dp->di_nlink-lcnt);
-		if(reply("ADJUST") == YES) {
-			dp->di_nlink -= lcnt;
-			inodirty();
-		}
-	}
+    if ((dp = ginode()) == NULL)
+        return;
+    if (flg == YES) {
+        printf("%s %s", s, DIR ? "DIR" : "FILE");
+        pinode();
+    }
+    if (reply("CLEAR") == YES) {
+        n_files--;
+        pfunc = pass4;
+        ckinode(dp, ADDR);
+        zapino(dp);
+        inodirty();
+    }
 }
 
-
-clri(s,flg)
-char *s;
+//
+// The inode `inum' is in, read one block at a time.  v7 had a second path here that swept
+// the i-list NINOBLK blocks at a time into the arena; it is gone with the arena, and the
+// alignment rules would have refused it in any case.
+//
+static DINODE *ginode(void)
 {
-	register DINODE *dp;
-
-	if((dp = ginode()) == NULL)
-		return;
-	if(flg == YES) {
-		printf("%s %s",s,DIR?"DIR":"FILE");
-		pinode();
-	}
-	if(reply("CLEAR") == YES) {
-		n_files--;
-		pfunc = pass4;
-		ckinode(dp,ADDR);
-		zapino(dp);
-		inodirty();
-	}
+    if (inum > imax)
+        return NULL;
+    if (getblk(&inoblk, itod(inum)) == NULL)
+        return NULL;
+    return inodes + itoo(inum);
 }
 
-
-setup(dev)
-char *dev;
+static int ftypeok(DINODE *dp)
 {
-	register n;
-	register BUFAREA *bp;
-	register MEMSIZE msize;
-	char *mbase;
-	daddr_t bcnt, nscrblk;
-	dev_t rootdev;
-	off_t smapsz, lncntsz, totsz;
-	struct {
-		daddr_t	tfree;
-		ino_t	tinode;
-		char	fname[6];
-		char	fpack[6];
-	} ustatarea;
-	struct stat statarea;
-
-	if(stat("/",&statarea) < 0)
-		errexit("Can't stat root\n");
-	rootdev = statarea.st_dev;
-	if(stat(dev,&statarea) < 0) {
-		error("Can't stat %s\n",dev);
-		return(NO);
-	}
-	hotroot = 0;
-	rawflg = 0;
-	if((statarea.st_mode & S_IFMT) == S_IFBLK) {
-		if(ustat(statarea.st_rdev, (char *)&ustatarea) >= 0) {
-			hotroot++;
-		}
-	}
-	else if((statarea.st_mode & S_IFMT) == S_IFCHR)
-		rawflg++;
-	else {
-		if (reply("file is not a block or character device; OK") == NO)
-			return(NO);
-	}
-	if(rootdev == statarea.st_rdev)
-		hotroot++;
-	if((dfile.rfdes = open(dev,0)) < 0) {
-		error("Can't open %s\n",dev);
-		return(NO);
-	}
-	printf("\n%s",dev);
-	if(nflag || (dfile.wfdes = open(dev,1)) < 0) {
-		dfile.wfdes = -1;
-		printf(" (NO WRITE)");
-	}
-	printf("\n");
-	fixfree = 0;
-	dfile.mod = 0;
-	n_files = n_blks = n_free = 0;
-	muldup = enddup = &duplist[0];
-	badlnp = &badlncnt[0];
-	lfdir = 0;
-	rplyflag = 0;
-	initbarea(&sblk);
-	initbarea(&fileblk);
-	initbarea(&inoblk);
-	sfile.wfdes = sfile.rfdes = -1;
-	rmscr = 0;
-	if(getblk(&sblk,SUPERB) == NULL) {
-		ckfini();
-		return(NO);
-	}
-	imax = ((ino_t)superblk.s_isize - (SUPERB+1)) * INOPB;
-	fmin = (daddr_t)superblk.s_isize;	/* first data blk num */
-	fmax = superblk.s_fsize;		/* first invalid blk num */
-	if(fmin >= fmax || 
-		(imax/INOPB) != ((ino_t)superblk.s_isize-(SUPERB+1))) {
-		error("Size check: fsize %ld isize %d\n",
-			superblk.s_fsize,superblk.s_isize);
-		ckfini();
-		return(NO);
-	}
-	printf("File System: %.6s Volume: %.6s\n\n", superblk.s_fname,
-		superblk.s_fpack);
-	bmapsz = roundup(howmany(fmax,BITSPB),sizeof(*lncntp));
-	smapsz = roundup(howmany((long)(imax+1),STATEPB),sizeof(*lncntp));
-	lncntsz = (long)(imax+1) * sizeof(*lncntp);
-	if(bmapsz > smapsz+lncntsz)
-		smapsz = bmapsz-lncntsz;
-	totsz = bmapsz+smapsz+lncntsz;
-	msize = memsize;
-	mbase = membase;
-	if(rawflg) {
-		if(msize < (MEMSIZE)(NINOBLK*BSIZE) + 2*sizeof(BUFAREA))
-			rawflg = 0;
-		else {
-			msize -= (MEMSIZE)NINOBLK*BSIZE;
-			mbase += (MEMSIZE)NINOBLK*BSIZE;
-			niblk = NINOBLK;
-			startib = fmax;
-		}
-	}
-	clear(mbase,msize);
-	if((off_t)msize < totsz) {
-		bmapsz = roundup(bmapsz,BSIZE);
-		smapsz = roundup(smapsz,BSIZE);
-		lncntsz = roundup(lncntsz,BSIZE);
-		nscrblk = (bmapsz+smapsz+lncntsz)>>BSHIFT;
-		if(tflag == 0) {
-			printf("\nNEED SCRATCH FILE (%ld BLKS)\n",nscrblk);
-			do {
-				printf("ENTER FILENAME:  ");
-				if((n = getline(stdin,scrfile,sizeof(scrfile))) == EOF)
-					errexit("\n");
-			} while(n == 0);
-		}
-		if(stat(scrfile,&statarea) < 0 ||
-			(statarea.st_mode & S_IFMT) == S_IFREG)
-			rmscr++;
-		if((sfile.wfdes = creat(scrfile,0666)) < 0 ||
-			(sfile.rfdes = open(scrfile,0)) < 0) {
-			error("Can't create %s\n",scrfile);
-			ckfini();
-			return(NO);
-		}
-		bp = &((BUFAREA *)mbase)[(msize/sizeof(BUFAREA))];
-		poolhead = NULL;
-		while(--bp >= (BUFAREA *)mbase) {
-			initbarea(bp);
-			bp->b_next = poolhead;
-			poolhead = bp;
-		}
-		bp = poolhead;
-		for(bcnt = 0; bcnt < nscrblk; bcnt++) {
-			bp->b_bno = bcnt;
-			dirty(bp);
-			flush(&sfile,bp);
-		}
-		blkmap = freemap = statemap = (char *) NULL;
-		lncntp = (short *) NULL;
-		smapblk = bmapsz / BSIZE;
-		lncntblk = smapblk + smapsz / BSIZE;
-		fmapblk = smapblk;
-	}
-	else {
-		if(rawflg && (off_t)msize > totsz+BSIZE) {
-			niblk += (unsigned)((off_t)msize-totsz)>>BSHIFT;
-			if(niblk > MAXRAW)
-				niblk = MAXRAW;
-			msize = memsize - (niblk*BSIZE);
-			mbase = membase + (niblk*BSIZE);
-		}
-		poolhead = NULL;
-		blkmap = mbase;
-		statemap = &mbase[(MEMSIZE)bmapsz];
-		freemap = statemap;
-		lncntp = (short *)&statemap[(MEMSIZE)smapsz];
-	}
-	return(YES);
+    switch (dp->di_mode & S_IFMT) {
+    case S_IFDIR:
+    case S_IFREG:
+    case S_IFBLK:
+    case S_IFCHR:
+    case S_IFMPC:
+    case S_IFMPB:
+        return YES;
+    default:
+        return NO;
+    }
 }
 
-
-DINODE *
-ginode()
+static int reply(const char *s)
 {
-	register DINODE *dp;
-	register char *mbase;
-	daddr_t iblk;
+    char line[80];
 
-	if(inum > imax)
-		return(NULL);
-	iblk = itod(inum);
-	if(rawflg) {
-		mbase = membase;
-		if(iblk < startib || iblk >= startib+niblk) {
-			if(inoblk.b_dirty)
-				bwrite(&dfile,mbase,startib,(int)niblk*BSIZE);
-			inoblk.b_dirty = 0;
-			if(bread(&dfile,mbase,iblk,(int)niblk*BSIZE) == NO) {
-				startib = fmax;
-				return(NULL);
-			}
-			startib = iblk;
-		}
-		dp = (DINODE *)&mbase[(unsigned)((iblk-startib)<<BSHIFT)];
-	}
-	else if(getblk(&inoblk,iblk) != NULL)
-		dp = inoblk.b_un.b_dinode;
-	else
-		return(NULL);
-	return(dp + itoo(inum));
+    rplyflag = 1;
+    printf("\n%s? ", s);
+    if (nflag || csflag || wfd < 0) {
+        printf(" no\n\n");
+        return NO;
+    }
+    if (yflag) {
+        printf(" yes\n\n");
+        return YES;
+    }
+    // This libc's stdout is line buffered on a terminal where v7's was unbuffered, so a
+    // prompt with no newline never arrives on its own.  cmd/login/README.md is the
+    // account; login(1) needed the same call for the same reason.
+    fflush(stdout);
+    if (getline(stdin, line, sizeof(line)) == EOF)
+        errexit();
+    printf("\n");
+    return (line[0] == 'y' || line[0] == 'Y') ? YES : NO;
 }
 
-
-ftypeok(dp)
-DINODE *dp;
+static int getline(FILE *fp, char *loc, int maxlen)
 {
-	switch(dp->di_mode & IFMT) {
-		case IFDIR:
-		case IFREG:
-		case IFBLK:
-		case IFCHR:
-		case IFMPC:
-		case IFMPB:
-			return(YES);
-		default:
-			return(NO);
-	}
+    int n, i;
+
+    i = 0;
+    while ((n = getc(fp)) != '\n') {
+        if (n == EOF)
+            return EOF;
+        // v7 compared two char pointers for the bound (SS2), and called isspace() on a
+        // value that can be EOF -- which here would index a 256-entry table at -1.
+        if (!isspace(n) && i < maxlen - 1)
+            loc[i++] = n;
+    }
+    loc[i] = 0;
+    return i;
 }
 
-
-reply(s)
-char *s;
+//
+// The three maps.  Each had a second arm in v7 reading the map out of a scratch file
+// through the buffer pool; with the maps always in core, what is left is the arithmetic.
+//
+static int dostate(int s, int flg)
 {
-	char line[80];
+    char *p;
+    int shift;
 
-	rplyflag = 1;
-	printf("\n%s? ",s);
-	if(nflag || csflag || dfile.wfdes < 0) {
-		printf(" no\n\n");
-		return(NO);
-	}
-	if(yflag) {
-		printf(" yes\n\n");
-		return(YES);
-	}
-	if(getline(stdin,line,sizeof(line)) == EOF)
-		errexit("\n");
-	printf("\n");
-	if(line[0] == 'y' || line[0] == 'Y')
-		return(YES);
-	else
-		return(NO);
+    p     = &statemap[inum / STATEPB];
+    shift = LSTATE * (int)(inum % STATEPB);
+    switch (flg) {
+    case 0:
+        *p &= ~(SMASK << shift);
+        *p |= s << shift;
+        return s;
+    case 1:
+        return (*p >> shift) & SMASK;
+    }
+    return USTATE;
 }
 
-
-getline(fp,loc,maxlen)
-FILE *fp;
-char *loc;
+static int domap(daddr_t blk, int flg)
 {
-	register n;
-	register char *p, *lastloc;
+    char *p;
+    int n;
 
-	p = loc;
-	lastloc = &p[maxlen-1];
-	while((n = getc(fp)) != '\n') {
-		if(n == EOF)
-			return(EOF);
-		if(!isspace(n) && p < lastloc)
-			*p++ = n;
-	}
-	*p = 0;
-	return(p - loc);
+    // BITSPB is bits in a byte and BITSHIFT is its log: this shift is not the block-size
+    // shift SS4 is about, and 8 really is a power of two.
+    n = 1 << (int)(blk & BITMASK);
+    p = ((flg & 04) ? freemap : blkmap) + (int)(blk >> BITSHIFT);
+    switch (flg & 03) {
+    case 0:
+        *p |= n;
+        break;
+    case 1:
+        n &= *p;
+        break;
+    case 2:
+        *p &= ~n;
+        break;
+    }
+    return n;
 }
 
-
-stype(p)
-register char *p;
+static int dolncnt(int val, int flg)
 {
-	if(*p == 0)
-		return;
-	if (*(p+1) == 0) {
-		if (*p == '3') {
-			cylsize = 200;
-			stepsize = 5;
-			return;
-		}
-		if (*p == '4') {
-			cylsize = 418;
-			stepsize = 9;
-			return;
-		}
-	}
-	cylsize = atoi(p);
-	while(*p && *p != ':')
-		p++;
-	if(*p)
-		p++;
-	stepsize = atoi(p);
-	if(stepsize <= 0 || stepsize > cylsize ||
-	cylsize <= 0 || cylsize > MAXCYL) {
-		error("Invalid -s argument, defaults assumed\n");
-		cylsize = stepsize = 0;
-	}
+    int *sp;
+
+    sp = &lncntp[inum];
+    switch (flg) {
+    case 0:
+        *sp = val;
+        break;
+    case 2:
+        (*sp)--;
+        break;
+    }
+    return *sp;
 }
 
-
-dostate(s,flg)
+static BUFAREA *getblk(BUFAREA *bp, daddr_t blk)
 {
-	register char *p;
-	register unsigned byte, shift;
-	BUFAREA *bp;
-
-	byte = (inum)/STATEPB;
-	shift = LSTATE * ((inum)%STATEPB);
-	if(statemap != NULL) {
-		bp = NULL;
-		p = &statemap[byte];
-	}
-	else if((bp = getblk((BUFAREA *)NULL,(daddr_t)(smapblk+(byte/BSIZE)))) == NULL)
-		errexit("Fatal I/O error\n");
-	else
-		p = &bp->b_un.b_buf[byte%BSIZE];
-	switch(flg) {
-		case 0:
-			*p &= ~(SMASK<<(shift));
-			*p |= s<<(shift);
-			if(bp != NULL)
-				dirty(bp);
-			return(s);
-		case 1:
-			return((*p>>(shift)) & SMASK);
-	}
-	return(USTATE);
+    if (bp->b_bno == blk)
+        return bp;
+    flush(bp);
+    if (bread(bp->b_addr, blk) != NO) {
+        bp->b_bno = blk;
+        return bp;
+    }
+    bp->b_bno = (daddr_t)-1;
+    return NULL;
 }
 
-
-domap(blk,flg)
-daddr_t blk;
+static void flush(BUFAREA *bp)
 {
-	register char *p;
-	register unsigned n;
-	register BUFAREA *bp;
-	off_t byte;
-
-	byte = blk >> BITSHIFT;
-	n = 1<<((unsigned)(blk & BITMASK));
-	if(flg & 04) {
-		p = freemap;
-		blk = fmapblk;
-	}
-	else {
-		p = blkmap;
-		blk = 0;
-	}
-	if(p != NULL) {
-		bp = NULL;
-		p += (unsigned)byte;
-	}
-	else if((bp = getblk((BUFAREA *)NULL,blk+(byte>>BSHIFT))) == NULL)
-		errexit("Fatal I/O error\n");
-	else
-		p = &bp->b_un.b_buf[(unsigned)(byte&BMASK)];
-	switch(flg&03) {
-		case 0:
-			*p |= n;
-			break;
-		case 1:
-			n &= *p;
-			bp = NULL;
-			break;
-		case 2:
-			*p &= ~n;
-	}
-	if(bp != NULL)
-		dirty(bp);
-	return(n);
+    if (bp->b_dirty)
+        bwrite(bp->b_addr, bp->b_bno);
+    bp->b_dirty = 0;
 }
 
-
-dolncnt(val,flg)
-short val;
+static void rwerr(const char *s, daddr_t blk)
 {
-	register short *sp;
-	register BUFAREA *bp;
-
-	if(lncntp != NULL) {
-		bp = NULL;
-		sp = &lncntp[inum];
-	}
-	else if((bp = getblk((BUFAREA *)NULL,(daddr_t)(lncntblk+(inum/SPERB)))) == NULL)
-		errexit("Fatal I/O error\n");
-	else
-		sp = &bp->b_un.b_lnks[inum%SPERB];
-	switch(flg) {
-		case 0:
-			*sp = val;
-			break;
-		case 1:
-			bp = NULL;
-			break;
-		case 2:
-			(*sp)--;
-	}
-	if(bp != NULL)
-		dirty(bp);
-	return(*sp);
+    printf("\nCAN NOT %s: BLK %d", s, blk);
+    if (reply("CONTINUE") == NO) {
+        printf("Program terminated\n");
+        errexit();
+    }
 }
 
-
-BUFAREA *
-getblk(bp,blk)
-daddr_t blk;
-register BUFAREA *bp;
+static void sizechk(DINODE *dp)
 {
-	register struct filecntl *fcp;
-
-	if(bp == NULL) {
-		bp = search(blk);
-		fcp = &sfile;
-	}
-	else
-		fcp = &dfile;
-	if(bp->b_bno == blk)
-		return(bp);
-	flush(fcp,bp);
-	if(bread(fcp,bp->b_un.b_buf,blk,BSIZE) != NO) {
-		bp->b_bno = blk;
-		return(bp);
-	}
-	bp->b_bno = (daddr_t)-1;
-	return(NULL);
+    if (DIR && (dp->di_size % sizeof(DIRECT)) != 0)
+        printf("DIRECTORY MISALIGNED I=%d\n\n", inum);
 }
 
-
-flush(fcp,bp)
-struct filecntl *fcp;
-register BUFAREA *bp;
+static void ckfini(void)
 {
-	if(bp->b_dirty) {
-		bwrite(fcp,bp->b_un.b_buf,bp->b_bno,BSIZE);
-	}
-	bp->b_dirty = 0;
+    flush(&fileblk);
+    flush(&sblk);
+    flush(&inoblk);
+    if (rfd >= 0)
+        close(rfd);
+    if (wfd >= 0)
+        close(wfd);
+    rfd = wfd = -1;
+
+    // v7 kept its arena for the next filesystem; these are per-volume, being sized from
+    // the superblock, so `fsck a b' has to give them back.
+    free(blkmap);
+    free(freemap);
+    free(statemap);
+    free(lncntp);
+    blkmap = freemap = statemap = NULL;
+    lncntp                      = NULL;
 }
 
-
-rwerr(s,blk)
-char *s;
-daddr_t blk;
+static void pinode(void)
 {
-	printf("\nCAN NOT %s: BLK %ld",s,blk);
-	if(reply("CONTINUE") == NO)
-		errexit("Program terminated\n");
+    DINODE *dp;
+    char *p;
+    int i;
+    // getpw(3) takes no length and writes a whole /etc/passwd line, so this is a bound on
+    // the caller's side and nothing else.  256 rather than v7's 200 because under b6sim
+    // the line comes from the BUILD MACHINE's /etc/passwd (../README.md SS9), which is
+    // also why cmd/fsck/test masks this one field and nothing else.
+    char uidbuf[256];
+
+    printf(" I=%d ", inum);
+    if ((dp = ginode()) == NULL)
+        return;
+    printf(" OWNER=");
+    if (getpw(dp->di_uid, uidbuf) == 0) {
+        for (i = 0; uidbuf[i] != 0 && uidbuf[i] != ':'; i++)
+            ;
+        uidbuf[i] = 0;
+        printf("%s ", uidbuf);
+    } else
+        printf("%d ", dp->di_uid);
+    printf("MODE=%o\n", dp->di_mode);
+    printf("SIZE=%d ", dp->di_size);
+    p = ctime(&dp->di_mtime);
+    printf("MTIME=%12.12s %4.4s ", p + 4, p + 20);
 }
 
-
-sizechk(dp)
-register DINODE *dp;
+static void copy(char *fp, char *tp, int size)
 {
-/*
-	if (maxblk != howmany(dp->di_size, BSIZE))
-		printf("POSSIBLE FILE SIZE ERROR I=%u (%ld,%ld)\n\n",inum, maxblk, howmany(dp->di_size,BSIZE));
-*/
-	if(DIR && (dp->di_size % sizeof(DIRECT)) != 0) {
-		printf("DIRECTORY MISALIGNED I=%u\n\n",inum);
-	}
+    while (size--)
+        *tp++ = *fp++;
 }
 
-
-ckfini()
+static void clear(char *p, int cnt)
 {
-	flush(&dfile,&fileblk);
-	flush(&dfile,&sblk);
-	flush(&dfile,&inoblk);
-	close(dfile.rfdes);
-	close(dfile.wfdes);
-	close(sfile.rfdes);
-	close(sfile.wfdes);
-	if(rmscr) {
-		unlink(scrfile);
-	}
+    while (cnt--)
+        *p++ = 0;
 }
 
-
-pinode()
+//
+// Walk the free list exactly as alloc() drains it, so a list this accepts is one the
+// kernel can use.  df.c's alloc() is the same walk and cmd/fsutil/check.cpp's
+// pass4_free_list() is the host's.
+//
+static void freechk(void)
 {
-	register DINODE *dp;
-	register char *p;
-	char uidbuf[200];
-	char *ctime();
+    daddr_t *ap;
 
-	printf(" I=%u ",inum);
-	if((dp = ginode()) == NULL)
-		return;
-	printf(" OWNER=");
-	if(getpw((int)dp->di_uid,uidbuf) == 0) {
-		for(p = uidbuf; *p != ':'; p++);
-		*p = 0;
-		printf("%s ",uidbuf);
-	}
-	else {
-		printf("%d ",dp->di_uid);
-	}
-	printf("MODE=%o\n",dp->di_mode);
-	printf("SIZE=%ld ",dp->di_size);
-	p = ctime(&dp->di_mtime);
-	printf("MTIME=%12.12s %4.4s ",p+4,p+20);
+    if (freeblk.df_nfree == 0)
+        return;
+    do {
+        if (freeblk.df_nfree <= 0 || freeblk.df_nfree > NICFREE) {
+            printf("BAD FREEBLK COUNT\n");
+            fixfree = 1;
+            return;
+        }
+        ap = &freeblk.df_free[freeblk.df_nfree];
+        while (--ap > &freeblk.df_free[0]) {
+            if (pass5(*ap) == STOP)
+                return;
+        }
+        if (*ap == (daddr_t)0 || pass5(*ap) != KEEPON)
+            return;
+    } while (getblk(&fileblk, *ap) != NULL);
 }
 
-
-copy(fp,tp,size)
-register char *tp, *fp;
-MEMSIZE size;
+//
+// Phase 6.  v7 laid the new list out in the rotational pattern s_m/s_n described; this
+// port has no such fields and no moving-head pack whose latency they were hiding, so the
+// list is built plainly and descending -- which is exactly how ../mkfs/mkfs.c builds one,
+// so a salvaged volume and a fresh one have the same shape.
+//
+static void makefree(void)
 {
-	while(size--)
-		*tp++ = *fp++;
+    daddr_t blk;
+    int i;
+
+    superblk.s_nfree  = 0;
+    superblk.s_flock  = 0;
+    superblk.s_fmod   = 0;
+    superblk.s_tfree  = 0;
+    superblk.s_ninode = 0;
+    superblk.s_ilock  = 0;
+    superblk.s_ronly  = 0;
+
+    clear((char *)&freeblk, BSIZE);
+    freeblk.df_nfree++; // slot 0 is the link to the next chain block
+
+    for (blk = fmax - 1; blk >= fmin; blk--) {
+        if (getbmap(blk))
+            continue;
+        superblk.s_tfree++;
+        if (freeblk.df_nfree >= NICFREE) {
+            fbdirty();
+            fileblk.b_bno = blk;
+            flush(&fileblk);
+            clear((char *)&freeblk, BSIZE);
+        }
+        freeblk.df_free[freeblk.df_nfree] = blk;
+        freeblk.df_nfree++;
+    }
+    superblk.s_nfree = freeblk.df_nfree;
+    for (i = 0; i < NICFREE; i++)
+        superblk.s_free[i] = freeblk.df_free[i];
+    sbdirty();
 }
 
-
-freechk()
+static int findino(DIRECT *dirp)
 {
-	register daddr_t *ap;
+    int i;
 
-	if(freeblk.df_nfree == 0)
-		return;
-	do {
-		if(freeblk.df_nfree <= 0 || freeblk.df_nfree > NICFREE) {
-			printf("BAD FREEBLK COUNT\n");
-			fixfree = 1;
-			return;
-		}
-		ap = &freeblk.df_free[freeblk.df_nfree];
-		while(--ap > &freeblk.df_free[0]) {
-			if(pass5(*ap) == STOP)
-				return;
-		}
-		if(*ap == (daddr_t)0 || pass5(*ap) != KEEPON)
-			return;
-	} while(getblk(&fileblk,*ap) != NULL);
+    if (dirp->d_ino == 0)
+        return KEEPON;
+    for (i = 0; i < DIRSIZ; i++) {
+        if (srchname[i] != dirp->d_name[i])
+            return KEEPON;
+        if (dirp->d_name[i] == 0)
+            break;
+    }
+    if (dirp->d_ino >= ROOTINO && dirp->d_ino <= imax)
+        parentdir = dirp->d_ino;
+    return STOP;
 }
 
-
-makefree()
+//
+// Put the orphan in the first empty slot of lost+found, named for its i-number.
+//
+static int mkentry(DIRECT *dirp)
 {
-	register i, cyl, step;
-	int j;
-	char flg[MAXCYL];
-	short addr[MAXCYL];
-	daddr_t blk, baseblk;
+    ino_t in;
+    int i;
 
-	superblk.s_nfree = 0;
-	superblk.s_flock = 0;
-	superblk.s_fmod = 0;
-	superblk.s_tfree = 0;
-	superblk.s_ninode = 0;
-	superblk.s_ilock = 0;
-	superblk.s_ronly = 0;
-	if(cylsize == 0 || stepsize == 0) {
-		step = superblk.s_m;
-		cyl = superblk.s_n;
-	}
-	else {
-		step = stepsize;
-		cyl = cylsize;
-	}
-	if(step > cyl || step <= 0 || cyl <= 0 || cyl > MAXCYL) {
-		error("Default free list spacing assumed\n");
-		step = STEPSIZE;
-		cyl = CYLSIZE;
-	}
-	superblk.s_m = step;
-	superblk.s_n = cyl;
-	clear(flg,sizeof(flg));
-	i = 0;
-	for(j = 0; j < cyl; j++) {
-		while(flg[i])
-			i = (i + 1) % cyl;
-		addr[j] = i + 1;
-		flg[i]++;
-		i = (i + step) % cyl;
-	}
-	baseblk = (daddr_t)roundup(fmax,cyl);
-	clear((char *)&freeblk,BSIZE);
-	freeblk.df_nfree++;
-	for( ; baseblk > 0; baseblk -= cyl)
-		for(i = 0; i < cyl; i++) {
-			blk = baseblk - addr[i];
-			if(!outrange(blk) && !getbmap(blk)) {
-				superblk.s_tfree++;
-				if(freeblk.df_nfree >= NICFREE) {
-					fbdirty();
-					fileblk.b_bno = blk;
-					flush(&dfile,&fileblk);
-					clear((char *)&freeblk,BSIZE);
-				}
-				freeblk.df_free[freeblk.df_nfree] = blk;
-				freeblk.df_nfree++;
-			}
-		}
-	superblk.s_nfree = freeblk.df_nfree;
-	for(i = 0; i < NICFREE; i++)
-		superblk.s_free[i] = freeblk.df_free[i];
-	sbdirty();
+    if (dirp->d_ino)
+        return KEEPON;
+    dirp->d_ino = orphan;
+    in          = orphan;
+    for (i = 0; i < DIRSIZ; i++)
+        dirp->d_name[i] = 0;
+    // Seven digits, filled from the right, as v7 did -- but derived rather than written
+    // as `&dirp->d_name[7]', DIRSIZ being 18 here and 14 there.
+    for (i = 7; --i >= 0;) {
+        dirp->d_name[i] = (in % 10) + '0';
+        in /= 10;
+    }
+    return ALTERD | STOP;
 }
 
-
-clear(p,cnt)
-register char *p;
-MEMSIZE cnt;
+static int chgdd(DIRECT *dirp)
 {
-	while(cnt--)
-		*p++ = 0;
+    if (dirp->d_name[0] == '.' && dirp->d_name[1] == '.' && dirp->d_name[2] == 0) {
+        dirp->d_ino = lfdir;
+        return ALTERD | STOP;
+    }
+    return KEEPON;
 }
 
-
-BUFAREA *
-search(blk)
-daddr_t blk;
+static int linkup(void)
 {
-	register BUFAREA *pbp, *bp;
+    DINODE *dp;
+    int lostdir;
+    ino_t pdir;
 
-	for(bp = (BUFAREA *) &poolhead; bp->b_next; ) {
-		pbp = bp;
-		bp = pbp->b_next;
-		if(bp->b_bno == blk)
-			break;
-	}
-	pbp->b_next = bp->b_next;
-	bp->b_next = poolhead;
-	poolhead = bp;
-	return(bp);
+    if ((dp = ginode()) == NULL)
+        return NO;
+    lostdir = DIR;
+    pdir    = parentdir;
+    printf("UNREF %s ", lostdir ? "DIR" : "FILE");
+    pinode();
+    if (reply("RECONNECT") == NO)
+        return NO;
+
+    orphan = inum;
+    if (lfdir == 0) {
+        inum = ROOTINO;
+        if ((dp = ginode()) == NULL) {
+            inum = orphan;
+            return NO;
+        }
+        dfunc     = findino;
+        srchname  = lfname;
+        filsize   = dp->di_size;
+        parentdir = 0;
+        ckinode(dp, DATA);
+        inum = orphan;
+        if ((lfdir = parentdir) == 0) {
+            printf("SORRY. NO lost+found DIRECTORY\n\n");
+            return NO;
+        }
+    }
+    inum = lfdir;
+    if ((dp = ginode()) == NULL || !DIR || getstate() != FSTATE) {
+        inum = orphan;
+        printf("SORRY. NO lost+found DIRECTORY\n\n");
+        return NO;
+    }
+    // Round the directory out to a whole block so that the zero entries past its size are
+    // scanned: those are the empty slots.  A block holds DIRPB of them, so a lost+found
+    // made by mkdir(1) and never used has DIRPB-2 -- which is why fsck.1m's advice to
+    // create and delete files in it first is marked as not true here.
+    if (dp->di_size % BSIZE) {
+        dp->di_size = roundup(dp->di_size, BSIZE);
+        inodirty();
+    }
+    filsize = dp->di_size;
+    inum    = orphan;
+    dfunc   = mkentry;
+    if ((ckinode(dp, DATA) & ALTERD) == 0) {
+        printf("SORRY. NO SPACE IN lost+found DIRECTORY\n\n");
+        return NO;
+    }
+    declncnt();
+    if (lostdir) {
+        dfunc = chgdd;
+        dp    = ginode();
+        if (dp != NULL) {
+            filsize = dp->di_size;
+            ckinode(dp, DATA);
+        }
+        inum = lfdir;
+        if ((dp = ginode()) != NULL) {
+            dp->di_nlink++;
+            inodirty();
+            setlncnt(getlncnt() + 1);
+        }
+        inum = orphan;
+        printf("DIR I=%d CONNECTED. ", orphan);
+        printf("PARENT WAS I=%d\n\n", pdir);
+    }
+    return YES;
 }
 
-
-findino(dirp)
-register DIRECT *dirp;
+//
+// Is `dev' the raw name of the device the root is mounted on?  4.xBSD's unrawname(): drop
+// the `r' from the last path component and ask about that name instead.  Every comparison
+// here is by index; a path is walked, never ordered (../README.md SS2).
+//
+static int israwroot(const char *dev, dev_t rootdev)
 {
-	register char *p1, *p2;
+    char name[64];
+    struct stat st;
+    int i, n, last;
 
-	if(dirp->d_ino == 0)
-		return(KEEPON);
-	for(p1 = dirp->d_name,p2 = srchname;*p2++ == *p1; p1++) {
-		if(*p1 == 0 || p1 == &dirp->d_name[DIRSIZ-1]) {
-			if(dirp->d_ino >= ROOTINO && dirp->d_ino <= imax)
-				parentdir = dirp->d_ino;
-			return(STOP);
-		}
-	}
-	return(KEEPON);
+    for (n = 0; dev[n] != 0; n++) {
+        if (n >= (int)sizeof(name) - 1)
+            return 0;
+        name[n] = dev[n];
+    }
+    name[n] = 0;
+
+    last = 0;
+    for (i = 0; i < n; i++)
+        if (name[i] == '/')
+            last = i + 1;
+    if (name[last] != 'r')
+        return 0;
+    for (i = last; i < n; i++)
+        name[i] = name[i + 1];
+
+    if (stat(name, &st) < 0)
+        return 0;
+    return (st.st_mode & S_IFMT) == S_IFBLK && st.st_rdev == rootdev;
 }
 
-
-mkentry(dirp)
-register DIRECT *dirp;
+//
+// One block, in and out.  Both obey the four conditions ../df/README.md lists: a whole
+// BSIZE into a MDALIGN-aligned buffer at a block-aligned offset.  The multiply is a
+// multiply -- v7's `blk<<BSHIFT' has no spelling here, 3072 not being a power of two.
+//
+static int bread(int *buf, daddr_t blk)
 {
-	register ino_t in;
-	register char *p;
-
-	if(dirp->d_ino)
-		return(KEEPON);
-	dirp->d_ino = orphan;
-	in = orphan;
-	p = &dirp->d_name[7];
-	*--p = 0;
-	while(p > dirp->d_name) {
-		*--p = (in % 10) + '0';
-		in /= 10;
-	}
-	return(ALTERD|STOP);
+    if (lseek(rfd, (off_t)blk * BSIZE, SEEK_SET) < 0)
+        rwerr("SEEK", blk);
+    else if (read(rfd, (char *)buf, BSIZE) == BSIZE)
+        return YES;
+    rwerr("READ", blk);
+    return NO;
 }
 
-
-chgdd(dirp)
-register DIRECT *dirp;
+static int bwrite(int *buf, daddr_t blk)
 {
-	if(dirp->d_name[0] == '.' && dirp->d_name[1] == '.' &&
-	dirp->d_name[2] == 0) {
-		dirp->d_ino = lfdir;
-		return(ALTERD|STOP);
-	}
-	return(KEEPON);
+    if (wfd < 0)
+        return NO;
+    if (lseek(wfd, (off_t)blk * BSIZE, SEEK_SET) < 0)
+        rwerr("SEEK", blk);
+    else if (write(wfd, (char *)buf, BSIZE) == BSIZE) {
+        modified = 1;
+        return YES;
+    }
+    rwerr("WRITE", blk);
+    return NO;
 }
 
-
-linkup()
+static void catch(int sig)
 {
-	register DINODE *dp;
-	register lostdir;
-	register ino_t pdir;
-
-	if((dp = ginode()) == NULL)
-		return(NO);
-	lostdir = DIR;
-	pdir = parentdir;
-	printf("UNREF %s ",lostdir ? "DIR" : "FILE");
-	pinode();
-	if(reply("RECONNECT") == NO)
-		return(NO);
-	orphan = inum;
-	if(lfdir == 0) {
-		inum = ROOTINO;
-		if((dp = ginode()) == NULL) {
-			inum = orphan;
-			return(NO);
-		}
-		pfunc = findino;
-		srchname = lfname;
-		filsize = dp->di_size;
-		parentdir = 0;
-		ckinode(dp,DATA);
-		inum = orphan;
-		if((lfdir = parentdir) == 0) {
-			printf("SORRY. NO lost+found DIRECTORY\n\n");
-			return(NO);
-		}
-	}
-	inum = lfdir;
-	if((dp = ginode()) == NULL || !DIR || getstate() != FSTATE) {
-		inum = orphan;
-		printf("SORRY. NO lost+found DIRECTORY\n\n");
-		return(NO);
-	}
-	if(dp->di_size & BMASK) {
-		dp->di_size = roundup(dp->di_size,BSIZE);
-		inodirty();
-	}
-	filsize = dp->di_size;
-	inum = orphan;
-	pfunc = mkentry;
-	if((ckinode(dp,DATA) & ALTERD) == 0) {
-		printf("SORRY. NO SPACE IN lost+found DIRECTORY\n\n");
-		return(NO);
-	}
-	declncnt();
-	if(lostdir) {
-		pfunc = chgdd;
-		dp = ginode();
-		filsize = dp->di_size;
-		ckinode(dp,DATA);
-		inum = lfdir;
-		if((dp = ginode()) != NULL) {
-			dp->di_nlink++;
-			inodirty();
-			setlncnt(getlncnt()+1);
-		}
-		inum = orphan;
-		printf("DIR I=%u CONNECTED. ",orphan);
-		printf("PARENT WAS I=%u\n\n",pdir);
-	}
-	return(YES);
+    (void)sig;
+    ckfini();
+    exit(4);
 }
 
-
-bread(fcp,buf,blk,size)
-daddr_t blk;
-register struct filecntl *fcp;
-register size;
-char *buf;
+//
+// v7's errexit() took a printf argument list; the caller prints for itself here, which
+// leaves one variadic function's worth of code out of the program and reads the same.
+// It does NOT flush: an interrupted repair leaves the disk as it was found.
+//
+static void errexit(void)
 {
-	if(lseek(fcp->rfdes,blk<<BSHIFT,0) < 0)
-		rwerr("SEEK",blk);
-	else if(read(fcp->rfdes,buf,size) == size)
-		return(YES);
-	rwerr("READ",blk);
-	return(NO);
-}
-
-
-bwrite(fcp,buf,blk,size)
-daddr_t blk;
-register struct filecntl *fcp;
-register size;
-char *buf;
-{
-	if(fcp->wfdes < 0)
-		return(NO);
-	if(lseek(fcp->wfdes,blk<<BSHIFT,0) < 0)
-		rwerr("SEEK",blk);
-	else if(write(fcp->wfdes,buf,size) == size) {
-		fcp->mod = 1;
-		return(YES);
-	}
-	rwerr("WRITE",blk);
-	return(NO);
-}
-
-catch()
-{
-	ckfini();
-	exit(4);
-}
-
-ustat(x, s)
-char *s;
-{
-	return(-1);
+    exit(8);
 }

@@ -34,8 +34,8 @@ single-file programs and 29 directories of larger ones. That tree is **not in th
 do — the ten of task C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`, `mv/`, `rm/`,
 `rmdir/`, `touch/`), the three of C2a (`date/`, `kill/`, `sleep/`), the five of C2b
 (`basename/`, `test/`, `time/`, `tty/`, `yes/`), the one of C3 (`ed/`), the three of C4a
-(`df/`, `du/`, `quot/`), the one of C4b (`dd/`), the one of C4c (`mkfs/`) and the two of
-kernel task 29b (`getty/`, `login/`) today. That is the only marker;
+(`df/`, `du/`, `quot/`), the one of C4b (`dd/`), the one of C4c (`mkfs/`), the one of C4d
+(`fsck/`) and the two of kernel task 29b (`getty/`, `login/`) today. That is the only marker;
 [../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.
 
 Four things about the copies:
@@ -115,6 +115,7 @@ candidates, as they stand today:
 | source | `char *` comparisons |
 |---|---|
 | `sort.c` | **fifteen** — all in `cmp()` and `newfile()`: `pa<la`, `ipa>pa`, `cp>=ce`, `cp < tspace+ntext`, … |
+| ~~`fsck.c`~~ | ~~five~~ — **found and fixed, task C4d**: two of them were `dirscan()`'s backward byte copy of a directory entry, which is a struct assignment now (an entry is four words); the others bounded a name, a line and the digits of a reconnected i-number, and are index counts. The twelve other relationals in that file compare `daddr_t *`, `ino_t *` and `DIRECT *` and were left alone |
 | ~~`ed.c`~~ | ~~**ten**~~ — **twenty**, and this table undercounted by half; the two `-x` took with it left nineteen to rewrite. **Found and fixed, task C3**: they are index counts and `int` differences now, and [ed/README.md](ed/README.md) lists them. Every one bounds a buffer the regex engine or the substitute path writes into |
 | `fgrep.c` | four — `p > &buf[512]` ×2, `p <= nlp`, `nlp < &buf[1024]` |
 | `grep.c` | three — `ep >= &expbuf[ESIZE]`, `sp > cstart`, `lp >= curlp` |
@@ -235,6 +236,7 @@ Anything that walks directories — `rm -r`, `du`, `find`, `ncheck`, `dcheck`, `
 
 | | const | text | data | bss | total |
 |---|---|---|---|---|---|
+| `fsck` | 125 | 6,323 | 587 | 3,807 | **10,842** |
 | `sh` | 121 | 7,039 | 637 | 131 | **7,928** |
 | `ls` | 110 | 4,632 | 298 | 2,638 | **7,678** |
 | `login` | 106 | 5,063 | 408 | 1,321 | **6,898** |
@@ -260,9 +262,10 @@ Anything that walks directories — `rm -r`, `du`, `find`, `ncheck`, `dcheck`, `
 | `test` | 22 | 886 | 49 | 7 | **964** |
 | `getty` | 34 | 361 | 28 | 11 | **434** |
 
-Most of `cat` is libc's stdio, and `sh` is the largest v7 command bar the ones tasks C9 and C10
-name — so nothing before task C6 is in danger of the first ceiling. `fsck`, `sort`, `awk` and
-`make` are the four to measure early rather than late.
+Most of `cat` is libc's stdio, and `fsck` is the largest program on the image — measured
+before it was ported, as task C4d's brief demanded, and it came in at a third of the ceiling
+even though it is the longest source in C1–C8. `sort`, `awk` and `make` are the three left to
+measure early rather than late. Nothing before task C6 is in danger of the first ceiling.
 
 **The bottom three rows say what stdio costs.** Every program above `basename` links `printf`
 and a `FILE` buffer, which is the ~1,030 words of bss and most of the text they have in common;
@@ -363,7 +366,15 @@ Two harnesses, and choosing wrong wastes the effort:
   list and real i-list with no boot. C4c took it further: a program that *writes* a device
   writes a file too, so `cmd_mkfs_layout` hands `mkfs` a blank of exactly N blocks and then
   compares what comes back with `b6fsutil -n` **byte for byte** — which is the strongest oracle
-  anywhere under this harness and costs a tenth of a second. C4d inherits both.
+  anywhere under this harness and costs a tenth of a second. C4d took the third step: it
+  **damages** a fixture with `b6fsutil -D`, has `fsck` repair it, and requires `b6fsutil -c` —
+  a separate implementation of the same checks, in host C++ — to find nothing afterwards. Two
+  rules came out of that and hold for anything similar. **Assert that there was something to
+  repair**: every case there requires the host's checker to *fail* first, or a damage spec that
+  had drifted out of step with its fixture would leave a test that fixes nothing and passes.
+  And **a deliberate disagreement is marked, not hidden**: `cmd_fsck_tcounts` carries a
+  `hostblind` marker because the two checkers differ about a field on purpose, and the case
+  fails the day that stops being true.
   A fourth limit came with that, and it is about the *host* rather than the simulator:
   **`getpwent(3)` opens the literal `/etc/passwd`**, so under `b6sim` a program that maps a uid
   to a name reads the build machine's password file and no case may assert what comes back.
@@ -404,10 +415,15 @@ Two harnesses, and choosing wrong wastes the effort:
   holds `kernel/dev/md.c` to the rule that nothing may write block 0 of a pack this system did
   not label. Its oracle is a **byte-for-byte `cmp` against `b6fsutil -n`**, which is available
   because the guest program and the host tool are transcriptions of each other and the only
-  thing between them is a timestamp six bytes into the superblock. Each has its own copy of the
-  image at its own volume number; **3090 is the highest used** (`edit` took 3086, `fsinfo` 3087,
-  `dd` 3088, and `mkfs` takes two — 3089 for its root copy and 3090 for the scratch pack it
-  makes a filesystem on). All but `login` graft a script onto that copy
+  thing between them is a timestamp six bytes into the superblock — and `kernel/test/fsck`
+  (task C4d) for anything that must **repair** what is already on a device, or that needs a
+  pack arriving with something *wrong* on it: it attaches its scratch drive without `-n`,
+  because the damaged filesystem comes from the host, and its oracle is `b6fsutil -c` on what
+  comes back. It is also the only test here that examines **the filesystem the machine is
+  running on**, which costs it an ordering constraint no other test has — see the warning in
+  `kernel/test/fsck.sh`'s header. Each has its own copy of the
+  image at its own volume number; **3092 is the highest used** (`edit` took 3086, `fsinfo` 3087,
+  `dd` 3088, `mkfs` two — 3089 root and 3090 scratch — and `fsck` two more, 3091 and 3092). All but `login` graft a script onto that copy
   with `b6fsutil -a`, and `login` is the exception because what it tests is the thing that reads
   what is typed: it types every character it needs. `mkfs` grafts its script at
   `/etc/mkfstest` rather than at `/etc/mkfs`, which is the program.
@@ -665,3 +681,42 @@ different failures caught with one diagnostic. That is safe only because the sup
 written **last**, so a run that dies partway leaves a volume with no magic rather than a
 plausible wreck. **Commit-last buys you the right not to check first**, and the two together
 are cheaper than a constant in two places.
+
+---
+
+## What task C4d taught
+
+`/etc/fsck` is on the image and [../kernel/test/fsck.sh](../kernel/test/fsck.sh) holds it
+there. It is the first program here that *repairs* a filesystem, and the first that writes a
+filesystem it did not make. [fsck/README.md](fsck/README.md) is the account; four findings
+generalize.
+
+**A second implementation is the best oracle there is, and it earns its keep by
+disagreeing.** `cmd/fsutil/check.cpp` had implemented the same checks on the host for three
+tasks before this one, in C++, sharing no line with the guest — so a damaged filesystem could
+be handed to both, and every disagreement was a bug in one of them. Four turned up, three of
+them in `fsck`: a free-inode count one too high on every clean filesystem this system has ever
+made, a superblock magic number v7's `fsck` never looked at, and a reconnected file that could
+have been left unreachable by `namei()`. **Where two implementations of the same job already
+exist, the test to write is the one that makes them argue.**
+
+**A test that repairs must assert that there was something to repair.** Damaging a fixture and
+requiring a program to fix it is only meaningful if the damage was real, and a spec that has
+drifted out of step with its fixture produces a test that repairs nothing and passes — with no
+symptom, a clean image repaired to a clean image looking exactly like success. So every case
+requires the *other* checker to fail first and succeed afterwards, and requires a second run to
+find nothing, a repair that is not idempotent not having finished. **Assert the precondition,
+not only the result.**
+
+**A deliberate disagreement is marked, not hidden.** One field the two tools differ about on
+purpose — a counter this port maintains nowhere — carries a `hostblind` marker in the harness,
+and the case fails the day the disagreement stops being true. That is the difference between a
+known gap and an unknown one, and it costs three lines of shell.
+
+**A tool that builds things has to learn to break them.** There was no way to corrupt an image
+from `b6fsutil`'s command line; the recipes existed only as C++ inside its own gtests, where a
+guest program cannot reach them. The `-D` verb is the answer, and its one design decision worth
+repeating is that the targets are **symbolic** — `sb.nfree`, `i5.nlink`, `e3.2` — resolved
+through the tool's own word-offset tables, because a shell script computing the byte offset of
+an inode field would put the on-disk layout in a second home. §4's rule about not re-deriving
+constants applies to test scripts as much as to C.

@@ -1,0 +1,15 @@
+
+badfree.img
+** Phase 1 - Check Blocks and Sizes
+** Phase 2 - Check Pathnames
+** Phase 3 - Check Connectivity
+** Phase 4 - Check Reference Counts
+** Phase 5 - Check Free List 
+1 BAD BLKS IN FREE LIST
+BAD FREE LIST
+SALVAGE?  yes
+
+** Phase 6 - Salvage Free List
+11 files 51 blocks 531 free
+
+***** FILE SYSTEM WAS MODIFIED *****

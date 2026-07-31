@@ -1,0 +1,32 @@
+
+dup.img
+** Phase 1 - Check Blocks and Sizes
+6 DUP I=8
+** Phase 1b - Rescan For More DUPS
+6 DUP I=2
+** Phase 2 - Check Pathnames
+DUPS/BAD IN ROOT INODE
+
+CONTINUE?  yes
+
+DUP/BAD  I=8  OWNER=U MODE=100644
+SIZE=64 MTIME=Nov 14 22:13 2023 
+FILE=/small
+REMOVE?  yes
+
+** Phase 3 - Check Connectivity
+** Phase 4 - Check Reference Counts
+BAD/DUP FILE I=8  OWNER=U MODE=100644
+SIZE=64 MTIME=Nov 14 22:13 2023 
+CLEAR?  yes
+
+note: s_tinode says 116 free inodes, the i-list holds 117
+** Phase 5 - Check Free List 
+3 BLK(S) MISSING
+BAD FREE LIST
+SALVAGE?  yes
+
+** Phase 6 - Salvage Free List
+10 files 48 blocks 534 free
+
+***** FILE SYSTEM WAS MODIFIED *****

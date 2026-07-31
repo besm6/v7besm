@@ -206,6 +206,7 @@ get_filename_component(ROOT_MANIFEST ${CMAKE_CURRENT_SOURCE_DIR}/../../root.mani
 
 set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/init
+    ${B6_ROOTFS}/etc/fsck
     ${B6_ROOTFS}/etc/getty
     ${B6_ROOTFS}/etc/mkfs
     ${B6_ROOTFS}/etc/quot
@@ -650,6 +651,35 @@ if(BESM6)
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(mkfs PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
+
+    # fsck -- REPAIRING A FILESYSTEM OVER THE RAW DEVICE, on two volumes (3091 root, 3092
+    # scratch).  Task C4d, and the top of the C4 ladder: fsinfo reads the device, dd moves
+    # bulk data through it, mkfs writes a filesystem onto a pack of its own, and this one
+    # writes a filesystem it did NOT make -- takes a volume that is wrong, works out what
+    # is wrong with it, and puts it right.
+    #
+    # THE ALGORITHM IS NOT WHAT THIS ASSERTS.  The thirteen cmd_fsck_* cases next door
+    # damage an image thirteen ways under b6sim and require `b6fsutil -c' to pronounce
+    # each repair sound, in about a second and a half all told.  What is left for a boot
+    # is the DEVICE: a repair is a scatter of small WRITES -- a directory block, an i-list
+    # block, a directory's size -- and then, in phase 6, the entire free list of a
+    # 2000-block volume laid down again, which is the longest run of raw writes anything
+    # on this system performs.
+    #
+    # It also does the thing no other test here can: it checks the filesystem the machine
+    # is RUNNING ON, read-only, and holds fsck's free count against df's and against the
+    # host's.  That check is sound only for as long as nothing allocates a block after
+    # fsck's sync(2), which is a property of the ORDER of fsck.sh -- see the warning in
+    # its header before editing that file.
+    #
+    # Unlike mkfs.ini this attaches its scratch pack WITHOUT -n: the pack has to arrive
+    # already carrying the damaged filesystem the host built for it, and -n would format
+    # away the thing under test.
+    add_test(NAME fsck
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-fsck.sh
+                ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(fsck PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
     # login -- MULTI-USER, on its own volume (3084).  Task 29b, and the question is a fifth
     # one: everything above types at the single-user shell init hands out, and this one types

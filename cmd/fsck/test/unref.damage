@@ -1,0 +1,4 @@
+# Drop /d/e/f from its parent (entry 2 of ino 6, /d/e).  The inode survives with nothing
+# pointing at it, so phase 4 RECONNECTs it into /lost+found -- which is why the fixture
+# has one, and why an EMPTY one is enough (fsckimg.manifest).
+e6.2=0

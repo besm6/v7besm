@@ -1,0 +1,4 @@
+# The same, but the orphan is a DIRECTORY: drop /d/e from /d (entry 2 of ino 5).  This is
+# the path phase 3 exists for -- the orphan walk up `..', then chgdd() rewriting the
+# reconnected directory's `..' to point at lost+found.
+e5.2=0

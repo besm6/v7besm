@@ -4,14 +4,21 @@
 fsck \- file system consistency check and interactive repair
 .SH SYNOPSIS
 .B /etc/fsck
-[ option ] ...
-[ filesystem ] ...
-] ...
+[
+.B \-y
+] [
+.B \-n
+] [
+.B \-s
+] [
+.B \-S
+]
+.I filesystem ...
 .SH DESCRIPTION
-.I  Fsck
+.I Fsck
 audits and interactively repairs inconsistent conditions for
 the named
-.IR filesystems.
+.IR filesystems .
 If a file system is consistent then the number of files, number of blocks
 used, and number of blocks free are reported.
 If the file system is inconsistent the operator is prompted for concurrence
@@ -21,62 +28,56 @@ all losses are reported.
 The default action for each correction
 is to wait for the operator to respond
 `yes' or `no'.
-Without write permission 
+Without write permission
 .I fsck
 defaults to
 .BR "\-n " action.
 .PP
 These options are recognized:
 .TP
-.B  \-y
+.B \-y
 Assume a yes response to all questions.
 .TP
-.B  \-n
+.B \-n
 Assume a no response to all questions.
 .TP
-.BI \-s X
+.B \-s
 Ignore the actual free list and (unconditionally) construct a new
-one by rewriting the super-block of the file system.  
+one by rewriting the super-block of the file system.
 The file system should be unmounted while this is done,
 or extreme care should be taken that the system is quiescent
 and that it is rebooted immediately afterwards.
 This precaution is necessary so that the old, bad, in-core copy
 of the superblock will not continue to be used, or written on the file system.
 .IP
-The free list is created with optimal interleaving
-according to the specification
-.IR X :
-.RS
-.IP
-.B \-s3
-optimal for RP03
-.br
+.B Note:
+v7's
+.B \-s
+took an argument
+.RI ( X )
+describing how to interleave the new free list \-
+.BR \-s3 ,
 .B \-s4
-optimal for RP04, RP05, RP06
-.br
+or
 .BI \-s c : s
-space free blocks
-.I s
-blocks apart in cylinders of
-.I c
-blocks each.
-.RE
-.IP
-If
-.I X
-is not given,
-the values used when the filesystem was created
-are used.
-If these values were not specified, then 
-.IR c =400,
-.IR s =9
-is assumed.
+\- and this port's takes none.
+The interleave was a rotational optimization for a moving-head pack, described by the
+.I s_m
+and
+.I s_n
+fields of the super-block; neither field exists in this filesystem
+(see
+.IR fs (5)),
+the disk is not such a pack, and
+.IR mkfs (1M)
+builds a plain descending free list.
+So does this.
 .TP
-.BI \-S X
+.B \-S
 Conditionally reconstruct the free list.
 This option
 is like
-.BR \-s X
+.B \-s
 except that the free list is rebuilt only
 if there were no discrepancies discovered in the
 file system.
@@ -85,35 +86,93 @@ on uncontaminated file systems.
 .B \-S
 forces
 .BR \-n .
-.TP
-.B \-t
-If
-.I fsck
-cannot obtain enough memory to keep its tables,
-it uses a scratch files.
-If the 
-.B -t
-option is
-specified, the file named in the next argument
-is used as the scratch file.
-Without the
-.B \-t
-option,
-.I fsck
-prompts if it needs a
-scratch file.
-The file should not be on the
-file system being checked, and if it is not
-a special file or did not already exist, it is
-removed when
-.I fsck
-completes.
 .PP
-If no filesystems are given to 
-.I fsck
-then a default list of file systems is read from
-the file
+.B Note:
+v7's
+.B \-t
+option, which named a scratch file for
+.IR fsck 's
+tables when memory was short, is not implemented and is not needed.
+The tables are allocated from the heap and sized from the super-block;
+on a filesystem filling one drive they come to about eight kilobytes.
+.PP
+.B Note:
+v7 with no
+.I filesystem
+argument read a default list from
 .BR /etc/checklist .
+There is no such file on this system and one filesystem to name, so an argument
+is required.
+.SH "BLOCKS ARE 1024 BYTES"
+A filesystem block here is
+.B 3072
+bytes, and every count
+.I fsck
+reports of used or free space is in
+.B 1024-byte
+blocks \- three of them to the block, as
+.IR df (1M),
+.IR du (1)
+and
+.IR quot (1M)
+also report.
+Two consequences: every such number is a multiple of three, and it is
+.I half
+what a PDP-11 would have printed rather than a sixth, v7 having counted
+512-byte blocks.
+.PP
+A block
+.I number
+is not a measurement and is not converted.
+.RB `` "119 DUP I=8" ''
+names block 119 of the volume, which is where
+.IR dd (1)
+and
+.IR icheck (1M)
+would look for it.
+Nor is a count of occurrences: ``3 BAD BLKS IN FREE LIST'' is three entries, not
+three kilobytes.
+.SH "THE RAW DEVICE"
+Checking the raw device is almost always faster, and on this system it is also
+the only way to check a mounted filesystem, there being no
+.IR ustat (2).
+A transfer through
+.B /dev/rmd0
+is subject to four conditions
+.I fsck
+obeys and a v7 program knows nothing about: the buffer must begin at byte 0 of a
+word, the count must be a whole number of blocks, the buffer's word address must
+be a multiple of 512, and the seek offset must be block-aligned.
+Every read and every write this program makes is one whole block into one of four
+buffers it aligns at startup.
+.PP
+A repair adds a fifth: a raw
+.I write
+may not be sourced from the text segment.
+No buffer here is.
+.SH "SUPER-USER ONLY"
+.B /dev/rmd0
+is mode 0600, because that one node is the contents of every file on the volume.
+.I Fsck
+is not set-user-id and must not become so: it
+.I writes
+that node.
+.PP
+It is also read \- and repaired \- through the same node the running system is
+using.  If
+.I fsck
+modifies a
+.I mounted
+filesystem it prints
+.PP
+.RS
+***** BOOT UNIX (NO SYNC!) *****
+.RE
+.PP
+and does not return, since the kernel's in-core super-block is now older than the
+disk's and letting it be written back would undo the repair.
+The machine must be halted rather than shut down.
+.SH "WHAT IS CHECKED"
 .PP
 .ne 10
 Inconsistencies checked are as follows:
@@ -130,9 +189,7 @@ Incorrect link counts.
 4.
 Size checks:
 .RS
-Incorrect number of blocks in file.
-.br
-Directory size not a multiple of 16 bytes.
+Directory size not a multiple of 24 bytes.
 .RE
 .TP
 5.
@@ -152,38 +209,92 @@ Inode number out of range.
 8.
 Super Block checks:
 .RS
-More than 65536 inodes.
+Not a filesystem (bad magic number).
+.br
+A geometry this system cannot read: block size, inodes per block or
+addresses per inode other than its own.
 .br
 More blocks for inodes than there are in the file system.
 .RE
 .TP
 9.
 Bad free block list format.
-.TP
-10.
-Total free block and/or free inode count incorrect.
+.PP
+.B Note:
+v7 listed a tenth, ``total free block and/or free inode count incorrect'', as a
+repair.  The two super-block counters it names,
+.I s_tfree
+and
+.IR s_tinode ,
+are maintained by nothing in this system \(em not by the kernel, which never
+touches them \(em so they are stale on any filesystem that has been written to
+and a repair would be undone by the next write.
+.I Fsck
+reports a discrepancy as a note, asks nothing, and leaves both fields correct
+when it has had reason to rewrite the super-block anyway.
 .PP
 Orphaned files and directories (allocated but unreferenced) are,
 with the operator's concurrence, reconnected by
-placing them in the "lost+found" directory.
-The name assigned is the inode number. The only restriction
-is that the directory "lost+found" must preexist
-in the root of the filesystem being checked and
-must have empty slots in which entries can be made.
-This is accomplished by making "lost+found", copying
-a number of files to the directory, and then removing them
-(before
-.I
-fsck
-is executed).
+placing them in the
+.B lost+found
+directory.
+The name assigned is the inode number.
+The only restriction
+is that
+.B lost+found
+must preexist
+in the root of the filesystem being checked.
 .PP
-Checking the raw device is almost always faster.
+.B Note:
+v7 added that it must also ``have empty slots in which entries can be made'',
+obtained by creating files in it and deleting them again.
+That is not true here.
+.I Fsck
+rounds the directory's size up to a whole block before it looks, a block holds
+128 entries, and everything past
+.B .
+and
+.B ..
+is zero \(em so a
+.B lost+found
+made by
+.IR mkdir (1)
+and never touched has 126 free slots.
+.SH DIAGNOSTICS
+.TP
+.BI "Can't stat " filesystem
+The argument does not exist.
+.TP
+.BI "Can't open " filesystem
+It exists and could not be opened for reading.
+.TP
+.IB filesystem ": not a filesystem"
+The super-block's magic number is wrong.  Nothing is checked.
+.TP
+.IB filesystem ": filesystem geometry mismatch"
+It is a filesystem, made by a system whose block size, inodes per block or
+addresses per inode differ from this one's.  The kernel would refuse to mount it
+for the same reason; see
+.IR fs (5).
+.TP
+.BI "Size check: fsize " n " isize " m
+The super-block's two sizes are not consistent with each other.
+.TP
+.B Can't get memory
+The tables do not fit.  On a filesystem this system can address they always do.
+.TP
+.BI "CAN NOT READ: BLK " n
+An I/O error.  On the raw device this most often means the transfer broke one of
+the conditions above rather than that the disk is bad.
+.TP
+.B Incompatible options: \-n and \-s
+Salvaging the free list is a write.
 .SH FILES
-/etc/checklist
-contains default list of file systems to check.
+.TP
+/lost+found
+directory for connecting files with no directory entry
 .SH "SEE ALSO"
-dcheck(1), icheck(1),
-checklist(5), fs(5), crash(8)
+dcheck(1M), icheck(1M), mkfs(1M), df(1M), fs(5)
 .SH BUGS
 Inode numbers for
 .B .
@@ -194,5 +305,14 @@ in each directory should be checked for validity.
 The
 .B \-b
 option of
-.IR icheck (1)
+.IR icheck (1M)
 should be available.
+.br
+A second mounted filesystem is not recognized as mounted: only the root is, and
+only because its name can be derived.  There is no
+.IR ustat (2)
+and, so far, nothing else to mount.
+.SH "EXIT STATUS"
+0 if every filesystem named was examined, 4 if interrupted, 8 on a fatal error.
+A filesystem that could not be opened or was not a filesystem is reported and
+skipped; as in v7, that alone does not change the exit status.

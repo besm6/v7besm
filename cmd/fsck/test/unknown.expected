@@ -1,0 +1,24 @@
+
+unknown.img
+** Phase 1 - Check Blocks and Sizes
+UNKNOWN FILE TYPE I=8
+CLEAR?  yes
+
+** Phase 2 - Check Pathnames
+UNALLOCATED  I=8  OWNER=U MODE=0
+SIZE=0 MTIME=Jan  1 00:00 1970 
+NAME=/small
+REMOVE?  yes
+
+** Phase 3 - Check Connectivity
+** Phase 4 - Check Reference Counts
+note: s_tinode says 116 free inodes, the i-list holds 117
+** Phase 5 - Check Free List 
+3 BLK(S) MISSING
+BAD FREE LIST
+SALVAGE?  yes
+
+** Phase 6 - Salvage Free List
+10 files 48 blocks 534 free
+
+***** FILE SYSTEM WAS MODIFIED *****

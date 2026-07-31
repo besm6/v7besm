@@ -1,0 +1,5 @@
+# The two counters this port does not maintain.  fsck must NOTE them and ask nothing --
+# and must therefore not modify the filesystem, which is what makes this case's
+# `unrepairable' marker mean what it says.
+sb.tfree=0
+sb.tinode=0

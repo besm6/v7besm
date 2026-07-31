@@ -3,6 +3,7 @@
 //
 #include "check.h"
 
+#include <cstdio>
 #include <cstring>
 #include <set>
 #include <vector>
@@ -13,20 +14,34 @@
 namespace {
 
 //
-// A cap on how many times one message is printed.  A thoroughly scrambled image
-// can produce a line per block, and 2000 identical complaints are less useful
-// than ten and a count.
+// A file mode, in the base a file mode is written in.  This was `"0" +
+// std::to_string(mode)' until task C4d -- a leading zero in front of a DECIMAL
+// number, so 0100644 came out as `mode 033188'.
 //
-constexpr int MAX_SAME = 10;
+std::string octal(int64_t v)
+{
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "0%llo", static_cast<unsigned long long>(v));
+    return buf;
+}
+
+//
+// A cap on how many problems are reported at all -- not, despite an earlier
+// comment here, on how many times any one message is printed: error() counts
+// every complaint into one total and there is no per-message bookkeeping.  A
+// thoroughly scrambled image can produce a line per block, and 2000 complaints
+// are less useful than a hundred and a note that there were more.
+//
+constexpr int MAX_REPORTED = 100;
 
 } // namespace
 
 void Checker::error(const std::string &msg)
 {
     nerror++;
-    if (nerror <= MAX_SAME * 10)
+    if (nerror <= MAX_REPORTED)
         *os << msg << "\n";
-    else if (nerror == MAX_SAME * 10 + 1)
+    else if (nerror == MAX_REPORTED + 1)
         *os << "... further problems suppressed\n";
 }
 
@@ -114,8 +129,7 @@ void Checker::pass1_inodes()
         const int64_t fmt = ip.mode & IFMT;
         if (fmt != IFDIR && fmt != IFREG && fmt != IFCHR && fmt != IFBLK && fmt != IFMPC &&
             fmt != IFMPB)
-            error("inode " + std::to_string(ino) + ": bad file type in mode 0" +
-                  std::to_string(ip.mode));
+            error("inode " + std::to_string(ino) + ": bad file type in mode " + octal(ip.mode));
 
         //
         // A device has no blocks -- di_addr[0] IS its major/minor, so walking the

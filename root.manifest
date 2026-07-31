@@ -90,6 +90,19 @@ dir /usr/test
 dir /tmp
 mode 0777
 
+# fsck(1M)'s reconnect target, task C4d.  An orphaned inode -- allocated, with nothing in
+# any directory pointing at it -- is put here under its i-number, and fsck can only do that
+# if the directory ALREADY EXISTS: it has no way to make one, having no free-list
+# discipline of its own to allocate with.
+#
+# AN EMPTY ONE IS ENOUGH, which fsck.1m denies.  That page says to create files in it and
+# delete them again so that empty slots exist; here linkup() rounds the directory's size up
+# to a whole block, a block holds DIRPB (128) entries, and everything past `.' and `..' is
+# zeros -- alloc() clears the buffer it hands out (kernel/alloc.c) and b6fsutil's dir.cpp
+# starts from a zero Block.  So this has 126 free slots the moment it is made.  cmd/fsck's
+# manual page carries the correction.
+dir /lost+found
+
 # guest's home, and the first directory here that is not root's.  login(1) chdir()s to the
 # pw_dir field of /etc/passwd and prints `No directory' if it cannot, so the account is only
 # usable because this exists -- and being uid 7's is what lets a non-root shell write in it.
@@ -125,6 +138,14 @@ mode 0755
 # the volume with one command.  cmd/mkfs/README.md is the account of that write path.
 file /etc/mkfs          # cmd/mkfs -- make a filesystem, on /dev/rmd1 and nothing else here
 source ../../rootfs/etc/mkfs
+mode 0755
+
+# quot's and mkfs's placement again, and the sharpest case of their reason: this one WRITES
+# other people's files.  /dev/rmd0 is mode 0600 because that node is every file's contents,
+# and a setuid fsck would hand the whole volume to anyone who could think of an i-number.
+# Not setuid; root-only; section 1M.
+file /etc/fsck          # cmd/fsck -- check a filesystem, and repair it
+source ../../rootfs/etc/fsck
 mode 0755
 
 file /bin/sh            # cmd/sh: S. R. Bourne's shell

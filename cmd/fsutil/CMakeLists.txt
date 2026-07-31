@@ -23,6 +23,7 @@ add_library(fsengine STATIC
     manifest.cpp
     command.cpp
     check.cpp
+    damage.cpp
 )
 
 #

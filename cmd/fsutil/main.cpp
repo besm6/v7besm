@@ -16,10 +16,12 @@
 #include <ctime>
 #include <iostream>
 #include <string>
+#include <vector>
 
 #include "check.h"
 #include "command.h"
 #include "create.h"
+#include "damage.h"
 #include "manifest.h"
 #include "simh.h"
 
@@ -34,6 +36,7 @@ void usage()
               << "       b6fsutil -a image path host-file        -- add one file\n"
               << "       b6fsutil -x image directory             -- extract everything\n"
               << "       b6fsutil -S [--volume=N] in out         -- convert to/from SIMH\n"
+              << "       b6fsutil -D spec [-D spec] ... image    -- damage it, on purpose\n"
               << "\n"
               << "  -v          verbose; twice also lists the volume's contents\n"
               << "  -s N        volume size in blocks (default " << MDNBLK << ", one EC-5052)\n"
@@ -41,7 +44,12 @@ void usage()
               << "  -M file     populate the new filesystem from a manifest\n"
               << "  -T N        timestamp to stamp the image with, for reproducible output\n"
               << "  --volume=N  SIMH volume number (2048..4095); taken from the output\n"
-              << "              filename when omitted, exactly as `attach' does\n";
+              << "              filename when omitted, exactly as `attach' does\n"
+              << "  -D spec     corrupt one word.  Repeatable.  See damage.h.\n"
+              << "                sb.<field>=V    a superblock word (nfree, isize, magic, ...)\n"
+              << "                i<N>.<field>=V  an inode word (mode, nlink, addr0, ...)\n"
+              << "                e<N>.<K>=V      the i-number of entry K of directory N\n"
+              << "                b<N>.<K>=V      word K of block N\n";
 }
 
 //
@@ -96,6 +104,7 @@ int main(int argc, char **argv)
     int64_t nblk = MDNBLK, ninodes = 0, now = 0;
     int volume = 0;
     std::string manifest_file;
+    std::vector<std::string> damage_specs;
 
     int argi = 1;
     for (; argi < argc && argv[argi][0] == '-' && argv[argi][1]; argi++) {
@@ -121,6 +130,8 @@ int main(int argc, char **argv)
             now = std::atoll(argv[++argi]);
         else if (std::strcmp(a, "-M") == 0 && argi + 1 < argc)
             manifest_file = argv[++argi];
+        else if (std::strcmp(a, "-D") == 0 && argi + 1 < argc)
+            damage_specs.push_back(argv[++argi]);
         else if (std::strncmp(a, "--volume=", 9) == 0)
             volume = std::atoi(a + 9);
         else {
@@ -161,6 +172,22 @@ int main(int argc, char **argv)
 
             std::cout << image << ": " << fs.sb.fsize << " blocks, " << fs.inode_count()
                       << " inodes, " << fs.sb.tfree << " blocks free\n";
+            fs.close();
+            return 0;
+        }
+
+        //
+        // Damage.  Applied in the order given, and each one is logged: a test
+        // whose corruption is invisible in its own transcript is unreadable.
+        // Note the absence of a sync() -- damage.h says why.
+        //
+        if (!damage_specs.empty()) {
+            Filesystem fs;
+            fs.open(image, true);
+
+            for (const std::string &spec : damage_specs)
+                damage::apply(fs, spec, std::cout);
+
             fs.close();
             return 0;
         }

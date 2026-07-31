@@ -16,9 +16,19 @@ date >/dev/console
 # attached read-only.  console.ini's expect stops just short of the seconds.
 #
 # What the v7 rc did next still wants a program this system has not got yet:
-# fsck and mount (task C4), cron and update (C10), accton (C8).  Each line
-# comes back as its command is ported.  There is nothing to mount in any case
-# -- one EC-5052 drive is the whole of the store, and swap lives on the drums.
+# mount (task C4), cron and update (C10), accton (C8).  Each line comes back as
+# its command is ported.  There is nothing to mount in any case -- one EC-5052
+# drive is the whole of the store, and swap lives on the drums.
+#
+# FSCK IS THE EXCEPTION, and it is C4d's one loose end: /etc/fsck exists now and
+# `/etc/fsck -y /dev/rmd0 >/dev/console' would be the v7 line.  It is not here
+# for the same reason the rm below is not -- a line in this file has exactly one
+# home for its assertion, kernel/test/console, which is DISABLED (kernel task
+# 35).  Note also that a fsck which REPAIRS the mounted root does not return:
+# it prints BOOT UNIX (NO SYNC!) and spins, deliberately, because the kernel's
+# in-core superblock would otherwise undo the repair.  So whoever adds the line
+# adds it knowing that a damaged root stops the boot dead, which is what it is
+# supposed to do and is not what an unattended test wants.
 #
 # rm left that list with task C1b, and so did cp, ln and mv -- but the only
 # line of the v7 rc that used rm cleared /tmp of an editor's leftovers, and

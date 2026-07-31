@@ -1,0 +1,10 @@
+
+tcounts.img
+** Phase 1 - Check Blocks and Sizes
+** Phase 2 - Check Pathnames
+** Phase 3 - Check Connectivity
+** Phase 4 - Check Reference Counts
+note: s_tinode says 0 free inodes, the i-list holds 116
+** Phase 5 - Check Free List 
+note: s_tfree says 0 free blocks, the list holds 177
+11 files 51 blocks 531 free
