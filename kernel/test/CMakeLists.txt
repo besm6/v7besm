@@ -207,6 +207,7 @@ get_filename_component(ROOT_MANIFEST ${CMAKE_CURRENT_SOURCE_DIR}/../../root.mani
 set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/init
     ${B6_ROOTFS}/etc/getty
+    ${B6_ROOTFS}/etc/mkfs
     ${B6_ROOTFS}/etc/quot
     ${B6_ROOTFS}/etc/group
     ${B6_ROOTFS}/etc/motd
@@ -624,6 +625,31 @@ if(BESM6)
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(dd PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
+
+    # mkfs -- MAKING A FILESYSTEM ON A SCRATCH DRIVE, on two volumes (3089 root, 3090
+    # scratch).  Task C4c, and it is the first test here in three separate ways: the first to
+    # attach TWO disks, the first to WRITE a raw device at all -- kernel/dev/md.c's mdwrite()
+    # was dead code until this one, and `dd of=/dev/rmd0' had been written and documented
+    # since C4b without ever running -- and the first whose subject is a filesystem that did
+    # not exist when the machine booted.
+    #
+    # THE LAYOUT IS NOT WHAT THIS ASSERTS.  cmd_mkfs_layout next door already compares what
+    # mkfs writes against what `b6fsutil -n' writes, byte for byte, under b6sim in a tenth of
+    # a second and with a diffable failure -- so by the time this boots, the only open
+    # question is the DEVICE: a write through physio() and mdstrategy() rather than a read, a
+    # second minor number, and a second pack under one controller.  It then makes the same
+    # byte comparison a second time over that path, which is the strongest oracle in C4.
+    #
+    # It also holds the driver to the one thing a two-drive machine exposed: the service
+    # words md.c writes the sector header from are per CONTROLLER, and it maintains only the
+    # address in them, so a written zone carries the volume number of whichever pack was last
+    # READ.  run-mkfs.sh checks the scratch pack still calls itself 3090, which it does only
+    # because nothing writes its block 0.  cmd/mkfs/README.md is the account.
+    add_test(NAME mkfs
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-mkfs.sh
+                ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(mkfs PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
     # login -- MULTI-USER, on its own volume (3084).  Task 29b, and the question is a fifth
     # one: everything above types at the single-user shell init hands out, and this one types

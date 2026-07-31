@@ -1,130 +1,230 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
-.TH MKFS 1M 
+.TH MKFS 1M
 .SH NAME
 mkfs \- construct a file system
 .SH SYNOPSIS
 .B /etc/mkfs
-special
-proto
+special nblocks [ ninodes ]
 .SH DESCRIPTION
 .I Mkfs
-constructs a file system
-by writing on the special file
+constructs a file system on the special file
 .I special
-according to the directions
-found in
-the prototype file
-.I proto.
-The prototype file
-contains tokens separated by spaces or
-new lines.
-The first token is the name of a file
-to be copied onto block zero as
-the bootstrap program,
-see
-.IR bproc (8).
-The second token is a number specifying the
-size of the created file system.
-Typically it will be the number of blocks on the device,
-perhaps diminished
-by space for swapping.
-The next token is the number of i-nodes
-in the i-list.
-The next set of tokens comprise the specification
-for the root file.
-File specifications consist of tokens
-giving the mode,
-the user-id,
-the group id,
-and the initial contents of the file.
-The syntax of the contents field
-depends on the mode.
+by writing a superblock, an empty i-list and a free list onto it, and
+leaves it holding one empty directory: its root.
+.I Nblocks
+is the size of the file system to make.
 .PP
-The mode token for a file is a 6 character string.
-The first character
-specifies the type of the file.
-(The characters
-.B \-bcd
-specify regular, block special,
-character special and directory files
-respectively.)
-The second character of the type
-is either
-.B u
-or
-.B \-
-to specify set-user-id mode or not.
-The third is
-.B g
-or
-.B \-
-for the set-group-id mode.
-The rest of the mode
-is a three digit octal number giving the
-owner, group, and other read, write, execute
-permissions, see
-.IR chmod (1).
+.I Ninodes
+is the number of i-nodes to leave room for.
+It is rounded up to fill the last block of the i-list,
+and defaults to one i-node per two blocks \-
+1024 of them on a whole drive, in 32 blocks, or 1.6% of the volume.
+v7's ratio was one per four blocks and 4.xBSD's one per sixteen; neither transfers.
+A block here is 3072 bytes, six times a PDP\-11's,
+so a file that cost six blocks there costs one here
+while still costing exactly one i-node,
+and the natural ratio is nearer 1:1 than 1:4.
 .PP
-Two decimal number
-tokens come after the mode; they specify the
-user and group ID's of the owner of the file.
-.PP
-If the file is a regular file,
-the next token is a pathname
-whence the contents and size are copied.
-.PP
-If the file is a block or character special file,
-two decimal number tokens
-follow which give the major and minor device numbers.
-.PP
-If the file is a directory,
+.B "Note:"
+.B "the prototype-file form is not ported."
+v7's
 .I mkfs
-makes the entries
-.BR . ""
-and
-.B  ..
-and then
-reads a list of names and
-(recursively)
-file specifications for the entries
-in the directory.
-The scan is terminated with the
-token
-.BR $ .
-.PP
-If the prototype file cannot be opened and
-its name consists of a string of digits,
-.I mkfs
-builds a file system with a single
-empty directory on it.
-The size of the file system is the value
-of
-.I proto
-interpreted as a decimal number.
-The number of i-nodes is calculated
-as a function of the filsystem size.
-The boot program is left uninitialized.
-.PP
-A sample prototype specification follows:
-.PP
+took either a proto file \- a bootstrap program, a size, an i-node count,
+and a recursive listing of the files to put on the new volume, terminated with
+.B $
+\- or, if that argument was a string of digits, a bare size.
+Only the second is here, and this is the one deliberate divergence in the program.
+Four reasons:
+.IP \(bu 3
+the bootstrap token is meaningless on this machine.
+The simulator loads the kernel image directly and nothing reads block 0;
+there is no
+.IR bproc (8)
+here and none is planned.
+.IP \(bu 3
+.IR cfile (),
+the recursive half, has a 3072-byte block buffer and a 512-entry indirect block
+as automatics \- about 1024 words of frame per directory level, against a stack of
+4096 words that nothing checks.
+.IP \(bu 3
+those two buffers are exactly the ones a raw transfer cannot use.
+See
+.B "THE RAW DEVICE"
+below: a buffer handed to the disk must be a 512-word-aligned static,
+which a recursive function cannot have.
+.IP \(bu 3
+.I b6fsutil
+on the build host does the same job better, from a manifest, and is how every
+image in this system is in fact populated.
+.SH "THE LAYOUT"
 .nf
-.in +5
-/usr/mdec/uboot
-4872 55
-d\-\-777 3 1
-usr	d\-\-777 3 1
-	sh	\-\-\-755 3 1 /bin/sh
-	ken	d\-\-755 6 1
-		$
-	b0	b\-\-644 3 1 0 0
-	c0	c\-\-644 3 1 0 0
-	$
-$
-.in -5
+block 0             the bootstrap.  Written by nothing here, and read by nothing.
+block 1             the superblock.
+blocks 2..isize\-1   the i-list.
+blocks isize..      data.
 .fi
-.SH "SEE ALSO"
-filsys(5),
-dir(5),
-bproc(8)
+.PP
+The first data block is reported when
+.I mkfs
+finishes, and is the superblock's
+.I s_isize
+\- which is that block number and not a count of i-list blocks.
+.PP
+.B "Note:"
+i-node 1 is left unallocated and there is
+.B no bad-blocks i-node.
+v7 wrote a dummy regular file there holding the blocks its
+.IR badblk ()
+had rejected; that routine returned 0 unconditionally even on the PDP\-11,
+the kernel's
+.IR ialloc ()
+will not hand out any i-node below the root's in any case,
+and the dummy serves only to give
+.IR fsck (1M)
+something to be puzzled by.
+.PP
+.B "Note:"
+the free list is built plainly, from the end of the volume down, so that the kernel
+allocates upwards.
+v7's
+.I "[ m n ]"
+arguments and the rotational interleave they described are gone with the
+.I s_m
+and
+.I s_n
+fields, which this port's superblock does not have: the pattern does not survive the
+first churn of the free list, and this is not a drive whose latency it would hide.
+.SH "BLOCKS HERE ARE 3072 BYTES"
+.B "Note:"
+.I nblocks
+is a
+.B filesystem
+block \- 3072 bytes, 512 words of 48 bits \- and so is every number
+.I mkfs
+prints.
+One EC\-5052 drive is
+.B 2000
+of them.
+.PP
+This is deliberately not the 1024-byte block that
+.IR df (1M),
+.IR du (1),
+.IR quot (1M)
+and
+.IR ls (1)
+report in.
+Those programs
+.I measure
+a filesystem and a reader of theirs should not have to know its block size;
+.I mkfs
+.I writes
+one, and its argument is the superblock's
+.I s_fsize
+verbatim.
+Expect
+.IR df (1M)
+to report
+.B three times
+the number
+.I mkfs
+was given.
+.SH "THE RAW DEVICE"
+.B "Note:"
+.I mkfs
+is the first program on this system that
+.B writes
+a raw device, and a raw transfer here obeys four conditions that v7 knew nothing of:
+the buffer must begin at byte 0 of a word, the count must be a whole number of
+filesystem blocks, the buffer's word address must be a multiple of 512,
+and the seek must be block-aligned.
+The first three fail with
+.BR EFAULT " or " EIO ;
+the fourth is silent and reads or writes the wrong block.
+.I Mkfs
+therefore has one buffer, aligned at startup, and every transfer names it.
+See
+.I cmd/mkfs/README.md
+in the source tree, and
+.I cmd/df/README.md
+for the conditions themselves.
+.SH "SUPER-USER ONLY"
+.B "Note:"
+.I mkfs
+writes the raw disk, and
+.I /dev/rmd0
+is mode 0600 because that one node is the contents of every file on the volume.
+So this program works for the super-user and for nobody else.
+It is deliberately
+.B not
+set-user-id, and the reason is sharper than
+.IR df (1M)'s:
+a set-uid
+.I mkfs
+would let anybody destroy every file on a volume with one command.
+.SH WARNING
+.I Mkfs
+does not know which volume the system is running from, and nothing stops you naming it.
+.I "mkfs /dev/rmd0"
+destroys the root filesystem while it is mounted.
+There is no check to be made: the raw major and the block major are different numbers
+and nothing on this machine maps one to the other.
+v7 had no guard either.
+.SH FILES
+.I /dev/rmd1
+\- the second drive, and the only volume on this system it is safe to name.
+There is one drive per
+.I minor
+number, bit 5 the controller, bits 4\-3 the group and bits 2\-0 the drive;
+there are no partitions.
+.SH DIAGNOSTICS
+.B "a filesystem needs at least 8 blocks"
+and
+.B "the i-list does not leave room for any data blocks"
+are the two size checks, and both happen before anything is written.
+.PP
+.B "cannot read block " \fIn\fR
+where
+.I n
+is one less than
+.IR nblocks :
+.I mkfs
+reads the last block before writing the first, which is how it finds out whether the
+drive is that big without knowing the drive's size.
+An
+.I errno
+of 5 there means the device refused the block number \- the volume is smaller than
+.I nblocks
+\- and a count of 0 means the special is an ordinary file that is too short.
+.PP
+.B "cannot write block " \fIn\fR
+.RI "with an " errno " of 14 means one of the four conditions in " "THE RAW DEVICE"
+is broken; 5 means the driver refused the transfer.
+.PP
+.B "out of free space"
+cannot happen and means the free list this program has just built is inconsistent.
+.PP
+The superblock is written
+.BR last ,
+which is the commit point: a
+.I mkfs
+that fails partway leaves a volume with no magic number, which nothing will mount,
+rather than one that looks plausible.
 .SH BUGS
-There should be some way to specify links.
+The data area is not zeroed, so a volume made over an old file system still holds
+its blocks until they are allocated.
+Nothing leaks through the file system \- the kernel's
+.IR alloc ()
+clears a block on the way out \- but the raw device still has them.
+.PP
+.B "Note:"
+v7's entry here was that there should be some way to specify links.
+It went with the prototype language.
+.SH "SEE ALSO"
+filsys(5), dir(5), df(1M), quot(1M)
+.br
+.B "Note:"
+v7's SEE ALSO named
+.IR bproc (8),
+which does not exist here \- see the bootstrap block above \- and
+.IR fsck (1M),
+which is not ported yet.

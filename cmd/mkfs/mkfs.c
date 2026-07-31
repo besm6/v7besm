@@ -1,618 +1,430 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 /* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
-/*
- * Make a file system prototype.
- * usage: mkfs filsys proto/size [ m n ]
- */
-#define	NIPB	(BSIZE/sizeof(struct dinode))
-#define	NINDIR	(BSIZE/sizeof(daddr_t))
-#define	NDIRECT	(BSIZE/sizeof(struct direct))
-#define	LADDR	10
-#define	MAXFN	500
-#define	itoo(x)	(int)((x+15)&07)
-#ifndef STANDALONE
+//
+// mkfs -- construct a file system.
+//
+//	/etc/mkfs special nblocks [ ninodes ]
+//
+// THE FIRST PROGRAM HERE THAT WRITES A RAW DEVICE.  Until this one, kernel/dev/md.c's
+// mdwrite() was dead code: df and quot read /dev/rmd0, dd read it and wrote only files,
+// and nothing had ever pushed a block the other way.  What that cost is at the foot of
+// this comment and in ../mkfs/README.md; the short of it is that the write side obeys the
+// same four alignment conditions the read side does (../df/README.md) plus a fifth of its
+// own, and that the driver's sector header turns out to be shared between drives.
+//
+// THE PROTOTYPE FILE IS NOT PORTED, and that is the one deliberate divergence.  v7's mkfs
+// took either a proto file -- a boot program, a size, and a recursive listing of files to
+// put on the new volume -- or a bare decimal size, and this port takes only the second.
+// Four reasons, in the order they bite:
+//
+//   * The boot block is meaningless here.  v7 read a PDP-11 a.out and copied its text and
+//     data onto block 0; on this machine SIMH `load's the kernel and block 0 is not read
+//     by anything.  See bproc(8), which this system also does not have.
+//   * cfile() recurses once per directory level with `char db[BSIZE]' and
+//     `daddr_t ib[NINDIR]' as automatics -- 1024 words of frame per level against a stack
+//     of 4096 words that nothing checks (../README.md SS6).  Three levels of proto and the
+//     program is off the end of its own stack with no diagnostic.
+//   * Those two buffers are exactly the ones a raw write cannot use, needing to be
+//     MDALIGN-aligned statics, which is a thing a recursive function cannot have.
+//   * `b6fsutil -n -M manifest' on the host does the same job better, and is how every
+//     image in this tree is in fact populated -- ../../root.manifest is the proto file
+//     this system really uses.  There is no proto fixture anywhere in the tree.
+//
+// mkfs.1m says all of that again, which is ../README.md SS10's rule.
+//
+// WHAT IS LEFT IS CLOSER TO cmd/fsutil/create.cpp THAN TO v7's mkfs.c.  That file is the
+// host's mkfs, and it is this program's oracle: `b6fsutil -n -s N -T t' produces the image
+// this produces, byte for byte, and cmd/mkfs/test/ asserts exactly that under b6sim.  So
+// where the two could differ, this follows create.cpp -- the free list built descending,
+// the free-inode cache seeded descending, no bad-blocks inode, one inode per two blocks --
+// and where v7 differs, v7 is wrong for this machine or merely arbitrary.  Three of those
+// are worth naming here because a reader who knows v7's mkfs will look for them:
+//
+//   * NO BAD-BLOCKS INODE.  v7 writes a dummy IFREG inode 1 holding the bad blocks
+//     bflist() found.  There are no bad blocks to find (v7's own badblk() returns 0
+//     unconditionally), ialloc() refuses to hand out anything below ROOTINO in any case,
+//     and the dummy only gives fsck something to be puzzled by.  Inode 1 is left zero.
+//   * s_tinode IS SET, NOT ACCUMULATED.  v7 adds NIPB per i-list block and subtracts one
+//     per inode written, which here would come to ninodes-1: it counts the bad-blocks
+//     inode that this program does not write.  It is ninodes-2 -- everything but inode 1,
+//     which cannot be allocated, and the root, which is in use.  Nothing but the oracle
+//     catches that; it is a one-off arithmetic error in a field the kernel then carries
+//     forever.
+//   * NO FREE-LIST INTERLEAVE.  v7's bflist() lays the free list out in a rotational
+//     pattern described by s_m/s_n and the optional `[ m n ]' arguments.  struct filsys
+//     has no s_m or s_n in this port (sys/filsys.h says why), the drive is not a moving-head
+//     pack whose latency that pattern was hiding, and the pattern does not survive the
+//     first churn anyway.  The list is built plainly, descending, and the arguments are gone.
+//
+// EVERYTHING THIS PROGRAM NAMES IS A FILESYSTEM BLOCK -- 3072 bytes -- and that is a
+// deliberate exception to ../README.md SS4, which says a program reports 1024-byte blocks.
+// The argument IS s_fsize and the report IS s_isize and an inode count: these are on-disk
+// quantities, not measurements, and a mkfs that had to be told 6000 for a drive that holds
+// 2000 blocks would be lying about the thing it is writing.  KBPB does not appear in this
+// file.  mkfs.1m has a section saying df(1M) will report three times these numbers.
+//
+// THE SUPERBLOCK IS WRITTEN LAST, and that is the commit point.  Until it lands the volume
+// has no magic and sbcheck() will not mount it, so a run that dies partway leaves something
+// obviously unfinished rather than something that looks plausible.  That is also what makes
+// the size check safe to be a probe (see main()) rather than a duplicated MDNBLK.
+//
+// THE RAW WRITE, which is what the task was really about.  A transfer through /dev/rmd1
+// goes physio() -> mdstrategy() and those two impose the same four conditions on a write
+// that ../df/README.md documents for a read:
+//
+//   * the buffer must start at byte #0 of a word		(physio, kernel/dev/bio.c)
+//   * the count must be a whole number of BSIZEs		(MDTRACK == BSIZEW, dev/md.c)
+//   * the buffer's word address must be MDALIGN-aligned		 (dev/md.c)
+//   * the seek offset must be a multiple of BSIZE	  (physio truncates, silently)
+//
+// and one more that only a write can break: physio() refuses a transfer whose base is
+// below u.u_tsize, so a raw write may never be sourced from the text segment -- from a
+// string literal or a const array.  It cannot fire today, b6_prog() producing FMAGIC and
+// getxfile() forcing u_tsize to 0 for that magic, and it is a live trap the day anything
+// here is linked pure.  README.md is the account.
+//
+// So there is ONE buffer, `blk', an int array stepped forward to an aligned word at
+// startup, and every read and every write names it and nothing else.  sblock is not it:
+// a struct filsys cannot be aligned, so committing the superblock copies it into blk word
+// by word.  df.c copies the other way for the same reason, and between them the rule is
+// that the aligned buffer is the only object either program ever hands to the kernel.
+//
+// NOT SETUID, and it must not become so: /dev/rmd0 is mode 0600 because that one node is
+// every file's contents.  mkfs is root-only and mkfs.1m says so.  ../README.md SS8.
+//
+
+// The order here does not matter and cannot be made to: clang-format sorts a block of <>
+// includes alphabetically.  Each header includes what it uses; sys/dir.h is the precedent.
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
-#include <a.out.h>
-#endif
-#include <sys/param.h>
-#include <sys/ino.h>
-#include <sys/inode.h>
-#include <sys/filsys.h>
-#include <sys/fblk.h>
+#include <stdlib.h>
 #include <sys/dir.h>
-time_t	utime;
-#ifndef STANDALONE
-FILE 	*fin;
-#else
-int	fin;
-#endif
-int	fsi;
-int	fso;
-char	*charp;
-char	buf[BSIZE];
-union {
-	struct fblk fb;
-	char pad1[BSIZE];
-} fbuf;
-#ifndef STANDALONE
-struct exec head;
-#endif
-char	string[50];
-union {
-	struct filsys fs;
-	char pad2[BSIZE];
-} filsys;
-char	*fsys;
-char	*proto;
-int	f_n	= MAXFN;
-int	f_m	= 3;
-int	error;
-ino_t	ino;
-long	getnum();
-daddr_t	alloc();
+#include <sys/fblk.h>
+#include <sys/filsys.h>
+#include <sys/ino.h>
+#include <sys/param.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
 
-main(argc, argv)
-char *argv[];
+// What this file assumes of the layout, asserted rather than re-derived (../TODO.md,
+// task C4).  The headers carry the rest: sys/filsys.h asserts the superblock is exactly
+// one block, sys/ino.h that INOPB dinodes tile one, sys/dir.h that DIRPB entries do.
+// Restated here are only the ones this file's ARITHMETIC leans on -- itod()/itoo() and
+// the `dp + itoo(...)' step, and "two entries and the rest zero is a whole block".
+_Static_assert(BSIZE == BSIZEW * NBPW, "a block must be BSIZEW words of NBPW bytes");
+_Static_assert(1 + NICFREE <= BSIZEW, "a chain block must fit the block buffer");
+_Static_assert(INOPB * sizeof(struct dinode) == BSIZE, "INOPB dinodes must tile a block");
+_Static_assert(DIRPB * sizeof(struct direct) == BSIZE, "DIRPB entries must tile a block");
+_Static_assert(ROOTINO == 2, "the root is inode 2 and the free-inode seed starts above it");
+
+// mdstrategy()'s half-zone, which is also a block: kernel/dev/md.c refuses a transfer
+// whose physical address is not a multiple of it.  A page is PGSZ words and mapping
+// preserves the offset within a page, so aligning the virtual address aligns the
+// physical one -- provided PGSZ is a multiple of this, which it is.
+#define MDALIGN BSIZEW
+_Static_assert(PGSZ % MDALIGN == 0, "a page must be a whole number of MDALIGNs");
+
+// The one transfer target, and the only buffer any raw read or write here names.  BSIZEW
+// words of it are used; the rest is the slack the alignment step needs, since where bss
+// lands is the linker's business and nothing in C can ask for a 512-word boundary.
+static int rawbuf[BSIZEW + MDALIGN];
+static int *blk;
+
+// The superblock, in core.  Arithmetic only: it is copied into blk to be written.
+static struct filsys sblock;
+
+static time_t fstime;
+static int fd = -1;
+static char *special;
+
+static void rdfs(daddr_t bno);
+static void wtfs(daddr_t bno);
+static void clrblk(void);
+static daddr_t alloc(void);
+static void bfree(daddr_t bno);
+static daddr_t number(char *s);
+
+int main(int argc, char **argv)
 {
-	int f, c;
-	long n;
+    daddr_t nblk, n, dblk;
+    int ninodes, iblocks, isize, cached, i;
+    struct dinode *dp;
+    struct direct *dirp;
 
-#ifndef STANDALONE
-	time(&utime);
-	if(argc < 3) {
-		printf("usage: mkfs filsys proto/size [ m n ]\n");
-		exit(1);
-	}
-	fsys = argv[1];
-	proto = argv[2];
-#else
-	{
-		static char protos[60];
+    if (argc < 3 || argc > 4) {
+        fprintf(stderr, "usage: /etc/mkfs special nblocks [ ninodes ]\n");
+        return 1;
+    }
+    special = argv[1];
+    nblk    = number(argv[2]);
+    ninodes = argc > 3 ? (int)number(argv[3]) : 0;
 
-		printf("file sys size: ");
-		gets(protos);
-		proto = protos;
-	}
-#endif
-#ifdef STANDALONE
-	{
-		char fsbuf[100];
+    // An `int *' IS a word address on this machine, so the alignment is ordinary
+    // arithmetic.  df.c and quot.c step the same way; a loop rather than a mask because
+    // it runs once, and because a mask over a negation would depend on how a negative
+    // word is spelled here.
+    blk = rawbuf;
+    while ((int)blk % MDALIGN != 0)
+        blk++;
 
-		do {
-			printf("file system: ");
-			gets(fsbuf);
-			fso = open(fsbuf, 1);
-			fsi = open(fsbuf, 0);
-		} while (fso < 0 || fsi < 0);
-	}
-	fin = NULL;
-	argc = 0;
-#else
-	fso = creat(fsys, 0666);
-	if(fso < 0) {
-		printf("%s: cannot create\n", fsys);
-		exit(1);
-	}
-	fsi = open(fsys, 0);
-	if(fsi < 0) {
-		printf("%s: cannot open\n", fsys);
-		exit(1);
-	}
-	fin = fopen(proto, "r");
-#endif
-	if(fin == NULL) {
-		n = 0;
-		for(f=0; c=proto[f]; f++) {
-			if(c<'0' || c>'9') {
-				printf("%s: cannot open\n", proto);
-				exit(1);
-			}
-			n = n*10 + (c-'0');
-		}
-		filsys.fs.s_fsize = n;
-		n = n/25;
-		if(n <= 0)
-			n = 1;
-		if(n > 65500/NIPB)
-			n = 65500/NIPB;
-		filsys.fs.s_isize = n + 2;
-		printf("isize = %D\n", n*NIPB);
-		charp = "d--777 0 0 $ ";
-		goto f3;
-	}
+    fstime = time((time_t *)0);
 
-#ifndef STANDALONE
-	/*
-	 * get name of boot load program
-	 * and read onto block 0
-	 */
+    // create.cpp's wording, verbatim, so that the host tool and this program answer the
+    // same way to the same bad input.
+    if (nblk < 8) {
+        fprintf(stderr, "mkfs: a filesystem needs at least 8 blocks\n");
+        return 1;
+    }
 
-	getstr();
-	f = open(string, 0);
-	if(f < 0) {
-		printf("%s: cannot  open init\n", string);
-		goto f2;
-	}
-	read(f, (char *)&head, sizeof head);
-	if(head.a_magic != A_MAGIC1) {
-		printf("%s: bad format\n", string);
-		goto f1;
-	}
-	c = head.a_text + head.a_data;
-	if(c > BSIZE) {
-		printf("%s: too big\n", string);
-		goto f1;
-	}
-	read(f, buf, c);
-	wtfs((long)0, buf);
+    // O_RDWR and not v7's creat(): the special may be an ordinary file (it is, under
+    // b6sim), and creat() would truncate it.  One descriptor serves rdfs() and wtfs()
+    // both, where v7 opened the same name twice.
+    fd = open(special, O_RDWR);
+    if (fd < 0) {
+        fprintf(stderr, "mkfs: %s: cannot open\n", special);
+        return 1;
+    }
 
-f1:
-	close(f);
+    // IS THE DEVICE THAT BIG?  Read the last block before writing the first.  The drive's
+    // size is MDNBLK, a constant of kernel/dev/md.c that no header exports to a program,
+    // and duplicating it here is exactly what ../TODO.md forbids -- so ask the device
+    // instead: mdstrategy() refuses blkno + wcount/MDTRACK > MDNBLK, so a read of the last
+    // block answers the question and costs one exchange.  It catches three things at once:
+    // a size larger than the drive, a drive nobody attached, and (under b6sim) a fixture
+    // file too short for the size asked.  Nothing has been written when it fails.
+    rdfs(nblk - 1);
 
-	/*
-	 * get total disk size
-	 * and inode block size
-	 */
+    // How big the i-list is, and where the data starts.
+    //
+    // ONE INODE PER TWO BLOCKS by default, which is create.cpp's ratio and not v7's 1:4.
+    // A block here is 3072 bytes, six times a PDP-11's, so a file that cost six blocks
+    // there costs one here while still costing exactly one inode; the natural ratio is
+    // nearer 1:1 than 1:4.  On a 2000-block drive that is 1024 inodes in 32 blocks.
+    //
+    // s_isize IS THE FIRST DATA BLOCK, not a count of i-list blocks.  ialloc() scans
+    // `for (adr = SUPERB+1; adr < s_isize; adr++)' and badblock() rejects `bn < s_isize',
+    // so this number bounds a loop in the kernel and one too high is a runaway read
+    // rather than a wrong answer.
+    //
+    //	block 0		boot -- written by nothing here
+    //	block 1		superblock (SUPERB)
+    //	blocks 2..	the i-list
+    //	block isize..	data
+    if (ninodes <= 0)
+        ninodes = (int)(nblk / 2);
+    iblocks = (ninodes + INOPB - 1) / INOPB;
+    if (iblocks < 1)
+        iblocks = 1;
+    isize = 2 + iblocks;
+    if (isize >= nblk) {
+        fprintf(stderr, "mkfs: the i-list does not leave room for any data blocks\n");
+        return 1;
+    }
+    ninodes = iblocks * INOPB; // round up to fill the last i-list block
 
-f2:
-	filsys.fs.s_fsize = getnum();
-	n = getnum();
-	n /= NIPB;
-	filsys.fs.s_isize = n + 3;
+    // Zero the i-list.  It must start clean: ialloc() decides an inode is free by finding
+    // di_mode == 0.  This is also what lets the root inode be written below with a bare
+    // wtfs() instead of v7's iput() read-modify-write -- nothing else has touched it since.
+    clrblk();
+    for (n = 2; n < isize; n++)
+        wtfs(n);
 
-#endif
-f3:
-	if(argc >= 5) {
-		f_m = atoi(argv[3]);
-		f_n = atoi(argv[4]);
-		if(f_n <= 0 || f_n >= MAXFN)
-			f_n = MAXFN;
-		if(f_m <= 0 || f_m > f_n)
-			f_m = 3;
-	}
-	filsys.fs.s_m = f_m;
-	filsys.fs.s_n = f_n;
-	printf("m/n = %d %d\n", f_m, f_n);
-	if(filsys.fs.s_isize >= filsys.fs.s_fsize) {
-		printf("%ld/%ld: bad ratio\n", filsys.fs.s_fsize, filsys.fs.s_isize-2);
-		exit(1);
-	}
-	filsys.fs.s_tfree = 0;
-	filsys.fs.s_tinode = 0;
-	for(c=0; c<BSIZE; c++)
-		buf[c] = 0;
-	for(n=2; n!=filsys.fs.s_isize; n++) {
-		wtfs(n, buf);
-		filsys.fs.s_tinode += NIPB;
-	}
-	ino = 0;
+    sblock.s_magic  = FS_MAGIC;
+    sblock.s_bsize  = BSIZEW;
+    sblock.s_inopb  = INOPB;
+    sblock.s_naddr  = NADDR;
+    sblock.s_isize  = isize;
+    sblock.s_fsize  = nblk;
+    sblock.s_time   = fstime;
+    sblock.s_nfree  = 0;
+    sblock.s_ninode = 0;
+    sblock.s_tfree  = 0;
 
-	bflist();
+    // THE FREE LIST, BUILT DESCENDING.  alloc() pops the superblock's cache from the top,
+    // so the LAST block freed is the FIRST one handed out: freeing from the end of the
+    // volume down to the first data block leaves the kernel allocating isize, isize+1,
+    // isize+2 ... in ascending order.  Build it the other way round and every file the
+    // kernel writes runs backwards across the platter.
+    for (n = nblk - 1; n >= isize; n--)
+        bfree(n);
 
-	cfile((struct inode *)0);
+    // The root directory: `.' and `..' both pointing at the root itself.
+    dblk = alloc();
+    clrblk();
+    dirp              = (struct direct *)blk;
+    dirp[0].d_ino     = ROOTINO;
+    dirp[0].d_name[0] = '.';
+    dirp[1].d_ino     = ROOTINO;
+    dirp[1].d_name[0] = '.';
+    dirp[1].d_name[1] = '.';
+    wtfs(dblk);
 
-	filsys.fs.s_time = utime;
-	wtfs((long)1, (char *)&filsys);
-	exit(error);
+    // ... and its inode.  Inode 1 is left with di_mode == 0; see the header.
+    clrblk();
+    dp = (struct dinode *)blk + itoo(ROOTINO);
+    // S_IFDIR and not <sys/inode.h>'s IFDIR: that header is the KERNEL's in-core inode and
+    // declares `extern struct inode inode[]'.  quot.c made the same swap for the same reason.
+    dp->di_mode    = S_IFDIR | 0777;
+    dp->di_nlink   = 2; // `.' and `..', both pointing here
+    dp->di_uid     = 0;
+    dp->di_gid     = 0;
+    dp->di_size    = 2 * (int)sizeof(struct direct);
+    dp->di_atime   = fstime;
+    dp->di_mtime   = fstime;
+    dp->di_ctime   = fstime;
+    dp->di_addr[0] = dblk;
+    wtfs(itod(ROOTINO));
+
+    // Seed the superblock's free-inode cache, DESCENDING, so that ialloc() -- which pops
+    // s_inode[--s_ninode] -- hands out the LOWEST number first and keeps the i-list dense.
+    // v7 seeds it ascending and hands out the highest; nothing depends on the order, but a
+    // dense i-list reads better in a dump and makes fsck's output stable.  The list starts
+    // at ROOTINO+1: inode 1 is not allocatable and inode 2 is the root.
+    cached = ninodes - ROOTINO;
+    if (cached > NICINOD)
+        cached = NICINOD;
+    if (cached < 0)
+        cached = 0;
+    sblock.s_ninode = cached;
+    for (i = 0; i < cached; i++)
+        sblock.s_inode[i] = ROOTINO + cached - i;
+
+    // Free inodes: everything except inode 1, which cannot be allocated, and the root,
+    // which is now in use.  SET and not accumulated -- see the header.
+    sblock.s_tinode = ninodes - 2;
+
+    // The commit point.  A struct filsys cannot be an aligned raw target, so it goes out
+    // through blk like everything else.  No clrblk() first: the superblock is exactly BSIZEW
+    // words -- sys/filsys.h asserts it -- so this copy leaves nothing of the last block behind.
+    for (i = 0; i < BSIZEW; i++)
+        blk[i] = ((int *)&sblock)[i];
+    wtfs(SUPERB);
+
+    printf("mkfs: %s: %d blocks, %d inodes in blocks 2..%d, first data block %d\n", special, nblk,
+           ninodes, isize - 1, isize);
+    return 0;
 }
 
-cfile(par)
-struct inode *par;
+// One block, into the one aligned buffer.  Whole blocks at block-aligned offsets are the
+// only shape a raw transfer here can take; see the header.
+//
+// errno IS CLEARED FIRST, which is not decoration: a short read is not a failure, so errno
+// would otherwise hold whatever the last failing call left there and the diagnostic would
+// differ from run to run.  Zero now means "the device had nothing more to give", which is
+// exactly what the probe in main() wants to report.
+static void rdfs(daddr_t bno)
 {
-	struct inode in;
-	int dbc, ibc;
-	char db[BSIZE];
-	daddr_t ib[NINDIR];
-	int i, f, c;
+    int n;
 
-	/*
-	 * get mode, uid and gid
-	 */
-
-	getstr();
-	in.i_mode = gmode(string[0], "-bcd", IFREG, IFBLK, IFCHR, IFDIR);
-	in.i_mode |= gmode(string[1], "-u", 0, ISUID, 0, 0);
-	in.i_mode |= gmode(string[2], "-g", 0, ISGID, 0, 0);
-	for(i=3; i<6; i++) {
-		c = string[i];
-		if(c<'0' || c>'7') {
-			printf("%c/%s: bad octal mode digit\n", c, string);
-			error = 1;
-			c = 0;
-		}
-		in.i_mode |= (c-'0')<<(15-3*i);
-	}
-	in.i_uid = getnum();
-	in.i_gid = getnum();
-
-	/*
-	 * general initialization prior to
-	 * switching on format
-	 */
-
-	ino++;
-	in.i_number = ino;
-	for(i=0; i<BSIZE; i++)
-		db[i] = 0;
-	for(i=0; i<NINDIR; i++)
-		ib[i] = (daddr_t)0;
-	in.i_nlink = 1;
-	in.i_size = 0;
-	for(i=0; i<NADDR; i++)
-		in.i_un.i_addr[i] = (daddr_t)0;
-	if(par == (struct inode *)0) {
-		par = &in;
-		in.i_nlink--;
-	}
-	dbc = 0;
-	ibc = 0;
-	switch(in.i_mode&IFMT) {
-
-	case IFREG:
-		/*
-		 * regular file
-		 * contents is a file name
-		 */
-
-		getstr();
-		f = open(string, 0);
-		if(f < 0) {
-			printf("%s: cannot open\n", string);
-			error = 1;
-			break;
-		}
-		while((i=read(f, db, BSIZE)) > 0) {
-			in.i_size += i;
-			newblk(&dbc, db, &ibc, ib);
-		}
-		close(f);
-		break;
-
-	case IFBLK:
-	case IFCHR:
-		/*
-		 * special file
-		 * content is maj/min types
-		 */
-
-		i = getnum() & 0377;
-		f = getnum() & 0377;
-		in.i_un.i_addr[0] = (i<<8) | f;
-		break;
-
-	case IFDIR:
-		/*
-		 * directory
-		 * put in extra links
-		 * call recursively until
-		 * name of "$" found
-		 */
-
-		par->i_nlink++;
-		in.i_nlink++;
-		entry(in.i_number, ".", &dbc, db, &ibc, ib);
-		entry(par->i_number, "..", &dbc, db, &ibc, ib);
-		in.i_size = 2*sizeof(struct direct);
-		for(;;) {
-			getstr();
-			if(string[0]=='$' && string[1]=='\0')
-				break;
-			entry(ino+1, string, &dbc, db, &ibc, ib);
-			in.i_size += sizeof(struct direct);
-			cfile(&in);
-		}
-		break;
-	}
-	if(dbc != 0)
-		newblk(&dbc, db, &ibc, ib);
-	iput(&in, &ibc, ib);
+    lseek(fd, (off_t)bno * BSIZE, SEEK_SET);
+    errno = 0;
+    if ((n = read(fd, (char *)blk, BSIZE)) != BSIZE) {
+        fprintf(stderr, "mkfs: %s: cannot read block %d\n", special, bno);
+        fprintf(stderr, "count = %d; errno = %d\n", n, errno);
+        exit(1);
+    }
 }
 
-gmode(c, s, m0, m1, m2, m3)
-char c, *s;
+// ... and out of it.  An EFAULT here means one of the four conditions in ../df/README.md
+// is broken and the word address of blk is the first thing to look at; an EIO means the
+// device refused the block number -- the drive is smaller than the size asked for, or
+// nobody attached it.
+static void wtfs(daddr_t bno)
 {
-	int i;
+    int n;
 
-	for(i=0; s[i]; i++)
-		if(c == s[i])
-			return((&m0)[i]);
-	printf("%c/%s: bad mode\n", c, string);
-	error = 1;
-	return(0);
+    lseek(fd, (off_t)bno * BSIZE, SEEK_SET);
+    errno = 0;
+    if ((n = write(fd, (char *)blk, BSIZE)) != BSIZE) {
+        fprintf(stderr, "mkfs: %s: cannot write block %d\n", special, bno);
+        fprintf(stderr, "count = %d; errno = %d\n", n, errno);
+        exit(1);
+    }
 }
 
-long
-getnum()
+static void clrblk(void)
 {
-	int i, c;
-	long n;
+    int i;
 
-	getstr();
-	n = 0;
-	i = 0;
-	for(i=0; c=string[i]; i++) {
-		if(c<'0' || c>'9') {
-			printf("%s: bad number\n", string);
-			error = 1;
-			return((long)0);
-		}
-		n = n*10 + (c-'0');
-	}
-	return(n);
+    for (i = 0; i < BSIZEW; i++)
+        blk[i] = 0;
 }
 
-getstr()
+// Pop one block off the free list, chaining through a struct fblk when the superblock's
+// cache empties.  The kernel's alloc(), less the bad-block loop: there is no corrupt list
+// to degrade from at mkfs time, this program having just built it.
+static daddr_t alloc(void)
 {
-	int i, c;
+    daddr_t bno;
+    int i;
 
-loop:
-	switch(c=getch()) {
-
-	case ' ':
-	case '\t':
-	case '\n':
-		goto loop;
-
-	case '\0':
-		printf("EOF\n");
-		exit(1);
-
-	case ':':
-		while(getch() != '\n');
-		goto loop;
-
-	}
-	i = 0;
-
-	do {
-		string[i++] = c;
-		c = getch();
-	} while(c!=' '&&c!='\t'&&c!='\n'&&c!='\0');
-	string[i] = '\0';
+    sblock.s_tfree--;
+    bno = sblock.s_free[--sblock.s_nfree];
+    if (bno == 0) {
+        fprintf(stderr, "mkfs: out of free space\n");
+        exit(1);
+    }
+    if (sblock.s_nfree <= 0) {
+        rdfs(bno);
+        sblock.s_nfree = ((struct fblk *)blk)->df_nfree;
+        for (i = 0; i < NICFREE; i++)
+            sblock.s_free[i] = ((struct fblk *)blk)->df_free[i];
+    }
+    return bno;
 }
 
-rdfs(bno, bf)
-daddr_t bno;
-char *bf;
+// ... and push one on.  The kernel's free(): when the cache is full it is spilled into the
+// block being freed, which becomes the next link of the chain.
+//
+// THE END-OF-LIST SENTINEL IS PLANTED HERE, on the first call, exactly as the kernel's
+// free() plants it -- v7's mkfs instead calls bfree(0) once to get a 0 into s_free[0],
+// which is a lie about block 0 and would make this program's first act a claim that the
+// boot block is free.
+static void bfree(daddr_t bno)
 {
-	int n;
+    struct fblk *fp;
+    int i;
 
-	lseek(fsi, bno*BSIZE, 0);
-	n = read(fsi, bf, BSIZE);
-	if(n != BSIZE) {
-		printf("read error: %ld\n", bno);
-		exit(1);
-	}
+    if (sblock.s_nfree <= 0) {
+        sblock.s_nfree   = 1;
+        sblock.s_free[0] = 0;
+    }
+    if (sblock.s_nfree >= NICFREE) {
+        // Zero the block before filling in the chain header: a chain block is 321 words
+        // of a 512-word block and the other 191 go to the disk either way.
+        clrblk();
+        fp           = (struct fblk *)blk;
+        fp->df_nfree = sblock.s_nfree;
+        for (i = 0; i < NICFREE; i++)
+            fp->df_free[i] = sblock.s_free[i];
+        wtfs(bno);
+        sblock.s_nfree = 0;
+    }
+    sblock.s_free[sblock.s_nfree++] = bno;
+    sblock.s_tfree++;
 }
 
-wtfs(bno, bf)
-daddr_t bno;
-char *bf;
+static daddr_t number(char *s)
 {
-	int n;
+    daddr_t n;
+    char *p;
+    int c;
 
-	lseek(fso, bno*BSIZE, 0);
-	n = write(fso, bf, BSIZE);
-	if(n != BSIZE) {
-		printf("write error: %D\n", bno);
-		exit(1);
-	}
-}
+    n = 0;
+    if (*s == '\0')
+        goto bad;
+    for (p = s; (c = *p) != '\0'; p++) {
+        if (c < '0' || c > '9')
+            goto bad;
+        n = n * 10 + (c - '0');
+    }
+    return n;
 
-daddr_t
-alloc()
-{
-	int i;
-	daddr_t bno;
-
-	filsys.fs.s_tfree--;
-	bno = filsys.fs.s_free[--filsys.fs.s_nfree];
-	if(bno == 0) {
-		printf("out of free space\n");
-		exit(1);
-	}
-	if(filsys.fs.s_nfree <= 0) {
-		rdfs(bno, (char *)&fbuf);
-		filsys.fs.s_nfree = fbuf.fb.df_nfree;
-		for(i=0; i<NICFREE; i++)
-			filsys.fs.s_free[i] = fbuf.fb.df_free[i];
-	}
-	return(bno);
-}
-
-bfree(bno)
-daddr_t bno;
-{
-	int i;
-
-	filsys.fs.s_tfree++;
-	if(filsys.fs.s_nfree >= NICFREE) {
-		fbuf.fb.df_nfree = filsys.fs.s_nfree;
-		for(i=0; i<NICFREE; i++)
-			fbuf.fb.df_free[i] = filsys.fs.s_free[i];
-		wtfs(bno, (char *)&fbuf);
-		filsys.fs.s_nfree = 0;
-	}
-	filsys.fs.s_free[filsys.fs.s_nfree++] = bno;
-}
-
-entry(inum, str, adbc, db, aibc, ib)
-ino_t inum;
-char *str;
-int *adbc, *aibc;
-char *db;
-daddr_t *ib;
-{
-	struct direct *dp;
-	int i;
-
-	dp = (struct direct *)db;
-	dp += *adbc;
-	(*adbc)++;
-	dp->d_ino = inum;
-	for(i=0; i<DIRSIZ; i++)
-		dp->d_name[i] = 0;
-	for(i=0; i<DIRSIZ; i++)
-		if((dp->d_name[i] = str[i]) == 0)
-			break;
-	if(*adbc >= NDIRECT)
-		newblk(adbc, db, aibc, ib);
-}
-
-newblk(adbc, db, aibc, ib)
-int *adbc, *aibc;
-char *db;
-daddr_t *ib;
-{
-	int i;
-	daddr_t bno;
-
-	bno = alloc();
-	wtfs(bno, db);
-	for(i=0; i<BSIZE; i++)
-		db[i] = 0;
-	*adbc = 0;
-	ib[*aibc] = bno;
-	(*aibc)++;
-	if(*aibc >= NINDIR) {
-		printf("indirect block full\n");
-		error = 1;
-		*aibc = 0;
-	}
-}
-
-getch()
-{
-
-#ifndef STANDALONE
-	if(charp)
-#endif
-		return(*charp++);
-#ifndef STANDALONE
-	return(getc(fin));
-#endif
-}
-
-bflist()
-{
-	struct inode in;
-	daddr_t ib[NINDIR];
-	int ibc;
-	char flg[MAXFN];
-	int adr[MAXFN];
-	int i, j;
-	daddr_t f, d;
-
-	for(i=0; i<f_n; i++)
-		flg[i] = 0;
-	i = 0;
-	for(j=0; j<f_n; j++) {
-		while(flg[i])
-			i = (i+1)%f_n;
-		adr[j] = i+1;
-		flg[i]++;
-		i = (i+f_m)%f_n;
-	}
-
-	ino++;
-	in.i_number = ino;
-	in.i_mode = IFREG;
-	in.i_uid = 0;
-	in.i_gid = 0;
-	in.i_nlink = 0;
-	in.i_size = 0;
-	for(i=0; i<NADDR; i++)
-		in.i_un.i_addr[i] = (daddr_t)0;
-
-	for(i=0; i<NINDIR; i++)
-		ib[i] = (daddr_t)0;
-	ibc = 0;
-	bfree((daddr_t)0);
-	d = filsys.fs.s_fsize-1;
-	while(d%f_n)
-		d++;
-	for(; d > 0; d -= f_n)
-	for(i=0; i<f_n; i++) {
-		f = d - adr[i];
-		if(f < filsys.fs.s_fsize && f >= filsys.fs.s_isize)
-			if(badblk(f)) {
-				if(ibc >= NINDIR) {
-					printf("too many bad blocks\n");
-					error = 1;
-					ibc = 0;
-				}
-				ib[ibc] = f;
-				ibc++;
-			} else
-				bfree(f);
-	}
-	iput(&in, &ibc, ib);
-}
-
-iput(ip, aibc, ib)
-struct inode *ip;
-int *aibc;
-daddr_t *ib;
-{
-	struct dinode *dp;
-	daddr_t d;
-	int i;
-
-	filsys.fs.s_tinode--;
-	d = itod(ip->i_number);
-	if(d >= filsys.fs.s_isize) {
-		if(error == 0)
-			printf("ilist too small\n");
-		error = 1;
-		return;
-	}
-	rdfs(d, buf);
-	dp = (struct dinode *)buf;
-	dp += itoo(ip->i_number);
-
-	dp->di_mode = ip->i_mode;
-	dp->di_nlink = ip->i_nlink;
-	dp->di_uid = ip->i_uid;
-	dp->di_gid = ip->i_gid;
-	dp->di_size = ip->i_size;
-	dp->di_atime = utime;
-	dp->di_mtime = utime;
-	dp->di_ctime = utime;
-
-	switch(ip->i_mode&IFMT) {
-
-	case IFDIR:
-	case IFREG:
-		for(i=0; i<*aibc; i++) {
-			if(i >= LADDR)
-				break;
-			ip->i_un.i_addr[i] = ib[i];
-		}
-		if(*aibc >= LADDR) {
-			ip->i_un.i_addr[LADDR] = alloc();
-			for(i=0; i<NINDIR-LADDR; i++) {
-				ib[i] = ib[i+LADDR];
-				ib[i+LADDR] = (daddr_t)0;
-			}
-			wtfs(ip->i_un.i_addr[LADDR], (char *)ib);
-		}
-
-	case IFBLK:
-	case IFCHR:
-		ltol3(dp->di_addr, ip->i_un.i_addr, NADDR);
-		break;
-
-	default:
-		printf("bad mode %o\n", ip->i_mode);
-		exit(1);
-	}
-	wtfs(d, buf);
-}
-
-badblk(bno)
-daddr_t bno;
-{
-
-	return(0);
+bad:
+    fprintf(stderr, "mkfs: %s: bad number\n", s);
+    exit(1);
 }

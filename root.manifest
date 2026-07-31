@@ -68,6 +68,12 @@
 # 4-3 the group (линейка), bits 2-0 the drive -- so /dev/md0's minor 0 is SIMH's md00, and
 # a minor number and an `attach' line are the same number.  There are no partitions: one
 # EC-5052 drive is 2000 blocks and swap lives on the drums (/dev/swap, block major 1).
+#
+# SINCE TASK C4c THERE ARE TWO DRIVES' WORTH OF NODES, md0/rmd0 and md1/rmd1, and only the
+# first is attached by an ordinary boot: kernel/test/mkfs is the one test that hangs a
+# second pack on md01, and the raw node is what /etc/mkfs writes a filesystem onto.  A node
+# for a drive nobody attached is not an error -- mdopen() accepts any minor below 64 and the
+# refusal comes at the first transfer -- so these two cost nothing on every other boot.
 
 default
 owner 0
@@ -111,6 +117,14 @@ mode 0755
 # the reason df is not -- see /bin/df above and cmd/df/README.md.
 file /etc/quot          # cmd/quot -- blocks per uid, by sweeping the i-list off /dev/rmd0
 source ../../rootfs/etc/quot
+mode 0755
+
+# quot's placement, and quot's reasons: section 1M, root-only, NOT setuid.  This one is
+# sharper than the other two, though -- mkfs WRITES the raw device, and it is the first
+# program on this image that does.  A setuid mkfs would let anybody destroy every file on
+# the volume with one command.  cmd/mkfs/README.md is the account of that write path.
+file /etc/mkfs          # cmd/mkfs -- make a filesystem, on /dev/rmd1 and nothing else here
+source ../../rootfs/etc/mkfs
 mode 0755
 
 file /bin/sh            # cmd/sh: S. R. Bourne's shell
@@ -530,6 +544,11 @@ major 3
 minor 0
 mode 0600
 
+cdev /dev/rmd1          # cdevsw[3] minor 1: the SECOND drive -- SIMH's md01
+major 3
+minor 1
+mode 0600
+
 cdev /dev/rmb0          # cdevsw[4]: the raw drum, dev/mb.c
 major 4
 minor 0
@@ -540,6 +559,11 @@ mode 0600
 bdev /dev/md0           # bdevsw[0]: the root disk -- rootdev = makedev(0, 0)
 major 0
 minor 0
+mode 0600
+
+bdev /dev/md1           # bdevsw[0] minor 1: the second drive, for mount(1M) -- task C4f
+major 0
+minor 1
 mode 0600
 
 bdev /dev/swap          # bdevsw[1]: the drums -- swapdev = makedev(1, 0)

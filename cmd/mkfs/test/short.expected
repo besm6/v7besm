@@ -1,0 +1,2 @@
+mkfs: short.img: cannot read block 199
+count = 0; errno = 0

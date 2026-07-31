@@ -29,6 +29,9 @@ which turns out to have four alignment rules a v7 program knows nothing about
 image, so bulk data reaches `/dev/rmd0` and comes back without `b6fsutil` on the host — and it
 does so at the *default* record size, which had to become the 3072-byte block, v7's 512 not
 being a whole number of words and so refused by `physio()` before the driver ever sees it.
+**And since C4c it can make one**: `/etc/mkfs` writes a filesystem onto `/dev/rmd1` — this
+system's first raw *write*, `kernel/dev/md.c`'s `mdwrite()` having been dead code until it,
+and the first time the machine has had two drives at all ([mkfs/README.md](mkfs/README.md)).
 [../etc/rc](../etc/rc) is a boot script that does something: it prints the motd and then the
 date, which is a literal to the minute because the boot clock is the image's own `-T` stamp,
 and `kernel/test/console` asserts both. What it
@@ -51,7 +54,7 @@ compiles.
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C4 | filesystem maintenance — ~~`df` `du` `quot` `dd`~~ `mkfs` `fsck` `icheck` `dcheck` `ncheck` `clri` `mount` `umount` | a system that maintains itself | large; C4a and C4b done |
+| C4 | filesystem maintenance — ~~`df` `du` `quot` `dd` `mkfs`~~ `fsck` `icheck` `dcheck` `ncheck` `clri` `mount` `umount` | a system that maintains itself | large; C4a, C4b and C4c done |
 | C5 | the text filters — `wc` `cmp` `sum` `tee` `split` `rev` `tr` `uniq` `comm` `tail` `od` `look` `col` `grep` `fgrep` `sort` `sed` `pr` `diff` `cal` `tsort` `join` `find` `file` | the corpus everything else is tested against | medium ×24 |
 | C6 | multiuser userland — `passwd` `su` `newgrp` `stty` `who` `write` `wall` `mesg` `mail` | more than one person | medium; unblocked |
 | C7 | `tar` | getting data on and off without `b6fsutil` | medium |
@@ -68,8 +71,9 @@ taken at any time; C6, C8 and C9 are each gated on something the task names.
 
 ## C4. Filesystem maintenance
 
-**Why.** The system cannot repair or extend itself. `kernel/test/session` fscks the image *on the
-host*, with `b6fsutil`; the machine itself cannot make a new filesystem and cannot mount anything.
+**Why.** The system cannot repair itself. `kernel/test/session` fscks the image *on the host*,
+with `b6fsutil`; the machine can now *make* a filesystem (C4c) but cannot check one and cannot
+mount anything.
 
 **C4a is done and its writeup has been removed.** `df`, `du` and `quot` are on the image — the
 first three programs here that can say anything about the store they live on — and
@@ -88,8 +92,9 @@ every task below, and **[df/README.md](df/README.md) is the account of both**:
   *console*, because a program that measures a filesystem cannot write its answer into one.
 
 `df` and `quot` also gave `b6sim` its first fixture **filesystem** ([df/test/](df/test/)): they
-read a file, and a flat `b6fsutil` image is one. C4c and C4d should copy that rather than build a
-second; `dd` already does.
+read a file, and a flat `b6fsutil` image is one. C4d should copy that rather than build a
+second; `dd` and `mkfs` already do — and `mkfs`'s is the one to look at first, since a program
+that *writes* a filesystem into a host file can be compared with `b6fsutil -n` byte for byte.
 
 **C4b is done and its writeup has been removed too.** `/bin/dd` is on the image and
 `kernel/test/dd` (volume 3088) holds it there, so bulk data can move to and from `/dev/rmd0`
@@ -110,29 +115,45 @@ without `b6fsutil` on the host. Three things it settled that the rest of C4 inhe
 * **The oracle can be the disk itself.** `run-dd.sh` compares what the guest pulled off
   `/dev/rmd0` against the same offset in the container the boot was handed — nothing checked
   in, nothing recomputed — at the cost of one assumption, that the run does not rewrite those
-  blocks, which it checks rather than assumes. `mkfs` has the stronger version of this
-  available: `b6fsutil -n` builds the same layout on the host.
+  blocks, which it checks rather than assumes. `mkfs` had the stronger version of this
+  available — `b6fsutil -n` builds the same layout on the host — and C4c took it, twice.
 
-**What `dd` does not do, and C4c should know it:** nothing here has ever *written* to a raw
-device. `kernel/dev/md.c`'s `mdwrite()` is still dead code, there is no second drive and no
-`/dev/rmd1`, and no test attaches a scratch volume. `dd of=/dev/rmd0` is written and
-documented but unexercised, and the first task that needs it — restoring an image `mkfs`
-made — is the one that should build that harness.
+**C4c is done and its writeup has been removed too.** `/etc/mkfs` is on the image and
+`kernel/test/mkfs` (volumes 3089 root, **3090 scratch**) holds it there, so the machine can
+make a filesystem rather than only measure and move one. It is the task that built the
+raw-**write** harness `dd` was waiting for: there is a second drive now, `/dev/rmd1` and
+`/dev/md1` are on the image, `mdwrite()` is live, and one test attaches a scratch volume.
+**[mkfs/README.md](mkfs/README.md) is the account**, and three things it settled belong to
+everything below:
+
+* **A raw write has a fifth condition, and it is about where the buffer lives.** All four of
+  C4a's apply unchanged — `physio()` never tests `rw` — and it also refuses a `base` below
+  `u_tsize`, so a raw write may never be sourced from the text segment. It cannot fire for an
+  `FMAGIC` program, which is what `b6_prog()` produces, and goes live the day anything that
+  writes a device is linked **pure**.
+* **The sector header is per *controller*, so a two-drive machine mislabels a pack.** `md.c`
+  maintains only the self-address in the service words it writes; the magic mark and the
+  **volume number** come from the last read of *any* drive on the controller. `b6fsutil`
+  reads the volume from zone 0 alone, so the rule is that **nothing may write block 0** of a
+  pack this system did not label. The first bug here that needed a second drive to exist.
+* **Committing last is a substitute for a size check.** `MDNBLK` has no guest header and must
+  not be duplicated, so `mkfs` reads the *last* block before writing the first and lets
+  `mdstrategy()` answer. Safe only because the superblock is written last: a run that dies
+  partway leaves a volume with no magic rather than a plausible wreck.
+
+And the oracle turned out to be available **twice** — byte for byte against `b6fsutil -n`
+under `b6sim` in a tenth of a second, where the layout is debugged, and again over the device
+under SIMH, where nothing else is. The only obstacle either time was the timestamp, which is
+six bytes at a known offset.
 
 Everything below still encodes the on-disk layout, and there is a rule for that:
 **`_Static_assert` against `<sys/param.h>` rather than re-deriving the constants**, which is what
 [fsutil/params.cpp](fsutil/params.cpp) does on the host side and why a kernel that retunes `INOPB`
 or `DIRSIZ` breaks the build instead of the images. (A guest program needs none of that file's
 machinery: it includes the real headers and inherits their assertions. `params.cpp` is elaborate
-only because `fsutil` is host C++ and cannot.) The raw devices are on the image — `/dev/rmd0` and
-`/dev/rmb0`, `cdevsw[3]` and `[4]`.
-
-### C4c. `mkfs`
-
-`mkfs.c` (618). The first program that can *create* a filesystem on the machine. It has an oracle:
-`b6fsutil -n` builds the same layout on the host, so a filesystem `mkfs` writes must pass
-`b6fsutil -c` after being pulled back off the disk, and vice versa. Do C4c before C4d — a `fsck`
-with nothing to fix is only half tested.
+only because `fsutil` is host C++ and cannot.) The raw devices are on the image — `/dev/rmd0`,
+`/dev/rmd1` and `/dev/rmb0`, `cdevsw[3]` and `[4]` — and so are the block nodes `/dev/md0`
+and `/dev/md1`.
 
 ### C4d. `fsck`
 
@@ -153,13 +174,18 @@ doing one of `fsck`'s jobs standalone. Cheap once C4d has taught the layout, and
 
 ### C4f. `mount`, `umount`
 
-`mount.c` (67), `umount.c` (56), plus `/etc/mtab`. Small, and the point of them is that there is a
-second thing to mount — which today there is not: one EC-5052 is the whole store and swap lives on
-the drums. Do this task after C4c, so `mkfs` can make the second filesystem that makes `mount`
-mean something.
+`mount.c` (67), `umount.c` (56), plus `/etc/mtab`. Small, and **unblocked since C4c**: the point
+of them is that there is a second thing to mount, and now there is one. `/dev/md1` is on the
+image for exactly this, `/etc/mkfs` makes the filesystem to put behind it, and
+`kernel/test/mkfs`'s `.ini` is the two-drive harness to extend — attach the same scratch pack,
+mount it on a directory, write a file through the *buffer cache* rather than through
+`physio()`, unmount, and let the host fsck what comes back. That last is the part this task
+buys that nothing else does: everything C4 has written so far went to the raw device, and
+`bdevsw[0]` minor 1 has still never carried a block.
 
-**Size.** Large overall; C4f is small, C4d is the whole weight.  C4a and C4b were the small
-ones, and what neither cost was its line count -- see df/README.md and cmd/dd/dd.c's header.
+**Size.** Large overall; C4f is small, C4d is the whole weight.  C4a, C4b and C4c were the
+small ones, and what none of them cost was its line count -- see df/README.md, cmd/dd/dd.c's
+header and mkfs/README.md.
 
 ---
 
@@ -419,15 +445,17 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 
 ## Where to start
 
-C4c, or C5 if a week is what is free rather than a month.
+C4d, or C4f if a day is what is free; C5 if a week is, rather than a month.
 
-C4a and C4b have landed, so the guest can now *examine* its own store — `df`, `du` and `quot`,
-with the raw-device path proven and a fixture-filesystem harness under `b6sim` that C4c and C4d
-inherit — and *move* it, `dd` reading and writing that device in whatever record size the user
-names. What it still cannot do is *make* a filesystem or *repair* one: `kernel/test/fsinfo`
-measures the image the guest is living on and `kernel/test/dd` copies pieces of it about, but it
-is still `b6fsutil` on the host that fscks it. C4c before C4d, because a `fsck` with nothing to
-fix is only half tested.
+C4a, C4b and C4c have landed, so the guest can now *examine* its own store — `df`, `du` and
+`quot`, with the raw-device path proven and a fixture-filesystem harness under `b6sim` that
+C4d inherits — *move* it, `dd` reading and writing that device in whatever record size the
+user names, and *make* one, `mkfs` writing a filesystem onto a second drive through a raw
+write path that had never run. What it still cannot do is *repair* a filesystem or *mount*
+one: it is still `b6fsutil` on the host that fscks what every test writes. C4d is the weight
+of what is left, and C4c has given it the thing its brief asked for — a filesystem the guest
+made, on a drive that is not the one it is living on, which can be corrupted deliberately
+without ending the run.
 
 C5 stays the cheap one, and the harness for it is now **complete**: `b6_progtest()` needs no
 boot, and C3 gave it the `<case>.in` that C2b's writeup said the filters would want, so a filter

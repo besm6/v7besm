@@ -1,0 +1,30 @@
+mkfs start
+---dd---
+0+1 records in
+1+0 records out
+status 0
+1+0 records in
+1+0 records out
+status 0
+write: Bad address
+0+1 records in
+1+0 records out
+status 1
+write: I/O error
+1+0 records in
+1+0 records out
+status 1
+---bad---
+mkfs: a filesystem needs at least 8 blocks
+status 1
+mkfs: /dev/rmd1: cannot read block 2000
+count = -1; errno = 5
+status 1
+---read---
+2+0 records in
+2+0 records out
+status 0
+---end---
+back
+mkfs.log
+newfs

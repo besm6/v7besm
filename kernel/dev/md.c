@@ -370,6 +370,20 @@ static void mdstart(void)
         // superblock and the i-list before it writes anything, so both slots are primed
         // long before this matters -- but a driver that filled the mark itself would need
         // to be told the volume number, which nothing on this system knows.)
+        //
+        // AND A SECOND EDGE, WHICH TASK C4c FOUND BY BEING THE FIRST THING HERE WITH TWO
+        // DRIVES.  This buffer belongs to the CONTROLLER, not to the drive, so words 1-3
+        // come from the last read of ANY drive on it -- and a write to md01 therefore
+        // stamps whatever pack md00 last read, VOLUME NUMBER INCLUDED.  Measured on
+        // kernel/test/mkfs's containers: the zones the guest wrote onto the scratch pack
+        // carry the root pack's number and the ones it did not carry their own.
+        //
+        // What makes that survivable is which words are read back.  b6fsutil's from_simh()
+        // validates the magic mark, which is the same constant on every pack, and each
+        // half-zone's self-address, which is the one field maintained here -- and it takes
+        // the volume number from ZONE 0 ALONE, without validating it.  So the rule is that
+        // nothing may write block 0 of a pack this system did not label; mkfs does not, and
+        // kernel/test/mkfs holds it to that with a grep.  cmd/mkfs/README.md is the account.
         if ((bp->b_flags & B_READ) == 0) {
             sys = MDSYS + ctlr * MDSYSWORDS;
             if (cw & CW_PAGE_MODE) {

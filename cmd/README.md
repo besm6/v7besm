@@ -34,8 +34,8 @@ single-file programs and 29 directories of larger ones. That tree is **not in th
 do — the ten of task C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`, `mv/`, `rm/`,
 `rmdir/`, `touch/`), the three of C2a (`date/`, `kill/`, `sleep/`), the five of C2b
 (`basename/`, `test/`, `time/`, `tty/`, `yes/`), the one of C3 (`ed/`), the three of C4a
-(`df/`, `du/`, `quot/`), the one of C4b (`dd/`) and the two of kernel task 29b
-(`getty/`, `login/`) today. That is the only marker;
+(`df/`, `du/`, `quot/`), the one of C4b (`dd/`), the one of C4c (`mkfs/`) and the two of
+kernel task 29b (`getty/`, `login/`) today. That is the only marker;
 [../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.
 
 Four things about the copies:
@@ -205,6 +205,16 @@ commonest thing `dd` exists to do could not reach the disk. `w` came along free,
 being 6. The rule that generalises: **a constant is the user's business only while it still
 names something on this machine.** 512 named a PDP-11 disk block and names nothing here.
 
+**And a size that names a *device* stays in filesystem blocks, which is `mkfs`'s exception.**
+`mkfs special nblocks` takes the superblock's `s_fsize` verbatim, and what it prints — the
+i-list extent, the first data block — is `s_isize` and an i-node count. These are not
+measurements of a filesystem, they are the *description* of one, and `KBPB` does not appear in
+`mkfs.c` at all: a `mkfs` that had to be told 6000 for a drive holding 2000 blocks would be
+lying about the thing it is writing, and the number would then disagree with every other
+number about the same volume. `b6fsutil` reports the same way and for the same reason. The
+manual page still owes a section, but it is the mirror one — `BLOCKS HERE ARE 3072 BYTES`,
+saying that `df(1M)` will report three times what `mkfs` was given.
+
 ### 5. `DIRSIZ` is 18
 
 `struct direct` is four words — a full-word `d_ino` and three words of name.  So `%.14s` is `%s`,
@@ -231,6 +241,7 @@ Anything that walks directories — `rm -r`, `du`, `find`, `ncheck`, `dcheck`, `
 | `ed` | 95 | 4,027 | 50 | 633 | **4,805** |
 | `quot` | 102 | 5,208 | 227 | 4,375 | **9,912** |
 | `du` | 83 | 3,041 | 198 | 3,132 | **6,454** |
+| `mkfs` | 85 | 2,956 | 222 | 2,571 | **5,834** |
 | `df` | 80 | 2,633 | 177 | 2,570 | **5,460** |
 | `dd` | 83 | 3,451 | 503 | 1,056 | **5,093** |
 | `cat` | 83 | 2,989 | 165 | 1,544 | **4,781** |
@@ -349,7 +360,10 @@ Two harnesses, and choosing wrong wastes the effort:
   **But it can be handed a whole filesystem**, which task C4a found and which nothing had
   needed: a program that reads a *device* reads a file, and a flat `b6fsutil` image is one, so
   [df/test/](df/test/) builds a small one at build time and `df` and `quot` walk its real free
-  list and real i-list with no boot. C4c and C4d inherit it.
+  list and real i-list with no boot. C4c took it further: a program that *writes* a device
+  writes a file too, so `cmd_mkfs_layout` hands `mkfs` a blank of exactly N blocks and then
+  compares what comes back with `b6fsutil -n` **byte for byte** — which is the strongest oracle
+  anywhere under this harness and costs a tenth of a second. C4d inherits both.
   A fourth limit came with that, and it is about the *host* rather than the simulator:
   **`getpwent(3)` opens the literal `/etc/passwd`**, so under `b6sim` a program that maps a uid
   to a name reads the build machine's password file and no case may assert what comes back.
@@ -384,10 +398,19 @@ Two harnesses, and choosing wrong wastes the effort:
   anything that moves **bulk data** through a device, or that must be handed a record size the
   hardware refuses; its oracle is the disk itself, the guest's transfer being `cmp`'d against the
   same offset in the container the boot was handed, and it is the first test here to assert a
-  **refused** transfer at all. Each has its own copy of the image at
-  its own volume number; **3088 is the highest used** (`edit` took 3086, `fsinfo` 3087 and `dd` 3088). All but `login` graft a script onto that copy
+  **refused** transfer at all — and `kernel/test/mkfs` (task C4c) for anything that **writes** a
+  device, or that needs a **second drive**: it is the only test here that attaches two, the only
+  one whose subject is a filesystem that did not exist when the machine booted, and the one that
+  holds `kernel/dev/md.c` to the rule that nothing may write block 0 of a pack this system did
+  not label. Its oracle is a **byte-for-byte `cmp` against `b6fsutil -n`**, which is available
+  because the guest program and the host tool are transcriptions of each other and the only
+  thing between them is a timestamp six bytes into the superblock. Each has its own copy of the
+  image at its own volume number; **3090 is the highest used** (`edit` took 3086, `fsinfo` 3087,
+  `dd` 3088, and `mkfs` takes two — 3089 for its root copy and 3090 for the scratch pack it
+  makes a filesystem on). All but `login` graft a script onto that copy
   with `b6fsutil -a`, and `login` is the exception because what it tests is the thing that reads
-  what is typed: it types every character it needs.
+  what is typed: it types every character it needs. `mkfs` grafts its script at
+  `/etc/mkfstest` rather than at `/etc/mkfs`, which is the program.
 
 Most of task C5 lands in the first; C1, C3, C4 and C6 land in the second. Where a program can run
 in both, **do both** — the first time the libc suite was run in both worlds it found two bugs
@@ -593,3 +616,52 @@ on one. And `b6fsutil -v -v` is *two* reports — the superblock summary, then t
 field, invents a uid-0 entry, and comes out one file ahead of the guest. **The guest was right
 and the oracle was wrong**, which is the failure mode a recomputing oracle has and a checked-in
 one does not; budget for debugging the oracle, not just the program.
+
+---
+
+## What task C4c taught
+
+`/etc/mkfs` is on the image and [../kernel/test/mkfs.sh](../kernel/test/mkfs.sh) holds it
+there. It is the first program here that *makes* a filesystem, the first that **writes** a raw
+device at all, and the first thing on this system that has ever had two disks.
+[mkfs/README.md](mkfs/README.md) is the account of the write path; four findings are general.
+
+**A raw write has all four of C4a's conditions and a fifth of its own, and the fifth is about
+where the buffer *lives*.** `physio()` never tests `rw` — it only ORs it into `b_flags` — so
+alignment, count and seek behave identically in both directions. What it also refuses is a
+`base` below `u_tsize`, which for a read means "do not scribble on the text" and for a write
+means **a raw write may never be sourced from a string literal or a `const` array**. It cannot
+fire today: `b6_prog()` links `FMAGIC` and `getxfile()` forces `u_tsize = 0` for that magic. It
+goes live the day something that writes a device is linked **pure**, as `/bin/sh` already is,
+and the symptom would be an `EFAULT` from a `write(2)` whose buffer looked perfectly aligned.
+**When a path has only ever run one way, re-read its gate for the other direction** rather than
+assuming symmetry.
+
+**A second instance of a device can expose a bug that one instance cannot hold.** The disk's
+sector header is written from a fixed buffer that belongs to the **controller**, not the drive,
+and `kernel/dev/md.c` maintains exactly one word of it. With one drive that was an "open edge,
+deliberately left"; with two it means every zone the guest writes onto the scratch pack carries
+the *root* pack's volume number. It survives only because `b6fsutil` reads the volume out of
+zone 0 alone — so "nothing may write block 0" is now a rule, and `run-mkfs.sh` greps for the
+volume number so that the day something does, the test says which rule broke. **Adding the
+second of anything is a test in itself.**
+
+**An oracle can be byte-exact when the two implementations are transcriptions of each other.**
+`b6fsutil -n` is the host's mkfs and `mkfs.c` is a transcription of it, so the comparison is
+`cmp` and not a field diff — and the only thing standing in the way was a timestamp, which is
+six bytes at a known offset and can be read back out of the guest's own output and fed to
+`-T`. That is worth going after: a field diff says the fields it was taught to say, and `cmp`
+says everything. The one discipline it needs is that the fixture start as **zeros** and that
+the program not zero anything it need not — `mkfs` deliberately does not clear the data area,
+which `mkfs.1m` lists under BUGS and which is exactly what keeps the comparison honest. Do the
+byte comparison in the **cheap world first**: `cmd_mkfs_layout` under `b6sim` settles the
+layout in a tenth of a second with a diffable failure, and the two-minute boot afterwards is
+then about the device and nothing else.
+
+**A kernel constant a program must respect but must not duplicate can be turned into a
+probe.** `MDNBLK` lives only in `kernel/dev/md.c` and no header exports it, so `mkfs` reads the
+**last block before writing the first** and lets `mdstrategy()` refuse it — one exchange, three
+different failures caught with one diagnostic. That is safe only because the superblock is
+written **last**, so a run that dies partway leaves a volume with no magic rather than a
+plausible wreck. **Commit-last buys you the right not to check first**, and the two together
+are cheaper than a constant in two places.

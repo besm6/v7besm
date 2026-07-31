@@ -124,7 +124,11 @@ work has two halves:
   forward with `(int)ptr` — a word pointer *is* a word address here — and obeying the rules made
   the programs *smaller*, `quot`'s 4,096-word `itab[256]` disappearing because one block already
   is `INOPB` inodes. `cmd/df/README.md` is the account, and the rest of C4 — `dd`, `mkfs`,
-  `fsck`, `icheck` — takes the same path. It also settled how a program that reports on a whole
+  `fsck`, `icheck` — takes the same path. **Since task C4c that path runs both ways**: `mkfs`
+  writes a filesystem onto a second drive, which is the first time `kernel/dev/md.c`'s
+  `mdwrite()` has ever run and the first time this machine has had two disks. A write obeys all
+  four conditions above and a fifth of its own, and the second drive turned up a bug one drive
+  could not hold — both in `cmd/mkfs/README.md`. It also settled how a program that reports on a whole
   filesystem is *asserted*: not against a checked-in table, which would have to be re-typed
   whenever anything joined `/bin`, but against numbers the host **recomputes** from the finished
   image — and to the **console** rather than to a file, since a `quot` writing to `/tmp` counts
@@ -132,7 +136,7 @@ work has two halves:
   table one slot past what it had filled, `quot` writing one element past `du[NUID]`, and
   `quot`'s `qsort` comparator calling `strcmp()` on two `NULL`s — which a PDP-11 forgave,
   address 0 being readable there, and which here dereferences word 0.
-  Twelve tests
+  Thirteen tests
   guard that ladder — `kernel/test/boot` (the prompt appears), `kernel/test/console` (a typed
   dialogue with the shell, and the only one that reaches `/etc/rc`, whose date it
   asserts, ending on the `login:` the first getty puts there — **currently `DISABLED`**, since it
@@ -176,6 +180,14 @@ work has two halves:
   boot was handed, so there is nothing checked in and nothing recomputed, and beside it 365
   bytes of UTF-8 go through the EBCDIC tables and back, which needs `dd` run twice and so cannot
   be one of the `cmd_dd_*` cases)
+  and `kernel/test/mkfs` (task C4c: the only test here that attaches **two** disks, and the
+  only one whose subject is a filesystem that did not exist when the machine booted — a scratch
+  pack formatted by `attach -n md01`, one block of /etc/motd pushed onto it through `mdwrite()`
+  and read straight back, two misaligned **writes** refused where `dd` had only ever asserted a
+  refused read, and then a 2000-block filesystem made on it and measured with `df`; its oracle is
+  a **byte-for-byte `cmp` against `b6fsutil -n`**, available because the guest program and the
+  host tool are transcriptions of each other and the only thing between them is a timestamp six
+  bytes into the superblock, which the host reads back out of the guest's own output)
   — and `cd kernel && make run` is
   where you type at it yourself. The drums
   must be attached to exec anything: they are `swapdev`, and `exece()` stages the argument
@@ -208,7 +220,7 @@ thing**, and knowing which one you are touching is most of what the build layout
 - **host tools** — `cmd/*`, compiled by the build machine's C/C++ compiler, run there;
 - **cross-built BESM-6 artifacts** — `kernel/` and `lib/`, compiled by the `b6*` toolchain
   above through `b6_obj()` in `scripts/BesmCross.cmake`;
-- **native BESM-6 programs** — `cmd/{init,getty,login,quot,sh,basename,cat,chgrp,chmod,chown,cp,date,dd,df,du,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`, linked against libc by `b6_prog()`
+- **native BESM-6 programs** — `cmd/{init,getty,login,mkfs,quot,sh,basename,cat,chgrp,chmod,chown,cp,date,dd,df,du,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`, linked against libc by `b6_prog()`
   and staged into `build/rootfs/` (with the static files of `etc/`) for the disk image the
   kernel mounts.
 
@@ -335,7 +347,7 @@ therefore names two archives, **ours first**: `-lc -lruntime`, because `b6ld` sc
 helper calls back into libc. The kernel takes `-lruntime` **alone** — it defines its own
 `printf` in `kernel/prf.c` and uses no other library routine.
 
-### Native BESM-6 programs (`cmd/{init,getty,login,quot,sh,basename,cat,chgrp,chmod,chown,cp,date,dd,df,du,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}` + `etc/` → `build/rootfs/`)
+### Native BESM-6 programs (`cmd/{init,getty,login,mkfs,quot,sh,basename,cat,chgrp,chmod,chown,cp,date,dd,df,du,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}` + `etc/` → `build/rootfs/`)
 
 The third category, and the newest. These are **`cmd/` subdirectories that are not host
 tools**: `cmd/init/init.c` is the Unix v7 `/etc/init`, `cmd/sh/` is S. R. Bourne's v7 shell,
@@ -372,8 +384,26 @@ it before the driver sees it — so with v7's defaults the commonest thing `dd` 
 not reach the disk at all. `w` came along free, `sizeof(int)` being 6 rather than a PDP-11's 2,
 so `1b`, `3k` and `512w` now name the same 3072 bytes. Three upstream bugs went with it, the
 sharpest being a `conv=swab` that rounded its pair count down to even and so copied a two-byte
-record entirely **unswapped**, silently. Nothing has yet *written* to a raw device, though:
-`kernel/dev/md.c`'s `mdwrite()` is still dead code and there is no scratch volume to aim it at.
+record entirely **unswapped**, silently. Then `cmd/mkfs` (task C4c) is the one that *makes* a
+filesystem rather than measuring or moving one, and it is what finally **wrote** to a raw
+device: `kernel/dev/md.c`'s `mdwrite()` was dead code until it, and this is the first thing on
+this system that has had two drives — `/dev/rmd1` and `/dev/md1` are on the image beside
+`/dev/rmd0` and `/dev/md0`, and `kernel/test/mkfs` hangs a scratch pack on SIMH's `md01`. It is
+in `/etc` and root-only for `quot`'s reasons, and emphatically not setuid for a sharper one. Its
+one divergence is that the **prototype-file form is not ported** — the boot-block token names
+nothing here, `cfile()` recurses with about 1,024 words of frame per directory level against a
+4,096-word unchecked stack, its two buffers are exactly the ones a raw transfer cannot use, and
+`b6fsutil -n -M` on the host does that job better — so `mkfs special nblocks [ ninodes ]` is the
+whole command. Three things it settled are `cmd/mkfs/README.md`'s: a raw **write** obeys all
+four of the read's conditions plus a fifth (`physio()` refuses a `base` below `u_tsize`, so it
+may never be sourced from the text — dormant while `b6_prog` links `FMAGIC`, live the day
+anything that writes a device is linked *pure*); the disk's sector-header buffer belongs to the
+**controller** rather than the drive, so a two-drive machine stamps one pack's volume number
+onto another's and nothing may write block 0 of a pack this system did not label; and
+`MDNBLK` need not be duplicated into a guest program, because reading the *last* block before
+writing the first lets `mdstrategy()` answer — which is safe only because the superblock is
+written last. Its oracle is byte-exact in both worlds: `b6fsutil -n` builds the same image and
+the only thing between them is a timestamp six bytes into the superblock.
 Last again,
 `cmd/getty` and `cmd/login` (kernel task 29b) are the two that make the machine multi-user, and
 they are the only pair here where one execs the other: `init` execs `/etc/getty`, getty execs
@@ -381,7 +411,7 @@ they are the only pair here where one execs the other: `init` execs `/etc/getty`
 exiting and `init`'s `multiple()` starting a fresh getty. Neither is setuid, and `login`
 emphatically not — it is *handed* root by getty rather than borrowing it, and the setuid version
 is `su` (task C6). All compiled by the
-`b6*` toolchain and staged into `build/rootfs/` as `etc/init`, `etc/getty`, `etc/quot` and
+`b6*` toolchain and staged into `build/rootfs/` as `etc/init`, `etc/getty`, `etc/mkfs`, `etc/quot` and
 `bin/{sh,basename,cat,chgrp,chmod,chown,cp,date,dd,df,du,echo,ed,kill,ln,login,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`. **`mkdir`, `mv` and `rmdir` are setuid
 root** on the image, which is a property of [root.manifest](root.manifest) alone (`mode 04755`)
 since nothing under `build/rootfs/` carries a mode; see
