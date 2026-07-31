@@ -6,6 +6,7 @@ cat
 chgrp
 chmod
 chown
+cmp
 cp
 date
 dd
@@ -20,15 +21,20 @@ ls
 mkdir
 mv
 pwd
+rev
 rm
 rmdir
 sh
 sleep
+split
+sum
 sync
+tee
 test
 time
 touch
 tty
+wc
 yes
 /tmp/d
 rmdir: cannot remove current directory

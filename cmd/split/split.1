@@ -1,5 +1,5 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
-.TH SPLIT 1 
+.TH SPLIT 1
 .SH NAME
 split \- split a file into pieces
 .SH SYNOPSIS
@@ -34,3 +34,67 @@ if
 .B \-
 is given in its stead,
 then the standard input file is used.
+.PP
+.B Note:
+the pieces are created in the
+.B working directory,
+the name being handed to
+.IR fopen (3)
+with no directory part prepended.
+A
+.I name
+containing a
+.B /
+therefore writes wherever it points; nothing is created for it, and a missing directory is
+reported as
+.BR "Cannot create output" .
+An existing piece is
+.B truncated
+without warning.
+Both are v7's and its page said neither.
+.SH "HOW MANY PIECES"
+The suffix is two letters, so
+.B 676
+pieces can be named:
+.B aa
+through
+.BR zz .
+.PP
+.B Note:
+the 677th is refused, with
+.BR "split: more than 676 output files" .
+v7 carried on past
+.B zz
+into
+.BR "{a" ,
+.BR "{b"
+and beyond, with no complaint \- so the promise above that the names run lexicographically
+stopped being true exactly when a user had enough pieces to care.
+What has already been written is left written; the input has been consumed.
+.PP
+.B Note:
+.I name
+may be at most
+.B 97
+bytes, the buffer being 100 and the suffix and terminator taking three.
+A longer one is refused with
+.B "split: output name too long"
+before anything is created.
+v7 copied it in with no test at all.
+.SH DIAGNOSTICS
+.B Note:
+.B \-0
+is refused with
+.BR "split: line count must be positive" .
+v7 accepted it and then looped forever, reading nothing and writing nothing: with a count of
+zero the per-piece loop runs no iterations, so no input is read, no output is opened, and the
+program goes round again.
+.PP
+.B Note:
+an unrecognised option is refused with a usage line.
+v7 ignored it silently and split the file into thousand-line pieces the user had not asked
+for.
+.PP
+Every diagnostic above exits 1, as does an input that cannot be opened.
+.SH "SEE ALSO"
+cat(1), tee(1), wc(1)

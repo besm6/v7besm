@@ -1,5 +1,8 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
-.TH REV 1 
+.\" NOTE: this page contains Cyrillic, and it is the example that matters -- read it
+.\" with `nroff -Kutf8 -man', not plain `nroff -man', which renders each byte on its
+.\" own.  It is the first page in this tree to need that; cmd/README.md SS10 says so.
+.TH REV 1
 .SH NAME
 rev \- reverse lines of a file
 .SH SYNOPSIS
@@ -10,3 +13,55 @@ rev \- reverse lines of a file
 copies the named files to the standard output,
 reversing the order of characters in every line.
 If no file is specified, the standard input is copied.
+.PP
+.B "The character here is a UTF-8 sequence, not a byte,"
+and that is a deliberate divergence from v7 rather than a detail of this port.
+The two are the same thing on an ASCII machine; on this one they are not.
+This system's text is UTF\-8 throughout \- the console driver, the filesystem and the shell
+all carry eight bits \- so
+.B "\`привет\'"
+is twelve bytes and six letters, and reversing its bytes yields twelve bytes that are not
+text at all.
+.I Rev
+reverses the letters:
+.IP "" 8n
+.B "$ echo привет мир | rev"
+.br
+рим тевирп
+.PP
+The rule is UTF\-8's own and needs no table: a byte
+.B 10xxxxxx
+is a continuation and travels with the byte that leads it.
+Input that is not valid UTF\-8 loses nothing \- a continuation byte with no lead comes out as
+a group of its own \- so
+.I rev
+is safe on arbitrary bytes even though it no longer treats them all alike.
+.SH "LONG LINES"
+A line longer than
+.B 1024
+bytes is cut into pieces of that size and each piece is reversed on its own, with a newline
+after it.
+That is v7's behaviour, at four times v7's buffer.
+.PP
+.B Note:
+the cut
+.B backs off to a character boundary,
+so a multi-byte letter is never split between two pieces; the bytes not taken begin the next
+one.
+Without that the reversal above would be a lie for exactly the lines long enough to need it.
+.SH DIAGNOSTICS
+.B Note:
+a final line with
+.B no newline
+is printed, with a newline added.
+v7 discarded whatever was in its buffer when it saw end of file, so
+.B "printf abc | rev"
+produced nothing at all.
+.PP
+A file that cannot be opened is reported and
+.B ends the run,
+the remaining arguments not being read.
+That is v7's and is left alone.
+The exit status is 1.
+.SH "SEE ALSO"
+cat(1), tail(1)

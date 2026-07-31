@@ -36,7 +36,8 @@ do — the ten of task C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`,
 (`basename/`, `test/`, `time/`, `tty/`, `yes/`), the one of C3 (`ed/`), the three of C4a
 (`df/`, `du/`, `quot/`), the one of C4b (`dd/`), the one of C4c (`mkfs/`), the one of C4d
 (`fsck/`), the four of C4e (`icheck/`, `dcheck/`, `ncheck/`, `clri/`), the two of C4f
-(`mount/`, `umount/`) and the two of kernel task 29b (`getty/`, `login/`) today. That is the only marker;
+(`mount/`, `umount/`), the six of C5a (`wc/`, `cmp/`, `sum/`, `tee/`, `split/`, `rev/`) and
+the two of kernel task 29b (`getty/`, `login/`) today. That is the only marker;
 [../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.
 
 Four things about the copies:
@@ -126,6 +127,7 @@ candidates, as they stand today:
 | ~~`date.c`~~ | ~~one — `sp < ep`~~ — **found and fixed**, task C2a: it bounded the in-place reversal of `argv[1]`, and is an index pair now |
 | ~~`basename.c`~~ | ~~**two**, not the one this table used to claim — `p1>p2 && p3>argv[2]`~~ — **found and fixed**, task C2b: both are in the *same expression*, the backwards suffix compare, and both are index counts now |
 | ~~`mount.c`, `umount.c`~~ | ~~five~~ — **found and gone, task C4f**, though not one of them was rewritten: three (`np > argv[1]`, `np < &mp->spec[NAMSIZ-1]`, `np < &mp->file[NAMSIZ-1]`) bounded the basename stripping and the fixed-width copy into the mount table, and the other two are `umount.c`'s copies of the same. The table became a **text** file for an unrelated reason (§2's sibling hazard — see [mount/README.md](mount/README.md) §2) and every one of the five went with it. Worth recording because it is the cheap way out and it is not always available: **a hazard in code that exists only to serve a file format can be deleted by changing the format**, when the format is the program's own business |
+| ~~`wc.c`, `cmp.c`, `sum.c`, `tee.c`, `split.c`, `rev.c`~~ | **none** — grepped, task C5a, and this is the *second* negative result in the table and a more surprising one than C4e's. Six **text filters**, 487 lines of buffer arithmetic and character loops, and not one `char *` relational between them. `tee.c` is the one that walks a buffer and it does so with `int` indices (`r`, `w`, `p`, `i`); every other pointer test in the six is `==`/`!=` against `NULL`. The reason is the same as C4e's and is worth generalising: **a v7 source acquires this hazard when it parses, not when it reads bytes.** `sort`, `grep`, `sed` and `pr` all hold a cursor inside a buffer they are deciding about; a filter that copies its input holds an index into a buffer it is filling |
 | ~~`icheck.c`, `dcheck.c`, `ncheck.c`, `clri.c`~~ | **none** — grepped, task C4e. The only pointer relational in the four is `ncheck.c`'s `++hp >= &htab[HSIZE]`, over a `struct htab *`, which is thin and correct; it went anyway when the hash table became one sized from the superblock and indexed by i-number. Worth recording as a *negative* result: four v7 sources full of block and inode arithmetic and not one `char *` cursor between them, because none of them parses anything |
 
 And the counterexample, because it is what makes the hazard hard to see: **`sort.c`'s record
@@ -156,9 +158,12 @@ match. Grepping for the arena hazards is still right; expecting them because a p
   consumes no argument** — so it desynchronises every later conversion in the same format string.
   v7 wrote `%D` freely. `ls` had two.
 
-Sources carrying the most `long`: `ps.c` (17), `od.c` (10), `cmp.c` (7), `find.c` (7),
+Sources carrying the most `long`: `ps.c` (17), `od.c` (10), ~~`cmp.c` (7)~~ (**done, task
+C5a** — the count was exact, and all seven were `int`: a byte offset, a line number, the two
+skip counts, `otoi()`'s declaration, its definition and its accumulator), `find.c` (7),
 ~~`du.c` (5)~~ (**done, task C4a** — all five were `int`), `strip.c` (5), `nm.c` (4),
-`grep.c` (4).
+`grep.c` (4). C5a's other five carry six between them (`wc.c` six, `sum.c` one, `tee.c` one),
+and none of the six had a `%D` or a `%O`, so the verbatim-echo trap above was never sprung.
 
 The other direction is worth a glance too: **plain `char` is unsigned here**
 ([../doc/Besm6_Data_Representation.md](../doc/Besm6_Data_Representation.md)), so the
@@ -259,6 +264,11 @@ alone, a name out of a directory being neither NUL-terminated nor the program's 
 | `mount` | 93 | 3,428 | 374 | 1,079 | **4,974** |
 | `umount` | 93 | 3,389 | 364 | 1,079 | **4,925** |
 | `cat` | 83 | 2,989 | 165 | 1,544 | **4,781** |
+| `split` | 91 | 3,092 | 190 | 1,054 | **4,427** |
+| `rev` | 84 | 2,981 | 159 | 1,204 | **4,428** |
+| `cmp` | 80 | 3,036 | 177 | 1,038 | **4,331** |
+| `wc` | 81 | 2,908 | 167 | 1,032 | **4,188** |
+| `sum` | 81 | 2,842 | 168 | 1,032 | **4,123** |
 | `chgrp` | 85 | 3,211 | 344 | 1,236 | **4,876** |
 | `time` | 85 | 3,088 | 340 | 1,041 | **4,554** |
 | `date` | 99 | 3,348 | 265 | 1,041 | **4,753** |
@@ -272,6 +282,7 @@ alone, a name out of a directory being neither NUL-terminated nor the program's 
 | `basename` | 35 | 1,162 | 147 | 1,030 | **2,374** |
 | `init` | 27 | 820 | 37 | 323 | **1,207** |
 | `test` | 22 | 886 | 49 | 7 | **964** |
+| `tee` | 22 | 397 | 54 | 1,029 | **1,502** |
 | `getty` | 34 | 361 | 28 | 11 | **434** |
 
 **`mount` and `umount` are the two smallest programs of task C4** and the reason is the
@@ -285,12 +296,21 @@ before it was ported, as task C4d's brief demanded, and it came in at a third of
 even though it is the longest source in C1–C8. `sort`, `awk` and `make` are the three left to
 measure early rather than late. Nothing before task C6 is in danger of the first ceiling.
 
-**The bottom three rows say what stdio costs.** Every program above `basename` links `printf`
+**The bottom rows say what stdio costs.** Every program above `basename` links `printf`
 and a `FILE` buffer, which is the ~1,030 words of bss and most of the text they have in common;
-`test` and `getty` link neither — `test`'s whole output is four `write(2)` calls and `getty`'s is
-one `write(2)` per character — so `getty` is the smallest program on the image, an eleventh the
-size of `cat`. That is the difference `lib/libc/README.md` measures for `hello`, seen from the
-other end.
+`test`, `tee` and `getty` link neither — `test`'s whole output is four `write(2)` calls,
+`tee`'s is `write(2)` on the descriptors it was handed, and `getty`'s is one `write(2)` per
+character — so `getty` is the smallest program on the image, an eleventh the size of `cat`.
+That is the difference `lib/libc/README.md` measures for `hello`, seen from the other end.
+
+**`tee` (task C5a) is the cleanest measurement of it there is**, because it is the one program
+here whose bss is *entirely* its own: 1,024 of its 1,029 words are the two `BSIZE` buffers it
+copies through, and the five left over are `openf[]`, `n`, `t` and `aflag`. So its 397 words
+of **text** are the whole program — a quarter of `basename`'s, which does far less — and the
+comparison to make is with `cat`, which does the same job through stdio and costs 2,989. Three
+times the text and half a kiloword more bss, for a `getc`/`putc` pair. It is not an argument
+for writing the rest of the userland against `write(2)`; it is the number to have in mind when
+a program is close to the ceiling and its output is a stream rather than a report.
 
 **And `ed` is the third angle on it**, being the one *large* program that pays nothing either:
 it has no format string at all (`putd()` over `write(2)`), so its 4,027 words of text — 1,038
@@ -486,7 +506,16 @@ sources are already here" above, including the ten programs that have no page of
 Follow the [../lib/libc/man/](../lib/libc/man/) precedent: **correct it in place** — ANSI SYNOPSIS,
 every wrong claim fixed where it stands and marked `Note:`, block counts in the 1024-byte block
 §4 describes,
-`DIRSIZ` 18 where it shows. Nothing installs any of them; they are read with `nroff -man`. Rewrite
+`DIRSIZ` 18 where it shows. Nothing installs any of them; they are read with `nroff -man`.
+
+**A page containing non-ASCII wants `nroff -Kutf8 -man` and says so in a `.\"` comment of its
+own.** Plain `nroff -man` reads the input a byte at a time and renders a Cyrillic letter as
+two, so the page becomes mojibake in exactly the passage that is about text not being mojibake.
+Task C5a's `wc.1` and `rev.1` are the first two pages in this tree to contain any, and both
+carry the comment; there is no reason to avoid the character, and every reason not to leave the
+reading command a matter of luck.
+
+Rewrite
 a page rather than correct it only when the DESCRIPTION itself stopped being true, which has
 happened once: `touch` — see "What task C1 taught" below. A `README.md` is worth writing only when the port *taught* something
 structural — a new privilege transition, a new hazard — which is the standard `sh`, `ls`, `mkdir`
@@ -862,3 +891,86 @@ numbers are true measurements of different moments. The mounted reading is asser
 literal by the log diff instead, and the recomputed comparison uses a final `df` taken after
 everything. **Ask what instant an oracle measures**, which is the sharper form of C4a's rule
 about which kind of number it holds.
+
+---
+
+## What task C5a taught
+
+`wc`, `cmp`, `sum`, `tee`, `split` and `rev` are on the image — the first six of the text
+filters, and the first task here whose whole assertion is `b6sim`'s **by choice** rather than
+by oversight. [rev/README.md](rev/README.md) is the account of the one divergence in the set;
+five findings generalize.
+
+**A task can have no §2 in it at all, and a survey cannot tell you that.** Six v7 filters, 487
+lines of buffer arithmetic, and not one `char *` relational between them — the count is now in
+§2's table as the second negative result there, and it is a more surprising one than C4e's,
+because these programs *do* walk buffers where `icheck` and its three only walked block
+numbers. `tee` is the proof of the rule that came out of it: it is the one of the six with a
+cursor and it uses `int` indices, because it is **copying** rather than **deciding**. So
+**this hazard arrives with parsing and not with byte handling**, which says where to expect it
+in what is left: `sort`'s fifteen are all inside `cmp()`, `grep`'s three bound a compiled
+expression, `sed`'s three bound `genbuf`. C5b's seven should be grepped and are likely to be
+clean; C5c's and C5d's will not be.
+
+**A width dependence that is *not* there is worth a comment, because the next reader will look
+for one.** `sum`'s checksum is sixteen bits computed in an `unsigned` that is 41 bits here and
+was 16 on a PDP-11, and it comes out bit for bit identical — but only because v7 masks with
+`0xFFFF` *inside* the loop rather than leaning on the register's width. Nothing about the code
+says "this is why I am portable"; the mask reads as belt and braces. `sum.c`'s header now says
+it, and the general form is that **the interesting thing about a port is sometimes what did
+not have to change, and that is exactly what a diff cannot show.**
+
+**§4 reaches programs that are not filesystem tools.** `sum` prints a block count, and the
+constant it divided by was `BUFSIZ` — which was 512 on a PDP-11 and *was also* its `BSIZE`, so
+the number named a filesystem block by coincidence rather than by design. Here `BUFSIZ` is
+3072 and so is `BSIZE`, so the coincidence still holds and the division still named a real
+block; what did not hold is that a number **reported to a user** is in 1024-byte blocks on
+this machine, which is what `df`, `du`, `quot` and `ls -s` were all taught in C4a. The rule
+generalises past the four programs that motivated it: **ask what unit a number is in whenever
+a program prints one, not only when the program's subject is the disk.**
+
+**An oracle over a program's *files* is a separate harness, and it is cheap.**
+`b6_progtest()` diffs standard output and checks an exit status, which is everything for `wc`
+and `cmp` and nothing at all for `tee` and `split`, whose entire job is what they create. The
+answer is the shape `cmd/mkfs/test/run-mkfs-test.sh` already had: a custom `add_test` that
+runs the guest under `b6sim` and then lets the **host** look at the directory afterwards —
+[tee/test/run-tee-test.sh](tee/test/run-tee-test.sh) and
+[split/test/run-split-test.sh](split/test/run-split-test.sh). Two things it made possible that
+no stdout diff could: that `tee -a` really *appends* (the file must be the input twice, which
+only a seek to the end can produce — a dropped `lseek` leaves a file that still compares equal
+to the input), and that `split` refuses its 677th piece after writing exactly 676. `col`,
+`sed -n w` and `sort -o` all inherit it.
+
+**And the fixture goes in the build directory, not through `@srcdir@`, whenever the program
+prints the name it was given.** `run-prog-test.sh` substitutes `@srcdir@` into a `.args` file,
+which is right for a program that only reads what it is pointed at — and wrong the moment the
+program *echoes* the path, because an absolute build path then lands in a checked-in
+`.expected` and the case passes on one machine. `wc`, `cmp` and `sum` all print filenames, so
+every fixture here is copied into the test's binary directory and named relatively. It is two
+lines of CMake and it is the difference between a portable case and a local one.
+
+**Three upstream bugs, and one of them was a hang.** `split -0` did not terminate — a zero
+count makes the per-piece loop zero-trip, so nothing is read, nothing is opened, and the
+program goes round forever — which is more than a bug: §9 says a program that does not
+terminate cannot be a `b6sim` case at all, so in the shape v7 left it the ctest would have
+*hung* rather than failed, and the whole directory would have had to be written around it.
+`split`'s output-name buffer and `tee`'s twenty-entry descriptor table were both unbounded
+against `argv`, the second writing straight into the three variables that follow it. **A
+program that hangs on an argument is worth grepping for before designing its tests**, and the
+three cheap places to look are a loop bound taken from a number the user supplied, a `fclose`
+of something that may be null, and a `goto` back over both.
+
+## Where task C5a stopped, and what owes it
+
+**The six are asserted under `b6sim` alone.** That is a deliberate stop and not an oversight —
+they run in both worlds and §9 says to do both — and it is recorded here for the reason task
+C4e's stop was: a deferral said out loud is the difference between a known gap and an unknown
+one. The booted-kernel pass belongs with task C5b's, whose seven programs will want the same
+script and the same two-minute boot; [TODO.md](TODO.md) carries it as a named loose end with
+the volume number a closing test would take.
+
+What that costs today is small and worth stating exactly. Nothing in the six touches a device,
+a directory, a signal or a second process, so the *program* logic is fully covered by
+`ctest -L cmd`. What is not covered is that the image's copy runs at all — which the two
+`ls /bin` listings (`kernel/test/console.ini` and `kernel/test/session.expected`) assert the
+existence of but not the execution of.

@@ -228,6 +228,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/chgrp
     ${B6_ROOTFS}/bin/chmod
     ${B6_ROOTFS}/bin/chown
+    ${B6_ROOTFS}/bin/cmp
     ${B6_ROOTFS}/bin/cp
     ${B6_ROOTFS}/bin/date
     ${B6_ROOTFS}/bin/dd
@@ -242,14 +243,19 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/mkdir
     ${B6_ROOTFS}/bin/mv
     ${B6_ROOTFS}/bin/pwd
+    ${B6_ROOTFS}/bin/rev
     ${B6_ROOTFS}/bin/rm
     ${B6_ROOTFS}/bin/rmdir
     ${B6_ROOTFS}/bin/sleep
+    ${B6_ROOTFS}/bin/split
+    ${B6_ROOTFS}/bin/sum
     ${B6_ROOTFS}/bin/sync
+    ${B6_ROOTFS}/bin/tee
     ${B6_ROOTFS}/bin/test
     ${B6_ROOTFS}/bin/time
     ${B6_ROOTFS}/bin/touch
     ${B6_ROOTFS}/bin/tty
+    ${B6_ROOTFS}/bin/wc
     ${B6_ROOTFS}/bin/yes)
 # /bin/[ is deliberately absent: it is a `link' stanza in the manifest, not a staged file,
 # so there is nothing here for the image to depend on.  rootimg_link below is what holds it.

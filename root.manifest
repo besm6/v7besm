@@ -227,6 +227,18 @@ file /bin/chown         # cmd/chown -- reads /etc/passwd; NOT setuid, chown(2) i
 source ../../rootfs/bin/chown
 mode 0755
 
+# TASK C5a's SIX -- cmp, rev, split, sum, tee and wc -- are NOT a block here.  This list is
+# alphabetical and they fall where their names do, so each carries its own `task C5a' note
+# instead: cmp below, then rev, split, sum, tee and wc further down.  They are the first of
+# the text filters, the phase that makes a userland testable -- almost every case they carry
+# runs under b6sim in a tenth of a second, with no boot at all (cmd/README.md SS9) -- and not
+# one of the six is setuid, each opening, creating or reading exactly what the caller could
+# itself.
+
+file /bin/cmp           # cmd/cmp -- task C5a; the seven `long's cmd/README.md SS3 counted
+source ../../rootfs/bin/cmp
+mode 0755
+
 file /bin/cp            # cmd/cp -- and what cmd/mv execs for a move across devices
 source ../../rootfs/bin/cp
 mode 0755
@@ -295,6 +307,12 @@ file /bin/pwd           # cmd/pwd
 source ../../rootfs/bin/pwd
 mode 0755
 
+file /bin/rev           # cmd/rev -- task C5a, and the one deliberate divergence in it: it
+                        # reverses UTF-8 SEQUENCES where v7 reversed bytes, this machine's
+                        # text being UTF-8 since task C11.  See cmd/rev/README.md.
+source ../../rootfs/bin/rev
+mode 0755
+
 file /bin/rm            # cmd/rm -- NOT setuid: `rm -r' execs /bin/rmdir, which is
 source ../../rootfs/bin/rm
 mode 0755
@@ -303,8 +321,24 @@ file /bin/sleep         # cmd/sleep -- a decimal parse around libc's sleep(3): a
 source ../../rootfs/bin/sleep
 mode 0755
 
+file /bin/split         # cmd/split -- task C5a; the pieces land in the working directory
+source ../../rootfs/bin/split
+mode 0755
+
+file /bin/sum           # cmd/sum -- task C5a.  Its block count is in 1024-byte blocks, like
+                        # df's, du's, quot's and `ls -s' (cmd/README.md SS4); v7's was in the
+                        # PDP-11's 512-byte ones.  The checksum is bit for bit v7's.
+source ../../rootfs/bin/sum
+mode 0755
+
 file /bin/sync          # cmd/sync -- what flushes the buffer cache before the machine stops
 source ../../rootfs/bin/sync
+mode 0755
+
+file /bin/tee           # cmd/tee -- task C5a, and the only one of the six with no stdio at
+                        # all: read(2) and write(2), in BSIZE buffers where v7 used the
+                        # PDP-11's 512
+source ../../rootfs/bin/tee
 mode 0755
 
 file /bin/test          # cmd/test -- what lets a shell script branch; see /bin/[ below
@@ -321,6 +355,12 @@ mode 0755
 
 file /bin/tty           # cmd/tty -- ttyname(3), which reads /dev as a directory
 source ../../rootfs/bin/tty
+mode 0755
+
+file /bin/wc            # cmd/wc -- task C5a.  A byte above 0177 is a WORD CONSTITUENT here,
+                        # not a delimiter as v7 had it, so a Cyrillic line counts (SS11); the
+                        # characters it counts are bytes.
+source ../../rootfs/bin/wc
 mode 0755
 
 file /bin/yes           # cmd/yes -- the only program here that a SIGPIPE has to stop

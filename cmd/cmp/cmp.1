@@ -1,5 +1,5 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
-.TH CMP 1 
+.TH CMP 1
 .SH NAME
 cmp \- compare two files
 .SH SYNOPSIS
@@ -9,7 +9,7 @@ cmp \- compare two files
 ] [
 .B \-s
 ]
-file1 file2
+file1 file2 [ skip1 [ skip2 ] ]
 .SH DESCRIPTION
 The two files are
 compared.
@@ -34,10 +34,55 @@ differing bytes (octal) for each difference.
 .B  \-s
 Print nothing for differing files;
 return codes only.
-.dt
-.SH "SEE ALSO"
-diff(1), comm(1)
+It suppresses the
+.B "cannot open"
+diagnostic as well.
+.SH "SKIPPING A PREFIX"
+.B Note:
+.I cmp
+accepts two further operands after the file names, and v7's page did not mention either.
+.I Skip1
+and
+.I skip2
+are counts of bytes to be read and discarded from
+.I file1
+and
+.I file2
+respectively before the comparison starts.
+Both files are read forward to get there, so either may be a pipe.
+.PP
+The byte and line numbers reported afterwards count from the
+.B first compared byte,
+not from the start of the file.
+.PP
+A count beginning with
+.B 0
+is octal, and any other is decimal.
+.B Note:
+v7 selected base 8 on the leading zero and then accepted the digits
+.B 8
+and
+.B 9
+regardless, so
+.B 018
+meant sixteen \- an octal number with a digit octal has not got.
+The parse stops at the first digit the base does not have, as every other number in C does,
+so
+.B 018
+now means one.
+.PP
+Reaching end of file during a skip is reported as
+.B "EOF on"
+that file, with exit code 1.
 .SH DIAGNOSTICS
 Exit code 0 is returned for identical
 files, 1 for different files, and 2 for an
 inaccessible or missing argument.
+.PP
+.B Note:
+every diagnostic goes to the
+.B standard output,
+not the diagnostic output.
+That is v7's and is left alone.
+.SH "SEE ALSO"
+diff(1), comm(1), sum(1)

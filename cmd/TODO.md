@@ -13,9 +13,9 @@ that file's porting recipe** — §2 the `char *` ordering hazard, §4 the 3072-
 1024-byte one reported in its place, §6 the
 address-space ceilings, and so on.
 
-**Tasks C1, C2, C3 and the whole of C4 are done and their writeups have been removed**; what each
-taught is README.md's eight closing sections. Thirty-nine commands are on the image — thirty
-entries in `/bin`, since `[` is `test` under a second name, plus `/etc/getty`, `/etc/quot`,
+**Tasks C1, C2, C3, the whole of C4 and C5a are done and their writeups have been removed**;
+what each taught is README.md's nine closing sections. Forty-five commands are on the image —
+thirty-six entries in `/bin`, since `[` is `test` under a second name, plus `/etc/getty`, `/etc/quot`,
 `/etc/mkfs`, `/etc/fsck`, `/etc/icheck`, `/etc/dcheck`, `/etc/ncheck`, `/etc/clri`,
 `/etc/mount` and `/etc/umount` beside them
 — so the tree
@@ -46,7 +46,16 @@ puts a second filesystem behind a directory, which is the first thing in this tr
 call `mount(2)` — `smount()` had been compiled into every kernel this port built and had no
 caller — and the first block `bdevsw[0]` minor 1 has ever carried. Everything C4 wrote
 before it went to the **raw** device through `physio()`; a mounted volume goes through the
-**buffer cache** ([mount/README.md](mount/README.md)).
+**buffer cache** ([mount/README.md](mount/README.md)). **And since C5a it can read its own
+text**: `wc`, `cmp`, `sum`, `tee`, `split` and `rev` are the first programs here whose subject
+is bytes rather than the machine, and the phase they open is the one that makes a userland
+*testable* — thirty-nine cases in a tenth of a second each, with no boot at all. Two of them
+are worth naming. `wc` is where §11 stopped being a property of the *system* and became a
+property of a **program**: v7's word test makes every byte of a Cyrillic letter a delimiter, so
+until this task the machine could type, store and glob `привет мир` and then count it as zero
+words. And `rev` is the first **deliberate divergence** since `touch` — it reverses UTF-8
+sequences where v7 reversed bytes, because on a machine whose text is UTF-8 end to end the
+faithful port is the one that returns mojibake ([rev/README.md](rev/README.md)).
 [../etc/rc](../etc/rc) is a boot script that does something: it prints the motd and then the
 date, which is a literal to the minute because the boot clock is the image's own `-T` stamp,
 and `kernel/test/console` asserts both. What it
@@ -86,7 +95,7 @@ compiles.
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C5 | the text filters — `wc` `cmp` `sum` `tee` `split` `rev` `tr` `uniq` `comm` `tail` `od` `look` `col` `grep` `fgrep` `sort` `sed` `pr` `diff` `cal` `tsort` `join` `find` `file` | the corpus everything else is tested against | medium ×24 |
+| C5 | the text filters — ~~`wc` `cmp` `sum` `tee` `split` `rev`~~ `tr` `uniq` `comm` `tail` `od` `look` `col` `grep` `fgrep` `sort` `sed` `pr` `diff` `cal` `tsort` `join` `find` `file` | the corpus everything else is tested against | medium ×18; six done |
 | C6 | multiuser userland — `passwd` `su` `newgrp` `stty` `who` `write` `wall` `mesg` `mail` | more than one person | medium; unblocked |
 | C7 | `tar` | getting data on and off without `b6fsutil` | medium |
 | C8 | inspection — `ps` `dmesg` `pstat` `iostat` `nice`, `ac` `sa` `accton` | seeing what the machine is doing | medium; needs `nlist(3)` |
@@ -95,8 +104,10 @@ compiles.
 
 **C4 was the one that mattered and it is gone from this table**, its twelve programs and what
 each of them settled being the opening paragraph's business now. C5 is cheap and pays for
-itself in test coverage. C7 is one program and can be taken at any time; C6, C8 and C9 are
-each gated on something the task names.
+itself in test coverage, and C5a has now shown what that is worth in numbers: six programs,
+thirty-nine cases, and the whole of `ctest -L cmd` still finishing in under a second. C7 is one
+program and can be taken at any time; C6, C8 and C9 are each gated on something the task
+names.
 
 ---
 
@@ -107,11 +118,25 @@ like Unix — but more importantly **almost all of them run under `b6sim`**, so 
 that builds a userland regression corpus cheaply, in the harness that does not need a two-minute
 boot.
 
-### C5a. The trivial six — `wc`, `cmp`, `sum`, `tee`, `split`, `rev`
+**C5a is done and its writeup has been removed**; what it taught is README.md's *What task C5a
+taught*. `wc`, `cmp`, `sum`, `tee`, `split` and `rev` are on the image with thirty-nine `b6sim`
+cases between them, and the two things it left for the tasks below are these. **The filter test
+pattern is established**, which is what C5a existed for: `<case>.in` feeds the filter, fixtures
+are **copied into the build directory** rather than named through `@srcdir@` (a program that
+prints the name it was given would otherwise put a build path into a checked-in `.expected`),
+and a filter whose output is a **file** rather than a stream gets a custom `add_test` that lets
+the host look at the directory afterwards — `cmd/tee/test/run-tee-test.sh` and
+`cmd/split/test/run-split-test.sh` are the two shapes. `col`, `sed -n w` and `sort -o` will all
+want the second.
 
-`wc.c` (88), `cmp.c` (123, seven `long`s), `sum.c` (50), `tee.c` (97), `split.c` (83), `rev.c`
-(46). An afternoon, all six, with a `b6sim` test each. Start here to establish the filter test
-pattern, then reuse it for everything below.
+**And C5a's one loose end is C5b's to close.** The six are asserted under `b6sim` **alone** —
+deliberately, and README.md says so out loud rather than leaving it to be discovered, which is
+the lesson task C4e paid for. They run in both worlds and §9 says to do both, so the booted
+pass is owed; it is not worth a two-minute boot for six programs that touch no device, no
+directory, no signal and no second process, and it *is* worth one for those six plus C5b's
+seven. **C5b should write `kernel/test/filters` and put all thirteen through it** — the
+`kernel/test/utils` script is the model, `run-utils.sh` the masking precedent, and **3096** is
+the next free volume number (`mount` took 3093–3095).
 
 ### C5b. `tr`, `uniq`, `comm`, `tail`, `od`, `look`, `col`
 
@@ -356,10 +381,12 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 
 ## Where to start
 
-**C5**, and there is no longer a cheaper alternative to weigh it against: C4 is finished and
-C5 is the only task left that costs a day rather than a week. Twenty-four programs, almost all
-of them testable under `b6sim` without a two-minute boot, and the corpus everything after them
-is regression-tested against.
+**C5b**, and for the reason C5a's writeup gives rather than for a new one: C5a proved the
+phase's economics — six programs, thirty-nine cases, no boot — and left C5b two things to do
+that nothing else can. The first is the seven programs themselves, of which `od` is the one
+that wants rethinking rather than porting. The second is the **booted-kernel pass C5a
+deliberately did not take**: `kernel/test/filters`, over all thirteen programs at once, at
+volume 3096. See the paragraph under C5b.
 
 **The whole of C4 has landed**, so the guest can now *examine* its own store — `df`, `du` and
 `quot`, with the raw-device path proven and a fixture-filesystem harness under `b6sim` — *move*
@@ -373,8 +400,13 @@ which is the first thing here that has ever gone to a disk through the **buffer 
 than through `physio()`. C4e's one loose end went with it, folded into that task's harness as
 this section used to recommend.
 
-C5 stays the cheap one, and the harness for it is now **complete**: `b6_progtest()` needs no
-boot, and C3 gave it the `<case>.in` that C2b's writeup said the filters would want, so a filter
-can finally be fed. README.md §9 records what is left that it cannot do — two things now, not
-three, plus the one C4f added, which is that a program calling a syscall the *host* also has
-belongs under the booted kernel or nowhere.
+C5 stays the cheap one, and the harness for it is now **proven** rather than merely complete:
+`b6_progtest()` needs no boot, C3 gave it the `<case>.in` that C2b's writeup said the filters
+would want, and C5a has now fed six filters with it. Two things C5a added to that harness and
+every later filter inherits: a **fixture is copied into the build directory** rather than named
+through `@srcdir@`, because a program that prints the name it was given would otherwise put a
+build path into a checked-in `.expected`; and a filter whose output is a **file** gets a custom
+`add_test` beside its cases, since `b6_progtest()` diffs standard output and can do no more.
+README.md §9 records what is left that the harness cannot do — two things, plus the one C4f
+added, which is that a program calling a syscall the *host* also has belongs under the booted
+kernel or nowhere.
