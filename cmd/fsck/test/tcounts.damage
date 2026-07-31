@@ -1,5 +1,8 @@
-# The two counters this port does not maintain.  fsck must NOTE them and ask nothing --
-# and must therefore not modify the filesystem, which is what makes this case's
-# `unrepairable' marker mean what it says.
+# The two superblock totals.  Zeroed here, so both are wrong and neither is a plausible
+# accident -- fsck must recompute each from its own walk and offer a FIX, and the host's
+# checker must fault the image before and pass it afterwards like any other repair.
+#
+# This was the tree's one `hostblind' case, back when nothing maintained the two fields and
+# fsck could only note them.  kernel/alloc.c maintains both now; see cmd/fsck/README.md SS1.
 sb.tfree=0
 sb.tinode=0

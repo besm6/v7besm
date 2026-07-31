@@ -372,9 +372,6 @@ Two harnesses, and choosing wrong wastes the effort:
   rules came out of that and hold for anything similar. **Assert that there was something to
   repair**: every case there requires the host's checker to *fail* first, or a damage spec that
   had drifted out of step with its fixture would leave a test that fixes nothing and passes.
-  And **a deliberate disagreement is marked, not hidden**: `cmd_fsck_tcounts` carries a
-  `hostblind` marker because the two checkers differ about a field on purpose, and the case
-  fails the day that stops being true.
   A fourth limit came with that, and it is about the *host* rather than the simulator:
   **`getpwent(3)` opens the literal `/etc/passwd`**, so under `b6sim` a program that maps a uid
   to a name reads the build machine's password file and no case may assert what comes back.
@@ -708,10 +705,12 @@ requires the *other* checker to fail first and succeed afterwards, and requires 
 find nothing, a repair that is not idempotent not having finished. **Assert the precondition,
 not only the result.**
 
-**A deliberate disagreement is marked, not hidden.** One field the two tools differ about on
-purpose — a counter this port maintains nowhere — carries a `hostblind` marker in the harness,
-and the case fails the day the disagreement stops being true. That is the difference between a
-known gap and an unknown one, and it costs three lines of shell.
+**A deliberate disagreement is marked, not hidden.** Two fields the tools differed about on
+purpose — counters this port maintained nowhere — carried a `hostblind` marker in the harness,
+written so that the case would fail the day the disagreement stopped being true. It did: the
+kernel took `s_tfree`/`s_tinode` up, the marker went, and the harness printed the instructions
+for removing itself. That is the difference between a known gap and an unknown one, and it
+cost three lines of shell.
 
 **A tool that builds things has to learn to break them.** There was no way to corrupt an image
 from `b6fsutil`'s command line; the recipes existed only as C++ inside its own gtests, where a

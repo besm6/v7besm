@@ -66,10 +66,19 @@ struct buf *alloc(dev_t dev)
     bp = getblk(dev, bno);
     clrbuf(bp);
     fp->s_fmod = 1;
+    // ONE decrement, and it covers the chain block too: when the cache empties the
+    // block popped IS the block holding the next NICFREE addresses, and it is then
+    // handed to the caller.  free() is symmetric.
+    fp->s_tfree--;
     return (bp);
 
 nospace:
+    // s_nfree is zeroed, so nothing more can be allocated until fsck runs; s_tfree = 0
+    // is the consistent statement of that.  A no-op when the list ran out honestly --
+    // the arithmetic above already has it at zero -- and a repair when it did not.
     fp->s_nfree = 0;
+    fp->s_tfree = 0;
+    fp->s_fmod  = 1;
     prdev("no space", dev);
     u.u_error = ENOSPC;
     return (NULL);
@@ -110,7 +119,8 @@ void free(dev_t dev, daddr_t bno)
         wakeup((chan_t)&fp->s_flock);
     }
     fp->s_free[fp->s_nfree++] = bno;
-    fp->s_fmod                = 1;
+    fp->s_tfree++;
+    fp->s_fmod = 1;
 }
 
 // Check that a block number is in the
@@ -162,6 +172,10 @@ int sbcheck(register struct filsys *fp, dev_t dev)
         prdev("bad free count", dev);
         return (1);
     }
+    // s_tfree and s_tinode are deliberately NOT checked here, nor repaired in getfs().
+    // They are totals this kernel maintains for fsck(1M) and df(1M) to read; nothing in
+    // the kernel acts on either, so a wrong one is a filesystem to check rather than a
+    // filesystem to refuse.  The counts above are different -- they bound array indices.
     return (0);
 }
 
@@ -199,6 +213,10 @@ loop:
             for (i = 0; i < NADDR; i++)
                 ip->i_un.i_addr[i] = 0;
             fp->s_fmod = 1;
+            // Only here: this is the one path that hands an i-number out.  The two
+            // `goto loop's around it pop the cache without allocating anything, and
+            // the ENOSPC exit allocates nothing either.
+            fp->s_tinode--;
             return (ip);
         }
         // Inode was allocated after all.
@@ -252,12 +270,20 @@ void ifree(dev_t dev, ino_t ino)
     register struct filsys *fp;
 
     fp = getfs(dev);
+
+    // BEFORE both returns below.  The inode is free whichever of the three paths runs
+    // -- the i-list itself is the record and di_mode is already zero; what the returns
+    // drop is the CACHE entry, not the inode.  s_fmod goes with it, or the count would
+    // be a change nothing writes back: RetroBSD's ufs_alloc.c increments here and sets
+    // its modified flag only on the third path, so the increment can be lost.
+    fp->s_tinode++;
+    fp->s_fmod = 1;
+
     if (fp->s_ilock)
         return;
     if (fp->s_ninode >= NICINOD)
         return;
     fp->s_inode[fp->s_ninode++] = ino;
-    fp->s_fmod                  = 1;
 }
 
 // getfs maps a device number into

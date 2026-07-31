@@ -13,12 +13,13 @@
 // descending allocation stream and lays every file backwards across the platter.
 // create.cpp frees descending for exactly this reason; see the comment there.
 //
-// ONE DELIBERATE ADDITION.  s_tfree and s_tinode are maintained here and are NOT
-// in the kernel's alloc()/free() -- include/sys/filsys.h calls them dead, and v7
-// says so itself.  They are kept because `b6fsutil -v' and fsck want a free-space
-// figure that does not require walking the whole chain.  Nothing in the kernel
-// reads them back, so a stale value cannot break a mount; treat them as this
-// tool's bookkeeping rather than as part of the format.
+// s_tfree AND s_tinode ARE MAINTAINED HERE, at the same four points and in the same
+// direction as the kernel's alloc()/free()/ialloc()/ifree() -- which is what makes
+// this file an oracle rather than a second opinion.  They were once this tool's own
+// bookkeeping, kept because `b6fsutil -v' and fsck wanted a free-space figure that
+// did not require walking the whole chain, and the kernel has caught up; if these
+// stop matching kernel/alloc.c, check.cpp will start faulting images the kernel
+// wrote, which is exactly the alarm it should be.
 //
 #include "filesystem.h"
 

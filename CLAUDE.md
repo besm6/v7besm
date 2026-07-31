@@ -141,9 +141,17 @@ work has two halves:
   disagreement is a bug in one of them. Four turned up, three of them in `fsck` — a free-inode
   count one too high on every clean filesystem this system ever made (inode 1 exists and can
   never be allocated), a superblock magic number v7's `fsck` never looked at, and a reconnected
-  file that could have been left unreachable by `namei()`; the fourth is a field the two
-  deliberately differ about, and the harness marks it rather than hiding it
-  (`cmd/fsck/README.md`). It also settled how a program that reports on a whole
+  file that could have been left unreachable by `namei()`; the fourth was neither tool's, and it
+  is the one that reached back into the kernel. **`s_tfree` and `s_tinode` are maintained now** —
+  `alloc()`, `free()`, `ialloc()` and `ifree()` keep them, which v7 does not and RetroBSD's
+  `ufs_alloc.c` does — where before, nothing in this system did, so on any volume that had been
+  written to they were stale by construction, `fsck` could only *note* a mismatch and
+  `check.cpp` looked at one of the two and not the other. That was the tree's one declared
+  disagreement between the two checkers, marked `hostblind` so it would fail the day it stopped
+  being true, and it did. Both now offer or report a real repair, and the proof is at the foot of
+  `kernel/test/fsck`: the machine fscks the root it is running on, after a boot's worth of
+  allocation, and finds its own superblock's totals exact (`cmd/fsck/README.md`).
+  It also settled how a program that reports on a whole
   filesystem is *asserted*: not against a checked-in table, which would have to be re-typed
   whenever anything joined `/bin`, but against numbers the host **recomputes** from the finished
   image — and to the **console** rather than to a file, since a `quot` writing to `/tmp` counts

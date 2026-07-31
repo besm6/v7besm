@@ -173,10 +173,6 @@ things it settled belong to C4e and C4f:
   a second `fsck` to find nothing. Without the first, a damage spec that drifted out of step
   with its fixture would leave a test that fixes nothing and passes, and nothing else would
   notice.
-* **The two checkers do not check the same things, and the difference is now written down.**
-  `fsck/README.md` lists what each sees that the other does not, and `cmd_fsck_tcounts` is
-  marked `hostblind` — a deliberate disagreement the harness knows about and that fails the
-  day it stops being true. C4e's `icheck` and `dcheck` are where that list gets shorter.
 
 It also found four bugs by holding the two implementations against each other, three of them
 in `fsck` itself: a free-inode count one too high on every clean filesystem this system has

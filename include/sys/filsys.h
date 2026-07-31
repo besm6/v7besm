@@ -19,9 +19,16 @@
 // is now load-bearing.  `int' removes the question instead of depending on the
 // answer, at a cost of three words in a block that has seventeen spare.
 //
-// s_tfree/s_tinode are dead here -- v7 says so itself, and this port has no ustat()
-// -- but they stay, because mkfs and fsck will be ported from v7 sources.  v7's
-// s_m/s_n (mkfs's free-list interleave) and s_fname/s_fpack (volume labels, read
+// s_tfree/s_tinode are MAINTAINED here, which v7's are not -- v7 says so itself, and
+// its own filsys(5) calls them uncurrent.  alloc(), free(), ialloc() and ifree()
+// (kernel/alloc.c) keep them, on RetroBSD's sys/kernel/ufs_alloc.c's precedent, so
+// that the superblock's own statement of its free space is true rather than a figure
+// left behind by the last mkfs.  What that buys is a checkable field: fsck(1M) offers
+// to FIX a mismatch instead of merely noting one, and cmd/fsutil/check.cpp -- which
+// shares no line with either -- can fault an image on it.  Nothing in the kernel ACTS
+// on either, so sbcheck() does not police them; see the note there.
+//
+// v7's s_m/s_n (mkfs's free-list interleave) and s_fname/s_fpack (volume labels, read
 // only by fsck and friends) are gone: nothing in this port writes them, the
 // interleave they describe does not survive the first free-list churn, and their six
 // words are better spent as room to grow.

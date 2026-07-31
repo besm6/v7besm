@@ -219,19 +219,26 @@ More blocks for inodes than there are in the file system.
 .TP
 9.
 Bad free block list format.
+.TP
+10.
+Total free block and/or free inode count incorrect.
 .PP
 .B Note:
-v7 listed a tenth, ``total free block and/or free inode count incorrect'', as a
-repair.  The two super-block counters it names,
+the two super-block counters the tenth names,
 .I s_tfree
 and
 .IR s_tinode ,
-are maintained by nothing in this system \(em not by the kernel, which never
-touches them \(em so they are stale on any filesystem that has been written to
-and a repair would be undone by the next write.
-.I Fsck
-reports a discrepancy as a note, asks nothing, and leaves both fields correct
-when it has had reason to rewrite the super-block anyway.
+were maintained by nothing in this system until the kernel took them up, and
+while that was so
+.I fsck
+could only report a discrepancy as a note: a repair would have been undone by
+the next write.  Both are now kept by the kernel's block and i-node allocator as
+blocks and i-nodes are allocated and freed, so a wrong one is a real
+inconsistency and is offered as a
+.BR FIX .
+The free inode count excludes i-node 1, which exists and can never be allocated;
+see
+.IR filsys (5).
 .PP
 Orphaned files and directories (allocated but unreferenced) are,
 with the operator's concurrence, reconnected by

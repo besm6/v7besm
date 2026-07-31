@@ -101,6 +101,7 @@ void Checker::walk_indirect(int64_t bno, int level, int64_t ino)
 void Checker::pass1_inodes()
 {
     const int64_t ninodes = fs.inode_count();
+    int64_t nalloc        = 0;
 
     for (int64_t ino = ROOTINO; ino <= ninodes; ino++) {
         Inode ip;
@@ -121,6 +122,7 @@ void Checker::pass1_inodes()
         allocated[size_t(ino)] = 1;
         links[size_t(ino)]     = int32_t(ip.nlink);
         is_dir[size_t(ino)]    = ip.is_dir() ? 1 : 0;
+        nalloc++;
 
         if (ip.nlink <= 0)
             error("inode " + std::to_string(ino) + ": allocated but has nlink " +
@@ -165,6 +167,22 @@ void Checker::pass1_inodes()
             error("inode " + std::to_string(ino) + ": directory size " + std::to_string(ip.size) +
                   " is not a multiple of " + std::to_string(DIRENTSZ));
     }
+
+    //
+    // s_tinode, the superblock's own count of unallocated inodes -- checked here
+    // because this loop is what has just counted them.
+    //
+    // NOTE THE `- 1'.  Inode 1 is not one of them: it exists and ialloc() can never
+    // hand it out, so it is a slot that can never be filled.  create.cpp seeds the
+    // field as ninodes-2 for that reason, cmd/mkfs does the same, and cmd/fsck's
+    // phase 4 recomputes it the same way.  The kernel maintains the field
+    // (kernel/alloc.c's ialloc()/ifree()), so a mismatch is a real defect and not the
+    // stale figure it was for most of this port's life.
+    //
+    const int64_t nfree_inodes = ninodes - 1 - nalloc;
+    if (nfree_inodes != fs.sb.tinode)
+        error("superblock: s_tinode says " + std::to_string(fs.sb.tinode) +
+              " free inodes, the i-list holds " + std::to_string(nfree_inodes));
 }
 
 //
@@ -293,7 +311,8 @@ void Checker::pass4_free_list()
     // the kernel can drain -- including the chain-block reload, which is where a
     // free list built in the wrong order goes wrong.
     //
-    int64_t nfree = fs.sb.nfree;
+    int64_t nfree           = fs.sb.nfree;
+    const int errors_before = nerror;
     std::vector<int64_t> cache(fs.sb.free.begin(), fs.sb.free.end());
 
     if (nfree < 0 || nfree > NICFREE) {
@@ -350,18 +369,22 @@ void Checker::pass4_free_list()
     }
 
     //
-    // s_tfree is this tool's own bookkeeping rather than part of the format -- the
-    // kernel does not maintain it -- so a mismatch is a warning about the figure
-    // `-v' prints, not about the filesystem.
+    // s_tfree, against the list this loop has just walked.  It was this tool's own
+    // bookkeeping while the kernel maintained nothing, and so a verbose-only note about
+    // the figure `-v' prints; kernel/alloc.c keeps it now, so a mismatch is a defect in
+    // the filesystem and cmd/fsck offers to FIX it.
+    //
+    // Only when the walk finished.  Every `break' above is a broken list, and a count cut
+    // short by one would otherwise be reported a second time as a wrong total.
     //
     // The count itself is not reported here: run() prints it at the foot of a clean run,
     // out of the freed[] bitmap this loop fills, as `N blocks in use, M free'.  THAT LINE
     // IS AN ORACLE and not only a summary -- cmd/df on the guest reports the same M by
     // doing this same walk, and kernel/test/run-fsinfo.sh diffs the two.
     //
-    if (count != fs.sb.tfree && opt.verbose)
-        *os << "note: s_tfree says " << fs.sb.tfree << " free blocks, the list holds " << count
-            << "\n";
+    if (nerror == errors_before && count != fs.sb.tfree)
+        error("superblock: s_tfree says " + std::to_string(fs.sb.tfree) +
+              " free blocks, the list holds " + std::to_string(count));
 }
 
 //

@@ -33,8 +33,12 @@
 #   .hostblind       the two checkers deliberately disagree: the damage is real and
 #                    `b6fsutil -c' does not look for it.  Assertion 1 inverts, and the
 #                    image must be clean to the host both before and after while fsck says
-#                    something about it and modifies nothing.  There is one such case and
-#                    it is not an oversight -- see cmd/fsck/README.md's list.
+#                    something about it and modifies nothing.  THERE IS NO SUCH CASE at
+#                    present: `tcounts' was the one, and it stopped being one when the
+#                    kernel took up s_tfree/s_tinode and check.cpp started faulting them
+#                    (cmd/fsck/README.md SS1).  The machinery stays because the next
+#                    divergence should be declared rather than papered over -- the message
+#                    below is what walked this one out.
 #
 set -e
 

@@ -125,8 +125,8 @@ TEST(Check, FreshImageIsClean)
 //
 // M is checked against s_tfree rather than against a literal: this tool writes both, so a
 // literal would only assert how big the fixture happens to be.  That the two agree at all
-// is the second half of the assertion -- a disagreement prints a `note:' and would mean
-// the free list and the bookkeeping had parted company.
+// is the second half of the assertion -- and it is not a free one, since a disagreement is
+// an error that would have failed the exit-status check above.
 //
 TEST(Check, VerboseReportsTheFreeBlockCount)
 {
@@ -148,7 +148,7 @@ TEST(Check, VerboseReportsTheFreeBlockCount)
         text.find(std::to_string(inuse) + " blocks in use, " + std::to_string(tfree) + " free\n"),
         std::string::npos)
         << text;
-    EXPECT_EQ(text.find("note: s_tfree"), std::string::npos) << text;
+    EXPECT_EQ(text.find("s_tfree says"), std::string::npos) << text;
 }
 
 //

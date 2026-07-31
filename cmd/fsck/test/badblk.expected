@@ -14,7 +14,9 @@ BAD/DUP FILE I=8  OWNER=U MODE=100644
 SIZE=64 MTIME=Nov 14 22:13 2023 
 CLEAR?  yes
 
-note: s_tinode says 116 free inodes, the i-list holds 117
+FREE INODE COUNT WRONG IN SUPERBLK
+FIX?  yes
+
 ** Phase 5 - Check Free List 
 3 BLK(S) MISSING
 BAD FREE LIST

@@ -44,10 +44,13 @@
 #       nothing was written.  And its free count equals df's, measured seconds apart by two
 #       programs walking the same list -- and equals the host's reading of the image that
 #       came back, which is the same claim from outside the machine.
-#       This section is GREPPED rather than diffed, unlike oracle 6.  It has to be: the
-#       root has been written to since the image was built, so the two counters this port
-#       does not maintain (cmd/fsck/fsck.c's head comment) are stale by construction and
-#       fsck says so in a note whose numbers nothing here should be asserting.
+#       This section is GREPPED rather than diffed, unlike oracle 6, because its numbers
+#       are the root image's and change whenever anything joins /bin -- run-fsinfo.sh's
+#       rule.  Note what the `?' check below therefore covers for free: the root has been
+#       written to since the image was built, so s_tfree and s_tinode are only right if the
+#       kernel really did maintain them across a whole boot's worth of allocation, and a
+#       wrong one is a FIX prompt like any other.  Until kernel/alloc.c took the two fields
+#       up they could not be asserted at all.
 #
 #   6.  THE LOG, diffed against fsck.expected with NOTHING MASKED.  OWNER= is real here --
 #       getpw(3) reads the image's /etc/passwd, so uid 7 is `guest' every time -- which is
@@ -178,6 +181,13 @@ for want in '(NO WRITE)' '\*\* Phase 1' '\*\* Phase 2' '\*\* Phase 3' '\*\* Phas
         exit 1
     fi
 done
+if echo "$root" | grep -q 'COUNT WRONG IN SUPERBLK'; then
+    echo "run-fsck.sh: on the mounted root fsck found a superblock total wrong, so the" >&2
+    echo "  kernel did not keep s_tfree/s_tinode across this boot's allocations." >&2
+    echo "  Something allocates or frees outside alloc()/free()/ialloc()/ifree()" >&2
+    echo "  (kernel/alloc.c), or one of the four counts in the wrong place." >&2
+    exit 1
+fi
 if echo "$root" | grep -q '?'; then
     echo "run-fsck.sh: fsck PROPOSED A REPAIR to the mounted root, which should be sound." >&2
     echo "  Every question fsck asks is a real inconsistency it found.  If it is" >&2

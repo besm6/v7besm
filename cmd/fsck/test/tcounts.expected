@@ -4,7 +4,13 @@ tcounts.img
 ** Phase 2 - Check Pathnames
 ** Phase 3 - Check Connectivity
 ** Phase 4 - Check Reference Counts
-note: s_tinode says 0 free inodes, the i-list holds 116
+FREE INODE COUNT WRONG IN SUPERBLK
+FIX?  yes
+
 ** Phase 5 - Check Free List 
-note: s_tfree says 0 free blocks, the list holds 177
+FREE BLK COUNT WRONG IN SUPERBLK
+FIX?  yes
+
 11 files 51 blocks 531 free
+
+***** FILE SYSTEM WAS MODIFIED *****

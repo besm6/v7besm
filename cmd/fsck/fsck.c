@@ -60,13 +60,13 @@
 //     ../mkfs/mkfs.c builds it -- descending, no cylinder interleave -- which deletes
 //     stype(), the -s/-S ARGUMENT, and a 584-word stack frame (flg[500] + addr[500]).
 //
-// s_tfree AND s_tinode ARE DEAD FIELDS HERE.  mkfs sets them and the kernel maintains
-// neither, so on any volume that has been written to they are stale by construction.  v7
-// offers to FIX both; this reports them as a note and offers nothing, because a value
-// nothing maintains is not repaired by writing it once -- and because the offer would fire
-// on every check of a live root.  cmd/fsutil/check.cpp makes the same call and says the
-// same thing about it.  Phase 6 does set them, being in the superblock it is rewriting
-// anyway.
+// s_tfree AND s_tinode ARE CHECKED AND REPAIRED, as v7 checks and repairs them.  For most
+// of this port's life they were dead -- mkfs set them and the kernel maintained neither, so
+// on any volume that had been written to they were stale by construction, and this program
+// could only NOTE them.  kernel/alloc.c maintains both now, at the four points that change
+// them, so a mismatch is a real inconsistency again and is offered as a FIX.  Both formulas
+// are recomputed from this run's own walk; cmd/fsutil/check.cpp faults an image on either,
+// which is what lets the two checkers be held against each other over them.
 //
 // WHAT IT REPORTS IN.  The summary and "N BLK(S) MISSING" are MEASUREMENTS, so they are
 // printed in 1024-byte blocks -- KBPB of them per filesystem block, ../README.md SS4 --
@@ -528,21 +528,22 @@ static void check(char *dev)
         }
     }
 
-    // s_tinode is a dead field here (see the head comment): reported, never offered as a
-    // repair.
-    //
     // NOTE THE `- 1', WHICH IS NOT v7's ARITHMETIC.  v7 compares against imax - n_files,
     // counting every i-number in the list that is not in use.  INODE 1 IS NOT ONE OF
     // THEM: ialloc() refuses to hand out anything below ROOTINO (kernel/alloc.c), so it
     // is a slot that exists and can never be filled, and ../mkfs/mkfs.c seeds the field
     // as ninodes-2 -- "everything but inode 1, which cannot be allocated, and the root,
     // which is in use" -- as does cmd/fsutil/create.cpp.  Carried unchanged, v7's formula
-    // is one too high and this note fires on every clean filesystem this system ever
+    // is one too high and this would fire on every clean filesystem this system ever
     // made.  It is the first disagreement between fsck and its oracle that this port
     // found, and fsck was the one that was wrong; ../fsck/README.md has the rest.
-    if (imax - n_files - 1 != superblk.s_tinode)
-        printf("note: s_tinode says %d free inodes, the i-list holds %d\n", superblk.s_tinode,
-               imax - n_files - 1);
+    if (imax - n_files - 1 != superblk.s_tinode) {
+        printf("FREE INODE COUNT WRONG IN SUPERBLK");
+        if (reply("FIX") == YES) {
+            superblk.s_tinode = imax - n_files - 1;
+            sbdirty();
+        }
+    }
 
     flush(&fileblk);
 
@@ -566,9 +567,16 @@ static void check(char *dev)
             if ((n_blks + n_free) != (fmax - fmin)) {
                 printf("%d BLK(S) MISSING\n", (fmax - fmin - n_blks - n_free) * KBPB);
                 fixfree = 1;
-            } else if (n_free != superblk.s_tfree)
-                printf("note: s_tfree says %d free blocks, the list holds %d\n", superblk.s_tfree,
-                       n_free);
+            } else if (n_free != superblk.s_tfree) {
+                // Only when the list itself is sound: if it is about to be salvaged,
+                // makefree() lays s_tfree down with it and asking here would be asking
+                // twice about one thing.
+                printf("FREE BLK COUNT WRONG IN SUPERBLK");
+                if (reply("FIX") == YES) {
+                    superblk.s_tfree = n_free;
+                    sbdirty();
+                }
+            }
         }
         if (fixfree) {
             printf("BAD FREE LIST");
@@ -587,10 +595,13 @@ static void check(char *dev)
     // this line, which is ../README.md SS4's rule and ../df/README.md's account of why.
     printf("%d files %d blocks %d free\n", n_files, n_blks * KBPB, n_free * KBPB);
 
-    // The two dead counters, left correct on the way out.  This is not offered as a
-    // repair and is not one -- nothing maintains them, so they will drift again with the
-    // next write -- but the superblock is being rewritten anyway and there is no reason
-    // to leave in it a number this run has just recomputed.
+    // Both counters written again on the way out of a run that changed anything, without
+    // asking, because any repair may have moved them: linkup() allocates a lost+found
+    // entry, clri() frees an inode, and phase 6 rebuilds the free list under them.  This
+    // run has just recomputed both, so there is no reason to leave a stale one behind.
+    // (`modified' is bwrite()'s flag, so a run whose only repair was one of the two FIX
+    // prompts above does not come through here -- the prompt has already set the field and
+    // ckfini() has yet to flush it.)
     if (modified) {
         superblk.s_tinode = imax - n_files - 1; // the `- 1' is inode 1; see phase 4
         superblk.s_tfree  = n_free;

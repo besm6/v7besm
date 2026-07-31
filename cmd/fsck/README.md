@@ -22,8 +22,8 @@ filesystem can be handed to both, and **every case they disagree on is a bug in 
 them**. That is the whole design of [test/](test/): `b6fsutil -D` breaks an image, `fsck -y`
 repairs it under `b6sim`, and `b6fsutil -c` has to find nothing afterwards.
 
-Four disagreements turned up. Three were `fsck`'s fault and are fixed; the fourth is
-recorded rather than fixed, and the test suite knows it.
+Four disagreements turned up. Three were `fsck`'s fault and are fixed; the fourth was
+neither tool's, and it took a change to the kernel to settle.
 
 ### `s_tinode` was one too high, on every clean filesystem this system ever made
 
@@ -53,20 +53,32 @@ terminates it — leaving whatever was in the rest of `d_name`. `namei()`
 `open` cannot find. It happens to be harmless in v7 only because `mklost+found` leaves the
 slots zeroed. The name is zeroed here before the digits go in.
 
-### And one that is not `fsck`'s: the two dead counters
+### And one that is neither tool's: the two counters nothing maintained
 
-`s_tfree` and `s_tinode` are maintained by **nothing** in this system. `mkfs` sets them,
-`b6fsutil` sets them, and the kernel never touches either (`grep s_tfree kernel/*.c` finds
-nothing) — [include/sys/filsys.h](../../include/sys/filsys.h) says they survive only because
-`mkfs` and `fsck` were going to be ported. So on any filesystem that has been *written* to
-they are stale by construction, which makes v7's offer to `FIX` them noise that fires on
-every check of a live root and is undone by the next write.
+`s_tfree` and `s_tinode` were maintained by **nothing** in this system. `mkfs` set them,
+`b6fsutil` set them, and the kernel touched neither — `grep s_tfree kernel/*.c` found
+nothing, and [include/sys/filsys.h](../../include/sys/filsys.h) said they survived only
+because `mkfs` and `fsck` were going to be ported. So on any filesystem that had been
+*written* to they were stale by construction, and v7's offer to `FIX` them was noise that
+fired on every check of a live root and was undone by the next write.
 
-They are a **note** here, asked about never, and left correct on the way out when the
-superblock is being rewritten for another reason anyway. `check.cpp` makes the same call in
-the same words for `s_tfree` and does not look at `s_tinode` at all — which is why
-`cmd_fsck_tcounts` is marked `hostblind` in [test/](test/): the two checkers deliberately
-differ, the test says so out loud, and it fails if `b6fsutil` ever starts seeing it.
+For task C4d they were therefore a **note**, asked about never, and `check.cpp` made the same
+call for `s_tfree` and did not look at `s_tinode` at all — the tree's one deliberate
+disagreement, marked `hostblind` in [test/](test/) so that it was stated out loud rather than
+hidden.
+
+**That was a symptom of a hole in the kernel, and the kernel is where it got fixed.**
+`alloc()`, `free()`, `ialloc()` and `ifree()` now keep both counters, at the same four points
+and in the same direction as `cmd/fsutil/alloc.cpp` had been keeping them all along —
+RetroBSD's `sys/kernel/ufs_alloc.c` does the same, and v7 is alone in not. Two consequences
+here: `fsck` offers a `FIX` for either, as v7 does, on this port's `imax - n_files - 1`
+arithmetic; and `check.cpp` **faults** an image on either, `s_tinode` included, so the
+disagreement is gone and `tcounts` is an ordinary repair case. Two ways of noticing one
+thing, which is what the rest of this section is about.
+
+Worth keeping in view: nothing in the kernel *acts* on either counter, so `sbcheck()`
+deliberately does not police them. A wrong total is a filesystem to check, not a filesystem
+to refuse to mount.
 
 **What else the two do not both check** is worth writing down, because "require both to
 report the same thing" is only true of the verdict. `check.cpp` looks for five things `fsck`

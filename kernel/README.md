@@ -531,6 +531,16 @@ Facts that cost real time to establish and are not in `doc/`.
 * **`s_isize` is the first data block, not a count of i-list blocks**, and **the free list must be
   built descending** — `alloc()` pops the superblock cache from the top, so an ascending build lays
   every file backwards across the platter while passing every self-consistency check.
+* **The superblock's two totals are maintained, and something now checks them.** `s_tfree` and
+  `s_tinode` are kept by `alloc()`, `free()`, `ialloc()` and `ifree()` (`alloc.c`) — v7 kept
+  neither; RetroBSD's `sys/kernel/ufs_alloc.c` is the model. So a new path that hands out or
+  reclaims a block or an i-number **without going through those four** silently drifts the totals,
+  and it will not stay silent: `kernel/test/fsck` has the machine fsck the root it is running on
+  and fails on a `COUNT WRONG IN SUPERBLK`, and every writing test ends with a host-side
+  `b6fsutil -c` that faults the same thing. Note the asymmetry `ifree()` needs — it counts *before*
+  its two early returns, because the i-node is free whether or not the `NICINOD` cache had room for
+  its number. Nothing in the kernel *acts* on either total, so `sbcheck()` deliberately does not
+  police them: a wrong one is a filesystem to check, not one to refuse to mount.
 * **The v7 shell has no comment character, and a `:` line is still PARSED.** A backquote, an
   apostrophe, a parenthesis, a `$`, a `;` or a redirection inside what looks like a comment is a
   syntax error or a command run. This cost two round trips on `test/session.sh`; `../etc/rc` says it

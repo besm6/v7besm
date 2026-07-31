@@ -292,9 +292,9 @@ TEST(Alloc, AllocatedBlockIsCleared)
 }
 
 //
-// The free count tracks the list.  This is the tool's own bookkeeping -- the
-// kernel does not maintain s_tfree -- but fsck and `-v' report it, so it should
-// at least be self-consistent.
+// The free count tracks the list.  s_tfree is part of the format rather than this
+// tool's own bookkeeping: kernel/alloc.c maintains it too, at the same points, and
+// check.cpp faults an image whose total disagrees with its list.
 //
 TEST(Alloc, FreeCountTracksTheList)
 {

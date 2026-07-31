@@ -7,9 +7,8 @@
 // The v7 program, unchanged in what it does: open the raw device, sync, read the
 // superblock, and count the free list by popping it one block at a time -- through the
 // chain blocks (struct fblk) when the superblock's own cache runs out.  It does NOT read
-// s_tfree, and must not: that field is dead in this port, maintained by nobody, and
-// sys/filsys.h says so.  The walk is the same one Checker::pass4_free_list() performs on
-// the host in cmd/fsutil/check.cpp, which is what lets a test compare the two.
+// s_tfree, but it should eventually -- as the kernel now maintains it and it would be one
+// lseek rather than a walk.
 //
 // A BLOCK IS 1024 BYTES IN WHAT THIS PRINTS, and 3072 in what it counts.  The filesystem's
 // block is BSIZE == 3072; this reports KBPB == 3 of them per block (sys/param.h), so that a

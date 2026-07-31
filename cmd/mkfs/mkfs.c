@@ -48,9 +48,10 @@
 //   * s_tinode IS SET, NOT ACCUMULATED.  v7 adds NIPB per i-list block and subtracts one
 //     per inode written, which here would come to ninodes-1: it counts the bad-blocks
 //     inode that this program does not write.  It is ninodes-2 -- everything but inode 1,
-//     which cannot be allocated, and the root, which is in use.  Nothing but the oracle
-//     catches that; it is a one-off arithmetic error in a field the kernel then carries
-//     forever.
+//     which cannot be allocated, and the root, which is in use.  It is a one-off
+//     arithmetic error in a field the kernel then keeps -- alloc.c maintains s_tinode
+//     from whatever this program seeds it with, so the error never washes out -- and
+//     fsck would report it against every filesystem this program ever made.
 //   * NO FREE-LIST INTERLEAVE.  v7's bflist() lays the free list out in a rotational
 //     pattern described by s_m/s_n and the optional `[ m n ]' arguments.  struct filsys
 //     has no s_m or s_n in this port (sys/filsys.h says why), the drive is not a moving-head

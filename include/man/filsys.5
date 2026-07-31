@@ -165,11 +165,28 @@ During a reboot,
 of the super-block for the root file system
 is used to set the system's idea of the time.
 .PP
-The fields
+.B Note:
+v7 said of
 .I s_tfree, s_tinode, s_fname
 and
 .I s_fpack
-are not currently maintained.
+that they were not currently maintained.
+On this system
+.I s_fname
+and
+.I s_fpack
+do not exist at all,
+and the other two
+.B are
+maintained:
+.I s_tfree
+is the number of blocks on the free list and
+.I s_tinode
+the number of unallocated i-nodes,
+both kept by the kernel as blocks and i-nodes are allocated and freed.
+.I Fsck (1M)
+recomputes them and offers to correct either.
+Note that i-node 1 is counted in neither: it exists and can never be allocated.
 .PP
 I-numbers begin at 1, and the storage for i-nodes
 begins in block 2.
