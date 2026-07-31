@@ -126,6 +126,9 @@ copy. Sources are compiled *into* `kernel/test/` via `b6_find_src()`/`b6_test_ob
 - ctest labels: `kernel` (SIMH), `lib` (b6sim), `rootfs` (size checks), `sh`.
 - Every `cmd/` tool has a GoogleTest suite under `cmd/<tool>/test/`; `cmd/cpp/test/` is a full
   C11 (N1570) conformance suite built on the `PreprocessorTest` fixture.
+- **A lone unexpected failure is usually the harness, not the change.** The suite runs in
+  parallel and both simulators are timing-sensitive, so a case that fails under `make run` and
+  passes on its own was a flake. Re-run it alone, then move on — do not spend the turn on it.
 
 ## Architecture notes
 
