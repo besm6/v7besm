@@ -11,8 +11,9 @@
 # and write(2) are the host's, so none of the five conditions of the raw path
 # (../../df/README.md) exists here.  A green cmd_icheck_* says the arithmetic is right and
 # nothing whatever about the device.  ../../fsck and ../../mkfs each have a SIMH test that
-# closes that gap for themselves; C4e deliberately has none, and ../../TODO.md carries it as
-# this task's one named loose end.
+# closes that gap for themselves; C4e deliberately had none, and task C4f closed it --
+# ../../../kernel/test/mount.sh section 6 runs icheck, dcheck, ncheck and clri, and `icheck
+# -s' as well, over /dev/rmd1 on a pack that has just been mounted, written and unmounted.
 #
 # NOTHING NEEDS MASKING HERE, unlike ../../fsck/test: no program of task C4e calls getpw(3)
 # or getpwent(3), so none of them prints a user name and none of them reads the build

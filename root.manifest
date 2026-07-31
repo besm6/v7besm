@@ -103,6 +103,12 @@ mode 0777
 # manual page carries the correction.
 dir /lost+found
 
+# mount(1M)'s target, task C4f.  It has to exist and it has to be EMPTY of anything anybody
+# wants: mounting covers it, and whatever is underneath is unreachable until the unmount.
+# It also has to be nobody's working directory when the mount happens -- smount() refuses a
+# mount point whose inode is held more than once (i_count != 1, kernel/sys3.c) with EBUSY.
+dir /mnt
+
 # guest's home, and the first directory here that is not root's.  login(1) chdir()s to the
 # pw_dir field of /etc/passwd and prints `No directory' if it cannot, so the account is only
 # usable because this exists -- and being uid 7's is what lets a non-root shell write in it.
@@ -169,6 +175,24 @@ mode 0755
 file /etc/ncheck        # cmd/ncheck -- i-number to path name; `ncheck | sort | quot -n'
 source ../../rootfs/etc/ncheck
 mode 0755
+
+# The pair of task C4f, and the one that finishes C4: they are what puts a second filesystem
+# behind /mnt below.  Section 1M and root-only for a reason that is not the other eight's --
+# these two do not touch the raw device at all.  What gates them is /dev/md1, mode 0600 and
+# root's, which is where mount(2) takes its privilege from: it asks for none of its own, so a
+# setuid mount would let anybody graft a filesystem of their own making -- setuid-root files
+# and all -- onto this one.  cmd/mount/README.md SS4.
+file /etc/mount         # cmd/mount -- mount a filesystem, on /dev/md1 through the buffer cache
+source ../../rootfs/etc/mount
+mode 0755
+
+file /etc/umount        # cmd/umount -- and take it away again
+source ../../rootfs/etc/umount
+mode 0755
+
+# /etc/mtab IS NOT HERE, and that is the design rather than an omission: the first mount of a
+# boot creates it (cmd/mount/mtab.c), a missing one reads as an empty table, and an image
+# that shipped one would be shipping a claim about what is mounted that no boot had made.
 
 file /bin/sh            # cmd/sh: S. R. Bourne's shell
 source ../../rootfs/bin/sh
@@ -607,6 +631,17 @@ mode 0600
 bdev /dev/md1           # bdevsw[0] minor 1: the second drive, for mount(1M) -- task C4f
 major 0
 minor 1
+mode 0600
+
+# A THIRD DRIVE, AND IT IS HERE TO BE REFUSED.  kernel/test/mount attaches a blank pack on
+# it -- formatted by SIMH's `attach -n', so every zone reads back as zeros -- and mounts it
+# on purpose, because sbcheck() (kernel/alloc.c) answering EINVAL on a device with no
+# filesystem is what retires cmd/mount/mount.1m's oldest BUGS line: v7's mount(2) believes
+# whatever superblock it reads and crashes later.  There is no /dev/rmd2 beside it; nothing
+# has ever wanted the raw form of a drive that holds nothing.
+bdev /dev/md2           # bdevsw[0] minor 2: the third drive -- SIMH's md02
+major 0
+minor 2
 mode 0600
 
 bdev /dev/swap          # bdevsw[1]: the drums -- swapdev = makedev(1, 0)

@@ -212,8 +212,10 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/getty
     ${B6_ROOTFS}/etc/icheck
     ${B6_ROOTFS}/etc/mkfs
+    ${B6_ROOTFS}/etc/mount
     ${B6_ROOTFS}/etc/ncheck
     ${B6_ROOTFS}/etc/quot
+    ${B6_ROOTFS}/etc/umount
     ${B6_ROOTFS}/etc/group
     ${B6_ROOTFS}/etc/motd
     ${B6_ROOTFS}/etc/passwd
@@ -684,6 +686,31 @@ if(BESM6)
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(fsck PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
+
+    # mount -- A SECOND FILESYSTEM, on its own volumes (3093 root, 3094 scratch).  Task C4f,
+    # the last of task C4, and the question it asks is one none of the four above can: every
+    # byte fsinfo, dd, mkfs and fsck moved went to the RAW device, through physio() and
+    # mdstrategy().  This one mounts /dev/md1 and writes through the BUFFER CACHE instead --
+    # bdevsw[0] minor 1 had never carried a block, smount() had never had a caller in this
+    # tree at all, and mount[1] had never been filled.
+    #
+    # IT IS ALSO THE ONLY THING THAT TESTS THESE TWO PROGRAMS.  cmd/mount/test has four
+    # cases and every one of them stops before mount(2), because b6sim services a system
+    # call on the host and mounting something on the build machine is not a test.  Where
+    # cmd/README.md SS9 says to do both worlds where a program can run in both, this is the
+    # first program of task C4 that cannot.
+    #
+    # And it closes task C4e's named loose end, which cmd/TODO.md said to fold in here:
+    # icheck, dcheck, ncheck and clri over the real device, on a pack that has just been
+    # mounted, written and unmounted.
+    #
+    # fsck.ini's shape, not mkfs.ini's: the scratch pack arrives carrying a filesystem the
+    # host built, so it is attached WITHOUT -n.
+    add_test(NAME mount
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-mount.sh
+                ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(mount PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
     # login -- MULTI-USER, on its own volume (3084).  Task 29b, and the question is a fifth
     # one: everything above types at the single-user shell init hands out, and this one types

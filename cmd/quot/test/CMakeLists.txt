@@ -35,7 +35,8 @@
 # listing -n reads has a producer at last -- but b6_progtest() runs ONE program and pipes
 # nothing, and a hand-made <case>.in would assert this program against a fixture invented
 # for it rather than against ncheck's real output.  The place for the pipeline is a SIMH
-# test, where a shell can run one; ../../TODO.md's C4e note is where that would go.
+# test, where a shell can run one.  ../../../kernel/test/mount.sh is where it would go now:
+# task C4f's section 6 already runs ncheck over /dev/rmd1 with a shell around it.
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fsimg.img
     COMMAND ${CMAKE_COMMAND} -E copy

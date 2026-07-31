@@ -133,19 +133,26 @@ last-configured one's directory.
 
 ---
 
-## 5. What is *not* asserted, and it is half the task
+## 5. What C4e did not assert, and how task C4f closed it
 
-Task C4e has **no SIMH test**. Everything above runs under `b6sim`, whose `read(2)` and
-`write(2)` are the host's — so **none of the five conditions of the raw path exists in any
+Task C4e had **no SIMH test**. Everything above runs under `b6sim`, whose `read(2)` and
+`write(2)` are the host's — so **none of the five conditions of the raw path existed in any
 of it**. A green `cmd_icheck_*` says the arithmetic is right and says nothing whatever about
 the device, and `clri` and `icheck -s` are the first programs since `mkfs` and `fsck` to
 write one.
 
-That is a deliberate deferral rather than an oversight, and [../TODO.md](../TODO.md) carries
-it as this task's one named loose end, with what it would take to close it: a test on
-`kernel/test/fsck`'s shape at volumes 3093 (root) and 3094 (scratch), with the scratch pack
-attached *without* `-n`, `clri` and `icheck -s` pointed at `/dev/rmd1`, and a read-only pass
-over the live root last. Two things that test would have to know before it is written:
+That was a deliberate deferral rather than an oversight, `../TODO.md` carried it as this
+task's one named loose end with the volumes a closing test would take, and **task C4f
+closed it** — folded into that task's harness rather than spending a second two-minute boot,
+which is what the plan recommended. [kernel/test/mount.sh](../../kernel/test/mount.sh)
+section 6 runs `icheck`, `dcheck` and `ncheck` over `/dev/rmd1`, clears i-node 7 with `clri`,
+has the first two fault the volume for it, lets `fsck -y` repair it and `icheck -s` lay the
+free list down again — on a pack that has just been mounted, written through the buffer cache
+and unmounted, at volumes 3093 (root) and 3094 (scratch), with the scratch drive attached
+*without* `-n` on `kernel/test/fsck`'s shape. **A deferral said out loud is what gets paid
+off**; nothing about the gap was discovered, only acted on.
+
+Two things that test had to know first, and they are why they are written here:
 
 * **`icheck -s` and `clri` must never be pointed at `/dev/rmd0`.** Both stop the machine on
   a hot root by design — `***** BOOT UNIX (NO SYNC!) *****` and `pause()` forever — so the
@@ -154,6 +161,13 @@ over the live root last. Two things that test would have to know before it is wr
   `/dev/console`**, which is [kernel/test/fsck.sh](../../kernel/test/fsck.sh)'s rule in the
   imperative and for its reason: a `>>/tmp/…` below that line allocates a block after
   `icheck`'s `sync(2)` and turns `missing` non-zero in some runs and not others.
+  `kernel/test/mount.sh` carries the same warning in its own header, and its last section is
+  `icheck` and `dcheck` on `/dev/rmd0` and nothing else.
+
+A third turned up when the test was written, and it belongs to whatever measures a pack next:
+**the pack must be unmounted before anything raw touches it.** A raw read bypasses the buffer
+cache, so a measurement taken through `/dev/rmd1` while `/dev/md1` is mounted is a
+measurement of whatever the cache has not written back yet.
 
 ---
 

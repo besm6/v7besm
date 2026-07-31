@@ -35,8 +35,8 @@ do — the ten of task C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`,
 `rmdir/`, `touch/`), the three of C2a (`date/`, `kill/`, `sleep/`), the five of C2b
 (`basename/`, `test/`, `time/`, `tty/`, `yes/`), the one of C3 (`ed/`), the three of C4a
 (`df/`, `du/`, `quot/`), the one of C4b (`dd/`), the one of C4c (`mkfs/`), the one of C4d
-(`fsck/`), the four of C4e (`icheck/`, `dcheck/`, `ncheck/`, `clri/`) and the two of kernel
-task 29b (`getty/`, `login/`) today. That is the only marker;
+(`fsck/`), the four of C4e (`icheck/`, `dcheck/`, `ncheck/`, `clri/`), the two of C4f
+(`mount/`, `umount/`) and the two of kernel task 29b (`getty/`, `login/`) today. That is the only marker;
 [../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.
 
 Four things about the copies:
@@ -125,6 +125,7 @@ candidates, as they stand today:
 | ~~`dd.c`~~ | ~~one — `ip > ibuf`~~ — **found and fixed**, task C4b: it zero-fills the input buffer before every read under `conv=noerror`/`conv=sync`, and is a word loop over `btow(ibs)` words now |
 | ~~`date.c`~~ | ~~one — `sp < ep`~~ — **found and fixed**, task C2a: it bounded the in-place reversal of `argv[1]`, and is an index pair now |
 | ~~`basename.c`~~ | ~~**two**, not the one this table used to claim — `p1>p2 && p3>argv[2]`~~ — **found and fixed**, task C2b: both are in the *same expression*, the backwards suffix compare, and both are index counts now |
+| ~~`mount.c`, `umount.c`~~ | ~~five~~ — **found and gone, task C4f**, though not one of them was rewritten: three (`np > argv[1]`, `np < &mp->spec[NAMSIZ-1]`, `np < &mp->file[NAMSIZ-1]`) bounded the basename stripping and the fixed-width copy into the mount table, and the other two are `umount.c`'s copies of the same. The table became a **text** file for an unrelated reason (§2's sibling hazard — see [mount/README.md](mount/README.md) §2) and every one of the five went with it. Worth recording because it is the cheap way out and it is not always available: **a hazard in code that exists only to serve a file format can be deleted by changing the format**, when the format is the program's own business |
 | ~~`icheck.c`, `dcheck.c`, `ncheck.c`, `clri.c`~~ | **none** — grepped, task C4e. The only pointer relational in the four is `ncheck.c`'s `++hp >= &htab[HSIZE]`, over a `struct htab *`, which is thin and correct; it went anyway when the hash table became one sized from the superblock and indexed by i-number. Worth recording as a *negative* result: four v7 sources full of block and inode arithmetic and not one `char *` cursor between them, because none of them parses anything |
 
 And the counterexample, because it is what makes the hazard hard to see: **`sort.c`'s record
@@ -255,6 +256,8 @@ alone, a name out of a directory being neither NUL-terminated nor the program's 
 | `df` | 80 | 2,633 | 177 | 2,570 | **5,460** |
 | `dd` | 83 | 3,451 | 503 | 1,056 | **5,093** |
 | `clri` | 86 | 3,021 | 219 | 2,575 | **5,901** |
+| `mount` | 93 | 3,428 | 374 | 1,079 | **4,974** |
+| `umount` | 93 | 3,389 | 364 | 1,079 | **4,925** |
 | `cat` | 83 | 2,989 | 165 | 1,544 | **4,781** |
 | `chgrp` | 85 | 3,211 | 344 | 1,236 | **4,876** |
 | `time` | 85 | 3,088 | 340 | 1,041 | **4,554** |
@@ -270,6 +273,12 @@ alone, a name out of a directory being neither NUL-terminated nor the program's 
 | `init` | 27 | 820 | 37 | 323 | **1,207** |
 | `test` | 22 | 886 | 49 | 7 | **964** |
 | `getty` | 34 | 361 | 28 | 11 | **434** |
+
+**`mount` and `umount` are the two smallest programs of task C4** and the reason is the
+mirror of `ed`'s: they carry no block buffer at all. Every other program in that task holds
+one or more aligned `BSIZEW` slots for the raw path — `icheck`'s five come to 2,560 words —
+and these two read no device, the kernel doing all the filesystem work they ask for. What is
+left is stdio and about 3,400 words of text.
 
 Most of `cat` is libc's stdio, and `fsck` is the largest program on the image — measured
 before it was ported, as task C4d's brief demanded, and it came in at a third of the ceiling
@@ -384,7 +393,17 @@ Two harnesses, and choosing wrong wastes the effort:
   A fourth limit came with that, and it is about the *host* rather than the simulator:
   **`getpwent(3)` opens the literal `/etc/passwd`**, so under `b6sim` a program that maps a uid
   to a name reads the build machine's password file and no case may assert what comes back.
-  There is no uid to steer around it — see [df/README.md](df/README.md). Two more limits C2a ran into: **`stime(2)` is a no-op that reports success**, so a
+  There is no uid to steer around it — see [df/README.md](df/README.md).
+  **Task C4f is where that limit became total**, and it is the only program in `cmd/` for
+  which this harness can say nothing: `mount(2)` and `umount(2)` are the *host's* under
+  `b6sim`, so a case that reached either would be asking the build machine to graft a
+  filesystem onto itself. `cmd/mount/test` has four cases and every one stops before the
+  syscall — which is only possible because the port settles its arguments before it opens
+  `/etc/mtab`, where v7 reads the table first, a reordering made for exactly this.
+  The general question, and it is the one `getpwent(3)` asks too: **when a program names a
+  fixed absolute path or a global system state, ask whose it is under `b6sim`** — and if the
+  answer is "the build machine's", the case belongs under the booted kernel or nowhere.
+  Two more limits C2a ran into: **`stime(2)` is a no-op that reports success**, so a
   program that sets global state cannot be asserted there at all; and **`kill(2)` is the build
   machine's own**, so no case may name a pid. And two C2b ran into: a program that **does not
   terminate** cannot be a case at all, however it is invoked, which is why `yes` has no `test/`
@@ -428,20 +447,33 @@ Two harnesses, and choosing wrong wastes the effort:
   comes back. It is also the only test here that examines **the filesystem the machine is
   running on**, which costs it an ordering constraint no other test has — see the warning in
   `kernel/test/fsck.sh`'s header.
-  **Task C4e is the one task that stopped at the first harness**, and it is written down
-  rather than left to be inferred: `icheck`, `dcheck`, `ncheck` and `clri` are asserted under
-  `b6sim` alone, so nothing exercises the raw path for them — and two of them *write* it.
-  [TODO.md](TODO.md) carries that as C4e's named loose end and says what would close it
-  (volumes 3093 and 3094, on `kernel/test/fsck`'s shape); `icheck/README.md` §5 says what
-  such a test would have to know first. **A deferral said out loud is the difference between
-  a known gap and an unknown one** — C4d's `hostblind` marker made the same point about a
-  disagreement rather than a gap.
+  And `kernel/test/mount` (task C4f) for anything that goes through the **buffer cache**
+  rather than `physio()`, or that needs a filesystem the machine can *reach* rather than only
+  measure: it is the only test that attaches **three** drives — a root, a scratch pack
+  carrying a host-built filesystem, and a **blank** one attached with `-n` that exists to be
+  mounted and refused — and the first thing in this tree ever to call `mount(2)`, `bdevsw[0]`
+  minor 1 having never carried a block. It is also the one test whose program has **no**
+  `b6sim` half at all (see above), so unlike `fsck.ini` it is not the second word on its
+  subject but the only word.
+  **Task C4e was the one task that stopped at the first harness**, and saying so out loud is
+  what got it closed: `icheck`, `dcheck`, `ncheck` and `clri` were asserted under `b6sim`
+  alone, where nothing exercises the raw path — and two of them *write* it.
+  [TODO.md](TODO.md) carried that as a named loose end with the volumes a closing test would
+  take, and **task C4f folded it in** rather than spending a second two-minute boot on it:
+  section 6 of `kernel/test/mount.sh` runs all four over the real device, on a pack that has
+  just been mounted, written and unmounted. **A deferral said out loud is the difference
+  between a known gap and an unknown one** — C4d's `hostblind` marker made the same point
+  about a disagreement rather than a gap, and both were paid off by the next task that
+  happened to be in the neighbourhood.
   Each test has its own copy of the
-  image at its own volume number; **3092 is the highest used** (`edit` took 3086, `fsinfo` 3087,
-  `dd` 3088, `mkfs` two — 3089 root and 3090 scratch — and `fsck` two more, 3091 and 3092). All but `login` graft a script onto that copy
+  image at its own volume number; **3095 is the highest used** (`edit` took 3086, `fsinfo` 3087,
+  `dd` 3088, `mkfs` two — 3089 root and 3090 scratch — `fsck` two more, 3091 and 3092, and
+  `mount` three: 3093 root, 3094 scratch and 3095 the blank pack it mounts to be refused).
+  All but `login` graft a script onto that copy
   with `b6fsutil -a`, and `login` is the exception because what it tests is the thing that reads
   what is typed: it types every character it needs. `mkfs` grafts its script at
-  `/etc/mkfstest` rather than at `/etc/mkfs`, which is the program.
+  `/etc/mkfstest` rather than at `/etc/mkfs`, which is the program; `fsck` and `mount` do the
+  same, for the same reason.
 
 Most of task C5 lands in the first; C1, C3, C4 and C6 land in the second. Where a program can run
 in both, **do both** — the first time the libc suite was run in both worlds it found two bugs
@@ -785,3 +817,48 @@ before copying the neighbouring test's polarity.**
 if the program's target already exists — so a case needing three of the four had to live in
 `cmd/icheck/test`, `cmd/clri` and `cmd/dcheck` being added to the top-level `CMakeLists.txt`
 before it. That is a two-minute discovery and an easy one to make late.
+
+---
+
+## What task C4f taught
+
+`/etc/mount` and `/etc/umount` are on the image and
+[../kernel/test/mount.sh](../kernel/test/mount.sh) holds them there. It is the last of task
+C4 and the first thing in this tree that ever called `mount(2)`: `smount()` had been compiled
+into every `unix` this port built and had no caller, `mount[1]` had never been filled, and
+`bdevsw[0]` minor 1 had never carried a block. [mount/README.md](mount/README.md) is the
+account; four findings generalize.
+
+**A byte count computed from a field width is not a struct's size here, and nothing
+diagnoses it.** v7's `/etc/mtab` is a binary record blitted out of a
+`struct { char file[32]; char spec[32]; }` with the length written by hand as `2 * NAMSIZ`.
+A `char[32]` occupies ⌈32/6⌉ = 6 words = 36 char-units on this machine and the next member
+starts on a word boundary, so `sizeof` that struct is **72 and not 64**: the program writes
+64-byte records out of 72-byte objects and every entry after the first comes back eight bytes
+out of step. It is §2's machine seen from the layout side rather than the pointer side, and
+the search is different: **grep for a `read`/`write` whose length is arithmetic rather than
+`sizeof`.**
+
+**A hazard in code that exists only to serve a file format can be deleted by changing the
+format.** Both programs' `char *` comparisons — five of them, none previously in §2's table —
+were in the basename stripping and the fixed-width copy into that record. Making `/etc/mtab`
+text removed the record, and all five went with it; nothing had to be rewritten as an index
+count. This is only available when the format is the program's own business, which `/etc/mtab`
+is and an on-disk inode is not, but it is worth asking before rewriting a loop.
+
+**A whole harness can have nothing to say about a program, and that has to be said out
+loud.** §9's rule is to test in both worlds where a program runs in both. These two do not
+run in `b6sim` at all: `mount(2)` there is the *host's*, so a case that reached it would ask
+the build machine to mount something. Four cases assert the argument handling and stop, which
+is only possible because the port settles its arguments before opening `/etc/mtab` — a
+reordering of v7 made for the test. `ctest -L cmd` therefore says nothing about the subject
+of this task, and the `kernel/test` case is not the second opinion but the only one.
+
+**A recomputed oracle is a measurement of an instant, and the instant has to be chosen.**
+`run-mount.sh` holds the guest's free count against the host's walk of the pack that came
+back. The obvious reading — `df` through the mount — is *wrong* for that comparison by one
+block, because `clri` threw a file away and `fsck` reclaimed its blocks afterwards; the two
+numbers are true measurements of different moments. The mounted reading is asserted as a
+literal by the log diff instead, and the recomputed comparison uses a final `df` taken after
+everything. **Ask what instant an oracle measures**, which is the sharper form of C4a's rule
+about which kind of number it holds.

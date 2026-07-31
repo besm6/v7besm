@@ -63,6 +63,15 @@ int chroot(const char *path);
 int chown(const char *path, uid_t uid, gid_t gid);
 int sync(void);
 
+// mount(2)/umount(2).  `spec' is a BLOCK special file -- getmdev() (kernel/sys3.c) refuses
+// anything else with ENOTBLK, so it is /dev/md1 and not the raw /dev/rmd1 -- and `rdonly'
+// non-zero mounts without write permission (s_ronly, kernel/filsys.h).  v7 declared neither
+// anywhere: /etc/mount and /etc/umount were the only callers and relied on the implicit int.
+// There is no <sys/mount.h> for a program to include; that header is the kernel's own mount
+// table and says nothing about these two.
+int mount(const char *spec, const char *dir, int rdonly);
+int umount(const char *spec);
+
 // utime() takes a TWO-ELEMENT time_t VECTOR -- `accessed' then `updated' -- and not POSIX's
 // `struct utimbuf'.  That is the kernel's own interface: sys4.c copyin()s `time_t tv[2]', and
 // lib/libc/man/utime.2 has said so since it was corrected.  There is no <utime.h> in this

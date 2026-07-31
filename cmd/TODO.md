@@ -13,10 +13,11 @@ that file's porting recipe** — §2 the `char *` ordering hazard, §4 the 3072-
 1024-byte one reported in its place, §6 the
 address-space ceilings, and so on.
 
-**Tasks C1, C2, C3 and C4a–C4e are done and their writeups have been removed**; what each taught
-is README.md's seven closing sections. Thirty-seven commands are on the image — thirty entries
-in `/bin`, since `[` is `test` under a second name, plus `/etc/getty`, `/etc/quot`, `/etc/mkfs`,
-`/etc/fsck`, `/etc/icheck`, `/etc/dcheck`, `/etc/ncheck` and `/etc/clri` beside them
+**Tasks C1, C2, C3 and the whole of C4 are done and their writeups have been removed**; what each
+taught is README.md's eight closing sections. Thirty-nine commands are on the image — thirty
+entries in `/bin`, since `[` is `test` under a second name, plus `/etc/getty`, `/etc/quot`,
+`/etc/mkfs`, `/etc/fsck`, `/etc/icheck`, `/etc/dcheck`, `/etc/ncheck`, `/etc/clri`,
+`/etc/mount` and `/etc/umount` beside them
 — so the tree
 can be built, rearranged and re-permissioned from the console, the machine can say what time it
 is, wait and signal, a shell script can finally **branch**, and since kernel task 29b there is
@@ -40,12 +41,18 @@ host tool can do at all ([fsck/README.md](fsck/README.md)). **And since C4e it c
 of those jobs on its own** — `icheck`, `dcheck`, `ncheck` and `clri` — of which the one
 worth naming is `ncheck`: it puts a **name** to an i-number, which nothing else on this
 image can do, and which is what `quot -n` has been waiting for since C4a
-([icheck/README.md](icheck/README.md)).
+([icheck/README.md](icheck/README.md)). **And since C4f it can *reach* one**: `/etc/mount`
+puts a second filesystem behind a directory, which is the first thing in this tree ever to
+call `mount(2)` — `smount()` had been compiled into every kernel this port built and had no
+caller — and the first block `bdevsw[0]` minor 1 has ever carried. Everything C4 wrote
+before it went to the **raw** device through `physio()`; a mounted volume goes through the
+**buffer cache** ([mount/README.md](mount/README.md)).
 [../etc/rc](../etc/rc) is a boot script that does something: it prints the motd and then the
 date, which is a literal to the minute because the boot clock is the image's own `-T` stamp,
 and `kernel/test/console` asserts both. What it
-still wants is what the file itself now names — `mount` (C4), `cron` and `update`
-(C10) and `accton` (C8). An `fsck` line is a fourth, and it is C4d's one loose end: the
+still wants is what the file itself now names — `cron` and `update`
+(C10) and `accton` (C8); `mount` has arrived and deliberately gets no line, a boot image
+having nothing to mount. An `fsck` line is a third, and it is C4d's one loose end: the
 program exists, and the line that would run it at boot has the same single home for an
 assertion as the `rm -f /tmp/*` line below and the same reason for waiting. That `rm -f /tmp/*`
 line is waiting on a
@@ -59,6 +66,19 @@ the line comes back with task 35.
 source comments and from `doc/`, and a bare number would be ambiguous forever after. The
 numbering is **left as it was** when a task is finished and dropped.
 
+**One rule of task C4's survives it and is cited from a dozen sources**, so it lives here
+rather than in a section that has been deleted. Anything that encodes the **on-disk layout**
+— a block number computed from an i-number, an entry count per block, a name length —
+**`_Static_assert`s against `<sys/param.h>` rather than re-deriving the constants**. That is
+what [fsutil/params.cpp](fsutil/params.cpp) does on the host side, and why a kernel that
+retunes `INOPB` or `DIRSIZ` breaks the build instead of the images. (A guest program needs
+none of that file's machinery: it includes the real headers and inherits their assertions.
+`params.cpp` is elaborate only because `fsutil` is host C++ and cannot.) It applies to test
+scripts as much as to C, which is why `b6fsutil -D`'s damage targets are **symbolic**. The
+devices those programs are pointed at are all on the image: `/dev/rmd0`, `/dev/rmd1` and
+`/dev/rmb0` (`cdevsw[3]` and `[4]`), and the block nodes `/dev/md0`, `/dev/md1` and
+`/dev/md2`.
+
 **The contract per task**, as in the kernel file: it leaves `make` building and `ctest` passing,
 and it leaves the program **on the image** — staged into `build/rootfs/`, named in
 [../root.manifest](../root.manifest), and asserted by a test. A port is not done when it
@@ -66,7 +86,6 @@ compiles.
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C4 | filesystem maintenance — ~~`df` `du` `quot` `dd` `mkfs` `fsck` `icheck` `dcheck` `ncheck` `clri`~~ `mount` `umount` | a system that maintains itself | large; C4a–C4e done |
 | C5 | the text filters — `wc` `cmp` `sum` `tee` `split` `rev` `tr` `uniq` `comm` `tail` `od` `look` `col` `grep` `fgrep` `sort` `sed` `pr` `diff` `cal` `tsort` `join` `find` `file` | the corpus everything else is tested against | medium ×24 |
 | C6 | multiuser userland — `passwd` `su` `newgrp` `stty` `who` `write` `wall` `mesg` `mail` | more than one person | medium; unblocked |
 | C7 | `tar` | getting data on and off without `b6fsutil` | medium |
@@ -74,167 +93,10 @@ compiles.
 | C9 | self-hosting — native `cpp`, `as`, `ld`, the binutils, `cc` | building the system on itself | large |
 | C10 | the rest of the manual — `make` `m4` `awk` `bc` `dc` `expr` `egrep` `units` `crypt` `at` `cron` `calendar` `update` | a system worth using | open-ended |
 
-C4 was the one that mattered and its weight is now behind it: C4a gave the machine the three
-programs that *measure* its store, C4b the one that *moves* it, C4c the one that *makes* one,
-C4d the one that *repairs* one and C4e the four that do each of those jobs on its own. What is
-left of it is `mount`/`umount`. C5 is cheap and pays for itself in test coverage. C7 is one
-program and can be taken at any time; C6, C8 and C9 are each gated on something the task names.
-
----
-
-## C4. Filesystem maintenance
-
-**Why.** The system could not maintain itself. It can now measure its store (C4a), move it
-(C4b), make a filesystem (C4c), repair one (C4d) and do each of `fsck`'s jobs standalone
-(C4e) — what is left is the pair that would let it mount anything.
-
-**C4a is done and its writeup has been removed.** `df`, `du` and `quot` are on the image — the
-first three programs here that can say anything about the store they live on — and
-`kernel/test/fsinfo` (volume 3087) holds them there. Two things it settled are the property of
-every task below, and **[df/README.md](df/README.md) is the account of both**:
-
-* **A raw read through `/dev/rmd0` obeys four conditions**, three of which fail with `EFAULT` and
-  the fourth of which is silent: byte #0 of a word, a whole number of `BSIZE`s, a buffer whose
-  *word address* is a multiple of `MDTRACK` (= `BSIZEW`, `mdstrategy()`'s half-zone), and a
-  block-aligned seek. `(int)ptr` on a word pointer is the alignment idiom, and obeying the rules
-  cost nothing: it deleted `quot`'s 4,096-word `itab[256]`, one block already being `INOPB`
-  inodes.
-* **A number about the whole image is recomputed by the host, not checked in.** `run-fsinfo.sh`
-  derives `df`'s answer from `b6fsutil -c -v` and `quot`'s from an `awk` over `b6fsutil -v -v`,
-  so nothing needs updating when a program joins `/bin` — and both programs report to the
-  *console*, because a program that measures a filesystem cannot write its answer into one.
-
-`df` and `quot` also gave `b6sim` its first fixture **filesystem** ([df/test/](df/test/)): they
-read a file, and a flat `b6fsutil` image is one. `dd`, `mkfs` and `fsck` all inherited it, the
-last building a fixture of its own — `fsck/test/fsckimg.manifest` says why df's could not be
-extended, and it is the general answer: a manifest whose free count is asserted as a literal
-somewhere is a manifest nothing may add a file to.
-
-**C4b is done and its writeup has been removed too.** `/bin/dd` is on the image and
-`kernel/test/dd` (volume 3088) holds it there, so bulk data can move to and from `/dev/rmd0`
-without `b6fsutil` on the host. Three things it settled that the rest of C4 inherits:
-
-* **A raw record is `BSIZE`, and a program's *default* has to say so.** `dd`'s `ibs`/`obs`
-  default to `BSIZE` and its `b` suffix multiplies by `BSIZE`, where v7's were 512 — because
-  512 is not a whole number of words, so `physio()` refuses it before the driver sees it and
-  v7's defaults could not reach the disk at all. `w` became `NBPW` for free, `sizeof(int)`
-  being 6 here, so `1b`, `3k` and `512w` now name the same thing. Any later program with a
-  record size of its own faces the same choice; `dd.1` is the worked example of writing a
-  divergence down twice.
-* **A wrong size is refused two different ways, and the diagnostic distinguishes them.**
-  `physio()` answers `EFAULT` for a count that is not a whole number of words; `mdstrategy()`
-  answers `EIO` for one that is a whole number of words but not a whole half-zone. Both are
-  condition 2 above, enforced in two places, and `kernel/test/dd` is the first test here to
-  assert a **refused** transfer at all.
-* **The oracle can be the disk itself.** `run-dd.sh` compares what the guest pulled off
-  `/dev/rmd0` against the same offset in the container the boot was handed — nothing checked
-  in, nothing recomputed — at the cost of one assumption, that the run does not rewrite those
-  blocks, which it checks rather than assumes. `mkfs` had the stronger version of this
-  available — `b6fsutil -n` builds the same layout on the host — and C4c took it, twice.
-
-**C4c is done and its writeup has been removed too.** `/etc/mkfs` is on the image and
-`kernel/test/mkfs` (volumes 3089 root, **3090 scratch**) holds it there, so the machine can
-make a filesystem rather than only measure and move one. It is the task that built the
-raw-**write** harness `dd` was waiting for: there is a second drive now, `/dev/rmd1` and
-`/dev/md1` are on the image, `mdwrite()` is live, and one test attaches a scratch volume.
-**[mkfs/README.md](mkfs/README.md) is the account**, and three things it settled belong to
-everything below:
-
-* **A raw write has a fifth condition, and it is about where the buffer lives.** All four of
-  C4a's apply unchanged — `physio()` never tests `rw` — and it also refuses a `base` below
-  `u_tsize`, so a raw write may never be sourced from the text segment. It cannot fire for an
-  `FMAGIC` program, which is what `b6_prog()` produces, and goes live the day anything that
-  writes a device is linked **pure**.
-* **The sector header is per *controller*, so a two-drive machine mislabels a pack.** `md.c`
-  maintains only the self-address in the service words it writes; the magic mark and the
-  **volume number** come from the last read of *any* drive on the controller. `b6fsutil`
-  reads the volume from zone 0 alone, so the rule is that **nothing may write block 0** of a
-  pack this system did not label. The first bug here that needed a second drive to exist.
-* **Committing last is a substitute for a size check.** `MDNBLK` has no guest header and must
-  not be duplicated, so `mkfs` reads the *last* block before writing the first and lets
-  `mdstrategy()` answer. Safe only because the superblock is written last: a run that dies
-  partway leaves a volume with no magic rather than a plausible wreck.
-
-And the oracle turned out to be available **twice** — byte for byte against `b6fsutil -n`
-under `b6sim` in a tenth of a second, where the layout is debugged, and again over the device
-under SIMH, where nothing else is. The only obstacle either time was the timestamp, which is
-six bytes at a known offset.
-
-**C4d is done and its writeup has been removed too.** `/etc/fsck` is on the image and
-`kernel/test/fsck` (volumes 3091 root, **3092 scratch**) holds it there, so the machine can
-repair a filesystem rather than only measure, move and make one — and `/lost+found` is on the
-root for it to reconnect into. **[fsck/README.md](fsck/README.md) is the account**, and two
-things it settled were what made C4e cheap and are C4f's to use too:
-
-* **`b6fsutil` can break an image on purpose now**, which C4d's brief asked for and which did
-  not exist: `-D sb.nfree=999`, `-D i5.nlink=7`, `-D e3.2=0`, `-D b12.0=…`. The targets are
-  **symbolic**, resolved through the tool's own word-offset tables, so no test script
-  re-derives `itod()` or `INOPB` — the rule below about `_Static_assert` applies to shell as
-  much as to C. It writes the raw word without `to_word()`'s range check and never `sync()`s;
-  `cmd/fsutil/damage.h` says why both.
-* **A test that repairs must assert that there was something to repair.** Every case here
-  requires `b6fsutil -c` to *fail* before the guest runs and to *succeed* after, and requires
-  a second `fsck` to find nothing. Without the first, a damage spec that drifted out of step
-  with its fixture would leave a test that fixes nothing and passes, and nothing else would
-  notice.
-
-It also found four bugs by holding the two implementations against each other, three of them
-in `fsck` itself: a free-inode count one too high on every clean filesystem this system has
-ever made (inode 1 exists and can never be allocated), a superblock magic number v7's `fsck`
-never looked at, and a reconnected file that could have been left unreachable by `namei()`.
-
-**C4e is done and its writeup has been removed too.** `/etc/icheck`, `/etc/dcheck`,
-`/etc/ncheck` and `/etc/clri` are on the image, so each of `fsck`'s jobs can be done on its
-own — and the machine can at last put a **name** to an i-number, which nothing here could do
-before and which `quot -n` has been waiting for since C4a.
-**[icheck/README.md](icheck/README.md) is the account**, and three of its findings are
-general. **A field that is inert upstream can be load-bearing here**: v7's `icheck -s` writes
-`s_tinode` as zero, harmlessly, because nothing in v7 maintains it — and since C4d the kernel
-maintains it and `b6fsutil -c` faults an image on it, so a salvage carried over unchanged
-would have broken every volume it touched. **A shared-and-re-fetched buffer and one buffer
-per level are each wrong in the other's program**, and the question that decides it is whether
-anything in the walk re-enters it: `fsck`'s does and `icheck`'s cannot, so copying `fsck` here
-would have re-read the outer indirect block 512 times per double indirect. And **`clri` is the
-first program here whose success is the host's checker *failing***, which inverts the polarity
-of every assertion in `cmd/fsck/test`.
-
-**C4e's one loose end is that it has no SIMH test**, and that is a deliberate deferral rather
-than an oversight. Everything asserted about the four runs under `b6sim`, whose `read(2)` and
-`write(2)` are the host's, so **none of the five conditions of the raw path is exercised for
-any of them** — and `clri` and `icheck -s` are the first programs since `mkfs` and `fsck` to
-*write* a device. What would close it is a test on `kernel/test/fsck`'s shape at volumes
-**3093** (root) and **3094** (scratch), with the scratch pack attached *without* `-n`, `clri`
-and `icheck -s` pointed at `/dev/rmd1`, and a read-only pass over the live root last. Two
-things it must know before it is written are in
-[icheck/README.md](icheck/README.md) §5: `icheck -s` and `clri` **stop the machine** on a hot
-root by design, so pointing either at `/dev/rmd0` is a 1,800-second timeout with no
-diagnostic; and anything that measures the mounted root goes below the `sync` and writes only
-to `/dev/console`, which is `kernel/test/fsck.sh`'s rule.
-
-Everything below still encodes the on-disk layout, and there is a rule for that:
-**`_Static_assert` against `<sys/param.h>` rather than re-deriving the constants**, which is what
-[fsutil/params.cpp](fsutil/params.cpp) does on the host side and why a kernel that retunes `INOPB`
-or `DIRSIZ` breaks the build instead of the images. (A guest program needs none of that file's
-machinery: it includes the real headers and inherits their assertions. `params.cpp` is elaborate
-only because `fsutil` is host C++ and cannot.) The raw devices are on the image — `/dev/rmd0`,
-`/dev/rmd1` and `/dev/rmb0`, `cdevsw[3]` and `[4]` — and so are the block nodes `/dev/md0`
-and `/dev/md1`.
-
-### C4f. `mount`, `umount`
-
-`mount.c` (67), `umount.c` (56), plus `/etc/mtab`. Small, and **unblocked since C4c**: the point
-of them is that there is a second thing to mount, and now there is one. `/dev/md1` is on the
-image for exactly this, `/etc/mkfs` makes the filesystem to put behind it, and
-`kernel/test/mkfs`'s `.ini` is the two-drive harness to extend — attach the same scratch pack,
-mount it on a directory, write a file through the *buffer cache* rather than through
-`physio()`, unmount, and let the host fsck what comes back. That last is the part this task
-buys that nothing else does: everything C4 has written so far went to the raw device, and
-`bdevsw[0]` minor 1 has still never carried a block.
-
-**Size.** What is left is two programs.  C4d was the weight and it is done.  What none of
-C4a–C4e cost was its line count -- see df/README.md, cmd/dd/dd.c's header, mkfs/README.md
-and fsck/README.md, the last of which came out a third shorter than it went in, and
-icheck/README.md, whose four programs came to between 5,901 and 8,265 words apiece.
+**C4 was the one that mattered and it is gone from this table**, its twelve programs and what
+each of them settled being the opening paragraph's business now. C5 is cheap and pays for
+itself in test coverage. C7 is one program and can be taken at any time; C6, C8 and C9 are
+each gated on something the task names.
 
 ---
 
@@ -494,23 +356,25 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 
 ## Where to start
 
-C4f, which is small and unblocked; C5 if a week is what is free rather than a day. C4e's one
-loose end — a SIMH test for the four programs it added, at volumes 3093 and 3094 — is worth
-folding into C4f rather than doing on its own: that task has to extend the two-drive harness
-anyway, and `icheck`, `dcheck` and `ncheck` pointed at a *mounted* filesystem is exactly what
-`mount` gives something to check.
+**C5**, and there is no longer a cheaper alternative to weigh it against: C4 is finished and
+C5 is the only task left that costs a day rather than a week. Twenty-four programs, almost all
+of them testable under `b6sim` without a two-minute boot, and the corpus everything after them
+is regression-tested against.
 
-C4a through C4e have landed, so the guest can now *examine* its own store — `df`, `du` and
+**The whole of C4 has landed**, so the guest can now *examine* its own store — `df`, `du` and
 `quot`, with the raw-device path proven and a fixture-filesystem harness under `b6sim` — *move*
 it with `dd`, *make* one with `mkfs` on a second drive through a raw write path that had never
 run, *repair* one (`fsck` takes a volume that is wrong, works out what is wrong with it and
 puts it right, over that same write path, and then reads the filesystem the machine is running
-on and pronounces it sound), and take each of those jobs on its own with `icheck`, `dcheck`,
+on and pronounces it sound), take each of those jobs on its own with `icheck`, `dcheck`,
 `ncheck` and `clri` — of which `ncheck` is the one that buys something new, a **name** for an
-i-number. What is left of C4 is `mount`/`umount`, whose whole point is that there is now a
-second thing to mount and a program to make it with.
+i-number — and, since C4f, *reach* one: `mount` puts a second filesystem behind a directory,
+which is the first thing here that has ever gone to a disk through the **buffer cache** rather
+than through `physio()`. C4e's one loose end went with it, folded into that task's harness as
+this section used to recommend.
 
 C5 stays the cheap one, and the harness for it is now **complete**: `b6_progtest()` needs no
 boot, and C3 gave it the `<case>.in` that C2b's writeup said the filters would want, so a filter
 can finally be fed. README.md §9 records what is left that it cannot do — two things now, not
-three.
+three, plus the one C4f added, which is that a program calling a syscall the *host* also has
+belongs under the booted kernel or nowhere.

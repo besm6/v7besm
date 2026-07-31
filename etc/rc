@@ -16,9 +16,15 @@ date >/dev/console
 # attached read-only.  console.ini's expect stops just short of the seconds.
 #
 # What the v7 rc did next still wants a program this system has not got yet:
-# mount (task C4), cron and update (C10), accton (C8).  Each line comes back as
-# its command is ported.  There is nothing to mount in any case -- one EC-5052
-# drive is the whole of the store, and swap lives on the drums.
+# cron and update (C10), accton (C8).  Each line comes back as its command is
+# ported.
+#
+# MOUNT IS NO LONGER ONE OF THEM AND STILL GETS NO LINE.  Task C4f put
+# /etc/mount and /etc/umount on the image, but a boot image has nothing to
+# mount: one EC-5052 drive is the whole of the store, /usr is a directory of
+# the root rather than a volume of its own, and swap lives on the drums.  The
+# second and third drives exist only in kernel/test/mount, which attaches them
+# itself.  A mount line here would fail on every real boot.
 #
 # FSCK IS THE EXCEPTION, and it is C4d's one loose end: /etc/fsck exists now and
 # `/etc/fsck -y /dev/rmd0 >/dev/console' would be the v7 line.  It is not here

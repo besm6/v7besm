@@ -15,7 +15,9 @@
 # WHAT THESE CASES CANNOT SAY, and for task C4e nothing else says it either: b6sim's
 # write(2) is the host's, so none of the five conditions of the raw path
 # (../../df/README.md, ../../mkfs/README.md) exists here -- and clri WRITES.  C4e
-# deliberately has no SIMH test; ../../TODO.md carries that as this task's loose end.
+# deliberately had no SIMH test at all, and task C4f closed that gap:
+# ../../../kernel/test/mount.sh section 6 clears an i-node over /dev/rmd1 and has icheck and
+# dcheck fault the volume for it, which is this directory's polarity on a real device.
 
 # Byte-reproducible, ../../df/test's rule.  Twenty blocks: nothing here cares what is on the
 # volume, only that there is an i-list to be outside of.  clriimg.manifest says why this

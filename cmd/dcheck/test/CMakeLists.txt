@@ -12,8 +12,9 @@
 # WHAT THESE CASES CANNOT SAY, and for task C4e nothing else says it either: b6sim's read(2)
 # is the host's, so none of the alignment conditions of the raw path (../../df/README.md)
 # exists here.  A green cmd_dcheck_* says the arithmetic is right and nothing whatever about
-# the device.  C4e deliberately has no SIMH test; ../../TODO.md carries that as this task's
-# one named loose end.
+# the device.  C4e deliberately had no SIMH test at all, and task C4f closed that gap:
+# ../../../kernel/test/mount.sh section 6 runs this program over /dev/rmd1, on a pack that
+# has just been mounted, written and unmounted.
 #
 # NOTHING NEEDS MASKING, unlike ../../fsck/test: dcheck prints i-numbers and counts and
 # never maps a uid to a name, so it never reads the build machine's /etc/passwd.
