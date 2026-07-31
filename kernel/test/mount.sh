@@ -15,6 +15,11 @@
 # bread()/bwrite()/bdwrite() onto a filesystem that is mounted, which is a different path
 # through the same driver, and the host then has to find those files on the pack.
 #
+# SECTION 6 IS NEWER THAN THE REST OF THIS FILE and belongs to NMOUNT going from 2 to 8.
+# Everything above it mounts one filesystem, because with a table of two and iinit() holding
+# mount[0] one was all there was; that section mounts /dev/md1 and /dev/md3 at the same time,
+# which fills mount[2] and gives namei() and /etc/mtab a second entry each to get right.
+#
 # TWO OUTPUT CHANNELS, fsinfo.sh's convention and fsck.sh's wording:
 #
 #   /tmp/mount.log    everything about the SCRATCH pack, diffed against mount.expected with
@@ -134,7 +139,66 @@ echo status $? >>/tmp/mount.log
 /etc/mount >>/tmp/mount.log 2>&1
 cat /etc/mtab >>/tmp/mount.log 2>&1
 
-# ---- 6.  TASK C4e's LOOSE END, closed here.  icheck, dcheck, ncheck and clri were asserted
+# ---- 6.  TWO FILESYSTEMS AT ONCE, which is what NMOUNT going from 2 to 8 bought and what
+#          nothing could do before it: mount[0] is the root's, so a table of two left exactly
+#          one slot and every mount in the sections above is mount[1].  This section fills
+#          mount[2] -- a slot that has never held anything in this port -- and the reads
+#          below are the reason to bother, not the mount itself:
+#
+#            * `/etc/mount' with no argument and /etc/mtab must now list TWO lines.  mtab.c
+#              has always been able to hold NMOUNT - 1 of them and has never held more than
+#              one, so its second record is as new as the kernel slot.
+#            * `pwd' from inside /usr walks `..' OUT of a mounted filesystem, which is
+#              namei()'s `for (i = 1; i < NMOUNT; i++)' scan for the m_inodp it was mounted
+#              on -- a loop that has only ever had to look at i == 1.  cmd/pwd stat()s every
+#              entry of the parent when the device changes, so it exercises the crossing from
+#              both sides.
+#            * `df /dev/md3' is a whole second superblock in core.  Each mount holds one
+#              buffer of the cache for it until it is unmounted (smount()'s geteblk()), which
+#              is why NBUF went to 16 in the same change; two held at once is the first time
+#              that has been more than the root's one.
+#
+#          md3 IS A SECOND COPY OF THE SAME FIXTURE -- run-mount.sh builds both packs from
+#          mount.manifest -- so /usr and /mnt hold the same names on different devices, which
+#          is what makes `ls' of the two worth comparing at all.  It is mounted on /usr and
+#          not on a directory of its own: /usr is on the root image already, mounting over it
+#          hides /usr/test and /usr/guest for the length of this section, and nothing below
+#          reads either.
+#
+#          BOTH ARE UNMOUNTED BEFORE THIS SECTION ENDS.  Section 7 goes at the pack raw.
+echo ---both--- >>/tmp/mount.log
+/etc/mount /dev/md1 /mnt >>/tmp/mount.log 2>&1
+echo status $? >>/tmp/mount.log
+/etc/mount /dev/md3 /usr >>/tmp/mount.log 2>&1
+echo status $? >>/tmp/mount.log
+/etc/mount >>/tmp/mount.log 2>&1
+cat /etc/mtab >>/tmp/mount.log 2>&1
+ls /mnt >>/tmp/mount.log 2>&1
+ls /usr >>/tmp/mount.log 2>&1
+# One file off each pack, so the two mounts are shown to be different filesystems and not the
+# same one named twice: /mnt/dir/hello is what section 3 wrote through the cache and exists
+# only on md1, /usr/motd is the fixture's own and comes back off md3.  The second goes to
+# /dev/null and is asserted by its status alone -- it is a copy of etc/motd, and putting that
+# in the log would mean re-checking mount.expected in whenever that file is edited.
+cat /mnt/dir/hello >>/tmp/mount.log 2>&1
+cat /usr/motd >/dev/null 2>&1
+echo status $? >>/tmp/mount.log
+cd /usr/d/e
+pwd >>/tmp/mount.log 2>&1
+cd ..
+pwd >>/tmp/mount.log 2>&1
+cd /
+sync
+df /dev/md3 >>/tmp/mount.log 2>&1
+/etc/umount /dev/md3 >>/tmp/mount.log 2>&1
+echo status $? >>/tmp/mount.log
+/etc/mount >>/tmp/mount.log 2>&1
+/etc/umount /dev/md1 >>/tmp/mount.log 2>&1
+echo status $? >>/tmp/mount.log
+/etc/mount >>/tmp/mount.log 2>&1
+cat /etc/mtab >>/tmp/mount.log 2>&1
+
+# ---- 7.  TASK C4e's LOOSE END, closed here.  icheck, dcheck, ncheck and clri were asserted
 #          under b6sim alone, whose read(2) and write(2) are the host's, so none of the five
 #          conditions of the raw path was ever exercised for any of them -- and two of them
 #          WRITE.  This is that, on a pack that has just been mounted, written and unmounted,
@@ -173,7 +237,7 @@ echo status $? >>/tmp/mount.log
 echo status $? >>/tmp/mount.log
 
 # THE LAST WORD ON THE PACK, and the one run-mount.sh holds against the host's own walk of
-# the image that comes back.  It has to be here, after section 6 rather than after section
+# the image that comes back.  It has to be here, after section 7 rather than after section
 # 3: clri threw a file away and fsck reclaimed its blocks, so the free count df read through
 # the mount is deliberately NOT the count the pack ends with.  The mounted reading is
 # asserted too -- as a literal, by the diff against mount.expected.
@@ -184,7 +248,7 @@ echo ---end--- >>/tmp/mount.log
 ls /tmp >>/tmp/mount.log
 sync
 
-# ---- 7.  THE LIVE ROOT, READ ONLY, AND LAST.  fsck.sh's section, with icheck and dcheck in
+# ---- 8.  THE LIVE ROOT, READ ONLY, AND LAST.  fsck.sh's section, with icheck and dcheck in
 #          fsck's place -- and `icheck -s' and `clri' are NOT here and must never be: both
 #          stop the machine on a hot root by design, so pointing either at /dev/rmd0 is a
 #          1,800-second timeout with no diagnostic at all.  cmd/icheck/README.md SS5.

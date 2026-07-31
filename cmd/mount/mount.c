@@ -23,9 +23,11 @@
 //     That is the one argument mistake this command invites, every other C4 program taking
 //     the raw name.
 //
-//   * NMOUNT is 2 and the root holds one slot, so exactly ONE filesystem may be mounted.
-//     The second attempt is EBUSY, which is also what a device already mounted and a mount
-//     point already in use both answer.
+//   * NMOUNT is 8 and the root holds one slot, so SEVEN filesystems may be mounted at once.
+//     The eighth is EBUSY -- and so is a device that is already mounted, and a mount point
+//     already in use, so that one status covers three different complaints.  It was 2 when
+//     this program was written, which made the table-full arm the ordinary answer rather
+//     than the rare one; it is now the rare one.
 //
 //   * A DEVICE WITH NO FILESYSTEM ON IT IS REFUSED, which retires this program's oldest
 //     BUG.  v7's mount(2) reads the superblock and believes it, so mount.1m says in so many

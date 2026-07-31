@@ -74,6 +74,13 @@
 # second pack on md01, and the raw node is what /etc/mkfs writes a filesystem onto.  A node
 # for a drive nobody attached is not an error -- mdopen() accepts any minor below 64 and the
 # refusal comes at the first transfer -- so these two cost nothing on every other boot.
+#
+# AND SINCE NMOUNT WENT FROM 2 TO 8 THERE ARE EIGHT, md0 through md7.  The kernel can hold
+# eight mounts and iinit() takes one for the root, so seven filesystems can be on this
+# machine at once; without the nodes to name them that is capacity nothing can reach, and
+# `mknod' on a running system does not survive the image being rebuilt.  md3-md7 carry no
+# raw node, for md2's reason: nothing has ever wanted the raw form of a drive that exists
+# only to be mounted, and /dev/rmdN is the whole of a pack to whoever can open it.
 
 default
 owner 0
@@ -642,6 +649,36 @@ mode 0600
 bdev /dev/md2           # bdevsw[0] minor 2: the third drive -- SIMH's md02
 major 0
 minor 2
+mode 0600
+
+# THE REST OF THE MOUNT TABLE.  NMOUNT is 8 and the root holds mount[0], so these five plus
+# md1 and md2 are the seven drives that can be mounted at once.  Only md3 is attached by any
+# test today -- kernel/test/mount hangs a second filesystem on it to prove that mount[2] can
+# be filled at all -- and the other four are nodes for drives nobody has attached, which
+# costs nothing: see the header above.
+bdev /dev/md3           # bdevsw[0] minor 3: SIMH's md03 -- kernel/test/mount's second mount
+major 0
+minor 3
+mode 0600
+
+bdev /dev/md4           # bdevsw[0] minor 4: SIMH's md04
+major 0
+minor 4
+mode 0600
+
+bdev /dev/md5           # bdevsw[0] minor 5: SIMH's md05
+major 0
+minor 5
+mode 0600
+
+bdev /dev/md6           # bdevsw[0] minor 6: SIMH's md06
+major 0
+minor 6
+mode 0600
+
+bdev /dev/md7           # bdevsw[0] minor 7: SIMH's md07
+major 0
+minor 7
 mode 0600
 
 bdev /dev/swap          # bdevsw[1]: the drums -- swapdev = makedev(1, 0)

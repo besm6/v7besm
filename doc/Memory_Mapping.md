@@ -1009,12 +1009,13 @@ entry. **None of those exist on the BESM-6.** The retarget is **done**; the tabl
 where each concern landed.
 
 The shape it settled into: **the kernel runs unmapped** (БлП = БлЗ = 1), so a kernel address *is* a
-physical address and the image must fit below **`062000`** (`KEND`); **the u-area is two fixed
+physical address and the image must fit below **`054000`** (`KEND`); **the u-area is two fixed
 physical pages** at `074000`, of which the first is copied in and out on a context switch; **the buffer cache
-`buffers[NBUF][BSIZE]` is a fixed physical area** at `062000`–`074000`, out of bss because the drum
+`buffers[NBUF][BSIZE]` is a fixed physical area** at `054000`–`074000`, out of bss because the drum
 and disk controllers transfer to a physical address; and **РП always holds the current process's
 map**, so a trap switches nothing. `KEND` is derived — `BUFBASE == UBASE - NBUF*BSIZEW` — so raising
-`NBUF` lowers the ceiling with it. The design is written up in
+`NBUF` lowers the ceiling with it, which is what raising `NMOUNT` to 8 did: `NBUF` went to 16 to
+keep the cache larger than the mount table, and the ceiling came down a page and a half. The design is written up in
 [`kernel/README.md`](../kernel/README.md); the routines are in
 [Kernel_Assembly_Routines.md](Kernel_Assembly_Routines.md).
 

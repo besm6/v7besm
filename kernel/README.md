@@ -37,7 +37,7 @@ the **in-tree** tool targets, so a rebuilt `b6as` relinks the kernel with no `ma
 between. The link takes `-lruntime` **alone** — the kernel defines its own `printf` in
 [prf.c](prf.c) and calls no library routine.
 
-`make` finishes by printing `b6size -w unix`: the image **must end below `062000`** (`KEND` in
+`make` finishes by printing `b6size -w unix`: the image **must end below `054000`** (`KEND` in
 [../include/sys/param.h](../include/sys/param.h)), because supervisor instruction fetch is never
 mapped and the top of the unmapped space is spoken for — see the map below. The kernel is
 archived into one link-pulled `libunix.a` so unused code is dropped; `besm6.o` must come **first**
@@ -138,8 +138,8 @@ PHYSICAL, pages 0..31 — the kernel, addressed with БлП = 1 (no translation)
    0        const   (interrupt vector 0500/0501, extracodes 0550-0577, literal pool)
             text    (fetched unmapped: РП is irrelevant to it, always)
             data + bss
-   ...      must all end below 062000 = KEND
-   062000   BUFFERS ------ buffers[NBUF][BSIZE], NBUF*BSIZEW = 5120 words -----
+   ...      must all end below 054000 = KEND
+   054000   BUFFERS ------ buffers[NBUF][BSIZE], NBUF*BSIZEW = 8192 words -----
               a fixed PHYSICAL area, not bss: the drum/disk controllers transfer
               to a physical address.  `buffers = BUFBASE', absolute, in besm6.S;
               main.c declares it `extern'.  Raising NBUF lowers KEND with it.
@@ -159,6 +159,16 @@ PHYSICAL, pages 0..31 — the kernel, addressed with БлП = 1 (no translation)
 
    The user gets all 32 pages. The u-area is not in this map — it is physical.
 ```
+
+**`NBUF` and `NMOUNT` are one setting in two names, and between them they set the ceiling.** Every
+mounted filesystem holds a buffer for its superblock for as long as it is mounted — `smount()`
+takes it with `geteblk()` and only `sumount()` gives it back, and `iinit()` does the same for the
+root — so `NMOUNT` of the `NBUF` buffers can be out of the cache at once. `geteblk()`/`getblk()`
+*sleep* on an empty free list, so a cache sized under the mount table does not run slowly, it
+stops. The pair was 10 and 2 and is now **16 and 8**: eight buffers left with every slot in use,
+which is what the old pair left. Paying for it moved `KEND` down 3072 words, from `062000` to
+`054000`, and the image is at `050325` — about **1800 words of headroom**, which makes `NBUF` and
+not the next page of code the thing most likely to run the kernel into its own buffers.
 
 ### Shared text, and what the paging store owes it
 

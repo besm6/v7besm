@@ -94,7 +94,7 @@ make run                   # boot under SIMH (besm6 unix.ini)
 ```
 
 Built with the **in-tree** tool targets, so a rebuilt `b6as` relinks with no `make install`.
-`make` prints `b6size -w unix`: the image **must end below `062000`** (`KEND`). Everything is
+`make` prints `b6size -w unix`: the image **must end below `054000`** (`KEND`). Everything is
 archived into one `libunix.a` (`b6ranlib`'s index resolves driver→core back-references in one
 scan). **`besm6.o` must come first in `OBJ`** so its const contribution pins the
 interrupt/extracode vectors at their fixed addresses. `brz.s` and `syscall.c` are separate
@@ -141,7 +141,8 @@ anything memory-related, and keep it current):
   is never mapped.
 - Two fixed physical areas, absolute symbols rather than bss (devices transfer to *physical*
   addresses): the **u-area, two pages at `074000`**, and **`buffers[NBUF][BSIZE]` at
-  `062000`–`074000`**. Hence `KEND == BUFBASE == UBASE - NBUF*BSIZEW`.
+  `054000`–`074000`**. Hence `KEND == BUFBASE == UBASE - NBUF*BSIZEW`. `NBUF` (16) must stay
+  above `NMOUNT` (8): every mount pins one buffer until it is unmounted.
 - **РП always holds the current process's map**, so a trap switches nothing. The shadow map
   is `u.u_upt[8]` — the hardware registers cannot be read back. `sureg()` (`kernel/utab.c`)
   loads the space in twelve `рег`s.

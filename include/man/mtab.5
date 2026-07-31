@@ -56,8 +56,9 @@ The number of entries is bounded by
 in
 .RI < sys/param.h >,
 which is the number of file systems the kernel can have mounted at once.
-It is 2 on this system and one of the two is the root,
-which never appears here.
+It is 8 on this system and one of the eight is the root,
+which never appears here,
+so this file holds at most seven.
 .PP
 No file is shipped on the root image.
 A missing

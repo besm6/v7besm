@@ -22,10 +22,17 @@
 
 // tunable variables
 
-#define NBUF    10             // size of buffer cache (min 10)
+// NBUF AND NMOUNT ARE TIED TOGETHER, so retune them together.  Every mounted
+// filesystem holds ONE buffer permanently -- smount() takes it with geteblk() and only
+// sumount() gives it back, and iinit() does the same for the root -- so NMOUNT of the
+// NBUF buffers can be out of the cache at once and the rest is all the machine has for
+// I/O.  geteblk()/getblk() sleep on an empty free list, so undersizing this pair does
+// not run slowly, it stops.  16 and 8 leave eight buffers with every slot in use, which
+// is what 10 and 2 left.  Raising NBUF lowers the kernel's ceiling: see BUFBASE below.
+#define NBUF    16             // size of buffer cache (min 10, and > NMOUNT)
 #define NINODE  24             // number of in core inodes (min 24)
 #define NFILE   50             // number of in core file structures
-#define NMOUNT  2              // number of mountable file systems
+#define NMOUNT  8              // number of mountable file systems (one is the root's)
 #define MAXMEM  (NPAGE * PGSZ) // max core per process, in words
 #define MAXUPRC 25             // max processes per user
 #define SSIZE   PGSZ           // initial stack size (words)
@@ -340,7 +347,13 @@
 // KEND is therefore BUFBASE, not UBASE: const + text + data + bss must all end below it.
 // `make' prints `b6size -w unix' so the total can be checked against this line.  Both are
 // derived, so raising NBUF moves the ceiling down and cannot silently disagree with it.
-#define BUFBASE (UBASE - NBUF * BSIZEW) // base of buffers[][]: 062000 at NBUF == 10
+//
+// AND IT HAS BEEN RAISED, from 10 to 16, to pay for NMOUNT going from 2 to 8: the ceiling
+// went 062000 -> 054000 with it, 3072 words, plus 78 more of bss for the six extra buf
+// headers in conf.c.  What is left under KEND is about 1800 words, and that is now the
+// tightest thing in this file -- the next NBUF, not the next page of code, is what will
+// run the image into the buffers.
+#define BUFBASE (UBASE - NBUF * BSIZEW) // base of buffers[][]: 054000 at NBUF == 16
 #define KEND    BUFBASE                 // the kernel image must end below this
 
 #endif // _SYS_PARAM_H

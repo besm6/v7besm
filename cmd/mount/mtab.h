@@ -20,6 +20,8 @@
 // iinit() and never named here, so NMOUNT - 1 entries is all this file can ever hold and the
 // spare costs one struct.  cmd/icheck/README.md's rule: a fixed table is a ceiling somebody
 // chose against different hardware -- ask what bounds it here before keeping the number.
+// NMOUNT is 8 now rather than 2, so the spare is a seventh of the table instead of half of
+// it, and the table is 184 words of bss against a 28,672-word address space.
 #define NMTAB NMOUNT
 
 struct mtab {

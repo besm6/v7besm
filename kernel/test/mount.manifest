@@ -1,8 +1,13 @@
 # The filesystem kernel/test/mount mounts on /mnt -- task C4f.
 #
 # IT IS NOT THE ROOT, for kernel/test/fsck.manifest's reason and one more of this task's
-# own: this volume is MOUNTED and then written through the buffer cache, and a mount can
-# only ever be a second filesystem here -- NMOUNT is 2 and iinit() has taken mount[0].
+# own: this volume is MOUNTED and then written through the buffer cache, and a mount is never
+# the root here -- iinit() has taken mount[0] and nothing gives it back.
+#
+# BUILT TWICE, ONCE PER PACK.  run-mount.sh lays this manifest down on volume 3094 and again
+# on 3096, because section 6 of mount.sh mounts the two at the same time -- NMOUNT is 8 now
+# rather than 2, so mount[2] exists -- and holds `ls' of one against `ls' of the other.  The
+# names have to match for that, which is why there is one manifest and not two.
 #
 # THE I-NUMBERS ARE THIS FILE'S ORDER, which mount.sh depends on twice: it clri's inode 7
 # and expects fsck to find the entry that still names it.  b6fsutil allocates in the order

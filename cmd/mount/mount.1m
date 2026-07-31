@@ -54,19 +54,26 @@ or errors will occur when access times are updated,
 whether or not any explicit write is attempted.
 There are no magnetic tape file systems here \- this system has no tape.
 .SH "HOW MANY AT ONCE"
-.B One.
+.B Seven.
 .B NMOUNT
 in
 .RI < sys/param.h >
 is the number of file systems the kernel can have mounted,
-it is 2 on this system, and the root holds one of the two.
-A second
+it is 8 on this system, and the root holds one of the eight.
+An eighth
 .I mount
 gets
 .B EBUSY
 \- which is also what a device that is already mounted,
 and a mount point that is already somebody's working directory,
 both answer.
+.PP
+Each mounted file system holds one buffer of the cache for its superblock
+for as long as it is mounted,
+so the seven are not free:
+.B NBUF
+is 16 and every mount takes one of them out of circulation
+until the file system is unmounted.
 .SH "WHAT IS REFUSED"
 .TP
 .B ENOTBLK

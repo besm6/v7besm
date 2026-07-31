@@ -6,10 +6,15 @@
 #
 #	run-mount.sh B6FSUTIL BESM6 SRCDIR
 #
-# and it is run-fsck.sh's shape: build the scratch filesystem here, convert it to a SIMH
-# container at this test's own volume number, copy the pristine root image and graft the
-# guest script onto the copy, boot with both attached, then ask the host the questions the
-# guest cannot answer about itself.
+# and it is run-fsck.sh's shape: build the scratch filesystems here, convert them to SIMH
+# containers at this test's own volume numbers, copy the pristine root image and graft the
+# guest script onto the copy, boot with all of them attached, then ask the host the questions
+# the guest cannot answer about itself.
+#
+# THERE ARE TWO SCRATCH PACKS, and the second is younger than the rest of this file: NMOUNT
+# was 2 until the kernel raised it to 8, and with iinit() holding mount[0] that left one slot,
+# so nothing in this port had ever had two filesystems mounted at the same time.  Section 6 of
+# mount.sh does, on md01 and md03, and both packs are built from the same mount.manifest.
 #
 # WHAT IS DIFFERENT FROM fsck IS THE PATH THE WRITES TOOK.  There the guest repaired a pack
 # through physio() -> mdstrategy() -> mdwrite(), which is where every byte task C4 has ever
@@ -34,7 +39,10 @@
 #
 #   3.  WHAT CAME BACK IS A FILESYSTEM.  `b6fsutil -c -v', five passes, exit 0 -- over a pack
 #       that was mounted, written through the cache, unmounted, deliberately broken with
-#       clri, repaired by fsck and had its free list laid down again by `icheck -s'.
+#       clri, repaired by fsck and had its free list laid down again by `icheck -s'.  Asked
+#       of BOTH packs: the second was mounted at the same time as the first, which is
+#       mount[2] and needed NMOUNT to be more than 2, and a mount writes a superblock back
+#       on the way out even when nothing wrote a file.
 #
 #   4.  THE BYTES REALLY ARRIVED, AND THIS IS THE TASK.  /copy is extracted from the pack and
 #       `cmp'd against /etc/motd out of the root image that came back -- run-mkfs.sh's oracle
@@ -61,9 +69,10 @@ NBLK=2000       # the scratch pack: one whole EC-5052, as mkfs's and fsck's are
 FSTIME=1700000000
 KBPB=3          # 1024-byte blocks per 3072-byte filesystem block; cmd/README.md SS4
 
-rm -rf mount.img root3093.disk scratch3094.disk blank3095.disk scratch.img \
-       scratchafter.img mountafter.img mount.out mount.scratch mount0.drum mount1.drum \
-       mount.console mount.check mount.rootcheck scratch.convert scratch.before
+rm -rf mount.img root3093.disk scratch3094.disk blank3095.disk scratch3096.disk scratch.img \
+       scratch2.img scratchafter.img scratch2after.img mountafter.img mount.out mount.scratch \
+       mount0.drum mount1.drum mount.console mount.check mount.check2 mount.rootcheck \
+       scratch.convert scratch.before scratch2.before
 
 #
 # The scratch pack: build it, and check that it really is sound.
@@ -81,6 +90,23 @@ fi
 cat scratch.before
 
 "$b6fsutil" -S --volume=3094 scratch.img scratch3094.disk
+
+#
+# The SECOND scratch pack, for section 6 of mount.sh -- two filesystems mounted at once,
+# which is what NMOUNT going from 2 to 8 bought.  Same manifest as the first on purpose: the
+# guest holds `ls /mnt' against `ls /usr' and the two must carry the same names on different
+# devices for that comparison to mean anything.  Nothing writes it, so oracle 1 is asked of it
+# and oracle 3 is asked again at the end, which is the whole of what the host wants from it.
+#
+"$b6fsutil" -n -s $NBLK -T $FSTIME -M "$srcdir/mount.manifest" scratch2.img
+if ! "$b6fsutil" -c scratch2.img >scratch2.before 2>&1; then
+    echo "run-mount.sh: the second fixture is broken before the boot.  It is built from the" >&2
+    echo "  same mount.manifest as the first, so if that one passed and this one did not," >&2
+    echo "  suspect b6fsutil rather than the manifest." >&2
+    cat scratch2.before >&2
+    exit 1
+fi
+"$b6fsutil" -S --volume=3096 scratch2.img scratch3096.disk
 
 #
 # The root, with the guest script grafted in.
@@ -123,6 +149,20 @@ if ! "$b6fsutil" -c -v scratchafter.img | tee mount.check; then
     echo "  CACHE and not physio(), which is what this test exists for and what nothing" >&2
     echo "  else here exercises on a second drive: look at getblk(), bwrite() and bflush()" >&2
     echo "  with a b_dev of minor 1 before suspecting the filesystem code." >&2
+    exit 1
+fi
+
+# ... and the same of the second pack, which was mounted alongside the first and only read.
+# A mount is not read-only even so -- smount() copies the superblock into a buffer of its own
+# and sumount() writes it back through update() -- so this asks whether the second mount slot
+# put back a filesystem, not merely whether it left one alone.
+"$b6fsutil" -S scratch3096.disk scratch2after.img
+if ! "$b6fsutil" -c -v scratch2after.img | tee mount.check2; then
+    echo "run-mount.sh: the pack that was mounted SECOND did not come back as a filesystem." >&2
+    echo "  Section 6 of mount.sh mounted it on /usr while /dev/md1 was on /mnt, which is" >&2
+    echo "  mount[2] -- a slot nothing in this port filled until NMOUNT went from 2 to 8." >&2
+    echo "  The first pack passed the same check above, so this is the second slot and not" >&2
+    echo "  the driver: look at smount(), sumount() and update()'s walk of mount[]." >&2
     exit 1
 fi
 

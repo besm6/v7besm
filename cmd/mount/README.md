@@ -129,9 +129,13 @@ before this task could have found out:
   precisely a readable device with no filesystem on it.
 * **`EIO` is a separate arm**, and `/dev/swap` reaches it: a block device whose superblock
   cannot be read at all fails in `bread()` before `sbcheck()` ever runs.
-* **`NMOUNT` is 2 and the root holds one slot**, so exactly one filesystem may be mounted.
+* **`NMOUNT` is 8 and the root holds one slot**, so seven filesystems may be mounted at once.
   `EBUSY` covers three different things — no free slot, a device already mounted, and a mount
-  point whose inode is held more than once.
+  point whose inode is held more than once. It was 2 when this program was written, which made
+  the no-free-slot arm the answer to an ordinary second mount; the test now mounts two packs
+  at the same time and gets `EBUSY` only from the other two arms. Seven mounts cost seven of
+  the sixteen buffers permanently — `smount()` takes each superblock's with `geteblk()` — so
+  `NBUF` was raised with `NMOUNT` and the two must stay in step (`sys/param.h`).
 * **The shell that types `umount` is a process.** `sumount()` scans the whole in-core inode
   table and refuses while any live inode belongs to the device, so `cd /mnt; /etc/umount
   /dev/md1` is `EBUSY` every time. It is the cheapest thing in the test and the most
