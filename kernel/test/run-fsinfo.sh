@@ -145,7 +145,7 @@ tr -d '\r' <fsinfo.console |
     awk '
         # `-v -v" IS TWO REPORTS: the superblock summary, then the tree.  Only the second is
         # wanted, and without this guard the header lines parse as inodes -- `Magic:
-        # 0123456701234" has no third field, so it becomes a uid-0 object of size 0 with an
+        # 0xBE50006F11E5" has no third field, so it becomes a uid-0 object of size 0 with an
         # empty i-number, and adds one to root`s file count.  That phantom is what made the
         # host and the guest disagree by exactly one file the first time this ran.
         #

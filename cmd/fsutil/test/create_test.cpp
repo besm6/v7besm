@@ -31,7 +31,7 @@ TEST(Create, SuperblockOfAFreshVolume)
     Filesystem fs;
     create_filesystem(fs, path, MDNBLK, 0, NOW);
 
-    EXPECT_EQ(fs.sb.magic, int64_t(FS_MAGIC));
+    EXPECT_EQ(fs.sb.magic, FS_MAGIC);
     EXPECT_EQ(fs.sb.bsize, BSIZEW);
     EXPECT_EQ(fs.sb.inopb, INOPB);
     EXPECT_EQ(fs.sb.naddr, NADDR);

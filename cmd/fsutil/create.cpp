@@ -79,7 +79,7 @@ void create_filesystem(Filesystem &fs, const std::string &path, int64_t nblk, in
     fs.image.create(path, nblk);
 
     fs.sb        = SuperBlock{};
-    fs.sb.magic  = int64_t(FS_MAGIC);
+    fs.sb.magic  = FS_MAGIC;
     fs.sb.bsize  = BSIZEW;
     fs.sb.inopb  = INOPB;
     fs.sb.naddr  = NADDR;

@@ -68,7 +68,10 @@ constexpr int DIRMASK  = 0177; // DIRPB-1
 constexpr int NICINOD = 160; // free i-nodes cached in the superblock
 constexpr int NICFREE = 320; // free blocks cached in the superblock
 
-constexpr Word FS_MAGIC = 0123456701234ULL;
+// The superblock magic.  A full 48-bit pattern, so it is a Word and NOT an int64_t
+// running through to_word()/from_word(): those hold a 41-bit signed value and this
+// does not fit one.  On the target it is an `unsigned' for the same reason.
+constexpr Word FS_MAGIC = 0xBE50006F11E5ULL;
 
 //
 // param.h spells these two with a cast -- ROOTINO is ((ino_t)2), SUPERB is

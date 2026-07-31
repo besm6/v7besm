@@ -43,7 +43,7 @@ TEST(SuperBlock, FieldOffsets)
     const char *path = "sb_offsets.img";
 
     SuperBlock sb;
-    sb.magic  = int64_t(FS_MAGIC);
+    sb.magic  = FS_MAGIC;
     sb.bsize  = BSIZEW;
     sb.inopb  = INOPB;
     sb.naddr  = NADDR;
@@ -71,7 +71,7 @@ TEST(SuperBlock, FieldOffsets)
     Block b;
     img.read_block(SUPERB, b);
 
-    EXPECT_EQ(from_word(b[0]), int64_t(FS_MAGIC));
+    EXPECT_EQ(b[0] & WORD_MASK, FS_MAGIC); // 48 bits raw, not a 41-bit signed value
     EXPECT_EQ(from_word(b[1]), BSIZEW);
     EXPECT_EQ(from_word(b[2]), INOPB);
     EXPECT_EQ(from_word(b[3]), NADDR);

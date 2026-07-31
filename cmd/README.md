@@ -721,7 +721,7 @@ transcript — which no test here had done. Anything self-referential inherits t
 **Two silent parsing traps on the host side, and the first run hit both.** The console runs with
 `XTABS`, so a tab a program emits reaches the transcript as spaces and a report cannot be split
 on one. And `b6fsutil -v -v` is *two* reports — the superblock summary, then the tree — so an
-`awk` that does not skip the preamble reads `Magic: 0123456701234` as an object with no third
+`awk` that does not skip the preamble reads `Magic: 0xBE50006F11E5` as an object with no third
 field, invents a uid-0 entry, and comes out one file ahead of the guest. **The guest was right
 and the oracle was wrong**, which is the failure mode a recomputing oracle has and a checked-in
 one does not; budget for debugging the oracle, not just the program.

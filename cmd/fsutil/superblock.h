@@ -54,7 +54,7 @@ static_assert(SB_FILL + 17 == BSIZEW, "the superblock must fill the block exactl
 
 class SuperBlock {
 public:
-    int64_t magic  = FS_MAGIC;
+    Word magic     = FS_MAGIC; // a raw 48-bit pattern, not a number -- see fsutil.h
     int64_t bsize  = BSIZEW;
     int64_t inopb  = INOPB;
     int64_t naddr  = NADDR;

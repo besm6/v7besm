@@ -116,7 +116,8 @@ int64_t sword(uint64_t w)
 // ---------------------------------------------------------------------------
 //
 struct Filsys {
-    int64_t s_magic, s_bsize, s_inopb, s_naddr;
+    uint64_t s_magic; // 48 bits raw -- `unsigned' on the target, not an int
+    int64_t s_bsize, s_inopb, s_naddr;
     int64_t s_isize, s_fsize, s_time, s_tfree, s_tinode;
     int64_t s_flock, s_ilock, s_fmod, s_ronly;
     int64_t s_nfree;
@@ -130,7 +131,7 @@ void read_super(Disk &d, Filsys &fp)
     uint64_t b[BSIZEW];
     d.bread(1, b); // SUPERB
 
-    fp.s_magic  = sword(b[0]);
+    fp.s_magic  = b[0] & WORD_MASK;
     fp.s_bsize  = sword(b[1]);
     fp.s_inopb  = sword(b[2]);
     fp.s_naddr  = sword(b[3]);
@@ -156,7 +157,7 @@ void read_super(Disk &d, Filsys &fp)
 //
 int sbcheck(const Filsys *fp, std::string &why)
 {
-    if (fp->s_magic != int64_t(FS_MAGIC)) {
+    if (fp->s_magic != FS_MAGIC) {
         why = "not a filesystem";
         return 1;
     }
@@ -498,7 +499,7 @@ TEST_F(KernelModel, VolumeMounts)
     std::string why;
     EXPECT_EQ(sbcheck(&fp, why), 0) << why;
 
-    EXPECT_EQ(fp.s_magic, int64_t(FS_MAGIC));
+    EXPECT_EQ(fp.s_magic, FS_MAGIC);
     EXPECT_EQ(fp.s_bsize, BSIZEW);
     EXPECT_EQ(fp.s_inopb, INOPB);
     EXPECT_EQ(fp.s_naddr, NADDR);

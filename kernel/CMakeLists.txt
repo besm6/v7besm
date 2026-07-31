@@ -32,6 +32,12 @@ endif()
 get_filename_component(KINC ${CMAKE_CURRENT_SOURCE_DIR}/../include ABSOLUTE)
 file(GLOB KHDRS ${KINC}/sys/*.h)
 
+# const.s is #included by besm6.S, not compiled on its own, so nothing else would notice it
+# change.  It joins the coarse list rather than besm6.S alone: b6_obj takes no per-source
+# extra dependency, and a literal-pool edit is rare enough that rebuilding the kernel costs
+# nothing worth an option.
+list(APPEND KHDRS ${CMAKE_CURRENT_SOURCE_DIR}/const.s)
+
 # ---------------------------------------------------------------------------------------
 # The kernel image.
 # ---------------------------------------------------------------------------------------

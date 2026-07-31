@@ -151,7 +151,7 @@ Two things bit while writing those oracles, and both are the kind that pass sile
   with `XTABS` ([../../kernel/dev/tty.c](../../kernel/dev/tty.c)), so by the time the report
   reaches the host they are spaces. A transcript cannot be split on a tab the guest emitted.
 * **`b6fsutil -v -v` is two reports**, the superblock summary and then the tree. An `awk` that
-  does not skip the preamble parses `Magic: 0123456701234` as an object — no third field, so a
+  does not skip the preamble parses `Magic: 0xBE50006F11E5` as an object — no third field, so a
   uid-0 entry of size 0 with an empty i-number — and the host comes out **one file ahead of the
   guest**. That is exactly how the first run failed, and `quot` was right.
 

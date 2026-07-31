@@ -12,7 +12,7 @@ void SuperBlock::load(Image &img)
     Block b;
     img.read_block(SUPERB, b);
 
-    magic  = from_word(b[SB_MAGIC]);
+    magic  = b[SB_MAGIC] & WORD_MASK; // raw: 48 bits, not a 41-bit signed value
     bsize  = from_word(b[SB_BSIZE]);
     inopb  = from_word(b[SB_INOPB]);
     naddr  = from_word(b[SB_NADDR]);
@@ -47,7 +47,7 @@ void SuperBlock::save(Image &img)
     //
     Block b{};
 
-    b[SB_MAGIC]  = to_word(magic);
+    b[SB_MAGIC]  = magic & WORD_MASK;
     b[SB_BSIZE]  = to_word(bsize);
     b[SB_INOPB]  = to_word(inopb);
     b[SB_NADDR]  = to_word(naddr);
@@ -81,7 +81,7 @@ void SuperBlock::save(Image &img)
 //
 bool SuperBlock::validate(std::ostream &err) const
 {
-    if (magic != int64_t(FS_MAGIC)) {
+    if (magic != FS_MAGIC) {
         err << "not a filesystem\n";
         return false;
     }
@@ -123,7 +123,7 @@ void SuperBlock::print(std::ostream &out) const
     if (const std::tm *tm = std::localtime(&t))
         std::strftime(when, sizeof(when), "%Y-%m-%d %H:%M:%S", tm);
 
-    out << "Magic:            " << std::oct << "0" << magic << std::dec << "\n";
+    out << "Magic:            " << std::hex << "0x" << magic << std::dec << "\n";
     out << "Block size:       " << bsize << " words (" << bsize * NBPW << " bytes)\n";
     out << "Inodes per block: " << inopb << "\n";
     out << "Addrs per inode:  " << naddr << "\n";

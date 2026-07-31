@@ -47,10 +47,10 @@
 
 struct filsys {
     // Identity and geometry: checked at mount by sbcheck(), kernel/alloc.c.
-    int s_magic; // 0: FS_MAGIC
-    int s_bsize; // 1: words per block (BSIZEW)
-    int s_inopb; // 2: inodes per block (INOPB)
-    int s_naddr; // 3: disk addresses per inode (NADDR)
+    unsigned s_magic; // 0: FS_MAGIC
+    int      s_bsize; // 1: words per block (BSIZEW)
+    int      s_inopb; // 2: inodes per block (INOPB)
+    int      s_naddr; // 3: disk addresses per inode (NADDR)
 
     int s_isize;     // 4: size in blocks of i-list
     daddr_t s_fsize; // 5: size in blocks of entire volume

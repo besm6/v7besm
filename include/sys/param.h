@@ -129,11 +129,8 @@
 #define NICINOD 160 // number of superblock inodes
 #define NICFREE 320 // number of superblock free blocks
 
-// Superblock magic.  v7 has none, so a garbage block mounts silently and the first
-// symptom is getfs()'s "bad count" -- which "repairs" it by zeroing the counts.
-// Deliberate and unmistakable in an octal dump; 39 bits, so it fits the 40-bit
-// value field with room to spare.  See sbcheck() in kernel/alloc.c.
-#define FS_MAGIC 0123456701234
+// Superblock magic.
+#define FS_MAGIC 0xBE50006F11E5U
 
 // There is no BSHIFT/BMASK, and there cannot be: a block is BSIZE == 3072 BYTES,
 // and 3072 is not a power of two.  v7's pair described a 512-byte block and were
