@@ -15,6 +15,6 @@ SIZE=72 MTIME=Nov 14 22:13 2023  COUNT 3 SHOULD BE 2
 ADJUST?  yes
 
 ** Phase 5 - Check Free List 
-11 files 51 blocks 531 free
+11 files 51 blocks 534 free
 
 ***** FILE SYSTEM WAS MODIFIED *****

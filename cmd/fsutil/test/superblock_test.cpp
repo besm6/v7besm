@@ -23,7 +23,7 @@ namespace {
 SuperBlock good()
 {
     SuperBlock sb;
-    sb.isize  = 34;
+    sb.isize  = 33;
     sb.fsize  = 2000;
     sb.time   = 1000000;
     sb.tfree  = 1965;

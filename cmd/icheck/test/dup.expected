@@ -1,6 +1,6 @@
 dup.img:
-14 dup; inode=5, class=data (small)
+13 dup; inode=5, class=data (small)
 files      5 (r=3,d=2,b=0,c=0)
 used    1578 (i=6,ii=3,d=1569)
-free     186
+free     189
 missing    3

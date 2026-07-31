@@ -52,8 +52,8 @@ breaks this build rather than the images it writes.
 | | |
 |---|---|
 | Block | 512 words = 3072 bytes |
-| Superblock | exactly one block, at block 1 |
-| Inode | 16 words, 32 to a block, i-list from block 2 |
+| Superblock | exactly one block, at block 0 -- the first of the volume |
+| Inode | 16 words, 32 to a block, i-list from block 1 |
 | Directory entry | 4 words — one i-number, three of name (18 chars) |
 | Addresses per inode | 8: six direct, one single indirect, one double |
 
@@ -129,7 +129,7 @@ A value is decimal, or octal with a leading `0` — a mode has to be writable th
 of the world spells one. Each poke is logged to standard output. Two things it does that
 nothing else in the tool does, both deliberate: it writes the raw word rather than going
 through `to_word()`, whose range check would refuse the interesting values; and it does
-**not** `sync()`, since that would rewrite block 1 from the in-core mirror and quietly undo
+**not** `sync()`, since that would rewrite block 0 from the in-core mirror and quietly undo
 any damage to the superblock. See `damage.h`.
 
 ## Source layout

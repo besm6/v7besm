@@ -68,8 +68,8 @@ void Image::create(const std::string &filename, int64_t count)
 {
     close();
 
-    if (count < 3)
-        throw FsError("a filesystem needs at least a boot block, a superblock and an i-list");
+    if (count < 2)
+        throw FsError("a filesystem needs at least a superblock and an i-list");
 
     fp = std::fopen(filename.c_str(), "w+b");
     if (!fp)

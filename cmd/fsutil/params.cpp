@@ -26,26 +26,27 @@
 // have both values in scope at once, which is the entire job of this file.
 //
 namespace ours {
-constexpr int nbpw     = NBPW;
-constexpr int bsize    = BSIZE;
-constexpr int bsizew   = BSIZEW;
-constexpr int nindir   = NINDIR;
-constexpr int nshift   = NSHIFT;
-constexpr int nmask    = NMASK;
-constexpr int naddr    = NADDR;
-constexpr int nlevel   = NLEVEL;
-constexpr int inopb    = INOPB;
-constexpr int inoshift = INOSHIFT;
-constexpr int inomask  = INOMASK;
-constexpr int dirsiz   = DIRSIZ;
-constexpr int dirwords = DIRWORDS;
-constexpr int direntsz = DIRENTSZ;
-constexpr int dirpb    = DIRPB;
-constexpr int dirshift = DIRSHIFT;
-constexpr int dirmask  = DIRMASK;
-constexpr int nicinod  = NICINOD;
-constexpr int nicfree  = NICFREE;
-constexpr Word magic   = FS_MAGIC;
+constexpr int nbpw       = NBPW;
+constexpr int bsize      = BSIZE;
+constexpr int bsizew     = BSIZEW;
+constexpr int nindir     = NINDIR;
+constexpr int nshift     = NSHIFT;
+constexpr int nmask      = NMASK;
+constexpr int naddr      = NADDR;
+constexpr int nlevel     = NLEVEL;
+constexpr int inopb      = INOPB;
+constexpr int inoshift   = INOSHIFT;
+constexpr int inomask    = INOMASK;
+constexpr int dirsiz     = DIRSIZ;
+constexpr int dirwords   = DIRWORDS;
+constexpr int direntsz   = DIRENTSZ;
+constexpr int dirpb      = DIRPB;
+constexpr int dirshift   = DIRSHIFT;
+constexpr int dirmask    = DIRMASK;
+constexpr int nicinod    = NICINOD;
+constexpr int nicfree    = NICFREE;
+constexpr Word magic     = FS_MAGIC;
+constexpr int64_t superb = SUPERB;
 } // namespace ours
 
 //
@@ -101,14 +102,18 @@ static_assert(ours::nicfree == NICFREE, "NICFREE disagrees with sys/param.h");
 static_assert(ours::magic == FS_MAGIC, "FS_MAGIC disagrees with sys/param.h");
 
 //
-// ROOTINO and SUPERB are NOT checked here, though they look like they could be.
-// param.h spells them ((ino_t)2) and ((daddr_t)1), and those typedefs are the
-// kernel's own -- one 48-bit word -- from sys/types.h, which this file must not
-// include.  Declaring them locally to make the macros expand would collide with
-// libc's `ino_t' on any host that has already declared it, which is most of them.
-// Their values are v7's and have not moved since 1979; test/create_test.cpp
-// asserts the root directory really does land at inode 2.
+// SUPERB moved -- v7's boot block is gone and the superblock is block 0 -- so it is
+// checked, through SUPERBVAL.  The macro itself cannot be: param.h spells it
+// ((daddr_t)SUPERBVAL), and daddr_t is the kernel's typedef from sys/types.h, which
+// this file must not include; declaring one locally would collide with libc's on any
+// host that has it, which is most of them.  SUPERBVAL is the same number without the
+// cast, and exists for this assertion.
 //
+// ROOTINO is still not checked, for that same reason and with no SUPERBVAL of its own:
+// it is v7's 2 and has not moved since 1979, and test/create_test.cpp asserts the root
+// directory really does land at inode 2.
+//
+static_assert(ours::superb == SUPERBVAL, "SUPERB disagrees with sys/param.h");
 
 //
 // The relations the kernel's own headers assert about themselves, restated in the

@@ -31,11 +31,10 @@
 #
 #   2.  THE SCRATCH PACK IS STILL ITSELF.  run-mkfs.sh's and run-fsck.sh's oracle, and this
 #       is the first time it is asked of the CACHE.  The sector-header service words are per
-#       CONTROLLER (kernel/dev/md.c maintains only the address in them), so a written zone
-#       carries the volume number of whichever pack was last READ, and b6fsutil reads it from
-#       zone 0 track 0 -- block 0 -- alone.  A mounted filesystem cannot reach block 0:
-#       SUPERB is block 1 and alloc() is bounded below by badblock().  This is what holds it
-#       to that.
+#       CONTROLLER, so a written zone would carry the volume number of whichever pack was
+#       last READ, and b6fsutil reads it from zone 0 track 0 -- block 0 -- alone.  A mounted
+#       filesystem reaches block 0 on every sync, SUPERB being the superblock, so what keeps
+#       the number right is md.c's per-drive mark.  This is what holds it to that.
 #
 #   3.  WHAT CAME BACK IS A FILESYSTEM.  `b6fsutil -c -v', five passes, exit 0 -- over a pack
 #       that was mounted, written through the cache, unmounted, deliberately broken with
@@ -131,11 +130,11 @@ cat mount.console
 "$b6fsutil" -S scratch3094.disk scratchafter.img | tee scratch.convert
 if ! grep -q 'volume 3094' scratch.convert; then
     echo "run-mount.sh: the scratch pack came back claiming to be some other volume." >&2
-    echo "  kernel/dev/md.c leaves the volume number in a written zone's service words as" >&2
-    echo "  the last READ of any drive on the controller left it, and zone 0 track 0 --" >&2
-    echo "  block 0 -- is the only one b6fsutil reads it from.  Something wrote block 0." >&2
-    echo "  From a MOUNTED filesystem that should be impossible: SUPERB is block 1 and" >&2
-    echo "  badblock() (kernel/alloc.c) bounds every allocation below by s_isize." >&2
+    echo "  kernel/dev/md.c stamps each DRIVE's own mark into a written zone's service" >&2
+    echo "  words (mdvol[]); zone 0 track 0 -- block 0, the superblock -- is the only one" >&2
+    echo "  b6fsutil reads the volume from.  Suspect mdvol[] not being primed or not being" >&2
+    echo "  stamped: without it a written zone carries whatever pack the CONTROLLER last" >&2
+    echo "  read.  cmd/mkfs/README.md SS2." >&2
     cat scratch.convert >&2
     exit 1
 fi

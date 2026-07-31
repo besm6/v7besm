@@ -17,15 +17,12 @@
 #
 # THE ORDER MATTERS IN TWO PLACES.
 #
-#   The dd write comes FIRST, and it targets BLOCK 2.  Block 2 is the first i-list block, so
-#   mkfs in section 3 rewrites it -- which is what lets the byte-for-byte compare on the
-#   host still hold afterwards: nothing this section leaves behind survives.  Block 0 is
-#   deliberately NOT used, and that is load-bearing rather than arbitrary: kernel/dev/md.c
-#   maintains only the sector address in the service words it writes, leaving the magic mark
-#   and THE VOLUME NUMBER as the last read of any drive on the controller left them, and
-#   zone 0 track 0 -- block 0 -- is the only half-zone whose volume number b6fsutil's
-#   from_simh() reads back.  Write block 0 from the guest and the scratch pack comes back
-#   claiming to be the root pack.  cmd/mkfs/README.md is the account.
+#   The dd write comes FIRST, and it targets BLOCK 2.  Block 2 is an i-list block, so mkfs
+#   in section 3 rewrites it -- which is what lets the byte-for-byte compare on the host
+#   still hold afterwards: nothing this section leaves behind survives.  (Block 0 was avoided
+#   here until the superblock moved there, because the volume number in zone 0's service
+#   words was the only one b6fsutil reads back and the driver did not maintain it.  It does
+#   now, per drive -- cmd/mkfs/README.md SS2 -- so the choice is only about the compare.)
 #
 #   The diagnostics come BEFORE the real mkfs, because each of them must leave the volume
 #   untouched and the only way to say so is that what follows still works.

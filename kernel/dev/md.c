@@ -226,6 +226,14 @@ static unsigned mderr;  // the running exchange already failed; its completion i
 // absent one, the way it already reaches into intr.c for mgrp.
 unsigned mdstatus;
 
+// The pack label -- service word 1, the magic mark and volume number -- one per drive.  The
+// service-word buffer belongs to the CONTROLLER, so without this a write to md01 puts back
+// whatever the last read of md00 left there.  Filled from every read, stamped on every write.
+// Zero means "not seen yet" and is never stamped: a zone with no mark is not a formatted pack
+// and b6fsutil's from_simh() refuses the whole container over one.  Indexed by minor(b_dev),
+// which mdstrategy() has already bounded below MDNUNIT.
+static int mdvol[MDNUNIT];
+
 // Exchanges re-issued since the driver last started a fresh request.  Diagnostic state --
 // "did that request come back cleanly, or did it come back after a fight" is worth having
 // when a drive starts to go -- and the one thing that makes the hard/soft split above
@@ -352,46 +360,36 @@ static void mdstart(void)
         // own sector header, and the driver owns the copy in the buffer between exchanges,
         // exactly as the hardware leaves it.
         //
-        // The first word of each four is THE SECTOR'S OWN ADDRESS, the block number in
-        // bits 48-37, and it is the field the drive matches when it looks for a track.  It
-        // changes with every exchange, so it is the one this driver must maintain.  Words
-        // 1-3 -- the volume's magic mark and number, the userid and the address checksum --
-        // are the same on every zone of a pack and are left exactly as the last read
-        // brought them in, which is the buffer behaving as it does on the machine.
+        // TWO of each four are the driver's.  Word 0 is the sector's own address, bits 48-37,
+        // the field the drive matches when it looks for a track; it changes every exchange.
+        // Word 1 is the volume's mark and number, which is constant within a pack but is not
+        // the CONTROLLER's to supply -- mdvol[] above holds the drive's own.  Words 2 and 3,
+        // the userid and the checksum, are left as the last read brought them in.
         //
-        // Until task 25b nothing wrote this at all, so every zone the kernel wrote got the
-        // address of whatever zone had been read last: a header no drive would ever find
-        // again.  Under SIMH nothing notices, because the simulator seeks by zone number
-        // and never reads the address back -- it took kernel/test/session, which converts
-        // the written container back to a flat image afterwards, for anything to say so.
+        // Until task 25b nothing wrote the address at all, so every zone the kernel wrote got
+        // whatever zone had been read last.  SIMH never reads it back, so it took
+        // kernel/test/session -- which converts the written container to flat afterwards --
+        // to say so.
         //
-        // (An open edge, deliberately left: a half-zone slot that has never been READ has a
-        // zero magic mark, and a write then stores that zero.  Every boot reads the
-        // superblock and the i-list before it writes anything, so both slots are primed
-        // long before this matters -- but a driver that filled the mark itself would need
-        // to be told the volume number, which nothing on this system knows.)
-        //
-        // AND A SECOND EDGE, WHICH TASK C4c FOUND BY BEING THE FIRST THING HERE WITH TWO
-        // DRIVES.  This buffer belongs to the CONTROLLER, not to the drive, so words 1-3
-        // come from the last read of ANY drive on it -- and a write to md01 therefore
-        // stamps whatever pack md00 last read, VOLUME NUMBER INCLUDED.  Measured on
-        // kernel/test/mkfs's containers: the zones the guest wrote onto the scratch pack
-        // carry the root pack's number and the ones it did not carry their own.
-        //
-        // What makes that survivable is which words are read back.  b6fsutil's from_simh()
-        // validates the magic mark, which is the same constant on every pack, and each
-        // half-zone's self-address, which is the one field maintained here -- and it takes
-        // the volume number from ZONE 0 ALONE, without validating it.  So the rule is that
-        // nothing may write block 0 of a pack this system did not label; mkfs does not, and
-        // kernel/test/mkfs holds it to that with a grep.  cmd/mkfs/README.md is the account.
+        // The mark was left alone until block 0 became the superblock.  Task C4c measured the
+        // damage on two drives: the buffer is the controller's, so a write to md01 stamped
+        // whatever pack md00 last read.  That was survivable only while nothing wrote block 0,
+        // the one zone b6fsutil's from_simh() takes a volume number from.  update() writes it
+        // on every sync now.  cmd/mkfs/README.md is the account.
         if ((bp->b_flags & B_READ) == 0) {
             sys = MDSYS + ctlr * MDSYSWORDS;
             if (cw & CW_PAGE_MODE) {
                 // A whole zone moves all eight words: both half-zones, both addresses.
                 sys[0]         = (int)(zone * MDTPZ) << MDSYS_ADDR;
                 sys[MDSYSHALF] = (int)(zone * MDTPZ + 1) << MDSYS_ADDR;
+                if (mdvol[dev] != 0) {
+                    sys[1]             = mdvol[dev];
+                    sys[MDSYSHALF + 1] = mdvol[dev];
+                }
             } else {
                 sys[track * MDSYSHALF] = (int)blk << MDSYS_ADDR;
+                if (mdvol[dev] != 0)
+                    sys[track * MDSYSHALF + 1] = mdvol[dev];
             }
 
             // AND DRAIN THE БРЗ, because the controller reads MEMORY and the CPU's write
@@ -493,6 +491,7 @@ static void mdstart(void)
 void mdintr(void)
 {
     register struct buf *bp;
+    unsigned dev, blk;
 
     // A completion nobody is waiting for.  It cannot happen from this driver -- only
     // mdstart() ever arms these bits, and only around a live exchange -- but the bit is
@@ -542,6 +541,17 @@ void mdintr(void)
     }
 
     mdtab.b_errcnt = 0; // this chunk landed; the next one starts its own count
+
+    // A read that landed is the one moment the service words are THIS drive's own header:
+    // keep the mark for mdstart() to put back.  mdstart()'s address arithmetic, repeated --
+    // mddone still describes the chunk that landed, and a half-zone read fills only the four
+    // words at 4*track.  No drainbrz(): the device was the writer and this only reads.
+    if (bp->b_flags & B_READ) {
+        dev        = minor(bp->b_dev);
+        blk        = (unsigned)bp->b_blkno + mddone / MDTRACK;
+        mdvol[dev] = MDSYS[(dev >> 5) * MDSYSWORDS + (blk % MDTPZ) * MDSYSHALF + 1];
+    }
+
     mddone += mdnw;
     if (mddone < bp->b_wcount) {
         // More to move.  Do NOT disarm: the control word mdstart() is about to issue lowers

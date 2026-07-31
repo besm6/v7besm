@@ -17,7 +17,7 @@
 namespace {
 
 constexpr int64_t NBLK  = 2000;
-constexpr int64_t ISIZE = 34; // first data block, as create.cpp computes it
+constexpr int64_t ISIZE = 33; // first data block, as create.cpp computes it
 
 //
 // A filesystem with a free list built the way create.cpp builds it: descending,
@@ -187,9 +187,9 @@ TEST(Alloc, ExhaustionIsClean)
     Filesystem fs;
 
     // A small volume, so the whole list fits inside the superblock's cache.
-    build(fs, path, 100, 34);
+    build(fs, path, 100, 33);
 
-    for (int64_t i = 0; i < 100 - 34; i++)
+    for (int64_t i = 0; i < 100 - 33; i++)
         ASSERT_NO_THROW(fs.block_alloc()) << "allocation " << i;
 
     EXPECT_THROW(fs.block_alloc(), FsError);
@@ -253,11 +253,11 @@ TEST(Alloc, RefusesNonDataBlocks)
     Filesystem fs;
     build(fs, path);
 
-    EXPECT_THROW(fs.block_free(0), FsError);         // boot block
-    EXPECT_THROW(fs.block_free(SUPERB), FsError);    // superblock
-    EXPECT_THROW(fs.block_free(ISIZE - 1), FsError); // last i-list block
-    EXPECT_THROW(fs.block_free(NBLK), FsError);      // past the end
-    EXPECT_NO_THROW(fs.block_free(ISIZE));           // the first data block is fine
+    EXPECT_THROW(fs.block_free(SUPERB), FsError);     // the superblock, block 0
+    EXPECT_THROW(fs.block_free(SUPERB + 1), FsError); // first i-list block
+    EXPECT_THROW(fs.block_free(ISIZE - 1), FsError);  // last i-list block
+    EXPECT_THROW(fs.block_free(NBLK), FsError);       // past the end
+    EXPECT_NO_THROW(fs.block_free(ISIZE));            // the first data block is fine
 
     fs.image.close();
     std::remove(path);

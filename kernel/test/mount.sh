@@ -51,9 +51,11 @@ echo mount start >/tmp/mount.log
 #          leaves them zeros -- so mounting it is mounting garbage, which v7's mount(2)
 #          believes: mount.1m says in so many words that doing so crashes the system.
 #          sbcheck() (kernel/alloc.c) answers EINVAL instead and prints what it disliked on
-#          the console, which is what run-mount.sh greps for.  /dev/swap is the other half of
-#          the same question: a block device whose superblock cannot even be READ, which is
-#          smount()'s bread() arm and answers EIO.
+#          the console, which is what run-mount.sh greps for.  /dev/md4 is the other half of
+#          the same question: SIMH has no drive attached there, so the superblock cannot be
+#          READ at all -- smount()'s bread() arm, which answers EIO.  It used to be /dev/swap,
+#          whose block 1 was past the highest drum zone ever written; block 0 is not, and the
+#          superblock lives there now, so that case stopped reaching this arm.
 echo ---bad--- >>/tmp/mount.log
 /etc/mount /dev/md1 >>/tmp/mount.log 2>&1
 echo status $? >>/tmp/mount.log
@@ -71,7 +73,7 @@ echo ---garbage--- >/dev/console
 /etc/mount /dev/md2 /mnt >>/tmp/mount.log 2>&1
 echo status $? >>/tmp/mount.log
 echo ---endgarbage--- >/dev/console
-/etc/mount /dev/swap /mnt >>/tmp/mount.log 2>&1
+/etc/mount /dev/md4 /mnt >>/tmp/mount.log 2>&1
 echo status $? >>/tmp/mount.log
 
 # ---- 2.  THE MOUNT.  /dev/md1 and not /dev/rmd1: getmdev() wants IFBLK, which is the one

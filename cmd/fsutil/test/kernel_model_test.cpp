@@ -129,7 +129,7 @@ struct Filsys {
 void read_super(Disk &d, Filsys &fp)
 {
     uint64_t b[BSIZEW];
-    d.bread(1, b); // SUPERB
+    d.bread(0, b); // SUPERB -- the first block of the volume
 
     fp.s_magic  = b[0] & WORD_MASK;
     fp.s_bsize  = sword(b[1]);
@@ -192,8 +192,8 @@ struct Dinode {
 //
 void iget(Disk &d, int64_t ino, Dinode *ip)
 {
-    const int64_t blk = (ino + 2 * INOPB - 1) >> INOSHIFT;
-    const int off     = int((ino + 2 * INOPB - 1) & INOMASK);
+    const int64_t blk = (ino + INOPB - 1) >> INOSHIFT;
+    const int off     = int((ino + INOPB - 1) & INOMASK);
 
     uint64_t b[BSIZEW];
     d.bread(blk, b);

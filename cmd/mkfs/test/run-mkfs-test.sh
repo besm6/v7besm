@@ -11,7 +11,7 @@
 #
 # THE TIMESTAMP IS THE ONLY THING IN THE WAY, and it is six bytes at a known offset.  mkfs
 # stamps time(2) -- here the build machine's clock -- into s_time and into the root inode's
-# three times.  s_time is word 6 of block 1, so it sits at byte 1*3072 + 6*6 = 3108 and is
+# three times.  s_time is word 6 of block 0, the superblock, so it sits at byte 6*6 = 36 and is
 # six bytes big-endian (doc/File_Magic.md: a BESM-6 word reads as one big-endian 48-bit
 # number).  Read it back out of what the guest wrote and hand it to `b6fsutil -T', and the
 # other four agree by construction.
@@ -40,7 +40,7 @@ cat layout.out
 
 # s_time, out of the image the guest just wrote.  `head -1' guards the awk against od's
 # trailing blank line, which would otherwise be parsed as the number 0.
-t=$(od -An -tu1 -j 3108 -N 6 layout.img | head -1 |
+t=$(od -An -tu1 -j 36 -N 6 layout.img | head -1 |
     awk '{ v = 0; for (i = 1; i <= NF; i++) v = v * 256 + $i; print v }')
 if [ -z "$t" ] || [ "$t" -le 0 ]; then
     echo "could not read s_time out of layout.img (got '$t')" >&2

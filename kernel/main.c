@@ -125,7 +125,7 @@ void main()
 //
 // panic: iinit -- cannot read the super
 // block. Usually because of an IO error.
-// panic: no root fs -- block 1 was read, but
+// panic: no root fs -- SUPERB was read, but
 // it is not a superblock this kernel can use.
 void iinit()
 {

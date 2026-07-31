@@ -16,7 +16,7 @@ BAD FREE LIST
 SALVAGE?  yes
 
 ** Phase 6 - Salvage Free List
-6 files 18 blocks 5880 free
+6 files 18 blocks 5883 free
 
 ***** FILE SYSTEM WAS MODIFIED *****
 status 0
@@ -28,7 +28,7 @@ status 0
 ** Phase 3 - Check Connectivity
 ** Phase 4 - Check Reference Counts
 ** Phase 5 - Check Free List 
-6 files 18 blocks 5880 free
+6 files 18 blocks 5883 free
 status 0
 ---bad---
 Incompatible options: -n and -s

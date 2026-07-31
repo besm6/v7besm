@@ -18,9 +18,9 @@
 // put on the new volume -- or a bare decimal size, and this port takes only the second.
 // Four reasons, in the order they bite:
 //
-//   * The boot block is meaningless here.  v7 read a PDP-11 a.out and copied its text and
-//     data onto block 0; on this machine SIMH `load's the kernel and block 0 is not read
-//     by anything.  See bproc(8), which this system also does not have.
+//   * There is no boot block to fill.  v7 read a PDP-11 a.out and copied its text and data
+//     onto block 0; on this machine SIMH `load's the kernel, so this port has no such block
+//     at all and the superblock is block 0.  See bproc(8), which this system also lacks.
 //   * cfile() recurses once per directory level with `char db[BSIZE]' and
 //     `daddr_t ib[NINDIR]' as automatics -- 1024 words of frame per level against a stack
 //     of 4096 words that nothing checks (../README.md SS6).  Three levels of proto and the
@@ -211,16 +211,15 @@ int main(int argc, char **argv)
     // so this number bounds a loop in the kernel and one too high is a runaway read
     // rather than a wrong answer.
     //
-    //	block 0		boot -- written by nothing here
-    //	block 1		superblock (SUPERB)
-    //	blocks 2..	the i-list
+    //	block 0		superblock (SUPERB) -- there is no boot block
+    //	blocks 1..	the i-list
     //	block isize..	data
     if (ninodes <= 0)
         ninodes = (int)(nblk / 2);
     iblocks = (ninodes + INOPB - 1) / INOPB;
     if (iblocks < 1)
         iblocks = 1;
-    isize = 2 + iblocks;
+    isize = SUPERB + 1 + iblocks;
     if (isize >= nblk) {
         fprintf(stderr, "mkfs: the i-list does not leave room for any data blocks\n");
         return 1;
@@ -231,7 +230,7 @@ int main(int argc, char **argv)
     // di_mode == 0.  This is also what lets the root inode be written below with a bare
     // wtfs() instead of v7's iput() read-modify-write -- nothing else has touched it since.
     clrblk();
-    for (n = 2; n < isize; n++)
+    for (n = SUPERB + 1; n < isize; n++)
         wtfs(n);
 
     sblock.s_magic  = FS_MAGIC;
@@ -305,8 +304,8 @@ int main(int argc, char **argv)
         blk[i] = ((int *)&sblock)[i];
     wtfs(SUPERB);
 
-    printf("mkfs: %s: %d blocks, %d inodes in blocks 2..%d, first data block %d\n", special, nblk,
-           ninodes, isize - 1, isize);
+    printf("mkfs: %s: %d blocks, %d inodes in blocks %d..%d, first data block %d\n", special, nblk,
+           ninodes, SUPERB + 1, isize - 1, isize);
     return 0;
 }
 
@@ -384,7 +383,7 @@ static daddr_t alloc(void)
 // THE END-OF-LIST SENTINEL IS PLANTED HERE, on the first call, exactly as the kernel's
 // free() plants it -- v7's mkfs instead calls bfree(0) once to get a 0 into s_free[0],
 // which is a lie about block 0 and would make this program's first act a claim that the
-// boot block is free.
+// superblock is free.
 static void bfree(daddr_t bno)
 {
     struct fblk *fp;

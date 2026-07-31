@@ -100,7 +100,12 @@
 #define CMASK   0            // default mask for file creation
 #define NODEV   (dev_t)(-1)  // no device
 #define ROOTINO ((ino_t)2)   // i number of all roots
-#define SUPERB  ((daddr_t)1) // block number of the super block
+// The superblock is the FIRST block of the volume.  v7 put a boot block at 0 and this port
+// never had a use for one -- SIMH loads the a.out image, there is no bootstrap on the pack --
+// so the block was 3072 bytes of zeros and one extra INOPB in itod()'s bias.  Spelled over
+// SUPERBVAL so that cmd/fsutil/params.cpp can assert the number without the cast; see there.
+#define SUPERBVAL 0
+#define SUPERB    ((daddr_t)SUPERBVAL) // block number of the super block
 
 // NULL was in the block above and is out of it now, guarded, exactly as
 // <stdio.h> guards its own: the compiler's <stddef.h> spells it ((void *)0), and
@@ -258,16 +263,18 @@
 // words gives three genuinely different addresses inside the same object.
 #define CHANOF(p, n) ((chan_t)((int *)(p) + (n)))
 
-// Inumber to disk address, and to the offset within that block.  The `2*INOPB - 1'
-// bias is v7's, and it places inode 1 at block 2 offset 0 -- the i-list starts
-// after the boot block and the superblock.  Both are written in terms of INOPB so
-// that resizing the inode cannot leave them behind, as the hardcoded >>3 and &07
-// were left behind when the struct stopped being 64 bytes.
+// Inumber to disk address, and to the offset within that block.  The `INOPB - 1' bias
+// places inode 1 at block 1 offset 0 -- the i-list starts just past the superblock.
+// v7's was `2*INOPB - 1', one block more, because it had a boot block to skip; see
+// SUPERB.  Both are written in terms of INOPB so that resizing the inode cannot leave
+// them behind, as the hardcoded >>3 and &07 were left behind when the struct stopped
+// being 64 bytes.  Inode 1 is unallocatable (ialloc() refuses anything below ROOTINO),
+// so slot 0 of the i-list is dead space -- v7's arrangement, kept.
 // inumber to disk address
-#define itod(x) (daddr_t)(((x) + 2 * INOPB - 1) >> INOSHIFT)
+#define itod(x) (daddr_t)(((x) + INOPB - 1) >> INOSHIFT)
 
 // inumber to disk offset
-#define itoo(x) (int)(((x) + 2 * INOPB - 1) & INOMASK)
+#define itoo(x) (int)(((x) + INOPB - 1) & INOMASK)
 
 // Major part of a device.  This used to shift through `unsigned', which made
 // major(NODEV) come out as (2^48-1)>>8 rather than -1.  That accidentally

@@ -75,11 +75,11 @@ constexpr Word FS_MAGIC = 0xBE50006F11E5ULL;
 
 //
 // param.h spells these two with a cast -- ROOTINO is ((ino_t)2), SUPERB is
-// ((daddr_t)1) -- so they are respelled here for the reason in the header comment.
+// ((daddr_t)SUPERBVAL) -- so they are respelled here for the reason in the header
+// comment.  SUPERB is the FIRST block of the volume: there is no boot block.
 //
 constexpr int64_t ROOTINO = 2; // i-number of the root directory
-constexpr int64_t SUPERB  = 1; // block number of the superblock
-constexpr int64_t BOOTB   = 0; // block number of the boot block
+constexpr int64_t SUPERB  = 0; // block number of the superblock
 
 //
 // The volume.  One EC-5052 drive is 1000 zones of two blocks each and there are no
@@ -176,19 +176,19 @@ inline void unpack_chars(Word w, char *s, int n)
 }
 
 //
-// Inumber to block number, and to the slot within that block.  v7's `2*INOPB - 1'
-// bias places inode 1 at block 2 slot 0: the i-list starts just past the boot block
-// and the superblock.  Spelled in terms of INOPB, as param.h now is, so that
-// resizing the inode cannot leave them behind.
+// Inumber to block number, and to the slot within that block.  The `INOPB - 1' bias
+// places inode 1 at block 1 slot 0: the i-list starts just past the superblock, and
+// there is no boot block.  Spelled in terms of INOPB, as param.h is, so that resizing
+// the inode cannot leave them behind.
 //
 inline int64_t itod(int64_t ino)
 {
-    return (ino + 2 * INOPB - 1) >> INOSHIFT;
+    return (ino + INOPB - 1) >> INOSHIFT;
 }
 
 inline int itoo(int64_t ino)
 {
-    return int((ino + 2 * INOPB - 1) & INOMASK);
+    return int((ino + INOPB - 1) & INOMASK);
 }
 
 //

@@ -87,12 +87,12 @@ function(icheck_damaged name)
     endif()
 endfunction()
 
-# Inode 5 is /small and its one block is 536; inode 4 is /huge and its first is 14.  Both
+# Inode 5 is /small and its one block is 535; inode 4 is /huge and its first is 13.  Both
 # are properties of a fixture whose manifest and timestamp are fixed, so they are stable --
-# and if the manifest ever changes, cmd_icheck_missing's `536 missing' fails and says so.
+# and if the manifest ever changes, cmd_icheck_missing's `535 missing' fails and says so.
 icheck_damaged(badblk  i5.addr0=9999) # a block number past the end of a 600-block volume
-icheck_damaged(dup     i5.addr0=14)   # /small's block is now /huge's first block too
-icheck_damaged(missing i5.addr0=0)    # block 536 is now in no file: lost space
+icheck_damaged(dup     i5.addr0=13)   # /small's block is now /huge's first block too
+icheck_damaged(missing i5.addr0=0)    # block 535 is now in no file: lost space
 icheck_damaged(notafs  sb.magic=0)    # the check v7's icheck had nothing to make
 
 if(TARGET build_tests)

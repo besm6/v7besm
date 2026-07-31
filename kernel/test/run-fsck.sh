@@ -24,10 +24,10 @@
 #       since a clean image repaired to a clean image looks exactly like success.
 #
 #   2.  THE SCRATCH PACK IS STILL ITSELF.  run-mkfs.sh's oracle 1, unchanged and for the
-#       same reason: the sector-header service words are per CONTROLLER, kernel/dev/md.c
-#       maintains only the address in them, so a written zone carries the volume number of
-#       whichever pack was last READ.  b6fsutil reads it from zone 0 -- block 0 -- alone.
-#       fsck cannot write block 0 (fmin is at least 2), and this is what holds it to that.
+#       same reason: the sector-header service words are per CONTROLLER, so a written zone
+#       would carry the volume number of whichever pack was last READ.  b6fsutil reads it
+#       from zone 0 -- block 0 -- alone, and fsck writes block 0, that being the superblock.
+#       md.c's per-drive mark is what keeps it right, and this is what holds it to that.
 #
 #   3.  THE REPAIR IS SOUND.  `b6fsutil -c -v' over the converted pack, five passes,
 #       exit 0.  A filesystem the guest repaired through physio(), mdstrategy() and
@@ -115,10 +115,11 @@ cat fsck.console
 "$b6fsutil" -S scratch3092.disk scratchafter.img | tee scratch.convert
 if ! grep -q 'volume 3092' scratch.convert; then
     echo "run-fsck.sh: the scratch pack came back claiming to be some other volume." >&2
-    echo "  kernel/dev/md.c leaves the volume number in a written zone's service words as" >&2
-    echo "  the last READ of any drive on the controller left it, and zone 0 track 0 --" >&2
-    echo "  block 0 -- is the only one b6fsutil reads it from.  Something wrote block 0," >&2
-    echo "  which fsck should not be able to do at all: fmin is never below 2." >&2
+    echo "  kernel/dev/md.c stamps each DRIVE's own mark into a written zone's service" >&2
+    echo "  words (mdvol[]); zone 0 track 0 -- block 0, the superblock -- is the only one" >&2
+    echo "  b6fsutil reads the volume from.  Suspect mdvol[] not being primed or not being" >&2
+    echo "  stamped: without it a written zone carries whatever pack the CONTROLLER last" >&2
+    echo "  read.  cmd/mkfs/README.md SS2." >&2
     cat scratch.convert >&2
     exit 1
 fi

@@ -20,11 +20,11 @@
 #       assertion in its own right -- from_simh() validates the magic mark on every zone and
 #       the self-address on every half-zone, and both are things kernel/dev/md.c writes from
 #       memory on a write exchange.  It also REPORTS the volume number out of zone 0, and
-#       that number is checked here, because it is the one field the driver gets wrong on a
-#       two-drive machine: the service words are per CONTROLLER, and md.c maintains only the
-#       address in them, so a written zone carries whatever pack was last READ.  Zone 0 track
-#       0 is block 0, mkfs.sh writes no such block on purpose, and this grep is what holds it
-#       to that.  cmd/mkfs/README.md is the account.
+#       that number is checked here, because the service words are per CONTROLLER: on a
+#       two-drive machine a written zone would carry whatever pack was last READ.  md.c keeps
+#       the mark per DRIVE for that reason, and this grep is what holds it to it -- zone 0
+#       track 0 is block 0, which is the superblock and is written on every sync.
+#       cmd/mkfs/README.md SS2 is the account.
 #
 #   2.  IT IS A FILESYSTEM.  `b6fsutil -c' -- five passes over one that no host tool built.
 #
@@ -33,7 +33,7 @@
 #       zeros both here (`attach -n' formats every data word to zero) and there
 #       (Image::create()), so every byte neither program wrote is zero in both.  The one
 #       thing in the way is the timestamp, which mkfs takes from the guest clock and which is
-#       six bytes at a known offset -- s_time is word 6 of block 1, so byte 3108 -- so it is
+#       six bytes at a known offset -- s_time is word 6 of block 0, so byte 36 -- so it is
 #       read back out of the guest's own superblock and handed to `-T'.
 #       THE FIELD DIFF COMES FIRST, because `cmp' says only "differ at byte N", which is no
 #       diagnostic at all; `b6fsutil -v' names the field that moved.
@@ -61,7 +61,7 @@ srcdir=$3
 
 NBLK=2000       # what the guest asks mkfs for: one whole EC-5052
 KBPB=3          # 1024-byte blocks per 3072-byte filesystem block; cmd/README.md SS4
-SBTIME=3108     # byte offset of s_time: block 1 (SUPERB) x 3072, plus word 6 x 6
+SBTIME=36       # byte offset of s_time: block 0 (SUPERB) x 3072, plus word 6 x 6
 
 rm -rf mkfs.img root3089.disk scratch3090.disk mkfsafter.img scratch.img want.img \
        mkfs.out mkfs0.drum mkfs1.drum mkfs.console mkfs.check mkfs.rootcheck \
@@ -93,9 +93,11 @@ cat mkfs.console
 "$b6fsutil" -S scratch3090.disk scratch.img | tee scratch.convert
 if ! grep -q 'volume 3090' scratch.convert; then
     echo "run-mkfs.sh: the scratch pack came back claiming to be some other volume." >&2
-    echo "  kernel/dev/md.c leaves the volume number in a written zone's service words as" >&2
-    echo "  the last READ of any drive on the controller left it, and zone 0 track 0 --" >&2
-    echo "  block 0 -- is the only one b6fsutil reads it from.  Something wrote block 0." >&2
+    echo "  kernel/dev/md.c stamps each DRIVE's own mark into a written zone's service" >&2
+    echo "  words (mdvol[]); zone 0 track 0 -- block 0, the superblock -- is the only one" >&2
+    echo "  b6fsutil reads the volume from.  Suspect mdvol[] not being primed or not being" >&2
+    echo "  stamped: without it a written zone carries whatever pack the CONTROLLER last" >&2
+    echo "  read.  cmd/mkfs/README.md SS2." >&2
     cat scratch.convert >&2
     exit 1
 fi
@@ -176,7 +178,8 @@ done
 # the two of them.
 isize=$(sed -n 's/^First data block: *\([0-9]*\)$/\1/p' want.sb)
 ninode=$(sed -n 's/^I-list: *blocks [0-9]*\.\.[0-9]* (\([0-9]*\) inodes)$/\1/p' want.sb)
-wantline="mkfs: /dev/rmd1: $NBLK blocks, $ninode inodes in blocks 2..$((isize - 1)), first data block $isize"
+ilist=$(sed -n 's/^I-list: *blocks \([0-9]*\)\.\..*$/\1/p' want.sb)
+wantline="mkfs: /dev/rmd1: $NBLK blocks, $ninode inodes in blocks $ilist..$((isize - 1)), first data block $isize"
 gotline=$(echo "$console" | grep '^mkfs: ')
 if [ "$gotline" != "$wantline" ]; then
     echo "run-mkfs.sh: mkfs's summary line and the host's reading of the image disagree" >&2

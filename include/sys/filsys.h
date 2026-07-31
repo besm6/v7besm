@@ -5,7 +5,7 @@
 // EXACTLY ONE BLOCK -- 512 words -- and the assertion at the foot is what keeps it
 // that way.  That is not tidiness: iinit() copies btow(sizeof(struct filsys)) words
 // into a fresh geteblk() buffer while update() writes BSIZEW words of that buffer
-// back to block 1, so anything short of a full block left the tail as uninitialised
+// back to block 0, so anything short of a full block left the tail as uninitialised
 // buffer contents and put them on the disk at the first sync.  At 165 words -- what
 // v7's layout comes to here -- that was 347 words of stale kernel memory per sync.
 // Sized to the block, the two agree by construction.

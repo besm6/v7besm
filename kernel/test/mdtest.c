@@ -329,10 +329,14 @@ int main(void)
     // THE FIRST OF THE FOUR IS THE DRIVER'S, since task 25b, and is expected NOT to
     // survive: it is the sector's own address, and mdstart() stores the block number there
     // before every write (dev/md.c).  The pattern in the other three is the volume mark and
-    // the checksum, which the driver leaves alone, so what comes back off the platter is
-    // the block number followed by the seed -- and a driver that stopped maintaining the
-    // address, or one that overwrote more of the header than it owns, fails here.  The
-    // block number is 0 in this check; check 2 is where the assertion has teeth.
+    // the checksum, so what comes back off the platter is the block number followed by the
+    // seed -- and a driver that stopped maintaining the address, or one that overwrote more
+    // of the header than it owns, fails here.  The block number is 0 in this check; check 2
+    // is where the assertion has teeth.
+    //
+    // Word 1 is the driver's too -- mdvol[], the pack's mark -- but it stamps only what a
+    // read has already given it, and this is the first transfer of the run.  So the seed
+    // stands here, and the read below is what primes check 2.
     for (i = 0; i < 4; i++)
         SYSDATA[i] = SYSPAT + i;
 
@@ -368,6 +372,10 @@ int main(void)
     // has a value worth reading: block 1.  A driver that wrote the address into the wrong
     // half of the buffer would leave check 1's four alone and fail here; one that did not
     // write it at all would hand back the seed.
+    //
+    // Word 5 is the mark, and this write finds mdvol[] primed by check 1's read -- with
+    // SYSPAT+1, which the seed had left on the platter.  So the driver puts SYSPAT+1 here,
+    // not the SYSPAT+5 seeded below; words 6 and 7 must survive untouched.
     for (i = 4; i < 8; i++)
         SYSDATA[i] = SYSPAT + i;
 
@@ -384,7 +392,9 @@ int main(void)
         mask |= F_TRK1;
     if (SYSDATA[4] >> SYSADDR != 1)
         mask |= F_SYSW;
-    for (i = 5; i < 8; i++)
+    if (SYSDATA[5] != SYSPAT + 1)
+        mask |= F_SYSW;
+    for (i = 6; i < 8; i++)
         if (SYSDATA[i] != SYSPAT + i)
             mask |= F_SYSW;
 

@@ -1,7 +1,7 @@
 //
 // Making a filesystem, end to end.
 //
-// The numbers asserted here -- isize 34, tfree 1965, the root at block 34 -- are
+// The numbers asserted here -- isize 33, tfree 1966, the root at block 33 -- are
 // not arbitrary: they are what a 2000-block EC-5052 volume comes to under the
 // sizing rule in create.cpp, and pinning them means a change to that rule has to
 // be deliberate.
@@ -40,12 +40,12 @@ TEST(Create, SuperblockOfAFreshVolume)
 
     //
     // 1000 inodes wanted -> 32 blocks of 32 -> 1024 inodes, first data block at
-    // 2 + 32 == 34.
+    // 1 + 32 == 33.
     //
-    EXPECT_EQ(fs.sb.isize, 34);
+    EXPECT_EQ(fs.sb.isize, 33);
 
-    // 2000 - 34 == 1966 data blocks, less the one the root directory took.
-    EXPECT_EQ(fs.sb.tfree, 1965);
+    // 2000 - 33 == 1967 data blocks, less the one the root directory took.
+    EXPECT_EQ(fs.sb.tfree, 1966);
 
     // 1024 inodes, less inode 1 (never allocatable) and the root.
     EXPECT_EQ(fs.sb.tinode, 1022);
@@ -109,7 +109,7 @@ TEST(Create, RootDirectory)
     EXPECT_EQ(root.size, 2 * DIRENTSZ);
 
     // The first data block, since the free list hands them out ascending.
-    EXPECT_EQ(root.addr[0], 34);
+    EXPECT_EQ(root.addr[0], 33);
     for (int i = 1; i < NADDR; i++)
         EXPECT_EQ(root.addr[i], 0) << "di_addr[" << i << "]";
 
@@ -197,8 +197,8 @@ TEST(Create, AllocationStartsAtFirstDataBlock)
     Filesystem fs;
     create_filesystem(fs, path, MDNBLK, 0, NOW);
 
-    // Block 34 went to the root, so the next one out is 35.
-    for (int64_t expect = 35; expect < 35 + 100; expect++)
+    // Block 33 went to the root, so the next one out is 34.
+    for (int64_t expect = 34; expect < 34 + 100; expect++)
         ASSERT_EQ(fs.block_alloc(), expect);
 
     fs.close();
@@ -215,11 +215,11 @@ TEST(Create, OtherVolumeSizes)
         int64_t ninodes;
         int64_t isize;
     } cases[] = {
-        { 2000, 0, 34 },     // the default: 1000 wanted -> 32 blocks
-        { 512, 0, 10 },      // 256 wanted -> 8 blocks
-        { 100, 0, 4 },       // 50 wanted -> 2 blocks
-        { 2000, 64, 4 },     // explicit: 64 inodes -> 2 blocks
-        { 2000, 4000, 127 }, // explicit: 4000 -> 125 blocks
+        { 2000, 0, 33 },     // the default: 1000 wanted -> 32 blocks
+        { 512, 0, 9 },       // 256 wanted -> 8 blocks
+        { 100, 0, 3 },       // 50 wanted -> 2 blocks
+        { 2000, 64, 3 },     // explicit: 64 inodes -> 2 blocks
+        { 2000, 4000, 126 }, // explicit: 4000 -> 125 blocks
     };
 
     for (const auto &c : cases) {

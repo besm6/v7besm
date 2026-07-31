@@ -264,8 +264,9 @@ group is the **sector's own address**, the block number in bits 48–37, and it 
 matches when it seeks; the second holds the volume's magic mark and number, the third and fourth a
 userid and the address checksum. A driver that never writes the buffer records the address of
 whatever zone it *read* last, producing a sector no drive would find again. `kernel/dev/md.c`
-maintains the address before every write and leaves the other three as the last read brought them
-in, which is the buffer behaving as the hardware leaves it.
+maintains the address and the mark before every write — the buffer is per *controller*, so on a
+two-drive machine the mark has to be remembered per drive — and leaves the userid and the checksum
+as the last read brought them in.
 
 **And the buffer must be in memory when the exchange starts.** The controller reads memory
 directly; the CPU's eight БРЗ write registers are not memory. Any store made fewer than eight

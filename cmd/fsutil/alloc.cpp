@@ -191,7 +191,7 @@ int64_t Filesystem::inode_alloc()
         }
 
         //
-        // Cache empty: scan the i-list.  `ino' starts at 1 because block 2 slot 0
+        // Cache empty: scan the i-list.  `ino' starts at 1 because block 1 slot 0
         // is inode 1 -- see itod()/itoo().
         //
         int64_t ino    = 1;

@@ -43,22 +43,20 @@ symptom would be an `EFAULT` from a `write(2)` whose buffer looked perfectly wel
 `mkfs` is not exposed to it in any case — it has one buffer and that buffer is bss — but the
 idiom that would be exposed is the obvious one: `write(fd, "\0\0\0...", BSIZE)`.
 
-## 2. The sector header is per *controller*, so a two-drive machine mislabels a pack
+## 2. The sector header is per *controller*, so a two-drive machine mislabelled a pack
 
-This is the first bug in this port that needed a second drive to exist at all.
+This was the first bug in this port that needed a second drive to exist at all. It is fixed;
+the account stays because the fix is not obvious from the code alone.
 
 `kernel/dev/md.c` writes the disk's sector header out of a **fixed physical buffer**, eight
-words at `030 + 8*ctlr`, and it maintains exactly one field of it: word 0 of each half-zone
-group, the sector's own address. Words 1–3 — the volume's magic mark, its **volume number**,
-the userid and the address checksum — are left exactly as the last *read* brought them in.
-`md.c` already documented that as "an open edge, deliberately left", on the grounds that
-every boot reads the superblock and the i-list long before it writes anything, so both
-half-zone slots are primed.
+words at `030 + 8*ctlr`, and it used to maintain exactly one field of it: word 0 of each
+half-zone group, the sector's own address. Words 1–3 — the volume's magic mark and **volume
+number**, the userid and the checksum — were left as the last *read* brought them in, on the
+grounds that every boot reads the superblock long before it writes anything.
 
-They are. Primed with **the root pack's** label. The buffer belongs to the controller, not to
-the drive, and `md00` and `md01` are two drives of one controller — so every half-zone the
-guest writes onto the scratch pack comes out carrying the root volume's number. Measured, on
-the container `kernel/test/mkfs` produces:
+It does. But the buffer belongs to the controller, not to the drive, and `md00` and `md01`
+are two drives of one — so every half-zone the guest wrote onto the scratch pack came out
+carrying **the root pack's** number. Measured, on the container `kernel/test/mkfs` produced:
 
 ```
 zone 0 track 0 (block 0, never written)   ...7c1a000   volume 3090 -- the scratch pack's own
@@ -66,23 +64,21 @@ zone 1 track 0 (block 2, written by dd)   ...7c1b000   volume 3089 -- the ROOT p
 zone 1 track 1 (block 3, never written)   ...7c1a000   volume 3090
 ```
 
-What saves it is which words anything reads back. `b6fsutil`'s `from_simh()`
-(`../fsutil/simh.cpp`) validates two things per zone — that the magic mark is present, which
-is the same constant on every pack and so survives, and that each half-zone's self-address
-equals its block number, which is the one field the driver does maintain — and it *reports*
-the volume number from **zone 0 alone**, without validating it. Zone 0 track 0 is block 0.
+It was survivable only because of which words are read back. `b6fsutil`'s `from_simh()`
+(`../fsutil/simh.cpp`) validates the magic mark, one constant on every pack, and each
+half-zone's self-address, the field the driver did maintain — and it *reports* the volume
+number from **zone 0 alone**, without validating it. Zone 0 track 0 is block 0, and while
+block 0 was a boot block nothing ever wrote it.
 
-So the rule, and it is now load-bearing rather than incidental:
+**The superblock lives at block 0 now**, so `update()` writes it on every sync and that rule
+could not survive. `md.c` keeps `mdvol[]` instead — one word per drive, the mark and volume
+of the last half-zone read from that unit, stamped into every write to it. A drive nobody has
+read is left exactly as before, which is a no-regression rather than a guarantee; nothing
+reaches it, since `iinit()` and `smount()` both `bread(dev, SUPERB)` before anything writes
+and `mkfs` probes the last block before writing the first.
 
-> **Nothing may write block 0 of a pack this system did not label.** `mkfs` does not (v7's
-> size-only path never touched the bootstrap block), `kernel/test/mkfs.sh` deliberately aims
-> its `dd` at block 2 instead, and `run-mkfs.sh` greps the conversion's own output for
-> `volume 3090` so that the day something does write block 0, the test says which rule broke
-> rather than failing somewhere downstream.
-
-Fixing it properly would mean telling the driver each drive's volume number, which nothing on
-this system knows — there is no label to read it from and `mount(1M)` is not ported. It is
-recorded here and in `md.c` rather than fixed.
+The three `volume` greps — `run-mkfs.sh` (3090), `run-fsck.sh` (3092), `run-mount.sh` (3094)
+— now assert the driver is right rather than that block 0 is untouched.
 
 ## 3. Committing last is a substitute for a size check
 
@@ -97,7 +93,7 @@ with `EIO`. One exchange, and it catches three different failures with one diagn
 larger than the drive, a drive nobody attached, and (under `b6sim`, where the special is an
 ordinary file) a fixture too short for the size asked.
 
-That works only because the **superblock is written last**. Until block 1 lands, the volume
+That works only because the **superblock is written last**. Until block 0 lands, the volume
 has no magic number and `sbcheck()` will not mount it, so a run that dies partway through the
 i-list or the free list leaves something obviously unfinished rather than something that
 looks plausible. Given that, "probe, then write" is as safe as "check, then write" and needs
@@ -121,7 +117,7 @@ worth stating so that it can be kept:
   the superblock. It does **not** zero the data area (`mkfs.1m` lists that under BUGS), and
   it must not start doing so.
 * the only difference is the clock, and it is four fields fed from one number. `s_time` is
-  word 6 of block 1 — byte offset **3108**, six bytes big-endian — so the test reads it back
+  word 6 of block 0 — byte offset **36**, six bytes big-endian — so the test reads it back
   out of what the guest wrote and hands it to `b6fsutil -T`, and the root inode's three times
   follow.
 

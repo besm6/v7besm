@@ -43,7 +43,7 @@ besm6=$2
 srcdir=$3
 
 # The blocks the guest read.  dd.sh's header says why 100 and not something more interesting:
-# this image's data area runs from block 34 to about 530 and holds program text nobody
+# this image's data area runs from block 33 to about 530 and holds program text nobody
 # rewrites, while everything the run allocates comes off the free list well above it.
 SKIP=100
 COUNT=2
@@ -82,7 +82,7 @@ dd if=ddafter.img of=dd.after bs=$BS skip=$SKIP count=$COUNT 2>/dev/null
 if ! cmp -s dd.want dd.after; then
     echo "run-dd.sh: the run rewrote block $SKIP, so the raw read cannot be checked against" \
          "the image it was handed.  Pick a block this run does not touch -- the data area is" \
-         "34 to about 530 and everything allocated here comes off the free list above it --" \
+         "33 to about 530 and everything allocated here comes off the free list above it --" \
          "and change SKIP in this file and in dd.sh together." >&2
     exit 1
 fi

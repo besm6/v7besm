@@ -1,9 +1,9 @@
 
 dup.img
 ** Phase 1 - Check Blocks and Sizes
-6 DUP I=8
+5 DUP I=8
 ** Phase 1b - Rescan For More DUPS
-6 DUP I=2
+5 DUP I=2
 ** Phase 2 - Check Pathnames
 DUPS/BAD IN ROOT INODE
 
@@ -29,6 +29,6 @@ BAD FREE LIST
 SALVAGE?  yes
 
 ** Phase 6 - Salvage Free List
-10 files 48 blocks 534 free
+10 files 48 blocks 537 free
 
 ***** FILE SYSTEM WAS MODIFIED *****

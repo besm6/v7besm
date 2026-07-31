@@ -13,7 +13,7 @@
 # THE RAW READ COMES FIRST, before this script writes anything.  run-dd.sh compares what dd
 # pulled off /dev/rmd0 against the same offset in the image AS IT WAS HANDED TO THE BOOT, so
 # nothing may have rewritten those blocks in between.  Block 100 is chosen for that: the data
-# area of this image runs from block 34 to about 530 and is full of program text that nobody
+# area of this image runs from block 33 to about 530 and is full of program text that nobody
 # rewrites, while everything this run allocates comes off the free list well above it.  If
 # that ever stops being true run-dd.sh says so in as many words rather than failing obscurely.
 #

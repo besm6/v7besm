@@ -58,12 +58,11 @@ void create_filesystem(Filesystem &fs, const std::string &path, int64_t nblk, in
     // `bn < s_isize', so this number bounds a loop in the kernel and getting it
     // one too high is a runaway read rather than a wrong answer.
     //
-    //   block 0        boot
-    //   block 1        superblock (SUPERB)
-    //   blocks 2..     the i-list
+    //   block 0        superblock (SUPERB) -- there is no boot block
+    //   blocks 1..     the i-list
     //   block isize..  data
     //
-    const int64_t isize = 2 + iblocks;
+    const int64_t isize = SUPERB + 1 + iblocks;
     if (isize >= nblk)
         throw FsError("the i-list does not leave room for any data blocks");
 

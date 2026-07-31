@@ -52,9 +52,9 @@
 //
 // WHAT WOULD NOTICE IF THE CODE WERE WRONG -- the checks that exist for that reason alone:
 //
-//   - Check 7 reads block 0, which is NOT a superblock, and requires sbcheck() to reject
-//     it and to have said so through prdev().  Without it a sbcheck() that returned 0
-//     unconditionally would pass every other check in this file.
+//   - Check 7 reads the first i-list block, which is NOT a superblock, and requires
+//     sbcheck() to reject it and to have said so through prdev().  Without it a sbcheck()
+//     that returned 0 unconditionally would pass every other check in this file.
 //   - Check 6 scribbles a sentinel over the in-core superblock before releasing it and
 //     requires the sentinel to survive the next bread().  A re-read from the device would
 //     quietly restore FS_MAGIC and look like a cache hit; only the sentinel tells the two
@@ -353,10 +353,11 @@ int main(void)
 
     // ---- Check 7: a block that is not a superblock ----------------------------------
     //
-    // Block 0 is the boot block: b6fsutil leaves it zero.  Reading it exercises the driver
-    // a second time, and sbcheck() must refuse it AND report it.  This is the check that
-    // makes checks 2-5 mean something.
-    bp = bread(rootdev, (daddr_t)0);
+    // The first i-list block: its word 0 is inode 1's di_mode, which mkfs leaves zero, so
+    // sbcheck() reads no magic there.  Reading it exercises the driver a second time, and
+    // sbcheck() must refuse it AND report it.  This is the check that makes checks 2-5 mean
+    // something.  It was block 0 until the superblock moved there.
+    bp = bread(rootdev, (daddr_t)(SUPERB + 1));
     if (bp->b_flags & B_ERROR)
         mask |= F_RDERR;
     if (sbcheck((struct filsys *)bp->b_addr, rootdev) == 0)

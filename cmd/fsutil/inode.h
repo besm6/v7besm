@@ -68,7 +68,7 @@ public:
     std::array<int64_t, NADDR> addr{};
 
     //
-    // Read inode `ino' out of the i-list.  Inode 1 is block 2 slot 0; see itod()
+    // Read inode `ino' out of the i-list.  Inode 1 is block 1 slot 0; see itod()
     // and itoo() in fsutil.h.
     //
     void get(Filesystem &f, int64_t ino);

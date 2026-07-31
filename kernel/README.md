@@ -528,10 +528,11 @@ Facts that cost real time to establish and are not in `doc/`.
   words are interleaved per zone; one drive is 8,256,000 bytes against the flat image's 6,144,000.
   `b6fsutil -S` converts. Converting a container the kernel has *written* back to flat is the only
   check on those service words there is, which is how `session` found the disk driver never
-  maintaining them — and, since task C4c, converting a **second** drive's container is what makes
-  the one field the driver still does not maintain visible: `from_simh()` reports the volume number
-  it finds in zone 0, and on a two-drive machine that number is only right because nothing writes
-  block 0. See the service-word bullet under "Known consequences, accepted".
+  maintaining them — and, since task C4c, converting a **second** drive's container is what made
+  the per-controller buffer visible: `from_simh()` reports the volume number it finds in zone 0,
+  which on a two-drive machine was only right because nothing wrote block 0. The superblock lives
+  at block 0 now, so `dev/md.c` maintains the mark per *drive* (`mdvol[]`) instead;
+  `cmd/mkfs/README.md` §2 is the account.
 * **A DRUM ZONE THAT HAS NEVER BEEN WRITTEN IS A READ ERROR, not garbage.** SIMH's `besm6_drum.c`
   fails the short `fread` and raises the same `drum_fail` an *unattached* drum raises, which
   `dev/mb.c`'s `EXT_IOERR` poll cannot tell apart. A **hole inside** the container reads back as
@@ -629,20 +630,13 @@ Facts that cost real time to establish and are not in `doc/`.
   that fills a swap page and the `033` lie far more than eight kernel stores. `dev/md.c` is where the
   same hazard *did* bite, because its sector header is stored two instructions before the exchange.
   The drain stays — a future caller need not leave eight stores behind it — but no test covers it.
-* **`dev/md.c`'s sector-header buffer belongs to the CONTROLLER, so a two-drive machine writes one
-  pack's label onto another's.** The eight service words at `030 + 8*ctlr` are a hardware-fixed
-  address per *controller*, and the driver maintains exactly one field of them — the half-zone's
-  own address. The magic mark, the volume number and the userid are whatever the last read of **any**
-  drive on that controller left there, which with one drive was harmless and with two is not: every
-  zone `kernel/test/mkfs` writes onto its scratch pack comes out carrying the root pack's volume
-  number, and the ones it does not write carry their own. It survives because `b6fsutil`'s
-  `from_simh()` validates the mark (one constant, every pack) and each half-zone's self-address (the
-  maintained field), and reads the *volume* out of **zone 0 alone** — so the rule is that nothing
-  may write block 0 of a pack this system did not label. `mkfs` does not, `mkfs.sh` aims its `dd` at
-  block 2 for that reason, and `run-mkfs.sh` greps the conversion for `volume 3090` so that the day
-  something does, the test says which rule broke. Fixing it means telling the driver each drive's
-  volume number, which nothing on this system knows: there is no label to read it from and
-  `mount(1M)` is not ported. `cmd/mkfs/README.md` is the account.
+* **`dev/md.c` maintains two of a half-zone's four service words, not all four.** The eight words at
+  `030 + 8*ctlr` are a hardware-fixed address per *controller*; the driver keeps the half-zone's own
+  address, and — since the superblock moved to block 0 — the volume's mark and number, per drive in
+  `mdvol[]`. The **userid and the address checksum** are still whatever the last read of any drive on
+  that controller left there. Nothing reads either: `from_simh()` checks the mark and the address,
+  and SIMH computes neither. A drive written before anything has read it gets the old behaviour, the
+  buffer's residue, which no path reaches. `cmd/mkfs/README.md` §2 is the account.
 * **`sy_nrarg` is read nowhere** and is vestigial: exactly one argument arrives in a register on this
   machine, for any `narg >= 1`.
 * **There is no read-only user page.** РЗ closes a page to reads as well as writes, so a closed text

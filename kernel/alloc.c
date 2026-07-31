@@ -141,7 +141,7 @@ int badblock(register struct filsys *fp, daddr_t bn, dev_t dev)
 
 // Is this block plausibly a superblock for THIS kernel?  Returns 0 if so, 1 if not.
 //
-// v7 has no such test: iinit() and smount() copy block 1 in and believe it, so a
+// v7 has no such test: iinit() and smount() copy SUPERB in and believe it, so a
 // garbage block mounts silently and the first symptom is badblock(), or getfs()'s
 // "bad count" -- which "repairs" the superblock by zeroing both counts, turning
 // garbage into a plausible-looking full filesystem.  iinit() even sets the system
@@ -164,6 +164,11 @@ int sbcheck(register struct filsys *fp, dev_t dev)
     // The i-list starts just past the superblock and must end before the volume
     // does.  s_isize bounds ialloc()'s scan loop, so a garbage value here is a
     // runaway read, not merely a wrong answer.
+    //
+    // It is also what keeps BLOCK 0 out of the data area now that the superblock
+    // lives there: s_isize > SUPERB == 0, and badblock() refuses bn < s_isize.  That
+    // is what lets 0 go on meaning "end of the free list" in alloc() and "hole" in
+    // bmap() -- no data block can ever be numbered 0.
     if (fp->s_isize <= SUPERB || fp->s_isize >= fp->s_fsize) {
         prdev("bad filesystem size", dev);
         return (1);

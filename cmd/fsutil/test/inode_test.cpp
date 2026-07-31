@@ -19,7 +19,7 @@
 namespace {
 
 constexpr int64_t NBLK  = 2000;
-constexpr int64_t ISIZE = 34;
+constexpr int64_t ISIZE = 33;
 
 void build(Filesystem &fs, const char *path)
 {
@@ -86,8 +86,9 @@ Walk kernel_bmap(int64_t bn)
 } // namespace
 
 //
-// Inode 1 is block 2 slot 0: the i-list starts after the boot block and the
-// superblock, which is what v7's `2*INOPB - 1' bias buys.
+// Inode 1 is block 1 slot 0: the i-list starts directly after the superblock,
+// which is what the `INOPB - 1' bias buys.  v7's was one block more, for a boot
+// block this port does not have.
 //
 TEST(Inode, ItodItoo)
 {
@@ -96,8 +97,8 @@ TEST(Inode, ItodItoo)
         int64_t blk;
         int slot;
     } cases[] = {
-        { 1, 2, 0 },   { 2, 2, 1 },  { 31, 2, 30 },    { 32, 2, 31 },   { 33, 3, 0 },
-        { 64, 3, 31 }, { 65, 4, 0 }, { 1024, 33, 31 }, { 1025, 34, 0 },
+        { 1, 1, 0 },   { 2, 1, 1 },  { 31, 1, 30 },    { 32, 1, 31 },   { 33, 2, 0 },
+        { 64, 2, 31 }, { 65, 3, 0 }, { 1024, 32, 31 }, { 1025, 33, 0 },
     };
 
     for (const auto &c : cases) {
@@ -171,7 +172,7 @@ TEST(Inode, SaveDoesNotDisturbNeighbours)
     Filesystem fs;
     build(fs, path);
 
-    // Inodes 3, 4 and 5 all live in block 2.
+    // Inodes 3, 4 and 5 all live in block 1.
     for (int64_t ino = 3; ino <= 5; ino++) {
         Inode ip;
         ip.get(fs, ino);

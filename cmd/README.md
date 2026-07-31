@@ -474,8 +474,7 @@ Two harnesses, and choosing wrong wastes the effort:
   **refused** transfer at all — and `kernel/test/mkfs` (task C4c) for anything that **writes** a
   device, or that needs a **second drive**: it is the only test here that attaches two, the only
   one whose subject is a filesystem that did not exist when the machine booted, and the one that
-  holds `kernel/dev/md.c` to the rule that nothing may write block 0 of a pack this system did
-  not label. Its oracle is a **byte-for-byte `cmp` against `b6fsutil -n`**, which is available
+  holds `kernel/dev/md.c` to stamping each drive's own volume label into what it writes. Its oracle is a **byte-for-byte `cmp` against `b6fsutil -n`**, which is available
   because the guest program and the host tool are transcriptions of each other and the only
   thing between them is a timestamp six bytes into the superblock — and `kernel/test/fsck`
   (task C4d) for anything that must **repair** what is already on a device, or that needs a
@@ -748,12 +747,12 @@ assuming symmetry.
 
 **A second instance of a device can expose a bug that one instance cannot hold.** The disk's
 sector header is written from a fixed buffer that belongs to the **controller**, not the drive,
-and `kernel/dev/md.c` maintains exactly one word of it. With one drive that was an "open edge,
-deliberately left"; with two it means every zone the guest writes onto the scratch pack carries
-the *root* pack's volume number. It survives only because `b6fsutil` reads the volume out of
-zone 0 alone — so "nothing may write block 0" is now a rule, and `run-mkfs.sh` greps for the
-volume number so that the day something does, the test says which rule broke. **Adding the
-second of anything is a test in itself.**
+and `kernel/dev/md.c` maintained exactly one word of it. With one drive that was an "open edge,
+deliberately left"; with two it meant every zone the guest wrote onto the scratch pack carried
+the *root* pack's volume number. It survived only because `b6fsutil` reads the volume out of
+zone 0 alone and nothing wrote block 0 — which stopped being true when the superblock moved
+there, so the driver now keeps the label per drive and `run-mkfs.sh`'s grep asserts it.
+**Adding the second of anything is a test in itself.**
 
 **An oracle can be byte-exact when the two implementations are transcriptions of each other.**
 `b6fsutil -n` is the host's mkfs and `mkfs.c` is a transcription of it, so the comparison is

@@ -16,7 +16,7 @@
 // it as `(n-1)%NI'.  All three constants are wrong here and none of them needs to be
 // rewritten by hand: <sys/param.h> has itod() and itoo(), which are the same expressions
 // with the layout in ONE home (../TODO.md's rule for on-disk constants).  Checked at the
-// boundaries -- itod(1) == 2, itoo(1) == 0, itod(INOPB+1) == 3, itoo(INOPB+1) == 0 -- so
+// boundaries -- itod(1) == 1, itoo(1) == 0, itod(INOPB+1) == 2, itoo(INOPB+1) == 0 -- so
 // this is a re-spelling and not a change of behaviour.
 //
 // THE BUFFER IS AN ALIGNED SLOT, not v7's `struct ino buf[NI]'.  A raw transfer through
