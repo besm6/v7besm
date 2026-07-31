@@ -21,12 +21,14 @@ Cause the pipeline
 .B "ncheck filesystem | sort +0n | quot \-n filesystem
 to produce a list of all files and their owners.
 .B "Note:"
-neither
 .IR ncheck (1M)
-nor
+arrived with task C4e and is on this machine;
 .IR sort (1)
-is on this machine yet, so this mode has no producer for its input here; it reads whatever
-standard input offers, in that format.
+is task C5d and is not, so the pipeline has its producer but not yet its middle.
+Without the sort the two sides run down the i-list in the same order anyway, both being
+i-list sweeps, so
+.B "ncheck filesystem | quot \-n filesystem"
+works on a filesystem nothing is writing to.
 .TP
 .B \-c
 Print three columns giving file size in blocks, number of

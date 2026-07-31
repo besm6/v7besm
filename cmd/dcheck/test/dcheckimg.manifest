@@ -1,0 +1,54 @@
+# The fixture filesystem dcheck's and ncheck's b6sim cases walk -- task C4e.
+#
+# WHY THIS IS NOT ../../df/test/fsimg.img.  Two reasons, and the second is the harder one.
+# df's fixture has no HARD LINK, so every link count on it is 1 and dcheck could only ever
+# be wrong in one direction; it has no device node and no setuid file, so `ncheck -s' --
+# whose whole job is to find those two -- would have nothing to report; and nothing on it is
+# nested more than one level, so ncheck's pname() would never recurse.  And cmd/dcheck is
+# configured BEFORE cmd/df (`dcheck' sorts ahead of `dd' and `df'), so its test directory
+# cannot depend on df_fsimg at all.  ../../ncheck/test copies this one rather than building
+# a third, which is the arrangement ../../quot/test has with df's.
+#
+# WHAT EACH ENTRY IS FOR.  Nothing here is decoration:
+#
+#   /f + /flink   one inode with TWO names, so a link count above 1 exists to be right
+#                 about -- and so ncheck prints one i-number twice, which is the thing that
+#                 makes an i-number-to-name listing interesting rather than a permutation.
+#   /d/e/g        three levels, so ncheck's pname() recurses and dcheck walks a directory
+#                 that is not the root.
+#   /setuid       mode 04755, one of the two things `ncheck -s' looks for.
+#   /dev/tty      a character special, the other one.  di_addr[0] is the device number
+#                 there rather than a block address, which is why dcheck and ncheck look at
+#                 di_mode before they look at anything else.
+#
+# 100 blocks and a fixed timestamp, for ../../df/test/fsimg.manifest's reason: the image
+# must be byte-reproducible or a count is not an expectation.  The `source' paths resolve
+# against b6fsutil's working directory, which is this test's build directory.
+
+default
+owner 0
+group 0
+dirmode 0755
+filemode 0644
+
+dir /d
+dir /d/e
+dir /dev
+
+file /f
+source dcheckimg.d/small
+
+link /flink
+target /f
+
+file /d/e/g
+source dcheckimg.d/small
+
+file /setuid
+mode 04755
+source dcheckimg.d/small
+
+cdev /dev/tty
+major 5
+minor 0
+mode 0620

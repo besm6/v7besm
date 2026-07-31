@@ -7,8 +7,9 @@
 // superblock, and sweep the whole i-list adding each inode's block count to its owner's
 // total.  It never learns a file's NAME -- only its inode's uid -- which is what makes it
 // different from du(1) beside it and why `-n' exists at all: that mode correlates the
-// running i-number against an ncheck(1) listing on standard input.  ncheck is task C4e and
-// is not on this image yet; quot.1m says so.
+// running i-number against an ncheck(1M) listing on standard input.  /etc/ncheck arrived
+// with task C4e and is on the image; sort(1) is task C5d and is not, so the pipeline
+// quot.1m gives has its producer but not yet its middle.
 //
 // A BLOCK IS 1024 BYTES IN WHAT THIS PRINTS, and 3072 in what it counts.  The filesystem's
 // block is BSIZE == 3072; this reports KBPB == 3 of them per block (sys/param.h), so that a

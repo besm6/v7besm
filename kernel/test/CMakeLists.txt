@@ -206,9 +206,13 @@ get_filename_component(ROOT_MANIFEST ${CMAKE_CURRENT_SOURCE_DIR}/../../root.mani
 
 set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/init
+    ${B6_ROOTFS}/etc/clri
+    ${B6_ROOTFS}/etc/dcheck
     ${B6_ROOTFS}/etc/fsck
     ${B6_ROOTFS}/etc/getty
+    ${B6_ROOTFS}/etc/icheck
     ${B6_ROOTFS}/etc/mkfs
+    ${B6_ROOTFS}/etc/ncheck
     ${B6_ROOTFS}/etc/quot
     ${B6_ROOTFS}/etc/group
     ${B6_ROOTFS}/etc/motd

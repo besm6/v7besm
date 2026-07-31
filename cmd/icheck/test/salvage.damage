@@ -1,0 +1,4 @@
+# A free-list count outside 1..NICFREE.  The superblock's own cache becomes unreadable, so
+# `icheck -s' has to lay the whole list of a 600-block volume down again -- which is the
+# only thing in task C4e that writes more than one block.
+sb.nfree=999

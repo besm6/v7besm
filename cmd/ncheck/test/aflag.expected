@@ -1,0 +1,17 @@
+dcheckimg.img:
+2	/./.
+2	/../.
+3	/d/.
+5	/dev/.
+6	/f
+8	/setuid
+6	/flink
+3	/d/./.
+2	/d/../.
+4	/d/e/.
+4	/d/e/./.
+3	/d/e/../.
+7	/d/e/g
+5	/dev/./.
+2	/dev/../.
+9	/dev/tty

@@ -1,0 +1,10 @@
+ncheck: bad flag q
+dcheckimg.img:
+3	/d/.
+5	/dev/.
+6	/f
+8	/setuid
+6	/flink
+4	/d/e/.
+7	/d/e/g
+9	/dev/tty

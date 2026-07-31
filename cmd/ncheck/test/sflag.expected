@@ -1,0 +1,3 @@
+dcheckimg.img:
+8	/setuid
+9	/dev/tty

@@ -86,8 +86,17 @@ does not: `.` and `..` present and pointing where they should, a directory loop 
 in itself, a negative `di_size`, a size needing more blocks than `NADDR`/`NINDIR` can
 address, and a free inode with a non-zero link count. `fsck` does three things `check.cpp`
 does not: it repairs, it *adjusts* a link count rather than merely reporting it, and it
-salvages a free list. Neither list is a defect; they are two tools with different jobs, and
-task C4e (`icheck`, `dcheck`) is where the first list gets shorter.
+salvages a free list. Neither list is a defect; they are two tools with different jobs.
+
+**Task C4e did not shorten that list, which is worth saying because this file used to
+predict that it would.** `icheck` and `dcheck` are now on the image and between them they
+cover the *block accounting* and the *link counts* — both of which `fsck` already had. The
+three checks that are still `check.cpp`'s alone are the three that are about a directory
+tree's shape rather than its arithmetic: `.` and `..` correct, a loop as an error in itself,
+and a size needing more blocks than the inode can address. Nothing in the four programs of
+C4e looks at any of them. What C4e *did* add is a fourth guest program with an opinion of
+its own about the free list — `icheck -s` — and [../icheck/README.md](../icheck/README.md)
+§3 is the account of how it is held to `fsck`'s: byte for byte, by `cmp`.
 
 ---
 

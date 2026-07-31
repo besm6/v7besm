@@ -1,0 +1,39 @@
+# The fixture filesystem icheck's b6sim cases walk -- task C4e.
+#
+# WHY THIS IS NOT ../../df/test/fsimg.img.  df's fixture is 200 blocks and its largest file
+# is three blocks, all DIRECT -- its own manifest says so, and says that the gap was left for
+# this program to fill.  icheck is the only thing on this system that walks an inode's whole
+# address list, so a fixture whose files never leave di_addr[0..5] would leave the interesting
+# half of it untested: NADDR is 8 and NLEVEL is 2, and v7's `NADDR-3' arithmetic would have
+# read di_addr[5] -- a direct block -- as a block of addresses.
+#
+# /huge IS 519 BLOCKS, AND 519 IS THE POINT.  Six direct addresses cover logical blocks 0..5
+# and the single indirect covers 6..517 (NINDIR is 512), so 518 is the first block that can
+# only be reached through the DOUBLE indirect.  At 519 data blocks the file has exactly one
+# block under the second level, which is the smallest file that makes icheck's `ii=' column
+# non-zero -- and the smallest thing in this tree that has ever exercised a double indirect
+# at all.  The volume is 600 blocks so that there is still a free list worth salvaging.
+#
+# The blocks icheck then charges for the file are 519 data + 1 single indirect + 1 double
+# indirect + 1 second-level indirect = 522, which is arithmetic the .expected states.
+#
+# The `source' paths resolve against b6fsutil's working directory, which is this test's build
+# directory -- ../../df/test/fsimg.manifest's arrangement, and the reason icheckimg.d/ is
+# generated into the build tree.  Nothing binary is checked in.
+
+default
+owner 0
+group 0
+dirmode 0755
+filemode 0644
+
+dir /d
+
+file /huge
+source icheckimg.d/huge
+
+file /small
+source icheckimg.d/small
+
+file /d/nested
+source icheckimg.d/small

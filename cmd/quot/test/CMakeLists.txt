@@ -31,10 +31,11 @@
 # is where the device path is asserted, and against a host oracle that RECOMPUTES the
 # per-uid sums out of `b6fsutil -v -v', so it needs no updating as the image grows.
 #
-# NO `-n' CASE.  That mode reads an ncheck(1) listing on standard input and correlates it
-# against the running i-number; ncheck is task C4e and is not written.  Feeding it a
-# hand-made listing would assert this program against a fixture invented for it, which is
-# worth less than the two lines it would take.
+# NO `-n' CASE, and task C4e did not change that.  ../../ncheck is on the image now, so the
+# listing -n reads has a producer at last -- but b6_progtest() runs ONE program and pipes
+# nothing, and a hand-made <case>.in would assert this program against a fixture invented
+# for it rather than against ncheck's real output.  The place for the pipeline is a SIMH
+# test, where a shell can run one; ../../TODO.md's C4e note is where that would go.
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fsimg.img
     COMMAND ${CMAKE_COMMAND} -E copy

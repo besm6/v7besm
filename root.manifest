@@ -148,6 +148,28 @@ file /etc/fsck          # cmd/fsck -- check a filesystem, and repair it
 source ../../rootfs/etc/fsck
 mode 0755
 
+# The four pre-fsck tools, task C4e -- each doing one of fsck's jobs standalone.  fsck's
+# placement and fsck's reasons, and two of them are the sharp case: clri WRITES an i-node
+# and `icheck -s' rewrites the free list of the whole volume, so a setuid one of either
+# would hand every file on the disk to anybody who could think of an i-number.  None of the
+# four is setuid; all four are root-only, and all four are section 1M.  Being in /etc is
+# also why the two hard-coded `ls /bin' expectations in kernel/test did not have to grow.
+file /etc/clri          # cmd/clri -- zero an i-node that appears in no directory
+source ../../rootfs/etc/clri
+mode 0755
+
+file /etc/dcheck        # cmd/dcheck -- directory entries against link counts
+source ../../rootfs/etc/dcheck
+mode 0755
+
+file /etc/icheck        # cmd/icheck -- block accounting, and -s lays the free list down again
+source ../../rootfs/etc/icheck
+mode 0755
+
+file /etc/ncheck        # cmd/ncheck -- i-number to path name; `ncheck | sort | quot -n'
+source ../../rootfs/etc/ncheck
+mode 0755
+
 file /bin/sh            # cmd/sh: S. R. Bourne's shell
 source ../../rootfs/bin/sh
 mode 0755

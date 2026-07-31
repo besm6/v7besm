@@ -1,0 +1,3 @@
+0: is zero
+abc: is not a number
+99999: out of range 2..32

@@ -21,9 +21,12 @@
 #                                                  direct -- NADDR is 8 with six direct,
 #                                                  and an indirect block is one quot does
 #                                                  not count, di_size being what it
-#                                                  divides.  That gap is icheck(1)'s
+#                                                  divides.  That gap is icheck(1M)'s
 #                                                  question, task C4e, and this fixture
-#                                                  does not prejudge it
+#                                                  does not prejudge it -- ../../icheck/test
+#                                                  builds a 600-block one of its own with a
+#                                                  519-block file, which is the smallest
+#                                                  thing that reaches a DOUBLE indirect
 #   /other              1536        1          3   half a block, and so a whole one
 #   /d/nested            128        1          3   and a directory to reach it through
 #

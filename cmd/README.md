@@ -35,7 +35,8 @@ do — the ten of task C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`,
 `rmdir/`, `touch/`), the three of C2a (`date/`, `kill/`, `sleep/`), the five of C2b
 (`basename/`, `test/`, `time/`, `tty/`, `yes/`), the one of C3 (`ed/`), the three of C4a
 (`df/`, `du/`, `quot/`), the one of C4b (`dd/`), the one of C4c (`mkfs/`), the one of C4d
-(`fsck/`) and the two of kernel task 29b (`getty/`, `login/`) today. That is the only marker;
+(`fsck/`), the four of C4e (`icheck/`, `dcheck/`, `ncheck/`, `clri/`) and the two of kernel
+task 29b (`getty/`, `login/`) today. That is the only marker;
 [../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.
 
 Four things about the copies:
@@ -124,6 +125,7 @@ candidates, as they stand today:
 | ~~`dd.c`~~ | ~~one — `ip > ibuf`~~ — **found and fixed**, task C4b: it zero-fills the input buffer before every read under `conv=noerror`/`conv=sync`, and is a word loop over `btow(ibs)` words now |
 | ~~`date.c`~~ | ~~one — `sp < ep`~~ — **found and fixed**, task C2a: it bounded the in-place reversal of `argv[1]`, and is an index pair now |
 | ~~`basename.c`~~ | ~~**two**, not the one this table used to claim — `p1>p2 && p3>argv[2]`~~ — **found and fixed**, task C2b: both are in the *same expression*, the backwards suffix compare, and both are index counts now |
+| ~~`icheck.c`, `dcheck.c`, `ncheck.c`, `clri.c`~~ | **none** — grepped, task C4e. The only pointer relational in the four is `ncheck.c`'s `++hp >= &htab[HSIZE]`, over a `struct htab *`, which is thin and correct; it went anyway when the hash table became one sized from the superblock and indexed by i-number. Worth recording as a *negative* result: four v7 sources full of block and inode arithmetic and not one `char *` cursor between them, because none of them parses anything |
 
 And the counterexample, because it is what makes the hazard hard to see: **`sort.c`'s record
 arena is clean.** `lp`, `hp`, `i`, `j`, `k` in `qsort()` are `char **` — thin word pointers that
@@ -221,7 +223,10 @@ saying that `df(1M)` will report three times what `mkfs` was given.
 `struct direct` is four words — a full-word `d_ino` and three words of name.  So `%.14s` is `%s`,
 `char name[15]` is `char name[DIRSIZ + 1]`, and a name read out of a directory **is not
 NUL-terminated** unless the port terminates it (a v7 bug `ls` had to fix rather than carry).
-Anything that walks directories — `rm -r`, `du`, `find`, `ncheck`, `dcheck`, `mv` — inherits this.
+Anything that walks directories — `rm -r`, `du`, `find`, ~~`ncheck`~~, ~~`dcheck`~~, `mv` —
+inherits this. The two struck through are done (task C4e) and took the same fix: `%.14s`
+became `printf("%.*s", DIRSIZ, …)`, which is `%s` with the bound restored rather than `%s`
+alone, a name out of a directory being neither NUL-terminated nor the program's own storage.
 
 ### 6. Three ceilings, of which only two are checked
 
@@ -242,10 +247,14 @@ Anything that walks directories — `rm -r`, `du`, `find`, `ncheck`, `dcheck`, `
 | `login` | 106 | 5,063 | 408 | 1,321 | **6,898** |
 | `ed` | 95 | 4,027 | 50 | 633 | **4,805** |
 | `quot` | 102 | 5,208 | 227 | 4,375 | **9,912** |
+| `icheck` | 92 | 3,725 | 305 | 4,143 | **8,265** |
+| `ncheck` | 86 | 3,468 | 215 | 4,228 | **7,997** |
+| `dcheck` | 84 | 3,222 | 213 | 4,136 | **7,655** |
 | `du` | 83 | 3,041 | 198 | 3,132 | **6,454** |
 | `mkfs` | 85 | 2,956 | 222 | 2,571 | **5,834** |
 | `df` | 80 | 2,633 | 177 | 2,570 | **5,460** |
 | `dd` | 83 | 3,451 | 503 | 1,056 | **5,093** |
+| `clri` | 86 | 3,021 | 219 | 2,575 | **5,901** |
 | `cat` | 83 | 2,989 | 165 | 1,544 | **4,781** |
 | `chgrp` | 85 | 3,211 | 344 | 1,236 | **4,876** |
 | `time` | 85 | 3,088 | 340 | 1,041 | **4,554** |
@@ -418,7 +427,16 @@ Two harnesses, and choosing wrong wastes the effort:
   because the damaged filesystem comes from the host, and its oracle is `b6fsutil -c` on what
   comes back. It is also the only test here that examines **the filesystem the machine is
   running on**, which costs it an ordering constraint no other test has — see the warning in
-  `kernel/test/fsck.sh`'s header. Each has its own copy of the
+  `kernel/test/fsck.sh`'s header.
+  **Task C4e is the one task that stopped at the first harness**, and it is written down
+  rather than left to be inferred: `icheck`, `dcheck`, `ncheck` and `clri` are asserted under
+  `b6sim` alone, so nothing exercises the raw path for them — and two of them *write* it.
+  [TODO.md](TODO.md) carries that as C4e's named loose end and says what would close it
+  (volumes 3093 and 3094, on `kernel/test/fsck`'s shape); `icheck/README.md` §5 says what
+  such a test would have to know first. **A deferral said out loud is the difference between
+  a known gap and an unknown one** — C4d's `hostblind` marker made the same point about a
+  disagreement rather than a gap.
+  Each test has its own copy of the
   image at its own volume number; **3092 is the highest used** (`edit` took 3086, `fsinfo` 3087,
   `dd` 3088, `mkfs` two — 3089 root and 3090 scratch — and `fsck` two more, 3091 and 3092). All but `login` graft a script onto that copy
   with `b6fsutil -a`, and `login` is the exception because what it tests is the thing that reads
@@ -719,3 +737,51 @@ repeating is that the targets are **symbolic** — `sb.nfree`, `i5.nlink`, `e3.2
 through the tool's own word-offset tables, because a shell script computing the byte offset of
 an inode field would put the on-disk layout in a second home. §4's rule about not re-deriving
 constants applies to test scripts as much as to C.
+
+---
+
+## What task C4e taught
+
+`/etc/icheck`, `/etc/dcheck`, `/etc/ncheck` and `/etc/clri` are on the image — the four
+one-job tools `fsck` grew out of, and the first task here whose whole assertion is
+`b6sim`'s. [icheck/README.md](icheck/README.md) is the account; five findings generalize.
+
+**A field that is inert upstream can be load-bearing here, and reading the diff will not
+show it.** v7's `icheck -s` writes the superblock's free-inode count as zero. That is
+harmless in v7, where nothing maintains the field — v7's own `filsys(5)` calls both counters
+uncurrent — and it is *fatal* here, because task C4d put `kernel/alloc.c` in charge of them
+and taught `b6fsutil -c` to fault an image on either. So the salvage would have produced,
+every time, a volume the host's checker rejects. Nothing in the v7 source says the field
+matters, because there it does not; what caught it was the oracle. **When a port has made
+something live that was dead upstream, grep the new sources for it rather than trusting the
+reading.**
+
+**"Share the buffer" and "one buffer per level" are each wrong in the other's program, and
+the question that decides it is whether the walk re-enters itself.** `fsck` shares one
+indirect buffer and re-fetches it every iteration, because its directory walk re-enters
+`iblock()` from inside a parent's and two walks of a level are live at once. `icheck`'s walk
+is a closed nested loop, so a buffer per level is safe — and `fsck`'s idiom there would
+re-read the outer indirect block on all 512 inner iterations. Both files carry a comment
+pointing at the other, because each looks like a mistake from the other's side.
+
+**A table sized for another machine's i-list is worth re-deriving rather than carrying.**
+v7's `ncheck` has a fixed 2503-entry hash table, which is 12,515 words here — 44% of the
+address space — on a volume whose i-list can never exceed about 1,024 entries, so three
+fifths of it was unreachable by construction. Sized from the superblock and indexed by
+i-number it needs no hash, no probe loop and no `out of core -- increase HSIZE` exit, and it
+fails at startup rather than partway through. The general form is §6's: **a fixed table is a
+ceiling somebody chose against different hardware; ask what bounds it here before keeping
+the number.**
+
+**A program whose success is the checker failing needs its harness written backwards.**
+Every case in `cmd/fsck/test` requires `b6fsutil -c` to pass after the guest has run.
+`clri`'s job is to *make* a filesystem inconsistent, so the same assertion inverted — the
+host's checker must fault the volume afterwards — is the whole oracle, and the case that
+does it also has `icheck` and `dcheck` say what was done. **Ask what the program is for
+before copying the neighbouring test's polarity.**
+
+**A cross-program case belongs in the last-configured directory.** `make test` builds
+`build_tests` and nothing else, and a test directory can only hang a program on that target
+if the program's target already exists — so a case needing three of the four had to live in
+`cmd/icheck/test`, `cmd/clri` and `cmd/dcheck` being added to the top-level `CMakeLists.txt`
+before it. That is a two-minute discovery and an easy one to make late.

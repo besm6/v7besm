@@ -1,13 +1,15 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
-.TH DCHECK 1M 
+.TH DCHECK 1M
 .SH NAME
 dcheck \- file system directory consistency check
 .SH SYNOPSIS
-.B dcheck
+.B /etc/dcheck
 [
 .B \-i
-numbers ]
-[ filesystem ]
+.I numbers
+] [
+.I filesystem
+]
 .SH DESCRIPTION
 .I Dcheck
 reads the directories in a file system
@@ -15,25 +17,67 @@ and compares
 the link-count in each i-node with the number of directory
 entries by which it is referenced.
 If the file system is not specified,
-a set of default file systems
+.B /dev/rmd0
 is checked.
 .PP
 The
 .B \-i
 flag
-is followed by a list of i-numbers;
+is followed by a list of up to ten i-numbers;
 when one of those i-numbers turns up
 in a directory,
 the number, the i-number of the directory,
 and the name of the entry are reported.
+.B Note:
+v7's program stopped at ten as well and its page did not say so.
 .PP
-The program is fastest if the
-raw version of the special file is used,
-since the i-list is read in large chunks.
+.B Note:
+v7 said "the program is fastest if the raw version of the special file is used, since the
+i-list is read in large chunks".
+Neither half holds here.
+The raw device is the only useful target \- it is what
+.B /dev/rmd0
+above is \- and the i-list is read
+.B one block at a time
+because
+.IR physio ()
+permits nothing else: a raw transfer must be a whole number of 3072-byte blocks into a
+buffer whose word address is a multiple of 512, at a block-aligned offset.
+.PP
+.B Note:
+a name is printed to
+.B eighteen
+characters.
+.I DIRSIZ
+is 18 on this machine rather than v7's 14, a directory entry being four 48-bit words \- one
+of i-number and three of name.
+.PP
+.B Note:
+v7 counted the entries naming each i-number in
+.B one byte,
+saturating at 255 and masking every comparison, because a PDP\-11 filesystem could not hold
+more.
+A link count is a whole word here, so a count above 255 is representable on the disk and is
+reported as it stands.
 .SH FILES
-Default file systems vary with installation.
+/dev/rmd0
 .SH "SEE ALSO"
-icheck(1), filsys(5), clri(1), ncheck(1)
+icheck(1M), ncheck(1M), clri(1M), fsck(1M),
+filsys(5)
+.PP
+.IR fsck (1M)
+does this program's job in the course of doing five others, and
+.B repairs
+a wrong link count rather than reporting it.
+.I Dcheck
+is worth reaching for when only the link counts are in question.
+.PP
+Nothing here is a block count, so there is no
+.B BLOCKS
+section: the two numbers this program prints are a count of directory entries and a link
+count.
+.IR icheck (1M)
+is the one that reports blocks.
 .SH DIAGNOSTICS
 When a file turns up for which the link-count and the number
 of directory entries disagree,
@@ -49,6 +93,22 @@ They should be removed.
 When there are more links than entries, or there is
 an allocated file with neither links nor entries,
 some disk space may be lost but the situation will not degenerate.
+.PP
+`\fIn\fR bad' means a directory entry names an i-number outside the i-list; the directory's
+own i-number and the entry's name follow it.
+.PP
+`\fIn\fR bad dir blk' means a directory's own block list names a block outside the data area,
+and the rest of that directory is not read.
+.B Note:
+this diagnostic is not v7's, which reads the block anyway and charges whatever it finds
+there to whatever i-numbers the bytes happen to spell.
+.PP
+`\fIfilesystem\fR: not a filesystem' means the super-block carries no
+.I FS_MAGIC
+and `filesystem geometry mismatch' that it describes a block size, an i-nodes-per-block or
+an addresses-per-inode this system does not have.
+.B Note:
+v7 had neither check, having no such fields.
 .SH BUGS
 Since
 .I dcheck

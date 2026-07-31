@@ -159,6 +159,24 @@ work has two halves:
   table one slot past what it had filled, `quot` writing one element past `du[NUID]`, and
   `quot`'s `qsort` comparator calling `strcmp()` on two `NULL`s — which a PDP-11 forgave,
   address 0 being readable there, and which here dereferences word 0.
+  **And since task C4e it can do each of those jobs on its own**: `icheck`, `dcheck`, `ncheck`
+  and `clri` are in `/etc` beside `fsck`, and the one that buys something new is **`ncheck`,
+  which puts a *name* to an i-number** — every other program here walks a path to an inode, and
+  the two that report an i-number, `fsck` and `quot`, can only print the number. `quot -n` has
+  wanted it since C4a. `icheck` is the only thing on this system that walks an inode's whole
+  address list, so it is also the only thing that has ever exercised a **double indirect** — six
+  direct addresses and `NINDIR` of 512 put the first doubly-indirect block at logical block 518,
+  and `cmd/icheck/test`'s fixture has a 519-block file for exactly that. Its `-s` is a *fourth*
+  free-list rebuilder beside `mkfs`'s and `fsck`'s phase 6, and it is held to `fsck`'s byte for
+  byte by a `cmp`; where it could not simply be carried over is `s_tinode`, which v7's writes as
+  zero because nothing in v7 maintained it and which the kernel maintains here, so the v7 salvage
+  would have broken every volume it touched. `clri` is the first program in this tree whose
+  *success* is the host checker **failing** — clearing an i-node that a directory still names is
+  what it is for — which inverts the polarity of every assertion `cmd/fsck/test` makes
+  (`cmd/icheck/README.md`). C4e is also the one task here that stopped at the cheap harness: all
+  four are asserted under `b6sim` alone, so nothing exercises the raw path for them and two of
+  them *write* it; `cmd/TODO.md` carries that as a named loose end rather than leaving it to be
+  inferred.
   Fourteen tests
   guard that ladder — `kernel/test/boot` (the prompt appears), `kernel/test/console` (a typed
   dialogue with the shell, and the only one that reaches `/etc/rc`, whose date it
@@ -252,7 +270,7 @@ thing**, and knowing which one you are touching is most of what the build layout
 - **host tools** — `cmd/*`, compiled by the build machine's C/C++ compiler, run there;
 - **cross-built BESM-6 artifacts** — `kernel/` and `lib/`, compiled by the `b6*` toolchain
   above through `b6_obj()` in `scripts/BesmCross.cmake`;
-- **native BESM-6 programs** — `cmd/{init,getty,login,fsck,mkfs,quot,sh,basename,cat,chgrp,chmod,chown,cp,date,dd,df,du,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`, linked against libc by `b6_prog()`
+- **native BESM-6 programs** — `cmd/{init,getty,login,clri,dcheck,fsck,icheck,mkfs,ncheck,quot,sh,basename,cat,chgrp,chmod,chown,cp,date,dd,df,du,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`, linked against libc by `b6_prog()`
   and staged into `build/rootfs/` (with the static files of `etc/`) for the disk image the
   kernel mounts.
 
@@ -379,7 +397,7 @@ therefore names two archives, **ours first**: `-lc -lruntime`, because `b6ld` sc
 helper calls back into libc. The kernel takes `-lruntime` **alone** — it defines its own
 `printf` in `kernel/prf.c` and uses no other library routine.
 
-### Native BESM-6 programs (`cmd/{init,getty,login,fsck,mkfs,quot,sh,basename,cat,chgrp,chmod,chown,cp,date,dd,df,du,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}` + `etc/` → `build/rootfs/`)
+### Native BESM-6 programs (`cmd/{init,getty,login,clri,dcheck,fsck,icheck,mkfs,ncheck,quot,sh,basename,cat,chgrp,chmod,chown,cp,date,dd,df,du,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}` + `etc/` → `build/rootfs/`)
 
 The third category, and the newest. These are **`cmd/` subdirectories that are not host
 tools**: `cmd/init/init.c` is the Unix v7 `/etc/init`, `cmd/sh/` is S. R. Bourne's v7 shell,
@@ -451,7 +469,21 @@ so it is one shared buffer re-fetched each iteration, which is the idiom v7's ow
 already uses on `fileblk` for exactly that reason; and `hotroot` never fired, `rootdev` being
 `makedev(0,0)` while `/dev/rmd0`'s `st_rdev` is `makedev(3,0)`, so the raw name is mapped back
 to the block one as 4.xBSD's `unrawname()` does rather than by duplicating `cdevsw[]`'s pairing
-into a user program.
+into a user program. Then `cmd/icheck`, `cmd/dcheck`, `cmd/ncheck` and `cmd/clri` (task C4e)
+are the four that do each of `fsck`'s jobs standalone, in `/etc` beside it and none of them
+setuid — and `cmd/ncheck` is the one that adds a capability rather than a second way of
+reaching one: an **i-number to a name**. `cmd/icheck` is the only program on this image that
+walks an inode's whole address list, so its two-level recursion is the only thing that has
+ever read a **double indirect**, and it is the one place where `fsck`'s
+one-shared-buffer-re-fetched idiom is deliberately *not* copied — nothing here re-enters the
+walk, so a buffer per level is safe, and re-fetching would re-read the outer block 512 times
+per inner one. Its `-s` had to compute `s_tinode` rather than zero it as v7 does, that field
+having been dead in v7 and maintained here since C4d, and it is held to `fsck`'s salvage by a
+**byte-for-byte `cmp`**. `cmd/clri` is the first program in this tree whose success is
+`b6fsutil -c` *failing*, and the first to bound an i-number against the superblock — v7's
+writes zeros over a data block if you name one past the i-list. `cmd/icheck/README.md` is the
+account, including what C4e deliberately left undone: it has no SIMH test, so the raw path is
+unasserted for all four.
 Last again,
 `cmd/getty` and `cmd/login` (kernel task 29b) are the two that make the machine multi-user, and
 they are the only pair here where one execs the other: `init` execs `/etc/getty`, getty execs
@@ -459,7 +491,8 @@ they are the only pair here where one execs the other: `init` execs `/etc/getty`
 exiting and `init`'s `multiple()` starting a fresh getty. Neither is setuid, and `login`
 emphatically not — it is *handed* root by getty rather than borrowing it, and the setuid version
 is `su` (task C6). All compiled by the
-`b6*` toolchain and staged into `build/rootfs/` as `etc/init`, `etc/getty`, `etc/fsck`, `etc/mkfs`, `etc/quot` and
+`b6*` toolchain and staged into `build/rootfs/` as `etc/init`, `etc/getty`, `etc/clri`, `etc/dcheck`, `etc/fsck`,
+`etc/icheck`, `etc/mkfs`, `etc/ncheck`, `etc/quot` and
 `bin/{sh,basename,cat,chgrp,chmod,chown,cp,date,dd,df,du,echo,ed,kill,ln,login,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`. **`mkdir`, `mv` and `rmdir` are setuid
 root** on the image, which is a property of [root.manifest](root.manifest) alone (`mode 04755`)
 since nothing under `build/rootfs/` carries a mode; see

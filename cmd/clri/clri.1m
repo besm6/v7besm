@@ -1,10 +1,10 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
-.TH CLRI 1M 
+.TH CLRI 1M
 .SH NAME
 clri \- clear i-node
 .SH SYNOPSIS
-.B clri
-filesystem i-number ...
+.B /etc/clri
+.I filesystem i-number ...
 .SH DESCRIPTION
 .I Clri
 writes zeros on the i-nodes
@@ -17,7 +17,7 @@ After
 any blocks
 in the affected file
 will show up as `missing' in an
-.IR icheck (1)
+.IR icheck (1M)
 of the
 .I filesystem.
 .PP
@@ -37,9 +37,76 @@ the old entry will still point to that file.
 At that point removing the old entry will destroy the new file.
 The new entry will again point to an unallocated i-node,
 so the whole cycle is likely to be repeated again and again.
+.PP
+.B Note:
+.IR fsck (1M)
+is the modern way to do all of that.
+It finds a file that appears in no directory for itself and offers to reconnect it into
+.BR /lost+found ,
+and it removes an entry naming an unallocated i-node rather than leaving the cycle above to
+be broken by hand.
+.I Clri
+is worth reaching for when the file is to be thrown away rather than kept.
+.PP
+Every
+.I i-number
+is checked, and the block it lies in read, before
+.B anything
+is written: a run that is going to fail on its fourth argument fails before it has cleared
+the first three.
+.PP
+.B Note:
+an
+.I i-number
+outside the file system's i-list is
+.BR refused .
+v7 seeks wherever the number names, so
+.B "clri /dev/rmd0 99999"
+there writes 3072 bytes of zeros over a
+.B data
+block \- somebody's file \- with no diagnostic at all.
+This version reads the super-block, works out how many i-numbers the volume has, and refuses
+anything outside 2 through that.
+I-node 1 goes with them: it exists and
+.IR ialloc ()
+can never hand it out.
+.PP
+.B Note:
+if the
+.I filesystem
+is the mounted root,
+.I clri
+prints
+.B "***** BOOT UNIX (NO SYNC!) *****"
+and stops, as
+.IR fsck (1M)
+does.
+That is what the BUGS section below means in this system's terms.
+.SH FILES
+/dev/rmd0, /dev/rmd1
 .SH "SEE ALSO"
-icheck(1)
+icheck(1M), dcheck(1M), ncheck(1M), fsck(1M),
+filsys(5)
+.SH DIAGNOSTICS
+`\fIarg\fR: is not a number' and `\fIarg\fR: is zero' are v7's.
+`\fIarg\fR: out of range 2..\fIn\fR' is the check above.
+.PP
+`\fIfilesystem\fR: not a filesystem' means the super-block carries no
+.I FS_MAGIC
+and `filesystem geometry mismatch' that it describes a block size, an i-nodes-per-block or
+an addresses-per-inode this system does not have.
+Either way there is no i-list to bound an
+.I i-number
+against, so nothing is cleared.
 .SH BUGS
 If the file is open,
 .I clri
 is likely to be ineffective.
+.PP
+.B Note:
+specifically, the kernel holds the i-node in core while the file is open and
+.IR iput ()
+writes that copy back to the disk when the last reference goes away \- over the zeros this
+program wrote.
+The same thing on a larger scale is why the mounted root stops the machine rather than
+returning: the whole in-core i-node cache is newer than the disk.

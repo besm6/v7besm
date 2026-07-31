@@ -1,0 +1,25 @@
+# The fixture filesystem clri's argument cases are pointed at -- task C4e.
+#
+# DELIBERATELY THE SMALLEST THING THAT IS A FILESYSTEM.  What these cases assert is the
+# argument handling and the range check that v7 does not have, so nothing about the contents
+# matters except that there is an i-list to be outside of.  The one that asserts what clri
+# DOES is cmd_icheck_cleared, which needs icheck and dcheck to say what was done and so is
+# registered in ../../icheck/test -- ../../icheck/test/run-icheck-cleared.sh says why it
+# cannot live here.
+#
+# It is also its own fixture rather than a copy of anybody's for a reason that is not taste:
+# cmd/clri is the first of the four added to the top-level CMakeLists.txt, so no other
+# fixture target exists when this directory is configured.
+#
+# 20 blocks and a fixed timestamp: byte-reproducible, ../../df/test/fsimg.manifest's rule.
+# The `source' path resolves against b6fsutil's working directory, this test's build
+# directory.
+
+default
+owner 0
+group 0
+dirmode 0755
+filemode 0644
+
+file /f
+source clriimg.d/small
