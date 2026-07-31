@@ -67,6 +67,30 @@ macro(b6_test prog)
     endif()
 endmacro()
 
+# THE `weekly' LABEL -- a second one, on top of `kernel', for the tests that BOOT the whole
+# kernel and drive it by typing at the guest.  Every one of them holds the simh_boot lock
+# below, so they run strictly one at a time, and together they are about seventy seconds of
+# serial wall clock: the critical path of the entire suite, since everything else
+# parallelizes around them.
+#
+# So the daily targets exclude them (`-LE weekly' in ../Makefile and the top-level one) and
+# `make weekly' selects them.  They are meant to be run by hand -- before a commit that
+# touches the kernel, after a change to the root image or the drivers, and periodically --
+# rather than on every edit.
+#
+# NOT `DISABLED', which is a different statement: these are expected to pass.  DISABLED is
+# what `console' and `edit' carry, for ../TODO.md task 35's reason.
+#
+# The label goes on, rather than replacing `kernel', so that "`kernel' means a SIMH test"
+# stays true and one filter can still name the whole SIMH suite.
+function(b6_weekly)
+    foreach(_t ${ARGN})
+        if(TEST ${_t})
+            set_property(TEST ${_t} APPEND PROPERTY LABELS weekly)
+        endif()
+    endforeach()
+endfunction()
+
 # hello is the odd one out: it links no b$* helpers (no -lruntime) and its .nm is left in
 # symbol order rather than address order.
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/hello.dir)
@@ -400,6 +424,10 @@ set_tests_properties(rootimg_link PROPERTIES LABELS kernel)
 # on one machine, twice.  Without it, two of the five failed this way and the suite took 47-49
 # seconds; with it, none of five failed -- nor any of ten further `ctest -L kernel' runs -- and
 # the suite takes about 62.  Fifteen seconds for a suite that does not lie.
+#
+# THOSE NUMBERS NOW DESCRIBE `make weekly', NOT `make run'.  They were measured when every
+# test here ran on every edit; the lock's serial chain is exactly what the `weekly' label
+# above takes out of the daily suite, and `boot' is the only test in this block still in it.
 #
 # `simh_boot' is therefore a lock and not a fixture: they are independent tests that must not
 # OVERLAP, which is a different statement from one needing another to have run.  ctest still
@@ -858,6 +886,16 @@ if(BESM6)
                  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
         set_tests_properties(libtest_${_p} PROPERTIES FIXTURES_REQUIRED libtest
                              LABELS kernel)
+    endforeach()
+
+    # Everything above that boots the kernel, in one list rather than a `weekly' sprinkled
+    # through fifteen set_tests_properties calls -- so the daily/weekly line is readable in
+    # one place.  The libtest_* diffs cost milliseconds each, but they adjudicate output
+    # only libtest_run can produce, so they follow it.
+    b6_weekly(console_setup console session files utils edit fsinfo dd mkfs fsck
+              mount login multi swap libtest_run libtest_fsck)
+    foreach(_p ${B6_LIBTEST_IMAGE})
+        b6_weekly(libtest_${_p})
     endforeach()
 endif()
 

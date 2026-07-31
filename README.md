@@ -148,14 +148,18 @@ build is `libruntime.a`, the `b$*` compiler-support helpers, which come from the
 
 ```sh
 cd kernel && make            # produces `unix`, a BESM-6 a.out, plus unix.nm and unix.dis
-cd kernel && make run        # boot it under SIMH and type at the shell yourself
-cd kernel/test && make test  # run the kernel's SIMH tests
+cd kernel && make run          # boot it under SIMH and type at the shell yourself
+cd kernel/test && make test    # run the kernel's fast SIMH tests
+cd kernel/test && make weekly  # and the slow ones, which boot the kernel
 ```
 
 The kernel tests need the [SIMH simulator](doc/Simh_Simulator.md) on the path as `besm6`; they
 are not host unit tests but BESM-6 programs the real simulator runs. `ctest` labels carve the
 suite up — `kernel` (SIMH), `lib` (the libc programs under `b6sim`), `rootfs` (size checks on
-the programs staged for the image) and `sh` (the shell's own scripts).
+the programs staged for the image) and `sh` (the shell's own scripts). A sixth, `weekly`, sits
+on top of `kernel` and marks the tests that boot the whole machine and drive it by typing at
+it: they run one at a time and take about a minute between them, so the daily `make run`
+leaves them out and `make weekly` is what runs them.
 
 See [CLAUDE.md](CLAUDE.md) for deeper build and architecture detail, and
 [kernel/README.md](kernel/README.md) for the state of the retarget.

@@ -29,6 +29,8 @@ touches the new image. With no drum that `bread` comes back `B_ERROR` and every 
 ```sh
 cd kernel && make          # produces `unix' (BESM-6 a.out), unix.nm and unix.dis
 make run                   # boot it under SIMH (`besm6 unix.ini')
+make test                  # the fast tests (label `kernel' less `weekly')
+make weekly                # the slow ones -- the tests that boot the kernel
 make clean
 ```
 
@@ -78,6 +80,16 @@ These cover the image the build produces ([../root.manifest](../root.manifest) �
 their own copy at their own volume number, so no test ever writes a build artifact. The rest of
 [test/](test/) exercises one kernel component at a time against a hand-built environment; see
 "Writing a standalone SIMH test" below.
+
+**Everything in that table but `boot` is `weekly` and does not run on every edit.** They all
+hold the `simh_boot` resource lock — a typed dialogue drops characters under load, and
+`login.ini`/`multi.ini` bind fixed ports besides — so they run strictly one at a time, about
+seventy seconds of serial wall clock, which was the critical path of the whole suite.
+`make test` here (and the top-level `make run`) now excludes the label; `make weekly` selects
+it. Run it before a commit that touches the kernel, the drivers or the root image. `boot`
+stays in the daily suite because it costs a second and answers the question that matters most
+after a kernel edit: does the thing still reach a shell prompt. The lock's own rationale, and
+the measurement behind it, are in [test/CMakeLists.txt](test/CMakeLists.txt).
 
 **`multi` is the one test with a host program of its own**, [test/ttyhost.c](test/ttyhost.c), and
 the reason is worth knowing before the next test wants a second terminal. `attach tty25 console`
@@ -391,7 +403,8 @@ What the ones already in [test/](test/) cost to get right:
   so an unmasked comparison changes when you recompile — mask with `&07777777777777777`), and no
   space may appear inside the condition token. `ex <addr>` prints it untagged and is what FAIL
   diagnostics should use. `test/swap.ini.in` is the worked example.
-* **`make` is not enough before `ctest`: use `make test` (or `make run`).** `swap.ini` is *generated*
+* **`make` is not enough before `ctest`: use `make test`, `make weekly` or the top-level `make run`
+  — never a bare `ctest`.** `swap.ini` is *generated*
   from `unix.nm` by `genboot.cmake`, because the `phymem` it deposits and the three counters it
   asserts on are link-time addresses. That generation hangs off `build_tests`, which plain `make`
   does not build — so a kernel change followed by a bare `make; ctest` runs the **previous** kernel's

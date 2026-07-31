@@ -115,16 +115,26 @@ copy. Sources are compiled *into* `kernel/test/` via `b6_find_src()`/`b6_test_ob
 `-DKERNEL`, into per-program object dirs (shared outputs would race under `make -j`).
 
 - **Run every MMU test with `set mmu cache`** — the БРЗ hazards are invisible otherwise.
-- Several tests boot the whole kernel (`boot`, `login`, `multi`, `session`, `files`,
-  `libtest`, `swap`, `utils`, `edit`, `fsinfo`, `dd`, `mkfs`, `fsck`, `console`). `console`
-  and `edit` are **DISABLED** — simulator flakiness, `kernel/TODO.md` task 35 — do not run
-  them on your own initiative.
+- Several tests boot the whole kernel (`login`, `multi`, `session`, `files`, `libtest`,
+  `swap`, `utils`, `edit`, `fsinfo`, `dd`, `mkfs`, `fsck`, `mount`, `console`). They hold
+  one resource lock, so they run one at a time — about seventy seconds of serial wall clock,
+  the critical path of the whole suite. **They are labelled `weekly` and are not in the
+  daily suite**: `make run` and `cd kernel/test && make test` exclude them (`-LE weekly`),
+  and `make weekly` (top level or in `kernel/`) is what runs them. Run it before a commit
+  that touches the kernel, the drivers or the root image — not on every edit. `boot` is the
+  exception, left in the daily suite as a one-second smoke test that the kernel still
+  reaches a shell prompt.
+- `console` and `edit` are **DISABLED** on top of that — simulator flakiness,
+  `kernel/TODO.md` task 35 — so `make weekly` skips them too; do not run them on your own
+  initiative.
 - **The libc suite runs twice on purpose**: under `b6sim` (label `lib`) and off the image
   under the booted kernel (label `kernel`), diffed against the *same* `.expected`. Disagreement
   means one harness is wrong. `b6_libtest()`'s `SIMONLY`/`IMAGEONLY` mark the exceptions.
   Adding a program = one `b6_libtest()` call + `lib/test/progs.cmake` + `root.manifest` +
   a line in `kernel/test/libtest.sh`.
-- ctest labels: `kernel` (SIMH), `lib` (b6sim), `rootfs` (size checks), `sh`.
+- ctest labels: `kernel` (SIMH), `lib` (b6sim), `rootfs` (size checks), `sh`, and `weekly`
+  — a *second* label on the kernel tests that boot, so `-L kernel` still names the whole
+  SIMH suite and `-LE weekly` takes the slow half out of it.
 - Every `cmd/` tool has a GoogleTest suite under `cmd/<tool>/test/`; `cmd/cpp/test/` is a full
   C11 (N1570) conformance suite built on the `PreprocessorTest` fixture.
 - **A lone unexpected failure is usually the harness, not the change.** The suite runs in
