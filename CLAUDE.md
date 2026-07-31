@@ -132,7 +132,7 @@ work has two halves:
   table one slot past what it had filled, `quot` writing one element past `du[NUID]`, and
   `quot`'s `qsort` comparator calling `strcmp()` on two `NULL`s — which a PDP-11 forgave,
   address 0 being readable there, and which here dereferences word 0.
-  Eleven tests
+  Twelve tests
   guard that ladder — `kernel/test/boot` (the prompt appears), `kernel/test/console` (a typed
   dialogue with the shell, and the only one that reaches `/etc/rc`, whose date it
   asserts, ending on the `login:` the first getty puts there — **currently `DISABLED`**, since it
@@ -167,6 +167,15 @@ work has two halves:
   and an `awk` over `b6fsutil -v -v`, so that neither has to be re-typed when a program joins
   `/bin`; it is the only test that captures the **console transcript** as part of its oracle,
   which it must, since a program that measures a filesystem cannot write its answer into one)
+  and `kernel/test/dd` (task C4b: two blocks pulled off `/dev/rmd0` twice over, once at the
+  default record size and once through the fast `bs=` path, then the same blocks asked for at
+  two sizes the hardware cannot name — `bs=512`, which `physio()` refuses as not a whole number
+  of words, and `bs=6`, which it passes and `mdstrategy()` refuses as not a whole half-zone —
+  which makes it the first test here to assert a **refused** transfer at all; its oracle is the
+  disk itself, the guest's copy `cmp`'d on the host against the same offset in the container the
+  boot was handed, so there is nothing checked in and nothing recomputed, and beside it 365
+  bytes of UTF-8 go through the EBCDIC tables and back, which needs `dd` run twice and so cannot
+  be one of the `cmd_dd_*` cases)
   — and `cd kernel && make run` is
   where you type at it yourself. The drums
   must be attached to exec anything: they are `swapdev`, and `exece()` stages the argument
@@ -199,7 +208,7 @@ thing**, and knowing which one you are touching is most of what the build layout
 - **host tools** — `cmd/*`, compiled by the build machine's C/C++ compiler, run there;
 - **cross-built BESM-6 artifacts** — `kernel/` and `lib/`, compiled by the `b6*` toolchain
   above through `b6_obj()` in `scripts/BesmCross.cmake`;
-- **native BESM-6 programs** — `cmd/{init,getty,login,quot,sh,basename,cat,chgrp,chmod,chown,cp,date,df,du,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`, linked against libc by `b6_prog()`
+- **native BESM-6 programs** — `cmd/{init,getty,login,quot,sh,basename,cat,chgrp,chmod,chown,cp,date,dd,df,du,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`, linked against libc by `b6_prog()`
   and staged into `build/rootfs/` (with the static files of `etc/`) for the disk image the
   kernel mounts.
 
@@ -326,7 +335,7 @@ therefore names two archives, **ours first**: `-lc -lruntime`, because `b6ld` sc
 helper calls back into libc. The kernel takes `-lruntime` **alone** — it defines its own
 `printf` in `kernel/prf.c` and uses no other library routine.
 
-### Native BESM-6 programs (`cmd/{init,getty,login,quot,sh,basename,cat,chgrp,chmod,chown,cp,date,df,du,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}` + `etc/` → `build/rootfs/`)
+### Native BESM-6 programs (`cmd/{init,getty,login,quot,sh,basename,cat,chgrp,chmod,chown,cp,date,dd,df,du,echo,ed,kill,ln,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}` + `etc/` → `build/rootfs/`)
 
 The third category, and the newest. These are **`cmd/` subdirectories that are not host
 tools**: `cmd/init/init.c` is the Unix v7 `/etc/init`, `cmd/sh/` is S. R. Bourne's v7 shell,
@@ -354,7 +363,18 @@ first two here to read a **device**: `df` and `quot` go through `/dev/rmd0` and 
 `physio()`, whose four alignment conditions are what that task was really about
 (`cmd/df/README.md`). `quot` is the only one of the three in `/etc` rather than `/bin`, being
 section 1M and root-only, and none of the three is setuid — `/dev/rmd0` is mode 0600 because
-that one node is every file's contents. Last again,
+that one node is every file's contents. Then `cmd/dd` (task C4b) is the one that *moves* the
+store rather than measuring it, and the only program here that can put bulk data onto
+`/dev/rmd0` or take it off — which is why `cmd/TODO.md` puts it ahead of `mkfs` and `fsck`. Its
+one divergence is a **default**: `ibs`/`obs` default to `BSIZE` and the `b` suffix multiplies by
+`BSIZE`, where v7's were 512, because 512 is not a whole number of words and `physio()` refuses
+it before the driver sees it — so with v7's defaults the commonest thing `dd` exists to do could
+not reach the disk at all. `w` came along free, `sizeof(int)` being 6 rather than a PDP-11's 2,
+so `1b`, `3k` and `512w` now name the same 3072 bytes. Three upstream bugs went with it, the
+sharpest being a `conv=swab` that rounded its pair count down to even and so copied a two-byte
+record entirely **unswapped**, silently. Nothing has yet *written* to a raw device, though:
+`kernel/dev/md.c`'s `mdwrite()` is still dead code and there is no scratch volume to aim it at.
+Last again,
 `cmd/getty` and `cmd/login` (kernel task 29b) are the two that make the machine multi-user, and
 they are the only pair here where one execs the other: `init` execs `/etc/getty`, getty execs
 `/bin/login`, login execs the shell, all in one process, which is why a logout is that process
@@ -362,7 +382,7 @@ exiting and `init`'s `multiple()` starting a fresh getty. Neither is setuid, and
 emphatically not — it is *handed* root by getty rather than borrowing it, and the setuid version
 is `su` (task C6). All compiled by the
 `b6*` toolchain and staged into `build/rootfs/` as `etc/init`, `etc/getty`, `etc/quot` and
-`bin/{sh,basename,cat,chgrp,chmod,chown,cp,date,df,du,echo,ed,kill,ln,login,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`. **`mkdir`, `mv` and `rmdir` are setuid
+`bin/{sh,basename,cat,chgrp,chmod,chown,cp,date,dd,df,du,echo,ed,kill,ln,login,ls,mkdir,mv,pwd,rm,rmdir,sleep,sync,test,time,touch,tty,yes}`. **`mkdir`, `mv` and `rmdir` are setuid
 root** on the image, which is a property of [root.manifest](root.manifest) alone (`mode 04755`)
 since nothing under `build/rootfs/` carries a mode; see
 [cmd/mkdir/README.md](cmd/mkdir/README.md) for the general account and

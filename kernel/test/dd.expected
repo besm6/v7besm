@@ -1,0 +1,34 @@
+dd start
+---raw---
+2+0 records in
+2+0 records out
+status 0
+2+0 records in
+2+0 records out
+status 0
+   6 /tmp/blkA
+   6 /tmp/blkB
+---misaligned---
+read: Bad address
+0+0 records in
+0+0 records out
+status 1
+read: I/O error
+0+0 records in
+0+0 records out
+status 1
+---ebcdic---
+0+1 records in
+0+1 records out
+status 0
+0+1 records in
+0+1 records out
+status 0
+---end---
+bad1
+bad2
+blkA
+blkB
+dd.log
+motd.a
+motd.e

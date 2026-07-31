@@ -148,6 +148,15 @@ file /bin/date          # cmd/date -- what /etc/rc prints after the motd; NOT se
 source ../../rootfs/bin/date
 mode 0755
 
+# Task C4b, and the reason it is here rather than in /etc beside quot: dd is a general copy
+# program that happens to be the only way to reach a device in bulk, not a device tool.  NOT
+# setuid, and least of all this one -- /dev/rmd0 is mode 0600 because that node is every
+# file's contents, and a setuid dd would let anybody rewrite them.  cmd/dd/dd.c is the
+# account of the four alignment rules it obeys and of the 3072-byte block it defaults to.
+file /bin/dd            # cmd/dd -- copy and convert, and the only bulk path to /dev/rmd0
+source ../../rootfs/bin/dd
+mode 0755
+
 # The two of task C4a that live in /bin.  Both report in 1024-byte blocks -- three per
 # filesystem block, so their numbers are half a PDP-11's and always a multiple of three;
 # /etc/quot is the third and is further down, being root-only.

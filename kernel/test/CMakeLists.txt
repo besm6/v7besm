@@ -222,6 +222,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/chown
     ${B6_ROOTFS}/bin/cp
     ${B6_ROOTFS}/bin/date
+    ${B6_ROOTFS}/bin/dd
     ${B6_ROOTFS}/bin/df
     ${B6_ROOTFS}/bin/du
     ${B6_ROOTFS}/bin/echo
@@ -601,6 +602,28 @@ if(BESM6)
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(fsinfo PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
+
+    # dd -- A GENERAL COPY PROGRAM ON THE RAW DEVICE, on its own volume (3088).  Task C4b, and
+    # what it adds to fsinfo is the complementary half of the same question.  fsinfo asks
+    # whether the guest can MEASURE its store, with df and quot reading /dev/rmd0 the only way
+    # they know how -- whole blocks, block-aligned, out of a buffer each program aligns at
+    # startup because C cannot ask for it.  This asks whether a program whose record size is
+    # the USER'S number can read that device at all, and then asks what happens when the
+    # number is wrong: bs=512, which physio() rejects for not being a whole number of words,
+    # and bs=6, which it passes and mdstrategy() then rejects for not being a whole half-zone.
+    # Nothing here had ever asserted a REFUSED transfer.
+    #
+    # ITS ORACLE IS THE DISK, which is new: the guest's two blocks are cmp'd against the same
+    # two blocks of the container the boot was handed, so there is no expectation to keep in
+    # step with anything and no number to recompute.  What that costs is one assumption --
+    # that the run does not rewrite those blocks -- and run-dd.sh checks it explicitly rather
+    # than letting it fail as a mystery.  The EBCDIC round trip beside it needs dd run TWICE,
+    # which is why it cannot be one of the cmd_dd_* cases next door.
+    add_test(NAME dd
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-dd.sh
+                ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(dd PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
     # login -- MULTI-USER, on its own volume (3084).  Task 29b, and the question is a fifth
     # one: everything above types at the single-user shell init hands out, and this one types

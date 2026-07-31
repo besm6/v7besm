@@ -34,7 +34,8 @@ single-file programs and 29 directories of larger ones. That tree is **not in th
 do — the ten of task C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`, `mv/`, `rm/`,
 `rmdir/`, `touch/`), the three of C2a (`date/`, `kill/`, `sleep/`), the five of C2b
 (`basename/`, `test/`, `time/`, `tty/`, `yes/`), the one of C3 (`ed/`), the three of C4a
-(`df/`, `du/`, `quot/`) and the two of kernel task 29b (`getty/`, `login/`) today. That is the only marker;
+(`df/`, `du/`, `quot/`), the one of C4b (`dd/`) and the two of kernel task 29b
+(`getty/`, `login/`) today. That is the only marker;
 [../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.
 
 Four things about the copies:
@@ -119,6 +120,7 @@ candidates, as they stand today:
 | `grep.c` | three — `ep >= &expbuf[ESIZE]`, `sp > cstart`, `lp >= curlp` |
 | `sed/sed1.c` | three, all `sp >= &genbuf[LBSIZE]` |
 | `pr.c` | two, both `>= &buffer[BUFS]` |
+| ~~`dd.c`~~ | ~~one — `ip > ibuf`~~ — **found and fixed**, task C4b: it zero-fills the input buffer before every read under `conv=noerror`/`conv=sync`, and is a word loop over `btow(ibs)` words now |
 | ~~`date.c`~~ | ~~one — `sp < ep`~~ — **found and fixed**, task C2a: it bounded the in-place reversal of `argv[1]`, and is an index pair now |
 | ~~`basename.c`~~ | ~~**two**, not the one this table used to claim — `p1>p2 && p3>argv[2]`~~ — **found and fixed**, task C2b: both are in the *same expression*, the backwards suffix compare, and both are index counts now |
 
@@ -131,8 +133,13 @@ which were left alone. **It is the pointed-to type that decides, not the shape o
 
 The other three hazards `sh/README.md` names — a flag packed into bit 0 of a pointer, a bit mask
 used to round to a word when `BYTESPERWORD` is 6, and a cast to a pointer that *floors* rather
-than rounds — come round again in anything that manages its own arena. `sort`, `dd` and `find`
-all call `sbrk` and are the places to expect them.
+than rounds — come round again in anything that manages its own arena. `sort` and `find` both
+call `sbrk` and are the places to expect them. **`dd` called it too and turned out to have none
+of the three**: its use is two flat allocations and no arena at all, and what it did have was
+this section's own hazard, `for (ip = ibuf+ibs; ip > ibuf;)`, plus an `sbrk` failure test
+spelled `(char *)-1` — a fabricated fat pointer, which this libc's `NULL` return could never
+match. Grepping for the arena hazards is still right; expecting them because a program calls
+`sbrk` is not.
 
 ### 3. A `long` is one word, and `%D` is not a conversion
 
@@ -189,6 +196,15 @@ lying. Three rules come with it, and a port that reports blocks should follow al
 `ed`'s temp file is 512-byte blocks by its own choice and stays that way; so do `tar`'s record
 and `tail -b`, which [TODO.md](TODO.md) already rules on, and `dd`'s `bs=` is the user's.
 
+**But a *default* is not the user's, and `dd` is where that was settled.** No number `dd` prints
+changes unit — it reports records — so the `KBPB` multiply above does not reach it at all. What
+did have to change is what the user gets when they name no unit: `ibs`/`obs` default to `BSIZE`
+and the `b` suffix multiplies by `BSIZE`, where v7's were 512, because 512 is not a whole number
+of words and `physio()` refuses it before the driver sees it — so with v7's defaults the
+commonest thing `dd` exists to do could not reach the disk. `w` came along free, `sizeof(int)`
+being 6. The rule that generalises: **a constant is the user's business only while it still
+names something on this machine.** 512 named a PDP-11 disk block and names nothing here.
+
 ### 5. `DIRSIZ` is 18
 
 `struct direct` is four words — a full-word `d_ino` and three words of name.  So `%.14s` is `%s`,
@@ -216,6 +232,7 @@ Anything that walks directories — `rm -r`, `du`, `find`, `ncheck`, `dcheck`, `
 | `quot` | 102 | 5,208 | 227 | 4,375 | **9,912** |
 | `du` | 83 | 3,041 | 198 | 3,132 | **6,454** |
 | `df` | 80 | 2,633 | 177 | 2,570 | **5,460** |
+| `dd` | 83 | 3,451 | 503 | 1,056 | **5,093** |
 | `cat` | 83 | 2,989 | 165 | 1,544 | **4,781** |
 | `chgrp` | 85 | 3,211 | 344 | 1,236 | **4,876** |
 | `time` | 85 | 3,088 | 340 | 1,041 | **4,554** |
@@ -363,8 +380,12 @@ Two harnesses, and choosing wrong wastes the effort:
   that runs a **here-document** under the booted kernel — and `kernel/test/fsinfo` (task C4a)
   for anything that reads a **device**, or that reports about the filesystem as a whole; it is
   the only one that captures the **console transcript** as part of its oracle, and the only one
-  whose oracles are *recomputed* rather than checked in. Each has its own copy of the image at
-  its own volume number; **3087 is the highest used** (`edit` took 3086 and `fsinfo` 3087). All but `login` graft a script onto that copy
+  whose oracles are *recomputed* rather than checked in — and `kernel/test/dd` (task C4b) for
+  anything that moves **bulk data** through a device, or that must be handed a record size the
+  hardware refuses; its oracle is the disk itself, the guest's transfer being `cmp`'d against the
+  same offset in the container the boot was handed, and it is the first test here to assert a
+  **refused** transfer at all. Each has its own copy of the image at
+  its own volume number; **3088 is the highest used** (`edit` took 3086, `fsinfo` 3087 and `dd` 3088). All but `login` graft a script onto that copy
   with `b6fsutil -a`, and `login` is the exception because what it tests is the thing that reads
   what is typed: it types every character it needs.
 
@@ -468,8 +489,12 @@ and really does report 255.
 **A magic number can be spread across two expressions that share no variable.** `time` builds
 the PDP-11's 60 Hz clock into a multiplier and into the leading entry of a radix table, and
 nothing in `printt` suggests that entry is a clock rate. Grepping for `HZ` finds neither.
-[time/README.md](time/README.md) is the account; `od`, `sort` and `dd` are flagged in
-[TODO.md](TODO.md) for the same kind of trouble.
+[time/README.md](time/README.md) is the account; `od` and `sort` are flagged in
+[TODO.md](TODO.md) for the same kind of trouble. **`dd` was too, and it was there**: the PDP-11's
+512-byte disk block sat in the `ibs`/`obs` initialisers *and* in the `b` case of `number()`'s
+suffix switch, which share no variable and are two hundred lines apart, so changing either alone
+would have left the command language contradicting itself. Task C4b changed both together and
+`_Static_assert`ed the third, `w`, which had been hiding as `sizeof(int)`.
 
 **A hard link is invisible to the whole build.** `/bin/[` is `/bin/test` — the first `link`
 stanza [../root.manifest](../root.manifest) has ever carried, and without it the `argv[0]`
