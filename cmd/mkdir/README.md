@@ -105,9 +105,7 @@ the `EPERM` from `mknod` arriving where it should.
 
 ## What did *not* need changing, and was checked
 
-No `long`, no `%D`, no `DIRSIZ` assumption, and — the one that would have mattered — **no
-relational operator between two `char *`** ([`cmd/ls/README.md`](../ls/README.md)): every `<` in
-the file is against a small integer constant. The file-scope helper is renamed `makedir()`, on
+No `long`, no `%D`, no `DIRSIZ` assumption. The file-scope helper is renamed `makedir()`, on
 the precedent of `ls`'s `readdir`→`listdir`: `<sys/stat.h>` here already declares
 `mknod`/`chmod`/`stat` and is one line away from declaring `mkdir`.
 

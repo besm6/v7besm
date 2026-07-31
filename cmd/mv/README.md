@@ -131,12 +131,7 @@ Stated at length in [`mv.c`](mv.c)'s header comment; in brief, and worst first.
 
 ## What did *not* need changing, and was checked
 
-No `long`, no `%D`, no `struct direct` — `mv` never reads a directory — and, the one that
-would have mattered, **no relational operator between two `char *`**
-([`cmd/ls/README.md`](../ls/README.md)). That is worth stating rather than assuming, because
-`pname()` is exactly the shape that breaks: two `char *` cursors walking one buffer. It uses
-`q = p-1` (subtraction, which `b$pdiff` decodes) and `q == buf` (equality, which is a
-representation comparison) and never orders them.
+No `long`, no `%D`, no `struct direct` — `mv` never reads a directory.
 
 Two things that look like bugs and are not, both left alone with a comment:
 

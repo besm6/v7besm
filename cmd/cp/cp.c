@@ -41,14 +41,8 @@
 //     `cp f1 ... fn d' calls copy() once per argument in one process, so the leak is per
 //     refused file and NOFILE is 20 (include/sys/param.h).  One close().
 //
-// THREE THINGS THAT LOOK LIKE BUGS HERE AND ARE NOT.  Noted so the next reader does not
+// TWO THINGS THAT LOOK LIKE BUGS HERE AND ARE NOT.  Noted so the next reader does not
 // "fix" them:
-//
-//  * The path-building loop below is exactly the shape ../ls/README.md warns about -- two
-//    char * cursors walking a buffer -- and it is clean.  It never ORDERS two pointers.
-//    `bp[-1]' is a subscript, `bp = p2' is an assignment, and the rest is *p++.  A relational
-//    operator between two char * is what breaks on this machine, and there is not one in this
-//    file.
 //
 //  * `while ((n = read(...)))' treats a -1 as true, and the n < 0 test is INSIDE the loop.
 //    That is deliberate and correct: a read error must be reported, not mistaken for

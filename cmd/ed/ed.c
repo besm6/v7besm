@@ -16,14 +16,11 @@
 //
 // 1.  TWENTY char * RELATIONAL COMPARISONS, not the ten ../README.md SS2's table claimed --
 //     the densest concentration in the whole survey, and every one of them bounds a buffer
-//     that the regex engine or the substitute path is writing into.  `<' between two char *
-//     does not order them here: the byte offset lives in bits 47-45, above the word
-//     address, and it DECREMENTS as the pointer advances, so the ordering comes out
-//     scrambled and inverted within a word.  There is no relational helper; SUBTRACTION is
-//     fine (b$pdiff decodes both operands) and that is the whole toolkit.  Every one is an
-//     int index or an int difference now, and the ones that survive as pointer walks are
-//     dereference-and-increment, which was never in question.  Two of the twenty went away
-//     with -x below, so nineteen were rewritten.
+//     that the regex engine or the substitute path is writing into.  When this was ported
+//     `<' between two char * did not order them (the compiler fixed that on 2026-06-17;
+//     SS2 has the account).  Every one is an int index or an int difference now, which is
+//     also the cheaper code: the relational costs two calls, an index test one compare.
+//     Two of the twenty went away with -x below, so nineteen were rewritten.
 //
 // 2.  THE FILE MIXES BOTH POINTER WIDTHS, FREELY, AND THAT IS THE TRAP.  zero, dot, dol,
 //     addr1, addr2, names[] and every `a1'/`a2'/`markp' over them are int * -- THIN word
@@ -1331,8 +1328,8 @@ static void dosub(void)
     lp = linebuf;
     rp = rhsbuf;
     sn = 0;
-    // The head of the line, up to the match.  Two independent cursors, and the one place in
-    // this file where getting the ordering wrong would have corrupted every `s' silently.
+    // The head of the line, up to the match.  Two independent cursors, ordered by their
+    // difference; getting this one wrong would corrupt every `s' silently.
     while (lp - loc1 < 0)
         genbuf[sn++] = *lp++;
     while ((c = *rp++) != 0) {
@@ -1440,8 +1437,7 @@ static int getcopy(void)
 }
 
 // Compile a regular expression into expbuf.  The cursor is an INDEX rather than the char *
-// v7 walked, because every bound in here is a relational test against the end of the
-// buffer, and there were five of them.
+// v7 walked: every bound in here tests against the end of the buffer, and there are five.
 static void compile(int aeof)
 {
     int eof, c;
@@ -1718,8 +1714,8 @@ static int advance(char *lp, char *ep)
             goto star;
 
         star:
-            // The closure's backtrack bound, and the sharpest of the nineteen: `lp > curlp'
-            // between two fat pointers walks the matcher off the end of the line buffer.
+            // The closure's backtrack bound, and the sharpest of the nineteen: v7's
+            // `lp > curlp' walked the matcher off the end of the line buffer here.
             do {
                 lp--;
                 if (lp == locs)

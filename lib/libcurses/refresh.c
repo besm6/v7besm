@@ -7,8 +7,8 @@
 //
 // THIS FILE HELD TWO OF THE ELEVEN `char *' COMPARISONS, and they are the two that matter
 // most: both decide how much of a line is trailing blanks, which is what the clear-to-end-
-// of-line optimisation is built on.  A relational operator between two `char *' gives the
-// wrong answer here (clrtoeol.c's header has the arithmetic), and neither of these faults
+// of-line optimisation is built on.  A relational operator between two `char *' gave the
+// wrong answer then (clrtoeol.c's header has the arithmetic), and neither of these faults
 // when it is wrong -- one truncates the new line's blank run, the other the screen's, and
 // the result is a `CE' emitted where sixty spaces were needed or sixty spaces where a `CE'
 // would have done.  Nothing but comparing real output catches that.

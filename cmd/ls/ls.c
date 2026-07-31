@@ -41,15 +41,13 @@
 // writes, which is needed anyway because compar() calls strcmp() on that array and v7 left
 // it unterminated.
 //
-// A FAT POINTER CANNOT BE COMPARED WITH `<'.  A char */void * carries a marker in bit 48 and
-// a byte offset in bits 47-45, and the offset DECREMENTS as the pointer advances
-// (doc/Besm6_Runtime_Library.md, b$pinc), so the offset field dominates the word address and
-// the ordering comes out scrambled -- there is no relational helper, the comparison is a raw
-// integer one.  v7's ls never does it (every `p < &tab[N]' here is over an array of
-// word-sized objects, whose pointers are THIN and compare correctly), and makename() was
-// rewritten with explicit indices rather than introduce one while bounding it.  This is the
-// same rule kernel/prim.c had to learn; grep for the pattern before trusting any v7 source
-// that walks buffers.
+// A FAT POINTER USED NOT TO SORT WITH `<'.  A char */void * carries a marker in bit 48 and a
+// byte offset in bits 47-45, and the offset DECREMENTS as the pointer advances
+// (doc/Besm6_Runtime_Library.md, b$pinc), so a raw integer comparison of the two words came
+// out scrambled.  The compiler fixed that on 2026-06-17 -- the relational goes through
+// b$pdiff now -- but makename() below still bounds itself with explicit indices, which is
+// what this port wrote instead of introducing the first such comparison in the file, and
+// which is a register compare where the relational is two calls.
 //
 // The rest, briefly:
 //   - `extern char *malloc();' inside gstat() conflicts with <stdlib.h> and is deleted.  The
@@ -436,8 +434,7 @@ static char dfile[DFILE];
 
 //
 // "directory" + "/" + "name" in dfile[].  Written with explicit indices rather than walking
-// pointers, because bounding it would otherwise want a `<' between two fat char pointers,
-// which does not order correctly on this machine -- see the header.
+// pointers -- see the header.
 //
 static char *makename(char *dirn, char *filen)
 {

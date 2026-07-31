@@ -25,8 +25,7 @@
 //
 // all other characters are ``self-inserting''.
 //
-// NOTHING HERE COMPARES TWO char * VALUES, so unlike termcap.c this file is v7's with
-// only the C11 pass applied -- see that file's header for why a comparison would matter.
+// Unlike termcap.c this file is v7's with only the C11 pass applied.
 // The four conditional forms (%n, %>, %B, %D) that the upstream Makefile switched on
 // with -DCM_N -DCM_GT -DCM_B -DCM_D are compiled UNCONDITIONALLY here: they are a few
 // words each, `tgoto' is one archive member either way, and a database entry that uses

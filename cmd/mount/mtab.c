@@ -29,9 +29,7 @@
 // `/dev/md1' because 32 bytes was tight; a line is as long as it needs to be, so the special
 // file is recorded as it was given and umount matches the string the user typed.
 //
-// Every scan below is by INDEX and not by pointer, which is SS2's rule rather than a habit:
-// `p < end' between two char * compares the byte offset before the word address and comes
-// out scrambled.
+// Every scan below is by INDEX and not by pointer.
 //
 
 #include "mtab.h"

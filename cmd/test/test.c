@@ -34,9 +34,7 @@
 //
 //   Everything at file scope is static.  ap/ac/av/tmp were four unqualified globals.
 //
-// NO §2 HAZARD.  This file compares no two char * values: length()'s `es-s-1' is
-// SUBTRACTION, which b$pdiff decodes correctly, and every other relational here is between
-// two ints.  There is no long, no %D and no buffer of any kind.
+// There is no long, no %D and no buffer of any kind.
 //
 // THE 255 CANNOT BE SEEN, and that is worth knowing before someone changes it.  synbad()
 // exits 255 as v7's did, but a wait status here is (code << 8) returned through r12, a

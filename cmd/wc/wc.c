@@ -6,8 +6,7 @@
 //      wc [ -lwc ] [ file ... ]
 //
 // The first of task C5a's six (../README.md), and the cheapest program in the phase: no
-// buffer, no arena, no pointer walk, and therefore none of §2 -- the whole of the six turned
-// out to carry not one char * comparison between them, which ../README.md records.
+// buffer, no arena and no pointer walk.
 //
 // WHAT A WORD IS, AND WHY THE TEST HAD TO CHANGE.  v7 wrote
 //

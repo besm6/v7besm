@@ -44,15 +44,15 @@ wrapped entirely in `#if 0`, and this system has `sgtty`, not `termios`.
 
 This is the whole of the interesting work, and it is all in
 [`termcap.c`](termcap.c). [`../../cmd/ls/README.md`](../../cmd/ls/README.md)'s fourth fat-pointer
-hazard is the one that bites here, over and over:
+hazard is the one that bit here, over and over: when this port was written a relational between
+two `char *` compiled to a whole-word integer comparison, the byte offset in bits 47–45
+dominated the word address in bits 15–1, and — because the offset *decrements* as the pointer
+advances — the ordering came out scrambled and inverted within a word.
 
-> **A relational operator between two `char *` values gives the wrong answer.** A fat pointer
-> carries its byte offset in bits 47–45 and its word address in bits 15–1, and the offset
-> *decrements* as the pointer advances
-> ([`doc/Besm6_Runtime_Library.md`](../../doc/Besm6_Runtime_Library.md)). There is no
-> relational helper — `<` compiles to an integer comparison of the whole word — so the offset
-> field dominates the address field and the ordering comes out scrambled and inverted within a
-> word.
+**The compiler has since fixed it** (2026-06-17): such a relational now lowers through
+`b$pdiff` and tests the sign, so none of what follows was strictly necessary and none of it is
+wrong either — an index test is a register compare where the relational is two calls
+([`../../cmd/README.md`](../../cmd/README.md) §2 is the account).
 
 termcap is nothing *but* buffer cursors, so it had four:
 

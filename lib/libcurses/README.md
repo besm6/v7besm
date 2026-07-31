@@ -110,18 +110,21 @@ word, not a flag.
 
 ## Eleven `char *` comparisons had to go
 
-A relational operator between two `char *` gives the wrong answer on this machine. A fat
-pointer carries its byte offset in bits 47–45 and its word address in bits 15–1, and the
-offset **decrements** as the pointer advances; there is no relational helper, so `<` compiles
-to an integer comparison of the whole word, the offset field dominates the address field, and
-the ordering comes out scrambled and inverted within every word. That is the hazard
-[`../libtermcap/README.md`](../libtermcap/README.md) met four times, and curses is a program
-made almost entirely of buffer cursors.
+When this port was written, a relational operator between two `char *` gave the wrong answer on
+this machine: a fat pointer carries its byte offset in bits 47–45 above its word address in
+bits 15–1, the offset **decrements** as the pointer advances, and `<` compiled to an integer
+comparison of the whole word, so the ordering came out scrambled and inverted within every
+word. That is the hazard [`../libtermcap/README.md`](../libtermcap/README.md) met four times,
+and curses is a program made almost entirely of buffer cursors.
+
+**The compiler fixed it on 2026-06-17** — the relational lowers through `b$pdiff` now and
+tests the sign ([`../../cmd/README.md`](../../cmd/README.md) §2). The eleven rewrites below
+stand: they cost nothing and an index test is a register compare where the relational is two
+calls.
 
 **Subtraction is fine and is left exactly as v7 wrote it** — `b$pdiff` decodes both operands,
-so `p - base` is an exact character count. It is also the conversion tool: where a loop is
-entered with a pointer that has already advanced, recover its index once by subtracting and
-never compare again.
+so `p - base` is an exact character count. It was also the conversion tool: where a loop is
+entered with a pointer that has already advanced, recover its index once by subtracting.
 
 | Where | v7 wrote | Now |
 | --- | --- | --- |

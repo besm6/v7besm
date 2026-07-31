@@ -52,10 +52,9 @@ later test's expectations shifting under it.
 
 ## Two pointer bounds, and one of them was an overflow
 
-`getname()` bounded its buffer with `np >= &name[16]` and `np > name` over a `char *`, which is
-[cmd/README.md](../README.md) §2's hazard: a relational operator between two `char *` gives the
-wrong answer here, the byte offset sitting above the word address and *decrementing* as the
-pointer advances. Both are an `int` index now.
+`getname()` bounded its buffer with `np >= &name[16]` and `np > name` over a `char *`, which was
+[cmd/README.md](../README.md) §2's hazard when this was ported — the compiler has since made
+such a relational order correctly. Both are an `int` index now, which is cheaper anyway.
 
 Fixing the first one exposed an upstream bug hiding behind it. v7 broke out of the loop on
 `np >= &name[16]` and then wrote `*np = 0` — so a name of exactly sixteen characters stored the

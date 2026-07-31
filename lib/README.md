@@ -122,9 +122,9 @@ Everything in [`../doc/`](../doc/) applies, `Besm6_Data_Representation.md` and
   15 bits wide. The gate performs the callee's stack cleanup, so a stub must **not** pop the
   stack and has **no prologue**; that is why `sys/` is assembly.
 - **`char *` is a fat pointer** — marker bit 48, byte offset in bits 47–45 over a 15-bit word
-  address — and `int *` is not. Never fabricate one by casting an integer, and never rely on a
-  raw word compare: incrementing a fat pointer *decreases* the offset field, and the compiler
-  lowers `<`/`>` through `b$pdiff`.
+  address — and `int *` is not. Never fabricate one by casting an integer. Ordering is the
+  compiler's problem and it handles it: incrementing a fat pointer *decreases* the offset
+  field, so `<`/`>` lower through `b$pdiff` rather than comparing the raw words.
 - **A flag packed into a word pointer goes above the address**, in bit 16, never in bit 0: an
   address is a *word index*, so bit 0 names the neighbouring word. This is what `malloc`'s
   `BUSY` bit had to become.

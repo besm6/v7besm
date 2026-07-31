@@ -96,23 +96,42 @@ link — the program's own definition satisfies its own call — so the collisio
 whatever wants the real one. Rename on sight; `mkdir.c`'s `readdir`→`listdir` and
 `mkdir`→`makedir` are the precedent.
 
-### 2. An `int` is not a `char *`, and `<` does not order two of them
+### 2. An `int` is not a `char *` — and `<` between two of them works now
 
-This is the part that is *not* mechanical, and it is where the time goes. A `char *` here is a
-**fat pointer** — byte offset in bits 47–45, word address in bits 15–1 — and the offset
-**decrements** as the pointer advances. So:
+A `char *` here is a **fat pointer** — byte offset in bits 47–45, word address in bits 15–1 —
+and the offset **decrements** as the pointer advances, so the raw word does not sort. The
+compiler deals with it:
 
-> **A relational operator between two `char *` values gives the wrong answer.** There is no
-> relational helper; `<` compiles to an integer comparison of the whole word, the offset field
-> dominates the address field, and the ordering comes out scrambled and inverted within a word.
-> `p < end` on a buffer cursor is silently, unpredictably wrong. **Subtraction is fine**
-> (`b$pdiff` decodes both operands); it is ordering that has no helper.
+> **A relational operator between two byte pointers orders them correctly.** `<`, `>`, `<=`
+> and `>=` between two operands of type `char *`, `signed char *`, `unsigned char *` or
+> `void *` (arrays decay first) lower to **`b$pdiff`** — the same helper as `-`, which decodes
+> both operands to absolute byte positions — followed by a sign test. `==` and `!=` are raw
+> word compares and are right too, because the encoding is canonical: two pointers to the same
+> byte are the same word.
 
-[ls/README.md](ls/README.md) states it, [../lib/libtermcap/README.md](../lib/libtermcap/README.md)
-found four instances, [../lib/libcurses/README.md](../lib/libcurses/README.md) eleven — and one of
-those made `getpass()` return the empty string every time, for months, in a library everything
-links. **Grep for it first, in every source, before reading anything else.** A count of the
-candidates, as they stand today:
+**This was not always true, and most of this directory was ported while it was not.** Until the
+external compiler's fix of 2026-06-17 (`translator/expr.c` in
+[besm6/c-compiler](https://github.com/besm6/c-compiler/), which also fixed `b$pdec`'s in-word
+decrement) a relational compiled to an integer comparison of the whole word, the offset field
+dominated the address field, and the ordering came out scrambled and inverted within a word —
+`p < end` on a buffer cursor was silently, unpredictably wrong, and one instance made
+`getpass()` return the empty string every time, for months, in a library everything links.
+**Everything below is the record of that period.** The rewrites it produced are worth keeping,
+because a comparison is still two out-of-line calls (`b$pdiff` then `b$lt`) where an `int`
+index is a register test — but no port after that date has to make them, and a `<` between two
+`char *` in a v7 source is no longer a bug to hunt.
+
+Two things the fix does not cover, and both are live:
+
+* **A fabricated pointer matches nothing.** `dd`'s `sbrk` failure test spelled `(char *)-1`;
+  equality against a word made out of an integer can never meet a real fat pointer, whose
+  marker and offset the compiler put there.
+* **A relational between two `void *` is a hard error** — `Invalid types for comparison`, from
+  the front end's constraint check, not from the lowering: C11 6.5.8 wants complete object
+  types and `void` is not one. gcc and clang take it as an extension, so a v7 source that
+  compares two `void *` needs a cast to `char *`.
+
+A count of the candidates, as they stood while the hazard was live:
 
 | source | `char *` comparisons |
 |---|---|
@@ -130,22 +149,20 @@ candidates, as they stand today:
 | ~~`wc.c`, `cmp.c`, `sum.c`, `tee.c`, `split.c`, `rev.c`~~ | **none** — grepped, task C5a, and this is the *second* negative result in the table and a more surprising one than C4e's. Six **text filters**, 487 lines of buffer arithmetic and character loops, and not one `char *` relational between them. `tee.c` is the one that walks a buffer and it does so with `int` indices (`r`, `w`, `p`, `i`); every other pointer test in the six is `==`/`!=` against `NULL`. The reason is the same as C4e's and is worth generalising: **a v7 source acquires this hazard when it parses, not when it reads bytes.** `sort`, `grep`, `sed` and `pr` all hold a cursor inside a buffer they are deciding about; a filter that copies its input holds an index into a buffer it is filling |
 | ~~`icheck.c`, `dcheck.c`, `ncheck.c`, `clri.c`~~ | **none** — grepped, task C4e. The only pointer relational in the four is `ncheck.c`'s `++hp >= &htab[HSIZE]`, over a `struct htab *`, which is thin and correct; it went anyway when the hash table became one sized from the superblock and indexed by i-number. Worth recording as a *negative* result: four v7 sources full of block and inode arithmetic and not one `char *` cursor between them, because none of them parses anything |
 
-And the counterexample, because it is what makes the hazard hard to see: **`sort.c`'s record
-arena is clean.** `lp`, `hp`, `i`, `j`, `k` in `qsort()` are `char **` — thin word pointers that
-compare correctly — while `pa`, `pb`, `la`, `lb` one function away are `char *` and do not. Two
-kinds of pointer in one program, identical syntax, opposite behaviour. The same is true of
-`ar.c`'s `int **mp`, `fgrep.c`'s `struct words *smax` and every `p < &tab[N]` in `ls`, all of
-which were left alone. **It is the pointed-to type that decides, not the shape of the loop.**
+What the table is still good for is the shape it found, which outlived the bug: **a v7 source
+grows byte cursors when it parses, not when it reads bytes.** `sort`, `grep`, `sed` and `pr`
+each hold a cursor inside a buffer they are deciding about; the six filters of C5a and the four
+checkers of C4e copy or count and hold `int` indices already. That is where to expect the
+*other* three hazards too.
 
-The other three hazards `sh/README.md` names — a flag packed into bit 0 of a pointer, a bit mask
-used to round to a word when `BYTESPERWORD` is 6, and a cast to a pointer that *floors* rather
-than rounds — come round again in anything that manages its own arena. `sort` and `find` both
-call `sbrk` and are the places to expect them. **`dd` called it too and turned out to have none
-of the three**: its use is two flat allocations and no arena at all, and what it did have was
-this section's own hazard, `for (ip = ibuf+ibs; ip > ibuf;)`, plus an `sbrk` failure test
-spelled `(char *)-1` — a fabricated fat pointer, which this libc's `NULL` return could never
-match. Grepping for the arena hazards is still right; expecting them because a program calls
-`sbrk` is not.
+Those three — a flag packed into bit 0 of a pointer, a bit mask used to round to a word when
+`BYTESPERWORD` is 6, and a cast to a pointer that *floors* rather than rounds
+([sh/README.md](sh/README.md)) — come round again in anything that manages its own arena, and
+none of them is fixed in the compiler. `sort` and `find` both call `sbrk` and are the places to
+expect them. **`dd` called it too and turned out to have none of the three**: its use is two
+flat allocations and no arena at all, and what it did have was this section's own hazard, plus
+the `(char *)-1` above. Grepping for the arena hazards is still right; expecting them because a
+program calls `sbrk` is not.
 
 ### 3. A `long` is one word, and `%D` is not a conversion
 
@@ -902,15 +919,14 @@ by oversight. [rev/README.md](rev/README.md) is the account of the one divergenc
 five findings generalize.
 
 **A task can have no §2 in it at all, and a survey cannot tell you that.** Six v7 filters, 487
-lines of buffer arithmetic, and not one `char *` relational between them — the count is now in
-§2's table as the second negative result there, and it is a more surprising one than C4e's,
-because these programs *do* walk buffers where `icheck` and its three only walked block
-numbers. `tee` is the proof of the rule that came out of it: it is the one of the six with a
-cursor and it uses `int` indices, because it is **copying** rather than **deciding**. So
-**this hazard arrives with parsing and not with byte handling**, which says where to expect it
-in what is left: `sort`'s fifteen are all inside `cmp()`, `grep`'s three bound a compiled
-expression, `sed`'s three bound `genbuf`. C5b's seven should be grepped and are likely to be
-clean; C5c's and C5d's will not be.
+lines of buffer arithmetic, and not one `char *` relational between them — the second negative
+result in §2's table, and a more surprising one than C4e's, because these programs *do* walk
+buffers where `icheck` and its three only walked block numbers. `tee` is the proof of the rule
+that came out of it: it is the one of the six with a cursor and it uses `int` indices, because
+it is **copying** rather than **deciding**. So **byte cursors arrive with parsing and not with
+byte handling** — the compiler has since made them harmless, but the shape still says where a
+program keeps its state: `sort`'s fifteen are all inside `cmp()`, `grep`'s three bound a
+compiled expression, `sed`'s three bound `genbuf`.
 
 **A width dependence that is *not* there is worth a comment, because the next reader will look
 for one.** `sum`'s checksum is sixteen bits computed in an `unsigned` that is 41 bits here and

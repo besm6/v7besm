@@ -63,8 +63,7 @@
 // ../rm/rm.c's were -- a test asserting on either must redirect the one it wants alone.
 //
 // WHAT DID NOT NEED CHANGING, AND WAS CHECKED.  No long, no %D, no struct direct -- chown
-// never reads a directory -- and no relational operator between two char * (../ls/README.md):
-// the only pointer comparison in the file is `pwd == NULL', and equality is not ordering.
+// never reads a directory.
 //
 #include <ctype.h>
 #include <pwd.h>

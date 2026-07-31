@@ -50,8 +50,7 @@
 //
 // The rest is the mechanical C11 pass: `long a' is a one-word time_t here (§3), `register p'
 // and `register i' were untyped, printt() was called before it was defined, and the four
-// tables were unqualified globals.  No §2 pointer comparison anywhere -- pad, sep and nsep
-// are indexed, never walked.
+// tables were unqualified globals.
 //
 // WHAT IS NOT CHANGED, deliberately: `while (wait(&status) != p) times(&obuffer);' re-reads
 // the child times on every unrelated child reaped, which is v7's way of not counting them;

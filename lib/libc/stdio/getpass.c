@@ -20,16 +20,16 @@
 // engine behind it -- and THE BOUND ON THE COPY IS AN INDEX.
 //
 // That last one was not tidying up.  v7 wrote `for (p = pbuf; ...) if (p < &pbuf[8])
-// *p++ = c;', and `<' BETWEEN TWO char * VALUES DOES NOT ORDER THEM ON THIS MACHINE.  A
-// fat pointer carries its byte offset in bits 47-45 and its word address in bits 15-1, and
-// the offset DECREMENTS as the pointer advances (../../../doc/Besm6_Data_Representation.md);
-// there is no relational helper, so `<' compiles to an integer comparison of the whole
-// word and the offset field dominates the address field.  pbuf is nine characters, so p
-// starts at byte #0 of its first word (offset field 5) while &pbuf[8] is byte #2 of the
-// second (offset field 3) -- the test was FALSE on the very first iteration, nothing was
-// ever stored, and getpass() returned the empty string every time.  The note below on why
-// lib/test/ does not cover this is also why nothing caught it.
-// ../../../cmd/ls/README.md names the hazard; lib/libtermcap/termcap.c had four more.
+// *p++ = c;', and until the compiler's fix of 2026-06-17 `<' BETWEEN TWO char * VALUES DID
+// NOT ORDER THEM ON THIS MACHINE: a fat pointer carries its byte offset in bits 47-45 above
+// its word address in bits 15-1, the offset DECREMENTS as the pointer advances
+// (../../../doc/Besm6_Data_Representation.md), and the comparison was of the whole word, so
+// the offset field dominated.  pbuf is nine characters, so p started at byte #0 of its first
+// word (offset field 5) while &pbuf[8] is byte #2 of the second (offset field 3) -- the test
+// was FALSE on the very first iteration, nothing was ever stored, and getpass() returned the
+// empty string every time.  The note below on why lib/test/ does not cover this is also why
+// nothing caught it.  The relational would work today; the index stays because it is
+// cheaper and because this routine has been wrong once already.
 //
 // No header declares it; a caller declares it itself.
 //

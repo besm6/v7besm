@@ -192,8 +192,7 @@ static int setup(const char *file)
             // answer for the RAW node -- rootdev is makedev(0,0) (kernel/conf.c) and
             // /dev/rmd0's st_rdev is makedev(3,0) -- so the raw name is mapped back to the
             // block one as 4.xBSD's unrawname() does.  fsck.c has the long version, and
-            // this is it open-coded rather than a fifth copy of the helper: every
-            // comparison is by index, a path being walked and never ordered (SS2).
+            // this is it open-coded rather than a fifth copy of the helper.
             if ((st.st_mode & S_IFMT) == S_IFBLK && st.st_rdev == rootdev)
                 hotroot++;
             else if ((st.st_mode & S_IFMT) == S_IFCHR) {

@@ -44,9 +44,7 @@
 //     harmless in a program that runs with an effective uid of 0.  One length test now covers
 //     both buffers, `d' plus "/.." plus the NUL being the longest thing either holds.
 //
-// Nothing else moved.  There is no `long' here, no %D, no DIRSIZ assumption, and -- the one
-// that would have mattered -- no relational operator between two char * (cmd/ls/README.md):
-// every `<' in the file is against a small integer constant.
+// Nothing else moved.  There is no `long' here, no %D and no DIRSIZ assumption.
 //
 // THE MODE IS 0777 MODIFIED BY umask(2).  maknode() applies ~u.u_cmask, and CMASK is 0 in
 // <sys/param.h>, so a directory made here is 0777 today.  Whoever gives the shell a umask

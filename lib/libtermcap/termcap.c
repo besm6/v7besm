@@ -18,17 +18,16 @@
 //
 // WHAT THE BESM-6 PORT CHANGED.  Three things, and the first is the one to read:
 //
-//   * FOUR `char *' COMPARISONS ARE GONE.  A relational operator between two char *
-//     values gives the wrong answer here.  A fat pointer carries its byte offset in
-//     bits 47-45 and its word address in bits 15-1, and the OFFSET DECREMENTS as the
-//     pointer advances (../../doc/Besm6_Data_Representation.md); there is no
-//     relational helper, so `<' compiles to an integer comparison of the whole word,
-//     the offset field dominates the address field, and the ordering comes out
-//     scrambled and inverted within each word.  `p < end' on a buffer cursor is
-//     silently, unpredictably wrong -- see ../../cmd/ls/README.md, which met the same
-//     hazard in makename().  Every one of them is an explicit int count now.
-//     SUBTRACTION IS FINE (b$pdiff decodes both operands), so the `p - holdtbuf'
-//     expressions below stand as v7 wrote them, modulo the base -- see tnchktc().
+//   * FOUR `char *' COMPARISONS ARE GONE.  When this was ported a relational operator
+//     between two char * gave the wrong answer: a fat pointer carries its byte offset
+//     in bits 47-45 above its word address in bits 15-1, the OFFSET DECREMENTS as the
+//     pointer advances (../../doc/Besm6_Data_Representation.md), and `<' compiled to
+//     an integer comparison of the whole word, so the ordering came out scrambled and
+//     inverted within each word.  The compiler fixed it on 2026-06-17 -- the relational
+//     goes through b$pdiff now -- but every one of these is an explicit int count and
+//     stays so, being one compare against two calls.  SUBTRACTION WAS ALWAYS FINE, so
+//     the `p - holdtbuf' expressions below stand as v7 wrote them, modulo the base --
+//     see tnchktc().
 //
 //   * MAXHOP IS 4, not 32.  tgetent() holds ibuf[TBUFSIZ] and tnchktc() holds
 //     tcbuf[TBUFSIZ], and the two recurse into each other -- so at six chars to the
@@ -102,8 +101,8 @@ static int tnchktc(void)
     int i, n, l;
 
     // Walk back from the end for the colon that begins the last field.  v7 ran a
-    // pointer down and tested `p < tbuf' to detect running off the front; that is the
-    // relational hazard, so the cursor is an INDEX and the test is on the index.
+    // pointer down and tested `p < tbuf' to detect running off the front; the cursor
+    // is an INDEX here and the test is on the index.
     n = (int)strlen(tbuf) - 2; // before the last colon
     while (--n >= 0 && tbuf[n] != ':')
         continue;
@@ -157,7 +156,7 @@ int tgetent(char *bp, char *name)
     register int c;
     register int i = 0, cnt = 0;
     char ibuf[TBUFSIZ];
-    int n; // characters in bp -- see the note on `char *' comparisons above
+    int n; // characters in bp -- see the note on the cursor counts above
     int tf;
 
     tbuf = bp;
@@ -201,8 +200,8 @@ int tgetent(char *bp, char *name)
             }
             c = ibuf[i++];
             if (c == '\n') {
-                // A backslash before the newline continues the entry.  `cp > bp' was
-                // the relational hazard; n is the same test on the count.
+                // A backslash before the newline continues the entry.  v7 wrote
+                // `cp > bp'; n is the same test on the count.
                 if (n > 0 && cp[-1] == '\\') {
                     cp--;
                     n--;

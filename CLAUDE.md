@@ -80,10 +80,11 @@ there, not in `build/rootfs/`. `etc/` stages the static `group`, `motd`, `passwd
 no K&R parameter lists — but the mechanical part is not what bites. What bites is that v7
 assumes `int` and `char *` are the same thing:
 
-- **`<` between two `char *` does not order them** (the byte offset sits above the word
-  address and *decrements*); `-` is fine. Use `int` counts.
 - a flag packed into bit 0 of a pointer, a mask rounding to a word assuming `BYTESPERWORD`,
   and pointer casts that *floor* rather than round.
+- **`<` between two `char *` orders them correctly** — the compiler lowers it through
+  `b$pdiff`. It did not before 2026-06-17, and much of this tree was ported under the old
+  rule; `cmd/README.md` §2 is the account and it is history now, not a hazard.
 - `long` is one word; `BSIZE` is 3072 bytes but tools report 1024-byte blocks; `DIRSIZ` 18.
 
 ### Kernel

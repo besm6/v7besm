@@ -39,9 +39,7 @@
 // strcpy, no sprintf and no strcat.  It walks argv[1] in place.
 //
 // WHAT DID NOT NEED CHANGING, AND WAS CHECKED.  No long, no %D, no struct direct -- chmod
-// never reads a directory, so DIRSIZ being 18 here does not reach it -- and no relational
-// operator between two char * (../ls/README.md).  The only pointer work in the file is
-// `*ms++', `ms--' and `*--ms' on one cursor, which is arithmetic and not ordering.
+// never reads a directory, so DIRSIZ being 18 here does not reach it.
 //
 // TWO THINGS THAT LOOK LIKE BUGS HERE AND ARE NOT.  The `newmode(0)' in main() is a
 // validation pass: it parses the mode argument once, before any file is touched, so that an

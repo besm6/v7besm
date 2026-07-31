@@ -51,8 +51,7 @@
 // written after a file name affects only the names after it.  Kept, and touch.1 now says so.
 //
 // WHAT DID NOT NEED CHANGING, AND WAS CHECKED.  No %D, no struct direct -- touch never reads a
-// directory -- and no relational operator between two char * (../ls/README.md); there is no
-// pointer comparison in the file at all.  The one `long' in task C1c was v7's
+// directory.  The one `long' in task C1c was v7's
 // `lseek(fd, 0L, 0)', and the rewrite above took it with the rest of that path.
 //
 #include <fcntl.h>

@@ -25,10 +25,9 @@
 // not:
 //
 //   - §2, THE POINTER COMPARISON.  `if (namep < utmp.ut_name+8)' bounded the name buffer with
-//     a relational between two char *, which does not order them on this machine: the byte
-//     offset sits above the word address and decrements as the pointer advances.  It is an
-//     int index now.  Same bug class as the one that made getpass() -- which this program is
-//     the first caller of -- return the empty string for months (lib/libc/README.md).
+//     a relational between two char *, which did not order them when this was ported.  It is
+//     an int index now.  Same bug class as the one that made getpass() -- which this program
+//     is the first caller of -- return the empty string for months (lib/libc/README.md).
 //
 //   - §3, THE LONGS.  `lseek(f, (long)(t*sizeof(utmp)), 0)' and `lseek(f, 0L, 2)': off_t is
 //     ONE WORD here, so the casts say nothing and are gone, and the whence arguments are
@@ -158,8 +157,7 @@ loop:
                 c = '_';
             if (c == EOF)
                 exit(0);
-            // §2: an int index.  `namep < utmp.ut_name+8' was a relational between two
-            // char *, which does not order them here.
+            // §2: an int index, where v7 wrote `namep < utmp.ut_name+8'.
             if (n < 8)
                 name[n++] = c;
         }

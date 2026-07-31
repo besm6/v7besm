@@ -99,7 +99,7 @@ date 8001020304 >>/tmp/utils.log
 # ---- basename: two lines, because cmd/basename/test covers the argument grammar under
 # b6sim and there is nothing here a kernel decides.  What this adds is that the IMAGE's copy
 # runs -- the same bytes, on the machine that is going to use them.  The second line is the
-# suffix strip, which is where the two char * comparisons used to be (cmd/README.md §2).
+# suffix strip, the part of the program this port had to rewrite.
 basename /bin/ls >>/tmp/utils.log
 basename /usr/src/cmd/ls.c .c >>/tmp/utils.log
 

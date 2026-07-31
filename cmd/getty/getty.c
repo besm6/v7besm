@@ -49,10 +49,9 @@
 // mechanical:
 //
 //   - §2, THE POINTER COMPARISONS.  getname() bounded its buffer with `np >= &name[16]' and
-//     `np > name' over a char *, and a relational operator between two char * gives the wrong
-//     answer here -- the byte offset sits above the word address and DECREMENTS as the
-//     pointer advances.  Both are an int index now.  This is the bug class that made
-//     getpass() return the empty string for months (lib/libc/README.md).
+//     `np > name' over a char *, which did not order two char * when this was ported.  Both
+//     are an int index now.  This is the bug class that made getpass() return the empty
+//     string for months (lib/libc/README.md); the compiler fixed it on 2026-06-17.
 //
 //   - v7's local puts() collided with the C11 name.  It is putmsg() here.  Nothing in this
 //     program uses stdio -- read() and write() are the whole of its I/O -- and keeping it
@@ -195,8 +194,7 @@ static int getname(void)
             return (0); // a null: try the next table
         if (c == EOT)
             _exit(1);
-        // §2: n is an int index.  `np >= &name[16]' was a relational between two char *,
-        // which does not order them on this machine.
+        // §2: n is an int index, where v7 wrote `np >= &name[16]'.
         if (c == '\r' || c == '\n' || n >= NAMESIZE - 1)
             break;
         putchr(cs);

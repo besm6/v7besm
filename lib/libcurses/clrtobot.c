@@ -6,7 +6,7 @@
 // Clear from the cursor to the bottom of the window.
 //
 // Two `char *' cursors became int indices; clrtoeol.c has the account of why a relational
-// operator between two of them cannot be trusted here.  Unlike clrtoeol(), this routine's
+// between two of them could not be trusted then.  Unlike clrtoeol(), this routine's
 // minx/maxx pair is LIVE -- touchline() is called only for the lines that actually changed,
 // and with the exact columns -- so the conditional scan stays and only the cursors change
 // type.  `maxx - &win->_y[y][0]' was already a subtraction and simply becomes `maxx'.

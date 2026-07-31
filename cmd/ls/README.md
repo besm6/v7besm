@@ -22,26 +22,24 @@ make run        # runs its size check (ctest `rootfs_ls_size', label `rootfs') w
 [`CMakeLists.txt`](CMakeLists.txt) is one `b6_prog()` call. No `CFLAGS`: unlike `cmd/sh` there
 is no private header to put a `-I.` in front of.
 
-## A fourth fat-pointer hazard: `<` does not order two `char *`
+## A fourth fat-pointer hazard, since fixed in the compiler: `<` between two `char *`
 
 `cmd/sh/README.md` lists three ways a v7 source goes wrong on this machine — a flag packed
 into bit 0 of a pointer, a bit mask used to round to a word, and a cast to a node pointer that
-floors rather than rounds. Bounding a copy loop in `makename()` turned up a fourth, and it is
-the sharpest of them because the code looks completely ordinary:
+floors rather than rounds. Bounding a copy loop in `makename()` turned up a fourth, and at the
+time it was the sharpest of them because the code looks completely ordinary: a fat pointer
+carries its byte offset in bits 47–45 above its word address in bits 15–1 and the offset
+*decrements* as the pointer advances, and `<` compiled to a whole-word integer comparison, so
+the ordering came out scrambled and inverted within a word.
 
-> **A relational operator between two `char *` values gives the wrong answer.** A fat pointer
-> carries its byte offset in bits 47–45 and its word address in bits 15–1, and the offset
-> *decrements* as the pointer advances (`b$pinc`,
-> [`doc/Besm6_Runtime_Library.md`](../../doc/Besm6_Runtime_Library.md)). There is no relational
-> helper — `<` compiles to an integer comparison of the whole word — so the offset field
-> dominates the address field and the ordering comes out scrambled and inverted within a word.
-> `p < end` on a buffer cursor is silently, unpredictably wrong.
-
-v7's `ls` never does it: every `p < &tab[N]` in the file is over an array of *word*-sized
-objects, whose pointers are thin word addresses and compare correctly. So the fix here was to
-write `makename()`'s bound with explicit indices rather than introduce the first one — the same
-answer [`kernel/prim.c`](../../kernel/prim.c) reached for the clists. **Subtraction is fine**
-(`b$pdiff` exists and decodes both operands); it is ordering that has no helper.
+**The compiler fixed it on 2026-06-17** — a relational between two byte pointers now lowers
+through `b$pdiff`, the same helper as `-`, and tests the sign
+([`doc/Besm6_Runtime_Library.md`](../../doc/Besm6_Runtime_Library.md),
+[`../README.md`](../README.md) §2). `makename()`'s bound is still written with explicit indices,
+which is what this port did instead of introducing the first `<` in the file — the same answer
+[`kernel/prim.c`](../../kernel/prim.c) reached for the clists — and it stays that way because an
+index test is a register compare where the relational is two calls. The other three hazards are
+not fixed and are still the ones to grep for.
 
 ## What else the port changed
 

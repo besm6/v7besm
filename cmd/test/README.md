@@ -66,8 +66,7 @@ hide a general limitation behind a local divergence, and `exit(2)` really does r
 
 ## What did *not* need saying
 
-The rest is ordinary. `test.c` has no `char *` comparison ([../README.md](../README.md) §2 —
-`length()`'s `es - s - 1` is subtraction, which is safe), no `long`, no `%D` and no buffer of
+The rest is ordinary. `test.c` has no `long`, no `%D` and no buffer of
 any kind; at 964 words it is the smallest program on the image, because its whole output is
 four `write(2)` calls and it links no stdio at all. `exp()` had to be renamed away from
 `<math.h>`'s, which is §1's standing warning and not a new finding.

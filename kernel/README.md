@@ -491,9 +491,9 @@ Facts that cost real time to establish and are not in `doc/`.
 * **A `char *` is a fat pointer** — marker in bit 48, byte offset in bits 47–45 — and the compiler
   walks one with `b$pinc`/`b$pdec`. Never build one out of a `(word, offset)` pair by hand; the
   worked example is `exece()`'s argument block ([sys1.c](sys1.c)), asserted by `mmutest` check 25.
-  `(caddr_t)(int *)w` is the fat pointer to byte #0 of word `w`. Note also that `<` between two
-  `char *` does **not** order them: the byte offset sits above the word address and decrements as the
-  pointer advances. `-` is fine (`b$pdiff` decodes both operands).
+  `(caddr_t)(int *)w` is the fat pointer to byte #0 of word `w`. `<` and `-` between two `char *`
+  both order and subtract correctly — each goes through `b$pdiff` — though `<` did not before the
+  compiler's fix of 2026-06-17, which is why the older code here bounds its loops with `int` counts.
 * **The `b$` pointer helpers had to be made REENTRANT before the first exec could run**, and the fix
   is in the *external* c-compiler. `b$padd`, `b$pinc`, `b$pdec`, `b$pdiff` and `b$stb` kept their
   working values in static `.bss`, so a clock tick landing inside one ran a handler whose helper

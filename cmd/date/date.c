@@ -42,11 +42,9 @@
 //
 // THE ONE char * COMPARISON (../README.md §2) is gtime()'s `while (sp < ep)', the loop
 // that reverses the argument in place so that the fields can be parsed from the right --
-// which is how omitting the leading ones works.  `<' between two char * does not order
-// them on this machine: the byte offset lives above the word address and DECREMENTS as
-// the pointer advances.  Rewritten as a pair of int indices over the array, as
-// ls's makename() and kernel/prim.c were.  gp()'s `*sp++' walking is untouched; it is
-// dereference and increment, which are both fine.
+// which is how omitting the leading ones works.  That relational did not order two char *
+// when this was ported; it is a pair of int indices over the array now, as ls's makename()
+// and kernel/prim.c are.  gp()'s `*sp++' walking is untouched.
 //
 // /usr/adm/wtmp IS NOT ON THIS IMAGE (root.manifest declares no /usr/adm), so the pair of
 // records v7 writes to record a clock change is simply not written -- v7 already guards
@@ -124,8 +122,7 @@ static int gtime(void)
     struct tm *L;
     char x;
 
-    // Reverse ap in place.  v7 walked two char * cursors towards each other and compared
-    // them with `<', which does not order two pointers here (../README.md §2).
+    // Reverse ap in place.  v7 walked two char * cursors towards each other; indices here.
     for (j = 0; ap[j]; j++)
         ;
     for (i = 0, j--; i < j; i++, j--) {

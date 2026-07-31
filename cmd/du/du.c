@@ -198,9 +198,7 @@ static int descend(char *np, char *fname)
         return blocks;
     }
 
-    // Where a component gets appended.  An INDEX and not a pointer, because bounding it
-    // means comparing it, and `<' between two char * does not order them here
-    // (../README.md SS2).
+    // Where a component gets appended: an index, so the bound test is on the index.
     endoff = (int)strlen(np);
     if (endoff > 0 && np[endoff - 1] == '/')
         --endoff;

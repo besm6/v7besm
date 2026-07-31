@@ -9,7 +9,8 @@ gives a shell prompt.
 porting recipe, the hazards a v7 source walks into on this machine, how a program gets onto the
 image and which harness tests it. Read it before starting any task below; **nothing here repeats
 it**, and a task names only what is unusual about itself. **A bare `§N` below is a section of
-that file's porting recipe** — §2 the `char *` ordering hazard, §4 the 3072-byte block and the
+that file's porting recipe** — §2 the `char *` ordering hazard, which the compiler has since
+fixed and which §2 now records as history, §4 the 3072-byte block and the
 1024-byte one reported in its place, §6 the
 address-space ceilings, and so on.
 
@@ -146,14 +147,13 @@ words in octal, which on a 48-bit machine means the default format wants rethink
 porting (a `-w` word dump in 16 octal digits is what this machine needs, beside the byte formats).
 And `tail -b` counts in **512-byte** blocks by definition (`n <<= 9`, `tail.c:57`) — that is the
 manual page's own unit and not a filesystem block, so §4 does *not* apply to it; decide whether to
-keep 512 or move it to `BSIZE`, and say which in the manual page. None of the seven carries a §2
-comparison.
+keep 512 or move it to `BSIZE`, and say which in the manual page.
 
 ### C5c. `grep`, `fgrep`
 
-`grep.c` (480), `fgrep.c` (365). Each carries its own matcher — three §2 comparisons in `grep`,
-four in `fgrep` (one of which, `smax >= &w[MAXSIZ-1]`, is over a `struct words *` and must be left
-alone) — and a few `long`s. `egrep` is a yacc grammar and is deferred to C10 with the others.
+`grep.c` (480), `fgrep.c` (365). Each carries its own matcher — three `char *` cursor bounds in
+`grep`, four in `fgrep` — and a few `long`s. Those compile correctly now (§2) and need touching
+only where they sit in an inner loop. `egrep` is a yacc grammar and is deferred to C10.
 
 **The `CCL` bitmap lives here, and this task inherited the warning C3's brief carried by
 mistake.** `grep.c` packs a character class into 128 bits — sixteen bytes, addressed
@@ -166,17 +166,17 @@ none of this. See [ed/README.md](ed/README.md), which says what that mistake cos
 ### C5d. `sort`
 
 `sort.c` (903). The heavyweight of the phase: `sbrk`, eight `signal` calls for temp-file cleanup,
-its own merge over temp files, and **the worst concentration of §2 in the tree — fifteen `char *`
-comparisons, every one of them inside `cmp()`, which is the routine that decides the program's
-entire output.** The record arena around it is `char **` and is fine, which is exactly what makes
-this one dangerous to skim. Its 28,672-word fit should be measured early. Do it after C5a–C5c, so
-the harness is established when the hard one arrives.
+its own merge over temp files, and the tree's densest patch of `char *` cursors — fifteen
+comparisons, every one inside `cmp()`, the routine that decides the program's entire output.
+Those now compile correctly (§2), so they are a *cost* question rather than a correctness one:
+`cmp()` is the inner loop, and each comparison there is two calls. Its 28,672-word fit should be
+measured early. Do it after C5a–C5c, so the harness is established when the hard one arrives.
 
 ### C5e. `sed`
 
 `sed/` (1,690 lines: `sed0.c`, `sed1.c` and `sed.h`). The same regex family as `ed`, and **C3 is
-done**, so [ed/README.md](ed/README.md) is the thing to read first: the three `char *`
-comparisons in `sed1.c` are the same `genbuf` bound `ed` had, and the `QESC` prefix that replaced
+done**, so [ed/README.md](ed/README.md) is the thing to read first: the three `char *` bounds
+in `sed1.c` are the same `genbuf` bound `ed` had, and the `QESC` prefix that replaced
 bit `0200` in `ed`'s replacement text is the pattern for `sed`'s. But `sed` **does** have the
 `CCL` bitmap `ed` turned out not to (see C5c), so budget for widening that here rather than
 expecting the `ed` diff to have covered it.

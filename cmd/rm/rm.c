@@ -65,9 +65,7 @@
 //    to close before recursing would change the program's behaviour on a directory being
 //    modified underneath it, which is not this task's business.
 //
-// WHAT DID NOT NEED CHANGING, AND WAS CHECKED.  No long, no %D, and no relational operator
-// between two char * (../ls/README.md): the only pointer work in the file is *++arg and
-// *++argv, which are increments.
+// WHAT DID NOT NEED CHANGING, AND WAS CHECKED.  No long and no %D.
 //
 #include <fcntl.h>
 #include <stdio.h>

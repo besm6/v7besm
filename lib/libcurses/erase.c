@@ -5,8 +5,7 @@
 //
 // Erase everything on the window and put the cursor at its top left.
 //
-// Same rewrite and the same reason as clrtobot.c: the cursors are int indices because a
-// relational operator between two `char *' is not trustworthy on this machine, and the
+// Same rewrite and the same reason as clrtobot.c: the cursors are int indices, and the
 // minx/maxx pair is live so the conditional scan stays.
 //
 #include "internal.h"

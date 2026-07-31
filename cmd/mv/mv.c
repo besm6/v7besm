@@ -94,11 +94,7 @@
 //    whose failure is silent, since a wrong link count reads back perfectly until an fsck.
 //    kernel/test/files is what puts b6fsutil -c behind it.
 //
-// WHAT DID NOT NEED CHANGING, AND WAS CHECKED.  No long, no %D, and -- the one that would
-// have mattered -- NO RELATIONAL OPERATOR BETWEEN TWO char * (../ls/README.md).  pname() is
-// exactly the cursor code that usually breaks: it walks two char * along a buffer.  It
-// happens to use only `q = p-1' (subtraction, which b$pdiff decodes) and `q == buf'
-// (equality, which is representation comparison), and never orders them.
+// WHAT DID NOT NEED CHANGING, AND WAS CHECKED.  No long and no %D.
 //
 #include <signal.h>
 #include <stdio.h>
@@ -376,7 +372,6 @@ static int mvdir(char *source, char *target)
 
 //
 // The directory part of a path, in a static buffer -- see the head of the file on that.
-// Two char * cursors, and not one relational operator between them.
 //
 static char *pname(char *name)
 {

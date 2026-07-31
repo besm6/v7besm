@@ -23,9 +23,7 @@
 // recipe).  One length test, and ln.1 says so.
 //
 // WHAT DID NOT NEED CHANGING, AND WAS CHECKED.  No long, no %D, no struct direct -- ln never
-// reads a directory -- and no relational operator between two char * (../ls/README.md): the
-// only pointer comparison in the file is `np == NULL' against a null pointer, and equality is
-// not ordering.
+// reads a directory.
 //
 // THE -f FLAG IS THE INTERESTING ONE ON THIS MACHINE, and ln.1 had never documented it at all.
 // With -f, ln will hand a directory to link(2), and this kernel allows that for the

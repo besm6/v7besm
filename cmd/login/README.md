@@ -55,9 +55,9 @@ in the program ends in `\n` and needs nothing.
 ## The rest of the diff
 
 * **§2, the pointer comparison.** `namep < utmp.ut_name+8` bounded the name buffer with a
-  relational between two `char *`, which does not order them here. It is an `int` index now.
-  The same bug class had made `getpass()` — which this program is the **first caller of** —
-  return the empty string for months (`lib/libc/README.md`).
+  relational between two `char *`, which did not order them when this was ported. It is an
+  `int` index now. The same bug class had made `getpass()` — which this program is the
+  **first caller of** — return the empty string for months (`lib/libc/README.md`).
 * **§3, the longs.** `lseek(f, (long)(t*sizeof(utmp)), 0)` and `lseek(f, 0L, 2)`: `off_t` is one
   word, so the casts say nothing and are gone, and the whences are spelled `SEEK_SET`/`SEEK_END`.
 * **The K&R declarations at the head had to go** rather than be modernised — `<pwd.h>` declares

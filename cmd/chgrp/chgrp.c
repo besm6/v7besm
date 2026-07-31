@@ -21,9 +21,8 @@
 // namespace and taught that "" is not a number, the tested stat() (this file's copy leaves a
 // stale st_UID rather than a stale st_gid, and is defensive there for the same reason), the
 // owner read back and written again because chown(2) takes both ids, the same split of
-// diagnostics between stdout and stderr, and the same "no long, no %D, no struct direct, no
-// char * ordering -- and it was checked".  Read that file's header; this one is not going to
-// say it twice.
+// diagnostics between stdout and stderr, and the same "no long, no %D, no struct direct --
+// and it was checked".  Read that file's header; this one is not going to say it twice.
 //
 #include <ctype.h>
 #include <grp.h>

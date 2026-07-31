@@ -886,9 +886,8 @@ static int pass2(DIRECT *dirp)
     if ((inum = dirp->d_ino) == 0)
         return KEEPON;
 
-    // The name, bounded.  v7 walked `p < &dirp->d_name[DIRSIZ]' -- a comparison between
-    // two char pointers, which does not order them here (../README.md SS2) -- and appended
-    // to pathname with no bound at all.
+    // The name, bounded.  v7 walked `p < &dirp->d_name[DIRSIZ]' and appended to pathname
+    // with no bound at all.
     thisname = pathp;
     for (i = 0; i < DIRSIZ && PATHROOM > 0; i++) {
         if (dirp->d_name[i] == 0)

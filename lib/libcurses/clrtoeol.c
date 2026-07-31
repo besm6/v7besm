@@ -5,13 +5,14 @@
 //
 // Clear from the cursor to the end of the line.
 //
-// A `char *' SCAN BECAME AN int COUNT.  v7 walked `for (sp = maxx; sp < end; sp++)', and a
-// relational operator between two `char *' gives the wrong answer here: a fat pointer keeps
-// its byte offset in bits 47-45 and its word address in bits 15-1, and the offset DECREMENTS
-// as the pointer advances, so the offset field dominates and the ordering comes out
-// scrambled and inverted within every word.  (Subtraction is fine -- b$pdiff decodes both
-// operands -- so `p - base' stays as v7 wrote it wherever it appears.  See
-// ../libtermcap/README.md and ../../doc/Besm6_Data_Representation.md.)
+// A `char *' SCAN BECAME AN int COUNT.  v7 walked `for (sp = maxx; sp < end; sp++)', and
+// when this was ported a relational operator between two `char *' gave the wrong answer: a
+// fat pointer keeps its byte offset in bits 47-45 and its word address in bits 15-1, the
+// offset DECREMENTS as the pointer advances, so the offset field dominated and the ordering
+// came out scrambled and inverted within every word.  The compiler fixed that on 2026-06-17
+// -- the relational goes through b$pdiff, the same helper as `-' -- but the index forms
+// here and in the six files that point at this note stay, being the cheaper code.  See
+// ../README.md and ../../doc/Besm6_Data_Representation.md.
 //
 // The scan is a memset now rather than an indexed loop, because the only thing v7's
 // conditional store bought was a `minx'/`maxx' pair that fed a debug fprintf: touchline() is

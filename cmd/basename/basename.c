@@ -6,7 +6,7 @@
 //      basename string [ suffix ]
 //
 // One of task C2b's five (../README.md), and the only one of them that walks into the
-// hazard §2 of that file is about.
+// hazard §2 of that file was about.
 //
 // THE TWO char * COMPARISONS.  v7's suffix strip is one line:
 //
@@ -15,17 +15,11 @@
 //                      goto output;
 //
 // and BOTH of those relationals are between two char * -- p1 and p2 into argv[1], p3 and
-// argv[2] into the suffix.  Neither orders correctly on this machine: a char * carries the
-// byte offset in bits 47-45 and the word address in bits 15-1, the offset DECREMENTS as the
-// pointer advances, and `>' compiles to an integer comparison of the whole word, so the
-// offset field dominates.  There is no relational helper to fix it with.  (Subtraction is
-// fine -- b$pdiff decodes both operands -- but ordering is not.)  ../TODO.md credited this
-// file with one comparison; it has two, in one expression.
-//
-// Rewritten as a pair of int indices counting DOWN from each string's end, which is what
-// the loop meant in the first place.  date.c's gtime() and ls's makename() are the
-// precedents.  Nothing else here compares pointers: the forward scan for the last `/' is
-// dereference-and-increment, which is exactly what a fat pointer does correctly.
+// argv[2] into the suffix.  When this was ported neither ordered correctly (the compiler
+// has since fixed that; see ../README.md §2).  They are a pair of int indices counting DOWN
+// from each string's end now, which is what the loop meant in the first place, and they stay
+// that way because an index test is a register compare where the relational is two calls.
+// date.c's gtime() and ls's makename() are the precedents.
 //
 // WHAT THE STRIP DOES WHEN IT RUNS OUT is v7's and is kept: the loop stops as soon as
 // EITHER string is exhausted, and truncates unless it stopped on a mismatch.  So

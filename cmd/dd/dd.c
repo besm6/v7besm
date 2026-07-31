@@ -34,13 +34,10 @@
 //
 //         for (ip = ibuf+ibs; ip > ibuf;) *--ip = 0;
 //
-//     and `>' between two char * gives the wrong answer here -- the byte offset sits above
-//     the word address and DECREASES as the pointer advances, so the loop's sense comes out
-//     scrambled and inverted within each word (../README.md SS2).  It is the only ordering
-//     comparison in the file; every other `<' or `>' is over an int or a char value, and
-//     the `ibuf == (char *)-1' is equality, which is safe.  Both bounds were already known
-//     as counts, so it is a word loop over the same bytes now -- six times less work, which
-//     is worth having: under conv=noerror or conv=sync it runs before EVERY read.
+//     and when this was ported `>' between two char * gave the wrong answer (../README.md
+//     SS2, which the compiler has since fixed).  Both bounds were already known as counts,
+//     so it is a word loop over the same bytes now -- six times less work, which is worth
+//     having on its own: under conv=noerror or conv=sync it runs before EVERY read.
 //
 //  4. THE BUFFERS HAVE TO BE ALIGNED, and C cannot ask for it.  A raw transfer through
 //     /dev/rmd0 goes physio() -> mdstrategy() and those two impose four conditions

@@ -281,20 +281,20 @@ pointer, so re-reading that zero word *as one* would decorate it into a nonzero 
 walk would never end. `doprnt`'s `%s` null test and `doscan`'s whole argument carriage are the
 same rule: read the word, reinterpret at the point of use.
 
-### A relational between two `char *` — where the line falls
+### A relational between two `char *` — safe, and it was not always
 
 **Inside libc it is safe, and that is not luck.** A fat pointer does not sort as a plain word —
 incrementing one *decreases* its 3-bit byte offset, which sits above the word address — but the
-compiler lowers a relational between two operands it carries as fat pointers through `b$pdiff`,
-the same helper as `-`, and tests the sign. `memmove`'s direction test and `qsort`'s partition
-both depend on that, and `test/strings` overlaps *within one word* on purpose to keep it so.
+compiler lowers a relational between two byte pointers through `b$pdiff`, the same helper as
+`-`, and tests the sign. `memmove`'s direction test and `qsort`'s partition both depend on
+that, and `test/strings` overlaps *within one word* on purpose to keep it so.
 
-**That is not a general licence**, and [`../libtermcap/README.md`](../libtermcap/README.md) and
-[`../libcurses/README.md`](../libcurses/README.md) are the other half of the story: where the
-comparison is not between two pointers the front end has proved fat, `<` reduces to an integer
-comparison of the whole word, the offset field dominates the address field, and the ordering
-comes out scrambled and inverted within a word. Those two ports had four and eleven of these to
-delete.
+**It only became safe on 2026-06-17.** Before that the relational reduced to an integer
+comparison of the whole word, the offset field dominated the address field, and the ordering
+came out scrambled and inverted within a word;
+[`../libtermcap/README.md`](../libtermcap/README.md) and
+[`../libcurses/README.md`](../libcurses/README.md) had four and eleven of these to delete, and
+their rewrites stayed. [`../../cmd/README.md`](../../cmd/README.md) §2 is the account.
 
 **One was live in libc**, in [`stdio/getpass.c`](stdio/getpass.c). v7 wrote
 `if (p < &pbuf[8]) *p++ = c;`, and `pbuf` is nine characters, so `p` starts at byte #0 of its

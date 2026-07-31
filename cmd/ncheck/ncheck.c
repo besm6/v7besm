@@ -34,10 +34,7 @@
 // blocks, so imax can never exceed about 1,024 and three fifths of that table is
 // unreachable BY CONSTRUCTION.  So the table is calloc'd at imax+1 entries and indexed
 // DIRECTLY by i-number: no hash, no probe, no collision, no fixed ceiling, and a refusal at
-// startup rather than an exit partway through if the i-list really is too large.  It also
-// removes the one relational between two pointers in the four sources of this task
-// (`++hp >= &htab[HSIZE]'), which was thin and correct but is exactly the shape
-// ../README.md SS2 says to grep for.
+// startup rather than an exit partway through if the i-list really is too large.
 //
 // THREE UPSTREAM BUGS, fixed rather than carried:
 //
