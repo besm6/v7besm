@@ -1,4 +1,5 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.\" This page contains Cyrillic: read it with `nroff -Kutf8 -man'.
 .TH SORT 1 
 .SH NAME
 sort \- sort or merge files
@@ -38,14 +39,37 @@ Ignore leading blanks (spaces and tabs) in field comparisons.
 .B  d
 `Dictionary' order: only letters, digits and blanks
 are significant in comparisons.
+.IR Note:
+a byte above 0177 is significant too.  Text on this machine is UTF-8, so the two
+bytes of a Cyrillic letter are two thirds of a letter and not punctuation.  v7's
+table ignored every byte of 0200\-0377, which made
+.I привет
+and
+.I мир
+compare equal and left the order between them to whatever the sort happened to do.
 .TP 5
 .B  f
 Fold upper case
 letters onto lower case.
+.IR Note:
+the table folds lower onto UPPER, which this page has always had backwards; the
+direction is not cosmetic, since it decides where a letter sorts relative to the
+punctuation lying between the two cases.  A byte above 0177 has no case and is
+left alone.  v7's table also folded
+.B ]
+onto
+.BR \e ,
+a slip in a hand-written table, corrected here.
 .TP 5
 .B  i
-Ignore characters outside the ASCII range 040-0176
+Ignore characters outside the ASCII range 040\-0176
 in nonnumeric comparisons.
+.IR Note:
+tab and newline are not ignored \- the comparison stops at the newline it can
+see, so a table that dropped it would walk into the next line \- and neither is
+a byte above 0177, for the reason
+.B d
+gives.
 .TP 5
 .B  n
 An initial numeric string,
@@ -109,7 +133,12 @@ When there are multiple sort keys, later keys
 are compared only after all earlier keys
 compare equal.
 Lines that otherwise compare equal are ordered
-with all bytes significant.
+with all bytes significant \- except under
+.BR \-u ,
+where equal keys are equal lines and the tie is not broken.
+Which member of a set of equal lines survives
+.B \-u
+is not defined.
 .PP
 These option arguments are also understood:
 .TP 5
@@ -128,6 +157,19 @@ This file may be the same as one of the inputs.
 .B T
 The next argument is the name of a directory in which temporary files
 should be made.
+.IR Note:
+it replaces
+.I /tmp
+rather than being tried ahead of it, so a directory named here and unusable is a
+diagnostic rather than a silent fall-back.  v7 tried
+.I /usr/tmp
+first and
+.I /tmp
+second; this system has no
+.I /usr/tmp
+and the first try was a wasted
+.IR creat (2)
+on every run.
 .TP 5
 .B  u
 Suppress all but one in each
@@ -162,8 +204,10 @@ unique representative from a set of equal lines predictable.
 .ti +8
 sort \-um +0 \-1 dates
 .SH FILES
-/usr/tmp/stm*, /tmp/*: first and second tries for
-temporary files
+/tmp/stm?????aa \- /tmp/stm?????zz: the temporary files, made as they are needed
+and unlinked before
+.I sort
+exits.  There are at most 676 of them.
 .SH "SEE ALSO"
 uniq(1),
 comm(1),
@@ -173,5 +217,12 @@ join(1)
 Comments and exits with nonzero status for various trouble
 conditions and for disorder discovered under option
 .BR \-c .
+.SH "BLOCKS AND LINES"
+A line may be 3072 bytes long, terminator included.  A longer one is a
+diagnostic and a nonzero exit, on the sorting pass and on the merging pass
+alike.  v7 truncated it, silently, and only when a merge happened to be
+involved: the sorting pass had no limit at all, so the same file came out
+right or came out corrupted depending on whether it fit in memory in one pass.
 .SH BUGS
-Very long lines are silently truncated.
+None known.  The v7 page said `very long lines are silently truncated'; see
+BLOCKS AND LINES above for what happens instead.

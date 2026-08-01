@@ -117,6 +117,43 @@ beta
 delta
 привет мир
 fgrep status 1
+---sort---
+apple 10 red
+apple 9 red
+fig 2 purple
+pear 3 green
+fig 2 purple
+pear 3 green
+apple 9 red
+apple 10 red
+pear 3 green
+fig 2 purple
+apple 10 red
+apple 9 red
+alpha
+beta
+delta
+gamma
+apple
+banana
+banana
+cherry
+cherry
+date
+elder
+fig
+root:aQR1E1yZh1bPE:0:1::/:
+daemon:x:1:1::/:
+sys::2:2::/usr/sys:
+bin::3:3::/bin:
+uucp::4:4::/usr/lib/uucp:/usr/lib/uucico
+guest::7:3::/usr/guest:
+apple 10 red
+apple 9 red
+fig 2 purple
+pear 3 green
+sort status 0
+/tmp/stm*
 ---c5a---
       7      7      41 /tmp/f.txt
       1      2      20
@@ -159,4 +196,9 @@ atled
       3
 4
 5
+alpha
+beta
+delta
+gamma
+sort status 0
 ---end---

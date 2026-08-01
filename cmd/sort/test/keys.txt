@@ -1,0 +1,4 @@
+zeta   3 x
+alpha  1 y
+beta   2 z
+alpha  0 w

@@ -1,4 +1,4 @@
-# /etc/filters -- the fifteen text filters of task C5, run by the console shell.
+# /etc/filters -- the sixteen text filters of task C5, run by the console shell.
 #
 # Grafted onto a copy of the image by run-filters.sh, not shipped on it.  utils.sh is the
 # model and its standing rules hold here too:
@@ -16,7 +16,7 @@
 # it: C5a's six and C5b's seven in a single boot.  Task C5c added grep and fgrep to it, as
 # cmd/TODO.md said a later filter should -- a section here rather than a second boot.
 #
-# SIX THINGS HERE CANNOT BE SAID UNDER b6sim AT ALL, and they are the reason this is not
+# SEVEN THINGS HERE CANNOT BE SAID UNDER b6sim AT ALL, and they are the reason this is not
 # merely a second opinion:
 #
 #   * look(1) AGAINST ITS DEFAULT DICTIONARY.  look's default is the absolute path
@@ -36,12 +36,17 @@
 #     checked-in .expected.  The shell here passes the word as it was typed (cmd/sh's execs()
 #     hands exece() the original t[0]), so the diagnostics read `col:' and can be diffed.
 #
-#   * A PATTERN WITH A SPACE IN IT (task C5c).  run-prog-test.sh splits a .args line on
+#   * A SEPARATOR OR A PATTERN WITH A SPACE IN IT (tasks C5c and C5d).  run-prog-test.sh splits a .args line on
 #     whitespace and has no quoting, so no b6sim case can hand grep or fgrep a pattern
-#     containing a space -- which is a large part of what anybody greps for.  Here the shell
-#     quotes it, so `grep 'вет мир'' is a single argument and the case exists at all.
+#     containing a space -- which is a large part of what anybody greps for, and `sort -t\' \''
+#     is the same limit on the commonest field separator there is.  Here the shell quotes
+#     them, so `grep 'вет мир'' and `sort -t' '' are single arguments and the cases exist.
 #
-#   * THE PIPELINES.  Eight of the commands below are pipelines between two of these filters,
+#   * A TEMP FILE IN THE IMAGE'S OWN /tmp (task C5d).  sort makes one before it reads
+#     anything and unlinks it on the way out; under b6sim that path is the build machine's,
+#     so nothing there may assert either half.  Section 10's closing glob asserts both.
+#
+#   * THE PIPELINES.  Ten of the commands below are pipelines between two of these filters,
 #     which is the way anybody actually uses them and which no single-program harness can
 #     represent.
 #
@@ -49,7 +54,7 @@
 #     their logic is fully covered by ctest -L cmd, and what was not covered is that the
 #     bytes on the disk execute.  The two `ls /bin' listings assert those files EXIST.
 #
-# SECTION MARKERS: mount.sh's convention rather than utils.sh's, because thirteen programs in
+# SECTION MARKERS: mount.sh's convention rather than utils.sh's, because sixteen programs in
 # one log want a diff that says which one moved.
 
 echo filters begin >/tmp/filters.log
@@ -210,7 +215,45 @@ echo привет мир | fgrep 'вет мир' >>/tmp/filters.log
 fgrep zzz /tmp/f.txt >>/tmp/filters.log
 echo fgrep status $? >>/tmp/filters.log
 
-# ---- 10. TASK C5a's SIX, at last on the machine they were built for.  Their logic is covered
+# ---- 10. sort (task C5d).  Four of these cannot be a b6sim case at all, and one of them is
+#          the reason this program wanted the boot more than any other filter has.
+#
+#          A SEPARATOR THAT IS A SPACE.  run-prog-test.sh splits a .args line on whitespace
+#          and has no quoting, so `-t\' \'' is unrepresentable there -- and a space is the
+#          commonest separator anybody sorts on.  C5c paid this cost once for a grep pattern;
+#          this is the second instance, and between them they are what the limit costs.
+#
+#          A TEMP FILE IN THE IMAGE'S OWN /tmp.  sort creates /tmp/stm<pid>aa before it reads
+#          anything and unlinks it on the way out.  Under b6sim that path is the BUILD
+#          MACHINE's, so no case there may say a word about it; here the glob below says
+#          both that the machine could make one and that none survived.
+#
+#          THE IMAGE'S OWN FILES AS INPUT.  /etc/passwd is a build constant and its third
+#          colon field is a number, which is exactly sort.1's own example; and
+#          /usr/dict/words is the file task C5b staged for look, sorted on the build host
+#          with `LC_ALL=C sort -c'.  The guest checking it is the machine confirming, in its
+#          own collating order, the ordering the host asserted -- which nothing else here can
+#          close.
+echo ---sort--- >>/tmp/filters.log
+cat >/tmp/s.txt <<\!
+pear 3 green
+apple 10 red
+fig 2 purple
+apple 9 red
+!
+sort /tmp/s.txt >>/tmp/filters.log
+sort -t' ' +1n /tmp/s.txt >>/tmp/filters.log
+sort +2 -3 /tmp/s.txt >>/tmp/filters.log
+sort -u /tmp/f.txt >>/tmp/filters.log
+sort -m /tmp/a.txt /tmp/b.txt >>/tmp/filters.log
+sort -t: +2n /etc/passwd >>/tmp/filters.log
+sort -o /tmp/so.txt /tmp/s.txt
+cat /tmp/so.txt >>/tmp/filters.log
+sort -c /usr/dict/words
+echo sort status $? >>/tmp/filters.log
+echo /tmp/stm* >>/tmp/filters.log
+
+# ---- 11. TASK C5a's SIX, at last on the machine they were built for.  Their logic is covered
 #          by ctest -L cmd; what this adds is that the image's copy executes.  Two of them are
 #          worth more than that: wc counts a Cyrillic line as two words, which is C5a's own
 #          divergence from v7, and rev reverses SEQUENCES rather than bytes, which is the
@@ -230,7 +273,7 @@ echo привет | rev >>/tmp/filters.log
 split -3 /tmp/f.txt /tmp/x
 cat /tmp/xaa /tmp/xab /tmp/xac >>/tmp/filters.log
 
-# ---- 11. THE FILTERS AGAINST EACH OTHER, which is how anybody uses them and which no
+# ---- 12. THE FILTERS AGAINST EACH OTHER, which is how anybody uses them and which no
 #          single-program harness can represent.  Every one of these is a pipeline between
 #          two programs of task C5.
 echo ---pipes--- >>/tmp/filters.log
@@ -242,6 +285,9 @@ comm -12 /tmp/a.txt /tmp/b.txt | od -c >>/tmp/filters.log
 grep gamma /tmp/f.txt | wc -l >>/tmp/filters.log
 uniq /tmp/f.txt | fgrep -c a >>/tmp/filters.log
 look comp | grep -c comp >>/tmp/filters.log
+cat /tmp/f.txt | sort -u >>/tmp/filters.log
+ls /bin | sort -c
+echo sort status $? >>/tmp/filters.log
 
 echo ---end--- >>/tmp/filters.log
 sync

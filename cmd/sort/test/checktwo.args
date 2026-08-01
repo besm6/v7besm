@@ -1,0 +1,1 @@
+-T . -c m1.txt m2.txt

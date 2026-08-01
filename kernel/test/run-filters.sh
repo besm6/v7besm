@@ -1,5 +1,5 @@
 #!/bin/sh
-# Boot the kernel and put all fifteen of task C5's text filters through it -- the booted pass
+# Boot the kernel and put all sixteen of task C5's text filters through it -- the booted pass
 # task C5a deliberately did not take, closed here with C5b's seven beside its six.
 #
 # Invoked by ctest as: run-filters.sh B6FSUTIL BESM6 SRCDIR, with the kernel test BUILD
@@ -21,8 +21,9 @@
 # columns are dropped, and name the place the masked property IS asserted.
 #
 # WHAT SEPARATES THIS TEST FROM ITS b6sim HALF is filters.sh's header, at length: look(1)'s
-# default dictionary, tail(1) on a pipe, col(1)'s argv[0], a grep(1) pattern with a space in
-# it, the eight pipelines, and that the
+# default dictionary, tail(1) on a pipe, col(1)'s argv[0], a grep(1) pattern and a sort(1)
+# separator with a space in them, a sort(1) temp file made and unlinked in the image's own
+# /tmp, the ten pipelines, and that the
 # image's copy of C5a's six executes at all.
 set -e
 b6fsutil=$1
@@ -39,9 +40,10 @@ cp root.img filters.img
 "$besm6" "$srcdir/filters.ini"
 
 # What reached the disk.  Not this test's main question -- the log is -- but it is nearly free
-# and the script does create eleven files in /tmp between the four here-documents, uniq's
-# named output, tee's two, split's three and col's two, so a five-pass check is what says the
-# allocation that took is sound.
+# and the script does create fourteen files in /tmp between the four here-documents, uniq's
+# named output, tee's two, split's three, col's two and sort's two (its own fixture and the
+# -o output; the temp file it makes is unlinked before the sync), so a five-pass check is
+# what says the allocation that took is sound.
 "$b6fsutil" -S root3097.disk filtersafter.img
 "$b6fsutil" -c filtersafter.img
 

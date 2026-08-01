@@ -368,6 +368,16 @@ file /bin/sleep         # cmd/sleep -- a decimal parse around libc's sleep(3): a
 source ../../rootfs/bin/sleep
 mode 0755
 
+file /bin/sort          # cmd/sort -- task C5d.  Its temp files are /tmp/stm<pid><letters>,
+                        # made and unlinked as it runs: /usr/tmp is not tried, this image
+                        # having none.  -d and -i keep a byte above 0177 SIGNIFICANT, where
+                        # v7's tables ignored all of 0200..0377 and so made two Cyrillic
+                        # words compare equal.  A line longer than 3072 bytes is a diagnostic
+                        # on both the sort and the merge path; v7 truncated it on one of them
+                        # and had no limit at all on the other.
+source ../../rootfs/bin/sort
+mode 0755
+
 file /bin/split         # cmd/split -- task C5a; the pieces land in the working directory
 source ../../rootfs/bin/split
 mode 0755

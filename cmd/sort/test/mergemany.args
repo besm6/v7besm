@@ -1,0 +1,1 @@
+-T . -m e1.txt e2.txt e3.txt e4.txt e5.txt e6.txt e7.txt e8.txt

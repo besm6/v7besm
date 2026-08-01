@@ -278,6 +278,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/rm
     ${B6_ROOTFS}/bin/rmdir
     ${B6_ROOTFS}/bin/sleep
+    ${B6_ROOTFS}/bin/sort
     ${B6_ROOTFS}/bin/split
     ${B6_ROOTFS}/bin/sum
     ${B6_ROOTFS}/bin/sync
@@ -567,7 +568,7 @@ if(BESM6)
     # rootimg_link checks from the host side -- yes(1) stopped by a SIGPIPE down THE FIRST
     # PIPELINE this image has ever run, and time(1) forking, execing and reading times(2),
     # with its three intervals masked like date's seconds and its exit status diffed as it
-    # stands.  Task C5 got a test of its own, `filters' below: fifteen programs wanted more
+    # stands.  Task C5 got a test of its own, `filters' below: sixteen programs wanted more
     # than a section, and one of them needs a PIPE on standard input, which is a shape no
     # command in this script has.
     add_test(NAME utils
@@ -576,16 +577,16 @@ if(BESM6)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(utils PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
-    # filters -- TASK C5's FIFTEEN TEXT FILTERS, on its own volume (3097).  This is the boot
+    # filters -- TASK C5's SIXTEEN TEXT FILTERS, on its own volume (3097).  This is the boot
     # task C5a deliberately did not take and wrote down as owing: its six -- wc, cmp, sum, tee,
     # split, rev -- were asserted under b6sim ALONE, on the argument that one two-minute boot
     # was not worth taking for six programs that touch no device, no directory, no signal and
     # no second process.  Task C5b's seven -- tr, uniq, comm, tail, od, look, col -- make
-    # thirteen, and thirteen is worth it.  Task C5c's grep and fgrep make fifteen, and they
+    # thirteen, and thirteen is worth it.  Task C5c's grep and fgrep make fifteen and C5d's sort makes sixteen, and they
     # joined this test rather than taking a boot of their own, which is what cmd/TODO.md told
     # a later filter to do; 3098 is still the next free volume.
     #
-    # SIX THINGS HERE ARE UNREACHABLE UNDER b6sim, which is why this is not merely a second
+    # SEVEN THINGS HERE ARE UNREACHABLE UNDER b6sim, which is why this is not merely a second
     # opinion (filters.sh's header is the long form): look(1) against its default
     # /usr/dict/words, an absolute path that under the simulator is the BUILD MACHINE's file;
     # tail(1) on a PIPE, where the ESPIPE probe takes the branch b6sim's always-a-file standard

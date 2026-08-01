@@ -1,0 +1,1 @@
+-T . -mu dup.txt dup.txt

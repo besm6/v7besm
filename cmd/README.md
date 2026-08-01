@@ -136,7 +136,7 @@ A count of the candidates, as they stood while the hazard was live:
 
 | source | `char *` comparisons |
 |---|---|
-| `sort.c` | **fifteen** — all in `cmp()` and `newfile()`: `pa<la`, `ipa>pa`, `cp>=ce`, `cp < tspace+ntext`, … |
+| ~~`sort.c`~~ | ~~**fifteen** — all in `cmp()` and `newfile()`~~ — **fifteen it was, and counted, task C5d**, but this row named the wrong routines: **thirteen** are in `cmp()`, one is `cp < tspace+ntext` in the sorting pass and one is `cp >= ce` in `rline()`. `newfile()` has none at all — it is `setfil()`, `fopen()` and a NULL test. The two outside `cmp()` are gone: both ran **once per byte**, where a fat-pointer relational is two out-of-line calls, and both became `int` counts. The thirteen inside `cmp()` stay and lower correctly. This is the third time the table has misdescribed a program it had not opened, after `ed` and `grep` |
 | ~~`fsck.c`~~ | ~~five~~ — **found and fixed, task C4d**: two of them were `dirscan()`'s backward byte copy of a directory entry, which is a struct assignment now (an entry is four words); the others bounded a name, a line and the digits of a reconnected i-number, and are index counts. The twelve other relationals in that file compare `daddr_t *`, `ino_t *` and `DIRECT *` and were left alone |
 | ~~`ed.c`~~ | ~~**ten**~~ — **twenty**, and this table undercounted by half; the two `-x` took with it left nineteen to rewrite. **Found and fixed, task C3**: they are index counts and `int` differences now, and [ed/README.md](ed/README.md) lists them. Every one bounds a buffer the regex engine or the substitute path writes into |
 | ~~`fgrep.c`~~ | ~~four~~ — **five, and counted, task C5c**: this table missed `nlp < p`, which is the per-byte loop that prints every matching line |
@@ -158,15 +158,19 @@ C5b and the four checkers of C4e copy or count and hold `int` indices already. *
 sources have now been grepped for it and come back empty**, which is worth stating as a
 prediction rather than a tally — and **task C5c confirmed the positive half of it too**: `grep`
 and `fgrep` are the first two of the four "deciding" programs to be opened, and both had *more*
-cursors than the table claimed rather than fewer. `sort` and `pr` are the two left, and
-`sort.c`'s fifteen should be re-counted rather than trusted. That is where to expect the
-*other* three hazards too.
+cursors than the table claimed rather than fewer. **Task C5d opened the third**, and `sort`'s
+fifteen turned out to be the one count this table got right and the one *description* it got
+wrong — the number was exact and two of the three routines it named were not the ones. `pr` is
+the last one left. That is where to expect the *other* three hazards too.
 
 Those three — a flag packed into bit 0 of a pointer, a bit mask used to round to a word when
 `BYTESPERWORD` is 6, and a cast to a pointer that *floors* rather than rounds
 ([sh/README.md](sh/README.md)) — come round again in anything that manages its own arena, and
 none of them is fixed in the compiler. `sort` and `find` both call `sbrk` and are the places to
-expect them. **`dd` called it too and turned out to have none of the three**: its use is two
+expect them — though **`sort` turned out to have none of the three either** (task C5d): its
+arena is three flat regions carved with pointer arithmetic the compiler gets right, and what it
+*did* have was a fourth hazard nobody had listed, described in the C5d section below. `find`
+and `make` are the two left. **`dd` called it too and turned out to have none of the three**: its use is two
 flat allocations and no arena at all, and what it did have was this section's own hazard, plus
 the `(char *)-1` above. Grepping for the arena hazards is still right; expecting them because a
 program calls `sbrk` is not.
@@ -310,6 +314,7 @@ alone, a name out of a directory being neither NUL-terminated nor the program's 
 | `col` | 87 | 3,500 | 168 | 1,434 | **5,189** |
 | `uniq` | 84 | 3,240 | 187 | 1,371 | **4,882** |
 | `look` | 85 | 3,432 | 185 | 1,162 | **4,864** |
+| `sort` | 96 | 5,105 | 411 | 1,211 | **6,823** |
 | `comm` | 83 | 3,099 | 168 | 1,037 | **4,387** |
 | `split` | 91 | 3,092 | 190 | 1,054 | **4,427** |
 | `rev` | 84 | 2,981 | 159 | 1,204 | **4,428** |
@@ -342,8 +347,10 @@ left is stdio and about 3,400 words of text.
 
 Most of `cat` is libc's stdio, and `fsck` is the largest program on the image — measured
 before it was ported, as task C4d's brief demanded, and it came in at a third of the ceiling
-even though it is the longest source in C1–C8. `sort`, `awk` and `make` are the three left to
-measure early rather than late. Nothing before task C6 is in danger of the first ceiling.
+even though it is the longest source in C1–C8. **`sort` was measured early, as task C5d's brief
+demanded, and came in at 6,823** — the largest of the sixteen filters by a wide margin and a
+quarter of the ceiling, between `login` and `sh`. `awk` and `make` are the two left to measure
+early rather than late. Nothing before task C6 is in danger of the first ceiling.
 
 **The bottom rows say what stdio costs.** Every program above `basename` links `printf`
 and a `FILE` buffer, which is the ~1,030 words of bss and most of the text they have in common;
@@ -384,6 +391,18 @@ gives it. What stops that being a wild store is that `col` already checks its `m
 with a diagnostic; what stops it being a surprise is saying so. Anything in C10 that manages its
 own storage inherits this — `sort`, `find` and `make` all call `sbrk` — and the general form is
 that **the size ctest is a bound on the image, not on the program.**
+
+**Task C5d is the case where the heap stopped being a footnote and became the design.** `sort`
+takes *every page the break will give* and then divides it: about 15,000 words, more than twice
+its own image, none of it visible to `rootfs_sort_size`. Three floors have to be checked by the
+program itself because nothing else can check them — the merge slots, one line's worth of text,
+and a reservation for the stdio buffers it will need *after* the arena is taken. That last one
+is the finding, and it is in [sort/README.md](sort/README.md): a stream whose `malloc(BUFSIZ)`
+fails does not fail, it silently becomes one `read(2)` per byte. **Ask what a program will still
+need to allocate after it has taken what it wanted.** And one more thing the two harnesses do
+not agree about: `b6sim` refuses a break *at* `070000` where the kernel refuses one *above* it,
+so a program that claims the whole heap gets one page less under the simulator, and no
+expectation anywhere may depend on how much it got.
 
 **The stack is where a fixed buffer goes wrong, and every port so far has had to bound one.**
 `mkdir`, `rmdir`, `ln`, `cp` and `mv` each build a path in a fixed automatic that v7 filled with
@@ -553,10 +572,12 @@ Two harnesses, and choosing wrong wastes the effort:
   minor 1 having never carried a block. It is also the one test whose program has **no**
   `b6sim` half at all (see above), so unlike `fsck.ini` it is not the second word on its
   subject but the only word.
-  And `kernel/test/filters` (task C5b, extended by C5c) for anything whose subject is
-  **bytes** — it is the one test here that runs **fifteen** programs, the only one that puts a
+  And `kernel/test/filters` (task C5b, extended by C5c and C5d) for anything whose subject is
+  **bytes** — it is the one test here that runs **sixteen** programs, the only one that puts a
   **pipe** on a program's standard input, the only place an argument can be **quoted**
-  (`run-prog-test.sh` splits a `.args` line and cannot, so `grep 'вет мир'` exists only here),
+  (`run-prog-test.sh` splits a `.args` line and cannot, so `grep 'вет мир'` and `sort -t' '`
+  exist only here), the only place a program's **temp file** is made in the image's own `/tmp`
+  rather than the build machine's,
   and the only one whose oracle is masked **nowhere**, every number in its log
   being computed by a filter from a corpus the script writes for itself in the same run.
   **Task C4e was the one task that stopped at the first harness**, and saying so out loud is
@@ -1018,8 +1039,9 @@ buffers where `icheck` and its three only walked block numbers. `tee` is the pro
 that came out of it: it is the one of the six with a cursor and it uses `int` indices, because
 it is **copying** rather than **deciding**. So **byte cursors arrive with parsing and not with
 byte handling** — the compiler has since made them harmless, but the shape still says where a
-program keeps its state: `sort`'s fifteen are all inside `cmp()`, `grep`'s three bound a
-compiled expression, `sed`'s three bound `genbuf`.
+program keeps its state: `sort`'s fifteen are thirteen inside `cmp()` and two loop bounds that
+have since become `int` counts (task C5d corrected this sentence as well as §2's row), `grep`'s
+three-that-were-nine bound a compiled expression, `sed`'s three bound `genbuf`.
 
 **A width dependence that is *not* there is worth a comment, because the next reader will look
 for one.** `sum`'s checksum is sixteen bits computed in an `unsigned` that is 41 bits here and
@@ -1220,3 +1242,82 @@ all be replaced by a file that happened to be in the test's working directory. O
 than of the machine, check which it is. The half that could *not* be fixed there — a pattern
 containing a **space**, the line being split with no quoting — went where such gaps go, into
 `kernel/test/filters.sh`, as a sixth item on its list of things `b6sim` cannot say.
+
+---
+
+## What task C5d taught
+
+`sort` is on the image, `/bin` holds forty-six entries, and `kernel/test/filters` runs
+**sixteen** filters in one boot — C5d joined that test rather than taking volume 3098, as C5c
+did and as the plan asked; 3098 is still free. [sort/README.md](sort/README.md) is the account.
+It is the one program of the phase that manages its own storage, and the brief predicted its
+cost would be §2. That was wrong in an instructive way: the fifteen `char *` comparisons compile
+correctly and cost only time, and every one of the four things that actually cost the day was
+absent from every table this file had. Six findings generalize.
+
+**A table indexed by a character needs 256 entries *and* an index that lands in them.** §11 has
+said the first half since task C3 and `grep` did the widening in C5c. `sort`'s four tables were
+already 256 entries — and were written **rotated by 128** and reached as `nofold+128`, because a
+PDP-11 `char` is signed and the bias put −128…127 back inside the array. A `char` is unsigned
+here, so every subscript landed in `table[128…383]`: up to 128 bytes past the end, for every
+byte of every Cyrillic letter. **It is a wild *read* where `grep`'s was a wild *store*, and that
+is why nobody had found it** — a store leaves wreckage a later test trips over, a read returns a
+plausible number and the program carries on. Grep for `+128`, `+ 0200` and any other constant
+bias on a table subscript, not only for the table's size.
+
+**Un-rotating a table asks the question the rotation was hiding.** v7's `nonprint[]` and
+`dict[]` both answer *ignore* for all of `0200`–`0377`, so a faithful `sort -d` deletes every
+byte of a Cyrillic word before comparing and makes `привет` and `мир` compare **equal** — `col`'s
+failure mode, plausible output that is quietly wrong. The fifth deliberate divergence after
+`touch`, `rev`, `col` and `grep -b`: a byte above `0177` is significant, printing under `-i` and
+alphanumeric under `-d`. Both cases that assert it were checked to be **sharp** — run the same
+fixture through the old tables and the answer differs — because a divergence whose test would
+pass either way is not a test.
+
+**A program that takes the whole heap must leave room for what it will allocate afterwards, and
+the failure is silent.** `sort` `brk()`s its arena and *then* `fopen()`s up to eight streams;
+`_filbuf`/`_flsbuf` respond to a failed `malloc(BUFSIZ)` by setting `_IOUNBUF` and doing **one
+syscall per byte** from then on. No diagnostic, no error return, just an unbounded slowdown. The
+reservation is taken by `malloc`-ing it and `free`-ing it rather than by subtracting it, and
+that is the transferable part: **a reserve that is computed can be computed wrong — a
+subtraction of `(N+2)*BUFSIZ` would have been nearly half short, `malloc` serving one 512-word
+buffer per page it takes — and one that is allocated cannot be.** `find` and `make` inherit the
+whole paragraph.
+
+**Reading the kernel is how a port learns what it can delete.** v7 kept 512 bytes back from the
+arena "for recursion", because on a PDP-11 the stack grew down into the far end of the same
+segment. Here the stack is its own four pages at `070000`, *above* the heap's ceiling, and
+`estabur()` is what stops the break. The two cannot meet, so the reserve is **deleted** rather
+than converted — and the 512-byte back-off beside it became a page, the granularity the kernel
+actually grants in. **Ask what the machine does before translating what the program did about
+it.**
+
+**A cast can be load-bearing for something that is not visible at the call site.** v7 sorts its
+merge inputs with `qsort((char **)ibuf, …)` over an array of `struct merg *` — invalid here,
+a `char *` carrying bit 48 and a byte offset a struct pointer has not got. The replacement is
+three lines. But that `qsort` *also* marks duplicates under `-u`, through `**k++ = '\0'`, which
+reaches `mp->l[0]` only through the same identity, and `merge()` reads the mark back. A
+replacement that merely sorted would have left `sort -u` over a **merge** keeping every
+duplicate — and no case that fits in one pass would have noticed. **Before replacing a routine
+reached through a cast, list what the caller reads back afterwards.**
+
+**And the compiler had a wrong-code bug that sixteen ports had walked past.** `b6codegen`
+compiles a bare truth test on an **additive** result as a **sign** test — it emits `UZA` straight
+after `A-X`, where ω is additive and `UZA` reads `A ≥ 0` rather than `A = 0` — so `if (x - y)` is
+false whenever `x > y`. v7's numeric comparison is exactly that shape, and the miscompile threw
+away half of every `sort -n` on a key, silently. [tmp/BUG.md](tmp/BUG.md) is the report.
+**Nothing else on the image hits it**: disassembling every staged program finds
+additive-then-`UZA` in six places, all inside `b$lt`, `b$gt`, `b$le`, `b$ge`, `b$flt` and
+`b$fge`, which are hand-written and want the sign test. The lesson is not about ω. It is that
+**when a ported program gives an answer that is not merely wrong but unrelated to the input, the
+compiler is a candidate** — and that a two-line repro plus a disassembly sweep of the whole image
+turns "something is broken" into a filed bug with a known blast radius in about an hour.
+
+**One correction to this file's own advice.** [TODO.md](TODO.md) and the C5b section above both
+name `sort` as a program whose oracle should be a **second implementation**, on `od`'s reasoning.
+That is half right. `sort`'s output is ordinary readable text, so a nine-line fixture with a
+designed answer is a better oracle than a second implementation — it says *which rule* broke.
+Where the second implementation earned its keep was a single case: a 4,000-line generated input,
+sized so that one pass is impossible by arithmetic, checked against `LC_ALL=C sort`. **Ask what
+a reviewer could not check by eye, not what the program is.** The suite is 41 cases and the
+whole of `ctest -L cmd` — now 327 cases — still finishes in under seven seconds.
