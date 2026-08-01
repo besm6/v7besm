@@ -8,8 +8,9 @@
 # is deliberate and is lib/test's property too: the bytes this harness runs are the bytes
 # the kernel will run, not a second link of the same sources.
 #
-# Optional SRCDIR/NAME.args holds the arguments (one line, split on whitespace by the shell,
-# with @srcdir@ substituted as lib/test/run-test.sh does); optional SRCDIR/NAME.status holds
+# Optional SRCDIR/NAME.args holds the arguments (one line, split on whitespace by the shell
+# under `set -f', with @srcdir@ substituted as lib/test/run-test.sh does); optional
+# SRCDIR/NAME.status holds
 # the exit status expected, 0 if absent -- a program that reports through its status alone
 # would otherwise be untested.  SRCDIR/NAME.expected is the output, stdout and stderr
 # together.
@@ -31,7 +32,14 @@
 # Anything that touches global machine state belongs under the booted kernel instead --
 # b6sim's stime() is a no-op that reports success, and its kill() goes straight to the
 # build machine's, so no case here may send a signal to a real pid.  See kernel/test/utils.
-set -e
+#
+# ARGUMENTS ARE SPLIT BUT NOT GLOBBED.  `set -f' is on because task C5c's arguments are
+# REGULAR EXPRESSIONS: `[bg]', `g*amma' and `^[^abg]' are all pathname patterns as well, and
+# without it a file happening to sit in the test's working directory would silently replace
+# the pattern with its name.  No .args file has ever wanted globbing.  What is still true is
+# that the line is split on whitespace, so a pattern CONTAINING A SPACE cannot be a case here
+# -- there is no quoting -- and belongs under the booted kernel, where the shell quotes it.
+set -ef
 sim=$1
 srcdir=$2
 prog=$3

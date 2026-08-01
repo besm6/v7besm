@@ -1,21 +1,32 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
-.TH GREP 1 
+.\" This page contains Cyrillic: read it with `nroff -Kutf8 -man', not plain
+.\" `nroff -man', which renders each letter as two characters of mojibake.
+.TH GREP 1
 .SH NAME
 grep, egrep, fgrep \- search a file for a pattern
 .SH SYNOPSIS
 .B grep
-[ option ] ...
+[
+.B \-bchlnsvy
+] [
+.B \-e
+]
 expression [ file ] ...
 .LP
-.B egrep 
+.B egrep
 [ option ] ...
 [ expression ]
 [ file ] ...
 .PP
 .B fgrep
-[ option ] ...
-[ strings ]
-[ file ]
+[
+.B \-bchlnsvxy
+] [
+.B \-e
+] [
+.B \-f
+file ]
+[ strings ] [ file ] ...
 .SH DESCRIPTION
 Commands of the
 .I grep
@@ -42,6 +53,18 @@ sometimes needs exponential space.
 .I Fgrep
 patterns are fixed strings; it is fast and compact.
 .PP
+Note:
+.I egrep
+is not on this system.
+It is a
+.IR yacc (1)
+grammar and there is no
+.I yacc
+here yet;
+see
+.I cmd/TODO.md
+in the source tree.
+.PP
 The following options are recognized.
 .TP
 .B \-v
@@ -60,38 +83,73 @@ Each line is preceded by
 its line number in the file.
 .TP
 .B \-b
-Each line is preceded by the block number
-on which it was found.
-This is sometimes useful in locating
-disk block numbers by context.
+Each line is preceded by the
+.B byte offset
+in the file at which it begins, counting from zero.
+This is useful in locating a match by position rather than by line.
+.IP
+Note:
+v7 printed a
+.I block
+number here \- the offset divided by a PDP\-11 disk block of 512 bytes.
+512 names nothing on this machine, a block here is 3072 bytes, and
+.I grep
+divided by that constant where
+.I fgrep
+divided by a hard\-coded 512, so the two commands answered differently
+about the same match.
+The division is gone rather than the divisor changed:
+a byte offset is exact, needs no unit, and both commands now agree.
 .TP
 .B \-s
 No output is produced, only status.
 .TP
 .B \-h
 Do not print filename headers with output lines.
+This applies to
+.B \-c
+as well;
+v7's
+.B \-c
+printed the header regardless.
 .TP
 .B \-y
 Lower case letters in the pattern will also match
-upper case letters in the input
-.RI ( grep
-only).
+upper case letters in the input.
+.I Fgrep
+implements this too, and matches without regard to case in both directions;
+v7's manual page said the flag was
+.I grep
+only and was wrong about its own program.
+.IP
+Note:
+a byte above 0177 is part of a multi\-byte letter,
+which has no case on this system,
+so
+.B \-y
+passes it through unchanged.
 .TP
 .BI \-e " expression"
 Same as a simple
-.I expression 
+.I expression
 argument,
 but useful when the
 .I expression
 begins with a \-.
 .TP
 .BI \-f " file"
-The regular expression
-.RI ( egrep )
-or string list
-.RI ( fgrep ) 
+The string list
+.RI ( fgrep )
 is taken from the
 .I file.
+This is the only way to give
+.I fgrep
+more than one keyword from a script,
+the list being newline\-separated.
+.I Grep
+has no
+.B \-f;
+v7's manual page implied otherwise.
 .TP
 .B \-x
 (Exact) only lines matched in their entirety are printed
@@ -124,7 +182,7 @@ matches that character.
 The character ^
 ($) matches the beginning (end) of a line.
 .IP
-A 
+A
 .B .
 matches any character.
 .IP
@@ -133,8 +191,8 @@ meaning matches that character.
 .IP
 A string enclosed in brackets [\|]
 matches any single character from the string.
-Ranges of ASCII character codes may be abbreviated
-as in `a\-z0\-9'.
+Ranges of character codes may be abbreviated
+as in `a\-z0\-9'; see EIGHT-BIT TEXT below for what a range means here.
 A ]
 may occur only as the first character of the string.
 A literal \- must be placed where it can't be
@@ -145,7 +203,7 @@ of 0 or more (1 or more, 0 or 1)
 matches of the regular expression.
 .IP
 Two regular expressions concatenated
-match a match of the first followed by a match of 
+match a match of the first followed by a match of
 the second.
 .IP
 Two regular expressions separated by | or newline
@@ -159,6 +217,51 @@ The order of precedence of operators
 at the same parenthesis level
 is [\|] then
 *+? then concatenation then | and newline.
+.SH "EIGHT-BIT TEXT"
+The text on this system is UTF\-8 end to end,
+and both commands carry eight bits.
+.PP
+.I Fgrep
+compares bytes and always did,
+so a keyword may be any text at all.
+.PP
+.I Grep
+matches
+.B bytes,
+which is the same rule
+.IR ed (1)
+follows and which has three visible consequences.
+A
+.B .
+matches one byte and not one letter,
+so a two\-byte Cyrillic letter needs two of them.
+A
+.B *
+after a multi\-byte letter repeats that letter's
+.I last
+byte.
+And a range written between two multi\-byte letters,
+as in
+.RB [ а\-я ],
+is a range of the bytes that spell them and not of the letters between them.
+.PP
+A bracketed class holds each byte value separately \-
+the table is 256 bits, one per value \-
+so
+.RB [ пм ]
+matches any of the four bytes that spell those two letters.
+.PP
+Note:
+v7's class table was 128 bits and its matcher masked every input byte with 0177,
+which folds the lead byte of a Cyrillic capital onto an ASCII letter:
+.RB [ п ]
+would have been found inside
+.BR ALPHA .
+Worse, nothing masked the byte on the way
+.I in,
+so a class containing a byte above 0177 stored past the end of its own table
+and quietly corrupted the compiled expression.
+Both are gone.
 .SH "SEE ALSO"
 ed(1),
 sed(1),
@@ -166,12 +269,50 @@ sh(1)
 .SH DIAGNOSTICS
 Exit status is 0 if any matches are found,
 1 if none, 2 for syntax errors or inaccessible files.
+An unknown flag is an error and exits 2;
+v7 printed a message and then searched for the bad flag.
 .SH BUGS
 Ideally there should be only one
 .I grep,
 but we don't know a single algorithm that spans a wide enough
 range of space-time tradeoffs.
 .PP
-Lines
-are limited to 256 characters;
-longer lines are truncated.
+.I Grep
+truncates a line at 511 characters
+and treats the remainder as a new line,
+so a long line may be reported more than once
+and the cut may land inside a multi\-byte letter.
+.I Fgrep
+reads through a ring of 1024 characters:
+a matching line longer than that
+has had its beginning overwritten by the time the line is printed,
+and only its last
+.I length
+\- 1024 characters come out.
+.RI ( v7's
+page said 256 for both and was wrong about both.
+Both limits are v7's own and neither was changed.)
+.PP
+.I Grep
+matches a starred expression by recursion,
+one level per
+.B *
+that consumes anything,
+and says
+.B grep: expression too complex
+past sixteen levels.
+An expression anybody writes goes two or three deep.
+Note:
+without that limit the recursion runs off this machine's 4096\-word stack \-
+and it returns a
+.I wrong
+answer, an empty one, for a dozen levels before it faults.
+.PP
+.I Fgrep
+holds its keywords in a table of 3000 states \-
+about 3000 characters of keyword text, fewer where the keywords share no
+prefix \- and says
+.B fgrep: wordlist too large
+beyond that.
+v7 allowed 6000, which does not fit this machine's address space:
+a state is four 48\-bit words here and eight bytes on a PDP\-11.

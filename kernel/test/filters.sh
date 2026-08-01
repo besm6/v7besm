@@ -1,4 +1,4 @@
-# /etc/filters -- the thirteen text filters of task C5, run by the console shell.
+# /etc/filters -- the fifteen text filters of task C5, run by the console shell.
 #
 # Grafted onto a copy of the image by run-filters.sh, not shipped on it.  utils.sh is the
 # model and its standing rules hold here too:
@@ -13,9 +13,10 @@
 # discovered.  cmd/README.md §9 says to test in both worlds where a program runs in both, and
 # one two-minute boot was not worth taking for six programs that touch no device, no
 # directory, no signal and no second process.  It is worth taking for THIRTEEN, and this is
-# it: C5a's six and C5b's seven in a single boot.
+# it: C5a's six and C5b's seven in a single boot.  Task C5c added grep and fgrep to it, as
+# cmd/TODO.md said a later filter should -- a section here rather than a second boot.
 #
-# FIVE THINGS HERE CANNOT BE SAID UNDER b6sim AT ALL, and they are the reason this is not
+# SIX THINGS HERE CANNOT BE SAID UNDER b6sim AT ALL, and they are the reason this is not
 # merely a second opinion:
 #
 #   * look(1) AGAINST ITS DEFAULT DICTIONARY.  look's default is the absolute path
@@ -35,7 +36,12 @@
 #     checked-in .expected.  The shell here passes the word as it was typed (cmd/sh's execs()
 #     hands exece() the original t[0]), so the diagnostics read `col:' and can be diffed.
 #
-#   * THE PIPELINES.  Six of the commands below are pipelines between two of these filters,
+#   * A PATTERN WITH A SPACE IN IT (task C5c).  run-prog-test.sh splits a .args line on
+#     whitespace and has no quoting, so no b6sim case can hand grep or fgrep a pattern
+#     containing a space -- which is a large part of what anybody greps for.  Here the shell
+#     quotes it, so `grep 'вет мир'' is a single argument and the case exists at all.
+#
+#   * THE PIPELINES.  Eight of the commands below are pipelines between two of these filters,
 #     which is the way anybody actually uses them and which no single-program harness can
 #     represent.
 #
@@ -167,7 +173,44 @@ od -c /tmp/od.in >>/tmp/filters.log
 od -b /tmp/od.in >>/tmp/filters.log
 od -w /tmp/od.in >>/tmp/filters.log
 
-# ---- 8.  TASK C5a's SIX, at last on the machine they were built for.  Their logic is covered
+# ---- 8.  grep (task C5c), AND A PATTERN WITH A SPACE IN IT.  The character class over a
+#          Cyrillic byte is the task's subject and ctest -L cmd covers it; what only this
+#          test can do is quote a pattern, run the image's copy, and put the answer through a
+#          pipe.  -b is the deliberate divergence: a byte offset into the file, and /tmp/f.txt
+#          puts `delta' at byte 35 -- fgrep below must say 35 for the same line.
+echo ---grep--- >>/tmp/filters.log
+grep gamma /tmp/f.txt >>/tmp/filters.log
+grep -c a /tmp/f.txt >>/tmp/filters.log
+grep -n delta /tmp/f.txt >>/tmp/filters.log
+grep -b delta /tmp/f.txt >>/tmp/filters.log
+grep -v gamma /tmp/f.txt >>/tmp/filters.log
+grep '[bg]' /tmp/f.txt >>/tmp/filters.log
+echo привет мир | grep '[пм]' >>/tmp/filters.log
+echo привет мир | grep 'вет мир' >>/tmp/filters.log
+echo ALPHA | grep -y alpha >>/tmp/filters.log
+grep zzz /tmp/f.txt >>/tmp/filters.log
+echo grep status $? >>/tmp/filters.log
+
+# ---- 9.  fgrep (task C5c).  The keyword list is newline-separated, so the several-keyword
+#          form cannot be a b6sim argument at all and -f is what carries it; here a here-
+#          document writes the list, which is the way it is actually used.  -b must agree with
+#          grep's above, which is the whole point of taking the divergence in both programs.
+echo ---fgrep--- >>/tmp/filters.log
+fgrep gamma /tmp/f.txt >>/tmp/filters.log
+fgrep -c a /tmp/f.txt >>/tmp/filters.log
+fgrep -n delta /tmp/f.txt >>/tmp/filters.log
+fgrep -b delta /tmp/f.txt >>/tmp/filters.log
+fgrep -x beta /tmp/f.txt >>/tmp/filters.log
+cat >/tmp/k.txt <<\!
+beta
+delta
+!
+fgrep -f /tmp/k.txt /tmp/f.txt >>/tmp/filters.log
+echo привет мир | fgrep 'вет мир' >>/tmp/filters.log
+fgrep zzz /tmp/f.txt >>/tmp/filters.log
+echo fgrep status $? >>/tmp/filters.log
+
+# ---- 10. TASK C5a's SIX, at last on the machine they were built for.  Their logic is covered
 #          by ctest -L cmd; what this adds is that the image's copy executes.  Two of them are
 #          worth more than that: wc counts a Cyrillic line as two words, which is C5a's own
 #          divergence from v7, and rev reverses SEQUENCES rather than bytes, which is the
@@ -187,7 +230,7 @@ echo привет | rev >>/tmp/filters.log
 split -3 /tmp/f.txt /tmp/x
 cat /tmp/xaa /tmp/xab /tmp/xac >>/tmp/filters.log
 
-# ---- 9.  THE FILTERS AGAINST EACH OTHER, which is how anybody uses them and which no
+# ---- 11. THE FILTERS AGAINST EACH OTHER, which is how anybody uses them and which no
 #          single-program harness can represent.  Every one of these is a pipeline between
 #          two programs of task C5.
 echo ---pipes--- >>/tmp/filters.log
@@ -196,6 +239,9 @@ uniq -c /tmp/f.txt | tr -s ' ' ' ' >>/tmp/filters.log
 tail -4 /tmp/f.txt | rev >>/tmp/filters.log
 look comp | wc -l >>/tmp/filters.log
 comm -12 /tmp/a.txt /tmp/b.txt | od -c >>/tmp/filters.log
+grep gamma /tmp/f.txt | wc -l >>/tmp/filters.log
+uniq /tmp/f.txt | fgrep -c a >>/tmp/filters.log
+look comp | grep -c comp >>/tmp/filters.log
 
 echo ---end--- >>/tmp/filters.log
 sync

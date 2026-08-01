@@ -86,7 +86,8 @@ hold the `simh_boot` resource lock — a typed dialogue drops characters under l
 `login.ini`/`multi.ini` bind fixed ports besides — so they run strictly one at a time, about
 seventy seconds of serial wall clock, which was the critical path of the whole suite.
 `make test` here (and the top-level `make run`) now excludes the label; `make weekly` selects
-it. Run it before a commit that touches the kernel, the drivers or the root image. `boot`
+it. **It is opt-in and not a pre-commit gate**: run it when this half of the suite is what you
+want, not as acceptance criteria for a change. `boot`
 stays in the daily suite because it costs a second and answers the question that matters most
 after a kernel edit: does the thing still reach a shell prompt. The lock's own rationale, and
 the measurement behind it, are in [test/CMakeLists.txt](test/CMakeLists.txt).

@@ -86,6 +86,37 @@ col status 2
 00000000 2206255433067454 1004110524646455
 00000014 1542016733671154 3102041200000000
 00000025
+---grep---
+gamma
+gamma
+gamma
+7
+7:delta
+35:delta
+alpha
+alpha
+beta
+delta
+beta
+gamma
+gamma
+gamma
+привет мир
+привет мир
+ALPHA
+grep status 1
+---fgrep---
+gamma
+gamma
+gamma
+7
+7:delta
+35:delta
+beta
+beta
+delta
+привет мир
+fgrep status 1
 ---c5a---
       7      7      41 /tmp/f.txt
       1      2      20
@@ -125,4 +156,7 @@ atled
 00000000   b   a   n   a   n   a  \n   c   h   e   r   r
 00000014   y  \n  \0  \0  \0  \0
 00000016
+      3
+4
+5
 ---end---

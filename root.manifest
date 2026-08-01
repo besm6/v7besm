@@ -303,6 +303,20 @@ file /bin/ed            # cmd/ed -- task C3, and THE FIRST PROGRAM ON THIS IMAGE
 source ../../rootfs/bin/ed
 mode 0755
 
+file /bin/fgrep         # cmd/fgrep -- task C5c, with grep below.  MAXSIZ is 3000 states and
+                        # not v7's 6000: a `struct words' is four words here, so the v7
+                        # table alone was 24,000 of the 28,672 words the address space has.
+source ../../rootfs/bin/fgrep
+mode 0755
+
+file /bin/grep          # cmd/grep -- task C5c.  A character class is 256 bits rather than
+                        # v7's 128, so a byte above 0177 has a bit of its own; that closed a
+                        # store past the class as well.  -b prints a BYTE OFFSET, which is a
+                        # deliberate divergence: v7's block number was a PDP-11 512-byte
+                        # disk block here and grep and fgrep disagreed about the same match.
+source ../../rootfs/bin/grep
+mode 0755
+
 file /bin/kill          # cmd/kill -- NOT setuid: kill(2) matches uids for anyone but root
 source ../../rootfs/bin/kill
 mode 0755

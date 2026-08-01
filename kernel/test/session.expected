@@ -16,6 +16,8 @@ df
 du
 echo
 ed
+fgrep
+grep
 kill
 ln
 login

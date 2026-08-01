@@ -15,8 +15,8 @@ fixed and which §2 now records as history, §4 the 3072-byte block and the
 address-space ceilings, and so on.
 
 **Tasks C1, C2, C3, the whole of C4 and C5a are done and their writeups have been removed**;
-what each taught is README.md's nine closing sections. Forty-five commands are on the image —
-thirty-six entries in `/bin`, since `[` is `test` under a second name, plus `/etc/getty`, `/etc/quot`,
+what each taught is README.md's ten closing sections. Fifty-four commands are on the image —
+forty-five entries in `/bin`, since `[` is `test` under a second name, plus `/etc/getty`, `/etc/quot`,
 `/etc/mkfs`, `/etc/fsck`, `/etc/icheck`, `/etc/dcheck`, `/etc/ncheck`, `/etc/clri`,
 `/etc/mount` and `/etc/umount` beside them
 — so the tree
@@ -76,6 +76,24 @@ sharpest instance of §9's absolute-path rule there has been — under `b6sim` t
 *build machine's*, so every case beside the source names its dictionary explicitly and the
 default is asserted under the booted kernel or nowhere. **And C5a's deferral is paid**:
 `kernel/test/filters` puts all thirteen through one boot, at volume **3097**.
+**And since C5c it can search it**: `grep` and `fgrep` take the phase to fifteen and `/bin` to
+forty-five entries, and they are the two that carried the **`CCL` bitmap** this file had been
+pointing at since task C3. It was 128 bits and is 256 — but the warning was right about the
+constant and wrong about the failure. The `0177` mask everyone knew about is the *match* side;
+the **compile** side masked nothing at all, so a Cyrillic byte in a class stored past the end of
+its own sixteen-byte table and corrupted the compiled expression while it was being built.
+Widening the table closes both, `c >> 3` landing in `[0,31]` by construction
+([grep/README.md](grep/README.md), which is what C5e should read before `sed`). Three other
+things are worth naming. **`grep -c` printed the two characters `%D`** — §3's trap, in the
+fourteenth filter after thirteen had been grepped for it and come back clean, which is the
+caution to take from a negative result. **`fgrep` did not fit the machine**: `struct words
+w[6000]` is 24,000 words of the 28,672 an address space has, a state being four 48-bit words
+where the PDP-11 packed it into eight bytes, so `MAXSIZ` is 3000 and two `_Static_assert`s hold
+it — the number that looked generous was the one that did not fit, and the thing to multiply by
+is `sizeof`. And **`-b` is the fourth deliberate divergence**, after `touch`, `rev` and `col`: it
+printed a block number, which `grep` computed with `BSIZE` and `fgrep` with a hard-coded 512, so
+the same flag on the same manual page gave two answers for the same match. It is a byte offset
+now — the division deleted rather than the divisor chosen, so the two cannot disagree again.
 [../etc/rc](../etc/rc) is a boot script that does something: it prints the motd and then the
 date, which is a literal to the minute because the boot clock is the image's own `-T` stamp,
 and `kernel/test/console` asserts both. What it
@@ -115,7 +133,7 @@ compiles.
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C5 | the text filters — ~~`wc` `cmp` `sum` `tee` `split` `rev` `tr` `uniq` `comm` `tail` `od` `look` `col`~~ `grep` `fgrep` `sort` `sed` `pr` `diff` `cal` `tsort` `join` `find` `file` | the corpus everything else is tested against | medium ×11; thirteen done |
+| C5 | the text filters — ~~`wc` `cmp` `sum` `tee` `split` `rev` `tr` `uniq` `comm` `tail` `od` `look` `col` `grep` `fgrep`~~ `sort` `sed` `pr` `diff` `cal` `tsort` `join` `find` `file` | the corpus everything else is tested against | medium ×9; fifteen done |
 | C6 | multiuser userland — `passwd` `su` `newgrp` `stty` `who` `write` `wall` `mesg` `mail` | more than one person | medium; unblocked |
 | C7 | `tar` | getting data on and off without `b6fsutil` | medium |
 | C8 | inspection — `ps` `dmesg` `pstat` `iostat` `nice`, `ac` `sa` `accton` | seeing what the machine is doing | medium; needs `nlist(3)` |
@@ -124,8 +142,11 @@ compiles.
 
 **C4 was the one that mattered and it is gone from this table**, its twelve programs and what
 each of them settled being the opening paragraph's business now. C5 is cheap and pays for
-itself in test coverage, and C5a and C5b have now shown what that is worth in numbers: thirteen
-programs, 238 `ctest -L cmd` cases, and the whole label still finishing in under six seconds.
+itself in test coverage, and C5a, C5b and C5c have now shown what that is worth in numbers:
+fifteen programs, 286 `ctest -L cmd` cases, and the whole label still finishing in under six
+seconds. **"Cheap" is about the harness and not about the port**, which is C5c's correction to
+this paragraph: two of that task's programs were three quarters of a day's work each, and the
+reason was never the line count.
 C7 is one program and can be taken at any time; C6, C8 and C9 are each gated on something the
 task names.
 
@@ -138,10 +159,10 @@ like Unix — but more importantly **almost all of them run under `b6sim`**, so 
 that builds a userland regression corpus cheaply, in the harness that does not need a two-minute
 boot.
 
-**C5a and C5b are done and their writeups have been removed**; what they taught is README.md's
-*What task C5a taught* and *What task C5b taught*. Thirteen filters are on the image with 238
-`ctest -L cmd` cases between them and a booted pass over all thirteen at once. Four things they
-leave to the tasks below.
+**C5a, C5b and C5c are done and their writeups have been removed**; what they taught is
+README.md's *What task C5a taught*, *What task C5b taught* and *What task C5c taught*. Fifteen
+filters are on the image with 286 `ctest -L cmd` cases between them and a booted pass over all
+fifteen at once. Four things they leave to the tasks below.
 
 **The filter test pattern is established**, which is what C5a existed for: `<case>.in` feeds the
 filter, fixtures are **copied into the build directory** rather than named through `@srcdir@` (a
@@ -155,12 +176,17 @@ ordinary shape. That is the second time a warning here was written from a survey
 the code — see what C3 says about `ed`'s `CCL` bitmap — and it is worth re-reading the source
 before budgeting for a harness.)
 
-**The booted pass exists now and later tasks join it rather than repeating it.**
-`kernel/test/filters` at volume **3097** runs all thirteen in one boot, and
-`cmd/README.md` §9 lists the five things it asserts that `b6sim` cannot. A C5c or C5d program
-that wants a booted assertion should add a section to `kernel/test/filters.sh`, as task C4f
-folded C4e's loose end into `mount.sh` rather than spending a second boot on it. **The next free
-volume number is 3098.**
+**The booted pass exists and later tasks join it rather than repeating it — and C5c did.**
+`kernel/test/filters` at volume **3097** runs all **fifteen** in one boot, and `cmd/README.md`
+§9 lists the six things it asserts that `b6sim` cannot. `grep` and `fgrep` added a section to
+`kernel/test/filters.sh` rather than a boot, exactly as this file asked; C5d and C5e should do
+the same. **The next free volume number is still 3098.**
+
+**One of those six is new and it constrains how a case is written.** `run-prog-test.sh` splits a
+`.args` line on whitespace with no quoting, so **a pattern containing a space cannot be a `b6sim`
+case at all** — which is much of what anybody greps or `sed`s for. C5c also found that the line
+was being *globbed*, harmlessly for thirteen filters and not for a regular expression; the
+harness runs `set -f` now, and `sed`'s cases inherit both the fix and the remaining limit.
 
 **An oracle for a program whose output is unreadable should be a second implementation.** `od`
 prints 48-bit words in sixteen octal digits, which no reviewer can check by eye, and v7's `putn()`
@@ -168,22 +194,11 @@ silently truncated anything too wide for its field — so every one of `od`'s ex
 computed by a Python implementation written from the manual page. `sort` and `pr` are the two
 below with the same property.
 
-**And `grep`'s and `sed`'s `CCL` bitmap is still 128 bits**, which is C5c's and C5e's business
-and is stated where those tasks are.
-
-### C5c. `grep`, `fgrep`
-
-`grep.c` (480), `fgrep.c` (365). Each carries its own matcher — three `char *` cursor bounds in
-`grep`, four in `fgrep` — and a few `long`s. Those compile correctly now (§2) and need touching
-only where they sit in an inner loop. `egrep` is a yacc grammar and is deferred to C10.
-
-**The `CCL` bitmap lives here, and this task inherited the warning C3's brief carried by
-mistake.** `grep.c` packs a character class into 128 bits — sixteen bytes, addressed
-`1 << (c & 07)` at `c >> 3` — and so does `sed`. That is byte work inside a fat-pointer buffer,
-it is exactly the shape §2 describes, and **it has to become 32 bytes** if a class is to hold a
-byte above `0177`, which §11 says it must. `ed` was thought to do the same and does not: its
-classes are an enumerated byte list with a count byte, so it was byte-capable already and needed
-none of this. See [ed/README.md](ed/README.md), which says what that mistake cost.
+**`sed`'s `CCL` bitmap is still 128 bits, and `grep`'s is not** — task C5c widened it, so C5e
+has a worked example rather than a warning. Read [grep/README.md](grep/README.md) before starting
+`sed`: the five places the width is written down, why the *compile* side turned out to be a wild
+store and not merely a narrow table, and why the assertion that proves the fix is a **negative**
+case. `sed0.c:732` and `sed1.c:243`/`296` are the same three lines.
 
 ### C5d. `sort`
 
@@ -192,7 +207,10 @@ its own merge over temp files, and the tree's densest patch of `char *` cursors 
 comparisons, every one inside `cmp()`, the routine that decides the program's entire output.
 Those now compile correctly (§2), so they are a *cost* question rather than a correctness one:
 `cmp()` is the inner loop, and each comparison there is two calls. Its 28,672-word fit should be
-measured early. Do it after C5a–C5c, so the harness is established when the hard one arrives.
+measured early — and **measure `sizeof` rather than deriving it**, which is C5c's finding:
+`fgrep`'s state table was 24,000 words of the 28,672 because a `char` member takes a word, and
+the count that looked generous was the one that did not fit. Do it after C5a–C5c, so the harness
+is established when the hard one arrives.
 
 ### C5e. `sed`
 
@@ -200,8 +218,9 @@ measured early. Do it after C5a–C5c, so the harness is established when the ha
 done**, so [ed/README.md](ed/README.md) is the thing to read first: the three `char *` bounds
 in `sed1.c` are the same `genbuf` bound `ed` had, and the `QESC` prefix that replaced
 bit `0200` in `ed`'s replacement text is the pattern for `sed`'s. But `sed` **does** have the
-`CCL` bitmap `ed` turned out not to (see C5c), so budget for widening that here rather than
-expecting the `ed` diff to have covered it.
+`CCL` bitmap `ed` turned out not to, and task C5c has now done that widening in `grep` —
+[grep/README.md](grep/README.md) is the recipe and the hazard it uncovered, and this is the
+half of `sed` not to budget for from scratch.
 
 ### C5f. `pr`, `diff`, `cal`, `tsort`, `join`, `find`, `file`
 
@@ -403,12 +422,17 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 
 ## Where to start
 
-**C5c**, and for the reason the two finished halves of C5 give rather than for a new one: the
-phase's economics are now measured rather than argued — thirteen programs, 238 cases, the whole
-of `ctest -L cmd` in under six seconds, and one booted pass that covers all thirteen at once.
-`grep` and `fgrep` are the next two and they are cheap; what they carry that C5a and C5b did not
-is the **`CCL` bitmap**, which is 128 bits and has to become 256 (see C5c below). After them,
-`sort` is the one to measure early rather than late.
+**C5d**, `sort`, and it is the one to measure early rather than late — `fgrep` has just shown
+what a table sized against a PDP-11 costs here, and `sort` is the program in this phase that
+manages its own storage. The phase's economics are measured rather than argued: fifteen
+programs, 286 cases, the whole of `ctest -L cmd` in under six seconds, and one booted pass that
+covers all fifteen at once.
+
+**C5c is done and it was not cheap in the way this file predicted.** Two of the four things it
+found were bugs a user meets on the first Cyrillic pattern, one was a program that did not fit
+the address space, and one was a recursion that ran off the four-page stack — returning a
+*wrong answer* for a dozen levels before it faulted. None of the four is in a line count. The
+opening paragraph is the account; [grep/README.md](grep/README.md) is the long form.
 
 **The whole of C4 has landed**, so the guest can now *examine* its own store — `df`, `du` and
 `quot`, with the raw-device path proven and a fixture-filesystem harness under `b6sim` — *move*

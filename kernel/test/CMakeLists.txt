@@ -74,9 +74,9 @@ endmacro()
 # parallelizes around them.
 #
 # So the daily targets exclude them (`-LE weekly' in ../Makefile and the top-level one) and
-# `make weekly' selects them.  They are meant to be run by hand -- before a commit that
-# touches the kernel, after a change to the root image or the drivers, and periodically --
-# rather than on every edit.
+# `make weekly' selects them.  They are meant to be run BY HAND and ON PURPOSE, when what is
+# wanted is this half of the suite; they are NOT a pre-commit gate and not acceptance
+# criteria for a change.  `make run' and `make test' are what a change is accepted on.
 #
 # NOT `DISABLED', which is a different statement: these are expected to pass.  DISABLED is
 # what `console' and `edit' carry, for ../TODO.md task 35's reason.
@@ -263,6 +263,8 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/du
     ${B6_ROOTFS}/bin/echo
     ${B6_ROOTFS}/bin/ed
+    ${B6_ROOTFS}/bin/fgrep
+    ${B6_ROOTFS}/bin/grep
     ${B6_ROOTFS}/bin/kill
     ${B6_ROOTFS}/bin/ln
     ${B6_ROOTFS}/bin/login
@@ -565,7 +567,7 @@ if(BESM6)
     # rootimg_link checks from the host side -- yes(1) stopped by a SIGPIPE down THE FIRST
     # PIPELINE this image has ever run, and time(1) forking, execing and reading times(2),
     # with its three intervals masked like date's seconds and its exit status diffed as it
-    # stands.  Task C5 got a test of its own, `filters' below: thirteen programs wanted more
+    # stands.  Task C5 got a test of its own, `filters' below: fifteen programs wanted more
     # than a section, and one of them needs a PIPE on standard input, which is a shape no
     # command in this script has.
     add_test(NAME utils
@@ -574,21 +576,24 @@ if(BESM6)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(utils PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
-    # filters -- TASK C5's THIRTEEN TEXT FILTERS, on its own volume (3097).  This is the boot
+    # filters -- TASK C5's FIFTEEN TEXT FILTERS, on its own volume (3097).  This is the boot
     # task C5a deliberately did not take and wrote down as owing: its six -- wc, cmp, sum, tee,
     # split, rev -- were asserted under b6sim ALONE, on the argument that one two-minute boot
     # was not worth taking for six programs that touch no device, no directory, no signal and
     # no second process.  Task C5b's seven -- tr, uniq, comm, tail, od, look, col -- make
-    # thirteen, and thirteen is worth it.
+    # thirteen, and thirteen is worth it.  Task C5c's grep and fgrep make fifteen, and they
+    # joined this test rather than taking a boot of their own, which is what cmd/TODO.md told
+    # a later filter to do; 3098 is still the next free volume.
     #
-    # FIVE THINGS HERE ARE UNREACHABLE UNDER b6sim, which is why this is not merely a second
+    # SIX THINGS HERE ARE UNREACHABLE UNDER b6sim, which is why this is not merely a second
     # opinion (filters.sh's header is the long form): look(1) against its default
     # /usr/dict/words, an absolute path that under the simulator is the BUILD MACHINE's file;
     # tail(1) on a PIPE, where the ESPIPE probe takes the branch b6sim's always-a-file standard
     # input cannot reach; col(1)'s two diagnostics, which name the program through argv[0] --
-    # the staged build path under b6sim and the word as typed here; six PIPELINES between one
-    # filter and another; and, for C5a's six, that the image's copy executes at all, which the
-    # two `ls /bin' listings assert the existence of and not the execution of.
+    # the staged build path under b6sim and the word as typed here; a grep(1) PATTERN WITH A
+    # SPACE IN IT, run-prog-test.sh splitting a .args line with no quoting; eight PIPELINES
+    # between one filter and another; and, for C5a's six, that the image's copy executes at
+    # all, which the two `ls /bin' listings assert the existence of and not the execution of.
     #
     # NOTHING IS MASKED, unlike utils above.  Every number in the log is computed by a filter
     # from a corpus filters.sh writes for itself in the same run, so the diff is over every

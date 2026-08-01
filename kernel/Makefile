@@ -15,8 +15,8 @@
 # make test   -- build and run the fast kernel tests (label `kernel' less `weekly')
 # make weekly -- build and run the slow ones: the tests that boot the kernel under SIMH and
 #                drive it by typing at it.  About a minute, serialized by a resource lock,
-#                and deliberately out of the daily loop -- run it before a commit that
-#                touches the kernel, the drivers or the root image.
+#                and deliberately out of the daily loop.  Opt-in: run it when this half of
+#                the suite is what you want, NOT as a pre-commit gate.
 # make clean  -- remove the top-level build tree
 
 TOP   := ..

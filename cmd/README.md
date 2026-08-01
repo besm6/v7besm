@@ -37,7 +37,7 @@ do — the ten of task C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`,
 (`df/`, `du/`, `quot/`), the one of C4b (`dd/`), the one of C4c (`mkfs/`), the one of C4d
 (`fsck/`), the four of C4e (`icheck/`, `dcheck/`, `ncheck/`, `clri/`), the two of C4f
 (`mount/`, `umount/`), the six of C5a (`wc/`, `cmp/`, `sum/`, `tee/`, `split/`, `rev/`), the seven of C5b
-(`tr/`, `uniq/`, `comm/`, `tail/`, `od/`, `look/`, `col/`) and
+(`tr/`, `uniq/`, `comm/`, `tail/`, `od/`, `look/`, `col/`), the two of C5c (`grep/`, `fgrep/`) and
 the two of kernel task 29b (`getty/`, `login/`) today. That is the only marker;
 [../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.
 
@@ -139,8 +139,8 @@ A count of the candidates, as they stood while the hazard was live:
 | `sort.c` | **fifteen** — all in `cmp()` and `newfile()`: `pa<la`, `ipa>pa`, `cp>=ce`, `cp < tspace+ntext`, … |
 | ~~`fsck.c`~~ | ~~five~~ — **found and fixed, task C4d**: two of them were `dirscan()`'s backward byte copy of a directory entry, which is a struct assignment now (an entry is four words); the others bounded a name, a line and the digits of a reconnected i-number, and are index counts. The twelve other relationals in that file compare `daddr_t *`, `ino_t *` and `DIRECT *` and were left alone |
 | ~~`ed.c`~~ | ~~**ten**~~ — **twenty**, and this table undercounted by half; the two `-x` took with it left nineteen to rewrite. **Found and fixed, task C3**: they are index counts and `int` differences now, and [ed/README.md](ed/README.md) lists them. Every one bounds a buffer the regex engine or the substitute path writes into |
-| `fgrep.c` | four — `p > &buf[512]` ×2, `p <= nlp`, `nlp < &buf[1024]` |
-| `grep.c` | three — `ep >= &expbuf[ESIZE]`, `sp > cstart`, `lp >= curlp` |
+| ~~`fgrep.c`~~ | ~~four~~ — **five, and counted, task C5c**: this table missed `nlp < p`, which is the per-byte loop that prints every matching line |
+| ~~`grep.c`~~ | ~~three~~ — **nine, and counted, task C5c**: the three named (`ep >= &expbuf[ESIZE]`, `sp > cstart`, `lp >= curlp`) were real and six were missed, including **both `lp-- > curlp` loops, which are the matcher's inner loop**. Left as they stand — they lower correctly and rewriting them would have obscured v7's backtracker — but the count is the second time this table has undercounted a *regex* program by two thirds, `ed` being the first |
 | `sed/sed1.c` | three, all `sp >= &genbuf[LBSIZE]` |
 | `pr.c` | two, both `>= &buffer[BUFS]` |
 | ~~`dd.c`~~ | ~~one — `ip > ibuf`~~ — **found and fixed**, task C4b: it zero-fills the input buffer before every read under `conv=noerror`/`conv=sync`, and is a word loop over `btow(ibs)` words now |
@@ -156,8 +156,10 @@ grows byte cursors when it parses, not when it reads bytes.** `sort`, `grep`, `s
 each hold a cursor inside a buffer they are deciding about; the six filters of C5a, the seven of
 C5b and the four checkers of C4e copy or count and hold `int` indices already. **Nineteen v7
 sources have now been grepped for it and come back empty**, which is worth stating as a
-prediction rather than a tally: the four programs the table still lists — `sort`, `grep`, `sed`,
-`pr` — are the ones that *decide* about a buffer, and they are where the remaining instances are. That is where to expect the
+prediction rather than a tally — and **task C5c confirmed the positive half of it too**: `grep`
+and `fgrep` are the first two of the four "deciding" programs to be opened, and both had *more*
+cursors than the table claimed rather than fewer. `sort` and `pr` are the two left, and
+`sort.c`'s fifteen should be re-counted rather than trusted. That is where to expect the
 *other* three hazards too.
 
 Those three — a flag packed into bit 0 of a pointer, a bit mask used to round to a word when
@@ -187,15 +189,23 @@ truncated silently), ~~`cmp.c` (7)~~ (**done, task
 C5a** — the count was exact, and all seven were `int`: a byte offset, a line number, the two
 skip counts, `otoi()`'s declaration, its definition and its accumulator), `find.c` (7),
 ~~`du.c` (5)~~ (**done, task C4a** — all five were `int`), `strip.c` (5), `nm.c` (4),
-`grep.c` (4). C5a's other five carry six between them (`wc.c` six, `sum.c` one, `tee.c` one),
+~~`grep.c` (4)~~ (**done, task C5c** — **three**, not four: this count included the string
+`"grep: argument too long"`. Two were counters and the third was a `long ftell();`
+re-declaration). C5a's other five carry six between them (`wc.c` six, `sum.c` one, `tee.c` one),
 and C5b's other six carry eleven (`look.c` six, `tail.c` five).
 
-**And thirteen filters have now been grepped for `%D` and `%O` with no hit at all** — including
-`od`, the one program in the tree whose entire output is numbers, which escaped §3's
-verbatim-echo trap because it uses no numeric `printf` conversion: it has its own recursive
-`putn()`. That is the second negative result in this section and it is worth the same caution
-the §2 table's are: **the trap is real and the sources that spring it are the ones that print a
-number they did not compute themselves.**
+**Thirteen filters were grepped for `%D` and `%O` with no hit at all** — including `od`, the one
+program in the tree whose entire output is numbers, which escaped §3's verbatim-echo trap because
+it uses no numeric `printf` conversion: it has its own recursive `putn()`.
+
+**And then the fourteenth had one.** `grep.c`'s `-c` path was `printf("%D\n", tln)` — the whole
+of that flag's output, printing the two characters `%D` — in a file that spells the *same*
+quantity `%ld` two lines further down. So the negative result stood for exactly as long as it
+took to open another source, which is the caution to take from it: **a survey of thirteen files
+is not a property of the fourteenth.** Keep grepping each new one; it costs a second. The
+prediction the negative result was worth stating as still holds — the sources that spring the
+trap are the ones that print a number they did not compute themselves — and `grep -c` prints
+one it counted.
 
 The other direction is worth a glance too: **plain `char` is unsigned here**
 ([../doc/Besm6_Data_Representation.md](../doc/Besm6_Data_Representation.md)), so the
@@ -491,6 +501,13 @@ Two harnesses, and choosing wrong wastes the effort:
   go into a checked-in `.expected`. `col` names itself that way in both its diagnostics, so
   both belong under the booted kernel — where the shell hands `exece()` the word as it was
   typed (`cmd/sh/service.c`'s `execs()`) and the message reads `col:`.
+  **And task C5c added a fifth, which is about the `.args` line rather than about the
+  simulator.** The line is expanded unquoted, so it is **split on whitespace and has no
+  quoting** — a pattern containing a space cannot be a case here at all, and that is much of
+  what anybody greps for. It was globbed as well until C5c, harmlessly, because no argument in
+  thirteen filters' worth of cases had ever been a pathname pattern; a regular expression is
+  one, so `run-prog-test.sh` runs `set -f` now. **Ask what the shell will do to an argument
+  before designing a case around it**, and send the ones it will not survive to the booted test.
   **A third is gone: there is stdin now.** C2b recorded that a case could not feed a filter and
   named `<case>.in` as the obvious fix; task C3 made it, because `ed` reads its whole command
   language on standard input and nothing else about it could have been tested cheaply. The file
@@ -536,9 +553,11 @@ Two harnesses, and choosing wrong wastes the effort:
   minor 1 having never carried a block. It is also the one test whose program has **no**
   `b6sim` half at all (see above), so unlike `fsck.ini` it is not the second word on its
   subject but the only word.
-  And `kernel/test/filters` (task C5b) for anything whose subject is **bytes** — it is the
-  one test here that runs thirteen programs, the only one that puts a **pipe** on a program's
-  standard input, and the only one whose oracle is masked **nowhere**, every number in its log
+  And `kernel/test/filters` (task C5b, extended by C5c) for anything whose subject is
+  **bytes** — it is the one test here that runs **fifteen** programs, the only one that puts a
+  **pipe** on a program's standard input, the only place an argument can be **quoted**
+  (`run-prog-test.sh` splits a `.args` line and cannot, so `grep 'вет мир'` exists only here),
+  and the only one whose oracle is masked **nowhere**, every number in its log
   being computed by a filter from a corpus the script writes for itself in the same run.
   **Task C4e was the one task that stopped at the first harness**, and saying so out loud is
   what got it closed: `icheck`, `dcheck`, `ncheck` and `clri` were asserted under `b6sim`
@@ -607,8 +626,8 @@ bit is almost always a bug.
 
 **The third form is the worst and `col` is its worked example: a program that STEALS bit `0200`
 for a flag of its own.** `/bin/sh` marked a quoted character with it and `col` marks a Greek
-half-shift with it; `grep` and `sed` will have the `CCL` bitmap, which is the same hazard from
-the table side. The shell's was fixed by moving the mark, `ed`'s replacement-text escape by
+half-shift with it; `grep` had the `CCL` bitmap, which is the same hazard from the table side,
+and `sed` still does ([grep/README.md](grep/README.md) is what task C5e should read first). The shell's was fixed by moving the mark, `ed`'s replacement-text escape by
 replacing bit `0200` with a `QESC` prefix, and `col`'s by **deleting the feature**, there being
 no Model 37 Teletype on this machine and no producer of `SO`/`SI` for it
 ([col/README.md](col/README.md)). Which of the three is right depends on what still feeds the
@@ -1135,3 +1154,69 @@ intervals because those two print what the clock and the host decided, and every
 `filters.log` is computed by a filter from a corpus the script writes for itself in the same
 run. A test whose oracle needs no projection is one whose subject is deterministic; **if a
 filter ever needs a mask here, that is a finding about the filter.**
+
+---
+
+## What task C5c taught
+
+`grep` and `fgrep` are on the image, `/bin` holds forty-five entries, and `kernel/test/filters`
+runs **fifteen** filters in one boot — task C5c joined that test rather than taking a volume of
+its own, which is what the plan told a later filter to do; 3098 is still free.
+[grep/README.md](grep/README.md) is the account, and it is the file task C5e should read before
+starting `sed`. Six findings generalize.
+
+**A warning that has been carried for three tasks is still worth re-reading against the code.**
+[TODO.md](TODO.md) and §11 both described `grep`'s `CCL` bitmap as 128 bits that must become 256
+so a class can hold a byte above `0177`. True, and only half of it: that is the **match** side,
+which masks with `0177`. The **compile** side masks nothing at all, and `char` is unsigned here,
+so a pattern byte of `0300` stored eight bytes past its own sixteen-byte class, on top of
+bytecode `compile()` had already written. v7's `grep` did not merely fail to match a Cyrillic
+class — it corrupted the expression while being asked for one. Widening the table to 32 bytes
+fixes both, `c >> 3` then landing in `[0,31]` by construction. **The warning was right about the
+constant and wrong about the failure**, which is the same shape task C3 recorded when `ed` turned
+out to have no bitmap at all: a brief written from a survey names the thing it saw.
+
+**A survey of thirteen files is not a property of the fourteenth.** §3 above records
+`%D`/`%O` grepped for across thirteen filters with no hit, stated — carefully — as a prediction
+rather than a tally. The fourteenth had one, in `grep -c`, which is the whole output of that
+flag. The habit the negative result was meant to license is *not* "stop grepping"; it costs a
+second per source and it caught this.
+
+**A count that must agree between two programs should have nothing left to choose.** `-b` printed
+a block number: `grep` divided by `BSIZE` (512 in v7, silently 3072 here) and `fgrep` by a
+hard-coded 512, so the same flag on the same manual page gave two different answers for the same
+match. Dividing by `BSIZE` in both would have made them agree *today*. Deleting the division —
+`-b` is a byte offset now, the fourth deliberate divergence after `touch`, `rev` and `col` — makes
+them unable to disagree, and `cmd_grep_offset` and `cmd_fgrep_offset` assert the same number over
+the same fixture so that a half-undone divergence fails a test. **Prefer removing the choice to
+making the two choices match.**
+
+**Multiply the count by the layout before believing a table is small.** `fgrep`'s `struct words
+w[6000]` is 24,000 words of bss here — a state is four 48-bit words where the PDP-11 packed it
+into eight bytes — against §6's 28,672-word ceiling for the whole program. It did not fit before
+a byte of its own text. That is C4e's `ncheck` finding, but it hid differently: `ncheck`'s
+2503-entry hash table was visibly enormous against a thousand-inode i-list, while `6000` reads as
+an ordinary generous constant and what makes it unaffordable is a six-line struct definition that
+looks identical on both machines. **The number to look at is `MAXSIZ * sizeof`, and the `sizeof`
+is worth measuring rather than deriving** — this one came out at four words where the arithmetic
+said five.
+
+**§6's third ceiling is real, it is reachable, and the region just past it does not fault.**
+`grep`'s `advance()` recurses once per star that consumes something, at 153 words a frame against
+a 4,096-word stack, so about twenty-six levels fill it. Stepping the star count up over a line
+that matches: twenty levels give the right answer, **about forty give an empty one — a wrong
+answer, from a search program, with no diagnostic** — and about fifty fault the machine. Only the
+third is the failure a reader expects. It is a counted wrapper with a `grep: expression too
+complex` now. The general form joins `col`'s heap from one task earlier: **a recursion whose
+depth is set by the input is a ceiling of its own, `rootfs_<name>_size` can see neither, and
+neither is safe to reason about instead of trying.**
+
+**And a harness limit that had never bound anything bound this task twice.**
+`run-prog-test.sh` expands a `.args` line unquoted, which is how arguments get split — and it
+globbed them too, harmlessly, for thirteen filters' worth of cases, because no argument had ever
+been a pathname pattern. **A regular expression is one.** `[bg]`, `g*amma` and `^[^abg]` would
+all be replaced by a file that happened to be in the test's working directory. One word of
+`set -f` fixes it, and it is task C3's rule again: when a limit is stated of a harness rather
+than of the machine, check which it is. The half that could *not* be fixed there — a pattern
+containing a **space**, the line being split with no quoting — went where such gaps go, into
+`kernel/test/filters.sh`, as a sixth item on its list of things `b6sim` cannot say.

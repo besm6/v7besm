@@ -120,10 +120,11 @@ copy. Sources are compiled *into* `kernel/test/` via `b6_find_src()`/`b6_test_ob
   one resource lock, so they run one at a time — about seventy seconds of serial wall clock,
   the critical path of the whole suite. **They are labelled `weekly` and are not in the
   daily suite**: `make run` and `cd kernel/test && make test` exclude them (`-LE weekly`),
-  and `make weekly` (top level or in `kernel/`) is what runs them. Run it before a commit
-  that touches the kernel, the drivers or the root image — not on every edit. `boot` is the
-  exception, left in the daily suite as a one-second smoke test that the kernel still
-  reaches a shell prompt.
+  and `make weekly` (top level or in `kernel/`) is what runs them. **It is opt-in and is
+  not a pre-commit gate** — do not run it as acceptance criteria; `make run` and `cd
+  kernel/test && make test` are what a change is accepted on, and the latter rebuilds
+  `root.img` first. `boot` is the exception, left in the daily suite as a one-second smoke
+  test that the kernel still reaches a shell prompt.
 - `console` and `edit` are **DISABLED** on top of that — simulator flakiness,
   `kernel/TODO.md` task 35 — so `make weekly` skips them too; do not run them on your own
   initiative.
