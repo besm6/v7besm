@@ -9,8 +9,21 @@
 # A KEYWORD LIST IS NEWLINE-SEPARATED, so the several-keyword form cannot be an argument at
 # all here: a .args file is one line.  keys.txt and -f are what test it, which is the same
 # shape the program's own -f exists for.
+#
+# FOUR CASES BRACKET THE ONE CEILING, in two pairs.  toomany/manykeys are the keyword-COUNT
+# direction and toolong/longkey the keyword-LENGTH direction; in each pair one list is taken
+# and the other gets `fgrep: wordlist too large'.  There used to be one case and it asserted
+# the wrong thing: 400 keywords of `keyword%08d' build 856 states of 3000 and died in cfail's
+# 400-entry QUEUE, never in cgotofn -- the same diagnostic from a ceiling no document in this
+# tree named, so the case passed on the wrong cause for the whole of task C5c.  The queue is
+# sized from MAXSIZ now (../fgrep.c's header), toomany.txt really does fill the table, and
+# manykeys and longkey are the two lists v7's code rejected.  ../../README.md SS9's rule that
+# a stated bound gets a program run against it is why there are four and not one: grep.1's
+# BUGS states 3000 states and no keyword count, and these four are what say so.
 
-set(FGREP_FIXTURES text.txt fold.txt exact.txt keys.txt toomany.txt)
+set(FGREP_FIXTURES text.txt fold.txt exact.txt keys.txt
+                   toomany.txt toolong.txt manykeys.txt longkey.txt longtext.txt
+                   failchain.txt failtext.txt)
 set(_copied)
 foreach(f ${FGREP_FIXTURES})
     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${f}
@@ -41,7 +54,11 @@ b6_progtest(fgrep fold)     # -y, which fgrep has although grep.1 said it did no
 b6_progtest(fgrep utf8)     # a Cyrillic keyword: fgrep compares bytes and always could
 b6_progtest(fgrep header)   # two files, so each line carries its file name
 b6_progtest(fgrep nohead)   # -h takes that prefix away
-b6_progtest(fgrep toomany)  # THE NEW LIMIT: 400 keywords overflow MAXSIZ 3000, status 2
+b6_progtest(fgrep toomany)  # 250 keywords x 15 chars: past 3000 states, `wordlist too large'
+b6_progtest(fgrep toolong)  # ONE keyword of 3001 chars: the same ceiling, the other way round
+b6_progtest(fgrep manykeys) # 500 keywords, ~1060 states: TAKEN.  v7's queue said no at 399
+b6_progtest(fgrep longkey)  # 450 chars in one keyword: v7 wrote past cfail's own stack frame
+b6_progtest(fgrep failchain) # a fail link two hops deep: v7 printed NOTHING for `bd' in `debd'
 b6_progtest(fgrep badflag)  # status 2, where v7 searched for the bad flag instead
 b6_progtest(fgrep noent)    # a file that is not there: status 2
 b6_progtest(fgrep nomatch)  # nothing found: status 1

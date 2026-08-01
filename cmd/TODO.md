@@ -90,7 +90,12 @@ caution to take from a negative result. **`fgrep` did not fit the machine**: `st
 w[6000]` is 24,000 words of the 28,672 an address space has, a state being four 48-bit words
 where the PDP-11 packed it into eight bytes, so `MAXSIZ` is 3000 and two `_Static_assert`s hold
 it — the number that looked generous was the one that did not fit, and the thing to multiply by
-is `sizeof`. And **`-b` is the fourth deliberate divergence**, after `touch`, `rev` and `col`: it
+is `sizeof`. **And `fgrep` had two more defects that this task did not find**, both in `cfail()`
+and both found afterwards by measuring rather than reading: a 400-entry queue in a stack frame
+whose wrap arithmetic was bounded on one arm and not the other, which was a second undocumented
+ceiling at 399 keywords *and* wrote past the frame; and a failure function that never took a
+second hop along the fail chain, so `fgrep` silently missed matches for about one keyword list
+in a hundred. And **`-b` is the fourth deliberate divergence**, after `touch`, `rev` and `col`: it
 printed a block number, which `grep` computed with `BSIZE` and `fgrep` with a hard-coded 512, so
 the same flag on the same manual page gave two answers for the same match. It is a byte offset
 now — the division deleted rather than the divisor chosen, so the two cannot disagree again.
@@ -160,7 +165,7 @@ compiles.
 **C4 was the one that mattered and it is gone from this table**, its twelve programs and what
 each of them settled being the opening paragraph's business now. C5 is cheap and pays for
 itself in test coverage, and C5a through C5d have now shown what that is worth in numbers:
-sixteen programs, 327 `ctest -L cmd` cases, and the whole label still finishing in under seven
+sixteen programs, 331 `ctest -L cmd` cases, and the whole label still finishing in under seven
 seconds. **"Cheap" is about the harness and not about the port**, which is C5c's correction to
 this paragraph and C5d's again: two of C5c's programs were three quarters of a day's work each,
 C5d's one program was more than that, and the reason was never the line count. C5d's day went
@@ -179,7 +184,7 @@ boot.
 
 **C5a, C5b, C5c and C5d are done and their writeups have been removed**; what they taught is
 README.md's *What task C5a taught* through *What task C5d taught*. Sixteen filters are on the
-image with 327 `ctest -L cmd` cases between them and a booted pass over all sixteen at once.
+image with 331 `ctest -L cmd` cases between them and a booted pass over all sixteen at once.
 Four things they leave to the tasks below.
 
 **The filter test pattern is established**, which is what C5a existed for: `<case>.in` feeds the
@@ -399,7 +404,7 @@ decision before either is started, not during.
 | | | lines | note |
 |---|---|---|---|
 | `make/` | the build tool | 2,047 | the highest-value item here; measure against the word ceiling early |
-| `awk/` | | 2,700 | yacc; also the most float-dependent program in the tree — read [../lib/libm/README.md](../lib/libm/README.md) on what overflow does here |
+| `awk/` | | 2,700 | yacc; also the most float-dependent program in the tree — read [../lib/libm/README.md](../lib/libm/README.md) on what overflow does here. `b.c` is the same Aho-Corasick shape `fgrep` has, and its tables *are* bounded on every path, but `cgotofn()`'s frame is ~900 words of them before its per-state `malloc` — §6's third and fourth ceilings both apply, and [grep/README.md](grep/README.md) is the worked example |
 | `m4/` | macro processor | 995 | |
 | `dc/`, `bc.y` | calculators | 1,943 + 600 | `dc` is the engine, `bc` the yacc front end |
 | `expr.y` | shell arithmetic | 669 | yacc; wanted by scripts almost as much as `test` |
@@ -438,7 +443,7 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 **C5e**, `sed`, and [grep/README.md](grep/README.md) is what to read before starting it — the
 `CCL` widening is a worked example now rather than a warning, and [sort/README.md](sort/README.md)
 is the one to read before `find` in C5f, which has the same `sbrk` shape. The phase's economics
-are measured rather than argued: sixteen programs, 327 cases, the whole of `ctest -L cmd` in
+are measured rather than argued: sixteen programs, 331 cases, the whole of `ctest -L cmd` in
 under seven seconds, and one booted pass that covers all sixteen at once.
 
 **C5c and C5d were both cheap in line count and neither was cheap.** C5c's four findings were

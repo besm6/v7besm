@@ -18,14 +18,46 @@
  * three pointers take one each, where the PDP-11 packed the lot into eight
  * bytes.  So v7's 6000 states are 24,000 words of bss, and the whole user
  * address space is 28,672 (../README.md SS6): fgrep did not fit before a byte of
- * text.  3000 states is 12,000 words -- the program measures 17,048 all told --
- * and is about 3,000 bytes of keyword text, far past any list anybody types;
+ * text.  3000 states is 12,000 words, and the queue below is sized from MAXSIZ and
+ * is 3,000 more -- the program measures 20,019 all told -- and 3000 states is about
+ * 3,000 bytes of keyword text, far past any list anybody types;
  * overflo() below has always diagnosed the limit, so the smaller table fails
  * loudly rather than quietly.  The _Static_asserts make a later change to the
  * struct or the count break the BUILD rather than the image, which is
  * ../README.md's rule for anything that encodes a layout.  This is icheck(1)'s
  * finding from task C4e: a fixed table is a ceiling somebody chose against
  * different hardware, so ask what bounds it here before keeping the number.
+ *
+ * THE FAILURE-LINK QUEUE IS LINEAR AND HAS NO BOUND TEST, WHICH IS A PROOF AND NOT A HOPE.
+ * cfail() walks the trie breadth-first, and v7 walked it through a circular queue[400] in
+ * cfail's own frame whose wrap arithmetic had TWO ARMS and a bound test on only one of them.
+ * The unchecked arm is the one a CHAIN takes: for a single long keyword the trie has no
+ * branches, front == rear at every enqueue, control never enters the checked arm at all, and
+ * rear walks off the array -- 450 characters of one keyword was enough, measured with
+ * AddressSanitizer on a host build of this source.  Two things followed.  It was a SECOND
+ * CEILING, tighter than the documented one and with the identical diagnostic, since overflo()
+ * says `wordlist too large' whether it is out of states or out of queue: 399 keywords whatever
+ * their length, and about 400 characters of one.  And it never needed to be a ring.  EVERY
+ * STATE IS ENQUEUED EXACTLY ONCE -- a state is the nst of exactly one node, nst is a fresh
+ * ++smax each time, and the root is nobody's nst -- so at most MAXSIZ-1 things are ever
+ * enqueued, and a LINEAR queue of MAXSIZ entries cannot wrap and cannot overflow.  All the
+ * circular arithmetic goes, and both of cfail's overflo() calls with it; MAXSIZ is now the only
+ * ceiling this program has.  Do not be tempted to drop the queue and walk w[] in index order
+ * instead: cgotofn allocates in keyword order, and the out-propagation at qloop needs
+ * breadth-first and not merely parent-before-child.
+ *
+ * AND THE FAILURE FUNCTION ITSELF WAS WRONG, WHICH IS THE ONE THAT COST ANSWERS.  fail(q), for
+ * q the c-successor of s, is the first state on s's FAILURE CHAIN that has a c-transition.
+ * v7 tried s->fail, walked its link chain of alternative transitions, and then went STRAIGHT TO
+ * THE ROOT -- it never took a second fail hop, because the trie's goto is the plain one and not
+ * a filled-in DFA, where one hop would have sufficed.  Any link needing two or more came out
+ * pointing too shallow, and since out is propagated along fail, a keyword ending at such a state
+ * was never reported.  Keywords `bd', `debdb', `ebb' and the line `debd' is the smallest case:
+ * fail(deb) is `eb', `eb' has no `d', and v7 jumps to the root and calls fail(debd) = `d',
+ * where the hop it skipped is fail(eb) = `b', which does have a `d' and gives `bd' -- a keyword.
+ * v7 printed nothing.  A SILENT WRONG ANSWER FROM A SEARCH PROGRAM, which is the failure mode
+ * ../grep/README.md keeps writing down, and it is not rare: about one random keyword set in a
+ * hundred hit it, measured against grep -F over 2,000 of them.  cmd_fgrep_failchain is the case.
  *
  * -b IS A BYTE OFFSET.  v7 printed (blkno-ccount-1)/512, a PDP-11 disk block;
  * grep.c divided by BSIZE instead, so the two commands printed different numbers
@@ -42,7 +74,6 @@
 #include <unistd.h>
 
 #define MAXSIZ 3000
-#define QSIZE  400
 
 // The input ring: two halves, read into alternately.  512 is this program's own
 // I/O chunking and not a unit it reports, so ../README.md SS4 leaves it alone.
@@ -61,16 +92,27 @@ struct words {
     struct words *fail;
 };
 
-static struct words w[MAXSIZ], *smax, *q;
+static struct words w[MAXSIZ], *smax;
+
+// cfail()'s breadth-first queue.  LINEAR, MAXSIZ long, and with no bound test in it
+// anywhere -- the header says why that is a proof rather than a hope.  It is bss and
+// not an automatic because 3,000 words in a frame is exactly ../README.md SS6's third
+// ceiling, the one nothing checks; in bss the rootfs_fgrep_size ctest weighs it on
+// every build.
+static struct words *queue[MAXSIZ];
 
 // Four words a state today, measured with b6size.  The bound is written as five --
 // doc/Besm6_Data_Representation.md SS8's worst case, a word per scalar member -- so
 // that this fails on a real growth of the struct rather than on a repacking; the
-// budget below is what actually holds the table inside the address space.
+// budget below is what actually holds the tables inside the address space.  THE BUDGET
+// COUNTS THE QUEUE, because queue[] is sized from MAXSIZ by the proof in the header and
+// not chosen: raising MAXSIZ costs five words a state and not four.  18,000 is the
+// 15,000 the table alone had plus the 3,000 the queue adds, so the slack is what it was.
+// Spelled from the declarations rather than from MAXSIZ, so it cannot drift from them.
 _Static_assert(sizeof(struct words) <= 5 * NBPW,
                "struct words grew: re-derive MAXSIZ against cmd/README.md SS6");
-_Static_assert(MAXSIZ * sizeof(struct words) <= 15000 * NBPW,
-               "w[] is past its 15,000-word budget; see the header");
+_Static_assert(sizeof(w) + sizeof(queue) <= 18000 * NBPW,
+               "w[] and queue[] are past their 18,000-word budget; see the header");
 
 static int lnum;
 static int bflag, cflag, fflag, lflag, nflag, vflag, xflag, yflag;
@@ -416,66 +458,49 @@ static void overflo(void)
 
 static void cfail(void)
 {
-    struct words *queue[QSIZE]; // 400 words of the 4,096 the stack has
     struct words **front, **rear;
     struct words *state;
-    int bstart;
+    struct words *q, *n;
+    int atroot;
     int c;
     struct words *s;
 
-    s     = w;
     front = rear = queue;
-init:
-    if ((s->inp) != 0) {
-        *rear++ = s->nst;
-        if (rear >= &queue[QSIZE - 1])
-            overflo();
-    }
-    if ((s = s->link) != 0) {
-        goto init;
-    }
+    for (s = w; s != 0; s = s->link)
+        if (s->inp != 0)
+            *rear++ = s->nst;
 
-    while (rear != front) {
-        s = *front;
-        if (front == &queue[QSIZE - 1])
-            front = queue;
-        else
-            front++;
-    cloop:
-        if ((c = s->inp) != 0) {
-            bstart = 0;
-            *rear  = (q = s->nst);
-            if (front < rear) {
-                if (rear >= &queue[QSIZE - 1]) {
-                    if (front == queue)
-                        overflo();
-                    else
-                        rear = queue;
-                } else
-                    rear++;
-            } else if (++rear == front)
-                overflo();
-            state = s->fail;
-        floop:
-            if (state == 0) {
-                state  = w;
-                bstart = 1;
-            }
-            if (state->inp == c) {
-            qloop:
-                q->fail = state->nst;
-                if ((state->nst)->out == 1)
-                    q->out = 1;
-                if ((q = q->link) != 0)
-                    goto qloop;
-            } else if ((state = state->link) != 0)
-                goto floop;
-            else if (bstart == 0) {
-                state = 0;
-                goto floop;
+    while (front < rear) {
+        for (s = *front++; s != 0; s = s->link) {
+            if ((c = s->inp) == 0)
+                continue;
+            *rear++ = (q = s->nst);
+            // fail(q) is the first state on s's FAILURE CHAIN that has a c-transition.
+            // Walking the chain is the whole of it: v7 tried s->fail and then jumped
+            // straight to the root, so every link needing two hops or more came out
+            // wrong and the machine silently missed matches.  See the header.
+            for (state = s->fail;; state = state->fail) {
+                atroot = 0;
+                if (state == 0) {
+                    state  = w;
+                    atroot = 1;
+                }
+                for (n = state; n != 0; n = n->link)
+                    if (n->inp == c)
+                        break;
+                if (n != 0) {
+                    // fail and out belong to the state, so every node of q's chain
+                    // carries them.
+                    for (; q != 0; q = q->link) {
+                        q->fail = n->nst;
+                        if ((n->nst)->out == 1)
+                            q->out = 1;
+                    }
+                    break;
+                }
+                if (atroot)
+                    break; // no c-transition anywhere: fail stays 0, meaning the root
             }
         }
-        if ((s = s->link) != 0)
-            goto cloop;
     }
 }

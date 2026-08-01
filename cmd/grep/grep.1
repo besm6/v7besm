@@ -310,9 +310,42 @@ answer, an empty one, for a dozen levels before it faults.
 .PP
 .I Fgrep
 holds its keywords in a table of 3000 states \-
-about 3000 characters of keyword text, fewer where the keywords share no
+one state per character of keyword text, less whatever the keywords share as a
 prefix \- and says
 .B fgrep: wordlist too large
 beyond that.
-v7 allowed 6000, which does not fit this machine's address space:
+There is no separate limit on the
+.I number
+of keywords: five hundred short ones fit easily,
+and it takes one keyword of three thousand characters to fill the table on its own.
+v7 allowed 6000 states, which does not fit this machine's address space:
 a state is four 48\-bit words here and eight bytes on a PDP\-11.
+.PP
+v7 also carried a second ceiling that no manual page mentioned \-
+a 400\-entry queue in the routine that computes the failure links \-
+which stopped
+.I fgrep
+at 399 keywords whatever their length,
+gave that same diagnostic when it did,
+and overran its own stack frame for a single keyword of about 450 characters.
+The queue is sized from the state table now and cannot overflow,
+so the 3000 states above is the only limit there is.
+.PP
+And v7's
+.I fgrep
+computed some of its failure links wrongly \-
+it followed one link from the failing state and then restarted at the root,
+where the chain of links has to be followed to its end \-
+so a keyword could go unreported although it was present.
+Keywords
+.BR bd ,
+.B debdb
+and
+.BR ebb ,
+against the line
+.BR debd ,
+is the smallest case: v7 printed nothing.
+About one keyword list in a hundred was affected,
+and the failure was silent \-
+indistinguishable from an honest absence of matches.
+Fixed, and checked against 2000 generated keyword lists.

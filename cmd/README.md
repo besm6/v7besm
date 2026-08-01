@@ -310,6 +310,8 @@ alone, a name out of a directory being neither NUL-terminated nor the program's 
 | `mount` | 93 | 3,428 | 374 | 1,079 | **4,974** |
 | `umount` | 93 | 3,389 | 364 | 1,079 | **4,925** |
 | `cat` | 83 | 2,989 | 165 | 1,544 | **4,781** |
+| `fgrep` | 86 | 3,670 | 212 | 16,051 | **20,019** |
+| `grep` | 100 | 3,983 | 220 | 1,323 | **5,626** |
 | `od` | 87 | 3,715 | 167 | 1,039 | **5,008** |
 | `col` | 87 | 3,500 | 168 | 1,434 | **5,189** |
 | `uniq` | 84 | 3,240 | 187 | 1,371 | **4,882** |
@@ -345,12 +347,15 @@ one or more aligned `BSIZEW` slots for the raw path — `icheck`'s five come to 
 and these two read no device, the kernel doing all the filesystem work they ask for. What is
 left is stdio and about 3,400 words of text.
 
-Most of `cat` is libc's stdio, and `fsck` is the largest program on the image — measured
+Most of `cat` is libc's stdio, and `fsck` is the largest program *of task C4* — measured
 before it was ported, as task C4d's brief demanded, and it came in at a third of the ceiling
-even though it is the longest source in C1–C8. **`sort` was measured early, as task C5d's brief
-demanded, and came in at 6,823** — the largest of the sixteen filters by a wide margin and a
-quarter of the ceiling, between `login` and `sh`. `awk` and `make` are the two left to measure
-early rather than late. Nothing before task C6 is in danger of the first ceiling.
+even though it is the longest source in C1–C8. **The largest program on the image is `fgrep`, at
+20,019**, and it is not close: 15,000 of its words are two arrays, the Aho-Corasick state table
+and the queue that is sized from it ([grep/README.md](grep/README.md)). Set it aside and **`sort`
+was measured early, as task C5d's brief demanded, and came in at 6,823** — the largest of the
+sixteen filters that carries its size in code rather than in one table, a quarter of the ceiling,
+between `login` and `sh`. `awk` and `make` are the two left to measure early rather than late.
+Nothing before task C6 is in danger of the first ceiling.
 
 **The bottom rows say what stdio costs.** Every program above `basename` links `printf`
 and a `FILE` buffer, which is the ~1,030 words of bss and most of the text they have in common;
@@ -408,6 +413,15 @@ expectation anywhere may depend on how much it got.
 `mkdir`, `rmdir`, `ln`, `cp` and `mv` each build a path in a fixed automatic that v7 filled with
 an unbounded `sprintf`/`strcpy`/`strcat` from `argv`. Add the length test. `chmod` is the only
 exception to date, and only because it has no buffer at all — it walks `argv[1]` in place.
+
+**And the other answer to a fixed buffer is to size it so that nothing has to test it.**
+`fgrep`'s `cfail()` walked its trie through a 400-entry circular queue in its own frame, with a
+bound test on one arm of the wrap arithmetic and none on the other — and the unchecked arm is
+the one a chain takes, so a single long keyword took it every time and wrote past the frame. The
+queue is linear and `MAXSIZ` long now, in bss where `rootfs_<name>_size` can weigh it, and it
+has no test at all: every state is enqueued exactly once and the state table is already bounded.
+**A bound test that is not on every path reads exactly like one**, and a check you can delete
+cannot be half-written. [grep/README.md](grep/README.md) is the account.
 
 ### 7. How a program gets onto the image — five steps
 
@@ -1185,7 +1199,7 @@ filter ever needs a mask here, that is a finding about the filter.**
 runs **fifteen** filters in one boot — task C5c joined that test rather than taking a volume of
 its own, which is what the plan told a later filter to do; 3098 is still free.
 [grep/README.md](grep/README.md) is the account, and it is the file task C5e should read before
-starting `sed`. Six findings generalize.
+starting `sed`. Eight findings generalize.
 
 **A warning that has been carried for three tasks is still worth re-reading against the code.**
 [TODO.md](TODO.md) and §11 both described `grep`'s `CCL` bitmap as 128 bits that must become 256
@@ -1242,6 +1256,36 @@ all be replaced by a file that happened to be in the test's working directory. O
 than of the machine, check which it is. The half that could *not* be fixed there — a pattern
 containing a **space**, the line being split with no quoting — went where such gaps go, into
 `kernel/test/filters.sh`, as a sixth item on its list of things `b6sim` cannot say.
+
+**A second ceiling can hide behind a shared diagnostic, and a test can pass on the wrong one.**
+`fgrep` says `fgrep: wordlist too large` from two places: `cgotofn`, out of the 3000 states the
+first finding above sized, and `cfail`, out of a 400-entry queue nothing in this tree
+documented. The queue was the tighter of the two for any keyword under about eight characters —
+399 keywords whatever their length — and its wrap arithmetic had a bound test on one of its two
+arms, the other being the one a single long keyword takes every time, so 450 characters of one
+keyword wrote past `cfail`'s own stack frame. `MAXSIZ` was in the source header, the manual
+page, this file and `TODO.md`; `QSIZE` was in none of them, and `cmd_fgrep_toomany` asserted the
+message, got it from the undocumented ceiling, and passed for a whole task. **A test that
+asserts a diagnostic asserts the string and not the cause** — bracket a stated bound from both
+sides instead, one list accepted and one refused, which is what `fgrep`'s four limit cases are.
+And the fix is a proof rather than a larger constant: every state is enqueued exactly once, so a
+linear queue of `MAXSIZ` needs no check at all, and both of `cfail`'s `overflo()` calls go with
+the arithmetic that hid the missing one.
+
+**A case built to demonstrate a feature exercises the feature, not the machinery underneath it.**
+Underneath that queue, `fgrep`'s failure function was computing the wrong links: `fail(q)` is the
+first state on the parent's *failure chain* with the right transition, and v7 tried the parent's
+`fail`, then went straight to the root, never taking a second hop. Links needing two or more came
+out too shallow, `out` is propagated along `fail`, and so a keyword ending at such a state was
+never reported — keywords `bd`, `debdb`, `ebb` and the line `debd` is the whole reproducer, and
+v7 printed nothing for it. **A silent wrong answer from a search program**, the failure this file
+has now recorded from four directions. Nineteen hand-written cases passed over it and pass
+unchanged today, because keywords chosen to illustrate a *flag* do not overlap each other in the
+way that makes a fail chain long; the bug lives in the interaction *between* keywords, which is
+exactly what hand-written cases hold fixed. What found it was 2,000 keyword sets nobody chose,
+diffed against `grep -F` — 1% of them wrong. **Where a program has a known-good reference and a
+cheap input generator, differential testing is worth more than the next ten hand-written cases**,
+and it is the first thing task C5e should point at `sed`'s regex engine.
 
 ---
 
