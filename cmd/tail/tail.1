@@ -1,11 +1,11 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
-.TH TAIL 1 
+.TH TAIL 1
 .SH NAME
 tail \- deliver the last part of a file
 .SH SYNOPSIS
 .B tail
-.if t [ \(+-number[\fBlbc\fR] ]
-.if n +_number[lbc___]
+.if t [ \(+-number[\fBlbcr\fR] ]
+.if n +_number[lbcr]
 [ file ]
 .SH DESCRIPTION
 .I Tail
@@ -19,18 +19,37 @@ from the beginning, or
 .I \-number
 from the end of the input.
 .I Number
-is counted in units of lines, blocks or characters,
+is counted in units of lines, blocks or bytes,
 according to the appended option
-.B l,
+.BR l ,
 .B b
 or
-.B c.
+.BR c .
 When no units are specified, counting is by lines.
+.PP
+The option
+.B r
+copies lines from the end of the file in reverse order;
+the default for
+.B r
+is to copy the whole buffer.
+.SH "A BLOCK IS 3072 BYTES"
+.I Note:
+.B b
+counts filesystem blocks, which are 3072 bytes here,
+where v7 counted 512-byte PDP\-11 disk blocks.
+So
+.B tail \-1b
+delivers the last 3072 bytes and
+.B dd bs=1b
+moves the same amount \- the two commands agree, which they would not
+if this one had kept a number that names nothing on this machine.
 .SH "SEE ALSO"
 dd(1)
 .SH BUGS
 Tails relative to the end of the file
-are treasured up in a buffer, and thus 
+are treasured up in a buffer of 4096 bytes, and thus
 are limited in length.
+.PP
 Various kinds of anomalous behavior may happen
 with character special files.

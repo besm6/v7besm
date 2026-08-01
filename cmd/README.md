@@ -36,7 +36,8 @@ do — the ten of task C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`,
 (`basename/`, `test/`, `time/`, `tty/`, `yes/`), the one of C3 (`ed/`), the three of C4a
 (`df/`, `du/`, `quot/`), the one of C4b (`dd/`), the one of C4c (`mkfs/`), the one of C4d
 (`fsck/`), the four of C4e (`icheck/`, `dcheck/`, `ncheck/`, `clri/`), the two of C4f
-(`mount/`, `umount/`), the six of C5a (`wc/`, `cmp/`, `sum/`, `tee/`, `split/`, `rev/`) and
+(`mount/`, `umount/`), the six of C5a (`wc/`, `cmp/`, `sum/`, `tee/`, `split/`, `rev/`), the seven of C5b
+(`tr/`, `uniq/`, `comm/`, `tail/`, `od/`, `look/`, `col/`) and
 the two of kernel task 29b (`getty/`, `login/`) today. That is the only marker;
 [../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.
 
@@ -147,12 +148,16 @@ A count of the candidates, as they stood while the hazard was live:
 | ~~`basename.c`~~ | ~~**two**, not the one this table used to claim — `p1>p2 && p3>argv[2]`~~ — **found and fixed**, task C2b: both are in the *same expression*, the backwards suffix compare, and both are index counts now |
 | ~~`mount.c`, `umount.c`~~ | ~~five~~ — **found and gone, task C4f**, though not one of them was rewritten: three (`np > argv[1]`, `np < &mp->spec[NAMSIZ-1]`, `np < &mp->file[NAMSIZ-1]`) bounded the basename stripping and the fixed-width copy into the mount table, and the other two are `umount.c`'s copies of the same. The table became a **text** file for an unrelated reason (§2's sibling hazard — see [mount/README.md](mount/README.md) §2) and every one of the five went with it. Worth recording because it is the cheap way out and it is not always available: **a hazard in code that exists only to serve a file format can be deleted by changing the format**, when the format is the program's own business |
 | ~~`wc.c`, `cmp.c`, `sum.c`, `tee.c`, `split.c`, `rev.c`~~ | **none** — grepped, task C5a, and this is the *second* negative result in the table and a more surprising one than C4e's. Six **text filters**, 487 lines of buffer arithmetic and character loops, and not one `char *` relational between them. `tee.c` is the one that walks a buffer and it does so with `int` indices (`r`, `w`, `p`, `i`); every other pointer test in the six is `==`/`!=` against `NULL`. The reason is the same as C4e's and is worth generalising: **a v7 source acquires this hazard when it parses, not when it reads bytes.** `sort`, `grep`, `sed` and `pr` all hold a cursor inside a buffer they are deciding about; a filter that copies its input holds an index into a buffer it is filling |
+| ~~`tr.c`, `uniq.c`, `comm.c`, `tail.c`, `od.c`, `look.c`, `col.c`~~ | **none** — grepped, task C5b, and this is the *third* negative result and the one that settles the shape. Seven more text filters, 1,364 lines, and not one `char *` relational between them either. Two are worth naming because they look like counter-examples and are not: `comm.c` holds two cursors in `compare()` and reaches them by forming `lb1 - 1` and incrementing back — a pointer before its buffer, which is UB and was rewritten as an index pair, but never a *relational*; and `col.c` walks `lbuff` with a file-scope `char *line` whose every bound (`lp > cp`, `lp < cp`) compares the **column count** rather than the pointer. So the rule holds with a sharper edge: a v7 source grows a byte cursor when it parses, and a cursor is not a hazard until something ORDERS two of them |
 | ~~`icheck.c`, `dcheck.c`, `ncheck.c`, `clri.c`~~ | **none** — grepped, task C4e. The only pointer relational in the four is `ncheck.c`'s `++hp >= &htab[HSIZE]`, over a `struct htab *`, which is thin and correct; it went anyway when the hash table became one sized from the superblock and indexed by i-number. Worth recording as a *negative* result: four v7 sources full of block and inode arithmetic and not one `char *` cursor between them, because none of them parses anything |
 
 What the table is still good for is the shape it found, which outlived the bug: **a v7 source
 grows byte cursors when it parses, not when it reads bytes.** `sort`, `grep`, `sed` and `pr`
-each hold a cursor inside a buffer they are deciding about; the six filters of C5a and the four
-checkers of C4e copy or count and hold `int` indices already. That is where to expect the
+each hold a cursor inside a buffer they are deciding about; the six filters of C5a, the seven of
+C5b and the four checkers of C4e copy or count and hold `int` indices already. **Nineteen v7
+sources have now been grepped for it and come back empty**, which is worth stating as a
+prediction rather than a tally: the four programs the table still lists — `sort`, `grep`, `sed`,
+`pr` — are the ones that *decide* about a buffer, and they are where the remaining instances are. That is where to expect the
 *other* three hazards too.
 
 Those three — a flag packed into bit 0 of a pointer, a bit mask used to round to a word when
@@ -175,12 +180,22 @@ program calls `sbrk` is not.
   consumes no argument** — so it desynchronises every later conversion in the same format string.
   v7 wrote `%D` freely. `ls` had two.
 
-Sources carrying the most `long`: `ps.c` (17), `od.c` (10), ~~`cmp.c` (7)~~ (**done, task
+Sources carrying the most `long`: `ps.c` (17), ~~`od.c` (10)~~ (**done, task C5b** — the count
+was exact and every one was a single word, but they were the *least* of that port: see
+[od/README.md](od/README.md), where five other things carried the 16-bit word and one of them
+truncated silently), ~~`cmp.c` (7)~~ (**done, task
 C5a** — the count was exact, and all seven were `int`: a byte offset, a line number, the two
 skip counts, `otoi()`'s declaration, its definition and its accumulator), `find.c` (7),
 ~~`du.c` (5)~~ (**done, task C4a** — all five were `int`), `strip.c` (5), `nm.c` (4),
 `grep.c` (4). C5a's other five carry six between them (`wc.c` six, `sum.c` one, `tee.c` one),
-and none of the six had a `%D` or a `%O`, so the verbatim-echo trap above was never sprung.
+and C5b's other six carry eleven (`look.c` six, `tail.c` five).
+
+**And thirteen filters have now been grepped for `%D` and `%O` with no hit at all** — including
+`od`, the one program in the tree whose entire output is numbers, which escaped §3's
+verbatim-echo trap because it uses no numeric `printf` conversion: it has its own recursive
+`putn()`. That is the second negative result in this section and it is worth the same caution
+the §2 table's are: **the trap is real and the sources that spring it are the ones that print a
+number they did not compute themselves.**
 
 The other direction is worth a glance too: **plain `char` is unsigned here**
 ([../doc/Besm6_Data_Representation.md](../doc/Besm6_Data_Representation.md)), so the
@@ -281,6 +296,11 @@ alone, a name out of a directory being neither NUL-terminated nor the program's 
 | `mount` | 93 | 3,428 | 374 | 1,079 | **4,974** |
 | `umount` | 93 | 3,389 | 364 | 1,079 | **4,925** |
 | `cat` | 83 | 2,989 | 165 | 1,544 | **4,781** |
+| `od` | 87 | 3,715 | 167 | 1,039 | **5,008** |
+| `col` | 87 | 3,500 | 168 | 1,434 | **5,189** |
+| `uniq` | 84 | 3,240 | 187 | 1,371 | **4,882** |
+| `look` | 85 | 3,432 | 185 | 1,162 | **4,864** |
+| `comm` | 83 | 3,099 | 168 | 1,037 | **4,387** |
 | `split` | 91 | 3,092 | 190 | 1,054 | **4,427** |
 | `rev` | 84 | 2,981 | 159 | 1,204 | **4,428** |
 | `cmp` | 80 | 3,036 | 177 | 1,038 | **4,331** |
@@ -300,6 +320,8 @@ alone, a name out of a directory being neither NUL-terminated nor the program's 
 | `init` | 27 | 820 | 37 | 323 | **1,207** |
 | `test` | 22 | 886 | 49 | 7 | **964** |
 | `tee` | 22 | 397 | 54 | 1,029 | **1,502** |
+| `tail` | 30 | 666 | 34 | 697 | **1,427** |
+| `tr` | 43 | 1,588 | 152 | 1,169 | **2,952** |
 | `getty` | 34 | 361 | 28 | 11 | **434** |
 
 **`mount` and `umount` are the two smallest programs of task C4** and the reason is the
@@ -334,6 +356,24 @@ it has no format string at all (`putd()` over `write(2)`), so its 4,027 words of
 more than `cat`'s — come with 911 words *less* bss, and the two totals land twenty-four words
 apart despite `ed` being five times the source. When measuring a candidate against the ceiling,
 ask what it prints with before extrapolating from a line count.
+
+**`tail` (task C5b) is now the smallest program on the image that does real work**, at 1,427
+words — a third of `cat` and below `getty`'s neighbours — and for `tee`'s reason carried
+further: it links **no stdio at all**, `read(2)` and `write(2) `end to end, and 683 of its 697
+words of bss are the 4,097-byte ring it holds a file's tail in. 666 words of text is the whole
+of a program with a forward mode, a backward mode, a reverse mode and four unit suffixes. Set
+beside `comm`, which does less and costs 4,387 because it holds **three** `FILE`s, it is the
+sharpest form of the rule above: **what a program prints with dominates what it does.**
+
+**And there is a fourth ceiling, which task C5b found and which nothing checks.** §6 names
+three; the heap is a fourth. `rootfs_<name>_size` weighs `const + text + data + bss` and cannot
+see a byte of allocated storage, and `col` is the first program here whose footprint is not
+statically knowable — `page[256]` is a sliding window of `malloc`'d half-lines. Its worst case
+is 34,304 words, **past the 28,672 the address space allows**, on top of the 5,189 the table
+gives it. What stops that being a wild store is that `col` already checks its `malloc` and exits
+with a diagnostic; what stops it being a surprise is saying so. Anything in C10 that manages its
+own storage inherits this — `sort`, `find` and `make` all call `sbrk` — and the general form is
+that **the size ctest is a bound on the image, not on the program.**
 
 **The stack is where a fixed buffer goes wrong, and every port so far has had to bound one.**
 `mkdir`, `rmdir`, `ln`, `cp` and `mv` each build a path in a fixed automatic that v7 filled with
@@ -446,6 +486,11 @@ Two harnesses, and choosing wrong wastes the effort:
   terminate** cannot be a case at all, however it is invoked, which is why `yes` has no `test/`
   directory; and **`argv[0]` is the staged path**, so a program that dispatches on the name it
   was called by — `test` and `[` — can only be tested through one of its names here.
+  **Task C5b widened that one**: it is not only a program that *dispatches* on `argv[0]` but
+  any program that *prints* it, since the staged path is an absolute build directory and cannot
+  go into a checked-in `.expected`. `col` names itself that way in both its diagnostics, so
+  both belong under the booted kernel — where the shell hands `exece()` the word as it was
+  typed (`cmd/sh/service.c`'s `execs()`) and the message reads `col:`.
   **A third is gone: there is stdin now.** C2b recorded that a case could not feed a filter and
   named `<case>.in` as the obvious fix; task C3 made it, because `ed` reads its whole command
   language on standard input and nothing else about it could have been tested cheaply. The file
@@ -491,6 +536,10 @@ Two harnesses, and choosing wrong wastes the effort:
   minor 1 having never carried a block. It is also the one test whose program has **no**
   `b6sim` half at all (see above), so unlike `fsck.ini` it is not the second word on its
   subject but the only word.
+  And `kernel/test/filters` (task C5b) for anything whose subject is **bytes** — it is the
+  one test here that runs thirteen programs, the only one that puts a **pipe** on a program's
+  standard input, and the only one whose oracle is masked **nowhere**, every number in its log
+  being computed by a filter from a corpus the script writes for itself in the same run.
   **Task C4e was the one task that stopped at the first harness**, and saying so out loud is
   what got it closed: `icheck`, `dcheck`, `ncheck` and `clri` were asserted under `b6sim`
   alone, where nothing exercises the raw path — and two of them *write* it.
@@ -502,9 +551,11 @@ Two harnesses, and choosing wrong wastes the effort:
   about a disagreement rather than a gap, and both were paid off by the next task that
   happened to be in the neighbourhood.
   Each test has its own copy of the
-  image at its own volume number; **3095 is the highest used** (`edit` took 3086, `fsinfo` 3087,
-  `dd` 3088, `mkfs` two — 3089 root and 3090 scratch — `fsck` two more, 3091 and 3092, and
-  `mount` three: 3093 root, 3094 scratch and 3095 the blank pack it mounts to be refused).
+  image at its own volume number; **3097 is the highest used** (`edit` took 3086, `fsinfo` 3087,
+  `dd` 3088, `mkfs` two — 3089 root and 3090 scratch — `fsck` two more, 3091 and 3092,
+  `mount` **four** — 3093 root, 3094 scratch, 3095 the blank pack it mounts to be refused and
+  3096 the second scratch `NMOUNT` 8 allowed — and `filters` 3097).  The next free number is
+  3098.
   All but `login` graft a script onto that copy
   with `b6fsutil -a`, and `login` is the exception because what it tests is the thing that reads
   what is typed: it types every character it needs. `mkfs` grafts its script at
@@ -554,10 +605,34 @@ account of what that cost is [sh/README.md](sh/README.md)'s C11 section; the sho
 table indexed by a character must have **256** entries, and a mask that throws away the eighth
 bit is almost always a bug.
 
-Two things that follow, and are worth knowing before writing a test: the shell's pattern
+**The third form is the worst and `col` is its worked example: a program that STEALS bit `0200`
+for a flag of its own.** `/bin/sh` marked a quoted character with it and `col` marks a Greek
+half-shift with it; `grep` and `sed` will have the `CCL` bitmap, which is the same hazard from
+the table side. The shell's was fixed by moving the mark, `ed`'s replacement-text escape by
+replacing bit `0200` with a `QESC` prefix, and `col`'s by **deleting the feature**, there being
+no Model 37 Teletype on this machine and no producer of `SO`/`SI` for it
+([col/README.md](col/README.md)). Which of the three is right depends on what still feeds the
+mechanism, and that is the question to ask first.
+
+**And a masked byte does not have to vanish to be wrong.** `col`'s `c &= 0177` turns `привет`
+into `P?QP8P2P5Q` — the six characters become ten bytes of plausible ASCII with two dropped, not
+an empty line and not a diagnostic. That shape is worth expecting: **a `0177` mask usually
+produces junk that looks like output**, which is why the assertion has to be a case with a known
+answer and not an eyeball.
+
+Two more things that follow, and are worth knowing before writing a test: the shell's pattern
 language matches **bytes**, so `?` is one byte and not one letter; and the terminal driver
 refuses a typed `0377` ([../kernel/dev/tty.c](../kernel/dev/tty.c)), which is the raw queue's
 delimiter — a script read from disk may contain one, a console user cannot type one.
+
+**A `<ctype.h>` call is the quiet form of the 128-entry table**, and two of C5b's seven had one:
+`lib/libc/gen/ctype_.c` is **129 entries** and says outright that only `isascii()` may be applied
+to a byte above `0177`, so `isdigit(argv[1][1])` in `uniq` and `isalnum`/`isupper` in `look` read
+off the end of it for a byte the caller chose. Guarding with `isascii()` is enough for `uniq`,
+whose argument is a flag letter; it is *not* enough for `look`, where `-d` (letters and digits
+only) and `-f` (fold case) have to **mean** something for a Cyrillic dictionary — the rule that
+port takes is that a byte above `0177` is a word constituent with no case. **Ask what the option
+means for a multi-byte letter, not merely whether the call is in bounds.**
 
 ---
 
@@ -975,17 +1050,88 @@ program that hangs on an argument is worth grepping for before designing its tes
 three cheap places to look are a loop bound taken from a number the user supplied, a `fclose`
 of something that may be null, and a `goto` back over both.
 
-## Where task C5a stopped, and what owes it
+---
 
-**The six are asserted under `b6sim` alone.** That is a deliberate stop and not an oversight —
-they run in both worlds and §9 says to do both — and it is recorded here for the reason task
-C4e's stop was: a deferral said out loud is the difference between a known gap and an unknown
-one. The booted-kernel pass belongs with task C5b's, whose seven programs will want the same
-script and the same two-minute boot; [TODO.md](TODO.md) carries it as a named loose end with
-the volume number a closing test would take.
+## What task C5b taught
 
-What that costs today is small and worth stating exactly. Nothing in the six touches a device,
-a directory, a signal or a second process, so the *program* logic is fully covered by
-`ctest -L cmd`. What is not covered is that the image's copy runs at all — which the two
-`ls /bin` listings (`kernel/test/console.ini` and `kernel/test/session.expected`) assert the
-existence of but not the execution of.
+`tr`, `uniq`, `comm`, `tail`, `od`, `look` and `col` are on the image, `/bin` holds forty-three
+entries, and [../kernel/test/filters.sh](../kernel/test/filters.sh) holds all **thirteen** of
+task C5 there — the booted pass C5a deferred, closed here. [od/README.md](od/README.md) and
+[col/README.md](col/README.md) are the two accounts. Six findings generalize.
+
+**A flag can keep its meaning while the thing it names changes underneath it, and that is the
+cheaper redesign.** `od`'s `-o`, `-d` and `-x` meant *the machine word, in this radix* on a
+PDP-11 and mean exactly that here; nothing about them was redefined, and what moved is only the
+width of the column — 6 octal digits to 16, 5 decimal to 15, 4 hex to 12. The tempting
+alternative was to make `-o` byte-sized so that the new `-w` could be the word, and that would
+have been the one change that really *did* break a v7 flag. **Ask whether the definition or the
+machine moved** before renaming anything; `-w` is a synonym and costs nothing.
+
+**A truncation that is silent is worse than a limit that is loud, and v7's `od` had one in the
+one program that could hide it best.** `putn()` recursed exactly as deep as the field was wide
+and discarded every digit above it, so a 48-bit word through `putn(n, 8, 6)` printed its low six
+octal digits and stopped — a plausible, wrong number, in a program whose entire output is numbers
+nobody can check by eye. It prints at least the field width and never fewer digits than the
+value needs now. **Where a program formats into fixed columns, ask what it does when the value
+does not fit**, and prefer a misaligned column to a quiet lie.
+
+**So the oracle has to be a second implementation when the output is unreadable.** Every one of
+`od`'s expectations was computed by a Python implementation of the same packing, written from
+`od.1` rather than from `od.c`. That is task C4d's rule — the best oracle is one that can
+disagree — reached from the opposite direction: not because two implementations already existed,
+but because *no reviewer could check the first one*. `mkfs`'s `cmp` against `b6fsutil -n` is the
+stronger form of the same thing, and `sort` and `pr` are the two below with the property that
+demands it.
+
+**A v7 feature that steals a bit must be re-examined on a machine whose text uses that bit, and
+the question is what still produces input for it.** `col` packs its Greek half-shift into bit
+`0200` of every stored character and masks its input with `0177`. Keeping it was possible — `ed`'s
+`QESC` prefix is the precedent for moving such a flag out of the character — and it was rejected
+because there is no Model 37 Teletype here, no way to attach one, and no *producer*: v7's `col`
+filters `nroff`, and there is no `nroff` in this source tree at all. That is `getty`'s cut to
+the speed table, and the third deliberate divergence in `cmd/` after `touch` and `rev`.
+
+**And the failure a faithful port would have produced was not the obvious one.** The reading
+that "the mask deletes the text" is wrong: `привет` masked with `0177` becomes `P ? Q \0 P 8 P 2
+P 5 Q \2`, and the printability test drops only the two that fell below a space — so v7's `col`
+prints `P?QP8P2P5Q`, ten bytes of plausible ASCII, two characters shorter than what went in.
+**Not an empty line and not a diagnostic: a wrong answer shaped like a right one.** It was
+asserted only because the byte arithmetic was worked out rather than assumed, and the first
+draft of this section claimed the output was empty. C1's rule — claiming more than the fix does
+is worse than carrying the bug — applies to describing the bug too.
+
+**A program can want a data file, and that turns the harness question into a design question.**
+`look`'s default is the absolute path `/usr/dict/words`, which under `b6sim` is the **build
+machine's** — on macOS it does not exist at all. So either the one-argument form, which is the
+form `look` mostly exists in, goes untested, or the dictionary joins the image. It joined:
+`cmd/look/words` is a thousand sorted entries with a Cyrillic tail, staged by
+`cmd/look/CMakeLists.txt` exactly as `etc/` stages `/etc/passwd`, and asserted under the booted
+kernel and nowhere else. §9's rule — when a program names a fixed absolute path, ask whose it is
+— has been cited five times now; this is the first task where the answer was to **give the guest
+one of its own**.
+
+## Where task C5a stopped, and what closed it
+
+**C5a's six were asserted under `b6sim` alone**, deliberately, and this file recorded the
+deferral rather than leaving it to be discovered — task C4e's lesson. **Task C5b closed it**:
+`kernel/test/filters` runs all thirteen in one boot at volume 3097, and five things it says are
+unreachable under `b6sim`, which is what makes it more than a second opinion:
+
+* **`look` against its default dictionary**, the one assertion the simulator is barred from.
+* **`tail` on a pipe.** It probes descriptor 0 and branches on `ESPIPE`; under `b6sim` standard
+  input is *always a file*, `run-prog-test.sh` redirecting one, so half that branch was
+  unreachable there. **A harness limitation can hide a whole code path rather than a whole
+  program**, which is a quieter gap than C4f's and worth looking for by grepping a candidate
+  for `ESPIPE`, `isatty` and `fstat` on descriptor 0.
+* **`col`'s two diagnostics**, for the widened `argv[0]` reason in §9.
+* **Six pipelines between one filter and another**, which is how anybody uses them and which no
+  single-program harness can represent.
+* **And that the image's copy of C5a's six executes at all** — which the two `ls /bin` listings
+  assert the *existence* of and not the execution of.
+
+**Nothing in that test is masked**, which is the difference from `kernel/test/utils` and is
+worth stating as a target rather than an accident: `utils` masks `date`'s seconds and `time`'s
+intervals because those two print what the clock and the host decided, and every number in
+`filters.log` is computed by a filter from a corpus the script writes for itself in the same
+run. A test whose oracle needs no projection is one whose subject is deterministic; **if a
+filter ever needs a mask here, that is a finding about the filter.**

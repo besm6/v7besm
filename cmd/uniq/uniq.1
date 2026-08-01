@@ -65,9 +65,21 @@ separated by tabs and spaces from its neighbors.
 .TP 8
 .BI + n
 The first
-.IR n 
-characters are ignored.
-Fields are skipped before characters.
+.I n
+bytes are ignored.
+.I Note:
+v7 called these characters, and on this machine they are not the same thing \-
+the text is UTF\-8 and a character above U+007F occupies more than one byte, so
+.B +2
+skips one Cyrillic letter and not two.
+Fields are skipped before bytes.
 .PP
+The comparison itself is over whole bytes and masks none of them,
+so a line of Cyrillic is compared like any other.
+.SH BUGS
+A line longer than 999 bytes is cut, and what is left of it is
+treated as the line that follows.
+.I Note:
+v7 had no bound here at all and wrote past the end of its buffer.
 .SH "SEE ALSO"
 sort(1), comm(1)

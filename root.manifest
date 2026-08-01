@@ -94,6 +94,15 @@ dir /etc
 dir /usr
 dir /usr/test
 
+# look(1)'s default dictionary.  v7's /usr/dict/words is not in this tree -- the
+# reference copy under cmd/tmp/ is git-ignored -- so cmd/look/words is a small sorted
+# list written for the purpose, staged by cmd/look/CMakeLists.txt.  It is what makes the
+# bare `look word' form mean anything here, and it is the ONE assertion about look that
+# b6sim cannot make: under the simulator this path is the build machine's (SS9), so every
+# case in cmd/look/test names its dictionary explicitly and kernel/test/filters is where
+# the default is exercised.
+dir /usr/dict
+
 dir /tmp
 mode 0777
 
@@ -239,6 +248,18 @@ file /bin/cmp           # cmd/cmp -- task C5a; the seven `long's cmd/README.md S
 source ../../rootfs/bin/cmp
 mode 0755
 
+file /bin/col           # cmd/col -- task C5b, and the task's one deliberate divergence: v7's
+                        # Greek half-shift stole bit 0200 of every character and its input
+                        # mask deleted the rest, so no UTF-8 letter survived.  Both are gone.
+source ../../rootfs/bin/col
+mode 0755
+
+file /bin/comm          # cmd/comm -- task C5b.  Its collating order is this machine's byte
+                        # order: char is unsigned here, so a byte above 0177 sorts AFTER the
+                        # ASCII where v7's signed char put it before (SS3).
+source ../../rootfs/bin/comm
+mode 0755
+
 file /bin/cp            # cmd/cp -- and what cmd/mv execs for a move across devices
 source ../../rootfs/bin/cp
 mode 0755
@@ -299,8 +320,20 @@ file /bin/login         # cmd/login: crypt(3), and the first non-root shell on t
 source ../../rootfs/bin/login
 mode 0755
 
+file /bin/look          # cmd/look -- task C5b.  Its default dictionary is /usr/dict/words
+                        # above; -d treats a byte over 0177 as a word constituent and -f
+                        # leaves it alone, a multi-byte letter having no case (SS11).
+source ../../rootfs/bin/look
+mode 0755
+
 file /bin/ls            # cmd/ls
 source ../../rootfs/bin/ls
+mode 0755
+
+file /bin/od            # cmd/od -- task C5b.  -o/-d/-x go on meaning THE MACHINE WORD, which
+                        # is 48 bits here: 16 octal digits, 15 decimal, 12 hex.  -w is a
+                        # second name for -o.  Bytes pack most significant first, as getw(3).
+source ../../rootfs/bin/od
 mode 0755
 
 file /bin/pwd           # cmd/pwd
@@ -341,6 +374,11 @@ file /bin/tee           # cmd/tee -- task C5a, and the only one of the six with 
 source ../../rootfs/bin/tee
 mode 0755
 
+file /bin/tail          # cmd/tail -- task C5b.  `-b' counts BSIZE here, not the PDP-11's 512
+                        # (SS4), so it agrees with dd's `b' suffix.  No stdio at all.
+source ../../rootfs/bin/tail
+mode 0755
+
 file /bin/test          # cmd/test -- what lets a shell script branch; see /bin/[ below
 source ../../rootfs/bin/test
 mode 0755
@@ -353,8 +391,19 @@ file /bin/touch         # cmd/touch -- utime(2) here, not v7's rewrite-a-byte; s
 source ../../rootfs/bin/touch
 mode 0755
 
+file /bin/tr            # cmd/tr -- task C5b.  The one filter of the seven that was eight-bit
+                        # clean already: its tables are [256] as v7 wrote them, so `tr a-z
+                        # A-Z' folds the ASCII and leaves a Cyrillic letter alone (SS11).
+source ../../rootfs/bin/tr
+mode 0755
+
 file /bin/tty           # cmd/tty -- ttyname(3), which reads /dev as a directory
 source ../../rootfs/bin/tty
+mode 0755
+
+file /bin/uniq          # cmd/uniq -- task C5b.  Compares whole bytes and masks none, so a
+                        # Cyrillic line compares like any other (SS11).
+source ../../rootfs/bin/uniq
 mode 0755
 
 file /bin/wc            # cmd/wc -- task C5a.  A byte above 0177 is a WORD CONSTITUENT here,
@@ -481,6 +530,12 @@ mode 0644
 #
 # puret is the one PURE (NMAGIC) program among them, and one of only two images on this
 # disk whose text the kernel can share at all -- /bin/sh is the other.  Task 26.
+
+file /usr/dict/words     # cmd/look -- task C5b.  Sorted in BYTE order, which is the order look
+                        # compares in: char is unsigned here, so every Cyrillic entry
+                        # follows every ASCII one.  `LC_ALL=C sort -c words' is the check.
+source ../../rootfs/usr/dict/words
+mode 0644
 
 file /usr/test/hello
 source ../../rootfs/usr/test/hello

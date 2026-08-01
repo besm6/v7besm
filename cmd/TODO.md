@@ -57,6 +57,25 @@ until this task the machine could type, store and glob `привет мир` and
 words. And `rev` is the first **deliberate divergence** since `touch` — it reverses UTF-8
 sequences where v7 reversed bytes, because on a machine whose text is UTF-8 end to end the
 faithful port is the one that returns mojibake ([rev/README.md](rev/README.md)).
+**And since C5b it can read it in every way the manual offers**: `tr`, `uniq`, `comm`, `tail`,
+`od`, `look` and `col` take the phase to thirteen and `/bin` to forty-three entries. Three are
+worth naming. **`od` is the one program in this tree that had to be *designed* rather than
+ported** — its whole subject is the machine word, and a machine word here is 48 bits, so `-o`,
+`-d` and `-x` go on meaning exactly what they meant on a PDP-11 while the columns they print
+become 16, 15 and 12 digits wide; `-w` is the name this file asked for and is a **synonym** for
+`-o` rather than a sixth format, because making `-o` byte-sized would have been the one change
+that really did redefine a v7 flag ([od/README.md](od/README.md)). **`col` is the third
+deliberate divergence**, after `touch` and `rev`: v7's steals bit `0200` of every stored
+character for a Model 37 Teletype's Greek half-shift and masks its input with `0177`, which
+between them turn `привет` into `P?QP8P2P5Q` — ten bytes of plausible ASCII, two characters
+short, which is a worse failure than losing the text would be — so the shift is deleted rather
+than carried, on `getty`'s precedent of cutting what this hardware has not got
+([col/README.md](col/README.md)). And **`look` brought a data file with it**: `/usr/dict/words`
+is on the image, which is what makes the bare `look word` form mean anything, and which is the
+sharpest instance of §9's absolute-path rule there has been — under `b6sim` that path is the
+*build machine's*, so every case beside the source names its dictionary explicitly and the
+default is asserted under the booted kernel or nowhere. **And C5a's deferral is paid**:
+`kernel/test/filters` puts all thirteen through one boot, at volume **3097**.
 [../etc/rc](../etc/rc) is a boot script that does something: it prints the motd and then the
 date, which is a literal to the minute because the boot clock is the image's own `-T` stamp,
 and `kernel/test/console` asserts both. What it
@@ -96,7 +115,7 @@ compiles.
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C5 | the text filters — ~~`wc` `cmp` `sum` `tee` `split` `rev`~~ `tr` `uniq` `comm` `tail` `od` `look` `col` `grep` `fgrep` `sort` `sed` `pr` `diff` `cal` `tsort` `join` `find` `file` | the corpus everything else is tested against | medium ×18; six done |
+| C5 | the text filters — ~~`wc` `cmp` `sum` `tee` `split` `rev` `tr` `uniq` `comm` `tail` `od` `look` `col`~~ `grep` `fgrep` `sort` `sed` `pr` `diff` `cal` `tsort` `join` `find` `file` | the corpus everything else is tested against | medium ×11; thirteen done |
 | C6 | multiuser userland — `passwd` `su` `newgrp` `stty` `who` `write` `wall` `mesg` `mail` | more than one person | medium; unblocked |
 | C7 | `tar` | getting data on and off without `b6fsutil` | medium |
 | C8 | inspection — `ps` `dmesg` `pstat` `iostat` `nice`, `ac` `sa` `accton` | seeing what the machine is doing | medium; needs `nlist(3)` |
@@ -105,10 +124,10 @@ compiles.
 
 **C4 was the one that mattered and it is gone from this table**, its twelve programs and what
 each of them settled being the opening paragraph's business now. C5 is cheap and pays for
-itself in test coverage, and C5a has now shown what that is worth in numbers: six programs,
-thirty-nine cases, and the whole of `ctest -L cmd` still finishing in under a second. C7 is one
-program and can be taken at any time; C6, C8 and C9 are each gated on something the task
-names.
+itself in test coverage, and C5a and C5b have now shown what that is worth in numbers: thirteen
+programs, 238 `ctest -L cmd` cases, and the whole label still finishing in under six seconds.
+C7 is one program and can be taken at any time; C6, C8 and C9 are each gated on something the
+task names.
 
 ---
 
@@ -119,35 +138,38 @@ like Unix — but more importantly **almost all of them run under `b6sim`**, so 
 that builds a userland regression corpus cheaply, in the harness that does not need a two-minute
 boot.
 
-**C5a is done and its writeup has been removed**; what it taught is README.md's *What task C5a
-taught*. `wc`, `cmp`, `sum`, `tee`, `split` and `rev` are on the image with thirty-nine `b6sim`
-cases between them, and the two things it left for the tasks below are these. **The filter test
-pattern is established**, which is what C5a existed for: `<case>.in` feeds the filter, fixtures
-are **copied into the build directory** rather than named through `@srcdir@` (a program that
-prints the name it was given would otherwise put a build path into a checked-in `.expected`),
-and a filter whose output is a **file** rather than a stream gets a custom `add_test` that lets
-the host look at the directory afterwards — `cmd/tee/test/run-tee-test.sh` and
-`cmd/split/test/run-split-test.sh` are the two shapes. `col`, `sed -n w` and `sort -o` will all
-want the second.
+**C5a and C5b are done and their writeups have been removed**; what they taught is README.md's
+*What task C5a taught* and *What task C5b taught*. Thirteen filters are on the image with 238
+`ctest -L cmd` cases between them and a booted pass over all thirteen at once. Four things they
+leave to the tasks below.
 
-**And C5a's one loose end is C5b's to close.** The six are asserted under `b6sim` **alone** —
-deliberately, and README.md says so out loud rather than leaving it to be discovered, which is
-the lesson task C4e paid for. They run in both worlds and §9 says to do both, so the booted
-pass is owed; it is not worth a two-minute boot for six programs that touch no device, no
-directory, no signal and no second process, and it *is* worth one for those six plus C5b's
-seven. **C5b should write `kernel/test/filters` and put all thirteen through it** — the
-`kernel/test/utils` script is the model, `run-utils.sh` the masking precedent, and **3096** is
-the next free volume number (`mount` took 3093–3095).
+**The filter test pattern is established**, which is what C5a existed for: `<case>.in` feeds the
+filter, fixtures are **copied into the build directory** rather than named through `@srcdir@` (a
+program that prints the name it was given would otherwise put a build path into a checked-in
+`.expected`), and a filter whose output is a **file** rather than a stream gets a custom
+`add_test` that lets the host look at the directory afterwards — `cmd/tee/test/run-tee-test.sh`,
+`cmd/split/test/run-split-test.sh` and now `cmd/uniq/test/run-uniq-test.sh` are the three shapes.
+`sed -n w` and `sort -o` will both want the last. (**This file used to name `col` among them and
+was wrong**: `col` opens no file at all, `getchar()` in and `putchar()` out, and takes the
+ordinary shape. That is the second time a warning here was written from a survey rather than from
+the code — see what C3 says about `ed`'s `CCL` bitmap — and it is worth re-reading the source
+before budgeting for a harness.)
 
-### C5b. `tr`, `uniq`, `comm`, `tail`, `od`, `look`, `col`
+**The booted pass exists now and later tasks join it rather than repeating it.**
+`kernel/test/filters` at volume **3097** runs all thirteen in one boot, and
+`cmd/README.md` §9 lists the five things it asserts that `b6sim` cannot. A C5c or C5d program
+that wants a booted assertion should add a section to `kernel/test/filters.sh`, as task C4f
+folded C4e's loose end into `mount.sh` rather than spending a second boot on it. **The next free
+volume number is 3098.**
 
-`tr.c` (134), `uniq.c` (144), `comm.c` (168), `tail.c` (186), `od.c` (252), `look.c` (164),
-`col.c` (316). Two notes: **`od` is worth extra care** — ten `long`s, and its whole job is to print
-words in octal, which on a 48-bit machine means the default format wants rethinking, not just
-porting (a `-w` word dump in 16 octal digits is what this machine needs, beside the byte formats).
-And `tail -b` counts in **512-byte** blocks by definition (`n <<= 9`, `tail.c:57`) — that is the
-manual page's own unit and not a filesystem block, so §4 does *not* apply to it; decide whether to
-keep 512 or move it to `BSIZE`, and say which in the manual page.
+**An oracle for a program whose output is unreadable should be a second implementation.** `od`
+prints 48-bit words in sixteen octal digits, which no reviewer can check by eye, and v7's `putn()`
+silently truncated anything too wide for its field — so every one of `od`'s expectations was
+computed by a Python implementation written from the manual page. `sort` and `pr` are the two
+below with the same property.
+
+**And `grep`'s and `sed`'s `CCL` bitmap is still 128 bits**, which is C5c's and C5e's business
+and is stated where those tasks are.
 
 ### C5c. `grep`, `fgrep`
 
@@ -381,12 +403,12 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 
 ## Where to start
 
-**C5b**, and for the reason C5a's writeup gives rather than for a new one: C5a proved the
-phase's economics — six programs, thirty-nine cases, no boot — and left C5b two things to do
-that nothing else can. The first is the seven programs themselves, of which `od` is the one
-that wants rethinking rather than porting. The second is the **booted-kernel pass C5a
-deliberately did not take**: `kernel/test/filters`, over all thirteen programs at once, at
-volume 3096. See the paragraph under C5b.
+**C5c**, and for the reason the two finished halves of C5 give rather than for a new one: the
+phase's economics are now measured rather than argued — thirteen programs, 238 cases, the whole
+of `ctest -L cmd` in under six seconds, and one booted pass that covers all thirteen at once.
+`grep` and `fgrep` are the next two and they are cheap; what they carry that C5a and C5b did not
+is the **`CCL` bitmap**, which is 128 bits and has to become 256 (see C5c below). After them,
+`sort` is the one to measure early rather than late.
 
 **The whole of C4 has landed**, so the guest can now *examine* its own store — `df`, `du` and
 `quot`, with the raw-device path proven and a fixture-filesystem harness under `b6sim` — *move*
@@ -402,11 +424,17 @@ this section used to recommend.
 
 C5 stays the cheap one, and the harness for it is now **proven** rather than merely complete:
 `b6_progtest()` needs no boot, C3 gave it the `<case>.in` that C2b's writeup said the filters
-would want, and C5a has now fed six filters with it. Two things C5a added to that harness and
+would want, and thirteen filters have been fed with it. Two things C5a added to that harness and
 every later filter inherits: a **fixture is copied into the build directory** rather than named
 through `@srcdir@`, because a program that prints the name it was given would otherwise put a
 build path into a checked-in `.expected`; and a filter whose output is a **file** gets a custom
 `add_test` beside its cases, since `b6_progtest()` diffs standard output and can do no more.
-README.md §9 records what is left that the harness cannot do — two things, plus the one C4f
-added, which is that a program calling a syscall the *host* also has belongs under the booted
-kernel or nowhere.
+README.md §9 records what is left that the harness cannot do — and C5b added a fourth item to
+that list, `argv[0]` being the staged build path, which is what sends `col`'s two diagnostics to
+the booted test.
+
+**And C5b closed the phase's other half**: `kernel/test/filters` exists, at volume 3097, so a
+later filter that wants a booted assertion adds a section to `filters.sh` rather than a boot.
+Five things it says that `b6sim` cannot are listed in that script's header; the shortest of them
+is that `b6sim`'s standard input is always a **file**, so any program that branches on `ESPIPE` —
+`tail` does — has a whole path that only a real pipe reaches.

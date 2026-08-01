@@ -1,0 +1,128 @@
+filters begin
+---tr---
+ALPHA
+ALPHA
+BETA
+GAMMA
+GAMMA
+GAMMA
+DELTA
+привет мир
+abc
+123
+---uniq---
+alpha
+beta
+gamma
+delta
+   2 alpha
+   1 beta
+   3 gamma
+   1 delta
+alpha
+gamma
+beta
+delta
+alpha
+beta
+gamma
+delta
+---comm---
+apple
+		banana
+		cherry
+date
+	elder
+	fig
+banana
+cherry
+apple
+date
+---tail---
+8
+9
+10
+8
+9
+10
+10
+9
+8
+8
+9
+10
+8
+9
+10
+10
+---look---
+apple
+company
+compare
+compiler
+complete
+computer
+год
+голова
+город
+look status 0
+---col---
+AAA BBB
+привет
+col: bad option foo
+col status 2
+col: bad option letter q
+col status 2
+---od---
+00000000 2206255433067454 1004110524646455
+00000014 1542016733671154 3102041200000000
+00000025
+00000000   H   e   l   l   o   ,       B   E   S   M   -
+00000014   6       w   o   r   l   d   !  \n  \0  \0  \0
+00000025
+00000000 110 145 154 154 157 054 040 102 105 123 115 055
+00000014 066 040 167 157 162 154 144 041 012 000 000 000
+00000025
+00000000 2206255433067454 1004110524646455
+00000014 1542016733671154 3102041200000000
+00000025
+---c5a---
+      7      7      41 /tmp/f.txt
+      1      2      20
+cmp status 0
+/tmp/a.txt /tmp/b.txt differ: char 1, line 1
+cmp status 1
+02726     3
+hello
+hello
+hello
+elppa
+ananab
+yrrehc
+etad
+тевирп
+alpha
+alpha
+beta
+gamma
+gamma
+gamma
+delta
+---pipes---
+ALPHA
+BETA
+GAMMA
+DELTA
+ 2 alpha
+ 1 beta
+ 3 gamma
+ 1 delta
+ammag
+ammag
+ammag
+atled
+      5
+00000000   b   a   n   a   n   a  \n   c   h   e   r   r
+00000014   y  \n  \0  \0  \0  \0
+00000016
+---end---

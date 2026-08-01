@@ -246,6 +246,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/rc
     ${B6_ROOTFS}/etc/termcap
     ${B6_ROOTFS}/etc/ttys
+    ${B6_ROOTFS}/usr/dict/words
     ${B6_ROOTFS}/bin/sh
     ${B6_ROOTFS}/bin/basename
     ${B6_ROOTFS}/bin/cat
@@ -253,6 +254,8 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/chmod
     ${B6_ROOTFS}/bin/chown
     ${B6_ROOTFS}/bin/cmp
+    ${B6_ROOTFS}/bin/col
+    ${B6_ROOTFS}/bin/comm
     ${B6_ROOTFS}/bin/cp
     ${B6_ROOTFS}/bin/date
     ${B6_ROOTFS}/bin/dd
@@ -263,9 +266,11 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/kill
     ${B6_ROOTFS}/bin/ln
     ${B6_ROOTFS}/bin/login
+    ${B6_ROOTFS}/bin/look
     ${B6_ROOTFS}/bin/ls
     ${B6_ROOTFS}/bin/mkdir
     ${B6_ROOTFS}/bin/mv
+    ${B6_ROOTFS}/bin/od
     ${B6_ROOTFS}/bin/pwd
     ${B6_ROOTFS}/bin/rev
     ${B6_ROOTFS}/bin/rm
@@ -274,11 +279,14 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/split
     ${B6_ROOTFS}/bin/sum
     ${B6_ROOTFS}/bin/sync
+    ${B6_ROOTFS}/bin/tail
     ${B6_ROOTFS}/bin/tee
     ${B6_ROOTFS}/bin/test
     ${B6_ROOTFS}/bin/time
     ${B6_ROOTFS}/bin/touch
+    ${B6_ROOTFS}/bin/tr
     ${B6_ROOTFS}/bin/tty
+    ${B6_ROOTFS}/bin/uniq
     ${B6_ROOTFS}/bin/wc
     ${B6_ROOTFS}/bin/yes)
 # /bin/[ is deliberately absent: it is a `link' stanza in the manifest, not a staged file,
@@ -531,7 +539,7 @@ if(BESM6)
     # `b6fsutil -v -v' sorted into files.modes, which is where a mode and an owner are
     # asserted.  They cannot be asserted in the guest -- `ls -l' prints a date and no time on
     # this machine is reproducible -- and the same will be true of every later task that
-    # touches a timestamp.  C5 belongs here as it lands.
+    # touches a timestamp.  Task C5 went to `filters' below rather than here.
     add_test(NAME files
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-files.sh
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
@@ -557,12 +565,39 @@ if(BESM6)
     # rootimg_link checks from the host side -- yes(1) stopped by a SIGPIPE down THE FIRST
     # PIPELINE this image has ever run, and time(1) forking, execing and reading times(2),
     # with its three intervals masked like date's seconds and its exit status diffed as it
-    # stands.  C5 belongs here too, as it lands.
+    # stands.  Task C5 got a test of its own, `filters' below: thirteen programs wanted more
+    # than a section, and one of them needs a PIPE on standard input, which is a shape no
+    # command in this script has.
     add_test(NAME utils
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-utils.sh
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(utils PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
+
+    # filters -- TASK C5's THIRTEEN TEXT FILTERS, on its own volume (3097).  This is the boot
+    # task C5a deliberately did not take and wrote down as owing: its six -- wc, cmp, sum, tee,
+    # split, rev -- were asserted under b6sim ALONE, on the argument that one two-minute boot
+    # was not worth taking for six programs that touch no device, no directory, no signal and
+    # no second process.  Task C5b's seven -- tr, uniq, comm, tail, od, look, col -- make
+    # thirteen, and thirteen is worth it.
+    #
+    # FIVE THINGS HERE ARE UNREACHABLE UNDER b6sim, which is why this is not merely a second
+    # opinion (filters.sh's header is the long form): look(1) against its default
+    # /usr/dict/words, an absolute path that under the simulator is the BUILD MACHINE's file;
+    # tail(1) on a PIPE, where the ESPIPE probe takes the branch b6sim's always-a-file standard
+    # input cannot reach; col(1)'s two diagnostics, which name the program through argv[0] --
+    # the staged build path under b6sim and the word as typed here; six PIPELINES between one
+    # filter and another; and, for C5a's six, that the image's copy executes at all, which the
+    # two `ls /bin' listings assert the existence of and not the execution of.
+    #
+    # NOTHING IS MASKED, unlike utils above.  Every number in the log is computed by a filter
+    # from a corpus filters.sh writes for itself in the same run, so the diff is over every
+    # column.
+    add_test(NAME filters
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-filters.sh
+                ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(filters PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
     # edit -- ed(1) ON A RUNNING SYSTEM, on its own volume (3086).  Task C3, and the question
     # is the one none of the tests above can ask: everything they assert was written on the
@@ -721,7 +756,8 @@ if(BESM6)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(fsck PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
-    # mount -- A SECOND FILESYSTEM, on its own volumes (3093 root, 3094 scratch).  Task C4f,
+    # mount -- A SECOND FILESYSTEM, on its own volumes (3093 root, 3094 scratch, 3095 the
+    # blank pack it mounts to be refused and 3096 the second scratch NMOUNT 8 allowed).  C4f,
     # the last of task C4, and the question it asks is one none of the four above can: every
     # byte fsinfo, dd, mkfs and fsck moved went to the RAW device, through physio() and
     # mdstrategy().  This one mounts /dev/md1 and writes through the BUFFER CACHE instead --
@@ -892,7 +928,7 @@ if(BESM6)
     # through fifteen set_tests_properties calls -- so the daily/weekly line is readable in
     # one place.  The libtest_* diffs cost milliseconds each, but they adjudicate output
     # only libtest_run can produce, so they follow it.
-    b6_weekly(console_setup console session files utils edit fsinfo dd mkfs fsck
+    b6_weekly(console_setup console session files utils filters edit fsinfo dd mkfs fsck
               mount login multi swap libtest_run libtest_fsck)
     foreach(_p ${B6_LIBTEST_IMAGE})
         b6_weekly(libtest_${_p})

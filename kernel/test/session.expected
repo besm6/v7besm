@@ -7,6 +7,8 @@ chgrp
 chmod
 chown
 cmp
+col
+comm
 cp
 date
 dd
@@ -17,9 +19,11 @@ ed
 kill
 ln
 login
+look
 ls
 mkdir
 mv
+od
 pwd
 rev
 rm
@@ -29,11 +33,14 @@ sleep
 split
 sum
 sync
+tail
 tee
 test
 time
 touch
+tr
 tty
+uniq
 wc
 yes
 /tmp/d
