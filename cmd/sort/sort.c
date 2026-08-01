@@ -76,16 +76,6 @@
 // from an unbounded -T argument into char[30], and the sort pass wrote a line into the arena
 // with no bound inside the line.  snprintf and L respectively.
 //
-// AND ONE THING THAT IS NOT THIS PROGRAM'S FAULT AT ALL.  b6codegen compiles a bare truth
-// test on an ADDITIVE result as a SIGN test -- it emits UZA straight after A-X, where omega
-// is additive and UZA reads `A >= 0' rather than `A == 0'.  v7's `if (b = *--ipb - *--ipa)'
-// is exactly that shape, and b is positive precisely when the first key sorts first, so
-// `sort -n' on a key returned an order with no relation to the numbers and said nothing.
-// Two sites carry an explicit `!= 0' until the compiler is fixed; ../tmp/BUG.md is the
-// report, with the minimal repro and the omega table.  Nothing else in this tree hits it:
-// the only additive-then-UZA pairs on the whole image are inside b$lt/b$gt/b$le/b$ge and
-// b$flt/b$fge, which are hand written and want the sign test.
-//
 // isdigit() ON AN ARBITRARY BYTE RUNS OFF THE TABLE -- <ctype.h>'s macros index
 // `(_ctype_ + 1)[c]' and lib/libc/gen/ctype_.c is 129 entries.  A numeric key is ASCII digits
 // by definition, so this file has its own digit() rather than an isascii() wart at seven
@@ -902,17 +892,9 @@ static int cmp(char *i, char *j)
             jpa = ipa;
             jpb = ipb;
             a   = 0;
-            // THE `!= 0' IS A COMPILER WORKAROUND, NOT A STYLE CHANGE.  v7 wrote
-            // `if (b = *--ipb - *--ipa)', and b6codegen compiles a bare truth test on an
-            // additive result as a SIGN test: it emits UZA straight after A-X, which leaves
-            // omega additive, so the branch reads `A >= 0' instead of `A == 0'.  b here is
-            // positive exactly when the first key sorts first, so the miscompile threw away
-            // half the answer and `sort -n' on a key returned an order unrelated to the
-            // numbers.  ../tmp/BUG.md is the report; an explicit comparison goes through
-            // b$ne and is correct.  Revert both sites when the compiler is fixed.
             if (sa == sb)
                 while (ipa > pa && ipb > pb)
-                    if ((b = *--ipb - *--ipa) != 0)
+                    if ((b = *--ipb - *--ipa))
                         a = b;
             while (ipa > pa)
                 if (*--ipa != '0')
@@ -928,7 +910,7 @@ static int cmp(char *i, char *j)
                 pb++;
             if (sa == sb)
                 while (pa < la && digit(*pa) && pb < lb && digit(*pb))
-                    if ((a = *pb++ - *pa++) != 0) // `!= 0': see above, ../tmp/BUG.md
+                    if ((a = *pb++ - *pa++))
                         return a * sa;
             while (pa < la && digit(*pa))
                 if (*pa++ != '0')

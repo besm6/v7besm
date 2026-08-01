@@ -100,7 +100,7 @@ printed a block number, which `grep` computed with `BSIZE` and `fgrep` with a ha
 the same flag on the same manual page gave two answers for the same match. It is a byte offset
 now — the division deleted rather than the divisor chosen, so the two cannot disagree again.
 **And since C5d it can put its text in order**: `sort` takes the phase to sixteen and `/bin` to
-forty-six entries, and it is the one program of the phase that manages its own storage. Four
+forty-six entries, and it is the one program of the phase that manages its own storage. Three
 things are worth naming and not one of them was in a table. **Its four character tables were
 rotated by 128** — v7's way of letting a *signed* `char` index them — so on a machine with
 unsigned chars every subscript landed up to 128 bytes past the end of its own array, which is
@@ -112,10 +112,7 @@ deletes a Cyrillic word before comparing it and makes `привет` and `мир
 **An arena that takes the whole heap starves stdio in silence** — a stream whose `malloc` fails
 does not fail, it becomes one syscall per byte — so the reservation is `malloc`'d and `free`'d
 rather than computed, which is the one form of it that cannot be short; `find` and `make`
-inherit that paragraph whole. And **the compiler had a wrong-code bug that sixteen ports had
-walked past**: a bare truth test on an additive result compiles as a *sign* test, so `if (x - y)`
-is false whenever `x > y`, which threw away half of every `sort -n` on a key and said nothing
-([../cmd/tmp/BUG.md](tmp/BUG.md), and nothing else on the image hits it).
+inherit that paragraph whole.
 [../etc/rc](../etc/rc) is a boot script that does something: it prints the motd and then the
 date, which is a literal to the minute because the boot clock is the image's own `-T` stamp,
 and `kernel/test/console` asserts both. What it

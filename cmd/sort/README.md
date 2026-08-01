@@ -7,8 +7,7 @@ what the port *taught*, worst first.
 The brief in [../TODO.md](../TODO.md) predicted the expensive part would be §2 — fifteen
 `char *` comparisons inside the routine that decides the whole output. The count was right and
 the prediction was wrong: those comparisons compile correctly and cost nothing but time. What
-actually cost the day was three things no line count could have named, one of which is a bug in
-the compiler.
+actually cost the day was two things no line count could have named.
 
 ## The tables were rotated by 128, and that is a wild read
 
@@ -196,44 +195,6 @@ The bound was run against before the sentence in `sort.1` was rewritten, which i
 correction to itself: 3071 data bytes plus a newline is accepted on both paths and 3072 plus a
 newline is refused on both. The first attempt was off by one on the merge path only.
 
-## And one thing that is not this program's fault at all
-
-`sort -t: +2n /etc/passwd` — the manual page's own example — returned the file in an order with
-no relation to the numbers:
-
-```
-sys:x:2:3
-bin:x:3:7
-daemon:x:1:1
-root:x:0:1
-```
-
-The cause is a **code generation bug**. `b6codegen` compiles a bare truth test on an *additive*
-result as a **sign** test: it emits `UZA` straight after `A-X`, and ω is additive there, where
-`UZA` reads `A ≥ 0` rather than `A = 0`.
-
-```c
-int f(int x, int y) { if (x - y) return 1; return 0; }
-/* f(5,4) == 0.  f(4,5) == 1.  f(4,4) == 0. */
-```
-
-v7's inner loop is exactly that shape —
-
-```c
-if (b = *--ipb - *--ipa)      /* v7 */
-        a = b;
-```
-
-— and `b` is positive precisely when the first key sorts first, so the miscompile threw away
-half of every numeric comparison, `cmp()` fell through to its whole-line tie-break, and the
-program said nothing. Two sites carry an explicit `!= 0` until it is fixed;
-[../tmp/BUG.md](../tmp/BUG.md) is the report, with the minimal repro and the ω table.
-
-**Nothing else in this tree hits it**, which is why it survived sixteen ports: disassembling
-every program on the image finds additive-then-`UZA` in exactly six places, all of them inside
-`b$lt`, `b$gt`, `b$le`, `b$ge`, `b$flt` and `b$fge` — hand-written helpers that *want* the sign
-test. It was one `if (a - b)` away the whole time.
-
 ## What else was fixed rather than carried
 
 * **`copyproto()` copied two `char *` through an `int` lvalue**, word by word. An `int` is bits
@@ -292,7 +253,7 @@ an address space of 172,032 — agreeing byte for byte with `LC_ALL=C sort`.
 
 | | const | text | data | bss | total |
 |---|---|---|---|---|---|
-| `sort` | 96 | 5,105 | 411 | 1,211 | **6,823** |
+| `sort` | 96 | 5,104 | 411 | 1,211 | **6,822** |
 
 Out of the 28,672 words §6 allows — between `login` (6,898) and `sh` (7,928), and the largest of
 the sixteen filters by a wide margin. `data` is 411 because four 256-byte tables are 172 words

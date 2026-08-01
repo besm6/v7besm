@@ -316,7 +316,7 @@ alone, a name out of a directory being neither NUL-terminated nor the program's 
 | `col` | 87 | 3,500 | 168 | 1,434 | **5,189** |
 | `uniq` | 84 | 3,240 | 187 | 1,371 | **4,882** |
 | `look` | 85 | 3,432 | 185 | 1,162 | **4,864** |
-| `sort` | 96 | 5,105 | 411 | 1,211 | **6,823** |
+| `sort` | 96 | 5,104 | 411 | 1,211 | **6,822** |
 | `comm` | 83 | 3,099 | 168 | 1,037 | **4,387** |
 | `split` | 91 | 3,092 | 190 | 1,054 | **4,427** |
 | `rev` | 84 | 2,981 | 159 | 1,204 | **4,428** |
@@ -352,7 +352,7 @@ before it was ported, as task C4d's brief demanded, and it came in at a third of
 even though it is the longest source in C1–C8. **The largest program on the image is `fgrep`, at
 20,019**, and it is not close: 15,000 of its words are two arrays, the Aho-Corasick state table
 and the queue that is sized from it ([grep/README.md](grep/README.md)). Set it aside and **`sort`
-was measured early, as task C5d's brief demanded, and came in at 6,823** — the largest of the
+was measured early, as task C5d's brief demanded, and came in at 6,822** — the largest of the
 sixteen filters that carries its size in code rather than in one table, a quarter of the ceiling,
 between `login` and `sh`. `awk` and `make` are the two left to measure early rather than late.
 Nothing before task C6 is in danger of the first ceiling.
@@ -1296,8 +1296,8 @@ and it is the first thing task C5e should point at `sed`'s regex engine.
 did and as the plan asked; 3098 is still free. [sort/README.md](sort/README.md) is the account.
 It is the one program of the phase that manages its own storage, and the brief predicted its
 cost would be §2. That was wrong in an instructive way: the fifteen `char *` comparisons compile
-correctly and cost only time, and every one of the four things that actually cost the day was
-absent from every table this file had. Six findings generalize.
+correctly and cost only time, and every one of the three things that actually cost the day was
+absent from every table this file had. Five findings generalize.
 
 **A table indexed by a character needs 256 entries *and* an index that lands in them.** §11 has
 said the first half since task C3 and `grep` did the widening in C5c. `sort`'s four tables were
@@ -1344,18 +1344,6 @@ reaches `mp->l[0]` only through the same identity, and `merge()` reads the mark 
 replacement that merely sorted would have left `sort -u` over a **merge** keeping every
 duplicate — and no case that fits in one pass would have noticed. **Before replacing a routine
 reached through a cast, list what the caller reads back afterwards.**
-
-**And the compiler had a wrong-code bug that sixteen ports had walked past.** `b6codegen`
-compiles a bare truth test on an **additive** result as a **sign** test — it emits `UZA` straight
-after `A-X`, where ω is additive and `UZA` reads `A ≥ 0` rather than `A = 0` — so `if (x - y)` is
-false whenever `x > y`. v7's numeric comparison is exactly that shape, and the miscompile threw
-away half of every `sort -n` on a key, silently. [tmp/BUG.md](tmp/BUG.md) is the report.
-**Nothing else on the image hits it**: disassembling every staged program finds
-additive-then-`UZA` in six places, all inside `b$lt`, `b$gt`, `b$le`, `b$ge`, `b$flt` and
-`b$fge`, which are hand-written and want the sign test. The lesson is not about ω. It is that
-**when a ported program gives an answer that is not merely wrong but unrelated to the input, the
-compiler is a candidate** — and that a two-line repro plus a disassembly sweep of the whole image
-turns "something is broken" into a filed bug with a known blast radius in about an hour.
 
 **One correction to this file's own advice.** [TODO.md](TODO.md) and the C5b section above both
 name `sort` as a program whose oracle should be a **second implementation**, on `od`'s reasoning.
