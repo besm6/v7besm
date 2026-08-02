@@ -1,0 +1,3 @@
+csrc.c
+plain.txt
+rus.txt

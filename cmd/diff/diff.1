@@ -72,6 +72,14 @@ The
 option causes
 trailing blanks (spaces and tabs) to be ignored
 and other strings of blanks to compare equal.
+.I Note:
+a blank here is a space, tab, carriage return, form feed or vertical tab,
+written out rather than taken from
+.IR ctype (3),
+whose table has no entries above 0177 \- so a Cyrillic line is compared as
+ordinary text under
+.B \-b
+as well as without it.
 .PP
 The
 .B \-e
@@ -110,6 +118,22 @@ Except in rare circumstances,
 .I diff
 finds a smallest sufficient set of file
 differences.
+.I Note:
+a smallest set is not a unique one.
+This
+.I diff
+finds a longest common subsequence by the method of Hunt and Szymanski over
+Harold Stone's k-candidates, and another implementation may report the same
+change in a different \- equally short \- way.
+What is invariant is that the
+.B \-e
+script really does turn
+.I file1
+into
+.IR file2 ,
+which is what
+.I cmd/diff/test
+asserts by applying it.
 .PP
 Option
 .B \-h
@@ -123,6 +147,22 @@ and
 .B \-f
 are unavailable with
 .BR \-h .
+.SH "LIMITS"
+.I Diff
+holds both files in core: one
+.B struct
+line per input line, plus three integer vectors over them, roughly
+.I 6n
+words for files of
+.I n
+lines.
+The whole address space here is 28,672 words
+.RI ( cmd/README.md
+\(sc 6), so
+.B "files too big, try \-h"
+is nearer than it was on a PDP-11 \- which is why
+.B \-h
+is worth having and is not dropped.
 .SH FILES
 /tmp/d?????
 .br
@@ -133,6 +173,15 @@ cmp(1), comm(1), ed(1)
 .SH DIAGNOSTICS
 Exit status is 0 for no differences, 1 for some, 2 for trouble.
 .SH BUGS
+.I Diff
+exits 2 and says
+.B "cannot find diffh"
+if
+.B \-h
+is given and
+.B /usr/lib/diffh
+is missing.
+.PP
 Editing scripts produced under the
 .BR \-e " or"
 .BR \-f " option are naive about"

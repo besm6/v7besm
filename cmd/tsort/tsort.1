@@ -23,6 +23,25 @@ Pairs of identical items indicate presence, but not ordering.
 lorder(1)
 .SH DIAGNOSTICS
 Odd data: there is an odd number of fields in the input file.
+.br
+.B "tsort: name too long: ..."
+\-
+an item longer than 255 bytes.
+.I Note:
+255 is
+.IR ar (1)'s
+longest member name on this machine, which is what
+.IR lorder (1)
+feeds this program;
+v7 read items into a fifty-byte buffer with no bound at all.
+.br
+.B "tsort: cycle in reverse order"
+followed by the items in the cycle, on the standard error output.
+The ordering is still printed.
+.SH "EIGHT BITS"
+An item is any run of bytes with no blank, tab, newline, carriage return, form
+feed or vertical tab in it, so a byte above 0177 is an ordinary item character
+and a Cyrillic name sorts like any other.
 .SH BUGS
 Uses a quadratic algorithm;
 not worth fixing for the typical use of ordering

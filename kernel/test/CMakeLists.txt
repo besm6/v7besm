@@ -249,6 +249,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/usr/dict/words
     ${B6_ROOTFS}/bin/sh
     ${B6_ROOTFS}/bin/basename
+    ${B6_ROOTFS}/bin/cal
     ${B6_ROOTFS}/bin/cat
     ${B6_ROOTFS}/bin/chgrp
     ${B6_ROOTFS}/bin/chmod
@@ -260,11 +261,16 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/date
     ${B6_ROOTFS}/bin/dd
     ${B6_ROOTFS}/bin/df
+    ${B6_ROOTFS}/bin/diff
     ${B6_ROOTFS}/bin/du
+    ${B6_ROOTFS}/usr/lib/diffh
     ${B6_ROOTFS}/bin/echo
     ${B6_ROOTFS}/bin/ed
     ${B6_ROOTFS}/bin/fgrep
+    ${B6_ROOTFS}/bin/file
+    ${B6_ROOTFS}/bin/find
     ${B6_ROOTFS}/bin/grep
+    ${B6_ROOTFS}/bin/join
     ${B6_ROOTFS}/bin/kill
     ${B6_ROOTFS}/bin/ln
     ${B6_ROOTFS}/bin/login
@@ -273,6 +279,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/mkdir
     ${B6_ROOTFS}/bin/mv
     ${B6_ROOTFS}/bin/od
+    ${B6_ROOTFS}/bin/pr
     ${B6_ROOTFS}/bin/pwd
     ${B6_ROOTFS}/bin/rev
     ${B6_ROOTFS}/bin/rm
@@ -289,6 +296,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/time
     ${B6_ROOTFS}/bin/touch
     ${B6_ROOTFS}/bin/tr
+    ${B6_ROOTFS}/bin/tsort
     ${B6_ROOTFS}/bin/tty
     ${B6_ROOTFS}/bin/uniq
     ${B6_ROOTFS}/bin/wc
@@ -569,7 +577,7 @@ if(BESM6)
     # rootimg_link checks from the host side -- yes(1) stopped by a SIGPIPE down THE FIRST
     # PIPELINE this image has ever run, and time(1) forking, execing and reading times(2),
     # with its three intervals masked like date's seconds and its exit status diffed as it
-    # stands.  Task C5 got a test of its own, `filters' below: seventeen programs wanted more
+    # stands.  Task C5 got a test of its own, `filters' below: twenty-four programs wanted more
     # than a section, and one of them needs a PIPE on standard input, which is a shape no
     # command in this script has.
     add_test(NAME utils
@@ -583,7 +591,8 @@ if(BESM6)
     # split, rev -- were asserted under b6sim ALONE, on the argument that one two-minute boot
     # was not worth taking for six programs that touch no device, no directory, no signal and
     # no second process.  Task C5b's seven -- tr, uniq, comm, tail, od, look, col -- make
-    # thirteen, and thirteen is worth it.  Task C5c's grep and fgrep make fifteen, C5d's sort sixteen and C5e's sed seventeen, and they
+    # thirteen, and thirteen is worth it.  Task C5c's grep and fgrep make fifteen, C5d's sort
+    # sixteen, C5e's sed seventeen and C5f's seven twenty-four, and they
     # joined this test rather than taking a boot of their own, which is what cmd/TODO.md told
     # a later filter to do; 3098 is still the next free volume.
     #

@@ -20,6 +20,15 @@ The calendar
 produced is that for England and her colonies.
 .PP
 Try September 1752.
+.SH DIAGNOSTICS
+.B "usage: cal [month] year"
+with no arguments, and
+.B "Bad argument"
+for a month outside 1\-12 or a year outside 1\-9999.
+A word that is not a number reads as zero and so is a bad argument too.
+.I Note:
+.I cal
+exits 0 after either message, which is v7's behaviour and is left alone.
 .SH BUGS
 The year is always considered to start in January even though this
 is historically naive.

@@ -30,9 +30,13 @@ The BESM-6 is a 48-bit word machine. The serialization conventions follow from t
 - An `int`/`long` field is stored as **two half-words (6 bytes == one word)**. Only the
   low (second) half-word carries the value; the high (first) half-word is written as
   zero and ignored on read (`fgetint`, `getint`, `putint`).
-- The **exec header** stores its 9 logical fields each as a zero padding half-word
+- The **exec header** stores its **8** logical fields each as a zero padding half-word
   followed by the value half-word, so each field begins on a 6-byte word boundary; the
-  whole header is `HDRSZ == 54` bytes (9 words). See `fgethdr`/`fputhdr`.
+  whole header is `HDRSZ == 48` bytes (8 words). See `fgethdr`/`fputhdr`.
+  `a_magic` is the one field whose high half-word is *not* padding: it carries the `BES`
+  of the `BESM` tag, which is why `fhdr_test.cpp`'s `PadBytesAreZero` skips field 0.
+  (This file used to say nine fields and 54 bytes; `<sys/param.h>`'s `BADDR 8` and
+  `fhdr_test.cpp`'s golden bytes are the authority. Task C5f corrected it.)
 - The **archive member header** is a variable-size, fully word-aligned record: a 1-byte
   name length (up to `ARMAXNAME == 255`), that many name bytes, zero padding up to a whole
   word, then one full 48-bit word each for date, uid, gid, mode and size (for uid/gid/mode
@@ -81,13 +85,15 @@ first.
 
 #### `int fgethdr(FILE *text, struct exec *h)` — [`fgethdr.c`](fgethdr.c)
 
-Read a 54-byte exec header into `*h`, decoding each of the 9 fields from a value
-half-word plus a discarded padding half-word. Always returns 1.
+Read a 48-byte exec header into `*h`, decoding each of the 8 fields from a discarded
+padding half-word plus a value half-word. Always returns 1. It does **not** validate the
+magic; callers use `N_BADMAG`.
 
 #### `void fputhdr(const struct exec *filhdr, FILE *coutb)` — [`fputhdr.c`](fputhdr.c)
 
-Write an exec header, the inverse of `fgethdr`: each field as a value half-word followed
-by a zero padding half-word.
+Write an exec header, the inverse of `fgethdr`: each field as a zero padding half-word
+followed by the value half-word. (This line used to state the two halves the other way
+round.)
 
 ### Integers
 

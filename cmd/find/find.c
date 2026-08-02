@@ -1,725 +1,810 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
-/*	find	COMPILE:	cc -o find -s -O -i find.c -lS	*/
+//
+// find -- walk a directory hierarchy, testing each file against a boolean expression.
+//
+//      find pathname-list expression
+//
+// The last of task C5f's seven (../TODO.md), the largest of them at 725 lines, and THE ONLY
+// ONE WITH NO b6sim HALF AT ALL -- the second program in this directory after mount/umount
+// to have none.  ./README.md is the account; it reads directory descriptors, which b6sim
+// refuses, popen()s pwd, and fork/execvp's for -exec, so every assertion about it is in
+// kernel/test/filters and there is no cmd/find/test at all.  Saying that out loud is C4f's
+// rule: a deferral written down is the difference between a known gap and an unknown one.
+//
+// THE PARSE TREE WAS A UNION BY REINTERPRETATION, and that is the port's headline.  v7's
+//
+//	struct anode { int (*F)(); struct anode *L, *R; } Node[100];
+//
+// holds, in L and R, whichever of an int, a char or a `char *' the primary wanted -- and
+// every primary reads the node back through a private struct shape of its own:
+//
+//	mk(glob,  (struct anode *)b,       (struct anode *)0)   /* b is a char *  */
+//	mk(mtime, (struct anode *)atoi(b), (struct anode *)s)   /* an int and a char */
+//	glob(p) register struct { int f; char *pat; } *p;  { return gmatch(Fname, p->pat); }
+//
+// A `char *' here is a FAT pointer -- bit 48 set, a byte offset in bits 47-45 -- and casting
+// it to a `struct anode *' FLOORS it to the word (../README.md §2's third hazard, the one
+// the compiler's 2026-06-17 fix does not cover).  So `-name' would have matched against the
+// first six bytes of whatever word its pattern started in.  The node carries a `pat', a
+// `num' and a `sign' of the right types now, and every primary takes `struct anode *'.
+//
+// -cpio IS DELETED, decision (B) of the task brief.  It wrote a PDP-11 cpio archive out of
+// 16-bit shorts, through a run-time byte-order probe (`union { long l; short s[2]; char
+// c[4]; }'), and chgreel() prompted on /dev/tty for the next TAPE REEL.  ../TODO.md's
+// exclusion table drops all tape, this kernel has no tape driver and no bdevsw row for one,
+// and an archive nothing here can read is not a service.  It took ~140 lines with it,
+// including this file's only sbrk, its only `short' and its only /dev/tty -- so `find' now
+// calls sbrk NOWHERE, and ../README.md §2's "find and make are the two left" for the three
+// arena hazards becomes just `make'.  getty's speed table and col's half-shift are the
+// precedent; find.1 says so and an unknown primary is diagnosed rather than ignored.
+//
+// -size IS IN 1024-BYTE BLOCKS, decision (C).  v7's was 512, which names nothing on this
+// machine (§4: a constant is the user's business only while it still names something here),
+// and the four programs that report a block count -- df, du, quot, ls -s -- were all taught
+// KBYTE in task C4a.  A user types the number they read out of `ls -s'.
+//
+// descend() CARRIED THREE PDP-11 LAYOUT CONSTANTS and they had to change together: a 512-
+// byte read, `dsize>>4' for a 16-byte entry, and a bare `for (i = 0; i < 14; ++i)' over the
+// name.  A struct direct is FOUR WORDS / 24 BYTES here and DIRSIZ is 18, so the read length
+// is a sizeof, the entry count is a divide (24 is not a power of two), and the name loop
+// takes DIRSIZ.  _Static_assert holds the first two against <sys/dir.h> (§4's rule: grep for
+// a read whose length is arithmetic rather than sizeof).
+//
+// AND descend() IS RECURSIVE, WITH ITS DIRECTORY BLOCK IN ITS OWN FRAME.  v7's `struct
+// direct dentry[32]' is 128 words a level here, so about thirty levels filled the four-page
+// stack §6 names and nothing checked it -- C5c's grep(1) finding, where the region past the
+// stack returns wrong answers for a dozen levels before it faults.  The block is 16 entries
+// now and the depth is COUNTED, with a diagnostic; see MAXDEPTH below for the measurement.
+//
+// The rest is §1 and §6: `exp' collides with libm's, `ctime' with <time.h>'s, and `index',
+// `size', `type', `print', `and', `or', `not' and `pr' were all file-scope; execvp() takes
+// two arguments here and v7 gave it three; Pathname[200] and Home[128] were filled by
+// unbounded strcpy/fgets/concatenation; and getunum() parsed /etc/passwd by hand into
+// char[20] with no bound, where getpwnam(3) and getgrnam(3) already exist.
+//
+// NOT SETUID: it opens and stats what the caller could open and stat itself, and -exec runs
+// as the caller.
+//
+#include <fcntl.h>
+#include <grp.h>
+#include <pwd.h>
 #include <stdio.h>
-#include <sys/types.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/dir.h>
+#include <sys/param.h>
 #include <sys/stat.h>
-#define A_DAY	86400L /* a day full of seconds */
-#define EQ(x, y)	(strcmp(x, y)==0)
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <unistd.h>
 
-int	Randlast;
-char	Pathname[200];
+#define A_DAY   86400 // a day full of seconds
+#define EQ(x, y) (strcmp(x, y) == 0)
+
+#define NNODE   100 // parse-tree nodes
+#define NENTRY  32  // directory entries per read -- see descend()
+#define PATHSZ  200
+#define HOMESZ  128
+#define NARGV   50 // -exec argument slots
+
+// §4: a count reported to -- or taken from -- a user is in 1024-byte blocks, as df, du, quot
+// and ls -s all are since task C4a.  KBYTE and KBPB live beside BSIZE in <sys/param.h> so
+// that retuning the block size cannot leave this program quietly lying.
+_Static_assert(BSIZE % KBYTE == 0, "a filesystem block must be a whole number of KiB");
+
+// The read length and the entry count are the same fact stated twice, so state it once and
+// let the compiler check the rest.  DIRSIZ is 18 here and was 14 on a PDP-11.
+_Static_assert(sizeof(struct direct) == 4 * sizeof(int), "struct direct is four words");
+_Static_assert(DIRSIZ == sizeof(struct direct) - sizeof(int), "d_name fills the rest");
+
+#define DIRBLK (NENTRY * (int)sizeof(struct direct)) // bytes read per call
+
+//
+// THE RECURSION CEILING, MEASURED RATHER THAN ESTIMATED, which is C5c's and C5e's shared
+// finding and this port's own correction to itself.  descend() calls itself once per
+// directory it enters.  v7 held its `struct direct dentry[32]' IN THAT FRAME -- 128 words a
+// level here, where a PDP-11 entry was 16 bytes and this one is 24 -- and nothing checked the
+// depth at all, so about thirty levels filled the four-page stack §6 names.
+//
+// The block is on the HEAP now, one per level, freed on the way out: it is the largest thing
+// in the frame by far and moving it is what buys the depth back.  The first draft of this
+// port merely shrank it to 16 entries and guessed the frame at eighty words; `b6disasm' says
+// that prologue was `15 utm 0277' -- 191 words -- so the guess was out by more than a factor
+// of two and MAXDEPTH would have been wrong in the unsafe direction.  ALWAYS READ THE
+// PROLOGUE.  (NENTRY is back to v7's 32 now that the block is not in the frame: 128 words on
+// the heap costs nothing and it halves the number of read(2) calls a big directory takes.)
+//
+// With the block gone, `b6disasm' puts descend()'s prologue at `15 utm 0223' -- 147 words a
+// level.  The arithmetic for the limit below:
+//
+//	20 levels x 147 words                          2,940
+//	the deepest thing it can call while stopping      127   (fputs 19 + _flsbuf 108)
+//	                                               -------
+//	                                                 3,067   of 4,096
+//
+// -- which leaves main()'s frame and the kernel's own margin more than a quarter of the
+// stack.  C5e's warning about the diagnostic's own frame does not bite as hard here as it
+// did in sed, and the reason is worth naming: THIS PROGRAM LINKS NO _doprnt AT ALL.  pr() is
+// fputs() and -print is puts(); there is not one numeric conversion in it.  §6's rule that
+// what a program prints with dominates what it does, seen from the stack rather than the
+// image.
+//
+#define MAXDEPTH 20
+
+static int Randlast;
+static char Pathname[PATHSZ];
 
 struct anode {
-	int (*F)();
-	struct anode *L, *R;
-} Node[100];
-int Nn;  /* number of nodes */
-char	*Fname;
-long	Now;
-int	Argc,
-	Ai,
-	Pi;
-char	**Argv;
-/* cpio stuff */
-int	Cpio;
-short	*Buf, *Dbuf, *Wp;
-int	Bufsize = 5120;
-int	Wct = 2560;
+    int (*F)(struct anode *);
+    struct anode *L, *R;
+    const char *pat; // -name
+    int num;         // the numeric operand, or an argv index for -exec/-ok
+    int sign;        // '+', '-', or 0
+};
 
-long	Newer;
+static struct anode Node[NNODE];
+static int Nn; // number of nodes
+static const char *Fname;
+static time_t Now;
+static int Argc, Ai, Pi;
+static char **Argv;
+static char Home[HOMESZ];
+static time_t Newer;
+static struct stat Statb;
+static int Depth;
 
-struct stat Statb;
+static struct anode *parse_or(void);
+static struct anode *parse_and(void);
+static struct anode *parse_not(void);
+static struct anode *parse_prim(void);
+static struct anode *mk(int (*f)(struct anode *), struct anode *l, struct anode *r);
+static struct anode *mknum(int (*f)(struct anode *), int num, int sign);
+static struct anode *mkpat(int (*f)(struct anode *), const char *pat);
+static char *nxtarg(void);
 
-struct	anode	*exp(),
-		*e1(),
-		*e2(),
-		*e3(),
-		*mk();
-char	*nxtarg();
-char	Home[128];
-long	Blocks;
-char *rindex();
-char *sbrk();
-main(argc, argv) char *argv[];
+static int f_and(struct anode *p);
+static int f_or(struct anode *p);
+static int f_not(struct anode *p);
+static int f_name(struct anode *p);
+static int f_print(struct anode *p);
+static int f_mtime(struct anode *p);
+static int f_atime(struct anode *p);
+static int f_chgtime(struct anode *p);
+static int f_user(struct anode *p);
+static int f_ino(struct anode *p);
+static int f_group(struct anode *p);
+static int f_links(struct anode *p);
+static int f_size(struct anode *p);
+static int f_perm(struct anode *p);
+static int f_type(struct anode *p);
+static int f_exec(struct anode *p);
+static int f_ok(struct anode *p);
+static int f_newer(struct anode *p);
+
+static int scomp(int a, int b, int s);
+static int doex(int com);
+static int descend(char *name, const char *fname, struct anode *exlist);
+static int gmatch(const char *s, const char *p);
+static int amatch(const char *s, const char *p);
+static int umatch(const char *s, const char *p);
+static void pr(const char *s);
+
+int main(int argc, char **argv)
 {
-	struct anode *exlist;
-	int paths;
-	register char *cp, *sp = 0;
-	FILE *pwd, *popen();
+    struct anode *exlist;
+    int paths;
+    char *cp, *sp = NULL;
+    FILE *pwd;
+    int n;
 
-	time(&Now);
-	pwd = popen("pwd", "r");
-	fgets(Home, 128, pwd);
-	pclose(pwd);
-	Home[strlen(Home) - 1] = '\0';
-	Argc = argc; Argv = argv;
-	if(argc<3) {
-usage:		pr("Usage: find path-list predicate-list\n");
-		exit(1);
-	}
-	for(Ai = paths = 1; Ai < (argc-1); ++Ai, ++paths)
-		if(*Argv[Ai] == '-' || EQ(Argv[Ai], "(") || EQ(Argv[Ai], "!"))
-			break;
-	if(paths == 1) /* no path-list */
-		goto usage;
-	if(!(exlist = exp())) { /* parse and compile the arguments */
-		pr("find: parsing error\n");
-		exit(1);
-	}
-	if(Ai<argc) {
-		pr("find: missing conjunction\n");
-		exit(1);
-	}
-	for(Pi = 1; Pi < paths; ++Pi) {
-		sp = 0;
-		chdir(Home);
-		strcpy(Pathname, Argv[Pi]);
-		if(cp = rindex(Pathname, '/')) {
-			sp = cp + 1;
-			*cp = '\0';
-			if(chdir(*Pathname? Pathname: "/") == -1) {
-				pr("find: bad starting directory\n");
-				exit(2);
-			}
-			*cp = '/';
-		}
-		Fname = sp? sp: Pathname;
-		descend(Pathname, Fname, exlist); /* to find files that match  */
-	}
-	if(Cpio) {
-		strcpy(Pathname, "TRAILER!!!");
-		Statb.st_size = 0;
-		cpio();
-	}
-	exit(0);
-}
-
-/* compile time functions:  priority is  exp()<e1()<e2()<e3()  */
-
-struct anode *exp() { /* parse ALTERNATION (-o)  */
-	int or();
-	register struct anode * p1;
-
-	p1 = e1() /* get left operand */ ;
-	if(EQ(nxtarg(), "-o")) {
-		Randlast--;
-		return(mk(or, p1, exp()));
-	}
-	else if(Ai <= Argc) --Ai;
-	return(p1);
-}
-struct anode *e1() { /* parse CONCATENATION (formerly -a) */
-	int and();
-	register struct anode * p1;
-	register char *a;
-
-	p1 = e2();
-	a = nxtarg();
-	if(EQ(a, "-a")) {
-And:
-		Randlast--;
-		return(mk(and, p1, e1()));
-	} else if(EQ(a, "(") || EQ(a, "!") || (*a=='-' && !EQ(a, "-o"))) {
-		--Ai;
-		goto And;
-	} else if(Ai <= Argc) --Ai;
-	return(p1);
-}
-struct anode *e2() { /* parse NOT (!) */
-	int not();
-
-	if(Randlast) {
-		pr("find: operand follows operand\n");
-		exit(1);
-	}
-	Randlast++;
-	if(EQ(nxtarg(), "!"))
-		return(mk(not, e3(), (struct anode *)0));
-	else if(Ai <= Argc) --Ai;
-	return(e3());
-}
-struct anode *e3() { /* parse parens and predicates */
-	int exeq(), ok(), glob(),  mtime(), atime(), ctime(), user(),
-		group(), size(), perm(), links(), print(),
-		type(), ino(), cpio(), newer();
-	struct anode *p1;
-	int i;
-	register char *a, *b, s;
-
-	a = nxtarg();
-	if(EQ(a, "(")) {
-		Randlast--;
-		p1 = exp();
-		a = nxtarg();
-		if(!EQ(a, ")")) goto err;
-		return(p1);
-	}
-	else if(EQ(a, "-print")) {
-		return(mk(print, (struct anode *)0, (struct anode *)0));
-	}
-	b = nxtarg();
-	s = *b;
-	if(s=='+') b++;
-	if(EQ(a, "-name"))
-		return(mk(glob, (struct anode *)b, (struct anode *)0));
-	else if(EQ(a, "-mtime"))
-		return(mk(mtime, (struct anode *)atoi(b), (struct anode *)s));
-	else if(EQ(a, "-atime"))
-		return(mk(atime, (struct anode *)atoi(b), (struct anode *)s));
-	else if(EQ(a, "-ctime"))
-		return(mk(ctime, (struct anode *)atoi(b), (struct anode *)s));
-	else if(EQ(a, "-user")) {
-		if((i=getunum("/etc/passwd", b)) == -1) {
-			if(gmatch(b, "[0-9][0-9][0-9]*")
-			|| gmatch(b, "[0-9][0-9]")
-			|| gmatch(b, "[0-9]"))
-				return mk(user, (struct anode *)atoi(b), (struct anode *)s);
-			pr("find: cannot find -user name\n");
-			exit(1);
-		}
-		return(mk(user, (struct anode *)i, (struct anode *)s));
-	}
-	else if(EQ(a, "-inum"))
-		return(mk(ino, (struct anode *)atoi(b), (struct anode *)s));
-	else if(EQ(a, "-group")) {
-		if((i=getunum("/etc/group", b)) == -1) {
-			if(gmatch(b, "[0-9][0-9][0-9]*")
-			|| gmatch(b, "[0-9][0-9]")
-			|| gmatch(b, "[0-9]"))
-				return mk(group, (struct anode *)atoi(b), (struct anode *)s);
-			pr("find: cannot find -group name\n");
-			exit(1);
-		}
-		return(mk(group, (struct anode *)i, (struct anode *)s));
-	} else if(EQ(a, "-size"))
-		return(mk(size, (struct anode *)atoi(b), (struct anode *)s));
-	else if(EQ(a, "-links"))
-		return(mk(links, (struct anode *)atoi(b), (struct anode *)s));
-	else if(EQ(a, "-perm")) {
-		for(i=0; *b ; ++b) {
-			if(*b=='-') continue;
-			i <<= 3;
-			i = i + (*b - '0');
-		}
-		return(mk(perm, (struct anode *)i, (struct anode *)s));
-	}
-	else if(EQ(a, "-type")) {
-		i = s=='d' ? S_IFDIR :
-		    s=='b' ? S_IFBLK :
-		    s=='c' ? S_IFCHR :
-		    s=='f' ? 0100000 :
-		    0;
-		return(mk(type, (struct anode *)i, (struct anode *)0));
-	}
-	else if (EQ(a, "-exec")) {
-		i = Ai - 1;
-		while(!EQ(nxtarg(), ";"));
-		return(mk(exeq, (struct anode *)i, (struct anode *)0));
-	}
-	else if (EQ(a, "-ok")) {
-		i = Ai - 1;
-		while(!EQ(nxtarg(), ";"));
-		return(mk(ok, (struct anode *)i, (struct anode *)0));
-	}
-	else if(EQ(a, "-cpio")) {
-		if((Cpio = creat(b, 0666)) < 0) {
-			pr("find: cannot create "), pr(s), pr("\n");
-			exit(1);
-		}
-		Buf = (short *)sbrk(512);
-		Wp = Dbuf = (short *)sbrk(5120);
-		return(mk(cpio, (struct anode *)0, (struct anode *)0));
-	}
-	else if(EQ(a, "-newer")) {
-		if(stat(b, &Statb) < 0) {
-			pr("find: cannot access "), pr(b), pr("\n");
-			exit(1);
-		}
-		Newer = Statb.st_mtime;
-		return mk(newer, (struct anode *)0, (struct anode *)0);
-	}
-err:	pr("find: bad option "), pr(a), pr("\n");
-	exit(1);
-}
-struct anode *mk(f, l, r)
-int (*f)();
-struct anode *l, *r;
-{
-	Node[Nn].F = f;
-	Node[Nn].L = l;
-	Node[Nn].R = r;
-	return(&(Node[Nn++]));
+    time(&Now);
+    // The only way this system has to name the working directory: there is no getcwd(3) in
+    // v7's libc and none here.  /bin/sh and /bin/pwd are both on the image.
+    pwd = popen("pwd", "r");
+    if (pwd == NULL || fgets(Home, sizeof(Home), pwd) == NULL) {
+        pr("find: cannot find the working directory\n");
+        exit(1);
+    }
+    pclose(pwd);
+    n = strlen(Home);
+    if (n > 0 && Home[n - 1] == '\n') // v7 wrote Home[strlen(Home)-1] unconditionally
+        Home[n - 1] = '\0';
+    Argc = argc;
+    Argv = argv;
+    if (argc < 3) {
+    usage:
+        pr("Usage: find path-list predicate-list\n");
+        exit(1);
+    }
+    for (Ai = paths = 1; Ai < (argc - 1); ++Ai, ++paths)
+        if (*Argv[Ai] == '-' || EQ(Argv[Ai], "(") || EQ(Argv[Ai], "!"))
+            break;
+    if (paths == 1) // no path-list
+        goto usage;
+    if (!(exlist = parse_or())) { // parse and compile the arguments
+        pr("find: parsing error\n");
+        exit(1);
+    }
+    if (Ai < argc) {
+        pr("find: missing conjunction\n");
+        exit(1);
+    }
+    for (Pi = 1; Pi < paths; ++Pi) {
+        sp = NULL;
+        chdir(Home);
+        if (strlen(Argv[Pi]) >= sizeof(Pathname)) {
+            pr("find: path too long: "), pr(Argv[Pi]), pr("\n");
+            exit(1);
+        }
+        strcpy(Pathname, Argv[Pi]);
+        if ((cp = strrchr(Pathname, '/')) != NULL) {
+            sp  = cp + 1;
+            *cp = '\0';
+            if (chdir(*Pathname ? Pathname : "/") == -1) {
+                pr("find: bad starting directory\n");
+                exit(2);
+            }
+            *cp = '/';
+        }
+        Fname = sp ? sp : Pathname;
+        Depth = 0;
+        descend(Pathname, Fname, exlist); // to find files that match
+    }
+    return 0;
 }
 
-char *nxtarg() { /* get next arg from command line */
-	static strikes = 0;
+// compile time functions:  priority is  parse_or() < parse_and() < parse_not() < parse_prim()
 
-	if(strikes==3) {
-		pr("find: incomplete statement\n");
-		exit(1);
-	}
-	if(Ai>=Argc) {
-		strikes++;
-		Ai = Argc + 1;
-		return("");
-	}
-	return(Argv[Ai++]);
-}
+// parse ALTERNATION (-o)
+static struct anode *parse_or(void)
+{
+    struct anode *p1;
 
-/* execution time functions */
-and(p)
-register struct anode *p;
-{
-	return(((*p->L->F)(p->L)) && ((*p->R->F)(p->R))?1:0);
-}
-or(p)
-register struct anode *p;
-{
-	 return(((*p->L->F)(p->L)) || ((*p->R->F)(p->R))?1:0);
-}
-not(p)
-register struct anode *p;
-{
-	return( !((*p->L->F)(p->L)));
-}
-glob(p)
-register struct { int f; char *pat; } *p; 
-{
-	return(gmatch(Fname, p->pat));
-}
-print()
-{
-	puts(Pathname);
-	return(1);
-}
-mtime(p)
-register struct { int f, t, s; } *p; 
-{
-	return(scomp((int)((Now - Statb.st_mtime) / A_DAY), p->t, p->s));
-}
-atime(p)
-register struct { int f, t, s; } *p; 
-{
-	return(scomp((int)((Now - Statb.st_atime) / A_DAY), p->t, p->s));
-}
-ctime(p)
-register struct { int f, t, s; } *p; 
-{
-	return(scomp((int)((Now - Statb.st_ctime) / A_DAY), p->t, p->s));
-}
-user(p)
-register struct { int f, u, s; } *p; 
-{
-	return(scomp(Statb.st_uid, p->u, p->s));
-}
-ino(p)
-register struct { int f, u, s; } *p;
-{
-	return(scomp((int)Statb.st_ino, p->u, p->s));
-}
-group(p)
-register struct { int f, u; } *p; 
-{
-	return(p->u == Statb.st_gid);
-}
-links(p)
-register struct { int f, link, s; } *p; 
-{
-	return(scomp(Statb.st_nlink, p->link, p->s));
-}
-size(p)
-register struct { int f, sz, s; } *p; 
-{
-	return(scomp((int)((Statb.st_size+511)>>9), p->sz, p->s));
-}
-perm(p)
-register struct { int f, per, s; } *p; 
-{
-	register i;
-	i = (p->s=='-') ? p->per : 07777; /* '-' means only arg bits */
-	return((Statb.st_mode & i & 07777) == p->per);
-}
-type(p)
-register struct { int f, per, s; } *p;
-{
-	return((Statb.st_mode&S_IFMT)==p->per);
-}
-exeq(p)
-register struct { int f, com; } *p;
-{
-	fflush(stdout); /* to flush possible `-print' */
-	return(doex(p->com));
-}
-ok(p)
-struct { int f, com; } *p;
-{
-	int c;  int yes;
-	yes = 0;
-	fflush(stdout); /* to flush possible `-print' */
-	pr("< "), pr(Argv[p->com]), pr(" ... "), pr(Pathname), pr(" >?   ");
-	fflush(stderr);
-	if((c=getchar())=='y') yes = 1;
-	while(c!='\n')
-		if(c==EOF)
-			exit(2);
-		else
-			c = getchar();
-	if(yes) return(doex(p->com));
-	return(0);
+    p1 = parse_and(); // get left operand
+    if (EQ(nxtarg(), "-o")) {
+        Randlast--;
+        return mk(f_or, p1, parse_or());
+    } else if (Ai <= Argc)
+        --Ai;
+    return p1;
 }
 
-#define MKSHORT(v, lv) {U.l=1L;if(U.c[0]) U.l=lv, v[0]=U.s[1], v[1]=U.s[0]; else U.l=lv, v[0]=U.s[0], v[1]=U.s[1];}
-union { long l; short s[2]; char c[4]; } U;
-long mklong(v)
-short v[];
+// parse CONCATENATION (formerly -a)
+static struct anode *parse_and(void)
 {
-	U.l = 1;
-	if(U.c[0] /* VAX */)
-		U.s[0] = v[1], U.s[1] = v[0];
-	else
-		U.s[0] = v[0], U.s[1] = v[1];
-	return U.l;
-}
-cpio()
-{
-#define MAGIC 070707
-	struct header {
-		short	h_magic,
-			h_dev,
-			h_ino,
-			h_mode,
-			h_uid,
-			h_gid,
-			h_nlink,
-			h_rdev;
-		short	h_mtime[2];
-		short	h_namesize;
-		short	h_filesize[2];
-		char	h_name[256];
-	} hdr;
-	register ifile, ct;
-	static long fsz;
-	register i;
+    struct anode *p1;
+    char *a;
 
-	hdr.h_magic = MAGIC;
-	strcpy(hdr.h_name, !strncmp(Pathname, "./", 2)? Pathname+2: Pathname);
-	hdr.h_namesize = strlen(hdr.h_name) + 1;
-	hdr.h_uid = Statb.st_uid;
-	hdr.h_gid = Statb.st_gid;
-	hdr.h_dev = Statb.st_dev;
-	hdr.h_ino = Statb.st_ino;
-	hdr.h_mode = Statb.st_mode;
-	MKSHORT(hdr.h_mtime, Statb.st_mtime);
-	hdr.h_nlink = Statb.st_nlink;
-	fsz = hdr.h_mode & S_IFREG? Statb.st_size: 0L;
-	MKSHORT(hdr.h_filesize, fsz);
-	hdr.h_rdev = Statb.st_rdev;
-	if(EQ(hdr.h_name, "TRAILER!!!")) {
-		bwrite((short *)&hdr, (sizeof hdr-256)+hdr.h_namesize);
-		for(i = 0; i < 10; ++i)
-			bwrite(Buf, 512);
-		return;
-	}
-	if(!mklong(hdr.h_filesize)) {
-		bwrite((short *)&hdr, (sizeof hdr-256)+hdr.h_namesize);
-		return;
-	}
-	if((ifile = open(Fname, 0)) < 0) {
-cerror:
-		pr("find: cannot copy "), pr(hdr.h_name), pr("\n");
-		return;
-	}
-	bwrite((short *)&hdr, (sizeof hdr-256)+hdr.h_namesize);
-	for(fsz = mklong(hdr.h_filesize); fsz > 0; fsz -= 512) {
-		ct = fsz>512? 512: fsz;
-		if(read(ifile, (char *)Buf, ct) < 0)
-			goto cerror;
-		bwrite(Buf, ct);
-	}
-	close(ifile);
-	return;
-}
-newer()
-{
-	return Statb.st_mtime > Newer;
+    p1 = parse_not();
+    a  = nxtarg();
+    if (EQ(a, "-a")) {
+    And:
+        Randlast--;
+        return mk(f_and, p1, parse_and());
+    } else if (EQ(a, "(") || EQ(a, "!") || (*a == '-' && !EQ(a, "-o"))) {
+        --Ai;
+        goto And;
+    } else if (Ai <= Argc)
+        --Ai;
+    return p1;
 }
 
-/* support functions */
-scomp(a, b, s) /* funny signed compare */
-register a, b;
-register char s;
+// parse NOT (!)
+static struct anode *parse_not(void)
 {
-	if(s == '+')
-		return(a > b);
-	if(s == '-')
-		return(a < (b * -1));
-	return(a == b);
+    if (Randlast) {
+        pr("find: operand follows operand\n");
+        exit(1);
+    }
+    Randlast++;
+    if (EQ(nxtarg(), "!"))
+        return mk(f_not, parse_prim(), NULL);
+    else if (Ai <= Argc)
+        --Ai;
+    return parse_prim();
 }
 
-doex(com)
+// parse parens and predicates
+static struct anode *parse_prim(void)
 {
-	register np;
-	register char *na;
-	static char *nargv[50];
-	static ccode;
+    struct anode *p1;
+    int i;
+    char *a, *b, s;
+    struct passwd *pw;
+    struct group *gr;
 
-	ccode = np = 0;
-	while (na=Argv[com++]) {
-		if(strcmp(na, ";")==0) break;
-		if(strcmp(na, "{}")==0) nargv[np++] = Pathname;
-		else nargv[np++] = na;
-	}
-	nargv[np] = 0;
-	if (np==0) return(9);
-	if(fork()) /*parent*/ wait(&ccode);
-	else { /*child*/
-		chdir(Home);
-		execvp(nargv[0], nargv, np);
-		exit(1);
-	}
-	return(ccode ? 0:1);
+    a = nxtarg();
+    if (EQ(a, "(")) {
+        Randlast--;
+        p1 = parse_or();
+        a  = nxtarg();
+        if (!EQ(a, ")"))
+            goto err;
+        return p1;
+    } else if (EQ(a, "-print")) {
+        return mk(f_print, NULL, NULL);
+    }
+    b = nxtarg();
+    s = *b;
+    if (s == '+')
+        b++;
+    if (EQ(a, "-name"))
+        return mkpat(f_name, b);
+    else if (EQ(a, "-mtime"))
+        return mknum(f_mtime, atoi(b), s);
+    else if (EQ(a, "-atime"))
+        return mknum(f_atime, atoi(b), s);
+    else if (EQ(a, "-ctime"))
+        return mknum(f_chgtime, atoi(b), s);
+    else if (EQ(a, "-user")) {
+        // v7 parsed /etc/passwd by hand into char[20] with no bound; getpwnam(3) exists.
+        if ((pw = getpwnam(b)) == NULL) {
+            if (gmatch(b, "[0-9][0-9][0-9]*") || gmatch(b, "[0-9][0-9]") ||
+                gmatch(b, "[0-9]"))
+                return mknum(f_user, atoi(b), s);
+            pr("find: cannot find -user name\n");
+            exit(1);
+        }
+        return mknum(f_user, pw->pw_uid, s);
+    } else if (EQ(a, "-inum"))
+        return mknum(f_ino, atoi(b), s);
+    else if (EQ(a, "-group")) {
+        if ((gr = getgrnam(b)) == NULL) {
+            if (gmatch(b, "[0-9][0-9][0-9]*") || gmatch(b, "[0-9][0-9]") ||
+                gmatch(b, "[0-9]"))
+                return mknum(f_group, atoi(b), s);
+            pr("find: cannot find -group name\n");
+            exit(1);
+        }
+        return mknum(f_group, gr->gr_gid, s);
+    } else if (EQ(a, "-size"))
+        return mknum(f_size, atoi(b), s);
+    else if (EQ(a, "-links"))
+        return mknum(f_links, atoi(b), s);
+    else if (EQ(a, "-perm")) {
+        for (i = 0; *b; ++b) {
+            if (*b == '-')
+                continue;
+            i <<= 3;
+            i = i + (*b - '0');
+        }
+        return mknum(f_perm, i, s);
+    } else if (EQ(a, "-type")) {
+        i = s == 'd'   ? S_IFDIR
+            : s == 'b' ? S_IFBLK
+            : s == 'c' ? S_IFCHR
+            : s == 'f' ? S_IFREG // v7 wrote the literal 0100000
+                       : 0;
+        return mknum(f_type, i, 0);
+    } else if (EQ(a, "-exec")) {
+        i = Ai - 1;
+        while (!EQ(nxtarg(), ";"))
+            ;
+        return mknum(f_exec, i, 0);
+    } else if (EQ(a, "-ok")) {
+        i = Ai - 1;
+        while (!EQ(nxtarg(), ";"))
+            ;
+        return mknum(f_ok, i, 0);
+    } else if (EQ(a, "-newer")) {
+        if (stat(b, &Statb) < 0) {
+            pr("find: cannot access "), pr(b), pr("\n");
+            exit(1);
+        }
+        Newer = Statb.st_mtime;
+        return mk(f_newer, NULL, NULL);
+    }
+err:
+    pr("find: bad option "), pr(a), pr("\n");
+    exit(1);
 }
 
-getunum(f, s) char *f, *s; { /* find user/group name and return number */
-	register i;
-	register char *sp;
-	register c;
-	char str[20];
-	FILE *pin;
-
-	i = -1;
-	pin = fopen(f, "r");
-	c = '\n'; /* prime with a CR */
-	do {
-		if(c=='\n') {
-			sp = str;
-			while((c = *sp++ = getc(pin)) != ':')
-				if(c == EOF) goto RET;
-			*--sp = '\0';
-			if(EQ(str, s)) {
-				while((c=getc(pin)) != ':')
-					if(c == EOF) goto RET;
-				sp = str;
-				while((*sp = getc(pin)) != ':') sp++;
-				*sp = '\0';
-				i = atoi(str);
-				goto RET;
-			}
-		}
-	} while((c = getc(pin)) != EOF);
- RET:
-	fclose(pin);
-	return(i);
+static struct anode *mk(int (*f)(struct anode *), struct anode *l, struct anode *r)
+{
+    if (Nn >= NNODE) {
+        pr("find: expression too long\n");
+        exit(1);
+    }
+    Node[Nn].F = f;
+    Node[Nn].L = l;
+    Node[Nn].R = r;
+    return &Node[Nn++];
 }
 
-descend(name, fname, exlist)
-struct anode *exlist;
-char *name, *fname;
+//
+// A numeric predicate, and a pattern predicate.  v7 stuffed both through the L and R pointer
+// slots and read them back through a private struct shape per primary; see the head of this
+// file for why that cannot work with a fat `char *'.
+//
+static struct anode *mknum(int (*f)(struct anode *), int num, int sign)
 {
-	int	dir = 0, /* open directory */
-		offset,
-		dsize,
-		entries,
-		dirsize;
-	struct direct dentry[32];
-	register struct direct	*dp;
-	register char *c1, *c2;
-	int i;
-	int rv = 0;
-	char *endofname;
+    struct anode *p = mk(f, NULL, NULL);
 
-	if(stat(fname, &Statb)<0) {
-		pr("find: bad status-- "), pr(name), pr("\n");
-		return(0);
-	}
-	(*exlist->F)(exlist);
-	if((Statb.st_mode&S_IFMT)!=S_IFDIR)
-		return(1);
+    p->num  = num;
+    p->sign = sign;
+    return p;
+}
 
-	for(c1 = name; *c1; ++c1);
-	if(*(c1-1) == '/')
-		--c1;
-	endofname = c1;
-	dirsize = Statb.st_size;
+static struct anode *mkpat(int (*f)(struct anode *), const char *pat)
+{
+    struct anode *p = mk(f, NULL, NULL);
 
-	if(chdir(fname) == -1)
-		return(0);
-	for(offset=0 ; offset < dirsize ; offset += 512) { /* each block */
-		dsize = 512<(dirsize-offset)? 512: (dirsize-offset);
-		if(!dir) {
-			if((dir=open(".", 0))<0) {
-				pr("find: cannot open "), pr(name), pr("\n");
-				rv = 0;
-				goto ret;
-			}
-			if(offset) lseek(dir, (long)offset, 0);
-			if(read(dir, (char *)dentry, dsize)<0) {
-				pr("find: cannot read "), pr(name), pr("\n");
-				rv = 0;
-				goto ret;
-			}
-			if(dir > 10) {
-				close(dir);
-				dir = 0;
-			}
-		} else 
-			if(read(dir, (char *)dentry, dsize)<0) {
-				pr("find: cannot read "), pr(name), pr("\n");
-				rv = 0;
-				goto ret;
-			}
-		for(dp=dentry, entries=dsize>>4; entries; --entries, ++dp) { /* each directory entry */
-			if(dp->d_ino==0
-			|| (dp->d_name[0]=='.' && dp->d_name[1]=='\0')
-			|| (dp->d_name[0]=='.' && dp->d_name[1]=='.' && dp->d_name[2]=='\0'))
-				continue;
-			c1 = endofname;
-			*c1++ = '/';
-			c2 = dp->d_name;
-			for(i=0; i<14; ++i)
-				if(*c2)
-					*c1++ = *c2++;
-				else
-					break;
-			*c1 = '\0';
-			if(c1 == endofname) { /* ?? */
-				rv = 0;
-				goto ret;
-			}
-			Fname = endofname+1;
-			if(!descend(name, Fname, exlist)) {
-				*endofname = '\0';
-				chdir(Home);
-				if(chdir(Pathname) == -1) {
-					pr("find: bad directory tree\n");
-					exit(1);
-				}
-			}
-		}
-	}
-	rv = 1;
+    p->pat = pat;
+    return p;
+}
+
+static char *nxtarg(void) // get next arg from command line
+{
+    static int strikes = 0;
+
+    if (strikes == 3) {
+        pr("find: incomplete statement\n");
+        exit(1);
+    }
+    if (Ai >= Argc) {
+        strikes++;
+        Ai = Argc + 1;
+        return "";
+    }
+    return Argv[Ai++];
+}
+
+// execution time functions
+
+static int f_and(struct anode *p)
+{
+    return ((*p->L->F)(p->L)) && ((*p->R->F)(p->R)) ? 1 : 0;
+}
+
+static int f_or(struct anode *p)
+{
+    return ((*p->L->F)(p->L)) || ((*p->R->F)(p->R)) ? 1 : 0;
+}
+
+static int f_not(struct anode *p)
+{
+    return !((*p->L->F)(p->L));
+}
+
+static int f_name(struct anode *p)
+{
+    return gmatch(Fname, p->pat);
+}
+
+static int f_print(struct anode *p)
+{
+    (void)p;
+    puts(Pathname);
+    return 1;
+}
+
+static int f_mtime(struct anode *p)
+{
+    return scomp((int)((Now - Statb.st_mtime) / A_DAY), p->num, p->sign);
+}
+
+static int f_atime(struct anode *p)
+{
+    return scomp((int)((Now - Statb.st_atime) / A_DAY), p->num, p->sign);
+}
+
+static int f_chgtime(struct anode *p) // v7 called this ctime(), which is <time.h>'s
+{
+    return scomp((int)((Now - Statb.st_ctime) / A_DAY), p->num, p->sign);
+}
+
+static int f_user(struct anode *p)
+{
+    return scomp(Statb.st_uid, p->num, p->sign);
+}
+
+static int f_ino(struct anode *p)
+{
+    return scomp((int)Statb.st_ino, p->num, p->sign);
+}
+
+static int f_group(struct anode *p)
+{
+    return p->num == Statb.st_gid;
+}
+
+static int f_links(struct anode *p)
+{
+    return scomp(Statb.st_nlink, p->num, p->sign);
+}
+
+//
+// -size, in 1024-BYTE BLOCKS.  v7's were 512, which names nothing here (§4).  The division
+// is at the comparison and nowhere else, so st_size stays in bytes right up to this line.
+//
+static int f_size(struct anode *p)
+{
+    return scomp((int)((Statb.st_size + KBYTE - 1) / KBYTE), p->num, p->sign);
+}
+
+static int f_perm(struct anode *p)
+{
+    int i;
+
+    i = (p->sign == '-') ? p->num : 07777; // `-' means only arg bits
+    return (Statb.st_mode & i & 07777) == p->num;
+}
+
+static int f_type(struct anode *p)
+{
+    return (Statb.st_mode & S_IFMT) == p->num;
+}
+
+static int f_exec(struct anode *p)
+{
+    fflush(stdout); // to flush possible `-print'
+    return doex(p->num);
+}
+
+static int f_ok(struct anode *p)
+{
+    int c;
+    int yes;
+
+    yes = 0;
+    fflush(stdout); // to flush possible `-print'
+    pr("< "), pr(Argv[p->num]), pr(" ... "), pr(Pathname), pr(" >?   ");
+    fflush(stderr);
+    if ((c = getchar()) == 'y')
+        yes = 1;
+    while (c != '\n')
+        if (c == EOF)
+            exit(2);
+        else
+            c = getchar();
+    if (yes)
+        return doex(p->num);
+    return 0;
+}
+
+static int f_newer(struct anode *p)
+{
+    (void)p;
+    return Statb.st_mtime > Newer;
+}
+
+// support functions
+
+static int scomp(int a, int b, int s) // funny signed compare
+{
+    if (s == '+')
+        return a > b;
+    if (s == '-')
+        return a < (b * -1);
+    return a == b;
+}
+
+static int doex(int com)
+{
+    int np;
+    char *na;
+    static char *nargv[NARGV];
+    static int ccode;
+
+    ccode = np = 0;
+    while ((na = Argv[com++]) != NULL) {
+        if (strcmp(na, ";") == 0)
+            break;
+        if (np >= NARGV - 1) { // v7 had no bound here at all
+            pr("find: -exec command too long\n");
+            exit(1);
+        }
+        if (strcmp(na, "{}") == 0)
+            nargv[np++] = Pathname;
+        else
+            nargv[np++] = na;
+    }
+    nargv[np] = NULL;
+    if (np == 0)
+        return 9;
+    if (fork()) // parent
+        wait(&ccode);
+    else { // child
+        chdir(Home);
+        execvp(nargv[0], nargv); // v7 passed a third argument
+        exit(1);
+    }
+    return ccode ? 0 : 1;
+}
+
+//
+// Walk `fname' (relative to the current directory) as `name' (the path from the top), and
+// apply the compiled expression to it and to everything under it.
+//
+static int descend(char *name, const char *fname, struct anode *exlist)
+{
+    int dir = 0; // open directory
+    int offset, dsize, entries, dirsize;
+    struct direct *dentry;
+    struct direct *dp;
+    char *c1;
+    const char *c2;
+    int i;
+    int rv = 0;
+    char *endofname;
+
+    if (stat(fname, &Statb) < 0) {
+        pr("find: bad status-- "), pr(name), pr("\n");
+        return 0;
+    }
+    (*exlist->F)(exlist);
+    if ((Statb.st_mode & S_IFMT) != S_IFDIR)
+        return 1;
+
+    // §6's third ceiling, which nothing else checks: see MAXDEPTH.
+    if (++Depth > MAXDEPTH) {
+        --Depth;
+        pr("find: directory tree too deep: "), pr(name), pr("\n");
+        return 1;
+    }
+    // On the heap and not in the frame: 32 entries are 128 words, and descend() recurses.
+    dentry = (struct direct *)malloc(NENTRY * sizeof(struct direct));
+    if (dentry == NULL) {
+        --Depth;
+        pr("find: out of memory\n");
+        exit(1);
+    }
+
+    for (c1 = name; *c1; ++c1)
+        ;
+    if (*(c1 - 1) == '/')
+        --c1;
+    endofname = c1;
+    dirsize   = Statb.st_size;
+
+    if (chdir(fname) == -1) {
+        free((char *)dentry);
+        --Depth;
+        return 0;
+    }
+    // v7 read 512 bytes at a time and counted entries with `dsize>>4' -- a PDP-11 directory
+    // block and a 16-byte entry.  A struct direct is 24 bytes here.
+    for (offset = 0; offset < dirsize; offset += DIRBLK) {
+        dsize = DIRBLK < (dirsize - offset) ? DIRBLK : (dirsize - offset);
+        if (!dir) {
+            if ((dir = open(".", 0)) < 0) {
+                pr("find: cannot open "), pr(name), pr("\n");
+                rv = 0;
+                goto ret;
+            }
+            if (offset)
+                lseek(dir, (long)offset, 0);
+            if (read(dir, (char *)dentry, dsize) < 0) {
+                pr("find: cannot read "), pr(name), pr("\n");
+                rv = 0;
+                goto ret;
+            }
+            // A descriptor budget: above fd 10 the descriptor is dropped and re-opened per
+            // block, so a deep tree cannot exhaust NOFILE.
+            if (dir > 10) {
+                close(dir);
+                dir = 0;
+            }
+        } else if (read(dir, (char *)dentry, dsize) < 0) {
+            pr("find: cannot read "), pr(name), pr("\n");
+            rv = 0;
+            goto ret;
+        }
+        // each directory entry
+        for (dp = dentry, entries = dsize / (int)sizeof(struct direct); entries;
+             --entries, ++dp) {
+            if (dp->d_ino == 0 || (dp->d_name[0] == '.' && dp->d_name[1] == '\0') ||
+                (dp->d_name[0] == '.' && dp->d_name[1] == '.' && dp->d_name[2] == '\0'))
+                continue;
+            // §5: a name out of a directory is not NUL-terminated, and DIRSIZ is 18.
+            if (endofname + 1 + DIRSIZ + 1 > Pathname + sizeof(Pathname)) {
+                pr("find: path too long: "), pr(name), pr("\n");
+                continue;
+            }
+            c1    = endofname;
+            *c1++ = '/';
+            c2    = dp->d_name;
+            for (i = 0; i < DIRSIZ; ++i)
+                if (*c2)
+                    *c1++ = *c2++;
+                else
+                    break;
+            *c1 = '\0';
+            if (c1 == endofname) { // ??
+                rv = 0;
+                goto ret;
+            }
+            Fname = endofname + 1;
+            if (!descend(name, Fname, exlist)) {
+                *endofname = '\0';
+                chdir(Home);
+                if (chdir(Pathname) == -1) {
+                    pr("find: bad directory tree\n");
+                    exit(1);
+                }
+            }
+        }
+    }
+    rv = 1;
 ret:
-	if(dir)
-		close(dir);
-	if(chdir("..") == -1) {
-		*endofname = '\0';
-		pr("find: bad directory "), pr(name), pr("\n");
-		rv = 1;
-	}
-	return(rv);
+    if (dir)
+        close(dir);
+    free((char *)dentry);
+    if (chdir("..") == -1) {
+        *endofname = '\0';
+        pr("find: bad directory "), pr(name), pr("\n");
+        rv = 1;
+    }
+    --Depth;
+    return rv;
 }
 
-gmatch(s, p) /* string match as in glob */
-register char *s, *p;
+static int gmatch(const char *s, const char *p) // string match as in glob
 {
-	if (*s=='.' && *p!='.') return(0);
-	return amatch(s, p);
+    if (*s == '.' && *p != '.')
+        return 0;
+    return amatch(s, p);
 }
 
-amatch(s, p)
-register char *s, *p;
+static int amatch(const char *s, const char *p)
 {
-	register cc;
-	int scc, k;
-	int c, lc;
+    int cc;
+    int scc, k;
+    int c, lc;
 
-	scc = *s;
-	lc = 077777;
-	switch (c = *p) {
+    scc = (unsigned char)*s;
+    lc  = 077777;
+    switch (c = (unsigned char)*p) {
 
-	case '[':
-		k = 0;
-		while (cc = *++p) {
-			switch (cc) {
+    case '[':
+        k = 0;
+        while ((cc = (unsigned char)*++p) != 0) {
+            switch (cc) {
 
-			case ']':
-				if (k)
-					return(amatch(++s, ++p));
-				else
-					return(0);
+            case ']':
+                if (k)
+                    return amatch(++s, ++p);
+                else
+                    return 0;
 
-			case '-':
-				k |= lc <= scc & scc <= (cc=p[1]);
-			}
-			if (scc==(lc=cc)) k++;
-		}
-		return(0);
+            case '-':
+                // v7 wrote a bitwise `&' where `&&' was meant.  It works -- both operands
+                // are 0 or 1 -- and it is left as it stands, with this line to say so.
+                k |= lc <= scc && scc <= (cc = (unsigned char)p[1]);
+            }
+            if (scc == (lc = cc))
+                k++;
+        }
+        return 0;
 
-	case '?':
-	caseq:
-		if(scc) return(amatch(++s, ++p));
-		return(0);
-	case '*':
-		return(umatch(s, ++p));
-	case 0:
-		return(!scc);
-	}
-	if (c==scc) goto caseq;
-	return(0);
+    case '?':
+    caseq:
+        if (scc)
+            return amatch(++s, ++p);
+        return 0;
+    case '*':
+        return umatch(s, ++p);
+    case 0:
+        return !scc;
+    }
+    if (c == scc)
+        goto caseq;
+    return 0;
 }
 
-umatch(s, p)
-register char *s, *p;
+static int umatch(const char *s, const char *p)
 {
-	if(*p==0) return(1);
-	while(*s)
-		if (amatch(s++, p)) return(1);
-	return(0);
+    if (*p == 0)
+        return 1;
+    while (*s)
+        if (amatch(s++, p))
+            return 1;
+    return 0;
 }
 
-bwrite(rp, c)
-register short *rp;
-register c;
+static void pr(const char *s)
 {
-	register short *wp = Wp;
-
-	c = (c+1) >> 1;
-	while(c--) {
-		if(!Wct) {
-again:
-			if(write(Cpio, (char *)Dbuf, Bufsize)<0) {
-				Cpio = chgreel(1, Cpio);
-				goto again;
-			}
-			Wct = Bufsize >> 1;
-			wp = Dbuf;
-			++Blocks;
-		}
-		*wp++ = *rp++;
-		--Wct;
-	}
-	Wp = wp;
-}
-chgreel(x, fl)
-{
-	register f;
-	char str[22];
-	FILE *devtty;
-	struct stat statb;
-
-	pr("find: can't "), pr(x? "write output": "read input"), pr("\n");
-	fstat(fl, &statb);
-	if((statb.st_mode&S_IFMT) != S_IFCHR)
-		exit(1);
-again:
-	pr("If you want to go on, type device/file name when ready\n");
-	devtty = fopen("/dev/tty", "r");
-	fgets(str, 20, devtty);
-	str[strlen(str) - 1] = '\0';
-	if(!*str)
-		exit(1);
-	close(fl);
-	if((f = open(str, x? 1: 0)) < 0) {
-		pr("That didn't work");
-		fclose(devtty);
-		goto again;
-	}
-	return f;
-}
-pr(s)
-char *s;
-{
-	fputs(s, stderr);
+    fputs(s, stderr);
 }

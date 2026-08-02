@@ -1,4 +1,4 @@
-# /etc/filters -- the seventeen text filters of task C5, run by the console shell.
+# /etc/filters -- the twenty-four text filters of task C5, run by the console shell.
 #
 # Grafted onto a copy of the image by run-filters.sh, not shipped on it.  utils.sh is the
 # model and its standing rules hold here too:
@@ -14,7 +14,8 @@
 # one two-minute boot was not worth taking for six programs that touch no device, no
 # directory, no signal and no second process.  It is worth taking for THIRTEEN, and this is
 # it: C5a's six and C5b's seven in a single boot.  Task C5c added grep and fgrep to it, as
-# cmd/TODO.md said a later filter should -- a section here rather than a second boot.
+# cmd/TODO.md said a later filter should -- a section here rather than a second boot -- and so
+# did C5d's sort, C5e's sed and C5f's seven, which takes it to twenty-four.
 #
 # EIGHT THINGS HERE CANNOT BE SAID UNDER b6sim AT ALL, and they are the reason this is not
 # merely a second opinion:
@@ -36,6 +37,22 @@
 #     checked-in .expected.  The shell here passes the word as it was typed (cmd/sh's execs()
 #     hands exece() the original t[0]), so the diagnostics read `col:' and can be diffed.
 #
+#   * find(1), ENTIRELY (task C5f).  cmd/find has no test/ directory at all: it reads
+#     directory descriptors, which b6sim refuses; it popen()s pwd, which there would fork the
+#     BUILD MACHINE's shell; and -exec fork/execs, which there would run the build machine's
+#     programs on the build machine's files.  Section 18 is not a second opinion about find,
+#     it is the only one -- mount(1M)'s position from task C4f exactly.
+#
+#   * file(1) ON THE THINGS IT EXISTS TO LOOK AT (task C5f).  A real BESM-6 a.out with FMAGIC
+#     and RELFLG set, a pure one, a directory, a block special file and a character special
+#     file are all things that exist on the IMAGE; under b6sim /bin, /dev and /etc are the
+#     build machine's, so cmd/file/test has to copy build artefacts under neutral names and
+#     can say nothing at all about the last four.
+#
+#   * diff(1)'s TEMP FILE AND ITS -h PATH (task C5f).  `diff -' copies standard input to
+#     /tmp/dXXXXX, and `diff -h' EXECs /usr/lib/diffh -- which is on the image and not on the
+#     build machine, so cmd/diff/test can only assert the diagnostic.
+#
 #   * A SEPARATOR, A PATTERN OR A WHOLE SCRIPT WITH A SPACE IN IT (tasks C5c, C5d and C5e).  run-prog-test.sh splits a .args line on
 #     whitespace and has no quoting, so no b6sim case can hand grep or fgrep a pattern
 #     containing a space -- which is a large part of what anybody greps for, and `sort -t\' \''
@@ -48,7 +65,7 @@
 #     anything and unlinks it on the way out; under b6sim that path is the build machine's,
 #     so nothing there may assert either half.  Section 10's closing glob asserts both.
 #
-#   * THE PIPELINES.  Twelve of the commands below are pipelines between two of these filters,
+#   * THE PIPELINES.  Sixteen of the commands below are pipelines between two of these filters,
 #     which is the way anybody actually uses them and which no single-program harness can
 #     represent.
 #
@@ -56,7 +73,7 @@
 #     their logic is fully covered by ctest -L cmd, and what was not covered is that the
 #     bytes on the disk execute.  The two `ls /bin' listings assert those files EXIST.
 #
-# SECTION MARKERS: mount.sh's convention rather than utils.sh's, because seventeen programs in
+# SECTION MARKERS: mount.sh's convention rather than utils.sh's, because twenty-four programs in
 # one log want a diff that says which one moved.
 
 echo filters begin >/tmp/filters.log
@@ -293,7 +310,146 @@ s/^/> /
 !
 sed -f /tmp/sed.sed /tmp/b.txt >>/tmp/filters.log
 
-# ---- 12. TASK C5a's SIX, at last on the machine they were built for.  Their logic is covered
+# ---- 12. pr (task C5f).  Every case in cmd/pr/test passes -t, and it has to: pr's page
+#          heading holds the FILE'S MTIME, so no run of pr without -t has a reproducible
+#          standard output anywhere -- here least of all, where the clock is the image's own
+#          -T stamp plus however long the boot took.  So the heading is asserted under b6sim
+#          (cmd/pr/test/run-pr-test.sh fixes an mtime with touch first) and what this section
+#          adds is the image's copy running, the -m path that never touches the ring buffer,
+#          and a Cyrillic column through that ring -- the two sentinel bytes 0375 and 0376
+#          live IN the character stream and survive only because neither can occur in UTF-8.
+echo ---pr--- >>/tmp/filters.log
+pr -t -l8 /tmp/a.txt >>/tmp/filters.log
+pr -t -l4 -2 /tmp/n.txt >>/tmp/filters.log
+pr -t -l4 -2 -s, /tmp/n.txt >>/tmp/filters.log
+pr -t -l4 -m /tmp/a.txt /tmp/b.txt >>/tmp/filters.log
+echo привет мир | pr -t -l2 >>/tmp/filters.log
+
+# ---- 13. cal (task C5f).  The cheapest program of the task and the one output everybody
+#          checks: September 1752, the month Britain lost eleven days.
+echo ---cal--- >>/tmp/filters.log
+cal 9 1752 >>/tmp/filters.log
+cal 2 2000 >>/tmp/filters.log
+cal 2 1900 >>/tmp/filters.log
+
+# ---- 14. tsort (task C5f), which is lorder(1)'s other half.  A Cyrillic node name is an
+#          ordinary item here: getname()'s blank set is written out rather than taken from a
+#          table, so a byte above 0177 is a name character.
+echo ---tsort--- >>/tmp/filters.log
+cat >/tmp/g.txt <<\!
+main.o util.o
+util.o io.o
+main.o io.o
+io.o io.o
+!
+tsort /tmp/g.txt >>/tmp/filters.log
+echo 'привет мир' | tsort >>/tmp/filters.log
+
+# ---- 15. join (task C5f).  The many-to-many path -- keys repeated on BOTH sides -- is most
+#          of this program, and it is the reason file2 has to be a real file: join rewinds it
+#          with fseek once per group of equal keys.
+echo ---join--- >>/tmp/filters.log
+cat >/tmp/j1.txt <<\!
+apple 1
+banana 2
+cherry 3
+!
+cat >/tmp/j2.txt <<\!
+apple red
+banana yellow
+banana green
+date brown
+!
+join /tmp/j1.txt /tmp/j2.txt >>/tmp/filters.log
+join -a1 /tmp/j1.txt /tmp/j2.txt >>/tmp/filters.log
+join -o 1.1 2.2 /tmp/j1.txt /tmp/j2.txt >>/tmp/filters.log
+
+# ---- 16. file (task C5f), AND THIS IS THE SECTION b6sim CANNOT HAVE.  Every interesting
+#          input to file is a thing that exists only on the image: a real BESM-6 a.out with
+#          FMAGIC and RELFLG set, a directory, a block special file, a character special file,
+#          and a shell script whose mode carries an execute bit.  Under b6sim /bin, /dev and
+#          /etc are the BUILD MACHINE's (cmd/README.md §9), so cmd/file/test has to copy
+#          build artefacts under neutral names and can say nothing about the last four.
+#          The Cyrillic line is the divergence: v7 called any byte above 0177 `data'.
+echo ---file--- >>/tmp/filters.log
+file /bin/cat >>/tmp/filters.log
+file /bin/sh >>/tmp/filters.log
+file / >>/tmp/filters.log
+file /dev/md0 >>/tmp/filters.log
+file /dev/console >>/tmp/filters.log
+file /etc/passwd >>/tmp/filters.log
+file /tmp/a.txt >>/tmp/filters.log
+echo привет мир >/tmp/rus.txt
+file /tmp/rus.txt >>/tmp/filters.log
+file /tmp/nosuch >>/tmp/filters.log
+
+# ---- 17. diff (task C5f), AND THE TWO THINGS ONLY A BOOT CAN SHOW.  `diff -' copies
+#          standard input to a temp file in /tmp, and under b6sim that /tmp is the build
+#          machine's (§9 again); and `diff -h' EXECs /usr/lib/diffh, which is on the image and
+#          not on the build machine, so cmd/diff/test can only assert the diagnostic.  Here
+#          both work.  The closing glob says the temp file did not survive.
+echo ---diff--- >>/tmp/filters.log
+diff /tmp/a.txt /tmp/b.txt >>/tmp/filters.log
+echo diff status $? >>/tmp/filters.log
+diff /tmp/a.txt /tmp/a.txt >>/tmp/filters.log
+echo diff status $? >>/tmp/filters.log
+diff -e /tmp/a.txt /tmp/b.txt >>/tmp/filters.log
+cat /tmp/a.txt | diff - /tmp/b.txt >>/tmp/filters.log
+diff -h /tmp/a.txt /tmp/b.txt >>/tmp/filters.log
+echo /tmp/d* >>/tmp/filters.log
+
+# ---- 18. find (task C5f), AND THIS IS THE WHOLE OF WHAT IS ASSERTED ABOUT IT.  cmd/find has
+#          no test/ directory at all: it reads directory descriptors, which b6sim refuses;
+#          it popen()s pwd, which under b6sim would fork the build machine's shell; and -exec
+#          fork/execs, which under b6sim would run the build machine's programs on the build
+#          machine's files.  So this section is not a second opinion, it is the only one --
+#          mount(1M)'s C4f position exactly, and cmd/find/README.md says so.
+#
+#          The walk order is a directory's own entry order, so everything below goes through
+#          sort: what is being asserted is WHICH files matched, not the order the filesystem
+#          happens to hold them in.  And every query is labelled, because a dozen unlabelled
+#          lists of the same three names is a log nobody can read a diff of.
+echo ---find--- >>/tmp/filters.log
+mkdir /tmp/ftree
+mkdir /tmp/ftree/sub
+echo one >/tmp/ftree/one.c
+echo two >/tmp/ftree/two.txt
+# A second of daylight between the two halves of the tree, so that -newer below has a real
+# answer rather than a race: the guest clock advances about two seconds over a whole boot,
+# so two files written one after the other usually carry the SAME mtime.
+sleep 2
+echo three >/tmp/ftree/sub/three.c
+echo 'find -print' >>/tmp/filters.log
+find /tmp/ftree -print | sort >>/tmp/filters.log
+echo 'find -name' >>/tmp/filters.log
+find /tmp/ftree -name '*.c' -print | sort >>/tmp/filters.log
+echo 'find -type d' >>/tmp/filters.log
+find /tmp/ftree -type d -print | sort >>/tmp/filters.log
+echo 'find -type f -name' >>/tmp/filters.log
+find /tmp/ftree -type f -name '*.txt' -print | sort >>/tmp/filters.log
+echo 'find ( -o )' >>/tmp/filters.log
+find /tmp/ftree \( -name '*.c' -o -name '*.txt' \) -print | sort >>/tmp/filters.log
+echo 'find ! -type d' >>/tmp/filters.log
+find /tmp/ftree ! -type d -print | sort >>/tmp/filters.log
+echo 'find -size 1' >>/tmp/filters.log
+find /tmp/ftree -size 1 -type f -print | sort >>/tmp/filters.log
+echo 'find -links 1' >>/tmp/filters.log
+find /tmp/ftree -links 1 -type f -print | sort >>/tmp/filters.log
+# chmod first, so that the mode being matched is one this script chose rather than whatever
+# the shell's umask happens to be.
+chmod 600 /tmp/ftree/one.c
+echo 'find -perm 0600' >>/tmp/filters.log
+find /tmp/ftree -perm 0600 -type f -print | sort >>/tmp/filters.log
+echo 'find -user root' >>/tmp/filters.log
+find /tmp/ftree -user root -type f -print | sort >>/tmp/filters.log
+echo 'find -newer' >>/tmp/filters.log
+find /tmp/ftree -newer /tmp/ftree/two.txt -type f -print | sort >>/tmp/filters.log
+echo 'find -exec' >>/tmp/filters.log
+find /tmp/ftree -name three.c -exec cat {} \; >>/tmp/filters.log
+echo 'find -cpio' >>/tmp/filters.log
+find /tmp/ftree -cpio /tmp/nope >>/tmp/filters.log 2>&1
+
+# ---- 19. TASK C5a's SIX, at last on the machine they were built for.  Their logic is covered
 #          by ctest -L cmd; what this adds is that the image's copy executes.  Two of them are
 #          worth more than that: wc counts a Cyrillic line as two words, which is C5a's own
 #          divergence from v7, and rev reverses SEQUENCES rather than bytes, which is the
@@ -313,7 +469,7 @@ echo привет | rev >>/tmp/filters.log
 split -3 /tmp/f.txt /tmp/x
 cat /tmp/xaa /tmp/xab /tmp/xac >>/tmp/filters.log
 
-# ---- 13. THE FILTERS AGAINST EACH OTHER, which is how anybody uses them and which no
+# ---- 20. THE FILTERS AGAINST EACH OTHER, which is how anybody uses them and which no
 #          single-program harness can represent.  Every one of these is a pipeline between
 #          two programs of task C5.
 echo ---pipes--- >>/tmp/filters.log
@@ -330,6 +486,10 @@ sed -n 's/^/> /p' /tmp/a.txt | wc -l >>/tmp/filters.log
 tr a-z A-Z </tmp/b.txt | sed -n '$p' >>/tmp/filters.log
 ls /bin | sort -c
 echo sort status $? >>/tmp/filters.log
+find /tmp/ftree -name '*.c' -print | wc -l >>/tmp/filters.log
+cal 1 2026 | pr -t -l9 >>/tmp/filters.log
+ls /bin | tsort | wc -l >>/tmp/filters.log
+file /bin/cat | sed 's/.*	//' >>/tmp/filters.log
 
 echo ---end--- >>/tmp/filters.log
 sync

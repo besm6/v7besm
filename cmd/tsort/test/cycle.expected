@@ -1,0 +1,7 @@
+tsort: cycle in reverse order
+tsort: a
+tsort: c
+tsort: b
+a
+b
+c

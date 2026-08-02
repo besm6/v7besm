@@ -19,6 +19,16 @@ and
 If
 .I file1
 is `\-', the standard input is used.
+.I Note:
+.I file2
+may not be, and saying so is refused rather than accepted:
+.I join
+rewinds
+.I file2
+with
+.IR fseek (3)
+once for each group of equal join fields, so it has to be a real file.
+v7 took `\-' there and then produced a wrong answer on the first repeated key.
 .PP
 .I File1
 and 
@@ -88,6 +98,30 @@ as a separator (tab character).
 Every appearance of
 .I c
 in a line is significant.
+.SH "LIMITS AND EIGHT BITS"
+A line may hold at most 20 fields and may be at most 3071 bytes long.
+.I Note:
+v7 stated neither, and enforced neither: a line of more than twenty fields
+walked off the end of the field array, and a last line with no newline was
+read past.
+Both are diagnostics now.
+.PP
+A join field beyond the end of a line is the empty string.
+v7 handed the terminating null pointer to
+.IR strcmp (3)
+and to
+.BR printf ( "%s" ).
+.PP
+Fields are compared as bytes, so a byte above 0177 is an ordinary field
+character and a Cyrillic key joins like any other.
+.SH DIAGNOSTICS
+.B "join: can't open f" ,
+.B "join: too many fields on one line" ,
+.B "join: file2 cannot be standard input" ,
+.B "join: join field out of range" ,
+and the usage message.
+.I Join
+exits 1 after any of them.
 .SH "SEE ALSO"
 sort(1), comm(1), awk(1)
 .SH BUGS

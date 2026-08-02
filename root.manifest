@@ -94,6 +94,14 @@ dir /etc
 dir /usr
 dir /usr/test
 
+# diff -h's other half, task C5f.  THE FIRST ENTRY THIS IMAGE HAS EVER HAD IN /usr/lib, and
+# the only program of that task that is not in /bin: diff(1) reaches it with
+# execv("/usr/lib/diffh", args), so the path here and the string in cmd/diff/diff.c are one
+# and have to stay so.  It is diff's way out of memory -- diff holds both files in core and
+# says `files too big, try -h' when they will not fit, which on a 28,672-word address space
+# is nearer than it was on a PDP-11 (cmd/diff/README.md).
+dir /usr/lib
+
 # look(1)'s default dictionary.  v7's /usr/dict/words is not in this tree -- the
 # reference copy under cmd/tmp/ is git-ignored -- so cmd/look/words is a small sorted
 # list written for the purpose, staged by cmd/look/CMakeLists.txt.  It is what makes the
@@ -220,6 +228,10 @@ file /bin/basename      # cmd/basename
 source ../../rootfs/bin/basename
 mode 0755
 
+file /bin/cal           # cmd/cal -- task C5f.  September 1752 still loses eleven days.
+source ../../rootfs/bin/cal
+mode 0755
+
 file /bin/cat           # cmd/cat -- and what /etc/rc uses to print the motd
 source ../../rootfs/bin/cat
 mode 0755
@@ -289,6 +301,14 @@ file /bin/df            # cmd/df -- free blocks, by walking the free list off /d
 source ../../rootfs/bin/df
 mode 0755
 
+file /bin/diff          # cmd/diff -- task C5f.  Hunt-Szymanski over Stone's k-candidates,
+                        # so a shortest edit script but not the same one GNU diff picks; what
+                        # cmd/diff/test asserts is that the -e script really does turn file1
+                        # into file2.  -b's blank set is written out rather than taken from
+                        # ctype(3), whose table stops at 0177.
+source ../../rootfs/bin/diff
+mode 0755
+
 file /bin/du            # cmd/du -- blocks per directory, by stat(2) and a directory walk
 source ../../rootfs/bin/du
 mode 0755
@@ -303,10 +323,28 @@ file /bin/ed            # cmd/ed -- task C3, and THE FIRST PROGRAM ON THIS IMAGE
 source ../../rootfs/bin/ed
 mode 0755
 
+file /bin/file          # cmd/file -- task C5f, and the one deliberate change of it: the
+                        # magic numbers are this machine's (FMAGIC/NMAGIC/ARMAG), RELFLG
+                        # tells a linked executable from a relocatable object, the assembler
+                        # tables are b6as's -- and WELL-FORMED UTF-8 IS TEXT, where v7 called
+                        # every byte above 0177 `data' and so reported this image's own
+                        # Russian prose as binary.  A malformed byte is still data.
+source ../../rootfs/bin/file
+mode 0755
+
 file /bin/fgrep         # cmd/fgrep -- task C5c, with grep below.  MAXSIZ is 3000 states and
                         # not v7's 6000: a `struct words' is four words here, so the v7
                         # table alone was 24,000 of the 28,672 words the address space has.
 source ../../rootfs/bin/fgrep
+mode 0755
+
+file /bin/find          # cmd/find -- task C5f, and the only program of it with no b6sim
+                        # test at all: it reads directories, popen()s pwd and fork/execs.
+                        # -size is in 1024-byte blocks, as df/du/quot/ls -s are, where v7's
+                        # were 512; -cpio is gone (a PDP-11 tape archive with a prompt for
+                        # the next reel); and the directory walk is bounded at 20 levels,
+                        # v7 having recursed with its block in the frame and checked nothing.
+source ../../rootfs/bin/find
 mode 0755
 
 file /bin/grep          # cmd/grep -- task C5c.  A character class is 256 bits rather than
@@ -315,6 +353,14 @@ file /bin/grep          # cmd/grep -- task C5c.  A character class is 256 bits r
                         # deliberate divergence: v7's block number was a PDP-11 512-byte
                         # disk block here and grep and fgrep disagreed about the same match.
 source ../../rootfs/bin/grep
+mode 0755
+
+file /bin/join          # cmd/join -- task C5f.  A line holds at most 20 fields and 3071
+                        # bytes, both of which v7 stated nowhere and enforced nowhere; a
+                        # join field past the end of a line is the empty string rather than
+                        # a null pointer; and file2 may not be `-', the many-to-many path
+                        # rewinding it with fseek.
+source ../../rootfs/bin/join
 mode 0755
 
 file /bin/kill          # cmd/kill -- NOT setuid: kill(2) matches uids for anyone but root
@@ -348,6 +394,15 @@ file /bin/od            # cmd/od -- task C5b.  -o/-d/-x go on meaning THE MACHIN
                         # is 48 bits here: 16 octal digits, 15 decimal, 12 hex.  -w is a
                         # second name for -o.  Bytes pack most significant first, as getw(3).
 source ../../rootfs/bin/od
+mode 0755
+
+file /bin/pr            # cmd/pr -- task C5f.  Its multi-column look-ahead lives in one
+                        # 6720-byte ring, and a page that needs more of it than that is a
+                        # diagnostic: v7 checked nothing there and silently began the
+                        # affected column part way down the file.  The two in-band sentinels
+                        # 0375 and 0376 are kept, neither byte being reachable in UTF-8.
+                        # Columns are counted in bytes, as col(1)'s are.
+source ../../rootfs/bin/pr
 mode 0755
 
 file /bin/pwd           # cmd/pwd
@@ -432,6 +487,13 @@ file /bin/tr            # cmd/tr -- task C5b.  The one filter of the seven that 
                         # clean already: its tables are [256] as v7 wrote them, so `tr a-z
                         # A-Z' folds the ASCII and leaves a Cyrillic letter alone (SS11).
 source ../../rootfs/bin/tr
+mode 0755
+
+file /bin/tsort         # cmd/tsort -- task C5f, and lorder(1)'s other half.  An item is
+                        # any run of bytes with no blank in it, so a Cyrillic name sorts
+                        # like any other; one past 255 bytes -- ar(1)'s longest member
+                        # name here -- is a diagnostic where v7 overran a 50-byte buffer.
+source ../../rootfs/bin/tsort
 mode 0755
 
 file /bin/tty           # cmd/tty -- ttyname(3), which reads /dev as a directory
@@ -567,6 +629,13 @@ mode 0644
 #
 # puret is the one PURE (NMAGIC) program among them, and one of only two images on this
 # disk whose text the kernel can share at all -- /bin/sh is the other.  Task 26.
+
+file /usr/lib/diffh     # cmd/diffh -- task C5f.  diff -h execv's this path; see the
+                        # /usr/lib stanza above.  Its window is RANGE (30) lines of each
+                        # file, so its storage is bounded by a constant where diff's is
+                        # bounded by the input -- which is the whole reason -h exists.
+source ../../rootfs/usr/lib/diffh
+mode 0755
 
 file /usr/dict/words     # cmd/look -- task C5b.  Sorted in BYTE order, which is the order look
                         # compares in: char is unsigned here, so every Cyrillic entry

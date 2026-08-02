@@ -1,0 +1,3 @@
+a:red
+b:blue
+d:pink

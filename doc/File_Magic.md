@@ -18,8 +18,12 @@ main.o: besm6 a.out object
 Every header field is one 48-bit BESM-6 word = **6 bytes**, stored big-endian.
 `fputw()` writes each field as 3 zero-padding bytes followed by a 3-byte value
 (see [`cmd/libaout/fputw.c`](../cmd/libaout/fputw.c) and
-[`cmd/libaout/fputhdr.c`](../cmd/libaout/fputhdr.c)). The header is 9 words =
-54 bytes (`HDRSZ`).
+[`cmd/libaout/fputhdr.c`](../cmd/libaout/fputhdr.c)). The header is **8 words =
+48 bytes** (`HDRSZ`): `a_magic`, `a_const`, `a_text`, `a_data`, `a_bss`,
+`a_syms`, `a_entry`, `a_flag`. (This note used to say nine words and 54 bytes,
+and put `a_flag` six bytes too far; `<sys/param.h>`'s `BADDR 8` — the word the
+image starts at — and `cmd/libaout/test/fhdr_test.cpp`'s golden 48 bytes are
+the authority. Task C5f corrected it.)
 
 Two fields identify a file:
 
@@ -34,15 +38,15 @@ Two fields identify a file:
   So a big-endian 16-bit read (`beshort`) at **offset 4** distinguishes the
   two magics.
 
-- **`a_flag`** is the 9th header word (offset 48). Its low value byte lands at
-  **offset 53**. The `RELFLG` bit (`0x01`, see `b.out.h`) is **set** in a fully
+- **`a_flag`** is the 8th and last header word (offset 42). Its low value byte
+  lands at **offset 47**. The `RELFLG` bit (`0x01`, see `b.out.h`) is **set** in a fully
   linked file that carries no relocation records (an *executable*) and **clear**
   in a relocatable object that still has relocation records (an *object*).
 
 That gives the discrimination:
 
 - `NMAGIC` → always an executable (pure).
-- `FMAGIC` → check `RELFLG` at byte 53: set → executable, clear → object.
+- `FMAGIC` → check `RELFLG` at byte 47: set → executable, clear → object.
 
 ## The magic rules
 
@@ -52,9 +56,9 @@ That gives the discrimination:
 # a_magic tail selects the file kind
 >4	beshort	0x0108	pure executable
 >4	beshort	0x0107
-# FMAGIC: RELFLG bit (a_flag, byte 53) tells linked exe from relocatable object
->>53	byte&0x01	1	executable
->>53	byte&0x01	0	object
+# FMAGIC: RELFLG bit (a_flag, byte 47) tells linked exe from relocatable object
+>>47	byte&0x01	1	executable
+>>47	byte&0x01	0	object
 ```
 
 The columns are **tab-separated** (offset, type, test value, message) — this is

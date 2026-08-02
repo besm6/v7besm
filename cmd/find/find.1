@@ -88,7 +88,9 @@ True if the file belongs to group
 .BR \-size " n"
 True if the file is
 .I n
-blocks long (512 bytes per block).
+blocks long.
+.I Note:
+a block here is 1024 bytes, not v7's 512 \- see BLOCKS ARE 1024 BYTES below.
 .TP
 .BR \-inum " n"
 True if the file has inode number
@@ -160,6 +162,50 @@ To remove all files named
 .IP "" .2i
 find / \\( \-name a.out \-o \-name '*.o' \\)
 \-atime +7 \-exec rm {} \\;
+.SH "BLOCKS ARE 1024 BYTES"
+.B \-size
+counts 1024-byte blocks, rounded up.
+.I Note:
+v7 counted 512-byte blocks.
+512 is not a whole number of BESM-6 words and names nothing on this machine, and the
+four programs that report a file's size in blocks \-
+.IR df (1M),
+.IR du (1),
+.IR quot (1M)
+and
+.B "ls \-s"
+\- all report 1024-byte blocks here, so
+.B \-size
+takes the number a user reads out of one of those.
+A filesystem block is three of them.
+.SH "WHAT IS NOT HERE"
+.B \-cpio
+is gone.
+It wrote a
+.IR cpio (5)
+archive out of 16-bit quantities, through a run-time byte-order probe, and prompted on
+.B /dev/tty
+for the next magnetic tape reel when the output filled.
+There is no tape drive on this machine and no driver for one, and
+.I cmd/TODO.md
+excludes the whole of v7's tape software; an archive nothing here can read is not a
+service.
+.I Find
+diagnoses
+.B \-cpio
+as an unknown primary rather than ignoring it.
+.SH LIMITS
+The directory walk is at most 20 levels deep, and a path at most 199 bytes long.
+.I Note:
+v7 stated neither and enforced neither.
+Its walk was recursive with a directory block in each frame, so about thirty levels
+exhausted the four-page stack \- and the region past the stack returns wrong answers
+before it faults.
+Both are diagnostics now.
+.PP
+An expression may hold at most 100 primaries and operators, and
+.B \-exec
+at most 49 arguments.
 .SH FILES
 /etc/passwd
 .br

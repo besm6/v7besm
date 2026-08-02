@@ -2,6 +2,7 @@ hello
 /
 [
 basename
+cal
 cat
 chgrp
 chmod
@@ -13,11 +14,15 @@ cp
 date
 dd
 df
+diff
 du
 echo
 ed
 fgrep
+file
+find
 grep
+join
 kill
 ln
 login
@@ -26,6 +31,7 @@ ls
 mkdir
 mv
 od
+pr
 pwd
 rev
 rm
@@ -43,6 +49,7 @@ test
 time
 touch
 tr
+tsort
 tty
 uniq
 wc

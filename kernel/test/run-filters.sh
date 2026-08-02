@@ -1,5 +1,5 @@
 #!/bin/sh
-# Boot the kernel and put all seventeen of task C5's text filters through it -- the booted pass
+# Boot the kernel and put all twenty-four of task C5's text filters through it -- the booted pass
 # task C5a deliberately did not take, closed here with C5b's seven beside its six.
 #
 # Invoked by ctest as: run-filters.sh B6FSUTIL BESM6 SRCDIR, with the kernel test BUILD
@@ -23,8 +23,10 @@
 # WHAT SEPARATES THIS TEST FROM ITS b6sim HALF is filters.sh's header, at length: look(1)'s
 # default dictionary, tail(1) on a pipe, col(1)'s argv[0], a grep(1) pattern and a sort(1)
 # separator with a space in them, a sort(1) temp file made and unlinked in the image's own
-# /tmp, a sed(1) w file written into it, the twelve pipelines, and that the
-# image's copy of C5a's six executes at all.
+# /tmp, a sed(1) w file written into it, THE WHOLE OF find(1) -- which has no b6sim half at
+# all -- file(1) over a real a.out, a directory and two device nodes, diff(1)'s temp file and
+# its exec of /usr/lib/diffh, the sixteen pipelines, and that the image's copy of C5a's six
+# executes at all.
 set -e
 b6fsutil=$1
 besm6=$2
@@ -40,10 +42,12 @@ cp root.img filters.img
 "$besm6" "$srcdir/filters.ini"
 
 # What reached the disk.  Not this test's main question -- the log is -- but it is nearly free
-# and the script does create seventeen files in /tmp between the five here-documents, uniq's
-# named output, tee's two, split's three, col's two and sort's two (its own fixture and the
-# -o output; the temp file it makes is unlinked before the sync), so a five-pass check is
-# what says the allocation that took is sound.
+# and the script does create twenty-four files and two directories in /tmp -- the eight
+# here-documents, uniq's named output, tee's two, split's three, col's two, sort's two (its
+# own fixture and the -o output), file's Cyrillic line and find's three-file tree -- so a
+# five-pass check is what says the allocation that took is sound.  Neither temp file that is
+# supposed to vanish survives: sort unlinks its own before the sync, and diff unlinks
+# /tmp/dXXXXX, which sections 10 and 17 assert with a glob apiece.
 "$b6fsutil" -S root3097.disk filtersafter.img
 "$b6fsutil" -c filtersafter.img
 

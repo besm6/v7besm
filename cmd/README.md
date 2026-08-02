@@ -38,7 +38,8 @@ do — the ten of task C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`,
 (`fsck/`), the four of C4e (`icheck/`, `dcheck/`, `ncheck/`, `clri/`), the two of C4f
 (`mount/`, `umount/`), the six of C5a (`wc/`, `cmp/`, `sum/`, `tee/`, `split/`, `rev/`), the seven of C5b
 (`tr/`, `uniq/`, `comm/`, `tail/`, `od/`, `look/`, `col/`), the two of C5c (`grep/`, `fgrep/`),
-the one of C5d (`sort/`), the one of C5e (`sed/`) and
+the one of C5d (`sort/`), the one of C5e (`sed/`), the eight of C5f (`pr/`, `cal/`, `tsort/`,
+`join/`, `file/`, `diff/`, `diffh/`, `find/`) and
 the two of kernel task 29b (`getty/`, `login/`) today. That is the only marker;
 [../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.
 
@@ -153,13 +154,14 @@ A count of the candidates, as they stood while the hazard was live:
 | ~~`fgrep.c`~~ | ~~four~~ — **five, and counted, task C5c**: this table missed `nlp < p`, which is the per-byte loop that prints every matching line |
 | ~~`grep.c`~~ | ~~three~~ — **nine, and counted, task C5c**: the three named (`ep >= &expbuf[ESIZE]`, `sp > cstart`, `lp >= curlp`) were real and six were missed, including **both `lp-- > curlp` loops, which are the matcher's inner loop**. Left as they stand — they lower correctly and rewriting them would have obscured v7's backtracker — but the count is the second time this table has undercounted a *regex* program by two thirds, `ed` being the first |
 | ~~`sed/sed1.c`~~ | ~~three, all `sp >= &genbuf[LBSIZE]`~~ — **forty-five, and counted, task C5e**, and this row named the wrong file as well as the wrong number: 28 are in `sed1.c` and **17 in `sed0.c`, which had no row at all**. The three named are real and are the ones that mattered, for a reason that has nothing to do with §2 — see the C5e section below. **All forty-five were left as v7 wrote them**, `grep`'s decision for the same reason: they lower correctly since the compiler's fix and rewriting the matcher's three `lp-- > curlp` would have obscured v7's backtracker. What was rewritten is the `genbuf` trio, and not because they were relationals. **Fourth undercount in a row**, after `ed` 10→20, `grep` 3→9 and `fgrep` 4→5 |
-| `pr.c` | two, both `>= &buffer[BUFS]` |
+| ~~`pr.c`~~ | ~~two, both `>= &buffer[BUFS]`~~ — **three, and counted, task C5f**: the missed one is `colp[ncol] < buffer`, the ring's BACKWARD wrap, and it had an off-by-one in it (`&buffer[BUFS]`, one past the array). All three are `int` offsets now — not for §2's sake, they lower correctly, but because two of them run ONCE PER BYTE. **Fifth consecutive undercount**, after `ed` 10→20, `grep` 3→9, `fgrep` 4→5 and `sed` 3→45 |
 | ~~`dd.c`~~ | ~~one — `ip > ibuf`~~ — **found and fixed**, task C4b: it zero-fills the input buffer before every read under `conv=noerror`/`conv=sync`, and is a word loop over `btow(ibs)` words now |
 | ~~`date.c`~~ | ~~one — `sp < ep`~~ — **found and fixed**, task C2a: it bounded the in-place reversal of `argv[1]`, and is an index pair now |
 | ~~`basename.c`~~ | ~~**two**, not the one this table used to claim — `p1>p2 && p3>argv[2]`~~ — **found and fixed**, task C2b: both are in the *same expression*, the backwards suffix compare, and both are index counts now |
 | ~~`mount.c`, `umount.c`~~ | ~~five~~ — **found and gone, task C4f**, though not one of them was rewritten: three (`np > argv[1]`, `np < &mp->spec[NAMSIZ-1]`, `np < &mp->file[NAMSIZ-1]`) bounded the basename stripping and the fixed-width copy into the mount table, and the other two are `umount.c`'s copies of the same. The table became a **text** file for an unrelated reason (§2's sibling hazard — see [mount/README.md](mount/README.md) §2) and every one of the five went with it. Worth recording because it is the cheap way out and it is not always available: **a hazard in code that exists only to serve a file format can be deleted by changing the format**, when the format is the program's own business |
 | ~~`wc.c`, `cmp.c`, `sum.c`, `tee.c`, `split.c`, `rev.c`~~ | **none** — grepped, task C5a, and this is the *second* negative result in the table and a more surprising one than C4e's. Six **text filters**, 487 lines of buffer arithmetic and character loops, and not one `char *` relational between them. `tee.c` is the one that walks a buffer and it does so with `int` indices (`r`, `w`, `p`, `i`); every other pointer test in the six is `==`/`!=` against `NULL`. The reason is the same as C4e's and is worth generalising: **a v7 source acquires this hazard when it parses, not when it reads bytes.** `sort`, `grep`, `sed` and `pr` all hold a cursor inside a buffer they are deciding about; a filter that copies its input holds an index into a buffer it is filling |
 | ~~`tr.c`, `uniq.c`, `comm.c`, `tail.c`, `od.c`, `look.c`, `col.c`~~ | **none** — grepped, task C5b, and this is the *third* negative result and the one that settles the shape. Seven more text filters, 1,364 lines, and not one `char *` relational between them either. Two are worth naming because they look like counter-examples and are not: `comm.c` holds two cursors in `compare()` and reaches them by forming `lb1 - 1` and incrementing back — a pointer before its buffer, which is UB and was rewritten as an index pair, but never a *relational*; and `col.c` walks `lbuff` with a file-scope `char *line` whose every bound (`lp > cp`, `lp < cp`) compares the **column count** rather than the pointer. So the rule holds with a sharper edge: a v7 source grows a byte cursor when it parses, and a cursor is not a hazard until something ORDERS two of them |
+| ~~`cal.c`, `tsort.c`, `join.c`, `file.c`, `diff.c`, `diffh.c`, `find.c`~~ | **none** — grepped, task C5f, and it closes §2's tally at twenty-six sources. `diff.c` is the one that looks like a counter-example and is the *sibling* hazard instead: `sort()`'s CACM #201 shellsort forms `ai -= m` **below the base of its array** and detects the underflow with `aim < ai` — both `struct line *`, so both thin and both correct as comparisons, but the pointer is undefined and on a word-address machine the guard need not fire. It is `comm.c`'s `lb1 - 1` from C5b and took the same fix. `find.c`'s only pointer test is an equality |
 | ~~`icheck.c`, `dcheck.c`, `ncheck.c`, `clri.c`~~ | **none** — grepped, task C4e. The only pointer relational in the four is `ncheck.c`'s `++hp >= &htab[HSIZE]`, over a `struct htab *`, which is thin and correct; it went anyway when the hash table became one sized from the superblock and indexed by i-number. Worth recording as a *negative* result: four v7 sources full of block and inode arithmetic and not one `char *` cursor between them, because none of them parses anything |
 
 What the table is still good for is the shape it found, which outlived the bug: **a v7 source
@@ -173,8 +175,10 @@ cursors than the table claimed rather than fewer. **Task C5d opened the third**,
 fifteen turned out to be the one count this table got right and the one *description* it got
 wrong — the number was exact and two of the three routines it named were not the ones. **Task
 C5e opened the fourth and this table was out by a factor of fifteen**, having also missed the
-file with a third of them in it. `pr` is the last one left, and the prediction to make about it
-is that the count here is low. That is where to expect the *other* three hazards too.
+file with a third of them in it. **Task C5f opened the last of the four and the prediction held
+in both halves**: `pr`'s count was low — three where the table said two — and it was low for the
+fifth time running. Nineteen sources had been grepped empty when C5a wrote that number down;
+with C5f's seven it is **twenty-six**, and the shape has not once been wrong.
 
 Those three — a flag packed into bit 0 of a pointer, a bit mask used to round to a word when
 `BYTESPERWORD` is 6, and a cast to a pointer that *floors* rather than rounds
@@ -182,11 +186,22 @@ Those three — a flag packed into bit 0 of a pointer, a bit mask used to round 
 none of them is fixed in the compiler. `sort` and `find` both call `sbrk` and are the places to
 expect them — though **`sort` turned out to have none of the three either** (task C5d): its
 arena is three flat regions carved with pointer arithmetic the compiler gets right, and what it
-*did* have was a fourth hazard nobody had listed, described in the C5d section below. `find`
-and `make` are the two left. **`dd` called it too and turned out to have none of the three**: its use is two
+*did* have was a fourth hazard nobody had listed, described in the C5d section below. ~~`find`
+and `make` are the two left.~~ **`make` is the one left, and `find` never had an arena at all**
+(task C5f): its only `sbrk` was inside the `-cpio` branch, which is deleted, so the program now
+calls it nowhere. **`dd` called it too and turned out to have none of the three**: its use is two
 flat allocations and no arena at all, and what it did have was this section's own hazard, plus
 the `(char *)-1` above. Grepping for the arena hazards is still right; expecting them because a
 program calls `sbrk` is not.
+
+**AND THE THIRD HAZARD HAS FINALLY FOUND A VICTIM, in the last program of task C5f.** `find`'s
+parse tree is a union built out of pointer casts — `mk(glob, (struct anode *)b, ...)` where `b`
+is the `-name` pattern, read back through a private `struct { int f; char *pat; }` — and casting
+a **fat** `char *` to a thin struct pointer FLOORS it to the word. `-name` would have matched
+against whatever byte its pattern's word began at. Four programs were opened expecting this
+(`sort`, `dd`, `find`, and `make` is still to come) and the one that had it is the one that was
+not storing bytes but *storing a pointer somewhere it did not fit*
+([find/README.md](find/README.md)).
 
 ### 3. A `long` is one word, and `%D` is not a conversion
 
@@ -204,7 +219,10 @@ was exact and every one was a single word, but they were the *least* of that por
 [od/README.md](od/README.md), where five other things carried the 16-bit word and one of them
 truncated silently), ~~`cmp.c` (7)~~ (**done, task
 C5a** — the count was exact, and all seven were `int`: a byte offset, a line number, the two
-skip counts, `otoi()`'s declaration, its definition and its accumulator), `find.c` (7),
+skip counts, `otoi()`'s declaration, its definition and its accumulator), ~~`find.c` (7)~~ (**done, task C5f** — the count was exact: two are `time_t`, one a
+tape block count that went with `-cpio`, one a `union` for a byte-order probe that went with it,
+one a `long mklong()` beside it, one a `static long fsz` in the same branch, and one an `lseek`
+cast),
 ~~`du.c` (5)~~ (**done, task C4a** — all five were `int`), `strip.c` (5), `nm.c` (4),
 ~~`grep.c` (4)~~ (**done, task C5c** — **three**, not four: this count included the string
 `"grep: argument too long"`. Two were counters and the third was a `long ftell();`
@@ -213,7 +231,9 @@ and C5b's other six carry eleven (`look.c` six, `tail.c` five).
 
 **Thirteen filters were grepped for `%D` and `%O` with no hit at all** — including `od`, the one
 program in the tree whose entire output is numbers, which escaped §3's verbatim-echo trap because
-it uses no numeric `printf` conversion: it has its own recursive `putn()`.
+it uses no numeric `printf` conversion: it has its own recursive `putn()`. **Task C5f's eight
+were grepped too and came back empty as well**, which takes the tally to twenty-two sources and
+one hit; `diffh` had four `%ld`, which are harmless and are `%d` now.
 
 **And then the fourteenth had one.** `grep.c`'s `-c` path was `printf("%D\n", tln)` — the whole
 of that flag's output, printing the two characters `%D` — in a file that spells the *same*
@@ -331,6 +351,14 @@ alone, a name out of a directory being neither NUL-terminated nor the program's 
 | `look` | 85 | 3,432 | 185 | 1,162 | **4,864** |
 | `sort` | 96 | 5,104 | 411 | 1,211 | **6,822** |
 | `sed` | 123 | 7,912 | 389 | 5,696 | **14,120** |
+| `pr` | 115 | 4,474 | 241 | 2,771 | **7,601** |
+| `diff` | 93 | 5,238 | 205 | 1,057 | **6,593** |
+| `find` | 77 | 4,165 | 402 | 2,023 | **6,667** |
+| `join` | 88 | 4,025 | 216 | 2,184 | **6,513** |
+| `file` | 114 | 4,406 | 339 | 1,121 | **5,980** |
+| `diffh` | 87 | 3,604 | 213 | 1,100 | **5,004** |
+| `tsort` | 83 | 3,296 | 187 | 1,032 | **4,598** |
+| `cal` | 90 | 2,840 | 225 | 1,105 | **4,260** |
 | `comm` | 83 | 3,099 | 168 | 1,037 | **4,387** |
 | `split` | 91 | 3,092 | 190 | 1,054 | **4,427** |
 | `rev` | 84 | 2,981 | 159 | 1,204 | **4,428** |
@@ -420,8 +448,17 @@ statically knowable — `page[256]` is a sliding window of `malloc`'d half-lines
 is 34,304 words, **past the 28,672 the address space allows**, on top of the 5,189 the table
 gives it. What stops that being a wild store is that `col` already checks its `malloc` and exits
 with a diagnostic; what stops it being a surprise is saying so. Anything in C10 that manages its
-own storage inherits this — `sort`, `find` and `make` all call `sbrk` — and the general form is
+own storage inherits this — ~~`sort`, `find` and `make` all call `sbrk`~~ **`sort` and `make`
+do; `find`'s only `sbrk` went with `-cpio` in task C5f** — and the general form is
 that **the size ctest is a bound on the image, not on the program.**
+
+**And task C5f found a FIFTH ceiling, which none of the four describes.** `pr`'s look-ahead ring
+is 6,720 bytes in `bss`, so `rootfs_pr_size` weighs every byte of it — what it cannot weigh is
+that the ring's *capacity* is a function of the **command line**: `-l` and the column count
+together decide how far ahead the program must read, and a page that needs more than the ring
+can hold made v7 silently begin a column part way down the file. So the list is: the image
+(checked), the 15-bit pointer reach (checked), the stack (not checked), the heap (not checkable),
+and **a bound the user chooses at run time** (checkable only by the program itself).
 
 **Task C5d is the case where the heap stopped being a footnote and became the design.** `sort`
 takes *every page the break will give* and then divides it: about 15,000 words, more than twice
@@ -560,6 +597,19 @@ Two harnesses, and choosing wrong wastes the effort:
   go into a checked-in `.expected`. `col` names itself that way in both its diagnostics, so
   both belong under the booted kernel — where the shell hands `exece()` the word as it was
   typed (`cmd/sh/service.c`'s `execs()`) and the message reads `col:`.
+  **Task C5f added a program with NO b6sim half at all, which is the second after
+  `mount`/`umount`.** `find` reads a directory descriptor (which the simulator refuses, and
+  which is `ls`'s and `du`'s reason), `popen`s `pwd` (which forks the *build machine's*
+  shell), and `fork`/`execvp`s for `-exec` (which would run the build machine's programs on
+  the build machine's files). `cmd/find/` has no `test/` directory at all and
+  [find/README.md](find/README.md) says so; `kernel/test/filters` §18 is the only word on it.
+  **And task C5f added a sixth limit, which is about the fixture's NAME.**
+  `run-prog-test.sh` captures standard output as **`<case>.out` in the working directory**, so
+  a fixture called `exe.out` for a case called `exe` is truncated by the redirection before the
+  program opens it — and `file` then answers `empty`, which is a plausible reading of a
+  zero-length file and asserts nothing at all. `cmd/file/test`'s binary fixtures are `execbin`,
+  `purebin`, `stripbin`, `objbin` and `archbin` for that reason. **Ask what the harness will do
+  with a name before choosing it**, which is C5b's `argv[0]` rule from the other end.
   **And task C5c added a fifth, which is about the `.args` line rather than about the
   simulator.** The line is expanded unquoted, so it is **split on whitespace and has no
   quoting** — a pattern containing a space cannot be a case here at all, and that is much of
@@ -612,14 +662,17 @@ Two harnesses, and choosing wrong wastes the effort:
   minor 1 having never carried a block. It is also the one test whose program has **no**
   `b6sim` half at all (see above), so unlike `fsck.ini` it is not the second word on its
   subject but the only word.
-  And `kernel/test/filters` (task C5b, extended by C5c, C5d and C5e) for anything whose subject
-  is **bytes** — it is the one test here that runs **seventeen** programs, the only one that
+  And `kernel/test/filters` (task C5b, extended by C5c, C5d, C5e and C5f) for anything whose
+  subject is **bytes** — it is the one test here that runs **twenty-four** programs, the only one that
   puts a **pipe** on a program's standard input, the only place an argument can be **quoted**
   (`run-prog-test.sh` splits a `.args` line and cannot, so `grep 'вет мир'`, `sort -t' '` and
   `sed 's/привет мир/мир привет/'` exist only here, and the third is the largest of the three:
   a substitution whose pattern or replacement holds a space is most of what `sed` is for), the
   only place a program's **temp file or `w` file** is made in the image's own `/tmp`
   rather than the build machine's,
+  the only place a program can be pointed at a real **a.out**, a **directory** or a **device
+  node** and asked what they are (`file` §16), the only place `diff` can make a temp file in
+  `/tmp` or **exec** `/usr/lib/diffh`, the only word there is on `find` at all,
   and the only one whose oracle is masked **nowhere**, every number in its log
   being computed by a filter from a corpus the script writes for itself in the same run.
   **Task C4e was the one task that stopped at the first harness**, and saying so out loud is
@@ -1468,3 +1521,122 @@ seventy-odd. That is not an oracle for v7's dialect and it cannot be; it is a ch
 parts two implementations *share* were not quietly broken, and **it is available for every
 program in C5f and most of C10.** It found nothing here, which is the result to want and to
 report.
+
+**Task C5f ran it over all six of its programs that have a host counterpart, and the numbers
+are worth having** — they say what fraction of a v7 command a modern one can still speak for:
+
+| | cases | agree | differ | the host refuses the arguments |
+|---|---|---|---|---|
+| `diff` | 17 | 14 | 1 | 2 |
+| `join` | 18 | 10 | 2 | 6 |
+| `tsort` | 9 | 4 | 2 | 3 |
+| `pr` | 19 | 3 | 13 | 3 |
+| `cal` | 14 | 0 | 9 | 5 |
+| `file` | 20 | — | — | all 20 |
+
+**Every one of the 27 disagreements was read, and not one is a defect.** `diff`'s is `-h`, which
+BSD's ignores rather than execs. `join`'s and `tsort`'s are diagnostics this task *added* (a name
+past 255 bytes, a line past 20 fields, `-` as the file that gets rewound) plus a different but
+equally valid topological order. `pr`'s are the three dialect differences its
+`test/CMakeLists.txt` lists: v7 pads a short page out to `length` lines, gives each column
+`length - margin` lines rather than balancing them, and never truncates the last column.
+`cal`'s are all one difference — the day-name heading, ` S  M Tu` against `Su Mo Tu` — on every
+case that prints a calendar at all; its *day cells* were checked against Python's `calendar`
+module over 84 months instead, and all 84 agree. **`file` is the one program a host counterpart
+cannot speak for at all**, its whole subject being the magic numbers of the machine it runs on.
+
+The lesson is C5e's, made concrete: **the check is free, so run it, read every disagreement, and
+publish the count.** Thirty-one agreements against twenty-seven differences is not a poor result;
+it is a measurement of how much of v7 a modern implementation still speaks, and the interesting
+number in it is `diff`'s 14 of 17 — the program with the most intricate algorithm of the seven
+is the one a stranger can still check almost all of.
+
+---
+
+## What task C5f taught
+
+`pr`, `cal`, `tsort`, `join`, `file`, `diff` (with `diffh`) and `find` are on the image, `/bin`
+holds **fifty-four** entries, `/usr/lib` exists at last, and `kernel/test/filters` runs
+**twenty-four** filters in one boot — C5f joined that test rather than taking volume 3098, as
+C5c, C5d and C5e did; **3098 is still free**. It closes task C5.
+[pr/README.md](pr/README.md), [file/README.md](file/README.md),
+[diff/README.md](diff/README.md) and [find/README.md](find/README.md) are the four accounts.
+The brief predicted three of the seven things that cost the time and none of the other four is
+in any table this file had. Eight findings generalize.
+
+**A REPLACEMENT FOR A LIBRARY MACRO INHERITS THE LIBRARY MACRO'S CONTRACT, and the part of that
+contract nobody writes down is how many times it touches its argument.** §11 has said since C5b
+that `<ctype.h>` is 129 entries and that a raw file byte must not index it; `diff` and `diffh`
+call `isspace()` on one at ten sites between them, and the obvious fix is to write the blank set
+out as a `#define`. It is **wrong**, because every call site here passes an expression with a
+side effect — `BLANK(c = getc(input[0]))` reads six characters where `isspace()` read one. What
+that produced was not a slight misbehaviour: `diff -b` reported two files differing only in
+trailing blanks as *wholly* different, and printed truncated text under the `>` marker, because
+the byte offsets `check()` collects had run off with the stream. It looked like a hash bug for
+an hour. It is a `static` function in both programs now. **`awk`, `m4` and `dc` all lean on
+`<ctype.h>` and every one of them is a candidate.**
+
+**READ THE PROLOGUE. DO NOT ESTIMATE THE FRAME.** `find`'s `descend()` recurses once per
+directory with its directory block in its own frame, and v7's `struct direct dentry[32]` is 128
+words here where a PDP-11 entry was 16 bytes. This port shrank it, counted the local variables,
+estimated "about eighty words a level" and set a limit of 40. `b6disasm` then said
+`15 utm 0277` — **191 words**, out by more than a factor of two and *in the unsafe direction*:
+40 levels would have been 7,640 of a 4,096-word stack. C5c set `grep`'s `MAXDEPTH` from a
+measured frame and C5e re-measured rather than copying it; this is the third time and the first
+where an estimate was actually made and was actually wrong. The block is on the heap now (147
+words a frame) and the limit is arithmetic.
+
+**§2's THIRD HAZARD HAS FOUND ITS FIRST VICTIM, and it is not where four tasks looked for it.**
+The flooring cast — a fat `char *` through a thin pointer type — has been listed since task C11,
+and `sort` (C5d), `dd` (C4b) and now `find` were each opened expecting it. `find` has it, and
+not in an arena: its parse tree is **a union built out of pointer casts**, `mk(glob, (struct
+anode *)b, ...)` storing the `-name` pattern in a `struct anode *` slot and reading it back
+through a private struct shape. `-name` would have matched against whatever byte its pattern's
+word began at. **The hazard lives where a program stores a pointer somewhere that does not fit
+it, which is not the same place as where a program manages memory.**
+
+**A BOUND CAN DEPEND ON WHAT THE USER TYPED, and that is a fourth kind of ceiling.** §6 names
+three, C5b added the heap and C5d made it the design. `pr` is different again: its 6,720-byte
+ring is in `bss`, so `rootfs_pr_size` can see every byte of it — what the size ctest cannot see
+is that the ring's *capacity* is a function of `-l` and the column count. Ask for a page longer
+than it can carry and v7 silently began a column part way down the file: `pr -l800 -2` over 24 KB
+started its first column 840 lines late, with no diagnostic, no short page and a listing that
+looks entirely ordinary. `nexbuf()` measures the distance to each cursor now.
+
+**A SENTINEL DRAWN FROM THE VALUE SPACE IT IS SUPPOSED TO BE OUTSIDE, twice in one task, and one
+of them was harmless by luck.** `diff`'s `readhash()` returns the hash and returns `0` for end of
+file — and `0` is a hash a real line can produce, so `prepare()` would have truncated the file
+there. But `pr` stores `0375` and `0376` **inside the character stream** as ring markers, which
+is §11's third and worst shape, and it needed **no change at all**: neither byte can occur in
+valid UTF-8, the lead bytes stopping at `0xF4` and the continuations at `0xBF`. So the rule is
+not "a sentinel in the value space is a bug" but **"ask what the value space actually is"** — and
+say so, because the same code over a KOI-8 image would corrupt text on the first `ý`. C5a's rule
+that what did not have to change is exactly what a diff cannot show.
+
+**AN ORACLE CAN BE AN INVARIANT RATHER THAN AN ANSWER, and that is the third shape.** C5b's `od`
+needed a second implementation; C5d's `sort` was better served by a designed fixture; C5e added
+replaying the suite through the host's program. `diff` needs a fourth, because **a diff is not
+unique**: v7 finds a longest common subsequence by Hunt–Szymanski over Stone's k-candidates and
+GNU `diff` uses Myers, and over 150 generated file pairs and four option sets the two disagree
+textually **79 times in 600 runs** and not once about whether the files differ. So host `diff`
+cannot be the oracle at all — and what can be checked is that **`diff -e`'s script, applied to
+the first file with the host's `ed`, produces the second, byte for byte**. 150 out of 150 do.
+`ed` being on the build machine is what makes it free.
+
+**THE FOURTH WAY A CHARACTER TABLE GOES WRONG IS THAT THIS MACHINE FIXES IT.** §11 now knows
+three shapes — `grep`'s right-sized table stored into unmasked, `sort`'s 256 entries reached
+through a `+128` bias, `sed`'s width written nowhere as a number. `file`'s `english()` is the
+fourth: `int ct[128]` guarded by `if (bp[j] < NASC)`, which with a **signed** PDP-11 `char` let
+every byte above `0177` through as a negative number and wrote `ct[]` *below zero*. `char` is
+unsigned here, so the guard is correct by construction and the upstream bug is gone without a
+line changing. **The instruction that follows is not to "improve" the guard and hand the negative
+range back.**
+
+**AND ASK WHOSE VALUE SPACE THE PROGRAM IS DESCRIBING.** `file`'s whole job is to name what a
+file *is*, and v7's answer for any byte above `0177` is `data`. On a machine whose text is UTF-8
+end to end that makes the system's own Russian prose binary and a C source with one Cyrillic
+identifier `c program text with garbage` — `col`'s and `sort -d`'s failure exactly. The sixth
+deliberate divergence validates the high-bit runs instead, and **the negative case is what makes
+it a divergence rather than a blindness**: `0377 0376` is still `data`, and
+`cmd/file/test`'s `badbyte` asserts it. Proving it sharp took the C5d recipe literally — restore
+v7's two loops, rebuild, watch `rus.txt: data` come back, restore the port.
