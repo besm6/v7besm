@@ -364,6 +364,19 @@ file /bin/rm            # cmd/rm -- NOT setuid: `rm -r' execs /bin/rmdir, which 
 source ../../rootfs/bin/rm
 mode 0755
 
+file /bin/sed           # cmd/sed -- task C5e.  A character class is 256 bits and a y///
+                        # table 256 entries, where v7's were 128 of each and each was
+                        # indexed by an UNMASKED byte on one side: the first stored past
+                        # the class it was compiling and the second read past the table it
+                        # was applying.  A backslash-escaped byte of an s/// replacement is
+                        # marked with a QESC prefix rather than with bit 0200 of the byte,
+                        # so `s/x/привет/' produces привет and not ten bytes of plausible
+                        # ASCII.  A line past 4000 bytes is a diagnostic on the input path
+                        # and on the output path alike; v7 truncated one in silence and
+                        # announced the other without acting on it.
+source ../../rootfs/bin/sed
+mode 0755
+
 file /bin/sleep         # cmd/sleep -- a decimal parse around libc's sleep(3): alarm + pause
 source ../../rootfs/bin/sleep
 mode 0755

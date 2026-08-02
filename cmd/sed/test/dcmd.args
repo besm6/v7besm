@@ -1,0 +1,1 @@
+-n -f dcmd.sed nums.txt

@@ -37,7 +37,8 @@ do — the ten of task C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`,
 (`df/`, `du/`, `quot/`), the one of C4b (`dd/`), the one of C4c (`mkfs/`), the one of C4d
 (`fsck/`), the four of C4e (`icheck/`, `dcheck/`, `ncheck/`, `clri/`), the two of C4f
 (`mount/`, `umount/`), the six of C5a (`wc/`, `cmp/`, `sum/`, `tee/`, `split/`, `rev/`), the seven of C5b
-(`tr/`, `uniq/`, `comm/`, `tail/`, `od/`, `look/`, `col/`), the two of C5c (`grep/`, `fgrep/`) and
+(`tr/`, `uniq/`, `comm/`, `tail/`, `od/`, `look/`, `col/`), the two of C5c (`grep/`, `fgrep/`),
+the one of C5d (`sort/`), the one of C5e (`sed/`) and
 the two of kernel task 29b (`getty/`, `login/`) today. That is the only marker;
 [../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.
 
@@ -97,6 +98,16 @@ link — the program's own definition satisfies its own call — so the collisio
 whatever wants the real one. Rename on sight; `mkdir.c`'s `readdir`→`listdir` and
 `mkdir`→`makedir` are the precedent.
 
+**And a MULTI-FILE v7 program almost certainly defines its globals in a header.** `sh/defs.h`
+did and `sed/sed.h` did: `char genbuf[LBSIZE];`, in a file every source includes, with the
+PDP-11 linker merging the copies into one common block. **C11 has no tentative definition
+across translation units and `b6ld` has no common symbols**, so left alone each source gets
+its own storage — and for `sed` that meant the compiler compiling a script into a `ptrspace`
+the executor never looks at, with no diagnostic from anything. `extern` in the header,
+defined once in a file of its own (`sh/glob.c`, `sed/sedglob.c`). `tar`, `make`, `m4`, `awk`
+and `dc` are the five multi-file ports left and every one of them is a candidate; one line
+of `b6nm` over the finished binary is the check.
+
 ### 2. An `int` is not a `char *` — and `<` between two of them works now
 
 A `char *` here is a **fat pointer** — byte offset in bits 47–45, word address in bits 15–1 —
@@ -141,7 +152,7 @@ A count of the candidates, as they stood while the hazard was live:
 | ~~`ed.c`~~ | ~~**ten**~~ — **twenty**, and this table undercounted by half; the two `-x` took with it left nineteen to rewrite. **Found and fixed, task C3**: they are index counts and `int` differences now, and [ed/README.md](ed/README.md) lists them. Every one bounds a buffer the regex engine or the substitute path writes into |
 | ~~`fgrep.c`~~ | ~~four~~ — **five, and counted, task C5c**: this table missed `nlp < p`, which is the per-byte loop that prints every matching line |
 | ~~`grep.c`~~ | ~~three~~ — **nine, and counted, task C5c**: the three named (`ep >= &expbuf[ESIZE]`, `sp > cstart`, `lp >= curlp`) were real and six were missed, including **both `lp-- > curlp` loops, which are the matcher's inner loop**. Left as they stand — they lower correctly and rewriting them would have obscured v7's backtracker — but the count is the second time this table has undercounted a *regex* program by two thirds, `ed` being the first |
-| `sed/sed1.c` | three, all `sp >= &genbuf[LBSIZE]` |
+| ~~`sed/sed1.c`~~ | ~~three, all `sp >= &genbuf[LBSIZE]`~~ — **forty-five, and counted, task C5e**, and this row named the wrong file as well as the wrong number: 28 are in `sed1.c` and **17 in `sed0.c`, which had no row at all**. The three named are real and are the ones that mattered, for a reason that has nothing to do with §2 — see the C5e section below. **All forty-five were left as v7 wrote them**, `grep`'s decision for the same reason: they lower correctly since the compiler's fix and rewriting the matcher's three `lp-- > curlp` would have obscured v7's backtracker. What was rewritten is the `genbuf` trio, and not because they were relationals. **Fourth undercount in a row**, after `ed` 10→20, `grep` 3→9 and `fgrep` 4→5 |
 | `pr.c` | two, both `>= &buffer[BUFS]` |
 | ~~`dd.c`~~ | ~~one — `ip > ibuf`~~ — **found and fixed**, task C4b: it zero-fills the input buffer before every read under `conv=noerror`/`conv=sync`, and is a word loop over `btow(ibs)` words now |
 | ~~`date.c`~~ | ~~one — `sp < ep`~~ — **found and fixed**, task C2a: it bounded the in-place reversal of `argv[1]`, and is an index pair now |
@@ -160,8 +171,10 @@ prediction rather than a tally — and **task C5c confirmed the positive half of
 and `fgrep` are the first two of the four "deciding" programs to be opened, and both had *more*
 cursors than the table claimed rather than fewer. **Task C5d opened the third**, and `sort`'s
 fifteen turned out to be the one count this table got right and the one *description* it got
-wrong — the number was exact and two of the three routines it named were not the ones. `pr` is
-the last one left. That is where to expect the *other* three hazards too.
+wrong — the number was exact and two of the three routines it named were not the ones. **Task
+C5e opened the fourth and this table was out by a factor of fifteen**, having also missed the
+file with a third of them in it. `pr` is the last one left, and the prediction to make about it
+is that the count here is low. That is where to expect the *other* three hazards too.
 
 Those three — a flag packed into bit 0 of a pointer, a bit mask used to round to a word when
 `BYTESPERWORD` is 6, and a cast to a pointer that *floors* rather than rounds
@@ -317,6 +330,7 @@ alone, a name out of a directory being neither NUL-terminated nor the program's 
 | `uniq` | 84 | 3,240 | 187 | 1,371 | **4,882** |
 | `look` | 85 | 3,432 | 185 | 1,162 | **4,864** |
 | `sort` | 96 | 5,104 | 411 | 1,211 | **6,822** |
+| `sed` | 123 | 7,912 | 389 | 5,696 | **14,120** |
 | `comm` | 83 | 3,099 | 168 | 1,037 | **4,387** |
 | `split` | 91 | 3,092 | 190 | 1,054 | **4,427** |
 | `rev` | 84 | 2,981 | 159 | 1,204 | **4,428** |
@@ -352,10 +366,22 @@ before it was ported, as task C4d's brief demanded, and it came in at a third of
 even though it is the longest source in C1–C8. **The largest program on the image is `fgrep`, at
 20,019**, and it is not close: 15,000 of its words are two arrays, the Aho-Corasick state table
 and the queue that is sized from it ([grep/README.md](grep/README.md)). Set it aside and **`sort`
-was measured early, as task C5d's brief demanded, and came in at 6,822** — the largest of the
-sixteen filters that carries its size in code rather than in one table, a quarter of the ceiling,
-between `login` and `sh`. `awk` and `make` are the two left to measure early rather than late.
-Nothing before task C6 is in danger of the first ceiling.
+was measured early, as task C5d's brief demanded, and came in at 6,822** — a quarter of the
+ceiling, between `login` and `sh`. **`sed` is larger than either at 14,120**, and it is the
+honest shape of a program that carries its size in *both*: 7,912 words of text for
+twenty-seven commands and a regex engine, and 5,696 of bss which is six fixed buffers
+(`respace` 1,334, `ptrspace` 1,131, `linebuf`, `holdsp` and `genbuf` 667 each, `tlno` 256) and
+almost nothing else. Half the ceiling for the largest filter of the seventeen. `awk` and `make`
+are the two left to measure early rather than late. Nothing before task C6 is in danger of the
+first ceiling.
+
+**And `sed` is where a struct's layout had to be measured rather than derived**, which is C5c's
+rule about `fgrep`'s `MAXSIZ * sizeof` from the other end. A `struct reptr` is four `char *`, a
+one-word union, a `FILE *` and five `char` flags — seven words by the arithmetic anybody would
+do, since six chars pack into a word. `b6nm` says the array spans 1,131 words for 100 entries,
+so it is **eleven**: a `char` member of a struct takes a word of its own here. The flags could
+be one `int` and save 400 words. Nothing needed them to be, which is the point — **the number
+to check is the one the linker prints, and it is free to check.**
 
 **The bottom rows say what stdio costs.** Every program above `basename` links `printf`
 and a `FILE` buffer, which is the ~1,030 words of bss and most of the text they have in common;
@@ -586,11 +612,13 @@ Two harnesses, and choosing wrong wastes the effort:
   minor 1 having never carried a block. It is also the one test whose program has **no**
   `b6sim` half at all (see above), so unlike `fsck.ini` it is not the second word on its
   subject but the only word.
-  And `kernel/test/filters` (task C5b, extended by C5c and C5d) for anything whose subject is
-  **bytes** — it is the one test here that runs **sixteen** programs, the only one that puts a
-  **pipe** on a program's standard input, the only place an argument can be **quoted**
-  (`run-prog-test.sh` splits a `.args` line and cannot, so `grep 'вет мир'` and `sort -t' '`
-  exist only here), the only place a program's **temp file** is made in the image's own `/tmp`
+  And `kernel/test/filters` (task C5b, extended by C5c, C5d and C5e) for anything whose subject
+  is **bytes** — it is the one test here that runs **seventeen** programs, the only one that
+  puts a **pipe** on a program's standard input, the only place an argument can be **quoted**
+  (`run-prog-test.sh` splits a `.args` line and cannot, so `grep 'вет мир'`, `sort -t' '` and
+  `sed 's/привет мир/мир привет/'` exist only here, and the third is the largest of the three:
+  a substitution whose pattern or replacement holds a space is most of what `sed` is for), the
+  only place a program's **temp file or `w` file** is made in the image's own `/tmp`
   rather than the build machine's,
   and the only one whose oracle is masked **nowhere**, every number in its log
   being computed by a filter from a corpus the script writes for itself in the same run.
@@ -662,8 +690,9 @@ bit is almost always a bug.
 **The third form is the worst and `col` is its worked example: a program that STEALS bit `0200`
 for a flag of its own.** `/bin/sh` marked a quoted character with it and `col` marks a Greek
 half-shift with it; `grep` had the `CCL` bitmap, which is the same hazard from the table side,
-and `sed` still does ([grep/README.md](grep/README.md) is what task C5e should read first). The shell's was fixed by moving the mark, `ed`'s replacement-text escape by
-replacing bit `0200` with a `QESC` prefix, and `col`'s by **deleting the feature**, there being
+and `sed` had it twice ([sed/README.md](sed/README.md)). The shell's was fixed by moving the mark, `ed`'s replacement-text escape by
+replacing bit `0200` with a `QESC` prefix — which `sed`'s replacement text then took whole —
+and `col`'s by **deleting the feature**, there being
 no Model 37 Teletype on this machine and no producer of `SO`/`SI` for it
 ([col/README.md](col/README.md)). Which of the three is right depends on what still feeds the
 mechanism, and that is the question to ask first.
@@ -687,6 +716,15 @@ whose argument is a flag letter; it is *not* enough for `look`, where `-d` (lett
 only) and `-f` (fold case) have to **mean** something for a Cyrillic dictionary — the rule that
 port takes is that a byte above `0177` is a word constituent with no case. **Ask what the option
 means for a multi-byte letter, not merely whether the call is in bounds.**
+
+**And task C5e adds a third way for a table to be the wrong size, which neither of the first
+two greps would find.** §11 has said *256 entries* since task C3 and C5d added *and an index
+that lands in them*; `sed`'s `y///` translation table is 128 entries and **its width is written
+as a loop condition (`!(c & 0200)`) and a pointer bump (`ep + 0200`) and as a number nowhere at
+all.** A grep for `128`, for `[128]` or for a `+128` bias finds none of it, and the execution
+side indexes it with an unmasked byte. What found it was reading the one routine the task brief
+did not mention. **Where a table's size is not written down, read the routine that allocates
+it.**
 
 ---
 
@@ -1352,4 +1390,81 @@ designed answer is a better oracle than a second implementation — it says *whi
 Where the second implementation earned its keep was a single case: a 4,000-line generated input,
 sized so that one pass is impossible by arithmetic, checked against `LC_ALL=C sort`. **Ask what
 a reviewer could not check by eye, not what the program is.** The suite is 41 cases and the
-whole of `ctest -L cmd` — now 327 cases — still finishes in under seven seconds.
+whole of `ctest -L cmd` — 412 cases since task C5e — still finishes in under seven seconds.
+
+---
+
+## What task C5e taught
+
+`sed` is on the image, `/bin` holds forty-seven entries, and `kernel/test/filters` runs
+**seventeen** filters in one boot — C5e joined that test rather than taking volume 3098, as C5c
+and C5d did; 3098 is still free. [sed/README.md](sed/README.md) is the account. The brief
+predicted two of the five things that cost the day and neither of the other three is in any
+table this file has. Six findings generalize.
+
+**A header that DEFINES a program's globals is the multi-file port's first problem, and the
+failure is silent and total.** v7's `sed.h` declares forty-odd objects as tentative definitions
+in a file both sources include; C11 has no such thing across translation units and `b6ld` has no
+common symbols, so each half would have got its own `ptrspace`, its own `respace`, its own
+`linebuf` — the compiler compiling a script into storage the executor never looks at. Not a link
+error, not one wrong command, but two programs sharing a name. `sh/defs.h` had met it in task
+C11 and nothing here had written it down as a *shape*; §1 does now. **`tar`, `make`, `m4`, `awk`
+and `dc` are the five multi-file ports left**, and one `b6nm` over the finished binary settles
+it in a second.
+
+**A table's size can be written down nowhere.** §11 has asked for 256 entries since C3 and C5d
+added *and an index that lands in them*. `sed`'s `y///` table is the third shape and the one no
+search finds: its width is a loop condition (`for (c = 0; !(c & 0200); c++)`) and a pointer bump
+(`return ep + 0200`), so a grep for `128`, for `[128]` or for a `+128` bias comes back empty
+while the execution side reads 128 bytes past the table with a byte from the pattern space.
+`grep`'s was a wild store, `sort`'s a wild read a bias hid, and this one a wild read *nothing*
+hid — it was simply in the routine nobody had named. **Read the routines a brief does not
+mention**, which is the same advice C3 gave about a warning worth confirming, from the other
+side.
+
+**A bound that is announced and not enforced reads exactly like a bound.** All three of `sed`'s
+`sp >= &genbuf[LBSIZE]` tests are an `fprintf` with no `exit`, no `break` and no `return` behind
+them: the diagnostic goes out and the loop keeps writing past the buffer. That is `fgrep`'s C5c
+rule — a test that asserts a diagnostic asserts the string and not the cause — moved from the
+test into the code, and it is worse than `sort`'s one-limit-two-paths finding, where at least one
+path was honest. **Grep a candidate for a diagnostic with no statement after it.**
+
+**A recursion ceiling is not a property of the recursion alone.** `grep` set `MAXDEPTH` 16 for a
+153-word frame; `sed`'s frame is 169 and copying the number was wrong twice over. The two paths
+that reach `advance()` **start 170 words apart** — an address match enters from `execute()`, an
+`s` command through `command()`, whose own frame is 540 — so one limit is under the edge on one
+path and over it on the other. And **printing the diagnostic costs `_doprnt`'s 281-word frame**,
+so the first draft faulted on its way out of the message that said it had stopped. **Ask what a
+program still has to do after it has decided to stop**, which is C5d's stdio-reserve finding in a
+second currency.
+
+**A survey against the wrong artifact measures nothing, and the build will not tell you.**
+`b6_obj`'s header dependency is the *system* header tree — `b6cc` has no `-M`, so every directory
+globs `include/*.h` and calls it coarse. A program whose constants live in a header **of its
+own** therefore has no dependency on it at all, and every measurement of the ceiling above was
+taken against a binary that still had the previous constant compiled in. The numbers made no
+sense for an afternoon. `cmd/sed` and `cmd/sh` name their own headers now; the other five
+multi-file ports will each have to. **When a measurement disagrees with the arithmetic twice,
+check that the thing you are measuring is the thing you changed.**
+
+**An expected divergence that turns out not to exist is worth writing down.** `grep`'s proving
+assertion in C5c is a *false positive* — `& 0177` folds `0320` onto `P`, so v7's `grep` finds
+`[п]` inside `ALPHA` — and the same case was written for `sed` on the same reasoning. It is not
+sharp: v7's `sed` gets it right, because the stray compile-side bytes land forward of the class
+and the bytecode compiled after it overwrites them before any match runs. The store is still out
+of bounds; what it does not do in this program is produce a plausible wrong match. The case
+stays, labelled, and the sharp negative is a different one. **The way to find that out is to
+restore the old constants, rebuild and run** — C5d's rule that a divergence whose test would
+pass either way is not a test, applied to a divergence that had already been written into three
+files as fact.
+
+**And the cheap third oracle: run the suite through the host's program.** [TODO.md](TODO.md) and
+the C5b section above frame the oracle question as *designed fixture* against *second
+implementation*. `sed` has a third answer that costs a minute: every one of its eighty-one
+expectations was designed from `sed.1`, and then the whole suite was replayed through
+`/usr/bin/sed`. It disagrees about exactly six — `-g`, `s///P` and the four `l` cases, which are
+the two v7-only flags and the deliberate divergence — and agrees byte for byte about the other
+seventy-odd. That is not an oracle for v7's dialect and it cannot be; it is a check that the
+parts two implementations *share* were not quietly broken, and **it is available for every
+program in C5f and most of C10.** It found nothing here, which is the result to want and to
+report.

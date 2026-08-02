@@ -30,6 +30,7 @@ pwd
 rev
 rm
 rmdir
+sed
 sh
 sleep
 sort

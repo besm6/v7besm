@@ -1,0 +1,1 @@
+-n /^[^abg]/p text.txt

@@ -1,4 +1,6 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.\" This page contains Cyrillic: read it with `nroff -Kutf8 -man'.  Plain nroff -man
+.\" reads the input a byte at a time and renders each letter as two.
 .TH SED 1 
 .SH NAME
 sed \- stream editor
@@ -6,8 +8,9 @@ sed \- stream editor
 .B sed
 [
 .B \-n
-]
-[
+] [
+.B \-g
+] [
 .B \-e
 script ] [
 .B \-f
@@ -33,6 +36,27 @@ may be omitted.
 The
 .B \-n
 option suppresses the default output.
+The
+.B \-g
+option makes every
+.B s
+command global, as though each carried the
+.B g
+flag.
+.I "Note:"
+.B \-g
+is in the v7 program and was in no v7 manual page.
+.PP
+If the first line of a script is
+.BR #n ,
+the default output is suppressed as though
+.B \-n
+had been given.
+Any other line whose first non-blank character is
+.B #
+is a comment.
+.I "Note:"
+neither was in the v7 page either.
 .PP
 A script consists of editing commands, one per line,
 of the following form:
@@ -65,6 +89,15 @@ modified thus:
 .IP
 The escape sequence `\en' matches a
 newline embedded in the pattern space.
+.PP
+Two addresses may be separated by a
+.B ;
+as well as by a
+.BR , ,
+and two commands may be separated by a
+.BR ; .
+.I "Note:"
+the first was in the v7 program and in no v7 manual page.
 .PP
 A command line with no addresses selects every pattern space.
 .PP
@@ -111,7 +144,10 @@ Each
 is created before processing begins.
 There can be at most 10 distinct
 .I wfile
-arguments.
+arguments, and each must be at most 39 characters long.
+.I "Note:"
+the v7 program sized its tables for ten and tested for ten one slot too early, so it
+allowed nine; and it copied the name into a 40-byte row with no bound at all.
 .TP
 (1)\|a\e
 .br
@@ -180,8 +216,31 @@ on the standard output.
 (2)\|l
 List the pattern space on the standard output in an
 unambiguous form.
-Non-printing characters are spelled in two digit ascii,
-and long lines are folded.
+Non-printing characters are spelled in
+.I three
+digit octal, backspace and tab as
+.B <-
+and
+.BR >- ,
+and lines longer than 71 characters are folded, the fold being marked with a
+trailing
+.BR \e .
+.I "Note:"
+the v7 page promised two digits and an unambiguous listing, and the two could not both
+be true: two digits cannot spell 0177, and the v7 program printed DEL and an embedded
+newline as
+.I themselves
+\(em so the one command whose purpose is a legible listing rendered the two characters
+that most need it invisibly.
+A byte above 0177 is passed through rather than escaped, this machine's text being UTF-8
+(see
+.IR ed (1),
+whose
+.B l
+does the same); on a PDP-11 each such byte printed as the octal of a negative number.
+The fold counts
+.IR bytes ,
+so it can land inside a multi-byte character.
 .TP
 (2)\|n
 Copy the pattern space to the standard output.
@@ -191,6 +250,14 @@ Replace the pattern space with the next line of input.
 Append the next line of input to the pattern space
 with an embedded newline.
 (The current line number changes.)
+If there is no next line, the pattern space is
+.I discarded
+and
+.I sed
+stops; later versions of
+.I sed
+print it first.
+This is the v7 behaviour and is kept.
 .TP
 (2)\|p
 Print.
@@ -233,6 +300,13 @@ first one.
 .TP
 p
 Print the pattern space if a replacement was made.
+.TP
+P
+Print the pattern space through the first newline if a replacement was made, as the
+.B P
+command does.
+.I "Note:"
+in the v7 program and in no v7 manual page.
 .TP
 .RI w " wfile"
 Write.
@@ -298,5 +372,54 @@ only when the pattern space is selected.
 .TP
 (0)\|
 An empty command is ignored.
+.SH LIMITS
+A script may hold at most 99 commands, 49 labels of at most 8 characters each,
+20 nested
+.BR { } ,
+9
+.B \e(\e)
+groups per expression, and 10 distinct
+.I wfile
+arguments.
+An expression compiles to at most 512 bytes and a whole script to 8000;
+a script line, a pattern space and a hold space are at most 4000 characters.
+An expression may not nest more than 12
+.BR * 's
+that each match something.
+.I "Note:"
+the last is not a v7 limit.  The matcher recurses once per such
+.BR * ,
+the stack is not checked by anything, and past the ceiling it returns a
+.I wrong
+answer for a while before it faults; a diagnostic is better than either.
+.SH DIAGNOSTICS
+.I Sed
+exits 0 if it edited everything it was given, and 2 on any error \(em including an
+input file it could not open, which the v7 program reported and then exited 0 for.
+.PP
+A line longer than 4000 characters, whether read or produced by a substitution, is an
+error and not a truncation.
+.I "Note:"
+the v7 program truncated a long input line in silence and announced a long output line
+three times without acting on any of them.
+.SH "EIGHT BIT CHARACTERS"
+Every byte value is significant.
+A character class holds 256 bits, one per byte value, so
+.B [п]
+selects the Cyrillic letter and nothing else;
+.BR y ,
+.B &
+and
+.BI \e n
+carry a byte above 0177 unchanged; and a
+.I "range within a class is a range of bytes,"
+so a range written between two multi-byte letters is not what a reader expects.
+.PP
+.I "Note:"
+the v7 program masked with 0177 in five places.  Three of them lost the eighth bit of
+text \(em a class member, a
+.B y
+source character and every byte of a replacement \(em and two of them indexed a
+128-entry table with a byte that could be 255.
 .SH SEE ALSO
 ed(1), grep(1), awk(1)

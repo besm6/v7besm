@@ -1,0 +1,1 @@
+usage: sed [-n] [-g] [-e script] [-f sfile] [file ...]

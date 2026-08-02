@@ -1,0 +1,1 @@
+-n -f flagP.sed two.txt

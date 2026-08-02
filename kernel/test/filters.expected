@@ -154,6 +154,32 @@ fig 2 purple
 pear 3 green
 sort status 0
 /tmp/stm*
+---sed---
+alpha
+ALPHA
+ALPHA
+beta
+gamma
+gamma
+gamma
+delta
+gamma
+gamma
+gamma
+delta
+7
+мир привет
+привет мир
+привет мир
+МИР
+привет
+apple
+banana
+cherry
+date
+> banana
+> elder
+> fig
 ---c5a---
       7      7      41 /tmp/f.txt
       1      2      20
@@ -200,5 +226,7 @@ alpha
 beta
 delta
 gamma
+      4
+FIG
 sort status 0
 ---end---

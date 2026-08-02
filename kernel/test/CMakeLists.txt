@@ -277,6 +277,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/rev
     ${B6_ROOTFS}/bin/rm
     ${B6_ROOTFS}/bin/rmdir
+    ${B6_ROOTFS}/bin/sed
     ${B6_ROOTFS}/bin/sleep
     ${B6_ROOTFS}/bin/sort
     ${B6_ROOTFS}/bin/split
@@ -568,7 +569,7 @@ if(BESM6)
     # rootimg_link checks from the host side -- yes(1) stopped by a SIGPIPE down THE FIRST
     # PIPELINE this image has ever run, and time(1) forking, execing and reading times(2),
     # with its three intervals masked like date's seconds and its exit status diffed as it
-    # stands.  Task C5 got a test of its own, `filters' below: sixteen programs wanted more
+    # stands.  Task C5 got a test of its own, `filters' below: seventeen programs wanted more
     # than a section, and one of them needs a PIPE on standard input, which is a shape no
     # command in this script has.
     add_test(NAME utils
@@ -582,7 +583,7 @@ if(BESM6)
     # split, rev -- were asserted under b6sim ALONE, on the argument that one two-minute boot
     # was not worth taking for six programs that touch no device, no directory, no signal and
     # no second process.  Task C5b's seven -- tr, uniq, comm, tail, od, look, col -- make
-    # thirteen, and thirteen is worth it.  Task C5c's grep and fgrep make fifteen and C5d's sort makes sixteen, and they
+    # thirteen, and thirteen is worth it.  Task C5c's grep and fgrep make fifteen, C5d's sort sixteen and C5e's sed seventeen, and they
     # joined this test rather than taking a boot of their own, which is what cmd/TODO.md told
     # a later filter to do; 3098 is still the next free volume.
     #

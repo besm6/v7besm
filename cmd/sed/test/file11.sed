@@ -1,0 +1,11 @@
+w f0
+w f1
+w f2
+w f3
+w f4
+w f5
+w f6
+w f7
+w f8
+w f9
+w f10

@@ -5,6 +5,12 @@
 set(KINC ${CMAKE_SOURCE_DIR}/include)
 file(GLOB KHDRS ${KINC}/*.h ${KINC}/sys/*.h)
 
+# AND the shell's own six headers, which that glob does not reach -- so until task C5e
+# noticed it in cmd/sed, editing defs.h, mac.h, mode.h, name.h, brkincr.h or ctype.h
+# rebuilt NOTHING.  Every constant this program keeps in a header was in that blind spot.
+file(GLOB SHHDRS ${CMAKE_CURRENT_SOURCE_DIR}/*.h)
+list(APPEND KHDRS ${SHHDRS})
+
 # -I. so that defs.h's `#include "ctype.h"' finds the shell's own table header rather
 # than the C11 <ctype.h> in the system tree.  It must be absolute: CFLAGS goes onto the
 # b6cc command line as written, and the compiler does not run in this directory.

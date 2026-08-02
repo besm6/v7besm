@@ -1,0 +1,1 @@
+-n /line3/,/line5/p nums.txt

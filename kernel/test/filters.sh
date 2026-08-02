@@ -1,4 +1,4 @@
-# /etc/filters -- the sixteen text filters of task C5, run by the console shell.
+# /etc/filters -- the seventeen text filters of task C5, run by the console shell.
 #
 # Grafted onto a copy of the image by run-filters.sh, not shipped on it.  utils.sh is the
 # model and its standing rules hold here too:
@@ -16,7 +16,7 @@
 # it: C5a's six and C5b's seven in a single boot.  Task C5c added grep and fgrep to it, as
 # cmd/TODO.md said a later filter should -- a section here rather than a second boot.
 #
-# SEVEN THINGS HERE CANNOT BE SAID UNDER b6sim AT ALL, and they are the reason this is not
+# EIGHT THINGS HERE CANNOT BE SAID UNDER b6sim AT ALL, and they are the reason this is not
 # merely a second opinion:
 #
 #   * look(1) AGAINST ITS DEFAULT DICTIONARY.  look's default is the absolute path
@@ -36,17 +36,19 @@
 #     checked-in .expected.  The shell here passes the word as it was typed (cmd/sh's execs()
 #     hands exece() the original t[0]), so the diagnostics read `col:' and can be diffed.
 #
-#   * A SEPARATOR OR A PATTERN WITH A SPACE IN IT (tasks C5c and C5d).  run-prog-test.sh splits a .args line on
+#   * A SEPARATOR, A PATTERN OR A WHOLE SCRIPT WITH A SPACE IN IT (tasks C5c, C5d and C5e).  run-prog-test.sh splits a .args line on
 #     whitespace and has no quoting, so no b6sim case can hand grep or fgrep a pattern
 #     containing a space -- which is a large part of what anybody greps for, and `sort -t\' \''
 #     is the same limit on the commonest field separator there is.  Here the shell quotes
-#     them, so `grep 'вет мир'' and `sort -t' '' are single arguments and the cases exist.
+#     them, so `grep 'вет мир'', `sort -t' '' and `sed 's/привет мир/мир привет/'' are
+#     single arguments and the cases exist.  sed is the largest instance of the three: a
+#     substitution whose pattern or replacement holds a space is most of what sed is for.
 #
-#   * A TEMP FILE IN THE IMAGE'S OWN /tmp (task C5d).  sort makes one before it reads
+#   * A TEMP FILE, OR A w FILE, IN THE IMAGE'S OWN /tmp (tasks C5d and C5e).  sort makes one before it reads
 #     anything and unlinks it on the way out; under b6sim that path is the build machine's,
 #     so nothing there may assert either half.  Section 10's closing glob asserts both.
 #
-#   * THE PIPELINES.  Ten of the commands below are pipelines between two of these filters,
+#   * THE PIPELINES.  Twelve of the commands below are pipelines between two of these filters,
 #     which is the way anybody actually uses them and which no single-program harness can
 #     represent.
 #
@@ -54,7 +56,7 @@
 #     their logic is fully covered by ctest -L cmd, and what was not covered is that the
 #     bytes on the disk execute.  The two `ls /bin' listings assert those files EXIST.
 #
-# SECTION MARKERS: mount.sh's convention rather than utils.sh's, because sixteen programs in
+# SECTION MARKERS: mount.sh's convention rather than utils.sh's, because seventeen programs in
 # one log want a diff that says which one moved.
 
 echo filters begin >/tmp/filters.log
@@ -253,7 +255,45 @@ sort -c /usr/dict/words
 echo sort status $? >>/tmp/filters.log
 echo /tmp/stm* >>/tmp/filters.log
 
-# ---- 11. TASK C5a's SIX, at last on the machine they were built for.  Their logic is covered
+# ---- 11. sed (task C5e), AND A SCRIPT WITH SPACES IN IT.  The character class over a
+#          Cyrillic byte, the y/// table and the QESC replacement mark are the task's subject
+#          and ctest -L cmd covers all three; four things only this test can do.
+#
+#          A QUOTED SCRIPT.  run-prog-test.sh splits a .args line on whitespace and has no
+#          quoting, so no b6sim case can hand sed `s/привет мир/мир привет/' -- and a
+#          substitution whose pattern or replacement contains a space is most of what
+#          anybody writes sed for.  This is the third instance of that limit after grep's
+#          pattern and sort's separator, and the largest.
+#
+#          A SCRIPT FROM A HERE-DOCUMENT.  sed -f is how a script of more than one line
+#          actually arrives, and a here-document is how the shell writes one.
+#
+#          A w FILE IN THE IMAGE'S OWN /tmp.  Under b6sim that path is the BUILD MACHINE's
+#          (README.md SS9's absolute-path rule), so cmd/sed/test writes into its own
+#          working directory and can say nothing about /tmp.
+#
+#          AND THE l COMMAND OVER A CONSOLE THAT SPEAKS UTF-8, which is what the divergence
+#          is for: a byte above 0177 is passed through rather than spelled in octal.
+echo ---sed--- >>/tmp/filters.log
+sed -n 2p /tmp/f.txt >>/tmp/filters.log
+sed 's/alpha/ALPHA/' /tmp/f.txt >>/tmp/filters.log
+sed -n '/gamma/,/delta/p' /tmp/f.txt >>/tmp/filters.log
+sed -n '$=' /tmp/f.txt >>/tmp/filters.log
+echo привет мир | sed 's/привет мир/мир привет/' >>/tmp/filters.log
+echo привет мир | sed -n '/[пм]/p' >>/tmp/filters.log
+echo ALPHA | sed -n '/[п]/p' >>/tmp/filters.log
+echo x | sed 's/x/привет мир/' >>/tmp/filters.log
+echo мир | sed 'y/мир/МИР/' >>/tmp/filters.log
+echo привет | sed -n l >>/tmp/filters.log
+sed -n 'w /tmp/sedw.txt' /tmp/a.txt
+cat /tmp/sedw.txt >>/tmp/filters.log
+cat >/tmp/sed.sed <<\!
+s/^/> /
+2d
+!
+sed -f /tmp/sed.sed /tmp/b.txt >>/tmp/filters.log
+
+# ---- 12. TASK C5a's SIX, at last on the machine they were built for.  Their logic is covered
 #          by ctest -L cmd; what this adds is that the image's copy executes.  Two of them are
 #          worth more than that: wc counts a Cyrillic line as two words, which is C5a's own
 #          divergence from v7, and rev reverses SEQUENCES rather than bytes, which is the
@@ -273,7 +313,7 @@ echo привет | rev >>/tmp/filters.log
 split -3 /tmp/f.txt /tmp/x
 cat /tmp/xaa /tmp/xab /tmp/xac >>/tmp/filters.log
 
-# ---- 12. THE FILTERS AGAINST EACH OTHER, which is how anybody uses them and which no
+# ---- 13. THE FILTERS AGAINST EACH OTHER, which is how anybody uses them and which no
 #          single-program harness can represent.  Every one of these is a pipeline between
 #          two programs of task C5.
 echo ---pipes--- >>/tmp/filters.log
@@ -286,6 +326,8 @@ grep gamma /tmp/f.txt | wc -l >>/tmp/filters.log
 uniq /tmp/f.txt | fgrep -c a >>/tmp/filters.log
 look comp | grep -c comp >>/tmp/filters.log
 cat /tmp/f.txt | sort -u >>/tmp/filters.log
+sed -n 's/^/> /p' /tmp/a.txt | wc -l >>/tmp/filters.log
+tr a-z A-Z </tmp/b.txt | sed -n '$p' >>/tmp/filters.log
 ls /bin | sort -c
 echo sort status $? >>/tmp/filters.log
 
