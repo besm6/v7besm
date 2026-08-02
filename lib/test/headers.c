@@ -73,6 +73,7 @@
 //
 #include <sys/dir.h>
 #include <sys/errno.h>
+#include <sys/kctl.h>
 #include <sys/param.h>
 #include <sys/signal.h>
 #include <sys/stat.h>
@@ -108,6 +109,7 @@
 
 #include <sys/dir.h>
 #include <sys/errno.h>
+#include <sys/kctl.h>
 #include <sys/param.h>
 #include <sys/signal.h>
 #include <sys/stat.h>

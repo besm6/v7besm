@@ -180,8 +180,42 @@ root — so `NMOUNT` of the `NBUF` buffers can be out of the cache at once. `get
 *sleep* on an empty free list, so a cache sized under the mount table does not run slowly, it
 stops. The pair was 10 and 2 and is now **16 and 8**: eight buffers left with every slot in use,
 which is what the old pair left. Paying for it moved `KEND` down 3072 words, from `062000` to
-`054000`, and the image is at `050325` — about **1800 words of headroom**, which makes `NBUF` and
+`054000`, and the image is at `051245` — about **1300 words of headroom**, which makes `NBUF` and
 not the next page of code the thing most likely to run the kernel into its own buffers.
+
+### The kernel-variable table
+
+**A user program cannot find a kernel variable by name any way but asking**, because there is no
+kernel image on the root filesystem: `root.manifest` names no `/unix`, and [unix.ini](unix.ini)
+has the *simulator* load one off the build host. So `nlist(3)` has nothing to open and is
+deliberately absent from this libc; [ksym.c](ksym.c) carries a small table of the variables the
+kernel publishes and `kctl(2)` reads it
+([../doc/Unix_V7_System_Calls.md](../doc/Unix_V7_System_Calls.md) §2.5,
+[../include/sys/kctl.h](../include/sys/kctl.h)). It costs about **330 words** of the headroom
+above — nineteen four-word rows and the handler — and it cannot fall out of step with the image
+it is part of, every address being a link-time relocation of the real declaration rather than a
+number written down.
+
+Three things about it belong here rather than in the interface header. **`ks_addr` is a `void *`
+because nothing else compiles**: a static initializer on this compiler folds an address constant
+from `&lvalue`, an array name and *address ± constant*, and from no cast at all, so `(int)proc`
+and `(int *)proc` are both rejected and only a `void`-pointee field takes a bare object name
+([../doc/Besm6_Data_Representation.md](../doc/Besm6_Data_Representation.md) §7 is the general
+rule, discovered here). A `void *` is fat, so every read of the field goes through `ptrword()`.
+**The `u`-area and `buffers` are not in the table** and must not be: they are absolute symbols
+(besm6.S), `UBASE` and `BUFBASE` are in `<sys/param.h>`, and `lib/test/memt.c` reaches the u-area
+with no lookup at all. And **the counts are not in the table either** — `NPROC`, `NTEXT`,
+`MSGBUFS` and the rest are `<sys/param.h>` constants a user program already sees, so there is no
+`nproc` variable to export and there must not be one. That last is the largest simplification
+against RetroBSD's version of this mechanism, whose table has to carry `_nproc` and `_hz`
+because its userland cannot see the constants.
+
+**The table serves the value readers completely and the pointer-chasers only halfway.**
+`KCTL_GET` copies a variable out, so a `dmesg` or an `iostat` opens no device; `ps` and `pstat`
+resolve `p_textp` into an index in `text[]` and `u_ttyp` into one in `sc[]`, which is arithmetic
+against a base address, and they read on through `/dev/kmem` — and through `/dev/mem` for a
+u-area at `p_addr`, which is above `KREACH`. The u-area invariant below applies to them in full:
+for the running process the truth is at `074000` and only `uhome` says which process that is.
 
 ### Shared text, and what the paging store owes it
 

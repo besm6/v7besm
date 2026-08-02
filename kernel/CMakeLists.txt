@@ -45,7 +45,7 @@ list(APPEND KHDRS ${CMAKE_CURRENT_SOURCE_DIR}/const.s)
 # Core kernel (SYS) + drivers (DEV) + machine assist (MACH).  Every one gets -DKERNEL;
 # b6_obj ignores it for the .s members (brz.s, switch.s), matching the Makefile.
 set(KSRC
-    acct.c alloc.c clock.c conf.c fio.c iget.c intr.c machdep.c main.c malloc.c
+    acct.c alloc.c clock.c conf.c fio.c iget.c intr.c ksym.c machdep.c main.c malloc.c
     nami.c pipe.c prf.c prim.c rdwri.c sendsig.c sig.c slp.c subr.c sys1.c sys2.c
     sys3.c sys4.c syscall.c sysent.c text.c trap.c ucopy.c utab.c
     dev/bio.c dev/mb.c dev/md.c dev/mem.c dev/partab.c dev/sc.c dev/sys.c dev/tty.c

@@ -90,6 +90,7 @@ enum {
     SYS_setgid = 46,
     SYS_getgid = 47,
     SYS_signal = 48,
+    SYS_kctl   = 49,
     SYS_acct   = 51,
     SYS_phys   = 52,
     SYS_lock   = 53,
@@ -150,9 +151,12 @@ static unsigned syscall_nargs(unsigned num)
     case SYS_mount:
         return 3;
 
-    // Four-argument calls.
+    // Four-argument calls.  kctl is here even though b6sim refuses it: the count is the
+    // CALLER's, and the caller pushed three words below r15 whether the call succeeds or
+    // not.  Getting this wrong drifts the user stack by a word per call and says nothing.
     case SYS_ptrace:
     case SYS_profil:
+    case SYS_kctl:
         return 4;
 
     // Two-argument calls.
@@ -1080,6 +1084,18 @@ void Processor::syscall(unsigned num)
     case SYS_phys:
         // Not meaningful for a user-level simulator.
         sys_err(EPERM);
+        break;
+
+    case SYS_kctl:
+        // int kctl(const char *name, int op, void *buf, int len)
+        //
+        // There is no kernel under this simulator, so there is no kernel-variable table:
+        // every name is unknown and every operation says so.  ENOENT and not EPERM above
+        // it -- a guest sees exactly what a kernel whose table is empty would say, which
+        // is a state the caller has to handle anyway, where EPERM would invite it to
+        // retry as root.  A program whose subject is kernel state belongs under the
+        // booted kernel; lib/test/kctlt is IMAGEONLY for this reason.
+        sys_err(ENOENT);
         break;
 
     default:

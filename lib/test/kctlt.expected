@@ -1,0 +1,28 @@
+ok   the page below the stack is not ours
+ok   a stat of proc comes back whole
+ok   its address is inside the kernel
+ok   its size is the whole proc table
+ok   it is readable and not writable
+ok   kgetsym agrees with the stat
+ok   the proc table reads back whole
+ok   we are in it
+ok   under our own uid
+ok   with our own parent
+ok   /dev/kmem opens
+ok   u_procp is the slot the table's base points at
+ok   a len of 0 reports the size
+ok   a short buffer is filled and no more
+ok   msgbuf is inside the kernel
+ok   msgbufp reads back whole
+ok   and points into msgbuf
+ok   the list is a whole number of records
+ok   a len of 0 reports its size too
+ok   and every name in it stats to something inside the kernel
+ok   an unknown name is ENOENT
+ok   an empty name is ENOENT too, and not special
+ok   a name with no NUL in KSYMLEN bytes is EINVAL
+ok   KCTL_SET is reserved and refused
+ok   so is an operation that does not exist
+ok   an unreadable name is EFAULT
+ok   an unwritable buffer is EFAULT
+ok   200 calls leave the frame alone

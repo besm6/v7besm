@@ -305,6 +305,7 @@ field. The six calls with a second result deliver it in `r12` — see [§3](#3-h
 | Time | `time`, `ftime`, `stime`§ |
 | Accepted no-ops | `ioctl`, `lock` |
 | Rejected (`EPERM`) | `mount`, `umount`, `ptrace`, `profil`, `acct`, `phys` — not meaningful for a user-level simulator |
+| Rejected (`ENOENT`) | `kctl`♦ — there is no kernel here, so there is no kernel-variable table |
 
 ★ `exec`/`exece` reload the image and lay the argument block at `070000` described in
 [§3](#how-a-program-starts) — the same code that starts the very first program, so a guest sees
@@ -343,6 +344,14 @@ rounded up to a whole page, and the call fails with `ENOMEM` if that reaches `07
 base, and therefore the argument block, not the current `r15` (which starts above the block and
 climbs). The kernel's own gate follows the same rule (`sbreak()` in `kernel/sys1.c`, whose
 ceiling is `estabur()`'s `nt + nd > USTKPAGE * PGSZ`), so one `sbrk()` serves both.
+♦ `kctl` reads a table only a kernel has ([Unix_V7_System_Calls.md §2.5](Unix_V7_System_Calls.md#25-kernel-introspection)),
+and there is no kernel underneath this simulator. Every operation therefore fails with
+**`ENOENT`** — what a kernel whose table is *empty* would answer, which is a state a caller has
+to handle anyway, where `EPERM` beside it in the table above would invite a retry as root that
+could never work. The arity is still 4, and that part is not cosmetic: the caller pushed three
+words below `r15` and the gate owes them back whether the call succeeded or not.
+`cmd/sim/test` asserts both the errno and the stack; a program whose subject is kernel state
+belongs under the booted kernel, which is why `lib/test/kctlt` is `IMAGEONLY`.
 
 Files, standard input/output/error, and pipes map straight onto the corresponding host
 descriptors, so a program's output appears in your terminal and the files it creates are real

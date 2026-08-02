@@ -45,6 +45,12 @@
 #define NPROC   150            // max number of processes
 #define NTEXT   40             // max number of pure texts
 #define NCLIST  100            // max total clist size
+// The Consul typewriters, and the size of dev/sc.c's tty array.  NOT a tunable -- the
+// machine has two and there is no third to configure -- but it is here rather than in the
+// driver because it dimensions a table kctl(2) exports, so a program that walks sc[] needs
+// it (kernel/ksym.c, <sys/kctl.h>).  dev/sc.c is the one driver behind both lines; see
+// kernel/conf.c's cdevsw comment for why there is no second major.
+#define NSC     2              // number of Consul typewriters
 // Ticks/second: the interval timer free-runs at this rate (ГРП bit 40; SIMH CLK_TPS)
 // and cannot be programmed.
 #define HZ       250

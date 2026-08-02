@@ -449,6 +449,46 @@ byte to a less significant one). When the offset wraps from 0 to 5 — that is, 
 stepping past byte #5 — the word address is simultaneously incremented by 1, advancing
 to the next word.
 
+### An address constant may not be cast — and what that forces
+
+Everything above is about a *run-time* conversion, where an `int` and a pointer are the same
+word and the compiler converts between them without emitting an instruction. **A static
+initializer is a different machine entirely**, and the rule there is narrower than the one a C
+programmer expects.
+
+`eval_addr_const()` (the compiler's `semantic/initializers.c`) folds an address constant from
+exactly three shapes — `&lvalue`, an array or function name decaying, and *address ±
+constant*, composed in any order — and **it has no case for a cast.** So both of these fail to
+compile, the first with *"Static initializer is not a constant"* and the second by falling
+through to the same place:
+
+```c
+static struct { char n[8]; int   a; } t1 = { "proc", (int)proc   }; /* NO */
+static struct { char n[8]; int  *a; } t2 = { "proc", (int *)proc }; /* NO */
+```
+
+The type check that follows is the second half of it: a pointer field accepts a bare object
+address only when the field's pointee is `void`, or is compatible with the object's. So an
+`int *` field will not take `proc` either — that is *"Incompatible types in static pointer
+initialization"* — and there is no cast available to make it.
+
+**What is left is a `void *` field**, which accepts any object address with no cast at all:
+
+```c
+static struct { char n[8]; void *a; } t3 = { "proc", proc };        /* yes */
+```
+
+and a `void *` is **fat** (§7 above), so the stored word carries the marker in bit 48 and a
+byte offset in bits 47–45. The address is its low 15 bits: run it through `ptrword()`
+(`<sys/param.h>`) before using it. Note also that `&c` on a **standalone `char`** is stored
+with offset 5 rather than 0, that object keeping its value in the low byte of its own word —
+invisible once masked, and a trap if it is not.
+
+This is not a hypothetical: it is why `struct ksym`'s address field in
+[kernel/ksym.c](../kernel/ksym.c) is a `void *`, and it is the whole reason that table can be
+written as a list of bare symbol names. `bufpaddr()` in [include/sys/buf.h](../include/sys/buf.h)
+masks a `caddr_t` the same way, for a different reason.
+
 ---
 
 ## 8. Type Summary

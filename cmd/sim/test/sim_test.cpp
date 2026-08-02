@@ -88,6 +88,7 @@ enum {
     SYS_kill   = 37,
     SYS_sigret = 45,
     SYS_signal = 48,
+    SYS_kctl   = 49,
 };
 
 //
@@ -564,6 +565,28 @@ TEST(Syscall, ForkWait)
     run_syscall(machine, SYS_wait, {}, 0);
     EXPECT_EQ(machine.cpu.get_acc(), child); // pid of the reaped child
     EXPECT_EQ((machine.cpu.get_m(12) >> 8) & 0xff, 42u);
+}
+
+//
+// kctl(2) is refused: there is no kernel here, so there is no kernel-variable table and
+// every name is unknown.  ENOENT rather than EPERM -- a guest sees what a kernel whose
+// table is empty would say, which is a state it has to handle anyway, where EPERM would
+// invite it to retry as root.  The stack check is the other half: kctl's arity is 4, so
+// the three pushed words must be popped even though the call failed, and nothing else in
+// this suite exercises a 4-argument call at all.
+//
+TEST(Syscall, KctlRefused)
+{
+    Memory memory;
+    Machine machine{ memory };
+
+    Word name = put_string(memory, 0x300, "proc");
+    // kctl(name, KCTL_STAT, buf, len): three words pushed, the length in the accumulator.
+    run_syscall(machine, SYS_kctl, { name, 3, 0x400 }, 18);
+
+    EXPECT_EQ(machine.cpu.get_acc(), GUEST_MINUS_ONE);
+    EXPECT_EQ(machine.cpu.get_m(14), 2u); // ENOENT
+    EXPECT_EQ(machine.cpu.get_m(017), STACK);
 }
 
 //

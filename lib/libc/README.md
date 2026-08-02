@@ -433,9 +433,26 @@ routine that may not be there.
 
 ## What is absent, and why
 
-- **`nlist`** — deferred. A caller needs `struct nlist`, and the `b.out` format is described once
-  and under `cross/besm6/`, which guest code cannot reach yet. It comes back with the first
-  program that wants it — `nm`, `ps`, `pstat` — and the header question gets settled then.
+- **`nlist`** — **not coming**, and the question this used to defer is settled. It was deferred
+  on a header problem: a caller needs `struct nlist`, and the `b.out` format is described once
+  and under `cross/besm6/`, which guest code cannot reach. The real objection turned out to be
+  larger and simpler. **There is no kernel image on the root filesystem** — `root.manifest`
+  names no `/unix`, and `kernel/unix.ini` has the *simulator* load one off the build host — so
+  `nlist()` would have had nothing to open, and the three programs named as its first callers
+  wanted it for exactly the thing it could not have done.
+
+  What replaced it is **`kctl(2)`** (`<sys/kctl.h>`, `kernel/ksym.c`, `doc/Unix_V7_System_Calls.md`
+  §2.5): the kernel carries a small table of the variables it publishes, and one call reads it.
+  Only `gen/kgetsym.c` is libc's share of that — thirty lines over `KCTL_STAT`, for the callers
+  that want an address rather than a value. There is no `struct nlist`, no `<nlist.h>` and no
+  `nlist.3`, which also keeps `include/README.md`'s `a.out.h` rule intact: the `b.out` format
+  stays described once, under `cross/besm6/`.
+
+  The polarity trap is worth recording since it is why an `nlist`-shaped API was not built over
+  `kctl` for source compatibility. RetroBSD's `knlist()` returns the count **found** where
+  `nlist()` returns the count **not** found, and its own `fstat` gets the test backwards. Every
+  caller here is being rewritten anyway (`cmd/TODO.md` C8 says so of `ps`, `pstat` and
+  `iostat`), so the only thing the old shape preserved was an invitation to that mistake.
 - **`atexit`** — see above.
 - **`monitor`/`mcount`, and `cc -p`** — no profiling runtime. The `profil` gate exists and has a
   generated stub; nothing calls it.
@@ -555,8 +572,13 @@ and `getgrent.3` have their structures written out.
 
 Six pages that are **not** here: `curses.3` and `termlib.3` belong to the libraries that own them,
 `dbm.3x`/`mp.3x`/`plot.3x`/`pkopen.3` are not libc, and `l3tol.3`, `monitor.3` and `nlist.3`
-describe routines this library does not have. Four of section 2 are gone for the same reason —
-`indir`, `mpx`, `mpxcall` and `pkon` are not syscalls here.
+describe routines this library does not have — `nlist.3` permanently, since `kctl(2)` is what
+this system has instead (see *What is absent, and why*). Four of section 2 are gone for the same
+reason — `indir`, `mpx`, `mpxcall` and `pkon` are not syscalls here.
+
+**One page is not v7's at all.** `kctl.2` documents this port's own system call and the
+`kgetsym(3)` shorthand over it, and it is the only page in this directory with no upstream
+original to have been edited from.
 
 **Nothing installs them** — no `CMakeLists.txt` in this tree has a man rule yet, which is also true
 of libtermcap's and libcurses' — so they are read with `nroff -man man/malloc.3`.

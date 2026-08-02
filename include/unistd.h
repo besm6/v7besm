@@ -20,7 +20,9 @@
 // What is NOT here, and where it went instead: `open'/`creat' are <fcntl.h>;
 // `mknod', `chmod', `umask' and `stat'/`fstat' are <sys/stat.h>, beside the mode
 // bits and the struct they are about; `wait' is <sys/wait.h>, beside the macros
-// that take its status apart.  This tree now has all three of those headers.
+// that take its status apart; and `kctl' -- this port's own call, which v7 had no
+// counterpart for -- is <sys/kctl.h>, beside the operation codes and the structure
+// it fills.  This tree now has all four of those headers.
 #ifndef _UNISTD_H
 #define _UNISTD_H
 

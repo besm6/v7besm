@@ -139,14 +139,26 @@ looks wrong, so a prototype the definition is checked against is worth more than
 It deliberately declares no `PC` and no `ospeed`: this `tputs` emits no padding, and the names
 stay free for `lib/libcurses`, which defines both and reads neither.
 
-The `a.out.h` rule has already cost something, and it was worth it: `nlist()` is the one routine
-of `lib/`'s phase 5 that did **not** land, because a caller of it needs `struct nlist` and there
-is no guest-visible spelling of the b.out format to give it. `cross/besm6/b.out.h` is the real
-description and it is the toolchain's — `cross/` is not installed, `b6cpp` predefines no `besm6`,
-and `<stdint.h>` here has no `int64_t`, so the native branch of `cross/besm6/types.h` does not
-compile yet. Nothing in `lib/` calls `nlist`; the first program that does — `nm`, `ps`, `pstat` —
-is what should settle whether the cross headers become reachable from guest code or a guest
-description is written beside them.
+The `a.out.h` rule looked as though it had cost something, and in the end it cost nothing.
+`nlist()` is the one routine of `lib/`'s phase 5 that did **not** land, because a caller of it
+needs `struct nlist` and there is no guest-visible spelling of the b.out format to give it.
+`cross/besm6/b.out.h` is the real description and it is the toolchain's — `cross/` is not
+installed, `b6cpp` predefines no `besm6`, and `<stdint.h>` here has no `int64_t`, so the native
+branch of `cross/besm6/types.h` does not compile yet.
+
+**That question is now closed, and not by answering it.** The three programs named as `nlist`'s
+first callers wanted it to read `/unix`, and **there is no `/unix` on the root filesystem** —
+`root.manifest` names no kernel image, the simulator loading one off the build host — so the
+routine would have had nothing to open however its header was spelled. `<sys/kctl.h>` is what
+went in instead: the kernel publishes a table of its own variables and `kctl(2)` reads it
+([`../doc/Unix_V7_System_Calls.md`](../doc/Unix_V7_System_Calls.md) §2.5). It is a header of
+this tree's own, in the "one home" family below, and the b.out format stays described once,
+under `cross/besm6/`, where it belongs.
+
+`<sys/kctl.h>` also follows the `#ifndef KERNEL` idiom that `<sys/stat.h>` and `<sys/times.h>`
+established, and for their reason: the kernel's handler is `void kctl(void)`, declared in
+`<sys/systm.h>`, and the two spellings must never both be in scope. `-DKERNEL` reaches every
+kernel-side translation unit, `kernel/test/`'s programs included.
 
 Types and macros follow the BESM-6 data model
 ([`../doc/Besm6_Data_Representation.md`](../doc/Besm6_Data_Representation.md)): every scalar

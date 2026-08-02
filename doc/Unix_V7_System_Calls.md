@@ -133,6 +133,36 @@ return a value in `r12` as well as the accumulator.
 | 25 | `int stime(time_t t)` | `stime` — [sys4.c](../kernel/sys4.c) | Set the system time; superuser only. **One argument**: `time_t` is one 48-bit word. |
 | 35 | `int ftime(struct timeb *tp)` | `ftime` — [sys4.c](../kernel/sys4.c) | Time with milliseconds — derived from `lbolt` at `HZ` = 250 — plus the compiled-in `TIMEZONE` and `DSTFLAG`. |
 
+### 2.5 Kernel introspection
+
+**One row here is not v7's**, and it is the only call in this table that no PDP-11 Unix had.
+
+| № | prototype | handler | what it does |
+|---|---|---|---|
+| 49 | `int kctl(const char *name, int op, void *buf, int len)` | `kctl` — [ksym.c](../kernel/ksym.c) | Read the kernel's table of exported variables. `KCTL_GET` copies the variable's value, `KCTL_STAT` a `struct kctlstat` holding its **word** address and size, `KCTL_LIST` the exported names as `KSYMLEN`-byte records; `KCTL_SET` is reserved and answers `EINVAL`. At most `len` bytes are copied and the count is returned, `read(2)`-fashion; `len == 0` copies nothing and reports the size *available*. `ENOENT` for an unknown name, `EINVAL` for an unknown op or a name with no NUL in `KSYMLEN` bytes, `EFAULT` for a bad pointer. **Not privileged.** |
+
+**Why it exists.** Every other Unix finds a kernel variable with `nlist(3)` over the kernel
+image. **There is no kernel image on this root filesystem** — [root.manifest](../root.manifest)
+names no `/unix`, and `kernel/unix.ini` has the *simulator* load one off the build host — so
+`nlist(3)` would have nothing to open and is deliberately absent from this libc
+([lib/libc/README.md](../lib/libc/README.md)). RetroBSD met the same wall, its kernel living in
+flash, and answered it by carrying a hand-written table inside the kernel and publishing it
+through one `sysctl(2)` node. This is the same idea without the framework: no MIB, no name
+space, one call, and a table that cannot drift from the image it is part of because every entry
+is a link-time relocation of the real declaration.
+
+**What it does not replace.** `KCTL_GET` is enough for a program that reads fixed variables —
+`dmesg` and `iostat` open no device and need no privilege. It is *not* enough for `ps` and
+`pstat`, which resolve `p_textp` into an index in `text[]` and `u_ttyp` into one in `sc[]`:
+that is arithmetic against a base address, which is what `KCTL_STAT` and the `kgetsym(3)`
+shorthand over it return. Those two read on through `/dev/kmem`, and through `/dev/mem` for a
+u-area at `p_addr`, which lies above `KREACH` and out of `/dev/kmem`'s reach
+([kernel/dev/mem.c](../kernel/dev/mem.c)). [lib/test/memt.c](../lib/test/memt.c) is that
+ladder's first rung and [lib/test/kctlt.c](../lib/test/kctlt.c) is this one's.
+
+The interface is [include/sys/kctl.h](../include/sys/kctl.h); the table is
+[kernel/ksym.c](../kernel/ksym.c), and every row in it names the program that asked for it.
+
 ## 3. Signals
 
 `signal` (48) is the only signal *call* a program makes, but three more of the entries above are
@@ -206,13 +236,14 @@ These are the facts a reader cannot get from a v7 manual page.
   speed and no modem control behind the rest of them.
 
 `b6sim` implements the same set at user level, but not identically: `mount`, `umount`, `ptrace`,
-`profil`, `acct` and `phys` are refused with `EPERM`, `ioctl` and `lock` are accepted no-ops, and
-`signal` supports only `SIG_DFL`/`SIG_IGN`. See
+`profil`, `acct` and `phys` are refused with `EPERM`, `kctl` with `ENOENT` (there is no kernel,
+so there is no table, and an empty table is a state a caller must handle anyway), `ioctl` and
+`lock` are accepted no-ops, and `signal` supports only `SIG_DFL`/`SIG_IGN`. See
 [Aout_Simulator.md §7](Aout_Simulator.md#7-system-calls).
 
 ## 5. Rows that are not system calls
 
-Sixteen rows of `sysent[]` dispatch to one of two stubs in [kernel/trap.c](../kernel/trap.c):
+Eleven rows of `sysent[]` dispatch to one of two stubs in [kernel/trap.c](../kernel/trap.c):
 `nullsys()` does nothing and succeeds, `nosys()` sets `EINVAL`.
 
 | rows | v7 name | dispatches to |
@@ -221,10 +252,13 @@ Sixteen rows of `sysent[]` dispatch to one of two stubs in [kernel/trap.c](../ke
 | 38 | `switch` | `nullsys` — inoperative in v7 too |
 | 39 | `setpgrp` | `nullsys` — not implemented yet |
 | 40 | `tell` | `nosys` — obsolete |
-| 49, 50, 55–58, 62, 63 | USG-reserved, `readwrite`, `mpxchan` | `nosys` |
+| 50, 55–58, 62, 63 | USG-reserved, `readwrite`, `mpxchan` | `nosys` |
 
-None of them has a `SYS_*` name, on purpose. Row 45, v7's "unused", is no longer among them: it is
-`sigret` ([§3](#3-signals)). Two more paths reach the same place:
+None of them has a `SYS_*` name, on purpose. **Two rows have left this table.** Row 45, v7's
+"unused", is `sigret` ([§3](#3-signals)); row 49, v7's second "reserved for USG", is `kctl`
+([§2.5](#25-kernel-introspection)) — this port's own call, which took the lowest free row rather
+than a number past 63, since going past 63 would have moved `NSYSENT` and the range check with
+it. Two more paths reach the same place:
 
 - **An out-of-range number.** `syscall()` dispatches `badsysent` — a private `{0, 0, nosys}` —
   rather than masking the number onto a real row.
@@ -247,8 +281,21 @@ None of them has a `SYS_*` name, on purpose. Row 45, v7's "unused", is no longer
 4. **[cmd/sim/syscall.cpp](../cmd/sim/syscall.cpp)** — add the enum value *and* the arity in
    `syscall_nargs()`, or `b6sim` and the kernel will disagree about the stack.
 5. Declare the handler in [include/sys/systm.h](../include/sys/systm.h), and add the source to
-   `SYS` in [kernel/Makefile](../kernel/Makefile) if it is a new file — including its line in the
-   hand-maintained `###` dependency block.
+   `KSRC` in [kernel/CMakeLists.txt](../kernel/CMakeLists.txt) if it is a new file. A new
+   **header** needs a re-configure on top of that (`make clean; make`): the coarse dependency
+   list is a `file(GLOB)` and runs at configure time.
+6. Give the user-visible prototype a home. `<unistd.h>` is the default; a call with a structure
+   or a set of operation codes of its own goes beside them instead, as `stat`, `wait` and `kctl`
+   do — [include/unistd.h](../include/unistd.h)'s head comment keeps that list.
+
+`kctl` (49) is the only call this port has added, and its commit is the worked example of all
+six steps.
+
+**Two things about a new call fail silently and nothing but a test catches them.** An `sy_narg`
+that disagrees with the prototype drifts the user stack by a word per call, and a table the
+kernel copies out with the wrong stride comes back the right *length*. `lib/test/kctlt.c`
+asserts both — a 200-call loop between two frame locals for the first, and a walk that stats
+every name `KCTL_LIST` returned for the second. Both found a real bug when they were written.
 
 ## 7. See also
 

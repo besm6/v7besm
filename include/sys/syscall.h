@@ -13,8 +13,13 @@
 //
 // THE GAPS ARE DELIBERATE.  Only the calls this kernel implements get a name; the
 // rows that are nullsys or nosys in sysent.c -- 0 (indir), 38 (switch), 39
-// (setpgrp), 40 (tell), 49, 50, 55-58, 62, 63 -- get none, so that naming one
+// (setpgrp), 40 (tell), 50, 55-58, 62, 63 -- get none, so that naming one
 // cannot be mistaken for implementing it.
+//
+// ONE NUMBER IS NOT v7's.  Row 49 was "reserved for USG" and is kctl, this port's own
+// call: there is no /unix on the root filesystem, so the nlist(3) route to a kernel
+// variable does not exist here and something had to take its place (<sys/kctl.h>).  It
+// took the lowest free row rather than a number past 63, which would have moved NSYSENT.
 //
 // ONE NAME IS NOT A CALL ANY PROGRAM MAKES.  Row 45, v7's "unused", is sigreturn:
 // the kernel plants a `$77 SYS_sigret' word on the user stack itself (`sigcode',
@@ -83,6 +88,7 @@
 #define SYS_setgid 46
 #define SYS_getgid 47
 #define SYS_signal 48
+#define SYS_kctl   49
 #define SYS_acct   51
 #define SYS_phys   52
 #define SYS_lock   53

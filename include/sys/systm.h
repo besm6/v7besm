@@ -91,6 +91,10 @@ extern int updlock;          // lock for sync
 extern daddr_t rablock;      // block to be read ahead
 extern char regloc[];        // locs. of saved user registers (trap.c)
 extern char msgbuf[MSGBUFS]; // saved "printf" characters
+extern char *msgbufp;        // ... and where putchar() will put the next one (dev/sc.c).
+                             // Declared beside the buffer because the two are useless apart:
+                             // dmesg reads both through kctl(2) and needs the pointer to know
+                             // where the ring's oldest character is.
 extern dev_t rootdev;        // device of the root
 extern dev_t swapdev;        // swapping device
 extern dev_t pipedev;        // pipe device
@@ -179,6 +183,7 @@ void sigret(void); // the return half of the signal frame; kernel/sendsig.c
 void setgid(void);
 void getgid(void);
 void ssig(void);
+void kctl(void); // the kernel-variable table; kernel/ksym.c, <sys/kctl.h>
 void sysacct(void);
 void sysphys(void);
 void syslock(void);

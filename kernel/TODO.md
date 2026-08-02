@@ -26,6 +26,7 @@ numbering is **left as it was** — task numbers are cited from the sources and 
 | 35 | the guest's timing is not reproducible — the dropped `send` character, and the disabled `console` and `edit` tests | small to measure, unknown to fix |
 | 36 | the shifting copy: the half of the byte path task 28 could not reach | medium, high risk |
 | 37 | `mdvol[]` is filled only by a READ, so a pack that is only ever written is stamped with another drive's label | small |
+| 38 | `dk_busy`, `dk_numb[]` and `dk_wds[]` are declared, defined and written by nothing | small |
 
 ---
 
@@ -130,6 +131,16 @@ done is the sweep.
   47–45 — so `(int)cp & MASK` reaches bits of the *word* address and cannot see the byte offset at
   all. Grep for `& 1`, `& ~1`, `& (NBPW - 1)` and `& CROUND`-shaped masks. `prim.c`'s clists and
   `sh`'s parse nodes are the two already fixed.
+**One boundary this rule does NOT cross, found by task C8.** "An `int` and a pointer are the same
+word here" is true of a *run-time* conversion and false of a **static initializer**: the compiler
+folds an address constant from `&lvalue`, an array name and *address ± constant*, and from no
+**cast** at all, so `(int)proc` and `(int *)proc` are both rejected outright — and a non-`void`
+pointer field will not take a bare `proc` either. `struct ksym`'s address field in
+[ksym.c](ksym.c) is a `void *` for that reason, which makes it fat and means every read of it
+goes through `ptrword()`. [../doc/Besm6_Data_Representation.md](../doc/Besm6_Data_Representation.md)
+§7 carries the general rule now. It is not a hazard for the sweep below — it fails loudly at
+compile time — but it is the answer to "why is this a `void *`" and it will be asked.
+
 * **A pointer fabricated from a small integer.** `u.u_dirp = (caddr_t)u.u_arg[0]`
   ([syscall.c](syscall.c)) is fine — that cast is a silent `COPY`, so the caller's marker and byte
   offset survive and `namei()`'s `fubyte(u.u_dirp++)` is right. Everywhere *else* has to be checked
@@ -382,3 +393,38 @@ why, in `kernel/test/fsck.sh`'s `hostblind` style: the day this is fixed that ch
 has to be tightened to 3100, which is what stops the deferral being forgotten.
 
 **Size.** Small.
+
+---
+
+## 38. The disk instrumentation nothing writes
+
+**Where.** `dk_busy`, `dk_numb[3]` and `dk_wds[3]` — declared in
+[../include/sys/systm.h](../include/sys/systm.h), defined in [main.c](main.c), and **written by
+nothing**. `dk_busy` is *read* once, at [clock.c](clock.c)'s `a = dk_busy & 07`, and is
+therefore always 0.
+
+**What is wrong.** These are v7's per-drive I/O counters and the drivers were meant to keep
+them: a driver sets a bit of `dk_busy` while a transfer is outstanding, bumps `dk_numb[]` per
+transfer and `dk_wds[]` per word moved, and `clock.c` bills each tick to a slot chosen by which
+drives are busy. [dev/md.c](dev/md.c) and [dev/mb.c](dev/mb.c) touch none of them, so the whole
+disk half of an `iostat` has nothing to report.
+
+**What still works, and is worth knowing before anybody "fixes" this by deleting it.**
+`dk_time[32]` **is** live, and because `dk_busy` is stuck at 0 its low three bits never vary —
+so `clock.c` reduces to a clean four-slot CPU histogram: **0 user, 8 nice, 16 system, 24 idle**,
+in ticks at `HZ` = 250. That is the whole CPU side of a `vmstat` and it is already correct.
+There is no `cp_time` on this system and none is wanted; `dk_time[]` is v7's spelling of it.
+
+**Why now.** Task C8's `kctl(2)` table ([ksym.c](ksym.c)) publishes `dk_time`, `tk_nin` and
+`tk_nout` and **deliberately withholds these three**, because a variable that is exported and
+never written makes `iostat` print zeros that read as measurements — which is worse than a
+column it cannot print at all. The day a driver keeps them is the day they join the table, and
+the row comment in `ksym.c` says so.
+
+**How to fix it.** `mdstrategy()`/`mbstrategy()` set the drive's bit in `dk_busy` and bump
+`dk_numb[]` on the way in; the interrupt end clears the bit and adds `b_wcount` to `dk_wds[]`.
+The unit index has to be the same one `clock.c`'s `& 07` assumes, which is three bits — two
+controllers' worth of drives will not fit it, and deciding what the three bits *mean* here is
+most of the task.
+
+**Size.** Small, and the decision is the larger half of it.

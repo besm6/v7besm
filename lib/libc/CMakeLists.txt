@@ -72,7 +72,7 @@ set(LIBC_OBJ
     setjmp assert toupper tolower isblank
     malloc calloc aligned_alloc cuexit
     atof ecvt modf frexp ldexp
-    execvp execlp ttyname ttyslot getlogin tell crypt
+    execvp execlp ttyname ttyslot getlogin tell crypt kgetsym
     ctime clock difftime mktime strftime timezone
     # STDIO
     data findiop endopen fopen fdopen freopen filbuf flsbuf

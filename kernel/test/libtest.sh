@@ -108,6 +108,9 @@ echo ok shellt >/dev/console
 ./memt >/tmp/memt.out 2>&1
 echo ok memt >/dev/console
 
+./kctlt >/tmp/kctlt.out 2>&1
+echo ok kctlt >/dev/console
+
 ./suidt >/tmp/suidt.out 2>&1
 echo ok suidt >/dev/console
 
