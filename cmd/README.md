@@ -1860,19 +1860,36 @@ available only because the author had already split it that way.
 that a 100-byte name outlives `DIRSIZ` 18 — and both were right and both were small. What cost
 the task was the two claims nobody had thought to doubt.
 
-**A LAYOUT RULE THIS FILE STATED WAS WRONG, AND SO WAS `mount`'s VERSION OF IT.** §6 above used
-to say "a `char` member of a struct takes a word of its own here" and
-[mount/README.md](mount/README.md) §2 said `sizeof{char f[32]; char s[32];}` is "72 and not
-64". It is **66**: `b6cc` packs `char` members six to a word inside a struct exactly as it
-packs them in an array, and only the struct's *overall size* rounds up. The first claim came
-from **reading `b6nm`'s octal addresses as decimal** — `sed`'s `ptrspace` spans `0600` words
-for 100 entries, six each, not the 1,131 that `22776 − 21645` gives — and the paragraph then
-built a rule on the arithmetic. Both are corrected. The reason it mattered here and had not
-mattered for two tasks is that a **tar header is a byte layout the archive format fixes**: had
-either statement been true, every archive this machine wrote would have been readable by
-nothing, and no diagnostic anywhere would have said so. **A claim about layout is worth a
-minute of measurement before it is worth an hour of design**, and the measurement is a
-`printf` of four `sizeof`s under `b6sim`.
+**A LAYOUT RULE THIS PROJECT STATED WAS WRONG IN THREE PLACES.** §6 above used to say "a
+`char` member of a struct takes a word of its own here"; [mount/README.md](mount/README.md) §2
+said `sizeof{char f[32]; char s[32];}` is "72 and not 64"; and
+[../doc/Besm6_Data_Representation.md](../doc/Besm6_Data_Representation.md) §8's type table gave
+`char` an alignment of one **word**. It is **66**: `b6cc` packs `char` members six to a word
+inside a struct exactly as it packs them in an array, and only the struct's *overall size*
+rounds up.
+
+**All three were wrong in the same direction and the shared cause is the thing to keep: the
+word is real, it is just the OBJECT's and not the MEMBER's.** A standalone `char c;` does take
+a whole word, because every allocation is rounded up to one — and that is a fact about
+allocation which does not reach inside a struct, where a `char` member has alignment 1 and sits
+at a byte offset. §6's version had a second cause stacked on top: **`b6nm` prints octal**, and
+`sed`'s `ptrspace` spans `0600` words for 100 entries, six each, not the 1,131 that
+`22776 − 21645` gives. All three are corrected, and `doc/` — the one `CLAUDE.md` calls
+authoritative and the only one anybody reads first — gained a `char inside a struct`
+subsection with measured examples.
+
+The reason it mattered in C7 and had not mattered for two tasks is that a **tar header is a
+byte layout the archive format fixes**: had any of the three been true, every archive this
+machine wrote would have been readable by nothing, and no diagnostic anywhere would have said
+so. **A claim about layout is worth a minute of measurement before it is worth an hour of
+design**, and the measurement is a `printf` of four `sizeof`s under `b6sim`. Two corollaries
+that cost nothing: **write the measured offsets into the source** beside the struct, and make
+the guard **exact** rather than an inequality — `sizeof(struct header) == btow(HDRBYTES) * NBPW`
+fails the build on any interior padding at all, and was proved sharp by putting an `int` in
+front of the member in question. `doc/` being wrong was found by a REVIEWER reading the
+committed code and asking whether `char linkflag;` was aligned, which is worth recording on its
+own: the port had corrected the two READMEs it tripped over and never thought to check the
+reference they were both paraphrasing.
 
 **AND A CLAIM THAT SOMETHING ALREADY WORKS COSTS THE SAME MINUTE.** C7's own brief said of
 `tar cf /tmp/x` and `tar cf /dev/rmd0` that "both work today; nothing in the program needs a

@@ -131,6 +131,53 @@ An array of N characters occupies ⌈N/6⌉ words. The packed layout is six time
 memory-efficient than storing each character in its own word, but it requires
 **fat pointers** (described in Section 8) to address individual bytes.
 
+### `char` inside a struct — a byte, not a word
+
+The one-word storage described above is a property of a **standalone object**, not of the
+type. A `char` **member of a struct** occupies **one byte**, at a byte-granular offset:
+members pack six to a word exactly as an array does, and nothing is padded between them.
+
+The two rules come from different places in the compiler and it is worth knowing which is
+which, because reading the first as if it covered the second is a mistake this project has
+made three times:
+
+- **Whole objects round up.** `backend/besm6/frame.c` rounds every allocation to whole words,
+  so a file-scope or automatic `char c;` really does take one — there is nothing else in the
+  word and nothing may be put there.
+- **Members do not.** `semantic/type_utils.c`'s `get_alignment()` returns **1** for `char`,
+  `signed char` and `unsigned char`, and for an array it returns the alignment of the element,
+  so **1** again; `semantic/declarations.c` rounds each member's offset against that member's
+  own alignment. The target's `aggregate_align` of 6 seeds only the *struct's* alignment, so
+  the single word-rounding it causes is the **trailing** pad — which is what keeps the stride
+  of an array of structs a whole number of words.
+
+```c
+struct { char a, b, c, d, e; };                        /* sizeof == 6,  not 30 */
+struct { char f[32]; char s[32]; };                    /* sizeof == 66, not 64, not 72 */
+struct { char n[100]; char m[8]; char f; char l[100]; };
+                     /* offsets 0, 100, 108, 109; sizeof == 210, not 209 */
+```
+
+Every one of those numbers was measured rather than derived, which is the habit this section
+is really about. The padding is at the **end** and nowhere else, and is never more than five
+bytes: one in the first example, two in the second, one in the third.
+
+**The consequence is that a struct of `char` arrays reproduces a foreign byte layout
+exactly**, which is the one thing this machine's word addressing would otherwise make
+impossible. `cmd/tar`'s `struct header` is the worked case: it is the tar archive's own
+512-byte record, whose field offsets (0, 100, 108, 116, 124, 136, 148, 156, 157) are fixed by
+a format written for other machines, and it lands on every one of them —
+see [../cmd/tar/README.md](../cmd/tar/README.md).
+
+**A `char x;` member and a `char x[1];` member are identical** in offset, size and addressing
+mode; there is nothing to be gained by writing the second to force an alignment the first
+already has.
+
+**What does *not* follow from this is that a byte count may be computed by hand.** The
+trailing pad is real: `sizeof` is the only correct length for a `read(2)` or a `write(2)` of a
+struct, and `2 * NAMSIZ` for the second example above is 64 where `sizeof` is 66. See
+[../cmd/mount/README.md](../cmd/mount/README.md) §2, where that cost a program.
+
 ---
 
 ## 5. Integer Types
@@ -409,9 +456,9 @@ to the next word.
 | Type | Size | Alignment | Bits used | Notes |
 |------|------|-----------|-----------|-------|
 | `bool` | 1w | 1w | 1 | Lower bit; upper 47 bits zero |
-| `char` | 1w | 1w | 8 | Unsigned by default; fat pointers for `char*` |
-| `signed char` | 1w | 1w | 8 | Two's complement; range −128…127 |
-| `unsigned char` | 1w | 1w | 8 | Range 0…255 |
+| `char` | 1w\* | 1 byte\* | 8 | Unsigned by default; fat pointers for `char*` |
+| `signed char` | 1w\* | 1 byte\* | 8 | Two's complement; range −128…127 |
+| `unsigned char` | 1w\* | 1 byte\* | 8 | Range 0…255 |
 | `short` | 1w | 1w | 41 | Same as `int` |
 | `int` | 1w | 1w | 41 | 1 sign bit + 40 value bits |
 | `long` | 1w | 1w | 41 | Same as `int` |
@@ -428,6 +475,14 @@ to the next word.
 
 Sizes and alignments in words (1 word = 48 bits). `sizeof` values in char-units:
 `sizeof(char) == 1`; every other type occupies one word with `sizeof == 6`.
+
+**\*The three character rows describe two different things and the difference matters.**
+A standalone `char` **object** takes a whole word, because every allocation is rounded up to
+one. A `char` **member of a struct**, or an element of an array, takes **one byte** and is
+aligned to one byte: six pack into a word and nothing is padded between them. The character
+rows above are the only ones where the two answers differ — every other type in the table is
+word-sized either way. [`char` inside a struct](#char-inside-a-struct--a-byte-not-a-word) in
+Section 4 is the account, with measured examples.
 
 ---
 
@@ -469,8 +524,14 @@ sizeof(void *)      == 6
 sizeof(char *)      == 6   /* fat pointer fits in one word */
 ```
 
-Every type is aligned to its own size. There is no struct padding for single-word members
-since all of them have the same size and alignment.
+Every **word-sized** type is aligned to its own size, so there is no struct padding between
+single-word members: all of them have the same size and alignment. The character types are the
+exception, and in the harmless direction — a `char` member is aligned to one **byte**, so
+`char` members and `char` arrays pack six to a word with no padding between them either. What
+a struct always does get is a **trailing** pad, up to five bytes, rounding its total size up to
+a whole word so that an array of it keeps a word-multiple stride. `sizeof` is therefore the
+only correct length for an I/O call on a struct; a byte count computed from the field widths is
+not. See [`char` inside a struct](#char-inside-a-struct--a-byte-not-a-word) in Section 4.
 
 ### Pointer size and address space
 

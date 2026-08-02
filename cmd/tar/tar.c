@@ -28,14 +28,23 @@
 // a default.  So dblock stays a union (one object, all I/O from its base, never sizeof'd) and
 // tbuf is a FLAT char array indexed by hand.  The assertions below hold both halves.
 //
-// AND THE LAYOUT RULE THIS TREE STATED WAS WRONG, TWICE.  ../README.md said "a char member of
-// a struct takes a word of its own here" and ../mount/README.md SS2 said sizeof{char f[32];
-// char s[32];} is "72 and not 64".  Both are false: it is 66, chars pack six to a word inside
-// a struct exactly as they do in an array, and only the total rounds up.  The first of the two
-// came from reading b6nm's OCTAL addresses as decimal (sed's ptrspace spans 0600 words for 100
-// entries -- six each, not eleven).  Both are corrected now.  Had either been true, this
-// program's headers would have been incompatible with every other tar in the world, which is
-// why the first thing task C7 did was measure it.
+// AND THE LAYOUT RULE THIS TREE STATED WAS WRONG IN THREE PLACES.  ../README.md said "a char
+// member of a struct takes a word of its own here"; ../mount/README.md SS2 said sizeof{char
+// f[32]; char s[32];} is "72 and not 64"; and ../../doc/Besm6_Data_Representation.md SS8's type
+// table -- the authoritative one, the one CLAUDE.md says to read first -- gave `char' an
+// alignment of one WORD.  All three are false for a struct MEMBER: it is 66, and chars pack six
+// to a word inside a struct exactly as they do in an array, only the total rounding up.
+//
+// All three were wrong in the same direction and for the same reason, which is the thing worth
+// keeping: **the word is real, it is just the OBJECT's and not the MEMBER's.**  A standalone
+// `char c;' does take a word, because every allocation is rounded up to one; that is a fact
+// about allocation and it does not reach into a struct.  The README's version had a second
+// cause on top of it -- b6nm prints OCTAL, and sed's ptrspace spans 0600 words for 100 entries,
+// six each and not the eleven that reading the addresses as decimal gives.  All three are
+// corrected now.  Had any of them been true, this program's headers would have been
+// incompatible with every other tar in the world, which is why the first thing task C7 did was
+// measure it -- and why a reviewer asking the same question about `char linkflag' afterwards
+// was right to ask.
 //
 // `f' IS MANDATORY AND THERE IS NO DEFAULT DEVICE.  v7 opened /dev/mt1 when told nothing, and
 // the digits 0-7 picked a tape drive.  This kernel has no tape driver and no bdevsw/cdevsw
@@ -114,11 +123,25 @@ _Static_assert(RAWNBLOCK *TBLOCK == BSIZE, "RAWNBLOCK records must be one block"
 _Static_assert(NBLOCK >= RAWNBLOCK, "the largest blocking factor must reach a whole block");
 
 // THE HEADER.  Every offset below is the archive format's and is NOT this machine's to
-// choose.  b6cc packs char members byte-granularly, so the struct lands on them exactly --
-// but that is a measurement, not an assumption, and the two assertions after it are what
-// keep it one.  The member sizes prove the field widths; HDRBYTES against sizeof() proves
-// there is no interior padding, because a single word-aligned member would add at least two
-// bytes and there are eight boundaries (a word-padded layout measures 282, not 258).
+// choose.  b6cc packs char members byte-granularly, so the struct lands on them exactly:
+//
+//      name 0   mode 100   uid 108   gid 116   size 124   mtime 136   chksum 148
+//      linkflag 156   linkname 157        sizeof(struct header) == 258
+//
+// Those are MEASURED, not derived, and the assertions after the struct are what keep them
+// that way: the member sizes prove the field widths, and sizeof() against btow(HDRBYTES)
+// proves there is no interior padding ANYWHERE -- a word-aligned member would put the total
+// at 264 or beyond.
+//
+// `char linkflag' IS ONE BYTE, and the doubt is worth answering here because a reviewer has
+// already had it.  A standalone `char c;' does occupy a whole word -- every ALLOCATION is
+// rounded up to one -- but a char MEMBER has alignment 1 and sits at a byte offset, which is
+// why linkname begins at 157 and not at 162.  Writing it `char linkflag[1]' would change
+// nothing at all: the compiler takes an array's alignment from its element and its size from
+// the count, so both spellings are alignment 1, size 1, same offset, same addressing mode.
+// ../../doc/Besm6_Data_Representation.md SS4 is the account and has the measured examples;
+// its SS8 table said `1w' alignment for a char until task C7, which is where the doubt came
+// from and which is the third place in this tree to have stated the rule wrongly.
 struct header {
     char name[NAMSIZ];
     char mode[8];
@@ -137,9 +160,12 @@ _Static_assert(sizeof(((struct header *)0)->name) == NAMSIZ, "name is 100 bytes"
 _Static_assert(sizeof(((struct header *)0)->mode) == 8, "mode is 8 bytes");
 _Static_assert(sizeof(((struct header *)0)->size) == 12, "size is 12 bytes");
 _Static_assert(sizeof(((struct header *)0)->chksum) == 8, "chksum is 8 bytes");
-// A word-aligned member would move every field and the archives would be readable by nothing.
-_Static_assert(sizeof(struct header) < HDRBYTES + NBPW,
-               "struct header must pack its char members byte-granularly");
+// EXACT, not an inequality: any interior padding at all moves a field, and a field that has
+// moved makes the archives readable by nothing.  btow() is <sys/param.h>'s bytes-to-words, so
+// btow(257) * 6 is the 258 that a struct with no interior padding and one byte of TRAILING
+// pad must measure.
+_Static_assert(sizeof(struct header) == btow(HDRBYTES) * NBPW,
+               "struct header must have no interior padding: char members pack six to a word");
 _Static_assert(HDRBYTES <= TBLOCK, "the header must fit one record");
 
 // ONE union, never an array of one: sizeof(union hblock) is 516 and every transfer on it is

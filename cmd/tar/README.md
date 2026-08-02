@@ -8,42 +8,68 @@ and the first program on this image that can move a **tree**. Everything before 
 `register i;`, four library re-declarations of which `char *sprintf()` was a hard conflict
 with this libc's `int sprintf()`) and is not repeated here. What the port taught is below.
 
-## The first thing it did was measure, and both statements of the rule were wrong
+## The first thing it did was measure, and all three statements of the rule were wrong
 
 The tar header is a **byte layout**: name at 0, mode at 100, uid at 108, size at 124, mtime
 at 136, chksum at 148, linkflag at 156, linkname at 157. Those offsets are the format's, not
 the program's — an archive has to stay readable by every other tar — so before anything else
-this port had to know whether a `struct` here can express them. Two places in this tree said
-it could not:
+this port had to know whether a `struct` here can express them. **Three** places in this tree
+said it could not:
 
 * [../README.md](../README.md)'s C5e section: "**a `char` member of a struct takes a word of
   its own here**", from `sed`'s `struct reptr` measuring "1,131 words for 100 entries, so it
   is eleven".
 * [../mount/README.md](../mount/README.md) §2: `sizeof{char f[32]; char s[32];}` is "**72 and
   not 64**", the next member starting on a word boundary.
+* [../../doc/Besm6_Data_Representation.md](../../doc/Besm6_Data_Representation.md) §8's type
+  table: `char` with an alignment of **1w**, and §9's "every type is aligned to its own size"
+  beside it. **This is the one that mattered**, and the port missed it: it is the reference
+  `CLAUDE.md` names as authoritative and tells you to read before touching anything
+  ABI-related, and it is where a reviewer went looking after the commit.
 
-Both are false, and the measurement takes a minute:
+All three are false, and the measurement takes a minute:
 
 ```
 sizeof(struct mtab)   = 66     not 64, and not 72
 sizeof(struct flags)  = 6      five char members, packed
 sizeof(struct header) = 258    257 rounded up to a word
 sizeof(union hblock)  = 516    <-- and this one is the finding
-off mode = 100  uid = 108  gid = 116  size = 124  mtime = 136  chksum = 148  linkname = 157
+off mode = 100  uid = 108  gid = 116  size = 124  mtime = 136  chksum = 148
+off linkflag = 156   linkname = 157      <-- a scalar char member, and it is ONE BYTE
 ```
 
 **Char members pack six to a word inside a struct exactly as they do in an array.** Only the
 struct's *overall size* rounds up, `aggregate_align` being 6. So `struct header` lands on v7's
 offsets exactly and the archives interchange.
 
-The C5e claim came from **reading `b6nm`'s octal addresses as decimal**. `ptrspace` runs from
-`021645` to `022775`, which is 600 words for 100 entries — six each — and `22776 - 21645` is
-1,131 only if the digits are taken for decimal. A `struct reptr` is five pointers and five
-`char`s: 35 bytes, rounded to 36, six words. Both READMEs are corrected.
+**All three were wrong in the same direction and for the same reason, and that reason is the
+finding**: the word is real, it is just the **object's** and not the **member's**. A standalone
+`char c;` does occupy a word — `backend/besm6/frame.c` rounds every allocation up to one — and
+that is a fact about allocation which does not reach inside a struct. `get_alignment()` returns
+**1** for a `char` and, for an array, the alignment of its element, so 1 again; the target's
+`aggregate_align` of 6 seeds only the struct's *own* alignment and therefore reaches nothing but
+the **trailing** pad.
 
-**Had either been true this program would have been incompatible with every tar in the
+The C5e claim had a second cause stacked on that one: **`b6nm` prints octal**. `ptrspace` runs
+from `021645` to `022775`, which is 600 words for 100 entries — six each — and `22776 - 21645`
+is 1,131 only if the digits are taken for decimal. A `struct reptr` is five pointers and five
+`char`s: 35 bytes, rounded to 36, six words. All three documents are corrected; `doc/` §4 gained
+a `char inside a struct` subsection with the measured examples, and its §8 table now marks the
+three character rows as the only ones where the object's answer and the member's answer differ.
+
+**A corollary, because the same review asked it**: `char linkflag;` and `char linkflag[1];` are
+identical here — alignment 1, size 1, same offset, same addressing mode, the compiler stripping
+the array before it decides either. Writing the second to force an alignment the first already
+has buys nothing, and the source says so at the struct so that the next reader stops where this
+one did.
+
+**Had any of them been true this program would have been incompatible with every tar in the
 world**, and nothing in the build would have said so. That is the reason a layout claim is
-worth a minute of measurement before it is worth an hour of design.
+worth a minute of measurement before it is worth an hour of design — and the guard that keeps
+it measured is exact rather than approximate:
+`_Static_assert(sizeof(struct header) == btow(HDRBYTES) * NBPW)`, which fails the build on any
+interior padding at all. It was proved sharp by putting an `int` in front of `linkflag` and
+watching the build stop.
 
 ## The union was the finding, and it hid behind a default
 
