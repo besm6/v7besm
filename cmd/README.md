@@ -47,7 +47,8 @@ do — the ten of task C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`,
 the one of C5d (`sort/`), the one of C5e (`sed/`), the eight of C5f (`pr/`, `cal/`, `tsort/`,
 `join/`, `file/`, `diff/`, `diffh/`, `find/`) and
 the two of kernel task 29b (`getty/`, `login/`) today, plus the eight of C6
-(`who/`, `mesg/`, `write/`, `wall/`, `stty/`, `passwd/`, `su/`, `newgrp/`) and the one of C12
+(`who/`, `mesg/`, `write/`, `wall/`, `stty/`, `passwd/`, `su/`, `newgrp/`), the one of C7
+(`tar/`) and the one of C12
 (`novi/`). That is the only marker;
 [../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.
 
@@ -113,9 +114,13 @@ PDP-11 linker merging the copies into one common block. **C11 has no tentative d
 across translation units and `b6ld` has no common symbols**, so left alone each source gets
 its own storage — and for `sed` that meant the compiler compiling a script into a `ptrspace`
 the executor never looks at, with no diagnostic from anything. `extern` in the header,
-defined once in a file of its own (`sh/glob.c`, `sed/sedglob.c`). `tar`, `make`, `m4`, `awk`
-and `dc` are the five multi-file ports left and every one of them is a candidate; one line
-of `b6nm` over the finished binary is the check.
+defined once in a file of its own (`sh/glob.c`, `sed/sedglob.c`). **`make`, `m4`, `awk` and
+`dc` are the four multi-file ports left** and every one of them is a candidate; one line of
+`b6nm` over the finished binary is the check. (This said *five* and named `tar` first for
+four tasks running. `cmd/tar/` is `tar.c`, `tar.1` and a makefile — **one** source, no header
+of its own — and task C7 found that out by opening the directory. C3's rule: re-grep the
+count at the start of a task, because a warning that is false sends the work at a problem
+that is not there.)
 
 ### 2. An `int` is not a `char *` — and `<` between two of them works now
 
@@ -171,6 +176,7 @@ A count of the candidates, as they stood while the hazard was live:
 | ~~`tr.c`, `uniq.c`, `comm.c`, `tail.c`, `od.c`, `look.c`, `col.c`~~ | **none** — grepped, task C5b, and this is the *third* negative result and the one that settles the shape. Seven more text filters, 1,364 lines, and not one `char *` relational between them either. Two are worth naming because they look like counter-examples and are not: `comm.c` holds two cursors in `compare()` and reaches them by forming `lb1 - 1` and incrementing back — a pointer before its buffer, which is UB and was rewritten as an index pair, but never a *relational*; and `col.c` walks `lbuff` with a file-scope `char *line` whose every bound (`lp > cp`, `lp < cp`) compares the **column count** rather than the pointer. So the rule holds with a sharper edge: a v7 source grows a byte cursor when it parses, and a cursor is not a hazard until something ORDERS two of them |
 | ~~`cal.c`, `tsort.c`, `join.c`, `file.c`, `diff.c`, `diffh.c`, `find.c`~~ | **none** — grepped, task C5f, and it closes §2's tally at twenty-six sources. `diff.c` is the one that looks like a counter-example and is the *sibling* hazard instead: `sort()`'s CACM #201 shellsort forms `ai -= m` **below the base of its array** and detects the underflow with `aim < ai` — both `struct line *`, so both thin and both correct as comparisons, but the pointer is undefined and on a word-address machine the guard need not fire. It is `comm.c`'s `lb1 - 1` from C5b and took the same fix. `find.c`'s only pointer test is an equality |
 | ~~`icheck.c`, `dcheck.c`, `ncheck.c`, `clri.c`~~ | **none** — grepped, task C4e. The only pointer relational in the four is `ncheck.c`'s `++hp >= &htab[HSIZE]`, over a `struct htab *`, which is thin and correct; it went anyway when the hash table became one sized from the superblock and indexed by i-number. Worth recording as a *negative* result: four v7 sources full of block and inode arithmetic and not one `char *` cursor between them, because none of them parses anything |
+| `tar.c` | **four**, and counted, task C7 — `putempty`, `tomodes` and two in `checksum`, every one of them a loop over the 512 bytes of a record. All four lower correctly since the compiler's fix and none was a bug; all four are `int` indices or `memset`/`memcpy` now, for `pr`'s reason and not §2's — two of them run **twice per file archived**. First source since C5f, and the tally's twenty-eighth |
 | `novi/*.c` | **none** — grepped, task C12, and it is the twenty-seventh source and the first whose reason is *architectural* rather than a matter of what the program parses. `novi` edits text and does nothing but hold a cursor in it — and holds not one byte of it in memory. The document lives in two files, the cursor is an `off_t`, and the only pointer arithmetic in 1,565 lines was one `slash - name + 1` that the save rewrite deleted. So the sharper edge C5b put on the rule gets a third clause: a cursor is not a hazard until something orders two of them, and **there are no two of them to order when the buffer is a file** |
 
 What the table is still good for is the shape it found, which outlived the bug: **a v7 source
@@ -243,6 +249,8 @@ program in the tree whose entire output is numbers, which escaped §3's verbatim
 it uses no numeric `printf` conversion: it has its own recursive `putn()`. **Task C5f's eight
 were grepped too and came back empty as well**, which takes the tally to twenty-two sources and
 one hit; `diffh` had four `%ld`, which are harmless and are `%d` now.
+
+**And the twenty-third had one too, five tasks later.** `tar.c:554` was `printf("%7D", st->st_size)` — the whole size column of `tar tv` — in a file that spells the same quantity `%ld` two lines away, which is `grep -c`'s shape exactly. Task C7, and it takes the record to twenty-three sources and **two** hits. The prediction below still holds and has now been confirmed twice: the sources that spring the trap are the ones that print a number they did not compute themselves.
 
 **And then the fourteenth had one.** `grep.c`'s `-c` path was `printf("%D\n", tln)` — the whole
 of that flag's output, printing the two characters `%D` — in a file that spells the *same*
@@ -400,6 +408,7 @@ alone, a name out of a directory being neither NUL-terminated nor the program's 
 | `write` | 87 | 3,402 | 231 | 1,048 | **4,768** |
 | `stty` | 79 | 2,774 | 241 | 1,035 | **4,129** |
 | `mesg` | 83 | 2,665 | 171 | 1,044 | **3,963** |
+| `tar` | 131 | 6,243 | 546 | 3,578 | **10,498** |
 
 **`mount` and `umount` are the two smallest programs of task C4** and the reason is the
 mirror of `ed`'s: they carry no block buffer at all. Every other program in that task holds
@@ -426,11 +435,15 @@ danger of the first ceiling.
 
 **And `sed` is where a struct's layout had to be measured rather than derived**, which is C5c's
 rule about `fgrep`'s `MAXSIZ * sizeof` from the other end. A `struct reptr` is four `char *`, a
-one-word union, a `FILE *` and five `char` flags — seven words by the arithmetic anybody would
-do, since six chars pack into a word. `b6nm` says the array spans 1,131 words for 100 entries,
-so it is **eleven**: a `char` member of a struct takes a word of its own here. The flags could
-be one `int` and save 400 words. Nothing needed them to be, which is the point — **the number
-to check is the one the linker prints, and it is free to check.**
+one-word union, a `FILE *` and five `char` flags. **The paragraph that stood here read `b6nm`'s
+octal addresses as decimal and drew the wrong rule out of them**, and task C7 corrected it:
+`ptrspace` runs from `021645` to `022775`, which is **600** words for 100 entries and not
+1,131, so a `struct reptr` is **six** words — thirty bytes of pointers plus five of flags,
+rounded up to a word — and **a `char` member of a struct does NOT take a word of its own.**
+Char members pack six to a word inside a struct exactly as they do in an array; only the
+struct's *overall* size rounds up. The habit the paragraph was recommending survives its own
+arithmetic and is the point: **the number to check is the one the tools print, and it is free
+to check** — including when the tool prints octal.
 
 **The bottom rows say what stdio costs.** Every program above `basename` links `printf`
 and a `FILE` buffer, which is the ~1,030 words of bss and most of the text they have in common;
@@ -1513,8 +1526,9 @@ in a file both sources include; C11 has no such thing across translation units a
 common symbols, so each half would have got its own `ptrspace`, its own `respace`, its own
 `linebuf` — the compiler compiling a script into storage the executor never looks at. Not a link
 error, not one wrong command, but two programs sharing a name. `sh/defs.h` had met it in task
-C11 and nothing here had written it down as a *shape*; §1 does now. **`tar`, `make`, `m4`, `awk`
-and `dc` are the five multi-file ports left**, and one `b6nm` over the finished binary settles
+C11 and nothing here had written it down as a *shape*; §1 does now. **`make`, `m4`, `awk`
+and `dc` are the four multi-file ports left** — this used to say five and to name `tar`,
+which task C7 found is a single source — and one `b6nm` over the finished binary settles
 it in a second.
 
 **A table's size can be written down nowhere.** §11 has asked for 256 entries since C3 and C5d
@@ -1836,3 +1850,78 @@ which is also where the risk was: the gap buffer with every byte verified after 
 multi-block seeks in both directions, and the escape decoder including the Л row. **Splitting
 the program so that the untestable part is small is the answer available here**, and it was
 available only because the author had already split it that way.
+
+---
+
+## What task C7 taught
+
+**One program, and its brief was wrong twice in opposite directions.**
+[TODO.md](TODO.md)'s C7 named two things to settle — keep the 512-byte record, say in the page
+that a 100-byte name outlives `DIRSIZ` 18 — and both were right and both were small. What cost
+the task was the two claims nobody had thought to doubt.
+
+**A LAYOUT RULE THIS FILE STATED WAS WRONG, AND SO WAS `mount`'s VERSION OF IT.** §6 above used
+to say "a `char` member of a struct takes a word of its own here" and
+[mount/README.md](mount/README.md) §2 said `sizeof{char f[32]; char s[32];}` is "72 and not
+64". It is **66**: `b6cc` packs `char` members six to a word inside a struct exactly as it
+packs them in an array, and only the struct's *overall size* rounds up. The first claim came
+from **reading `b6nm`'s octal addresses as decimal** — `sed`'s `ptrspace` spans `0600` words
+for 100 entries, six each, not the 1,131 that `22776 − 21645` gives — and the paragraph then
+built a rule on the arithmetic. Both are corrected. The reason it mattered here and had not
+mattered for two tasks is that a **tar header is a byte layout the archive format fixes**: had
+either statement been true, every archive this machine wrote would have been readable by
+nothing, and no diagnostic anywhere would have said so. **A claim about layout is worth a
+minute of measurement before it is worth an hour of design**, and the measurement is a
+`printf` of four `sizeof`s under `b6sim`.
+
+**AND A CLAIM THAT SOMETHING ALREADY WORKS COSTS THE SAME MINUTE.** C7's own brief said of
+`tar cf /tmp/x` and `tar cf /dev/rmd0` that "both work today; nothing in the program needs a
+device this kernel has not got." Neither worked. The first was broken by `sizeof(union hblock)`
+being 516 and not 512, and the second broke three of `physio()`'s four conditions
+([df/README.md](df/README.md)). Of the two kinds of wrong claim, C3 recorded that the
+expensive one is the warning that is false, because it sends the work at a problem that is not
+there — C7 paid that too, `tar` having been called a multi-file port in two places for four
+tasks and being one source. But **a false all-clear is worse than a false alarm**: a false
+alarm wastes a morning and a false all-clear ships.
+
+**THE ROUNDING IS INVISIBLE UNTIL SOMETHING STRIDES ACROSS IT.** 512 is not a multiple of six,
+so a `union { char dummy[512]; ... }` is 516 char-units. One such object is harmless — every
+transfer starts at its base. An **array** of it is not: v7's `tbuf[NBLOCK]` had a 516-byte
+stride under a 512-byte-per-record transfer, and with v7's default of one record per read and
+per write only element 0 was ever touched, so the program was accidentally self-consistent and
+nothing showed. This is `mount`'s C4f finding from the union side, and it sharpens that
+paragraph's grep: not only *a byte count computed from a field width is not a struct's size*,
+but **an array of a rounded-up type indexed against a constant stride** — look for an array
+whose element is a struct or union and whose I/O length is a literal rather than `sizeof`.
+
+**A NEGATIVE THAT CANNOT DISTINGUISH IS NOT A NEGATIVE.** `kernel/test/tar` asserts that
+extraction restores the modification time by making a marker two seconds after its corpus and
+requiring `find -newer` to print **nothing**. On its own that passes for a `tar` that restores
+nothing, so the matched half runs the same extraction under `m` and requires it to print
+**everything** — and *that* half printed nothing on the first run, because the guest clock
+advances about two seconds over a whole run and the extraction landed in the same second as
+the marker. It needs a `sleep` of its own. C5d's rule about a divergence being sharp has a
+harness-side twin: **an empty result is exactly what a passing test looks like**, so a test
+whose success is an absence needs a second case whose success is a presence.
+
+**AND A PROGRAM CAN FIND A KERNEL BUG BY BEING THE FIRST TO DO SOMETHING ORDINARY.**
+`tar cf /dev/rmd1` is the first thing in this tree to **write a pack it never reads**, and
+`kernel/dev/md.c` fills its per-drive volume label from a completed *read* alone — so the pack
+came back stamped with the root's number. `kernel/test/mkfs`'s oracle was written for exactly
+this and passes only because `mkfs` probes the last block before writing the first. It is
+[../kernel/TODO.md](../kernel/TODO.md) task 37, and `run-tar.sh` asserts the **defect** in
+`fsck.sh`'s `hostblind` style so that fixing it forces the test to be tightened. **Ask what a
+new program does that no existing one does**, and point an oracle at it: here it was one
+`grep` for a volume number that already existed next door.
+
+Four smaller things, each a v7 bug fixed rather than carried:
+`%7D` again (§3's second hit in twenty-three sources, and `grep -c`'s shape exactly — a number
+the program did not compute itself); `char c = getchar()` spinning forever at EOF, which §11's
+input side predicts and which C5a's rule says to grep for **before** designing tests, since it
+turns a ctest into a hang; a 100-byte name having **no terminator** and being handed to six
+routines that read on past it; and the tail of the last record carrying the previous file's
+bytes. [tar/README.md](tar/README.md) is the long form, and its closing note is the one to
+carry into C9: the host's own program is a second implementation, but two transcriptions of
+the same **format** are a weaker relation than C4c's two transcriptions of **each other** —
+`tar` blank-pads its octal fields where a modern tar zero-pads them, both are legal, each
+reads the other, and so what can be compared is the files and not the bytes.

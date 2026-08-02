@@ -14,9 +14,10 @@ fixed and which §2 now records as history, §4 the 3072-byte block and the
 1024-byte one reported in its place, §6 the
 address-space ceilings, and so on.
 
-**Tasks C1, C2, C3 and the whole of C4, C5 and C6 are done and their writeups have been removed**;
-what each taught is README.md's fifteen closing sections. Seventy-three commands are on the image —
-sixty-two entries in `/bin`, since `[` is `test` under a second name, plus `/usr/lib/diffh`,
+**Tasks C1, C2, C3, C7 and the whole of C4, C5 and C6 are done and their writeups have been
+removed**;
+what each taught is README.md's sixteen closing sections. Seventy-four commands are on the image —
+sixty-three entries in `/bin`, since `[` is `test` under a second name, plus `/usr/lib/diffh`,
 `/etc/getty`, `/etc/quot`, `/etc/wall`,
 `/etc/mkfs`, `/etc/fsck`, `/etc/icheck`, `/etc/dcheck`, `/etc/ncheck`, `/etc/clri`,
 `/etc/mount` and `/etc/umount` beside them
@@ -179,6 +180,26 @@ give it back because `setuid(2)` moves the real id too, and between them they ma
 `lib/test/suidt` was written to reach on purpose ([passwd/README.md](passwd/README.md)).
 `kernel/test/accounts`, at volume **3098**, is where a password is set, used to log in again, and
 read back off the disk.
+**And since C7 a whole tree can leave the machine.** `tar` takes `/bin` to sixty-three entries
+and is the first program here that can move a *directory* rather than a file or a block — which
+is the one thing `dd`, `mkfs`, `fsck` and `mount` between them still could not do, and the one
+that stops a tree needing `b6fsutil` on the host to get on or off the image. Three things are
+worth naming and not one of them was in the brief. **A tar header is a byte layout the archive
+format fixes**, so the first work of the task was to measure whether a `struct` here can express
+one — and the answer contradicted what this project had written down in two places, README.md §6
+and [mount/README.md](mount/README.md) §2 both being wrong about how a `char` member packs; the
+offsets are v7's exactly, and had they not been, every archive this machine wrote would have
+been readable by nothing. **What is not safe is an ARRAY of a union**: `sizeof(union hblock)` is
+516 and not 512, so v7's `tbuf[NBLOCK]` strode four bytes further per record than the transfers
+across it — invisible at the default blocking factor of one, which is why nothing showed. And
+**this file's own claim that `tar cf /dev/rmd0` worked already was wrong**: a raw archive breaks
+three of `physio()`'s four conditions, so the blocking factor on a character special must be a
+multiple of six and `r` is refused there outright ([tar/README.md](tar/README.md)).
+`kernel/test/tar`, at volume **3099** with a scratch pack at **3100**, walks a tree, extracts it
+through the setuid `/bin/mkdir`, proves with `find -newer` that the modification times came back,
+and then writes the archive onto the bare `/dev/rmd1` for the host's own `tar` to read off the
+pack. It also found a kernel bug: `tar` is the first program here to write a pack it never reads,
+and [../kernel/TODO.md](../kernel/TODO.md) task 37 is the result.
 [../etc/rc](../etc/rc) is a boot script that does something: it prints the motd and then the
 date, which is a literal to the minute because the boot clock is the image's own `-T` stamp,
 and `kernel/test/console` asserts both. What it
@@ -218,7 +239,6 @@ compiles.
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C7 | `tar` | getting data on and off without `b6fsutil` | medium |
 | C8 | inspection — `ps` `dmesg` `pstat` `iostat` `nice`, `ac` `sa` `accton` | seeing what the machine is doing | medium; needs `nlist(3)` |
 | C9 | self-hosting — native `cpp`, `as`, `ld`, the binutils, `cc` | building the system on itself | large |
 | C10 | the rest of the manual — `make` `m4` `awk` `bc` `dc` `expr` `egrep` `units` `crypt` `at` `cron` `calendar` `update` `mail` | a system worth using | open-ended |
@@ -229,8 +249,7 @@ under *Where to start* below: twenty-four programs, 511 `ctest -L cmd` cases and
 label still under seven seconds is what the HARNESS cost, and it is the number to quote when
 budgeting a test suite. What the ports cost is twenty-one findings, several of them a day
 apiece, and not one of them is in a line count.
-C7 is one program and can be taken at any time; C8 and C9 are each gated on something the
-task names.
+C8 and C9 are each gated on something the task names.
 
 **Two loose ends C6 leaves behind, both about the terminal and both one line each.**
 `TANDEM` is honoured by the kernel — `ttyblock()` queues the stop character when the input queue
@@ -241,29 +260,6 @@ can set it**: v7's `stty` had no word for it and the port added none, the cut in
 and **nothing in the kernel ever tests either bit**, so an exclusive-open request and a
 hang-up-on-last-close request are both silently ignored. Neither is worth a task of its own;
 both are worth knowing before somebody reports them as bugs.
-
----
-
-## C7. `tar`
-
-**One program.** `tar/` is a single 935-line source, and the reason it is worth having is not
-tape: it is that a `tar` on the machine is how a tree gets moved between the BESM-6 and a
-host-built image **without** `b6fsutil` — `tar cf /tmp/x`, or straight onto a raw disk device with
-`tar cf /dev/rmd0`. Both work today; nothing in the program needs a device this kernel has not
-got.
-
-Two things to settle while porting it:
-
-* **The block size.** `tar` writes 512-byte records in 20-record blocks by definition of the
-  format, and that is the *archive's* unit, not the filesystem's — §4 does not apply, and changing
-  it would make the archives unreadable anywhere else. Keep 512, and let `TBLOCK`/`NBLOCK` stand.
-* **`DIRSIZ` is 18 but a `tar` header name field is 100 bytes**, so names survive the round trip
-  in one direction only. Say so in the manual page rather than discovering it on a restore.
-
-The tape half of v7's archiving — `tp`, `dump`, `restor`, `dumpdir` — is **not in this plan**; see
-the exclusion table.
-
-**Size.** Medium, and unblocked.
 
 ---
 
@@ -432,18 +428,34 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 
 ## Where to start
 
-**C7.** `tar` is one unblocked program and can be taken at any time, and it is now the only
-task in the table that is gated on nothing. C8 and C9 are each gated on something their own
-section names, and C10 is open-ended by construction.
+**C8's `nice`, or C10's `expr`.** Nothing in the table is unblocked whole any more: C8 waits on
+`nlist(3)`, C9's first three fifths on a foreign repository, and C10 on the `yacc` decision its
+own section names. `nice.c` (28 lines) is the one piece of C8 that is independent of `nlist` and
+can be taken on its own at any time.
 
-**Read C7's section for the two things to settle while porting it**, and add a third from C5f's
-closing list, which C6 did not have to pay and `tar` will: **`b6_obj`'s header dependency is the
-system header tree**, so a program whose own constants live in a header of its own has no
-dependency on that header and editing it rebuilds nothing. `tar` is single-file and so escapes
-that, but it is the first of the five C5f named — `tar`, `make`, `m4`, `awk`, `dc` — to come up.
-And **check which harness it lands in before designing its cases**, not after: C5f's brief said to
-do that for `ps` and `tar` both, and C6 is the task that shows what it costs to get wrong, having
-turned out to have no `b6sim` half at all.
+**Task C7 is closed and cost two false claims, both of them in briefs rather than in code.**
+The section that stood here named two things to settle and both were right and small; what the
+task actually paid for was a **layout rule this project had written down wrong in two places**
+and a **claim in this very file that a path already worked**. [README.md](README.md)'s C7
+section is the long form and [tar/README.md](tar/README.md) the detail. Three things to carry:
+
+* **A claim about struct layout is worth a `printf` of four `sizeof`s before it is worth an
+  hour of design.** §6 said a `char` member of a struct takes a word of its own and
+  [mount/README.md](mount/README.md) §2 said `sizeof{char f[32]; char s[32];}` is 72. Both are
+  wrong — it is 66, chars pack six to a word inside a struct — and the first came from reading
+  `b6nm`'s **octal** addresses as decimal. A tar header is a byte layout the format fixes, so
+  either claim being true would have made every archive this machine writes readable by
+  nothing, silently.
+* **A false all-clear is worse than a false alarm.** C3 recorded that a warning which is false
+  is the expensive kind, because it sends the work at a problem that is not there; C7 paid that
+  (`tar` was called a multi-file port here and in README.md §1, and is one source) and paid the
+  other kind too. This file said `tar cf /dev/rmd0` worked already. It broke three of
+  `physio()`'s four conditions. A false alarm wastes a morning; a false all-clear ships.
+* **Ask what a new program does that no existing one does, and point an oracle at it.**
+  `tar cf /dev/rmd1` is the first thing here to write a pack it never reads, which is how it
+  found [../kernel/TODO.md](../kernel/TODO.md) task 37 — `mdvol[]` filled from a read alone, so
+  a written pack is stamped with another drive's label. The oracle that caught it already
+  existed next door in `run-mkfs.sh`.
 
 **Task C12 is closed and is the one task in this file that was not a port**, and the reason it
 is worth reading before starting another is that it says which half of the recipe does the work.
@@ -523,10 +535,14 @@ admits before writing a case.
 ([README.md](README.md) §9) and has one whole program on the wrong side of it. `find` has **no
 `b6sim` half at all** — it reads directory descriptors, `popen`s `pwd` and `fork`/`exec`s — so
 `cmd/find/` has no `test/` directory and `kernel/test/filters` §18 is the only word on it.
-`mount`/`umount` were the first such program and this is the second; `ps` (C8) and `tar` (C7)
-should both be checked for it **before** their cases are designed rather than after.
+`mount`/`umount` were the first such program and this is the second. **`tar` was checked for it
+before its cases were designed, as this paragraph asked, and came out on the good side**: it
+reads directories too, but only on the `c` path, so `t`, `x`, `r` and every bound and diagnostic
+have a `b6sim` half and only the tree walk needed a boot. `ps` (C8) is the one still to check.
 
 **The booted pass is where a later program joins rather than boots.** `kernel/test/filters`
 runs twenty-four programs at volume **3097**, masks nothing, and takes about ten seconds. Adding
-a section to `filters.sh` costs nothing; a boot of its own costs two minutes and a volume number.
-**3098 is still free.**
+a section to `filters.sh` costs nothing; a boot of its own costs two minutes and a volume number
+— which task C7 spent, `tar` needing a **second drive** that `filters.ini` does not attach.
+`accounts` took 3098 and `tar` 3099 with a scratch pack at 3100, so **3101 is the next free
+volume.**

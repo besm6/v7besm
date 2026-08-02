@@ -298,6 +298,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/sum
     ${B6_ROOTFS}/bin/sync
     ${B6_ROOTFS}/bin/tail
+    ${B6_ROOTFS}/bin/tar
     ${B6_ROOTFS}/bin/tee
     ${B6_ROOTFS}/bin/test
     ${B6_ROOTFS}/bin/time
@@ -755,6 +756,31 @@ if(BESM6)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(mkfs PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
+    # tar -- ARCHIVING A TREE, on two volumes (3099 root, 3100 scratch).  Task C7, and the
+    # only place in this tree where a directory is walked at all.  The eleven cmd_tar_* cases
+    # next door settle the header layout, the record arithmetic, the blocking factor and both
+    # directions of interchange with the host's tar under b6sim in under a second; four things
+    # are left over and every one of them needs a kernel.
+    #
+    #   * THE TREE WALK.  b6sim refuses to read a directory descriptor -- ls(1)'s, du(1)'s and
+    #     find(1)'s limit -- so `tar c' of a DIRECTORY runs here and nowhere else.
+    #   * checkdir()'s exec of the setuid-root /bin/mkdir, which is how a non-root tar gets a
+    #     directory on a system with no mkdir(2).
+    #   * The owner, mode and MTIME an extraction restores -- asserted off the finished image
+    #     with `b6fsutil -v -v' (C1's rule) and, for the time, with find(1) -newer against a
+    #     marker the script makes two seconds after its corpus.  The `m' key is the matched
+    #     negative, without which the mtime section would pass on a tar that restored nothing.
+    #   * /dev/rmd1.  tar writes the archive onto the BARE pack -- no filesystem on it at all,
+    #     which is what makes this different from mkfs's use of the same drive -- so
+    #     run-tar.sh converts the container and reads the archive off it with the HOST's own
+    #     tar.  ../../cmd/TODO.md said `tar cf /dev/rmd0' worked already; it broke three of
+    #     physio()'s four conditions, and this is what it takes to know.
+    add_test(NAME tar
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-tar.sh
+                ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(tar PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
+
     # fsck -- REPAIRING A FILESYSTEM OVER THE RAW DEVICE, on two volumes (3091 root, 3092
     # scratch).  Task C4d, and the top of the C4 ladder: fsinfo reads the device, dd moves
     # bulk data through it, mkfs writes a filesystem onto a pack of its own, and this one
@@ -992,7 +1018,7 @@ if(BESM6)
     # one place.  The libtest_* diffs cost milliseconds each, but they adjudicate output
     # only libtest_run can produce, so they follow it.
     b6_weekly(console_setup console session files utils filters edit fsinfo dd mkfs fsck accounts
-              mount login multi swap libtest_run libtest_fsck)
+              mount tar login multi swap libtest_run libtest_fsck)
     foreach(_p ${B6_LIBTEST_IMAGE})
         b6_weekly(libtest_${_p})
     endforeach()

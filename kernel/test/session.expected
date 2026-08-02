@@ -50,6 +50,7 @@ su
 sum
 sync
 tail
+tar
 tee
 test
 time

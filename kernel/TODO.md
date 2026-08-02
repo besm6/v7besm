@@ -25,6 +25,7 @@ numbering is **left as it was** — task numbers are cited from the sources and 
 | 34 | the `int` ↔ pointer audit | open-ended |
 | 35 | the guest's timing is not reproducible — the dropped `send` character, and the disabled `console` and `edit` tests | small to measure, unknown to fix |
 | 36 | the shifting copy: the half of the byte path task 28 could not reach | medium, high risk |
+| 37 | `mdvol[]` is filled only by a READ, so a pack that is only ever written is stamped with another drive's label | small |
 
 ---
 
@@ -327,3 +328,57 @@ that made it bite. So this task's bite test is written; what a new implementatio
 
 **Size.** Medium for (1), and higher risk than it looks — this is the same routine that produced
 one silent data-corruption bug already, and the reason `umem` exists.
+
+
+---
+
+## 37. `mdvol[]` is filled only by a read
+
+**Where.** `mdvol[]` in [dev/md.c](dev/md.c) — filled at `md.c:552` inside
+`if (bp->b_flags & B_READ)`, stamped into the sector header at `md.c:385` and `md.c:391`
+inside `if ((bp->b_flags & B_READ) == 0)`.
+
+**What is wrong.** The service-word buffer is the **controller's**, so the volume mark a write
+puts on the platter has to come from somewhere the driver keeps **per drive** — which is what
+`mdvol[]` is for, and the comment above it says so. But it is filled from a completed *read*
+and from nothing else, and `0` is treated as "not seen yet" and left alone:
+
+```c
+if (mdvol[dev] != 0)
+    sys[track * MDSYSHALF + 1] = mdvol[dev];
+```
+
+Leaving it alone does not leave the header blank. It leaves whatever the **last read of any
+drive on that controller** put in the controller's buffer. So a pack that is written without
+ever being read is stamped with **another drive's volume number**.
+
+**How it was found, and why not before.** Task C7. `tar cf /dev/rmd1` is the first program in
+this tree that writes a pack it never reads: `mkfs` reads the last block before writing the
+first (its own end-of-volume probe), `fsck` reads everything it repairs, and `dd` is pointed at
+a device the caller has usually just read. `kernel/test/mkfs`'s oracle 1 was written for exactly
+this class of defect and passes only because of that probe. `kernel/test/tar` reproduces it in
+one line:
+
+```
+attach -n md01 scratch3100.disk      # SIMH formats it, volume 3100 throughout
+tar cfb /dev/rmd1 6 tree             # writes from block 0, never reads
+b6fsutil -S scratch3100.disk out     # "scratch3100.disk: volume 3099 -> out (flat)"
+```
+
+3099 is the **root** pack's number, off drive 0.
+
+**What it costs today.** Nothing that has been noticed: `b6fsutil`'s `from_simh()` validates the
+magic *mark* and the per-half-zone self-address, and both are right — only the volume *number*
+beside the mark is another pack's. A container written this way converts, fscks and boots. What
+it breaks is the one thing the number is for: telling two packs apart.
+
+**How to fix it.** Either read the label before the first write to a drive (`mdopen()` is the
+obvious place, and it currently does nothing but bound the minor), or carry the number the way
+SIMH does and take it from the drive rather than the controller. The first is smaller and needs
+no new state; it costs one exchange per open of a drive that has not been read.
+
+**What is asserted meanwhile.** `kernel/test/run-tar.sh` requires the **wrong** number and says
+why, in `kernel/test/fsck.sh`'s `hostblind` style: the day this is fixed that check fails and
+has to be tightened to 3100, which is what stops the deferral being forgotten.
+
+**Size.** Small.

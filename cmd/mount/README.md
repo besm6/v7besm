@@ -48,12 +48,22 @@ struct mtab { char file[32]; char spec[32]; } mtab[16];
 write(mf, (char *)mtab, (mp - mtab + 1) * 2 * NAMSIZ);
 ```
 
-A `char[32]` occupies ⌈32/6⌉ = 6 words = **36** char-units here, and the next member starts
-on a word boundary, so `sizeof(struct mtab)` is **72 and not 64**. v7's own expression writes
-64-byte records out of 72-byte objects: every entry after the first is read back eight bytes
-out of step, and `mount` with no argument prints rubbish. Nothing about the source looks
-wrong, and no compiler diagnostic exists for it — `2 * NAMSIZ` is simply a different number
-from `sizeof(struct mtab)` on this machine and the same number on a PDP-11.
+`sizeof(struct mtab)` is **66 and not 64**. v7's own expression writes 64-byte records out of
+66-byte objects: every entry after the first is read back two bytes out of step, and `mount`
+with no argument prints rubbish. Nothing about the source looks wrong, and no compiler
+diagnostic exists for it — `2 * NAMSIZ` is simply a different number from
+`sizeof(struct mtab)` on this machine and the same number on a PDP-11.
+
+**This paragraph used to say 72, and the reasoning under it was wrong** — it claimed a member
+after a `char[32]` starts on a word boundary. It does not: `b6cc` packs `char` members
+**byte-granularly** inside a struct exactly as it packs them in an array, and only the
+struct's *overall size* rounds up to a word (`aggregate_align` is 6). So the two fields lie at
+0 and 32, the total is 64, and 64 rounds to 66. Task C7 measured it, because a `tar` header is
+a byte layout the archive format fixes and the answer decided whether a `struct` could express
+one at all; [../tar/README.md](../tar/README.md) is the measurement and
+[../README.md](../README.md)'s C7 section the general form. **The finding here survives the
+correction unchanged** — the arithmetic differs by six bytes and the bug is the same bug —
+which is worth saying, because it is why nobody caught the wrong number for a task and a half.
 
 The generalisation is the one worth keeping: **a byte count computed from a field width is
 not a struct's size here**, and any v7 source that `read`s or `write`s a struct is making

@@ -1,0 +1,2 @@
+tar: no archive named -- f is not optional here
+tar: usage: tar {crtx}[vwlm]f archive [b factor] [name ...]

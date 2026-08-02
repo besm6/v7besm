@@ -503,6 +503,19 @@ file /bin/tail          # cmd/tail -- task C5b.  `-b' counts BSIZE here, not the
 source ../../rootfs/bin/tail
 mode 0755
 
+file /bin/tar           # cmd/tar -- task C7, and the first thing here that moves a TREE.
+                        # `f' is MANDATORY: v7 defaulted to /dev/mt1 and this machine has no
+                        # tape, and the digits 0-7 that picked a drive are gone with it -- a
+                        # default that could name /dev/rmd0, the pack the system is running
+                        # on, is not one worth having.  `u' is gone too: its index needed awk.
+                        # An archive on /dev/rmd? obeys physio()'s four rules, so the
+                        # blocking factor there must be a multiple of 6 (6 * 512 == BSIZE)
+                        # and `r' is refused, a raw device having no backspace.  NOT setuid;
+                        # it execs the setuid /bin/mkdir to make a directory on extraction,
+                        # this system having no mkdir(2).  cmd/tar/README.md is the account.
+source ../../rootfs/bin/tar
+mode 0755
+
 file /bin/test          # cmd/test -- what lets a shell script branch; see /bin/[ below
 source ../../rootfs/bin/test
 mode 0755
