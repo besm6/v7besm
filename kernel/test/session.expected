@@ -32,6 +32,7 @@ mesg
 mkdir
 mv
 newgrp
+novi
 od
 passwd
 pr

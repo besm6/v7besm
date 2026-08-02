@@ -406,6 +406,16 @@ file /bin/mesg          # cmd/mesg -- task C6.  NOT setuid: chmod(2) is gated on
 source ../../rootfs/bin/mesg
 mode 0755
 
+file /bin/novi          # cmd/novi -- Dave W Plummer's full-screen editor; task C12, and the
+                        # first program here that is not a port of a v7 command.  Its document
+                        # is never in memory: two unlinked /tmp files hold it with a gap at
+                        # the cursor,
+                        # and a third is the cut buffer.  NOT setuid -- it reads and writes
+                        # as its caller.  Wants an ANSI terminal; the Consul is one only
+                        # because SIMH's line is raw8 and passes the escapes through.
+source ../../rootfs/bin/novi
+mode 0755
+
 file /bin/od            # cmd/od -- task C5b.  -o/-d/-x go on meaning THE MACHINE WORD, which
                         # is 48 bits here: 16 octal digits, 15 decimal, 12 hex.  -w is a
                         # second name for -o.  Bytes pack most significant first, as getw(3).

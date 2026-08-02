@@ -224,6 +224,18 @@ the transcript and the by-hand command, and note what disabling this one costs t
 `console` did not — `edit` is a *script*, so the three host-side oracles at the end of
 `run-edit.sh` go with it, the fsck and the two `cmp`s against `/etc/motd`.
 
+**A third test is now waiting on this one without ever having been written.** Task C12 put a
+full-screen editor on the image (`/bin/novi`, [../cmd/novi/README.md](../cmd/novi/README.md)),
+and its interactive half is deliberately untested: a typed dialogue driving it would be
+strictly worse than `edit`'s, because `novi`'s output is escape sequences with embedded cursor
+coordinates on an alternate screen rather than readable text, and its input is multi-byte
+arrow keys — so a stray or missing byte would be neither diagnosable nor, in a transcript,
+even visible. **A third test born disabled asserts nothing**, so it was not written, and it
+goes in with the re-enabling of `console` and `edit` rather than beside them. What that test
+would cover and nothing else does: `refresh()`'s screen model, the key bindings, and RAW mode
+driven from user code for the second time on this machine after `getty`. Until then `novi`'s
+gap buffer and escape decoder are asserted under `b6sim` and the screen itself is not.
+
 **Why it went unnoticed for so long is worth its own sentence**, because it is the more useful
 finding: `console.ini`'s last rule was a bare `expect "# "`. All SIMH rules are armed at once, so a
 stalled stage simply fell through to it at the next prompt and the test printed PASS — it had been

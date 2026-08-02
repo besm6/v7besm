@@ -382,6 +382,33 @@ decision before either is started, not during.
 
 ---
 
+## C12. What `novi` left open
+
+The editor itself is done and on the image — [novi/README.md](novi/README.md) is the account,
+and [README.md](README.md)'s C12 section what it taught. **Not a v7 command**, which is why it
+is not in C10's table. Three things outstanding:
+
+**The interactive test, and it is blocked on something else.** A typed console dialogue driving
+the screen is not written, on purpose: `kernel/test/edit` and `kernel/test/console` are both
+DISABLED for the `send` wobble of [../kernel/TODO.md](../kernel/TODO.md) task 35, and a `novi`
+dialogue would be strictly worse than `edit`'s — its output is escape sequences with embedded
+cursor coordinates on an alternate screen, not readable text. **It goes in with the re-enabling
+of those two, not before.** What is asserted meanwhile is the two halves that need no terminal,
+which is where the risk of the port was: the disk-backed gap buffer (`cmd_novibuft_buffer`) and
+the escape decoder (`cmd_novikeyt_keys`).
+
+**No `termcap`.** `novi` writes hard-coded ANSI, so a terminal that is not ANSI cannot use it.
+The blocker is `b6_prog()`'s missing `LIBS` keyword, which
+[../lib/libcurses/README.md](../lib/libcurses/README.md) has predicted since the library landed
+and which nothing has needed yet — `novi` is the first program that *would* want it and the
+first that gets by without it.
+
+**The search is literal.** `ed`'s regex engine is next door and is 700 lines of it; whether
+`novi` should carry a second copy or the two should share one is the question to settle before
+starting, not during.
+
+---
+
 ## Not ported, and why
 
 Each row is a decision that can be re-examined; the line count is there so it can be.
@@ -417,6 +444,19 @@ that, but it is the first of the five C5f named — `tar`, `make`, `m4`, `awk`, 
 And **check which harness it lands in before designing its cases**, not after: C5f's brief said to
 do that for `ps` and `tar` both, and C6 is the task that shows what it costs to get wrong, having
 turned out to have no `b6sim` half at all.
+
+**Task C12 is closed and is the one task in this file that was not a port**, and the reason it
+is worth reading before starting another is that it says which half of the recipe does the work.
+Five of the eleven points came back empty on a source that had never seen v7; what was left was
+**four kernel primitives that do not exist**, and not one of them wanted a substitute — the thing
+that wanted them was wrong, or was better off without them. `creat(2)` preserves for free the
+inode, owner and mode that a temp-file-and-rename save exists to fake. Also: **§11 has an input
+side** — a byte above `0177` given a meaning of the program's own is a hazard whichever way it is
+travelling, and the input side is harder to spot, the symptom being a lost keystroke rather than
+mangled output. And **a syscall count can be a correctness-shaped problem**: `novi`'s gap moved a
+byte at a time, four traps each, so one PgDn was six thousand of them. Work that out from the
+source before deciding a port is mechanical. [README.md](README.md)'s C12 section is the long form
+and [novi/README.md](novi/README.md) the detail.
 
 **Task C6 is closed and cost four findings, none of them a line count** — the eight ports took
 an afternoon and everything around them took the rest. A declaration four files carried is a

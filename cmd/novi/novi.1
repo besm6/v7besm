@@ -1,0 +1,189 @@
+.\" novi is by Dave W Plummer, written for 2.11BSD on a split-I/D PDP-11:
+.\"     https://x.com/davepl1968/status/2080867382105710812
+.\" This page is new: novi is not a v7 command, so there was none to correct.
+.\" See README.md beside this file for what the port to this machine changed.
+.\" It names Cyrillic letters, so read it with `nroff -Kutf8 -man novi.1'.
+.TH NOVI 1
+.SH NAME
+novi \- full-screen text editor
+.SH SYNOPSIS
+.B novi
+[
+file
+]
+.SH DESCRIPTION
+.I Novi
+edits
+.I file
+on the screen: the text is displayed, the cursor is moved over it with the arrow keys, and
+what is typed appears where the cursor is.  If
+.I file
+does not exist it is created when the buffer is written; with no argument the buffer starts
+empty and
+.B ^O
+asks for a name.
+.PP
+The commands are control characters, and the two lines at the foot of the screen list the
+common ones.  The line above them shows messages and asks questions.  The line at the top
+shows the file name, whether the buffer has been changed, and whether typing inserts
+.RB ( [INS] )
+or replaces
+.RB ( [OVR] ).
+.PP
+Cursor motion:
+.PP
+.PD 0
+.TP 16
+arrow keys
+one character or one line
+.TP
+.B ^B \ ^F
+left, right
+.TP
+.B ^P \ ^N
+up, down
+.TP
+.B ^A \ ^E
+start, end of line
+.TP
+Home, End
+the same
+.TP
+.B ^Y \ ^V
+one screenful up, down
+.TP
+PgUp, PgDn
+the same
+.PD
+.PP
+Changing the text:
+.PP
+.PD 0
+.TP 16
+.B ^D
+delete the character under the cursor; Del does the same
+.TP
+.B ^H
+delete the character before it; the erase key does the same
+.TP
+Ins
+switch between inserting and replacing
+.TP
+.B ^K
+cut from the cursor to the end of the line.  Struck again with nothing in between, it adds
+the next line to what was already cut instead of replacing it
+.TP
+.B ^U
+insert everything
+.B ^K
+has cut
+.TP
+.B ^R
+insert a file at the cursor
+.PD
+.PP
+Everything else:
+.PP
+.PD 0
+.TP 16
+.B ^G
+a page describing these keys
+.TP
+.B ^O
+write the buffer out.  The current name is offered and may be edited
+.TP
+.B ^W
+search forward for a string, wrapping round the end of the buffer
+.TP
+.B ^C
+report the line, the column and the character position
+.TP
+.B ^X
+leave.  A changed buffer is asked about first
+.PD
+.PP
+When
+.I novi
+asks a question, printable characters answer it, the erase key rubs one out, a newline
+accepts and
+.B ^C
+or ESC cancels.
+.PP
+Tabs are shown as spaces to the next eighth column.  Other control characters are shown as
+.BR ? .
+Text is treated as UTF\-8 throughout: a Cyrillic letter is two bytes and one column, and
+may be typed into the buffer, into a file name and into a search string alike.
+.SH "THE TERMINAL"
+.I Novi
+writes ANSI/VT100 escape sequences and reads them back from the arrow and function keys.
+It consults no terminal database:
+.IR termcap (5)
+is not read and
+.B $TERM
+is not looked at.  The console this system boots on is a Consul\-254 typewriter, which is a
+suitable terminal only because the simulator's line is
+.I raw8
+and passes the escapes through to whatever is at the far end.
+.PP
+There is no window-size call in this kernel, so the screen is taken to be 24 lines of 80
+columns unless
+.B $LINES
+and
+.B $COLUMNS
+say otherwise.
+.PP
+While
+.I novi
+runs, the terminal is in RAW mode with echo off.
+.SH FILES
+.PD 0
+.TP 20
+/tmp/noviL*
+the text before the cursor
+.TP
+/tmp/noviR*
+the text after it, stored in reverse
+.TP
+/tmp/noviC*
+what
+.B ^K
+has cut
+.PD
+.PP
+All three are unlinked as soon as they are opened, so they disappear when
+.I novi
+does, however it goes.  The document is never held in memory; the two halves together take
+at most twice the size of the file being edited.
+.SH DIAGNOSTICS
+.I Novi
+refuses a file name longer than 255 characters, and says so if the terminal or the scratch
+files cannot be set up.  Everything else is reported on the message line and the editor
+carries on.
+.SH AUTHOR
+Dave W Plummer.
+This page and the port to this machine are not his.
+.SH BUGS
+.B ^O
+writes the file in place with
+.IR creat (2),
+so a write that fails part of the way through leaves the file truncated.  There is no
+.IR rename (2)
+on this system to make the replacement atomic;
+.IR ed (1)'s
+.B w
+has the same exposure.
+.PP
+A
+.I novi
+killed by a signal it cannot catch leaves the terminal in RAW mode with echo off.
+.IR Stty (1)
+is the way back.
+.PP
+A lone ESC is not acted on until another key is struck, there being no way to time out a
+read.
+.PP
+The interactive part of
+.I novi
+has no automated test.  See README.md beside the source.
+.SH "SEE ALSO"
+ed(1), stty(1)

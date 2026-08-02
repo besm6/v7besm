@@ -30,6 +30,12 @@ They came from v7's own tree, [tmp/v7x86-0.8a/usr/src/cmd/](tmp/v7x86-0.8a/usr/s
 single-file programs and 29 directories of larger ones. That tree is **not in the repository**:
 `tmp/` is git-ignored, and it is an unpacked reference copy.
 
+**One directory here is not from that tree at all.** [novi/](novi/) is Dave W Plummer's
+full-screen editor, written for 2.11BSD on a split-I/D PDP-11, and it is the only program under
+`cmd/` with no v7 original behind it. Task C12, and worth reading for what that changed: five of
+the eleven points below came back empty, because they are about a 1979 dialect, and the whole of
+the work was in the half that is about this machine.
+
 **A directory is part of the build when it holds a `CMakeLists.txt`**, and only the ported ones
 do — the ten of task C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`, `mv/`, `rm/`,
 `rmdir/`, `touch/`), the three of C2a (`date/`, `kill/`, `sleep/`), the five of C2b
@@ -40,7 +46,9 @@ do — the ten of task C1 (`chgrp/`, `chmod/`, `chown/`, `cp/`, `ln/`, `mkdir/`,
 (`tr/`, `uniq/`, `comm/`, `tail/`, `od/`, `look/`, `col/`), the two of C5c (`grep/`, `fgrep/`),
 the one of C5d (`sort/`), the one of C5e (`sed/`), the eight of C5f (`pr/`, `cal/`, `tsort/`,
 `join/`, `file/`, `diff/`, `diffh/`, `find/`) and
-the two of kernel task 29b (`getty/`, `login/`) today. That is the only marker;
+the two of kernel task 29b (`getty/`, `login/`) today, plus the eight of C6
+(`who/`, `mesg/`, `write/`, `wall/`, `stty/`, `passwd/`, `su/`, `newgrp/`) and the one of C12
+(`novi/`). That is the only marker;
 [../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.
 
 Four things about the copies:
@@ -163,6 +171,7 @@ A count of the candidates, as they stood while the hazard was live:
 | ~~`tr.c`, `uniq.c`, `comm.c`, `tail.c`, `od.c`, `look.c`, `col.c`~~ | **none** — grepped, task C5b, and this is the *third* negative result and the one that settles the shape. Seven more text filters, 1,364 lines, and not one `char *` relational between them either. Two are worth naming because they look like counter-examples and are not: `comm.c` holds two cursors in `compare()` and reaches them by forming `lb1 - 1` and incrementing back — a pointer before its buffer, which is UB and was rewritten as an index pair, but never a *relational*; and `col.c` walks `lbuff` with a file-scope `char *line` whose every bound (`lp > cp`, `lp < cp`) compares the **column count** rather than the pointer. So the rule holds with a sharper edge: a v7 source grows a byte cursor when it parses, and a cursor is not a hazard until something ORDERS two of them |
 | ~~`cal.c`, `tsort.c`, `join.c`, `file.c`, `diff.c`, `diffh.c`, `find.c`~~ | **none** — grepped, task C5f, and it closes §2's tally at twenty-six sources. `diff.c` is the one that looks like a counter-example and is the *sibling* hazard instead: `sort()`'s CACM #201 shellsort forms `ai -= m` **below the base of its array** and detects the underflow with `aim < ai` — both `struct line *`, so both thin and both correct as comparisons, but the pointer is undefined and on a word-address machine the guard need not fire. It is `comm.c`'s `lb1 - 1` from C5b and took the same fix. `find.c`'s only pointer test is an equality |
 | ~~`icheck.c`, `dcheck.c`, `ncheck.c`, `clri.c`~~ | **none** — grepped, task C4e. The only pointer relational in the four is `ncheck.c`'s `++hp >= &htab[HSIZE]`, over a `struct htab *`, which is thin and correct; it went anyway when the hash table became one sized from the superblock and indexed by i-number. Worth recording as a *negative* result: four v7 sources full of block and inode arithmetic and not one `char *` cursor between them, because none of them parses anything |
+| `novi/*.c` | **none** — grepped, task C12, and it is the twenty-seventh source and the first whose reason is *architectural* rather than a matter of what the program parses. `novi` edits text and does nothing but hold a cursor in it — and holds not one byte of it in memory. The document lives in two files, the cursor is an `off_t`, and the only pointer arithmetic in 1,565 lines was one `slash - name + 1` that the save rewrite deleted. So the sharper edge C5b put on the rule gets a third clause: a cursor is not a hazard until something orders two of them, and **there are no two of them to order when the buffer is a file** |
 
 What the table is still good for is the shape it found, which outlived the bug: **a v7 source
 grows byte cursors when it parses, not when it reads bytes.** `sort`, `grep`, `sed` and `pr`
@@ -383,6 +392,7 @@ alone, a name out of a directory being neither NUL-terminated nor the program's 
 | `tr` | 43 | 1,588 | 152 | 1,169 | **2,952** |
 | `getty` | 34 | 361 | 28 | 11 | **434** |
 | `passwd` | 97 | 4,762 | 419 | 1,401 | **6,679** |
+| `novi` | 133 | 6,046 | 511 | 1,683 | **8,373** |
 | `newgrp` | 92 | 4,346 | 508 | 1,496 | **6,442** |
 | `su` | 90 | 4,141 | 338 | 1,305 | **5,874** |
 | `wall` | 85 | 3,159 | 183 | 1,742 | **5,169** |
@@ -1744,3 +1754,85 @@ that neither program chose is a **mode**: `/tmp/before` and `/tmp/after` come ba
 0644, because `cmd/sh`'s `>` creates with 0666 and `cmd/login` does `umask(02)` for every session.
 Both facts are in `run-accounts.sh`'s header, where the next person to read a diff of that file
 will be looking.
+
+---
+
+## What task C12 taught
+
+**`novi` is Dave W Plummer's**, written for 2.11BSD on a split-I/D PDP-11
+([the announcement](https://x.com/davepl1968/status/2080867382105710812)), and it is **the
+first program in this directory that is not a port of a v7 command**. That turned out to
+change the shape of the work rather than merely its provenance, and the four findings are
+each about a different half of the recipe above. [novi/README.md](novi/README.md) is the long
+form.
+
+**THE ELEVEN POINTS ASSUME A v7 SOURCE, AND FIVE OF THEM CAME BACK EMPTY.** §1's C11 pass
+found nothing — the sources were already ANSI, with prototypes and `void` parameter lists.
+§2 found nothing, §3 found nothing, §5 (`BSIZE`) and §6 (`DIRSIZ`) had nothing to say to a
+program that reads bytes. What was left was §11, twice, and **four kernel primitives that do
+not exist** — which is not a category the recipe has, because a v7 program by construction
+asks only for what v7 had. The general statement: **the recipe's first half is about a
+1979 dialect and its second half is about this machine, and a source from outside pays only
+the second half — with interest.**
+
+**A MISSING PRIMITIVE IS A QUESTION ABOUT THE DESIGN, NOT A REQUEST FOR A SUBSTITUTE.** Four
+of them, and not one needed a stand-in:
+
+* **`ftruncate(2)` was deleted.** It shortened a scratch file after popping its last byte,
+  and nothing read that file's physical length — the program tracked its own. **A program
+  that already knows where its data ends does not need the filesystem to know too.** The
+  file simply never shrinks, bounded by its own high-water mark.
+* **`rename(3)` and `fchmod(2)` were designed away together, and the result is better than
+  what it replaced.** `buf_save()` wrote a temp sibling, `fchmod`'d it to the original's
+  mode and renamed it over the original; here `rename` is `link()+unlink()`
+  ([../lib/libc/stdio/rename.c](../lib/libc/stdio/rename.c)) and `link` refuses a
+  destination that exists — every save but the first. The replacement is `ed`'s: **`creat(2)`
+  on an existing file truncates it in place and ignores the mode argument, so the inode, the
+  owner, the permissions and every hard link survive** — which is exactly what the
+  `stat`/`fchmod` pair existed to fake. It cost atomicity, which is in the manual page's
+  BUGS and which `ed`'s `w` has too.
+* **`mkstemp(3)` became `mktemp`+`creat`+`open`+`unlink`**, `cmd/ed`'s idiom, with one trap
+  that is new here: **`mktemp` only avoids names `access(2)` can see**, so three callers that
+  unlink their files the moment they open them need **three distinct templates**. Upstream's
+  two callers shared one and got away with it through statement order alone.
+
+**§11 HAS AN INPUT SIDE, AND THIS IS ITS FIRST EXAMPLE.** Every previous instance was a
+program giving a meaning of its own to bit `0200` of a byte it *stored* — `sh`'s quoting
+mark, `ed`'s `QESC`, `col`'s flag. `novi`'s two are in what it *reads*: the escape decoder
+treated `0233` as an eight-bit CSI introducer, and `0233` is `0x9B`, **the second byte of
+Cyrillic Л** (`D0 9B`) — so typing Л swallowed the following keystroke. And `prompt()`
+accepted only `key < 127`, so no Cyrillic could be typed into a file name or a search
+pattern, while `edit_loop()` in the same file already admitted the whole byte. Neither
+crashes; both are silent. **The rule generalises: a program that gives a meaning to a byte
+above `0177` is a hazard whichever direction the byte is travelling**, and the input side is
+harder to spot because the symptom is a lost keystroke rather than mangled output.
+
+Its third consequence is arithmetic rather than §11: on a UTF-8 machine **a column and a byte
+are different things**, and the three functions that reasoned about columns counted bytes. A
+Cyrillic line put the cursor one column right per continuation byte. The fix is one predicate
+— a byte in `0200..0277` belongs to the character before it and occupies no column — applied
+in all three, with `draw_line()` keeping a byte count and a column count separately.
+
+**A SYSCALL COUNT CAN BE A CORRECTNESS-SHAPED PROBLEM, AND IT IS WORTH MEASURING BEFORE
+PORTING RATHER THAN AFTER.** `novi`'s whole architecture is that the document is never in
+memory, which is exactly right for a machine with 32 pages of user address space — but
+upstream migrated its gap **one byte at a time**, four syscalls a byte, so one `PgDn` was
+about six thousand traps and one `^W` was unbounded. Moving 1,024 bytes an iteration instead
+makes the same `PgDn` cost eight. The same arithmetic from the other end: one `write(2)` per
+string meant about fifty per keystroke through a console whose clist blocks are thirty bytes,
+and one 1 KB output buffer makes it two. **Neither is a nicety on a simulated machine, and
+neither is visible in a diff** — they are visible only in the count of what the program asks
+the kernel for per keypress, which is a thing to work out from the source before deciding a
+port is mechanical. The transfer buffers went in **bss and not on the stack**, for §6's third
+ceiling: two 1 KB automatics in one frame is 342 of the 4,096 words nothing checks.
+
+**AND ONE DEFERRAL, SAID OUT LOUD.** `novi` is the second program here with no meaningful
+`b6sim` half — `curstty`'s reason, an `ioctl` that is a no-op and a `gtty` that answers
+`ENOTTY` — but unlike `mount`/`find`/C6 it has no booted-kernel half either, because
+`kernel/test/edit` and `console` are both DISABLED for task 35's `send` wobble and a dialogue
+made of escape sequences on an alternate screen would be strictly worse than one made of
+text. What *is* tested is the three quarters of the program that never touches a terminal,
+which is also where the risk was: the gap buffer with every byte verified after seven
+multi-block seeks in both directions, and the escape decoder including the Л row. **Splitting
+the program so that the untestable part is small is the answer available here**, and it was
+available only because the author had already split it that way.

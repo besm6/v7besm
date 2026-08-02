@@ -281,6 +281,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/mkdir
     ${B6_ROOTFS}/bin/mv
     ${B6_ROOTFS}/bin/newgrp
+    ${B6_ROOTFS}/bin/novi
     ${B6_ROOTFS}/bin/od
     ${B6_ROOTFS}/bin/passwd
     ${B6_ROOTFS}/bin/pr
