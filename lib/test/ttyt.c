@@ -34,10 +34,7 @@
 //
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
-
-// No header in this tree declares ttyslot(); the caller must.
-int ttyslot(void);
+#include <unistd.h> // ttyname, ttyslot, getlogin -- all three declared there since task C6
 
 static void ok(const char *what, int cond)
 {

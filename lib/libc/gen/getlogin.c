@@ -15,13 +15,9 @@
 //
 // ut_name is blank-padded and not terminated, which is why there is a scan to do.
 //
-// No header declares it; a caller declares it itself.
-//
 #include <fcntl.h>
 #include <utmp.h>
-#include <unistd.h>
-
-int ttyslot(void);
+#include <unistd.h> // getlogin, ttyslot
 
 static const char UTMP[] = "/etc/utmp";
 

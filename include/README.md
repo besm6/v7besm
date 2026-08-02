@@ -171,6 +171,14 @@ rather than POSIX's `struct utimbuf`, because that is what the kernel `copyin`s
 (`kernel/sys4.c`), and `lib/libc/man/utime.2` has said so since it was corrected. It had no
 declaration anywhere until `cmd/mv` needed one.
 
+**Not everything in it is a system call**, and that is the header's second job: `execlp`/`execvp`
+are libc's own `$PATH`-searching forms, and task C6 added `crypt`, `setkey`, `encrypt`, `getpass`
+and `ttyslot` beside them. Each of those had been declared by no header at all, so every caller
+carried a prototype of its own — four copies of the same block, and C6's nine programs were about
+to make it thirteen. The rule that decides such a case is **how many callers there are**: `getpw`,
+`ecvt`/`gcvt`, `cfree`, `timezone` and `tell` are still the caller's to declare, because each has
+one caller or none.
+
 Those three `sys/` prototypes carry a guard the rest of the tree does not: `#ifndef KERNEL`.
 `stat`, `chmod` and `wait` name *two* different functions in this repo — the libc leaf and the
 kernel's system-call handler (`void stat(void)`, `<sys/systm.h>`) — and both sides include

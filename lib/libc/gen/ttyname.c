@@ -15,7 +15,7 @@
 // bounded: v7's strcat() would have run past the entry into the next one.  And rbuf is
 // sized from DIRSIZ rather than being v7's flat 32, since DIRSIZ is 18 here and not 14.
 //
-// No header declares it; a caller declares it itself.
+// <unistd.h> declares it, beside ttyslot(), which answers its question the other way.
 //
 #include <fcntl.h>
 #include <string.h>

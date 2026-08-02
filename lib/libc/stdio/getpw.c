@@ -20,7 +20,10 @@
 // terminates buf is a '\0'.  A line with fewer than three colons therefore walked off
 // the end of the caller's buffer.  Both loops stop on the terminator here.
 //
-// No header declares it; a caller declares it itself, as one does for getpass().
+// No header declares it; a caller declares it itself.  It is the odd one out of the
+// password routines now: <pwd.h> has the getpwent family and <unistd.h> took crypt() and
+// getpass() in task C6, leaving this two-argument form -- which nothing but lib/test/pwent
+// calls -- as the only one a caller still has to write out.
 //
 #include <stdio.h>
 

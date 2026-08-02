@@ -32,10 +32,11 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
+#include <unistd.h> // crypt, since task C6
 
+// getpw() is still the caller's to declare: <pwd.h> covers the getpwent family and this
+// one is the old two-argument form nothing else calls.
 int getpw(int uid, char buf[]);
-char *crypt(const char *pw, const char *salt);
 
 #define MAXENT  64
 #define MAXNAME 32

@@ -36,9 +36,9 @@
 //   - THE K&R DECLARATIONS AT THE HEAD HAD TO GO rather than be modernized.  <pwd.h> declares
 //     getpwnam()/setpwent()/endpwent() and <unistd.h> declares ttyname(), and a second
 //     declaration of a different shape is an error rather than a redundancy -- the lesson
-//     cmd/tty/tty.c learned first.  crypt(), getpass() and ttyslot() are the other way round:
-//     no header in this tree declares any of them (each source's head says the caller must),
-//     so those three are written out below, as lib/test/pwent.c writes them out.
+//     cmd/tty/tty.c learned first.  crypt(), getpass() and ttyslot() used to be the other way
+//     round -- no header declared them and this source wrote all three out -- until task C6 put
+//     them in <unistd.h>, because C6's own five callers would have copied the block again.
 //
 //   - AN UPSTREAM BUG.  v7 passed utmp.ut_name -- a char[8] that SCPYN (strncpy) leaves
 //     UNTERMINATED for a name of exactly eight characters -- straight to getpwnam(), which
@@ -74,15 +74,10 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <time.h>
-#include <unistd.h>
+#include <unistd.h> // crypt, getpass, ttyslot, ttyname -- the first three since task C6
 #include <utmp.h>
 
 #define SCPYN(a, b) strncpy(a, b, sizeof(a))
-
-// No header in this tree declares these three; each source's head says the caller must.
-char *crypt(const char *pw, const char *salt);
-char *getpass(const char *prompt);
-int ttyslot(void);
 
 static char maildir[30]     = "/usr/spool/mail/";
 static struct passwd nouser = { "", "nope" };

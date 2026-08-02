@@ -20,7 +20,9 @@
 // It reads a character at a time, one read() apiece, and that is v7's doing: this runs
 // once at login and stdio would cost more to set up than it saved.
 //
-// No header declares it; a caller declares it itself.
+// <unistd.h> declares it, beside ttyname(), and is included below already -- so this
+// definition is checked against it.  v7 declared it nowhere and every caller carried its
+// own prototype; task C6 ended that, and the header says why.
 //
 #include <fcntl.h>
 #include <string.h>

@@ -31,14 +31,15 @@
 // nothing caught it.  The relational would work today; the index stays because it is
 // cheaper and because this routine has been wrong once already.
 //
-// No header declares it; a caller declares it itself.
+// <unistd.h> declares it, and is included below so that this definition is checked
+// against it.  v7 declared it nowhere and every caller carried its own prototype; task C6
+// ended that, and the header says why.  The two lines that redeclared gtty()/stty() went
+// with it: <sgtty.h> right above has said so all along.
 //
 #include <sgtty.h>
 #include <signal.h>
 #include <stdio.h>
-
-int gtty(int fd, struct sgttyb *buf);
-int stty(int fd, struct sgttyb *buf);
+#include <unistd.h>
 
 char *getpass(const char *prompt)
 {

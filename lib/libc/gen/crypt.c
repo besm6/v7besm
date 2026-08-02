@@ -18,9 +18,11 @@
 // The one thing that had to change is the shape of the declarations: ANSI prototypes,
 // and the inner braces on the two-dimensional initialisers that v7 wrote flat.
 //
-// None of the three is declared by a header -- v7 had none and C11 has no such
-// routines -- so a caller declares them itself.
+// All three are declared by <unistd.h>, which is included below so that these definitions
+// are checked against it.  v7 declared them nowhere and every caller carried its own
+// prototype; task C6 ended that, and the header says why.
 //
+#include <unistd.h>
 
 //
 // Every table below is laid out in the rows its own definition has -- seven and six to

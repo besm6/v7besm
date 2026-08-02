@@ -110,8 +110,27 @@ int alarm(int sec);
 void sleep(unsigned sec);
 int isatty(int fd);
 char *ttyname(int fd);
+// ttyslot() is ttyname()'s question asked again, and answers it BY calling ttyname():
+// which line of /etc/ttys the terminal is, counting from 1 -- which is also its slot in
+// /etc/utmp, and therefore what getlogin() indexes by.  Zero for every failure.
+int ttyslot(void);
 char *getlogin(void);
 char *sbrk(int incr);
 int brk(char *addr);
+
+// Passwords, and the DES engine under them.  None of these four is a system call --
+// crypt(), setkey() and encrypt() are lib/libc/gen/crypt.c and getpass() is
+// lib/libc/stdio/getpass.c -- and they are declared here for the reason execlp() and
+// execvp() are above: v7 put them in no header at all, so every caller opened with a
+// prototype of its own.  There were four such copies (cmd/login, lib/test/pwent,
+// lib/test/ttyt, lib/libc/gen/getlogin) and task C6 would have made nine.  crypt(3)
+// documents the first three as one entry, so they arrive together; nothing in this tree
+// calls setkey() or encrypt() yet.
+//
+// getpass() reads at most eight characters, because crypt() looks at no more.
+char *crypt(const char *key, const char *salt);
+void setkey(const char *key);
+void encrypt(char *block, int edflag);
+char *getpass(const char *prompt);
 
 #endif // _UNISTD_H

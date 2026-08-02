@@ -62,8 +62,11 @@ in the program ends in `\n` and needs nothing.
   word, so the casts say nothing and are gone, and the whences are spelled `SEEK_SET`/`SEEK_END`.
 * **The K&R declarations at the head had to go** rather than be modernised — `<pwd.h>` declares
   `getpwnam()` and `<unistd.h>` declares `ttyname()`, and a second declaration of a different
-  shape is an error, not a redundancy. `crypt()`, `getpass()` and `ttyslot()` are the other way
-  round: no header in this tree declares them, so they are written out in the source.
+  shape is an error, not a redundancy. `crypt()`, `getpass()` and `ttyslot()` were the other way
+  round when this was ported — no header declared them, so all three were written out here, as
+  `lib/test/pwent.c` and `lib/test/ttyt.c` wrote them out too. **Task C6 ended that**: they are in
+  `<unistd.h>` now, beside `ttyname()`, because five more callers were about to copy the same
+  block. The four copies are gone and this source declares nothing.
 * **An upstream bug.** v7 passed `utmp.ut_name` — a `char[8]` that `strncpy` leaves
   *unterminated* for a name of exactly eight characters — straight to `getpwnam()`, which then
   read on into `ut_time`. The name goes through a nine-byte local here and is copied into the
