@@ -19,7 +19,10 @@ Communication continues until an end of file is
 read from the terminal or an interrupt is sent.
 At that point
 .I write
-writes `EOT' on the other terminal and exits.
+writes `EOF' on the other terminal and exits.
+.PP
+.B Note:
+this page said `EOT'; the program has always written `EOF'.
 .PP
 If you want to write to a user who is logged in more than once,
 the
@@ -30,13 +33,34 @@ appropriate terminal name.
 Permission to write may be denied or granted by use of the
 .I mesg
 command.
-At the outset writing is allowed.
+At the outset writing is allowed: the terminal nodes of this system
+are created with mode 0622.
 Certain commands, in particular
 .I nroff
 and
 .IR  pr (1)
 disallow
 messages in order to prevent messy output.
+.PP
+.B Note:
+the check is
+.IR write 's
+own, made on the descriptor it has already opened, and it is
+made whoever you are \-
+so a
+.B mesg n
+refuses the super-user too, even though the open succeeded and
+.IR cat (1)
+would have put the bytes there.
+.IR wall (1M)
+is the deliberate other half of that pair: it makes no such check.
+.PP
+.B Note:
+there is no
+.I nroff
+on this system, and this port of
+.IR pr (1)
+does not touch the terminal's mode.
 .PP
 If the character `!' is found at the beginning of a line,
 .I write

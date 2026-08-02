@@ -15,6 +15,23 @@ The program prompts for the old password and then for the new one.
 The caller must supply both.
 The new password must be typed twice, to forestall mistakes.
 .PP
+.B Note:
+the old password is not asked for when the account has none \-
+which is how every account on this system but
+.B root
+ships \-
+nor when the caller is the super-user.
+.PP
+.B Note:
+with no argument the name comes from
+.IR getlogin (3),
+which reads the /etc/utmp record for
+.I this terminal
+rather than mapping the user id.
+A caller who has used
+.IR su (1)
+is therefore asked about the account they logged in as.
+.PP
 New passwords must be at least four characters long if they use
 a sufficiently rich alphabet and at least six characters long
 if monocase.
@@ -22,10 +39,42 @@ These rules are relaxed if you are insistent enough.
 .PP
 Only the owner of the name or the super-user may change a password;
 the owner must prove he knows the old password.
+.I Passwd
+is set-user-id to root, which is how it comes to be able to write
+/etc/passwd at all; the check above is made against the
+.I real
+user id.
+.PP
+.B Note:
+the file is rewritten by copying it through /etc/ptmp and copying that
+back over /etc/passwd, there being no
+.IR rename (2)
+on this system.
+/etc/passwd keeps its i-number, so nothing holding it open sees it
+vanish \- but a crash between the two copies leaves it short.
+.PP
+.B Note:
+/etc/ptmp is also the lock, and it leaks.
+Its existence is what makes a second
+.I passwd
+say `Temporary file busy', and the error paths after it is created do
+not remove it \- so an interrupted run leaves every later one refusing.
+Remove it by hand.
+This is v7's behaviour and is left alone deliberately: the alternative
+is unlinking a file this process may not have created.
+.SH DIAGNOSTICS
+Exit status is 0 when the password was changed and 1 otherwise.
+.PP
+.B Note:
+v7 exited 1 in both cases, so no script could tell the two apart.
 .SH FILES
 /etc/passwd
+.br
+/etc/ptmp
+.br
+/etc/utmp
 .SH "SEE ALSO"
-login(1), passwd(5), crypt(3)
+login(1), su(1), newgrp(1), passwd(5), crypt(3), getlogin(3)
 .br
 Robert Morris and Ken Thompson,
 .I Password Security: A Case History

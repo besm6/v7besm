@@ -382,6 +382,14 @@ alone, a name out of a directory being neither NUL-terminated nor the program's 
 | `tail` | 30 | 666 | 34 | 697 | **1,427** |
 | `tr` | 43 | 1,588 | 152 | 1,169 | **2,952** |
 | `getty` | 34 | 361 | 28 | 11 | **434** |
+| `passwd` | 97 | 4,762 | 419 | 1,401 | **6,679** |
+| `newgrp` | 92 | 4,346 | 508 | 1,496 | **6,442** |
+| `su` | 90 | 4,141 | 338 | 1,305 | **5,874** |
+| `wall` | 85 | 3,159 | 183 | 1,742 | **5,169** |
+| `who` | 104 | 3,864 | 219 | 1,137 | **5,324** |
+| `write` | 87 | 3,402 | 231 | 1,048 | **4,768** |
+| `stty` | 79 | 2,774 | 241 | 1,035 | **4,129** |
+| `mesg` | 83 | 2,665 | 171 | 1,044 | **3,963** |
 
 **`mount` and `umount` are the two smallest programs of task C4** and the reason is the
 mirror of `ed`'s: they carry no block buffer at all. Every other program in that task holds
@@ -400,8 +408,11 @@ honest shape of a program that carries its size in *both*: 7,912 words of text f
 twenty-seven commands and a regex engine, and 5,696 of bss which is six fixed buffers
 (`respace` 1,334, `ptrspace` 1,131, `linebuf`, `holdsp` and `genbuf` 667 each, `tlno` 256) and
 almost nothing else. Half the ceiling for the largest filter of the seventeen. `awk` and `make`
-are the two left to measure early rather than late. Nothing before task C6 is in danger of the
-first ceiling.
+are the two left to measure early rather than late. **Task C6 is measured and is nowhere near
+it**: its largest is `passwd` at 6,679, and its three account programs sit within a few hundred
+words of each other and of `login`'s 6,898 because all four are `crypt`, the `getpw`/`getgr`
+family and stdio — the programs themselves are 52, 57 and 172 lines. Nothing through task C6 is in
+danger of the first ceiling.
 
 **And `sed` is where a struct's layout had to be measured rather than derived**, which is C5c's
 rule about `fgrep`'s `MAXSIZ * sizeof` from the other end. A `struct reptr` is four `char *`, a
@@ -541,6 +552,19 @@ dialogue is asserted through `getty`, `login`, `crypt` and `/etc/passwd` as well
 failing looks the same. **Anything that wants the bit follows `suidt`'s pattern**, and
 [mkdir/README.md](mkdir/README.md) is the account.
 
+**Task C6 added three that are setuid for something other than a directory**, and the distinction
+is worth keeping. `mkdir`, `mv` and `rmdir` borrow root for one `suser()`-gated syscall and give it
+straight back, because this system has no `mkdir(2)`, `rmdir(2)` or `rename(2)`. What
+[passwd/](passwd/), [su/](su/) and [newgrp/](newgrp/) change is **who the caller is** — and `su`
+cannot give it back, because `setuid(2)` moves the real id too and there is no saved id to climb
+through. That is the property the program exists to have. `login` is deliberately *not* setuid (its
+privilege is inherited from `getty`), so before these three there was no way to change uid or gid
+from a shell at all; [passwd/README.md](passwd/README.md) is the account and
+[login/README.md](login/README.md) is the other end of it. **What they also do is make the ISUID
+branch ordinary**: a guest typing `su` reaches it by accident, where `suidt` had to be written to
+reach it on purpose. That does not retire `suidt`'s pattern — it is still how a bit gets *tested* —
+but the branch is no longer exotic.
+
 **Most programs do not want it.** `chmod(2)` is gated on `owner()`, which admits the file's owner,
 and `chown(2)` on `suser()` — and that second gate is the rule that stops a user giving a file
 away, so a setuid `chown` would defeat the thing it exists for. Ask what call actually needs
@@ -603,6 +627,13 @@ Two harnesses, and choosing wrong wastes the effort:
   shell), and `fork`/`execvp`s for `-exec` (which would run the build machine's programs on
   the build machine's files). `cmd/find/` has no `test/` directory at all and
   [find/README.md](find/README.md) says so; `kernel/test/filters` §18 is the only word on it.
+  **Task C6 is the third, and it is a whole task rather than a program**: all eight of
+  `who`, `mesg`, `write`, `wall`, `stty`, `passwd`, `su` and `newgrp` read `/etc/utmp`, a
+  terminal or `/etc/passwd`, and under `b6sim` all three are the build machine's. None of the
+  eight has a `test/` directory. **`passwd` is where the limit stops being a limit and becomes
+  a hazard**: `getpwent(3)` opens the literal `/etc/passwd`, so a case that reached the rewrite
+  would be asking the simulator to `creat()` the developer's password file. Do not point
+  anything at it; the whole task is asserted in `kernel/test/multi` and `kernel/test/accounts`.
   **And task C5f added a sixth limit, which is about the fixture's NAME.**
   `run-prog-test.sh` captures standard output as **`<case>.out` in the working directory**, so
   a fixture called `exe.out` for a case called `exe` is truncated by the redirection before the
@@ -686,18 +717,29 @@ Two harnesses, and choosing wrong wastes the effort:
   about a disagreement rather than a gap, and both were paid off by the next task that
   happened to be in the neighbourhood.
   Each test has its own copy of the
-  image at its own volume number; **3097 is the highest used** (`edit` took 3086, `fsinfo` 3087,
+  image at its own volume number; **3098 is the highest used** (`edit` took 3086, `fsinfo` 3087,
   `dd` 3088, `mkfs` two — 3089 root and 3090 scratch — `fsck` two more, 3091 and 3092,
   `mount` **four** — 3093 root, 3094 scratch, 3095 the blank pack it mounts to be refused and
-  3096 the second scratch `NMOUNT` 8 allowed — and `filters` 3097).  The next free number is
-  3098.
-  All but `login` graft a script onto that copy
-  with `b6fsutil -a`, and `login` is the exception because what it tests is the thing that reads
-  what is typed: it types every character it needs. `mkfs` grafts its script at
+  3096 the second scratch `NMOUNT` 8 allowed — `filters` 3097 and `accounts` 3098).  The next
+  free number is 3099.
+  All but `login`, `multi` and `accounts` graft a script onto that copy
+  with `b6fsutil -a`, and those three are the exception because what they test is the thing that
+  reads what is typed: they type every character they need. `mkfs` grafts its script at
   `/etc/mkfstest` rather than at `/etc/mkfs`, which is the program; `fsck` and `mount` do the
   same, for the same reason.
+  **And `kernel/test/accounts` (task C6e) for anything a user does to their own ACCOUNT**: it is
+  the only test whose subject is `/etc/passwd` as a file that changes, the only one that logs the
+  same name in **twice** — the second time being asked for a password that did not exist the
+  first — and the only one where `getxfile()`'s ISUID branch is taken by a command somebody typed
+  rather than by a program written to reach it. Its oracle cannot be a literal: the hash is salted
+  from `time()` and `getpid()`, so the dialogue asserts the *prompt* and the host side asserts the
+  field's *shape* and the rest of the file byte for byte.
+  Three tests now need a **fixed TCP port** for Consul 2 — `login` listens on 4199, `multi` dials
+  4200, `accounts` listens on 4201 — and that is as much of the `RESOURCE_LOCK`'s reason as the
+  CPU is.
 
-Most of task C5 lands in the first; C1, C3, C4 and C6 land in the second. Where a program can run
+Most of task C5 lands in the first; C1, C3, C4 and C6 land in the second — C6 **entirely**, which
+is why none of its eight programs has a `test/` directory. Where a program can run
 in both, **do both** — the first time the libc suite was run in both worlds it found two bugs
 nothing else had exercised.
 
@@ -1640,3 +1682,65 @@ deliberate divergence validates the high-bit runs instead, and **the negative ca
 it a divergence rather than a blindness**: `0377 0376` is still `data`, and
 `cmd/file/test`'s `badbyte` asserts it. Proving it sharp took the C5d recipe literally — restore
 v7's two loops, rebuild, watch `rus.txt: data` come back, restore the port.
+
+## What task C6 taught
+
+Eight programs, three of them setuid root, one library header change and one new booted test. C6
+had been called "mostly mechanical now that the terminal, the accounts and the login path are all
+proven", and that was right about the *ports* and wrong about everything around them: the eight
+sources took an afternoon and the four findings below took the rest.
+
+**A DECLARATION THAT FOUR FILES CARRY IS A HEADER'S JOB, AND THE THRESHOLD IS HOW MANY CALLERS
+THERE ARE.** `crypt()`, `getpass()` and `ttyslot()` were declared by no header at all, and
+`cmd/login`, `lib/test/pwent`, `lib/test/ttyt` and `lib/libc/gen/getlogin` each carried its own
+prototype — a rule this tree had recorded in five source headers and in `cmd/login/README.md`.
+C6's five callers would have made nine copies. They are in `<unistd.h>` now, beside `execlp` and
+`execvp`, which had been moved there for the same reason and are the precedent the header's own
+comment cites. **What the move actually buys is not tidiness**: the three definitions now include
+the header that declares them, so a definition and its callers can no longer disagree — and
+`getpass()` is the routine that returned the empty string for months (`lib/libc/README.md`)
+because nothing was checking it. `getpw`, `ecvt`, `cfree`, `timezone` and `tell` stay the caller's
+to declare, each having one caller or none.
+
+**A CAPABILITY THE KERNEL HONOURS IS NOT AUTOMATICALLY ONE TO EXPOSE**, and `stty` is where that
+stops being obvious. Ten of the eleven groups cut from its tables were cut because
+`kernel/dev/tty.c` ignores them — the speeds are inert storage, the delays are unreachable on an
+eight-bit line, `TIOCHPCL` sets a bit nothing tests. `LCASE` is the eleventh and the kernel
+implements it fully, in both directions. It came out anyway: the Consul's own code has no
+lower-case Latin, which is why `dev/sc.c` runs the line raw and speaks ASCII, and since task C11
+this machine's text is UTF-8 — so `stty lcase` would offer to break the console in a way that
+looks like a feature. **Ask what a capability would do to *this* machine, not only whether the
+kernel would carry it out.** `TANDEM` is the mirror image and is left alone: live in the kernel,
+reachable from nothing, and recorded in `TODO.md` rather than given a name this port invented.
+`cmd/stty/README.md` is the account.
+
+**A `step` BUDGET IS A CEILING ON GUEST TIME, AND EVERY TEST BEFORE THIS ONE WAS CPU-BOUND.**
+`kernel/test/multi`'s stages all carry `step 50000000`, and that had never been a number worth
+thinking about: the programs finish in a few hundred thousand instructions and the budget is
+scenery. `wall` is the first thing tested here that waits on the **wall clock** — `sleep(1)` per
+recipient, which is v7's and is there to stagger two terminals — and one second of guest time is
+most of a 50,000,000-step budget. Two seconds is more than one. The failure is not a diagnostic:
+the broadcast stops half way through and it looks exactly like a hung program, which is where the
+afternoon went. The two `wall` stages carry `step 500000000` and say why at length. **The budget
+is a ceiling, not a delay** — a stage still ends the instant its `expect` matches — so raising it
+costs a passing run nothing, and the question to ask of any new stage is whether what it waits for
+is the CPU or the clock.
+
+**`exit` DOES NOT LEAVE AN INTERACTIVE SHELL**, and it is worth knowing before writing a `.ini`
+rather than after. `cmd/sh/error.c`'s `exitsh()` is v7's verbatim, and with `ttyflg` set, not
+forked and no error flag it `longjmp`s back to the read loop instead of calling `done()`. So the
+echo appears and then another prompt does, which reads as a stall. Every dialogue in
+`kernel/test/` types `^D`, and now there is a sentence saying why. The `^D` is not echoed, which
+is the second half of the same problem: a stage keyed on what follows it must match a **bare
+prompt**, and that is safe only because SIMH empties the match buffer when a rule fires
+(`login.ini`'s stage 7 is the standing note). `accounts.ini` leans on that three times in a row.
+
+**Two smaller things, both about what a harness can say.** C6 is the **third task with no `b6sim`
+half at all** after `mount`/`umount` and `find`, and §9 now names the reason as a hazard rather
+than a limit: `getpwent(3)` under that harness opens the literal `/etc/passwd`, so a `passwd` case
+that got as far as the rewrite would be asking the simulator to `creat()` the developer's password
+file. Nothing in `cmd/` should ever be pointed at it. And the one number in `kernel/test/accounts`
+that neither program chose is a **mode**: `/tmp/before` and `/tmp/after` come back 0664 rather than
+0644, because `cmd/sh`'s `>` creates with 0666 and `cmd/login` does `umask(02)` for every session.
+Both facts are in `run-accounts.sh`'s header, where the next person to read a diff of that file
+will be looking.

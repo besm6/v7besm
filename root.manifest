@@ -214,6 +214,16 @@ file /etc/umount        # cmd/umount -- and take it away again
 source ../../rootfs/etc/umount
 mode 0755
 
+# /etc AND NOT /bin, which is v7's arrangement: wall's section is 1M and cmd/sh's default path
+# reaches /bin only, so it is typed with its path.  NOT setuid, and its own manual page is the
+# argument -- "the sender should be super-user to override any protections the users may have
+# invoked" is a statement about the ordinary permission check on a 0600 terminal, and a setuid
+# wall would hand that override to everybody.  cmd/write is the opposite case and is 0755 too,
+# for the opposite reason: it makes the mesg(1) check itself.
+file /etc/wall          # cmd/wall -- task C6.  One forked child per live /etc/utmp record
+source ../../rootfs/etc/wall
+mode 0755
+
 # /etc/mtab IS NOT HERE, and that is the design rather than an omission: the first mount of a
 # boot creates it (cmd/mount/mtab.c), a missing one reads as an empty table, and an image
 # that shipped one would be shipping a claim about what is mounted that no boot had made.
@@ -390,6 +400,12 @@ file /bin/ls            # cmd/ls
 source ../../rootfs/bin/ls
 mode 0755
 
+file /bin/mesg          # cmd/mesg -- task C6.  NOT setuid: chmod(2) is gated on owner(), and
+                        # the terminal is the user's only because login chowned it.  The nodes
+                        # below ship 0622, so a fresh boot answers `is y'.
+source ../../rootfs/bin/mesg
+mode 0755
+
 file /bin/od            # cmd/od -- task C5b.  -o/-d/-x go on meaning THE MACHINE WORD, which
                         # is 48 bits here: 16 octal digits, 15 decimal, 12 hex.  -w is a
                         # second name for -o.  Bytes pack most significant first, as getw(3).
@@ -448,6 +464,12 @@ mode 0755
 
 file /bin/split         # cmd/split -- task C5a; the pieces land in the working directory
 source ../../rootfs/bin/split
+mode 0755
+
+file /bin/stty          # cmd/stty -- task C6.  NOT setuid: gtty/stty are gated on holding
+                        # the descriptor.  Its capability list is CUT to what dev/tty.c
+                        # honours -- no speeds, no parity, no delays, no LCASE, no hup.
+source ../../rootfs/bin/stty
 mode 0755
 
 file /bin/sum           # cmd/sum -- task C5a.  Its block count is in 1024-byte blocks, like
@@ -511,6 +533,17 @@ file /bin/wc            # cmd/wc -- task C5a.  A byte above 0177 is a WORD CONST
 source ../../rootfs/bin/wc
 mode 0755
 
+file /bin/who           # cmd/who -- task C6.  The first reader /etc/utmp has ever had; init
+                        # and login were the only programs that touched that file before it.
+source ../../rootfs/bin/who
+mode 0755
+
+file /bin/write         # cmd/write -- task C6.  NOT setuid: the terminal nodes are 0622, so
+                        # the open needs nothing -- and write makes the mesg(1) check ITSELF,
+                        # which a setuid bit would be defeating rather than enabling.
+source ../../rootfs/bin/write
+mode 0755
+
 file /bin/yes           # cmd/yes -- the only program here that a SIGPIPE has to stop
 source ../../rootfs/bin/yes
 mode 0755
@@ -528,7 +561,8 @@ mode 0755
 link /bin/[
 target /bin/test
 
-# ---- and the three that can change a DIRECTORY: THE SETUID PROGRAMS HERE ----------
+# ---- THE SETUID PROGRAMS HERE: three that change a DIRECTORY, and since task C6 --
+# ---- three that change WHO YOU ARE ------------------------------------------------
 #
 # `mode 04755' -- 04000 is ISUID, and it is the whole of the work.  b6fsutil carries it
 # through: manifest.cpp parses the number as an octal literal and add_file() writes
@@ -561,6 +595,40 @@ mode 04755
 
 file /bin/rmdir         # cmd/rmdir -- SETUID ROOT: unlink(2) on a directory
 source ../../rootfs/bin/rmdir
+mode 04755
+
+# THE OTHER THREE ARE TASK C6's, and what they borrow root for is not a directory but an
+# IDENTITY.  cmd/login is the program that made them possible and it is deliberately NOT
+# setuid -- its privilege is inherited from getty, which init forked as root -- so until
+# these three there was no way to change uid or gid from a shell at all.  cmd/login/README.md
+# named su in advance for exactly this reason.
+#
+# Each drops what it borrowed, and the ORDER is load-bearing in the same way login's is:
+# setuid(2) moves the REAL uid as well (kernel/sys4.c), so there is no way back afterwards
+# and it has to be the last privileged act each of them performs.
+#
+#   su       setuid()/setgid() to the account that answered the prompt.  getuid() is the
+#            real uid, which is what makes v7's `getuid() == 0 skips the password' correct.
+#   newgrp   setgid() to a group the caller is not in -- allowed only through suser() --
+#            and then setuid(getuid()) straight back down.
+#   passwd   the narrowest of the three: it wants nothing but write permission on this
+#            file, which is 0644 and root's.
+#
+# THEY ARE ALSO WHAT FINALLY MAKES getxfile()'s ISUID BRANCH ORDINARY.  cmd/README.md §8
+# records that the branch is taken only `if (u.u_uid != 0)' and that every shell on this
+# image used to be root's, so lib/test/suidt had to drop to uid 7 on purpose to reach it.
+# A guest who types `su' reaches it by accident now, which is the point.
+
+file /bin/newgrp        # cmd/newgrp -- SETUID ROOT: setgid(2) to a group you are not in
+source ../../rootfs/bin/newgrp
+mode 04755
+
+file /bin/passwd        # cmd/passwd -- SETUID ROOT: it writes /etc/passwd, which is root's
+source ../../rootfs/bin/passwd
+mode 04755
+
+file /bin/su            # cmd/su -- SETUID ROOT: setuid(2)/setgid(2) to another account
+source ../../rootfs/bin/su
 mode 04755
 
 # ---- the static files of /etc ----------------------------------------------------

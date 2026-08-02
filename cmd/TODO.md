@@ -14,10 +14,10 @@ fixed and which §2 now records as history, §4 the 3072-byte block and the
 1024-byte one reported in its place, §6 the
 address-space ceilings, and so on.
 
-**Tasks C1, C2, C3 and the whole of C4 and C5 are done and their writeups have been removed**;
-what each taught is README.md's fourteen closing sections. Sixty-four commands are on the image —
-fifty-four entries in `/bin`, since `[` is `test` under a second name, plus `/usr/lib/diffh`,
-`/etc/getty`, `/etc/quot`,
+**Tasks C1, C2, C3 and the whole of C4, C5 and C6 are done and their writeups have been removed**;
+what each taught is README.md's fifteen closing sections. Seventy-three commands are on the image —
+sixty-two entries in `/bin`, since `[` is `test` under a second name, plus `/usr/lib/diffh`,
+`/etc/getty`, `/etc/quot`, `/etc/wall`,
 `/etc/mkfs`, `/etc/fsck`, `/etc/icheck`, `/etc/dcheck`, `/etc/ncheck`, `/etc/clri`,
 `/etc/mount` and `/etc/umount` beside them
 — so the tree
@@ -161,6 +161,24 @@ divergence**, after `touch`, `rev`, `col`, `grep -b` and `sort -d`: v7 calls any
 UTF-8 is text and a malformed byte is still `data`
 ([file/README.md](file/README.md), [find/README.md](find/README.md),
 [diff/README.md](diff/README.md), [pr/README.md](pr/README.md)).
+**And since C6 there is more than one person on it.** `who`, `mesg`, `write`, `wall`, `stty`,
+`passwd`, `su` and `newgrp` take `/bin` to sixty-two entries and are the first programs here whose
+subject is *somebody else*. Four are worth naming. **`who` is the first reader `/etc/utmp` has
+ever had** — `init` creates that file and blanks records in it and `login` writes them, and until
+this task nothing had printed the table. **`write` is the first program to open a terminal it does
+not own**, and it makes the `mesg` check *itself*, on a descriptor it has already opened, so a
+`mesg n` refuses **root** as well; `/etc/wall` is the deliberate other half and makes no such
+check, which is what its manual page means by the super-user overriding the protections a user has
+invoked. **`stty`'s port is a cut** — eleven groups of capabilities out of two tables, measured
+against `kernel/dev/tty.c` rather than assumed, and `LCASE` is the one the kernel *does* implement
+and that came out anyway, because the Consul has no lower-case Latin and this machine's text is
+UTF-8 ([stty/README.md](stty/README.md)). And **`passwd`, `su` and `newgrp` are the first setuid
+bits here that are not about a directory**: what they borrow root for is an identity, `su` cannot
+give it back because `setuid(2)` moves the real id too, and between them they make
+`getxfile()`'s ISUID branch something a user reaches by accident rather than something
+`lib/test/suidt` was written to reach on purpose ([passwd/README.md](passwd/README.md)).
+`kernel/test/accounts`, at volume **3098**, is where a password is set, used to log in again, and
+read back off the disk.
 [../etc/rc](../etc/rc) is a boot script that does something: it prints the motd and then the
 date, which is a literal to the minute because the boot clock is the image's own `-T` stamp,
 and `kernel/test/console` asserts both. What it
@@ -200,55 +218,29 @@ compiles.
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C6 | multiuser userland — `passwd` `su` `newgrp` `stty` `who` `write` `wall` `mesg` `mail` | more than one person | medium; unblocked |
 | C7 | `tar` | getting data on and off without `b6fsutil` | medium |
 | C8 | inspection — `ps` `dmesg` `pstat` `iostat` `nice`, `ac` `sa` `accton` | seeing what the machine is doing | medium; needs `nlist(3)` |
 | C9 | self-hosting — native `cpp`, `as`, `ld`, the binutils, `cc` | building the system on itself | large |
-| C10 | the rest of the manual — `make` `m4` `awk` `bc` `dc` `expr` `egrep` `units` `crypt` `at` `cron` `calendar` `update` | a system worth using | open-ended |
+| C10 | the rest of the manual — `make` `m4` `awk` `bc` `dc` `expr` `egrep` `units` `crypt` `at` `cron` `calendar` `update` `mail` | a system worth using | open-ended |
 
-**C4 and C5 were the two that mattered and both are gone from this table** — C4's twelve
-programs and C5's twenty-four, and what each of them settled, being the opening paragraph's
-business now. C5 was called cheap in this table for four tasks running and the correction is
+**C4, C5 and C6 are gone from this table** — C4's twelve programs, C5's twenty-four and C6's
+eight, and what each of them settled, being the opening paragraph's business now. C5 was called cheap in this table for four tasks running and the correction is
 under *Where to start* below: twenty-four programs, 511 `ctest -L cmd` cases and the whole
 label still under seven seconds is what the HARNESS cost, and it is the number to quote when
 budgeting a test suite. What the ports cost is twenty-one findings, several of them a day
 apiece, and not one of them is in a line count.
-C7 is one program and can be taken at any time; C6, C8 and C9 are each gated on something the
+C7 is one program and can be taken at any time; C8 and C9 are each gated on something the
 task names.
 
----
-
-## C6. Multiuser userland
-
-**Unblocked, and half of it is already done.** Kernel 29a gave the image a second terminal
-(`/dev/tty1`, `dev/sc.c` driving both Consuls) and kernel 29b put the userland on top of it:
-[getty/](getty/) and [login/](login/) are ported and on the image, `/etc/ttys` is staged from
-[../etc/](../etc/), `/etc/passwd` carries a real encrypted field, `init`'s `merge()`/`multiple()`
-half runs at last, and `kernel/test/login` logs in and out over the console. **Do not duplicate
-that**: read [getty/README.md](getty/README.md) and [login/README.md](login/README.md) first —
-between them they cover the speed table this machine does not have, the privilege order that must
-not be tidied, and the stdio change that makes a prompt with no newline invisible.
-
-What remains is the rest of the manual pages that assume more than one person:
-
-* `passwd.c` (172), `su.c` (52), `newgrp.c` (57) — the account trio, and the first two are where
-  the setuid bit `login` deliberately does **not** carry has to go. `passwd` needs a writable
-  `/etc/passwd`; both need the `crypt` libc already has and `login` has now exercised.
-* `stty.c` (303) — reads and writes the `sgttyb` the kernel's `sc.c` implements. Its capability
-  list must be cut down to what that driver actually honours rather than carried whole, which is
-  the same cut [getty/README.md](getty/README.md) records making to the speed table, and for the
-  same reasons: no baud rate, no parity, no delays, no LCASE. One name it uses is gone rather
-  than renamed: `('t' << 8) | 16` is `TIOCFLUSH` here and nothing else, v7's `<sgtty.h>` spelling
-  `TIOCTSTP` having been dropped when the two tty headers were folded onto `<sys/ttyio.h>`.
-* `who.c` (64), `write.c` (186), `wall.c` (70), `mesg.c` (57) — the social four, all `/etc/utmp`.
-  That file now exists and is written: `init`'s `merge()` creates it and `login` writes a record,
-  and `lib/test/ttyt` asserts the `ttyslot(3)` they all index it by. `who` is the cheapest of the
-  four and the first one worth doing, being the only reader `/etc/utmp` still lacks.
-* `mail.c` (556) — only if `/usr/spool/mail` is wanted. `login` already probes for it with
-  `access()` and quietly finds nothing.
-
-**Size.** Medium, and mostly mechanical now that the terminal, the accounts and the login path are
-all proven.
+**Two loose ends C6 leaves behind, both about the terminal and both one line each.**
+`TANDEM` is honoured by the kernel — `ttyblock()` queues the stop character when the input queue
+passes `TTYHOG/2` and `canon()` sends the start character back — and **no program on this image
+can set it**: v7's `stty` had no word for it and the port added none, the cut in
+[stty/README.md](stty/README.md) being deliberately subtractive. `TIOCEXCL`/`TIOCNXCL` and
+`TIOCHPCL` are the other shape: `ttioccomm()` accepts all three and sets `XCLUDE` or `HUPCLS`,
+and **nothing in the kernel ever tests either bit**, so an exclusive-open request and a
+hang-up-on-last-close request are both silently ignored. Neither is worth a task of its own;
+both are worth knowing before somebody reports them as bugs.
 
 ---
 
@@ -347,7 +339,19 @@ task that changes what this port *is*.
 
 ## C10. The rest of the manual
 
-Everything else worth having, in no fixed order, once C1–C5 are in place.
+Everything else worth having, in no fixed order, once C1–C6 are in place.
+
+**`mail` came here from C6, deliberately, and the reasons are worth keeping.** `mail.c` is 556
+lines and would have been the ninth program of that task; what stopped it is not its size but its
+surroundings. It wants a `/usr/spool/mail` directory that [../root.manifest](../root.manifest)
+does not have and a mailbox **lock protocol** built out of the user execute bit (`lock()` sets
+`st_mode & 01` and spins), it includes `<whoami.h>` for a `sysname` this tree pruned on purpose
+([../include/README.md](../include/README.md) calls it one of the two identity placeholders), and
+its `REMOTE`/`FORWARD` arms hand a letter to `uucp`, which is in the exclusion table below. So it
+carries three decisions rather than a port: re-import `whoami.h` or hard-code the system name,
+add the spool directory and its mode, and cut the remote arm or leave it failing. `cmd/login`
+already probes for `/usr/spool/mail` with `access()` and quietly finds nothing, which is the
+behaviour to keep until the day this is done.
 
 **A decision this task must record first, and it reaches further than it looks: six of these are
 yacc grammars** — `expr.y` (669), `egrep.y` (594), `bc.y` (600), `make/gram.y`, `m4/m4y.y` and
@@ -372,7 +376,7 @@ decision before either is started, not during.
 | `egrep.y` | | 594 | yacc; finishes C5c |
 | `units.c` | | 466 | needs `/usr/lib/units` staged |
 | `crypt.c`, `makekey.c` | | 93 + 21 | libc's `crypt` already exists |
-| `at.c`, `atrun.c`, `cron.c`, `calendar.c` | scheduling | 307 + 110 + 254 + 54 | want a running multiuser system and a correct clock; after C6. `cron` is one of the five [../etc/rc](../etc/rc) still names |
+| `at.c`, `atrun.c`, `cron.c`, `calendar.c` | scheduling | 307 + 110 + 254 + 54 | want a running multiuser system, which C6 delivered, and a correct clock, which this machine has not got -- iinit() seeds `time' from the root superblock. `cron` is one of the five [../etc/rc](../etc/rc) still names |
 | `update.c` | periodic `sync` | 38 | trivial, and [../etc/rc](../etc/rc) names it — but it is a **daemon**, and `/etc/rc` runs on every pass through `init`'s loop, so weigh a second copy per pass before adding the line |
 | `strip`, `size`, `nm` | | | **not these** — see C9 |
 
@@ -401,10 +405,29 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 
 ## Where to start
 
-**C7, or C6.** `tar` is one unblocked program and can be taken at any time; C6 is half done
-already — [getty/README.md](getty/README.md) and [login/README.md](login/README.md) are what to
-read first, and `who` is the cheapest of the nine. C8 and C9 are each gated on something their
-own section names.
+**C7.** `tar` is one unblocked program and can be taken at any time, and it is now the only
+task in the table that is gated on nothing. C8 and C9 are each gated on something their own
+section names, and C10 is open-ended by construction.
+
+**Read C7's section for the two things to settle while porting it**, and add a third from C5f's
+closing list, which C6 did not have to pay and `tar` will: **`b6_obj`'s header dependency is the
+system header tree**, so a program whose own constants live in a header of its own has no
+dependency on that header and editing it rebuilds nothing. `tar` is single-file and so escapes
+that, but it is the first of the five C5f named — `tar`, `make`, `m4`, `awk`, `dc` — to come up.
+And **check which harness it lands in before designing its cases**, not after: C5f's brief said to
+do that for `ps` and `tar` both, and C6 is the task that shows what it costs to get wrong, having
+turned out to have no `b6sim` half at all.
+
+**Task C6 is closed and cost four findings, none of them a line count** — the eight ports took
+an afternoon and everything around them took the rest. A declaration four files carried is a
+header's job and the threshold is how many callers there are (`crypt`, `getpass` and `ttyslot` are
+in `<unistd.h>` now, and the definitions include it, which is the part that buys anything). A
+capability the kernel honours is **not** automatically one to expose — `LCASE` is implemented and
+came out anyway. A `step` budget is a ceiling on **guest time**, and `wall` is the first thing
+tested here that waits on the wall clock rather than the CPU: one second is most of a 50,000,000
+step budget and the failure looks exactly like a hung program. And `exit` does not leave an
+interactive shell, which is `cmd/sh/error.c`'s `exitsh()` and is why every dialogue in
+`kernel/test/` types `^D`. [README.md](README.md)'s closing section is the long form.
 
 **Task C5 is closed and it is worth stating what it cost, because the estimate was wrong every
 single time.** Twenty-four programs, 511 `ctest -L cmd` cases, the whole of that label still

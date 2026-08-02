@@ -1,5 +1,5 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
-.TH STTY 1 
+.TH STTY 1
 .SH NAME
 stty \- set terminal options
 .SH SYNOPSIS
@@ -9,41 +9,22 @@ stty \- set terminal options
 .I Stty
 sets certain I/O options on the current output terminal.
 With no argument, it reports the current settings of the options.
+The report goes to the standard error.
 The option strings are
 selected from the following set:
 .TP  8n
-.B even 
-allow even parity
-.br
-.ns
-.TP 
-.B \-even 
-disallow even parity
-.br
-.ns
-.TP 
-.B odd 
-allow odd parity
-.br
-.ns
-.TP 
-.B \-odd 
-disallow odd parity
-.br
-.ns
-.TP 
-.B raw 
+.B raw
 raw mode input
-(no erase, kill, interrupt, quit, EOT; parity bit passed back)
+(no erase, kill, interrupt, quit, EOT)
 .br
 .ns
-.TP 
-.B \-raw 
+.TP
+.B \-raw
 negate raw mode
 .br
 .ns
-.TP 
-.B cooked 
+.TP
+.B cooked
 same as `\-raw'
 .br
 .ns
@@ -56,156 +37,138 @@ as received; no erase and kill
 .ns
 .TP
 .B \-cbreak
-make characters available to 
+make characters available to
 .I read
 only when newline is received
 .br
 .ns
-.TP 
-.B \-nl 
+.TP
+.B \-nl
 allow carriage return for new-line,
 and output CR-LF for carriage return or new-line
 .br
 .ns
-.TP 
-.B nl 
+.TP
+.B nl
 accept only new-line to end lines
 .br
 .ns
-.TP 
-.B echo 
+.TP
+.B echo
 echo back every character typed
 .br
 .ns
-.TP 
-.B \-echo 
+.TP
+.B \-echo
 do not echo characters
 .br
 .ns
-.TP 
-.B lcase 
-map upper case to lower case
-.br
-.ns
-.TP 
-.B \-lcase 
-do not map case
-.br
-.ns
-.TP 
-.B \-tabs 
+.TP
+.B \-tabs
 replace tabs by spaces when printing
 .br
 .ns
-.TP 
-.B tabs 
+.TP
+.B tabs
 preserve tabs
 .br
 .ns
-.TP 
-.B ek 
+.TP
+.B ek
 reset erase and kill characters back to normal # and @
 .br
 .ns
-.TP 
+.TP
 .BI erase  \ c\fR
 set erase character to
 .IR c .
 .I C
-can be of the form 
+can be of the form
 .I `^X'
 which is interpreted as a `control X'.
 .br
 .ns
-.TP 
+.TP
 .BI kill  \ c\fR
 set kill character to
 .IR c .
 .I `^X'
 works here also.
+.PP
+That is the whole list, and it is much shorter than v7's.
+.PP
+.B Note:
+the options this page used to name that describe hardware the BESM-6
+has not got were removed from the program rather than left to fail
+quietly, on the precedent
+.IR getty (8)
+set when it cut its speed table to one entry.
+Each was measured against the driver, not assumed:
+.TP  8n
+.B "50 \&... 9600 exta extb 0"
+the baud rates.
+A Consul-254 is a parallel typewriter that moves one whole character
+per instruction; there is no line whose rate could be set.
+.I sg_ispeed
+and
+.I sg_ospeed
+are stored and handed back by the kernel and read by nothing.
 .br
 .ns
 .TP
-.B  cr0 cr1 cr2 cr3
-.br
-select style of delay for carriage return (see
-.IR ioctl (2))
-.br
-.ns
-.TP
-.B  nl0 nl1 nl2 nl3
-.br
-select style of delay for linefeed 
+.B "even \-even odd \-odd"
+parity.
+The Consul line carries eight bits of data end to end.
 .br
 .ns
 .TP
-.B  tab0 tab1 tab2 tab3
-.br
-select style of delay for tab 
-.br
-.ns
-.TP
-.B  ff0 ff1
-select style of delay for form feed 
-.br
-.ns
-.TP
-.B bs0 bs1
-select style of delay for backspace
-.br
-.ns
-.TP 
-.B tty33 
-set all modes suitable for the
-Teletype Corporation Model 33 terminal.
-.br
-.ns
-.TP 
-.B tty37 
-set all modes suitable for the
-Teletype Corporation Model 37 terminal.
-.br
-.ns
-.TP 
-.B vt05 
-set all modes suitable for Digital Equipment Corp. VT05 terminal
-.br
-.ns
-.TP 
-.B tn300 
-set all modes suitable for a General Electric TermiNet 300
-.br
-.ns
-.TP 
-.B ti700 
-set all modes suitable for Texas Instruments 700 series terminal
-.br
-.ns
-.TP 
-.B tek 
-set all modes suitable for Tektronix 4014 terminal
-.br
-.ns
-.TP 
-.B hup 
-hang up dataphone on last close.
-.br
-.ns
-.TP 
-.B \-hup 
-do not hang up dataphone on last close.
-.br
-.ns
-.TP 
-.B 0 
-hang up phone line immediately
+.B "cr0\-cr3 nl0\-nl3 tab0\-tab3 ff0 ff1 bs0 bs1"
+the delays.
+Nothing on this terminal has a carriage to wait for, and on an
+eight-bit line a queued byte above 0177 is data and cannot also be a
+delay count.
+.B \-tabs
+is the exception and remains: tab expansion is done by column and is live.
 .br
 .ns
 .TP
-.B  "50 75 110 134 150 200 300 600 1200 1800 2400 4800 9600 exta extb"
+.B "tty33 tty37 vt05 tn300 ti700 tek"
+terminals that are not this one; each was only a bundle of the delays above.
 .br
-Set terminal baud rate to the number given, if possible.
-(These are the speeds supported by the DH-11 interface).
-.dt
+.ns
+.TP
+.B "lcase \-lcase"
+case mapping.
+The kernel does implement it, in both directions \- and it would undo
+the driver, whose line is raw because the Consul's own code has no
+lower-case Latin at all.
+The text of this system is UTF-8 end to end.
+.br
+.ns
+.TP
+.B "hup \-hup"
+.IR ioctl (2)'s
+TIOCHPCL sets a bit that nothing in this kernel ever tests.
+It was this program's only
+.I ioctl
+call.
+.PP
+.B Note:
+.B \-hup
+and
+.B "\&0"
+were on this page and were never in v7's program.
+.PP
+.B Note:
+TANDEM, the flow-control flag, is live in the kernel and this program
+still cannot set it \- v7's had no word for it either.
+.SH DIAGNOSTICS
+`stty: not a terminal' if the standard output is not one.
+v7 ignored
+.IR gtty (2)'s
+return and reported the modes of a zeroed structure instead.
+.PP
+An unrecognised word gives `unknown mode: \fIword\fR' and the
+remaining options are still applied, which is v7's behaviour.
 .SH "SEE ALSO"
-ioctl(2), tabs(1)
+ioctl(2), tty(4), getty(8)

@@ -15,4 +15,15 @@ and learn(1) will teach it.
 $ tty
 /dev/tty1
 $ echo hello from tty1 >/tmp/two
-$ 
+$ mesg
+is y
+$ mesg n
+$ mesg
+is n
+$ mesg y
+$ Message from root console...
+hello guest
+EOF
+Broadcast Message ...
+
+attention all users

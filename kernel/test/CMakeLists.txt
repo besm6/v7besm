@@ -240,6 +240,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/ncheck
     ${B6_ROOTFS}/etc/quot
     ${B6_ROOTFS}/etc/umount
+    ${B6_ROOTFS}/etc/wall
     ${B6_ROOTFS}/etc/group
     ${B6_ROOTFS}/etc/motd
     ${B6_ROOTFS}/etc/passwd
@@ -276,9 +277,12 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/login
     ${B6_ROOTFS}/bin/look
     ${B6_ROOTFS}/bin/ls
+    ${B6_ROOTFS}/bin/mesg
     ${B6_ROOTFS}/bin/mkdir
     ${B6_ROOTFS}/bin/mv
+    ${B6_ROOTFS}/bin/newgrp
     ${B6_ROOTFS}/bin/od
+    ${B6_ROOTFS}/bin/passwd
     ${B6_ROOTFS}/bin/pr
     ${B6_ROOTFS}/bin/pwd
     ${B6_ROOTFS}/bin/rev
@@ -288,6 +292,8 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/sleep
     ${B6_ROOTFS}/bin/sort
     ${B6_ROOTFS}/bin/split
+    ${B6_ROOTFS}/bin/stty
+    ${B6_ROOTFS}/bin/su
     ${B6_ROOTFS}/bin/sum
     ${B6_ROOTFS}/bin/sync
     ${B6_ROOTFS}/bin/tail
@@ -300,6 +306,8 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/tty
     ${B6_ROOTFS}/bin/uniq
     ${B6_ROOTFS}/bin/wc
+    ${B6_ROOTFS}/bin/who
+    ${B6_ROOTFS}/bin/write
     ${B6_ROOTFS}/bin/yes)
 # /bin/[ is deliberately absent: it is a `link' stanza in the manifest, not a staged file,
 # so there is nothing here for the image to depend on.  rootimg_link below is what holds it.
@@ -354,7 +362,10 @@ set_tests_properties(rootimg_check PROPERTIES LABELS kernel)
 add_test(NAME rootimg_setuid
     COMMAND sh -c "${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/mkdir$' && \
                    ${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/mv$' && \
-                   ${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/rmdir$'"
+                   ${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/rmdir$' && \
+                   ${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/newgrp$' && \
+                   ${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/passwd$' && \
+                   ${B6FSUTIL} -v -v root.img | grep -q '^- 4755 0/0 .* /bin/su$'"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(rootimg_setuid PROPERTIES LABELS kernel)
 
@@ -849,6 +860,41 @@ if(BESM6)
     set_tests_properties(multi PROPERTIES LABELS kernel TIMEOUT 600 RESOURCE_LOCK simh_boot)
 
     # ---------------------------------------------------------------------------------
+    # accounts -- passwd, su and newgrp, on its own volume (3098).  Task C6e, and the
+    # question is what a user may do to their own account once they have one.
+    # ---------------------------------------------------------------------------------
+    #
+    # WHY IT IS A BOOT OF ITS OWN and not more stages in `multi'.  All three programs prompt
+    # through getpass(3), which opens /dev/tty, so nothing a script on the image could say
+    # would answer them -- the characters have to be typed, which rules out the grafted-script
+    # shape `utils' and `filters' use.  And passwd REWRITES /etc/passwd, which multi.ini's
+    # host side has no business finding changed under it.
+    #
+    # THREE THINGS IT ASSERTS THAT NOTHING ELSE HERE CAN:
+    #
+    #   getxfile()'s ISUID BRANCH, REACHED BY A TYPED COMMAND.  cmd/README.md §8 is the long
+    #   form: the branch is taken only `if (u.u_uid != 0)', every shell on this image was
+    #   root's until kernel task 29b, and lib/test/suidt still has to drop to uid 7 on purpose
+    #   to reach it.  Here a guest types `su' and it fires by itself.
+    #
+    #   A PASSWORD ROUND TRIP.  guest ships with an EMPTY password field, logs in with no
+    #   prompt, is given a password by passwd, logs out, and is ASKED for it on the way back
+    #   in.  The hash is salted from time() + getpid() and is different every run, so the
+    #   dialogue asserts the PROMPT and run-accounts.sh asserts the field's shape.
+    #
+    #   TWO FILES WHOSE GROUPS DIFFER, which is newgrp's only visible effect and which no
+    #   guest can see: `ls -l' prints the owner, and what newgrp changed is the other field.
+    #   That is the host's to read, as task C1 established.
+    #
+    # It takes 4201 for Consul 2 (login has 4199, multi dials 4200); the RESOURCE_LOCK is what
+    # keeps the three from colliding on those ports as much as on the CPU.
+    add_test(NAME accounts
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-accounts.sh
+                ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(accounts PROPERTIES LABELS kernel TIMEOUT 600 RESOURCE_LOCK simh_boot)
+
+    # ---------------------------------------------------------------------------------
     # swap -- more processes than core, and two of them sharing one binary's text
     # (task 26).
     # ---------------------------------------------------------------------------------
@@ -944,7 +990,7 @@ if(BESM6)
     # through fifteen set_tests_properties calls -- so the daily/weekly line is readable in
     # one place.  The libtest_* diffs cost milliseconds each, but they adjudicate output
     # only libtest_run can produce, so they follow it.
-    b6_weekly(console_setup console session files utils filters edit fsinfo dd mkfs fsck
+    b6_weekly(console_setup console session files utils filters edit fsinfo dd mkfs fsck accounts
               mount login multi swap libtest_run libtest_fsck)
     foreach(_p ${B6_LIBTEST_IMAGE})
         b6_weekly(libtest_${_p})

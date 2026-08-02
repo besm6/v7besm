@@ -34,6 +34,11 @@
 #                writer this port has had; a lost block or a bad link count would otherwise only
 #                show up later, in some other test, for no visible reason.
 #
+#   the modes,   AND SINCE TASK C6 THEY ARE AN ASSERTION ABOUT mesg TOO.  /dev/tty1 comes back
+#   again        622 because the dialogue ends on `mesg y'; it passed through 600 on the way,
+#                which only stage 16's `is n' can see.  A mesg that chmod()ed nothing would
+#                leave this file passing and that stage failing, which is the split worth having.
+#
 #   the tty1     what Consul 2 printed, diffed against multi.expected.  The three lines the
 #   transcript   simulator itself writes to a new connection are dropped: two are constant and the
 #                third carries a wall clock and a port number.  CRs go too -- the line is in

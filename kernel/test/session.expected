@@ -28,9 +28,12 @@ ln
 login
 look
 ls
+mesg
 mkdir
 mv
+newgrp
 od
+passwd
 pr
 pwd
 rev
@@ -41,6 +44,8 @@ sh
 sleep
 sort
 split
+stty
+su
 sum
 sync
 tail
@@ -53,6 +58,8 @@ tsort
 tty
 uniq
 wc
+who
+write
 yes
 /tmp/d
 rmdir: cannot remove current directory

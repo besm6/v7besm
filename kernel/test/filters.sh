@@ -488,7 +488,13 @@ ls /bin | sort -c
 echo sort status $? >>/tmp/filters.log
 find /tmp/ftree -name '*.c' -print | wc -l >>/tmp/filters.log
 cal 1 2026 | pr -t -l9 >>/tmp/filters.log
-ls /bin | tsort | wc -l >>/tmp/filters.log
+# THE `sed' IS NOT DECORATION and task C6 is what put it there.  tsort reads its input as
+# PAIRS, and v7's says `odd data' and produces nothing at all when there is an odd token left
+# over -- so `ls /bin | tsort' silently depended on how many programs happen to be in /bin, and
+# went from 54 lines to none the day that number became 61.  Fixing the count here keeps the
+# assertion about the PIPE, which is what this section is for, rather than about the size of
+# the image.
+ls /bin | sed -n '1,40p' | tsort | wc -l >>/tmp/filters.log
 file /bin/cat | sed 's/.*	//' >>/tmp/filters.log
 
 echo ---end--- >>/tmp/filters.log

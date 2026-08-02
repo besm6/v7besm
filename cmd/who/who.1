@@ -38,7 +38,43 @@ With two arguments,
 as in `who am I' (and also `who are you'),
 .I who
 tells who you are logged in as.
+The terminal it reports is the one on the standard input, reduced to a
+line name exactly as
+.IR login (1)
+reduced it when it wrote the record, so the two cannot disagree.
+.PP
+.B Note:
+/usr/adm/wtmp is not kept on this system.
+Nothing writes it and nothing reads it, so the paragraph above about
+logouts, reboots and fossil times describes a file that has to be made
+before it describes anything;
+.I who
+will read one if it is given one.
+.PP
+.B Note:
+the name and line fields are eight characters and are
+.I not
+terminated when they are full \- see
+.IR utmp (5)
+\- so a name of exactly eight characters prints as eight characters and
+no more.
+Record 0 of /etc/utmp is always blank:
+.IR ttyslot (3)
+counts the lines of /etc/ttys from 1, and that is the index
+.IR login (1)
+writes at.
+Blank records are suppressed for /etc/utmp and shown when a file is named,
+which is what makes a logout visible in a file that keeps them.
 .SH FILES
 /etc/utmp
+.br
+/etc/ttys
 .SH "SEE ALSO"
-getuid(2), utmp(5)
+getuid(2), utmp(5), ttys(5), login(1), mesg(1), write(1)
+.SH DIAGNOSTICS
+.B Note:
+v7 printed
+.RB ` "who: cannot open utmp" '
+on the standard output, naming a file it may not have been given.
+The diagnostic names the file that failed and goes to the standard error.
+Exit status is 1 in that case and 0 otherwise.

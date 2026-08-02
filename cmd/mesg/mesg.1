@@ -24,12 +24,51 @@ reinstates permission.
 All by itself,
 .I mesg
 reports the current state without changing it.
+The report goes to the standard error, which is also the descriptor
+.I mesg
+asks
+.IR ttyname (3)
+about.
+.PP
+.B Note:
+the two modes are 0622 and 0600, and the terminal nodes of this system
+are created 0622, so a fresh login receives messages.
+.PP
+.B Note:
+.IR chmod (2)
+here is gated on ownership, so
+.I mesg
+works only on a terminal the caller owns \-
+which is arranged by
+.IR login (1),
+whose
+.IR chown (2)
+runs before it drops privilege.
+.I Mesg
+is deliberately not set-user-id: it would otherwise let any user
+silence any terminal on the machine.
 .SH FILES
 /dev/tty*
 .br
 /dev
 .SH "SEE ALSO"
-write(1)
+write(1), wall(1M), who(1), chmod(2), ttyname(3)
 .SH DIAGNOSTICS
 Exit status is 0 if messages are receivable,
 1 if not, 2 on error.
+.PP
+.B Note:
+v7's program exited \-1 rather than 2 on an error, and this page
+was already right about it: an exit status above 127 does not survive
+.IR wait (2)
+on this machine, so \-1 reached the shell as 255.
+It is 2 now.
+.PP
+.B Note:
+a process with no terminal \- a
+.I mesg
+in a shell script with its standard error redirected \-
+now reports
+.RB ` "mesg: not a tty" '
+and exits 2, where v7 passed a null pointer to
+.IR stat (2).
