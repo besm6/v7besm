@@ -806,10 +806,11 @@ file /usr/test/memt
 source ../../rootfs/usr/test/memt
 mode 0755
 
-file /usr/test/kctlt     # kctl(2) over the kernel-variable table, kernel/ksym.c.  Here for
-                         # memt's reason and one of its own: b6sim has no kernel to hold a
-                         # table, so it refuses every call and cmd/sim/test asserts that
-                         # instead.  It reads /dev/kmem, so it runs as root and only root.
+file /usr/test/kctlt     # kctl(2) over the kernel-variable table, kernel/ksym.c.  One of the
+                         # few here that runs in BOTH worlds: b6sim imitates a kernel well
+                         # enough to answer it (cmd/sim/kernel.h), so the same transcript has
+                         # to come back from a simulator with no kernel and from this one.
+                         # It reads /dev/kmem, so on the image it runs as root and only root.
 source ../../rootfs/usr/test/kctlt
 mode 0755
 

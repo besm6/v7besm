@@ -49,9 +49,8 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/progs.cmake)
 # every program on that image gets.  ARGN also takes:
 #
 #   SIMONLY    b6sim test, no staging   -- spawn, whose premise is that /bin/sh cannot be exec'd
-#   IMAGEONLY  staging, no b6sim test   -- shellt, which needs a shell that really starts;
-#              memt, which reads and writes the kernel's own memory through /dev/mem; and
-#              kctlt, whose subject is a table only a kernel has (kernel/ksym.c)
+#   IMAGEONLY  staging, no b6sim test   -- shellt, which needs a shell that really starts,
+#              and memt, which reads and writes the kernel's own memory through /dev/mem
 #   PURE       link -n (NMAGIC)         -- puret, the one program that is about shared text
 #
 # THE STAGED FILE IS A COPY OF THE LINKED ONE, not a second link.  Two links of one source
@@ -160,7 +159,7 @@ b6_libtest(execs)
 b6_libtest(spawn SIMONLY)
 b6_libtest(shellt IMAGEONLY)
 b6_libtest(memt IMAGEONLY)
-b6_libtest(kctlt IMAGEONLY)
+b6_libtest(kctlt)
 b6_libtest(suidt IMAGEONLY)
 b6_libtest(timet)
 b6_libtest(pwent)

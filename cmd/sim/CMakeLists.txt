@@ -10,8 +10,18 @@ add_library(simulator STATIC
     arithmetic.cpp
     besm6_arch.cpp
     syscall.cpp
+    kernel.cpp
+    params.cpp
     trace.cpp
 )
+#
+# NOTE the absence of ${CMAKE_SOURCE_DIR}/include here, as in cmd/fsutil.  params.cpp
+# does read the kernel's sys/param.h -- it exists to static_assert kernel.cpp's copy of
+# the tunables against it -- but it reaches it by relative path instead, because
+# include/ is the kernel's FULL system-header tree: its own stdio.h, string.h and
+# sys/stat.h shadow the host's, and syscall.cpp needs the host's.  See the comment at
+# that include.
+#
 target_include_directories(simulator PUBLIC ${BESM6_CROSS_INCLUDE} ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(simulator PUBLIC aout)
 

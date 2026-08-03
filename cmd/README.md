@@ -633,6 +633,16 @@ Two harnesses, and choosing wrong wastes the effort:
   The general question, and it is the one `getpwent(3)` asks too: **when a program names a
   fixed absolute path or a global system state, ask whose it is under `b6sim`** — and if the
   answer is "the build machine's", the case belongs under the booted kernel or nowhere.
+  **One class of program is the exception, and it is new**: a program whose subject is
+  *kernel state*. `kctl(2)` and the memory devices are answered here by an imitation kernel
+  ([../doc/Aout_Simulator.md](../doc/Aout_Simulator.md) §7) rather than by the host, so
+  `/dev/kmem` under `b6sim` is neither the build machine's nor missing — it is a synthetic
+  one whose contents agree with what `kctl` reports. That is deliberately *unlike* every
+  other absolute path in this section, and the reason is the one `lib/test/kctlt` embodies:
+  a program that can only be tested under a boot is a program tested in the `weekly` suite,
+  which is not a gate. What the simulator cannot give it is *plurality* — `proc[]` holds one
+  live entry, the guest itself — so a `ps` can be checked for its formatting here and for
+  what it finds only on the image.
   Two more limits C2a ran into: **`stime(2)` is a no-op that reports success**, so a
   program that sets global state cannot be asserted there at all; and **`kill(2)` is the build
   machine's own**, so no case may name a pid. And two C2b ran into: a program that **does not

@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "kernel.h"
 #include "processor.h"
 
 class Machine {
@@ -82,6 +83,11 @@ public:
 
     // BESM-6 processor.
     Processor cpu;
+
+    // The kernel this simulator pretends to be running under: what kctl(2) reads and what
+    // /dev/kmem and /dev/mem serve.  There is no operating system inside b6sim, so every
+    // word of it is synthesized -- see kernel.h for what is real in it and what is not.
+    SimKernel kernel;
 
     // Constructor.
     explicit Machine(Memory &memory);

@@ -568,25 +568,155 @@ TEST(Syscall, ForkWait)
 }
 
 //
-// kctl(2) is refused: there is no kernel here, so there is no kernel-variable table and
-// every name is unknown.  ENOENT rather than EPERM -- a guest sees what a kernel whose
-// table is empty would say, which is a state it has to handle anyway, where EPERM would
-// invite it to retry as root.  The stack check is the other half: kctl's arity is 4, so
-// the three pushed words must be popped even though the call failed, and nothing else in
-// this suite exercises a 4-argument call at all.
+// kctl(2) over the imitation kernel (cmd/sim/kernel.h).
 //
-TEST(Syscall, KctlRefused)
+// THESE ARE NOT THE MAIN TEST OF IT.  lib/test/kctlt is, and it is stronger than anything
+// here can be: it runs the same guest program in both worlds and diffs the transcripts, so
+// it compares this implementation against kernel/ksym.c rather than against itself.  What
+// belongs here is what a guest program cannot conveniently reach -- the raw stack discipline,
+// and the shape of the bytes on the way out.
+//
+// A word of the guest's memory built into a fat char* pointing at its first byte.  The
+// pointer a real caller passes has exactly this shape (see put_string).
+static Word fat(unsigned addr)
+{
+    return BIT48 | (5ull << 44) | addr;
+}
+
+// kctl's four arguments: three pushed, the last in the accumulator.
+//
+// The break has to be set first, and that is not incidental.  kctl is the one call that
+// validates its pointers -- guest memory has no protection here, so a kernel's EFAULT has
+// to be imitated from the same two bounds estabur() uses, the break and the stack base
+// (user_addr_ok, syscall.cpp).  These tests load no program, so nothing has set a break and
+// every address would look like the unmapped hole.  A real run always has one.
+static void run_kctl(Machine &m, Word name, int op, Word buf, int len)
+{
+    m.set_program_break(0x1000);
+    run_syscall(m, SYS_kctl, { name, (Word)op, buf }, (Word)len);
+}
+
+TEST(Syscall, KctlStat)
+{
+    Memory memory;
+    Machine machine{ memory };
+    const unsigned S = 0x400;
+
+    Word name = put_string(memory, 0x300, "proc");
+    run_kctl(machine, name, 3 /* KCTL_STAT */, fat(S), 18);
+
+    // struct kctlstat is three words: kc_addr, kc_size, kc_flags.  All eighteen bytes come
+    // back, or kgetsym(3) fails -- it tests the count against sizeof.
+    EXPECT_EQ(machine.cpu.get_acc(), 18u);
+    EXPECT_EQ(machine.cpu.get_m(14), 0u);
+    EXPECT_GT(memory.load(S + 0), 0u);
+    EXPECT_LT(memory.load(S + 0), 054000u); // inside the kernel, below KEND
+    EXPECT_EQ(memory.load(S + 1), 150u * 72u); // NPROC * sizeof(struct proc)
+    EXPECT_EQ(memory.load(S + 2), 01u);        // KCTLF_RD
+
+    // The arity is 4, so the three pushed words must be popped.  Nothing else in this suite
+    // exercises a four-argument call, and a wrong count says nothing at all -- it drifts the
+    // user stack by a word per call.
+    EXPECT_EQ(machine.cpu.get_m(017), STACK);
+}
+
+//
+// A len of 0 copies nothing and reports the size available; a short len truncates and says
+// how much arrived.  That is read(2)'s rule and it is the only rule kctl has, so it is worth
+// pinning apart from the guest test.
+//
+TEST(Syscall, KctlSizing)
 {
     Memory memory;
     Machine machine{ memory };
 
     Word name = put_string(memory, 0x300, "proc");
-    // kctl(name, KCTL_STAT, buf, len): three words pushed, the length in the accumulator.
-    run_syscall(machine, SYS_kctl, { name, 3, 0x400 }, 18);
+    run_kctl(machine, name, 0 /* KCTL_GET */, 0, 0);
+    EXPECT_EQ(machine.cpu.get_acc(), 150u * 72u);
 
+    run_kctl(machine, name, 0, fat(0x400), 60);
+    EXPECT_EQ(machine.cpu.get_acc(), 60u);
+}
+
+//
+// KCTL_LIST returns fixed-width records and does not look at the name -- a null pointer
+// there is legal, and reading it would turn a good call into an EFAULT.
+//
+TEST(Syscall, KctlList)
+{
+    Memory memory;
+    Machine machine{ memory };
+    const unsigned S = 0x400;
+
+    run_kctl(machine, 0, 2 /* KCTL_LIST */, fat(S), 64 * 12);
+    int64_t n = (int64_t)machine.cpu.get_acc();
+    EXPECT_GT(n, 0);
+    EXPECT_EQ(n % 12, 0); // KSYMLEN-byte records
+
+    // The first name is proc, NUL-padded to its record, and every record holds a NUL.
+    std::string all = get_bytes(memory, S, (unsigned)n);
+    EXPECT_EQ(all.substr(0, 5), std::string("proc\0", 5));
+    for (int i = 0; i < n / 12; i++)
+        EXPECT_NE(all.find('\0', (size_t)i * 12), std::string::npos);
+}
+
+//
+// The refusals.  ENOENT for a name that is not exported, EINVAL for KCTL_SET (reserved and
+// unimplemented) and for a name with no NUL inside KSYMLEN bytes.
+//
+TEST(Syscall, KctlRefusals)
+{
+    Memory memory;
+    Machine machine{ memory };
+
+    Word bad = put_string(memory, 0x300, "no_such_var");
+    run_kctl(machine, bad, 3, fat(0x400), 18);
     EXPECT_EQ(machine.cpu.get_acc(), GUEST_MINUS_ONE);
     EXPECT_EQ(machine.cpu.get_m(14), 2u); // ENOENT
-    EXPECT_EQ(machine.cpu.get_m(017), STACK);
+
+    Word name = put_string(memory, 0x300, "proc");
+    run_kctl(machine, name, 1 /* KCTL_SET */, fat(0x400), 18);
+    EXPECT_EQ(machine.cpu.get_acc(), GUEST_MINUS_ONE);
+    EXPECT_EQ(machine.cpu.get_m(14), 22u); // EINVAL
+
+    Word longname = put_string(memory, 0x300, "aaaaaaaaaaaaaaaa"); // 16, no NUL in twelve
+    run_kctl(machine, longname, 3, fat(0x400), 18);
+    EXPECT_EQ(machine.cpu.get_acc(), GUEST_MINUS_ONE);
+    EXPECT_EQ(machine.cpu.get_m(14), 22u); // EINVAL
+}
+
+//
+// /dev/kmem is the imitation kernel's, not the host's -- the host has none on macOS and
+// would refuse it on Linux.  The word kctl reported as msgbuf's address must hold the
+// banner when read through the device: the two views have to agree, or a dmesg written
+// against one would read rubbish through the other.
+//
+TEST(Syscall, KmemReadsWhatKctlDescribes)
+{
+    Memory memory;
+    Machine machine{ memory };
+    const unsigned S = 0x400;
+
+    Word name = put_string(memory, 0x300, "msgbuf");
+    run_kctl(machine, name, 3 /* KCTL_STAT */, fat(S), 18);
+    ASSERT_EQ(machine.cpu.get_acc(), 18u);
+    unsigned addr = (unsigned)memory.load(S + 0);
+
+    Word path = put_string(memory, 0x300, "/dev/kmem");
+    run_syscall(machine, SYS_open, { path }, 0);
+    int fd = (int)machine.cpu.get_acc();
+    ASSERT_GE(fd, 0);
+
+    // A BYTE offset, like every other file: kernel word W is at W * 6 (kernel/dev/mem.c).
+    run_syscall(machine, SYS_seek, { (Word)fd, (Word)(addr * 6) }, 0);
+    EXPECT_EQ(machine.cpu.get_acc(), (Word)(addr * 6));
+
+    run_syscall(machine, SYS_read, { (Word)fd, fat(S) }, 6);
+    EXPECT_EQ(machine.cpu.get_acc(), 6u);
+    EXPECT_EQ(get_bytes(memory, S, 6), "BESM-6");
+
+    run_syscall(machine, SYS_close, { }, (Word)fd);
+    EXPECT_EQ(machine.cpu.get_acc(), 0u);
 }
 
 //

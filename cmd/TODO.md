@@ -298,6 +298,21 @@ That is the shape of this task and it is not a line count either.
   `/dev/mem` for a u-area at `p_addr`, which is above `KREACH` and out of `/dev/kmem`'s reach.
   Both nodes are mode 0640 root, so **these two run as root and only root**, exactly as v7's did.
 
+**And all four have a `b6sim` half, which is not what §9 of [README.md](README.md) would lead
+you to expect.** `b6sim` imitates a kernel now — the same nineteen variables, `/dev/kmem` and
+`/dev/mem` ([../doc/Aout_Simulator.md](../doc/Aout_Simulator.md) §7) — so a program whose
+subject is kernel state can be a `cmd/<x>/test/` case running in a tenth of a second, instead
+of waiting for the `weekly` boot. What the simulator cannot supply is **plurality**: `proc[]`
+holds one live entry, the guest itself, and `inode`, `file`, `text` and `mount` are empty on
+purpose. So the split per program is:
+
+| | asserted under `b6sim` | needs the boot |
+|---|---|---|
+| `dmesg` | everything: the ring is a fixed banner there, so the output is a literal | that a *real* `printf` reached `msgbuf` |
+| `iostat` | the format, and that the CPU column moves | any number with a second process in it |
+| `ps` | the format, the header, the flags, and one line — its own | more than one process, and a `WCHAN` worth printing |
+| `pstat` | the flags and the empty-table output | every number it exists to print |
+
 **Do not port v7's `ps`.** `ps.c` (408 lines, 17 `long`s) reads the proc table and then fetches
 each u-area *through the swap device* using PDP-11 memory-management assumptions that have no
 counterpart here — this kernel's u-area is two fixed physical pages at `074000` and its swap

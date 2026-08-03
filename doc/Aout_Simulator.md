@@ -303,9 +303,9 @@ field. The six calls with a second result deliver it in `r12` — see [§3](#3-h
 | Files & I/O | `open`, `creat`, `close`, `read`, `write`, `seek` (`lseek`), `dup`/`dup2`✦, `pipe`, `stat`/`fstat`, `access`, `stty`/`gtty`‡ |
 | Filesystem | `link`, `unlink`, `chdir`, `chroot`, `chmod`, `chown`, `mknod`, `utime`, `umask`, `sync` |
 | Time | `time`, `ftime`, `stime`§ |
+| Kernel state | `kctl`♦ — answered from an imitation kernel, along with `/dev/kmem` and `/dev/mem` |
 | Accepted no-ops | `ioctl`, `lock` |
 | Rejected (`EPERM`) | `mount`, `umount`, `ptrace`, `profil`, `acct`, `phys` — not meaningful for a user-level simulator |
-| Rejected (`ENOENT`) | `kctl`♦ — there is no kernel here, so there is no kernel-variable table |
 
 ★ `exec`/`exece` reload the image and lay the argument block at `070000` described in
 [§3](#how-a-program-starts) — the same code that starts the very first program, so a guest sees
@@ -344,14 +344,56 @@ rounded up to a whole page, and the call fails with `ENOMEM` if that reaches `07
 base, and therefore the argument block, not the current `r15` (which starts above the block and
 climbs). The kernel's own gate follows the same rule (`sbreak()` in `kernel/sys1.c`, whose
 ceiling is `estabur()`'s `nt + nd > USTKPAGE * PGSZ`), so one `sbrk()` serves both.
-♦ `kctl` reads a table only a kernel has ([Unix_V7_System_Calls.md §2.5](Unix_V7_System_Calls.md#25-kernel-introspection)),
-and there is no kernel underneath this simulator. Every operation therefore fails with
-**`ENOENT`** — what a kernel whose table is *empty* would answer, which is a state a caller has
-to handle anyway, where `EPERM` beside it in the table above would invite a retry as root that
-could never work. The arity is still 4, and that part is not cosmetic: the caller pushed three
-words below `r15` and the gate owes them back whether the call succeeded or not.
-`cmd/sim/test` asserts both the errno and the stack; a program whose subject is kernel state
-belongs under the booted kernel, which is why `lib/test/kctlt` is `IMAGEONLY`.
+♦ `kctl` reads a table only a kernel has
+([Unix_V7_System_Calls.md §2.5](Unix_V7_System_Calls.md#25-kernel-introspection)), and there is
+no kernel underneath this simulator — so b6sim **pretends to be one**. `cmd/sim/kernel.h` holds
+a block of memory laid out the way the kernel's low core is laid out, carrying the same
+nineteen variables `kernel/ksym.c` exports and a `struct user` at `UBASE`, answered through the
+same `KCTL_GET`/`KCTL_STAT`/`KCTL_LIST` and readable through `/dev/kmem` and `/dev/mem`.
+
+**Every value b6sim genuinely knows is the real one**, and every value it does not is left
+**zero** rather than invented. The guest's own pid, uid and parent fill `proc[0]` — the very
+numbers `getpid`, `getuid` and `getppid` return, so a program can check the table against
+something it learned another way. `time` is the host clock; `tk_nin`/`tk_nout` are the bytes
+actually moved through descriptors 0, 1 and 2; `lbolt` and `dk_time` come from the instruction
+counter, **all of it billed to `dk_time[0]`**, because there is no kernel here to charge system
+time to, nothing to be idle, and no nice — which is exactly what `kernel/clock.c` would record
+for a machine that never left user mode. `inode`, `file`, `text`, `mount`, the maps and `sc`
+are zero: b6sim has no counterpart for any of them, and a plausible fiction is worse than an
+empty table because a tool cannot tell it from a measurement. The one exception is `msgbuf`,
+which carries a fixed banner so that a `dmesg` has a line to print and its empty case stays
+tellable from its working one.
+
+**The memory devices take a real descriptor number** — borrowed by opening `/dev/null` — so
+`dup`, `close` and inheritance keep working with no descriptor table of b6sim's own; only
+`read`, `lseek` and `close` know the difference. A *write* to either is refused with `EPERM`:
+the kernel's would change core, and there is no core here to change. The offset rule is the
+kernel's, a byte offset with word `W` at `W * NBPW`; `/dev/kmem` ends at `KREACH` and
+`/dev/mem` reads as zero above it.
+
+**`EFAULT` is the one rule b6sim had to invent.** Guest memory is a flat array with no
+protection, so nothing faults on its own; `kctl` refuses a pointer in the hole between the
+break and the stack base, which is the span an unallocated page covers on the real machine.
+That check is scoped to this call alone — applying it everywhere would change what b6sim does
+with every out-of-range pointer any guest has ever handed it.
+
+**What checks all of this is not `cmd/sim/test`.** It is `lib/test/kctlt`, which is *not*
+`IMAGEONLY`: the same guest program runs in both worlds against one `.expected`, and it
+computes `NPROC * sizeof(struct proc)` and the `u_procp` arithmetic from the **real** headers.
+b6sim has to respell those layouts — `<sys/proc.h>` and `<sys/user.h>` carry the kernel's
+`dev_t` and `daddr_t` and will not compile on the host — so a drifted offset fails there and
+passes on the image, which is the signal that arrangement exists to produce. `cmd/sim/params.cpp`
+covers the counts, which `<sys/param.h>` can be reached for; the arity is still 4, and that
+part is not cosmetic either: the caller pushed three words below `r15` and the gate owes them
+back whether the call succeeded or not.
+
+**It earned its keep immediately.** `proc[0].p_ppid` was first filled with the host's `getppid()`
+whole, and a guest learns its parent's pid from `getppid()` — which reads **`r12`, an index
+register**, so `sys_ok2()` has already truncated it to fifteen bits. The two agreed only while
+the invoking shell's pid stayed under 32768, and the failure was intermittent by construction:
+the same simulator, the same program, a different day. Nothing but running the guest test in
+both worlds would have found it, and `cmd/sim/test`'s own cases could not have — they compare
+b6sim against itself.
 
 Files, standard input/output/error, and pipes map straight onto the corresponding host
 descriptors, so a program's output appears in your terminal and the files it creates are real
@@ -454,9 +496,15 @@ it, along with the rest of the toolchain's tests, with `make run`.
 `b6sim` is a user-level model, not the real machine, and deliberately leaves out anything that
 needs a full operating system:
 
-- No `ptrace`, no privileged or device operations, no `mount`. Signal **handlers** do run, but only
-  at a syscall return, and a signal number goes to the host as it stands.
+- No `ptrace`, no `mount`, and no device operations **but two**: `/dev/kmem` and `/dev/mem` are
+  served from the imitation kernel described in [§7](#7-system-calls), because a program whose
+  subject is kernel state has to be testable somewhere cheaper than a boot. Signal **handlers**
+  do run, but only at a syscall return, and a signal number goes to the host as it stands.
 - No separate filesystem — it uses the host's files, users, and permissions directly.
+- **The imitation kernel is one process wide.** `proc[]` has a single live entry, the guest's
+  own, so a `ps` run here lists itself and nothing else; the tables a `pstat` reads are empty
+  on purpose. Neither program is *wrong* under b6sim — it is that there is nothing for them to
+  find, and the booted kernel is where they have something to say.
 - One flat program image and one thread of control; `fork` uses the host's `fork`.
 - It does not model instruction timing or the real machine's peripherals — for that, use the
   full-machine [SIMH](https://github.com/besm6/simh/tree/master/BESM6/) emulator.

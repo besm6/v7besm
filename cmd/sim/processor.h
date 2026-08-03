@@ -93,6 +93,17 @@ private:
     void mem_get_bytes(Word fatptr, char *dst, unsigned n);
     void mem_put_bytes(Word fatptr, const char *src, unsigned n);
 
+    // Is `n' bytes at this fat pointer inside the guest's address space?  Guest memory has
+    // no protection here, so this is how kctl(2) imitates the kernel's EFAULT; see the
+    // definition in syscall.cpp for why nothing else uses it.
+    bool user_addr_ok(Word fatptr, unsigned n) const;
+
+    // kctl(2) over the imitation kernel (kernel.h), and the two memory devices it goes
+    // with.  sys_kctl() answers the table; dev_read()/dev_seek() serve /dev/kmem and
+    // /dev/mem, which have no host descriptor behind them.
+    void sys_kctl();
+    void sys_kctl_out(const char *src, unsigned avail, Word buf, int len);
+
     // Finish a syscall: result in the accumulator, errno (0 on success) in M[14].
     void sys_ok(int64_t result);
     // ... and a second result in r12, for v7's two-value calls (pipe, wait,

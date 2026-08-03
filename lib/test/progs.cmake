@@ -16,9 +16,12 @@
 #   memt    runs on the image ONLY, and is not a libc test at all: it is the user-mode half
 #           of the memory driver's (kernel/dev/mem.c, task 27), and this is where a program
 #           can be run off /usr/test by a real kernel for the price of one b6_libtest() call.
-#   kctlt   runs on the image ONLY, for memt's reason and one of its own: its subject is
-#           kctl(2) over the kernel-variable table (kernel/ksym.c), and b6sim has no kernel
-#           to hold one -- it refuses every call with ENOENT, which cmd/sim/test asserts.
+#   kctlt   IS NOT ONE OF THEM, and is worth naming for that: its subject is kctl(2) over
+#           the kernel-variable table (kernel/ksym.c), which for a while made it image-only
+#           like memt.  b6sim imitates a kernel now -- the table, the values behind it and
+#           /dev/kmem (cmd/sim/kernel.h) -- so the same program runs in BOTH worlds against
+#           the one .expected, and a disagreement between them means b6sim's respelled copy
+#           of the guest struct layouts has parted company with the real one.
 #   suidt   runs on the image ONLY, and is cmd/mkdir's and cmd/rmdir's (task C1a): it drops
 #           to uid 7 and execs them, which is the only way to reach getxfile()'s ISUID branch
 #           on a system whose every shell is root's.  There is no /bin/mkdir under b6sim.
@@ -28,7 +31,7 @@
 #   ttyt    runs on the image ONLY, and is the half pwent had to give up when kernel task 29b
 #           put /etc/ttys on the image: ttyname(0), ttyslot() and getlogin() answered the same
 #           in both worlds only while that file was missing.
-# So `spawn' is absent below and the other six are present: 29 names here, 24 b6sim cases
+# So `spawn' is absent below and the other five are present: 29 names here, 25 b6sim cases
 # next door.
 #
 # NOR IS EVERY NAME HERE A libc TEST any more.  termcapt is lib/libtermcap's and cursest and

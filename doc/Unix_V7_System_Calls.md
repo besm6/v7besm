@@ -163,6 +163,14 @@ ladder's first rung and [lib/test/kctlt.c](../lib/test/kctlt.c) is this one's.
 The interface is [include/sys/kctl.h](../include/sys/kctl.h); the table is
 [kernel/ksym.c](../kernel/ksym.c), and every row in it names the program that asked for it.
 
+**`b6sim` answers this call too**, from a kernel it pretends to be running under
+([cmd/sim/kernel.h](../cmd/sim/kernel.h)) — the same nineteen names, the guest's own pid and uid
+in `proc[0]`, zeros where the simulator has no counterpart, and `/dev/kmem` and `/dev/mem`
+served from the same block. That is what lets [lib/test/kctlt](../lib/test/kctlt.c) run in
+**both worlds against one `.expected`**, which is the only guard there is on the guest struct
+layouts b6sim has to respell: `kctlt` computes them from the real headers and a drifted offset
+fails under the simulator while passing on the image.
+
 ## 3. Signals
 
 `signal` (48) is the only signal *call* a program makes, but three more of the entries above are
@@ -236,9 +244,14 @@ These are the facts a reader cannot get from a v7 manual page.
   speed and no modem control behind the rest of them.
 
 `b6sim` implements the same set at user level, but not identically: `mount`, `umount`, `ptrace`,
-`profil`, `acct` and `phys` are refused with `EPERM`, `kctl` with `ENOENT` (there is no kernel,
-so there is no table, and an empty table is a state a caller must handle anyway), `ioctl` and
-`lock` are accepted no-ops, and `signal` supports only `SIG_DFL`/`SIG_IGN`. See
+`profil`, `acct` and `phys` are refused with `EPERM`, and `ioctl` and `lock` are accepted
+no-ops. Two entries need more than a clause. **`signal` runs a guest handler** — on the guest,
+at the end of a serviced extracode, which is where the kernel delivers too — so it is no longer
+the `SIG_DFL`/`SIG_IGN`-only stub this sentence used to describe. And **`kctl` is answered from
+an imitation kernel**: b6sim carries the same nineteen variables, fills in what it genuinely
+knows and zeroes what it does not, and serves `/dev/kmem` and `/dev/mem` from the same block —
+which is what lets `lib/test/kctlt` run in *both* worlds against one `.expected` rather than
+only under a boot. See
 [Aout_Simulator.md §7](Aout_Simulator.md#7-system-calls).
 
 ## 5. Rows that are not system calls

@@ -28,6 +28,7 @@
 #include <csignal>
 #include <cerrno>
 #include <cstdio>
+#include <cstring>
 #include <ctime>
 #include <string>
 #include <vector>
@@ -336,6 +337,152 @@ void Processor::mem_put_bytes(Word fatptr, const char *src, unsigned n)
     BytePointer bp = fat_to_byteptr(memory, fatptr);
     for (unsigned i = 0; i < n; i++)
         bp.put_byte((uint8_t)src[i]);
+}
+
+//
+// Is `n' bytes at this fat pointer inside the guest's address space?
+//
+// GUEST MEMORY HAS NO PROTECTION HERE -- it is one flat array, and every word of it can be
+// read -- so nothing faults on its own and a kernel's EFAULT has to be imitated.  b6sim
+// knows the same two bounds the kernel's estabur() sets: the data segment runs from 0 to
+// the break, and the stack occupies the top four pages from STACK_BASE.  The hole between
+// them is mapped by nothing on a real machine (kernel/README.md: an unallocated page has
+// РП = 0 and its РЗ bit set), so a reference into it is the one this refuses.
+//
+// SCOPED TO kctl DELIBERATELY.  Applying it to read(), write() and the rest would change
+// what b6sim does with every out-of-range pointer any guest has ever handed it, which is a
+// far larger behavioural change than this task is; lib/test/kctlt asserts EFAULT and needs
+// this much and no more.
+//
+bool Processor::user_addr_ok(Word fatptr, unsigned n) const
+{
+    unsigned addr = fatptr & BITS(15);
+    unsigned last = addr + (n + 5) / 6; // the last word the run can touch
+
+    if (last >= MEMORY_NWORDS)
+        return false;
+    if (addr >= STACK_BASE)
+        return true; // the stack pages
+    return last < machine.get_program_break();
+}
+
+//
+// Pack one guest word into six bytes, most significant first -- the order BytePointer
+// walks, and therefore the order a guest `char *' sees.
+//
+static void pack_word(char *dst, Word v)
+{
+    for (int i = 0; i < 6; i++)
+        dst[i] = (char)((v >> (40 - i * 8)) & 0xff);
+}
+
+//
+// Hand `avail' bytes at `src' to the caller, and report how many arrived.
+//
+// This is read(2)'s rule and the only rule kctl has: a `len' of 0 copies nothing and
+// answers with the size AVAILABLE, so a caller can size a buffer; a short `len' truncates
+// rather than failing, so completeness is a comparison the caller makes.  ksymout() in
+// kernel/ksym.c is the same function, and lib/test/kctlt compares the two.
+//
+void Processor::sys_kctl_out(const char *src, unsigned avail, Word buf, int len)
+{
+    if (len <= 0) {
+        sys_ok(avail);
+        return;
+    }
+    unsigned n = ((unsigned)len < avail) ? (unsigned)len : avail;
+    if (!user_addr_ok(buf, n)) {
+        sys_err(EFAULT);
+        return;
+    }
+    mem_put_bytes(buf, src, n);
+    sys_ok(n);
+}
+
+//
+// int kctl(const char *name, int op, void *buf, int len)
+//
+// The imitation kernel's half of kernel/ksym.c.  It has to match that file's BEHAVIOUR and
+// not merely its spirit: lib/test/kctlt runs against both and diffs the transcripts.
+//
+void Processor::sys_kctl()
+{
+    Word nameptr = syscall_arg(1, 4);
+    int op       = (int)sign_extend41(syscall_arg(2, 4));
+    Word buf     = syscall_arg(3, 4);
+    int len      = (int)sign_extend41(syscall_arg(4, 4));
+
+    // Bring the clock and the counters up to date, so that two reads a moment apart differ
+    // the way they would on a running machine.
+    machine.kernel.refresh(Machine::get_instr_count());
+
+    // KCTL_LIST first, and before the name is touched: it names nothing, so a caller may
+    // pass anything at all there -- a null pointer included -- and reading it would turn a
+    // legal call into an EFAULT.  The names go out as fixed-width records.
+    if (op == kctlop::LIST) {
+        unsigned n = (unsigned)machine.kernel.count() * kctlop::KSYMLEN;
+        std::vector<char> names(n, 0);
+        for (int i = 0; i < machine.kernel.count(); i++) {
+            const char *nm = machine.kernel.entry(i).name;
+            memcpy(&names[(size_t)i * kctlop::KSYMLEN], nm, strlen(nm));
+        }
+        sys_kctl_out(names.data(), n, buf, len);
+        return;
+    }
+
+    // The name.  At most KSYMLEN bytes, and EINVAL if no NUL arrives inside them --
+    // mem_get_string() will not do here: it has no length limit and no fault, and would
+    // scan to the end of memory.
+    if (!user_addr_ok(nameptr, kctlop::KSYMLEN)) {
+        sys_err(EFAULT);
+        return;
+    }
+    char kn[kctlop::KSYMLEN + 1] = {};
+    mem_get_bytes(nameptr, kn, kctlop::KSYMLEN);
+    int i;
+    for (i = 0; i < kctlop::KSYMLEN && kn[i]; i++)
+        ;
+    if (i == kctlop::KSYMLEN) {
+        sys_err(EINVAL);
+        return;
+    }
+
+    const SimKernel::Entry *e = machine.kernel.find(kn);
+    if (e == nullptr) {
+        sys_err(ENOENT);
+        return;
+    }
+
+    switch (op) {
+    case kctlop::GET: {
+        // Only as much as is going to be handed over -- a `len' of 0 wants the size and
+        // no bytes at all, and proc is 10800 of them.
+        unsigned want = (len <= 0) ? 0 : (((unsigned)len < e->size) ? (unsigned)len : e->size);
+        std::vector<char> v(want, 0);
+        if (want > 0)
+            machine.kernel.read_bytes(e->addr, 0, v.data(), want);
+        sys_kctl_out(v.data(), e->size, buf, len);
+        return;
+    }
+
+    case kctlop::STAT: {
+        // struct kctlstat is three words, and it goes out BYTEWISE like everything else:
+        // the kernel uses copyoutb() for it too, so a short or odd `len' truncates the
+        // same way and kgetsym(3) fails unless a full 18 bytes come back.
+        char st[kctlop::STAT_WORDS * 6];
+        pack_word(st + 0, e->addr);
+        pack_word(st + 6, e->size);
+        pack_word(st + 12, kctlop::FLAG_RD);
+        sys_kctl_out(st, sizeof st, buf, len);
+        return;
+    }
+
+    default:
+        // KCTL_SET lands here with everything else: it is reserved rather than refused on
+        // its own account, and nothing may write a kernel variable yet.
+        sys_err(EINVAL);
+        return;
+    }
 }
 
 //
@@ -659,11 +806,35 @@ void Processor::syscall(unsigned num)
             break;
         }
         std::vector<char> buf(n);
+
+        // A memory device has no host descriptor behind it: serve it from the imitation
+        // kernel, at the byte offset lseek left, and clip at the node's own ceiling --
+        // /dev/kmem ends where an unmapped access does, as kernel/dev/mem.c ends it.
+        SimKernel::DevFd *dev = machine.kernel.dev_find(fd);
+        if (dev != nullptr) {
+            machine.kernel.refresh(Machine::get_instr_count());
+            uint64_t end   = (uint64_t)SimKernel::dev_limit(dev->minor) * 6;
+            uint64_t avail = (dev->offset < end) ? end - dev->offset : 0;
+            unsigned got   = (unsigned)((uint64_t)n < avail ? (uint64_t)n : avail);
+            if (got > 0) {
+                machine.kernel.read_bytes((unsigned)(dev->offset / 6),
+                                          (unsigned)(dev->offset % 6), buf.data(), got);
+                mem_put_bytes(bufptr, buf.data(), got);
+                dev->offset += got;
+            }
+            sys_ok(got); // 0 is the end of the device, as it is the end of a file
+            break;
+        }
+
         ssize_t r = ::read(fd, buf.data(), n);
         if (r < 0)
             sys_err(errno);
         else {
             mem_put_bytes(bufptr, buf.data(), (unsigned)r);
+            // tk_nin counts what came off the terminal, and this is the only place b6sim
+            // moves any: descriptor 0 is the guest's standard input (kernel.h).
+            if (fd == 0)
+                machine.kernel.count_tty_in((unsigned)r);
             sys_ok(r);
         }
         break;
@@ -680,7 +851,18 @@ void Processor::syscall(unsigned num)
         }
         std::vector<char> buf(n);
         mem_get_bytes(bufptr, buf.data(), (unsigned)n);
-        sys_ret(::write(fd, buf.data(), n));
+        // A write to a memory device is refused rather than served: the kernel's would
+        // change core, and there is no core here to change.  EPERM says the node is not
+        // writable to this caller, which is the nearest true thing.
+        if (machine.kernel.dev_find(fd) != nullptr) {
+            sys_err(EPERM);
+            break;
+        }
+        ssize_t w = ::write(fd, buf.data(), n);
+        // tk_nout counts what went to the terminal: descriptors 1 and 2 (kernel.h).
+        if (w > 0 && (fd == 1 || fd == 2))
+            machine.kernel.count_tty_out((unsigned)w);
+        sys_ret((int64_t)w);
         break;
     }
 
@@ -689,14 +871,35 @@ void Processor::syscall(unsigned num)
         std::string path = mem_get_string(syscall_arg(1, 2));
         int vmode        = (int)sign_extend41(syscall_arg(2, 2));
         int hmode        = (vmode == 0) ? O_RDONLY : (vmode == 1) ? O_WRONLY : O_RDWR;
+
+        // /dev/kmem and /dev/mem are the imitation kernel's, not the host's -- the host's
+        // are absent on macOS and unreadable on Linux, and neither would hold what a guest
+        // is asking for.  The node still takes a REAL descriptor number, borrowed by
+        // opening /dev/null, so that dup(), close() and exec inheritance keep working with
+        // no descriptor table of b6sim's own; only the three calls below know the
+        // difference.  See kernel.h.
+        int minor = SimKernel::dev_minor(path);
+        if (minor >= 0) {
+            int fd = ::open("/dev/null", O_RDONLY);
+            if (fd < 0)
+                sys_err(errno);
+            else {
+                machine.kernel.dev_add(fd, minor);
+                sys_ok(fd);
+            }
+            break;
+        }
         sys_ret(::open(path.c_str(), hmode));
         break;
     }
 
-    case SYS_close:
+    case SYS_close: {
         // int close(int fd)
-        sys_ret(::close((int)sign_extend41(syscall_arg(1, 1))));
+        int fd = (int)sign_extend41(syscall_arg(1, 1));
+        machine.kernel.dev_close(fd);
+        sys_ret(::close(fd));
         break;
+    }
 
     case SYS_wait: {
         // wait(): no arguments.  The pid comes back in the accumulator and the
@@ -839,6 +1042,22 @@ void Processor::syscall(unsigned num)
         int fd       = (int)sign_extend41(syscall_arg(1, 3));
         off_t off    = (off_t)sign_extend41(syscall_arg(2, 3));
         int whence   = (int)sign_extend41(syscall_arg(3, 3));
+
+        // A memory device seeks in b6sim's own bookkeeping.  A BYTE offset, like every
+        // other file: kernel word W is at W * NBPW (kernel/dev/mem.c).
+        SimKernel::DevFd *dev = machine.kernel.dev_find(fd);
+        if (dev != nullptr) {
+            int64_t end  = (int64_t)SimKernel::dev_limit(dev->minor) * 6;
+            int64_t base = (whence == 1) ? (int64_t)dev->offset : (whence == 2) ? end : 0;
+            int64_t pos  = base + off;
+            if (pos < 0)
+                sys_err(EINVAL);
+            else {
+                dev->offset = (uint64_t)pos;
+                sys_ok(pos);
+            }
+            break;
+        }
         sys_ret((int64_t)::lseek(fd, off, whence));
         break;
     }
@@ -959,10 +1178,14 @@ void Processor::syscall(unsigned num)
         int fd2 = (int)sign_extend41(syscall_arg(2, 2));
         int m   = fd & ~077;
         fd &= 077;
-        if (m & 0100)
-            sys_ret(::dup2(fd, fd2));
-        else
-            sys_ret(::dup(fd));
+        // A memory device's descriptor is a real one (it borrowed /dev/null's), so the
+        // host duplicates it; what has to follow is b6sim's own note of which node it is
+        // and how far into it the copy starts -- v7 shares the offset between a
+        // descriptor and its dup, and so does this.
+        int nfd = (m & 0100) ? ::dup2(fd, fd2) : ::dup(fd);
+        if (nfd >= 0)
+            machine.kernel.dev_dup(fd, nfd);
+        sys_ret(nfd);
         break;
     }
 
@@ -1088,14 +1311,7 @@ void Processor::syscall(unsigned num)
 
     case SYS_kctl:
         // int kctl(const char *name, int op, void *buf, int len)
-        //
-        // There is no kernel under this simulator, so there is no kernel-variable table:
-        // every name is unknown and every operation says so.  ENOENT and not EPERM above
-        // it -- a guest sees exactly what a kernel whose table is empty would say, which
-        // is a state the caller has to handle anyway, where EPERM would invite it to
-        // retry as root.  A program whose subject is kernel state belongs under the
-        // booted kernel; lib/test/kctlt is IMAGEONLY for this reason.
-        sys_err(ENOENT);
+        sys_kctl();
         break;
 
     default:

@@ -350,6 +350,11 @@ void Machine::exec(const std::string &filename, const std::vector<std::string> &
     // Loads the image and seeds PC, the stack pointer and the break.
     load_program(filename);
 
+    // The imitation kernel's u_comm, which the real one fills in here too (exec() in
+    // kernel/sys1.c).  It is what a ps prints, and it is one more value b6sim genuinely
+    // knows rather than has to invent.
+    kernel.set_comm(filename);
+
     unsigned ap = STACK_BASE;
     BytePointer up(memory, sbase, 0);
 
