@@ -1,0 +1,8 @@
+Usage:
+    disasm [-bcCrR] file...
+Options:
+    -b    Use BEMSH (Cyrillic) mnemonics instead of the default MADLEN
+    -c    Also print each instruction word in octal
+    -C    Print instruction words only in octal (implies -c)
+    -r    Print relocation info
+    -R    Print relocation as numbers (implies -r)

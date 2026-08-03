@@ -74,16 +74,23 @@ words** (a member is a 12-bit offset from a base register — move the big array
 and the **4,096-word stack**, where a long function costs 1.5–2 words per source line of
 temporaries before any array. `cmd/README.md` §6 is the account and `cmd/cpp` the worked example.
 
-**Three programs are built twice** — `cmd/cpp`, `cmd/as` and `cmd/ld` — as the host tools
-`b6cpp`/`b6as`/`b6ld` and, from the same sources, as `build/rootfs/usr/bin/{cpp,as,ld}`
-(`cmd/<x>/rootfs/`; tasks C9a and C9b, self-hosting). **The machine assembles and links its own
-programs**: the native `as` and `ld` reproduce the host tools' objects and images byte for
-byte, the whole kernel and the toolchain itself included. These are the only places the
-ceilings actually bind a program, and each carries a BESM-6 size profile keyed on the `besm6`
-macro `b6cpp` always predefines — `cmd/cpp/defs.h` (below the C11 §5.2.4.1 minima), `cmd/as/as.h`,
-`cmd/ld/intern.h`. Each README's "Building for the BESM-6" has the measurements. A second
-native build of a host tool needs its own subdirectory, since `cmd/<x>` is added above the
-`B6RUNTIME_LIB` guard where `b6_prog()` does not yet exist.
+**Seven programs are built twice** — `cmd/cpp`, `as`, `ld`, `nm`, `size`, `strip` and `disasm`
+— as the host tools `b6cpp`/`b6as`/… and, from the same sources, as
+`build/rootfs/usr/bin/{cpp,as,ld,nm,size,strip,disasm}` (`cmd/<x>/rootfs/`; tasks C9a–C9c,
+self-hosting), plus `cmd/lorder`, a shell script `configure_file`d twice on the one `nm` it
+names. **The machine assembles and links its own programs and reads back what it built**: the
+native `as` and `ld` reproduce the host tools' objects and images byte for byte, the whole
+kernel and the toolchain itself included.
+
+The first three are the only places the ceilings actually bind, and each carries a BESM-6 size
+profile keyed on the `besm6` macro `b6cpp` always predefines — `cmd/cpp/defs.h` (below the C11
+§5.2.4.1 minima), `cmd/as/as.h`, `cmd/ld/intern.h`. Of C9c's four only two changed anything:
+`cmd/nm/nm.c`'s `QUANT` (a *heap* step `rootfs_<name>_size` cannot see — a `struct nlist` is
+four words) and `cmd/strip/strip.c`'s `BUFSZ` (a *stack* array, 8,192 bytes being a third of
+the stack); `size` and `disasm` are character-for-character the host build. Each README's
+"Building for the BESM-6" has the measurements. A second native build of a host tool needs its
+own subdirectory, since `cmd/<x>` is added above the `B6RUNTIME_LIB` guard where `b6_prog()`
+does not yet exist.
 
 Three traps the toolchain sources hit and nothing else has: **`b6lower` ignores designated
 initializers** and initializes positionally, silently (`cmd/as/main.c`, `cmd/ld/ld.c` say so);

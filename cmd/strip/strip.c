@@ -4,18 +4,26 @@
 //                                in place via a temporary file.
 //
 
-#include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #include "besm6/b.out.h"
 
 #include "strip.h"
 
-#define BUFSZ 8192 // copy chunk size in bytes
+//
+// The copy chunk, in bytes, and it lives ON THE STACK in copy().  The BESM-6
+// build cuts it to one stdio buffer -- 3,072 bytes is 512 words, this machine's
+// block size -- because 8,192 bytes is 1,366 words and the whole stack is 4,096
+// (cmd/README.md SS6).  Nothing checks that ceiling at run time.
+//
+#ifdef besm6
+#define BUFSZ BUFSIZ
+#else
+#define BUFSZ 8192
+#endif
 
 static char *progname = "strip"; // diagnostic prefix: basename of argv[0]
 
@@ -100,9 +108,7 @@ static void usage(void)
 
 int strip_run(int argc, char **argv)
 {
-    char tname[] = "/tmp/stripXXXXXX";
     FILE *tf;
-    int fd;
     int status = 0;
     int i;
 
@@ -117,17 +123,20 @@ int strip_run(int argc, char **argv)
         return 1;
     }
 
+    // The signals are ignored for the sake of the file being REWRITTEN, which
+    // spends a moment truncated: the scratch stream below needs no protecting,
+    // tmpfile() having unlinked it before it ever returned.
     signal(SIGHUP, SIG_IGN);
     signal(SIGINT, SIG_IGN);
     signal(SIGQUIT, SIG_IGN);
 
-    fd = mkstemp(tname);
-    if (fd < 0 || (tf = fdopen(fd, "w+")) == NULL) {
+    // tmpfile() rather than mkstemp(): only the STREAM is wanted here, never the
+    // name, and this libc has no mkstemp() -- only v7's mktemp(), which walks one
+    // letter.  The file is unlinked the moment the stream holds it, so it goes
+    // away on the fclose() below and on an uncaught signal alike.
+    tf = tmpfile();
+    if (tf == NULL) {
         fprintf(stderr, "%s: error: cannot create temp file\n", progname);
-        if (fd >= 0) {
-            close(fd);
-            unlink(tname);
-        }
         return 2;
     }
     for (i = 1; i < argc; i++) {
@@ -138,6 +147,5 @@ int strip_run(int argc, char **argv)
             break;
     }
     fclose(tf);
-    unlink(tname);
     return status;
 }

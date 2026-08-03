@@ -1,0 +1,4 @@
+Usage:
+    size [-w] file...
+Options:
+    -w          Print sizes in words instead of bytes

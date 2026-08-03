@@ -17,7 +17,24 @@
 
 #define N_FORMAT "%05lo" // octal printf format for a symbol value
 
+//
+// How many symbols the table grows by at a time.  This is a growth step, not a
+// ceiling: the table keeps growing until malloc() says no.
+//
+// The BESM-6 build cuts it because a `struct nlist' is FOUR WORDS here and the
+// step is paid twice -- realloc() holds the old block while it copies -- so 2048
+// asks for 8,192 words up front and 24,576 at the first growth, against a heap
+// that is what remains of 28,672 after the program itself.  256 is one 1,024-word
+// malloc page exactly (cmd/README.md SS6: measure the break, not the request), and
+// the corpus fits inside three of them: the largest symbol table in this tree is
+// kernel/unix's 623, the largest archive MEMBER 139 -- and a member is all that is
+// live at once, nm() freeing the table per file and per member both.
+//
+#ifdef besm6
+#define QUANT 256
+#else
 #define QUANT 2048
+#endif
 
 static int numsort_flg;
 static int undef_flg;

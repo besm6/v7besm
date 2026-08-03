@@ -1,0 +1,49 @@
+
+# The default below is filled in by CMake -- b6nm for the host b6lorder, plain nm
+# for the copy staged onto the disk image, where the tool is /usr/bin/nm and there
+# is no b6 prefix on anything (task C9c).  (This comment says it that way round
+# because the placeholder would be substituted here too.)  The braces have NO
+# COLON in them on purpose --
+# v7's sh takes ${name-word} and not ${name:-word}, `:' not being a T_DEF
+# character in cmd/sh/ctype.h, and this script has to parse under that shell.
+NM=${NM-@NM@}
+
+# Backquotes, not $(...): v7's sh has no $( ) at all.  Every other construct here
+# -- ${name-word}, $$, $*, case, trap -- it does have.
+prog=`basename "$0"`
+trap "rm -f $$sym?ef; exit" 0 1 2 13 15
+case $# in
+0)	echo "Usage:"
+	echo "    $prog file ..."
+	echo "Emit dependency pairs among object files and archives, for tsort(1)."
+	exit 1 ;;
+1)	case $1 in
+	*.o)	set $1 $1
+	esac
+esac
+$NM -g $* | sed '
+	/^$/d
+	/:$/{
+		/\.o:/!d
+		s/://
+		h
+		s/.*/& &/
+		p
+		d
+	}
+	/[TDL] /{
+		s/.* //
+		G
+		s/\n/ /
+		w '$$symdef'
+		d
+	}
+	s/.* //
+	G
+	s/\n/ /
+	w '$$symref'
+	d
+'
+sort $$symdef -o $$symdef
+sort $$symref -o $$symref
+join $$symref $$symdef | sed 's/[^ ]* *//'

@@ -157,6 +157,15 @@ if(B6RUNTIME_LIB)
     # a subdirectory for the same reason cmd/cpp/rootfs is, and each says so.
     add_subdirectory(cmd/as/rootfs)
     add_subdirectory(cmd/ld/rootfs)
+    # /usr/bin/{size,disasm,nm,strip} -- the read-only binutils, task C9c, and what
+    # makes the three above usable: the machine can now read back what it built.
+    add_subdirectory(cmd/size/rootfs)
+    add_subdirectory(cmd/disasm/rootfs)
+    add_subdirectory(cmd/nm/rootfs)
+    add_subdirectory(cmd/strip/rootfs)
+    # ...and lorder, which came along with nm: a shell script, so it is staged
+    # rather than compiled, but it is the same one-source-two-copies shape.
+    add_subdirectory(cmd/lorder/rootfs)
     add_subdirectory(cmd/sh)
     add_subdirectory(cmd/basename)
     add_subdirectory(cmd/cal)

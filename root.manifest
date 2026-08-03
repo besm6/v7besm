@@ -805,6 +805,61 @@ file /usr/bin/ld        # cmd/ld built natively -- task C9b, and the point of th
 source ../../rootfs/usr/bin/ld
 mode 0755
 
+# THE READ-ONLY BINUTILS, task C9c, and what makes the three above usable: with these the
+# machine can read back what it just built.  All four are the same shape as cpp/as/ld --
+# one set of sources, two builds -- but only two of them changed anything at all for the
+# target, and neither change is an address-space cut.  They are small: nm is 6,147 words,
+# disasm 6,439, strip 5,501 and size 5,068, where cpp and ld are near 24,000.
+
+file /usr/bin/nm        # cmd/nm built natively.  The one number the target changes is
+                        # QUANT, the symbol table's growth step, and it is a HEAP number
+                        # the rootfs_nm_size check cannot see: a `struct nlist' is four
+                        # words here, so the host's 2048 asks for 8,192 words at once and
+                        # 24,576 at the first realloc().  256 is one malloc page, and the
+                        # corpus fits in three of them -- the largest symbol table in the
+                        # tree is the kernel's 623.  cmd/nm/README.md has the measurements.
+source ../../rootfs/usr/bin/nm
+mode 0755
+
+file /usr/bin/size      # cmd/size built natively.  Nothing about it changed for the
+                        # target: it reads a header, prints six numbers and holds nothing
+                        # while it does.  The only one of the four with no size profile at
+                        # all, which is why it went first.  cmd/size/README.md.
+source ../../rootfs/usr/bin/size
+mode 0755
+
+file /usr/bin/strip     # cmd/strip built natively -- the only one of the four that WRITES,
+                        # rewriting the file it is given through a tmpfile() scratch stream,
+                        # so it wants the /tmp above and the others do not.  Two things
+                        # changed for the target and both are in cmd/strip/strip.c: BUFSZ,
+                        # the copy chunk, which is 8,192 bytes of STACK on the host and
+                        # 1,366 words of a 4,096-word stack here; and mkstemp(), which this
+                        # libc has not got.  cmd/strip/README.md.
+source ../../rootfs/usr/bin/strip
+mode 0755
+
+file /usr/bin/disasm    # cmd/disasm built natively.  Not a v7 program at all -- this repo
+                        # wrote it -- and the one place the machine reads its own
+                        # instruction encoding back.  Nothing changed for the target; the
+                        # two mnemonic tables are 80 const pointers and the line buffer is
+                        # 64 bytes.  The Cyrillic (BEMSH) names are UTF-8 literals and come
+                        # through b6cc unharmed, which the -b agreement case asserts.
+                        # cmd/disasm/README.md.
+source ../../rootfs/usr/bin/disasm
+mode 0755
+
+file /usr/bin/lorder    # cmd/lorder -- a SHELL SCRIPT, and the only thing task C9c put here
+                        # that is not compiled.  It came along with nm, which was the last
+                        # program its pipe wanted that this image had not got: sed, sort,
+                        # join, basename and tsort have been here since C5f.  The copy is
+                        # configured from cmd/lorder/lorder.sh.in with nm rather than b6nm
+                        # as its default, and the script is written to parse under v7's sh
+                        # -- backquotes, and ${name-word} with no colon.  It has no `#!'
+                        # line and wants none: this kernel has no such thing, and the shell
+                        # reads a file back itself when exec returns ENOEXEC.
+source ../../rootfs/usr/bin/lorder
+mode 0755
+
 file /usr/lib/diffh     # cmd/diffh -- task C5f.  diff -h execv's this path; see the
                         # /usr/lib stanza above.  Its window is RANGE (30) lines of each
                         # file, so its storage is bounded by a constant where diff's is

@@ -4,8 +4,9 @@
 #
 # b6_prog() takes a flat SOURCES list and there is no native archive to link
 # against, so every program built for the BESM-6 that touches an a.out has to
-# name these files itself.  cmd/as/rootfs and cmd/ld/rootfs do today; the
-# binutils of task C9c will each want the same list again.
+# name these files itself.  Six do: cmd/as/rootfs and cmd/ld/rootfs (task C9b),
+# and cmd/{nm,size,strip,disasm}/rootfs (task C9c).  ar and ranlib will be the
+# first to want the fd flavour below as well.
 #
 # Read with a path relative to the includer, exactly as lib/test/progs.cmake is.
 #
@@ -30,9 +31,10 @@ set(B6_LIBAOUT_SOURCES_NATIVE
     ${_LIBAOUT_DIR}/shortaddr.c)
 
 # ...and the file-descriptor flavour, which exists for ar/ranlib's in-place
-# archive rewrites.  Neither as nor ld calls any of it, and b6_prog() links
-# every object it is handed whether it is referenced or not, so these four stay
-# out of a native program until a native ar wants them.
+# archive rewrites.  None of the six above calls any of it -- nm reads an archive
+# header through the FILE* fgetarhdr() -- and b6_prog() links every object it is
+# handed whether it is referenced or not, so these four stay out of a native
+# program until a native ar wants them.
 set(B6_LIBAOUT_SOURCES
     ${B6_LIBAOUT_SOURCES_NATIVE}
     ${_LIBAOUT_DIR}/getarhdr.c

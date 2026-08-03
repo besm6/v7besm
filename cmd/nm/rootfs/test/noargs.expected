@@ -1,0 +1,9 @@
+Usage:
+    nm [-goprun] file...
+Options:
+    -n          Sort numerically by value
+    -g          List global (external) symbols only
+    -u          List undefined symbols only
+    -r          Sort in reverse order
+    -p          Don't sort; print in symbol-table order
+    -o          Prepend the file name to each line

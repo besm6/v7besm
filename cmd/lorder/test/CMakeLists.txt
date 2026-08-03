@@ -9,7 +9,10 @@
 add_executable(lorder_test lorder_test.cpp)
 target_link_libraries(lorder_test PRIVATE GTest::gtest_main)
 target_compile_definitions(lorder_test PRIVATE
-    LORDER_SH="${CMAKE_CURRENT_SOURCE_DIR}/../lorder.sh"
+    # The CONFIGURED script, not the .in: @NM@ is unsubstituted in the input, and
+    # the test overrides NM anyway, but running the input would be testing a file
+    # nothing installs.  ../CMakeLists.txt writes this one.
+    LORDER_SH="${CMAKE_CURRENT_BINARY_DIR}/../lorder.sh"
     B6AS_EXE="$<TARGET_FILE:b6as>"
     B6NM_EXE="$<TARGET_FILE:b6nm>")
 add_dependencies(lorder_test b6as b6nm) # the script chain shells out to both
