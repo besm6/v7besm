@@ -55,10 +55,10 @@ anything: it is to build what is already here a *second* time, for the target.
 
 ### C9a. `cpp`
 
-**See [cpp/TODO.md](cpp/TODO.md)**, which is a complete plan already: two external-compiler bugs
-(B1, B2), one libc gap (G1), and two address-space limits (L1, L2), each with a minimal repro. Do
-not restate any of it here. It is the gate for the rest of this task, and the compiler bugs are
-gates for far more than `cpp`.
+**See [cpp/TODO.md](cpp/TODO.md)**, which is a complete plan already: one external-compiler bug
+(B2), one libc gap (G1), and two address-space limits (L1, L2), each with a minimal repro. Do
+not restate any of it here. It is the gate for the rest of this task, and the compiler bug is a
+gate for far more than `cpp`.
 
 ### C9b. `as`, `ld`
 

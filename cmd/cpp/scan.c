@@ -310,72 +310,25 @@ char *scan_token(char *p)
                     break;
             }
             break;
-        // An identifier (letter or '_' start): this is where macro names are
-        // recognized.  If we are skipping a false #if branch, just consume it
-        // (goto nomac).  Otherwise run the superimposed-code filter character by
-        // character (TMAC1): the moment a position rules out every macro
-        // name we jump to nomac and skip the lookup; if the name survives the
-        // filter we call lookup_token, which expands it if it is really a macro.
-        case 'A':
-        case 'B':
-        case 'C':
-        case 'D':
-        case 'E':
-        case 'F':
-        case 'G':
-        case 'H':
-        case 'I':
-        case 'J':
-        case 'K':
-        case 'L':
-        case 'M':
-        case 'N':
-        case 'O':
-        case 'P':
-        case 'Q':
-        case 'R':
-        case 'S':
-        case 'T':
-        case 'U':
-        case 'V':
-        case 'W':
-        case 'X':
-        case 'Y':
-        case 'Z':
-        case '_':
-        case 'a':
-        case 'b':
-        case 'c':
-        case 'd':
-        case 'e':
-        case 'f':
-        case 'g':
-        case 'h':
-        case 'i':
-        case 'j':
-        case 'k':
-        case 'l':
-        case 'm':
-        case 'n':
-        case 'o':
-        case 'p':
-        case 'q':
-        case 'r':
-        case 's':
-        case 't':
-        case 'u':
-        case 'v':
-        case 'w':
-        case 'x':
-        case 'y':
-        case 'z':
-        // High bytes start a UTF-8 identifier (e.g. Cyrillic macro names).  The
-        // range deliberately skips the marker bytes 0xFA-0xFE: PAINT_END_MARK
-        // (0xFB) has its own case earlier in the switch, and the four WB markers
-        // (0xFA, 0xFC-0xFE) have no case, so a stray one in live text just falls
-        // through and is emitted as-is rather than starting an identifier.
-        case 0x80 ... 0xF9:
-        case 0xFF:
+        // An identifier start: a letter, '_', or a high byte (a UTF-8 name such
+        // as a Cyrillic macro name).  char_class marks exactly those IDENT --
+        // digits are NUMBR and handled above, and the five marker bytes are
+        // cleared back to 0 in cpp.c -- so one lookup selects the case.  It is a
+        // guarded default rather than the label list plus `case 0x80 ... 0xF9:
+        // case 0xFF:` because the GCC case-range extension is not C11 and
+        // b6parse (https://github.com/besm6/c-compiler/) does not parse it.
+        // Every other byte, a stray marker included, breaks out here and is
+        // emitted as-is, exactly as falling out of the switch did before.
+        //
+        // This is where macro names are recognized.  If we are skipping a false
+        // #if branch, just consume it (goto nomac).  Otherwise run the
+        // superimposed-code filter character by character (TMAC1): the moment a
+        // position rules out every macro name we jump to nomac and skip the
+        // lookup; if the name survives the filter we call lookup_token, which
+        // expands it if it is really a macro.
+        default:
+            if (cpp.char_class[(unsigned char)*cpp.tok_ptr] != IDENT)
+                break;
 
             if (cpp.false_level)
                 goto nomac;

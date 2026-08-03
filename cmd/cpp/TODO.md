@@ -20,16 +20,15 @@ and the plan is all blockers.
 
 **The build machinery is the easy 20%.** The real content of this plan is a set of blockers
 found by actually running `b6cc -c` over all eight sources — every one below is reproduced with
-a minimal case, not guessed. Two are **bugs in the external c-compiler**
-(<https://github.com/besm6/c-compiler/>), which is a separate repo; they are general-C bugs, not
-cpp-specific, so a self-hosting toolchain has to fix them anyway. One is a libc gap. Two are
+a minimal case, not guessed. One is a **bug in the external c-compiler**
+(<https://github.com/besm6/c-compiler/>), which is a separate repo; it is a general-C bug, not
+cpp-specific, so a self-hosting toolchain has to fix it anyway. One is a libc gap. Two are
 BESM-6 address-space limits this repo owns.
 
 ### The blockers, each with its minimal repro
 
 | # | Where | What | Minimal repro (all deterministic) |
 |---|---|---|---|
-| **B1** | external compiler (`b6parse`) | The **GCC case-range extension** `case A ... B:` is unparsed. [scan.c:377](scan.c#L377) `case 0x80 ... 0xF9:`. | `switch(c){case 1 ... 5: …}` → `Parse error: expected ':', got '...'`. |
 | **B2** | external compiler (`b6lower`) | An **array of an anonymous struct type at block scope** loses its type. [buffer.c:111](buffer.c#L111) declares `static const struct { char t, r; } map[]` inside `translate_trigraphs`. | `char f(void){struct{char t,r;}m[2]; m[0].r='b'; return m[0].r;}` → `Fatal error: Struct or union '__anon_1' not found`. Neither `static` nor an initializer is needed. The same declaration at **file** scope compiles, as does a block-scope *scalar* of an anonymous struct, or an array of a *named* one — it is the combination. |
 | **G1** | libc | `open_memstream()` (POSIX 2008, neither C11 nor v7) is not in libc. [macro.c:545](macro.c#L545). | `Symbol 'open_memstream' not found`. |
 | **L1** | this repo (size) | `struct cppstate` is **~38,630 words** of bss; a C pointer reaches 15 bits (32,767 words) and user text+data+bss gets 28 pages (28,672). | `b6as: short address out of range: 047217` from `utc cpp / xta 20111` — a member 20,111 words into `struct cppstate`. Five of the eight sources stop here. Note that 047217 *does* fit the 15 bits a long address has, so check whether `b6as`'s addressing is part of this before assuming shrinking bss alone answers it. |
@@ -49,20 +48,17 @@ under `b6sim` and asserts its output matches the host `b6cpp` byte-for-byte.
 
 ## Approach
 
-The order matters: **the external-compiler bugs are gates.** No amount of build wiring helps
-until B1 and B2 are resolved, since `scan.c` and `buffer.c` do not reach the assembler at all.
-Each has a source-level workaround in `cmd/cpp` that unblocks this pilot, and both workarounds
-are small, but the durable fix is upstream and the plan says so at every step.
+The order matters: **the external-compiler bug is a gate.** No amount of build wiring helps
+until B2 is resolved, since `buffer.c` does not reach the assembler at all. It has a
+source-level workaround in `cmd/cpp` that unblocks this pilot, and the workaround is small,
+but the durable fix is upstream and the plan says so at every step.
 
-### 1. The external-compiler bugs (B1, B2)
+### 1. The external-compiler bug (B2)
 
-For each: **file it upstream with the minimal repro above**, and land a source workaround here so
-the pilot is not blocked on a foreign repo. Every workaround carries a comment naming the
-upstream issue so it can be reverted.
+**File it upstream with the minimal repro above**, and land a source workaround here so the
+pilot is not blocked on a foreign repo. The workaround carries a comment naming the upstream
+issue so it can be reverted.
 
-- **B1 — case range.** Rewrite [scan.c:377](scan.c#L377) `case 0x80 ... 0xF9:` as an
-  `if (c >= 0x80 && c <= 0xF9)` guard ahead of the `switch`, or a `default:` with the range test
-  inside. Preserve the existing fall-through behaviour exactly.
 - **B2 — block-scope anonymous struct array.** Workaround: give the type a tag and hoist it out
   of the function — a file-scope `struct trigraph { char t, r; };` above
   [buffer.c:109](buffer.c#L109), leaving the `map[]` initializer as it stands. Confirmed to
@@ -186,8 +182,8 @@ function-like macros, `#if`/`#elif`, `#`/`##`, and a local `#include`; must avoi
 
 ## Order of work (gates first)
 
-1. **B1, B2** — file them upstream; land the two source workarounds (§1). `scan.c` and
-   `buffer.c` do not reach the assembler until this is done.
+1. **B2** — file it upstream; land the source workaround (§1). `buffer.c` does not reach the
+   assembler until this is done.
 2. **G1** — settle `open_memstream` one way or the other (§2). It is the only blocker whose
    answer changes what the finished program *does*, so it wants deciding early.
 3. Confirm all eight sources compile with `-I ../../include`.
@@ -223,5 +219,5 @@ likely to exhaust the reduced `SYMSIZ`.
 No other `cmd/` tool built natively, no userland beyond the `init` that is already there (`sh`,
 `bin/*`), no change to `root.manifest` — the image is staged, not yet put on a disk.
 Those are [../../kernel/TODO.md](../../kernel/TODO.md) task 24; this plan leaves the staging
-root ready for them. The three upstream compiler fixes (B1–B3) live in a **separate repo**; this
-plan files them and works around them locally, but landing them there is its own task.
+root ready for them. The upstream compiler fix (B2) lives in a **separate repo**; this plan
+files it and works around it locally, but landing it there is its own task.
