@@ -329,6 +329,16 @@ is untouched. `stdout` takes the mode when `isatty(1)`, where v7 went fully *un*
 spent a syscall per character — and `fflush` must **leave the count at zero**, since restoring a
 real one would send the next `putc` down the fast path and lose the newline flush.
 
+**BSD's `setbuffer` and `setlinebuf` are here too**, in
+[`stdio/setbuffer.c`](stdio/setbuffer.c) — neither C11 nor v7, but `cmd/` sources reach for them
+([`cmd/cpp`](../../cmd/cpp/cpp.c) does). `setbuffer` is `setvbuf` with the BSD signature, and the
+one difference that matters is that a null buffer or a non-positive size means *unbuffered* rather
+than a failed call. `setlinebuf` only turns `_IOLBUF` on, where `setvbuf(iop, NULL, _IOLBF,
+BUFSIZ)` would `malloc` 3072 bytes — even for `stdout`, which `_flsbuf` otherwise serves from the
+static `_sobuf`. `_flsbuf` picks a buffer lazily when `_base` is null, so a stream that has one
+keeps it and one that has none pays nothing until it writes: 512 words of heap is worth that much
+care in 28,672 words of address space.
+
 **`_IOSTRG` is what makes `snprintf` count.** `sprintf` and `snprintf` build a v7 `_IOSTRG` stream
 over the caller's buffer, and `_flsbuf` *drops* the byte when such a stream fills, leaving the
 engine counting characters it could not store — which is exactly C11's return value, obtained for

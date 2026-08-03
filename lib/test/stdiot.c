@@ -22,6 +22,9 @@
 //   the new one (v7 had no _IOLBUF) and it is the odd one out mechanically: it is
 //   held at _cnt == 0 so every putc misses into _flsbuf.
 //
+//   setbuffer hands over a buffer that is NOT BUFSIZ, which is what _bufsiz is for:
+//   eight bytes with twenty written through them.
+//
 //   an _IOSTRG stream never touches a descriptor, which is why sscanf works on a
 //   FILE with _file == -1.
 //
@@ -207,6 +210,19 @@ static void reopen(void)
     }
 }
 
+// Read the scratch file whole into buf, NUL-terminated, and return its length.
+static int readback(char *buf, int size)
+{
+    FILE *f;
+    int n;
+
+    f      = fopen(FNAME, "r");
+    n      = fread(buf, 1, size - 1, f);
+    buf[n] = '\0';
+    fclose(f);
+    return n;
+}
+
 //
 // The same six characters through each buffering mode.  Unbuffered spends a write()
 // per byte, line buffered flushes on the newline, fully buffered flushes at fclose;
@@ -215,6 +231,7 @@ static void reopen(void)
 static void buffering(void)
 {
     static char mybuf[BUFSIZ];
+    static char small[8]; // deliberately NOT BUFSIZ: see setbuffer below
     FILE *f;
     char buf[80];
     int mode, n;
@@ -228,10 +245,7 @@ static void buffering(void)
         fputs("ab\ncd\n", f);
         fclose(f);
 
-        f      = fopen(FNAME, "r");
-        n      = fread(buf, 1, sizeof buf - 1, f);
-        buf[n] = '\0';
-        fclose(f);
+        n = readback(buf, sizeof buf);
         printf("%-4s %s buffered wrote %d bytes\n",
                (n == 6 && strcmp(buf, "ab\ncd\n") == 0) ? "ok" : "FAIL", name[mode], n);
         if (n != 6 || strcmp(buf, "ab\ncd\n") != 0)
@@ -243,11 +257,38 @@ static void buffering(void)
     setbuf(f, NULL);
     fputs("xy\n", f);
     fclose(f);
-    f      = fopen(FNAME, "r");
-    n      = fread(buf, 1, sizeof buf - 1, f);
-    buf[n] = '\0';
-    fclose(f);
+    readback(buf, sizeof buf);
     eqs("setbuf NULL", buf, "xy\n");
+
+    //
+    // The BSD pair.  setbuffer's whole reason to exist is a buffer that is NOT
+    // BUFSIZ: eight bytes here with twenty written through them, so a stream that
+    // did not remember _bufsiz would overrun the array it was given.  The buffer is
+    // also not malloc'd, so an implementation that left _IOMYBUF set would have
+    // fclose() free static storage.
+    //
+    f = fopen(FNAME, "w");
+    setbuffer(f, small, sizeof small);
+    fputs("0123456789abcdefghij", f);
+    fclose(f);
+    readback(buf, sizeof buf);
+    eqs("setbuffer sized", buf, "0123456789abcdefghij");
+
+    // A null buffer -- or no room for one -- is unbuffered, where setvbuf fails the call.
+    f = fopen(FNAME, "w");
+    setbuffer(f, NULL, 0);
+    fputs("xy\n", f);
+    fclose(f);
+    readback(buf, sizeof buf);
+    eqs("setbuffer NULL", buf, "xy\n");
+
+    // setlinebuf takes the mode with no buffer of its own: _flsbuf finds one.
+    f = fopen(FNAME, "w");
+    ok("setlinebuf", setlinebuf(f) == 0);
+    fputs("ab\ncd\n", f);
+    fclose(f);
+    readback(buf, sizeof buf);
+    eqs("setlinebuf", buf, "ab\ncd\n");
 }
 
 // remove, rename, tmpnam and tmpfile.

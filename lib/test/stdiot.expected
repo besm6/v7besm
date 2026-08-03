@@ -57,6 +57,13 @@ ok   setvbuf
 ok   un buffered wrote 6 bytes
 ok   setbuf NULL [xy
 ]
+ok   setbuffer sized [0123456789abcdefghij]
+ok   setbuffer NULL [xy
+]
+ok   setlinebuf
+ok   setlinebuf [ab
+cd
+]
 ok   rename
 ok   old name gone
 ok   new name there

@@ -15,7 +15,7 @@ What is still missing is the *fourth* thing this document is about: **a BESM-6 p
 the same sources as a host tool**. `cmd/cpp` is the natural first one — plain C, needs only
 libc, and a preprocessor that runs on the target is the first step toward a self-hosting
 toolchain. This plan adds exactly that one program, `build/rootfs/usr/bin/cpp`, from the existing
-`cmd/cpp/*.c`. Since `cmd/init` landed, the machinery for it is a single `b6_prog()` call (§5)
+`cmd/cpp/*.c`. Since `cmd/init` landed, the machinery for it is a single `b6_prog()` call (§4)
 and the plan is all blockers.
 
 **The build machinery is the easy 20%.** The real content of this plan is a set of blockers
@@ -23,7 +23,7 @@ found by actually running `b6cc -c` over all eight sources — every one below i
 a minimal case, not guessed. Three are **bugs in the external c-compiler**
 (<https://github.com/besm6/c-compiler/>), which is a separate repo; they are general-C bugs, not
 cpp-specific, so a self-hosting toolchain has to fix them anyway. Two are BESM-6 address-space
-limits this repo owns. One is a libc gap.
+limits this repo owns.
 
 ### The blockers, each with its minimal repro
 
@@ -32,7 +32,6 @@ limits this repo owns. One is a libc gap.
 | **B1** | external compiler (`b6lower`) | A struct's comma-separated declarator list loses its **interior** members once another declaration follows. `struct cppstate` is full of `char *out_ptr, *tok_ptr, *scan_ptr;` — `tok_ptr` vanishes. | `struct s { char *a, *tok_ptr, *c; int p; }; …g.tok_ptr` → `Struct s has no member tok_ptr`. Remove the trailing `int p;` and it compiles. |
 | **B2** | external compiler (`b6lower`) | **Enum constants in any aggregate initializer** crash the lowerer (const or not). `yylex.c:22` and `parser.c` both do this. | `enum{X,Y}; static const int a[]={X,Y};` → `literal_to_int64: Cannot convert enum`. Same with plain `int a[]`. Integer literals are fine. |
 | **B3** | external compiler (`b6parse`) | The **GCC case-range extension** `case A ... B:` is unparsed. [scan.c:377](scan.c#L377) `case 0x80 ... 0xF9:`. | `switch(c){case 1 ... 5: …}` → `Parse error: expected ':', got '...'`. |
-| **G1** | libc | `setbuffer()` (BSD) is not in libc. [cpp.c:203](cpp.c#L203). | `Symbol 'setbuffer' not found`. |
 | **L1** | this repo (size) | `struct cppstate` is **~38,630 words** of bss; a C pointer reaches 15 bits (32,767 words) and user text+data+bss gets 28 pages (28,672). | `b6as: short address out of range: 013344` from `utc cpp / atx 38628` (38628 mod 32768 = 013344). |
 | **L2** | this repo (size) | `expand_macro`'s frame is `acttxt[BUFSIZ]+exptxt[4*BUFSIZ]` ≈ **6,827 words**; the user stack is 4,096 (pages 28–31). | [macro.c:677-678](macro.c#L677). |
 
@@ -40,7 +39,10 @@ Two things claimed in an earlier draft turned out already handled and are **not*
 `<unistd.h>` and `<fcntl.h>` already exist in [../../include/](../../include/), and
 `strtol`/`strtoul` are already in libc
 ([../../lib/libc/CMakeLists.txt](../../lib/libc/CMakeLists.txt) `LIBC_OBJ`, with
-`lib/test/strtolt`). Once headers resolve, `direct.c`'s `strtol` compiles fine.
+`lib/test/strtolt`). Once headers resolve, `direct.c`'s `strtol` compiles fine. The one libc gap
+there was — BSD's `setbuffer()`, which [cpp.c:203](cpp.c#L203) calls — is closed too:
+[../../lib/libc/stdio/setbuffer.c](../../lib/libc/stdio/setbuffer.c), so that line links as
+written.
 
 Intended outcome: `make` produces `build/rootfs/usr/bin/cpp` beside `etc/init`; a ctest runs it
 under `b6sim` and asserts its output matches the host `b6cpp` byte-for-byte.
@@ -73,14 +75,7 @@ upstream issue so it can be reverted.
   `if (c >= 0x80 && c <= 0xF9)` guard ahead of the `switch`, or a `default:` with the range test
   inside. Preserve the existing fall-through behaviour exactly.
 
-### 2. `setbuffer` → `setvbuf` (G1)
-
-[cpp.c:203](cpp.c#L203) `setbuffer(cpp.out_file, sobuf, sizeof(sobuf))` →
-`setvbuf(cpp.out_file, sobuf, _IOFBF, sizeof(sobuf))`. `setvbuf` **is** in libc (`LIBC_OBJ`), is
-ISO C, and is exactly equivalent here. This is a plain source improvement — `setbuffer` is BSD
-and has no reason to be preferred — so no `#ifdef` is needed; change it for both builds.
-
-### 3. An arch predefine, so a shared source can tune itself (for L1/L2)
+### 2. An arch predefine, so a shared source can tune itself (for L1/L2)
 
 [cpp.c:236](cpp.c#L236) has the v7 predefine block (`#if unix` → `unix`, `#if pdp11` → `pdp11`,
 …), all keyed on what the *host* compiler defines. Add one **unconditional** line after it:
@@ -95,7 +90,7 @@ below keys off it with no flags on any command line. Add a case to
 `test/test_predefined_macros.cpp` asserting `besm6` is defined and `#undef`-able (the
 `#undef unix` case at line 149 is the model).
 
-### 4. A BESM-6 size profile in `defs.h` (L1, L2)
+### 3. A BESM-6 size profile in `defs.h` (L1, L2)
 
 Wrap the four constants at [defs.h:50-56](defs.h#L50):
 
@@ -122,7 +117,7 @@ with `BUFSIZ` too).
 non-conforming, and [README.md](README.md) must record that `test/`'s C11 conformance results
 apply to the **host** build only.
 
-### 5. The native link — **already built, one call**
+### 4. The native link — **already built, one call**
 
 *This step is done, by [`cmd/init`](../init/README.md), which became the first native program
 instead of `cpp`.* `b6_prog()` in [../../scripts/BesmCross.cmake](../../scripts/BesmCross.cmake)
@@ -147,9 +142,9 @@ Two differences from what this section originally planned, both settled by `cmd/
 - **The size ceilings are enforced, not merely reported.** `b6_prog()` registers
   `rootfs_cpp_size`, running `scripts/check-size.sh` against 28,672 words of
   `const+text+data+bss` and a 32,767-word symbol ceiling — which is exactly blockers **L1** and
-  **L2** above, turned into a test. Expect it to fail until §4's size profile lands.
+  **L2** above, turned into a test. Expect it to fail until §3's size profile lands.
 
-### 6. The test: native cpp must agree with host cpp
+### 5. The test: native cpp must agree with host cpp
 
 One ctest, label `rootfs`, driven by a `rootfs/run-test.sh` shaped like
 [../../lib/test/run-test.sh](../../lib/test/run-test.sh):
@@ -163,7 +158,7 @@ function-like macros, `#if`/`#elif`, `#`/`##`, and a local `#include`; must avoi
 `__DATE__`/`__TIME__` (differ per run, [cpp.c:291](cpp.c#L291)); and must stay within the reduced
 `SYMSIZ`/`BUFSIZ`.
 
-### 7. Documentation
+### 6. Documentation
 
 - [README.md](README.md) — a "Building for the BESM-6" section: the non-conforming size profile
   and why, and the three ceilings (32,767-word pointer reach, 28-page text+data+bss, 4,096-word
@@ -181,13 +176,13 @@ function-like macros, `#if`/`#elif`, `#`/`##`, and a local `#include`; must avoi
 
 1. **B1** (comma declarators) — file upstream, split declarators in `defs.h` and any local
    structs. Nothing else compiles until this is done.
-2. **B2, B3, G1** — file B2/B3 upstream; land the source workarounds; `setbuffer`→`setvbuf`.
+2. **B2, B3** — file them upstream; land the source workarounds.
 3. Confirm all eight sources compile with `-I ../../include`.
-4. **Predefine + size profile** (§3, §4); check `b6size -w` puts text+data+bss under 28,672
+4. **Predefine + size profile** (§2, §3); check `b6size -w` puts text+data+bss under 28,672
    words and no symbol exceeds word 32,767.
-5. The `b6_prog()` call (§5) — one block in `cmd/cpp/CMakeLists.txt`.
-6. Fixture, `run-test.sh`, ctest (§6).
-7. Docs (§7).
+5. The `b6_prog()` call (§4) — one block in `cmd/cpp/CMakeLists.txt`.
+6. Fixture, `run-test.sh`, ctest (§5).
+7. Docs (§6).
 
 ## Verification
 
@@ -197,8 +192,8 @@ make run                      # the whole suite, the rootfs label included
 ```
 
 - `ctest --test-dir build -L rootfs` — two things now: `rootfs_cpp_size` (the ceilings, from
-  `b6_prog()`) and the output-agreement test of §6. Close to the ceiling in the size test's
-  report means the §4 profile needs another notch down.
+  `b6_prog()`) and the output-agreement test of §5. Close to the ceiling in the size test's
+  report means the §3 profile needs another notch down.
 - `b6nm -n build/rootfs/usr/bin/cpp | tail` — by hand, for where the space went.
 - `build/cmd/cpp/test/cpp_test` — the host C11 suite still passes in full; the `besm6` predefine
   and the split declarators must be invisible to the host build. (Its cases are registered

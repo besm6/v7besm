@@ -157,6 +157,11 @@ int fsetpos(FILE *iop, const fpos_t *pos);
 void setbuf(FILE *iop, char *buf);
 int setvbuf(FILE *iop, char *buf, int mode, size_t size);
 
+// The BSD pair, neither C11 nor v7: setbuf with a size, and the line-buffered mode
+// on its own.  Callers under cmd/ want them -- see lib/libc/man/setbuf.3s.
+void setbuffer(FILE *iop, char *buf, int size);
+int setlinebuf(FILE *iop);
+
 void clearerr(FILE *iop);
 int feof(FILE *iop);
 int ferror(FILE *iop);

@@ -1,13 +1,17 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 .TH SETBUF 3S
 .SH NAME
-setbuf, setvbuf \- assign buffering to a stream
+setbuf, setvbuf, setbuffer, setlinebuf \- assign buffering to a stream
 .SH SYNOPSIS
 .B #include <stdio.h>
 .PP
 .B void setbuf(FILE *stream, char *buf);
 .PP
 .B int setvbuf(FILE *stream, char *buf, int mode, size_t size);
+.PP
+.B void setbuffer(FILE *stream, char *buf, int size);
+.PP
+.B int setlinebuf(FILE *stream);
 .SH DESCRIPTION
 .I Setbuf
 is used after a stream has been opened but before it
@@ -54,6 +58,26 @@ allocate one of
 bytes itself.  It returns 0, or a non-zero value if the mode is not one of the
 three or the size is zero.
 .PP
+.B Note:
+.I setbuffer
+and
+.I setlinebuf
+are BSD's and are neither C11 nor v7.
+.I Setbuffer
+is
+.I setbuf
+with a size:
+.I buf
+need not be BUFSIZ bytes, and a null
+.I buf
+\- or a
+.I size
+of zero or less \- makes the stream unbuffered, where
+.I setvbuf
+would instead fail the call.
+.I Setlinebuf
+selects line buffering and nothing else, and always returns 0.
+.PP
 .B These three modes are not flag bits,
 and in particular _IONBF is not the flag of that name in v7's <stdio.h>: the
 modes are 0, 1 and 2, while the flag bits are 04 and 0400.  That collision is
@@ -96,8 +120,18 @@ a zero word here: the cast that makes a pointer fat sets the marker bit over the
 zero address, so the word is non-zero while the pointer still compares equal to
 NULL.  The compiler compares the address part for
 .BR == ,
-which is what makes the first spelling right and the second unreliable.  Both
-routines are written the first way.
+which is what makes the first spelling right and the second unreliable.  Every
+routine here is written the first way.
+.SS setlinebuf keeps the buffer the stream has
+It turns the mode bit on rather than saying
+.I setvbuf(stream, NULL, _IOLBF, BUFSIZ),
+which would
+.IR malloc (3)
+3072 bytes even for
+.I stdout
+\- a stream the buffering code serves from static storage.  A stream with no buffer
+yet is given one on its first write, so nothing is allocated ahead of need.  512
+words is worth this much care in an address space of 28,672.
 .SS _bufsiz exists for setvbuf
 v7 wrote BUFSIZ into the buffering code outright, because
 .I setbuf
@@ -109,4 +143,4 @@ real rather than advisory.
 .SH FILES
 share/besm6/lib/libc.a
 .br
-lib/libc/stdio/setbuf.c, setvbuf.c
+lib/libc/stdio/setbuf.c, setvbuf.c, setbuffer.c

@@ -77,7 +77,7 @@ set(LIBC_OBJ
     # STDIO
     data findiop endopen fopen fdopen freopen filbuf flsbuf
     fseek ftell rew fgetpos fsetpos
-    setbuf setvbuf clrerr feof ferror
+    setbuf setvbuf setbuffer clrerr feof ferror
     fgetc fputc getc putc getchar putchar ungetc
     fgets fputs gets puts fread fwrite getw putw
     remove rename tmpnam tmpfile
