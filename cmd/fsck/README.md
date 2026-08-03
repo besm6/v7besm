@@ -16,7 +16,7 @@ cannot arise here.
 
 ## 1. The best oracle in the tree, and the four times it disagreed
 
-`cmd/TODO.md` picked this task out for a reason: `cmd/fsutil/check.cpp` already implements
+`cmd/TODO.md` picked this task out for a reason: `cmd/fsutil/check.cpp` already implemented
 the same checks on the host, in C++, sharing not one line with the guest. So a damaged
 filesystem can be handed to both, and **every case they disagree on is a bug in one of
 them**. That is the whole design of [test/](test/): `b6fsutil -D` breaks an image, `fsck -y`
@@ -172,7 +172,7 @@ cache write stale blocks over the repairs.
 
 The fix is 4.xBSD's `unrawname()`: strip the `r` from the last path component and `stat`
 *that*. `/dev/rmd0` → `/dev/md0` → `makedev(0, 0)`. It duplicates no table, which matters —
-writing `cdevsw[]`'s raw-to-block pairing into a user program is what `cmd/TODO.md` forbids
+writing `cdevsw[]`'s raw-to-block pairing into a user program is what `cmd/README.md` §12 forbids
 — and it answers correctly for `/dev/rmd1`, which is not the root.
 
 ---

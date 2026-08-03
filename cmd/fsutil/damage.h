@@ -13,7 +13,7 @@
 // THE TARGETS ARE SYMBOLIC, and that is the whole design.  A shell script could
 // compute the byte offset of inode 5's link count itself -- itod(), itoo(), INOPB,
 // DI_NLINK, NBPW -- but then the on-disk layout would have a second home in a test
-// script, which is exactly what cmd/TODO.md forbids and what params.cpp exists to
+// script, which is exactly what cmd/README.md §12 forbids and what params.cpp exists to
 // prevent.  Everything here resolves through the same SB_*, DI_* and DE_* offsets
 // the rest of the tool marshals with, so a layout change breaks the build here too.
 //

@@ -48,7 +48,7 @@ Notes on the copies:
 
 ## The porting recipe
 
-Eleven things that are true of **every** port, collected here so that no task in
+Twelve things that are true of **every** port, collected here so that no task in
 [TODO.md](TODO.md) has to repeat them.
 
 ### 1. The C11 pass, which is mechanical
@@ -68,6 +68,10 @@ merging the copies. **C11 has no tentative definition across translation units a
 common symbols**, so left alone each source gets its own storage, with no diagnostic from anything.
 `extern` in the header, defined once in a file of its own (`sh/glob.c`, `sed/sedglob.c`). One line
 of `b6nm` over the finished binary is the check.
+
+**A header of the program's own is a build blind spot.** `b6_obj`'s header dependency is the
+*system* header tree, so editing `sed/sed.h` or `sh/defs.h` rebuilds nothing. Touch a `.c` after
+changing one.
 
 ### 2. An `int` is not a `char *`
 
@@ -235,6 +239,12 @@ own purpose. Ask what call actually needs privilege before reaching for `04755`.
   `ps`/`pstat` can be checked here for formatting — but not for plurality, `proc[]` holding one
   live entry.
 
+  **Ask which side of those limits a program falls on before designing its cases.** A program can
+  land wholly outside: `mount`/`umount` and `find` have no `b6sim` half at all and so no `test/`
+  directory of their own. More often it is a **branch** rather than a program — `tar`'s `c` path
+  walks a tree while `t`, `x` and `r` do not; `ps` reads a u-area at a `p_addr` that is not the
+  caller's, which one process can never produce.
+
 * **SIMH**, under the booted kernel — for everything the above cannot say. Join the existing test
   in `kernel/test/` whose subject matches rather than taking a new volume: `console` (a typed
   dialogue), `libtest` (a program off `/usr/test` diffed against a `.expected`), `session`
@@ -244,10 +254,14 @@ own purpose. Ask what call actually needs privilege before reaching for `04755`.
   on a filesystem), `dd` (bulk data through a device), `mkfs` (writing a device, or a second
   drive), `fsck` (repairing a device), `mount` (the buffer cache), `filters` (anything whose
   subject is bytes — the only place an argument can be **quoted** and the only place a temp file
-  lands in the image's own `/tmp`), `accounts` (`/etc/passwd` as a file that changes).
+  lands in the image's own `/tmp`), `accounts` (`/etc/passwd` as a file that changes), `tar` (a
+  whole tree, and a pack that is written and never read), `inspect` (a second process, and one of
+  them asleep).
 
-  Each has its own copy of the image at its own volume number; **3098 is the highest used, 3099 is
-  the next free.** Most graft their script with `b6fsutil -a`, at a path distinct from the program
+  **Joining one of those costs a section in its `.sh`; a boot of its own costs two minutes and a
+  volume number**, so take one only for something they cannot show — `tar` needed a second drive,
+  `inspect` a plurality of processes. Each has its own copy of the image at its own volume number;
+  **3101 is the highest used, 3102 is the next free.** Most graft their script with `b6fsutil -a`, at a path distinct from the program
   under test (`/etc/mkfstest`, not `/etc/mkfs`). `login`, `multi` and `accounts` type every
   character instead, and each needs a fixed TCP port for Consul 2 (4199, 4200, 4201) — as much of
   the `RESOURCE_LOCK`'s reason as the CPU is. An oracle that is a property of the whole image
@@ -255,6 +269,13 @@ own purpose. Ask what call actually needs privilege before reaching for `04755`.
 
 Where a program can run in both worlds, **do both** — the first time the libc suite ran in both it
 found two bugs nothing else had exercised.
+
+**An oracle takes one of four shapes; ask which the program admits before writing a case.** A
+**designed fixture** where a reviewer can check the answer by hand (`sort`); a **second
+implementation** where nobody can (`od`, `pr`); the **host's own program** replayed over the whole
+suite as a cheap third opinion (it found `join` and `diff` agreeing byte for byte with BSD's on
+everything the two dialects share); and an **invariant** where the answer is not unique at all —
+`diff`'s `-e` script, applied with the host's `ed`, must produce the second file.
 
 ### 10. The manual page comes with the source
 
@@ -278,6 +299,11 @@ are silent on ASCII and wrong on the first Cyrillic byte.
 * **A table indexed by a character needs 256 entries *and* an index that lands in them** — and its
   width may be written down nowhere, as a loop condition (`!(c & 0200)`) and a pointer bump
   (`ep + 0200`). **Where a table's size is not written down, read the routine that allocates it.**
+  Four shapes are on the record: `grep`'s `CCL`, right-sized and stored into unmasked; `sort`'s,
+  256 entries reached through a `+128` bias so a grep for the size finds nothing; `sed`'s `y///`
+  table, whose width is a loop condition and a pointer bump and a number nowhere at all; and
+  `file`'s `english()`, a v7 wild write that this machine's unsigned `char` repairs by itself and
+  that must not be "fixed" back.
 * **A `<ctype.h>` call is the quiet form of the same table**: `lib/libc/gen/ctype_.c` is **129
   entries** and only `isascii()` may be applied above `0177`. Ask what the option *means* for a
   multi-byte letter, not merely whether the call is in bounds.
@@ -293,3 +319,17 @@ Two more, worth knowing before writing a test: the shell's pattern language matc
 `?` is one byte and not one letter; and the terminal driver refuses a typed `0377`
 ([../kernel/dev/tty.c](../kernel/dev/tty.c)), the raw queue's delimiter — a script read from disk
 may contain one, a console user cannot type one.
+
+### 12. On-disk layout is asserted, not re-derived
+
+Anything that encodes the **on-disk layout** — a block number computed from an i-number, an entry
+count per block, a name length — **`_Static_assert`s against
+[../include/sys/param.h](../include/sys/param.h) rather than re-deriving the constants**, so a
+kernel that retunes `INOPB` or `DIRSIZ` breaks the build instead of the images. A guest program
+gets this for free: it includes the real headers and inherits their assertions.
+[fsutil/params.cpp](fsutil/params.cpp) is elaborate only because `fsutil` is host C++ and cannot.
+The rule applies to test scripts as much as to C, which is why `b6fsutil -D`'s damage targets are
+**symbolic**.
+
+The devices these programs are pointed at are all on the image: `/dev/rmd0`, `/dev/rmd1` and
+`/dev/rmb0` (`cdevsw[3]` and `[4]`), and the block nodes `/dev/md0`, `/dev/md1` and `/dev/md2`.

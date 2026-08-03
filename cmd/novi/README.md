@@ -173,6 +173,14 @@ multi-byte arrow keys. A third test born disabled asserts nothing and costs a vo
 and a `simh_boot` lock slot. **`novi`'s interactive half goes in with the re-enabling of
 `console` and `edit`, not before**, and task 35 is where that is recorded.
 
+**Two other things are left open, neither a task in [../TODO.md](../TODO.md).** `novi` writes
+hard-coded ANSI and has **no `termcap`**, so a terminal that is not ANSI cannot use it — the
+blocker is `b6_prog()`'s missing `LIBS` keyword, which
+[../../lib/libcurses/README.md](../../lib/libcurses/README.md) has predicted since the library
+landed. And **the search is literal**: `ed`'s regex engine is next door and is 700 lines of it;
+whether `novi` should carry a second copy or the two should share one is the question to settle
+before starting, not during.
+
 What was done instead, by hand and not checked in: `novi` was driven under `b6sim` on a host
 pty, which is the only place the screen logic can be watched running at all (`b6sim`'s `stty`
 is a no-op, so the pty has to be put in raw mode from outside). It painted a four-line file

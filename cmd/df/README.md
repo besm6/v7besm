@@ -10,7 +10,7 @@ whatever reads a device next, which is the whole of the rest of C4.
 
 ## A raw transfer has four conditions, and three of them fail with `EFAULT`
 
-`cmd/TODO.md` says of task C4 that "the raw devices these need are already on the image —
+`cmd/TODO.md` said of task C4 that "the raw devices these need are already on the image —
 `/dev/rmd0` and `/dev/rmb0`". They are, and they are the right ones. But `open`/`lseek`/`read`
 on `/dev/rmd0` is not the v7 call sequence it looks like: it goes
 [`physio()`](../../kernel/dev/bio.c) → [`mdstrategy()`](../../kernel/dev/md.c), and between them
