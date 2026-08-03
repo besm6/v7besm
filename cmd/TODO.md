@@ -22,11 +22,12 @@ and it leaves the program **on the image** — staged into `build/rootfs/`, name
 | C10 | the rest of the manual — `make` `m4` `awk` `bc` `dc` `expr` `egrep` `units` `crypt` `at` `cron` `calendar` `update` `mail` | a system worth using | open-ended |
 
 **Where to start: C9a's `cpp`.** It waited on a foreign repository until the front-end bug that
-gated it was fixed upstream; the libc gap beside it is closed too, so what is left in
-[cpp/TODO.md](cpp/TODO.md) is one codegen bug with a local workaround and two size limits this
-repo owns — a plan that can now be executed end to end. C10 is still behind the `yacc` decision
-its own section names; `expr.y` is the smallest thing in front of that decision, and scripts want
-it almost as much as they want `test`.
+gated it was fixed upstream; the libc gap beside it is closed too, and what is left in
+[cpp/TODO.md](cpp/TODO.md) is three limits of this machine that this repo designs around — a
+plan that can now be executed end to end, and whose first step is a target-independent refactor
+the host build proves on its own. C10 is still behind the `yacc` decision its own section names;
+`expr.y` is the smallest thing in front of that decision, and scripts want it almost as much as
+they want `test`.
 
 **Two loose ends about the terminal, one line each and neither worth a task of its own.** `TANDEM`
 is honoured by the kernel — `ttyblock()` queues the stop character when the input queue passes
@@ -57,19 +58,21 @@ anything: it is to build what is already here a *second* time, for the target.
 
 ### C9a. `cpp`
 
-**See [cpp/TODO.md](cpp/TODO.md)**, which is a complete plan already: one codegen bug in the
-external compiler (B1) and two address-space limits (L1, L2), each with a minimal repro. Do not
-restate any of it here. All eight sources now reach `b6as`, so what stops `cpp` is size and how
-one large struct is addressed — and B1 reaches far beyond `cpp`, since every tool below keeps
-tables of the same shape.
+**See [cpp/TODO.md](cpp/TODO.md)**, which is a complete plan already: three limits of this
+machine (L1, L2, L3), each with a minimal repro, and **nothing left upstream**. Do not restate
+any of it here. All eight sources now reach `b6as`, so what stops `cpp` is size — and **L3, that
+no struct may exceed 4,096 words** (a member is named by a 12-bit offset from a base register,
+and there is no longer form), reaches far beyond `cpp`: every tool below keeps its state in one
+big struct, and the answer is the same each time, which is to move the large arrays out of it to
+file scope.
 
 ### C9b. `as`, `ld`
 
 [as/](as/) (12 sources) and [ld/](ld/) (9). Both plain C, both already reading and writing this
 machine's `a.out` through [libaout/](libaout/), which builds natively too. Expect the same limits
-`cpp` hit: a symbol table that must live inside 32,767 words, frames that must fit 4,096, and
-B1 — a member of a global struct past word 4,095 is unreachable, which is a table of any size.
-Both are already designed around fixed tables rather than unbounded growth, which helps.
+`cpp` hit: a symbol table that must live inside 32,767 words, frames that must fit 4,096, and L3
+— no struct above 4,096 words, so their big tables must sit at file scope and not inside a state
+struct. Both are already designed around fixed tables rather than unbounded growth, which helps.
 
 ### C9c. The binutils and the driver
 
@@ -80,9 +83,9 @@ machine, this is the short tail that makes them usable.
 **What it does not include.** `b6sim` and `b6fsutil` are C++ and stay host-only. `b6disasm` is C
 and could come along for free.
 
-**Size.** Large, but no longer blocked on a foreign repository: the one upstream bug left
-([cpp/TODO.md](cpp/TODO.md) B1) has a local workaround, and everything else is size. And it is
-the task that changes what this port *is*.
+**Size.** Large, but nothing in it waits on a foreign repository any more: what is left is this
+machine's limits and how the source is laid out against them. And it is the task that changes
+what this port *is*.
 
 ---
 

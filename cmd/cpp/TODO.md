@@ -22,18 +22,16 @@ and the plan is all blockers.
 found by actually running `b6cc -c` over all eight sources — every one below is reproduced with
 a minimal case, not guessed. **All eight now stop in `b6as`, none in the compiler front end**:
 the block-scope anonymous-struct bug this plan used to gate on is fixed upstream, and so is the
-missing `open_memstream()` (§1). What is left is one **codegen** bug in the external c-compiler
-(<https://github.com/besm6/c-compiler/>), which is a separate repo — a general-C bug, not
-cpp-specific, so a self-hosting toolchain has to fix it anyway — and two BESM-6 address-space
-limits this repo owns.
+missing `open_memstream()` (§1). **Nothing is left upstream.** What remains is three limits of
+this machine, all three of them this repo's to design around.
 
 ### The blockers, each with its minimal repro
 
 | # | Where | What | Minimal repro (all deterministic) |
 |---|---|---|---|
-| **B1** | external compiler (`b6codegen`) | A member of a global struct **beyond word 4,095** is reached as `utc g` plus a *short*-form instruction, whose address field spans only `[0..07777]` and `[070000..077777]` ([../as/pass2.c](../as/pass2.c) explains why nothing downstream can rescue it). So no object above 4,096 words is addressable member-wise; `struct cppstate` is ~38,630. | `struct s { int pad[4096]; int x; } g; int f(void){ return g.x; }` → `b6as: short address out of range: 010000` from `utc g / xta 4096`. `pad[4095]` compiles. The **same member through a pointer** — `struct s *p; p->x` — compiles at any offset: codegen puts the offset in the const segment and adds it. That is both the shape of the bug and the shape of the local workaround. |
-| **L1** | this repo (size) | `struct cppstate` is **~38,630 words** of bss; a C pointer reaches 15 bits (32,767 words) and user text+data+bss gets 28 pages (28,672). | `parser.c` and `yylex.c` name word **38,650** (`utc cpp / atx 38650`), past the 15-bit reach. `b6as` reports that one as `short address out of range: 013372` — the value **masked** to 15 bits, so it does not read like an overflow; do not chase 013372. The other six sources meet **B1** first, around word 20,000 (`xta 20111` in `cpp.c`). |
+| **L1** | this repo (size) | `struct cppstate` is **~38,630 words** of bss; a C pointer reaches 15 bits (32,767 words) and user const+text+data+bss gets 28 pages (28,672). | `parser.c` and `yylex.c` name word **38,650** (`utc cpp / atx 38650`), past the 15-bit reach. `b6as` reports that one as `short address out of range: 013372` — the value **masked** to 15 bits, so it does not read like an overflow; do not chase 013372. The other six sources meet **L3** first, around word 20,000 (`xta 20111` in `cpp.c`). |
 | **L2** | this repo (size) | `expand_macro`'s frame is `acttxt[BUFSIZ]+exptxt[4*BUFSIZ]` ≈ **6,827 words**; the user stack is 4,096 (pages 28–31). | [macro.c:677-678](macro.c#L677). |
+| **L3** | this machine (addressing) | **A struct cannot exceed 4,096 words.** A member is reached as a base register plus a *short* address field, and that field spans only `[0..07777]` and `[070000..077777]` — see [../as/pass2.c](../as/pass2.c) for why nothing downstream can rescue an offset outside it. This is the architecture, not a compiler defect: there is no long-address form of the base-plus-offset access, so a member past word 4,095 has nowhere to be named. `struct cppstate` is ~38,630 words, and this is what stops six of the eight sources. | `struct s { int pad[4096]; int x; } g; int f(void){ return g.x; }` → `b6as: short address out of range: 010000` from `utc g / xta 4096`. `pad[4095]` compiles. A **file-scope array** of the same size has no such limit — the address goes into an index register — which is why §3's answer is to take the big arrays out of the struct rather than to shrink it. |
 
 Two things claimed in an earlier draft turned out already handled and are **not** in this plan:
 `<unistd.h>` and `<fcntl.h>` already exist in [../../include/](../../include/), and
@@ -49,12 +47,11 @@ under `b6sim` and asserts its output matches the host `b6cpp` byte-for-byte.
 
 ## Approach
 
-The order matters: **`struct cppstate` is the gate.** Every source now fails on how that one
-object is reached, so nothing else can even be measured until §3 shrinks it — and §3 has to
-clear **4,096 words**, not merely the 28,672-word ceiling, for as long as B1 stands. B1 itself
-is upstream, in a separate repo; the local answer is the pointer form its repro shows, and that
-choice belongs *with* §3 rather than before it, since which of the two is enough depends on how
-small the struct gets.
+The order matters: **`struct cppstate` is the gate**, and it is a gate twice over. Every source
+now fails on that one object, first because a member of it cannot be named past word 4,095 (L3)
+and then because it does not fit the address space at all (L1). §3 answers both, in that order —
+**take the four big arrays out of the struct**, which is a plain refactor owing nothing to this
+machine, and only then size what is left. Nothing here waits on another repository.
 
 ### 1. `open_memstream` — done
 
@@ -75,7 +72,7 @@ pays a word of bss and nothing else. What it costs *this* program is the heap, i
 space already fighting L1/L2 — the initial buffer is 48 bytes and doubles, so a prescan of a few
 dozen characters never reaches `BUFSIZ`.
 
-### 2. An arch predefine, so a shared source can tune itself (for B1/L1/L2)
+### 2. An arch predefine, so a shared source can tune itself (for L1/L2)
 
 [cpp.c:236](cpp.c#L236) has the v7 predefine block (`#if unix` → `unix`, `#if pdp11` → `pdp11`,
 …), all keyed on what the *host* compiler defines. Add one **unconditional** line after it:
@@ -90,9 +87,33 @@ below keys off it with no flags on any command line. Add a case to
 `test/test_predefined_macros.cpp` asserting `besm6` is defined and `#undef`-able (the
 `#undef unix` case at line 149 is the model).
 
-### 3. A BESM-6 size profile in `defs.h` (B1, L1, L2)
+### 3. The four big arrays out of the struct (L3), then a size profile (L1, L2)
 
-Wrap the four constants at [defs.h:50-56](defs.h#L50):
+**First, and independently of any sizing: move the four large arrays out of `struct cppstate`**
+to file scope in [cpp.c](cpp.c), leaving `extern` declarations beside the struct in
+[defs.h](defs.h). They are all of the struct's bulk and none of its cursors:
+
+| member | words today |
+|---|---|
+| `symbols[SYMSIZ]` — `struct symtab` ×3w | 18,453 |
+| `side_buf[SBSIZE]` | 10,923 |
+| `paint_stack[SYMSIZ]` | 6,151 |
+| `arena[8+2*BUFSIZ+8]` | 2,734 |
+
+What is left is the cursors, the four `ALFSIZ` scan tables, the include and pushback stacks, the
+option flags and the `sym_*` handles — **≈ 400 words**, an order of magnitude inside L3's 4,096,
+and it stays there under any size profile because nothing left in it scales with `SYMSIZ`,
+`SBSIZE` or `BUFSIZ`. A file-scope array of any size is reached through an index register, so
+`symbols[i].value` and `side_buf[65535]` both compile at full size — confirmed with the four
+declarations above compiled alone. The struct keeps doing what its comment says it is for
+(namespacing the *state*), and this costs the host build nothing, so it is **not** guarded on
+the `besm6` predefine of §2 — one form of the source for both targets.
+
+L3 is then gone for good rather than held under a ceiling, and the profile below is free to be
+chosen on merit.
+
+**Then the size profile**, for L1 and L2 alone. Wrap the four constants at
+[defs.h:50-56](defs.h#L50):
 
 ```c
 #ifdef besm6
@@ -107,21 +128,17 @@ Wrap the four constants at [defs.h:50-56](defs.h#L50):
 ```
 
 Sizing (chars pack six to a word): `symbols[1021]`×3w = 3,063, `paint_stack[1021]` = 1,021,
-`side_buf[8192]` = 1,366, `arena` = 686, remainder ≈ 400 → **≈ 6,500 words** of bss, from
-~38,630. Also make `exptxt`'s `4 * BUFSIZ` a named `EXPTXT_MULT` knob. With `BUFSIZ 2048`,
-`expand_macro`'s frame is ≈ 2,100 words of the 4,096 available; if too tight in practice, step
-`BUFSIZ` to 1024 rather than dropping the multiplier (the diagnostic frames in `direct.c` scale
-with `BUFSIZ` too).
+`side_buf[8192]` = 1,366, `arena` = 686, the struct itself ≈ 400 → **≈ 6,500 words** of bss,
+from ~38,630. That is well inside L1's 28,672 with room for text, and the four objects are now
+separate symbols, so what the 32,767-word ceiling has to hold is the *last* of them rather than
+a single 38,630-word block. Also make `exptxt`'s `4 * BUFSIZ` a named `EXPTXT_MULT` knob. With
+`BUFSIZ 2048`, `expand_macro`'s frame is ≈ 2,100 words of the 4,096 available; if too tight in
+practice, step `BUFSIZ` to 1024 rather than dropping the multiplier (the diagnostic frames in
+`direct.c` scale with `BUFSIZ` too).
 
-**≈ 6,500 words clears L1 but not B1**, which stops at 4,096 — so this step has to decide
-between two answers and the sizing above is only half of either. Cutting further means roughly
-`SYMSIZ 509` and `SBSIZE 4096`, which begins to cost real conformance for a preprocessor that
-still has to preprocess this repo's kernel sources. The other answer is to stop declaring
-`struct cppstate cpp;` and reach it through a pointer — `static struct cppstate *cpp;` over one
-bss instance, `cpp->` at every use — which B1's repro shows compiles at any offset, costs one
-indirection per access, and leaves the size profile free to be chosen on merit rather than
-against a codegen limit. **Prefer the pointer**, and keep the profile as sized above; the
-`besm6` predefine of §2 need then only guard the profile, not the declaration.
+The profile above is the conservative first cut. Once it builds and passes §5, there is headroom
+to step `SYMSIZ`/`SBSIZE` back up toward the C11 minima against the measured `b6size -w` — L3 no
+longer objects to any of it, and L2 bounds only `BUFSIZ`.
 
 **The honesty requirement:** the comment must state plainly that the BESM-6 profile is
 non-conforming, and [README.md](README.md) must record that `test/`'s C11 conformance results
@@ -153,7 +170,8 @@ Two differences from what this section originally planned, both settled by `cmd/
   `rootfs_cpp_size`, running `scripts/check-size.sh` against 28,672 words of
   `const+text+data+bss` and a 32,767-word symbol ceiling — which is exactly blockers **L1** and
   **L2** above, turned into a test. Expect it to fail until §3's size profile lands. It does
-  **not** catch B1, which `b6as` stops long before there is a program to measure.
+  **not** catch L3, which `b6as` stops long before there is a program to measure — that one has
+  no test but the build itself.
 
 ### 5. The test: native cpp must agree with host cpp
 
@@ -171,27 +189,30 @@ function-like macros, `#if`/`#elif`, `#`/`##`, and a local `#include`; must avoi
 
 ### 6. Documentation
 
-- [README.md](README.md) — a "Building for the BESM-6" section: the non-conforming size profile
-  and why, and the three ceilings (32,767-word pointer reach, 28-page text+data+bss, 4,096-word
-  stack). The build category itself is documented in [../init/README.md](../init/README.md).
+- [README.md](README.md) — a "Building for the BESM-6" section: the `besm6` predefine, the
+  non-conforming size profile and why, the host-only scope of the C11 conformance suite, and the
+  **four** ceilings (32,767-word pointer reach, 28-page const+text+data+bss, 4,096-word stack,
+  and L3's 4,096-word struct). The build category itself is documented in
+  [../init/README.md](../init/README.md).
 - [../../CLAUDE.md](../../CLAUDE.md) — its "Native BESM-6 programs" section already describes
   the category and `b6_prog()`; add `cpp` as the second one, and the size profile as the first
   time the ceilings actually bound a program.
-- [README.md](README.md) — the `besm6` predefine, the host-only scope of the conformance suite,
-  and a short "Building for the BESM-6" note listing the workarounds and their upstream issue
-  numbers.
+- [../README.md](../README.md) — **L3 belongs in the hazard list**, beside the `int`/`char *`
+  traps. It is a property of the machine that every v7 source with one big state struct will
+  meet, it is invisible until `b6as` refuses an offset, and the fix (arrays to file scope) is
+  the same every time.
 - [../../kernel/TODO.md](../../kernel/TODO.md) — task 24 named `build/rootfs/`; note that
   `usr/bin/cpp` now sits in it beside `etc/init`.
 
 ## Order of work (gates first)
 
-1. **Predefine + size profile** (§2, §3) — the gate, and the one step with a decision in it:
-   the pointer form for `cpp`, or a profile small enough to clear B1's 4,096 words. Then check
-   `b6size -w` puts const+text+data+bss under 28,672 words and no symbol exceeds word 32,767.
-2. Confirm all eight sources compile with `-I ../../include` — they reach `b6as` today and stop
-   there, so this is the step that says whether §3's decision was enough.
-3. **B1** — file it upstream with the repro above. It stops being a gate once §3 lands, but
-   `as` and `ld` (C9b) keep tables of the same shape and will meet it again.
+1. **The four arrays out of `struct cppstate`** (§3, first half) — the gate, and worth landing
+   on its own: it is target-independent, so the host `cmd/cpp` and its C11 suite prove it before
+   anything is cross-built.
+2. **Predefine + size profile** (§2, §3, second half); then check `b6size -w` puts
+   const+text+data+bss under 28,672 words and no symbol exceeds word 32,767.
+3. Confirm all eight sources compile with `-I ../../include` — they reach `b6as` today and stop
+   there, so this is the step that says whether §3 was enough.
 4. The `b6_prog()` call (§4) — one block in `cmd/cpp/CMakeLists.txt`.
 5. Fixture, `run-test.sh`, ctest (§5).
 6. Docs (§6).
@@ -222,5 +243,4 @@ likely to exhaust the reduced `SYMSIZ`.
 No other `cmd/` tool built natively, no userland beyond the `init` that is already there (`sh`,
 `bin/*`), no change to `root.manifest` — the image is staged, not yet put on a disk.
 Those are [../../kernel/TODO.md](../../kernel/TODO.md) task 24; this plan leaves the staging
-root ready for them. The upstream codegen fix (B1) lives in a **separate repo**; this plan
-files it and works around it locally, but landing it there is its own task.
+root ready for them.
