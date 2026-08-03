@@ -30,19 +30,19 @@ void finalize_symtab(void)
     for (snum = 0, i = 0; i < as.stabfree; i++) {
         // if uflag is not set,
         // an undefined name is treated as external
-        if (as.stab[i].n_type == N_UNDF) {
+        if (stab[i].n_type == N_UNDF) {
             if (as.uflag)
-                fatal("name undefined", as.stab[i].n_name);
+                fatal("name undefined: %s", stab[i].n_name);
             else
-                as.stab[i].n_type |= N_EXT;
+                stab[i].n_type |= N_EXT;
         }
         if (as.xflags)
             newindex[i] = snum; // remember each symbol's new (compacted) index
         // Keep the symbol if we are not stripping, or it is external, or (-X)
         // it is not a local ".name".
-        if (!as.xflags || (as.stab[i].n_type & N_EXT) ||
-            (as.Xflag && as.stab[i].n_name[0] != '.')) {
-            as.stlength += 2 + W / 2 + as.stab[i].n_len;
+        if (!as.xflags || (stab[i].n_type & N_EXT) ||
+            (as.Xflag && stab[i].n_name[0] != '.')) {
+            as.stlength += 2 + W / 2 + stab[i].n_len;
             snum++;
         }
     }
@@ -147,8 +147,8 @@ static long relocate_halfword(long h, long hr)
         // External symbol: if it is now defined here, fill in its value;
         // otherwise leave it for the linker.
         i = RGETIX(hr);
-        if (as.stab[i].n_type != N_EXT + N_UNDF && as.stab[i].n_type != N_EXT + N_COMM)
-            h = relocate_field(h, as.stab[i].n_value, (int)hr);
+        if (stab[i].n_type != N_EXT + N_UNDF && stab[i].n_type != N_EXT + N_COMM)
+            h = relocate_field(h, stab[i].n_value, (int)hr);
         break;
     }
     return h;
@@ -195,13 +195,13 @@ void emit_segments(void)
     // process the symbol table: turn each symbol's segment-relative value into
     // a final address by adding the segment base.
     for (i = 0; i < as.stabfree; i++) {
-        h = as.stab[i].n_value;
-        switch (as.stab[i].n_type & N_TYPE) {
+        h = stab[i].n_value;
+        switch (stab[i].n_type & N_TYPE) {
         default:
         case N_UNDF:
         case N_ABS:
             // Not relative to anything: nothing to add, nothing to range-check.
-            as.stab[i].n_value = h;
+            stab[i].n_value = h;
             continue;
         case N_CONST:
             base  = as.cbase;
@@ -218,7 +218,7 @@ void emit_segments(void)
         case N_STRNG:
             base  = as.adbase;
             limit = as.count[SSTRNG] / 2;
-            as.stab[i].n_type += N_DATA - N_STRNG; // strings live in the data segment
+            stab[i].n_type += N_DATA - N_STRNG; // strings live in the data segment
             break;
         case N_BSS:
             base  = as.bbase;
@@ -229,8 +229,8 @@ void emit_segments(void)
         // the segment.  align_segment() has already word-aligned every segment, so
         // the half-word counts above divide exactly.
         if (h > limit)
-            fatal("symbol '%s': value 0%lo outside its segment", as.stab[i].n_name, h);
-        as.stab[i].n_value = (h + base) & HALF_MASK;
+            fatal("symbol '%s': value 0%lo outside its segment", stab[i].n_name, h);
+        stab[i].n_value = (h + base) & HALF_MASK;
     }
     // re-read each segment that has an image from its temp file and emit it,
     // relocating every half-word as it goes.
@@ -291,13 +291,13 @@ static long rewrite_reloc(long hr)
         break;
     case REXT:
         i = RGETIX(hr);
-        if (as.stab[i].n_type == N_EXT + N_UNDF || as.stab[i].n_type == N_EXT + N_COMM) {
+        if (stab[i].n_type == N_EXT + N_UNDF || stab[i].n_type == N_EXT + N_COMM) {
             // still external: renumber the symbol index if symbols were dropped
             if (as.xflags)
                 hr = (hr & (RSHORT | REXT)) | RPUTIX(newindex[i]);
         } else
             // now defined locally: become a segment-relative relocation
-            hr = (hr & RSHORT) | type_to_reloc((int)as.stab[i].n_type);
+            hr = (hr & RSHORT) | type_to_reloc((int)stab[i].n_type);
         break;
     }
     return hr;
@@ -329,8 +329,8 @@ void write_symtab(void)
     int i;
 
     for (i = 0; i < as.stabfree; i++)
-        if (!as.xflags || (as.stab[i].n_type & N_EXT) || (as.Xflag && as.stab[i].n_name[0] != '.'))
-            fputsym(&as.stab[i], stdout);
+        if (!as.xflags || (stab[i].n_type & N_EXT) || (as.Xflag && stab[i].n_name[0] != '.'))
+            fputsym(&stab[i], stdout);
     while (as.stalign--)
         putchar(0);
 }

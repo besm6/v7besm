@@ -15,7 +15,7 @@
 // stdio handles on it: ld.text for the segment/symbol data and ld.reloc for the
 // relocation records (the two passes read from different positions, so each gets
 // its own handle).  A "-lfoo" argument is expanded to "libfoo.a" and looked up
-// in each -L search directory in turn (ld.libdir), falling back to "libfoo.a" in
+// in each -L search directory in turn (libdir), falling back to "libfoo.a" in
 // the current directory if the search path is empty or nothing matched.
 //
 // Return value classifies the file so the caller knows how to read it:
@@ -39,7 +39,7 @@ int open_input(char *cp)
 
         // Search each -L directory in turn for "<dir>/lib<name>.a".
         for (i = 0; !ld.text && i < ld.nlibdir; i++) {
-            const char *dir = ld.libdir[i];
+            const char *dir = libdir[i];
             size_t sz       = strlen(dir) + strlen(name) + sizeof("/lib.a");
             char *p         = malloc(sz);
             if (!p) {
@@ -78,6 +78,12 @@ int open_input(char *cp)
     if (!ld.reloc)
         error(2, "cannot open");
 
+    // Two handles on one file, so two stdio buffers -- and on the BESM-6 they
+    // are charged against the same heap as the output scratch files.  See
+    // shrink_buffer() in output.c.
+    shrink_buffer(ld.text);
+    shrink_buffer(ld.reloc);
+
     // The first word tells an archive (magic ARMAG) from a plain object file.
     if (!fgetint(ld.text, &c))
         error(1, "unexpected EOF");
@@ -102,7 +108,7 @@ int open_input(char *cp)
 //
 void check_liblist(void)
 {
-    if (ld.libp >= &ld.liblist[LLSIZE])
+    if (ld.libp >= &liblist[LLSIZE])
         error(2, "library table overflow");
 }
 
@@ -131,7 +137,7 @@ int scan_member(long nloc)
 
 //
 // Read a randomized archive's table of contents (the "__.SYMDEF" member) into
-// ld.rantab.  Each entry pairs an exported symbol name with the byte offset of
+// rantab.  Each entry pairs an exported symbol name with the byte offset of
 // the member that defines it, so we can pull in members on demand without
 // scanning the whole archive.  Records the count in ld.tnum.
 //
@@ -139,12 +145,12 @@ void read_ranlib(void)
 {
     struct ranlib *p;
 
-    for (p = ld.rantab; p < ld.rantab + RANTABSZ; ++p) {
+    for (p = rantab; p < rantab + RANTABSZ; ++p) {
         int n = fgetran(ld.text, p);
         if (n < 0)
             error(2, "out of memory");
         if (n == 0) {
-            ld.tnum = p - ld.rantab;
+            ld.tnum = p - rantab;
             return;
         }
     }
@@ -163,7 +169,7 @@ int load_ranlib_members(void)
     struct ranlib *p;
     const long *oldp = ld.libp;
 
-    for (p = ld.rantab; p < ld.rantab + ld.tnum; ++p) {
+    for (p = rantab; p < rantab + ld.tnum; ++p) {
         struct nlist **pp = lookup_name(p->ran_name);
         if (!*pp)
             continue;
@@ -180,6 +186,6 @@ void free_ranlib(void)
 {
     struct ranlib *p;
 
-    for (p = ld.rantab; p < ld.rantab + ld.tnum; ++p)
+    for (p = rantab; p < rantab + ld.tnum; ++p)
         free(p->ran_name);
 }

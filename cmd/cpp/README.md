@@ -214,10 +214,13 @@ raw text is rescanned with the outer `ID` still blue-painted (§6.10.3.4), so th
 left un-expanded where the host expands it. `cmd_cpp_nesting` records that difference as a fact.
 
 **This bound is the stack's, not the preprocessor's.** Raising `USTKPAGE` from 28 to 24
-(`include/sys/param.h`) would give 8,192 words of stack and 24,576 of image — and every program
-on this disk already fits under 24,576, `fgrep` being the largest at 20,019. That is a kernel ABI
-change and belongs to [../../kernel/TODO.md](../../kernel/TODO.md), not here; `as` and `ld` (task
-C9b) will want it too.
+(`include/sys/param.h`) would give 8,192 words of stack and 24,576 of image. That is a kernel ABI
+change and belongs to [../../kernel/TODO.md](../../kernel/TODO.md) task 39, not here — and **it is
+no longer free.** When this was written every program on the disk fitted under 24,576; task C9b
+has since put `/usr/bin/ld` on it at **23,951 words**, whose ~4,700 words of headroom are the heap
+budget for twelve stdio buffers. Cutting the ceiling to 24,576 would leave it 625 and stop it
+linking. `cpp` is the only program that would gain, and `as` and `ld` — which that task expected
+to want the bigger stack too — turned out not to ([../ld/README.md](../ld/README.md)).
 
 ### Testing the native build
 

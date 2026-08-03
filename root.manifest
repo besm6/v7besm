@@ -781,6 +781,30 @@ file /usr/bin/cpp       # cmd/cpp built natively -- task C9a, the first step of 
 source ../../rootfs/usr/bin/cpp
 mode 0755
 
+file /usr/bin/as        # cmd/as built natively -- task C9b, the second step of self-hosting.
+                        # Same shape as cpp above: one set of sources, two builds, and only a
+                        # size profile between them.  cmd/as/as.h cuts HASHSZ/HCONSZ/HCMDSZ
+                        # under the `besm6' predefine, because the host sizes come to ~28,300
+                        # words and a user program gets 28,672 for everything including its
+                        # heap.  It also bounds expression nesting (MAXEXPRDEPTH), which the
+                        # host build does not: that recursion's depth is chosen by the input
+                        # and this machine's 4,096-word stack is unchecked.
+                        # cmd/as/README.md, "Building for the BESM-6", has the measurements.
+source ../../rootfs/usr/bin/as
+mode 0755
+
+file /usr/bin/ld        # cmd/ld built natively -- task C9b, and the point of the exercise:
+                        # with this and /usr/bin/as beside /usr/bin/cpp, the machine can
+                        # assemble and link its own programs.  It links THE WHOLE KERNEL and
+                        # every program on this disk byte-for-byte identically to the host
+                        # b6ld, itself included.  cmd/ld/intern.h cuts NSYM/NSYMPR/NCONST/
+                        # NCINDEX/RANTABSZ under the `besm6' predefine and gives every stdio
+                        # stream a smaller buffer: the linker holds twelve open at once, and
+                        # at the default BUFSIZ that alone is 6,144 words of heap.
+                        # cmd/ld/README.md, "Building for the BESM-6", has the measurements.
+source ../../rootfs/usr/bin/ld
+mode 0755
+
 file /usr/lib/diffh     # cmd/diffh -- task C5f.  diff -h execv's this path; see the
                         # /usr/lib stanza above.  Its window is RANGE (30) lines of each
                         # file, so its storage is bounded by a constant where diff's is

@@ -18,16 +18,19 @@ and it leaves the program **on the image** — staged into `build/rootfs/`, name
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C9 | self-hosting — `as`, `ld`, the binutils, `cc` (`cpp` is done, C9a) | building the system on itself | large |
+| C9 | self-hosting — the binutils and `cc` (`cpp`, `as` and `ld` are done: C9a, C9b) | building the system on itself | large |
 | C10 | the rest of the manual — `make` `m4` `awk` `bc` `dc` `expr` `egrep` `units` `crypt` `at` `cron` `calendar` `update` `mail` | a system worth using | open-ended |
 
-**Where to start: C9b's `as` and `ld`.** C9a is done — `/usr/bin/cpp` is on the image, built from
-the same eight sources as the host `b6cpp`, and it preprocesses this repo's own kernel, libc and
-shell sources byte-for-byte identically to the host tool. What it *cost* is the whole lesson for
-the two tasks below, and [cpp/README.md](cpp/README.md)'s "Building for the BESM-6" is where it
-is written down: the four-ceilings section of §6 below was rewritten out of it. C10 is still
-behind the `yacc` decision its own section names; `expr.y` is the smallest thing in front of that
-decision, and scripts want it almost as much as they want `test`.
+**Where to start: C9c, the binutils and the driver.** C9a and C9b are done — `/usr/bin/cpp`,
+`/usr/bin/as` and `/usr/bin/ld` are on the image, each built from the same sources as its host
+tool, and **the machine now assembles and links its own programs**: the native `as` and `ld`
+reproduce the host tools' objects and images byte for byte, for the whole kernel and for the
+toolchain itself. What that cost is the lesson for what is left, and the three "Building for the
+BESM-6" sections are where it is written down — [cpp/README.md](cpp/README.md) for the size
+profile and the stack, [as/README.md](as/README.md) for the 48-bit word in a machine with no
+`int64_t`, [ld/README.md](ld/README.md) for a 50,000-word struct and twelve stdio buffers.
+C10 is still behind the `yacc` decision its own section names; `expr.y` is the smallest thing in
+front of that decision, and scripts want it almost as much as they want `test`.
 
 **Two loose ends about the terminal, one line each and neither worth a task of its own.** `TANDEM`
 is honoured by the kernel — `ttyblock()` queues the stop character when the input queue passes
@@ -56,35 +59,27 @@ this directory, and — with the exception of `cmd/sim` and `cmd/fsutil`, which 
 out of reach until there is a C++ compiler — **they are all plain C**. So the task is not to port
 anything: it is to build what is already here a *second* time, for the target.
 
-**C9a is done and its writeup has been removed**; `/usr/bin/cpp` is on the image and
-[cpp/README.md](cpp/README.md)'s "Building for the BESM-6" is what it left behind — the build
-category, the size profile, the four ceilings and how each was answered. The numbering is left as
-it was.
+**C9a and C9b are done and their writeups have been removed**; `/usr/bin/cpp`, `/usr/bin/as` and
+`/usr/bin/ld` are on the image, and the three "Building for the BESM-6" sections are what they
+left behind — the build category, the size profile, the ceilings and how each was answered. The
+numbering is left as it was.
 
-### C9b. `as`, `ld`
+**What C9b established, and C9c inherits.** The `b6_prog()` recipe needed no change for any of the
+three. What did:
 
-[as/](as/) (12 sources) and [ld/](ld/) (9). Both plain C, both already reading and writing this
-machine's `a.out` through [libaout/](libaout/), which builds natively too. Both are designed
-around fixed tables rather than unbounded growth, which helps.
-
-**Read [cpp/README.md](cpp/README.md)'s "Building for the BESM-6" first**: C9a met every ceiling
-these two will meet, and it names the fix for each. In the order they bit:
-
-* **No struct above 4,096 words.** `struct cppstate` was ~38,630 and stopped six of eight sources
-  in `b6as` with a masked offset that does not read like an overflow. Move the big arrays out to
-  file scope. Both `as` and `ld` keep their tables in exactly that shape.
-* **The 4,096-word stack, which nothing checks.** This is the one that costs behaviour rather
-  than headroom, and the one that is invisible until the program produces a wrong answer. Big
-  scratch to the heap where the function recurses, `static` where it does not, and split a long
-  function that stays resident — `cpp`'s `main` alone was 531 words. Then read the real `15 utm`
-  out of the `.dis`.
-* **The heap**, whose granularity is a page: size a block against the *break*, not the request.
-* **28,672 words of image**, which `cpp` fills to 23,826 — so a size profile is not optional for
-  anything this large, and `as`'s and `ld`'s symbol tables are the obvious knob.
-
-The stack is the one of those that is a *kernel* decision as much as a source one, and
-[../kernel/TODO.md](../kernel/TODO.md) task 39 is the proposal to raise it. `cpp` works without
-it; whether `as` does is the first thing worth measuring.
+* **No struct above 4,096 words**, every time. `struct cppstate` was ~38,600, `struct assembler`
+  ~28,300, `struct linker` ~50,400 — the last of those half again the whole address space. The
+  answer is always to lift the big arrays to file scope, never to shrink them in place.
+* **A size profile keyed on `besm6`, measured rather than guessed.** Instrument the host tool,
+  run it over this repo's own sources, and size from the high-water mark.
+* **The heap, which `rootfs_<name>_size` cannot see.** `ld` holds twelve stdio streams open and
+  at the default `BUFSIZ` that alone is 6,144 words; it sets its own buffer size.
+* **Three compiler and libc facts, all silent.** `b6lower` ignores designated initializers and
+  initializes *positionally*; a string literal cannot initialize a `char *` inside a struct
+  initializer at all; and there is no `mkstemp()` (use `tmpfile()`) and no `int64_t` — only what
+  really holds a 48-bit word becomes `uword_t`, everything narrower stays `word_t`.
+* **The agreement test is the one that matters.** Host tool and native program over one fixture,
+  the outputs compared live; a checked-in expectation cannot express "these two builds agree".
 
 ### C9c. The binutils and the driver
 

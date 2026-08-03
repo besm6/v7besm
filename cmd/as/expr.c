@@ -1,7 +1,7 @@
 //
 // Assembler for BESM-6.
 // Expression parser.  Operands and the result are full 48-bit values carried
-// in as.intval (one int64_t).  Besides the numeric value, every
+// in as.intval (one uword_t).  Besides the numeric value, every
 // expression also has a SEGMENT: which segment, if any, it is relative to.  A
 // plain number is "absolute" (SABS); a label is relative to its segment; an
 // undefined name is "external" (SEXT).  An expression may contain at most one
@@ -33,12 +33,12 @@ static int parse_operand(void)
         // segment.  An undefined or common symbol becomes an external
         // reference, remembered in as.extref for the relocation record.
         as.intval = 0;
-        ty        = as.stab[cval].n_type & N_TYPE;
+        ty        = stab[cval].n_type & N_TYPE;
         if (ty == N_UNDF || ty == N_COMM) {
             as.extref = cval;
             return SEXT;
         }
-        as.intval = as.stab[cval].n_value;
+        as.intval = stab[cval].n_value;
         return TYPESEGM(ty);
     case '.':
         // "." is the current location: the offset (in words) into the segment
@@ -56,7 +56,7 @@ static int parse_operand(void)
         parse_expr(&s);
         if (next_token(&cval) != '}')
             fatal("bad () syntax");
-        as.intval &= ~((int64_t)0177 << 41);
+        as.intval &= ~((uword_t)0177 << 41);
         return s;
     }
 }
@@ -138,7 +138,7 @@ static int precedence(int token)
 // we get here the look-ahead inside parse_binary may have lexed a number and
 // overwritten as.intval.
 //
-static int apply_op(int op, int64_t *lhs, int lseg, int64_t rhs, int rseg)
+static int apply_op(int op, uword_t *lhs, int lseg, uword_t rhs, int rseg)
 {
     switch (op) {
     case '+':
@@ -179,10 +179,10 @@ static int apply_op(int op, int64_t *lhs, int lseg, int64_t rhs, int rseg)
         *lhs ^= ~rhs & WORD_MASK;
         break;
     case LLSHIFT: // shift the whole 48-bit value left; count is the low 6 bits
-        *lhs = ((uint64_t)*lhs << (rhs & 077)) & WORD_MASK;
+        *lhs = (*lhs << (rhs & 077)) & WORD_MASK;
         break;
     case LRSHIFT: // shift the whole 48-bit value right
-        *lhs = (uint64_t)*lhs >> (rhs & 077);
+        *lhs = *lhs >> (rhs & 077);
         break;
     // Multiply/divide/modulo take the low 24 bits of each side; multiply may
     // then produce a full 48-bit product, divide/modulo a 24-bit result.
@@ -217,11 +217,11 @@ static int apply_op(int op, int64_t *lhs, int lseg, int64_t rhs, int rseg)
 // bottoms out, and a pushed-back token keeps the kind it was lexed with - so a
 // following mnemonic ("7 xta data") must be recognized right there.
 //
-static int parse_binary(int64_t *lhs, int lseg, int minprec, int cmd)
+static int parse_binary(uword_t *lhs, int lseg, int minprec, int cmd)
 {
     for (;;) {
         int cval, rseg;
-        int64_t rhs;
+        uword_t rhs;
 
         as.cmdmode = cmd; // the look-ahead may land on a mnemonic
         int clex   = next_token(&cval);
@@ -262,9 +262,18 @@ static int parse_binary(int64_t *lhs, int lseg, int minprec, int cmd)
 long parse_expr(int *s)
 {
     int clex, cval, seg;
-    int64_t rez;
+    uword_t rez;
     int cmd    = as.cmdmode; // a machine instruction may follow the expression
     as.cmdmode = 0;          // operands themselves never absorb operator chars
+
+    // "(" and "{" send parse_operand() back through here, so the depth of this
+    // recursion is chosen by the INPUT, and it is the only such recursion in the
+    // assembler.  On a machine whose stack is 4,096 words and unchecked that
+    // needs a ceiling of its own -- overrunning it corrupts silently rather than
+    // faulting.  The counter lives in `as' so assemble()'s memset resets it, and
+    // it is decremented on every path out below.
+    if (++as.exprdepth > MAXEXPRDEPTH)
+        fatal("expression nested too deeply");
 
     // look at the first token
     switch (clex = next_token(&cval)) {
@@ -275,6 +284,7 @@ long parse_expr(int *s)
         as.cmdmode = cmd; // restore for the caller
         as.intval  = 0;
         *s         = SABS;
+        as.exprdepth--;
         return 0;
     case LNUM:
     case LNAME:
@@ -294,5 +304,6 @@ long parse_expr(int *s)
     as.cmdmode = cmd; // restore for the caller
     as.intval  = rez;
     *s         = seg;
+    as.exprdepth--;
     return rez & HALF_MASK;
 }

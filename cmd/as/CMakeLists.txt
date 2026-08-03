@@ -1,9 +1,13 @@
 #
 # Assembler for BESM-6.
 #
-# Built from the host C compiler: it runs on the host and emits BESM-6 a.out
-# objects.  The fput*/fgeth helpers it needs are shared with the rest of the
-# toolchain and come from the cmd/libaout (aout) library.
+# This directory builds the HOST tool b6as: compiled by the host C compiler, it
+# runs on the host and emits BESM-6 a.out objects.  The fput*/fgeth helpers it
+# needs are shared with the rest of the toolchain and come from the cmd/libaout
+# (aout) library.
+#
+# The same sources are built a SECOND time, for the machine itself, into
+# build/rootfs/usr/bin/as -- see rootfs/, and task C9b in ../TODO.md.
 #
 # The assembler engine, split into a reusable library so it can be linked into
 # both the command-line tool and the unit tests.  uerror() is left undefined

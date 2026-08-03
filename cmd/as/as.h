@@ -73,16 +73,70 @@
 // Table sizes.  The hash arrays use open addressing, so they are deliberately
 // larger than the number of entries they hold; the hash size must be a power
 // of two so SUPERHASH's bit-mask works.
+//
+// THE BESM-6 PROFILE IS SMALLER, and it is measured rather than guessed: the
+// tables below are ~28,300 words at the host sizes, against the 28,672 words a
+// user program gets for const+text+data+bss and heap together, so the host
+// numbers do not fit with any room for code at all.  Assembling the 194 .s files
+// this repo's own kernel, libc, sh, sed, cpp, as and ld compile to, the high
+// water marks are 503 symbols, 3,240 bytes of name arena and 87 constants -- all
+// three set by cmd/sed/sed0.c, the largest single source here.  The sizes below
+// leave roughly 80% headroom on that and come to ~8,100 words.  README.md,
+// "Building for the BESM-6", has the arithmetic.
+//
+// Undersizing the three is not equally bad, which is why they are not cut
+// equally: the symbol table and the name arena are FATAL when they fill
+// (symtab.c), while the constant-dedup table just stops merging (pass1.c) and
+// costs a duplicate word.
 
-#define HASHSZ 2048 // name (symbol) table hash size
-#define HCONSZ 4096 // constant-dedup hash size
-#define HCMDSZ 1024 // machine-instruction hash size
+#if besm6
+#   define HASHSZ 1024 // name (symbol) table hash size -- 921 symbols, measured max 503
+#   define HCONSZ 512  // constant-dedup hash size -- 460 entries, measured max 87
+#   define HCMDSZ 128  // machine-instruction hash size -- table[] has 45 entries
+#else
+#   define HASHSZ 2048 // name (symbol) table hash size
+#   define HCONSZ 4096 // constant-dedup hash size
+#   define HCMDSZ 1024 // machine-instruction hash size
+#endif
 
 #define STSIZE  (HASHSZ * 9 / 10) // max symbols (kept below the hash size to stay sparse)
 #define CSIZE   (HCONSZ * 9 / 10) // max entries in the constant-dedup table
 #define SPACESZ (STSIZE * 8)      // bytes of arena for symbol-name text
 
-#define SRCNAME_MAX 1024 // max length of a source file name from a "# N \"file\"" marker
+// Max length of a source file name from a "# N \"file\"" marker.  It is charged
+// twice on the BESM-6 -- once as as.srcfile and once as parse_line_marker()'s
+// scratch buffer, which sits on the stack under the whole parse -- so the target
+// takes the shorter one.  A marker naming a longer path is truncated, not an
+// error, which is why cutting it costs nothing but a fuzzy diagnostic.
+#if besm6
+#   define SRCNAME_MAX 256
+#else
+#   define SRCNAME_MAX 1024
+#endif
+
+// How deeply "(" and "{" may nest in one expression.  parse_expr -> parse_term
+// -> parse_operand -> parse_expr is the one recursion here whose depth the input
+// chooses, so on a machine with 4,096 words of unchecked stack it needs a bound
+// of its own -- the same move as grep's MAXDEPTH and cpp's MAXARGDEPTH.
+//
+// The BESM-6 number is MEASURED, from the `15 utm' prologues in as.dis: 554
+// words are resident before an expression is even reached, each nesting level
+// costs 104, and next_token's 372 plus parse_line_marker's 124 sit under the
+// deepest one.  So depth D costs 1,050 + 104*D and 20 fits at 3,130 of the
+// 4,096 -- a margin of about 950 words, which is what pays for fatal()'s own
+// frame and the runtime helpers.  README.md prints the chain.  The host has
+// stack to spare and keeps a value that only stops a runaway.
+#if besm6
+#   define MAXEXPRDEPTH 20
+#else
+#   define MAXEXPRDEPTH 200
+#endif
+
+// Capacity of as.name, the one scratch buffer the lexer builds both identifiers
+// and decoded digit strings in.  Every writer into it is bounded against this:
+// nothing downstream re-checks, and an overrun would land in the scalars that
+// follow it in struct assembler rather than anywhere a diagnostic could reach.
+#define NAMEMAX 256
 
 // Conversion tables wrapped as macros (the arrays live in tables.c).
 
@@ -101,7 +155,15 @@
 // optimal hash multiplier for a 32-bit word == 011706736335L
 // the same for a 16-bit word = 067433
 
-#define SUPERHASH(key, mask) (((short)(key) * (short)067433) & (short)(mask))
+// The truncation to 16 bits is written out rather than left to a cast through
+// `short': a short is 16 bits on the build machine and 41 on the BESM-6, so the
+// cast would fold the key on one target and not the other.  Masking first gives
+// BOTH builds the identical probe sequence, since the low bits of a product
+// depend only on the low bits of its operands.  The multiply stays SIGNED -- the
+// BESM-6 multiplies signed in one instruction and an unsigned multiply costs a
+// fixup -- and it cannot overflow either build: the masked key is at most
+// 0177777, so the product is under 2**31.
+#define SUPERHASH(key, mask) (((((int)(key)) & 0177777) * 067433) & (mask))
 
 // Character classification, driven by the bit flags in ctype[] (see tables.c).
 
@@ -110,12 +172,20 @@
 #define ISDIGIT(c)  (ctype[(c) & 0377] & 4) // decimal digit 0-9
 #define ISLETTER(c) (ctype[(c) & 0377] & 8) // name character (letter, '.', '_', '$', high-bit)
 
-// A BESM-6 word is 48 bits.  Values are carried in a single int64_t; these
-// masks and accessors split a word into its two 24-bit half-words where the
-// on-disk format needs them (high half = bits 25..48, low half = bits 1..24).
+// A BESM-6 word is 48 bits.  Values are carried in a single uword_t -- UNSIGNED,
+// because a native `int' is only 41 bits wide and no signed type on this machine
+// holds a whole word.  Nothing here ever compares a word value signed and every
+// result is masked back to 48 bits, so unsigned costs no behaviour; anything
+// narrower than a word (a half, an address, a relocation record) stays long/int.
+// These masks and accessors split a word into its two 24-bit half-words where
+// the on-disk format needs them (high half = bits 25..48, low half = bits 1..24).
 
-#define WORD_MASK (((int64_t)1 << 48) - 1) // 48-bit value mask
-#define HALF_MASK 077777777L               // 24-bit half-word mask
+#if besm6
+#   define WORD_MASK ((uword_t) ~0u) // on this machine `unsigned' IS the 48-bit word
+#else
+#   define WORD_MASK ((((uword_t)1 << 48) - 1)) // 48-bit value mask
+#endif
+#define HALF_MASK 077777777L // 24-bit half-word mask
 #define HIHALF(w) ((long)(((w) >> 24) & HALF_MASK)) // high 24 bits as a long
 #define LOHALF(w) ((long)((w) & HALF_MASK))         // low  24 bits as a long
 
@@ -123,7 +193,7 @@
 // same array is reused to remap symbol indices when -x/-X drops local symbols.
 // "newindex" is just a readable alias for that reuse.
 
-#define newindex as.hashtab
+#define newindex hashtab
 
 // One row of the machine-instruction table (tables.c).
 struct table {
@@ -138,7 +208,7 @@ struct table {
 // two halves are absolute (see register_constant()).  Note this table indexes
 // const words - it no longer *holds* them; the words live in the segment image.
 struct constant {
-    int64_t val; // the word's 48-bit value
+    uword_t val; // the word's 48-bit value
     long rel;    // relocation type of the value (R* code, possibly with a symbol index)
     long addr;   // the word's offset, in words, from the start of the const segment
 };
@@ -163,7 +233,6 @@ struct assembler {
 
     char *infile;       // input file name (NULL = stdin)
     char *outfile;      // output file name
-    char tfilename[14]; // template for the temp files: "/tmp/asXXXXXX"
     int line;           // current physical input line number (fallback for error messages)
     int srcline;        // source line from the last "# N \"file\"" marker (0 = none seen)
     char srcfile[SRCNAME_MAX]; // source file name from the last marker ("" = none seen)
@@ -182,34 +251,45 @@ struct assembler {
     long adbase; // string-constant segment base address
     long bbase;  // bss   segment base address
 
-    struct nlist stab[STSIZE]; // the symbol table
-    int stabfree;              // number of symbols used so far
-
-    char space[SPACESZ]; // arena that holds the symbol-name strings
-    int lastfree;        // bytes of the arena used so far
+    int stabfree; // number of symbols used so far in stab[]
+    int lastfree; // bytes of the name arena space[] used so far
 
     int regleft; // index register written to the left of an instruction (the "N M" prefix)
 
-    struct constant constab[CSIZE]; // the constant-dedup table
-    int nconst;                     // number of entries in it
+    int nconst; // number of entries used so far in constab[]
 
-    char name[256];   // scratch buffer: the identifier/number text just scanned
-    int64_t intval;   // scratch: the value of the integer literal just scanned (full 48-bit word)
+    char name[NAMEMAX]; // scratch buffer: the identifier/number text just scanned
+    uword_t intval;   // scratch: the value of the integer literal just scanned (full 48-bit word)
     int extref;       // symbol index of the external name referenced by the current operand
 
     int blexflag; // a token has been pushed back (see unget_token / next_token)
     int backlex;  // the pushed-back token's value
     int blextype; // the pushed-back token's type
 
-    int hashtab[HASHSZ];   // hash buckets for the symbol table (reused as newindex on pass 2)
-    int hashctab[HCMDSZ];  // hash buckets for the machine-instruction table
-    int hashconst[HCONSZ]; // hash buckets for the constant pool
-
-    int aflag;   // -a: do not word-align after instructions
-    int cmdmode; // lexer expects a machine instruction (so '+ - * /' may be part of a name)
+    int aflag;     // -a: do not word-align after instructions
+    int cmdmode;   // lexer expects a machine instruction (so '+ - * /' may be part of a name)
+    int exprdepth; // parenthesis nesting currently open in parse_expr (see MAXEXPRDEPTH)
 };
 
 extern struct assembler as; // the one global assembler state (as.c)
+
+// The six big tables live at FILE SCOPE rather than inside struct assembler,
+// and they have to: a struct member is named by a 12-bit offset from a base
+// register and there is no longer form, so a struct above 4,096 words cannot be
+// compiled at all (cmd/README.md SS6).  With these inside it, `as' was ~28,300
+// words.  A file-scope array is reached through an index register and has no
+// such limit.  cmd/cpp did the same to struct cppstate; this is that move.
+//
+// None of them needs clearing between runs, which is why assemble()'s memset
+// over the struct is still the whole of the reset: the three hash arrays are
+// rewritten to -1 by init_hash_tables(), and stab/space/constab are read only
+// below the counters stabfree/lastfree/nconst, which the memset does zero.
+extern struct nlist stab[STSIZE];    // the symbol table
+extern char space[SPACESZ];          // arena that holds the symbol-name strings
+extern struct constant constab[CSIZE]; // the constant-dedup table
+extern int hashtab[HASHSZ];          // hash buckets for the symbol table (also newindex, above)
+extern int hashctab[HCMDSZ];         // hash buckets for the machine-instruction table
+extern int hashconst[HCONSZ];        // hash buckets for the constant pool
 
 // Read-only tables (defined in tables.c).
 extern const int ctype[256];       // character classification bit flags

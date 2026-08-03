@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "ld.h"
 
@@ -29,9 +30,17 @@ static void onsig(int sig)
 int main(int argc, char **argv)
 {
     if (argc == 1) {
+        // The BASENAME of argv[0], as error() uses for its diagnostic prefix
+        // (ld.c) -- printing the whole path would put whatever the caller typed,
+        // or the absolute path an exec'ing program passed, into the usage line.
+        char *progname = (argv[0] && argv[0][0]) ? argv[0] : "ld";
+        char *slash    = strrchr(progname, '/');
+
+        if (slash)
+            progname = slash + 1;
         printf("Usage:\n");
         printf("    %s [-xXsSrndt] [-T addr] [-D num] [-L dir] [-lname] [-u name] [-e name] [-o file] file...\n",
-               argv[0]);
+               progname);
         printf("Options:\n");
         printf("    -o file     Set output file name, default a.out\n");
         printf("    -e name     Make name the program entry point\n");

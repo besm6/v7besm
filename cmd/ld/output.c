@@ -10,16 +10,38 @@
 
 //
 // Open one output buffer file into *buf.  With tempflg set it is a scratch file
-// (one per segment) that is unlink()ed immediately, so it has no name on disk but
-// stays usable until closed; with tempflg clear it is the real output file.
+// (one per segment) with no name on disk, so it disappears when it is closed;
+// with tempflg clear it is the real output file.
 //
+// tmpfile() is C11 §7.21.4.3 and is exactly the fopen("w+") + unlink() this used
+// to spell by hand around mkstemp().  It is also what the BESM-6 build needs:
+// that libc has no mkstemp(), and its tmpnam() separates names by process id and
+// a three-letter sequence, so the seven scratch streams open here never collide.
+//
+//
+// Give one freshly opened stream a smaller buffer than stdio's default.  On the
+// BESM-6 only: intern.h's LDBUFSIZ comment has the arithmetic, and on the host
+// the default is both affordable and faster.  Must be called before any I/O on
+// the stream, which is why every caller is right next to an fopen/tmpfile.
+//
+// A failure is not fatal -- setvbuf() leaves the stream unbuffered, which is
+// slow but correct -- so there is nothing to report.
+//
+void shrink_buffer(FILE *f)
+{
+#if besm6
+    setvbuf(f, NULL, _IOFBF, LDBUFSIZ);
+#else
+    (void)f;
+#endif
+}
+
 void create_buffer(FILE **buf, int tempflg)
 {
-    *buf = fopen(tempflg ? ld.tfname : ld.ofilename, "w+");
+    *buf = tempflg ? tmpfile() : fopen(ld.ofilename, "w+");
     if (!*buf)
         error(2, tempflg ? "cannot create temporary file" : "cannot create output file");
-    if (tempflg)
-        unlink(ld.tfname);
+    shrink_buffer(*buf);
 }
 
 //
@@ -32,12 +54,6 @@ void create_buffer(FILE **buf, int tempflg)
 //
 void setup_output(void)
 {
-    int fd = mkstemp(ld.tfname);
-    if (fd == -1) {
-        error(2, "cannot create temporary file %s", ld.tfname);
-    } else {
-        close(fd);
-    }
     create_buffer(&ld.outb, 0);
     create_buffer(&ld.coutb, 1);
     create_buffer(&ld.toutb, 1);
@@ -135,7 +151,7 @@ void finish_output(void)
         const struct nlist *p;
         if (!ld.xflag)
             copy_buffer(ld.soutb);
-        for (p = ld.symtab; p < &ld.symtab[ld.symindex]; ++p)
+        for (p = symtab; p < &symtab[ld.symindex]; ++p)
             fputsym(p, ld.outb);
         putc(0, ld.outb);
         while (ld.ssize++ % W)

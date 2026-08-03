@@ -27,32 +27,48 @@ numbering is **left as it was** — task numbers are cited from the sources and 
 | 36 | the shifting copy: the half of the byte path task 28 could not reach | medium, high risk |
 | 37 | `mdvol[]` is filled only by a READ, so a pack that is only ever written is stamped with another drive's label | small |
 | 38 | `dk_busy`, `dk_numb[]` and `dk_wds[]` are declared, defined and written by nothing | small |
-| 39 | the 4,096-word user stack is too small for the toolchain — `USTKPAGE` 28 → 24 | small change, wide blast radius |
+| 39 | the 4,096-word user stack: `USTKPAGE` 28 → 24, and why C9b argues against it | small change, wide blast radius |
 
 ---
 
-## 39. The user stack is 4,096 words and that is now the binding limit
+## 39. The user stack is 4,096 words — and the image ceiling is now the tighter one
 
 **Where.** `USTKPAGE 28` in [../include/sys/param.h](../include/sys/param.h). `estabur()`
 ([utab.c](utab.c)) derives *both* user ceilings from it: 28 pages of `const+text+data+bss` below
-it and 4 pages of stack from `070000` up.
+it and 4 pages of stack from `070000` up. The two move in opposite directions, which is the
+whole of this task.
 
-**Why now.** Task C9a ([../cmd/cpp/README.md](../cmd/cpp/README.md), "Building for the BESM-6")
-is the first program on this image whose stack the split actually bounds, and it bounds it
-tightly enough to cost behaviour rather than headroom. C11 §6.10.3.1 macro-argument prescanning
-is a recursion the *input* drives, and the measured chain — `main` 41 + `process_directives` 372
-+ `scan_token` 656 + `lookup_token` 11 resident, then 1,227 words per nesting level and another
-1,106 for the inner macro's argument collection — fits **one** level in 4,096 and not two. So
-`cpp` carries `MAXARGDEPTH 1` and substitutes a deeper argument raw. It is honest, warned about
-and almost always invisible, but it is a real subset of the language, and `as` and `ld` (task
-C9b in [../cmd/TODO.md](../cmd/TODO.md)) will meet the same wall.
+**Why it was raised.** Task C9a ([../cmd/cpp/README.md](../cmd/cpp/README.md), "Building for the
+BESM-6") is the one program on this image whose stack the split bounds tightly enough to cost
+behaviour rather than headroom. C11 §6.10.3.1 macro-argument prescanning is a recursion the
+*input* drives, and the measured chain — `main` 41 + `process_directives` 372 + `scan_token` 656
++ `lookup_token` 11 resident, then 1,227 words per nesting level and another 1,106 for the inner
+macro's argument collection — fits **one** level in 4,096 and not two. So `cpp` carries
+`MAXARGDEPTH 1` and substitutes a deeper argument raw. It is honest, warned about and almost
+always invisible, but it is a real subset of the language.
 
-**What to change.** `USTKPAGE` 24: 8,192 words of stack, 24,576 of image. **Every program on
-this disk already fits under 24,576** — `cpp` is the largest at 23,826, then `fgrep` 20,019,
-`sed` 14,120 — so nothing has to shrink, but the margin `cpp` has left is 750 words and it is
-the program that would gain the most. Weigh that before choosing 24 over 26.
+**C9b is evidence AGAINST the change, and this is the part to read before doing it.** That task
+predicted `as` and `ld` would want the bigger stack too. Neither does, and `ld` would be actively
+hurt:
 
-**What moves with it**, and none of it is computed: `cmd/sim`'s `STACK_BASE`
+* **`ld` has no recursion at all** and not one local array. Its deepest chain —
+  `pass2` → `relocate_file` → `relocate_object` → `relocate_segment` → `relocate_halfword` →
+  `lookup_local` — is **578 words** of the 4,096 ([../cmd/ld/README.md](../cmd/ld/README.md) has
+  the frames). What it is short of is *image*: it links at **23,951** words of 28,672, and the
+  ~4,700 left are the heap budget for twelve stdio buffers. `USTKPAGE 24` would cut the ceiling
+  to 24,576 and leave it 625 words for a heap that needs ~2,050. **`/usr/bin/ld` would stop
+  linking.**
+* **`as` needed only a bound of its own**, `MAXEXPRDEPTH`, on the one recursion its input drives
+  — the same move as `grep`'s `MAXDEPTH`. It is 554 words resident plus 104 a level, so 20 levels
+  fit in 3,130 with room to spare, and no real input nests parentheses at all.
+
+So the trade is now explicit: **`USTKPAGE 24` buys `cpp` one more level of macro-argument
+nesting and costs `ld` the ability to run.** Anyone taking this task has to shrink `ld` first —
+its `NCONST`/`NSYM` profile is where the words are — or pick 26 rather than 24 and re-measure
+both.
+
+**What to change**, if it is still wanted: `USTKPAGE` 24 gives 8,192 words of stack and 24,576
+of image. **What moves with it**, and none of it is computed: `cmd/sim`'s `STACK_BASE`
 ([../cmd/sim/besm6_arch.h](../cmd/sim/besm6_arch.h)) — b6sim seeds `M15` at `070000` and its
 memory ends at `0100000`, so the two worlds must agree or a program that passes under the
 simulator faults under the kernel; the `28672` literals in
@@ -62,8 +78,9 @@ what `rootfs_<name>_size` checks; `scripts/check-size.sh`'s header; `cmd/README.
 and has nothing to do with this split.
 
 **How to know it worked.** Raise `cpp`'s `MAXARGDEPTH` to 2, rebuild, and check that
-`rootfs_cpp_deep` still agrees with the host and that `ID(ID(ID(4)))` now expands. That one
-number is the whole observable difference.
+`rootfs_cpp_deep` still agrees with the host and that `ID(ID(ID(4)))` now expands — and that
+`rootfs_ld_size` and the four `rootfs_ld_link*` cases still pass, which is the half this task
+did not originally have.
 
 ---
 

@@ -153,6 +153,10 @@ if(B6RUNTIME_LIB)
     # A subdirectory of its own because cmd/cpp is added above, outside this guard, where
     # b6_prog() does not exist yet; cmd/cpp/rootfs/CMakeLists.txt says so at length.
     add_subdirectory(cmd/cpp/rootfs)
+    # /usr/bin/as and /usr/bin/ld -- the same story one task later (C9b).  Each is
+    # a subdirectory for the same reason cmd/cpp/rootfs is, and each says so.
+    add_subdirectory(cmd/as/rootfs)
+    add_subdirectory(cmd/ld/rootfs)
     add_subdirectory(cmd/sh)
     add_subdirectory(cmd/basename)
     add_subdirectory(cmd/cal)

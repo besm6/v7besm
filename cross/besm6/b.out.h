@@ -54,7 +54,10 @@
 // a_flag carries the RELFLG bit.
 //
 struct exec {
-    word_t a_magic; // magic number
+    // MUST be unsigned: FMAGIC is 47 bits and a native `int' is 41 (the same reason
+    // include/sys/user.h gives for ux_mag).  Every other field here is a byte count,
+    // an address or a flag, so 41 bits is ample and word_t is right for them.
+    uword_t a_magic; // magic number
     word_t a_const; // const segment size, bytes (multiple of 6)
     word_t a_text;  // text (code) segment size, bytes
     word_t a_data;  // initialized data segment size, bytes
@@ -93,8 +96,13 @@ struct nlist {
 // Magic numbers (a_magic). Only FMAGIC and NMAGIC are accepted on input
 // (see BADMAG below).
 //
-#define FMAGIC 02044252323200407 // standard relocatable / impure executable
-#define NMAGIC 02044252323200410 // read-only (pure) text segment
+// The U is not decoration: without it the constant is signed, and a native build
+// carries it in a 41-bit int -- losing the "BE" of the "BESM" tag and writing a
+// magic number neither the kernel nor b6sim accepts.  Spelled CHARACTER-IDENTICALLY
+// with include/sys/param.h, which defines the same pair for the kernel: b6cpp
+// rejects a redefinition whose replacement text is not byte-for-byte the same.
+#define FMAGIC 02044252323200407U // standard relocatable / impure executable
+#define NMAGIC 02044252323200410U // read-only (pure) text segment
 
 //
 // Symbol types (n_type).

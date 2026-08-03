@@ -47,13 +47,20 @@
 #include <string.h>
 #include <unistd.h>
 
-// The single instance of the assembler's state.  Only the two fields with
-// non-zero defaults are set here; assemble() zeroes the rest at the start of
-// each run.
-struct assembler as = {
-    .outfile   = "a.out",
-    .tfilename = "/tmp/asXXXXXX",
-};
+// The single instance of the assembler's state.  Entirely zero to start with:
+// assemble() memsets it anyway at the head of each run, and fills in outfile
+// from its arguments (defaulting to "a.out") right afterwards.  It is not
+// initialized here because the BESM-6 compiler cannot initialize a char * from
+// a string literal inside a struct initializer, and the value was redundant.
+struct assembler as;
+
+// The big tables, at file scope for the reason as.h gives where it declares them.
+struct nlist stab[STSIZE];
+char space[SPACESZ];
+struct constant constab[CSIZE];
+int hashtab[HASHSZ];
+int hashctab[HCMDSZ];
+int hashconst[HCONSZ];
 
 //
 // Format the current source-location prefix into buf, e.g. "hello.c:42: ".  If
@@ -80,27 +87,23 @@ char *format_location(char *buf, int size)
 //
 // Open the temporary files that hold the segment images and their relocation
 // streams during pass 1.  Each segment needs two files (code image + matching
-// relocations).  The files are created with mkstemp() and then immediately
-// unlink()ed: they have no name on disk, so they disappear automatically when
-// the process exits, yet stay usable through the open FILE* handles.
+// relocations).  They have no name on disk, so they disappear when the process
+// exits, yet stay usable through the open FILE* handles.
+//
+// tmpfile() is C11 §7.21.4.3 and is exactly the fopen("w+") + unlink() this used
+// to spell by hand around mkstemp().  It is also what the BESM-6 build needs:
+// that libc has no mkstemp(), and its tmpnam() separates names by process id and
+// a three-letter sequence, so the eight streams opened here never collide.
 //
 static void open_temp_files(void)
 {
     int i;
 
-    int fd = mkstemp(as.tfilename);
-    if (fd == -1) {
-        fatal("cannot create temporary file %s", as.tfilename);
-    } else {
-        close(fd);
-    }
     for (i = SCONST; i < SBSS; i++) {
-        if (!(as.sfile[i] = fopen(as.tfilename, "w+")))
-            fatal("cannot open %s", as.tfilename);
-        unlink(as.tfilename);
-        if (!(as.rfile[i] = fopen(as.tfilename, "w+")))
-            fatal("cannot open %s", as.tfilename);
-        unlink(as.tfilename);
+        if (!(as.sfile[i] = tmpfile()))
+            fatal("cannot create temporary file");
+        if (!(as.rfile[i] = tmpfile()))
+            fatal("cannot create temporary file");
     }
     as.line = 1;
 }
@@ -122,9 +125,8 @@ int assemble(const struct assembler_args *args)
     // Reset the global state so the engine can be invoked repeatedly in one
     // process (the unit tests assemble many sources in a row; the CLI front end
     // calls this just once).  Everything else is rebuilt by open_temp_files()/init_hash_tables()/
-    // the passes; only the two static defaults need restoring afterwards.
+    // the passes; only the one static default needs restoring afterwards.
     memset(&as, 0, sizeof as);
-    strcpy(as.tfilename, "/tmp/asXXXXXX");
 
     // Copy options into the global state.
     as.infile  = args->infile;

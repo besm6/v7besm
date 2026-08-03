@@ -26,6 +26,29 @@ void relocate_object(long loc)
     // Turn this file's relocation biases (relative offsets) into absolute ones by
     // adding the final base address chosen for each segment.
     read_header(loc);
+
+    // Rebuild newindex[] for this file.  The map is per-file (load_constants()
+    // in pass1.c says why), so pass 2 has to derive it again rather than read the
+    // one pass 1 left behind -- there is only ever one file's worth of it.
+    //
+    // This is the SAME CODE over the SAME BYTES: read_header() has just left
+    // ld.text at the const data, the fseek puts ld.reloc on the matching
+    // relocation records exactly as scan_object() does, and ld.nconst is back at
+    // this file's base, so constab[0..nconst) is bit-for-bit the prefix pass 1
+    // searched.  The map therefore comes out identical by construction, not by
+    // agreement.  The entries it re-appends are the ones already there; nconst is
+    // restored because relocate_constants() below reads from that base.
+    //
+    // Position is not disturbed for anything downstream: the symbol loop fseeks
+    // ld.text itself, and relocate_segment() fseeks both streams.
+    {
+        int save = ld.nconst;
+
+        fseek(ld.reloc, loc + N_SYMOFF(ld.filhdr), 0);
+        load_constants();
+        ld.nconst = save;
+    }
+
     ld.ctrel += ld.torigin;
     ld.cdrel += ld.dorigin;
     ld.cbrel += ld.borigin;
@@ -34,9 +57,9 @@ void relocate_object(long loc)
         printf("ctrel=%lxh, cdrel=%lxh, cbrel=%lxh\n", ld.ctrel, ld.cdrel, ld.cbrel);
     //
     // Re-read the symbol table, recording, for each external reference, which
-    // global symbol the file's local symbol number maps to (in ld.local[]).
+    // global symbol the file's local symbol number maps to (in local[]).
     //
-    lp    = ld.local;
+    lp    = local;
     symno = -1;
     loc += HDRSZ;
     fseek(ld.text, loc + (ld.filhdr.a_const + ld.filhdr.a_text + ld.filhdr.a_data) * 2, 0);
@@ -68,7 +91,7 @@ void relocate_object(long loc)
         // Still unresolved (undefined/common): remember symno -> sp so that
         // references in this file's code can be steered to the global symbol.
         if (ld.cursym.n_type == N_EXT + N_UNDF || ld.cursym.n_type == N_EXT + N_COMM) {
-            if (lp >= &ld.local[NSYMPR])
+            if (lp >= &local[NSYMPR])
                 error(2, "local symbol table overflow");
             lp->locindex    = symno;
             lp++->locsymbol = sp;
@@ -104,9 +127,8 @@ void relocate_object(long loc)
 
     // Advance every running counter past this file's contribution so the next
     // file's contents land immediately after it.
-    ld.nconst += ld.coptsize[ld.nfile];
-    ld.cindex += ld.filhdr.a_const / W;
-    ld.corigin += ld.coptsize[ld.nfile];
+    ld.nconst += coptsize[ld.nfile];
+    ld.corigin += coptsize[ld.nfile];
     ld.torigin += ld.filhdr.a_text / W;
     ld.dorigin += ld.filhdr.a_data / W;
     ld.borigin += ld.filhdr.a_bss / W;
@@ -116,7 +138,7 @@ void relocate_object(long loc)
 //
 // Pass-2 handling of one command-line file argument.  A plain object is relocated
 // directly; for an archive we revisit exactly the members pass 1 decided to keep
-// (their offsets were recorded in ld.liblist), in the same order, and relocate
+// (their offsets were recorded in liblist), in the same order, and relocate
 // each.  Emits a filename symbol before each so the symbol table stays annotated.
 //
 void relocate_file(char *acp)
@@ -164,8 +186,7 @@ void pass2(int argc, char **argv)
     char *ap, **p;
 
     p         = argv + 1;
-    ld.libp   = ld.liblist;
-    ld.cindex = 0;
+    ld.libp   = liblist;
     ld.nconst = 0;
     ld.nfile  = 0;
     for (c = 1; c < argc; c++) {

@@ -85,12 +85,25 @@
 // The entire engine state, bundled into one struct (mirrors cmd/as).  Only the
 // few fields below need a non-zero initial value; the rest are zeroed.
 //
-struct linker ld = {
-    .basaddr   = BADDR,
-    .ofilename = "l.out",
-    .delarg    = 4,
-    .tfname    = "/tmp/ldaXXXXXX",
-};
+// Zero and assign rather than a designated initializer: b6lower ignores the
+// designators and initializes POSITIONALLY, so the three values below would land
+// in filhdr's first members instead.  It compiles and it is silent.  ld_link()
+// sets them, which is also where a second link in one process would want them.
+struct linker ld;
+
+// The big tables, at file scope for the reason intern.h gives where it declares
+// them.  Between them they are ~13,900 words on the BESM-6; inside the struct
+// they made it twelve times the 4,096-word ceiling a struct may occupy.
+struct constab constab[NCONST];
+struct nlist symtab[NSYM];
+struct nlist **symhash[NSYM];
+struct nlist *hshtab[NSYM + 2];
+struct local local[NSYMPR];
+int newindex[NCINDEX];
+int coptsize[LLSIZE];
+struct ranlib rantab[RANTABSZ];
+long liblist[LLSIZE];
+char *libdir[NLIBDIR];
 
 //
 // Final cleanup: remove the temporary l.out and set permissions on the
@@ -225,9 +238,9 @@ void assign_addresses(void)
     // the file can be linked again later.  The five boundary symbols above don't
     // count - they are defined just below.
     //
-    symp = &ld.symtab[ld.symindex];
+    symp = &symtab[ld.symindex];
     if (!ld.rflag) {
-        for (sp = ld.symtab; sp < symp; sp++)
+        for (sp = symtab; sp < symp; sp++)
             if (sp->n_type == N_EXT + N_UNDF && sp != ld.p_end && sp != ld.p_ebss &&
                 sp != ld.p_edata && sp != ld.p_etext && sp != ld.p_econst) {
                 ld.rflag++;
@@ -262,7 +275,7 @@ void assign_addresses(void)
         define_symbol(ld.p_edata, ld.dsize / W, N_EXT + N_DATA);
         define_symbol(ld.p_ebss, ld.bsize / W, N_EXT + N_BSS);
         define_symbol(ld.p_end, ld.bsize / W, N_EXT + N_BSS);
-        for (sp = ld.symtab; sp < symp; sp++) {
+        for (sp = symtab; sp < symp; sp++) {
             if ((sp->n_type & N_TYPE) == N_COMM) {
                 long t      = sp->n_value;
                 sp->n_value = cmsize / W;
@@ -303,7 +316,7 @@ void assign_addresses(void)
     // bss symbols here.  Undefined ones are reported (unless -r), and any
     // value that overflows the 27-bit address field is flagged.
     //
-    for (sp = ld.symtab; sp < symp; sp++) {
+    for (sp = symtab; sp < symp; sp++) {
         switch (sp->n_type) {
         case N_EXT + N_UNDF:
             if (!ld.arflag)
@@ -346,7 +359,7 @@ void assign_addresses(void)
     else {
         if (ld.xflag)
             ld.ssize = 0;
-        for (sp = ld.symtab; sp < &ld.symtab[ld.symindex]; sp++)
+        for (sp = symtab; sp < &symtab[ld.symindex]; sp++)
             ld.ssize += sp->n_len + 6;
         ld.ssize++;
     }
@@ -364,6 +377,10 @@ int ld_link(int argc, char **argv)
     // Derive the diagnostic prefix from argv[0]'s basename (falling back to
     // "ld"), before any pass can emit a message.
     //
+    ld.basaddr   = BADDR;
+    ld.ofilename = "l.out";
+    ld.delarg    = 4;
+
     ld.progname = "ld";
     if (argc > 0 && argv[0] && argv[0][0]) {
         char *slash = strrchr(argv[0], '/');

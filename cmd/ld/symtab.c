@@ -25,9 +25,9 @@ void relocate_cursym(void)
     switch (ld.cursym.n_type) {
     case N_CONST:
     case N_EXT + N_CONST:
-        // Where this file's const word ended up after merging.  ld.cindex is the
-        // file's base within newindex[] in both passes, so the symbol's word
-        // offset indexes straight off it.  cbasaddr is the segment's final origin,
+        // Where this file's const word ended up after merging.  newindex[] is
+        // rebuilt per file in both passes, so the symbol's word offset indexes
+        // it directly.  cbasaddr is the segment's final origin,
         // and is still 0 during pass 1 - which is what assign_addresses() expects,
         // since it adds corigin itself.  By pass 2 it is set, so the value
         // recomputed here matches the one pass 1 settled on (the same trick
@@ -40,11 +40,12 @@ void relocate_cursym(void)
         // through the pool, and there is nothing to extrapolate past either edge.
         // "sym = . - 8" at the top of a .const is the usual way to land here -
         // anchor such a symbol inside the segment instead.
-        i = ld.cindex + ld.cursym.n_value - HDRSZ / W;
-        if (i < ld.cindex || i >= ld.cindex + (int)(ld.filhdr.a_const / W))
+        i = ld.cursym.n_value - HDRSZ / W;
+        if (i < 0 || i >= (int)(ld.filhdr.a_const / W))
             error(2, "symbol '%s': const value 0%lo outside the file's const segment",
                   ld.cursym.n_name, (long)ld.cursym.n_value);
-        ld.cursym.n_value = ld.newindex[i] + ld.cbasaddr;
+        else
+            ld.cursym.n_value = newindex[i] + ld.cbasaddr;
         return;
 
     case N_TEXT:
@@ -84,8 +85,8 @@ int enter_symbol(struct nlist **hp)
     if (!*hp) {
         if (ld.symindex >= NSYM)
             error(2, "symbol table overflow");
-        ld.symhash[ld.symindex] = hp;
-        *hp = ld.lastsym = sp = &ld.symtab[ld.symindex++];
+        symhash[ld.symindex] = hp;
+        *hp = ld.lastsym = sp = &symtab[ld.symindex++];
         sp->n_len             = ld.cursym.n_len;
         sp->n_name            = ld.cursym.n_name;
         sp->n_type            = ld.cursym.n_type;
@@ -117,7 +118,7 @@ struct nlist **lookup_symbol(void)
     i = 0;
     for (cp = ld.cursym.n_name; *cp; i = (i << 1) + *cp++)
         ;
-    for (hp = &ld.hshtab[(i & 077777) % NSYM + 2]; *hp != 0;) {
+    for (hp = &hshtab[(i & 077777) % NSYM + 2]; *hp != 0;) {
         const char *cp1 = (*hp)->n_name;
         int clash       = 0;
         for (cp = ld.cursym.n_name; *cp;)
@@ -127,8 +128,8 @@ struct nlist **lookup_symbol(void)
             }
         if (clash) {
             // Occupied by a different name: try the next bucket, wrapping.
-            if (++hp >= &ld.hshtab[NSYM + 2])
-                hp = ld.hshtab;
+            if (++hp >= &hshtab[NSYM + 2])
+                hp = hshtab;
         } else
             break; // found our name, or an empty slot
     }
@@ -177,12 +178,12 @@ struct nlist *lookup_local(const struct local *lp, int sn)
 {
     const struct local *clp;
 
-    for (clp = ld.local; clp < lp; clp++)
+    for (clp = local; clp < lp; clp++)
         if (clp->locindex == sn)
             return clp->locsymbol;
     if (ld.trace) {
         fprintf(stderr, "*** %d ***\n", sn);
-        for (clp = ld.local; clp < lp; clp++)
+        for (clp = local; clp < lp; clp++)
             fprintf(stderr, "%ld, ", clp->locindex);
         fprintf(stderr, "\n");
     }

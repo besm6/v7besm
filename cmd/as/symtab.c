@@ -37,19 +37,19 @@ void init_hash_tables(void)
     const struct table *p;
 
     for (i = 0; i < HCONSZ; i++)
-        as.hashconst[i] = -1;
+        hashconst[i] = -1;
     for (i = 0; i < HCMDSZ; i++)
-        as.hashctab[i] = -1;
+        hashctab[i] = -1;
     for (p = table; p->name; p++) {
         int h = hash_instruction(p->name);
 
-        while (as.hashctab[h] != -1)
+        while (hashctab[h] != -1)
             if (--h < 0)
                 h += HCMDSZ;
-        as.hashctab[h] = p - table;
+        hashctab[h] = p - table;
     }
     for (i = 0; i < HASHSZ; i++)
-        as.hashtab[i] = -1;
+        hashtab[i] = -1;
 }
 
 //
@@ -120,7 +120,7 @@ int lookup_instruction(void)
     int i, h;
 
     h = hash_instruction(as.name);
-    while ((i = as.hashctab[h]) != -1) {
+    while ((i = hashctab[h]) != -1) {
         if (!strcmp(table[i].name, as.name))
             return i;
         if (--h < 0)
@@ -155,7 +155,7 @@ static char *alloc_name(int len)
     r = as.lastfree;
     if ((as.lastfree += len) > SPACESZ)
         fatal("out of memory");
-    return as.space + r;
+    return space + r;
 }
 
 //
@@ -168,8 +168,8 @@ int lookup_name(void)
     int i, h;
 
     h = hash_name(as.name);
-    while ((i = as.hashtab[h]) != -1) {
-        if (!strcmp(as.stab[i].n_name, as.name))
+    while ((i = hashtab[h]) != -1) {
+        if (!strcmp(stab[i].n_name, as.name))
             return i;
         if (--h < 0)
             h += HASHSZ;
@@ -181,12 +181,12 @@ int lookup_name(void)
     if (i >= STSIZE)
         fatal("symbol table overflow");
     else {
-        as.stab[i].n_len  = strlen(as.name);
-        as.stab[i].n_name = alloc_name(1 + as.stab[i].n_len);
-        strcpy(as.stab[i].n_name, as.name);
-        as.stab[i].n_value = 0;
-        as.stab[i].n_type  = 0;
-        as.hashtab[h]      = i;
+        stab[i].n_len  = strlen(as.name);
+        stab[i].n_name = alloc_name(1 + stab[i].n_len);
+        strcpy(stab[i].n_name, as.name);
+        stab[i].n_value = 0;
+        stab[i].n_type  = 0;
+        hashtab[h]      = i;
         return i;
     }
 }

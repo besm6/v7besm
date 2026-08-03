@@ -80,12 +80,13 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
         // The constant pool was de-duplicated; redirect to the pooled slot.  As in
         // relocate_cursym(), the map only covers the words this file contributed, so
         // a reference outside them cannot be followed.  `a' is a 15-bit field and so
-        // never negative, but a - HDRSZ/W + cindex still can be, and a + cindex can
-        // run past the end of the map.
-        i = a - HDRSZ / W + ld.cindex;
-        if (i < ld.cindex || i >= ld.cindex + (int)(ld.filhdr.a_const / W))
+        // never negative, but a - HDRSZ/W still can be, and it can run past the
+        // end of the map.
+        i = a - HDRSZ / W;
+        if (i < 0 || i >= (int)(ld.filhdr.a_const / W))
             error(2, "const reference to 0%lo outside the file's const segment", a);
-        ad = ld.cbasaddr + ld.newindex[i] - a;
+        else
+            ad = ld.cbasaddr + newindex[i] - a;
         break;
     case RTEXT:
         ad = ld.ctrel; // add the text segment base
@@ -104,7 +105,7 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
         if (sp->n_type == N_EXT + N_UNDF || sp->n_type == N_EXT + N_COMM) {
             // Still undefined: keep it external in the output, but renumber it to
             // its slot in the final global symbol table.
-            r |= REXT | RPUTIX(ld.nsym + (sp - ld.symtab));
+            r |= REXT | RPUTIX(ld.nsym + (sp - symtab));
             break;
         }
         // Resolved: bake in the symbol's address and tag the record with the
@@ -163,14 +164,14 @@ void relocate_constants(const struct local *lp)
     struct constab *p;
     const struct constab *c;
 
-    p = &ld.constab[ld.nconst];
-    c = p + ld.coptsize[ld.nfile];
+    p = &constab[ld.nconst];
+    c = p + coptsize[ld.nfile];
     for (; p < c; p++) {
-        relocate_halfword(lp, p->h, p->hr, &t, &r);
+        relocate_halfword(lp, CON_HI(p->v), CON_HI(p->r), &t, &r);
         fputh(t, ld.coutb);
         if (ld.rflag)
             fputh(r, ld.croutb);
-        relocate_halfword(lp, p->h2, p->hr2, &t, &r);
+        relocate_halfword(lp, CON_LO(p->v), CON_LO(p->r), &t, &r);
         fputh(t, ld.coutb);
         if (ld.rflag)
             fputh(r, ld.croutb);

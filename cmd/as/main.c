@@ -62,10 +62,15 @@ int main(int argc, char *argv[])
 {
     int i;
     char *cp;
-    int ofile                  = 0;
-    struct assembler_args args = {
-        .outfile = "a.out",
-    };
+    int ofile = 0;
+    struct assembler_args args;
+
+    // Zero and assign rather than a designated initializer: b6lower ignores the
+    // designators and initializes POSITIONALLY, so `{ .outfile = "a.out" }' put
+    // the literal into infile -- the first member -- and the native assembler
+    // read its own output file as its input.  It compiles and it is silent.
+    memset(&args, 0, sizeof args);
+    args.outfile = "a.out";
 
     // Derive the diagnostic prefix from argv[0]'s basename (fallback "as").
     if (argc > 0 && argv[0] && argv[0][0]) {

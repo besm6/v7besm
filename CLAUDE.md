@@ -74,13 +74,22 @@ words** (a member is a 12-bit offset from a base register — move the big array
 and the **4,096-word stack**, where a long function costs 1.5–2 words per source line of
 temporaries before any array. `cmd/README.md` §6 is the account and `cmd/cpp` the worked example.
 
-`cmd/cpp` is the one program built **twice**: as the host tool `b6cpp` and, from the same
-sources, as `build/rootfs/usr/bin/cpp` (`cmd/cpp/rootfs/`, task C9a — the first step of C9,
-self-hosting). It is the only place the ceilings actually bound a program: its BESM-6 size
-profile in `cmd/cpp/defs.h` is deliberately below the C11 §5.2.4.1 minima, keyed on the `besm6`
-macro `b6cpp` always predefines. `cmd/cpp/README.md`, "Building for the BESM-6", has the
-measurements. A second native build of a host tool needs its own subdirectory, since `cmd/<x>`
-is added above the `B6RUNTIME_LIB` guard where `b6_prog()` does not yet exist.
+**Three programs are built twice** — `cmd/cpp`, `cmd/as` and `cmd/ld` — as the host tools
+`b6cpp`/`b6as`/`b6ld` and, from the same sources, as `build/rootfs/usr/bin/{cpp,as,ld}`
+(`cmd/<x>/rootfs/`; tasks C9a and C9b, self-hosting). **The machine assembles and links its own
+programs**: the native `as` and `ld` reproduce the host tools' objects and images byte for
+byte, the whole kernel and the toolchain itself included. These are the only places the
+ceilings actually bind a program, and each carries a BESM-6 size profile keyed on the `besm6`
+macro `b6cpp` always predefines — `cmd/cpp/defs.h` (below the C11 §5.2.4.1 minima), `cmd/as/as.h`,
+`cmd/ld/intern.h`. Each README's "Building for the BESM-6" has the measurements. A second
+native build of a host tool needs its own subdirectory, since `cmd/<x>` is added above the
+`B6RUNTIME_LIB` guard where `b6_prog()` does not yet exist.
+
+Three traps the toolchain sources hit and nothing else has: **`b6lower` ignores designated
+initializers** and initializes positionally, silently (`cmd/as/main.c`, `cmd/ld/ld.c` say so);
+a **string literal cannot initialize a `char *` inside a struct initializer** at all; and there
+is **no `int64_t`** — an `int` is 41 bits, an `unsigned` exactly 48, so only what really holds a
+whole word becomes `uword_t` and everything narrower stays `word_t`.
 
 `build/rootfs/` is staged only, never installed. **`root.manifest`** at the tree top describes
 the image; paths resolve against `b6fsutil`'s working directory (`build/kernel/test`). Modes

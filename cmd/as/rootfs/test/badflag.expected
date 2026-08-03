@@ -1,0 +1,10 @@
+as: error: unknown option 'Q'
+Usage:
+    as [-uaxXd] [-o outfile] [infile]
+Options:
+    -o filename     Set output file name, default stdout
+    -u              Treat undefined names as error
+    -a              Don't align on word boundary
+    -x              Discard local symbols
+    -X              Discard locals starting with '.'
+    -d              Debug mode

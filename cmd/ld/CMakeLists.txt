@@ -1,9 +1,13 @@
 #
 # Linker for BESM-6 a.out objects.
 #
-# Built from the host C compiler: runs on the host and combines BESM-6 objects
-# (and archives produced by cmd/ar) into an executable.  The fget*/fput*/get*/put*
-# helpers it needs come from cmd/libaout (aout).
+# This directory builds the HOST tool b6ld: compiled by the host C compiler, it
+# runs on the host and combines BESM-6 objects (and archives produced by cmd/ar)
+# into an executable.  The fget*/fput*/get*/put* helpers it needs come from
+# cmd/libaout (aout).
+#
+# The same sources are built a SECOND time, for the machine itself, into
+# build/rootfs/usr/bin/ld -- see rootfs/, and task C9b in ../TODO.md.
 #
 # The engine is split into a reusable library so it can be linked into both the
 # command-line tool and the unit tests.

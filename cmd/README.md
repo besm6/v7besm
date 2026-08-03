@@ -179,9 +179,11 @@ directories inherits this.
   look-ahead ring capacity is a function of `-l` and the column count.
 
 `b6_prog()` registers `check-size.sh` for the first two as ctest `rootfs_<name>_size`. For scale:
-`cpp` is 23,826 words, the largest thing on the image and the only one whose limits had to be cut
-below what C11 asks for; `fgrep` is 20,019, and 15,000 of them are two arrays; `sed` is
-14,120, `fsck` 10,842, `sh` 7,928, `sort` 6,822. **What a program prints with dominates what it
+`ld` is 23,951 words and `cpp` 23,826, the two largest things on the image; `fgrep` is 20,019,
+and 15,000 of them are two arrays; `as` is 19,824, `sed` 14,120, `fsck` 10,842, `sh` 7,928,
+`sort` 6,822. **The three toolchain programs are where the ceilings really bind** — each carries
+a `besm6` size profile, and `cpp`'s is below what C11 asks for
+([cpp/README.md](cpp/README.md), [as/README.md](as/README.md), [ld/README.md](ld/README.md)). **What a program prints with dominates what it
 does** — everything that links stdio carries ~1,030 words of bss and ~2,500 of common text, while
 `test`, `tee`, `tail` and `getty` write with `write(2)` and cost a fraction of it (`getty` 434
 words, an eleventh of `cat`). Measure a large candidate early. And **measure a struct rather than

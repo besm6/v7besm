@@ -20,23 +20,23 @@
 // each - correct, only bigger.  Keeping the table below its hash size also
 // guarantees the linear probing here and in intern_constant() finds a free slot.
 //
-static void register_constant(int64_t val, long rel, long addr)
+static void register_constant(uword_t val, long rel, long addr)
 {
     int hash, i;
 
     if (as.nconst >= CSIZE)
         return; // table full: give up de-duplicating, do not fail
     hash = SUPERHASH(HIHALF(val) + LOHALF(val) + rel, HCONSZ - 1);
-    while ((i = as.hashconst[hash]) != -1) {
-        if (val == as.constab[i].val && rel == as.constab[i].rel)
+    while ((i = hashconst[hash]) != -1) {
+        if (val == constab[i].val && rel == constab[i].rel)
             return; // already known: keep the word we found first
         if (--hash < 0)
             hash += HCONSZ;
     }
-    as.hashconst[hash]         = as.nconst;
-    as.constab[as.nconst].val  = val;
-    as.constab[as.nconst].rel  = rel;
-    as.constab[as.nconst].addr = addr;
+    hashconst[hash]         = as.nconst;
+    constab[as.nconst].val  = val;
+    constab[as.nconst].rel  = rel;
+    constab[as.nconst].addr = addr;
     as.nconst++;
 }
 
@@ -67,7 +67,7 @@ static void emit_halfword(long h, long r)
         as.count[as.segm]++;
 
         if (as.segm == SCONST && !(sr & RMERGE) && (sr & REXT) == RABS && (r & REXT) == RABS)
-            register_constant(((int64_t)sh << 24) | (h & HALF_MASK), RABS,
+            register_constant(((uword_t)sh << 24) | (h & HALF_MASK), RABS,
                               as.count[SCONST] / 2 - 1);
         return;
     }
@@ -150,7 +150,7 @@ static void set_location(long words)
 // carries RMERGE in its high half to tell the linker it is an anonymous literal
 // that may be merged with an identical one from another object file.
 //
-static long intern_constant(int64_t val, int bs, int extref)
+static long intern_constant(uword_t val, int bs, int extref)
 {
     int hash, i, save;
     long hr2, addr;
@@ -159,10 +159,10 @@ static long intern_constant(int64_t val, int bs, int extref)
     if (bs == SEXT)
         hr2 |= RPUTIX(extref); // external constant: remember which symbol
     hash = SUPERHASH(HIHALF(val) + LOHALF(val) + hr2, HCONSZ - 1);
-    while ((i = as.hashconst[hash]) != -1) {
+    while ((i = hashconst[hash]) != -1) {
         // Slot taken: a real match means a suitable word already exists.
-        if (val == as.constab[i].val && hr2 == as.constab[i].rel)
-            return as.constab[i].addr;
+        if (val == constab[i].val && hr2 == constab[i].rel)
+            return constab[i].addr;
         if (--hash < 0)
             hash += HCONSZ;
     }
@@ -228,7 +228,7 @@ static void assemble_instruction(long val, int type, int index)
     int cval, segment;
     int pooled      = 0;    // a pending "# expr", awaiting the final index register
     int cset        = 0;    // a utc/wtc has loaded C, which modifies the next address
-    int64_t poolval = 0;    // the "# expr" value / segment / external symbol, captured
+    uword_t poolval = 0;    // the "# expr" value / segment / external symbol, captured
     int poolseg     = SABS; //   before the ", reg" parse below clobbers as.intval
     int poolext     = 0;    //   and as.extref
 
@@ -508,20 +508,20 @@ void generate_code(void)
             // A name at statement start; what follows decides its meaning.
             if ((clex = next_token(&tval)) == ':') {
                 // "name:" - a label: bind the name to the current location.
-                if ((as.stab[cval].n_type & N_TYPE) != N_UNDF)
+                if ((stab[cval].n_type & N_TYPE) != N_UNDF)
                     fatal("name already defined");
                 align_segment(as.segm);
-                as.stab[cval].n_value = as.count[as.segm] / 2;
-                as.stab[cval].n_type &= ~N_TYPE;
-                as.stab[cval].n_type |= SEGMTYPE(as.segm);
+                stab[cval].n_value = as.count[as.segm] / 2;
+                stab[cval].n_type &= ~N_TYPE;
+                stab[cval].n_type |= SEGMTYPE(as.segm);
                 continue;
             } else if (clex == '=') {
                 // "name = expr" - define a constant name.
-                as.stab[cval].n_value = parse_expr(&csegm);
+                stab[cval].n_value = parse_expr(&csegm);
                 if (csegm == SEXT)
                     fatal("indirect equivalence");
-                as.stab[cval].n_type &= N_EXT;
-                as.stab[cval].n_type |= SEGMTYPE(csegm);
+                stab[cval].n_type &= N_EXT;
+                stab[cval].n_type |= SEGMTYPE(csegm);
                 break;
             }
             fatal("bad command");
@@ -611,7 +611,7 @@ void generate_code(void)
                 for (;;) {
                     if ((clex = next_token(&cval)) != LNAME)
                         fatal("bad parameter .globl");
-                    as.stab[cval].n_type |= N_EXT;
+                    stab[cval].n_type |= N_EXT;
                     if ((clex = next_token(&cval)) != ',') {
                         unget_token(clex, cval);
                         break;
@@ -625,19 +625,19 @@ void generate_code(void)
                     fatal("bad parameter .equ");
                 if (next_token(&tval) != ',')
                     fatal("bad parameter .equ");
-                as.stab[cval].n_value = parse_expr(&csegm);
+                stab[cval].n_value = parse_expr(&csegm);
                 if (csegm == SEXT)
                     fatal("indirect equivalence");
-                as.stab[cval].n_type &= N_EXT;
-                as.stab[cval].n_type |= SEGMTYPE(csegm);
+                stab[cval].n_type &= N_EXT;
+                stab[cval].n_type |= SEGMTYPE(csegm);
                 break;
             case COMM:
                 // ".comm name, len" - the directive form of a common block.
                 if (next_token(&cval) != LNAME)
                     fatal("bad parameter .comm");
-                if (as.stab[cval].n_type != N_UNDF && as.stab[cval].n_type != (N_EXT | N_COMM))
+                if (stab[cval].n_type != N_UNDF && stab[cval].n_type != (N_EXT | N_COMM))
                     fatal("name already defined");
-                as.stab[cval].n_type = N_EXT | N_COMM;
+                stab[cval].n_type = N_EXT | N_COMM;
                 if ((clex = next_token(&tval)) == ',') {
                     parse_expr(&tval);
                     if (tval != SABS)
@@ -646,7 +646,7 @@ void generate_code(void)
                     unget_token(clex, cval);
                     as.intval = 1;
                 }
-                as.stab[cval].n_value = LOHALF(as.intval);
+                stab[cval].n_value = LOHALF(as.intval);
                 break;
             }
             break;

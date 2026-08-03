@@ -1,0 +1,18 @@
+Usage:
+    ld [-xXsSrndt] [-T addr] [-D num] [-L dir] [-lname] [-u name] [-e name] [-o file] file...
+Options:
+    -o file     Set output file name, default a.out
+    -e name     Make name the program entry point
+    -u name     Enter name as an undefined external (force library load)
+    -D num      Reserve a data segment of at least num words
+    -T addr     Set base load address (octal/hex accepted)
+    -L dir      Add dir to the library search path (for -l; -Ldir also works)
+    -lname      Link library libname.a (bare -l means -la)
+    -x          Discard all local symbols
+    -X          Discard local symbols starting with '.'
+    -S          Strip absolute and debug symbols
+    -s          Discard all symbols
+    -r          Retain relocation; produce relinkable output
+    -n          Pure procedure: read-only text, page-aligned data
+    -d          Define common symbols even under -r
+    -t          Trace progress (repeat for more detail)

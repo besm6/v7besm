@@ -3,9 +3,18 @@
 A small static library (`aout`) of helper routines that serialize and deserialize
 object files, executables and archives in the BESM-6 `a.out` format. It is shared by the
 whole toolchain — the assembler (`cmd/as`), the linker and the binutils
-(`cmd/ld`, plus `ar`/`nm`/`size`/`strip`/`ranlib`). The library is built with the *host*
-C compiler: it runs on the host and manipulates BESM-6 objects, so it never executes on
-the target machine itself.
+(`cmd/ld`, plus `ar`/`nm`/`size`/`strip`/`ranlib`). The `aout` target here is built with
+the *host* C compiler and runs on the host.
+
+**These sources are also cross-compiled and run on the BESM-6 itself.** The native
+`/usr/bin/as` and `/usr/bin/ld` (task **C9b** in [../TODO.md](../TODO.md)) link them
+directly — there is no native archive — so [`sources.cmake`](sources.cmake) names the
+list once for both worlds. It names two lists: everything, and the subset without the
+four file-descriptor routines, which only `ar`/`ranlib` call and which would otherwise
+be dead weight on a program that has 28,672 words to live in. What makes the same source
+serve both is `word_t`/`uword_t` in [`../../cross/besm6/types.h`](../../cross/besm6/types.h)
+— `int64_t`/`uint64_t` for the host, `int`/`unsigned` under the `besm6` predefine, where
+a word is 48 bits and an `int` is 41.
 
 The on-disk structures (`struct exec`, `struct nlist`, `struct ar_hdr`, `struct ranlib`)
 and the format-level constants are declared in the cross headers:
@@ -102,15 +111,16 @@ round.)
 Read one int from a stream as two half-words (6 bytes); the value is the low half-word,
 the high half-word is ignored. Always returns 1.
 
-#### `int getint(int f, int *i)` — [`getint.c`](getint.c)
+#### `int getint(int f, uword_t *i)` — [`getint.c`](getint.c)
 
-File-descriptor counterpart of `fgetint`. Reads 6 bytes via `read(2)` and stores the low
-half-word in `*i`. Returns 1 on success, 0 on a short read.
+File-descriptor counterpart of `fgetint`, but reads the **whole** 48-bit word rather
+than just the low half: it is what recognizes `ARMAG` and steps an archive. Reads 6
+bytes via `read(2)`. Returns 1 on success, 0 on a short read.
 
-#### `int putint(int f, int i)` — [`putint.c`](putint.c)
+#### `int putint(int f, uword_t i)` — [`putint.c`](putint.c)
 
-Write one int via `write(2)` as 6 bytes: the value in the low half-word, the high
-half-word zero. Returns 1 on success, 0 on a short write.
+Write one word via `write(2)` as 6 bytes, high half-word first. Returns 1 on success,
+0 on a short write.
 
 ### Symbol table
 

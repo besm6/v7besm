@@ -66,7 +66,7 @@ static void pack_left(const char *start, const char *end, int bits_per_digit)
 
     // Assemble the mantissa right-aligned, then shift it up to the top of the
     // word so digit 0 lands in the most-significant position.
-    int64_t v = 0;
+    uword_t v = 0;
     for (const char *dp = start; dp < end; dp++)
         v = (v << bits_per_digit) | *dp;
     as.intval = (nbits < 48) ? (v << (48 - nbits)) : v;
@@ -94,6 +94,8 @@ static void read_hex_number(void)
         c = digit_separator(c, cp > as.name, is_hex_digit);
         if (!ISHEX(c))
             break;
+        if (cp >= as.name + NAMEMAX)
+            fatal("numeric literal too long");
         *cp++ = hex_digit_value(c);
     }
     ungetc(c, stdin);
@@ -109,13 +111,13 @@ static void read_hex_number(void)
     for (c = 0; c < 24; c += 4) {
         if (--cp < as.name)
             return;
-        as.intval |= (int64_t)*cp << c;
+        as.intval |= (uword_t)*cp << c;
     }
     // Remaining digits spill into the high half (bits 25..48).
     for (c = 0; c < 24; c += 4) {
         if (--cp < as.name)
             return;
-        as.intval |= (int64_t)*cp << (c + 24);
+        as.intval |= (uword_t)*cp << (c + 24);
     }
 }
 
@@ -137,6 +139,8 @@ static void read_binary_number(void)
         c = digit_separator(c, cp > as.name, is_binary_digit);
         if (c != '0' && c != '1')
             break;
+        if (cp >= as.name + NAMEMAX)
+            fatal("numeric literal too long");
         *cp++ = c - '0';
     }
     ungetc(c, stdin);
@@ -150,12 +154,12 @@ static void read_binary_number(void)
     for (c = 0; c < 24; c++) {
         if (--cp < as.name)
             return;
-        as.intval |= (int64_t)*cp << c;
+        as.intval |= (uword_t)*cp << c;
     }
     for (c = 0; c < 24; c++) {
         if (--cp < as.name)
             return;
-        as.intval |= (int64_t)*cp << (c + 24);
+        as.intval |= (uword_t)*cp << (c + 24);
     }
 }
 
@@ -183,6 +187,8 @@ static void read_number(int c)
             c = digit_separator(c, cp > as.name, is_octal_digit);
             if (!ISOCTAL(c))
                 break;
+            if (cp >= as.name + NAMEMAX)
+                fatal("numeric literal too long");
             *cp++ = c - '0';
         }
         ungetc(c, stdin);
@@ -196,22 +202,24 @@ static void read_number(int c)
         for (c = 0; c <= 21; c += 3) {
             if (--cp < as.name)
                 return;
-            as.intval |= (int64_t)*cp << c;
+            as.intval |= (uword_t)*cp << c;
         }
         // Further digits continue in the high half.  24 is a multiple of 3, so
         // octal digits align on the half-word boundary - no straddling digit.
         for (c = 0; c <= 21; c += 3) {
             if (--cp < as.name)
                 return;
-            as.intval |= (int64_t)*cp << (c + 24);
+            as.intval |= (uword_t)*cp << (c + 24);
         }
         return;
     }
 
-    // Decimal: no prefix, e.g. 1234.  Accumulate into a wide host value, then
-    // mask to 48 bits so a large decimal does not leak past the word.
+    // Decimal: no prefix, e.g. 1234.  Accumulate a whole word, then mask to 48
+    // bits so a large decimal does not leak past it.  Accumulating in a type
+    // that is exactly 48 bits wide gives the same answer as accumulating wide
+    // and truncating once: both are the literal's value modulo 2**48.
     {
-        unsigned long long v = 0;
+        uword_t v = 0;
         int have_digit = 0;
         for (;; c = getchar()) {
             c = digit_separator(c, have_digit, is_decimal_digit);
@@ -221,7 +229,7 @@ static void read_number(int c)
             have_digit = 1;
         }
         ungetc(c, stdin);
-        as.intval = (int64_t)(v & WORD_MASK);
+        as.intval = v & WORD_MASK;
     }
 }
 
@@ -263,18 +271,21 @@ static void read_bit_mask(void)
     }
     // a >= b.  Set bits b..a, split across the two 24-bit halves: bit range
     // b..min(a,23) in the low half, max(b,24)..min(a,47) in the high half.
-    // A contiguous run of bits lo..hi is (~0 >> (63 - (hi - lo))) << lo.
+    // A contiguous run of bits lo..hi is ((1 << (hi - lo + 1)) - 1) << lo.  Do
+    // NOT build it by shifting ~0 down instead: that hard-codes the width of the
+    // type it shifts, and a `long' is 64 bits here and 41 on the machine itself.
+    // Each arm stays inside one 24-bit half, so the run is at most 24 bits wide
+    // and a long holds it either way.
     {
-        unsigned long m = ~0UL;
-        as.intval       = 0;
+        as.intval = 0;
         if (b <= 23) {
             int hi = a < 23 ? a : 23;
-            as.intval |= (int64_t)((m >> (63 - (hi - b)) << b) & 077777777UL);
+            as.intval |= (uword_t)((((1L << (hi - b + 1)) - 1) << b) & HALF_MASK);
         }
         if (a >= 24) {
             int lo = (b > 24 ? b : 24) - 24;
             int hi = (a < 47 ? a : 47) - 24;
-            as.intval |= (int64_t)((m >> (63 - (hi - lo)) << lo) & 077777777UL) << 24;
+            as.intval |= (uword_t)((((1L << (hi - lo + 1)) - 1) << lo) & HALF_MASK) << 24;
         }
     }
     if (compl)
@@ -291,11 +302,14 @@ static void read_bit_number(int c)
     c = (int)as.intval - 1;
     if (c < 0 || c >= 64)
         fatal("bit number out of range 1..64");
-    // Split at bit 24 so each shift amount stays within one half-word.
+    // Split at bit 24 so each shift amount stays within one half-word.  The mask
+    // matters for a bit number above 48: the range check above accepts 1..64,
+    // the word holds 48, and masking is what makes the surplus come out 0 rather
+    // than depending on how wide the shifted type happens to be.
     if (c >= 24)
-        as.intval = (int64_t)(1L << (c - 24)) << 24;
+        as.intval = (((uword_t)1 << (c - 24)) << 24) & WORD_MASK;
     else if (c >= 0)
-        as.intval = 1L << c;
+        as.intval = (uword_t)1 << c;
 }
 
 //
@@ -317,10 +331,14 @@ static void read_name(int c)
     char *cp;
 
     // When a machine instruction is expected, absorb the operator characters
-    // so mnemonics like "a+x" lex as a single name.
+    // so mnemonics like "a+x" lex as a single name.  One byte is held back for
+    // the terminator, which the callers rely on.
     for (cp = as.name; ISLETTER(c) || ISDIGIT(c) || (as.cmdmode && is_operator_char(c));
-         c  = getchar())
+         c  = getchar()) {
+        if (cp >= as.name + NAMEMAX - 1)
+            fatal("name too long");
         *cp++ = c;
+    }
     *cp = 0;
     ungetc(c, stdin);
 }
@@ -343,7 +361,10 @@ void parse_line_marker(void)
     int c;
     long lineno = 0;
     int ndigits = 0;
-    char buf[SRCNAME_MAX];
+    // static, not automatic: this function is reached from next_token(), so its
+    // frame sits under the whole parse, and SRCNAME_MAX bytes of it is the
+    // single largest thing on the assembler's stack.  It never recurses.
+    static char buf[SRCNAME_MAX];
     char *cp        = buf;
     const char *end = buf + sizeof(buf) - 1;
 

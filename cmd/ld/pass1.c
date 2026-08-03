@@ -9,7 +9,7 @@
 
 //
 // Read the current file's const segment and append it to the program-wide one
-// (ld.constab), merging duplicated literals so a constant used by many files is
+// (constab), merging duplicated literals so a constant used by many files is
 // stored once.  Each word is two half-words of value (h, h2) plus two half-words
 // of relocation (hr, hr2).
 //
@@ -24,15 +24,27 @@
 // The survivor of a merge may be any earlier word with the same value and no
 // relocation of its own, marked or not, since it does not move as a result.
 //
-// As it goes it fills ld.newindex[]: for each of this file's const words, the
+// As it goes it fills newindex[]: for each of this file's const words, the
 // index of the word it ended up at.  relocate_cursym() and relocate_halfword()
 // use that map to repoint const references - it covers every word, merged or
 // not, so ".const" labels and data references stay correct as earlier duplicates
 // collapse.  Returns how many *new* entries were added.
 //
-// ld.cindex is this file's base within newindex[] and stays put: both readers of
-// the map need it that way while the file's symbols are being processed.  The
-// caller advances it past the file once the file is known to be kept.
+// THE MAP IS PER-FILE, indexed 0..a_const/W-1, and is rebuilt for each file as
+// it is reached.  It used to be indexed from a running ld.cindex covering every
+// file in the link at once, which made newindex[] 16,384 words -- more than half
+// the BESM-6 address space -- for a table whose largest single object needs 386.
+// Nothing was lost by the change: both readers ALREADY refused an index outside
+// the current file's window and said so, because a const word merged away is
+// scattered through the pool and there is nothing to extrapolate past either
+// edge.  What it buys is a bound that no longer grows with the number of files.
+//
+// PASS 2 CALLS THIS AGAIN, per file, to rebuild the map (relocate_object()).
+// It is the same code over the same bytes with ld.nconst back at the file's
+// base, so constab[0..nconst) is bit-for-bit the prefix pass 1 searched and the
+// map comes out identical by construction rather than by agreement.  The
+// entries it re-appends are the ones already there; the caller restores
+// ld.nconst afterwards, since relocate_constants() reads from that base.
 //
 int load_constants(void)
 {
@@ -44,29 +56,32 @@ int load_constants(void)
 
     save  = ld.nconst;
     count = ld.filhdr.a_const / W;
-    ci    = ld.cindex;
-    if (ci + count > NCINDEX)
+    ci    = 0;
+    if (count > NCINDEX)
         error(2, "constant index table overflow");
-    c = &ld.constab[ld.nconst];
+    c = &constab[ld.nconst];
     while (count--) {
-        c->h   = fgeth(ld.text);
-        c->h2  = fgeth(ld.text);
-        c->hr  = fgeth(ld.reloc);
-        c->hr2 = fgeth(ld.reloc);
-        p      = c;
+        long h  = fgeth(ld.text);
+        long h2 = fgeth(ld.text);
+
+        c->v = CON_PACK(h, h2);
+        h    = fgeth(ld.reloc);
+        h2   = fgeth(ld.reloc);
+        c->r = CON_PACK(h, h2);
+        p    = c;
 
         // An anonymous, non-relocatable literal: look for an identical earlier word.
-        if (c->hr == RMERGE && !c->hr2)
-            for (p = ld.constab; p < c; p++)
-                if (!p->hr2 && !(p->hr & ~(long)RMERGE) && c->h == p->h && c->h2 == p->h2)
+        if (h == RMERGE && !h2)
+            for (p = constab; p < c; p++)
+                if (!CON_LO(p->r) && !(CON_HI(p->r) & ~(long)RMERGE) && c->v == p->v)
                     break;
 
         // p==c means no duplicate was found, so keep this new entry.
-        if (p == c && ++c >= &ld.constab[NCONST])
+        if (p == c && ++c >= &constab[NCONST])
             error(2, "constant table overflow");
-        ld.newindex[ci++] = p - ld.constab;
+        newindex[ci++] = p - constab;
     }
-    ld.nconst = c - ld.constab;
+    ld.nconst = c - constab;
     return ld.nconst - save;
 }
 
@@ -95,7 +110,7 @@ int scan_object(long loc, int libflg, int nloc)
         return 0;
     }
     fseek(ld.reloc, loc + N_SYMOFF(ld.filhdr), 0);
-    ld.coptsize[ld.nfile] = load_constants();
+    coptsize[ld.nfile] = load_constants();
     ld.ctrel += ld.tsize / W;
     ld.cdrel += ld.dsize / W;
     ld.cbrel += ld.bsize / W;
@@ -165,11 +180,9 @@ int scan_object(long loc, int libflg, int nloc)
     }
 
     // Keep this file (always for a normal object; for a library member only if it
-    // defined something): fold its segment sizes into the running totals, and step
-    // ld.cindex over the const words this file contributed to newindex[].
+    // defined something): fold its segment sizes into the running totals.
     if (!libflg || ndef) {
-        ld.cindex += ld.filhdr.a_const / W;
-        ld.csize = add_size(ld.csize, (long)W * ld.coptsize[ld.nfile++], "const segment overflow");
+        ld.csize = add_size(ld.csize, (long)W * coptsize[ld.nfile++], "const segment overflow");
         ld.tsize = add_size(ld.tsize, ld.filhdr.a_text, "text segment overflow");
         ld.dsize = add_size(ld.dsize, ld.filhdr.a_data, "data segment overflow");
         ld.bsize = add_size(ld.bsize, ld.filhdr.a_bss, "bss segment overflow");
@@ -180,14 +193,14 @@ int scan_object(long loc, int libflg, int nloc)
 
     //
     // No symbols defined by this library member.  Rip out the hash table entries
-    // and reset the symbol table.  ld.cindex never moved, so the newindex[] slots
-    // this member scribbled on are simply reused by the next one.
+    // and reset the symbol table.  newindex[] is per-file, so the slots this
+    // member scribbled on are simply overwritten by the next one.
     //
-    ld.nconst -= ld.coptsize[ld.nfile];
+    ld.nconst -= coptsize[ld.nfile];
     while (ld.symindex > savindex) {
         struct nlist **p;
 
-        p = ld.symhash[--ld.symindex];
+        p = symhash[--ld.symindex];
         free((*p)->n_name);
         *p = 0;
     }
@@ -254,7 +267,7 @@ void pass1(int argc, char **argv)
     char save;
 
     p       = argv + 1;
-    ld.libp = ld.liblist;
+    ld.libp = liblist;
     for (c = 1; c < argc; ++c) {
         ld.filname = 0;
         ap         = *p++;
@@ -319,7 +332,7 @@ void pass1(int argc, char **argv)
                 }
                 if (ld.nlibdir >= NLIBDIR)
                     error(2, "-L: too many library directories");
-                ld.libdir[ld.nlibdir++] = dir;
+                libdir[ld.nlibdir++] = dir;
                 break; // the rest of a glued token is the directory, not flags
 
                 // library

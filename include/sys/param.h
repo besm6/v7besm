@@ -339,6 +339,9 @@
 
 // BESM-6 a.out magic numbers and image base -- must match cross/besm6/b.out.h
 // (the kernel build cannot reach cross/, so these are a documented duplicate).
+// The two spellings are byte-for-byte identical, and must stay so: a native
+// toolchain program (cmd/as, cmd/ld) can include both headers in one translation
+// unit, and b6cpp rejects a redefinition whose replacement text differs at all.
 // getxfile() (kernel/sys1.c) reads the 8-word header into u.u_exdata, whose
 // sizeof is HDRSZ == BADDR words.
 #define FMAGIC 02044252323200407U // impure: one writable region from word BADDR
