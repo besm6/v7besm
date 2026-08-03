@@ -85,8 +85,8 @@ had never been executed on this machine at all:
 | `/etc/utmp` | never written by anything. `init`'s `merge()` creates it; this writes the record. |
 
 `crypt()` is the exception: `lib/test/pwent.c` has been checking six of its vectors against the
-host's DES all along, and the hash in `/etc/passwd` is deliberately one of them —
-`crypt("besm6", "aQ") == "aQR1E1yZh1bPE"`. **The plaintext is `besm6`**, and it is here and in
+host's DES all along, and the hash in `/etc/passwd` is one more of the same —
+`crypt("root", ".8") == ".8Y/JOGhfuk1I"`. **The plaintext is `root`**, and it is here and in
 `kernel/test/login.ini` rather than on the image. If libc's `crypt` ever drifts, `pwent` fails
 before `login` does.
 
