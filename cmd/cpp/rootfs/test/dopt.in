@@ -1,0 +1,8 @@
+#ifdef KEEP
+KEEP is KEEP
+#endif
+#ifdef besm6
+besm6 survived -U
+#else
+besm6 removed by -U
+#endif

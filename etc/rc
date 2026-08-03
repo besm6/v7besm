@@ -65,6 +65,9 @@ date >/dev/console
 # death blanks it -- but init's own merge() truncates the file with creat() on
 # every pass into multi-user, which happens after this script and does the same
 # job.  A line here would only write the root filesystem twice per boot.
-# `PATH=/bin:/usr/bin' names a directory that does not exist here, and the
-# shell's own default path already reaches /bin.  (login exports that same
-# string to every user, for the same reason: it is v7's, kept verbatim.)
+# `PATH=/bin:/usr/bin' would set what the shell already uses: its own default
+# path is ":/bin:/usr/bin" (cmd/sh/msg.c), and both directories now exist -- task
+# C9a put /usr/bin/cpp on the image.  So the line would name the same two
+# directories the shell searches anyway, and only drop the leading empty element
+# that makes the CURRENT directory first.  (login exports that same string to
+# every user, for a different reason: it is v7's, kept verbatim.)

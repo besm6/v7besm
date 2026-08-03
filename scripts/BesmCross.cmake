@@ -140,7 +140,7 @@ endfunction()
 # This is the third kind of thing this repo builds, beside the host tools of cmd/ and the
 # freestanding artifacts of kernel/: a program compiled by the b6* toolchain, linked
 # against the libc built in lib/, and destined for the disk image the kernel mounts.
-# cmd/init is the first; cmd/cpp (see cmd/cpp/TODO.md) is meant to be the second.
+# cmd/init was the first; cmd/cpp/rootfs (task C9a) is the one that made the ceilings bite.
 #
 # Defines a target b6prog_<name> producing ${B6_ROOTFS}/<DEST>, makes the aggregate
 # `rootfs' target depend on it if that target exists, and registers one ctest,

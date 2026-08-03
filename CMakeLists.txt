@@ -149,6 +149,10 @@ if(B6RUNTIME_LIB)
     add_subdirectory(lib)
 
     add_subdirectory(cmd/init)
+    # /usr/bin/cpp -- the host tool cmd/cpp, built a second time for the target (task C9a).
+    # A subdirectory of its own because cmd/cpp is added above, outside this guard, where
+    # b6_prog() does not exist yet; cmd/cpp/rootfs/CMakeLists.txt says so at length.
+    add_subdirectory(cmd/cpp/rootfs)
     add_subdirectory(cmd/sh)
     add_subdirectory(cmd/basename)
     add_subdirectory(cmd/cal)

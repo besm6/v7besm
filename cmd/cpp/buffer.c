@@ -287,7 +287,7 @@ char *spill_buffer(char *p)
     else {
         np = cpp.side_ptr;
         cpp.side_ptr += BUFSIZ;
-        if (cpp.side_ptr >= cpp.side_buf + SBSIZE) {
+        if (cpp.side_ptr >= side_buf + SBSIZE) {
             pperror("no space");
             exit(cpp.exit_code);
         }

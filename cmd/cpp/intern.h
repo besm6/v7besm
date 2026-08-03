@@ -19,9 +19,19 @@
 
 #define DROP   0xFE // special character not legal ASCII or EBCDIC
 #define SAME   0    // strcmp() returns this when two strings are equal
+#ifdef besm6
+// Part of defs.h's non-conforming BESM-6 profile, and here rather than there
+// because it buys STACK and not address space: actual[] and expanded[] are two
+// MAXFRM-word arrays in expand_macro's frame, and that frame is on the recursive
+// argument-prescan path.  127 formals cost 254 words per nesting level of the
+// 4,096 there are; 31 cost 62.  README.md, "Building for the BESM-6", has the
+// measured chain.  (v7's own cpp stopped at 32.)
+#define MAXFRM 31
+#else
 #define MAXFRM 127  // max number of formals/actuals to a macro (§5.2.4.1 minimum; also the
                     // encoding ceiling: the param-number byte and the VA_FLAG=0x80 params-count
                     // byte both top out at 127, so a 128th formal is rejected, not misencoded)
+#endif
 #define VA_FLAG 0x80 // OR'd into a stored params byte: last formal is __VA_ARGS__ (absorbs trailing args)
 
 // scan-table selection and buffer-boundary predicates

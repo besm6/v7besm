@@ -1,0 +1,3 @@
+cpp: 2: error: Can't find include file no-such-header.h
+
+after the failure

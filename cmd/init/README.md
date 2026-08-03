@@ -29,7 +29,8 @@ Two conditions gate it, both shared with `kernel/` and `lib/`: the external
 [`CMakeLists.txt`](CMakeLists.txt) is six lines, because the work is in `b6_prog()` in
 [`../../scripts/BesmCross.cmake`](../../scripts/BesmCross.cmake). Any further native program
 — a shell, `cat`, or `cmd/cpp` built a second time for the target
-([`../cpp/TODO.md`](../cpp/TODO.md)) — is one more `b6_prog()` call.
+([`../cpp/README.md`](../cpp/README.md), "Building for the BESM-6") — is one more `b6_prog()`
+call.
 
 ## The source
 
@@ -145,7 +146,8 @@ A user program here lives in 32 pages of 1 Kword. The top four are the stack, ba
 `scripts/check-size.sh`, registered as the ctest `rootfs_init_size`; the failure they catch is
 otherwise silent, since the link succeeds and only the running program misbehaves.
 
-`init` uses 1,207 words of the 28,672, so there is no pressure here. There will be in a
-program the size of `cpp`; see [`../cpp/TODO.md`](../cpp/TODO.md), blockers L1 and L2.
+`init` uses 1,207 words of the 28,672, so there is no pressure here. There is in a program the
+size of `cpp`, which links at 23,826 and had to have its C11 limits cut to get there; see
+[`../cpp/README.md`](../cpp/README.md), "Building for the BESM-6".
 
 `init.8` is the v7 manual page, kept as it was.

@@ -18,16 +18,16 @@ and it leaves the program **on the image** — staged into `build/rootfs/`, name
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C9 | self-hosting — native `cpp`, `as`, `ld`, the binutils, `cc` | building the system on itself | large |
+| C9 | self-hosting — `as`, `ld`, the binutils, `cc` (`cpp` is done, C9a) | building the system on itself | large |
 | C10 | the rest of the manual — `make` `m4` `awk` `bc` `dc` `expr` `egrep` `units` `crypt` `at` `cron` `calendar` `update` `mail` | a system worth using | open-ended |
 
-**Where to start: C9a's `cpp`.** It waited on a foreign repository until the front-end bug that
-gated it was fixed upstream; the libc gap beside it is closed too, and what is left in
-[cpp/TODO.md](cpp/TODO.md) is three limits of this machine that this repo designs around — a
-plan that can now be executed end to end, and whose first step is a target-independent refactor
-the host build proves on its own. C10 is still behind the `yacc` decision its own section names;
-`expr.y` is the smallest thing in front of that decision, and scripts want it almost as much as
-they want `test`.
+**Where to start: C9b's `as` and `ld`.** C9a is done — `/usr/bin/cpp` is on the image, built from
+the same eight sources as the host `b6cpp`, and it preprocesses this repo's own kernel, libc and
+shell sources byte-for-byte identically to the host tool. What it *cost* is the whole lesson for
+the two tasks below, and [cpp/README.md](cpp/README.md)'s "Building for the BESM-6" is where it
+is written down: the four-ceilings section of §6 below was rewritten out of it. C10 is still
+behind the `yacc` decision its own section names; `expr.y` is the smallest thing in front of that
+decision, and scripts want it almost as much as they want `test`.
 
 **Two loose ends about the terminal, one line each and neither worth a task of its own.** `TANDEM`
 is honoured by the kernel — `ttyblock()` queues the stop character when the input queue passes
@@ -56,23 +56,35 @@ this directory, and — with the exception of `cmd/sim` and `cmd/fsutil`, which 
 out of reach until there is a C++ compiler — **they are all plain C**. So the task is not to port
 anything: it is to build what is already here a *second* time, for the target.
 
-### C9a. `cpp`
-
-**See [cpp/TODO.md](cpp/TODO.md)**, which is a complete plan already: three limits of this
-machine (L1, L2, L3), each with a minimal repro, and **nothing left upstream**. Do not restate
-any of it here. All eight sources now reach `b6as`, so what stops `cpp` is size — and **L3, that
-no struct may exceed 4,096 words** (a member is named by a 12-bit offset from a base register,
-and there is no longer form), reaches far beyond `cpp`: every tool below keeps its state in one
-big struct, and the answer is the same each time, which is to move the large arrays out of it to
-file scope.
+**C9a is done and its writeup has been removed**; `/usr/bin/cpp` is on the image and
+[cpp/README.md](cpp/README.md)'s "Building for the BESM-6" is what it left behind — the build
+category, the size profile, the four ceilings and how each was answered. The numbering is left as
+it was.
 
 ### C9b. `as`, `ld`
 
 [as/](as/) (12 sources) and [ld/](ld/) (9). Both plain C, both already reading and writing this
-machine's `a.out` through [libaout/](libaout/), which builds natively too. Expect the same limits
-`cpp` hit: a symbol table that must live inside 32,767 words, frames that must fit 4,096, and L3
-— no struct above 4,096 words, so their big tables must sit at file scope and not inside a state
-struct. Both are already designed around fixed tables rather than unbounded growth, which helps.
+machine's `a.out` through [libaout/](libaout/), which builds natively too. Both are designed
+around fixed tables rather than unbounded growth, which helps.
+
+**Read [cpp/README.md](cpp/README.md)'s "Building for the BESM-6" first**: C9a met every ceiling
+these two will meet, and it names the fix for each. In the order they bit:
+
+* **No struct above 4,096 words.** `struct cppstate` was ~38,630 and stopped six of eight sources
+  in `b6as` with a masked offset that does not read like an overflow. Move the big arrays out to
+  file scope. Both `as` and `ld` keep their tables in exactly that shape.
+* **The 4,096-word stack, which nothing checks.** This is the one that costs behaviour rather
+  than headroom, and the one that is invisible until the program produces a wrong answer. Big
+  scratch to the heap where the function recurses, `static` where it does not, and split a long
+  function that stays resident — `cpp`'s `main` alone was 531 words. Then read the real `15 utm`
+  out of the `.dis`.
+* **The heap**, whose granularity is a page: size a block against the *break*, not the request.
+* **28,672 words of image**, which `cpp` fills to 23,826 — so a size profile is not optional for
+  anything this large, and `as`'s and `ld`'s symbol tables are the obvious knob.
+
+The stack is the one of those that is a *kernel* decision as much as a source one, and
+[../kernel/TODO.md](../kernel/TODO.md) task 39 is the proposal to raise it. `cpp` works without
+it; whether `as` does is the first thing worth measuring.
 
 ### C9c. The binutils and the driver
 

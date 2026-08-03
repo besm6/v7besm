@@ -22,6 +22,15 @@
 struct cppstate cpp;
 
 //
+// The four large arrays, kept out of `cpp' so that no struct on this machine
+// exceeds 4,096 words (defs.h says why).  Nothing else about them is special.
+//
+char arena[8 + BUFSIZ + BUFSIZ + 8];
+char side_buf[SBSIZE];
+struct symtab symbols[SYMSIZ];
+struct symtab *paint_stack[SYMSIZ];
+
+//
 // Print the command-line help and the meaning of each option.
 //
 void usage()
@@ -39,43 +48,24 @@ void usage()
 }
 
 //
-// Program entry point.  Startup happens in a fixed order:
-//   1. seed the state fields that need a non-zero initial value;
-//   2. build the character-classification tables (fast_tab / slow_tab /
-//      char_class) that drive the scanner;
-//   3. parse the command line (-I/-D/-U/-P/-C/-R and the input/output files);
-//   4. register the built-in directives (#define, #if, ...) and predefined
-//      macros (__LINE__, __FILE__, and any -D options), and apply -U removals;
-//   5. set the buffer pointers and hand control to process_directives, which
-//      runs until end of input.
-// The process exit status is the number of errors reported.
+// The three startup phases, each a function of its own rather than a stretch of
+// main().  That is not cosmetic here: main() stays on the stack for the whole
+// run, under every macro expansion, and on the BESM-6 the frame it would need
+// for all three at once is 500 words of the 4,096 there are -- see README.md,
+// "Building for the BESM-6".  Split, each phase's frame is gone before the next
+// begins, and main()'s is a handful of words.
 //
-int main(int argc, char *argv[])
+
+//
+// Build the scan tables: mark which bytes are identifier chars, digits, quotes,
+// comment starters, whitespace, etc.  The scanner then classifies a character
+// with a single table lookup.
+//
+static void build_scan_tables(void)
 {
     int i, c;
-    char *p;
-    char *tf, **cp2;
+    const char *p;
 
-    // 1. Fields that used to have static initializers referencing other fields;
-    // set them up before anything runs (the instance is otherwise zeroed).
-    cpp.side_ptr       = cpp.side_buf;
-    cpp.pre_defs_end   = cpp.pre_defs;
-    cpp.pre_undefs_end = cpp.pre_undefs;
-    cpp.in_fd          = STDIN;
-    cpp.ndirs          = 1;
-
-    // Diagnostic prefix: the basename of argv[0] (fallback "cpp").
-    cpp.prog_name = "cpp";
-    if (argc > 0 && argv[0] && argv[0][0]) {
-        char *slash   = strrchr(argv[0], '/');
-        cpp.prog_name = slash ? slash + 1 : argv[0];
-    }
-
-    cpp.out_file = stdout;
-
-    // 2. Build the scan tables: mark which bytes are identifier chars, digits,
-    // quotes, comment starters, whitespace, etc.  The scanner then classifies a
-    // character with a single table lookup.
     p = "_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     while ((c = *p++)) {
         cpp.fast_tab[(unsigned char)c] |= IB | NB | SB;
@@ -121,9 +111,16 @@ int main(int argc, char *argv[])
     p = " \t\013\f\r"; // note no \n;	\v not legal for vertical tab?
     while ((c = *p++))
         cpp.char_class[(unsigned char)c] = BLANK;
+}
 
-    // 3. Parse the command line: options begin with '-', otherwise the argument
-    // is the input file (first) or output file (second).
+//
+// Parse the command line: options begin with '-', otherwise the argument is the
+// input file (first) or output file (second).
+//
+static void parse_args(int argc, char *argv[])
+{
+    int i;
+
     cpp.inc_file[cpp.inc_level = 0] = "";
     for (i = 1; i < argc; i++) {
         switch (argv[i][0]) {
@@ -209,12 +206,17 @@ int main(int argc, char *argv[])
         usage();
         exit(8);
     }
+}
 
-    cpp.inc_fd[cpp.inc_level] = cpp.in_fd;
-    cpp.exit_code             = 0;
+//
+// Finish the include search path, then register the built-in directives and the
+// predefined macros -- including the -D and -U options staged by parse_args().
+//
+static void register_builtins(void)
+{
+    int i;
+    char *p, *tf, **cp2;
 
-    // 4. Finish the include search path, then register the built-in directives
-    // and predefined macros.
     // after user -I files here are the standard include libraries
     cpp.search_dirs[cpp.ndirs++] = "/usr/include";
     cpp.search_dirs[cpp.ndirs++] = 0;
@@ -259,6 +261,12 @@ int main(int argc, char *argv[])
 #if mert
     cpp.sym_arch = define_symbol("mert");
 #endif
+    // Unconditional, and last so it wins over any of the host arch macros above:
+    // this preprocessor always targets the BESM-6, whatever it is running on.  It
+    // is what lets one source tune itself to the target -- defs.h's size profile
+    // keys off it -- with no flag on any command line.  Ordinary and #undef'able,
+    // like the platform macros above it (§6.10.8.4 applies to neither).
+    cpp.sym_arch       = define_symbol("besm6");
     cpp.sym_line_macro = define_symbol("__LINE__");
     cpp.sym_file_macro = define_symbol("__FILE__");
     cpp.sym_pragma_op  = define_symbol("_Pragma");
@@ -311,11 +319,48 @@ int main(int argc, char *argv[])
         lookup(*cp2++, DROP);
     }
     cpp.inc_file[cpp.inc_level] = tf;
-    cpp.buf_start               = cpp.arena + 8;
+}
+
+//
+// Program entry point.  Startup runs in a fixed order: seed the state fields
+// that need a non-zero initial value, build the scan tables, parse the command
+// line, register the built-ins, then set the buffer pointers and hand control to
+// process_directives, which runs until end of input.  The process exit status is
+// the number of errors reported.
+//
+int main(int argc, char *argv[])
+{
+    // Fields that used to have static initializers referencing other fields;
+    // set them up before anything runs (the instance is otherwise zeroed).
+    cpp.side_ptr       = side_buf;
+    cpp.pre_defs_end   = cpp.pre_defs;
+    cpp.pre_undefs_end = cpp.pre_undefs;
+    cpp.in_fd          = STDIN;
+    cpp.ndirs          = 1;
+
+    // Diagnostic prefix: the basename of argv[0] (fallback "cpp").
+    cpp.prog_name = "cpp";
+    if (argc > 0 && argv[0] && argv[0][0]) {
+        char *slash   = strrchr(argv[0], '/');
+        cpp.prog_name = slash ? slash + 1 : argv[0];
+    }
+
+    cpp.out_file = stdout;
+
+    build_scan_tables();
+
+    parse_args(argc, argv);
+
+    cpp.inc_fd[cpp.inc_level] = cpp.in_fd;
+    cpp.exit_code             = 0;
+
+    register_builtins();
+
+    cpp.buf_start               = arena + 8;
     cpp.buf_mid                 = cpp.buf_start + BUFSIZ;
     cpp.buf_end                 = cpp.buf_mid + BUFSIZ;
 
-    // 5. Point the buffer cursors at the (empty) buffer and run the main loop.
+    // Point the buffer cursors at the (empty) buffer and run the main loop.
     // The first refill inside process_directives reads the actual input.
     cpp.true_level  = 0;
     cpp.false_level = 0;

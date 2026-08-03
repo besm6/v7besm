@@ -99,6 +99,11 @@ All predefined macros are protected: `#define`/`#undef` of them (and `-D`/`-U` o
 rejected per §6.10.8.4. Optional OS/architecture macros (`unix`, `vax`, …) exist as
 compile-time conditionals but are off in this build.
 
+**`besm6` is defined unconditionally**, and it is the one predefine that does not describe the
+machine the preprocessor is *running* on: this tool always targets the BESM-6, whatever it was
+compiled for. It is an ordinary macro, freely `#undef`-able like `unix`, and it is what lets one
+source tune itself to the target — the next section is the first user of it.
+
 ## `#if` expressions
 
 `#if`/`#elif` conditions are evaluated by a full integer constant-expression evaluator
@@ -125,10 +130,121 @@ honors the C11 §5.2.4.1 translation-limit minimums; the relevant sizes (from
 
 Trigraph translation (translation phase 1) is available via `-trigraphs`.
 
+**Everything in this section is the HOST build.** The same sources are also built for the
+BESM-6, and that build meets none of those minima — see the next section.
+
 Identifiers are significant to their full length (no truncation). Bytes 0x80–0xFF
 are accepted as identifier characters, so raw UTF-8 names such as `#define длина 100`
 work — including function-like macro and parameter names. This matches GCC/Clang's
 default handling of the implementation-defined extended identifier set (§6.4.2).
+
+## Building for the BESM-6
+
+These same eight sources are built a **second** time, by the `b6*` cross toolchain, into
+`build/rootfs/usr/bin/cpp` — the preprocessor that runs on the machine, and the first step of
+self-hosting (task **C9a** in [../TODO.md](../TODO.md); the plan is [TODO.md](TODO.md)).
+[`rootfs/CMakeLists.txt`](rootfs) is the whole of the build machinery, and there is **no second
+copy of any source**: the only thing that differs is a size profile in [`defs.h`](defs.h) keyed
+on the `besm6` predefine above.
+
+**That profile is deliberately non-conforming.** It does not meet the C11 §5.2.4.1 minima and
+cannot: a user program on this machine gets 28,672 words of `const+text+data+bss`, no pointer
+reaches past word 32,767, the stack is **4,096 words and nothing checks it**, and no struct may
+exceed 4,096 words. The C11 conformance results above are the **host** build's alone.
+
+| | host | BESM-6 | why |
+| --- | ---: | ---: | --- |
+| `BUFSIZ` (logical line / scan window) | 8192 | 1024 | address space |
+| `SBSIZE` (side buffer: every macro's name + body) | 65536 | 24576 | 4,096 words, the largest object in the program; measured — one kernel source's include closure is 315 macros and ~14 KB of them, and 8192 overflowed on `<sys/reg.h>` |
+| `SYMSIZ` (hash slots) | 6151 | 1021 | 315 macros is the measured load; 4095 would cost 12,285 words |
+| `MAXFRM` (macro parameters) | 127 | 31 | 254 words of **stack** per nesting level, against 4,096 |
+| `MAXARGDEPTH` (macro call inside a macro argument) | 200 | **1** | the stack; see below |
+| `EXPTXT_MULT` | 4 | 2 | keeps the heap block inside one 1,024-word `malloc` page |
+
+### Where the ceilings actually bind
+
+Four things had to change in the shared source before any of it fit, and each is worth knowing
+because **every v7 program of this shape meets the same wall**:
+
+1. **No struct may exceed 4,096 words** — a member is named by a 12-bit offset from a base
+   register and there is no longer form, so `b6as` refuses the offset and nothing downstream can
+   rescue it. `struct cppstate` was ~38,630 words. The fix is not to shrink it but to take the
+   four big arrays *out* of it (`arena`, `side_buf`, `symbols`, `paint_stack` are at file scope
+   in [`cpp.c`](cpp.c) now); a file-scope array of any size is reached through an index register
+   and has no such limit. This is [../README.md](../README.md)'s hazard list entry.
+2. **The scratch buffers are on the heap, not in a frame.** `expand_macro`'s `acttxt`/`exptxt`/
+   `strbuf` and `expand_text`'s `subarena` were 7×`BUFSIZ` and 2×`BUFSIZ` of *automatic* storage
+   on a path that recurses.
+3. **The startup phases are separate functions.** `main()` stays on the stack under every macro
+   expansion; as one function its frame was **531 words**, split into `build_scan_tables()`,
+   `parse_args()` and `register_builtins()` it is **41**.
+4. **`#line`'s and `#error`'s buffers are `static`.** `process_directives()` is the top-level
+   loop, entered once and never recursively, and its four `BUFSIZ` automatics sat under
+   everything.
+
+### The measured frame chain
+
+Read out of `build/cmd/cpp/rootfs/cpp.dis` — the `15 utm 0NNN` in each prologue, which is what
+[../grep/README.md](../grep/README.md) means by reading the frame rather than estimating it:
+
+| | words |
+| --- | ---: |
+| `main` | 41 |
+| `process_directives` | 372 |
+| `scan_token` | 656 |
+| `lookup_token` | 11 |
+| `expand_macro` | 442 |
+| `expand_text` | 120 |
+
+§6.10.3.1's argument prescan is a **recursion the input drives** —
+`expand_macro` → `expand_text` → `scan_token` → `expand_macro` — and it is the only one in this
+program. Resident before any expansion: 41 + 372 + 656 + 11 = **1,080 words**. Each further level
+costs `expand_macro` + `expand_text` + `scan_token` + `lookup_token` = **1,227**, and the inner
+macro's *argument collection* re-enters `scan_token` for another **1,106** before `expand_text`
+is even reached. So one level fits at ≈3,400 of the 4,096 and two do not — hence
+`MAXARGDEPTH 1`.
+
+**What that costs.** Past the bound the argument is substituted **raw** instead of pre-expanded,
+with a warning (`-w` silences it) and **not** an error: the substituted text is rescanned in the
+ordinary way afterwards, so for everything but a `#`/`##` operand — which takes the raw actual
+regardless — the result is the same text. `MAX(1, MIN(2,3))` and `CLAMP(5,0,9)` come out
+byte-identical to the host, and `rootfs/test/deep.c` asserts exactly that. **The one shape that
+genuinely diverges** is a macro nested inside *its own* argument two deep, `ID(ID(ID(4)))`: the
+raw text is rescanned with the outer `ID` still blue-painted (§6.10.3.4), so the inner call is
+left un-expanded where the host expands it. `cmd_cpp_nesting` records that difference as a fact.
+
+**This bound is the stack's, not the preprocessor's.** Raising `USTKPAGE` from 28 to 24
+(`include/sys/param.h`) would give 8,192 words of stack and 24,576 of image — and every program
+on this disk already fits under 24,576, `fgrep` being the largest at 20,019. That is a kernel ABI
+change and belongs to [../../kernel/TODO.md](../../kernel/TODO.md), not here; `as` and `ld` (task
+C9b) will want it too.
+
+### Testing the native build
+
+Two kinds, both in [`rootfs/test/`](rootfs/test):
+
+- **`rootfs_cpp_agree` / `rootfs_cpp_deep`** — the host `b6cpp` and the native `cpp` over one
+  fixture, diffed **live**. Two cpps built from one source must agree byte for byte; a
+  checked-in expectation could not express that, because the day a `##` corner is fixed in
+  `macro.c` a live diff *requires* the fix to land identically on both targets.
+- **`cmd_cpp_*`** — ordinary `b6sim` cases with a checked-in `.expected`, which is the other
+  half: they pin the output and the exit status, which two cpps wrong in the same way would not.
+
+`rootfs_cpp_size` (registered by `b6_prog()`) is the third: it holds the program under 28,672
+words and its top symbol under 32,767. Today it links at **23,826** words, leaving ~4,800 for the
+heap — which is not slack but budget, since `malloc` grows a page at a time and one expansion
+level takes two pages.
+
+The stronger check, by hand, is the real workload:
+
+```sh
+build/cmd/cpp/b6cpp -Iinclude -I~/.local/share/besm6/include kernel/sys1.c > a
+b6sim build/rootfs/usr/bin/cpp -Iinclude -I~/.local/share/besm6/include kernel/sys1.c > b
+diff a b
+```
+
+`kernel/sys1.c`, `kernel/main.c`, `kernel/dev/tty.c`, `cmd/sh/xec.c`, `cmd/sed/sed0.c`,
+`lib/libc/gen/malloc.c` and `cmd/cpp/macro.c` itself all come out identical.
 
 ## Source layout
 

@@ -1,0 +1,8 @@
+cpp: 4: warning: MIN: argument not pre-expanded, nesting deeper than 1
+cpp: 4: warning: MIN: argument not pre-expanded, nesting deeper than 1
+cpp: 5: warning: ID: argument not pre-expanded, nesting deeper than 1
+
+
+
+ ((1) > (  ((2) < ( 3) ? (2) : ( 3))) ? (1) : (  ((2) < ( 3) ? (2) : ( 3))))
+  ID(4)

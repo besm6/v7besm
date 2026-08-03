@@ -69,6 +69,19 @@ guards the two **user** address-space ceilings: `const+text+data+bss` ≤ **28,6
 pages less the 4-page stack at `070000`), and no relocatable symbol above word **32,767** (a
 15-bit pointer's reach). Both failures are otherwise silent.
 
+Two ceilings it does **not** guard, and both bind in practice: **no struct may exceed 4,096
+words** (a member is a 12-bit offset from a base register — move the big arrays to file scope),
+and the **4,096-word stack**, where a long function costs 1.5–2 words per source line of
+temporaries before any array. `cmd/README.md` §6 is the account and `cmd/cpp` the worked example.
+
+`cmd/cpp` is the one program built **twice**: as the host tool `b6cpp` and, from the same
+sources, as `build/rootfs/usr/bin/cpp` (`cmd/cpp/rootfs/`, task C9a — the first step of C9,
+self-hosting). It is the only place the ceilings actually bound a program: its BESM-6 size
+profile in `cmd/cpp/defs.h` is deliberately below the C11 §5.2.4.1 minima, keyed on the `besm6`
+macro `b6cpp` always predefines. `cmd/cpp/README.md`, "Building for the BESM-6", has the
+measurements. A second native build of a host tool needs its own subdirectory, since `cmd/<x>`
+is added above the `B6RUNTIME_LIB` guard where `b6_prog()` does not yet exist.
+
 `build/rootfs/` is staged only, never installed. **`root.manifest`** at the tree top describes
 the image; paths resolve against `b6fsutil`'s working directory (`build/kernel/test`). Modes
 (`04755` setuid on `mkdir`/`mv`/`rmdir`) and the one hard link (`/bin/[` → `/bin/test`) live

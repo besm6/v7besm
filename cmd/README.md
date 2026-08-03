@@ -150,19 +150,37 @@ directories inherits this.
 
 * **28,672 words** of `const + text + data + bss` — 32 pages less the four the stack takes.
 * **Word 32,767** — no relocatable symbol above the reach of a 15-bit pointer.
+* **A struct may not exceed 4,096 words.** A member is named by a 12-bit offset from a base
+  register and there is no longer form, so `b6as` refuses the offset (`short address out of
+  range`) and nothing downstream can rescue it. This is the architecture, not a compiler defect.
+  It bites **every v7 program that keeps its state in one big struct**, it is invisible until the
+  assembler speaks, and the answer is the same every time: **move the big arrays out of the struct
+  to file scope**, where an index register reaches them at any size. [cpp/README.md](cpp/README.md)
+  is the worked example — `struct cppstate` was ~38,630 words and is ~400 with its four arrays
+  lifted out.
 * **4,096 words of stack** at `070000`. **Nothing checks this.** One big automatic array blows it
-  in silence; [cpp/TODO.md](cpp/TODO.md)'s blocker L2 is the worked example. Read the prologue
-  rather than estimating the frame, and bound every fixed path buffer v7 filled with an unbounded
-  `sprintf`/`strcpy` from `argv`.
+  in silence, and so does a modest one multiplied by a recursion. Read the prologue (`15 utm 0NNN`
+  in the `.dis` `b6_prog()` writes) rather than estimating the frame, and bound every fixed path
+  buffer v7 filled with an unbounded `sprintf`/`strcpy` from `argv`. **Scalars are not free**:
+  every distinct compiler temporary is a permanent frame slot, so a long function costs 1.5–2
+  words per source line with no arrays at all — `sed`'s `fcomp` is 700. The three moves that pay
+  are (a) big scratch to the heap when the function recurses, (b) `static` when it does not, and
+  (c) splitting a long function that stays resident: `cpp`'s `main` went 531 → 41 words that way.
+  **And a recursion whose depth the input chooses needs a ceiling of its own** — `grep`'s
+  `MAXDEPTH`, `cpp`'s `MAXARGDEPTH`.
 * **The heap**, which is not checkable: `rootfs_<name>_size` cannot see a byte of allocated
   storage. `col`'s worst case is past the whole address space; `sort` takes every page the break
   will give. **Ask what a program will still need to allocate after it has taken what it wanted** —
-  a stream whose `malloc(BUFSIZ)` fails does not fail, it becomes one `read(2)` per byte.
+  a stream whose `malloc(BUFSIZ)` fails does not fail, it becomes one `read(2)` per byte. And
+  **measure the break, not the request**: `malloc` grows the arena a 1,024-word page at a time
+  (`lib/libc/gen/malloc.c`), so a 1,196-word block costs two pages while an 854-word one costs
+  one. `cpp` chose `EXPTXT_MULT` on that alone.
 * **A bound the user chooses at run time**, checkable only by the program itself: `pr`'s
   look-ahead ring capacity is a function of `-l` and the column count.
 
 `b6_prog()` registers `check-size.sh` for the first two as ctest `rootfs_<name>_size`. For scale:
-`fgrep` is the largest on the image at 20,019 words, and 15,000 of them are two arrays; `sed` is
+`cpp` is 23,826 words, the largest thing on the image and the only one whose limits had to be cut
+below what C11 asks for; `fgrep` is 20,019, and 15,000 of them are two arrays; `sed` is
 14,120, `fsck` 10,842, `sh` 7,928, `sort` 6,822. **What a program prints with dominates what it
 does** — everything that links stdio carries ~1,030 words of bss and ~2,500 of common text, while
 `test`, `tee`, `tail` and `getty` write with `write(2)` and cost a fraction of it (`getty` 434

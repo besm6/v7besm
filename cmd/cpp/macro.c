@@ -41,7 +41,7 @@ static int macro_is_painted(const struct symtab *sp)
 {
     int i;
     for (i = 0; i < cpp.paint_top; i++)
-        if (cpp.paint_stack[i] == sp)
+        if (paint_stack[i] == sp)
             return 1;
     return 0;
 }
@@ -71,7 +71,7 @@ char *do_define(char *p)
     const char *body_start; // side-buffer position where the replacement text begins
     int paste_pending = 0; // a '##' was just seen; its right operand pastes onto the left
 
-    if (cpp.side_ptr > cpp.side_buf + SBSIZE - BUFSIZ) {
+    if (cpp.side_ptr > side_buf + SBSIZE - BUFSIZ) {
         pperror("too much defining");
         return (p);
     }
@@ -374,7 +374,7 @@ struct symtab *lookup(char *namep, int enterf)
     c %= SYMSIZ;
     if (c < 0)
         c += SYMSIZ;
-    sp = &cpp.symbols[c];
+    sp = &symbols[c];
     while ((snp = sp->name)) {
         np = namep;
         while (*snp++ == *np) {
@@ -386,13 +386,13 @@ struct symtab *lookup(char *namep, int enterf)
                 return (cpp.last_sym = sp);
             }
         }
-        if (--sp < &cpp.symbols[0]) {
+        if (--sp < &symbols[0]) {
             if (around) {
                 pperror("too many defines", 0);
                 exit(cpp.exit_code);
             } else {
                 ++around;
-                sp = &cpp.symbols[SYMSIZ - 1];
+                sp = &symbols[SYMSIZ - 1];
             }
         }
     }
@@ -500,6 +500,20 @@ static int stringize(const char *a0, const char *a1, char *out)
 }
 
 //
+// Copy the raw argument text [a0,a1) to out[cap] NUL-terminated, unexpanded --
+// what expand_text falls back to on each of its three give-up paths.
+//
+static char *raw_text(const char *a0, const char *a1, char *out, int cap)
+{
+    char *w = out;
+
+    while (a0 < a1 && w < out + cap - 1)
+        *w++ = *a0++;
+    *w = '\0';
+    return out;
+}
+
+//
 // Expand the raw argument text [a0,a1) to its fully macro-expanded form and store
 // it, NUL-terminated, at out[cap]; return out.  A normal parameter substitutes
 // this *expanded* argument (§6.10.3.1p2), which is what lets the STR/XSTR
@@ -509,21 +523,42 @@ static int stringize(const char *a0, const char *a1, char *out)
 //
 char *expand_text(const char *a0, const char *a1, char *out, int cap)
 {
-    char subarena[8 + 2 * BUFSIZ + 8];
-    char *start = subarena + 8 + BUFSIZ; // mirror the real arena: BUFSIZ of pushback headroom
-    long n      = a1 - a0;
-    char *w     = out;
+    char *subarena, *start;
+    long n  = a1 - a0;
+    char *w = out;
 
     if (n < 0)
         n = 0;
     // Too large to load with its sentinel without risking a refill from real
     // input: fall back to the raw (unexpanded) text.
-    if (n > BUFSIZ - 8) {
-        while (a0 < a1 && w < out + cap - 1)
-            *w++ = *a0++;
-        *w = '\0';
-        return out;
+    if (n > BUFSIZ - 8)
+        return raw_text(a0, a1, out, cap);
+    // The prescan is a recursion the input drives; past MAXARGDEPTH the argument
+    // is substituted RAW instead.  A WARNING and not an error: the substituted
+    // text is rescanned in the ordinary way afterwards, so for everything but a
+    // '#'/'##' operand (which takes the raw actual regardless) the result is the
+    // same text the prescan would have produced.  The region just past the
+    // ceiling need not fault, and the exit status must not say it did.
+    if (cpp.arg_depth >= MAXARGDEPTH) {
+        if (!cpp.opt_no_warnings)
+            ppwarn("%s: argument not pre-expanded, nesting deeper than %d", cpp.macro_name,
+                   MAXARGDEPTH);
+        return raw_text(a0, a1, out, cap);
     }
+
+    // The isolated buffer is HEAPED rather than automatic.  This function is on
+    // the recursive path -- expand_macro calls it per parameter, it runs
+    // scan_token, and that reaches expand_macro again for a macro call inside an
+    // argument -- so an automatic array here is multiplied by the argument
+    // nesting depth against a 4,096-word stack that nothing checks
+    // (cmd/README.md §6; README.md, "Building for the BESM-6").  A failed malloc is a
+    // diagnosable NULL; a blown stack on this machine is a wrong answer.
+    subarena = malloc(8 + 2 * BUFSIZ + 8);
+    if (subarena == NULL) {
+        pperror("out of memory expanding an argument of %s", cpp.macro_name);
+        return raw_text(a0, a1, out, cap);
+    }
+    start = subarena + 8 + BUFSIZ; // mirror the real arena: BUFSIZ of pushback headroom
 
     // Save engine state.
     char *s_buf_start = cpp.buf_start, *s_buf_mid = cpp.buf_mid, *s_buf_end = cpp.buf_end;
@@ -544,10 +579,8 @@ char *expand_text(const char *a0, const char *a1, char *out, int cap)
     size_t mlen = 0;
     FILE *mf    = open_memstream(&mbuf, &mlen);
     if (mf == NULL) { // capture unavailable: fall back to raw text
-        while (a0 < a1 && w < out + cap - 1)
-            *w++ = *a0++;
-        *w = '\0';
-        return out;
+        free(subarena);
+        return raw_text(a0, a1, out, cap);
     }
 
     // Load  raw + "\n#"  into the isolated buffer.  The "\n#" makes scan_token
@@ -567,7 +600,9 @@ char *expand_text(const char *a0, const char *a1, char *out, int cap)
     cpp.recur_bound           = start;
     cpp.recur_bound_adj       = 0;
     SET_FAST_SCAN();
+    ++cpp.arg_depth;
     scan_token(start);
+    --cpp.arg_depth;
     flush_output(); // push [out_ptr,tok_ptr) (the expanded text) into the memory stream
     fclose(mf);
 
@@ -601,6 +636,7 @@ char *expand_text(const char *a0, const char *a1, char *out, int cap)
     }
     *w = '\0';
     free(mbuf);
+    free(subarena);
     return out;
 }
 
@@ -613,7 +649,10 @@ char *expand_text(const char *a0, const char *a1, char *out, int cap)
 //
 static char *pragma_operator(char *p)
 {
-    char text[BUFSIZ]; // destringized pragma text
+    // STATIC for the reason direct.c's #line buffers are: this is reached from
+    // expand_macro, which nests, and a _Pragma cannot appear inside its own
+    // argument, so one buffer for the run is enough.
+    static char text[BUFSIZ]; // destringized pragma text
     char *w        = text;
     const char *s = 0, *e = 0;
 
@@ -672,10 +711,15 @@ char *expand_macro(char *p, struct symtab *sp)
 {
     char *ca, *vp;
     int params;
-    char *actual[MAXFRM];    // actual[n] is the raw text of the nth actual (for '#')
-    char *expanded[MAXFRM];  // expanded[n] is its macro-expanded text (for normal use)
-    char acttxt[BUFSIZ];     // space for the raw actuals
-    char exptxt[4 * BUFSIZ]; // space for the expanded actuals
+    char *actual[MAXFRM];   // actual[n] is the raw text of the nth actual (for '#')
+    char *expanded[MAXFRM]; // expanded[n] is its macro-expanded text (for normal use)
+    // The three big scratch areas are ONE HEAP BLOCK, not automatic arrays: this
+    // function is on the recursive path (see expand_text) and together they are
+    // seven times BUFSIZ, against a 4,096-word stack that nothing checks.  Sliced
+    // rather than malloc'ed three times because their lifetimes are identical.
+    char *scratch;
+    char *acttxt; // space for the raw actuals
+    char *exptxt; // space for the expanded actuals
 
     if (0 == (vp = sp->value))
         return (p);
@@ -698,6 +742,13 @@ char *expand_macro(char *p, struct symtab *sp)
     flush_output();
     if (sp == cpp.sym_pragma_op) // _Pragma("...") operator (§6.10.9)
         return pragma_operator(p);
+    scratch = malloc(ACTTXT_SIZE + EXPTXT_SIZE + STRBUF_SIZE);
+    if (scratch == NULL) {
+        pperror("%s: out of memory expanding a macro", sp->name);
+        return (p); // leave the name un-expanded, as the blue-paint path does
+    }
+    acttxt = scratch;
+    exptxt = acttxt + ACTTXT_SIZE;
     if (sp == cpp.sym_line_macro) {
         vp    = acttxt;
         *vp++ = '\0';
@@ -748,7 +799,8 @@ char *expand_macro(char *p, struct symtab *sp)
             if (*cpp.tok_ptr == '\0')
                 ++cpp.tok_ptr;         // step over refill_buffer's EOF sentinel
             cpp.out_ptr = cpp.tok_ptr; // drop the (stale) name region
-            return (cpp.tok_ptr);      // resume at the peeked token
+            free(scratch);
+            return (cpp.tok_ptr); // resume at the peeked token
         }
         {
             cpp.call_line = cpp.line_no[cpp.inc_level];
@@ -803,7 +855,7 @@ char *expand_macro(char *p, struct symtab *sp)
                 while (a0[-1] != '\0') // start of this raw actual's text
                     --a0;
                 *ep++ = '\0';
-                expand_text(a0, a1, ep, (int)(exptxt + sizeof(exptxt) - ep));
+                expand_text(a0, a1, ep, (int)(exptxt + EXPTXT_SIZE - ep));
                 ep += strlen(ep);
                 expanded[k] = ep; // end pointer (leading '\0' stops the reader)
                 ep++;
@@ -815,7 +867,7 @@ char *expand_macro(char *p, struct symtab *sp)
     // the name while the region is open is left un-expanded; the marker un-paints
     // the macro when the scanner reaches it.  The per-macro-appears-once invariant
     // bounds paint_top by SYMSIZ, so the stack cannot overflow.
-    cpp.paint_stack[cpp.paint_top++] = sp;
+    paint_stack[cpp.paint_top++] = sp;
     if (AT_BUF_START(p)) {
         cpp.out_ptr = cpp.tok_ptr = p;
         p                         = spill_buffer(p);
@@ -841,7 +893,7 @@ char *expand_macro(char *p, struct symtab *sp)
                 *--p = *ca;
             }
         } else if ((unsigned char)*vp == STRINGIZE_MARK) { // '#param': push the quoted raw actual
-            char strbuf[2 * BUFSIZ + 4];
+            char *strbuf   = exptxt + EXPTXT_SIZE; // the third slice of `scratch'
             const char *a1 = actual[*--vp - 1];
             const char *a0 = a1;
             const char *ce;
@@ -891,5 +943,6 @@ char *expand_macro(char *p, struct symtab *sp)
             break;
     }
     cpp.out_ptr = cpp.tok_ptr = p;
+    free(scratch);
     return (p);
 }

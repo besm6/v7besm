@@ -94,6 +94,13 @@ dir /etc
 dir /usr
 dir /usr/test
 
+# THE FIRST DIRECTORY THIS IMAGE HAS EVER HAD IN /usr/bin, and it exists for one program:
+# /usr/bin/cpp, the C preprocessor -- the first thing on this disk built from THE SAME
+# SOURCES AS A HOST TOOL (cmd/cpp/TODO.md, task C9a in cmd/TODO.md).  The shell's default
+# path is already ":/bin:/usr/bin" (cmd/sh/msg.c), so a bare `cpp' finds it without
+# /etc/rc setting PATH at all.
+dir /usr/bin
+
 # diff -h's other half, task C5f.  THE FIRST ENTRY THIS IMAGE HAS EVER HAD IN /usr/lib, and
 # the only program of that task that is not in /bin: diff(1) reaches it with
 # execv("/usr/lib/diffh", args), so the path here and the string in cmd/diff/diff.c are one
@@ -763,6 +770,16 @@ mode 0644
 #
 # puret is the one PURE (NMAGIC) program among them, and one of only two images on this
 # disk whose text the kernel can share at all -- /bin/sh is the other.  Task 26.
+
+file /usr/bin/cpp       # cmd/cpp built natively -- task C9a, the first step of self-hosting
+                        # and the first program here whose sources are also a host tool's
+                        # (b6cpp).  Its size profile is not the host one: cmd/cpp/defs.h
+                        # cuts BUFSIZ/SBSIZE/SYMSIZ and bounds macro-argument nesting under
+                        # the `besm6' predefine, deliberately below the C11 minima, because
+                        # this address space and this 4,096-word stack cannot hold them.
+                        # cmd/cpp/README.md, "Building for the BESM-6", has the measurements.
+source ../../rootfs/usr/bin/cpp
+mode 0755
 
 file /usr/lib/diffh     # cmd/diffh -- task C5f.  diff -h execv's this path; see the
                         # /usr/lib stanza above.  Its window is RANGE (30) lines of each

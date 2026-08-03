@@ -268,6 +268,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/dmesg
     ${B6_ROOTFS}/bin/du
     ${B6_ROOTFS}/usr/lib/diffh
+    ${B6_ROOTFS}/usr/bin/cpp
     ${B6_ROOTFS}/bin/echo
     ${B6_ROOTFS}/bin/ed
     ${B6_ROOTFS}/bin/fgrep

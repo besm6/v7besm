@@ -85,7 +85,7 @@ static char *do_include(char *p)
         pperror("Unreasonable include nesting", 0);
         return (p);
     }
-    if ((nfil = cpp.side_ptr) > cpp.side_buf + SBSIZE - BUFSIZ) {
+    if ((nfil = cpp.side_ptr) > side_buf + SBSIZE - BUFSIZ) {
         pperror("no space");
         exit(cpp.exit_code);
     }
@@ -333,9 +333,14 @@ char *process_directives(char *p)
             enter_if(was_live, taken);
         } else if (np == cpp.sym_line) { // line (§6.10.4)
             if (cpp.false_level == 0) {
-                char optext[BUFSIZ]; // raw operand text
-                char expbuf[BUFSIZ]; // operands after macro expansion
-                char fbuf[BUFSIZ];   // extracted file name
+                // STATIC, like #error's msg below: this function is the top-level
+                // loop, entered once from main() and never recursively, so these
+                // are one buffer each for the life of the run -- and as automatics
+                // they would sit under every macro expansion on the stack, which
+                // is 4,096 words on the BESM-6 with nothing checking it.
+                static char optext[BUFSIZ]; // raw operand text
+                static char expbuf[BUFSIZ]; // operands after macro expansion
+                static char fbuf[BUFSIZ];   // extracted file name
                 char *cp, *e;
 
                 // Collect the raw operand text up to end of line.  Reaching the
@@ -381,7 +386,7 @@ char *process_directives(char *p)
             }
         } else if (np == cpp.sym_error) { // error (§6.10.5)
             if (cpp.false_level == 0) {
-                char msg[BUFSIZ]; // the diagnostic tokens, used literally
+                static char msg[BUFSIZ]; // the diagnostic tokens, used literally
                 char *cp = msg;
 
                 p = skip_blanks(p);

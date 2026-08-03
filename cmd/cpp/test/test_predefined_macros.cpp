@@ -148,3 +148,16 @@ TEST_F(Predefined, UndefDefinedDiagnosed) {
 TEST_F(Predefined, UndefPlatformMacroAllowed) {
     EXPECT_PP_OK("#undef unix\n");
 }
+
+// The target macro, and the one predefine that does not depend on what the
+// preprocessor is running on: this tool always targets the BESM-6.  A source
+// shared between the host build and the native one (cmd/cpp itself is the first)
+// tunes itself on this.
+TEST_F(Predefined, Besm6Defined) {
+    EXPECT_TOKENS("#ifdef besm6\nTARGET\n#endif\n", "TARGET");
+}
+
+// ... and it is an ordinary macro like unix/pdp11 above, not a §6.10.8.4 one.
+TEST_F(Predefined, UndefBesm6Allowed) {
+    EXPECT_PP_OK("#undef besm6\n");
+}

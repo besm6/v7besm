@@ -1,0 +1,9 @@
+#ifdef besm6
+target besm6
+#endif
+#undef besm6
+#ifdef besm6
+still defined
+#else
+undefined now
+#endif
