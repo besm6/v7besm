@@ -22,15 +22,14 @@ and the plan is all blockers.
 found by actually running `b6cc -c` over all eight sources — every one below is reproduced with
 a minimal case, not guessed. One is a **bug in the external c-compiler**
 (<https://github.com/besm6/c-compiler/>), which is a separate repo; it is a general-C bug, not
-cpp-specific, so a self-hosting toolchain has to fix it anyway. One is a libc gap. Two are
-BESM-6 address-space limits this repo owns.
+cpp-specific, so a self-hosting toolchain has to fix it anyway. Two are BESM-6 address-space
+limits this repo owns. A fourth, the missing `open_memstream()`, is **done** — see §2.
 
 ### The blockers, each with its minimal repro
 
 | # | Where | What | Minimal repro (all deterministic) |
 |---|---|---|---|
 | **B2** | external compiler (`b6lower`) | An **array of an anonymous struct type at block scope** loses its type. [buffer.c:111](buffer.c#L111) declares `static const struct { char t, r; } map[]` inside `translate_trigraphs`. | `char f(void){struct{char t,r;}m[2]; m[0].r='b'; return m[0].r;}` → `Fatal error: Struct or union '__anon_1' not found`. Neither `static` nor an initializer is needed. The same declaration at **file** scope compiles, as does a block-scope *scalar* of an anonymous struct, or an array of a *named* one — it is the combination. |
-| **G1** | libc | `open_memstream()` (POSIX 2008, neither C11 nor v7) is not in libc. [macro.c:545](macro.c#L545). | `Symbol 'open_memstream' not found`. |
 | **L1** | this repo (size) | `struct cppstate` is **~38,630 words** of bss; a C pointer reaches 15 bits (32,767 words) and user text+data+bss gets 28 pages (28,672). | `b6as: short address out of range: 047217` from `utc cpp / xta 20111` — a member 20,111 words into `struct cppstate`. Five of the eight sources stop here. Note that 047217 *does* fit the 15 bits a long address has, so check whether `b6as`'s addressing is part of this before assuming shrinking bss alone answers it. |
 | **L2** | this repo (size) | `expand_macro`'s frame is `acttxt[BUFSIZ]+exptxt[4*BUFSIZ]` ≈ **6,827 words**; the user stack is 4,096 (pages 28–31). | [macro.c:677-678](macro.c#L677). |
 
@@ -41,7 +40,7 @@ Two things claimed in an earlier draft turned out already handled and are **not*
 `lib/test/strtolt`). Once headers resolve, `direct.c`'s `strtol` compiles fine. BSD's
 `setbuffer()`, which [cpp.c:203](cpp.c#L203) calls, is in libc now as well —
 [../../lib/libc/stdio/setbuffer.c](../../lib/libc/stdio/setbuffer.c) — so that line links as
-written, and G1 above is the one libc gap left.
+written, and with §2 done there is no libc gap left.
 
 Intended outcome: `make` produces `build/rootfs/usr/bin/cpp` beside `etc/init`; a ctest runs it
 under `b6sim` and asserts its output matches the host `b6cpp` byte-for-byte.
@@ -65,23 +64,24 @@ issue so it can be reverted.
   compile; check the other seven sources for the same shape, since only `buffer.c` is known to
   have it.
 
-### 2. `open_memstream` (G1)
+### 2. `open_memstream` — done
 
 [macro.c:545](macro.c#L545) captures an isolated macro prescan through
-`open_memstream(&mbuf, &mlen)`, and libc has no such routine. It is not enough that the call
-site already degrades gracefully when the stream is null (`mf == NULL` falls back to copying the
-argument raw): the **symbol still has to resolve** to link at all, and the fallback path does not
-prescan, so a cpp built on it would not match the host `b6cpp` byte for byte — which is exactly
-what §6's test asserts. Two routes, and this plan does not settle which:
+`open_memstream(&mbuf, &mlen)`, and libc now has it:
+[../../lib/libc/stdio/memstream.c](../../lib/libc/stdio/memstream.c), declared in
+[../../include/stdio.h](../../include/stdio.h), documented in
+[../../lib/libc/man/fopen.3s](../../lib/libc/man/fopen.3s) and covered by `lib/test/stdiot`.
 
-- **Implement it in libc.** A growing heap sink is a new kind of stream here: `_IOSTRG` is a
-  *fixed* caller buffer and `_flsbuf` deliberately drops the byte when one fills
-  ([../../lib/libc/README.md](../../lib/libc/README.md)), so a real `open_memstream` wants either
-  a `realloc` on overflow behind its own flag bit, or a distinct sink. It also pulls the heap into
-  a program already fighting L1/L2 for address space.
-- **Restructure the call site** to prescan into a fixed arena buffer it already owns, so no
-  stream is needed. Cheaper on the target and no libc change, but it is a change to shared
-  source that the host build compiles too, so it must be output-neutral there.
+Restructuring the call site was the alternative and was not taken. The reason the call site's own
+`mf == NULL` fallback was never enough is worth keeping: the **symbol still has to resolve** to
+link at all, and the fallback does not prescan, so a cpp built on it would not match the host
+`b6cpp` byte for byte — which is exactly what §6's test asserts.
+
+It is an ordinary `_iob` stream carrying `_IOSTRG | _IOMEM`, held at `_cnt == 0` so that
+`_flsbuf()` sees every byte and grows a heap buffer to take it; a program that never opens one
+pays a word of bss and nothing else. What it costs *this* program is the heap, in an address
+space already fighting L1/L2 — the initial buffer is 48 bytes and doubles, so a prescan of a few
+dozen characters never reaches `BUFSIZ`.
 
 ### 3. An arch predefine, so a shared source can tune itself (for L1/L2)
 
@@ -184,14 +184,12 @@ function-like macros, `#if`/`#elif`, `#`/`##`, and a local `#include`; must avoi
 
 1. **B2** — file it upstream; land the source workaround (§1). `buffer.c` does not reach the
    assembler until this is done.
-2. **G1** — settle `open_memstream` one way or the other (§2). It is the only blocker whose
-   answer changes what the finished program *does*, so it wants deciding early.
-3. Confirm all eight sources compile with `-I ../../include`.
-4. **Predefine + size profile** (§3, §4); check `b6size -w` puts text+data+bss under 28,672
+2. Confirm all eight sources compile with `-I ../../include`.
+3. **Predefine + size profile** (§3, §4); check `b6size -w` puts text+data+bss under 28,672
    words and no symbol exceeds word 32,767.
-5. The `b6_prog()` call (§5) — one block in `cmd/cpp/CMakeLists.txt`.
-6. Fixture, `run-test.sh`, ctest (§6).
-7. Docs (§7).
+4. The `b6_prog()` call (§5) — one block in `cmd/cpp/CMakeLists.txt`.
+5. Fixture, `run-test.sh`, ctest (§6).
+6. Docs (§7).
 
 ## Verification
 

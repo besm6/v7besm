@@ -28,11 +28,16 @@
 //   an _IOSTRG stream never touches a descriptor, which is why sscanf works on a
 //   FILE with _file == -1.
 //
+//   open_memstream is the other kind of _IOSTRG stream and the only one that occupies
+//   an _iob slot, so it is the only one whose release can be got wrong -- which is
+//   what the slot-reuse case is for.  See the head comment of memstream() below.
+//
 // The scratch file is created here and removed at the end, so a run leaves nothing
 // behind and the .expected file stays host-independent.
 //
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define FNAME "stdiot.tmp"
@@ -291,6 +296,126 @@ static void buffering(void)
     eqs("setlinebuf", buf, "ab\ncd\n");
 }
 
+//
+// open_memstream: a sink with no descriptor behind it that grows to hold whatever
+// is written.  What is worth proving rather than transcribing:
+//
+//   THE BUFFER OUTLIVES fclose.  That is the whole point of the interface, and here
+//   it is what fclose() does NOT do -- no close(), no free() -- that makes it true.
+//
+//   GROWTH IS CHECKED BYTE BY BYTE, with a period-10 pattern over 500 characters, so
+//   that a byte lost or duplicated where a realloc boundary fell shows up as a wrong
+//   character rather than as a plausible one.  48 bytes is the starting capacity, so
+//   this crosses four doublings.
+//
+//   THE SIDE TABLE is exercised by two streams open at once and written alternately;
+//   an implementation that kept one pair of pointers would publish both into one.
+//
+//   THE SLOT IS RELEASED CLEANLY.  A memory stream carries _IOSTRG, so fclose() takes
+//   the arm that neither closes a descriptor nor frees the base -- and if it also
+//   left _base pointing at the buffer just handed to the caller, the fopen() below
+//   would inherit it (both searches scan from _iob[0], so it takes back the very slot
+//   just released), drain the memory stream's stale bytes into the file ahead of its
+//   own, and go on writing into storage the caller has since freed.  Nothing else in
+//   this program can catch that.
+//
+static void memstream(void)
+{
+    FILE *m, *m2, *f;
+    char *b, *b2;
+    size_t n, n2;
+    char buf[80];
+    int i, bad;
+
+    // Empty and untouched: a real buffer, a zero length and a NUL, per POSIX.
+    m = open_memstream(&b, &n);
+    ok("open_memstream", m != NULL);
+    if (m == NULL)
+        return;
+    ok("empty buffer", b != NULL);
+    eq("empty length", (long)n, 0);
+    ok("empty terminated", b[0] == '\0');
+    ok("fclose empty", fclose(m) == 0);
+    eq("empty length after close", (long)n, 0);
+    free(b);
+
+    //
+    // Every writing routine there is, into one stream.  They all funnel through the
+    // putc macro, which is the claim being tested: the stream is held at _cnt == 0,
+    // so each of these bytes arrives in _flsbuf one at a time.
+    //
+    m = open_memstream(&b, &n);
+    fputs("first", m);
+    fprintf(m, " %s %d", "second", 22);
+    fwrite(" third", 1, 6, m);
+    putc('!', m);
+    eq("ftell on memstream", ftell(m), 22);
+    ok("fflush publishes", fflush(m) == 0);
+    eq("flushed length", (long)n, 22);
+    eqs("flushed text", b, "first second 22 third!");
+    ok("no error", ferror(m) == 0);
+    ok("fclose written", fclose(m) == 0);
+    eq("length after close", (long)n, 22);
+    eqs("text after close", b, "first second 22 third!");
+    free(b);
+
+    // An embedded NUL is data, and is not what terminates the buffer.
+    m = open_memstream(&b, &n);
+    fwrite("a\0b", 1, 3, m);
+    fclose(m);
+    eq("embedded NUL length", (long)n, 3);
+    ok("embedded NUL kept", b[0] == 'a' && b[1] == '\0' && b[2] == 'b' && b[3] == '\0');
+    free(b);
+
+    // Growth across four doublings.
+    m = open_memstream(&b, &n);
+    for (i = 0; i < 500; i++)
+        putc('0' + i % 10, m);
+    ok("fclose grown", fclose(m) == 0);
+    eq("grown length", (long)n, 500);
+    bad = 0;
+    for (i = 0; i < 500; i++)
+        if (b[i] != '0' + i % 10)
+            bad++;
+    eq("grown bytes wrong", bad, 0);
+    ok("grown terminated", b[500] == '\0');
+    free(b);
+
+    // Two at once, interleaved, both growing.
+    m  = open_memstream(&b, &n);
+    m2 = open_memstream(&b2, &n2);
+    for (i = 0; i < 200; i++) {
+        putc('a', m);
+        putc('b', m2);
+        putc('B', m2);
+    }
+    fclose(m);
+    fclose(m2);
+    eq("first of two", (long)n, 200);
+    eq("second of two", (long)n2, 400);
+    bad = 0;
+    for (i = 0; i < 200; i++)
+        if (b[i] != 'a')
+            bad++;
+    for (i = 0; i < 400; i++)
+        if (b2[i] != (i % 2 == 0 ? 'b' : 'B'))
+            bad++;
+    eq("two streams crossed", bad, 0);
+    free(b);
+    free(b2);
+
+    // The slot must come back clean -- see the head comment.
+    m = open_memstream(&b, &n);
+    fputs("stale", m);
+    fclose(m);
+    f = fopen(FNAME, "w");
+    fputs("zz\n", f);
+    fclose(f);
+    readback(buf, sizeof buf);
+    eqs("slot reused cleanly", buf, "zz\n");
+    free(b);
+}
+
 // remove, rename, tmpnam and tmpfile.
 static void names(void)
 {
@@ -330,6 +455,7 @@ int main(void)
     readfile();
     reopen();
     buffering();
+    memstream();
     names();
 
     printf("%d error(s)\n", errors);

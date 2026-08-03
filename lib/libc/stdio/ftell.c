@@ -16,6 +16,14 @@ long ftell(FILE *iop)
 
     if (iop->_cnt < 0)
         iop->_cnt = 0;
+    //
+    // A stream with no descriptor behind it IS its own position: what has been
+    // stored, measured from the base.  Without this the lseek below would be asked
+    // about a descriptor that was never opened -- open_memstream() deliberately puts
+    // a number there that no fd can be (memstream.c) -- and the answer would be -1.
+    //
+    if (iop->_flag & _IOSTRG)
+        return iop->_ptr - iop->_base;
     if (iop->_flag & _IOREAD)
         adjust = -iop->_cnt;
     else if (iop->_flag & (_IOWRT | _IORW)) {

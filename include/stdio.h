@@ -45,6 +45,13 @@
 // the slow path pays for it, and a fully buffered stream -- stdout redirected to
 // a file, say -- is untouched.  _flsbuf() turns the bit on for stdout when
 // isatty(1); stderr is unbuffered outright, as in v7.
+//
+// A MEMORY STREAM IS HELD THERE TOO, for the same reason and to a further end:
+// open_memstream() has to see every byte in order to keep *bufp and *sizep current,
+// so it wants every putc to miss.  It carries _IOSTRG -- which in this library means
+// "no descriptor behind this FILE" -- and _IOMEM to say which kind of descriptorless
+// stream it is: sprintf's fills a fixed caller buffer and drops the overflow, this
+// one grows.  See lib/libc/stdio/memstream.c.
 #ifndef _STDIO_H
 #define _STDIO_H
 
@@ -80,6 +87,7 @@ typedef int fpos_t;
 #define _IOSTRG  0100
 #define _IORW    0200
 #define _IOLBUF  0400 // line buffered; v7 had no such thing
+#define _IOMEM   01000 // open_memstream's growing heap sink; implies _IOSTRG
 
 // setvbuf modes (§7.21.5.6).  Not _flag bits -- see the note above.
 #define _IOFBF 0
@@ -161,6 +169,13 @@ int setvbuf(FILE *iop, char *buf, int mode, size_t size);
 // on its own.  Callers under cmd/ want them -- see lib/libc/man/setbuf.3s.
 void setbuffer(FILE *iop, char *buf, int size);
 int setlinebuf(FILE *iop);
+
+// POSIX.1-2008, and so neither C11 nor v7 either: a stream whose sink is a heap
+// buffer that grows to hold whatever is written to it.  *bufp and *sizep name the
+// buffer and its length; the buffer is malloc'd and is the CALLER's to free.
+// cmd/cpp captures an isolated macro-argument prescan through one.  What this port
+// does and does not honour is in lib/libc/man/fopen.3s and lib/libc/stdio/memstream.c.
+FILE *open_memstream(char **bufp, size_t *sizep);
 
 void clearerr(FILE *iop);
 int feof(FILE *iop);

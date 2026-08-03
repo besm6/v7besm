@@ -64,6 +64,31 @@ ok   setlinebuf
 ok   setlinebuf [ab
 cd
 ]
+ok   open_memstream
+ok   empty buffer
+ok   empty length 0
+ok   empty terminated
+ok   fclose empty
+ok   empty length after close 0
+ok   ftell on memstream 22
+ok   fflush publishes
+ok   flushed length 22
+ok   flushed text [first second 22 third!]
+ok   no error
+ok   fclose written
+ok   length after close 22
+ok   text after close [first second 22 third!]
+ok   embedded NUL length 3
+ok   embedded NUL kept
+ok   fclose grown
+ok   grown length 500
+ok   grown bytes wrong 0
+ok   grown terminated
+ok   first of two 200
+ok   second of two 400
+ok   two streams crossed 0
+ok   slot reused cleanly [zz
+]
 ok   rename
 ok   old name gone
 ok   new name there

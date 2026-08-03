@@ -1,8 +1,8 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 .TH FOPEN 3S
 .SH NAME
-fopen, freopen, fdopen, tmpfile, tmpnam, remove, rename \- open, name and remove
-a stream's file
+fopen, freopen, fdopen, open_memstream, tmpfile, tmpnam, remove, rename \- open,
+name and remove a stream's file
 .SH SYNOPSIS
 .B #include <stdio.h>
 .PP
@@ -11,6 +11,8 @@ a stream's file
 .B FILE *freopen(const char *filename, const char *type, FILE *stream);
 .PP
 .B FILE *fdopen(int fildes, const char *type);
+.PP
+.B FILE *open_memstream(char **bufp, size_t *sizep);
 .PP
 .B FILE *tmpfile(void);
 .PP
@@ -76,6 +78,68 @@ The
 .I type
 of the stream must agree with the mode of the open file.
 .PP
+.I Open_memstream
+opens a stream for writing whose sink is not a file but a buffer on the heap that
+grows to hold whatever is written to it.  It is POSIX.1\-2008 and was in neither
+C11 nor v7.  The buffer and its length are reported through
+.I bufp
+and
+.IR sizep ,
+which POSIX says are valid after each
+.IR fflush (3)
+or
+.IR fclose (3);
+here they are current at every moment, because the stream is arranged so that the
+library sees each byte as it is written.  The buffer is obtained from
+.IR malloc (3)
+and belongs to the caller, who must
+.I free
+it once the stream is closed.
+.PP
+The length in
+.RI * sizep
+excludes the null byte that always terminates the buffer, so the result may be read
+either as a string or as
+.RI * sizep
+bytes.  A null byte written to the stream is data and is counted like any other.
+.PP
+.B Note:
+what this port does not honour.  A memory stream carries no descriptor, so
+.IR fseek (3),
+.I rewind
+and
+.IR ungetc (3)
+are not supported on one, and neither are
+.IR setbuf (3)
+and
+.I setvbuf,
+which would replace the very buffer the caller has been handed.
+.IR Ftell (3)
+.I is
+supported and answers the number of bytes written.
+.IR Fileno (3)
+answers a number deliberately chosen to be no descriptor at all, so that a stray
+.IR write (2)
+or
+.IR lseek (2)
+on a memory stream fails with EBADF rather than reaching a real file.
+.PP
+.B Note:
+an allocation failure while the buffer is growing
+.I loses
+the text.  This
+.IR realloc (3)
+frees a block before it allocates the new one and does not give it back on failure,
+so there is nothing to fall back on; the loss is reported honestly as a null
+.RI * bufp ,
+a zero
+.RI * sizep
+and the error indication that
+.IR ferror (3)
+reads.
+.I Free
+accepts the null, so a caller that frees unconditionally is still correct.
+.PP
 .B Note:
 the four that follow are C11 and had no v7 ancestor.
 .PP
@@ -137,6 +201,9 @@ return the pointer
 if
 .I filename
 cannot be accessed.
+.I Open_memstream
+returns NULL when every one of the FOPEN_MAX streams is already in use, or when
+the initial buffer cannot be allocated.
 .I Tmpnam
 returns NULL if it cannot find an unused name.
 .SH BUGS
@@ -155,5 +222,5 @@ number; it is v7's customary 128.
 .SH FILES
 share/besm6/lib/libc.a
 .br
-lib/libc/stdio/fopen.c, freopen.c, fdopen.c, endopen.c, findiop.c, tmpfile.c,
-tmpnam.c, remove.c, rename.c
+lib/libc/stdio/fopen.c, freopen.c, fdopen.c, endopen.c, findiop.c, memstream.c,
+tmpfile.c, tmpnam.c, remove.c, rename.c

@@ -1,7 +1,7 @@
 # libc — the Unix v7 C library on the BESM-6
 
-`libc.a` and `crt0.o`: the C library a user program under this kernel links against. 184
-objects, **12,137 words**, 144 sources over 7,202 lines. It answers every declaration
+`libc.a` and `crt0.o`: the C library a user program under this kernel links against. 187
+objects, **12,464 words**, 147 sources over 7,503 lines. It answers every declaration
 [`../../include/`](../../include/)'s hosted half makes — which is C11, not K&R, so a good deal
 of it is newer than v7.
 
@@ -32,8 +32,8 @@ libc/
     CMakeLists.txt  builds libc.a and crt0.o, including the mkstub codegen
     csu/            crt0                                    (1 file)
     sys/            syscall stubs, cerror, sbrk, the exec wrappers  (18)
-    gen/            strings, ctype, setjmp, malloc, conversions, <time.h>, misc  (62)
-    stdio/          FILE machinery, the printf and scanf engines, the accounts  (64)
+    gen/            strings, ctype, setjmp, malloc, conversions, <time.h>, misc  (64)
+    stdio/          FILE machinery, the printf and scanf engines, the accounts  (66)
     man/            the v7 manual pages, sections 2 and 3     (86)
 ```
 
@@ -344,6 +344,36 @@ over the caller's buffer, and `_flsbuf` *drops* the byte when such a stream fill
 engine counting characters it could not store — which is exactly C11's return value, obtained for
 nothing.
 
+**`open_memstream` reuses `_IOSTRG` rather than avoiding it.** POSIX's growing heap sink
+([`stdio/memstream.c`](stdio/memstream.c), neither C11 nor v7; `cmd/cpp` is the first caller) is
+the *other* kind of descriptorless stream, and `_IOSTRG` is exactly the bit that says so. That is
+what makes `fflush` skip it — correct, there is no kernel to hand anything to — and `fclose` skip
+both the `close()` and the `free()`, which is what leaves the buffer in the caller's hands. Both
+answers come out of `flsbuf.o`, the object every program that prints anything links, with no new
+code. `_IOMEM` is the second bit, saying *which* kind: `sprintf`'s fills a fixed caller buffer and
+drops the byte, this one grows. **The reuse has exactly one price, and it is not cosmetic.**
+`sprintf`'s `_IOSTRG` stream lives on the stack, so no such stream had ever occupied an `_iob`
+slot before; `fclose` nulls `_base` only inside the branch a memory stream skips, and `_endopen`
+never touches `_base`, so the slot would go back on the free list still naming the buffer just
+handed away — and the next `fopen` onto it would drain the memory stream's stale bytes into its
+own file and write on into storage the caller has since freed. `fclose` clears the three pointers
+in its `_IOMEM` arm, and `lib/test/stdiot.c` has the case that catches it (`stalezz` for `zz`
+without the arm).
+
+Three smaller decisions there follow rules already written down elsewhere in this file. **The
+stream is held at `_cnt == 0`**, the line-buffering trick, so every `putc` misses into `_flsbuf`
+and `*bufp`/`*sizep` can be republished on *every* byte rather than at flush time — which is a
+stronger promise than POSIX asks and is what lets `fflush` stay a no-op. **`_flsbuf` reaches it
+through a function pointer**, `_memputc`, armed by `open_memstream`: the `_cleanup` bargain again,
+worth 245 words that a program calling only `printf` does not link. And **the caller's two
+pointers live in a side table keyed by the `_iob` slot**, `filbuf.c`'s `smallbuf[fileno(iop)]`
+pattern — `_file` carries the index biased by `_NFILE`, both so that `sizeof(FILE) == 6` never
+turns into a divide on the per-byte path and so that a memory stream's `fileno` can never be a
+live descriptor (`NOFILE == _NFILE`). One fact about the machine had to be written into the
+failure path: **this `realloc` frees before it allocates** and does not give the block back when
+it fails ([`gen/malloc.c`](gen/malloc.c)), so a growth failure cannot keep the old text — it
+unpublishes instead, a null `*bufp` and a zero `*sizep` behind `_IOERR`.
+
 **`_IONBF` is spelled `_IOUNBUF`.** v7 used that name for a *bit* in `_flag`; C11 uses it for a
 `setvbuf` *mode*, and the two cannot be the same number.
 
@@ -528,7 +558,7 @@ arrangement found two bugs, both in code nothing else had exercised.
 | `environ` | the vector `crt0` computes |
 | `jmp` | `setjmp`/`longjmp` |
 | `headers` | the whole `include/` tree, included twice |
-| `stdiot` | the `FILE` machinery through a real file |
+| `stdiot` | the `FILE` machinery through a real file, and `open_memstream` |
 | `printft` | every conversion, floats and `LONG_MIN` included |
 | `scanft` | scanf and the `atof`/`ecvt`/`gcvt` conversions either side of it |
 | `execs` | the exec family — it **execs itself** five times, once per wrapper, reading the stage back out of its own `argv` |

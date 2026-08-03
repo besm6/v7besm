@@ -9,10 +9,14 @@
 // is where all four buffering modes are decided.  It was restructured from v7's
 // chain of gotos because there is a mode v7 did not have:
 //
-//   _IOSTRG   sprintf's sink.  The caller's buffer is full, so the byte is DROPPED
-//             and the count is left at zero so every later putc lands here too.
-//             _doprnt() goes on counting characters it could not store, which is
-//             exactly the value C11 wants snprintf to return.
+//   _IOSTRG   a stream with no descriptor behind it, of which there are two kinds.
+//             sprintf's sink is a FIXED caller buffer, and when it is full the byte
+//             is DROPPED and the count left at zero so every later putc lands here
+//             too -- _doprnt() goes on counting characters it could not store, which
+//             is exactly the value C11 wants snprintf to return.  A memory stream
+//             carries _IOMEM as well and GROWS instead; open_memstream() holds it at
+//             _cnt == 0 so that every one of its bytes arrives here, and the arm it
+//             is handed to lives in stdio/memstream.c.
 //
 //   _IOUNBUF  one write() per byte.  stderr, always; anything malloc() could not
 //             find a buffer for; and whatever setvbuf(_IONBF) says.
@@ -43,6 +47,16 @@ extern FILE *_lastbuf;
 // from linking any of this; the reasoning is written out in cuexit.c.
 //
 extern void (*_cleanup_hook)(void);
+
+//
+// _flsbuf()'s memory-stream arm, defined here because this is where it is TESTED and
+// null until open_memstream() arms it -- the same bargain cuexit.c makes for
+// _cleanup, and for the same reason: naming stdio/memstream.c from this file would
+// put its code and its _NFILE-entry side table in every program that ever calls
+// printf().  A stream carrying _IOMEM has been through open_memstream(), which arms
+// this before it returns, so there is no null case to spend a test on.
+//
+int (*_memputc)(int, FILE *);
 
 void _cleanup(void); // defined at the foot of this file
 
@@ -83,6 +97,13 @@ int _flsbuf(int c, FILE *iop)
 
     if (iop->_flag & _IOSTRG) {
         iop->_cnt = 0;
+        //
+        // Which kind of descriptorless stream: sprintf's drops the byte, a memory
+        // stream grows to take it.  The test rides inside a branch a fully buffered
+        // stream never reaches, so the common path pays nothing for it.
+        //
+        if (iop->_flag & _IOMEM)
+            return (*_memputc)(c, iop);
         return EOF;
     }
 
@@ -170,7 +191,26 @@ int fclose(FILE *iop)
     int r;
 
     r = EOF;
-    if (iop->_flag & (_IOREAD | _IOWRT | _IORW) && (iop->_flag & _IOSTRG) == 0) {
+    if (iop->_flag & _IOMEM) {
+        //
+        // A memory stream owns no descriptor, and its buffer is the CALLER's -- who
+        // is about to read it and free it.  So there is nothing to close and nothing
+        // to free, and everything writable was published as it was written.
+        //
+        // But the pointers MUST be cleared, and that is not tidiness.  This slot is
+        // about to become reusable; _endopen() sets only _cnt, _file and _flag, and
+        // _flsbuf() picks a buffer only when _base is null.  A later fopen() landing
+        // on this slot would therefore keep the buffer just handed away, drain the
+        // memory stream's stale bytes into its own file, and go on writing into
+        // storage the caller has since freed.  No _IOSTRG stream could reach here
+        // before open_memstream(): sprintf's lives on the stack (vsnprintf.c) and is
+        // never an _iob slot.  lib/test/stdiot.c has the regression case.
+        //
+        iop->_base   = NULL;
+        iop->_ptr    = NULL;
+        iop->_bufsiz = 0;
+        r            = 0;
+    } else if (iop->_flag & (_IOREAD | _IOWRT | _IORW) && (iop->_flag & _IOSTRG) == 0) {
         r = fflush(iop);
         if (close(fileno(iop)) < 0)
             r = EOF;
@@ -179,8 +219,8 @@ int fclose(FILE *iop)
         if (iop->_flag & (_IOMYBUF | _IOUNBUF))
             iop->_base = NULL;
     }
-    iop->_flag &=
-        ~(_IOREAD | _IOWRT | _IOUNBUF | _IOLBUF | _IOMYBUF | _IOERR | _IOEOF | _IOSTRG | _IORW);
+    iop->_flag &= ~(_IOREAD | _IOWRT | _IOUNBUF | _IOLBUF | _IOMYBUF | _IOERR | _IOEOF | _IOSTRG |
+                    _IORW | _IOMEM);
     iop->_cnt = 0;
     return r;
 }
