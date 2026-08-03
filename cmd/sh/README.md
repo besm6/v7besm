@@ -331,6 +331,25 @@ the shell.
   Leaving them as they were is not available: a half-encoded name tree makes the value push in
   `macro.c` wrong whichever way it is written — encode unconditionally and these two values are
   encoded twice, pass them through and a `0377` arriving from the environment is read as a mark.
+* **A pipeline of four or more stages *inside command substitution* kills the shell**, and the
+  repro is three lines. Found by task C8 while writing `kernel/test/inspect`; **not diagnosed,
+  and not this shell's only unexplained corner** — it is written down here so the next person
+  starts from a minimal case rather than from a test that stopped.
+
+  ```sh
+  a=`echo x | cat | cat`              # fine
+  b=`echo x | cat | cat | cat`        # SIGNAL 4 -- the script dies here
+  echo x | cat | cat | cat | cat      # fine: four stages, no backquotes
+  ```
+
+  So it is **not** the pipeline depth on its own and **not** command substitution on its own —
+  it is the two together, at three stages inside the substitution and above. The signal is 4,
+  SIGILL, which on this machine means the trap handler saw an illegal instruction; a shell that
+  had merely run out of a table would say so. Suspect the interaction between `service.c`'s
+  fork-per-stage and the `stak.c` region the substitution's output is being read into, which is
+  the one thing that differs between the two forms. Until it is understood, a script that needs
+  four stages puts the first three in a pipeline of their own and reads the file back:
+  `kernel/test/inspect.sh` is the worked example and says so where it does it.
 * **`?` and `[...]` match one BYTE, not one character**, so `приве?` does not match `привет`.
   See the C11 section above; `test/utf8.sh` asserts it.
 * **`wait()`'s status comes back in r12, a 15-bit index register**, so an exit code of 128 or more

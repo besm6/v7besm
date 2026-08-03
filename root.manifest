@@ -200,6 +200,25 @@ file /etc/ncheck        # cmd/ncheck -- i-number to path name; `ncheck | sort | 
 source ../../rootfs/etc/ncheck
 mode 0755
 
+# The two inspection programs of task C8 that are section 1M, and so are in /etc where v7 put
+# them.  NEITHER IS ROOT-ONLY BY PERMISSION, unlike the nine above: iostat reads three values
+# through kctl(2), which is unprivileged, and pstat reads eleven the same way.  What IS
+# root-only is pstat -u, whose u-area comes off /dev/mem -- mode 0640 and root's -- so that
+# one flag fails for anybody else and the other seven do not.  Neither is setuid, and pstat
+# must not become one: /dev/mem is every process's memory, and a setuid pstat would hand it
+# out through a program that already knows the layout.
+file /etc/iostat        # cmd/iostat -- the CPU histogram and the terminal counters.  No disk
+                        # columns: dk_busy is written by nothing, so kernel/ksym.c withholds
+                        # it (kernel/TODO.md task 38).
+source ../../rootfs/etc/iostat
+mode 0755
+
+file /etc/pstat         # cmd/pstat -- eleven of kernel/ksym.c's rows name this program, and
+                        # -m, -s and -c are here because six of them named it for tables v7's
+                        # pstat never printed.  Only -u opens a device.
+source ../../rootfs/etc/pstat
+mode 0755
+
 # The pair of task C4f, and the one that finishes C4: they are what puts a second filesystem
 # behind /mnt below.  Section 1M and root-only for a reason that is not the other eight's --
 # these two do not touch the raw device at all.  What gates them is /dev/md1, mode 0600 and
@@ -319,6 +338,13 @@ file /bin/diff          # cmd/diff -- task C5f.  Hunt-Szymanski over Stone's k-c
 source ../../rootfs/bin/diff
 mode 0755
 
+file /bin/dmesg         # cmd/dmesg -- task C8.  IN /bin, WHERE v7 KEPT IT IN /etc: v7's read
+                        # /dev/kmem and needed root, this one asks kctl(2) for the value of
+                        # msgbuf and msgbufp and opens nothing, so it is an ordinary user
+                        # command.  NOT setuid, and there is nothing for it to be setuid to.
+source ../../rootfs/bin/dmesg
+mode 0755
+
 file /bin/du            # cmd/du -- blocks per directory, by stat(2) and a directory walk
 source ../../rootfs/bin/du
 mode 0755
@@ -406,6 +432,12 @@ file /bin/mesg          # cmd/mesg -- task C6.  NOT setuid: chmod(2) is gated on
 source ../../rootfs/bin/mesg
 mode 0755
 
+file /bin/nice          # cmd/nice -- task C8.  NOT setuid: nice(2) is what refuses a negative
+                        # increment to anyone but root (kernel/sys4.c), so a mode bit here
+                        # would only hand out the thing the kernel is busy withholding.
+source ../../rootfs/bin/nice
+mode 0755
+
 file /bin/novi          # cmd/novi -- Dave W Plummer's full-screen editor; task C12, and the
                         # first program here that is not a port of a v7 command.  Its document
                         # is never in memory: two unlinked /tmp files hold it with a gap at
@@ -429,6 +461,17 @@ file /bin/pr            # cmd/pr -- task C5f.  Its multi-column look-ahead lives
                         # 0375 and 0376 are kept, neither byte being reachable in UTF-8.
                         # Columns are counted in bytes, as col(1)'s are.
 source ../../rootfs/bin/pr
+mode 0755
+
+file /bin/ps            # cmd/ps -- task C8.  ROOT ONLY AND NOT SETUID, which is v7's
+                        # arrangement and not a choice: the proc table comes through kctl(2)
+                        # and needs nothing, but a u-area does not -- it is at UBASE or at
+                        # p_addr, reached through /dev/kmem and /dev/mem, both 0640 and
+                        # root's.  So ps says so and stops for anybody else.  A setuid ps
+                        # would hand every process's memory to everybody through a program
+                        # that already knows the layout, which is quot's argument about
+                        # /dev/rmd0 in the block below.
+source ../../rootfs/bin/ps
 mode 0755
 
 file /bin/pwd           # cmd/pwd

@@ -1,289 +1,210 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 /* Changes: Copyright (c) 2007 Robert Nordier. All rights reserved. */
 
-int	bflg;
-int	dflg;
-int	tflg;
-int	iflg;
-int	aflg;
-int	sflg;
-struct
+//
+// iostat -- report I/O statistics.
+//
+//      iostat [ -t ] [ -i ] [ interval [ count ] ]
+//
+// Task C8's third.  Three KCTL_GETs -- dk_time[], tk_nin, tk_nout -- and no device and no
+// privilege, which is the whole of what the kctl(2) half of this task costs (<sys/kctl.h>).
+//
+// IT GETS A CPU COLUMN AND NO DISK COLUMN, and that is a fact about the kernel rather than
+// about this program.  kernel/clock.c stamps dk_time[(dk_busy & 07) + o], with o being 0 for
+// user, 8 for nice, 16 for system and 24 for idle -- so the array is a histogram of four
+// CPU states crossed with eight I/O states.  dk_busy is written by NOTHING on this system
+// (kernel/main.c defines it, no driver touches it), so the I/O half of every subscript is
+// permanently 0 and only slots 0, 8, 16 and 24 ever move.  dk_busy, dk_numb[] and dk_wds[]
+// are deliberately absent from kernel/ksym.c for exactly that reason -- an exported variable
+// nobody updates makes a tool print zeros that read as measurements.  The HD/FD/CD columns
+// come back with kernel/TODO.md task 38 and not before.  There is no cp_time here.
+//
+// THE ARITHMETIC IS INTEGER, and that is the substantive port decision.  v7's iostat is the
+// most float-dependent program of its size in the tree -- two `double' arrays and thirteen
+// %6.2f -- and none of it survives:
+//
+//   b6_prog() cannot link -lm (scripts/BesmCross.cmake has no LIBS keyword; the gap is named
+//   in lib/test/CMakeLists.txt), this machine has no IEEE 754 (../../lib/libm/README.md on
+//   what its overflow does), and a percentage wants two decimal digits, not 53 bits of
+//   mantissa.  So every quantity here is scaled: pcent() returns HUNDREDTHS OF A PERCENT and
+//   prpc() prints one as `%3d.%02d', six characters, which is what %6.2f printed.  rate()
+//   returns TENTHS of a character per second and prrate() prints `%4d.%d', which is %6.1f.
+//   The columns are identical to v7's, digit for digit.
+//
+//   pcent() HALVES BOTH SIDES until the multiply fits.  An int here is 41 bits, so
+//   part * 10000 must stay under 2^40; at HZ = 250 that is about eleven hours of uptime
+//   before the scaling starts, and it costs a bit of the last decimal place when it does.
+//   The alternative -- doing the divide first -- costs the decimal place ALWAYS.
+//
+// FOUR FLAGS ARE GONE, and none of them silently:
+//
+//   -s (documented) printed the 32 raw slots.  Twenty-eight of them are permanently zero
+//   here; the flag would be a page of noise around four numbers -i already names.
+//   -b (documented) printed buffer-cache statistics out of an `io_info' structure that this
+//   kernel does not have and kernel/ksym.c exports nothing for.  Adding a row for it would
+//   break the table's own rule: a row names the program that asked, and nothing asked.
+//   -d and -a were undocumented in v7's own page.  -d stamped each report with ctime(); -a
+//   printed the elapsed minutes.  Both are one line of shell away.
+//
+// ONE v7 BUG IS FIXED RATHER THAN CARRIED.  Its shadow loop is `for(i=0; i<40; i++)' over a
+// `long etime[32]' -- eight elements past the end, into the numb[], wds[], tin and tout
+// members that follow it in the same structure, read AND written back.  The loop below runs
+// to NDK.
+//
+// WHAT STAYS EXACTLY AS IT WAS: the first report is cumulative since boot and every later
+// one covers the interval alone, which is what the shadow array is for; and a bare `iostat'
+// with no interval prints one report and exits, while an interval with no count repeats for
+// ever.  Both of those are v7's, down to the arithmetic of the loop.
+//
+// NOT SETUID, and in /etc rather than /bin only because v7's page is section 1M.
+//
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+#include <sys/kctl.h>
+#include <sys/param.h>
+
+#define NDK 32 // dk_time[] -- 4 CPU states x 8 I/O states
+
+// The four subscripts kernel/clock.c actually reaches, in the order v7's header names them.
+#define O_USER 0
+#define O_NICE 8
+#define O_SYS  16
+#define O_IDLE 24
+
+static int cur[NDK], prev[NDK], delta[NDK];
+static int tin, tout, ptin, ptout, dtin, dtout;
+
+static int tflg, iflg;
+
+//
+// Hundredths of a percent of `part' in `total'.  See the header: both sides are halved
+// until the multiply fits in an int, rather than dividing first and losing the decimals.
+//
+static int pcent(int part, int total)
 {
-	char	name[8];
-	int	type;
-	unsigned	value;
-} nl[] = {
-	"_dk_busy", 0, 0,
-	"_dk_time", 0, 0,
-	"_dk_numb", 0, 0,
-	"_dk_wds",  0, 0,
-	"_tk_nin",  0, 0,
-	"_tk_nout", 0, 0,
-	"_io_info", 0, 0,
-	"\0\0\0\0\0\0\0\0", 0, 0
-};
-struct
-{
-	int	busy;
-	long	etime[32];
-	long	numb[3];
-	long	wds[3];
-	long	tin;
-	long	tout;
-} s, s1;
-
-struct iostat {
-	int	nbuf;
-	long	nread;
-	long	nreada;
-	long	ncache;
-	long	nwrite;
-	long	bufcount[50];
-} io_info, io_delta;
-double	etime;
-
-int	mf;
-
-main(argc, argv)
-char *argv[];
-{
-	extern char *ctime();
-	register  i;
-	int iter;
-	double f1, f2;
-	long t;
-
-	nlist("/unix", nl);
-	if(nl[0].type == -1) {
-		printf("dk_busy not found in /unix namelist\n");
-		exit(1);
-	}
-	mf = open("/dev/kmem", 0);
-	if(mf < 0) {
-		printf("cannot open /dev/kmem\n");
-		exit(1);
-	}
-	iter = 0;
-	while (argc>1&&argv[1][0]=='-') {
-		if (argv[1][1]=='d')
-			dflg++;
-		else if (argv[1][1]=='s')
-			sflg++;
-		else if (argv[1][1]=='a')
-			aflg++;
-		else if (argv[1][1]=='t')
-			tflg++;
-		else if (argv[1][1]=='i')
-			iflg++;
-		else if (argv[1][1]=='b')
-			bflg++;
-		argc--;
-		argv++;
-	}
-	if(argc > 2)
-		iter = atoi(argv[2]);
-	if (!(sflg|iflg)) {
-	if(tflg)
-		printf("         TTY");
-	if (bflg==0)
-	printf("   HD                FD                CD                  PERCENT\n");
-	if(tflg)
-		printf("   tin  tout");
-	if (bflg==0)
-	printf("   tpm  msps  mspt   tpm  msps  mspt   tpm  msps  mspt  user  nice systm  idle\n");
-	}
-
-loop:
-	lseek(mf, (long)nl[0].value, 0);
-	read(mf, (char *)&s.busy, sizeof s.busy);
-	lseek(mf, (long)nl[1].value, 0);
-	read(mf, (char *)s.etime, sizeof s.etime);
-	lseek(mf, (long)nl[2].value, 0);
-	read(mf, (char *)s.numb, sizeof s.numb);
-	lseek(mf, (long)nl[3].value, 0);
-	read(mf, (char *)s.wds, sizeof s.wds);
-	lseek(mf, (long)nl[4].value, 0);
-	read(mf, (char *)&s.tin, sizeof s.tin);
-	lseek(mf, (long)nl[5].value, 0);
-	read(mf, (char *)&s.tout, sizeof s.tout);
-	for(i=0; i<40; i++) {
-		t = s.etime[i];
-		s.etime[i] -= s1.etime[i];
-		s1.etime[i] = t;
-	}
-	t = 0;
-	for(i=0; i<32; i++)
-		t += s.etime[i];
-	etime = t;
-	if(etime == 0.)
-		etime = 1.;
-	if (bflg) {
-		biostats();
-		goto contin;
-	}
-	if (dflg) {
-		long tm;
-		time(&tm);
-		printf("%s", ctime(&tm));
-	}
-	if (aflg)
-		printf("%.2f minutes total\n", etime/3600);
-	if (sflg) {
-		stats2(etime);
-		goto contin;
-	}
-	if (iflg) {
-		stats3(etime);
-		goto contin;
-	}
-	etime /= 60.;
-	if(tflg) {
-		f1 = s.tin;
-		f2 = s.tout;
-		printf("%6.1f", f1/etime);
-		printf("%6.1f", f2/etime);
-	}
-	for(i=0; i<3; i++)
-		stats(i);
-	for(i=0; i<4; i++)
-		stat1(i*8);
-	printf("\n");
-contin:
-	--iter;
-	if(iter)
-	if(argc > 1) {
-		sleep(atoi(argv[1]));
-		goto loop;
-	}
+    if (total <= 0)
+        return 0;
+    while (total > 10000000) {
+        part /= 2;
+        total /= 2;
+    }
+    return (part * 10000 + total / 2) / total;
 }
 
-/* usec per word for the various disks */
-double	xf[] = {
-	1.0,	/* RF */
-	1.0,	/* RK03/05 */
-	1.0,	/* RP06 */
-};
-
-stats(dn)
+static void prpc(int hundredths)
 {
-	register i;
-	double f1, f2, f3;
-	double f4, f5, f6;
-	long t;
-
-	t = 0;
-	for(i=0; i<32; i++)
-		if(i & (1<<dn))
-			t += s.etime[i];
-	f1 = t;
-	f1 = f1/60.;
-	f2 = s.numb[dn];
-	if(f2 == 0.) {
-		printf("%6.0f%6.1f%6.1f", 0.0, 0.0, 0.0);
-		return;
-	}
-	f3 = s.wds[dn];
-	f3 = f3*32.;
-	f4 = xf[dn];
-	f4 = f4*1.0e-6;
-	f5 = f1 - f4*f3;
-	f6 = f1 - f5;
-	printf("%6.0f", f2*60./etime);
-	printf("%6.1f", f5*1000./f2);
-	printf("%6.1f", f6*1000./f2);
+    printf("%3d.%02d", hundredths / 100, hundredths % 100);
 }
 
-stat1(o)
+//
+// Tenths of a character per second: n characters over `ticks' ticks at HZ.
+//
+static int rate(int n, int ticks)
 {
-	register i;
-	long t;
-	double f1, f2;
-
-	t = 0;
-	for(i=0; i<32; i++)
-		t += s.etime[i];
-	f1 = t;
-	if(f1 == 0.)
-		f1 = 1.;
-	t = 0;
-	for(i=0; i<8; i++)
-		t += s.etime[o+i];
-	f2 = t;
-	printf("%6.2f", f2*100./f1);
+    if (ticks <= 0)
+        return 0;
+    while (n > 100000000) {
+        n /= 2;
+        ticks /= 2;
+    }
+    return (n * HZ * 10 + ticks / 2) / ticks;
 }
 
-stats2(t)
-double t;
+static void prrate(int tenths)
 {
-	register i, j;
-
-	for (i=0; i<4; i++) {
-		for (j=0; j<8; j++)
-			printf("%6.2f\n", s.etime[8*i+j]/(t/100));
-		printf("\n");
-	}
+    printf("%4d.%d", tenths / 10, tenths % 10);
 }
 
-stats3(t)
-double t;
+//
+// Fetch the three variables.  A kernel that exports none of them is a kernel this program
+// has nothing to say about, so say so once and stop.
+//
+static int fetch(void)
 {
-	register i;
-	double sum;
-
-	t /= 100;
-	printf("%6.2f idle\n", s.etime[24]/t);
-	sum = 0;
-	for (i=0; i<8; i++)
-		sum += s.etime[i];
-	printf("%6.2f user\n", sum/t);
-	sum = 0;
-	for (i=0; i<8; i++)
-		sum += s.etime[8+i];
-	printf("%6.2f nice\n", sum/t);
-	sum = 0;
-	for (i=0; i<8; i++)
-		sum += s.etime[16+i];
-	printf("%6.2f system\n", sum/t);
-	sum = 0;
-	for (i=1; i<8; i++)
-		sum += s.etime[24+i];
-	printf("%6.2f IO wait\n", sum/t);
-	sum = 0;
-	for (i=1; i<8; i++)
-		sum += s.etime[i]+s.etime[i+8]+s.etime[i+16]+s.etime[i+24];
-	printf("%6.2f IO active\n", sum/t);
-	sum = 0;
-	for (i=0; i<32; i++)
-		if (i&01)
-			sum += s.etime[i];
-	printf("%6.2f HD active\n", sum/t);
-	sum = 0;
-	for (i=0; i<32; i++)
-		if (i&02)
-			sum += s.etime[i];
-	printf("%6.2f FD active\n", sum/t);
-	sum = 0;
-	for (i=0; i<32; i++)
-		if (i&04)
-			sum += s.etime[i];
-	printf("%6.2f CD active\n", sum/t);
+    if (kctl("dk_time", KCTL_GET, cur, sizeof cur) != (int)sizeof cur ||
+        kctl("tk_nin", KCTL_GET, &tin, sizeof tin) != (int)sizeof tin ||
+        kctl("tk_nout", KCTL_GET, &tout, sizeof tout) != (int)sizeof tout) {
+        fputs("iostat: this kernel exports no I/O statistics\n", stderr);
+        return -1;
+    }
+    return 0;
 }
 
-biostats()
+int main(int argc, char *argv[])
 {
-register i;
+    int i, iter = 0, total;
 
-	lseek(mf,(long)nl[6].value, 0);
-	read(mf, (char *)&io_info, sizeof(io_info));
-	printf("%D\t%D\t%D\t%D\n",
-	 io_info.nread-io_delta.nread, io_info.nreada-io_delta.nreada,
-	 io_info.ncache-io_delta.ncache, io_info.nwrite-io_delta.nwrite);
+    while (argc > 1 && argv[1][0] == '-') {
+        if (argv[1][1] == 't')
+            tflg++;
+        else if (argv[1][1] == 'i')
+            iflg++;
+        else {
+            fprintf(stderr, "iostat: unknown option %s\n", argv[1]);
+            return 1;
+        }
+        argc--;
+        argv++;
+    }
+    if (argc > 2)
+        iter = atoi(argv[2]);
 
-	for(i=0; i<30; ) {
-		printf("%D\t",(long)io_info.bufcount[i]-io_delta.bufcount[i]);
-		i++;
-		if (i % 10 == 0)
-			printf("\n");
-	}
-	io_delta = io_info;
+    if (!iflg) {
+        if (tflg)
+            printf("         TTY");
+        printf("        PERCENT\n");
+        if (tflg)
+            printf("   tin  tout");
+        printf("  user  nice systm  idle\n");
+    }
+
+    for (;;) {
+        if (fetch() < 0)
+            return 1;
+
+        // The interval, and the shadow that makes the next one an interval too.  The first
+        // pass finds the shadow zeroed, so it reports everything since boot.
+        for (i = 0; i < NDK; i++) {
+            delta[i] = cur[i] - prev[i];
+            prev[i]  = cur[i];
+        }
+        dtin  = tin - ptin;
+        dtout = tout - ptout;
+        ptin  = tin;
+        ptout = tout;
+
+        total = 0;
+        for (i = 0; i < NDK; i++)
+            total += delta[i];
+
+        if (iflg) {
+            prpc(pcent(delta[O_IDLE], total));
+            printf(" idle\n");
+            prpc(pcent(delta[O_USER], total));
+            printf(" user\n");
+            prpc(pcent(delta[O_NICE], total));
+            printf(" nice\n");
+            prpc(pcent(delta[O_SYS], total));
+            printf(" system\n");
+        } else {
+            if (tflg) {
+                prrate(rate(dtin, total));
+                prrate(rate(dtout, total));
+            }
+            prpc(pcent(delta[O_USER], total));
+            prpc(pcent(delta[O_NICE], total));
+            prpc(pcent(delta[O_SYS], total));
+            prpc(pcent(delta[O_IDLE], total));
+            printf("\n");
+        }
+
+        // v7's loop, arithmetic included: a count of 0 (none given) decrements to -1 and
+        // repeats for ever, and an interval is what there has to be to repeat at all.
+        if (--iter == 0 || argc <= 1)
+            break;
+        sleep(atoi(argv[1]));
+    }
+    return 0;
 }

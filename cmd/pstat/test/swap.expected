@@ -1,0 +1,5 @@
+swapdev 1,0  swplo 0  nswap 1024 blocks of 3072 bytes
+coremap: 0 fragments, 0 words free
+     LOC     SIZE     ADDR
+swapmap: 0 fragments, 0 blocks free
+     LOC     SIZE     ADDR

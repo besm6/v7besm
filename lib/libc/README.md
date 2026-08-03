@@ -451,8 +451,9 @@ routine that may not be there.
   The polarity trap is worth recording since it is why an `nlist`-shaped API was not built over
   `kctl` for source compatibility. RetroBSD's `knlist()` returns the count **found** where
   `nlist()` returns the count **not** found, and its own `fstat` gets the test backwards. Every
-  caller here is being rewritten anyway (`cmd/TODO.md` C8 says so of `ps`, `pstat` and
-  `iostat`), so the only thing the old shape preserved was an invitation to that mistake.
+  caller here was being rewritten anyway, and all three now are: `cmd/ps`, `cmd/pstat` and
+  `cmd/iostat` call `kctl(2)` and `kgetsym(3)` directly and none of them wants an array of
+  structures back. So the only thing the old shape preserved was an invitation to that mistake.
 - **`atexit`** — see above.
 - **`monitor`/`mcount`, and `cc -p`** — no profiling runtime. The `profil` gate exists and has a
   generated stub; nothing calls it.

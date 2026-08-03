@@ -415,11 +415,17 @@ so `clock.c` reduces to a clean four-slot CPU histogram: **0 user, 8 nice, 16 sy
 in ticks at `HZ` = 250. That is the whole CPU side of a `vmstat` and it is already correct.
 There is no `cp_time` on this system and none is wanted; `dk_time[]` is v7's spelling of it.
 
-**Why now.** Task C8's `kctl(2)` table ([ksym.c](ksym.c)) publishes `dk_time`, `tk_nin` and
+**Why now.** The `kctl(2)` table ([ksym.c](ksym.c)) publishes `dk_time`, `tk_nin` and
 `tk_nout` and **deliberately withholds these three**, because a variable that is exported and
 never written makes `iostat` print zeros that read as measurements — which is worse than a
 column it cannot print at all. The day a driver keeps them is the day they join the table, and
 the row comment in `ksym.c` says so.
+
+**And `iostat` exists now** ([../cmd/iostat/](../cmd/iostat/), task C8), so this is no longer a
+hypothetical reader: the program prints the four CPU percentages and the two terminal columns
+and says in its own manual page that the HD/FD/CD columns wait on this task. Adding the three
+variables here is all that stands between it and the disk half of its report; nothing in the
+program has to change beyond restoring the columns v7 printed.
 
 **How to fix it.** `mdstrategy()`/`mbstrategy()` set the drive's bit in `dk_busy` and bump
 `dk_numb[]` on the way in; the interrupt end clears the bit and adds `b_wcount` to `dk_wds[]`.

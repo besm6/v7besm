@@ -54,6 +54,15 @@ struct ksym {
 
 // The exported set.
 //
+// THE COMMENT COLUMN WAS RE-CHECKED WHEN THE PROGRAMS ARRIVED (cmd/TODO.md task C8), and
+// three rows had claimed a reader they turned out not to have.  `text' said ps: ps has no
+// TEXTP column and never grew one, so it says pstat alone now.  `lbolt' and `time' said ps
+// too, and ps has neither a START nor an ELAPSED column; rather than delete two live and
+// useful variables, pstat grew a -c that prints the system clock to sub-second resolution,
+// which time(2) cannot report and nothing else in userland can see.  That is the discipline
+// working as intended: the question "who reads this" has to have an answer, and the answer
+// may be a feature nobody had written yet.
+//
 // A SIZE IS NEVER A HAND-WRITTEN NUMBER: it is either sizeof of the object, where the extern
 // carries its bound, or the same COUNT MACRO kernel/conf.c dimensioned the array with.  Four
 // of these -- proc, text, inode, file -- are declared `extern struct x x[]' with no bound in
@@ -79,14 +88,14 @@ struct ksym {
 //     pipedev -- live and real, and no program asks yet.  They come with a vmstat.
 static struct ksym ksym[] = {
     { "proc", proc, NPROC * sizeof(struct proc) },     // ps  pstat
-    { "text", text, NTEXT * sizeof(struct text) },     // ps  pstat
+    { "text", text, NTEXT * sizeof(struct text) },     //     pstat
     { "inode", inode, NINODE * sizeof(struct inode) }, //    pstat
     { "file", file, NFILE * sizeof(struct file) },     //     pstat
     { "mount", mount, sizeof mount },                  //     pstat
     { "sc", sc, NSC * sizeof(struct tty) },            // ps  pstat -- the only tty array
     { "uhome", &uhome, sizeof uhome },                 // ps  -- whose u-area is live at UBASE
-    { "lbolt", &lbolt, sizeof lbolt },                 // ps
-    { "time", &time, sizeof time },                    // ps
+    { "lbolt", &lbolt, sizeof lbolt },                 //     pstat -c
+    { "time", &time, sizeof time },                    //     pstat -c
 
     { "msgbuf", msgbuf, sizeof msgbuf },     // dmesg
     { "msgbufp", &msgbufp, sizeof msgbufp }, // dmesg -- a FAT char *; ptrword() it

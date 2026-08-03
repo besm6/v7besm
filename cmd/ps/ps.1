@@ -1,13 +1,13 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
-.TH PS 1  PDP11
+.TH PS 1
 .SH NAME
 ps \- process status
 .SH SYNOPSIS
 .B ps
 [
-.B aklx
+.B alx
 ]
-[ namelist ]
+[ pid ]
 .SH DESCRIPTION
 .I Ps
 prints certain indicia about active
@@ -20,9 +20,9 @@ only one's own processes are displayed);
 asks even about processes with no terminal;
 .B l
 asks for a long listing.
+A numeric argument selects that one process and suppresses the short heading.
 The short listing contains the process ID, tty letter,
-the cumulative execution time of the process and an
-approximation to the command line.
+the cumulative execution time of the process and the command name.
 .PP
 The long listing is columnar and contains
 .TP
@@ -31,8 +31,8 @@ Flags associated with the process.
 01: in core;
 02: system process;
 04: locked in core (e.g. for physical I/O);
-10: being swapped;
-20: being traced by another process.
+010: being swapped;
+020: being traced by another process.
 .TP
 S
 The state of the process.
@@ -63,63 +63,139 @@ process; high numbers mean low priority.
 .TP
 NICE
 Used in priority computation.
+This is the absolute value, not the increment: 20
+.RB ( NZERO )
+is normal and
+.B nice \-10
+makes it 30.
 .TP
 ADDR
 The core address of the process if resident,
-otherwise the disk address.
+otherwise its block on the paging store.
+.B Note:
+this is a
+.B word
+address and it is printed in
+.BR octal ,
+where v7 printed a 64-byte click address in hex.
+It is the number
+.IR pstat (1M)'s
+.B \-u
+takes.
 .TP
 SZ
-The size in blocks of the core image of the process.
+The size of the core image of the process, in
+.BR words ,
+a multiple of
+.BR PGSZ .
+.B Note:
+v7 counted 64-byte blocks.
 .TP
 WCHAN
 The event for which the process is waiting or sleeping;
 if blank, the process is running.
+.B Note:
+octal, and the whole of it \- v7 masked it to 24 bits.
 .TP
 TTY
-The controlling tty for the process.
+The controlling tty for the process, as an index into the kernel's
+one terminal array, or `?' if there is none.
 .TP
 TIME
 The cumulative execution time for the process.
-.TP TIME
-The command and its arguments.
+.B Note:
+this is
+.B u_utime + u_stime
+in ticks at
+.BR HZ ,
+which is 250 here and was 60 on the PDP-11.
+.TP
+CMD
+The command name.
 .DT
 .PP
 A process that has exited and has a parent, but has not
 yet been waited for by the parent is marked <defunct>.
-.I Ps
-makes an educated guess as to the file name
-and arguments given when the process was created
-by examining core memory or the swap area.
-The method is inherently somewhat unreliable and in any event
-a process is entitled to destroy this information,
-so the names cannot be counted on too much.
+Its core image has already been given back, so nothing but its
+.B proc
+entry is printed.
 .PP
-If the
-.B k
-option is specified,
-the file
-.I /usr/sys/core
-is used in place of
-.IR /dev/mem .
-This is used for
-postmortem system debugging.
-If a second argument is given,
-it is taken to be the file containing the system's namelist.
+A process that has been swapped out is marked <swapped>, and has no
+TTY, TIME or CMD.
+Its u-area is on the paging store; v7 read it back off
+.I /dev/swap
+and this
+.I ps
+does not.
+.PP
+.B Note:
+.B the command name is exact.
+v7 made "an educated guess as to the file name and arguments given when the
+process was created by examining core memory or the swap area", warned that
+the method was unreliable, and needed some 140 lines to do it.
+On this system the name is
+.B u_comm
+in the u-area, put there by
+.IR exec (2),
+so there is nothing to guess \- but there are also no
+.BR arguments ,
+only the name, and it is at most
+.B DIRSIZ
+characters.
 .SH FILES
-.ta \w'/usr/sys/core 'u
-/unix		system namelist
+.ta \w'/dev/kmem 'u
+/dev/kmem	the u-area of the running process, at
+.B UBASE
 .br
-/dev/mem	core memory
-.br
-/usr/sys/core	alternate core file
-.br
-/dev		searched to find swap device and tty names
+/dev/mem	the u-area of any other resident process, at its
+.B ADDR
+.PP
+Both are mode 0640 and root's, so
+.I ps
+is for the super-user and says so and stops for anybody else.
+It is deliberately not set-user-ID.
+Everything else it prints \- the whole
+.B proc
+table, and the base of the terminal array \- comes through
+.IR kctl (2)
+and needs no privilege at all.
+.PP
+.B Note:
+v7 also read
+.IR /unix ,
+.I /dev/swap
+and the
+.I /dev
+directory, and had a
+.B k
+option naming
+.I /usr/sys/core
+and an optional
+.I namelist
+argument.
+There is no kernel image on this filesystem, so all of that is gone;
+.IR kctl (2)
+is what replaced it.
 .SH "SEE ALSO"
-kill(1)
+kctl(2), pstat(1M), iostat(1M), nice(1), kill(1)
+.SH DIAGNOSTICS
+Exit status is 0 if any process was printed and 1 if none was, which is
+what makes
+.B ps
+.I pid
+usable as a test.
 .SH BUGS
 Things can change while
 .I ps
 is running; the picture it gives is only a close
 approximation to reality.
 .br
-Some data printed for defunct processes is irrelevant
+The u-area of a resident process other than the caller's is as of that
+process's last context switch, that being when the kernel last flushed it
+to the process's own image.
+The caller's own row is current, because the live copy at
+.B UBASE
+is read instead whenever it is the one that belongs to the process being
+printed.
+.br
+Some data printed for defunct processes is irrelevant.

@@ -409,6 +409,11 @@ alone, a name out of a directory being neither NUL-terminated nor the program's 
 | `stty` | 79 | 2,774 | 241 | 1,035 | **4,129** |
 | `mesg` | 83 | 2,665 | 171 | 1,044 | **3,963** |
 | `tar` | 131 | 6,243 | 546 | 3,578 | **10,498** |
+| `pstat` | 149 | 4,604 | 486 | 4,027 | **9,266** |
+| `ps` | 88 | 3,078 | 231 | 2,977 | **6,374** |
+| `iostat` | 86 | 2,979 | 196 | 1,144 | **4,405** |
+| `nice` | 85 | 2,946 | 318 | 1,040 | **4,389** |
+| `dmesg` | 35 | 1,156 | 178 | 1,052 | **2,421** |
 
 **`mount` and `umount` are the two smallest programs of task C4** and the reason is the
 mirror of `ed`'s: they carry no block buffer at all. Every other program in that task holds
@@ -643,6 +648,17 @@ Two harnesses, and choosing wrong wastes the effort:
   which is not a gate. What the simulator cannot give it is *plurality* — `proc[]` holds one
   live entry, the guest itself — so a `ps` can be checked for its formatting here and for
   what it finds only on the image.
+  **Task C8 is where that was cashed and it bought more than formatting.** Twelve of its
+  fifteen `cmd_*` cases run here, and two things make them worth more than a shape check:
+  b6sim takes the guest's *real* pid, uid, parent and command name from the host, so a case
+  can compare a column against something the shell already knows (`id -u`, the program's own
+  name); and it leaves `inode`, `file`, `text`, `mount` and `sc` **zero on purpose** rather
+  than inventing plausible contents, so `pstat`'s empty tables are checked-in literals and its
+  two-row terminal table pins `NSC` and the 29-word `struct tty` stride. What still needs the
+  boot is exactly what has no counterpart: a real kernel `printf` in `msgbuf`, four processes,
+  a `WCHAN`, a system-time column, and — the one that no amount of imitation reaches —
+  a u-area at a `p_addr` that is *not* the caller's, b6sim's one process having
+  `p_addr == uhome` so that branch is never taken at all.
   Two more limits C2a ran into: **`stime(2)` is a no-op that reports success**, so a
   program that sets global state cannot be asserted there at all; and **`kill(2)` is the build
   machine's own**, so no case may name a pid. And two C2b ran into: a program that **does not
@@ -1952,3 +1968,94 @@ carry into C9: the host's own program is a second implementation, but two transc
 the same **format** are a weaker relation than C4c's two transcriptions of **each other** —
 `tar` blank-pads its octal fields where a modern tar zero-pads them, both are legal, each
 reads the other, and so what can be compared is the files and not the bytes.
+
+## What task C8 taught
+
+**The five inspection programs — [ps](ps/), [dmesg](dmesg/), [iostat](iostat/), [pstat](pstat/),
+[nice](nice/) — and the finding is the shape of the task rather than any one of them.** The
+task named three more, `ac`, `sa` and `accton`, and they are **not** deferred: process
+accounting went to [TODO.md](TODO.md)'s *Not ported, and why* table on the decision that
+`acct(2)` working is not a reason to write programs that digest a record nothing on this image
+produces, for a machine with nobody to bill. C8 is
+the first task in this file whose subject is not a file, a filesystem or a terminal but the
+kernel's own state, and the thing that decided it was already built before the task started:
+`kctl(2)` ([../kernel/ksym.c](../kernel/ksym.c)) hands over a named kernel variable by value,
+`kgetsym(3)` hands over its word address, and both are **unprivileged**. So the axis the task
+brief drew — value readers versus pointer-chasers, the second pair root-only — turned out to
+fall in a different place: `dmesg` and `iostat` need nothing, **`pstat` needs nothing either
+except for its one `-u`**, and only `ps` is root-only outright, because a u-area is the one
+thing the table deliberately does not export.
+
+**`ps` is not a port and could not have been one, and the reason generalises.** v7's `ps.c` is
+408 lines, of which about forty are the report; the rest is a *route to the data* —
+`nlist("/unix")`, a relocation fudge, a sequential read of `/dev/mem`, a u-area fetched off
+`/dev/swap`, and 140 lines that reconstruct a command line by walking the process's stack
+through a two-segment address map. Every one of those is PDP-11 memory management, and every
+one of them is replaced by a single named call. **When a v7 program's bulk is its route to the
+data rather than its treatment of it, expect the port to be a rewrite and to come out a third
+of the size.** `pstat` is the same story with `dotty()`, which is three PDP-11 symbols
+(`_kl11`, `_dh11`, `_ndh11`) and no Unix at all.
+
+**A u-area is in one of three places and getting that wrong is silent.** For a process whose
+`p_addr` is `uhome`, the live copy at `UBASE` is authoritative and the image is stale; for any
+other resident process the image is right and is above `KREACH`, so it comes off `/dev/mem`;
+and a swapped-out process has neither. That ladder is [../lib/test/memt.c](../lib/test/memt.c)'s
+and it was built before this task for this task. **A v7 bug fell out of writing it down**:
+v7's `prcom()` reads the u-area first and tests `SZOMB` twenty lines later, and on this kernel
+`exit()` calls `mfree(coremap, ...)` *before* setting `SZOMB` — so a zombie's `p_addr` names
+core that has already been handed back. The test moved ahead of the read.
+
+**The `kctl` table's discipline forced a feature, which is the strongest evidence that it
+works.** [../kernel/ksym.c](../kernel/ksym.c) says a row names the program that asked for it
+and that a row whose column is empty does not belong. Checking that when the programs finally
+arrived found three rows claiming a reader they did not have: `text` said `ps`, which has no
+TEXTP column; `lbolt` and `time` said `ps`, which has neither a START nor an ELAPSED one. Six
+more rows — `mount`, `coremap`, `swapmap`, `nswap`, `swplo`, `swapdev` — named `pstat`, and
+**v7's `pstat` prints not one of them**. The settlement was `pstat -m`, `pstat -s` and
+`pstat -c`, three modes that exist because the kernel was already willing to answer and
+nothing had asked. `-c` is the one worth having: `time` plus `lbolt` is the system clock to
+sub-second resolution, which `time(2)` cannot report and nothing else in userland can see.
+
+**`iostat` is where the float went.** v7's is the most float-dependent program of its size in
+the tree — two `double` arrays and thirteen `%6.2f` — and none of it survives: `b6_prog()`
+cannot link `-lm`, the machine has no IEEE 754, and a percentage wants two decimal digits
+rather than 53 bits of mantissa. Every quantity is scaled instead: hundredths of a percent
+printed `%3d.%02d`, which is six characters and is exactly what `%6.2f` printed. **Halve both
+sides of the ratio until the multiply fits rather than dividing first** — an `int` is 41 bits,
+so `part * 10000` has about eleven hours of uptime at `HZ` 250 before it needs scaling, and
+dividing first would cost the decimal place always instead of eventually.
+
+**Two header collisions, and the first is the only one in the tree.**
+`<sys/mount.h>` declares `extern struct mount mount[NMOUNT]` and `<unistd.h>` declares
+`int mount(const char *, const char *, int)`; they are the same name and `b6parse` refuses the
+second one it sees. Nothing had hit it before because nothing had ever wanted the mount table
+from user space — `mount(1M)` wants the call, the kernel wants the table and links no libc.
+`cmd/pstat/pstat.c` is the one source in this tree that cannot include `<unistd.h>` and
+declares its three calls by hand instead. The second is smaller and worth knowing: **a local
+named `free` is not shadowing here, it is an error** — this compiler refuses the redeclaration
+against `<stdlib.h>` outright.
+
+**§9's rule about which world a test runs in moved, and this is the task that moved it.** That
+section used to say a program whose subject is kernel state has no b6sim half. It has one now:
+`b6sim` answers `kctl(2)`, `/dev/kmem` and `/dev/mem` out of an imitation kernel
+([../doc/Aout_Simulator.md](../doc/Aout_Simulator.md) §7), so twelve of this task's fifteen
+`cmd_*` cases run in a tenth of a second. What that half cannot have is **plurality** — one
+live `proc[]` entry, empty inode/file/text/mount tables, every tick billed to `dk_time[0]`,
+and `p_addr == uhome` so that the `/dev/mem` branch is *never taken at all*. `kernel/test/inspect`
+(volume 3101) is the other half, and its sharpest line is the one nothing else can reach: take
+`init`'s ADDR out of a `ps -l` listing and hand it to `pstat -u`, which reads a u-area at a
+`p_addr` that is not the caller's.
+
+**A masked column has to say where the property IS asserted, and here the two harnesses do it
+for each other.** `run-inspect.sh` masks exactly two things — `dmesg`'s four sizes and
+`pstat -s`'s three swap scalars — and both are checked in as *literals* under `b6sim`, because
+b6sim's imitation kernel carries `conf.c`'s own numbers for the paging store and a fixed
+banner in `msgbuf`. That is the two-harness split paying for itself rather than merely
+duplicating.
+
+**And one thing that is not this task's and is written down anyway.** `cmd/sh` dies with
+SIGILL on a pipeline of four or more stages *inside command substitution*; three is fine and
+four outside backquotes is fine. It was found writing `inspect.sh`, it is not diagnosed, and
+[sh/README.md](sh/README.md) carries the three-line repro under *Known limits*. A test that
+routes around a bug it has not reported is a test that will be rewritten by somebody who does
+not know why it is shaped that way.

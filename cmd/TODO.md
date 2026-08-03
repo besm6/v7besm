@@ -204,8 +204,9 @@ and [../kernel/TODO.md](../kernel/TODO.md) task 37 is the result.
 date, which is a literal to the minute because the boot clock is the image's own `-T` stamp,
 and `kernel/test/console` asserts both. What it
 still wants is what the file itself now names — `cron` and `update`
-(C10) and `accton` (C8); `mount` has arrived and deliberately gets no line, a boot image
-having nothing to mount. An `fsck` line is a third, and it is C4d's one loose end: the
+(C10). `accton` was the third and **is not coming**: process accounting is in the *Not ported*
+table below, so that line of the v7 `rc` is gone rather than pending. `mount` has arrived and
+deliberately gets no line, a boot image having nothing to mount. An `fsck` line is a third, and it is C4d's one loose end: the
 program exists, and the line that would run it at boot has the same single home for an
 assertion as the `rm -f /tmp/*` line below and the same reason for waiting. That `rm -f /tmp/*`
 line is waiting on a
@@ -239,7 +240,6 @@ compiles.
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C8 | inspection — `ps` `dmesg` `pstat` `iostat` `nice`, `ac` `sa` `accton` | seeing what the machine is doing | medium |
 | C9 | self-hosting — native `cpp`, `as`, `ld`, the binutils, `cc` | building the system on itself | large |
 | C10 | the rest of the manual — `make` `m4` `awk` `bc` `dc` `expr` `egrep` `units` `crypt` `at` `cron` `calendar` `update` `mail` | a system worth using | open-ended |
 
@@ -249,9 +249,15 @@ under *Where to start* below: twenty-four programs, 511 `ctest -L cmd` cases and
 label still under seven seconds is what the HARNESS cost, and it is the number to quote when
 budgeting a test suite. What the ports cost is twenty-one findings, several of them a day
 apiece, and not one of them is in a line count.
-C9 is gated on something the task names. **C8 no longer is**: the gate it named was `nlist(3)`,
-which turned out to be the wrong tool for a system with no `/unix` on it, and `kctl(2)` was
-built in its place — see the task.
+C9 is gated on something the task names. **C8's five inspection programs are done and the
+section is gone**: `ps`, `dmesg`, `iostat`, `pstat` and `nice` are on the image, and what the
+port taught is [README.md](README.md)'s business now. Its gate is worth one sentence of
+history, because it was wrong twice over: the task opened by saying every one of these programs
+needed `nlist(3)` to find a kernel variable by name in `/unix`, and **there is no `/unix`** —
+[../root.manifest](../root.manifest) names no kernel image. `kctl(2)` was built in its place
+([../include/sys/kctl.h](../include/sys/kctl.h), [../kernel/ksym.c](../kernel/ksym.c)) and
+cannot drift from the image it is part of, every address in its table being a link-time
+relocation of the real declaration.
 
 **Two loose ends C6 leaves behind, both about the terminal and both one line each.**
 `TANDEM` is honoured by the kernel — `ttyblock()` queues the stop character when the input queue
@@ -262,98 +268,6 @@ can set it**: v7's `stty` had no word for it and the port added none, the cut in
 and **nothing in the kernel ever tests either bit**, so an exclusive-open request and a
 hang-up-on-last-close request are both silently ignored. Neither is worth a task of its own;
 both are worth knowing before somebody reports them as bugs.
-
----
-
-## C8. Process and system inspection
-
-**The gate this task used to name is gone.** It opened by saying that libc has no `nlist(3)`,
-that every program here needs one to find a kernel variable by name in `/unix`, and that writing
-it was the first sub-task with everything else waiting on it. **All three were wrong together,
-and for one reason: there is no `/unix`.** [../root.manifest](../root.manifest) names no kernel
-image, and [../kernel/unix.ini](../kernel/unix.ini) has the *simulator* load one off the build
-host — so an `nlist()` over this machine's `a.out` symbol format would have compiled, passed a
-test against a file on the build machine, and found nothing to open on the image. The programs
-that were said to be waiting on it wanted it for precisely the thing it could not have done.
-
-**`kctl(2)` is what went in instead, and it is DONE** —
-[../include/sys/kctl.h](../include/sys/kctl.h), [../kernel/ksym.c](../kernel/ksym.c),
-[../doc/Unix_V7_System_Calls.md](../doc/Unix_V7_System_Calls.md) §2.5. The kernel carries a
-hand-written table of the variables it publishes and one system call reads it: `KCTL_GET` copies
-a variable's **value**, `KCTL_STAT` its **word address** and size, `KCTL_LIST` the names. It is
-unprivileged, it cannot drift from the image it is part of (every address is a link-time
-relocation of the real declaration), and there is no `struct nlist` anywhere on the guest side —
-which also leaves `include/README.md`'s `a.out.h` rule intact. `kgetsym(3)`
-([../lib/libc/gen/kgetsym.c](../lib/libc/gen/kgetsym.c)) is the one-line shorthand for the
-address. `lib/test/kctlt` asserts the lot under the booted kernel.
-
-**So the first sub-task is now: decide, per program, which half of the interface it wants.**
-That is the shape of this task and it is not a line count either.
-
-* **A value reader opens no device and needs no privilege.** `dmesg` and `iostat` are entirely
-  in this half.
-* **A pointer-chaser needs `/dev/kmem` as well.** `ps` and `pstat` resolve `p_textp` into an
-  index in `text[]` and `u_ttyp` into one in `sc[]`, which is arithmetic against a base address;
-  `KCTL_STAT` gives the base and the reading goes on through the device — and through
-  `/dev/mem` for a u-area at `p_addr`, which is above `KREACH` and out of `/dev/kmem`'s reach.
-  Both nodes are mode 0640 root, so **these two run as root and only root**, exactly as v7's did.
-
-**And all four have a `b6sim` half, which is not what §9 of [README.md](README.md) would lead
-you to expect.** `b6sim` imitates a kernel now — the same nineteen variables, `/dev/kmem` and
-`/dev/mem` ([../doc/Aout_Simulator.md](../doc/Aout_Simulator.md) §7) — so a program whose
-subject is kernel state can be a `cmd/<x>/test/` case running in a tenth of a second, instead
-of waiting for the `weekly` boot. What the simulator cannot supply is **plurality**: `proc[]`
-holds one live entry, the guest itself, and `inode`, `file`, `text` and `mount` are empty on
-purpose. So the split per program is:
-
-| | asserted under `b6sim` | needs the boot |
-|---|---|---|
-| `dmesg` | everything: the ring is a fixed banner there, so the output is a literal | that a *real* `printf` reached `msgbuf` |
-| `iostat` | the format, and that the CPU column moves | any number with a second process in it |
-| `ps` | the format, the header, the flags, and one line — its own | more than one process, and a `WCHAN` worth printing |
-| `pstat` | the flags and the empty-table output | every number it exists to print |
-
-**Do not port v7's `ps`.** `ps.c` (408 lines, 17 `long`s) reads the proc table and then fetches
-each u-area *through the swap device* using PDP-11 memory-management assumptions that have no
-counterpart here — this kernel's u-area is two fixed physical pages at `074000` and its swap
-layout is its own. Write `ps` against **this** kernel instead: [../lib/test/memt](../lib/test/memt)
-reads its own `struct user` at `074000`, follows `u_procp` into the proc table and reads physical
-memory above `0100000` through `copyphys()`, and [../lib/test/kctlt](../lib/test/kctlt) climbs
-the same ladder starting from `kctl`. That is exactly a `ps`'s route. Keep v7's *output format*
-and its `.1`; replace its middle. **`u_comm` is in the u-area** (`<sys/user.h>`), so the default
-listing needs no argv reconstruction off the swap device at all.
-
-**`dmesg` is now the cheapest of the four, not the one carrying a kernel task.** This file used
-to say it "needs the kernel to keep a message ring, which `prf.c` does not do yet". **The ring
-already exists** — `putchar()` fills `msgbuf[MSGBUFS]` and advances `msgbufp` in
-[../kernel/dev/sc.c](../kernel/dev/sc.c), not in `prf.c`, which is where that was looked for —
-and both are in the `kctl` table. `dmesg` needs two `KCTL_GET`s and nothing else. Two smaller
-things come with it: `msgbufp` is a **fat** `char *`, so `ptrword()` it (`<sys/param.h>`); and
-v7's `dmesg` keeps a history in `/usr/adm/msgbuf`, which is not on the image and is a decision
-rather than an oversight.
-
-**`iostat` gets a CPU column and no disk column.** `dk_time[32]` is live and, because `dk_busy`
-is stuck at 0, reduces to a clean four-slot histogram — **0 user, 8 nice, 16 system, 24 idle**,
-in ticks at `HZ` = 250 — and `tk_nin`/`tk_nout` are live too; all three are exported. But
-`dk_busy`, `dk_numb[]` and `dk_wds[]` are **written by nothing**, and are deliberately *not* in
-the table, because an exported variable nobody updates makes a tool print zeros that read as
-measurements. That is [../kernel/TODO.md](../kernel/TODO.md) task 38, and `iostat`'s disk half
-waits on it. There is no `cp_time` here and none is wanted.
-
-The rest, in order of value: `nice.c` (28) — trivial, wants nothing from any of this, and is
-takeable on its own at any time; `pstat.c` (385) — deeply tied to kernel structures and worth
-rewriting rather than porting, and the heaviest user of the table (`inode`, `file`, `text`,
-`proc`, `mount`, `swapmap`, `coremap`, `nswap`, `swplo`, `swapdev`, `sc` are all exported for
-it); `ac.c` (251), `sa.c` (489), `accton.c` (16) — process accounting, which the kernel's
-`acct()` supports, and which nothing needs. `accton` is one of the five
-[../etc/rc](../etc/rc) still names, and the only one of them this task owns.
-
-**One rule for the table itself, and it is the whole of its discipline.** A row in
-`kernel/ksym.c` names the program that asked for it. A program that wants a variable not in the
-table adds the row *with its own name in the comment column*; a row whose column is empty does
-not belong. The nineteen there now were put in for these four programs and for nothing else.
-
-**Size.** Medium. It is no longer front-loaded — the thing everything used to wait on is built.
 
 ---
 
@@ -485,16 +399,17 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 | `osh.c` | 846 | The pre-Bourne shell. [sh/](sh/) supersedes it. |
 | `xsend/` | 414 | Secret mail. Needs `mail` first, and wants nothing. |
 | `cc.c`, `as/`, `ld.c`, `nm.c`, `ar.c`, `size.c`, `strip.c`, `ranlib.c`, `arcv.c` | | PDP-11 `a.out`. The BESM-6 tools are in `cmd/` already — **see C9**. |
-| `random.c`, `sp.c`, `tk.c`, `sa.c` … | | Curiosities. Port one if it is ever wanted; none is on a path to anything. |
+| `ac.c`, `sa.c`, `accton.c` | 251 + 489 + 16 | Process accounting. The kernel side EXISTS and works — `acct(2)` is a real gate ([../kernel/acct.c](../kernel/acct.c), `<sys/acct.h>`), which is what makes this a decision rather than a gap. Nothing needs it: the machine has one operator, there is nobody to bill, and `sa`'s whole subject is digesting a record nothing on this image writes. It would also want a `/usr/adm` that [../root.manifest](../root.manifest) does not have, and a boot-time `accton` line in [../etc/rc](../etc/rc) whose only assertion home is the DISABLED `kernel/test/console`. Reconsider if this machine ever has more than one user who matters. |
+| `random.c`, `sp.c`, `tk.c` … | | Curiosities. Port one if it is ever wanted; none is on a path to anything. |
 
 ---
 
 ## Where to start
 
-**C8's `nice`, or C10's `expr`.** Nothing in the table is unblocked whole any more: C8 waits on
-`nlist(3)`, C9's first three fifths on a foreign repository, and C10 on the `yacc` decision its
-own section names. `nice.c` (28 lines) is the one piece of C8 that is independent of `nlist` and
-can be taken on its own at any time.
+**C10's `expr`.** Neither task in the table is unblocked whole: C9's first three fifths wait on
+a foreign repository, and C10 on the `yacc` decision its own section names. `expr.y` is inside
+that decision but is the smallest thing behind it, and scripts want it almost as much as they
+want `test`.
 
 **Task C7 is closed and cost two false claims, both of them in briefs rather than in code.**
 The section that stood here named two things to settle and both were right and small; what the
@@ -601,11 +516,16 @@ admits before writing a case.
 `mount`/`umount` were the first such program and this is the second. **`tar` was checked for it
 before its cases were designed, as this paragraph asked, and came out on the good side**: it
 reads directories too, but only on the `c` path, so `t`, `x`, `r` and every bound and diagnostic
-have a `b6sim` half and only the tree walk needed a boot. `ps` (C8) is the one still to check.
+have a `b6sim` half and only the tree walk needed a boot. **`ps` came out on the good side too,
+and by a route worth recording**: `b6sim` now answers `kctl(2)` and both memory devices out of
+an imitation kernel, so twelve of task C8's fifteen cases run under it. What has no `b6sim`
+half is not a program but a *branch* — a u-area at a `p_addr` that is not the caller's, which
+the simulator's single process can never produce. `kernel/test/inspect` is the only word on it.
 
 **The booted pass is where a later program joins rather than boots.** `kernel/test/filters`
 runs twenty-four programs at volume **3097**, masks nothing, and takes about ten seconds. Adding
 a section to `filters.sh` costs nothing; a boot of its own costs two minutes and a volume number
 — which task C7 spent, `tar` needing a **second drive** that `filters.ini` does not attach.
-`accounts` took 3098 and `tar` 3099 with a scratch pack at 3100, so **3101 is the next free
-volume.**
+`accounts` took 3098, `tar` 3099 with a scratch pack at 3100, and task C8's `inspect` 3101 —
+which did take a boot of its own rather than joining `filters`, because what it needs is
+PLURALITY: a second process, and one of them asleep. So **3102 is the next free volume.**

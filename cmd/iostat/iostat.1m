@@ -1,32 +1,27 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 .\" Changes: Copyright (c) 1999 Robert Nordier. All rights reserved.
-.TH IOSTAT 1M 
+.TH IOSTAT 1M
 .SH NAME
 iostat \- report I/O statistics
 .SH SYNOPSIS
 .B iostat
-[ option ] ...
+[
+.B \-t
+] [
+.B \-i
+]
 [ interval [ count ] ]
 .SH DESCRIPTION
 .I Iostat
 delves into the system and reports certain statistics kept about
 input-output activity.
-Information is kept about up to three different disks
-(HD, FD, CD) and about typewriters.
-For each disk, IO completions and number of words transferred
-are counted; for typewriters collectively, the number
-of input and output characters are counted.
-Also, each sixtieth of a second,
-the state of each disk is examined
-and a tally is made if the disk is active.
-The tally goes into
+For typewriters collectively, the number of input and output characters
+are counted.
+Also, on each clock tick,
+a tally is made in
 one of four categories, depending on whether the system is
 executing in user mode, in `nice' (background)
 user mode, in system mode, or idle.
-From all these numbers and from the known transfer rates
-of the devices it is possible to determine
-information such as the degree of IO overlap
-and average seek times for each device.
 .PP
 The optional
 .I interval
@@ -35,21 +30,24 @@ argument causes
 to report once each
 .I interval
 seconds.
-The first report is for  all time since a reboot and each
+The first report is for all time since a reboot and each
 subsequent report is for the last interval only.
 .PP
 The optional
 .I count
 argument restricts the number of reports.
+With an
+.I interval
+and no
+.IR count ,
+.I iostat
+reports until it is stopped.
+With neither, it prints one report and exits.
 .PP
 With no option argument
 .I iostat
-reports for each disk the number of transfers per minute,
-the milliseconds
-per average seek,
-and the milliseconds per data transfer exclusive of seek time.
-It also gives the percentage of time the system has
-spend in each of the four categories mentioned above.
+gives the percentage of time the system has
+spent in each of the four categories mentioned above.
 .PP
 The following options are available:
 .TP
@@ -57,20 +55,66 @@ The following options are available:
 Report the number of characters of terminal IO per second as well.
 .TP
 .B \-i
-Report the percentage of time spend in each
-of the four categories mentioned above,
-the percentage of time each disk was active (seeking or transferring),
-the percentage of time any disk was active,
-and the percentage of time spent in `IO wait:'
-idle, but with a disk active.
-.TP
-.B \-s
-Report the raw timing information: 32 numbers indicating
-the percentage of time spent in each of the possible
-configurations of 4 system states and 8 IO states
-(3 disks each active or not).
-.TP
-.B \-b
-Report on the usage of IO buffers.
+Report the percentage of time spent in each
+of the four categories mentioned above, one per line and named.
 .SH FILES
-/dev/mem, /unix
+None.
+.I Iostat
+reads
+.BR dk_time ,
+.B tk_nin
+and
+.B tk_nout
+through
+.IR kctl (2)
+and opens no device.
+.SH "SEE ALSO"
+kctl(2), pstat(1M), ps(1)
+.SH BUGS
+.PP
+.B Note:
+.B there are no disk columns.
+v7's
+.I iostat
+reported, for each of three disks, the transfers per minute and the
+milliseconds per seek and per transfer, and crossed those with the four
+CPU states to make the 32-way tally it reads.
+On this system
+.B dk_busy
+is written by no driver, so the I/O half of every subscript is permanently
+zero and only four of the 32 slots ever move;
+.BR dk_busy ,
+.B dk_numb
+and
+.B dk_wds
+are deliberately not exported at all, an exported variable that nobody
+updates being worse than an absent one.
+The columns return with task 38 of
+.BR kernel/TODO.md .
+There is no
+.B cp_time
+on this system and none is wanted.
+.PP
+.B Note:
+v7's
+.B \-s
+(the 32 raw slots) and
+.B \-b
+(buffer-cache statistics, out of an
+.B io_info
+structure this kernel does not have) are gone with them, as are the
+undocumented
+.B \-d
+and
+.BR \-a .
+.PP
+.B Note:
+the clock runs at
+.B HZ
+ticks per second, which is 250 here and was 60 on the PDP-11.
+Nothing in the report is expressed in ticks, so this shows up only in
+the resolution of the percentages.
+.PP
+Things can change while
+.I iostat
+is running.

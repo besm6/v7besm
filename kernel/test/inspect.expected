@@ -1,0 +1,46 @@
+inspect begin
+--1-dmesg--
+      4
+phys mem  = N kbytes
+user mem  = N kbytes
+swap size = N kbytes
+root size = N kbytes
+--2-ps--
+ F S UID   PID  PPID CPU PRI NICE    ADDR     SZ   WCHAN TTY TIME CMD
+ps: four or more processes
+ps: at least one process is asleep
+ps: some process is waiting on a WCHAN
+1
+1
+1
+ps status 0
+   PID TTY TIME CMD
+--3-pssel--
+ps status 0
+      1
+sleep
+--4-nice--
+   20
+   30
+   39
+--5-iostat--
+        PERCENT
+  user  nice systm  idle
+iostat: at least two CPU categories are non-zero
+         TTY        PERCENT
+   tin  tout  user  nice systm  idle
+--6-pstat--
+pstat: the inode table is not empty
+pstat: the file table is not empty
+1 mounted file systems
+2 Consul lines
+ # RAW CAN OUT   FLAGS  LINE DEL COL STATE     PGRP
+1
+swapdev MASKED
+--7-uarea--
+pstat status 0
+comm init
+0
+comm pstat
+1
+---end---

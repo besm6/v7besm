@@ -5,19 +5,43 @@ pstat \- print system facts
 .SH SYNOPSIS
 .B pstat
 [
-.B \-aixptuf
-] [ suboptions ]
-[ file ]
+.B \-acfimpstx
+] [
+.B \-u
+addr ]
 .SH DESCRIPTION
 .I Pstat
 interprets the contents of certain system tables.
-If
+.PP
+.B Note:
+every table it prints is read by name and by value through
+.IR kctl (2),
+which is unprivileged, so all of it works for anybody \- except
+.BR \-u ,
+which opens a memory device and is the super-user's.
+v7 read every table off
+.I /dev/mem
+with a namelist taken from
+.IR /unix ;
+there is no kernel image on this filesystem, and the
 .I file
-is given, the tables are sought there, otherwise
-in
-.I /dev/mem.
-The required namelist is taken from
-.I /unix.
+and
+.I namelist
+arguments are gone with it.
+.PP
+.B LOC
+throughout is the
+.B word
+address of the table entry, printed in octal, where v7 printed a
+24-bit byte address in hex.
+So is every
+.BR IPTR ,
+.BR INODP ,
+.B LINK
+and
+.BR TEXTP :
+the tables cross-reference by eye.
+.PP
 Options are
 .TP \w'WCHAN\ 'u
 .B \-a
@@ -126,7 +150,7 @@ being terminated
 stopped under trace
 .RE
 .IP F
-Miscellaneous state variables, or-ed together:
+Miscellaneous state variables, or-ed together, in octal:
 .RS
 .IP 01
 loaded
@@ -167,12 +191,19 @@ The process ID number.
 .IP PPID
 The process ID of parent process.
 .IP ADDR
-If in core, the physical address of the `u-area' of
-the process measured in multiples of 64 bytes.
-If swapped out, the position in the swap area
-measured in multiples of 512 bytes.
+If in core, the physical
+.B word
+address of the process image, whose first
+.B USIZE
+words are its `u-area'.
+If swapped out, its block on the paging store.
+.B Note:
+v7 counted 64-byte clicks and 512-byte blocks.
 .IP SIZE
-Size of process image in multiples of 64 bytes.
+Size of the process image in
+.BR words ,
+a multiple of
+.BR PGSZ .
 .IP WCHAN
 Wait channel number of a waiting process.
 .IP LINK
@@ -186,8 +217,14 @@ measured in seconds.
 .PD
 .TP
 .B \-t
-Print table for terminals (only DH11 and DL11 handled)
-with these headings:
+Print the table for the
+.B NSC
+Consul typewriters, with these headings.
+.B Note:
+v7's handled a DL11 and up to 48 DH11 lines; this machine has one terminal
+driver and one array,
+.BR sc[] ,
+and the row number is its subscript, which is also the device's minor number.
 .IP RAW
 Number of characters in raw input queue.
 .PD 0
@@ -195,11 +232,21 @@ Number of characters in raw input queue.
 Number of characters in canonicalized input queue.
 .IP OUT
 Number of characters in putput queue.
-.IP MODE
+.IP FLAGS
 See
 .IR tty (4).
-.IP ADDR
-Physical device address.
+.B Note:
+v7 called this column MODE.
+.IP LINE
+The device/line number.
+.B Note:
+v7 called this ADDR and it was the UNIBUS address of the line's registers.
+This machine has no I/O address space at all \- a device is named by the
+register number an
+.B 033
+instruction addresses \- so
+.B t_addr
+is a line number here and the column is renamed to say so.
 .IP DEL
 Number of delimiters (newlines) in canonicalized input queue.
 .IP COL
@@ -207,12 +254,14 @@ Calculated column position of terminal.
 .IP STATE
 Miscellaneous state variables encoded thus:
 .RS
+.IP T
+timeout pending.
+.B Note:
+nothing sets this bit now; it is kept for v7's numbering and for this program.
 .IP W
 waiting for open to complete
 .IP O
 open
-.IP S
-has special (output) start routine
 .IP C
 carrier is on
 .IP B
@@ -224,17 +273,39 @@ open for exclusive use
 .IP H
 hangup on close
 .RE
+.B Note:
+.B XCLUDE
+and
+.B HUPCLS
+are set by
+.IR ioctl (2)
+and tested by nothing in this kernel, so those two letters record a request
+rather than a state.
 .IP PGRP
 Process group for which this is controlling terminal.
 .PD
 .TP
 .B \-u
-print information about a user process;
+Print information about a user process;
 the next argument is its address as given
 by
-.IR ps (1).
-The process must be in main memory, or the file used can
-be a core image and the address 0.
+.IR ps (1),
+in octal, and with no conversion \- both are word addresses.
+An address of
+.B 0
+names the u-area that is live at
+.BR UBASE ,
+which is the caller's own.
+.B Note:
+if the address given is the one the live u-area belongs to, the live copy is
+read instead of the process's image, the image being stale until the kernel
+next flushes it.
+.IR ps (1)
+follows the same rule and its source is the account of it.
+The process must be in main memory: a swapped-out u-area is on the paging
+store and this program does not read it.
+This is the only option that opens a device, and so the only one that needs
+to be root.
 .TP
 .B \-f
 Print the open file table with these headings:
@@ -259,14 +330,84 @@ The location of the inode table entry for this file.
 The file offset, see
 .IR lseek (2).
 .PD
+.TP
+.B \-m
+.B Note:
+.B this option is new.
+Print the mount table \- one line per mounted file system \- with the headings
+LOC, DEVICE, BUFP (the buffer holding its super-block) and INODP (the inode it
+is mounted on).
+Slot 0 is the root and is always in use.
+With
+.B \-a
+the empty slots are printed too.
+.TP
+.B \-s
+.B Note:
+.B this option is new.
+Print the paging store and the two allocation maps:
+the swap device and its
+.B swplo
+and
+.BR nswap ,
+then
+.B coremap
+and
+.BR swapmap ,
+each with its free fragments and their total.
+.B The units differ:
+.B coremap
+hands out
+.B words
+of physical core and
+.B swapmap
+hands out
+.B blocks
+of
+.BR BSIZE .
+.TP
+.B \-c
+.B Note:
+.B this option is new.
+Print the system clock:
+.B time
+in seconds since the epoch, and
+.B lbolt
+as a fraction of
+.B HZ
+into the current second, followed by the date.
+.IR time (2)
+returns whole seconds, so the fraction is visible nowhere else.
 .PP
+.B Note:
+the three options above exist because the kernel exports the tables behind them
+and nothing else read them.
+A variable in
+.BR kernel/ksym.c 's
+table names the program that asked for it, and
+.BR mount ,
+.BR coremap ,
+.BR swapmap ,
+.BR nswap ,
+.BR swplo ,
+.BR swapdev ,
+.B time
+and
+.B lbolt
+all named this one.
 .SH FILES
-.ta \w'/dev/mem  'u
-/unix	namelist
+.ta \w'/dev/kmem  'u
+/dev/kmem	the live u-area, for
+.B \-u
 .br
-/dev/mem	default source of tables
+/dev/mem	any other resident u-area, for
+.B \-u
+.PP
+Everything else comes through
+.IR kctl (2)
+and opens nothing.
 .SH SEE ALSO
-ps(1), stat(2), filsys(5)
+kctl(2), ps(1), iostat(1M), dmesg(1), stat(2), filsys(5)
 .br
 K. Thompson,
 .I UNIX Implementation

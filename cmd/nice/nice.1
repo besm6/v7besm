@@ -1,15 +1,12 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
 .TH NICE 1 
 .SH NAME
-nice, nohup \- run a command at low priority
+nice \- run a command at low priority
 .SH SYNOPSIS
 .B nice
 [
 .BI \- number
 ]
-command [ arguments ]
-.PP
-.B nohup
 command [ arguments ]
 .SH DESCRIPTION
 .I Nice
@@ -19,31 +16,29 @@ with low scheduling priority.
 If the
 .I number
 argument is present, the priority is incremented (higher
-numbers mean lower priorities) by that amount up to a limit of 20.
+numbers mean lower priorities) by that amount.
 The default
 .I number
 is 10.
+Note: v7's page said the increment was limited to 20.
+The kernel clamps the resulting priority to the range 0 through 39
+(0 through 2*NZERO\-1), not the increment;
+a nice value already at 39 does not move.
 .PP
 The super-user may run commands with
 priority higher than normal
 by using a negative priority,
 e.g. `\-\-10'.
+A negative
+.I number
+from anyone else is silently taken as 0 \- the command still runs,
+at the priority its caller was entitled to.
 .PP
-.I Nohup
-executes
-.I command
-immune to hangup and terminate signals from the controlling terminal.
-The priority is incremented by 5.
-.I Nohup
-should be invoked from the shell with `&' in order to 
-prevent it from responding to interrupts by or
-stealing the input from
-the next person who logs in on the same terminal.
-.SH FILES
-nohup.out standard output and standard error file under
-.I nohup
+Note: v7's page also described
+.IR nohup ,
+a shell script that is not on this system.
 .SH "SEE ALSO"
-nice(2)
+nice(2), ps(1)
 .SH DIAGNOSTICS
 .I Nice
 returns the exit status of the subject command.

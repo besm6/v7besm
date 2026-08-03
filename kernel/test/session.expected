@@ -15,6 +15,7 @@ date
 dd
 df
 diff
+dmesg
 du
 echo
 ed
@@ -32,10 +33,12 @@ mesg
 mkdir
 mv
 newgrp
+nice
 novi
 od
 passwd
 pr
+ps
 pwd
 rev
 rm

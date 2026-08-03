@@ -65,6 +65,19 @@ proves it: it is `#define`-only so that `kernel/*.S` can include it too, emits n
 all, and so needs nothing to be order-insensitive. Its head comment says why the obvious
 `#ifndef __ASSEMBLER__` escape is not available.
 
+**Standing alone is not the same as composing, and there is exactly one pair that does not.**
+`<sys/mount.h>` declares the kernel's table, `extern struct mount mount[NMOUNT]`; `<unistd.h>`
+declares the system call, `int mount(const char *, const char *, int)`. They are the same
+identifier in the same namespace, and `b6parse` refuses the second one it sees — *"Variable
+mount redeclared with different type"*. It is v7's collision, not this port's, and nothing had
+met it because nothing had ever wanted the mount *table* from user space: `cmd/mount` wants the
+call, and the kernel wants the table and links no libc. Task C8's `pstat` wants both and is
+the one source in the tree that cannot include `<unistd.h>`; it declares the three calls it
+needs by hand, and [`../cmd/pstat/README.md`](../cmd/pstat/README.md) says why. **Neither
+header may be changed to dodge it** — the `extern` is what kernel sources include
+`<sys/mount.h>` for, and the prototype is what user sources include `<unistd.h>` for — so the
+resolution belongs in the caller, and any future one should copy `pstat`'s.
+
 **The errno numbering has one home, `<sys/errno.h>`.** v7 wrote it out twice — in `<errno.h>`
 for the user and in `<sys/user.h>`'s `u_error codes` block for the kernel — and this port
 inherited both. They had already drifted in the only way that matters here: `b6cpp` rejects a

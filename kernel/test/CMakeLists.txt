@@ -235,9 +235,11 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/fsck
     ${B6_ROOTFS}/etc/getty
     ${B6_ROOTFS}/etc/icheck
+    ${B6_ROOTFS}/etc/iostat
     ${B6_ROOTFS}/etc/mkfs
     ${B6_ROOTFS}/etc/mount
     ${B6_ROOTFS}/etc/ncheck
+    ${B6_ROOTFS}/etc/pstat
     ${B6_ROOTFS}/etc/quot
     ${B6_ROOTFS}/etc/umount
     ${B6_ROOTFS}/etc/wall
@@ -263,6 +265,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/dd
     ${B6_ROOTFS}/bin/df
     ${B6_ROOTFS}/bin/diff
+    ${B6_ROOTFS}/bin/dmesg
     ${B6_ROOTFS}/bin/du
     ${B6_ROOTFS}/usr/lib/diffh
     ${B6_ROOTFS}/bin/echo
@@ -281,10 +284,12 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/mkdir
     ${B6_ROOTFS}/bin/mv
     ${B6_ROOTFS}/bin/newgrp
+    ${B6_ROOTFS}/bin/nice
     ${B6_ROOTFS}/bin/novi
     ${B6_ROOTFS}/bin/od
     ${B6_ROOTFS}/bin/passwd
     ${B6_ROOTFS}/bin/pr
+    ${B6_ROOTFS}/bin/ps
     ${B6_ROOTFS}/bin/pwd
     ${B6_ROOTFS}/bin/rev
     ${B6_ROOTFS}/bin/rm
@@ -627,6 +632,31 @@ if(BESM6)
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(filters PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
+
+    # inspect -- TASK C8's FIVE INSPECTION PROGRAMS, on its own volume (3101).  A boot of its
+    # own rather than a section of utils or filters, for one reason: what it needs is
+    # PLURALITY.  All five of ps, dmesg, iostat, pstat and nice have a b6sim half -- the
+    # simulator answers kctl(2) and both memory devices out of an imitation kernel
+    # (doc/Aout_Simulator.md SS7) -- and it is the larger half.  What it cannot have is a
+    # second process, and neither utils nor filters arranges one; this script puts a
+    # `sleep 30' in the background on purpose so that there is something asleep to look at.
+    #
+    # SIX THINGS HERE ARE UNREACHABLE UNDER b6sim (inspect.sh's header is the long form): a
+    # REAL kernel printf in msgbuf, where the simulator has a fixed banner; four or more
+    # processes, where it has one; a process in state S; a WCHAN worth printing; a systm and
+    # an idle column with numbers in them, every tick under b6sim being billed to dk_time[0];
+    # and -- the sharpest of them -- a u-area at a p_addr that is NOT the caller's, above
+    # KREACH and off /dev/mem.  b6sim's one process has p_addr == uhome, so a ps there always
+    # reads the live u-area at UBASE and that branch is never taken at all.
+    #
+    # TWO THINGS ARE MASKED and run-inspect.sh says which and why: dmesg's four sizes and
+    # pstat -s's three swap scalars, both of which are configuration rather than measurement
+    # and both of which ARE asserted as literals under b6sim.
+    add_test(NAME inspect
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-inspect.sh
+                ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(inspect PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
     # edit -- ed(1) ON A RUNNING SYSTEM, on its own volume (3086).  Task C3, and the question
     # is the one none of the tests above can ask: everything they assert was written on the
@@ -1017,8 +1047,8 @@ if(BESM6)
     # through fifteen set_tests_properties calls -- so the daily/weekly line is readable in
     # one place.  The libtest_* diffs cost milliseconds each, but they adjudicate output
     # only libtest_run can produce, so they follow it.
-    b6_weekly(console_setup console session files utils filters edit fsinfo dd mkfs fsck accounts
-              mount tar login multi swap libtest_run libtest_fsck)
+    b6_weekly(console_setup console session files utils filters inspect edit fsinfo dd mkfs fsck
+              accounts mount tar login multi swap libtest_run libtest_fsck)
     foreach(_p ${B6_LIBTEST_IMAGE})
         b6_weekly(libtest_${_p})
     endforeach()
