@@ -174,7 +174,8 @@ int main(int argc, char **argv)
 //
 // The line is RAW here, so nothing is echoed and nothing is translated by the kernel: erase,
 // kill and the end of the line are this loop's business, and so is every character that
-// appears on the terminal.
+// appears on the terminal -- the "\b \b" an erase rubs out with included, which in cooked
+// mode is the kernel's own (kernel/dev/tty.c) and at this prompt can only be ours.
 //
 static int getname(void)
 {
@@ -198,16 +199,19 @@ static int getname(void)
         // §2: n is an int index, where v7 wrote `np >= &name[16]'.
         if (c == '\r' || c == '\n' || n >= NAMESIZE - 1)
             break;
+        if (c == ERASE) {
+            if (n > 0) {
+                n--;
+                putmsg("\b \b");
+            }
+            continue;
+        }
         putchr(cs);
         if (c >= 'a' && c <= 'z') {
             lower++;
         } else if (c >= 'A' && c <= 'Z') {
             upper++;
             c += 'a' - 'A';
-        } else if (c == ERASE) {
-            if (n > 0)
-                n--;
-            continue;
         } else if (c == KILL) {
             putchr('\r');
             putchr('\n');
