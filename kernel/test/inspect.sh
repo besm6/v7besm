@@ -213,7 +213,7 @@ grep -c '^u-area at 74000 (the live one)$' /tmp/pu0.out >>/tmp/inspect.log
 # NO NUMBER REACHES THE LOG.  Every one of them is a rate over a tick count; the comparisons
 # are made here and only the verdicts are diffed, which is this file's standing rule.
 echo --8-vmstat-- >>/tmp/inspect.log
-/etc/vmstat >/tmp/vm.out
+vmstat >/tmp/vm.out
 sed -n '1,2p' /tmp/vm.out >>/tmp/inspect.log
 # THE INTERMEDIATE FILE IS NOT STYLE.  cmd/sh cannot run a FOUR-stage pipeline inside
 # backquotes: three works, four takes a SIGILL in the shell itself, and the same four stages
@@ -242,11 +242,11 @@ then echo "vmstat: something is runnable" >>/tmp/inspect.log
 else echo "vmstat: nothing is runnable" >>/tmp/inspect.log
 fi
 # -p prints four more columns over the same partition; only its two headings reach the log.
-/etc/vmstat -p >/tmp/vmp.out
+vmstat -p >/tmp/vmp.out
 sed -n '1,2p' /tmp/vmp.out >>/tmp/inspect.log
 # -s: the LABELS, every number stripped.  A cumulative counter is precisely the kind of
 # number this test may not print, and the labels are what say the report is complete.
-/etc/vmstat -s | sed 's/^ *[0-9]* //' >>/tmp/inspect.log
+vmstat -s | sed 's/^ *[0-9]* //' >>/tmp/inspect.log
 
 kill $slept
 echo ---end--- >>/tmp/inspect.log

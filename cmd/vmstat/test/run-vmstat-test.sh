@@ -1,5 +1,5 @@
 #!/bin/sh
-# The FORMAT oracle for vmstat(1M), under b6sim.  Invoked by ctest as:
+# The FORMAT oracle for vmstat(1), under b6sim.  Invoked by ctest as:
 #
 #	run-vmstat-test.sh SIM PROG
 #

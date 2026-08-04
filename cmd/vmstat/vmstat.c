@@ -67,8 +67,10 @@
 // dk_time[(dk_busy & 07) + state*8], and dk_busy is live, so the four bases are bases and
 // not slots.  cmd/iostat/iostat.c is the long version.
 //
-// NOT SETUID, and in /etc beside iostat and pstat because the page is section 1M.  It opens
-// no device and needs no privilege: kctl(2) is unprivileged.
+// NOT SETUID, and in /bin as 2.11BSD had it: it opens no device and needs no privilege --
+// kctl(2) is unprivileged -- so it is an ordinary user command and its page is section 1.
+// iostat and pstat are in /etc because v7's pages for THEM are section 1M, which is a fact
+// about v7 rather than about privilege; cmd/dmesg made the same move for the same reason.
 //
 #include <stdio.h>
 #include <stdlib.h>

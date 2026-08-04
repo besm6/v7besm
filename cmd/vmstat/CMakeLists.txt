@@ -1,4 +1,4 @@
-# /etc/vmstat -- 2.11BSD's vmstat(1M), built natively for the BESM-6.
+# /bin/vmstat -- 2.11BSD's vmstat(1), built natively for the BESM-6.
 #
 # NOT A v7 PROGRAM.  v7 has no vmstat at all; the source is RetroBSD's
 # (src/cmd/vmstat.c), by way of 2.11BSD, and vmstat.c's header is the account of what
@@ -6,11 +6,13 @@
 # table had been holding a dozen live counters open on the sentence "they come with a
 # vmstat", and this is the vmstat.
 #
-# /etc AND NOT /bin, as iostat and pstat beside it: the page is section 1M.  It needs no
-# privilege either -- kctl(2) is unprivileged and it opens no device -- so, exactly as
-# for iostat, the placement is convention rather than permission, and the side effect is
-# the same and worth knowing: the two hard-coded `ls /bin' expectations
-# (kernel/test/console.ini and kernel/test/session.expected) do not have to grow for it.
+# /bin AND NOT /etc, which is where 2.11BSD had it and is cmd/dmesg's argument rather
+# than iostat's: this asks kctl(2) for every number it prints and opens no device, so it
+# is an ordinary user command and its page is section 1.  iostat and pstat are in /etc
+# because v7's pages for them are section 1M, which is a fact about v7 and not about
+# privilege -- neither of those needs any either.  The side effect is worth knowing: the
+# two hard-coded `ls /bin' expectations (kernel/test/console.ini and
+# kernel/test/session.expected) DO have to carry this program, and do.
 #
 # NOT SETUID, and there is nothing for it to be setuid to.
 #
@@ -21,14 +23,14 @@
 # device out of the same histogram; this one prints one, and neither is the other's
 # summary.
 #
-# vmstat.1m is the manual page; nothing installs it, it is read with `nroff -man
-# vmstat.1m'.
+# vmstat.1 is the manual page; nothing installs it, it is read with `nroff -man
+# vmstat.1'.
 
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is
 # the whole tree at once, as it is in lib/, kernel/, cmd/init/ and cmd/sh/.
 set(KINC ${CMAKE_SOURCE_DIR}/include)
 file(GLOB KHDRS ${KINC}/*.h ${KINC}/sys/*.h)
 
-b6_prog(vmstat DEST etc/vmstat SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/vmstat.c)
+b6_prog(vmstat DEST bin/vmstat SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/vmstat.c)
 
 add_subdirectory(test)

@@ -1,4 +1,4 @@
-# cmd/vmstat/test -- vmstat(1M) under b6sim.
+# cmd/vmstat/test -- vmstat(1) under b6sim.
 #
 # ONE b6_progtest CASE AND ONE ORACLE, and run-vmstat-test.sh's header is the account of
 # why the split falls there: the interval every rate is divided by comes off b6sim's
@@ -13,12 +13,12 @@
 # that, because a harness with no kernel under it must not invent traffic.  Where they move
 # is kernel/test/inspect.
 
-b6_progtest(vmstat badopt DEST etc/vmstat)
+b6_progtest(vmstat badopt DEST bin/vmstat)
 
 if(B6SIM)
     add_test(NAME cmd_vmstat_format
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-vmstat-test.sh
-                ${B6SIM} ${B6_ROOTFS}/etc/vmstat
+                ${B6SIM} ${B6_ROOTFS}/bin/vmstat
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(cmd_vmstat_format PROPERTIES LABELS cmd)
     if(TARGET build_tests AND TARGET b6prog_vmstat)

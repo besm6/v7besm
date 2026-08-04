@@ -242,7 +242,6 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/pstat
     ${B6_ROOTFS}/etc/quot
     ${B6_ROOTFS}/etc/umount
-    ${B6_ROOTFS}/etc/vmstat
     ${B6_ROOTFS}/etc/wall
     ${B6_ROOTFS}/etc/group
     ${B6_ROOTFS}/etc/motd
@@ -325,6 +324,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/tsort
     ${B6_ROOTFS}/bin/tty
     ${B6_ROOTFS}/bin/uniq
+    ${B6_ROOTFS}/bin/vmstat
     ${B6_ROOTFS}/bin/wc
     ${B6_ROOTFS}/bin/who
     ${B6_ROOTFS}/bin/write
