@@ -19,6 +19,7 @@
 // Like the rest of test/ it declares write() itself and carries its own put(), stdio
 // being phase 4; it does take strlen from libc, which is the point of the exercise.
 //
+#include <stdlib.h> // strdup's free()
 #include <string.h>
 
 int write(int fd, char *buf, int n);
@@ -186,6 +187,20 @@ int main(int argc, char **argv, char **envp)
     show("strerror(ENOENT)", strerror(2));
     show("strerror(-1)", strerror(-1));
     show("strerror(30000)", strerror(30000));
+
+    // ---- strdup: the one routine here that allocates, and the one that can fail.
+    // The copy is asked for from a source that does NOT start on a word boundary,
+    // since malloc always hands back a block that does: a duplicate written word
+    // at a time from an offset source would come out shifted.
+    memcpy(buf, "abcdefghij", 11);
+    p = strdup(buf + 1);
+    ok("strdup copies", p != 0 && strcmp(p, "bcdefghij") == 0);
+    ok("... into storage of its own", p != buf + 1);
+    show("strdup", p);
+    free(p);
+    p = strdup("");
+    ok("strdup of the empty string", p != 0 && strlen(p) == 0);
+    free(p);
 
     put("done\n");
     return 0;

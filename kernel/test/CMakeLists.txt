@@ -278,6 +278,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/usr/bin/lorder
     ${B6_ROOTFS}/usr/bin/ar
     ${B6_ROOTFS}/usr/bin/ranlib
+    ${B6_ROOTFS}/usr/bin/cc
     ${B6_ROOTFS}/bin/echo
     ${B6_ROOTFS}/bin/ed
     ${B6_ROOTFS}/bin/fgrep
@@ -337,6 +338,18 @@ set(ROOTFS_FILES
 include(${CMAKE_CURRENT_SOURCE_DIR}/../../lib/test/progs.cmake)
 foreach(_p ${B6_LIBTEST_IMAGE})
     list(APPEND ROOTFS_FILES ${B6_ROOTFS}/usr/test/${_p})
+endforeach()
+
+# ...and /lib and /usr/include, the development tree task C9e put on the image so that
+# /usr/bin/cc's default link line has something to find.  The three lists are the
+# top-level CMakeLists.txt's, declared there before this directory is added, for exactly
+# the reason above: one list, so the staging and this dependency cannot drift.  A
+# standalone `cmake -S kernel' has none of them and builds no image either.
+foreach(_f ${B6_STAGE_LIB})
+    list(APPEND ROOTFS_FILES ${B6_ROOTFS}/lib/${_f})
+endforeach()
+foreach(_f ${B6_STAGE_INC} ${B6_STAGE_FREEINC})
+    list(APPEND ROOTFS_FILES ${B6_ROOTFS}/usr/include/${_f})
 endforeach()
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/root.img
@@ -667,6 +680,35 @@ if(BESM6)
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(inspect PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
+
+    # toolchain -- THE MACHINE BUILDS AND RUNS A PROGRAM WITH ITS OWN TOOLS, on its own
+    # volume (3102).  Task C9's "done when", and a boot of its own for the reason inspect
+    # took one: what it needs is something no other script here arranges.  /usr/bin/cc
+    # searches /usr/bin for its sub-tools, appends /usr/include to every preprocessor run,
+    # and finds /lib/{crt0.o,libc.a,libruntime.a} for the link -- ALL BY ABSOLUTE PATH, and
+    # under b6sim all six of those are the build machine's.  So the b6sim suite in
+    # cmd/cc/rootfs/test pins the sub-tools with B6CPP/B6AS/B6LD and links -nostdlib with
+    # everything named by hand, which is the right way to compare two drivers and is exactly
+    # what leaves the search itself, and the whole of /lib and /usr/include, unasserted.
+    #
+    # FIVE THINGS ARE UNREACHABLE UNDER b6sim (toolchain.sh's header is the long form): cc's
+    # own path search; /lib and /usr/include, which task C9e put on the image for this and
+    # for nothing else; three forks and three execs through the real kernel, waited for with
+    # the argument-less wait(2) this system has instead of waitpid(); the EXECUTION of an
+    # a.out the machine built during the run; and cc's temporaries in the image's own /tmp,
+    # made with mkstemps(3) and removed by the atexit(3) handler libc gained in the same
+    # task -- the only place either routine's cleanup is visible anywhere.
+    #
+    # IT NEEDS THE HOST b6cc, which none of the other boots do: the fixture is the assembly
+    # of lib/test/hello.c, generated fresh by run-toolchain.sh rather than checked in, since
+    # a golden .s would freeze the code generator and this test would stop noticing that the
+    # machine's as and ld still agree with it.  NOTHING IS MASKED.
+    add_test(NAME toolchain
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-toolchain.sh
+                ${B6FSUTIL} ${BESM6} ${B6CC} ${B6_LIBC_DIR} ${B6LIBDIR}
+                ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(toolchain PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
     # edit -- ed(1) ON A RUNNING SYSTEM, on its own volume (3086).  Task C3, and the question
     # is the one none of the tests above can ask: everything they assert was written on the
@@ -1057,8 +1099,8 @@ if(BESM6)
     # through fifteen set_tests_properties calls -- so the daily/weekly line is readable in
     # one place.  The libtest_* diffs cost milliseconds each, but they adjudicate output
     # only libtest_run can produce, so they follow it.
-    b6_weekly(console_setup console session files utils filters inspect edit fsinfo dd mkfs fsck
-              accounts mount tar login multi swap libtest_run libtest_fsck)
+    b6_weekly(console_setup console session files utils filters inspect toolchain edit fsinfo
+              dd mkfs fsck accounts mount tar login multi swap libtest_run libtest_fsck)
     foreach(_p ${B6_LIBTEST_IMAGE})
         b6_weekly(libtest_${_p})
     endforeach()

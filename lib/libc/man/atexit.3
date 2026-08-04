@@ -1,0 +1,72 @@
+.TH ATEXIT 3
+.SH NAME
+atexit \- register a function to run at normal termination
+.SH SYNOPSIS
+.B #include <stdlib.h>
+.PP
+.B int atexit(void (*func)(void));
+.SH DESCRIPTION
+.I Atexit
+records
+.I func
+to be called when the program terminates normally.  It returns 0 on success and
+\-1 if the registration could not be made \- a null
+.I func
+or more than
+.B 32
+of them, which is C11 sec 7.22.4.2's own minimum and all this implementation
+offers.
+.PP
+The registered functions are called by
+.IR exit (2),
+.B in reverse order of registration,
+and
+.B before
+the standard I/O streams are flushed and closed, so a handler may still print.
+Each is called with no arguments and its return value is discarded.
+.PP
+.B It is not reached by every exit.
+Nothing runs on
+.IR _exit (2),
+on a signal that terminates the process, or on a
+.I "sys exit"
+from the assembler, so it is a way of tidying up after a program's own decision
+to stop, not after a crash.  A handler that itself calls
+.I exit
+is undefined behaviour in C11 and recurses here.
+.PP
+It is C11's and not v7's: a v7 program that wanted this wrote its own wrapper
+round
+.IR exit ,
+and several in cmd/ still do.
+.SH "SEE ALSO"
+exit(2), fclose(3)
+.SH FILES
+share/besm6/lib/libc.a
+.br
+lib/libc/gen/atexit.c
+.br
+lib/libc/gen/cuexit.c \- the pointer
+.I exit
+tests
+.SH BESM-6 NOTES
+.SS Registering costs one word to everyone else
+.I Exit
+is tail-jumped to by
+.I crt0
+and is therefore in every program.  If it named the handler table outright, every
+program would carry the 32 words of it, whether or not it had ever called
+.IR atexit .
+So
+.I exit
+tests a pointer that
+.I atexit
+arms \- the same bargain
+.IR fclose (3)
+makes for the stdio flush, and for the same reason.
+.I Hello
+pays one word of bss for this page and nothing else.
+.SH BUGS
+.B The table is 32 entries and the limit is not diagnosed at compile time.
+A thirty-third registration simply returns \-1, and a caller that ignores the
+result loses the handler silently.

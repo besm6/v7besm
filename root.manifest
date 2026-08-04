@@ -94,12 +94,28 @@ dir /etc
 dir /usr
 dir /usr/test
 
-# THE FIRST DIRECTORY THIS IMAGE HAS EVER HAD IN /usr/bin, and it exists for one program:
-# /usr/bin/cpp, the C preprocessor -- the first thing on this disk built from THE SAME
-# SOURCES AS A HOST TOOL (cmd/cpp/TODO.md, task C9a in cmd/TODO.md).  The shell's default
-# path is already ":/bin:/usr/bin" (cmd/sh/msg.c), so a bare `cpp' finds it without
-# /etc/rc setting PATH at all.
+# THE TOOLCHAIN.  It began as one program -- /usr/bin/cpp, the C preprocessor, the first
+# thing on this disk built from THE SAME SOURCES AS A HOST TOOL (task C9a in cmd/TODO.md)
+# -- and tasks C9b through C9e finished it: eleven programs now, from the preprocessor to
+# the cc(1) driver that runs them.  The shell's default path is already ":/bin:/usr/bin"
+# (cmd/sh/msg.c), so a bare `cc' finds it without /etc/rc setting PATH at all.
 dir /usr/bin
+
+# THE OTHER TWO THIRDS OF A DEVELOPMENT SYSTEM, task C9e, and they are here because
+# /usr/bin/cc's link line names them: without /lib there is no crt0.o and no libc.a to
+# link against, and cc could only ever be run -nostdlib.  /usr/include is what a `cc -E'
+# resolves a system header from.  Both are staged by the top-level CMakeLists.txt (the
+# B6_STAGE_* lists), and kernel/test/CMakeLists.txt hangs root.img on the same lists so
+# that a file staged and not listed cannot go unnoticed.
+#
+# THE HEADER TREE HAS TWO OWNERS, which is the one thing to know before adding to it: the
+# hosted half is this repo's include/ and is staged from the SOURCE tree, so an edit is on
+# the image without an install; the freestanding ten -- <stddef.h>, <stdarg.h>, <besm6.h>
+# and their fellows -- belong to the external c-compiler, which defines them, and are
+# copied from where it installed them.  include/README.md has the division.
+dir /lib
+dir /usr/include
+dir /usr/include/sys
 
 # diff -h's other half, task C5f.  THE FIRST ENTRY THIS IMAGE HAS EVER HAD IN /usr/lib, and
 # the only program of that task that is not in /bin: diff(1) reaches it with
@@ -896,6 +912,353 @@ file /usr/bin/ranlib    # cmd/ranlib built natively -- and it CONTAINS ALL OF ar
                         # than /tmp.  cmd/ranlib/README.md.
 source ../../rootfs/usr/bin/ranlib
 mode 0755
+
+# THE C9e BLOCK: the driver, and the two directories that make it worth having.  With
+# /usr/bin/cc the machine can drive its own toolchain from one command -- and with /lib
+# and /usr/include below it can drive it all the way to a runnable a.out:
+#
+#	$ cc -o hello hello.s
+#
+# is /usr/bin/cpp, /usr/bin/as and /usr/bin/ld, /lib/crt0.o at the head of the link and
+# /lib/{libc.a,libruntime.a} at the end of it, all of them this disk's own.  What it
+# CANNOT do is start from hello.c: the parse, lower and codegen passes belong to the
+# external c-compiler repository, which this one cannot build for the target, and cc says
+# so rather than reporting a missing file.  cmd/cc/README.md, "It cannot compile C".
+
+file /usr/bin/cc        # cmd/cc built natively -- task C9e, the last of C9 and the only
+                        # program of the eleven that is a DRIVER: it parses arguments,
+                        # searches a path and forks.  Two things differ from the host
+                        # build and both are in the one profile at the head of cmd/cc.c:
+                        # the search is /usr/bin, /usr/include and /lib rather than
+                        # share/besm6 under ~/.local or /usr/local, and a sub-tool here
+                        # is `cpp' where the host needs `b6cpp' to tell it from its own.
+                        # The spawn is NOT keyed -- fork, execv and wait are what v7's cc
+                        # did and what this kernel has, so both builds take them.  What
+                        # changed for the target is in libc: strdup(), mkstemps() and
+                        # atexit(), the last of which <stdlib.h> had declared since these
+                        # headers were written and nothing had implemented.
+                        # cmd/cc/README.md.
+source ../../rootfs/usr/bin/cc
+mode 0755
+
+# /lib -- WHAT cc LINKS AGAINST, and exactly that, nothing more.  crt0.o and libc.a are
+# lib/libc's, built by this same tree with these same tools; libruntime.a is the external
+# c-compiler's and is the one piece of the link that cannot come from here (it holds the
+# b$* helpers every compiled function calls).  The order on cc's command line is a
+# contract and not a preference -- b6ld scans an archive once, where it stands, and libc
+# calls the helpers while no helper calls back into libc.
+#
+# libm.a, libcurses.a and libtermcap.a are deliberately ABSENT: some 40 blocks for
+# archives nothing on this image links today, and adding one is a line in the top-level
+# CMakeLists.txt's B6_STAGE_LIB and a stanza here.
+
+file /lib/crt0.o        # the startup object, NAMED on the link line and never pulled by
+                        # symbol -- which is why it is beside libc.a and not in it, as it
+                        # is on v7.  It defines _start, the entry cc gives b6ld with -e.
+source ../../rootfs/lib/crt0.o
+mode 0644
+
+file /lib/libc.a        # this tree's C library, index and all -- and the machine can now
+                        # rebuild it from its own objects with /usr/bin/ar and
+                        # /usr/bin/ranlib, byte for byte (task C9d).
+source ../../rootfs/lib/libc.a
+mode 0644
+
+file /lib/libruntime.a  # the external c-compiler's b$* helpers.  The one file on this
+                        # disk that this repository does not build.
+source ../../rootfs/lib/libruntime.a
+mode 0644
+
+# /usr/include -- THE ONE SYSTEM HEADER TREE, in the two halves include/README.md
+# describes.  The first 59 are this repo's own, staged from the source tree; the last ten
+# are the freestanding headers the external c-compiler defines and installs, and are here
+# because no <stddef.h> means no <stdio.h> either.  cc appends this directory to every
+# preprocessor run unless -nostdinc.
+#
+# They are listed one by one because this manifest is kept by hand and b6fsutil has no
+# recursive directive; the list they must match is B6_STAGE_INC / B6_STAGE_FREEINC in the
+# top-level CMakeLists.txt, and root.img depends on every one of them.
+
+file /usr/include/assert.h
+source ../../rootfs/usr/include/assert.h
+mode 0644
+
+file /usr/include/ctype.h
+source ../../rootfs/usr/include/ctype.h
+mode 0644
+
+file /usr/include/curses.h
+source ../../rootfs/usr/include/curses.h
+mode 0644
+
+file /usr/include/errno.h
+source ../../rootfs/usr/include/errno.h
+mode 0644
+
+file /usr/include/fcntl.h
+source ../../rootfs/usr/include/fcntl.h
+mode 0644
+
+file /usr/include/fenv.h
+source ../../rootfs/usr/include/fenv.h
+mode 0644
+
+file /usr/include/grp.h
+source ../../rootfs/usr/include/grp.h
+mode 0644
+
+file /usr/include/inttypes.h
+source ../../rootfs/usr/include/inttypes.h
+mode 0644
+
+file /usr/include/locale.h
+source ../../rootfs/usr/include/locale.h
+mode 0644
+
+file /usr/include/math.h
+source ../../rootfs/usr/include/math.h
+mode 0644
+
+file /usr/include/pwd.h
+source ../../rootfs/usr/include/pwd.h
+mode 0644
+
+file /usr/include/setjmp.h
+source ../../rootfs/usr/include/setjmp.h
+mode 0644
+
+file /usr/include/sgtty.h
+source ../../rootfs/usr/include/sgtty.h
+mode 0644
+
+file /usr/include/signal.h
+source ../../rootfs/usr/include/signal.h
+mode 0644
+
+file /usr/include/stdio.h
+source ../../rootfs/usr/include/stdio.h
+mode 0644
+
+file /usr/include/stdlib.h
+source ../../rootfs/usr/include/stdlib.h
+mode 0644
+
+file /usr/include/string.h
+source ../../rootfs/usr/include/string.h
+mode 0644
+
+file /usr/include/term.h
+source ../../rootfs/usr/include/term.h
+mode 0644
+
+file /usr/include/tgmath.h
+source ../../rootfs/usr/include/tgmath.h
+mode 0644
+
+file /usr/include/time.h
+source ../../rootfs/usr/include/time.h
+mode 0644
+
+file /usr/include/uchar.h
+source ../../rootfs/usr/include/uchar.h
+mode 0644
+
+file /usr/include/unctrl.h
+source ../../rootfs/usr/include/unctrl.h
+mode 0644
+
+file /usr/include/unistd.h
+source ../../rootfs/usr/include/unistd.h
+mode 0644
+
+file /usr/include/utmp.h
+source ../../rootfs/usr/include/utmp.h
+mode 0644
+
+file /usr/include/varargs.h
+source ../../rootfs/usr/include/varargs.h
+mode 0644
+
+file /usr/include/wchar.h
+source ../../rootfs/usr/include/wchar.h
+mode 0644
+
+file /usr/include/wctype.h
+source ../../rootfs/usr/include/wctype.h
+mode 0644
+
+# ...and the freestanding ten, the external compiler's.
+
+file /usr/include/besm6.h
+source ../../rootfs/usr/include/besm6.h
+mode 0644
+
+file /usr/include/float.h
+source ../../rootfs/usr/include/float.h
+mode 0644
+
+file /usr/include/iso646.h
+source ../../rootfs/usr/include/iso646.h
+mode 0644
+
+file /usr/include/limits.h
+source ../../rootfs/usr/include/limits.h
+mode 0644
+
+file /usr/include/stdalign.h
+source ../../rootfs/usr/include/stdalign.h
+mode 0644
+
+file /usr/include/stdarg.h
+source ../../rootfs/usr/include/stdarg.h
+mode 0644
+
+file /usr/include/stdbool.h
+source ../../rootfs/usr/include/stdbool.h
+mode 0644
+
+file /usr/include/stddef.h
+source ../../rootfs/usr/include/stddef.h
+mode 0644
+
+file /usr/include/stdint.h
+source ../../rootfs/usr/include/stdint.h
+mode 0644
+
+file /usr/include/stdnoreturn.h
+source ../../rootfs/usr/include/stdnoreturn.h
+mode 0644
+
+# sys/, the kernel's own half of the tree.
+
+file /usr/include/sys/acct.h
+source ../../rootfs/usr/include/sys/acct.h
+mode 0644
+
+file /usr/include/sys/besm6dev.h
+source ../../rootfs/usr/include/sys/besm6dev.h
+mode 0644
+
+file /usr/include/sys/besm6disk.h
+source ../../rootfs/usr/include/sys/besm6disk.h
+mode 0644
+
+file /usr/include/sys/buf.h
+source ../../rootfs/usr/include/sys/buf.h
+mode 0644
+
+file /usr/include/sys/callo.h
+source ../../rootfs/usr/include/sys/callo.h
+mode 0644
+
+file /usr/include/sys/conf.h
+source ../../rootfs/usr/include/sys/conf.h
+mode 0644
+
+file /usr/include/sys/dir.h
+source ../../rootfs/usr/include/sys/dir.h
+mode 0644
+
+file /usr/include/sys/errno.h
+source ../../rootfs/usr/include/sys/errno.h
+mode 0644
+
+file /usr/include/sys/fblk.h
+source ../../rootfs/usr/include/sys/fblk.h
+mode 0644
+
+file /usr/include/sys/file.h
+source ../../rootfs/usr/include/sys/file.h
+mode 0644
+
+file /usr/include/sys/filsys.h
+source ../../rootfs/usr/include/sys/filsys.h
+mode 0644
+
+file /usr/include/sys/ino.h
+source ../../rootfs/usr/include/sys/ino.h
+mode 0644
+
+file /usr/include/sys/inode.h
+source ../../rootfs/usr/include/sys/inode.h
+mode 0644
+
+file /usr/include/sys/kctl.h
+source ../../rootfs/usr/include/sys/kctl.h
+mode 0644
+
+file /usr/include/sys/map.h
+source ../../rootfs/usr/include/sys/map.h
+mode 0644
+
+file /usr/include/sys/mount.h
+source ../../rootfs/usr/include/sys/mount.h
+mode 0644
+
+file /usr/include/sys/param.h
+source ../../rootfs/usr/include/sys/param.h
+mode 0644
+
+file /usr/include/sys/proc.h
+source ../../rootfs/usr/include/sys/proc.h
+mode 0644
+
+file /usr/include/sys/reg.h
+source ../../rootfs/usr/include/sys/reg.h
+mode 0644
+
+file /usr/include/sys/seg.h
+source ../../rootfs/usr/include/sys/seg.h
+mode 0644
+
+file /usr/include/sys/signal.h
+source ../../rootfs/usr/include/sys/signal.h
+mode 0644
+
+file /usr/include/sys/stat.h
+source ../../rootfs/usr/include/sys/stat.h
+mode 0644
+
+file /usr/include/sys/syscall.h
+source ../../rootfs/usr/include/sys/syscall.h
+mode 0644
+
+file /usr/include/sys/systm.h
+source ../../rootfs/usr/include/sys/systm.h
+mode 0644
+
+file /usr/include/sys/text.h
+source ../../rootfs/usr/include/sys/text.h
+mode 0644
+
+file /usr/include/sys/timeb.h
+source ../../rootfs/usr/include/sys/timeb.h
+mode 0644
+
+file /usr/include/sys/times.h
+source ../../rootfs/usr/include/sys/times.h
+mode 0644
+
+file /usr/include/sys/tty.h
+source ../../rootfs/usr/include/sys/tty.h
+mode 0644
+
+file /usr/include/sys/ttyio.h
+source ../../rootfs/usr/include/sys/ttyio.h
+mode 0644
+
+file /usr/include/sys/types.h
+source ../../rootfs/usr/include/sys/types.h
+mode 0644
+
+file /usr/include/sys/user.h
+source ../../rootfs/usr/include/sys/user.h
+mode 0644
+
+file /usr/include/sys/wait.h
+source ../../rootfs/usr/include/sys/wait.h
+mode 0644
+
 
 file /usr/lib/diffh     # cmd/diffh -- task C5f.  diff -h execv's this path; see the
                         # /usr/lib stanza above.  Its window is RANGE (30) lines of each

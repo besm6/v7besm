@@ -145,8 +145,86 @@ if(B6RUNTIME_LIB)
     # `make' alone would leave build/rootfs/usr/test empty and only `make test' would fill it.
     add_custom_target(rootfs ALL)
 
+    #
+    # THE DEVELOPMENT TREE ON THE IMAGE: /lib and /usr/include, which task C9e put
+    # there because /usr/bin/cc's link line names them.  Without these the machine's
+    # own driver can only link -nostdlib, which is a driver that cannot build a
+    # program.
+    #
+    # Three lists, declared HERE rather than beside the copies below because
+    # kernel/test/ is configured before them and its ROOTFS_FILES has to name the
+    # same files -- root.img depends on every one of them, and a file staged but not
+    # listed is an image that silently does not rebuild.
+    #
+    # B6_STAGE_LIB is what `cc' names by default and nothing more: crt0.o and libc.a
+    # from lib/libc, and libruntime.a from the external c-compiler beside it.
+    # libm.a, libcurses.a and libtermcap.a are deliberately NOT here -- some 40
+    # blocks for archives nothing on this image links -- and adding one is a line
+    # here and a stanza in root.manifest.
+    #
+    # The header tree has TWO OWNERS, as install(DIRECTORY include/) below records:
+    # the hosted half is this repo's and is staged from the SOURCE tree, so an edit
+    # is on the image without an install; the freestanding half is the external
+    # compiler's, which defines those ten and which we do not ship copies of.
+    #
+    set(B6_STAGE_INC_SRC ${CMAKE_SOURCE_DIR}/include)
+    file(GLOB B6_STAGE_INC RELATIVE ${B6_STAGE_INC_SRC}
+         ${B6_STAGE_INC_SRC}/*.h ${B6_STAGE_INC_SRC}/sys/*.h)
+    get_filename_component(B6_STAGE_FREEINC_SRC ${B6LIBDIR}/../include ABSOLUTE)
+    set(B6_STAGE_FREEINC
+        besm6.h float.h iso646.h limits.h stdalign.h
+        stdarg.h stdbool.h stddef.h stdint.h stdnoreturn.h)
+    set(B6_STAGE_LIB crt0.o libc.a libruntime.a)
+
     add_subdirectory(kernel)
     add_subdirectory(lib)
+
+    #
+    # ...and the copies themselves, which have to come after lib/ since two of the
+    # three archives are its output.  copy_if_different rather than copy: a header
+    # that did not change must not restamp the file the disk image depends on, or
+    # every configure would rebuild root.img.
+    #
+    set(_staged "")
+    foreach(_f ${B6_STAGE_LIB})
+        if(_f STREQUAL libruntime.a)
+            set(_src ${B6LIBDIR}/${_f})     # the external compiler's
+            set(_dep ${_src})
+        else()
+            set(_src ${B6_LIBC_DIR}/${_f})  # lib/libc's, freshly built
+            set(_dep libc)
+        endif()
+        add_custom_command(OUTPUT ${B6_ROOTFS}/lib/${_f}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${B6_ROOTFS}/lib
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_src} ${B6_ROOTFS}/lib/${_f}
+            DEPENDS ${_dep}
+            COMMENT "stage /lib/${_f}" VERBATIM)
+        list(APPEND _staged ${B6_ROOTFS}/lib/${_f})
+    endforeach()
+
+    foreach(_f ${B6_STAGE_INC})
+        get_filename_component(_d ${B6_ROOTFS}/usr/include/${_f} DIRECTORY)
+        add_custom_command(OUTPUT ${B6_ROOTFS}/usr/include/${_f}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${_d}
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${B6_STAGE_INC_SRC}/${_f} ${B6_ROOTFS}/usr/include/${_f}
+            DEPENDS ${B6_STAGE_INC_SRC}/${_f}
+            COMMENT "stage /usr/include/${_f}" VERBATIM)
+        list(APPEND _staged ${B6_ROOTFS}/usr/include/${_f})
+    endforeach()
+
+    foreach(_f ${B6_STAGE_FREEINC})
+        add_custom_command(OUTPUT ${B6_ROOTFS}/usr/include/${_f}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${B6_ROOTFS}/usr/include
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${B6_STAGE_FREEINC_SRC}/${_f} ${B6_ROOTFS}/usr/include/${_f}
+            DEPENDS ${B6_STAGE_FREEINC_SRC}/${_f}
+            COMMENT "stage /usr/include/${_f}" VERBATIM)
+        list(APPEND _staged ${B6_ROOTFS}/usr/include/${_f})
+    endforeach()
+
+    add_custom_target(rootfs_devel ALL DEPENDS ${_staged})
+    add_dependencies(rootfs rootfs_devel)
 
     add_subdirectory(cmd/init)
     # /usr/bin/cpp -- the host tool cmd/cpp, built a second time for the target (task C9a).
@@ -174,6 +252,12 @@ if(B6RUNTIME_LIB)
     # full B6_LIBAOUT_SOURCES -- the four file-descriptor routines exist for them.
     add_subdirectory(cmd/ar/rootfs)
     add_subdirectory(cmd/ranlib/rootfs)
+    # /usr/bin/cc -- task C9e, and the last of C9: the driver that runs all of the
+    # above.  One source file, no libaout (a driver reads no a.out), and the only
+    # program of the ten that cannot do its most obvious job -- the compiler proper
+    # is the external c-compiler's, so `cc foo.c' on the machine stops after the
+    # preprocessor.  It is also what makes /lib and /usr/include below worth having.
+    add_subdirectory(cmd/cc/rootfs)
     add_subdirectory(cmd/sh)
     add_subdirectory(cmd/basename)
     add_subdirectory(cmd/cal)

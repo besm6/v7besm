@@ -27,9 +27,20 @@
 // on the host filesystem, so rewriting PATH would hide the very directory the
 // program under test was just built into.
 //
+// THE SIX B6* NAMES ARE HERE FOR ONE PROGRAM, and for the sharp end of the same
+// fact.  /usr/bin/cc (task C9e) looks its sub-tools up at ABSOLUTE paths --
+// /usr/bin/cpp, /usr/bin/as, /usr/bin/ld -- and under b6sim those resolve on the
+// BUILD MACHINE, where /usr/bin/as is very likely a real assembler for some other
+// architecture.  The per-tool overrides are the driver's own answer to that and
+// are checked ahead of the search, so a test points them at the staged BESM-6
+// programs; without them on this list the guest would never see them.  Compare
+// cmd/sh/test/run-sh-test.sh, which meets the same hazard with PATH and answers it
+// by copying ./echo in beside the script.
+//
 static const char *const ENV_WHITELIST[] = {
-    "LANG", "LC_ALL",  "TERM",   "SHELL",  "PATH",  "HOME",
-    "USER", "LOGNAME", "TMPDIR", "EDITOR", "PAGER", "MAKEFLAGS",
+    "LANG",  "LC_ALL", "TERM",      "SHELL",     "PATH", "HOME",
+    "USER",  "LOGNAME", "TMPDIR",   "EDITOR",    "PAGER", "MAKEFLAGS",
+    "B6CPP", "B6PARSE", "B6LOWER",  "B6CODEGEN", "B6AS",  "B6LD",
 };
 
 //

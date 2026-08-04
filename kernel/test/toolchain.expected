@@ -1,0 +1,12 @@
+toolchain begin
+cc status 0
+hello, world
+./hello
+hello status 0
+size status 0
+1
+cc -c status 0
+relink identical 0
+/tmp/cc*
+2
+cc on a .c status 1

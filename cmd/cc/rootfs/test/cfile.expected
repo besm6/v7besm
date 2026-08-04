@@ -1,0 +1,1 @@
+cc: error: hello.c: cannot compile C on this machine -- the parse, lower and codegen passes are not here.  -E works, and so do .s, .S and .o inputs.

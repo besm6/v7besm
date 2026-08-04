@@ -1,6 +1,6 @@
 //
 // gen -- the small utilities of phase 2: abs, atoi, atol, rand, qsort, the ctype
-// table, mktemp, isatty and perror.
+// table, mktemp, mkstemp, mkstemps, atexit, isatty and perror.
 //
 // Three of these are more than a transcription of the v7 file and are what the program
 // is really for:
@@ -33,6 +33,7 @@
 
 char *mktemp(char *as);
 int mkstemp(char *as);
+int mkstemps(char *as, int suffixlen);
 void perror(const char *s);
 char *index(const char *sp, char c);
 
@@ -101,11 +102,31 @@ static void showints(char *what, int *v, int n)
     put("\n");
 }
 
+//
+// The three atexit() handlers.  They print AFTER main's own "done", which is half
+// the assertion, and in the order third, second, first, which is the other half:
+// C11 SS7.22.4.4 runs them in reverse order of registration.
+//
+static void bye1(void)
+{
+    put("atexit first\n");
+}
+
+static void bye2(void)
+{
+    put("atexit second\n");
+}
+
+static void bye3(void)
+{
+    put("atexit third\n");
+}
+
 int main(int argc, char **argv, char **envp)
 {
     int v[8], pairs[16], i, n;
     char bytes[9];
-    char tmpl[16], tmpl2[16];
+    char tmpl[24], tmpl2[24]; // "/tmp/mkqXXXXXX.tac" is the longest below
     char *p;
     int fd, fd2;
 
@@ -285,9 +306,43 @@ int main(int argc, char **argv, char **envp)
     unlink(tmpl);
     unlink(tmpl2);
 
+    // ---- mkstemps: the Xs are in the MIDDLE and the suffix survives ----
+    //
+    // The whole of the difference is where the walk stops, so what is asserted is
+    // that the four bytes after the Xs come through untouched and that the name
+    // still varies.  A suffix longer than the template is the one error case.
+    strcpy(tmpl, "/tmp/mkqXXXXXX.tac");
+    fd = mkstemps(tmpl, 4);
+    ok("mkstemps returns a descriptor", fd >= 0);
+    ok("mkstemps kept the prefix", strncmp(tmpl, "/tmp/mkq", 8) == 0);
+    ok("mkstemps kept the suffix", strcmp(tmpl + 14, ".tac") == 0);
+    ok("mkstemps replaced every X", index(tmpl, 'X') == 0);
+    ok("mkstemps kept the length", strlen(tmpl) == 18);
+    ok("mkstemps made the file", open(tmpl, O_RDONLY) >= 0);
+    strcpy(tmpl2, "/tmp/mkqXXXXXX.tac");
+    fd2 = mkstemps(tmpl2, 4);
+    ok("second mkstemps names something else", strcmp(tmpl, tmpl2) != 0);
+    close(fd);
+    close(fd2);
+    unlink(tmpl);
+    unlink(tmpl2);
+    strcpy(tmpl, "/tmp/mkqXXXXXX.tac");
+    ok("mkstemps rejects an over-long suffix", mkstemps(tmpl, 99) == -1);
+    ok("mkstemps rejects a negative suffix", mkstemps(tmpl, -1) == -1);
+
     // ---- isatty: the harness redirects both descriptors to a file ----
     ok("isatty of a redirected stdout", isatty(1) == 0);
     ok("isatty of a bad descriptor", isatty(63) == 0);
+
+    // ---- atexit: registered here, run below the end of main ----
+    //
+    // Three of them, so the reverse order is visible, plus the two ways a
+    // registration is refused.  Nothing here can assert the 32-entry limit without
+    // 32 named functions; the null case is the one that costs a line.
+    ok("atexit accepts a handler", atexit(bye1) == 0);
+    ok("atexit accepts a second", atexit(bye2) == 0);
+    ok("atexit accepts a third", atexit(bye3) == 0);
+    ok("atexit refuses a null handler", atexit((void (*)(void))0) == -1);
 
     // ---- perror, on fd 2, after a call that really failed ----
     open("/no/such/file", O_RDONLY);

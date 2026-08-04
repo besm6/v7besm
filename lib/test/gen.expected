@@ -49,8 +49,24 @@ ok   mkstemp descriptor writes
 ok   mkstemp descriptor reads back
 ok   second mkstemp returns a descriptor
 ok   second mkstemp names something else
+ok   mkstemps returns a descriptor
+ok   mkstemps kept the prefix
+ok   mkstemps kept the suffix
+ok   mkstemps replaced every X
+ok   mkstemps kept the length
+ok   mkstemps made the file
+ok   second mkstemps names something else
+ok   mkstemps rejects an over-long suffix
+ok   mkstemps rejects a negative suffix
 ok   isatty of a redirected stdout
 ok   isatty of a bad descriptor
+ok   atexit accepts a handler
+ok   atexit accepts a second
+ok   atexit accepts a third
+ok   atexit refuses a null handler
 perror: No such file or directory
 No such file or directory
 done
+atexit third
+atexit second
+atexit first

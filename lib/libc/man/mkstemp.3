@@ -1,10 +1,12 @@
 .TH MKSTEMP 3
 .SH NAME
-mkstemp \- make a unique file and open it
+mkstemp, mkstemps \- make a unique file and open it
 .SH SYNOPSIS
 .B #include <stdio.h>
 .PP
 .B int mkstemp(char *template);
+.br
+.B int mkstemps(char *template, int suffixlen);
 .SH DESCRIPTION
 .I Mkstemp
 replaces
@@ -20,7 +22,22 @@ does; the template must be
 \- a string literal will not do, this machine's literals living in the read\-only
 const segment.
 .PP
-It is POSIX's, not v7's and not C11's.
+.I Mkstemps
+is the same, except that the last
+.I suffixlen
+bytes of the template are a fixed suffix and the run of X's ends just before
+them, so that
+.B /tmp/ccXXXXXX.tac
+varies in the middle and keeps its extension.
+.I Mkstemp(template)
+is
+.IR mkstemps(template,\ 0) .
+A negative
+.I suffixlen
+or one longer than the template is
+.SM EINVAL .
+.PP
+Both are POSIX's or BSD's, and neither v7's nor C11's.
 .I Mktemp
 hands back a name and leaves the caller to open it;
 .I mkstemp

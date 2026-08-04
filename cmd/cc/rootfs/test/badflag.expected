@@ -1,0 +1,21 @@
+cc: error: unknown option -Q
+Usage:
+    cc [options] file...
+Options:
+    -c              Compile and assemble, but do not link
+    -S              Compile only; emit assembly (.s)
+    -Sbemsh         Like -S, but emit Bemsh-dialect assembly
+    -Smadlen        Like -S, but emit Madlen-dialect assembly
+    -E              Preprocess only; write to output or .i
+    -o file         Set output file name
+    -O              Optimize (reserved; currently a no-op)
+    -g              Emit debug info (reserved; currently a no-op)
+    -v              Verbose: echo each sub-command
+    -Dname[=val]    Predefine a preprocessor macro
+    -Uname          Undefine a preprocessor macro
+    -Ipath          Add a header search directory
+    -Lpath          Add a library search directory (for the linker)
+    -lname          Link against library libname (for the linker)
+    -nostdlib       Do not use the standard library dirs, crt0.o, -lc or -lruntime
+    -nostdinc       Do not add the standard system include directory
+Inputs are dispatched by suffix: .c (compile), .S (preprocess + assemble), .s (assemble), .o (link).

@@ -69,9 +69,15 @@ void *aligned_alloc(size_t alignment, size_t size);
 // extensions no header declares and a caller declares them itself.
 double atof(const char *nptr);
 
+// Registered handlers run at exit(), in reverse order of registration and BEFORE
+// the streams are flushed; at least 32 of them, which is C11's own minimum.  It
+// costs a program that never calls it one word (lib/libc/gen/cuexit.c says why),
+// and it does NOT run on _exit() or on a signal, so it is not a way to clean up
+// after a crash.  lib/libc/gen/atexit.c.
+int atexit(void (*func)(void));
+
 // ---- declared for future implementation (TODO) ----
 _Noreturn void _Exit(int status);
-int atexit(void (*func)(void));
 _Noreturn void quick_exit(int status);
 int at_quick_exit(void (*func)(void));
 

@@ -280,8 +280,9 @@ own purpose. Ask what call actually needs privilege before reaching for `04755`.
 
   **Joining one of those costs a section in its `.sh`; a boot of its own costs two minutes and a
   volume number**, so take one only for something they cannot show — `tar` needed a second drive,
-  `inspect` a plurality of processes. Each has its own copy of the image at its own volume number;
-  **3101 is the highest used, 3102 is the next free.** Most graft their script with `b6fsutil -a`, at a path distinct from the program
+  `inspect` a plurality of processes, `toolchain` a `cc` whose search path is the *image's*
+  `/usr/bin`, `/lib` and `/usr/include` rather than the build machine's. Each has its own copy of
+  the image at its own volume number; **3102 is the highest used, 3103 is the next free.** Most graft their script with `b6fsutil -a`, at a path distinct from the program
   under test (`/etc/mkfstest`, not `/etc/mkfs`). `login`, `multi` and `accounts` type every
   character instead, and each needs a fixed TCP port for Consul 2 (4199, 4200, 4201) — as much of
   the `RESOURCE_LOCK`'s reason as the CPU is. An oracle that is a property of the whole image

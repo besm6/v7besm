@@ -24,6 +24,12 @@ char *strrchr(const char *s, int c);
 char *strstr(const char *haystack, const char *needle);
 char *strtok(char *str, const char *delim);
 
+// POSIX's, and neither v7's nor C11's -- C did not take it until C23.  It is here
+// rather than in <stdlib.h> because POSIX puts it here: a string routine that
+// happens to allocate.  The copy is malloc'd and the caller frees it; a null
+// return means the allocation failed.  lib/libc/gen/strdup.c.
+char *strdup(const char *s);
+
 // ---- declared for future implementation (TODO) ----
 // The search trio C11 §7.24.5 requires and v7's libc never had.  strcoll and
 // strxfrm are the "C" locale only -- there is no other (see <locale.h>) -- so

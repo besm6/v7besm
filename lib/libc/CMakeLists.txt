@@ -65,12 +65,12 @@ set(LIBC_OBJ
     cerror exit fork wait pipe getpid getuid getgid time dup exec exece
     execl execv execle sbrk
     # GEN
-    strcat strcmp strcpy strlen strncat strncmp strncpy strchr strrchr strstr strtok
+    strcat strcmp strcpy strlen strncat strncmp strncpy strchr strrchr strstr strtok strdup
     memcpy memmove memset memcmp memchr
     abs atoi atol strtol strtoul index rindex swab qsort rand
     getenv mktemp mkstemp isatty sleep perror strerror errlst ctype_ abort raise
     setjmp assert toupper tolower isblank
-    malloc calloc aligned_alloc cuexit
+    malloc calloc aligned_alloc cuexit atexit
     atof ecvt modf frexp ldexp
     execvp execlp ttyname ttyslot getlogin tell crypt kgetsym
     ctime clock difftime mktime strftime timezone

@@ -20,24 +20,44 @@
 //     closing it: what the caller gains is the file existing, read-write, before
 //     anything is written to it, not exclusive creation.
 //
+// BOTH ROUTINES LIVE IN ONE FILE because mkstemp() IS mkstemps() with a zero
+// suffix, and a caller that wants either always pulls both.  mkstemps() is the
+// BSD extension of the pair and came with cmd/cc (task C9e): the driver names its
+// temporaries `/tmp/ccXXXXXX.i', `.ast', `.tac', `.s', because every stage of the
+// pipeline is a file whose SUFFIX says what is in it -- and the plain mkstemp()
+// cannot fill a run of `X' that is not at the end of the template.
+//
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>
 
-int mkstemp(char *as)
+//
+// As mkstemp(), but the last `suffixlen' bytes of the template are a fixed suffix
+// and the run of `X' ends just before them.  A negative or over-long suffixlen is
+// EINVAL, as BSD's is.
+//
+int mkstemps(char *as, int suffixlen)
 {
     char *s, *last;
     unsigned pid;
     int i, fd;
 
-    // Fill the trailing run of `X' with the digits of the process id, rightmost
-    // digit first, and leave s on the leftmost of them.
-    pid  = getpid();
+    // Find the end of the template, then step back over the fixed suffix: `last'
+    // is one past the rightmost `X' the walk below may write.
     last = as;
     while (*last)
         last++;
-    s = last;
+    if (suffixlen < 0 || last - as < suffixlen) {
+        errno = EINVAL;
+        return -1;
+    }
+    last -= suffixlen;
+
+    // Fill the trailing run of `X' with the digits of the process id, rightmost
+    // digit first, and leave s on the leftmost of them.
+    pid = getpid();
+    s   = last;
     while (s > as && s[-1] == 'X') {
         --s;
         *s = (pid % 10) + '0';
@@ -62,4 +82,9 @@ int mkstemp(char *as)
         }
         *s = i;
     }
+}
+
+int mkstemp(char *as)
+{
+    return mkstemps(as, 0);
 }

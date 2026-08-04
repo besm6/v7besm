@@ -203,6 +203,13 @@ char *mktemp(char *as);
 // not atomic -- lib/libc/gen/mkstemp.c says exactly what is and is not promised.
 int mkstemp(char *as);
 
+// The BSD extension of the same, for a template whose run of `X' is not at the
+// end: the last `suffixlen' bytes are a fixed suffix and the name varies just
+// before them.  cmd/cc wanted it -- every stage of the pipeline is a temporary
+// whose SUFFIX says what is in it (`/tmp/ccXXXXXX.tac') -- and it shares
+// lib/libc/gen/mkstemp.c with mkstemp(), which is mkstemps(as, 0).
+int mkstemps(char *as, int suffixlen);
+
 // The internal pair the getc/putc macros fall out to, and v7's word-at-a-time
 // pair, which are v7 extensions and not C11.  A word is SIX bytes here, not the
 // PDP-11's two, so getw/putw move sizeof(int) == NBPW bytes.

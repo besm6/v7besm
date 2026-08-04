@@ -6,6 +6,14 @@ the top-level `make install` copies the tree to `<prefix>/share/besm6/include`, 
 appends to every preprocessor run. So a source with no `-I` of its own still finds
 `<string.h>`, and one built in the tree gets the same files it would after installation.
 
+**The tree is also on the disk image, as `/usr/include`** (task C9e, [../cmd/TODO.md](../cmd/TODO.md)),
+because the machine's own `/usr/bin/cc` appends *that* directory for the same reason. It is
+staged from the **source** tree rather than from an installed copy — the top-level
+`CMakeLists.txt`'s `B6_STAGE_INC` — so an edit here reaches the image without an install; the
+ten freestanding headers below come from where the external compiler installed them, since
+nothing here can produce them. Both halves go, because one without the other preprocesses
+nothing.
+
 **Two owners share that installed directory.** The *freestanding* set — `stddef.h`,
 `stdarg.h`, `limits.h`, `float.h`, `stdbool.h`, `stdint.h`, `iso646.h`, `stdalign.h`,
 `stdnoreturn.h`, and `besm6.h` — belongs to the external

@@ -74,24 +74,41 @@ words** (a member is a 12-bit offset from a base register — move the big array
 and the **4,096-word stack**, where a long function costs 1.5–2 words per source line of
 temporaries before any array. `cmd/README.md` §6 is the account and `cmd/cpp` the worked example.
 
-**Nine programs are built twice** — `cmd/cpp`, `as`, `ld`, `nm`, `size`, `strip`, `disasm`,
-`ar` and `ranlib` — as the host tools `b6cpp`/`b6as`/… and, from the same sources, as
-`build/rootfs/usr/bin/{cpp,as,ld,nm,size,strip,disasm,ar,ranlib}` (`cmd/<x>/rootfs/`; tasks
-C9a–C9d, self-hosting), plus `cmd/lorder`, a shell script `configure_file`d twice on the one
-`nm` it names. **The machine assembles, links, archives and indexes its own programs and reads
-back what it built**: the native `as` and `ld` reproduce the host tools' objects and images
-byte for byte — the whole kernel and the toolchain itself included — and the native `ar` and
-`ranlib` build `libc.a`, archive and `__.SYMDEF` both, byte for byte too. `ar`/`ranlib` are
-also the only two that link the **full** `B6_LIBAOUT_SOURCES`: the four file-descriptor
-routines `getarhdr`/`getint`/`putarhdr`/`putint` exist for them and for nothing else.
+**Ten programs are built twice** — `cmd/cpp`, `as`, `ld`, `nm`, `size`, `strip`, `disasm`,
+`ar`, `ranlib` and `cc` — as the host tools `b6cpp`/`b6as`/… and, from the same sources, as
+`build/rootfs/usr/bin/{cpp,as,ld,nm,size,strip,disasm,ar,ranlib,cc}` (`cmd/<x>/rootfs/`; tasks
+C9a–C9e, self-hosting), plus `cmd/lorder`, a shell script `configure_file`d twice on the one
+`nm` it names. **The machine assembles, links, archives and indexes its own programs, reads
+back what it built, and drives the chain from one command**: the native `as` and `ld` reproduce
+the host tools' objects and images byte for byte — the whole kernel and the toolchain itself
+included — the native `ar` and `ranlib` build `libc.a`, archive and `__.SYMDEF` both, byte for
+byte too, and `cc -o hello hello.s` on the image links against `/lib/crt0.o` and `/lib/libc.a`
+and produces a runnable `a.out`. `ar`/`ranlib` are the only two that link the **full**
+`B6_LIBAOUT_SOURCES` (the four file-descriptor routines `getarhdr`/`getint`/`putarhdr`/`putint`
+exist for them and for nothing else); `cc` is the only one that links **no** `libaout` at all,
+a driver reading no `a.out`.
+
+**What `cc` cannot do is compile C**, and it says so rather than reporting a missing file:
+`b6parse`, `b6lower` and `b6codegen` are the external c-compiler's and cannot be built for the
+target. `-E`, `-c` on a `.s`/`.S`, and a link all work. Its three target changes are **all in
+libc** — `strdup()`, `mkstemps()` and `atexit()`, the last declared in `<stdlib.h>` since these
+headers were written and never implemented (`lib/libc/gen/`, and `cuexit.c` on why `exit()`
+reaches both it and the stdio flush through a pointer). The image also carries
+**`/lib/{crt0.o,libc.a,libruntime.a}` and the whole `/usr/include`** — staged by the top-level
+`CMakeLists.txt`'s `B6_STAGE_*` lists, which `kernel/test/CMakeLists.txt` reuses so that a file
+staged and not listed cannot slip past `root.img`.
 
 The first three are the only places the ceilings actually bind, and each carries a BESM-6 size
 profile keyed on the `besm6` macro `b6cpp` always predefines — `cmd/cpp/defs.h` (below the C11
-§5.2.4.1 minima), `cmd/as/as.h`, `cmd/ld/intern.h`. Of the other six only three changed
+§5.2.4.1 minima), `cmd/as/as.h`, `cmd/ld/intern.h`. Of the other seven only four changed
 anything: `cmd/nm/nm.c`'s `QUANT` (a *heap* step `rootfs_<name>_size` cannot see — a `struct
 nlist` is four words), `cmd/strip/strip.c`'s `BUFSZ` (a *stack* array, 8,192 bytes being a
-third of the stack), and `cmd/ranlib/ranlib.c`'s `TABSZ` — not an address-space cut but a match
-to `b6ld`'s own `RANTABSZ`, so the machine cannot write an index its linker refuses to read.
+third of the stack), `cmd/ranlib/ranlib.c`'s `TABSZ` — not an address-space cut but a match
+to `b6ld`'s own `RANTABSZ`, so the machine cannot write an index its linker refuses to read —
+and `cmd/cc/cc.c`'s, which is not a size profile at all but a **path** profile: `/usr/bin`,
+`/usr/include` and `/lib` in place of `share/besm6` under `~/.local` or `/usr/local`, and no
+`b6` prefix on a sub-tool's name. The `B6CPP`-style environment overrides are deliberately not
+keyed, being how a test points either build at a tool off its search path.
 `size`, `disasm` and `ar` are character-for-character the host build; `ar` is the one that says
 how much of the difficulty was the three big ones, since it keeps all its state in a struct and
 that struct is 190 words. Each README's "Building for the BESM-6" has the measurements. A
@@ -107,9 +124,13 @@ initialised from runtime values (`unsigned char b[6] = { i >> 40, … }` in `cmd
 `char *av[]` in `cmd/ranlib/ranlib.c`) is **not** a fourth trap — C9d was the first task to
 cross-compile one and it is correct — but it had no precedent before, so check a new one.
 
-`mkstemp()` is in this libc (`lib/libc/gen/mkstemp.c`) and is **not atomic**: there is no
-`O_CREAT` and no `O_EXCL` in this kernel, so it is `mktemp`'s name walk plus `creat()` and a
-reopen. `cmd/ar` is the caller that wanted it; `as`, `ld` and `strip` all use `tmpfile()`.
+`mkstemp()`/`mkstemps()` are in this libc (`lib/libc/gen/mkstemp.c`, one object) and are **not
+atomic**: there is no `O_CREAT` and no `O_EXCL` in this kernel, so each is `mktemp`'s name walk
+plus `creat()` and a reopen. `cmd/ar` wanted the first and `cmd/cc` the second (its temporaries
+carry a suffix that says which stage wrote them); `as`, `ld` and `strip` all use `tmpfile()`.
+There is **no `posix_spawn()` and no `waitpid()`** — `<sys/wait.h>` has only the argument-less
+`wait(2)`, and `cmd/cc`'s `run()` is `fork`/`execv`/`wait` in *both* builds rather than behind
+an `#if besm6`.
 
 `build/rootfs/` is staged only, never installed. **`root.manifest`** at the tree top describes
 the image; paths resolve against `b6fsutil`'s working directory (`build/kernel/test`). Modes
@@ -158,7 +179,11 @@ copy. Sources are compiled *into* `kernel/test/` via `b6_find_src()`/`b6_test_ob
 
 - **Run every MMU test with `set mmu cache`** — the БРЗ hazards are invisible otherwise.
 - Several tests boot the whole kernel (`login`, `multi`, `session`, `files`, `libtest`,
-  `swap`, `utils`, `edit`, `fsinfo`, `dd`, `mkfs`, `fsck`, `mount`, `console`). They hold
+  `swap`, `utils`, `edit`, `fsinfo`, `dd`, `mkfs`, `fsck`, `mount`, `console`, `filters`,
+  `inspect`, `tar`, `accounts`, `toolchain`). `toolchain` is C9's closing claim and the
+  only one that needs the *host* `b6cc`: the machine runs `cc -o hello hello.s` with
+  nothing pinned — its own `/usr/bin` search, its own `/lib`, its own `/usr/include` — and
+  the a.out it produces is compared byte for byte with the host build's. They hold
   one resource lock, so they run one at a time — about seventy seconds of serial wall clock,
   the critical path of the whole suite. **They are labelled `weekly` and are not in the
   daily suite**: `make run` and `cd kernel/test && make test` exclude them (`-LE weekly`),

@@ -2,8 +2,8 @@
 .TH STRING 3
 .SH NAME
 strcat, strncat, strcmp, strncmp, strcpy, strncpy, strlen, strchr, strrchr,
-strstr, strtok, index, rindex, memcpy, memmove, memset, memcmp, memchr \- string
-and memory operations
+strstr, strtok, strdup, index, rindex, memcpy, memmove, memset, memcmp, memchr
+\- string and memory operations
 .SH SYNOPSIS
 .B #include <string.h>
 .PP
@@ -28,6 +28,8 @@ and memory operations
 .B char *strstr(const char *s, const char *sub);
 .PP
 .B char *strtok(char *s, const char *sep);
+.PP
+.B char *strdup(const char *s);
 .PP
 .B char *index(const char *s, int c);
 .PP
@@ -130,6 +132,16 @@ into tokens separated by any character of
 returning one per call \- the first call names the string, the rest pass NULL \-
 and it writes on the string it is given.
 .PP
+.B Note:
+.I strdup
+is neither v7's nor C11's \- it is POSIX's, and C took it only in C23.  It
+returns a
+.IR malloc (3)ed
+copy of
+.IR s ,
+which the caller frees, or NULL if the allocation failed.  It is the one routine
+on this page that allocates, and therefore the one that can fail.
+.PP
 .I Memcpy
 copies
 .I n
@@ -163,7 +175,9 @@ which would have made
 .I strcpy
 return an integer.
 .SH SEE ALSO
-strtol(3), atof(3)
+strtol(3), atof(3), malloc(3) for
+.I strdup's
+storage
 .SH BUGS
 .B Note:
 v7's bug \- "strcmp uses native character comparison, which is signed on PDP11's,
@@ -223,3 +237,5 @@ include/README.md, so a difference of two lengths behaves in a mixed comparison.
 share/besm6/lib/libc.a
 .br
 lib/libc/gen/str*.c, mem*.c, index.c, rindex.c
+.br
+lib/libc/gen/strdup.c \- this tree's, and the one file on this page that is

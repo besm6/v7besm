@@ -371,8 +371,11 @@ static void report(void)
 }
 
 //
-// strdup(3) by hand, as v7 wrote it: this libc has no such routine, <pwd.h> hands back
-// pointers into one shared line buffer, and the next getpwent() overwrites it.
+// strdup(3) by hand, as v7 wrote it, and the reason it is wanted at all: <pwd.h> hands
+// back pointers into one shared line buffer, and the next getpwent() overwrites it.
+// This libc has grown a strdup() since (task C9e, cmd/cc wanted it nine times over), so
+// this is now a transcription rather than a necessity; it is kept because the NULL
+// branch below is this program's own decision and not the library's.
 //
 static char *copy(const char *s)
 {

@@ -24,8 +24,14 @@
 // and tool names are new, and the argument handling, temp-file management and
 // process spawning have been rewritten in C11.
 //
+// THESE SOURCES ARE BUILT TWICE, as b6cc for the build machine and as the BESM-6's
+// own /usr/bin/cc (task C9e, cmd/TODO.md).  The only difference between the two is
+// the profile below -- where the sub-tools, the headers and the libraries live --
+// and the one thing the machine cannot do, which is compile C: b6parse, b6lower
+// and b6codegen belong to the external c-compiler repository and are not on the
+// image.  README.md, "Building for the BESM-6", is the account.
+//
 #include <errno.h>
-#include <spawn.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -35,7 +41,28 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-extern char **environ;
+//
+// THE PATH PROFILE, keyed on the `besm6' macro b6cpp always predefines, exactly as
+// cmd/cpp, cmd/as and cmd/ld key their size profiles.
+//
+// On the build machine the toolchain is one installation among many, so every tool
+// carries a `b6' prefix to keep it apart from the host's own cpp/as/ld, and the
+// prefixes are searched in the order `make install' writes them.  ON THE MACHINE
+// ITSELF there is no ~/.local, no /usr/local and no other toolchain to be confused
+// with: the tools are /usr/bin/{cpp,as,ld} where tasks C9a-C9d put them, the
+// headers are /usr/include and the libraries /lib -- which is where v7 kept both.
+//
+// The B6CPP-style environment overrides are NOT keyed and must not be: they are
+// how a test points either build at a tool that is not on its search path, and the
+// agreement suite in rootfs/test depends on it.
+//
+#ifdef besm6
+#   define TOOL(n) n // /usr/bin/cpp
+#   define INCDIR   "/usr/include"
+#   define LIBDIR   "/lib"
+#else
+#   define TOOL(n) "b6" n // ~/.local/bin/b6cpp
+#endif
 
 static char *progname = "cc"; // diagnostic prefix: basename of argv[0]
 
@@ -202,9 +229,10 @@ static bool same_file(const char *a, const char *b)
 
 //
 // Create a temporary file whose name ends in `.suf`, register it for cleanup,
-// and return its (heap-allocated) path.  Uses mkstemps(3) so the file is
-// created atomically; the returned fd is closed immediately since the sub-tool
-// reopens the path by name.
+// and return its (heap-allocated) path.  Uses mkstemps(3) rather than mkstemp(3)
+// because the suffix is the point: every stage of the pipeline is a file whose
+// extension says what is in it.  The returned fd is closed immediately since the
+// sub-tool reopens the path by name.
 //
 static char *make_temp(const char *suf)
 {
@@ -233,7 +261,8 @@ static char *make_temp(const char *suf)
 //
 // Locate a sub-tool.  Resolution order:
 //   1. the per-tool environment override, if set (e.g. B6CPP);
-//   2. <dir>/<name> for dir in ~/.local/bin, then /usr/local/bin.
+//   2. <dir>/<name> for dir in the profile's search path -- ~/.local/bin then
+//      /usr/local/bin on the host, /usr/bin on the machine itself.
 // Returns a heap-allocated path, or NULL if not found.
 //
 static char *find_tool(const char *envvar, const char *name)
@@ -242,6 +271,14 @@ static char *find_tool(const char *envvar, const char *name)
     if (override && *override)
         return strdup(override);
 
+#ifdef besm6
+    // One directory, and no $HOME to expand into it: /usr/bin is where every
+    // program of task C9 was staged and where the shell's own default PATH looks
+    // (":/bin:/usr/bin", cmd/sh/msg.c).
+    const char *dirs[1];
+    int nd      = 0;
+    dirs[nd++]  = "/usr/bin";
+#else
     const char *home = getenv("HOME");
     const char *dirs[3];
     int nd = 0;
@@ -251,6 +288,7 @@ static char *find_tool(const char *envvar, const char *name)
         dirs[nd++] = localbin;
     }
     dirs[nd++] = "/usr/local/bin";
+#endif
 
     for (int i = 0; i < nd; i++) {
         size_t n = strlen(dirs[i]) + strlen(name) + 2;
@@ -269,21 +307,29 @@ static char *find_tool(const char *envvar, const char *name)
 
 //
 // The three lookups below need no adjusting, and have needed none through two
-// changes of who owns what.  The prefixes are fixed by convention -- ~/.local
-// first, then /usr/local, share/besm6 under either -- and every producer
+// changes of who owns what.  On the host the prefixes are fixed by convention --
+// ~/.local first, then /usr/local, share/besm6 under either -- and every producer
 // installs there: the top-level CMake puts include/ in the first, lib/libc puts
 // libc.a and crt0.o in the second, and the external c-compiler puts
-// libruntime.a beside them.  A missing file here means a step of the bootstrap
-// has not been run (see the README), never that the search order is wrong.
+// libruntime.a beside them.  On the machine there is one of each and no search at
+// all.  A missing file here means a step of the bootstrap has not been run (see
+// the README), never that the search order is wrong.
 //
 
 //
-// Return the default besm6 include directory: <prefix>/share/besm6/include,
-// where <prefix> is ~/.local if it exists, else /usr/local.  Heap-allocated,
-// or NULL if it cannot be determined.
+// Return the default besm6 include directory: /usr/include on the machine, and
+// <prefix>/share/besm6/include on the host, where <prefix> is ~/.local if it
+// exists, else /usr/local.  Heap-allocated, or NULL if it cannot be determined.
 //
 static char *besm6_include_dir(void)
 {
+#ifdef besm6
+    char *path = strdup(INCDIR);
+    if (path && access(path, X_OK) == 0)
+        return path;
+    free(path);
+    return NULL;
+#else
     const char *home = getenv("HOME");
     if (home && *home) {
         size_t n = strlen(home) + sizeof("/.local/share/besm6/include");
@@ -300,16 +346,24 @@ static char *besm6_include_dir(void)
         return fallback;
     free(fallback);
     return NULL;
+#endif
 }
 
 //
-// Locate the crt0 startup object.  Resolution order mirrors besm6_include_dir():
+// Locate the crt0 startup object: /lib/crt0.o on the machine, where v7 kept it
+// too.  On the host the order mirrors besm6_include_dir():
 //   1. <HOME>/.local/share/besm6/lib/crt0.o, if it exists;
 //   2. /usr/local/share/besm6/lib/crt0.o, if it exists.
-// Returns a heap-allocated (and owned) full path, or NULL if neither is present.
+// Returns a heap-allocated (and owned) full path, or NULL if none is present.
 //
 static char *find_crt0(void)
 {
+#ifdef besm6
+    char *path = concat(LIBDIR, "/crt0.o");
+    if (access(path, R_OK) == 0)
+        return path;
+    return NULL;
+#else
     const char *home = getenv("HOME");
     if (home && *home) {
         char *path = concat(home, "/.local/share/besm6/lib/crt0.o");
@@ -320,16 +374,22 @@ static char *find_crt0(void)
     if (access(fallback, R_OK) == 0)
         return fallback;
     return NULL;
+#endif
 }
 
 //
 // Append the standard BESM-6 library search directories to `av` as glued -L
-// flags.  Unlike besm6_include_dir(), both prefixes are checked independently:
-// <HOME>/.local/share/besm6/lib and /usr/local/share/besm6/lib are each added
-// if they exist.  Suppressed by -nostdlib (the caller decides).
+// flags: the one /lib on the machine, and on the host both prefixes checked
+// independently -- unlike besm6_include_dir(), <HOME>/.local/share/besm6/lib and
+// /usr/local/share/besm6/lib are each added if they exist.  Suppressed by
+// -nostdlib (the caller decides).
 //
 static void add_default_libdirs(struct vec *av)
 {
+#ifdef besm6
+    if (access(LIBDIR, X_OK) == 0)
+        vec_push(av, own(strdup("-L" LIBDIR)));
+#else
     const char *home = getenv("HOME");
     if (home && *home) {
         char *dir = concat(home, "/.local/share/besm6/lib");
@@ -338,6 +398,7 @@ static void add_default_libdirs(struct vec *av)
     }
     if (access("/usr/local/share/besm6/lib", X_OK) == 0)
         vec_push(av, own(strdup("-L/usr/local/share/besm6/lib")));
+#endif
 }
 
 //
@@ -345,25 +406,47 @@ static void add_default_libdirs(struct vec *av)
 // Returns the child's exit status: 0 on success, nonzero on failure.  With
 // -v, the command line is echoed first.
 //
+// FORK, EXECV AND WAIT -- which is what v7's own cc(1) did, and what this kernel
+// can do.  There is no posix_spawn() here and no waitpid(): <sys/wait.h> records
+// that the only gate is the argument-less wait(2), with no wait3() and no WNOHANG.
+// The host build takes the same three calls rather than keeping posix_spawn behind
+// an `#if besm6' -- the driver has one child in flight at a time, so the loop below
+// is exact on both, and a second implementation would be a second thing to be
+// wrong.  Only the fflush is the machine's: stdout is buffered, and the fork would
+// otherwise give the child a copy of whatever -v had put in the buffer.
+//
 static int run(const char *tool, char *const argv[])
 {
     if (opt_v) {
         for (char *const *p = argv; *p; p++)
             printf("%s ", *p);
         putchar('\n');
-        fflush(stdout);
     }
+    fflush(stdout);
 
-    pid_t pid;
-    int rc = posix_spawn(&pid, tool, NULL, NULL, argv, environ);
-    if (rc != 0) {
-        error("cannot run %s: %s", tool, strerror(rc));
+    pid_t pid = fork();
+    if (pid < 0) {
+        error("cannot run %s: %s", tool, strerror(errno));
         return 1;
     }
+    if (pid == 0) {
+        execv(tool, argv);
+        // Only reached if the exec failed.  _exit(), not exit(): this is a copy of
+        // the parent, and letting it flush the parent's buffers or run the parent's
+        // atexit() handlers would unlink the very temp files still in use.
+        fprintf(stderr, "%s: error: cannot run %s: %s\n", progname, tool, strerror(errno));
+        fflush(stderr);
+        _exit(127);
+    }
 
-    int status;
-    while (waitpid(pid, &status, 0) < 0) {
-        if (errno != EINTR) {
+    // wait(2) names no child, so take deaths until this one's comes back.  Nothing
+    // else of ours is running, but a stray child of a sub-tool would land here.
+    int status = 0;
+    pid_t w;
+    while ((w = wait(&status)) != pid) {
+        if (w < 0) {
+            if (errno == EINTR)
+                continue;
             error("wait failed: %s", strerror(errno));
             return 1;
         }
@@ -386,9 +469,9 @@ static int run(const char *tool, char *const argv[])
 //
 static int run_cpp(const char *in, const char *out)
 {
-    char *tool = find_tool("B6CPP", "b6cpp");
+    char *tool = find_tool("B6CPP", TOOL("cpp"));
     if (!tool) {
-        error("cannot find b6cpp");
+        error("cannot find %s", TOOL("cpp"));
         return 1;
     }
     // The standard system include dir is added automatically unless -nostdinc.
@@ -437,9 +520,9 @@ static int run_pass(const char *envvar, const char *name, const char *in, const 
 //
 static int run_codegen(const char *in, const char *out)
 {
-    char *tool = find_tool("B6CODEGEN", "b6codegen");
+    char *tool = find_tool("B6CODEGEN", TOOL("codegen"));
     if (!tool) {
-        error("cannot find b6codegen");
+        error("cannot find %s", TOOL("codegen"));
         return 1;
     }
     struct vec av = { 0 };
@@ -460,9 +543,9 @@ static int run_codegen(const char *in, const char *out)
 //
 static int run_as(const char *in, const char *out)
 {
-    char *tool = find_tool("B6AS", "b6as");
+    char *tool = find_tool("B6AS", TOOL("as"));
     if (!tool) {
-        error("cannot find b6as");
+        error("cannot find %s", TOOL("as"));
         return 1;
     }
     char *av[] = { tool, "-X", "-o", (char *)out, (char *)in, NULL };
@@ -529,6 +612,22 @@ static int compile_one(const char *src)
         return 1;
     }
 
+#ifdef besm6
+    // AND THIS IS AS FAR AS THE MACHINE GOES.  The compiler proper is three
+    // programs of the external c-compiler repository, which this one cannot build
+    // for the target, so /usr/bin/parse and its two fellows are not here and never
+    // will be looked for.  Say that outright -- before the preprocessor runs, so
+    // that a source which cannot be compiled is not first half-processed, and
+    // instead of letting the search report a missing file as though installing one
+    // were the answer.  README.md, "It cannot compile C", has the whole of it.
+    if (!opt_E) {
+        error("%s: cannot compile C on this machine -- the parse, lower and codegen "
+              "passes are not here.  -E works, and so do .s, .S and .o inputs.",
+              src);
+        return 1;
+    }
+#endif
+
     // Preprocess: .c -> .i
     const char *ifile;
     if (opt_E)
@@ -540,12 +639,17 @@ static int compile_one(const char *src)
     if (opt_E)
         return 0;
 
+#ifdef besm6
+    // Unreachable: the guard at the head of this arm took every path but -E, and
+    // -E returned just above.
+    return 1;
+#else
     // Parse and lower: .i -> .ast -> .tac
     const char *astfile = make_temp("ast");
-    if (run_pass("B6PARSE", "b6parse", ifile, astfile) != 0)
+    if (run_pass("B6PARSE", TOOL("parse"), ifile, astfile) != 0)
         return 1;
     const char *tacfile = make_temp("tac");
-    if (run_pass("B6LOWER", "b6lower", astfile, tacfile) != 0)
+    if (run_pass("B6LOWER", TOOL("lower"), astfile, tacfile) != 0)
         return 1;
 
     // Code generation: .tac -> .s (or .madlen/.bemsh for the -Smadlen/-Sbemsh
@@ -563,6 +667,7 @@ static int compile_one(const char *src)
     int rc = run_as(asmfile, obj);
     vec_push(&objects, obj);
     return rc;
+#endif // besm6
 }
 
 //
@@ -576,9 +681,9 @@ static int compile_one(const char *src)
 //
 static int link_objects(void)
 {
-    char *tool = find_tool("B6LD", "b6ld");
+    char *tool = find_tool("B6LD", TOOL("ld"));
     if (!tool) {
-        error("cannot find b6ld");
+        error("cannot find %s", TOOL("ld"));
         return 1;
     }
 

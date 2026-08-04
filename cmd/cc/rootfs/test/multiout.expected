@@ -1,0 +1,1 @@
+cc: error: cannot specify -o with -c, -S or -E and multiple input files

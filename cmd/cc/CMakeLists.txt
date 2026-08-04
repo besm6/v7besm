@@ -6,6 +6,11 @@
 # BESM-6 a.out objects/executables.  Sub-tools are located via per-tool
 # environment overrides (B6CPP, B6PARSE, ...) or under ~/.local/bin | /usr/local/bin.
 #
+# The same source is built a SECOND time, for the machine itself, into
+# build/rootfs/usr/bin/cc -- see rootfs/, and task C9e in ../TODO.md.  There the
+# search is /usr/bin, /usr/include and /lib, and the sub-tools carry no `b6'
+# prefix; the profile at the head of cc.c is the whole of the difference.
+#
 add_executable(b6cc cc.c)
 target_include_directories(b6cc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 install(TARGETS b6cc RUNTIME DESTINATION bin)

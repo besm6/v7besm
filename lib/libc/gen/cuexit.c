@@ -26,9 +26,11 @@
 // program that never writes through a FILE never mentions _cleanup at all.  The
 // whole cost to such a program is this one word of bss and the test below.
 //
-// When atexit() lands this becomes a special case of it -- stdio would register
-// _cleanup like any other handler -- but a single word is cheaper than an atexit
-// table in every program, and atexit is not written yet.
+// atexit() has landed since (gen/atexit.c, task C9e) and did NOT become the
+// general case of this: it is a second pointer beside it, armed the same way and
+// for the same reason.  Folding stdio's flush into an atexit table would put that
+// table -- and its 32 words of bss -- into every program, which is the cost this
+// pointer exists to avoid.
 //
 #include <stdlib.h>
 
@@ -41,8 +43,18 @@ _Noreturn void _exit(int status);
 //
 void (*_cleanup_hook)(void);
 
+//
+// Armed by the first atexit() call, and null in a program that never makes one.
+//
+void (*_atexit_hook)(void);
+
 _Noreturn void exit(int status)
 {
+    // C11 §7.22.4.4: the registered handlers run first, then the streams are
+    // flushed and closed -- a handler is allowed to print, and would find its
+    // output discarded the other way round.
+    if (_atexit_hook != NULL)
+        _atexit_hook();
     if (_cleanup_hook != NULL)
         _cleanup_hook();
     _exit(status);
