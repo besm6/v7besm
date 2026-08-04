@@ -1,0 +1,2 @@
+usage: vmstat [ -p ] [ interval [ count ] ]
+       vmstat -s

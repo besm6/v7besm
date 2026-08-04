@@ -812,6 +812,11 @@ void Processor::sys_sigret()
 //
 void Processor::syscall(unsigned num)
 {
+    // kernel/syscall.c counts here too, and for the same reason: this is the door.  A
+    // number outside the table is counted, having come through it; the э50-э76 extracodes
+    // never reach this function at all.
+    machine.kernel.count_syscall();
+
     switch (num) {
     case SYS_exit:
         // void _exit(int status): status is in the accumulator. No return.

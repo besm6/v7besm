@@ -17,9 +17,15 @@
 time_t time; // time in sec from 1970
 int nblkdev;
 int dk_busy;
-int dk_numb[3];
-int dk_wds[3];
-int dk_time[32];
+int dk_numb[NDK];
+int dk_wds[NDK];
+int dk_time[NDKTIME];
+
+// dk_busy's bits ARE the low three of clock.c's dk_time subscript, so the whole busy set has
+// to fit in three bits.  <sys/param.h> cannot say so itself, being #define-only; machdep.c's
+// assertion is here for the same reason.
+_Static_assert(NDK <= 3, "dk_busy must fit in the three bits kernel/clock.c masks");
+_Static_assert(NDKTIME == 4 * 8, "dk_time is four CPU states crossed with eight I/O states");
 struct mount mount[NMOUNT];
 struct inode *rootdir; // pointer to inode of root directory
 

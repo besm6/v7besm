@@ -164,7 +164,7 @@ The interface is [include/sys/kctl.h](../include/sys/kctl.h); the table is
 [kernel/ksym.c](../kernel/ksym.c), and every row in it names the program that asked for it.
 
 **`b6sim` answers this call too**, from a kernel it pretends to be running under
-([cmd/sim/kernel.h](../cmd/sim/kernel.h)) — the same nineteen names, the guest's own pid and uid
+([cmd/sim/kernel.h](../cmd/sim/kernel.h)) — the same thirty-three names, the guest's own pid and uid
 in `proc[0]`, zeros where the simulator has no counterpart, and `/dev/kmem` and `/dev/mem`
 served from the same block. That is what lets [lib/test/kctlt](../lib/test/kctlt.c) run in
 **both worlds against one `.expected`**, which is the only guard there is on the guest struct
@@ -248,7 +248,7 @@ These are the facts a reader cannot get from a v7 manual page.
 no-ops. Two entries need more than a clause. **`signal` runs a guest handler** — on the guest,
 at the end of a serviced extracode, which is where the kernel delivers too — so it is no longer
 the `SIG_DFL`/`SIG_IGN`-only stub this sentence used to describe. And **`kctl` is answered from
-an imitation kernel**: b6sim carries the same nineteen variables, fills in what it genuinely
+an imitation kernel**: b6sim carries the same thirty-three variables, fills in what it genuinely
 knows and zeroes what it does not, and serves `/dev/kmem` and `/dev/mem` from the same block —
 which is what lets `lib/test/kctlt` run in *both* worlds against one `.expected` rather than
 only under a boot. See

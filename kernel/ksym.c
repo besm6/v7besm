@@ -63,6 +63,12 @@ struct ksym {
 // working as intended: the question "who reads this" has to have an answer, and the answer
 // may be a feature nobody had written yet.
 //
+// RE-CHECKED AGAIN WHEN vmstat ARRIVED, and this time nothing had to be corrected: dk_time
+// picked up a second reader and the iostat-only rows stayed iostat-only.  What did change is
+// that the closing paragraph below stopped being a promise -- the counters it was holding
+// open for a vmstat are in the table now, and the ones vmstat turned out not to want are
+// still out of it, with the reason written down rather than the wait.
+//
 // A SIZE IS NEVER A HAND-WRITTEN NUMBER: it is either sizeof of the object, where the extern
 // carries its bound, or the same COUNT MACRO kernel/conf.c dimensioned the array with.  Four
 // of these -- proc, text, inode, file -- are declared `extern struct x x[]' with no bound in
@@ -71,21 +77,30 @@ struct ksym {
 //
 // WHAT IS DELIBERATELY ABSENT, since an empty answer looks the same as an unasked question:
 //
-//   dk_busy, dk_numb[], dk_wds[] -- defined in kernel/main.c and written by NOTHING.  No
-//     driver touches them.  Exporting them would have iostat print zeros that read as
-//     measurements; they arrive when dev/md.c and dev/mb.c are made to keep them
-//     (kernel/TODO.md).  dk_time IS live -- kernel/clock.c stamps index 0 user, 8 nice,
-//     16 system, 24 idle -- and is here.  There is no cp_time on this system.
+//   dk_busy -- live now (dev/md.c and dev/mb.c keep it, a bit each; NDK in <sys/param.h>),
+//     and STILL absent, for a different reason than the one it used to have.  It is an
+//     INSTANT and not a count: what it says is what the drives happened to be doing during
+//     the read, and no interval divides it.  What a report wants is dk_time, whose low three
+//     bits ARE dk_busy sampled at every tick -- so a per-device percentage falls out of the
+//     histogram and needs nothing else.  dk_numb and dk_wds ARE here: those are counts, and
+//     iostat and vmstat divide them by an interval.  There is no cp_time on this system;
+//     dk_time is it, and kernel/clock.c stamps 0 user, 8 nice, 16 system, 24 idle, each of
+//     those a BASE and not a slot.
 //   u, buffers -- ABSOLUTE symbols (kernel/besm6.S), and UBASE and BUFBASE are already in
 //     <sys/param.h>, which user code includes.  lib/test/memt.c reads the u-area with no
 //     lookup at all.  A second route to a constant is a second thing to keep true.
-//   NPROC, NTEXT, NFILE, NINODE, NMOUNT, NSC, MSGBUFS, HZ -- <sys/param.h> constants, shared
-//     with user space.  There is no `nproc' variable to export and there must not be one;
-//     this is the largest simplification against RetroBSD, whose table carries _nproc, _hz
-//     and _cnttys because its userland could not see the constants.
-//   the swapper, text and iomove counters; runin/runout/runrun/curpri; mpid; callout; cfree;
-//     buf; bfreelist; panicstr; phymem; maxmem; nblkdev; nchrdev; bdevsw; cdevsw; rootdev;
-//     pipedev -- live and real, and no program asks yet.  They come with a vmstat.
+//   NPROC, NTEXT, NFILE, NINODE, NMOUNT, NSC, MSGBUFS, HZ, NDK -- <sys/param.h> constants,
+//     shared with user space.  There is no `nproc' variable to export and there must not be
+//     one; this is the largest simplification against RetroBSD, whose table carries _nproc,
+//     _hz, _cnttys and _dk_ndrive because its userland could not see the constants.  vmstat
+//     needs no boottime row either: the ticks in dk_time ARE the uptime, and using them puts
+//     every number in a report over the same denominator.
+//   runin/runout/runrun/curpri; mpid; callout; cfree; buf; bfreelist; panicstr; phymem;
+//     maxmem; nblkdev; nchrdev; bdevsw; cdevsw; rootdev; pipedev -- live and real, and no
+//     program asks.  VMSTAT WAS THE PROGRAM THEY WERE BEING KEPT FOR, it is here now
+//     (cmd/vmstat), and it wants none of them: `procs r/b/w' is a scan of proc[] and `fre' a
+//     sum over coremap, both of which this table already carries.  The swapper, text and
+//     iomove counters DID come with it, and are below.
 static struct ksym ksym[] = {
     { "proc", proc, NPROC * sizeof(struct proc) },     // ps  pstat
     { "text", text, NTEXT * sizeof(struct text) },     //     pstat
@@ -106,9 +121,28 @@ static struct ksym ksym[] = {
     { "swplo", &swplo, sizeof swplo },       //     pstat
     { "swapdev", &swapdev, sizeof swapdev }, //     pstat
 
-    { "dk_time", dk_time, sizeof dk_time },  //            iostat
+    { "dk_time", dk_time, sizeof dk_time },  //            iostat  vmstat
+    { "dk_numb", dk_numb, sizeof dk_numb },  //            iostat  vmstat
+    { "dk_wds", dk_wds, sizeof dk_wds },     //            iostat
     { "tk_nin", &tk_nin, sizeof tk_nin },    //            iostat
     { "tk_nout", &tk_nout, sizeof tk_nout }, //            iostat
+
+    // The rate counters vmstat divides by an interval.  Six were here in spirit already --
+    // the block comment above used to say they came with a vmstat -- and four are new
+    // (kernel/intr.c, syscall.c, trap.c, slp.c).
+    { "nintr", &nintr, sizeof nintr },          //                 vmstat
+    { "nsyscall", &nsyscall, sizeof nsyscall }, //                 vmstat
+    { "ntrap", &ntrap, sizeof ntrap },          //                 vmstat -p, vmstat -s
+    { "nswtch", &nswtch, sizeof nswtch },       //                 vmstat
+    { "nswapin", &nswapin, sizeof nswapin },    //                 vmstat -p, vmstat -s
+    { "nswapout", &nswapout, sizeof nswapout }, //                 vmstat -p, vmstat -s
+
+    { "ntextin", &ntextin, sizeof ntextin },       //              vmstat -s
+    { "ntextout", &ntextout, sizeof ntextout },    //              vmstat -s
+    { "ntextjoin", &ntextjoin, sizeof ntextjoin }, //              vmstat -s
+    { "niobulk", &niobulk, sizeof niobulk },       //              vmstat -s
+    { "nioedge", &nioedge, sizeof nioedge },       //              vmstat -s
+    { "nioshift", &nioshift, sizeof nioshift },    //              vmstat -s
 };
 
 #define NKSYM ((int)(sizeof ksym / sizeof ksym[0]))

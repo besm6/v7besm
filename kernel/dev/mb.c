@@ -208,6 +208,7 @@ static void mbstart(void)
             mbarm = bit;
             mgrpon(bit);
             mbtab.b_active = 1;
+            dk_busy |= 1 << DK_MB;
             return;
         }
 
@@ -224,6 +225,7 @@ static void mbstart(void)
         mbarm = 0;
     }
     mbtab.b_active = 0;
+    dk_busy &= ~(1 << DK_MB);
 }
 
 // An exchange finished: GRP_DRUM1_FREE or GRP_DRUM2_FREE, from the ГРП dispatch in
@@ -246,6 +248,14 @@ void mbintr(void)
     }
 
     bp = mbtab.b_actf;
+
+    // The exchange that just completed, in slot DK_MB.  dev/md.c says why the count belongs
+    // here rather than at issue; the drum has no status register and no retry, so the only
+    // thing this arm has to be careful of is the request the start loop refused for want of
+    // a drum, which began no exchange and is counted nowhere.
+    dk_numb[DK_MB]++;
+    dk_wds[DK_MB] += mbnw;
+
     mbdone += mbnw;
     if (mbdone < bp->b_wcount) {
         // More to move.  Do NOT disarm: the control word mbstart() is about to issue

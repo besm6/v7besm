@@ -242,6 +242,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/pstat
     ${B6_ROOTFS}/etc/quot
     ${B6_ROOTFS}/etc/umount
+    ${B6_ROOTFS}/etc/vmstat
     ${B6_ROOTFS}/etc/wall
     ${B6_ROOTFS}/etc/group
     ${B6_ROOTFS}/etc/motd
@@ -657,21 +658,24 @@ if(BESM6)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(filters PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
-    # inspect -- TASK C8's FIVE INSPECTION PROGRAMS, on its own volume (3101).  A boot of its
-    # own rather than a section of utils or filters, for one reason: what it needs is
-    # PLURALITY.  All five of ps, dmesg, iostat, pstat and nice have a b6sim half -- the
-    # simulator answers kctl(2) and both memory devices out of an imitation kernel
+    # inspect -- THE SIX INSPECTION PROGRAMS, on its own volume (3101).  Five are task C8's
+    # and the sixth is cmd/vmstat, which arrived with the driver instrumentation.  A boot of
+    # its own rather than a section of utils or filters, for one reason: what it needs is
+    # PLURALITY.  All six of ps, dmesg, iostat, vmstat, pstat and nice have a b6sim half --
+    # the simulator answers kctl(2) and both memory devices out of an imitation kernel
     # (doc/Aout_Simulator.md SS7) -- and it is the larger half.  What it cannot have is a
     # second process, and neither utils nor filters arranges one; this script puts a
     # `sleep 30' in the background on purpose so that there is something asleep to look at.
     #
-    # SIX THINGS HERE ARE UNREACHABLE UNDER b6sim (inspect.sh's header is the long form): a
+    # EIGHT THINGS HERE ARE UNREACHABLE UNDER b6sim (inspect.sh's header is the long form): a
     # REAL kernel printf in msgbuf, where the simulator has a fixed banner; four or more
     # processes, where it has one; a process in state S; a WCHAN worth printing; a systm and
     # an idle column with numbers in them, every tick under b6sim being billed to dk_time[0];
-    # and -- the sharpest of them -- a u-area at a p_addr that is NOT the caller's, above
-    # KREACH and off /dev/mem.  b6sim's one process has p_addr == uhome, so a ps there always
-    # reads the live u-area at UBASE and that branch is never taken at all.
+    # A DEVICE THAT HAS MOVED WORDS and AN INTERRUPT AND A CONTEXT SWITCH THAT WERE COUNTED,
+    # the simulator having no block device, no 0500 vector and no scheduler; and -- the
+    # sharpest of them -- a u-area at a p_addr that is NOT the caller's, above KREACH and off
+    # /dev/mem.  b6sim's one process has p_addr == uhome, so a ps there always reads the live
+    # u-area at UBASE and that branch is never taken at all.
     #
     # TWO THINGS ARE MASKED and run-inspect.sh says which and why: dmesg's four sizes and
     # pstat -s's three swap scalars, both of which are configuration rather than measurement

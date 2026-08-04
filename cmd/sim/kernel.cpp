@@ -82,9 +82,26 @@ SimKernel::SimKernel() : image(kp::KREACH, 0)
     unsigned a_swplo   = place("swplo", 1, kp::NBPW, next);
     unsigned a_swapdev = place("swapdev", 1, kp::NBPW, next);
 
-    a_dktime = place("dk_time", kl::DKTIME_N, kl::DKTIME_N * kp::NBPW, next);
+    a_dktime = place("dk_time", kp::NDKTIME, kp::NDKTIME * kp::NBPW, next);
+    place("dk_numb", kp::NDK, kp::NDK * kp::NBPW, next);
+    place("dk_wds", kp::NDK, kp::NDK * kp::NBPW, next);
     a_tknin  = place("tk_nin", 1, kp::NBPW, next);
     a_tknout = place("tk_nout", 1, kp::NBPW, next);
+
+    // vmstat's rate counters.  Only nsyscall is fed; refresh() says why the other thirteen
+    // stay zero and why that is an answer rather than a gap.
+    place("nintr", 1, kp::NBPW, next);
+    a_nsyscall = place("nsyscall", 1, kp::NBPW, next);
+    place("ntrap", 1, kp::NBPW, next);
+    place("nswtch", 1, kp::NBPW, next);
+    place("nswapin", 1, kp::NBPW, next);
+    place("nswapout", 1, kp::NBPW, next);
+    place("ntextin", 1, kp::NBPW, next);
+    place("ntextout", 1, kp::NBPW, next);
+    place("ntextjoin", 1, kp::NBPW, next);
+    place("niobulk", 1, kp::NBPW, next);
+    place("nioedge", 1, kp::NBPW, next);
+    place("nioshift", 1, kp::NBPW, next);
 
     //
     // The one process.  Its numbers are the ones SYS_getpid, SYS_getuid and SYS_getgid
@@ -192,6 +209,17 @@ void SimKernel::refresh(uint64_t instructions)
 
     store(a_tknin, (Word)tk_nin & BITS41);
     store(a_tknout, (Word)tk_nout & BITS41);
+
+    // The one rate counter b6sim genuinely knows: it dispatched every $77 itself.
+    store(a_nsyscall, (Word)nsyscall & BITS41);
+
+    // THE OTHER THIRTEEN STAY ZERO, and each of them is zero because it is TRUE here rather
+    // than because nothing filled it in.  There is no interrupt, no 0500 vector and no
+    // scheduler (nintr, ntrap, nswtch); no paging store and no shared text (nswapin,
+    // nswapout, ntextin, ntextout, ntextjoin); no copyin/copyout, the host doing the moving
+    // (niobulk, nioedge, nioshift); and no block device at all (dk_numb, dk_wds).  A vmstat
+    // run here therefore prints structural zeros in those columns, and cmd/vmstat/test
+    // asserts exactly that -- kernel/test/inspect is where they move.
 }
 
 //

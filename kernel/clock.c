@@ -87,6 +87,12 @@ void clock(struct trap *tr)
     // lightning bolt time-out
     // and time of day
 out:
+    // BOTH HALVES OF THE SUBSCRIPT ARE LIVE.  The low three bits are dk_busy -- which
+    // devices had an exchange outstanding at this tick, kept by dev/md.c and dev/mb.c --
+    // and the high two are the CPU state added below.  So dk_time is a HISTOGRAM and not
+    // four counters: every CPU category is the sum of eight slots, and a reader that
+    // samples 0, 8, 16 and 24 alone silently drops every tick taken while a disk or a drum
+    // was busy.  cmd/iostat and cmd/vmstat both sum; NDK bounds the mask (<sys/param.h>).
     a = dk_busy & 07;
     if (USERMODE(tr->spsw)) {
         u.u_utime++;

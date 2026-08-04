@@ -24,6 +24,7 @@ struct map swapmap[SMAPSIZ]; // space for swap allocation
 // The swap-in half of the traffic counters; the other four are kernel/text.c's, and
 // <sys/systm.h> says what they are for.
 int nswapin;
+int nswtch;  // processes dispatched onto the CPU -- vmstat's `cs'; see <sys/systm.h>
 char runin;  // scheduling flag
 char runout; // scheduling flag
 char runrun; // scheduling flag
@@ -376,6 +377,13 @@ loop:
     else
         q->p_link = p->p_link;
     curpri = n;
+
+    // vmstat's `cs', counted HERE and not at the head of swtch(): the loop above re-enters
+    // through idle() whenever nothing is runnable, and a count there would report the idle
+    // spin as context switching.  This point is reached exactly once per process actually
+    // put on the CPU.  Inside the spl6() the loop opened, so no bracket of its own.
+    nswtch++;
+
     spl0();
     // The rsav (ssav) contents are interpreted in the new address space
     n = p->p_flag & SSWAP;

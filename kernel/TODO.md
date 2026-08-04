@@ -26,7 +26,6 @@ numbering is **left as it was** — task numbers are cited from the sources and 
 | 35 | the guest's timing is not reproducible — the dropped `send` character, and the disabled `console` and `edit` tests | small to measure, unknown to fix |
 | 36 | the shifting copy: the half of the byte path task 28 could not reach | medium, high risk |
 | 37 | `mdvol[]` is filled only by a READ, so a pack that is only ever written is stamped with another drive's label | small |
-| 38 | `dk_busy`, `dk_numb[]` and `dk_wds[]` are declared, defined and written by nothing | small |
 | 39 | the 4,096-word user stack: `USTKPAGE` 28 → 24, and why C9b argues against it | small change, wide blast radius |
 
 ---
@@ -448,43 +447,3 @@ has to be tightened to 3100, which is what stops the deferral being forgotten.
 
 **Size.** Small.
 
----
-
-## 38. The disk instrumentation nothing writes
-
-**Where.** `dk_busy`, `dk_numb[3]` and `dk_wds[3]` — declared in
-[../include/sys/systm.h](../include/sys/systm.h), defined in [main.c](main.c), and **written by
-nothing**. `dk_busy` is *read* once, at [clock.c](clock.c)'s `a = dk_busy & 07`, and is
-therefore always 0.
-
-**What is wrong.** These are v7's per-drive I/O counters and the drivers were meant to keep
-them: a driver sets a bit of `dk_busy` while a transfer is outstanding, bumps `dk_numb[]` per
-transfer and `dk_wds[]` per word moved, and `clock.c` bills each tick to a slot chosen by which
-drives are busy. [dev/md.c](dev/md.c) and [dev/mb.c](dev/mb.c) touch none of them, so the whole
-disk half of an `iostat` has nothing to report.
-
-**What still works, and is worth knowing before anybody "fixes" this by deleting it.**
-`dk_time[32]` **is** live, and because `dk_busy` is stuck at 0 its low three bits never vary —
-so `clock.c` reduces to a clean four-slot CPU histogram: **0 user, 8 nice, 16 system, 24 idle**,
-in ticks at `HZ` = 250. That is the whole CPU side of a `vmstat` and it is already correct.
-There is no `cp_time` on this system and none is wanted; `dk_time[]` is v7's spelling of it.
-
-**Why now.** The `kctl(2)` table ([ksym.c](ksym.c)) publishes `dk_time`, `tk_nin` and
-`tk_nout` and **deliberately withholds these three**, because a variable that is exported and
-never written makes `iostat` print zeros that read as measurements — which is worse than a
-column it cannot print at all. The day a driver keeps them is the day they join the table, and
-the row comment in `ksym.c` says so.
-
-**And `iostat` exists now** ([../cmd/iostat/](../cmd/iostat/), task C8), so this is no longer a
-hypothetical reader: the program prints the four CPU percentages and the two terminal columns
-and says in its own manual page that the HD/FD/CD columns wait on this task. Adding the three
-variables here is all that stands between it and the disk half of its report; nothing in the
-program has to change beyond restoring the columns v7 printed.
-
-**How to fix it.** `mdstrategy()`/`mbstrategy()` set the drive's bit in `dk_busy` and bump
-`dk_numb[]` on the way in; the interrupt end clears the bit and adds `b_wcount` to `dk_wds[]`.
-The unit index has to be the same one `clock.c`'s `& 07` assumes, which is three bits — two
-controllers' worth of drives will not fit it, and deciding what the three bits *mean* here is
-most of the task.
-
-**Size.** Small, and the decision is the larger half of it.

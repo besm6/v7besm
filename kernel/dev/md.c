@@ -101,7 +101,14 @@
 // a request that runs out fails with B_ERROR, the untransferred remainder in b_resid and a
 // deverror() line naming the status word -- the v7 arrangement.
 //
-// kernel/test/mdtest exercises all of it against SIMH.
+// THE INSTRUMENTATION IS THIS DRIVER'S, in slot DK_MD (<sys/param.h>): the busy bit tracks
+// mdtab.b_active exactly, so it stands across a chained request and across a retry -- which
+// is true, the drive really is busy for the whole of both -- and dk_numb/dk_wds are bumped in
+// mdintr() where a chunk has landed, not in mdstart() where one was issued.  ONE SLOT FOR ALL
+// 64 UNITS, and the reason is in clock.c: the busy set is the low three bits of the dk_time
+// subscript, and no three-bit field holds MDNUNIT.
+//
+// kernel/test/mdtest exercises all of it against SIMH, the counters included.
 
 #include <besm6.h>
 
@@ -476,6 +483,7 @@ static void mdstart(void)
         mdarm = bit;
         mgrpon(bit);
         mdtab.b_active = 1;
+        dk_busy |= 1 << DK_MD;
         return;
     }
 
@@ -484,6 +492,7 @@ static void mdstart(void)
         mdarm = 0;
     }
     mdtab.b_active = 0;
+    dk_busy &= ~(1 << DK_MD);
 }
 
 // An exchange finished: GRP_CHAN3_FREE or GRP_CHAN4_FREE, from the ГРП dispatch in
@@ -551,6 +560,19 @@ void mdintr(void)
         blk        = (unsigned)bp->b_blkno + mddone / MDTRACK;
         mdvol[dev] = MDSYS[(dev >> 5) * MDSYSWORDS + (blk % MDTPZ) * MDSYSHALF + 1];
     }
+
+    // The exchange that just completed, and the only point at which the driver knows both
+    // THAT one did and how big it was.  Counted here rather than at the 033 for two
+    // reasons: mdstart() re-issues a soft failure, so a count at issue would charge a
+    // retried chunk twice and credit words that never reached memory; and a request the
+    // start loop refused outright (no such drive, a write to a read-only one) began no
+    // exchange and is counted nowhere, which is right -- it is not a transfer.
+    //
+    // mdnw is what the controller was ASKED to move.  The hardware gives no residual count
+    // -- an exchange transfers its half-zone or it fails -- so that is the only quantity
+    // there is, and dk_wds means "words moved by exchanges that completed".
+    dk_numb[DK_MD]++;
+    dk_wds[DK_MD] += mdnw;
 
     mddone += mdnw;
     if (mddone < bp->b_wcount) {

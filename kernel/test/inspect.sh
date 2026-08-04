@@ -1,4 +1,5 @@
-# /etc/inspect -- task C8's five inspection programs, run by the console shell.
+# /etc/inspect -- the six inspection programs, run by the console shell.  Five are task C8's
+# and the sixth is cmd/vmstat, which arrived with the driver instrumentation.
 #
 # Grafted onto a copy of the image by run-inspect.sh, not shipped on it.  filters.sh is the
 # model and utils.sh the model for its mask; the standing rule of both holds here too:
@@ -31,9 +32,14 @@
 #     `pstat -u', which is a u-area at a p_addr that is not the caller's, above KREACH, off
 #     /dev/mem.  That is the one assertion in this task that nothing else can make.
 #
-#   * iostat -- a systm and an idle column with numbers in them.  b6sim bills every tick to
-#     dk_time[0], there being no kernel to charge system time to and nothing idle, so `user'
-#     is 100.00 there and the other three never move.
+#   * iostat -- a systm and an idle column with numbers in them, and A DEVICE THAT MOVED.
+#     b6sim bills every tick to dk_time[0], there being no kernel to charge system time to
+#     and nothing idle, so `user' is 100.00 there and the other three never move; and it has
+#     no block device at all, so all six of the MD and MB fields are structurally zero.
+#
+#   * vmstat -- interrupts, context switches and a runnable process.  The same argument once
+#     more and at its sharpest: b6sim has one process, no 0500 vector and no scheduler, so
+#     `in', `cs', `tr', `b' and `w' cannot move there however long it runs.
 #
 #   * pstat -- every number it exists to print: a live inode table, open files, a mounted
 #     root, and a console that is open with carrier on.
@@ -127,20 +133,32 @@ ps -l | grep ' ps$' | sed 's/^............................\(.....\).*/\1/' >>/tm
 nice -10 ps -l | grep ' ps$' | sed 's/^............................\(.....\).*/\1/' >>/tmp/inspect.log
 nice -100 ps -l | grep ' ps$' | sed 's/^............................\(.....\).*/\1/' >>/tmp/inspect.log
 
-# ---- 5.  iostat: a column that b6sim can never move ------------------------------------
+# ---- 5.  iostat: columns that b6sim can never move -------------------------------------
 echo --5-iostat-- >>/tmp/inspect.log
 /etc/iostat >/tmp/io.out
 sed -n '1,2p' /tmp/io.out >>/tmp/inspect.log
-# THE INTERMEDIATE FILE IS NOT STYLE.  cmd/sh cannot run a FOUR-stage pipeline inside
-# backquotes: three works, four takes a SIGILL in the shell itself, and the same four stages
-# outside backquotes are fine.  It is not this task's bug and not this task's to fix; it is
-# recorded in ../../cmd/sh/README.md, and this is one of the two places in the tree that
-# would have hit it.
-sed -n 3p /tmp/io.out | tr -s ' ' '\012' | grep -v '^$' >/tmp/iocols.out
-nz=`grep -c -v '^0\.00$' /tmp/iocols.out`
+sed -n 3p /tmp/io.out >/tmp/iorow.out
+# -i NAMES THE FOUR CPU PERCENTAGES ONE PER LINE, and that is why the verdict is taken from
+# it rather than from the report above.  The six device fields now sit in front of them, and
+# `%3d.%02d' has no leading space at 100.00 -- so a `user' of 100.00 runs into the words
+# column ahead of it, and splitting the data line on whitespace would see one field where
+# there are two.  -i has no such neighbour.
+/etc/iostat -i >/tmp/ioi.out
+nz=`grep -c -v '^  0\.00 ' /tmp/ioi.out`
 if test $nz -ge 2
 then echo "iostat: at least two CPU categories are non-zero" >>/tmp/inspect.log
 else echo "iostat: only $nz CPU categories are non-zero" >>/tmp/inspect.log
+fi
+# AND THE DISK MOVED, which is the half of this program that did not exist until dev/md.c
+# and dev/mb.c were made to keep dk_numb and dk_wds.  This machine booted off /dev/md0 and
+# has been reading it ever since, so MD's words-per-second -- characters 13 to 18 of the
+# data line, cut BY POSITION for the reason just given -- cannot be zero unless the driver
+# is not counting at all.  Under b6sim all six device fields are structurally zero, which is
+# what cmd/vmstat/test and cmd/iostat/test assert instead.
+w=`sed 's/^............\(......\).*/\1/' /tmp/iorow.out | tr -d ' '`
+if test $w -gt 0
+then echo "iostat: the disk has moved words" >>/tmp/inspect.log
+else echo "iostat: the disk has moved no words" >>/tmp/inspect.log
 fi
 /etc/iostat -t >/tmp/iot.out
 sed -n '1,2p' /tmp/iot.out >>/tmp/inspect.log
@@ -184,6 +202,51 @@ grep -c '^u-area at 74000' /tmp/pu.out >>/tmp/inspect.log
 /etc/pstat -u 0 >/tmp/pu0.out
 grep '^comm ' /tmp/pu0.out >>/tmp/inspect.log
 grep -c '^u-area at 74000 (the live one)$' /tmp/pu0.out >>/tmp/inspect.log
+
+# ---- 8.  vmstat: the columns b6sim is structurally unable to move ----------------------
+#
+# THREE THINGS ONLY A BOOT CAN SHOW.  b6sim has one process, no block device, no 0500 vector
+# and no scheduler, so `b', `w', `md', `mb', `in', `tr' and `cs' are zero there and
+# cmd/vmstat/test asserts exactly that.  Here they move, and that they move IS the assertion
+# that the four counters kernel/intr.c, syscall.c, trap.c and slp.c now keep are live.
+#
+# NO NUMBER REACHES THE LOG.  Every one of them is a rate over a tick count; the comparisons
+# are made here and only the verdicts are diffed, which is this file's standing rule.
+echo --8-vmstat-- >>/tmp/inspect.log
+/etc/vmstat >/tmp/vm.out
+sed -n '1,2p' /tmp/vm.out >>/tmp/inspect.log
+# THE INTERMEDIATE FILE IS NOT STYLE.  cmd/sh cannot run a FOUR-stage pipeline inside
+# backquotes: three works, four takes a SIGILL in the shell itself, and the same four stages
+# outside backquotes are fine.  It is not this task's bug and not this task's to fix; it is
+# recorded in ../../cmd/sh/README.md, and this is one of the two places in the tree that
+# would have hit it.  The columns are cut by POSITION in any case -- adjacent fields have no
+# separator between them and can run together, exactly as in section 5.
+sed -n 3p /tmp/vm.out >/tmp/vmrow.out
+# `in', characters 34 to 38: the interrupt rate.  At HZ = 250 the free-running timer alone
+# puts it near 250, so anything at all here says extintr() is being counted.
+n=`sed 's/^.................................\\(.....\\).*/\\1/' /tmp/vmrow.out | tr -d ' '`
+if test $n -gt 0
+then echo "vmstat: interrupts are being counted" >>/tmp/inspect.log
+else echo "vmstat: no interrupts have been counted" >>/tmp/inspect.log
+fi
+# `cs', characters 44 to 48: a machine with an init, a shell and a sleep switches processes.
+n=`sed 's/^...........................................\\(.....\\).*/\\1/' /tmp/vmrow.out | tr -d ' '`
+if test $n -gt 0
+then echo "vmstat: processes are being switched" >>/tmp/inspect.log
+else echo "vmstat: nothing has been switched" >>/tmp/inspect.log
+fi
+# `r', characters 1 and 2: at least this vmstat is runnable, and the swapper is not counted.
+n=`sed 's/^\\(..\\).*/\\1/' /tmp/vmrow.out | tr -d ' '`
+if test $n -ge 1
+then echo "vmstat: something is runnable" >>/tmp/inspect.log
+else echo "vmstat: nothing is runnable" >>/tmp/inspect.log
+fi
+# -p prints four more columns over the same partition; only its two headings reach the log.
+/etc/vmstat -p >/tmp/vmp.out
+sed -n '1,2p' /tmp/vmp.out >>/tmp/inspect.log
+# -s: the LABELS, every number stripped.  A cumulative counter is precisely the kind of
+# number this test may not print, and the labels are what say the report is complete.
+/etc/vmstat -s | sed 's/^ *[0-9]* //' >>/tmp/inspect.log
 
 kill $slept
 echo ---end--- >>/tmp/inspect.log

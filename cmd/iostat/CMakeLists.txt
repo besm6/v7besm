@@ -8,9 +8,12 @@
 #
 # NOT SETUID, and there is nothing for it to be setuid to.
 #
-# THE DISK COLUMNS ARE NOT HERE, and iostat.c's header is the account: dk_busy is written
-# by nothing, so kernel/ksym.c withholds it along with dk_numb[] and dk_wds[], and the
-# HD/FD/CD half of v7's report has no numbers behind it.  kernel/TODO.md task 38.
+# THE DISK COLUMNS ARE HERE, and there are two devices rather than v7's three: MD, which is
+# all 64 units of kernel/dev/md.c together, and MB, the drums.  dk_busy is three bits wide
+# because it is the low three of kernel/clock.c's dk_time subscript, so one slot per
+# CONTROLLER is what fits; iostat.c's header is the account.  Each device gets %bsy, tps and
+# wps, and cmd/vmstat prints one number per device instead -- the two halves of the same
+# histogram, and neither is the other's summary.
 #
 # iostat.1m is the manual page, corrected in place; nothing installs it, it is read with
 # `nroff -man iostat.1m'.

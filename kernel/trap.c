@@ -36,6 +36,8 @@ char regloc[] = {
     RET,                                                              // [16] PC
 };
 
+int ntrap; // faults through the 0500 vector -- vmstat -p's `tr'; see <sys/systm.h>
+
 // The register dump both panic paths print.  `grp' is passed rather than re-read because
 // each caller has already dismissed the bit it decoded.
 //
@@ -110,6 +112,13 @@ void trap(void)
 
     syst    = u.u_stime;
     u.u_ar0 = (int *)tr;
+
+    // vmstat -p's `tr', counted before the restart fix-up and before the decode, so that
+    // every one of the five ГРП causes is counted whatever happens next.  grow()'s retry
+    // is deliberately included: an automatic stack extension is the one fault this kernel
+    // takes ON PURPOSE and it is normally the commonest, so excluding it would hide the
+    // very traffic the column exists to show.
+    ntrap++;
 
     // The restart protocol (doc/Memory_Mapping.md).  Before vectoring, the machine took
     // delivery of the NEXT WORD of the instruction stream and saved that as the return

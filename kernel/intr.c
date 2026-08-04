@@ -107,6 +107,7 @@ void clock(struct trap *tr);
 
 unsigned mgrp; // shadow of МГРП: it cannot be read back
 unsigned mprp; // shadow of МПРП: likewise
+int nintr;     // ГРП sources extintr() dispatched -- vmstat's `in'; see <sys/systm.h>
 
 // Arm the always-live interrupt sources.  Called once from main(), before the first
 // spl0().  After this the priority rides on БлПр alone; МГРП changes only through
@@ -244,6 +245,13 @@ void extintr(void)
         grp = __besm6_mod(MOD_GRP, 0) & mgrp;
         if (grp == 0)
             break;
+
+        // One per SOURCE SERVICED, not one per entry: a single vector can carry a device
+        // completion and a tick, and the loop below dispatches them one at a time.  The
+        // free-running timer is included and dominates -- at HZ = 250 a quiet machine's
+        // `in' column is about 250 -- which is what BSD's v_intr counts too; cmd/vmstat's
+        // manual page says so rather than leaving it to be discovered.
+        nintr++;
 
         if (grp & GRP_SLAVE) {
             prpintr();                           // clears the ПРП bits ...

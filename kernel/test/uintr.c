@@ -69,14 +69,17 @@ void drainbrz(void);
 
 // The external interrupt handler, reached from crt0u.s's intrgate.  It only has to dismiss the
 // simulated interrupt so the machine leaves the handler -- but being ordinary C, it clobbers R
-// (the ABI exits NTR 3 / ω = logical), Y (the logical ops) and M[16] (the `nintr++' global
+// (the ABI exits NTR 3 / ω = logical), Y (the logical ops) and M[16] (the `nfired++' global
 // reach), which is exactly the state intrgate must have saved.  If intrgate drops any of those
 // saves, uprog sees the damage and report() flags it.
-unsigned nintr; // bumped through the compiler's `utc nintr' idiom -> clobbers M[16]
+// `nfired' and not `nintr': <sys/systm.h> declares an int nintr now -- the kernel's own count
+// of ГРП sources dispatched, which cmd/vmstat divides by an interval -- and this handler is
+// the test's, not kernel/intr.c's.
+unsigned nfired; // bumped through the compiler's `utc nfired' idiom -> clobbers M[16]
 
 void extintr(void)
 {
-    nintr++;
+    nfired++;
     if (__besm6_mod(MOD_GRP, 0) & GRP_TIMER) {
         __besm6_mod(MOD_GRPCLR, ~GRP_TIMER); // dismiss it ...
         __besm6_mod(MOD_MGRP, 0);            // ... and mask, so the interval timer cannot re-fire

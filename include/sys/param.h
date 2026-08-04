@@ -51,6 +51,21 @@
 // it (kernel/ksym.c, <sys/kctl.h>).  dev/sc.c is the one driver behind both lines; see
 // kernel/conf.c's cdevsw comment for why there is no second major.
 #define NSC     2              // number of Consul typewriters
+// The instrumented block devices, and the slots they own in dk_busy, dk_numb[] and dk_wds[]
+// (<sys/systm.h>).  Here for NSC's reason and kernel/ksym.c's doctrine: this is a CONSTANT,
+// and a program walking dk_numb[] has to know how long it is.
+//
+// A SLOT INDEX IS ALSO A BIT NUMBER IN dk_busy, and that is what bounds NDK: kernel/clock.c
+// bills every tick to dk_time[(dk_busy & 07) + state*8], so the whole busy set has to fit in
+// three bits.  kernel/main.c asserts it -- this header is #define-only and cannot.
+//
+// ONE SLOT PER CONTROLLER AND NOT PER DRIVE.  dev/md.c addresses MDNUNIT = 64 units and no
+// three-bit field will hold them; what dk_busy can say is whether the disks were busy, and
+// that is what it says.  A per-drive breakdown needs a wider histogram than dk_time.
+#define NDK     2              // instrumented block devices
+#define DK_MD   0              // the disks -- kernel/dev/md.c, all MDNUNIT units together
+#define DK_MB   1              // the drums -- kernel/dev/mb.c, the paging store
+#define NDKTIME 32             // slots in dk_time[]: 4 CPU states x 8 I/O states
 // Ticks/second: the interval timer free-runs at this rate (ГРП bit 40; SIMH CLK_TPS)
 // and cannot be programmed.
 #define HZ       250

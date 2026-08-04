@@ -94,12 +94,21 @@ extern unsigned mgrp; // intr.c's shadow of МГРП, which cannot be read back
 #define F_IDLE   0001000 // a completion nobody was waiting for was not disarmed
 #define F_MAP    0002000 // the sector write did not land where the block number says
 #define F_DRUM1X 0004000 // ...and the drum-2 write landed on drum 1
+#define F_DKBUSY 0010000 // dk_busy was still set with no exchange outstanding
+#define F_DKCNT  0020000 // dk_wds disagreed with what the successful requests asked for
 
 // -------------------------------------------------------------------------
 // The environment kernel/dev/mb.c and kernel/intr.c name.
 // -------------------------------------------------------------------------
 
 int *intrframe; // extintr() dereferences it only on the timer arm
+
+// The instrumentation dev/mb.c keeps; kernel/main.c defines these in the kernel.  Checked
+// below rather than merely defined -- kernel/test/mdtest carries the fuller version of the
+// same argument, this being one exchange per instruction where the disk has four.
+int dk_busy;
+int dk_numb[NDK];
+int dk_wds[NDK];
 
 // mbopen() is the only thing in mb.c that touches the u-area, and only to set u_error.
 // Ordinary bss will do, as in biotest -- there is no mapping here and nothing reads it.
@@ -146,6 +155,8 @@ void iodone(register struct buf *bp)
 // -------------------------------------------------------------------------
 
 static struct buf mbbuf;
+static unsigned xwords; // words the requests that SUCCEEDED asked for -- dk_wds's oracle
+static unsigned dkbad;  // F_DKBUSY, raised by xfer(); main() folds it into the mask
 
 // One request, start to finish.  Returns B_ERROR (0 when the transfer worked).
 //
@@ -170,6 +181,15 @@ static int xfer(daddr_t blk, unsigned nw, int rw)
     // a hang, and mbtest.ini's `step' is what turns that into a failure.
     while ((mbbuf.b_flags & B_DONE) == 0)
         extintr();
+
+    // The busy bit belongs to an OUTSTANDING exchange, and mbintr() calls mbstart() after
+    // iodone(), which is what clears it once the queue has run dry.  Checked on every
+    // request, the refused one included.
+    if (dk_busy & (1 << DK_MB))
+        dkbad = F_DKBUSY;
+
+    if ((mbbuf.b_flags & B_ERROR) == 0)
+        xwords += nw;
 
     return mbbuf.b_flags & B_ERROR;
 }
@@ -356,6 +376,18 @@ int main(void)
 
     if ((mbbuf.b_flags & B_DONE) == 0)
         mask |= F_DONE;
+
+    // ---- The instrumentation ------------------------------------------------------------
+    //
+    // dk_wds counts words moved by exchanges that COMPLETED, so it must equal exactly what
+    // the successful requests asked for -- one sector at a time or a whole page.  The run
+    // with drum 2 detached contributes nothing to it, no exchange having begun, which is
+    // what makes that run an assertion here and not merely a run.
+    if (dk_wds[DK_MB] != (int)xwords)
+        mask |= F_DKCNT;
+    if (dk_busy != 0)
+        mask |= F_DKBUSY;
+    mask |= dkbad;
 
     return mask;
 }

@@ -253,17 +253,25 @@ file /etc/ncheck        # cmd/ncheck -- i-number to path name; `ncheck | sort | 
 source ../../rootfs/etc/ncheck
 mode 0755
 
-# The two inspection programs of task C8 that are section 1M, and so are in /etc where v7 put
-# them.  NEITHER IS ROOT-ONLY BY PERMISSION, unlike the nine above: iostat reads three values
-# through kctl(2), which is unprivileged, and pstat reads eleven the same way.  What IS
-# root-only is pstat -u, whose u-area comes off /dev/mem -- mode 0640 and root's -- so that
-# one flag fails for anybody else and the other seven do not.  Neither is setuid, and pstat
-# must not become one: /dev/mem is every process's memory, and a setuid pstat would hand it
-# out through a program that already knows the layout.
-file /etc/iostat        # cmd/iostat -- the CPU histogram and the terminal counters.  No disk
-                        # columns: dk_busy is written by nothing, so kernel/ksym.c withholds
-                        # it (kernel/TODO.md task 38).
+# The three inspection programs that are section 1M, and so are in /etc where v7 put them.
+# NONE IS ROOT-ONLY BY PERMISSION, unlike the nine above: all three read through kctl(2),
+# which is unprivileged, and open no device.  What IS root-only is pstat -u, whose u-area
+# comes off /dev/mem -- mode 0640 and root's -- so that one flag fails for anybody else and
+# the other seven do not.  None is setuid, and pstat must not become one: /dev/mem is every
+# process's memory, and a setuid pstat would hand it out through a program that already
+# knows the layout.
+file /etc/iostat        # cmd/iostat -- five of kernel/ksym.c's rows.  Three columns per
+                        # device out of the dk_time histogram, and the four CPU percentages,
+                        # each of them the sum of eight of its slots.
 source ../../rootfs/etc/iostat
+mode 0755
+
+file /etc/vmstat        # cmd/vmstat -- not a v7 program: 2.11BSD's, and the reader a dozen
+                        # of kernel/ksym.c's rows were being kept for.  procs and memory from
+                        # a scan of proc[] and coremap, the two devices, four rate counters,
+                        # and the same histogram cut the other way.  -s is the cumulative
+                        # form; there is no name cache here to report.
+source ../../rootfs/etc/vmstat
 mode 0755
 
 file /etc/pstat         # cmd/pstat -- eleven of kernel/ksym.c's rows name this program, and

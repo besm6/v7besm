@@ -85,6 +85,16 @@ extern int niobulk;  // whole words through copyin/copyout, both pointers on byt
 extern int nioedge;  // byte-at-a-time, squaring up the two ends of an in-phase transfer
 extern int nioshift; // byte-at-a-time, phases DIFFERENT -- needs a shifting copy, or nothing
 
+// The four rate counters, and the same argument again: a machine spending its time in the
+// kernel looks exactly like one that is not, until something counts.  These are what vmstat
+// divides by an interval to print `in', `sy', `tr' and `cs' (cmd/vmstat).  Plain ints for
+// the reason above -- every site below already runs with delivery blocked, and a count lost
+// to a race is not worth an spl bracket.
+extern int nintr;    // extintr(): ГРП sources dispatched, the free-running timer INCLUDED
+extern int nsyscall; // syscall(): э77 dispatches.  badextr()'s э50-э76 are not system calls
+extern int ntrap;    // trap(): faults through the 0500 vector, the stack-growth retry too
+extern int nswtch;   // swtch(): processes actually dispatched onto the CPU, idling excluded
+
 extern daddr_t swplo;        // block number of swap space
 extern int nswap;            // size of swap space
 extern int updlock;          // lock for sync
@@ -307,11 +317,12 @@ void open1(struct inode *ip, int mode, int trf);
 void signal(int pgrp, int sig);
 void iomove(caddr_t cp, int n, int flag);
 
-// Instrumentation
-extern int dk_busy;
-extern int dk_time[32];
-extern int dk_numb[3];
-extern int dk_wds[3];
+// Instrumentation.  The block-device half is kept by dev/md.c and dev/mb.c, a slot each
+// (<sys/param.h>: NDK, DK_MD, DK_MB); the terminal half by dev/tty.c.
+extern int dk_busy;            // one bit per device -- the low three of clock.c's subscript
+extern int dk_time[NDKTIME];   // ticks, by CPU state crossed with which devices were busy
+extern int dk_numb[NDK];       // exchanges completed, per device
+extern int dk_wds[NDK];        // ... and the words those exchanges moved
 extern int tk_nin;
 extern int tk_nout;
 

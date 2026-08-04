@@ -128,7 +128,7 @@ char runrun;
 char runin;
 time_t time;
 int dk_busy;
-int dk_time[32];
+int dk_time[NDKTIME];
 
 // intr.c calls this from prpintr(); no ПРП bit is ever up here, so it must never run.
 void scintr(void)

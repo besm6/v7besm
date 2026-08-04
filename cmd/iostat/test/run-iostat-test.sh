@@ -21,9 +21,12 @@
 #
 # WHAT b6sim CANNOT SHOW AT ALL is a moving column.  There is no kernel under it to bill
 # system time to, nothing idle and no nice, so every tick lands in dk_time[0] and `user' is
-# 100.00 whenever it is anything.  A systm and an idle column with real numbers in them is
-# kernel/test/inspect's, on the booted image, and that is the whole of what the boot half of
-# this program's testing exists for.
+# 100.00 whenever it is anything.  THE SIX DRIVE COLUMNS ARE THE SAME CASE and more sharply:
+# b6sim has no block device, so dk_numb and dk_wds are structurally zero there and the busy
+# share of the histogram never leaves subscript 0.  What is checked here is that the six
+# fields are present, in the right order and the right shape; a systm column, an idle column
+# and a drive that has actually moved are kernel/test/inspect's, on the booted image, and
+# that is the whole of what the boot half of this program's testing exists for.
 #
 # ENV -i, for the reason ../../pr/test/run-pr-test.sh gives.
 set -e
@@ -65,16 +68,52 @@ check_pct() {
     ' "$1" || exit 1
 }
 
+# Each device contributes three columns -- `%bsy' as `%3d.%02d', `tps' as `%4d.%d' and
+# `wps' as a plain `%6d' -- eighteen characters, immediately before the CPU block.  Cut by
+# column for the same reason check_pct is.
+check_drives() {
+    awk -v where="$2" -v ndk=2 '
+        {
+            line = $0
+            base = length(line) - 24 - ndk * 18
+            for (d = 0; d < ndk; d++) {
+                b = substr(line, base + d * 18 + 1, 6)
+                t = substr(line, base + d * 18 + 7, 6)
+                w = substr(line, base + d * 18 + 13, 6)
+                if (b !~ /^ *[0-9]+\.[0-9][0-9]$/) {
+                    printf "%s: drive %d %%bsy is not a percentage: [%s]\n", where, d, b
+                    exit 1
+                }
+                if (t !~ /^ *[0-9]+\.[0-9]$/) {
+                    printf "%s: drive %d tps is not a one-decimal rate: [%s]\n", where, d, t
+                    exit 1
+                }
+                if (w !~ /^ *[0-9]+$/) {
+                    printf "%s: drive %d wps is not an integer: [%s]\n", where, d, w
+                    exit 1
+                }
+                # b6sim has no block device at all, so all six are structurally zero here.
+                # This is the honesty check: a driver-less harness must not invent traffic.
+                if (b + 0 != 0 || t + 0 != 0 || w + 0 != 0) {
+                    printf "%s: drive %d moved under b6sim, which has no block device\n", where, d
+                    exit 1
+                }
+            }
+        }
+    ' "$1" || exit 1
+}
+
 # 1.  The default report: two header lines and one data line.
 env -i "$sim" "$prog" >out1.txt 2>&1
 [ "$(wc -l <out1.txt)" -eq 3 ] || fail "the default report is not three lines" out1.txt
-[ "$(sed -n 1p out1.txt)" = "        PERCENT" ] ||
-    fail "line 1 is not the PERCENT banner" out1.txt
-[ "$(sed -n 2p out1.txt)" = "  user  nice systm  idle" ] ||
-    fail "line 2 is not the four CPU column headings" out1.txt
-[ "$(sed -n 3p out1.txt | wc -c)" -eq 25 ] ||
-    fail "the data line is not 24 characters wide" out1.txt
+[ "$(sed -n 1p out1.txt)" = "                MD                MB        PERCENT" ] ||
+    fail "line 1 is not the two device banners and PERCENT" out1.txt
+[ "$(sed -n 2p out1.txt)" = "  %bsy   tps   wps  %bsy   tps   wps  user  nice systm  idle" ] ||
+    fail "line 2 is not the six drive headings and the four CPU ones" out1.txt
+[ "$(sed -n 3p out1.txt | wc -c)" -eq 61 ] ||
+    fail "the data line is not 60 characters wide" out1.txt
 sed -n 3p out1.txt >d1.txt
+check_drives d1.txt "the default report"
 check_pct d1.txt "the default report"
 
 # 2.  -t puts the two terminal columns in front of them, and widens both headers by the same
@@ -82,14 +121,15 @@ check_pct d1.txt "the default report"
 #     b6sim counts the bytes it really moved through descriptors 0, 1 and 2, and a stdout
 #     that is a pipe has not been flushed when the read happens.
 env -i "$sim" "$prog" -t >out2.txt 2>&1
-[ "$(sed -n 1p out2.txt)" = "         TTY        PERCENT" ] ||
-    fail "-t line 1 is not the TTY + PERCENT banner" out2.txt
-[ "$(sed -n 2p out2.txt)" = "   tin  tout  user  nice systm  idle" ] ||
-    fail "-t line 2 is not the six column headings" out2.txt
+[ "$(sed -n 1p out2.txt)" = "         TTY                MD                MB        PERCENT" ] ||
+    fail "-t line 1 is not the TTY, device and PERCENT banners" out2.txt
+[ "$(sed -n 2p out2.txt)" = "   tin  tout  %bsy   tps   wps  %bsy   tps   wps  user  nice systm  idle" ] ||
+    fail "-t line 2 is not the twelve column headings" out2.txt
 sed -n 3p out2.txt >d2.txt
-[ "$(wc -c <d2.txt)" -eq 37 ] || fail "-t's data line is not 36 characters wide" d2.txt
+[ "$(wc -c <d2.txt)" -eq 73 ] || fail "-t's data line is not 72 characters wide" d2.txt
 grep -q '^ *[0-9]*\.[0-9] *[0-9]*\.[0-9]' d2.txt ||
     fail "-t's first two columns are not one-decimal rates" d2.txt
+check_drives d2.txt "-t"
 check_pct d2.txt "-t"
 
 # 3.  -i names the same four numbers, one per line, in v7's order: idle, user, nice, system.
@@ -121,5 +161,6 @@ check_pct d3.txt "the cumulative report"
 check_pct d4.txt "the differential report"
 
 echo "cmd_iostat_format: the headers are exact, the columns are the width v7 printed them,"
-echo "                   the four percentages partition 100.00, -t prepends two rate columns"
+echo "                   the four percentages partition 100.00, the six drive fields are"
+echo "                   well formed and structurally zero, -t prepends two rate columns"
 echo "                   and an interval with a count reports through the differential path"

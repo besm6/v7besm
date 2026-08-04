@@ -29,6 +29,8 @@
 // 15-bit value, so this is a reachable path and not an assertion.
 static struct sysent badsysent = { 0, 0, nosys };
 
+int nsyscall; // э77 dispatches -- vmstat's `sy'; see <sys/systm.h>
+
 // The tail both doors share with trap(): deliver any signal the call raised,
 // re-price the process, and give up the CPU if something more urgent is runnable.
 static void sysret(struct trap *tr, time_t syst)
@@ -63,6 +65,12 @@ void syscall(void)
     syst      = u.u_stime;
     u.u_ar0   = (int *)tr;
     u.u_error = 0;
+
+    // vmstat's `sy'.  Counted here and NOT in badextr(): э50-э76 are the extracodes the
+    // Dubna monitor answered and this kernel does not, they raise SIGILL, and lumping them
+    // in would make a program jumping into hyperspace look busy.  A number out of range is
+    // counted, though -- it came through this door and it is a system call that failed.
+    nsyscall++;
 
     // The syscall number is the effective address the hardware wrote to r14 at the
     // vector.  Latch it NOW: R_ERRNO is that same slot, which the return path below

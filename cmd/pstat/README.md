@@ -1,7 +1,7 @@
 # `pstat` grew three modes because the kernel was already answering
 
 Task C8's fifth ([../TODO.md](../TODO.md)), and the widest reader of the kernel-variable table:
-eleven of `kernel/ksym.c`'s nineteen rows name this program. Two things about the port are
+eleven of `kernel/ksym.c`'s thirty-three rows name this program. Two things about the port are
 structural and neither is in the brief. [pstat.c](pstat.c)'s header is the short form;
 [pstat.1m](pstat.1m) carries the user-facing divergences, each marked `Note:`.
 
@@ -28,7 +28,7 @@ would hand it out through a program that already knows the layout —
 ## 2. The table's discipline forced three features
 
 [`kernel/ksym.c`](../../kernel/ksym.c) states its own rule: *a row names the program that asked
-for it, and a row whose column is empty does not belong.* The nineteen rows were put there
+for it, and a row whose column is empty does not belong.* The rows were put there
 before any of these programs existed, on the strength of what they were expected to want.
 Checking that when they arrived found eight rows in trouble:
 

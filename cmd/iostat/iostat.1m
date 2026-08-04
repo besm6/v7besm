@@ -18,10 +18,13 @@ input-output activity.
 For typewriters collectively, the number of input and output characters
 are counted.
 Also, on each clock tick,
-a tally is made in
-one of four categories, depending on whether the system is
+a tally is made in one of 32 slots, chosen by which devices had an
+exchange outstanding crossed with whether the system was
 executing in user mode, in `nice' (background)
 user mode, in system mode, or idle.
+Each of the four categories reported below is therefore the sum of
+eight of those slots, and each device's busy share is the sum of the
+slots with its own bit set.
 .PP
 The optional
 .I interval
@@ -46,8 +49,24 @@ With neither, it prints one report and exits.
 .PP
 With no option argument
 .I iostat
-gives the percentage of time the system has
+gives, for each instrumented device, the percentage of time it had an
+exchange outstanding
+.RB ( %bsy ),
+the exchanges it completed per second
+.RB ( tps )
+and the words those exchanges moved per second
+.RB ( wps );
+and then the percentage of time the system has
 spent in each of the four categories mentioned above.
+.PP
+There are two devices.
+.B MD
+is the magnetic disk of
+.BR kernel/dev/md.c ,
+.B all of its units together,
+and
+.B MB
+is the drum, which is also the paging store.
 .PP
 The following options are available:
 .TP
@@ -62,6 +81,8 @@ None.
 .I Iostat
 reads
 .BR dk_time ,
+.BR dk_numb ,
+.BR dk_wds ,
 .B tk_nin
 and
 .B tk_nout
@@ -69,31 +90,37 @@ through
 .IR kctl (2)
 and opens no device.
 .SH "SEE ALSO"
-kctl(2), pstat(1M), ps(1)
+kctl(2), vmstat(1M), pstat(1M), ps(1)
 .SH BUGS
 .PP
 .B Note:
-.B there are no disk columns.
+.B a device is a controller, not a drive.
 v7's
 .I iostat
-reported, for each of three disks, the transfers per minute and the
-milliseconds per seek and per transfer, and crossed those with the four
-CPU states to make the 32-way tally it reads.
-On this system
+named three disks and reported milliseconds per seek and per transfer for
+each.
 .B dk_busy
-is written by no driver, so the I/O half of every subscript is permanently
-zero and only four of the 32 slots ever move;
-.BR dk_busy ,
-.B dk_numb
-and
-.B dk_wds
-are deliberately not exported at all, an exported variable that nobody
-updates being worse than an absent one.
-The columns return with task 38 of
-.BR kernel/TODO.md .
+is three bits wide here because it is the low three bits of the subscript
+.B dk_time
+is tallied by, and
+.B kernel/dev/md.c
+addresses 64 drives; so
+.B MD
+is the disks together and
+.B MB
+the drums together, and a per-drive breakdown would need a wider histogram
+than
+.B dk_time
+is.
+Seek and transfer times are not reported at all: the controller returns no
+timing, and
+.B wps
+says what those columns were for.
 There is no
 .B cp_time
-on this system and none is wanted.
+on this system and none is wanted \-
+.B dk_time
+is it.
 .PP
 .B Note:
 v7's
@@ -102,7 +129,7 @@ v7's
 .B \-b
 (buffer-cache statistics, out of an
 .B io_info
-structure this kernel does not have) are gone with them, as are the
+structure this kernel does not have) are gone, as are the
 undocumented
 .B \-d
 and

@@ -24,11 +24,12 @@ sleep
    30
    39
 --5-iostat--
-        PERCENT
-  user  nice systm  idle
+                MD                MB        PERCENT
+  %bsy   tps   wps  %bsy   tps   wps  user  nice systm  idle
 iostat: at least two CPU categories are non-zero
-         TTY        PERCENT
-   tin  tout  user  nice systm  idle
+iostat: the disk has moved words
+         TTY                MD                MB        PERCENT
+   tin  tout  %bsy   tps   wps  %bsy   tps   wps  user  nice systm  idle
 --6-pstat--
 pstat: the inode table is not empty
 pstat: the file table is not empty
@@ -43,4 +44,28 @@ comm init
 0
 comm pstat
 1
+--8-vmstat--
+ procs       memory       disks      faults         cpu
+ r  b  w      avm     fre  md  mb   in   sy   cs  us  sy  id
+vmstat: interrupts are being counted
+vmstat: processes are being switched
+vmstat: something is runnable
+ procs        memory         swap   disks         faults             cpu
+ r  b  w     avm txt    fre   i   o  md  mb   in   sy   tr   cs  us  ni  sy  id
+swap ins
+swap outs
+text images read in
+text images written out
+joins to a text already in core
+cpu context switches
+device interrupts
+traps
+system calls
+bytes copied whole words at a time
+bytes copied a byte at a time, in phase
+bytes copied a byte at a time, out of phase
+disk transfers
+disk words moved
+drum transfers
+drum words moved
 ---end---

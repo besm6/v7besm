@@ -160,6 +160,12 @@ daddr_t swplo = 0;
 
 int *intrframe; // extintr() dereferences it only on the timer arm
 
+// The instrumentation dev/md.c keeps; kernel/main.c defines these in the kernel.  Nothing
+// here reads them -- mdtest is where they are held to account.
+int dk_busy;
+int dk_numb[NDK];
+int dk_wds[NDK];
+
 struct trap;
 
 static int nclock; // free-running timer ticks; any number is fine

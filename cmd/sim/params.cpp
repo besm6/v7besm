@@ -46,6 +46,8 @@ constexpr int nsc     = kparam::NSC;
 constexpr int msgbufs = kparam::MSGBUFS;
 constexpr int cmapsiz = kparam::CMAPSIZ;
 constexpr int smapsiz = kparam::SMAPSIZ;
+constexpr int ndk     = kparam::NDK;
+constexpr int ndktime = kparam::NDKTIME;
 
 // The word offsets and element sizes, captured for the arithmetic below.
 constexpr int p_words     = klayout::P_WORDS;
@@ -57,7 +59,6 @@ constexpr int file_words  = klayout::FILE_WORDS;
 constexpr int mount_words = klayout::MOUNT_WORDS;
 constexpr int tty_words   = klayout::TTY_WORDS;
 constexpr int map_words   = klayout::MAP_WORDS;
-constexpr int dktime_n    = klayout::DKTIME_N;
 
 // The kctl(2) interface itself.
 constexpr int op_get     = kctlop::GET;
@@ -124,6 +125,8 @@ static_assert(ours::nsc == NSC, "NSC disagrees with sys/param.h");
 static_assert(ours::msgbufs == MSGBUFS, "MSGBUFS disagrees with sys/param.h");
 static_assert(ours::cmapsiz == CMAPSIZ, "CMAPSIZ disagrees with sys/param.h");
 static_assert(ours::smapsiz == SMAPSIZ, "SMAPSIZ disagrees with sys/param.h");
+static_assert(ours::ndk == NDK, "NDK disagrees with sys/param.h");
+static_assert(ours::ndktime == NDKTIME, "NDKTIME disagrees with sys/param.h");
 
 //
 // The image has to hold what this file lays into it.  These are the assertions that would
@@ -144,6 +147,6 @@ static_assert(010000 + ours::nproc * ours::p_words + ours::ntext * ours::text_wo
                       ours::nmount * ours::mount_words + ours::nsc * ours::tty_words +
                       (ours::msgbufs + ours::nbpw - 1) / ours::nbpw +
                       ours::cmapsiz * ours::map_words + ours::smapsiz * ours::map_words +
-                      ours::dktime_n + 9 /* the nine one-word scalars */
+                      ours::ndktime + 2 * ours::ndk + 21 /* the twenty-one one-word scalars */
                   < ours::kend,
               "the imitation kernel's variables must all fit below KEND");

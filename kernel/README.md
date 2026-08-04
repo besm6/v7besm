@@ -191,8 +191,8 @@ has the *simulator* load one off the build host. So `nlist(3)` has nothing to op
 deliberately absent from this libc; [ksym.c](ksym.c) carries a small table of the variables the
 kernel publishes and `kctl(2)` reads it
 ([../doc/Unix_V7_System_Calls.md](../doc/Unix_V7_System_Calls.md) §2.5,
-[../include/sys/kctl.h](../include/sys/kctl.h)). It costs about **330 words** of the headroom
-above — nineteen four-word rows and the handler — and it cannot fall out of step with the image
+[../include/sys/kctl.h](../include/sys/kctl.h)). It costs about **390 words** of the headroom
+above — thirty-three four-word rows and the handler — and it cannot fall out of step with the image
 it is part of, every address being a link-time relocation of the real declaration rather than a
 number written down.
 

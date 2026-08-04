@@ -92,6 +92,12 @@ time_t time;
 int lbolt;
 int *intrframe; // extintr() dereferences it only on the timer arm
 
+// The instrumentation dev/mb.c keeps; kernel/main.c defines these in the kernel.  Nothing
+// here reads them -- mbtest is where they are held to account.
+int dk_busy;
+int dk_numb[NDK];
+int dk_wds[NDK];
+
 // One row: the drum.  swapdev is major 0 here, not conf.c's 1, because there is no disk
 // on this machine and main()'s nblkdev walk is not running to be confused by a hole.
 struct bdevsw bdevsw[] = {

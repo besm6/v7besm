@@ -137,27 +137,29 @@ extern unsigned mdretries; // exchanges md.c re-issued for the current request
 #define SYSADDR 36
 
 // Fault-mask bits, returned in the accumulator.  Zero means every check passed.
-#define F_ERR    0000001  // a transfer that should have worked reported B_ERROR
-#define F_TRK0   0000002  // the half-zone round trip on an even block came back different
-#define F_SYSW   0000004  // the service words did not survive the round trip
-#define F_TRK1   0000010  // ...on an ODD block
-#define F_MAP    0000020  // reading the zone whole did not show both halves where written
-#define F_HALFP  0000040  // DISK_HALFPAGE did not move the memory side
-#define F_GROUP  0000100  // the group-1 drive round trip came back different
-#define F_CTLR4  0000200  // the controller-4 round trip came back different
-#define F_MD00X  0000400  // ...and it landed on controller 3 instead
-#define F_NOERR  0001000  // the missing unit did not report B_ERROR
-#define F_RESID  0002000  // ...or did not leave the whole request in b_resid
-#define F_MODE   0004000  // the mode word named no run this test knows
-#define F_DONE   0010000  // a request came back with neither B_DONE nor a hang
-#define F_IDLE   0020000  // a completion nobody was waiting for was not disarmed
-#define F_MISRDY 0040000  // the MISSING drive was not classified: READY still set, or unreported
-#define F_ROERR  0100000  // a write to the READ-ONLY drive was not refused, or not reported
-#define F_ROSTAT 0200000  // ...and the status did not say READONLY-but-present
-#define F_RORD   0400000  // a READ of the read-only drive failed, or came back wrong
-#define F_SHORT  01000000 // an unreadable zone did not fail the request, or was not reported
-#define F_SHRSD  02000000 // ...or did not leave the whole request in b_resid
-#define F_SHRTY  04000000 // ...or was not RETRIED, which is what makes it a SOFT error
+#define F_ERR    0000001   // a transfer that should have worked reported B_ERROR
+#define F_TRK0   0000002   // the half-zone round trip on an even block came back different
+#define F_SYSW   0000004   // the service words did not survive the round trip
+#define F_TRK1   0000010   // ...on an ODD block
+#define F_MAP    0000020   // reading the zone whole did not show both halves where written
+#define F_HALFP  0000040   // DISK_HALFPAGE did not move the memory side
+#define F_GROUP  0000100   // the group-1 drive round trip came back different
+#define F_CTLR4  0000200   // the controller-4 round trip came back different
+#define F_MD00X  0000400   // ...and it landed on controller 3 instead
+#define F_NOERR  0001000   // the missing unit did not report B_ERROR
+#define F_RESID  0002000   // ...or did not leave the whole request in b_resid
+#define F_MODE   0004000   // the mode word named no run this test knows
+#define F_DONE   0010000   // a request came back with neither B_DONE nor a hang
+#define F_IDLE   0020000   // a completion nobody was waiting for was not disarmed
+#define F_MISRDY 0040000   // the MISSING drive was not classified: READY still set, or unreported
+#define F_ROERR  0100000   // a write to the READ-ONLY drive was not refused, or not reported
+#define F_ROSTAT 0200000   // ...and the status did not say READONLY-but-present
+#define F_RORD   0400000   // a READ of the read-only drive failed, or came back wrong
+#define F_SHORT  01000000  // an unreadable zone did not fail the request, or was not reported
+#define F_SHRSD  02000000  // ...or did not leave the whole request in b_resid
+#define F_SHRTY  04000000  // ...or was not RETRIED, which is what makes it a SOFT error
+#define F_DKBUSY 010000000 // dk_busy was still set with no exchange outstanding
+#define F_DKCNT  020000000 // dk_numb/dk_wds disagreed with what the requests asked for
 
 // Must match MDRETRY in kernel/dev/md.c -- run 4 asserts the exact retry count.
 #define MDRETRY 10
@@ -167,6 +169,14 @@ extern unsigned mdretries; // exchanges md.c re-issued for the current request
 // -------------------------------------------------------------------------
 
 int *intrframe; // extintr() dereferences it only on the timer arm
+
+// The instrumentation dev/md.c keeps; kernel/main.c defines these in the kernel.  They are
+// CHECKED here and not merely defined: this is the only environment in the tree where the
+// words the driver claims to have moved can be held against a number the test computed
+// itself, and where a REFUSED request can be shown to have counted nothing.
+int dk_busy;
+int dk_numb[NDK];
+int dk_wds[NDK];
 
 // mdopen() is the only thing in md.c that touches the u-area, and only to set u_error.
 // Ordinary bss will do, as in mbtest and biotest -- there is no mapping here.
@@ -226,6 +236,7 @@ void deverror(struct buf *bp, int o1, int o2)
 
 static struct buf mdbuf;
 static unsigned mask;
+static unsigned xwords; // words the requests that SUCCEEDED asked for -- dk_wds's oracle
 
 // One request, start to finish.  Returns B_ERROR (0 when the transfer worked).
 //
@@ -254,6 +265,16 @@ static int xfer(int unit, daddr_t blk, unsigned off, unsigned nw, int rw)
 
     if ((mdbuf.b_flags & B_DONE) == 0)
         mask |= F_DONE;
+
+    // The busy bit belongs to an OUTSTANDING exchange, and the queue is empty by the time
+    // iodone() has run -- mdintr() calls mdstart() after it, which is what clears the bit.
+    // Checked on every request, refused ones included: a request the start loop turned away
+    // must not leave the drive marked busy for the rest of the run.
+    if (dk_busy & (1 << DK_MD))
+        mask |= F_DKBUSY;
+
+    if ((mdbuf.b_flags & B_ERROR) == 0)
+        xwords += nw;
 
     return mdbuf.b_flags & B_ERROR;
 }
@@ -571,6 +592,31 @@ int main(void)
 
     if (mgrp & GRP_CHAN3_FREE)
         mask |= F_IDLE;
+
+    // ---- Check 14: the instrumentation ------------------------------------------------
+    //
+    // dk_wds counts words moved by exchanges that COMPLETED, so it must equal exactly what
+    // the successful requests above asked for -- whether one exchange carried the request
+    // or four did, in half-zone mode or page mode.  That equality is the whole assertion:
+    // a driver counting at issue rather than at completion overshoots on run 4, where the
+    // short image makes md.c re-issue the same chunk MDRETRY times and land none of them,
+    // and a driver counting per REQUEST rather than per exchange undershoots on check 3.
+    //
+    // A refused request contributes nothing, no exchange having begun, which is what makes
+    // runs 2 and 3 assertions here and not merely runs.
+    //
+    // dk_numb is a count of exchanges and can only be bounded: at least one per successful
+    // request, and never fewer than one per PGSZ words nor more than one per BSIZEW.
+    if (dk_wds[DK_MD] != (int)xwords)
+        mask |= F_DKCNT;
+    if (xwords != 0)
+        if (dk_numb[DK_MD] < (int)(xwords / PGSZ) || dk_numb[DK_MD] > (int)(xwords / BSIZEW))
+            mask |= F_DKCNT;
+
+    // Nothing is outstanding on any device, and the forged completion above did not raise
+    // the bit either -- mdintr()'s idle guard returns before it can.
+    if (dk_busy != 0)
+        mask |= F_DKBUSY;
 
     return mask;
 }

@@ -349,19 +349,27 @@ ceiling is `estabur()`'s `nt + nd > USTKPAGE * PGSZ`), so one `sbrk()` serves bo
 ([Unix_V7_System_Calls.md §2.5](Unix_V7_System_Calls.md#25-kernel-introspection)), and there is
 no kernel underneath this simulator — so b6sim **pretends to be one**. `cmd/sim/kernel.h` holds
 a block of memory laid out the way the kernel's low core is laid out, carrying the same
-nineteen variables `kernel/ksym.c` exports and a `struct user` at `UBASE`, answered through the
+thirty-three variables `kernel/ksym.c` exports and a `struct user` at `UBASE`, answered through
+the
 same `KCTL_GET`/`KCTL_STAT`/`KCTL_LIST` and readable through `/dev/kmem` and `/dev/mem`.
 
 **Every value b6sim genuinely knows is the real one**, and every value it does not is left
 **zero** rather than invented. The guest's own pid, uid and parent fill `proc[0]` — the very
 numbers `getpid`, `getuid` and `getppid` return, so a program can check the table against
 something it learned another way. `time` is the host clock; `tk_nin`/`tk_nout` are the bytes
-actually moved through descriptors 0, 1 and 2; `lbolt` and `dk_time` come from the instruction
+actually moved through descriptors 0, 1 and 2; `nsyscall` is the `$77` dispatches b6sim made
+itself; `lbolt` and `dk_time` come from the instruction
 counter, **all of it billed to `dk_time[0]`**, because there is no kernel here to charge system
 time to, nothing to be idle, and no nice — which is exactly what `kernel/clock.c` would record
 for a machine that never left user mode. `inode`, `file`, `text`, `mount`, the maps and `sc`
 are zero: b6sim has no counterpart for any of them, and a plausible fiction is worse than an
-empty table because a tool cannot tell it from a measurement. The one exception is `msgbuf`,
+empty table because a tool cannot tell it from a measurement. **The other thirteen rate
+counters are zero for the same reason and it is the truth about them**: there are no
+interrupts, no `0500` vector, no scheduler, no paging store, no shared text, no
+`copyin`/`copyout` and no block device here, so `nintr`, `ntrap`, `nswtch`, `nswapin`,
+`nswapout`, `ntextin`, `ntextout`, `ntextjoin`, `niobulk`, `nioedge`, `nioshift`, `dk_numb`
+and `dk_wds` cannot move however long a guest runs — which is what `cmd/vmstat/test` and
+`cmd/iostat/test` assert, and what `kernel/test/inspect` exists to see move. The one exception is `msgbuf`,
 which carries a fixed banner so that a `dmesg` has a line to print and its empty case stays
 tellable from its working one.
 

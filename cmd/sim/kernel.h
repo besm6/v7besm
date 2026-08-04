@@ -3,7 +3,7 @@
 //
 // b6sim runs ONE process and has no operating system inside it, so there is nothing behind
 // kctl(2) or /dev/kmem to read.  This class is the pretence: a block of memory laid out the
-// way the kernel's low core is laid out, holding the nineteen variables kernel/ksym.c
+// way the kernel's low core is laid out, holding the thirty-three variables kernel/ksym.c
 // exports and a `struct user' at UBASE, answered through the same three operations the real
 // call offers and readable through the same two device nodes.
 //
@@ -68,6 +68,8 @@ constexpr int NSC     = 2;
 constexpr int MSGBUFS = 128;
 constexpr int CMAPSIZ = 50;
 constexpr int SMAPSIZ = 50;
+constexpr int NDK     = 2;  // instrumented block devices: dk_numb[], dk_wds[]
+constexpr int NDKTIME = 32; // dk_time[]: 4 CPU states x 8 I/O states
 constexpr int SRUN    = 3;  // proc.h stat code
 constexpr int SLOAD   = 01; // proc.h flag code
 } // namespace kparam
@@ -139,7 +141,6 @@ enum : int {
     MOUNT_WORDS = 3,
     TTY_WORDS   = 29,
     MAP_WORDS   = 2,
-    DKTIME_N    = 32, // dk_time[32]
 };
 } // namespace klayout
 
@@ -175,6 +176,11 @@ public:
     // are real: they count the bytes b6sim actually moved.
     void count_tty_in(unsigned n) { tk_nin += n; }
     void count_tty_out(unsigned n) { tk_nout += n; }
+
+    // The system-call count, fed by the $77 dispatch.  Real for the same reason: b6sim
+    // dispatched every one of them itself.  It is the ONLY one of vmstat's four rate
+    // counters that means anything here -- see refresh().
+    void count_syscall() { nsyscall++; }
 
     // The guest's name, for u_comm.  Set once, when a program is loaded.
     void set_comm(const std::string &name);
@@ -214,9 +220,10 @@ private:
     unsigned msgbuf_addr{}; // ... and of msgbuf, for msgbufp
     unsigned tk_nin{};
     unsigned tk_nout{};
+    unsigned nsyscall{};
 
     // Addresses of the live scalars, so refresh() need not search the table.
-    unsigned a_time{}, a_lbolt{}, a_dktime{}, a_tknin{}, a_tknout{};
+    unsigned a_time{}, a_lbolt{}, a_dktime{}, a_tknin{}, a_tknout{}, a_nsyscall{};
 
     unsigned place(const char *name, unsigned words, unsigned bytes, unsigned &next);
     void store(unsigned addr, Word w) { image[addr] = w; }
