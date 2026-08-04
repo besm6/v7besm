@@ -92,6 +92,7 @@ enum {
     SYS_getgid = 47,
     SYS_signal = 48,
     SYS_kctl   = 49,
+    SYS_statfs = 50,
     SYS_acct   = 51,
     SYS_phys   = 52,
     SYS_lock   = 53,
@@ -174,6 +175,7 @@ static unsigned syscall_nargs(unsigned num)
     case SYS_gtty:
     case SYS_signal:
     case SYS_exec:
+    case SYS_statfs:
         return 2;
 
     // Everything else takes one argument (single stack/ACC operand).
@@ -398,7 +400,7 @@ static void pack_word(char *dst, Word v)
 // This is read(2)'s rule and the only rule kctl has: a `len' of 0 copies nothing and
 // answers with the size AVAILABLE, so a caller can size a buffer; a short `len' truncates
 // rather than failing, so completeness is a comparison the caller makes.  ksymout() in
-// kernel/ksym.c is the same function, and lib/test/kctlt compares the two.
+// kernel/kctl.c is the same function, and lib/test/kctlt compares the two.
 //
 void Processor::sys_kctl_out(const char *src, unsigned avail, Word buf, int len)
 {
@@ -418,7 +420,7 @@ void Processor::sys_kctl_out(const char *src, unsigned avail, Word buf, int len)
 //
 // int kctl(const char *name, int op, void *buf, int len)
 //
-// The imitation kernel's half of kernel/ksym.c.  It has to match that file's BEHAVIOUR and
+// The imitation kernel's half of kernel/kctl.c.  It has to match that file's BEHAVIOUR and
 // not merely its spirit: lib/test/kctlt runs against both and diffs the transcripts.
 //
 void Processor::sys_kctl()
@@ -443,6 +445,17 @@ void Processor::sys_kctl()
             memcpy(&names[(size_t)i * kctlop::KSYMLEN], nm, strlen(nm));
         }
         sys_kctl_out(names.data(), n, buf, len);
+        return;
+    }
+
+    // KCTL_PSINFO names nothing either.  NPROC records, slot 0 the one process.
+    if (op == kctlop::PSINFO) {
+        unsigned rec = kctlop::PS_WORDS * kparam::NBPW;
+        unsigned n   = (unsigned)kparam::NPROC * rec;
+        std::vector<char> v(n, 0);
+        for (int i = 0; i < kparam::NPROC; i++)
+            machine.kernel.psinfo_record(i, &v[(size_t)i * rec]);
+        sys_kctl_out(v.data(), n, buf, len);
         return;
     }
 
@@ -1434,6 +1447,18 @@ void Processor::syscall(unsigned num)
     case SYS_phys:
         // Not meaningful for a user-level simulator.
         sys_err(EPERM);
+        break;
+
+    case SYS_statfs:
+        // int statfs(const char *path, struct statfs *buf)
+        //
+        // ENODEV AND NOT EPERM, which is what the group above answers.  b6sim has no
+        // filesystem of its own -- every path is the HOST's, and the host has no v7
+        // superblock, no BSIZE of 3072 and no s_tfree to report in those units.  EPERM
+        // would read as "you are not root", which is the one thing this call exists to
+        // stop meaning: df(1) uses it precisely so that an ordinary user gets an answer.
+        // cmd/df/test's five cases all take the image path and never reach here.
+        sys_err(ENODEV);
         break;
 
     case SYS_kctl:

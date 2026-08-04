@@ -13,13 +13,22 @@
 //
 // THE GAPS ARE DELIBERATE.  Only the calls this kernel implements get a name; the
 // rows that are nullsys or nosys in sysent.c -- 0 (indir), 38 (switch), 39
-// (setpgrp), 40 (tell), 50, 55-58, 62, 63 -- get none, so that naming one
+// (setpgrp), 40 (tell), 55-58, 62, 63 -- get none, so that naming one
 // cannot be mistaken for implementing it.
 //
-// ONE NUMBER IS NOT v7's.  Row 49 was "reserved for USG" and is kctl, this port's own
-// call: there is no /unix on the root filesystem, so the nlist(3) route to a kernel
-// variable does not exist here and something had to take its place (<sys/kctl.h>).  It
-// took the lowest free row rather than a number past 63, which would have moved NSYSENT.
+// TWO NUMBERS ARE NOT v7's, and both were "reserved for USG".  Row 49 is kctl: there is no
+// /unix on the root filesystem, so the nlist(3) route to a kernel variable does not exist
+// here and something had to take its place (<sys/kctl.h>).  Row 50 is statfs, which df(1)
+// asks instead of reading a superblock off /dev/rmd0 -- a node that is mode 0600 because it
+// is every file's contents, and so a node df had to stop needing before it could be an
+// ordinary user's command (<sys/statfs.h>).  Both took the lowest free row rather than a
+// number past 63, which would have moved NSYSENT.
+//
+// A THIRD ADDITION TOOK NO NUMBER AT ALL.  ps(1) wants the u-area fields that kctl's
+// variable table cannot carry, and got KCTL_PSINFO -- an OPERATION on row 49, beside
+// KCTL_LIST, which likewise names nothing.  A syscall number is permanent and externally
+// visible; an operation on a call that already exists is neither.  <sys/kctl.h> is the
+// account, and it is the shape to reach for first.
 //
 // ONE NAME IS NOT A CALL ANY PROGRAM MAKES.  Row 45, v7's "unused", is sigreturn:
 // the kernel plants a `$77 SYS_sigret' word on the user stack itself (`sigcode',
@@ -89,6 +98,7 @@
 #define SYS_getgid 47 // int getgid(void) -- the real gid in A, the effective one in r12
 #define SYS_signal 48 // int (*signal(int sig, int (*func)()))()
 #define SYS_kctl   49 // int kctl(const char *name, int op, void *buf, int len)
+#define SYS_statfs 50 // int statfs(const char *path, struct statfs *buf)
 #define SYS_acct   51 // int acct(char *path)
 #define SYS_phys   52 // int phys(int segno, int npages, int physaddr)
 #define SYS_lock   53 // int lock(int flag)

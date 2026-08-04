@@ -485,7 +485,7 @@ with offset 5 rather than 0, that object keeping its value in the low byte of it
 invisible once masked, and a trap if it is not.
 
 This is not a hypothetical: it is why `struct ksym`'s address field in
-[kernel/ksym.c](../kernel/ksym.c) is a `void *`, and it is the whole reason that table can be
+[kernel/kctl.c](../kernel/kctl.c) is a `void *`, and it is the whole reason that table can be
 written as a list of bare symbol names. `bufpaddr()` in [include/sys/buf.h](../include/sys/buf.h)
 masks a `caddr_t` the same way, for a different reason.
 

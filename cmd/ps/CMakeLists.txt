@@ -9,10 +9,12 @@
 # two hard-coded `ls /bin' expectations -- kernel/test/console.ini and
 # kernel/test/session.expected -- had to grow for this one.
 #
-# NOT SETUID, AND IT MUST NOT BECOME ONE.  It works because /dev/kmem and /dev/mem are
-# readable by root, and it says so and stops for anybody else, exactly as v7's did.  A
-# setuid ps would hand every process's memory to everybody through a program that already
-# knows the layout -- the argument ../quot/CMakeLists.txt makes about /dev/rmd0.
+# NOT SETUID, AND IT NEVER WAS -- and since KCTL_PSINFO it opens no device at all and works
+# for anybody.  It used to read /dev/kmem and /dev/mem, both 0640 and root's, for four fields
+# of a u-area; those modes are unchanged, and what changed is that it stopped asking for
+# memory.  A setuid ps would hand every process's memory to everybody through a program that
+# already knows the layout -- ../quot/CMakeLists.txt's argument about /dev/rmd0 -- which is
+# why the call returns a digest and not an address.
 #
 # ps.1 is the manual page, corrected in place; nothing installs it, it is read with
 # `nroff -man ps.1'.

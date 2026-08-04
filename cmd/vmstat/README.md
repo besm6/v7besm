@@ -2,7 +2,7 @@
 
 Not a v7 program. v7 has no `vmstat`; the source is
 [RetroBSD's](../../../BSD/retrobsd/src/cmd/vmstat.c), by way of 2.11BSD. It is here because
-[../../kernel/ksym.c](../../kernel/ksym.c) had been holding a dozen live counters open on one
+[../../kernel/kctl.c](../../kernel/kctl.c) had been holding a dozen live counters open on one
 sentence — *"they come with a vmstat"* — and because the disk half of
 [../iostat/](../iostat/) had been waiting on a kernel task with the same shape. Both are
 discharged here.
@@ -44,7 +44,7 @@ merely an available one:
 
 1. It is the **same** denominator the percentages use, so no two numbers in one report can
    disagree about how long the interval was. A wall clock would let them.
-2. It needs no new kernel variable at all — which is exactly the simplification `ksym.c`'s
+2. It needs no new kernel variable at all — which is exactly the simplification `kctl.c`'s
    doctrine already made against RetroBSD's `_hz` and `_nproc`.
 3. The first report and every later one then share **one** formula, where BSD needed a
    `nintv != 1` branch and a second kernel structure to read on the first pass.

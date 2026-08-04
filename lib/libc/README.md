@@ -538,7 +538,7 @@ routine that may not be there.
   `nlist()` would have had nothing to open, and the three programs named as its first callers
   wanted it for exactly the thing it could not have done.
 
-  What replaced it is **`kctl(2)`** (`<sys/kctl.h>`, `kernel/ksym.c`, `doc/Unix_V7_System_Calls.md`
+  What replaced it is **`kctl(2)`** (`<sys/kctl.h>`, `kernel/kctl.c`, `doc/Unix_V7_System_Calls.md`
   §2.5): the kernel carries a small table of the variables it publishes, and one call reads it.
   Only `gen/kgetsym.c` is libc's share of that — thirty lines over `KCTL_STAT`, for the callers
   that want an address rather than a value. There is no `struct nlist`, no `<nlist.h>` and no

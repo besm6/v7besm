@@ -135,11 +135,13 @@ return a value in `r12` as well as the accumulator.
 
 ### 2.5 Kernel introspection
 
-**One row here is not v7's**, and it is the only call in this table that no PDP-11 Unix had.
+**Two rows here are not v7's**, and they are the only calls in this table that no PDP-11 Unix
+had.
 
 | № | prototype | handler | what it does |
 |---|---|---|---|
-| 49 | `int kctl(const char *name, int op, void *buf, int len)` | `kctl` — [ksym.c](../kernel/ksym.c) | Read the kernel's table of exported variables. `KCTL_GET` copies the variable's value, `KCTL_STAT` a `struct kctlstat` holding its **word** address and size, `KCTL_LIST` the exported names as `KSYMLEN`-byte records; `KCTL_SET` is reserved and answers `EINVAL`. At most `len` bytes are copied and the count is returned, `read(2)`-fashion; `len == 0` copies nothing and reports the size *available*. `ENOENT` for an unknown name, `EINVAL` for an unknown op or a name with no NUL in `KSYMLEN` bytes, `EFAULT` for a bad pointer. **Not privileged.** |
+| 49 | `int kctl(const char *name, int op, void *buf, int len)` | `kctl` — [kctl.c](../kernel/kctl.c) | Read the kernel's table of exported variables. `KCTL_GET` copies the variable's value, `KCTL_STAT` a `struct kctlstat` holding its **word** address and size, `KCTL_LIST` the exported names as `KSYMLEN`-byte records, `KCTL_PSINFO` a `struct psinfo` per `proc[]` slot (see below); `KCTL_SET` is reserved and answers `EINVAL`. At most `len` bytes are copied and the count is returned, `read(2)`-fashion; `len == 0` copies nothing and reports the size *available*. `ENOENT` for an unknown name, `EINVAL` for an unknown op or a name with no NUL in `KSYMLEN` bytes, `EFAULT` for a bad pointer. **Not privileged.** |
+| 50 | `int statfs(const char *path, struct statfs *buf)` | `statfs` — [sys3.c](../kernel/sys3.c) | The four counts `df(1M)` prints — `s_fsize`, `s_isize`, `s_tfree`, `s_tinode` — for the filesystem holding `path`, out of the **in-core** superblock. `namei()` crosses a mount, so `statfs("/mnt")` answers for what is mounted there. `ENXIO` if the filesystem is not mounted, `EFAULT` for a bad pointer, and `stat(2)`'s errors from the path walk. **Not privileged.** |
 
 **Why it exists.** Every other Unix finds a kernel variable with `nlist(3)` over the kernel
 image. **There is no kernel image on this root filesystem** — [root.manifest](../root.manifest)
@@ -152,21 +154,36 @@ space, one call, and a table that cannot drift from the image it is part of beca
 is a link-time relocation of the real declaration.
 
 **What it does not replace.** `KCTL_GET` is enough for a program that reads fixed variables —
-`dmesg` and `iostat` open no device and need no privilege. It is *not* enough for `ps` and
-`pstat`, which resolve `p_textp` into an index in `text[]` and `u_ttyp` into one in `sc[]`:
-that is arithmetic against a base address, which is what `KCTL_STAT` and the `kgetsym(3)`
-shorthand over it return. Those two read on through `/dev/kmem`, and through `/dev/mem` for a
-u-area at `p_addr`, which lies above `KREACH` and out of `/dev/kmem`'s reach
-([kernel/dev/mem.c](../kernel/dev/mem.c)). [lib/test/memt.c](../lib/test/memt.c) is that
-ladder's first rung and [lib/test/kctlt.c](../lib/test/kctlt.c) is this one's.
+`dmesg`, `iostat` and `vmstat` open no device and need no privilege. It is *not* enough for
+`pstat`, which resolves `p_textp` into an index in `text[]`: that is arithmetic against a base
+address, which is what `KCTL_STAT` and the `kgetsym(3)` shorthand over it return. `pstat` then
+reads on through `/dev/kmem`, and through `/dev/mem` for a u-area at `p_addr`, which lies above
+`KREACH` and out of `/dev/kmem`'s reach ([kernel/dev/mem.c](../kernel/dev/mem.c)).
+[lib/test/memt.c](../lib/test/memt.c) is that ladder's first rung and
+[lib/test/kctlt.c](../lib/test/kctlt.c) is this one's.
+
+**`pstat` is the only program left on that ladder.** `ps` climbed it too — the same two
+devices, both mode 0640 and root's, for four fields of a u-area — until `KCTL_PSINFO`. That
+operation returns a `struct psinfo` per `proc[]` slot: the pid as a join key, `u_utime +
+u_stime`, the index of `u_ttyp` in `sc[]`, and `u_comm`. The kernel does the walking, so `ps`
+opens no device and is an ordinary user's command; the same reasoning made `df(1M)` one, by way
+of `statfs(2)` above. **Neither took a permission bit and neither loosened a device mode** —
+`/dev/kmem`, `/dev/mem` and `/dev/rmd0` are exactly as they were, which
+[lib/test/unprivt.c](../lib/test/unprivt.c) asserts before it asserts anything else.
+`KCTL_PSINFO` is an *operation* and not a table row because a digest computed at the moment of
+asking has no address to relocate; it took no system-call number for the reason
+[§6](#6-adding-a-system-call) gives.
 
 The interface is [include/sys/kctl.h](../include/sys/kctl.h); the table is
-[kernel/ksym.c](../kernel/ksym.c), and every row in it names the program that asked for it.
+[kernel/kctl.c](../kernel/kctl.c), and every row in it names the program that asked for it.
 
 **`b6sim` answers this call too**, from a kernel it pretends to be running under
 ([cmd/sim/kernel.h](../cmd/sim/kernel.h)) — the same thirty-three names, the guest's own pid and uid
-in `proc[0]`, zeros where the simulator has no counterpart, and `/dev/kmem` and `/dev/mem`
-served from the same block. That is what lets [lib/test/kctlt](../lib/test/kctlt.c) run in
+in `proc[0]`, one `KCTL_PSINFO` record for that slot and empty ones for the rest, zeros where
+the simulator has no counterpart, and `/dev/kmem` and `/dev/mem` served from the same block.
+`statfs(2)` is the exception it answers with `ENODEV`: every path there is the *host's*, and
+the host has no v7 superblock to report in these units. `ENODEV` and not `EPERM`, which would
+read as "you are not root" — the one thing that call exists to stop meaning. That is what lets [lib/test/kctlt](../lib/test/kctlt.c) run in
 **both worlds against one `.expected`**, which is the only guard there is on the guest struct
 layouts b6sim has to respell: `kctlt` computes them from the real headers and a drifted offset
 fails under the simulator while passing on the image.
@@ -249,9 +266,10 @@ no-ops. Two entries need more than a clause. **`signal` runs a guest handler** �
 at the end of a serviced extracode, which is where the kernel delivers too — so it is no longer
 the `SIG_DFL`/`SIG_IGN`-only stub this sentence used to describe. And **`kctl` is answered from
 an imitation kernel**: b6sim carries the same thirty-three variables, fills in what it genuinely
-knows and zeroes what it does not, and serves `/dev/kmem` and `/dev/mem` from the same block —
-which is what lets `lib/test/kctlt` run in *both* worlds against one `.expected` rather than
-only under a boot. See
+knows and zeroes what it does not, answers `KCTL_PSINFO` for its one process, and serves
+`/dev/kmem` and `/dev/mem` from the same block — which is what lets `lib/test/kctlt` run in
+*both* worlds against one `.expected` rather than only under a boot. `statfs` is the one row
+b6sim refuses on purpose, with `ENODEV`. See
 [Aout_Simulator.md §7](Aout_Simulator.md#7-system-calls).
 
 ## 5. Rows that are not system calls
@@ -265,13 +283,13 @@ Eleven rows of `sysent[]` dispatch to one of two stubs in [kernel/trap.c](../ker
 | 38 | `switch` | `nullsys` — inoperative in v7 too |
 | 39 | `setpgrp` | `nullsys` — not implemented yet |
 | 40 | `tell` | `nosys` — obsolete |
-| 50, 55–58, 62, 63 | USG-reserved, `readwrite`, `mpxchan` | `nosys` |
+| 55–58, 62, 63 | USG-reserved, `readwrite`, `mpxchan` | `nosys` |
 
-None of them has a `SYS_*` name, on purpose. **Two rows have left this table.** Row 45, v7's
-"unused", is `sigret` ([§3](#3-signals)); row 49, v7's second "reserved for USG", is `kctl`
-([§2.5](#25-kernel-introspection)) — this port's own call, which took the lowest free row rather
-than a number past 63, since going past 63 would have moved `NSYSENT` and the range check with
-it. Two more paths reach the same place:
+None of them has a `SYS_*` name, on purpose. **Three rows have left this table.** Row 45, v7's
+"unused", is `sigret` ([§3](#3-signals)); rows 49 and 50, v7's two "reserved for USG", are
+`kctl` and `statfs` ([§2.5](#25-kernel-introspection)) — this port's own calls, which took the
+lowest free rows rather than numbers past 63, since going past 63 would have moved `NSYSENT`
+and the range check with it. Two more paths reach the same place:
 
 - **An out-of-range number.** `syscall()` dispatches `badsysent` — a private `{0, 0, nosys}` —
   rather than masking the number onto a real row.
@@ -298,8 +316,19 @@ it. Two more paths reach the same place:
    **header** needs a re-configure on top of that (`make clean; make`): the coarse dependency
    list is a `file(GLOB)` and runs at configure time.
 6. Give the user-visible prototype a home. `<unistd.h>` is the default; a call with a structure
-   or a set of operation codes of its own goes beside them instead, as `stat`, `wait` and `kctl`
-   do — [include/unistd.h](../include/unistd.h)'s head comment keeps that list.
+   or a set of operation codes of its own goes beside them instead, as `stat`, `wait`, `kctl`
+   and `statfs` do — [include/unistd.h](../include/unistd.h)'s head comment keeps that list.
+
+**Before doing any of it, ask whether it needs a number at all.** A system-call number is
+permanent and externally visible; an *operation* on a call that already exists is neither, and
+costs none of steps 1–4. `KCTL_PSINFO` is the worked example: `ps` needed three u-area columns,
+and they arrived as a fourth operation on `kctl(2)` — one `#define`, one struct in
+`<sys/kctl.h>` and one arm in [kernel/kctl.c](../kernel/kctl.c), with the existing
+`lib/test/kctlt` conformance test extending to cover it. `statfs` is the counter-example and
+says why the line falls where it does: `kctl`'s first argument is a *symbol name*, read for at
+most `KSYMLEN` (12) bytes, so a pathname would fit for `/tmp` and not for `/usr/include/sys` —
+the worst behaviour available. **`kctl` answers questions about the kernel; `statfs` answers a
+question about a filesystem named by a path.**
 
 `kctl` (49) is the only call this port has added, and its commit is the worked example of all
 six steps.

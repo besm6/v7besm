@@ -113,14 +113,21 @@ echo ---end--- >>/tmp/fsinfo.log
 ls /tmp >>/tmp/fsinfo.log
 
 # ---- 3.  THE WHOLE-IMAGE REPORTS, on the console, after a sync.  See the header for both
-# halves of why.  df is run four ways and all four must agree on the same volume:
+# halves of why.  df is run five ways and all five must agree on the same volume -- and
+# TWO OF THEM DO NOT READ THE DISK AT ALL, which is what makes this the sharpest assertion
+# available on statfs(2): the kernel's in-core superblock and the raw device's, one volume,
+# one run, after a sync.
 #
 #   bare		the default list, which is the ROOT plus /etc/mtab.  Nothing is
 #			mounted here and mtab is not on the image, so this is one row, and
 #			it names /dev/md0 -- the block device, which is what the kernel
-#			mounted -- while df reads its raw twin.  Nothing else exercises
-#			either the default list or the raw-twin lookup.
-#   /dev/rmd0		the raw device named outright
+#			mounted.  It is a MOUNTED filesystem, so this row comes from
+#			statfs(2) and no device is opened.  Nothing else exercises the
+#			default list.
+#   /tmp		a PATH and not a device: the same volume reached through st_dev,
+#			the argument shape an ordinary user actually types.
+#   /dev/rmd0		the raw device named outright -- the READ route, and the one this
+#			whole section exists to hold the other two against
 #   -i /dev/rmd0	the i-node columns, which no free-list walk could have produced:
 #			they come from s_tinode and from (s_isize - (SUPERB+1)) * INOPB
 #   -w /dev/rmd0	the same volume counted the OLD way, by walking the free list.
@@ -130,6 +137,7 @@ ls /tmp >>/tmp/fsinfo.log
 sync
 echo ---df--- >/dev/console
 df >/dev/console
+df /tmp >/dev/console
 df /dev/rmd0 >/dev/console
 df -i /dev/rmd0 >/dev/console
 df -w /dev/rmd0 >/dev/console

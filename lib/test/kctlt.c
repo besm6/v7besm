@@ -1,5 +1,5 @@
 //
-// kctlt -- kctl(2) and kgetsym(3), the kernel-variable interface (kernel/ksym.c).
+// kctlt -- kctl(2) and kgetsym(3), the kernel-variable interface (kernel/kctl.c).
 //
 // THIS PROGRAM RUNS ON THE DISK IMAGE ONLY, for memt's reason and one more of its own: its
 // subject is kernel state, and b6sim has no kernel -- it answers every kctl with ENOENT
@@ -45,6 +45,7 @@
 #define NLIST 64 // room for more names than the table has, so a full LIST is never clipped
 
 static struct proc ptab[NPROC]; // bss, not a frame: 1800 words is half the stack
+static struct psinfo psi[NPROC];
 static char list[NLIST * KSYMLEN];
 
 static void ok(const char *what, int cond)
@@ -155,6 +156,38 @@ int main(void)
        kctl(BADPTR, KCTL_STAT, &st2, sizeof st2) < 0 && errno == EFAULT);
     ok("an unwritable buffer is EFAULT",
        kctl("proc", KCTL_STAT, BADPTR, sizeof st2) < 0 && errno == EFAULT);
+
+    // ---- KCTL_PSINFO ----------------------------------------------------------------------
+    // The other operation that names nothing.  What is checkable without a second process is
+    // the SHAPE and the JOIN: NPROC records in proc[]'s order, ours among them, carrying the
+    // name and the terminal the rest of this suite already knows independently.
+    n = kctl(0, KCTL_PSINFO, psi, sizeof psi);
+    ok("psinfo fills one record per proc slot", n == (int)sizeof psi);
+    ok("its len of 0 reports a size as well", kctl(0, KCTL_PSINFO, 0, 0) == n);
+    ok("and a short buffer truncates the same way", kctl(0, KCTL_PSINFO, psi, 60) == 60);
+
+    // Re-read whole, then join against the proc table by index -- which is the contract, and
+    // the one thing a caller cannot check any other way.
+    kctl(0, KCTL_PSINFO, psi, sizeof psi);
+    self = -1;
+    for (i = 0; i < NPROC; i++)
+        if (ptab[i].p_stat != 0 && ptab[i].p_pid == getpid())
+            self = i;
+    ok("our slot has our pid in both tables", self >= 0 && psi[self].ps_pid == getpid());
+    ok("and our own command name", self >= 0 && psi[self].ps_comm[0] == 'k' &&
+                                       psi[self].ps_comm[1] == 'c' && psi[self].ps_comm[2] == 't');
+    ok("on a terminal the kernel can name", self >= 0 && psi[self].ps_ttyn >= 0 &&
+                                                psi[self].ps_ttyn < NSC);
+    // An empty proc slot carries no u-area, and says so the one way the interface allows.
+    n = -1;
+    for (i = 0; i < NPROC; i++)
+        if (ptab[i].p_stat == 0) {
+            n = i;
+            break;
+        }
+    ok("an unused slot comes back empty", n < 0 || (psi[n].ps_time == 0 && psi[n].ps_ttyn < 0 &&
+                                                    psi[n].ps_comm[0] == '\0'));
+    ok("a null name is fine for it", kctl(0, KCTL_PSINFO, psi, sizeof psi) == (int)sizeof psi);
 
     // ---- the arity canary --------------------------------------------------------------------
     // sy_narg is the ONE thing about a new system call that fails silently: the gate pops

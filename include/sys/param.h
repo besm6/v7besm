@@ -48,11 +48,11 @@
 // The Consul typewriters, and the size of dev/sc.c's tty array.  NOT a tunable -- the
 // machine has two and there is no third to configure -- but it is here rather than in the
 // driver because it dimensions a table kctl(2) exports, so a program that walks sc[] needs
-// it (kernel/ksym.c, <sys/kctl.h>).  dev/sc.c is the one driver behind both lines; see
+// it (kernel/kctl.c, <sys/kctl.h>).  dev/sc.c is the one driver behind both lines; see
 // kernel/conf.c's cdevsw comment for why there is no second major.
 #define NSC     2              // number of Consul typewriters
 // The instrumented block devices, and the slots they own in dk_busy, dk_numb[] and dk_wds[]
-// (<sys/systm.h>).  Here for NSC's reason and kernel/ksym.c's doctrine: this is a CONSTANT,
+// (<sys/systm.h>).  Here for NSC's reason and kernel/kctl.c's doctrine: this is a CONSTANT,
 // and a program walking dk_numb[] has to know how long it is.
 //
 // A SLOT INDEX IS ALSO A BIT NUMBER IN dk_busy, and that is what bounds NDK: kernel/clock.c
@@ -378,9 +378,12 @@
 //
 // AND IT HAS BEEN RAISED, from 10 to 16, to pay for NMOUNT going from 2 to 8: the ceiling
 // went 062000 -> 054000 with it, 3072 words, plus 78 more of bss for the six extra buf
-// headers in conf.c.  What is left under KEND is about 1800 words, and that is now the
-// tightest thing in this file -- the next NBUF, not the next page of code, is what will
-// run the image into the buffers.
+// headers in conf.c.  What is left under KEND is about 940 words, and that is the tightest
+// thing in this file -- the next NBUF, not the next page of code, is what will run the
+// image into the buffers.  statfs(2) and KCTL_PSINFO cost some 490 of it between them, and
+// were written as they were BECAUSE of this line: both are text, and neither adds a word of
+// bss (the alternative for ps -- carrying its three columns in struct proc -- would have
+// been 750 words of bss and would have grown with NPROC).
 #define BUFBASE (UBASE - NBUF * BSIZEW) // base of buffers[][]: 054000 at NBUF == 16
 #define KEND    BUFBASE                 // the kernel image must end below this
 

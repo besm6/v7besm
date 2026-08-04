@@ -143,22 +143,38 @@ only the name, and it is at most
 .B DIRSIZ
 characters.
 .SH FILES
-.ta \w'/dev/kmem 'u
-/dev/kmem	the u-area of the running process, at
-.B UBASE
-.br
-/dev/mem	the u-area of any other resident process, at its
-.B ADDR
-.PP
-Both are mode 0640 and root's, so
+None.
+Everything
 .I ps
-is for the super-user and says so and stops for anybody else.
-It is deliberately not set-user-ID.
-Everything else it prints \- the whole
-.B proc
-table, and the base of the terminal array \- comes through
+prints comes through two
 .IR kctl (2)
-and needs no privilege at all.
+calls \-
+.B KCTL_GET
+of the
+.B proc
+table, and
+.B KCTL_PSINFO
+for the four u-area fields per slot \- and
+.B neither is privileged,
+so this is an ordinary user's command.
+.PP
+.B Note:
+it used to read
+.I /dev/kmem
+and
+.I /dev/mem
+for those four fields, and since both are mode 0640 and root's it was the
+super-user's program.
+Those modes have not changed and
+.I ps
+is deliberately not set-user-ID; what changed is that it no longer asks
+for memory.
+A set-uid
+.I ps
+would hand out every process's memory through a program that already knows
+the layout, which is why
+.B KCTL_PSINFO
+returns a digest and not an address.
 .PP
 .B Note:
 v7 also read
@@ -195,7 +211,10 @@ process's last context switch, that being when the kernel last flushed it
 to the process's own image.
 The caller's own row is current, because the live copy at
 .B UBASE
-is read instead whenever it is the one that belongs to the process being
+is used instead whenever it is the one that belongs to the process being
 printed.
+That rule did not go away when the reading moved into the kernel; it is
+now
+.IR kernel/kctl.c 's.
 .br
 Some data printed for defunct processes is irrelevant.

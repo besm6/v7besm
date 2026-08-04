@@ -167,6 +167,13 @@ int fsig(struct proc *p)
 // there are probably a wealth of them here
 // when this occurs to a suid command.
 //
+// ONE OF THEM IS CLOSED: the gate below tests the GROUP as well as the user, which is
+// 4.2BSD's condition and not v7's.  access() compares the EFFECTIVE ids (kernel/fio.c), so
+// a set-group-id process could otherwise have dropped a core image -- the whole u-area,
+// and whatever it had read -- into a directory its borrowed group could write and its
+// caller could not.  Nothing on this image carries ISGID today (root.manifest has only
+// 04755), so this shuts a door before anybody walks through it.
+//
 // It writes USIZE block of the
 // user.h area followed by the entire
 // data+stack segments.
@@ -185,7 +192,8 @@ int core()
         if (ip == NULL)
             return (0);
     }
-    if (!access(ip, IWRITE) && (ip->i_mode & IFMT) == IFREG && u.u_uid == u.u_ruid) {
+    if (!access(ip, IWRITE) && (ip->i_mode & IFMT) == IFREG && u.u_uid == u.u_ruid &&
+        u.u_gid == u.u_rgid) {
         itrunc(ip);
         u.u_offset = 0;
         // The SAVED u-area is a single page: struct user at the bottom, the

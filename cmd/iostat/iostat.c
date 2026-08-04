@@ -56,7 +56,7 @@
 //   -s (documented) printed the 32 raw slots.  Twenty-eight of them are permanently zero
 //   here; the flag would be a page of noise around four numbers -i already names.
 //   -b (documented) printed buffer-cache statistics out of an `io_info' structure that this
-//   kernel does not have and kernel/ksym.c exports nothing for.  Adding a row for it would
+//   kernel does not have and kernel/kctl.c exports nothing for.  Adding a row for it would
 //   break the table's own rule: a row names the program that asked, and nothing asked.
 //   -d and -a were undocumented in v7's own page.  -d stamped each report with ctime(); -a
 //   printed the elapsed minutes.  Both are one line of shell away.

@@ -1,7 +1,15 @@
-# `ps` is the first program here that reads a u-area which is not its own
+# `ps` needs a u-area that is not its own, and no longer reads one itself
 
 Task C8's fourth ([../TODO.md](../TODO.md)), and the one that brief told nobody to port. This
 is the account of what replaced v7's 408 lines and of the one rule the replacement turns on.
+
+**The rule is now the kernel's.** `ps` reached the u-area through `/dev/kmem` and `/dev/mem`
+until `KCTL_PSINFO`, and because both are mode 0640 and root's it was the super-user's
+program. It is not any more: the kernel does the walking and hands back a four-field digest,
+so `ps` opens no device and needs no privilege. Everything below still describes the rule —
+it moved to [../../kernel/kctl.c](../../kernel/kctl.c), it did not go away. See
+[../README.md](../README.md) §8: the fix for a program that needs privilege is to ask what it
+is actually reading, not to reach for a mode or a setuid bit.
 [../README.md](../README.md) §9 has the harness argument, [ps.1](ps.1) the user-facing
 divergences, and [ps.c](ps.c)'s header the short form of all of it; what is here is the part
 that is structural.
@@ -38,16 +46,18 @@ print, they are just one context switch old or somebody else's.
 
 1. **`p_addr == uhome`** — the live copy at `UBASE` is authoritative and the copy in the
    process's own image is stale, `uflush()` not having run for it yet
-   ([../../kernel/text.c](../../kernel/text.c)). Read `UBASE` through `/dev/kmem`.
+   ([../../kernel/text.c](../../kernel/text.c)). The kernel runs unmapped, so it reads `u`
+   directly; `ps` used to read `UBASE` through `/dev/kmem`.
 2. **`SLOAD` set and `p_addr != uhome`** — the image is in core and its first `USIZE` words
    are the saved u-area, current as of that process's last context switch. `p_addr` is at or
-   above `KREACH`, out of `/dev/kmem`'s reach, so this goes through `/dev/mem`.
+   above `KREACH`, so this goes through `copyphys()`; `ps` used to go through `/dev/mem`.
 3. **`SLOAD` clear** — swapped out, and `p_addr` is a block on the paging store rather than an
    address. v7 read it back off `/dev/swap`; this does not, and the row prints `<swapped>`.
 
-`uhome` ([../../kernel/switch.s](../../kernel/switch.s)) is exported for this and for nothing
-else. `NOUHOME` is 0 and no image is ever at word 0, so case 1 is safe when the live u-area
-belongs to nobody. [../../lib/test/memt.c](../../lib/test/memt.c) is the rung below this
+`uhome` ([../../kernel/switch.s](../../kernel/switch.s)) is a plain kernel variable to the
+code that now reads it, and stopped being a `kctl` table row when `ps` stopped needing one.
+`NOUHOME` is 0 and no image is ever at word 0, so case 1 is safe when the live u-area belongs
+to nobody. [../../lib/test/memt.c](../../lib/test/memt.c) is the rung below this
 program: it climbs the same ladder from `UBASE` through `u_procp` into `proc[]` and out to
 physical memory above `0100000`, and it was written before this task, for this task.
 
@@ -67,14 +77,14 @@ the kernel and `sc[minor(dev)]` is how the driver itself indexes it
 ([../../kernel/dev/sc.c](../../kernel/dev/sc.c)), so
 
 ```c
-i = (ptrword(u.u_ttyp) - kgetsym("sc")) / (sizeof(struct tty) / NBPW);
+i = (ptrword(u.u_ttyp) - ptrword(sc)) / (sizeof(struct tty) / NBPW);
 ```
 
-*is* the terminal's name, and it prints the same digit v7's scan produced. Two reasons to
-prefer it beyond the eighty lines it saves. **The stride is computed, never written** — 29 is
-also a hand-measured constant in [../sim/kernel.h](../sim/kernel.h), and the whole point of
-deriving it here from the real header is that a divergence between the two shows up as a
-failing test rather than as a wrong column. And **`u_ttyp` and not `u_ttyd`**: b6sim stores
+*is* the terminal's name, and it prints the same digit v7's scan produced. It is computed in
+the kernel now and arrives as `ps_ttyn`. Two reasons to prefer it beyond the eighty lines it
+saves. **The stride is computed, never written** — 29 is also a hand-measured constant in
+[../sim/kernel.h](../sim/kernel.h), and the whole point of deriving it from the real header is
+that a divergence between the two shows up as a failing test rather than as a wrong column. And **`u_ttyp` and not `u_ttyd`**: b6sim stores
 only the pointer and leaves the device number 0, so the `u_ttyd` route would print `?` under
 the simulator and `0` on the image — a divergence that would then have to be excused.
 
@@ -93,7 +103,11 @@ What it cannot reach is the second and third cases of the three-place rule.
 `p_addr == uhome`, so a `ps` there *always* takes branch 1, and only on the image is there an
 `init` to look at. Section 7 of that script takes `init`'s ADDR out of a `ps -l` listing and
 hands it to `pstat -u`, which is branch 2 — a u-area above `KREACH`, off `/dev/mem`, belonging
-to somebody else. That is the sharpest single assertion in task C8.
+to somebody else. That is the sharpest single assertion in task C8. Since `KCTL_PSINFO`,
+`pstat -u` is the only half of it that still needs `/dev/mem`, and `ps` reaches branch 2
+through the kernel instead — which is what
+[../../lib/test/unprivt.c](../../lib/test/unprivt.c) exists to prove, by running both
+programs as `guest` after checking that the three device nodes still refuse that uid.
 
 One thing found while writing it and worth keeping: `sleep 30 &` returns the moment the shell
 has **forked**, and a `ps` run immediately after finds a process still called `sh`, in state R,
@@ -104,9 +118,10 @@ seconds later the same slot is `sleep`, asleep on a channel. The test waits, and
 
 | | const | text | data | bss | total |
 |---|---|---|---|---|---|
-| `ps` | 88 | 3,078 | 231 | 2,977 | **6,374** |
+| `ps` | 86 | 2,989 | 212 | 3,738 | **7,025** |
 
-Nearly all the bss is `struct proc ptab[NPROC]`, 1,800 words. **It is a file-scope static and
-must stay one**: that is 44% of the 4,096-word stack, which is §6's third ceiling and the one
-nothing checks. [../../lib/test/kctlt.c](../../lib/test/kctlt.c) says the same thing in its own
-comment and is the precedent.
+Nearly all the bss is two tables: `struct proc ptab[NPROC]` at 1,800 words and
+`struct psinfo psi[NPROC]` at 900. **Both are file-scope statics and must stay so** — together
+that is 66% of the 4,096-word stack, which is §6's third ceiling and the one nothing checks.
+[../../lib/test/kctlt.c](../../lib/test/kctlt.c) says the same thing in its own comment and is
+the precedent. Text fell by 89 words even so: `getu()`, `rdwords()` and the two `open`s went.

@@ -16,9 +16,15 @@ onward belong to whatever reads a device next, which is the whole of the rest of
 What `df` prints is the table every later Unix prints — `Filesystem`, `1K-blocks`, `Used`,
 `Avail`, `Capacity`, `Mounted on`, and with `-i` three i-node columns — ported from
 RetroBSD's `src/cmd/df.c`. **Only the report ported.** That program is built on `statfs(2)` and
-`getmntinfo(3)` and this kernel has neither; what it *does* have is the half of that source
+`getmntinfo(3)` and this kernel had neither; what it *does* have is the half of that source
 which predates both — its `ufs_df()`, the pre-syscall Berkeley code that computes the same six
-numbers out of a superblock — and that is what this file now is.
+numbers out of a superblock — and that is what this file was.
+
+**It now has `statfs(2)`, written for this program**, and that is the one sentence above that
+has stopped being true. `getmntinfo(3)` is still missing and is why `/etc/mtab` and
+`mtabread()` stay. See [Two routes, one rule](#two-routes-and-the-rule-that-picks-one) below:
+the pre-syscall reader is still here in full, and is still what a device, an image and `-w`
+take.
 
 Three things had to be true before it was worth doing, and none of them was when C4a was
 written:
@@ -91,6 +97,52 @@ cannot find, a regular file that validates as an image, and a bad flag.
 words are checked in `icheck`'s words, so a `df` pointed at a tar archive says
 `not a filesystem` instead of printing arithmetic on it. Both tests are *equalities* and so
 stay inline; a relational here is an out-of-line call.
+
+## Two routes, and the rule that picks one
+
+Since `statfs(2)` there are two ways to the same six numbers, and one rule chooses:
+
+> **A mounted filesystem is asked. A device or an image is read.**
+
+| | route | what it opens | who may run it |
+|---|---|---|---|
+| `df` | asked | nothing | anybody |
+| `df /mnt`, `df /some/file` | asked | nothing | anybody |
+| `df /dev/rmd0`, `df /dev/md1` | read | the raw twin | the super-user |
+| `df image.img` | read | the file | whoever can read it |
+| `df -w` *(any argument)* | read | the raw twin | the super-user on a mounted volume |
+
+**Asked** is `statfs(2)` ([`sys/statfs.h`](../../include/sys/statfs.h),
+[`kernel/sys3.c`](../../kernel/sys3.c)): the four counts out of the kernel's *in-core*
+superblock, for the filesystem holding a path. No device is opened and no privilege is
+wanted, which is the whole reason the call exists — `/dev/rmd0` is mode 0600 because that one
+node is every file's contents, so `df` had to stop needing it before it could be an ordinary
+user's command. **The fix was not a setuid bit and not a looser mode**; `cmd/README.md` §8 is
+the general rule and this is its best example.
+
+**Read** is everything this file did before and still does in full — `sbread()`, `bread()`,
+the aligned `blk`, the free-list walk. `open(2)` is the whole of its gate, and when that gate
+refuses, `df` now says *"the raw device is the super-user's; name a file or a mount point"*
+rather than "cannot open": since the asked route exists, the diagnostic can name the fix.
+
+Three things worth expecting:
+
+* **A named device is read even when it is mounted.** `df /dev/rmd0` is a request to look at
+  that node, and answering it out of the mount table would make the one command that can
+  disagree with the kernel agree with it by construction. `run-fsinfo.sh` holds the two
+  readings against each other and needs them independent.
+* **`-w` forces the read route for every argument**, and that is not a special case — the walk
+  *is* the superblock reader, and a `-w` served out of the mount table would be measuring
+  nothing.
+* **The asked route is the *more current* of the two**, which sounds backwards and is not.
+  `s_tfree` and `s_tinode` live in core until `update()` writes them back, so the disk's copy
+  is stale by construction — that is why the read route must `sync(2)` first ([below](#and-sync-stopped-being-decorative)). The asked route reads what the kernel believes
+  at the moment of asking and does no I/O to find out, so it makes no `sync()` at all: a `df`
+  that wrote the disk to answer a question about the disk would be doing I/O to report on I/O.
+
+The arithmetic is written **once**, in `getnums()`, and is the same on both routes: `s_fsize`,
+`s_isize`, `s_tfree` and `s_tinode` mean what they mean whichever side they came from, so the
+data-area subtraction and the corrected i-node count above cannot drift apart.
 
 ## A raw transfer has four conditions, and three of them fail with `EFAULT`
 
@@ -288,7 +340,7 @@ Against the 28,672-word ceiling, with `cat` for scale — most of all three is s
 | | const | text | data | bss | total |
 |---|---|---|---|---|---|
 | `quot` | 102 | 5,247 | 227 | 4,377 | **9,953** |
-| `df` | 94 | 4,309 | 450 | 2,999 | **7,852** |
+| `df` | 94 | 4,401 | 465 | 3,000 | **7,960** |
 | `du` | 84 | 3,077 | 198 | 3,134 | **6,493** |
 | `cat` | 84 | 3,017 | 165 | 1,546 | **4,812** |
 

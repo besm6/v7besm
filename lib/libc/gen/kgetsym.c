@@ -3,7 +3,7 @@
 //
 // Not v7's, and not any Unix's: this port has no /unix on the root filesystem, so nlist(3)
 // has nothing to open and is deliberately not coming (lib/libc/README.md).  What replaced it
-// is kctl(2) over a table the kernel carries (kernel/ksym.c, <sys/kctl.h>).
+// is kctl(2) over a table the kernel carries (kernel/kctl.c, <sys/kctl.h>).
 //
 // This is the shorthand for the one thing a caller usually wants.  ps and pstat cannot work
 // from values alone -- they resolve p_textp into an index in text[] and u_ttyp into one in

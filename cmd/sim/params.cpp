@@ -65,9 +65,11 @@ constexpr int op_get     = kctlop::GET;
 constexpr int op_set     = kctlop::SET;
 constexpr int op_list    = kctlop::LIST;
 constexpr int op_stat    = kctlop::STAT;
+constexpr int op_psinfo  = kctlop::PSINFO;
 constexpr int ksymlen    = kctlop::KSYMLEN;
 constexpr int flag_rd    = kctlop::FLAG_RD;
 constexpr int stat_words = kctlop::STAT_WORDS;
+constexpr int ps_words   = kctlop::PS_WORDS;
 } // namespace ours
 
 //
@@ -85,19 +87,28 @@ constexpr int stat_words = kctlop::STAT_WORDS;
 #undef major
 #undef minor
 #undef makedev
+
+// KCTL_NO_KERNEL_TYPES asks <sys/kctl.h> for its numbers alone.  The rest of that header --
+// struct psinfo -- names DIRSIZ and time_t and so includes <sys/param.h> and <sys/types.h>,
+// and neither can be reached from here: include/ is off this target's -I on purpose, so the
+// angle-bracket forms would find the HOST's, whose param.h macros collide with the kernel's
+// and whose time_t is not one 48-bit word.  The header's own note is the account.  What is
+// skipped is guarded instead by the ps_words assertion below and by lib/test/kctlt.
+#define KCTL_NO_KERNEL_TYPES
 #include "../../include/sys/kctl.h"
 #include "../../include/sys/param.h"
 
 //
-// The interface.  <sys/kctl.h> includes nothing and defines no type of the kernel's, so it
-// comes in whole and these compare directly.  KCTL_SET is checked like the rest even though
-// nothing implements it: the number is reserved, and reserving a DIFFERENT number on the two
-// sides would be worse than not reserving one.
+// The interface.  Under KCTL_NO_KERNEL_TYPES <sys/kctl.h> includes nothing and defines no
+// type of the kernel's, so its numbers come in whole and these compare directly.  KCTL_SET is
+// checked like the rest even though nothing implements it: the number is reserved, and
+// reserving a DIFFERENT number on the two sides would be worse than not reserving one.
 //
 static_assert(ours::op_get == KCTL_GET, "KCTL_GET disagrees with sys/kctl.h");
 static_assert(ours::op_set == KCTL_SET, "KCTL_SET disagrees with sys/kctl.h");
 static_assert(ours::op_list == KCTL_LIST, "KCTL_LIST disagrees with sys/kctl.h");
 static_assert(ours::op_stat == KCTL_STAT, "KCTL_STAT disagrees with sys/kctl.h");
+static_assert(ours::op_psinfo == KCTL_PSINFO, "KCTL_PSINFO disagrees with sys/kctl.h");
 static_assert(ours::ksymlen == KSYMLEN, "KSYMLEN disagrees with sys/kctl.h");
 static_assert(ours::flag_rd == KCTLF_RD, "KCTLF_RD disagrees with sys/kctl.h");
 
@@ -107,6 +118,16 @@ static_assert(ours::flag_rd == KCTLF_RD, "KCTLF_RD disagrees with sys/kctl.h");
 // same layout, and it is what syscall.cpp's pack_word() calls depend on.
 //
 static_assert(ours::stat_words == 3, "struct kctlstat must be kc_addr, kc_size, kc_flags");
+
+//
+// struct psinfo, the same way and for the same reason: three one-word fields and then
+// char ps_comm[DIRSIZ].  The struct itself is behind KCTL_NO_KERNEL_TYPES above and so is
+// not in scope here -- it names time_t, which is the kernel's -- but DIRSIZ is, param.h
+// being #define-only, so this arm of the layout IS reachable.  lib/test/kctlt guards the
+// rest at runtime, in both worlds against one .expected.
+//
+static_assert(ours::ps_words == 3 + DIRSIZ / NBPW, "struct psinfo disagrees with sys/kctl.h");
+static_assert(DIRSIZ % NBPW == 0, "ps_comm must be a whole number of words");
 
 //
 // The tunables.  Each is a plain integer in param.h and compares directly.

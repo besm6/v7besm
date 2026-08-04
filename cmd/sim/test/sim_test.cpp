@@ -682,7 +682,7 @@ TEST(Syscall, ForkWait)
 //
 // THESE ARE NOT THE MAIN TEST OF IT.  lib/test/kctlt is, and it is stronger than anything
 // here can be: it runs the same guest program in both worlds and diffs the transcripts, so
-// it compares this implementation against kernel/ksym.c rather than against itself.  What
+// it compares this implementation against kernel/kctl.c rather than against itself.  What
 // belongs here is what a guest program cannot conveniently reach -- the raw stack discipline,
 // and the shape of the bytes on the way out.
 //

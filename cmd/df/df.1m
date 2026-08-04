@@ -141,6 +141,21 @@ is deliberately
 the letter: every other
 .I df
 spells that one "local file systems only".
+.PP
+.B "Note:"
+.B \-w
+forces the
+.B read
+route for every argument, mounted or not, since the walk
+.I is
+the super-block reader.
+On a mounted volume that means the raw device, and so
+.B "df -w"
+is the super-user's where a bare
+.I df
+is not.
+That is the point of the flag rather than a limitation of it: two readings that agreed by
+construction would be measuring nothing.
 .SH "BLOCKS ARE 1024 BYTES"
 .B "Note:"
 the block
@@ -176,18 +191,69 @@ divide by the filesystem block and then a multiply, and both live in
 and
 .IR ls (1)
 report in the same block.
-.SH "SUPER-USER ONLY"
+.SH "WHO MAY RUN IT"
+There are
+.B two routes
+to the same six numbers, and one rule picks between them:
+.B "a mounted filesystem is asked, a device or an image is read."
+.PP
+.B "Asked"
+means
+.IR statfs (2):
+the four counts come out of the kernel's
+.B in-core
+super block, for the filesystem holding a path the caller can already name.
+No device is opened and
+.B no privilege is wanted,
+so a bare
+.IR df ,
+.I "df /mnt"
+and
+.I "df /some/file"
+are ordinary user commands.
+.PP
+.B "Read"
+means what this program has always done \- open the raw twin, seek to the super block,
+and obey the four alignment rules a raw transfer here has.
+.IR "df /dev/rmd0" ,
+.I "df image.img"
+and
+.B \-w
+take that route, because a raw device, an unmounted image and a walk of the free list are
+not questions the kernel can be asked.
+.IR Open (2)
+is the whole of the gate, and
+.I /dev/rmd0
+is mode 0600 because that one node is the contents of every file on the volume \- so those
+three forms are the super-user's, and
+.I df
+says so in those words rather than "cannot open".
+.PP
 .B "Note:"
 .I df
-reads the raw disk, and
-.I /dev/rmd0
-is mode 0600 because that one node is the contents of every file on the volume.
-So this program works for the super-user and for nobody else.
-It is deliberately
+is deliberately
 .B not
-set-user-id: a set-uid
+set-user-id and never was: a set-uid
 .I df
 would hand the whole filesystem to anyone able to think of an offset.
+What made the default report unprivileged was not a change of mode or a borrowed
+user-id but
+.IR statfs (2),
+which hands over the counts without handing over the device.
+.PP
+.B "Note:"
+the asked route is also the
+.B "more current"
+of the two.
+.I s_tfree
+and
+.I s_tinode
+live in core until
+.IR update ()
+writes them back, so the copy on the disk is stale by construction \- which is why the read
+route calls
+.IR sync (2)
+first and the asked route makes no such call.
 .SH FILES
 .TP
 .I /etc/mtab
@@ -212,12 +278,25 @@ is read through
 There is one EC\-5052 drive attached by an ordinary boot, of 2000 blocks, and there are no
 partitions; swap is on the drums.
 .SH DIAGNOSTICS
+.B "the raw device is the super-user's; name a file or a mount point"
+means the read route was taken \- a named device, an image, or
+.B \-w
+\- and
+.IR open (2)
+refused it.
+The advice is the whole of the fix: name the mount point or any file on the volume and the
+asked route answers without privilege.
+.PP
 .B "cannot open"
 names a file
 .I df
 could neither
 .IR stat (2)
 nor read;
+.B "cannot stat"
+one whose filesystem
+.IR statfs (2)
+would not report on;
 .B "not a mounted filesystem"
 an ordinary file whose device is in no table.
 Either way
@@ -248,4 +327,5 @@ mean the free list is corrupt at the block named, and a
 .B \-w
 count is then a lower bound rather than an answer.
 .SH "SEE ALSO"
-du(1), quot(1M), ls(1), mount(1M), umount(1M), fsck(1M), icheck(1M), mtab(5), filsys(5)
+du(1), quot(1M), ls(1), mount(1M), umount(1M), fsck(1M), icheck(1M), statfs(2), mtab(5),
+filsys(5)

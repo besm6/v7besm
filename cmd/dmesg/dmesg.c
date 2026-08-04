@@ -30,7 +30,7 @@
 //
 //   with `base' the word address of msgbuf itself, which is what kgetsym(3) returns.  This
 //   is the only place in the tree that needs both halves of a fat pointer at once; the
-//   kernel's own ksym.c wants ptrword() and no more, since every other exported variable is
+//   kernel's own kctl.c wants ptrword() and no more, since every other exported variable is
 //   word-aligned by construction.
 //
 // TWO THINGS OF v7's ARE DELIBERATELY GONE, and they go together:

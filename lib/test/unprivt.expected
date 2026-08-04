@@ -1,0 +1,26 @@
+ok   we start as root
+ok   /bin/ps is not setuid
+ok   /bin/df is not setuid
+ok   guest still cannot open /dev/kmem
+ok   guest still cannot open /dev/mem
+ok   guest still cannot open /dev/rmd0
+ok   guest ran /bin/ps to a normal exit
+ok   and it printed something
+ok   with the long header
+ok   and more than one process
+ok   including a row for unprivt itself
+ok   that row is not <swapped>
+ok   and carries a terminal, not a question mark
+ok   guest ran /bin/df to a normal exit
+ok   and it printed something
+ok   with the Berkeley header
+ok   and a row for the root
+ok   mounted on /
+ok   with a nonzero size
+ok   guest ran /bin/df /tmp to a normal exit
+ok   naming the same filesystem
+ok   of the same size
+ok   guest ran /bin/df -w /dev/rmd0 and it still exited 0
+ok   it printed no table
+ok   and said the raw device is the super-user's
+ok   naming what to do instead

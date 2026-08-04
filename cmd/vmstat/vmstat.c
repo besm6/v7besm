@@ -11,7 +11,7 @@
 //      vmstat -s
 //
 // NOT A v7 PROGRAM.  v7 has no vmstat; this is 2.11BSD's, by way of RetroBSD's
-// (src/cmd/vmstat.c), and it is here because kernel/ksym.c had been holding a dozen live
+// (src/cmd/vmstat.c), and it is here because kernel/kctl.c had been holding a dozen live
 // counters open for it -- "they come with a vmstat", the table's own closing line.  They
 // came with this one, and so did the driver instrumentation that had been outstanding beside
 // them: dev/md.c and dev/mb.c now keep dk_busy, dk_numb[] and dk_wds[], which is where the
@@ -38,7 +38,7 @@
 //   flip-flop and free-runs, so a tick that arrives while delivery is blocked is coalesced,
 //   and this is a lower bound on wall clock.  iostat prints under the same convention.
 //
-//   _dk_ndrive, _dk_name[], _dk_unit[] -- kernel/ksym.c's doctrine is that a constant lives
+//   _dk_ndrive, _dk_name[], _dk_unit[] -- kernel/kctl.c's doctrine is that a constant lives
 //   in <sys/param.h>, where user code can see it, rather than in a table row.  NDK is 2 and
 //   the two devices are DK_MD and DK_MB; there is nothing to read out of the kernel and no
 //   two-level dereference through /dev/kmem to do it with.

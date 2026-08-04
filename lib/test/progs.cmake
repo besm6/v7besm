@@ -17,7 +17,7 @@
 #           of the memory driver's (kernel/dev/mem.c, task 27), and this is where a program
 #           can be run off /usr/test by a real kernel for the price of one b6_libtest() call.
 #   kctlt   IS NOT ONE OF THEM, and is worth naming for that: its subject is kctl(2) over
-#           the kernel-variable table (kernel/ksym.c), which for a while made it image-only
+#           the kernel-variable table (kernel/kctl.c), which for a while made it image-only
 #           like memt.  b6sim imitates a kernel now -- the table, the values behind it and
 #           /dev/kmem (cmd/sim/kernel.h) -- so the same program runs in BOTH worlds against
 #           the one .expected, and a disagreement between them means b6sim's respelled copy
@@ -25,6 +25,11 @@
 #   suidt   runs on the image ONLY, and is cmd/mkdir's and cmd/rmdir's (task C1a): it drops
 #           to uid 7 and execs them, which is the only way to reach getxfile()'s ISUID branch
 #           on a system whose every shell is root's.  There is no /bin/mkdir under b6sim.
+#   unprivt runs on the image ONLY, and is cmd/ps's and cmd/df's: it drops to uid 7 and runs
+#           both, which since KCTL_PSINFO and statfs(2) they allow.  Its first three verdicts
+#           are the negative control -- /dev/kmem, /dev/mem and /dev/rmd0 must STILL refuse
+#           that uid -- without which "ps printed a table" would be equally consistent with a
+#           loosened device node.  b6sim has neither /bin/ps nor a kernel to change a uid.
 #   curstty runs on the image ONLY, and is lib/libcurses': it reads and writes the console's
 #           tty modes, and b6sim's ioctl is an unconditional no-op that changes nothing, so
 #           the two harnesses could not share an expectation.
@@ -53,5 +58,6 @@
 # failure early in the list is a failure in something everything after it depends on.
 set(B6_LIBTEST_IMAGE
     hello vararg errno procs sbrkt malloct strings gen strtolt environ jmp headers
-    stdiot printft scanft execs shellt memt kctlt suidt timet pwent ttyt dirt signals matht
+    stdiot printft scanft execs shellt memt kctlt suidt unprivt timet pwent ttyt dirt signals
+    matht
     termcapt cursest curstty puret)

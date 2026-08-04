@@ -75,7 +75,7 @@
 
 // The two typewriters are this driver's unit numbers -- 0 is Consul 1, 1 is Consul 2 -- and
 // NSC is in <sys/param.h> rather than here because kctl(2) exports sc[] and a program that
-// walks it has to know how long it is (kernel/ksym.c).
+// walks it has to know how long it is (kernel/kctl.c).
 
 // Per-unit registers and bits.  THE HARDWARE NUMBERING IS WHY THIS IS ONE DRIVER:
 // EXT_CONS1/EXT_CONS2 are ADJACENT addresses and each ПРП pair is one bit apart, so

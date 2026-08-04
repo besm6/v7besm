@@ -231,6 +231,25 @@ and `/etc/passwd` as well, and any of them failing looks the same.
 and that second gate is what stops a user giving a file away, so a setuid `chown` would defeat its
 own purpose. Ask what call actually needs privilege before reaching for `04755`.
 
+**And when a program *does* need privilege, ask what it is actually reading.** `ps` and `df` were
+both root-only, and both said in capitals that they must never become setuid — rightly: a setuid
+`ps` hands out every process's memory through a program that already knows the layout, and a
+setuid `df` hands out the filesystem to anyone able to think of an offset. But neither wanted the
+*device*. `ps` wanted four fields of a u-area and `df` four counts out of a superblock, so the
+kernel was made to answer instead — `KCTL_PSINFO` on the existing `kctl(2)`, and `statfs(2)` — and
+both are now ordinary user commands at `mode 0755`, with **no bit set and no device mode
+loosened**. `/dev/kmem`, `/dev/mem` and `/dev/rmd0` are exactly as they were, which is the *first*
+thing [../lib/test/unprivt.c](../lib/test/unprivt.c) asserts: without that negative control, "`ps`
+printed a table" would read the same whether the kernel had grown an interface or somebody had
+quietly widened a node.
+
+The corollary is worth stating because it is the cheaper half: **an operation on a call that
+already exists costs no system-call number.** `KCTL_PSINFO` is one `#define`, one struct in
+`<sys/kctl.h>` and one arm in [../kernel/kctl.c](../kernel/kctl.c) — no libc stub, no `b6sim`
+arity entry, and the existing `lib/test/kctlt` conformance test extended to cover it.
+[../doc/Unix_V7_System_Calls.md](../doc/Unix_V7_System_Calls.md) §6 says where the line between
+the two shapes falls.
+
 ### 9. Which world a test runs in
 
 * **`b6sim`** runs one BESM-6 `a.out` and services its syscalls on the *host*. Good for filters.

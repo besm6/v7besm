@@ -8,9 +8,20 @@
 // THE REPORT IS BERKELEY'S AND THE NUMBERS ARE THE SUPERBLOCK'S.  What this prints is
 // 4.4BSD's table -- Filesystem, 1K-blocks, Used, Avail, Capacity, Mounted on, and with -i
 // the three i-node columns -- ported from RetroBSD's src/cmd/df.c.  Only the REPORT ported:
-// that program is built on statfs(2) and getmntinfo(3) and this kernel has neither.  What it
-// does have is the half of that source which predates both, its ufs_df(), which computes the
-// same six numbers out of a superblock; that is what this file is.
+// that program is built on statfs(2) and getmntinfo(3), and this kernel had neither.  What
+// it does have is the half of that source which predates both, its ufs_df(), which computes
+// the same six numbers out of a superblock; that is what this file was.
+//
+// IT NOW HAS statfs(2), WRITTEN FOR THIS PROGRAM; getmntinfo(3) is still missing, which is
+// why /etc/mtab and mtabread() stay.  So there are two routes and one rule:
+//
+//      A MOUNTED FILESYSTEM IS ASKED.  A DEVICE OR AN IMAGE IS READ.
+//
+// Asked is statfs(2): the four counts out of the IN-CORE superblock, no device opened and no
+// privilege wanted, which is what makes a bare `df', `df /mnt' and `df /some/file' ordinary
+// user commands.  Read is everything below -- and is also the STALER of the two, s_tfree
+// living in core until update() writes it back, which is why it must sync(2) first and the
+// asked route must not.  README.md is the account.
 //
 // WHERE EACH NUMBER COMES FROM, and the one place RetroBSD's arithmetic is wrong here:
 //
@@ -94,9 +105,10 @@
 //     filesystem is still writing through -- and s_tfree in particular lives in core, in the
 //     mount table's own buffer, until update() writes it back.
 //
-// NOT SETUID, and it must not become so: /dev/rmd0 is mode 0600 because that one node is
-// every file's contents.  df is a root-only program here and df.1m says so.  ../README.md
-// SS8 is the rule.
+// NOT SETUID, AND IT NEVER WAS.  A setuid df would hand the whole filesystem to anybody who
+// could think of an octal offset, which is as true as ever -- so the fix was to stop needing
+// /dev/rmd0 rather than to lend it out.  The read route is still the super-user's and open(2)
+// is still the whole of its gate.  ../README.md SS8 is the rule.
 //
 
 // The order here does not matter and cannot be made to: clang-format sorts a block of <>
@@ -112,6 +124,7 @@
 #include <sys/filsys.h>
 #include <sys/param.h>
 #include <sys/stat.h>
+#include <sys/statfs.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -156,10 +169,15 @@ struct dfs {
 // One row, resolved but not yet read.  e_name is what the Filesystem column prints and
 // e_read is what open(2) is actually given -- the RAW twin of a block device, where there is
 // one, because the raw path is the one README.md's four rules are about.
+//
+// e_mounted picks the route, and is set only where the row was found THROUGH a mount point:
+// the default list and resolve()'s st_dev arm.  statfs(2) is given e_dir, not e_name -- the
+// kernel wants a path it can walk, and NOMNT ("-") is not one.
 struct dfent {
     char e_name[NAMSIZ];
     char e_dir[NAMSIZ];
     char e_read[NAMSIZ];
+    int e_mounted;
 };
 
 // FILE SCOPE, NOT AUTOMATIC.  A long function costs 1.5-2 words of frame per source line
@@ -191,6 +209,7 @@ static char *dirfor(const char *spec);
 static int rawtwin(char *dst, const char *src);
 static int isimage(const char *file);
 static int resolve(const char *arg, struct dfent *e, int quiet);
+static int getnums(struct dfent *e, daddr_t *total, daddr_t *avail, ino_t *files, ino_t *ifree);
 static void report(struct dfent *e, int maxwidth);
 static void prtstat(struct dfent *e, daddr_t total, daddr_t avail, ino_t files, ino_t ifree,
                     int maxwidth);
@@ -242,6 +261,8 @@ int main(int argc, char **argv)
             strcpy(ent.e_dir, fstab[i].s_dir);
             if (!rawtwin(ent.e_read, fstab[i].s_spec))
                 strcpy(ent.e_read, fstab[i].s_spec);
+            // Every row here came out of a mount point, so the default report is asked.
+            ent.e_mounted = 1;
             report(&ent, maxwidth);
         }
         return 0;
@@ -403,6 +424,11 @@ static int resolve(const char *arg, struct dfent *e, int quiet)
     }
     mode = st.st_mode & S_IFMT;
 
+    // A named device is READ even when it is mounted: answering it out of the mount table
+    // would make the one command that can disagree with the kernel agree by construction,
+    // and kernel/test/fsinfo needs the two readings independent.
+    e->e_mounted = 0;
+
     if (mode == S_IFCHR) {
         strcpy(e->e_name, arg);
         strcpy(e->e_read, arg);
@@ -432,6 +458,7 @@ static int resolve(const char *arg, struct dfent *e, int quiet)
             strcpy(e->e_dir, fstab[i].s_dir);
             if (!rawtwin(e->e_read, fstab[i].s_spec))
                 strcpy(e->e_read, fstab[i].s_spec);
+            e->e_mounted = 1;
             return 1;
         }
     }
@@ -441,26 +468,55 @@ static int resolve(const char *arg, struct dfent *e, int quiet)
 }
 
 //
-// One row: read the superblock, work out the six numbers, print.
+// The four numbers, by whichever route this row takes; 0 if it cannot be reported on.
+//
+// The arithmetic is written ONCE and is the same on both routes -- the fields mean what they
+// mean whichever side they came from, so the corrected i-node count must not be re-derived.
+// -w takes the read route for every argument, which is not a special case: the walk IS the
+// superblock reader, and one served out of the mount table would be measuring nothing.
+//
+static int getnums(struct dfent *e, daddr_t *total, daddr_t *avail, ino_t *files, ino_t *ifree)
+{
+    struct statfs sf;
+
+    if (e->e_mounted && !wflag) {
+        if (statfs(e->e_dir, &sf) < 0) {
+            fprintf(stderr, "cannot stat %s\n", e->e_name);
+            return 0;
+        }
+        *total = sf.f_fsize - sf.f_isize;
+        *avail = sf.f_tfree;
+        *files = ((ino_t)sf.f_isize - (SUPERB + 1)) * INOPB;
+        *ifree = sf.f_tinode;
+        return 1;
+    }
+
+    if (!sbread(e))
+        return 0;
+    *total = sblock.s_fsize - sblock.s_isize;
+    *avail = sblock.s_tfree;
+    *files = ((ino_t)sblock.s_isize - (SUPERB + 1)) * INOPB;
+    *ifree = sblock.s_tinode;
+    return 1;
+}
+
+//
+// One row: get the six numbers and print.
 //
 // THE ORDER IS LOAD-BEARING.  Every number comes out of sblock BEFORE walkfree() runs,
 // because alloc() drains s_nfree and overwrites s_free[] as it pops.
+//
+// Neither the superblock nor the i-list is in any column: what df is about is the DATA area,
+// which is what a file can be put in.  b6fsutil's "N blocks in use, M free" counts the same
+// two quantities, which is what kernel/test/fsinfo holds this against.
 //
 static void report(struct dfent *e, int maxwidth)
 {
     daddr_t total, avail, walked;
     ino_t files, ifree;
 
-    if (!sbread(e))
+    if (!getnums(e, &total, &avail, &files, &ifree))
         return;
-
-    // Neither the superblock nor the i-list is in any column: what df is about is the DATA
-    // area, which is what a file can be put in.  b6fsutil's "N blocks in use, M free" counts
-    // the same two quantities, which is what kernel/test/fsinfo holds this against.
-    total = sblock.s_fsize - sblock.s_isize;
-    avail = sblock.s_tfree;
-    files = ((ino_t)sblock.s_isize - (SUPERB + 1)) * INOPB;
-    ifree = sblock.s_tinode;
 
     if (wflag) {
         walked = walkfree();
@@ -473,8 +529,12 @@ static void report(struct dfent *e, int maxwidth)
         avail = 0;
 
     prtstat(e, total, avail, files, ifree, maxwidth);
-    close(fi);
-    fi = -1;
+
+    // Only the read route left a descriptor open; the asked route never had one.
+    if (fi >= 0) {
+        close(fi);
+        fi = -1;
+    }
 }
 
 //
@@ -540,7 +600,13 @@ static int sbread(struct dfent *e)
     if (fi < 0 && strcmp(e->e_read, e->e_name) != 0)
         fi = open(e->e_name, O_RDONLY);
     if (fi < 0) {
-        fprintf(stderr, "cannot open %s\n", e->e_name);
+        // The permission case gets its own words: it is the only wall an ordinary user
+        // meets now, and "cannot open" would not say what to do instead.
+        if (errno == EACCES || errno == EPERM)
+            fprintf(stderr, "%s: the raw device is the super-user's; name a file or a mount point\n",
+                    e->e_name);
+        else
+            fprintf(stderr, "cannot open %s\n", e->e_name);
         return 0;
     }
 

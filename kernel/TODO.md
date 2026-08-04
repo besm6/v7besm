@@ -189,7 +189,7 @@ word here" is true of a *run-time* conversion and false of a **static initialize
 folds an address constant from `&lvalue`, an array name and *address ± constant*, and from no
 **cast** at all, so `(int)proc` and `(int *)proc` are both rejected outright — and a non-`void`
 pointer field will not take a bare `proc` either. `struct ksym`'s address field in
-[ksym.c](ksym.c) is a `void *` for that reason, which makes it fat and means every read of it
+[kctl.c](kctl.c) is a `void *` for that reason, which makes it fat and means every read of it
 goes through `ptrword()`. [../doc/Besm6_Data_Representation.md](../doc/Besm6_Data_Representation.md)
 §7 carries the general rule now. It is not a hazard for the sweep below — it fails loudly at
 compile time — but it is the answer to "why is this a `void *`" and it will be asked.

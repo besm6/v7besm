@@ -3,7 +3,7 @@
 //
 // b6sim runs ONE process and has no operating system inside it, so there is nothing behind
 // kctl(2) or /dev/kmem to read.  This class is the pretence: a block of memory laid out the
-// way the kernel's low core is laid out, holding the thirty-three variables kernel/ksym.c
+// way the kernel's low core is laid out, holding the thirty-three variables kernel/kctl.c
 // exports and a `struct user' at UBASE, answered through the same three operations the real
 // call offers and readable through the same two device nodes.
 //
@@ -81,14 +81,23 @@ constexpr int SLOAD   = 01; // proc.h flag code
 // whole job is to prove the copies agree.
 //
 namespace kctlop {
-constexpr int GET  = 0;
-constexpr int SET  = 1; // reserved -- EINVAL, as in the kernel
-constexpr int LIST = 2;
-constexpr int STAT = 3;
+constexpr int GET    = 0;
+constexpr int SET    = 1; // reserved -- EINVAL, as in the kernel
+constexpr int LIST   = 2;
+constexpr int STAT   = 3;
+constexpr int PSINFO = 4;
 
 constexpr int KSYMLEN    = 12; // width of one KCTL_LIST record, in bytes
 constexpr int FLAG_RD    = 01; // KCTLF_RD
 constexpr int STAT_WORDS = 3;  // struct kctlstat: kc_addr, kc_size, kc_flags
+// struct psinfo -- <sys/kctl.h>: ps_pid, ps_time, ps_ttyn, then char ps_comm[DIRSIZ],
+// which is three words.  The offsets are here rather than in klayout because this struct is
+// not a kernel object b6sim images; it is what the operation hands back.
+constexpr int PS_PID    = 0;
+constexpr int PS_TIME   = 1;
+constexpr int PS_TTYN   = 2;
+constexpr int PS_COMM   = 3; // char[DIRSIZ], three words
+constexpr int PS_WORDS  = 6;
 } // namespace kctlop
 
 //
@@ -149,7 +158,7 @@ enum : int {
 //
 class SimKernel {
 public:
-    // One row of the kctl(2) table, in the order kernel/ksym.c declares them.
+    // One row of the kctl(2) table, in the order kernel/kctl.c declares them.
     struct Entry {
         const char *name; // NUL-terminated; at most KSYMLEN-1 characters
         unsigned addr;    // word address inside the image
@@ -184,6 +193,11 @@ public:
 
     // The guest's name, for u_comm.  Set once, when a program is loaded.
     void set_comm(const std::string &name);
+
+    // One KCTL_PSINFO record for proc[] slot `i', packed big-endian into `dst'
+    // (kctlop::PS_WORDS * 6 bytes).  Only slot 0 is a process here; the rest come back
+    // empty, exactly as the kernel returns an unused slot.
+    void psinfo_record(int i, char *dst) const;
 
     //
     // The synthetic nodes: what b6sim answers itself rather than passing to the host.  Two

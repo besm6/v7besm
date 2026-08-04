@@ -18,36 +18,24 @@
 //   and it reconstructs the command line by walking the process's stack through a
 //     two-segment address map, a scavenger it warns about in its own manual page.
 //
-// WHAT REPLACES ALL OF IT.  kctl(2) hands over the whole proc table by name and value in one
-// call (<sys/kctl.h>), kgetsym(3) gives the word address of sc[] so a tty pointer can be
-// turned into an index, and u_comm -- which is in the u-area on this system (<sys/user.h>)
-// -- IS the command name, so the scavenger is not needed at all.  lib/test/memt.c and
-// lib/test/kctlt.c are the worked examples of the ladder and were written before this
-// program to prove it.  v7's OUTPUT FORMAT is kept, and so is its ps.1.
+// WHAT REPLACES ALL OF IT: two kctl(2) calls and nothing else (<sys/kctl.h>).  KCTL_GET of
+// `proc' hands over the whole table by value; KCTL_PSINFO hands over the four u-area fields
+// per slot, the command name among them -- so the stack scavenger is not needed and neither
+// is a memory device.  lib/test/kctlt.c is the worked example.  v7's OUTPUT FORMAT is kept,
+// and so is its ps.1.
 //
-// THE U-AREA IS IN ONE OF THREE PLACES, and getting that wrong is the way to print numbers
-// that are quietly one context switch old:
-//
-//   p_addr == uhome.  The LIVE u-area at UBASE is this process's, and the copy in its image
-//     at p_addr is stale -- uflush() has not run for it yet (kernel/text.c).  Read UBASE
-//     through /dev/kmem, which is what lib/test/memt.c does.  `uhome' is exported for
-//     exactly this and for nothing else.
-//
-//   SLOAD set, p_addr != uhome.  The image is in core and its first USIZE words are the
-//     saved u-area.  p_addr is at or above KREACH, out of /dev/kmem's reach, so this one
-//     goes through /dev/mem.
-//
-//   SLOAD clear.  The process is swapped out and p_addr is a block on the paging store, not
-//     an address.  v7 read it back off /dev/swap; this one does not, and the row prints its
-//     proc[] columns with the u-area ones blank.  A swap reader is a lot of program for a
-//     process that is by definition not doing anything.
+// THE U-AREA IS THE KERNEL'S PROBLEM NOW.  This program used to reach it itself: the live
+// copy at UBASE through /dev/kmem, a saved one at p_addr through /dev/mem, and nothing at
+// all for a process swapped out.  That three-place rule is still the rule and is still
+// written down -- in kernel/kctl.c, where uhome is a variable rather than a table row and
+// p_addr is reached with copyphys() rather than through a device.  KCTL_PSINFO returns the
+// four fields; a swapped-out process still prints <swapped>, which is what it always did.
 //
 // THE TTY COLUMN DOES NOT SCAN /dev.  v7 read the whole directory as a raw struct direct
-// stream and matched st_rdev against u_ttyd.  Here sc[] is the only terminal array in the
-// kernel (kernel/dev/sc.c) and sc[minor(dev)] is how the driver itself indexes it, so the
-// index of u_ttyp in sc[] IS the terminal's name, and it costs one kgetsym.  That also
-// makes this program work under b6sim, which cannot read a directory descriptor at all
-// (../README.md SS9).
+// stream and matched st_rdev against u_ttyd.  sc[] is the only terminal array in the kernel
+// and sc[minor(dev)] is how the driver itself indexes it, so the subscript IS the terminal's
+// name -- computed in the kernel now, and never written down.  That is also what makes this
+// program work under b6sim, which cannot read a directory descriptor (../README.md SS9).
 //
 // FOUR COLUMNS CHANGED, all of them because the machine did; ps.1 says so too:
 //   ADDR   a WORD address printed in octal, not a click address in hex.
@@ -60,79 +48,42 @@
 // every one of them is a plain int and every conversion is %d.  v7's `%D' would have been
 // worse: it prints the two characters %D and consumes no argument.
 //
-// NOT SETUID, AND IT MUST NOT BECOME ONE.  /dev/kmem and /dev/mem are mode 0640 and root's,
-// so this program works for root and reports "no memory device" for anybody else -- exactly
-// as v7's did.  A setuid ps would hand out every process's memory through a program that
-// already knows the layout; ../quot/CMakeLists.txt makes the same argument about /dev/rmd0.
+// NOT SETUID, AND IT NEVER WAS -- AND SINCE KCTL_PSINFO IT NEEDS NOTHING TO BE.  It used to
+// open /dev/kmem and /dev/mem, both mode 0640 and root's, for four fields of a u-area, and
+// so worked for root and told everybody else to go away.  The fix was not to loosen those
+// modes and not to borrow a uid; it was to stop asking for memory.  A setuid ps would hand
+// out every process's MEMORY through a program that already knows the layout -- the argument
+// ../quot/CMakeLists.txt makes about /dev/rmd0 -- and it is still true, which is why the
+// call returns a digest and not an address.  ../README.md SS8 is the rule.
 //
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <fcntl.h>
 #include <sys/kctl.h>
 #include <sys/param.h>
 #include <sys/proc.h>
-#include <sys/tty.h>
 #include <sys/types.h>
-#include <sys/user.h>
 
-// bss, not frames.  The proc table is NPROC * 12 words -- 1,800 of them -- which is nearly
-// half the 4,096-word stack, and nothing checks that ceiling (../README.md SS6).
-// lib/test/kctlt.c does the same and for the same reason.
+// bss, not frames.  proc[] is NPROC * 12 words and psinfo[] NPROC * 6 -- 2,700 together,
+// against a 4,096-word stack that nothing checks (../README.md SS6).
 static struct proc ptab[NPROC];
-static struct user ku;
+static struct psinfo psi[NPROC];
 
 static int aflg, xflg, lflg;
 static int chkpid;
-static int uhome, a_sc;
-static int kmem = -1, memf = -1;
 
 // v7's, indexed by p_stat: SSLEEP SWAIT SRUN SIDL SZOMB SSTOP (<sys/proc.h>).
 static char states[] = "0SWRIZT";
 
-//
-// Read n bytes from a kernel/physical word address.  Both devices take a BYTE offset and
-// word W is at W * NBPW (kernel/dev/mem.c); lib/test/memt.c's rdwords() is the same helper
-// one word at a time.
-//
-static int rdwords(int fd, int w, void *buf, int n)
-{
-    if (fd < 0)
-        return -1;
-    if (lseek(fd, (off_t)w * NBPW, 0) < 0)
-        return -1;
-    return read(fd, buf, n) == n ? 0 : -1;
-}
-
-//
-// Fetch p's u-area into ku.  Returns 0, or -1 when there is none to be had.  See the header:
-// the live copy wins over the image, and a swapped-out process has neither.
-//
-static int getu(struct proc *p)
-{
-    if ((int)p->p_addr == uhome)
-        return rdwords(kmem, UBASE, &ku, sizeof ku);
-    if ((p->p_flag & SLOAD) == 0)
-        return -1;
-    return rdwords(memf, (int)p->p_addr, &ku, sizeof ku);
-}
-
-//
-// The terminal's name: the index of u_ttyp in sc[].  "?" when the process has no controlling
-// terminal, or when the pointer is not one of sc[]'s.
-//
-static char *ttyname_of(int haveu)
+// The terminal's name: the index the kernel put in ps_ttyn, or "?" for none.
+static char *ttyname_of(struct psinfo *ps)
 {
     static char buf[4];
-    int i;
 
-    if (!haveu || ku.u_ttyp == NULL)
+    if (ps->ps_ttyn < 0)
         return "?";
-    i = (ptrword(ku.u_ttyp) - a_sc) / (int)(sizeof(struct tty) / NBPW);
-    if (i < 0 || i >= NSC)
-        return "?";
-    buf[0] = '0' + i;
+    buf[0] = '0' + ps->ps_ttyn;
     buf[1] = '\0';
     return buf;
 }
@@ -141,17 +92,14 @@ static char *ttyname_of(int haveu)
 // One row.  Returns 1 if it printed anything, which is v7's protocol for "put a newline
 // under it".
 //
-static int prcom(struct proc *p)
+static int prcom(struct proc *p, struct psinfo *ps)
 {
     int haveu, tm;
 
-    // A ZOMBIE'S U-AREA IS NOT READ AT ALL, and the order matters here where it did not in
-    // v7.  v7 read the u-area first and tested SZOMB twenty lines later; on this kernel
-    // exit() calls mfree(coremap, p_size, p_addr) and only THEN sets p_stat to SZOMB
-    // (kernel/sys1.c), so a zombie's p_addr names core that has already been handed back and
-    // may hold somebody else's image.  Reading it would print another process's times under
-    // this one's pid.
-    haveu = p->p_stat != SZOMB && getu(p) == 0;
+    // ps_pid is the join key: a process can exit and its slot be reused between the two
+    // calls, so a row that does not match is one this table never described.  The zombie and
+    // swapped-out cases the kernel already left empty (<sys/kctl.h>).
+    haveu = ps->ps_pid == p->p_pid && ps->ps_comm[0] != '\0';
 
     if (lflg) {
         printf("%2o %c%4d", p->p_flag, states[(int)p->p_stat & 07], p->p_uid);
@@ -165,7 +113,7 @@ static int prcom(struct proc *p)
     } else
         printf("%6d", p->p_pid);
 
-    printf(" %-2.2s", ttyname_of(haveu));
+    printf(" %-2.2s", ttyname_of(ps));
 
     if (p->p_stat == SZOMB) {
         printf("  <defunct>");
@@ -178,14 +126,14 @@ static int prcom(struct proc *p)
     }
 
     // v7 rounded to the nearest second at 60 ticks; HZ is 250 here.
-    tm = (ku.u_utime + ku.u_stime + HZ / 2) / HZ;
+    tm = (ps->ps_time + HZ / 2) / HZ;
     printf(" %2d:", tm / 60);
     tm %= 60;
     printf(tm < 10 ? "0%d" : "%d", tm);
 
-    // u_comm is char[DIRSIZ] and is NOT NUL-terminated when the name fills it, so the
+    // ps_comm is char[DIRSIZ] and is NOT NUL-terminated when the name fills it, so the
     // precision is what bounds it -- ../README.md SS5, and dcheck and ncheck do the same.
-    printf(" %.*s", DIRSIZ, ku.u_comm);
+    printf(" %.*s", DIRSIZ, ps->ps_comm);
     return 1;
 }
 
@@ -230,23 +178,15 @@ int main(int argc, char *argv[])
         }
     }
 
+    // Two calls, neither privileged.  A literal 0 for the name: KCTL_PSINFO does not look
+    // at it (lib/test/kctlt.c is the idiom).
     n = kctl("proc", KCTL_GET, ptab, sizeof ptab);
     if (n != (int)sizeof ptab) {
         fputs("ps: cannot read the proc table\n", stderr);
         return 1;
     }
-    if (kctl("uhome", KCTL_GET, &uhome, sizeof uhome) != (int)sizeof uhome ||
-        (a_sc = kgetsym("sc")) < 0) {
-        fputs("ps: this kernel exports no uhome or sc\n", stderr);
-        return 1;
-    }
-
-    // Both nodes are mode 0640 and root's, so this is where a non-root ps stops -- v7's
-    // said "No mem" and stopped here too.
-    kmem = open("/dev/kmem", O_RDONLY);
-    memf = open("/dev/mem", O_RDONLY);
-    if (kmem < 0 || memf < 0) {
-        fputs("ps: no memory device (ps is for the super-user)\n", stderr);
+    if (kctl(0, KCTL_PSINFO, psi, sizeof psi) != (int)sizeof psi) {
+        fputs("ps: this kernel has no KCTL_PSINFO\n", stderr);
         return 1;
     }
 
@@ -268,7 +208,7 @@ int main(int argc, char *argv[])
             continue;
         if ((uid != p->p_uid && aflg == 0) || (chkpid != 0 && chkpid != p->p_pid))
             continue;
-        if (prcom(p)) {
+        if (prcom(p, &psi[i])) {
             printf("\n");
             retcode = 0;
         }

@@ -50,7 +50,7 @@ namespace kp = kparam;
 namespace kl = klayout;
 
 //
-// Build the image.  The order of the rows is kernel/ksym.c's, so that a KCTL_LIST here and a
+// Build the image.  The order of the rows is kernel/kctl.c's, so that a KCTL_LIST here and a
 // KCTL_LIST there return the names in the same sequence -- not required by anything, but a
 // diff between the two harnesses is easier to read when they agree.
 //
@@ -177,6 +177,31 @@ void SimKernel::set_comm(const std::string &name)
     char comm[18] = {};
     strncpy(comm, base.c_str(), sizeof(comm) - 1);
     store_bytes(kparam::UBASE + klayout::U_COMM, comm, sizeof(comm));
+}
+
+//
+// One KCTL_PSINFO record.  Slot 0 is the one process, whose u-area is at UBASE; every other
+// slot has p_stat == 0 and comes back empty, which is what the kernel returns for an unused
+// slot.  ps_ttyn is 0 because U_TTYP points at sc[0] here.
+//
+void SimKernel::psinfo_record(int i, char *dst) const
+{
+    auto put = [&](int word, Word v) {
+        for (int b = 0; b < kparam::NBPW; b++)
+            dst[word * kparam::NBPW + b] = (char)((v >> (40 - b * 8)) & 0xff);
+    };
+
+    for (int w = 0; w < kctlop::PS_WORDS; w++)
+        put(w, 0);
+    if (i != 0) {
+        put(kctlop::PS_TTYN, (Word)(-1) & BITS41);
+        return;
+    }
+    put(kctlop::PS_PID, (Word)getpid() & BITS41);
+    put(kctlop::PS_TIME, 0); // no accounting here; the clock is the host's
+    put(kctlop::PS_TTYN, 0);
+    read_bytes(kparam::UBASE + klayout::U_COMM, 0, dst + kctlop::PS_COMM * kparam::NBPW,
+               (kctlop::PS_WORDS - kctlop::PS_COMM) * kparam::NBPW);
 }
 
 const SimKernel::Entry *SimKernel::find(const std::string &name) const

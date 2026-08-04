@@ -349,7 +349,7 @@ ceiling is `estabur()`'s `nt + nd > USTKPAGE * PGSZ`), so one `sbrk()` serves bo
 ([Unix_V7_System_Calls.md §2.5](Unix_V7_System_Calls.md#25-kernel-introspection)), and there is
 no kernel underneath this simulator — so b6sim **pretends to be one**. `cmd/sim/kernel.h` holds
 a block of memory laid out the way the kernel's low core is laid out, carrying the same
-thirty-three variables `kernel/ksym.c` exports and a `struct user` at `UBASE`, answered through
+thirty-three variables `kernel/kctl.c` exports and a `struct user` at `UBASE`, answered through
 the
 same `KCTL_GET`/`KCTL_STAT`/`KCTL_LIST` and readable through `/dev/kmem` and `/dev/mem`.
 

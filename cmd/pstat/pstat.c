@@ -6,7 +6,7 @@
 //
 //      pstat [ -acfimpstx ] [ -u addr ]
 //
-// Task C8's fifth and widest.  It is the heaviest reader of kernel/ksym.c -- eleven of the
+// Task C8's fifth and widest.  It is the heaviest reader of kernel/kctl.c -- eleven of the
 // table's rows name this program -- and it is a rewrite rather than a port, for the reason
 // ../TODO.md gives: v7's pstat is 385 lines tied to PDP-11 structures, and the parts of it
 // that are not the report are the parts that do not survive.
@@ -35,7 +35,7 @@
 // t_addr is a device/line number and not an address on this machine; and the queue counts
 // come out of this port's own struct clist, whose c_cc is the one field of it that is v7's.
 //
-// TWO MODES ARE NEW, AND THEY ARE NOT DECORATION.  kernel/ksym.c's discipline is that a row
+// TWO MODES ARE NEW, AND THEY ARE NOT DECORATION.  kernel/kctl.c's discipline is that a row
 // names the program that asked for it and that a row whose column is empty does not belong.
 // Six rows -- mount, coremap, swapmap, nswap, swplo, swapdev -- name pstat, and v7's pstat
 // prints not one of them; two more -- time and lbolt -- named ps, which has no column for
@@ -307,7 +307,7 @@ static void dofil(void)
 }
 
 //
-// -m.  The mount table, which v7's pstat never printed and which kernel/ksym.c exports on
+// -m.  The mount table, which v7's pstat never printed and which kernel/kctl.c exports on
 // this program's account.  Slot 0 is the root and is always in use (kernel/main.c).
 //
 static void domount(void)

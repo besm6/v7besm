@@ -257,16 +257,18 @@ mode 0755
 # them.  NEITHER IS ROOT-ONLY BY PERMISSION, unlike the nine above: iostat reads five values
 # through kctl(2), which is unprivileged, and pstat reads eleven the same way.  What IS
 # root-only is pstat -u, whose u-area comes off /dev/mem -- mode 0640 and root's -- so that
-# one flag fails for anybody else and the other seven do not.  Neither is setuid, and pstat
-# must not become one: /dev/mem is every process's memory, and a setuid pstat would hand it
-# out through a program that already knows the layout.
-file /etc/iostat        # cmd/iostat -- five of kernel/ksym.c's rows.  Three columns per
+# one flag fails for anybody else and the other seven do not.  IT IS NOW THE ONLY ROOT-ONLY
+# INSPECTION MODE LEFT: ps took KCTL_PSINFO and df took statfs(2), and neither reaches a
+# device any more.  Neither is setuid, and pstat must not become one: /dev/mem is every
+# process's memory, and a setuid pstat would hand it out through a program that already
+# knows the layout.
+file /etc/iostat        # cmd/iostat -- five of kernel/kctl.c's rows.  Three columns per
                         # device out of the dk_time histogram, and the four CPU percentages,
                         # each of them the sum of eight of its slots.
 source ../../rootfs/etc/iostat
 mode 0755
 
-file /etc/pstat         # cmd/pstat -- eleven of kernel/ksym.c's rows name this program, and
+file /etc/pstat         # cmd/pstat -- eleven of kernel/kctl.c's rows name this program, and
                         # -m, -s and -c are here because six of them named it for tables v7's
                         # pstat never printed.  Only -u opens a device.
 source ../../rootfs/etc/pstat
@@ -375,10 +377,13 @@ mode 0755
 # The two of task C4a that live in /bin.  Both report in 1024-byte blocks -- three per
 # filesystem block, so their numbers are half a PDP-11's and always a multiple of three;
 # /etc/quot is the third and is further down, being root-only.
-# df is NOT setuid and must not become one -- it reads /dev/rmd0, which is mode 0600 because
-# that one node is every file's contents -- so it works for root and nobody else.  du opens
-# no device at all and works for anybody.  cmd/df/README.md is the account of the four
-# alignment rules a raw read here obeys, and of the Berkeley report df prints now.
+# df is NOT setuid and must not become one -- a setuid df would hand the whole filesystem to
+# anybody who could think of an offset.  Since statfs(2) it does not need to be: a MOUNTED
+# filesystem is asked and only a device or an image is read, so a bare `df', `df /mnt' and
+# `df /some/file' work for anybody and only `df /dev/rmd0', `df image.img' and `df -w' are
+# the super-user's -- /dev/rmd0 being mode 0600, unchanged, because that one node is every
+# file's contents.  du opens no device at all.  cmd/df/README.md is the account of both
+# routes, of the four alignment rules a raw read obeys, and of the Berkeley report.
 #
 # df ALSO READS /etc/mtab, which is not staged here and is not meant to be -- see the note
 # further down: a missing one is an empty table, so a bare df on a machine that has mounted
@@ -520,14 +525,15 @@ file /bin/pr            # cmd/pr -- task C5f.  Its multi-column look-ahead lives
 source ../../rootfs/bin/pr
 mode 0755
 
-file /bin/ps            # cmd/ps -- task C8.  ROOT ONLY AND NOT SETUID, which is v7's
-                        # arrangement and not a choice: the proc table comes through kctl(2)
-                        # and needs nothing, but a u-area does not -- it is at UBASE or at
-                        # p_addr, reached through /dev/kmem and /dev/mem, both 0640 and
-                        # root's.  So ps says so and stops for anybody else.  A setuid ps
-                        # would hand every process's memory to everybody through a program
-                        # that already knows the layout, which is quot's argument about
-                        # /dev/rmd0 in the block below.
+file /bin/ps            # cmd/ps -- task C8.  NOT SETUID AND NOT ROOT-ONLY EITHER, since
+                        # KCTL_PSINFO: the proc table and the four u-area fields both come
+                        # through kctl(2) and neither needs privilege, so ps opens no device
+                        # at all.  It used to open /dev/kmem and /dev/mem, both 0640 and
+                        # root's; THOSE MODES ARE UNCHANGED and lib/test/unprivt asserts it.
+                        # A setuid ps would hand every process's memory to everybody through
+                        # a program that already knows the layout -- quot's argument about
+                        # /dev/rmd0 in the block below -- which is why the fix was to stop
+                        # asking for memory rather than to lend it out.
 source ../../rootfs/bin/ps
 mode 0755
 
@@ -651,7 +657,7 @@ source ../../rootfs/bin/uniq
 mode 0755
 
 file /bin/vmstat        # cmd/vmstat -- not a v7 program: 2.11BSD's, and the reader a dozen
-                        # of kernel/ksym.c's rows were being kept for.  IN /bin, AS 2.11BSD
+                        # of kernel/kctl.c's rows were being kept for.  IN /bin, AS 2.11BSD
                         # HAD IT, and for dmesg's reason above rather than the section: it
                         # asks kctl(2) for its numbers and opens no device, so it is an
                         # ordinary user command.  procs and memory from a scan of proc[] and
@@ -1393,7 +1399,7 @@ file /usr/test/memt
 source ../../rootfs/usr/test/memt
 mode 0755
 
-file /usr/test/kctlt     # kctl(2) over the kernel-variable table, kernel/ksym.c.  One of the
+file /usr/test/kctlt     # kctl(2) over the kernel-variable table, kernel/kctl.c.  One of the
                          # few here that runs in BOTH worlds: b6sim imitates a kernel well
                          # enough to answer it (cmd/sim/kernel.h), so the same transcript has
                          # to come back from a simulator with no kernel and from this one.
@@ -1403,6 +1409,12 @@ mode 0755
 
 file /usr/test/suidt     # 0755 and not 04755: see the note above
 source ../../rootfs/usr/test/suidt
+mode 0755
+
+file /usr/test/unprivt   # drops to uid 7 and runs /bin/ps and /bin/df, which since
+                         # KCTL_PSINFO and statfs(2) need no privilege -- and first checks
+                         # that /dev/kmem, /dev/mem and /dev/rmd0 still refuse that uid.
+source ../../rootfs/usr/test/unprivt
 mode 0755
 
 file /usr/test/timet

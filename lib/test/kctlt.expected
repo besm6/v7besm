@@ -25,4 +25,12 @@ ok   KCTL_SET is reserved and refused
 ok   so is an operation that does not exist
 ok   an unreadable name is EFAULT
 ok   an unwritable buffer is EFAULT
+ok   psinfo fills one record per proc slot
+ok   its len of 0 reports a size as well
+ok   and a short buffer truncates the same way
+ok   our slot has our pid in both tables
+ok   and our own command name
+ok   on a terminal the kernel can name
+ok   an unused slot comes back empty
+ok   a null name is fine for it
 ok   200 calls leave the frame alone

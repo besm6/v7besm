@@ -87,6 +87,7 @@ expect "ok execs"   step 1000000000
 expect "ok shellt"  step 1000000000
 expect "ok memt"    step 1000000000
 expect "ok suidt"   step 1000000000
+expect "ok unprivt" step 1000000000
 expect "ok timet"   step 1000000000
 expect "ok pwent"   step 1000000000
 expect "ok ttyt"    step 1000000000

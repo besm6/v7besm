@@ -9,17 +9,18 @@
 # cmd/sh/README.md.  These lines used to begin with `:', the null built-in, whose words
 # were still parsed.
 #
-# WHAT THIS PROVES.  Twenty-three of the programs of lib/test also run under b6sim, where
+# WHAT THIS PROVES.  Twenty-four of the programs of lib/test also run under b6sim, where
 # every system call is served by the HOST -- so a bug in this kernel cannot show there.
 # Here they run on the real thing, and the same .expected files adjudicate.  This is the
 # first time the extracode gate is driven from user mode by anything but the kernel own
 # tests and the eight commands of /bin, and it is where sysent rows meet a real caller.
 #
-# FIVE OF THE TWENTY-EIGHT ARE HERE ONLY.  shellt needs a /bin/sh that really starts; memt
+# SEVEN OF THE THIRTY-ONE ARE HERE ONLY.  shellt needs a /bin/sh that really starts; memt
 # reads the kernel own memory through /dev/kmem and its own image through /dev/mem; suidt
-# drops to uid 7 and execs /bin/mkdir, which no host has; curstty needs a console whose
-# tty modes are real; and ttyt needs the /dev the host will not let it read and the /etc/ttys
-# the host has none of.  See lib/test/progs.cmake.
+# drops to uid 7 and execs /bin/mkdir, which no host has; unprivt drops to the same uid and
+# runs /bin/ps and /bin/df, which no host has either; curstty needs a console whose tty modes
+# are real; ttyt needs the /dev the host will not let it read and the /etc/ttys the host has
+# none of; and dirt needs a real directory descriptor.  See lib/test/progs.cmake.
 #
 # FOUR THINGS BELOW ARE LOAD-BEARING, and each matches lib/test/run-test.sh so that the
 # expectation files transfer unchanged:
@@ -113,6 +114,9 @@ echo ok kctlt >/dev/console
 
 ./suidt >/tmp/suidt.out 2>&1
 echo ok suidt >/dev/console
+
+./unprivt >/tmp/unprivt.out 2>&1
+echo ok unprivt >/dev/console
 
 ./timet >/tmp/timet.out 2>&1
 echo ok timet >/dev/console

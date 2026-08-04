@@ -188,13 +188,22 @@ not the next page of code the thing most likely to run the kernel into its own b
 **A user program cannot find a kernel variable by name any way but asking**, because there is no
 kernel image on the root filesystem: `root.manifest` names no `/unix`, and [unix.ini](unix.ini)
 has the *simulator* load one off the build host. So `nlist(3)` has nothing to open and is
-deliberately absent from this libc; [ksym.c](ksym.c) carries a small table of the variables the
+deliberately absent from this libc; [kctl.c](kctl.c) carries a small table of the variables the
 kernel publishes and `kctl(2)` reads it
 ([../doc/Unix_V7_System_Calls.md](../doc/Unix_V7_System_Calls.md) §2.5,
 [../include/sys/kctl.h](../include/sys/kctl.h)). It costs about **390 words** of the headroom
 above — thirty-three four-word rows and the handler — and it cannot fall out of step with the image
 it is part of, every address being a link-time relocation of the real declaration rather than a
 number written down.
+
+**`KCTL_PSINFO` shares the file but not the table.** `ps` wanted three columns that live in the
+u-area and so cannot be a row: a digest computed at the moment of asking has no address to
+relocate. It is a fourth *operation* instead, dispatched beside `KCTL_LIST` — which likewise
+names nothing — and the walk lives at the foot of [kctl.c](kctl.c). The kernel holds one record
+on its stack and `copyout`s per slot, so it costs **no bss at all**; that mattered, the
+alternative being to carry `p_comm` and a tick counter in `struct proc`, which is 750 words of
+bss and grows with `NPROC`. What it buys is that `ps` opens no memory device and needs no
+privilege — `/dev/kmem` and `/dev/mem` keep mode 0640, and `pstat -u` is the only reader left.
 
 Three things about it belong here rather than in the interface header. **`ks_addr` is a `void *`
 because nothing else compiles**: a static initializer on this compiler folds an address constant

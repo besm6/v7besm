@@ -78,6 +78,7 @@
 #include <sys/param.h>
 #include <sys/signal.h>
 #include <sys/stat.h>
+#include <sys/statfs.h>
 #include <sys/tty.h>
 #include <sys/ttyio.h>
 #include <sys/types.h>
@@ -115,6 +116,7 @@
 #include <sys/param.h>
 #include <sys/signal.h>
 #include <sys/stat.h>
+#include <sys/statfs.h>
 #include <sys/tty.h>
 #include <sys/ttyio.h>
 #include <sys/types.h>

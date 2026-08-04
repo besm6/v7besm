@@ -193,7 +193,8 @@ void sigret(void); // the return half of the signal frame; kernel/sendsig.c
 void setgid(void);
 void getgid(void);
 void ssig(void);
-void kctl(void); // the kernel-variable table; kernel/ksym.c, <sys/kctl.h>
+void kctl(void);   // the kernel-variable table; kernel/kctl.c, <sys/kctl.h>
+void statfs(void); // free blocks and i-nodes of a mounted fs; kernel/sys3.c, <sys/statfs.h>
 void sysacct(void);
 void sysphys(void);
 void syslock(void);

@@ -2,7 +2,7 @@
 #
 # NOT A v7 PROGRAM.  v7 has no vmstat at all; the source is RetroBSD's
 # (src/cmd/vmstat.c), by way of 2.11BSD, and vmstat.c's header is the account of what
-# survived the crossing and what did not.  What brought it here is kernel/ksym.c: its
+# survived the crossing and what did not.  What brought it here is kernel/kctl.c: its
 # table had been holding a dozen live counters open on the sentence "they come with a
 # vmstat", and this is the vmstat.
 #

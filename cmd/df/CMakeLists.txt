@@ -6,10 +6,15 @@
 # build/rootfs/bin/df.  Added from inside the top-level libruntime guard, after lib/, and
 # not with the other cmd/ subdirectories.
 #
-# NOT SETUID, and it must not become one.  df reads /dev/rmd0, which is mode 0600 because
-# that one node is every file's contents -- a setuid df would hand the whole filesystem to
-# anybody who could think of an octal offset.  It is a root-only program here, df.1m says
-# so, and ../README.md SS8 is the general rule.
+# NOT SETUID, AND IT NEVER WAS -- AND FOR A MOUNTED FILESYSTEM IT NEEDS NOTHING TO BE.
+# /dev/rmd0 is mode 0600 because that one node is every file's contents, and a setuid df
+# would hand the whole filesystem to anybody who could think of an octal offset.  That is
+# still true, which is why the fix was to stop needing the device rather than to lend it
+# out: statfs(2) (<sys/statfs.h>, kernel/sys3.c) answers the four counts for the filesystem
+# holding a path, so a bare `df', `df /mnt' and `df /some/file' are ordinary user commands.
+# `df /dev/rmd0', `df image.img' and `df -w' still read a descriptor and are still the
+# super-user's, with open(2) the whole of the gate.  df.1m says so and ../README.md SS8 is
+# the general rule.
 #
 # THIS IS THE PROGRAM THAT SETTLED HOW A USER PROCESS READS THE RAW DISK, which is why it
 # is the one of the three that carries a README.md: physio() and mdstrategy() between them

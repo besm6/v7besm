@@ -11,6 +11,7 @@
 #include "sys/param.h"
 #include "sys/reg.h"
 #include "sys/stat.h"
+#include "sys/statfs.h"
 #include "sys/systm.h"
 #include "sys/types.h"
 #include "sys/user.h"
@@ -220,6 +221,48 @@ found:
     bp         = mp->m_bufp;
     mp->m_bufp = NULL;
     brelse(bp);
+}
+
+// int statfs(const char *path, struct statfs *buf) -- <sys/statfs.h>.
+//
+// It walks mount[] itself rather than calling getfs(), which panics on an unmounted device
+// and, on a bad in-core count, zeroes s_nfree/s_ninode and prints to the console.  A read-only
+// query must do neither.  The ENXIO arm is unreachable through namei() today, and written
+// anyway: that is the same "cannot happen" getfs() rests on.
+void statfs()
+{
+    register struct inode *ip;
+    register struct mount *mp;
+    register struct filsys *fp;
+    register struct a {
+        char *fname;
+        struct statfs *buf;
+    } *uap = (struct a *)u.u_ap;
+    struct statfs sf;
+
+    // u.u_dirp is already uap->fname (kernel/syscall.c).
+    ip = namei(uchar, 0);
+    if (ip == NULL)
+        return;
+
+    for (mp = &mount[0]; mp < &mount[NMOUNT]; mp++)
+        if (mp->m_bufp != NULL && mp->m_dev == ip->i_dev)
+            goto found;
+    u.u_error = ENXIO;
+    iput(ip);
+    return;
+
+found:
+    fp          = (struct filsys *)mp->m_bufp->b_addr;
+    sf.f_fsize  = fp->s_fsize;
+    sf.f_isize  = fp->s_isize;
+    sf.f_tfree  = fp->s_tfree;
+    sf.f_tinode = fp->s_tinode;
+    iput(ip);
+
+    // copyout() and not copyoutb(): word-sized fields into a struct, as stat1() above.
+    if (copyout((caddr_t)&sf, (caddr_t)uap->buf, sizeof sf) < 0)
+        u.u_error = EFAULT;
 }
 
 // Common code for mount and umount.
