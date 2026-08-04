@@ -33,8 +33,8 @@ int main(int argc, char **argv)
         // The BASENAME of argv[0], as error() uses for its diagnostic prefix
         // (ld.c) -- printing the whole path would put whatever the caller typed,
         // or the absolute path an exec'ing program passed, into the usage line.
-        char *progname = (argv[0] && argv[0][0]) ? argv[0] : "ld";
-        char *slash    = strrchr(progname, '/');
+        const char *progname = (argv[0] && argv[0][0]) ? argv[0] : "ld";
+        const char *slash    = strrchr(progname, '/');
 
         if (slash)
             progname = slash + 1;

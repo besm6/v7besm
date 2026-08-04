@@ -636,8 +636,9 @@ TEST_F(KernelModel, FreeListWalksAscending)
         ASSERT_LT(bno, fp.s_fsize) << "handed out a block past the volume";
         ASSERT_TRUE(seen.insert(bno).second) << "block " << bno << " handed out twice";
 
-        if (prev)
+        if (prev) {
             ASSERT_EQ(bno, prev + 1) << "allocation " << count << " broke the ascending run";
+        }
         prev = bno;
         count++;
     }
