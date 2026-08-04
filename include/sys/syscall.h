@@ -43,58 +43,58 @@
 #ifndef _SYS_SYSCALL_H
 #define _SYS_SYSCALL_H
 
-#define SYS_exit   1
-#define SYS_fork   2
-#define SYS_read   3
-#define SYS_write  4
-#define SYS_open   5
-#define SYS_close  6
-#define SYS_wait   7
-#define SYS_creat  8
-#define SYS_link   9
-#define SYS_unlink 10
-#define SYS_exec   11
-#define SYS_chdir  12
-#define SYS_time   13
-#define SYS_mknod  14
-#define SYS_chmod  15
-#define SYS_chown  16
-#define SYS_break  17
-#define SYS_stat   18
-#define SYS_seek   19
-#define SYS_getpid 20
-#define SYS_mount  21
-#define SYS_umount 22
-#define SYS_setuid 23
-#define SYS_getuid 24
-#define SYS_stime  25
-#define SYS_ptrace 26
-#define SYS_alarm  27
-#define SYS_fstat  28
-#define SYS_pause  29
-#define SYS_utime  30
-#define SYS_stty   31
-#define SYS_gtty   32
-#define SYS_access 33
-#define SYS_nice   34
-#define SYS_ftime  35
-#define SYS_sync   36
-#define SYS_kill   37
-#define SYS_dup    41
-#define SYS_pipe   42
-#define SYS_times  43
-#define SYS_profil 44
-#define SYS_sigret 45
-#define SYS_setgid 46
-#define SYS_getgid 47
-#define SYS_signal 48
-#define SYS_kctl   49
-#define SYS_acct   51
-#define SYS_phys   52
-#define SYS_lock   53
-#define SYS_ioctl  54
-#define SYS_exece  59
-#define SYS_umask  60
-#define SYS_chroot 61
+#define SYS_exit   1  // void _exit(int status) -- does not return
+#define SYS_fork   2  // pid_t fork(void) -- other side's pid in A, 1 in r12 for the child
+#define SYS_read   3  // int read(int fd, char *buf, int n)
+#define SYS_write  4  // int write(int fd, char *buf, int n)
+#define SYS_open   5  // int open(char *path, int mode)
+#define SYS_close  6  // int close(int fd)
+#define SYS_wait   7  // pid_t wait(void) -- no argument: the status comes back in r12
+#define SYS_creat  8  // int creat(char *path, int mode)
+#define SYS_link   9  // int link(char *target, char *linkname)
+#define SYS_unlink 10 // int unlink(char *path)
+#define SYS_exec   11 // int exec(char *path, char **argv) -- returns only on failure
+#define SYS_chdir  12 // int chdir(char *path)
+#define SYS_time   13 // time_t time(void) -- libc's tloc store is libc's own doing
+#define SYS_mknod  14 // int mknod(char *path, int mode, int dev)
+#define SYS_chmod  15 // int chmod(char *path, int mode)
+#define SYS_chown  16 // int chown(char *path, int uid, int gid)
+#define SYS_break  17 // int _break(char *addr) -- what sbrk() issues
+#define SYS_stat   18 // int stat(char *path, struct stat *buf)
+#define SYS_seek   19 // off_t lseek(int fd, off_t off, int whence) -- off_t is one word
+#define SYS_getpid 20 // pid_t getpid(void) -- the parent's pid in r12
+#define SYS_mount  21 // int mount(char *spec, char *dir, int rdonly)
+#define SYS_umount 22 // int umount(char *spec)
+#define SYS_setuid 23 // int setuid(int uid)
+#define SYS_getuid 24 // int getuid(void) -- the real uid in A, the effective one in r12
+#define SYS_stime  25 // int stime(time_t t) -- by VALUE; time_t is one word
+#define SYS_ptrace 26 // int ptrace(int req, int pid, int *addr, int data)
+#define SYS_alarm  27 // int alarm(int sec)
+#define SYS_fstat  28 // int fstat(int fd, struct stat *buf)
+#define SYS_pause  29 // int pause(void)
+#define SYS_utime  30 // int utime(char *path, time_t *times)
+#define SYS_stty   31 // int stty(int fd, struct sgttyb *buf)
+#define SYS_gtty   32 // int gtty(int fd, struct sgttyb *buf)
+#define SYS_access 33 // int access(char *path, int mode)
+#define SYS_nice   34 // int nice(int incr)
+#define SYS_ftime  35 // int ftime(struct timeb *tp)
+#define SYS_sync   36 // int sync(void)
+#define SYS_kill   37 // int kill(pid_t pid, int sig)
+#define SYS_dup    41 // int dup(int fd, int fd2) -- bit 0100 of fd asks for dup2
+#define SYS_pipe   42 // int pipe(void) -- no argument: read end in A, write end in r12
+#define SYS_times  43 // int times(struct tms *buf)
+#define SYS_profil 44 // int profil(char *buf, int n, int off, int scale)
+#define SYS_sigret 45 // void sigreturn(void) -- issued by the kernel's sigcode, not libc
+#define SYS_setgid 46 // int setgid(int gid)
+#define SYS_getgid 47 // int getgid(void) -- the real gid in A, the effective one in r12
+#define SYS_signal 48 // int (*signal(int sig, int (*func)()))()
+#define SYS_kctl   49 // int kctl(const char *name, int op, void *buf, int len)
+#define SYS_acct   51 // int acct(char *path)
+#define SYS_phys   52 // int phys(int segno, int npages, int physaddr)
+#define SYS_lock   53 // int lock(int flag)
+#define SYS_ioctl  54 // int ioctl(int fd, int req, char *argp)
+#define SYS_exece  59 // int exece(char *path, char **argv, char **envp) -- see SYS_exec
+#define SYS_umask  60 // int umask(int mask)
+#define SYS_chroot 61 // int chroot(char *path)
 
 #endif // _SYS_SYSCALL_H
