@@ -14,8 +14,11 @@ A port of **Unix v7 to the BESM-6**, a Soviet 48-bit-word mainframe. Three halve
   binutils, preprocessor, disassembler, and `b6sim`, a user-level a.out simulator.
 - **`lib/`** — cross-built `libc.a`, `libm.a`, `libtermcap.a`, `libcurses.a`, `crt0.o`.
 
-Plus **native BESM-6 programs** under `cmd/` (`sh`, `ed`, `fsck`, `ls`, … — see the
-`b6_prog()` calls) staged into `build/rootfs/` for the root image.
+Plus **native BESM-6 programs** under `cmd/` — 92 of them plus one hard link on the image
+(`init`, `getty`, `login`, `sh`, the file-management and account set, the filesystem tools,
+two dozen text filters, `ed` and `novi`, `tar`, the kernel-inspection set, and ten of the
+toolchain built a second time; six are setuid root) — staged into `build/rootfs/` for the root
+image. `root.manifest` is the roster; `b6_prog()` calls are how each gets there.
 
 **The narrative lives in the per-directory READMEs, and that is where to look before
 touching anything**: `kernel/README.md` (memory model, hardware rules), `kernel/TODO.md`,
@@ -37,7 +40,8 @@ Makefiles are wrappers over the same `build/` tree. From the repo root:
 ```sh
 make            # configure into build/ and build everything
 make test       # build unit tests without running them
-make run        # run all tests via ctest
+make run        # run the daily suite via ctest (everything less the `weekly' label)
+make weekly     # the tests that boot the kernel under SIMH -- opt-in, not a gate
 make install    # install b6* tools, include/, and the archives into ~/.local
 make clean; make debug; make    # reconfigure as Debug (default RelWithDebInfo)
 ```
@@ -147,9 +151,9 @@ an `#if besm6`.
 
 `build/rootfs/` is staged only, never installed. **`root.manifest`** at the tree top describes
 the image; paths resolve against `b6fsutil`'s working directory (`build/kernel/test`). Modes
-(`04755` setuid on `mkdir`/`mv`/`rmdir`) and the one hard link (`/bin/[` → `/bin/test`) live
-there, not in `build/rootfs/`. `etc/` stages the static `group`, `motd`, `passwd`, `rc`,
-`termcap`, `ttys`; `lib/test/` stages `usr/test/*`.
+(`04755` setuid on `mkdir`/`mv`/`rmdir`/`newgrp`/`passwd`/`su`) and the one hard link (`/bin/[`
+→ `/bin/test`) live there, not in `build/rootfs/`. `etc/` stages the static `group`, `motd`,
+`passwd`, `rc`, `termcap`, `ttys`; `lib/test/` stages `usr/test/*`.
 
 **Porting v7 userland**: read `cmd/README.md` (the eleven-point recipe), then
 `cmd/sh/README.md` and `cmd/ls/README.md`. `b6parse` is **strict C11** — no implicit `int`,
@@ -162,6 +166,13 @@ assumes `int` and `char *` are the same thing:
   `b$pdiff`. It did not before 2026-06-17, and much of this tree was ported under the old
   rule; `cmd/README.md` §2 is the account and it is history now, not a hazard.
 - `long` is one word; `BSIZE` is 3072 bytes but tools report 1024-byte blocks; `DIRSIZ` 18.
+- **`opendir(3)` exists** (`<dirent.h>`, `lib/libc/gen/`, `lib/libc/man/directory.3`), added
+  with `cmd/ls`, its first and so far only caller. A **new** port that walks a pathname uses it
+  rather than hand-rolling `<sys/dir.h>` — a name read out of a directory is **not
+  NUL-terminated**, which is what the library now knows for you. Eight existing programs still
+  hand-roll it (`cmd/TODO.md` C24), and eight *others* deliberately never will: `fsck`, `mkfs`,
+  `ncheck`, `dcheck`, `icheck`, `quot`, `df` and `pstat` read a `struct direct` out of a raw
+  block off `/dev/rmd*` and want `<sys/dir.h>` exactly as it is.
 
 ### Kernel
 
@@ -269,7 +280,28 @@ const/text/data/bss sizes), serialized by `cmd/libaout` with a **6-byte word** (
 `b6as` → `b6ld`, the middle three from the external c-compiler. `-E`/`-S`/`-c` as usual;
 `-O`/`-g` are no-ops. **`b6sim`** loads one a.out, interprets it, and traps `$77 N` to run
 v7 syscall `N` on the host (numbers from `kernel/sysent.c`; args below `r15`, last in the
-accumulator, result in the accumulator, errno in `r14`).
+accumulator, result in the accumulator, errno in `r14`). It **serves the target's `etc/`, not
+the build machine's**: the six static files are compiled into `cmd/sim/etcfiles.cpp` and matched
+on the *literal* path, `/dev/kmem`-style (writes get `EROFS`, exec `ENOEXEC`), so a
+`getpwuid(3)` under `b6sim` reads the same bytes the booted kernel would — otherwise every name
+a test prints is a property of whoever is building. `cmd/sim/test/etc_test.cpp` is the drift
+guard: a seventh file joining `etc/` and not the table fails a test rather than quietly reaching
+the host.
+
+**Two system calls are not v7's**, and both took the lowest free `sysent.c` row rather than
+appending (`include/sys/syscall.h` says why, and carries a signature on every `SYS_*` line):
+
+- **`kctl(2)`, row 49** (`<sys/kctl.h>`, `kernel/kctl.c`) — the kernel-variable interface.
+  Every earlier Unix found a kernel variable with `nlist(3)` over `/unix`, and **there is no
+  kernel image on this disk**: `root.manifest` names no `/unix`, the simulator loads one off
+  the build host. So the kernel publishes a small hand-written table instead. `KCTL_GET`
+  copies a *value* (no memory device, no privilege — `dmesg`, `iostat`, `vmstat`);
+  `KCTL_STAT` hands back an *address* for a pointer-chaser, and `pstat` is the only program
+  left on that ladder, `ps` having moved to `KCTL_PSINFO`, which makes the kernel do the walk.
+  `KCTL_LIST` is the only way to see the table — nothing in user space holds a second copy.
+  `KCTL_SET` is reserved and answers `EINVAL`.
+- **`statfs(2)`, row 50** (`<sys/statfs.h>`) — where `df(1)` gets its numbers, so that an
+  ordinary user can measure the store without reading the raw device.
 
 **`include/`** is the v7 header tree, C11-ified. **Every header stands alone and includes what
 it uses**, so include lists are sets, not sequences. Two traps: `<sys/param.h>` must stay
