@@ -159,7 +159,30 @@ dir /mnt
 # guest's home, and the first directory here that is not root's.  login(1) chdir()s to the
 # pw_dir field of /etc/passwd and prints `No directory' if it cannot, so the account is only
 # usable because this exists -- and being uid 7's is what lets a non-root shell write in it.
+# That last property is what put the cc demo below here rather than anywhere else.
 dir /usr/guest
+owner 7
+group 3
+
+file /usr/guest/hello.S # cmd/cc/hello.S -- THE DEMO, and the only SOURCE FILE on this disk.
+                        # Task C9e put /usr/bin/cc here; this is the thing to point it at:
+                        #
+                        #       $ cc hello.S
+                        #       $ ./a.out
+                        #       Hello BESM-6!
+                        #
+                        # A capital `.S' on purpose -- it is what sends the file through cpp
+                        # before as, and the #include <sys/syscall.h> at its head is what
+                        # that is for -- so this one command is the longest chain the
+                        # machine can run, and the only one it can run end to end: a `.c'
+                        # cannot be compiled here at all.  It calls write(2) and exit(2)
+                        # through the $77 gate directly and takes nothing from libc, which
+                        # is why it is legible as a first program.  It is guest's own file
+                        # (uid 7, as the directory is) because cc writes hello.o and a.out
+                        # into the CURRENT directory: a logged-in user builds it where it
+                        # sits.  cmd/cc/README.md, "The demo on the image".
+source ../../rootfs/usr/guest/hello.S
+mode 0644
 owner 7
 group 3
 

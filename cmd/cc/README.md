@@ -213,6 +213,45 @@ $ ./hello
 That last line is the closing claim of C9: the machine assembles and links a program of its
 own with its own tools, against its own C library, and runs the result.
 
+### The demo on the image
+
+The image ships one source file, [hello.S](hello.S), as **`/usr/guest/hello.S`** — the thing
+to point `cc` at:
+
+```
+$ cc hello.S
+$ ./a.out
+Hello BESM-6!
+```
+
+It calls `write(2)` and `exit(2)` through the `$77` gate directly and takes nothing from
+libc, so it is legible as a first program: arguments 1…n−1 pushed below `r15` with `xts`,
+the last left in the accumulator, and the system call number carried in the instruction's
+own address field. [kernel/test/coninit.S](../../kernel/test/coninit.S) is the longer worked
+example, and `hello.S`'s own header carries the rest — including the two things a reader
+coming from another machine gets wrong: **nothing sets `r14`** (the gate takes the arity
+from `sysent[]` and leaves *errno* there), and **the `char *` is fat**, built at assembly
+time out of a marker bit and a byte offset.
+
+Three deliberate choices in it:
+
+* **A capital `.S`.** It is what sends the file through `cpp` before `as`, and the
+  `#include <sys/syscall.h>` at its head is what that is for — the header is `#define`-only
+  precisely so an assembler may include it. So this one command is the longest chain the
+  machine can run, and the only one it can run end to end.
+* **It defines `main`, not `_start`.** `_start` belongs to `/lib/crt0.o`, which `cc` links
+  ahead of everything unless `-nostdlib`; defining it here too is a duplicate symbol. Since
+  `main` leaves through `exit(2)` rather than returning, it needs no prologue and no
+  epilogue. `cc -nostdlib hello.S` with `_start` in place of `main` works as well and is the
+  whole of the program — **9 words against 47** — though the gap is that small only because
+  this one calls nothing: `crt0` and the `exit()` behind it are all libc contributes.
+* **It lives in the guest account's home**, which is the only directory on the image a
+  non-root user can write in besides `/tmp` — and `cc` writes `hello.o` and `a.out` into the
+  *current* directory, so that is where a logged-in user can build it where it sits.
+
+Section 6 of `kernel/test/toolchain` builds it exactly as its header says to, and is the
+only place `cpp` and `as` run in one command anywhere.
+
 ### /lib and /usr/include
 
 The link line has to have something to name, so C9e put the other two thirds of a development

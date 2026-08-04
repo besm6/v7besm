@@ -48,4 +48,23 @@ file(GLOB KHDRS ${KINC}/*.h ${KINC}/sys/*.h)
 
 b6_prog(cc DEST usr/bin/cc SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../cc.c)
 
+# ...and the demo program the image ships beside it, ../hello.S, staged into the guest
+# account's home exactly as cmd/look stages its dictionary and etc/ its passwd file.  It is
+# NOT compiled here: it is source, and the whole point is that the machine compiles it.
+#
+# /usr/guest BECAUSE cc WRITES INTO THE CURRENT DIRECTORY.  hello.o and a.out land in the
+# cwd, and that home (owner 7, root.manifest) is the only directory on this image a non-root
+# user can write in besides /tmp -- so it is the one place a logged-in user can build the
+# demo where it sits rather than copying it out first.
+#
+# copy_if_different, so an unchanged source does not re-trigger the whole image build.
+add_custom_command(OUTPUT ${B6_ROOTFS}/usr/guest/hello.S
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${B6_ROOTFS}/usr/guest
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_CURRENT_SOURCE_DIR}/../hello.S ${B6_ROOTFS}/usr/guest/hello.S
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../hello.S
+    COMMENT "stage cmd/cc/hello.S" VERBATIM)
+add_custom_target(rootfs_ccdemo ALL DEPENDS ${B6_ROOTFS}/usr/guest/hello.S)
+add_dependencies(rootfs rootfs_ccdemo)
+
 add_subdirectory(test)

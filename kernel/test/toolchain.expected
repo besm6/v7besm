@@ -10,3 +10,6 @@ relink identical 0
 /tmp/cc*
 2
 cc on a .c status 1
+demo status 0
+Hello BESM-6!
+demo ran 0
