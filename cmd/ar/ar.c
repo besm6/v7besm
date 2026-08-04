@@ -55,16 +55,21 @@ static void set_command(void (*fun)(void)); // file-local; defined below
 // Wipe all engine state back to zero before a run.
 //
 // ar_run() may be called many times inside one process (the unit tests do
-// this), so every field must be reset or one run would leak into the next.
-// A single memset clears the whole struct; then we re-seed the three temp-file
-// name templates. The trailing "XXXXXX" is where mkstemp() later writes a
-// unique suffix.
+// this, and so does ranlib, once per archive on its command line), so every
+// field must be reset or one run would leak into the next. A single memset
+// clears the whole struct; then we re-seed the three temp-file name templates.
+// The trailing "XXXXXX" is where mkstemp() later writes a unique suffix.
+//
+// The five descriptors are set to -1 rather than left at the memset's 0, which
+// is stdin: every path assigns one before use today, but "unset" and "standard
+// input" must not be the same value in a struct that finish() closes.
 static void reset_state(void)
 {
     memset(&ar, 0, sizeof(ar));
     strcpy(ar.tmpl_main, "/tmp/ar0XXXXXX");
     strcpy(ar.tmpl_before, "/tmp/ar1XXXXXX");
     strcpy(ar.tmpl_move, "/tmp/ar2XXXXXX");
+    ar.arfd = ar.tmpfd = ar.tmp1fd = ar.tmp2fd = ar.qfd = -1;
 }
 
 // Entry point of the archiver engine: parse argv and run the chosen command.

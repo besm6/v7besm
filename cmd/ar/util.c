@@ -51,12 +51,22 @@ void on_signal(int sig)
 
 // The single exit point for the whole engine.
 //
-// Deletes any temp files that were created, stores the exit code, and jumps
-// back to the setjmp() in ar_run(). Using longjmp instead of exit() lets the
-// engine be invoked over and over in one test process without leaking temp
-// files or state.
+// Closes every descriptor it opened, deletes any temp files that were created,
+// stores the exit code, and jumps back to the setjmp() in ar_run(). Using
+// longjmp instead of exit() lets the engine be invoked over and over in one
+// process without leaking temp files, descriptors or state.
+//
+// The closes matter on this machine and not on the host: NOFILE is 20 here
+// (<sys/param.h>), and ranlib calls ar_run() once per archive on its command
+// line, so four leaked descriptors a call would stop `ranlib *.a' after the
+// fifth archive. reset_state() sets these to -1, so 0 here would be stdin.
 void finish(int c)
 {
+    close_fd(&ar.arfd);
+    close_fd(&ar.tmpfd);
+    close_fd(&ar.tmp1fd);
+    close_fd(&ar.tmp2fd);
+    close_fd(&ar.qfd);
     if (ar.tmp_name)
         unlink(ar.tmp_name);
     if (ar.tmp1_name)
@@ -65,6 +75,16 @@ void finish(int c)
         unlink(ar.tmp2_name);
     ar.exit_code = c;
     longjmp(ar.done_env, 1);
+}
+
+// Close one of the engine's descriptors and mark it unset, leaving the three
+// standard ones alone: cmd_print() writes members to fd 1, and closing that
+// would take stdout with it.
+void close_fd(int *fdp)
+{
+    if (*fdp > 2)
+        close(*fdp);
+    *fdp = -1;
 }
 
 // Report every named file that was never matched, and count them.

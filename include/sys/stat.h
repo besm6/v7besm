@@ -43,6 +43,22 @@ struct stat {
 #define S_IWRITE 0000200 // write permission, owner
 #define S_IEXEC  0000100 // execute/search permission, owner
 
+// The nine permission bits under their POSIX names.  v7 named only the owner's
+// three (above) and left group and other to be written as shifts of them, which
+// is how its own commands spell them; POSIX names all nine, and a program that
+// formats an `ls -l' permission string wants all nine by name.  The bits are the
+// same bits -- S_IRUSR IS S_IREAD -- so this adds spellings, not meanings.
+// cmd/ar/list.c is the caller that wanted them.
+#define S_IRUSR  0000400 // read permission, owner
+#define S_IWUSR  0000200 // write permission, owner
+#define S_IXUSR  0000100 // execute/search permission, owner
+#define S_IRGRP  0000040 // read permission, group
+#define S_IWGRP  0000020 // write permission, group
+#define S_IXGRP  0000010 // execute/search permission, group
+#define S_IROTH  0000004 // read permission, other
+#define S_IWOTH  0000002 // write permission, other
+#define S_IXOTH  0000001 // execute/search permission, other
+
 // Not for the kernel side: it includes this header for `struct stat', and all five of
 // these names are ALSO its own system-call handlers -- `void stat(void)' and friends,
 // declared in <sys/systm.h> and defined in kernel/sys3.c.  Same spelling, opposite side

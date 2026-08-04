@@ -195,6 +195,14 @@ char *tmpnam(char *s);
 // is where that bit the first caller.
 char *mktemp(char *as);
 
+// POSIX's safe half of the pair, and neither v7's nor C11's: it picks the name the
+// same way and then CREATES the file, returning a read-write descriptor on it.  It
+// is named here rather than in <stdlib.h>, which POSIX would say, because that
+// header is kept strictly C11 in this tree and because mktemp() above is what a
+// reader needs to have read first.  This kernel has no O_EXCL, so the creation is
+// not atomic -- lib/libc/gen/mkstemp.c says exactly what is and is not promised.
+int mkstemp(char *as);
+
 // The internal pair the getc/putc macros fall out to, and v7's word-at-a-time
 // pair, which are v7 extensions and not C11.  A word is SIX bytes here, not the
 // PDP-11's two, so getw/putw move sizeof(int) == NBPW bytes.

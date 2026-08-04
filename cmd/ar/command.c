@@ -201,9 +201,12 @@ void cmd_quick(void)
             continue;
         }
         // write_member() emits into ar.tmpfd, so point that at the archive fd
-        // for the duration of the call, then restore it.
+        // for the duration of the call, then restore it. Put tmpfd back to -1
+        // afterwards: the two named one descriptor and only qfd owns it, so
+        // leaving the alias would have finish() close it twice.
         ar.tmpfd = ar.qfd;
         write_member(f);
-        ar.qfd = ar.tmpfd;
+        ar.qfd   = ar.tmpfd;
+        ar.tmpfd = -1;
     }
 }

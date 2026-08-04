@@ -166,6 +166,14 @@ if(B6RUNTIME_LIB)
     # ...and lorder, which came along with nm: a shell script, so it is staged
     # rather than compiled, but it is the same one-source-two-copies shape.
     add_subdirectory(cmd/lorder/rootfs)
+    # /usr/bin/ar and /usr/bin/ranlib -- task C9d, and the archive the objects
+    # above go into: with these the machine builds its own libc.a, index and all.
+    # ranlib carries the WHOLE of ar inside it (ranlib_run() calls ar_run()), so
+    # there are two copies of the archiver on the disk; cmd/ranlib/rootfs says why
+    # that was the choice.  They are also the first native programs to link the
+    # full B6_LIBAOUT_SOURCES -- the four file-descriptor routines exist for them.
+    add_subdirectory(cmd/ar/rootfs)
+    add_subdirectory(cmd/ranlib/rootfs)
     add_subdirectory(cmd/sh)
     add_subdirectory(cmd/basename)
     add_subdirectory(cmd/cal)

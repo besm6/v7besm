@@ -18,21 +18,26 @@ and it leaves the program **on the image** — staged into `build/rootfs/`, name
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C9 | self-hosting — `ar`/`ranlib` (C9d) and the driver (C9e); `cpp`, `as`, `ld` and the read-only binutils are done | building the system on itself | large |
+| C9 | self-hosting — the driver (C9e); `cpp`, `as`, `ld`, the read-only binutils and the archive pair are done | building the system on itself | large |
 | C10 | the rest of the manual — `make` `m4` `awk` `bc` `dc` `expr` `egrep` `units` `crypt` `at` `cron` `calendar` `update` `mail` | a system worth using | open-ended |
 
-**Where to start: C9d, `ar` and `ranlib`.** C9a, C9b and C9c are done — `/usr/bin/cpp`, `as`,
-`ld`, `nm`, `size`, `strip`, `disasm` and `lorder` are on the image, each built from the same
-sources as its host tool, and **the machine now assembles and links its own programs and reads
-back what it built**: the native `as` and `ld` reproduce the host tools' objects and images byte
-for byte, for the whole kernel and for the toolchain itself. What that cost is the lesson for
-what is left, and the "Building for the BESM-6" sections are where it is written down —
+**Where to start: C9e, the `cc` driver — and it is the last of C9.** C9a through C9d are done:
+`/usr/bin/cpp`, `as`, `ld`, `nm`, `size`, `strip`, `disasm`, `lorder`, `ar` and `ranlib` are on
+the image, each built from the same sources as its host tool, and **the machine now assembles,
+links, archives and indexes its own programs and reads back what it built** — the native `as`
+and `ld` reproduce the host tools' objects and images byte for byte for the whole kernel and
+for the toolchain itself, and the native `ar` and `ranlib` build `libc.a`, archive and index
+both, byte for byte too. What that cost is the lesson for what is left, and the "Building for
+the BESM-6" sections are where it is written down —
 [cpp/README.md](cpp/README.md) for the size profile and the stack, [as/README.md](as/README.md)
 for the 48-bit word in a machine with no `int64_t`, [ld/README.md](ld/README.md) for a
 50,000-word struct and twelve stdio buffers, [nm/README.md](nm/README.md) for a heap step that
 `rootfs_<name>_size` cannot see, [strip/README.md](strip/README.md) for an 8-kilobyte buffer on
-a 4,096-word stack. **Two of the seven needed no target change at all** ([size/](size/) and
-[disasm/](disasm/)), which is the measure of how much of the difficulty was the three big ones.
+a 4,096-word stack, [ar/README.md](ar/README.md) for the `mkstemp()` libc gained and a program
+the ceilings did not touch at all, [ranlib/README.md](ranlib/README.md) for an agreement test
+whose output cannot be made deterministic. **Three of the nine needed no target change at all**
+([size/](size/), [disasm/](disasm/) and [ar/](ar/)), which is the measure of how much of the
+difficulty was the three big ones.
 C10 is still behind the `yacc` decision its own section names; `expr.y` is the smallest thing in
 front of that decision, and scripts want it almost as much as they want `test`.
 
@@ -63,12 +68,12 @@ this directory, and — with the exception of `cmd/sim` and `cmd/fsutil`, which 
 out of reach until there is a C++ compiler — **they are all plain C**. So the task is not to port
 anything: it is to build what is already here a *second* time, for the target.
 
-**C9a, C9b and C9c are done**; `/usr/bin/cpp`, `as`, `ld`, `nm`, `size`, `strip`, `disasm` and
-`lorder` are on the image, and the "Building for the BESM-6" sections are what they left behind.
-The numbering below is left as it was.
+**C9a through C9d are done**; `/usr/bin/cpp`, `as`, `ld`, `nm`, `size`, `strip`, `disasm`,
+`lorder`, `ar` and `ranlib` are on the image, and the "Building for the BESM-6" sections are
+what they left behind. The numbering below is left as it was.
 
-**What they established, and every subtask below inherits.** The `b6_prog()` recipe needed no
-change for any of the seven. What did:
+**What they established, and C9e inherits.** The `b6_prog()` recipe needed no
+change for any of the nine. What did:
 
 * **No struct above 4,096 words**, every time. `struct cppstate` was ~38,600, `struct assembler`
   ~28,300, `struct linker` ~50,400 — the last of those half again the whole address space. The
@@ -80,9 +85,17 @@ change for any of the seven. What did:
 * **Three compiler and libc facts, all silent.** `b6lower` ignores designated initializers and
   initializes *positionally*; a string literal cannot initialize a `char *` inside a struct
   initializer at all; and there is no `int64_t` — only what really holds a 48-bit word becomes
-  `uword_t`, everything narrower stays `word_t`.
+  `uword_t`, everything narrower stays `word_t`. An **automatic** aggregate initialised from
+  runtime values (`unsigned char b[6] = { i >> 40, … }`, `char *av[] = { "ar", … }`) had no
+  precedent in this tree before C9d and turns out to be correct; the check cost two `b6cc` runs
+  and would have caught a wrong `ARMAG` at the head of every archive.
 * **The agreement test is the one that matters.** Host tool and native program over one fixture,
   the outputs compared live; a checked-in expectation cannot express "these two builds agree".
+  **When one field of the output cannot be deterministic, mask that field and assert the rest,
+  and find a second comparison with nothing masked at all.** `ranlib` stamps `__.SYMDEF` with
+  the time of day: `rootfs_ranlib_*` compares the archive either side of those six bytes and
+  `rootfs_ranlib_symdef` compares the index *member*, which carries no timestamp. Anything C9e
+  timestamps will want the same shape.
 * **The build lives in `cmd/<x>/rootfs/`**, a subdirectory and not more lines in
   `cmd/<x>/CMakeLists.txt`, because the host tool is added above the `B6RUNTIME_LIB` guard where
   `b6_prog()` does not yet exist. [ld/rootfs/CMakeLists.txt](ld/rootfs/CMakeLists.txt) is the
@@ -92,38 +105,16 @@ change for any of the seven. What did:
   [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The `ls /bin` expectations
   `../README.md` §7 also names do not apply to anything in `/usr/bin`.
 * **A small program is mostly `stdio`.** C9c's four came to 5,068–6,439 words against a 28,672
-  ceiling, and `_doprnt` alone is a 281-word stack frame — half of `nm`'s deepest path. The
-  ceilings bind the big three and nothing else; measure anyway, but expect the answer.
-
-### C9d. The archive pair: `ar` and `ranlib`
-
-`ar` (1,135 lines over six files) and `ranlib` (295). They go together because **`ranlib` links
-`cmd/ar`'s archiver library and rebuilds the archive in process** through `ar_run()`, so the native
-`ranlib` carries all of `ar` inside it — measure the pair, and expect two copies of the archiver on
-the image unless one of them becomes an `exec` of the other.
-
-Three things here are genuinely new, and none of them appeared in C9a or C9b:
-
-* **The four file-descriptor routines of `libaout` become native for the first time.**
-  `getarhdr`, `getint`, `putarhdr` and `putint` are exactly the difference between
-  `B6_LIBAOUT_SOURCES` and `B6_LIBAOUT_SOURCES_NATIVE`, and they exist for these two programs and
-  no others.
-* **There is no `mkstemp()` in this libc.** `ar` makes up to three temp files from templates
-  (`/tmp/ar0XXXXXX`, `…1…`, `…2…`, or bare names in the current directory under `-l`) and calls
-  `mkstemp()` on each. Only v7's `mktemp()` exists here — it fills the caller's **writable**
-  buffer and returns it ([../include/stdio.h](../include/stdio.h) says why the buffer cannot be a
-  literal) and it walks one letter, not six. So either add `mkstemp()` to libc or open the
-  `mktemp()` result with `O_CREAT|O_EXCL`; decide it once, in `ar`'s README.
-* **`_NFILE` is 20 and so is `NOFILE`.** `ar` holds the archive plus its temps open at once, and
-  after `ld`'s twelve streams this is the second program in the toolchain where the stdio buffer
-  arithmetic, not the text, is the number to watch.
-
-**The agreement test, and the fixture that matters.** Archives compared byte for byte, and the one
-to build is `libc.a` itself: the machine archiving and indexing its own C library, diffed against
-the host build. `__.SYMDEF` is order-sensitive and `b6ranlib`'s index is what makes a single-scan
-link work, so a diff here is a real failure and never a cosmetic one.
-
-**Size.** Medium. The code is written; the temp-file decision and the double archiver are the work.
+  ceiling, C9d's two to 8,504 and 11,333, and `_doprnt` alone is a 281-word stack frame — half
+  of `nm`'s deepest path. The ceilings bind the big three and nothing else; measure anyway, but
+  expect the answer.
+* **A libc gap is worth filling in libc.** C9d wanted `mkstemp()`, which is not v7's and not
+  C11's, and `ar` could not take `tmpfile()` the way `as`, `ld` and `strip` had — it wants the
+  temp file's *name* and a descriptor it can read back. Putting it in
+  [../lib/libc/gen/mkstemp.c](../lib/libc/gen/mkstemp.c) rather than behind an `#if besm6` in
+  the program left `cmd/ar`'s sources character-identical in both builds, which is the property
+  the whole of C9 is arranged around. Note what this kernel can and cannot promise: there is no
+  `O_CREAT` and no `O_EXCL`, so the creation is not atomic and the man page says so.
 
 ### C9e. The driver: `cc`
 
@@ -139,7 +130,8 @@ honest limitation:
   default `-L` walk `share/besm6/` under either. On the image those are `/usr/bin`, `/usr/include`
   and `/lib`, and the `B6CPP`-style environment overrides should survive unchanged.
 * **It cannot compile C, and its README must say so.** `cc -E` works on the machine today, and
-  with C9d done so will `-S`, `-c` on a `.s` file and a link; `cc` on a `.c` file will not,
+  so do `-S`, `-c` on a `.s` file and a link, C9d having put `ar` and `ranlib` there; `cc` on a
+  `.c` file will not,
   because `b6parse`, `b6lower` and `b6codegen` are not here — they live in the external
   [c-compiler](https://github.com/besm6/c-compiler/) repo, which this one cannot add a
   `b6_prog()` to, and no task above proposes bringing them over. A driver that assembles and
@@ -154,8 +146,9 @@ The closing test is the bootstrap: **the machine builds its own toolchain from i
 the result is byte for byte what the host build produced.** That is already true for objects and
 images — the native `as` and `ld` reproduce the host tools' output for the whole kernel and for the
 toolchain itself, and since C9c the machine can read back what it built, `nm`, `size` and `disasm`
-agreeing with their host tools over the same files. What is left extends it by two links: C9d the
-archive the objects go into, C9e the driver that runs the chain. **The last link is not here**: the
+agreeing with their host tools over the same files -- and since C9d for the archive those objects
+go into, the native `ar` and `ranlib` building `libc.a`, index and all, byte for byte too. What is
+left is one link, C9e, the driver that runs the chain. **The last link is not here**: the
 compiler proper is the external repo's, so `cc` on a `.c` file is the one step of the chain this
 task cannot close.
 
@@ -197,7 +190,7 @@ the remote arm or leave it failing. `cmd/login` already probes for `/usr/spool/m
 | `crypt.c`, `makekey.c` | | 93 + 21 | libc's `crypt` already exists |
 | `at.c`, `atrun.c`, `cron.c`, `calendar.c` | scheduling | 307 + 110 + 254 + 54 | want a correct clock, which this machine has not got — `iinit()` seeds `time` from the root superblock. `cron` is one of the two [../etc/rc](../etc/rc) still names |
 | `update.c` | periodic `sync` | 38 | trivial, and [../etc/rc](../etc/rc) names it — but it is a **daemon**, and `/etc/rc` runs on every pass through `init`'s loop, so weigh a second copy per pass before adding the line |
-| `strip`, `size`, `nm` | | | **not these** — the BESM-6 ones have been on the image since C9c |
+| `strip`, `size`, `nm`, `ar`, `ranlib` | | | **not these** — the BESM-6 ones have been on the image since C9c and C9d |
 
 ---
 

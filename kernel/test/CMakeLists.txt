@@ -276,6 +276,8 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/usr/bin/strip
     ${B6_ROOTFS}/usr/bin/disasm
     ${B6_ROOTFS}/usr/bin/lorder
+    ${B6_ROOTFS}/usr/bin/ar
+    ${B6_ROOTFS}/usr/bin/ranlib
     ${B6_ROOTFS}/bin/echo
     ${B6_ROOTFS}/bin/ed
     ${B6_ROOTFS}/bin/fgrep

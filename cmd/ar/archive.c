@@ -119,7 +119,7 @@ void commit_archive(void)
     if (ar.arfd < 0)
         if (!ar.opt_create)
             fprintf(stderr, "%s: creating %s\n", ar.progname, ar.archive_name);
-    close(ar.arfd);
+    close_fd(&ar.arfd);
     ar.arfd = creat(ar.archive_name, 0666);
     if (ar.arfd < 0) {
         fprintf(stderr, "%s: error: cannot create %s\n", ar.progname, ar.archive_name);

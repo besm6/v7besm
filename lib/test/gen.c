@@ -32,6 +32,7 @@
 #include <unistd.h>
 
 char *mktemp(char *as);
+int mkstemp(char *as);
 void perror(const char *s);
 char *index(const char *sp, char c);
 
@@ -104,8 +105,9 @@ int main(int argc, char **argv, char **envp)
 {
     int v[8], pairs[16], i, n;
     char bytes[9];
-    char tmpl[16];
+    char tmpl[16], tmpl2[16];
     char *p;
+    int fd, fd2;
 
     // ---- abs ----
     ok("abs of a positive", abs(7) == 7);
@@ -250,6 +252,38 @@ int main(int argc, char **argv, char **envp)
     ok("mktemp replaced every X", index(tmpl, 'X') == 0);
     ok("mktemp kept the length", strlen(tmpl) == 14);
     ok("mktemp names nothing that exists", open(tmpl, O_RDONLY) == -1);
+
+    // ---- mkstemp: the same name, and the file made and open read-write ----
+    //
+    // The file is the whole difference from mktemp above, so the assertions are
+    // that it EXISTS and that the descriptor handed back really is read-write:
+    // this kernel has no O_EXCL, so mkstemp() reaches read-write through a
+    // creat() (write-only) and a reopen, and getting that wrong would leave a
+    // descriptor that silently reads nothing.
+    strcpy(tmpl, "/tmp/mksXXXXXX");
+    fd = mkstemp(tmpl);
+    ok("mkstemp returns a descriptor", fd >= 0);
+    ok("mkstemp kept the prefix", strncmp(tmpl, "/tmp/mks", 8) == 0);
+    ok("mkstemp replaced every X", index(tmpl, 'X') == 0);
+    ok("mkstemp kept the length", strlen(tmpl) == 14);
+    ok("mkstemp made the file", open(tmpl, O_RDONLY) >= 0);
+    ok("mkstemp descriptor writes", write(fd, "gen", 3) == 3);
+    lseek(fd, 0L, 0);
+    bytes[0] = bytes[1] = bytes[2] = 0;
+    ok("mkstemp descriptor reads back",
+       read(fd, bytes, 3) == 3 && bytes[0] == 'g' && bytes[1] == 'e' && bytes[2] == 'n');
+
+    // A second call on a fresh copy of the same template must not hand back the
+    // first name: the digits are the pid's and identical, so this is the one
+    // assertion that the letter walk happens at all.
+    strcpy(tmpl2, "/tmp/mksXXXXXX");
+    fd2 = mkstemp(tmpl2);
+    ok("second mkstemp returns a descriptor", fd2 >= 0);
+    ok("second mkstemp names something else", strcmp(tmpl, tmpl2) != 0);
+    close(fd);
+    close(fd2);
+    unlink(tmpl);
+    unlink(tmpl2);
 
     // ---- isatty: the harness redirects both descriptors to a file ----
     ok("isatty of a redirected stdout", isatty(1) == 0);

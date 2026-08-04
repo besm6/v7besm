@@ -15,10 +15,14 @@ X's, which will be replaced with the
 current process id and a unique letter.
 .PP
 .B Note:
-it is declared by no header \- v7 had none and C11 has no such routine \- so a
-caller declares it itself.
+v7 declared it in no header and C11 has no such routine, so every v7 caller
+declared it itself.  This port declares it in
+.IR <stdio.h> ,
+beside
+.IR tmpnam ,
+because the strict front end takes no undeclared call.
 .SH "SEE ALSO"
-getpid(2), fopen(3) for
+mkstemp(3), getpid(2), fopen(3) for
 .I tmpnam
 .SH FILES
 share/besm6/lib/libc.a

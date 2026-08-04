@@ -40,6 +40,15 @@ ok   mktemp kept the prefix
 ok   mktemp replaced every X
 ok   mktemp kept the length
 ok   mktemp names nothing that exists
+ok   mkstemp returns a descriptor
+ok   mkstemp kept the prefix
+ok   mkstemp replaced every X
+ok   mkstemp kept the length
+ok   mkstemp made the file
+ok   mkstemp descriptor writes
+ok   mkstemp descriptor reads back
+ok   second mkstemp returns a descriptor
+ok   second mkstemp names something else
 ok   isatty of a redirected stdout
 ok   isatty of a bad descriptor
 perror: No such file or directory

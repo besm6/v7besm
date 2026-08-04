@@ -7,11 +7,14 @@ whole toolchain — the assembler (`cmd/as`), the linker and the binutils
 the *host* C compiler and runs on the host.
 
 **These sources are also cross-compiled and run on the BESM-6 itself.** The native
-`/usr/bin/as` and `/usr/bin/ld` (task **C9b** in [../TODO.md](../TODO.md)) link them
-directly — there is no native archive — so [`sources.cmake`](sources.cmake) names the
+`/usr/bin/as` and `/usr/bin/ld` (task **C9b** in [../TODO.md](../TODO.md)), the read-only
+binutils (**C9c**) and `/usr/bin/{ar,ranlib}` (**C9d**) link them directly — there is no
+native archive — so [`sources.cmake`](sources.cmake) names the
 list once for both worlds. It names two lists: everything, and the subset without the
 four file-descriptor routines, which only `ar`/`ranlib` call and which would otherwise
-be dead weight on a program that has 28,672 words to live in. What makes the same source
+be dead weight on a program that has 28,672 words to live in. Since C9d both lists are
+live on the target: `cmd/{ar,ranlib}/rootfs` take the whole of it, the other six the
+subset. What makes the same source
 serve both is `word_t`/`uword_t` in [`../../cross/besm6/types.h`](../../cross/besm6/types.h)
 — `int64_t`/`uint64_t` for the host, `int`/`unsigned` under the `besm6` predefine, where
 a word is 48 bits and an `int` is 41.

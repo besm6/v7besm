@@ -12,6 +12,7 @@
 #include "symdef.h"
 
 #include <fcntl.h>
+#include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,8 +27,22 @@
 
 #define W 6 // sizeof word of BESM-6
 
-#define TABSZ    1000
-#define STRTABSZ (TABSZ * 10)
+//
+// Capacity of the __.SYMDEF table this program builds, in entries.
+//
+// The BESM-6 value is not an address-space cut -- a struct ranlib is three words,
+// so even the host's 1000 is only 3,000 words of bss in a program that has 28,672
+// -- it is the number b6ld will READ.  cmd/ld/intern.h caps its own rantab[] at
+// RANTABSZ 512 on this target, and an index longer than that is one the machine's
+// own linker refuses, so writing one would be a trap with nothing to catch it.
+// 512 against a measured peak of 331 (build/kernel/libunix.a; libc.a is 222 and
+// libcurses.a 154), and stash() below fails loudly rather than overruns.
+//
+#if besm6
+#   define TABSZ 512
+#else
+#   define TABSZ 1000
+#endif
 
 static struct ar_hdr archdr;
 static struct exec exh;
@@ -44,11 +59,55 @@ static int debug;
 static int justtouch;
 static char *progname = "ranlib"; // diagnostic prefix: basename of argv[0]
 
+// Single exit point, exactly as cmd/ar's finish() is: fail() unwinds to the
+// setjmp() in ranlib_run() instead of calling exit().
+static jmp_buf done_env;
+static int exit_code;
+static int made_temp; // is the __.SYMDEF in the cwd one we created?
+
 static int nextel(FILE *af);
 static void fixdate(const char *s);
 static void putrantab(FILE *f);
 static void stash(const struct nlist *s);
 static void fixsize(void);
+static void fail(int c);
+
+// Close a stream and forget it, so that fail() below cannot close it twice.
+static void closein(void)
+{
+    if (fi) {
+        fclose(fi);
+        fi = NULL;
+    }
+}
+
+static void closeout(void)
+{
+    if (fo) {
+        fclose(fo);
+        fo = NULL;
+    }
+}
+
+// The single exit point, and cmd/ar's finish() in miniature.
+//
+// ranlib_run() is a library entry point that promises to return the exit code
+// rather than call exit() (symdef.h), so that it can be run repeatedly in one
+// process -- the unit tests do, and the four exit(1)s this replaced broke that
+// promise. It also cleans up on the way out, which they did not: the streams
+// are closed and the scratch __.SYMDEF removed. The made_temp guard is what
+// keeps a flag error from deleting a __.SYMDEF this program never made.
+static void fail(int c)
+{
+    closein();
+    closeout();
+    if (made_temp) {
+        unlink(tempnm);
+        made_temp = 0;
+    }
+    exit_code = c;
+    longjmp(done_env, 1);
+}
 
 // Print the command-line usage summary.
 static void usage(void)
@@ -75,6 +134,16 @@ int ranlib_run(int argc, char **argv)
     new       = 0;
     off       = 0;
     oldoff    = 0;
+    fi        = NULL;
+    fo        = NULL;
+    made_temp = 0;
+
+    // fail() lands here; exit_code holds the result. Same shape as ar_run()'s
+    // setjmp, and for the same reason: this engine is a library, so a fatal
+    // error has to unwind rather than take the process with it.
+    exit_code = 0;
+    if (setjmp(done_env))
+        return exit_code;
 
     // check for the "-t" flag"
     for (; argc > 1 && argv[1][0] == '-'; --argc, ++argv) {
@@ -90,7 +159,7 @@ int ranlib_run(int argc, char **argv)
                 break;
             default:
                 fprintf(stderr, "%s: error: unknown flag '%c'\n", progname, *p);
-                exit(1);
+                fail(1);
             }
     }
 
@@ -107,7 +176,7 @@ int ranlib_run(int argc, char **argv)
         }
         if (fgetw(fi) != ARMAG) {
             fprintf(stderr, "%s: error: not an archive: %s\n", progname, *argv);
-            fclose(fi);
+            closein();
             continue;
         }
         if (justtouch) {
@@ -116,22 +185,22 @@ int ranlib_run(int argc, char **argv)
             archdr.ar_name = NULL;
             if (!fgetarhdr(fi, &archdr)) {
                 fprintf(stderr, "%s: error: malformed archive: %s\n", progname, *argv);
-                fclose(fi);
+                closein();
                 continue;
             }
             if (strcmp(archdr.ar_name, tempnm)) {
                 fprintf(stderr, "%s: error: no symbol table: %s\n", progname, *argv);
-                fclose(fi);
+                closein();
                 continue;
             }
-            fclose(fi);
+            closein();
             fixdate(*argv);
             continue;
         }
         new = tnum = 0;
         off        = W;
         if (nextel(fi) == 0) {
-            fclose(fi);
+            closein();
             continue;
         }
         do {
@@ -153,7 +222,7 @@ int ranlib_run(int argc, char **argv)
                 int n = fgetsym(fi, &sym);
                 if (n == 0) { // malloc returned 0
                     fprintf(stderr, "%s: error: out of memory\n", progname);
-                    exit(1);
+                    fail(1);
                 }
                 if (n == 1) // end of symtab
                     break;
@@ -164,14 +233,15 @@ int ranlib_run(int argc, char **argv)
             }
         } while (nextel(fi));
         fixsize(); // update ran_off by length of __.SYMTAB
-        fclose(fi);
+        closein();
         fo = fopen(tempnm, "w");
         if (!fo) {
             fprintf(stderr, "%s: error: can't create temporary\n", progname);
-            exit(1);
+            fail(1);
         }
+        made_temp = 1;
         putrantab(fo);
-        fclose(fo);
+        closeout();
         {
             int rc;
 
@@ -188,6 +258,7 @@ int ranlib_run(int argc, char **argv)
                 fixdate(*argv);
         }
         unlink(tempnm);
+        made_temp = 0;
     }
     return (0);
 }
@@ -248,7 +319,7 @@ static void stash(const struct nlist *s)
 {
     if (tnum >= TABSZ) {
         fprintf(stderr, "%s: error: symbol table overflow\n", progname);
-        exit(1);
+        fail(1);
     }
     rantab[tnum].ran_name = s->n_name;
     rantab[tnum].ran_len  = s->n_len;

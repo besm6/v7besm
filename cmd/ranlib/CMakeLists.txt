@@ -5,6 +5,11 @@
 # archives.  The fget*/fput*/get*/put* helpers it needs come from cmd/libaout
 # (aout); the archive rebuild is done in-process via cmd/ar's archiver library.
 #
+# The same sources are built a SECOND time, for the machine itself, into
+# build/rootfs/usr/bin/ranlib -- see rootfs/, and task C9d in ../TODO.md.  There
+# is no native `archiver' library, so that build names cmd/ar's five engine
+# sources itself and the program carries the whole archiver.
+#
 # The engine is split into a reusable library so it can be linked into both the
 # command-line tool and the unit tests.
 #

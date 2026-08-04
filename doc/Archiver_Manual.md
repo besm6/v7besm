@@ -479,3 +479,28 @@ $ b6ld -o prog  crt0.o  main.o  libutil.a         # link against the library
 | [`cross/besm6/ar.h`](../cross/besm6/ar.h) | `ARMAG`, `ARMAXNAME`, `arhdrsz()`, and `struct ar_hdr` |
 | [`cross/besm6/ranlib.h`](../cross/besm6/ranlib.h) | `struct ranlib` for the `__.SYMDEF` table of contents |
 | [`cmd/libaout/`](../cmd/libaout/) | `getarhdr`/`putarhdr`/`getint`/`putint` — the shared big-endian word serialization |
+
+---
+
+## 11. On the machine itself
+
+Everything above describes the host tools `b6ar` and `b6ranlib`. Since task **C9d**
+([`cmd/TODO.md`](../cmd/TODO.md)) the same sources are also built for the BESM-6 and staged as
+**`/usr/bin/ar`** and **`/usr/bin/ranlib`**, so the machine maintains its own libraries: it
+builds `libc.a` — the archive and the `__.SYMDEF` index both — byte for byte identically to the
+host build. Two things are worth knowing about the target copies.
+
+**`/usr/bin/ranlib` contains all of `/usr/bin/ar`.** `ranlib` rebuilds the archive in process
+through `ar_run()` (§7), and there is no shared library on this machine, so the archiver is
+linked into it exactly as the `archiver` target is linked into the host `b6ranlib`. There are
+two copies of the archiver on the disk and that was deliberate; [`cmd/ranlib/README.md`](../cmd/ranlib/README.md)
+has the arithmetic.
+
+**Nothing else about the format or the commands changes**, and one number does: `ranlib`'s
+`__.SYMDEF` table is capped at 512 entries on the target rather than 1000, to match the
+capacity `b6ld` will read back (`RANTABSZ`, [`cmd/ld/intern.h`](../cmd/ld/intern.h)). The
+largest index in this tree is 331 entries.
+
+[`cmd/ar/README.md`](../cmd/ar/README.md) and [`cmd/ranlib/README.md`](../cmd/ranlib/README.md)
+carry the measurements, the `mkstemp()` decision the temp files of §5.1 forced, and the test
+suites that hold the two builds to each other.

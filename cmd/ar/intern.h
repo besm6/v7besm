@@ -106,6 +106,7 @@ void print_long_entry(void);
 
 // Diagnostics, exit path, small helpers (util.c)
 void finish(int c);
+void close_fd(int *fdp);
 void on_signal(int sig);
 void die_usage(void);
 void die_no_archive(void);

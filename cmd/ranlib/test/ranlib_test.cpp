@@ -300,3 +300,26 @@ TEST(Ranlib, NotAnArchive)
 
     unlink(notar.c_str());
 }
+
+// A fatal error RETURNS. The engine used to call exit(1) on an unknown flag,
+// which took this process with it -- so this case could not be written at all
+// until ranlib_run() grew cmd/ar's single-exit discipline (a jmp_buf and
+// fail()). That the assertions below run is the whole of what it asserts.
+TEST(Ranlib, UnknownFlag)
+{
+    std::string base = current_test_name();
+    std::string a    = base + ".o";
+    std::string lib  = base + ".a";
+
+    build_object(a, { { "x", N_TEXT | N_EXT, 0 } });
+    ASSERT_EQ(run(ar_run, { "b6ar", "rc", lib, a }), 0);
+
+    EXPECT_EQ(run(ranlib_run, { "b6ranlib", "-z", lib }), 1);
+
+    // ...and the engine is still usable afterwards, which is the other half of
+    // the promise symdef.h makes.
+    EXPECT_EQ(run(ranlib_run, { "b6ranlib", lib }), 0);
+
+    unlink(a.c_str());
+    unlink(lib.c_str());
+}

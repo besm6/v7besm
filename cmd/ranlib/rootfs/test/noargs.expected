@@ -1,0 +1,5 @@
+Usage:
+    ranlib [-td] archive...
+Options:
+    -t          Touch: update the symbol-table timestamp without rebuilding it
+    -d          Debug: print the symbol table as it is built

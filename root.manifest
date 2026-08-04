@@ -860,6 +860,43 @@ file /usr/bin/lorder    # cmd/lorder -- a SHELL SCRIPT, and the only thing task 
 source ../../rootfs/usr/bin/lorder
 mode 0755
 
+# THE ARCHIVE PAIR, task C9d, and the link that closes the chain: with these the machine
+# builds its own libc.a -- archive and index both -- and the result is byte for byte what
+# the host b6ar and b6ranlib produce.  They are the first two programs here to link the
+# FULL cmd/libaout list: getarhdr, getint, putarhdr and putint, the four file-descriptor
+# routines that exist for ar and ranlib and for nothing else.  ar is 8,504 words and
+# ranlib 11,333 -- the difference is that ranlib carries the whole archiver inside it.
+
+file /usr/bin/ar        # cmd/ar built natively.  NOTHING in its sources changed for the
+                        # target -- the third of the nine with no `besm6' size profile at
+                        # all, after size and disasm -- because it keeps its state in a
+                        # ~190-word struct rather than in the tens of thousands of words
+                        # cpp, as and ld each had to have lifted out.  What DID change is
+                        # in libc: mkstemp(), which ar calls three times and this libc had
+                        # not got.  as, ld and strip all escaped it by moving to tmpfile();
+                        # ar cannot, because it wants the temp file's NAME (finish() unlinks
+                        # it) and a descriptor it can read back at the end.  So it wants the
+                        # /tmp above, as strip does -- and unlike strip it will use the
+                        # current directory instead under -l.  cmd/ar/README.md.
+source ../../rootfs/usr/bin/ar
+mode 0755
+
+file /usr/bin/ranlib    # cmd/ranlib built natively -- and it CONTAINS ALL OF ar, because
+                        # ranlib_run() rebuilds the archive in process through ar_run().
+                        # There are two copies of the archiver on this disk and that was
+                        # the choice: the pair costs 37 of the 830 blocks this image had
+                        # free and an exec of /usr/bin/ar would give back at most 16, at
+                        # the price of a hard-coded path and an
+                        # `#if besm6' fork in sources every other C9 task kept single.
+                        # The one number the target changes is TABSZ, the __.SYMDEF table,
+                        # 1000 -> 512 -- not an address-space cut but a match to b6ld's own
+                        # RANTABSZ, so this ranlib cannot write an index the machine's
+                        # linker would refuse to read.  It writes its scratch __.SYMDEF
+                        # into the CURRENT directory, so it wants a writable cwd rather
+                        # than /tmp.  cmd/ranlib/README.md.
+source ../../rootfs/usr/bin/ranlib
+mode 0755
+
 file /usr/lib/diffh     # cmd/diffh -- task C5f.  diff -h execv's this path; see the
                         # /usr/lib stanza above.  Its window is RANGE (30) lines of each
                         # file, so its storage is bounded by a constant where diff's is

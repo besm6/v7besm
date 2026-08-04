@@ -89,5 +89,5 @@ The check by hand is the real workload — the machine reading the tools that bu
 ```sh
 cd build
 b6sim rootfs/usr/bin/nm -n kernel/unix | wc -l      # 623, and no `out of memory'
-b6sim rootfs/usr/bin/nm lib/libc/libc.a | wc -l     # 1,840 over 154 members
+b6sim rootfs/usr/bin/nm lib/libc/libc.a | wc -l     # 1,862 over 188 members
 ```

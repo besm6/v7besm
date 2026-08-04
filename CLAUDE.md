@@ -74,29 +74,42 @@ words** (a member is a 12-bit offset from a base register — move the big array
 and the **4,096-word stack**, where a long function costs 1.5–2 words per source line of
 temporaries before any array. `cmd/README.md` §6 is the account and `cmd/cpp` the worked example.
 
-**Seven programs are built twice** — `cmd/cpp`, `as`, `ld`, `nm`, `size`, `strip` and `disasm`
-— as the host tools `b6cpp`/`b6as`/… and, from the same sources, as
-`build/rootfs/usr/bin/{cpp,as,ld,nm,size,strip,disasm}` (`cmd/<x>/rootfs/`; tasks C9a–C9c,
-self-hosting), plus `cmd/lorder`, a shell script `configure_file`d twice on the one `nm` it
-names. **The machine assembles and links its own programs and reads back what it built**: the
-native `as` and `ld` reproduce the host tools' objects and images byte for byte, the whole
-kernel and the toolchain itself included.
+**Nine programs are built twice** — `cmd/cpp`, `as`, `ld`, `nm`, `size`, `strip`, `disasm`,
+`ar` and `ranlib` — as the host tools `b6cpp`/`b6as`/… and, from the same sources, as
+`build/rootfs/usr/bin/{cpp,as,ld,nm,size,strip,disasm,ar,ranlib}` (`cmd/<x>/rootfs/`; tasks
+C9a–C9d, self-hosting), plus `cmd/lorder`, a shell script `configure_file`d twice on the one
+`nm` it names. **The machine assembles, links, archives and indexes its own programs and reads
+back what it built**: the native `as` and `ld` reproduce the host tools' objects and images
+byte for byte — the whole kernel and the toolchain itself included — and the native `ar` and
+`ranlib` build `libc.a`, archive and `__.SYMDEF` both, byte for byte too. `ar`/`ranlib` are
+also the only two that link the **full** `B6_LIBAOUT_SOURCES`: the four file-descriptor
+routines `getarhdr`/`getint`/`putarhdr`/`putint` exist for them and for nothing else.
 
 The first three are the only places the ceilings actually bind, and each carries a BESM-6 size
 profile keyed on the `besm6` macro `b6cpp` always predefines — `cmd/cpp/defs.h` (below the C11
-§5.2.4.1 minima), `cmd/as/as.h`, `cmd/ld/intern.h`. Of C9c's four only two changed anything:
-`cmd/nm/nm.c`'s `QUANT` (a *heap* step `rootfs_<name>_size` cannot see — a `struct nlist` is
-four words) and `cmd/strip/strip.c`'s `BUFSZ` (a *stack* array, 8,192 bytes being a third of
-the stack); `size` and `disasm` are character-for-character the host build. Each README's
-"Building for the BESM-6" has the measurements. A second native build of a host tool needs its
-own subdirectory, since `cmd/<x>` is added above the `B6RUNTIME_LIB` guard where `b6_prog()`
-does not yet exist.
+§5.2.4.1 minima), `cmd/as/as.h`, `cmd/ld/intern.h`. Of the other six only three changed
+anything: `cmd/nm/nm.c`'s `QUANT` (a *heap* step `rootfs_<name>_size` cannot see — a `struct
+nlist` is four words), `cmd/strip/strip.c`'s `BUFSZ` (a *stack* array, 8,192 bytes being a
+third of the stack), and `cmd/ranlib/ranlib.c`'s `TABSZ` — not an address-space cut but a match
+to `b6ld`'s own `RANTABSZ`, so the machine cannot write an index its linker refuses to read.
+`size`, `disasm` and `ar` are character-for-character the host build; `ar` is the one that says
+how much of the difficulty was the three big ones, since it keeps all its state in a struct and
+that struct is 190 words. Each README's "Building for the BESM-6" has the measurements. A
+second native build of a host tool needs its own subdirectory, since `cmd/<x>` is added above
+the `B6RUNTIME_LIB` guard where `b6_prog()` does not yet exist.
 
 Three traps the toolchain sources hit and nothing else has: **`b6lower` ignores designated
 initializers** and initializes positionally, silently (`cmd/as/main.c`, `cmd/ld/ld.c` say so);
 a **string literal cannot initialize a `char *` inside a struct initializer** at all; and there
 is **no `int64_t`** — an `int` is 41 bits, an `unsigned` exactly 48, so only what really holds a
-whole word becomes `uword_t` and everything narrower stays `word_t`.
+whole word becomes `uword_t` and everything narrower stays `word_t`. An *automatic* aggregate
+initialised from runtime values (`unsigned char b[6] = { i >> 40, … }` in `cmd/libaout/putint.c`,
+`char *av[]` in `cmd/ranlib/ranlib.c`) is **not** a fourth trap — C9d was the first task to
+cross-compile one and it is correct — but it had no precedent before, so check a new one.
+
+`mkstemp()` is in this libc (`lib/libc/gen/mkstemp.c`) and is **not atomic**: there is no
+`O_CREAT` and no `O_EXCL` in this kernel, so it is `mktemp`'s name walk plus `creat()` and a
+reopen. `cmd/ar` is the caller that wanted it; `as`, `ld` and `strip` all use `tmpfile()`.
 
 `build/rootfs/` is staged only, never installed. **`root.manifest`** at the tree top describes
 the image; paths resolve against `b6fsutil`'s working directory (`build/kernel/test`). Modes

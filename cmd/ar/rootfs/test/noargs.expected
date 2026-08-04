@@ -1,0 +1,21 @@
+Usage:
+    ar [-]{mrxtdpq}[uvnbail] archive file...
+Commands (exactly one required):
+    r           Replace or add files to the archive
+    d           Delete files from the archive
+    x           Extract files from the archive
+    t           List a table of contents
+    p           Print members to standard output
+    m           Move files within the archive
+    q           Quick-append files without checking for duplicates
+Options:
+    u           With r, replace a member only if the file is newer
+    v           Verbose: trace each action (repeat to trace unchanged members)
+    a           Position insert/move after the named member
+    b           Position insert/move before the named member
+    i           Synonym for b
+    c           Suppress the "creating archive" notice
+    l           Keep temporary files in the current directory, not /tmp
+    n           Accepted for compatibility, ignored
+    archive     The archive file to create or modify
+    file...     Files/members to operate on
