@@ -294,6 +294,22 @@ static void store_stat(Machine &m, unsigned addr, const struct stat &st)
 }
 
 //
+// ... and the same 11 words for a file b6sim serves itself (etcfiles.h).  The size, the mode
+// and the owner are root.manifest's and are real: all six are `mode 0644' and belong to root.
+// Everything else stays ZERO -- there is no filesystem behind these, so an st_dev, an st_ino
+// or a timestamp here would be a fiction, and kernel.h's rule is that a fiction is worse than
+// an empty field because a tool cannot tell it from a measurement.
+//
+static void store_etc_stat(Machine &m, unsigned addr, const EtcFiles::File *f)
+{
+    struct stat st = {};
+    st.st_mode     = 0100644;
+    st.st_nlink    = 1;
+    st.st_size     = (off_t)f->size;
+    store_stat(m, addr, st);
+}
+
+//
 // Fetch the k-th argument (1-based) of a call passing `count` arguments.
 //
 Word Processor::syscall_arg(unsigned k, unsigned count)
@@ -543,6 +559,22 @@ void Processor::sys_ret(int64_t result)
 }
 
 //
+// A path b6sim serves is served for reading and for nothing else.  cmd/passwd is the case
+// this exists for -- it creat()s /etc/passwd, and without a refusal here that call would
+// reach the BUILD MACHINE's file.  EROFS everywhere rather than EPERM or EACCES: b6sim's
+// /etc is a read-only image compiled into the simulator and no caller can write it, so a
+// guest told EPERM would retry as root and one told EACCES would try a chmod, while EROFS is
+// simply true.  It is v7 errno 30, inside the 1..34 range guest_errno() passes through.
+//
+bool Processor::etc_refuse(const std::string &path, int err)
+{
+    if (EtcFiles::find(path) == nullptr)
+        return false;
+    sys_err(err);
+    return true;
+}
+
+//
 // exec()/exece(): replace the process image with a new a.out.
 //
 void Processor::sys_exec(unsigned count, bool with_env)
@@ -550,6 +582,15 @@ void Processor::sys_exec(unsigned count, bool with_env)
     std::string path = mem_get_string(syscall_arg(1, count));
     Word argvptr     = syscall_arg(2, count);
     Word envpptr     = with_env ? syscall_arg(3, count) : 0;
+
+    // A served /etc file is not an a.out, and ENOEXEC and not EROFS is what says so: /etc/rc
+    // IS a script, and ENOEXEC is a shell's signal to read one as such (see the ExecError
+    // comment below).  The stack cleanup is the failure path's, not the common tail's.
+    if (etc_refuse(path, ENOEXEC)) {
+        if (count >= 2)
+            core.M[017] = ADDR(core.M[017] - (count - 1));
+        return;
+    }
 
     // Walk a guest array of char* fat pointers into a vector of host strings.
     auto read_vec = [&](Word vec) -> std::vector<std::string> {
@@ -807,22 +848,31 @@ void Processor::syscall(unsigned num)
         }
         std::vector<char> buf(n);
 
-        // A memory device has no host descriptor behind it: serve it from the imitation
-        // kernel, at the byte offset lseek left, and clip at the node's own ceiling --
-        // /dev/kmem ends where an unmapped access does, as kernel/dev/mem.c ends it.
-        SimKernel::DevFd *dev = machine.kernel.dev_find(fd);
-        if (dev != nullptr) {
-            machine.kernel.refresh(Machine::get_instr_count());
-            uint64_t end   = (uint64_t)SimKernel::dev_limit(dev->minor) * 6;
-            uint64_t avail = (dev->offset < end) ? end - dev->offset : 0;
+        // A synthetic node has no host descriptor behind it (kernel.h).  A served /etc file
+        // comes out of the text compiled into b6sim; a memory device comes out of the
+        // imitation kernel, at the byte offset lseek left, clipped at the node's own ceiling
+        // -- /dev/kmem ends where an unmapped access does, as kernel/dev/mem.c ends it.
+        SimKernel::Node *node = machine.kernel.node_find(fd);
+        if (node != nullptr) {
+            uint64_t end;
+            if (node->file != nullptr) {
+                end = node->file->size;
+            } else {
+                machine.kernel.refresh(Machine::get_instr_count());
+                end = (uint64_t)SimKernel::dev_limit(node->minor) * 6;
+            }
+            uint64_t avail = (node->offset < end) ? end - node->offset : 0;
             unsigned got   = (unsigned)((uint64_t)n < avail ? (uint64_t)n : avail);
             if (got > 0) {
-                machine.kernel.read_bytes((unsigned)(dev->offset / 6),
-                                          (unsigned)(dev->offset % 6), buf.data(), got);
+                if (node->file != nullptr)
+                    memcpy(buf.data(), node->file->text + node->offset, got);
+                else
+                    machine.kernel.read_bytes((unsigned)(node->offset / 6),
+                                              (unsigned)(node->offset % 6), buf.data(), got);
                 mem_put_bytes(bufptr, buf.data(), got);
-                dev->offset += got;
+                node->offset += got;
             }
-            sys_ok(got); // 0 is the end of the device, as it is the end of a file
+            sys_ok(got); // 0 is the end of the node, as it is the end of a file
             break;
         }
 
@@ -851,11 +901,14 @@ void Processor::syscall(unsigned num)
         }
         std::vector<char> buf(n);
         mem_get_bytes(bufptr, buf.data(), (unsigned)n);
-        // A write to a memory device is refused rather than served: the kernel's would
-        // change core, and there is no core here to change.  EPERM says the node is not
-        // writable to this caller, which is the nearest true thing.
-        if (machine.kernel.dev_find(fd) != nullptr) {
-            sys_err(EPERM);
+        // A write to a synthetic node is refused rather than served.  Two different
+        // refusals: a memory device would change core and there is no core here to change,
+        // so EPERM -- the node is not writable to this caller.  A served /etc file is
+        // read-only to EVERYONE, root included, because it is a text compiled into the
+        // simulator, and EROFS is the one true statement about it (etcfiles.cpp).
+        const SimKernel::Node *node = machine.kernel.node_find(fd);
+        if (node != nullptr) {
+            sys_err(node->file != nullptr ? EROFS : EPERM);
             break;
         }
         ssize_t w = ::write(fd, buf.data(), n);
@@ -872,19 +925,26 @@ void Processor::syscall(unsigned num)
         int vmode        = (int)sign_extend41(syscall_arg(2, 2));
         int hmode        = (vmode == 0) ? O_RDONLY : (vmode == 1) ? O_WRONLY : O_RDWR;
 
-        // /dev/kmem and /dev/mem are the imitation kernel's, not the host's -- the host's
-        // are absent on macOS and unreadable on Linux, and neither would hold what a guest
-        // is asking for.  The node still takes a REAL descriptor number, borrowed by
-        // opening /dev/null, so that dup(), close() and exec inheritance keep working with
-        // no descriptor table of b6sim's own; only the three calls below know the
-        // difference.  See kernel.h.
-        int minor = SimKernel::dev_minor(path);
-        if (minor >= 0) {
+        // Two kinds of path are b6sim's own rather than the host's, and both answer here.
+        // /dev/kmem and /dev/mem are the imitation kernel's -- the host's are absent on
+        // macOS and unreadable on Linux, and neither would hold what a guest is asking for.
+        // The six static /etc files are the TARGET's, and the host's would be a property of
+        // whoever is building (etcfiles.cpp).  Either way the node takes a REAL descriptor
+        // number, borrowed by opening /dev/null, so that dup(), close() and exec inheritance
+        // keep working with no descriptor table of b6sim's own.  See kernel.h.
+        int minor                = SimKernel::dev_minor(path);
+        const EtcFiles::File *ef = EtcFiles::find(path);
+        if (minor >= 0 || ef != nullptr) {
+            // b6sim's /etc is a text compiled into the simulator: read-only to everyone.
+            if (ef != nullptr && vmode != 0) {
+                sys_err(EROFS);
+                break;
+            }
             int fd = ::open("/dev/null", O_RDONLY);
             if (fd < 0)
                 sys_err(errno);
             else {
-                machine.kernel.dev_add(fd, minor);
+                machine.kernel.node_add(fd, minor, ef);
                 sys_ok(fd);
             }
             break;
@@ -896,7 +956,7 @@ void Processor::syscall(unsigned num)
     case SYS_close: {
         // int close(int fd)
         int fd = (int)sign_extend41(syscall_arg(1, 1));
-        machine.kernel.dev_close(fd);
+        machine.kernel.node_close(fd);
         sys_ret(::close(fd));
         break;
     }
@@ -925,6 +985,8 @@ void Processor::syscall(unsigned num)
         // int creat(char *path, int mode)
         std::string path = mem_get_string(syscall_arg(1, 2));
         int mode         = (int)sign_extend41(syscall_arg(2, 2));
+        if (etc_refuse(path, EROFS))
+            break;
         sys_ret(::creat(path.c_str(), mode));
         break;
     }
@@ -933,14 +995,22 @@ void Processor::syscall(unsigned num)
         // int link(char *name1, char *name2)
         std::string name1 = mem_get_string(syscall_arg(1, 2));
         std::string name2 = mem_get_string(syscall_arg(2, 2));
+        // Either end: a link TO a served file would have to read its i-node, and a link
+        // named AS one would have to replace it.
+        if (etc_refuse(name1, EROFS) || etc_refuse(name2, EROFS))
+            break;
         sys_ret(::link(name1.c_str(), name2.c_str()));
         break;
     }
 
-    case SYS_unlink:
+    case SYS_unlink: {
         // int unlink(char *path)
-        sys_ret(::unlink(mem_get_string(syscall_arg(1, 1)).c_str()));
+        std::string path = mem_get_string(syscall_arg(1, 1));
+        if (etc_refuse(path, EROFS))
+            break;
+        sys_ret(::unlink(path.c_str()));
         break;
+    }
 
     case SYS_exec:
         // On success the image is replaced and r15 reseeded, so the tail pop
@@ -952,10 +1022,15 @@ void Processor::syscall(unsigned num)
         sys_exec(3, true);
         return;
 
-    case SYS_chdir:
+    case SYS_chdir: {
         // int chdir(char *path)
-        sys_ret(::chdir(mem_get_string(syscall_arg(1, 1)).c_str()));
+        std::string path = mem_get_string(syscall_arg(1, 1));
+        // A served file is a plain file, so this is ENOTDIR and not a refusal to write.
+        if (etc_refuse(path, ENOTDIR))
+            break;
+        sys_ret(::chdir(path.c_str()));
         break;
+    }
 
     case SYS_time:
         // time_t time(void): seconds since the epoch in one word.
@@ -967,6 +1042,8 @@ void Processor::syscall(unsigned num)
         std::string path = mem_get_string(syscall_arg(1, 3));
         int mode         = (int)sign_extend41(syscall_arg(2, 3));
         int dev          = (int)sign_extend41(syscall_arg(3, 3));
+        if (etc_refuse(path, EROFS))
+            break;
         if ((mode & S_IFMT) == S_IFDIR)
             sys_ret(::mkdir(path.c_str(), mode & 07777));
         else
@@ -978,6 +1055,8 @@ void Processor::syscall(unsigned num)
         // int chmod(char *path, int mode)
         std::string path = mem_get_string(syscall_arg(1, 2));
         int mode         = (int)sign_extend41(syscall_arg(2, 2));
+        if (etc_refuse(path, EROFS))
+            break;
         sys_ret(::chmod(path.c_str(), mode));
         break;
     }
@@ -987,6 +1066,8 @@ void Processor::syscall(unsigned num)
         std::string path = mem_get_string(syscall_arg(1, 3));
         int uid          = (int)sign_extend41(syscall_arg(2, 3));
         int gid          = (int)sign_extend41(syscall_arg(3, 3));
+        if (etc_refuse(path, EROFS))
+            break;
         sys_ret(::chown(path.c_str(), uid, gid));
         break;
     }
@@ -1013,6 +1094,15 @@ void Processor::syscall(unsigned num)
         // int stat(char *path, struct stat *buf)
         std::string path = mem_get_string(syscall_arg(1, 2));
         unsigned bufaddr = syscall_arg(2, 2) & BITS(15);
+
+        // A served file answers about itself, not about whatever the host has by that name.
+        const EtcFiles::File *ef = EtcFiles::find(path);
+        if (ef != nullptr) {
+            store_etc_stat(machine, bufaddr, ef);
+            sys_ok(0);
+            break;
+        }
+
         struct stat st;
         if (::stat(path.c_str(), &st) < 0)
             sys_err(errno);
@@ -1027,6 +1117,19 @@ void Processor::syscall(unsigned num)
         // int fstat(int fd, struct stat *buf)
         int fd           = (int)sign_extend41(syscall_arg(1, 2));
         unsigned bufaddr = syscall_arg(2, 2) & BITS(15);
+
+        // A served /etc file must answer from its own node: the descriptor behind it is the
+        // borrowed /dev/null, so falling through would report a character special of size 0
+        // -- which is what opendir(3) looks at before it decides a path is not a directory,
+        // and what anything sizing a buffer by st_size would believe.  A memory device does
+        // fall through: /dev/mem's dev_t is exactly the kind of number b6sim will not invent.
+        const SimKernel::Node *node = machine.kernel.node_find(fd);
+        if (node != nullptr && node->file != nullptr) {
+            store_etc_stat(machine, bufaddr, node->file);
+            sys_ok(0);
+            break;
+        }
+
         struct stat st;
         if (::fstat(fd, &st) < 0)
             sys_err(errno);
@@ -1043,17 +1146,21 @@ void Processor::syscall(unsigned num)
         off_t off    = (off_t)sign_extend41(syscall_arg(2, 3));
         int whence   = (int)sign_extend41(syscall_arg(3, 3));
 
-        // A memory device seeks in b6sim's own bookkeeping.  A BYTE offset, like every
-        // other file: kernel word W is at W * NBPW (kernel/dev/mem.c).
-        SimKernel::DevFd *dev = machine.kernel.dev_find(fd);
-        if (dev != nullptr) {
-            int64_t end  = (int64_t)SimKernel::dev_limit(dev->minor) * 6;
-            int64_t base = (whence == 1) ? (int64_t)dev->offset : (whence == 2) ? end : 0;
+        // A synthetic node seeks in b6sim's own bookkeeping.  A BYTE offset, like every
+        // other file: kernel word W is at W * NBPW (kernel/dev/mem.c), and a served /etc
+        // file ends where its text does.  Seeking past the end is legal and reads 0 there,
+        // which is what setpwent()'s rewind and getpwent()'s walk need between them.
+        SimKernel::Node *node = machine.kernel.node_find(fd);
+        if (node != nullptr) {
+            int64_t end  = (node->file != nullptr)
+                               ? (int64_t)node->file->size
+                               : (int64_t)SimKernel::dev_limit(node->minor) * 6;
+            int64_t base = (whence == 1) ? (int64_t)node->offset : (whence == 2) ? end : 0;
             int64_t pos  = base + off;
             if (pos < 0)
                 sys_err(EINVAL);
             else {
-                dev->offset = (uint64_t)pos;
+                node->offset = (uint64_t)pos;
                 sys_ok(pos);
             }
             break;
@@ -1113,6 +1220,8 @@ void Processor::syscall(unsigned num)
         // int utime(char *path, struct { time_t actime, modtime; } *times)
         std::string path = mem_get_string(syscall_arg(1, 2));
         unsigned tp      = syscall_arg(2, 2) & BITS(15);
+        if (etc_refuse(path, EROFS))
+            break;
         if (tp == 0)
             sys_ret(::utime(path.c_str(), nullptr));
         else {
@@ -1128,6 +1237,19 @@ void Processor::syscall(unsigned num)
         // int access(char *path, int mode)
         std::string path = mem_get_string(syscall_arg(1, 2));
         int mode         = (int)sign_extend41(syscall_arg(2, 2));
+        // v7's access modes are the host's numbers: 4 read, 2 write, 1 execute, 0 existence.
+        // A served file exists and is readable to everyone (0644); nobody may write it, and
+        // it is not executable -- EACCES for that one, since a mode bit and not the medium
+        // is what refuses.
+        if (EtcFiles::find(path) != nullptr) {
+            if (mode & 2)
+                sys_err(EROFS);
+            else if (mode & 1)
+                sys_err(EACCES);
+            else
+                sys_ok(0);
+            break;
+        }
         sys_ret(::access(path.c_str(), mode));
         break;
     }
@@ -1178,13 +1300,13 @@ void Processor::syscall(unsigned num)
         int fd2 = (int)sign_extend41(syscall_arg(2, 2));
         int m   = fd & ~077;
         fd &= 077;
-        // A memory device's descriptor is a real one (it borrowed /dev/null's), so the
+        // A synthetic node's descriptor is a real one (it borrowed /dev/null's), so the
         // host duplicates it; what has to follow is b6sim's own note of which node it is
         // and how far into it the copy starts -- v7 shares the offset between a
         // descriptor and its dup, and so does this.
         int nfd = (m & 0100) ? ::dup2(fd, fd2) : ::dup(fd);
         if (nfd >= 0)
-            machine.kernel.dev_dup(fd, nfd);
+            machine.kernel.node_dup(fd, nfd);
         sys_ret(nfd);
         break;
     }

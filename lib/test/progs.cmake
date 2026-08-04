@@ -41,9 +41,12 @@
 # next door.
 #
 # NOR IS EVERY NAME HERE A libc TEST any more.  termcapt is lib/libtermcap's and cursest and
-# curstty are lib/libcurses', and they are here for the reason memt is: the disk image is the
-# only place their /etc/termcap exists.  Under b6sim the two that run there read the same
-# file out of the source tree, named by lib/test/<name>.args.
+# curstty are lib/libcurses'.  All three NAME the database rather than letting tgetent() find
+# it: $TERMCAP is set from <name>.args, the source tree's etc/termcap under b6sim and the
+# image's /etc/termcap under the kernel -- the same file, so one .expected adjudicates both.
+# That is deliberate and stays: b6sim serves /etc/termcap itself now (cmd/sim/etcfiles.cpp),
+# so the default path would work too, but naming it is what exercises tgetent's $TERMCAP-is-a
+# -file-name branch, which is half of what termcapt is for.
 #
 # The order is the order kernel/test/libtest.sh runs them in, which is the order
 # lib/test/CMakeLists.txt registers them in: roughly the order libc was built up, so a

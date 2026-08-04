@@ -1287,10 +1287,11 @@ static void pinode(void)
     DINODE *dp;
     char *p;
     int i;
-    // getpw(3) takes no length and writes a whole /etc/passwd line, so this is a bound on
-    // the caller's side and nothing else.  256 rather than v7's 200 because under b6sim
-    // the line comes from the BUILD MACHINE's /etc/passwd (../README.md SS9), which is
-    // also why cmd/fsck/test masks this one field and nothing else.
+    // getpw(3) takes no length and writes a whole /etc/passwd line, so the bound is the
+    // caller's and nothing else's.  256 rather than v7's 200 for the margin: the file is
+    // the same one in both worlds -- the image's under SIMH, the same six lines compiled
+    // into b6sim under b6sim (cmd/sim/etcfiles.cpp) -- but a line is only as long as
+    // whoever last edited etc/passwd made it.
     char uidbuf[256];
 
     printf(" I=%d ", inum);

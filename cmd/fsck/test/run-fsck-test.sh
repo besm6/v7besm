@@ -4,13 +4,14 @@
 #
 #	run-fsck-test.sh SIM B6FSUTIL PROG SRCDIR CASE FIXTURE
 #
-# WHY THIS IS NOT b6_progtest().  That harness diffs raw stdout, and one field of fsck's
-# output cannot be diffed on a host: pinode() maps a uid to a name with getpw(3), which
-# opens the literal /etc/passwd -- so under b6sim it reads THE BUILD MACHINE's password
-# file (../../README.md SS9, ../../df/README.md).  OWNER= is masked below and nothing else
-# is.  Under SIMH, where /etc/passwd is the image's, kernel/test/fsck masks nothing.
+# WHY THIS IS NOT b6_progtest().  Not because anything here has to be masked -- THE ORACLE
+# IS FIVE ASSERTIONS and that harness makes one.  It did mask, once: pinode() maps a uid to
+# a name with getpw(3), which opens the literal /etc/passwd, and under b6sim that used to be
+# THE BUILD MACHINE's password file, so OWNER= was rewritten before the diff.  b6sim serves
+# the target's /etc now (cmd/sim/etcfiles.cpp), the names below are the image's, and the diff
+# is of raw output -- the same output kernel/test/fsck asserts under SIMH.
 #
-# THE ORACLE IS FIVE ASSERTIONS, and the middle one is the task:
+# THE FIVE ASSERTIONS, and the middle one is the task:
 #
 #   1. the damage is not a no-op -- `b6fsutil -c' must FAIL before fsck runs.  Without
 #      this a spec that stopped matching the fixture would leave a case that repairs
@@ -50,7 +51,7 @@ case="$5"
 fixture="$6"
 
 img="$case.img"
-rm -f "$img" "$case.out" "$case.log" "$case.again"
+rm -f "$img" "$case.out" "$case.again"
 cp "$fixture" "$img"
 
 flag=-n
@@ -94,11 +95,10 @@ env -i "$sim" "$prog" $flag "$img" >"$case.out" 2>&1
 status=$?
 set -e
 
-sed 's/OWNER=[^ ]*/OWNER=U/' "$case.out" >"$case.log"
-cat "$case.log"
+cat "$case.out"
 
 # 2.  what it said.
-if ! diff -u "$srcdir/$case.expected" "$case.log"; then
+if ! diff -u "$srcdir/$case.expected" "$case.out"; then
     echo "FAIL: $case: fsck said something else." >&2
     exit 1
 fi
@@ -116,7 +116,7 @@ fi
 if [ -f "$srcdir/$case.hostblind" ]; then
     # fsck saw something the host's checker does not look for, and must have left the
     # filesystem alone: a note is not a repair.
-    if grep -q 'MODIFIED' "$case.log"; then
+    if grep -q 'MODIFIED' "$case.out"; then
         echo "FAIL: $case: fsck wrote to the filesystem over a NOTE." >&2
         exit 1
     fi

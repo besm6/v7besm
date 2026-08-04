@@ -11,6 +11,7 @@ add_library(simulator STATIC
     besm6_arch.cpp
     syscall.cpp
     kernel.cpp
+    etcfiles.cpp
     params.cpp
     trace.cpp
 )
@@ -20,7 +21,8 @@ add_library(simulator STATIC
 # the tunables against it -- but it reaches it by relative path instead, because
 # include/ is the kernel's FULL system-header tree: its own stdio.h, string.h and
 # sys/stat.h shadow the host's, and syscall.cpp needs the host's.  See the comment at
-# that include.
+# that include.  test/etc_test.cpp reaches the tree the same way and for the same reason,
+# but with a -D rather than a relative path: see test/CMakeLists.txt.
 #
 target_include_directories(simulator PUBLIC ${BESM6_CROSS_INCLUDE} ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(simulator PUBLIC aout)

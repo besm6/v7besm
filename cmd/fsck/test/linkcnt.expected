@@ -4,7 +4,7 @@ linkcnt.img
 ** Phase 2 - Check Pathnames
 ** Phase 3 - Check Connectivity
 ** Phase 4 - Check Reference Counts
-LINK COUNT FILE I=9  OWNER=U MODE=100644
+LINK COUNT FILE I=9  OWNER=root MODE=100644
 SIZE=64 MTIME=Nov 14 22:13 2023  COUNT 9 SHOULD BE 2
 ADJUST?  yes
 

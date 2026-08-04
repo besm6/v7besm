@@ -35,11 +35,13 @@
 # the same as /small's 64 bytes: a reported block is smaller than an allocated one, so the
 # smallest non-empty file still costs three.
 #
-# THE THREE OWNERS ARE THE POINT OF THE quot CASES.  0 is root, which is uid 0 on every
-# host that has ever run this build, so `quot' may print the name.  201 and 202 are in no
-# host /etc/passwd, so quot's `#%d' fallback prints the number -- which is the only way a
-# per-uid report can be diffed under a harness whose getpwent(3) reads THE BUILD MACHINE's
-# password file.  cmd/quot/test/CMakeLists.txt says the same thing from the other end.
+# THE THREE OWNERS ARE THE POINT OF THE quot CASES.  0 is root, and 201 and 202 are in no
+# password file at all, so quot prints the name for the first and its `#%d' fallback for the
+# other two -- both arms of that decision in one report.  It used to be the only shape that
+# could be diffed anywhere, getpwent(3) having read THE BUILD MACHINE's file under b6sim;
+# b6sim serves the target's /etc/passwd now (cmd/sim/etcfiles.cpp) and the fixture keeps the
+# three owners because the two arms are still worth having.
+# cmd/quot/test/CMakeLists.txt says the same thing from the other end.
 #
 # The sources are generated at configure time into fsimg.d/ by CMakeLists.txt beside this
 # file -- they are runs of one 64-byte line, so nothing binary is checked in -- and the

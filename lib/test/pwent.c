@@ -1,14 +1,25 @@
 //
 // pwent -- the accounts and terminal routines, plus crypt.
 //
-// NOTHING OUT OF /etc/passwd REACHES THE OUTPUT, and it cannot: the harness diffs
-// against a checked-in .expected, and the host's account list differs from machine to
-// machine -- on some of them (macOS) the logged-in user is not in the file at all.  So
-// the pw and gr families are tested for SELF-CONSISTENCY instead: every entry the
-// walker yields must be findable again by name and by id, and only the verdict is
-// printed.  A host with no /etc/passwd makes the walk empty and every claim below still
-// true, which is the right answer for a test that is checking the routines and not the
-// machine.
+// WHAT IS IN /etc/passwd REACHES THE OUTPUT NOW, and for a long time it could not.  This
+// program adjudicates two runs against one .expected -- b6sim and the booted kernel -- and
+// b6sim used to hand the literal path to the host, so every name read was a property of
+// whoever was building (on macOS the logged-in user is not in that file at all).  b6sim
+// serves the target's own /etc/passwd and /etc/group now (cmd/sim/etcfiles.cpp, and
+// cmd/sim/test/etc_test.cpp is what keeps the two copies byte for byte), so BOTH RUNS READ
+// THE SAME SIX ACCOUNTS AND THE SAME FOUR GROUPS and the file's content can be asserted.
+//
+// That argument is the one to make before adding a claim here, and it is not the same as
+// running the test.  The image half runs under libtest, which is labelled `weekly' and is
+// outside the daily gate, so a claim that is true under b6sim and false on the image would
+// pass `make run' and surface days later.  Everything below is true because the two worlds
+// read the same bytes.  Anything that is not -- ttyslot(), getlogin(), anything reaching
+// /dev -- stays in ttyt, which is image-only.
+//
+// THE SELF-CONSISTENCY CHECKS STAY, and they are not made redundant by the content ones:
+// every entry the walker yields must still be findable again by name and by id, which is a
+// claim about the ROUTINES rather than about the file, and it would survive an edit to
+// etc/passwd that the printed walk below would (deliberately) show as a diff.
 //
 // The lookup has to be done in two passes.  getpwnam() shares its statics with
 // getpwent() AND rewinds the file underneath it, so a lookup made in the middle of a
@@ -73,9 +84,14 @@ int main(void)
         strcpy(names[n], pw->pw_name);
         ids[n] = pw->pw_uid;
         n++;
+        // The walk itself, so that an edit to etc/passwd shows up here as a readable diff
+        // rather than as a count that moved.  Name, uid, gid and home directory; the
+        // password field is asserted below and is not printed beside a name.
+        printf("%-8s %3d %3d %s\n", pw->pw_name, pw->pw_uid, pw->pw_gid, pw->pw_dir);
     }
     endpwent();
     ok("the walk terminates", n >= 0 && n <= MAXENT);
+    ok("the file is the target's six accounts", n == 6);
 
     bad = 0;
     for (i = 0; i < n; i++) {
@@ -109,6 +125,38 @@ int main(void)
     ok("a name nobody has is not found", getpwnam("no-such-user-at-all") == 0);
     ok("a uid nobody has is not found", getpwuid(-12345) == 0);
 
+    //
+    // The two accounts anything else on this system depends on.  root is uid 0 with the
+    // root directory for a home and NO SHELL FIELD -- the entry ends at the last colon, so
+    // pw_shell is the empty string and not a null pointer, which is the difference between
+    // a line split in place and one parsed into fresh storage.  guest is the only non-root
+    // identity on the image (lib/test/suidt drops to it) and the one login(1) puts a user
+    // on; its gid 3 is `bin' in /etc/group below.
+    //
+    pw = getpwnam("root");
+    ok("root is there", pw != 0);
+    if (pw != 0) {
+        ok("root is uid 0", pw->pw_uid == 0);
+        ok("root is gid 1", pw->pw_gid == 1);
+        ok("root's home is /", strcmp(pw->pw_dir, "/") == 0);
+        ok("root has no shell field", pw->pw_shell != 0 && pw->pw_shell[0] == '\0');
+        ok("root has a password", pw->pw_passwd[0] != '\0');
+    }
+
+    pw = getpwuid(7);
+    ok("uid 7 is guest", pw != 0 && strcmp(pw->pw_name, "guest") == 0);
+    if (pw != 0) {
+        ok("guest is gid 3", pw->pw_gid == 3);
+        ok("guest's home is /usr/guest", strcmp(pw->pw_dir, "/usr/guest") == 0);
+        ok("guest has no password", pw->pw_passwd[0] == '\0');
+    }
+
+    // uucp is the one entry with a shell, and so the only one that proves the LAST field
+    // is reached at all: five of the six lines end before it.
+    pw = getpwnam("uucp");
+    ok("uucp's shell is uucico",
+       pw != 0 && strcmp(pw->pw_shell, "/usr/lib/uucico") == 0);
+
     // setpwent may be called twice, and endpwent on a stream never opened.
     setpwent();
     setpwent();
@@ -127,15 +175,20 @@ int main(void)
         strcpy(names[n], gr->gr_name);
         ids[n] = gr->gr_gid;
         n++;
-        // The member vector must be NULL-terminated inside its own bounds.
+        printf("%-8s %3d", gr->gr_name, gr->gr_gid);
+        // The member vector must be NULL-terminated inside its own bounds, and printing it
+        // is the only thing in either family that walks a vector rather than a field.
         for (m = gr->gr_mem; *m != 0; m++) {
+            printf(" %s", *m);
             mem++;
             if (mem > MAXENT * 100)
                 break;
         }
+        printf("\n");
     }
     endgrent();
     ok("the walk terminates", n >= 0 && n <= MAXENT);
+    ok("the file is the target's four groups", n == 4);
     ok("every member vector is terminated", mem <= MAXENT * 100);
 
     bad = 0;
@@ -157,9 +210,38 @@ int main(void)
     ok("a group nobody has is not found", getgrnam("no-such-group-at-all") == 0);
     ok("a gid nobody has is not found", getgrgid(-12345) == 0);
 
+    //
+    // The member list, which is the one thing /etc/group has and /etc/passwd has not.  bin
+    // is gid 3, the group guest is in, and its two members are the only place in either
+    // file where a comma-separated vector is parsed at all.
+    //
+    gr = getgrnam("bin");
+    ok("bin is there", gr != 0);
+    if (gr != 0) {
+        ok("bin is gid 3", gr->gr_gid == 3);
+        m = gr->gr_mem;
+        ok("bin's members are bin and guest",
+           m[0] != 0 && strcmp(m[0], "bin") == 0 && m[1] != 0 && strcmp(m[1], "guest") == 0 &&
+               m[2] == 0);
+    }
+
+    gr = getgrgid(1);
+    ok("gid 1 is other", gr != 0 && strcmp(gr->gr_name, "other") == 0);
+    if (gr != 0) {
+        m = gr->gr_mem;
+        ok("other's members are root and daemon",
+           m[0] != 0 && strcmp(m[0], "root") == 0 && m[1] != 0 && strcmp(m[1], "daemon") == 0 &&
+               m[2] == 0);
+    }
+
     // ---- getpw, v7's obsolete one ----
     printf("--- getpw\n");
     ok("a uid nobody has fails", getpw(-12345, buf) == 1);
+    // The WHOLE LINE, newline stripped, which is all this call has ever promised -- and the
+    // reason fsck(1M) still uses it (cmd/fsck/fsck.c pinode()).  It keeps a stream of its
+    // own, so this also says that the two are reading the same file.
+    ok("uid 0 comes back as its whole line",
+       getpw(0, buf) == 0 && strcmp(buf, "root:.8Y/JOGhfuk1I:0:1::/:") == 0);
 
     // ---- the terminal three ----
     printf("--- terminals\n");
@@ -168,12 +250,13 @@ int main(void)
     if (fd >= 0)
         close(fd);
     ok("ttyname of a closed descriptor is null", ttyname(31) == 0);
-    // ttyslot() AND getlogin() USED TO BE ASSERTED HERE and are not any more.  They answered
-    // zero and NULL in both worlds only because /etc/ttys did not exist; kernel task 29b put
-    // it on the image, so ttyslot() now finds `console' on line 1 under the booted kernel
-    // while it still finds nothing under b6sim -- and this program adjudicates BOTH runs
-    // against one .expected, so it can no longer be the one that says.  Their positive
-    // answers moved to ttyt, which is image-only for that reason.
+    // ttyslot() AND getlogin() USED TO BE ASSERTED HERE and are not any more, and the reason
+    // is no longer the one this comment used to give.  It is NOT that /etc/ttys is missing
+    // under b6sim -- b6sim serves it now, the same seventeen bytes the image carries.  It is
+    // that ttyslot() starts from ttyname(0), which reads /dev with read(2), and b6sim's
+    // read(2) is the host's and refuses a directory: the two worlds disagree about the
+    // DIRECTORY and not about the file.  Their positive answers are in ttyt, image-only for
+    // that reason, and moving them back here would fail on one harness only.
 
     // ---- crypt ----
     printf("--- crypt\n");
@@ -188,6 +271,16 @@ int main(void)
        strcmp(crypt("abcdefgh", "zz"), crypt("abcdefghXYZ", "zz")) == 0);
     ok("the salt is the first two characters of the answer",
        strncmp(crypt("password", "Z."), "Z.", 2) == 0);
+    //
+    // And the one vector that is not arbitrary: the hash root actually carries on this
+    // system.  It ties three things together that no single test could reach before -- the
+    // password file b6sim and the kernel now agree on, this DES implementation, and
+    // kernel/test/login.ini, which types `root' at the login prompt and expects a shell.
+    // If this line ever fails, either crypt changed or nobody can log in.
+    //
+    pw = getpwnam("root");
+    ok("root's password is crypt(\"root\", \".8\")",
+       pw != 0 && strcmp(crypt("root", ".8"), pw->pw_passwd) == 0);
 
     printf("done\n");
     return 0;

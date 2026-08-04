@@ -202,14 +202,17 @@ succeed there. That half is `kernel/test/fsinfo`'s, on volume 3087.
 `du` is in neither world but the second: it reads directories with `read(2)`, and a host
 directory descriptor refuses that — [../ls/README.md](../ls/README.md)'s limitation exactly.
 
-**One thing cannot be asserted under `b6sim` at all, and it is not about this machine.** `quot`
-maps a uid to a name with `getpwent(3)`, which opens the literal path `/etc/passwd` — so under
-that harness it reads *the build machine's* password file. There is no uid this can be steered
-around: `quot` ignores uids at or above `NUID` (300), and the whole range below that is system
-accounts on both macOS and Linux. On the machine this was written on the fixture's uid 202 came
-back as `_coreaudiod`; and uid 0 is unavoidable, the root directory having an owner, and is not
-`root` either — macOS opens `/etc/passwd` with a `##` comment header, and `getpwent(3)` has no
-notion of a comment, so the first line parses as an entry named `##` with an empty uid field.
+**One thing could not be asserted under `b6sim` at all, and it was not about this machine.**
+`quot` maps a uid to a name with `getpwent(3)`, which opens the literal path `/etc/passwd` — and
+that harness used to read *the build machine's* password file. There was no uid it could be
+steered around: `quot` ignores uids at or above `NUID` (300), and the whole range below that is
+system accounts on both macOS and Linux. On the machine this was written on the fixture's uid 202
+came back as `_coreaudiod`; and uid 0 is unavoidable, the root directory having an owner, and was
+not `root` either — macOS opens `/etc/passwd` with a `##` comment header, and `getpwent(3)` has no
+notion of a comment, so the first line parsed as an entry named `##` with an empty uid field.
+**`b6sim` serves the target's `/etc/passwd` now** ([../sim/etcfiles.cpp](../sim/etcfiles.cpp)), so
+the per-uid report is two ordinary cases — `../quot/test`'s `report` and `files`, where uid 0 is
+`root` and 201 and 202 take `quot`'s `#%d` fallback because they are in no password file at all.
 
 ## The oracles, and a rule for the ones that come after
 

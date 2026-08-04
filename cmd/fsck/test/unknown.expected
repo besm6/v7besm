@@ -5,7 +5,7 @@ UNKNOWN FILE TYPE I=8
 CLEAR?  yes
 
 ** Phase 2 - Check Pathnames
-UNALLOCATED  I=8  OWNER=U MODE=0
+UNALLOCATED  I=8  OWNER=root MODE=0
 SIZE=0 MTIME=Jan  1 00:00 1970 
 NAME=/small
 REMOVE?  yes

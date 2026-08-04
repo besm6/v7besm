@@ -3,14 +3,14 @@ badblk.img
 ** Phase 1 - Check Blocks and Sizes
 1999 BAD I=8
 ** Phase 2 - Check Pathnames
-DUP/BAD  I=8  OWNER=U MODE=100644
+DUP/BAD  I=8  OWNER=201 MODE=100644
 SIZE=64 MTIME=Nov 14 22:13 2023 
 FILE=/small
 REMOVE?  yes
 
 ** Phase 3 - Check Connectivity
 ** Phase 4 - Check Reference Counts
-BAD/DUP FILE I=8  OWNER=U MODE=100644
+BAD/DUP FILE I=8  OWNER=201 MODE=100644
 SIZE=64 MTIME=Nov 14 22:13 2023 
 CLEAR?  yes
 

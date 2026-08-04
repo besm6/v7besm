@@ -30,6 +30,14 @@
 // single exception is msgbuf, which carries a fixed banner so that a dmesg has one line to
 // print; see BANNER below.
 //
+// THE STATIC /etc FILES ARE NOT A SECOND EXCEPTION, and etcfiles.cpp is the argument that
+// they are not: etc/passwd and the five files beside it are checked into this tree and are
+// written onto root.img, so serving them here is b6sim reporting a value it knows rather than
+// one it invented -- the HOST's /etc/passwd, which a guest would otherwise read, is the
+// invention.  They are served through the same node table as the memory devices below, and
+// what b6sim has no counterpart for is left zero there too: a served file has a size, a mode
+// and an owner, all of them root.manifest's, and no st_dev, no st_ino and no timestamps.
+//
 #ifndef DUBNA_KERNEL_H
 #define DUBNA_KERNEL_H
 
@@ -39,6 +47,7 @@
 #include <vector>
 
 #include "besm6_arch.h"
+#include "etcfiles.h"
 
 //
 // Constants respelled from include/sys/param.h.  params.cpp static_asserts every one of
@@ -171,21 +180,26 @@ public:
     void set_comm(const std::string &name);
 
     //
-    // The memory devices.  Guest descriptors are host descriptors everywhere else in
-    // b6sim, so a synthetic node borrows a real number by opening /dev/null: `dup',
-    // `close' and descriptor inheritance then keep working with no table of their own,
-    // and only the four calls below have to know the difference.
+    // The synthetic nodes: what b6sim answers itself rather than passing to the host.  Two
+    // kinds, and one table -- the two MEMORY DEVICES, served out of the image above, and the
+    // six static /etc FILES, served out of etcfiles.cpp.  Guest descriptors are host
+    // descriptors everywhere else in b6sim, so a synthetic node borrows a real number by
+    // opening /dev/null: `dup', `close' and descriptor inheritance then keep working with no
+    // table of their own, and only six calls have to know the difference -- read, write,
+    // lseek, fstat, close and dup.
     //
-    struct DevFd {
-        int minor;       // 0 = /dev/mem, 1 = /dev/kmem
-        uint64_t offset; // byte offset, as lseek left it
+    struct Node {
+        int minor;                  // 0 = /dev/mem, 1 = /dev/kmem; -1 for a served file
+        const EtcFiles::File *file; // nullptr for a memory device
+        uint64_t offset;            // byte offset, as lseek left it
     };
-    // Returns 0 for /dev/mem, 1 for /dev/kmem, -1 for anything else.
+    // Returns 0 for /dev/mem, 1 for /dev/kmem, -1 for anything else.  A served file is
+    // EtcFiles::find()'s answer instead, and the two cannot both be set.
     static int dev_minor(const std::string &path);
-    void dev_add(int fd, int minor) { devs[fd] = { minor, 0 }; }
-    DevFd *dev_find(int fd);
-    void dev_dup(int oldfd, int newfd);
-    void dev_close(int fd) { devs.erase(fd); }
+    void node_add(int fd, int minor, const EtcFiles::File *file) { nodes[fd] = { minor, file, 0 }; }
+    Node *node_find(int fd);
+    void node_dup(int oldfd, int newfd);
+    void node_close(int fd) { nodes.erase(fd); }
 
     // The ceiling of each node, in words: /dev/kmem stops where an unmapped access does,
     // /dev/mem covers all of core (kernel/dev/mem.c).
@@ -194,7 +208,7 @@ public:
 private:
     std::vector<Word> image; // KREACH words, the kernel's low core as b6sim pretends it
     std::vector<Entry> table;
-    std::map<int, DevFd> devs;
+    std::map<int, Node> nodes;
 
     unsigned proc_addr{};   // word address of proc[0], for u_procp
     unsigned msgbuf_addr{}; // ... and of msgbuf, for msgbufp

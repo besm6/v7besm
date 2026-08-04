@@ -104,6 +104,11 @@ private:
     void sys_kctl();
     void sys_kctl_out(const char *src, unsigned avail, Word buf, int len);
 
+    // Is `path' one of the six /etc files b6sim serves itself (etcfiles.h)?  If it is,
+    // finish the call with `err' and answer true -- every syscall that would MODIFY one
+    // says so this way rather than reaching the host's copy of that name.
+    bool etc_refuse(const std::string &path, int err);
+
     // Finish a syscall: result in the accumulator, errno (0 on success) in M[14].
     void sys_ok(int64_t result);
     // ... and a second result in r12, for v7's two-value calls (pipe, wait,

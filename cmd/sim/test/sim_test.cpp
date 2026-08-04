@@ -8,6 +8,7 @@
 // then the right one (bits 24..1).
 //
 #include <fcntl.h>
+#include <gtest/gtest.h>
 #include <unistd.h>
 
 #include <cerrno>
@@ -16,8 +17,7 @@
 #include <string>
 #include <vector>
 
-#include <gtest/gtest.h>
-
+#include "etcfiles.h"
 #include "machine.h"
 #include "memory.h"
 
@@ -75,12 +75,15 @@ enum {
     SYS_close  = 6,
     SYS_wait   = 7,
     SYS_creat  = 8,
+    SYS_unlink = 10,
     SYS_time   = 13,
     SYS_break  = 17,
     SYS_stat   = 18,
     SYS_seek   = 19,
     SYS_getpid = 20,
     SYS_getuid = 24,
+    SYS_fstat  = 28,
+    SYS_access = 33,
     SYS_getgid = 47,
     SYS_pipe   = 42,
     SYS_fork   = 2,
@@ -484,6 +487,113 @@ TEST(Syscall, Stat)
 }
 
 //
+// The six static /etc files are b6sim's own, not the host's (cmd/sim/etcfiles.cpp).  These
+// three cases are the syscall half of that claim; etc_test.cpp is the other half, checking
+// that the bytes b6sim serves are still the bytes in etc/.  They matter most on macOS, where
+// there is no host /etc/group or /etc/termcap at all and where /etc/passwd opens with a `##'
+// comment header that getpwent(3) reads as an entry named `##' with uid 0.
+//
+TEST(Syscall, EtcIsServedNotHosted)
+{
+    Memory memory;
+    Machine machine{ memory };
+
+    const EtcFiles::File *pw = EtcFiles::find("/etc/passwd");
+    ASSERT_NE(pw, nullptr);
+
+    Word ppath = put_string(memory, 0x300, "/etc/passwd");
+    run_syscall(machine, SYS_open, { ppath }, 0);
+    int fd = (int)machine.cpu.get_acc();
+    ASSERT_GE(fd, 0);
+
+    // The whole file, then nothing: the read stops at the end of the text and does not run
+    // on into the /dev/null the descriptor was borrowed from.
+    Word rbuf = BIT48 | (5ull << 44) | 0x500;
+    run_syscall(machine, SYS_read, { (Word)fd, rbuf }, 4096);
+    ASSERT_EQ(machine.cpu.get_acc(), pw->size);
+    EXPECT_EQ(get_bytes(memory, 0x500, pw->size), std::string(pw->text, pw->size));
+
+    run_syscall(machine, SYS_read, { (Word)fd, rbuf }, 4096);
+    EXPECT_EQ(machine.cpu.get_acc(), 0u);
+
+    // ... and setpwent()'s rewind gets it back.  A seek past the end is legal and reads 0.
+    run_syscall(machine, SYS_seek, { (Word)fd, 0 }, 0);
+    EXPECT_EQ(machine.cpu.get_acc(), 0u);
+    run_syscall(machine, SYS_read, { (Word)fd, rbuf }, 6);
+    EXPECT_EQ(machine.cpu.get_acc(), 6u);
+    EXPECT_EQ(get_bytes(memory, 0x500, 6), std::string(pw->text, 6));
+
+    // fstat answers from the node.  Without that it would describe /dev/null: size 0 and
+    // S_IFCHR, which is what opendir(3) looks at to decide a path is not a directory.
+    const unsigned S = 0x400;
+    run_syscall(machine, SYS_fstat, { (Word)fd }, S);
+    EXPECT_EQ(machine.cpu.get_acc(), 0u);
+    EXPECT_EQ(memory.load(S + 2), 0100644u);
+    EXPECT_EQ(memory.load(S + 7), pw->size);
+
+    run_syscall(machine, SYS_close, {}, (Word)fd);
+    EXPECT_EQ(machine.cpu.get_acc(), 0u);
+}
+
+//
+// stat() by name says the same thing, and says nothing it does not know: the size, the mode
+// and the owner are root.manifest's, and st_dev, st_ino and the three times stay zero
+// because there is no filesystem here to have them.
+//
+TEST(Syscall, EtcStat)
+{
+    Memory memory;
+    Machine machine{ memory };
+
+    Word ppath       = put_string(memory, 0x300, "/etc/group");
+    const unsigned S = 0x400;
+    for (unsigned i = 0; i < 11; i++)
+        memory.store(S + i, 0777777);
+    run_syscall(machine, SYS_stat, { ppath }, S);
+
+    EXPECT_EQ(machine.cpu.get_acc(), 0u);
+    EXPECT_EQ(memory.load(S + 0), 0u);       // st_dev
+    EXPECT_EQ(memory.load(S + 1), 0u);       // st_ino
+    EXPECT_EQ(memory.load(S + 2), 0100644u); // st_mode
+    EXPECT_EQ(memory.load(S + 3), 1u);       // st_nlink
+    EXPECT_EQ(memory.load(S + 4), 0u);       // st_uid: root
+    EXPECT_EQ(memory.load(S + 5), 0u);       // st_gid
+    EXPECT_EQ(memory.load(S + 9), 0u);       // st_mtime
+    EXPECT_EQ(memory.load(S + 7), EtcFiles::find("/etc/group")->size);
+}
+
+//
+// Nothing writes one.  cmd/passwd is the program this is for: it creat()s /etc/passwd, and
+// on the host that call would name the build machine's file.
+//
+TEST(Syscall, EtcIsReadOnly)
+{
+    Memory memory;
+    Machine machine{ memory };
+
+    Word ppath = put_string(memory, 0x300, "/etc/passwd");
+
+    run_syscall(machine, SYS_creat, { ppath }, 0644);
+    EXPECT_EQ(machine.cpu.get_acc(), GUEST_MINUS_ONE);
+    EXPECT_EQ(machine.cpu.get_m(14), 30u); // EROFS
+
+    run_syscall(machine, SYS_open, { ppath }, 1); // O_WRONLY
+    EXPECT_EQ(machine.cpu.get_acc(), GUEST_MINUS_ONE);
+    EXPECT_EQ(machine.cpu.get_m(14), 30u);
+
+    run_syscall(machine, SYS_unlink, {}, ppath);
+    EXPECT_EQ(machine.cpu.get_acc(), GUEST_MINUS_ONE);
+    EXPECT_EQ(machine.cpu.get_m(14), 30u);
+
+    // Readable to everyone, writable to nobody: access(2) says both.
+    run_syscall(machine, SYS_access, { ppath }, 4);
+    EXPECT_EQ(machine.cpu.get_acc(), 0u);
+    run_syscall(machine, SYS_access, { ppath }, 2);
+    EXPECT_EQ(machine.cpu.get_acc(), GUEST_MINUS_ONE);
+    EXPECT_EQ(machine.cpu.get_m(14), 30u);
+}
+
+//
 // break() rounds the requested break up to a page boundary and rejects growth
 // into the stack.
 //
@@ -610,7 +720,7 @@ TEST(Syscall, KctlStat)
     EXPECT_EQ(machine.cpu.get_acc(), 18u);
     EXPECT_EQ(machine.cpu.get_m(14), 0u);
     EXPECT_GT(memory.load(S + 0), 0u);
-    EXPECT_LT(memory.load(S + 0), 054000u); // inside the kernel, below KEND
+    EXPECT_LT(memory.load(S + 0), 054000u);    // inside the kernel, below KEND
     EXPECT_EQ(memory.load(S + 1), 150u * 72u); // NPROC * sizeof(struct proc)
     EXPECT_EQ(memory.load(S + 2), 01u);        // KCTLF_RD
 
@@ -715,7 +825,7 @@ TEST(Syscall, KmemReadsWhatKctlDescribes)
     EXPECT_EQ(machine.cpu.get_acc(), 6u);
     EXPECT_EQ(get_bytes(memory, S, 6), "BESM-6");
 
-    run_syscall(machine, SYS_close, { }, (Word)fd);
+    run_syscall(machine, SYS_close, {}, (Word)fd);
     EXPECT_EQ(machine.cpu.get_acc(), 0u);
 }
 

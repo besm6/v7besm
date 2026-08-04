@@ -19,6 +19,13 @@
 # and does not describe.  It is also the file lib/test/termcapt reads under b6sim -- through
 # $TERMCAP, naming THIS source copy -- so that the b6sim run and the run off the image
 # adjudicate against one expectation.
+
+# THESE SIX ARE ALSO COMPILED INTO b6sim, in cmd/sim/etcfiles.cpp, so that a guest opening
+# /etc/passwd under the simulator reads the image's accounts and not the BUILD MACHINE's.
+# Editing a file here therefore means editing that one: cmd/sim/test/etc_test.cpp fails when
+# the two copies drift, and fails when a SEVENTH name joins the list below and b6sim has
+# never heard of it.  passwd, group and ttys are held there byte for byte; motd, rc and
+# termcap are abridged, and etcfiles.cpp says on what principle.
 set(B6_ETC group motd passwd rc termcap ttys)
 
 set(_staged "")

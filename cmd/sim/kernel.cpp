@@ -222,17 +222,19 @@ int SimKernel::dev_minor(const std::string &path)
     return -1;
 }
 
-SimKernel::DevFd *SimKernel::dev_find(int fd)
+SimKernel::Node *SimKernel::node_find(int fd)
 {
-    auto it = devs.find(fd);
-    return (it == devs.end()) ? nullptr : &it->second;
+    auto it = nodes.find(fd);
+    return (it == nodes.end()) ? nullptr : &it->second;
 }
 
-void SimKernel::dev_dup(int oldfd, int newfd)
+// A dup shares the offset with the descriptor it came from, as v7's does: both name one
+// open file, and this table is where that file's cursor lives.
+void SimKernel::node_dup(int oldfd, int newfd)
 {
-    auto it = devs.find(oldfd);
-    if (it != devs.end())
-        devs[newfd] = it->second;
+    auto it = nodes.find(oldfd);
+    if (it != nodes.end())
+        nodes[newfd] = it->second;
 }
 
 //

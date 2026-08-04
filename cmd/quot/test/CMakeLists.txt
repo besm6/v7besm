@@ -6,23 +6,16 @@
 # is made; this directory copies the finished image rather than building a second one, so
 # there is exactly one description of what is in it (../../df/test/fsimg.manifest).
 #
-# THE PER-UID REPORT CANNOT BE ASSERTED HERE, and finding out why is worth writing down.
-# quot maps a uid to a name through getpwent(3), which opens the literal path /etc/passwd --
-# so under b6sim it reads THE BUILD MACHINE's password file, and every name it prints is a
-# property of whoever is building.  There is no uid this can be steered around:
-#
-#   * quot ignores uids >= NUID (300) outright, so every uid it CAN report is inside the
-#     range both macOS and Linux fill with system accounts.  On the machine this was written
-#     on, the fixture's uid 202 came back as `_coreaudiod'.
-#
-#   * uid 0 is unavoidable -- the root directory has an owner -- and is not `root' either:
-#     macOS opens /etc/passwd with a `##' comment header, and getpwent(3) has no notion of a
-#     comment (v7's password files had none), so the first line parses as an entry named
-#     `##' with an empty uid field, which is 0.  It wins, du[0].name being set once.
-#
-# So the two cases that print names are gone and only `-c' remains, which looks at no name
-# at all.  kernel/test/fsinfo is where the per-uid report is asserted, against a host oracle
-# that RECOMPUTES the sums out of `b6fsutil -v -v' -- on an image whose /etc/passwd is ours.
+# THE PER-UID REPORT IS ASSERTED HERE, and for a while it could not be.  quot maps a uid to
+# a name through getpwent(3), which opens the literal path /etc/passwd -- and b6sim used to
+# hand that path to the host, so every name printed was a property of whoever was building.
+# There was no uid it could be steered around: quot ignores uids >= NUID (300), so the range
+# it CAN report is the one both macOS and Linux fill with system accounts (the fixture's 202
+# came back `_coreaudiod' on the machine this was written on), and uid 0 is unavoidable, the
+# root directory having an owner.  b6sim serves the TARGET's /etc/passwd now
+# (cmd/sim/etcfiles.cpp), so the names are the image's: 0 is `root', and 201 and 202 are in
+# that file no more than they were in anyone's, so quot's `#%d' fallback prints them.  The
+# two cases below say exactly what kernel/test/fsinfo's oracle says of the same arithmetic.
 #
 # WHAT THESE CASES STILL CANNOT SAY, and it is the same disclaimer df's carry: none of the
 # four alignment rules quot.c's header lists exists under b6sim, whose read(2) is the host's.
@@ -61,3 +54,12 @@ endif()
 # ../../df/test/fsimg.manifest by hand if this ever changes.
 b6_progtest(quot sizes DEST etc/quot) # -c: the histogram, which looks at no name at all
 b6_progtest(quot nodev DEST etc/quot) # the diagnostic, and that v7's quot still exits 0
+#
+# The report, and the two arms of it.  ../../df/test/fsimg.manifest is what to check these
+# against by hand: root owns the root directory, /d and /small -- 3 one-block objects, 9
+# reported -- 201 owns /mid and /big, one block and three, and 202 owns /other and /d/nested.
+# The rows come out descending by blocks, and `-f' adds the FILE COUNT, the one column the
+# `sizes' case never reaches.
+#
+b6_progtest(quot report DEST etc/quot) # blocks per uid, and the name that goes with it
+b6_progtest(quot files DEST etc/quot)  # -f: and how many files made that count

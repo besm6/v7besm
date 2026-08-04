@@ -255,12 +255,15 @@ own purpose. Ask what call actually needs privilege before reaching for `04755`.
   captured as **`<case>.out` in the working directory**, so no fixture may be named that.
 
   **The general question: when a program names a fixed absolute path or a global system state, ask
-  whose it is under `b6sim`.** `getpwent(3)` opens the literal `/etc/passwd` — the *build machine's*
-  — which makes `passwd` a hazard rather than a limit; `mount(2)`/`umount(2)` would graft a
-  filesystem onto the build machine. One class is exempt: `kctl(2)` and the memory devices are
-  answered by an imitation kernel ([../doc/Aout_Simulator.md](../doc/Aout_Simulator.md) §7), so
-  `ps`/`pstat` can be checked here for formatting — but not for plurality, `proc[]` holding one
-  live entry.
+  whose it is under `b6sim`.** `mount(2)`/`umount(2)` would graft a filesystem onto the build
+  machine. Two classes are exempt, both answered by b6sim itself
+  ([../doc/Aout_Simulator.md](../doc/Aout_Simulator.md) §7): `kctl(2)` and the memory devices, from
+  an imitation kernel — so `ps`/`pstat` can be checked here for formatting, but not for plurality,
+  `proc[]` holding one live entry — and the six static `/etc` files, from
+  [sim/etcfiles.cpp](sim/etcfiles.cpp). `getpwent(3)` opens the literal `/etc/passwd`, which used to
+  be the *build machine's* and made `passwd` a hazard rather than a limit; it is the target's now,
+  the same bytes the image carries, so `quot`'s per-uid report and `fsck`'s `OWNER=` are ordinary
+  assertions. `passwd(1)` is left a clean **limit**: it `creat`s that file and gets `EROFS`.
 
   **Ask which side of those limits a program falls on before designing its cases.** A program can
   land wholly outside: `mount`/`umount` and `find` have no `b6sim` half at all and so no `test/`

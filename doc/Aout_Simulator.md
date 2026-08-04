@@ -304,6 +304,7 @@ field. The six calls with a second result deliver it in `r12` — see [§3](#3-h
 | Filesystem | `link`, `unlink`, `chdir`, `chroot`, `chmod`, `chown`, `mknod`, `utime`, `umask`, `sync` |
 | Time | `time`, `ftime`, `stime`§ |
 | Kernel state | `kctl`♦ — answered from an imitation kernel, along with `/dev/kmem` and `/dev/mem` |
+| The target's `/etc` | every call above that names a path checks it first: six files are b6sim's own, readable and not writable — see [below](#the-targets-own-etc) |
 | Accepted no-ops | `ioctl`, `lock` |
 | Rejected (`EPERM`) | `mount`, `umount`, `ptrace`, `profil`, `acct`, `phys` — not meaningful for a user-level simulator |
 
@@ -366,10 +367,40 @@ tellable from its working one.
 
 **The memory devices take a real descriptor number** — borrowed by opening `/dev/null` — so
 `dup`, `close` and inheritance keep working with no descriptor table of b6sim's own; only
-`read`, `lseek` and `close` know the difference. A *write* to either is refused with `EPERM`:
-the kernel's would change core, and there is no core here to change. The offset rule is the
-kernel's, a byte offset with word `W` at `W * NBPW`; `/dev/kmem` ends at `KREACH` and
-`/dev/mem` reads as zero above it.
+`read`, `write`, `lseek`, `fstat`, `close` and `dup` know the difference. A *write* to either is
+refused with `EPERM`: the kernel's would change core, and there is no core here to change. The
+offset rule is the kernel's, a byte offset with word `W` at `W * NBPW`; `/dev/kmem` ends at
+`KREACH` and `/dev/mem` reads as zero above it.
+
+### The target's own `/etc`
+
+**Six paths are b6sim's and not the host's**, served from `cmd/sim/etcfiles.cpp` through the same
+node table: `/etc/passwd`, `/etc/group`, `/etc/ttys`, `/etc/termcap`, `/etc/motd` and `/etc/rc`.
+The reason is `getpwent(3)`: it opens the *literal* `/etc/passwd`, as v7 does and as it must —
+that path is right on the image — so under a b6sim that passed the name through, every name a
+guest printed was a property of whoever was building. On macOS there is no `/etc/group` or
+`/etc/termcap` at all, and `/etc/passwd` opens with a `##` comment header that `getpwent(3)`,
+which knows no comments, reads as an entry named `##` with uid 0.
+
+**This is not a fiction, and it is the one case where serving something is more honest than
+passing it on.** These six files are checked into the tree under `etc/`, staged into
+`build/rootfs/etc` and written onto `root.img` by `root.manifest`; a guest reading `/etc/passwd`
+under the booted kernel reads exactly what b6sim serves. Three of them — `passwd`, `group`,
+`ttys` — are byte for byte, because programs *parse* them and tests diff the result across both
+worlds; `termcap` carries its five terminal entries without the header comment; `motd` and `rc`
+are abridged, nothing under b6sim reading either. `cmd/sim/test/etc_test.cpp` checks each rule,
+and checks that every file in `etc/` is in the table — a seventh joining `B6_ETC` fails a test
+rather than quietly reaching the host.
+
+**Read-only, and to everyone.** `open` for writing, `creat`, `unlink`, `chmod`, `chown`, `utime`,
+`mknod` and `link` all answer **`EROFS`**: b6sim's `/etc` is a text compiled into the simulator,
+so no caller can write it and a guest told `EPERM` would only retry as root. `cmd/passwd` is the
+program this is for — it `creat`s `/etc/passwd`. `exec` answers **`ENOEXEC`**, not `EROFS`,
+because `/etc/rc` is a script and `ENOEXEC` is a shell's signal to read one as such; `chdir`
+answers `ENOTDIR`. `stat` and `fstat` report `root.manifest`'s truth — mode `0644`, owner root,
+the real size — and leave `st_dev`, `st_ino` and the three timestamps **zero**, there being no
+filesystem here to have them. The match is an exact string comparison, as `/dev/kmem`'s is:
+`/etc/./passwd` and a relative `passwd` after a `chdir` fall through to the host.
 
 **`EFAULT` is the one rule b6sim had to invent.** Guest memory is a flat array with no
 protection, so nothing faults on its own; `kctl` refuses a pointer in the hole between the
@@ -500,7 +531,10 @@ needs a full operating system:
   served from the imitation kernel described in [§7](#7-system-calls), because a program whose
   subject is kernel state has to be testable somewhere cheaper than a boot. Signal **handlers**
   do run, but only at a syscall return, and a signal number goes to the host as it stands.
-- No separate filesystem — it uses the host's files, users, and permissions directly.
+- No separate filesystem — it uses the host's files, users, and permissions directly, **except
+  the six static `/etc` files**, which are the target's and are served from
+  [§7](#the-targets-own-etc). A guest's `getpwuid(3)` therefore names the image's accounts and
+  not the build machine's, and nothing else it opens is intercepted.
 - **The imitation kernel is one process wide.** `proc[]` has a single live entry, the guest's
   own, so a `ps` run here lists itself and nothing else; the tables a `pstat` reads are empty
   on purpose. Neither program is *wrong* under b6sim — it is that there is nothing for them to

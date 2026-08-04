@@ -1,20 +1,49 @@
 --- passwd
+root       0   1 /
+daemon     1   1 /
+sys        2   2 /usr/sys
+bin        3   3 /bin
+uucp       4   4 /usr/lib/uucp
+guest      7   3 /usr/guest
 ok   the walk terminates
+ok   the file is the target's six accounts
 ok   every entry is found again by name
 ok   every entry is found again by uid
 ok   no entry has an empty name
 ok   a name nobody has is not found
 ok   a uid nobody has is not found
+ok   root is there
+ok   root is uid 0
+ok   root is gid 1
+ok   root's home is /
+ok   root has no shell field
+ok   root has a password
+ok   uid 7 is guest
+ok   guest is gid 3
+ok   guest's home is /usr/guest
+ok   guest has no password
+ok   uucp's shell is uucico
 ok   setpwent and endpwent are repeatable
 --- group
+other      1 root daemon
+sys        2 sys
+bin        3 bin guest
+uucp       4 uucp
 ok   the walk terminates
+ok   the file is the target's four groups
 ok   every member vector is terminated
 ok   every entry is found again by name
 ok   every entry is found again by gid
 ok   a group nobody has is not found
 ok   a gid nobody has is not found
+ok   bin is there
+ok   bin is gid 3
+ok   bin's members are bin and guest
+ok   gid 1 is other
+ok   other's members are root and daemon
 --- getpw
 ok   a uid nobody has fails
+ok   uid 0 comes back as its whole line
 --- terminals
 ok   a regular file is not a terminal
 ok   ttyname of a closed descriptor is null
@@ -28,4 +57,5 @@ crypt("besm6","aQ")     aQR1E1yZh1bPE
 ok   crypt agrees with the host's DES
 ok   only the first eight characters count
 ok   the salt is the first two characters of the answer
+ok   root's password is crypt("root", ".8")
 done
