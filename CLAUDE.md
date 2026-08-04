@@ -115,6 +115,19 @@ that struct is 190 words. Each README's "Building for the BESM-6" has the measur
 second native build of a host tool needs its own subdirectory, since `cmd/<x>` is added above
 the `B6RUNTIME_LIB` guard where `b6_prog()` does not yet exist.
 
+**Bulk I/O moves a word, not a byte, and the reason is the one fact this machine keeps
+teaching**: six chars pack big-endian into a 48-bit word, and a word on disk is six
+big-endian bytes, so the two are the same bit pattern. Where a stdio cursor sits on a word
+boundary, one load or store does what six `getc`/`putc` expansions and their fat-pointer
+helpers would. `lib/libc/stdio/{fread,fwrite}.c` and `cmd/libaout/{fgetw,fputw}.c` take that
+path (see `cmd/libaout/fastio.h` for the guard, and `lib/libc/gen/qsort.c`, which had it
+first); `fgeth`/`fputh` deliberately do **not**, a half-word leaving the cursor unaligned.
+Two consequences that bite: **a stdio buffer size must be a whole number of words** or the
+path dies after the first refill — `_ptr` advances six at a time, so its offset mod 6 is
+invariant within a buffer (`LDBUFSIZ` was 1024, now 1026) — and **every relational lowers
+to an out-of-line call** here (`b$ge`, `b$uge`, `b$lt`, …), even `x >= 0` in an `if`, so
+loop shape is worth as much as the move itself.
+
 Three traps the toolchain sources hit and nothing else has: **`b6lower` ignores designated
 initializers** and initializes positionally, silently (`cmd/as/main.c`, `cmd/ld/ld.c` say so);
 a **string literal cannot initialize a `char *` inside a struct initializer** at all; and there
@@ -199,7 +212,10 @@ copy. Sources are compiled *into* `kernel/test/` via `b6_find_src()`/`b6_test_ob
   under the booted kernel (label `kernel`), diffed against the *same* `.expected`. Disagreement
   means one harness is wrong. `b6_libtest()`'s `SIMONLY`/`IMAGEONLY` mark the exceptions.
   Adding a program = one `b6_libtest()` call + `lib/test/progs.cmake` + `root.manifest` +
-  a line in `kernel/test/libtest.sh`.
+  a line in `kernel/test/libtest.sh`. **A native test that is not a libc test wants the
+  other, cheaper shape**: `b6_prog(... SOURCES ...)` + `b6_progtest()` staged into
+  `build/rootfs/test/`, which needs none of those four and can link sources `b6_libtest()`
+  cannot (it compiles exactly one `.c`). `cmd/novi/test/` and `cmd/libaout/rootfs/` use it.
 - ctest labels: `kernel` (SIMH), `lib` (b6sim), `rootfs` (size checks), `sh`, and `weekly`
   — a *second* label on the kernel tests that boot, so `-L kernel` still names the whole
   SIMH suite and `-LE weekly` takes the slow half out of it.

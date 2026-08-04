@@ -61,17 +61,15 @@ int load_constants(void)
         error(2, "constant index table overflow");
     c = &constab[ld.nconst];
     while (count--) {
-        long h  = fgeth(ld.text);
-        long h2 = fgeth(ld.text);
-
-        c->v = CON_PACK(h, h2);
-        h    = fgeth(ld.reloc);
-        h2   = fgeth(ld.reloc);
-        c->r = CON_PACK(h, h2);
+        // A whole word from each stream: CON_PACK() of the two half-words IS what
+        // fgetw() returns, and one aligned fgetw() is one load where two fgeth()
+        // calls are six getc expansions (cmd/libaout/fastio.h).
+        c->v = fgetw(ld.text);
+        c->r = fgetw(ld.reloc);
         p    = c;
 
         // An anonymous, non-relocatable literal: look for an identical earlier word.
-        if (h == RMERGE && !h2)
+        if (CON_HI(c->r) == RMERGE && !CON_LO(c->r))
             for (p = constab; p < c; p++)
                 if (!CON_LO(p->r) && !(CON_HI(p->r) & ~(long)RMERGE) && c->v == p->v)
                     break;

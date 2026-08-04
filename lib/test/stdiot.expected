@@ -64,6 +64,22 @@ ok   setlinebuf
 ok   setlinebuf [ab
 cd
 ]
+bulk stream+0, caller+0..5: ok ok ok ok ok ok
+bulk stream+1, caller+0..5: ok ok ok ok ok ok
+bulk stream+2, caller+0..5: ok ok ok ok ok ok
+bulk stream+3, caller+0..5: ok ok ok ok ok ok
+bulk stream+4, caller+0..5: ok ok ok ok ok ok
+bulk stream+5, caller+0..5: ok ok ok ok ok ok
+ok   bulk across a refill, aligned
+ok   bulk across a refill, skewed
+ok   bulk line buffered
+ok   bulk unbuffered
+ok   fread short items 3
+ok   fread short data [0123456789]
+ok   fread past the end 0
+ok   fread exact items 2
+ok   fread zero size 0
+ok   fread zero count 0
 ok   open_memstream
 ok   empty buffer
 ok   empty length 0

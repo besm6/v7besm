@@ -416,6 +416,136 @@ static void memstream(void)
     free(b);
 }
 
+//
+// fread/fwrite in bulk.  They move a WORD at a time when the caller's buffer and
+// the stream's cursor are BOTH on a word boundary (lib/libc/stdio/fread.c), and
+// fall back to getc/putc otherwise.  What is worth proving rather than merely
+// transcribing:
+//
+//   ALL THIRTY-SIX COMBINATIONS of the two cursors' byte offsets.  The two are
+//   moved independently -- k bytes of filler ahead of the run shift the STREAM's,
+//   wbuf+j / rbuf+j shift the CALLER's -- because a word path that fired when only
+//   one of them was aligned would corrupt thirty of the thirty-six and leave the
+//   diagonal, which is what a naive test sweeps, looking healthy.
+//
+//   A RUN THAT CROSSES A REFILL.  BUFSIZ is 3072 bytes == 512 words, so a longer
+//   run empties the buffer mid-transfer and the word that straddles the boundary
+//   has to go back through getc.
+//
+//   THE MODES THAT MUST DECLINE IT.  A line-buffered or unbuffered stream is held
+//   at _cnt == 0 by design, so it can never take the word path -- and an
+//   unbuffered one gets _base = &smallbuf[fileno], which is not word-aligned at
+//   all.  The bytes must still be the same bytes.
+//
+//   THE ITEM ACCOUNTING.  The transfer is flattened to size*count bytes inside, so
+//   a short read has to divide back to COMPLETE items: ten bytes read as four
+//   three-byte items is three, not four and not ten, and the tenth byte is
+//   consumed without being counted.
+//
+#define BULKN   60   // the alignment matrix, run thirty-six times: short on purpose
+#define BULKBIG 4000 // longer than BUFSIZ, so a run crosses a refill
+
+static char wbuf[BULKBIG + 8];
+static char rbuf[BULKBIG + 8];
+static char bulkbuf[BUFSIZ];
+
+// A pattern with no period a lost or duplicated byte could hide in.
+static int bulkbyte(int i)
+{
+    return (i * 7 + 13) & 0377;
+}
+
+//
+// Push n bytes through the scratch file at stream offset k and caller offset j.
+// Answers 0 on success, -1 on a short transfer, else the 1-based index of the
+// first byte that came back wrong.
+//
+static int bulkpass(int k, int j, int n, int mode)
+{
+    FILE *f;
+    int i;
+
+    for (i = 0; i < n; i++) {
+        wbuf[j + i] = bulkbyte(i);
+        rbuf[j + i] = 0;
+    }
+
+    f = fopen(FNAME, "w");
+    if (f == NULL)
+        return -1;
+    if (mode != _IOFBF)
+        setvbuf(f, mode == _IONBF ? NULL : bulkbuf, mode, BUFSIZ);
+    for (i = 0; i < k; i++)
+        putc('#', f);
+    if (fwrite(wbuf + j, 1, n, f) != (size_t)n) {
+        fclose(f);
+        return -1;
+    }
+    if (fclose(f) != 0)
+        return -1;
+
+    f = fopen(FNAME, "r");
+    if (f == NULL)
+        return -1;
+    if (mode != _IOFBF)
+        setvbuf(f, mode == _IONBF ? NULL : bulkbuf, mode, BUFSIZ);
+    for (i = 0; i < k; i++)
+        getc(f);
+    if (fread(rbuf + j, 1, n, f) != (size_t)n) {
+        fclose(f);
+        return -1;
+    }
+    fclose(f);
+
+    for (i = 0; i < n; i++)
+        if (rbuf[j + i] != (char)bulkbyte(i))
+            return i + 1;
+    return 0;
+}
+
+static void bulkio(void)
+{
+    FILE *f;
+    int j, k;
+
+    for (k = 0; k < 6; k++) {
+        printf("bulk stream+%d, caller+0..5:", k);
+        for (j = 0; j < 6; j++) {
+            int rc = bulkpass(k, j, BULKN, _IOFBF);
+
+            printf(" %s", rc == 0 ? "ok" : "FAIL");
+            if (rc != 0)
+                errors++;
+        }
+        putchar('\n');
+    }
+
+    ok("bulk across a refill, aligned", bulkpass(0, 0, BULKBIG, _IOFBF) == 0);
+    ok("bulk across a refill, skewed", bulkpass(1, 4, BULKBIG, _IOFBF) == 0);
+    ok("bulk line buffered", bulkpass(0, 0, BULKN, _IOLBF) == 0);
+    ok("bulk unbuffered", bulkpass(0, 0, BULKN, _IONBF) == 0);
+
+    f = fopen(FNAME, "w");
+    fwrite("0123456789", 1, 10, f);
+    fclose(f);
+
+    f = fopen(FNAME, "r");
+    eq("fread short items", (long)fread(rbuf, 3, 4, f), 3);
+    rbuf[10] = '\0';
+    eqs("fread short data", rbuf, "0123456789");
+    eq("fread past the end", (long)fread(rbuf, 1, 1, f), 0);
+    fclose(f);
+
+    f = fopen(FNAME, "r");
+    eq("fread exact items", (long)fread(rbuf, 5, 2, f), 2);
+    fclose(f);
+
+    f = fopen(FNAME, "r");
+    eq("fread zero size", (long)fread(rbuf, 0, 4, f), 0);
+    eq("fread zero count", (long)fread(rbuf, 4, 0, f), 0);
+    fclose(f);
+}
+
 // remove, rename, tmpnam and tmpfile.
 static void names(void)
 {
@@ -455,6 +585,7 @@ int main(void)
     readfile();
     reopen();
     buffering();
+    bulkio();
     memstream();
     names();
 

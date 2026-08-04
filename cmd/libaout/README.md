@@ -69,6 +69,47 @@ sequential reading/writing of objects. A few work directly on a Unix file descri
 (`getint`, `putint`, `getarhdr`, `putarhdr`) so that `ar`/`ranlib` can rewrite archive
 members in place. Both flavors share the same byte-level layout described above.
 
+## The word path, and why it is not `fread`
+
+On the BESM-6 `fgetw`/`fputw` move a whole 48-bit word to or from the stdio buffer with
+a single load or store, when they may. [`fastio.h`](fastio.h) holds the guard and the
+argument; the short version is that a word on disk is six big-endian bytes, six chars
+pack big-endian into a BESM-6 word, and **they are the same bit pattern** — so a cursor
+sitting on a word boundary is already pointing at the word the object file wants. The
+fallback is the unchanged `fgeth` pair, and on the host the whole thing compiles away.
+
+Two preconditions, both tested by `WORD_IN_BUF()`: the buffer must hold (or have room
+for) six bytes, and `f->_ptr` must be at byte #0 of a word. Alignment is testable in
+plain C — casting a `char *` to a word pointer discards the byte offset and casting back
+rebuilds it as byte #0, so the round trip is the identity exactly for a pointer that was
+already there. [`lib/libc/gen/qsort.c`](../../lib/libc/gen/qsort.c) makes the same test
+for the same reason.
+
+**`fread`/`fwrite` are not the answer to this problem, and the reason is worth recording
+so the idea is not re-proposed.** Replacing `fgeth`'s three `getc` calls with one
+`fread(b, 1, 3, f)` looks like a bulk transfer and is not: those routines move a word at
+a time *now*, but even so, a caller that reads six bytes into a `char b[6]` still has to
+shift-assemble the word out of it, which is six fat-pointer loads that reading the buffer
+word directly does not pay. It was strictly worse before
+[`lib/libc/stdio/fread.c`](../../lib/libc/stdio/fread.c) gained its own word path, since
+v7's `fread` *was* a `getc` loop — the same six expansions, plus a call, plus a `b$stb`
+per byte to store what the caller then had to read back out.
+
+Only `fgetw`/`fputw` take the word path. `fgeth`/`fputh` deliberately do not: a half-word
+is three bytes, so consuming one from an aligned cursor leaves the next unaligned, and the
+loops would alternate fast and slow while paying `b$padd` for every 3-byte advance. They
+stay as they were and serve the genuinely unaligned records — symbol names, ranlib
+entries, archive header names. What keeps the bulk traffic on whole words instead is that
+the callers were re-cut to read and write a word at a time: `relocate_segment` and
+`relocate_constants` in `cmd/ld`, `load_constants` in `cmd/ld/pass1.c`, `emit_segments`
+and `write_reloc` in `cmd/as/pass2.c`, and `prwords`/`prtext` in `cmd/disasm`.
+
+One consequence worth knowing about, recorded in `cmd/ld/intern.h`: **a stdio buffer size
+must be a whole number of words** or the path dies after the first refill. The cursor
+advances six bytes at a time, so its offset within the buffer is invariant mod 6 — a
+stream that resyncs to an unaligned cursor never realigns. `LDBUFSIZ` was 1024 and is now
+1026.
+
 ## Function reference
 
 ### Primitive half-word / word I/O
@@ -195,3 +236,15 @@ GoogleTest unit tests live in [`test/`](test):
 
 They are built as the `libaout_test` target (see [`test/CMakeLists.txt`](test/CMakeLists.txt))
 and run via CTest.
+
+**They build for the HOST, where `besm6` is not defined and the whole of `fastio.h`
+compiles to nothing** — so they cover the fallback path only, and remain the authority on
+its on-disk byte layout. The word path is covered by [`rootfs/aoutt.c`](rootfs/aoutt.c),
+a native BESM-6 program run daily under `b6sim` as `cmd_aoutt_words`. It sweeps all six
+cursor alignments and all six buffer-base alignments, crosses a buffer refill (its runs
+are 700 words against a 512-word buffer), covers the line-buffered and unbuffered modes,
+`ungetc`, and the all-ones answer `fgetw` gives past EOF — and it checks every file byte
+by byte against an independently computed big-endian decomposition, not only by reading it
+back, since an encode bug and a decode bug cancel in a round trip. It is staged into
+`build/rootfs/test/` and does not reach the disk image;
+[`rootfs/CMakeLists.txt`](rootfs/CMakeLists.txt) says why it is a directory of its own.

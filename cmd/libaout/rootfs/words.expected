@@ -1,0 +1,39 @@
+ok   golden bytes, first wrong 0
+ok   golden length
+ok   golden word back 0x123456789abc
+ok   golden half back 0xfedc
+ok   stream+0 bytes on disk 0
+ok   stream+0 read back as words 0
+ok   stream+1 bytes on disk 0
+ok   stream+1 read back as words 0
+ok   stream+2 bytes on disk 0
+ok   stream+2 read back as words 0
+ok   stream+3 bytes on disk 0
+ok   stream+3 read back as words 0
+ok   stream+4 bytes on disk 0
+ok   stream+4 read back as words 0
+ok   stream+5 bytes on disk 0
+ok   stream+5 read back as words 0
+ok   buffer base+0 bytes on disk 0
+ok   buffer base+0 read back as words 0
+ok   buffer base+1 bytes on disk 0
+ok   buffer base+1 read back as words 0
+ok   buffer base+2 bytes on disk 0
+ok   buffer base+2 read back as words 0
+ok   buffer base+3 bytes on disk 0
+ok   buffer base+3 read back as words 0
+ok   buffer base+4 bytes on disk 0
+ok   buffer base+4 read back as words 0
+ok   buffer base+5 bytes on disk 0
+ok   buffer base+5 read back as words 0
+ok   line buffered on disk 0
+ok   line buffered as words 0
+ok   unbuffered on disk 0
+ok   unbuffered as words 0
+ok   ungetc before fgetw, first bad offset 0
+ok   word before the tail 0x112233445566
+ok   word before the tail 0x12263a465a69
+ok   word before the tail 0x132a41485f6c
+ok   tail half-word 0xabcd
+ok   fgetw past the end 0xffffffffffff
+0 error(s)

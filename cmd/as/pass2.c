@@ -233,13 +233,22 @@ void emit_segments(void)
         stab[i].n_value = (h + base) & HALF_MASK;
     }
     // re-read each segment that has an image from its temp file and emit it,
-    // relocating every half-word as it goes.
+    // relocating every half-word as it goes.  A WORD AT A TIME, not a half-word:
+    // align_segment() word-aligned every segment, so as.count[] is even, and an
+    // aligned stream moves a word with one load and one store where six getc and
+    // six putc expansions would otherwise run (cmd/libaout/fastio.h).
     for (as.segm = SCONST; as.segm < SBSS; as.segm++) {
         rewind(as.sfile[as.segm]);
         rewind(as.rfile[as.segm]);
-        h = as.count[as.segm];
-        while (h--)
-            fputh(relocate_halfword(fgeth(as.sfile[as.segm]), fgeth(as.rfile[as.segm])), stdout);
+        h = as.count[as.segm] / 2;
+        while (h--) {
+            uword_t sw = fgetw(as.sfile[as.segm]);
+            uword_t rw = fgetw(as.rfile[as.segm]);
+            long hi    = relocate_halfword(HIHALF(sw), HIHALF(rw));
+            long lo    = relocate_halfword(LOHALF(sw), LOHALF(rw));
+
+            fputw(PACKWORD(hi, lo), stdout);
+        }
     }
 }
 
@@ -311,11 +320,16 @@ static long rewrite_reloc(long hr)
 void write_reloc(void)
 {
     for (as.segm = SCONST; as.segm < SBSS; as.segm++) {
-        long len = as.count[as.segm];
+        long len = as.count[as.segm] / 2; // words; see emit_segments() on why it divides
 
         rewind(as.rfile[as.segm]);
-        while (len--)
-            fputh(rewrite_reloc(fgeth(as.rfile[as.segm])), stdout);
+        while (len--) {
+            uword_t rw = fgetw(as.rfile[as.segm]);
+            long hi    = rewrite_reloc(HIHALF(rw));
+            long lo    = rewrite_reloc(LOHALF(rw));
+
+            fputw(PACKWORD(hi, lo), stdout);
+        }
     }
 }
 

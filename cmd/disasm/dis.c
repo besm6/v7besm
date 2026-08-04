@@ -13,6 +13,12 @@
 
 #define W 6 // word length in bytes
 
+// The image is read a WORD at a time and split here, rather than as two fgeth()
+// calls: on an aligned stream that is one load in place of six getc expansions
+// (cmd/libaout/fastio.h).  High half first, as the format stores it.
+#define HIHALF(w) ((long)((w) >> 24))
+#define LOHALF(w) ((long)((w) & 077777777L))
+
 struct exec hdr; // header
 FILE *text, *rel;
 int rflag, Rflag, cflag, Cflag;
@@ -136,12 +142,14 @@ void prrel(long r)
 void prwords(int n)
 {
     while (n--) {
-        long hi = fgeth(text);
-        long lo = fgeth(text);
+        uword_t w = fgetw(text);
+        long hi   = HIHALF(w);
+        long lo   = LOHALF(w);
         printf("%5o:\t%08lo %08lo", addr++, hi & 077777777L, lo & 077777777L);
         if (rflag) {
-            long rhi = fgeth(rel);
-            long rlo = fgeth(rel);
+            uword_t rw = fgetw(rel);
+            long rhi   = HIHALF(rw);
+            long rlo   = LOHALF(rw);
             putchar('\t');
             prrel(rhi);
             putchar(' ');
@@ -171,12 +179,15 @@ void prcmd(long c)
 void prtext(int n)
 {
     while (n--) {
-        long hi = fgeth(text);
-        long lo = fgeth(text);
+        uword_t w = fgetw(text);
+        long hi   = HIHALF(w);
+        long lo   = LOHALF(w);
         long rhi = 0, rlo = 0;
         if (rflag) {
-            rhi = fgeth(rel);
-            rlo = fgeth(rel);
+            uword_t rw = fgetw(rel);
+
+            rhi = HIHALF(rw);
+            rlo = LOHALF(rw);
         }
         printf("%5o:", addr++);
         prcmd(hi);

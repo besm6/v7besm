@@ -313,6 +313,23 @@ at a time when it can — the alignment test being expressible in C, since casti
 `int *` discards the byte offset and casting back rebuilds it as byte #0, making the round trip
 the identity exactly for a pointer already at byte #0.
 
+**`fread` and `fwrite` move a word at a time too, and for them it matters most.** v7's were
+`getc`/`putc` loops (its `stdio/rdwr.c`), which on this machine is a fat-pointer load out of the
+stream buffer and a `b$stb` read-modify-write into the caller's, *per byte*; one `unsigned`
+assignment moves all six. The catch that `qsort` does not have is that **two** cursors must be
+aligned — the caller's buffer and the stream's — and they can be mutually misaligned, in which
+case no word move is possible at all and the byte loop is still what runs. The transfer is also
+flattened to `size * count` bytes rather than v7's loop over items, because the commonest call
+in the tree is `fread(buf, 1, n, f)`: a per-item move would be handed one byte at a time and
+could never reach a whole word. `bytes moved / size` is v7's count of complete items, and the
+divide happens only on a short transfer. `cmd/strip`'s segment copy is the biggest beneficiary
+and did not have to change to get it.
+
+Both are covered by `lib/test/stdiot.c`'s `bulkio()`, which sweeps all thirty-six combinations
+of the two cursors' byte offsets — a word path that fired when only one of them was aligned
+would corrupt thirty of them and leave the diagonal, which is what a naive test sweeps, looking
+healthy.
+
 ## stdio
 
 **`FILE` grew two members, and both were free.** `_flag` is an `int` rather than v7's `char`,

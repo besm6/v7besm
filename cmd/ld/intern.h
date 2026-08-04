@@ -61,7 +61,17 @@
 // link with "out of memory".  At the size below the same twelve cost ~2,050
 // words.  What it buys back is more read(2)/write(2) calls, which is the right
 // trade when the alternative is not running at all.
-#define LDBUFSIZ 1024
+//
+// A WHOLE NUMBER OF WORDS, and it has to be.  fgetw()/fputw() move a word with one
+// load when the stdio cursor sits on a word boundary (cmd/libaout/fastio.h), and the
+// cursor advances six bytes at a time, so its offset within the buffer is invariant
+// mod 6: a stream that resyncs to an aligned cursor after a refill stays aligned for
+// the whole buffer, and one that resyncs to an unaligned cursor NEVER TAKES THE FAST
+// PATH AGAIN.  1024 is 6*170 + 4, so every refill would have shifted the cursor by
+// four and cost the linker -- the biggest beneficiary of that path -- almost all of
+// it.  1026 is 6*171: the same 171 words per buffer, so the arithmetic above is
+// unchanged.
+#define LDBUFSIZ 1026
 
 // Round x up to the next multiple of y.
 #define ALIGN(x, y) ((x) + (y) - 1 - ((x) + (y) - 1) % (y))

@@ -158,37 +158,42 @@ void relocate_halfword(const struct local *lp, long t, long r, long *pt, long *p
 // relocation records (hr, hr2); both halves go through relocate_halfword.  When
 // -r is in effect the updated records are written to the const relocation buffer.
 //
+// Both loops below relocate a HALF-word at a time, as they must, but read and write
+// a WHOLE word: CON_PACK() of two half-words is exactly what fgetw() returns and
+// fputw() takes, and on an aligned stream that is one load and one store in place of
+// six getc and six putc expansions (cmd/libaout/fastio.h).  Each output stream still
+// receives its half-words in the same order, and so does the -t trace, since
+// relocate_halfword() is still called on the high half first.
 void relocate_constants(const struct local *lp)
 {
-    long r, t;
+    long rhi, thi, rlo, tlo;
     struct constab *p;
     const struct constab *c;
 
     p = &constab[ld.nconst];
     c = p + coptsize[ld.nfile];
     for (; p < c; p++) {
-        relocate_halfword(lp, CON_HI(p->v), CON_HI(p->r), &t, &r);
-        fputh(t, ld.coutb);
+        relocate_halfword(lp, CON_HI(p->v), CON_HI(p->r), &thi, &rhi);
+        relocate_halfword(lp, CON_LO(p->v), CON_LO(p->r), &tlo, &rlo);
+        fputw(CON_PACK(thi, tlo), ld.coutb);
         if (ld.rflag)
-            fputh(r, ld.croutb);
-        relocate_halfword(lp, CON_LO(p->v), CON_LO(p->r), &t, &r);
-        fputh(t, ld.coutb);
-        if (ld.rflag)
-            fputh(r, ld.croutb);
+            fputw(CON_PACK(rhi, rlo), ld.croutb);
     }
 }
 
 void relocate_segment(const struct local *lp, FILE *b1, FILE *b2, long len)
 {
-    long r, t;
+    long rhi, thi, rlo, tlo;
 
-    len /= W / 2;
+    len /= W; // whole words now, not half-words: every segment is word-aligned
     while (len--) {
-        t = fgeth(ld.text);
-        r = fgeth(ld.reloc);
-        relocate_halfword(lp, t, r, &t, &r);
-        fputh(t, b1);
+        uword_t tw = fgetw(ld.text);
+        uword_t rw = fgetw(ld.reloc);
+
+        relocate_halfword(lp, CON_HI(tw), CON_HI(rw), &thi, &rhi);
+        relocate_halfword(lp, CON_LO(tw), CON_LO(rw), &tlo, &rlo);
+        fputw(CON_PACK(thi, tlo), b1);
         if (ld.rflag)
-            fputh(r, b2);
+            fputw(CON_PACK(rhi, rlo), b2);
     }
 }

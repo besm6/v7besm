@@ -188,6 +188,10 @@
 #define HALF_MASK 077777777L // 24-bit half-word mask
 #define HIHALF(w) ((long)(((w) >> 24) & HALF_MASK)) // high 24 bits as a long
 #define LOHALF(w) ((long)((w) & HALF_MASK))         // low  24 bits as a long
+// ... and back, high half first, which is the order the format stores a word in
+// everywhere.  pass2 emits through this so that one fputw() replaces two fputh()
+// calls and, on an aligned stream, one store replaces six (cmd/libaout/fastio.h).
+#define PACKWORD(hi, lo) (((uword_t)(hi) << 24) | ((uword_t)(lo) & HALF_MASK))
 
 // On the second pass the symbol-name hash table is no longer needed, so the
 // same array is reused to remap symbol indices when -x/-X drops local symbols.

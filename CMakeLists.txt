@@ -231,6 +231,11 @@ if(B6RUNTIME_LIB)
     # A subdirectory of its own because cmd/cpp is added above, outside this guard, where
     # b6_prog() does not exist yet; cmd/cpp/rootfs/CMakeLists.txt says so at length.
     add_subdirectory(cmd/cpp/rootfs)
+    # aoutt -- not a program on the image but a TEST of cmd/libaout, run under b6sim
+    # from build/rootfs/test/.  It has to live here for the same reason the rest do:
+    # cmd/libaout is added above, outside this guard.  It comes first because what it
+    # covers -- the word path in fgetw()/fputw() -- is underneath every one of them.
+    add_subdirectory(cmd/libaout/rootfs)
     # /usr/bin/as and /usr/bin/ld -- the same story one task later (C9b).  Each is
     # a subdirectory for the same reason cmd/cpp/rootfs is, and each says so.
     add_subdirectory(cmd/as/rootfs)
