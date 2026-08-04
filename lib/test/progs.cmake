@@ -31,7 +31,13 @@
 #   ttyt    runs on the image ONLY, and is the half pwent had to give up when kernel task 29b
 #           put /etc/ttys on the image: ttyname(0), ttyslot() and getlogin() answered the same
 #           in both worlds only while that file was missing.
-# So `spawn' is absent below and the other five are present: 29 names here, 25 b6sim cases
+#   dirt    runs on the image ONLY, and is the directory family's -- opendir(3) and its six
+#           companions.  ITS b6sim FAILURE IS THE QUIET ONE OF THE SIX: the host's open() and
+#           fstat() both SUCCEED on a directory and only read(2) refuses, so under the
+#           simulator opendir() returns a perfectly good DIR and the first readdir() returns
+#           NULL -- every directory in the world looks empty, and looks it in exactly the way
+#           an empty one does.  Nothing in an expectation can tell those apart.
+# So `spawn' is absent below and the other six are present: 30 names here, 25 b6sim cases
 # next door.
 #
 # NOR IS EVERY NAME HERE A libc TEST any more.  termcapt is lib/libtermcap's and cursest and
@@ -44,5 +50,5 @@
 # failure early in the list is a failure in something everything after it depends on.
 set(B6_LIBTEST_IMAGE
     hello vararg errno procs sbrkt malloct strings gen strtolt environ jmp headers
-    stdiot printft scanft execs shellt memt kctlt suidt timet pwent ttyt signals matht termcapt
-    cursest curstty puret)
+    stdiot printft scanft execs shellt memt kctlt suidt timet pwent ttyt dirt signals matht
+    termcapt cursest curstty puret)

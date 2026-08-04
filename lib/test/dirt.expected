@@ -1,0 +1,34 @@
+--- opendir
+ok   the root directory opens
+--- the root's first two entries
+ok   the first entry is .
+ok   and it is the root inode
+ok   the second entry is ..
+ok   and the root's parent is itself
+--- dirfd
+ok   dirfd names an open descriptor
+ok   and it is a directory
+ok   and it is the one that was opened
+--- opendir refuses what is not a directory
+ok   a plain file is refused
+ok   and the reason is ENOTDIR
+ok   a path that does not exist is refused
+--- names of every length
+ok   the scratch directory opens
+6 entries: . .. a bcdefghijklmnopq cdefghijklmnopqrs ABCDEFGHIJKLMNOPQR
+ok   no entry has a zero i-number
+ok   six entries: . .. and the four made here
+--- a name that fills the field
+ok   the DIRSIZ-character name came back whole
+--- a hole in the middle
+5 entries: . .. a cdefghijklmnopqrs ABCDEFGHIJKLMNOPQR
+ok   the emptied slot was skipped
+ok   one fewer entry
+--- telldir and seekdir
+ok   seeking back to a marked entry finds it again
+--- rewinddir
+ok   two walks agree
+--- and it is empty again
+2 entries: . ..
+ok   only . and ..
+done

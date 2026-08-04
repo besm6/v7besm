@@ -151,6 +151,28 @@ the shape of `struct _win_st`, in every window flag bit, and in whether the tty-
 through `stty()` or `ioctl()`. Nothing had ever compiled against the old one, so nothing broke;
 the account is in [`../lib/libcurses/README.md`](../lib/libcurses/README.md).
 
+**`dirent.h` is the other header this repo added and v7 had none of**, and the one thing to know
+before touching it is why it is not part of `<sys/dir.h>`. `<sys/dir.h>`'s `struct direct` is the
+format **on the disk** — exactly four words, `_Static_assert`ed against `BSIZE` and `DIRPB`, with
+`d_name` being `DIRSIZ` characters and **no room for a terminator** when a name fills the field.
+`<dirent.h>`'s `struct dirent` is what a *program* wants: `d_name[DIRSIZ + 1]`, NUL-terminated by
+`readdir()`. The two coexist in one translation unit by design — `lib/libc/gen/readdir.c` includes
+both — so neither may be defined in terms of the other.
+
+It is deliberately **not** under `sys/`. Thirty-odd kernel sources include `<sys/dir.h>` (and
+`<sys/user.h>` pulls it in for `u_dent`), the kernel's header dependency is the whole of
+`include/sys/` at once, and nothing kernel-side wants a user-space library declaration. And it
+defines **no macro at all** — not `DIRSIZ`, which has one home in `<sys/param.h>` and is read from
+there; `b6cpp` rejects a redefinition whose replacement text is not character-identical, and the
+one way to be certain of that is to have nothing to redefine.
+
+Adding it is what turned up the tree's **last order-dependent header pair**, which was already
+there and had simply never been named: `<sys/param.h>` defines `HZ` as the clock rate and
+4.xBSD's `<curses.h>` declared `extern bool HZ`, the Hazeltine capability. Any source naming both
+failed, in either order — `<sys/dir.h>` had the same effect and nobody had put it before
+`<curses.h>`. Nothing in `lib/libcurses` ever *read* the flag, so it is that library's private
+`_HZ` now, on the `_PC` precedent already in `cr_tty.c`; `<curses.h>` says so where the name was.
+
 **`term.h` is a header this repo added and v7 had none of.** termlib shipped as three `.c` files
 and nothing else, so every caller wrote its own `char *tgetstr();` beside the call — which is what
 the v7 `curses.h` did before it was replaced. It is here because

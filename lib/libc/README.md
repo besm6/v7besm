@@ -32,9 +32,9 @@ libc/
     CMakeLists.txt  builds libc.a and crt0.o, including the mkstub codegen
     csu/            crt0                                    (1 file)
     sys/            syscall stubs, cerror, sbrk, the exec wrappers  (18)
-    gen/            strings, ctype, setjmp, malloc, conversions, <time.h>, misc  (64)
+    gen/            strings, ctype, setjmp, malloc, conversions, <time.h>, directory(3), misc  (71)
     stdio/          FILE machinery, the printf and scanf engines, the accounts  (66)
-    man/            the v7 manual pages, sections 2 and 3     (86)
+    man/            the v7 manual pages, sections 2 and 3, and two that are not  (87)
 ```
 
 **The objects all land flat in one binary directory**, which is not merely a build detail: it is
@@ -330,6 +330,46 @@ of the two cursors' byte offsets — a word path that fired when only one of the
 would corrupt thirty of them and leave the diagonal, which is what a naive test sweeps, looking
 healthy.
 
+## `directory(3)` — the one family v7 had no form of
+
+`opendir`, `readdir`, `closedir`, `rewinddir`, `telldir`, `seekdir` and `dirfd`, seven objects in
+[`gen/`](gen/) over the private [`gen/dirdesc.h`](gen/dirdesc.h). **v7 had none of this.** Every
+caller opened the directory as a file and read raw `struct direct` records out of it, and the
+eleven programs in `cmd/` that walk a directory each grew their own reader and their own copy of
+the same four mistakes: the free slot `unlink(2)` leaves behind, the name that is not
+NUL-terminated when it fills the field, the `strlen` that then runs into the next entry's `d_ino`,
+and `DIRENTSZ` re-derived. `cmd/ls` was going to be the twelfth and is the first caller instead;
+converting the other eight is [`../../cmd/TODO.md`](../../cmd/TODO.md) task C24.
+
+About **230 words** for a caller that only walks (`opendir` 89, `readdir` 121, `closedir` 15,
+`dirfd` 5), 298 for all seven — which is why they are seven objects and not one `directory.c`: a
+program that never seeks should not link `seekdir`.
+
+Three decisions in it are about **this machine** rather than about directories:
+
+- **The cursor is an entry index into a `struct direct *`, not a byte offset into a `char *`.**
+  4.2BSD keeps `char *dd_buf` with a byte offset and forms `(struct direct *)(dd_buf + dd_loc)`. A
+  `char *` is a fat pointer here and that cast **floors** to the containing word — right only
+  because `DIRENTSZ` happens to be a multiple of `NBPW`. Indexing an array of `struct direct` does
+  the same arithmetic with no cast and no dependence on the coincidence; `malloc` returns byte #0
+  of a word, so the array is aligned by construction. `dirdesc.h` asserts the multiple anyway, so
+  that retuning `DIRSIZ` is a diagnostic and not silent garbage.
+- **`telldir` is the plain byte offset**, and there is no machinery behind it. 4.2BSD returns an
+  index into a `malloc`'d list of seek points that `closedir` must free, because a BSD entry is
+  variable-length and an offset alone cannot name one. Every entry here is exactly `DIRENTSZ`
+  bytes, so the offset *is* the entry — and `seekdir` rounds down to one, which turns a caller's
+  arithmetic slip from a straddled read of garbage into defined behaviour.
+- **The read buffer is sized from the directory** — as many entries as it holds when opened,
+  capped at `DIRPB`, which is exactly one filesystem block so that no entry straddles a refill. A
+  fixed one-block buffer would be 512 words for a `/dev` of twenty-five entries, and `_NFILE` is
+  20: seventeen open directories would be 8,704 words of a 28,672-word address space.
+
+Two behaviours are the **contract**, not conveniences. `readdir()` **skips `d_ino == 0`**, because
+`unlink(2)` empties an entry in place and the hole sits in the middle of a live directory; and it
+**terminates the name**, which is the whole reason the library exists. And `opendir()` **refuses a
+non-directory** where neither v7 nor 4.2BSD had to: `read(2)` on a regular file succeeds here, so
+without that test `readdir()` would hand back file contents reinterpreted as entries, silently.
+
 ## stdio
 
 **`FILE` grew two members, and both were free.** `_flag` is an `int` rather than v7's `char`,
@@ -552,7 +592,7 @@ keeps the spelling, and its comment now says that is a preference rather than a 
 
 ## Testing
 
-Twenty-seven programs in [`../test/`](../test/) — twenty-one of them libc's, the rest belonging
+Twenty-eight programs in [`../test/`](../test/) — twenty-two of them libc's, the rest belonging
 to libm, libtermcap, libcurses and the kernel's memory driver — and **most of them run twice**:
 under `b6sim`
 (ctest label `lib`) and off the disk image under the booted kernel (label `kernel`) — from **one
@@ -583,6 +623,7 @@ arrangement found two bugs, both in code nothing else had exercised.
 | `shellt` | the same pair where it can (image only) |
 | `timet` | the whole of `<time.h>`, plus `tell` |
 | `pwent` | the accounts, the terminal three and `crypt` |
+| `dirt` | `directory(3)` — the free slots skipped, a full-width name terminated, `telldir`/`seekdir`, `rewinddir`, `dirfd`, and `opendir`'s refusal of a plain file (image only) |
 | `signals` | the signal frame, `SIG_IGN`, a handler raising a second signal, `alarm`/`pause` and the `EINTR` they answer with *after* the handler has run, and `sleep` |
 
 **An `.expected` file may record only what the *program* does**; nothing host-dependent may reach
@@ -603,9 +644,20 @@ test but is more than it had: `/bin/login` (kernel task 29b) reads its password 
 `kernel/test/login` types a wrong one and then a right one, so both answers are exercised on a
 real terminal even though no `.expected` adjudicates the routine itself.
 
-**And one family works under the kernel and not under `b6sim`:** `ttyname` reads a directory with
-an ordinary `read()`, as v7 did and as this kernel allows, while `b6sim`'s `read` is the host's
-and refuses a directory. `ttyslot` and `getlogin` stand on it and are the same story. The failure
+**And the directory routines work under the kernel and not under `b6sim`** — `b6sim`'s `read` is
+the host's and refuses a directory descriptor.
+
+**The way that fails is worse than an error, and is the reason `dirt` is image-only.** On the host
+`open(2)` and `fstat(2)` on a directory both *succeed*; only `read(2)` refuses. So under the
+simulator `opendir()` returns a perfectly good `DIR` and the first `readdir()` returns `NULL`, and
+every directory in the world reads as **empty** — in exactly the way an empty one does. No
+expectation file can tell those apart, and a `b6sim` case would pass while proving nothing. Say it
+out loud wherever it comes up: it also means a `b6sim` run of *any* program that walks a tree
+(`ls`, `du`, `find`, `tar c`) proves nothing about the walk.
+
+`ttyname` is the older half of the same story, and it does its own `read()` rather than using the
+library — deliberately, since `/bin/login` and `/etc/getty` should not carry `opendir` for one
+scan of `/dev`; the file says so. `ttyslot` and `getlogin` stand on it. The failure
 paths are what the `b6sim` side covers, and until kernel task 29b that was all any side covered:
 `ttyslot` answered 0 everywhere for want of an `/etc/ttys` to count. That file is on the image
 now, so the two harnesses disagree — which is why the positive answers moved out of
@@ -634,9 +686,12 @@ describe routines this library does not have — `nlist.3` permanently, since `k
 this system has instead (see *What is absent, and why*). Four of section 2 are gone for the same
 reason — `indir`, `mpx`, `mpxcall` and `pkon` are not syscalls here.
 
-**One page is not v7's at all.** `kctl.2` documents this port's own system call and the
-`kgetsym(3)` shorthand over it, and it is the only page in this directory with no upstream
-original to have been edited from.
+**Two pages are not v7's at all.** `kctl.2` documents this port's own system call and the
+`kgetsym(3)` shorthand over it. `directory.3` documents `opendir`, `readdir`, `closedir`,
+`rewinddir`, `telldir`, `seekdir` and `dirfd` — **4.2BSD's library, which v7 had no form of at
+all**: every v7 caller opened the directory as a file and read raw `struct direct` records out of
+it. Neither page had an upstream original to be edited from, and both carry a `.\"` line at the
+top saying so.
 
 **Nothing installs them** — no `CMakeLists.txt` in this tree has a man rule yet, which is also true
 of libtermcap's and libcurses' — so they are read with `nroff -man man/malloc.3`.

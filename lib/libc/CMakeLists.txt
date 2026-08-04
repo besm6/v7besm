@@ -73,6 +73,7 @@ set(LIBC_OBJ
     malloc calloc aligned_alloc cuexit atexit
     atof ecvt modf frexp ldexp
     execvp execlp ttyname ttyslot getlogin tell crypt kgetsym
+    opendir readdir closedir rewinddir telldir seekdir dirfd
     ctime clock difftime mktime strftime timezone
     # STDIO
     data findiop endopen fopen fdopen freopen filbuf flsbuf

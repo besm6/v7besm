@@ -126,6 +126,13 @@ echo ok pwent >/dev/console
 ./ttyt >/tmp/ttyt.out 2>&1
 echo ok ttyt >/dev/console
 
+# Directories, and it is here ONLY for the same reason ttyname() is: b6sim's read(2) is the
+# host's and refuses a directory descriptor.  What makes this one worth saying twice is that
+# the failure there does not look like a failure -- the host's open() and fstat() both
+# SUCCEED, so opendir() hands back a good DIR and every directory reads as empty.
+./dirt >/tmp/dirt.out 2>&1
+echo ok dirt >/dev/console
+
 ./signals >/tmp/signals.out 2>&1
 echo ok signals >/dev/console
 

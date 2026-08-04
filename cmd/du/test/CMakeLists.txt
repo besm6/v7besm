@@ -1,10 +1,16 @@
 # du's b6sim cases, and there are none.
 #
-# EVERYTHING du DOES IS A DIRECTORY READ.  It has no library for that -- there is no
-# opendir(3) in v7 or in this libc -- so it open(2)s a directory and read(2)s struct direct
-# records straight out of it, and b6sim maps read(2) onto the host, where a directory
-# descriptor refuses to be read at all.  That is ../../ls/README.md's limitation exactly,
-# and it is why ls(1) has no cases here either.
+# EVERYTHING du DOES IS A DIRECTORY READ, and b6sim cannot serve one: it maps read(2) onto
+# the host, where a directory descriptor refuses to be read at all.  du still does that read
+# by hand -- open(2) and read(2) of struct direct records -- because it predates the library.
+#
+# THERE IS AN opendir(3) NOW (lib/libc/man/directory.3), which arrived with cmd/ls, and
+# converting du to it is ../../TODO.md task C24.  IT WOULD NOT MAKE A CASE POSSIBLE HERE, and
+# the reason is worth knowing before anybody tries: on the host, open(2) and fstat(2) on a
+# directory both SUCCEED and only read(2) refuses, so under b6sim opendir() hands back a
+# perfectly good DIR and the first readdir() returns NULL.  Every directory reads as empty,
+# in exactly the way an empty one does, and a case would pass while proving nothing.  That is
+# ../../ls/README.md's limitation still, and it is why ls(1) has no cases here either.
 #
 # So there is nothing left for this harness to hold: strip the directory walk from du and
 # what remains is two flag tests and a stat(2).  A case asserting those would say the

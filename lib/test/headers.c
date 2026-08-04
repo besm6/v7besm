@@ -34,6 +34,7 @@
 // clang-format off
 #include <assert.h>
 #include <ctype.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <fenv.h>
@@ -86,6 +87,7 @@
 // Again, all of it.  See above.
 #include <assert.h>
 #include <ctype.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <fenv.h>

@@ -69,7 +69,15 @@
 typedef struct sgttyb SGTTY;
 
 // Capabilities read out of /etc/termcap by setterm(), in lib/libcurses/cr_tty.c.
-extern bool AM, BS, CA, DA, DB, EO, HC, HZ, IN, MI, MS, NC, NS, OS, UL, XB, XN, XT, XS, XX;
+//
+// `hz' IS NOT AMONG THEM, and its absence is not an oversight.  4.xBSD curses exported the
+// Hazeltine boolean as HZ -- and <sys/param.h> has defined HZ as the clock rate since v7, so
+// a translation unit naming both headers failed, in whichever order it named them.  Nothing
+// in this library ever READ the flag; setterm() only stored it.  So it is private now,
+// lib/libcurses/cr_tty.c's static _HZ, which is what that file already does with the `pc'
+// capability and _PC.  The capability is still consumed and its table slot still occupied --
+// what changed is only that the name is no longer exported.
+extern bool AM, BS, CA, DA, DB, EO, HC, IN, MI, MS, NC, NS, OS, UL, XB, XN, XT, XS, XX;
 extern char *AL, *BC, *BT, *CD, *CE, *CL, *CM, *CR, *CS, *DC, *DL, *DM, *DO, *ED, *EI, *K0,
     *K1, *K2, *K3, *K4, *K5, *K6, *K7, *K8, *K9, *HO, *IC, *IM, *IP, *KD, *KE, *KH, *KL, *KR,
     *KS, *KU, *LL, *MA, *ND, *NL, *RC, *SC, *SE, *SF, *SO, *SR, *TA, *TE, *TI, *UC, *UE, *UP,

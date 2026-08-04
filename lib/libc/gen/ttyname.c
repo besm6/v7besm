@@ -5,10 +5,16 @@
 //
 // v7's method, which is a linear search of /dev: there is no way back from a device
 // number to a name, so the directory is read and every entry with the right i-number is
-// stat'ed to make sure it really is the same file.  READING A DIRECTORY IS AN ORDINARY
-// read() HERE, as it was in v7 -- there is no getdents and no <dirent.h> -- so this
-// works on the kernel and NOT under b6sim, whose read() is the host's and refuses a
-// directory.  Under the simulator it simply answers NULL.
+// stat'ed to make sure it really is the same file.  IT IS AN ORDINARY read() HERE, as it
+// was in v7, so this works on the kernel and NOT under b6sim, whose read() is the host's
+// and refuses a directory.  Under the simulator it simply answers NULL.
+//
+// THERE IS AN opendir(3) NOW -- see directory(3) -- AND THIS DELIBERATELY DOES NOT USE IT.
+// The library costs about 230 words of text plus a heap allocation per open directory, and
+// /bin/login and /etc/getty would pay both for a routine that scans /dev once and is never
+// called again.  The four lines below cost nothing and are already correct.  cmd/README.md
+// SS6's rule applies to a library exactly as it does to a program: ask what is still going to
+// be needed after the convenience is bought.
 //
 // Two fixes to v7, both about the name field.  struct direct is DIRSIZ chars with no
 // room for a terminator when the name fills it (include/sys/dir.h), so the copy is

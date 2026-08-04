@@ -244,7 +244,10 @@ own purpose. Ask what call actually needs privilege before reaching for `04755`.
   against `b6fsutil -c` after `b6fsutil -D` damage. **A test that repairs must assert that there was
   something to repair.**
 
-  What it cannot do: read a **directory** (so `ls`, `du`, `find` have no case); exec `/bin/…`; set
+  What it cannot do: read a **directory** (so `ls`, `du`, `find` have no case — and note that
+  `opendir(3)` does **not** rescue this: on the host `open(2)` and `fstat(2)` on a directory both
+  *succeed* and only `read(2)` refuses, so a `b6sim` walk returns no entries rather than an error,
+  and a case would pass while proving nothing); exec `/bin/…`; set
   global state (`stime(2)` is a no-op reporting success); name a pid (`kill(2)` is the host's). Its
   `argv[0]` is the staged absolute path, so a program that dispatches on or prints its own name
   belongs under the kernel. Its `.args` line is split on whitespace with no quoting (globbing is off

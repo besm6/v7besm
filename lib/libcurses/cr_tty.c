@@ -27,8 +27,14 @@
 #include <string.h>
 #include <term.h>
 
-static bool *sflags[] = { &AM, &BS, &DA, &DB, &EO, &HC, &HZ, &IN, &MI, &MS,
-                          &NC, &NS, &OS, &UL, &XB, &XN, &XT, &XS, &XX };
+// The `hz' capability lands in _HZ, exactly as `pc' lands in _PC below and for the same
+// kind of reason: 4.xBSD exported it as HZ, <sys/param.h> has defined HZ as the clock rate
+// since v7, and nothing here ever reads the flag.  Its slot stays -- the two tables run in
+// lockstep with the name string -- and only the name is private.
+static bool _HZ;
+
+static bool *sflags[] = { &AM, &BS, &DA, &DB, &EO, &HC, &_HZ, &IN, &MI, &MS,
+                          &NC, &NS, &OS, &UL, &XB, &XN, &XT,  &XS, &XX };
 
 static char *_PC,
     // The `pc' capability lands in _PC, whose slot in this table matches "pc" in the name

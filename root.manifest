@@ -94,6 +94,13 @@ dir /etc
 dir /usr
 dir /usr/test
 
+# /usr/test/dirt's workspace, and the only directory on this image that is meant to stay
+# empty.  That is what lets dirt assert a COMPLETE listing -- `. .. and exactly what I just
+# made' -- rather than hunt for its own names among somebody else's, and an empty directory
+# is the only place the free-slot and full-width-name cases can be arranged on purpose.
+# It removes everything it creates, so this is empty again after a run.
+dir /usr/test/scratch
+
 # THE TOOLCHAIN.  It began as one program -- /usr/bin/cpp, the C preprocessor, the first
 # thing on this disk built from THE SAME SOURCES AS A HOST TOOL (task C9a in cmd/TODO.md)
 # -- and tasks C9b through C9e finished it: eleven programs now, from the preprocessor to
@@ -1018,6 +1025,10 @@ file /usr/include/curses.h
 source ../../rootfs/usr/include/curses.h
 mode 0644
 
+file /usr/include/dirent.h
+source ../../rootfs/usr/include/dirent.h
+mode 0644
+
 file /usr/include/errno.h
 source ../../rootfs/usr/include/errno.h
 mode 0644
@@ -1397,6 +1408,16 @@ mode 0755
 # real here.  Task 29b.
 file /usr/test/ttyt
 source ../../rootfs/usr/test/ttyt
+mode 0755
+
+# dirt is opendir(3)'s, and is image-only for a reason worth knowing before trusting a
+# b6sim run of anything that walks a tree: on the host a directory OPENS and fstat()s
+# fine and only read(2) refuses it, so under the simulator every directory reads as
+# empty rather than as an error.  /usr/test/scratch below is its workspace -- empty on
+# the image and empty again when it has finished, which is what lets it assert a
+# COMPLETE listing rather than a search for its own names among somebody else's.
+file /usr/test/dirt
+source ../../rootfs/usr/test/dirt
 mode 0755
 
 file /usr/test/signals

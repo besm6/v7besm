@@ -36,7 +36,8 @@ WINDOW *stdscr = NULL, *curscr = NULL;
 
 SGTTY _tty; // tty modes
 
-bool AM, BS, CA, DA, DB, EO, HC, HZ, IN, MI, MS, NC, NS, OS, UL, XB, XN, XT, XS, XX;
+// `hz' is missing on purpose and lives in cr_tty.c as a static _HZ; see <curses.h>.
+bool AM, BS, CA, DA, DB, EO, HC, IN, MI, MS, NC, NS, OS, UL, XB, XN, XT, XS, XX;
 char *AL, *BC, *BT, *CD, *CE, *CL, *CM, *CR, *CS, *DC, *DL, *DM, *DO, *ED, *EI, *K0, *K1,
     *K2, *K3, *K4, *K5, *K6, *K7, *K8, *K9, *HO, *IC, *IM, *IP, *KD, *KE, *KH, *KL, *KR, *KS,
     *KU, *LL, *MA, *ND, *NL, *RC, *SC, *SE, *SF, *SO, *SR, *TA, *TE, *TI, *UC, *UE, *UP, *US,
