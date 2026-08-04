@@ -280,7 +280,8 @@ void flushtty(register struct tty *tp)
         ;
     while (getc(&tp->t_rawq) >= 0)
         ;
-    tp->t_delct = 0;
+    tp->t_delct  = 0;
+    tp->t_echoct = 0; // the queue is gone, so nothing on the screen is ours to erase
     splx(s);
 }
 
@@ -314,6 +315,11 @@ loop:
             }
             if (bp[-1] != '\\') {
                 if (c == tp->t_erase) {
+                    // THE EDIT IS HERE, THE DISPLAY HALF IS IN ttyinput(): it rubbed this
+                    // character off the screen with "\b \b" when it was typed, and the two
+                    // halves agree through t_echoct.  Change the back-up rule below and the
+                    // counting rule there has to change with it.
+                    //
                     // One character, not one byte: back over a UTF-8 sequence's
                     // continuation bytes first.  On ASCII the loop runs zero times.
                     while (bp > &canonb[2] && (bp[-1] & 0300) == 0200)
@@ -384,6 +390,7 @@ void ttyrend(register struct tty *tp, register char *pb, register char *pe)
 void ttyinput(register int c, register struct tty *tp)
 {
     register int t_flags;
+    register int col; // t_col before the echo: what advanced it is what may be rubbed out
 
     tk_nin += 1;
     c &= 0377;
@@ -442,9 +449,58 @@ void ttyinput(register int c, register struct tty *tp)
         wakeup((chan_t)&tp->t_rawq);
     }
     if (t_flags & ECHO) {
-        ttyoutput(c, tp);
-        if (c == tp->t_kill && (t_flags & (RAW | CBREAK)) == 0)
-            ttyoutput('\n', tp);
+        if (c == tp->t_erase && (t_flags & (RAW | CBREAK)) == 0) {
+            // RUB THE CHARACTER OUT.  v7 echoed the erase byte like anything else and let the
+            // terminal keep the record -- `#' overstruck the text and the paper held it.  A
+            // screen prints DEL as nothing at all, so from the first erase the line the eye
+            // reads and the line canon() will hand the program drift apart.  "\b \b" is this
+            // terminal's version of that record: back up, blank the column, back up again --
+            // partab[] classes 2, 0, 2, so net -1 on t_col.
+            //
+            // THE EDIT ITSELF IS STILL canon()'s.  The erase byte went on the raw queue above
+            // like any other and nothing acts on it until the line is read; this is the
+            // display half only, and t_echoct is what the two halves agree on.
+            //
+            // COOKED MODE ONLY: canon() does no erase processing under RAW or CBREAK, so
+            // there the byte is data and is echoed as data.  getty reads RAW with ECHO off
+            // and rubs out for itself (cmd/getty), and is untouched by any of this.
+            if (tp->t_echoct) {
+                ttyoutput('\b', tp);
+                ttyoutput(' ', tp);
+                ttyoutput('\b', tp);
+                tp->t_echoct--;
+            }
+        } else {
+            col = tp->t_col;
+            ttyoutput(c, tp);
+            if (c == tp->t_kill && (t_flags & (RAW | CBREAK)) == 0)
+                ttyoutput('\n', tp);
+
+            // WHAT THERE IS TO ERASE, IN COLUMNS THIS LAYER PRINTED.  Nothing here knows
+            // partab[]: the column advanced or it did not, which is ttyoutput()'s own answer
+            // to the same question.  So a control character counts 0 and its erase rubs out
+            // nothing -- the screen was never marked, though canon() still drops the byte --
+            // and a UTF-8 continuation byte counts 0 while its lead byte counts 1, canon()
+            // backing over the whole sequence for that one rubout.  What the PROGRAM printed
+            // is never counted, ttwrite() not coming through here, and that is what keeps an
+            // erase at the head of a line off the shell's prompt.
+            //
+            // A TAB IS THE ONE THIS CANNOT GET RIGHT: under XTABS it echoes as up to eight
+            // spaces and counts one, so one erase rubs out one column and leaves the rest
+            // standing while canon() removes the tab whole.  Likewise `\' before the erase
+            // character, which canon() drops in favour of a literal DEL while the rubout
+            // takes the backslash off the screen: its test is on the last byte still in the
+            // canonical buffer, not on the last byte typed (type `\', `a', erase and the
+            // backslash is back), so tracking it would mean running the editor twice.  Both
+            // are display divergences only -- canon() is untouched and a program reads
+            // exactly what it read before.
+            //
+            // Saturated because this is a byte and a cooked line runs to TTYHOG.
+            if (c == '\n' || c == tun.t_eofc || c == tun.t_brkc || c == tp->t_kill)
+                tp->t_echoct = 0;
+            else if (tp->t_col > col && tp->t_echoct < 0377)
+                tp->t_echoct++;
+        }
         ttstart(tp);
     }
 }

@@ -67,6 +67,11 @@ struct tty {
     char t_char;                   // character temporary
     char t_ispeed;                 // input speed
     char t_ospeed;                 // output speed
+    char t_echoct;                 // columns this layer echoed on the current input line, and
+                                   // so how many the erase character may rub out (dev/tty.c).
+                                   // Ninth of the twelve char slots the two packed words hold,
+                                   // so sizeof(struct tty) stays 29 words -- the stride
+                                   // cmd/pstat walks sc[] with.
     union {
         struct tchars t_tc; // v7 spelled this `struct tc', a second copy of tchars
         struct clist t_ctlq;

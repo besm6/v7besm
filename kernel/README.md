@@ -679,6 +679,21 @@ Facts that cost real time to establish and are not in `doc/`.
   synthesise no parity and truncate nothing (plain `raw` keeps the authentic 7-bits-plus-parity
   contract and will not do), and against an older one the symptom is garbage on
   input from the first character typed.
+* **The erase character rubs out, because the terminal is a screen and not paper.** v7 echoed the
+  erase byte like any other and let the terminal keep the record — `#` overstruck the text and the
+  page held both. `CERASE` is `^?` here (`sys/tty.h`) and a screen prints DEL as nothing at all, so
+  `ttyinput()` echoes `"\b \b"` instead: back up, blank the column, back up again, `partab[]`
+  classes 2, 0, 2 and net −1 on `t_col`. **The edit is still `canon()`'s** — the erase byte goes on
+  the raw queue like any other and nothing acts on it until the line is read — and `t_echoct` is
+  what the two halves agree on: the columns *this layer* echoed on the current line, so an erase at
+  the head of a line cannot rub out the shell's prompt (`ttwrite()` does not come through the echo
+  path, and its columns are therefore never counted). Only in cooked mode, since `canon()` does no
+  erase processing under `RAW` or `CBREAK`; `getty` reads `RAW` with `ECHO` off and rubs out for
+  itself. Two cases the count cannot get right, both **display only** — a tab, which echoes as up to
+  eight spaces under `XTABS` and counts one, and `\` before the erase character, which `canon()`
+  drops in favour of a literal DEL while the rubout takes the backslash off the screen. Getting
+  either right means shadowing `canon()`'s buffer at interrupt level, i.e. running the editor twice;
+  what a program reads is unchanged in both.
 * **The tail of an image grown by `expand()` reads back as zeros.** v7 promised nothing there and
   nothing reads it, but this machine cannot leave those blocks unwritten at all, so `xswap()` writes
   zeros — a contract stronger than v7's, asserted by `test/uswap` leg 0.
