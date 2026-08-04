@@ -41,9 +41,10 @@
 #
 #   5.  THE LIVE ROOT.  fsck read the filesystem it was running on and found nothing to do:
 #       no `?' prompt was printed, so nothing was proposed, and no MODIFIED banner, so
-#       nothing was written.  And its free count equals df's, measured seconds apart by two
-#       programs walking the same list -- and equals the host's reading of the image that
-#       came back, which is the same claim from outside the machine.
+#       nothing was written.  And its free count equals df's -- measured seconds apart by two
+#       programs that no longer agree by construction, fsck walking the list and df reading
+#       s_tfree -- and equals the host's reading of the image that came back, which is the
+#       same claim from outside the machine.
 #       This section is GREPPED rather than diffed, unlike oracle 6, because its numbers
 #       are the root image's and change whenever anything joins /bin -- run-fsinfo.sh's
 #       rule.  Note what the `?' check below therefore covers for free: the root has been
@@ -201,10 +202,16 @@ if echo "$root" | grep -q 'MODIFIED'; then
     exit 1
 fi
 
-# The two guest numbers against each other: fsck walked the free list and so did df, seconds
-# apart, on the same device.
+# The two guest numbers against each other, and they no longer come from the same method:
+# fsck WALKED the free list and df READ s_tfree, seconds apart on the same device.  That makes
+# this a stronger claim than it was when both walked -- had the kernel's bookkeeping drifted,
+# `fsck -n' would have said COUNT WRONG IN SUPERBLK above and this line would disagree.
+#
+# THE `NF >= 5' GUARD IS LOAD-BEARING.  fsck prints the device name on a line of its own
+# before Phase 1, so a bare `$1 == "/dev/rmd0"' would match that line too and hand $4 back as
+# an empty field -- two lines in dffree, one of them blank, and an unreadable diagnostic.
 fsckfree=$(echo "$root" | sed -n 's/^[0-9]* files [0-9]* blocks \([0-9]*\) free$/\1/p')
-dffree=$(echo "$root" | sed -n 's|^/dev/rmd0 \([0-9]*\)$|\1|p')
+dffree=$(echo "$root" | awk 'NF >= 5 && $1 == "/dev/rmd0" { print $4 }')
 if [ -z "$fsckfree" ] || [ "$fsckfree" != "$dffree" ]; then
     echo "run-fsck.sh: on the mounted root fsck says $fsckfree free and df says $dffree" >&2
     exit 1

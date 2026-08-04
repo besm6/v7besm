@@ -78,8 +78,12 @@ echo status $? >>/tmp/mount.log
 
 # ---- 2.  THE MOUNT.  /dev/md1 and not /dev/rmd1: getmdev() wants IFBLK, which is the one
 #          argument mistake this command invites, every other program of task C4 taking the
-#          raw name.  The `sync' before df is not decoration -- the mounted superblock lives
-#          in core (m_bufp) until update() writes it, and df reads the disk.
+#          raw name.  The `sync' before df is not decoration, and it matters MORE than it did:
+#          the mounted superblock lives in core (m_bufp) until update() writes it, df reads
+#          the disk, and what df now reads off the disk is s_tfree -- the very field the
+#          kernel is keeping in that in-core copy.  df is also handed the BLOCK name here and
+#          opens the raw twin /dev/rmd1 for itself, which is the path cmd/df/README.md's four
+#          alignment rules are about.
 echo ---mount--- >>/tmp/mount.log
 /etc/mount /dev/md1 /mnt >>/tmp/mount.log 2>&1
 echo status $? >>/tmp/mount.log
@@ -155,7 +159,11 @@ cat /etc/mtab >>/tmp/mount.log 2>&1
 #              on -- a loop that has only ever had to look at i == 1.  cmd/pwd stat()s every
 #              entry of the parent when the device changes, so it exercises the crossing from
 #              both sides.
-#            * `df /dev/md3' is a whole second superblock in core.  Each mount holds one
+#            * `df /dev/md3' is a whole second superblock in core -- and it is also the one
+#              place df's raw-twin fallback is exercised: there is no /dev/rmd3 on this image
+#              (../../root.manifest stages rmd0 and rmd1 only), so the open of the twin fails
+#              and df reads the BLOCK device through readi() and the cache, where none of the
+#              four alignment rules bind.  Each mount holds one
 #              buffer of the cache for it until it is unmounted (smount()'s geteblk()), which
 #              is why NBUF went to 16 in the same change; two held at once is the first time
 #              that has been more than the root's one.

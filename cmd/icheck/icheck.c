@@ -238,7 +238,8 @@ int main(int argc, char **argv)
 
     if (nchecked == 0) {
         // v7's DESCRIPTION promises "a set of default file systems"; there is one drive
-        // here and no partitions, so the set is one entry -- df.c's and quot.c's dargv[].
+        // here and no partitions, so the set is one entry -- quot.c's dargv[].  (df's is
+        // gone: it takes its default from the kernel's own mount table now.)
         // A SALVAGE is aimed deliberately, though, and is never defaulted: fsck's rule.
         if (sflg) {
             printf("usage: icheck -s filesystem\n");

@@ -191,7 +191,8 @@ int main(int argc, char **argv)
     }
 
     // v7's DESCRIPTION promises "a set of default file systems"; there is one drive here
-    // and no partitions, so the set is one entry -- df.c's and quot.c's dargv[].
+    // and no partitions, so the set is one entry -- quot.c's dargv[].  (df's is gone: it
+    // takes its default from the kernel's own mount table now.)
     if (nchecked == 0)
         check(dargv[0]);
     return nerror;

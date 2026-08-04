@@ -1,4 +1,4 @@
-# /bin/df -- Unix v7 df(1), built natively for the BESM-6.
+# /bin/df -- df(1M), built natively for the BESM-6: v7's program with 4.4BSD's report.
 #
 # The first of task C4a's three (../TODO.md): a cmd/ subdirectory that is NOT a host tool.
 # b6_prog() (../../scripts/BesmCross.cmake) runs the b6* toolchain over df.c, links it
@@ -16,11 +16,21 @@
 # impose four alignment rules on a raw transfer, three of which fail with EFAULT and the
 # fourth silently.  quot(1) obeys the same four and cites this account; C4b-C4e will too.
 
+# ../mount/mtab.c IS COMPILED HERE A THIRD TIME rather than df growing a parser of its own:
+# that file is the one home of the /etc/mtab format, and its header records that v7's four
+# copies of one layout across two programs were the bug.  ../umount/CMakeLists.txt is the
+# precedent and b6_prog() puts every object in ${name}.dir, so the three builds of it cannot
+# collide.  -I is for its header.  What df does NOT inherit is the timing: mtabread() must not
+# run before every argument is settled, or a b6sim case reads the build machine's table --
+# see df.c's loadtab() and test/CMakeLists.txt.
+
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is
 # the whole tree at once, as it is in lib/, kernel/, cmd/init/ and cmd/sh/.
 set(KINC ${CMAKE_SOURCE_DIR}/include)
 file(GLOB KHDRS ${KINC}/*.h ${KINC}/sys/*.h)
 
-b6_prog(df DEST bin/df SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/df.c)
+b6_prog(df DEST bin/df
+    SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/df.c ${CMAKE_CURRENT_SOURCE_DIR}/../mount/mtab.c
+    CFLAGS -I${CMAKE_CURRENT_SOURCE_DIR}/../mount)
 
 add_subdirectory(test)

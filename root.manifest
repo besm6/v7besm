@@ -371,8 +371,12 @@ mode 0755
 # df is NOT setuid and must not become one -- it reads /dev/rmd0, which is mode 0600 because
 # that one node is every file's contents -- so it works for root and nobody else.  du opens
 # no device at all and works for anybody.  cmd/df/README.md is the account of the four
-# alignment rules a raw read here obeys.
-file /bin/df            # cmd/df -- free blocks, by walking the free list off /dev/rmd0
+# alignment rules a raw read here obeys, and of the Berkeley report df prints now.
+#
+# df ALSO READS /etc/mtab, which is not staged here and is not meant to be -- see the note
+# further down: a missing one is an empty table, so a bare df on a machine that has mounted
+# nothing reports the root alone.
+file /bin/df            # cmd/df -- the BSD table off the superblock; -w walks the free list
 source ../../rootfs/bin/df
 mode 0755
 

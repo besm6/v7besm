@@ -10,7 +10,9 @@ and contains a table of devices mounted by the
 .I mount
 command.
 .I Umount
-removes entries.
+removes entries, and
+.I df (1M)
+reads the table to find out what to report on and where each file system is mounted.
 .PP
 .B "Note:"
 .B "the table is a text file here, not v7's binary record."
@@ -49,7 +51,8 @@ and
 with no argument prints rubbish.
 See
 .IR cmd/mount/mtab.c ,
-which is the one implementation of this format and is shared by both programs.
+which is the one implementation of this format and is compiled into all three programs
+that read or write it.
 .PP
 The number of entries is bounded by
 .B NMOUNT
@@ -79,4 +82,4 @@ does say so, on the standard error, having just unmounted the file system anyway
 .SH FILES
 /etc/mtab
 .SH "SEE ALSO"
-mount(1M)
+mount(1M), umount(1M), df(1M)

@@ -16,12 +16,16 @@
 #       Structural: what the run wrote is still a filesystem.  Nearly free, and it is the
 #       reason every writing test here ends this way.
 #
-#   2.  df, AGAINST THE HOST'S OWN FREE-LIST WALK.  `b6fsutil -c -v' ends a clean run with
-#       `N blocks in use, M free', and M is counted out of the bitmap pass 4 fills by
-#       draining the free list exactly as the kernel's alloc() drains it -- which is also
-#       exactly what cmd/df does on the guest.  Two independent implementations of one walk,
-#       over the same disk, and the test is that they agree.  cmd/fsutil/test/check_test.cpp
-#       pins the format of that line, since this script now depends on it.
+#   2.  df, AGAINST THE HOST'S OWN ACCOUNTING, in three parts.  `b6fsutil -c -v' ends a clean
+#       run with `N blocks in use, M free', counted out of the bitmap pass 4 fills by draining
+#       the free list exactly as the kernel's alloc() drains it; those are df's Used and Avail
+#       columns and their sum is its 1K-blocks column, so all three are checked (2).
+#       `b6fsutil -v' names the i-list size and the free i-node count, which are `df -i's two
+#       i-node columns (2a) -- and the total is the expression RetroBSD's df gets wrong on
+#       this machine, so that oracle earns its place.  Finally `df -w' walks the free list the
+#       way v7's df did, df itself compares the walk with s_tfree, and the assertion is that
+#       it had nothing to say (2b).  cmd/fsutil/test/check_test.cpp pins the format of the
+#       accounting line, since this script depends on it.
 #
 #   3.  quot, AGAINST AN awk OVER `b6fsutil -v -v'.  This is the run-files.sh modes oracle
 #       one step on: rather than a checked-in table, the host RECOMPUTES the per-uid sums
@@ -74,36 +78,88 @@ mkdir fsinfo.out
 "$b6fsutil" -x fsinfoafter.img fsinfo.out
 
 #
-# Oracle 2.  The guest printed the same number twice -- once from its default device list
-# and once from an explicit /dev/rmd0 -- and both must equal the host's.
+# Oracle 2.  The guest printed the same volume four ways -- the default list, the raw device,
+# -i and -w -- and every one of them must equal the host's reading of the same image.
+#
+# THREE COLUMNS ARE CHECKED, not one.  `b6fsutil -c -v' ends with `N blocks in use, M free',
+# and those are exactly the two quantities df calls Used and Avail; their sum is what it calls
+# 1K-blocks, which is the DATA area (s_fsize - s_isize) and not the volume.  The old one-line
+# df could only be held against `free'.
 #
 # THE TWO SIDES ARE IN DIFFERENT UNITS, deliberately.  b6fsutil counts FILESYSTEM blocks --
 # it is an inspector, and the rest of its report is on-disk block numbers -- while df(1M)
 # reports the 1024-byte block cmd/README.md SS4 describes, KBPB of them per filesystem block.
 # Converting here, once, in the place that already knows both sides, is better than making
 # b6fsutil mix units inside one report.
+#
+# THE ROW IS FOUND BY ITS FIRST FIELD, which is a device name -- /dev/md0 from the default
+# list, since that is the block device the kernel mounted, and /dev/rmd0 from the three
+# explicit runs.  That also skips df's header line, whose first field is `Filesystem'.
 KBPB=3
 blocks=$(sed -n 's/^[0-9]* blocks in use, \([0-9]*\) free$/\1/p' fsinfo.check)
+inuse=$(sed -n 's/^\([0-9]*\) blocks in use, [0-9]* free$/\1/p' fsinfo.check)
 if [ -z "$blocks" ]; then
     echo "run-fsinfo.sh: b6fsutil -c -v printed no block accounting -- see fsinfo.check" >&2
     exit 1
 fi
 want=$((blocks * KBPB))
+wantused=$((inuse * KBPB))
+wanttotal=$(((inuse + blocks) * KBPB))
 # The console has CR line endings; strip them before matching.
-got=$(tr -d '\r' <fsinfo.console |
-      sed -n '/^---df---$/,/^---quot---$/s/^\/dev\/rmd0 \([0-9]*\)$/\1/p')
+dfout=$(tr -d '\r' <fsinfo.console | sed -n '/^---df---$/,/^---quot---$/p')
+got=$(echo "$dfout" | awk '$1 == "/dev/md0" || $1 == "/dev/rmd0" { print $2, $3, $4 }')
 if [ -z "$got" ]; then
     echo "run-fsinfo.sh: no df output between the markers -- see fsinfo.console" >&2
     exit 1
 fi
-for n in $got; do
-    if [ "$n" != "$want" ]; then
-        echo "run-fsinfo.sh: df says $n free 1K-blocks, the host's free-list walk says" \
-             "$want ($blocks filesystem blocks x $KBPB)" >&2
+echo "$got" |
+while read total used free; do
+    if [ "$free" != "$want" ] || [ "$used" != "$wantused" ] || [ "$total" != "$wanttotal" ]; then
+        echo "run-fsinfo.sh: df says $total/$used/$free 1K-blocks (total/used/free), the" \
+             "host says $wanttotal/$wantused/$want ($inuse in use, $blocks free" \
+             "filesystem blocks x $KBPB)" >&2
         exit 1
     fi
-done
-echo "run-fsinfo.sh: df and b6fsutil agree on $want free 1K-blocks ($blocks filesystem blocks) from $(echo $got | wc -w | tr -d " ") df runs"
+done || exit 1
+nrows=$(echo "$got" | wc -l | tr -d " ")
+echo "run-fsinfo.sh: df and b6fsutil agree on $wanttotal/$wantused/$want 1K-blocks (total/used/free) from $nrows df runs"
+
+#
+# Oracle 2a.  THE I-NODE COLUMNS, which no walk of the free list could ever have produced:
+# `df -i' takes ifree from s_tinode and the total from (s_isize - (SUPERB+1)) * INOPB.  That
+# second expression is the one place RetroBSD's df is wrong on this machine -- it skips a boot
+# block that does not exist here -- so this is the oracle that catches it: with s_isize 33 the
+# wrong spelling gives 992 where b6fsutil says 1024.
+"$b6fsutil" -v fsinfoafter.img >fsinfo.sb
+ninode=$(sed -n 's/^I-list:.*(\([0-9]*\) inodes)$/\1/p' fsinfo.sb)
+inofree=$(sed -n 's/^Free inodes: *\([0-9]*\)$/\1/p' fsinfo.sb)
+if [ -z "$ninode" ] || [ -z "$inofree" ]; then
+    echo "run-fsinfo.sh: b6fsutil -v printed no i-node accounting -- see fsinfo.sb" >&2
+    exit 1
+fi
+gotino=$(echo "$dfout" | awk 'NF >= 9 && $1 == "/dev/rmd0" { print $6, $7 }')
+if [ -z "$gotino" ]; then
+    echo "run-fsinfo.sh: no df -i row between the markers -- see fsinfo.console" >&2
+    exit 1
+fi
+set -- $gotino
+if [ "$2" != "$inofree" ] || [ "$1" != "$((ninode - inofree))" ]; then
+    echo "run-fsinfo.sh: df -i says $1 used / $2 free i-nodes, the host says" \
+         "$((ninode - inofree)) / $inofree of $ninode" >&2
+    exit 1
+fi
+echo "run-fsinfo.sh: df -i and b6fsutil agree on $1 used / $2 free of $ninode i-nodes"
+
+#
+# Oracle 2b.  `df -w' WALKED THE FREE LIST and `df' read s_tfree, and df itself compares the
+# two and complains on stderr when they differ.  Oracle 2 has already held both rows against
+# the host, so what is left to assert is the ABSENCE of that complaint -- which is also the
+# assertion that the kernel's s_tfree bookkeeping survived everything this volume did.
+if tr -d '\r' <fsinfo.console | grep -q 'the free list has'; then
+    echo "run-fsinfo.sh: df -w found the free list and s_tfree disagreeing -- see" \
+         "fsinfo.console" >&2
+    exit 1
+fi
 
 #
 # Oracle 3.  quot -f prints `blocks<TAB>files<TAB>name', sorted by blocks; the host's table

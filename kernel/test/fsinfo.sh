@@ -113,13 +113,26 @@ echo ---end--- >>/tmp/fsinfo.log
 ls /tmp >>/tmp/fsinfo.log
 
 # ---- 3.  THE WHOLE-IMAGE REPORTS, on the console, after a sync.  See the header for both
-# halves of why.  df is run twice: once by its default device list, which is the path a
-# bare `df' takes and which nothing else exercises, and once with /dev/rmd0 named.  The two
-# numbers must be identical, there being one drive.
+# halves of why.  df is run four ways and all four must agree on the same volume:
+#
+#   bare		the default list, which is the ROOT plus /etc/mtab.  Nothing is
+#			mounted here and mtab is not on the image, so this is one row, and
+#			it names /dev/md0 -- the block device, which is what the kernel
+#			mounted -- while df reads its raw twin.  Nothing else exercises
+#			either the default list or the raw-twin lookup.
+#   /dev/rmd0		the raw device named outright
+#   -i /dev/rmd0	the i-node columns, which no free-list walk could have produced:
+#			they come from s_tinode and from (s_isize - (SUPERB+1)) * INOPB
+#   -w /dev/rmd0	the same volume counted the OLD way, by walking the free list.
+#			It must print the row -i and the bare run printed, and must say
+#			nothing on stderr -- df complains there when the walk and s_tfree
+#			disagree, and run-fsinfo.sh asserts the absence of that complaint.
 sync
 echo ---df--- >/dev/console
 df >/dev/console
 df /dev/rmd0 >/dev/console
+df -i /dev/rmd0 >/dev/console
+df -w /dev/rmd0 >/dev/console
 echo ---quot--- >/dev/console
 /etc/quot -f /dev/rmd0 >/dev/console
 echo ---endquot--- >/dev/console

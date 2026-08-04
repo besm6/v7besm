@@ -24,7 +24,8 @@ d
 lost+found
 motd
 status 0
-/dev/md1 5883
+Filesystem  1K-blocks     Used    Avail Capacity  Mounted on
+/dev/md1         5901       18     5883     0%    /mnt
 ---write---
 written through the buffer cache
 copy
@@ -33,7 +34,8 @@ dir
 lost+found
 motd
 hello
-/dev/md1 5874
+Filesystem  1K-blocks     Used    Avail Capacity  Mounted on
+/dev/md1         5901       27     5874     0%    /mnt
 ---busy---
 mount: Mount device busy
 status 1
@@ -71,7 +73,8 @@ written through the buffer cache
 status 0
 /usr/d/e
 /usr/d
-/dev/md3 5883
+Filesystem  1K-blocks     Used    Avail Capacity  Mounted on
+/dev/md3         5901       18     5883     0%    /usr
 status 0
 /dev/md1 on /mnt
 status 0
@@ -141,7 +144,8 @@ free    5877
 missing    0
 status 0
 ---free---
-/dev/rmd1 5877
+Filesystem  1K-blocks     Used    Avail Capacity  Mounted on
+/dev/rmd1        5901       24     5877     0%    -
 ---end---
 fromdisk
 mount.log

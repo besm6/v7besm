@@ -62,9 +62,10 @@ sync
 
 # ---- 4.  THE LIVE ROOT, READ ONLY, AND LAST.  This is the one-line statement of the whole
 #          task: the machine reading, and pronouncing sound, the filesystem it is running
-#          on.  df follows immediately, on the same device through the same free-list walk,
-#          so the host can hold the two guest numbers against each other as well as against
-#          its own.
+#          on.  df follows immediately on the same device -- and no longer by the same
+#          method: fsck walks the free list and df reads s_tfree, so the host holding the two
+#          guest numbers against each other now says the kernel's bookkeeping is right and
+#          not merely that one program agrees with itself.
 echo ---root--- >/dev/console
 /etc/fsck -n /dev/rmd0 >/dev/console
 df /dev/rmd0 >/dev/console

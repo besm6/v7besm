@@ -4,9 +4,93 @@
 programs on this image that can say anything about the filesystem they live on. Everything
 before them could *change* the store; these measure it.
 
+**`df` has since been rewritten around Berkeley's report**, and the first section below is that
+change. Everything after it is C4a's and still holds.
+
 The C11 pass over each source is described in that file's own header and is not repeated here.
-**What the port taught is below, and only the first section is about `df`** — the rest belongs to
-whatever reads a device next, which is the whole of the rest of C4.
+**What the port taught is below**, and the sections from "A raw transfer has four conditions"
+onward belong to whatever reads a device next, which is the whole of the rest of C4.
+
+## The report is 4.4BSD's and the numbers are the superblock's
+
+What `df` prints is the table every later Unix prints — `Filesystem`, `1K-blocks`, `Used`,
+`Avail`, `Capacity`, `Mounted on`, and with `-i` three i-node columns — ported from
+RetroBSD's `src/cmd/df.c`. **Only the report ported.** That program is built on `statfs(2)` and
+`getmntinfo(3)` and this kernel has neither; what it *does* have is the half of that source
+which predates both — its `ufs_df()`, the pre-syscall Berkeley code that computes the same six
+numbers out of a superblock — and that is what this file now is.
+
+Three things had to be true before it was worth doing, and none of them was when C4a was
+written:
+
+* **`s_tfree` and `s_tinode` are maintained.** v7's own `filsys(5)` calls both fields
+  uncurrent, which is why v7's `df` walks the whole free list instead. `alloc()`, `free()`,
+  `ialloc()` and `ifree()` keep them here ([../../kernel/alloc.c](../../kernel/alloc.c), on
+  RetroBSD's precedent — [`sys/filsys.h`](../../include/sys/filsys.h) is the account). So the
+  answer is one `lseek`, and **free i-nodes become askable at all**, which no walk of the free
+  list could ever have answered.
+* **`/etc/mtab` exists** (task C4f), so there is a `Mounted on` column to fill and a default
+  list to take. `df.1m` used to say outright that there was no such file.
+* The old `df` printed one number, and four host oracles parsed it with a `sed`.
+
+**One line of RetroBSD's arithmetic is wrong on this machine and the difference is silent.**
+Its i-node total is `(fs_isize - 2) * INOPB`, where the `2` skips a boot block; `SUPERB` is 0
+here and there is no boot block, so the i-list starts at block 1 and the total is
+`(s_isize - (SUPERB + 1)) * INOPB`. That is how every sibling that sweeps the i-list already
+spells it — `icheck`, `dcheck`, `ncheck`, `clri`, `fsck`, `quot`. On the root image, where
+`s_isize` is 33, the two differ by 32 i-nodes and both look plausible. `cmd_df_inode` and
+`run-fsinfo.sh`'s oracle 2a exist to catch exactly that.
+
+### `-w`, and why the walk is still here
+
+`df -w` counts the free list the old way. It is **a check and not an alternative**: the two are
+readings of one number, so `df -w` must print exactly what `df` prints, and `df` says so on
+stderr when they do not. That is asserted three ways —
+[test/walk.expected](test/walk.expected) is [test/image.expected](test/image.expected)
+character for character (`cmp` them), `run-fsinfo.sh` holds both against `b6fsutil`'s own walk,
+and the absence of the complaint is itself an oracle there. `-w` and not `-l`, because every
+other `df` spells `-l` "local filesystems only".
+
+### Where an argument can point, and the raw twin
+
+An argument may be a special file, a **mount point**, any ordinary file, or a **filesystem
+image**. The first three are Berkeley's; the image is neither Berkeley's nor v7's and is what
+lets the `b6sim` cases test this program against real on-disk structure at all.
+
+A *mount point* or an ordinary file is resolved through `st_dev` — `namei()` crosses a mount,
+so `stat("/mnt").st_dev` is the mounted device, and no name arithmetic is needed. A *special
+file* is matched by **name**, because the raw and block nodes of one drive have different
+majors here (`cdevsw[3]` against `bdevsw[0]`) and their device numbers say nothing about each
+other. Given a block name, `df` opens the **raw twin** — `/dev/md1` through `/dev/rmd1` — so
+that a bare `df` still takes the path the four conditions below are about.
+
+**The fallback to the block device is load-bearing and has a live case.**
+`kernel/test/mount.sh` runs `df /dev/md3`, and [../../root.manifest](../../root.manifest)
+stages `rmd0` and `rmd1` and no other raw node. That one falls back, and a block read goes
+through `readi()` and the buffer cache, where none of the four conditions bind. Staging
+`/dev/rmd2`…`rmd7` for one test would have been the worse trade.
+
+### `mtab.c` is compiled a third time, and *when* it runs is the trap
+
+[`../mount/mtab.c`](../mount/mtab.c) exists to end a second parser — its header records that
+v7's four copies of one layout across two programs were the bug — so `df` compiles it rather
+than growing a read loop, exactly as [`../umount`](../umount/CMakeLists.txt) does.
+
+What `df` could not inherit is the timing. Under `b6sim` every system call is the **host's**,
+so an unconditional `mtabread()` reads the *build machine's* `/etc/mtab` — absent on macOS, and
+on Linux a symlink to `/proc/self/mounts`, which would also put `mtab.c`'s "more than 8
+entries" warning on stderr. `mount(1M)` diverges from v7 for the same reason and states the
+rule: **settle every argument before opening the table.** `df`'s `loadtab()` is therefore lazy
+and idempotent, and [test/CMakeLists.txt](test/CMakeLists.txt) carries the corollary — *no
+b6sim case may reach it*, which is why the three argument shapes used there are a name `stat(2)`
+cannot find, a regular file that validates as an image, and a bad flag.
+
+### And it now validates the superblock
+
+`df` was the only tool in this directory that did not. `s_magic` and the three geometry
+words are checked in `icheck`'s words, so a `df` pointed at a tar archive says
+`not a filesystem` instead of printing arithmetic on it. Both tests are *equalities* and so
+stay inline; a relational here is an out-of-line call.
 
 ## A raw transfer has four conditions, and three of them fail with `EFAULT`
 
@@ -70,7 +154,10 @@ Condition 2 permits only whole blocks, and one block *is* `INOPB` dinodes, so th
 
 Both programs call `sync()` before reading, as v7's did. On the raw path that is load-bearing
 rather than cautious: the read bypasses the buffer cache that the mounted filesystem is still
-writing through, so without it `df` counts a free list the kernel has already moved on from.
+writing through, so without it `df` reads a superblock the kernel has already moved on from.
+That got *more* true when `df` started reading `s_tfree`, not less — the mounted superblock
+lives in the mount table's own buffer (`m_bufp`) until `update()` writes it back, so the field
+`df` now depends on is exactly the one `sync()` puts on the disk.
 
 ## The unit they report in is not the unit they count in
 
@@ -104,7 +191,8 @@ that already knows both sides.
 on-disk structure**. They read a *filesystem*, and a flat `b6fsutil` image is an ordinary host
 file, so [test/fsimg.manifest](test/fsimg.manifest) builds one at build time — file sizes chosen
 so that a ceil-divide by 3072 has something to get wrong, including a file of exactly one block —
-and the cases walk its real free list and real i-list in a tenth of a second. **`mkfs` (C4c) and
+and the cases read its real superblock and its real i-list in a tenth of a second — and
+`cmd_df_walk` walks its real free list, since that is what `-w` is for. **`mkfs` (C4c) and
 `fsck` (C4d) should copy that rather than invent a second one.**
 
 What those cases cannot say is anything at all about the four conditions above: `b6sim`'s
@@ -196,12 +284,21 @@ Against the 28,672-word ceiling, with `cat` for scale — most of all three is s
 
 | | const | text | data | bss | total |
 |---|---|---|---|---|---|
-| `quot` | 102 | 5,208 | 227 | 4,375 | **9,912** |
-| `du` | 83 | 3,041 | 198 | 3,132 | **6,454** |
-| `df` | 80 | 2,633 | 177 | 2,570 | **5,460** |
-| `cat` | 83 | 2,989 | 165 | 1,544 | **4,781** |
+| `quot` | 102 | 5,247 | 227 | 4,377 | **9,953** |
+| `df` | 94 | 4,309 | 450 | 2,999 | **7,852** |
+| `du` | 84 | 3,077 | 198 | 3,134 | **6,493** |
+| `cat` | 84 | 3,017 | 165 | 1,546 | **4,812** |
 
 `quot`'s `bss` is `du[300]` (1,200 words), `sizes[500]`, the superblock (512) and the aligned
 block buffer (1,024) — it would have been 4,096 words larger had the `itab[256]` survived.
-`du`'s is `ml[1000]`, 2,000 words, which is `du.1`'s second BUG made concrete. `df`'s is the
-block buffer and the superblock and almost nothing else.
+`du`'s is `ml[1000]`, 2,000 words, which is `du.1`'s second BUG made concrete.
+
+`df` was 5,460 before the Berkeley report and is 7,852 after it, which is what that section
+cost: `mtab.c` whole (`mtabwrite()` and `mtabname()` are dead weight here, and splitting the
+file would be the answer if this ever bound), `fopen`/`fgets`/`fclose`, and the resolution
+logic. Its `bss` is the block buffer (1,024) and the superblock (512) as before, plus
+`mtab[8]` at 184 words and `fstab[9]` at 207. The 4,096-word **stack** is the ceiling worth
+naming for it rather than the address space: the deepest path is
+`main → resolve → dirfor → loadtab → mtabread`, and `mtabread()`'s `line[160]` is the only
+frame of any size in it. `fstab[]` and the one `struct dfent` are at file scope for that
+reason, and v7's 321-word `struct fblk` automatic is still gone.

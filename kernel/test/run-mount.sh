@@ -49,8 +49,16 @@
 #       this is what says so.
 #
 #   5.  THE GUEST AND THE HOST AGREE ABOUT THE FREE SPACE, recomputed rather than remembered
-#       (run-fsinfo.sh's rule): df's last reading of /dev/md1 -- taken through the MOUNT, so
-#       through the cache -- against the host's own free-list walk of the pack, times KBPB.
+#       (run-fsinfo.sh's rule): df's last reading of the pack -- named as /dev/rmd1, after
+#       both mounts are gone -- against the host's own free-list walk of it, times KBPB.
+#       That reading is the SUPERBLOCK's s_tfree now and not a walk, so this is a check on
+#       the kernel's bookkeeping as well as on the free list itself.
+#
+#   5a. AND df's `Mounted on' COLUMN IS mount(1M)'s OWN TABLE READ BACK, which is asserted as
+#       a literal by the diff against mount.expected rather than here: the two rows taken
+#       while /dev/md1 was mounted say `/mnt', the one taken while /dev/md3 was mounted says
+#       `/usr', and the last one -- after umount -- says `-'.  That is the first assertion in
+#       the suite that the two programs of task C4f and df agree about anything.
 #
 #   6.  THE LIVE ROOT, and the console.  icheck and dcheck read the filesystem the machine is
 #       running on and found nothing; and sbcheck() refused the drum, which is what retires
@@ -229,8 +237,10 @@ if [ -z "$blocks" ]; then
     echo "run-mount.sh: b6fsutil -c -v printed no block accounting -- see mount.check" >&2
     exit 1
 fi
+# The Avail column of the row whose first field is the device: `NF >= 5' and the name
+# together skip df's header line, whose first field is `Filesystem'.
 free=$(sed -n '/^---free---$/,/^---end---$/p' mount.out/tmp/mount.log |
-       sed -n 's|^/dev/rmd1 \([0-9]*\)$|\1|p')
+       awk 'NF >= 5 && $1 == "/dev/rmd1" { print $4 }')
 want=$((blocks * KBPB))
 if [ -z "$free" ]; then
     echo "run-mount.sh: no df line for /dev/rmd1 in the guest's ---free--- section" >&2

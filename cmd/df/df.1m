@@ -1,38 +1,146 @@
 .\" UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details.
+.\" The report is 4.4BSD's; see cmd/df/README.md.
 .TH DF 1M
 .SH NAME
 df \- disk free
 .SH SYNOPSIS
 .B df
-[ filesystem ] ...
+[
+.B \-iw
+] [ filesystem | file ] ...
 .SH DESCRIPTION
 .I Df
-prints out the number of free blocks
-available on the
-.I filesystems.
-If no file system is specified,
-the free space on all of
-the normally mounted file systems
-is printed.
+prints, for each file system, how much room it has and how much of it is gone.
+The report is Berkeley's:
+.PP
+.nf
+Filesystem  1K\-blocks     Used    Avail Capacity  Mounted on
+/dev/md0         5901     4140     1761    70%    /
+.fi
+.PP
+With no argument the file systems reported on are
+.B the root
+and every one named in
+.IR /etc/mtab ,
+which is the table
+.IR mount (1M)
+and
+.IR umount (1M)
+keep between them.
+An argument may be
+.B a special file
+\- block or character, and the block name is the one
+.I /etc/mtab
+records \-
+.B a mount point,
+or
+.B any ordinary file,
+in which case the file system holding it is the one reported on.
+A file that turns out to
+.I hold
+a file system, rather than to live on one, is reported on directly; that is how a flat
+image can be handed to this program.
+.SH "THE COLUMNS"
+.TP
+.B "1K-blocks"
+The
+.B data area
+of the volume:
+.I s_fsize
+less
+.IR s_isize .
+Neither the super-block nor the i-list is in this column or in any other, so it is smaller
+than the volume.
+.TP
+.B "Used, Avail"
+.I Avail
+is the super-block's
+.IR s_tfree ;
+.I Used
+is the difference.
+.TP
+.B Capacity
+.I Used
+as a percentage of the two together.
+There is no Berkeley
+.I minfree
+here, so nothing is withheld from an ordinary user and
+.I Avail
+is what
+.I Avail
+says.
+.TP
+.B "iused, ifree, %iused"
+Printed only with
+.BR \-i .
+The total is the size of the i-list \-
+.I s_isize
+less the super-block's own block, times
+.I INOPB
+\- and
+.I ifree
+is
+.IR s_tinode .
 .PP
 .B "Note:"
-a
-.I filesystem
-here is the name of a
-.IR device ,
-not of a mount point: there is no
-.IR /etc/mtab ,
-.IR mount (1M)
-not being ported.
-The count is obtained by walking the free list itself, block by block, exactly as the
-kernel's
+.I iused
+counts
+.B i-node 1,
+which can never be allocated \-
+.IR ialloc ()
+refuses anything below
+.I ROOTINO
+\- so a file system holding seven files reports eight used.
+That is v7's arithmetic and it is kept.
+.SH OPTIONS
+.TP
+.B \-i
+Print the three i-node columns as well.
+.TP
+.B \-w
+Get the free-block count by
+.B walking the free list,
+block by block through the chain blocks, exactly as the kernel's
 .IR alloc ()
-drains it.
-The superblock's
+drains it \- which is what
+.I df
+did in this port until now, and what v7's
+.I df
+does always.
+.PP
+.B "Note:"
 .I s_tfree
-field is
-.B not
-consulted and must not be: it is dead in this port and nothing maintains it.
+is
+.B maintained
+by this kernel, which v7's is not: v7's own
+.IR filsys (5)
+calls the field uncurrent and its
+.I df
+therefore cannot read it.
+.IR Alloc (),
+.IR free (),
+.IR ialloc ()
+and
+.IR ifree ()
+keep both totals here, so the default is one
+.I lseek
+rather than a walk \- and free
+.I i-nodes
+become askable at all, which no walk of the free list could have answered.
+.PP
+.B "Note:"
+.B "-w is a check and not an alternative."
+The two are readings of one number, so
+.B "df -w must print exactly what df prints;"
+when they differ,
+.I df
+says so on the standard error and prints the walked figure.
+.B \-l
+is deliberately
+.I not
+the letter: every other
+.I df
+spells that one "local file systems only".
 .SH "BLOCKS ARE 1024 BYTES"
 .B "Note:"
 the block
@@ -81,27 +189,63 @@ set-user-id: a set-uid
 .I df
 would hand the whole filesystem to anyone able to think of an offset.
 .SH FILES
-.I /dev/rmd0
-\- the raw disk, and the default when no
-.I filesystem
-is named.
-There is one EC\-5052 drive of 2000 blocks and there are no partitions; swap is on the
-drums.
+.TP
+.I /etc/mtab
+the mounted-file-system table.
+A missing one is an empty table and not an error, so on a machine that has mounted nothing
+.I df
+reports the root alone.
+.TP
+.I /dev/md0
+the root, and the first entry of the default list.
+Given a
+.B block
+special file
+.I df
+opens the
+.B raw
+twin of the name \-
+.I /dev/md1
+is read through
+.I /dev/rmd1
+\- and falls back to the block device when there is no such node.
+There is one EC\-5052 drive attached by an ordinary boot, of 2000 blocks, and there are no
+partitions; swap is on the drums.
 .SH DIAGNOSTICS
 .B "cannot open"
-names a device that could not be read;
+names a file
 .I df
-goes on to the next argument and exits 0 either way, which is v7's behaviour and is kept.
+could neither
+.IR stat (2)
+nor read;
+.B "not a mounted filesystem"
+an ordinary file whose device is in no table.
+Either way
+.I df
+goes on to the next argument and exits 0, which is v7's behaviour and is kept.
+A bad
+.B flag
+is different and exits 1.
+.PP
+.B "not a filesystem"
+and
+.B "filesystem geometry mismatch"
+mean the super-block read back is not one this system could mount;
+.IR sbcheck ()
+refuses the same two and
+.IR fsck (1M)
+refuses to repair them.
+.PP
+.B "the free list has N blocks, the superblock says M"
+is
+.BR \-w 's
+disagreement, and means one of the two is wrong about the volume.
 .PP
 .B "bad free count"
 and
 .B "bad free block"
-mean the free list is corrupt at the block named, and the number printed up to that point
-is a lower bound rather than an answer.
+mean the free list is corrupt at the block named, and a
+.B \-w
+count is then a lower bound rather than an answer.
 .SH "SEE ALSO"
-du(1), quot(1M), ls(1)
-.br
-.B "Note:"
-v7's SEE ALSO named
-.IR icheck (1M),
-which is not ported.
+du(1), quot(1M), ls(1), mount(1M), umount(1M), fsck(1M), icheck(1M), mtab(5), filsys(5)

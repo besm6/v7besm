@@ -143,9 +143,15 @@ mkdir mkfs.out
 "$b6fsutil" -x mkfsafter.img mkfs.out
 
 #
-# Oracle 4.  Both df lines, each against its own device's free-list walk.  The two sides are
+# Oracle 4.  Both df rows, each against its own device's free-list walk.  The two sides are
 # in different units on purpose -- b6fsutil counts filesystem blocks, df reports 1024-byte
 # ones -- and converting here, once, is run-fsinfo.sh's arrangement.
+#
+# A row is now a TABLE ROW: `Filesystem 1K-blocks Used Avail Capacity Mounted on', and Avail
+# is field 4.  The freshly made /dev/rmd1 is mounted nowhere, so its Mounted on column is `-';
+# the control /dev/rmd0 is the root, but it is named as the RAW device and /etc/mtab does not
+# hold the root, so df finds `/' for it through the block twin /dev/md0.  Neither column is
+# checked here -- kernel/test/mount is where the mount point is the assertion.
 #
 console=$(tr -d '\r' <mkfs.console | sed -n '/^---mkfs---$/,/^---endmkfs---$/p')
 for dev in rmd1 rmd0; do
@@ -159,7 +165,9 @@ for dev in rmd1 rmd0; do
         exit 1
     fi
     want=$((blocks * KBPB))
-    got=$(echo "$console" | sed -n "s|^/dev/$dev \([0-9]*\)\$|\1|p")
+    # The Avail column, found by the row's first field -- which also skips df's header, whose
+    # first field is `Filesystem', and mkfs's own summary, whose first field is `mkfs:'.
+    got=$(echo "$console" | awk -v d="/dev/$dev" 'NF >= 5 && $1 == d { print $4 }')
     if [ -z "$got" ]; then
         echo "run-mkfs.sh: no df output for /dev/$dev between the markers" >&2
         echo "$console" >&2
