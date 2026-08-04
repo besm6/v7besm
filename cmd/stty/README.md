@@ -63,7 +63,7 @@ typewriter with no keyboard buffer to stop, flow control means about as much as 
 [../TODO.md](../TODO.md) carries it as a named loose end rather than this program inventing a name
 for it — the same treatment `TIOCEXCL` gets, which `ttioccomm()` accepts and nothing tests.
 
-## Two bugs the cut did not cover
+## Three bugs the cut did not cover
 
 **`stty erase` with the keyword last walks off the end of `argv`.** v7:
 
@@ -84,6 +84,13 @@ answer to a question that was never asked, which is [../README.md](../README.md)
 failure in a different medium: *junk that looks like output*. It is an error now — which is also
 what makes the program honest under a harness that has no terminal at all.
 
+**`prmodes()` could not print DEL, and `erase ^?` could not set it.** v7's test is `c < ' '`, and
+0177 is above it, so a DEL erase character went into the report as a raw DEL byte; the argument
+side masked `^X` with `037`, which cannot reach 0177 either. Both were harmless while the defaults
+were `#` and `@`, and neither is now that `CERASE` is `^?` ([`include/sys/tty.h`](../../include/sys/tty.h)).
+`prchar()` spells it `^?` on the way out, and `^?` on the command line means DEL on the way in —
+4BSD's rule in both directions.
+
 ## Where it is tested
 
 [../../kernel/test/multi](../../kernel/test/multi), stages 25–29, and nowhere else. There is no
@@ -91,8 +98,8 @@ what makes the program honest under a harness that has no terminal at all.
 harness `ioctl` is an unconditional success that changes nothing — every case would be asserting
 the simulator.
 
-What the booted stages pin is that the report is **exactly as long as the truth**: `erase = '#';
-kill = '@'` over `-nl echo -tabs`, which is `scopen()`'s own first-open state and nothing else.
+What the booted stages pin is that the report is **exactly as long as the truth**: `erase = '^?';
+kill = '^U'` over `-nl echo -tabs`, which is `scopen()`'s own first-open state and nothing else.
 Then `stty tabs`, the report again with `-tabs` gone, and `stty -tabs` to put it back — a round
 trip through `stty(2)` and `gtty(2)` and the same `struct sgttyb`. The flag order is v7's
 `prmodes()` order and not the table's: `CRMOD` prints before `ECHO`.

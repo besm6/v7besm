@@ -75,7 +75,7 @@ preserve tabs
 .ns
 .TP
 .B ek
-reset erase and kill characters back to normal # and @
+reset erase and kill characters back to normal ^? and ^U
 .br
 .ns
 .TP
@@ -85,7 +85,9 @@ set erase character to
 .I C
 can be of the form
 .I `^X'
-which is interpreted as a `control X'.
+which is interpreted as a `control X';
+.I `^?'
+is DEL.
 .br
 .ns
 .TP

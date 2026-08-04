@@ -111,11 +111,11 @@ int main(int argc, char **argv)
     nice(20);
     nice(0);
 
-    // The erase and kill characters the whole system agrees on -- the same two getty set, and
-    // the same two ttychars() installs in the kernel.
+    // The erase and kill characters the whole system agrees on -- ^? and ^U, the same two
+    // getty set, and the same two ttychars() installs in the kernel.
     gtty(0, &ttyb);
-    ttyb.sg_erase = '#';
-    ttyb.sg_kill  = '@';
+    ttyb.sg_erase = 0177;
+    ttyb.sg_kill  = 025;
     stty(0, &ttyb);
 
     // Nothing but the terminal may be inherited across the exec below.

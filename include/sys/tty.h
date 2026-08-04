@@ -85,11 +85,14 @@ struct tty {
 #define TTIPRI 28
 #define TTOPRI 29
 
-#define CERASE '#' // default special characters
+// Default special characters.  NOT v7's: v7 erased with `#' and killed with `@', both of
+// them typeable text, and interrupted with DEL, which is what a keyboard's own erase key
+// sends.  These are what every terminal since has meant by the four.
+#define CERASE 0177 // Erase a character: ctl-? (DEL)
 #define CEOT   004
-#define CKILL  '@'
-#define CQUIT  034  // FS, cntl shift L
-#define CINTR  0177 // DEL
+#define CKILL  025  // Kill the line: ctl-u
+#define CQUIT  034  // Quit: ctl-\ (FS)
+#define CINTR  003  // Interrupt: ctl-c
 #define CSTOP  023  // Stop output: ctl-s
 #define CSTART 021  // Start output: ctl-q
 #define CBRK   0377

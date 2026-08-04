@@ -468,16 +468,15 @@ line, still has its words
 so that a backquote in such a line starts a command substitution
 that runs to end of file
 and a parenthesis is a syntax error.
-The rule applies wherever the shell reads.
-On this system's console, however, a comment cannot be
-.I typed \|:
-.B #
-is also the terminal's erase character
+The rule applies wherever the shell reads, the console included:
+the terminal's erase character is
+.B ^?
 .RB ( CERASE
 in
 .BR <sys/tty.h> ),
-so the line discipline consumes it, and the character before it,
-before the shell is handed the line at all.
+so a typed
+.B #
+reaches the shell like any other character.
 A
 .B #
 that is not where a word would begin is an ordinary character:

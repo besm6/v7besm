@@ -128,18 +128,34 @@ static int eq(const char *string)
     return 1;
 }
 
+// One special character, printable.  v7 tested `< space' alone, which prints DEL as itself --
+// a raw 0177 into the report -- and DEL is now the erase character (<sys/tty.h>).  `^?' is
+// 4BSD's spelling and the one the erase and kill arguments below accept.
+static char *prchar(int c, char *buf)
+{
+    c &= 0377;
+    if (c == 0177) {
+        buf[0] = '^';
+        buf[1] = '?';
+        buf[2] = 0;
+    } else if (c < ' ') {
+        buf[0] = '^';
+        buf[1] = '@' + c;
+        buf[2] = 0;
+    } else {
+        buf[0] = c;
+        buf[1] = 0;
+    }
+    return buf;
+}
+
 static void prmodes(void)
 {
+    char eb[3], kb[3];
     int m;
 
-    if (mode.sg_erase < ' ')
-        fprintf(stderr, "erase = '^%c'; ", '@' + mode.sg_erase);
-    else
-        fprintf(stderr, "erase = '%c'; ", mode.sg_erase);
-    if (mode.sg_kill < ' ')
-        fprintf(stderr, "kill = '^%c'\n", '@' + mode.sg_kill);
-    else
-        fprintf(stderr, "kill = '%c'\n", mode.sg_kill);
+    fprintf(stderr, "erase = '%s'; ", prchar(mode.sg_erase, eb));
+    fprintf(stderr, "kill = '%s'\n", prchar(mode.sg_kill, kb));
     m = mode.sg_flags;
     if (m & RAW)
         fprintf(stderr, "raw ");
@@ -169,8 +185,9 @@ int main(int argc, char *argv[])
     while (--argc > 0) {
         arg = *++argv;
         if (eq("ek")) {
-            mode.sg_erase = '#';
-            mode.sg_kill  = '@';
+            // Normal is what ttychars() installs: ^? and ^U, not v7's `#' and `@'.
+            mode.sg_erase = 0177;
+            mode.sg_kill  = 025;
         }
         // The bound is the fix: v7 read argv[argc] and dereferenced it when the
         // keyword was the last argument on the line.
@@ -179,8 +196,10 @@ int main(int argc, char *argv[])
                 fprintf(stderr, "stty: erase needs a character\n");
                 return 1;
             }
+            // `^?' is DEL and not 037: the mask alone cannot reach it, and it is the
+            // default erase character.
             if (**++argv == '^')
-                mode.sg_erase = (*argv)[1] & 037;
+                mode.sg_erase = (*argv)[1] == '?' ? 0177 : ((*argv)[1] & 037);
             else
                 mode.sg_erase = **argv;
             argc--;
@@ -191,7 +210,7 @@ int main(int argc, char *argv[])
                 return 1;
             }
             if (**++argv == '^')
-                mode.sg_kill = (*argv)[1] & 037;
+                mode.sg_kill = (*argv)[1] == '?' ? 0177 : ((*argv)[1] & 037);
             else
                 mode.sg_kill = **argv;
             argc--;

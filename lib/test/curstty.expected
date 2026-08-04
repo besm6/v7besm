@@ -29,8 +29,8 @@ nonl                           flags=010     echoit=1 rawmode=0 pfast=1
 nonl cleared CRMOD             00
 nl                             flags=030     echoit=1 rawmode=0 pfast=0
 nl set CRMOD                   020
-erasechar                      043
-killchar                       0100
+erasechar                      0177
+killchar                       025
 savetty _res_flg               030
 after resetty                  flags=030     echoit=1 rawmode=1 pfast=1
 resetty restored               030

@@ -322,7 +322,8 @@ scroll-by-linefeed loop.
 *not* set `My_term`, so it is **IMAGEONLY** — the same precedent `memt` and `shellt` set. It
 asserts the console this kernel opens: `_res_flg` must be `06030` (`ECHO|CRMOD|XTABS`),
 `gettmode()` must clear `XTABS` in the live flags, `GT` and `NONL` must both come out false,
-and `erasechar`/`killchar` must be `043`/`0100` — v7's `#` and `@`. It runs **last** in
+and `erasechar`/`killchar` must be `0177`/`025` — `^?` and `^U`, what `ttychars()` installs
+([`include/sys/tty.h`](../../include/sys/tty.h)). It runs **last** in
 `kernel/test/libtest.sh` on purpose: `gettmode()` clears `XTABS` on the real console and only
 `endwin()`'s `resetty()` puts it back, so if it ever dies the only thing still running
 against a changed console is one `echo` and the `sync`.

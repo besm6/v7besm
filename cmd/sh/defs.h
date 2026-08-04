@@ -201,9 +201,9 @@
 // `:' line whose words are still PARSED, so a backquote in one starts a command
 // substitution that runs to end of file.  word() is where it is honoured.
 //
-// It is a SCRIPT feature in practice: on the console this same character is CERASE
-// (<sys/tty.h>), so the line discipline eats a typed `#' -- and the character before it --
-// long before the shell sees the line.  kernel/test/console asserts exactly that.
+// It works on the console too, which it did not while CERASE was `#' (<sys/tty.h>) and the
+// line discipline ate a typed one -- and the character before it -- before the shell saw the
+// line.  Erase is `^?' now, so a typed `#' arrives like any other character.
 #define COMCHAR '#'
 
 #include "mode.h"

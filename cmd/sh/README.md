@@ -228,12 +228,12 @@ room in a 28-page address space; the first is a feature v7 had not got.
   here-document flush included. `test/comment.sh` drives all three, and ends without a final
   newline on purpose.
 
-  **One thing it does not get you: a comment you can type.** On this console `#` is *also* the
-  erase character — `CERASE` in [`include/sys/tty.h`](../../include/sys/tty.h), v7's default — so
-  the line discipline eats it, and the character in front of it, before the shell is handed
-  anything. `kernel/test/console` has asserted that since task 25b: it types `echo ab#c` and the
-  shell prints `ac`. Comments are a *script* feature here until something can change the erase
-  character, which wants an `stty` this image has not got.
+  **It used not to get you a comment you could type.** While `CERASE` was v7's `#`
+  ([`include/sys/tty.h`](../../include/sys/tty.h)) the line discipline ate a typed one, and the
+  character in front of it, before the shell was handed anything — `kernel/test/console` asserted
+  exactly that from task 25b, typing `echo ab#c` and getting `ac` back. The erase character is
+  `^?` now and the kill character `^U`, so a `#` typed at the prompt reaches the shell like any
+  other character and comments work wherever the shell reads.
 
 * **`gmatch()` recursed once per character** of an unbounded pattern. The user stack is four
   pages, and a pattern of a few hundred characters would have run off it with no diagnostic. Its

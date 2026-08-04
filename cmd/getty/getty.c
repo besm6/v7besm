@@ -80,9 +80,9 @@
 #include <signal.h>
 #include <unistd.h>
 
-#define ERASE '#' // what login and the kernel's ttychars() both use
-#define KILL  '@'
-#define EOT   004 // ^D at the login: prompt means "go away"
+#define ERASE 0177 // ^?, what login and the kernel's ttychars() both use
+#define KILL  025  // ^U
+#define EOT   004  // ^D at the login: prompt means "go away"
 
 // The name buffer.  Sixteen is v7's; login truncates to eight, and getname() below will not
 // store past this.
@@ -94,8 +94,9 @@ static struct sgttyb tmode;
 // (kernel/dev/tty.c), not a per-line copy -- v7's arrangement, carried faithfully -- so this
 // is a system-wide statement and not a property of this terminal.  The values are the ones
 // ttychars() already installs; setting them again costs one syscall and means a getty started
-// after something else has moved them puts them back.
-static struct tchars tchars = { '\177', '\034', '\021', '\023', '\004', '\377' };
+// after something else has moved them puts them back.  In struct tchars order (sys/ttyio.h):
+// intr ^C, quit ^\, start ^Q, stop ^S, eof ^D, brk 0377.
+static struct tchars tchars = { '\003', '\034', '\021', '\023', '\004', '\377' };
 
 // One kind of terminal: what to select it by, what to leave the line as while the name is
 // read, what to leave it as for login, and what to print.  `nname' is the entry to fall to
