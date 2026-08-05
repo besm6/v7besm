@@ -190,7 +190,9 @@ def v7_quotes(text):
                 continue
             end = j
             break
-        if end < 0:
+        if end < 0 or end == i + width:
+            # An EMPTY quotation is not one -- m4.1 writes the pair itself to name
+            # the default quote characters.  mark_quotes() in escape.cpp agrees.
             i += 1
             continue
         spans.append((i, end, width))
