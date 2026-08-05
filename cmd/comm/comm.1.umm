@@ -1,0 +1,42 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# COMM(1)
+
+## NAME
+
+comm - select or reject lines common to two sorted files
+
+## SYNOPSIS
+
+| **comm** [ **-** [ **123** ] ] file1 file2
+
+## DESCRIPTION
+
+*Comm* reads *file1* and *file2,* which should be ordered in the collating sequence described
+below, and produces a three column output: lines only in *file1;* lines only in *file2;* and
+lines in both files. The filename `-` means the standard input.
+
+Flags 1, 2, or 3 suppress printing of the corresponding column. Thus **comm -12** prints only
+the lines common to the two files; **comm -23** prints only lines in the first file but not in
+the second; **comm -123** is a no-op.
+
+## THE COLLATING SEQUENCE
+
+*Note:* lines are compared a byte at a time, and a byte is an unsigned value from 0 to 255 on
+this machine where it was a signed one on the PDP-11. So a character above U+007F - which is
+more than one byte in this system's UTF-8 text - sorts *after* every ASCII character, not
+before it as it did in v7. That is the order sort(1) and the shell's filename generation
+already use, so
+
+> sort file1 >a; sort file2 >b; comm a b
+
+means what it looks like it means for a file holding **привет**.
+
+## BUGS
+
+A line longer than 255 bytes is cut, and what is left of it is treated as the line that
+follows.
+
+## SEE ALSO
+
+cmp(1), diff(1), uniq(1), sort(1)

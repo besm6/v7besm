@@ -1,0 +1,101 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# STTY(1)
+
+## NAME
+
+stty - set terminal options
+
+## SYNOPSIS
+
+| **stty** [ option ... ]
+
+## DESCRIPTION
+
+*Stty* sets certain I/O options on the current output terminal. With no argument, it reports
+the current settings of the options. The report goes to the standard error. The option strings
+are selected from the following set:
+
+**raw**
+: | raw mode input (no erase, kill, interrupt, quit, EOT)
+
+**-raw**
+: | negate raw mode
+
+**cooked**
+: | same as `-raw`
+
+**cbreak**
+: | make each character available to read(2) as received; no erase and kill
+
+**-cbreak**
+: | make characters available to *read* only when newline is received
+
+**-nl**
+: | allow carriage return for new-line, and output CR-LF for carriage return or new-line
+
+**nl**
+: | accept only new-line to end lines
+
+**echo**
+: | echo back every character typed
+
+**-echo**
+: | do not echo characters
+
+**-tabs**
+: | replace tabs by spaces when printing
+
+**tabs**
+: | preserve tabs
+
+**ek**
+: | reset erase and kill characters back to normal ^? and ^U
+
+**erase** *c*
+: | set erase character to *c*. *C* can be of the form `^X` which is interpreted as a `control X`; `^?` is DEL.
+
+**kill** *c*
+: set kill character to *c*. `^X` works here also.
+
+That is the whole list, and it is much shorter than v7's.
+
+**Note:** the options this page used to name that describe hardware the BESM-6 has not got were
+removed from the program rather than left to fail quietly, on the precedent getty(8) set when
+it cut its speed table to one entry. Each was measured against the driver, not assumed:
+
+**50 ... 9600 exta extb 0**
+: | the baud rates. A Consul-254 is a parallel typewriter that moves one whole character per instruction; there is no line whose rate could be set. *sg_ispeed* and *sg_ospeed* are stored and handed back by the kernel and read by nothing.
+
+**even -even odd -odd**
+: | parity. The Consul line carries eight bits of data end to end.
+
+**cr0-cr3 nl0-nl3 tab0-tab3 ff0 ff1 bs0 bs1**
+: | the delays. Nothing on this terminal has a carriage to wait for, and on an eight-bit line a queued byte above 0177 is data and cannot also be a delay count. **-tabs** is the exception and remains: tab expansion is done by column and is live.
+
+**tty33 tty37 vt05 tn300 ti700 tek**
+: | terminals that are not this one; each was only a bundle of the delays above.
+
+**lcase -lcase**
+: | case mapping. The kernel does implement it, in both directions - and it would undo the driver, whose line is raw because the Consul's own code has no lower-case Latin at all. The text of this system is UTF-8 end to end.
+
+**hup -hup**
+: ioctl(2)'s TIOCHPCL sets a bit that nothing in this kernel ever tests. It was this program's
+  only *ioctl* call.
+
+**Note: -hup** and **0** were on this page and were never in v7's program.
+
+**Note:** TANDEM, the flow-control flag, is live in the kernel and this program still cannot
+set it - v7's had no word for it either.
+
+## DIAGNOSTICS
+
+`stty: not a terminal` if the standard output is not one. v7 ignored gtty(2)'s return and
+reported the modes of a zeroed structure instead.
+
+An unrecognised word gives `unknown mode: word` and the remaining options are still applied,
+which is v7's behaviour.
+
+## SEE ALSO
+
+ioctl(2), tty(4), getty(8)

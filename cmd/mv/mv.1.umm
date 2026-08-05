@@ -1,0 +1,133 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# MV(1)
+
+## NAME
+
+mv - move or rename files and directories
+
+## SYNOPSIS
+
+| **mv** file1 file2
+
+| **mv** dir1 dir2
+
+| **mv** file ... directory
+
+## DESCRIPTION
+
+*Mv* moves (changes the name of) *file1* to *file2*.
+
+If *file2* already exists, it is removed before *file1* is moved. If *file2* has a mode which
+forbids writing, *mv* prints the mode (see chmod(2)) and reads the standard input to obtain a
+line; if the line begins with **y,** the move takes place; if not, *mv* exits. The question is
+asked only when the standard input is a terminal.
+
+**Note:** the second SYNOPSIS line is an addition. The v7 page showed two forms and the program
+has always had three - its own usage message says **mv f1 f2; or mv d1 d2; or mv f1 ... fn d1**
+\- and the third of them, renaming a **directory**, is the whole of what makes *mv* interesting
+on this machine. See below.
+
+In the second form, one or more *files* are moved to the *directory* with their original
+file-names.
+
+*Mv* refuses to move a file onto itself.
+
+## RENAMING A DIRECTORY
+
+**Note:** this section is new; v7's page did not mention the case at all.
+
+There is no *rename* system call on this system, and no *mkdir* or *rmdir* either. A directory
+is renamed by hand. When the old and the new name share a parent that is a link(2) and an
+unlink(2) and no more, because `..` already points where it should. When they do **not** share
+a parent it takes four calls - link the new name, unlink the old, unlink the directory's own
+`..`, and link the new parent in its place - and until all four have run the filesystem is
+inconsistent. *Mv* ignores every signal across that sequence for exactly that reason.
+
+**Note: /bin/mv is set-user-id root, and has to be.** Both link(2) and unlink(2) refuse a
+directory to anyone but the super-user (**if ((ip->i_mode & IFMT) == IFDIR && !suser())**,
+kernel/sys2.c and kernel/sys4.c), so none of the calls above can be made by an ordinary user.
+The bit is `mode 04755` in root.manifest, and mkdir(1) and rmdir(1) carry it for the same kind
+of reason.
+
+**Root is borrowed and not granted.** *Mv* calls **setuid(getuid())** as soon as it knows the
+argument is not a directory, so every other form of *mv* runs with the invoking user's own
+identity and no privilege whatever. For the directory form the privilege is kept, and what
+decides whether the rename is allowed is *mv*'s own access(2) checks on both parents and on the
+directory itself - access(2) asking about the **real** user id. So the answer is the one the
+user would have got without the setuid bit; only the mechanics need root.
+
+Two renames are refused outright:
+
+A directory may not be moved **into itself** or into anything below it. *Mv* walks from the
+target's parent up to the root through `..` and stops if it meets the source.
+
+A path that spells **..** in any component is refused, rather than reasoned about. (This test
+is reached only when the two parents differ; a rename inside one parent takes the simpler
+branch and never looks.)
+
+## DIAGNOSTICS
+
+**Note:** v7's page had no DIAGNOSTICS section. All of these go to the standard error and *mv*
+exits 1.
+
+**mv: cannot access** *file* - the source could not be stat'ed.
+
+**mv: directory rename only** - a directory appeared among the arguments of a multi-file move.
+Renaming a directory takes exactly two arguments.
+
+**mv:** *file* **is a directory**
+
+**mv:** *file* **and** *file* **are identical**
+
+**mv: cannot unlink** *file*
+
+**mv:** *dir*\&**/**\&*name*\&**:** *name too long* and **mv: target name too long** - a
+constructed name would not fit 100 characters. v7 checked one of the three places this can
+happen and did not bound the other two.
+
+**mv:** *dir* **exists** - the target of a directory rename is in the way.
+
+**mv: cannot rename** *name* - the last component of the source is `.`, `..` or empty.
+
+**mv: cannot locate parent**
+
+**mv: no write access to** *dir* - and this is the check that asks about the **real** user id;
+see above.
+
+**mv: cannot move directories across devices**
+
+**mv: cannot move a directory into itself**
+
+**mv: Sorry, path names including .. aren't allowed**
+
+**mv: cannot link** *a* **to** *b* and **mv:** *file*\&**: cannot unlink** - one of the four
+calls of a re-parent failed. *Mv* undoes what it can and says which call it was.
+
+**mv: try again** - the fork(2) for a cross-device copy failed.
+
+**mv: cannot exec cp** and **mv: cannot wait for cp** - see BUGS.
+
+## BUGS
+
+If *file1* and *file2* lie on different file systems, *mv* must copy the file and delete the
+original. In this case the owner name becomes that of the copying process and any linking
+relationship with other files is lost.
+
+**Note:** `must copy the file` is literal - *mv fork*\&s and *exec*\&s **/bin/cp**, by that
+name and with no search of any kind, so the move fails outright if *cp* is not on the
+filesystem. It is not as bad as the paragraph above suggests, though: the times **are** kept,
+because *mv* restores them with utime(2) after the copy returns. Only the owner and the links
+are lost.
+
+**Note: this cannot happen on this machine.** A cross-device move is one whose link(2) came
+back **EXDEV**, and there is only one filesystem here - one EC-5052 drive is the whole of the
+store, and swap lives on the drums. The path is faithfully ported and **/bin/cp** really is on
+the image, but nothing exercises it and nothing can until there is a second thing to mount.
+
+*Mv* should take **-f** flag, like *rm,* to suppress the question if the target exists and is
+not writable.
+
+## SEE ALSO
+
+cp(1), ln(1), rm(1), chmod(2), link(2), unlink(2), utime(2)

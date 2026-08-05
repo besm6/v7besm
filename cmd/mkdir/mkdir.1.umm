@@ -1,0 +1,45 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# MKDIR(1)
+
+## NAME
+
+mkdir - make a directory
+
+## SYNOPSIS
+
+| **mkdir** *dirname ...*
+
+## DESCRIPTION
+
+*Mkdir* creates specified directories in mode 777. Standard entries, `.`, for the directory
+itself, and `..` for its parent, are made automatically.
+
+*Mkdir* requires write permission in the parent directory.
+
+**Note:** the mode is 777 as modified by the umask(2) of the calling process, which is what
+*maknode* in the kernel applies to every mknod(2). The initial mask, **CMASK** in
+<sys/param.h>, is 0 on this system and nothing sets another, so a directory made here really is
+777 today.
+
+**Note:** *mkdir* is **set-user-id to root** on this system, and must be: there is no *mkdir*
+system call, so the directory is built by hand out of mknod(2) and two link(2)s, and all three
+are refused to anyone but the super-user. The bit is granted in *root.manifest* at the top of
+the source tree, as mode 04755.
+
+The permission the paragraph above speaks of is therefore the program's own: *mkdir* calls
+access(2) on the parent directory before it does anything else, and *access* asks about the
+**real** user id. The super-user rights are borrowed for the three calls that need them and for
+nothing else, and the finished directory is handed to the real user and group with chown(2).
+
+## SEE ALSO
+
+rm(1), mknod(2), link(2), chown(2), umask(2)
+
+## DIAGNOSTICS
+
+*Mkdir* returns exit code 0 if all directories were successfully made. Otherwise it prints a
+diagnostic and returns nonzero.
+
+**Note:** a name longer than 124 characters is refused rather than copied into a fixed buffer,
+which is what v7 did.

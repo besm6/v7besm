@@ -1,0 +1,71 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# CP(1)
+
+## NAME
+
+cp - copy
+
+## SYNOPSIS
+
+| **cp** file1 file2
+
+| **cp** file ... directory
+
+## DESCRIPTION
+
+*File1* is copied onto *file2*. The mode and owner of *file2* are preserved if it already
+existed; the mode of the source file is used otherwise.
+
+**Note:** `the mode of the source file is used` is not quite what happens, here or on the
+PDP-11. *Cp* hands creat(2) the source's whole *st_mode*, and the kernel keeps **mode & 07777 &
+~ISVTX** and then applies the caller's umask(2) - see **maknode** in kernel/sys2.c. So the
+sticky bit is dropped and the umask still bites. **CMASK** is 0 on this system and nothing sets
+another, so today the copy does come out with the source's permission bits; give the shell a
+*umask* builtin and it will not.
+
+**Note:** *cp* does not preserve the times. The copy is new, so its `accessed` and `updated`
+times are the time of the copy. Mv(1) restores them itself with utime(2) after it has had to
+fall back on *cp*.
+
+In the second form, one or more *files* are copied into the *directory* with their original
+file-names.
+
+**Note:** the constructed name - the directory, a slash, and the last component of the source -
+is refused if it will not fit 512 characters. v7 built it in the I/O buffer with no bound at
+all.
+
+*Cp* refuses to copy a file onto itself.
+
+**Note:** *cp* copies one 3072-byte block at a time, which is **BUFSIZ** and is one filesystem
+block on this machine (include/sys/param.h). v7's 512 was one PDP-11 disk block and would be
+six system calls per block here.
+
+## DIAGNOSTICS
+
+*Cp* writes to the standard error and exits with the number of files it failed on.
+
+**cp: cannot open** *file* - the source could not be opened for reading.
+
+**cp: cannot create** *file* - the target could not be created: no write permission on its
+directory, or a full filesystem.
+
+**cp:** *directory*\&**/**\&*file*\&**: name too long** - the constructed name exceeds the
+buffer; see above.
+
+**cp: cannot copy file to itself.**
+
+**cp: read error** and **cp: write error.** - the copy stopped part way, and the target is left
+truncated.
+
+## BUGS
+
+*Cp* does not copy directories, and says nothing useful when asked to: it opens the directory,
+reads it, and writes its raw contents into an ordinary file. Use tar(1) when there is one, or
+copy the files one at a time.
+
+A copy interrupted part way leaves a truncated target. Nothing here catches a signal.
+
+## SEE ALSO
+
+cat(1), pr(1), mv(1), ln(1), rm(1), creat(2), umask(2)

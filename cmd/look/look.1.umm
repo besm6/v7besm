@@ -1,0 +1,60 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# LOOK(1)
+
+## NAME
+
+look - find lines in a sorted list
+
+## SYNOPSIS
+
+| **look** [ **-df** ] [ **-t**\&*c* ] string [ file ]
+
+## DESCRIPTION
+
+*Look* consults a sorted *file* and prints all lines that begin with *string*. It uses binary
+search.
+
+The options **d** and **f** affect comparisons as in sort(1):
+
+**d**
+: `Dictionary` order: only letters, digits, tabs and blanks participate in comparisons.
+
+**f**
+: Fold. Upper case letters compare equal to lower case.
+
+**-t**\&*c*
+: Set the termination character to *c*: the comparison stops there rather than at the end of the
+  line.
+
+If no *file* is specified, */usr/dict/words* is assumed with collating sequence **-df**.
+
+## SORTED MEANS SORTED IN BYTE ORDER
+
+*Note:* lines are compared a byte at a time, and a byte is an unsigned value from 0 to 255 on
+this machine where it was a signed one on the PDP-11. So a character above U+007F - which is
+more than one byte in this system's UTF-8 text - sorts *after* every ASCII character. That is
+the order sort(1) produces and the order */usr/dict/words* below is in; **LC_ALL=C sort -c** is
+the check. A list sorted any other way will make the binary search miss entries that are there.
+
+The two comparison options are defined over a multi-byte character as follows, which v7 had no
+occasion to say: a byte above 0177 is part of a letter, so **-d** keeps it, and a multi-byte
+letter has no case here, so **-f** leaves it alone. **look го** therefore finds **год**,
+**голова** and **город**.
+
+## FILES
+
+/usr/dict/words
+
+## BUGS
+
+*Note: /usr/dict/words* on this machine is a short list written for the purpose - about a
+thousand entries - and not v7's 25,000-word dictionary, which is not in this source tree.
+*Look* is a working command over it, but it is not a spelling authority.
+
+A dictionary line longer than 249 bytes is cut before it is compared. *Note:* v7 had no bound
+here at all and wrote past the end of its buffer.
+
+## SEE ALSO
+
+sort(1), grep(1), comm(1)

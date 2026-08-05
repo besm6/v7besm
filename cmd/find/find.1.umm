@@ -1,0 +1,129 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# FIND(1)
+
+## NAME
+
+find - find files
+
+## SYNOPSIS
+
+| **find** pathname-list expression
+
+## DESCRIPTION
+
+*Find* recursively descends the directory hierarchy for each pathname in the *pathname-list*
+(i.e., one or more pathnames) seeking files that match a boolean *expression* written in the
+primaries given below. In the descriptions, the argument *n* is used as a decimal integer where
+*+n* means more than *n, -n* means less than *n* and *n* means exactly *n*.
+
+**-name** filename
+: True if the *filename* argument matches the current file name. Normal Shell argument syntax may
+  be used if escaped (watch out for `[`, `?` and `*`).
+
+**-perm** onum
+: True if the file permission flags exactly match the octal number *onum* (see chmod(1)). If
+  *onum* is prefixed by a minus sign, more flag bits (017777, see stat(2)) become significant and
+  the flags are compared: *(flags&onum)==onum*.
+
+**-type** c
+: True if the type of the file is *c,* where *c* is **b, c, d** or **f** for block special file,
+  character special file, directory or plain file.
+
+**-links** n
+: True if the file has *n* links.
+
+**-user** uname
+: True if the file belongs to the user *uname* (login name or numeric user ID).
+
+**-group** gname
+: True if the file belongs to group *gname* (group name or numeric group ID).
+
+**-size** n
+: True if the file is *n* blocks long. *Note:* a block here is 1024 bytes, not v7's 512 - see
+  BLOCKS ARE 1024 BYTES below.
+
+**-inum** n
+: True if the file has inode number *n.*
+
+**-atime** n
+: True if the file has been accessed in *n* days.
+
+**-mtime** n
+: True if the file has been modified in *n* days.
+
+**-exec** command
+: True if the executed command returns a zero value as exit status. The end of the command must
+  be punctuated by an escaped semicolon. A command argument `{}` is replaced by the current
+  pathname.
+
+**-ok** command
+: Like **-exec** except that the generated command is written on the standard output, then the
+  standard input is read and the command executed only upon response **y**.
+
+**-print**
+: Always true; causes the current pathname to be printed.
+
+**-newer** file
+: True if the current file has been modified more recently than the argument *file.*
+
+The primaries may be combined using the following operators (in order of decreasing
+precedence):
+
+1)
+: A parenthesized group of primaries and operators (parentheses are special to the Shell and must
+  be escaped).
+
+2)
+: The negation of a primary (`!` is the unary *not* operator).
+
+3)
+: Concatenation of primaries (the *and* operation is implied by the juxtaposition of two
+  primaries).
+
+4)
+: Alternation of primaries (`-o` is the *or* operator).
+
+## EXAMPLE
+
+To remove all files named `a.out` or `*.o` that have not been accessed for a week:
+
+> find / \\( -name a.out -o -name '\*.o' \\) -atime +7 -exec rm {} \\;
+
+## BLOCKS ARE 1024 BYTES
+
+**-size** counts 1024-byte blocks, rounded up. *Note:* v7 counted 512-byte blocks. 512 is not a
+whole number of BESM-6 words and names nothing on this machine, and the four programs that
+report a file's size in blocks - *df*(1M), du(1), *quot*(1M) and **ls -s** - all report
+1024-byte blocks here, so **-size** takes the number a user reads out of one of those. A
+filesystem block is three of them.
+
+## WHAT IS NOT HERE
+
+**-cpio** is gone. It wrote a cpio(5) archive out of 16-bit quantities, through a run-time
+byte-order probe, and prompted on **/dev/tty** for the next magnetic tape reel when the output
+filled. There is no tape drive on this machine and no driver for one, and *cmd/TODO.md*
+excludes the whole of v7's tape software; an archive nothing here can read is not a service.
+*Find* diagnoses **-cpio** as an unknown primary rather than ignoring it.
+
+## LIMITS
+
+The directory walk is at most 20 levels deep, and a path at most 199 bytes long. *Note:* v7
+stated neither and enforced neither. Its walk was recursive with a directory block in each
+frame, so about thirty levels exhausted the four-page stack - and the region past the stack
+returns wrong answers before it faults. Both are diagnostics now.
+
+An expression may hold at most 100 primaries and operators, and **-exec** at most 49 arguments.
+
+## FILES
+
+| /etc/passwd
+| /etc/group
+
+## SEE ALSO
+
+sh(1), test(1), filsys(5)
+
+## BUGS
+
+The syntax is painful.

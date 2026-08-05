@@ -128,5 +128,4 @@ rather than provably single-rounded, for the same reason the split could not be 
 ## FILES
 
 | share/besm6/lib/libm.a
-| lib/libm/fabs.c, floor.c, trunc.c, round.c, copysign.c, fmin.c, fmax.c, fmod.c,
-| fma.c
+| lib/libm/fabs.c, floor.c, trunc.c, round.c, copysign.c, fmin.c, fmax.c, fmod.c, fma.c

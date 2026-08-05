@@ -1,0 +1,95 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# PR(1)
+
+## NAME
+
+pr - print file
+
+## SYNOPSIS
+
+| **pr** [ option ] ... [ file ] ...
+
+## DESCRIPTION
+
+*Pr* produces a printed listing of one or more *files.* The output is separated into pages
+headed by a date, the name of the file or a specified header, and the page number. If there are
+no file arguments, *pr* prints its standard input.
+
+Options apply to all following files but may be reset between files:
+
+**-**\&*n*
+: Produce *n*-column output. *Note: n* must be between 1 and 72 and no larger than the page
+  width.
+
+**+**\&*n*
+: Begin printing with page *n.*
+
+**-h**
+: Take the next argument as a page header.
+
+**-w**\&*n*
+: For purposes of multi-column output, take the width of the page to be *n* characters instead of
+  the default 72.
+
+**-l**\&*n*
+: Take the length of the page to be *n* lines instead of the default 66. *Note:* without **-t**,
+  a length of 10 or less is silently taken as 66, ten lines being what the heading and the
+  trailer need between them.
+
+**-t**
+: Do not print the 5-line header or the 5-line trailer normally supplied for each page.
+
+**-s**\&*c*
+: Separate columns by the single character *c* instead of by the appropriate amount of white
+  space. A missing *c* is taken to be a tab.
+
+**-m**
+: Print all *files* simultaneously, each in one column,
+
+Inter-terminal messages via write(1) are forbidden during a *pr*. *Note:* neither write(1) nor
+mesg(1) is on this system yet - see *cmd/TODO.md* - but *pr* still sets the mode of its own
+terminal to 0600 for the duration of a listing and puts it back on the way out, so that they
+need no change when they arrive.
+
+## HOW A PAGE IS LAID OUT
+
+A page is *length* lines whether or not there is that much input: the heading is five lines,
+the body is *length*-5 lines padded out with blanks, and the trailer is the five lines left
+over. Under **-t** the body alone is *length* lines, and it is still padded.
+
+Each column of an *n*-column listing holds *length*-10 lines - *length* under **-t** - so
+**-3** on a default page is three columns of 56 lines, and column *k* begins 56\&*k* lines into
+the file. Every column but the last is truncated at *width*/*n* characters; the last one, and
+single-column output, are never truncated.
+
+## COLUMNS ARE COUNTED IN BYTES
+
+*Note:* a character above U+007F occupies more than one byte, and *pr* counts each of them as a
+column. So a Cyrillic column aligns against an ASCII one by byte and not by letter. This is the
+same limitation col(1) has, and the same one the shell's pattern language has, where **?**
+matches one byte.
+
+## FILES
+
+/dev/tty? to suspend messages.
+
+## SEE ALSO
+
+cat(1), col(1)
+
+## DIAGNOSTICS
+
+There are no diagnostics when *pr* is printing on a terminal.
+
+**pr: too many columns for the buffer** - *pr* reads ahead so that every column of a page can
+be filled in one pass over the input, and it holds that look-ahead in a single 6720-byte
+circular buffer. More columns, or a longer page, than the buffer can carry is refused. *Note:*
+v7 did not check this. It silently began the affected column part way down the file instead,
+with no diagnostic of any kind, so that **pr -l800 -2** over a 24-kilobyte file started its
+first column 840 lines late.
+
+## BUGS
+
+*Pr* exits 0 after every one of its diagnostics, so a shell script cannot tell a refused
+listing from a printed one. That is v7's behaviour and is left alone.

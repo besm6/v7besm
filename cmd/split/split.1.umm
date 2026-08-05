@@ -1,0 +1,54 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# SPLIT(1)
+
+## NAME
+
+split - split a file into pieces
+
+## SYNOPSIS
+
+| **split** [ **-**\&*n* ] [ file [ name ] ]
+
+## DESCRIPTION
+
+*Split* reads *file* and writes it in *n*-line pieces (default 1000), as many as necessary,
+onto a set of output files. The name of the first output file is *name* with **aa** appended,
+and so on lexicographically. If no output name is given, **x** is default.
+
+If no input file is given, or if **-** is given in its stead, then the standard input file is
+used.
+
+**Note:** the pieces are created in the **working directory,** the name being handed to
+fopen(3) with no directory part prepended. A *name* containing a **/** therefore writes
+wherever it points; nothing is created for it, and a missing directory is reported as **Cannot
+create output**. An existing piece is **truncated** without warning. Both are v7's and its page
+said neither.
+
+## HOW MANY PIECES
+
+The suffix is two letters, so **676** pieces can be named: **aa** through **zz**.
+
+**Note:** the 677th is refused, with **split: more than 676 output files**. v7 carried on past
+**zz** into **{a**, **{b** and beyond, with no complaint - so the promise above that the names
+run lexicographically stopped being true exactly when a user had enough pieces to care. What
+has already been written is left written; the input has been consumed.
+
+**Note:** *name* may be at most **97** bytes, the buffer being 100 and the suffix and
+terminator taking three. A longer one is refused with **split: output name too long** before
+anything is created. v7 copied it in with no test at all.
+
+## DIAGNOSTICS
+
+**Note: -0** is refused with **split: line count must be positive**. v7 accepted it and then
+looped forever, reading nothing and writing nothing: with a count of zero the per-piece loop
+runs no iterations, so no input is read, no output is opened, and the program goes round again.
+
+**Note:** an unrecognised option is refused with a usage line. v7 ignored it silently and split
+the file into thousand-line pieces the user had not asked for.
+
+Every diagnostic above exits 1, as does an input that cannot be opened.
+
+## SEE ALSO
+
+cat(1), tee(1), wc(1)

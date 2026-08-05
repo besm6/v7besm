@@ -1,0 +1,41 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# TAIL(1)
+
+## NAME
+
+tail - deliver the last part of a file
+
+## SYNOPSIS
+
+| **tail** +_number[lbcr] [ file ]
+
+## DESCRIPTION
+
+*Tail* copies the named file to the standard output beginning at a designated place. If no file
+is named, the standard input is used.
+
+Copying begins at distance *+number* from the beginning, or *-number* from the end of the
+input. *Number* is counted in units of lines, blocks or bytes, according to the appended option
+**l**, **b** or **c**. When no units are specified, counting is by lines.
+
+The option **r** copies lines from the end of the file in reverse order; the default for **r**
+is to copy the whole buffer.
+
+## A BLOCK IS 3072 BYTES
+
+*Note:* **b** counts filesystem blocks, which are 3072 bytes here, where v7 counted 512-byte
+PDP-11 disk blocks. So **tail -1b** delivers the last 3072 bytes and **dd bs=1b** moves the
+same amount - the two commands agree, which they would not if this one had kept a number that
+names nothing on this machine.
+
+## SEE ALSO
+
+dd(1)
+
+## BUGS
+
+Tails relative to the end of the file are treasured up in a buffer of 4096 bytes, and thus are
+limited in length.
+
+Various kinds of anomalous behavior may happen with character special files.

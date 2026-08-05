@@ -1,0 +1,48 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# DU(1)
+
+## NAME
+
+du - summarize disk usage
+
+## SYNOPSIS
+
+| **du** [ **-s** ] [ **-a** ] [ name ... ]
+
+## DESCRIPTION
+
+*Du* gives the number of blocks contained in all files and (recursively) directories within
+each specified directory or file *name*. If *name* is missing, `.` is used.
+
+The optional argument **-s** causes only the grand total to be given. The optional argument
+**-a** causes an entry to be generated for each file. Absence of either causes an entry to be
+generated for each directory only.
+
+A file which has two links to it is only counted once.
+
+## BLOCKS ARE 1024 BYTES
+
+**Note:** the block *du* counts in is **1024** bytes. It is not this machine's filesystem
+block, which is **3072** bytes - 512 words of 48 bits - and is three of them.
+
+Two things follow. Every number *du* prints is a **multiple of three,** the smallest thing that
+can be allocated being one 3072-byte block: a one-byte file costs three. And the numbers are
+**half** what a PDP-11 printed, v7 having counted in 512-byte blocks - not a sixth, which is
+what they were when this program counted in the filesystem block.
+
+**Note:** there is no *BSHIFT* on this machine and there cannot be, 3072 not being a power of
+two; the conversion is a divide by the filesystem block and then a multiply, and both live in
+*sys/param.h*.
+
+*Df*(1M), *quot*(1M) and ls(1) report in the same block.
+
+## BUGS
+
+| Non-directories given as arguments (not under **-a** option) are not listed.
+| If there are too many distinct linked files, *du* counts the excess files multiply.
+| **Note:** a path longer than 256 characters, or one grown past that by the walk, is refused with **--path too long** and skipped. v7 appended one component per directory level into a fixed buffer with no test of any kind.
+
+## SEE ALSO
+
+df(1M), quot(1M), ls(1)

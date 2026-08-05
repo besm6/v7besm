@@ -1,0 +1,49 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# SUM(1)
+
+## NAME
+
+sum - sum and count blocks in a file
+
+## SYNOPSIS
+
+| **sum** [ file ... ]
+
+## DESCRIPTION
+
+*Sum* calculates and prints a 16-bit checksum for the named files, or for the standard input if
+no name appears, and also prints the number of blocks in each. It is typically used to look for
+bad spots, or to validate a file communicated over some transmission line.
+
+**Note:** the checksum is **still 16 bits** and is bit for bit the one a PDP-11 computed for
+the same file, although a word on this machine is 48. The algorithm rotates a sixteen-bit
+accumulator right, adds the byte and masks back to sixteen bits, and because the mask is
+applied on every byte rather than left to the register's width, a wider machine cannot diverge
+from a narrower one.
+
+**Note:** the file name is printed only when **more than one** file was named. A single named
+file gets a checksum and a block count and nothing else, which is v7's test - **argc > 2,** not
+**argc > 1.**
+
+## BLOCKS ARE 1024 BYTES
+
+**Note:** the block *sum* counts in is **1024** bytes. It is not this machine's filesystem
+block, which is **3072** bytes - 512 words of 48 bits - and is three of them.
+
+So every number *sum* prints is a **multiple of three,** the smallest thing that can be
+allocated being one 3072-byte block: a one-byte file reads as three. And the numbers are
+**twice** a PDP-11's, v7 having counted in 512-byte blocks.
+
+Du(1), *df*(1M), *quot*(1M) and ls(1) report in the same block.
+
+## DIAGNOSTICS
+
+`Read error` is indistinguishable from end of file on most devices; check the block count.
+
+A file that cannot be opened adds 10 to the exit status and a read error adds 1, so a run that
+failed to open one file exits 10. That is v7's arithmetic, unchanged.
+
+## SEE ALSO
+
+wc(1), cmp(1), du(1)

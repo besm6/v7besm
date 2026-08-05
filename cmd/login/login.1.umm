@@ -1,0 +1,78 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# LOGIN(1)
+
+## NAME
+
+login - sign on
+
+## SYNOPSIS
+
+| **login** [ *username* ]
+
+## DESCRIPTION
+
+The *login* command is used when a user initially signs on. It is normally reached by getty(8),
+which reads the name and passes it as the argument above.
+
+If *login* is invoked without an argument, it asks for a user name, and, if appropriate, a
+password. Echoing is turned off during the typing of the password, so it will not appear on the
+written record of the session. A name that is not in the password file is still asked for a
+password and still refused: this is deliberate, since a *login* that skipped the prompt would
+say which names exist.
+
+After a successful login, accounting files are updated and the user is informed of the
+existence of mail and message-of-the-day files. *Login* initializes the user and group IDs and
+the working directory, then executes a command interpreter (usually sh(1)) according to
+specifications found in a password file. Argument 0 of the command interpreter is `-sh`.
+
+## THIS MACHINE
+
+**Note:** three of the files below are not on this system, and each fails quietly rather than
+being cut out of the program:
+
+/usr/adm/wtmp
+: The permanent login history. Nothing reads it - there is no *last* here - so it is not on the
+  image and the append is skipped.
+
+/usr/spool/mail
+: There is no mail(1), so `You have mail.` never prints.
+
+/usr/bin
+: Named by the PATH *login* exports, and empty of meaning: the shell's own default already
+  reaches /bin.
+
+**Note:** v7 says *login* `may be used at any time to change from one user to another`. Not
+here. That use needs the program to be set-user-ID root, and it is not - getty(8) is already
+root and hands the privilege on. The command that changes user is su(1), which is not yet
+ported.
+
+**Note:** v7 says *login* \`is recognized by sh(1) and executed directly (without forking)'.
+That was the pre-Bourne shell. Sh(1) here has no such built-in and forks like any other
+command.
+
+## FILES
+
+/etc/utmp
+: accounting
+
+/usr/adm/wtmp
+: accounting; absent here
+
+/usr/spool/mail/\*
+: mail; absent here
+
+/etc/motd
+: message-of-the-day
+
+/etc/passwd
+: password file
+
+## SEE ALSO
+
+init(8), newgrp(1), getty(8), mail(1), passwd(1), passwd(5), ttys(5)
+
+## DIAGNOSTICS
+
+| `Login incorrect,` if the name or the password is bad.
+| `No directory`, if the account's home directory cannot be reached; `No shell`, if the command interpreter cannot be executed.

@@ -1,0 +1,51 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+<!-- NOTE: this page contains Cyrillic, and it is the example that matters -- read it -->
+<!-- own.  It is the first page in this tree to need that; cmd/README.md SS10 says so. -->
+
+# WC(1)
+
+## NAME
+
+wc - word count
+
+## SYNOPSIS
+
+| **wc** [ **-lwc** ] [ name ... ]
+
+## DESCRIPTION
+
+*Wc* counts lines, words and characters in the named files, or in the standard input if no name
+appears. A word is a maximal string of characters delimited by spaces, tabs or newlines.
+
+If the optional argument is present, just the specified counts (lines, words or characters) are
+selected by the letters **l**, **w**, or **c**.
+
+**Note:** the counts always come out in the order **l**, **w**, **c**, whatever order the
+letters were given in, and a bare **-** selects none of them - *wc* then reads its input and
+prints an empty line. Both are v7's.
+
+## WORDS, CHARACTERS AND EIGHT BITS
+
+**Note:** a **character** here is a **byte**. This machine's text is UTF-8, so a Cyrillic
+letter is two bytes and counts as two.
+
+**Note:** a byte above **0177** is a **word constituent,** not a delimiter; only space, tab and
+newline end a word. v7's test was **\` ' < c && c < 0177** - printable ASCII and nothing else -
+which on this machine would have made `привет мир` zero words rather than two, every
+byte of it being 0320 or over. The test is **c > \` ' && c != 0177** here.
+
+The DEL exclusion is v7's and is kept, as is what follows from it: a control character other
+than tab and newline neither ends a word nor begins one, so a word with one embedded in it
+still counts as one word.
+
+## DIAGNOSTICS
+
+A file that cannot be opened is reported on the diagnostic output and skipped; the remaining
+arguments are still counted, and a **total** line still appears.
+
+**Note:** *wc* then exits **1**. v7 exited 0 however many files it had failed to open, so no
+shell script could tell a run that counted everything from one that counted half of it.
+
+## SEE ALSO
+
+sum(1)

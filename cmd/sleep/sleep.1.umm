@@ -1,0 +1,47 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# SLEEP(1)
+
+## NAME
+
+sleep - suspend execution for an interval
+
+## SYNOPSIS
+
+| **sleep** time
+
+## DESCRIPTION
+
+*Sleep* suspends execution for *time* seconds. It is used to execute a command after a certain
+amount of time as in:
+
+```
+(sleep 105; command)&
+```
+
+or to execute a command every so often, as in:
+
+```
+while true
+do
+command
+sleep 37
+done
+```
+
+## DIAGNOSTICS
+
+`arg count` if no interval was given, `bad character` if what was given is not a decimal
+number. **Note:** v7 printed both and then exited 0, so a script could not tell a rejected
+*sleep* from one that really slept; this returns 1. The messages are still on the standard
+output, where v7 put them.
+
+## SEE ALSO
+
+alarm(2), pause(2), sleep(3), kill(1)
+
+## BUGS
+
+**Note:** v7's page said here that *time* must be less than 65536 seconds. That was a PDP-11
+fact. The argument to alarm(2) is one 41-bit word on this machine, and nothing in this program
+or in sleep(3) narrows it.

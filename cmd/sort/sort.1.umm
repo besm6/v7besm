@@ -1,0 +1,134 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# SORT(1)
+
+## NAME
+
+sort - sort or merge files
+
+## SYNOPSIS
+
+| **sort** [ **-mubdfinrt**\&*x* ] [ **+**\&*pos1* [ **-**\&*pos2* ] ] ... [ **-o** name ] [ **-T** directory ] [ name ] ...
+
+## DESCRIPTION
+
+*Sort* sorts lines of all the named files together and writes the result on the standard
+output. The name `-` means the standard input. If no input files are named, the standard input
+is sorted.
+
+The default sort key is an entire line. Default ordering is lexicographic by bytes in machine
+collating sequence. The ordering is affected globally by the following options, one or more of
+which may appear.
+
+**b**
+: Ignore leading blanks (spaces and tabs) in field comparisons.
+
+**d**
+: `Dictionary` order: only letters, digits and blanks are significant in comparisons. *Note:* a
+  byte above 0177 is significant too. Text on this machine is UTF-8, so the two bytes of a
+  Cyrillic letter are two thirds of a letter and not punctuation. v7's table ignored every byte
+  of 0200-0377, which made *привет* and *мир* compare equal and left the order between
+  them to whatever the sort happened to do.
+
+**f**
+: Fold upper case letters onto lower case. *Note:* the table folds lower onto UPPER, which this
+  page has always had backwards; the direction is not cosmetic, since it decides where a letter
+  sorts relative to the punctuation lying between the two cases. A byte above 0177 has no case
+  and is left alone. v7's table also folded **]** onto **\\**, a slip in a hand-written table,
+  corrected here.
+
+**i**
+: Ignore characters outside the ASCII range 040-0176 in nonnumeric comparisons. *Note:* tab and
+  newline are not ignored - the comparison stops at the newline it can see, so a table that
+  dropped it would walk into the next line - and neither is a byte above 0177, for the reason
+  **d** gives.
+
+**n**
+: An initial numeric string, consisting of optional blanks, optional minus sign, and zero or more
+  digits with optional decimal point, is sorted by arithmetic value. Option **n** implies option
+  **b.**
+
+**r**
+: Reverse the sense of comparisons.
+
+**t**\&*x*
+: `Tab character` separating fields is *x*.
+
+The notation **+**\&*pos1* **-**\&*pos2* restricts a sort key to a field beginning at *pos1*
+and ending just before *pos2*. *Pos1* and *pos2* each have the form *m*\&**.**\&*n*, optionally
+followed by one or more of the flags **bdfinr,** where *m* tells a number of fields to skip
+from the beginning of the line and *n* tells a number of characters to skip further. If any
+flags are present they override all the global ordering options for this key. If the **b**
+option is in effect *n* is counted from the first nonblank in the field; **b** is attached
+independently to *pos2*. A missing **.**\&*n* means .0; a missing **-**\&*pos2* means the end
+of the line. Under the **-t**\&*x* option, fields are strings separated by *x*; otherwise
+fields are nonempty nonblank strings separated by blanks.
+
+When there are multiple sort keys, later keys are compared only after all earlier keys compare
+equal. Lines that otherwise compare equal are ordered with all bytes significant - except under
+**-u**, where equal keys are equal lines and the tie is not broken. Which member of a set of
+equal lines survives **-u** is not defined.
+
+These option arguments are also understood:
+
+**c**
+: Check that the input file is sorted according to the ordering rules; give no output unless the
+  file is out of sort.
+
+**m**
+: Merge only, the input files are already sorted.
+
+**o**
+: The next argument is the name of an output file to use instead of the standard output. This
+  file may be the same as one of the inputs.
+
+**T**
+: The next argument is the name of a directory in which temporary files should be made. *Note:*
+  it replaces */tmp* rather than being tried ahead of it, so a directory named here and unusable
+  is a diagnostic rather than a silent fall-back. v7 tried */usr/tmp* first and */tmp* second;
+  this system has no */usr/tmp* and the first try was a wasted creat(2) on every run.
+
+**u**
+: Suppress all but one in each set of equal lines. Ignored bytes and bytes outside keys do not
+  participate in this comparison.
+
+**Examples.** Print in alphabetical order all the unique spellings in a list of words.
+Capitalized words differ from uncapitalized.
+
+sort -u +0f +0 list
+
+Print the password file (passwd(5)) sorted by user id number (the 3rd colon-separated field).
+
+sort -t: +2n /etc/passwd
+
+Print the first instance of each month in an already sorted file of (month day) entries. The
+options **-um** with just one input file make the choice of a unique representative from a set
+of equal lines predictable.
+
+sort -um +0 -1 dates
+
+## FILES
+
+/tmp/stm?????aa - /tmp/stm?????zz: the temporary files, made as they are needed and unlinked
+before *sort* exits. There are at most 676 of them.
+
+## SEE ALSO
+
+uniq(1), comm(1), rev(1), join(1)
+
+## DIAGNOSTICS
+
+Comments and exits with nonzero status for various trouble conditions and for disorder
+discovered under option **-c**.
+
+## BLOCKS AND LINES
+
+A line may be 3072 bytes long, terminator included. A longer one is a diagnostic and a nonzero
+exit, on the sorting pass and on the merging pass alike. v7 truncated it, silently, and only
+when a merge happened to be involved: the sorting pass had no limit at all, so the same file
+came out right or came out corrupted depending on whether it fit in memory in one pass.
+
+## BUGS
+
+None known. The v7 page said `very long lines are silently truncated`; see BLOCKS AND LINES
+above for what happens instead.

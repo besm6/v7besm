@@ -1,0 +1,63 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# LN(1)
+
+## NAME
+
+ln - make a link
+
+## SYNOPSIS
+
+| **ln** [ **-f** ] name1 [ name2 ]
+
+## DESCRIPTION
+
+A link is a directory entry referring to a file; the same file (together with its size, all its
+protection information, etc.) may have several links to it. There is no way to distinguish a
+link to a file from its original directory entry; any changes in the file are effective
+independently of the name by which the file is known.
+
+*Ln* creates a link to an existing file *name1*. If *name2* is given, the link has that name;
+otherwise it is placed in the current directory and its name is the last component of *name1*.
+If *name2* is a directory, the link is made inside it under the last component of *name1*.
+
+It is forbidden to link to a directory or to link across file systems.
+
+**Note:** the SYNOPSIS above is corrected. v7's page showed no options at all, and the program
+has always taken **-f**, which suppresses the refusal to link to a directory. The refusal is
+*ln*'s own; the kernel's is what stands behind it, and the two do not say the same thing.
+Link(2) here reads
+
+> **if ((ip->i_mode & IFMT) == IFDIR && !suser())**
+
+\- kernel/sys2.c - so linking to a directory is refused to an ordinary user and **permitted to
+the super-user.** With **-f**, therefore, root really can make a second name for a directory,
+and the result is a filesystem no *fsck* will thank you for: a cycle, or a directory with two
+parents and a `..` that can only point at one of them. Use mv(1), which is set-user-id root
+precisely so that it can do this correctly.
+
+`or to link across file systems` is the kernel's too - it is **EXDEV** from the same routine -
+and it cannot arise on this machine, one EC-5052 drive being the whole of the store.
+
+**Note:** when *name2* is a directory, the constructed name is refused if it will not fit 100
+characters. v7 built it with no bound at all.
+
+## DIAGNOSTICS
+
+*Ln* exits 1 on any failure. The first three messages go to the standard **output,** which is
+v7's and is inconsistent with its neighbours; only the last goes to the standard error.
+
+**Usage: ln [ -f ] target [ newname ]**
+
+**ln:** *name* **does not exist**
+
+**ln:** *name* **is a directory** - and **-f** was not given.
+
+**ln:** *dir*\&**/**\&*name*\&**:** *name too long*
+
+**ln:** *reason* - from perror(3), when the link(2) itself failed: **File exists** if the new
+name is taken, **Permission denied** if the directory it would go in is not writable.
+
+## SEE ALSO
+
+rm(1), cp(1), mv(1), link(2)

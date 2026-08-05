@@ -1,0 +1,60 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# TOUCH(1)
+
+## NAME
+
+touch - update the date of a file
+
+## SYNOPSIS
+
+| **touch** [ **-c** ] file ...
+
+## DESCRIPTION
+
+*Touch* sets the accessed and modified dates of each *file* to the current time.
+
+If a *file* does not exist, an attempt will be made to create it unless the **-c** option is
+specified.
+
+**Note:** this DESCRIPTION is not v7's, because this program is not quite v7's. v7's *touch*
+moved a date by **reading a character from the file and writing it back** - it did not call
+utime(2) at all - and its page said so. This port calls utime(2), which is a deliberate
+divergence and the only one in its task. What v7's method cost:
+
+- it needed read **and** write permission, so a file its own owner could not open for writing
+  could not be dated at all;
+
+- it re-created, and so truncated, any file of zero length, there being no byte in one to
+  rewrite;
+
+- it put a write down a path where nothing was meant to change, so a full filesystem could make
+  it fail halfway.
+
+None of that is true here. In exchange, *touch* now sets **both** dates rather than the
+modified one alone, and it is gated by utime(2)'s own rule - the caller must be the file's
+owner or the super-user - rather than by the file's write permission. See utime(2), whose
+second argument on this system is a two-element **time_t** vector, *accessed* then *updated*,
+and not **struct utimbuf**.
+
+**Note: -c** is positional. The argument list is scanned once, so a **-c** written after a file
+name affects only the names that follow it, and **touch a -c b** creates *a* and refuses *b*.
+The SYNOPSIS above implies otherwise; the program is v7's in this and was left alone.
+
+**Note:** a file *touch* creates has mode **0666**, less the file creation mask - and the
+initial mask (**CMASK** in <sys/param.h>) is **0** on this system, with no **umask** builtin in
+any shell here. So it is world-writable.
+
+## DIAGNOSTICS
+
+*Touch* exits with the number of files it could not date. v7's exited with whatever happened to
+be in the accumulator; both messages go to the standard error, and their inconsistent forms are
+v7's and were kept.
+
+**touch: file** *name* **does not exist.** - **-c** was given.
+
+**Cannot touch** *name* - the file could not be created, or utime(2) refused it.
+
+## SEE ALSO
+
+chmod(1), ls(1), utime(2)

@@ -1,0 +1,117 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# PS(1)
+
+## NAME
+
+ps - process status
+
+## SYNOPSIS
+
+| **ps** [ **alx** ] [ pid ]
+
+## DESCRIPTION
+
+*Ps* prints certain indicia about active processes. The **a** option asks for information about
+all processes with terminals (ordinarily only one's own processes are displayed); **x** asks
+even about processes with no terminal; **l** asks for a long listing. A numeric argument
+selects that one process and suppresses the short heading. The short listing contains the
+process ID, tty letter, the cumulative execution time of the process and the command name.
+
+The long listing is columnar and contains
+
+F
+: Flags associated with the process. 01: in core; 02: system process; 04: locked in core (e.g.
+  for physical I/O); 010: being swapped; 020: being traced by another process.
+
+S
+: The state of the process. 0: nonexistent; S: sleeping; W: waiting; R: running; I: intermediate;
+  Z: terminated; T: stopped.
+
+UID
+: The user ID of the process owner.
+
+PID
+: The process ID of the process; as in certain cults it is possible to kill a process if you know
+  its true name.
+
+PPID
+: The process ID of the parent process.
+
+CPU
+: Processor utilization for scheduling.
+
+PRI
+: The priority of the process; high numbers mean low priority.
+
+NICE
+: Used in priority computation. This is the absolute value, not the increment: 20 (**NZERO**) is
+  normal and **nice -10** makes it 30.
+
+ADDR
+: The core address of the process if resident, otherwise its block on the paging store. **Note:**
+  this is a **word** address and it is printed in **octal**, where v7 printed a 64-byte click
+  address in hex. It is the number *pstat*(1M)'s **-u** takes.
+
+SZ
+: The size of the core image of the process, in **words**, a multiple of **PGSZ**. **Note:** v7
+  counted 64-byte blocks.
+
+WCHAN
+: The event for which the process is waiting or sleeping; if blank, the process is running.
+  **Note:** octal, and the whole of it - v7 masked it to 24 bits.
+
+TTY
+: The controlling tty for the process, as an index into the kernel's one terminal array, or `?`
+  if there is none.
+
+TIME
+: The cumulative execution time for the process. **Note:** this is **u_utime + u_stime** in ticks
+  at **HZ**, which is 250 here and was 60 on the PDP-11.
+
+CMD
+: The command name.
+
+A process that has exited and has a parent, but has not yet been waited for by the parent is
+marked <defunct>. Its core image has already been given back, so nothing but its **proc** entry
+is printed.
+
+A process that has been swapped out is marked <swapped>, and has no TTY, TIME or CMD. Its
+u-area is on the paging store; v7 read it back off */dev/swap* and this *ps* does not.
+
+**Note: the command name is exact.** v7 made "an educated guess as to the file name and
+arguments given when the process was created by examining core memory or the swap area", warned
+that the method was unreliable, and needed some 140 lines to do it. On this system the name is
+**u_comm** in the u-area, put there by exec(2), so there is nothing to guess - but there are
+also no **arguments**, only the name, and it is at most **DIRSIZ** characters.
+
+## FILES
+
+None. Everything *ps* prints comes through two kctl(2) calls - **KCTL_GET** of the **proc**
+table, and **KCTL_PSINFO** for the four u-area fields per slot - and **neither is privileged,**
+so this is an ordinary user's command.
+
+**Note:** it used to read */dev/kmem* and */dev/mem* for those four fields, and since both are
+mode 0640 and root's it was the super-user's program. Those modes have not changed and *ps* is
+deliberately not set-user-ID; what changed is that it no longer asks for memory. A set-uid *ps*
+would hand out every process's memory through a program that already knows the layout, which is
+why **KCTL_PSINFO** returns a digest and not an address.
+
+**Note:** v7 also read */unix*, */dev/swap* and the */dev* directory, and had a **k** option
+naming */usr/sys/core* and an optional *namelist* argument. There is no kernel image on this
+filesystem, so all of that is gone; kctl(2) is what replaced it.
+
+## SEE ALSO
+
+kctl(2), pstat(1M), iostat(1M), nice(1), kill(1)
+
+## DIAGNOSTICS
+
+Exit status is 0 if any process was printed and 1 if none was, which is what makes **ps** *pid*
+usable as a test.
+
+## BUGS
+
+| Things can change while *ps* is running; the picture it gives is only a close approximation to reality.
+| The u-area of a resident process other than the caller's is as of that process's last context switch, that being when the kernel last flushed it to the process's own image. The caller's own row is current, because the live copy at **UBASE** is used instead whenever it is the one that belongs to the process being printed. That rule did not go away when the reading moved into the kernel; it is now *kernel/kctl.c*'s.
+| Some data printed for defunct processes is irrelevant.

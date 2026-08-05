@@ -33,7 +33,9 @@ address *physadr*×64 bytes. Only the first *size*×64 bytes of this mapping is 
 the call
 
 ```c
+```c
 phys(6, 1, 0177775);
+```
 ```
 
 will map virtual addresses 0160000-0160077 into physical addresses 017777500-017777577. In

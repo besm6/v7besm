@@ -1,0 +1,46 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# SU(1)
+
+## NAME
+
+su - substitute user id temporarily
+
+## SYNOPSIS
+
+| **su** [ userid ]
+
+## DESCRIPTION
+
+*Su* demands the password of the specified *userid,* and if it is given, changes to that
+*userid* and invokes the Shell sh(1) without changing the current directory or the user
+environment (see environ(5)). The new user ID stays in force until the Shell exits.
+
+If no *userid* is specified, `root` is assumed. To remind the super-user of his
+responsibilities, the Shell substitutes `#` for its usual prompt.
+
+**Note:** that prompt is chosen by sh(1) from the user id it finds itself running under, not
+from the environment. *Su* also rewrites a **PS1** already in the environment, which on this
+system there is not: login(1) exports HOME, PATH and TERM and nothing else.
+
+**Note:** no password is demanded when the account has none, or when the caller is already the
+super-user. The test is on the *real* user id, which is what makes it right in a program that
+is set-user-id: by the time it runs, the effective id is already 0.
+
+**Note:** *su* is set-user-id to root, and it is one of the two programs of this system for
+which that bit exists to change an identity rather than to reach a directory operation.
+login(1) is deliberately not set-user-id - its privilege is inherited from getty(8) - so before
+*su* there was no way to change user from a shell at all.
+
+**Note:** the change is one-way. setuid(2) here moves the real user id as well as the effective
+one, so the shell *su* starts cannot climb back; leaving it is the only way out, and sh(1)
+leaves on end-of-file rather than on **exit**, which merely reprompts an interactive shell.
+
+## DIAGNOSTICS
+
+Exit status is 1 for an unknown name, 2 for a wrong password and 3 if the shell cannot be
+executed.
+
+## SEE ALSO
+
+sh(1), login(1), newgrp(1), passwd(1), setuid(2), crypt(3)

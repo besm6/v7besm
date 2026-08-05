@@ -57,11 +57,7 @@ absolute path or holds an entry outright.
 ## SEE ALSO
 
 | *Screen Updating and Cursor Movement Optimization: A Library Package,* Ken Arnold,
-| ioctl(2),
-| getenv(3),
-| tty(4),
-| termcap(3),
-| termcap(5)
+| ioctl(2), getenv(3), tty(4), termcap(3), termcap(5)
 
 ## AUTHOR
 

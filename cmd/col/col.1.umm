@@ -1,0 +1,70 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# COL(1)
+
+## NAME
+
+col - filter reverse line feeds
+
+## SYNOPSIS
+
+```c
+col [-bfx]
+```
+
+## DESCRIPTION
+
+*Col* reads the standard input and writes the standard output. It performs the line overlays
+implied by reverse line feeds (ESC-7) and by forward and reverse half line feeds (ESC-9 and
+ESC-8). *Col* is particularly useful for filtering multicolumn output made with the `.rt`
+command of *nroff* and output resulting from use of the tbl(1) preprocessor. *Note:* neither
+program is on this system - see *cmd/TODO.md* - so what *col* filters here is whatever a
+program or a script produces for it.
+
+Although *col* accepts half line motions in its input, it normally does not emit them on
+output. Instead, text that would appear between lines is moved to the next lower full line
+boundary. This treatment can be suppressed by the **-f** (fine) option; in this case the output
+from *col* may contain forward half line feeds (ESC-9), but will still never contain either
+kind of reverse line motion.
+
+If the **-b** option is given, *col* assumes that the output device in use is not capable of
+backspacing. In this case, if several characters are to appear in the same place, only the last
+one read will be taken.
+
+*Col* normally converts white space to tabs to shorten printing time. If the **-x** option is
+given, this conversion is suppressed.
+
+All control characters are removed from the input except space, backspace, tab, return,
+newline, ESC (033) followed by one of 789, and VT (013). This last character is an alternate
+form of full reverse line feed, for compatibility with some other hardware conventions. All
+other non-printing characters are ignored.
+
+## EIGHT BITS, AND NO ALTERNATE CHARACTER SET
+
+*Note:* v7's *col* treats SO (016) and SI (017) as selecting an alternate character set - the
+Greek type box of a Model 37 Teletype - and remembers which set each character belonged to by
+setting **bit 0200** of the character in its own storage. **Both are gone here.**
+
+This system's text is UTF-8, so a byte above 0177 is part of a letter and not a flag. v7's mask
+would take the six characters of **привет** and print **P?QP8P2P5Q**: ten bytes of
+plausible ASCII, two characters shorter than what went in. This *col* passes every byte above
+040 through unchanged, except DEL (0177), which is still dropped. SO and SI are read and
+discarded like any other control character, and none is ever emitted.
+
+There is no Model 37 on this machine and no way to attach one, so nothing is lost that could
+have been used. See *cmd/col/README.md* for the argument in full.
+
+## COLUMNS ARE COUNTED IN BYTES
+
+*Note:* a character above U+007F occupies more than one byte, and *col* counts each of them as
+a column. So a line of Cyrillic aligns against a line of ASCII by byte and not by letter. This
+is the same limitation the shell's pattern language has, where **?** matches one byte.
+
+## SEE ALSO
+
+troff(1), tbl(1)
+
+## BUGS
+
+| Can't back up more than 128 lines.
+| No more than 800 bytes, including backspaces, on a line. *Note:* v7 stated this limit and did not enforce it - a longer line wrote past the end of the buffer. Here the cursor stops at column 796, and an overstrike that has no room to open two more bytes replaces the column instead of overlaying it.

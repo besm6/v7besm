@@ -1,0 +1,189 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# DD(1)
+
+## NAME
+
+dd - convert and copy a file
+
+## SYNOPSIS
+
+| **dd** [option=value] ...
+
+## DESCRIPTION
+
+*Dd* copies the specified input file to the specified output with possible conversions. The
+standard input and output are used by default. The input and output block size may be specified
+to take advantage of raw physical I/O.
+
+*option*
+: | *values*
+
+if=
+: | input file name; standard input is default
+
+of=
+: | output file name; standard output is default
+
+ibs=*n*
+: | input block size *n* bytes (default 3072)
+
+obs=*n*
+: | output block size (default 3072)
+
+bs=*n*
+: | set both input and output block size, superseding *ibs* and *obs;* also, if no conversion is specified, it is particularly efficient since no copy need be done
+
+cbs=*n*
+: | conversion buffer size
+
+skip=*n*
+: | skip *n* input records before starting copy
+
+files=*n*
+: | copy *n* files from (tape) input
+
+seek=*n*
+: | seek *n* records from beginning of output file before copying
+
+count=*n*
+: | copy only *n* input records
+
+conv=ascii
+: | convert EBCDIC to ASCII
+
+ebcdic
+: | convert ASCII to EBCDIC
+
+ibm
+: | slightly different map of ASCII to EBCDIC
+
+lcase
+: | map alphabetics to lower case
+
+ucase
+: | map alphabetics to upper case
+
+swab
+: | swap every pair of bytes
+
+noerror
+: | do not stop processing on an error
+
+sync
+: | pad every input record to *ibs*
+
+... , ...
+: several comma-separated conversions
+
+Where sizes are specified, a number of bytes is expected. A number may end with **k, b** or
+**w** to specify multiplication by 1024, 3072, or 6 respectively; a pair of numbers may be
+separated by **x** to indicate a product.
+
+**Note:** two of those three multipliers differ from v7's, which were 512 and 2. Here **b** is
+this machine's filesystem block, 3072 bytes, and **w** is one 48-bit *word*, six bytes - the
+unit **w** was always meant to name. So **1b**, **3k** and **512w** are all the same number,
+and the default *ibs* and *obs* above are one of them. A **w** here is three times a PDP-11's,
+so a v7 script asking for **512w** gets 3072 bytes rather than 1024.
+
+*Cbs* is used only if *ascii* or *ebcdic* conversion is specified. In the former case *cbs*
+characters are placed into the conversion buffer, converted to ASCII, and trailing blanks
+trimmed and new-line added before sending the line to the output. In the latter case ASCII
+characters are read into the conversion buffer, converted to EBCDIC, and blanks added to make
+up an output record of size *cbs*.
+
+After completion, *dd* reports the number of whole and partial input and output blocks.
+
+For example, to read a file of EBCDIC card images blocked ten 80-byte images per record into
+the ASCII file *x*:
+
+> dd if=cards of=x ibs=800 cbs=80 conv=ascii,lcase
+
+**Note:** v7 gave this example with *if=/dev/rmt0* and a second one reading past a file mark on
+the same device. Both are gone: there is no magnetic tape on this machine, no tape driver in
+the kernel and no *cdevsw* row for one. The conversion tables are still here, so the example is
+kept with an ordinary file as its input.
+
+## RAW DEVICES
+
+**Note:** this section is new, and it is the reason *dd* was ported before *mkfs*(1M) and
+*fsck*(1M).
+
+*Dd* is the only program here that can move bulk data to or from */dev/rmd0* and */dev/rmb0*,
+and a transfer on either is not the ordinary read(2) it looks like: it goes through *physio*()
+and the disk driver, which between them accept only **whole blocks** of 3072 bytes. So *ibs*
+and *obs* must be multiples of 3072 whenever a device is named - which the defaults above
+already are, so the common cases need no *bs* at all.
+
+Give a size that is not, and the transfer is **refused** rather than truncated. Two different
+sizes fail two different ways, and the diagnostic says which: a size that is not a whole number
+of 48-bit words earns **Bad address,** and one that is a whole number of words but not a whole
+block earns **I/O error.**
+
+**Note:** the offset needs no such care, and that is a property of this program rather than of
+the device. Every offset *dd* can produce is a multiple of *obs* - *seek* gives *n*\**obs*, and
+each record written advances by *obs* - so if the record size is a whole number of blocks then
+every offset is block-aligned too, and if it is not, the very first transfer fails on the size
+before any offset is used. A misaligned offset is the one condition the kernel does **not**
+diagnose, and *dd* cannot reach it.
+
+**Note:** the raw disk has **no end of file.** A read past the last block of the volume is an
+**I/O error,** not a count of zero, so a copy *from* the device must say how much to copy with
+*count*.
+
+**Note:** a copy *to* the device fails on its last record if the input is not a whole number of
+blocks, there being no way to write part of one. *conv=sync* pads the short record out to *ibs*
+and is what that case wants.
+
+## SUPER-USER ONLY
+
+**Note:** */dev/rmd0* is mode 0600 because that one node is the contents of every file on the
+volume, so any use of *dd* on it works for the super-user and for nobody else. *Dd* is
+deliberately **not** set-user-id, and the reason is stronger than the one *df*(1M) gives for
+itself: a set-uid *df* would let anyone read the whole filesystem, and a set-uid *dd* would let
+them rewrite it.
+
+## SEE ALSO
+
+cp(1), tr(1), df(1M)
+
+## DIAGNOSTICS
+
+f+p records in(out): numbers of full and partial records read(written)
+
+**Note:** *dd* exits 1 when it fails - on an unrecognised argument, on a file it cannot open or
+create, on a zero *ibs* or *obs*, and on a read or write error it was not told to ignore. v7
+printed every one of those diagnostics and then exited **0**, so no shell script could tell a
+refused copy from a completed one. An interrupt still exits 0, as in v7: it is not a failure of
+the program, and the records copied up to that point are reported as usual.
+
+## BUGS
+
+The ASCII/EBCDIC conversion tables are taken from the 256 character standard in the CACM Nov,
+1968\. The `ibm` conversion, while less blessed as a standard, corresponds better to certain IBM
+print train conventions. There is no universal solution.
+
+Newlines are inserted only on conversion to ASCII; padding is done only on conversion to
+EBCDIC. These should be separate options.
+
+**Note:** four more, all v7's and all carried rather than fixed, because a fix for any of them
+would be a behaviour this port invented and could not test.
+
+*conv=noerror* cannot get past a block the device refuses outright. It recovers what a failed
+read left in the buffer, and a refused transfer leaves nothing there, which is
+indistinguishable from end of file - so *dd* stops at the first bad block whatever *noerror*
+says.
+
+*Files* counts one phantom partial record at each file boundary. It cannot arise at the default
+of one file, and there is no tape here to raise it.
+
+A number may carry trailing characters that are neither a multiplier nor a digit, and they are
+ignored: *ibs=512junk* is 512.
+
+*conv=swab* exchanges adjacent **bytes**, and says nothing about this machine's six-byte word.
+There is no option that reverses a word, and none is proposed: the byte order within a word is
+not a thing this machine's files disagree about.
+
+**Note:** without a *conv*, *bs* copies each record whole and never looks at a byte; with one,
+every byte passes through the conversion by itself. A bulk copy should therefore name *bs* and
+no conversion, which is what makes it worth naming *bs* at all.

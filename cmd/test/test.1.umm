@@ -1,0 +1,108 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# TEST(1)
+
+## NAME
+
+test - condition command
+
+## SYNOPSIS
+
+| **test** expr
+
+| **[** expr **]**
+
+## DESCRIPTION
+
+*test* evaluates the expression *expr*, and if its value is true then returns zero exit status;
+otherwise, a non zero exit status is returned. *test* returns a non zero exit if there are no
+arguments.
+
+**Note:** v7's page gave only the first of the two SYNOPSIS lines, although the program has
+always accepted both. **/bin/[ is /bin/test** - one inode with two names, and the only hard
+link on this system's root filesystem. Entered by that name the program requires a closing
+**]**, and complains **test: ] missing** if it is absent.
+
+The following primitives are used to construct *expr*.
+
+**-r** file
+: true if the file exists and is readable.
+
+**-w** file
+: true if the file exists and is writable.
+
+**Note:** those two are answered by opening the file and closing it again rather than by
+access(2), so they report on the *effective* user and not the real one. That is v7's
+implementation, and it is kept. It matters here because every shell on this system is the
+super-user's, which can open anything: **-w** is true of a file with no write permission at
+all.
+
+**-f** file
+: true if the file exists and is not a directory.
+
+**-d** file
+: true if the file exists and is a directory.
+
+**-s** file
+: true if the file exists and has a size greater than zero.
+
+**-t** [ fildes ]
+: true if the open file whose file descriptor number is *fildes* (1 by default) is associated
+  with a terminal device.
+
+**-z** s1
+: true if the length of string *s1* is zero.
+
+**-n** s1
+: true if the length of the string *s1* is nonzero.
+
+s1 **=** s2
+: true if the strings *s1* and *s2* are equal.
+
+s1 **!=** s2
+: true if the strings *s1* and *s2* are not equal.
+
+s1
+: true if *s1* is not the null string.
+
+**-l** s1
+: the length of the string *s1*, for use on the left of one of the integer comparisons below -
+  **test -l abcde -eq 5** is true. **Note:** v7's page did not document this primary, although
+  the program has always had it.
+
+n1 **-eq** n2
+: true if the integers *n1* and *n2* are algebraically equal. Any of the comparisons **-ne**,
+  **-gt**, **-ge**, **-lt**, or **-le** may be used in place of **-eq**.
+
+These primaries may be combined with the following operators:
+
+**!**
+: unary negation operator
+
+**-a**
+: binary *and* operator
+
+**-o**
+: binary *or* operator
+
+**(** expr **)**
+: parentheses for grouping.
+
+**-a** has higher precedence than **-o.** Notice that all the operators and flags are separate
+arguments to *test*. Notice also that parentheses are meaningful to the Shell and must be
+escaped.
+
+## DIAGNOSTICS
+
+An expression that does not parse produces one of **test: argument expected**, **test: )
+expected**, **test: ] missing** or **test: unknown operator** x on the diagnostic output, and
+an exit status of 255.
+
+**Note: no caller on this machine can see that 255.** A wait status is the exit code shifted
+left by eight and it is returned through r12, a fifteen-bit index register, so every code from
+128 up arrives truncated: the Shell's **$?** reads 127. See wait(2). Exit statuses 0 and 1 -
+the answers this program exists to give - are unaffected.
+
+## SEE ALSO
+
+sh(1), find(1), wait(2)

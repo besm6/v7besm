@@ -1,0 +1,87 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+<!-- REWRITTEN rather than corrected, per cmd/README.md SS10's `touch' rule: v7's DESCRIPTION -->
+<!-- said "interpret words" and the word it meant -- the PDP-11's 16 bits -- has stopped -->
+<!-- existing.  See cmd/od/README.md. -->
+
+# OD(1)
+
+## NAME
+
+od - octal dump
+
+## SYNOPSIS
+
+| **od** [ **-bcdhowx** ] [ file ] [ [ **+** ]offset[ **.** ][ **b** ] ]
+
+## DESCRIPTION
+
+*Od* dumps *file* in one or more formats as selected by the first argument. If the first
+argument is missing, **-o** is default.
+
+A *word* here is the machine's own: 48 bits, six bytes. The word formats (**-o**, **-d**,
+**-x**) show one, and the byte formats (**-b**, **-c**) show its six bytes. An output line is
+**twelve bytes** - two words.
+
+The meanings of the format argument characters are:
+
+**b**
+: Interpret bytes in octal, three digits each.
+
+**c**
+: Interpret bytes as characters. Certain non-graphic characters appear as C escapes: null=\\0,
+  backspace=\\b, formfeed=\\f, newline=\\n, return=\\r, tab=\\t; others, including every byte
+  above 0177, appear as 3-digit octal numbers.
+
+**d**
+: Interpret words in decimal, 15 digits.
+
+**o**
+: Interpret words in octal, 16 digits.
+
+**w**
+: The same as **-o**, under the name that says what it dumps.
+
+**x**
+: Interpret words in hex, 12 digits. **-h** is a second name for it.
+
+The *file* argument specifies which file is to be dumped. If no file argument is specified, the
+standard input is used.
+
+The offset argument specifies the offset in the file where dumping is to commence. This
+argument is normally interpreted as octal bytes. If `.` is appended, the offset is interpreted
+in decimal. If `b` is appended, the offset is interpreted in blocks of 3072 bytes. If the file
+argument is omitted, the offset argument must be preceded `+`. *Note:* the offset argument also
+sets the radix of the **address** column, as a side effect v7's page never mentioned - **x** or
+**0x** makes it hexadecimal, a leading **0** octal, and a `.` anywhere decimal.
+
+A line identical to the one before it is not printed; a **\*** stands for any run of them.
+Dumping continues until end-of-file, and the byte offset of the end is printed last.
+
+## THE WORD IS 48 BITS
+
+*Note:* **-o**, **-d** and **-x** mean what they meant on the PDP-11 - *the machine word, in
+this radix* - so nothing about them has been redefined. What changed is the machine word, from
+16 bits to 48, and with it the width of the column:
+
+```
+      flag        v7              here
+      -o -w       6 octal         16 octal
+      -d          5 decimal       15 decimal
+      -x -h       4 hex           12 hex
+```
+
+The six bytes of a word are packed **most significant first,** which is how six characters
+occupy a word on this machine and what getw(3) and putw(3) already do. So **od -c** and **od
+-w** of the same file agree about which byte is which, and a file written by *putw* reads back
+as its own words. A short group at the end of a file is padded with zero bytes on the right,
+which is where the unused characters of a partial word are.
+
+## A BLOCK IS 3072 BYTES
+
+*Note:* the **b** suffix on an offset counts filesystem blocks, which are 3072 bytes here,
+where v7 counted 512-byte PDP-11 disk blocks. This agrees with tail(1)'s **-b** and with
+dd(1)'s **b** suffix.
+
+## SEE ALSO
+
+b6disasm(1), getw(3)

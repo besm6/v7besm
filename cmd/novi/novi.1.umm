@@ -1,0 +1,149 @@
+<!-- novi is by Dave W Plummer, written for 2.11BSD on a split-I/D PDP-11: -->
+<!-- https://x.com/davepl1968/status/2080867382105710812 -->
+<!-- This page is new: novi is not a v7 command, so there was none to correct. -->
+<!-- See README.md beside this file for what the port to this machine changed. -->
+
+# NOVI(1)
+
+## NAME
+
+novi - full-screen text editor
+
+## SYNOPSIS
+
+| **novi** [ file ]
+
+## DESCRIPTION
+
+*Novi* edits *file* on the screen: the text is displayed, the cursor is moved over it with the
+arrow keys, and what is typed appears where the cursor is. If *file* does not exist it is
+created when the buffer is written; with no argument the buffer starts empty and **^O** asks
+for a name.
+
+The commands are control characters, and the two lines at the foot of the screen list the
+common ones. The line above them shows messages and asks questions. The line at the top shows
+the file name, whether the buffer has been changed, and whether typing inserts (**[INS]**) or
+replaces (**[OVR]**).
+
+Cursor motion:
+
+arrow keys
+: one character or one line
+
+**^B  ^F**
+: left, right
+
+**^P  ^N**
+: up, down
+
+**^A  ^E**
+: start, end of line
+
+Home, End
+: the same
+
+**^Y  ^V**
+: one screenful up, down
+
+PgUp, PgDn
+: the same
+
+Changing the text:
+
+**^D**
+: delete the character under the cursor; Del does the same
+
+**^H**
+: delete the character before it; the erase key does the same
+
+Ins
+: switch between inserting and replacing
+
+**^K**
+: cut from the cursor to the end of the line. Struck again with nothing in between, it adds the
+  next line to what was already cut instead of replacing it
+
+**^U**
+: insert everything **^K** has cut
+
+**^R**
+: insert a file at the cursor
+
+Everything else:
+
+**^G**
+: a page describing these keys
+
+**^O**
+: write the buffer out. The current name is offered and may be edited
+
+**^W**
+: search forward for a string, wrapping round the end of the buffer
+
+**^C**
+: report the line, the column and the character position
+
+**^X**
+: leave. A changed buffer is asked about first
+
+When *novi* asks a question, printable characters answer it, the erase key rubs one out, a
+newline accepts and **^C** or ESC cancels.
+
+Tabs are shown as spaces to the next eighth column. Other control characters are shown as
+**?**. Text is treated as UTF-8 throughout: a Cyrillic letter is two bytes and one column, and
+may be typed into the buffer, into a file name and into a search string alike.
+
+## THE TERMINAL
+
+*Novi* writes ANSI/VT100 escape sequences and reads them back from the arrow and function keys.
+It consults no terminal database: termcap(5) is not read and **$TERM** is not looked at. The
+console this system boots on is a Consul-254 typewriter, which is a suitable terminal only
+because the simulator's line is *raw8* and passes the escapes through to whatever is at the far
+end.
+
+There is no window-size call in this kernel, so the screen is taken to be 24 lines of 80
+columns unless **$LINES** and **$COLUMNS** say otherwise.
+
+While *novi* runs, the terminal is in RAW mode with echo off.
+
+## FILES
+
+/tmp/noviL\*
+: the text before the cursor
+
+/tmp/noviR\*
+: the text after it, stored in reverse
+
+/tmp/noviC\*
+: what **^K** has cut
+
+All three are unlinked as soon as they are opened, so they disappear when *novi* does, however
+it goes. The document is never held in memory; the two halves together take at most twice the
+size of the file being edited.
+
+## DIAGNOSTICS
+
+*Novi* refuses a file name longer than 255 characters, and says so if the terminal or the
+scratch files cannot be set up. Everything else is reported on the message line and the editor
+carries on.
+
+## AUTHOR
+
+Dave W Plummer. This page and the port to this machine are not his.
+
+## BUGS
+
+**^O** writes the file in place with creat(2), so a write that fails part of the way through
+leaves the file truncated. There is no rename(2) on this system to make the replacement atomic;
+ed(1)'s **w** has the same exposure.
+
+A *novi* killed by a signal it cannot catch leaves the terminal in RAW mode with echo off.
+Stty(1) is the way back.
+
+A lone ESC is not acted on until another key is struck, there being no way to time out a read.
+
+The interactive part of *novi* has no automated test. See README.md beside the source.
+
+## SEE ALSO
+
+ed(1), stty(1)

@@ -1,0 +1,184 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# GREP(1)
+
+## NAME
+
+grep, egrep, fgrep - search a file for a pattern
+
+## SYNOPSIS
+
+| **grep** [ **-bchlnsvy** ] [ **-e** ] expression [ file ] ...
+
+| **egrep** [ option ] ... [ expression ] [ file ] ...
+
+| **fgrep** [ **-bchlnsvxy** ] [ **-e** ] [ **-f** file ] [ strings ] [ file ] ...
+
+## DESCRIPTION
+
+Commands of the *grep* family search the input *files* (standard input default) for lines
+matching a pattern. Normally, each line found is copied to the standard output; unless the
+**-h** flag is used, the file name is shown if there is more than one input file.
+
+*Grep* patterns are limited regular expressions in the style of ed(1); it uses a compact
+nondeterministic algorithm. *Egrep* patterns are full regular expressions; it uses a fast
+deterministic algorithm that sometimes needs exponential space. *Fgrep* patterns are fixed
+strings; it is fast and compact.
+
+Note: *egrep* is not on this system. It is a yacc(1) grammar and there is no *yacc* here yet;
+see *cmd/TODO.md* in the source tree.
+
+The following options are recognized.
+
+**-v**
+: All lines but those matching are printed.
+
+**-c**
+: Only a count of matching lines is printed.
+
+**-l**
+: The names of files with matching lines are listed (once) separated by newlines.
+
+**-n**
+: Each line is preceded by its line number in the file.
+
+**-b**
+: Each line is preceded by the **byte offset** in the file at which it begins, counting from
+  zero. This is useful in locating a match by position rather than by line.
+
+> Note: v7 printed a *block* number here - the offset divided by a PDP-11 disk block of 512
+> bytes. 512 names nothing on this machine, a block here is 3072 bytes, and *grep* divided by
+> that constant where *fgrep* divided by a hard-coded 512, so the two commands answered
+> differently about the same match. The division is gone rather than the divisor changed: a byte
+> offset is exact, needs no unit, and both commands now agree.
+
+**-s**
+: No output is produced, only status.
+
+**-h**
+: Do not print filename headers with output lines. This applies to **-c** as well; v7's **-c**
+  printed the header regardless.
+
+**-y**
+: Lower case letters in the pattern will also match upper case letters in the input. *Fgrep*
+  implements this too, and matches without regard to case in both directions; v7's manual page
+  said the flag was *grep* only and was wrong about its own program.
+
+> Note: a byte above 0177 is part of a multi-byte letter, which has no case on this system, so
+> **-y** passes it through unchanged.
+
+**-e** *expression*
+: Same as a simple *expression* argument, but useful when the *expression* begins with a -.
+
+**-f** *file*
+: The string list (*fgrep*) is taken from the *file.* This is the only way to give *fgrep* more
+  than one keyword from a script, the list being newline-separated. *Grep* has no **-f;** v7's
+  manual page implied otherwise.
+
+**-x**
+: (Exact) only lines matched in their entirety are printed (*fgrep* only).
+
+Care should be taken when using the characters $ \* [ ^ | ? ' " ( ) and \\ in the *expression*
+as they are also meaningful to the Shell. It is safest to enclose the entire *expression*
+argument in single quotes ' '.
+
+*Fgrep* searches for lines that contain one of the (newline-separated) *strings.*
+
+*Egrep* accepts extended regular expressions. In the following description `character` excludes
+newline:
+
+> A \\ followed by a single character matches that character.
+
+> The character ^ ($) matches the beginning (end) of a line.
+
+> A **.** matches any character.
+
+> A single character not otherwise endowed with special meaning matches that character.
+
+> A string enclosed in brackets [] matches any single character from the string. Ranges of
+> character codes may be abbreviated as in `a-z0-9`; see EIGHT-BIT TEXT below for what a range
+> means here. A ] may occur only as the first character of the string. A literal - must be placed
+> where it can't be mistaken as a range indicator.
+
+> A regular expression followed by \* (+, ?) matches a sequence of 0 or more (1 or more, 0 or 1)
+> matches of the regular expression.
+
+> Two regular expressions concatenated match a match of the first followed by a match of the
+> second.
+
+> Two regular expressions separated by | or newline match either a match for the first or a match
+> for the second.
+
+> A regular expression enclosed in parentheses matches a match for the regular expression.
+
+The order of precedence of operators at the same parenthesis level is [] then \*+? then
+concatenation then | and newline.
+
+## EIGHT-BIT TEXT
+
+The text on this system is UTF-8 end to end, and both commands carry eight bits.
+
+*Fgrep* compares bytes and always did, so a keyword may be any text at all.
+
+*Grep* matches **bytes,** which is the same rule ed(1) follows and which has three visible
+consequences. A **.** matches one byte and not one letter, so a two-byte Cyrillic letter needs
+two of them. A **\*** after a multi-byte letter repeats that letter's *last* byte. And a range
+written between two multi-byte letters, as in [**а-я**], is a range of the bytes that spell
+them and not of the letters between them.
+
+A bracketed class holds each byte value separately - the table is 256 bits, one per value - so
+[**пм**] matches any of the four bytes that spell those two letters.
+
+Note: v7's class table was 128 bits and its matcher masked every input byte with 0177, which
+folds the lead byte of a Cyrillic capital onto an ASCII letter: [**п**] would have been found
+inside **ALPHA**. Worse, nothing masked the byte on the way *in,* so a class containing a byte
+above 0177 stored past the end of its own table and quietly corrupted the compiled expression.
+Both are gone.
+
+## SEE ALSO
+
+ed(1), sed(1), sh(1)
+
+## DIAGNOSTICS
+
+Exit status is 0 if any matches are found, 1 if none, 2 for syntax errors or inaccessible
+files. An unknown flag is an error and exits 2; v7 printed a message and then searched for the
+bad flag.
+
+## BUGS
+
+Ideally there should be only one *grep,* but we don't know a single algorithm that spans a wide
+enough range of space-time tradeoffs.
+
+*Grep* truncates a line at 511 characters and treats the remainder as a new line, so a long
+line may be reported more than once and the cut may land inside a multi-byte letter. *Fgrep*
+reads through a ring of 1024 characters: a matching line longer than that has had its beginning
+overwritten by the time the line is printed, and only its last *length* - 1024 characters come
+out. (*v7's* page said 256 for both and was wrong about both. Both limits are v7's own and
+neither was changed.)
+
+*Grep* matches a starred expression by recursion, one level per **\*** that consumes anything,
+and says **grep: expression too complex** past sixteen levels. An expression anybody writes
+goes two or three deep. Note: without that limit the recursion runs off this machine's
+4096-word stack - and it returns a *wrong* answer, an empty one, for a dozen levels before it
+faults.
+
+*Fgrep* holds its keywords in a table of 3000 states - one state per character of keyword text,
+less whatever the keywords share as a prefix - and says **fgrep: wordlist too large** beyond
+that. There is no separate limit on the *number* of keywords: five hundred short ones fit
+easily, and it takes one keyword of three thousand characters to fill the table on its own. v7
+allowed 6000 states, which does not fit this machine's address space: a state is four 48-bit
+words here and eight bytes on a PDP-11.
+
+v7 also carried a second ceiling that no manual page mentioned - a 400-entry queue in the
+routine that computes the failure links - which stopped *fgrep* at 399 keywords whatever their
+length, gave that same diagnostic when it did, and overran its own stack frame for a single
+keyword of about 450 characters. The queue is sized from the state table now and cannot
+overflow, so the 3000 states above is the only limit there is.
+
+And v7's *fgrep* computed some of its failure links wrongly - it followed one link from the
+failing state and then restarted at the root, where the chain of links has to be followed to
+its end - so a keyword could go unreported although it was present. Keywords **bd**, **debdb**
+and **ebb**, against the line **debd**, is the smallest case: v7 printed nothing. About one
+keyword list in a hundred was affected, and the failure was silent - indistinguishable from an
+honest absence of matches. Fixed, and checked against 2000 generated keyword lists.

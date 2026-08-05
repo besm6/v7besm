@@ -1,0 +1,43 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# TTY(1)
+
+## NAME
+
+tty - get terminal name
+
+## SYNOPSIS
+
+| **tty** [ **-s** ]
+
+## DESCRIPTION
+
+*Tty* prints the pathname of the user's terminal - the name in **/dev** of whatever is open on
+the standard input.
+
+**-s** prints nothing; the answer is the exit status alone, which is what a shell script wants.
+**Note:** v7's page documented neither the option nor the status, although the program has
+always had both.
+
+## DIAGNOSTICS
+
+`not a tty` if the standard input file is not a terminal.
+
+## EXIT STATUS
+
+0 if the standard input is a terminal, 1 if it is not.
+
+## FILES
+
+/dev
+: searched for the name
+
+## SEE ALSO
+
+ttyname(3)
+
+## BUGS
+
+There is no way back from a device number to a name, so ttyname(3) reads **/dev** and compares
+i-numbers. A terminal that is not in **/dev** has no name, and one that is there twice answers
+with whichever entry comes first in the directory.

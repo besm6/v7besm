@@ -1,0 +1,106 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# CHMOD(1)
+
+## NAME
+
+chmod - change mode
+
+## SYNOPSIS
+
+| **chmod** mode file ...
+
+## DESCRIPTION
+
+The mode of each named file is changed according to *mode,* which may be absolute or symbolic.
+An absolute *mode* is an octal number constructed from the OR of the following modes:
+
+4000
+: | set user ID on execution
+
+2000
+: | set group ID on execution
+
+1000
+: | sticky bit, see chmod(2)
+
+0400
+: | read by owner
+
+0200
+: | write by owner
+
+0100
+: | execute (search in directory) by owner
+
+0070
+: | read, write, execute (search) by group
+
+0007
+: read, write, execute (search) by others
+
+A symbolic *mode* has the form:
+
+> [*who*] *op permission* [*op permission*] ...
+
+The *who* part is a combination of the letters **u** (for user's permissions), **g** (group)
+and **o** (other). The letter **a** stands for **ugo.** If *who* is omitted, the default is *a*
+but the setting of the file creation mask (see umask(2)) is taken into account.
+
+*Op* can be **+** to add *permission* to the file's mode, **-** to take away *permission* and
+**=** to assign *permission* absolutely (all other bits will be reset).
+
+*Permission* is any combination of the letters **r** (read), **w** (write), **x** (execute),
+**s** (set owner or group id) and **t** (save text - sticky). Letters **u, g** or **o**
+indicate that *permission* is to be taken from the current mode. Omitting *permission* is only
+useful with **=** to take away all permissions.
+
+The first example denies write permission to others, the second makes a file executable:
+
+> | chmod o-w file
+> | chmod +x file
+
+Multiple symbolic modes separated by commas may be given. Operations are performed in the order
+specified. The letter **s** is only useful with **u** or **g.**
+
+Only the owner of a file (or the super-user) may change its mode. That rule is chmod(2)'s and
+not this program's: the call goes through **owner()** in kernel/fio.c, which admits the file's
+owner as well as root. *Chmod* is therefore **not** a set-user-ID program, unlike mkdir(1),
+mv(1) and rmdir(1) on this system.
+
+**Note: chmod +s** does nothing at all, here and in v7 alike, and the sentence above
+understates it. With *who* omitted the default is **a** less the file creation mask, which is
+**01777; s** is **06000;** and the two have no bit in common. The letter **s** is not merely
+`only useful` with **u** or **g**, it is inert without them.
+
+**Note: chmod +t** does work - the sticky bit **01000** is inside **01777** - but only for the
+super-user. Chmod(2) here reads
+
+> **if (u.u_uid) uap->fmode &= ~ISVTX;**
+
+\- kernel/sys4.c - so an ordinary owner's **chmod +t** succeeds and silently changes nothing.
+
+**Note:** the omitted-*who* default depends on umask(2), and on this system the initial mask
+(**CMASK** in <sys/param.h>) is **0**, while no shell here has a **umask** builtin. So the
+default is plainly **a** today, and every mode this port's tests predict rests on that.
+
+**Note:** the mode argument is parsed **once, before any file is opened,** so an unparsable
+mode changes nothing rather than half of what was named. An absolute mode out of range is not
+diagnosed: *chmod* accumulates it and chmod(2) masks it with **07777**.
+
+## DIAGNOSTICS
+
+*Chmod* exits with the number of files it could not change, or **255** for a usage error or an
+unparsable mode. All four messages go to the standard error, unlike chown(1)'s and ln(1)'s.
+
+**Usage: chmod [ugoa][+-=][rwxstugo] file ...**
+
+**chmod: invalid mode**
+
+**chmod: can't access** *name* - the file could not be *stat*\&ed.
+
+**chmod: can't change** *name* - the file was found and chmod(2) refused it.
+
+## SEE ALSO
+
+ls(1), chmod(2), chown (1), stat(2), touch(1), umask(2)

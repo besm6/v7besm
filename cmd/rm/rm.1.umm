@@ -1,0 +1,83 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# RM(1)
+
+## NAME
+
+rm, rmdir - remove (unlink) files
+
+## SYNOPSIS
+
+| **rm** [ **-fri** ] file ...
+
+| **rmdir** dir ...
+
+## DESCRIPTION
+
+*Rm* removes the entries for one or more files from a directory. If an entry was the last link
+to the file, the file is destroyed. Removal of a file requires write permission in its
+directory, but neither read nor write permission on the file itself.
+
+If a file has no write permission and the standard input is a terminal, its permissions are
+printed and a line is read from the standard input. If that line begins with `y` the file is
+deleted, otherwise the file remains. No questions are asked when the **-f** (force) option is
+given.
+
+**Note:** nor when the standard input is **not** a terminal. *Rm* sets **-f** for itself in
+that case - there being nobody to answer - which v7's page never said, and which is what makes
+*rm* usable from a shell script.
+
+If a designated file is a directory, an error comment is printed unless the optional argument
+**-r** has been used. In that case, *rm* recursively deletes the entire contents of the
+specified directory, and the directory itself.
+
+**Note:** `and the directory itself` is done by **forking and execing /bin/rmdir,** which is
+where the privilege for it comes from: unlink(2) of a directory is refused to anyone but the
+super-user, and */bin/rmdir* is set-user-id root (see below). *Rm* is **not** setuid and does
+not need to be - but **rm -r will not work if /bin/rmdir is missing,** and will say so. (v7
+tried */usr/bin/rmdir* as well; there is no */usr/bin* on this system, and that second attempt
+is kept and is dead.)
+
+**Note: rm -r** holds one file descriptor open per level of nesting, and **NOFILE** is 20
+(include/sys/param.h), so it stops at twenty levels deep. This was as true of v7 as it is here.
+The recursion also builds each path in a 100-character buffer, and refuses a name that will not
+fit - v7 built it with no bound at all, which mattered rather more in a routine that recurses
+on what it builds.
+
+If the **-i** (interactive) option is in effect, *rm* asks whether to delete each file, and,
+under **-r**, whether to examine each directory.
+
+*Rmdir* removes entries for the named directories, which must be empty.
+
+**Note:** *rmdir* is **set-user-id to root** on this system, for mkdir(1)'s reason turned
+round: there is no *rmdir* system call, the directory is taken apart with three unlink(2)s - of
+`name/..`, `name/.` and *name* itself - and *unlink* of a directory is refused to anyone but
+the super-user. The bit is granted in *root.manifest* at the top of the source tree, as mode
+04755\. As in *mkdir*, the permission that actually decides is the program's own access(2) check
+on the parent, made against the **real** user id.
+
+**Note:** *rmdir* refuses to remove a name whose last component is **.** or **..**, and refuses
+to remove the directory the process is standing in. v7's *rmdir* made the first check on the
+whole path rather than on the last component, so it was not made at all for a qualified name
+such as `rmdir foo/.`; that is repaired here.
+
+## SEE ALSO
+
+unlink(2), mkdir(1), cp(1), mv(1), ln(1)
+
+## DIAGNOSTICS
+
+Generally self-explanatory. It is forbidden to remove the file `..` merely to avoid the
+antisocial consequences of inadvertently doing something like `rm -r .*`.
+
+**Note:** *rm* exits with the number of files it failed on, and this now includes a directory
+that */bin/rmdir* failed to remove. In v7 it did not: *rm* added the child's raw wait(2) status
+to its error count, and a normal exit stores its code in the **high** byte, so a failed *rmdir*
+contributed 0400 and *rm* exited 0 - reporting success for a directory that is still there.
+
+**Note:** *rm*'s own messages go to the standard **output** and not to the standard error,
+which is v7's and is inconsistent with cp(1) and mv(1); only \`cannot remove `..'` goes to the
+standard error. They are flushed before each question is read, which they were not - the
+standard output is line buffered to a terminal on this system, so under **-i** the question
+used to sit in the buffer while *rm* waited for an answer to something the user had not been
+shown.

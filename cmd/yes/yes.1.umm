@@ -1,0 +1,37 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# YES(1)
+
+## NAME
+
+yes - print a string repeatedly
+
+## SYNOPSIS
+
+| **yes** [ string ]
+
+## DESCRIPTION
+
+*Yes* writes *string* followed by a newline to the standard output, over and over, until it is
+stopped. With no argument the string is **y**.
+
+It is a filter's answer to a program that asks questions: piping *yes* into a command supplies
+the same reply to each of them.
+
+**Note: this page is new.** *Yes* is one of the two commands in the v7 **/usr/src/cmd** tree
+that came with no manual page anywhere in the system; the other is dmesg. The program is eight
+lines and v7 evidently did not think it needed one.
+
+## DIAGNOSTICS
+
+None.
+
+## BUGS
+
+*Yes* has no terminating condition of its own. What normally stops it is the reader at the far
+end of its pipe going away, which costs it a SIGPIPE; a *yes* whose output is a file or a
+terminal runs until it is killed.
+
+## SEE ALSO
+
+kill(1), pipe(2), signal(2)

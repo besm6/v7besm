@@ -38,9 +38,7 @@ exit(2), fclose(3)
 
 | share/besm6/lib/libc.a
 | lib/libc/gen/atexit.c
-| lib/libc/gen/cuexit.c - the pointer
-| *exit*
-| tests
+| lib/libc/gen/cuexit.c - the pointer *exit* tests
 
 ## BESM-6 NOTES
 

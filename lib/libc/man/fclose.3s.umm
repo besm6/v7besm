@@ -54,5 +54,4 @@ words that way and 100 through the pointer. See exit(3).
 ## FILES
 
 | share/besm6/lib/libc.a
-| lib/libc/stdio/flsbuf.c - fflush, fclose and the cleanup share one file, as v7
-| keeps them
+| lib/libc/stdio/flsbuf.c - fflush, fclose and the cleanup share one file, as v7 keeps them

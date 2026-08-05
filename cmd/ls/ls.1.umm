@@ -1,0 +1,191 @@
+<!-- Not v7's page: this ls is 4.2BSD's, by way of RetroBSD.  See BESM-6 NOTES. -->
+
+# LS(1)
+
+## NAME
+
+ls - list contents of directory
+
+## SYNOPSIS
+
+| **ls** [ **-1ACFRacdfgilqrstu** ] name ...
+
+## DESCRIPTION
+
+For each directory argument, *ls* lists the contents of the directory; for each file argument,
+*ls* repeats its name and any other information requested. The output is sorted alphabetically
+by default. When no argument is given, the current directory is listed. When several arguments
+are given, the arguments are first sorted appropriately, but file arguments appear before
+directories and their contents.
+
+By default, when the standard output is a terminal, the names are printed in as many columns as
+will fit and unprintable characters are shown as `?`; when it is not, one name is printed per
+line and every byte is printed as it is. `-C`, **-1** and **-q** ask for those forms
+explicitly.
+
+There are several options:
+
+**-l**
+: List in long format, giving mode, number of links, owner, size in bytes, and time of last
+  modification for each file. (See below.) If the file is a special file the size field will
+  instead contain the major and minor device numbers.
+
+**-C**
+: Force multi-column output; this is the default when the output is a terminal.
+
+**-1**
+: Force one entry per line; this is the default when the output is not a terminal. **-1 , -C**
+  and **-l** each turn the other two off, so that shell aliasing works.
+
+**-F**
+: Mark directories with a trailing `/` and executable files with a trailing `*`.
+
+**-R**
+: Recursively list subdirectories encountered.
+
+**-a**
+: List all entries; usually `.` and `..` are suppressed.
+
+**-A**
+: List all entries except `.` and `..`. It is the default for the super-user.
+
+**-q**
+: Print each non-graphic character in a file name as `?`; this is the default when the output is
+  a terminal.
+
+**-t**
+: Sort by time modified (latest first) instead of by name, as is normal.
+
+**-s**
+: Give size in blocks, including indirect blocks, for each entry.
+
+**-d**
+: If argument is a directory, list only its name, not its contents (mostly used with **-l** to
+  get status on directory).
+
+**-r**
+: Reverse the order of sort to get reverse alphabetic or oldest first as appropriate.
+
+**-u**
+: Use time of last access instead of last modification for sorting (**-t**) or printing (**-l**).
+
+**-c**
+: Use time of last modification to inode (mode, etc.) instead of last modification to file for
+  sorting (**-t**) or printing (**-l**).
+
+**-i**
+: Print i-number in first column of the report for each file listed.
+
+**-f**
+: Force each argument to be interpreted as a directory and list the name found in each slot. This
+  option turns off **-l, -t, -s,** and **-r,** and turns on **-a;** the order is the order in
+  which entries appear in the directory.
+
+**-g**
+: Give group ID instead of owner ID in long listing.
+
+**-L, -o**
+: Accepted and ignored. See **OPTIONS THAT DO NOTHING HERE** below.
+
+The mode printed under the **-l** option contains 11 characters which are interpreted as
+follows: the first character is
+
+**d**
+: | if the entry is a directory;
+
+**b**
+: | if the entry is a block-type special file;
+
+**c**
+: | if the entry is a character-type special file;
+
+**-**
+: if the entry is a plain file.
+
+The next 9 characters are interpreted as three sets of three bits each. The first set refers to
+owner permissions; the next to permissions to others in the same user-group; and the last to
+all others. Within each set the three characters indicate permission respectively to read, to
+write, or to execute the file as a program. For a directory, `execute` permission is
+interpreted to mean permission to search the directory for a specified file. The permissions
+are indicated as follows:
+
+**r**
+: | if the file is readable;
+
+**w**
+: | if the file is writable;
+
+**x**
+: | if the file is executable;
+
+**-**
+: if the indicated permission is not granted.
+
+The group-execute permission character is given as **s** if the file has set-group-ID mode;
+likewise the user-execute permission character is given as **s** if the file has set-user-ID
+mode. If the set-ID bit is on but the corresponding execute bit is not, the character is **S**
+instead.
+
+The last character of the mode (normally `x` or `-`) is **t** if the 1000 bit of the mode is
+on, or **T** if that bit is on and the execute bit is not. See chmod(1) for the meaning of this
+mode.
+
+When the sizes of the files in a directory are listed, a total count of blocks, including
+indirect blocks is printed.
+
+## OPTIONS THAT DO NOTHING HERE
+
+**Note: -L** and **-o** are parsed, so that a command line written for a 4.xBSD *ls* runs here
+rather than failing, and then nothing reads them.
+
+**-L** asks that a symbolic link be followed rather than described. **This system has no
+symbolic links,** so every *stat* already behaves as **-L** asks and there is nothing for the
+option to change. Nothing is ever listed with a leading `l`, and **-F** has no `@` to print.
+
+**-o** asks for the 4.4BSD file-flags column - *uappnd*, *uchg*, *schg* and their fellows.
+**This system has no such flags:** *struct stat* has no *st_flags* and there is no chflags(2)
+to set one.
+
+## COLUMNS ARE COUNTED IN BYTES
+
+**Note:** this system carries eight bits everywhere - the console, the clists, the filesystem
+and sh(1) are all byte-transparent - so a file name may hold Cyrillic. *Ls* counts a column's
+width in **bytes,** not in letters, so a name written in a multi-byte encoding is charged for
+its bytes and a column holding one will be wider than it looks.
+
+**-q** is unaffected by this and is deliberately narrower than 4.xBSD's: it replaces the
+control characters and **rubout** only, where 4.xBSD replaced every byte above **0177**. Since
+**-q** is on by default at a terminal, the wider test would have turned every Cyrillic name
+into a row of question marks.
+
+## BLOCKS ARE 1024 BYTES
+
+**Note:** the block **-s** and the **total** line count in is **1024** bytes. It is not this
+machine's filesystem block, which is **3072** bytes - 512 words of 48 bits - and is three of
+them.
+
+So every size **-s** prints is a **multiple of three,** the smallest thing that can be
+allocated being one 3072-byte block: a one-byte file costs three. And the numbers are **half**
+what a PDP-11 printed, v7 having counted in 512-byte blocks.
+
+*Df*(1M), du(1) and *quot*(1M) report in the same block.
+
+## BESM-6 NOTES
+
+The screen width cannot be asked for: this kernel's terminal calls are v7's and there is no
+**TIOCGWINSZ.** *Ls* uses 80 columns, or the value of **$COLUMNS** when that names a positive
+number.
+
+There is no *st_blocks*, so the block counts are computed from the file's size and an entirely
+sparse file is charged for the blocks it does not have.
+
+*Ls* is the first program here to read a directory through directory(3) rather than by hand.
+
+## FILES
+
+| /etc/passwd to get user ID's for `ls -l`.
+| /etc/group to get group ID's for `ls -g`.
+
+## SEE ALSO
+
+directory(3), dir(5), chmod(1), find(1)

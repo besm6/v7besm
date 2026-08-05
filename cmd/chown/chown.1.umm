@@ -1,0 +1,72 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# CHOWN(1)
+
+## NAME
+
+chown, chgrp - change owner or group
+
+## SYNOPSIS
+
+| **chown** owner file ...
+
+| **chgrp** group file ...
+
+## DESCRIPTION
+
+*Chown* changes the owner of the *files* to *owner*. The owner may be either a decimal UID or a
+login name found in the password file.
+
+*Chgrp* changes the group-ID of the *files* to *group*. The group may be either a decimal GID
+or a group name found in the group-ID file.
+
+Only the super-user can change owner or group, in order to simplify as yet unimplemented
+accounting procedures.
+
+**Note:** that is enforced by the kernel and not by these programs. Chown(2) here opens with
+
+> **if (!suser() || (ip = owner()) == NULL) return;**
+
+\- kernel/sys4.c - so an ordinary user is refused whatever the file's mode says, and both
+programs are the super-user's alone. Neither is a set-user-ID program, and neither should
+become one: the whole point of the rule is that a user cannot give a file away.
+
+**Note:** *chgrp* has no manual page of its own and no source beyond cmd/chgrp/chgrp.c - this
+page documents both, the arrangement rm(1) has with *rmdir*.
+
+**Note:** there is no chgrp(2). The group is the third argument of chown(2), which has no
+`leave this one alone` sentinel, so *chown* reads the group back out of a stat(2) and writes it
+again, and *chgrp* does the same with the owner. Each therefore rewrites the field it is not
+changing, and a program that changes both must be prepared for either order.
+
+**Note:** the names available on the root filesystem this port ships are **root** (0),
+**daemon** (1), **sys** (2), **bin** (3), **uucp** (4) and **guest** (7); the groups are
+**other** (1), **sys** (2), **bin** (3) and **uucp** (4). There is no group with gid 0, so
+**chgrp 0** must be written numerically.
+
+**Note:** v7's programs accepted an empty first argument as a number, so **chown '' file**
+handed the file to root without a word. It is refused here.
+
+## DIAGNOSTICS
+
+Both exit **4** for a usage error or an unknown name, and **1** if any file could not be
+changed. The first two messages go to the standard **output,** which is v7's and is
+inconsistent with the third; the third is perror(3) and goes to the standard error.
+
+| **usage: chown uid file ...**
+| **usage: chgrp gid file ...**
+
+| **unknown user id:** *name*
+| **unknown group:** *name*
+
+**name**\&*:* **reason** - the file could not be *stat*\&ed or chown(2) refused it. For an
+ordinary user the reason is **Not owner**.
+
+## FILES
+
+| /etc/passwd
+| /etc/group
+
+## SEE ALSO
+
+chmod(1), chown(2), ls(1), passwd(5), group(5)

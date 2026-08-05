@@ -1,0 +1,56 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# TR(1)
+
+## NAME
+
+tr - translate characters
+
+## SYNOPSIS
+
+| **tr** [ **-cds** ] [ string1 [ string2 ] ]
+
+## DESCRIPTION
+
+*Tr* copies the standard input to the standard output with substitution or deletion of selected
+characters. Input characters found in *string1* are mapped into the corresponding characters of
+*string2*. When *string2* is short it is padded to the length of *string1* by duplicating its
+last character. Any combination of the options **-cds** may be used: **-c** complements the set
+of characters in *string1* with respect to the universe of characters whose codes are 01
+through 0377 octal; **-d** deletes all input characters in *string1;* **-s** squeezes all
+strings of repeated output characters that are in *string2* to single characters.
+
+In either string the notation *a*\&**-**\&*b* means a range of characters from *a* to *b* in
+increasing order of character code. The character `\` followed by 1, 2 or 3 octal digits stands
+for the character whose code is given by those digits. A `\` followed by any other character
+stands for that character.
+
+The following example creates a list of all the words in `file1` one per line in `file2`, where
+a word is taken to be a maximal string of alphabetics. The second string is quoted to protect
+`\` from the Shell. 012 is the code for newline.
+
+> tr -cs A-Za-z '\\012' <file1 >file2
+
+## THE SETS ARE BYTES
+
+*Note:* this machine's text is UTF-8 and a character above U+007F occupies more than one byte,
+but *tr* works a byte at a time. So a multi-byte character can only be named in *string1* or
+*string2* by writing out its bytes - **tr п н** does not exchange two letters, it exchanges
+the four bytes they are made of, one for another.
+
+What follows from that is more useful than what it costs, and it is why no byte is masked away
+here as it is in several of *tr*'s neighbours. Every one of the 256 byte values maps to itself
+unless *string1* names it, so
+
+> tr a-z A-Z
+
+folds the Latin letters of a line and passes **привет** through untouched. The universe
+**-c** complements is all 255 non-null bytes, not the 127 of ASCII.
+
+## SEE ALSO
+
+ed(1), ascii(7)
+
+## BUGS
+
+Won't handle NUL in *string1* or *string2;* always deletes NUL from input.

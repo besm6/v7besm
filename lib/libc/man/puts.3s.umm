@@ -32,8 +32,7 @@ error, as C11 sec 7.21.7.4 and 7.21.7.9 require.
 ## SEE ALSO
 
 | fopen(3), gets(3), putc(3), printf(3), ferror(3), stdio(3)
-| fread(3) for
-| *fwrite*
+| fread(3) for *fwrite*
 
 ## BUGS
 

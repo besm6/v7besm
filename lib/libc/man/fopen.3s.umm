@@ -128,5 +128,4 @@ buffer and not a kernel number; it is v7's customary 128.
 ## FILES
 
 | share/besm6/lib/libc.a
-| lib/libc/stdio/fopen.c, freopen.c, fdopen.c, endopen.c, findiop.c, memstream.c,
-| tmpfile.c, tmpnam.c, remove.c, rename.c
+| lib/libc/stdio/fopen.c, freopen.c, fdopen.c, endopen.c, findiop.c, memstream.c, tmpfile.c, tmpnam.c, remove.c, rename.c

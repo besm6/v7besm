@@ -112,8 +112,7 @@ On the Interdata 8/32, `as soon as possible` (request 7) means `as soon as a sto
 has been executed.`
 
 | The request 0 call should be able to specify signals which are to be treated normally and not cause a stop. In this way, for example, programs with simulated floating point (which use `illegal instruction` signals at a very high rate) could be efficiently debugged.
-| On this machine the T-bit wording above does not apply either; single-stepping is
-| not implemented.
+| On this machine the T-bit wording above does not apply either; single-stepping is not implemented.
 
 The error indication, -1, is a legitimate function value; *errno,* see intro(2), can be used to
 disambiguate.

@@ -12,10 +12,8 @@ stdio - standard buffered input/output package
 #include <stdio.h>
 
 FILE *stdin;
-FILE
-*stdout;
-FILE
-*stderr;
+FILE *stdout;
+FILE *stderr;
 ```
 
 ## DESCRIPTION

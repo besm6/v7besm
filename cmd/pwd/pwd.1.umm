@@ -1,0 +1,21 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# PWD(1)
+
+## NAME
+
+pwd - working directory name
+
+## SYNOPSIS
+
+```c
+pwd
+```
+
+## DESCRIPTION
+
+*Pwd* prints the pathname of the working (current) directory.
+
+## SEE ALSO
+
+cd(1)

@@ -1,0 +1,59 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# WRITE(1)
+
+## NAME
+
+write - write to another user
+
+## SYNOPSIS
+
+| **write** user [ ttyname ]
+
+## DESCRIPTION
+
+*Write* copies lines from your terminal to that of another user. When first called, it sends
+the message
+
+Message from yourname yourttyname...
+
+The recipient of the message should write back at this point. Communication continues until an
+end of file is read from the terminal or an interrupt is sent. At that point *write* writes
+`EOF` on the other terminal and exits.
+
+**Note:** this page said `EOT`; the program has always written `EOF`.
+
+If you want to write to a user who is logged in more than once, the *ttyname* argument may be
+used to indicate the appropriate terminal name.
+
+Permission to write may be denied or granted by use of the *mesg* command. At the outset
+writing is allowed: the terminal nodes of this system are created with mode 0622. Certain
+commands, in particular *nroff* and pr(1) disallow messages in order to prevent messy output.
+
+**Note:** the check is *write*'s own, made on the descriptor it has already opened, and it is
+made whoever you are - so a **mesg n** refuses the super-user too, even though the open
+succeeded and cat(1) would have put the bytes there. *wall*(1M) is the deliberate other half of
+that pair: it makes no such check.
+
+**Note:** there is no *nroff* on this system, and this port of pr(1) does not touch the
+terminal's mode.
+
+If the character `!` is found at the beginning of a line, *write* calls the shell to execute
+the rest of the line as a command.
+
+The following protocol is suggested for using *write*: when you first write to another user,
+wait for him to write back before starting to send. Each party should end each message with a
+distinctive signal—**(o)** for `over` is conventional—that the other may reply. **(oo)**
+for `over and out` is suggested when conversation is about to be terminated.
+
+## FILES
+
+/etc/utmp
+: to find user
+
+/bin/sh
+: to execute `!`
+
+## SEE ALSO
+
+mesg(1), who(1), mail(1)

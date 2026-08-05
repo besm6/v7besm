@@ -1,0 +1,51 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# TEE(1)
+
+## NAME
+
+tee - pipe fitting
+
+## SYNOPSIS
+
+| **tee** [ **-i** ] [ **-a** ] [ file ] ...
+
+## DESCRIPTION
+
+*Tee* transcribes the standard input to the standard output and makes copies in the *files.*
+Option **-i** ignores interrupts; option **-a** causes the output to be appended to the *files*
+rather than overwriting them.
+
+**Note:** a bare **-** is accepted as a synonym for **-i**. That is v7's and its page did not
+mention it.
+
+**Note:** *tee* copies bytes and inspects none of them, so a UTF-8 file goes through it
+unchanged.
+
+## HOW MANY FILES
+
+**Note:** at most **19** files may be named - one short of this system's limit of 20 open files
+per process, the twentieth descriptor being the standard output *tee* always writes to. A
+twentieth name is refused with **tee: too many output files** and the copy proceeds to the
+outputs already open.
+
+v7 sized the same table at twenty and then wrote past the end of it, into the three variables
+that happened to follow, so a twentieth file corrupted the program rather than being refused.
+
+## BUFFERING
+
+**Note:** the buffer is one **3072-byte** filesystem block, where v7's was 512 bytes - the
+PDP-11's block, which names nothing on this machine.
+
+When any output is a terminal or a pipe, *tee* writes what it has as soon as the input pauses,
+and in 16-byte pieces, so that an interactive pipeline echoes as it is typed rather than a
+block at a time. That is v7's and the number is unchanged.
+
+## DIAGNOSTICS
+
+A file that cannot be created is reported and dropped from the output list; the copy continues
+to the rest. The exit status is 0 either way, which is v7's.
+
+## SEE ALSO
+
+cat(1), sh(1)
