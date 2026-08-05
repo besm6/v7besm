@@ -24,11 +24,20 @@
 //
 // My_term IS SET, AND THAT IS THE WHOLE REASON THE TWO HARNESSES CAN AGREE.  initscr()'s
 // other path calls gettmode(), which derives GT from XTABS and NONL and _pfast from CRMOD --
-// and ioctl is an unconditional no-op under b6sim (cmd/sim/syscall.cpp) while the booted
-// kernel's console really is ECHO|CRMOD|XTABS (kernel/dev/sc.c).  Those three flags change
-// which cursor motion cr_put.c emits, so the same program would produce two different
-// streams.  With My_term set, initscr() asks the tty nothing and all three keep their BSS
-// zeros.  curstty.c is the other half: it does NOT set My_term, and runs on the image only.
+// and the two harnesses hold two different terminals.  The booted kernel's console really is
+// ECHO|CRMOD|XTABS (kernel/dev/sc.c); under b6sim it is whatever descriptor ctest handed
+// over, which is a FILE, so gettmode() gets ENOTTY and takes its failure path.  Those three
+// flags change which cursor motion cr_put.c emits, so the same program would produce two
+// different streams.  With My_term set, initscr() asks the tty nothing and all three keep
+// their BSS zeros.  curstty.c is the other half: it does NOT set My_term, and runs on the
+// image only.
+//
+// THE REASON USED TO BE STRONGER THAN IT IS.  b6sim's ioctl was an unconditional no-op that
+// answered success and changed nothing, so gettmode() there read back a terminal that did not
+// exist; the port of more(1) made stty/gtty/ioctl real (cmd/sim/tty.h), and what is left is
+// the honest difference between a Consul-254 and whatever ctest redirects into.  Whether
+// these two programs can now be ONE, run in both worlds against one expectation, is a
+// question with its own answer and its own expectations, and nobody has done the work.
 //
 // _putchar AND wgetch ARE THIS PROGRAM'S.  b6ld pulls an archive member only for a symbol
 // still undefined, so defining them here means libcurses' putchar.o and getch.o are never

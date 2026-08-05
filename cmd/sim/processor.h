@@ -104,6 +104,14 @@ private:
     void sys_kctl();
     void sys_kctl_out(const char *src, unsigned avail, Word buf, int len);
 
+    // Terminal parameters over the host's termios (tty.h).  sys_ioctl() is the whole gate
+    // and mirrors kernel/dev/tty.c's ioctl() in its ORDER, close-on-exec first; the two
+    // below it carry out one command each, on a WORD address, so that stty(2)/gtty(2) --
+    // whose pointer is thin where ioctl's is fat -- can share the translation.
+    void sys_ioctl();
+    void sys_tty_param(int fd, unsigned cmd, unsigned addr);
+    void sys_tty_chars(int fd, unsigned cmd, unsigned addr);
+
     // Is `path' one of the six /etc files b6sim serves itself (etcfiles.h)?  If it is,
     // finish the call with `err' and answer true -- every syscall that would MODIFY one
     // says so this way rather than reaching the host's copy of that name.

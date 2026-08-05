@@ -10,6 +10,7 @@ add_library(simulator STATIC
     arithmetic.cpp
     besm6_arch.cpp
     syscall.cpp
+    tty.cpp
     kernel.cpp
     etcfiles.cpp
     params.cpp

@@ -67,8 +67,10 @@ here and not 14.
 
 ### isatty
 
-**struct sgttyb is five words here** - four chars, each occupying a word of its own, and an
-**int**. That is the shape gtty(2) fills, and there is no packing to undo.
+**struct sgttyb is two words here** - the four chars in bytes 0 through 3 of the first, a
+two-byte pad, and *sg_flags* in the second. A **char** *member* of a struct occupies one byte,
+not a word; it is a whole *object* that rounds up. That is the shape gtty(2) fills, and
+ioctl(2)'s BESM-6 NOTES is where it is written out.
 
 ### Two v7 bugs fixed rather than carried
 

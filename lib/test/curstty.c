@@ -2,12 +2,18 @@
 // curstty -- lib/libcurses' tty modes, on the booted kernel only.
 //
 // THIS IS THE HALF cursest.c HAS TO SWITCH OFF.  That program sets My_term so that initscr()
-// never calls gettmode(), because gettmode() is an ioctl and the two harnesses do not agree
-// about ioctls: under b6sim it is an unconditional success that changes nothing and gtty
-// zero-fills five words (cmd/sim/syscall.cpp), while under the booted kernel it reaches
-// kernel/dev/tty.c's ttioccomm() and really reads and writes the console.  A shared
+// never calls gettmode(), because gettmode() is an ioctl and the two harnesses do not hold
+// the same terminal: under the booted kernel it reaches kernel/dev/tty.c's ttioccomm() and
+// really reads and writes the console, while under b6sim the descriptor is one ctest
+// redirected -- a file, not a terminal -- and the call comes back ENOTTY.  A shared
 // expectation cannot say two things, so the tty modes have a program of their own and it is
 // IMAGEONLY -- the same reason memt and shellt are.
+//
+// UNTIL THE PORT OF more(1) THE REASON WAS WORSE THAN THAT: b6sim's ioctl answered every
+// request with success and changed nothing, and its gtty zero-filled FIVE words into a
+// structure that is TWO (cmd/sim/tty.h, and section 4 of doc/Besm6_Data_Representation.md
+// for why).  Both are now real -- b6sim translates struct sgttyb against the host's termios --
+// so what separates the two worlds here is the machine underneath and nothing else.
 //
 // WHAT IT ASSERTS IS THE CONSOLE.  kernel/dev/sc.c opens it ECHO|CRMOD|XTABS, which is
 // 010|020|06000 = 06030, and gettmode() must read exactly that back, save it in _res_flg,

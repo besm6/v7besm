@@ -21,9 +21,14 @@
 //
 //   _flag is an `int', not v7's `char'.  All eight bits of a char were spoken for
 //   (_IOREAD..._IORW == 01...0200) and line buffering needs a ninth, _IOLBUF.  It
-//   costs nothing: a char STRUCT MEMBER occupies a whole word here anyway -- see
-//   struct sgttyb, four chars in four words.  _file stays a char for the same
-//   reason: widening it would buy nothing.
+//   COSTS ONE WORD PER STREAM, which is worth stating plainly because this comment
+//   claimed for a long time that it cost nothing, on the strength of a rule that
+//   does not exist: a char MEMBER of a struct occupies one BYTE at a byte-granular
+//   offset (doc/Besm6_Data_Representation.md section 4), and it is a whole OBJECT
+//   that rounds up to a word.  So _flag as a char would put _file beside it and
+//   make this structure five words where it is six -- 20 words of bss over _iob,
+//   which is the price of the ninth bit and is worth paying.  _file stays a char
+//   because it is last: widening it would round to the same six.
 //
 //   _bufsiz is new, and setvbuf is why.  v7 wrote BUFSIZ into _filbuf and _flsbuf
 //   outright, because setbuf() was the only way to hand over a buffer and it

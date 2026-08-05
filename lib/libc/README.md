@@ -375,9 +375,14 @@ without that test `readdir()` would hand back file contents reinterpreted as ent
 **`FILE` grew two members, and both were free.** `_flag` is an `int` rather than v7's `char`,
 because all eight bits of a char were spoken for and line buffering needed a ninth; `_bufsiz` is
 new, and `setvbuf` is why — v7 wrote `BUFSIZ` into `_filbuf` and `_flsbuf` outright, because
-`setbuf()` was the only way to hand a buffer over and promised one of exactly that size. Neither
-costs anything: **a `char` struct member occupies a whole word here anyway** — `struct sgttyb` is
-four chars in four words.
+`setbuf()` was the only way to hand a buffer over and promised one of exactly that size. **Each
+costs a word, and the second one costs it for a reason this tree got wrong four times**: a
+`char` *member* of a struct occupies one **byte** at a byte-granular offset — it is a whole
+*object* that rounds up to a word (`doc/Besm6_Data_Representation.md` §4, measured). So `_flag`
+as a char would sit beside `_file` and make `FILE` five words where it is six: 20 words of bss
+over `_iob`, which is what the ninth flag bit is worth. `struct sgttyb`, the example this
+paragraph used to cite for the opposite claim, is **two** words and not five — four chars in
+bytes 0–3 of the first, a two-byte pad, `sg_flags` in the second.
 
 **A line-buffered stream is held at `_cnt == 0`.** That is the whole mechanism, and it is why the
 `putc` macro shows no sign of the mode: every `putc` misses and lands in `_flsbuf`, which appends

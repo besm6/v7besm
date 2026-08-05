@@ -61,14 +61,22 @@ properties, *argp* should have an open-ended declaration like
 
 ## BESM-6 NOTES
 
-**struct sgttyb is five words - four chars, each occupying a word of its own, and an int.** A
-**char** struct member takes a whole word here, so nothing about that structure is packed and
-there is no unpacking to do.
+**struct sgttyb is two words, not five.** A **char** *member* of a struct occupies one byte at
+a byte-granular offset, so the four chars fill bytes 0 through 3 of the first word, bytes 4 and
+5 are the trailing pad, and *sg_flags* is the second word. It is a whole *object* that rounds
+up to a word, not a member; reading the first rule as though it covered the second is a mistake
+this tree has made four times, and this page was one of them. See section 4 of
+doc/Besm6_Data_Representation.md, whose numbers were measured. **struct tchars** is six chars
+in six bytes: exactly one word, no pad.
 
-**Note:** under b6sim, *ioctl* is an unconditional no-op that answers success and changes
-nothing, while the real console is ECHO|CRMOD|XTABS. A program whose output depends on tty
-modes therefore cannot have one expectation for both harnesses; the curses tests split along
-exactly that line.
+**Note:** *ioctl*, *stty* and *gtty* are real under b6sim as well as under the kernel. b6sim
+translates between **struct sgttyb** and the host terminal's settings, so a program that clears
+ECHO or asks for RAW gets what it asked for and a program that asks whether it is on a terminal
+is told the truth. Two differences remain, and both are the machine underneath rather than the
+simulation: the console this kernel drives is ECHO|CRMOD|XTABS where a host terminal is
+whatever the user left it, and *sg_ispeed*/*sg_ospeed* read back **B0** on the kernel - a
+Consul-254 has no baud rate - where b6sim reports what the host line really runs at. A program
+that needs the same answer in both worlds must not ask those questions.
 
 The important thing is that the size is fixed by `struct sgttyb`.
 

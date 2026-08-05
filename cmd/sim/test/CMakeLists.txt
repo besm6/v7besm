@@ -1,7 +1,7 @@
 #
 # Unit tests for the BESM-6 simulator (b6sim).
 #
-add_executable(sim_test sim_test.cpp etc_test.cpp)
+add_executable(sim_test sim_test.cpp etc_test.cpp tty_test.cpp)
 target_link_libraries(sim_test PRIVATE simulator GTest::gtest_main)
 # etc_test.cpp compares b6sim's compiled-in copy of /etc against the tree it was transcribed
 # from, so it needs to find the tree at run time.  A -D and not a -I: ../CMakeLists.txt keeps

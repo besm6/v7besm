@@ -77,8 +77,16 @@ spoken for (_IOREAD ... _IORW) and line buffering needed a ninth. *_bufsiz* is n
 setvbuf(3) is why: v7 wrote BUFSIZ into the buffering code outright, since *setbuf* was the
 only way to hand a buffer over and promised one of exactly that size.
 
-Neither costs anything. **A char struct member occupies a whole word here anyway** - see
-**struct sgttyb**, which is four chars in four words.
+*_bufsiz* is a word that was not there before, and *_flag* costs one more: a **char** *member*
+of a struct occupies one byte at a byte-granular offset, so *_flag* as a char would sit beside
+*_file* and make **FILE** five words where it is six. That is 20 words of static storage over
+*_iob*, and it is the price of the ninth flag bit.
+
+**Note:** this page and `<stdio.h>` both used to say the widening cost nothing, on the strength
+of a rule that does not exist - that a **char** struct member takes a whole word. It is a whole
+*object* that rounds up to a word; a member does not. See section 4 of
+doc/Besm6_Data_Representation.md, and ioctl(2)'s BESM-6 NOTES for the same correction applied
+to **struct sgttyb**.
 
 ### _IONBF is spelled _IOUNBUF
 

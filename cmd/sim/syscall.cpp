@@ -25,8 +25,8 @@
 #include <unistd.h>
 #include <utime.h>
 
-#include <csignal>
 #include <cerrno>
+#include <csignal>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -35,6 +35,7 @@
 
 #include "machine.h"
 #include "memory.h"
+#include "tty.h"
 
 //
 // Unix v7 system call numbers (kernel/sysent.c).
@@ -199,56 +200,93 @@ static unsigned syscall_nargs(unsigned num)
 static int guest_errno(int e)
 {
     switch (e) {
-    case EPERM:   return 1;
-    case ENOENT:  return 2;
-    case ESRCH:   return 3;
-    case EINTR:   return 4;
-    case EIO:     return 5;
-    case ENXIO:   return 6;
-    case E2BIG:   return 7;
-    case ENOEXEC: return 8;
-    case EBADF:   return 9;
-    case ECHILD:  return 10;
-    case EAGAIN:  return 11;
-    case ENOMEM:  return 12;
-    case EACCES:  return 13;
-    case EFAULT:  return 14;
-    case ENOTBLK: return 15;
-    case EBUSY:   return 16;
-    case EEXIST:  return 17;
-    case EXDEV:   return 18;
-    case ENODEV:  return 19;
-    case ENOTDIR: return 20;
-    case EISDIR:  return 21;
-    case EINVAL:  return 22;
-    case ENFILE:  return 23;
-    case EMFILE:  return 24;
-    case ENOTTY:  return 25;
-    case ETXTBSY: return 26;
-    case EFBIG:   return 27;
-    case ENOSPC:  return 28;
-    case ESPIPE:  return 29;
-    case EROFS:   return 30;
-    case EMLINK:  return 31;
-    case EPIPE:   return 32;
-    case EDOM:    return 33;
-    case ERANGE:  return 34;
+    case EPERM:
+        return 1;
+    case ENOENT:
+        return 2;
+    case ESRCH:
+        return 3;
+    case EINTR:
+        return 4;
+    case EIO:
+        return 5;
+    case ENXIO:
+        return 6;
+    case E2BIG:
+        return 7;
+    case ENOEXEC:
+        return 8;
+    case EBADF:
+        return 9;
+    case ECHILD:
+        return 10;
+    case EAGAIN:
+        return 11;
+    case ENOMEM:
+        return 12;
+    case EACCES:
+        return 13;
+    case EFAULT:
+        return 14;
+    case ENOTBLK:
+        return 15;
+    case EBUSY:
+        return 16;
+    case EEXIST:
+        return 17;
+    case EXDEV:
+        return 18;
+    case ENODEV:
+        return 19;
+    case ENOTDIR:
+        return 20;
+    case EISDIR:
+        return 21;
+    case EINVAL:
+        return 22;
+    case ENFILE:
+        return 23;
+    case EMFILE:
+        return 24;
+    case ENOTTY:
+        return 25;
+    case ETXTBSY:
+        return 26;
+    case EFBIG:
+        return 27;
+    case ENOSPC:
+        return 28;
+    case ESPIPE:
+        return 29;
+    case EROFS:
+        return 30;
+    case EMLINK:
+        return 31;
+    case EPIPE:
+        return 32;
+    case EDOM:
+        return 33;
+    case ERANGE:
+        return 34;
 
     // A path a v7 system could never have named at all.
     case ENAMETOOLONG:
-    case ELOOP: return 2; // ENOENT
+    case ELOOP:
+        return 2; // ENOENT
 
-    // Asked of the host something it declines to do; v7's answer is EINVAL.
-    // ENOTSUP and EOPNOTSUPP are one value on Linux and two on macOS, so the
-    // second label has to be conditional or the switch would not compile.
+        // Asked of the host something it declines to do; v7's answer is EINVAL.
+        // ENOTSUP and EOPNOTSUPP are one value on Linux and two on macOS, so the
+        // second label has to be conditional or the switch would not compile.
 #if defined(ENOTSUP) && ENOTSUP != EOPNOTSUPP
     case ENOTSUP:
 #endif
     case EOPNOTSUPP:
-    case ENOSYS: return 22; // EINVAL
+    case ENOSYS:
+        return 22; // EINVAL
 
     // Everything else: a host condition v7 has no number for.
-    default: return 5; // EIO
+    default:
+        return 5; // EIO
     }
 }
 
@@ -309,6 +347,240 @@ static void store_etc_stat(Machine &m, unsigned addr, const EtcFiles::File *f)
     st.st_nlink    = 1;
     st.st_size     = (off_t)f->size;
     store_stat(m, addr, st);
+}
+
+//
+// ---------------------------------------------------------------------------
+// Terminal parameters: the guest's structures in guest memory
+// ---------------------------------------------------------------------------
+//
+// The tty ioctl commands, a hand-maintained copy of include/sys/ttyio.h for the reason
+// the syscall numbers above are one: b6sim is a host tool and cannot put include/ on its
+// -I path.  Only the ones this file answers are here; the rest reach the default arm and
+// are refused, as ttioccomm()'s own default arm refuses them (kernel/dev/tty.c).
+//
+// THE V7_ PREFIX IS NOT DECORATION: every one of these names is also a macro of the
+// host's <sys/ioctl.h>, which <termios.h> drags in, and their numbers are not v7's.  The
+// mode bits in tty.h carry an SG_ prefix for the same reason.
+//
+enum {
+    V7_TIOCGETD  = ('t' << 8) | 0,
+    V7_TIOCSETD  = ('t' << 8) | 1,
+    V7_TIOCHPCL  = ('t' << 8) | 2,
+    V7_TIOCGETP  = ('t' << 8) | 8,
+    V7_TIOCSETP  = ('t' << 8) | 9,
+    V7_TIOCSETN  = ('t' << 8) | 10,
+    V7_TIOCEXCL  = ('t' << 8) | 13,
+    V7_TIOCNXCL  = ('t' << 8) | 14,
+    V7_TIOCFLUSH = ('t' << 8) | 16,
+    V7_TIOCSETC  = ('t' << 8) | 17,
+    V7_TIOCGETC  = ('t' << 8) | 18,
+    V7_FIOCLEX   = ('f' << 8) | 1,
+    V7_FIONCLEX  = ('f' << 8) | 2,
+};
+
+//
+// `struct sgttyb' IS TWO WORDS, NOT FIVE.  A char member of a struct occupies one byte at
+// a byte-granular offset (doc/Besm6_Data_Representation.md section 4, whose numbers were
+// measured), so the four chars fill bytes 0..3 of word 0 -- byte 0 being the MOST
+// significant, bits 48..41 -- bytes 4 and 5 are the trailing pad, and sg_flags is word 1.
+// The pad is written as zero rather than left alone, so that two runs of the same program
+// see the same twelve bytes.
+//
+// This was five words here until the port of more(1), which is to say b6sim wrote three
+// words PAST every caller's structure.  It went unnoticed because isatty(3), getpass(3)
+// and ls(1) all have slack after theirs and none of them reads the words back.
+//
+static void store_sgttyb(Machine &m, unsigned addr, const Sgttyb &s)
+{
+    m.mem_store(addr + 0, ((Word)s.sg_ispeed << 40) | ((Word)s.sg_ospeed << 32) |
+                              ((Word)s.sg_erase << 24) | ((Word)s.sg_kill << 16));
+    m.mem_store(addr + 1, (Word)s.sg_flags & BITS41);
+}
+
+static void load_sgttyb(Machine &m, unsigned addr, Sgttyb &s)
+{
+    Word w      = m.mem_load(addr);
+    s.sg_ispeed = (uint8_t)(w >> 40);
+    s.sg_ospeed = (uint8_t)(w >> 32);
+    s.sg_erase  = (uint8_t)(w >> 24);
+    s.sg_kill   = (uint8_t)(w >> 16);
+    s.sg_flags  = (unsigned)(m.mem_load(addr + 1) & BITS41);
+}
+
+//
+// ... and `struct tchars' is six chars in six bytes: exactly one word, no pad.
+//
+static void store_tchars(Machine &m, unsigned addr, const Tchars &c)
+{
+    m.mem_store(addr, ((Word)c.t_intrc << 40) | ((Word)c.t_quitc << 32) | ((Word)c.t_startc << 24) |
+                          ((Word)c.t_stopc << 16) | ((Word)c.t_eofc << 8) | (Word)c.t_brkc);
+}
+
+static void load_tchars(Machine &m, unsigned addr, Tchars &c)
+{
+    Word w     = m.mem_load(addr);
+    c.t_intrc  = (uint8_t)(w >> 40);
+    c.t_quitc  = (uint8_t)(w >> 32);
+    c.t_startc = (uint8_t)(w >> 24);
+    c.t_stopc  = (uint8_t)(w >> 16);
+    c.t_eofc   = (uint8_t)(w >> 8);
+    c.t_brkc   = (uint8_t)w;
+}
+
+//
+// One TIOCGETP/TIOCSETP/TIOCSETN on a WORD address.  Shared by ioctl(2) and by the
+// stty(2)/gtty(2) gates, which name the same structure through a thin pointer.
+//
+// TIOCSETP FLUSHES AND TIOCSETN DOES NOT, and that difference is the whole difference
+// between the two commands: kernel/dev/tty.c calls wflushtty() on the SETP arm and then
+// falls through into SETN.  TCSAFLUSH and TCSANOW are the host's way of saying it.
+//
+void Processor::sys_tty_param(int fd, unsigned cmd, unsigned addr)
+{
+    struct termios t;
+    if (tcgetattr(fd, &t) < 0) {
+        sys_err(ENOTTY);
+        return;
+    }
+
+    if (cmd == V7_TIOCGETP) {
+        Sgttyb s;
+        termios_to_sgttyb(t, s);
+        store_sgttyb(machine, addr, s);
+        sys_ok(0);
+        return;
+    }
+
+    Sgttyb s;
+    load_sgttyb(machine, addr, s);
+    sgttyb_to_termios(s, t);
+    tty_remember(fd); // before the first change, so there is something to put back
+    if (tcsetattr(fd, cmd == V7_TIOCSETN ? TCSANOW : TCSAFLUSH, &t) < 0)
+        sys_err(errno);
+    else
+        sys_ok(0);
+}
+
+//
+// ... and one TIOCGETC/TIOCSETC, the six special characters.
+//
+void Processor::sys_tty_chars(int fd, unsigned cmd, unsigned addr)
+{
+    struct termios t;
+    if (tcgetattr(fd, &t) < 0) {
+        sys_err(ENOTTY);
+        return;
+    }
+
+    if (cmd == V7_TIOCGETC) {
+        Tchars c;
+        termios_to_tchars(t, c);
+        store_tchars(machine, addr, c);
+        sys_ok(0);
+        return;
+    }
+
+    Tchars c;
+    load_tchars(machine, addr, c);
+    tchars_to_termios(c, t);
+    tty_remember(fd);
+    sys_ret(tcsetattr(fd, TCSANOW, &t));
+}
+
+//
+// int ioctl(int fd, int cmd, char *argp)
+//
+// THE ORDER IS kernel/dev/tty.c's ioctl() AND THAT IS NOT COSMETIC.  The kernel resolves
+// the descriptor, answers FIOCLEX/FIONCLEX for ANY descriptor whatever it is, and only
+// then insists on a character special.  cmd/sh/main.c calls ioctl(fb, FIOCLEX, 0) on a
+// FILE; an ENOTTY there would break the shell.  So close-on-exec comes first here too.
+//
+// Everything past that arm needs a terminal, and everything this file does not implement
+// is refused with ENOTTY -- which is what ttioccomm()'s default arm produces on the other
+// side, returning 0 for `not mine' and leaving the driver to set the number.  It was an
+// unconditional success until the port of more(1): a pager asks ioctl(TIOCGETP) whether
+// it has a terminal, was told yes by a pipe, and blocked reading a descriptor nobody
+// would ever type at.
+//
+void Processor::sys_ioctl()
+{
+    int fd       = (int)sign_extend41(syscall_arg(1, 3));
+    unsigned cmd = (unsigned)(syscall_arg(2, 3) & BITS(24));
+    Word argp    = syscall_arg(3, 3);
+
+    if (::fcntl(fd, F_GETFD) < 0) {
+        sys_err(EBADF);
+        return;
+    }
+
+    if (cmd == V7_FIOCLEX || cmd == V7_FIONCLEX) {
+        sys_ret(::fcntl(fd, F_SETFD, cmd == V7_FIOCLEX ? FD_CLOEXEC : 0));
+        return;
+    }
+
+    if (!::isatty(fd)) {
+        sys_err(ENOTTY);
+        return;
+    }
+
+    // THE ARGUMENT POINTER IS FAT here and thin in stty(2)/gtty(2).  Every caller passes
+    // `(char *)&sgbuf', so the byte offset is zero and the word address is the structure;
+    // a non-zero offset would mean a structure not on a word boundary, which the compiler
+    // cannot produce and this refuses rather than silently reading the wrong word.
+    BytePointer bp = fat_to_byteptr(memory, argp);
+    unsigned addr  = bp.word_addr;
+    bool aligned   = (bp.byte_index == 0);
+
+    switch (cmd) {
+    case V7_TIOCGETP:
+    case V7_TIOCSETP:
+    case V7_TIOCSETN:
+        if (!aligned)
+            sys_err(EFAULT);
+        else
+            sys_tty_param(fd, cmd, addr);
+        break;
+
+    case V7_TIOCGETC:
+    case V7_TIOCSETC:
+        if (!aligned)
+            sys_err(EFAULT);
+        else
+            sys_tty_chars(fd, cmd, addr);
+        break;
+
+    case V7_TIOCFLUSH:
+        // v7 flushes both queues and reads no argument.
+        sys_ret(::tcflush(fd, TCIOFLUSH));
+        break;
+
+    case V7_TIOCGETD:
+        // One line discipline here, as on the kernel: number 0.
+        machine.mem_store(addr, 0);
+        sys_ok(0);
+        break;
+
+    case V7_TIOCSETD:
+        // ... so any other number is ENXIO, which is what ttioccomm() answers.
+        if (machine.mem_load(addr) != 0)
+            sys_err(ENXIO);
+        else
+            sys_ok(0);
+        break;
+
+    case V7_TIOCEXCL:
+    case V7_TIOCNXCL:
+    case V7_TIOCHPCL:
+        // Accepted and inert, exactly as on the kernel: it sets a bit and, as
+        // include/sys/ttyio.h says, nothing ever tests it.
+        sys_ok(0);
+        break;
+
+    default:
+        sys_err(ENOTTY);
+        break;
+    }
 }
 
 //
@@ -857,9 +1129,9 @@ void Processor::syscall(unsigned num)
 
     case SYS_read: {
         // int read(int fd, char *buf, int n)
-        int fd       = (int)sign_extend41(syscall_arg(1, 3));
-        Word bufptr  = syscall_arg(2, 3);
-        int64_t n    = sign_extend41(syscall_arg(3, 3));
+        int fd      = (int)sign_extend41(syscall_arg(1, 3));
+        Word bufptr = syscall_arg(2, 3);
+        int64_t n   = sign_extend41(syscall_arg(3, 3));
         if (n < 0 || (uint64_t)n > (uint64_t)MEMORY_NWORDS * 6) {
             sys_err(EINVAL);
             break;
@@ -1160,9 +1432,9 @@ void Processor::syscall(unsigned num)
 
     case SYS_seek: {
         // off_t lseek(int fd, off_t off, int whence): one-word offset.
-        int fd       = (int)sign_extend41(syscall_arg(1, 3));
-        off_t off    = (off_t)sign_extend41(syscall_arg(2, 3));
-        int whence   = (int)sign_extend41(syscall_arg(3, 3));
+        int fd     = (int)sign_extend41(syscall_arg(1, 3));
+        off_t off  = (off_t)sign_extend41(syscall_arg(2, 3));
+        int whence = (int)sign_extend41(syscall_arg(3, 3));
 
         // A synthetic node seeks in b6sim's own bookkeeping.  A BYTE offset, like every
         // other file: kernel word W is at W * NBPW (kernel/dev/mem.c), and a served /etc
@@ -1170,9 +1442,8 @@ void Processor::syscall(unsigned num)
         // which is what setpwent()'s rewind and getpwent()'s walk need between them.
         SimKernel::Node *node = machine.kernel.node_find(fd);
         if (node != nullptr) {
-            int64_t end  = (node->file != nullptr)
-                               ? (int64_t)node->file->size
-                               : (int64_t)SimKernel::dev_limit(node->minor) * 6;
+            int64_t end  = (node->file != nullptr) ? (int64_t)node->file->size
+                                                   : (int64_t)SimKernel::dev_limit(node->minor) * 6;
             int64_t base = (whence == 1) ? (int64_t)node->offset : (whence == 2) ? end : 0;
             int64_t pos  = base + off;
             if (pos < 0)
@@ -1274,8 +1545,8 @@ void Processor::syscall(unsigned num)
 
     case SYS_nice: {
         // int nice(int incr): -1 is a legal result, so check errno.
-        errno  = 0;
-        int r  = ::nice((int)sign_extend41(syscall_arg(1, 1)));
+        errno = 0;
+        int r = ::nice((int)sign_extend41(syscall_arg(1, 1)));
         if (r == -1 && errno != 0)
             sys_err(errno);
         else
@@ -1415,23 +1686,26 @@ void Processor::syscall(unsigned num)
 
     case SYS_stty:
     case SYS_gtty: {
-        // Terminal parameters: honoured only as far as "is this a tty".
-        int fd = (int)sign_extend41(syscall_arg(1, 2));
-        if (!isatty(fd))
-            sys_err(ENOTTY);
-        else if (num == SYS_gtty) {
-            unsigned bp = syscall_arg(2, 2) & BITS(15);
-            for (unsigned i = 0; i < 5; i++)
-                machine.mem_store(bp + i, 0);
-            sys_ok(0);
-        } else
-            sys_ok(0);
+        // int stty(int fd, struct sgttyb *buf) / int gtty(int fd, struct sgttyb *buf)
+        //
+        // The two are v7's write-around for TIOCSETP and TIOCGETP and are real syscalls on
+        // this kernel rather than library wrappers (lib/libc/sys/syscalls.tbl), so they get
+        // the same translation the ioctl arm below does.  stty(2) is TIOCSETP -- it FLUSHES,
+        // which is what distinguishes it from TIOCSETN.
+        //
+        // THE POINTER IS THIN.  Both are declared taking a `struct sgttyb *' (include/
+        // sgtty.h), which is a bare word address; ioctl's third argument is a `char *' and
+        // is fat.  Two representations reach the same structure and getting it wrong is
+        // silent, so each arm converts its own.
+        int fd      = (int)sign_extend41(syscall_arg(1, 2));
+        unsigned bp = syscall_arg(2, 2) & BITS(15);
+        sys_tty_param(fd, num == SYS_gtty ? V7_TIOCGETP : V7_TIOCSETP, bp);
         break;
     }
 
     case SYS_ioctl:
-        // Accepted as a no-op success, like apout for non-tty-param requests.
-        sys_ok(0);
+        // int ioctl(int fd, int cmd, char *argp)
+        sys_ioctl();
         break;
 
     case SYS_lock:
