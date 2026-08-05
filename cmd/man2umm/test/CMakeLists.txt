@@ -8,7 +8,7 @@ add_dependencies(build_tests man2umm_test)
 
 #
 # THE CORPUS TESTS, one per manual page in the tree.  Two kinds, and they assert
-# different things -- ../README.md and ../../../scripts/mancheck.sh have the argument:
+# different things -- ../README.md and ../../../scripts/mancheck.py have the argument:
 #
 #   man_lint_<page>    canonical shape (doc/Manual_Page_Format.md section 9), run on
 #                      the .umm alone.  PERMANENT: it is what holds a hand-edited
@@ -17,12 +17,15 @@ add_dependencies(build_tests man2umm_test)
 #                      converted from, along three axes.  Registered only where both
 #                      files still exist, so it retires page by page as the roff does.
 #
-# The oracle is guarded on groff being installed, the way the top-level CMakeLists.txt
-# guards cppcheck: a tree without it still configures, and simply checks less.
+# The oracle is guarded on groff AND python3, the way the top-level CMakeLists.txt
+# guards cppcheck: a tree without them still configures, and simply checks less.
+# It is the only thing in this project that wants python; the lint does not.
 #
 find_program(GROFF NAMES groff)
-if(GROFF MATCHES "NOTFOUND")
-    message(STATUS "groff not found -- the manual-page oracle (man_oracle_*) is skipped")
+find_program(PYTHON3 NAMES python3)
+if((GROFF MATCHES "NOTFOUND") OR (PYTHON3 MATCHES "NOTFOUND"))
+    message(STATUS "groff or python3 not found -- the manual-page oracle (man_oracle_*) is skipped")
+    set(B6_NO_ORACLE TRUE)
 endif()
 
 file(GLOB_RECURSE B6_MAN_PAGES
@@ -41,9 +44,9 @@ foreach(_page ${B6_MAN_PAGES})
              COMMAND $<TARGET_FILE:b6man2umm> -l ${_page})
     set_tests_properties(man_lint_${_tag} PROPERTIES LABELS man)
 
-    if(NOT (GROFF MATCHES "NOTFOUND") AND EXISTS ${_dir}/${_roff_name})
+    if(NOT B6_NO_ORACLE AND EXISTS ${_dir}/${_roff_name})
         add_test(NAME man_oracle_${_tag}
-                 COMMAND sh ${CMAKE_SOURCE_DIR}/scripts/mancheck.sh
+                 COMMAND ${PYTHON3} ${CMAKE_SOURCE_DIR}/scripts/mancheck.py
                          ${_dir}/${_roff_name} ${_page} $<TARGET_FILE:b6man2umm>)
         set_tests_properties(man_oracle_${_tag} PROPERTIES LABELS man)
     endif()

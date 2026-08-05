@@ -14,13 +14,15 @@
 namespace umm {
 namespace {
 
-enum class Mode { Convert, Lint, Fonts, Dump };
+enum class Mode { Convert, Lint, Fonts, Words, Heads, Dump };
 
 void usage(std::ostream &os)
 {
     os << "usage: b6man2umm [-w] [-o out.md] page.1     convert a roff -man page\n"
           "       b6man2umm [-w] -l page.1.umm ...       check canonical shape\n"
-          "       b6man2umm -f page.1.umm                the font stream, for mancheck.sh\n"
+          "       b6man2umm -f page.1.umm                the font stream, for mancheck.py\n"
+          "       b6man2umm -t page.1.umm                the text, one word a line\n"
+          "       b6man2umm -s page.1.umm                the section headings\n"
           "       b6man2umm -d page                     dump the document model\n";
 }
 
@@ -59,6 +61,10 @@ int cli(int argc, char **argv)
             mode = Mode::Lint;
         else if (a == "-f")
             mode = Mode::Fonts;
+        else if (a == "-t")
+            mode = Mode::Words;
+        else if (a == "-s")
+            mode = Mode::Heads;
         else if (a == "-d")
             mode = Mode::Dump;
         else if (a == "-w")
@@ -116,6 +122,12 @@ int cli(int argc, char **argv)
             break;
         case Mode::Fonts:
             font_stream(std::cout, doc);
+            break;
+        case Mode::Words:
+            word_stream(std::cout, doc);
+            break;
+        case Mode::Heads:
+            head_stream(std::cout, doc);
             break;
         case Mode::Dump:
             dump(std::cout, doc);

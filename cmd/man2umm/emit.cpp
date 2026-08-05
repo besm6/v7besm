@@ -18,6 +18,7 @@
 #include <cctype>
 #include <cstring>
 #include <ostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -383,7 +384,7 @@ void write_umm(std::ostream &os, const Doc &doc)
 }
 
 //
-// The font stream scripts/mancheck.sh diffs against groff's overstrike: one letter
+// The font stream scripts/mancheck.py diffs against groff's overstrike: one letter
 // per non-space character of rendered text, in reading order.  The title is not in
 // it -- groff turns .TH into a running page header the script strips anyway.
 //
@@ -531,6 +532,74 @@ void font_stream(std::ostream &os, const Doc &doc)
 {
     fonts_blocks(os, doc.blocks);
     os << '\n';
+}
+
+namespace {
+
+// NO SEPARATOR BETWEEN SPANS.  The spaces are already in the text -- squeeze_spans
+// put them there -- and a font boundary is not a word boundary: `name=value' is one
+// word made of a literal run and the full stop after it.
+void words_spans(std::ostream &os, const std::vector<Span> &v)
+{
+    for (const Span &sp : v)
+        os << sp.text;
+}
+
+void words_blocks(std::ostream &os, const std::vector<Block> &blocks)
+{
+    for (const Block &b : blocks) {
+        os << ' '; // blocks do not run together, spans do
+        switch (b.kind) {
+        case Kind::Comment:
+            break; // not rendered
+        case Kind::Code:
+            os << b.text;
+            break;
+        case Kind::Deflist:
+            words_spans(os, b.tag);
+            os << ' '; // the term is not the first word of its definition
+            words_blocks(os, b.child);
+            break;
+        case Kind::Enum:
+            os << ' ' << b.info; // roff renders the label as text
+            words_blocks(os, b.child);
+            break;
+        case Kind::Bullet: // the marker is not a word on either side
+        case Kind::Quote:
+            words_blocks(os, b.child);
+            break;
+        default:
+            words_spans(os, b.body);
+            break;
+        }
+    }
+}
+
+} // namespace
+
+void word_stream(std::ostream &os, const Doc &doc)
+{
+    std::ostringstream all;
+    words_blocks(all, doc.blocks);
+    std::string s = all.str(), word;
+    for (char c : s) {
+        if (isspace((unsigned char)c)) {
+            if (!word.empty())
+                os << word << '\n';
+            word.clear();
+            continue;
+        }
+        word += c;
+    }
+    if (!word.empty())
+        os << word << '\n';
+}
+
+void head_stream(std::ostream &os, const Doc &doc)
+{
+    for (const Block &b : doc.blocks)
+        if (b.kind == Kind::Section || b.kind == Kind::Subsection)
+            os << squeeze(span_text(b.body)) << '\n';
 }
 
 void dump(std::ostream &os, const Doc &doc)

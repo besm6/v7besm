@@ -2,7 +2,7 @@
 // Canonical shape: the ten rules of doc/Manual_Page_Format.md section 9.
 //
 // This is the check that OUTLIVES the conversion.  The roff sources go, and with
-// them scripts/mancheck.sh's ability to compare a page against groff; what is left
+// them scripts/mancheck.py's ability to compare a page against groff; what is left
 // to hold a hand-edited page to the format is this, registered as one ctest per
 // page.  So the rules here are the ones a reader or an index depends on, not
 // house style: a NAME line an index can parse, a title that matches the filename,

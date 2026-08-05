@@ -18,7 +18,7 @@ same reason this is.
 ```sh
 b6man2umm -o cmd/foo/foo.1.umm cmd/foo/foo.1     # convert
 b6man2umm -l cmd/foo/foo.1.umm                   # canonical shape, section 9
-sh scripts/mancheck.sh cmd/foo/foo.1 cmd/foo/foo.1.umm   # agree with groff?
+python3 scripts/mancheck.py cmd/foo/foo.1 cmd/foo/foo.1.umm   # agree with groff?
 ```
 
 Then read it, fix what the converter could not, and delete the roff. The middle step is a permanent
@@ -51,6 +51,12 @@ run by hand.
 | `ummread.cpp` | the dialect **reader** |
 | `lint.cpp` | canonical shape |
 | `run.cpp` | the driver, in the library so `test/` can call it |
+
+**The tool emits the streams the oracle compares** — `-t` the words, `-s` the headings, `-f` the
+font of every character. [`scripts/mancheck.py`](../../scripts/mancheck.py) renders the roff with
+`groff` and compares; it never parses Markdown. That division is deliberate and was learned the
+hard way: when the checker had its own copy of the quote rule, the two disagreed, and a greedy
+regex ran from an opening backquote past the real close to the apostrophe in a possessive.
 
 **`ummread.cpp` is the half that outlives the conversion.** The roff reader has a finite job; the
 dialect reader is what anything displaying a page goes through, and the renderer of

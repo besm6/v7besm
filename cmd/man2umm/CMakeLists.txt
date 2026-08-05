@@ -12,7 +12,7 @@
 # not the only one: every v7 program still to be ported (../TODO.md C10-C24, and the
 # unported pages already sitting in ../awk/, ../make/ and the rest) arrives with a
 # roff page that has to become a .md.  ./README.md is the standing procedure and
-# ../../scripts/mancheck.sh is its verification step.
+# ../../scripts/mancheck.py is its verification step.
 #
 # The engine is split into a static library, as cmd/nm's is and for cmd/nm's reason:
 # the GoogleTest suite in test/ links the same code the binary does.  The library is

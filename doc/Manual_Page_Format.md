@@ -532,12 +532,12 @@ b6man2umm -l cmd/foo/foo.1.umm
 ```
 
 Then verify against the host's own formatter before deleting the roff —
-[`scripts/mancheck.sh`](../scripts/mancheck.sh) compares `groff -man`'s rendering with the
+[`scripts/mancheck.py`](../scripts/mancheck.py) compares `groff -man`'s rendering with the
 Markdown's along three axes: the word stream, the section structure, and the font of every
 character.
 
 ```sh
-sh scripts/mancheck.sh cmd/foo/foo.1 cmd/foo/foo.1.umm
+python3 scripts/mancheck.py cmd/foo/foo.1 cmd/foo/foo.1.umm
 ```
 
 The converter is mechanical and its output is a draft. Read it. It will have dropped a `.ta`, or

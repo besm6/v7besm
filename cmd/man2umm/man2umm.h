@@ -114,10 +114,21 @@ void dump(std::ostream &, const Doc &);
 
 //
 // One character of R/B/I/L/X per non-space character of rendered text, in reading
-// order.  scripts/mancheck.sh diffs this against the font stream it recovers from
+// order.  scripts/mancheck.py diffs this against the font stream it recovers from
 // groff's overstrike, which is the only check that sees whether the fonts survived.
 //
 void font_stream(std::ostream &, const Doc &);
+
+//
+// The other two streams scripts/mancheck.py compares against groff's rendering:
+// every word of the document, one per line, and every heading, one per line.
+//
+// THEY LIVE HERE RATHER THAN IN THE CHECKER because the checker would otherwise be
+// a second implementation of the dialect -- and the first thing two implementations
+// of the same rule do is disagree.  The quote rule cost an afternoon that way.
+//
+void word_stream(std::ostream &, const Doc &);
+void head_stream(std::ostream &, const Doc &);
 
 // Canonical shape, doc/Manual_Page_Format.md section 9.  False if it found an error.
 bool lint(const Doc &, const std::string &path, Diag &);
