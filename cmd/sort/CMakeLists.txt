@@ -17,7 +17,8 @@
 # this task was told to take early -- though what it weighs is const+text+data+bss, and the
 # arena sort takes at run time is exactly what it cannot see.
 #
-# sort.1.umm is the manual page; nothing installs it, it is read with `nroff -Kutf8 -man'.
+# sort.1.umm is the manual page; nothing installs it and there is no renderer yet -- read it
+# as it stands.
 #
 # NOT SETUID: it opens what the caller could open itself, and writes its temp files as the
 # caller too.

@@ -12,7 +12,8 @@
 # as build/rootfs/bin/join.  It also registers rootfs_join_size -- of which `char
 # buf[2][BUFSIZ]' is 1,024 words, BUFSIZ being 3072 here and 512 on a PDP-11.
 #
-# join.1.umm is the manual page; nothing installs it, it is read with `nroff -man'.
+# join.1.umm is the manual page; nothing installs it and there is no renderer yet -- read it
+# as it stands.
 #
 # NOT SETUID: it opens what the caller could open itself.
 

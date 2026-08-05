@@ -170,7 +170,8 @@ what 4.2BSD did as well as what happens now:
 
 A `BESM-6 NOTES` section carries `MAXHOP` and the unconditional `%` forms, and `FILES` names
 `share/besm6/lib` rather than `/usr/lib`. Nothing installs it — no `CMakeLists.txt` in this tree
-has a man rule yet — so it is read with `nroff -man termcap.3.umm`.
+has a man rule yet, and there is no renderer yet
+([`../../cmd/TODO.md`](../../cmd/TODO.md) C25) — so it is read as it stands.
 
 ## Testing
 

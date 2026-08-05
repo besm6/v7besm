@@ -16,8 +16,8 @@
 # See README.md beside this file.
 #
 # sed.1.umm is v7's page corrected in place, as ../README.md SS10 requires.  Nothing installs
-# it -- it is read with `nroff -Kutf8 -man', the -K because the page names a Cyrillic
-# example.
+# it and there is no renderer yet -- read it as it stands.  The Cyrillic example in it is
+# UTF-8 like everything else and needs no flag.
 #
 # NOT SETUID: sed opens files for reading, and creates the wfiles it was told to, as
 # whoever ran it.  ../README.md SS8.

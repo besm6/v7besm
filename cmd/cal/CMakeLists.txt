@@ -10,7 +10,8 @@
 # `crt0.o cal.o -lc -lruntime' against the libc built in ../../lib, and stages the result as
 # build/rootfs/bin/cal.  It also registers rootfs_cal_size.
 #
-# cal.1.umm is the manual page; nothing installs it, it is read with `nroff -man'.
+# cal.1.umm is the manual page, in the format ../../doc/Manual_Page_Format.md describes;
+# nothing installs it and there is no renderer yet (../TODO.md C25) -- read it as it stands.
 #
 # NOT SETUID: it opens nothing at all.
 

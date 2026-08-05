@@ -39,6 +39,7 @@ here and already tested, whose value is in doing them together rather than one a
 | C22 | `cron` | the other [../etc/rc](../etc/rc) line | medium, blocked on a clock |
 | C23 | `calendar` | | small, blocked on a clock and on its data |
 | C24 | the eight hand-rolled directory readers, over `opendir(3)` | one reader instead of eight, and §5 stops being everybody's problem | medium |
+| C25 | `man(1)`: a renderer for the manual pages, then the pages on the image | two hundred pages nobody can read on the machine they document | medium |
 
 **Where to start: C10a.** Six of the tasks below are yacc grammars and one of those is a lex
 scanner besides, so nothing after C10 can begin until `b6yacc` exists.
@@ -364,6 +365,55 @@ Three things to weigh rather than assume:
 
 ---
 
+## C25. `man(1)`, and the manual pages on the image
+
+Two hundred pages are in the tree, in the dialect
+[../doc/Manual_Page_Format.md](../doc/Manual_Page_Format.md) describes, and **nothing renders
+them**. They are legible as they stand — that is what the dialect is for — but the machine they
+document cannot show them.
+
+### C25a. The host renderer
+
+`cmd/man/`, C++, linking the `umm` library [man2umm/](man2umm/) already builds. **No code moves
+out of that directory**: `ummread.cpp` is the dialect reader and `model.cpp` the document model,
+and they were written for this. The round-trip test in `man2umm/test/` is already the guarantee
+that the model this consumes is the model the converter produces.
+
+Four back ends off the one model:
+
+- **overstrike**, v7's own — `c\bc` for bold and `_\bc` for italic, so [col/](col/) behaves as it
+  always did.  This is the default and the fallback.
+- **ANSI attributes** — bold, italic and underline through SGR.
+- **ANSI colour** — headings, bold runs, italic arguments and `Font::Xref` cross-references each
+  with a colour of their own, keyed off `TERM` and [../lib/libtermcap/](../lib/libtermcap/), with
+  plain text when the terminal says nothing.
+- **HTML**, nearly free once the model is in hand, and the reason a cross-reference is a span kind
+  rather than plain text.
+
+Note that [col/README.md](col/README.md)'s "there is no *producer* of overstruck text on this
+image" stops being true here: `col` finally gets its caller.
+
+### C25b. `man(1)` on the image
+
+An independent **C** program — `b6cc` drives `b6parse`, which is strict C11, and there is no C++
+cross-compiler for this machine, so the host renderer's model cannot be shared. That sharing was
+never realistic anyway: a `std::vector` document tree is the wrong shape under a 28,672-word
+address space and a 4,096-word stack. Write it streaming, so it never holds a whole page, and use
+C25a's output as its oracle.
+
+Then the pages themselves: a `/usr/man` tree in [../root.manifest](../root.manifest), a staging
+rule beside `B6_STAGE_INC`, `ROOTFS_FILES` in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt),
+and a test. **Measured: the image has about 625 free blocks of 2000 and the corpus is about 297**,
+so it is affordable but takes half the headroom — decide whether it stages the whole corpus or a
+curated subset, and say which in the manifest.
+
+### C25c. The standing procedure
+
+[man2umm/](man2umm/) is **not** retired when this is done. Every program left in the table above
+arrives with a roff page, and `b6man2umm` plus [../scripts/mancheck.py](../scripts/mancheck.py) is
+how it becomes a `.umm`; `man2umm/README.md` is the procedure and §10 of [README.md](README.md)
+points at it.
+
 ## Not ported, and why
 
 Each row is a decision that can be re-examined; the line count is there so it can be.
@@ -371,7 +421,7 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 | | lines | why not |
 |---|---|---|
 | `mail/`, `xsend/` | 556 + 414 | **Three decisions rather than a port.** `mail` wants a `/usr/spool/mail` directory [../root.manifest](../root.manifest) has not got and a mailbox **lock protocol** built out of the user execute bit (`lock()` sets `st_mode & 01` and spins); it includes `<whoami.h>` for a `sysname` this tree pruned on purpose ([../include/README.md](../include/README.md)); and its `REMOTE`/`FORWARD` arms hand the letter to `uucp`, which is refused below. There is one user on this machine and nowhere for a letter to go. `cmd/login` already probes for `/usr/spool/mail` with `access()` and quietly finds nothing, which is the behaviour to keep. `xsend` is secret mail and needs `mail` first. |
-| `troff/`, `eqn/`, `neqn/`, `tbl/`, `refer/`, `deroff.c`, `prep/`, `checkeq.c`, `ptx.c`, `spell/` | 8,266 + 1,726 + 1,677 + 2,434 + 4,874 + 496 + 589 + 101 + 553 + 625 | The typesetting suite. `troff` drives a CAT phototypesetter that does not exist, and **there is no `nroff` in this source tree at all** — only `troff`. This repo's own manual pages are read with the *host* `nroff`, which is the right answer for the foreseeable future. `spell` additionally needs its whole word list. |
+| `troff/`, `eqn/`, `neqn/`, `tbl/`, `refer/`, `deroff.c`, `prep/`, `checkeq.c`, `ptx.c`, `spell/` | 8,266 + 1,726 + 1,677 + 2,434 + 4,874 + 496 + 589 + 101 + 553 + 625 | The typesetting suite. `troff` drives a CAT phototypesetter that does not exist, and there was never an `nroff` in this source tree to begin with. **The refusal is stronger than it was: there is nothing left here for either to typeset.** This repo's manual pages are in the dialect [../doc/Manual_Page_Format.md](../doc/Manual_Page_Format.md) describes, and C25 below is what will display them. `spell` additionally needs its whole word list. |
 | `tp/`, `dump.c`, `restor.c`, `dumpdir.c` | 800 + 641 + 1,150 + 475 | Tape. **This kernel has no tape driver** and no `bdevsw`/`cdevsw` row for one, and all four are built around a tape's sequential access rather than merely willing to use it — `dump`/`restor` are a filesystem-level backup pair whose whole design is the reel. `tp` is the pre-`tar` archiver and is superseded by it in any case. If a magnetic-tape driver is ever written (a `kernel/TODO.md` item nobody has raised; [../doc/Besm6_Peripherals.md](../doc/Besm6_Peripherals.md) is the reference), reconsider `dump`/`restor` and not the other two. |
 | `uucp/`, `cu.c` | 6,415 + 541 | Dial-out over a modem link nothing models. `cu` becomes conceivable only if the machine's serial multiplexor is ever driven and wired to something outside; no kernel task proposes that. |
 | `lpr/`, `vpr.c` | 1,315 + 334 | Printer spooling. **Worth revisiting:** SIMH *does* model the АЦПУ drum printer, so `lpr` becomes a small task the day a kernel printer driver exists — which is a `kernel/TODO.md` item nobody has written yet. |

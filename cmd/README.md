@@ -325,13 +325,27 @@ everything the two dialects share); and an **invariant** where the answer is not
 
 ### 10. The manual page comes with the source
 
-Each v7 command ships its `.1` in its own directory. Follow the
-[../lib/libc/man/](../lib/libc/man/) precedent: **correct it in place** — ANSI SYNOPSIS, every wrong
-claim fixed where it stands and marked `Note:`, 1024-byte block counts per §4, `DIRSIZ` 18 where it
-shows. Nothing installs them; they are read with `nroff -man`. **A page containing non-ASCII wants
-`nroff -Kutf8 -man` and says so in a `.\"` comment**, plain `nroff` rendering a Cyrillic letter as
-two. Rewrite a page rather than correct it only when the DESCRIPTION itself stopped being true. A
-`README.md` is worth writing only when the port *taught* something structural.
+Each command ships its page in its own directory, named `<name>.<section>.umm` — `ls.1.umm`,
+`fsck.1m.umm`, `init.8.umm`. Follow the [../lib/libc/man/](../lib/libc/man/) precedent: **correct it
+in place** — ANSI SYNOPSIS, every wrong claim fixed where it stands and marked `Note:`, 1024-byte
+block counts per §4, `DIRSIZ` 18 where it shows. Rewrite a page rather than correct it only when the
+DESCRIPTION itself stopped being true. A `README.md` is worth writing only when the port *taught*
+something structural.
+
+**The format is [../doc/Manual_Page_Format.md](../doc/Manual_Page_Format.md)**, a small semantic
+dialect of Markdown, and it replaced the roff `-man` macros the pages were inherited in. The source
+is UTF-8 and nothing special is needed for it; §11 already covers what eight-bit text means here.
+`b6man2umm -l` checks a page against the format's canonical shape and runs as a `ctest`
+(`man_lint_<page>`) over every page in the tree, so a page must pass it.
+
+**Nothing installs them and there is no renderer yet** — read a page as it stands, which is what the
+dialect is for. [TODO.md](TODO.md) C25 is the renderer and `man(1)`.
+
+**A v7 program you port arrives with a roff page.** [man2umm/README.md](man2umm/README.md) is the
+procedure: convert it with `b6man2umm`, check it against the host's `groff` with
+[../scripts/mancheck.py](../scripts/mancheck.py), read what the converter could not do, and only then
+delete the roff. The one roff file left in this tree is `file/test/page.1`, a three-line fixture for
+`file(1)`'s roff detector.
 
 ### 11. Everything carries eight bits, and a `char` is unsigned
 

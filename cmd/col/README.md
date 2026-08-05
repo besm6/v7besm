@@ -52,6 +52,11 @@ which drives a phototypesetter that does not exist either. Carrying a mechanism 
 effect here would be to corrupt real text, in service of a device nothing can produce input
 for, is not fidelity.
 
+**That last clause has a date on it.** [`../TODO.md`](../TODO.md) C25a is a renderer for the manual
+pages whose default back end is v7's own overstrike, so `col` acquires the producer it has never
+had here. The Greek shift is still not coming back — a renderer emits `c\bc` and `_\bc`, which is
+exactly what this `col` already strips — but "no producer" stops being true.
+
 **So this is the cut [`getty`](../getty/README.md) made to the speed table**, and the one
 [../TODO.md](../TODO.md) tells `stty` to make to its capability list when C6 comes: delete
 what this hardware has not got, rather than keep a mechanism that can only get in the way of

@@ -15,8 +15,8 @@
 # wps, and cmd/vmstat prints one number per device instead -- the two halves of the same
 # histogram, and neither is the other's summary.
 #
-# iostat.1m.umm is the manual page, corrected in place; nothing installs it, it is read with
-# `nroff -man iostat.1m.umm'.
+# iostat.1m.umm is the manual page, corrected in place; nothing installs it and there is no
+# renderer yet -- read it as it stands.
 
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is
 # the whole tree at once, as it is in lib/, kernel/, cmd/init/ and cmd/sh/.

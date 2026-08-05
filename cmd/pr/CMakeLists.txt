@@ -16,7 +16,8 @@
 # build/rootfs/bin/pr.  It also registers rootfs_pr_size, the §6 measurement -- of which the
 # 1,120 words of ring buffer are the largest single object of task C5f's seven.
 #
-# pr.1.umm is the manual page; nothing installs it, it is read with `nroff -man'.
+# pr.1.umm is the manual page; nothing installs it and there is no renderer yet -- read it as
+# it stands.
 #
 # NOT SETUID: it opens what the caller could open itself, and chmods only its own terminal.
 

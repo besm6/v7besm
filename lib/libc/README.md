@@ -694,4 +694,5 @@ it. Neither page had an upstream original to be edited from, and both carry a `.
 top saying so.
 
 **Nothing installs them** — no `CMakeLists.txt` in this tree has a man rule yet, which is also true
-of libtermcap's and libcurses' — so they are read with `nroff -man man/malloc.3.umm`.
+of libtermcap's and libcurses' — and there is no renderer yet
+([`../../cmd/TODO.md`](../../cmd/TODO.md) C25), so they are read as they stand.
