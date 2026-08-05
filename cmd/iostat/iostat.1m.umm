@@ -1,0 +1,75 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+<!-- Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. -->
+
+# IOSTAT(1M)
+
+## NAME
+
+iostat - report I/O statistics
+
+## SYNOPSIS
+
+| **iostat** [ **-t** ] [ **-i** ] [ interval [ count ] ]
+
+## DESCRIPTION
+
+*Iostat* delves into the system and reports certain statistics kept about input-output
+activity. For typewriters collectively, the number of input and output characters are counted.
+Also, on each clock tick, a tally is made in one of 32 slots, chosen by which devices had an
+exchange outstanding crossed with whether the system was executing in user mode, in `nice`
+(background) user mode, in system mode, or idle. Each of the four categories reported below is
+therefore the sum of eight of those slots, and each device's busy share is the sum of the slots
+with its own bit set.
+
+The optional *interval* argument causes *iostat* to report once each *interval* seconds. The
+first report is for all time since a reboot and each subsequent report is for the last interval
+only.
+
+The optional *count* argument restricts the number of reports. With an *interval* and no
+*count*, *iostat* reports until it is stopped. With neither, it prints one report and exits.
+
+With no option argument *iostat* gives, for each instrumented device, the percentage of time it
+had an exchange outstanding (**%bsy**), the exchanges it completed per second (**tps**) and the
+words those exchanges moved per second (**wps**); and then the percentage of time the system
+has spent in each of the four categories mentioned above.
+
+There are two devices. **MD** is the magnetic disk of **kernel/dev/md.c**, **all of its units
+together,** and **MB** is the drum, which is also the paging store.
+
+The following options are available:
+
+**-t**
+: Report the number of characters of terminal IO per second as well.
+
+**-i**
+: Report the percentage of time spent in each of the four categories mentioned above, one per
+  line and named.
+
+## FILES
+
+None. *Iostat* reads **dk_time**, **dk_numb**, **dk_wds**, **tk_nin** and **tk_nout** through
+kctl(2) and opens no device.
+
+## SEE ALSO
+
+kctl(2), vmstat(1), pstat(1M), ps(1)
+
+## BUGS
+
+**Note: a device is a controller, not a drive.** v7's *iostat* named three disks and reported
+milliseconds per seek and per transfer for each. **dk_busy** is three bits wide here because it
+is the low three bits of the subscript **dk_time** is tallied by, and **kernel/dev/md.c**
+addresses 64 drives; so **MD** is the disks together and **MB** the drums together, and a
+per-drive breakdown would need a wider histogram than **dk_time** is. Seek and transfer times
+are not reported at all: the controller returns no timing, and **wps** says what those columns
+were for. There is no **cp_time** on this system and none is wanted - **dk_time** is it.
+
+**Note:** v7's **-s** (the 32 raw slots) and **-b** (buffer-cache statistics, out of an
+**io_info** structure this kernel does not have) are gone, as are the undocumented **-d** and
+**-a**.
+
+**Note:** the clock runs at **HZ** ticks per second, which is 250 here and was 60 on the
+PDP-11. Nothing in the report is expressed in ticks, so this shows up only in the resolution of
+the percentages.
+
+Things can change while *iostat* is running.

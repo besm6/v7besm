@@ -1,0 +1,90 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# MOUNT(1M)
+
+## NAME
+
+mount, umount - mount and dismount file system
+
+## SYNOPSIS
+
+| **/etc/mount** [ special directory [ **-r** ] ]
+
+| **/etc/umount** special
+
+## DESCRIPTION
+
+*Mount* announces to the system that a removable file system is present on the device
+*special*, which must be a **block** special file - */dev/md1* and not the raw */dev/rmd1*. The
+file *directory* must exist already; it must be a directory (unless the root of the mounted
+file system is not a directory). It becomes the name of the newly mounted root, and whatever
+was underneath it is unreachable until the file system is dismounted. The optional **-r**
+mounts the file system read-only.
+
+*Umount* announces to the system that the removable file system previously mounted on device
+*special* is to be removed. It calls sync(2) first.
+
+These commands maintain a table of mounted devices, */etc/mtab*. If invoked without an
+argument, *mount* prints it.
+
+Physically write-protected file systems must be mounted read-only or errors will occur when
+access times are updated, whether or not any explicit write is attempted. There are no magnetic
+tape file systems here - this system has no tape.
+
+## HOW MANY AT ONCE
+
+**Seven. NMOUNT** in <*sys/param.h*> is the number of file systems the kernel can have mounted,
+it is 8 on this system, and the root holds one of the eight. An eighth *mount* gets **EBUSY** -
+which is also what a device that is already mounted, and a mount point that is already
+somebody's working directory, both answer.
+
+Each mounted file system holds one buffer of the cache for its superblock for as long as it is
+mounted, so the seven are not free: **NBUF** is 16 and every mount takes one of them out of
+circulation until the file system is unmounted.
+
+## WHAT IS REFUSED
+
+**ENOTBLK**
+: *Special* is not a block special file. This is the mistake the command invites on this system,
+  every other file system program - *mkfs*(1M), *fsck*(1M), *icheck*(1M) - taking the **raw**
+  name instead.
+
+**EBUSY**
+: See **HOW MANY AT ONCE** above. For *umount*, somebody is still on the file system: an open
+  file or a process whose working directory is inside it. The shell that typed the command
+  counts, so **cd /mnt; /etc/umount /dev/md1** never works.
+
+**EINVAL**
+: For *mount*, there is no file system on *special*. For *umount*, nothing is mounted on it.
+
+**EIO**
+: The superblock could not be read at all.
+
+## FILES
+
+/etc/mtab: mount table
+
+## SEE ALSO
+
+mount(2), mtab(5), mkfs(1M), fsck(1M)
+
+## BUGS
+
+Mounting a root directory on a non-directory makes some apparently good pathnames invalid.
+
+**Note: mounting a file system full of garbage no longer crashes the system,** which is what
+this page said for as long as there was a v7. The kernel checks the superblock at mount time -
+*sbcheck*(), *kernel/alloc.c* - for the magic number, the geometry this system was built for,
+an i-list extent inside the volume and free counts within their caches, and refuses with
+**EINVAL** after printing on the console what it disliked. v7 had no superblock magic number at
+all; this file system has one, and filsys(5) records it.
+
+**Note: -r is parsed.** v7 mounts read-only if it is given any third argument whatever and
+never looks at what it is, so **mount /dev/md1 /mnt rw** mounts read-only there. Here anything
+but **-r** is refused.
+
+**Note: a umount whose special file is not in the table still succeeds.** v7 prints **not in
+mount table** and exits 1, having already unmounted the file system. This one says so on the
+standard error and exits 0: mtab(5) has said since v7 that the table is there so people can
+look at it, and an exit status claiming the unmount failed when it succeeded is worse than a
+stale table.

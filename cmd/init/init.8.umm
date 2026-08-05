@@ -1,0 +1,73 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# INIT(8)
+
+## NAME
+
+init, rc - process control initialization
+
+## SYNOPSIS
+
+```c
+/etc/init
+/etc/rc
+```
+
+## DESCRIPTION
+
+*Init* is invoked as the last step of the boot procedure (see boot(8)). Generally its role is
+to create a process for each typewriter on which a user may log in.
+
+When *init* first is executed the console typewriter */dev/console.* is opened for reading and
+writing and the shell is invoked immediately. This feature is used to bring up a single-user
+system. If the shell terminates, *init* comes up multi-user and the process described below is
+started.
+
+Note: on this machine *init* announces that state before the shell prompts - \`\`**Single-user
+mode -- type ^D to run /etc/rc and go multi-user**''**-** which the PDP-11 *init* did not.
+There the operator had just typed the boot line by hand; here the machine boots itself, and the
+bare \``# '` prompt says neither where it is nor how to leave it.
+
+Note: by the same argument *init* announces every other state change it makes. It says
+\`\`**Going multi-user -- running /etc/rc and then a getty per terminal line**'' before it runs
+that script; it says why it has come back to the single-user prompt when */etc/ttys* cannot be
+read, when no line in it is enabled, when nothing is left running on any line, when a hangup
+arrives on the console, and when a process refuses to die within the minute *init* allows it;
+and it reports a shell or a getty(8) it could not execute. Each of those is silent on the
+PDP-11, and three of them are indistinguishable there from a boot that has simply gone quiet.
+
+Note: the wording and the placement are both constrained, because the SIMH tests in
+*kernel/test* watch the console stream. No message may contain a `#`, no line of one may end in
+a period, and nothing may be written between the date */etc/rc* prints and the first \``login:
+'` prompt - which is why the multi-user line comes before that script rather than after it. See
+*cmd/init/README.md* for the full set and the reason each message comes out of a forked child.
+
+When *init* comes up multiuser, it invokes a shell, with input taken from the file */etc/rc.*
+This command file performs housekeeping like removing temporary files, mounting file systems,
+and starting daemons.
+
+Then *init* reads the file */etc/ttys* and forks several times to create a process for each
+typewriter specified in the file. Each of these processes opens the appropriate typewriter for
+reading and writing. These channels thus receive file descriptors 0, 1 and 2, the standard
+input, output and error files. Opening the typewriter will usually involve a delay, since the
+*open* is not completed until someone is dialed up and carrier established on the channel. Then
+*/etc/getty* is called with argument as specified by the last character of the *ttys* file
+line. *Getty* reads the user's name and invokes login(1) to log in the user and execute the
+shell.
+
+Ultimately the shell will terminate because of an end-of-file either typed explicitly or
+generated as a result of hanging up. The main path of *init*, which has been waiting for such
+an event, wakes up and removes the appropriate entry from the file *utmp*, which records
+current users, and makes an entry in */usr/adm/wtmp*, which maintains a history of logins and
+logouts. Then the appropriate typewriter is reopened and *getty* is reinvoked.
+
+*Init* catches the hangup signal SIGHUP and interprets it to mean that the system should be
+brought from multi user to single user. Use `kill -1 1` to send the hangup signal.
+
+## FILES
+
+/dev/tty?, /etc/utmp, /usr/adm/wtmp, /etc/ttys, /etc/rc
+
+## SEE ALSO
+
+login(1), kill(1), sh(1), ttys(5), getty(8)

@@ -1,0 +1,46 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# WALL(1M)
+
+## NAME
+
+wall - write to all users
+
+## SYNOPSIS
+
+| **/etc/wall** [ *file* ]
+
+## DESCRIPTION
+
+*Wall* reads its standard input until an end-of-file, or the named *file* if one is given. It
+then sends this message, preceded by `Broadcast Message ...`, to all logged in users.
+
+The sender should be super-user to override any protections the users may have invoked.
+
+**Note:** that override is nothing but the ordinary permission check on opening the terminal,
+which mesg(1) has set to 0600 or 0622. *Wall* makes no check of its own - unlike write(1),
+which refuses even the super-user on a terminal that has said no. For the same reason *wall* is
+not set-user-id: the bit would hand the override to everybody and leave nothing to invoke.
+
+**Note:** the file argument is not in the SYNOPSIS of v7's page and has always been in its
+program. Users are served in the slot order of /etc/utmp - which ttyslot(3) makes the line
+order of /etc/ttys - one forked child apiece, a second apart. The children are not waited for.
+
+**Note:** the message is held in a 3000-character buffer. v7 read past the end of it without a
+word; a longer message is truncated here and says so on the standard error.
+
+## FILES
+
+- /dev/tty?
+- /etc/utmp
+- /etc/ttys
+
+## SEE ALSO
+
+mesg(1), write(1), who(1), utmp(5)
+
+## DIAGNOSTICS
+
+`cannot open ...` when the open on a user's tty file fails.
+
+**Note:** this page said `Cannot send to ...`; the program has always written `cannot open`.

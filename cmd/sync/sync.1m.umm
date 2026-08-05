@@ -1,0 +1,22 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# SYNC(1M)
+
+## NAME
+
+sync - update the super block
+
+## SYNOPSIS
+
+```c
+sync
+```
+
+## DESCRIPTION
+
+*Sync* executes the *sync* system primitive. If the system is to be stopped, *sync* must be
+called to insure file system integrity. See sync(2) for details.
+
+## SEE ALSO
+
+sync(2), update(8)

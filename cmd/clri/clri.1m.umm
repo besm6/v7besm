@@ -1,0 +1,72 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# CLRI(1M)
+
+## NAME
+
+clri - clear i-node
+
+## SYNOPSIS
+
+| **/etc/clri** *filesystem i-number ...*
+
+## DESCRIPTION
+
+*Clri* writes zeros on the i-nodes with the decimal *i-numbers* on the *filesystem.* After
+*clri,* any blocks in the affected file will show up as `missing` in an *icheck*(1M) of the
+*filesystem.*
+
+Read and write permission is required on the specified file system device. The i-node becomes
+allocatable.
+
+The primary purpose of this routine is to remove a file which for some reason appears in no
+directory. If it is used to zap an i-node which does appear in a directory, care should be
+taken to track down the entry and remove it. Otherwise, when the i-node is reallocated to some
+new file, the old entry will still point to that file. At that point removing the old entry
+will destroy the new file. The new entry will again point to an unallocated i-node, so the
+whole cycle is likely to be repeated again and again.
+
+**Note:** *fsck*(1M) is the modern way to do all of that. It finds a file that appears in no
+directory for itself and offers to reconnect it into **/lost+found**, and it removes an entry
+naming an unallocated i-node rather than leaving the cycle above to be broken by hand. *Clri*
+is worth reaching for when the file is to be thrown away rather than kept.
+
+Every *i-number* is checked, and the block it lies in read, before **anything** is written: a
+run that is going to fail on its fourth argument fails before it has cleared the first three.
+
+**Note:** an *i-number* outside the file system's i-list is **refused**. v7 seeks wherever the
+number names, so **clri /dev/rmd0 99999** there writes 3072 bytes of zeros over a **data**
+block - somebody's file - with no diagnostic at all. This version reads the super-block, works
+out how many i-numbers the volume has, and refuses anything outside 2 through that. I-node 1
+goes with them: it exists and *ialloc*() can never hand it out.
+
+**Note:** if the *filesystem* is the mounted root, *clri* prints **\*\*\*\*\* BOOT UNIX (NO
+SYNC!) \*\*\*\*\*** and stops, as *fsck*(1M) does. That is what the BUGS section below means in
+this system's terms.
+
+## FILES
+
+/dev/rmd0, /dev/rmd1
+
+## SEE ALSO
+
+icheck(1M), dcheck(1M), ncheck(1M), fsck(1M), filsys(5)
+
+## DIAGNOSTICS
+
+`arg: is not a number` and `arg: is zero` are v7's. `arg: out of range 2..n` is the check
+above.
+
+`filesystem: not a filesystem` means the super-block carries no *FS_MAGIC* and `filesystem
+geometry mismatch` that it describes a block size, an i-nodes-per-block or an
+addresses-per-inode this system does not have. Either way there is no i-list to bound an
+*i-number* against, so nothing is cleared.
+
+## BUGS
+
+If the file is open, *clri* is likely to be ineffective.
+
+**Note:** specifically, the kernel holds the i-node in core while the file is open and *iput*()
+writes that copy back to the disk when the last reference goes away - over the zeros this
+program wrote. The same thing on a larger scale is why the mounted root stops the machine
+rather than returning: the whole in-core i-node cache is newer than the disk.

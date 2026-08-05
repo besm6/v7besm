@@ -1,0 +1,125 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# ICHECK(1M)
+
+## NAME
+
+icheck - file system storage consistency check
+
+## SYNOPSIS
+
+| **/etc/icheck** [ **-s** ] [ **-m** ] [ **-d** ] [ **-b** *numbers* ] [ *filesystem* ]
+
+## DESCRIPTION
+
+*Icheck* examines a file system, builds a bit map of used blocks, and compares this bit map
+against the free list maintained on the file system. If the file system is not specified,
+**/dev/rmd0** is checked. The normal output of *icheck* includes a report of
+
+> The total number of files and the numbers of regular, directory, block special and character
+> special files.
+
+> The total number of blocks in use and the numbers of single- and double-indirect blocks and
+> data blocks.
+
+> The number of free blocks.
+
+> The number of blocks missing; i.e. not in any file nor in the free list.
+
+**Note:** v7 reported single-, double- **and triple-indirect** blocks. This machine's inode has
+**eight** disk addresses of which **two** are indirect - *NADDR* is 8 and *NLEVEL* is 2, six
+direct, one single indirect and one double - and there is no third level.
+*/usr/include/sys/param.h* says why: one drive is 2000 blocks, and the single indirect alone
+addresses 512 of them.
+
+The **-s** option causes *icheck* to ignore the actual free list and reconstruct a new one,
+rewriting the free-list chain blocks and then the super-block. The file system should be
+dismounted while this is done; if this is not possible (for example if the root file system has
+to be salvaged) *icheck* prints **\*\*\*\*\* BOOT UNIX (NO SYNC!) \*\*\*\*\*** and stops,
+exactly as *fsck*(1M) does, because the old, bad in-core copy of the super-block must not be
+written back over the new one. Notice also that the words in the super-block which indicate the
+size of the free list and of the i-list are believed. The **-s** option causes the normal
+output reports to be suppressed.
+
+**Note:** v7's **-s** laid the new list out in the rotational pattern the super-block's *s_m*
+and *s_n* described. This system's super-block has neither field and its disk has no such
+latency to hide, so the list is rebuilt plainly and descending - which is how *mkfs*(1M) builds
+one and how *fsck*(1M) salvages one, so all three leave a volume the same shape.
+
+**Note: -s** requires an explicit *filesystem* and will not use the default. A salvage is aimed
+deliberately.
+
+**Note:** v7's **-s** wrote the super-block's count of free i-nodes as **zero**. That was
+harmless there, nothing in v7 maintaining the field; here the kernel maintains it
+(*/usr/src/kernel/alloc.c*), so this *icheck* computes it, as *fsck*(1M) does.
+
+Following the **-b** option is a list of block numbers; whenever any of the named blocks turns
+up in a file, a diagnostic is produced.
+
+The **-m** option names every missing block as well as counting them. **Note:** this option is
+in v7's program and not in v7's manual page.
+
+The **-d** option suppresses the duplicate check, and with it the block map and the count of
+missing blocks. It cannot be combined with **-s**, which needs that map to know which blocks
+are free.
+
+**Note:** v7 said *icheck* "is faster if the raw version of the special file is used, since it
+reads the i-list many blocks at a time". Neither half holds here. The raw device is the only
+useful target - it is what **/dev/rmd0** above is - and the transfer is **one block at a time**
+because *physio ()* permits nothing else: a raw transfer must be a whole number of 3072-byte
+blocks into a buffer whose word address is a multiple of 512, at a block-aligned offset.
+
+## FILES
+
+/dev/rmd0
+
+## BLOCKS ARE 1024 BYTES
+
+**Note:** the block *icheck* counts in is **1024** bytes. It is not this machine's filesystem
+block, which is **3072** bytes - 512 words of 48 bits - and is three of them.
+
+Two things follow. Every count *icheck* prints is a **multiple of three,** the smallest thing
+that can be allocated being one 3072-byte block. And the numbers are **half** what a PDP-11
+printed, v7 having counted in 512-byte blocks.
+
+**Note:** this applies to the **used**, **free** and **missing** totals, which are
+measurements. It does **not** apply to a block **number**, which is a quantity on the disk and
+is printed exactly as it stands there: the **bad**, **dup** and **arg** diagnostics, the
+per-block lines under **-m**, the block number in a free-list diagnostic, and the *s_isize* and
+*s_fsize* of a size check are all block numbers or descriptions of the volume. So **-m** prints
+a block number and then a total in different units, deliberately.
+
+## SEE ALSO
+
+dcheck(1M), ncheck(1M), clri(1M), fsck(1M), df(1M), mkfs(1M), filsys(5)
+
+*fsck*(1M) does all of this program's job and more, in one pass, and repairs what it finds.
+*Icheck* is worth reaching for when only the block accounting is wanted, or when the free list
+is to be laid down again without answering any questions.
+
+## DIAGNOSTICS
+
+For duplicate blocks and bad blocks (which lie outside the file system) *icheck* announces the
+difficulty, the i-number, and the kind of block involved. If a read error is encountered, the
+block number of the bad block is printed and *icheck* considers it to contain 0. `Bad free
+list` means that a block number outside the available space, or an impossible count, was
+encountered in the free list.
+
+`filesystem: not a filesystem` means the super-block carries no *FS_MAGIC* and `filesystem
+geometry mismatch` that it describes a block size, an i-nodes-per-block or an
+addresses-per-inode this system does not have. **Note:** v7 had neither check, having no such
+fields; *sbcheck*() in the kernel refuses to mount such a volume and *fsck*(1M) refuses to
+repair one.
+
+`Can't get memory` means the block map would not fit. **Note:** v7 carried on at that point
+with duplicates unchecked, which silently turns **-s** into a program that rebuilds a free list
+from an empty map. It is a refusal here.
+
+## BUGS
+
+Since *icheck* is inherently two-pass in nature, extraneous diagnostics may be produced if
+applied to active file systems.
+
+**Note:** v7's second bug here - "it believes even preposterous super-blocks and consequently
+can get core images" - no longer applies: the magic number and the three geometry words are
+checked before anything else is read.

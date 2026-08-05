@@ -1,0 +1,358 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# PSTAT(1M)
+
+## NAME
+
+pstat - print system facts
+
+## SYNOPSIS
+
+| **pstat** [ **-acfimpstx** ] [ **-u** addr ]
+
+## DESCRIPTION
+
+*Pstat* interprets the contents of certain system tables.
+
+**Note:** every table it prints is read by name and by value through kctl(2), which is
+unprivileged, so all of it works for anybody - except **-u**, which opens a memory device and
+is the super-user's. v7 read every table off */dev/mem* with a namelist taken from */unix*;
+there is no kernel image on this filesystem, and the *file* and *namelist* arguments are gone
+with it.
+
+**LOC** throughout is the **word** address of the table entry, printed in octal, where v7
+printed a 24-bit byte address in hex. So is every **IPTR**, **INODP**, **LINK** and **TEXTP**:
+the tables cross-reference by eye.
+
+Options are
+
+**-a**
+: Under **-p**, describe all process slots rather than just active ones.
+
+**-i**
+: Print the inode table with the these headings:
+
+LOC
+: The core location of this table entry.
+
+FLAGS
+: Miscellaneous state variables encoded thus:
+
+  > L
+  > : locked
+  >
+  > U
+  > : update time filsys(5)) must be corrected
+  >
+  > A
+  > : access time must be corrected
+  >
+  > M
+  > : file system is mounted here
+  >
+  > W
+  > : wanted by another process (L flag is on)
+  >
+  > T
+  > : contains a text file
+  >
+  > C
+  > : changed time must be corrected
+
+CNT
+: Number of open file table entries for this inode.
+
+DEV
+: Major and minor device number of file system in which this inode resides.
+
+INO
+: I-number within the device.
+
+MODE
+: Mode bits, see chmod(2).
+
+NLK
+: Number of links to this inode.
+
+UID
+: User ID of owner.
+
+SIZ/DEV
+: Number of bytes in an ordinary file, or major and minor device of special file.
+
+**-x**
+: Print the text table with these headings:
+
+LOC
+: The core location of this table entry.
+
+FLAGS
+: Miscellaneous state variables encoded thus:
+
+  > T
+  > : ptrace(2) in effect
+  >
+  > W
+  > : text not yet written on swap device
+  >
+  > L
+  > : loading in progress
+  >
+  > K
+  > : locked
+  >
+  > w
+  > : wanted (L flag is on)
+
+DADDR
+: Disk address in swap, measured in multiples of 512 bytes.
+
+CADDR
+: Core address, measured in multiples of 64 bytes.
+
+SIZE
+: Size of text segment, measured in multiples of 64 bytes.
+
+IPTR
+: Core location of corresponding inode.
+
+CNT
+: Number of processes using this text segment.
+
+CCNT
+: Number of processes in core using this text segment.
+
+**-p**
+: Print process table for active processes with these headings:
+
+LOC
+: The core location of this table entry.
+
+S
+: Run state encoded thus:
+
+  > 0
+  > : no process
+  >
+  > 1
+  > : waiting for some event
+  >
+  > 3
+  > : runnable
+  >
+  > 4
+  > : being created
+  >
+  > 5
+  > : being terminated
+  >
+  > 6
+  > : stopped under trace
+
+F
+: Miscellaneous state variables, or-ed together, in octal:
+
+  > 01
+  > : loaded
+  >
+  > 02
+  > : the scheduler process
+  >
+  > 04
+  > : locked
+  >
+  > 010
+  > : swapped out
+  >
+  > 020
+  > : traced
+  >
+  > 040
+  > : used in tracing
+  >
+  > 0100
+  > : locked in by lock(2).
+
+PRI
+: Scheduling priority, see nice(2).
+
+SIGNAL
+: Signals received (signals 1-16 coded in bits 0-15),
+
+UID
+: Real user ID.
+
+TIM
+: Time resident in seconds; times over 127 coded as 127.
+
+CPU
+: Weighted integral of CPU time, for scheduler.
+
+NI
+: Nice level, see nice(2).
+
+PGRP
+: Process number of root of process group (the opener of the controlling terminal).
+
+PID
+: The process ID number.
+
+PPID
+: The process ID of parent process.
+
+ADDR
+: If in core, the physical **word** address of the process image, whose first **USIZE** words are
+  its `u-area`. If swapped out, its block on the paging store. **Note:** v7 counted 64-byte
+  clicks and 512-byte blocks.
+
+SIZE
+: Size of the process image in **words**, a multiple of **PGSZ**.
+
+WCHAN
+: Wait channel number of a waiting process.
+
+LINK
+: Link pointer in list of runnable processes.
+
+TEXTP
+: If text is pure, pointer to location of text table entry.
+
+CLKT
+: Countdown for alarm(2) measured in seconds.
+
+**-t**
+: Print the table for the **NSC** Consul typewriters, with these headings. **Note:** v7's handled
+  a DL11 and up to 48 DH11 lines; this machine has one terminal driver and one array, **sc[]**,
+  and the row number is its subscript, which is also the device's minor number.
+
+RAW
+: Number of characters in raw input queue.
+
+CAN
+: Number of characters in canonicalized input queue.
+
+OUT
+: Number of characters in putput queue.
+
+FLAGS
+: See tty(4). **Note:** v7 called this column MODE.
+
+LINE
+: The device/line number. **Note:** v7 called this ADDR and it was the UNIBUS address of the
+  line's registers. This machine has no I/O address space at all - a device is named by the
+  register number an **033** instruction addresses - so **t_addr** is a line number here and the
+  column is renamed to say so.
+
+DEL
+: Number of delimiters (newlines) in canonicalized input queue.
+
+COL
+: Calculated column position of terminal.
+
+STATE
+: Miscellaneous state variables encoded thus:
+
+  > T
+  > : timeout pending. **Note:** nothing sets this bit now; it is kept for v7's numbering and for
+  >   this program.
+  >
+  > W
+  > : waiting for open to complete
+  >
+  > O
+  > : open
+  >
+  > C
+  > : carrier is on
+  >
+  > B
+  > : busy doing output
+  >
+  > A
+  > : process is awaiting output
+  >
+  > X
+  > : open for exclusive use
+  >
+  > H
+  > : hangup on close
+
+  **Note: XCLUDE** and **HUPCLS** are set by ioctl(2) and tested by nothing in this kernel, so
+  those two letters record a request rather than a state.
+
+PGRP
+: Process group for which this is controlling terminal.
+
+**-u**
+: Print information about a user process; the next argument is its address as given by ps(1), in
+  octal, and with no conversion - both are word addresses. An address of **0** names the u-area
+  that is live at **UBASE**, which is the caller's own. **Note:** if the address given is the one
+  the live u-area belongs to, the live copy is read instead of the process's image, the image
+  being stale until the kernel next flushes it. ps(1) follows the same rule and its source is the
+  account of it. The process must be in main memory: a swapped-out u-area is on the paging store
+  and this program does not read it. This is the only option that opens a device, and so the only
+  one that needs to be root.
+
+**-f**
+: Print the open file table with these headings:
+
+LOC
+: The core location of this table entry.
+
+FLG
+: Miscellaneous state variables encoded thus:
+
+  > R
+  > : open for reading
+  >
+  > W
+  > : open for writing
+  >
+  > P
+  > : pipe
+
+CNT
+: Number of processes that know this open file.
+
+INO
+: The location of the inode table entry for this file.
+
+OFFS
+: The file offset, see lseek(2).
+
+**-m**
+: **Note: this option is new.** Print the mount table - one line per mounted file system - with
+  the headings LOC, DEVICE, BUFP (the buffer holding its super-block) and INODP (the inode it is
+  mounted on). Slot 0 is the root and is always in use. With **-a** the empty slots are printed
+  too.
+
+**-s**
+: **Note: this option is new.** Print the paging store and the two allocation maps: the swap
+  device and its **swplo** and **nswap**, then **coremap** and **swapmap**, each with its free
+  fragments and their total. **The units differ: coremap** hands out **words** of physical core
+  and **swapmap** hands out **blocks** of **BSIZE**.
+
+**-c**
+: **Note: this option is new.** Print the system clock: **time** in seconds since the epoch, and
+  **lbolt** as a fraction of **HZ** into the current second, followed by the date. time(2)
+  returns whole seconds, so the fraction is visible nowhere else.
+
+**Note:** the three options above exist because the kernel exports the tables behind them and
+nothing else read them. A variable in **kernel/ksym.c**'s table names the program that asked
+for it, and **mount**, **coremap**, **swapmap**, **nswap**, **swplo**, **swapdev**, **time**
+and **lbolt** all named this one.
+
+## FILES
+
+/dev/kmem
+: the live u-area, for **-u**
+
+/dev/mem
+: any other resident u-area, for **-u**
+
+Everything else comes through kctl(2) and opens nothing.
+
+## SEE ALSO
+
+| kctl(2), ps(1), iostat(1M), dmesg(1), stat(2), filsys(5)
+| K. Thompson, *UNIX Implementation*

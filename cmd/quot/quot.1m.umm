@@ -1,0 +1,77 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# QUOT(1M)
+
+## NAME
+
+quot - summarize file system ownership
+
+## SYNOPSIS
+
+| **quot** [ option ] ... [ filesystem ]
+
+## DESCRIPTION
+
+*Quot* prints the number of blocks in the named *filesystem* currently owned by each user. If
+no *filesystem* is named, a default name is assumed. The following options are available:
+
+**-n**
+: Cause the pipeline **ncheck filesystem | sort +0n | quot -n filesystem** to produce a list of
+  all files and their owners. **Note:** *ncheck*(1M) arrived with task C4e and is on this
+  machine; sort(1) is task C5d and is not, so the pipeline has its producer but not yet its
+  middle. Without the sort the two sides run down the i-list in the same order anyway, both being
+  i-list sweeps, so **ncheck filesystem | quot -n filesystem** works on a filesystem nothing is
+  writing to.
+
+**-c**
+: Print three columns giving file size in blocks, number of files of that size, and cumulative
+  total of blocks in that size or smaller file.
+
+**-f**
+: Print count of number of files as well as space owned by each user.
+
+## BLOCKS ARE 1024 BYTES
+
+**Note:** the block *quot* counts in is **1024** bytes. It is not this machine's filesystem
+block, which is **3072** bytes - 512 words of 48 bits - and is three of them.
+
+Two things follow. Every number *quot* prints is a **multiple of three,** the smallest thing
+that can be allocated being one 3072-byte block: a one-byte file costs three. And the numbers
+are **half** what a PDP-11 printed, v7 having counted in 512-byte blocks - not a sixth, which
+is what they were when this program counted in the filesystem block.
+
+**Note:** there is no *BSHIFT* on this machine and there cannot be, 3072 not being a power of
+two; the conversion is a divide by the filesystem block and then a multiply, and both live in
+*sys/param.h*.
+
+*Df*(1M), du(1) and ls(1) report in the same block.
+
+## SUPER-USER ONLY
+
+**Note:** *quot* sweeps the raw disk's i-list, and */dev/rmd0* is mode 0600 because that one
+node is the contents of every file on the volume. So this program works for the super-user and
+for nobody else. It is deliberately **not** set-user-id.
+
+## FILES
+
+| */dev/rmd0* - the raw disk, and the default when no *filesystem* is named. There is one EC-5052 drive and there are no partitions.
+| */etc/passwd* to get user names. A uid with no entry there is reported as **#**\&*n*.
+
+## DIAGNOSTICS
+
+**cannot open** names a device that could not be read; *quot* goes on to the next argument and
+exits 0 either way, which is v7's behaviour and is kept.
+
+## SEE ALSO
+
+ls(1), du(1), df(1M)
+
+## BUGS
+
+- Holes in files are counted as if they actually occupied space.
+- **Note:** and, for the same reason, a file's indirect blocks are **not** counted: the figure
+  comes from the inode's *size* rather than from its addresses. *Icheck*(1M) would count what
+  is really allocated, and is not ported.
+- **Note:** uids at or above 300 are not reported at all, and the totals are not cleared
+  between filesystems, so **quot a b** gives running sums. Both are v7's, and neither can arise
+  here: there is one filesystem.

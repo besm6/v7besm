@@ -1,0 +1,158 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+<!-- The report is 4.4BSD's; see cmd/df/README.md. -->
+
+# DF(1M)
+
+## NAME
+
+df - disk free
+
+## SYNOPSIS
+
+| **df** [ **-iw** ] [ filesystem | file ] ...
+
+## DESCRIPTION
+
+*Df* prints, for each file system, how much room it has and how much of it is gone. The report
+is Berkeley's:
+
+```
+Filesystem  1K-blocks     Used    Avail Capacity  Mounted on
+/dev/md0         5901     4140     1761    70%    /
+```
+
+With no argument the file systems reported on are **the root** and every one named in
+*/etc/mtab*, which is the table *mount*(1M) and *umount*(1M) keep between them. An argument may
+be **a special file** - block or character, and the block name is the one */etc/mtab* records -
+**a mount point,** or **any ordinary file,** in which case the file system holding it is the
+one reported on. A file that turns out to *hold* a file system, rather than to live on one, is
+reported on directly; that is how a flat image can be handed to this program.
+
+## THE COLUMNS
+
+**1K-blocks**
+: The **data area** of the volume: *s_fsize* less *s_isize*. Neither the super-block nor the
+  i-list is in this column or in any other, so it is smaller than the volume.
+
+**Used, Avail**
+: *Avail* is the super-block's *s_tfree*; *Used* is the difference.
+
+**Capacity**
+: *Used* as a percentage of the two together. There is no Berkeley *minfree* here, so nothing is
+  withheld from an ordinary user and *Avail* is what *Avail* says.
+
+**iused, ifree, %iused**
+: Printed only with **-i**. The total is the size of the i-list - *s_isize* less the
+  super-block's own block, times *INOPB* - and *ifree* is *s_tinode*.
+
+**Note:** *iused* counts **i-node 1,** which can never be allocated - *ialloc*() refuses
+anything below *ROOTINO* - so a file system holding seven files reports eight used. That is
+v7's arithmetic and it is kept.
+
+## OPTIONS
+
+**-i**
+: Print the three i-node columns as well.
+
+**-w**
+: Get the free-block count by **walking the free list,** block by block through the chain blocks,
+  exactly as the kernel's *alloc*() drains it - which is what *df* did in this port until now,
+  and what v7's *df* does always.
+
+**Note:** *s_tfree* is **maintained** by this kernel, which v7's is not: v7's own filsys(5)
+calls the field uncurrent and its *df* therefore cannot read it. *Alloc*(), *free*(),
+*ialloc*() and *ifree*() keep both totals here, so the default is one *lseek* rather than a
+walk - and free *i-nodes* become askable at all, which no walk of the free list could have
+answered.
+
+**Note: -w is a check and not an alternative.** The two are readings of one number, so **df -w
+must print exactly what df prints;** when they differ, *df* says so on the standard error and
+prints the walked figure. **-l** is deliberately *not* the letter: every other *df* spells that
+one "local file systems only".
+
+**Note: -w** forces the **read** route for every argument, mounted or not, since the walk *is*
+the super-block reader. On a mounted volume that means the raw device, and so **df -w** is the
+super-user's where a bare *df* is not. That is the point of the flag rather than a limitation
+of it: two readings that agreed by construction would be measuring nothing.
+
+## BLOCKS ARE 1024 BYTES
+
+**Note:** the block *df* counts in is **1024** bytes. It is not this machine's filesystem
+block, which is **3072** bytes - 512 words of 48 bits - and is three of them.
+
+Two things follow. Every number *df* prints is a **multiple of three,** the smallest thing that
+can be allocated being one 3072-byte block: a one-byte file costs three. And the numbers are
+**half** what a PDP-11 printed, v7 having counted in 512-byte blocks - not a sixth, which is
+what they were when this program counted in the filesystem block.
+
+**Note:** there is no *BSHIFT* on this machine and there cannot be, 3072 not being a power of
+two; the conversion is a divide by the filesystem block and then a multiply, and both live in
+*sys/param.h*.
+
+Du(1), *quot*(1M) and ls(1) report in the same block.
+
+## WHO MAY RUN IT
+
+There are **two routes** to the same six numbers, and one rule picks between them: **a mounted
+filesystem is asked, a device or an image is read.**
+
+**Asked** means statfs(2): the four counts come out of the kernel's **in-core** super block,
+for the filesystem holding a path the caller can already name. No device is opened and **no
+privilege is wanted,** so a bare *df*, *df /mnt* and *df /some/file* are ordinary user
+commands.
+
+**Read** means what this program has always done - open the raw twin, seek to the super block,
+and obey the four alignment rules a raw transfer here has. *df /dev/rmd0*, *df image.img* and
+**-w** take that route, because a raw device, an unmounted image and a walk of the free list
+are not questions the kernel can be asked. Open(2) is the whole of the gate, and */dev/rmd0* is
+mode 0600 because that one node is the contents of every file on the volume - so those three
+forms are the super-user's, and *df* says so in those words rather than "cannot open".
+
+**Note:** *df* is deliberately **not** set-user-id and never was: a set-uid *df* would hand the
+whole filesystem to anyone able to think of an offset. What made the default report
+unprivileged was not a change of mode or a borrowed user-id but statfs(2), which hands over the
+counts without handing over the device.
+
+**Note:** the asked route is also the **more current** of the two. *s_tfree* and *s_tinode*
+live in core until *update*() writes them back, so the copy on the disk is stale by
+construction - which is why the read route calls sync(2) first and the asked route makes no
+such call.
+
+## FILES
+
+*/etc/mtab*
+: the mounted-file-system table. A missing one is an empty table and not an error, so on a
+  machine that has mounted nothing *df* reports the root alone.
+
+*/dev/md0*
+: the root, and the first entry of the default list. Given a **block** special file *df* opens
+  the **raw** twin of the name - */dev/md1* is read through */dev/rmd1* - and falls back to the
+  block device when there is no such node. There is one EC-5052 drive attached by an ordinary
+  boot, of 2000 blocks, and there are no partitions; swap is on the drums.
+
+## DIAGNOSTICS
+
+**the raw device is the super-user's; name a file or a mount point** means the read route was
+taken - a named device, an image, or **-w** - and open(2) refused it. The advice is the whole
+of the fix: name the mount point or any file on the volume and the asked route answers without
+privilege.
+
+**cannot open** names a file *df* could neither stat(2) nor read; **cannot stat** one whose
+filesystem statfs(2) would not report on; **not a mounted filesystem** an ordinary file whose
+device is in no table. Either way *df* goes on to the next argument and exits 0, which is v7's
+behaviour and is kept. A bad **flag** is different and exits 1.
+
+**not a filesystem** and **filesystem geometry mismatch** mean the super-block read back is not
+one this system could mount; *sbcheck*() refuses the same two and *fsck*(1M) refuses to repair
+them.
+
+**the free list has N blocks, the superblock says M** is **-w**'s disagreement, and means one
+of the two is wrong about the volume.
+
+**bad free count** and **bad free block** mean the free list is corrupt at the block named, and
+a **-w** count is then a lower bound rather than an answer.
+
+## SEE ALSO
+
+du(1), quot(1M), ls(1), mount(1M), umount(1M), fsck(1M), icheck(1M), statfs(2), mtab(5),
+filsys(5)

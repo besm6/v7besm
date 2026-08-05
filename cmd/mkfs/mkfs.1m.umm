@@ -1,0 +1,145 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# MKFS(1M)
+
+## NAME
+
+mkfs - construct a file system
+
+## SYNOPSIS
+
+| **/etc/mkfs** special nblocks [ ninodes ]
+
+## DESCRIPTION
+
+*Mkfs* constructs a file system on the special file *special* by writing a superblock, an empty
+i-list and a free list onto it, and leaves it holding one empty directory: its root. *Nblocks*
+is the size of the file system to make.
+
+*Ninodes* is the number of i-nodes to leave room for. It is rounded up to fill the last block
+of the i-list, and defaults to one i-node per two blocks - 1024 of them on a whole drive, in 32
+blocks, or 1.6% of the volume. v7's ratio was one per four blocks and 4.xBSD's one per sixteen;
+neither transfers. A block here is 3072 bytes, six times a PDP-11's, so a file that cost six
+blocks there costs one here while still costing exactly one i-node, and the natural ratio is
+nearer 1:1 than 1:4.
+
+**Note: the prototype-file form is not ported.** v7's *mkfs* took either a proto file - a
+bootstrap program, a size, an i-node count, and a recursive listing of the files to put on the
+new volume, terminated with **$** - or, if that argument was a string of digits, a bare size.
+Only the second is here, and this is the one deliberate divergence in the program. Four
+reasons:
+
+- the bootstrap token is meaningless on this machine. The simulator loads the kernel image
+  directly and nothing reads block 0; there is no bproc(8) here and none is planned.
+
+- *cfile*(), the recursive half, has a 3072-byte block buffer and a 512-entry indirect block as
+  automatics - about 1024 words of frame per directory level, against a stack of 4096 words that
+  nothing checks.
+
+- those two buffers are exactly the ones a raw transfer cannot use. See **THE RAW DEVICE** below:
+  a buffer handed to the disk must be a 512-word-aligned static, which a recursive function
+  cannot have.
+
+- *b6fsutil* on the build host does the same job better, from a manifest, and is how every image
+  in this system is in fact populated.
+
+## THE LAYOUT
+
+```
+block 0             the bootstrap.  Written by nothing here, and read by nothing.
+block 1             the superblock.
+blocks 2..isize-1   the i-list.
+blocks isize..      data.
+```
+
+The first data block is reported when *mkfs* finishes, and is the superblock's *s_isize* -
+which is that block number and not a count of i-list blocks.
+
+**Note:** i-node 1 is left unallocated and there is **no bad-blocks i-node.** v7 wrote a dummy
+regular file there holding the blocks its *badblk*() had rejected; that routine returned 0
+unconditionally even on the PDP-11, the kernel's *ialloc*() will not hand out any i-node below
+the root's in any case, and the dummy serves only to give *fsck*(1M) something to be puzzled
+by.
+
+**Note:** the free list is built plainly, from the end of the volume down, so that the kernel
+allocates upwards. v7's *[ m n ]* arguments and the rotational interleave they described are
+gone with the *s_m* and *s_n* fields, which this port's superblock does not have: the pattern
+does not survive the first churn of the free list, and this is not a drive whose latency it
+would hide.
+
+## BLOCKS HERE ARE 3072 BYTES
+
+**Note:** *nblocks* is a **filesystem** block - 3072 bytes, 512 words of 48 bits - and so is
+every number *mkfs* prints. One EC-5052 drive is **2000** of them.
+
+This is deliberately not the 1024-byte block that *df*(1M), du(1), *quot*(1M) and ls(1) report
+in. Those programs *measure* a filesystem and a reader of theirs should not have to know its
+block size; *mkfs writes* one, and its argument is the superblock's *s_fsize* verbatim. Expect
+*df*(1M) to report **three times** the number *mkfs* was given.
+
+## THE RAW DEVICE
+
+**Note:** *mkfs* is the first program on this system that **writes** a raw device, and a raw
+transfer here obeys four conditions that v7 knew nothing of: the buffer must begin at byte 0 of
+a word, the count must be a whole number of filesystem blocks, the buffer's word address must
+be a multiple of 512, and the seek must be block-aligned. The first three fail with **EFAULT**
+or **EIO**; the fourth is silent and reads or writes the wrong block. *Mkfs* therefore has one
+buffer, aligned at startup, and every transfer names it. See *cmd/mkfs/README.md* in the source
+tree, and *cmd/df/README.md* for the conditions themselves.
+
+## SUPER-USER ONLY
+
+**Note:** *mkfs* writes the raw disk, and */dev/rmd0* is mode 0600 because that one node is the
+contents of every file on the volume. So this program works for the super-user and for nobody
+else. It is deliberately **not** set-user-id, and the reason is sharper than *df*(1M)'s: a
+set-uid *mkfs* would let anybody destroy every file on a volume with one command.
+
+## WARNING
+
+*Mkfs* does not know which volume the system is running from, and nothing stops you naming it.
+*mkfs /dev/rmd0* destroys the root filesystem while it is mounted. There is no check to be
+made: the raw major and the block major are different numbers and nothing on this machine maps
+one to the other. v7 had no guard either.
+
+## FILES
+
+*/dev/rmd1* - the second drive, and the only volume on this system it is safe to name. There is
+one drive per *minor* number, bit 5 the controller, bits 4-3 the group and bits 2-0 the drive;
+there are no partitions.
+
+## DIAGNOSTICS
+
+**a filesystem needs at least 8 blocks** and **the i-list does not leave room for any data
+blocks** are the two size checks, and both happen before anything is written.
+
+**cannot read block** *n* where *n* is one less than *nblocks*: *mkfs* reads the last block
+before writing the first, which is how it finds out whether the drive is that big without
+knowing the drive's size. An *errno* of 5 there means the device refused the block number - the
+volume is smaller than *nblocks* - and a count of 0 means the special is an ordinary file that
+is too short.
+
+**cannot write block** *n* with an *errno* of 14 means one of the four conditions in *THE RAW
+DEVICE* is broken; 5 means the driver refused the transfer.
+
+**out of free space** cannot happen and means the free list this program has just built is
+inconsistent.
+
+The superblock is written **last**, which is the commit point: a *mkfs* that fails partway
+leaves a volume with no magic number, which nothing will mount, rather than one that looks
+plausible.
+
+## BUGS
+
+The data area is not zeroed, so a volume made over an old file system still holds its blocks
+until they are allocated. Nothing leaks through the file system - the kernel's *alloc*() clears
+a block on the way out - but the raw device still has them.
+
+**Note:** v7's entry here was that there should be some way to specify links. It went with the
+prototype language.
+
+## SEE ALSO
+
+filsys(5), dir(5), df(1M), quot(1M)
+
+**Note:** v7's SEE ALSO named bproc(8), which does not exist here - see the bootstrap block
+above - and *fsck*(1M), which is not ported yet.

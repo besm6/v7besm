@@ -1,0 +1,67 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# GETTY(8)
+
+## NAME
+
+getty - set typewriter mode and read a login name
+
+## SYNOPSIS
+
+| **/etc/getty** [ *char* ]
+
+## DESCRIPTION
+
+*Getty* is invoked by init(8) immediately after a typewriter is opened. It reads the user's
+login name and calls login(1) with the name as argument.
+
+*Init* calls *getty* with a single character argument taken from the ttys(5) file entry for the
+terminal line. That argument selects an entry of a table built into *getty*, giving the modes
+the line is set to while the name is read, the modes it is left in for *login*, and the
+`login:` greeting message. An argument naming no entry selects the first.
+
+The user's name is terminated by a new-line or carriage-return character. In the second case
+CRMOD mode is set (see ioctl(2)).
+
+The name is scanned to see if it contains any lower-case alphabetic characters; if not, and if
+the name is nonempty, the system is told to map any future upper-case characters into the
+corresponding lower-case characters.
+
+Finally, *login* is called with the user's name as argument.
+
+## THIS MACHINE
+
+**Note:** the table has ONE entry, `0`, and it describes the Consul-254 typewriter, which is
+the only kind of terminal this machine has. The line is read RAW and handed to *login* as
+ECHO|CRMOD|XTABS, which is what the driver (sc(4), kernel/dev/sc.c) sets on a first open.
+
+v7's table had thirteen entries of PDP-11 baud rates, and none of it survives, because none of
+it describes a parallel character-at-a-time typewriter:
+
+speeds
+: There is no baud rate. *Sg_ispeed* and *sg_ospeed* are stored by ioctl(2) and read by nothing,
+  so v7's `3` entry - which probed the connect speed and chose a table from it - could only ever
+  have read back B0. The **break** key, which in v7 made *getty* cycle to the next speed in the
+  entry's chain, has nothing to cycle to and no way to be pressed.
+
+delays
+: The CR, NL, TAB and FF delay bits are honoured by this kernel: they queue a delay byte that the
+  driver turns into a *timeout*(9). They exist for a carriage that needs time to return, which
+  this one does not, so no entry here sets them.
+
+parity
+: The driver sends and receives seven bits, so ANYP, EVENP and ODDP describe nothing. v7's
+  *getty* also ORed an even-parity bit into every character it printed, from a 128-byte table;
+  that table is gone.
+
+LCASE
+: The Consul's own character code has no lower-case Latin letters, so the line runs in ASCII and
+  the driver does not fold case. A *getty* that set LCASE would undo that.
+
+## FILES
+
+/etc/ttys
+
+## SEE ALSO
+
+init(8), login(1), ioctl(2), ttys(5)
