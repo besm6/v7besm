@@ -49,7 +49,7 @@ import sys
 FOLD = {
     "‘": "`", "’": "'", "“": '"', "”": '"',
     "‐": "-", "−": "-", "∣": "|", " ": " ",
-    "ˆ": "^", "˜": "~", "´": "'",
+    "ˆ": "^", "˜": "~", "´": "'", "∗": "*",
 }
 
 BULLET = "•"
@@ -97,8 +97,18 @@ def decode_overstrike(raw):
                 continue
             out.append((FOLD.get(c, c), "R"))
             i += 1
-        lines.append(resolve_ambiguous(out))
+        lines.append(collapse_em(resolve_ambiguous(out)))
     return lines
+
+
+def collapse_em(cells):
+    r"""groff draws \(em as TWO em dashes on a terminal.  The source wrote one."""
+    out = []
+    for cell in cells:
+        if out and cell[0] == "\u2014" and out[-1][0] == "\u2014":
+            continue
+        out.append(cell)
+    return out
 
 
 def resolve_ambiguous(cells):
@@ -195,19 +205,19 @@ def unquote(text):
     return "".join(c for i, c in enumerate(text) if i not in drop)
 
 
-def strip_quotes(word):
-    """A quotation's own characters are not part of the word on either side."""
-    word = re.sub(r"^`{1,2}", "", word)
-    return re.sub(r"'{1,2}([^A-Za-z0-9]*)$", r"\1", word)
-
-
 def words_of(lines):
+    """Every word groff rendered, with the quotation delimiters taken out.
+
+    unquote() rather than a per-word rule, because a quotation can end in the
+    middle of one: exp(3m) writes an l-suffixed name as a quoted l followed by
+    the suffix, and a regex anchored at the end of the token cannot see it.
+    """
     out = []
     for cells in lines:
-        for w in plain(cells).split():
+        for w in unquote(plain(cells)).split():
             if w == BULLET:  # a list marker, not a word
                 continue
-            w = strip_quotes(w)
+            w = w.replace("^", "")
             if w:
                 out.append(w)
     return out
@@ -247,7 +257,10 @@ def fonts_of(lines, synopsis_fenced):
             force.update(range(start + width, end))
 
         for i, (c, f) in enumerate(cells):
-            if c.isspace() or i in drop:
+            # A bullet is a list marker on this side and a `- ' the dialect side
+            # never emits; a caret is this format's superscript and roff has no
+            # glyph for one.  Neither is a character either stream counts.
+            if c.isspace() or c in (BULLET, "^") or i in drop:
                 continue
             if fold_all or (i in force and not heading):
                 f = "R"
@@ -319,7 +332,7 @@ def main(argv):
     status = 0
 
     want = words_of(lines)
-    got = [strip_quotes(w) for w in tool(binary, "-t", ummpath) if w.strip()]
+    got = [w for w in (x.replace("^", "") for x in tool(binary, "-t", ummpath)) if w]
     if want != got:
         lost = [w for w in want if w not in got]
         if not (partial and not lost):

@@ -896,6 +896,13 @@ void Reader::do_line(const std::string &line)
         }
         if (name == "nf")
             return;
+        if (name == "SH" || name == "SS") {
+            // A heading always returns to the margin, so it ends a verbatim region
+            // -- curses.3 opens one for its function table and never closes it.
+            end_nf();
+            do_request(name, rest);
+            return;
+        }
         if (name == "ds" || name == "de") { // a definition, not output
             do_request(name, rest);
             return;
@@ -917,8 +924,9 @@ void Reader::do_line(const std::string &line)
             return;
         }
         if (name == "ne" || name == "in" || name == "ti" || name == "ad" || name == "na" ||
-            name == "ce" || name == "fi." || name == "ns" || name == "PD")
-            return;
+            name == "ce" || name == "ft" || name == "ns" || name == "PD" || name == "nh" ||
+            name == "hy")
+            return; // typography a fenced block has no use for
         if (nf_inline(name, rest))
             return;
         warn("dropped ." + name + " inside .nf");

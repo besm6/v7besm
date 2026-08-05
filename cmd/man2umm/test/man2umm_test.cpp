@@ -376,6 +376,22 @@ TEST(Escape, CommentToEndOfLine)
     EXPECT_EQ(body_of("visible \\\" hidden\n"), "visible");
 }
 
+TEST(Escape, SuperscriptIsACaret)
+{
+    // doc/Manual_Page_Format.md section 8.  rand.3 writes 2 to the 15th, exp.3m
+    // writes x to the y.
+    EXPECT_EQ(body_of("2\\u15\\d\\-1\n"), "2^15-1");
+    EXPECT_EQ(body_of("x\\uy\\d.\n"), "x^y.");
+}
+
+TEST(Escape, TypeSizeTakesOneDigit)
+{
+    // groff's rule, and therefore the oracle's.  Taking digits greedily turns
+    // rand.3's `\s715' -- size 7, then the number 15 -- into size 715.
+    EXPECT_EQ(body_of("2\\u\\s715\\s0\\d\n"), "2^15");
+    EXPECT_EQ(body_of("\\s-2small\\s0 again\n"), "small again");
+}
+
 TEST(Escape, NestedWidthFunction)
 {
     // intro.2 lays its errno table out with a motion whose width is itself a width
@@ -388,13 +404,6 @@ TEST(Escape, WidthFunctionWarns)
 {
     Diag d;
     conv_diag(page("a\\w'wide'ub\n"), d);
-    EXPECT_GT(d.warnings(), 0);
-}
-
-TEST(Escape, SuperscriptWarns)
-{
-    Diag d;
-    conv_diag(page("10\\u9\\d\n"), d);
     EXPECT_GT(d.warnings(), 0);
 }
 
@@ -472,6 +481,16 @@ TEST(Block, CDeclarationGetsTheInfoString)
 TEST(Block, BreakMakesALineBlock)
 {
     EXPECT_EQ(body_of("one\n.br\ntwo\n"), "| one\n| two");
+}
+
+TEST(Block, HeadingEndsAVerbatimRegion)
+{
+    // curses.3 opens a .nf for its function table and never closes it; a heading
+    // always returns to the margin, so it closes one.
+    std::string md = conv(".TH FOO 1\n.SH NAME\nfoo \\- a thing\n"
+                          ".SH DESCRIPTION\n.nf\n  a table\n.SH BUGS\nNone.\n");
+    EXPECT_NE(md.find("## BUGS\n"), std::string::npos);
+    EXPECT_NE(md.find("```\n  a table\n```"), std::string::npos);
 }
 
 TEST(Block, RsReIsAQuote)

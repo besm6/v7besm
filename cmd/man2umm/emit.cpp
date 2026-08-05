@@ -414,7 +414,7 @@ void fonts_spans(std::ostream &os, const std::vector<Span> &v, char override_to)
             }
         }
         for (char ch : sp.text)
-            if (!isspace((unsigned char)ch))
+            if (!isspace((unsigned char)ch) && ch != '^')
                 os << c;
     }
 }
@@ -528,6 +528,12 @@ void dump_blocks(std::ostream &os, const std::vector<Block> &blocks, const std::
 
 } // namespace
 
+//
+// A CARET IS NOT A CHARACTER HERE.  It is this format's superscript notation
+// (doc/Manual_Page_Format.md section 8) for something roff wrote as a vertical
+// motion, and a terminal renders no glyph for either.  So neither stream counts
+// it, and scripts/mancheck.py drops it from its side too.
+//
 void font_stream(std::ostream &os, const Doc &doc)
 {
     fonts_blocks(os, doc.blocks);

@@ -272,10 +272,13 @@ Font roff_escapes(const std::string &in, Font f, std::vector<Span> &out,
             i = in.size();
             break;
         case 's': { // \s+N, \s-N, \s0 -- a terminal has one type size
+            // ONE DIGIT, which is groff's rule and therefore the oracle's.  Taking
+            // digits greedily turns rand.3's `\s715' -- size 7, then the number 15
+            // -- into size 715 and swallows the number.
             i++;
             if (i < in.size() && (in[i] == '+' || in[i] == '-'))
                 i++;
-            while (i < in.size() && isdigit((unsigned char)in[i]))
+            if (i < in.size() && isdigit((unsigned char)in[i]))
                 i++;
             i--;
             break;
@@ -286,11 +289,11 @@ Font roff_escapes(const std::string &in, Font f, std::vector<Span> &out,
             warn(std::string("dropped \\") + c + " -- width or motion, which a filled renderer does not need");
             i = skip_quoted(in, i + 1) - 1;
             break;
-        case 'u':
-        case 'd':
-            warn(std::string("dropped \\") + c +
-                 " -- a superscript; write it with ^ (doc/Manual_Page_Format.md section 8)");
+        case 'u': // a superscript, which this format writes with a caret
+            pending += '^';
             break;
+        case 'd':
+            break; // ...and the return from it costs nothing
         case 'z':
         case 'c':
             warn(std::string("dropped \\") + c + " -- overstrike or line continuation; rewrite this by hand");
