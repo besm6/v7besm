@@ -49,7 +49,7 @@ import sys
 FOLD = {
     "‘": "`", "’": "'", "“": '"', "”": '"',
     "‐": "-", "−": "-", "∣": "|", " ": " ",
-    "ˆ": "^", "˜": "~", "´": "'", "∗": "*",
+    "ˆ": "^", "˜": "~", "´": "'", "∗": "*", "⎪": "|",
 }
 
 BULLET = "•"
@@ -57,7 +57,11 @@ BULLET = "•"
 # A cross-reference, as doc/Manual_Page_Format.md section 3 defines it.
 XREF = re.compile(r"[A-Za-z_][A-Za-z0-9_.+-]*\([1-8][a-z]?\)")
 
-GROFF_ARGS = ["-k", "-Tutf8", "-man", "-rHY=0", "-rLL=1000n", "-rIN=0", "-rcR=1"]
+# -K utf8 rather than -k: preconv guesses the input encoding from the locale, and
+# guesses latin1 for a page whose only clue is the Cyrillic itself -- which turns
+# sed(1)'s one-character class into two mojibake characters.  The sources are UTF-8
+# by rule (doc/Manual_Page_Format.md section 8), so say so.
+GROFF_ARGS = ["-K", "utf8", "-Tutf8", "-man", "-rHY=0", "-rLL=1000n", "-rIN=0", "-rcR=1"]
 
 
 def run_groff(path):
@@ -89,6 +93,8 @@ def decode_overstrike(raw):
                 elif c == "_":
                     font = "I"
                     c = over
+                elif over == "_":   # the same underline, typed the other way round
+                    font = "I"
                 else:
                     font = "R"
                     c = over

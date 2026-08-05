@@ -320,10 +320,16 @@ private:
     int depth = 0; // macro expansion, to stop a macro that calls itself
 
     std::vector<Span> para;  // the paragraph being accumulated
-    bool para_lines = false; // a .br turned it into a line block
+    // A .br BREAKS ONE LINE, it does not turn the rest of the paragraph into a
+    // line block: roff fills whatever follows it until the next break.  sh.1 writes
+    // a bold lead-in, a .br, and then six filled lines of prose.
+    bool break_next = false;  // the next join is a line break
+    bool para_broken = false; // ...and this paragraph has had one, so it is a block
     Font font = Font::Roman;
     bool await_tag = false;      // .TP: the next line is the term
     bool one_line_font = false;  // a bare .B or .I: it lasts one line
+    bool no_join = false;        // the line before ended with \c
+    bool pending_no_join = false;
 
     bool nf = false; // a verbatim region
     std::vector<std::string> nfraw;
@@ -362,20 +368,25 @@ void Reader::join_para()
 {
     if (para.empty())
         return;
-    span_add(para, para.back().font, para_lines ? "\n" : " ");
+    if (no_join) { // the line before ended with \c: no space between them
+        no_join = false;
+        return;
+    }
+    span_add(para, para.back().font, break_next ? "\n" : " ");
+    break_next = false;
 }
 
 void Reader::flush_para()
 {
     if (para.empty()) {
-        para_lines = false;
+        break_next = para_broken = false;
         return;
     }
     Block b;
-    b.kind = para_lines ? Kind::Lines : Kind::Para;
+    b.kind = para_broken ? Kind::Lines : Kind::Para;
     b.body = std::move(para);
     para.clear();
-    para_lines = false;
+    break_next = para_broken = false;
     squeeze_spans(b.body);
     mark_quotes(b.body);
     mark_xrefs(b.body, false);
@@ -426,6 +437,11 @@ void Reader::do_text(const std::string &raw)
     // forbids a tab outside a fence, and refilling cannot keep the columns anyway,
     // so say so once and let a human look at the two pages that do this.
     std::string line = raw;
+    // \c at the end of a line continues it: the next line joins with no space.
+    if (line.size() >= 2 && line.compare(line.size() - 2, 2, "\\c") == 0) {
+        line.resize(line.size() - 2);
+        pending_no_join = true;
+    }
     if (line.find('\t') != std::string::npos) {
         if (!tab_seen) {
             tab_seen = true;
@@ -445,6 +461,8 @@ void Reader::do_text(const std::string &raw)
     }
     join_para();
     font = roff_escapes(line, font, para, strings, here());
+    no_join = pending_no_join;
+    pending_no_join = false;
     if (one_line_font) {
         one_line_font = false;
         font = Font::Roman;
@@ -453,12 +471,14 @@ void Reader::do_text(const std::string &raw)
 
 void Reader::do_font_macro(const std::string &name, const std::string &rest)
 {
-    Font f = Font::Roman;
+    // .SM CHANGES THE SIZE, NOT THE FONT, so it keeps whatever is in effect --
+    // sh.1 writes a bare .B above a .SM and expects the word to come out bold.
+    // The size itself is nothing on a terminal.
+    Font f = font;
     if (name == "B" || name == "SB")
         f = Font::Bold;
     else if (name == "I")
         f = Font::Italic;
-    // .SM stays roman: nroff rendered it at the same size on a terminal.
 
     std::vector<std::string> args = split_args(rest);
     if (args.empty()) {
@@ -485,7 +505,9 @@ void Reader::do_font_macro(const std::string &name, const std::string &rest)
         join_para();
         roff_escapes(joined, f, para, strings, here());
     }
-    font = save;
+    // A bare .B above this one was waiting for a line, and this was the line.
+    font = one_line_font ? Font::Roman : save;
+    one_line_font = false;
 }
 
 //
@@ -539,8 +561,11 @@ void Reader::do_ip(const std::string &rest)
         push_frame(Kind::Enum, false, {}, tag);
         return;
     }
+    // THE TAG IS NOT BOLD.  roff sets it in the prevailing font, which is roman
+    // unless the page said otherwise -- unlike a .TP tag, which is whatever the
+    // line after it makes it.
     std::vector<Span> t;
-    roff_escapes(tag, Font::Bold, t, strings, here()); // a tagged paragraph's tag is bold
+    roff_escapes(tag, font, t, strings, here());
     mark_quotes(t);
     mark_xrefs(t, false);
     push_frame(Kind::Deflist, false, std::move(t));
@@ -712,7 +737,7 @@ void Reader::do_request(const std::string &name, const std::string &rest)
     }
     if (name == "br") {
         if (!para.empty())
-            para_lines = true;
+            break_next = para_broken = true;
         return;
     }
     if (name == "TP") {
@@ -728,7 +753,7 @@ void Reader::do_request(const std::string &name, const std::string &rest)
     if (name == "HP") {
         warn(".HP is a hanging paragraph -- rewrite it as a definition list");
         close_frames(false);
-        para_lines = true;
+        break_next = para_broken = true;
         return;
     }
     if (name == "RS") {

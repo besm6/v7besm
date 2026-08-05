@@ -183,10 +183,12 @@ TEST(Font, SeveralArgumentsJoinWithSpaces)
     EXPECT_EQ(body_of(".B a b c\n"), "**a b c**");
 }
 
-TEST(Font, SmallIsRoman)
+TEST(Font, SmallKeepsTheCurrentFont)
 {
-    // nroff rendered .SM at the same size on a terminal, so it carries nothing.
+    // .SM changes the SIZE, not the font, and a terminal has one size.  sh.1 writes
+    // a bare .B above a .SM and expects the word to come out bold.
     EXPECT_EQ(body_of(".SM BESM\n"), "BESM");
+    EXPECT_EQ(body_of(".B\n.SM HOME\nThe home directory.\n"), "**HOME** The home directory.");
 }
 
 TEST(Font, BareMacroTakesTheNextLine)
@@ -445,7 +447,9 @@ TEST(Block, TaggedParagraphIsADefinition)
 
 TEST(Block, IpWithATagIsADefinition)
 {
-    EXPECT_EQ(body_of(".IP FLAGS\nThe flags.\n"), "**FLAGS**\n: The flags.");
+    // THE TAG IS NOT BOLD.  roff sets an .IP tag in the prevailing font, unlike a
+    // .TP tag, which is whatever the line after it makes it.
+    EXPECT_EQ(body_of(".IP FLAGS\nThe flags.\n"), "FLAGS\n: The flags.");
 }
 
 TEST(Block, BareIpIsAnIndentedDisplay)
@@ -481,6 +485,20 @@ TEST(Block, CDeclarationGetsTheInfoString)
 TEST(Block, BreakMakesALineBlock)
 {
     EXPECT_EQ(body_of("one\n.br\ntwo\n"), "| one\n| two");
+}
+
+TEST(Block, BreakBreaksOneLineOnly)
+{
+    // roff fills whatever follows a .br until the next break.  sh.1 writes a bold
+    // lead-in, a .br, and then six filled lines of prose.
+    EXPECT_EQ(body_of(".B Lead-in.\n.br\nfirst line\nsecond line\nthird line\n"),
+              "| **Lead-in.**\n| first line second line third line");
+}
+
+TEST(Block, ContinuationJoinsWithNoSpace)
+{
+    // \c at the end of a line: chmod.1 writes `the omitted-\c' above an .I who.
+    EXPECT_EQ(body_of("the omitted-\\c\n.I who\ndefault\n"), "the omitted-*who* default");
 }
 
 TEST(Block, HeadingEndsAVerbatimRegion)
