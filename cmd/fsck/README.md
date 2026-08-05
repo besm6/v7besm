@@ -3,7 +3,7 @@
 Task C4d. `/etc/fsck` is on the image, so the machine can repair a filesystem rather than
 only measure ([`df`](../df/README.md)), move (`dd`) or make ([`mkfs`](../mkfs/README.md))
 one. This file is the account of what the port taught; the program is documented in its own
-header and in [fsck.1m](fsck.1m), [../README.md](../README.md) is the porting recipe, and
+header and in [fsck.1m.umm](fsck.1m.umm), [../README.md](../README.md) is the porting recipe, and
 [../df/README.md](../df/README.md) is the account of the four alignment conditions a raw
 transfer obeys. **Read that one first** — nothing here repeats it.
 

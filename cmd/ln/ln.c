@@ -20,12 +20,12 @@
 // unbounded into a 100-byte automatic, and both of its operands come from argv.  That is the
 // hazard ../mkdir/mkdir.c and ../rmdir/rmdir.c each bounded in their turn -- the 4,096-word
 // stack at 070000 is the one address-space ceiling nothing checks (../README.md, the porting
-// recipe).  One length test, and ln.1 says so.
+// recipe).  One length test, and ln.1.umm says so.
 //
 // WHAT DID NOT NEED CHANGING, AND WAS CHECKED.  No long, no %D, no struct direct -- ln never
 // reads a directory.
 //
-// THE -f FLAG IS THE INTERESTING ONE ON THIS MACHINE, and ln.1 had never documented it at all.
+// THE -f FLAG IS THE INTERESTING ONE ON THIS MACHINE, and ln.1.umm had never documented it at all.
 // With -f, ln will hand a directory to link(2), and this kernel allows that for the
 // super-user alone -- `if ((ip->i_mode & IFMT) == IFDIR && !suser())' in link(),
 // kernel/sys2.c.  So the v7 page's flat "it is forbidden to link to a directory" is true of an

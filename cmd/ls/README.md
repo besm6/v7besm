@@ -31,7 +31,7 @@ make run        # runs its size check (ctest `rootfs_ls_size', label `rootfs') w
 
 The libc directory library — `opendir`, `readdir`, `closedir`, `rewinddir`, `telldir`, `seekdir`,
 `dirfd` — **arrived with this port and exists because of it**
-([`lib/libc/man/directory.3`](../../lib/libc/man/directory.3),
+([`lib/libc/man/directory.3`](../../lib/libc/man/directory.3.umm),
 [`include/dirent.h`](../../include/dirent.h)). v7 had no such thing, and the eleven programs in
 `cmd/` that walk directories each grew their own reader and their own copy of the same four
 mistakes. `ls` was going to be the twelfth.
@@ -57,7 +57,7 @@ a plain `stat()`. There are **no sockets**, so `S_IFSOCK`, the `s` type and the 
 them. There is **no `st_flags`**, so the `-o` column and `stat_flags.c` are not here.
 
 **`-L` and `-o` are still parsed**, and set a flag nothing reads, so that a command line written
-for a BSD `ls` runs rather than failing. `ls.1` says so under `OPTIONS THAT DO NOTHING HERE`, and
+for a BSD `ls` runs rather than failing. `ls.1.umm` says so under `OPTIONS THAT DO NOTHING HERE`, and
 says *why* in each case — `-L` asks for behaviour every `stat` already has, and `-o` asks for a
 field `struct stat` has not got.
 
@@ -107,7 +107,7 @@ question mark — the worst shape §11 describes, applied to the one program who
 show you a name. The test is `c < ' ' || c == 0177`: control characters and rubout, nothing else.
 
 The consequence is that **a column is a byte wide**, so a multi-byte name is charged for its
-bytes. `ls.1` has a section saying so rather than leaving it to be discovered.
+bytes. `ls.1.umm` has a section saying so rather than leaving it to be discovered.
 
 ### Bounded where upstream was not
 

@@ -28,7 +28,7 @@
 // 3072 here and so is BSIZE, so the division still names one -- but a count REPORTED TO A
 // USER is not in that unit on this machine: df, du, quot and `ls -s' all print KBPB == 3
 // reported blocks per filesystem block, so that what they say means something without
-// knowing BSIZE.  sum now says the same, its number is a multiple of three, and sum.1 has
+// knowing BSIZE.  sum now says the same, its number is a multiple of three, and sum.1.umm has
 // the BLOCKS ARE 1024 BYTES section the other four carry.  §4's rule about where the
 // multiply goes is kept: `nblocks' holds filesystem blocks right up to the printf.
 //
@@ -37,7 +37,7 @@
 // being one filesystem block however small it is.)
 //
 // A SINGLE FILE ARGUMENT DOES NOT GET ITS NAME PRINTED -- the test is `argc > 2' -- which is
-// v7's and is what every later sum(1) does too.  Left alone; sum.1 now says it.
+// v7's and is what every later sum(1) does too.  Left alone; sum.1.umm now says it.
 //
 // NOT SETUID: it opens what the caller could open itself.
 //

@@ -58,7 +58,7 @@
 // count is a MULTIPLE OF 3, the smallest thing that can be allocated being one 3072-byte
 // block; and a number is half a PDP-11's rather than a sixth, v7's block having been 512
 // bytes.  THE MULTIPLY IS AT THE printf AND NOWHERE ELSE -- every count in this file is a
-// filesystem block until it is printed.  df.1m says so; ../README.md SS4 is the general rule.
+// filesystem block until it is printed.  df.1m.umm says so; ../README.md SS4 is the general rule.
 //
 // WHAT THE DEFAULT LIST IS NOW.  v7's df, and this one until now, had a compiled-in device
 // list.  /etc/mtab exists since task C4f (../mount/mtab.c), so the list is the ROOT plus every

@@ -28,7 +28,7 @@
 // and `-f' folds case.  A byte above 0177 is part of a multi-byte letter: it is a word
 // constituent, so -d keeps it, and it has no case to fold, so -f leaves it alone.  That is
 // the rule this port takes, it makes `look -df' on a Cyrillic dictionary do the obvious
-// thing, and look.1 states it (§11).
+// thing, and look.1.umm states it (§11).
 //
 // THE DEFAULT DICTIONARY IS ON THE IMAGE, and putting it there is what makes the bare
 // `look word' form mean anything.  /usr/dict/words here is a small sorted list -- see
@@ -37,7 +37,7 @@
 // purest form:
 //
 //   * The list is short, so `look' is a demonstration and a test subject rather than a
-//     spelling authority.  look.1 says which.
+//     spelling authority.  look.1.umm says which.
 //   * NO b6sim CASE MAY USE THE DEFAULT PATH.  Under b6sim the system calls are the HOST's,
 //     so /usr/dict/words is the build machine's file -- on macOS it does not exist at all,
 //     the list living at /usr/share/dict/words -- and a case that read it would assert

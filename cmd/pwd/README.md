@@ -41,4 +41,4 @@ be read. It gets its size check (`rootfs_pwd_size`, label `rootfs`) and is exerc
 real kernel by [`kernel/test/console`](../../kernel/test/console.ini), which types `pwd` at the
 shell and expects `/`.
 
-`pwd.1` is the v7 manual page, kept as it was.
+`pwd.1.umm` is the v7 manual page, kept as it was.

@@ -39,7 +39,7 @@
 //
 // NOTHING IT PRINTS IS A BLOCK, so ../README.md SS4's KBPB conversion does not reach this
 // program at all: the two numbers in its report are a count of directory entries and a link
-// count.  dcheck.1m therefore has no BLOCKS section, which is a difference from icheck.1m
+// count.  dcheck.1m.umm therefore has no BLOCKS section, which is a difference from icheck.1m
 // worth not `fixing'.
 //
 // NOT SETUID: it reads /dev/rmd0, which is mode 0600 because that one node is every file's

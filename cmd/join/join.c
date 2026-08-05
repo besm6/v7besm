@@ -28,7 +28,7 @@
 // AND FILE 2 CANNOT BE STANDARD INPUT.  The many-to-many join rewinds it with ftell()/fseek()
 // once per group of equal keys, so `-' is accepted for file 1 and only for file 1.  v7 said
 // so nowhere and simply produced a wrong answer on the first repeated key.  It is a
-// diagnostic now, and join.1 says it.
+// diagnostic now, and join.1.umm says it.
 //
 // error() WAS VARARGS BY FIXED PARAMETERS -- `error(s1,s2,s3,s4,s5)' with only s1 typed,
 // handed straight to fprintf.  Every call site passes at most one string, so it takes one.

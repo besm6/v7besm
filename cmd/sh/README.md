@@ -368,6 +368,6 @@ the shell.
   [`../../kernel/README.md`](../../kernel/README.md) and the account at `UBASE` in
   [`../../include/sys/param.h`](../../include/sys/param.h).
 
-`sh.1` is the v7 manual page, corrected in place on the [`lib/libc/man/`](../../lib/libc/man/)
+`sh.1.umm` is the v7 manual page, corrected in place on the [`lib/libc/man/`](../../lib/libc/man/)
 precedent: one addition, a `Comments.` paragraph marked `Note:` as the deviation from v7 that it
 is. Nothing installs it; read it with `nroff -man`.

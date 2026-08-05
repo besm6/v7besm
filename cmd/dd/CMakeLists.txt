@@ -9,11 +9,11 @@
 # NOT SETUID, and it must not become one, for the reason df(1) and quot(1) are not: /dev/rmd0
 # is mode 0600 because that one node is the contents of every file on the volume.  A setuid
 # dd would be worse than a setuid df -- it would hand the filesystem out AND let anybody
-# overwrite it.  dd.1 says so and ../README.md SS8 is the general rule.
+# overwrite it.  dd.1.umm says so and ../README.md SS8 is the general rule.
 #
 # THE ONE DIVERGENCE IN THE COMMAND LANGUAGE is that ibs/obs default to BSIZE and the `b'
 # suffix multiplies by BSIZE, where v7's were 512.  dd.c's header item 1 is the argument and
-# dd.1 marks it Note:; the short version is that 512 is not a whole number of words, so with
+# dd.1.umm marks it Note:; the short version is that 512 is not a whole number of words, so with
 # v7's default `dd if=/dev/rmd0 ...' could not reach the disk at all.
 
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is

@@ -86,7 +86,7 @@ back clean — is what caught it.
 ## `-b` is a byte offset now, and that is a divergence
 
 The fourth deliberate divergence in `cmd/`, after `touch`, `rev` and `col`, and it is recorded
-in three places as §10 requires: the source header, `grep.1`, and here.
+in three places as §10 requires: the source header, `grep.1.umm`, and here.
 
 v7's `-b` prints a **block number** — the offset divided by a disk block. Two things were wrong
 with carrying that:
@@ -195,7 +195,7 @@ queue. Measured, N distinct keywords of length L:
 | 20 | 157 | 2,991 | the table |
 | 40 | 76 | 2,968 | the table |
 
-Below about eight characters a keyword, the `3000` in `grep.1` and in the section above
+Below about eight characters a keyword, the `3000` in `grep.1.umm` and in the section above
 described a limit the program never reached: what a user hit was 399 keywords, or about 400
 characters of one. `QSIZE` appeared in no `.md` file in this tree, and it is what
 `cmd_fgrep_toomany` had been asserting all along — 400 keywords of `keyword%08d` build **856
@@ -226,7 +226,7 @@ from the length side where it cannot be misread as a keyword count; and `manykey
 keywords) and `longkey` (450 characters in one), the two lists v7's code rejected and this one
 takes. Four cases, two directions, one accepted and one refused in each — which is
 [../README.md](../README.md) §9's rule that a stated bound gets a program run against it, and
-the reason `grep.1`'s BUGS can now say there is no limit on the number of keywords at all.
+the reason `grep.1.umm`'s BUGS can now say there is no limit on the number of keywords at all.
 
 `longkey`'s text file carries the assertion that matters: the line above the match is the
 keyword less its last character, 449 of the 450. A corrupted failure-link queue shows up as a
@@ -290,7 +290,7 @@ chose, checked against an oracle. Where a program has a known-good reference imp
 a cheap input generator — and `fgrep` has both — differential testing is worth more than the
 next ten hand-written cases, and it is what task C5e should point at `sed`'s regex engine.
 
-## And one claim in `grep.1` that was wrong twice over
+## And one claim in `grep.1.umm` that was wrong twice over
 
 v7's BUGS said "Lines are limited to 256 characters; longer lines are truncated." Neither number
 is right for either program, and the first draft of the corrected page was wrong too — it said
@@ -311,7 +311,7 @@ sentence is written.
 * **An unknown flag was not an error.** Both programs printed a diagnostic and went round the
   loop *without consuming the argument*, so `grep -Q pattern file` searched for `pattern` and
   reported success — and `fgrep --` could not terminate at all. Both exit 2 now, which is the
-  status `grep.1` has always promised for "syntax errors".
+  status `grep.1.umm` has always promised for "syntax errors".
 * **`-c` ignored `-h`.** The count path printed a file-name prefix on `nfile > 1` where the
   ordinary path also asked `hflag`. One line, and the two paths agree now.
 * **No usage line.** With no expression, v7 exited 2 in silence. The status is unchanged, so

@@ -8,7 +8,7 @@
  *		1 - ok, but no matches
  *		2 - some error
  *
- * Task C5c, with grep(1).  ../grep/README.md is the account and ../grep/grep.1
+ * Task C5c, with grep(1).  ../grep/README.md is the account and ../grep/grep.1.umm
  * the manual page -- v7 documented all three commands of the family on one page
  * and this port keeps that.  Two things a reader of the diff needs:
  *

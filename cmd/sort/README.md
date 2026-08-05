@@ -181,7 +181,7 @@ if (cp >= ce)
 *cp++ = c;
 ```
 
-No diagnostic. `sort.1`'s BUGS said "very long lines are silently truncated" and left it there.
+No diagnostic. `sort.1.umm`'s BUGS said "very long lines are silently truncated" and left it there.
 But the *sorting* pass has no line limit at all — it writes into the arena unbounded — so the
 same file came out right or came out corrupted depending on whether it happened to fit in memory
 in one pass, and `sort` merges whenever there is more than one run.
@@ -191,7 +191,7 @@ a nonzero exit on both. `toolong` and `toolongmerge` are the two cases, and they
 pair on purpose — this is `grep -b`'s rule from one task earlier, *prefer removing the choice
 to making the two choices match*.
 
-The bound was run against before the sentence in `sort.1` was rewritten, which is `grep`'s
+The bound was run against before the sentence in `sort.1.umm` was rewritten, which is `grep`'s
 correction to itself: 3071 data bytes plus a newline is accepted on both paths and 3072 plus a
 newline is refused on both. The first attempt was off by one on the merge path only.
 

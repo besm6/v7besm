@@ -36,7 +36,7 @@ written:
   answer is one `lseek`, and **free i-nodes become askable at all**, which no walk of the free
   list could ever have answered.
 * **`/etc/mtab` exists** (task C4f), so there is a `Mounted on` column to fill and a default
-  list to take. `df.1m` used to say outright that there was no such file.
+  list to take. `df.1m.umm` used to say outright that there was no such file.
 * The old `df` printed one number, and four host oracles parsed it with a `sed`.
 
 **One line of RetroBSD's arithmetic is wrong on this machine and the difference is silent.**

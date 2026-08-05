@@ -61,7 +61,7 @@
 // WHAT IS LEFT ALONE: v7's escape set for -c (\0 \b \f \n \r \t and octal for the rest, with
 // no \a or \v -- v7 had none and adding them would change what a dump means); the radix of
 // the ADDRESS column being set as a side effect of parsing the offset argument, which the
-// manual page has never mentioned and which od.1 now does; and the `*' line that stands for
+// manual page has never mentioned and which od.1.umm now does; and the `*' line that stands for
 // a run of identical lines.
 //
 // NOT SETUID: it opens what the caller could open itself.

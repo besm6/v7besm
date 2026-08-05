@@ -10,7 +10,7 @@
 // THE MIDDLE OF IT IS DELIBERATELY NOT v7's, and this is the one divergence in task C1c.  v7's
 // touch has no utime(2) in it at all: it opens the file O_RDWR, reads its first byte, seeks
 // back and writes the same byte again, letting the write move the modified time.  That works,
-// and it is what v7's touch.1 described -- but it needs read AND write permission on a file the
+// and it is what v7's touch.1.umm described -- but it needs read AND write permission on a file the
 // caller may only own, it cannot touch a read-only file at all, it re-creat()s (and so
 // truncates) any file of zero length because there is no byte in one to rewrite, and it puts a
 // write down a path where nothing was meant to change.  This port calls utime(2) instead:
@@ -23,7 +23,7 @@
 // `struct utimbuf'; see <unistd.h> and lib/libc/man/utime.2.  time_t is one word.  The kernel
 // (utime() in kernel/sys4.c) has no "a null pointer means now" branch, so the vector is
 // mandatory, and it gates the call on owner() -- the file's owner or the super-user -- which
-// is a weaker requirement than v7's open-for-writing, not a stronger one.  touch.1 is rewritten
+// is a weaker requirement than v7's open-for-writing, not a stronger one.  touch.1.umm is rewritten
 // to say all of this rather than corrected in place; it is the DESCRIPTION that stopped being
 // true, not a detail of it.
 //
@@ -48,7 +48,7 @@
 //     what was meant, but the source did not read that way.
 //
 // THE -c FLAG IS POSITIONAL AND STAYS THAT WAY: v7 scans one argument list once, so a -c
-// written after a file name affects only the names after it.  Kept, and touch.1 now says so.
+// written after a file name affects only the names after it.  Kept, and touch.1.umm now says so.
 //
 // WHAT DID NOT NEED CHANGING, AND WAS CHECKED.  No %D, no struct direct -- touch never reads a
 // directory.  The one `long' in task C1c was v7's

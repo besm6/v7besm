@@ -301,7 +301,7 @@ their rewrites stayed. [`../../cmd/README.md`](../../cmd/README.md) §2 is the a
 first word (offset field 5) while `&pbuf[8]` is byte #2 of the second (offset field 3): **the
 test was false on the very first iteration, nothing was ever stored, and `getpass()` returned the
 empty string every time.** It is an `int` index now. That file's header has the arithmetic, and
-`man/getpass.3` repeats it.
+`man/getpass.3.umm` repeats it.
 
 ### There is no 16-bit unit, and a word is six bytes
 
@@ -667,7 +667,7 @@ into `../test/ttyt.c`, which runs on the image alone.
 ## The manual pages
 
 [`man/`](man/) holds **86** of v7's own — 43 from section 2 and 43 from section 3 — **corrected in
-place** on the precedent [`../libtermcap/termcap.3`](../libtermcap/termcap.3) set. Every SYNOPSIS
+place** on the precedent [`../libtermcap/termcap.3.umm`](../libtermcap/termcap.3.umm) set. Every SYNOPSIS
 is ANSI, since `b6parse` accepts nothing else; every claim that this port does not honour is fixed
 where it stands and marked **Note:**, saying what v7 did as well as what happens now; and the C11
 routines v7 had none of are folded into the page that owns them, so `string.3` names the `mem*`
@@ -694,4 +694,4 @@ it. Neither page had an upstream original to be edited from, and both carry a `.
 top saying so.
 
 **Nothing installs them** — no `CMakeLists.txt` in this tree has a man rule yet, which is also true
-of libtermcap's and libcurses' — so they are read with `nroff -man man/malloc.3`.
+of libtermcap's and libcurses' — so they are read with `nroff -man man/malloc.3.umm`.

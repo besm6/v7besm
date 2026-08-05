@@ -6,7 +6,7 @@
 # THE DESTINATION IS etc/wall.  v7's section is 1M and its Makefile installs it in /etc,
 # beside the other programs whose subject is the machine rather than a file -- /etc/mkfs,
 # /etc/fsck, /etc/mount.  cmd/sh's default path reaches /bin only, so it is typed with its
-# path, which is v7's arrangement rather than an oversight.  wall.1m is the page.
+# path, which is v7's arrangement rather than an oversight.  wall.1m.umm is the page.
 #
 # NOT SETUID, and the manual page states the reason from the other side: "the sender should
 # be super-user to override any protections the users may have invoked."  That override is

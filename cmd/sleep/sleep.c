@@ -14,10 +14,10 @@
 // ONE DELIBERATE CHANGE.  v7 prints its two diagnostics and then calls exit(0), so a
 // script could not tell a rejected sleep from one that really slept; this returns 1.  The
 // messages stay on STDOUT, where v7 put them -- that is v7's inconsistency and not this
-// port's, as it is in ln and rm (../README.md).  sleep.1 records both.
+// port's, as it is in ln and rm (../README.md).  sleep.1.umm records both.
 //
 // v7's BUGS section said the interval must be under 65536 seconds.  That was a PDP-11
-// fact; the argument to alarm(2) is one 41-bit word here.  sleep.1 records that too.
+// fact; the argument to alarm(2) is one 41-bit word here.  sleep.1.umm records that too.
 //
 #include <stdio.h>
 #include <unistd.h>

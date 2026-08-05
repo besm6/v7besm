@@ -116,7 +116,7 @@ Stated at length in [`mv.c`](mv.c)'s header comment; in brief, and worst first.
   `<sys/wait.h>`'s `WIFEXITED`/`WEXITSTATUS`.
 * **`utime()` had no declaration anywhere in `include/`.** It is in
   [`<unistd.h>`](../../include/unistd.h) now, matching the SYNOPSIS
-  [`lib/libc/man/utime.2`](../../lib/libc/man/utime.2) already carried — and note it takes a
+  [`lib/libc/man/utime.2`](../../lib/libc/man/utime.2.umm) already carried — and note it takes a
   two-element `time_t` **vector**, not POSIX's `struct utimbuf`, because that is what the
   kernel `copyin`s. v7's `utime(target, &s1.st_atime)` would have worked here, `st_atime` and
   `st_mtime` being adjacent one-word fields, but a struct's field order is not an interface;
@@ -144,7 +144,7 @@ Two things that look like bugs and are not, both left alone with a comment:
   image before `mv` all the same, because the dependency is in the source and `mv` would fail
   outright without it the day there is a second filesystem to mount. Nothing exercises it.
 
-`mv.1` is the v7 manual page, corrected in place on the
+`mv.1.umm` is the v7 manual page, corrected in place on the
 [`lib/libc/man/`](../../lib/libc/man/) precedent: the directory-rename form added to the
 SYNOPSIS it was missing from, a new section for what that form costs, a DIAGNOSTICS section
 the page never had, and `Note:` paragraphs on the setuid bit and on the `/bin/cp` path that

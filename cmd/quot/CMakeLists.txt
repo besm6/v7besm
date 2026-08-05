@@ -15,7 +15,7 @@
 #
 # NOT SETUID, and it must not become one.  /dev/rmd0 is mode 0600 because that one node is
 # every file's contents -- a setuid quot would let anybody read any of them by way of a
-# program that already knows the layout.  quot.1m says it is root-only; ../README.md SS8 is
+# program that already knows the layout.  quot.1m.umm says it is root-only; ../README.md SS8 is
 # the general rule.
 #
 # THE RAW-READ RULES ARE df's, not restated here: ../df/README.md is the account of the four

@@ -21,7 +21,7 @@
 # parse tree and CANNOT see the recursion, so descend()'s depth is counted by the program
 # itself (§6's third ceiling).
 #
-# find.1 is the manual page; nothing installs it, it is read with `nroff -man'.
+# find.1.umm is the manual page; nothing installs it, it is read with `nroff -man'.
 #
 # NOT SETUID: it opens and stats what the caller could, and -exec runs as the caller.
 

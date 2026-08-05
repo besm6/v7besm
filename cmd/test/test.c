@@ -42,7 +42,7 @@
 // truncated and the shell's $? reads 127.  It is left at 255 anyway: the truncation is the
 // system's ABI and affects every program that exits above 127, so moving this one number
 // would hide a general limitation behind a local divergence -- and exit(2) really does
-// receive 255, which is what b6sim's cases next door observe.  test.1 says so, and
+// receive 255, which is what b6sim's cases next door observe.  test.1.umm says so, and
 // README.md beside this file is the account.
 //
 // -r AND -w STAY AN open(2) PROBE.  v7 implements them by opening the file and closing it
@@ -50,7 +50,7 @@
 // in this libc, but switching would be a divergence with nothing to show for it: every
 // shell on this machine is root's (init execs /bin/sh with no getty and no login behind it),
 // so the real and effective uids are the same 0 and both answers agree.  Left as v7 wrote
-// it, and test.1 says which call it is.
+// it, and test.1.umm says which call it is.
 //
 // NOT SETUID: open, stat and isatty on the caller's own behalf need no privilege -- and a
 // setuid test would answer -r and -w for the wrong user, which is the whole point of them.

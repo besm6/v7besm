@@ -31,7 +31,7 @@
 //     image in this tree is in fact populated -- ../../root.manifest is the proto file
 //     this system really uses.  There is no proto fixture anywhere in the tree.
 //
-// mkfs.1m says all of that again, which is ../README.md SS10's rule.
+// mkfs.1m.umm says all of that again, which is ../README.md SS10's rule.
 //
 // WHAT IS LEFT IS CLOSER TO cmd/fsutil/create.cpp THAN TO v7's mkfs.c.  That file is the
 // host's mkfs, and it is this program's oracle: `b6fsutil -n -s N -T t' produces the image
@@ -63,7 +63,7 @@
 // The argument IS s_fsize and the report IS s_isize and an inode count: these are on-disk
 // quantities, not measurements, and a mkfs that had to be told 6000 for a drive that holds
 // 2000 blocks would be lying about the thing it is writing.  KBPB does not appear in this
-// file.  mkfs.1m has a section saying df(1M) will report three times these numbers.
+// file.  mkfs.1m.umm has a section saying df(1M) will report three times these numbers.
 //
 // THE SUPERBLOCK IS WRITTEN LAST, and that is the commit point.  Until it lands the volume
 // has no magic and sbcheck() will not mount it, so a run that dies partway leaves something
@@ -92,7 +92,7 @@
 // that the aligned buffer is the only object either program ever hands to the kernel.
 //
 // NOT SETUID, and it must not become so: /dev/rmd0 is mode 0600 because that one node is
-// every file's contents.  mkfs is root-only and mkfs.1m says so.  ../README.md SS8.
+// every file's contents.  mkfs is root-only and mkfs.1m.umm says so.  ../README.md SS8.
 //
 
 // The order here does not matter and cannot be made to: clang-format sorts a block of <>

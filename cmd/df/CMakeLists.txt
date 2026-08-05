@@ -13,7 +13,7 @@
 # out: statfs(2) (<sys/statfs.h>, kernel/sys3.c) answers the four counts for the filesystem
 # holding a path, so a bare `df', `df /mnt' and `df /some/file' are ordinary user commands.
 # `df /dev/rmd0', `df image.img' and `df -w' still read a descriptor and are still the
-# super-user's, with open(2) the whole of the gate.  df.1m says so and ../README.md SS8 is
+# super-user's, with open(2) the whole of the gate.  df.1m.umm says so and ../README.md SS8 is
 # the general rule.
 #
 # THIS IS THE PROGRAM THAT SETTLED HOW A USER PROCESS READS THE RAW DISK, which is why it

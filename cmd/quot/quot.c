@@ -9,7 +9,7 @@
 // different from du(1) beside it and why `-n' exists at all: that mode correlates the
 // running i-number against an ncheck(1M) listing on standard input.  /etc/ncheck arrived
 // with task C4e and is on the image; sort(1) is task C5d and is not, so the pipeline
-// quot.1m gives has its producer but not yet its middle.
+// quot.1m.umm gives has its producer but not yet its middle.
 //
 // A BLOCK IS 1024 BYTES IN WHAT THIS PRINTS, and 3072 in what it counts.  The filesystem's
 // block is BSIZE == 3072; this reports KBPB == 3 of them per block (sys/param.h), so that a
@@ -17,7 +17,7 @@
 // count is a MULTIPLE OF 3, the smallest thing that can be allocated being one 3072-byte
 // block; and a number is half a PDP-11's rather than a sixth, v7's block having been 512
 // bytes.  THE MULTIPLY IS AT THE printf and nowhere else -- every count in this file is a
-// filesystem block until it is printed.  quot.1m says so; ../README.md SS4 is the rule.
+// filesystem block until it is printed.  quot.1m.umm says so; ../README.md SS4 is the rule.
 //
 // Holes are still counted, as v7's BUGS section says: di_size is what this divides, so a
 // file's indirect blocks are not counted and its holes are.  icheck(1) is the program that
@@ -72,7 +72,7 @@
 // inventing a divergence for it would be a change nothing can test.
 //
 // NOT SETUID.  /dev/rmd0 is mode 0600 because that one node is every file's contents;
-// quot is a root-only program here and quot.1m says so.  ../README.md SS8 is the rule.
+// quot is a root-only program here and quot.1m.umm says so.  ../README.md SS8 is the rule.
 //
 
 // The order here does not matter and cannot be made to: clang-format sorts a block of <>

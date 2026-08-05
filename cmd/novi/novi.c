@@ -1,7 +1,7 @@
 // novi -- a small full-screen editor, by Dave W Plummer, written for a split-I/D
 // PDP-11 running 2.11BSD: https://x.com/davepl1968/status/2080867382105710812
 //
-// Task C12; see README.md for what the port to this machine changed and novi.1 for
+// Task C12; see README.md for what the port to this machine changed and novi.1.umm for
 // what it does.
 //
 // The document is never in memory: buffer.c holds it in two unlinked /tmp files with

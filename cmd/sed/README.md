@@ -189,7 +189,7 @@ than `grep`'s sixteen, and the number is measured:
 
 ## 6. The `l` command, which is the fifth divergence in `cmd/`
 
-After `touch`, `rev`, `col` and `grep -b` — and `sort`'s tables. `sed.1` promised `l` would
+After `touch`, `rev`, `col` and `grep -b` — and `sort`'s tables. `sed.1.umm` promised `l` would
 list "in an unambiguous form" with "non-printing characters spelled in two digit ascii", and
 v7's table could not do both:
 
@@ -246,7 +246,7 @@ and the answer differs. They were checked that way rather than asserted to be: `
 sharp negative on `grep`'s precedent, **does not** — §2 is the account. Checking cost one
 rebuild and it corrected a claim that had already been written into three files.
 
-**Every one of the eighty-one expectations was designed from `sed.1` and the sources**, which is C5d's correction
+**Every one of the eighty-one expectations was designed from `sed.1.umm` and the sources**, which is C5d's correction
 to C5b rather than `od`'s rule — `sed`'s output is ordinary readable text, so a small
 fixture with a known answer says *which* rule broke. They were then **cross-checked against
 the host's `sed`** as an independent second opinion, and it disagrees about exactly six: the
@@ -257,7 +257,7 @@ That is [../grep/README.md](../grep/README.md)'s closing finding pointed at `sed
 
 **The file oracle** ([test/run-sed-test.sh](test/run-sed-test.sh)) says four things no
 stdout diff can, and the first is the one a careless test misses: **a `w` file is created
-before processing begins**, which `sed.1` states and which is a property of the *compiler* —
+before processing begins**, which `sed.1.umm` states and which is a property of the *compiler* —
 `fcomp()` does the `fopen(, "w")` while reading the script, so the file is truncated even by
 a run that reads no input at all.
 
@@ -272,7 +272,7 @@ file written into the image's own `/tmp`.
 
 * **`N` at end of input discards the pattern space.** v7 sets `pending` and `delflag`, so
   the last line of `sed -n 'N;P;D'` never appears; every later `sed` prints it. It is v7's
-  documented-by-behaviour choice, it is what `sed.1` describes, and `cmd_sed_dcmd` pins it
+  documented-by-behaviour choice, it is what `sed.1.umm` describes, and `cmd_sed_dcmd` pins it
   so that a later change has to be deliberate.
 * **`NLINES` is unreachable.** 256 line-number addresses, against 99 commands carrying at
   most two each: 198 is the most any script can ask for, so the `Too many line numbers`

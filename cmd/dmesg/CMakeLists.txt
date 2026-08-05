@@ -7,9 +7,9 @@
 #
 # NOT SETUID: kctl(2) is unprivileged by design (../../include/sys/kctl.h).
 #
-# dmesg.1 is NEW.  v7 shipped this program with no manual page anywhere in the tree -- the
+# dmesg.1.umm is NEW.  v7 shipped this program with no manual page anywhere in the tree -- the
 # same situation yes(1) was in -- so the page beside it was written for this port and is not
-# a correction of an upstream one.  Nothing installs it; read it with `nroff -man dmesg.1'.
+# a correction of an upstream one.  Nothing installs it; read it with `nroff -man dmesg.1.umm'.
 
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is
 # the whole tree at once, as it is in lib/, kernel/, cmd/init/ and cmd/sh/.

@@ -10,8 +10,8 @@
 #
 # NOT SETUID, AND IT MUST NOT BECOME ONE, for -u's sake: /dev/mem is every process's memory.
 #
-# pstat.1m is the manual page, corrected in place; nothing installs it, it is read with
-# `nroff -man pstat.1m'.
+# pstat.1m.umm is the manual page, corrected in place; nothing installs it, it is read with
+# `nroff -man pstat.1m.umm'.
 
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is
 # the whole tree at once, as it is in lib/, kernel/, cmd/init/ and cmd/sh/.

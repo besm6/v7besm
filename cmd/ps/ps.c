@@ -37,7 +37,7 @@
 // name -- computed in the kernel now, and never written down.  That is also what makes this
 // program work under b6sim, which cannot read a directory descriptor (../README.md SS9).
 //
-// FOUR COLUMNS CHANGED, all of them because the machine did; ps.1 says so too:
+// FOUR COLUMNS CHANGED, all of them because the machine did; ps.1.umm says so too:
 //   ADDR   a WORD address printed in octal, not a click address in hex.
 //   SZ     WORDS, a multiple of PGSZ, not 64-byte blocks.
 //   WCHAN  octal, and the whole of a thin chan_t rather than v7's 24-bit mask.

@@ -13,18 +13,21 @@ add_dependencies(build_tests man2umm_test)
 #   man_lint_<page>    canonical shape (doc/Manual_Page_Format.md section 9), run on
 #                      the .umm alone.  PERMANENT: it is what holds a hand-edited
 #                      page to the format once the roff it came from is gone.
-#   man_oracle_<page>  the .umm against the host groff's rendering of the .1 it was
-#                      converted from, along three axes.  Registered only where both
-#                      files still exist, so it retires page by page as the roff does.
+#   man_oracle_<page>  the .umm against the host groff's rendering of the roff page
+#                      it was converted from, along three axes.  REGISTERED ONLY
+#                      WHERE THE ROFF IS STILL THERE, and none is: the conversion
+#                      is done and the sources are gone.  What the loop below still
+#                      does is register it for a page somebody converts NEXT --
+#                      ../README.md is the procedure, and every v7 program left to
+#                      port arrives with one.
 #
-# The oracle is guarded on groff AND python3, the way the top-level CMakeLists.txt
-# guards cppcheck: a tree without them still configures, and simply checks less.
-# It is the only thing in this project that wants python; the lint does not.
+# scripts/mancheck.py needs groff and python3; the lint needs neither.  Guarded the
+# way the top-level CMakeLists.txt guards cppcheck: a tree without them still
+# configures, and simply checks less.
 #
 find_program(GROFF NAMES groff)
 find_program(PYTHON3 NAMES python3)
 if((GROFF MATCHES "NOTFOUND") OR (PYTHON3 MATCHES "NOTFOUND"))
-    message(STATUS "groff or python3 not found -- the manual-page oracle (man_oracle_*) is skipped")
     set(B6_NO_ORACLE TRUE)
 endif()
 

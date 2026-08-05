@@ -11,7 +11,7 @@
 # the third argument of chown(2), and chown(2) is gated on suser().
 #
 # It reads /etc/group through getgrnam(3), which ../../etc/ stages onto the image.  Its manual
-# page is ../chown/chown.1, v7 having documented the two programs together.
+# page is ../chown/chown.1.umm, v7 having documented the two programs together.
 
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is
 # the whole tree at once, as it is in lib/, kernel/, cmd/init/ and cmd/sh/.

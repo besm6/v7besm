@@ -37,7 +37,7 @@
 // including this file's only sbrk, its only `short' and its only /dev/tty -- so `find' now
 // calls sbrk NOWHERE, and ../README.md §2's "find and make are the two left" for the three
 // arena hazards becomes just `make'.  getty's speed table and col's half-shift are the
-// precedent; find.1 says so and an unknown primary is diagnosed rather than ignored.
+// precedent; find.1.umm says so and an unknown primary is diagnosed rather than ignored.
 //
 // -size IS IN 1024-BYTE BLOCKS, decision (C).  v7's was 512, which names nothing on this
 // machine (§4: a constant is the user's business only while it still names something here),

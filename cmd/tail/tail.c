@@ -20,7 +20,7 @@
 // named a PDP-11 disk block and names nothing on this machine, so the rule dd(1) was ported
 // under applies -- a constant is the user's business only while it still names something
 // here.  `b' therefore means one filesystem block, 3072 bytes, exactly as dd's `b' suffix
-// does, and tail.1 states the number, which it never did in v7.
+// does, and tail.1.umm states the number, which it never did in v7.
 //
 // The three OTHER 512s in this file are not that unit and did not move: they are the size of
 // a read(2), and nothing user-visible depends on them.  They are BSIZE now for throughput

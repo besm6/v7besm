@@ -6,8 +6,8 @@
 // The v7 program, unchanged in what it does: turn its first argument into a uid, either by
 // reading it as a decimal number or by looking it up in /etc/passwd with getpwnam(3), and hand
 // each file named after it to chown(2) -- keeping the group it already had.  ../chgrp/chgrp.c
-// is the same program with the two fields exchanged, and ../chown/chown.1 documents both, the
-// way ../rm/rm.1 documents rmdir.  Task C1c (../README.md).
+// is the same program with the two fields exchanged, and ../chown/chown.1.umm documents both, the
+// way ../rm/rm.1.umm documents rmdir.  Task C1c (../README.md).
 //
 // ONLY THE SUPER-USER CAN RUN IT TO ANY EFFECT, and that is not a policy of this port: chown()
 // in kernel/sys4.c opens with `if (!suser() || (ip = owner()) == NULL) return', so an ordinary

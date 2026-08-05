@@ -39,7 +39,7 @@
 //     PDP-11's in any case.  Deleted whole -- getkey(), crinit(), crblock(), makekey(), the
 //     xflag/xtflag/kflag state, key[], perm[], tperm[], crbuf[], the `x' command and the
 //     last use of <sgtty.h>: 170 lines and 342 words of static data.  A deliberate
-//     divergence, so it is written down twice, here and in ed.1, on touch(1)'s precedent
+//     divergence, so it is written down twice, here and in ed.1.umm, on touch(1)'s precedent
 //     (../README.md SS10).
 //
 //     It took a WILD longjmp with it, which is the part worth keeping in mind.  main() called
@@ -62,7 +62,7 @@
 //     the same rule the shell's globber follows: THE PATTERN LANGUAGE MATCHES BYTES.  `.'
 //     matches one byte and not one character, `*' after a multi-byte character repeats its
 //     last byte, and a range over two multi-byte characters is a range of bytes and does not
-//     mean what it looks like.  ed.1 says so.
+//     mean what it looks like.  ed.1.umm says so.
 //
 //     What the mask at getchr() actually did is worth stating exactly, because it is worse
 //     than the `echo privet' bug that prompted task C11.  Cyrillic capitals are the UTF-8
@@ -1810,7 +1810,7 @@ static void putchr(int ac)
         // bytes in octal, which is what a console that speaks UTF-8 wants.  On the PDP-11
         // the same line printed `\3', the octal of a negative number.
         //
-        // 0177 is the exception, and fixing it is the one BUG ed.1 itself owned up to: DEL
+        // 0177 is the exception, and fixing it is the one BUG ed.1.umm itself owned up to: DEL
         // is a control character that is not `< ' '', so `l' printed it raw and garbled the
         // display it exists to make legible.  Escaping it costs eight-bit transparency
         // nothing -- 0177 is ASCII, and no byte of a UTF-8 sequence can be it.
@@ -1818,7 +1818,7 @@ static void putchr(int ac)
         // THE ESCAPE IS THREE OCTAL DIGITS NOW, where v7's was two, and that is the whole of
         // why DEL was mishandled rather than merely unescaped: two digits cannot spell 0177,
         // and v7's `(c >> 3) + '0'' on 127 gives 15 + '0' = `?', so the honest fix prints
-        // `\177' and not `\?7'.  ed.1 promised two digits and an "unambiguous" listing, which
+        // `\177' and not `\?7'.  ed.1.umm promised two digits and an "unambiguous" listing, which
         // could not both be true once anything above 037 reached here; the page is corrected.
         if (c == 0177 || (c < ' ' && c != '\n')) {
             line[n++] = '\\';

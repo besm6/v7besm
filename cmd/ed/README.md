@@ -101,7 +101,7 @@ that would say so.
 
 **The pattern language matches bytes**, which is `sh`'s rule for its globber. `.` matches one
 byte, `*` after a multi-byte character repeats that character's last byte, and a range written
-between two multi-byte characters is a range of bytes. `ed.1` says so, and `cmd_ed_utf8`
+between two multi-byte characters is a range of bytes. `ed.1.umm` says so, and `cmd_ed_utf8`
 asserts it — including the `3s/^../@/p` that replaces `[` and the first byte of `К` and leaves a
 stray continuation byte behind, because that is what the semantics are.
 
@@ -144,7 +144,7 @@ does is worse than carrying the bug.
 * **`blkio()` called `read` and `write` through one `int (*)()`.** Their real prototypes differ
   in the constness of the buffer, so no single pointer type fits both. The caller already had a
   `READ`/`WRITE` flag to hand, so the flag is what comes down now.
-* **`l` mishandled DEL**, which is the one bug `ed.1` itself owned up to. The cause is in the
+* **`l` mishandled DEL**, which is the one bug `ed.1.umm` itself owned up to. The cause is in the
   page rather than the code: it promised "two-digit octal", and two digits cannot spell `0177` —
   v7's `(c >> 3) + '0'` on 127 gives `?`, so DEL listed as `\?7`. Three digits, and the BUGS
   entry is gone.

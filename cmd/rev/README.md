@@ -62,7 +62,7 @@ v7's `case EOF: goto eof` abandons whatever is already in the buffer, so a final
 newline is **discarded**: `printf abc | rev` printed nothing. It prints `cba` now.
 [../README.md](../README.md)'s rule is that upstream bugs are fixed rather than carried and
 that the fix says which it is — this one is a bug, and the character reversal above is a
-decision. Keeping them apart in the source header and in `rev.1` is the whole point of
+decision. Keeping them apart in the source header and in `rev.1.umm` is the whole point of
 stating both.
 
 ## What was left alone

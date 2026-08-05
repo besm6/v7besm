@@ -26,7 +26,7 @@
 //
 // A CHARACTER IS A BYTE, which is the other half of the same point and is a limitation
 // rather than a choice: `charct' counts what getc() returns, so a two-byte letter counts as
-// two.  wc.1 says so.  Counting UTF-8 sequences would be a different program from the one
+// two.  wc.1.umm says so.  Counting UTF-8 sequences would be a different program from the one
 // the manual page describes, and the count everything else on this machine wants -- a file's
 // size, a line's length in the terminal driver -- is the byte one.
 //
@@ -36,7 +36,7 @@
 //
 // AN UNREADABLE FILE IS AN ERROR NOW.  v7 printed the diagnostic, skipped the file and
 // exited 0, so no script could tell `wc *.c' that read everything from one that read half.
-// This port remembers the failure and exits 1; wc.1 marks it.  The file is still skipped
+// This port remembers the failure and exits 1; wc.1.umm marks it.  The file is still skipped
 // rather than aborting the run, which is v7's choice and the useful one.
 //
 // NOT SETUID: it opens what the caller could open itself.
@@ -77,7 +77,7 @@ int main(int argc, char **argv)
     wd = "lwc";
     if (argc > 1 && *argv[1] == '-') {
         // A bare `-' leaves an empty flag string, and wcp() then prints nothing at all.
-        // That is v7's, and wc.1 says so rather than this port inventing a meaning for it.
+        // That is v7's, and wc.1.umm says so rather than this port inventing a meaning for it.
         wd = ++argv[1];
         argc--;
         argv++;

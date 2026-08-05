@@ -4,7 +4,7 @@
 # v7's col steals bit 0200 of every stored character as the Model 37 Teletype's Greek
 # half-shift flag and masks its input with `c &= 0177', which between them turn `привет' into
 # `P?QP8P2P5Q'.  Both are gone.  README.md beside it is the account, col.c's header the
-# short form, and col.1 carries it too (../README.md §10 asks for both).
+# short form, and col.1.umm carries it too (../README.md §10 asks for both).
 #
 # NOTE FOR ../TODO.md's READER: col does NOT need the file-oracle harness that section says
 # it will.  It opens no file at all -- getchar() in, putchar() out -- so its cases are the

@@ -50,7 +50,7 @@
 // the filesystem and /bin/sh are all byte-transparent (../README.md SS11), so that test
 // would turn every byte of a Cyrillic name into a question mark.  It is `< ' ' || == 0177'
 // below: control characters, and nothing else.  A COLUMN IS THEN A BYTE WIDE and a
-// multi-byte name is charged for its bytes; ls.1 says so.
+// multi-byte name is charged for its bytes; ls.1.umm says so.
 //
 // NO TIOCGWINSZ.  This kernel's terminal ioctls are v7's, so there is no way to ask how
 // wide the screen is: twidth is 80, or $COLUMNS when that is set to something sensible.
@@ -272,7 +272,7 @@ static int options(int argc, char *argv[])
             // BSD ls runs here instead of failing.  -L follows a symbolic link and this
             // kernel has none, so every stat already behaves as -L asks.  -o prints the
             // 4.4BSD chflags column and there is no st_flags to print.  The flags are set
-            // and nothing reads them; ls.1 says so under Note.
+            // and nothing reads them; ls.1.umm says so under Note.
             case 'L':
                 Lflg++;
                 break;

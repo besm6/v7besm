@@ -51,7 +51,7 @@
 //  * creat(to, mode) is handed the full st_mode, S_IFREG bit and all.  The kernel masks it --
 //    maknode(uap->fmode & 07777 & ~ISVTX), kernel/sys2.c -- so the type bits cannot reach the
 //    inode.  What the mask also does is drop the sticky bit and apply the umask, which is why
-//    cp.1 now says cp does not reproduce a mode exactly.
+//    cp.1.umm now says cp does not reproduce a mode exactly.
 //
 #include <fcntl.h>
 #include <stdio.h>

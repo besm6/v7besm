@@ -23,7 +23,7 @@
 // property that matters for a filter that has to be safe on arbitrary bytes.
 //
 // ../README.md §10 allows a divergence and asks for it to be written down twice: this header
-// is one, the rewritten rev.1 is the other, and README.md is the account.
+// is one, the rewritten rev.1.umm is the other, and README.md is the account.
 //
 // TWO CONSEQUENCES FOR THE LONG-LINE SPLIT, which v7 has and which this keeps.  A line
 // longer than the buffer is cut into buffer-sized pieces and each is reversed on its own,
@@ -40,7 +40,7 @@
 //
 // WHAT IS LEFT ALONE, both v7's: a file that cannot be opened aborts the whole run rather
 // than the rest of the arguments continuing, and the no-argument path fcloses stdin.  Both
-// are visible, neither is wrong, and rev.1 says so.
+// are visible, neither is wrong, and rev.1.umm says so.
 //
 // NOT SETUID: it opens what the caller could open itself.
 //

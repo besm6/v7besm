@@ -16,7 +16,7 @@
 # -b prints a BYTE OFFSET, as grep's does; v7 divided by a PDP-11 disk block here and by
 # BSIZE in grep, so the two commands disagreed about the same match.
 #
-# NO MANUAL PAGE OF ITS OWN: ../grep/grep.1 documents grep, fgrep and egrep together, as
+# NO MANUAL PAGE OF ITS OWN: ../grep/grep.1.umm documents grep, fgrep and egrep together, as
 # v7 wrote it, and that is where this program's corrections went.
 #
 # NOT SETUID: it reads files as whoever ran it.  ../README.md SS8.

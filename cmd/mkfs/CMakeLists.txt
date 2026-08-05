@@ -14,7 +14,7 @@
 #
 # NOT SETUID, and it must not become one.  /dev/rmd0 is mode 0600 because that one node is
 # every file's contents; a setuid mkfs would let anybody destroy all of them with one
-# command.  mkfs.1m says it is root-only; ../README.md SS8 is the general rule.
+# command.  mkfs.1m.umm says it is root-only; ../README.md SS8 is the general rule.
 #
 # THE RAW-WRITE RULES ARE df's four plus one, and README.md beside this file is the
 # account: physio() refuses a transfer whose base is below u.u_tsize, so a raw write may

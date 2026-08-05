@@ -25,7 +25,7 @@
 // EITHER string is exhausted, and truncates unless it stopped on a mismatch.  So
 // `basename c .c' prints an empty line -- the suffix is longer than what is left of the
 // name, the comparison never disagrees, and the cut lands at the start.  That is the
-// upstream behaviour and not something this port introduced; basename.1 now says so.
+// upstream behaviour and not something this port introduced; basename.1.umm now says so.
 //
 // puts() TAKES ONE ARGUMENT.  v7 wrote `puts(p2, stdout)'; this libc's is C11's, and it
 // appends the newline exactly as v7's did, so `puts(p2)' is the whole of the change.

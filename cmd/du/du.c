@@ -15,7 +15,7 @@
 // count is a MULTIPLE OF 3, the smallest thing that can be allocated being one 3072-byte
 // block; and a number is half a PDP-11's rather than a sixth, v7's block having been 512
 // bytes.  THE MULTIPLY IS AT THE printf and nowhere else -- every count in this file is a
-// filesystem block until it is printed.  du.1 says so; ../README.md SS4 is the rule.
+// filesystem block until it is printed.  du.1.umm says so; ../README.md SS4 is the rule.
 //
 // WHAT THE PORT HAD TO CHANGE, beyond the mechanical C11 pass.  Three of these are about
 // one fact -- a struct direct is FOUR WORDS, 24 bytes, where v7's was 16 -- and the first
@@ -62,7 +62,7 @@
 //     two, in a function declared long.  Moot now that everything is int, but it is why
 //     the return type is stated once and not three times.
 //
-// WHAT IS DELIBERATELY LEFT.  du.1's two BUGS are still true and still documented: a
+// WHAT IS DELIBERATELY LEFT.  du.1.umm's two BUGS are still true and still documented: a
 // non-directory argument prints nothing without -a, and more than ML distinct linked files
 // makes the excess count more than once.  Both are v7's design, not defects of this port.
 //
@@ -89,7 +89,7 @@ _Static_assert(BSIZE % sizeof(struct direct) == 0, "entries must tile a block");
 _Static_assert(BSIZE % KBYTE == 0, "a block must be a whole number of reported blocks");
 
 #define EQ(x, y) (strcmp(x, y) == 0)
-#define ML       1000 // distinct multiply-linked files remembered; du.1's second BUG
+#define ML       1000 // distinct multiply-linked files remembered; du.1.umm's second BUG
 #define PATHSIZ  256  // the path being built, and the argument it starts from
 
 // Sixteen entries, not v7's thirty-two: this array is on a RECURSIVE frame and an entry is

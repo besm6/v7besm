@@ -72,12 +72,12 @@
 // printed in 1024-byte blocks -- KBPB of them per filesystem block, ../README.md SS4 --
 // and the free count can therefore be compared with df(1M)'s, which kernel/test/fsck does.
 // A block NUMBER in a diagnostic is not a measurement and stays exactly as it is on the
-// disk, and neither is a count of events ("N BAD BLKS IN FREE LIST").  fsck.1m has the
+// disk, and neither is a count of events ("N BAD BLKS IN FREE LIST").  fsck.1m.umm has the
 // section SS4 requires.
 //
 // NO /etc/checklist, the one deliberate divergence in the argument handling: v7 with no
 // argument reads a list of filesystems from that file, and this system has one filesystem
-// and no such file.  A device argument is required.  fsck.1m says so.
+// and no such file.  A device argument is required.  fsck.1m.umm says so.
 //
 // NOT SETUID, and it must not become so, for /etc/mkfs's and /etc/quot's reason: /dev/rmd0
 // is mode 0600 because that one node is every file's contents, and this program writes it.
@@ -365,7 +365,7 @@ int main(int argc, char **argv)
         sflag = 0;
 
     // v7 with no argument read /etc/checklist.  There is no such file here and one
-    // filesystem to name; fsck.1m records the divergence.
+    // filesystem to name; fsck.1m.umm records the divergence.
     if (argc <= 0) {
         fprintf(stderr, "usage: /etc/fsck [ -y ] [ -n ] [ -s ] [ -S ] filesystem ...\n");
         return 1;
@@ -653,7 +653,7 @@ static int setup(char *dev)
         // this program -- cmd/fsck/test/ runs it under b6sim, where the special is an
         // ordinary host file.  v7 asked "OK?" here, and reply() answers *no* whenever -n
         // is set, so the read-only case, which is the most useful one there is, could not
-        // have been run at all.  fsck.1m records the divergence.
+        // have been run at all.  fsck.1m.umm records the divergence.
         break;
     default:
         if (reply("file is not a block or character device; OK") == NO)
@@ -1481,7 +1481,7 @@ static int linkup(void)
     }
     // Round the directory out to a whole block so that the zero entries past its size are
     // scanned: those are the empty slots.  A block holds DIRPB of them, so a lost+found
-    // made by mkdir(1) and never used has DIRPB-2 -- which is why fsck.1m's advice to
+    // made by mkdir(1) and never used has DIRPB-2 -- which is why fsck.1m.umm's advice to
     // create and delete files in it first is marked as not true here.
     if (dp->di_size % BSIZE) {
         dp->di_size = roundup(dp->di_size, BSIZE);

@@ -30,10 +30,10 @@
 //     than the rare one; it is now the rare one.
 //
 //   * A DEVICE WITH NO FILESYSTEM ON IT IS REFUSED, which retires this program's oldest
-//     BUG.  v7's mount(2) reads the superblock and believes it, so mount.1m says in so many
+//     BUG.  v7's mount(2) reads the superblock and believes it, so mount.1m.umm says in so many
 //     words that "mounting file systems full of garbage will crash the system"; this kernel
 //     calls sbcheck() (kernel/alloc.c) and answers EINVAL after printing what it disliked on
-//     the console.  mount.1m says so now instead.
+//     the console.  mount.1m.umm says so now instead.
 //
 // TWO DIVERGENCES FROM v7, both small and both in the source and the manual page (../README.md
 // SS10):

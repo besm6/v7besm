@@ -25,7 +25,7 @@
 //     file truncates it IN PLACE and ignores the mode argument, so the inode, the
 //     owner, the permissions and every hard link survive untouched.  That is exactly
 //     what the stat/fchmod pair upstream carries existed to fake.  The cost is in
-//     novi.1's BUGS: a write that fails half way leaves the file truncated, which is
+//     novi.1.umm's BUGS: a write that fails half way leaves the file truncated, which is
 //     ed(1)'s `w' on this system too.
 //
 // AND ONE THING THIS MACHINE ADDED.  Upstream migrates the gap ONE BYTE AT A TIME,

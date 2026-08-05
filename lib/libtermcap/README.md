@@ -154,7 +154,7 @@ the port is not the place to improve one:
 
 ## The manual page
 
-[`termcap.3`](termcap.3) is William Joy's, and unlike [`cmd/ls/ls.1`](../../cmd/ls/ls.1) it is
+[`termcap.3.umm`](termcap.3.umm) is William Joy's, and unlike [`cmd/ls/ls.1`](../../cmd/ls/ls.1.umm) it is
 **not** kept as it was. `ls.1`'s only wrongness was a unit; this page's SYNOPSIS declared four
 external variables that do not exist here, and three of its statements described code this
 implementation does not contain. Each of those is corrected in place, marked **Note:**, and says
@@ -170,7 +170,7 @@ what 4.2BSD did as well as what happens now:
 
 A `BESM-6 NOTES` section carries `MAXHOP` and the unconditional `%` forms, and `FILES` names
 `share/besm6/lib` rather than `/usr/lib`. Nothing installs it — no `CMakeLists.txt` in this tree
-has a man rule yet — so it is read with `nroff -man termcap.3`.
+has a man rule yet — so it is read with `nroff -man termcap.3.umm`.
 
 ## Testing
 

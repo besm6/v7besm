@@ -21,7 +21,7 @@ a second into tenths**. Everything after it is 10/10 for seconds, 6/10 for minut
 10s of hours, and none of that depends on the clock rate.
 
 **HZ is 250 here** ([`<sys/param.h>`](../../include/sys/param.h), and `CLOCKS_PER_SEC` in
-[`<time.h>`](../../include/time.h); [`times.2`](../../lib/libc/man/times.2) says so outright).
+[`<time.h>`](../../include/time.h); [`times.2`](../../lib/libc/man/times.2.umm) says so outright).
 So both constants are wrong, and wrong in different directions: the multiplier makes `real`
 come out four times short, and the radix makes every printed field wrong from the tenths
 upward. Ported as
@@ -53,7 +53,7 @@ On a terminal that is invisible, which is the only place v7 ever looked. Redirec
 diagnostic output — `time cmd 2>log`, which is exactly what
 [../../kernel/test/utils.sh](../../kernel/test/utils.sh) does — and the file gets real NULs,
 about six per line. Fixed rather than carried, per [../README.md](../README.md)'s rule, and
-recorded in both the source and [time.1](time.1). Nothing visible changes.
+recorded in both the source and [time.1.umm](time.1.umm). Nothing visible changes.
 
 ## `execvp` had no prototype, so `<unistd.h>` got one
 
@@ -61,7 +61,7 @@ This was the fourth caller in the tree to open with a declaration of its own —
 [execvp.c](../../lib/libc/gen/execvp.c) and [execlp.c](../../lib/libc/gen/execlp.c) declare
 what they call, and [execs.c](../../lib/test/execs.c) declared all five — because v7 put the
 two `$PATH`-searching forms in no header at all, while
-[exec.2](../../lib/libc/man/exec.2)'s NAME line has always named them. They are declared in
+[exec.2](../../lib/libc/man/exec.2.umm)'s NAME line has always named them. They are declared in
 [`<unistd.h>`](../../include/unistd.h) now, beside `execl`/`execle`/`execv`/`exece`, and
 `execs.c` dropped its copies. The two implementation files keep their self-contained style,
 which is `execl.c`'s and `execv.c`'s: nothing in `lib/libc/` includes `<unistd.h>` to define

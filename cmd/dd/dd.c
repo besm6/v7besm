@@ -22,11 +22,11 @@
 //
 //     -- never reached the disk at all: EFAULT, `read: Bad address', and (see B1 below) an
 //     exit status of 0.  With BSIZE it is one aligned whole-block transfer and works with
-//     no bs= at all.  dd.1 says so and marks it Note:.
+//     no bs= at all.  dd.1.umm says so and marks it Note:.
 //
 //  2. `w' IS SIX BYTES, and that one came free: v7 wrote `n *= sizeof(int)', which was 2 on
 //     a PDP-11 and is NBPW here.  A free divergence is still a divergence, so it is spelt
-//     NBPW with a _Static_assert under it and written down in dd.1 -- otherwise a user
+//     NBPW with a _Static_assert under it and written down in dd.1.umm -- otherwise a user
 //     reading v7's page asks for `512w' and gets three times what they meant.  The pleasing
 //     part is that 1b, 3k and 512w are now all the same number.
 //
@@ -117,7 +117,7 @@
 //   * conv=noerror cannot skip a block this device refuses outright.  mdstrategy()'s bad:
 //     path moves nothing, the buffer is left entirely zero, B3's scan yields ibc == 0 and
 //     that is indistinguishable from end of file.  Fixing it means inventing a
-//     skip-and-continue policy v7 never had.  dd.1's BUGS says so instead.
+//     skip-and-continue policy v7 never had.  dd.1.umm's BUGS says so instead.
 //   * an interrupt loses the partial output record -- term() does not flush.  v7's, and a
 //     "fix" would change what an interrupt means.
 //   * `c &= 0377' after reading a byte is a no-op now that char is unsigned.  Harmless, and
@@ -128,7 +128,7 @@
 // NOT SETUID, and it must not become so.  /dev/rmd0 is mode 0600 because that one node is
 // the contents of every file on the volume; a setuid dd would hand the whole filesystem to
 // anyone who could think of an offset AND let them overwrite it.  dd is a root-only program
-// where a device is concerned and dd.1 says so.  ../README.md SS8 is the rule.
+// where a device is concerned and dd.1.umm says so.  ../README.md SS8 is the rule.
 //
 
 #include <fcntl.h>

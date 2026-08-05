@@ -799,7 +799,7 @@ mode 0644
 # enabled line; without it merge() returns at the failed open, multiple() falls straight
 # through, and the boot is the single-user loop this port lived in until now.  Two lines,
 # `console' and `tty1' -- the two Consuls, dev/sc.c's minors 0 and 1.  Format: ttys(5)
-# (include/man/ttys.5) and rline() in cmd/init/init.c.  It is also what makes ttyslot(3)
+# (include/man/ttys.5.umm) and rline() in cmd/init/init.c.  It is also what makes ttyslot(3)
 # answer, and therefore getlogin(3): lib/test/ttyt is the assertion of that.
 file /etc/ttys          # the terminal lines a getty sits on; etc/ttys
 source ../../rootfs/etc/ttys
@@ -1552,7 +1552,7 @@ mode 0600
 # A THIRD DRIVE, AND IT IS HERE TO BE REFUSED.  kernel/test/mount attaches a blank pack on
 # it -- formatted by SIMH's `attach -n', so every zone reads back as zeros -- and mounts it
 # on purpose, because sbcheck() (kernel/alloc.c) answering EINVAL on a device with no
-# filesystem is what retires cmd/mount/mount.1m's oldest BUGS line: v7's mount(2) believes
+# filesystem is what retires cmd/mount/mount.1m.umm's oldest BUGS line: v7's mount(2) believes
 # whatever superblock it reads and crashes later.  There is no /dev/rmd2 beside it; nothing
 # has ever wanted the raw form of a drive that holds nothing.
 bdev /dev/md2           # bdevsw[0] minor 2: the third drive -- SIMH's md02

@@ -31,7 +31,7 @@ Notes on the copies:
 * The v7 `makefile` came along for each multi-file program as the record of its source list and
   flags. It is a PDP-11 recipe, kept for reading; nothing runs it.
 * **Ten programs have no manual page of their own.** Eight are documented inside another program's
-  page — `rmdir` in [rm/rm.1](rm/rm.1), `chgrp` in `chown.1`, `umount` in `mount.1m`,
+  page — `rmdir` in [rm/rm.1.umm](rm/rm.1.umm), `chgrp` in `chown.1`, `umount` in `mount.1m`,
   `fgrep`/`egrep` in `grep.1`, `diffh` in `diff.1`, `atrun` in `at.1`, `accton` in `sa.1m`.
   **`yes` and `dmesg` have no page anywhere in v7** and need one written.
 * **The file-format pages are in [../include/man/](../include/man/)**, not here — they document the

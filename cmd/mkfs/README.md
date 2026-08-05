@@ -2,14 +2,14 @@
 
 Task C4c. This file is the account of the three things the port taught that belong to
 whatever writes a device next, rather than to `mkfs`. The program itself is documented in
-its own header and in [mkfs.1m](mkfs.1m); [../README.md](../README.md) is the porting recipe
+its own header and in [mkfs.1m.umm](mkfs.1m.umm); [../README.md](../README.md) is the porting recipe
 and [../df/README.md](../df/README.md) is the account of the four alignment conditions a raw
 *read* obeys, which are also all four of a write's. **Read that one first** — nothing here
 repeats it.
 
 The short version of the port is that `mkfs.c` came out shorter than it went in. v7's is 618
 lines of which perhaps 250 are the prototype language, and that language is not ported
-(`mkfs.1m` says why, four reasons); what is left is 200 lines that read much more like
+(`mkfs.1m.umm` says why, four reasons); what is left is 200 lines that read much more like
 [../fsutil/create.cpp](../fsutil/create.cpp), the host's mkfs, than like v7's. That is
 deliberate and it is what the oracle is built on.
 
@@ -114,7 +114,7 @@ worth stating so that it can be kept:
 * both start from zeros. `attach -n` formats every data word of a SIMH container to zero and
   `Image::create()` writes a zero file, so every byte neither program wrote is zero in both.
 * `mkfs` writes only the i-list, the free-list chain blocks, the root's directory block and
-  the superblock. It does **not** zero the data area (`mkfs.1m` lists that under BUGS), and
+  the superblock. It does **not** zero the data area (`mkfs.1m.umm` lists that under BUGS), and
   it must not start doing so.
 * the only difference is the clock, and it is four fields fed from one number. `s_time` is
   word 6 of block 0 — byte offset **36**, six bytes big-endian — so the test reads it back

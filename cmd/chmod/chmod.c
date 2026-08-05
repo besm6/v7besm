@@ -48,7 +48,7 @@
 // before every file.  And `where()' reaches a label inside its own switch with `goto dup',
 // which is legal C11 and says what it means: the three who-letters share one tail.
 //
-// THREE THINGS THIS MACHINE MAKES TRUE THAT chmod.1 NEVER SAID, all now Note:d there:
+// THREE THINGS THIS MACHINE MAKES TRUE THAT chmod.1.umm NEVER SAID, all now Note:d there:
 //
 //  - `chmod +s file' DOES NOTHING, here and in v7 alike.  With the who omitted, who() answers
 //    ALL & ~um = 01777, SETID is 06000, and the AND of the two is zero.  The page's "the

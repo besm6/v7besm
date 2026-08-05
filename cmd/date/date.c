@@ -36,7 +36,7 @@
 //     as an error.  On a machine whose time_t reaches past 2100 and whose only way to set
 //     a clock is this program, that is not a curiosity.  Two-digit years 70..99 mean
 //     1970..1999 and 00..69 mean 2000..2069, and the pivot is 70 because that is where a
-//     time_t begins: every year the window can name is one the machine can hold.  date.1
+//     time_t begins: every year the window can name is one the machine can hold.  date.1.umm
 //     says so, and note that it is also what makes finding 2 REACHABLE -- the old and new
 //     leap rules differ only at a century, and no century was expressible before.
 //
@@ -58,7 +58,7 @@
 //
 // THE MACHINE IS ALWAYS GMT.  TIMEZONE and DSTFLAG are both 0 (<sys/param.h>), ftime()
 // hands those out unchanged, and timezone(0, 0) is "GMT" -- so `date' and `date -u' print
-// the same instant and differ only in where the zone name comes from.  date.1 says so.
+// the same instant and differ only in where the zone name comes from.  date.1.umm says so.
 //
 // The C11 pass is the usual one: prototypes and explicit return types (v7 declared none of
 // main, gtime or gp), `static' on the file-scope objects, the ancient `char *ctime();'

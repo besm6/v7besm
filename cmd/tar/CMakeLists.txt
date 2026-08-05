@@ -12,7 +12,7 @@
 # setuid-root /bin/mkdir when extracting a nested tree, which is the only way to get a
 # directory on a system with no mkdir(2) -- ../mkdir/README.md SS8.
 #
-# tar.1 is the manual page; nothing installs it, it is read with 'nroff -man'.
+# tar.1.umm is the manual page; nothing installs it, it is read with 'nroff -man'.
 
 set(KINC ${CMAKE_SOURCE_DIR}/include)
 file(GLOB KHDRS ${KINC}/*.h ${KINC}/sys/*.h)

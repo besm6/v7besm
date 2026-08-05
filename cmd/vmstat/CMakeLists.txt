@@ -23,8 +23,8 @@
 # device out of the same histogram; this one prints one, and neither is the other's
 # summary.
 #
-# vmstat.1 is the manual page; nothing installs it, it is read with `nroff -man
-# vmstat.1'.
+# vmstat.1.umm is the manual page; nothing installs it, it is read with `nroff -man
+# vmstat.1.umm'.
 
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is
 # the whole tree at once, as it is in lib/, kernel/, cmd/init/ and cmd/sh/.

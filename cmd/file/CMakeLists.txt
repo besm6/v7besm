@@ -16,7 +16,7 @@
 # `crt0.o file.o -lc -lruntime' against the libc built in ../../lib, and stages the result as
 # build/rootfs/bin/file.  It also registers rootfs_file_size.
 #
-# file.1 is the manual page; nothing installs it, it is read with `nroff -man'.
+# file.1.umm is the manual page; nothing installs it, it is read with `nroff -man'.
 #
 # NOT SETUID: it opens what the caller could open itself.
 

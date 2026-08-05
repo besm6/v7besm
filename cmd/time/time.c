@@ -54,7 +54,7 @@
 //
 // WHAT IS NOT CHANGED, deliberately: `while (wait(&status) != p) times(&obuffer);' re-reads
 // the child times on every unrelated child reaped, which is v7's way of not counting them;
-// and the report goes to the DIAGNOSTIC output, as v7 put it -- time.1 says so, and it is
+// and the report goes to the DIAGNOSTIC output, as v7 put it -- time.1.umm says so, and it is
 // why kernel/test/utils.sh redirects this program's stderr and nothing else's.
 //
 // NOT SETUID: fork, exec, wait and times all act on the caller's own process and children.

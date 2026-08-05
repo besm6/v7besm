@@ -84,7 +84,7 @@ truncated through the same `putn()`. It is 8 digits and cannot truncate.
 ## Why the oracle is a second implementation
 
 Every `.expected` in [test/](test/) was computed by a Python implementation of the same
-packing, written from `od.1` rather than from `od.c`. That is a stronger discipline than the
+packing, written from `od.1.umm` rather than from `od.c`. That is a stronger discipline than the
 rest of task C5b needed, and the reason is the truncation above: **a wrong width prints a
 number wrong by a factor of eight and looks entirely plausible.** Sixteen octal digits of a
 48-bit word is not checkable by eye, and a captured `.expected` would have asserted only that
@@ -103,7 +103,7 @@ in task C5b whose job is to **show** the bytes rather than to carry them, so it 
 program in the task with no UTF-8 case and no need of one.
 
 **The offset argument sets the radix of the address column** as a side effect — `x`/`0x` →
-hex, a leading `0` → octal, a `.` anywhere → decimal. v7's page never mentioned it; `od.1`
+hex, a leading `0` → octal, a `.` anywhere → decimal. v7's page never mentioned it; `od.1.umm`
 now does.
 
 The `b` suffix on an offset is **`BSIZE`** (`../README.md` §4), the same decision `tail -b`

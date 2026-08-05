@@ -61,7 +61,7 @@
 //
 //  * `rm -r' holds the directory's descriptor OPEN ACROSS THE RECURSION, so it needs one
 //    descriptor per level of nesting and NOFILE is 20 (include/sys/param.h).  Twenty levels
-//    is the real limit, not the stack; v7 had the same one.  rm.1 says so now.  Restructuring
+//    is the real limit, not the stack; v7 had the same one.  rm.1.umm says so now.  Restructuring
 //    to close before recursing would change the program's behaviour on a directory being
 //    modified underneath it, which is not this task's business.
 //

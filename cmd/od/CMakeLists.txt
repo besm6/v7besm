@@ -2,7 +2,7 @@
 #
 # One of task C5b's seven (../TODO.md), and the one that had to be DESIGNED rather than
 # ported: od's subject is the machine word, and a machine word here is 48 bits where v7's was
-# 16.  README.md beside it is the account, od.c's header the short form, and od.1 was
+# 16.  README.md beside it is the account, od.c's header the short form, and od.1.umm was
 # rewritten rather than corrected -- §10's `touch' rule -- because its DESCRIPTION said
 # `interpret words' and the word it meant has stopped existing.
 #

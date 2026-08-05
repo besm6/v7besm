@@ -5,7 +5,7 @@
 //
 // Write win1 onto win2 NON-destructively: a cell of win1 that holds a blank leaves win2's
 // cell alone.  That is the whole difference from overwrite(), and it is what the name, the
-// comment 4.3BSD put on this function, and curses.3 all promise.
+// comment 4.3BSD put on this function, and curses.3.umm all promise.
 //
 // THE bcopy() 4.3BSD HAD HERE IS GONE.  This file carried overwrite.c's copy loop verbatim
 // -- an unconditional row-at-a-time bcopy -- and then the selective loop below.  The first

@@ -166,7 +166,7 @@ assumes `int` and `char *` are the same thing:
   `b$pdiff`. It did not before 2026-06-17, and much of this tree was ported under the old
   rule; `cmd/README.md` §2 is the account and it is history now, not a hazard.
 - `long` is one word; `BSIZE` is 3072 bytes but tools report 1024-byte blocks; `DIRSIZ` 18.
-- **`opendir(3)` exists** (`<dirent.h>`, `lib/libc/gen/`, `lib/libc/man/directory.3`), added
+- **`opendir(3)` exists** (`<dirent.h>`, `lib/libc/gen/`, `lib/libc/man/directory.3.umm`), added
   with `cmd/ls`, its first and so far only caller. A **new** port that walks a pathname uses it
   rather than hand-rolling `<sys/dir.h>` — a name read out of a directory is **not
   NUL-terminated**, which is what the library now knows for you. Eight existing programs still

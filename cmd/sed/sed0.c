@@ -125,7 +125,7 @@ int main(int argc, char **argv)
             eflag = 0;
             continue;
 
-        // -g is v7's and sed.1 never mentioned it; the page says so now rather than the
+        // -g is v7's and sed.1.umm never mentioned it; the page says so now rather than the
         // flag being deleted, since a script may rely on it.
         case 'g':
             gflag++;
@@ -545,7 +545,7 @@ static void fcomp(void)
                 rep->pfl = 1;
             }
 
-            // s///P is v7's and sed.1 never mentioned it either: print only as far as the
+            // s///P is v7's and sed.1.umm never mentioned it either: print only as far as the
             // first newline, the way the P command does.
             if (*cp == 'P') {
                 cp++;
@@ -830,7 +830,7 @@ static char *compile(char *expbuf)
                 if (c == '-' && sp > cstart && *sp != ']') {
                     // A range is a range of BYTES, as ed(1)'s and grep(1)'s classes are,
                     // so a range written between two multi-byte letters is not what a
-                    // reader expects.  sed.1 says so.
+                    // reader expects.  sed.1.umm says so.
                     for (c = sp[-2]; c < *sp; c++)
                         ep[c >> 3] |= bittab[c & 07];
                 }

@@ -293,13 +293,13 @@ includes `<tgmath.h>` **last and alone**, because every one of that header's mac
 
 ## The manual pages
 
-Six, and they are v7's own — [`exp.3m`](exp.3m), [`floor.3m`](floor.3m), [`hypot.3m`](hypot.3m),
-[`j0.3m`](j0.3m), [`sin.3m`](sin.3m), [`sinh.3m`](sinh.3m) — **corrected in place** on the
-precedent [`../libtermcap/termcap.3`](../libtermcap/termcap.3) set. Each correction is marked
+Six, and they are v7's own — [`exp.3m.umm`](exp.3m.umm), [`floor.3m.umm`](floor.3m.umm), [`hypot.3m.umm`](hypot.3m.umm),
+[`j0.3m.umm`](j0.3m.umm), [`sin.3m.umm`](sin.3m.umm), [`sinh.3m.umm`](sinh.3m.umm) — **corrected in place** on the
+precedent [`../libtermcap/termcap.3.umm`](../libtermcap/termcap.3.umm) set. Each correction is marked
 **Note:** and says what v7 did as well as what happens now; the SYNOPSIS of each is ANSI, since
 `b6parse` accepts nothing else. What they had to be told, mostly: that `log(0)` returns
 −`HUGE_VAL` and not 0, that an overflow is a fault and not an infinity, that the thresholds moved,
-that `cabs` is gone, and that `floor.3m` now owns seven C11 routines v7 had none of.
+that `cabs` is gone, and that `floor.3m.umm` now owns seven C11 routines v7 had none of.
 
 Nothing installs them — no `CMakeLists.txt` in this tree has a man rule yet — so they are read
-with `nroff -man exp.3m`.
+with `nroff -man exp.3m.umm`.

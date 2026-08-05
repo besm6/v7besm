@@ -21,7 +21,7 @@
  * c >> 3 lands in 0..31 by construction and no mask is needed anywhere.
  *
  * -b IS A BYTE OFFSET, which is a deliberate divergence from v7 and is written
- * down here, in grep.1 and in README.md as ../README.md SS10 requires.  v7 printed a
+ * down here, in grep.1.umm and in README.md as ../README.md SS10 requires.  v7 printed a
  * block number: ftell()/BSIZE, where BSIZE was a PDP-11 disk block of 512 bytes.
  * 512 names nothing on this machine (../README.md SS4), BSIZE here is 3072 and would
  * name this filesystem's blocking rather than a position, and fgrep hard-coded
@@ -267,7 +267,7 @@ static void compile(char *astr)
                 if (c == '-' && sp > cstart && *sp != ']') {
                     // A range is a range of BYTES, as ed(1)'s classes are, so a
                     // range written between two multi-byte letters is not what a
-                    // reader expects.  grep.1 says so; see cmd/ed/README.md.
+                    // reader expects.  grep.1.umm says so; see cmd/ed/README.md.
                     for (c = sp[-2]; c < *sp; c++)
                         ep[c >> 3] |= bittab[c & 07];
                     sp++;

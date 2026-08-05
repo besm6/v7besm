@@ -19,7 +19,7 @@
 # way; the difference is that this one leaves nothing behind to register.
 #
 # v7 shipped no manual page for yes -- ../README.md names it as one of the two commands
-# undocumented anywhere in the v7 tree -- so yes.1 beside the source is new.
+# undocumented anywhere in the v7 tree -- so yes.1.umm beside the source is new.
 
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is
 # the whole tree at once, as it is in lib/, kernel/, cmd/init/ and cmd/sh/.

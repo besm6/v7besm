@@ -71,7 +71,7 @@ the inode, the owner, the permissions and every hard link to the file survive un
 Preserving those is precisely what the `stat`/`fchmod` pair existed to fake. It also removed
 a 512-byte automatic, the `strrchr`/`memcpy`/`strcat` path surgery that built the sibling's
 name, and a failure mode in a read-only directory holding a writable file. The one thing
-lost is atomicity, and it is in `novi.1`'s BUGS: a write that fails half way leaves the file
+lost is atomicity, and it is in `novi.1.umm`'s BUGS: a write that fails half way leaves the file
 truncated. `ed` on this system has the same exposure, so `novi` is adopting a hazard the
 tree already has rather than introducing one.
 

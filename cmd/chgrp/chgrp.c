@@ -10,7 +10,7 @@
 // ../chown/chown.c are the same program with two fields exchanged.  Task C1c (../README.md).
 //
 // IT HAS NO MANUAL PAGE OF ITS OWN, and never had: v7 documented it inside chown(1), so
-// ../chown/chown.1 is the page for both -- the arrangement ../rm/rm.1 has with rmdir.
+// ../chown/chown.1.umm is the page for both -- the arrangement ../rm/rm.1.umm has with rmdir.
 //
 // ONLY THE SUPER-USER CAN RUN IT TO ANY EFFECT, for the reason ../chown/chown.c gives at
 // length: chown() in kernel/sys4.c is gated on suser(), so an ordinary user gets EPERM

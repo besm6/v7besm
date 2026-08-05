@@ -89,7 +89,7 @@ asterisk at a time sees the *other asterisk* as its non-alphanumeric flank and e
 ## What it does not do
 
 There is **no macro facility in the format and there must not be one**. `.ds` and `.de` are
-expanded here and discarded; [`../../lib/libc/man/intro.2`](../../lib/libc/man/intro.2)'s `.de en`
+expanded here and discarded; [`../../lib/libc/man/intro.2.umm`](../../lib/libc/man/intro.2.umm)'s `.de en`
 was the corpus's only user macro. A page that wants a repeated phrase types it.
 
 It is **not a Markdown implementation**. `ummread.cpp` parses the dialect and only the dialect: no

@@ -12,7 +12,7 @@
 #
 # THIS ONE DIVERGES FROM v7 IN WHAT IT DOES, not merely in how it is written -- it calls
 # utime(2) where v7 rewrote the file's first byte.  touch.c's header is the account and
-# touch.1 was rewritten to match.
+# touch.1.umm was rewritten to match.
 
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is
 # the whole tree at once, as it is in lib/, kernel/, cmd/init/ and cmd/sh/.

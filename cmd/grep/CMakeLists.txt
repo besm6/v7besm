@@ -6,10 +6,10 @@
 # above 0177 stored past the sixteen-byte class into the compiled expression.  See
 # README.md beside this file.
 #
-# ONE DELIBERATE DIVERGENCE, recorded there, in grep.c's header and in grep.1 as
+# ONE DELIBERATE DIVERGENCE, recorded there, in grep.c's header and in grep.1.umm as
 # ../README.md SS10 requires: -b prints a BYTE OFFSET rather than v7's block number.
 #
-# grep.1 is the manual page for grep, fgrep and egrep together, as v7 wrote it; ../fgrep
+# grep.1.umm is the manual page for grep, fgrep and egrep together, as v7 wrote it; ../fgrep
 # has no page of its own.  Nothing installs it -- it is read with `nroff -Kutf8 -man'.
 #
 # b6_prog() links crt0.o grep.o -lc -lruntime, stages the result into build/rootfs/bin/grep

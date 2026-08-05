@@ -4,7 +4,7 @@
 // mv -- move or rename files and directories.
 //
 // The v7 program, unchanged in what it does.  Three forms, which its own usage string names
-// and mv.1 had never documented in full:
+// and mv.1.umm had never documented in full:
 //
 //     mv f1 f2            rename a file
 //     mv f1 ... fn d      move files into a directory

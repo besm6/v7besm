@@ -93,7 +93,7 @@ against an ASCII one by byte and not by letter. This is [col/README.md](../col/R
 decision, taken again and for the same reasons: making it character-aware means decoding UTF-8
 in `put()` and `pgetc()`, and it invents a policy for the truncation at a column boundary — a
 lead byte that fits where its continuations do not produces mojibake, which is worse than a
-misaligned column. `pr.1` says so in a section of its own.
+misaligned column. `pr.1.umm` says so in a section of its own.
 
 ## What else was fixed rather than carried
 
@@ -114,11 +114,11 @@ misaligned column. `pr.1` says so in a section of its own.
 `pr` **exits 0 after every diagnostic**, its own `done()` being both the error path and the
 normal one. That is a real defect — a script cannot tell a refused listing from a printed one —
 but it is not a defect *of this machine*, and the new look-ahead diagnostic follows the same
-rule rather than being the one exception. `pr.1` says so under BUGS.
+rule rather than being the one exception. `pr.1.umm` says so under BUGS.
 
 A NUL byte in the input is dropped rather than printed (`tpgetc()`'s `goto loop`), and a page
 is padded out to `length` lines whether or not there is that much input. Both are v7's and both
-are what `pr.1` now describes; BSD `pr` does neither, which is two of the three dialect
+are what `pr.1.umm` now describes; BSD `pr` does neither, which is two of the three dialect
 differences the host cross-check turned up.
 
 ## The oracle, and why it is not `od`'s reason
@@ -127,7 +127,7 @@ differences the host cross-check turned up.
 ordinary readable text — what nobody can check by eye is the **whitespace in it**: which run of
 spaces `put()` compressed back to a tab, which column a truncation fell in, how many blank lines
 padded a short page. So every `.expected` came from a Python model of v7's algorithm written
-from `pr.1` plus the six things `pr.1` does not state, and fourteen of the nineteen cases are
+from `pr.1.umm` plus the six things `pr.1.umm` does not state, and fourteen of the nineteen cases are
 within the model's reach and agree with the program byte for byte.
 
 **And two things about `pr` make its harness different from every other filter's.**

@@ -47,7 +47,7 @@
 // converted: `%d bad', `%d dup', `%d arg', the per-block `%d missing' under -m and the
 // chain-block number in a free-list diagnostic are all on-disk quantities, and so are the
 // s_isize/s_fsize a size check prints -- those DESCRIBE the volume, which is mkfs's
-// exception to the same rule.  icheck.1m has the section SS4 requires.
+// exception to the same rule.  icheck.1m.umm has the section SS4 requires.
 //
 // THREE UPSTREAM BUGS, fixed rather than carried:
 //

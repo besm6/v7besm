@@ -112,4 +112,4 @@ the precedent of `ls`'s `readdir`→`listdir`: `<sys/stat.h>` here already decla
 The mode really is 0777 rather than 0777-less-a-umask, because `CMASK` is 0 in
 [`sys/param.h`](../../include/sys/param.h) and nothing sets another — `maknode()` applies
 `~u.u_cmask` all the same. `suidt` asserts the mode, so giving the shell a `umask` builtin will
-change that expectation; `mkdir.1` says so too.
+change that expectation; `mkdir.1.umm` says so too.

@@ -7,7 +7,7 @@
 //
 // One of task C5b's seven (../TODO.md), and the one deliberate divergence in the task.
 // README.md beside it is the account; §10 asks for a divergence to be written down twice and
-// this header is one of the two, col.1 the other.
+// this header is one of the two, col.1.umm the other.
 //
 // THE DIVERGENCE: THE GREEK HALF-SHIFT IS GONE, AND WITH IT THE EIGHTH BIT.  v7's col tracks
 // the Model 37 Teletype's shift-out/shift-in pair -- SO selects a Greek type box, SI selects
@@ -52,7 +52,7 @@
 // outc() HAD NO BOUND.  cp is advanced by every space, tab and printable character with
 // nothing limiting it, and the cursor walks lbuff to reach it, so a long enough input line
 // left the 800-byte buffer.  cp is clamped to MAXCOL now and the overstrike insert refuses to
-// open two more bytes it has not got -- §6's rule, and col.1 says what is dropped.
+// open two more bytes it has not got -- §6's rule, and col.1.umm says what is dropped.
 //
 // WHAT IS LEFT ALONE: page[] is a 256-entry sliding window of malloc'd half-lines, not a
 // matrix, and it is the only allocation in task C5b.  The reverse and half line feeds, -b,

@@ -21,7 +21,7 @@
 // THE NODES SHIP AT 0622 (root.manifest), so a fresh boot answers `is y' and v7's two
 // numbers are exactly the two states this system has.
 //
-// TWO FIXES, both marked `Note:' in mesg.1:
+// TWO FIXES, both marked `Note:' in mesg.1.umm:
 //
 //   - ttyname(2) RETURNS NULL for a process with no terminal -- a mesg in a shell script
 //     with its standard error redirected -- and v7 handed that NULL straight to stat().

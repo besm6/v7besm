@@ -334,7 +334,7 @@ instead of something every future port has to be told, and the same for `d_ino =
 re-deriving `DIRENTSZ`.
 
 `libc` grew the library with `cmd/ls`, which is 4.2BSD's now and is its first caller
-([ls/README.md](ls/README.md), [../lib/libc/man/directory.3](../lib/libc/man/directory.3)):
+([ls/README.md](ls/README.md), [../lib/libc/man/directory.3.umm](../lib/libc/man/directory.3.umm)):
 `opendir`, `readdir`, `closedir`, `rewinddir`, `telldir`, `seekdir`, `dirfd`, about 230 words for
 a caller that only walks. Nothing else uses it yet.
 

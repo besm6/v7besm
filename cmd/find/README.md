@@ -112,7 +112,7 @@ something on this machine* — is `dd`'s from C4b, and 512 names a PDP-11 disk b
 here. `df`, `du`, `quot` and `ls -s` were all taught `KBYTE` in C4a, so a user types the number
 they read out of one of those. The division is at the comparison and nowhere else, so
 `st_size` stays in bytes right up to that line, and `_Static_assert(BSIZE % KBYTE == 0)` sits
-beside it. `find.1` gets the `BLOCKS ARE 1024 BYTES` section the other four carry.
+beside it. `find.1.umm` gets the `BLOCKS ARE 1024 BYTES` section the other four carry.
 
 ## What else was fixed rather than carried
 

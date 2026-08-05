@@ -13,7 +13,7 @@
 # program's real footprint, one malloc per node and one per edge with no ceiling anywhere
 # (§6's fourth ceiling).
 #
-# tsort.1 is the manual page; nothing installs it, it is read with `nroff -man'.
+# tsort.1.umm is the manual page; nothing installs it, it is read with `nroff -man'.
 #
 # NOT SETUID: it opens what the caller could open itself.
 

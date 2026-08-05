@@ -71,7 +71,7 @@ this was the fourth toolchain program to want a scratch file. The other three es
 
 So `mkstemp()` was added to libc: [`lib/libc/gen/mkstemp.c`](../../lib/libc/gen/mkstemp.c),
 declared in [`<stdio.h>`](../../include/stdio.h) beside `mktemp()`, with
-[`lib/libc/man/mkstemp.3`](../../lib/libc/man/mkstemp.3) and cases in
+[`lib/libc/man/mkstemp.3`](../../lib/libc/man/mkstemp.3.umm) and cases in
 [`lib/test/gen.c`](../../lib/test/gen.c). That keeps these sources character-identical in both
 builds, which no `#ifdef` in `ar` could have done.
 

@@ -10,7 +10,7 @@ so `ps` opens no device and needs no privilege. Everything below still describes
 it moved to [../../kernel/kctl.c](../../kernel/kctl.c), it did not go away. See
 [../README.md](../README.md) §8: the fix for a program that needs privilege is to ask what it
 is actually reading, not to reach for a mode or a setuid bit.
-[../README.md](../README.md) §9 has the harness argument, [ps.1](ps.1) the user-facing
+[../README.md](../README.md) §9 has the harness argument, [ps.1.umm](ps.1.umm) the user-facing
 divergences, and [ps.c](ps.c)'s header the short form of all of it; what is here is the part
 that is structural.
 

@@ -21,7 +21,7 @@
 //
 // advance() COUNTS ITS RECURSION.  See MAXDEPTH in sed.h.
 //
-// THE l COMMAND SPELLS AN ESCAPE IN THREE OCTAL DIGITS.  sed.1 promised two and an
+// THE l COMMAND SPELLS AN ESCAPE IN THREE OCTAL DIGITS.  sed.1.umm promised two and an
 // "unambiguous" listing, and the two could not both be true: v7's table printed a RAW
 // newline for 012 and a RAW DEL for 0177, so `l' -- whose entire job is making a line
 // legible -- rendered two of the characters that most need it as themselves.  A byte

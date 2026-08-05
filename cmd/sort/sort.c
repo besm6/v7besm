@@ -725,7 +725,7 @@ static int rline(struct merg *mp)
         }
         // v7 wrote `if (cp>=ce) cp--;' -- it overwrote the last byte of the buffer for as
         // long as the line went on, so a long line came out corrupted, silently, and only on
-        // the merge path, while the sort path had no limit at all.  sort.1's BUGS said so.
+        // the merge path, while the sort path had no limit at all.  sort.1.umm's BUGS said so.
         // It says something else now: one limit, both paths, and a diagnostic.
         // l[] is L bytes and the newline is stored INSIDE this loop, so n may reach L-1:
         // a line of L bytes, terminator included, is the longest that fits and does fit.

@@ -13,7 +13,7 @@
 // 1000-byte buffers laid down next to each other, so a long enough line walked out of b1 and
 // through b2 and past it.  §6 asks every port to bound the one fixed buffer it has, and this
 // is uniq's.  The line is cut at LMAX now and what is left of it becomes the next line, which
-// is comm(1)'s behaviour for the same situation and is what uniq.1 now says.
+// is comm(1)'s behaviour for the same situation and is what uniq.1.umm now says.
 //
 // AND ONE UPSTREAM BUG, THE SAME ONE rev HAD.  v7's gline() answers `end of file' the instant
 // it sees EOF, whatever it has already read, so a final line with no newline was thrown away:
@@ -33,7 +33,7 @@
 // and nothing checks that ceiling.  v7 wrote `static' and it is the right answer here for a
 // reason v7 did not have.
 //
-// WHAT IS LEFT ALONE, all v7's and all in uniq.1: -c's count field is four columns wide and a
+// WHAT IS LEFT ALONE, all v7's and all in uniq.1.umm: -c's count field is four columns wide and a
 // count past 9999 pushes the line right rather than being truncated; the comparison is over
 // whole bytes, so `+n' skips n bytes and not n characters; and `-n' counts FIELDS, where a
 // field is blank-delimited, so a Cyrillic word is one field like any other.

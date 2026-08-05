@@ -100,7 +100,7 @@
 // observed by anything.
 #define QESC 0377
 
-// fcode[0] is stdout, so this allows the ten distinct wfile arguments sed.1 promises.
+// fcode[0] is stdout, so this allows the ten distinct wfile arguments sed.1.umm promises.
 // v7 sized the arrays for twelve and tested for ten, which allowed nine.
 #define WFILES 11
 #define FNSIZE 40 // characters in a wfile name

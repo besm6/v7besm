@@ -23,7 +23,7 @@
 // does not do what it looks like it does.  What byte transparency buys instead is the case
 // that matters far more often: `tr a-z A-Z' passes every Cyrillic letter through UNTOUCHED,
 // because code[i] defaults to i for all 256 values.  A tr that masked to 0177 -- which is
-// what most of this task's other six did -- would have mangled them.  tr.1 says so.
+// what most of this task's other six did -- would have mangled them.  tr.1.umm says so.
 //
 // ONE WRITE INTO A STRING LITERAL, REMOVED.  v7's nextc() ends with `if(c==0) *--s->p = 0;',
 // which backs the cursor onto the terminator and stores a 0 over the 0 it just read.  The
@@ -32,7 +32,7 @@
 // literal lives in the CONST segment here (cross/besm6/b.out.h carries a separate const
 // size).  The decrement alone is exactly equivalent and touches nothing.
 //
-// TWO v7 SEMANTICS RECORDED RATHER THAN FIXED, both visible and both in tr.1: next() returns
+// TWO v7 SEMANTICS RECORDED RATHER THAN FIXED, both visible and both in tr.1.umm: next() returns
 // 0 to mean end-of-set, so NUL can never be a member of either set; and the copy loop drops
 // a NUL from the input stream instead of passing it on.
 //

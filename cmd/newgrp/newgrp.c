@@ -25,7 +25,7 @@
 // ends in done(), which execs a shell.  `newgrp nosuchgroup' prints its complaint and then
 // hands back a shell with the group UNCHANGED rather than exiting -- because the shell it
 // replaced is gone and leaving the terminal without one would log the user out.  That is v7
-// and it is deliberate; newgrp.1 now says so, since the exit status cannot.
+// and it is deliberate; newgrp.1.umm now says so, since the exit status cannot.
 //
 // NOFILE RATHER THAN 15.  v7 closed descriptors 3 through 14 because NOFILE was 15 there;
 // it is 20 here (<sys/param.h>), and the loop is written from the constant so that a kernel

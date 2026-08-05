@@ -36,9 +36,9 @@
 // (§3), so v7 collated a byte above 0177 BEFORE every ASCII character and this collates it
 // after -- which is the byte order every other program on this image uses, and the order a
 // UTF-8 line has to be sorted in for comm to agree with itself.  Nothing had to change for
-// that; it is worth saying precisely because a diff cannot show it.  comm.1 says it too.
+// that; it is worth saying precisely because a diff cannot show it.  comm.1.umm says it too.
 //
-// WHAT IS LEFT ALONE, both v7's and both in comm.1: a line longer than 255 bytes is cut and
+// WHAT IS LEFT ALONE, both v7's and both in comm.1.umm: a line longer than 255 bytes is cut and
 // its remainder becomes the next line, and `-' names the standard input for either file.
 //
 // NOT SETUID: it opens what the caller could open itself.
@@ -137,7 +137,7 @@ int main(int argc, char **argv)
 
 // One line into buf, terminated and without its newline.  -1 at end of file.  A line that
 // does not fit is cut, and what is left of it comes back as the next line -- v7's, and
-// comm.1 says so.
+// comm.1.umm says so.
 static int rd(FILE *file, char *buf)
 {
     int i, c;

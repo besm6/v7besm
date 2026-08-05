@@ -2,7 +2,7 @@
 #
 # One of task C5a's six (../TODO.md), and the only one of them that is not a faithful port:
 # it reverses UTF-8 sequences where v7 reversed bytes.  README.md beside it is the account,
-# rev.c's header the short form, and rev.1 was rewritten rather than corrected.
+# rev.c's header the short form, and rev.1.umm was rewritten rather than corrected.
 #
 # b6_prog() (../../scripts/BesmCross.cmake) runs the b6* toolchain over rev.c, links it
 # `crt0.o rev.o -lc -lruntime' against the libc built in ../../lib, and stages the result as

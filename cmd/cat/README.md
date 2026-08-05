@@ -34,4 +34,4 @@ The one number that changed is the buffer's: `BUFSIZ` is `BSIZE` here, 3,072 byt
 `stdbuf` is 512 words rather than the 512 *bytes* of the PDP-11 — the largest object in the
 program, and still comfortable.
 
-`cat.1` is the v7 manual page, kept as it was; its "buffered in 512-byte blocks" is 3,072 now.
+`cat.1.umm` is the v7 manual page, kept as it was; its "buffered in 512-byte blocks" is 3,072 now.

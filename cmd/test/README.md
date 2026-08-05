@@ -60,7 +60,7 @@ harnesses, two answers, one program — as with `tty`, and for a reason each sta
 **It is left at 255 rather than lowered to something visible.** The truncation is the
 system's ABI and reaches every program that exits above 127; moving this one number would
 hide a general limitation behind a local divergence, and `exit(2)` really does receive the
-255. [test.1](test.1) records the effect where a user meets it. Widening it means giving the
+255. [test.1.umm](test.1.umm) records the effect where a user meets it. Widening it means giving the
 `wait` gate an argument and writing the status through the caller's pointer kernel-side, which
 `lib/README.md` already names as future work.
 

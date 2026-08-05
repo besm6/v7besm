@@ -27,7 +27,7 @@
 //
 // 3.  THE SUFFIX WRAPPED OUT OF THE ALPHABET.  It is `fnumber/26 + 'a'' and `fnumber%26 +
 //     'a'', which is aa..zz for the first 676 pieces and then `{a', `{b', ... with no limit
-//     and no complaint -- so split.1's promise that the names come out in lexicographic
+//     and no complaint -- so split.1.umm's promise that the names come out in lexicographic
 //     order stopped being true exactly when a user had enough pieces to care.  The 677th
 //     piece is refused.  What is already written stays written, which is the only useful
 //     thing to do: the input has been consumed.
@@ -38,7 +38,7 @@
 //
 // THE PIECES LAND IN THE WORKING DIRECTORY, `xaa' onwards, because the prefix defaults to
 // `x' and is passed to fopen() with no directory part -- so a prefix containing a `/' writes
-// wherever it points.  That is v7's and split.1 now says it.  An existing piece is
+// wherever it points.  That is v7's and split.1.umm now says it.  An existing piece is
 // truncated without warning, the mode being "w"; also v7's, also now documented.
 //
 // NOT SETUID: it creates what the caller could create itself.

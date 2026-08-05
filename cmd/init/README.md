@@ -150,4 +150,4 @@ otherwise silent, since the link succeeds and only the running program misbehave
 size of `cpp`, which links at 23,826 and had to have its C11 limits cut to get there; see
 [`../cpp/README.md`](../cpp/README.md), "Building for the BESM-6".
 
-`init.8` is the v7 manual page, kept as it was.
+`init.8.umm` is the v7 manual page, kept as it was.

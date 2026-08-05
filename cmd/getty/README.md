@@ -34,7 +34,7 @@ baud rate to guess, no `break` key, and nothing to fall back to. Concretely, in 
   turned `LCASE` on would fold that away.
 
 So the table has **one entry**, and it keeps v7's shape rather than collapsing into two
-constants: `init` still passes a selector character, [ttys(5)](../../include/man/ttys.5) still
+constants: `init` still passes a selector character, [ttys(5)](../../include/man/ttys.5.umm) still
 defines the column, and a second kind of terminal is one line. An unknown selector falls back
 to `itab[0]`, which is v7's rule and is now also the only outcome.
 

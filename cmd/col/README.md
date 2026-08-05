@@ -62,7 +62,7 @@ not "how do I keep it" but "what still produces input for it".
 ## The honest half: columns are counted in bytes
 
 `col` aligns text in columns, and a two-byte Cyrillic letter occupies **two** of them. That
-is stated in `col.1` rather than fixed.
+is stated in `col.1.umm` rather than fixed.
 
 Making it character-aware would mean decoding UTF-8 in `outc()`, and it would be inventing a
 behaviour rather than porting one: the half-line arithmetic this program exists for is about

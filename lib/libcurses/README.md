@@ -334,6 +334,6 @@ kernel; and `initscr()`'s `isatty()` search, for the same reason.
 
 ## The manual page
 
-`curses.3` is 4.3BSD's, corrected in place with `Note:` markers where it describes something
+`curses.3.umm` is 4.3BSD's, corrected in place with `Note:` markers where it describes something
 this port does not do. **Nothing installs it** — no `CMakeLists.txt` in this tree has a man
-rule yet, which is also true of `../libtermcap/termcap.3`. Read it with `nroff -man curses.3`.
+rule yet, which is also true of `../libtermcap/termcap.3.umm`. Read it with `nroff -man curses.3.umm`.

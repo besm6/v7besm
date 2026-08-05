@@ -23,7 +23,7 @@
 // WHICH ALSO FIXES A BUG THAT HAS NOTHING TO DO WITH THIS MACHINE.  v7 chose base 8 on a
 // leading `0' and then accepted every digit isdigit() did, so `cmp a b 09' skipped nine
 // bytes and `cmp a b 08' skipped eight -- an octal parse quietly accepting digits octal does
-// not have.  The digit is checked against the base now.  cmp.1 documents the two skip
+// not have.  The digit is checked against the base now.  cmp.1.umm documents the two skip
 // operands for the first time; v7's page never mentioned them.
 //
 // DIAGNOSTICS GO TO STANDARD OUTPUT, which is v7's and is left alone.  It is visible in the

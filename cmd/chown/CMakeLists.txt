@@ -8,7 +8,7 @@
 # lib/, and not with the other cmd/ subdirectories.
 #
 # NOT SETUID, deliberately: chown(2) opens with `if (!suser() ...)' in kernel/sys4.c, so only
-# the super-user can change an owner at all -- which is v7's rule and chown.1's own words.  A
+# the super-user can change an owner at all -- which is v7's rule and chown.1.umm's own words.  A
 # setuid chown would hand every user the ability to give a file away, which is the thing that
 # rule exists to prevent.  ../mkdir/README.md is the account of the three that ARE setuid.
 #

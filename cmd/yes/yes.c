@@ -24,7 +24,7 @@
 // the point it does it.
 //
 // v7 SHIPPED NO MANUAL PAGE for yes -- it is one of the two commands ../README.md names as
-// undocumented anywhere in the v7 tree -- so yes.1 beside this file is new.
+// undocumented anywhere in the v7 tree -- so yes.1.umm beside this file is new.
 //
 // NOT SETUID: it writes to its own standard output and does nothing else.
 //

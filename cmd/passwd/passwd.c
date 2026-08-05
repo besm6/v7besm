@@ -24,7 +24,7 @@
 // unlink it -- so an interrupted passwd leaves a file that makes every later run say
 // `Temporary file busy'.  Only the paths that reach `out' clean up.  That is v7's and it is
 // left alone deliberately: the alternative is unlinking a file this process may not have
-// created, which is worse.  passwd.1 records it.
+// created, which is worse.  passwd.1.umm records it.
 //
 // getlogin() IS NOT getpwuid(getuid()), and the difference is the whole reason the no-
 // argument form works: getlogin() reads the /etc/utmp record for THIS TERMINAL
@@ -42,7 +42,7 @@
 //
 //   - v7 EXITED 1 ON SUCCESS.  Every path, including the one that rewrote the file, fell
 //     into `bex: exit(1)'.  A shell script could not tell a changed password from a refused
-//     one.  Success is 0 here and passwd.1 says so.
+//     one.  Success is 0 here and passwd.1.umm says so.
 //
 //   - the signal dispositions are `void (*)(int)' per <signal.h>, where v7 wrote the K&R
 //     form.  They are set BEFORE the temp file is created, which is v7's order and is the

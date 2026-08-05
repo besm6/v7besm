@@ -7,7 +7,7 @@
 #
 # THE THREE SKIP CASES ARE THE ONES WORTH NAMING.  cmp takes two undocumented positional
 # operands after the file names, a count of bytes to skip in each, and v7's cmp.1 never
-# mentioned them; ../cmp.1 does now.
+# mentioned them; ../cmp.1.umm does now.
 #
 #   skip     14 and 14, decimal, so the byte `differ' reports as char 15 is reported as
 #            char 1 -- the assertion that both skips happened and that the counter restarts

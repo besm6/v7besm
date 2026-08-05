@@ -81,7 +81,7 @@ and `umount.c`'s is the one with the `char *` comparison in it.
 It cost the two programs their basename stripping as well, which is where three of their five
 `char *` comparisons lived. v7 stored `md1` rather than `/dev/md1` because 32 bytes was
 tight; a line is as long as it needs to be, so the special file is recorded as it was given
-and `umount` matches the string the user typed. [include/man/mtab.5](../../include/man/mtab.5)
+and `umount` matches the string the user typed. [include/man/mtab.5](../../include/man/mtab.5.umm)
 is the specification and carries the arithmetic above.
 
 ## 3. This is the first program of task C4 that has no `b6sim` world at all
@@ -130,7 +130,7 @@ privilege"; here the answer is *none*, and that is exactly why the bit must not 
 Written down because the manual page had to be corrected against it, and because nothing
 before this task could have found out:
 
-* **`sbcheck()` retires this program's oldest BUG.** v7's `mount.1m` says in so many words
+* **`sbcheck()` retires this program's oldest BUG.** v7's `mount.1m.umm` says in so many words
   that "mounting file systems full of garbage will crash the system", because v7's `mount(2)`
   reads the superblock and believes it. This kernel checks the magic number, the geometry it
   was built for, the i-list extent and the free counts (`kernel/alloc.c`), prints what it
@@ -151,7 +151,7 @@ before this task could have found out:
   /dev/md1` is `EBUSY` every time. It is the cheapest thing in the test and the most
   convincing.
 * **`s_ronly` reaches `access()`** (`kernel/fio.c`), so a create on a read-only mount is
-  `EROFS`; and `iupdat()` silently skips the access time, which is what `mount.1m` warns about
+  `EROFS`; and `iupdat()` silently skips the access time, which is what `mount.1m.umm` warns about
   from the other side.
 
 ## 6. Two things the test had to be built around
