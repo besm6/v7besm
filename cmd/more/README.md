@@ -53,6 +53,69 @@ and why, in a case, rather than leaving a reader to assume the option was covere
 [`../README.md`](../README.md) §9 asks which world a *program* belongs in; this one had to be
 asked of a *branch*.
 
+## The terminal database, and the keyword that had to exist first
+
+The port shipped with RetroBSD's five termcap **stubs** — `tgetent()` returning 1, `tgetnum()`
+answering `li=25` and `co=80`, `tgetstr()` answering six ANSI literals — not because a database
+was unwanted but because there was no way to link one. [`b6_prog()`](../../scripts/BesmCross.cmake)
+hard-wired `-lc -lruntime`, and [`lib/libcurses/README.md`](../../lib/libcurses/README.md) had
+been predicting a `LIBS` keyword since that library landed. It exists now, modelled on
+`b6_libtest()`, and emits **its own order rather than the caller's** — `[-lm] [-lcurses]
+[-ltermcap]` ahead of `-lc` — because the order is the contract and a caller has no reason to
+know it. `more` is its first user; `novi` is the other program that wants it.
+
+What the real library changed, beyond the two signatures the stubs had shortened:
+
+- **`tputs()` takes an output function**, and `putchar()` here is deliberately the `<stdio.h>`
+  macro. One `putch()` wrapper is handed to `tputs()`; the two hundred `putchar()` calls stay
+  macros. `tput()` beside it is the NULL guard every call site used to get for free from a stub
+  that was only ever asked for capabilities it had.
+- **Padding is parsed and dropped.** `vt100`'s `cl` is `50\E[H\E[J`; the stub would have
+  printed the `50`. That entry is now usable, which is the whole point of the exercise.
+- **`se` is the entry's**, so an xterm gets `\E[27m` (end standout) rather than the stub's
+  `\E[m` (end *everything*).
+- **The buffers came back**, at file scope: `tgetent()`'s `bp` must outlive the call because
+  the other three read the entry it left behind. 1024 chars of bss and a 512-char decoding
+  arena, where the stubs cost none — and 1024 is spelled out rather than named, `TBUFSIZ` being
+  private to `termcap.c` and unable to move into `<term.h>` without hitting `b6cpp`'s
+  character-identical redefinition rule.
+
+**`$TERM` unset means `xterm`, and so does a `$TERM` the database does not have.** That second
+half is not a courtesy: `/etc/termcap` here is BSD's `termcap.small`, five entries of which one
+(`xterm-color`) dangles on a `tc=` that was never staged, so an unknown name is the ordinary
+case. Only a database that cannot be opened at all leaves the terminal `dumb`.
+
+## Six keys, and why the database alone is not enough to read them
+
+`ku`, `kd`, `kP`, `kN`, `kh` and `@7` — Up, Down, PageUp, PageDown, Home, End — are read out of
+the entry into a small table, and `readkey()` sits in front of `readch()` matching against it:
+anything but ESC passes through, an ESC collects bytes until the buffer is some entry's whole
+sequence or is no entry's prefix.
+
+The table also carries **built-in ANSI forms, and they earn their place twice over**. `more`
+never emits `ks`, so a terminal stays in *normal* cursor mode and a real xterm sends `\E[A`,
+`\E[H`, `\E[F` — while the `xterm` entry lists the *application*-mode `\EOA`, `\EOH`, `\EOF`
+that `ks` would have switched it to. Emitting `ks` was the alternative and was rejected: there
+is no way to guarantee the matching `ke` when a signal this program does not catch can end it,
+and a table row costs two words. Separately, the `vt100` entry has no `kP`, `kN`, `kh` or `@7`
+at all, so under `TERM=vt100` all four of those keys work through the fallback alone.
+
+Each key is an existing command less the part that does not belong on a key: PageDown is space
+without `z`'s side effect of making the count the new window size, Down is `<return>` without
+the same, PageUp is `b` without its `...back N pages` banner — printed only because a scrolling
+terminal has no other way to show that the file moved backwards, which a named key does not
+need. Home and End are new. **End is two passes over the file**, and there is no cheaper way:
+nothing here indexes lines and `file_size` is bytes.
+
+`command()`'s `comchar` and `number()`'s argument became `int` for this — the codes are above
+`0377` so that nothing collides with a Cyrillic keystroke, which is the same reason `readch()`
+answers an `int`. `lastcmd` and `lastarg` already were, so `.` repeats a key with its count and
+needed no change at all.
+
+**What cannot be fixed is the bare ESC.** Telling the key from the start of a sequence needs a
+timeout, and there is no `select(2)` and no `VMIN`/`VTIME` under `sgtty`. `more` has no ESC
+command, so the cost is one swallowed keystroke and a bell; the manual page says so under BUGS.
+
 ## The literal search is better than the regular expressions it replaced
 
 `re_comp`/`re_exec` are not in this libc and were not added, so `/pattern` is
@@ -96,18 +159,43 @@ pay for it.
 
 | | const | text | data | bss | total |
 |---|---|---|---|---|---|
-| `more` | 124 | 7,549 | 726 | 1,225 | **9,624** |
+| `more`, stubs | 124 | 7,549 | 726 | 1,225 | **9,624** |
+| `more`, libtermcap | 133 | 8,691 | 822 | 1,533 | **11,179** |
 
-9,624 words of the 28,672, between `pr` (7,725) and nothing much — the largest program here
-that is not a toolchain component. The deepest stack frame is 281 words of 4,096, which is
-`command()`; deleting `initterm()`'s `char buf[TBUFSIZ]` took 171 words off that on its own,
-and the `static char clearbuf[TBUFSIZ]` beside it another 171 of bss. Both existed only to be
-handed to a `tgetent()` and a `tgetstr()` that ignore them.
+11,179 words of the 28,672 — the largest program here that is not a toolchain component. The
+1,555 words the database cost are the library's 1,075 (`termcap.o` 761, `tgoto.o` 206,
+`tputs.o` 108), the 1024-char entry buffer and 512-char arena that came back as 256 words of
+bss, and the key table and its matcher.
+
+Stack, from `15 utm N` in `b6cc -S`: `command()` 267 words (229 with the stubs — the End case's
+temporaries), `main()` 190, `initterm()` 180, `ttyin()` 161, of 4,096. The new depth is not any
+of those but what `tgetent()` costs *below* `initterm()`: `ibuf[TBUFSIZ]` and `tnchktc()`'s
+`tcbuf[TBUFSIZ]` are ~342 words a hop, which is why
+[`lib/libtermcap`](../../lib/libtermcap/README.md) caps `MAXHOP` at 4 rather than v7's 32. The
+deepest chain reachable here — `main` → `initterm` → `tgetent` → one `tc=` hop, which is what
+`xterm` needs — is about 1,100 words.
 
 ## Testing
 
 `ctest -R cmd_more_` runs the ten cases; `ctest -R rootimg_link_more` asserts off the finished
 image that `/bin/less` and `/bin/more` are one inode.
+
+**That the ten cases did not move is the regression signal for the whole termcap change.** With
+standard output not a terminal, `initterm()` never reaches `tgetent()` at all, so a `.expected`
+file that shifts means the filter half was disturbed by work that should have touched only the
+screen half.
+
+The screen half itself was driven by hand, which is what §1's `ioctl` fix bought: a pty, `TERM`
+in the environment, and `b6sim` on the staged binary —
+
+```sh
+TERM=xterm build/cmd/sim/b6sim build/rootfs/bin/more file
+```
+
+`=` after each key reports the line reached, which makes the six keys checkable: from line 22 of
+a 200-line file, Down gives 23, PageDown 45, Up 44, PageUp 22, Home 22, End the last screenful.
+Worth running under `xterm` (both the `\E[` and the `\EO` forms), `vt100` (padding stripped, and
+four keys reaching the fallback), and a name the database does not have (the retry as `xterm`).
 
 **The screen half has no test and that is a deferral, not an oversight.** `kernel/test/console`
 and `kernel/test/edit` are DISABLED for the `send` wobble of `kernel/TODO.md` task 35, and a

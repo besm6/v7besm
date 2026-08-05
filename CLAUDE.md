@@ -59,7 +59,9 @@ being installed; without it only the `cmd/` host tools build.
 
 Link order is a contract — **`b6ld` scans each archive once, in order**:
 `crt0.o … -lcurses -ltermcap -lc -lruntime`. The kernel takes `-lruntime` alone (own `printf`
-in `kernel/prf.c`, no libc).
+in `kernel/prf.c`, no libc). A native program names the optional archives through
+`b6_prog(... LIBS libm|libcurses|libtermcap)`, which **emits that order rather than the
+caller's** — `cmd/more` is the only caller so far, and takes `libtermcap`.
 
 ### Native BESM-6 programs
 
@@ -114,8 +116,8 @@ renders as it recognizes, because a `Doc` of `Block`/`Span` vectors would not fi
 Its **attributes are ANSI SGR, on by default and not conditioned on `isatty(2)`** (man hands it a
 pipe into `more` exactly when a human is reading); `-p` is the plain form and there is no
 overstrike back end. Pages are staged as **sources**, so `man - ls` shows the file itself. They
-cost 302 of the disk's blocks, `man` 12 and `manview` 17, so the image has **187 free of 2000** —
-weigh a large addition against that.
+cost 302 of the disk's blocks, `man` 12 and `manview` 17, so the image has **185 free of 2000** —
+weigh a large addition against that. (`more`'s move to `libtermcap` took the last two of those.)
 
 The first three are the only places the ceilings actually bind, and each carries a BESM-6 size
 profile keyed on the `besm6` macro `b6cpp` always predefines — `cmd/cpp/defs.h` (below the C11

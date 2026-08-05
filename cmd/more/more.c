@@ -28,6 +28,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <term.h>
 #include <unistd.h>
 
 #define Fopen(s, m)   (Currline = 0, file_pos = 0, fopen(s, m))
@@ -126,6 +127,9 @@ static const char helptext[] =
     ":p                      Go to kth previous file [1]\n"
     ":f                      Display current file name and line number\n"
     ".                       Repeat previous command\n"
+    "<down> or <up>          Move forward or back k lines [1]\n"
+    "<pagedown> or <pageup>  Move forward or back k screenfuls [1]\n"
+    "<home> or <end>         Go to the first or the last screenful\n"
     "----------------------------------------------------------------------------\n";
 
 void setmode(struct sgttyb *t);
@@ -150,13 +154,14 @@ int nextline(FILE *f, int *length);
 int printd(int n);
 void prompt(char *filename);
 void prbuf(char *s, int n);
-int number(char *cmd);
+int number(int *cmd);
 int colon(char *filename, int cmd, int nlines);
 void ttyin(char buf[], int nmax, char pchar);
 void do_shell(char *filename);
 void error(char *mess);
 void execute(char *filename, char *cmd, char *const argv[]);
 int readch(void);
+int readkey(void);
 void skipf(int nskip);
 int expand(char *outbuf, char *inbuf);
 void rdline(FILE *f);
@@ -164,71 +169,74 @@ void show(int c);
 
 // The terminal.
 //
-// RetroBSD replaced 4BSD's termcap calls with these stubs and this port keeps them:
-// lib/libtermcap is next door and /etc/termcap is on the image, but b6_prog() links
-// -lc -lruntime and has no hook for a third archive (lib/libcurses/README.md has
-// predicted that keyword since the library landed).  So more(1) writes ANSI/VT100,
-// like cmd/novi, and a terminal that is not ANSI cannot use it.
+// RetroBSD replaced 4BSD's termcap calls with five stubs answering hard-coded ANSI --
+// li=25, co=80, am, and six literal escape sequences -- and this port kept them while
+// b6_prog() had no way to name a third archive.  It has one now (the LIBS keyword,
+// ../../scripts/BesmCross.cmake), so this is lib/libtermcap and the /etc/termcap that
+// etc/ stages, and more(1) drives whatever terminal the database describes.
 //
-// Two signatures are shorter than upstream's.  tgetstr() has lost the `char **area'
-// it never wrote into -- with it went initterm()'s two 1024-byte buffers, one of
-// them 171 words of a 4096-word stack -- and tputs() has lost the padding count and
-// the output function it never called.  Dropping that function pointer is what lets
-// `#undef putchar' go, so the two hundred putchar() calls in this file stay the
-// <stdio.h> macro instead of becoming an out-of-line call each.
-int tgetent(char *termtype)
+// THE ENTRY BUFFER IS AT FILE SCOPE, not in initterm().  tgetnum/tgetflag/tgetstr read
+// the pointer tgetent() retained, so it must outlive the call; and 1024 chars is 171
+// words of a 4096-word stack, which is what the stubbed port deleted these buffers to
+// avoid.  tcarea is tgetstr()'s decoding arena -- the sixteen capabilities below come
+// to well under half of it, where lib/libcurses/cr_tty.c sizes its _tspace 1024.
+//
+// 1024 IS SPELLED OUT, not taken from a macro: TBUFSIZ is private to
+// lib/libtermcap/termcap.c and <term.h> gives the number in prose only.  It cannot move
+// to the header either -- b6cpp rejects a redefinition whose replacement text is not
+// character-identical, and termcap.c's own #define is spaced differently (CLAUDE.md).
+// lib/libcurses/cr_tty.c writes its genbuf[1024] for the same reason.
+static char termbuf[1024];
+static char tcarea[512];
+static char *tcap = tcarea;
+
+// tputs() takes an output FUNCTION, and putchar() here is the <stdio.h> macro that this
+// port went out of its way to keep: `#undef putchar' would turn the two hundred calls in
+// this file into an out-of-line call each.  So the macro is wrapped once, here, and
+// tput() is the guard every call site used to get from the stub (which was handed only
+// capabilities that existed).  affcnt is 1 throughout: nothing here writes a capability
+// whose padding scales with the number of lines affected, and this tputs() does not pad
+// anyway (lib/libtermcap/README.md -- the Consul-254 cannot be overrun).
+static int putch(int c)
 {
-    return 1;
+    return putchar(c);
 }
 
-int tgetnum(char *name)
+static void tput(char *s)
 {
-    if (name[0] == 'l' && name[1] == 'i')
-        return 25;
-    if (name[0] == 'c' && name[1] == 'o')
-        return 80;
-    return -1;
+    if (s != NULL && *s != '\0')
+        tputs(s, 1, putch);
 }
 
-int tgetflag(char *name)
-{
-    if (name[0] == 'a' && name[1] == 'm')
-        return 1;
-    return 0;
-}
+// The six keys that are not one byte.  The codes are above 0377 so that nothing collides
+// with a keystroke: readch() answers an unsigned char, and a Cyrillic byte is a value in
+// 128..255 (see the note there).  Everything that carries a command character is an int
+// for this reason -- command()'s comchar, number()'s argument, lastcmd.
+#define K_UP   0400
+#define K_DOWN 0401
+#define K_PGUP 0402
+#define K_PGDN 0403
+#define K_HOME 0404
+#define K_END  0405
 
-char *tgetstr(char *name)
-{
-    // erase to end of line
-    if (name[0] == 'c' && name[1] == 'e')
-        return "\33[K";
+// THE TABLE IS THE DATABASE PLUS A BUILT-IN FALLBACK, and the fallback is not
+// belt-and-braces.  more(1) never emits `ks', so a terminal stays in NORMAL cursor mode
+// and an xterm sends \E[A, \E[H, \E[F -- while the xterm entry in /etc/termcap lists the
+// APPLICATION-mode \EOA, \EOH, \EOF that `ks' would have switched it to.  Sending ks was
+// the alternative and was rejected: there is no way to guarantee the matching `ke' (a
+// signal this program does not catch leaves the keypad switched), where an extra table
+// row costs two words.  The vt100 entry, separately, has no kP, kN, kh or @7 at all.
+//
+// First match wins, so a capability that duplicates a fallback is stored once.
+#define NKEYS 24
+static struct {
+    char *seq;
+    int code;
+} keytab[NKEYS];
+static int nkeys;
 
-    // Clear screen
-    if (name[0] == 'c' && name[1] == 'l')
-        return "\33[2J";
-
-    // Reverse
-    if (name[0] == 's' && name[1] == 'o')
-        return "\33[7m";
-
-    // End reverse
-    if (name[0] == 's' && name[1] == 'e')
-        return "\33[m";
-
-    // Home
-    if (name[0] == 'h' && name[1] == 'o')
-        return "\33[H";
-
-    // Clear to end of screen
-    if (name[0] == 'c' && name[1] == 'd')
-        return "\33[J";
-    return 0;
-}
-
-void tputs(char *string)
-{
-    fputs(string, stdout);
-}
+static void addkey(char *seq, int code);
+static void backto(FILE *f, int line);
 
 // Come here if a quit signal is received
 void onquit(int sig)
@@ -571,7 +579,7 @@ void screen(FILE *f, int num_lines)
             num_lines--;
         }
         if (pstate) {
-            tputs(ULexit);
+            tput(ULexit);
             pstate = 0;
         }
         fflush(stdout);
@@ -630,7 +638,7 @@ void prompt(char *filename)
     if (!hard) {
         promptlen = 8;
         if (Senter && Sexit) {
-            tputs(Senter);
+            tput(Senter);
             promptlen += (2 * soglitch);
         }
         if (clreol)
@@ -645,7 +653,7 @@ void prompt(char *filename)
             promptlen += pr("[Press space to continue, 'q' to quit.]");
         }
         if (Senter && Sexit)
-            tputs(Sexit);
+            tput(Sexit);
         if (clreol)
             clreos();
         fflush(stdout);
@@ -725,7 +733,7 @@ int nextline(FILE *f, int *length)
             if (hardtabs && column < promptlen && !hard) {
                 if (eraseln && !dumb) {
                     column = 1 + (column | 7);
-                    tputs(eraseln);
+                    tput(eraseln);
                     promptlen = 0;
                 } else {
                     for (--i; column & 7 && i < LINSIZ - 1; column++) {
@@ -782,7 +790,7 @@ void erase(int col)
         if (col == 0)
             putchar('\r');
         if (!dumb && eraseln)
-            tputs(eraseln);
+            tput(eraseln);
         else
             for (col = promptlen - col; col > 0; col--)
                 putchar(' ');
@@ -801,12 +809,12 @@ void kill_line(void)
 // force clear to end of line
 void cleareol(void)
 {
-    tputs(eraseln);
+    tput(eraseln);
 }
 
 void clreos(void)
 {
-    tputs(EodClr);
+    tput(EodClr);
 }
 
 //  Print string and return number of characters
@@ -846,13 +854,13 @@ void prbuf(char *s, int n)
                 if (c == ' ' && state == 0 && ulglitch && wouldul(s, n - 1))
                     state = 1;
                 else
-                    tputs(state ? ULenter : ULexit);
+                    tput(state ? ULenter : ULexit);
             }
             if (c != ' ' || pstate == 0 || state != 0 || ulglitch == 0)
                 putchar(c);
             if (state && *chUL) {
                 pr(chBS);
-                tputs(chUL);
+                tput(chUL);
             }
             pstate = state;
         }
@@ -862,7 +870,7 @@ void prbuf(char *s, int n)
 void doclear(void)
 {
     if (Clear && !hard) {
-        tputs(Clear);
+        tput(Clear);
 
         // Put out carriage return so that system doesn't
         // get confused by escape sequences when expanding tabs
@@ -874,7 +882,7 @@ void doclear(void)
 // Go to home position
 void home(void)
 {
-    tputs(Home);
+    tput(Home);
 }
 
 static int lastcmd, lastarg, lastp;
@@ -906,7 +914,11 @@ int command(char *filename, FILE *f)
     int c; // NOT a char: it receives Getc(), and EOF is -1
     char colonch;
     int done;
-    char comchar, cmdbuf[80];
+    // comchar IS AN int: a command may be one of the six keys, whose codes are above
+    // 0377 and do not fit a char.  lastcmd and lastarg already were, so `.' repeats a
+    // key with no further change.
+    int comchar;
+    char cmdbuf[80];
 
 #define ret(val)  \
     retval = val; \
@@ -971,11 +983,7 @@ int command(char *filename, FILE *f)
             initline = Currline - dlines * (nlines + 1);
             if (!noscroll)
                 --initline;
-            if (initline < 0)
-                initline = 0;
-            Fseek(f, 0L);
-            Currline = 0; // skiplns() will make Currline correct
-            skiplns(initline, f);
+            backto(f, initline);
             if (!noscroll) {
                 ret(dlines + 1);
             } else {
@@ -1035,6 +1043,53 @@ int command(char *filename, FILE *f)
             else
                 nlines = 1;
             ret(nlines);
+
+        // The keypad.  Each of the six is an existing command less the part of it that
+        // does not belong on a key: PageDown is ` ' without `z''s side effect of making
+        // the count the new screen size, Down is <return> without the same, PageUp is
+        // `b' without the `...back N pages' banner it prints because a scrolling
+        // terminal has no other way to show that the file moved backwards.
+        case K_DOWN:
+            if (nlines == 0)
+                nlines = 1;
+            ret(nlines);
+        case K_PGDN:
+            if (nlines == 0)
+                nlines = dlines;
+            ret(nlines);
+
+        // The four that move backwards.  All of them re-seek and re-skip, so all of them
+        // want a file: on a pipe there is nothing to seek, which is `b''s own rule.
+        case K_UP:
+        case K_PGUP:
+        case K_HOME:
+        case K_END:
+            if (no_intty) {
+                write(2, &bell, 1);
+                return (-1);
+            }
+            if (nlines == 0)
+                nlines++;
+            kill_line();
+            if (comchar == K_UP)
+                backto(f, Currline - dlines - nlines);
+            else if (comchar == K_PGUP)
+                backto(f, Currline - dlines * (nlines + 1));
+            else if (comchar == K_HOME)
+                backto(f, 0);
+            else {
+                // TWO PASSES OVER THE FILE, and there is no cheaper way: nothing here
+                // indexes lines, and file_size is bytes.  So count to EOF, then rewind
+                // and skip.  It is the one command whose cost grows with the file.
+                int total = 0;
+
+                backto(f, 0);
+                while ((c = Getc(f)) != EOF)
+                    if (c == '\n')
+                        total++;
+                backto(f, total - dlines);
+            }
+            ret(dlines);
         case '\f':
             if (!no_intty) {
                 doclear();
@@ -1101,9 +1156,9 @@ int command(char *filename, FILE *f)
             if (dum_opt) {
                 kill_line();
                 if (Senter && Sexit) {
-                    tputs(Senter);
+                    tput(Senter);
                     promptlen = pr("[Press 'h' for instructions.]") + (2 * soglitch);
-                    tputs(Sexit);
+                    tput(Sexit);
                 } else
                     promptlen = pr("[Press 'h' for instructions.]");
                 fflush(stdout);
@@ -1175,13 +1230,17 @@ int colon(char *filename, int cmd, int nlines)
 
 // Read a decimal number from the terminal. Set cmd to the non-digit which
 // terminates the number.
-int number(char *cmd)
+//
+// readkey() AND NOT readch(), and *cmd is an int for it: what terminates the number may
+// be one of the six keys, whose codes are above 0377.  Neither the digit arm nor the
+// kill arm can be reached by one.
+int number(int *cmd)
 {
     int i;
 
     i = 0; // upstream also seeds ch here, and the loop overwrites it at once
     for (;;) {
-        ch = readch();
+        ch = readkey();
         if (ch >= '0' && ch <= '9')
             i = i * 10 + ch - '0';
         else if (ch == otty.sg_kill)
@@ -1367,6 +1426,21 @@ void skiplns(int n, FILE *f)
     }
 }
 
+// Position the file at the given line, counting from zero.
+//
+// The only way backwards there is: rewind and count newlines again, since nothing here
+// remembers where a line began.  Factored out of `b', whose four lines this was, for the
+// four keys that move backwards -- all of them wanting exactly this and the clamp.
+// The caller has already checked no_intty; a pipe cannot be rewound.
+static void backto(FILE *f, int line)
+{
+    if (line < 0)
+        line = 0;
+    Fseek(f, 0L);
+    Currline = 0; // skiplns() will make Currline correct
+    skiplns(line, f);
+}
+
 // Skip nskip files in the file list (from the command line). Nskip may be
 // negative.
 void skipf(int nskip)
@@ -1397,13 +1471,14 @@ void skipf(int nskip)
 
 // ----------------------------- Terminal I/O -------------------------------
 
-// $LINES or $COLUMNS, if it names a sane number; otherwise the default.
+// $LINES or $COLUMNS, if it names a sane number; otherwise the default -- which is now
+// the database's li and co, this being the OVERRIDE and no longer the only channel.
 //
 // THIS IS WHERE TIOCGWINSZ WAS, and it is cmd/novi/terminal.c's fromenv() -- there is
 // no window-size ioctl on this kernel and no SIGWINCH to be told of a change, so the
-// size is read once and stands.  The stubs above answer li=25 and co=80, so without
-// this a terminal is always taken to be that; lib/libcurses/cr_tty.c deleted the same
-// path and settles for the same 24x80.
+// size is read once and stands.  A terminal resized under a running more(1) is a
+// terminal more(1) still believes to be its old size, and there is nothing to be done
+// about it here; lib/libcurses/cr_tty.c settles for the same.
 static int fromenv(const char *name, int lo, int hi, int dflt)
 {
     char *s = getenv(name);
@@ -1429,12 +1504,21 @@ void initterm(void)
     // and TIOCGWINSZ, replaced above.  <sys/ttyio.h> lists what ttioccomm() answers.
     no_tty = ioctl(fileno(stdout), TIOCGETP, (char *)&otty);
     if (no_tty == 0) {
-        if ((term = getenv("TERM")) == 0 || tgetent(term) <= 0) {
+        // NO $TERM MEANS xterm, and so does a $TERM the database does not have.  The
+        // /etc/termcap on this image is BSD's termcap.small: five entries, one of which
+        // (xterm-color) dangles on a tc= that is not there, so an unknown name is the
+        // ordinary case rather than the exceptional one and falling straight to `dumb'
+        // would cost the erase-line, the underlining and the six keys below for no
+        // reason.  Only when xterm itself cannot be read -- no /etc/termcap at all --
+        // is the terminal really unknown.
+        if ((term = getenv("TERM")) == NULL)
+            term = "xterm";
+        if (tgetent(termbuf, term) != 1 && tgetent(termbuf, "xterm") != 1) {
             dumb++;
             ul_opt = 0;
         } else {
-            Lpp  = fromenv("LINES", 2, 200, 24);
-            Mcol = fromenv("COLUMNS", 20, 200, 80);
+            Lpp  = fromenv("LINES", 2, 200, tgetnum("li"));
+            Mcol = fromenv("COLUMNS", 20, 200, tgetnum("co"));
             if ((Lpp <= 0) || tgetflag("hc")) {
                 hard++; // Hard copy terminal
                 Lpp = 24;
@@ -1446,10 +1530,10 @@ void initterm(void)
                 noscroll++;
             Wrap    = tgetflag("am");
             bad_so  = tgetflag("xs");
-            eraseln = tgetstr("ce");
-            Clear   = tgetstr("cl");
-            Senter  = tgetstr("so");
-            Sexit   = tgetstr("se");
+            eraseln = tgetstr("ce", &tcap);
+            Clear   = tgetstr("cl", &tcap);
+            Senter  = tgetstr("so", &tcap);
+            Sexit   = tgetstr("se", &tcap);
             if ((soglitch = tgetnum("sg")) < 0)
                 soglitch = 0;
 
@@ -1461,9 +1545,11 @@ void initterm(void)
 
             if (tgetflag("ul") || tgetflag("os"))
                 ul_opt = 0;
-            if ((chUL = tgetstr("uc")) == NULL)
+            if ((chUL = tgetstr("uc", &tcap)) == NULL)
                 chUL = "";
-            if (((ULenter = tgetstr("us")) == NULL || (ULexit = tgetstr("ue")) == NULL) && !*chUL) {
+            if (((ULenter = tgetstr("us", &tcap)) == NULL ||
+                 (ULexit = tgetstr("ue", &tcap)) == NULL) &&
+                !*chUL) {
                 if ((ULenter = Senter) == NULL || (ULexit = Sexit) == NULL) {
                     ULenter = "";
                     ULexit  = "";
@@ -1474,13 +1560,36 @@ void initterm(void)
                     ulglitch = 0;
             }
 
-            // The pad character and the cursor-motion fallback for Home are gone
-            // with tputs()'s padding and tgoto(): the stub answers no "pc" and no
-            // "cm", and it always answers a non-empty "ho", so both were dead.
-            Home   = tgetstr("ho");
-            EodClr = tgetstr("cd");
-            if ((chBS = tgetstr("bc")) == NULL)
+            // The pad character is gone with tputs()'s padding: this library does not
+            // pad at all and defines no PC, so `pc' had nothing to be assigned to.  The
+            // cursor-motion fallback for Home is gone with it -- upstream reached for
+            // tgoto(cm, 0, 0) when a terminal had no "ho", and every entry here has one.
+            Home   = tgetstr("ho", &tcap);
+            EodClr = tgetstr("cd", &tcap);
+            if ((chBS = tgetstr("bc", &tcap)) == NULL)
                 chBS = "\b";
+
+            // The keypad.  Six capabilities, then the built-in forms -- see the table.
+            addkey(tgetstr("ku", &tcap), K_UP);
+            addkey(tgetstr("kd", &tcap), K_DOWN);
+            addkey(tgetstr("kP", &tcap), K_PGUP);
+            addkey(tgetstr("kN", &tcap), K_PGDN);
+            addkey(tgetstr("kh", &tcap), K_HOME);
+            addkey(tgetstr("@7", &tcap), K_END);
+            addkey("\33[A", K_UP);
+            addkey("\33OA", K_UP);
+            addkey("\33[B", K_DOWN);
+            addkey("\33OB", K_DOWN);
+            addkey("\33[5~", K_PGUP);
+            addkey("\33[I", K_PGUP);
+            addkey("\33[6~", K_PGDN);
+            addkey("\33[G", K_PGDN);
+            addkey("\33[1~", K_HOME);
+            addkey("\33[H", K_HOME);
+            addkey("\33OH", K_HOME);
+            addkey("\33[4~", K_END);
+            addkey("\33[F", K_END);
+            addkey("\33OF", K_END);
         }
         if ((shell = getenv("SHELL")) == NULL)
             shell = "/bin/sh";
@@ -1518,6 +1627,63 @@ int readch(void)
             c = otty.sg_kill;
     }
     return (c);
+}
+
+// One row of the key table.  A capability that is absent, empty, or does not begin with
+// ESC is dropped: the matcher below is only ever entered on an ESC, and a key that sends
+// a bare control character (kb=^H, kD=\177) is one this program already has a meaning for.
+// A sequence already in the table is dropped too, so a capability that agrees with a
+// built-in form is stored once and the capability -- being first -- is the one kept.
+static void addkey(char *seq, int code)
+{
+    int i;
+
+    if (seq == NULL || seq[0] != ESC || seq[1] == '\0' || nkeys >= NKEYS)
+        return;
+    for (i = 0; i < nkeys; i++)
+        if (strcmp(keytab[i].seq, seq) == 0)
+            return;
+    keytab[nkeys].seq  = seq;
+    keytab[nkeys].code = code;
+    nkeys++;
+}
+
+// One keystroke, or one of the six keys that are a sequence.
+//
+// Everything but ESC is readch()'s answer unchanged.  On ESC the bytes are collected
+// until the buffer is some entry's whole sequence (that key), or is no entry's prefix
+// (unknown -- ring the bell and start over on a fresh keystroke).
+//
+// A BARE ESC BLOCKS UNTIL THE NEXT KEY IS TYPED, and cannot do otherwise: distinguishing
+// the key from the start of a sequence needs a timeout, and there is no select(2) here
+// and no VMIN/VTIME under sgtty.  more(1) has no ESC command, so what it costs is a
+// wasted keystroke; the manual page says so.  readch() itself is unchanged, ttyin()
+// reading literal text at the / and ! prompts and needing to see raw bytes.
+int readkey(void)
+{
+    char buf[8]; // longer than any sequence in the table, which is at most four
+    int c, n, i, len, cands;
+
+    for (;;) {
+        if ((c = readch()) != ESC)
+            return c;
+        buf[0] = ESC;
+        for (n = 1; n < 7;) {
+            buf[n++] = readch();
+            buf[n]   = '\0';
+            cands    = 0;
+            for (i = 0; i < nkeys; i++) {
+                len = strlen(keytab[i].seq);
+                if (len == n && strcmp(keytab[i].seq, buf) == 0)
+                    return keytab[i].code;
+                if (len > n && strncmp(keytab[i].seq, buf, n) == 0)
+                    cands++;
+            }
+            if (cands == 0)
+                break;
+        }
+        write(2, &bell, 1);
+    }
 }
 
 static char BS    = '\b';
@@ -1684,9 +1850,9 @@ void error(char *mess)
         kill_line();
     promptlen += strlen(mess);
     if (Senter && Sexit) {
-        tputs(Senter);
+        tput(Senter);
         pr(mess);
-        tputs(Sexit);
+        tput(Sexit);
     } else
         pr(mess);
     fflush(stdout);
@@ -1721,7 +1887,7 @@ void set_tty(void)
 void reset_tty(void)
 {
     if (pstate) {
-        tputs(ULexit);
+        tput(ULexit);
         fflush(stdout);
         pstate = 0;
     }

@@ -14,8 +14,9 @@
 //
 // THERE IS NO TIOCGWINSZ.  The console is a Consul-254 typewriter and the kernel has
 // no window-size ioctl for anything; 24x80 is the answer libcurses settles for too,
-// and $LINES/$COLUMNS are the only other channel -- reading /etc/termcap would mean a
-// LIBS keyword in b6_prog() that this program otherwise has no use for.
+// and $LINES/$COLUMNS are the only other channel.  /etc/termcap would give li and co,
+// as it now does for cmd/more -- b6_prog() grew the LIBS keyword there -- and this
+// program has not moved to it; see ../README.md for what that would take.
 //
 // OUTPUT IS BUFFERED, and that is not a nicety.  Upstream issues one write(2) per
 // string, and refresh() emits a cursor address AND a line per row: about fifty

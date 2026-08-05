@@ -31,7 +31,10 @@ b6ld crt0.o prog.o -ltermcap -lc -lruntime -o prog
 `b6ld` scans each archive exactly once, in order. termcap calls `getenv`, `open`, `read`,
 `close`, `write`, `strlen`, `strcpy` and `strncpy` in libc, and libc calls nothing back — the
 same one-scan reasoning [`../README.md`](../README.md) gives for `-lm`. In the CMake build,
-`b6_libtest(<name> libtermcap)` does it.
+`b6_libtest(<name> libtermcap)` does it for a libc test program and
+`b6_prog(<name> ... LIBS libtermcap)` for a program bound for the image —
+[`cmd/more`](../../cmd/more/README.md), the pager, being the first and so far only caller of
+the second.
 
 The whole library is **1,075 words** — 761 for `termcap.o`, 206 for `tgoto.o`, 108 for
 `tputs.o` — and one function per file means `b6ranlib`'s index lets a program that only calls

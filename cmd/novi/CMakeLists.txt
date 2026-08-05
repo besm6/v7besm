@@ -16,9 +16,10 @@
 # NOT SETUID: novi reads and writes files as whoever ran it, and its scratch files are its
 # own.  ../README.md SS8.
 #
-# NO LIBS BEYOND libc.  novi emits hard-coded ANSI/VT100 and reads no terminal database, so
-# b6_prog()'s `-lc -lruntime' wiring is right as it stands and the LIBS keyword
-# lib/libcurses/README.md predicts the first cmd/ program would need is still unneeded.
+# NO LIBS BEYOND libc, and that is now a choice rather than a constraint.  novi emits
+# hard-coded ANSI/VT100 and reads no terminal database; b6_prog() HAS the `LIBS' keyword
+# lib/libcurses/README.md predicted, and cmd/more is using it to link -ltermcap.  What
+# stands between novi and the same is novi's own terminal.c, not the build (../README.md).
 
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is
 # the whole system tree at once, as it is in lib/, kernel/, cmd/sed/ and cmd/sh/.

@@ -90,11 +90,15 @@ there for the fingers of whoever learned the other name and is **not** the pager
 found on later systems -- it takes the options above, pages forward a screenful at a time, and
 backs up with **b**.
 
-*Note:* *more* reads no terminal database. It does not consult termcap(5), does not look at
-`$TERM` beyond noticing whether it is set at all, and writes ANSI/VT100 escape sequences; a
-terminal that does not understand those cannot use it. The screen is taken to be 24 lines of
-80 columns unless `$LINES` and `$COLUMNS` say otherwise, which is what novi(1) does and for the
-same reason. The window is two lines less than that, so 22 by default.
+*Note:* *more* reads the terminal database. It looks `$TERM` up in `/etc/termcap` and drives
+whatever that entry describes; `$TERM` unset means `xterm`, and so does a `$TERM` the database
+does not have. Only when the database itself cannot be read is the terminal treated as dumb,
+and then *more* pads with spaces instead of erasing and does not underline.
+
+The screen size comes from the entry's `li` and `co`, which `$LINES` and `$COLUMNS` override.
+There is no window-size ioctl on this system and no signal for a change, so the size is read
+once at startup: a terminal resized under a running *more* is a terminal *more* still believes
+to be its old size. The window is two lines less than the screen, so 22 by default.
 
 *More* looks in the environment variable *MORE* to pre-set any flags desired. For example, if
 you prefer to view files using the *-c* mode of operation, the *sh* command sequence
@@ -187,6 +191,24 @@ h
 .
 : (dot) repeat the previous command.
 
+*i*<down> or *i*<up>
+: move forward or back *i* lines. Unlike <return>, the count does not become the new window
+  size.
+
+*i*<pagedown> or *i*<pageup>
+: move forward or back *i* screenfuls. Unlike **b**, <pageup> prints no `...back` banner.
+
+<home> or <end>
+: go to the first or the last screenful of the file. <end> reads the whole file to count its
+  lines and then reads it again to reach them, so it is the one command whose cost grows with
+  the file; having displayed the last screenful it has reached end of file, and *more* goes on
+  to the next file or exits, as it would have on any other command that reached the end.
+
+  *Note:* the six keys above are read from the terminal database -- the `ku`, `kd`, `kP`, `kN`,
+  `kh` and `@7` capabilities -- and the usual ANSI forms are recognised whether or not the entry
+  lists them, since *more* does not put the keypad into application mode. The four that move
+  backwards need a file: on a pipe the bell is rung, as it is for **b**.
+
 The commands take effect immediately, i.e., it is not necessary to type a carriage return. Up
 to the time when the command character itself is given, the user may hit the line kill
 character to cancel the numerical argument being formed. In addition, the user may hit the
@@ -220,16 +242,21 @@ and **-u** options are still worth what they were -- **-u** in particular unders
 
 ## FILES
 
-None. The help text printed by **h** is compiled into the program, so there is no
-`more.help` beside it, and no terminal database is read, so there is no `/etc/termcap` either.
+`/etc/termcap` -- the terminal database. The help text printed by **h** is compiled into the
+program, so there is no `more.help` beside it.
 
 ## SEE ALSO
 
-cat(1), ed(1), novi(1), pr(1), sh(1), stty(1)
+cat(1), ed(1), novi(1), pr(1), sh(1), stty(1), termcap(3)
 
 ## BUGS
 
 Skipping backwards is too slow on large files.
+
+The escape key is swallowed. *More* has no escape command, but a keypad key sends an escape
+followed by more characters, and telling the two apart needs a timeout that this system has no
+way to ask for -- there is no select(2) and no VMIN/VTIME under sgtty(3). So an escape typed on
+its own waits for the next keystroke and then consumes it, ringing the bell.
 
 *More* no longer refuses to page a binary file. The check it inherited read the second byte of
 the file out of the standard-I/O buffer and compared the pair against PDP-11 a.out magic

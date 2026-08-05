@@ -30,18 +30,18 @@ in", gives undefined references from an archive that has already been scanned.
 
 `b6cc` needs no help: `cmd/cc/cc.c` places user `-L`/`-l` flags after the objects and before
 its implicit `-lc -lruntime`, so `b6cc prog.c -lcurses -ltermcap -o prog` is already right.
-`b6_prog()` in `scripts/BesmCross.cmake` is a different matter — it is hard-wired to
-`-lc -lruntime` and has no hook for a third archive, so the first `cmd/` program that wants
-curses will need a `LIBS` keyword there and `B6_LIBCURSES_DIR`/`B6_LIBTERMCAP_DIR` promoted
-beside `B6_LIBC_DIR`. Nothing needs it yet; `lib/test/CMakeLists.txt`'s `b6_libtest()` grew
-the same capability for `-lm` and carries these two as well.
+`b6_prog()` in `scripts/BesmCross.cmake` was a different matter — hard-wired to `-lc -lruntime`
+with no hook for a third archive — and **the `LIBS` keyword predicted here now exists**, with
+`B6_LIBM_DIR`/`B6_LIBCURSES_DIR`/`B6_LIBTERMCAP_DIR` promoted beside `B6_LIBC_DIR`. It emits
+its own order rather than the caller's, for the reason above: a caller has no business knowing
+that `-lcurses` must precede `-ltermcap`. `lib/test/CMakeLists.txt`'s `b6_libtest()` grew the
+same capability first, for `-lm`, and is what it was modelled on.
 
-**Two programs have now wanted a terminal database and both got by without one.** `cmd/novi`
-writes hard-coded ANSI, and `cmd/more` — which arrived with the *whole* termcap call structure
-already written, `tgetent`/`tgetnum`/`tgetflag`/`tgetstr`/`tputs` and all — kept the ANSI stubs
-its upstream had substituted rather than grow the keyword. So the prediction stands and the
-work does not: a terminal that is not ANSI can use neither program, `/etc/termcap` is on the
-image and is still read by nothing, and the third that asks will be the one to add `LIBS`.
+**`cmd/more` is its first user, and wanted termcap and not curses.** It had arrived with the
+*whole* termcap call structure already written — `tgetent`/`tgetnum`/`tgetflag`/`tgetstr`/`tputs`
+and all — under RetroBSD's ANSI stubs, so adding the keyword was most of the work and replacing
+the stubs was the rest. `/etc/termcap` is therefore read by something at last. `cmd/novi` is
+the program still writing hard-coded ANSI, and no longer has a blocker to point at.
 
 ## This is 4.3BSD curses, and `include/curses.h` was replaced to say so
 

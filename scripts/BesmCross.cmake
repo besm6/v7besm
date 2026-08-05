@@ -77,6 +77,18 @@ if(NOT DEFINED B6_LIBC_DIR)
     set(B6_LIBC_DIR ${CMAKE_BINARY_DIR}/lib/libc)
 endif()
 
+# The three optional archives b6_prog()'s LIBS keyword can name, beside the libc every program
+# links.  Same derivation as B6_LIBC_DIR and overridable for the same reason.
+if(NOT DEFINED B6_LIBM_DIR)
+    set(B6_LIBM_DIR ${CMAKE_BINARY_DIR}/lib/libm)
+endif()
+if(NOT DEFINED B6_LIBCURSES_DIR)
+    set(B6_LIBCURSES_DIR ${CMAKE_BINARY_DIR}/lib/libcurses)
+endif()
+if(NOT DEFINED B6_LIBTERMCAP_DIR)
+    set(B6_LIBTERMCAP_DIR ${CMAKE_BINARY_DIR}/lib/libtermcap)
+endif()
+
 # ---------------------------------------------------------------------------------------
 # Compile one source to an object.  Dispatches by extension:
 #   .s        -> b6as, no flags (assembly that #includes nothing)
@@ -135,7 +147,8 @@ endfunction()
 # ---------------------------------------------------------------------------------------
 # Build one NATIVE BESM-6 user program and stage it into the root filesystem tree.
 #
-#   b6_prog(<name> DEST <path under ${B6_ROOTFS}> SOURCES <src>... [CFLAGS <flag>...])
+#   b6_prog(<name> DEST <path under ${B6_ROOTFS}> SOURCES <src>...
+#           [CFLAGS <flag>...] [LIBS libm|libcurses|libtermcap ...])
 #
 # This is the third kind of thing this repo builds, beside the host tools of cmd/ and the
 # freestanding artifacts of kernel/: a program compiled by the b6* toolchain, linked
@@ -146,14 +159,18 @@ endfunction()
 # `rootfs' target depend on it if that target exists, and registers one ctest,
 # rootfs_<name>_size (label `rootfs'), asserting the program fits the user address space.
 #
-# THE LINK ORDER IS A CONTRACT, not a style: crt0.o, then the objects, then -lc -lruntime.
-# b6ld scans each archive exactly once, in order; libc calls the b$* helpers and no helper
-# calls back into libc (lib/README.md).
+# THE LINK ORDER IS A CONTRACT, not a style: crt0.o, then the objects, then whatever LIBS
+# names, then -lc -lruntime.  b6ld scans each archive exactly once, in order; libm, libcurses
+# and libtermcap call into libc, libc calls the b$* helpers, and nothing calls back
+# (lib/README.md).  Hence the order LIBS is emitted in is this function's, not the caller's:
+# -lm, then -lcurses, then -ltermcap, because curses is what calls tgetent/tgetstr/tgoto/tputs
+# and termcap calls nothing back.  A program that names libcurses must name libtermcap too.
+# lib/test/CMakeLists.txt's b6_libtest() does the same thing for the libc test programs.
 #
 # The caller must have set KINC/KHDRS, which b6_obj reads from its scope.
 # ---------------------------------------------------------------------------------------
 function(b6_prog name)
-    cmake_parse_arguments(P "PURE" "DEST" "SOURCES;CFLAGS" ${ARGN})
+    cmake_parse_arguments(P "PURE" "DEST" "SOURCES;CFLAGS;LIBS" ${ARGN})
     if(NOT P_DEST OR NOT P_SOURCES)
         message(FATAL_ERROR "b6_prog(${name}): DEST and SOURCES are both required")
     endif()
@@ -183,22 +200,44 @@ function(b6_prog name)
         list(APPEND objs ${obj})
     endforeach()
 
+    # LIBS, in the contract's order and not the caller's.  An unknown name is an error rather
+    # than a silently dropped -l: b6ld would only report the undefined symbols it caused.
+    foreach(_l ${P_LIBS})
+        if(NOT _l MATCHES "^lib(m|curses|termcap)$")
+            message(FATAL_ERROR "b6_prog(${name}): LIBS knows libm, libcurses and libtermcap, not '${_l}'")
+        endif()
+    endforeach()
+    set(_libs "")
+    set(_libdeps "")
+    set(_libtargets "")
+    set(B6_LIBM_A        ${B6_LIBM_DIR}/libm.a)
+    set(B6_LIBCURSES_A   ${B6_LIBCURSES_DIR}/libcurses.a)
+    set(B6_LIBTERMCAP_A  ${B6_LIBTERMCAP_DIR}/libtermcap.a)
+    foreach(_l m curses termcap)
+        if("lib${_l}" IN_LIST P_LIBS)
+            string(TOUPPER ${_l} _u)
+            list(APPEND _libs -L${B6_LIB${_u}_DIR} -l${_l})
+            list(APPEND _libdeps ${B6_LIB${_u}_A})
+            list(APPEND _libtargets lib${_l})
+        endif()
+    endforeach()
+
     set(out ${B6_ROOTFS}/${P_DEST})
     get_filename_component(outdir ${out} DIRECTORY)
     add_custom_command(OUTPUT ${out}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${outdir}
-        COMMAND ${B6LD} ${_pure} ${B6_LIBC_DIR}/crt0.o ${objs} -o ${out}
+        COMMAND ${B6LD} ${_pure} ${B6_LIBC_DIR}/crt0.o ${objs} ${_libs} -o ${out}
                 -L${B6_LIBC_DIR} -L${B6LIBDIR} -lc -lruntime
         COMMAND sh -c "${B6NM} -n ${out} > ${name}.nm"
         COMMAND sh -c "${B6DISASM} -c ${out} > ${name}.dis"
-        DEPENDS ${objs} ${B6_LIBC_DIR}/crt0.o ${B6_LIBC_DIR}/libc.a
+        DEPENDS ${objs} ${B6_LIBC_DIR}/crt0.o ${B6_LIBC_DIR}/libc.a ${_libdeps}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         COMMENT "b6ld ${P_DEST}" VERBATIM)
 
     add_custom_target(b6prog_${name} ALL DEPENDS ${out})
     # libc lives in another directory scope, so the file dependency above is not enough to
-    # order the two -- as lib/test/CMakeLists.txt does for the same reason.
-    add_dependencies(b6prog_${name} libc)
+    # order the two -- as lib/test/CMakeLists.txt does for the same reason.  Same for LIBS.
+    add_dependencies(b6prog_${name} libc ${_libtargets})
     if(TARGET rootfs)
         add_dependencies(rootfs b6prog_${name})
     endif()

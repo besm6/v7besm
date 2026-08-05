@@ -514,9 +514,11 @@ mode 0755
 file /bin/more          # cmd/more -- Berkeley's pager (Eric Shienbrood, UCB); task C27, and
                         # the second program here that is not a port of a v7 command: v7 had
                         # no pager at all.  Its help text is COMPILED IN, so there is no
-                        # /usr/lib/more.help beside it; it reads no terminal database, so
-                        # /etc/termcap is not consulted either and a terminal that is not
-                        # ANSI cannot use it.  Its search is for a LITERAL string --
+                        # /usr/lib/more.help beside it; it DOES read /etc/termcap, being
+                        # the first program on this image to link lib/libtermcap, and it
+                        # reads the arrow, page, Home and End keys out of the same entry.
+                        # $TERM unset means xterm, and so does a $TERM the database does
+                        # not have.  Its search is for a LITERAL string --
                         # re_comp/re_exec are not in this libc, and novi's search is literal
                         # for the same reason.  NOT setuid: it opens what its caller could.
 source ../../rootfs/bin/more

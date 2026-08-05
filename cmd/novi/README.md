@@ -174,10 +174,12 @@ and a `simh_boot` lock slot. **`novi`'s interactive half goes in with the re-ena
 `console` and `edit`, not before**, and task 35 is where that is recorded.
 
 **Two other things are left open, neither a task in [../TODO.md](../TODO.md).** `novi` writes
-hard-coded ANSI and has **no `termcap`**, so a terminal that is not ANSI cannot use it — the
-blocker is `b6_prog()`'s missing `LIBS` keyword, which
-[../../lib/libcurses/README.md](../../lib/libcurses/README.md) has predicted since the library
-landed. And **the search is literal**: `ed`'s regex engine is next door and is 700 lines of it;
+hard-coded ANSI and has **no `termcap`**, so a terminal that is not ANSI cannot use it — and
+**the blocker is gone**: `b6_prog()` has the `LIBS` keyword
+[../../lib/libcurses/README.md](../../lib/libcurses/README.md) predicted, and
+[`more`](../more/README.md) is using it. What is left is `novi`'s own work — `terminal.c` writes its
+escape sequences into a 1 KB buffer of its own and reads its keys with a hand-rolled matcher,
+both of which the library would replace. And **the search is literal**: `ed`'s regex engine is next door and is 700 lines of it;
 whether `novi` should carry a second copy or the two should share one is the question to settle
 before starting, not during.
 
