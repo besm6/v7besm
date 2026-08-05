@@ -1,0 +1,244 @@
+<!-- Copyright (c) 1980 Regents of the University of California. -->
+<!-- All rights reserved.  The Berkeley software License Agreement -->
+<!-- specifies the terms and conditions for redistribution. -->
+<!--  -->
+<!-- @(#)more.1      6.4.1 (2.11BSD) 1996/10/22 -->
+
+# MORE(1) [October 22, 1996]
+
+## NAME
+
+more, less - file perusal filter for crt viewing
+
+## SYNOPSIS
+
+| **more** [ **-cdflpsu** ] [ **-**\&*n* ] [ **+**\&*linenumber* ] [ **+/**\&*string* ] [ name ... ]
+
+| **less** *more options*
+
+## DESCRIPTION
+
+*More* is a filter which allows examination of a continuous text one screenful at a time on a
+soft-copy terminal. It normally pauses after each screenful, printing --More-- at the bottom of
+the screen. If the user then types a carriage return, one more line is displayed. If the user
+hits a space, another screenful is displayed. Other possibilities are enumerated later.
+
+The command line options are:
+
+*-n*
+: An integer which is the size (in lines) of the window which *more* will use instead of the
+  default.
+
+**-c**
+: *More* will draw each page by beginning at the top of the screen and erasing each line just
+  before it draws on it. This avoids scrolling the screen, making it easier to read while *more*
+  is writing. This option will be ignored if the terminal does not have the ability to clear to
+  the end of a line.
+
+**-d**
+: *More* will prompt the user with the message "Press space to continue, 'q' to quit." at the end
+  of each screenful, and will respond to subsequent illegal user input by printing "Press 'h' for
+  instructions." instead of ringing the bell. This is useful if *more* is being used as a filter
+  in some setting, such as a class, where many users may be unsophisticated.
+
+**-f**
+: This causes *more* to count logical, rather than screen lines. That is, long lines are not
+  folded. This option is recommended if *nroff* output is being piped through *ul,* since the
+  latter may generate escape sequences. These escape sequences contain characters which would
+  ordinarily occupy screen positions, but which do not print when they are sent to the terminal
+  as part of an escape sequence. Thus *more* may think that lines are longer than they actually
+  are, and fold lines erroneously.
+
+**-l**
+: Do not treat ^L (form feed) specially. If this option is not given, *more* will pause after any
+  line that contains a ^L, as if the end of a screenful had been reached. Also, if a file begins
+  with a form feed, the screen will be cleared before the file is printed.
+
+**-s**
+: Squeeze multiple blank lines from the output, producing only one blank line. Especially helpful
+  when viewing *nroff* output, this option maximizes the useful information present on the
+  screen.
+
+**-u**
+: Normally, *more* will handle underlining such as produced by *nroff* in a manner appropriate to
+  the particular terminal: if the terminal can perform underlining or has a stand-out mode,
+  *more* will output appropriate escape sequences to enable underlining or stand-out mode for
+  underlined information in the source file. The *-u* option suppresses this processing.
+
+**+**\&*linenumber*
+: Start up at *linenumber*.
+
+**-p**
+: Clear the screen before each screenful is printed (but only if a full screenful is being
+  printed), and print *k* - 1 rather than *k* - 2 lines in each screenful, where *k* is the
+  number of lines the terminal can display.
+
+  *Note:* upstream implements this option and documents it nowhere. What it documents instead
+  is a second name, *page,* which sets the same flag and is recognised by looking at the name
+  the program was invoked under. There is no *page* here: **-p** is the same thing said out
+  loud, and nothing in this *more* reads its own name -- which is also what makes **less**
+  below an honest link rather than a mode.
+
+**+**\&*linenumber*
+: Start up at *linenumber*.
+
+**+/**\&*string*
+: Start up two lines before the line containing *string*.
+
+**Less** is *more* under a second name: one program, one inode, two entries in `/bin`. It is
+there for the fingers of whoever learned the other name and is **not** the pager of that name
+found on later systems -- it takes the options above, pages forward a screenful at a time, and
+backs up with **b**.
+
+*Note:* *more* reads no terminal database. It does not consult termcap(5), does not look at
+`$TERM` beyond noticing whether it is set at all, and writes ANSI/VT100 escape sequences; a
+terminal that does not understand those cannot use it. The screen is taken to be 24 lines of
+80 columns unless `$LINES` and `$COLUMNS` say otherwise, which is what novi(1) does and for the
+same reason. The window is two lines less than that, so 22 by default.
+
+*More* looks in the environment variable *MORE* to pre-set any flags desired. For example, if
+you prefer to view files using the *-c* mode of operation, the *sh* command sequence
+*MORE='-c' ; export MORE* would cause all invocations of *more* to use this mode. Normally,
+the user will place the command sequence which sets up the *MORE* environment variable in the
+*.profile* file.
+
+If *more* is reading from a file, rather than a pipe, then a percentage is displayed along with
+the --More-- prompt. This gives the fraction of the file (in characters, not lines) that has
+been read so far.
+
+Other sequences which may be typed when *more* pauses, and their effects, are as follows (*i*
+is an optional integer argument, defaulting to 1) :
+
+*i*<space>
+: display *i* more lines, (or another screenful if no argument is given)
+
+^D
+: display 11 more lines (a `scroll`). If *i* is given, then the scroll size is set to *i*.
+
+d
+: same as ^D (control-D)
+
+*i*\&z
+: same as typing a space except that *i*, if present, becomes the new window size.
+
+*i*\&s
+: skip *i* lines and print a screenful of lines
+
+*i*\&f
+: skip *i* screenfuls and print a screenful of lines
+
+*i*\&b
+: skip back *i* screenfuls and print a screenful of lines
+
+*i*^B
+: same as b
+
+q or Q
+: Exit from *more.*
+
+=
+: Display the current line number.
+
+h
+: Help command; give a description of all the *more* commands.
+
+*i*/string
+: search for the *i*-th occurrence of *string.* If there are less than *i* occurrences of
+  *string*, and the input is a file (rather than a pipe), then the position in the file remains
+  unchanged. Otherwise, a screenful is displayed, starting two lines before the place where the
+  string was found. The user's erase and kill characters may be used to edit the string.
+  Erasing back past the first column cancels the search command.
+
+  *Note:* a literal string, not a regular expression. re_comp(3) and re_exec(3) are not in this
+  library, and the search of novi(1) is literal for the same reason. What this costs is the
+  metacharacters; what it buys is that the comparison is over bytes, so a string in Cyrillic
+  may be searched for, which a regular-expression engine indexing a 129-entry character-class
+  table could not have offered.
+
+*i*\&n
+: search for the *i*-th occurrence of the last string entered.
+
+'
+: (single quote) Go to the point from which the last search started. If no search has been
+  performed in the current file, this command goes back to the beginning of the file.
+
+!command
+: invoke a shell with *command*. The characters `%` and `!` in "command" are replaced with the
+  current file name and the previous shell command respectively. If there is no current file
+  name, `%` is not expanded. The sequences "\\%" and "\\!" are replaced by "%" and "!"
+  respectively.
+
+*i*:n
+: skip to the *i*-th next file given in the command line (skips to last file if n doesn't make
+  sense)
+
+*i*:p
+: skip to the *i*-th previous file given in the command line. If this command is given in the
+  middle of printing out a file, then *more* goes back to the beginning of the file. If *i*
+  doesn't make sense, *more* skips back to the first file. If *more* is not reading from a file,
+  the bell is rung and nothing else happens.
+
+:f
+: display the current file name and line number.
+
+:q or :Q
+: exit from *more* (same as q or Q).
+
+.
+: (dot) repeat the previous command.
+
+The commands take effect immediately, i.e., it is not necessary to type a carriage return. Up
+to the time when the command character itself is given, the user may hit the line kill
+character to cancel the numerical argument being formed. In addition, the user may hit the
+erase character to redisplay the --More--(xx%) message.
+
+At any time when output is being sent to the terminal, the user can hit the quit key (normally
+control-\\). *More* will stop sending output, and will display the usual --More-- prompt. The
+user may then enter one of the above commands in the normal manner. Unfortunately, some output
+is lost when this is done, due to the fact that any characters waiting in the terminal's output
+queue are flushed when the quit signal occurs.
+
+The terminal is set to *noecho* mode by this program so that the output can be continuous. What
+you type will thus not show on your terminal, except for the / and ! commands.
+
+If the standard output is not a teletype, then *more* acts just like *cat,* except that a
+header is printed before each file (if there is more than one).
+
+*Note:* when the standard **input** is not a terminal either -- in a pipeline, or with input
+redirected -- the header is printed even for a single file, and no option has any effect at
+all, since the whole of *more* in that case is the byte copy above. The **+**\&*linenumber* and
+**+/**\&*string* arguments are not reached either.
+
+A sample usage of *more* in previewing wide output would be
+
+pr -t doc.txt | more -s
+
+*Note:* upstream's example pipes *nroff* output through *ul.* Neither program exists here and
+neither is coming: the typesetting suite is refused in cmd/TODO.md. The **-f**, **-l**, **-s**
+and **-u** options are still worth what they were -- **-u** in particular understands the
+`_\b` overstrike convention, whoever writes it.
+
+## FILES
+
+None. The help text printed by **h** is compiled into the program, so there is no
+`more.help` beside it, and no terminal database is read, so there is no `/etc/termcap` either.
+
+## SEE ALSO
+
+cat(1), ed(1), novi(1), pr(1), sh(1), stty(1)
+
+## BUGS
+
+Skipping backwards is too slow on large files.
+
+*More* no longer refuses to page a binary file. The check it inherited read the second byte of
+the file out of the standard-I/O buffer and compared the pair against PDP-11 a.out magic
+numbers, none of which mean anything here; file(1) answers that question properly.
+
+A column is a character and not a byte, so a line of Cyrillic folds where it looks as though it
+should. The string typed at the **/** and **!** prompts is echoed and counted a byte at a time
+even so, so a prompt containing multi-byte characters is measured too wide and the erase
+character rubs out one byte rather than one character.
+
+The screen half of this program has no automated test; only its behaviour as a filter is
+covered. See cmd/more/README.md.

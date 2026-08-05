@@ -14,6 +14,14 @@ is **left as it was** when a task is finished and dropped: C1 through C9 are spe
 sections are gone, and no number is ever re-used, because `root.manifest` stanzas and per-program
 `README.md`s cite them.
 
+**Two numbers are spent and have no row in the table below**, which is why they are written down
+here rather than only in the places that cite them: **C12 is `novi`** and **C27 is `more`**. They
+are the two programs under [`.`](.) that are not ports of v7 commands — v7 had neither a
+full-screen editor nor a pager — so neither ever had a row among the v7 programs still to port,
+and each landed complete and left no section behind. `egrep` held C12 for a while by mistake and
+is C26 now; **neither 12 nor 27 may be re-used**, which is the rule directly above and is exactly
+the rule a number recorded in five source files and nowhere else is apt to break.
+
 **The contract per task**, as in the kernel file: it leaves `make` building and `ctest` passing,
 and it leaves the program **on the image** — staged into `build/rootfs/`, named in
 [../root.manifest](../root.manifest), and asserted by a test. A port is not done when it compiles.
@@ -26,7 +34,7 @@ here and already tested, whose value is in doing them together rather than one a
 |---|---|---|---|
 | C10 | `yacc` and `lex`, host and native | the seven grammars below, and a machine that generates its own parsers | large |
 | C11 | `expr` | shell arithmetic; the first thing C10 proves | small |
-| C12 | `egrep` | finishes C5c | small |
+| C26 | `egrep` | finishes C5c | small |
 | C13 | `m4` | macro processor | medium |
 | C14 | `make` | the build tool — the highest-value item here | large |
 | C15 | `dc` | the calculator engine | medium |
@@ -234,7 +242,7 @@ says. Scripts want it almost as much as they want `test`, which is already on th
 Its arithmetic is one word wide here (§3) and its `match` operator is a regular expression over
 bytes (§11). A pure filter, so `b6_progtest` cases are the whole of the harness (§9).
 
-## C12. `egrep`
+## C26. `egrep`
 
 `egrep/egrep.y`, 594 lines. **Finishes C5c**, which put `grep` and `fgrep` on the image and left
 this one behind the yacc decision.
@@ -409,6 +417,11 @@ are staged by `B6_STAGE_MAN` in the top-level [../CMakeLists.txt](../CMakeLists.
 search path is therefore `/usr/man/man[1-8]` with the letter on the filename, which is what
 `man 1m fsck` and a bare `man fsck` both have to cope with; and the image has some 237 free blocks
 left, so the program itself is the only thing still to fit.
+
+**There is a pager to page it with now.** C27 put `/bin/more` on the image, `PAGER` is already on
+`b6sim`'s whitelist (`cmd/sim/session.cpp`), and `man` on every other Unix hands its output to one
+rather than rendering a screenful itself — which is a decision this task no longer has to take,
+only to make.
 
 ### C25c. The standing procedure
 

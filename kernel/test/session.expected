@@ -25,12 +25,14 @@ find
 grep
 join
 kill
+less
 ln
 login
 look
 ls
 mesg
 mkdir
+more
 mv
 newgrp
 nice

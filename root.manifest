@@ -511,6 +511,28 @@ file /bin/mesg          # cmd/mesg -- task C6.  NOT setuid: chmod(2) is gated on
 source ../../rootfs/bin/mesg
 mode 0755
 
+file /bin/more          # cmd/more -- Berkeley's pager (Eric Shienbrood, UCB); task C27, and
+                        # the second program here that is not a port of a v7 command: v7 had
+                        # no pager at all.  Its help text is COMPILED IN, so there is no
+                        # /usr/lib/more.help beside it; it reads no terminal database, so
+                        # /etc/termcap is not consulted either and a terminal that is not
+                        # ANSI cannot use it.  Its search is for a LITERAL string --
+                        # re_comp/re_exec are not in this libc, and novi's search is literal
+                        # for the same reason.  NOT setuid: it opens what its caller could.
+source ../../rootfs/bin/more
+mode 0755
+
+# /bin/less IS /bin/more: the same inode under a second name, and the second hard link on
+# this image after /bin/[ -> /bin/test.  Unlike that one it is a CONVENIENCE and not a
+# reachability fix -- cmd/test/test.c reads argv[0] and has a branch that only the other
+# name reaches, whereas nothing whatever in more.c looks at its own name (upstream's `page'
+# alias did, and the port deleted it).  So `less' is a second spelling for the fingers of
+# whoever learned the other one, and is not GNU less: it pages forward, `b' pages back, and
+# more(1) is the page that documents it.  kernel/test's rootimg_link_more asserts the shared
+# inode once the image is built, as rootimg_link does for /bin/[.
+link /bin/less
+target /bin/more
+
 file /bin/nice          # cmd/nice -- task C8.  NOT setuid: nice(2) is what refuses a negative
                         # increment to anyone but root (kernel/sys4.c), so a mode bit here
                         # would only hand out the thing the kernel is busy withholding.

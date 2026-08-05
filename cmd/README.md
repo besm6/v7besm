@@ -20,8 +20,10 @@ upstream copy**, so the first diff on it is the porting diff. A task starts by w
 `CMakeLists.txt`, not by fetching anything.
 
 They came from `tmp/v7x86-0.8a/usr/src/cmd/`, an unpacked reference tree that is **not in the
-repository** (`tmp/` is git-ignored). [novi/](novi/) is the exception: Dave W Plummer's full-screen
-editor for 2.11BSD, the one program here with no v7 original behind it.
+repository** (`tmp/` is git-ignored). **Two directories are the exception**, neither with a v7
+original behind it: [novi/](novi/), Dave W Plummer's full-screen editor for 2.11BSD, and
+[more/](more/), Berkeley's pager by way of RetroBSD — v7 had neither an editor of that kind nor a
+pager at all. They are the two tasks in [TODO.md](TODO.md) with a number and no table row.
 
 **A directory is part of the build when it holds a `CMakeLists.txt`** — that is the only marker;
 [../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.

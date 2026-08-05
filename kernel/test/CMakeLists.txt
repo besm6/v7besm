@@ -294,6 +294,8 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/ls
     ${B6_ROOTFS}/bin/mesg
     ${B6_ROOTFS}/bin/mkdir
+    # No entry for /bin/less: it is a hard link to this one and stages no file.
+    ${B6_ROOTFS}/bin/more
     ${B6_ROOTFS}/bin/mv
     ${B6_ROOTFS}/bin/newgrp
     ${B6_ROOTFS}/bin/nice
@@ -408,11 +410,11 @@ add_test(NAME rootimg_setuid
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(rootimg_setuid PROPERTIES LABELS kernel)
 
-# THE HARD LINK, READ BACK OFF THE FINISHED IMAGE (task C2b).  /bin/[ is /bin/test -- the
-# same inode under two names -- and it is the only link on this image and the only entry in
-# ../../root.manifest that names no `source'.  Nothing in build/rootfs/ corresponds to it, so
-# it is invisible to ROOTFS_FILES above and to every size check; the image is again the only
-# thing that can say whether it is there.
+# THE HARD LINKS, READ BACK OFF THE FINISHED IMAGE (tasks C2b and C27).  /bin/[ is /bin/test
+# and /bin/less is /bin/more -- each the same inode under two names -- and they are the only
+# two entries in ../../root.manifest that name no `source'.  Nothing in build/rootfs/
+# corresponds to either, so both are invisible to ROOTFS_FILES above and to every size check;
+# the image is again the only thing that can say whether they are there.
 #
 # WHY IT MATTERS RATHER THAN BEING DECORATION: cmd/test/test.c looks at argv[0] and requires a
 # closing `]' when it was entered by that name, so with no link that branch is unreachable and
@@ -427,6 +429,17 @@ add_test(NAME rootimg_link
                    ${B6FSUTIL} -v -v root.img | grep -E ' /bin/(test|\\[)$' | sed 's| /bin/.*||' | sort -u | grep -c . | grep -qx 1"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(rootimg_link PROPERTIES LABELS kernel)
+
+# ... and the same two assertions for /bin/less -> /bin/more (task C27).  A SECOND TEST rather
+# than a widened first one, because what the two links are for is not the same thing: the one
+# above makes a branch of cmd/test reachable at all, while this one is a convenience -- nothing
+# in cmd/more/more.c reads argv[0] -- and the comment above should go on being true of its own
+# link.  A failure here means the manifest stanza or b6fsutil's link resolution, not more(1).
+add_test(NAME rootimg_link_more
+    COMMAND sh -c "${B6FSUTIL} -v -v root.img | grep -E ' /bin/(more|less)$' | grep -c 'nlink 2 ' | grep -qx 2 && \
+                   ${B6FSUTIL} -v -v root.img | grep -E ' /bin/(more|less)$' | sed 's| /bin/.*||' | sort -u | grep -c . | grep -qx 1"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(rootimg_link_more PROPERTIES LABELS kernel)
 
 # ---------------------------------------------------------------------------------------
 # boot, console, session and libtest -- the whole kernel booting with the root image

@@ -36,6 +36,13 @@ curses will need a `LIBS` keyword there and `B6_LIBCURSES_DIR`/`B6_LIBTERMCAP_DI
 beside `B6_LIBC_DIR`. Nothing needs it yet; `lib/test/CMakeLists.txt`'s `b6_libtest()` grew
 the same capability for `-lm` and carries these two as well.
 
+**Two programs have now wanted a terminal database and both got by without one.** `cmd/novi`
+writes hard-coded ANSI, and `cmd/more` — which arrived with the *whole* termcap call structure
+already written, `tgetent`/`tgetnum`/`tgetflag`/`tgetstr`/`tputs` and all — kept the ANSI stubs
+its upstream had substituted rather than grow the keyword. So the prediction stands and the
+work does not: a terminal that is not ANSI can use neither program, `/etc/termcap` is on the
+image and is still read by nothing, and the third that asks will be the one to add `LIBS`.
+
 ## This is 4.3BSD curses, and `include/curses.h` was replaced to say so
 
 The header that stood in `include/` until now was v7's `1.7 (4/17/81)`, and it was
