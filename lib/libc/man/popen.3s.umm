@@ -1,0 +1,67 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# POPEN(3S)
+
+## NAME
+
+popen, pclose - initiate I/O to/from a process
+
+## SYNOPSIS
+
+```c
+#include <stdio.h>
+
+FILE *popen(const char *command, const char *type);
+
+int pclose(FILE *stream);
+```
+
+## DESCRIPTION
+
+The arguments to *popen* are pointers to null-terminated strings containing respectively a
+shell command line and an I/O mode, either "r" for reading or "w" for writing. It creates a
+pipe between the calling process and the command to be executed. The value returned is a stream
+pointer that can be used (as appropriate) to write to the standard input of the command or read
+from its standard output.
+
+A stream opened by *popen* should be closed by *pclose,* which waits for the associated process
+to terminate and returns the exit status of the command.
+
+Because open files are shared, a type "r" command may be used as an input filter, and a type
+"w" as an output filter.
+
+## SEE ALSO
+
+pipe(2), fopen(3), fclose(3), system(3), wait(2)
+
+## DIAGNOSTICS
+
+*Popen* returns a null pointer if files or processes cannot be created, or the Shell cannot be
+accessed.
+
+*Pclose* returns -1 if *stream* is not associated with a `popened` command.
+
+## BUGS
+
+Buffered reading before opening an input filter may leave the standard input of that filter
+mispositioned. Similar problems with an output filter may be forestalled by careful buffer
+flushing, e.g. with *fflush,* see fclose(3).
+
+## BESM-6 NOTES
+
+*Pclose* returns wait(2)'s raw status, and **that status is only 15 bits wide here:** it comes
+back in r12, an index register, and a v7 status is (code << 8), which passes 32767 as soon as
+the exit code passes 127. Exit codes 128..255 therefore arrive truncated. See wait(2).
+
+*Popen* and *pclose* are declared in <stdio.h> rather than at their own file head, which is
+unusual for a routine no v7 header declared: it is done because a *caller* needs them, and this
+is the only place in the library where a **FILE \*** and a fork(2) meet.
+
+One v7 bug is fixed rather than carried: a *fork* that fails now closes *both* ends of the pipe
+before returning NULL. v7 leaked them, so a program that retried on failure ran out of
+descriptors.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/stdio/popen.c

@@ -1,0 +1,53 @@
+# MKSTEMP(3)
+
+## NAME
+
+mkstemp, mkstemps - make a unique file and open it
+
+## SYNOPSIS
+
+```c
+#include <stdio.h>
+
+int mkstemp(char *template);
+int mkstemps(char *template, int suffixlen);
+```
+
+## DESCRIPTION
+
+*Mkstemp* replaces *template* by a unique file name, creates that file with mode 0600, and
+returns a descriptor open on it for reading and writing. It returns -1 if no name can be found
+or the file cannot be made. The template should look like a file name with six trailing X's,
+which are replaced with the current process id and a unique letter, exactly as mktemp(3) does;
+the template must be **writable** - a string literal will not do, this machine's literals
+living in the read-only const segment.
+
+*Mkstemps* is the same, except that the last *suffixlen* bytes of the template are a fixed
+suffix and the run of X's ends just before them, so that **/tmp/ccXXXXXX.tac** varies in the
+middle and keeps its extension. *Mkstemp(template)* is *mkstemps(template, 0)*. A negative
+*suffixlen* or one longer than the template is EINVAL .
+
+Both are POSIX's or BSD's, and neither v7's nor C11's. *Mktemp* hands back a name and leaves
+the caller to open it; *mkstemp* opens it itself, which is the whole of the difference.
+
+## SEE ALSO
+
+mktemp(3), creat(2), open(2), fopen(3) for *tmpfile* and *tmpnam*
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/gen/mkstemp.c
+
+## BUGS
+
+**The creation is not atomic on this machine.** POSIX obtains its guarantee from
+**O_CREAT**|**O_EXCL**, and this kernel has neither (*<fcntl.h>*): creation is reachable only
+through creat(2), which does not fail on a file that already exists. So *mkstemp* tests the
+name with access(2) and creates it immediately afterwards, which is mktemp(3)'s own race and
+not an improvement on it. What it does buy over *mktemp* is that the file exists, and is open
+read-write, before the caller writes a byte - so nothing downstream has to open a name a second
+time.
+
+**It walks a single letter,** inheriting mktemp(3)'s reach: 27 names for a given process and no
+more.

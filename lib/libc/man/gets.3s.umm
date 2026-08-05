@@ -1,0 +1,47 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# GETS(3S)
+
+## NAME
+
+gets, fgets - get a string from a stream
+
+## SYNOPSIS
+
+```c
+#include <stdio.h>
+
+char *gets(char *s);
+
+char *fgets(char *s, int n, FILE *stream);
+```
+
+## DESCRIPTION
+
+*Gets* reads a string into *s* from the standard input stream **stdin.** The string is
+terminated by a newline character, which is replaced in *s* by a null character. *Gets* returns
+its argument.
+
+*Fgets* reads *n*-1 characters, or up to a newline character, whichever comes first, from the
+*stream* into the string *s*. The last character read into *s* is followed by a null character.
+*Fgets* returns its first argument.
+
+## SEE ALSO
+
+puts(3), getc(3), scanf(3), fread(3), ferror(3), stdio(3)
+
+## DIAGNOSTICS
+
+*Gets* and *fgets* return the constant pointer **NULL** upon end of file or error.
+
+## BUGS
+
+*Gets* deletes a newline, *fgets* keeps it, all in the name of backward compatibility.
+
+*Gets* cannot be told how large *s* is and so cannot be used safely on input it does not
+control. C11 removed it from the language; it is kept here because v7 code calls it.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/stdio/gets.c, fgets.c

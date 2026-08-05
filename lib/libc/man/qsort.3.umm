@@ -1,0 +1,68 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# QSORT(3)
+
+## NAME
+
+qsort - quicker sort
+
+## SYNOPSIS
+
+```c
+#include <stdlib.h>
+
+void qsort(void *base, size_t nel, size_t width, int (*compar)(const void *, const void *));
+```
+
+## DESCRIPTION
+
+*Qsort* is an implementation of the quicker-sort algorithm. The first argument is a pointer to
+the base of the data; the second is the number of elements; the third is the width of an
+element in bytes; the last is the name of the comparison routine to be called with two
+arguments which are pointers to the elements being compared. The routine must return an integer
+less than, equal to, or greater than 0 according as the first argument is to be considered less
+than, equal to, or greater than the second.
+
+## SEE ALSO
+
+sort(1), string(3)
+
+## BESM-6 NOTES
+
+### The width is in bytes, and a word is six of them
+
+So sorting an array of **int** means **width = sizeof(int) = 6**, not 2 and not 4. A page that
+says otherwise is quoting a different machine.
+
+### The pointer comparisons are safe, and that is not luck
+
+*Qsort* compares partition cursors (**i < lp**, **j > hp**) and takes a difference (**l - a**),
+and a fat **char \*** does *not* sort as a plain word: incrementing one **decreases** its 3-bit
+byte offset, which sits above the word address.
+
+**The compiler knows.** It lowers a relational between two fat pointers through **b$pdiff**,
+the same helper as **-**, and tests the sign. So this file is v7's arithmetic, unchanged. See
+getpass(3) for the case where the same operator *does* give the wrong answer, and why.
+
+### The exchanges go a word at a time when they can
+
+This is the one thing this file adds to v7, and the alignment test is expressible in C: casting
+a **char \*** to an **int \*** discards the byte offset, and casting back rebuilds it as byte
+\#0, so **the round trip is the identity exactly for a pointer that was already at byte #0.**
+Two such pointers and a width that is a whole number of words mean the swap can move words.
+
+### The comparison lives in a file-scope static, as v7 has it
+
+That is worth recording because for a time it could not. A toolchain defect made a call through
+a file-scope function pointer fail, and the routine had to carry its comparison through a
+parameter instead. It is fixed upstream, and the structural change it forced is gone.
+
+The durable fact underneath: a call through a function pointer is a **wtc** of the pointer and
+a bare **13 vjm**, wherever the pointer lives - a parameter, an auto, an array element or a
+file-scope variable. **wtc** carries a 15-bit address, so it reaches a global with no address
+escape, and a callback needs no special handling at all.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/gen/qsort.c

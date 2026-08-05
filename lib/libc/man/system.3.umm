@@ -1,0 +1,48 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# SYSTEM(3)
+
+## NAME
+
+system - issue a shell command
+
+## SYNOPSIS
+
+```c
+#include <stdlib.h>
+
+int system(const char *string);
+```
+
+## DESCRIPTION
+
+*System* causes the *string* to be given to sh(1) as input as if the string had been typed as a
+command at a terminal. The current process waits until the shell has completed, then returns
+the exit status of the shell.
+
+**Note:** a null *string* asks whether a command processor exists, which is C11 sec 7.22.4.8.
+v7 had no such case.
+
+## SEE ALSO
+
+popen(3), exec(2), wait(2)
+
+## DIAGNOSTICS
+
+Exit status 127 indicates the shell couldn't be executed.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/stdio/system.c
+
+## BESM-6 NOTES
+
+The status is wait(2)'s and is **only 15 bits wide here** - it comes back in an index register
+\- so exit codes 128..255 arrive truncated. See wait(2).
+
+**This routine is tested in both harnesses and they test opposite things.** Under b6sim,
+/bin/sh is a host binary and not a BESM-6 *a.out*, so the child always fails to exec and
+reports it with the 127 above; that is lib/test/spawn, and it is a b6sim-only test for exactly
+that reason. Off the disk image, /bin/sh really does start, and lib/test/shellt is the other
+half.

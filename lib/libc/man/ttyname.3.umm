@@ -1,0 +1,79 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# TTYNAME(3)
+
+## NAME
+
+ttyname, isatty, ttyslot - find name of a terminal
+
+## SYNOPSIS
+
+```c
+#include <unistd.h>
+
+char *ttyname(int fildes);
+
+int isatty(int fildes);
+
+int ttyslot(void);
+```
+
+## DESCRIPTION
+
+*Ttyname* returns a pointer to the null-terminated path name of the terminal device associated
+with file descriptor *fildes*.
+
+*Isatty* returns 1 if *fildes* is associated with a terminal device, 0 otherwise.
+
+*Ttyslot* returns the number of the entry in the ttys(5) file for the control terminal of the
+current process.
+
+**Note:** none of the three is declared by a header - v7 had none and C11 has no such routines
+\- so a caller declares them itself.
+
+## FILES
+
+| /dev/\*
+| /etc/ttys
+| share/besm6/lib/libc.a, lib/libc/gen/ttyname.c, isatty.c, ttyslot.c
+
+## SEE ALSO
+
+ioctl(2), ttys(5), getlogin(3), stty(2)
+
+## DIAGNOSTICS
+
+*Ttyname* returns a null pointer (0) if *fildes* does not describe a terminal device in
+directory `/dev`.
+
+*Ttyslot* returns 0 if `/etc/ttys` is inaccessible or if it cannot determine the control
+terminal.
+
+## BUGS
+
+The return value points to static data whose content is overwritten by each call.
+
+## BESM-6 NOTES
+
+### Reading a directory is an ordinary read(2) here
+
+As it was in v7, and as this kernel allows. The consequence is worth knowing before writing a
+test: **ttyname works under the kernel and not under b6sim,** whose *read* is the host's and
+refuses a directory. *Ttyslot* and getlogin(3) stand on it and are the same story. Their
+failure paths are what the b6sim suite covers; the rest is exercised off the disk image.
+
+The directory buffer is sized from **DIRSIZ** rather than v7's flat 32, since DIRSIZ is **18**
+here and not 14.
+
+### isatty
+
+**struct sgttyb is five words here** - four chars, each occupying a word of its own, and an
+**int**. That is the shape gtty(2) fills, and there is no packing to undo.
+
+### Two v7 bugs fixed rather than carried
+
+*Ttyname* copied the directory entry onto the end of "/dev/" with an unbounded *strcat*, which
+a long enough entry overran.
+
+*Ttyslot* tested for the end of its buffer *after* storing the character, so a line of exactly
+32 characters wrote one past the array.

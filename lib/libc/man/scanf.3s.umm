@@ -1,0 +1,174 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# SCANF(3S)
+
+## NAME
+
+scanf, fscanf, sscanf, vscanf, vfscanf, vsscanf - formatted input conversion
+
+## SYNOPSIS
+
+```c
+#include <stdio.h>
+
+int scanf(const char *format, ...);
+
+int fscanf(FILE *stream, const char *format, ...);
+
+int sscanf(const char *s, const char *format, ...);
+
+#include <stdarg.h>
+
+int vscanf(const char *format, va_list ap);
+
+int vfscanf(FILE *stream, const char *format, va_list ap);
+
+int vsscanf(const char *s, const char *format, va_list ap);
+```
+
+## DESCRIPTION
+
+*Scanf* reads from the standard input stream *stdin*. *Fscanf* reads from the named input
+*stream*. *Sscanf* reads from the character string *s*. Each function reads characters,
+interprets them according to a format, and stores the results in its arguments. Each expects as
+arguments a control string *format,* described below, and a set of *pointer* arguments
+indicating where the converted input should be stored.
+
+**Note:** the three *v* forms are C11 and take an already-started **va_list** in place of the
+variable argument list. v7 had none of them.
+
+The control string usually contains conversion specifications, which are used to direct
+interpretation of input sequences. The control string may contain:
+
+1.
+: Blanks, tabs or newlines, which match optional white space in the input.
+
+2.
+: An ordinary character (not %) which must match the next character of the input stream.
+
+3.
+: Conversion specifications, consisting of the character **%**, an optional assignment
+  suppressing character **\***, an optional numerical maximum field width, and a conversion
+  character.
+
+A conversion specification directs the conversion of the next input field; the result is placed
+in the variable pointed to by the corresponding argument, unless assignment suppression was
+indicated by **\***. An input field is defined as a string of non-space characters; it extends
+to the next inappropriate character or until the field width, if specified, is exhausted.
+
+The conversion character indicates the interpretation of the input field; the corresponding
+pointer argument must usually be of a restricted type. The following conversion characters are
+legal:
+
+**%**
+: a single `%` is expected in the input at this point; no assignment is done.
+
+**d**
+: a decimal integer is expected; the corresponding argument should be an integer pointer.
+
+**o**
+: an octal integer is expected; the corresponding argument should be a integer pointer.
+
+**x**
+: a hexadecimal integer is expected; the corresponding argument should be an integer pointer.
+
+**s**
+: a character string is expected; the corresponding argument should be a character pointer
+  pointing to an array of characters large enough to accept the string and a terminating `\0`,
+  which will be added. The input field is terminated by a space character or a newline.
+
+**c**
+: a character is expected; the corresponding argument should be a character pointer. The normal
+  skip over space characters is suppressed in this case; to read the next non-space character,
+  try `%1s`. If a field width is given, the corresponding argument should refer to a character
+  array, and the indicated number of characters is read.
+
+**e, f**
+: a floating point number is expected; the next field is converted accordingly and stored through
+  the corresponding argument, which should be a pointer to a *double*. **Note:** v7 said *float*,
+  and distinguished the two. There is one floating type here. The input format for floating point
+  numbers is an optionally signed string of digits possibly containing a decimal point, followed
+  by an optional exponent field consisting of an E or e followed by an optionally signed integer.
+
+**[**
+: indicates a string not to be delimited by space characters. The left bracket is followed by a
+  set of characters and a right bracket; the characters between the brackets define a set of
+  characters making up the string. If the first character is not circumflex (^), the input field
+  is all characters until the first character not in the set between the brackets; if the first
+  character after the left bracket is ^, the input field is all characters until the first
+  character which is in the remaining set of characters between the brackets. The corresponding
+  argument must point to a character array.
+
+**Note:** v7's page went on to explain that **d**, **o** and **x** may be capitalized or
+preceded by **l** to mean a **long** pointer and by **h** to mean a **short** one, and that
+**e** or **f** may be capitalized or preceded by **l** to mean **double** rather than
+**float**. **None of that distinguishes anything here. short**, **int** and **long** are the
+same one word, and so are **float** and **double**; **h**, **l** and a capital conversion
+letter are still parsed and still mean nothing. v7's switch on the two attributes has two arms
+here rather than six.
+
+The *scanf* functions return the number of successfully matched and assigned input items. This
+can be used to decide how many input items were found. The constant **EOF** is returned upon
+end of input; note that this is different from 0, which means that no conversion was done; if
+conversion was intended, it was frustrated by an inappropriate character in the input.
+
+For example, the call
+
+> | int i; double x; char name[50];
+> | scanf( "%d%f%s", &i, &x, name);
+
+with the input line
+
+> 25 54.32E-1 thompson
+
+will assign to *i* the value 25, *x* the value 5.432, and *name* will contain `thompson\0`. Or,
+
+> | int i; double x; char name[50];
+> | scanf("%2d%f%\*d%[1234567890]", &i, &x, name);
+
+with input
+
+> 56789 0123 56a72
+
+will assign 56 to *i,* 789.0 to *x,* skip `0123`, and place the string `56\0` in *name*. The
+next call to *getchar* will return `a`.
+
+## SEE ALSO
+
+atof(3), getc(3), printf(3), stdio(3)
+
+## DIAGNOSTICS
+
+The *scanf* functions return **EOF** on end of input, and a short count for missing or illegal
+data items.
+
+## BUGS
+
+The success of literal matches and suppressed assignments is not directly determinable.
+
+A scan containing a **%[** is not re-entrant: the character-class table is a file static and
+**%[** writes on it. That is v7's bargain too, and is noted here only because it is easy to
+forget.
+
+## BESM-6 NOTES
+
+### An argument is carried as a raw word
+
+A **char \*** is a fat pointer - a byte offset above a word address - and an **int \*** is not,
+so the two cannot share a C type without one of them being re-decorated on the way through, and
+**a null that acquires the fat marker stops testing as null.** The engine reads each argument
+with **va_arg(ap, int)** and reinterprets it at the point of use, exactly as the printf(3)
+engine does for **%s**. v7 instead walked the caller's parameter block through an **int \*\***
+handed in by *scanf*, which <stdarg.h> makes both unnecessary and impossible.
+
+### Two v7 bugs are fixed here
+
+The character-class table is indexed safely now. v7 wrote **_sctab[getc(iop)]** and only
+afterwards asked whether the value was EOF - reading **_sctab[-1]** first. And its **%[**
+walked a **char** subscript into a 128-entry table, which is out of bounds for any byte above
+0177; **char** is unsigned here, so that is reachable.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/stdio/doscan.c and the six entry points beside it

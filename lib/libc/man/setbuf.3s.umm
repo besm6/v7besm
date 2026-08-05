@@ -1,0 +1,89 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# SETBUF(3S)
+
+## NAME
+
+setbuf, setvbuf, setbuffer, setlinebuf - assign buffering to a stream
+
+## SYNOPSIS
+
+```c
+#include <stdio.h>
+
+void setbuf(FILE *stream, char *buf);
+
+int setvbuf(FILE *stream, char *buf, int mode, size_t size);
+
+void setbuffer(FILE *stream, char *buf, int size);
+
+int setlinebuf(FILE *stream);
+```
+
+## DESCRIPTION
+
+*Setbuf* is used after a stream has been opened but before it is read or written. It causes the
+character array *buf* to be used instead of an automatically allocated buffer. If *buf* is the
+constant pointer **NULL,** input/output will be completely unbuffered.
+
+A manifest constant **BUFSIZ** tells how big an array is needed:
+
+char buf[BUFSIZ];
+
+**Note:** BUFSIZ is 3072 here, one disk block in *bytes.* A page that says 512 is a PDP-11
+page.
+
+**Note:** *setvbuf* is C11 and had no v7 ancestor. It says the same thing as *setbuf* and two
+more besides: the *mode* is _IOFBF (fully buffered), _IOLBF (line buffered) or _IONBF
+(unbuffered), and *size* is the size of *buf*, which need not be BUFSIZ. A null *buf* with a
+buffered mode makes *setvbuf* allocate one of *size* bytes itself. It returns 0, or a non-zero
+value if the mode is not one of the three or the size is zero.
+
+**Note:** *setbuffer* and *setlinebuf* are BSD's and are neither C11 nor v7. *Setbuffer* is
+*setbuf* with a size: *buf* need not be BUFSIZ bytes, and a null *buf* - or a *size* of zero or
+less - makes the stream unbuffered, where *setvbuf* would instead fail the call. *Setlinebuf*
+selects line buffering and nothing else, and always returns 0.
+
+**These three modes are not flag bits,** and in particular _IONBF is not the flag of that name
+in v7's <stdio.h>: the modes are 0, 1 and 2, while the flag bits are 04 and 0400. That
+collision is why v7's _IONBF flag bit is spelled _IOUNBUF now.
+
+A buffer is normally obtained from malloc(3) upon the first *getc* or putc(3) on the file,
+except that the standard error stream *stderr* is normally not buffered.
+
+**Note:** v7 said output streams directed to terminals are not buffered either. Here they are
+*line* buffered - *stdout* takes _IOLBF when isatty(3) says so - which costs one system call
+per line where v7 spent one per character. See stdio(3) for the mechanism, since the *putc*
+macro shows no sign of it.
+
+## SEE ALSO
+
+fopen(3), getc(3), putc(3), malloc(3), stdio(3)
+
+## BESM-6 NOTES
+
+### `buf == NULL`, never `!buf`
+
+A null **char \*** is *not* a zero word here: the cast that makes a pointer fat sets the marker
+bit over the zero address, so the word is non-zero while the pointer still compares equal to
+NULL. The compiler compares the address part for **==**, which is what makes the first spelling
+right and the second unreliable. Every routine here is written the first way.
+
+### setlinebuf keeps the buffer the stream has
+
+It turns the mode bit on rather than saying *setvbuf(stream, NULL, _IOLBF, BUFSIZ),* which
+would malloc(3) 3072 bytes even for *stdout* - a stream the buffering code serves from static
+storage. A stream with no buffer yet is given one on its first write, so nothing is allocated
+ahead of need. 512 words is worth this much care in an address space of 28,672.
+
+### _bufsiz exists for setvbuf
+
+v7 wrote BUFSIZ into the buffering code outright, because *setbuf* was the only way to hand a
+buffer over and it promised one of exactly that size. A caller that names its own size needs
+the stream to remember it, or the next flush overruns the buffer it was given. One word, and it
+makes *setvbuf* real rather than advisory.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/stdio/setbuf.c, setvbuf.c, setbuffer.c

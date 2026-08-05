@@ -1,0 +1,52 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# GETLOGIN(3)
+
+## NAME
+
+getlogin - get login name
+
+## SYNOPSIS
+
+```c
+#include <unistd.h>
+
+char *getlogin(void);
+```
+
+## DESCRIPTION
+
+*Getlogin* returns a pointer to the login name as found in */etc/utmp*. It may be used in
+conjunction with *getpwnam* to locate the correct password file entry when the same userid is
+shared by several login names.
+
+If *getlogin* is called within a process that is not attached to a typewriter, it returns NULL.
+The correct procedure for determining the login name is to first call *getlogin* and if it
+fails, to call *getpwuid*.
+
+## FILES
+
+| /etc/utmp
+| share/besm6/lib/libc.a, lib/libc/gen/getlogin.c
+
+## SEE ALSO
+
+getpwent(3), getgrent(3), utmp(5), ttyname(3)
+
+## DIAGNOSTICS
+
+Returns NULL (0) if name not found.
+
+## BUGS
+
+The return values point to static data whose content is overwritten by each call.
+
+**Note:** this routine stands on ttyslot(3), which stands on ttyname(3), which reads a
+directory with an ordinary read(2). So it answers under this kernel and *not* under b6sim,
+whose *read* is the host's and refuses a directory. Its failure path is what lib/test covers.
+
+## BESM-6 NOTES
+
+One v7 bug is fixed rather than carried: it wrote **ubuf.ut_name[8] = ' '** - one past the end
+of the eight-character field - as a sentinel before scanning back over trailing blanks. The
+scan is bounded now instead.

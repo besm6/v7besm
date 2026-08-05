@@ -1,0 +1,51 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# HYPOT(3M)
+
+## NAME
+
+hypot - euclidean distance
+
+## SYNOPSIS
+
+```c
+#include <math.h>
+
+double hypot(double x, double y);
+```
+
+## DESCRIPTION
+
+*Hypot* returns
+
+> sqrt(x*x + y*y),
+
+taking precautions against unwarranted overflows.
+
+**Note:** v7 documented *cabs* here as well, taking a **struct { double x, y; }**. It is not in
+this library. The v7 source arrived wrapped in an **#if 0** and it went with it: there is no
+<complex.h> on this system - **__STDC_NO_COMPLEX__** is defined - and nothing declares *cabs*.
+
+## SEE ALSO
+
+exp(3) for *sqrt*, floor(3), intro(2)
+
+## DIAGNOSTICS
+
+None. The precautions are what make that true; see BESM-6 NOTES.
+
+## BESM-6 NOTES
+
+The care this routine takes is not a nicety here, because **an overflow is a fault and not an
+infinity:** past 2**63 the program dies. The obvious spelling squares both arguments, and x*x
+overflows for any |x| above 2**31.5 even when the answer is perfectly representable. Dividing
+by the larger argument first keeps the ratio in [0,1] and the square in [1,2], so only the
+closing multiply can reach the top of the range - and it can only reach it when the answer
+itself is out of range.
+
+The routine is otherwise v7's, unchanged.
+
+## FILES
+
+| share/besm6/lib/libm.a
+| lib/libm/hypot.c

@@ -1,0 +1,67 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# FSEEK(3S)
+
+## NAME
+
+fseek, ftell, rewind, fgetpos, fsetpos - reposition a stream
+
+## SYNOPSIS
+
+```c
+#include <stdio.h>
+
+int fseek(FILE *stream, long offset, int ptrname);
+
+long ftell(FILE *stream);
+
+void rewind(FILE *stream);
+
+int fgetpos(FILE *stream, fpos_t *pos);
+
+int fsetpos(FILE *stream, const fpos_t *pos);
+```
+
+## DESCRIPTION
+
+*Fseek* sets the position of the next input or output operation on the *stream*. The new
+position is at the signed distance *offset* bytes from the beginning, the current position, or
+the end of the file, according as *ptrname* has the value 0, 1, or 2. **Note:** SEEK_SET,
+SEEK_CUR and SEEK_END are those three values, and <stdio.h> defines them; v7 wrote the digits.
+
+*Fseek* undoes any effects of ungetc(3).
+
+*Ftell* returns the current value of the offset relative to the beginning of the file
+associated with the named *stream*. It is measured in bytes on UNIX; on some other systems it
+is a magic cookie, and the only foolproof way to obtain an *offset* for *fseek*.
+
+*Rewind(stream)* is equivalent to *fseek(stream, 0L, 0).*
+
+**Note:** *fgetpos* and *fsetpos* are C11 and had no v7 ancestor. They save and restore a
+position through an **fpos_t**, which is the portable spelling of the same thing: *fgetpos*
+records where the stream stands and *fsetpos* puts it back. Each returns 0 on success and a
+non-zero value on failure. **Fpos_t is an int here** - one word, the same **off_t** the kernel
+counts bytes in - because v7 had no such type and used a **long** for a file offset, which is
+also one word.
+
+## SEE ALSO
+
+lseek(2), fopen(3), stdio(3)
+
+## DIAGNOSTICS
+
+*Fseek* returns -1 for improper seeks.
+
+## BESM-6 NOTES
+
+An offset is **one word,** not the PDP-11's pair. **long** is **int** here, and so is
+**off_t**, which is why lseek(2) lost an argument that v7's gate carried.
+
+One v7 bug is fixed here rather than carried: *fseek* left its resolved position uninitialised
+on a path that could reach the return, so a seek that took that path reported a position that
+was never computed. It is initialised to -1 now.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/stdio/fseek.c, ftell.c, rew.c, fgetpos.c, fsetpos.c

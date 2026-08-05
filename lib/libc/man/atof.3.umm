@@ -1,0 +1,102 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# ATOF(3)
+
+## NAME
+
+atof, atoi, atol, strtol, strtoul - convert ASCII to numbers
+
+## SYNOPSIS
+
+```c
+#include <stdlib.h>
+
+double atof(const char *nptr);
+
+int atoi(const char *nptr);
+
+long atol(const char *nptr);
+
+long strtol(const char *nptr, char **endptr, int base);
+
+unsigned long strtoul(const char *nptr, char **endptr, int base);
+```
+
+## DESCRIPTION
+
+These functions convert a string pointed to by *nptr* to floating, integer, and long integer
+representation respectively. The first unrecognized character ends the string.
+
+*Atof* recognizes an optional string of tabs and spaces, then an optional sign, then a string
+of digits optionally containing a decimal point, then an optional `e` or `E` followed by an
+optionally signed integer.
+
+*Atoi* and *atol* recognize an optional string of tabs and spaces, then an optional sign, then
+a string of digits.
+
+**Note:** *strtol* and *strtoul* are C11 and had no v7 ancestor. Each converts an initial
+subject sequence in *base* (2 to 36, or 0 to take the base from a leading "0x" or "0"), stores
+a pointer to the first unconverted character through *endptr* if that is not NULL, and reports
+overflow by returning the appropriate limit with *errno* set to ERANGE. They are what a caller
+should use where *atoi* has "no provisions for overflow".
+
+## SEE ALSO
+
+scanf(3), ecvt(3), string(3)
+
+## BUGS
+
+There are no provisions for overflow *in the atoi family.*
+
+## BESM-6 NOTES
+
+### atol is a call to atoi
+
+**long** is **int** here - one word - so the two conversions cannot differ by so much as an
+overflow. One word is also all the system-call gate carries, which is why lseek(2) and stime(2)
+each shed an argument v7's gate had.
+
+### The limits are asymmetric and narrow
+
+**long** is 41 bits signed, so LONG_MAX is 2**40-1 and LONG_MIN is -2**40, while an **unsigned
+long** is the full 48 bits. A page that quotes the PDP-11's 32767 or 2147483647 is quoting a
+different machine.
+
+### No signed value is ever reinterpreted as unsigned
+
+An integer here is a 41-bit two's-complement field with bits 48..42 *zero*, so the raw word of
+a negative value is *not* its 48-bit two's complement. BSD's scanner builds its negative cutoff
+as **-(unsigned long)LONG_MIN** and assigns LONG_MIN into an unsigned accumulator; both depend
+on how the front end widens a sign, and here it *reinterprets* rather than sign-extends -
+**(unsigned long)(-1L) is 2**41-1, not ULONG_MAX.**
+
+Every cast in *strtol* is value-preserving instead: the negative cutoff is **(unsigned
+long)LONG_MAX + 1**, and LONG_MIN is returned as the constant and never as **-(long)acc**, the
+accumulator holding 2**40 there, which no **long** can.
+
+### Two C11 fixes to the scanner it came from
+
+"0x" with no hex digit after it converts the 0 and stops at the `x`. BSD consumes the prefix,
+finds nothing, and reports the whole input unconsumed.
+
+A base outside 0 and 2..36 gives EINVAL. C11 leaves it undefined and BSD scans on regardless.
+
+### atof's constants are this machine's
+
+*Big* is 2**40, not v7's 2**56, and LOGHUGE is 19 rather than 39 - both mantissa and exponent
+widths, and both wrong if carried over. The local exponent variable is spelled *dexp* because
+the front end has one namespace for objects and functions and <math.h> has declared *exp*().
+
+*Atof* also avoids the comma operator, which the front end evaluated to its *left* operand for
+a time - so **while (isdigit(c = \*p++))** read "3.5" as the three digits 3, -2 and 5. That is
+fixed upstream and the spelling is now a preference rather than a workaround.
+
+### strtoul is a second copy of the scanner, deliberately
+
+One member per function is what lets the archive index pull only the one a program calls, and a
+shared core would come along with either.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/gen/atof.c, atoi.c, atol.c, strtol.c, strtoul.c

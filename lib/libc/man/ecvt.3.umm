@@ -1,0 +1,59 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# ECVT(3)
+
+## NAME
+
+ecvt, fcvt, gcvt - output conversion
+
+## SYNOPSIS
+
+```c
+char *ecvt(double value, int ndigit, int *decpt, int *sign);
+
+char *fcvt(double value, int ndigit, int *decpt, int *sign);
+
+char *gcvt(double value, int ndigit, char *buf);
+```
+
+## DESCRIPTION
+
+*Ecvt* converts the *value* to a null-terminated string of *ndigit* ASCII digits and returns a
+pointer thereto. The position of the decimal point relative to the beginning of the string is
+stored indirectly through *decpt* (negative means to the left of the returned digits). If the
+sign of the result is negative, the word pointed to by *sign* is non-zero, otherwise it is
+zero. The low-order digit is rounded.
+
+*Fcvt* is identical to *ecvt*, except that the correct digit has been rounded for Fortran
+F-format output of the number of digits specified by *ndigit*.
+
+*Gcvt* converts the *value* to a null-terminated ASCII string in *buf* and returns a pointer to
+*buf.* It attempts to produce *ndigit* significant digits in Fortran F format if possible,
+otherwise E format, ready for printing. Trailing zeros may be suppressed.
+
+**Note:** none of the three is C11 and no header declares them - they are v7 extensions, so a
+caller declares them itself.
+
+## SEE ALSO
+
+printf(3), atof(3), frexp(3)
+
+## BUGS
+
+The return values point to static data whose content is overwritten by each call.
+
+## BESM-6 NOTES
+
+Unchanged from v7, and that is worth saying explicitly: this is decimal digit shuffling over
+modf(3), and **nothing in it assumes a width.** The `+.03` fudges are v7's and are still right
+\- *modf(fi/10)* leaves a fraction within a few ulps of k/10, and adding 0.03 before the
+multiply lands it on k without ever reaching k+1.
+
+These three are among the reasons modf(3), *frexp* and *ldexp* live in libc rather than in
+libm: the conversions need them, and a program that calls *printf* must not have to link
+**-lm**.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/gen/ecvt.c, lib/libc/stdio/gcvt.c

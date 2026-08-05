@@ -1,0 +1,76 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# ABORT(3)
+
+## NAME
+
+abort, raise - terminate abnormally, or send a signal to oneself
+
+## SYNOPSIS
+
+```c
+#include <stdlib.h>
+
+void abort(void);
+
+#include <signal.h>
+
+int raise(int sig);
+```
+
+## DESCRIPTION
+
+*Abort* sends SIGABRT to the calling process. This causes a signal that normally terminates the
+process with a core dump, which may be used for debugging.
+
+**Note:** v7's page said "executes the PDP11 IOT instruction". There is no such instruction
+here and none is needed - *abort* is **kill(getpid(), SIGABRT)** and always was on machines
+other than the PDP-11. Not even the NAME of that instruction is left: signal 6 is SIGABRT here
+and v7's SIGIOT is not defined (signal(2)). SIGABRT is left at SIG_DFL, so the kernel dumps
+core for it.
+
+**Note:** *raise* is C11 and had no v7 ancestor. It sends *sig* to the calling process and does
+not return until the signal has been handled. **There is nothing to arrange for that here:** a
+kill(2) to one's own process raises the signal in the kernel's pending set, and the system
+call's own return path delivers it - the handler has run and returned through the signal frame
+by the time *raise* yields a value. b6sim delivers at the same point.
+
+*Raise*'s value is *kill*'s, 0 or -1, rather than C11's "nonzero if unsuccessful" - the same
+thing said two ways.
+
+## SEE ALSO
+
+signal(2), exit(3), kill(2), assert(3)
+
+## DIAGNOSTICS
+
+Usually `IOT trap - core dumped` from the shell.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/gen/abort.c, raise.c
+
+## BUGS
+
+**There is no test for abort, deliberately.** Under b6sim a kill(2) the guest does not catch is
+serviced by the simulator killing *its own* process - the guest pid is the host pid - so a test
+would take the simulator down with the program and report as a harness crash rather than a
+result. Under the real kernel it is an ordinary signal and dumps core.
+
+## BESM-6 NOTES
+
+*Raise* is the *only* routine libc gained when signal delivery landed, and the absences around
+it are the point.
+
+The kernel builds the signal frame on the user stack and **plants the return path in it:** a
+**$77 SYS_sigret** word, copied out above the frame and named as the handler's return address,
+so a handler's ordinary return trips an extracode and the kernel reloads the frame.
+
+So there is no trampoline of the kind other ports carry, no libc table shadowing the kernel's
+dispositions, and signal(2) still answers with the *true* previous disposition - including the
+SIG_DFL a caught signal is reset to on delivery.
+
+It could not have been libc's work in any case: which *half* of a word to resume at lives in
+the saved program status, and only the privileged return instruction restores it, so a handler
+interrupted from a right-half instruction can be resumed only by the kernel.

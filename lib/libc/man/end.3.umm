@@ -1,0 +1,61 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# END(3)
+
+## NAME
+
+end, etext, edata - last locations in program
+
+## SYNOPSIS
+
+```c
+extern char end[];
+extern char etext[];
+extern char edata[];
+```
+
+## DESCRIPTION
+
+These names refer neither to routines nor to locations with interesting contents. The address
+of *etext* is the first address above the program text, *edata* above the initialized data
+region, and *end* above the uninitialized data region.
+
+When execution begins, the program break coincides with *end,* but many functions reset the
+program break, among them the routines of brk(2), malloc(3) and standard input/output
+(stdio(3)). The current value of the program break is reliably returned by `sbrk(0)`, see
+brk(2). **Note:** v7 also listed the profiling option of cc(1); there is no profiling runtime
+here.
+
+## SEE ALSO
+
+brk(2), malloc(3)
+
+## BESM-6 NOTES
+
+### The segment order is const, text, data, bss
+
+Four segments, not the PDP-11's three: a *const* segment holds string literals and initialized
+file-scope arrays, ahead of the text. That is why the size check on a program sums
+**const+text+data+bss** and why a **.dis** listing begins below the entry point.
+
+### Declare it as an array
+
+**extern char end[];** and not **extern char end;**. The decay of an array name produces a
+genuine fat **char \*** at byte offset 0, where taking the address of a **char** object would
+produce one describing that one byte. Sbrk(3) declares it exactly that way for exactly that
+reason.
+
+### bss is the segment that can outrun a short address
+
+An address field in an instruction reaches [0..07777] and [070000..077777]; the segment order
+above puts bss last, so it is the one segment a large program can push past the 12-bit field.
+Assembly that names a bss symbol uses the **< >** address escape; *crt0* and *cerror* both say
+so at the point where they do it.
+
+A separate ceiling applies to the whole program: text plus data plus bss must fit below the
+stack at 070000 - 28,672 words - and no relocatable symbol may sit above word 32,767, the reach
+of a 15-bit pointer. Both failures are silent, so the build checks them with **b6size -w**.
+
+## FILES
+
+share/besm6/lib/crt0.o, lib/libc/csu/crt0.s

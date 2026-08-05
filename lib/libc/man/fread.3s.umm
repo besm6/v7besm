@@ -1,0 +1,48 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# FREAD(3S)
+
+## NAME
+
+fread, fwrite - buffered binary input/output
+
+## SYNOPSIS
+
+```c
+#include <stdio.h>
+
+size_t fread(void *ptr, size_t size, size_t nitems, FILE *stream);
+
+size_t fwrite(const void *ptr, size_t size, size_t nitems, FILE *stream);
+```
+
+## DESCRIPTION
+
+*Fread* reads, into a block beginning at *ptr, nitems* of data of *size* bytes each from the
+named input *stream*. It returns the number of items actually read.
+
+*Fwrite* appends at most *nitems* of data of *size* bytes each beginning at *ptr* to the named
+output *stream*. It returns the number of items actually written.
+
+## SEE ALSO
+
+read(2), write(2), fopen(3), getc(3), putc(3), gets(3), puts(3), printf(3), scanf(3), stdio(3)
+
+## DIAGNOSTICS
+
+*Fread* and *fwrite* return 0 upon end of file or error.
+
+## BESM-6 NOTES
+
+**Size is a byte count, not a word count. sizeof(int)** is **6**, six char-units, because six
+characters pack into one 48-bit word - so **fread(buf, sizeof(int), n, f)** moves 6n bytes and
+not n of anything else. This is the same arithmetic that makes getw(3) move six bytes rather
+than the PDP-11's two.
+
+**size_t is signed here.** That is a deliberate departure from C11 sec 7.19, recorded in
+include/README.md, and it is why a mixed comparison against a difference of two counts behaves.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/stdio/fread.c, fwrite.c

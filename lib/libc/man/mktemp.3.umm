@@ -1,0 +1,38 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# MKTEMP(3)
+
+## NAME
+
+mktemp - make a unique file name
+
+## SYNOPSIS
+
+```c
+char *mktemp(char *template);
+```
+
+## DESCRIPTION
+
+*Mktemp* replaces *template* by a unique file name, and returns the address of the template.
+The template should look like a file name with six trailing X's, which will be replaced with
+the current process id and a unique letter.
+
+**Note:** v7 declared it in no header and C11 has no such routine, so every v7 caller declared
+it itself. This port declares it in *<stdio.h>*, beside *tmpnam*, because the strict front end
+takes no undeclared call.
+
+## SEE ALSO
+
+mkstemp(3), getpid(2), fopen(3) for *tmpnam*
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/gen/mktemp.c
+
+## BUGS
+
+**It walks a single letter,** so it can distinguish 26 names for a given process and no more.
+That is why tmpnam(3) does *not* call it: TMP_MAX promises 26**3, and *tmpnam* counts three
+letters of its own.

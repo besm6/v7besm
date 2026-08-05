@@ -1,0 +1,111 @@
+<!-- Copyright (c) 1980 Regents of the University of California. -->
+<!-- All rights reserved.  The Berkeley software License Agreement -->
+<!-- specifies the terms and conditions for redistribution. -->
+<!--  -->
+<!-- @(#)termcap.3x  6.1 (Berkeley) 5/15/85 -->
+<!--  -->
+
+# TERMCAP(3) [May 15, 1985]
+
+## NAME
+
+tgetent, tgetnum, tgetflag, tgetstr, tgoto, tputs - terminal independent operation routines
+
+## SYNOPSIS
+
+```c
+#include <term.h>
+
+int tgetent(char *bp, char *name);
+
+int tgetnum(char *id);
+
+int tgetflag(char *id);
+
+char *tgetstr(char *id, char **area);
+
+char *tgoto(char *cm, int destcol, int destline);
+
+void tputs(char *cp, int affcnt, int (*outc)(int));
+```
+
+## DESCRIPTION
+
+These functions extract and use capabilities from the terminal capability data base termcap(5).
+These are low level routines; see *curses*(3X) for a higher level package.
+
+*Tgetent* extracts the entry for terminal *name* into the buffer at *bp. Bp* should be a
+character buffer of size 1024 and must be retained through all subsequent calls to *tgetnum,
+tgetflag,* and *tgetstr. Tgetent* returns -1 if it cannot open the *termcap* file, 0 if the
+terminal name given does not have an entry, and 1 if all goes well. It will look in the
+environment for a TERMCAP variable. If found, and the value does not begin with a slash, and
+one of the names in the TERMCAP string's own first field is **name,** the TERMCAP string is
+used instead of reading the termcap file. If it does begin with a slash, the string is used as
+a path name rather than */etc/termcap.*
+
+**Note:** this implementation does *not* consult TERM to decide whether the TERMCAP string
+applies — it matches **name** against the entry's names, as above. A TERMCAP entry that does
+not match falls through to */etc/termcap* like any other miss. This can speed up entry into
+programs that call *tgetent*, as well as to help debug new terminal descriptions or to make one
+for your terminal if you can't write the file */etc/termcap.*
+
+*Tgetnum* gets the numeric value of capability *id,* returning -1 if is not given for the
+terminal. *Tgetflag* returns 1 if the specified capability is present in the terminal's entry,
+0 if it is not. *Tgetstr* returns the string value of the capability *id,* places it in the
+buffer at *area,* and advances the *area* pointer. It decodes the abbreviations for this field
+described in termcap(5), except for cursor addressing and padding information. *Tgetstr*
+returns NULL if the capability was not found.
+
+*Tgoto* returns a cursor addressing string decoded from *cm* to go to column *destcol* in line
+*destline.* The result is a static buffer, overwritten by the next call.
+
+**Note:** 4.2BSD's *tgoto* consulted the external variables **UP** and **BC** to avoid placing
+**\\n**, **^D** or **^@** in the returned string. Neither variable exists here and neither is
+consulted: the vestige of that logic in the source appends an always-empty string. A **cm**
+whose substitution would produce one of those three characters produces it.
+
+(Programs which call tgoto should be sure to turn off the XTABS bit(s), since *tgoto* may now
+output a tab. Note that programs using termcap should in general turn off XTABS anyway since
+some terminals use control I for other functions, such as nondestructive space.) If a **%**
+sequence is given which is not understood, then *tgoto* returns "OOPS".
+
+*Tputs* decodes the leading padding information of the string *cp*; *affcnt* gives the number
+of lines affected by the operation, or 1 if this is not applicable, *outc* is a routine which
+is called with each character in turn.
+
+**Note:** this implementation emits *no padding.* The delay is still skipped — it is part of
+the capability string, and a *tputs* that did not consume the digits would print them — but
+it is only stepped over, never converted, so *affcnt* is accepted and ignored and the external
+variables **ospeed** and **PC** of 4.2BSD do not exist and are not consulted. Nothing on this
+machine can be overrun: the console is a Consul-254 driven one character at a time by the
+kernel's *sc* driver, which offers the next character only when the last has printed. Leaving
+those two names undefined is also what lets a *curses*(3X) define them itself, as v7's does.
+
+## BESM-6 NOTES
+
+*Tgetent* accepts at most four **tc=** indirections, where 4.2BSD allowed 32. Each one costs
+about 360 words of stack — two 1024-character buffers at six characters to the word, plus two
+frames — against a user stack of four pages, so 32 would overflow it in silence. No real
+database comes near four.
+
+The **%** forms **%n**, **%>**, **%B** and **%D**, which 4.2BSD compiled conditionally, are
+always available.
+
+See *lib/libtermcap/README.md* in the source tree for the port's account, in particular the
+four **char \*** comparisons it had to delete.
+
+## FILES
+
+<prefix>/share/besm6/lib/libtermcap.a
+: -ltermcap library
+
+/etc/termcap
+: data base
+
+## SEE ALSO
+
+termcap(5); curses(3X), when it is ported
+
+## AUTHOR
+
+William Joy

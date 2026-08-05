@@ -1,0 +1,65 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# GETC(3S)
+
+## NAME
+
+getc, getchar, fgetc, getw - get character or word from stream
+
+## SYNOPSIS
+
+```c
+#include <stdio.h>
+
+int getc(FILE *stream);
+
+int getchar(void);
+
+int fgetc(FILE *stream);
+
+int getw(FILE *stream);
+```
+
+## DESCRIPTION
+
+*Getc* returns the next character from the named input *stream*.
+
+*Getchar()* is identical to *getc(stdin)*.
+
+*Fgetc* behaves like *getc,* but is a genuine function, not a macro; it may be used to save
+object text.
+
+*Getw* returns the next word from the named input *stream*. It returns the constant **EOF**
+upon end of file or error, but since that is a good integer value, *feof* and ferror(3) should
+be used to check the success of *getw*. *Getw* assumes no special alignment in the file.
+
+**Note: a word is six bytes here,** not the PDP-11's two, and the bytes come back most
+significant first - which is how six characters pack into a word, so a word written by putw(3)
+reads back byte for byte as that word's own six characters. v7's assembly, `i |
+(getc(iop)<<8)`, would have carried a quarter of the value. *Getw* and *putw* are v7
+extensions, not C11.
+
+## SEE ALSO
+
+fopen(3), putc(3), gets(3), scanf(3), fread(3), ungetc(3), stdio(3)
+
+## DIAGNOSTICS
+
+These functions return the integer constant **EOF** at end of file or upon read error.
+
+A stop with message, `Reading bad file`, means an attempt has been made to read from a stream
+that has not been opened for reading by *fopen*.
+
+## BUGS
+
+The end-of-file return from *getchar* is incompatible with that in UNIX editions 1-6.
+
+Because it is implemented as a macro, *getc* treats a *stream* argument with side effects
+incorrectly. In particular, `getc(*f++);` doesn't work sensibly. **Note:** C11 sec 7.21.1p3
+singles *getc* and putc(3) out as the two library macros permitted to do this; every other
+macro in <stdio.h> evaluates its argument exactly once.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/stdio/getc.c, getchar.c, fgetc.c, getw.c, filbuf.c

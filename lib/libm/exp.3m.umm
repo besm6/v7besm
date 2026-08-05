@@ -1,0 +1,95 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# EXP(3M)
+
+## NAME
+
+exp, log, log10, pow, sqrt - exponential, logarithm, power, square root
+
+## SYNOPSIS
+
+```c
+#include <math.h>
+
+double exp(double x);
+
+double log(double x);
+
+double log10(double x);
+
+double pow(double x, double y);
+
+double sqrt(double x);
+```
+
+## DESCRIPTION
+
+*Exp* returns the exponential function of *x.*
+
+*Log* returns the natural logarithm of *x*; *log10* returns the base 10 logarithm.
+
+*Pow* returns *x^y.*
+
+*Sqrt* returns the square root of *x.*
+
+## SEE ALSO
+
+hypot(3), sinh(3), floor(3), intro(2)
+
+## DIAGNOSTICS
+
+*Exp* and *pow* return HUGE_VAL when the correct value would overflow; *errno* is set to
+ERANGE. *Pow* returns 0 and sets *errno* to EDOM when the second argument is negative and
+non-integral and when both arguments are 0.
+
+*Log* returns -HUGE_VAL when *x* is zero or negative; *errno* is set to EDOM. **Note:** v7
+returned 0 here. -HUGE_VAL is the most negative finite value, which is as close to the true
+-infinity as this machine can come; see BESM-6 NOTES.
+
+*Sqrt* returns 0 when *x* is negative; *errno* is set to EDOM. A *sqrt* of exactly zero returns
+zero and sets nothing.
+
+## BESM-6 NOTES
+
+### The range gates are the port
+
+On this machine an exponent that rises past 2**63 raises an arithmetic-overflow fault and **the
+program dies;** it does not produce an infinity, because the format has none. An exponent that
+falls below 2\*\*-63 quietly becomes machine zero. The two ends are therefore not symmetric,
+and HUGE_VAL is a value a routine *returns,* never one it computes: every range check in *libm*
+is made *before* the arithmetic that would overflow, and is checked strictly.
+
+**Note:** v7 tested *exp* against a single *maxf* of DBL_MAX_10_EXP*2.5 = 45, but e**45 is
+about 3.5e19 - past this machine's largest finite 9.223e18, so computing it faulted. *Exp* now
+has two gates instead, and each is placed before the arithmetic:
+
+- overflow above **x = 43.6.** ln(DBL_MAX) is 43.668, and 43.6 is the last tenth that keeps the
+  closing ldexp(3) in range. Past it: ERANGE and HUGE_VAL.
+
+- underflow below **x = -44.3.** ln(DBL_MIN) is -44.36, and by -44.3 the result has already
+  flushed to machine zero. This gate is not cosmetic: ldexp(3) keeps only the low seven bits of
+  its argument, so an ungated tiny *x* would wrap the exponent and come back *enormous.* No
+  *errno* is set - an underflow to zero is what the hardware does to any small value anyway.
+
+### sqrt
+
+v7 put the exponent back on by multiplying or dividing by 1L<<30 in a loop, which is a way of
+writing ldexp(3) on a machine whose library had none. Here *ldexp* is six instructions and is
+exact. The **float sqrtf(float)** that accompanied the v7 source is gone: **float**, **double**
+and **long double** are the same one 48-bit word here, and <math.h> declares no `f`- or
+`l`-suffixed variants at all.
+
+### pow
+
+A negative base has a real power only for an integer exponent, and v7 found out by rounding the
+exponent to a **long** and comparing. A **long** is one word here - 41 bits signed - while the
+exponent ranges to 2**63, so that conversion is undefined for a large exponent and the test is
+gated by **fabs(y) < 2**40** first. Above 2**40 every value is already integral, a 40-bit
+mantissa having no fractional bits left.
+
+*pow(0, 0)* is EDOM, as in v7. C11 sec 7.12.7.4 permits either 1 or a domain error.
+
+## FILES
+
+| share/besm6/lib/libm.a
+| lib/libm/exp.c, log.c, pow.c, sqrt.c

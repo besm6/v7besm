@@ -1,0 +1,68 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# GETPASS(3)
+
+## NAME
+
+getpass - read a password
+
+## SYNOPSIS
+
+```c
+#include <unistd.h>
+
+char *getpass(const char *prompt);
+```
+
+## DESCRIPTION
+
+*Getpass* reads a password from the file */dev/tty*, or if that cannot be opened, from the
+standard input, after prompting with the null-terminated string *prompt* and disabling echoing.
+A pointer is returned to a null-terminated string of at most 8 characters.
+
+**Note:** the prompt goes out through fputs(3) here. v7 passed the caller's string to
+fprintf(3) as a *format* - harmless in 1979, and a hole worth closing.
+
+## FILES
+
+| /dev/tty
+| share/besm6/lib/libc.a, lib/libc/stdio/getpass.c
+
+## SEE ALSO
+
+crypt(3), getpwent(3)
+
+## BUGS
+
+The return value points to static data whose content is overwritten by each call.
+
+**There is no test for this routine,** and there cannot easily be one: it opens /dev/tty and
+would sit there waiting for someone to type, which a harness that diffs a program's output
+against a recorded expectation cannot arrange. That is also why the bug below went unnoticed
+for as long as it did.
+
+## BESM-6 NOTES
+
+### The bound on the copy is an index, and that was not tidying up
+
+v7 wrote
+
+for (p = pbuf; ...) if (p < &pbuf[8]) \*p++ = c;
+
+and `<` **between two char \* values does not order them on this machine.** A fat pointer
+carries its byte offset in bits 47..45 and its word address in bits 15..1, and **the offset
+decrements as the pointer advances;** there is no relational helper for the general case, so
+the comparison reduces to an integer comparison of the whole word and the offset field
+dominates the address field.
+
+*Pbuf* is nine characters, so *p* starts at byte #0 of its first word (offset field 5) while
+**&pbuf[8]** is byte #2 of the second (offset field 3). **The test was false on the very first
+iteration:** nothing was ever stored, and *getpass* returned the empty string *every time.*
+
+It is **if (n < 8) pbuf[n++] = c** now. See the same hazard in libtermcap and libcurses, whose
+ports had four and eleven of these to remove.
+
+### Dispositions are void (\*)(int)
+
+The signal it saves and restores across the read is stored in that type, which is what
+<signal.h> declares and what the kernel's frame delivers. v7 wrote **int (\*)()**.

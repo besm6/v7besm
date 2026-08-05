@@ -1,0 +1,214 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# PRINTF(3S)
+
+## NAME
+
+printf, fprintf, sprintf, snprintf, vprintf, vfprintf, vsprintf, vsnprintf - formatted output
+conversion
+
+## SYNOPSIS
+
+```c
+#include <stdio.h>
+
+int printf(const char *format, ...);
+
+int fprintf(FILE *stream, const char *format, ...);
+
+int sprintf(char *s, const char *format, ...);
+
+int snprintf(char *s, size_t size, const char *format, ...);
+
+#include <stdarg.h>
+
+int vprintf(const char *format, va_list ap);
+
+int vfprintf(FILE *stream, const char *format, va_list ap);
+
+int vsprintf(char *s, const char *format, va_list ap);
+
+int vsnprintf(char *s, size_t size, const char *format, va_list ap);
+```
+
+## DESCRIPTION
+
+*Printf* places output on the standard output stream *stdout*. *Fprintf* places output on the
+named output *stream*. *Sprintf* places `output` in the string *s,* followed by the character
+`\0`.
+
+**Note:** *snprintf* is C11 and writes at most *size* bytes including the terminating null; the
+four *v* forms take an already-started **va_list** in place of the variable argument list. v7
+had none of the eight but the first three. See BESM-6 NOTES for which of them is the primitive
+here.
+
+Each of these functions converts, formats, and prints its arguments after the first under
+control of the first argument. The first argument is a character string which contains two
+types of objects: plain characters, which are simply copied to the output stream, and
+conversion specifications, each of which causes conversion and printing of the next successive
+*arg printf*.
+
+Each conversion specification is introduced by the character **%**. Following the **%**, there
+may be
+
+-
+: zero or more flags: **-** for *left adjustment* of the converted value in the indicated field;
+  **0** for zero-padding instead of blank-padding; **+** or a space, to force a sign or a blank
+  in front of a signed conversion; and **#** for the alternate form, which prefixes a non-zero
+  **o** with `0` and a non-zero **x** or **X** with `0x` or `0X`. **Note:** v7's page described
+  only the first two.
+
+-
+: an optional digit string specifying a *field width;* if the converted value has fewer
+  characters than the field width it will be blank-padded on the left (or right, if the
+  left-adjustment indicator has been given) to make up the field width;
+
+-
+: an optional period `.` which serves to separate the field width from the next digit string;
+
+-
+: an optional digit string specifying a *precision* which specifies the number of digits to
+  appear after the decimal point, for e- and f-conversion, or the maximum number of characters to
+  be printed from a string;
+
+-
+: an optional length modifier. **Note:** v7 had only **l**, and said that a capitalized
+  conversion code did the same thing. **Neither is true here.** The C11 set (**hh**, **h**,
+  **l**, **ll**, **j**, **z**, **t**, **L**) is accepted and *every* member of it is *ignored*,
+  because every argument is exactly one word and *va_arg* steps by one word whatever type it is
+  named with. And a capital conversion letter is a *different* conversion now - see below.
+
+-
+: a character which indicates the type of conversion to be applied.
+
+A field width or precision may be `*` instead of a digit string. In this case an integer *arg*
+supplies the field width or precision.
+
+The conversion characters and their meanings are
+
+**diouxX**
+: The integer *arg* is converted to decimal (**d**, **i**), unsigned decimal (**u**), octal
+  (**o**), or hexadecimal (**x**, **X**) notation respectively. **Note: i** is C11's synonym for
+  **d**.
+
+**p**
+: The *arg* is printed as an unsigned hexadecimal value in the alternate form. C11; v7 had no
+  such conversion.
+
+**f**
+: The float or double *arg* is converted to decimal notation in the style `[-]ddd.ddd` where the
+  number of d's after the decimal point is equal to the precision specification for the argument.
+  If the precision is missing, 6 digits are given; if the precision is explicitly 0, no digits
+  and no decimal point are printed.
+
+**e**
+: The float or double *arg* is converted in the style `[-]d.ddde±dd` where there is one digit
+  before the decimal point and the number after is equal to the precision specification for the
+  argument; when the precision is missing, 6 digits are produced.
+
+**g**
+: The float or double *arg* is printed in style **d**, in style **f**, or in style **e**,
+  whichever gives full precision in minimum space.
+
+**F E G**
+: As **f**, **e** and **g**, but any letter the conversion emits is upper case. **Note:** under
+  v7 a capital was merely a length modifier and printed identically; see BESM-6 NOTES.
+
+**c**
+: The character *arg* is printed. **Note:** v7 said null characters are ignored. They are not: a
+  `\0` is emitted like any other byte, and a stream carries it through.
+
+**s**
+: *Arg* is taken to be a string (character pointer) and characters from the string are printed
+  until a null character or until the number of characters indicated by the precision
+  specification is reached; however if the precision is 0 or missing all characters up to a null
+  are printed. **Note:** a null pointer prints as `(null)` rather than faulting.
+
+**n**
+: The number of characters produced so far is stored through the **int \*** *arg*. Nothing is
+  printed. C11; v7 had no such conversion.
+
+**%**
+: Print a `%`; no argument is converted.
+
+**Note:** an unrecognised conversion letter is echoed verbatim, preceded by its `%`.
+
+In no case does a non-existent or small field width cause truncation of a field; padding takes
+place only if the specified field width exceeds the actual width. Characters generated by
+*printf* are printed by putc(3).
+
+**Examples**
+
+To print a date and time in the form `Sunday, July 3, 10:02`, where *weekday* and *month* are
+pointers to null-terminated strings:
+
+> printf("%s, %s %d, %02d:%02d", weekday, month, day, hour, min);
+
+To print pi to 5 decimals:
+
+> printf("pi = %.5f", 4*atan(1.0));
+
+## SEE ALSO
+
+putc(3), scanf(3), ecvt(3), stdio(3)
+
+## DIAGNOSTICS
+
+**Note:** v7's page said nothing about return values, because K&R had not settled them. Each of
+the eight returns the number of characters produced, and *snprintf* and *vsnprintf* return the
+number that *would* have been produced had the buffer been large enough - which may exceed
+*size*.
+
+## BUGS
+
+**Note:** v7's bug, "very wide fields (>128 characters) fail", is gone: padding is emitted in a
+loop and passes through no buffer at all. Only the *digits* of a conversion are buffered, and
+32 of them is more than a 48-bit value can need.
+
+## BESM-6 NOTES
+
+### This engine is not v7's
+
+v7's *_doprnt* was x86 assembly in the port these sources came from, so there was nothing to
+port. The engine here is the external c-compiler's *doprnt.c*, itself derived from the FreeBSD
+kernel *printf*, retargeted to a **FILE \*** sink.
+
+### The case fold is gone, which is why a capital is a real conversion
+
+The engine arrived folding *every* conversion letter to upper case, because its output device
+buffered KOI7 and printed upper case only: **%d** and **%D** both arrived as `D`, and %x/%X,
+%e/%E and %g/%G were indistinguishable.
+
+**This terminal is ASCII,** so the letters are case-sensitive again - three distinct pairs,
+plus a **(null)** that is no longer **(NULL)**.
+
+### The v form is the primitive
+
+<stdarg.h> is the only way to walk an argument list here, so *vfprintf* is the routine and the
+seven others are wrappers around it. That is the inverse of v7, where *_doprnt* took a frame
+pointer and the *v* forms did not exist.
+
+### sprintf counts because the stream drops the byte
+
+*Sprintf* and *snprintf* build a v7 _IOSTRG stream over the caller's buffer. When such a stream
+fills, *_flsbuf*() *drops* the byte and leaves the count rising - which is exactly the value
+C11 wants *snprintf* to return, obtained for nothing.
+
+### %d of the most negative value
+
+Taking the magnitude as -(int)ul is wrong here twice over: a signed value is a 41-bit field
+with bits 48..42 zero, so negating it as a signed **int** overflows at the negative limit, and
+negating the raw word as unsigned is wrong for *every* negative, the word not being a true
+48-bit two's complement. The magnitude is computed as 2**41 - ul in unsigned arithmetic
+instead.
+
+### %010.2f keeps its zero fill
+
+C11 sec 7.21.6.1p6 says a precision makes the `0` flag ignored - but only for **diouxX**. The
+engine this came from applied it in the flag parser and silently disarmed the floating
+conversions too.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/stdio/doprnt.c and the eight entry points beside it

@@ -1,0 +1,37 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# ABS(3)
+
+## NAME
+
+abs - integer absolute value
+
+## SYNOPSIS
+
+```c
+#include <stdlib.h>
+
+int abs(int i);
+```
+
+## DESCRIPTION
+
+*Abs* returns the absolute value of its integer operand.
+
+## SEE ALSO
+
+floor(3) for *fabs*
+
+## BUGS
+
+You get what the hardware gives on the largest negative integer.
+
+**Note:** that is still true, and the number is different here. An **int** is a 41-bit
+two's-complement field, so INT_MIN is -2**40 and its magnitude, 2**40, has no positive twin in
+41 bits. The same asymmetry is what strtol(3) had to be rewritten around and what printf(3) of
+the most negative value gets wrong if the magnitude is taken by negating.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/gen/abs.c

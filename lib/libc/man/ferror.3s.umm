@@ -1,0 +1,50 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# FERROR(3S)
+
+## NAME
+
+feof, ferror, clearerr, fileno - stream status inquiries
+
+## SYNOPSIS
+
+```c
+#include <stdio.h>
+
+int feof(FILE *stream);
+
+int ferror(FILE *stream);
+
+void clearerr(FILE *stream);
+
+int fileno(FILE *stream);
+```
+
+## DESCRIPTION
+
+*Feof* returns non-zero when end of file is read on the named input *stream,* otherwise zero.
+
+*Ferror* returns non-zero when an error has occurred reading or writing the named *stream,*
+otherwise zero. Unless cleared by *clearerr,* the error indication lasts until the stream is
+closed.
+
+*Clearerr* resets the error indication on the named *stream.* **Note:** v7's own page spelled
+it *clrerr* in the text and *clearerr* in the synopsis. The name is *clearerr*; the source file
+is called *clrerr.c* because the object directory is flat.
+
+*Fileno* returns the integer file descriptor associated with the *stream,* see open(2). It is
+POSIX rather than C11, and is here because v7 has it and v7 code uses it.
+
+These functions are implemented as macros; they cannot be redeclared. **Note:** *feof*,
+*ferror* and *clearerr* also exist as real functions, which is C11 sec 7.1.4 - a macro may be
+suppressed by parenthesising the name, and there must be something to call when it is. Each of
+the three evaluates its argument exactly once, unlike getc(3) and putc(3).
+
+## SEE ALSO
+
+fopen(3), open(2), stdio(3)
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/stdio/feof.c, ferror.c, clrerr.c

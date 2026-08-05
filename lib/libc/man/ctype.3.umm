@@ -1,0 +1,127 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# CTYPE(3)
+
+## NAME
+
+isalpha, isupper, islower, isdigit, isxdigit, isalnum, isspace, isblank, ispunct, isprint,
+isgraph, iscntrl, isascii, toupper, tolower - character classification and case conversion
+
+## SYNOPSIS
+
+```c
+#include <ctype.h>
+
+int isalpha(int c);
+
+. . .
+
+int toupper(int c);
+
+int tolower(int c);
+```
+
+## DESCRIPTION
+
+These macros classify ASCII-coded integer values by table lookup. Each is a predicate returning
+nonzero for true, zero for false. *Isascii* is defined on all integer values; the rest are
+defined only where *isascii* is true and on the single non-ASCII value EOF (see stdio(3)).
+
+*isalpha*
+: *c* is a letter
+
+*isupper*
+: *c* is an upper case letter
+
+*islower*
+: *c* is a lower case letter
+
+*isdigit*
+: *c* is a digit
+
+*isxdigit*
+: *c* is a hexadecimal digit
+
+*isalnum*
+: *c* is an alphanumeric character
+
+*isspace*
+: *c* is a space, tab, carriage return, newline, vertical tab or formfeed
+
+*isblank*
+: *c* is a space or a tab. **Note:** C11; v7 had no such test.
+
+*ispunct*
+: *c* is a punctuation character (neither control nor alphanumeric)
+
+*isprint*
+: *c* is a printing character, code 040(8) (space) through 0176 (tilde)
+
+*isgraph*
+: *c* is a printing character other than the space
+
+*iscntrl*
+: *c* is a delete character (0177) or ordinary control character (less than 040).
+
+*isascii*
+: *c* is an ASCII character, code less than 0200
+
+*Toupper* and *tolower* convert a letter to the other case and return **any other argument
+unchanged.**
+
+## SEE ALSO
+
+ascii(7), string(3)
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/gen/ctype_.c, toupper.c, tolower.c, isblank.c, include/ctype.h
+
+## BESM-6 NOTES
+
+### The table is v7's, unchanged, because this terminal is ASCII
+
+Not KOI7. The console driver passes bytes untranslated in both directions, so there was nothing
+in the classification to re-derive.
+
+### isprint(' ') is true now, and it was not in v7
+
+v7 left bit 0200 of its table free. It carries **_B** on the space here, which is what makes
+*isprint* and *isgraph* distinguishable - v7's *isprint* answered *false* for a space, which is
+a plain violation of C11 sec 7.4.1.8.
+
+### toupper and tolower could not stay macros
+
+v7's are *unconditional* - **(c) - 'a' + 'A'** - so v7's *toupper('1')* returns garbage, where
+C11 sec 7.4.2 requires the argument back unchanged when it is not a character of the other
+case. The conditional form must test the class and then yield the argument, that is, *evaluate
+it twice,* which sec 7.1.4 forbids of a macro.
+
+So both are real functions here, and **v7's unconditional pair keeps the name v7 itself gave it
+on other machines: _toupper and _tolower.** A caller that has already checked the class can
+still have the cheap one.
+
+*Isblank* went the same way, for want of a bit rather than for the fold: it is the space and
+the tab, and the tab's only class is _S, which also covers newline, vertical tab, form feed and
+carriage return. A macro would have had to test the two characters separately.
+
+### The table is 129 entries, not 128
+
+Every macro indexes **(_ctype_ + 1)[c]**, so EOF (-1) lands on a leading zero and classifies as
+nothing.
+
+**char is unsigned here,** so a byte of 0200..0377 is reachable and runs off the end of the
+table. Two places in the tree had to be fixed for that: strtol(3)'s scanner, and a *isspace*()
+in libcurses applied to a window cell carrying a standout bit.
+
+### The whole table is 22 words
+
+Six chars to a word.
+
+### The functions are declared but not all defined
+
+C11 sec 7.4 wants each classification to exist as a function as well as a macro, so that
+**(isalpha)(c)** and **&isalpha** work. <ctype.h> declares them all; *toupper*, *tolower* and
+*isblank* are the three that exist. The rest are a TODO, and the macros serve every caller in
+this tree today.

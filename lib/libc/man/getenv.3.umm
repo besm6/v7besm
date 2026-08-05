@@ -1,0 +1,59 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# GETENV(3)
+
+## NAME
+
+getenv - value for environment name
+
+## SYNOPSIS
+
+```c
+#include <stdlib.h>
+
+char *getenv(const char *name);
+```
+
+## DESCRIPTION
+
+*Getenv* searches the environment list (see environ(5)) for a string of the form
+*name*\&**=**\&*value* and returns *value* if such a string is present, otherwise 0 (NULL).
+
+## SEE ALSO
+
+environ(5), exec(2), end(3)
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/gen/getenv.c, lib/libc/csu/crt0.s
+
+## BESM-6 NOTES
+
+### Where environ comes from
+
+Nothing is handed to a program in a register. Both gates - the kernel's *exece*() and b6sim's
+loader - lay the argument block at the fixed base **070000** and zero every register but the
+stack pointer, which is already seeded and must not be touched.
+
+*Crt0* reads *argc* from that word and computes
+
+> ```
+> environ = &block[argc + 2]
+> ```
+
+\- past *argc* itself, the *argc* pointers, and the null that terminates the **argv[]** vector.
+*Environ* is one word of bss defined there.
+
+### Every slot strides by one word
+
+A **char \*** is a fat pointer and carries a byte offset, but a **char \*\*** is a plain word
+address - which is what *argv* and *envp* are here - so walking the vector is ordinary word
+indexing and no decoding is involved.
+
+### The environment is not a good thing to write a test against
+
+lib/test/environ checks *getenv* against the vector it was handed, entry by entry, and prints
+**neither a name nor a count.** Under b6sim the environment is a whitelisted slice of the
+host's, so even MAKEFLAGS alone would make a count differ between a run under *make* and the
+same run by hand. An expectation file may record only what the program does.

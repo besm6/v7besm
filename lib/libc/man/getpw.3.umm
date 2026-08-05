@@ -1,0 +1,48 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# GETPW(3) [deprecated]
+
+## NAME
+
+getpw - get name from UID
+
+## SYNOPSIS
+
+```c
+int getpw(int uid, char *buf);
+```
+
+## DESCRIPTION
+
+*Getpw* searches the password file for the (numerical) *uid*, and fills in *buf* with the
+corresponding line; it returns non-zero if *uid* could not be found. The line is
+null-terminated.
+
+**Note:** it is declared at its own file head and by no header, which is this tree's rule for a
+routine no v7 header names. Prefer getpwuid(3), which is what "deprecated" in the title has
+always meant here.
+
+## FILES
+
+| /etc/passwd
+| share/besm6/lib/libc.a, lib/libc/stdio/getpw.c
+
+## SEE ALSO
+
+getpwent(3), passwd(5)
+
+## DIAGNOSTICS
+
+Non-zero return on error.
+
+## BUGS
+
+*Buf* must be large enough for a whole line of /etc/passwd and there is no way to say how large
+it is.
+
+## BESM-6 NOTES
+
+One v7 bug is fixed rather than carried. Two of the field walks were guarded against a `\n`
+that cannot be present, the line having been read a character at a time and terminated already
+\- so **a line with fewer than three colons walked off the end of the caller's buffer.** Both
+walks stop at the terminator now.

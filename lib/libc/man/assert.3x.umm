@@ -1,0 +1,79 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# ASSERT(3X)
+
+## NAME
+
+assert, static_assert - program verification
+
+## SYNOPSIS
+
+```c
+#include <assert.h>
+
+void assert(scalar expression);
+
+static_assert(constant-expression, string-literal);
+```
+
+## DESCRIPTION
+
+*Assert* is a macro that indicates *expression* is expected to be true at this point in the
+program. It writes a diagnostic to the standard *error* file and calls abort(3) when
+*expression* is false (0). Compiling with the b6cc(1) option **-DNDEBUG** effectively deletes
+*assert* from the program.
+
+**Note:** v7's page said it "causes an exit(2) with a diagnostic comment on the standard
+output". Two corrections there: **the diagnostic goes to fd 2,** and the macro calls *abort*
+rather than exit(1), which C11 sec 7.2.1.1 requires and which is worth having - v7's exit(1)
+was indistinguishable from an ordinary failure.
+
+**Note:** *static_assert* is C11 and had no v7 ancestor. It is a macro spelling of the
+**_Static_assert** keyword, which the front end implements, so it costs nothing.
+
+## DIAGNOSTICS
+
+`Assertion failed: expression, file f, line n`
+
+**Note:** v7 printed the file and line only. *F* is the source file and *n* the source line
+number of the *assert* statement.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/gen/assert.c, include/assert.h
+
+## SEE ALSO
+
+abort(3)
+
+## BESM-6 NOTES
+
+### <assert.h> is deliberately unguarded, and it is the only such header here
+
+C11 sec 7.2 says NDEBUG is re-examined at *every* inclusion, so a source may include the
+header, define NDEBUG, and include it again to turn assertions off for the rest of the
+translation unit. An include guard would silently defeat that, so the file opens with **#undef
+assert** instead.
+
+### assert is an expression
+
+v7's macro expanded to a *brace block,* so **if (p) assert(q); else ...** was a syntax error
+and **assert(q), f()** would not parse at all. C11 sec 7.2.1.1 requires a **void** expression,
+and this one is a conditional.
+
+v7's macro also called *fprintf* and *exit* without declaring either, which no longer compiles:
+the front end has no implicit declarations.
+
+### The handler writes with write(), not through stdio
+
+There is no stdio dependency here at all, and that is deliberate: an assertion failure is
+exactly the moment not to depend on a buffered stream, which is the thing most likely to be
+broken already. Perror(3) writes the same way and for the same reason.
+
+Nothing is #included by <assert.h> either - **_Noreturn** is a keyword and the handler is
+declared in the header - so a source that asserts need not drag in stdio or stdlib to do it.
+
+### _assert is kept
+
+v7's alias, for the v7 sources that still spell it that way.

@@ -1,0 +1,104 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# STDIO(3S)
+
+## NAME
+
+stdio - standard buffered input/output package
+
+## SYNOPSIS
+
+```c
+#include <stdio.h>
+
+FILE *stdin;
+FILE
+*stdout;
+FILE
+*stderr;
+```
+
+## DESCRIPTION
+
+The functions described in Sections 3S constitute an efficient user-level buffering scheme. The
+in-line macros *getc* and putc(3) handle characters quickly. The higher level routines *gets,
+fgets, scanf, fscanf, fread, puts, fputs, printf, fprintf, fwrite* all use *getc* and *putc;*
+they can be freely intermixed.
+
+A file with associated buffering is called a *stream,* and is declared to be a pointer to a
+defined type **FILE.** Fopen(3) creates certain descriptive data for a stream and returns a
+pointer to designate the stream in all further transactions. There are three normally open
+streams with constant pointers declared in the include file and associated with the standard
+open files:
+
+**stdin**
+: | standard input file
+
+**stdout**
+: | standard output file
+
+**stderr**
+: standard error file
+
+A constant `pointer` **NULL** (0) designates no stream at all.
+
+An integer constant **EOF** (-1) is returned upon end of file or error by integer functions
+that deal with streams.
+
+Any routine that uses the standard input/output package must include the header file <stdio.h>
+of pertinent macro definitions. The functions and constants mentioned in sections labeled 3S
+are declared in the include file and need no further declaration. The constants, and the
+following `functions` are implemented as macros; redeclaration of these names is perilous:
+*getc, getchar, putc, putchar, feof, ferror, fileno*.
+
+**Note:** *every function* this package supplies is declared in <stdio.h> now, not just the
+five v7 declared there. The front end has no implicit declarations, so a call to an undeclared
+*printf* would not have compiled at all.
+
+## SEE ALSO
+
+open(2), close(2), read(2), write(2), fopen(3), setbuf(3), printf(3), getc(3)
+
+## DIAGNOSTICS
+
+The value **EOF** is returned uniformly to indicate that a **FILE** pointer has not been
+initialized with *fopen,* input (output) has been attempted on an output (input) stream, or a
+**FILE** pointer designates corrupt or otherwise unintelligible **FILE** data.
+
+## BESM-6 NOTES
+
+### BUFSIZ is 3072
+
+One disk block, in *bytes*: BSIZE is 512 words and file I/O counts bytes throughout. A page
+that says "512 bytes" means one block on the PDP-11 and is out of date here.
+
+### FILE grew two members, and both were free
+
+*_flag* is an **int** rather than v7's **char**, because all eight bits of a char were already
+spoken for (_IOREAD ... _IORW) and line buffering needed a ninth. *_bufsiz* is new, and
+setvbuf(3) is why: v7 wrote BUFSIZ into the buffering code outright, since *setbuf* was the
+only way to hand a buffer over and promised one of exactly that size.
+
+Neither costs anything. **A char struct member occupies a whole word here anyway** - see
+**struct sgttyb**, which is four chars in four words.
+
+### _IONBF is spelled _IOUNBUF
+
+v7 used the name _IONBF for a *bit* in *_flag*; C11 uses it for a setvbuf(3) *mode*, and the
+two cannot be the same number. The flag bit keeps its value under the name _IOUNBUF, and
+_IOFBF/_IOLBF/_IONBF are the three modes.
+
+### Line buffering exists, and the putc macro shows no sign of it
+
+A line-buffered stream is held at **_cnt == 0**, so *every putc* misses and falls into
+*_flsbuf*(), which appends the byte and writes the line out on a newline or a full buffer. Only
+the slow path pays; a fully buffered stream is untouched.
+
+**Note:** *stdout* takes this mode when isatty(3) says its descriptor is a terminal. v7 went
+fully *unbuffered* there and spent a system call per character. *Stderr* is unbuffered
+outright, as in v7.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/stdio/, include/stdio.h

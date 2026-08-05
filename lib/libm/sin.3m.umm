@@ -1,0 +1,89 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# SIN(3M)
+
+## NAME
+
+sin, cos, tan, asin, acos, atan, atan2 - trigonometric functions
+
+## SYNOPSIS
+
+```c
+#include <math.h>
+
+double sin(double x);
+
+double cos(double x);
+
+double tan(double x);
+
+double asin(double x);
+
+double acos(double x);
+
+double atan(double x);
+
+double atan2(double y, double x);
+```
+
+## DESCRIPTION
+
+*Sin, cos* and *tan* return trigonometric functions of radian arguments. The magnitude of the
+argument should be checked by the caller to make sure the result is meaningful.
+
+*Asin* returns the arc sin in the range -π/2 to π/2.
+
+*Acos* returns the arc cosine in the range 0 to π.
+
+*Atan* returns the arc tangent of *x* in the range -π/2 to π/2.
+
+*Atan2* returns the arc tangent of *y/x* in the range -π to π. **Note:** v7's page named the
+arguments the other way round and called the result the arc tangent of *x/y*. The routine is
+the same one; the names here are C11's, and <math.h> declares it **atan2(double y, double x)**.
+
+## SEE ALSO
+
+exp(3), sinh(3), intro(2)
+
+## DIAGNOSTICS
+
+Arguments of magnitude greater than 1 cause *asin* and *acos* to return value 0; *errno* is set
+to EDOM. The value of *tan* at its singular points is HUGE_VAL with the sign of the pole, and
+*errno* is set to ERANGE. **Note:** that is the "would have been an infinity" case, for which
+this machine has no value; HUGE_VAL is the largest finite one.
+
+Nothing on this page can overflow. *Atan* and *atan2* evaluate their fit on an argument reduced
+to [-0.414, 0.414], and *asin* and *acos* reduce to *atan* after their range check, so no error
+return but the two above exists.
+
+## BUGS
+
+The value of *tan* for arguments greater than about 2**40 is garbage. **Note:** v7 said 2**31,
+which was its own mantissa and integer widths speaking. Here the reduction carries the integer
+part of x/π through an **int**, which holds 41 bits, and above 2**40 a **double** has no
+fractional bits left in any case.
+
+## BESM-6 NOTES
+
+### The reduction crossover was a width, not a bound
+
+v7's *sin* reads **if (x > 32764)**, and that number is not mathematical: it is the last
+multiple of the quarter-turn below 2**15, past which the PDP-11's **int** overflowed, so above
+it v7 fell back on a slower reduction through modf(3).
+
+Here **int** is 41 bits, and the real point past which the fast integer reduction loses bits is
+2**40 - the width of the mantissa, and the same constant *modf* itself keys on. The crossover
+moves out to 2**40 accordingly, so the fast path serves the whole range a program is likely to
+ask for. A magnitude past 2**40 has no fractional turn left to speak of anyway.
+
+### atan needed one line of C11
+
+v7's first line of *atan.c* reads **double static sq2p1**, which this front end rejects: the
+storage class has to precede the type. The routine is otherwise unchanged, the closing **if ((y
+\+ x) == y)** test of *atan2* included - that is v7's way of asking whether the angle is a right
+angle, and it works here for the same reason it worked on the PDP-11.
+
+## FILES
+
+| share/besm6/lib/libm.a
+| lib/libm/sin.c, tan.c, asin.c, atan.c

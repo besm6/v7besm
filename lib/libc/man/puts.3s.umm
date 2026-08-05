@@ -1,0 +1,45 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# PUTS(3S)
+
+## NAME
+
+puts, fputs - put a string on a stream
+
+## SYNOPSIS
+
+```c
+#include <stdio.h>
+
+int puts(const char *s);
+
+int fputs(const char *s, FILE *stream);
+```
+
+## DESCRIPTION
+
+*Puts* copies the null-terminated string *s* to the standard output stream *stdout* and appends
+a newline character.
+
+*Fputs* copies the null-terminated string *s* to the named output *stream*.
+
+Neither routine copies the terminal null character.
+
+**Note:** v7's page said nothing about return values, because it had none to report - v7's
+*fputs* returned whatever fell out. Both return a non-negative value on success and EOF on
+error, as C11 sec 7.21.7.4 and 7.21.7.9 require.
+
+## SEE ALSO
+
+| fopen(3), gets(3), putc(3), printf(3), ferror(3), stdio(3)
+| fread(3) for
+| *fwrite*
+
+## BUGS
+
+*Puts* appends a newline, *fputs* does not, all in the name of backward compatibility.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/stdio/puts.c, fputs.c

@@ -1,0 +1,142 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# CTIME(3)
+
+## NAME
+
+ctime, localtime, gmtime, asctime, timezone, clock, difftime, mktime, strftime - convert date
+and time to ASCII
+
+## SYNOPSIS
+
+```c
+#include <time.h>
+
+char *ctime(const time_t *clock);
+
+struct tm *localtime(const time_t *clock);
+
+struct tm *gmtime(const time_t *clock);
+
+char *asctime(const struct tm *tm);
+
+char *timezone(int zone, int dst);
+
+clock_t clock(void);
+
+double difftime(time_t end, time_t start);
+
+time_t mktime(struct tm *tp);
+
+size_t strftime(char *s, size_t n, const char *fmt, const struct tm *tp);
+```
+
+## DESCRIPTION
+
+*Ctime* converts a time pointed to by *clock* such as returned by time(2) into ASCII and
+returns a pointer to a 26-character string in the following form. All the fields have constant
+width.
+
+Sun Sep 16 01:03:52 1973\\n\\0
+
+*Localtime* and *gmtime* return pointers to structures containing the broken-down time.
+*Localtime* corrects for the time zone and possible daylight savings time; *gmtime* converts
+directly to GMT, which is the time UNIX uses. *Asctime* converts a broken-down time to ASCII
+and returns a pointer to a 26-character string.
+
+The structure declaration from the include file is:
+
+> ```c
+> struct tm {
+>     int tm_sec;
+>     int tm_min;
+>     int tm_hour;
+>     int tm_mday;
+>     int tm_mon;
+>     int tm_year;
+>     int tm_wday;
+>     int tm_yday;
+>     int tm_isdst;
+> };
+> ```
+
+**Note:** v7's page pulled this in with a **.so** of the installed header; it is written out
+here, there being no /usr/include on this system. <time.h> also declares every routine now.
+v7's held the struct alone and left the calls to K&R's implicit **int**.
+
+These quantities give the time on a 24-hour clock, day of month (1-31), month of year (0-11),
+day of week (Sunday = 0), year - 1900, day of year (0-365), and a flag that is nonzero if
+daylight saving time is in effect.
+
+When local time is called for, the program consults the system to determine the time zone and
+whether the standard U.S.A. daylight saving time adjustment is appropriate. The program knows
+about the peculiarities of this conversion in 1974 and 1975; if necessary, a table for these
+years can be extended. **Note:** the zone comes from ftime(2), as it did in v7 - the kernel
+owns the westward offset and the daylight flag, and there is no zoneinfo to read.
+
+*Timezone* returns the name of the time zone associated with its first argument, which is
+measured in minutes westward from Greenwich. If the second argument is 0, the standard name is
+used, otherwise the Daylight Saving version. If the required name does not appear in a table
+built into the routine, the difference from GMT is produced; e.g. in Afghanistan
+*timezone(-(60*4+30), 0)* is appropriate because it is 4:30 ahead of GMT and the string
+**GMT+4:30** is produced. **Note:** *timezone* is declared by no header, C11 having **%Z**
+instead; a caller that wants the v7 spelling declares it itself. So does *dysize*().
+
+**Note:** the four that follow are C11 and had no v7 ancestor.
+
+*Clock* returns the processor time used, in units of **CLOCKS_PER_SEC**, or (clock_t)-1 if it
+is not available.
+
+*Difftime* returns the difference of two times in seconds, as a **double**.
+
+*Mktime* is the inverse of *localtime*: it takes a broken-down local time, normalises its
+fields, fills in *tm_wday* and *tm_yday*, and returns the corresponding **time_t**, or
+(time_t)-1 if it cannot be represented.
+
+*Strftime* formats a broken-down time into *s* according to *fmt*, writing at most *n*
+characters, and returns the number written not counting the terminating null - or 0 if the
+result would not fit.
+
+## SEE ALSO
+
+time(2), ftime(2)
+
+## BUGS
+
+The return values point to static data whose content is overwritten by each call.
+
+## BESM-6 NOTES
+
+### time_t is one word, and it reaches past 2100
+
+41 bits of seconds, so there is **no 2038 problem** - and that is not merely reassuring,
+because it breaks a v7 assumption.
+
+**dysize() uses the full Gregorian rule now.** v7 wrote **(y % 4) == 0** and was right until
+2100, which a two-digit year could not reach and a 41-bit **time_t** can.
+
+The same collapse is why stime(2) sheds an argument that v7's gate carried: v7's **time_t** was
+two PDP-11 words.
+
+### CLOCKS_PER_SEC is HZ
+
+250, the tick this kernel programs. *Clock* can be no finer than the clock the machine has.
+
+**Note:** under b6sim the counters are the *host's* clock ticks, whose rate is not this
+machine's HZ. A program that divides by CLOCKS_PER_SEC gets a different answer in the two
+harnesses, which is why the test converts only literal **time_t** values.
+
+### Two more departures from v7's arithmetic
+
+*Gmtime* and *asctime* **name their fields.** v7 walked **struct tm** through an **int \***,
+filling it positionally. That works here only because every field is one word, and it is not
+worth relying on.
+
+**February is not patched in place.** v7 wrote 29 into its static month-length table for the
+duration of a leap year and wrote 28 back afterwards - a static mutated and restored, which any
+early return leaves wrong.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/gen/ctime.c, clock.c, difftime.c, mktime.c, strftime.c, timezone.c

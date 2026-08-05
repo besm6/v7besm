@@ -1,0 +1,151 @@
+<!-- Copyright (c) 1980 Regents of the University of California. -->
+<!-- All rights reserved.  The Berkeley software License Agreement -->
+<!-- specifies the terms and conditions for redistribution. -->
+<!--  -->
+<!-- @(#)curses.3x   6.3 (Berkeley) 4/23/86 -->
+<!--  -->
+
+# CURSES(3) [April 23, 1986]
+
+## NAME
+
+curses - screen functions with `optimal` cursor motion
+
+## SYNOPSIS
+
+| **cc** [ flags ] files **-lcurses -ltermcap** [ libraries ]
+
+| Note: on this system that order is a contract, not a convention. *b6ld* scans each archive exactly once and in order, so **-lcurses** must precede **-ltermcap,** which must precede the implicit **-lc -lruntime.**
+
+## DESCRIPTION
+
+These routines give the user a method of updating screens with reasonable optimization. They
+keep an image of the current screen, and the user sets up an image of a new one. Then the
+*refresh()* tells the routines to make the current screen look like the new one. In order to
+initialize the routines, the routine *initscr()* must be called before any of the other
+routines that deal with windows and screens are used. The routine *endwin()* should be called
+before exiting.
+
+## BESM-6 NOTES
+
+This is the 4.3BSD library, ported. See *lib/libcurses/README.md* in the source tree for the
+whole account; what a caller needs to know is this.
+
+*bool* is C11's *_Bool*, not a macro. 4.3BSD spelled the boolean capabilities and window flags
+*bool*, which was its own macro for *int*; *<curses.h>* includes *<stdbool.h>* and declares
+them with the real type instead. Redefining the name was not open to it - a *bool* macro of its
+own would collide with the one *<stdbool.h>* already has, in either inclusion order. On this
+machine *_Bool* occupies a whole word like every other scalar, so nothing changes size, and
+converting any scalar to it is a zero test, so such an object never holds anything but 0 or 1.
+*TRUE* and *FALSE* are *true* and *false*; *ERR* and *OK* are return codes and remain *int*.
+
+The tty-mode routines - *raw()*, *noraw()*, *cbreak()*, *nocbreak()*, *echo()*, *noecho()*,
+*nl()*, *nonl()*, *savetty()* and *resetty()* - are ioctl(2) calls on the console. Under the
+user-level simulator *b6sim* every one of them succeeds and changes nothing, so a program whose
+behaviour depends on the terminal really entering raw or cbreak mode must be run under the
+booted kernel.
+
+There is no job control, so nothing here catches SIGTSTP and there is no handler to reinstate
+after a stop.
+
+*longname()* and *fullname()* copy at most 49 characters into *def*, which is the size of the
+*ttytype* buffer their only caller passes. 4.3BSD copied without a bound.
+
+The terminal description is read from */etc/termcap*, or from **$TERMCAP** if that names an
+absolute path or holds an entry outright.
+
+## SEE ALSO
+
+| *Screen Updating and Cursor Movement Optimization: A Library Package,* Ken Arnold,
+| ioctl(2),
+| getenv(3),
+| tty(4),
+| termcap(3),
+| termcap(5)
+
+## AUTHOR
+
+Ken Arnold
+
+## FUNCTIONS
+
+| addch(ch)                     add a character to *stdscr*
+| addstr(str)                   add a string to *stdscr*
+| box(win,vert,hor)             draw a box around a window
+| cbreak()                      set cbreak mode
+| clear()                       clear *stdscr*
+| clearok(scr,boolf)            set clear flag for *scr*
+| clrtobot()                    clear to bottom on *stdscr*
+| clrtoeol()                    clear to end of line on *stdscr*
+| delch()                       delete a character
+| deleteln()                    delete a line
+| delwin(win)                   delete *win*
+| echo()                        set echo mode
+| endwin()                      end window modes
+| erase()                       erase *stdscr*
+| flusok(win,boolf)             set flush-on-refresh flag for *win*
+| getch()                       get a char through *stdscr*
+| getcap(name)                  get terminal capability *name*
+| getstr(str)                   get a string through *stdscr*
+| gettmode()                    get tty modes
+| getyx(win,y,x)                get (y,x) co-ordinates
+| inch()                        get char at current (y,x) co-ordinates
+| initscr()                     initialize screens
+| insch(c)                      insert a char
+| insertln()                    insert a line
+| leaveok(win,boolf)            set leave flag for *win*
+| longname(termbuf,name)        get long name from *termbuf*
+| move(y,x)                     move to (y,x) on *stdscr*
+| mvcur(lasty,lastx,newy,newx)  actually move cursor
+| newwin(lines,cols,begin_y,begin_x)                         create a new window
+| nl()                          set newline mapping
+| nocbreak()                    unset cbreak mode
+| noecho()                      unset echo mode
+| nonl()                        unset newline mapping
+| noraw()                       unset raw mode
+| overlay(win1,win2)            overlay win1 on win2
+| overwrite(win1,win2)          overwrite win1 on top of win2
+| printw(fmt,arg1,arg2,...)     printf on *stdscr*
+| raw()                         set raw mode
+| refresh()                     make current screen look like *stdscr*
+| resetty()                     reset tty flags to stored value
+| savetty()                     stored current tty flags
+| scanw(fmt,arg1,arg2,...)      scanf through *stdscr*
+| scroll(win)                   scroll *win* one line
+| scrollok(win,boolf)           set scroll flag
+| setterm(name)                 set term variables for name
+| standend()                    end standout mode
+| standout()                    start standout mode
+| subwin(win,lines,cols,begin_y,begin_x)                     create a subwindow
+| touchline(win,y,sx,ex)        mark line *y* *sx* through *sy* as changed
+| touchoverlap(win1,win2)       mark overlap of *win1* on *win2* as changed
+| touchwin(win)                 "change" all of *win*
+| unctrl(ch)                    printable version of *ch*
+| waddch(win,ch)                add char to *win*
+| waddstr(win,str)              add string to *win*
+| wclear(win)                   clear *win*
+| wclrtobot(win)                clear to bottom of *win*
+| wclrtoeol(win)                clear to end of line on *win*
+| wdelch(win,c)                 delete char from *win*
+| wdeleteln(win)                delete line from *win*
+| werase(win)                   erase *win*
+| wgetch(win)                   get a char through *win*
+| wgetstr(win,str)              get a string through *win*
+| winch(win)                    get char at current (y,x) in *win*
+| winsch(win,c)                 insert char into *win*
+| winsertln(win)                insert line into *win*
+| wmove(win,y,x)                set current (y,x) co-ordinates on *win*
+| wprintw(win,fmt,arg1,arg2,...)                             printf on *win*
+| wrefresh(win)                 make screen look like *win*
+| wscanw(win,fmt,arg1,arg2,...)                              scanf through *win*
+| wstandend(win)                end standout mode on *win*
+| wstandout(win)                start standout mode on *win*
+
+## BUGS
+
+*wprintw()* used to pass the wrong thing to the formatting core, so it formatted garbage where
+its three siblings did not; fixed in this port. So were an unbounded *longname()*, an
+*overlay()* that was destructive despite its name, an *isspace()* applied to a window cell that
+indexed off the end of the character-class table, a *wgetch()* that could not report end of
+input, and a *_id_subwins()* that wrote one word in front of a heap block whenever a subwindow
+began below its parent's cursor.

@@ -1,0 +1,125 @@
+<!-- Not a v7 page: v7 had no directory library at all.  See BESM-6 NOTES. -->
+
+# DIRECTORY(3)
+
+## NAME
+
+opendir, readdir, closedir, rewinddir, telldir, seekdir, dirfd - read a directory
+
+## SYNOPSIS
+
+```c
+#include <dirent.h>
+
+DIR *opendir(const char *name);
+
+struct dirent *readdir(DIR *dirp);
+
+int closedir(DIR *dirp);
+
+void rewinddir(DIR *dirp);
+
+long telldir(DIR *dirp);
+
+void seekdir(DIR *dirp, long loc);
+
+int dirfd(DIR *dirp);
+```
+
+## DESCRIPTION
+
+*Opendir* opens the directory named by *name* and returns a pointer to a directory stream,
+positioned at the first entry. It returns NULL if the name cannot be opened, or is not a
+directory, or if there is no memory for the stream.
+
+*Readdir* returns a pointer to the next entry, or NULL at the end of the directory. The object
+it points at has the following structure:
+
+> ```c
+> struct dirent {
+>     ino_t d_ino;
+>     int   d_namlen;
+>     char  d_name[DIRSIZ + 1];
+> };
+> ```
+
+**d_ino** is the entry's i-number and is never zero; **d_name** is the name, NUL-terminated;
+**d_namlen** is its length, which *readdir* has already computed, so a caller need not call
+strlen(3).
+
+The structure is the stream's own and the next *readdir* on the same stream overwrites it,
+exactly as getpwent(3) overwrites its own. A caller that wants to keep a name copies it out.
+
+*Closedir* closes the stream, releases everything *opendir* allocated, and returns the result
+of the underlying close(2).
+
+*Telldir* returns a value naming the position *readdir* will read from next; *seekdir* returns
+the stream to a position *telldir* reported earlier. *Rewinddir* returns it to the beginning.
+
+*Dirfd* returns the descriptor the stream is holding, so that a caller may fstat(2) the
+directory it is walking without opening it a second time. A caller must not close, read or seek
+that descriptor: the stream's buffer and position would then describe a place in the file that
+no longer exists.
+
+## FILES
+
+```
+share/besm6/lib/libc.a
+lib/libc/gen/opendir.c
+lib/libc/gen/readdir.c
+lib/libc/gen/closedir.c
+lib/libc/gen/rewinddir.c
+lib/libc/gen/telldir.c
+lib/libc/gen/seekdir.c
+lib/libc/gen/dirfd.c
+```
+
+## SEE ALSO
+
+dir(5), open(2), read(2), stat(2), ttyname(3)
+
+## DIAGNOSTICS
+
+*Opendir* returns NULL and sets *errno:* **ENOTDIR** when the name is not a directory, and
+otherwise whatever open(2) or malloc(3) set. *Readdir* returns NULL at the end of the directory
+and on a read error alike, and does not distinguish them.
+
+## BESM-6 NOTES
+
+**This is not a v7 interface.** v7 had none at all: every caller opened the directory as a file
+and read(2) raw **struct direct** records out of it, and eleven programs in *cmd/* each carried
+their own copy of the same mistakes. 4.2BSD introduced the library and this is its shape, less
+what has no meaning here.
+
+**struct dirent is not struct direct.** dir(5)'s **struct direct** is the format on the disk:
+exactly four words, with **d_name** being **DIRSIZ** characters and **no room for a
+terminator** when a name fills the field. **DIRSIZ is 18 here,** not v7's 14. *Readdir* copies
+the name into a field one character longer and plants that terminator, which is the whole
+reason for the library: a strlen(3) on the on-disk field runs into the next entry's **d_ino**.
+A **struct dirent** is never read into and nothing about it is on any disk.
+
+**readdir skips the empty slots.** unlink(2) empties a directory entry by writing **d_ino** = 0
+back in place, so a hole sits in the middle of a live directory and every open-coded caller in
+this tree tests for it by hand. *Readdir* does that test once, for all of them.
+
+**telldir returns the plain byte offset,** and there is no machinery behind it. 4.2BSD returns
+an index into a list of seek points that *closedir* must free, because a BSD directory entry is
+variable-length and an offset alone cannot name one. Every entry here is exactly **DIRENTSZ**
+(24) bytes, so the offset is the entry. *Seekdir* rounds its argument down to a whole entry.
+
+**The read buffer is sized from the directory** - as many entries as it holds when it is
+opened, capped at **DIRPB** (128), which is exactly one filesystem block, so a full read is one
+buffer-cache block and no entry straddles the buffer. A fixed one-block buffer would be 512
+words for a */dev* of twenty-five entries, and **_NFILE** is 20: seventeen directories open at
+once would be 8,704 words of a 28,672-word address space.
+
+**opendir refuses a plain file,** which neither v7 nor 4.2BSD had to do. Read(2) on a regular
+file succeeds here, so without the test *readdir* would hand back file contents reinterpreted
+as entries - silently, there being no field in a directory entry that can be checked for sense.
+
+**lib/test/dirt is the test, and it runs on the disk image only.** *b6sim* serves every system
+call from the host, where open(2) and fstat(2) on a directory both **succeed** and only read(2)
+refuses. So under the simulator *opendir* returns a perfectly good stream and the first
+*readdir* returns NULL: every directory looks empty, and looks it in exactly the way an empty
+one does. No expectation file can tell those apart, which is why the test is image-only and why
+a *b6sim* run of anything that walks a tree proves nothing about the walk.

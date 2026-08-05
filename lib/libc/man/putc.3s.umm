@@ -1,0 +1,70 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# PUTC(3S)
+
+## NAME
+
+putc, putchar, fputc, putw - put character or word on a stream
+
+## SYNOPSIS
+
+```c
+#include <stdio.h>
+
+int putc(int c, FILE *stream);
+
+int putchar(int c);
+
+int fputc(int c, FILE *stream);
+
+int putw(int w, FILE *stream);
+```
+
+## DESCRIPTION
+
+*Putc* appends the character *c* to the named output *stream*. It returns the character
+written.
+
+*Putchar(c)* is defined as *putc(c, stdout).*
+
+*Fputc* behaves like *putc,* but is a genuine function rather than a macro. It may be used to
+save on object text.
+
+*Putw* appends word (i.e. **int**) *w* to the output *stream*. *Putw* neither assumes nor
+causes special alignment in the file.
+
+**Note: a word is six bytes here,** not the PDP-11's two, and they are written most significant
+first; see getc(3). And *putw* returns 0, or EOF if the stream went bad - v7's page said it
+returns the word written, and v7's *putw* in fact returned nothing at all.
+
+The standard stream *stdout* is normally buffered if and only if the output does not refer to a
+terminal; this default may be changed by setbuf(3). **Note:** when *stdout does* refer to a
+terminal it is *line* buffered here, not unbuffered. v7 had no such mode and spent a system
+call per character; see stdio(3) for how the mode works, since the *putc* macro shows no sign
+of it.
+
+The standard stream *stderr* is by default unbuffered unconditionally, but use of *freopen*
+(see fopen(3)) will cause it to become buffered; *setbuf*, again, will set the state to
+whatever is desired. When an output stream is unbuffered information appears on the destination
+file or terminal as soon as written; when it is buffered many characters are saved up and
+written as a block. *Fflush* (see fclose(3)) may be used to force the block out early.
+
+## SEE ALSO
+
+fopen(3), fclose(3), getc(3), puts(3), printf(3), fread(3), setbuf(3), stdio(3)
+
+## DIAGNOSTICS
+
+These functions return the constant **EOF** upon error. Since this is a good integer, ferror(3)
+should be used to detect *putw* errors.
+
+## BUGS
+
+Because it is implemented as a macro, *putc* treats a *stream* argument with side effects
+improperly. In particular `putc(c, *f++);` doesn't work sensibly. **Note:** C11 sec 7.21.1p3
+permits exactly this of *putc* and getc(3), and of no other macro in <stdio.h>.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/stdio/putc.c, putchar.c, fputc.c, putw.c, flsbuf.c

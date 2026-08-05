@@ -1,0 +1,132 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# FOPEN(3S)
+
+## NAME
+
+fopen, freopen, fdopen, open_memstream, tmpfile, tmpnam, remove, rename - open, name and remove
+a stream's file
+
+## SYNOPSIS
+
+```c
+#include <stdio.h>
+
+FILE *fopen(const char *filename, const char *type);
+
+FILE *freopen(const char *filename, const char *type, FILE *stream);
+
+FILE *fdopen(int fildes, const char *type);
+
+FILE *open_memstream(char **bufp, size_t *sizep);
+
+FILE *tmpfile(void);
+
+char *tmpnam(char *s);
+
+int remove(const char *filename);
+
+int rename(const char *from, const char *to);
+```
+
+## DESCRIPTION
+
+*Fopen* opens the file named by *filename* and associates a stream with it. *Fopen* returns a
+pointer to be used to identify the stream in subsequent operations.
+
+*Type* is a character string having one of the following values:
+
+"r"
+: open for reading
+
+"w"
+: create for writing
+
+"a"
+: append: open for writing at end of file, or create for writing
+
+**Note:** a `+` may follow any of the three, opening the stream for update. **w+** and **a+**
+are created and then reopened, because creat(2) leaves the descriptor write-only. A `b` is
+accepted and ignored: there are no text and binary streams here, only bytes.
+
+*Freopen* substitutes the named file in place of the open *stream*. It returns the original
+value of *stream*. The original stream is closed.
+
+*Freopen* is typically used to attach the preopened constant names, **stdin, stdout, stderr,**
+to specified files.
+
+*Fdopen* associates a stream with a file descriptor obtained from *open, dup, creat,* or
+pipe(2). The *type* of the stream must agree with the mode of the open file.
+
+*Open_memstream* opens a stream for writing whose sink is not a file but a buffer on the heap
+that grows to hold whatever is written to it. It is POSIX.1-2008 and was in neither C11 nor v7.
+The buffer and its length are reported through *bufp* and *sizep*, which POSIX says are valid
+after each fflush(3) or fclose(3); here they are current at every moment, because the stream is
+arranged so that the library sees each byte as it is written. The buffer is obtained from
+malloc(3) and belongs to the caller, who must *free* it once the stream is closed.
+
+The length in \**sizep* excludes the null byte that always terminates the buffer, so the result
+may be read either as a string or as \**sizep* bytes. A null byte written to the stream is data
+and is counted like any other.
+
+**Note:** what this port does not honour. A memory stream carries no descriptor, so fseek(3),
+*rewind* and ungetc(3) are not supported on one, and neither are setbuf(3) and *setvbuf,* which
+would replace the very buffer the caller has been handed. Ftell(3) *is* supported and answers
+the number of bytes written. Fileno(3) answers a number deliberately chosen to be no descriptor
+at all, so that a stray write(2) or lseek(2) on a memory stream fails with EBADF rather than
+reaching a real file.
+
+**Note:** an allocation failure while the buffer is growing *loses* the text. This realloc(3)
+frees a block before it allocates the new one and does not give it back on failure, so there is
+nothing to fall back on; the loss is reported honestly as a null \**bufp*, a zero \**sizep* and
+the error indication that ferror(3) reads. *Free* accepts the null, so a caller that frees
+unconditionally is still correct.
+
+**Note:** the four that follow are C11 and had no v7 ancestor.
+
+*Tmpfile* creates a temporary file open for update and returns a stream on it. The name is
+*unlinked* as soon as the stream holds the descriptor, so the file has no name from then on and
+the kernel frees the inode when the last reference goes - which is either fclose(3) or the
+cleanup that exit(3) runs. Nothing is left behind even if the program dies on a signal.
+
+*Tmpnam* generates a file name that no existing file has, in a buffer of at least **L_tmpnam**
+characters; a null *s* asks for a static buffer that the next call overwrites. It can
+distinguish **TMP_MAX** names.
+
+**Note:** *tmpnam* does *not* go through mktemp(3). That routine fills its trailing X's from
+the process id and then walks a *single* letter, so it can distinguish 26 names where TMP_MAX
+promises 26**3. *Tmpnam* counts three letters of its own, and the pid still separates one
+process's names from another's.
+
+*Remove* deletes a file; *rename* changes its name. Both return 0 on success and a non-zero
+value on failure, and both are thin wrappers over unlink(2) and link(2)/unlink(2).
+
+## SEE ALSO
+
+open(2), fclose(3), setbuf(3), mktemp(3), stdio(3)
+
+## DIAGNOSTICS
+
+*Fopen, freopen, fdopen* and *tmpfile* return the pointer **NULL** if *filename* cannot be
+accessed. *Open_memstream* returns NULL when every one of the FOPEN_MAX streams is already in
+use, or when the initial buffer cannot be allocated. *Tmpnam* returns NULL if it cannot find an
+unused name.
+
+## BUGS
+
+*Fdopen* is not portable to systems other than UNIX.
+
+## BESM-6 NOTES
+
+FOPEN_MAX is _NFILE, which is also NOFILE in <sys/param.h>: one **FILE** per descriptor and no
+more.
+
+**There is no path-length limit in this kernel.** *Namei*() walks a component at a time and
+only the component is bounded, by DIRSIZ. So FILENAME_MAX is a convention for sizing a caller's
+buffer and not a kernel number; it is v7's customary 128.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/stdio/fopen.c, freopen.c, fdopen.c, endopen.c, findiop.c, memstream.c,
+| tmpfile.c, tmpnam.c, remove.c, rename.c

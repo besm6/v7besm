@@ -1,0 +1,132 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# MALLOC(3)
+
+## NAME
+
+malloc, free, realloc, calloc, aligned_alloc - main memory allocator
+
+## SYNOPSIS
+
+```c
+#include <stdlib.h>
+
+void *malloc(size_t size);
+
+void free(void *ptr);
+
+void *realloc(void *ptr, size_t size);
+
+void *calloc(size_t nelem, size_t elsize);
+
+void *aligned_alloc(size_t alignment, size_t size);
+```
+
+## DESCRIPTION
+
+*Malloc* and *free* provide a simple general-purpose memory allocation package. *Malloc*
+returns a pointer to a block of at least *size* bytes beginning on a word boundary.
+
+The argument to *free* is a pointer to a block previously allocated by *malloc*; this space is
+made available for further allocation, but its contents are left undisturbed. **Note:** a null
+*ptr* is accepted and does nothing, which is C11 sec 7.22.3.3. v7 would have walked the arena
+from a wild address.
+
+Needless to say, grave disorder will result if the space assigned by *malloc* is overrun or if
+some random number is handed to *free*.
+
+*Malloc* allocates the first big enough contiguous reach of free space found in a circular
+search from the last block allocated or freed, coalescing adjacent free blocks as it searches.
+It calls *sbrk* (see break(2)) to get more memory from the system when there is no suitable
+space already free.
+
+*Realloc* changes the size of the block pointed to by *ptr* to *size* bytes and returns a
+pointer to the (possibly moved) block. The contents will be unchanged up to the lesser of the
+new and old sizes. **Note:** a null *ptr* makes it a *malloc*, per C11 sec 7.22.3.5.
+
+*Realloc* also works if *ptr* points to a block freed since the last call of *malloc, realloc*
+or *calloc*; thus sequences of *free, malloc* and *realloc* can exploit the search strategy of
+*malloc* to do storage compaction.
+
+*Calloc* allocates space for an array of *nelem* elements of size *elsize.* The space is
+initialized to zeros. **Note:** the product is checked for overflow, which v7 did not do.
+
+**Note:** *aligned_alloc* is C11 and had no v7 ancestor. It is *malloc* with its *alignment*
+argument checked. **An alignment wider than a word is not supported:** every allocation is
+already word-aligned, and there is no unit finer than a word to align to, so the routine
+accepts an alignment of one word or less and refuses anything else.
+
+Each of the allocation routines returns a pointer to space suitably aligned (after possible
+pointer coercion) for storage of any type of object.
+
+## DIAGNOSTICS
+
+*Malloc, realloc, calloc* and *aligned_alloc* return a null pointer (0) if there is no
+available memory or if the arena has been detectably corrupted by storing outside the bounds of
+a block.
+
+**Note:** v7 said *malloc* "may be recompiled to check the arena very stringently on every
+transaction; see the source code." That **#ifdef debug** scaffolding is *gone,* not merely
+compiled out. Its one structural trace is in the free-list search, where two nested tests whose
+else branch was an assertion collapse into a single condition.
+
+## BUGS
+
+When *realloc* returns 0, the block pointed to by *ptr* may be destroyed.
+
+## BESM-6 NOTES
+
+### Where the BUSY bit lives
+
+This is the one change to the algorithm, and it is forced.
+
+v7 packs the flag into **bit 0** of a block's link, which is free on a byte-addressed machine
+because its list cell is two bytes wide there and every block is even. **Here a block is
+exactly one word and an address is a word index,** so adjacent blocks differ by 1 and bit 0 is
+a *significant* address bit - setting it would name the next block.
+
+The flag moves *above* the address instead, to **bit 16**: a regular (non-fat) pointer carries
+its 15-bit word address in bits 15..1 with bits 48..16 zero, so bit 16 is free, one past the
+top of the address space, and it sits far below the bit-48 marker that would make a marked link
+look like a fat **char \***.
+
+Nothing else in the algorithm notices - v7 already clears the flag before every dereference and
+every comparison - and the casts it takes are free, pointer and integer being one word each.
+
+### The break is granted a page at a time
+
+So the growth chunk and the step the allocator backs off by when refused are both a page (1024
+words). Anything smaller asks for exactly what was just given, or exactly what was just
+refused.
+
+Sbrk(2) fails with **NULL**, not v7's **(char \*)-1**, which would have to be fabricated out of
+an integer; *malloc* tests for NULL.
+
+### A size is checked before it becomes a word count
+
+A **size_t** is 48 bits wide and a word address is 15, so an unchecked byte size would wrap
+when divided into words. There is an up-front guard for it.
+
+Note also that *calloc*'s overflow guard must *not* be written **(size_t)-1**, which on this
+machine is 2**41-1 rather than 2**48-1: a signed-to-unsigned conversion is a bare copy of a
+41-bit pattern, not an adjustment by 2**48.
+
+### realloc's two failure returns are kept apart
+
+v7 writes them as one **return (char \*)q**. Casting a *null* word pointer to a fat one
+produces a pointer with the bit-48 marker and a byte offset set over a zero address - a null
+that is not a zero word. The failure path returns a plain NULL instead.
+
+### This is not the c-compiler's allocator
+
+That one claims the whole span from *end* to the stack on first use, which would defeat the
+kernel's demand-grown break and leave nothing between the heap and the stack.
+
+## FILES
+
+| share/besm6/lib/libc.a
+| lib/libc/gen/malloc.c, calloc.c, aligned_alloc.c
+
+## SEE ALSO
+
+break(2), end(3)
