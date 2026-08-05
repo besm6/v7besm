@@ -266,6 +266,23 @@ TEST(Quoting, EmptyQuotationIsLeftAlone)
     EXPECT_EQ(body_of("a \\`' b\n"), "a \\`' b");
 }
 
+TEST(Quoting, DoubledIsOneRunToo)
+{
+    // v7 doubles the quotes for an outer level; the closing run must match.
+    EXPECT_EQ(body_of("an \\`\\`='' here\n"), "an `=` here");
+    // A doubled open with a single close is malformed roff.  All that is promised
+    // is that it degrades locally rather than swallowing the rest of the line.
+    EXPECT_NE(body_of("an \\`\\`=' here\n").find("here"), std::string::npos);
+}
+
+TEST(Quoting, InAHeading)
+{
+    // brk.2 titles a subsection with a quotation, and a heading gets the same two
+    // passes as anything else.
+    std::string md = conv(".TH FOO 1\n.SS \\`end' is declared as an array\n");
+    EXPECT_NE(md.find("### `end` is declared as an array\n"), std::string::npos);
+}
+
 TEST(RoundTrip, Quoting)
 {
     EXPECT_TRUE(round_trips(page("the \\`environment' and \\`name=value' forms\n")));
@@ -299,6 +316,20 @@ TEST(Xref, NotAPrototype)
 TEST(Xref, DoesNotStartMidWord)
 {
     EXPECT_EQ(body_of("sprintf(3) is one word\n"), "sprintf(3) is one word");
+}
+
+TEST(Alternator, EscapedSpaceStaysInsideItsArgument)
+{
+    // roff splits on UNESCAPED whitespace, so this is three arguments and not five.
+    EXPECT_EQ(body_of(".IR execv \\ and \\ execl\n"), "*execv* and *execl*");
+}
+
+TEST(Font, BareMacroLastsOneLineOnly)
+{
+    // stat.2 writes a bare .I above a list of type names and expects the italic to
+    // stop at the end of that line.
+    EXPECT_EQ(body_of(".I\nino_t, off_t, time_t,\nname various widths\n"),
+              "*ino_t, off_t, time_t,* name various widths");
 }
 
 // --------------------------------------------------------------- the escapes ----
@@ -343,6 +374,14 @@ TEST(Escape, TwoSpecialsStayAscii)
 TEST(Escape, CommentToEndOfLine)
 {
     EXPECT_EQ(body_of("visible \\\" hidden\n"), "visible");
+}
+
+TEST(Escape, NestedWidthFunction)
+{
+    // intro.2 lays its errno table out with a motion whose width is itself a width
+    // function.  Taking the first delimiter as the close leaves the inner argument
+    // behind as text.
+    EXPECT_EQ(body_of("a\\h'\\w'EIO'u'b\n"), "ab");
 }
 
 TEST(Escape, WidthFunctionWarns)

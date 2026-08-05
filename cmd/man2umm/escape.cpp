@@ -155,15 +155,27 @@ static Font font_of(char c)
     }
 }
 
-// Skip a quoted escape argument: \w'...', \h'...', \v'...'.  Returns the index
-// just past the closing quote, or `i' unchanged if there is no opening one.
+//
+// Skip a delimited escape argument: \w'...', \h'...', \v'...'.  THEY NEST, and
+// lib/libc/man/intro.2 is the page that proves it -- its errno table is laid out
+// with a motion whose width is itself a width function.  Taking the first
+// delimiter as the close leaves the inner argument behind as text.
+//
 static size_t skip_quoted(const std::string &s, size_t i)
 {
     if (i >= s.size())
         return i;
     char q = s[i];
-    size_t j = s.find(q, i + 1);
-    return j == std::string::npos ? s.size() : j + 1;
+    for (size_t j = i + 1; j < s.size(); j++) {
+        if (s[j] == '\\' && j + 2 < s.size() &&
+            (s[j + 1] == 'w' || s[j + 1] == 'h' || s[j + 1] == 'v') && s[j + 2] == q) {
+            j = skip_quoted(s, j + 2) - 1;
+            continue;
+        }
+        if (s[j] == q)
+            return j + 1;
+    }
+    return s.size();
 }
 
 Font roff_escapes(const std::string &in, Font f, std::vector<Span> &out,
@@ -348,33 +360,44 @@ void mark_quotes(std::vector<Span> &v)
     std::string keep;
     std::vector<Font> kf;
     for (size_t i = 0; i < s.size(); i++) {
-        bool opens = s[i] == '`' && (i == 0 || !isalnum((unsigned char)s[i - 1])) &&
-                     i + 1 < s.size() && !isspace((unsigned char)s[i + 1]);
+        // v7 doubles the quotes for its outer level: ``x'' beside `x'.  Both are
+        // one literal run; the closing run must match the opening one in width.
+        size_t open_n = 0;
+        while (i + open_n < s.size() && s[i + open_n] == '`' && open_n < 2)
+            open_n++;
+        bool opens = open_n > 0 && (i == 0 || !isalnum((unsigned char)s[i - 1])) &&
+                     i + open_n < s.size() && !isspace((unsigned char)s[i + open_n]);
+
         size_t close = std::string::npos;
         if (opens) {
-            for (size_t j = i + 1; j < s.size() && j - i <= CAP; j++) {
+            for (size_t j = i + open_n; j < s.size() && j - i <= CAP; j++) {
                 if (s[j] == '`' || s[j] == '\n')
                     break;
                 if (s[j] != '\'')
                     continue;
+                size_t n_ = 0;
+                while (j + n_ < s.size() && s[j + n_] == '\'')
+                    n_++;
+                if (n_ != open_n)
+                    continue;
                 if (isspace((unsigned char)s[j - 1])) // ` x ' is not a quotation
                     break;
-                if (j + 1 < s.size() && isalnum((unsigned char)s[j + 1]))
+                if (j + n_ < s.size() && isalnum((unsigned char)s[j + n_]))
                     continue; // an apostrophe inside a word
                 close = j;
                 break;
             }
         }
-        if (close == std::string::npos || close == i + 1) {
+        if (close == std::string::npos || close == i + open_n) {
             keep += s[i];
             kf.push_back(fonts[i]);
             continue;
         }
-        for (size_t j = i + 1; j < close; j++) {
+        for (size_t j = i + open_n; j < close; j++) {
             keep += s[j];
             kf.push_back(Font::Literal);
         }
-        i = close;
+        i = close + open_n - 1;
     }
 
     v.clear();

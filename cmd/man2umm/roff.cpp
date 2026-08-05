@@ -69,8 +69,16 @@ std::vector<std::string> split_args(const std::string &s)
                 a += s[i++];
             }
         } else {
-            while (i < s.size() && s[i] != ' ' && s[i] != '\t')
+            while (i < s.size() && s[i] != ' ' && s[i] != '\t') {
+                // A backslash escape is one unit, so the unpaddable space of
+                // `.IR execv \ and \ execl' stays inside its argument.
+                if (s[i] == '\\' && i + 1 < s.size()) {
+                    a += s[i++];
+                    a += s[i++];
+                    continue;
+                }
                 a += s[i++];
+            }
         }
         args.push_back(a);
     }
@@ -314,7 +322,8 @@ private:
     std::vector<Span> para;  // the paragraph being accumulated
     bool para_lines = false; // a .br turned it into a line block
     Font font = Font::Roman;
-    bool await_tag = false; // .TP: the next line is the term
+    bool await_tag = false;      // .TP: the next line is the term
+    bool one_line_font = false;  // a bare .B or .I: it lasts one line
 
     bool nf = false; // a verbatim region
     std::vector<std::string> nfraw;
@@ -436,6 +445,10 @@ void Reader::do_text(const std::string &raw)
     }
     join_para();
     font = roff_escapes(line, font, para, strings, here());
+    if (one_line_font) {
+        one_line_font = false;
+        font = Font::Roman;
+    }
 }
 
 void Reader::do_font_macro(const std::string &name, const std::string &rest)
@@ -449,7 +462,8 @@ void Reader::do_font_macro(const std::string &name, const std::string &rest)
 
     std::vector<std::string> args = split_args(rest);
     if (args.empty()) {
-        font = f; // a bare .B takes the whole of the next line
+        font = f; // a bare .B takes the next line, and only the next line
+        one_line_font = true;
         return;
     }
     std::string joined;
@@ -683,6 +697,8 @@ void Reader::do_request(const std::string &name, const std::string &rest)
         Block b;
         b.kind = name == "SH" ? Kind::Section : Kind::Subsection;
         roff_escapes(t, Font::Roman, b.body, strings, here());
+        mark_quotes(b.body);
+        mark_xrefs(b.body, false);
         font = Font::Roman;
         emit(std::move(b));
         return;

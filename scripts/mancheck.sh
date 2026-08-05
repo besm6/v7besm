@@ -90,12 +90,22 @@ fi
 
 # The running header and footer groff puts on the one page: the title line at the
 # top and the page number at the bottom, neither of which is content.
+#
+# col RUNS IN THE AMBIENT LOCALE, deliberately: in the C locale it drops every byte
+# above 0x7f, which silently deletes an em dash, a multiplication sign and every
+# Cyrillic letter on the ten pages that have them.
 col -b < "$TMP/raw" | sed -e '1d' -e '$d' > "$TMP/plain"
+
+# Bytes from here on.  The dialect side counts bytes (b6man2umm -f walks a
+# std::string), so the roff side must too -- and BSD awk in a UTF-8 locale refuses a
+# page carrying Cyrillic rather than treating it as bytes.
+LC_ALL=C
+export LC_ALL
 
 # ---------------------------------------------------------------- W, the words ----
 tr -s ' \t' '\n\n' < "$TMP/plain" \
     | sed -e '/^$/d' -e '/^\xe2\x80\xa2$/d' \
-          -e 's/^`//' -e "s/'\\([^A-Za-z0-9]*\\)\$/\\1/" > "$TMP/w.roff"
+          -e 's/^`\{1,2\}//' -e "s/'\\{1,2\\}\\([^A-Za-z0-9]*\\)\$/\\1/" > "$TMP/w.roff"
 
 # The Markdown side.  awk rather than sed because A FENCED BLOCK IS VERBATIM: its
 # asterisks and backticks are content, and stripping them there is how `char *buffer'
@@ -147,8 +157,9 @@ fence       { line = $0; sub(/^ *> ?/, "", line); print line; next }
         if (sub(/^ *[0-9]+\. /, "", line)) peeled = 1
         if (sub(/^ *\| /, "", line)) peeled = 1
     } while (peeled)
-    gsub(/\\&/, "", line)
+    gsub(/\\&/, "\006", line)   # a non-alphanumeric stand-in, so rule 2 sees it
     line = strip_inline(line)
+    gsub(/\006/, "", line)
     gsub(/\\/, "", line)     # what is left is an escaped block-start character
     gsub(/\001/, "*", line)
     gsub(/\002/, "`", line)
@@ -156,7 +167,7 @@ fence       { line = $0; sub(/^ *> ?/, "", line); print line; next }
     print line
 }
 ' "$UMM" | tr -s ' \t' '\n\n' \
-    | sed -e '/^$/d' -e 's/^`//' -e "s/'\\([^A-Za-z0-9]*\\)\$/\\1/" > "$TMP/w.umm"
+    | sed -e '/^$/d' -e 's/^`\{1,2\}//' -e "s/'\\{1,2\\}\\([^A-Za-z0-9]*\\)\$/\\1/" > "$TMP/w.umm"
 
 if ! diff -u "$TMP/w.roff" "$TMP/w.umm" > "$TMP/w.diff"; then
     lost=$(grep -c '^-[^-]' "$TMP/w.diff")
@@ -176,11 +187,16 @@ sed -n -e 's/^\.S[HS] *//p' "$ROFF" \
     | sed -e 's/^"//' -e 's/"$//' \
           -e 's/\\f.//g' -e 's/\\(em/\xe2\x80\x94/g' -e 's/\\(mi/-/g' \
           -e 's/\\-/-/g' -e "s/\\\\'/'/g" -e 's/\\`/`/g' -e 's/\\[|^&]//g' \
+          -e 's/`//g' -e "s/'//g" \
           -e 's/  */ /g' -e 's/^ //' -e 's/ $//' > "$TMP/s.roff"
+
+# The dialect side loses the quote characters of a literal run, so take them off
+# both -- symmetric, exactly as W does with its tokens.
 sed -n -e 's/^#\{2,3\} //p' "$UMM" \
     | sed -e 's/\\\*/\x01/g' -e 's/\\`/\x02/g' \
           -e 's/\*\*//g' -e 's/\*//g' -e 's/`//g' -e 's/\\//g' \
-          -e 's/\x01/*/g' -e 's/\x02/`/g' > "$TMP/s.umm"
+          -e 's/\x01/*/g' -e 's/\x02/`/g' \
+          -e 's/`//g' -e "s/'//g" > "$TMP/s.umm"
 
 if ! diff -u "$TMP/s.roff" "$TMP/s.umm" > "$TMP/s.diff"; then
     echo "mancheck: $name: S -- the section structure differs" >&2
@@ -208,14 +224,37 @@ awk '
         c = substr($0, i, 1)
         if (i + 2 <= n && substr($0, i + 1, 1) == "\b") {
             over = substr($0, i + 2, 1)
-            if (c == "_")       out = out "I"
-            else if (c == over) out = out "B"
-            else                out = out "R"
+            # AN UNDERSCORE STRUCK OVER ITSELF IS AMBIGUOUS.  Italic is an
+            # underscore over the character and bold is the character over itself,
+            # so a bold _ and an italic _ are the same three bytes.  Emit U and
+            # resolve it below from the run it sits in -- SYS_close is bold and
+            # proc_user_time is italic, and nothing local to the character says so.
+            if (c == "_" && over == "_") out = out "U"
+            else if (c == over)          out = out "B"
+            else if (c == "_")           out = out "I"
+            else                         out = out "R"
             i += 3
             continue
         }
         if (c != " " && c != "\t" && c != "\b") out = out "R"
         i++
+    }
+    # Resolve each ambiguous underscore from its neighbours.  Prefer the marked
+    # one where they disagree: an _ that opens a run (_exit) has roman before it
+    # and italic after, and an _ that closes one has it the other way round.
+    while ((z = index(out, "U")) > 0) {
+        nx = "R"
+        for (y = z + 1; y <= length(out); y++) {
+            cy = substr(out, y, 1)
+            if (cy != "U") { nx = cy; break }
+        }
+        pv = "R"
+        for (y = z - 1; y >= 1; y--) {
+            cy = substr(out, y, 1)
+            if (cy != "U") { pv = cy; break }
+        }
+        r = (nx == "R" && pv != "R") ? pv : nx
+        out = substr(out, 1, z - 1) r substr(out, z + 1)
     }
     print out
 }
@@ -278,29 +317,38 @@ NR == FNR { text[FNR] = $0; next }
     while (qi <= tn) {
         if (substr(t, qi, 1) != "`") { qi++; continue }
         if (qi > 1 && substr(t, qi - 1, 1) ~ /[A-Za-z0-9]/) { qi++; continue }
-        qc = substr(t, qi + 1, 1)
+        qw = (substr(t, qi + 1, 1) == "`") ? 2 : 1   # v7 doubles its outer quotes
+        qc = substr(t, qi + qw, 1)
         if (qc == "" || qc == " " || qc == "\t") { qi++; continue }
         qe = 0
-        for (qj = qi + 1; qj <= tn && qj - qi <= 60; qj++) {
+        for (qj = qi + qw; qj <= tn && qj - qi <= 60; qj++) {
             qc = substr(t, qj, 1)
             if (qc == "`") break
             if (qc != q) continue
+            qn = 0
+            while (substr(t, qj + qn, 1) == q) qn++
+            if (qn != qw) continue
             if (substr(t, qj - 1, 1) == " ") break
-            if (substr(t, qj + 1, 1) ~ /[A-Za-z0-9]/) continue
+            if (substr(t, qj + qn, 1) ~ /[A-Za-z0-9]/) continue
             qe = qj
             break
         }
-        if (qe == 0 || qe == qi + 1) { qi++; continue }
-        mark = substr(mark, 1, qi - 1) "2" substr(mark, qi + 1)
-        mark = substr(mark, 1, qe - 1) "2" substr(mark, qe + 1)
-        for (qk = qi + 1; qk < qe; qk++)
+        if (qe == 0 || qe == qi + qw) { qi++; continue }
+        for (qk = 0; qk < qw; qk++) {
+            mark = substr(mark, 1, qi + qk - 1) "2" substr(mark, qi + qk + 1)
+            mark = substr(mark, 1, qe + qk - 1) "2" substr(mark, qe + qk + 1)
+        }
+        for (qk = qi + qw; qk < qe; qk++)
             mark = substr(mark, 1, qk - 1) "1" substr(mark, qk + 1)
-        qi = qe + 1
+        qi = qe + qw
     }
 
     head = (t ~ /^[A-Z]/)
     if (head) insyn = (t ~ /^SYNOPSIS/)
     fold_all = (insyn && !head && fence == 1)
+    # A heading, section or subsection, is bold on both sides -- so drop what the
+    # dialect dropped (mark 2) but leave the fonts alone (mark 1).
+    is_head = head || (t ~ /^   [^ ]/)
 
     out = ""
     k = 0
@@ -311,7 +359,7 @@ NR == FNR { text[FNR] = $0; next }
         k++
         ch = substr(f, k, 1)
         if (substr(mark, i, 1) == "2") continue
-        if (fold_all || substr(mark, i, 1) == "1") ch = "R"
+        if (fold_all || (substr(mark, i, 1) == "1" && !is_head)) ch = "R"
         out = out ch
     }
     printf "%s", out
