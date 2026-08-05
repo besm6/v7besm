@@ -122,7 +122,7 @@ If a field width is given, the corresponding argument
 should refer to a character array, and the
 indicated number of characters is read.
 .TP 4
-\z\fBe\v'1'f\v'-1'\fR
+.B "e, f"
 a
 floating point number is expected;
 the next field is converted accordingly and stored through the
