@@ -16,9 +16,11 @@
 #
 # The engine is split into a static library, as cmd/nm's is and for cmd/nm's reason:
 # the GoogleTest suite in test/ links the same code the binary does.  The library is
-# called `umm' rather than `man2umm' because CMake target names are global and
-# cmd/man (../TODO.md task C25a, the renderer) will link it too -- ummread.cpp and
-# emit.cpp are written for that second reader, not just for the round-trip test.
+# called `umm' rather than `man2umm' because ummread.cpp is a reader of the DIALECT
+# and not of roff: it is the half that outlives the conversion, and cmd/manview
+# (../TODO.md task C25a, the renderer) is to be written from it as a skeleton rather
+# than by linking it -- that task is C11 and this library is C++.  Neither is cmd/man,
+# which is C25b's program on the image and shares no code with either.
 #
 add_library(umm STATIC
     model.cpp       # diagnostics

@@ -1,0 +1,87 @@
+<!-- Copyright (c) 1980 Regents of the University of California. -->
+<!-- All rights reserved.  The Berkeley software License Agreement -->
+<!-- specifies the terms and conditions for redistribution. -->
+<!--  -->
+<!-- @(#)man.1        6.7 (Berkeley) 4/19/88 -->
+
+# MAN(1) [April 19, 1988]
+
+## NAME
+
+man - print out the manual
+
+## SYNOPSIS
+
+| **man** [ **-** ] [ **-a** ] [ **-w** ] [ **-M** *path* ] [ *section* ] *title* ...
+
+## DESCRIPTION
+
+*Man* provides on-line access to this manual. If a *section* specifier is given, *man* looks in
+that section for the given *title*(s); if it is omitted, *man* searches every section, giving
+preference to commands over library subroutines, and displays the first page it finds.
+
+A section is a digit, optionally followed by the subsection letter that appears on the page's
+own title: `1`, `1m`, `2`, `3`, `3s`, `3m`, `3x`, `5`, `8`. A bare digit names the whole family,
+so `man 3 stdio` finds *stdio*(3S) and `man 1 fsck` finds *fsck*(1M); a digit and a letter must
+match exactly. The search order is 1, 1M, 8, 6, 2, 3, 3S, 3M, 3X, 4, 5, 7 -- commands first --
+and it is what decides which page a bare *title* gets when the same name appears in two
+sections. `man mount` is *mount*(1M), the command; `man 2 mount` is the system call.
+
+The options are:
+
+**-**
+: Copy the page to the standard output as it stands, with no pager. This is the source of the
+  page, in the dialect described below.
+
+**-a**
+: Display all the pages that match, rather than the first.
+
+**-w**
+: Print where the page is, one path to a line, and display nothing.
+
+**-M** *path*
+: Search *path* instead of the default `/usr/man`. *Path* is a colon-separated list of
+  directories, each expected to hold the standard `man?` subdirectories; the whole of one
+  directory is searched before the next is looked at. The environment variable *MANPATH* says
+  the same thing.
+
+If the standard output is a terminal and the **-** flag is not given, *man* pipes the page
+through more(1), or through the pager named by the environment variable *PAGER*.
+
+*Note:* **this program does not format.** There is no nroff(1) on this machine, and none is
+coming; the pages here are written in the dialect `doc/Manual_Page_Format.md` describes and are
+meant to be read as they stand. So *man* runs cat(1) where another system runs a formatter, and
+the difference between `man ls` and `man - ls` is the pager and nothing else. When a renderer
+exists it takes cat(1)'s place, and nothing about the sections, the paths or the options above
+changes.
+
+*Note:* the sections `local`, `new` and `old`, the *MACHINE* variable and the machine-specific
+subdirectories it selected, the preformatted `cat?` directories and the `3f` FORTRAN section are
+all gone. This manual has one tree, one copy of each page, and no FORTRAN. The undocumented
+**-f** and **-k**, which invoked whatis(1) and apropos(1), are gone with them: neither program
+is on this system, and there is no `whatis` database for one to read.
+
+## FILES
+
+| `/usr/man` the manual
+| `/usr/man/man?/*` the pages themselves
+| `/bin/cat` what a page is shown with
+| `/bin/more` what it is paged with
+
+## SEE ALSO
+
+cat(1), more(1)
+
+## BUGS
+
+The command *man* builds is handed to sh(1), so a *title* that names a real page and also
+contains a shell metacharacter is re-interpreted by the shell. Every *man* of this lineage has
+this hole.
+
+A section is recognised by its leading digit, so a page whose name begins with a digit could not
+be asked for by name alone. There is no such page.
+
+A subsection letter that no version of this program has seen -- `2v`, say -- is staged onto the
+disk correctly and cannot be found here until it is added to the table in the source.
+
+The exit status of the pager, and of the program that shows the page, is discarded.

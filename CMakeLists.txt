@@ -180,8 +180,9 @@ if(B6RUNTIME_LIB)
     #
     # THE MANUAL, /usr/man -- two hundred pages in the dialect doc/Manual_Page_Format.md
     # describes, which is the whole of it: every page in the tree goes on the image.  There
-    # is no man(1) yet (cmd/TODO.md C25); a page is legible as it stands, which is what the
-    # dialect is for, and `cat /usr/man/man1/ls.1' is what a reader gets today.
+    # is a man(1) to find them with now (cmd/man, task C25b) and it does NOT format: a page
+    # is legible as it stands, which is what the dialect is for, so man runs `cat' where
+    # every other Unix runs a formatter.  The renderer is cmd/TODO.md C25a and is still open.
     #
     # v7's OWN LAYOUT: the section DIGIT picks the directory and the subsection letter stays
     # on the FILE, so fsck's page is man1/fsck.1m and stdio's is man3/stdio.3s.  The .umm
@@ -351,6 +352,7 @@ if(B6RUNTIME_LIB)
     add_subdirectory(cmd/login)
     add_subdirectory(cmd/look)
     add_subdirectory(cmd/ls)
+    add_subdirectory(cmd/man)
     add_subdirectory(cmd/mesg)
     add_subdirectory(cmd/mkdir)
     add_subdirectory(cmd/mkfs)

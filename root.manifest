@@ -24,8 +24,8 @@
 # directory here that is not root's, and /usr/test/ttyt, which asserts that ttyslot(3) can now
 # find a line in that file.  Task C25b added /usr/man -- two hundred manual pages in five
 # section directories, the largest single addition this file has ever taken, and the whole of
-# the manual in the dialect doc/Manual_Page_Format.md describes.  Nothing on the image reads
-# them yet: there is no man(1), and a page is legible as it stands.
+# the manual in the dialect doc/Manual_Page_Format.md describes -- together with the
+# /usr/bin/man that reads them, which does not format and does not need to.
 #
 # WHY THIS FILE LIVES AT THE TOP OF THE TREE and not in kernel/test/ beside the CMakeLists
 # that runs b6fsutil over it: every `file' below but none of the directories comes out of
@@ -1030,6 +1030,28 @@ file /usr/bin/cc        # cmd/cc built natively -- task C9e, the last of C9 and 
 source ../../rootfs/usr/bin/cc
 mode 0755
 
+# AND ONE PROGRAM HERE THAT IS NOT THE TOOLCHAIN'S.  /usr/bin held the eleven of task C9 and
+# nothing else; man is the twelfth entry and the first that is not compiled by, for or into
+# the compiler chain.  It is here rather than in /bin because v7 put it here, the shell's
+# default path is `:/bin:/usr/bin' (cmd/sh/msg.c), and it is a program about /usr and not
+# about the root -- which is also why the ls /bin expectations in kernel/test/console.ini
+# and session.expected did not have to move for it.
+
+file /usr/bin/man       # cmd/man -- task C25b, and the first program on this image that
+                        # reads /usr/man above.  IT DOES NOT FORMAT: there is no nroff on
+                        # this machine and none is coming, the pages are legible as they
+                        # stand, so man finds the file and runs /bin/cat on it -- piped into
+                        # /bin/more when standard output is a terminal, and into nothing at
+                        # all when it is not.  A renderer replaces the one `cat' in man.c
+                        # (cmd/TODO.md C25a) and nothing here changes when it does.
+                        # THE SECTION SEARCH IS AN ORDERED TABLE and not a readdir: thirteen
+                        # of the pages above -- mount, chmod, passwd, kill, time, write and
+                        # seven more -- exist in two sections at once, and only that order
+                        # decides which one a bare `man mount' answers with.
+                        # NOT setuid: it opens what its caller could open itself.
+source ../../rootfs/usr/bin/man
+mode 0755
+
 # /lib -- WHAT cc LINKS AGAINST, and exactly that, nothing more.  crt0.o and libc.a are
 # lib/libc's, built by this same tree with these same tools; libruntime.a is the external
 # c-compiler's and is the one piece of the link that cannot come from here (it holds the
@@ -1365,8 +1387,8 @@ mode 0644
 # against that glob, and it is worth running after any page is renamed or deleted, since a
 # copy_if_different stages but never removes.
 #
-# IT DOES NOT CURATE.  The corpus costs about 302 of the 539 free blocks this image had and
-# leaves some 237, which is affordable and is half the headroom; a manual with holes in it
+# IT DOES NOT CURATE.  The corpus costs about 302 of the free blocks this image had and
+# leaves 216, of which /usr/bin/man below took another 12; a manual with holes in it
 # is worth less than the blocks.  SIXTEEN OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
 # THIS IMAGE -- ac, at, awk, bc, calendar, cron, crypt, dc, expr, m4, mail, make, makekey,
 # sa, units and update.  Thirteen are ports cmd/TODO.md still has open and their pages are
@@ -1374,8 +1396,11 @@ mode 0644
 # table and will never have a program, which is v7's own habit -- a manual page is where a
 # decision about a program is recorded whether or not the program exists.
 #
-# NOTHING READS THEM YET.  There is no man(1) on this disk (cmd/TODO.md C25); a page is
-# legible as it stands, which is what the dialect is for.
+# WHAT READS THEM is /usr/bin/man below, and it does not format: a page is legible as it
+# stands, which is what the dialect is for, so man finds the file and shows it with /bin/cat.
+# The one thing it needs of the layout here is that the section digit is the directory and
+# the subsection letter is on the file -- `man 3 stdio' probes man3/stdio.3, .3s, .3m and .3x
+# in that order.  A renderer is cmd/TODO.md C25a and changes nothing on this disk.
 
 file /usr/man/man1/ac.1m
 source ../../rootfs/usr/man/man1/ac.1m
@@ -1543,6 +1568,10 @@ mode 0644
 
 file /usr/man/man1/make.1
 source ../../rootfs/usr/man/man1/make.1
+mode 0644
+
+file /usr/man/man1/man.1
+source ../../rootfs/usr/man/man1/man.1
 mode 0644
 
 file /usr/man/man1/mesg.1

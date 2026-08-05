@@ -404,4 +404,18 @@ sort status 0
 
      40
 executable not stripped
+---man---
+/usr/man/man1/ls.1
+/usr/man/man1/fsck.1m
+/usr/man/man3/stdio.3s
+/usr/man/man2/mount.2
+/usr/man/man1/mount.1m
+/usr/man/man2/mount.2
+/usr/man/man1/man.1
+/usr/man/man1/ls.1
+man: no entry for nosuchpage in the manual
+man status 1
+man cmp status 0
+man - cmp status 0
+    202
 ---end---

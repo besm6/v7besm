@@ -217,9 +217,10 @@ the second `-d` to `prog`. The program file itself, spelled exactly as you typed
 
 The program's environment is *not* the host's. `b6sim` passes a fixed short list of variables,
 in this order and only when the host has them set: `LANG`, `LC_ALL`, `TERM`, `SHELL`, `PATH`,
-`HOME`, `USER`, `LOGNAME`, `TMPDIR`, `EDITOR`, `PAGER`, `MAKEFLAGS`. A v7 program has no use for
-the hundreds of variables a modern shell exports, and the block competes for the few thousand
-words between `070000` and the guard word. Values are passed through verbatim, `PATH` included.
+`HOME`, `USER`, `LOGNAME`, `TMPDIR`, `EDITOR`, `PAGER`, `MANPATH`, `MAKEFLAGS`. A v7 program has
+no use for the hundreds of variables a modern shell exports, and the block competes for the few
+thousand words between `070000` and the guard word. Values are passed through verbatim, `PATH`
+included.
 
 | Option | Effect |
 |--------|--------|

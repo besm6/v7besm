@@ -20,10 +20,13 @@ upstream copy**, so the first diff on it is the porting diff. A task starts by w
 `CMakeLists.txt`, not by fetching anything.
 
 They came from `tmp/v7x86-0.8a/usr/src/cmd/`, an unpacked reference tree that is **not in the
-repository** (`tmp/` is git-ignored). **Two directories are the exception**, neither with a v7
-original behind it: [novi/](novi/), Dave W Plummer's full-screen editor for 2.11BSD, and
+repository** (`tmp/` is git-ignored). **Three directories are the exception.** Two have no v7
+original behind them at all: [novi/](novi/), Dave W Plummer's full-screen editor for 2.11BSD, and
 [more/](more/), Berkeley's pager by way of RetroBSD — v7 had neither an editor of that kind nor a
-pager at all. They are the two tasks in [TODO.md](TODO.md) with a number and no table row.
+pager. They are the two tasks in [TODO.md](TODO.md) with a number and no table row. The third is
+[man/](man/), and it is a different case: v7 *had* a `man`, but it is a shell script around
+`nroff` and there is no `nroff` here, so the source is Berkeley's 1987 C rewrite by way of
+RetroBSD and the reference tree's copy was not used.
 
 **A directory is part of the build when it holds a `CMakeLists.txt`** — that is the only marker;
 [../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.
@@ -215,9 +218,10 @@ in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt), and the hard-
 expectations in `kernel/test/console.ini` and `kernel/test/session.expected`.
 
 The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and since the manual went on it (§10)
-there are about **237 free** — the whole of `/usr/man` is 302 of them. That is still room for
-everything [TODO.md](TODO.md) has open, `man(1)` included, but it is no longer room for anything:
-weigh a large addition against it rather than assuming.
+and `man(1)` after it there are **204 free** — the whole of `/usr/man` is 302 of them and `man`
+itself 12. That is still room for most of what [TODO.md](TODO.md) has open, but it is no longer
+room for anything: weigh a large addition against it rather than assuming. The number is printed
+by `b6fsutil` every time `root.img` is built, so it is measured and not estimated.
 
 ### 8. Setuid works, and it is asserted
 
@@ -343,11 +347,13 @@ is UTF-8 and nothing special is needed for it; §11 already covers what eight-bi
 `b6man2umm -l` checks a page against the format's canonical shape and runs as a `ctest`
 (`man_lint_<page>`) over every page in the tree, so a page must pass it.
 
-**The pages are on the image, and there is no renderer yet** — read one as it stands, which is what
-the dialect is for. All two hundred are staged as `/usr/man/man<N>/<name>.<section>` in v7's layout:
-the `.umm` suffix dropped, the section digit picking the directory and the subsection letter left on
-the file, so `ls.1.umm` is `/usr/man/man1/ls.1` and `fsck.1m.umm` is `/usr/man/man1/fsck.1m`.
-[TODO.md](TODO.md) C25 is what will read them.
+**The pages are on the image and `man(1)` finds them; there is still no renderer** — a page is read
+as it stands, which is what the dialect is for, and [man/](man/) shows it with `cat`. All two
+hundred are staged as `/usr/man/man<N>/<name>.<section>` in v7's layout: the `.umm` suffix dropped,
+the section digit picking the directory and the subsection letter left on the file, so `ls.1.umm`
+is `/usr/man/man1/ls.1` and `fsck.1m.umm` is `/usr/man/man1/fsck.1m`. That layout is `man`'s whole
+search rule, so **the name of a page decides where it can be found**. [TODO.md](TODO.md) C25a is
+what will format them.
 
 **A new page costs two edits, not none.** `B6_STAGE_MAN` in the top-level
 [../CMakeLists.txt](../CMakeLists.txt) globs `cmd/*/*.umm`, so a page in a new command's directory

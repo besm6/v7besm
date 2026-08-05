@@ -65,8 +65,9 @@ regex ran from an opening backquote past the real close to the apostrophe in a p
 
 **`ummread.cpp` is the half that outlives the conversion.** The roff reader has a finite job; the
 dialect reader is what anything displaying a page goes through, and the renderer of
-[`../TODO.md`](../TODO.md) task C25 links this same library and adds a back end. That is why the
-library is called `umm` and not `man2umm`, and why the highest-value test in the suite is
+[`../TODO.md`](../TODO.md) task C25a is to be written from it — as a skeleton rather than as a
+library, that task being C11 and this code C++. That is why the library is called `umm` and not
+`man2umm`, and why the highest-value test in the suite is
 
 ```
 ummread(write_umm(read_man(x))) == read_man(x)

@@ -103,9 +103,12 @@ reaches both it and the stdio flush through a pointer). The image also carries
 staged and not listed cannot slip past `root.img`. `B6_STAGE_MAN` is the fourth of those lists
 and carries **`/usr/man`, all 200 manual pages**, in v7's layout — the `.umm` suffix dropped, the
 section digit picking the directory, the subsection letter left on the file (`man1/fsck.1m`,
-`man3/stdio.3s`). Nothing on the image reads them: `man(1)` is `cmd/TODO.md` C25. The pages cost
-302 of the disk's blocks, so the image now has about **237 free of 2000** — weigh a large
-addition against that.
+`man3/stdio.3s`). **`/usr/bin/man` reads them and does not format them**: there is no `nroff` here
+and a page is legible as it stands, so `man` finds the file — an ordered section table, not a
+`readdir`, since thirteen page names live in two sections at once — and shows it with `/bin/cat`,
+piped into `/bin/more` for a terminal. `FORMATTER` in `cmd/man/man.c` is the one line C25a's
+renderer replaces. The pages cost 302 of the disk's blocks and `man` 12 more, so the image has
+**204 free of 2000** — weigh a large addition against that.
 
 The first three are the only places the ceilings actually bind, and each carries a BESM-6 size
 profile keyed on the `besm6` macro `b6cpp` always predefines — `cmd/cpp/defs.h` (below the C11

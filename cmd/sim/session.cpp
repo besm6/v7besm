@@ -37,9 +37,14 @@
 // cmd/sh/test/run-sh-test.sh, which meets the same hazard with PATH and answers it
 // by copying ./echo in beside the script.
 //
+// MANPATH is here for /usr/bin/man (task C25b) and for PAGER's reason: the program is
+// drivable by hand under b6sim only if the manual tree can be named from outside, its
+// default /usr/man being the BUILD MACHINE's under this simulator.  No test needs it --
+// run-prog-test.sh runs `env -i' and every case passes -M instead.
 static const char *const ENV_WHITELIST[] = {
-    "LANG",  "LC_ALL", "TERM",      "SHELL",     "PATH", "HOME",
-    "USER",  "LOGNAME", "TMPDIR",   "EDITOR",    "PAGER", "MAKEFLAGS",
+    "LANG",  "LC_ALL", "TERM",      "SHELL",     "PATH",  "HOME",
+    "USER",  "LOGNAME", "TMPDIR",   "EDITOR",    "PAGER", "MANPATH",
+    "MAKEFLAGS",
     "B6CPP", "B6PARSE", "B6LOWER",  "B6CODEGEN", "B6AS",  "B6LD",
 };
 

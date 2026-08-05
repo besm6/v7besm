@@ -1,4 +1,6 @@
-# /etc/filters -- the twenty-four text filters of task C5, run by the console shell.
+# /etc/filters -- the twenty-four text filters of task C5, run by the console shell, and
+# since C25b one program that is not a filter at all: man(1), whose section at the end says
+# why it is here rather than in a boot of its own.
 #
 # Grafted onto a copy of the image by run-filters.sh, not shipped on it.  utils.sh is the
 # model and its standing rules hold here too:
@@ -496,6 +498,39 @@ cal 1 2026 | pr -t -l9 >>/tmp/filters.log
 # the image.
 ls /bin | sed -n '1,40p' | tsort | wc -l >>/tmp/filters.log
 file /bin/cat | sed 's/.*	//' >>/tmp/filters.log
+
+# ---- 21. man (task C25b), AND IT IS NOT A FILTER.  It is here rather than in a boot of its
+#          own for cmd/README.md §9's arithmetic -- a section costs a section, a boot costs
+#          two minutes and a volume number -- and because what it needs is exactly what this
+#          script already has: the real /usr/man, a shell, and a pipe.
+#
+#          THREE THINGS ONLY A BOOT CAN SAY, and they are the whole reason cmd/man/test is
+#          not enough.  THE DEFAULT SEARCH PATH: man's is the absolute /usr/man, which under
+#          b6sim is the BUILD MACHINE's, so every case there names a fixture tree with -M --
+#          look(1) in section 5 above is the same rule and this is its second instance.
+#          $MANPATH: run-prog-test.sh runs `env -i'.  And THE DISPLAY ITSELF: with neither
+#          -w nor -, man builds one command string and hands it to system(3), which forks
+#          /bin/sh -- and b6sim can fork but cannot exec a BESM-6 a.out.  So the two cmp
+#          lines below are the only assertion anywhere that man SHOWS a page, and the oracle
+#          is the page file rather than a checked-in copy of it: man runs /bin/cat, so the
+#          output must be the file byte for byte.  What is still unreachable in both worlds
+#          is the `| /bin/more' tail, which is appended only for a terminal -- cmd/more's
+#          screen half, with cmd/more's reason and kernel/TODO.md task 35's timing.
+echo ---man--- >>/tmp/filters.log
+man -w ls >>/tmp/filters.log
+man -w 1m fsck >>/tmp/filters.log
+man -w 3 stdio >>/tmp/filters.log
+man -w 2 mount >>/tmp/filters.log
+man -aw mount >>/tmp/filters.log
+man -w man >>/tmp/filters.log
+MANPATH=/tmp:/usr/man man -w ls >>/tmp/filters.log
+man -w nosuchpage >>/tmp/filters.log 2>&1
+echo man status $? >>/tmp/filters.log
+man ls | cmp - /usr/man/man1/ls.1
+echo man cmp status $? >>/tmp/filters.log
+man - ls | cmp - /usr/man/man1/ls.1
+echo man - cmp status $? >>/tmp/filters.log
+man 1m fsck | wc -l >>/tmp/filters.log
 
 echo ---end--- >>/tmp/filters.log
 sync

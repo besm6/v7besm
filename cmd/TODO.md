@@ -47,7 +47,7 @@ here and already tested, whose value is in doing them together rather than one a
 | C22 | `cron` | the other [../etc/rc](../etc/rc) line | medium, blocked on a clock |
 | C23 | `calendar` | | small, blocked on a clock and on its data |
 | C24 | the eight hand-rolled directory readers, over `opendir(3)` | one reader instead of eight, and §5 stops being everybody's problem | medium |
-| C25 | `man(1)`: a renderer for the manual pages, then the pages on the image | two hundred pages nobody can read on the machine they document | medium |
+| C25 | a **renderer** for the manual pages | `man(1)` finds a page and shows it with `cat`; nothing formats one | medium |
 
 **Where to start: C10a.** Six of the tasks below are yacc grammars and one of those is a lex
 scanner besides, so nothing after C10 can begin until `b6yacc` exists.
@@ -373,55 +373,35 @@ Three things to weigh rather than assume:
 
 ---
 
-## C25. `man(1)`, and the manual pages on the image
+## C25. Rendering the manual pages
 
 Two hundred pages are in the tree, in the dialect
 [../doc/Manual_Page_Format.md](../doc/Manual_Page_Format.md) describes, and **nothing renders
-them**. They are legible as they stand — that is what the dialect is for — but the machine they
-document cannot show them.
+them**. They are legible as they stand — that is what the dialect is for — and since C25b there
+is a `man(1)` on the image that finds one and shows it with `cat`. What is left is the part that
+formats.
 
-### C25a. The host renderer
+### C25a. The renderer
 
-`cmd/man/`, C++, linking the `umm` library [man2umm/](man2umm/) already builds. **No code moves
-out of that directory**: `ummread.cpp` is the dialect reader and `model.cpp` the document model,
-and they were written for this. The round-trip test in `man2umm/test/` is already the guarantee
-that the model this consumes is the model the converter produces.
+`cmd/manview/` — C11 program (not C++), developed from scratch, using existing `ummread.cpp` as a skeleton. One back end with **ANSI attributes** (bold, italic and underline through SGR), and **ANSI colour** (headings, bold runs, italic arguments and `Font::Xref` cross-references each with a colour of their own).
+  
+**Where it plugs in is already decided and costs one line.** `man(1)`'s display path builds
+`FORMATTER page … | /bin/more` and hands it to `system(3)`; `FORMATTER` is `#define`d to `/bin/cat` in [man/man.c](man/man.c) and is the only thing in that program that knows what showing a page means.
 
-Four back ends off the one model:
+### C25b. `man(1)` on the image — **done**
 
-- **overstrike**, v7's own — `c\bc` for bold and `_\bc` for italic, so [col/](col/) behaves as it
-  always did.  This is the default and the fallback.
-- **ANSI attributes** — bold, italic and underline through SGR.
-- **ANSI colour** — headings, bold runs, italic arguments and `Font::Xref` cross-references each
-  with a colour of their own, keyed off `TERM` and [../lib/libtermcap/](../lib/libtermcap/), with
-  plain text when the terminal says nothing.
-- **HTML**, nearly free once the model is in hand, and the reason a cross-reference is a span kind
-  rather than plain text.
+`/usr/bin/man`, from RetroBSD's 4.3BSD source; [man/README.md](man/README.md) is the account and
+[man/man.1.umm](man/man.1.umm) the page. What is worth carrying forward from it:
 
-Note that [col/README.md](col/README.md)'s "there is no *producer* of overstruck text on this
-image" stops being true here: `col` finally gets its caller.
-
-### C25b. `man(1)` on the image
-
-An independent **C** program — `b6cc` drives `b6parse`, which is strict C11, and there is no C++
-cross-compiler for this machine, so the host renderer's model cannot be shared. That sharing was
-never realistic anyway: a `std::vector` document tree is the wrong shape under a 28,672-word
-address space and a 4,096-word stack. Write it streaming, so it never holds a whole page, and use
-C25a's output as its oracle.
-
-**The pages are already there**, so this is the program and its test alone: all two hundred are on
-the image as `/usr/man/man<digit>/<name>.<section>` — v7's own layout, the `.umm` suffix dropped
-and the subsection letter left on the file, so `man1/ls.1`, `man1/fsck.1m`, `man3/stdio.3s`. They
-are staged by `B6_STAGE_MAN` in the top-level [../CMakeLists.txt](../CMakeLists.txt) and listed in
-[../root.manifest](../root.manifest), which is where the decision not to curate is recorded. The
-search path is therefore `/usr/man/man[1-8]` with the letter on the filename, which is what
-`man 1m fsck` and a bare `man fsck` both have to cope with; and the image has some 237 free blocks
-left, so the program itself is the only thing still to fit.
-
-**There is a pager to page it with now.** C27 put `/bin/more` on the image, `PAGER` is already on
-`b6sim`'s whitelist (`cmd/sim/session.cpp`), and `man` on every other Unix hands its output to one
-rather than rendering a screenful itself — which is a decision this task no longer has to take,
-only to make.
+* **It does not format**, and the pages are on the image unchanged. `cat` is the placeholder above.
+* **The section search is an ordered table** — `1 1m 8 6 2 3 3s 3m 3x 4 5 7`, commands first — and
+  not a `readdir`, because thirteen page names live in two sections at once and only that order
+  decides which one a bare `man mount` answers with. A new section *digit* is already covered; a
+  new subsection *letter* is one line in that table and nothing warns you.
+* **Eighteen `b6sim` cases and section 21 of `kernel/test/filters.sh`.** The default `/usr/man`,
+  `$MANPATH` and everything after `system(3)` exist only in the booted half — `look(1)`'s position
+  exactly. The `| more` tail is unreachable in both worlds and waits on `kernel/TODO.md` task 35,
+  as `more`'s own screen half does.
 
 ### C25c. The standing procedure
 
