@@ -557,7 +557,11 @@ void Reader::do_ip(const std::string &rest)
         push_frame(Kind::Bullet, false, {});
         return;
     }
-    if (isdigit((unsigned char)tag[0])) {
+    // AN ORDERED LIST CARRIES THE PERIOD.  `.IP 1.' is item one; `.IP 0' is a
+    // tagged paragraph whose tag happens to be a digit, and pstat.1m uses both --
+    // run states as bare numbers, and octal flag values beside them.
+    if (isdigit((unsigned char)tag[0]) && tag.back() == '.' &&
+        tag.find_first_not_of("0123456789") == tag.size() - 1) {
         push_frame(Kind::Enum, false, {}, tag);
         return;
     }

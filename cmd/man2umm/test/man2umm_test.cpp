@@ -464,7 +464,11 @@ TEST(Block, BulletList)
 
 TEST(Block, OrderedList)
 {
+    // AN ORDERED LIST CARRIES THE PERIOD.  pstat.1m uses both forms: run states as
+    // bare numbers, which are tagged paragraphs, and octal flag values beside them.
     EXPECT_EQ(body_of(".IP 1.\nfirst\n"), "1. first");
+    EXPECT_EQ(body_of(".IP 0\nno process\n"), "0\n: no process");
+    EXPECT_EQ(body_of(".IP 040\nthe bit\n"), "040\n: the bit");
 }
 
 TEST(Block, NoFillWithoutFontsIsAFence)
