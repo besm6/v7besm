@@ -59,7 +59,16 @@ because the source holds only the delimiters, set a cross-reference with its nam
 its parentheses in roman, and **never hyphenate** — a word wider than the measure goes out over
 the margin rather than in two pieces.
 
-Three decisions beyond it:
+Four decisions beyond it:
+
+**The rightmost column is left empty.** `-w` says how wide the *terminal* is and `out_setup()`
+fills to one less than that, so no line ever ends in the last column. A glyph written there
+leaves the cursor in the pending-wrap position, where the newline that follows can be swallowed
+or doubled depending on the terminal, and the fold shows up as a stray blank line in the middle
+of a paragraph under [`../more`](../more). One column of padding costs a word every few
+paragraphs and removes the question. It is the only measure the three width-reading expressions
+in `render.c` see — the fill rule and the banner's two — so a line block, a fenced block and an
+over-long word still go past it, as they already went past 80.
 
 **Attributes are on by default and are not conditioned on `isatty(2)`.** This looks wrong until
 the pipeline is written out. `man` builds `manview page | /bin/more` and hands it to `system(3)`,

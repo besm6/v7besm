@@ -1,4 +1,4 @@
-BLOCKS(1)                   UNIX Programmer's Manual                   BLOCKS(1)
+BLOCKS(1)                  UNIX Programmer's Manual                   BLOCKS(1)
 
 NAME
      blocks - the nine block kinds of section 4
@@ -28,9 +28,9 @@ DESCRIPTION
      A bullet list, compact because the source is:
 
      -    the first thing
-     -    the second thing, which is long enough that it has to be filled across
-          more than one output line and so shows what the continuation indent
-          looks like
+     -    the second thing, which is long enough that it has to be filled
+          across more than one output line and so shows what the continuation
+          indent looks like
      -    the third thing
 
      An ordered list, spaced because the source is:

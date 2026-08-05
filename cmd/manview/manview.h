@@ -32,8 +32,11 @@
 // section heading sits at column 0, a subsection at 3, and everything else at 5 or a
 // multiple of it deeper.
 //
-#define STEP     5
-#define SUBCOL   3
+#define STEP   5
+#define SUBCOL 3
+
+// The width of the TERMINAL, not of the text: render.c leaves the rightmost column empty
+// and fills to one less than this.
 #define DEFWIDTH 80
 #define MINWIDTH 20
 #define MAXWIDTH 512

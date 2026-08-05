@@ -41,9 +41,11 @@ there is no page number to put in one.
   understands the one and not the other.
 
 **-w** *cols*
-: Set the output width, 80 by default. A value below 20 is raised to 20 and one above 512
-  is lowered to it. There is no way to ask a terminal how wide it is on this system, which
-  is why this option exists.
+: Set the terminal width, 80 by default. A value below 20 is raised to 20 and one above 512
+  is lowered to it. The rightmost column is left blank, so the text itself is set one column
+  narrower than *cols*: a line ending in the last column of a terminal leaves the cursor
+  where the following newline reads as a fold. There is no way to ask a terminal how wide it
+  is on this system, which is why this option exists.
 
 An argument that is not an option ends the option list, and so does `--`. A page that
 cannot be opened is reported and the rest are formatted anyway.

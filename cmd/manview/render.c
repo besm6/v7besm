@@ -85,7 +85,10 @@ static const char *const sgr_mono[NFONT] = {
 
 void out_setup(int w, int p, int m)
 {
-    width = w;
+    // ONE COLUMN OF RIGHT PADDING.  A line that ends in the terminal's last column leaves
+    // the cursor in the pending-wrap position, and the next newline reads as a fold; the
+    // caller says how wide the terminal is and text gets one column less than that.
+    width = w - 1;
     plain = p;
     mono  = m;
 }

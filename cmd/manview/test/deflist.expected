@@ -1,11 +1,11 @@
-DEFLIST(1)                  UNIX Programmer's Manual                  DEFLIST(1)
+DEFLIST(1)                 UNIX Programmer's Manual                  DEFLIST(1)
 
 NAME
      deflist - the hanging tag, and what happens when it does not fit
 
 DESCRIPTION
-     -l   A tag that fits the five-column step keeps its body on the tag's line,
-          which is the shape v7's .TP has always had.
+     -l   A tag that fits the five-column step keeps its body on the tag's
+          line, which is the shape v7's .TP has always had.
 
      -1ACFRacdfgilqrstu
           A tag wider than the step gets the next line to itself, and the body

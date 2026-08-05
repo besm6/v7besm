@@ -24,7 +24,8 @@
 // browser on a BESM-6 and one output is what this disk has room for.  No pager of its own:
 // /bin/more is on the image and man already pipes into it.  And no width from the
 // terminal: there is no TIOCGWINSZ in this kernel and no winsize to ask for, so -w is how
-// a caller says what it knows.
+// a caller says what it knows.  What it says is the width of the TERMINAL: render.c leaves
+// the rightmost column empty and fills the text to one less.
 //
 #include <stdio.h>
 #include <stdlib.h>

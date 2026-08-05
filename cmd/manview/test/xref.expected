@@ -1,23 +1,23 @@
-[1;33mXREF(1)[0m                     [1;33mUNIX Programmer's Manual[0m                     [1;33mXREF(1)[0m
+[1;33mXREF(1)[0m                    [1;33mUNIX Programmer's Manual[0m                     [1;33mXREF(1)[0m
 
 [1;33mNAME[0m
      xref - what is a cross-reference and what only looks like one
 
 [1;33mDESCRIPTION[0m
-     See [3;35mopen[0m(2) and the discussion in [3;35mls[0m(1). A subsection letter is part of it,
-     so [3;35mfsck[0m(1m) and stdio.3s and [3;35mexp[0m(3m) are references too, and a name may
-     begin with an underscore: [3;35m_exit[0m(2).
+     See [3;35mopen[0m(2) and the discussion in [3;35mls[0m(1). A subsection letter is part of
+     it, so [3;35mfsck[0m(1m) and stdio.3s and [3;35mexp[0m(3m) are references too, and a name
+     may begin with an underscore: [3;35m_exit[0m(2).
 
      The name must start at a word boundary, so [3;35msprintf[0m(3) is one reference and
      not two: the printf inside it does not match on its own.
 
      A reference must carry no markup, and these are therefore not references:
-     [1;32mopen(2)[0m is a bold run, [3;36mls(1)[0m is an italic one, and `[4mprintf(3)[0m' is a literal
-     one.
+     [1;32mopen(2)[0m is a bold run, [3;36mls(1)[0m is an italic one, and `[4mprintf(3)[0m' is a
+     literal one.
 
-     Nor is anything whose shape is wrong: open(9) has no such section, open (2)
-     has a space in it, open(2 has no close, and 9open(2) does not begin with a
-     letter.
+     Nor is anything whose shape is wrong: open(9) has no such section, open
+     (2) has a space in it, open(2 has no close, and 9open(2) does not begin
+     with a letter.
 
 [1;33mSEE ALSO[0m
      [3;35mmalloc[0m(3), [3;35mfree[0m(3), [3;35mrealloc[0m(3), [3;35mcalloc[0m(3)

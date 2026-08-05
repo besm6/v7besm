@@ -1,4 +1,4 @@
-[1mSPANS(1)[0m                    [1mUNIX Programmer's Manual[0m                    [1mSPANS(1)[0m
+[1mSPANS(1)[0m                   [1mUNIX Programmer's Manual[0m                    [1mSPANS(1)[0m
 
 [1mNAME[0m
      spans - the four span kinds and the three rules over them
@@ -7,8 +7,8 @@
      Roman text, [1mbold[0m [1mtext[0m, [3mitalic[0m [3mtext[0m, and `[4ma[0m [4mliteral[0m [4mrun[0m'.
 
      Rule 2 wants a non-alphanumeric outside a delimiter, so 2**41-1 is
-     arithmetic and not a bold run, [3mmalloc[0m(2) closes before its parenthesis, and
-     ([1m-t[0m) opens after one and closes before another.
+     arithmetic and not a bold run, [3mmalloc[0m(2) closes before its parenthesis,
+     and ([1m-t[0m) opens after one and closes before another.
 
      Rule 3's joiner butts two runs together with no space: [1mb[0m[3msize[0m is one word
      and so is [3mx[0m[1my[0m[3mz[0m.

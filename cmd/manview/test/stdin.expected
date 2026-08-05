@@ -1,4 +1,4 @@
-SPANS(1)                    UNIX Programmer's Manual                    SPANS(1)
+SPANS(1)                   UNIX Programmer's Manual                    SPANS(1)
 
 NAME
      spans - the four span kinds and the three rules over them
@@ -7,8 +7,8 @@ DESCRIPTION
      Roman text, bold text, italic text, and `a literal run'.
 
      Rule 2 wants a non-alphanumeric outside a delimiter, so 2**41-1 is
-     arithmetic and not a bold run, malloc(2) closes before its parenthesis, and
-     (-t) opens after one and closes before another.
+     arithmetic and not a bold run, malloc(2) closes before its parenthesis,
+     and (-t) opens after one and closes before another.
 
      Rule 3's joiner butts two runs together with no space: bsize is one word
      and so is xyz.

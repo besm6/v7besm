@@ -1,5 +1,5 @@
-GETPW(3)                    UNIX Programmer's Manual                    GETPW(3)
-                                   deprecated
+GETPW(3)                   UNIX Programmer's Manual                    GETPW(3)
+                                  deprecated
 
 NAME
      getpw - get name from uid
