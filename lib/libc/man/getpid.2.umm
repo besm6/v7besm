@@ -1,0 +1,46 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# GETPID(2)
+
+## NAME
+
+getpid, getppid - get process identification
+
+## SYNOPSIS
+
+```c
+#include <unistd.h>
+
+pid_t getpid(void);
+
+pid_t getppid(void);
+```
+
+## DESCRIPTION
+
+*Getpid* returns the process ID of the current process; *getppid* that of its parent. Most
+often it is used to generate uniquely-named temporary files.
+
+## SEE ALSO
+
+mktemp(3), fork(2)
+
+## BESM-6 NOTES
+
+**One extracode, two entry points.** The gate returns the process id in the accumulator and the
+*parent's* in r12, so *getpid* and *getppid* are two labels on one stub - which is why it is
+hand-written rather than generated. Getuid(2) and getgid(2) have the same shape.
+
+r12 is an index register and so only 15 bits wide. That does not bite here - process ids are
+small - but it does in wait(2).
+
+## ASSEMBLER
+
+**Note:** v7's page gave the PDP-11 form here - a decimal call number and a `sys name; arg ...`
+line. Neither is how a call is made on this machine. The gate is one extracode - **$77
+SYS_getpid** - and the C calling convention has already put the arguments where it reads them:
+1..n-1 below r15, the last in the accumulator, the result in the accumulator, the error number
+in r14.
+
+**The numbering itself is v7's, unchanged.** The macro is defined in <sys/syscall.h>, which is
+the only place a syscall number appears on the user side. See intro(2) for the whole contract.

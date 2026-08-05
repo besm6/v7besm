@@ -1,0 +1,40 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# SYNC(2)
+
+## NAME
+
+sync - update super-block
+
+## SYNOPSIS
+
+```c
+int sync(void);
+```
+
+## DESCRIPTION
+
+*Sync* causes all information in core memory that should be on disk to be written out. This
+includes modified super blocks, modified i-nodes, and delayed block I/O.
+
+It should be used by programs which examine a file system, for example *icheck, df,* etc. It is
+mandatory before a boot.
+
+## SEE ALSO
+
+sync(1), update(8)
+
+## BUGS
+
+The writing, although scheduled, is not necessarily complete upon return from *sync*.
+
+## ASSEMBLER
+
+**Note:** v7's page gave the PDP-11 form here - a decimal call number and a `sys name; arg ...`
+line. Neither is how a call is made on this machine. The gate is one extracode - **$77
+SYS_sync** - and the C calling convention has already put the arguments where it reads them:
+1..n-1 below r15, the last in the accumulator, the result in the accumulator, the error number
+in r14.
+
+**The numbering itself is v7's, unchanged.** The macro is defined in <sys/syscall.h>, which is
+the only place a syscall number appears on the user side. See intro(2) for the whole contract.

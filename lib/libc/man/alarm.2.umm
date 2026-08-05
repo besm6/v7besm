@@ -1,0 +1,41 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# ALARM(2)
+
+## NAME
+
+alarm - schedule signal after specified time
+
+## SYNOPSIS
+
+```c
+unsigned alarm(unsigned seconds);
+```
+
+## DESCRIPTION
+
+*Alarm* causes signal SIGALRM, see signal(2), to be sent to the invoking process in a number of
+seconds given by the argument. Unless caught or ignored, the signal terminates the process.
+
+Alarm requests are not stacked; successive calls reset the alarm clock. If the argument is 0,
+any alarm request is cancelled. Because the clock has a 1-second resolution, the signal may
+occur up to one second early; because of scheduling delays, resumption of execution of when the
+signal is caught may be delayed an arbitrary amount. The longest specifiable delay time is
+65535 seconds.
+
+The return value is the amount of time previously remaining in the alarm clock.
+
+## SEE ALSO
+
+pause(2), signal(2), sleep(3)
+
+## ASSEMBLER
+
+**Note:** v7's page gave the PDP-11 form here - a decimal call number and a `sys name; arg ...`
+line. Neither is how a call is made on this machine. The gate is one extracode - **$77
+SYS_alarm** - and the C calling convention has already put the arguments where it reads them:
+1..n-1 below r15, the last in the accumulator, the result in the accumulator, the error number
+in r14.
+
+**The numbering itself is v7's, unchanged.** The macro is defined in <sys/syscall.h>, which is
+the only place a syscall number appears on the user side. See intro(2) for the whole contract.

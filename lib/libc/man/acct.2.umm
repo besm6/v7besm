@@ -1,0 +1,47 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# ACCT(2)
+
+## NAME
+
+acct - turn accounting on or off
+
+## SYNOPSIS
+
+```c
+int acct(const char *file);
+```
+
+## DESCRIPTION
+
+The system is prepared to write a record in an accounting *file* for each process as it
+terminates. This call, with a null-terminated string naming an existing file as argument, turns
+on accounting; records for each terminating process are appended to *file*. An argument of 0
+causes accounting to be turned off.
+
+The accounting file format is given in acct(5).
+
+## SEE ALSO
+
+acct(5), sa(1)
+
+## DIAGNOSTICS
+
+On error -1 is returned. The file must exist and the call may be exercised only by the
+super-user. It is erroneous to try to turn on accounting when it is already on.
+
+## BUGS
+
+No accounting is produced for programs running when a crash occurs. In particular
+nonterminating programs are never accounted for.
+
+## ASSEMBLER
+
+**Note:** v7's page gave the PDP-11 form here - a decimal call number and a `sys name; arg ...`
+line. Neither is how a call is made on this machine. The gate is one extracode - **$77
+SYS_acct** - and the C calling convention has already put the arguments where it reads them:
+1..n-1 below r15, the last in the accumulator, the result in the accumulator, the error number
+in r14.
+
+**The numbering itself is v7's, unchanged.** The macro is defined in <sys/syscall.h>, which is
+the only place a syscall number appears on the user side. See intro(2) for the whole contract.

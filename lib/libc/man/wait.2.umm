@@ -1,0 +1,68 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# WAIT(2)
+
+## NAME
+
+wait - wait for process to terminate
+
+## SYNOPSIS
+
+```c
+#include <sys/wait.h>
+
+int wait(int *status);
+```
+
+## DESCRIPTION
+
+*Wait* causes its caller to delay until a signal is received or one of its child processes
+terminates. If any child has died since the last *wait,* return is immediate; if there are no
+children, return is immediate with the error bit set (resp. with a value of -1 returned). The
+normal return yields the process ID of the terminated child. In the case of several children
+several *wait* calls are needed to learn of all the deaths.
+
+If (int)*status* is nonzero, the high byte of the word pointed to receives the low byte of the
+argument of *exit* when the child terminated. The low byte receives the termination status of
+the process. See signal(2) for a list of termination statuses (signals); 0 status indicates
+normal termination. A special status (0177) is returned for a stopped process which has not
+terminated and can be restarted. See ptrace(2). If the 0200 bit of the termination status is
+set, a core image of the process was produced by the system.
+
+If the parent process terminates without waiting on its children, the initialization process
+(process ID = 1) inherits the children.
+
+## SEE ALSO
+
+exit(2), fork(2), signal(2)
+
+## DIAGNOSTICS
+
+Returns -1 if there are no children not previously waited for.
+
+## BESM-6 NOTES
+
+### The status does not always fit
+
+The gate takes no arguments at all: the process id comes back in the accumulator and **the
+status in r12,** which the stub stores through the caller's pointer.
+
+**r12 is an index register - 15 bits -** and a wait status is (code << 8), which passes 32767
+as soon as the exit code passes 127. **Exit codes 128..255 therefore arrive truncated,**
+identically here and under b6sim. Widening it means giving the gate an argument again and
+writing the status through the caller's pointer on the kernel side; until then, exit codes
+should stay small.
+
+That second-result convention is what makes this stub hand-written rather than generated, and
+it is shared with fork(2), pipe(2), getpid(2) and getuid(2). See intro(2).
+
+## ASSEMBLER
+
+**Note:** v7's page gave the PDP-11 form here - a decimal call number and a `sys name; arg ...`
+line. Neither is how a call is made on this machine. The gate is one extracode - **$77
+SYS_wait** - and the C calling convention has already put the arguments where it reads them:
+1..n-1 below r15, the last in the accumulator, the result in the accumulator, the error number
+in r14.
+
+**The numbering itself is v7's, unchanged.** The macro is defined in <sys/syscall.h>, which is
+the only place a syscall number appears on the user side. See intro(2) for the whole contract.

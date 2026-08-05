@@ -1,0 +1,50 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# KILL(2)
+
+## NAME
+
+kill - send signal to a process
+
+## SYNOPSIS
+
+```c
+int kill(int pid, int sig);
+```
+
+## DESCRIPTION
+
+*Kill* sends the signal *sig* to the process specified by the process number in r0. See
+signal(2) for a list of signals.
+
+The sending and receiving processes must have the same effective user ID, otherwise this call
+is restricted to the super-user.
+
+If the process number is 0, the signal is sent to all other processes in the sender's process
+group; see tty(4).
+
+If the process number is -1, and the user is the super-user, the signal is broadcast
+universally except to processes 0 and 1, the scheduler and initialization processes, see
+init(8).
+
+Processes may send signals to themselves.
+
+## SEE ALSO
+
+signal(2), kill(1)
+
+## DIAGNOSTICS
+
+Zero is returned if the process is killed; -1 is returned if the process does not have the same
+effective user ID and the user is not super-user, or if the process does not exist.
+
+## ASSEMBLER
+
+**Note:** v7's page gave the PDP-11 form here - a decimal call number and a `sys name; arg ...`
+line. Neither is how a call is made on this machine. The gate is one extracode - **$77
+SYS_kill** - and the C calling convention has already put the arguments where it reads them:
+1..n-1 below r15, the last in the accumulator, the result in the accumulator, the error number
+in r14.
+
+**The numbering itself is v7's, unchanged.** The macro is defined in <sys/syscall.h>, which is
+the only place a syscall number appears on the user side. See intro(2) for the whole contract.

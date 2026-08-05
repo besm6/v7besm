@@ -1,0 +1,73 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# TIME(2)
+
+## NAME
+
+time, ftime - get date and time
+
+## SYNOPSIS
+
+```c
+#include <sys/types.h>
+
+time_t time(time_t *tloc);
+
+#include <sys/timeb.h>
+
+int ftime(struct timeb *tp);
+```
+
+## DESCRIPTION
+
+*Time* returns the time since 00:00:00 GMT, Jan. 1, 1970, measured in seconds.
+
+If *tloc* is nonnull, the return value is also stored in the place to which *tloc* points.
+
+The *ftime* entry fills in a structure pointed to by its argument, as defined by
+*<sys/timeb.h>*:
+
+```c
+struct timeb {
+        time_t  time;
+        int     millitm;
+        int     timezone;
+        int     dstflag;
+};
+```
+
+**Note:** v7's page pulled this in with a **.so** of the installed header; it is written out
+here, there being no /usr/include on this system.
+
+The structure contains the time since the epoch in seconds, up to 1000 milliseconds of
+more-precise interval, the local timezone (measured in minutes of time westward from
+Greenwich), and a flag that, if nonzero, indicates that Daylight Saving time applies locally
+during the appropriate part of the year.
+
+## SEE ALSO
+
+date(1), stime(2), ctime(3)
+
+## BESM-6 NOTES
+
+**time_t is one word,** 41 bits of seconds, so there is no 2038 problem - and no second word
+for the gate to carry, which is why stime(2) lost an argument.
+
+**The gate takes no argument at all.** The time comes back in the accumulator and the store
+through *tloc* is the stub's own doing, which is why this stub is hand-written rather than
+generated. See intro(2).
+
+**Ftime is where the zone comes from,** as it did in v7: localtime(3), *mktime* and
+*strftime*'s **%z** and **%Z** all ask it. The kernel owns the westward offset and the daylight
+flag, and there is no zoneinfo to read.
+
+## ASSEMBLER
+
+**Note:** v7's page gave the PDP-11 form here - a decimal call number and a `sys name; arg ...`
+line. Neither is how a call is made on this machine. The gate is one extracode - **$77
+SYS_time, SYS_ftime** - and the C calling convention has already put the arguments where it
+reads them: 1..n-1 below r15, the last in the accumulator, the result in the accumulator, the
+error number in r14.
+
+**The numbering itself is v7's, unchanged.** The macro is defined in <sys/syscall.h>, which is
+the only place a syscall number appears on the user side. See intro(2) for the whole contract.

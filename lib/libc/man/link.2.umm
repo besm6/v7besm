@@ -1,0 +1,40 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# LINK(2)
+
+## NAME
+
+link - link to a file
+
+## SYNOPSIS
+
+```c
+int link(const char *name1, const char *name2);
+```
+
+## DESCRIPTION
+
+A link to *name1* is created; the link has the name *name2*. Either name may be an arbitrary
+path name.
+
+## SEE ALSO
+
+ln(1), unlink(2)
+
+## DIAGNOSTICS
+
+Zero is returned when a link is made; -1 is returned when *name1* cannot be found; when *name2*
+already exists; when the directory of *name2* cannot be written; when an attempt is made to
+link to a directory by a user other than the super-user; when an attempt is made to link to a
+file on another file system; when a file has too many links.
+
+## ASSEMBLER
+
+**Note:** v7's page gave the PDP-11 form here - a decimal call number and a `sys name; arg ...`
+line. Neither is how a call is made on this machine. The gate is one extracode - **$77
+SYS_link** - and the C calling convention has already put the arguments where it reads them:
+1..n-1 below r15, the last in the accumulator, the result in the accumulator, the error number
+in r14.
+
+**The numbering itself is v7's, unchanged.** The macro is defined in <sys/syscall.h>, which is
+the only place a syscall number appears on the user side. See intro(2) for the whole contract.

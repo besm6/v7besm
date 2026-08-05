@@ -1,0 +1,51 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# STIME(2)
+
+## NAME
+
+stime - set time
+
+## SYNOPSIS
+
+```c
+#include <sys/types.h>
+
+int stime(time_t t);
+```
+
+## DESCRIPTION
+
+*Stime* sets the system's idea of the time and date. *T* is measured in seconds from 0000 GMT
+Jan 1, 1970. Only the super-user may use this call.
+
+**Note:** v7's page took a POINTER here, and so did this one and the prototype in
+lib/libc/sys/syscalls.tbl until date(1) became the first caller there had ever been. It is a
+VALUE on this machine, for the reason the notes below give: the gate reads one word out of the
+argument list and the generated stub dereferences nothing.
+
+## SEE ALSO
+
+date(1), time(2), ctime(3)
+
+## DIAGNOSTICS
+
+Zero is returned if the time was set; -1 if user is not the super-user.
+
+## BESM-6 NOTES
+
+**time_t is one word - 41 bits of seconds, so there is no 2038 problem - and the gate shed an
+argument because of it.** v7's **time_t** was two PDP-11 words and its gate took both. See
+lseek(2), which collapsed the same way, and intro(2) for why the argument count is a contract
+between three places and not one.
+
+## ASSEMBLER
+
+**Note:** v7's page gave the PDP-11 form here - a decimal call number and a `sys name; arg ...`
+line. Neither is how a call is made on this machine. The gate is one extracode - **$77
+SYS_stime** - and the C calling convention has already put the arguments where it reads them:
+1..n-1 below r15, the last in the accumulator, the result in the accumulator, the error number
+in r14.
+
+**The numbering itself is v7's, unchanged.** The macro is defined in <sys/syscall.h>, which is
+the only place a syscall number appears on the user side. See intro(2) for the whole contract.

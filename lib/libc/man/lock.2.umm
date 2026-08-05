@@ -1,0 +1,35 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# LOCK(2) [local]
+
+## NAME
+
+lock - lock a process in primary memory
+
+## SYNOPSIS
+
+```c
+int lock(int flag);
+```
+
+## DESCRIPTION
+
+If the *flag* argument is non-zero, the process executing this call will not be swapped except
+if it is required to grow. If the argument is zero, the process is un\&*lock*\&ed. This call
+may only be executed by the super-user.
+
+## BUGS
+
+*Lock*\&ed processes interfere with the compaction of primary memory and can cause deadlock.
+This system call is not considered a permanent part of the system.
+
+## ASSEMBLER
+
+**Note:** v7's page gave the PDP-11 form here - a decimal call number and a `sys name; arg ...`
+line. Neither is how a call is made on this machine. The gate is one extracode - **$77
+SYS_lock** - and the C calling convention has already put the arguments where it reads them:
+1..n-1 below r15, the last in the accumulator, the result in the accumulator, the error number
+in r14.
+
+**The numbering itself is v7's, unchanged.** The macro is defined in <sys/syscall.h>, which is
+the only place a syscall number appears on the user side. See intro(2) for the whole contract.

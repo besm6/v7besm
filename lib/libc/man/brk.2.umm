@@ -1,0 +1,90 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# BRK(2)
+
+## NAME
+
+brk, sbrk, break - change core allocation
+
+## SYNOPSIS
+
+```c
+char *brk(char *addr);
+
+char *sbrk(int incr);
+```
+
+## DESCRIPTION
+
+*Brk* sets the system's idea of the lowest location not used by the program (called the break)
+to *addr* (rounded up to the next page). **Note:** v7's page listed 64 bytes on the PDP11, 256
+on the Interdata and 512 on the VAX. **The break is granted a page at a time here - 1024 words,
+6144 bytes -** and both the kernel and b6sim round it up. Locations not less than *addr* and
+below the stack pointer are not in the address space and will thus cause a memory violation if
+accessed.
+
+In the alternate function *sbrk, incr* more bytes are added to the program's data space and a
+pointer to the start of the new area is returned.
+
+When a program begins execution via *exec* the break is set at the highest location defined by
+the program and data storage areas. Ordinarily, therefore, only programs with growing data
+areas need to use *break*.
+
+## SEE ALSO
+
+exec(2), malloc(3), end(3)
+
+## DIAGNOSTICS
+
+Zero is returned by *brk* if the break could be set; -1 if the program requests more memory
+than the system limit.
+
+**Note: sbrk fails with NULL, not (char \*)-1.** v7's value would have to be fabricated out of
+an integer, which is exactly what the fat-pointer rule forbids - see BESM-6 NOTES. The break
+can never legitimately be word 0, so NULL costs nothing. Malloc(3) tests for NULL.
+
+v7's remark about segmentation registers is PDP-11 hardware. Here the kernel refuses growth
+that would reach the stack at 070000.
+
+## BUGS
+
+**Note:** v7's bug - "setting the break in the range 0177701 to 0177777 on the PDP11 is the
+same as setting it to zero" - is a PDP-11 address wrap and does not arise. The wrap that *does*
+arise here is described below.
+
+## BESM-6 NOTES
+
+### The break syscall takes a word address
+
+A fat **char \*** and a plain word address arrive at the gate as the same 15 bits, and **the
+byte offset is simply dropped.** So a mid-word pointer would floor the break to its word and
+hand back memory that was never granted. The library keeps the break as a real **char \*** and
+converts the byte increment itself, calling the gate with a whole number of words.
+
+### Rounding is asymmetric on purpose
+
+*Sbrk* rounds *up* when growing and *toward zero* when shrinking. The byte-to-word helper
+cannot do the second job: it is (x + 5) / 6, and C truncates a negative quotient toward zero,
+so an exact multiple of six would come up one word short.
+
+### Growth past the address space wraps, quietly
+
+A **char \*** carries a 15-bit word address, so an increment past the end of the space does not
+overflow - it *wraps. Sbrk* catches it by the only symptom it has: **growth that did not
+grow.**
+
+### `end` is declared as an array
+
+**extern char end[];** so that its decay produces a genuine fat pointer at byte offset 0,
+rather than a cast. See end(3).
+
+## ASSEMBLER
+
+**Note:** v7's page gave the PDP-11 form here - a decimal call number and a `sys name; arg ...`
+line. Neither is how a call is made on this machine. The gate is one extracode - **$77
+SYS_break** - and the C calling convention has already put the arguments where it reads them:
+1..n-1 below r15, the last in the accumulator, the result in the accumulator, the error number
+in r14.
+
+**The numbering itself is v7's, unchanged.** The macro is defined in <sys/syscall.h>, which is
+the only place a syscall number appears on the user side. See intro(2) for the whole contract.

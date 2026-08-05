@@ -1,0 +1,106 @@
+<!-- Not a v7 page: kctl(2) is this port's own call.  See BESM-6 NOTES. -->
+
+# KCTL(2)
+
+## NAME
+
+kctl, kgetsym - read a kernel variable
+
+## SYNOPSIS
+
+```c
+#include <sys/kctl.h>
+
+int kctl(const char *name, int op, void *buf, int len);
+
+int kgetsym(const char *name);
+```
+
+## DESCRIPTION
+
+*Kctl* reads the kernel's table of exported variables. *Name* selects one of them; *op* says
+what to report about it:
+
+**KCTL_GET**
+: Copy the variable's current value.
+
+**KCTL_STAT**
+: Copy a **struct kctlstat ,** which holds the variable's kernel *word* address in **kc_addr**,
+  its size in bytes in **kc_size**, and **KCTLF_RD** in **kc_flags**.
+
+**KCTL_LIST**
+: Copy the exported names, one per **KSYMLEN** bytes, NUL-padded. *Name* is not examined and may
+  be a null pointer; divide the return value by **KSYMLEN** for the count.
+
+**KCTL_SET**
+: Reserved. It always fails; nothing may write a kernel variable today.
+
+At most *len* bytes are copied into *buf*, and the number that arrived is returned - the same
+rule read(2) follows. A *len* of zero copies nothing and returns the number of bytes
+*available*, which is how a caller sizes a buffer; a *len* smaller than that truncates rather
+than failing, so a caller that wants the whole object compares the return value against what it
+asked for.
+
+*Kgetsym* is a library routine, not a system call: it performs a **KCTL_STAT** and returns
+**kc_addr**, or -1. It is the short form for the callers that want an address rather than a
+value - see BESM-6 NOTES.
+
+No privilege is required.
+
+## SEE ALSO
+
+mem(4), ps(1), dmesg(8)
+
+## DIAGNOSTICS
+
+-1 is returned and *errno* set on error.
+
+**ENOENT**
+: *Name* is not in the table. An empty name matches nothing and is not treated specially.
+
+**EINVAL**
+: *Op* is unknown or is **KCTL_SET**, or *name* has no terminating NUL within its first
+  **KSYMLEN** bytes.
+
+**EFAULT**
+: *Name* or *buf* is outside the process's address space.
+
+## BESM-6 NOTES
+
+**This call is not v7's, and exists because** nlist(3) **cannot work here.** Every other Unix
+finds a kernel variable by reading the symbol table of the kernel image. There is no kernel
+image on this root filesystem - the simulator loads **unix** from the build host - so there is
+nothing for nlist(3) to open, and it is deliberately absent from this libc. The kernel carries
+a small hand-written table instead (kernel/ksym.c), and this call reads it. RetroBSD met the
+same wall, its kernel living in flash, and answered it through one sysctl(2) node; there is no
+*sysctl* here and this is not one.
+
+**An address is a word address.** The kernel runs unmapped, so a kernel address is a physical
+word index. To read the variable through mem(4) the offset is **kc_addr \* NBPW** - a byte
+offset, like every other file's.
+
+**Which operation to use is a real choice. KCTL_GET** copies the value, so a program that reads
+nothing but fixed variables - dmesg(8) and iostat(1) - opens no device and needs no privilege.
+**KCTL_STAT** exists for the programs that cannot work that way: ps(1) and pstat(8) resolve
+**p_textp** into an index in **text**[], and **u_ttyp** into one in **sc**[], which is
+arithmetic against a base address that no amount of value copying supplies. Those read on
+through /dev/kmem, and through /dev/mem for a u-area at **p_addr**, which lies above the
+unmapped reach.
+
+**A pointer-valued variable comes back raw. Msgbufp** is the only one, and a **char \*** here
+is a fat pointer: the word address is its low 15 bits. Use **ptrword()** from <sys/param.h>.
+
+**The sizes in the table are the kernel's own sizeof.** A caller computes the matching count
+from the same <sys/param.h> the kernel was built with - there is no **nproc** variable to read,
+and there must not be one.
+
+**Under b6sim there is no kernel,** so every call fails with **ENOENT**, which is what a kernel
+with an empty table would say. A program whose subject is kernel state has to be tested under
+the booted kernel.
+
+## ASSEMBLER
+
+The gate is one extracode - **$77 SYS_kctl** - with the first three arguments below r15 and
+*len* in the accumulator, the result in the accumulator and the error number in r14. The macro
+is in <sys/syscall.h>. The number is 49, which v7 reserved and never used. See intro(2) for the
+whole contract.

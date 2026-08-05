@@ -1,0 +1,55 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# PROFIL(2)
+
+## NAME
+
+profil - execution time profile
+
+## SYNOPSIS
+
+```c
+int profil(char *buff, int bufsiz, int offset, int scale);
+```
+
+## DESCRIPTION
+
+*Buff* points to an area of core whose length (in bytes) is given by *bufsiz*. After this call,
+the user's program counter (pc) is examined each clock tick. **Note:** v7 said a sixtieth of a
+second. HZ is **250** here. *offset* is subtracted from it, and the result multiplied by
+*scale*. If the resulting number corresponds to a word inside *buff,* that word is incremented.
+
+The scale is interpreted as an unsigned, fixed-point fraction with binary point at the left:
+0177777(8) gives a 1-1 mapping of pc's to words in *buff;* 077777(8) maps each pair of
+instruction words together. 02(8) maps all instructions onto the beginning of *buff* (producing
+a non-interrupting core clock).
+
+Profiling is turned off by giving a *scale* of 0 or 1. It is rendered ineffective by giving a
+*bufsiz* of 0. Profiling is turned off when an *exec* is executed, but remains on in child and
+parent both after a *fork*. Profiling may be turned off if an update in *buff* would cause a
+memory fault.
+
+## SEE ALSO
+
+prof(1)
+
+## BESM-6 NOTES
+
+**There is no profiling runtime here.** *Profil* is a generated syscall stub like any other and
+the gate exists, but the *monitor* and *mcount* half of the machinery - what v7's page pointed
+at as monitor(3), and what **cc -p** would install - has not been ported, so nothing calls
+this.
+
+The scale wording above is v7's and describes PDP-11 word addresses. Read it as a fraction over
+*word* addresses here; a word is one 48-bit unit and an address is a word index.
+
+## ASSEMBLER
+
+**Note:** v7's page gave the PDP-11 form here - a decimal call number and a `sys name; arg ...`
+line. Neither is how a call is made on this machine. The gate is one extracode - **$77
+SYS_profil** - and the C calling convention has already put the arguments where it reads them:
+1..n-1 below r15, the last in the accumulator, the result in the accumulator, the error number
+in r14.
+
+**The numbering itself is v7's, unchanged.** The macro is defined in <sys/syscall.h>, which is
+the only place a syscall number appears on the user side. See intro(2) for the whole contract.

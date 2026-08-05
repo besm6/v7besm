@@ -1,0 +1,77 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# EXIT(2)
+
+## NAME
+
+exit - terminate process
+
+## SYNOPSIS
+
+```c
+#include <stdlib.h>
+
+_Noreturn void exit(int status);
+
+#include <unistd.h>
+
+_Noreturn void _exit(int status);
+```
+
+## DESCRIPTION
+
+*Exit* is the normal means of terminating a process. *Exit* closes all the process's files and
+notifies the parent process if it is executing a *wait*. The low-order 8 bits of *status* are
+available to the parent process.
+
+This call can never return.
+
+The C function *exit* may cause cleanup actions before the final `sys exit`. The function
+*_exit* circumvents all cleanup.
+
+## SEE ALSO
+
+wait(2), fclose(3), atexit(3)
+
+## BESM-6 NOTES
+
+### The cleanup is reached through a pointer, never by name
+
+*Crt0* tail-jumps to *exit*, so *exit*'s object is linked into *every* program. Naming the
+stdio cleanup outright - which is what v7 does - would drag in the whole of stdio behind it:
+the stream table, the two buffers, *malloc*, *free* and *close*, whether the program ever
+printed or not. **The** `hello` **program measured 2255 words that way and 100 through the
+pointer.**
+
+**A weak definition cannot substitute, and that is a property of linkers.** *B6ld* pulls an
+archive member only for a symbol that is still *undefined,* so a weak no-op would satisfy the
+reference and stop the real cleanup from ever being pulled - the opposite of what is wanted.
+Fclose(3)'s *_flsbuf*() arms the pointer instead, on the first buffered write, which every
+write path passes through.
+
+**There are two such pointers now, not one.** Atexit(3) arms the second, and it is a second
+pointer rather than a general mechanism the stdio flush was folded into, for exactly the reason
+above: the handler table is 32 words, and every program would carry them. *Exit* runs the
+registered handlers first and flushes afterwards, which is the order C11 sec 7.22.4.4 requires
+\- a handler is allowed to print.
+
+### The two live in different files, and the names could not collide
+
+The library builds into a flat object directory, so *exit*'s source is called *cuexit.c* - v7's
+own name for it - because *exit.c* would collide with the *_exit* stub's *exit.S*.
+
+### _exit's stub has no return path
+
+A call that never comes back has nothing to test r14 for and no return instruction, which is
+why it is hand-written rather than generated. The same is true of exec(2).
+
+## ASSEMBLER
+
+**Note:** v7's page gave the PDP-11 form here - a decimal call number and a `sys name; arg ...`
+line. Neither is how a call is made on this machine. The gate is one extracode - **$77
+SYS_exit** - and the C calling convention has already put the arguments where it reads them:
+1..n-1 below r15, the last in the accumulator, the result in the accumulator, the error number
+in r14.
+
+**The numbering itself is v7's, unchanged.** The macro is defined in <sys/syscall.h>, which is
+the only place a syscall number appears on the user side. See intro(2) for the whole contract.

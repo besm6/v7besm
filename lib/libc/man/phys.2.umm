@@ -1,0 +1,69 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# PHYS(2) [PDP11]
+
+## NAME
+
+phys - allow a process to access physical addresses
+
+## SYNOPSIS
+
+```c
+int phys(int segreg, int size, int physadr);
+```
+
+## DESCRIPTION
+
+**Note:** everything below describes PDP-11 segmentation hardware and none of the numbers
+apply. The gate exists and has a stub, and the page is kept as the record of what the call was
+for.
+
+**The mapping unit here is a page of 1024 words,** not 8K bytes; a program sees 32 such pages
+through eight write-only page registers, and the kernel keeps the only readable copy of the
+map. See doc/Memory_Mapping.md.
+
+**And there is a better way to reach physical memory on this system:** /dev/mem and /dev/kmem,
+which the kernel's memory driver backs, going through a mapped window for any address a program
+could not otherwise name.
+
+The argument *segreg* specifies a process virtual (data-space) address range of 8K bytes
+starting at virtual address *segreg*×8K bytes. This address range is mapped into physical
+address *physadr*×64 bytes. Only the first *size*×64 bytes of this mapping is addressable. If
+*size* is zero, any previous mapping of this virtual address range is nullified. For example,
+the call
+
+```c
+phys(6, 1, 0177775);
+```
+
+will map virtual addresses 0160000-0160077 into physical addresses 017777500-017777577. In
+particular, virtual address 0160060 is the PDP-11 console located at physical address
+017777560.
+
+This call may only be executed by the super-user.
+
+## SEE ALSO
+
+mem(4), doc/Memory_Mapping.md
+
+## DIAGNOSTICS
+
+The function value zero is returned if the physical mapping is in effect. The value -1 is
+returned if not super-user, if *segreg* is not in the range 0-7, if *size* is not in the range
+0-127, or if the specified *segreg* is already used for other than a previous call to *phys*.
+
+## BUGS
+
+This system call is obviously very machine dependent and very dangerous. This system call is
+not considered a permanent part of the system.
+
+## ASSEMBLER
+
+**Note:** v7's page gave the PDP-11 form here - a decimal call number and a `sys name; arg ...`
+line. Neither is how a call is made on this machine. The gate is one extracode - **$77
+SYS_phys** - and the C calling convention has already put the arguments where it reads them:
+1..n-1 below r15, the last in the accumulator, the result in the accumulator, the error number
+in r14.
+
+**The numbering itself is v7's, unchanged.** The macro is defined in <sys/syscall.h>, which is
+the only place a syscall number appears on the user side. See intro(2) for the whole contract.

@@ -1,0 +1,45 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# ACCESS(2)
+
+## NAME
+
+access - determine accessibility of file
+
+## SYNOPSIS
+
+```c
+int access(const char *name, int mode);
+```
+
+## DESCRIPTION
+
+*Access* checks the given file *name* for accessibility according to *mode,* which is 4 (read),
+2 (write) or 1 (execute) or a combination thereof. Specifying mode 0 tests whether the
+directories leading to the file can be searched and the file exists.
+
+An appropriate error indication is returned if *name* cannot be found or if any of the desired
+access modes would not be granted. On disallowed accesses -1 is returned and the error code is
+in *errno*. 0 is returned from successful tests.
+
+The user and group IDs with respect to which permission is checked are the real UID and GID of
+the process, so this call is useful to set-UID programs.
+
+Notice that it is only access bits that are checked. A directory may be announced as writable
+by *access,* but an attempt to open it for writing will fail (although files may be created
+there); a file may look executable, but *exec* will fail unless it is in proper format.
+
+## SEE ALSO
+
+stat(2)
+
+## ASSEMBLER
+
+**Note:** v7's page gave the PDP-11 form here - a decimal call number and a `sys name; arg ...`
+line. Neither is how a call is made on this machine. The gate is one extracode - **$77
+SYS_access** - and the C calling convention has already put the arguments where it reads them:
+1..n-1 below r15, the last in the accumulator, the result in the accumulator, the error number
+in r14.
+
+**The numbering itself is v7's, unchanged.** The macro is defined in <sys/syscall.h>, which is
+the only place a syscall number appears on the user side. See intro(2) for the whole contract.
