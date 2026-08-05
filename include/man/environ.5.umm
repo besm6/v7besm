@@ -1,0 +1,40 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# ENVIRON(5)
+
+## NAME
+
+environ - user environment
+
+## SYNOPSIS
+
+```c
+extern char **environ;
+```
+
+## DESCRIPTION
+
+An array of strings called the `environment` is made available by exec(2) when a process
+begins. By convention these strings have the form `name=value`. The following names are used by
+various commands:
+
+PATH
+: The sequence of directory prefixes that *sh, time,* nice(1), etc., apply in searching for a
+  file known by an incomplete path name. The prefixes are separated by `:`. Login(1) sets
+  PATH=:/bin:/usr/bin.
+
+HOME
+: A user's login directory, set by login(1) from the password file passwd(5).
+
+TERM
+: The kind of terminal for which output is to be prepared. This information is used by commands,
+  such as *nroff* or plot(1), which may exploit special terminal capabilities. See term(7) for a
+  list of terminal types.
+
+Further names may be placed in the environment by the *export* command and `name=value`
+arguments in sh(1), or by exec(2). It is unwise to conflict with certain Shell variables that
+are frequently exported by `.profile` files: MAIL, PS1, PS2, IFS.
+
+## SEE ALSO
+
+exec(2), sh(1), term(7), login(1)

@@ -1,0 +1,53 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# TYPES(5)
+
+## NAME
+
+types - primitive system data types
+
+## SYNOPSIS
+
+```c
+#include <sys/types.h>
+```
+
+## DESCRIPTION
+
+The data types defined in the include file are used in UNIX system code; some data of these
+types are accessible to user code:
+
+```c
+typedef int daddr_t; // disk address; bmap() returns -1, so SIGNED
+typedef int ino_t;   // i-node number
+typedef int dev_t;   // device code; NODEV is -1, so SIGNED
+typedef int off_t;   // byte offset in file
+
+typedef int ssize_t; // a byte count, or -1 on error
+typedef int pid_t;   // process id
+typedef int uid_t;   // user id
+typedef int gid_t;   // group id
+
+typedef int time_t;
+
+typedef char *caddr_t;   // core address -- a FAT pointer; see sys/param.h
+typedef int label_t[10]; // program status: r1-r7, r13, r15
+
+struct chan;
+typedef struct chan *chan_t;
+
+struct carg;
+typedef struct carg *carg_t;
+
+typedef int paddr_t;
+```
+
+The form *daddr_t* is used for disk addresses except in an i-node on disk, see filsys(5). Times
+are encoded in seconds since 00:00:00 GMT, January 1, 1970. The major and minor parts of a
+device code specify kind and unit number of a device and are installation-dependent. Offsets
+are measured in bytes from the beginning of a file. The *label_t* variables are used to save
+the processor state while another process is running.
+
+## SEE ALSO
+
+filsys(5), time(2), lseek(2), adb(1)

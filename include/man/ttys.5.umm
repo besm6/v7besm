@@ -1,0 +1,39 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# TTYS(5)
+
+## NAME
+
+ttys - terminal initialization data
+
+## DESCRIPTION
+
+The *ttys* file is read by the *init* program and specifies which terminal special files are to
+have a process created for them which will allow people to log in. It contains one line per
+special file.
+
+The first character of a line is either `0` or `1`; the former causes the line to be ignored,
+the latter causes it to be effective. The second character is used as an argument to getty(8),
+which performs such tasks as baud-rate recognition, reading the login name, and calling
+*login.* For normal lines, the character is `0`; other characters can be used, for example,
+with hard-wired terminals where speed recognition is unnecessary or which have special
+characteristics. (*Getty* will have to be fixed in such cases.) The remainder of the line is
+the terminal's entry in the device directory, /dev.
+
+**Note:** on this machine the second character selects an entry of a table built into getty(8)
+that has exactly one entry, describing the Consul-254 typewriter - there being no other kind of
+terminal here and no baud rate to recognise. A character naming no entry selects that one
+anyway, so the column is carried rather than used. */etc/ttys* holds two lines, **10console**
+and **10tty1**, one per Consul.
+
+**Note:** the file is also read by ttyslot(3), which counts its lines to find the terminal's
+slot in /etc/utmp. A line added or removed here therefore moves every later terminal's
+accounting record.
+
+## FILES
+
+/etc/ttys
+
+## SEE ALSO
+
+init(8), getty(8), login(1)

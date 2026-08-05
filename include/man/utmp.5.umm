@@ -1,0 +1,47 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# UTMP(5)
+
+## NAME
+
+utmp, wtmp - login records
+
+## SYNOPSIS
+
+```c
+#include <utmp.h>
+```
+
+## DESCRIPTION
+
+The *utmp* file allows one to discover information about who is currently using UNIX. The file
+is a sequence of entries with the following structure declared in the include file:
+
+```c
+struct utmp {
+    char ut_line[8]; // tty name
+    char ut_name[8]; // user id
+    time_t ut_time;  // time on
+};
+```
+
+This structure gives the name of the special file associated with the user's terminal, the
+user's login name, and the time of the login in the form of time(2).
+
+The *wtmp* file records all logins and logouts. Its format is exactly like *utmp* except that a
+null user name indicates a logout on the associated terminal. Furthermore, the terminal name
+`~` indicates that the system was rebooted at the indicated time; the adjacent pair of entries
+with terminal names `|` and `}` indicate the system-maintained time just before and just after
+a *date* command has changed the system's idea of the time.
+
+*Wtmp* is maintained by login(1) and init(8). Neither of these programs creates the file, so if
+it is removed record-keeping is turned off. It is summarized by ac(1).
+
+## FILES
+
+| /etc/utmp
+| /usr/adm/wtmp
+
+## SEE ALSO
+
+login(1), init(8), who(1), ac(1)

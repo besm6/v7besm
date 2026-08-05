@@ -1,0 +1,38 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# DIR(5)
+
+## NAME
+
+dir - format of directories
+
+## SYNOPSIS
+
+```c
+#include <sys/dir.h>
+```
+
+## DESCRIPTION
+
+A directory behaves exactly like an ordinary file, save that no user may write into a
+directory. The fact that a file is a directory is indicated by a bit in the flag word of its
+i-node entry see, filsys(5). The structure of a directory entry as given in the include file
+is:
+
+```c
+struct direct {
+    ino_t d_ino;
+    char d_name[DIRSIZ];
+};
+```
+
+By convention, the first two entries in each directory are for `.` and `..`. The first is an
+entry for the directory itself. The second is for the parent directory. The meaning of `..` is
+modified for the root directory of the master file system and for the root directories of
+removable file systems. In the first case, there is no parent, and in the second, the system
+does not permit off-device references. Therefore in both cases `..` has the same meaning as
+`.`.
+
+## SEE ALSO
+
+filsys(5)
