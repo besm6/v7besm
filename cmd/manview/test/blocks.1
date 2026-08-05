@@ -1,0 +1,61 @@
+<!-- A fixture for cmd/manview/test, not a manual page.  Not named *.umm on purpose. -->
+
+# BLOCKS(1)
+
+## NAME
+
+blocks - the nine block kinds of section 4
+
+## SYNOPSIS
+
+| **blocks** [ **-a** ] [ **-b** *file* ] *name* ...
+| **blocks** **-c**
+|
+| the empty line above is a line block line, and   these   spaces   are kept
+
+## DESCRIPTION
+
+An ordinary filled paragraph. Its line breaks are not significant and a renderer refills it
+to the output width, which is why this sentence is written across two source lines and comes
+out across however many the measure allows.
+
+A fenced block is verbatim and no markup is interpreted inside it:
+
+```c
+struct direct {
+	ino_t d_ino;
+	char  d_name[DIRSIZ];
+};
+```
+
+```
+a tab	between	columns	survives
+**this** is not bold and `this` is not literal
+```
+
+A bullet list, compact because the source is:
+
+- the first thing
+- the second thing, which is long enough that it has to be filled across more than one
+  output line and so shows what the continuation indent looks like
+- the third thing
+
+An ordered list, spaced because the source is:
+
+1. the first step
+
+2. the second step
+
+10. the tenth step, whose label is wider than the others
+
+A quote is an indented display that is not a definition:
+
+> cat file1 file2 >file3
+
+> A quote may hold any other block, and this one holds two paragraphs.
+>
+> This is the second.
+
+### A subsection
+
+Subsections sit three columns in and their bodies stay at five.

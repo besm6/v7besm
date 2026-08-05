@@ -1,0 +1,33 @@
+GETPW(3)                    UNIX Programmer's Manual                    GETPW(3)
+                                   deprecated
+
+NAME
+     getpw - get name from uid
+
+DESCRIPTION
+     The bracketed qualifier of section 5 goes on a centred second line under
+     the banner.
+
+XREF(1)                     UNIX Programmer's Manual                     XREF(1)
+
+NAME
+     xref - what is a cross-reference and what only looks like one
+
+DESCRIPTION
+     See open(2) and the discussion in ls(1). A subsection letter is part of it,
+     so fsck(1m) and stdio.3s and exp(3m) are references too, and a name may
+     begin with an underscore: _exit(2).
+
+     The name must start at a word boundary, so sprintf(3) is one reference and
+     not two: the printf inside it does not match on its own.
+
+     A reference must carry no markup, and these are therefore not references:
+     open(2) is a bold run, ls(1) is an italic one, and `printf(3)' is a literal
+     one.
+
+     Nor is anything whose shape is wrong: open(9) has no such section, open (2)
+     has a space in it, open(2 has no close, and 9open(2) does not begin with a
+     letter.
+
+SEE ALSO
+     malloc(3), free(3), realloc(3), calloc(3)

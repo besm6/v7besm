@@ -370,5 +370,5 @@ the shell.
 
 `sh.1.umm` is the v7 manual page, corrected in place on the [`lib/libc/man/`](../../lib/libc/man/)
 precedent: one addition, a `Comments.` paragraph marked `Note:` as the deviation from v7 that it
-is. Nothing installs it, and there is no renderer yet ([`../TODO.md`](../TODO.md) C25) — read
-it as it stands.
+is. It goes on the image as `/usr/man/man1/sh.1`, where manview(1)
+([`../TODO.md`](../TODO.md) C25a) formats it — and it is legible as it stands either way.

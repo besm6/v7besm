@@ -453,19 +453,31 @@ not a plain comma-separated reference list; a `##` heading outside the conventio
 ## 10. What a renderer is expected to do
 
 Normative for anything that formats this dialect, so that two renderers agree.
+[`cmd/manview`](../cmd/manview/) is this tree's, and it is on the image as `/usr/bin/manview`.
 
 - **Fill paragraphs** to the output width; do not fill a line block, a fenced block or a heading.
 - **Indent** a definition body, a list item and a quote by a fixed step (5 columns is v7's).
 - **Cross-references** get the name in italic and the parentheses in roman, which is what v7's pages
   did, plus a link in HTML and a colour of their own where colour is available.
-- **On a terminal, bold and italic are backspace overstrike** — `c\bc` for bold, `_\bc` for italic —
-  which is what `nroff` emitted and what [`cmd/col/col.c`](../cmd/col/col.c) exists to strip. A
-  renderer targeting a terminal that understands ANSI may emit SGR attributes instead, and may add
-  colour, but overstrike is the default and the fallback.
+- **On a terminal, bold and italic are ANSI SGR attributes**, and colour is allowed and wanted:
+  bold for what the user types, italic for what the user replaces, underline for a literal run,
+  and a colour of its own for a heading, for a bold run, for an italic one and for a
+  cross-reference. `cmd/manview`'s table is the worked example.
+
+  This bullet once read the other way round — *overstrike is the default and the fallback*,
+  `c\bc` for bold and `_\bc` for italic, which is what `nroff` emitted and what
+  [`cmd/col/col.c`](../cmd/col/col.c) exists to strip. **That is nroff's convention and this
+  system has no nroff**: nothing here produces overstrike, nothing but `col` would read it, and
+  `cmd/more` and `cmd/novi` already write hard-coded ANSI. The fallback is a **plain-text** mode
+  with no escape sequences at all — `manview -p` — which is legible in a file, as overstrike is
+  not. A renderer may still emit overstrike; none does.
 - **A literal run is quoted on a terminal** — `` `x' `` as v7 rendered it, or the terminal's own
   quotation marks — and is `<code>` in HTML. The quote characters are the renderer's, not the
   source's: the source has only the delimiters.
 - **Never hyphenate.** A manual page is full of tokens that must not break.
+- **A tab inside a fenced block advances to the next eight-column stop counted from the block's
+  own column 0**, not from the page's. The indent step is 5 and a stop is 8, so measuring from the
+  page shifts every column of a hand-aligned table by a different amount.
 
 ---
 

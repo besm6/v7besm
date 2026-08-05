@@ -1,0 +1,9 @@
+GETPW(3)                    UNIX Programmer's Manual                    GETPW(3)
+                                   deprecated
+
+NAME
+     getpw - get name from uid
+
+DESCRIPTION
+     The bracketed qualifier of section 5 goes on a centred second line under
+     the banner.

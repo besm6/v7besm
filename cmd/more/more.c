@@ -656,9 +656,9 @@ void prompt(char *filename)
 
 // Get a logical line.
 //
-// RENAMED FROM getline(), which is POSIX's and which task C25's manual-page renderer
-// will want from <stdio.h>.  Nothing here declares it today; the clash would be found
-// the day something does.
+// RENAMED FROM getline(), which is POSIX's.  Nothing in this libc declares it -- ../manview,
+// the manual-page renderer this rename was made for, reads its lines with fgets(3) and never
+// wanted the name -- but the clash would be found the day something does.
 //
 // THE INDEX IS AN int AND NOT A char *.  Upstream's loop condition is
 // `p < &Line[LINSIZ-1]', a relational between two char * -- which is correct on this
@@ -668,15 +668,30 @@ void prompt(char *filename)
 //
 // COLUMN COUNTS CHARACTERS, NOT BYTES -- see the `(c & 0300) != 0200' clause below and
 // README.md.  That is what LINSIZ is 512 for.
+//
+// AND AN ANSI ESCAPE SEQUENCE COUNTS NOTHING, which is the same rule again and arrived for
+// the same reason.  ESC is below ' ' and was already free, but the `[1;33m' after it is
+// seven ordinary characters and was charged seven columns, so a coloured line folded that
+// much early.  Nothing on this image put escapes into a PAGED STREAM until cmd/manview
+// (task C25a) -- more's own control output never came back through here -- and man(1) now
+// pipes every page through it.  A CSI run is ESC, `[', the parameter and intermediate
+// bytes, and one final byte in `@'..`~'; prbuf() below still walks bytes, which is correct,
+// since it is emitting and not measuring.
+//
+// NOT ASSERTED, and it cannot be here: this whole path needs a terminal, and a terminal
+// whose output can still be diffed is kernel/test/console -- DISABLED for kernel/TODO.md
+// task 35, which is where README.md's `screen half' has been waiting all along.
 int nextline(FILE *f, int *length)
 {
     int c;
     int i;
     int column;
     static int colflg;
+    int csi; // inside an escape sequence, which occupies no column
 
     i      = 0;
     column = 0;
+    csi    = 0;
     c      = Getc(f);
     if (colflg && c == '\n') {
         Currline++;
@@ -697,7 +712,16 @@ int nextline(FILE *f, int *length)
             break;
         }
         Line[i++] = c;
-        if (c == '\t')
+        if (csi) {
+            // ESC `[' opens a CSI run that ends at a final byte; ESC anything-else is a
+            // two-character sequence and the second character closes it.  Neither counts.
+            if (csi == 1)
+                csi = c == '[' ? 2 : 0;
+            else if (c >= '@' && c <= '~')
+                csi = 0;
+        } else if (c == ESC)
+            csi = 1;
+        else if (c == '\t')
             if (hardtabs && column < promptlen && !hard) {
                 if (eraseln && !dumb) {
                     column = 1 + (column | 7);

@@ -1,0 +1,27 @@
+<!-- A fixture for cmd/manview/test, not a manual page.  Not named *.umm on purpose. -->
+
+# SPANS(1)
+
+## NAME
+
+spans - the four span kinds and the three rules over them
+
+## DESCRIPTION
+
+Roman text, **bold text**, *italic text*, and `a literal run`.
+
+Rule 2 wants a non-alphanumeric outside a delimiter, so 2**41-1 is arithmetic and not a bold
+run, *malloc*(2) closes before its parenthesis, and (**-t**) opens after one and closes
+before another.
+
+Rule 3's joiner butts two runs together with no space: **b**\&*size* is one word and so is
+*x*\&**y**\&*z*.
+
+The escapes: a literal \* asterisk, a literal \` backtick, a literal \\ backslash, and a
+\| pipe.
+
+The padded form of a literal run holds a backtick: `` a ` b ``.
+
+A marked run may cross a source line inside a paragraph, **as this bold
+run does**, and so may `a literal
+run`.

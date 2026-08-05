@@ -1,0 +1,34 @@
+DEFLIST(1)                  UNIX Programmer's Manual                  DEFLIST(1)
+
+NAME
+     deflist - the hanging tag, and what happens when it does not fit
+
+DESCRIPTION
+     -l   A tag that fits the five-column step keeps its body on the tag's line,
+          which is the shape v7's .TP has always had.
+
+     -1ACFRacdfgilqrstu
+          A tag wider than the step gets the next line to itself, and the body
+          starts under it.
+
+     -x   A body may hold more than one paragraph.
+
+          This is the second, and it is indented to the same column as the
+          first.
+
+     -n   A body may hold another container, and the step applies again:
+
+          -    a bullet inside a definition
+          -    and a second one
+
+          -inner
+               a definition inside a definition
+
+          A definition with no term above it keeps its shape and loses nothing.
+
+     -abcd
+          A tag exactly as wide as the step, five columns, is too wide for it:
+          there has to be a space after the tag, so the body goes on the next
+          line.
+
+     -abc One column narrower, and it fits with the one space.

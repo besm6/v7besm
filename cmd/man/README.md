@@ -1,11 +1,12 @@
-# man, and the formatter that is a placeholder on purpose
+# man, and the one line that knows what showing a page means
 
-Task C25b. Two hundred pages have been on the image since the manual went there, and until now
-nothing on the machine could find one. This finds one. It does not format it, and that is the
-design rather than a shortfall: the pages are in the dialect
-[`doc/Manual_Page_Format.md`](../../doc/Manual_Page_Format.md) describes and are meant to be
-read as they stand, so `man` runs `/bin/cat` where every other Unix runs `nroff`, and pipes into
-`/bin/more` when standard output is a terminal.
+Task C25b. Two hundred pages have been on the image since the manual went there, and until this
+nothing on the machine could find one. This finds one, and does not format it: it runs one
+formatter over what it found and pipes that into `/bin/more` when standard output is a terminal.
+That formatter was `/bin/cat` when this landed — the pages are in the dialect
+[`doc/Manual_Page_Format.md`](../../doc/Manual_Page_Format.md) describes and are legible as they
+stand — and is [`../manview`](../manview/) since task C25a. `man.c` did not otherwise change,
+which is what the first section below is about.
 
 The source is RetroBSD's `src/cmd/man/man.c`, which is Berkeley's 1987 C rewrite. v7 *had* a
 `man` — a shell script around `nroff` — and it is not this; the program here is closer to what
@@ -17,7 +18,7 @@ Four things are worth the file.
 ## `FORMATTER` is one line, and everything else is arranged so that it stays one line
 
 ```c
-#define FORMATTER "/bin/cat"        // THE ONE LINE C25a's renderer replaces
+#define FORMATTER "/usr/bin/manview"    // C25a's renderer, and the only line that knew of cat
 ```
 
 The display path builds a single command string — `FORMATTER page1 page2 …`, plus `| pager` when
@@ -25,16 +26,18 @@ The display path builds a single command string — `FORMATTER page1 page2 …`,
 anywhere in the program, which is the whole reason `-` does something else.
 
 Upstream's `-` meant *do not page*, and it did so by copying the file out in-process. That
-reading works only while the formatter is `cat`: the day `manview` lands, "do not page" and "do
-not format" stop being the same thing, and a `-` that took the in-process copy would silently
-have become the second, wrong one. So `-` is documented and implemented here as **the page
-source, unformatted and unpaged** — a permanent meaning that survives C25a — and everything
-without `-` goes through the formatter, terminal or no terminal.
+reading worked only while the formatter was `cat`: the day `manview` landed, "do not page" and
+"do not format" stopped being the same thing, and a `-` that took the in-process copy would
+silently have become the second, wrong one. So `-` is documented and implemented here as **the
+page source, unformatted and unpaged** — and that was written before C25a existed, which is why
+C25a cost one line. Everything without `-` goes through the formatter, terminal or no terminal.
 
 That split is also what makes the display testable at all. Under `b6sim` there is no exec of a
 BESM-6 `a.out`, so `system(3)` reaches nothing; under the booted kernel `man ls` really forks
-`/bin/sh -c "/bin/cat /usr/man/man1/ls.1"`, and `kernel/test/filters` pipes it into `cmp` against
-the page file. The oracle is the file itself, so no checked-in copy of a page can go stale.
+`/bin/sh -c "/usr/bin/manview /usr/man/man1/ls.1"`, and `kernel/test/filters` compares that
+against `manview` run on the same file by hand. `man - ls` is still `cmp`'d against the page file
+itself and is now the only byte-identity assertion left, so no checked-in copy of a page can go
+stale either way.
 
 ## The section search is an ordered table, and the reason is not the one you would guess
 
@@ -104,8 +107,10 @@ whenever somebody wants it, because §9 rule 3 fixes the shape of every page's N
 comma-separated names, ` - `, a description — so `/usr/man/whatis` is a `sed` over two hundred
 files, and [`../TODO.md`](../TODO.md) C25's table row is where that is booked.
 
-Note that the fourteen `cmd/*/CMakeLists.txt` comments saying *"there is no renderer yet"* are
-**still true** and must not be swept: this is a reader, not a renderer. C25a is the renderer.
+The nineteen `cmd/*/CMakeLists.txt` and `README.md` comments that used to say *"there is no
+renderer yet"* were swept when C25a landed, which is exactly what this paragraph asked for when
+it forbade sweeping them early: this program is a reader, [`../manview`](../manview/) is the
+renderer.
 
 ## Sizes
 

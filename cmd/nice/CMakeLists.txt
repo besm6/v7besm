@@ -8,7 +8,7 @@
 # NOT SETUID: nice(2) itself is what refuses a negative increment to a non-super-user
 # (kernel/sys4.c), so there is nothing for a mode bit to buy here.
 #
-# nice.1.umm is the manual page; nothing installs it and there is no renderer yet.  v7's
+# nice.1.umm is the manual page; manview(1) formats it on the image.  v7's
 # page covered nohup(1) too -- a shell script that is not on this image -- and this one says
 # so in a Note instead of documenting it.
 

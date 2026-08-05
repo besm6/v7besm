@@ -14,11 +14,12 @@ A port of **Unix v7 to the BESM-6**, a Soviet 48-bit-word mainframe. Three halve
   binutils, preprocessor, disassembler, and `b6sim`, a user-level a.out simulator.
 - **`lib/`** — cross-built `libc.a`, `libm.a`, `libtermcap.a`, `libcurses.a`, `crt0.o`.
 
-Plus **native BESM-6 programs** under `cmd/` — 92 of them plus one hard link on the image
+Plus **native BESM-6 programs** under `cmd/` — 94 of them plus one hard link on the image
 (`init`, `getty`, `login`, `sh`, the file-management and account set, the filesystem tools,
-two dozen text filters, `ed` and `novi`, `tar`, the kernel-inspection set, and ten of the
-toolchain built a second time; six are setuid root) — staged into `build/rootfs/` for the root
-image. `root.manifest` is the roster; `b6_prog()` calls are how each gets there.
+two dozen text filters, `ed` and `novi`, `more`, `man` and `manview`, `tar`, the
+kernel-inspection set, and ten of the toolchain built a second time; six are setuid root) —
+staged into `build/rootfs/` for the root image. `root.manifest` is the roster; `b6_prog()`
+calls are how each gets there.
 
 **The narrative lives in the per-directory READMEs, and that is where to look before
 touching anything**: `kernel/README.md` (memory model, hardware rules), `kernel/TODO.md`,
@@ -103,12 +104,18 @@ reaches both it and the stdio flush through a pointer). The image also carries
 staged and not listed cannot slip past `root.img`. `B6_STAGE_MAN` is the fourth of those lists
 and carries **`/usr/man`, all 200 manual pages**, in v7's layout — the `.umm` suffix dropped, the
 section digit picking the directory, the subsection letter left on the file (`man1/fsck.1m`,
-`man3/stdio.3s`). **`/usr/bin/man` reads them and does not format them**: there is no `nroff` here
-and a page is legible as it stands, so `man` finds the file — an ordered section table, not a
-`readdir`, since thirteen page names live in two sections at once — and shows it with `/bin/cat`,
-piped into `/bin/more` for a terminal. `FORMATTER` in `cmd/man/man.c` is the one line C25a's
-renderer replaces. The pages cost 302 of the disk's blocks and `man` 12 more, so the image has
-**204 free of 2000** — weigh a large addition against that.
+`man3/stdio.3s`). **`/usr/bin/man` finds a page and `/usr/bin/manview` formats it.** `man` does
+the search — an ordered section table, not a `readdir`, since thirteen page names live in two
+sections at once — and runs `FORMATTER page … | /bin/more`, `FORMATTER` in `cmd/man/man.c` being
+the whole of what it knows about formatting. `manview` (`cmd/manview`, C11, three files) reads the
+dialect through `cmd/man2umm/ummread.cpp`'s rules **without building a document**: it holds one
+*group* of lines at a time — the corpus's largest is 4,053 bytes against an 8,192-byte buffer — and
+renders as it recognizes, because a `Doc` of `Block`/`Span` vectors would not fit 28,672 words.
+Its **attributes are ANSI SGR, on by default and not conditioned on `isatty(2)`** (man hands it a
+pipe into `more` exactly when a human is reading); `-p` is the plain form and there is no
+overstrike back end. Pages are staged as **sources**, so `man - ls` shows the file itself. They
+cost 302 of the disk's blocks, `man` 12 and `manview` 17, so the image has **187 free of 2000** —
+weigh a large addition against that.
 
 The first three are the only places the ceilings actually bind, and each carries a BESM-6 size
 profile keyed on the `besm6` macro `b6cpp` always predefines — `cmd/cpp/defs.h` (below the C11

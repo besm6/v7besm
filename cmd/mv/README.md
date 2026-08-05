@@ -148,5 +148,5 @@ Two things that look like bugs and are not, both left alone with a comment:
 [`lib/libc/man/`](../../lib/libc/man/) precedent: the directory-rename form added to the
 SYNOPSIS it was missing from, a new section for what that form costs, a DIAGNOSTICS section
 the page never had, and `Note:` paragraphs on the setuid bit and on the `/bin/cp` path that
-cannot be reached. Nothing installs it, and there is no renderer yet
-([`../TODO.md`](../TODO.md) C25) — read it as it stands.
+cannot be reached. It goes on the image as `/usr/man/man1/mv.1`, where manview(1)
+([`../TODO.md`](../TODO.md) C25a) formats it — and it is legible as it stands either way.

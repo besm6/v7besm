@@ -13,11 +13,15 @@
 // Task C25b (../TODO.md).  The source is RetroBSD's src/cmd/man/man.c, which is 4.3BSD's;
 // v7 HAD a man, but it was a shell script around nroff and there is no nroff here.
 //
-// THIS PROGRAM DOES NOT FORMAT, and that is the whole design rather than a shortfall.  The
-// pages on this image are the dialect ../../doc/Manual_Page_Format.md describes and are
-// legible as they stand, so man runs `cat' where every other Unix runs a formatter, and
-// pipes into more(1) when standard output is a terminal.  FORMATTER below is the one line
-// C25a's renderer replaces; nothing else in this file knows what formatting is.
+// THIS PROGRAM DOES NOT FORMAT: it finds a page and runs one formatter over it.  FORMATTER
+// below is the whole of what it knows about formatting, and nothing else in this file knows
+// anything -- it was `/bin/cat' until C25a and is ../manview now, and the file did not
+// otherwise change.  That is what the display path was arranged for.
+//
+// WHICH IS ALSO WHY `-' MEANS THE PAGE SOURCE AND NOT `do not page'.  Upstream's `-' copied
+// the file out in-process, a reading that worked only while the formatter was cat; the day
+// manview landed, "do not format" and "do not page" stopped being the same request, and a
+// `-' defined as the second would silently have become the wrong one.  See README.md.
 //
 // THE SECTION SEARCH IS AN ORDERED TABLE AND NOT A readdir(), for three reasons in this
 // order.  THIRTEEN page names live in two sections at once -- acct, chmod, chown, crypt,
@@ -52,9 +56,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#define MAXPATH   256        // a page path, terminator included
-#define CMDCHUNK  256        // the command string grows by this much at a time
-#define FORMATTER "/bin/cat" // THE ONE LINE C25a's renderer replaces
+#define MAXPATH   256                // a page path, terminator included
+#define CMDCHUNK  256                // the command string grows by this much at a time
+#define FORMATTER "/usr/bin/manview" // C25a's renderer, and the only line that knew of cat
 #define DEFPAGER  "/bin/more"
 #define DEFPATH   "/usr/man"
 
@@ -123,9 +127,10 @@ static void addcmd(const char *s)
 }
 
 //
-// The `-' path: the page source, byte for byte.  Upstream wrote `if (!(fd = open(...)))',
-// testing the descriptor against 0 -- so a page opened on descriptor 0 was reported as a
-// failure and a failed open sailed on into read(2).
+// The `-' path: the page source, byte for byte, and the only thing on this image that shows a
+// page unformatted now that FORMATTER is a formatter.  Upstream wrote
+// `if (!(fd = open(...)))', testing the descriptor against 0 -- so a page opened on descriptor
+// 0 was reported as a failure and a failed open sailed on into read(2).
 //
 static void copyout(const char *path)
 {

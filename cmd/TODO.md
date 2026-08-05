@@ -14,13 +14,26 @@ is **left as it was** when a task is finished and dropped: C1 through C9 are spe
 sections are gone, and no number is ever re-used, because `root.manifest` stanzas and per-program
 `README.md`s cite them.
 
-**Two numbers are spent and have no row in the table below**, which is why they are written down
-here rather than only in the places that cite them: **C12 is `novi`** and **C27 is `more`**. They
-are the two programs under [`.`](.) that are not ports of v7 commands — v7 had neither a
-full-screen editor nor a pager — so neither ever had a row among the v7 programs still to port,
-and each landed complete and left no section behind. `egrep` held C12 for a while by mistake and
-is C26 now; **neither 12 nor 27 may be re-used**, which is the rule directly above and is exactly
-the rule a number recorded in five source files and nowhere else is apt to break.
+**Three numbers are spent and have no row in the table below**, which is why they are written
+down here rather than only in the places that cite them.
+
+**C12 is `novi`** and **C27 is `more`**: the two programs under [`.`](.) that are not ports of v7
+commands — v7 had neither a full-screen editor nor a pager — so neither ever had a row among the
+v7 programs still to port, and each landed complete and left no section behind. `egrep` held C12
+for a while by mistake and is C26 now.
+
+**C25 is the manual**, and it is spent in three parts that are cited from about twenty files, so
+they are named here: **C25a is [`manview/`](manview/)**, the renderer, which is
+`/usr/bin/manview` and is what `man(1)` runs over a page; **C25b is [`man/`](man/)**, which finds
+the page; and **C25c was the standing procedure** — [`man2umm/`](man2umm/) is *not* retired, every
+program left in the table above arrives with a roff page, and `b6man2umm` plus
+[../scripts/mancheck.py](../scripts/mancheck.py) is how one becomes a `.umm`. That last is a
+habit and not a task, and it lives in `man2umm/README.md` and §10 of [README.md](README.md) now.
+`manview` is also this tree's third program that is not a port of a v7 command, `nroff` being
+refused below with the rest of the typesetting suite.
+
+**None of 12, 25 or 27 may be re-used**, which is the rule directly above and is exactly the rule
+a number recorded in twenty source files and nowhere else is apt to break.
 
 **The contract per task**, as in the kernel file: it leaves `make` building and `ctest` passing,
 and it leaves the program **on the image** — staged into `build/rootfs/`, named in
@@ -47,7 +60,6 @@ here and already tested, whose value is in doing them together rather than one a
 | C22 | `cron` | the other [../etc/rc](../etc/rc) line | medium, blocked on a clock |
 | C23 | `calendar` | | small, blocked on a clock and on its data |
 | C24 | the eight hand-rolled directory readers, over `opendir(3)` | one reader instead of eight, and §5 stops being everybody's problem | medium |
-| C25 | a **renderer** for the manual pages | `man(1)` finds a page and shows it with `cat`; nothing formats one | medium |
 
 **Where to start: C10a.** Six of the tasks below are yacc grammars and one of those is a lex
 scanner besides, so nothing after C10 can begin until `b6yacc` exists.
@@ -373,43 +385,6 @@ Three things to weigh rather than assume:
 
 ---
 
-## C25. Rendering the manual pages
-
-Two hundred pages are in the tree, in the dialect
-[../doc/Manual_Page_Format.md](../doc/Manual_Page_Format.md) describes, and **nothing renders
-them**. They are legible as they stand — that is what the dialect is for — and since C25b there
-is a `man(1)` on the image that finds one and shows it with `cat`. What is left is the part that
-formats.
-
-### C25a. The renderer
-
-`cmd/manview/` — C11 program (not C++), developed from scratch, using existing `ummread.cpp` as a skeleton. One back end with **ANSI attributes** (bold, italic and underline through SGR), and **ANSI colour** (headings, bold runs, italic arguments and `Font::Xref` cross-references each with a colour of their own).
-  
-**Where it plugs in is already decided and costs one line.** `man(1)`'s display path builds
-`FORMATTER page … | /bin/more` and hands it to `system(3)`; `FORMATTER` is `#define`d to `/bin/cat` in [man/man.c](man/man.c) and is the only thing in that program that knows what showing a page means.
-
-### C25b. `man(1)` on the image — **done**
-
-`/usr/bin/man`, from RetroBSD's 4.3BSD source; [man/README.md](man/README.md) is the account and
-[man/man.1.umm](man/man.1.umm) the page. What is worth carrying forward from it:
-
-* **It does not format**, and the pages are on the image unchanged. `cat` is the placeholder above.
-* **The section search is an ordered table** — `1 1m 8 6 2 3 3s 3m 3x 4 5 7`, commands first — and
-  not a `readdir`, because thirteen page names live in two sections at once and only that order
-  decides which one a bare `man mount` answers with. A new section *digit* is already covered; a
-  new subsection *letter* is one line in that table and nothing warns you.
-* **Eighteen `b6sim` cases and section 21 of `kernel/test/filters.sh`.** The default `/usr/man`,
-  `$MANPATH` and everything after `system(3)` exist only in the booted half — `look(1)`'s position
-  exactly. The `| more` tail is unreachable in both worlds and waits on `kernel/TODO.md` task 35,
-  as `more`'s own screen half does.
-
-### C25c. The standing procedure
-
-[man2umm/](man2umm/) is **not** retired when this is done. Every program left in the table above
-arrives with a roff page, and `b6man2umm` plus [../scripts/mancheck.py](../scripts/mancheck.py) is
-how it becomes a `.umm`; `man2umm/README.md` is the procedure and §10 of [README.md](README.md)
-points at it.
-
 ## Not ported, and why
 
 Each row is a decision that can be re-examined; the line count is there so it can be.
@@ -417,7 +392,7 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 | | lines | why not |
 |---|---|---|
 | `mail/`, `xsend/` | 556 + 414 | **Three decisions rather than a port.** `mail` wants a `/usr/spool/mail` directory [../root.manifest](../root.manifest) has not got and a mailbox **lock protocol** built out of the user execute bit (`lock()` sets `st_mode & 01` and spins); it includes `<whoami.h>` for a `sysname` this tree pruned on purpose ([../include/README.md](../include/README.md)); and its `REMOTE`/`FORWARD` arms hand the letter to `uucp`, which is refused below. There is one user on this machine and nowhere for a letter to go. `cmd/login` already probes for `/usr/spool/mail` with `access()` and quietly finds nothing, which is the behaviour to keep. `xsend` is secret mail and needs `mail` first. |
-| `troff/`, `eqn/`, `neqn/`, `tbl/`, `refer/`, `deroff.c`, `prep/`, `checkeq.c`, `ptx.c`, `spell/` | 8,266 + 1,726 + 1,677 + 2,434 + 4,874 + 496 + 589 + 101 + 553 + 625 | The typesetting suite. `troff` drives a CAT phototypesetter that does not exist, and there was never an `nroff` in this source tree to begin with. **The refusal is stronger than it was: there is nothing left here for either to typeset.** This repo's manual pages are in the dialect [../doc/Manual_Page_Format.md](../doc/Manual_Page_Format.md) describes, and C25 below is what will display them. `spell` additionally needs its whole word list. |
+| `troff/`, `eqn/`, `neqn/`, `tbl/`, `refer/`, `deroff.c`, `prep/`, `checkeq.c`, `ptx.c`, `spell/` | 8,266 + 1,726 + 1,677 + 2,434 + 4,874 + 496 + 589 + 101 + 553 + 625 | The typesetting suite. `troff` drives a CAT phototypesetter that does not exist, and there was never an `nroff` in this source tree to begin with. **The refusal is stronger than it was: there is nothing left here for either to typeset.** This repo's manual pages are in the dialect [../doc/Manual_Page_Format.md](../doc/Manual_Page_Format.md) describes, and [manview/](manview/) displays them. `spell` additionally needs its whole word list. |
 | `tp/`, `dump.c`, `restor.c`, `dumpdir.c` | 800 + 641 + 1,150 + 475 | Tape. **This kernel has no tape driver** and no `bdevsw`/`cdevsw` row for one, and all four are built around a tape's sequential access rather than merely willing to use it — `dump`/`restor` are a filesystem-level backup pair whose whole design is the reel. `tp` is the pre-`tar` archiver and is superseded by it in any case. If a magnetic-tape driver is ever written (a `kernel/TODO.md` item nobody has raised; [../doc/Besm6_Peripherals.md](../doc/Besm6_Peripherals.md) is the reference), reconsider `dump`/`restor` and not the other two. |
 | `uucp/`, `cu.c` | 6,415 + 541 | Dial-out over a modem link nothing models. `cu` becomes conceivable only if the machine's serial multiplexor is ever driven and wired to something outside; no kernel task proposes that. |
 | `lpr/`, `vpr.c` | 1,315 + 334 | Printer spooling. **Worth revisiting:** SIMH *does* model the АЦПУ drum printer, so `lpr` becomes a small task the day a kernel printer driver exists — which is a `kernel/TODO.md` item nobody has written yet. |

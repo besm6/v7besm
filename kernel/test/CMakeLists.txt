@@ -280,6 +280,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/usr/bin/ranlib
     ${B6_ROOTFS}/usr/bin/cc
     ${B6_ROOTFS}/usr/bin/man
+    ${B6_ROOTFS}/usr/bin/manview
     ${B6_ROOTFS}/usr/guest/hello.S
     ${B6_ROOTFS}/bin/echo
     ${B6_ROOTFS}/bin/ed

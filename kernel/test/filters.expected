@@ -417,5 +417,6 @@ man: no entry for nosuchpage in the manual
 man status 1
 man cmp status 0
 man - cmp status 0
-    202
+    193
+    106
 ---end---

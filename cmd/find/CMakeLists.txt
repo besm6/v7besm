@@ -21,8 +21,8 @@
 # parse tree and CANNOT see the recursion, so descend()'s depth is counted by the program
 # itself (§6's third ceiling).
 #
-# find.1.umm is the manual page; nothing installs it and there is no renderer yet -- read it
-# as it stands.
+# find.1.umm is the manual page; manview(1) formats it on the image, and it is
+# legible as it stands.
 #
 # NOT SETUID: it opens and stats what the caller could, and -exec runs as the caller.
 

@@ -10,8 +10,8 @@
 # ../README.md SS10 requires: -b prints a BYTE OFFSET rather than v7's block number.
 #
 # grep.1.umm is the manual page for grep, fgrep and egrep together, as v7 wrote it; ../fgrep
-# has no page of its own.  Nothing installs it and there is no renderer yet -- read it as it
-# stands; the Cyrillic in it is UTF-8 like everything else and needs no flag.
+# has no page of its own.  manview(1) formats it on the image and it is legible as it
+# stands either way; the Cyrillic in it is UTF-8 like everything else and needs no flag.
 #
 # b6_prog() links crt0.o grep.o -lc -lruntime, stages the result into build/rootfs/bin/grep
 # and registers rootfs_grep_size for the two address-space ceilings (../README.md SS6).

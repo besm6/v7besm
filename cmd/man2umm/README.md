@@ -64,9 +64,11 @@ hard way: when the checker had its own copy of the quote rule, the two disagreed
 regex ran from an opening backquote past the real close to the apostrophe in a possessive.
 
 **`ummread.cpp` is the half that outlives the conversion.** The roff reader has a finite job; the
-dialect reader is what anything displaying a page goes through, and the renderer of
-[`../TODO.md`](../TODO.md) task C25a is to be written from it — as a skeleton rather than as a
-library, that task being C11 and this code C++. That is why the library is called `umm` and not
+dialect reader is what anything displaying a page goes through, and task C25a's renderer —
+[`../manview`](../manview/), which is `/usr/bin/manview` on the image — was written from it as a
+skeleton rather than as a library, that program being C11 and this code C++. Its
+[`parse.c`](../manview/parse.c) is the transliteration, function for function, and its header
+says where the two must go on agreeing. That is why the library is called `umm` and not
 `man2umm`, and why the highest-value test in the suite is
 
 ```

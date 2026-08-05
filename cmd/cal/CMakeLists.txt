@@ -11,7 +11,7 @@
 # build/rootfs/bin/cal.  It also registers rootfs_cal_size.
 #
 # cal.1.umm is the manual page, in the format ../../doc/Manual_Page_Format.md describes;
-# nothing installs it and there is no renderer yet (../TODO.md C25) -- read it as it stands.
+# manview(1) formats it on the image (../TODO.md C25a), and it is legible as it stands.
 #
 # NOT SETUID: it opens nothing at all.
 

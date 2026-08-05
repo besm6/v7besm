@@ -16,8 +16,8 @@
 # `crt0.o file.o -lc -lruntime' against the libc built in ../../lib, and stages the result as
 # build/rootfs/bin/file.  It also registers rootfs_file_size.
 #
-# file.1.umm is the manual page; nothing installs it and there is no renderer yet -- read it
-# as it stands.  test/page.1 is NOT one: it is a three-line fixture for the roff detector.
+# file.1.umm is the manual page; manview(1) formats it on the image, and it is
+# legible as it stands.  test/page.1 is NOT one: it is a three-line fixture for the roff detector.
 #
 # NOT SETUID: it opens what the caller could open itself.
 

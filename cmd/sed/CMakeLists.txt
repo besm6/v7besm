@@ -15,9 +15,9 @@
 # backslash-escaped byte by setting bit 0200 of it -- ed(1)'s QESC prefix replaces that.
 # See README.md beside this file.
 #
-# sed.1.umm is v7's page corrected in place, as ../README.md SS10 requires.  Nothing installs
-# it and there is no renderer yet -- read it as it stands.  The Cyrillic example in it is
-# UTF-8 like everything else and needs no flag.
+# sed.1.umm is v7's page corrected in place, as ../README.md SS10 requires.  manview(1)
+# formats it on the image and it is legible as it stands either way.  The Cyrillic example
+# in it is UTF-8 like everything else and needs no flag.
 #
 # NOT SETUID: sed opens files for reading, and creates the wfiles it was told to, as
 # whoever ran it.  ../README.md SS8.

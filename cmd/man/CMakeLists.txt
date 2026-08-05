@@ -6,10 +6,10 @@
 # nroff on this machine and never will be.  The source is RetroBSD's src/cmd/man/man.c,
 # which is Berkeley's 1987 C rewrite.
 #
-# IT DOES NOT FORMAT, and that decision is the program.  The pages are the dialect
-# ../../doc/Manual_Page_Format.md describes and are legible as they stand, so man runs
-# /bin/cat where every other Unix runs a formatter and pipes into /bin/more for a terminal.
-# FORMATTER in man.c is the one line C25a's renderer replaces; nothing else knows.
+# IT DOES NOT FORMAT ITSELF: it finds a page and runs one formatter over it, ../manview
+# (task C25a), piped into /bin/more for a terminal.  FORMATTER in man.c is the whole of what
+# it knows about formatting -- it was /bin/cat until C25a and is manview now, and nothing
+# else in the file changed.  That is what the display path was arranged for.
 #
 # /usr/bin AND NOT /bin, which is the one placement here that is not this tree's habit --
 # /bin holds the user commands and /usr/bin the ten natively built toolchain programs.  v7

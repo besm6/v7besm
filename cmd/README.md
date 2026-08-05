@@ -218,10 +218,11 @@ in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt), and the hard-
 expectations in `kernel/test/console.ini` and `kernel/test/session.expected`.
 
 The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and since the manual went on it (§10)
-and `man(1)` after it there are **204 free** — the whole of `/usr/man` is 302 of them and `man`
-itself 12. That is still room for most of what [TODO.md](TODO.md) has open, but it is no longer
-room for anything: weigh a large addition against it rather than assuming. The number is printed
-by `b6fsutil` every time `root.img` is built, so it is measured and not estimated.
+and `man(1)` and `manview(1)` after it there are **187 free** — the whole of `/usr/man` is 302 of
+them, `man` 12 and `manview` 17. That is still room for a good deal of what [TODO.md](TODO.md) has
+open, but it is no longer room for anything: weigh a large addition against it rather than
+assuming. The number is printed by `b6fsutil` every time `root.img` is built, so it is measured
+and not estimated.
 
 ### 8. Setuid works, and it is asserted
 
@@ -347,13 +348,13 @@ is UTF-8 and nothing special is needed for it; §11 already covers what eight-bi
 `b6man2umm -l` checks a page against the format's canonical shape and runs as a `ctest`
 (`man_lint_<page>`) over every page in the tree, so a page must pass it.
 
-**The pages are on the image and `man(1)` finds them; there is still no renderer** — a page is read
-as it stands, which is what the dialect is for, and [man/](man/) shows it with `cat`. All two
-hundred are staged as `/usr/man/man<N>/<name>.<section>` in v7's layout: the `.umm` suffix dropped,
-the section digit picking the directory and the subsection letter left on the file, so `ls.1.umm`
-is `/usr/man/man1/ls.1` and `fsck.1m.umm` is `/usr/man/man1/fsck.1m`. That layout is `man`'s whole
-search rule, so **the name of a page decides where it can be found**. [TODO.md](TODO.md) C25a is
-what will format them.
+**The pages are on the image, [man/](man/) finds them and [manview/](manview/) formats them.** All
+two hundred and one are staged as `/usr/man/man<N>/<name>.<section>` in v7's layout: the `.umm`
+suffix dropped, the section digit picking the directory and the subsection letter left on the file,
+so `ls.1.umm` is `/usr/man/man1/ls.1` and `fsck.1m.umm` is `/usr/man/man1/fsck.1m`. That layout is
+`man`'s whole search rule, so **the name of a page decides where it can be found**. They are staged
+as **sources** and not preformatted, which is what the dialect is for: `man - ls` shows the file
+itself, and `man ls` runs it through `manview` and pipes that into `more` for a terminal.
 
 **A new page costs two edits, not none.** `B6_STAGE_MAN` in the top-level
 [../CMakeLists.txt](../CMakeLists.txt) globs `cmd/*/*.umm`, so a page in a new command's directory

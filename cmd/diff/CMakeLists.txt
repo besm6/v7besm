@@ -18,8 +18,8 @@
 # build/rootfs/bin/diff.  It also registers rootfs_diff_size -- which cannot see the six
 # integer vectors this program allocates over its input, §6's fourth ceiling.
 #
-# diff.1.umm is the manual page, and it covers diffh too; nothing installs it and there is no
-# renderer yet (../TODO.md C25) -- read it as it stands.
+# diff.1.umm is the manual page, and it covers diffh too; manview(1) formats it on the image
+# (../TODO.md C25a), and it is legible as it stands.
 #
 # NOT SETUID: it opens what the caller could open itself, and writes its temp file as the
 # caller too.

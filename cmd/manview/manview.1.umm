@@ -1,0 +1,110 @@
+<!-- Not a v7 page: v7 had no renderer for this dialect and no dialect to render.  See BESM-6 NOTES. -->
+
+# MANVIEW(1)
+
+## NAME
+
+manview - format a manual page
+
+## SYNOPSIS
+
+| **manview** [ **-p** ] [ **-m** ] [ **-w** *cols* ] [ *file* ... ]
+
+## DESCRIPTION
+
+*Manview* reads a manual page written in Unix Manual Markdown and writes it formatted for a
+terminal. It is what man(1) runs over a page it has found, and it is the only formatter on
+this system: there is no nroff(1) here and none is coming.
+
+With no *file* argument, or with a *file* named `-`, the page is read from the standard
+input. More than one *file* may be given; each is formatted in turn with a blank line
+between, which is what **man -a** asks for.
+
+A paragraph is filled to the output width and a word is never hyphenated. A line block, a
+fenced block and a heading keep the line structure the source gave them. A definition, a
+list item and a quote are indented five columns, which is v7's step; a definition whose tag
+fits that step keeps its body on the tag's line. A literal run is quoted, the quotes being
+*manview*\&'s and not the source's, and a cross-reference is set with its name in one font
+and its parentheses in roman.
+
+The level-1 title becomes a page banner: the page's own name at both margins with the
+manual's name between them. There is no footer, since more(1) does the paging here and
+there is no page number to put in one.
+
+**-p**
+: Plain. No escape sequence of any kind is written, so the output is legible in a file and
+  may be compared byte for byte. Quotation marks and the parentheses of a cross-reference
+  are punctuation and stay.
+
+**-m**
+: Monochrome. Bold, italic and underline are written, colour is not. For a terminal that
+  understands the one and not the other.
+
+**-w** *cols*
+: Set the output width, 80 by default. A value below 20 is raised to 20 and one above 512
+  is lowered to it. There is no way to ask a terminal how wide it is on this system, which
+  is why this option exists.
+
+An argument that is not an option ends the option list, and so does `--`. A page that
+cannot be opened is reported and the rest are formatted anyway.
+
+## THE FORMAT
+
+Unix Manual Markdown is a small semantic dialect of Markdown, described in this tree's
+`doc/Manual_Page_Format.md`, and *manview* implements it and nothing else. There is no link
+syntax, no raw HTML, no setext heading and no thematic break, and a construct this program
+does not recognize is text rather than an extension.
+
+Four span kinds are recognized: roman, `**bold**` for what is typed, `*italic*` for what is
+replaced, and a backquoted run for a token quoted as itself. An underscore is never a
+delimiter, so `time_t` and `SIG_DFL` need no escaping. A `name(N)` written with no markup at
+all is a cross-reference. Nine block kinds are recognized: paragraph, line block, fenced
+block, definition list, bullet list, ordered list, quote, comment and heading.
+
+## FILES
+
+| `/usr/man/man?/*` the pages this formats
+| `/usr/bin/man` what finds one and runs this over it
+| `/bin/more` what man pipes the result into
+
+## SEE ALSO
+
+man(1), more(1), col(1)
+
+## DIAGNOSTICS
+
+The exit status is 1 if any *file* could not be opened, and 0 otherwise.
+
+A page holding a single block longer than eight thousand bytes draws `block too long,
+output truncated` and is formatted as far as it was read. No page in this manual comes
+within half of that.
+
+## BESM-6 NOTES
+
+*Note:* colour and attributes are **on by default and are not conditioned on the output
+being a terminal**, which is the opposite of the modern habit and is forced by how man(1)
+invokes this program: the display command is `manview page | more`, so *manview*\&'s
+standard output is a pipe exactly when a person is reading. **-p** is the plain form and is
+what a script or a pipeline wants; **man -** shows the page source itself and formats
+nothing.
+
+*Note:* the escape sequences are ANSI, hard-coded, as more(1) and novi(1) already write.
+There is no terminal database on this image and no `/usr/lib/more.help`-style data file for
+this program either; a terminal that is not ANSI wants **-p**.
+
+*Note:* a column is a **character** and not a byte. This system carries eight bits
+everywhere, so a page may hold Cyrillic - seventeen in this manual do - and a paragraph of
+it is filled by the letters it has rather than by the bytes they take.
+
+*Note:* backspace overstrike, which the format calls a renderer's default and its fallback,
+is **not** implemented. That is nroff's convention and col(1) exists to undo it; nothing on
+this machine produces it and nothing but col(1) would read it. **-p** is the fallback here.
+
+*Note:* one block of the page is held at a time and not the page, which is what lets a
+manual of any size be read in 28,672 words of address space. The largest block in this
+manual is about four thousand bytes and the buffer is eight thousand.
+
+## AUTHOR
+
+Written for this port. The dialect it reads, and the reader it was written from, are
+`cmd/man2umm` in the source tree.

@@ -699,5 +699,5 @@ it. Neither page had an upstream original to be edited from, and both carry a `.
 top saying so.
 
 **Nothing installs them** — no `CMakeLists.txt` in this tree has a man rule yet, which is also true
-of libtermcap's and libcurses' — and there is no renderer yet
-([`../../cmd/TODO.md`](../../cmd/TODO.md) C25), so they are read as they stand.
+of libtermcap's and libcurses' — but they are staged onto the image all the same, by the top-level
+`B6_STAGE_MAN` glob, where manview(1) ([`../../cmd/TODO.md`](../../cmd/TODO.md) C25a) formats them.

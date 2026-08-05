@@ -48,12 +48,11 @@ The options are:
 If the standard output is a terminal and the **-** flag is not given, *man* pipes the page
 through more(1), or through the pager named by the environment variable *PAGER*.
 
-*Note:* **this program does not format.** There is no nroff(1) on this machine, and none is
-coming; the pages here are written in the dialect `doc/Manual_Page_Format.md` describes and are
-meant to be read as they stand. So *man* runs cat(1) where another system runs a formatter, and
-the difference between `man ls` and `man - ls` is the pager and nothing else. When a renderer
-exists it takes cat(1)'s place, and nothing about the sections, the paths or the options above
-changes.
+*Note:* **this program does not format; it runs a formatter.** There is no nroff(1) on this
+machine and none is coming, so the formatter is manview(1), which reads the dialect
+`doc/Manual_Page_Format.md` describes and writes it for a terminal. The pages on this system are
+staged as sources and not preformatted, which is why **-** can show one at all: `man ls` is the
+page formatted and `man - ls` is the file itself.
 
 *Note:* the sections `local`, `new` and `old`, the *MACHINE* variable and the machine-specific
 subdirectories it selected, the preformatted `cat?` directories and the `3f` FORTRAN section are
@@ -65,12 +64,12 @@ is on this system, and there is no `whatis` database for one to read.
 
 | `/usr/man` the manual
 | `/usr/man/man?/*` the pages themselves
-| `/bin/cat` what a page is shown with
+| `/usr/bin/manview` what a page is formatted with
 | `/bin/more` what it is paged with
 
 ## SEE ALSO
 
-cat(1), more(1)
+manview(1), more(1), cat(1)
 
 ## BUGS
 

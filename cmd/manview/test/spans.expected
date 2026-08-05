@@ -1,0 +1,22 @@
+[1;33mSPANS(1)[0m                    [1;33mUNIX Programmer's Manual[0m                    [1;33mSPANS(1)[0m
+
+[1;33mNAME[0m
+     spans - the four span kinds and the three rules over them
+
+[1;33mDESCRIPTION[0m
+     Roman text, [1;32mbold[0m [1;32mtext[0m, [3;36mitalic[0m [3;36mtext[0m, and `[4ma[0m [4mliteral[0m [4mrun[0m'.
+
+     Rule 2 wants a non-alphanumeric outside a delimiter, so 2**41-1 is
+     arithmetic and not a bold run, [3;36mmalloc[0m(2) closes before its parenthesis, and
+     ([1;32m-t[0m) opens after one and closes before another.
+
+     Rule 3's joiner butts two runs together with no space: [1;32mb[0m[3;36msize[0m is one word
+     and so is [3;36mx[0m[1;32my[0m[3;36mz[0m.
+
+     The escapes: a literal * asterisk, a literal ` backtick, a literal \
+     backslash, and a | pipe.
+
+     The padded form of a literal run holds a backtick: `[4ma[0m [4m`[0m [4mb[0m'.
+
+     A marked run may cross a source line inside a paragraph, [1;32mas[0m [1;32mthis[0m [1;32mbold[0m [1;32mrun[0m
+     [1;32mdoes[0m, and so may `[4ma[0m [4mliteral[0m [4mrun[0m'.

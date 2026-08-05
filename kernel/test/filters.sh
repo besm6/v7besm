@@ -511,11 +511,16 @@ file /bin/cat | sed 's/.*	//' >>/tmp/filters.log
 #          $MANPATH: run-prog-test.sh runs `env -i'.  And THE DISPLAY ITSELF: with neither
 #          -w nor -, man builds one command string and hands it to system(3), which forks
 #          /bin/sh -- and b6sim can fork but cannot exec a BESM-6 a.out.  So the two cmp
-#          lines below are the only assertion anywhere that man SHOWS a page, and the oracle
-#          is the page file rather than a checked-in copy of it: man runs /bin/cat, so the
-#          output must be the file byte for byte.  What is still unreachable in both worlds
-#          is the `| /bin/more' tail, which is appended only for a terminal -- cmd/more's
-#          screen half, with cmd/more's reason and kernel/TODO.md task 35's timing.
+#          lines below are the only assertion anywhere that man SHOWS a page, and neither
+#          oracle is a checked-in copy of one.  `man -' is the page source and is cmp'd
+#          against the FILE.  `man ls' is the page FORMATTED, and since task C25a that is
+#          /usr/bin/manview and not /bin/cat, so the oracle is manview run on the same file
+#          by hand: what is being asserted is the WIRING -- that man execs the formatter it
+#          names on the page it found -- and cmd/manview/test asserts what the formatter
+#          does.  Two temporaries because this shell has no process substitution.
+#          What is still unreachable in both worlds is the `| /bin/more' tail, which is
+#          appended only for a terminal -- cmd/more's screen half, with cmd/more's reason
+#          and kernel/TODO.md task 35's timing.
 echo ---man--- >>/tmp/filters.log
 man -w ls >>/tmp/filters.log
 man -w 1m fsck >>/tmp/filters.log
@@ -526,11 +531,15 @@ man -w man >>/tmp/filters.log
 MANPATH=/tmp:/usr/man man -w ls >>/tmp/filters.log
 man -w nosuchpage >>/tmp/filters.log 2>&1
 echo man status $? >>/tmp/filters.log
-man ls | cmp - /usr/man/man1/ls.1
+man ls >/tmp/man.out
+manview /usr/man/man1/ls.1 >/tmp/manview.out
+cmp /tmp/man.out /tmp/manview.out
 echo man cmp status $? >>/tmp/filters.log
 man - ls | cmp - /usr/man/man1/ls.1
 echo man - cmp status $? >>/tmp/filters.log
 man 1m fsck | wc -l >>/tmp/filters.log
+manview -p /usr/man/man1/manview.1 | wc -l >>/tmp/filters.log
+rm -f /tmp/man.out /tmp/manview.out
 
 echo ---end--- >>/tmp/filters.log
 sync
