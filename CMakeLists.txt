@@ -89,6 +89,7 @@ add_subdirectory(cmd/strip)
 add_subdirectory(cmd/lorder)
 add_subdirectory(cmd/cc)
 add_subdirectory(cmd/fsutil)
+add_subdirectory(cmd/man2umm)
 
 #
 # The system header tree.  b6cc appends <prefix>/share/besm6/include to every
