@@ -100,7 +100,12 @@ headers were written and never implemented (`lib/libc/gen/`, and `cuexit.c` on w
 reaches both it and the stdio flush through a pointer). The image also carries
 **`/lib/{crt0.o,libc.a,libruntime.a}` and the whole `/usr/include`** — staged by the top-level
 `CMakeLists.txt`'s `B6_STAGE_*` lists, which `kernel/test/CMakeLists.txt` reuses so that a file
-staged and not listed cannot slip past `root.img`.
+staged and not listed cannot slip past `root.img`. `B6_STAGE_MAN` is the fourth of those lists
+and carries **`/usr/man`, all 200 manual pages**, in v7's layout — the `.umm` suffix dropped, the
+section digit picking the directory, the subsection letter left on the file (`man1/fsck.1m`,
+`man3/stdio.3s`). Nothing on the image reads them: `man(1)` is `cmd/TODO.md` C25. The pages cost
+302 of the disk's blocks, so the image now has about **237 free of 2000** — weigh a large
+addition against that.
 
 The first three are the only places the ceilings actually bind, and each carries a BESM-6 size
 profile keyed on the `besm6` macro `b6cpp` always predefines — `cmd/cpp/defs.h` (below the C11
@@ -153,7 +158,9 @@ an `#if besm6`.
 the image; paths resolve against `b6fsutil`'s working directory (`build/kernel/test`). Modes
 (`04755` setuid on `mkdir`/`mv`/`rmdir`/`newgrp`/`passwd`/`su`) and the one hard link (`/bin/[`
 → `/bin/test`) live there, not in `build/rootfs/`. `etc/` stages the static `group`, `motd`,
-`passwd`, `rc`, `termcap`, `ttys`; `lib/test/` stages `usr/test/*`.
+`passwd`, `rc`, `termcap`, `ttys`; `lib/test/` stages `usr/test/*`; the top-level
+`CMakeLists.txt` stages the three trees no one directory owns — `/lib`, `/usr/include` and
+`/usr/man`.
 
 **Porting v7 userland**: read `cmd/README.md` (the eleven-point recipe), then
 `cmd/sh/README.md` and `cmd/ls/README.md`. `b6parse` is **strict C11** — no implicit `int`,

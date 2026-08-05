@@ -212,7 +212,10 @@ Two lists must grow with the program, and nothing catches them but a failing tes
 in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt), and the hard-coded `ls /bin`
 expectations in `kernel/test/console.ini` and `kernel/test/session.expected`.
 
-The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**. Nothing planned comes close to filling it.
+The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and since the manual went on it (§10)
+there are about **237 free** — the whole of `/usr/man` is 302 of them. That is still room for
+everything [TODO.md](TODO.md) has open, `man(1)` included, but it is no longer room for anything:
+weigh a large addition against it rather than assuming.
 
 ### 8. Setuid works, and it is asserted
 
@@ -338,8 +341,17 @@ is UTF-8 and nothing special is needed for it; §11 already covers what eight-bi
 `b6man2umm -l` checks a page against the format's canonical shape and runs as a `ctest`
 (`man_lint_<page>`) over every page in the tree, so a page must pass it.
 
-**Nothing installs them and there is no renderer yet** — read a page as it stands, which is what the
-dialect is for. [TODO.md](TODO.md) C25 is the renderer and `man(1)`.
+**The pages are on the image, and there is no renderer yet** — read one as it stands, which is what
+the dialect is for. All two hundred are staged as `/usr/man/man<N>/<name>.<section>` in v7's layout:
+the `.umm` suffix dropped, the section digit picking the directory and the subsection letter left on
+the file, so `ls.1.umm` is `/usr/man/man1/ls.1` and `fsck.1m.umm` is `/usr/man/man1/fsck.1m`.
+[TODO.md](TODO.md) C25 is what will read them.
+
+**A new page costs two edits, not none.** `B6_STAGE_MAN` in the top-level
+[../CMakeLists.txt](../CMakeLists.txt) globs `cmd/*/*.umm`, so a page in a new command's directory
+is already inside it — but that glob runs at *configure* time, so the page needs a re-configure to
+be staged and a stanza in [../root.manifest](../root.manifest) to reach the disk. Neither is
+automatic and nothing fails if you skip them; the page simply is not there.
 
 **A v7 program you port arrives with a roff page.** [man2umm/README.md](man2umm/README.md) is the
 procedure: convert it with `b6man2umm`, check it against the host's `groff` with

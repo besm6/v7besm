@@ -177,6 +177,57 @@ if(B6RUNTIME_LIB)
         stdarg.h stdbool.h stddef.h stdint.h stdnoreturn.h)
     set(B6_STAGE_LIB crt0.o libc.a libruntime.a)
 
+    #
+    # THE MANUAL, /usr/man -- two hundred pages in the dialect doc/Manual_Page_Format.md
+    # describes, which is the whole of it: every page in the tree goes on the image.  There
+    # is no man(1) yet (cmd/TODO.md C25); a page is legible as it stands, which is what the
+    # dialect is for, and `cat /usr/man/man1/ls.1' is what a reader gets today.
+    #
+    # v7's OWN LAYOUT: the section DIGIT picks the directory and the subsection letter stays
+    # on the FILE, so fsck's page is man1/fsck.1m and stdio's is man3/stdio.3s.  The .umm
+    # suffix is a source-tree convention and is dropped here.  A page is COPIED from where it
+    # lives beside its source (cmd/README.md §10), so an edit reaches the disk with no
+    # install, exactly as a header does.
+    #
+    # ONE LIST, and it holds IMAGE-RELATIVE names -- `man1/ls.1' -- for the reason the three
+    # above are declared here rather than beside the copies: kernel/test/ is configured at the
+    # next line and root.img has to name every one of them.  The source path is consumed in
+    # the loop below and never leaves it, so there is no second list to skew against.
+    #
+    # SIX GLOBS AND NOT A RECURSIVE ONE.  cmd/man2umm/test/ globs cmd/, lib/ and include/
+    # recursively for the man_lint_* tests and today finds these same two hundred files -- but
+    # a .umm FIXTURE under some cmd/<x>/test/ would belong in that corpus and must not thereby
+    # land on the disk.  The two sets coincide and are allowed to diverge in that direction.
+    # Like every file(GLOB) here it runs at CONFIGURE time: a new page needs a re-configure,
+    # exactly as a new header does, and a stanza in root.manifest besides.
+    #
+    set(B6_STAGE_MAN "")
+    set(_staged_man "")
+    file(GLOB _man_pages
+         ${CMAKE_SOURCE_DIR}/cmd/*/*.umm
+         ${CMAKE_SOURCE_DIR}/lib/libc/man/*.umm
+         ${CMAKE_SOURCE_DIR}/lib/libm/*.umm
+         ${CMAKE_SOURCE_DIR}/lib/libtermcap/*.umm
+         ${CMAKE_SOURCE_DIR}/lib/libcurses/*.umm
+         ${CMAKE_SOURCE_DIR}/include/man/*.umm)
+    foreach(_p ${_man_pages})
+        get_filename_component(_page ${_p} NAME)              # ls.1.umm
+        string(REGEX REPLACE "\\.umm$" "" _page ${_page})     # ls.1
+        if(NOT _page MATCHES "^.+\\.([0-9])[a-z]*$")
+            message(FATAL_ERROR "manual page ${_p}: name is not <topic>.<section>.umm")
+        endif()
+        set(_dst man${CMAKE_MATCH_1}/${_page})                # man1/ls.1, man1/fsck.1m
+        add_custom_command(OUTPUT ${B6_ROOTFS}/usr/man/${_dst}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${B6_ROOTFS}/usr/man/man${CMAKE_MATCH_1}
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_p} ${B6_ROOTFS}/usr/man/${_dst}
+            DEPENDS ${_p}
+            COMMENT "stage /usr/man/${_dst}" VERBATIM)
+        list(APPEND B6_STAGE_MAN ${_dst})
+        list(APPEND _staged_man ${B6_ROOTFS}/usr/man/${_dst})
+    endforeach()
+    add_custom_target(rootfs_man ALL DEPENDS ${_staged_man})
+    add_dependencies(rootfs rootfs_man)
+
     add_subdirectory(kernel)
     add_subdirectory(lib)
 

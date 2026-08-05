@@ -401,11 +401,14 @@ never realistic anyway: a `std::vector` document tree is the wrong shape under a
 address space and a 4,096-word stack. Write it streaming, so it never holds a whole page, and use
 C25a's output as its oracle.
 
-Then the pages themselves: a `/usr/man` tree in [../root.manifest](../root.manifest), a staging
-rule beside `B6_STAGE_INC`, `ROOTFS_FILES` in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt),
-and a test. **Measured: the image has about 625 free blocks of 2000 and the corpus is about 297**,
-so it is affordable but takes half the headroom — decide whether it stages the whole corpus or a
-curated subset, and say which in the manifest.
+**The pages are already there**, so this is the program and its test alone: all two hundred are on
+the image as `/usr/man/man<digit>/<name>.<section>` — v7's own layout, the `.umm` suffix dropped
+and the subsection letter left on the file, so `man1/ls.1`, `man1/fsck.1m`, `man3/stdio.3s`. They
+are staged by `B6_STAGE_MAN` in the top-level [../CMakeLists.txt](../CMakeLists.txt) and listed in
+[../root.manifest](../root.manifest), which is where the decision not to curate is recorded. The
+search path is therefore `/usr/man/man[1-8]` with the letter on the filename, which is what
+`man 1m fsck` and a bare `man fsck` both have to cope with; and the image has some 237 free blocks
+left, so the program itself is the only thing still to fit.
 
 ### C25c. The standing procedure
 

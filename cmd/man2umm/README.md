@@ -25,6 +25,11 @@ Then read it, fix what the converter could not, and delete the roff. The middle 
 `ctest` (`man_lint_<page>`); the third is the one that needs the host's `groff` and is therefore
 run by hand.
 
+Then **re-configure and add a stanza to [`../../root.manifest`](../../root.manifest)**: the page
+goes onto the image as `/usr/man/man<N>/<name>.<section>`, and the glob that stages it
+(`B6_STAGE_MAN`, the top-level `CMakeLists.txt`) runs at configure time while the manifest is kept
+by hand. See [`../README.md`](../README.md) §10.
+
 **What always needs a human.** The converter is mechanical and its output is a draft:
 
 - **`.HP`, the hanging paragraph.** It is a definition list wearing a disguise, and which part is

@@ -354,6 +354,13 @@ foreach(_f ${B6_STAGE_INC} ${B6_STAGE_FREEINC})
     list(APPEND ROOTFS_FILES ${B6_ROOTFS}/usr/include/${_f})
 endforeach()
 
+# ...and /usr/man, the two hundred manual pages.  B6_STAGE_MAN is the same kind of list and is
+# declared in the same place; it holds image-relative names -- man1/ls.1, man3/stdio.3s -- so
+# this is the whole of what the manual costs here.
+foreach(_f ${B6_STAGE_MAN})
+    list(APPEND ROOTFS_FILES ${B6_ROOTFS}/usr/man/${_f})
+endforeach()
+
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/root.img
     COMMAND ${B6FSUTIL} -n -s 2000 -T ${ROOTTIME}
             -M ${ROOT_MANIFEST} root.img

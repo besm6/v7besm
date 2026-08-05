@@ -4,10 +4,15 @@ The format this system's manual pages are written in. It is a **small semantic d
 Markdown**, designed for reference material rather than prose, and it replaces the roff `-man`
 macros the pages were inherited in.
 
-A page is a plain text file named `<name>.<section>.md` and living beside the source it documents —
+A page is a plain text file named `<name>.<section>.umm` and living beside the source it documents —
 [`cmd/ls/ls.1.umm`](../cmd/ls/ls.1.umm), [`lib/libc/man/read.2.umm`](../lib/libc/man/read.2.umm),
 [`include/man/dir.5.umm`](../include/man/dir.5.umm). That placement is
 [`cmd/README.md`](../cmd/README.md) §10's rule and it does not change.
+
+**On the image the same file is `/usr/man/man<digit>/<name>.<section>`** — v7's own layout, the
+`.umm` suffix dropped, the section digit choosing the directory and the subsection letter left on
+the file: `/usr/man/man1/ls.1`, `/usr/man/man1/fsck.1m`, `/usr/man/man3/stdio.3s`. It is staged
+from the source file itself, so an edit here is on the disk with no install step.
 
 **Why not roff.** A `-man` page is only legible through a formatter, and this project will never own
 one: `troff` drives a CAT phototypesetter that does not exist, v7 shipped no `nroff` at all, and
