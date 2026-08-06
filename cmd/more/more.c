@@ -94,8 +94,12 @@ struct {
     long chrctr, line;
 } context, screen_start;
 
-// What `h' and `?' print.  Upstream pages a file, /share/misc/more.help; this is that
-// file, less the `v' line, with the search described as what it now is.
+// What `h' and `?' print.  Upstream's /share/misc/more.help, one command to a line, in
+// four groups and two columns instead.
+//
+// NINETEEN ROWS BY EIGHTY, AND THAT IS THE POINT OF THE LAYOUT: one fputs() and no paging,
+// so a text as tall as the screen loses its first rows to the scroll.  Upstream's filled
+// 24 of the 24 rows this program assumes.
 //
 // ONE ARRAY AND NOT AN ARRAY OF POINTERS: a table of char * needs a relocation each
 // and would meet the trap that a string literal cannot initialize a char * inside an
@@ -103,31 +107,25 @@ struct {
 // translation phase 6 and this is one object, about 280 words of const.
 static const char helptext[] =
     "\n"
-    "Most commands optionally preceded by integer argument k.  Defaults in brackets.\n"
-    "Star (*) indicates argument becomes new default.\n"
-    "----------------------------------------------------------------------------\n"
-    "<space>                 Display next k lines of text [current screen size]\n"
-    "z                       Display next k lines of text [current screen size]*\n"
-    "<return>                Display next k lines of text [1]*\n"
-    "d or ctrl-D             Scroll k lines [current scroll size, initially 11]*\n"
-    "q or Q or <interrupt>   Exit from more\n"
-    "s                       Skip forward k lines of text [1]\n"
-    "f                       Skip forward k screenfuls of text [1]\n"
-    "b or ctrl-B             Skip backwards k screenfuls of text [1]\n"
-    "'                       Go to place where previous search started\n"
-    "=                       Display current line number\n"
-    "/<string>               Search for kth occurrence of string [1]\n"
-    "n                       Search for kth occurrence of last string [1]\n"
-    "!<cmd> or :!<cmd>       Execute <cmd> in a subshell\n"
-    "ctrl-L                  Redraw screen\n"
-    ":n                      Go to kth next file [1]\n"
-    ":p                      Go to kth previous file [1]\n"
-    ":f                      Display current file name and line number\n"
-    ".                       Repeat previous command\n"
-    "<down> or <up>          Move forward or back k lines [1]\n"
-    "<pagedown> or <pageup>  Move forward or back k screenfuls [1]\n"
-    "<home> or <end>         Go to the first or the last screenful\n"
-    "----------------------------------------------------------------------------\n";
+    "                       more -- k is an optional count\n"
+    "\n"
+    " Moving                              Searching\n"
+    "  <space> <pagedown>  a screen on      /text  search forward for text\n"
+    "  b ^B    <pageup>    a screen back    n      repeat the last search\n"
+    "  d ^D                half a screen    '      back where the search began\n"
+    "  u                   half back\n"
+    "  <return> j <down>   k lines on      Files\n"
+    "  k        <up>       k lines back     :n     next file\n"
+    "  g        <home>     first line       :p     previous file\n"
+    "  G        <end>      last screen      :f     show file name and line\n"
+    "  k g / k G           line k\n"
+    "  s                   skip k lines    Other\n"
+    "  f                   skip k screens   =      show current line number\n"
+    "  z                   screen; k is     ^L     redraw the screen\n"
+    "                      the new size     !cmd   run cmd in a shell\n"
+    "                                       .      repeat the last command\n"
+    "                                       q Q    quit\n"
+    "                                       h ?    this help\n";
 
 void setmode(struct sgttyb *t);
 void reset_tty(void);
@@ -233,6 +231,7 @@ static int nkeys;
 
 static void addkey(char *seq, int code);
 static void backto(FILE *f, int line);
+static void backtoend(FILE *f);
 
 // Come here if a quit signal is received
 void onquit(int sig)
@@ -912,6 +911,7 @@ int command(char *filename, FILE *f)
     // 0377 and do not fit a char.  lastcmd and lastarg already were, so `.' repeats a
     // key with no further change.
     int comchar;
+    int hadcount; // g and G mean different things with a count and without
     char cmdbuf[80];
 
 #define ret(val)  \
@@ -936,6 +936,12 @@ int command(char *filename, FILE *f)
         }
         lastcmd = comchar;
         lastarg = nlines;
+        // j and k are <down> and <up> exactly.  Mapped after the store above, so that
+        // `.' repeats the letter as itself.
+        if (comchar == 'j')
+            comchar = K_DOWN;
+        else if (comchar == 'k')
+            comchar = K_UP;
         if (comchar == otty.sg_erase) {
             kill_line();
             prompt(filename);
@@ -988,6 +994,19 @@ int command(char *filename, FILE *f)
             if (nlines != 0)
                 nscroll = nlines;
             ret(nscroll);
+
+        // `u' is `d' backwards and shares its scroll size.  NO ctrl('U'): CKILL is 025
+        // (<sys/tty.h>), so number() eats it as the kill character first.
+        case 'u':
+            if (no_intty) {
+                write(2, &bell, 1);
+                return (-1);
+            }
+            if (nlines != 0)
+                nscroll = nlines;
+            kill_line();
+            backto(f, Currline - dlines - nscroll);
+            ret(dlines);
         case 'q':
         case 'Q':
             end_it(0);
@@ -1042,16 +1061,21 @@ int command(char *filename, FILE *f)
                 nlines = dlines;
             ret(nlines);
 
-        // The four that move backwards.  All of them re-seek and re-skip, so all of them
+        // The six that move backwards.  All of them re-seek and re-skip, so all of them
         // want a file: on a pipe there is nothing to seek, which is `b''s own rule.
+        // The letters take a count where the keys do not -- hence hadcount, since the
+        // bump below destroys the distinction.
         case K_UP:
         case K_PGUP:
         case K_HOME:
         case K_END:
+        case 'g':
+        case 'G':
             if (no_intty) {
                 write(2, &bell, 1);
                 return (-1);
             }
+            hadcount = (nlines != 0);
             if (nlines == 0)
                 nlines++;
             kill_line();
@@ -1061,18 +1085,14 @@ int command(char *filename, FILE *f)
                 backto(f, Currline - dlines * (nlines + 1));
             else if (comchar == K_HOME)
                 backto(f, 0);
-            else {
-                // TWO PASSES OVER THE FILE, and there is no cheaper way: nothing here
-                // indexes lines, and file_size is bytes.  So count to EOF, then rewind
-                // and skip.  It is the one command whose cost grows with the file.
-                int total = 0;
-
+            else if (comchar == K_END)
+                backtoend(f);
+            else if (hadcount)
+                backto(f, nlines - 1); // k g and k G: the screen starts at line k
+            else if (comchar == 'g')
                 backto(f, 0);
-                while ((c = Getc(f)) != EOF)
-                    if (c == '\n')
-                        total++;
-                backto(f, total - dlines);
-            }
+            else
+                backtoend(f);
             ret(dlines);
         case '\f':
             if (!no_intty) {
@@ -1124,8 +1144,8 @@ int command(char *filename, FILE *f)
         case '?':
         case 'h':
             // THE HELP TEXT IS COMPILED IN, not read from /usr/lib/more.help: it is
-            // 24 lines that only this command prints, and an inode and a staging rule
-            // are more than that is worth.  So there is no `Can't open help file'
+            // one screenful that only this command prints, and an inode and a staging
+            // rule are more than that is worth.  So there is no `Can't open help file'
             // path either -- h cannot fail.  The manual page's FILES section says so.
             if (noscroll)
                 doclear();
@@ -1429,6 +1449,22 @@ static void backto(FILE *f, int line)
     Fseek(f, 0L);
     Currline = 0; // skiplns() will make Currline correct
     skiplns(line, f);
+}
+
+// Position the file at its last screenful, for <end> and for a bare G.
+//
+// TWO PASSES, and there is no cheaper way: nothing here indexes lines and file_size is
+// bytes.  It is the one command whose cost grows with the file.
+static void backtoend(FILE *f)
+{
+    int total = 0;
+    int c;
+
+    backto(f, 0);
+    while ((c = Getc(f)) != EOF)
+        if (c == '\n')
+            total++;
+    backto(f, total - dlines);
 }
 
 // Skip nskip files in the file list (from the command line). Nskip may be

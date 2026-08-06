@@ -139,6 +139,11 @@ is an optional integer argument, defaulting to 1) :
 d
 : same as ^D (control-D)
 
+u
+: scroll backwards, the counterpart of **d**: display the 11 lines above the screen. If *i* is
+  given, then the scroll size is set to *i* for **d** as well. Like **b**, this needs a file: on
+  a pipe the bell is rung.
+
 *i*\&z
 : same as typing a space except that *i*, if present, becomes the new window size.
 
@@ -208,6 +213,16 @@ h
 .
 : (dot) repeat the previous command.
 
+*i*\&j or *i*\&k
+: move forward or back *i* lines, the same as <down> and <up> below.
+
+*i*\&g
+: go to line *i*, which becomes the first line on the screen. Without a count, go to the first
+  line of the file.
+
+*i*\&G
+: go to line *i*, as **g** does. Without a count, go to the last screenful of the file.
+
 *i*<down> or *i*<up>
 : move forward or back *i* lines. Unlike <return>, the count does not become the new window
   size.
@@ -216,10 +231,11 @@ h
 : move forward or back *i* screenfuls. Unlike **b**, <pageup> prints no `...back` banner.
 
 <home> or <end>
-: go to the first or the last screenful of the file. <end> reads the whole file to count its
-  lines and then reads it again to reach them, so it is the one command whose cost grows with
-  the file; having displayed the last screenful it has reached end of file, and *more* goes on
-  to the next file or exits, as it would have on any other command that reached the end.
+: go to the first or the last screenful of the file, as **g** and **G** do without a count; a
+  count on either key is ignored. <end> reads the whole file to count its lines and then reads it
+  again to reach them, so it is the one command whose cost grows with the file; having displayed
+  the last screenful it has reached end of file, and *more* goes on to the next file or exits, as
+  it would have on any other command that reached the end.
 
   *Note:* the six keys above are read from the terminal database -- the `ku`, `kd`, `kP`, `kN`,
   `kh` and `@7` capabilities -- and the usual ANSI forms are recognised whether or not the entry
