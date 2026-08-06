@@ -27,6 +27,7 @@
 // anything.
 //
 #include <gtest/gtest.h>
+#include <unistd.h>
 
 #include <cstdio>
 #include <cstring>
@@ -410,10 +411,19 @@ std::string read_file(Disk &d, const Dinode *ip)
 // Built ONCE for the whole suite.  Each of these tests only reads, and the image
 // costs 6 Mb of writes plus 2.7 Mb of file data to assemble; doing that per test
 // took longer than everything else in the suite put together.
+//
+// The four names carry the process id.  ctest runs every case as its own process
+// in this shared directory, so SetUpTestSuite runs once per case there and a fixed
+// name would have concurrent cases assembling the same image on top of each other.
+// Running the binary directly is still one build for all eight.
 // ---------------------------------------------------------------------------
 //
 struct Fixture {
-    std::string img         = "km_root.img";
+    std::string tag         = std::to_string(getpid());
+    std::string img         = "km_root." + tag + ".img";
+    std::string passwd      = "km_passwd." + tag;
+    std::string big_path    = "km_big." + tag;
+    std::string huge_path   = "km_huge." + tag;
     std::string passwd_text = "root::0:0:Charlie Root:/:/bin/sh\n";
     std::string big;
     std::string huge;
@@ -428,9 +438,9 @@ struct Fixture {
         for (size_t i = 0; i < huge.size(); i++)
             huge[i] = char(i * 17 + 3);
 
-        write("km_passwd", passwd_text);
-        write("km_big", big);
-        write("km_huge", huge);
+        write(passwd, passwd_text);
+        write(big_path, big);
+        write(huge_path, huge);
 
         Filesystem fs;
         create_filesystem(fs, img, MDNBLK, 0, NOW);
@@ -438,9 +448,9 @@ struct Fixture {
         cmd::make_directory(fs, "/etc", 0755, 0, 0, NOW);
         cmd::make_directory(fs, "/usr", 0755, 0, 0, NOW);
         cmd::make_directory(fs, "/usr/lib", 0755, 0, 0, NOW);
-        cmd::add_file(fs, "/etc/passwd", "km_passwd", 0444, 0, 0, NOW);
-        cmd::add_file(fs, "/usr/lib/big", "km_big", 0644, 0, 0, NOW);
-        cmd::add_file(fs, "/usr/lib/huge", "km_huge", 0644, 0, 0, NOW);
+        cmd::add_file(fs, "/etc/passwd", passwd, 0444, 0, 0, NOW);
+        cmd::add_file(fs, "/usr/lib/big", big_path, 0644, 0, 0, NOW);
+        cmd::add_file(fs, "/usr/lib/huge", huge_path, 0644, 0, 0, NOW);
         cmd::add_hard_link(fs, "/etc/passwd.bak", "/etc/passwd");
         cmd::add_device(fs, "/dev/tty", false, 5, 0, 0620, 0, 0, NOW);
         fs.sync(true);
@@ -450,12 +460,12 @@ struct Fixture {
     ~Fixture()
     {
         std::remove(img.c_str());
-        std::remove("km_passwd");
-        std::remove("km_big");
-        std::remove("km_huge");
+        std::remove(passwd.c_str());
+        std::remove(big_path.c_str());
+        std::remove(huge_path.c_str());
     }
 
-    static void write(const char *path, const std::string &text)
+    static void write(const std::string &path, const std::string &text)
     {
         std::ofstream f(path, std::ios::binary);
         f.write(text.data(), std::streamsize(text.size()));

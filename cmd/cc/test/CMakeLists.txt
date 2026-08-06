@@ -16,5 +16,5 @@ target_compile_definitions(cc_test PRIVATE
     B6AS_PATH="$<TARGET_FILE:b6as>"
     B6LD_PATH="$<TARGET_FILE:b6ld>")
 add_dependencies(cc_test b6cc b6cpp b6as b6ld)
-gtest_discover_tests(cc_test PROPERTIES RUN_SERIAL TRUE)
+gtest_discover_tests(cc_test)
 add_dependencies(build_tests cc_test)

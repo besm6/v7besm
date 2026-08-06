@@ -34,5 +34,5 @@ target_compile_definitions(cpp_test PRIVATE
     C11PP_ARGS="-E"
     C11PP_STRICT_ARGS="")
 add_dependencies(cpp_test b6cpp)
-gtest_discover_tests(cpp_test PROPERTIES RUN_SERIAL TRUE)
+gtest_discover_tests(cpp_test)
 add_dependencies(build_tests cpp_test)

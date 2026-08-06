@@ -16,5 +16,5 @@ target_compile_definitions(lorder_test PRIVATE
     B6AS_EXE="$<TARGET_FILE:b6as>"
     B6NM_EXE="$<TARGET_FILE:b6nm>")
 add_dependencies(lorder_test b6as b6nm) # the script chain shells out to both
-gtest_discover_tests(lorder_test PROPERTIES RUN_SERIAL TRUE)
+gtest_discover_tests(lorder_test)
 add_dependencies(build_tests lorder_test)

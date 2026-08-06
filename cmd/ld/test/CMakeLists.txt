@@ -11,5 +11,5 @@ target_compile_definitions(ld_test PRIVATE
     B6AS_PATH="$<TARGET_FILE:b6as>"
     B6AR_PATH="$<TARGET_FILE:b6ar>")
 add_dependencies(ld_test b6as b6ar)
-gtest_discover_tests(ld_test PROPERTIES RUN_SERIAL TRUE)
+gtest_discover_tests(ld_test)
 add_dependencies(build_tests ld_test)

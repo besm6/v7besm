@@ -11,8 +11,11 @@
 #include "damage.h"
 
 #include <gtest/gtest.h>
+#include <unistd.h>
 
+#include <cstdio>
 #include <sstream>
+#include <string>
 
 #include "check.h"
 #include "command.h"
@@ -24,7 +27,13 @@ namespace {
 
 constexpr int64_t NOW = 1000000000;
 
-const char *const IMG = "damage_test.img";
+//
+// The image name carries the process id, because ctest runs every case as its own
+// process and all of them share this directory: under a fixed name two concurrent
+// cases would build and damage the same file.  Within one process the cases run in
+// turn, and SetUp/TearDown rebuild and remove it around each.
+//
+const std::string IMG = "damage_test." + std::to_string(getpid()) + ".img";
 
 //
 // A small filesystem with a directory, a file and a hard link -- enough structure
@@ -104,6 +113,7 @@ std::string expect_throw(const std::string &spec)
 class Damage : public ::testing::Test {
 protected:
     void SetUp() override { build(); }
+    void TearDown() override { std::remove(IMG.c_str()); }
 };
 
 //

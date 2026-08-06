@@ -3,7 +3,7 @@
 #
 add_executable(man2umm_test man2umm_test.cpp)
 target_link_libraries(man2umm_test PRIVATE umm GTest::gtest_main)
-gtest_discover_tests(man2umm_test PROPERTIES RUN_SERIAL TRUE)
+gtest_discover_tests(man2umm_test)
 add_dependencies(build_tests man2umm_test)
 
 #

@@ -1,8 +1,12 @@
 #
 # Unit tests for the cmd/fsutil filesystem engine.
 #
-# RUN_SERIAL because every one of these creates image files in the current
-# directory under a fixed name.
+# NOT SERIALISED, and that is a constraint on what may be added here.  Every case
+# in this directory writes image files into a shared working directory, and ctest
+# runs each one as its own process, so a case that names a file must name it
+# UNIQUELY -- per case, or per process where a fixture is built once per suite
+# (damage_test.cpp, kernel_model_test.cpp).  The directory carried RUN_SERIAL until
+# those two were the last using fixed names; it was the slowest thing in the suite.
 #
 add_executable(fsutil_test
     word_test.cpp
@@ -18,5 +22,5 @@ add_executable(fsutil_test
     damage_test.cpp
 )
 target_link_libraries(fsutil_test PRIVATE fsengine GTest::gtest_main)
-gtest_discover_tests(fsutil_test PROPERTIES RUN_SERIAL TRUE)
+gtest_discover_tests(fsutil_test)
 add_dependencies(build_tests fsutil_test)

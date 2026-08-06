@@ -8,5 +8,5 @@ target_link_libraries(sim_test PRIVATE simulator GTest::gtest_main)
 # include/ off this library's search path deliberately, and a relative path would assume where
 # the build directory sits.  See the header of etc_test.cpp.
 target_compile_definitions(sim_test PRIVATE B6_TREE_ROOT="${CMAKE_SOURCE_DIR}")
-gtest_discover_tests(sim_test PROPERTIES RUN_SERIAL TRUE)
+gtest_discover_tests(sim_test)
 add_dependencies(build_tests sim_test)
