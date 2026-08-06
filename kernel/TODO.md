@@ -23,7 +23,7 @@ numbering is **left as it was** — task numbers are cited from the sources and 
 | 32 | `profil()`: implement `addupc()` or make it fail | small; the decision is the task |
 | 33 | `ptrace` single-step | small now, blocked after |
 | 34 | the `int` ↔ pointer audit | open-ended |
-| 35 | the guest's timing is not reproducible — the dropped `send` character, and the disabled `console` and `edit` tests | small to measure, unknown to fix |
+| 35 | the dropped `send` character is fixed and `console`/`edit` are back; what is left is whether the resource lock and the paced `send` still buy anything | small, and it is a measurement |
 | 36 | the shifting copy: the half of the byte path task 28 could not reach | medium, high risk |
 | 37 | `mdvol[]` is filled only by a READ, so a pack that is only ever written is stamped with another drive's label | small |
 | 39 | the 4,096-word user stack: `USTKPAGE` 28 → 24, and why C9b argues against it | small change, wide blast radius |
@@ -214,135 +214,45 @@ exercises the site, run under `libtest`, not an inspection.
 
 ---
 
-## 35. The character `send` drops
+## 35. What the paced `send` is still buying
 
-**What is known, and it is more than it was.** Every test that types at the guest —
-`console`, `session`, `files`, `libtest`, `utils`, `swap` — loses a character out of a `send`
-sometimes. That much was already written down twice, in README.md's SIMH notes and in the
-`RESOURCE_LOCK simh_boot` comment in [test/CMakeLists.txt](test/CMakeLists.txt), and both attribute
-it to **host load**: `session` failing one run in four under `CTEST_PARALLEL_LEVEL=8` with
-`s: not found` for a sent `sh /etc/session`.
+**The character drop is found and fixed, and it was one bug on each side of the boundary** —
+which is why neither candidate mechanism in the old text ever explained all of it.
 
-Task C2c found a case that is **not** load-dependent and reproduces every time. In `console.ini`,
-`send "rmdir /tmp/d\r"` arrived as `mdir /tmp/d` on every run of the file, on an idle machine — the
-**first** character of the send and no other. Two things establish the shape of it:
+*The guest half.* `scintr()` ([dev/sc.c](dev/sc.c)) skipped a Consul that was not open
+**without dismissing its ПРП bits**, and those bits are cleared there and nowhere else. The
+processor re-tests ПРП before every instruction, so a "printing finished" that arrived just
+after `ttyclose()` zeroed `t_state` — and `wflushtty()` waits for the queue to drain, not for
+the character still in the typewriter — re-raised GRP_SLAVE for ever. That is the one-in-three
+`console` wobble and the `edit` byte that appeared to be *gained*: the guest was not losing a
+character, it was stalled mid-echo. Intermittent because it turned on whether init's close beat
+that one interrupt. `scintr()` now dismisses, and reads, whatever stands for a closed line.
 
-* prefixing a throwaway character (`send "Zrmdir …"`) makes `rmdir` arrive intact and the `Z` is the
-  one eaten, so it is positional, not a corruption of that byte;
-* `send after=20000 "…"` — 20,000 cycles before the first character — makes it deliver reliably,
-  five runs for five.
+*The simulator half.* `CONSUL_IN[]` in SIMH's `besm6_tty.c` is one character deep and
+`consul_receive()` overwrote it every tick regardless of whether the guest had read it, so
+anything arriving faster than the guest services ПРП was lost. It now leaves the character in
+the line's own queue until `consul_read()` takes it. **This is the bug a real operator meets**,
+and `more(1)` was the first program to meet it: an arrow key sends three bytes in one instant,
+the middle one went, and the pager rang the bell instead of scrolling.
 
-`console.ini` carries `after=20000` on every `send` now and says so at length in its header. **The
-other five `.ini` files do not**, and they are the ones the lock was measured against.
+With both in, `console` and `edit` are **enabled again** and the whole weekly suite has run
+100% three times over; `console` measured 6 of 6 where it was 0 of 6 before.
 
-Task 29b found a **third** case, and it is the first one that separates the two candidate
-mechanisms rather than merely restating the symptom. `test/login.ini` needed `delay=20000` — the
-gap between the characters *after* the first — on top of the `after=`: without it `nosuch` arrived
-as `nsuch`, every run, on an idle machine, and it is the **second** character that goes, not the
-first. What is different about that dialogue is the guest, not the simulator: `/etc/getty` reads
-the login name in **RAW mode**, one `read(2)` and one `write(2)` per character from user mode,
-where every other test types at a shell in canonical mode and the kernel accumulates a whole line
-in a clist before waking anybody. So the same simulator, at the same default rate, feeds a shell
-without loss and a getty with it — which is what the input-overrun hypothesis below predicts and
-the timing-artifact one does not. **Start step 1 from there**, and note that 20000 is a delay that
-works, not a measured minimum.
+**What is left is an optimisation, not a bug.**
 
-Task 29c added a **second place to measure it, on the other side of the mux boundary**.
-`send TTY:n,"…"` used to be a silent no-op on a BESM-6 line — `vt_getc()` (`besm6_tty.c`) tested
-only `TMXR_VALID`, the tag `tmxr_getc_ln()` puts on a character that came off the *socket*, while
-SCP tags an injected one `SCPE_KFLAG` and the byte was dequeued and dropped. With that fixed,
-`test/multi` types at a RAW getty on **line 26**, whose characters arrive through
-`tmxr_getc_ln()`/`consul_receive()` rather than through `sim_poll_kbd()`. Two paths into the same
-`scintr()` is exactly the discriminator step 1 wants: if the drop is the driver's single input
-register, both lines lose characters at the same rate; if it is the console's host-clock timing,
-only line 25 does. Neither has been measured — `multi.ini` simply carries the same
-`after=`/`delay=` as `login.ini` — but the experiment is now one file away.
+1. **Re-measure the `RESOURCE_LOCK simh_boot`.** It was bought to treat this symptom and has
+   never been measured against a paced send, let alone against a fixed one — `test/CMakeLists.txt`
+   says so at the `RESOURCE_LOCK` comment. Five full `ctest` runs with and without it, which is
+   how it earned its place. It costs about seventy seconds of serial wall clock on the critical
+   path of the suite. If it is buying nothing now, the lock and its comment both come out.
+2. **Re-measure the `after=`/`delay=` pacing.** Every `send` in `test/` now carries
+   `after=20000 delay=20000`, the thirteen single-send files having been brought into line with
+   the dialogues. Whether either is still needed after the two fixes is untested; 20000 is a
+   number that worked, not a measured minimum. Take them off one file and run it six times.
 
-Task C11 left the **first symptom that is not a lost character**, and it is the one that says the
-mechanism is not merely cosmetic: `test/console` fails about **one run in three** — two in six,
-measured on an otherwise untouched tree, with `cmd/sh` reverted to its previous commit, so it is
-nothing the shell did. It is always the same failure. Every stage of the dialogue passes, and then
-the **last** expect never fires: `Step expired` at PC `37037`, with `/etc/rc`'s motd printed and its
-date line still to come. **`test/console` is DISABLED because of it** (`test/CMakeLists.txt`), which
-is a real hole — nothing else in the tree covers the typed keystroke path, erase and kill, or the
-motd and boot date — and re-enabling it is the deliverable this task now owes.
-
-What makes it worth more than the earlier three is that **a step budget ought to be
-deterministic**. The same image, the same script and the same instruction count should reach the
-same instruction every time; that they do not means something in the run is timed against the host
-rather than counted, which is precisely candidate mechanism 2 below, and this is a much cheaper
-experiment than the character drop: no `send` is involved in the failing stage at all, only
-`^D` → `init` → `/etc/rc`. **Start here rather than at step 1** if the aim is to tell the two
-mechanisms apart, and note what it implies — if instruction counts are not reproducible, then every
-`step N` budget in `kernel/test/` is a wall-clock timeout wearing a disguise.
-
-**A second test is disabled for the same reason now**, and its signature goes the other way.
-`test/edit` fails **two runs in six** on an otherwise idle tree — measured — always at the same
-place: the scripted stage passes in full and prints `edit done`, and then the *first* typed
-`send after=20000 "ed\r"` comes back echoed as **`e d`**, a byte standing between the two
-characters of a two-character send, so the `expect "ed\r\n"` on the next line never matches and
-the run spends its budget in the idle loop (`Step expired` at `01024`). Every case above **loses**
-a character; this one has **gained** one, on a `send` that already carries `after=`. That is a
-discriminator, and a cheap one: an input overrun in `scintr()` cannot manufacture a byte, while a
-host-timed console echo interleaved with the guest's own output can. `test/CMakeLists.txt` carries
-the transcript and the by-hand command, and note what disabling this one costs that disabling
-`console` did not — `edit` is a *script*, so the three host-side oracles at the end of
-`run-edit.sh` go with it, the fsck and the two `cmp`s against `/etc/motd`.
-
-**A third test is now waiting on this one without ever having been written.** Task C12 put a
-full-screen editor on the image (`/bin/novi`, [../cmd/novi/README.md](../cmd/novi/README.md)),
-and its interactive half is deliberately untested: a typed dialogue driving it would be
-strictly worse than `edit`'s, because `novi`'s output is escape sequences with embedded cursor
-coordinates on an alternate screen rather than readable text, and its input is multi-byte
-arrow keys — so a stray or missing byte would be neither diagnosable nor, in a transcript,
-even visible. **A third test born disabled asserts nothing**, so it was not written, and it
-goes in with the re-enabling of `console` and `edit` rather than beside them. What that test
-would cover and nothing else does: `refresh()`'s screen model, the key bindings, and RAW mode
-driven from user code for the second time on this machine after `getty`. Until then `novi`'s
-gap buffer and escape decoder are asserted under `b6sim` and the screen itself is not.
-
-**Why it went unnoticed for so long is worth its own sentence**, because it is the more useful
-finding: `console.ini`'s last rule was a bare `expect "# "`. All SIMH rules are armed at once, so a
-stalled stage simply fell through to it at the next prompt and the test printed PASS — it had been
-passing without running its last four stages. That rule is unique now. **Check every
-`expect`/`send` test for a final rule a bare prompt can satisfy** before trusting a green run here.
-
-**What to do.**
-
-1. **Find where the character goes.** Not established, and the two candidate mechanisms sit on
-   opposite sides of the boundary. One is an input overrun in the guest: `scintr()`
-   ([dev/sc.c](dev/sc.c)) takes one character per ПРП interrupt out of a single register, so a
-   second arriving before the first is read has nowhere to wait — and if that is it, then it is a
-   **driver** bug that a real operator typing fast would also hit, not a test artifact. The other is
-   the simulator: `send` delivers at an instruction-count rate while the console's timing is
-   calibrated against the host clock, which is the guess `test/CMakeLists.txt` already records.
-   `sctest` is the place to tell them apart — it drives the Consul with no kernel underneath, so
-   feeding it two characters closer together than one interrupt service answers the first question
-   on its own. `test/login.ini`'s `delay=` above is the first evidence that points one way rather
-   than the other, and `test/login` is the cheap way to make the drop happen: remove that `delay=`
-   and `nosuch` comes back as `nsuch` on the next run.
-2. **Then decide what the delay is worth.** If `after=` is enough, put it on the other five files
-   and **re-run the RESOURCE_LOCK measurement**: five full `ctest` runs with and without
-   `simh_boot`, which is exactly how the lock earned its place. It costs about fifteen seconds a
-   suite, and it was bought to treat this symptom. If the delay makes the lock unnecessary, both
-   the lock and its comment come out.
-3. **Re-enable `test/console` and `test/edit`.** Both are disabled, not deleted, and each property
-   is one line in `test/CMakeLists.txt` with its measurement written beside it. Nothing else asserts
-   the typed keystroke path, erase and kill, `/dev/tty` from a forked child, or `/etc/rc`'s motd and
-   boot date; and nothing else runs `ed` under a real kernel or fscks what it wrote. The suite is
-   thinner than it looks until both come back.
-4. Whatever the answer, correct README.md's "`send` DROPS A CHARACTER now and then, and it is not
-   the kernel" — the second half of that sentence is exactly what has not been established.
-
-**How to verify.** A fix is only a fix if the fault can be *made to happen first*. For the
-step-budget half that is free: take the `DISABLED` property off `test/console` and run
-`ctest -R console` six times, which is how the one-in-three was measured, and the same off
-`test/edit` for the two-in-six. For the drop, remove the `after=` from `console.ini` and confirm
-`rmdir` still arrives as `mdir`, which takes one run. Then the five parallel-`ctest` runs for the
-load half.
-
-**Size.** Small to measure, and the measurement is most of the value. The fix is unknown until
-step 1 answers which side of the boundary it is on.
+**How to verify a change here.** Make the fault happen first. For the drop, the reproducer is one
+line: `send "\033[B"` with **no** `delay=` at a `--More--` prompt used to arrive as `ESC B` and
+ring the bell, and now scrolls. For the storm, `console` six times is the measurement.
 
 ---
 

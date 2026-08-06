@@ -30,8 +30,8 @@
 # destined for the image, hence the note.
 #
 # WHAT IS NOT HERE, AND DELIBERATELY.  There is no typed SIMH dialogue driving the editor.
-# kernel/test/edit is DISABLED because `send after=20000 "ed\r"' comes back with a stray byte
-# between the two characters (kernel/TODO.md task 35), and console is disabled for the same
+# kernel/test/edit used to fail because `send after=20000 "ed\r"' came back with a stray byte
+# between the two characters (kernel/TODO.md task 35, fixed), and console failed for the same
 # reason; a novi dialogue would be strictly worse, its output being escape sequences with
 # embedded cursor coordinates on an alternate screen rather than readable text.  A third test
 # born disabled asserts nothing and costs a volume number and a simh_boot lock slot.  novi's

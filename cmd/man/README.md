@@ -137,6 +137,6 @@ and it is labelled `weekly`: `make run` sees the cases and none of the boot.
 
 **The pager tail has no test and that is a deferral, not an oversight.** `| /bin/more` is
 appended only when standard output is a terminal, and a terminal whose output can still be
-diffed is `kernel/test/console`, DISABLED for `kernel/TODO.md` task 35. It goes in when that
+diffed is `kernel/test/console`, enabled again now that `kernel/TODO.md` task 35 is answered. It goes in when that
 comes back — which is word for word [`../more/README.md`](../more/README.md)'s position, and the
 same task is why.

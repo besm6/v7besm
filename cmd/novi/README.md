@@ -165,8 +165,8 @@ so both have a full `b6sim` half — and that is where the risk of this port liv
   and load a Cyrillic fixture into the gap block-reversed before the diagnostic.
 
 **There is no typed SIMH dialogue, and that is a decision rather than an omission.**
-`kernel/test/edit` is DISABLED because `send after=20000 "ed\r"` comes back with a stray byte
-between the two characters — `kernel/TODO.md` task 35 — and `console` is disabled for the
+`kernel/test/edit` used to fail because `send after=20000 "ed\r"` came back with a stray byte
+between the two characters — the guest stalled mid-echo, `kernel/TODO.md` task 35, fixed — and so did the
 same reason. A `novi` dialogue would be strictly worse: its output is escape sequences with
 embedded cursor coordinates on an alternate screen, not readable text, and its input is
 multi-byte arrow keys. A third test born disabled asserts nothing and costs a volume number

@@ -229,8 +229,26 @@ void scintr(void)
         // still zero -- a jump to 0, which is GRP_INSN_CHECK and a kernel trap
         // before the root is even mounted.  kernel/test/sctest cannot see this: it
         // drives the hardware and does not link the driver.  kernel/test/boot did.
-        if ((tp->t_state & ISOPEN) == 0)
+        //
+        // DISMISSED ALL THE SAME.  Skipping the line without clearing its bits hangs
+        // the machine: these bits are cleared here and nowhere else, the processor
+        // re-tests ПРП before every instruction, and ttyclose() zeroes t_state while
+        // the LAST character is still in the typewriter -- wflushtty() waits for the
+        // queue to drain, not for the device.  So init's own "going multi-user"
+        // message could raise a "printing finished" just after it closed /dev/console,
+        // and the machine spun in this handler for ever.  Intermittent, because it
+        // turns on whether the close lands before or after that one interrupt.
+        // The read register is read as well as dismissed, so a character typed at a
+        // closed line is taken rather than left standing in it.
+        if ((tp->t_state & ISOPEN) == 0) {
+            if (prp & SC_INPUT(unit)) {
+                __besm6_ext(EXT_PRPCLR, ~(unsigned)SC_INPUT(unit));
+                __besm6_ext(SC_READ(unit), 0);
+            }
+            if (prp & SC_DONE(unit))
+                __besm6_ext(EXT_PRPCLR, ~(unsigned)SC_DONE(unit));
             continue;
+        }
         if (prp & SC_INPUT(unit)) {
             __besm6_ext(EXT_PRPCLR, ~(unsigned)SC_INPUT(unit));
             // All eight bits are data.  On the authentic device bit 8 is odd parity; a

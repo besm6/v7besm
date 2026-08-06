@@ -67,7 +67,7 @@ These cover the image the build produces ([../root.manifest](../root.manifest) �
 |---|---|
 | `fstest` | the superblock and root inode read through the real `md` driver, buffer cache and `sbcheck()`, strictly below the boot path |
 | `boot` | process 1 leaves the kernel, execs `/etc/init`, which forks `/bin/sh`, and the shell **prompts** |
-| `console` | a typed dialogue with that shell: erase, kill, a line longer than a clist block, `>/dev/tty`, `pwd`, `ls /bin`, and `^D` round through `/etc/rc` to the next prompt. **`DISABLED` — it fails about one run in three, always the same way, and nothing the guest does explains it; TODO.md task 35 owns it and `test/CMakeLists.txt` carries the measurement** |
+| `console` | a typed dialogue with that shell: erase, kill, a line longer than a clist block, `>/dev/tty`, `pwd`, `ls /bin`, and `^D` round through `/etc/rc` to the next prompt. It failed about one run in three until TODO.md task 35 was answered — `scintr()` left ПРП standing for a Consul nobody had open — and is enabled again, 6 of 6 |
 | `session` | the shell **writes** — files, an inode past its direct blocks, `sync` — and the host then fscks the container and diffs what was written |
 | `files` | the file-management set rearranges a tree and then re-permissions it; the modes and owners are diffed on the host, out of `b6fsutil -v -v` |
 | `utils` | the clock moved and read back, an alarm delivered, a background process killed, a script branching on `test`, the first pipeline this image has run, and a Cyrillic word carried through `exece()` and through filename generation |
@@ -424,9 +424,10 @@ What the ones already in [test/](test/) cost to get right:
   `send after=20000` to avoid it and its header says why. **`login.ini` pays `delay=` on top of
   that**, because a `getty` reading a name in RAW mode loses the *second* character too — one
   `read(2)` and one `write(2)` per character from user mode, where a shell in canonical mode takes
-  the same stream whole. That is the first evidence favouring the overrun over the timing
-  artifact; **[TODO.md](TODO.md) task 35** is still the measurement that would settle it, and
-  `login.ini` is now the cheapest way to make the drop happen on demand.
+  the same stream whole. That was the first evidence favouring the overrun, and the overrun
+  is what it was: SIMH's `CONSUL_IN` is one character deep and was overwritten before the guest
+  read it, while `scintr()` left ПРП standing for a closed line. Both are fixed; **[TODO.md](TODO.md)
+  task 35** now owns only the question of whether the pacing is still needed.
 * **Never end an `expect`/`send` file on a rule a bare prompt satisfies.** All the rules are armed
   at once, so when a stage stalls the run falls through to that one at the next prompt and reports
   PASS. `console.ini` was doing exactly that, and had been passing without running its last four

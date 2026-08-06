@@ -67,7 +67,7 @@ w
 q
 !
 ed /tmp/m1 >>/tmp/edit.log <<\!
-/troff/p
+/Cyrillic/p
 1,$s/^| //
 $=
 w

@@ -7,7 +7,7 @@ fsck start
 ** Phase 3 - Check Connectivity
 ** Phase 4 - Check Reference Counts
 UNREF FILE  I=7  OWNER=guest MODE=100644
-SIZE=365 MTIME=Nov 14 22:13 2023 
+SIZE=509 MTIME=Nov 14 22:13 2023 
 RECONNECT?  yes
 
 ** Phase 5 - Check Free List 

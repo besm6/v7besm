@@ -78,8 +78,8 @@ endmacro()
 # wanted is this half of the suite; they are NOT a pre-commit gate and not acceptance
 # criteria for a change.  `make run' and `make test' are what a change is accepted on.
 #
-# NOT `DISABLED', which is a different statement: these are expected to pass.  DISABLED is
-# what `console' and `edit' carry, for ../TODO.md task 35's reason.
+# NOT `DISABLED', which is a different statement: these are expected to pass.  Nothing in this
+# directory is DISABLED now -- `console' and `edit' came back with ../TODO.md task 35's fix.
 #
 # The label goes on, rather than replacing `kernel', so that "`kernel' means a SIMH test"
 # stays true and one filter can still name the whole SIMH suite.
@@ -487,9 +487,9 @@ set_tests_properties(rootimg_link_more PROPERTIES LABELS kernel)
 #
 # SINCE TASK C2c THERE IS A SECOND CASE, and it is NOT load-dependent: console.ini dropped the
 # FIRST character of one send on every run of an idle machine, and `send after=20000' fixed it.
-# That file now carries the delay on every send; THE OTHER FIVE DO NOT.  So this lock has not
-# been re-measured against a paced send, and it may be buying nothing -- ../TODO.md task 35 is
-# that measurement, and it is the task that owns the whole question.
+# EVERY send in this directory now carries it, the thirteen single-send files included.  So this
+# lock has still not been re-measured against a paced send -- let alone against the two fixes of
+# ../TODO.md task 35 -- and it may be buying nothing.  That measurement is what is left of it.
 #
 # AND SINCE TASK 29b A THIRD, which is the first one that points at a mechanism.  login.ini
 # needed `delay=' -- the gap between the characters AFTER the first -- as well, and without it
@@ -564,34 +564,13 @@ if(BESM6)
                          FIXTURES_REQUIRED console_disk RESOURCE_LOCK simh_boot)
 
     #
-    # DISABLED, AND NOT BECAUSE IT IS WRONG.  It fails about one run in three -- measured at
-    # two failures in six on an otherwise untouched tree -- always the same way: the LAST
-    # expect never fires, `Step expired' at PC 37037, with /etc/rc's motd printed and its
-    # date line still to come.  Every other stage of the dialogue passes first.
-    #
-    # What makes that worth suspending rather than fixing here is that it is not
-    # deterministic, and a SIMH step budget ought to be: the same image, the same script and
-    # the same instruction count should reach the same place every time.  Something in the
-    # run is taking its timing from the host -- the console poll is the obvious suspect --
-    # and until that is understood, an intermittent failure in the one test everybody runs
-    # teaches people to ignore a red result, which costs more than this test earns.
-    #
-    # NOTHING ELSE COVERS WHAT IT COVERS, so this is a debt and not a deletion: the typed
-    # dialogue, erase and kill, a line longer than a clist block, /dev/tty from a forked
-    # child, and the only assertion in the tree on /etc/rc's motd and boot date.  `login'
-    # still types at a getty and `utils' still runs a script off the image, so the shell and
-    # the console driver are not unwatched -- but the keystroke path is.
-    #
-    # RUN IT BY HAND from the test build directory:
-    #
-    #	cd build/kernel/test && besm6 ../../../kernel/test/console.ini
-    #
-    # not with `ctest -R console', which cannot run a disabled test -- though that command
-    # is still worth giving, because console_setup is deliberately LEFT ENABLED and is what
-    # refreshes the root3078.disk the line above attaches.  The script echoes its own
-    # PASS/FAIL line either way.  Re-enable this as soon as the wobble is explained.
-    #
-    set_tests_properties(console PROPERTIES DISABLED TRUE)
+    # ENABLED AGAIN.  This was DISABLED for the wobble of TODO task 35 -- one run in three,
+    # always the LAST expect unfired with /etc/rc's motd printed and its date line to come.
+    # The cause was scintr(): it skipped a Consul that was not open WITHOUT dismissing its
+    # ПРП bits, which are cleared there and nowhere else, so a "printing finished" arriving
+    # just after init closed /dev/console re-raised GRP_SLAVE for ever.  dev/sc.c has the
+    # account.  Intermittent because it turned on whether the close beat that one interrupt.
+    # Measured 6 of 6 after the fix, where it was 0 of 6 before it.
 
     # session -- the end-to-end statement task 25b asks for: boot, shell, create and write
     # files, sync, fsck clean.  Three programs have to run in order (b6fsutil to build and
@@ -757,40 +736,11 @@ if(BESM6)
     set_tests_properties(edit PROPERTIES LABELS kernel TIMEOUT 1800 RESOURCE_LOCK simh_boot)
 
     #
-    # DISABLED, on `console' above's precedent and for the same reason: the keystroke path is
-    # not reproducible.  Two failures in six runs on an otherwise idle tree, always at the
-    # same place and always with the same signature -- the SCRIPTED stage passes in full and
-    # prints `edit done', and then the FIRST typed send dies:
-    #
-    #	edit done
-    #	#e d
-    #	Step expired, "СчАС": 01024
-    #
-    # `send after=20000 "ed\r"' comes back echoed as `e d', a byte standing between the two
-    # characters of a two-character send, so `expect "ed\r\n"' on the next line cannot match
-    # and the run spends its step budget in the idle loop.  Note which way this one goes: the
-    # three cases in ../TODO.md task 35 all LOSE a character, and this transcript has gained
-    # one -- which is another discriminator for that task, not a new problem.
-    #
-    # WHAT GOES WITH IT is more than went with `console', and that is the cost: this test is a
-    # SCRIPT, not an .ini, so disabling it also suspends the three host-side oracles at the end
-    # of run-edit.sh -- the fsck and the two `cmp's against /etc/motd out of the same extracted
-    # image, which are the strongest statement in the file.  The nineteen cmd_ed_* cases next
-    # door still cover the command language and the regex engine under b6sim on the same bytes,
-    # so `ed' itself is not unwatched; what is suspended is ed under a real kernel -- a /tmp of
-    # this machine's own, a `!' with a real /bin/sh, the 512-byte temp-file pager against a real
-    # disk, and the typed dialogue that drives the editor from the Consul in Cyrillic.
-    #
-    # RUN IT BY HAND from the test build directory, where it passes about two runs in three:
-    #
-    #	cd build/kernel/test && sh ../../../kernel/test/run-edit.sh b6fsutil besm6 ../../../kernel/test
-    #
-    # not with `ctest -R edit', which cannot run a disabled test -- and unlike `console' there
-    # is no companion fixture left enabled, the script doing its own disk conversion.  It prints
-    # its own PASS/FAIL line either way.  Re-enable this with `console', the wobble being one
-    # question and not two.
-    #
-    set_tests_properties(edit PROPERTIES DISABLED TRUE)
+    # ENABLED AGAIN, with `console' and on the same fix -- the wobble was one question and not
+    # two.  Its own signature was the opposite of task 35's other three, a byte GAINED rather
+    # than lost (`ed' echoed back as `e d', so the next expect could not match); what it really
+    # was is the ПРП storm dev/sc.c now describes, which stalls the guest mid-echo.  The
+    # scripted stage's send carries `after='/`delay=' like every other one in this directory.
 
     # fsinfo -- THE GUEST MEASURING ITS OWN FILESYSTEM, on its own volume (3087).  Task C4a,
     # and the question is one none of the tests above can ask: every one of them asks what

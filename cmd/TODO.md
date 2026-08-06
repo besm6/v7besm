@@ -75,9 +75,9 @@ before somebody reports them as bugs.
 
 **[../etc/rc](../etc/rc) still wants four lines.** `update` waits on C20 and `cron` on C22. A
 boot-time `fsck` and the `rm -f /tmp/*` line wait on something else: both programs exist, but §7
-step 4 gives a line in that script exactly one home for its assertion, `kernel/test/console`, and
-that test is DISABLED ([../kernel/TODO.md](../kernel/TODO.md) task 35). An unasserted line in the
-boot script three tests walk through is worse than an honest deferral.
+step 4 gives a line in that script exactly one home for its assertion, `kernel/test/console` —
+which is enabled again ([../kernel/TODO.md](../kernel/TODO.md) task 35), so this deferral has lost
+its reason and the two lines can now be asserted where they belong.
 
 ---
 
@@ -405,5 +405,5 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 | `prof.c` | 310 | Reads a `mon.out` that nothing produces: `profil(2)` is `kernel/TODO.md` task 32, still undecided, and `cc` has no `-p`. |
 | `cb.c`, `diff3.c`, `tabs.c` | 366 + 423 + 196 | Curiosities with a real cost and no caller. `cb` is a C beautifier superseded by this repo's own clang-format; `diff3` wants three files and a merge nobody does here; `tabs` sets hardware tab stops on terminals this machine does not have — the Consul typewriter is not one of them. |
 | `cc.c`, `as/`, `ld.c`, `nm.c`, `ar.c`, `size.c`, `strip.c`, `ranlib.c`, `arcv.c` | | PDP-11 `a.out`, PDP-11 opcodes and PDP-11 registers; nothing in them survives retargeting. The BESM-6 tools were written for this repo instead, and task C9 built every one of them a second time for the machine itself — see each tool's "Building for the BESM-6". |
-| `ac.c`, `sa.c`, `accton.c` | 251 + 489 + 16 | Process accounting. The kernel side EXISTS and works — `acct(2)` is a real gate ([../kernel/acct.c](../kernel/acct.c), `<sys/acct.h>`), which is what makes this a decision rather than a gap. Nothing needs it: the machine has one operator, there is nobody to bill, and `sa`'s whole subject is digesting a record nothing on this image writes. It would also want a `/usr/adm` that [../root.manifest](../root.manifest) does not have, and a boot-time `accton` line in [../etc/rc](../etc/rc) whose only assertion home is the DISABLED `kernel/test/console`. Reconsider if this machine ever has more than one user who matters. |
+| `ac.c`, `sa.c`, `accton.c` | 251 + 489 + 16 | Process accounting. The kernel side EXISTS and works — `acct(2)` is a real gate ([../kernel/acct.c](../kernel/acct.c), `<sys/acct.h>`), which is what makes this a decision rather than a gap. Nothing needs it: the machine has one operator, there is nobody to bill, and `sa`'s whole subject is digesting a record nothing on this image writes. It would also want a `/usr/adm` that [../root.manifest](../root.manifest) does not have, and a boot-time `accton` line in [../etc/rc](../etc/rc) whose only assertion home is `kernel/test/console`. Reconsider if this machine ever has more than one user who matters. |
 | `random.c`, `sp.c` … | | Curiosities. Port one if it is ever wanted; none is on a path to anything. |
