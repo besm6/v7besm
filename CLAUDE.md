@@ -4,34 +4,19 @@ Guidance for Claude Code (claude.ai/code) working in this repository.
 
 ## What this is
 
-A port of **Unix v7 to the BESM-6**, a Soviet 48-bit-word mainframe. Three halves:
+A port of **Unix v7 to the BESM-6**, a Soviet 48-bit-word mainframe.
 
 - **`kernel/` + `include/`** — the v7 kernel (from Robert Nordier's v7/x86 port; see
-  `COPYRIGHT`), cross-built by this repo's toolchain and **booting under SIMH**: it mounts
-  `root3072.disk`, execs the real `/etc/init`, runs getty/login on both Consul typewriters,
-  and gives multi-user shells. It swaps, does `/dev/mem`, and the image fscks clean.
-- **`cmd/`** — the BESM-6 toolchain (host tools): compiler driver, assembler, linker,
-  binutils, preprocessor, disassembler, and `b6sim`, a user-level a.out simulator.
+  `COPYRIGHT`), cross-built here and **booting under SIMH** to multi-user shells.
+- **`cmd/`** — the toolchain as host tools, including `b6sim`, a user-level a.out simulator,
+  plus **94 native BESM-6 programs** staged into `build/rootfs/` for the root image.
 - **`lib/`** — cross-built `libc.a`, `libm.a`, `libtermcap.a`, `libcurses.a`, `crt0.o`.
 
-Plus **native BESM-6 programs** under `cmd/` — 94 of them plus one hard link on the image
-(`init`, `getty`, `login`, `sh`, the file-management and account set, the filesystem tools,
-two dozen text filters, `ed` and `novi`, `more`, `man` and `manview`, `tar`, the
-kernel-inspection set, and ten of the toolchain built a second time; six are setuid root) —
-staged into `build/rootfs/` for the root image. `root.manifest` is the roster; `b6_prog()`
-calls are how each gets there.
-
-**The narrative lives in the per-directory READMEs, and that is where to look before
-touching anything**: `kernel/README.md` (memory model, hardware rules), `kernel/TODO.md`,
-`cmd/README.md` (the porting recipe for v7 userland), `cmd/TODO.md`, `include/README.md`,
-`lib/lib*/README.md`, and a `README.md` in most `cmd/<prog>/` directories.
-
-External, not in this repo:
-
-- C cross-compiler: https://github.com/besm6/c-compiler/ — supplies `libruntime.a` (the `b$*`
-  helpers) and the ten freestanding headers (`stddef.h`, `stdarg.h`, …, `besm6.h`).
-- SIMH full-machine emulator: https://github.com/besm6/simh/tree/master/BESM6/ — **the target
-  the kernel boots on**. See `doc/Simh_Simulator.md`, `doc/Besm6_Peripherals.md`.
+**The narrative lives in the per-directory READMEs, and that is where to look before touching
+anything**: `kernel/README.md` (memory model, hardware rules), `cmd/README.md` (the porting
+recipe), the two `TODO.md`s, and most `cmd/<prog>/`. Two things are external: the C
+cross-compiler <https://github.com/besm6/c-compiler/>, supplying `libruntime.a`'s `b$*` helpers
+and the ten freestanding headers, and SIMH <https://github.com/besm6/simh/tree/master/BESM6/>.
 
 ## Building
 
@@ -41,26 +26,21 @@ Makefiles are wrappers over the same `build/` tree. From the repo root:
 ```sh
 make            # configure into build/ and build everything
 make test       # build unit tests without running them
-make run        # run the test suite via ctest
+make run        # run the whole suite via ctest — every label, kernel SIMH tests included
 make install    # install b6* tools, include/, and the archives into ~/.local
 make clean; make debug; make    # reconfigure as Debug (default RelWithDebInfo)
 ```
 
-**Do not** invoke `cc`/`clang` by hand or run `cmake --build` directly — always go through
-the top-level `make` targets. Requires CMake + a C++17 host compiler; GoogleTest is fetched
-at configure time, cppcheck runs when installed, everything builds `-Wall -Werror -Wshadow`.
-
-Tools install `b6`-prefixed: `b6cc`, `b6as`, `b6ld`, `b6cpp`, `b6disasm`, `b6sim`, `b6fsutil`,
-plus `b6ar`/`b6nm`/`b6size`/`b6strip`/`b6ranlib`/`b6lorder`. `include/` installs to
-`<prefix>/share/besm6/include`, the one system header tree (hosted half ours, freestanding
-half the compiler's). `kernel/` + `lib/` + the native programs are guarded on `libruntime.a`
-being installed; without it only the `cmd/` host tools build.
+**Do not** invoke `cc`/`clang` by hand or run `cmake --build` directly — always go through the
+top-level `make` targets. Everything builds `-Wall -Werror -Wshadow`. Tools install
+`b6`-prefixed (`b6cc`, `b6as`, `b6ld`, `b6cpp`, `b6sim`, `b6fsutil` and the binutils);
+`include/` goes to `<prefix>/share/besm6/include`. `kernel/`, `lib/` and the native programs
+are guarded on `libruntime.a` being installed.
 
 Link order is a contract — **`b6ld` scans each archive once, in order**:
 `crt0.o … -lcurses -ltermcap -lc -lruntime`. The kernel takes `-lruntime` alone (own `printf`
-in `kernel/prf.c`, no libc). A native program names the optional archives through
-`b6_prog(... LIBS libm|libcurses|libtermcap)`, which **emits that order rather than the
-caller's** — `cmd/more` is the only caller so far, and takes `libtermcap`.
+in `kernel/prf.c`, no libc). `b6_prog(... LIBS ...)` **emits that order rather than the
+caller's**.
 
 ### Native BESM-6 programs
 
@@ -70,275 +50,160 @@ One `b6_prog()` call in `scripts/BesmCross.cmake` per program:
 b6_prog(init DEST etc/init SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/init.c)
 ```
 
-It stages the program into `build/rootfs/` and registers a `rootfs_<name>_size` ctest that
-guards the two **user** address-space ceilings: `const+text+data+bss` ≤ **28,672 words** (32
-pages less the 4-page stack at `070000`), and no relocatable symbol above word **32,767** (a
-15-bit pointer's reach). Both failures are otherwise silent.
+It stages the program into `build/rootfs/` and registers a `rootfs_<name>_size` ctest guarding
+the two **user** address-space ceilings, whose failures are otherwise silent:
+`const+text+data+bss` ≤ **28,672 words** (32 pages less the 4-page stack at `070000`), and no
+relocatable symbol above word **32,767** (a 15-bit pointer's reach). Two more ceilings it
+cannot guard, and both bind in practice: **no struct may exceed 4,096 words** (a member is a
+12-bit offset from a base register — move the big arrays to file scope), and the **4,096-word
+stack**, where a long function costs 1.5–2 words per source line before any array.
+`cmd/README.md` §6 is the account. **The image has 185 free blocks of 2000.**
 
-Two ceilings it does **not** guard, and both bind in practice: **no struct may exceed 4,096
-words** (a member is a 12-bit offset from a base register — move the big arrays to file scope),
-and the **4,096-word stack**, where a long function costs 1.5–2 words per source line of
-temporaries before any array. `cmd/README.md` §6 is the account and `cmd/cpp` the worked example.
+**Ten programs are built twice** — `cpp`, `as`, `ld`, `nm`, `size`, `strip`, `disasm`, `ar`,
+`ranlib`, `cc` — as the host `b6*` tools and, from the same sources under `cmd/<x>/rootfs/`, as
+native `/usr/bin/*` reproducing the host tools' output byte for byte. A second native build
+needs that subdirectory, `cmd/<x>` being added above the `B6RUNTIME_LIB` guard where
+`b6_prog()` does not yet exist. Size profiles are keyed on the `besm6` macro `b6cpp` predefines
+(`cmd/cpp/defs.h`, `cmd/as/as.h`, `cmd/ld/intern.h`). **Native `cc` cannot compile C** —
+`b6parse`, `b6lower`, `b6codegen` cannot be built for the target — and says so.
 
-**Ten programs are built twice** — `cmd/cpp`, `as`, `ld`, `nm`, `size`, `strip`, `disasm`,
-`ar`, `ranlib` and `cc` — as the host tools `b6cpp`/`b6as`/… and, from the same sources, as
-`build/rootfs/usr/bin/{cpp,as,ld,nm,size,strip,disasm,ar,ranlib,cc}` (`cmd/<x>/rootfs/`; tasks
-C9a–C9e, self-hosting), plus `cmd/lorder`, a shell script `configure_file`d twice on the one
-`nm` it names. **The machine assembles, links, archives and indexes its own programs, reads
-back what it built, and drives the chain from one command**: the native `as` and `ld` reproduce
-the host tools' objects and images byte for byte — the whole kernel and the toolchain itself
-included — the native `ar` and `ranlib` build `libc.a`, archive and `__.SYMDEF` both, byte for
-byte too, and `cc -o hello hello.s` on the image links against `/lib/crt0.o` and `/lib/libc.a`
-and produces a runnable `a.out`. `ar`/`ranlib` are the only two that link the **full**
-`B6_LIBAOUT_SOURCES` (the four file-descriptor routines `getarhdr`/`getint`/`putarhdr`/`putint`
-exist for them and for nothing else); `cc` is the only one that links **no** `libaout` at all,
-a driver reading no `a.out`.
+**Bulk I/O moves a word, not a byte**: six chars pack big-endian into a 48-bit word and a word
+on disk is six big-endian bytes, the same bit pattern, so where a stdio cursor sits on a word
+boundary one load or store replaces six `getc`/`putc` expansions (`lib/libc/stdio/`,
+`cmd/libaout/{fgetw,fputw}.c`; guard in `cmd/libaout/fastio.h`). `fgeth`/`fputh` deliberately
+do **not** — a half-word leaves the cursor unaligned. Two consequences: **a stdio buffer size
+must be a whole number of words** or the path dies after the first refill, and **every
+relational lowers to an out-of-line call** (`b$ge`, `b$lt`, …), even `x >= 0` in an `if`.
 
-**What `cc` cannot do is compile C**, and it says so rather than reporting a missing file:
-`b6parse`, `b6lower` and `b6codegen` are the external c-compiler's and cannot be built for the
-target. `-E`, `-c` on a `.s`/`.S`, and a link all work. Its three target changes are **all in
-libc** — `strdup()`, `mkstemps()` and `atexit()`, the last declared in `<stdlib.h>` since these
-headers were written and never implemented (`lib/libc/gen/`, and `cuexit.c` on why `exit()`
-reaches both it and the stdio flush through a pointer). The image also carries
-**`/lib/{crt0.o,libc.a,libruntime.a}` and the whole `/usr/include`** — staged by the top-level
-`CMakeLists.txt`'s `B6_STAGE_*` lists, which `kernel/test/CMakeLists.txt` reuses so that a file
-staged and not listed cannot slip past `root.img`. `B6_STAGE_MAN` is the fourth of those lists
-and carries **`/usr/man`, all 200 manual pages**, in v7's layout — the `.umm` suffix dropped, the
-section digit picking the directory, the subsection letter left on the file (`man1/fsck.1m`,
-`man3/stdio.3s`). **`/usr/bin/man` finds a page and `/usr/bin/manview` formats it.** `man` does
-the search — an ordered section table, not a `readdir`, since thirteen page names live in two
-sections at once — and runs `FORMATTER page … | /bin/more`, `FORMATTER` in `cmd/man/man.c` being
-the whole of what it knows about formatting. `manview` (`cmd/manview`, C11, three files) reads the
-dialect through `cmd/man2umm/ummread.cpp`'s rules **without building a document**: it holds one
-*group* of lines at a time — the corpus's largest is 4,053 bytes against an 8,192-byte buffer — and
-renders as it recognizes, because a `Doc` of `Block`/`Span` vectors would not fit 28,672 words.
-Its **attributes are ANSI SGR, on by default and not conditioned on `isatty(2)`** (man hands it a
-pipe into `more` exactly when a human is reading); `-p` is the plain form and there is no
-overstrike back end. Pages are staged as **sources**, so `man - ls` shows the file itself. They
-cost 302 of the disk's blocks, `man` 12 and `manview` 17, so the image has **185 free of 2000** —
-weigh a large addition against that. (`more`'s move to `libtermcap` took the last two of those.)
+Traps: **`b6lower` ignores designated initializers**, initializing positionally and silently;
+a **string literal cannot initialize a `char *` inside a struct initializer**; there is **no
+`int64_t`** (an `int` is 41 bits, an `unsigned` exactly 48, so only what holds a whole word
+becomes `uword_t`); **no `posix_spawn()` and no `waitpid()`**, `<sys/wait.h>` having the
+argument-less `wait(2)` only; and `mkstemp()`/`mkstemps()` are **not atomic**, this kernel
+having no `O_CREAT` and no `O_EXCL`.
 
-The first three are the only places the ceilings actually bind, and each carries a BESM-6 size
-profile keyed on the `besm6` macro `b6cpp` always predefines — `cmd/cpp/defs.h` (below the C11
-§5.2.4.1 minima), `cmd/as/as.h`, `cmd/ld/intern.h`. Of the other seven only four changed
-anything: `cmd/nm/nm.c`'s `QUANT` (a *heap* step `rootfs_<name>_size` cannot see — a `struct
-nlist` is four words), `cmd/strip/strip.c`'s `BUFSZ` (a *stack* array, 8,192 bytes being a
-third of the stack), `cmd/ranlib/ranlib.c`'s `TABSZ` — not an address-space cut but a match
-to `b6ld`'s own `RANTABSZ`, so the machine cannot write an index its linker refuses to read —
-and `cmd/cc/cc.c`'s, which is not a size profile at all but a **path** profile: `/usr/bin`,
-`/usr/include` and `/lib` in place of `share/besm6` under `~/.local` or `/usr/local`, and no
-`b6` prefix on a sub-tool's name. The `B6CPP`-style environment overrides are deliberately not
-keyed, being how a test points either build at a tool off its search path.
-`size`, `disasm` and `ar` are character-for-character the host build; `ar` is the one that says
-how much of the difficulty was the three big ones, since it keeps all its state in a struct and
-that struct is 190 words. Each README's "Building for the BESM-6" has the measurements. A
-second native build of a host tool needs its own subdirectory, since `cmd/<x>` is added above
-the `B6RUNTIME_LIB` guard where `b6_prog()` does not yet exist.
+`build/rootfs/` is staged only, never installed, and also carries
+`/lib/{crt0.o,libc.a,libruntime.a}`, `/usr/include` and `/usr/man` through the top-level
+`CMakeLists.txt`'s `B6_STAGE_*` lists. **`root.manifest`** at the tree top describes the image;
+paths resolve against `b6fsutil`'s working directory (`build/kernel/test`), and modes (six
+setuid) and the one hard link (`/bin/[` → `/bin/test`) live there rather than in the staging
+tree.
 
-**Bulk I/O moves a word, not a byte, and the reason is the one fact this machine keeps
-teaching**: six chars pack big-endian into a 48-bit word, and a word on disk is six
-big-endian bytes, so the two are the same bit pattern. Where a stdio cursor sits on a word
-boundary, one load or store does what six `getc`/`putc` expansions and their fat-pointer
-helpers would. `lib/libc/stdio/{fread,fwrite}.c` and `cmd/libaout/{fgetw,fputw}.c` take that
-path (see `cmd/libaout/fastio.h` for the guard, and `lib/libc/gen/qsort.c`, which had it
-first); `fgeth`/`fputh` deliberately do **not**, a half-word leaving the cursor unaligned.
-Two consequences that bite: **a stdio buffer size must be a whole number of words** or the
-path dies after the first refill — `_ptr` advances six at a time, so its offset mod 6 is
-invariant within a buffer (`LDBUFSIZ` was 1024, now 1026) — and **every relational lowers
-to an out-of-line call** here (`b$ge`, `b$uge`, `b$lt`, …), even `x >= 0` in an `if`, so
-loop shape is worth as much as the move itself.
-
-Three traps the toolchain sources hit and nothing else has: **`b6lower` ignores designated
-initializers** and initializes positionally, silently (`cmd/as/main.c`, `cmd/ld/ld.c` say so);
-a **string literal cannot initialize a `char *` inside a struct initializer** at all; and there
-is **no `int64_t`** — an `int` is 41 bits, an `unsigned` exactly 48, so only what really holds a
-whole word becomes `uword_t` and everything narrower stays `word_t`. An *automatic* aggregate
-initialised from runtime values (`unsigned char b[6] = { i >> 40, … }` in `cmd/libaout/putint.c`,
-`char *av[]` in `cmd/ranlib/ranlib.c`) is **not** a fourth trap — C9d was the first task to
-cross-compile one and it is correct — but it had no precedent before, so check a new one.
-
-`mkstemp()`/`mkstemps()` are in this libc (`lib/libc/gen/mkstemp.c`, one object) and are **not
-atomic**: there is no `O_CREAT` and no `O_EXCL` in this kernel, so each is `mktemp`'s name walk
-plus `creat()` and a reopen. `cmd/ar` wanted the first and `cmd/cc` the second (its temporaries
-carry a suffix that says which stage wrote them); `as`, `ld` and `strip` all use `tmpfile()`.
-There is **no `posix_spawn()` and no `waitpid()`** — `<sys/wait.h>` has only the argument-less
-`wait(2)`, and `cmd/cc`'s `run()` is `fork`/`execv`/`wait` in *both* builds rather than behind
-an `#if besm6`.
-
-`build/rootfs/` is staged only, never installed. **`root.manifest`** at the tree top describes
-the image; paths resolve against `b6fsutil`'s working directory (`build/kernel/test`). Modes
-(`04755` setuid on `mkdir`/`mv`/`rmdir`/`newgrp`/`passwd`/`su`) and the one hard link (`/bin/[`
-→ `/bin/test`) live there, not in `build/rootfs/`. `etc/` stages the static `group`, `motd`,
-`passwd`, `rc`, `termcap`, `ttys`; `lib/test/` stages `usr/test/*`; the top-level
-`CMakeLists.txt` stages the three trees no one directory owns — `/lib`, `/usr/include` and
-`/usr/man`.
-
-**Porting v7 userland**: read `cmd/README.md` (the eleven-point recipe), then
-`cmd/sh/README.md` and `cmd/ls/README.md`. `b6parse` is **strict C11** — no implicit `int`,
-no K&R parameter lists — but the mechanical part is not what bites. What bites is that v7
-assumes `int` and `char *` are the same thing:
-
-- a flag packed into bit 0 of a pointer, a mask rounding to a word assuming `BYTESPERWORD`,
-  and pointer casts that *floor* rather than round.
-- **`<` between two `char *` orders them correctly** — the compiler lowers it through
-  `b$pdiff`. It did not before 2026-06-17, and much of this tree was ported under the old
-  rule; `cmd/README.md` §2 is the account and it is history now, not a hazard.
-- `long` is one word; `BSIZE` is 3072 bytes but tools report 1024-byte blocks; `DIRSIZ` 18.
-- **`opendir(3)` exists** (`<dirent.h>`, `lib/libc/gen/`, `lib/libc/man/directory.3.umm`), added
-  with `cmd/ls`, its first and so far only caller. A **new** port that walks a pathname uses it
-  rather than hand-rolling `<sys/dir.h>` — a name read out of a directory is **not
-  NUL-terminated**, which is what the library now knows for you. Eight existing programs still
-  hand-roll it (`cmd/TODO.md` C24), and eight *others* deliberately never will: `fsck`, `mkfs`,
-  `ncheck`, `dcheck`, `icheck`, `quot`, `df` and `pstat` read a `struct direct` out of a raw
-  block off `/dev/rmd*` and want `<sys/dir.h>` exactly as it is.
+**Porting v7 userland**: read `cmd/README.md`, the eleven-point recipe. `b6parse` is **strict
+C11** — no implicit `int`, no K&R parameter lists — but what bites is that v7 assumes `int` and
+`char *` are the same thing: a flag packed into bit 0 of a pointer, a mask rounding to a word
+assuming `BYTESPERWORD`, pointer casts that *floor* rather than round. Also: `long` is one
+word; `BSIZE` is 3072 bytes but tools report 1024-byte blocks; `DIRSIZ` 18. **`opendir(3)`
+exists**, and a new port that walks a pathname uses it rather than hand-rolling `<sys/dir.h>` —
+a name read out of a directory is **not NUL-terminated**.
 
 ### Kernel
 
 ```sh
-cd kernel && make          # produces `unix`, unix.nm, unix.dis
-make run                   # boot under SIMH (besm6 unix.ini)
+cd kernel && make          # produces `unix', unix.nm, unix.dis
+make run                   # boot under SIMH (besm6 unix.ini) — an interactive session,
+                           # not a test run; the tests are the top-level `make run'
 ```
 
 Built with the **in-tree** tool targets, so a rebuilt `b6as` relinks with no `make install`.
 `make` prints `b6size -w unix`: the image **must end below `054000`** (`KEND`). Everything is
-archived into one `libunix.a` (`b6ranlib`'s index resolves driver→core back-references in one
-scan). **`besm6.o` must come first in `OBJ`** so its const contribution pins the
-interrupt/extracode vectors at their fixed addresses. `brz.s` and `syscall.c` are separate
-files because `kernel/test/` links them directly.
-
-Header dependencies are **coarse, not computed** (`b6cc`/`b6cpp` have no `-M`): every object
-depends on every `include/sys/*.h`. Adding a **new header file** needs a re-configure, since
-`file(GLOB)` runs at configure time.
+archived into one `libunix.a`, and **`besm6.o` must come first in `OBJ`** so its const
+contribution pins the interrupt/extracode vectors at their fixed addresses. `brz.s` and
+`syscall.c` are separate files because `kernel/test/` links them directly. Header dependencies
+are **coarse, not computed** (`b6cc` has no `-M`): every object depends on every
+`include/sys/*.h`, and a **new header file** needs a re-configure.
 
 ### Tests
 
-**Kernel tests run on real SIMH** (`cd kernel/test && make test` — that target rebuilds
-`root.img` first; plain `ctest -L kernel` tests a stale image). Each is a standalone BESM-6
-program linking kernel objects against a hand-built environment plus a `.ini` that loads it,
-runs it, and asserts on machine state; `b6sim` cannot substitute. `mmutest` is the one to
-copy. Sources are compiled *into* `kernel/test/` via `b6_find_src()`/`b6_test_obj()` with
-`-DKERNEL`, into per-program object dirs (shared outputs would race under `make -j`).
+**Kernel tests run on real SIMH, and the top-level `make run` already runs them** —
+`kernel/test/`'s targets hang off `build_tests`, so `make test` rebuilds `root.img` and the
+test images too. `cd kernel/test && make test` is the same thing narrowed to `-L kernel`. What
+is *not* safe is a bare `ctest -L kernel`, which builds nothing and so tests a stale image.
+Each test is a standalone BESM-6 program linking kernel objects, with a `.ini` that loads it,
+runs it, and asserts on machine state; `b6sim` cannot substitute, and `mmutest` is the one to
+copy.
 
 - **Run every MMU test with `set mmu cache`** — the БРЗ hazards are invisible otherwise.
-- **The nineteen tests that booted the kernel and typed at it are gone**, with the `weekly`
-  label and `make weekly` that selected them — `console`, `session`, `login`, `multi`,
-  `files`, `utils`, `filters`, `inspect`, `toolchain`, `edit`, `fsinfo`, `dd`, `mkfs`,
-  `tar`, `fsck`, `mount`, `accounts`, `swap` and the image-side `libtest`, with their guest
-  scripts, `run-*.sh` drivers and `.expected` transcripts. **`boot` is what is left**: a
-  one-second smoke test that the kernel still reaches a shell prompt. So nothing now
-  asserts a typed dialogue, `/etc/rc`, getty/login, a mounted second filesystem, `fsck`
-  repairing a pack, or the self-hosting `cc` run — when a README says one of those is
-  covered, it is describing a test that no longer exists.
-- **The libc suite ran twice on purpose** — under `b6sim` (label `lib`) and off the image
-  under the booted kernel — diffed against the *same* `.expected`, so that disagreement said
-  one harness was wrong. That found two bugs. **The image-side half is gone** with the rest
-  of the weekly tests; only the `b6sim` run remains, and `b6_libtest()`'s `IMAGEONLY` now
-  marks a program nothing runs. The `/usr/test` programs are still staged onto the image.
-  Adding a program = one `b6_libtest()` call + `lib/test/progs.cmake` + `root.manifest`.
-  **A native test that is not a libc test wants the
-  other, cheaper shape**: `b6_prog(... SOURCES ...)` + `b6_progtest()` staged into
-  `build/rootfs/test/`, which needs none of those four and can link sources `b6_libtest()`
-  cannot (it compiles exactly one `.c`). `cmd/novi/test/` and `cmd/libaout/rootfs/` use it.
-- ctest labels: `kernel` (SIMH), `lib` (b6sim), `rootfs` (size checks) and `sh`.
-- Every `cmd/` tool has a GoogleTest suite under `cmd/<tool>/test/`; `cmd/cpp/test/` is a full
-  C11 (N1570) conformance suite built on the `PreprocessorTest` fixture.
+- **The tests that booted the kernel and typed at it are gone**; `boot`, a one-second smoke
+  test that the kernel still reaches a shell prompt, is what is left. When a README claims a
+  typed dialogue, `/etc/rc`, a mounted second filesystem or the self-hosting `cc` run is
+  covered, it describes a test that no longer exists.
+- The libc suite runs under `b6sim` only; adding a program = a `b6_libtest()` call +
+  `lib/test/progs.cmake` + `root.manifest`. **A native test that is not a libc test wants the
+  cheaper shape**: `b6_prog(... SOURCES ...)` + `b6_progtest()` staged into
+  `build/rootfs/test/` (`cmd/novi/test/`, `cmd/libaout/rootfs/`); it can link sources
+  `b6_libtest()` cannot, that one compiling exactly one `.c`.
+- ctest labels: `kernel` (SIMH), `lib` (b6sim), `rootfs` (size checks) and `sh`. Every `cmd/`
+  tool has a GoogleTest suite under `cmd/<tool>/test/`; `cmd/cpp/test/` is a full C11 (N1570)
+  conformance suite.
 - **A lone unexpected failure is usually the harness, not the change.** The suite runs in
   parallel and both simulators are timing-sensitive, so a case that fails under `make run` and
-  passes on its own was a flake. Re-run it alone, then move on — do not spend the turn on it.
+  passes on its own was a flake. Re-run it alone, then move on.
 
 ## Architecture notes
 
-**BESM-6 is word-addressed.** The addressable unit is one 48-bit word; no sub-word
-load/store. `CHAR_BIT == 8` but six chars pack into a word, so **`sizeof(int) == 6`** and
-addresses are word indices. Bits number right-to-left from 1. Numbers are octal. No IEEE 754.
+**BESM-6 is word-addressed.** The addressable unit is one 48-bit word; no sub-word load/store.
+`CHAR_BIT == 8` but six chars pack into a word, so **`sizeof(int) == 6`** and addresses are
+word indices. Bits number right-to-left from 1. Numbers are octal. No IEEE 754.
 
-**Kernel memory model** (full account in `kernel/README.md` — read it before touching
-anything memory-related, and keep it current):
+**Kernel memory model** (full account in `kernel/README.md` — read it before touching anything
+memory-related, and keep it current):
 
 - The kernel **runs unmapped** (БлП = БлЗ = 1), so a kernel address *is* physical; kernel
-  image + u-area + buffer cache must fit the low 32 pages, since supervisor instruction fetch
+  image, u-area and buffer cache must fit the low 32 pages, since supervisor instruction fetch
   is never mapped.
 - Two fixed physical areas, absolute symbols rather than bss (devices transfer to *physical*
   addresses): the **u-area, two pages at `074000`**, and **`buffers[NBUF][BSIZE]` at
   `054000`–`074000`**. Hence `KEND == BUFBASE == UBASE - NBUF*BSIZEW`. `NBUF` (16) must stay
   above `NMOUNT` (8): every mount pins one buffer until it is unmounted.
-- **РП always holds the current process's map**, so a trap switches nothing. The shadow map
-  is `u.u_upt[8]` — the hardware registers cannot be read back. `sureg()` (`kernel/utab.c`)
-  loads the space in twelve `рег`s.
-- **Drain the БРЗ write cache before every РП write** — `drainbrz()` in `kernel/brz.s`. It
+- **РП always holds the current process's map**, so a trap switches nothing. The shadow map is
+  `u.u_upt[8]`, the hardware registers not being readable; `sureg()` (`kernel/utab.c`) loads
+  the space in twelve `рег`s.
+- **Drain the БРЗ write cache before every РП write** — `drainbrz()` in `kernel/brz.s`, which
   **cannot be written in C** (the nine stores must be consecutive; `b6cc` spills the pointer
-  through a frame slot). Verified by disassembly; don't re-litigate. A device also reads
-  memory rather than the write cache, so drivers must drain before a write exchange.
+  through a frame slot). Verified by disassembly; don't re-litigate. A device reads memory
+  rather than the write cache, so drivers must drain before a write exchange too.
 
-**SIMH device model** (details in `doc/Besm6_Peripherals.md`, `doc/Memory_Mapping.md`):
-no I/O address space and no channel programs — devices are reached by two supervisor
-instructions naming a register via the effective address with data in the accumulator:
-`033 «увв»` (`ext`) for peripherals, `002 «рег»` (`mod`) for CPU registers; one address bit
-selects read vs write (`04000` / `0200`). Devices answer through ГРП (48-bit) and ПРП
-(24-bit, delivered via `GRP_SLAVE`); some ГРП bits are wired and clear only at the device.
-Mass storage exchanges in zones of `8 + 1024` words, service words landing at a fixed low
-address per controller. The MMU is eight write-only registers (РП `002 020`–`027`, РЗ
-`002 030`–`033`), 32 pages of 1 Kword over 512 Kwords.
+**SIMH device model** (`doc/Besm6_Peripherals.md`, `doc/Memory_Mapping.md`): no I/O address
+space and no channel programs — a device is reached by a supervisor instruction naming a
+register through the effective address with data in the accumulator, `033 «увв»` (`ext`) for
+peripherals and `002 «рег»` (`mod`) for CPU registers. Devices answer through ГРП and ПРП; some
+ГРП bits clear only at the device. The MMU is eight write-only registers, 32 pages of 1 Kword.
 
-**Object format**: BESM-6 `a.out` in `cross/besm6/b.out.h` (`FMAGIC`/`NMAGIC`, separate
-const/text/data/bss sizes), serialized by `cmd/libaout` with a **6-byte word** (`W == 6`, two
-3-byte big-endian half-words, high first). Archive headers: `cross/besm6/ar.h`, `ARHDRSZ ==
-60`. `b6as` uses AT&T syntax with Madlen mnemonics; `b6disasm` prints the same by default
-(`-b` for the Cyrillic BEMSH dialect).
+**Object format**: BESM-6 `a.out` and archive headers in `cross/besm6/{b.out.h,ar.h}` (separate
+const/text/data/bss sizes), serialized by `cmd/libaout` with a **6-byte word**. `b6as` uses
+AT&T syntax with Madlen mnemonics, `b6disasm` the same (`-b` for Cyrillic BEMSH).
 
-**`b6cc` is a driver**, not a compiler: `b6cpp` → `b6parse` → `b6lower` → `b6codegen` →
-`b6as` → `b6ld`, the middle three from the external c-compiler. `-E`/`-S`/`-c` as usual;
-`-O`/`-g` are no-ops. **`b6sim`** loads one a.out, interprets it, and traps `$77 N` to run
-v7 syscall `N` on the host (numbers from `kernel/sysent.c`; args below `r15`, last in the
-accumulator, result in the accumulator, errno in `r14`). It **serves the target's `etc/`, not
-the build machine's**: the six static files are compiled into `cmd/sim/etcfiles.cpp` and matched
-on the *literal* path, `/dev/kmem`-style (writes get `EROFS`, exec `ENOEXEC`), so a
-`getpwuid(3)` under `b6sim` reads the same bytes the booted kernel would — otherwise every name
-a test prints is a property of whoever is building. `cmd/sim/test/etc_test.cpp` is the drift
-guard: a seventh file joining `etc/` and not the table fails a test rather than quietly reaching
-the host.
+**`b6cc` is a driver**, not a compiler: `b6cpp` → `b6parse` → `b6lower` → `b6codegen` → `b6as`
+→ `b6ld`, the middle three external; `-O`/`-g` are no-ops. **`b6sim`** interprets one a.out and
+traps `$77 N` to run v7 syscall `N` on the host (numbers from `kernel/sysent.c`; args below
+`r15`, last in the accumulator, result in the accumulator, errno in `r14`), and **serves the
+target's `etc/`, not the build machine's**, from `cmd/sim/etcfiles.cpp`.
 
-**Two system calls are not v7's**, and both took the lowest free `sysent.c` row rather than
-appending (`include/sys/syscall.h` says why, and carries a signature on every `SYS_*` line):
-
-- **`kctl(2)`, row 49** (`<sys/kctl.h>`, `kernel/kctl.c`) — the kernel-variable interface.
-  Every earlier Unix found a kernel variable with `nlist(3)` over `/unix`, and **there is no
-  kernel image on this disk**: `root.manifest` names no `/unix`, the simulator loads one off
-  the build host. So the kernel publishes a small hand-written table instead. `KCTL_GET`
-  copies a *value* (no memory device, no privilege — `dmesg`, `iostat`, `vmstat`);
-  `KCTL_STAT` hands back an *address* for a pointer-chaser, and `pstat` is the only program
-  left on that ladder, `ps` having moved to `KCTL_PSINFO`, which makes the kernel do the walk.
-  `KCTL_LIST` is the only way to see the table — nothing in user space holds a second copy.
-  `KCTL_SET` is reserved and answers `EINVAL`.
-- **`statfs(2)`, row 50** (`<sys/statfs.h>`) — where `df(1)` gets its numbers, so that an
-  ordinary user can measure the store without reading the raw device.
+**Two system calls are not v7's**, both taking the lowest free `sysent.c` row rather than
+appending (`include/sys/syscall.h` carries a signature on every `SYS_*` line): **`kctl(2)`,
+row 49** (`<sys/kctl.h>`, `kernel/kctl.c`), the kernel-variable interface, since **there is no
+kernel image on this disk** for `nlist(3)` to read — `KCTL_GET` copies a value, `KCTL_STAT` an
+address, `KCTL_PSINFO` walks the process table for `ps`, `KCTL_LIST` is the only view of the
+table; and **`statfs(2)`, row 50** (`<sys/statfs.h>`), where `df(1)` gets its numbers.
 
 **`include/`** is the v7 header tree, C11-ified. **Every header stands alone and includes what
 it uses**, so include lists are sets, not sequences. Two traps: `<sys/param.h>` must stay
-`#define`-only (`kernel/*.S` includes it, and there is no `__ASSEMBLER__`); and **`b6cpp`
-rejects a macro redefinition whose replacement text is not character-identical**, so two
-headers defining a name must agree character for character, alignment included.
+`#define`-only (`kernel/*.S` includes it, and there is no `__ASSEMBLER__`), and **`b6cpp`
+rejects a macro redefinition whose replacement text is not character-identical**, alignment
+included.
 
-**Read `doc/` before touching codegen, the assembler, or anything ABI-related** — these are
-authoritative and kept current:
-`Besm6_Instruction_Set.md` (opcodes, registers), `Besm6_Calling_Conventions.md` (args in
-direct order, last in the accumulator, r14 = negative arg count, r13 = return address),
-`Besm6_Data_Representation.md`, `Besm6_Runtime_Library.md` (the `b$*` helper convention),
-`Intrinsics.md` (the twelve `<besm6.h>` intrinsics that let `kernel/dev/` be written in C —
-read before writing any driver), `Besm6_Peripherals.md`, `Memory_Mapping.md`,
-`Unix_Context_Switch.md` (the four gates, the 21-word trap frame, `save()`/`resume()`),
-`Unix_V7_System_Calls.md`, `Kernel_Assembly_Routines.md`, `Dubna_Context_Switch.md`,
-`Assembler_Manual.md`, `Linker_Manual.md`, `Archiver_Manual.md`, `File_Magic.md`,
-`Aout_Simulator.md`, `Simh_Simulator.md`.
+**Read `doc/` before touching codegen, the assembler, or anything ABI-related** — those files
+are authoritative and kept current, notably `Besm6_Instruction_Set.md`,
+`Besm6_Calling_Conventions.md` (args in direct order, last in the accumulator, r14 = negative
+arg count, r13 = return address) and `Intrinsics.md` (the twelve `<besm6.h>` intrinsics that
+let `kernel/dev/` be written in C — read before writing any driver).
 
 ## Conventions
 
 - clang-format (`.clang-format` at repo root), but **not over `include/`** — re-spacing a
-  `#define` changes what `b6cpp` compares on redefinition. The tree was formatted with a
-  clang-format older than 22, so re-running it produces some alignment churn. `TypeNames:`
-  lists the `<sys/types.h>` scalars, without which `(caddr_t)&x` is misread as a bitwise and.
+  `#define` changes what `b6cpp` compares on redefinition.
 - Comments and identifiers are frequently in **Russian**; match the surrounding language.
 - Build artifacts (`*.o`, `*.a`, `*.i`, `*.ast`, `*.yaml`) are git-ignored.
-- `scripts/vscode-besm6/` is a grammar-only VSCode extension; its mnemonic tables are
-  transcribed from `cmd/as/tables.c` and `cmd/disasm/dis.c`, so adding a mnemonic there means
-  adding it here too.
+- `scripts/vscode-besm6/` transcribes the mnemonic tables of `cmd/as/tables.c` and
+  `cmd/disasm/dis.c`; a new mnemonic goes into both places.
