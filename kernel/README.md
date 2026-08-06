@@ -69,9 +69,11 @@ These cover the image the build produces ([../root.manifest](../root.manifest) â
 | `multi` | ^D out of that shell and the rest of the way: `/etc/rc`, a getty per line of `/etc/ttys`, `crypt(3)`, and **two people logged in at once** on the two Consuls |
 
 `boot` attaches the pristine disk read-only â€” an assertion in itself; `multi` writes, so it
-converts a copy of its own at volume 3085. Between them they hold the `simh_boot` lock and cost
-about five seconds. The rest of [test/](test/) exercises one kernel component at a time against
-a hand-built environment; see "Writing a standalone SIMH test" below.
+converts a copy of its own at volume 3085. Both are **`RUN_SERIAL`**, not merely locked against
+each other: they type at the guest on a step budget, and SIMH drops characters out of a `send`
+when the host is oversubscribed, so ctest starts nothing else while either runs. The rest of
+[test/](test/) exercises one kernel component at a time against a hand-built environment; see
+"Writing a standalone SIMH test" below.
 
 **Eighteen further tests used to sit in that table and are gone**, with the `weekly` label and
 the `make weekly` target that selected them: `console`, `session`, `files`, `utils`, `filters`,

@@ -440,9 +440,16 @@ set_tests_properties(rootimg_link_more PROPERTIES LABELS kernel)
 # one stops.
 #
 # `boot' ATTACHES root3072.disk READ-ONLY, which is an assertion in itself: the boot path
-# needs no writes.  The RESOURCE_LOCK is shared with `multi', and is load-bearing: SIMH drops
-# characters out of a `send' when the host is oversubscribed, which is what the lock was
-# bought to treat, and this test costs a second of the wall clock they take between them.
+# needs no writes.
+#
+# RUN_SERIAL, HERE AND ON `multi', AND NOT A RESOURCE_LOCK.  A lock between the two would only
+# keep them apart from EACH OTHER; these two are sensitive to the load of the whole machine,
+# not just to one another.  SIMH drops characters out of a `send' when the host is
+# oversubscribed, and both run on a step budget that a loaded box can exhaust before the guest
+# has got there -- so a green run says nothing if 600 GoogleTest cases were competing for the
+# cores.  RUN_SERIAL is ctest's "start nothing else while this runs", which is the property
+# that actually matches the requirement.  It costs a few seconds of total wall clock, since
+# neither can overlap anything; that is the price of a boot dialogue meaning what it says.
 # ../TODO.md task 35 has the two bugs that were found underneath it.
 #
 # `spin' is a LINKED address that moves as the kernel grows, so boot.ini is
@@ -466,7 +473,7 @@ if(BESM6)
     list(APPEND TEST_TARGETS bootini)
     add_test(NAME boot COMMAND ${BESM6} ${CMAKE_CURRENT_BINARY_DIR}/boot.ini
              WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(boot PROPERTIES LABELS kernel RESOURCE_LOCK simh_boot)
+    set_tests_properties(boot PROPERTIES LABELS kernel RUN_SERIAL TRUE)
 
     # ---------------------------------------------------------------------------------
     # multi -- TWO PEOPLE LOGGED IN AT ONCE, on the two Consul typewriters, on its own volume
@@ -498,7 +505,7 @@ if(BESM6)
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-multi.sh
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR} $<TARGET_FILE:ttyhost>
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(multi PROPERTIES LABELS kernel TIMEOUT 600 RESOURCE_LOCK simh_boot)
+    set_tests_properties(multi PROPERTIES LABELS kernel TIMEOUT 600 RUN_SERIAL TRUE)
 
 endif()
 
