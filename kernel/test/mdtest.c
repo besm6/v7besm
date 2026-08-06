@@ -24,6 +24,9 @@
 //     is what makes the odd-numbered entries of buffers[] legal transfer targets, so it is
 //     not decoration -- check 4.
 //   - GROUPS AND TWO CONTROLLERS behind one major number: checks 5 and 6.
+//   - A SERVICE-WORD BUFFER PER CONTROLLER, not per drive, so the volume mark a write puts
+//     on the platter has to come from the driver's own mdvol[] -- and from mdopen() when
+//     nothing has read that drive yet (check 15).
 //   - THREE KINDS OF FAILURE where the drum has one, which is the whole of task 18b.5.  The
 //     error mask at 033 4035 says only THAT an exchange failed; the status register is what
 //     says what to do about it, and the three runs after the first are one shape each:
@@ -63,6 +66,7 @@
 
 // md.c and intr.c, the code under test.
 void mdstrategy(struct buf *bp);
+void mdopen(dev_t dev, int rw);
 void extintr(void);
 void intrinit(void);
 void mgrpon(unsigned bits);
@@ -119,6 +123,12 @@ extern unsigned mdretries; // exchanges md.c re-issued for the current request
 #define PAT_D 0400000U // block 0 of md10
 #define PAT_E 0500000U // block 0 of md40
 
+// Service word 1 as `attach -n' formats it: a magic mark and the volume number, which SIMH
+// takes from the digits in the FILENAME (besm6_disk.c, disk_attach).
+#define VOLMARK(v) ((01370707U << 24) | ((unsigned)(v) << 12))
+#define VOL_MD00   3073 // mdtest3073.disk
+#define VOL_MD10   3074 // mdtest3074.disk -- the drive check 15 writes unread
+
 // An arbitrary recognizable pattern for the service words.  It has to stay clear of the
 // sector-address field, bits 48-37, because the driver owns that field and this pattern is
 // what the checks below expect to find UNTOUCHED beside it.
@@ -160,6 +170,7 @@ extern unsigned mdretries; // exchanges md.c re-issued for the current request
 #define F_SHRTY  04000000  // ...or was not RETRIED, which is what makes it a SOFT error
 #define F_DKBUSY 010000000 // dk_busy was still set with no exchange outstanding
 #define F_DKCNT  020000000 // dk_numb/dk_wds disagreed with what the requests asked for
+#define F_VOL    040000000 // a pack written before it was read got another drive's label
 
 // Must match MDRETRY in kernel/dev/md.c -- run 4 asserts the exact retry count.
 #define MDRETRY 10
@@ -218,6 +229,34 @@ void physio(void (*strat)(struct buf *), struct buf *bp, int dev, int rw)
 void iodone(register struct buf *bp)
 {
     bp->b_flags |= B_DONE;
+}
+
+// The rest of what mdopen()'s label read names.  bio.o is not linked -- it could not be,
+// this file supplying its own iodone() and physio() -- so block 0 lands on a private page
+// instead of a cache buffer.  Only the allocation and the wait are forged; the request, the
+// exchange and the platter are real, which is what lets check 15 assert on what came back.
+#define LBLPAGE 021 // clear of the transfer page, and never looked at
+static struct buf lblbuf;
+
+struct buf *geteblk(void)
+{
+    lblbuf.b_flags = B_BUSY | B_PHYS; // mdlabel() ORs B_READ onto this
+    lblbuf.b_paddr = LBLPAGE * PGSZ;
+    lblbuf.b_resid = 0;
+    lblbuf.b_error = 0;
+    return &lblbuf;
+}
+
+void brelse(register struct buf *bp)
+{
+    bp->b_flags = 0;
+}
+
+// The real one sleeps with delivery blocked; here the completion is polled, as in xfer().
+void iowait(register struct buf *bp)
+{
+    while ((bp->b_flags & B_DONE) == 0)
+        extintr();
 }
 
 // md.c reports a failed request through this.  The real one (kernel/prf.c) would drag in
@@ -325,7 +364,7 @@ static unsigned roundtrip(int unit, daddr_t blk, unsigned seed, unsigned badbit)
 int main(void)
 {
     unsigned mode;
-    int i;
+    int i, dkw;
 
     // Block delivery for the whole run.  extintr() is called by hand below and must be the
     // only thing servicing ГРП: an interrupt taken through crt0.s's gate would run a disk
@@ -347,17 +386,19 @@ int main(void)
     // the write and clobbering them before the read proves the fixed low-memory buffer is
     // real, that it is the controller filling it, and that the driver picked track 0.
     //
-    // THE FIRST OF THE FOUR IS THE DRIVER'S, since task 25b, and is expected NOT to
-    // survive: it is the sector's own address, and mdstart() stores the block number there
-    // before every write (dev/md.c).  The pattern in the other three is the volume mark and
-    // the checksum, so what comes back off the platter is the block number followed by the
-    // seed -- and a driver that stopped maintaining the address, or one that overwrote more
-    // of the header than it owns, fails here.  The block number is 0 in this check; check 2
-    // is where the assertion has teeth.
-    //
-    // Word 1 is the driver's too -- mdvol[], the pack's mark -- but it stamps only what a
-    // read has already given it, and this is the first transfer of the run.  So the seed
-    // stands here, and the read below is what primes check 2.
+    // THE FIRST TWO OF THE FOUR ARE THE DRIVER'S and are expected NOT to survive.  Word 0 is
+    // the sector's own address, stored before every write since task 25b -- 0 in this check,
+    // check 2 is where that assertion has teeth.  Word 1 is the pack's mark out of mdvol[],
+    // which mdopen() primes from the platter, so what must come back is md00's own volume
+    // and not the seed.  Words 2 and 3 are nobody's and must survive untouched, so a driver
+    // that overwrote more of the header than it owns fails here.
+    // The open reads block 0 only if mdvol[] is not already primed -- and md.c's bss survives
+    // `load' between the runs of one SIMH session, so runs 2-4 find run 1's entry standing.
+    // Credit dk_wds with whatever the open actually moved, which is 0 or one half-zone.
+    dkw = dk_wds[DK_MD];
+    mdopen(UNIT_MD00, 1);
+    xwords += dk_wds[DK_MD] - dkw;
+
     for (i = 0; i < 4; i++)
         SYSDATA[i] = SYSPAT + i;
 
@@ -375,7 +416,9 @@ int main(void)
         mask |= F_TRK0;
     if (SYSDATA[0] >> SYSADDR != 0)
         mask |= F_SYSW;
-    for (i = 1; i < 4; i++)
+    if (SYSDATA[1] != VOLMARK(VOL_MD00))
+        mask |= F_VOL;
+    for (i = 2; i < 4; i++)
         if (SYSDATA[i] != SYSPAT + i)
             mask |= F_SYSW;
 
@@ -394,9 +437,8 @@ int main(void)
     // half of the buffer would leave check 1's four alone and fail here; one that did not
     // write it at all would hand back the seed.
     //
-    // Word 5 is the mark, and this write finds mdvol[] primed by check 1's read -- with
-    // SYSPAT+1, which the seed had left on the platter.  So the driver puts SYSPAT+1 here,
-    // not the SYSPAT+5 seeded below; words 6 and 7 must survive untouched.
+    // Word 5 is the mark: md00's own volume again, not the SYSPAT+5 seeded below -- the same
+    // mdvol[] entry serves both halves of the zone.  Words 6 and 7 must survive untouched.
     for (i = 4; i < 8; i++)
         SYSDATA[i] = SYSPAT + i;
 
@@ -413,8 +455,8 @@ int main(void)
         mask |= F_TRK1;
     if (SYSDATA[4] >> SYSADDR != 1)
         mask |= F_SYSW;
-    if (SYSDATA[5] != SYSPAT + 1)
-        mask |= F_SYSW;
+    if (SYSDATA[5] != VOLMARK(VOL_MD00))
+        mask |= F_VOL;
     for (i = 6; i < 8; i++)
         if (SYSDATA[i] != SYSPAT + i)
             mask |= F_SYSW;
@@ -453,6 +495,32 @@ int main(void)
         mask |= F_ERR;
     if (cmprange(0, BSIZEW, PAT_C))
         mask |= F_HALFP;
+
+    // ---- Check 15: the label of a pack nothing has read ---------------------------------
+    //
+    // Numbered last, placed here: it has to be md10's FIRST transfer, and check 5 writes it.
+    //
+    // mdvol[] is filled by a completed READ, and the service-word buffer is the CONTROLLER's,
+    // so a drive only ever written had nothing of its own to stamp: it got whatever the last
+    // read of another drive left in the buffer, which the seed below stands in for.
+    // mdopen() reads block 0 for exactly this, so md10's own mark must come back instead.
+    // Run 1 only: it is the run that attaches md10 with -n, so 3074's mark is on the platter.
+    if (mode == MODE_ALL) {
+        SYSDATA[1] = SYSPAT + 1; // md00's residue -- the answer this check must not accept
+        dkw        = dk_wds[DK_MD];
+        mdopen(UNIT_MD10, 1);
+        xwords += dk_wds[DK_MD] - dkw;
+
+        fillrange(0, BSIZEW, PAT_D);
+        if (xfer(UNIT_MD10, 0, 0, BSIZEW, B_WRITE))
+            mask |= F_ERR;
+        clearall();
+        SYSDATA[1] = 0;
+        if (xfer(UNIT_MD10, 0, 0, BSIZEW, B_READ))
+            mask |= F_ERR;
+        if (SYSDATA[1] != VOLMARK(VOL_MD10))
+            mask |= F_VOL;
+    }
 
     // ---- Check 5: another group ---------------------------------------------------------
     //

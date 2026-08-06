@@ -124,16 +124,16 @@ where it did not — and the second is the expensive kind.
 `tar cf /dev/rmd1` is the first program in this tree to **write a pack it never reads**, and
 that turns out to matter. `kernel/dev/md.c` keeps `mdvol[]`, the volume mark a write stamps
 into the sector header, because the service-word buffer is the *controller's* and the mark is
-the *drive's* — but it fills it only from a completed **read**, and treats zero as "not seen
-yet" and leaves the header alone. Leaving it alone does not leave it blank: it leaves whatever
-the last read of any drive on that controller put there. The scratch pack comes back calling
-itself **3099**, which is the root's number.
+the *drive's* — but it filled it only from a completed **read**, treating zero as "not seen
+yet" and leaving the header alone. Leaving it alone does not leave it blank: it leaves whatever
+the last read of any drive on that controller put there. The scratch pack came back calling
+itself **3099**, which was the root's number.
 
-`kernel/test/mkfs`'s oracle 1 was written for exactly this class of defect and passes only
-because `mkfs` probes the last block before writing the first. It is
-[../../kernel/TODO.md](../../kernel/TODO.md) task 37 now, and `run-tar.sh` asserts the
-**defect** in `fsck.sh`'s `hostblind` style, so that fixing it forces the test to be tightened
-rather than letting the deferral be forgotten.
+`kernel/test/mkfs`'s oracle 1 was written for exactly this class of defect and passed only
+because `mkfs` probes the last block before writing the first. Fixed as task 37:
+`mdopen()` reads block 0 once per drive, so a pack now carries its own number whether or not
+anything read it. `kernel/test/mdtest`'s check 15 is what holds it there — this test and
+`run-tar.sh`, which asserted the defect deliberately, are both gone.
 
 ## Five things fixed rather than carried
 

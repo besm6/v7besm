@@ -72,10 +72,10 @@ block 0 was a boot block nothing ever wrote it.
 
 **The superblock lives at block 0 now**, so `update()` writes it on every sync and that rule
 could not survive. `md.c` keeps `mdvol[]` instead — one word per drive, the mark and volume
-of the last half-zone read from that unit, stamped into every write to it. A drive nobody has
-read is left exactly as before, which is a no-regression rather than a guarantee; nothing
-reaches it, since `iinit()` and `smount()` both `bread(dev, SUPERB)` before anything writes
-and `mkfs` probes the last block before writing the first.
+of the last half-zone read from that unit, stamped into every write to it. A drive nobody had
+read was left exactly as before, which was a no-regression rather than a guarantee: `tar cf
+/dev/rmd1` then reached it, and task 37 closed it — `mdopen()` reads block 0 once per drive,
+so the label is the drive's own before the first write either way.
 
 The three `volume` greps — `run-mkfs.sh` (3090), `run-fsck.sh` (3092), `run-mount.sh` (3094)
 — now assert the driver is right rather than that block 0 is untouched.

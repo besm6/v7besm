@@ -48,7 +48,6 @@ struct buf swbuf2;
 // 	bawrite
 // 	brelse
 int incore(dev_t dev, daddr_t blkno);
-void iowait(struct buf *bp);
 void notavail(struct buf *bp);
 void geterror(struct buf *bp);
 

@@ -22,7 +22,6 @@ The tasks left are small, independent, and were deferred deliberately.
 | 32 | `profil()`: implement `addupc()` or make it fail | small; the decision is the task |
 | 33 | `ptrace` single-step | small now, blocked after |
 | 34 | the `int` ↔ pointer audit | open-ended |
-| 37 | `mdvol[]` is filled only by a READ, so a pack that is only ever written is stamped with another drive's label | small |
 
 ---
 
@@ -123,62 +122,3 @@ system call and the kernel's copy never runs, and neither was found by review �
 exercises the site, run under `libtest`, not an inspection.
 
 **Size.** Open-ended; do it in one sitting per file and stop when the grep is clean.
-
----
-
-## 37. `mdvol[]` is filled only by a read
-
-**Where.** `mdvol[]` in [dev/md.c](dev/md.c) — declared at `md.c:242`, filled at `md.c:561`
-inside `if (bp->b_flags & B_READ)`, stamped into the sector header at `md.c:393`, `md.c:394`
-and `md.c:399` inside `if ((bp->b_flags & B_READ) == 0)`.
-
-**What is wrong.** The service-word buffer is the **controller's**, so the volume mark a write
-puts on the platter has to come from somewhere the driver keeps **per drive** — which is what
-`mdvol[]` is for, and the comment above it says so. But it is filled from a completed *read*
-and from nothing else, and `0` is treated as "not seen yet" and left alone:
-
-```c
-if (mdvol[dev] != 0)
-    sys[track * MDSYSHALF + 1] = mdvol[dev];
-```
-
-Leaving it alone does not leave the header blank. It leaves whatever the **last read of any
-drive on that controller** put in the controller's buffer. So a pack that is written without
-ever being read is stamped with **another drive's volume number**.
-
-**How it was found, and why not before.** Task C7. `tar cf /dev/rmd1` is the first program in
-this tree that writes a pack it never reads: `mkfs` reads the last block before writing the
-first (its own end-of-volume probe), `fsck` reads everything it repairs, and `dd` is pointed at
-a device the caller has usually just read. The `mkfs` kernel test's oracle 1 was written for
-exactly this class of defect and passed only because of that probe, and the `tar` kernel test
-reproduced the bug in one line. **Both tests have since been deleted** with the rest of the
-user-mode image tests, so the reproduction has to be rebuilt; it is still this shape, against
-any scratch pack SIMH formats:
-
-```
-attach -n md01 scratch3100.disk      # SIMH formats it, volume 3100 throughout
-tar cfb /dev/rmd1 6 tree             # writes from block 0, never reads
-b6fsutil -S scratch3100.disk out     # "scratch3100.disk: volume 3099 -> out (flat)"
-```
-
-3099 was the **root** pack's number in that run, off drive 0 — whatever the controller last
-read. Today's root image is `root3072.disk`, so a rebuilt reproduction reports that instead.
-
-**What it costs today.** Nothing that has been noticed: `b6fsutil`'s `from_simh()` validates the
-magic *mark* and the per-half-zone self-address, and both are right — only the volume *number*
-beside the mark is another pack's. A container written this way converts, fscks and boots. What
-it breaks is the one thing the number is for: telling two packs apart.
-
-**How to fix it.** Either read the label before the first write to a drive (`mdopen()` is the
-obvious place, and it currently does nothing but bound the minor), or carry the number the way
-SIMH does and take it from the drive rather than the controller. The first is smaller and needs
-no new state; it costs one exchange per open of a drive that has not been read.
-
-**What is asserted meanwhile.** Nothing, and nothing guards the deferral either.
-`kernel/test/run-tar.sh` used to require the **wrong** number and say why, so that the day this
-was fixed the check would fail and have to be tightened to 3100 — but that script went with the
-`tar` test. A fix now has to bring its own check: the three lines above, with the write-only
-pack's own number required.
-
-**Size.** Small.
-

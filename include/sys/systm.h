@@ -314,6 +314,7 @@ int physrange(int addr, int count);
 void timeout(void (*fun)(carg_t), carg_t arg, int tim);
 void deverror(struct buf *bp, int o1, int o2);
 void iodone(struct buf *bp);
+void iowait(struct buf *bp);
 void physio(void (*strat)(struct buf *), struct buf *bp, int dev, int rw);
 void open1(struct inode *ip, int mode, int trf);
 void signal(int pgrp, int sig);

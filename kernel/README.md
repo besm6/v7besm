@@ -573,8 +573,8 @@ Facts that cost real time to establish and are not in `doc/`.
   maintaining them — and, since task C4c, converting a **second** drive's container is what made
   the per-controller buffer visible: `from_simh()` reports the volume number it finds in zone 0,
   which on a two-drive machine was only right because nothing wrote block 0. The superblock lives
-  at block 0 now, so `dev/md.c` maintains the mark per *drive* (`mdvol[]`) instead;
-  `cmd/mkfs/README.md` §2 is the account.
+  at block 0 now, so `dev/md.c` maintains the mark per *drive* (`mdvol[]`) instead, primed from the
+  platter by `mdopen()`; `cmd/mkfs/README.md` §2 is the account.
 * **A DRUM ZONE THAT HAS NEVER BEEN WRITTEN IS A READ ERROR, not garbage.** SIMH's `besm6_drum.c`
   fails the short `fread` and raises the same `drum_fail` an *unattached* drum raises, which
   `dev/mb.c`'s `EXT_IOERR` poll cannot tell apart. A **hole inside** the container reads back as
@@ -697,8 +697,10 @@ Facts that cost real time to establish and are not in `doc/`.
   address, and — since the superblock moved to block 0 — the volume's mark and number, per drive in
   `mdvol[]`. The **userid and the address checksum** are still whatever the last read of any drive on
   that controller left there. Nothing reads either: `from_simh()` checks the mark and the address,
-  and SIMH computes neither. A drive written before anything has read it gets the old behaviour, the
-  buffer's residue, which no path reaches. `cmd/mkfs/README.md` §2 is the account.
+  and SIMH computes neither. `mdvol[]` was filled only by a completed read until task 37, so a pack
+  that was only ever written — `tar cf /dev/rmd1` — carried another drive's number; `mdopen()` reads
+  block 0 once per drive now (`mdlabel()`), and `mdtest`'s check 15 holds it there.
+  `cmd/mkfs/README.md` §2 is the account.
 * **`sy_nrarg` is read nowhere** and is vestigial: exactly one argument arrives in a register on this
   machine, for any `narg >= 1`.
 * **There is no read-only user page.** РЗ closes a page to reads as well as writes, so a closed text
