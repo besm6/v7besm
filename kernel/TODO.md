@@ -15,102 +15,15 @@ why `besm6.o` cannot go into one.
 README.md, and how each turned out is in the source comments and in [../doc/](../doc/). The
 numbering is **left as it was** — task numbers are cited from the sources and from `doc/`.
 
-31–36 are small, independent, and were deferred deliberately.
+The tasks left are small, independent, and were deferred deliberately.
 
 | | task | size |
 |---|---|---|
-| 31 | the kernel-stack depth check | small |
 | 32 | `profil()`: implement `addupc()` or make it fail | small; the decision is the task |
 | 33 | `ptrace` single-step | small now, blocked after |
 | 34 | the `int` ↔ pointer audit | open-ended |
-| 35 | the dropped `send` character is fixed and `console`/`edit` are back; what is left is whether the resource lock and the paced `send` still buy anything | small, and it is a measurement |
 | 36 | the shifting copy: the half of the byte path task 28 could not reach | medium, high risk |
 | 37 | `mdvol[]` is filled only by a READ, so a pack that is only ever written is stamped with another drive's label | small |
-| 39 | the 4,096-word user stack: `USTKPAGE` 28 → 24, and why C9b argues against it | small change, wide blast radius |
-
----
-
-## 39. The user stack is 4,096 words — and the image ceiling is now the tighter one
-
-**Where.** `USTKPAGE 28` in [../include/sys/param.h](../include/sys/param.h). `estabur()`
-([utab.c](utab.c)) derives *both* user ceilings from it: 28 pages of `const+text+data+bss` below
-it and 4 pages of stack from `070000` up. The two move in opposite directions, which is the
-whole of this task.
-
-**Why it was raised.** Task C9a ([../cmd/cpp/README.md](../cmd/cpp/README.md), "Building for the
-BESM-6") is the one program on this image whose stack the split bounds tightly enough to cost
-behaviour rather than headroom. C11 §6.10.3.1 macro-argument prescanning is a recursion the
-*input* drives, and the measured chain — `main` 41 + `process_directives` 372 + `scan_token` 656
-+ `lookup_token` 11 resident, then 1,227 words per nesting level and another 1,106 for the inner
-macro's argument collection — fits **one** level in 4,096 and not two. So `cpp` carries
-`MAXARGDEPTH 1` and substitutes a deeper argument raw. It is honest, warned about and almost
-always invisible, but it is a real subset of the language.
-
-**C9b is evidence AGAINST the change, and this is the part to read before doing it.** That task
-predicted `as` and `ld` would want the bigger stack too. Neither does, and `ld` would be actively
-hurt:
-
-* **`ld` has no recursion at all** and not one local array. Its deepest chain —
-  `pass2` → `relocate_file` → `relocate_object` → `relocate_segment` → `relocate_halfword` →
-  `lookup_local` — is **578 words** of the 4,096 ([../cmd/ld/README.md](../cmd/ld/README.md) has
-  the frames). What it is short of is *image*: it links at **23,951** words of 28,672, and the
-  ~4,700 left are the heap budget for twelve stdio buffers. `USTKPAGE 24` would cut the ceiling
-  to 24,576 and leave it 625 words for a heap that needs ~2,050. **`/usr/bin/ld` would stop
-  linking.**
-* **`as` needed only a bound of its own**, `MAXEXPRDEPTH`, on the one recursion its input drives
-  — the same move as `grep`'s `MAXDEPTH`. It is 554 words resident plus 104 a level, so 20 levels
-  fit in 3,130 with room to spare, and no real input nests parentheses at all.
-
-So the trade is now explicit: **`USTKPAGE 24` buys `cpp` one more level of macro-argument
-nesting and costs `ld` the ability to run.** Anyone taking this task has to shrink `ld` first —
-its `NCONST`/`NSYM` profile is where the words are — or pick 26 rather than 24 and re-measure
-both.
-
-**What to change**, if it is still wanted: `USTKPAGE` 24 gives 8,192 words of stack and 24,576
-of image. **What moves with it**, and none of it is computed: `cmd/sim`'s `STACK_BASE`
-([../cmd/sim/besm6_arch.h](../cmd/sim/besm6_arch.h)) — b6sim seeds `M15` at `070000` and its
-memory ends at `0100000`, so the two worlds must agree or a program that passes under the
-simulator faults under the kernel; the `28672` literals in
-[../scripts/BesmCross.cmake](../scripts/BesmCross.cmake) and `lib/test/CMakeLists.txt`, which are
-what `rootfs_<name>_size` checks; `scripts/check-size.sh`'s header; `cmd/README.md` §6 and
-`../doc/Memory_Mapping.md`. **The `32767` ceiling does not move** — that is the 15-bit pointer
-and has nothing to do with this split.
-
-**How to know it worked.** Raise `cpp`'s `MAXARGDEPTH` to 2, rebuild, and check that
-`rootfs_cpp_deep` still agrees with the host and that `ID(ID(ID(4)))` now expands — and that
-`rootfs_ld_size` and the four `rootfs_ld_link*` cases still pass, which is the half this task
-did not originally have.
-
----
-
-## 31. The kernel-stack depth check
-
-There is **no guard page and none is possible.** `r15` grows up from ≈ `074214` to `0100000`, and
-past that a 15-bit address wraps to 0 — into the interrupt vectors. The kernel runs unmapped, so
-neither РП nor РЗ applies to it; the only mechanisms are a software depth check or the simulator.
-Task 25a made the wrap unreachable by any measured path, but two one-line checks were left unwritten:
-
-```c
-if ((int)&local >= UBASE + USIZE)   panic("kstack");   /* in sleep() — the one the geometry needs */
-if ((int)&local >= 0100000 - MARGIN) panic("kstack");  /* the wrap */
-```
-
-The first is the important one: `sleep()` (and `swtch()`) is exactly where a frame in the overflow
-page is silently lost, because `uflush()` copies at most `USIZE` words — it clamps there, task 30
-having left that threshold exactly where it was — and another process then runs deep on the same
-physical page. There is no fault and no diagnostic — see README.md's consequences list.
-
-**Decide first whether it earns its keep**, because SIMH already observes both without kernel code: a
-write watchpoint on the overflow page (`break -w 0176000-0177777`) fires only on an *unmapped* store,
-i.e. only on a kernel stack frame, because `mmu_store()` ORs `0100000` into the address before
-`sim_brk_test`; and `break <resume>; ex M17` samples the depth at every switch. The argument for the
-runtime check is that it fires on a real workload nobody is watching, and it costs one comparison per
-sleep.
-
-**How to verify.** A standalone test that forges a deep frame and sleeps in it must panic; without
-that, the check is decorative. A test that cannot fail proves nothing about the geometry.
-
-**Size.** Small.
 
 ---
 
@@ -211,50 +124,6 @@ system call and the kernel's copy never runs, and neither was found by review �
 exercises the site, run under `libtest`, not an inspection.
 
 **Size.** Open-ended; do it in one sitting per file and stop when the grep is clean.
-
----
-
-## 35. What the paced `send` is still buying
-
-**The character drop is found and fixed, and it was one bug on each side of the boundary** —
-which is why neither candidate mechanism in the old text ever explained all of it.
-
-*The guest half.* `scintr()` ([dev/sc.c](dev/sc.c)) skipped a Consul that was not open
-**without dismissing its ПРП bits**, and those bits are cleared there and nowhere else. The
-processor re-tests ПРП before every instruction, so a "printing finished" that arrived just
-after `ttyclose()` zeroed `t_state` — and `wflushtty()` waits for the queue to drain, not for
-the character still in the typewriter — re-raised GRP_SLAVE for ever. That is the one-in-three
-`console` wobble and the `edit` byte that appeared to be *gained*: the guest was not losing a
-character, it was stalled mid-echo. Intermittent because it turned on whether init's close beat
-that one interrupt. `scintr()` now dismisses, and reads, whatever stands for a closed line.
-
-*The simulator half.* `CONSUL_IN[]` in SIMH's `besm6_tty.c` is one character deep and
-`consul_receive()` overwrote it every tick regardless of whether the guest had read it, so
-anything arriving faster than the guest services ПРП was lost. It now leaves the character in
-the line's own queue until `consul_read()` takes it. **This is the bug a real operator meets**,
-and `more(1)` was the first program to meet it: an arrow key sends three bytes in one instant,
-the middle one went, and the pager rang the bell instead of scrolling.
-
-With both in, `console` and `edit` were enabled again and the whole weekly suite ran 100%
-three times over, `console` measuring 6 of 6 where it had been 0 of 6. **All of those tests
-have since been deleted**, so this is now a record of what was wrong rather than something
-under test.
-
-**What is left is an optimisation, not a bug.**
-
-1. **Re-measure the `RESOURCE_LOCK simh_boot`.** It was bought to treat this symptom and has
-   never been measured against a paced send, let alone against a fixed one — `test/CMakeLists.txt`
-   says so at the `RESOURCE_LOCK` comment. Five full `ctest` runs with and without it, which is
-   how it earned its place. It costs about seventy seconds of serial wall clock on the critical
-   path of the suite. If it is buying nothing now, the lock and its comment both come out.
-2. **Re-measure the `after=`/`delay=` pacing.** Every `send` in `test/` now carries
-   `after=20000 delay=20000`, the thirteen single-send files having been brought into line with
-   the dialogues. Whether either is still needed after the two fixes is untested; 20000 is a
-   number that worked, not a measured minimum. Take them off one file and run it six times.
-
-**How to verify a change here.** Make the fault happen first. For the drop, the reproducer is one
-line: `send "\033[B"` with **no** `delay=` at a `--More--` prompt used to arrive as `ESC B` and
-ring the bell, and now scrolls. For the storm, `console` six times is the measurement.
 
 ---
 
