@@ -39,8 +39,8 @@
 ; exec() refused the file.
 ;
 ; WHAT THIS TEST DOES NOT DO IS TALK TO THE SHELL.  It watches for the prompt and stops.  The
-; typed line, the erase and kill characters, ^D and /dev/tty belong to console.ini next door,
-; and writing files belongs to session.ini beside it.  Keeping them apart keeps the diagnosis
+; typed line, the erase and kill characters, ^D and /dev/tty belonged to console.ini, and
+; writing files to session.ini; both are deleted.  Keeping them apart kept the diagnosis
 ; apart too: a failure here says "the kernel never got a user program running", a failure
 ; there says "the line discipline is wrong".
 ;
@@ -62,7 +62,7 @@
 ;
 ; THIS IS THE ONE TEST THAT STILL ATTACHES root3072.disk ITSELF, and read-only, which is an
 ; assertion of its own: the path from _start to the shell's first prompt WRITES NOTHING.
-; console.ini and session.ini go further and need a writable unit, so each converts its own
+; console.ini and session.ini went further and needed a writable unit, so each converted its own
 ; copy of root.img at its own volume number -- see kernel/test/CMakeLists.txt.  If an `md'
 ; write error ever appears in this test's console stream, this attach becomes a copy too.
 ;
@@ -71,7 +71,7 @@
 ; before it ever touches the new image.  With no drum that bread comes back B_ERROR and the
 ; exec fails with EIO, which is what this test found the first time it was run with an
 ; /etc/init to exec.  Here `-n' IS right: the drums are scratch and want to start empty.
-; Their names are this test's own, since ctest runs the SIMH tests in parallel and console.ini
+; Their names are this test's own, since ctest runs the SIMH tests in parallel and another .ini
 ; needs a swap area of its own.
 ;
 ; THE CONSOLE IS ATTACHED NOW, and has to be -- the assertion is what the shell printed on it.

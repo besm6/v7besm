@@ -21,7 +21,8 @@
 // FALSE), and then clear XTABS in the live flags.  If any of those disagrees, the
 // disagreement is with the kernel's console driver and one of the two is wrong.
 //
-// IT RUNS LAST IN kernel/test/libtest.sh, ON PURPOSE.  gettmode() clears XTABS on the real
+// IT RAN LAST IN THE DELETED kernel/test/libtest.sh, ON PURPOSE -- nothing runs it now.
+// gettmode() clears XTABS on the real
 // console and only endwin()'s resetty() puts it back, so if this program ever dies the only
 // thing still running against a changed console is one echo.
 //
@@ -92,7 +93,7 @@ int main(int argc, char **argv)
     }
 
     printf("--- after initscr\n");
-    // stdout is redirected to a file by libtest.sh and stdin is the console, so the isatty
+    // stdout was redirected to a file by the image-side runner and stdin was the console, so the isatty
     // search lands on descriptor 0.
     ck("_tty_ch", _tty_ch, 0);
     ck("_res_flg", _res_flg, CONSOLE_FLAGS);

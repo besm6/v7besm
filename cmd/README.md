@@ -209,13 +209,13 @@ Where a fixed buffer can be sized so that nothing has to test it, do that instea
    ../../rootfs/bin/<x>`. Paths resolve against `b6fsutil`'s working directory
    (`build/kernel/test`), not against the manifest.
 4. A line in [../etc/rc](../etc/rc) if the boot script wants it — `/etc/rc` runs with **no
-   terminal**, so anything meant to be seen redirects to `/dev/console` for itself. Its assertion
-   has one home, `kernel/test/console`.
+   terminal**, so anything meant to be seen redirects to `/dev/console` for itself. Nothing
+   asserts `/etc/rc` any more: `kernel/test/console` was its one home and is deleted.
 5. The test, per §9.
 
-Two lists must grow with the program, and nothing catches them but a failing test: `ROOTFS_FILES`
-in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt), and the hard-coded `ls /bin`
-expectations in `kernel/test/console.ini` and `kernel/test/session.expected`.
+One list must grow with the program and nothing catches it but a failing build: `ROOTFS_FILES`
+in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The hard-coded `ls /bin`
+expectations that used to catch it as well went with `kernel/test/console` and `session`.
 
 The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and since the manual went on it (§10)
 and `man(1)` and `manview(1)` after it there are **187 free** — the whole of `/usr/man` is 302 of

@@ -1,4 +1,0 @@
-c 622 0/1 /dev/console
-c 622 0/0 /dev/tty0
-c 622 7/3 /dev/tty1
-- 644 0/0 /etc/utmp

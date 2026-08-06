@@ -52,7 +52,7 @@
 # NOTHING WRITES THIS IMAGE IN PLACE.  root.img and root3072.disk are build artifacts, and
 # the one test that needs a writable filesystem -- kernel/test/session, which creates files,
 # runs sync(2) and then fscks what reached the disk -- converts its own copy at its own
-# volume number first (kernel/test/run-session.sh).  The same trick, `b6fsutil -a', is how
+# volume number first, as the deleted run-*.sh drivers did.  The same trick, `b6fsutil -a', is how
 # that test gets its script onto the image without a line here, and how coninit can be put
 # back as /etc/init by hand when a console failure needs bisecting against a program that
 # links neither crt0 nor libc.
@@ -61,7 +61,7 @@
 # inode below the boot path, and kernel/test/boot + kernel/test/console, which boot a
 # kernel against it.  kernel/test/login boots a copy too and is the one that WRITES the most
 # of it -- /etc/utmp made and filled in, and a device node's owner changed by login(1) -- which
-# is why run-login.sh fscks what comes back and diffs four inodes out of `b6fsutil -v -v'.
+# is why the deleted run-login.sh fscked what came back and diffed four inodes; nothing does now.
 #
 # THE DEVICE NUMBERS ARE kernel/conf.c's, and that file is the authority: the major is the
 # row index in bdevsw[] (0 md, 1 mb) or cdevsw[] (0 console, 1 mem, 2 tty, 3 rmd, 4 rmb).
@@ -859,7 +859,7 @@ mode 0644
 #
 # lib/test/*.c, the same twenty-four images b6sim runs (lib/test/CMakeLists.txt), staged
 # into build/rootfs/usr/test/ by b6_libtest() and run HERE by the booted kernel --
-# kernel/test/libtest.sh drives them, kernel/test/run-libtest.sh diffs what they wrote.
+# The image-side runner that drove them is deleted; they are staged and no longer executed.
 # Under b6sim every syscall is the host's; this is where sysent[] meets a real caller.
 #
 # THE LIST IS ALSO IN lib/test/progs.cmake, which is what kernel/test/CMakeLists.txt reads
@@ -1037,7 +1037,7 @@ mode 0755
 # are not compiled by, for or into the compiler chain.  They are here rather than in /bin
 # because v7 put man here, the shell's default path is `:/bin:/usr/bin' (cmd/sh/msg.c), and
 # both are programs about /usr and not about the root -- which is also why the ls /bin
-# expectations in kernel/test/console.ini and session.expected did not have to move for them.
+# expectations in the deleted kernel/test/console.ini and session.expected did not have to move.
 
 file /usr/bin/man       # cmd/man -- task C25b, and the first program on this image that
                         # reads /usr/man above.  IT DOES NOT FORMAT ITSELF: it finds the file
@@ -2375,7 +2375,7 @@ mode 0755
 # which is what makes b6sim and this kernel agree -- b6sim's ioctl is a no-op and this
 # console is ECHO|CRMOD|XTABS, so GT and NONL would otherwise differ and change the cursor
 # motion curses emits.  curstty is the half that follows from that: it does NOT set My_term,
-# and therefore runs HERE ONLY.  It is also the LAST program libtest.sh runs, because
+# and therefore ran HERE ONLY -- nothing runs it now.  It was also the LAST program, because
 # gettmode() clears XTABS on the real console and only endwin() puts it back.
 file /usr/test/cursest
 source ../../rootfs/usr/test/cursest

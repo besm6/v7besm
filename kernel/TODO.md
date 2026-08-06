@@ -235,8 +235,10 @@ the line's own queue until `consul_read()` takes it. **This is the bug a real op
 and `more(1)` was the first program to meet it: an arrow key sends three bytes in one instant,
 the middle one went, and the pager rang the bell instead of scrolling.
 
-With both in, `console` and `edit` are **enabled again** and the whole weekly suite has run
-100% three times over; `console` measured 6 of 6 where it was 0 of 6 before.
+With both in, `console` and `edit` were enabled again and the whole weekly suite ran 100%
+three times over, `console` measuring 6 of 6 where it had been 0 of 6. **All of those tests
+have since been deleted**, so this is now a record of what was wrong rather than something
+under test.
 
 **What is left is an optimisation, not a bug.**
 
@@ -267,7 +269,7 @@ word the middle is whole words on both sides. Out of phase, every word of the tr
 two on the other side, and the copy is still one `fubyte`/`subyte` per byte: a `useracc()` range
 walk and a mode-toggle bracket for six bits of payload.
 
-**How much it is.** `nioshift` (systm.h; `libtest.ini.in` prints it on every run) said **94,805
+**How much it is.** `nioshift` (systm.h; the deleted `libtest.ini.in` printed it on every run) said **94,805
 bytes** of `libtest`'s 1,253,598, against 871 left on the in-phase arm and 1,157,922 through the
 bulk path. So this is now the *whole* of what `iomove()` still moves a byte at a time, and it is
 7.6% of the traffic and a much larger share of the time. `session` is 2,894 bytes, unchanged by
@@ -351,8 +353,8 @@ obvious place, and it currently does nothing but bound the minor), or carry the 
 SIMH does and take it from the drive rather than the controller. The first is smaller and needs
 no new state; it costs one exchange per open of a drive that has not been read.
 
-**What is asserted meanwhile.** `kernel/test/run-tar.sh` requires the **wrong** number and says
-why, in `kernel/test/fsck.sh`'s `hostblind` style: the day this is fixed that check fails and
+**What is asserted meanwhile.** Nothing: `kernel/test/run-tar.sh` required the **wrong** number
+and said why, so that the day this was fixed the check would fail and
 has to be tightened to 3100, which is what stops the deferral being forgotten.
 
 **Size.** Small.

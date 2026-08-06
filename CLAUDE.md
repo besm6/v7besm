@@ -41,8 +41,7 @@ Makefiles are wrappers over the same `build/` tree. From the repo root:
 ```sh
 make            # configure into build/ and build everything
 make test       # build unit tests without running them
-make run        # run the daily suite via ctest (everything less the `weekly' label)
-make weekly     # slow tests: do not use for regular development
+make run        # run the test suite via ctest
 make install    # install b6* tools, include/, and the archives into ~/.local
 make clean; make debug; make    # reconfigure as Debug (default RelWithDebInfo)
 ```
@@ -221,31 +220,26 @@ copy. Sources are compiled *into* `kernel/test/` via `b6_find_src()`/`b6_test_ob
 `-DKERNEL`, into per-program object dirs (shared outputs would race under `make -j`).
 
 - **Run every MMU test with `set mmu cache`** — the БРЗ hazards are invisible otherwise.
-- Several tests boot the whole kernel (`login`, `multi`, `session`, `files`, `libtest`,
-  `swap`, `utils`, `edit`, `fsinfo`, `dd`, `mkfs`, `fsck`, `mount`, `console`, `filters`,
-  `inspect`, `tar`, `accounts`, `toolchain`). `toolchain` is C9's closing claim and the
-  only one that needs the *host* `b6cc`: the machine runs `cc -o hello hello.s` with
-  nothing pinned — its own `/usr/bin` search, its own `/lib`, its own `/usr/include` — and
-  the a.out it produces is compared byte for byte with the host build's. They hold
-  one resource lock, so they run one at a time — about seventy seconds of serial wall clock,
-  the critical path of the whole suite. **They are labelled `weekly` and are not in the
-  daily suite**: `make run` and `cd kernel/test && make test` exclude them (`-LE weekly`),
-  and `make weekly` (top level or in `kernel/`) is what runs them. **Do not use these as
-  a pre-commit gate** — do not run them at all; `make run` and `cd
-  kernel/test && make test` are what a change is accepted on, and the latter rebuilds
-  `root.img` first. `boot` is the exception, left in the daily suite as a one-second smoke
-  test that the kernel still reaches a shell prompt.
-- **The libc suite runs twice on purpose**: under `b6sim` (label `lib`) and off the image
-  under the booted kernel (label `kernel`), diffed against the *same* `.expected`. Disagreement
-  means one harness is wrong. `b6_libtest()`'s `SIMONLY`/`IMAGEONLY` mark the exceptions.
-  Adding a program = one `b6_libtest()` call + `lib/test/progs.cmake` + `root.manifest` +
-  a line in `kernel/test/libtest.sh`. **A native test that is not a libc test wants the
+- **The nineteen tests that booted the kernel and typed at it are gone**, with the `weekly`
+  label and `make weekly` that selected them — `console`, `session`, `login`, `multi`,
+  `files`, `utils`, `filters`, `inspect`, `toolchain`, `edit`, `fsinfo`, `dd`, `mkfs`,
+  `tar`, `fsck`, `mount`, `accounts`, `swap` and the image-side `libtest`, with their guest
+  scripts, `run-*.sh` drivers and `.expected` transcripts. **`boot` is what is left**: a
+  one-second smoke test that the kernel still reaches a shell prompt. So nothing now
+  asserts a typed dialogue, `/etc/rc`, getty/login, a mounted second filesystem, `fsck`
+  repairing a pack, or the self-hosting `cc` run — when a README says one of those is
+  covered, it is describing a test that no longer exists.
+- **The libc suite ran twice on purpose** — under `b6sim` (label `lib`) and off the image
+  under the booted kernel — diffed against the *same* `.expected`, so that disagreement said
+  one harness was wrong. That found two bugs. **The image-side half is gone** with the rest
+  of the weekly tests; only the `b6sim` run remains, and `b6_libtest()`'s `IMAGEONLY` now
+  marks a program nothing runs. The `/usr/test` programs are still staged onto the image.
+  Adding a program = one `b6_libtest()` call + `lib/test/progs.cmake` + `root.manifest`.
+  **A native test that is not a libc test wants the
   other, cheaper shape**: `b6_prog(... SOURCES ...)` + `b6_progtest()` staged into
   `build/rootfs/test/`, which needs none of those four and can link sources `b6_libtest()`
   cannot (it compiles exactly one `.c`). `cmd/novi/test/` and `cmd/libaout/rootfs/` use it.
-- ctest labels: `kernel` (SIMH), `lib` (b6sim), `rootfs` (size checks), `sh`, and `weekly`
-  — a *second* label on the kernel tests that boot, so `-L kernel` still names the whole
-  SIMH suite and `-LE weekly` takes the slow half out of it.
+- ctest labels: `kernel` (SIMH), `lib` (b6sim), `rootfs` (size checks) and `sh`.
 - Every `cmd/` tool has a GoogleTest suite under `cmd/<tool>/test/`; `cmd/cpp/test/` is a full
   C11 (N1570) conformance suite built on the `PreprocessorTest` fixture.
 - **A lone unexpected failure is usually the harness, not the change.** The suite runs in

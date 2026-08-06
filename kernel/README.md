@@ -29,8 +29,7 @@ touches the new image. With no drum that `bread` comes back `B_ERROR` and every 
 ```sh
 cd kernel && make          # produces `unix' (BESM-6 a.out), unix.nm and unix.dis
 make run                   # boot it under SIMH (`besm6 unix.ini')
-make test                  # the fast tests (label `kernel' less `weekly')
-make weekly                # the slow ones -- the tests that boot the kernel
+make test                  # the kernel tests (label `kernel')
 make clean
 ```
 
@@ -67,44 +66,26 @@ These cover the image the build produces ([../root.manifest](../root.manifest) �
 |---|---|
 | `fstest` | the superblock and root inode read through the real `md` driver, buffer cache and `sbcheck()`, strictly below the boot path |
 | `boot` | process 1 leaves the kernel, execs `/etc/init`, which forks `/bin/sh`, and the shell **prompts** |
-| `console` | a typed dialogue with that shell: erase, kill, a line longer than a clist block, `>/dev/tty`, `pwd`, `ls /bin`, and `^D` round through `/etc/rc` to the next prompt. It failed about one run in three until TODO.md task 35 was answered — `scintr()` left ПРП standing for a Consul nobody had open — and is enabled again, 6 of 6 |
-| `session` | the shell **writes** — files, an inode past its direct blocks, `sync` — and the host then fscks the container and diffs what was written |
-| `files` | the file-management set rearranges a tree and then re-permissions it; the modes and owners are diffed on the host, out of `b6fsutil -v -v` |
-| `utils` | the clock moved and read back, an alarm delivered, a background process killed, a script branching on `test`, the first pipeline this image has run, and a Cyrillic word carried through `exece()` and through filename generation |
-| `libtest` | the [../lib/test/](../lib/test/) programs run off `/usr/test`, each matching **the same `.expected` file `b6sim` is held to** (`memt` and `shellt` run here only) — and `iomove()`'s own counters say the bulk copy path carried it |
-| `login` | multi-user: `/etc/ttys`, a getty per line, a password through `crypt(3)`, `/etc/utmp`, and `multiple()` respawning the getty a logout killed — all on Consul 1 |
-| `multi` | **two people logged in at once**, one per Consul: root on `/dev/console` and guest on `/dev/tty1`, each shell naming its own terminal, guest's file read by root's shell, and two different non-zero owners on two terminal nodes at the sync |
-| `swap` | the same kernel on a machine of **31 pages** (`phymem` deposited before the boot), running more processes than fit: `sched()`/`newproc()` swap through the drum, two processes share one text, and the counters say so |
 
-`boot` attaches the pristine disk read-only — an assertion in itself — and the others each convert
-their own copy at their own volume number, so no test ever writes a build artifact. The rest of
+`boot` attaches the pristine disk read-only — an assertion in itself. The rest of
 [test/](test/) exercises one kernel component at a time against a hand-built environment; see
 "Writing a standalone SIMH test" below.
 
-**Everything in that table but `boot` is `weekly` and does not run on every edit.** They all
-hold the `simh_boot` resource lock — a typed dialogue drops characters under load, and
-`login.ini`/`multi.ini` bind fixed ports besides — so they run strictly one at a time, about
-seventy seconds of serial wall clock, which was the critical path of the whole suite.
-`make test` here (and the top-level `make run`) now excludes the label; `make weekly` selects
-it. **It is opt-in and not a pre-commit gate**: run it when this half of the suite is what you
-want, not as acceptance criteria for a change. `boot`
-stays in the daily suite because it costs a second and answers the question that matters most
-after a kernel edit: does the thing still reach a shell prompt. The lock's own rationale, and
-the measurement behind it, are in [test/CMakeLists.txt](test/CMakeLists.txt).
+**Nineteen further tests used to sit in that table and are gone**, with the `weekly` label and
+the `make weekly` target that selected them: `console`, `session`, `files`, `utils`, `filters`,
+`inspect`, `toolchain`, `edit`, `fsinfo`, `dd`, `mkfs`, `tar`, `fsck`, `mount`, `login`,
+`multi`, `accounts`, `swap` and the image-side `libtest`, together with their guest scripts,
+`run-*.sh` drivers, `.expected` transcripts and `test/ttyhost.c`. They booted the kernel and
+drove it by typing at the guest, held the `simh_boot` lock, and were about seventy seconds of
+serial wall clock.
 
-**`multi` is the one test with a host program of its own**, [test/ttyhost.c](test/ttyhost.c), and
-the reason is worth knowing before the next test wants a second terminal. `attach tty25 console`
-binds Consul 1 to the simulator's own stdin/stdout, which is what lets bare `expect`/`send` drive
-it; Consul 2 is a mux line, and `vt_puts()` (`besm6_tty.c`) discards everything the guest prints to
-it while nothing is connected. Two things had to be fixed in the simulator rather than worked
-around: `vt_getc()` tested only `TMXR_VALID`, so a character injected by `send TTY:n,"…"` — which
-SCP tags `SCPE_KFLAG` — was dequeued and dropped, making `send` a silent no-op on every BESM-6 mux
-line; and `attach tty26 4199` does **not** bind line 26, `tty_attach()` passing the string to
-`tmxr_attach()` so that the connection goes to the lowest free line, which is line 1. Even with
-both fixed, a *listener* is wrong for a test: the accept happens in a poll that runs at most once
-per second of host time, i.e. after `merge()` has forked the getty and that getty has prompted into
-the void. So `ttyhost` binds the port before the simulator starts and `multi.ini` has the simulator
-**dial out** (`Line=26,Connect=…`), which connects while the .ini is being parsed.
+**What went with them is worth being explicit about**, because much of this tree's prose still
+claims it: nothing now asserts a typed dialogue, erase and kill, `/etc/rc` or the boot date,
+getty and login, two users at once, a second filesystem mounted, `fsck` repairing a pack, the
+swapper under memory pressure, `ed` under a real kernel, or the self-hosting `cc` run that was
+task C9's closing claim. The libc programs are still staged onto `/usr/test` but only `b6sim`
+runs them. `boot` stays because it costs a second and answers the question that matters most
+after a kernel edit: does the thing still reach a shell prompt.
 
 ## Reading list
 
@@ -408,30 +389,27 @@ What the ones already in [test/](test/) cost to get right:
 * **A rule armed after its data has gone by never fires**, and the run then stalls somewhere later
   rather than failing where the mistake is. With one stream that costs nothing — the simulator is
   stopped at every match, so the next rule is always armed before the guest can answer. With **two**
-  (`multi.ini`) it is the whole design problem: while one line's `step` is running the other line is
+  it was the whole design problem, and `multi.ini` was where it was solved: while one line's `step` is running the other line is
   free to print. Sequence the two so that only one is ever talking, and make the hand-over a rule on
   the *other* line. Actions are pushed ahead of whatever is already pending (`sim_brk_setact`), so
   two rules matching at once is safe; a bare `send`, though, is issued at parse time, before `go`.
 * **A second terminal is a mux line and needs a client**, `expect TTY:26,`/`send TTY:26,` rather than
-  the bare forms, and the simulator dialling out to a host program rather than listening. See "The
-  tests" above — the reasoning is all in `test/multi.ini`'s and `test/ttyhost.c`'s headers.
-* **`send` DROPS A CHARACTER.** Under `CTEST_PARALLEL_LEVEL=8` `session` fails perhaps one run in
-  four with `s: not found` — the shell really received `s` where the script sent
-  `sh /etc/session`. Measured on an unmodified tree. Re-run before believing it. This bullet used
-  to end "and it is not the kernel"; that half is **withdrawn** — the drop also happens on an idle
-  machine, reproducibly, on the *first* character of a send issued straight out of an `expect`, and
-  an input overrun in `scintr()` is one of the two candidate mechanisms. `console.ini` pays
-  `send after=20000` to avoid it and its header says why. **`login.ini` pays `delay=` on top of
-  that**, because a `getty` reading a name in RAW mode loses the *second* character too — one
-  `read(2)` and one `write(2)` per character from user mode, where a shell in canonical mode takes
-  the same stream whole. That was the first evidence favouring the overrun, and the overrun
-  is what it was: SIMH's `CONSUL_IN` is one character deep and was overwritten before the guest
-  read it, while `scintr()` left ПРП standing for a closed line. Both are fixed; **[TODO.md](TODO.md)
-  task 35** now owns only the question of whether the pacing is still needed.
+  the bare forms, and the simulator dialling out to a host program rather than listening. The
+  worked example was `test/multi.ini` with `test/ttyhost.c` beside it; both are deleted, so
+  anything wanting a second Consul again starts from this paragraph and the git history.
+* **`send` DROPPED A CHARACTER, and it was two bugs.** SIMH's `CONSUL_IN` is one character deep
+  and `consul_receive()` overwrote it whether or not the guest had read it, so anything arriving
+  faster than the guest services ПРП was lost; and `scintr()` skipped a Consul that was not open
+  **without dismissing its ПРП bits**, which are cleared there and nowhere else, so a "printing
+  finished" landing just after `ttyclose()` re-raised GRP_SLAVE for ever. The first is what a
+  real operator meets — an arrow key sends three bytes in one instant and the middle one went;
+  the second is what made a boot dialogue stall one run in three. Both are fixed
+  ([TODO.md](TODO.md) task 35), and every `send` that remains still carries
+  `after=20000 delay=20000` because nobody has re-measured whether it is needed.
 * **Never end an `expect`/`send` file on a rule a bare prompt satisfies.** All the rules are armed
   at once, so when a stage stalls the run falls through to that one at the next prompt and reports
   PASS. `console.ini` was doing exactly that, and had been passing without running its last four
-  stages; the drop above is what was stalling it. Its closing rule is a unique string now.
+  stages. That file is gone now, but the trap is not: check any new dialogue for it.
 * **The interval timer cannot be switched off.** It free-runs at 250 Hz and the SIMH `CLK` device has
   no `DEV_DISABLE`, so a second tick may land mid-run. Phrase every assertion to tolerate exactly one
   — a draft `p_cpu >= 1` check once passed *only because* a second tick arrived after the aging code
@@ -447,11 +425,12 @@ What the ones already in [test/](test/) cost to get right:
   `mmu_store()` wrote, and it is 0 or 1 depending on which half-word the storing instruction sat in,
   so an unmasked comparison changes when you recompile — mask with `&07777777777777777`), and no
   space may appear inside the condition token. `ex <addr>` prints it untagged and is what FAIL
-  diagnostics should use. `test/swap.ini.in` is the worked example.
-* **`make` is not enough before `ctest`: use `make test`, `make weekly` or the top-level `make run`
-  — never a bare `ctest`.** `swap.ini` is *generated*
-  from `unix.nm` by `genboot.cmake`, because the `phymem` it deposits and the three counters it
-  asserts on are link-time addresses. That generation hangs off `build_tests`, which plain `make`
+  diagnostics should use. `test/swap.ini.in` was the worked example, and is deleted; `boot.ini.in`
+  is the one generated `.ini` left.
+* **`make` is not enough before `ctest`: use `make test` or the top-level `make run`
+  — never a bare `ctest`.** `boot.ini` is *generated*
+  from `unix.nm` by `genboot.cmake`, because the `spin` address it breaks on is a link-time
+  address. That generation hangs off `build_tests`, which plain `make`
   does not build — so a kernel change followed by a bare `make; ctest` runs the **previous** kernel's
   addresses. The deposit then lands on whatever now lives at the old `phymem`, and the failure looks
   nothing like the cause: the banner reports a *full* machine (the squeeze silently missed) and the

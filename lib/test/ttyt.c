@@ -16,7 +16,7 @@
 //
 // WHY THE ANSWERS ARE WHAT THEY ARE, since each is a claim about a different file:
 //
-//   ttyname(0) == "/dev/console".  kernel/test/libtest.sh redirects only descriptors 1 and 2,
+//   ttyname(0) == "/dev/console".  The deleted image-side runner redirected only 1 and 2,
 //   so 0 is still the shell's terminal.  ttyname() fstat()s it and scans /dev for a character
 //   special file with the same I-NUMBER -- not the same device number, which would be
 //   ambiguous here: root.manifest gives /dev/console and /dev/tty0 the same major and minor

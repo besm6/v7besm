@@ -5,11 +5,12 @@
 # against the checked-in .expected file (see run-test.sh); a program that needs arguments lists
 # them in a matching .args file.
 #
-# SINCE TASK 25c THE SAME IMAGES ALSO GO ON THE ROOT FILESYSTEM, as /usr/test/<name>, and the
-# booted kernel runs them from there (kernel/test/libtest.{sh,ini}, run-libtest.sh).  That is
-# where sysent[]'s rows meet a real caller: under b6sim every syscall is the host's, and a
-# kernel bug cannot show.  The two runs share ONE LINKED IMAGE -- staged by a copy, not by a
-# second link -- so a difference between them can only be the harness, never the compiler.
+# SINCE TASK 25c THE SAME IMAGES ALSO GO ON THE ROOT FILESYSTEM, as /usr/test/<name>.  The
+# booted kernel used to run them from there and diff each against the same .expected -- which
+# is where sysent[]'s rows met a real caller, since under b6sim every syscall is the host's and
+# a kernel bug cannot show.  THAT RUN IS DELETED with the rest of the tests that booted, so
+# only the b6sim half survives; the programs are still staged, and /usr/test is now a picture
+# of the disk rather than something under test.
 #
 # The two halves used to belong to two helpers that each did one of them: b6_prog() in
 # scripts/BesmCross.cmake stages and size-checks but never runs, b6_libtest() ran but never
@@ -50,7 +51,10 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/progs.cmake)
 #
 #   SIMONLY    b6sim test, no staging   -- spawn, whose premise is that /bin/sh cannot be exec'd
 #   IMAGEONLY  staging, no b6sim test   -- shellt, which needs a shell that really starts,
-#              and memt, which reads and writes the kernel's own memory through /dev/mem
+#              and memt, which reads and writes the kernel's own memory through /dev/mem.
+#              THESE SEVEN NOW RUN NOWHERE: shellt, memt, suidt, unprivt, ttyt, dirt and
+#              curstty were only ever run off the image, and the test that did that is
+#              deleted.  They are still built and still staged; nothing executes them.
 #   PURE       link -n (NMAGIC)         -- puret, the one program that is about shared text
 #
 # THE STAGED FILE IS A COPY OF THE LINKED ONE, not a second link.  Two links of one source

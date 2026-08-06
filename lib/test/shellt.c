@@ -9,8 +9,8 @@
 // it becomes reachable for the first time: the command's exit status coming back through
 // wait(), the child's inherited descriptors, and a pipe with data in it.
 //
-// kernel/test/libtest.sh runs it as ./shellt from /usr/test with both descriptors on a
-// file, and kernel/test/run-libtest.sh diffs the result -- lib/test/CMakeLists.txt
+// The deleted image-side runner ran it as ./shellt from /usr/test with both descriptors on
+// a file and diffed the result; nothing runs it now -- lib/test/CMakeLists.txt
 // registers it IMAGEONLY, so no b6sim case exists to fail.
 //
 // WHAT MAY REACH THE .expected FILE.  No pid, no descriptor number and no time: the only

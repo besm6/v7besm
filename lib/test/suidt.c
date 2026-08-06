@@ -110,7 +110,7 @@ static int becomeguest(void)
 
 // Run one command as guest and hand back its wait status, or -1 if the fork or the drop
 // failed.  A null `arg2' makes it a one-argument command, which is what mkdir and rmdir take
-// and mv does not.  stdout is a file here (libtest.sh redirects it), so it must be flushed
+// and mv does not.  stdout was a file here (the image-side runner redirected it), so it must be flushed
 // before the fork or the child would inherit a copy of the buffer.
 static int rundropped(const char *path, const char *arg, const char *arg2)
 {

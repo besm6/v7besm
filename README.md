@@ -82,12 +82,10 @@ is the program above, ready to build.
 - **92 programs.** The shell and its scripts, the file commands, two dozen text filters
   (`grep`, `sed`, `sort`, `diff`, `tr`, …), two editors — `ed` and the full-screen `novi` —
   the system-inspection set (`ps`, `vmstat`, `iostat`, `dmesg`), and the toolchain above.
-- **The C library.** libc, libm, libtermcap and libcurses, cross-built and tested twice: once
-  under a user-level simulator on the host, once off the disk image under the booted kernel,
-  against the same expected output.
+- **The C library.** libc, libm, libtermcap and libcurses, cross-built and tested under a
+  user-level simulator on the host.
 
-Everything above is tested. `make run` is 1,257 checks; `make weekly` adds the slow ones,
-seventeen of which boot the whole kernel and drive it by typing at it.
+Everything above is built and most of it is tested: `make run` is the whole suite.
 
 ## What is missing
 

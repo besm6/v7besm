@@ -12,17 +12,13 @@
 # make        -- build the `unix' image (ends by printing `b6size -w unix')
 # make run    -- boot it under SIMH (besm6 unix.ini)
 # make tests  -- build the kernel/test SIMH programs, do not run them
-# make test   -- build and run the fast kernel tests (label `kernel' less `weekly')
-# make weekly -- build and run the slow ones: the tests that boot the kernel under SIMH and
-#                drive it by typing at it.  About a minute, serialized by a resource lock,
-#                and deliberately out of the daily loop.  Opt-in: run it when this half of
-#                the suite is what you want, NOT as a pre-commit gate.
+# make test   -- build and run the kernel tests (label `kernel')
 # make clean  -- remove the top-level build tree
 
 TOP   := ..
 BUILD := $(TOP)/build
 
-.PHONY: all run tests test weekly clean
+.PHONY: all run tests test clean
 
 all: | $(BUILD)
 	cmake --build $(BUILD) --target kernel
@@ -34,13 +30,7 @@ tests: | $(BUILD)
 	cmake --build $(BUILD) --target tests
 
 test: tests
-	ctest --test-dir $(BUILD) --output-on-failure -L kernel -LE weekly
-
-# Hangs on `tests' for the reason `test' does -- ctest never builds -- and it matters more
-# here: this is exactly the set that boots root.img, so a stale image would make every one
-# of these test yesterday's tree.
-weekly: tests
-	ctest --test-dir $(BUILD) --output-on-failure -L weekly
+	ctest --test-dir $(BUILD) --output-on-failure -L kernel
 
 clean:
 	rm -rf $(BUILD)

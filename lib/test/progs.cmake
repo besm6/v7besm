@@ -53,9 +53,10 @@
 # so the default path would work too, but naming it is what exercises tgetent's $TERMCAP-is-a
 # -file-name branch, which is half of what termcapt is for.
 #
-# The order is the order kernel/test/libtest.sh runs them in, which is the order
-# lib/test/CMakeLists.txt registers them in: roughly the order libc was built up, so a
-# failure early in the list is a failure in something everything after it depends on.
+# The order is lib/test/CMakeLists.txt's registration order -- roughly the order libc was
+# built up, so a failure early in the list is a failure in something everything after it
+# depends on.  It was also the order the deleted image-side runner used.  The list survives
+# because root.manifest and kernel/test/CMakeLists.txt both stage /usr/test from it.
 set(B6_LIBTEST_IMAGE
     hello vararg errno procs sbrkt malloct strings gen strtolt environ jmp headers
     stdiot printft scanft execs shellt memt kctlt suidt unprivt timet pwent ttyt dirt signals
