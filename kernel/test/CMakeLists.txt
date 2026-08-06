@@ -68,9 +68,10 @@ macro(b6_test prog)
 endmacro()
 
 # The tests that BOOTED the whole kernel and drove it by typing at the guest are gone --
-# nineteen dialogues and the image-side half of the libc suite, with the `weekly' label
-# and `make weekly' that selected them.  `boot' is what is left of that half: a one-second
-# smoke test that the kernel still reaches a shell prompt.
+# eighteen dialogues and the image-side half of the libc suite, with the `weekly' label
+# and `make weekly' that selected them.  Two are left, both at the foot of this file:
+# `boot', a one-second smoke test that the kernel still reaches a shell prompt, and
+# `multi', which carries on from there into multi-user mode with two people logged in.
 
 # hello is the odd one out: it links no b$* helpers (no -lruntime) and its .nm is left in
 # symbol order rather than address order.
@@ -434,16 +435,15 @@ set_tests_properties(rootimg_link_more PROPERTIES LABELS kernel)
 # execs /etc/init, init forks /bin/sh and the shell PROMPTS -- rather than panicking (no
 # root fs), falling into the icode's failure loop, stopping anywhere in the kernel or
 # hanging.  Still the regression guard for the b_un.b_addr fat-pointer fix and for the
-# whole path into user mode, and the only test left that boots at all: console, session
-# and the image-side libtest went with the rest of the weekly half.
+# whole path into user mode: console, session and the image-side libtest went with the rest
+# of the weekly half.  `multi' below is the other test that boots, and carries on where this
+# one stops.
 #
 # `boot' ATTACHES root3072.disk READ-ONLY, which is an assertion in itself: the boot path
-# needs no writes.  It is the last of the tests that drove the guest by typing at it, and
-# with the other nineteen gone the RESOURCE_LOCK it still carries holds nothing back -- a
-# lock with one member serialises nothing.  It stays because it costs nothing and because
-# anything added here that types at the guest, or binds a port, wants it: SIMH drops
+# needs no writes.  The RESOURCE_LOCK is shared with `multi', and is load-bearing: SIMH drops
 # characters out of a `send' when the host is oversubscribed, which is what the lock was
-# bought to treat.  ../TODO.md task 35 has the two bugs that were found underneath it.
+# bought to treat, and this test costs a second of the wall clock they take between them.
+# ../TODO.md task 35 has the two bugs that were found underneath it.
 #
 # `spin' is a LINKED address that moves as the kernel grows, so boot.ini is
 # GENERATED from unix.nm at build time (genboot.cmake) rather than hardcoded.  The generation
@@ -467,6 +467,38 @@ if(BESM6)
     add_test(NAME boot COMMAND ${BESM6} ${CMAKE_CURRENT_BINARY_DIR}/boot.ini
              WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(boot PROPERTIES LABELS kernel RESOURCE_LOCK simh_boot)
+
+    # ---------------------------------------------------------------------------------
+    # multi -- TWO PEOPLE LOGGED IN AT ONCE, on the two Consul typewriters, on its own volume
+    # (3085).  Task 29c.  `boot' stops at the single-user prompt; this one types ^D and goes
+    # the rest of the way -- /etc/rc, a getty per line of /etc/ttys, crypt(3) against
+    # /etc/passwd, login dropping privilege -- and then puts root on /dev/console and guest
+    # on /dev/tty1, each shell naming its own line, guest's file read by root's shell, and
+    # NEITHER LOGGING OUT.  So the disk afterwards carries two different non-zero owners on
+    # two terminal nodes at the same instant, which no single session can produce however it
+    # is driven.
+    #
+    # IT NEEDS A HOST PROGRAM, and it is the only test here that does.  Consul 1 is bound to
+    # the simulator's own stdin/stdout by `attach tty25 console'; Consul 2 is a mux line, and
+    # besm6_tty.c's vt_puts() discards everything printed to it while nothing is connected.
+    # ttyhost binds a port, the simulator DIALS OUT to it as multi.ini is parsed -- before
+    # `go', which is what removes the race against the once-a-second connection poll -- and it
+    # writes down what Consul 2 printed.  It types nothing: multi.ini drives both lines, with
+    # `send TTY:26,' for the second.  ttyhost.c's header is the account.
+    #
+    # `ttyhost' is a HOST executable, the one in this directory: everything else here is
+    # BESM-6 code built by the b6* toolchain.  It is not installed.
+    #
+    # No fixture: run-multi.sh converts its own writable copy of root.img, which TEST_TARGETS
+    # already builds, and the `kernel' target supplies the ../unix it loads.
+    add_executable(ttyhost ${CMAKE_CURRENT_SOURCE_DIR}/ttyhost.c)
+    list(APPEND TEST_TARGETS ttyhost)
+
+    add_test(NAME multi
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-multi.sh
+                ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR} $<TARGET_FILE:ttyhost>
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(multi PROPERTIES LABELS kernel TIMEOUT 600 RESOURCE_LOCK simh_boot)
 
 endif()
 

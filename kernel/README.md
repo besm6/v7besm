@@ -66,26 +66,28 @@ These cover the image the build produces ([../root.manifest](../root.manifest) �
 |---|---|
 | `fstest` | the superblock and root inode read through the real `md` driver, buffer cache and `sbcheck()`, strictly below the boot path |
 | `boot` | process 1 leaves the kernel, execs `/etc/init`, which forks `/bin/sh`, and the shell **prompts** |
+| `multi` | ^D out of that shell and the rest of the way: `/etc/rc`, a getty per line of `/etc/ttys`, `crypt(3)`, and **two people logged in at once** on the two Consuls |
 
-`boot` attaches the pristine disk read-only — an assertion in itself. The rest of
-[test/](test/) exercises one kernel component at a time against a hand-built environment; see
-"Writing a standalone SIMH test" below.
+`boot` attaches the pristine disk read-only — an assertion in itself; `multi` writes, so it
+converts a copy of its own at volume 3085. Between them they hold the `simh_boot` lock and cost
+about five seconds. The rest of [test/](test/) exercises one kernel component at a time against
+a hand-built environment; see "Writing a standalone SIMH test" below.
 
-**Nineteen further tests used to sit in that table and are gone**, with the `weekly` label and
+**Eighteen further tests used to sit in that table and are gone**, with the `weekly` label and
 the `make weekly` target that selected them: `console`, `session`, `files`, `utils`, `filters`,
 `inspect`, `toolchain`, `edit`, `fsinfo`, `dd`, `mkfs`, `tar`, `fsck`, `mount`, `login`,
-`multi`, `accounts`, `swap` and the image-side `libtest`, together with their guest scripts,
-`run-*.sh` drivers, `.expected` transcripts and `test/ttyhost.c`. They booted the kernel and
-drove it by typing at the guest, held the `simh_boot` lock, and were about seventy seconds of
-serial wall clock.
+`accounts`, `swap` and the image-side `libtest`, together with their guest scripts, `run-*.sh`
+drivers and `.expected` transcripts. They booted the kernel and drove it by typing at the guest,
+held the `simh_boot` lock, and were about seventy seconds of serial wall clock.
 
 **What went with them is worth being explicit about**, because much of this tree's prose still
-claims it: nothing now asserts a typed dialogue, erase and kill, `/etc/rc` or the boot date,
-getty and login, two users at once, a second filesystem mounted, `fsck` repairing a pack, the
-swapper under memory pressure, `ed` under a real kernel, or the self-hosting `cc` run that was
-task C9's closing claim. The libc programs are still staged onto `/usr/test` but only `b6sim`
-runs them. `boot` stays because it costs a second and answers the question that matters most
-after a kernel edit: does the thing still reach a shell prompt.
+claims it: nothing now asserts erase and kill, a second filesystem mounted, `fsck` repairing a
+pack, the swapper under memory pressure, `ed` under a real kernel, or the self-hosting `cc` run
+that was task C9's closing claim. The libc programs are still staged onto `/usr/test` but only
+`b6sim` runs them. `multi` was brought back afterwards, and with it the typed dialogue, `/etc/rc`
+and the boot date, getty and login, and two users at once; `boot` stays because it costs a second
+and answers the question that matters most after a kernel edit — does the thing still reach a
+shell prompt — and because a failure there and a failure in `multi` are different diagnoses.
 
 ## Reading list
 
@@ -374,7 +376,7 @@ What the ones already in [test/](test/) cost to get right:
   in as the correct answer.
 * **`step N`, not `go`.** A broken switch or a lost gate *hangs* rather than failing, and `go` takes
   an address, not a step count. Every `.ini` uses `step 50000000` to turn a hang into a failure.
-* **A test that needs a TYPED line drives it with `expect`/`send`** (`console.ini`). Injected input
+* **A test that needs a TYPED line drives it with `expect`/`send`** (`multi.ini`). Injected input
   arrives through `sim_poll_kbd()`, which serves it *before* the real keyboard, so the dialogue runs
   under ctest with no terminal on stdin — a plain pipe into `besm6` is **not** a substitute. A match
   **halts** the simulator and then runs the rule's action, so each action must end with its own
@@ -389,14 +391,15 @@ What the ones already in [test/](test/) cost to get right:
 * **A rule armed after its data has gone by never fires**, and the run then stalls somewhere later
   rather than failing where the mistake is. With one stream that costs nothing — the simulator is
   stopped at every match, so the next rule is always armed before the guest can answer. With **two**
-  it was the whole design problem, and `multi.ini` was where it was solved: while one line's `step` is running the other line is
+  it is the whole design problem, and `multi.ini` is where it is solved: while one line's `step` is running the other line is
   free to print. Sequence the two so that only one is ever talking, and make the hand-over a rule on
   the *other* line. Actions are pushed ahead of whatever is already pending (`sim_brk_setact`), so
   two rules matching at once is safe; a bare `send`, though, is issued at parse time, before `go`.
 * **A second terminal is a mux line and needs a client**, `expect TTY:26,`/`send TTY:26,` rather than
-  the bare forms, and the simulator dialling out to a host program rather than listening. The
-  worked example was `test/multi.ini` with `test/ttyhost.c` beside it; both are deleted, so
-  anything wanting a second Consul again starts from this paragraph and the git history.
+  the bare forms, and the simulator dialling out to a host program rather than listening — because
+  the accept happens in `tmxr_poll_conn()`, polled once a second of *host* time, which lands after
+  the getty has already prompted into the void. `test/multi.ini` with `test/ttyhost.c` beside it is
+  the worked example; copy those two.
 * **`send` DROPPED A CHARACTER, and it was two bugs.** SIMH's `CONSUL_IN` is one character deep
   and `consul_receive()` overwrote it whether or not the guest had read it, so anything arriving
   faster than the guest services ПРП was lost; and `scintr()` skipped a Consul that was not open

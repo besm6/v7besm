@@ -124,10 +124,14 @@ runs it, and asserts on machine state; `b6sim` cannot substitute, and `mmutest` 
 copy.
 
 - **Run every MMU test with `set mmu cache`** — the БРЗ hazards are invisible otherwise.
-- **The tests that booted the kernel and typed at it are gone**; `boot`, a one-second smoke
-  test that the kernel still reaches a shell prompt, is what is left. When a README claims a
-  typed dialogue, `/etc/rc`, a mounted second filesystem or the self-hosting `cc` run is
-  covered, it describes a test that no longer exists.
+- **Two tests boot the kernel**, and only two: `boot`, a one-second smoke test that it still
+  reaches a shell prompt, and `multi`, which types `^D` at that prompt and goes on into
+  multi-user mode — `/etc/rc`, a getty per line of `/etc/ttys`, `crypt(3)`, and root on
+  `/dev/console` with guest on `/dev/tty1` at the same instant. `multi` is also the worked
+  example for typing at the guest and for driving the second Consul, which needs the host
+  program `kernel/test/ttyhost.c`. When a README claims a mounted second filesystem, `fsck`
+  repairing a pack, the swapper under pressure or the self-hosting `cc` run is covered, it
+  describes one of the eighteen tests that no longer exist.
 - The libc suite runs under `b6sim` only; adding a program = a `b6_libtest()` call +
   `lib/test/progs.cmake` + `root.manifest`. **A native test that is not a libc test wants the
   cheaper shape**: `b6_prog(... SOURCES ...)` + `b6_progtest()` staged into
