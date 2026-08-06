@@ -124,8 +124,8 @@ static char *rlabel[] = {
     "traps",
     "system calls",
     "bytes copied whole words at a time",
-    "bytes copied a byte at a time, in phase",
-    "bytes copied a byte at a time, out of phase",
+    "bytes copied a byte at a time, at the two ends",
+    "bytes copied a word at a time, out of phase",
 };
 
 // The tables, all at file scope.  The stack is 4,096 words and proc[NPROC] alone is 1,800;

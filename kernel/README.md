@@ -622,13 +622,18 @@ Facts that cost real time to establish and are not in `doc/`.
   purpose** — `usermem.S`'s header names the three callers that pass a pointer built from an `int`,
   whose byte-offset field reads as byte #5 and which the `aax #077777` mask is what saves. The byte
   offsets are peeled a level up, in `copyinb`/`copyoutb` ([ucopy.c](ucopy.c)), so an unaligned
-  `read`/`write` costs at most ten byte operations per 3072-byte block instead of 3072 — **but only
-  when the two pointers are IN PHASE**, on the same byte of their respective words. Out of phase
-  the transfer is still byte-by-byte, because every word of it straddles two on the other side and
-  nothing short of a machine-language funnel shift (`asx`/`yta`, used nowhere in this kernel) will
-  do. Measured under `libtest`: 87% of the bytes were already going through the bulk path, the
-  in-phase remainder fell from 70,231 bytes to 871, and 94,805 bytes — 7.6% of the traffic — are
-  still moved one at a time. `nioshift` is what says so on every run, and that is the open half.
+  `read`/`write` costs at most ten byte operations per 3072-byte block instead of 3072. Both
+  functions have the same three-part shape — peel to align the **destination**, move the middle,
+  peel the tail — and only the middle knows about phase. **In phase**, source byte *k* lands on
+  destination byte *k*, so the middle is `copyin`/`copyout`. **Out of phase**, every word straddles
+  two on the other side, and the middle is a **funnel shift written in C**: `unsigned` is exactly
+  one 48-bit word, so `(cur << 8k) | (nxt >> 8(6−k))` joins the tail of one source word to the head
+  of the next. No assembly, and the boundary is crossed once per six bytes rather than six times —
+  the variable shifts cost a call to `b$lsh`/`b$rsh`, which are three instructions apiece because
+  `asn`'s shift distance can be modified by an index register. So the byte-at-a-time arm is now the
+  **two ends only**, and `nioedge` bounds it at ten bytes a transfer. `nioshift` no longer means
+  "still to do"; it means "out of phase", and it must stay non-zero, because a bulk path that is
+  never taken looks exactly like one that is.
 * **`off_t` stays a byte count.** Making file offsets word counts is the BESM-6-shaped answer and
   would delete a `b$div` at every block crossing — but `BSIZE` is 3072 and not a power of two either
   way, the divide is **one per block** against 3072 bytes moved (`readi()` says so at the site), and

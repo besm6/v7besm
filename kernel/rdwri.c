@@ -203,10 +203,13 @@ int min(int a, int b)
 // not multiples of six.  It is 13% of the bytes and far more than 13% of the time, since a
 // byte on that arm costs a useracc() walk and a mode-toggle bracket of its own.
 //
-// Of that byte arm this change reaches the IN-PHASE half only -- 43% of it under libtest --
-// and reaches it completely: at most ten byte operations per 3072-byte block instead of 3072.
-// The out-of-phase half needs a shifting copy across word boundaries, which is a machine
-// assist this kernel does not have; nioshift is what says how much is still on the table.
+// Both halves of that byte arm are now reached, and reached completely: at most ten byte
+// operations per 3072-byte block instead of 3072.  The in-phase half went first (task 28,
+// copyin/copyout on the whole middle); the out-of-phase half followed (task 36), where the
+// middle is a funnel shift written in C -- `unsigned' is one 48-bit word, so two shifts and an
+// `or' join the tail of one source word to the head of the next, and the boundary is crossed
+// once per six bytes rather than six times.  What is left on the byte arm is the two ends of a
+// transfer, five bytes each at the worst, and nioedge is what counts them.
 //
 // EFAULT ACCOUNTING CHANGED, deliberately.  The byte arm used to advance u_base/u_count/
 // u_offset per byte, so a fault left a partial account; copyinb/copyoutb validate the whole

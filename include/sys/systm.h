@@ -79,11 +79,12 @@ extern int ntextout;  // ... and written to it, by the last in-core sharer leavi
 extern int ntextjoin; // xalloc(): a process attached to a text already in text[]
 
 // iomove() traffic, in BYTES, by the arm that carried it (kernel/ucopy.c).  Same argument as
-// the counters above: a copy path that is never taken looks exactly like one that is, and the
-// split between the two byte arms is what says how much is left to win.
+// the counters above: a copy path that is never taken looks exactly like one that is.  Both
+// middles move whole words now, so what the split says is how much of the traffic is out of
+// phase -- and nioedge, the only byte-at-a-time arm left, is bounded by ten bytes a transfer.
 extern int niobulk;  // whole words through copyin/copyout, both pointers on byte #0
-extern int nioedge;  // byte-at-a-time, squaring up the two ends of an in-phase transfer
-extern int nioshift; // byte-at-a-time, phases DIFFERENT -- needs a shifting copy, or nothing
+extern int nioedge;  // byte-at-a-time, squaring up the two ends of a transfer
+extern int nioshift; // a word at a time through the funnel shift, phases DIFFERENT
 
 // The four rate counters, and the same argument again: a machine spending its time in the
 // kernel looks exactly like one that is not, until something counts.  These are what vmstat

@@ -22,7 +22,6 @@ The tasks left are small, independent, and were deferred deliberately.
 | 32 | `profil()`: implement `addupc()` or make it fail | small; the decision is the task |
 | 33 | `ptrace` single-step | small now, blocked after |
 | 34 | the `int` ↔ pointer audit | open-ended |
-| 36 | the shifting copy: the half of the byte path task 28 could not reach | medium, high risk |
 | 37 | `mdvol[]` is filled only by a READ, so a pack that is only ever written is stamped with another drive's label | small |
 
 ---
@@ -127,61 +126,11 @@ exercises the site, run under `libtest`, not an inspection.
 
 ---
 
-## 36. The shifting copy
-
-**Where.** `copyinb`/`copyoutb` in [ucopy.c](ucopy.c), and whatever machine assist they end up
-calling.
-
-**What is left.** Task 28 gave `iomove()` a bulk path, and it reaches the **in-phase** case only —
-both pointers standing on the same byte of their respective words, so that after a partial leading
-word the middle is whole words on both sides. Out of phase, every word of the transfer straddles
-two on the other side, and the copy is still one `fubyte`/`subyte` per byte: a `useracc()` range
-walk and a mode-toggle bracket for six bits of payload.
-
-**How much it is.** `nioshift` (systm.h; the deleted `libtest.ini.in` printed it on every run) said **94,805
-bytes** of `libtest`'s 1,253,598, against 871 left on the in-phase arm and 1,157,922 through the
-bulk path. So this is now the *whole* of what `iomove()` still moves a byte at a time, and it is
-7.6% of the traffic and a much larger share of the time. `session` is 2,894 bytes, unchanged by
-task 28 and unchanged by anything since.
-
-**Where it comes from**, which is worth knowing before optimising it: the kernel-side pointer is
-`(caddr_t)bp->b_addr + on` with `on = u_offset % BSIZE`, so its phase walks with the file offset,
-while the user's buffer stays put. `read(fd, buf, 100)` in a loop lands here on every call after
-the first. A program whose transfers are multiples of six never does.
-
-**What to do.** Two candidates, and the first is much the cheaper:
-
-1. **Word-at-a-time in C, through `fuword`/`suword`.** For `copyinb`, read whole user words with
-   `fuword` and split them in C — one `useracc()` per six bytes instead of six. For `copyoutb`,
-   assemble each user word from the kernel bytes and `suword` it, reading the old word back with
-   `fuword` only for the two partial end words. Roughly 3–6× on the same arm, no assembly, and the
-   masks are the ones `ucopy.c` already reasons about.
-2. **A funnel shift in `usermem.S`.** `asx`/`asn` shift `[A, Y]` as one 96-bit quantity and `yta`
-   reads `Y` back, so a two-instruction shift-and-carry per word is available; it is used nowhere
-   in this kernel today. Faster than (1) and the only way to get the mode-toggle bracket down to
-   one per word — but it is assembly, in the file whose header explains why it stays word-only, and
-   `copyinb`/`copyoutb` would have to hand it the two phases explicitly rather than mask them away.
-
-Do (1) first and re-read `nioshift`; (2) is only worth it if the counter says so afterwards.
-
-**How to verify.** [test/umem](test/umem.c) **already covers this**, and covering it is why its
-matrix is 6 × 6 and not 6: every unequal `(ku, kk)` pair is an out-of-phase transfer, at lengths
-0–13 and at 200, with the whole destination window compared against an independent oracle so that
-a shift that lands one byte out is caught wherever it lands. The `.ini` header lists the mutations
-that made it bite. So this task's bite test is written; what a new implementation must do is fail
-`umem` when it is wrong, which the existing mutation list already demonstrates it does.
-
-**Size.** Medium for (1), and higher risk than it looks — this is the same routine that produced
-one silent data-corruption bug already, and the reason `umem` exists.
-
-
----
-
 ## 37. `mdvol[]` is filled only by a read
 
-**Where.** `mdvol[]` in [dev/md.c](dev/md.c) — filled at `md.c:552` inside
-`if (bp->b_flags & B_READ)`, stamped into the sector header at `md.c:385` and `md.c:391`
-inside `if ((bp->b_flags & B_READ) == 0)`.
+**Where.** `mdvol[]` in [dev/md.c](dev/md.c) — declared at `md.c:242`, filled at `md.c:561`
+inside `if (bp->b_flags & B_READ)`, stamped into the sector header at `md.c:393`, `md.c:394`
+and `md.c:399` inside `if ((bp->b_flags & B_READ) == 0)`.
 
 **What is wrong.** The service-word buffer is the **controller's**, so the volume mark a write
 puts on the platter has to come from somewhere the driver keeps **per drive** — which is what
@@ -200,9 +149,11 @@ ever being read is stamped with **another drive's volume number**.
 **How it was found, and why not before.** Task C7. `tar cf /dev/rmd1` is the first program in
 this tree that writes a pack it never reads: `mkfs` reads the last block before writing the
 first (its own end-of-volume probe), `fsck` reads everything it repairs, and `dd` is pointed at
-a device the caller has usually just read. `kernel/test/mkfs`'s oracle 1 was written for exactly
-this class of defect and passes only because of that probe. `kernel/test/tar` reproduces it in
-one line:
+a device the caller has usually just read. The `mkfs` kernel test's oracle 1 was written for
+exactly this class of defect and passed only because of that probe, and the `tar` kernel test
+reproduced the bug in one line. **Both tests have since been deleted** with the rest of the
+user-mode image tests, so the reproduction has to be rebuilt; it is still this shape, against
+any scratch pack SIMH formats:
 
 ```
 attach -n md01 scratch3100.disk      # SIMH formats it, volume 3100 throughout
@@ -210,7 +161,8 @@ tar cfb /dev/rmd1 6 tree             # writes from block 0, never reads
 b6fsutil -S scratch3100.disk out     # "scratch3100.disk: volume 3099 -> out (flat)"
 ```
 
-3099 is the **root** pack's number, off drive 0.
+3099 was the **root** pack's number in that run, off drive 0 — whatever the controller last
+read. Today's root image is `root3072.disk`, so a rebuilt reproduction reports that instead.
 
 **What it costs today.** Nothing that has been noticed: `b6fsutil`'s `from_simh()` validates the
 magic *mark* and the per-half-zone self-address, and both are right — only the volume *number*
@@ -222,9 +174,11 @@ obvious place, and it currently does nothing but bound the minor), or carry the 
 SIMH does and take it from the drive rather than the controller. The first is smaller and needs
 no new state; it costs one exchange per open of a drive that has not been read.
 
-**What is asserted meanwhile.** Nothing: `kernel/test/run-tar.sh` required the **wrong** number
-and said why, so that the day this was fixed the check would fail and
-has to be tightened to 3100, which is what stops the deferral being forgotten.
+**What is asserted meanwhile.** Nothing, and nothing guards the deferral either.
+`kernel/test/run-tar.sh` used to require the **wrong** number and say why, so that the day this
+was fixed the check would fail and have to be tightened to 3100 — but that script went with the
+`tar` test. A fix now has to bring its own check: the three lines above, with the write-only
+pack's own number required.
 
 **Size.** Small.
 

@@ -139,8 +139,8 @@ device interrupts
 traps
 system calls
 bytes copied whole words at a time
-bytes copied a byte at a time, in phase
-bytes copied a byte at a time, out of phase
+bytes copied a byte at a time, at the two ends
+bytes copied a word at a time, out of phase
 disk transfers
 disk words moved
 drum transfers

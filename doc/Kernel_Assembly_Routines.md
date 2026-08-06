@@ -488,11 +488,13 @@ int copyout(caddr_t from, caddr_t to, unsigned nbytes);  /* systm.h:177 */
   callers pass a `caddr_t` built from an `int` (`sendsig`/`sigret`, and `mmutest`), and since that
   cast is a silent bit copy the offset field reads **0, which is byte #5 and not byte #0**; the mask
   is what saves them. So the byte offsets are peeled one level up, in `copyinb`/`copyoutb`
-  ([ucopy.c](../kernel/ucopy.c)), which square both pointers to a word boundary with
+  ([ucopy.c](../kernel/ucopy.c)), which square the **destination** to a word boundary with
   `subyte`/`fubyte`, hand these routines only whole words on byte #0, and peel the tail the same
-  way. That covers the **in-phase** case — both pointers on the same byte of their words; out of
-  phase every word straddles two on the other side and the transfer is still byte-at-a-time.
-  `kernel/test/umem` drives all of it, and `kernel/TODO.md` task 36 is the rest.
+  way. That covers the **in-phase** case — both pointers on the same byte of their words. Out of
+  phase every word straddles two on the other side, and these routines are not called at all:
+  `ucopy.c` does that middle itself, a word at a time, with a funnel shift written in C
+  (`unsigned` is one whole 48-bit word) and one `fuword`/`suword` per six bytes. So nothing here
+  ever sees a pointer off byte #0, in either phase. `kernel/test/umem` drives all of it.
 
   The byte variants do emulate sub-word access by read-modify-write, as predicted — but note the
   **fat-pointer marker bit (48) is load-bearing**. `fubyte` extracts its byte with `asx` on the
