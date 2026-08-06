@@ -40,7 +40,7 @@
 #define MBIT CBREAK
 
 // LINSIZ was 256 and is 512 because a column here is a CHARACTER, not a byte:
-// getline() folds at Mcol characters and a Cyrillic one costs two bytes, a
+// nextline() folds at Mcol-1 characters and a Cyrillic one costs two bytes, a
 // four-byte one four.  See README.md; cmd/pr counts bytes, deliberately, and the
 // difference between the two programs is that pr's columns are a layout the user
 // gave a width for while more's are the physical screen.
@@ -48,7 +48,6 @@
 #define ctrl(letter) (letter & 077)
 #define RUBOUT       '\177'
 #define ESC          '\033'
-#define QUIT         '\034'
 
 struct sgttyb otty, savetty;
 long file_pos, file_size;
@@ -61,11 +60,9 @@ int ssp_opt  = 0;  // Suppress white space
 int ul_opt   = 1;  // Underline as best we can
 int promptlen;
 int Currline; // Line we are currently at
-int startup    = 1;
-int firstf     = 1;
-int notell     = 1;
-int docrterase = 0;
-int docrtkill  = 0;
+int startup = 1;
+int firstf  = 1;
+int notell  = 1;
 int bad_so; // True if overwriting does not turn off standout
 int inwait, Pause, errors;
 int within; // true within a file, false between files
@@ -74,9 +71,10 @@ char **fnames; // The list of file names
 int nfiles;    // Number of files left to process
 char *shell;   // The name of the shell to use
 int shellp;    // A previous shell command exists
-// ONE definition: upstream has two tentative ones, at file scope, of the same name.
-// An int rather than a char because readch() answers one -- see the note there.
-int ch;
+// NO FILE-SCOPE ch.  Upstream has two tentative definitions of one, which b6parse
+// rejects; it was only ever scratch for number() and colon(), so each has its own now.
+// A local may not duplicate a file-scope name here -- which is why the name had to go
+// before it could be used, and why readch()/ttyin()/expand() are named as they are.
 jmp_buf restore;
 char Line[LINSIZ];      // Line buffer
 int Lpp = 24;           // lines per page
@@ -89,7 +87,6 @@ char *chBS;             // backspace character
 char *Home;             // go to home
 char *EodClr;           // clear rest of screen
 int Mcol = 80;          // number of columns
-int Wrap = 1;           // set if automargins
 int soglitch;           // terminal has standout mode glitch
 int ulglitch;           // terminal has underline mode glitch
 int pstate = 0;         // current UL state
@@ -151,7 +148,6 @@ void erase(int col);
 void cleareol(void);
 int pr(char *s1);
 int nextline(FILE *f, int *length);
-int printd(int n);
 void prompt(char *filename);
 void prbuf(char *s, int n);
 int number(int *cmd);
@@ -163,7 +159,7 @@ void execute(char *filename, char *cmd, char *const argv[]);
 int readch(void);
 int readkey(void);
 void skipf(int nskip);
-int expand(char *outbuf, char *inbuf);
+int expand(char *outbuf, int outsize, char *inbuf);
 void rdline(FILE *f);
 void show(int c);
 
@@ -261,7 +257,11 @@ void onquit(int sig)
 // this kernel has neither: <sys/signal.h> is v7's fifteen numbers, with no 28, and
 // <sys/ttyio.h> has no TIOCGWINSZ and no `struct winsize' -- lib/libcurses and
 // cmd/novi/terminal.c both deleted the same path rather than ifdef it away.  The
-// screen size is read once, from $LINES and $COLUMNS, and cannot change under us.
+// screen size is read once, from $LINES and $COLUMNS over the database, and cannot
+// change under us.  NOTHING ON THIS IMAGE SETS ANY OF THE THREE: login(1) exports HOME
+// and PATH and there is no /etc/profile, so $TERM is unset, initterm() falls back to
+// the xterm entry, and an unexported window of any other size is one more(1) will
+// misjudge.  The manual page says so and says what to export.
 //
 // NOR onsusp().  Job control arrived in 4.1BSD: there is no SIGTSTP, no SIGTTOU and
 // no sigsetmask() to be had, so `more' cannot be stopped at a prompt and resumed.
@@ -336,8 +336,11 @@ int main(int argc, char *argv[])
         else
             noscroll = 1;
     }
+    // Lpp-1, not upstream's Lpp-2 on a scrolling terminal: the prompt row is overwritten
+    // by the next screenful's first line, so one row is all the prompt costs.  The line
+    // upstream held back was the previous screenful's last, kept as context.
     if (dlines == 0)
-        dlines = Lpp - (noscroll ? 1 : 2);
+        dlines = Lpp - 1;
     left = dlines;
     if (nfiles > 1)
         prnames++;
@@ -571,11 +574,12 @@ void screen(FILE *f, int num_lines)
                 erase(nchars); // erase () sets promptlen to 0
             else
                 promptlen = 0;
-            // is this needed?
-            // if (clreol)
-            // cleareol();	-- must clear again in case we wrapped
-            if (nchars < Mcol || !fold_opt)
-                prbuf("\n", 1); // will turn off UL if necessary
+            // ALWAYS.  Upstream omits the newline when a line reached Mcol and lets the
+            // terminal's automargin wrap instead -- which is right only when Mcol is the
+            // real width.  It is a guess here (see initterm), and when it is wrong the
+            // cursor stays put and --More-- lands at the end of the line.  nextline()
+            // now folds one column early, so nothing is ever pending in the margin.
+            prbuf("\n", 1); // will turn off UL if necessary
             num_lines--;
         }
         if (pstate) {
@@ -657,8 +661,12 @@ void prompt(char *filename)
         if (clreol)
             clreos();
         fflush(stdout);
-    } else
+    } else {
+        // A bell prints nothing, so there is nothing to erase.  Upstream leaves
+        // promptlen stale and erase()'s hard arm then emits a newline for it.
+        promptlen = 0;
         write(2, &bell, 1);
+    }
     inwait++;
 }
 
@@ -687,8 +695,8 @@ void prompt(char *filename)
 // since it is emitting and not measuring.
 //
 // NOT ASSERTED, and it cannot be here: this whole path needs a terminal, and a terminal
-// whose output can still be diffed is kernel/test/console -- DISABLED for kernel/TODO.md
-// task 35, which is where README.md's `screen half' has been waiting all along.
+// whose output can still be diffed is kernel/test/console, enabled again now that
+// kernel/TODO.md task 35 is answered -- where README.md's `screen half' had been waiting.
 int nextline(FILE *f, int *length)
 {
     int c;
@@ -705,7 +713,9 @@ int nextline(FILE *f, int *length)
         Currline++;
         c = Getc(f);
     }
-    while (i < LINSIZ - 1) {
+    // LINSIZ-2, not LINSIZ-1: the form-feed arm below appends a second byte, so the
+    // looser guard lets i reach LINSIZ and the terminator writes off the end.
+    while (i < LINSIZ - 2) {
         if (c == EOF) {
             if (i > 0) {
                 Line[i] = '\0';
@@ -736,7 +746,7 @@ int nextline(FILE *f, int *length)
                     tput(eraseln);
                     promptlen = 0;
                 } else {
-                    for (--i; column & 7 && i < LINSIZ - 1; column++) {
+                    for (--i; column & 7 && i < LINSIZ - 2; column++) {
                         Line[i++] = ' ';
                     }
                     if (column >= promptlen)
@@ -764,16 +774,13 @@ int nextline(FILE *f, int *length)
             // not measuring.  The `c == EOF' arm upstream has here is unreachable
             // -- the top of the loop already returned on it -- and is gone.
             column++;
-        if (column >= Mcol && fold_opt)
+        if (column >= Mcol - 1 && fold_opt)
             break;
         c = Getc(f);
     }
-    if (column >= Mcol && Mcol > 0) {
-        if (!Wrap) {
-            Line[i++] = '\n';
-        }
-    }
-    colflg  = column == Mcol && fold_opt;
+    // >=, not upstream's ==: a tab or the ^L expansion can step past the fold without
+    // landing on it, and then the physical newline that follows costs a blank row.
+    colflg  = column >= Mcol - 1 && fold_opt;
     *length = i;
     Line[i] = 0;
     return (column);
@@ -887,21 +894,8 @@ void home(void)
 
 static int lastcmd, lastarg, lastp;
 static int lastcolon;
-char shell_line[132];
-
-// Print an integer as a string of decimal digits,
-// returning the length of the print representation.
-int printd(int n)
-{
-    register int a, nchars;
-
-    if ((a = n / 10))
-        nchars = 1 + printd(a);
-    else
-        nchars = 1;
-    putchar(n % 10 + '0');
-    return (nchars);
-}
+#define SHLINSIZ 132 // a literal: b6lower will not size an array from a sizeof
+char shell_line[SHLINSIZ];
 
 // Read a command and do it. A command consists of an optional integer
 // argument followed by the command character.  Return the number of lines
@@ -911,8 +905,8 @@ int command(char *filename, FILE *f)
 {
     int nlines;
     int retval;
-    int c; // NOT a char: it receives Getc(), and EOF is -1
-    char colonch;
+    int c;       // NOT a char: it receives Getc(), and EOF is -1
+    int colonch; // an int for comchar's reason: colon() now reads through readkey()
     int done;
     // comchar IS AN int: a command may be one of the six keys, whose codes are above
     // 0377 and do not fit a char.  lastcmd and lastarg already were, so `.' repeats a
@@ -965,9 +959,11 @@ int command(char *filename, FILE *f)
             if (nlines == 0)
                 nlines++;
 
+            // ONE ROW, AND IT IS CHARGED TO THE COUNT.  Upstream prints three -- a blank,
+            // the text, a blank -- and then a whole screenful on top, so its own banner
+            // has scrolled off before it can be read.
             putchar('\r');
             erase(0);
-            printf("\n");
             if (clreol)
                 cleareol();
             printf("...back %d page", nlines);
@@ -976,19 +972,9 @@ int command(char *filename, FILE *f)
             else
                 pr("\n");
 
-            if (clreol)
-                cleareol();
-            pr("\n");
-
             initline = Currline - dlines * (nlines + 1);
-            if (!noscroll)
-                --initline;
             backto(f, initline);
-            if (!noscroll) {
-                ret(dlines + 1);
-            } else {
-                ret(dlines);
-            }
+            ret(dlines > 1 ? dlines - 1 : 1);
         }
         case ' ':
         case 'z':
@@ -1005,6 +991,7 @@ int command(char *filename, FILE *f)
         case 'q':
         case 'Q':
             end_it(0);
+            // NOTREACHED -- end_it() ends in _exit()
         case 's':
         case 'f':
             if (nlines == 0)
@@ -1013,7 +1000,6 @@ int command(char *filename, FILE *f)
                 nlines *= dlines;
             putchar('\r');
             erase(0);
-            printf("\n");
             if (clreol)
                 cleareol();
             printf("...skipping %d line", nlines);
@@ -1021,10 +1007,6 @@ int command(char *filename, FILE *f)
                 pr("s\n");
             else
                 pr("\n");
-
-            if (clreol)
-                cleareol();
-            pr("\n");
 
             while (nlines > 0) {
                 while ((c = Getc(f)) != '\n')
@@ -1036,7 +1018,9 @@ int command(char *filename, FILE *f)
                 Currline++;
                 nlines--;
             }
-            ret(dlines);
+            // The banner row above is charged to the count, but never down to zero:
+            // command() returning 0 is what screen() reads as end of file.
+            ret(dlines > 1 ? dlines - 1 : 1);
         case '\n':
             if (nlines != 0)
                 dlines = nlines;
@@ -1113,7 +1097,7 @@ int command(char *filename, FILE *f)
             }
         case '=':
             kill_line();
-            promptlen = printd(Currline);
+            promptlen = printf("%d", Currline);
             fflush(stdout);
             break;
         case 'n':
@@ -1133,7 +1117,7 @@ int command(char *filename, FILE *f)
                 write(2, "\r", 1);
                 search(cmdbuf, f, nlines);
             }
-            ret(dlines - 1);
+            ret(dlines > 1 ? dlines - 1 : 1);
         case '!':
             do_shell(filename);
             break;
@@ -1181,8 +1165,12 @@ endsw:
 // more of the file to be printed.
 int colon(char *filename, int cmd, int nlines)
 {
+    int ch;
+
+    // readkey() and not upstream's readch(), the one command path that bypassed the
+    // matcher: an arrow after `:' left its two trailing bytes to be read as commands.
     if (cmd == 0)
-        ch = readch();
+        ch = readkey();
     else
         ch = cmd;
     lastcolon = ch;
@@ -1222,6 +1210,7 @@ int colon(char *filename, int cmd, int nlines)
     case 'q':
     case 'Q':
         end_it(0);
+        // NOTREACHED
     default:
         write(2, &bell, 1);
         return (-1);
@@ -1237,6 +1226,7 @@ int colon(char *filename, int cmd, int nlines)
 int number(int *cmd)
 {
     int i;
+    int ch;
 
     i = 0; // upstream also seeds ch here, and the loop overwrites it at once
     for (;;) {
@@ -1265,7 +1255,7 @@ void do_shell(char *filename)
         pr(shell_line);
     else {
         ttyin(cmdbuf, 78, '!');
-        if (expand(shell_line, cmdbuf)) {
+        if (expand(shell_line, sizeof(shell_line), cmdbuf)) {
             kill_line();
             promptlen = printf("!%s", shell_line);
         }
@@ -1455,7 +1445,7 @@ void skipf(int nskip)
     fnum += nskip;
     if (fnum < 0)
         fnum = 0;
-    pr("\n...Skipping ");
+    // One banner: upstream welds the text to this newline and prints it again below.
     pr("\n");
     if (clreol)
         cleareol();
@@ -1499,9 +1489,9 @@ void initterm(void)
 
     // FOUR ioctls ARE GONE FROM HERE, all of them 4BSD's and none of them on this
     // kernel: TIOCLGET and the local modes LCRTERA/LCRTKIL, which only made the erase
-    // echo prettier (docrterase and docrtkill stay 0); TIOCGPGRP and the loop that
-    // waited to reach the foreground, there being no process groups to be behind;
-    // and TIOCGWINSZ, replaced above.  <sys/ttyio.h> lists what ttioccomm() answers.
+    // echo prettier -- the two arms of ttyin() that read them went with it; TIOCGPGRP
+    // and the loop that waited to reach the foreground, there being no process groups
+    // to be behind; and TIOCGWINSZ, replaced above.
     no_tty = ioctl(fileno(stdout), TIOCGETP, (char *)&otty);
     if (no_tty == 0) {
         // NO $TERM MEANS xterm, and so does a $TERM the database does not have.  The
@@ -1528,7 +1518,8 @@ void initterm(void)
 
             if (!hard && tgetflag("ns"))
                 noscroll++;
-            Wrap    = tgetflag("am");
+            // `am' is not read: the fold leaves the last column empty, so margin
+            // behaviour cannot be observed either way.
             bad_so  = tgetflag("xs");
             eraseln = tgetstr("ce", &tcap);
             Clear   = tgetstr("cl", &tcap);
@@ -1687,17 +1678,12 @@ int readkey(void)
 }
 
 static char BS    = '\b';
-static char *BSB  = "\b \b";
 static char CARAT = '^';
 
-// LITERALLY THREE, not sizeof(BSB).  BSB is a char * and sizeof gives the size of the
-// POINTER -- two bytes on the PDP-11 this was written for, six here -- so upstream
-// writes three bytes past the end of the literal every time it rubs a character out.
-#define ERASEONECHAR      \
-    if (docrterase)       \
-        write(2, BSB, 3); \
-    else                  \
-        write(2, &BS, sizeof(BS));
+// ONE BACKSPACE, AND NO CHOICE OF TWO.  Upstream's other arm rubbed the character out
+// with "\b \b" under TIOCLGET's LCRTERA, which this kernel has not got -- and wrote
+// sizeof(char *) rather than 3 bytes of it.  Fixed first, then deleted with its flag.
+#define ERASEONECHAR write(2, &BS, 1)
 
 void ttyin(char buf[], int nmax, char pchar)
 {
@@ -1718,11 +1704,11 @@ void ttyin(char buf[], int nmax, char pchar)
         } else if ((c == otty.sg_erase) && !slash) {
             if (sptr > buf) {
                 --promptlen;
-                ERASEONECHAR
+                ERASEONECHAR;
                 --sptr;
                 if ((*sptr < ' ' && *sptr != '\n') || *sptr == RUBOUT) {
                     --promptlen;
-                    ERASEONECHAR
+                    ERASEONECHAR;
                 }
                 continue;
             } else {
@@ -1738,11 +1724,10 @@ void ttyin(char buf[], int nmax, char pchar)
             } else {
                 putchar('\r');
                 putchar(pchar);
+                // The LCRTKIL arm went with LCRTERA's; promptlen = 1 below was all it
+                // left behind anyway.
                 if (eraseln)
                     erase(1);
-                else if (docrtkill)
-                    while (promptlen-- > 1)
-                        write(2, BSB, 3);
                 promptlen = 1;
             }
             sptr = buf;
@@ -1750,7 +1735,7 @@ void ttyin(char buf[], int nmax, char pchar)
             continue;
         }
         if (slash && (c == otty.sg_kill || c == otty.sg_erase)) {
-            ERASEONECHAR
+            ERASEONECHAR;
             --sptr;
         }
         if (c != '\\')
@@ -1781,43 +1766,61 @@ void ttyin(char buf[], int nmax, char pchar)
         error("Line too long");
 }
 
-int expand(char *outbuf, char *inbuf)
+// Substitute % (this file's name) and ! (the previous command) into a shell command.
+//
+// BOTH HALVES ARE BOUNDED; upstream bounds neither, and either overruns from a 78-byte
+// cmdbuf.  temp cannot go: the `!' arm reads shell_line, which is outbuf.
+int expand(char *outbuf, int outsize, char *inbuf)
 {
     char *instr;
     char *outstr;
+    char *s;
     int c;
-    char temp[200];
+    char temp[SHLINSIZ];
+    char *end   = temp + sizeof(temp) - 1;
     int changed = 0;
 
     instr  = inbuf;
     outstr = temp;
+#define PUTC(ch)                       \
+    do {                               \
+        if (outstr >= end)             \
+            error("Command too long"); \
+        *outstr++ = (ch);              \
+    } while (0)
+
     while ((c = *instr++) != '\0')
         switch (c) {
         case '%':
             if (!no_intty) {
-                strcpy(outstr, fnames[fnum]);
-                outstr += strlen(fnames[fnum]);
+                for (s = fnames[fnum]; *s != '\0'; s++)
+                    PUTC(*s);
                 changed++;
             } else
-                *outstr++ = c;
+                PUTC(c);
             break;
         case '!':
             if (!shellp)
                 error("No previous command to substitute for");
-            strcpy(outstr, shell_line);
-            outstr += strlen(shell_line);
+            for (s = shell_line; *s != '\0'; s++)
+                PUTC(*s);
             changed++;
             break;
         case '\\':
             if (*instr == '%' || *instr == '!') {
-                *outstr++ = *instr++;
+                PUTC(*instr);
+                instr++;
                 break;
             }
         default:
-            *outstr++ = c;
+            PUTC(c);
         }
-    *outstr++ = '\0';
-    strcpy(outbuf, temp);
+#undef PUTC
+    *outstr = '\0';
+    if (outsize > 0) {
+        strncpy(outbuf, temp, outsize - 1);
+        outbuf[outsize - 1] = '\0';
+    }
     return (changed);
 }
 
@@ -1844,11 +1847,14 @@ void show(int c)
 
 void error(char *mess)
 {
-    if (clreol)
+    // cleareol() does not zero promptlen where kill_line() does, so upstream's
+    // `promptlen +=' accumulates under -c, one message at a time.
+    if (clreol) {
         cleareol();
-    else
+        promptlen = 0;
+    } else
         kill_line();
-    promptlen += strlen(mess);
+    promptlen = strlen(mess);
     if (Senter && Sexit) {
         tput(Senter);
         pr(mess);
@@ -1891,8 +1897,8 @@ void reset_tty(void)
         fflush(stdout);
         pstate = 0;
     }
-    otty.sg_flags |= ECHO;
-    otty.sg_flags &= ~MBIT;
+    // Upstream's two stores into otty.sg_flags are dead here: savetty is what goes to
+    // the terminal, and set_tty() re-sets both bits before it uses otty.
     setmode(&savetty);
 }
 

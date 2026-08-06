@@ -132,6 +132,9 @@ Four of these are live defects on any machine, not BESM-6 accommodations:
 
 - `write(2, BSB, sizeof(BSB))` where `BSB` is a `char *` — the size of the **pointer**, two on
   a PDP-11 and six here, so every rubbed-out character wrote three bytes past the literal.
+  Fixed first and then deleted outright: the arm was reached only under `TIOCLGET`'s `LCRTERA`,
+  which this kernel has not got, so `docrterase` was hard-wired 0 and the code unreachable.
+  `docrtkill`'s arm in `ttyin()` went the same way. Grep will not find `BSB`; this is why.
 - `execute()` declared `(char *cmd, char *args, ...)` and called `execv(cmd, &args)`, taking
   the address of the last named parameter as an `argv[]`. Undefined in C11 and simply untrue
   of this machine's calling convention. The one surviving caller builds the vector.
@@ -144,7 +147,50 @@ every `char` receiving `Getc()` had to become an `int` — `skiplns()` and `comm
 loop spin forever otherwise, and `rdline()` appends up to 511 bytes of `0377` to the last line
 of every file, which is the line `search()` then looks at. `b6parse` also rejects a local named
 `ch` while a file-scope `ch` exists — *Duplicate variable declaration*, not shadowing — which
-is how the two tentative definitions upstream has of that name came to light.
+is how the two tentative definitions upstream has of that name came to light. The file-scope
+object is now gone as well: it was scratch for `number()` and `colon()` and nothing else, and
+each has its own local, which is legal precisely *because* the file-scope name went. The rule
+still bites, though, and is why `readch()`, `ttyin()` and `expand()` are named as they are.
+
+Two more that the review of task C27 turned up, both unbounded writes:
+
+- `nextline()`'s loop guard is `i < LINSIZ-1`, but the form-feed arm appends a **second** byte,
+  so `i` reaches `LINSIZ` and the terminator writes off the end. It is `LINSIZ-2` here.
+- `expand()` `strcpy`s an argv string of any length into a `temp[200]` for every `%`, from a
+  78-byte `cmdbuf` that holds thirty-nine of them, and then `strcpy`s the result into a
+  `shell_line` of 132. Both halves are bounded now and `temp` is sized to match its
+  destination; it cannot be dropped, since the `!` arm reads `shell_line`, which *is* `outbuf`.
+
+And three that only showed on a screen: `error()` accumulated `promptlen` under `-c` because
+`cleareol()` does not zero it where `kill_line()` does; `prompt()` left it stale on a hard-copy
+terminal, where the prompt is a bell and prints nothing; and `colon()` read with `readch()`, the
+one command path bypassing the key matcher, so an arrow typed after `:` left its two trailing
+bytes to be read as commands.
+
+## The screen, and the size it is assumed to be
+
+`$TERM` is never set on this image — `login(1)` exports `HOME` and `PATH`, and there is no
+`/etc/profile` — so `initterm()` falls to the `xterm` entry and the screen is 24 by 80 whatever
+SIMH's line is really attached to. There is no `TIOCGWINSZ` here to ask with. `$LINES` and
+`$COLUMNS` are the whole of the override and the manual page now says so out loud.
+
+Two things follow from the width being a guess. Upstream **omits the newline** after a line that
+reached `Mcol` and lets the terminal's automargin wrap instead; when the terminal is wider than
+`Mcol` it does not wrap, the cursor stays put, and `--More--` appears at the end of that line
+rather than under it. So `nextline()` folds at `Mcol - 1` and `screen()` ends every line itself
+— which is [`../manview/render.c`](../manview/render.c)'s rule (`width = w - 1`), and the two
+programs `man(1)` pipes through now agree on it instead of differing by a column. `Wrap` and the
+`am` capability went with the change: margin behaviour is no longer observable either way.
+
+The other is `colflg`, which asked `column == Mcol`. A tab or the `^L` expansion steps *past* the
+fold without landing on it, and then the physical newline that follows costs a blank row. `>=`.
+
+**The window is `Lpp - 1`, not upstream's `Lpp - 2`.** The prompt row is overwritten by the next
+screenful's first line, so a prompt costs one row and no more; what upstream held back was the
+previous screenful's last line, carried over as context. Dropping it makes `-p` the redraw and
+nothing else, which is all the manual page now claims for it. `b` and `s`/`f` printed a
+three-row banner and *then* a full screenful, so their own banners had scrolled off before they
+could be read — one row each now, charged to the count.
 
 ## Left alone, deliberately
 
@@ -155,14 +201,18 @@ That is §11 already satisfied, and it would have been a wild write on a machine
 not measuring; only `nextline()`'s `column` counts characters, and `LINSIZ` went 256 → 512 to
 pay for it.
 
+`printd()` — a recursive decimal printer whose one caller wanted the digit count — is gone for
+`printf("%d", …)`, which the five neighbouring statements that want the same thing already use.
+
 ## Sizes
 
 | | const | text | data | bss | total |
 |---|---|---|---|---|---|
 | `more`, stubs | 124 | 7,549 | 726 | 1,225 | **9,624** |
 | `more`, libtermcap | 133 | 8,691 | 822 | 1,533 | **11,179** |
+| after the C27 review | 135 | 8,604 | 827 | 1,530 | **11,096** |
 
-11,179 words of the 28,672 — the largest program here that is not a toolchain component. The
+11,096 words of the 28,672 — the largest program here that is not a toolchain component. The
 1,555 words the database cost are the library's 1,075 (`termcap.o` 761, `tgoto.o` 206,
 `tputs.o` 108), the 1024-char entry buffer and 512-char arena that came back as 256 words of
 bss, and the key table and its matcher.
@@ -197,8 +247,14 @@ a 200-line file, Down gives 23, PageDown 45, Up 44, PageUp 22, Home 22, End the 
 Worth running under `xterm` (both the `\E[` and the `\EO` forms), `vt100` (padding stripped, and
 four keys reaching the fallback), and a name the database does not have (the retry as `xterm`).
 
+The C27 review added three more by hand: the same file in an **80-column** window and then a
+**120-column** one — before the fold moved, the second welded `--More--` to the end of any line
+reaching column 80 — a file with tabs and one with a `^L` (the two ways `column` steps past the
+fold), and `!` with a long path and a `!!` after it, for the bounded `expand()`. `LINES` and
+`COLUMNS` are exported from the shell, which is the only channel there is.
+
 **The screen half has no test and that is a deferral, not an oversight.** `kernel/test/console`
-and `kernel/test/edit` are DISABLED for the `send` wobble of `kernel/TODO.md` task 35, and a
+and `kernel/test/edit` were disabled for the `send` wobble of `kernel/TODO.md` task 35 -- fixed now, and a
 `more` dialogue is harder to assert than either: a single keystroke off descriptor 2 with
 `ECHO` off and `CBREAK` on, answered with cursor motion. It goes in when those two come back.
 Unlike `novi`, there is no separable module to unit-test in the meantime — `nextline()`,

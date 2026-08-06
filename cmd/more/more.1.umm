@@ -70,8 +70,10 @@ The command line options are:
 
 **-p**
 : Clear the screen before each screenful is printed (but only if a full screenful is being
-  printed), and print *k* - 1 rather than *k* - 2 lines in each screenful, where *k* is the
-  number of lines the terminal can display.
+  printed), rather than letting it scroll.
+
+  Upstream also prints one line more under this option than without it. Here both are the
+  same, *k* - 1 lines of a *k*-line terminal, so **-p** is the redraw and nothing else.
 
   *Note:* upstream implements this option and documents it nowhere. What it documents instead
   is a second name, *page,* which sets the same flag and is recognised by looking at the name
@@ -98,7 +100,22 @@ and then *more* pads with spaces instead of erasing and does not underline.
 The screen size comes from the entry's `li` and `co`, which `$LINES` and `$COLUMNS` override.
 There is no window-size ioctl on this system and no signal for a change, so the size is read
 once at startup: a terminal resized under a running *more* is a terminal *more* still believes
-to be its old size. The window is two lines less than the screen, so 22 by default.
+to be its old size. The window is one line less than the screen -- 23 by default -- the last
+line being the prompt, which the next screenful overwrites.
+
+*Nothing on this system sets any of the three.* `login(1)` exports `HOME` and `PATH` and there
+is no `/etc/profile`, so `$TERM` is unset, the `xterm` entry is used, and *more* believes the
+screen is 24 by 80 whatever it really is. **If your terminal is another size, say so:**
+
+```
+LINES=50 COLUMNS=132 ; export LINES COLUMNS
+```
+
+A screen taller than *more* thinks is a screen only partly used. A screen *wider* used to be
+worse than that -- a line reaching the assumed width was left for the terminal to wrap, which
+it then did not, and `--More--` appeared at the end of the line rather than under it. *More*
+now folds one column short of the width and ends every line itself, so the prompt is at the
+left margin whether the width is right or not; the cost is that the last column is not used.
 
 *More* looks in the environment variable *MORE* to pre-set any flags desired. For example, if
 you prefer to view files using the *-c* mode of operation, the *sh* command sequence
@@ -266,6 +283,10 @@ A column is a character and not a byte, so a line of Cyrillic folds where it loo
 should. The string typed at the **/** and **!** prompts is echoed and counted a byte at a time
 even so, so a prompt containing multi-byte characters is measured too wide and the erase
 character rubs out one byte rather than one character.
+
+The rightmost column of the screen is never written to. That is the price of not depending on
+the terminal to wrap for us, which is a bargain when the assumed width is wrong and a column
+lost when it is right.
 
 The screen half of this program has no automated test; only its behaviour as a filter is
 covered. See cmd/more/README.md.
