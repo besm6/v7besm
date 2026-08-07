@@ -58,7 +58,8 @@ relocatable symbol above word **32,767** (a 15-bit pointer's reach). Two more ce
 cannot guard, and both bind in practice: **no struct may exceed 4,096 words** (a member is a
 12-bit offset from a base register — move the big arrays to file scope), and the **4,096-word
 stack**, where a long function costs 1.5–2 words per source line before any array.
-`cmd/README.md` §6 is the account. **The image has 175 free blocks of 2000.**
+`cmd/README.md` §6 is the account. **The root image has 460 free blocks of 2000** — it had 181
+until the `lib/test` programs moved to the test pack, which has 1,686 free of its own.
 
 **Ten programs are built twice** — `cpp`, `as`, `ld`, `nm`, `size`, `strip`, `disasm`, `ar`,
 `ranlib`, `cc` — as the host `b6*` tools and, from the same sources under `cmd/<x>/rootfs/`, as
@@ -90,6 +91,14 @@ paths resolve against `b6fsutil`'s working directory (`build/kernel/test`), and 
 setuid) and the one hard link (`/bin/[` → `/bin/test`) live there rather than in the staging
 tree.
 
+**There are two disks.** `build/testfs/` is the second staging tree and **`test.manifest`**
+the second manifest: the `lib/test` programs, which were `/usr/test` on the root until the
+**test pack** existed and are now `/test/*` on `test3077.disk`. Nothing mounts it
+automatically — `/etc/rc` has no line for it, deliberately — so a dialogue that wants them
+types `/etc/mount /dev/md1 /mnt -r` and reads them as `/mnt/test/*`. It is attached `-r` and
+mounted `-r`, so one shared copy serves every test; only `kernel/test/core` uses it, and that
+is the tree's only live caller of `smount()`.
+
 **Porting v7 userland**: read `cmd/README.md`, the eleven-point recipe. `b6parse` is **strict
 C11** — no implicit `int`, no K&R parameter lists — but what bites is that v7 assumes `int` and
 `char *` are the same thing: a flag packed into bit 0 of a pointer, a mask rounding to a word
@@ -102,7 +111,7 @@ a name read out of a directory is **not NUL-terminated**.
 
 ```sh
 cd kernel && make          # produces `unix', unix.nm, unix.dis
-make run                   # boot under SIMH (besm6 unix.ini) — an interactive session,
+make demo                  # boot under SIMH (besm6 unix.ini) — an interactive session,
                            # not a test run; the tests are the top-level `make run'
 ```
 
@@ -125,16 +134,17 @@ runs it, and asserts on machine state; `b6sim` cannot substitute, and `mmutest` 
 copy.
 
 - **Run every MMU test with `set mmu cache`** — the БРЗ hazards are invisible otherwise.
-- **Two tests boot the kernel**, and only two: `boot`, a one-second smoke test that it still
-  reaches a shell prompt, and `multi`, which types `^D` at that prompt and goes on into
+- **Three tests boot the kernel**, and only three: `boot`, a one-second smoke test that it
+  still reaches a shell prompt; `multi`, which types `^D` at that prompt and goes on into
   multi-user mode — `/etc/rc`, a getty per line of `/etc/ttys`, `crypt(3)`, and root on
-  `/dev/console` with guest on `/dev/tty1` at the same instant. `multi` is also the worked
-  example for typing at the guest and for driving the second Consul, which needs the host
-  program `kernel/test/ttyhost.c`. When a README claims a mounted second filesystem, `fsck`
-  repairing a pack, the swapper under pressure or the self-hosting `cc` run is covered, it
-  describes one of the eighteen tests that no longer exist.
+  `/dev/console` with guest on `/dev/tty1` at the same instant; and `core`, which mounts the
+  test pack and runs `/mnt/test/coret`. `multi` is also the worked example for typing at the
+  guest and for driving the second Consul, which needs the host program
+  `kernel/test/ttyhost.c`. When a README claims `fsck` repairing a pack, the swapper under
+  pressure or the self-hosting `cc` run is covered, it describes one of the eighteen tests
+  that no longer exist.
 - The libc suite runs under `b6sim` only; adding a program = a `b6_libtest()` call +
-  `lib/test/progs.cmake` + `root.manifest`. **A native test that is not a libc test wants the
+  `lib/test/progs.cmake` + `test.manifest`. **A native test that is not a libc test wants the
   cheaper shape**: `b6_prog(... SOURCES ...)` + `b6_progtest()` staged into
   `build/rootfs/test/` (`cmd/novi/test/`, `cmd/libaout/rootfs/`); it can link sources
   `b6_libtest()` cannot, that one compiling exactly one `.c`.

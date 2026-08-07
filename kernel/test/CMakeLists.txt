@@ -318,15 +318,9 @@ set(ROOTFS_FILES
 # /bin/[ is deliberately absent: it is a `link' stanza in the manifest, not a staged file,
 # so there is nothing here for the image to depend on.  rootimg_link below is what holds it.
 
-# ...and /usr/test, the lib/test programs (task 25c).  The list is lib/test's, since that is
-# where they are linked and staged; naming it from one file is what keeps the manifest, this
-# dependency list and the ctest cases below from drifting apart.  Read by a path relative to
-# this directory so that a standalone `cmake -S kernel' still configures -- it cannot build
-# root.img anyway, for the reason ../../root.manifest's header gives.
-include(${CMAKE_CURRENT_SOURCE_DIR}/../../lib/test/progs.cmake)
-foreach(_p ${B6_LIBTEST_IMAGE})
-    list(APPEND ROOTFS_FILES ${B6_ROOTFS}/usr/test/${_p})
-endforeach()
+# /usr/test IS NOT HERE ANY MORE.  The lib/test programs were on this image until the test
+# pack existed and are now on that one -- see TESTFS_FILES below, and ../../test.manifest for
+# why they moved.  Nothing else on the root refers to them.
 
 # ...and /lib and /usr/include, the development tree task C9e put on the image so that
 # /usr/bin/cc's default link line has something to find.  The three lists are the
@@ -363,6 +357,55 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/root3072.disk
 add_custom_target(rootimg DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/root3072.disk)
 list(APPEND TEST_TARGETS rootimg)
 
+# ---------------------------------------------------------------------------------------
+# THE TEST PACK -- the second filesystem, and the second drive's first standing job.
+# ---------------------------------------------------------------------------------------
+#
+# test.img holds the lib/test programs as /test/*, and a booted kernel reaches them as
+# /mnt/test/* after `/etc/mount /dev/md1 /mnt -r'.  They were /usr/test on root.img until
+# this existed; ../../test.manifest's header is the whole account, including why nothing
+# mounts it automatically.
+#
+# ONE SHARED READ-ONLY ARTIFACT.  Every .ini that wants it does `attach -r md01
+# test3077.disk' and mounts it -r, so unlike root.img -- which each booting test copies at a
+# volume of its own, because it gets written -- there is one copy and one volume number for
+# all of them.  Volume 3077: 3072 is the root artifact, mdtest owns 3073-3076, and this is
+# the next free number.
+#
+# SAME -T STAMP AS THE ROOT, so the pack is byte-reproducible too.  It is not the boot clock
+# -- iinit() seeds `time' from the ROOT superblock's s_time and never looks at a mounted
+# volume's -- so the value matters here only for reproducibility.
+#
+# The build-ORDER edge (testfs must be staged before b6fsutil runs) is drawn at the foot of
+# the top-level CMakeLists.txt, beside rootimg's and for the same reason.
+get_filename_component(TEST_MANIFEST ${CMAKE_CURRENT_SOURCE_DIR}/../../test.manifest ABSOLUTE)
+
+# The list is lib/test's, since that is where these are linked and staged; naming it from one
+# file is what keeps the manifest and this dependency list from drifting apart.  Read by a
+# path relative to this directory so that a standalone `cmake -S kernel' still configures --
+# it cannot build either image anyway, for the reason the manifests' headers give.
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../lib/test/progs.cmake)
+set(TESTFS_FILES "")
+foreach(_p ${B6_LIBTEST_IMAGE})
+    list(APPEND TESTFS_FILES ${B6_TESTFS}/test/${_p})
+endforeach()
+
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test.img
+    COMMAND ${B6FSUTIL} -n -s 2000 -T ${ROOTTIME}
+            -M ${TEST_MANIFEST} test.img
+    DEPENDS ${TEST_MANIFEST} ${TESTFS_FILES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "b6fsutil test.img" VERBATIM)
+
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test3077.disk
+    COMMAND ${B6FSUTIL} -S test.img test3077.disk
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/test.img
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "b6fsutil -S test3077.disk" VERBATIM)
+
+add_custom_target(testimg DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/test3077.disk)
+list(APPEND TEST_TARGETS testimg)
+
 # The image is self-consistent before any kernel touches it.  Cheap, and it keeps a
 # b6fsutil regression from arriving disguised as a driver bug in fstest.  Not guarded by
 # BESM6: it is a host check on a host tool's output, and runs whether or not the simulator
@@ -370,6 +413,14 @@ list(APPEND TEST_TARGETS rootimg)
 add_test(NAME rootimg_check COMMAND ${B6FSUTIL} -c root.img
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(rootimg_check PROPERTIES LABELS kernel)
+
+# The same check on the test pack, and it is the ONLY thing that ever inspects it: the pack is
+# mounted read-only and no guest writes it, so a `-c' failure here can only mean b6fsutil or
+# ../../test.manifest.  That is worth having anyway -- kernel/test/core mounts this image, and
+# a filesystem sbcheck() refuses would fail that test with a message about mount(1).
+add_test(NAME testimg_check COMMAND ${B6FSUTIL} -c test.img
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(testimg_check PROPERTIES LABELS kernel)
 
 # THE SETUID BIT, READ BACK OFF THE FINISHED IMAGE (task C1a, and /bin/mv since C1b).
 # /bin/mkdir, /bin/mv and /bin/rmdir are the only files here whose mode the staging tree
@@ -512,19 +563,24 @@ if(BESM6)
     # check on kernel task 34, the `int'-vs-pointer sweep.
     # ---------------------------------------------------------------------------------
     #
-    # `boot' stops at the single-user prompt; this types one command at it,
-    # /usr/test/coret, and lets the program adjudicate itself on the console.  What it is
-    # about is an address the kernel FABRICATED OUT OF AN INTEGER: core() dumping the
-    # user's image through `u_base = 0' -- a bit copy whose byte field reads as #5, so
-    # the whole image went to disk five bytes out of phase with a chunk missing off the
-    # end -- and ptrace(2)'s addr, whose unit was written down nowhere until now.
+    # `boot' stops at the single-user prompt; this types two commands at it -- a mount of
+    # the test pack, then /mnt/test/coret -- and lets the program adjudicate itself on the
+    # console.  What it is about is an address the kernel FABRICATED OUT OF AN INTEGER:
+    # core() dumping the user's image through `u_base = 0' -- a bit copy whose byte field
+    # reads as #5, so the whole image went to disk five bytes out of phase with a chunk
+    # missing off the end -- and ptrace(2)'s addr, whose unit was written down nowhere.
     #
-    # THE THIRD TEST THAT BOOTS, and the first that runs a program off /usr/test since the
+    # THE THIRD TEST THAT BOOTS, and the only one that runs a user program at all since the
     # image-side libtest was deleted.  It exists as a test of its own rather than as a
     # libtest case because NEITHER ARM RUNS UNDER b6sim: there is no core dump there at
     # all, and ptrace is refused with EPERM.  The two bugs the sweep started from were
     # found by a user program under a booted kernel and by nothing else, which is the
     # whole argument for this file.
+    #
+    # IT IS ALSO THE ONLY LIVE CALLER OF smount(), since kernel/test/mount went with the
+    # rest of the tests that booted: cmd/mount's own b6sim cases can reach the argument
+    # diagnostics and nothing further.  A failure at the mount rather than at a verdict is
+    # therefore a mount(2)/mount(1) failure, not a coret one; core.ini's echof says so.
     #
     # RUN_SERIAL for the reason `boot' and `multi' carry it: these type at the guest on a
     # step budget, and SIMH drops characters out of a `send' when the host is
@@ -532,7 +588,8 @@ if(BESM6)
     # whole machine, not one another.
     #
     # No fixture and no generated .ini: run-core.sh converts its own writable copy of
-    # root.img, which TEST_TARGETS already builds, and nothing here is a linked address.
+    # root.img and attaches the shared read-only test3077.disk, both of which TEST_TARGETS
+    # already builds, and nothing here is a linked address.
     add_test(NAME core
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-core.sh
                 ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}

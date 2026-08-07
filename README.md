@@ -62,7 +62,7 @@ You need [CMake](https://cmake.org/), a C++ compiler, the
 
 ```sh
 make                    # build the toolchain, the kernel and the disk image
-cd kernel && make run   # boot it, and type at the shell yourself
+cd kernel && make demo  # boot it, and type at the shell yourself
 ```
 
 You get a single-user root shell first, at a `#` prompt. Type `^D` and the system comes up

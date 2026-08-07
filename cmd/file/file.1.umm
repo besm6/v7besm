@@ -26,8 +26,8 @@ is not zero padding: **FMAGIC** is **BESM** 01 07 and **NMAGIC** is **BESM** 01 
 (*doc/File_Magic.md*, *cross/besm6/b.out.h*). *File* answers:
 
 **pure executable**
-: **NMAGIC**: read-only const and text, page-aligned data. Only **/bin/sh** and
-  **/usr/test/puret** are built this way.
+: **NMAGIC**: read-only const and text, page-aligned data. **/bin/sh** is the only one on this
+  disk built that way; **/mnt/test/puret** is the other, on the test pack.
 
 **executable**
 : **FMAGIC** with **RELFLG** set - a fully linked program.

@@ -1,7 +1,7 @@
 #!/bin/sh
-# Boot the kernel and have it run one user program, /usr/test/coret -- the check on
-# kernel/TODO.md's `int'-vs-pointer sweep.  core.ini is the dialogue and its header is the
-# account of it.
+# Boot the kernel, have it mount the test pack, and run one user program off it,
+# /mnt/test/coret -- the check on kernel/TODO.md's `int'-vs-pointer sweep.  core.ini is the
+# dialogue and its header is the account of it.
 #
 # Invoked by ctest as: run-core.sh B6FSUTIL BESM6 SRCDIR, with the kernel test BUILD directory
 # as the working directory -- where root.img and ../unix already are.
@@ -17,10 +17,15 @@
 # and a free through alloc.c and free.c, with the superblock totals maintained on both sides --
 # so a `COUNT WRONG IN SUPERBLK' here would mean that path drifted.  It costs a second.
 #
-# THE DISK IS A COPY, at volume 3086: root3072.disk is the build artifact and nothing writes it.
-# `-S' takes its direction from the input -- it looks for the SIMH zone mark and converts the
+# THE ROOT DISK IS A COPY, at volume 3086: root3072.disk is the build artifact and nothing writes
+# it.  `-S' takes its direction from the input -- it looks for the SIMH zone mark and converts the
 # other way if it finds one -- so the same option builds the container before the run and unpacks
 # it after.
+#
+# THE TEST PACK IS NOT COPIED and appears nowhere below.  test3077.disk is a build artifact too,
+# but core.ini attaches it `-r' and mounts it `-r', so every test that wants it shares the one
+# copy and there is nothing here to convert, check or clean up.  A test that needed to WRITE it
+# would convert its own, at its own volume, exactly as this does for the root.
 #
 # THE DRUMS ARE `-n' AND ARE NAMED FOR THIS TEST.  ctest runs the SIMH tests in parallel; two
 # tests sharing a swap container would swap over each other.

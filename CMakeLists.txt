@@ -135,16 +135,24 @@ if(B6RUNTIME_LIB)
     # kernel mounts (root.manifest, at the top of the tree).  `rootfs' is the aggregate every
     # b6_prog() hangs itself on; the programs come after lib/, since each links against its libc.
     #
-    # DECLARED BEFORE add_subdirectory(lib), not after it as it used to be, because lib/test
-    # now stages its programs onto the image too (as /usr/test/*, task 25c) and hangs them on
-    # this target through the same `if(TARGET rootfs)' guard b6_prog() uses.  An aggregate with
-    # no dependencies of its own can be created anywhere; only the guards care.
-    #
-    # ALL, so that a plain `make' stages the whole tree.  It matters since lib/test joined:
-    # those programs are staged by their EXISTING image targets (lib_<name>_img, a POST_BUILD
-    # copy), and those live in the test aggregate rather than in ALL -- so without this,
-    # `make' alone would leave build/rootfs/usr/test empty and only `make test' would fill it.
+    # ALL, so that a plain `make' stages the whole tree.
     add_custom_target(rootfs ALL)
+
+    #
+    # ...and build/testfs/, the staging tree of the SECOND filesystem: the lib/test programs,
+    # which used to be /usr/test on the root image and are now /test on a pack of their own
+    # (test.manifest, beside root.manifest).  `testfs' is to lib/test what `rootfs' is to
+    # cmd/: the aggregate every stager hangs itself on.
+    #
+    # DECLARED BEFORE add_subdirectory(lib), because that is where the only stager is and it
+    # hangs on this target through the same `if(TARGET ...)' guard b6_prog() uses.  An
+    # aggregate with no dependencies of its own can be created anywhere; only the guards care.
+    #
+    # ALL for the reason rootfs is: those programs are staged by their EXISTING image targets
+    # (lib_<name>_img, a POST_BUILD copy), and those live in the test aggregate rather than in
+    # ALL -- so without this, `make' alone would leave build/testfs/test empty and only
+    # `make test' would fill it.
+    add_custom_target(testfs ALL)
 
     #
     # THE DEVELOPMENT TREE ON THE IMAGE: /lib and /usr/include, which task C9e put
@@ -411,6 +419,9 @@ if(B6RUNTIME_LIB)
     #
     if(TARGET rootimg)
         add_dependencies(rootimg rootfs)
+    endif()
+    if(TARGET testimg)
+        add_dependencies(testimg testfs)
     endif()
 else()
     message(STATUS "kernel/, lib/ and the rootfs: external compiler runtime (libruntime.a) not installed; skipping")

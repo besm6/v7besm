@@ -1,0 +1,187 @@
+# The TEST PACK -- the lib/test programs as /test/*, mounted on /mnt and so reached as
+# /mnt/test/*.  `b6fsutil -n -M' builds it into test.img, `-S' converts that into the SIMH
+# container kernel/test/CMakeLists.txt attaches as md01.  Grammar: cmd/fsutil/README.md.
+#
+# They were /usr/test on the root until this existed, and cost that disk ~262 of its 2000
+# blocks for programs no boot path, command or manual page refers to.
+#
+# NOBODY MOUNTS IT AUTOMATICALLY.  There is no line in /etc/rc: a boot that did not attach the
+# pack would fail one.  Whoever wants it types `/etc/mount /dev/md1 /mnt -r', and
+# kernel/test/core.ini is the one dialogue that does.
+#
+# READ-ONLY, which is what lets every test share one copy -- `attach -r' and `mount -r', no
+# conversion and no volume number per test.  A test that needs to write converts its own copy
+# first, as kernel/test/run-core.sh does for the root.
+#
+# THE LIST IS ALSO IN lib/test/progs.cmake, which is what stages these and what
+# kernel/test/CMakeLists.txt reads for the dependency list.  Adding a program means editing
+# both; nothing here can be generated.
+#
+# A `source' resolves against b6fsutil's CWD, the kernel test build directory, so
+# `../../testfs' is build/testfs/ -- lib/test's staging tree, separate from build/rootfs/ so
+# that B6_ROOTFS goes on meaning what the root image holds.
+
+default
+owner 0
+group 0
+dirmode 0755
+filemode 0644
+
+# fsck reconnects a disconnected file here.  Nothing fscks this pack -- it is checked on the
+# host with `b6fsutil -c' and never written by a guest -- but mkfs makes one and so does this.
+dir /lost+found
+
+dir /test
+
+# dirt's workspace (lib/test/dirt.c names it /mnt/test/scratch), and the only directory here
+# meant to stay empty: that is what lets dirt assert a COMPLETE listing.
+dir /test/scratch
+
+# ---- the library test programs ----------------------------------------------------
+#
+# spawn is NOT here and shellt is: spawn's premise is that /bin/sh cannot be exec'd, true only
+# under b6sim, and shellt is the other half of it.  memt and suidt are here for that reason
+# too -- see either source.
+
+file /test/hello
+source ../../testfs/test/hello
+mode 0755
+
+file /test/vararg
+source ../../testfs/test/vararg
+mode 0755
+
+file /test/errno
+source ../../testfs/test/errno
+mode 0755
+
+file /test/procs
+source ../../testfs/test/procs
+mode 0755
+
+file /test/sbrkt
+source ../../testfs/test/sbrkt
+mode 0755
+
+file /test/malloct
+source ../../testfs/test/malloct
+mode 0755
+
+file /test/strings
+source ../../testfs/test/strings
+mode 0755
+
+file /test/gen
+source ../../testfs/test/gen
+mode 0755
+
+file /test/strtolt
+source ../../testfs/test/strtolt
+mode 0755
+
+file /test/environ
+source ../../testfs/test/environ
+mode 0755
+
+file /test/jmp
+source ../../testfs/test/jmp
+mode 0755
+
+file /test/headers
+source ../../testfs/test/headers
+mode 0755
+
+file /test/stdiot
+source ../../testfs/test/stdiot
+mode 0755
+
+file /test/printft
+source ../../testfs/test/printft
+mode 0755
+
+file /test/scanft
+source ../../testfs/test/scanft
+mode 0755
+
+file /test/execs
+source ../../testfs/test/execs
+mode 0755
+
+file /test/shellt
+source ../../testfs/test/shellt
+mode 0755
+
+file /test/memt
+source ../../testfs/test/memt
+mode 0755
+
+file /test/kctlt        # kctl(2), kernel/kctl.c.  Runs in BOTH worlds -- b6sim answers it
+                        # too (cmd/sim/kernel.h) -- and reads /dev/kmem, so here it is root's.
+source ../../testfs/test/kctlt
+mode 0755
+
+file /test/suidt        # 0755 and not 04755: the program that TESTS the bit must not carry it
+source ../../testfs/test/suidt
+mode 0755
+
+file /test/unprivt      # drops to uid 7 and runs /bin/ps and /bin/df, first checking that
+                        # /dev/kmem, /dev/mem and /dev/rmd0 still refuse that uid
+source ../../testfs/test/unprivt
+mode 0755
+
+file /test/timet
+source ../../testfs/test/timet
+mode 0755
+
+file /test/pwent
+source ../../testfs/test/pwent
+mode 0755
+
+# ttyt is pwent's other half, image-only because /etc/ttys is: ttyname(0), ttyslot() and
+# getlogin() answer for their failure paths under b6sim and for real here.
+file /test/ttyt
+source ../../testfs/test/ttyt
+mode 0755
+
+# dirt is opendir(3)'s, image-only because on the host a directory opens and fstat()s fine
+# and only read(2) refuses -- so under b6sim every directory reads as empty, not as an error.
+file /test/dirt
+source ../../testfs/test/dirt
+mode 0755
+
+file /test/signals
+source ../../testfs/test/signals
+mode 0755
+
+file /test/matht
+source ../../testfs/test/matht
+mode 0755
+
+# termcapt is lib/libtermcap's, and reads /etc/termcap off the ROOT pack rather than this one.
+# Under b6sim it is handed the same file out of the source tree (lib/test/termcapt.args).
+file /test/termcapt
+source ../../testfs/test/termcapt
+mode 0755
+
+# cursest and curstty are lib/libcurses', and read /etc/termcap for termcapt's reason.
+# cursest sets My_term so initscr() never calls gettmode(), which is what makes b6sim and this
+# kernel agree; curstty does not, and so was image-only.  Nothing runs curstty now.
+file /test/cursest
+source ../../testfs/test/cursest
+mode 0755
+
+file /test/curstty
+source ../../testfs/test/curstty
+mode 0755
+
+# puret is the only PURE (NMAGIC) image on either pack but /bin/sh, and so the only reason
+# kernel/text.c's xalloc()/xexpand()/xccdec() run at all.  Task 26.
+file /test/puret
+source ../../testfs/test/puret
+mode 0755
+
+# coret is the one program here with a SIMH test of its own: kernel/test/core.ini boots the
+# kernel, mounts this filesystem and types its name.  b6sim has neither a core dump nor ptrace.
+file /test/coret
+source ../../testfs/test/coret
+mode 0755

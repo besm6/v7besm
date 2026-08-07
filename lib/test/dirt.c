@@ -2,7 +2,7 @@
 // dirt -- opendir(3), readdir(3) and the rest of directory(3).
 //
 // IMAGEONLY, and the reason is sharper than the other five.  b6sim maps every system call
-// onto the host, and on the host open("/usr/test", O_RDONLY) SUCCEEDS and fstat() reports
+// onto the host, and on the host open("/mnt/test", O_RDONLY) SUCCEEDS and fstat() reports
 // S_IFDIR -- only read(2) refuses, with EISDIR.  So under the simulator opendir() returns
 // a perfectly good DIR and the first readdir() returns NULL: every directory in the world
 // looks empty, and looks it in exactly the way an empty directory does.  One .expected
@@ -27,7 +27,7 @@
 //   - dirfd() names the directory itself, which is how ls(1) tells a directory from the
 //     plain file it was handed.
 //
-// /usr/test/scratch is its own, empty, and in root.manifest for that reason: it is the one
+// /mnt/test/scratch is its own, empty, and in test.manifest for that reason: it is the one
 // way to assert a COMPLETE listing.  Everything this program creates it removes again, so
 // the filesystem it leaves is the one it found.
 //
@@ -41,7 +41,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define SCRATCH "/usr/test/scratch"
+#define SCRATCH "/mnt/test/scratch"
 
 // One character, DIRSIZ - 2 and DIRSIZ - 1 -- and `full' below is exactly DIRSIZ, which is
 // the whole point: on the disk that one fills d_name with no room for a terminator, so

@@ -37,7 +37,7 @@ It cannot fire today, and the reason is worth knowing rather than discovering. `
 links an ordinary program `FMAGIC`, and `getxfile()` (`kernel/sys1.c:265`) forces
 `ux_tsize = 0` for that magic — an impure program is one writable region and has no separate
 text — so `u.u_tsize` is 0 and `base < 0` is never true. It becomes live the day something
-that writes a device is linked **pure**, as `/bin/sh` and `/usr/test/puret` already are. The
+that writes a device is linked **pure**, as `/bin/sh` and `/mnt/test/puret` already are. The
 symptom would be an `EFAULT` from a `write(2)` whose buffer looked perfectly well aligned.
 
 `mkfs` is not exposed to it in any case — it has one buffer and that buffer is bss — but the

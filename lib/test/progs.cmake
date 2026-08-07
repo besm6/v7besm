@@ -1,11 +1,13 @@
-# The library test programs that go on the root disk image, as /usr/test/<name>.
+# The library test programs that go on the TEST PACK, as /test/<name> -- /mnt/test/<name>
+# once the kernel has mounted it.  They were /usr/test on the root image until the pack
+# existed; ../../test.manifest's header is the account of why they moved.
 #
 # ONE LIST, TWO CONSUMERS, and they are configured in different directories: this one
-# (lib/test/CMakeLists.txt) links and stages them, and kernel/test/CMakeLists.txt names
-# them in ROOTFS_FILES -- the dependency list that makes editing a test source rebuild
-# root.img -- and registers the ctest case that diffs each program's output after the
-# kernel has run it.  A third consumer, ../../root.manifest, is a static file and says the
-# same names by hand; nothing but the manifest's own grammar can be generated for it.
+# (lib/test/CMakeLists.txt) links and stages them into build/testfs/test/, and
+# kernel/test/CMakeLists.txt names them in TESTFS_FILES -- the dependency list that makes
+# editing a test source rebuild test.img.  A third consumer, ../../test.manifest, is a static
+# file and says the same names by hand; nothing but the manifest's own grammar can be
+# generated for it.
 #
 # THIS IS NOT THE SAME LIST as the b6_libtest() calls next door, and deliberately.  Two
 # programs are in one world only:
@@ -15,7 +17,7 @@
 #           with a shell that really does start.
 #   memt    runs on the image ONLY, and is not a libc test at all: it is the user-mode half
 #           of the memory driver's (kernel/dev/mem.c, task 27), and this is where a program
-#           can be run off /usr/test by a real kernel for the price of one b6_libtest() call.
+#           can be run off /mnt/test by a real kernel for the price of one b6_libtest() call.
 #   kctlt   IS NOT ONE OF THEM, and is worth naming for that: its subject is kctl(2) over
 #           the kernel-variable table (kernel/kctl.c), which for a while made it image-only
 #           like memt.  b6sim imitates a kernel now -- the table, the values behind it and
@@ -47,7 +49,7 @@
 #           core dump there at all, and ptrace(2) is refused with EPERM.  IT IS ALSO THE ONE
 #           PROGRAM HERE WITH A SIMH TEST OF ITS OWN (kernel/test/core.ini), rather than
 #           waiting for an image-side runner that no longer exists.
-# So `spawn' is absent below and the other seven are present: 31 names here, 25 b6sim cases
+# So `spawn' is absent below and the other eight are present: 32 names here, 25 b6sim cases
 # next door.
 #
 # NOR IS EVERY NAME HERE A libc TEST any more.  termcapt is lib/libtermcap's and cursest and
@@ -61,7 +63,7 @@
 # The order is lib/test/CMakeLists.txt's registration order -- roughly the order libc was
 # built up, so a failure early in the list is a failure in something everything after it
 # depends on.  It was also the order the deleted image-side runner used.  The list survives
-# because root.manifest and kernel/test/CMakeLists.txt both stage /usr/test from it.
+# because test.manifest and kernel/test/CMakeLists.txt both build the pack from it.
 set(B6_LIBTEST_IMAGE
     hello vararg errno procs sbrkt malloct strings gen strtolt environ jmp headers
     stdiot printft scanft execs shellt memt kctlt suidt unprivt timet pwent ttyt dirt signals

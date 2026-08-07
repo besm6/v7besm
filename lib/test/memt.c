@@ -3,7 +3,7 @@
 //
 // THIS PROGRAM RUNS ON THE DISK IMAGE ONLY, never under b6sim, and unlike its neighbours
 // here it is not about libc: it is the user-mode half of the memory driver's test, and the
-// libc suite is where it can be run off /usr/test by a booted kernel for the price of one
+// libc suite is where it can be run off /mnt/test by a booted kernel for the price of one
 // b6_libtest() call.  kernel/test/mmutest covers the other half -- copyphys(), the mapped
 // bracket underneath /dev/mem -- against the bare machine.
 //

@@ -4,7 +4,7 @@
 // THIS PROGRAM RUNS ON THE DISK IMAGE ONLY, never under b6sim, and like memt.c next door it
 // is not a libc test at all.  It belongs to cmd/mkdir and cmd/rmdir (task C1a) and to cmd/mv
 // (task C1b) -- the three setuid-root programs this system has -- and it is here for the
-// reason memt is: /usr/test is where a program can be run off the image by a booted kernel
+// reason memt is: /mnt/test is where a program can be run off the image by a booted kernel
 // for the price of one b6_libtest() call.  b6sim could not run it in any case -- there is no
 // /bin/mkdir on the build machine, and no kernel underneath to change a uid.
 //

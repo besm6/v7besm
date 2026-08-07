@@ -10,7 +10,7 @@
 # kernel/ can also still be built in isolation: `cmake -S kernel -B <dir> && cmake --build <dir>'.
 #
 # make        -- build the `unix' image (ends by printing `b6size -w unix')
-# make run    -- boot it under SIMH (besm6 unix.ini)
+# make demo   -- boot it under SIMH (besm6 unix.ini), an interactive session
 # make tests  -- build the kernel/test SIMH programs, do not run them
 # make test   -- build and run the kernel tests (label `kernel')
 # make clean  -- remove the top-level build tree
@@ -18,13 +18,13 @@
 TOP   := ..
 BUILD := $(TOP)/build
 
-.PHONY: all run tests test clean
+.PHONY: all demo tests test clean
 
 all: | $(BUILD)
 	cmake --build $(BUILD) --target kernel
 
-run: all
-	cmake --build $(BUILD) --target run
+demo: all
+	cmake --build $(BUILD) --target demo
 
 tests: | $(BUILD)
 	cmake --build $(BUILD) --target tests

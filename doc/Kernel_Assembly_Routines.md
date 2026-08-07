@@ -220,8 +220,8 @@ neither for stylistic reasons:
   test pattern. The number is the machine's, not a measurement.
 
 `uhome` is initialised in `main()` immediately after `proc[0].p_addr`; see
-[README.md](../kernel/README.md), "The u-area invariant". `make run` with
-[kernel/unix.ini](../kernel/unix.ini) boots the image under SIMH.
+[README.md](../kernel/README.md), "The u-area invariant". `cd kernel && make demo` boots the image
+under SIMH with [kernel/unix.ini](../kernel/unix.ini).
 
 ---
 

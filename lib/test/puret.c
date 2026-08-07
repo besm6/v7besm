@@ -20,7 +20,7 @@
 // on writing to the text, because there would not be one.
 //
 // IT RUNS IN BOTH WORLDS, and that is the point of the arrangement: under b6sim the loader
-// is cmd/sim/machine.cpp and every system call is the host's, while off /usr/test it is
+// is cmd/sim/machine.cpp and every system call is the host's, while off /mnt/test it is
 // getxfile() and the real thing.  One .expected file holds both to the same answer, so a
 // disagreement is a bug in one of them rather than a fact about either (kernel/README.md).
 //

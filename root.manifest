@@ -7,9 +7,9 @@
 # C2, plus the static files of /etc.
 # Task 24 put them here and task 25b
 # flipped the last line, /etc/init, from the task-23 stand-in to the real one.  Task 25c
-# added /usr/test, the lib/test programs that b6sim also runs; the termcap port added
-# /etc/termcap and termcapt beside them, which are lib/libtermcap's rather than libc's, and
-# the curses port added cursest and curstty, which are lib/libcurses' and read the same file.
+# added /usr/test, the lib/test programs that b6sim also runs, and the termcap and curses
+# ports added three more beside them; ALL OF THAT HAS SINCE LEFT for a filesystem of its own
+# (../test.manifest), leaving /etc/termcap, which they read and which stays here.
 # Task C1a (cmd/README.md) added /bin/mkdir and /bin/rmdir, which are the first entries here
 # to carry a mode the staging tree cannot express: they are SETUID ROOT.  Task C1b added
 # /bin/{cp,ln,mv,rm} and a third setuid program in mv, and task C1c added
@@ -21,8 +21,7 @@
 # either, together with THE FIRST HARD LINK this file has ever carried: /bin/[ is /bin/test.
 # Kernel task 29b added the three entries that make this a MULTI-USER image: /etc/getty,
 # /bin/login and the /etc/ttys that sends init looking for them -- plus /usr/guest, the first
-# directory here that is not root's, and /usr/test/ttyt, which asserts that ttyslot(3) can now
-# find a line in that file.  Task C25b added /usr/man -- two hundred manual pages in five
+# directory here that is not root's.  Task C25b added /usr/man -- two hundred manual pages in five
 # section directories, the largest single addition this file has ever taken, and the whole of
 # the manual in the dialect doc/Manual_Page_Format.md describes -- together with the
 # /usr/bin/man that finds them, and task C25a the /usr/bin/manview that formats one.
@@ -49,19 +48,17 @@
 # `cmake -S kernel' can still build and boot the kernel, but it cannot build root.img,
 # because nothing there stages a build/rootfs/ for these paths to point at.
 #
-# NOTHING WRITES THIS IMAGE IN PLACE.  root.img and root3072.disk are build artifacts, and
-# the one test that needs a writable filesystem -- kernel/test/session, which creates files,
-# runs sync(2) and then fscks what reached the disk -- converts its own copy at its own
-# volume number first, as the deleted run-*.sh drivers did.  The same trick, `b6fsutil -a', is how
-# that test gets its script onto the image without a line here, and how coninit can be put
-# back as /etc/init by hand when a console failure needs bisecting against a program that
-# links neither crt0 nor libc.
+# NOTHING WRITES THIS IMAGE IN PLACE.  root.img and root3072.disk are build artifacts, and a
+# test that needs a writable filesystem converts its own copy at its own volume number first
+# -- kernel/test/run-multi.sh and run-core.sh both do.  The same tool's `-a' is how a test can
+# get a guest script onto the image without a line here, and how coninit can be put back as
+# /etc/init by hand when a console failure needs bisecting against a program that links
+# neither crt0 nor libc.
 #
-# Three tests read this image: kernel/test/fstest, which checks the superblock and the root
-# inode below the boot path, and kernel/test/boot + kernel/test/console, which boot a
-# kernel against it.  kernel/test/login boots a copy too and is the one that WRITES the most
-# of it -- /etc/utmp made and filled in, and a device node's owner changed by login(1) -- which
-# is why the deleted run-login.sh fscked what came back and diffed four inodes; nothing does now.
+# Four tests read this image: fstest, which checks the superblock and the root inode below the
+# boot path, and boot, multi and core, which boot a kernel against it -- boot read-only at
+# volume 3072, the other two off writable copies at 3085 and 3086.  The second filesystem is
+# ../test.manifest's and is a separate matter.
 #
 # THE DEVICE NUMBERS ARE kernel/conf.c's, and that file is the authority: the major is the
 # row index in bdevsw[] (0 md, 1 mb) or cdevsw[] (0 console, 1 mem, 2 tty, 3 rmd, 4 rmb).
@@ -74,11 +71,11 @@
 # a minor number and an `attach' line are the same number.  There are no partitions: one
 # EC-5052 drive is 2000 blocks and swap lives on the drums (/dev/swap, block major 1).
 #
-# SINCE TASK C4c THERE ARE TWO DRIVES' WORTH OF NODES, md0/rmd0 and md1/rmd1, and only the
-# first is attached by an ordinary boot: kernel/test/mkfs is the one test that hangs a
-# second pack on md01, and the raw node is what /etc/mkfs writes a filesystem onto.  A node
-# for a drive nobody attached is not an error -- mdopen() accepts any minor below 64 and the
-# refusal comes at the first transfer -- so these two cost nothing on every other boot.
+# SINCE TASK C4c THERE ARE TWO DRIVES' WORTH OF NODES, md0/rmd0 and md1/rmd1, and md1 is now
+# the one with a standing job: the test pack (../test.manifest) is attached there and mounted
+# on /mnt.  The raw twin is what /etc/mkfs writes a filesystem onto.  A node for a drive nobody
+# attached is not an error -- mdopen() accepts any minor below 64 and the refusal comes at the
+# first transfer -- so neither costs anything on a boot that attaches only md00.
 #
 # AND SINCE NMOUNT WENT FROM 2 TO 8 THERE ARE EIGHT, md0 through md7.  The kernel can hold
 # eight mounts and iinit() takes one for the root, so seven filesystems can be on this
@@ -97,14 +94,6 @@ dir /bin
 dir /dev
 dir /etc
 dir /usr
-dir /usr/test
-
-# /usr/test/dirt's workspace, and the only directory on this image that is meant to stay
-# empty.  That is what lets dirt assert a COMPLETE listing -- `. .. and exactly what I just
-# made' -- rather than hunt for its own names among somebody else's, and an empty directory
-# is the only place the free-slot and full-width-name cases can be arranged on purpose.
-# It removes everything it creates, so this is empty again after a run.
-dir /usr/test/scratch
 
 # THE TOOLCHAIN.  It began as one program -- /usr/bin/cpp, the C preprocessor, the first
 # thing on this disk built from THE SAME SOURCES AS A HOST TOOL (task C9a in cmd/TODO.md)
@@ -174,10 +163,12 @@ mode 0777
 # manual page carries the correction.
 dir /lost+found
 
-# mount(1M)'s target, task C4f.  It has to exist and it has to be EMPTY of anything anybody
-# wants: mounting covers it, and whatever is underneath is unreachable until the unmount.
-# It also has to be nobody's working directory when the mount happens -- smount() refuses a
-# mount point whose inode is held more than once (i_count != 1, kernel/sys3.c) with EBUSY.
+# mount(1M)'s target, task C4f, and since the test pack arrived it has a tenant:
+# `/etc/mount /dev/md1 /mnt -r' puts the lib/test programs here as /mnt/test/* (../test.manifest).
+# It has to exist and it has to be EMPTY of anything anybody wants: mounting covers it, and
+# whatever is underneath is unreachable until the unmount.  It also has to be nobody's working
+# directory when the mount happens -- smount() refuses a mount point whose inode is held more
+# than once (i_count != 1, kernel/sys3.c) with EBUSY.
 dir /mnt
 
 # guest's home, and the first directory here that is not root's.  login(1) chdir()s to the
@@ -849,34 +840,15 @@ mode 0644
 # The terminal capability database, read by tgetent() in lib/libtermcap.  BSD's
 # termcap.small verbatim -- five entries, no `dumb', and vt100's `if=' names a tabset file
 # that is not on this image; lib/libtermcap/README.md says why none of that is edited out.
-# /usr/test/termcapt reads it from here, and reads THE SAME FILE (etc/termcap in the source
-# tree) under b6sim through $TERMCAP.
+# /mnt/test/termcapt reads it from here -- off this pack, not its own -- and reads THE SAME
+# FILE (etc/termcap in the source tree) under b6sim through $TERMCAP.
 file /etc/termcap       # the terminal capability database; etc/termcap
 source ../../rootfs/etc/termcap
 mode 0644
 
-# ---- the library test programs, task 25c ------------------------------------------
-#
-# lib/test/*.c, the same twenty-four images b6sim runs (lib/test/CMakeLists.txt), staged
-# into build/rootfs/usr/test/ by b6_libtest() and run HERE by the booted kernel --
-# The image-side runner that drove them is deleted; they are staged and no longer executed.
-# Under b6sim every syscall is the host's; this is where sysent[] meets a real caller.
-#
-# THE LIST IS ALSO IN lib/test/progs.cmake, which is what kernel/test/CMakeLists.txt reads
-# for ROOTFS_FILES and for the per-program ctest cases.  A manifest is a static file and
-# can be generated from nothing, so these stanzas are the one copy kept by hand; adding a
-# program means editing both.
-#
-# spawn is NOT here and shellt is: spawn's premise is that /bin/sh cannot be exec'd, which
-# is true only under b6sim, and shellt is the other half of it -- see either source.  memt
-# is here for the same reason and is not a libc test at all: it reads the kernel's own
-# memory through /dev/kmem and its own image through /dev/mem, neither of which b6sim has.
-# Nor is suidt: it drops to uid 7 and execs the two setuid programs above, which is the only
-# way anything on this image reaches getxfile()'s ISUID branch.  It is 0755 itself -- the
-# program that TESTS the bit must not carry it, or the drop it depends on would not happen.
-#
-# puret is the one PURE (NMAGIC) program among them, and one of only two images on this
-# disk whose text the kernel can share at all -- /bin/sh is the other.  Task 26.
+# THE LIBRARY TEST PROGRAMS ARE NOT HERE ANY MORE.  lib/test/*.c were /usr/test from task 25c
+# until the test pack took them (../test.manifest); they are /mnt/test/* now.  What that leaves
+# behind is /bin/sh as the only PURE (NMAGIC) image on this disk -- puret was the other.
 
 file /usr/bin/cpp       # cmd/cpp built natively -- task C9a, the first step of self-hosting
                         # and the first program here whose sources are also a host tool's
@@ -2236,168 +2208,6 @@ file /usr/dict/words     # cmd/look -- task C5b.  Sorted in BYTE order, which is
 source ../../rootfs/usr/dict/words
 mode 0644
 
-file /usr/test/hello
-source ../../rootfs/usr/test/hello
-mode 0755
-
-file /usr/test/vararg
-source ../../rootfs/usr/test/vararg
-mode 0755
-
-file /usr/test/errno
-source ../../rootfs/usr/test/errno
-mode 0755
-
-file /usr/test/procs
-source ../../rootfs/usr/test/procs
-mode 0755
-
-file /usr/test/sbrkt
-source ../../rootfs/usr/test/sbrkt
-mode 0755
-
-file /usr/test/malloct
-source ../../rootfs/usr/test/malloct
-mode 0755
-
-file /usr/test/strings
-source ../../rootfs/usr/test/strings
-mode 0755
-
-file /usr/test/gen
-source ../../rootfs/usr/test/gen
-mode 0755
-
-file /usr/test/strtolt
-source ../../rootfs/usr/test/strtolt
-mode 0755
-
-file /usr/test/environ
-source ../../rootfs/usr/test/environ
-mode 0755
-
-file /usr/test/jmp
-source ../../rootfs/usr/test/jmp
-mode 0755
-
-file /usr/test/headers
-source ../../rootfs/usr/test/headers
-mode 0755
-
-file /usr/test/stdiot
-source ../../rootfs/usr/test/stdiot
-mode 0755
-
-file /usr/test/printft
-source ../../rootfs/usr/test/printft
-mode 0755
-
-file /usr/test/scanft
-source ../../rootfs/usr/test/scanft
-mode 0755
-
-file /usr/test/execs
-source ../../rootfs/usr/test/execs
-mode 0755
-
-file /usr/test/shellt
-source ../../rootfs/usr/test/shellt
-mode 0755
-
-file /usr/test/memt
-source ../../rootfs/usr/test/memt
-mode 0755
-
-file /usr/test/kctlt     # kctl(2) over the kernel-variable table, kernel/kctl.c.  One of the
-                         # few here that runs in BOTH worlds: b6sim imitates a kernel well
-                         # enough to answer it (cmd/sim/kernel.h), so the same transcript has
-                         # to come back from a simulator with no kernel and from this one.
-                         # It reads /dev/kmem, so on the image it runs as root and only root.
-source ../../rootfs/usr/test/kctlt
-mode 0755
-
-file /usr/test/suidt     # 0755 and not 04755: see the note above
-source ../../rootfs/usr/test/suidt
-mode 0755
-
-file /usr/test/unprivt   # drops to uid 7 and runs /bin/ps and /bin/df, which since
-                         # KCTL_PSINFO and statfs(2) need no privilege -- and first checks
-                         # that /dev/kmem, /dev/mem and /dev/rmd0 still refuse that uid.
-source ../../rootfs/usr/test/unprivt
-mode 0755
-
-file /usr/test/timet
-source ../../rootfs/usr/test/timet
-mode 0755
-
-file /usr/test/pwent
-source ../../rootfs/usr/test/pwent
-mode 0755
-
-# ttyt is pwent's other half, and is here rather than in both worlds because /etc/ttys is:
-# ttyname(0), ttyslot() and getlogin() answer for their failure paths under b6sim and for
-# real here.  Task 29b.
-file /usr/test/ttyt
-source ../../rootfs/usr/test/ttyt
-mode 0755
-
-# dirt is opendir(3)'s, and is image-only for a reason worth knowing before trusting a
-# b6sim run of anything that walks a tree: on the host a directory OPENS and fstat()s
-# fine and only read(2) refuses it, so under the simulator every directory reads as
-# empty rather than as an error.  /usr/test/scratch below is its workspace -- empty on
-# the image and empty again when it has finished, which is what lets it assert a
-# COMPLETE listing rather than a search for its own names among somebody else's.
-file /usr/test/dirt
-source ../../rootfs/usr/test/dirt
-mode 0755
-
-file /usr/test/signals
-source ../../rootfs/usr/test/signals
-mode 0755
-
-file /usr/test/matht
-source ../../rootfs/usr/test/matht
-mode 0755
-
-# termcapt is lib/libtermcap's, not libc's, and it is here for the reason memt is: the
-# thing it reads -- /etc/termcap, above -- exists on this image and nowhere else.  Under
-# b6sim it is handed the same file out of the source tree instead (lib/test/termcapt.args).
-file /usr/test/termcapt
-source ../../rootfs/usr/test/termcapt
-mode 0755
-
-# cursest and curstty are lib/libcurses', and they read /etc/termcap for termcapt's reason.
-# cursest runs in both worlds: it sets My_term so that initscr() never calls gettmode(),
-# which is what makes b6sim and this kernel agree -- b6sim's ioctl is a no-op and this
-# console is ECHO|CRMOD|XTABS, so GT and NONL would otherwise differ and change the cursor
-# motion curses emits.  curstty is the half that follows from that: it does NOT set My_term,
-# and therefore ran HERE ONLY -- nothing runs it now.  It was also the LAST program, because
-# gettmode() clears XTABS on the real console and only endwin() puts it back.
-file /usr/test/cursest
-source ../../rootfs/usr/test/cursest
-mode 0755
-
-file /usr/test/curstty
-source ../../rootfs/usr/test/curstty
-mode 0755
-
-# puret is the only PURE (NMAGIC) image on the disk, and the only reason kernel/text.c's
-# xalloc()/xexpand()/xccdec() run at all: getxfile() forces ux_tsize to 0 for an FMAGIC
-# image, so every other program here has no shared text to share.  kernel/test/swap runs
-# three copies of it at once.
-
-file /usr/test/puret
-source ../../rootfs/usr/test/puret
-mode 0755
-
-# coret is the one program in this block with a SIMH test of its own -- kernel/test/core.ini
-# boots the kernel and types its name at the single-user prompt.  It has to be here rather
-# than merely staged: what it exercises is core() dumping a real image and ptrace(2) reaching
-# a real stopped child, neither of which b6sim has.
-file /usr/test/coret
-source ../../rootfs/usr/test/coret
-mode 0755
-
 # ---- character devices ----------------------------------------------------------
 
 cdev /dev/console       # cdevsw[0] minor 0: the operator's console, dev/sc.c
@@ -2461,28 +2271,25 @@ major 0
 minor 0
 mode 0600
 
+# THE TEST PACK'S DRIVE (../test.manifest), and the only one besides the root that anything
+# attaches.  Mode 0600 and root's IS the whole privilege story for mount(1M), which is not
+# setuid: mount(2) calls no suser() and gates on the mode of the special file, as v7 did.  It
+# must be the BLOCK node -- getmdev() insists on IFBLK, so /dev/rmd1 answers ENOTBLK.
 bdev /dev/md1           # bdevsw[0] minor 1: the second drive, for mount(1M) -- task C4f
 major 0
 minor 1
 mode 0600
 
-# A THIRD DRIVE, AND IT IS HERE TO BE REFUSED.  kernel/test/mount attaches a blank pack on
-# it -- formatted by SIMH's `attach -n', so every zone reads back as zeros -- and mounts it
-# on purpose, because sbcheck() (kernel/alloc.c) answering EINVAL on a device with no
-# filesystem is what retires cmd/mount/mount.1m.umm's oldest BUGS line: v7's mount(2) believes
-# whatever superblock it reads and crashes later.  There is no /dev/rmd2 beside it; nothing
-# has ever wanted the raw form of a drive that holds nothing.
 bdev /dev/md2           # bdevsw[0] minor 2: the third drive -- SIMH's md02
 major 0
 minor 2
 mode 0600
 
 # THE REST OF THE MOUNT TABLE.  NMOUNT is 8 and the root holds mount[0], so these five plus
-# md1 and md2 are the seven drives that can be mounted at once.  Only md3 is attached by any
-# test today -- kernel/test/mount hangs a second filesystem on it to prove that mount[2] can
-# be filled at all -- and the other four are nodes for drives nobody has attached, which
-# costs nothing: see the header above.
-bdev /dev/md3           # bdevsw[0] minor 3: SIMH's md03 -- kernel/test/mount's second mount
+# md1 and md2 are the seven drives that can be mounted at once.  Nothing attaches any of them
+# today, which costs nothing (see the header above) and is the only way to have them at all --
+# a `mknod' on a running system does not survive the image being rebuilt.
+bdev /dev/md3           # bdevsw[0] minor 3: SIMH's md03
 major 0
 minor 3
 mode 0600

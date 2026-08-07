@@ -17,7 +17,7 @@ touching memory management, [Intrinsics.md](Intrinsics.md) for how C reaches `00
 
 ```sh
 cd kernel && make          # produces `unix' (BESM-6 a.out), unix.nm and unix.dis
-make run                   # boot it under SIMH (`besm6 unix.ini')
+make demo                  # boot it under SIMH (`besm6 unix.ini')
 make test                  # the kernel tests (label `kernel')
 ```
 
@@ -235,10 +235,13 @@ These cover the image the build produces ([../root.manifest](../root.manifest) �
 | `fstest` | the superblock and root inode read through the real `md` driver, buffer cache and `sbcheck()`, strictly below the boot path |
 | `boot` | process 1 leaves the kernel, execs `/etc/init`, which forks `/bin/sh`, and the shell **prompts** |
 | `multi` | ^D out of that shell and the rest of the way: `/etc/rc`, a getty per line of `/etc/ttys`, `crypt(3)`, and **two people logged in at once** on the two Consuls |
-| `core` | one user program (`/usr/test/coret`) typed at that prompt: `core()` dumping a real image and `ptrace(2)` reaching a real stopped child — the two places the kernel builds a user address out of an integer |
+| `core` | the test pack mounted on `/mnt`, then one user program (`/mnt/test/coret`) typed at that prompt: `core()` dumping a real image and `ptrace(2)` reaching a real stopped child — the two places the kernel builds a user address out of an integer |
 
-`boot` attaches the pristine disk read-only — an assertion in itself; `multi` and `core` write, so
-each converts a copy of its own. All three are **`RUN_SERIAL`**: they type at the guest on a step
+`boot` attaches the pristine disk read-only — an assertion in itself; `multi` and `core` write the
+root, so each converts a copy of its own. The **test pack** ([../test.manifest](../test.manifest) →
+`test3077.disk`) is the second filesystem, carrying the `lib/test` programs as `/test/*`; it is
+attached `-r` on `md01` and mounted `-r`, so one copy serves every test and only `core` wants it.
+Nothing mounts it automatically — `/etc/rc` has no line for it, deliberately. All three are **`RUN_SERIAL`**: they type at the guest on a step
 budget, and SIMH drops characters out of a `send` when the host is oversubscribed. `core`
 adjudicates itself — `coret` prints a verdict per line and the `.ini` fires on the first `FAIL`, so
 no `.expected` on the host has to keep step with the image's layout; that is the pattern to copy

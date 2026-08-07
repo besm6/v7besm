@@ -302,7 +302,7 @@ the two shapes falls.
 
 * **SIMH**, under the booted kernel — for everything the above cannot say. Join the existing test
   in `kernel/test/` whose subject matches rather than taking a new volume: `console` (a typed
-  dialogue), `libtest` (a program off `/usr/test` diffed against a `.expected`), `session`
+  dialogue), `libtest` (a program off the test pack diffed against a `.expected`), `session`
   (anything that writes and is fscked on the host afterwards), `files` (a tree or an inode),
   `utils` (clock, signal, process, pipe), `login` (terminal modes, or a process that is not
   root's), `edit` (authoring a file, and here-documents), `fsinfo` (reading a device, or reporting
