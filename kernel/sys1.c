@@ -132,7 +132,10 @@ void exece()
     if (bp)
         bawrite(bp);
     bp = 0;
-    nc = (nc + NBPW - 1) & ~(NBPW - 1);
+    // Round the arg-list size up to a whole word.  NBPW is 6, so v7's `& ~(NBPW - 1)' is
+    // not a rounding operation at all -- it clears bits 0 and 2, taking 1 to 2 and 7 to 8 --
+    // for the reason the BSIZE remainder above gives.  A divide and a multiply, as there.
+    nc = wtob(btow(nc));
     // The stack must hold the pointer vector as well as the strings: argc, na pointers,
     // the two NULLs and the terminating word.
     if (getxfile(ip, nc + (na + 4) * NBPW) || u.u_error)

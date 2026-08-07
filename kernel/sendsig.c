@@ -49,10 +49,15 @@ void drainbrz(void);
 
 // Let a process handle a signal by simulating a call.
 //
-// `p' is the handler (u.u_signal[signo], already vetted by psig()), and the frame is
-// built on the USER stack, which grows UP from 070000 -- exec seeds it there; see the
-// arg-block comment in sys1.c.  r15 is a WORD index naming the first free slot, so a
-// push stores AT r15 and steps it by one word, not by a byte count:
+// `p' is the handler's ENTRY WORD ADDRESS -- u.u_signal[signo], already vetted by psig()
+// -- and it is an INT rather than a caddr_t because that is what it is: nothing
+// dereferences it, `выпр' takes a word address, and the only use below is `tr->ret = p'.
+// A caddr_t there would have been a fat pointer made by a bit copy, with a clear marker
+// and a byte field reading as #5: a type that lies about its own contents.
+//
+// The frame is built on the USER stack, which grows UP from 070000 -- exec seeds it
+// there; see the arg-block comment in sys1.c.  r15 is a WORD index naming the first free
+// slot, so a push stores AT r15 and steps it by one word, not by a byte count:
 //
 //      n .. n+20   the saved reg.h frame (copyout, one call)
 //      n+21        `$77 SYS_sigret'  -- the return trampoline
@@ -61,7 +66,7 @@ void drainbrz(void);
 // The handler is entered by the ordinary calling convention for a one-argument
 // function (doc/Besm6_Calling_Conventions.md): the last -- here the only -- argument
 // in the accumulator, r14 the negative argument count, r13 the return address.
-void sendsig(caddr_t p, int signo)
+void sendsig(int p, int signo)
 {
     register struct trap *tr = (struct trap *)u.u_ar0;
     register int n;
@@ -82,8 +87,11 @@ void sendsig(caddr_t p, int signo)
     // the return value -- on the PDP-11 it was pushing two words, not twenty-two --
     // and would resume a process whose saved context was never stored.  Kill it
     // instead; exit() does not come back.
-    if (copyout((caddr_t)tr, (caddr_t)n, wtob(NREGFRAME)) < 0 ||
-        suword((caddr_t)(n + NREGFRAME), sigcode[0]) < 0)
+    // `(caddr_t)(int *)' on both: n is an int word address, and the bare cast would be a bit
+    // COPY leaving the byte field 0 -- byte #5.  copyout() and suword() mask it away, so
+    // either spelling works today; this one is also right if they ever stop.
+    if (copyout((caddr_t)tr, (caddr_t)(int *)n, wtob(NREGFRAME)) < 0 ||
+        suword((caddr_t)(int *)(n + NREGFRAME), sigcode[0]) < 0)
         exit(SIGKILL);
 
     // The word just planted is one the handler EXECUTES, and the store that planted it was
@@ -98,7 +106,7 @@ void sendsig(caddr_t p, int signo)
     tr->r14  = -1;                // argument count, negative, per the convention
     tr->r13  = n + NREGFRAME;     // return address: the planted extracode
     tr->r15  = n + NREGFRAME + 1; // the handler's own frame starts above it
-    tr->ret  = (int)p;            // and `выпр' enters the handler
+    tr->ret  = p;                 // and `выпр' enters the handler
     tr->creg = 0;                 // no address modifier armed
     tr->rreg = RREG_C;            // the AU mode word compiled code runs in.  NOT zero,
                                   //   which is what setregs() leaves after an exec:
@@ -136,7 +144,7 @@ void sigret()
     register struct trap *tr = (struct trap *)u.u_ar0;
     struct trap frame;
 
-    if (copyin((caddr_t)(tr->r15 - (NREGFRAME + 1)), (caddr_t)&frame, wtob(NREGFRAME)) < 0) {
+    if (copyin((caddr_t)(int *)(tr->r15 - (NREGFRAME + 1)), (caddr_t)&frame, wtob(NREGFRAME)) < 0) {
         u.u_error = EFAULT;
         return;
     }

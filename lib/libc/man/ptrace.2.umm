@@ -89,6 +89,14 @@ the alignment conditions v7's page attaches to *addr* - "must be even", "0 mod 4
 arise at all. There is no I/D separation either, so requests 1 and 2 name the same space and so
 do 4 and 5.
 
+*Addr* is declared `int *` - a plain word address, not a `char *` - and that is the interface:
+there is no way to name a byte, and requests 1, 2, 4 and 5 transfer whole 48-bit words. A fat
+`char *` passed here has its byte offset dropped and floors to the word containing it. **The
+units are not the same for every request.** For 1, 2, 4 and 5 it is an address in the child's
+address space; for 3 and 6 it is a word INDEX into the u-area, 0 through USIZE-1, where v7's was
+a byte offset; for 7 and 9 it is the resume PC, with 1 still reserved for "leave it where it
+stopped". *Data* and the returned word are whole words too. See Unix_V7_System_Calls.md section 4.
+
 ## SEE ALSO
 
 wait(2), signal(2), adb(1)

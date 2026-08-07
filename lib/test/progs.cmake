@@ -42,7 +42,12 @@
 #           simulator opendir() returns a perfectly good DIR and the first readdir() returns
 #           NULL -- every directory in the world looks empty, and looks it in exactly the way
 #           an empty one does.  Nothing in an expectation can tell those apart.
-# So `spawn' is absent below and the other six are present: 30 names here, 25 b6sim cases
+#   coret   runs on the image ONLY, and is the kernel's, not libc's: it is what closes the
+#           `int'-vs-pointer sweep, and neither arm of it exists under b6sim -- there is no
+#           core dump there at all, and ptrace(2) is refused with EPERM.  IT IS ALSO THE ONE
+#           PROGRAM HERE WITH A SIMH TEST OF ITS OWN (kernel/test/core.ini), rather than
+#           waiting for an image-side runner that no longer exists.
+# So `spawn' is absent below and the other seven are present: 31 names here, 25 b6sim cases
 # next door.
 #
 # NOR IS EVERY NAME HERE A libc TEST any more.  termcapt is lib/libtermcap's and cursest and
@@ -61,4 +66,4 @@ set(B6_LIBTEST_IMAGE
     hello vararg errno procs sbrkt malloct strings gen strtolt environ jmp headers
     stdiot printft scanft execs shellt memt kctlt suidt unprivt timet pwent ttyt dirt signals
     matht
-    termcapt cursest curstty puret)
+    termcapt cursest curstty puret coret)

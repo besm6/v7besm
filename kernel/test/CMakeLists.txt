@@ -507,6 +507,38 @@ if(BESM6)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(multi PROPERTIES LABELS kernel TIMEOUT 600 RUN_SERIAL TRUE)
 
+    # ---------------------------------------------------------------------------------
+    # core -- ONE USER PROGRAM RUN BY THE REAL KERNEL, on its own volume (3086).  The
+    # check on kernel task 34, the `int'-vs-pointer sweep.
+    # ---------------------------------------------------------------------------------
+    #
+    # `boot' stops at the single-user prompt; this types one command at it,
+    # /usr/test/coret, and lets the program adjudicate itself on the console.  What it is
+    # about is an address the kernel FABRICATED OUT OF AN INTEGER: core() dumping the
+    # user's image through `u_base = 0' -- a bit copy whose byte field reads as #5, so
+    # the whole image went to disk five bytes out of phase with a chunk missing off the
+    # end -- and ptrace(2)'s addr, whose unit was written down nowhere until now.
+    #
+    # THE THIRD TEST THAT BOOTS, and the first that runs a program off /usr/test since the
+    # image-side libtest was deleted.  It exists as a test of its own rather than as a
+    # libtest case because NEITHER ARM RUNS UNDER b6sim: there is no core dump there at
+    # all, and ptrace is refused with EPERM.  The two bugs the sweep started from were
+    # found by a user program under a booted kernel and by nothing else, which is the
+    # whole argument for this file.
+    #
+    # RUN_SERIAL for the reason `boot' and `multi' carry it: these type at the guest on a
+    # step budget, and SIMH drops characters out of a `send' when the host is
+    # oversubscribed.  It is not a lock -- what they are sensitive to is the load of the
+    # whole machine, not one another.
+    #
+    # No fixture and no generated .ini: run-core.sh converts its own writable copy of
+    # root.img, which TEST_TARGETS already builds, and nothing here is a linked address.
+    add_test(NAME core
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/run-core.sh
+                ${B6FSUTIL} ${BESM6} ${CMAKE_CURRENT_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(core PROPERTIES LABELS kernel TIMEOUT 600 RUN_SERIAL TRUE)
+
 endif()
 
 # `make test' truncates mdshort3076.disk to nothing before running mdtest: run 4 attaches

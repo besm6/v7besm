@@ -21,7 +21,6 @@ The tasks left are small, independent, and were deferred deliberately.
 |---|---|---|
 | 32 | `profil()`: implement `addupc()` or make it fail | small; the decision is the task |
 | 33 | `ptrace` single-step | small now, blocked after |
-| 34 | the `int` ↔ pointer audit | open-ended |
 
 ---
 
@@ -79,46 +78,3 @@ decoder.
 
 **Size.** Small now; the full version is a task of its own and should be re-scoped when a debugger
 exists.
-
----
-
-## 34. The `int` ↔ pointer audit
-
-Both bugs `libtest` found on its first run were one pattern in two disguises — **v7 packs flags into
-spare low bits of addresses, and this machine has none** — and both sat in code every other test
-walked straight past. The rule and the two worked examples are in README.md's gotchas. What is *not*
-done is the sweep.
-
-**What to look for.** Two distinct mistakes:
-
-* **A mask on `(int)ptr`.** A `caddr_t` is a fat pointer — marker in bit 48, byte offset in bits
-  47–45 — so `(int)cp & MASK` reaches bits of the *word* address and cannot see the byte offset at
-  all. Grep for `& 1`, `& ~1`, `& (NBPW - 1)` and `& CROUND`-shaped masks. `prim.c`'s clists and
-  `sh`'s parse nodes are the two already fixed.
-**One boundary this rule does NOT cross, found by task C8.** "An `int` and a pointer are the same
-word here" is true of a *run-time* conversion and false of a **static initializer**: the compiler
-folds an address constant from `&lvalue`, an array name and *address ± constant*, and from no
-**cast** at all, so `(int)proc` and `(int *)proc` are both rejected outright — and a non-`void`
-pointer field will not take a bare `proc` either. `struct ksym`'s address field in
-[kctl.c](kctl.c) is a `void *` for that reason, which makes it fat and means every read of it
-goes through `ptrword()`. [../doc/Besm6_Data_Representation.md](../doc/Besm6_Data_Representation.md)
-§7 carries the general rule now. It is not a hazard for the sweep below — it fails loudly at
-compile time — but it is the answer to "why is this a `void *`" and it will be asked.
-
-* **A pointer fabricated from a small integer.** `u.u_dirp = (caddr_t)u.u_arg[0]`
-  ([syscall.c](syscall.c)) is fine — that cast is a silent `COPY`, so the caller's marker and byte
-  offset survive and `namei()`'s `fubyte(u.u_dirp++)` is right. Everywhere *else* has to be checked
-  one site at a time: `(caddr_t)ipc.ip_addr` in [sig.c](sig.c) (four sites) is a `ptrace` client's
-  address and is only right if a word address is what the ABI promises, which nothing states today.
-  An `int` and a pointer are the same word here and `b6cc` converts between them without a word.
-
-**Deliverable.** A pass over `kernel/*.c` and `kernel/dev/*.c` recording, per site, which of the two
-things the integer is; the fixes; and the ABI sentence for `ptrace`'s `ip_addr` written down in
-[../doc/Unix_V7_System_Calls.md](../doc/Unix_V7_System_Calls.md).
-
-**How to verify.** Neither of the two known bugs reproduced under `b6sim`, where the host serves the
-system call and the kernel's copy never runs, and neither was found by review — both were found by a
-*user program* doing something ordinary. So the check on this task is a user-level program that
-exercises the site, run under `libtest`, not an inspection.
-
-**Size.** Open-ended; do it in one sitting per file and stop when the grep is clean.

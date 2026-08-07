@@ -226,7 +226,7 @@ int issig(void)
 void psig(void)
 {
     deliver = 0;
-    sendsig((caddr_t)hentry1, SIG1);
+    sendsig((int)hentry1, SIG1);
 }
 
 int setpri(struct proc *pp)
@@ -293,7 +293,7 @@ void trap(void)
         // puts the program back on the faulting instruction -- the RIGHT half of its word.
         fault1spsw = tr->spsw;
         fault1ret  = tr->ret;
-        sendsig((caddr_t)hentry2, SIG2);
+        sendsig((int)hentry2, SIG2);
         return;
     }
 

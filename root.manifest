@@ -2394,6 +2394,14 @@ file /usr/test/puret
 source ../../rootfs/usr/test/puret
 mode 0755
 
+# coret is the one program in this block with a SIMH test of its own -- kernel/test/core.ini
+# boots the kernel and types its name at the single-user prompt.  It has to be here rather
+# than merely staged: what it exercises is core() dumping a real image and ptrace(2) reaching
+# a real stopped child, neither of which b6sim has.
+file /usr/test/coret
+source ../../rootfs/usr/test/coret
+mode 0755
+
 # ---- character devices ----------------------------------------------------------
 
 cdev /dev/console       # cdevsw[0] minor 0: the operator's console, dev/sc.c

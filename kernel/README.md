@@ -67,13 +67,20 @@ These cover the image the build produces ([../root.manifest](../root.manifest) �
 | `fstest` | the superblock and root inode read through the real `md` driver, buffer cache and `sbcheck()`, strictly below the boot path |
 | `boot` | process 1 leaves the kernel, execs `/etc/init`, which forks `/bin/sh`, and the shell **prompts** |
 | `multi` | ^D out of that shell and the rest of the way: `/etc/rc`, a getty per line of `/etc/ttys`, `crypt(3)`, and **two people logged in at once** on the two Consuls |
+| `core` | one user program (`/usr/test/coret`) typed at that prompt: `core()` dumping a real image and `ptrace(2)` reaching a real stopped child — the two places the kernel builds a user address out of an integer |
 
-`boot` attaches the pristine disk read-only — an assertion in itself; `multi` writes, so it
-converts a copy of its own at volume 3085. Both are **`RUN_SERIAL`**, not merely locked against
-each other: they type at the guest on a step budget, and SIMH drops characters out of a `send`
-when the host is oversubscribed, so ctest starts nothing else while either runs. The rest of
-[test/](test/) exercises one kernel component at a time against a hand-built environment; see
-"Writing a standalone SIMH test" below.
+`boot` attaches the pristine disk read-only — an assertion in itself; `multi` and `core` write, so
+each converts a copy of its own, at volumes 3085 and 3086. All three are **`RUN_SERIAL`**, not
+merely locked against each other: they type at the guest on a step budget, and SIMH drops
+characters out of a `send` when the host is oversubscribed, so ctest starts nothing else while
+any of them runs. The rest of [test/](test/) exercises one kernel component at a time against a
+hand-built environment; see "Writing a standalone SIMH test" below.
+
+`core` is the only one that runs a program off `/usr/test`, and it adjudicates itself: `coret`
+prints a verdict per line and the `.ini` fires on the first `FAIL`, so there is no `.expected`
+on the host to keep in step with the image's layout. That is the pattern to copy for anything
+else that needs a *user* program under a real kernel — the shape the deleted image-side runner
+had, narrowed to one program.
 
 **Eighteen further tests used to sit in that table and are gone**, with the `weekly` label and
 the `make weekly` target that selected them: `console`, `session`, `files`, `utils`, `filters`,
@@ -85,8 +92,9 @@ held the `simh_boot` lock, and were about seventy seconds of serial wall clock.
 **What went with them is worth being explicit about**, because much of this tree's prose still
 claims it: nothing now asserts erase and kill, a second filesystem mounted, `fsck` repairing a
 pack, the swapper under memory pressure, `ed` under a real kernel, or the self-hosting `cc` run
-that was task C9's closing claim. The libc programs are still staged onto `/usr/test` but only
-`b6sim` runs them. `multi` was brought back afterwards, and with it the typed dialogue, `/etc/rc`
+that was task C9's closing claim. The libc programs are still staged onto `/usr/test` and only
+`b6sim` runs them — `coret` excepted, which task 34 added with a `.ini` of its own because
+neither arm of it exists under the simulator. `multi` was brought back afterwards, and with it the typed dialogue, `/etc/rc`
 and the boot date, getty and login, and two users at once; `boot` stays because it costs a second
 and answers the question that matters most after a kernel edit — does the thing still reach a
 shell prompt — and because a failure there and a failure in `multi` are different diagnoses.
@@ -523,7 +531,26 @@ Facts that cost real time to establish and are not in `doc/`.
     time in eight and silently dropped up to five bytes per call.
 
   The rule: **a flag in a pointer has to be a separate field, and a mask on `(int)ptr` is almost
-  always wrong.** [TODO.md](TODO.md) task 34 is the sweep.
+  always wrong.**
+
+  **The sweep is done** (task 34), and it turned up two more, in the two halves of the class:
+  * `exece()`'s `nc = (nc + NBPW - 1) & ~(NBPW - 1)` ([sys1.c](sys1.c)) — **`NBPW` is 6, so that
+    is not a rounding operation at all**; it clears bits 0 and 2, taking 1 to 2 and 7 to 8. It sat
+    fourteen lines below a comment in the same function saying why `BSIZE` needs a remainder and a
+    divide. Latent: the only consumer is a stack size `getxfile()` rounds up to a whole page.
+  * `core()`'s `u.u_base = 0` ([sig.c](sig.c)) — a **live** silent corruption. `(caddr_t)0` is a
+    bit copy with no marker and a byte field of 0, i.e. byte #5, so the base stood out of phase
+    with the kernel buffer and `copyinb()` funnelled the first 3072-byte chunk five bytes over.
+    *Only* the first: `iomove()` walks the base with `u.u_base += n` and the walked value is well
+    formed, so words 0..511 of every core image were garbage and everything above them was
+    perfect. That is why nothing noticed — and it stayed unnoticed because nothing on this system
+    had ever read a core file back. `test/core` does now.
+
+  The spelling that fixes both halves is **`(caddr_t)(int *)w`**, which the compiler *converts*
+  (it ORs the marker in) where `(caddr_t)w` merely copies — the two are one word apart in the
+  image and `b6disasm` shows the difference. Everything else the sweep looked at was already
+  right; `usermem.S`'s header carries what is left of the rule, and `test/mmutest` keeps the bare
+  spelling on purpose, being the test of the mask that erases it.
 * **A punned union member reads word 0 and does not fault.** `b_addr` was a *fat* pointer, and
   reading `struct buf`'s block through `b_un.b_filsys`/`b_dino` reinterpreted its bit-48 marker as a
   large exponent — so `fp->s_bsize` silently returned `s_magic` and every member past offset 0 came

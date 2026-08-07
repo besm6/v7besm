@@ -77,7 +77,7 @@ return a value in `r12` as well as the accumulator.
 | 24 | `int getuid(void)` | `getuid` — [sys4.c](../kernel/sys4.c) | Real user id. **Second result**: the effective one. |
 | 46 | `int setgid(int gid)` | `setgid` — [sys4.c](../kernel/sys4.c) | Set real and effective group id, under the same rule as `setuid`. |
 | 47 | `int getgid(void)` | `getgid` — [sys4.c](../kernel/sys4.c) | Real group id. **Second result**: the effective one. |
-| 26 | `int ptrace(int req, int pid, int *addr, int data)` | `ptrace` — [sig.c](../kernel/sig.c) | Process tracing. Request ≤ 0 marks *this* process traced; otherwise the request is handed through the single global `ipc` slot to a stopped child, which executes it in `procxmt()` and hands the answer back. `ESRCH` if no such stopped child, `EIO` if the child rejects the request. |
+| 26 | `int ptrace(int req, int pid, int *addr, int data)` | `ptrace` — [sig.c](../kernel/sig.c) | Process tracing. Request ≤ 0 marks *this* process traced; otherwise the request is handed through the single global `ipc` slot to a stopped child, which executes it in `procxmt()` and hands the answer back. `ESRCH` if no such stopped child, `EIO` if the child rejects the request. **`addr` is a word address, and what it counts differs per request** — §4. |
 | 27 | `int alarm(int sec)` | `alarm` — [sys4.c](../kernel/sys4.c) | Arm `SIGALRM` for `sec` seconds; returns what was left of any previous alarm. |
 | 29 | `int pause(void)` | `pause` — [sys4.c](../kernel/sys4.c) | Sleep until a signal arrives. Nothing ever wakes this channel, so the only way out is the signal. |
 | 34 | `int nice(int incr)` | `nice` — [sys4.c](../kernel/sys4.c) | Add to the scheduling `p_nice`, clamped to `0 … 2*NZERO-1`. A negative increment is ignored for a non-superuser. |
@@ -224,6 +224,23 @@ These are the facts a reader cannot get from a v7 manual page.
   both accepted (a mid-word pointer floors to its word). The ceiling is not written in
   `sbreak()` but in `estabur()`'s `nt + nd > USTKPAGE * PGSZ` ([kernel/utab.c](../kernel/utab.c)):
   the data segment stops where the stack begins, at `070000`.
+
+- **`ptrace`'s `addr` is a word address, and what it counts depends on the request.** The
+  argument is declared `int *` — a *thin* pointer, bits 15–1 — and `ptrace()` hands it to the
+  stopped child untouched ([kernel/sig.c](../kernel/sig.c)), so a word address is what the ABI
+  promises. `fuword()`/`suword()` mask to bits 15–1, so a fat `char *` is accepted and floors to
+  its containing word; there is no way to name a *byte*, and requests 1, 2, 4 and 5 transfer whole
+  48-bit words. The units are not the same across requests, and two of them are not v7's:
+
+  | request | `addr` is |
+  |---|---|
+  | 1, 2 (read I/D), 4, 5 (write I/D) | a word address in the child's address space. There is no I/D separation, so 1 and 2 name the same space, and so do 4 and 5. |
+  | 3, 6 (read/write u) | a word **index** into the u-area, `0 … USIZE-1`. v7's was a byte offset. |
+  | 7, 9 (continue) | the resume PC, a word address, with `1` reserved for "leave it where it stopped". |
+
+  `data` and the returned word are likewise whole words, and **−1 is a legal result**: `r14`
+  says whether the call failed, so libc's stub needs none of v7's `errno = 0` preamble. `b6sim`
+  refuses `ptrace` with `EPERM`, so nothing about this row is observable except under a boot.
 
 - **`fork` returns "which am I" in `r12`.** Nothing advances the saved PC to skip an instruction
   in the parent: the extracode gate already stored `nextpc` in ERET, and `RET` is a *word*

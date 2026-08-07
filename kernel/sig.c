@@ -21,6 +21,16 @@
 // This data base cannot be
 // shared and is locked
 // per user.
+//
+// ip_addr IS AN `int *', AND THAT IS THE ABI.  It arrives as the caller's third argument
+// untouched (ptrace() below), so what ptrace(2) promises is a WORD address -- a thin
+// pointer, bits 15-1 -- and not a char *.  Two things follow.  `(caddr_t)ip_addr' in
+// procxmt() is a real conversion and yields byte #0 of that word, which is why those
+// casts need no `(int *)' step; and a caller that hands over a mid-word char * has its
+// byte offset silently dropped by fuword()/suword(), flooring to the containing word.
+// The units differ per request -- an address in the child for 1/2/4/5, a word INDEX into
+// the u-area for 3/6, a resume PC for 7/9 -- and doc/Unix_V7_System_Calls.md carries the
+// table.
 struct {
     int ip_lock;
     int ip_req;
@@ -128,7 +138,7 @@ void psig()
         u.u_error = 0;
         if (n != SIGILL && n != SIGTRAP)
             u.u_signal[n] = 0;
-        sendsig((caddr_t)p, n);
+        sendsig(p, n);
         return;
     }
     switch (n) {
@@ -214,7 +224,18 @@ int core()
         writei(ip);
         s = u.u_procp->p_size - USIZE;
         estabur(0, s, 0, 0, RO);
-        u.u_base   = 0;
+        // `(caddr_t)(int *)0', never `(caddr_t)0'.  The bare form is a bit COPY -- the
+        // compiler emits no marker and leaves the byte field 0, which reads as byte #5, a
+        // word's LAST -- so this base stood out of phase with the kernel buffer and
+        // copyinb() funnelled the FIRST 3072-byte chunk five bytes over.  Only the first:
+        // iomove() then walks the base with `u.u_base += n', and the walked value is
+        // well-formed, so the thirteen chunks after it were in phase and right.  The
+        // damage was therefore silent and bounded -- virtual words 0..511 of every core
+        // image, the header hole and the start of const+text -- and the file was always
+        // its full p_size words.  Measured with ucopy.c's nioshift, which rose by exactly
+        // one block.  Same idiom and same fix as getxfile()'s data read; sys1.c says it
+        // at length.  kernel/test/core is what holds this line down.
+        u.u_base   = (caddr_t)(int *)0;
         u.u_count  = wtob(s);
         u.u_segflg = 0;
         writei(ip);
@@ -362,8 +383,12 @@ int procxmt()
 
     // write u
     case 6:
-        // ip_addr is a word index into the u-area, as in case 3 above
+        // ip_addr is a word index into the u-area, as in case 3 above -- and bounded here
+        // as it is there.  The regloc[] walk below is what gates the store, so an index off
+        // the end was never written through; it was still formed into a pointer first.
         i = (int)ipc.ip_addr;
+        if (i < 0 || i >= USIZE)
+            goto error;
         p = &((int *)&u)[i];
         for (i = 0; i < 16; i++)
             if (p == &u.u_ar0[regloc[i]])

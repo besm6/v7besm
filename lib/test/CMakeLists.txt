@@ -176,6 +176,7 @@ b6_libtest(termcapt libtermcap)
 b6_libtest(cursest libcurses libtermcap)
 b6_libtest(curstty libcurses libtermcap IMAGEONLY)
 b6_libtest(puret PURE)
+b6_libtest(coret IMAGEONLY)
 
 # Aggregate target the top-level `make test' builds before ctest runs (ctest never builds).
 add_custom_target(lib_tests DEPENDS ${TEST_TARGETS})

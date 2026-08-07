@@ -72,6 +72,10 @@ void extintr(void)
 // compiler makes it a fat pointer at byte #0 (the MSB byte), and `+ k' walks toward the LSB, byte
 // by byte, exactly as exec/namei do (doc/Besm6_Data_Representation.md §7).  This is the real path
 // fubyte()/subyte() take; building the fat pointer by hand from an int misses the marker bit.
+// `(caddr_t)uw' below, rather than the `(caddr_t)(int *)uw' the kernel is held to since the
+// `int'-vs-pointer audit, is DELIBERATE and is part of what this file tests: a bare cast is a bit
+// copy whose byte field reads as #5, and copyin/copyout/fuword/suword promise to mask it away
+// (usermem.S).  Respell these and that promise stops being exercised anywhere.
 #define UBYTE(w, k) ((caddr_t)(int *)(w) + (k))
 
 // The u-area round trip (task 10).  UHOME is a page above 0100000 -- out of reach of any

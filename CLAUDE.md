@@ -57,7 +57,7 @@ relocatable symbol above word **32,767** (a 15-bit pointer's reach). Two more ce
 cannot guard, and both bind in practice: **no struct may exceed 4,096 words** (a member is a
 12-bit offset from a base register — move the big arrays to file scope), and the **4,096-word
 stack**, where a long function costs 1.5–2 words per source line before any array.
-`cmd/README.md` §6 is the account. **The image has 185 free blocks of 2000.**
+`cmd/README.md` §6 is the account. **The image has 175 free blocks of 2000.**
 
 **Ten programs are built twice** — `cpp`, `as`, `ld`, `nm`, `size`, `strip`, `disasm`, `ar`,
 `ranlib`, `cc` — as the host `b6*` tools and, from the same sources under `cmd/<x>/rootfs/`, as

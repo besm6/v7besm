@@ -268,7 +268,7 @@ int cpass(void);
 int passc(int c);
 int fsig(struct proc *p);
 int procxmt(void);
-void sendsig(caddr_t p, int signo);
+void sendsig(int p, int signo); // p is the handler's word address; see kernel/sendsig.c
 int core(void);
 void copyseg(int s, int d);
 void clearseg(int d);
