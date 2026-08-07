@@ -10,12 +10,12 @@
 // include/sys/param.h, which is #define-only by design so that b6as can read it.
 // Three things make it unusable from C++ code that also uses the host's libc:
 //
-//   - it defines NULL as 0 (param.h:93), which redefines the C++ library's own
+//   - it defines NULL as 0 (param.h:101), which redefines the C++ library's own
 //     spelling and fails the build under -Werror;
 //   - itod(), itoo() and makedev() cast to daddr_t/ino_t/dev_t -- the KERNEL's
 //     typedefs, from sys/types.h, which mean one 48-bit word.  On the host those
 //     names belong to libc and mean something else entirely;
-//   - ROOTINO and SUPERB carry the same casts.
+//   - ROOTINO carries the same cast.
 //
 // So the values are written out here, and params.cpp -- one translation unit that
 // includes param.h in isolation and does nothing else -- static_asserts every one
@@ -74,9 +74,9 @@ constexpr int NICFREE = 320; // free blocks cached in the superblock
 constexpr Word FS_MAGIC = 0xBE50006F11E5ULL;
 
 //
-// param.h spells these two with a cast -- ROOTINO is ((ino_t)2), SUPERB is
-// ((daddr_t)SUPERBVAL) -- so they are respelled here for the reason in the header
-// comment.  SUPERB is the FIRST block of the volume: there is no boot block.
+// ROOTINO is ((ino_t)2) in param.h, so it is respelled here for the reason in the
+// header comment; SUPERB is uncast there and params.cpp asserts it directly.  SUPERB
+// is the FIRST block of the volume: there is no boot block.
 //
 constexpr int64_t ROOTINO = 2; // i-number of the root directory
 constexpr int64_t SUPERB  = 0; // block number of the superblock

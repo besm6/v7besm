@@ -10,7 +10,7 @@
 // out of step mounts perfectly well and reads every inode from the wrong offset.
 //
 // This is the ONLY translation unit that includes sys/param.h, and that isolation
-// is deliberate: param.h defines NULL as 0 (param.h:93), which clashes with the
+// is deliberate: param.h defines NULL as 0 (param.h:101), which clashes with the
 // C++ library's own definition under -Werror.  It is only safe here because
 // nothing below this point uses the C++ library.
 //
@@ -55,7 +55,7 @@ constexpr int64_t superb = SUPERB;
 // than silenced with a -Wno- flag: if a future param.h grows another clash, the
 // build names it.
 //
-//   NULL    param.h:93 spells it `0'; the C++ library has its own.
+//   NULL    param.h:101 spells it `0'; the C++ library has its own.
 //
 // NSIG and SIGIOT used to be undefined here as well, and are not any more: the
 // signal numbering left param.h for sys/signal.h, which this file does not include
@@ -103,17 +103,13 @@ static_assert(ours::magic == FS_MAGIC, "FS_MAGIC disagrees with sys/param.h");
 
 //
 // SUPERB moved -- v7's boot block is gone and the superblock is block 0 -- so it is
-// checked, through SUPERBVAL.  The macro itself cannot be: param.h spells it
-// ((daddr_t)SUPERBVAL), and daddr_t is the kernel's typedef from sys/types.h, which
-// this file must not include; declaring one locally would collide with libc's on any
-// host that has it, which is most of them.  SUPERBVAL is the same number without the
-// cast, and exists for this assertion.
+// checked.  It can be, because param.h spells it uncast; keep it that way, since
+// daddr_t is the kernel's typedef from sys/types.h, which this file must not include.
 //
-// ROOTINO is still not checked, for that same reason and with no SUPERBVAL of its own:
-// it is v7's 2 and has not moved since 1979, and test/create_test.cpp asserts the root
-// directory really does land at inode 2.
+// ROOTINO is not checked: it is ((ino_t)2), it has not moved since 1979, and
+// test/create_test.cpp asserts the root directory really does land at inode 2.
 //
-static_assert(ours::superb == SUPERBVAL, "SUPERB disagrees with sys/param.h");
+static_assert(ours::superb == SUPERB, "SUPERB disagrees with sys/param.h");
 
 //
 // The relations the kernel's own headers assert about themselves, restated in the
