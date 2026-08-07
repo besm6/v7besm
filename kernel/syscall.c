@@ -33,15 +33,13 @@ int nsyscall; // э77 dispatches -- vmstat's `sy'; see <sys/systm.h>
 
 // The tail both doors share with trap(): deliver any signal the call raised,
 // re-price the process, and give up the CPU if something more urgent is runnable.
-static void sysret(struct trap *tr, time_t syst)
+static void sysret(void)
 {
     if (issig())
         psig();
     curpri = setpri(u.u_procp);
     if (runrun)
         qswtch();
-    if (u.u_prof.pr_scale)
-        addupc(tr->ret, &u.u_prof, (int)(u.u_stime - syst));
 }
 
 // Extracode э77 -- the Unix system call.  Called from `sysgate' (besm6.S).
@@ -60,9 +58,7 @@ void syscall(void)
     register int i, n;
     unsigned code;
     int *ap;
-    time_t syst;
 
-    syst      = u.u_stime;
     u.u_ar0   = (int *)tr;
     u.u_error = 0;
 
@@ -151,7 +147,7 @@ void syscall(void)
         }
     }
 
-    sysret(tr, syst);
+    sysret();
 }
 
 // Extracodes э50-э76 -- ones this kernel does not implement.  Called from `badext'
@@ -164,11 +160,9 @@ void syscall(void)
 void badextr(void)
 {
     register struct trap *tr = (struct trap *)u.u_stack;
-    time_t syst;
 
-    syst    = u.u_stime;
     u.u_ar0 = (int *)tr;
 
     psignal(u.u_procp, SIGILL);
-    sysret(tr, syst);
+    sysret();
 }

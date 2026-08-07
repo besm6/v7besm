@@ -323,6 +323,12 @@ void times()
         u.u_error = EFAULT;
 }
 
+// profil(2) -- refused.  There is no profiling runtime on this machine: no monitor()
+// or mcount() in libc, no `cc -p', no prof(1), and addupc() was never written.  v7
+// reads a scale of 0 or 1 as "profiling off", which is the only state there is here,
+// so those two succeed; anything that asks to sample gets EINVAL rather than silence.
+// Implementing it means a libc monitor() and a host-side prof first -- kernel/README.md,
+// "Known consequences, accepted".  b6sim is the answer in the meantime.
 void profil()
 {
     register struct a {
@@ -332,11 +338,9 @@ void profil()
         int pcscale;
     } *uap;
 
-    uap               = (struct a *)u.u_ap;
-    u.u_prof.pr_base  = uap->bufbase;
-    u.u_prof.pr_size  = uap->bufsize;
-    u.u_prof.pr_off   = uap->pcoffset;
-    u.u_prof.pr_scale = uap->pcscale;
+    uap = (struct a *)u.u_ap;
+    if ((unsigned)uap->pcscale > 1)
+        u.u_error = EINVAL;
 }
 
 // alarm clock signal

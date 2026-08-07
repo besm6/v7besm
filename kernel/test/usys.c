@@ -233,10 +233,6 @@ void psignal(struct proc *p, int sig)
     lastsig = sig;
 }
 
-void addupc(int pc, void *prof, int incr)
-{
-}
-
 // -------------------------------------------------------------------------
 
 // Reached from crt0s.S's `toreport' after uprog's closing data fault.  Everything uprog stored

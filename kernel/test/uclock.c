@@ -166,10 +166,6 @@ int setpri(struct proc *pp)
     return (0);
 }
 
-void addupc(int pc, void *prof, int incr)
-{
-}
-
 void panic(char *s)
 {
     halt(0777777); // a distinctive, unmistakable failure

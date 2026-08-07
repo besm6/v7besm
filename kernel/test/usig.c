@@ -242,10 +242,6 @@ void psignal(struct proc *p, int sig)
 {
 }
 
-void addupc(int pc, void *prof, int incr)
-{
-}
-
 // sendsig() grows the stack for the frame.  Here the stack page is mapped from the start, so
 // there is nothing to do -- and nothing to test: grow() is sig.c's, and ugrow tests it.
 int grow(int pg)

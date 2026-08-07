@@ -126,7 +126,9 @@ enum : int {
 };
 
 // struct user -- <sys/user.h>.  Only the fields b6sim has an answer for are named; the
-// rest of the 139 words stay zero.
+// rest of the 135 words stay zero.  params.cpp cannot check these (its header says why),
+// so a member added to or removed from struct user has to be walked through by hand --
+// everything at or past it moves, and cmd/pstat/test is where a missed one shows up.
 enum : int {
     U_UID   = 11,
     U_GID   = 12,
@@ -135,11 +137,11 @@ enum : int {
     U_PROCP = 15,
     U_UTIME = 111,
     U_STIME = 112,
-    U_TTYP  = 121,
-    U_TTYD  = 122,
-    U_COMM  = 131, // char[DIRSIZ]
-    U_START = 134,
-    U_WORDS = 139,
+    U_TTYP  = 117,
+    U_TTYD  = 118,
+    U_COMM  = 127, // char[DIRSIZ]
+    U_START = 130,
+    U_WORDS = 135,
 };
 
 // The other exported aggregates, in words per element.

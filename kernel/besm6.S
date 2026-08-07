@@ -767,25 +767,6 @@ sigcode:
         $77     SYS_sigret
 
 // ============================================================================
-// Execution profiling
-// ============================================================================
-//
-// void addupc(int pc, void *prof, int incr) -- profil(2) support.
-//
-// Map the interrupted user pc into a bucket of the profiling descriptor `prof`
-// { short *pr_base; unsigned pr_size, pr_off, pr_scale; } and add `incr` to that
-// bucket in user space (through the nofault guard).  Called from clock() and
-// trap() when profiling is armed.
-//
-// TODO: implement the scaled bucket computation and the fault-safe user update.
-        .globl  addupc
-addupc:
-        // TODO: bucket = ((pc - pr_off) * pr_scale) >> N; bump pr_base[bucket].
-        xta                      // no meaningful return value
-        15 utm -2                // pop the two pushed arguments (pc, prof)
-        13 uj
-
-// ============================================================================
 // Kernel memory primitives
 // ============================================================================
 //

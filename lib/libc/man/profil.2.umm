@@ -14,6 +14,11 @@ int profil(char *buff, int bufsiz, int offset, int scale);
 
 ## DESCRIPTION
 
+**Note: this call is refused here, and everything below describes what it did on v7.** A *scale*
+of 0 or 1 succeeds - that is v7's own "profiling off" and it is the only state there is - and any
+other *scale* fails with EINVAL. See BESM-6 NOTES; the page is kept as the record of what the call
+was for.
+
 *Buff* points to an area of core whose length (in bytes) is given by *bufsiz*. After this call,
 the user's program counter (pc) is examined each clock tick. **Note:** v7 said a sixtieth of a
 second. HZ is **250** here. *offset* is subtracted from it, and the result multiplied by
@@ -29,19 +34,35 @@ Profiling is turned off by giving a *scale* of 0 or 1. It is rendered ineffectiv
 parent both after a *fork*. Profiling may be turned off if an update in *buff* would cause a
 memory fault.
 
-## SEE ALSO
-
-prof(1)
-
 ## BESM-6 NOTES
 
-**There is no profiling runtime here.** *Profil* is a generated syscall stub like any other and
-the gate exists, but the *monitor* and *mcount* half of the machinery - what v7's page pointed
-at as monitor(3), and what **cc -p** would install - has not been ported, so nothing calls
-this.
+**The description above is v7's, and this call does none of it.** *Profil* is refused: a *scale*
+of 0 or 1 - which v7 itself reads as "profiling off", and off is the only state this machine has -
+returns 0 and does nothing, and **any other scale returns -1 with errno set to EINVAL**. The
+*buff*, *bufsiz* and *offset* arguments are not looked at. No word of *buff* is ever incremented,
+and there is no clock sampling behind the call at all: the kernel has no *addupc* and carries no
+profiling descriptor in the u-area.
 
-The scale wording above is v7's and describes PDP-11 word addresses. Read it as a fraction over
-*word* addresses here; a word is one 48-bit unit and an address is a word index.
+The reason is that the other half of the machinery is missing and is not coming. What v7's page
+pointed at as monitor(3), and what **cc -p** would install - *monitor* and *mcount* - has not been
+ported, this compiler has no **-p**, and *prof*(1) is deliberately not ported either, so nothing
+would read a *mon.out* that nothing produces. Accepting the call and silently recording nothing
+was the worse of the two answers. Should profiling ever be wanted, those three come first; and
+note that v7's kernel side does not transliterate, its buckets being 16-bit shorts indexed by a
+*byte* offset through a 16-bit binary fraction, where a buffer here would be **words** and a
+bucket index a **word** index.
+
+**Profiling a program on this machine is a simulator job.** *B6sim* counts what it interprets
+with no kernel help; it refuses this call too, with EPERM.
+
+## DIAGNOSTICS
+
+Returns 0 for a *scale* of 0 or 1, and -1 with *errno* set to **EINVAL** for any other, this
+being a request to sample.
+
+## SEE ALSO
+
+intro(2)
 
 ## ASSEMBLER
 

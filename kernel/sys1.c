@@ -298,7 +298,6 @@ int getxfile(register struct inode *ip, int nargc)
     // at this point, committed
     // to the new image
 
-    u.u_prof.pr_scale = 0;
     xfree();
     i = USIZE + ds + ss;
     expand(i);

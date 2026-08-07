@@ -671,6 +671,21 @@ Facts that cost real time to establish and are not in `doc/`.
   `DSTFLAG` are therefore **0** rather than v7's US Eastern: an offset on top of an invented epoch
   says nothing, and zero makes `ftime()` agree with `b6sim`, which is what lets `lib/test/timet` be
   one file for both harnesses.
+* **`profil(2)` is refused, and `addupc()` does not exist** (task 32). The gate is real — it takes
+  v7's four arguments and answers `EINVAL` for any scale but the 0 or 1 v7 itself reads as
+  "profiling off" ([sys4.c](sys4.c)) — but there is nothing behind it: `u_prof` is gone from
+  `<sys/user.h>`, so `clock()` and the trap/syscall tail sample nothing and `exec` has nothing to
+  disarm. The decision is that the whole *userland* half is missing and is not coming: no
+  `monitor()`/`mcount()` in `lib/libc`, no `cc -p`, and `prof(1)` deliberately not ported
+  ([../cmd/TODO.md](../cmd/TODO.md)). Accepting the call and recording nothing was the one outcome
+  worse than failing. **What would have to exist first**, in order: a libc `monitor()` and the
+  `mcount()` a `-p` compilation calls, a host-side `prof` to read `mon.out` — and only then the
+  kernel half, which is not a transliteration: v7's `addupc` indexes 16-bit shorts by a *byte*
+  offset through a 16-bit binary fraction, while a buffer here is **words** and a bucket index is a
+  **word** index, so `pr_scale`'s definition has to be restated before a line is written. It would
+  also land in the *user's* buffer while the kernel is unmapped — `suword`, not a store — from the
+  clock interrupt, where it must not fault. Until then the answer is `b6sim`, which can count what
+  it interprets with no kernel help at all.
 * **The tick is four times v7's, and two things are scaled for it by hand.** `HZ` is 250 because the
   interval timer free-runs at 250 Hz and cannot be programmed, so a tick is exact but is not the
   sixtieth every v7 constant assumes. `p_cpu` accrues one tick in four (`CPUTICK`, [clock.c](clock.c))

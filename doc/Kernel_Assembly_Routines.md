@@ -57,8 +57,9 @@ address space, what `copyin`/`copyout` cost, and why `invd` has nothing left to 
 These routines are the direct descendants of the Unix v7 *machine language assist*
 (`sys/conf/mch.s` on the PDP-11): `save`/`resume`/`idle` for context switching (the modernized
 form of v6's `savu`/`aretu`/`retu`), `spl0`…`spl7`/`splx` returning the previous priority,
-`fubyte`/`suword`/`copyin`/`copyout` for fault-safe user access, and `addupc` for `profil(2)`.
-Those v7 *contracts* are what this assist keeps; the PDP-11 mechanisms behind them (processor
+`fubyte`/`suword`/`copyin`/`copyout` for fault-safe user access, and `addupc` for `profil(2)` —
+which is the one v7 contract this assist does **not** keep (§4.5).
+The rest it does; the PDP-11 mechanisms behind them (processor
 priority in the PS word, `mfpd`/`mtpd` previous-space moves, the FP11) all have BESM-6
 replacements, described routine by routine below. The one to hold on to hardest is the
 `save`/`resume` two-return protocol.
@@ -572,25 +573,23 @@ in `r11`/`r12`, and the count is in `r10` (`ati`, then `vzm`/`utm -1` — `userm
   page 0 cannot be windowed at all. It is below the unmapped reach anyway, where the caller needs
   no window.
 
-### 4.5 Profiling — `addupc`
+### 4.5 Profiling — `addupc` is **not present, by design**
 
-```c
-void addupc(int pc, void *prof, int incr);   /* systm.h:151 */
-```
+v7's assist had one more routine, `addupc(pc, prof, incr)`: the `profil(2)` histogram bump, called
+from `clock()` on a tick and from the trap and syscall tails with the CPU time just spent. **It is
+not here, and there is no state for it either** — `u_prof` is gone from
+[`<sys/user.h>`](../include/sys/user.h), so nothing samples the user PC and `exec` has nothing to
+disarm. `profil(2)` is a real gate that **refuses**: `EINVAL` for any scale but the 0 or 1 v7 reads
+as "profiling off" ([sys4.c](../kernel/sys4.c)).
 
-- **Purpose.** Support for `profil(2)`: given the interrupted user PC and the process's profiling
-  descriptor, increment the histogram bucket that `pc` maps into. `prof` points at
-  `struct { short *pr_base; unsigned pr_size; unsigned pr_off; unsigned pr_scale; }`
-  ([user.h:68-73](../include/sys/user.h)); `addupc` computes `bucket = ((pc - pr_off) * pr_scale)
-  >> N`, and if in range, adds `incr` to `pr_base[bucket]`.
-- **Side effects.** Writes into the user's profiling buffer; an inaccessible buffer disarms
-  profiling by zeroing `pr_scale`.
-- **Callers.** `clock.c:87` (one tick, when `pr_scale` set) and `trap.c:164` (syscall CPU time).
-  Armed by the `profil` syscall (`sys4.c:340`), cleared on `exec` (`sys1.c:216`).
-- **Status — still a stub**, so `profil(2)` is inert. Straightforward to write when it is
-  wanted; only the fixed-point scale shift and the buffer addressing need care for word
-  addressing, and the range check is a `useracc()` call (§4.4). Idle-time accounting, which
-  `addupc`'s neighbourhood in `clock()` sits next to, works differently — see §4.3.
+The reason is that the userland half is missing and is not coming — no `monitor()`/`mcount()` in
+`lib/libc`, no `cc -p`, no `prof(1)` — and accepting the call while recording nothing was the worse
+of the two outcomes. The full account, including what would have to exist first and why v7's
+routine cannot simply be transliterated (it indexes 16-bit shorts by a *byte* offset through a
+16-bit binary fraction; a buffer here is **words** and a bucket index is a **word** index), is the
+`profil(2)` bullet under "Known consequences, accepted" in
+[../kernel/README.md](../kernel/README.md). Idle-time accounting, which used to sit next to
+`addupc` in `clock()`, is unaffected and works differently — see §4.3.
 
 ### 4.6 Memory primitives — `bcopy`, `bzero`
 
@@ -758,7 +757,7 @@ the reschedule-pending flag the gates test on the way back to user mode (§3).
 | `save`, `resume` | **done (task 16)** — [kernel/switch.s](../kernel/switch.s); nine slots (r1–r7, r13, r15), and `resume()` switches the **u-area**, not the address space: it never writes РП |
 | `idle` | **done (task 16)** — no wait-for-interrupt exists, so it is a spin released by `extintr()`, written in C over the `idling` flag |
 | `_start`, trap/interrupt/extracode dispatch (§2–3) | **done** — `_start` is two instructions in (the machine resets into the kernel's own mode) with bss-zero and `phymem` in C, plus nine on the way out: the hand-forged first entry into user mode at `icode` ([Unix_Context_Switch.md §10b](Unix_Context_Switch.md#10b-the-first-entry-into-user-mode)). Dispatch is four gates, two save disciplines and one shared exit (§3) |
-| `addupc` | **still a stub**, so `profil(2)` is inert — same histogram logic when wanted, adjusting the fixed-point scale and word addressing |
+| `addupc` | **not present, by design** (task 32) — `profil(2)` is a gate that refuses with `EINVAL`, and `u_prof` is gone with it. Nothing in userland profiles and nothing will: no `monitor`/`mcount`, no `cc -p`, no `prof(1)`. See §4.5 |
 | port I/O, TLB flush, FP context | **not present, by design** — see §4.8 |
 
 Remember the calling convention when working on any of these: arguments in

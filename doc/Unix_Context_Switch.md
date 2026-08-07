@@ -447,7 +447,8 @@ is a one-shot notification and only the dispatched bit is cleared (§9).
   no cause we decode.
 
 The tail is shared with the syscall path: `issig()`/`psig()`, `curpri = setpri()`,
-`if (runrun) qswtch()`, `addupc()`.
+`if (runrun) qswtch()`. (v7 ended it with `addupc()`, the `profil(2)` sample; there is none here —
+the call is refused, so the tail carries no CPU-time bookkeeping at all.)
 
 ### `ktrap()` — the supervisor arm
 
@@ -539,7 +540,7 @@ convention is errno-in-r14, zero on success:
 ```
 
 `badextr()` — every extracode э50–э76 — does none of this: it posts SIGILL and falls into the same
-shared tail (`issig`/`psig`, `setpri`, `qswtch` on `runrun`, `addupc`).
+shared tail (`issig`/`psig`, `setpri`, `qswtch` on `runrun`).
 
 Two v7 idioms work differently here. `fork()` tells parent from child by `r_val2` (r12), not by
 advancing the saved PC past the syscall — RET is a *word* address and, since the extracode gate

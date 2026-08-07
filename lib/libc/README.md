@@ -557,8 +557,12 @@ routine that may not be there.
   `cmd/iostat` call `kctl(2)` and `kgetsym(3)` directly and none of them wants an array of
   structures back. So the only thing the old shape preserved was an invitation to that mistake.
 - **`atexit`** — see above.
-- **`monitor`/`mcount`, and `cc -p`** — no profiling runtime. The `profil` gate exists and has a
-  generated stub; nothing calls it.
+- **`monitor`/`mcount`, and `cc -p`** — no profiling runtime, and the kernel has settled the
+  matter: `profil(2)` **refuses**, returning `EINVAL` for any scale but the 0 or 1 v7 reads as
+  "profiling off" (`kernel/sys4.c`; the account is the `profil(2)` bullet under "Known
+  consequences, accepted" in `kernel/README.md`). The generated stub is still in the archive — it
+  is what carries the error back. These three, plus a host-side `prof`, are what would have to
+  exist before the kernel half could be written; `b6sim` is the answer in the meantime.
 - **`l3tol`/`ltol3`, `locv`, `nargs`, `fptrap`** — PDP-11 artefacts with no meaning on a 48-bit
   word machine.
 - **`regex` (`re_comp`/`re_exec`), `valloc`, `ctermid`, `cuserid`** — not ported, nothing calls

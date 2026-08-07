@@ -64,13 +64,7 @@ struct user {
     caddr_t u_dirp;       // pathname pointer
     struct direct u_dent; // current directory entry
     struct inode *u_pdir; // inode of parent directory of dirp
-    // The shadow page table, ready to load: eight words, each carrying a quartet
-    // of РП descriptors for virtual pages 4i..4i+3 (accumulator bits 1-20 and
-    // 29-48) and, in the even words, the matching РЗ protection byte for pages
-    // 8j..8j+7 (bits 21-28, which РП leaves alone).  РП and РЗ cannot be read
-    // back, so this is the only copy of the mapping.  See sureg() in utab.c and
-    // doc/Memory_Mapping.md, "Programming the MMU".
-    unsigned u_upt[8];
+    unsigned u_upt[8];    // The shadow page table
     // How many words of this u-area the last uflush() copied: struct user plus the
     // live kernel stack (everything below r15), rounded up by a margin.  Written by
     // uflush() into the SAVED copy and read back by uload() before it copies, so the
@@ -93,12 +87,6 @@ struct user {
     time_t u_cutime;              // sum of childs' utimes
     time_t u_cstime;              // sum of childs' stimes
     int *u_ar0;                   // address of users saved R0
-    struct {                      // profile arguments
-        int *pr_base;             // buffer base
-        int pr_size;              // buffer size
-        int pr_off;               // pc offset
-        int pr_scale;             // pc scaling
-    } u_prof;
     char u_intflg;      // catch intr from sys
     char u_justreturn;  // this call restored the frame itself; see sigret(), sendsig.c
     char u_sep;         // flag for I and D separation

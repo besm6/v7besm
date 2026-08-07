@@ -42,9 +42,9 @@ struct callo callout[NCALL]; // the callout table; sys/callo.h only declares it
 // come through u.u_ar0: that names the USER's registers and belongs to whatever the tick
 // interrupted.  See the header over intrgate in besm6.S.
 //
-// One thing this reads is still inert: addupc() is a stub (besm6.S) and u_prof.pr_scale is 0
-// until profil() works -- task 17.  Idle-time accounting is live, though: `idling' is raised
-// by the idle spin in intr.c and cleared by extintr() once this has run.
+// v7 sampled the user pc here for profil(2); nothing does now -- the call is refused and
+// addupc() is gone (sys4.c).  Idle-time accounting is live, though: `idling' is raised by
+// the idle spin in intr.c and cleared by extintr() once this has run.
 void clock(struct trap *tr)
 {
     register struct callo *p1, *p2;
@@ -96,8 +96,6 @@ out:
     a = dk_busy & 07;
     if (USERMODE(tr->spsw)) {
         u.u_utime++;
-        if (u.u_prof.pr_scale)
-            addupc(tr->ret, &u.u_prof, 1);
         if (u.u_procp->p_nice > NZERO)
             a += 8;
     } else {

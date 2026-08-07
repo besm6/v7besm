@@ -107,10 +107,8 @@ void trap(void)
 {
     register struct trap *tr = (struct trap *)u.u_stack;
     register int i           = 0;
-    time_t syst;
     unsigned grp; // ГРП, read live: the fault cause
 
-    syst    = u.u_stime;
     u.u_ar0 = (int *)tr;
 
     // vmstat -p's `tr', counted before the restart fix-up and before the decode, so that
@@ -125,7 +123,7 @@ void trap(void)
     // address, setting SPSW_NEXT_RK to say so -- so the framed RET is the faulting word
     // plus one, and `выпр' would resume past the instruction that faulted.  Back it up
     // here, unconditionally, so that everything downstream (grow()'s retry, sendsig(),
-    // ptrace, addupc()) sees the frame describing the FAULTING instruction.
+    // ptrace) sees the frame describing the FAULTING instruction.
     //
     // Only the word needs correcting: SPSW_RIGHT_INSTR already says WHICH HALF of it
     // faulted, and `выпр' reloads the half-word indicator from it -- verified on the
@@ -194,8 +192,6 @@ out:
     curpri = setpri(u.u_procp);
     if (runrun)
         qswtch();
-    if (u.u_prof.pr_scale)
-        addupc(tr->ret, &u.u_prof, (int)(u.u_stime - syst));
 }
 
 // stray interrupt

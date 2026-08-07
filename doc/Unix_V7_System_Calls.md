@@ -83,7 +83,7 @@ return a value in `r12` as well as the accumulator.
 | 34 | `int nice(int incr)` | `nice` — [sys4.c](../kernel/sys4.c) | Add to the scheduling `p_nice`, clamped to `0 … 2*NZERO-1`. A negative increment is ignored for a non-superuser. |
 | 37 | `int kill(int pid, int sig)` | `kill` — [sys4.c](../kernel/sys4.c) | Send a signal: to one process, to the caller's process group (`pid == 0`), or — for the superuser — to everything but the first two processes (`pid == -1`). `ESRCH` if nothing matched. |
 | 43 | `int times(struct tms *buf)` | `times` — [sys4.c](../kernel/sys4.c) | Copy out the four accumulated times (user, system, children's user, children's system) from the u-area. |
-| 44 | `int profil(char *buf, int n, int off, int scale)` | `profil` — [sys4.c](../kernel/sys4.c) | Record the profiling buffer in the u-area; the clock's `addupc()` and the trap-return path fill it. A zero scale turns profiling off. |
+| 44 | `int profil(char *buf, int n, int off, int scale)` | `profil` — [sys4.c](../kernel/sys4.c) | **Refused.** A scale of 0 or 1 is v7's "profiling off" and succeeds; any other scale asks to sample and gets `EINVAL`. There is no `addupc()` — see [§4](#4-where-this-kernel-differs-from-v7). |
 | 48 | `int (*signal(int sig, int (*f)()))()` | `ssig` — [sys4.c](../kernel/sys4.c) | Set the disposition of a signal and return the previous one, clearing any pending instance. `EINVAL` for signal 0, out-of-range signals, and `SIGKILL`. |
 | 51 | `int acct(char *path)` | `sysacct` — [acct.c](../kernel/acct.c) | Superuser: start writing process-accounting records to `path` (a regular file), or stop when `path` is null. `EBUSY` if accounting is already on. |
 | 52 | `int phys(int segno, int npages, int physaddr)` | `sysphys` — [machdep.c](../kernel/machdep.c) | Map physical addresses into the user's space. Superuser-checked and then always `EINVAL` — see [§4](#4-where-this-kernel-differs-from-v7). |
@@ -263,6 +263,14 @@ These are the facts a reader cannot get from a v7 manual page.
 - **`phys` is a stub.** It checks `suser()` and then returns `EINVAL`. The v7 PDP-11 call handed
   a user a physical segment through the segmentation registers; the equivalent here would be a
   raw `РП` entry, and nothing needs one yet.
+
+- **`profil` refuses.** A scale of 0 or 1 is v7's own spelling of "profiling off", which is this
+  machine's permanent state, so those succeed; any other scale is a request to sample and gets
+  `EINVAL`. There is no `addupc()` and no `u_prof` in the u-area behind it — nothing in userland
+  profiles (`monitor`/`mcount`, `cc -p` and `prof(1)` are all absent and are not coming), and
+  accepting the call while recording nothing was the worse of the two answers. The full account is
+  the `profil(2)` bullet under "Known consequences, accepted" in
+  [kernel/README.md](../kernel/README.md).
 
 - **The epoch starts at 0.** The machine has no clock-calendar a program can read, so `time`
   counts from boot until something calls `stime` (`clkstart()` in

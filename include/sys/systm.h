@@ -234,7 +234,6 @@ int spl1(void);
 void mprpon(unsigned bits);  // unmask a device's ПРП interrupts (intr.c)
 void mgrpon(unsigned bits);  // arm a device's ГРП bits for one exchange (intr.c)
 void mgrpoff(unsigned bits); // ... and disarm them again; see the pair in intr.c
-void addupc(int, void *, int);
 int setpri(struct proc *pp);
 void xrele(struct inode *ip);
 void printf(char *fmt, ...);
