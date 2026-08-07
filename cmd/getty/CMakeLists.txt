@@ -1,6 +1,6 @@
 # /etc/getty -- Unix v7 getty(8), built natively for the BESM-6.
 #
-# One of task 29b's two (../../kernel/TODO.md): a cmd/ subdirectory that is NOT a host tool.
+# One of kernel task 29b's two: a cmd/ subdirectory that is NOT a host tool.
 # b6_prog() (../../scripts/BesmCross.cmake) runs the b6* toolchain over getty.c, links it
 # `crt0.o getty.o -lc -lruntime' against the libc built in ../../lib, and stages the result as
 # build/rootfs/etc/getty.  Added from inside the top-level libruntime guard, after lib/, and

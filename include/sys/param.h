@@ -339,7 +339,7 @@
 // there -- and another process then runs deep on the same physical page.  Task 30 left
 // that threshold exactly where it was.  There is no fault and no
 // diagnostic.  It takes a path 884+ words deep AT A SLEEP POINT to do it -- 109 words
-// deeper than anything measured -- and kernel/TODO.md task 31 says how it would be
+// deeper than anything measured -- and kernel task 31 says how it would be
 // detected.  See kernel/uarea.S and include/sys/user.h.
 #define UBASE    074000 // the u-area: the last two pages of the kernel space
 #define USTKPAGE 28     // first page of the user stack (070000)

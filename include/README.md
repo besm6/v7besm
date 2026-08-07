@@ -44,7 +44,7 @@ What that cost is written down in each header, but the four worth knowing here a
 - `isprint(' ')` is true, which under v7 it was not; the free bit `_B` in `lib/libc/gen/ctype_.c`
   is what separates `isprint` from `isgraph`.
 - `signal()` takes and returns C11's `void (*)(int)`. That commits phase 6's `sendsig()` to
-  passing the signal number — see `kernel/TODO.md`.
+  passing the signal number — see `kernel/README.md`.
 
 Six headers that were missing outright came over whole: `locale.h`, `fenv.h`, `wchar.h`,
 `wctype.h`, `uchar.h`, `tgmath.h`. Three are refused from that tree on purpose — its `errno.h`

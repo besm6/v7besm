@@ -13,7 +13,7 @@
 //
 // That commits the kernel.  sendsig() in kernel/machdep.c pushes a single word
 // and jumps, and does not tell the handler which signal it is handling; the
-// signal frame is still to be designed (lib phase 6, kernel/TODO.md), and it now
+// signal frame is still to be designed (lib phase 6), and it now
 // has to carry the number as the handler's argument.  Nothing in libc breaks in
 // the meantime: the signal() stub is generated assembly and has no opinion about
 // C types, and b6sim answers anything but SIG_DFL/SIG_IGN with EINVAL.

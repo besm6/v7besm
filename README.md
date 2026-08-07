@@ -93,8 +93,8 @@ A **C compiler on the machine**, and **`yacc` and `lex`** — six of the remaini
 are grammars (`expr`, `egrep`, `m4`, `make`, `bc`, `awk`) and none can be built until yacc
 exists. `at`, `cron` and `calendar` need a clock the hardware has not got. The typesetting
 suite, tape utilities, `uucp` and the PDP-11 compiler internals are not coming at all, and
-[cmd/TODO.md](cmd/TODO.md) says why for each. The kernel's own leftovers are in
-[kernel/TODO.md](kernel/TODO.md).
+[cmd/TODO.md](cmd/TODO.md) says why for each. The kernel has no work plan left; its reference is
+[kernel/README.md](kernel/README.md).
 
 ## Repository layout
 

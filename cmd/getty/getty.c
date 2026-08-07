@@ -5,7 +5,7 @@
 //
 //      getty [ selector ]
 //
-// One of task 29b's two (../../kernel/TODO.md).  /etc/init forks one of these per enabled
+// One of kernel task 29b's two.  /etc/init forks one of these per enabled
 // line of /etc/ttys and execs it as `execl("/etc/getty", "-", "<selector>", 0)' with
 // descriptors 0, 1 and 2 already open on the terminal (cmd/init/init.c, dfork()).  This
 // program sets the line's modes, prints `login: ', reads a name, sets the modes a user wants

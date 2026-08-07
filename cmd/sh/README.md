@@ -2,7 +2,7 @@
 
 `/bin/sh`: S. R. Bourne's shell, compiled by the `b6*` toolchain and staged as
 **`build/rootfs/bin/sh`** — the shell `/etc/init` execs to bring the system up single-user
-([`../init/README.md`](../init/README.md), [`../../kernel/TODO.md`](../../kernel/TODO.md) task 24).
+([`../init/README.md`](../init/README.md), kernel task 24).
 
 Like [`cmd/init/`](../init/), this is a `cmd/` subdirectory that is **not a host tool**. Nothing
 here runs on the build machine.

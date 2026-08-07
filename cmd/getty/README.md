@@ -86,7 +86,7 @@ anybody. `scintr()` takes one character per ПРП interrupt out of a single reg
 character arriving while the last is still unread has nowhere to wait, and a per-character
 round trip through user mode is the way to make that window wide.
 
-That is evidence for the guest-side half of [kernel/TODO.md](../../kernel/TODO.md) task 35's
+That is evidence for the guest-side half of kernel task 35's
 question — the first case that tells the two send rates apart, since the same simulator feeds a
 shell at the default rate without loss. It is not a proof; `kernel/test/login.ini`'s header says
 what would be.

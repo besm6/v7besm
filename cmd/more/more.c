@@ -695,7 +695,7 @@ void prompt(char *filename)
 //
 // NOT ASSERTED, and it cannot be here: this whole path needs a terminal, and a terminal
 // whose output can still be diffed is kernel/test/console, enabled again now that
-// kernel/TODO.md task 35 is answered -- where README.md's `screen half' had been waiting.
+// kernel task 35 is answered -- where README.md's `screen half' had been waiting.
 int nextline(FILE *f, int *length)
 {
     int c;

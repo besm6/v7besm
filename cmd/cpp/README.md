@@ -215,7 +215,7 @@ left un-expanded where the host expands it. `cmd_cpp_nesting` records that diffe
 
 **This bound is the stack's, not the preprocessor's.** Raising `USTKPAGE` from 28 to 24
 (`include/sys/param.h`) would give 8,192 words of stack and 24,576 of image. That is a kernel ABI
-change and belongs to [../../kernel/TODO.md](../../kernel/TODO.md) task 39, not here — and **it is
+change and belongs to kernel task 39, not here — and **it is
 no longer free.** When this was written every program on the disk fitted under 24,576; task C9b
 has since put `/usr/bin/ld` on it at **23,951 words**, whose ~4,700 words of headroom are the heap
 budget for twelve stdio buffers. Cutting the ceiling to 24,576 would leave it 625 and stop it

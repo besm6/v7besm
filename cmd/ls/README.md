@@ -178,7 +178,7 @@ What *is* asserted, and where:
   and would print in columns, making the expectation a function of the screen width, of the
   terminal's `XTABS` bit and of the longest name in `/bin`, none of which that stage is about.
   It matters more than it would elsewhere because **that test is DISABLED**
-  ([`../../kernel/TODO.md`](../../kernel/TODO.md) task 35), so a wrong expectation would sit there
+  (kernel task 35), so a wrong expectation would sit there
   unnoticed.
 
 **Column output is therefore not asserted anywhere**, and that is a real gap rather than an

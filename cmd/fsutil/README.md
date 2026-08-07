@@ -176,5 +176,5 @@ attaches the result at the correct geometry.
 inode back through the kernel's *own* `bread()`, buffer cache and `sbcheck()`
 (`kernel/alloc.c`) under SIMH — the first time `sbcheck()` has executed, and the
 close of the loop the kernel-model test (`test/kernel_model_test.cpp`) stood in
-for. A full boot mount still hangs (`kernel/TODO.md` task 20), but the driver and
+for. A full boot mount still hung at the time, but the driver and
 the superblock check are now known good in isolation, strictly below that path.

@@ -39,7 +39,7 @@
 
 // Fabricating a char * from an int is kernel/dev/mem.c's conversion and has to be spelled its
 // way: int -> int * copies the word address, int * -> char * sets the fat marker and byte
-// offset.  A direct (char *) of an int would build the marker bit wrong (kernel/TODO.md 34).
+// offset.  A direct (char *) of an int would build the marker bit wrong (kernel task 34).
 #define BADPTR ((char *)(int *)BADWORD)
 
 #define NLIST 64 // room for more names than the table has, so a full LIST is never clipped

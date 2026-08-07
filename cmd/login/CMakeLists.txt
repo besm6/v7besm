@@ -1,6 +1,6 @@
 # /bin/login -- Unix v7 login(1), built natively for the BESM-6.
 #
-# The second of task 29b's two (../../kernel/TODO.md): a cmd/ subdirectory that is NOT a host
+# The second of kernel task 29b's two: a cmd/ subdirectory that is NOT a host
 # tool.  b6_prog() (../../scripts/BesmCross.cmake) runs the b6* toolchain over login.c, links
 # it `crt0.o login.o -lc -lruntime' against the libc built in ../../lib, and stages the result
 # as build/rootfs/bin/login.  Added from inside the top-level libruntime guard, after lib/, and

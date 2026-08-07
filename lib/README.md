@@ -186,6 +186,6 @@ names or counts, `timet` converts only literal `time_t` values, `spawn` never st
 shell, `pwent` prints no line of `/etc/passwd`, and `termcapt` replaces its own `environ` rather
 than let a `$TERMCAP` in the developer's shell decide what it reads.
 
-Once [`../kernel/TODO.md`](../kernel/TODO.md) lands a root filesystem, these same programs go
+Once the kernel lands a root filesystem, these same programs go
 on it and run under the real kernel on SIMH — the first time the `$77` gate is exercised from
 user mode by anything but the kernel's own tests.

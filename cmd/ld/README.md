@@ -119,7 +119,7 @@ no recursion at all**, and not one function holds a local array. The deepest cha
 | `lookup_local` | 28 |
 
 The deepest path costs 60 + 29 + 43 + 41 + 284 + 11 + 82 + 28 = **578 words** of the 4,096.
-This is worth stating because [../../kernel/TODO.md](../../kernel/TODO.md) task 39 assumed the
+This is worth stating because kernel task 39 assumed the
 opposite: raising `USTKPAGE` would take 4,096 words *off* the image ceiling, which is exactly
 what this program is short of. C9b is evidence against that change, not for it.
 

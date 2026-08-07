@@ -8,7 +8,7 @@
 //
 // THE MACHINE HAS TWO OF THEM and this file drives both, as cdevsw[0] minors 0 and
 // 1: /dev/console (also /dev/tty0) is Consul 1, and /dev/tty1 is Consul 2, the
-// second terminal the multiuser work needs (kernel/TODO.md task 29).  One driver
+// second terminal the multiuser work needs (kernel task 29).  One driver
 // rather than two because the hardware asked for it -- see the register macros
 // below -- and because one interrupt handler then reads ПРП once for both lines.
 //

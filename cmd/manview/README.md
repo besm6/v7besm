@@ -163,7 +163,7 @@ byte-identity assertion left.
 
 `| /bin/more` has no test and that is a deferral, not an oversight — it is appended only for a
 terminal, and a terminal whose output can be diffed is `kernel/test/console`, enabled again since
-`kernel/TODO.md` task 35. [`../more/README.md`](../more/README.md)'s position, word for word.
+kernel task 35. [`../more/README.md`](../more/README.md)'s position, word for word.
 
 **One change was made to `more(1)` for this** and it has the same problem. Its column counter
 skipped UTF-8 continuation bytes and knew nothing about `ESC`: the escape itself is below `' '`

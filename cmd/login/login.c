@@ -5,7 +5,7 @@
 //
 //      login [ name ]
 //
-// The second of task 29b's two (../../kernel/TODO.md), and THE FIRST PROGRAM ON THIS MACHINE
+// The second of kernel task 29b's two, and THE FIRST PROGRAM ON THIS MACHINE
 // THAT MAKES A SHELL BELONGING TO SOMEBODY OTHER THAN ROOT.  Until now init exec'd /bin/sh
 // directly, so every process the system has ever run above the icode has had uid 0; the only
 // exception was lib/test/suidt, which drops to uid 7 to prove the setuid bit works.  Here the
