@@ -72,8 +72,8 @@ PHYSICAL, pages 0..31 — the kernel, addressed with БлП = 1 (no translation)
    054000   BUFFERS ------ buffers[NBUF][BSIZEW], 16 * 512 = 8192 words -----------
               a fixed PHYSICAL area: the controllers transfer to a physical address
    074000   U AREA, saved half ---- USIZE words: the CEILING on a switch's copy ---
-              struct user     (~142 words)   `u = 074000', an absolute symbol
-              kernel stack    (883 words, grows UP past 075777 into...)
+              struct user     (135 words)   `u = 074000', an absolute symbol
+              kernel stack    (890 words, grows UP past 075777 into...)
    076000   U AREA, overflow ------ 1024 words, saved by NOTHING ------------------
               the stack may run here but must not SLEEP here
    0100000  end of the unmapped reach; everything above is the page pool

@@ -17,7 +17,6 @@
 #include "sys/dir.h"
 #include "sys/param.h"
 #include "sys/proc.h"
-#include "sys/seg.h"
 #include "sys/systm.h"
 #include "sys/text.h"
 #include "sys/types.h"
@@ -124,9 +123,9 @@ void sureg()
 // gets, text+data must stay below the stack base, and the stack must fit the
 // pages above it.
 //
-// xrw (RO/RW from seg.h) is accepted and ignored: the machine has no read-only
-// page.  So is sep -- there is no I/D separation here either.
-int estabur(int nt, int nd, int ns, int sep, int xrw)
+// v7's `sep' and `xrw' arguments are gone, with sys/seg.h that spelled RO and RW:
+// this machine has no read-only page and no I/D separation.
+int estabur(int nt, int nd, int ns)
 {
     if (nt + nd + ns > MAXMEM)
         goto err;

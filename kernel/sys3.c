@@ -112,6 +112,8 @@ void dup()
         if (u.u_ofile[i] != NULL)
             closef(u.u_ofile[i]);
         u.u_ofile[i] = fp;
+        // dup2 names fdes2 outright, bypassing ufalloc(): clear the stale EXCLOSE.
+        u.u_pofile[i] = 0;
         fp->f_count++;
     }
 }

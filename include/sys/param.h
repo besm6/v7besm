@@ -219,15 +219,16 @@
 // struct direct (u_dent) AHEAD of the shadow page table, and uarea.S and seg.S
 // hardcode that table's word offset as UPT -- b6as has no offsetof().  Going from
 // 24 to 18 took a word off each, so UPT went 35 -> 33 in kernel/uarea.S,
-// kernel/seg.S and kernel/test/mmutest.c.  mmutest's check 13 asserts it, which is
-// how this was caught; keep all four in step.
+// kernel/seg.S and kernel/test/mmutest.c; widening u_segflg and u_error to int
+// then took it to 34.  mmutest's check 13 asserts it, which is how this was
+// caught; keep all four in step.  A FIFTH copy moves with them and is asserted by
+// nothing: cmd/sim/kernel.h's klayout, whose U_COMM and U_WORDS this also shifts.
 #define DIRSIZ   18   // max characters per directory name (3 words)
 #define DIRWORDS 4    // words in a struct direct
 #define DIRENTSZ 24   // bytes in a struct direct (DIRWORDS * NBPW)
 #define DIRPB    128  // directory entries per block: BSIZEW / DIRWORDS
 #define DIRSHIFT 7    // LOG2(DIRPB)
 #define DIRMASK  0177 // DIRPB-1
-#define INFSIZE  138 // size of per-proc info for users
 // Chars in a clist block: 30 is five words exactly, chars packing six to a word, so a
 // `struct cblock' is the link word plus five and nothing is wasted.  v7's companion
 // CROUND is GONE -- it existed so that a clist cursor could find its own block, and its
@@ -317,7 +318,7 @@
 #define NPAGE    32 // virtual pages per process
 
 // The u-area occupies the last TWO pages of the kernel space, 074000-077777, but only
-// the FIRST of them is per-process state: `struct user' at the bottom (~142 words) and
+// the FIRST of them is per-process state: `struct user' at the bottom (135 words) and
 // the kernel stack growing UP through it.  USIZE words from UBASE are what every process
 // image reserves at p_addr and the CEILING on what uflush()/uload() copy on a context
 // switch; what they actually copy is everything below r15, since the stack grows up and

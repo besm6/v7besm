@@ -18,7 +18,6 @@
 #include "sys/param.h"
 #include "sys/proc.h"
 #include "sys/reg.h"
-#include "sys/seg.h"
 #include "sys/signal.h"
 #include "sys/systm.h"
 #include "sys/types.h"

@@ -5,7 +5,6 @@
 #include "sys/param.h"
 #include "sys/proc.h"
 #include "sys/reg.h"
-#include "sys/seg.h"
 #include "sys/signal.h"
 #include "sys/systm.h"
 #include "sys/text.h"
@@ -223,7 +222,7 @@ int core()
         u.u_segflg = 1;
         writei(ip);
         s = u.u_procp->p_size - USIZE;
-        estabur(0, s, 0, 0, RO);
+        estabur(0, s, 0);
         // `(caddr_t)(int *)0', never `(caddr_t)0'.  The bare form is a bit COPY -- the
         // compiler emits no marker and leaves the byte field 0, which reads as byte #5, a
         // word's LAST -- so this base stood out of phase with the kernel buffer and
@@ -269,7 +268,7 @@ int grow(int pg)
         si = SINCR;
     // estabur() assigns u_ssize itself, so there is no trailing `u.u_ssize += si' here
     // -- that would count the growth twice.
-    if (estabur(u.u_tsize, u.u_dsize, u.u_ssize + si, u.u_sep, RO))
+    if (estabur(u.u_tsize, u.u_dsize, u.u_ssize + si))
         return (0);
     p = u.u_procp;
     expand(p->p_size + si);
@@ -364,10 +363,12 @@ int procxmt()
                 goto error;
             xp->x_iptr->i_flag &= ~ITEXT;
         }
-        estabur(u.u_tsize, u.u_dsize, u.u_ssize, u.u_sep, RW);
+        // v7's estabur(RW)/estabur(RO) bracket: the same call twice here, no page
+        // being read-only, and kept only for the sureg() it re-runs.
+        estabur(u.u_tsize, u.u_dsize, u.u_ssize);
         i = suword((caddr_t)ipc.ip_addr, 0);
         suword((caddr_t)ipc.ip_addr, ipc.ip_data);
-        estabur(u.u_tsize, u.u_dsize, u.u_ssize, u.u_sep, RO);
+        estabur(u.u_tsize, u.u_dsize, u.u_ssize);
         if (i < 0)
             goto error;
         if (xp)

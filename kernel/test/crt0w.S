@@ -12,7 +12,7 @@
 //     would have uflush() copying the wrong page.  `u' is therefore an absolute symbol here
 //     exactly as in kernel/besm6.S.
 //
-//   * MAIN RUNS ON THE u-PAGE STACK, at 074400 -- past struct user (~142 words), with ~768
+//   * MAIN RUNS ON THE u-PAGE STACK, at 074400 -- past struct user (135 words), with ~768
 //     words below the end of the SAVED page (075777) and 1024 more of overflow above that
 //     (task 25a; see UBASE in <sys/param.h>).  This matters: resume() reloads the u page out
 //     from under its own caller, so a test running on some other stack would never exercise

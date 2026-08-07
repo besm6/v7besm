@@ -1337,10 +1337,6 @@ file /usr/include/sys/reg.h
 source ../../rootfs/usr/include/sys/reg.h
 mode 0644
 
-file /usr/include/sys/seg.h
-source ../../rootfs/usr/include/sys/seg.h
-mode 0644
-
 file /usr/include/sys/signal.h
 source ../../rootfs/usr/include/sys/signal.h
 mode 0644

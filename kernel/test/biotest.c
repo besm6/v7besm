@@ -35,7 +35,6 @@
 #include "sys/dir.h"
 #include "sys/param.h"
 #include "sys/proc.h"
-#include "sys/seg.h"
 #include "sys/systm.h"
 #include "sys/text.h"
 #include "sys/types.h"

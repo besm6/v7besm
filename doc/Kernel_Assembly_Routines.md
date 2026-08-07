@@ -93,7 +93,7 @@ control. It is manipulated only by `save()` and `resume()`. Three of them live p
 Nine of the ten slots are used — r1–r7 (the callee-saved set), r13 (the return address into
 `save()`'s caller) and r15 (the kernel stack pointer). Slot 9 is reserved and unused:
 shrinking to nine would move `u_upt`, whose
-word offset in `struct user` is hardcoded as `UPT = 35` in [uarea.S](../kernel/uarea.S) and
+word offset in `struct user` is hardcoded as `UPT = 34` in [uarea.S](../kernel/uarea.S) and
 [seg.S](../kernel/seg.S) (`b6as` has no `offsetof`; `mmutest` asserts the value). Ten words cost
 three words per process and no risk.
 
@@ -192,7 +192,7 @@ dismisses the tick accumulated during boot and calls `spl0()`. v7 userland that 
 
 `_start` ([besm6.S](../kernel/besm6.S)) is the kernel entry point, and it is **two halves**. The
 first is **two instructions**: seed r15 from `machdep.c`'s `int *const ustkbase = &u.u_stack[0]`
-(≈ `074214`) and call `main()`. The second is the **first entry into user mode**, which `main()`
+(`074206`) and call `main()`. The second is the **first entry into user mode**, which `main()`
 returns into — nine instructions that forge SPSW, IRET, r15 and R and leave through `выпр`, the one
 path into user mode that does not go through `intret`. It is spelled out in
 [Unix_Context_Switch.md §10b](Unix_Context_Switch.md#10b-the-first-entry-into-user-mode).

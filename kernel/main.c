@@ -9,7 +9,6 @@
 #include "sys/mount.h"
 #include "sys/param.h"
 #include "sys/proc.h"
-#include "sys/seg.h"
 #include "sys/systm.h"
 #include "sys/types.h"
 #include "sys/user.h"
@@ -98,7 +97,7 @@ void main()
         nd = pground(ptrword((caddr_t)icode) + nw);
 
         expand(USIZE + nd + SSIZE);
-        estabur(0, nd, SSIZE, 0, RO);
+        estabur(0, nd, SSIZE);
         copyout((caddr_t)icode, (caddr_t)icode, wtob(nw));
 
         // Drain the БРЗ write cache before anything can FETCH what we just stored.  The

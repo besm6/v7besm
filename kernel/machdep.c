@@ -11,7 +11,6 @@
 #include "sys/param.h"
 #include "sys/proc.h"
 #include "sys/reg.h"
-#include "sys/seg.h"
 #include "sys/systm.h"
 #include "sys/types.h"
 #include "sys/user.h"
@@ -31,10 +30,10 @@ int maxmem; // actual max memory per process
 // context switch reloads r15 from the saved label thereafter.
 //
 // u_stack is the last member of struct user, so this points at UBASE +
-// wordsizeof(struct user) - 1 (~074214).  b6cc now folds &u.u_stack[0] --
+// wordsizeof(struct user) - 1 (074206).  b6cc now folds &u.u_stack[0] --
 // a symbol+offset -- into the static relocation, so we can spell it directly.
 //
-// 883 of the words above it are SAVABLE (they are inside the USIZE ceiling on
+// 890 of the words above it are SAVABLE (they are inside the USIZE ceiling on
 // what a context switch copies, which ends at 075777) -- and of those, the ones
 // actually copied are the ones below r15, which is the whole of task 30.  The
 // 1024 above 075777 are overflow, and running there is only safe as long as the

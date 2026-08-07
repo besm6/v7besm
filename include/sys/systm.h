@@ -250,7 +250,7 @@ void clkstart(void);
 void cinit(void);
 int newproc(void);
 void expand(int newsize);
-int estabur(int nt, int nd, int ns, int sep, int xrw);
+int estabur(int nt, int nd, int ns);
 int copyout(caddr_t from, caddr_t to, int nbytes);
 int copyin(caddr_t from, caddr_t to, int nbytes);
 // ... and the byte-granular pair over them (kernel/ucopy.c), which is what iomove() calls:

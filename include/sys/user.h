@@ -37,8 +37,8 @@
 
 struct user {
     label_t u_rsav;       // save info when exchanging stacks
-    char u_segflg;        // IO flag: 0:user D; 1:system; 2:user I
-    char u_error;         // return error code
+    int u_segflg;         // IO flag: 0:user D; 1:system; 2:user I
+    int u_error;          // return error code
     int u_uid;            // effective user id
     int u_gid;            // effective group id
     int u_ruid;           // real user id
@@ -87,9 +87,7 @@ struct user {
     time_t u_cutime;              // sum of childs' utimes
     time_t u_cstime;              // sum of childs' stimes
     int *u_ar0;                   // address of users saved R0
-    char u_intflg;      // catch intr from sys
-    char u_justreturn;  // this call restored the frame itself; see sigret(), sendsig.c
-    char u_sep;         // flag for I and D separation
+    int u_justreturn;   // this call restored the frame itself; see sigret(), sendsig.c
     struct tty *u_ttyp; // controlling tty pointer
     dev_t u_ttyd;       // controlling tty dev
     struct {              // header of executable file (cross/besm6/b.out.h)
@@ -104,8 +102,7 @@ struct user {
     } u_exdata;
     char u_comm[DIRSIZ];
     time_t u_start;
-    char u_acflag;
-    int u_fpflag; // unused now, will be later
+    int u_acflag; // AFORK/ASU, for the accounting record's ac_flag
     int u_cmask;  // mask for file creation
     int u_stack[1];
     // kernel stack per user

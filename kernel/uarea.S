@@ -119,7 +119,7 @@
 
         .text
 
-UPT    = 33                    // word offset of u_upt in struct user -- mmutest asserts it
+UPT    = 34                    // word offset of u_upt in struct user -- mmutest asserts it
 USTKD  = UPT + 8                // word offset of u_stkdepth, immediately after u_upt[8]:
                                 //   the two can only drift together, and mmutest checks both
 SLACK  = 32                     // words of margin above r15.  Insurance, not correctness --

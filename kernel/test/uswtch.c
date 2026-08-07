@@ -63,7 +63,7 @@ int *intrframe;
 #define sentinel u.u_arg[0]
 
 // Leg D's two probes, as word offsets into the u page.  Both are in the kernel-stack region
-// -- past struct user (~142 words) -- and both are inside the SAVED page (< USIZE).  DEEP is
+// -- past struct user (135 words) -- and both are inside the SAVED page (< USIZE).  DEEP is
 // below crt0w.S's stack base at 0400, so it is under every r15 this test can reach and under
 // every count; HIGH is far above one (main()'s r15 is around 0420, so the count is ~300).
 #define DEEP   0300  // 192: struct user has ended, crt0w.S's stack base (0400) has not begun

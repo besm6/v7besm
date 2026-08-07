@@ -8,7 +8,6 @@
 #include "sys/map.h"
 #include "sys/param.h"
 #include "sys/proc.h"
-#include "sys/seg.h"
 #include "sys/signal.h"
 #include "sys/systm.h"
 #include "sys/types.h"
@@ -213,7 +212,7 @@ void xalloc(register struct inode *ip)
         panic("out of swap space");
     u.u_procp->p_textp = xp;
     xexpand(xp);
-    estabur(ts, 0, 0, 0, RW);
+    estabur(ts, 0, 0);
     u.u_count  = u.u_exdata.ux_csize + u.u_exdata.ux_tsize;
     u.u_offset = sizeof(u.u_exdata);
     u.u_base   = (caddr_t)(int *)BADDR;

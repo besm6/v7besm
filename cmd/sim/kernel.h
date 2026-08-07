@@ -130,17 +130,17 @@ enum : int {
 // so a member added to or removed from struct user has to be walked through by hand --
 // everything at or past it moves, and cmd/pstat/test is where a missed one shows up.
 enum : int {
-    U_UID   = 11,
-    U_GID   = 12,
-    U_RUID  = 13,
-    U_RGID  = 14,
-    U_PROCP = 15,
-    U_UTIME = 111,
-    U_STIME = 112,
-    U_TTYP  = 117,
-    U_TTYD  = 118,
-    U_COMM  = 127, // char[DIRSIZ]
-    U_START = 130,
+    U_UID   = 12,
+    U_GID   = 13,
+    U_RUID  = 14,
+    U_RGID  = 15,
+    U_PROCP = 16,
+    U_UTIME = 112,
+    U_STIME = 113,
+    U_TTYP  = 118,
+    U_TTYD  = 119,
+    U_COMM  = 128, // char[DIRSIZ]
+    U_START = 131,
     U_WORDS = 135,
 };
 

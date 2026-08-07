@@ -6,7 +6,6 @@
 #include "sys/buf.h"
 #include "sys/conf.h"
 #include "sys/param.h"
-#include "sys/seg.h"
 #include "sys/systm.h"
 #include "sys/types.h"
 

@@ -457,7 +457,6 @@ static void dousr(void)
     printf("sizes %d %d %d words\n", up->u_tsize, up->u_dsize, up->u_ssize);
     printf("times %d %d\n", up->u_utime / HZ, up->u_stime / HZ);
     printf("ctimes %d %d\n", up->u_cutime / HZ, up->u_cstime / HZ);
-    printf("intflg %d\n", up->u_intflg);
     printf("ttyp %o\n", ptrword(up->u_ttyp));
     printf("ttydev %d,%d\n", major(up->u_ttyd), minor(up->u_ttyd));
     printf("comm %.*s\n", DIRSIZ, up->u_comm);

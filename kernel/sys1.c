@@ -8,7 +8,6 @@
 #include "sys/param.h"
 #include "sys/proc.h"
 #include "sys/reg.h"
-#include "sys/seg.h"
 #include "sys/signal.h"
 #include "sys/systm.h"
 #include "sys/types.h"
@@ -291,7 +290,7 @@ int getxfile(register struct inode *ip, int nargc)
     }
     ds = pground(btow(lsize) + (ts ? 0 : BADDR));
     ss = SSIZE + pground(btow(nargc));
-    if (estabur(ts, ds, ss, 0, RO))
+    if (estabur(ts, ds, ss))
         goto bad;
 
     // allocate and clear core
@@ -325,7 +324,7 @@ int getxfile(register struct inode *ip, int nargc)
     // pointer to byte #0 of word ts, and ts is page-aligned and non-zero for a pure image.
     // lib/test/puret checks its own first data word for exactly this.
 
-    estabur(ts, ds, 0, 0, RO);
+    estabur(ts, ds, 0);
     u.u_base   = (caddr_t)(int *)(ts ? ts : BADDR);
     u.u_offset = sizeof(u.u_exdata) + u.u_exdata.ux_csize + u.u_exdata.ux_tsize;
     u.u_count  = u.u_exdata.ux_dsize;
@@ -344,7 +343,7 @@ int getxfile(register struct inode *ip, int nargc)
     u.u_tsize = ts;
     u.u_dsize = ds;
     u.u_ssize = ss;
-    estabur(ts, ds, ss, 0, RO);
+    estabur(ts, ds, ss);
 bad:
     return (0);
 }
@@ -594,8 +593,7 @@ void sbreak()
     // word.  The mask also makes the value non-negative, so the `n < 0' below is now
     // purely about a break that lands below the text.
     n = pground(ptrword(((struct a *)u.u_ap)->nsiz));
-    if (!u.u_sep)
-        n -= u.u_tsize;
+    n -= u.u_tsize;
     if (n < 0)
         n = 0;
     d = n - u.u_dsize;
@@ -606,7 +604,7 @@ void sbreak()
     // trailing `u.u_dsize += d', which would count the change twice.  `d' below is still
     // the delta the copyseg shuffle needs: data grows in the MIDDLE of the image, so unlike
     // the stack's, its growth really does move the pages above it.
-    if (estabur(u.u_tsize, u.u_dsize + d, u.u_ssize, u.u_sep, RO))
+    if (estabur(u.u_tsize, u.u_dsize + d, u.u_ssize))
         return;
     if (d > 0)
         goto bigger;

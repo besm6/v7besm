@@ -160,7 +160,8 @@ void close()
     fp  = getf(uap->fdes);
     if (fp == NULL)
         return;
-    u.u_ofile[uap->fdes] = NULL;
+    u.u_ofile[uap->fdes]  = NULL;
+    u.u_pofile[uap->fdes] = 0; // the flags die with the descriptor
     closef(fp);
 }
 

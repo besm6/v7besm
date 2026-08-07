@@ -27,7 +27,6 @@
 #include "sys/dir.h"
 #include "sys/param.h"
 #include "sys/proc.h"
-#include "sys/seg.h"
 #include "sys/systm.h"
 #include "sys/text.h"
 #include "sys/types.h"
@@ -92,7 +91,7 @@ void extintr(void)
 // but not compiled, so it can pick up #defines from sys/param.h yet still cannot compute an
 // offsetof() -- it hardcodes these, and this is what keeps it honest.  u_stkdepth sits
 // immediately after u_upt[8] so that the two can only drift together (task 30).
-#define UPT   33
+#define UPT   34
 #define USTKD (UPT + 8)
 
 int main()
