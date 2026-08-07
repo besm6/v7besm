@@ -17,11 +17,11 @@
 // was measured rather than assumed, and uswap.ini says why at length.
 //
 // THE IMAGES LIVE IN LOW CORE, below the 32767 a C pointer can name (the second note in
-// kernel/README.md's list for the next standalone test).  They are page-aligned words out of
-// the real coremap, seeded from `end' upwards, so malloc() hands out addresses this file can
-// both hand to the drum as a physical address and read back with an ordinary `int *'.  A
-// swapper image above 0100000 is mbtest's and biotest's business; what is under test here is
-// the content, and content has to be checkable.
+// doc/Besm6_Kernel_Reference.md's list for the next standalone test).  They are page-aligned
+// words out of the real coremap, seeded from `end' upwards, so malloc() hands out addresses
+// this file can both hand to the drum as a physical address and read back with an ordinary
+// `int *'.  A swapper image above 0100000 is mbtest's and biotest's business; what is under
+// test here is the content, and content has to be checkable.
 //
 // THE READ-BACK IS ONLY MEANINGFUL IF THE CORE WAS WIPED FIRST.  Every leg zeroes the whole
 // free-core region between the write and the read, so a swap() that transferred nothing

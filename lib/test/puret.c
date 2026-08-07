@@ -98,10 +98,11 @@ int main(int argc, char **argv)
     // THE FIRST WORD OF THE DATA SEGMENT.  This is the check the program was written for.
     // getxfile() remaps the data region to read it, and if it reads it to virtual 0 the
     // first word is swallowed: a store to virtual word 0 is DROPPED and a load returns 0,
-    // whatever page 0 is mapped to (kernel/README.md, "Never virtual page 0").  Under FMAGIC
-    // the base is BADDR = 8 and the hole is never touched; under NMAGIC it is the very
-    // first word of the segment, so exactly one initialized variable comes back zero and
-    // nothing faults.  `firstword' is this file's first initializer, and the assertion
+    // whatever page 0 is mapped to (doc/Besm6_Kernel_Reference.md, "Never virtual page 0").
+    // Under FMAGIC the base is BADDR = 8 and the hole is never touched; under NMAGIC it is
+    // the very first word of the segment, so exactly one initialized variable comes back
+    // zero and nothing faults.  `firstword' is this file's first initializer, and the
+    // assertion
     // below is on its VALUE, not on its address -- if the compiler or the linker ever puts
     // something else at the origin, that word is the one at risk and this check goes with it.
     //

@@ -76,8 +76,8 @@
 //
 // There is no clock-calendar a program can read on a BESM-6, so `time' is never seeded
 // from a wall clock: it starts at the superblock's s_time and counts ticks from there
-// (kernel/README.md, "Known consequences").  A five-hour offset on top of an invented
-// epoch is a fiction laid over a fiction, and it would put localtime() an hour and a
+// (doc/Besm6_Kernel_Reference.md, "Known consequences").  A five-hour offset on top of an
+// invented epoch is a fiction laid over a fiction, and it would put localtime() an hour and a
 // half of arithmetic away from gmtime() for no gain.  Zero also makes the kernel agree
 // with b6sim, whose ftime() answers 0/0 (cmd/sim/syscall.cpp), so lib/test/timet.c gives
 // the same transcript under both harnesses -- which is the whole point of running it

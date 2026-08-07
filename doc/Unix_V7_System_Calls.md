@@ -237,7 +237,7 @@ These are the facts a reader cannot get from a v7 manual page.
   | 1, 2 (read I/D), 4, 5 (write I/D) | a word address in the child's address space. There is no I/D separation, so 1 and 2 name the same space, and so do 4 and 5. |
   | 3, 6 (read/write u) | a word **index** into the u-area, `0 … USIZE-1`. v7's was a byte offset. |
   | 7 (continue) | the resume PC, a word address, with `1` reserved for "leave it where it stopped". |
-  | 9 (single-step) | nothing: the request is **refused with `EIO`** and `addr` is never read. There is no T-bit on this machine, and stepping with the address-break registers М034/М035 would need an instruction decoder in the kernel — [kernel/README.md](../kernel/README.md), "Known consequences, accepted". The child is left stopped, so request 7 still works. |
+  | 9 (single-step) | nothing: the request is **refused with `EIO`** and `addr` is never read. There is no T-bit on this machine, and stepping with the address-break registers М034/М035 would need an instruction decoder in the kernel — [Besm6_Kernel_Reference.md](Besm6_Kernel_Reference.md), "Known consequences, accepted". The child is left stopped, so request 7 still works. |
 
   `data` and the returned word are likewise whole words, and **−1 is a legal result**: `r14`
   says whether the call failed, so libc's stub needs none of v7's `errno = 0` preamble. `b6sim`
@@ -270,7 +270,7 @@ These are the facts a reader cannot get from a v7 manual page.
   profiles (`monitor`/`mcount`, `cc -p` and `prof(1)` are all absent and are not coming), and
   accepting the call while recording nothing was the worse of the two answers. The full account is
   the `profil(2)` bullet under "Known consequences, accepted" in
-  [kernel/README.md](../kernel/README.md).
+  [Besm6_Kernel_Reference.md](Besm6_Kernel_Reference.md).
 
 - **The epoch starts at 0.** The machine has no clock-calendar a program can read, so `time`
   counts from boot until something calls `stime` (`clkstart()` in
@@ -376,4 +376,5 @@ every name `KCTL_LIST` returned for the second. Both found a real bug when they 
 - [Aout_Simulator.md §7](Aout_Simulator.md#7-system-calls) — the same set as `b6sim` services it.
 - [lib/README.md](../lib/README.md) — the libc side: `crt0`, the stubs, `cerror`, and the work
   that is left.
-- [kernel/README.md](../kernel/README.md) — the state of the port.
+- [kernel/README.md](../kernel/README.md) — how the kernel works, and
+  [Besm6_Kernel_Reference.md](Besm6_Kernel_Reference.md) for the rules behind it.

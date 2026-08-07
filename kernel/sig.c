@@ -216,7 +216,7 @@ int core()
         // that means the tail above the live depth holds whatever the
         // PREVIOUSLY resumed process left on the stack, where before it held
         // this process's own dead frames.  Accepted, and noted in
-        // kernel/README.md's consequences list; ptrace's u-area window
+        // doc/Besm6_Kernel_Reference.md's consequences list; ptrace's u-area window
         // (procxmt() below) reads the same words and says the same thing.
         u.u_base   = (caddr_t)&u;
         u.u_count  = wtob(USIZE);
@@ -403,7 +403,8 @@ int procxmt()
 
     // continue and stop again after one instruction: not offered here.  There is no
     // T-bit, and stepping with the address-break registers М034/М035 would need an
-    // instruction decoder in the kernel -- README.md, "Known consequences, accepted".
+    // instruction decoder in the kernel -- doc/Besm6_Kernel_Reference.md, "Known
+    // consequences, accepted".
     // The child stays stopped, so the parent can retry with request 7.
     case 9:
         goto error;

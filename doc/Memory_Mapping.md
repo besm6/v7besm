@@ -1016,7 +1016,8 @@ and disk controllers transfer to a physical address; and **РП always holds the
 map**, so a trap switches nothing. `KEND` is derived — `BUFBASE == UBASE - NBUF*BSIZEW` — so raising
 `NBUF` lowers the ceiling with it, which is what raising `NMOUNT` to 8 did: `NBUF` went to 16 to
 keep the cache larger than the mount table, and the ceiling came down a page and a half. The design is written up in
-[`kernel/README.md`](../kernel/README.md); the routines are in
+[`kernel/README.md`](../kernel/README.md) and
+[`Besm6_Kernel_Reference.md`](Besm6_Kernel_Reference.md); the routines are in
 [Kernel_Assembly_Routines.md](Kernel_Assembly_Routines.md).
 
 | concern | how it works on this machine |

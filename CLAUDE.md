@@ -13,7 +13,8 @@ A port of **Unix v7 to the BESM-6**, a Soviet 48-bit-word mainframe.
 - **`lib/`** — cross-built `libc.a`, `libm.a`, `libtermcap.a`, `libcurses.a`, `crt0.o`.
 
 **The narrative lives in the per-directory READMEs, and that is where to look before touching
-anything**: `kernel/README.md` (memory model, hardware rules), `cmd/README.md` (the porting
+anything**: `kernel/README.md` and `doc/Besm6_Kernel_Reference.md` (memory model, hardware
+rules), `cmd/README.md` (the porting
 recipe), `cmd/TODO.md`, and most `cmd/<prog>/`. Two things are external: the C
 cross-compiler <https://github.com/besm6/c-compiler/>, supplying `libruntime.a`'s `b$*` helpers
 and the ten freestanding headers, and SIMH <https://github.com/besm6/simh/tree/master/BESM6/>.
@@ -150,8 +151,8 @@ copy.
 `CHAR_BIT == 8` but six chars pack into a word, so **`sizeof(int) == 6`** and addresses are
 word indices. Bits number right-to-left from 1. Numbers are octal. No IEEE 754.
 
-**Kernel memory model** (full account in `kernel/README.md` — read it before touching anything
-memory-related, and keep it current):
+**Kernel memory model** (`kernel/README.md` tells how it works, `doc/Besm6_Kernel_Reference.md`
+the rules — read them before touching anything memory-related, and keep both current):
 
 - The kernel **runs unmapped** (БлП = БлЗ = 1), so a kernel address *is* physical; kernel
   image, u-area and buffer cache must fit the low 32 pages, since supervisor instruction fetch

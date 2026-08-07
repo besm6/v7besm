@@ -94,7 +94,7 @@ are grammars (`expr`, `egrep`, `m4`, `make`, `bc`, `awk`) and none can be built 
 exists. `at`, `cron` and `calendar` need a clock the hardware has not got. The typesetting
 suite, tape utilities, `uucp` and the PDP-11 compiler internals are not coming at all, and
 [cmd/TODO.md](cmd/TODO.md) says why for each. The kernel has no work plan left; its reference is
-[kernel/README.md](kernel/README.md).
+[doc/Besm6_Kernel_Reference.md](doc/Besm6_Kernel_Reference.md).
 
 ## Repository layout
 
@@ -128,7 +128,8 @@ details.
 **The simulators** — [SIMH, the full machine](doc/Simh_Simulator.md),
 [b6sim, a user-level `a.out` runner](doc/Aout_Simulator.md).
 
-**The kernel** — [kernel/README.md](kernel/README.md) is the reference; alongside it,
+**The kernel** — [kernel/README.md](kernel/README.md) is an article on how it works and
+[the maintainer's reference](doc/Besm6_Kernel_Reference.md) is the rest of it; alongside them,
 [system calls](doc/Unix_V7_System_Calls.md), [context switching](doc/Unix_Context_Switch.md),
 [the assembly routines](doc/Kernel_Assembly_Routines.md), and
 [how Dubna did it](doc/Dubna_Context_Switch.md) — the BESM-6 operating system that ran on the

@@ -129,7 +129,7 @@ out:
     //
     // Switching the kernel to the machine's 62.5 Hz slow clock (ГРП bit 10) would
     // buy exactly this and nothing else, at the price of an HZ that is no longer
-    // exact -- see kernel/README.md, "Gotchas worth not re-deriving".
+    // exact -- see doc/Besm6_Kernel_Reference.md, "Gotchas worth not re-deriving".
     if ((lbolt & (CPUTICK - 1)) == 0)
         if (++pp->p_cpu == 0)
             pp->p_cpu--;

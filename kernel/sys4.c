@@ -327,8 +327,9 @@ void times()
 // or mcount() in libc, no `cc -p', no prof(1), and addupc() was never written.  v7
 // reads a scale of 0 or 1 as "profiling off", which is the only state there is here,
 // so those two succeed; anything that asks to sample gets EINVAL rather than silence.
-// Implementing it means a libc monitor() and a host-side prof first -- kernel/README.md,
-// "Known consequences, accepted".  b6sim is the answer in the meantime.
+// Implementing it means a libc monitor() and a host-side prof first --
+// doc/Besm6_Kernel_Reference.md, "Known consequences, accepted".  b6sim is the answer
+// in the meantime.
 void profil()
 {
     register struct a {

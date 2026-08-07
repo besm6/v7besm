@@ -588,7 +588,7 @@ of the two outcomes. The full account, including what would have to exist first 
 routine cannot simply be transliterated (it indexes 16-bit shorts by a *byte* offset through a
 16-bit binary fraction; a buffer here is **words** and a bucket index is a **word** index), is the
 `profil(2)` bullet under "Known consequences, accepted" in
-[../kernel/README.md](../kernel/README.md). Idle-time accounting, which used to sit next to
+[Besm6_Kernel_Reference.md](Besm6_Kernel_Reference.md). Idle-time accounting, which used to sit next to
 `addupc` in `clock()`, is unaffected and works differently — see §4.3.
 
 ### 4.6 Memory primitives — `bcopy`, `bzero`
