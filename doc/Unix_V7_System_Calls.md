@@ -236,7 +236,8 @@ These are the facts a reader cannot get from a v7 manual page.
   |---|---|
   | 1, 2 (read I/D), 4, 5 (write I/D) | a word address in the child's address space. There is no I/D separation, so 1 and 2 name the same space, and so do 4 and 5. |
   | 3, 6 (read/write u) | a word **index** into the u-area, `0 … USIZE-1`. v7's was a byte offset. |
-  | 7, 9 (continue) | the resume PC, a word address, with `1` reserved for "leave it where it stopped". |
+  | 7 (continue) | the resume PC, a word address, with `1` reserved for "leave it where it stopped". |
+  | 9 (single-step) | nothing: the request is **refused with `EIO`** and `addr` is never read. There is no T-bit on this machine, and stepping with the address-break registers М034/М035 would need an instruction decoder in the kernel — [kernel/README.md](../kernel/README.md), "Known consequences, accepted". The child is left stopped, so request 7 still works. |
 
   `data` and the returned word are likewise whole words, and **−1 is a legal result**: `r14`
   says whether the call failed, so libc's stub needs none of v7's `errno = 0` preamble. `b6sim`

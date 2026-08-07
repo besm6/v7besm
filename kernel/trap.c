@@ -172,8 +172,9 @@ void trap(void)
     } else if (grp & GRP_BREAKPOINT) { // address-break match (М034/М035)
         __besm6_mod(MOD_GRPCLR, ~GRP_BREAKPOINT);
         i = SIGTRAP;
-        // TODO 33: single-step is the address-break registers М034/М035, not a flag bit;
-        // there is no EFL/TBIT to clear, so re-arming belongs to procxmt().
+        // Nothing arms М034/М035: ptrace's single-step request is refused (sig.c), and no
+        // other caller sets them.  The arm stays so that a match cannot reach the panic
+        // below; there is no flag to clear, the ГРП bit above being the whole state.
 
     } else {
         // Vectored with nothing pending: a cause we do not decode.

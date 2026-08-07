@@ -393,19 +393,22 @@ int procxmt()
         for (i = 0; i < 16; i++)
             if (p == &u.u_ar0[regloc[i]])
                 goto ok;
-        // TODO 33: there is no flags register in the frame; single-step /
-        // address-break is М034/М035 (rewritten, not remapped).
+        // There is no flags register in the frame to write: the machine's trace
+        // hardware is М034/М035, which is rewritten rather than remapped.
         goto error;
 
     ok:
         *p = ipc.ip_data;
         break;
 
-    // set signal and continue
-    // one version causes a trace-trap
+    // continue and stop again after one instruction: not offered here.  There is no
+    // T-bit, and stepping with the address-break registers М034/М035 would need an
+    // instruction decoder in the kernel -- README.md, "Known consequences, accepted".
+    // The child stays stopped, so the parent can retry with request 7.
     case 9:
-        // TODO 33: arm single-step via the address-break registers М034/М035
-        // (not a flag bit).  Falls through to case 7 to set the resume PC.
+        goto error;
+
+    // set signal and continue
     case 7:
         if ((int)ipc.ip_addr != 1)
             // The single RET slot holds whichever return the stopping gate saved

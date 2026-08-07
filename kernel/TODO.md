@@ -15,12 +15,11 @@ why `besm6.o` cannot go into one.
 README.md, and how each turned out is in the source comments and in [../doc/](../doc/). The
 numbering is **left as it was** — task numbers are cited from the sources and from `doc/`.
 
-The tasks left are small, independent, and were deferred deliberately.
+One task is left. It is small and was deferred deliberately.
 
 | | task | size |
 |---|---|---|
 | 32 | `profil()`: implement `addupc()` or make it fail | small; the decision is the task |
-| 33 | `ptrace` single-step | small now, blocked after |
 
 ---
 
@@ -44,37 +43,3 @@ the kernel is unmapped, so it goes through `fuword`/`suword`, not a store — an
 interrupt, so it must not fault.
 
 **Size.** Small either way; the decision is the whole task.
-
----
-
-## 33. `ptrace` single-step
-
-Marked `TODO 33` at [sig.c](sig.c) (cases 6 and 9), [trap.c](trap.c) (the `GRP_BREAKPOINT` arm) and
-`GRP_BREAKPOINT` in [../include/sys/besm6dev.h](../include/sys/besm6dev.h).
-
-**Why it is not a flag bit.** v7's `PT_STEP` sets the PDP-11 T-bit and the hardware traps after one
-instruction. This machine has no such bit. What it has is a pair of debug registers
-([../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) §13): **ИБП** (`M[034]`, КРА) is an *execute
-breakpoint* — one address — and **ДВП** (`M[035]`, ЗПСЧ) is a data watchpoint with `PSW_WRITE_WATCH`
-selecting write- or read-match. They raise ГРП bits 12, 16 and 17, and they match the *tagged*
-address, so they follow the current mapping mode.
-
-A breakpoint register is not a single-step: stepping with it means decoding the instruction at the
-resume PC, computing the successor and arming `M[034]` on it — and a conditional branch has two
-successors against one register. So `PT_STEP` needs either an instruction decoder in the kernel or a
-different contract with the debugger.
-
-**Today it is worse than unimplemented: it lies.** `procxmt()` case 9 falls through to case 7 and
-resumes the process with no trap armed, so a debugger waits forever for a stop that will never come.
-
-**Do this much now** (small, and independent of everything above): make case 9 return `EIO` rather
-than fall through, and say so in one comment at each of the three sites.
-
-**The rest is blocked on a user.** No debugger is ported — no `adb`, no `sdb` — so there is nothing
-to hold an implementation to. When one arrives, the design question to settle first is whether to
-offer hardware breakpoints as their own `ptrace` request (`M[034]` armed at an address, re-armed by
-`procxmt()` after each match, since there is no flag to clear) or to keep v7's ABI and pay for the
-decoder.
-
-**Size.** Small now; the full version is a task of its own and should be re-scoped when a debugger
-exists.

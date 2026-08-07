@@ -730,6 +730,22 @@ Facts that cost real time to establish and are not in `doc/`.
   `cmd/mkfs/README.md` §2 is the account.
 * **`sy_nrarg` is read nowhere** and is vestigial: exactly one argument arrives in a register on this
   machine, for any `narg >= 1`.
+* **`ptrace`'s single-step, request 9, is refused with `EIO`.** v7 sets the PDP-11 T-bit and the
+  hardware traps after one instruction; this machine has no such bit. What it has is a pair of debug
+  registers ([../doc/Memory_Mapping.md](../doc/Memory_Mapping.md) §13): **ИБП** (`M[034]`) is an
+  *execute breakpoint* — one address — and **ДВП** (`M[035]`) a data watchpoint, both matching the
+  tagged address and raising ГРП bits 12, 16 and 17. A breakpoint register is not a single-step:
+  stepping with it means decoding the instruction at the resume PC and arming `M[034]` on its
+  successor, and a conditional branch has two successors against one register. So request 9 costs an
+  instruction decoder in the kernel, and nothing is ported that would use it — there is no `adb` and
+  no `sdb`, and `lib/test/coret.c` is the tree's only `ptrace` caller. The refusal is `procxmt()`'s
+  ordinary one ([sig.c](sig.c)), so the child stays stopped and the parent can continue it with
+  request 7; what it replaces was worse than unimplemented, a fall-through that resumed the child
+  with no trap armed and left a debugger waiting forever. `trap.c`'s `GRP_BREAKPOINT` arm stays,
+  turning a match nothing armed into `SIGTRAP` rather than a panic. **The day a debugger exists**,
+  the design question to settle first is whether to offer hardware breakpoints as their own `ptrace`
+  request — `M[034]` armed at an address and re-armed by `procxmt()` after each match, there being no
+  flag to clear — or to keep v7's ABI and pay for the decoder.
 * **There is no read-only user page.** РЗ closes a page to reads as well as writes, so a closed text
   page would take the program's own constant pool with it. `estabur()`'s `xrw` argument, and `sep`,
   are accepted and ignored. A **pure** (`NMAGIC`) binary's text is therefore *shared* but still

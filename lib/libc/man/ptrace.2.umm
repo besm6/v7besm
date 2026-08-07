@@ -71,7 +71,11 @@ The value of the *request* argument determines the precise action of the call:
   one instruction, execution stops again. The signal number from the stop is SIGTRAP. (On the
   PDP-11 the T-bit is used and just one instruction is executed; on the Interdata the stop does
   not take place until a store instruction is executed.) This is part of the mechanism for
-  implementing breakpoints.
+  implementing breakpoints. **On this machine request 9 fails with EIO** and *addr* is not read:
+  there is no T-bit here, and the address-break registers this machine does have cannot step
+  without an instruction decoder in the kernel. The child is left **stopped** — the refusal
+  changes nothing about its state — so a debugger can continue it with request 7 instead. See
+  BUGS.
 
 As indicated, these calls (except for request 0) can be used only when the subject process has
 stopped. The *wait* call is used to determine when a process stops; in such a case the
@@ -112,7 +116,9 @@ other. See intro(2).
 ## DIAGNOSTICS
 
 The value -1 is returned if *request* is invalid, *pid* is not a traceable process, *addr* is
-out of bounds, or *data* specifies an illegal signal number.
+out of bounds, or *data* specifies an illegal signal number. Request 9 always fails this way,
+with *errno* set to EIO; so does a request 6 naming a word of the u-area that is not a general
+register.
 
 ## BUGS
 
@@ -120,7 +126,7 @@ On the Interdata 8/32, `as soon as possible` (request 7) means `as soon as a sto
 has been executed.`
 
 | The request 0 call should be able to specify signals which are to be treated normally and not cause a stop. In this way, for example, programs with simulated floating point (which use `illegal instruction` signals at a very high rate) could be efficiently debugged.
-| On this machine the T-bit wording above does not apply either; single-stepping is not implemented.
+| On this machine the T-bit wording above does not apply either. **Single-stepping is not offered at all: request 9 is refused with EIO.** There is no flag bit that traps after one instruction; what this machine has is a pair of debug registers, an execute breakpoint holding one address and a data watchpoint. Stepping with a breakpoint register means decoding the instruction at the resume PC to compute its successor, and a conditional branch has two successors against one register - so a real request 9 costs an instruction decoder in the kernel, and nothing that would use it is ported. A refusal is what the kernel could honestly say: the alternative it replaced resumed the child with no trap armed, and a debugger waited forever for a stop that was never coming.
 
 The error indication, -1, is a legitimate function value; *errno,* see intro(2), can be used to
 disambiguate.
