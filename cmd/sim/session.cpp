@@ -41,11 +41,16 @@
 // drivable by hand under b6sim only if the manual tree can be named from outside, its
 // default /usr/man being the BUILD MACHINE's under this simulator.  No test needs it --
 // run-prog-test.sh runs `env -i' and every case passes -M instead.
+//
+// B6YACCPAR and B6LEXFORM are the same hazard again, for /usr/bin/yacc (C10c) and
+// /usr/bin/lex (C10d): each copies a skeleton from an absolute path of the IMAGE's --
+// /usr/lib/yaccpar, /usr/lib/lex/ncform -- which under b6sim is not there.
 static const char *const ENV_WHITELIST[] = {
     "LANG",  "LC_ALL", "TERM",      "SHELL",     "PATH",  "HOME",
     "USER",  "LOGNAME", "TMPDIR",   "EDITOR",    "PAGER", "MANPATH",
     "MAKEFLAGS",
     "B6CPP", "B6PARSE", "B6LOWER",  "B6CODEGEN", "B6AS",  "B6LD",
+    "B6YACCPAR", "B6LEXFORM",
 };
 
 //

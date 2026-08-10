@@ -93,10 +93,13 @@ void setup(int argc, char *argv[])
                 foutput = fopen(FILEU, "w");
                 if (foutput == NULL)
                     error("cannot open y.output");
+                shrink_buffer(foutput);
                 continue;
             case 'D':
             case 'd':
                 fdefine = fopen(FILED, "w");
+                if (fdefine != NULL)
+                    shrink_buffer(fdefine);
                 continue;
             case 'o':
             case 'O':
@@ -118,6 +121,7 @@ void setup(int argc, char *argv[])
     ftable = fopen(OFILE, "w");
     if (ftable == NULL)
         error("cannot open table file");
+    shrink_buffer(ftable);
 
     // written here, rewound and read back later: ftemp by callopt(), faction by
     // others()
@@ -125,10 +129,13 @@ void setup(int argc, char *argv[])
     faction = tmpfile();
     if (ftemp == NULL || faction == NULL)
         error("cannot open temp file");
+    shrink_buffer(ftemp);
+    shrink_buffer(faction);
 
     if (argc < 2 || ((finput = fopen(infile = argv[1], "r")) == NULL)) {
         error("cannot open input file");
     }
+    shrink_buffer(finput);
 
     cnamp = cnames;
     defin(0, "$end");

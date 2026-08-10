@@ -53,6 +53,17 @@ static void stagen(void);
 static void summary(void);
 static void others(void);
 
+// dextern.h's YYBUFSIZ has the arithmetic; on the host the default is affordable.
+// A failure leaves the stream unbuffered -- slow but correct -- so it is not fatal.
+void shrink_buffer(FILE *f)
+{
+#if besm6
+    setvbuf(f, NULL, _IOFBF, YYBUFSIZ);
+#else
+    (void)f;
+#endif
+}
+
 // $B6YACCPAR first -- deliberately not keyed on `besm6', as in cc.c -- then the
 // profile's search path.  Returns the last candidate if none exists, so the
 // caller's diagnostic names a path.  README.md, "Finding the skeleton".
@@ -107,6 +118,7 @@ static void others(void)
     finput = fopen(parser, "r");
     if (finput == NULL)
         error("cannot find parser %s", parser);
+    shrink_buffer(finput);
 
     warray("yyr1", levprd, nprod);
 

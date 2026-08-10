@@ -63,8 +63,7 @@ here and already tested, whose value is in doing them together rather than one a
 
 **Where to start: C11.** `b6yacc` and `b6lex` both exist now (C10a, C10b), so every grammar
 below can be built — and `expr` is the smallest consumer and the one that proves them end to end.
-C10c and C10d, which put the two tools on the image, are a separate axis and neither blocks a
-grammar.
+C10d, which puts `lex` on the image as C10c did `yacc`, is a separate axis and blocks no grammar.
 
 **Two loose ends about the terminal, one line each and neither worth a task of its own.** `TANDEM`
 is honoured by the kernel — `ttyblock()` queues the stop character when the input queue passes
@@ -107,44 +106,19 @@ program named here is already in its directory as a verbatim upstream copy; [yac
 first two itself and `ncform` carries the rest, so nothing here adds an archive to
 [../lib/](../lib/) or to `B6_STAGE_LIB`. [lex/README.md](lex/README.md), "No support library".
 
-### C10c. `yacc` on the image — `/usr/bin/yacc` and `/usr/lib/yaccpar`
-
-The C9 shape exactly: the same sources built a second time in the existing
-[yacc/rootfs/](yacc/rootfs/) subdirectory (`cmd/yacc` is added above the `libruntime.a` guard,
-where `b6_prog()` does not exist, and that directory is already added below it for C10a's native
-test), [../root.manifest](../root.manifest) stanzas for the binary and the template, and
-`ROOTFS_FILES` in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The manual page
-is written and staged; only its manifest stanza is missing, having waited for the binary.
-
-* **A `besm6` size profile, measured rather than guessed.** C10a collapsed v7's three profiles to
-  one keyed block in `dextern.h`, so this is an `#ifdef besm6` arm and nothing else; the
-  `_Static_assert`s beside it will refuse a set that does not hold, which is what the whole
-  `TEMPSIZE`/`NSTATES` question reduces to now. For scale, v7's `TINY` numbers cost about **10,540
-  words** of int and pointer arrays: `lkst[250]` 2,000, `mem0[1300]` 1,300, `amem[1000]` 1,000, and
-  3,052 in the four `NSTATES`-sized arrays, the rest scattered. Against 28,672 that leaves some
-  18,000 words for text, so **the address-space ceiling is not what binds here** — the tuning to
-  make is sized to the six grammars this yacc will actually be given, none of which has more than
-  thirty nonterminals. The host's numbers are `NTERMS` 300 and up; below 128 a grammar loses
-  eight-bit character literals (§11), which is a capability question and not a memory one.
-* **`WORD32` is gone**, not merely undefined: its macros shift by 31 and an `int` is 41 bits.
-* The rest is easy: the only automatic array in the program is a `char actname[8]`, so §6's stack
-  ceiling does not come near.
-* **The agreement test is the one that matters.** Host `b6yacc` and native `/usr/bin/yacc` over one
-  grammar, `y.tab.c` compared byte for byte, live — a checked-in expectation cannot say "these two
-  builds agree". `kernel/test/toolchain` used to boot for exactly this claim and is deleted,
-  rather than taking volume 3103. The conflict counts C10a pinned for all six grammars
-  ([yacc/README.md](yacc/README.md)) are the cheap half of the same check.
-* **What a generated parser costs is still unmeasured.** `short` is one word here, so
-  `yys[YYMAXDEPTH]` is 150 words of stack and `yyv[YYMAXDEPTH]` 150 of bss before any table;
-  `rootfs_calct_size` is the first number.
-
 ### C10d. `lex` on the image — `/usr/bin/lex` and `/usr/lib/lex/ncform`
 
-The C10c shape, in a `lex/rootfs/` that already exists (C10b's `scant` is there, and `cmd/lex` is
-added above the `libruntime.a` guard as well as below it): [../root.manifest](../root.manifest)
-stanzas for the binary, the skeleton and `/usr/man/man1/lex.1`, and `ROOTFS_FILES` in
+**C10c is the worked example and it is done**, so this is that shape again over a `lex/rootfs/`
+that already exists (C10b's `scant` is there, and `cmd/lex` is added above the `libruntime.a`
+guard as well as below it): a `b6_prog()` call and a staged skeleton in
+[yacc/rootfs/CMakeLists.txt](yacc/rootfs/CMakeLists.txt)'s shape, a `rootfs/test/` on
+[yacc/rootfs/test/](yacc/rootfs/test/)'s, [../root.manifest](../root.manifest) stanzas for the
+binary, the skeleton and `/usr/man/man1/lex.1`, and `ROOTFS_FILES` in
 [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The manual page is written and
-staged; only its manifest stanza is missing. `find_form()` already has its `#ifdef besm6` arm.
+staged; only its manifest stanza is missing. `find_form()` already has its `#ifdef besm6` arm,
+and `B6LEXFORM` is already on `ENV_WHITELIST` in [sim/session.cpp](sim/session.cpp) — C10c put it
+there, since the agreement test is the only way a native tool reaches an image skeleton under
+`b6sim`.
 
 **Different binding ceiling from yacc's**, and C10b measured it rather than leaving it to be
 guessed — [lex/README.md](lex/README.md), "What C10d still has to measure", has the arithmetic:
@@ -171,9 +145,13 @@ guessed — [lex/README.md](lex/README.md), "What C10d still has to measure", ha
   `yyracc()` and `yyless()` for every scanner whether or not it uses them, which `awk` does not;
   `rootfs_awk_size` is the first measurement of what that costs, and C10b's README records the
   fallback if it turns out to matter.
-* **The agreement test is the one that matters**, as for yacc: host `b6lex` and native
-  `/usr/bin/lex` over one scanner, `lex.yy.c` compared byte for byte, live. `awk.lx.l`'s pinned
-  statistics line is the cheap half of the same check.
+* **The agreement test is the one that matters**, as it was for yacc: host `b6lex` and native
+  `/usr/bin/lex` over one scanner, `lex.yy.c` compared byte for byte, live.
+  [yacc/rootfs/test/run-yacc-test.sh](yacc/rootfs/test/run-yacc-test.sh) is the script to copy,
+  and it comes with two things C10c learned. **The `-v` statistics are not comparable** — like
+  yacc's `y.output` they quote the profile's own bounds, so what `awk.lx.l`'s pinned line asserts
+  is the *host* build and the cheap half of the check, not agreement. And a case must not name
+  its input by an absolute path if the generator writes it into the output.
 
 ---
 

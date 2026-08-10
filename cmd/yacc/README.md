@@ -1,8 +1,8 @@
 # `cmd/yacc` — the parser generator
 
-Task **C10a** ([`../TODO.md`](../TODO.md)): the host tool `b6yacc`, the parser skeleton it
-copies, and the `b6_yacc()` CMake helper. C10b builds `b6lex` on top of it; C10c puts the same
-sources on the image as `/usr/bin/yacc`.
+Tasks **C10a** and **C10c** ([`../TODO.md`](../TODO.md)): the host tool `b6yacc`, the parser
+skeleton it copies, and the `b6_yacc()` CMake helper — then the same sources built a second time
+as the machine's own `/usr/bin/yacc`. C10b builds `b6lex` on top of the first.
 
 **This directory is the first exception to [`../README.md`](../README.md)'s "the sources are
 already here".** Everything else under [`../`](../) came from an unpacked v7 reference tree;
@@ -28,8 +28,8 @@ against `NSTATES` 750. `temp1[TEMPSIZE]` is indexed by state number in `others()
 Three profiles of which one is broken, one untested and one selected by editing a second header
 is not a mechanism worth keeping, so:
 
-* the numbers are now **one block**, `HUGE`'s, in `dextern.h`, to be keyed on `besm6` when C10c
-  adds that arm — the shape `cmd/cpp`, `cmd/as` and `cmd/ld` already use;
+* the numbers are now **one block keyed on `besm6`**, `HUGE`'s on the host — the shape `cmd/cpp`,
+  `cmd/as` and `cmd/ld` already use. The target arm is C10c's and is below;
 * `files.h` is gone, having held nothing else;
 * the invariants are **`_Static_assert`s**, §12's habit turned on the program's own arithmetic.
   There are six, one more than the header's comment listed: `temp1[]` is also indexed by
@@ -37,8 +37,8 @@ is not a mechanism worth keeping, so:
 
 `HUGE` is right for the host on capability rather than on memory: `NTERMS` is 300 there and 127
 in the other two, and **300 is the only one of the three in which a token value above 127 is
-representable at all** (§11). Table capacity does not enter the generated output, so C10c's
-smaller `besm6` profile will still agree byte for byte on any grammar that fits both.
+representable at all** (§11). Table capacity does not enter the generated output, which is what
+makes C10c's smaller profile safe — and is now measured rather than argued.
 
 `WORD32`, the 32-bit lookahead-set alternative, is **deleted rather than left unselected**: its
 bit-packing macros shift by 31, and an `int` is 41 bits on the target, so the option was never
@@ -101,7 +101,7 @@ profile on `cc.c`'s model:
 1. `$B6YACCPAR`, if set and non-empty — **not** keyed on `besm6`, exactly as `cc.c`'s tool
    overrides are not: it is how a test, and `b6_yacc()`, reach a skeleton that has not been
    installed;
-2. `/usr/lib/yaccpar` on the machine itself (C10c's location);
+2. `/usr/lib/yaccpar` on the machine itself, which is where C10c staged it;
 3. `~/.local/share/besm6/yaccpar.c`, then `/usr/local/share/besm6/yaccpar.c`, on the host.
 
 It returns the last candidate when none exists, so the diagnostic names a path a user can act
@@ -150,6 +150,58 @@ It lives inside the `libruntime` guard and so serves the cross builds only. C10b
 *host* program built from a generated parser and names `$<TARGET_FILE:b6yacc>` in a custom
 command of its own ([`../lex/CMakeLists.txt`](../lex/CMakeLists.txt)) — the first consumer of
 this tool that is not a test, and the first host one. `b6_lex()` sits beside `b6_yacc()` now.
+
+## Building for the BESM-6
+
+These same four sources are built a **second** time, by the `b6*` cross toolchain, into
+`build/rootfs/usr/bin/yacc` — the parser generator that runs on the machine, and the twelfth
+program of a toolchain that was eleven (task **C10c**). [`rootfs/CMakeLists.txt`](rootfs) is the
+whole of the build machinery, there is **no second copy of any source**, and the skeleton is
+staged beside it as `/usr/lib/yaccpar` because `find_parser()`'s `besm6` arm names that path and
+has no second candidate. What differs is a size profile in [`dextern.h`](dextern.h) keyed on the
+`besm6` predefine, and a stdio buffer.
+
+**At the host sizes the program does not fit at all**: 79,226 words — 145 const, 10,515 text,
+1,753 data, **66,813 bss** — against the 28,672 a user program gets for everything including its
+heap. bss is the whole of the problem; text does not move with the profile.
+
+The numbers are measured from the six grammars C11–C17 will feed this yacc, which are the only
+input it has to accept. `awk.g.y` is the worst of them on every count but one, and `bc.y` peaks
+the working sets:
+
+| | host | BESM-6 | measured need | why |
+| --- | ---: | ---: | ---: | --- |
+| `ACTSIZE` | 12000 | 2200 | 1727 | the optimizer's output table, one word each |
+| `MEMSIZE` | 24000 | 4800 | 3660 | production and optimizer storage; the largest single array |
+| `NSTATES` | 750 | 320 | 242 | five words a state across `pstate`/`tystate`/`indgo`/`mstates`/`defact` |
+| `NTERMS` | 300 | 144 | 95 | **not cut to the measurement** — see below |
+| `NPROD` | 600 | 200 | 122 | three words a rule |
+| `NNONTERM` | 300 | 48 | 30 | nine words a nonterminal, the dearest unit here |
+| `TEMPSIZE` | 1200 | 320 | — | the asserts fix it: `>= NSTATES`, `>= NPROD`, `>= NTERMS+NNONTERM+1` |
+| `CNAMSZ` | 5000 | 2400 | — | the name arena, six chars to a word |
+| `LSETSIZE` | 600 | 128 | 98 | `TBITSET` words a set, so it scales with `NTERMS` too |
+| `WSETSIZE` | 350 | 112 | 88 | `TBITSET + 2` words each, likewise |
+
+**`NTERMS` is the one not cut to what the grammars use.** It caps the number of *distinct*
+terminals and a character literal is one of them, so a value below 128 would stop a grammar using
+eight-bit literals at all — a capability limit rather than a memory one (§11). It is also charged
+twice over, `TBITSET` growing with it and every `struct looksets` and `struct wset` carrying a
+set: 144 keeps `TBITSET` at 10 where 256 would make it 17 and cost some 1,200 words.
+
+**The stdio buffer is not optional either.** `yacc` calls no `malloc` anywhere, so its entire
+heap is stdio's — and it holds seven streams open at once: the grammar, `y.tab.c`, `y.tab.h`
+under `-d`, `y.output` under `-v`, the two `tmpfile()`s and `stdout`. At the default `BUFSIZ`,
+3,072 bytes or 512 words, that is 3,584 words against the ~2,000 the profile leaves;
+`rootfs_yacc_size` cannot see a byte of it, so the program would link and a real run would die.
+`YYBUFSIZ` is 1026 bytes — 171 words, and a whole number of them, as
+[`../ld/intern.h`](../ld/intern.h)'s `LDBUFSIZ` explains — so the same seven cost about 1,200.
+
+It links at **26,647 words**: 143 const, 10,629 text, 1,353 data, 14,522 bss, top symbol
+`064037`. On `awk.g.y`, the largest grammar it will ever be given, every bound comes back with
+headroom — `3660/4800` of memory, `1727/2200` of action table, `242/320` states, `98/128`
+lookahead sets. The largest stack frame is **434 words** of 4,096 and the only automatic array
+in the program is a `char actname[8]`, so §6's stack ceiling does not come near. On the disk it
+costs 30 blocks of the 460 that were free: 26 for the binary, 2 for the skeleton, 2 for the page.
 
 ## Tests
 
@@ -200,8 +252,37 @@ case reports the offending byte **by value**, so anything that masked would prin
 evaluate the line instead of refusing it.
 
 `rootfs/` rather than `test/` because `cmd/yacc` is added to the build outside the `libruntime`
-guard, where `b6_prog()` does not exist — `cmd/libaout/rootfs` is the same shape, and C10c adds
-`/usr/bin/yacc` to this directory beside it.
+guard, where `b6_prog()` does not exist — `cmd/libaout/rootfs` is the same shape. C10c's
+`/usr/bin/yacc` is in that directory beside it.
+
+### Testing the native build
+
+Two kinds, both in [`rootfs/test/`](rootfs/test):
+
+* **`rootfs_yacc_*`** — the host `b6yacc` and the native `yacc` over one grammar, `y.tab.c`,
+  `y.tab.h` and the message stream diffed **live**. Two yaccs built from one source must generate
+  the same parser, and a checked-in expectation cannot say that: the day a table is emitted
+  differently in `y3.c`, a live diff *requires* the change to land identically on both targets.
+  There are eight cases and each is a real grammar — the six of C11–C17, `lex/parser.y` (which is
+  the machine generating a real tool's parser) and `calct.y`. A grammar written for this suite
+  could be sized to fit and would prove only that it fits.
+* **`cmd_yacc_*`** — ordinary `b6sim` cases with a checked-in `.expected`, which is the other
+  half: they pin the diagnostics and the exit status, which two yaccs wrong in the same way would
+  not.
+
+**`y.output` is the one output the two builds cannot agree on**, and it is deliberately not
+compared: its statistics section quotes the profile's own bounds — `95/300 terminals` on the host
+against `95/144` here. Nothing else does. In particular no message carries `argv[0]` — `error()`
+prints `" fatal error: "` and nothing more — so the message stream *is* comparable across the two
+worlds, which is unusual here and is why the conflict counts are part of the live diff rather
+than a separate assertion.
+
+**Both sides are told where the skeleton is.** The host's search path ends at an installed
+`share/besm6/yaccpar.c` and the native one is `/usr/lib/yaccpar`, which under `b6sim` is the
+*build machine's*; `$B6YACCPAR` is checked ahead of either, and `ENV_WHITELIST` in
+[`../sim/session.cpp`](../sim/session.cpp) passes it to the guest for this test's sake and
+C10d's. The `cmd_yacc_*` cases run under `env -i` and so cannot see it, which is why every one of
+them is a case that fails *before* `others()` wants the skeleton.
 
 ## Traps
 
