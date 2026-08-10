@@ -61,8 +61,8 @@ here and already tested, whose value is in doing them together rather than one a
 | C23 | `calendar` | | small, blocked on a clock and on its data |
 | C24 | the eight hand-rolled directory readers, over `opendir(3)` | one reader instead of eight, and §5 stops being everybody's problem | medium |
 
-**Where to start: C10a.** Six of the tasks below are yacc grammars and one of those is a lex
-scanner besides, so nothing after C10 can begin until `b6yacc` exists.
+**Where to start: C10b.** Six of the tasks below are yacc grammars and one of those is a lex
+scanner besides. `b6yacc` exists now (C10a); `b6lex` does not.
 
 **Two loose ends about the terminal, one line each and neither worth a task of its own.** `TANDEM`
 is honoured by the kernel — `ttyblock()` queues the stop character when the input queue passes
@@ -96,56 +96,21 @@ already done — prototypes throughout, `<stdarg.h>` for `error()` — which is 
 the task starts. RetroBSD's lex is very nearly v7's, K&R and all, but it carries the 4.xBSD
 `<paths.h>` fixes and a few corrections, and there is no better starting point in existence.
 
-**This is the one task that starts by fetching.** [README.md](README.md) says every program named
-here is already in its directory as a verbatim upstream copy; `cmd/yacc/` and `cmd/lex/` will be
-the exceptions, and that sentence needs amending when C10a lands. Import verbatim all the same, so
-that the first diff is the porting diff.
+**This is the one task that starts by fetching.** [README.md](README.md) says almost every program
+named here is already in its directory as a verbatim upstream copy; [yacc/](yacc/) and `cmd/lex/`
+are the exceptions. Import verbatim all the same, so that the first diff is the porting diff.
 
 **Neither program needs a support library.** v7 shipped `liby.a` (a `main()` and a `yyerror()`) and
 `libl.a` (a `main()` and a `yywrap()`); every consumer below defines its own, so nothing here adds
 an archive to [../lib/](../lib/) or to `B6_STAGE_LIB`.
 
-### C10a. `yacc`, the host tool `b6yacc`
-
-`y1.c` 797, `y2.c` 989, `y3.c` 488, `y4.c` 368, `dextern.h` 292, `files.h` 21, and `yaccpar.c` 163
-— 2,642 lines of C, 313 of header, and a 163-line data file that is not compiled. The v7 `yacc.1`
-is not in the reference tree's `src/cmd/yacc/`; take it from `usr/man` or write one (§10).
-
-* `cmd/yacc/CMakeLists.txt` on the [cpp/CMakeLists.txt](cpp/CMakeLists.txt) model —
-  `add_executable(b6yacc y1.c y2.c y3.c y4.c)`, `install(TARGETS b6yacc RUNTIME DESTINATION bin)`
-  — plus a line in the host-tool block at the top of [../CMakeLists.txt](../CMakeLists.txt).
-* **`PARSER` becomes a path profile**, exactly as `cc.c`'s three paths are. `files.h` hardcodes
-  `/usr/share/misc/yaccpar.c` and **RetroBSD's makefile installs the template nowhere at all**, so
-  the tool as shipped cannot run. The host build installs it to `<prefix>/share/besm6/yaccpar.c`
-  beside the header tree; a `B6YACCPAR` environment override, on the `B6CPP` precedent, is how a
-  test points the tool off its search path before an install.
-* **`yaccpar.c` has to be C11 before anything downstream compiles.** It is K&R — `yyparse()` with
-  no return type, no prototype for the `yylex()` and `yyerror()` it calls — and it is copied
-  **verbatim into the user's `y.tab.c`**, where `b6parse` will refuse it. Nothing in C11–C17 works
-  until this file does.
-* The mechanical part of §1 is about twenty zero-argument definitions written `void others()`
-  rather than `(void)`, and `register` throughout.
-* **Fix the latent overrun while porting.** `dextern.h` states in a comment that
-  `TEMPSIZE >= NSTATES` must hold, and the selected `TINY` profile has `TEMPSIZE 200` against
-  `NSTATES 750`; `y4.c` writes `yypact[++nstate]` into `temp1[TEMPSIZE]`. Any grammar over 200
-  states corrupts memory in silence. Which end to move is C10c's measurement, but the assert
-  belongs here — `_Static_assert(TEMPSIZE >= NSTATES, …)`, §12's habit applied to a program's own
-  invariant.
-* **A `b6_yacc()` helper** in [../scripts/BesmCross.cmake](../scripts/BesmCross.cmake), beside
-  `b6_prog()`: run the in-tree `b6yacc` over a `.y` at build time and hand the `y.tab.c` to
-  `b6_obj()`, so a rebuilt `b6yacc` regenerates every parser with no `make install`. **It needs a
-  working directory per invocation**: yacc writes `y.tab.c`, `y.tab.h` and `y.output`, and its two
-  temp files `yacc.tmp` and `yacc.acts`, under fixed names in the current directory, and a shared
-  one races under `make -j` for the same reason `kernel/test/`'s per-program object dirs do.
-* **Test.** A GoogleTest suite under `cmd/yacc/test/` on the [cpp/test/](cpp/test/) model for the
-  diagnostics, and the real oracle beside it: `b6yacc` over each of the seven grammars C11–C17
-  will feed it, compared against the host `yacc`'s output for what the two dialects share.
-
 ### C10b. `lex`, the host tool `b6lex`
 
 `sub2.c` 952, `parser.y` 714, `sub1.c` 692, `lmain.c` 230, `ldefs.c` 166, `once.c` 131,
 `header.c` 112, and the `ncform` skeleton 181 — 2,283 lines of C and a 714-line grammar.
-**`parser.y` is built by `b6yacc`**, which is why this comes second and is C10a's first consumer.
+**`parser.y` is built by `b6yacc`**, which is why this comes second. It is also the first
+consumer of `b6yacc` that is not a test — and the first HOST one, so it cannot use `b6_yacc()`
+(that helper is inside the `libruntime.a` guard) and names `$<TARGET_FILE:b6yacc>` itself.
 
 **Drop the Ratfor half on the way in** — the `nrform` skeleton, the `ratfor` flag, `ratname`,
 `rhd1` and `rtail`. There is no Fortran on this machine and `struct`/`ratfor` are already refused
@@ -171,7 +136,9 @@ and `cwork[]` are all `char` holding values up to `NCH+105`. Either make it 8-bi
 its manual page that it is not — `awk` (C17) is the program that would notice, and a scanner that
 silently turns `привет` into junk is §11's worst shape.
 
-**`ncform` needs the same C11 treatment `yaccpar.c` does, and one hazard besides.** It is emitted
+**`ncform` needs the same C11 treatment `yaccpar.c` does** — [yacc/README.md](yacc/README.md)
+under "The skeleton" and "The contract" is the worked example, including why the prototypes it
+needs cannot be written in the skeleton itself — **and one hazard besides.** It is emitted
 verbatim into every generated scanner, so `yylook()` and `yyback(p, m)` must gain prototypes — and
 it compares `(int)yyt` against `(int)yycrank` and then forms `yycrank + (yycrank - yyt)`, a pointer
 below the base of its own array. Both are §2: a cast to a thin pointer floors a fat one, and a
@@ -191,34 +158,34 @@ them. Rename them, and remember §1: a header of the program's own is a build bl
 
 ### C10c. `yacc` on the image — `/usr/bin/yacc` and `/usr/lib/yaccpar`
 
-The C9 shape exactly: a `cmd/yacc/rootfs/` subdirectory (`cmd/yacc` is added above the
-`libruntime.a` guard, where `b6_prog()` does not yet exist), the same sources built a second time,
-`add_subdirectory(cmd/yacc/rootfs)` beside the eleven that are there, [../root.manifest](../root.manifest)
-stanzas for the binary and the template, and `ROOTFS_FILES` in
-[../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt).
+The C9 shape exactly: the same sources built a second time in the existing
+[yacc/rootfs/](yacc/rootfs/) subdirectory (`cmd/yacc` is added above the `libruntime.a` guard,
+where `b6_prog()` does not exist, and that directory is already added below it for C10a's native
+test), [../root.manifest](../root.manifest) stanzas for the binary and the template, and
+`ROOTFS_FILES` in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The manual page
+is written and staged; only its manifest stanza is missing, having waited for the binary.
 
-* **A `besm6` size profile, measured rather than guessed.** `dextern.h` already has the mechanism —
-  `HUGE`, `MEDIUM`, `TINY` — so a fourth profile keyed on the macro `b6cpp` predefines is the whole
-  of the change. For scale, `TINY` costs about **10,540 words** of int and pointer arrays:
-  `lkst[250]` 2,000, `mem0[1300]` 1,300, `amem[1000]` 1,000, and 3,052 in the four `NSTATES`-sized
-  arrays, the rest scattered. Against 28,672 that leaves some 18,000 words for text, so **the
-  address-space ceiling is not what binds here** — the tuning to make is `NSTATES` against
-  `TEMPSIZE` (C10a's overrun), sized to the seven grammars this yacc will actually be given. None
-  of them has more than thirty nonterminals.
-* **`WORD32` stays undefined.** The alternative bit-packing macros shift by at most 15 and are safe
-  on a 41-bit `int`; the `WORD32` set shifts by 31 and buys four words per lookahead set.
-* **`y4.c` aliases three unrelated global tables as flat `int` arrays** — `lkst[0].lset`,
-  `wsets[0].ws.lset` and `&nontrst[0].tvalue` — and walks the last with a stride of
-  `sizeof(struct ntsymb) / sizeof(int)`, which is to say it assumes a pointer and an `int` are the
-  same width. They are, here, so it works; §2 says to grep for exactly this shape, and the answer
-  is to give `y4` arrays of its own rather than leave a correct-by-accident aliasing in the tree.
+* **A `besm6` size profile, measured rather than guessed.** C10a collapsed v7's three profiles to
+  one keyed block in `dextern.h`, so this is an `#ifdef besm6` arm and nothing else; the
+  `_Static_assert`s beside it will refuse a set that does not hold, which is what the whole
+  `TEMPSIZE`/`NSTATES` question reduces to now. For scale, v7's `TINY` numbers cost about **10,540
+  words** of int and pointer arrays: `lkst[250]` 2,000, `mem0[1300]` 1,300, `amem[1000]` 1,000, and
+  3,052 in the four `NSTATES`-sized arrays, the rest scattered. Against 28,672 that leaves some
+  18,000 words for text, so **the address-space ceiling is not what binds here** — the tuning to
+  make is sized to the six grammars this yacc will actually be given, none of which has more than
+  thirty nonterminals. The host's numbers are `NTERMS` 300 and up; below 128 a grammar loses
+  eight-bit character literals (§11), which is a capability question and not a memory one.
+* **`WORD32` is gone**, not merely undefined: its macros shift by 31 and an `int` is 41 bits.
 * The rest is easy: the only automatic array in the program is a `char actname[8]`, so §6's stack
-  ceiling does not come near, and the two temp files are text-only and want `tmpfile()`, as `as`,
-  `ld` and `strip` all use.
+  ceiling does not come near.
 * **The agreement test is the one that matters.** Host `b6yacc` and native `/usr/bin/yacc` over one
   grammar, `y.tab.c` compared byte for byte, live — a checked-in expectation cannot say "these two
   builds agree". `kernel/test/toolchain` used to boot for exactly this claim and is deleted,
-  rather than taking volume 3103.
+  rather than taking volume 3103. The conflict counts C10a pinned for all six grammars
+  ([yacc/README.md](yacc/README.md)) are the cheap half of the same check.
+* **What a generated parser costs is still unmeasured.** `short` is one word here, so
+  `yys[YYMAXDEPTH]` is 150 words of stack and `yyv[YYMAXDEPTH]` 150 of bss before any table;
+  `rootfs_calct_size` is the first number.
 
 ### C10d. `lex` on the image — `/usr/bin/lex` and `/usr/lib/lex/ncform`
 

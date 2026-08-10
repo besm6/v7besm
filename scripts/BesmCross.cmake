@@ -35,8 +35,16 @@ if(TARGET b6cc)
     set(B6STRIP  $<TARGET_FILE:b6strip>)
     set(B6DISASM $<TARGET_FILE:b6disasm>)
     set(B6SIM    $<TARGET_FILE:b6sim>)
+    set(B6YACC   $<TARGET_FILE:b6yacc>)
     set(B6CC_ENV ${CMAKE_COMMAND} -E env
         B6CPP=$<TARGET_FILE:b6cpp> B6AS=$<TARGET_FILE:b6as> B6LD=$<TARGET_FILE:b6ld>)
+    # b6yacc reads its parser skeleton from a data file, and a build tree has not
+    # installed one -- same shape as B6CC_ENV above, and the same reason: the
+    # tool's own search path is the INSTALL's, and nothing here may depend on it.
+    # The path is kept as well, so b6_yacc() can depend on the file: editing the
+    # skeleton changes every generated parser and no target-level dependency sees it.
+    set(B6YACCPAR ${CMAKE_SOURCE_DIR}/cmd/yacc/yaccpar.c)
+    set(B6YACC_ENV ${CMAKE_COMMAND} -E env B6YACCPAR=${B6YACCPAR})
 else()
     find_program(B6CC     b6cc     REQUIRED)
     find_program(B6AS     b6as     REQUIRED)
@@ -48,7 +56,12 @@ else()
     find_program(B6STRIP  b6strip  REQUIRED)
     find_program(B6DISASM b6disasm REQUIRED)
     find_program(B6SIM    b6sim    REQUIRED)
+    find_program(B6YACC   b6yacc   REQUIRED)
     set(B6CC_ENV "")
+    # the installed b6yacc finds the installed skeleton by itself, which is what
+    # its search path is for
+    set(B6YACCPAR "")
+    set(B6YACC_ENV "")
 endif()
 
 # besm6 (the SIMH full-machine simulator) boots the kernel; b6sim (above) runs a user a.out.
@@ -151,6 +164,53 @@ function(b6_find_src outvar base)
         endforeach()
     endforeach()
     message(FATAL_ERROR "b6_find_src: no source for '${base}'")
+endfunction()
+
+# ---------------------------------------------------------------------------------------
+# Run b6yacc over a grammar and hand back a C source b6_obj() can compile.
+#
+#   b6_yacc(<outvar> <name> <abs .y>)
+#
+# Always -vd: y.tab.h costs nothing and a grammar that wants its token numbers elsewhere
+# needs it, and y.output is the only readable account of a conflict.
+#
+# Sets ${outvar} to the generated source and ${outvar}_DIR to the directory holding it,
+# so a caller that #includes y.tab.h passes CFLAGS -I${<outvar>_DIR} to b6_prog().
+#
+# A WORKING DIRECTORY OF ITS OWN, per grammar.  yacc writes y.tab.c, y.tab.h and
+# y.output under those exact names in the current directory -- they are the interface and
+# cannot be renamed on the command line -- so two grammars generating into one directory
+# clobber each other's output under `make -j' for the same reason kernel/test/'s per-program
+# object dirs exist.  (The two scratch files that used to join them are tmpfile() streams
+# now; cmd/yacc/dextern.h says so.)  Created eagerly at configure time, as b6_prog() creates
+# B6_OBJDIR.
+#
+# The generated source is RENAMED to <name>.c, because b6_obj() derives the object's name
+# from the source's and CMake's NAME_WE cuts `y.tab.c' at the first dot -- every grammar in
+# the tree would compile to the same y.o.  y.tab.h keeps its name: that is what a grammar's
+# own #include says.
+#
+# $<TARGET_FILE:b6yacc> in the COMMAND is what makes a rebuilt b6yacc regenerate every
+# parser with no `make install' -- CMake reads a target-level dependency out of it.
+#
+# THIS SERVES THE CROSS BUILDS ONLY, being inside the libruntime guard.  cmd/lex (task C10b)
+# is a HOST program built from a b6yacc-generated parser and cannot use this; it names
+# $<TARGET_FILE:b6yacc> in a custom command of its own.
+# ---------------------------------------------------------------------------------------
+function(b6_yacc outvar name absy)
+    set(_dir ${CMAKE_CURRENT_BINARY_DIR}/${name}.yacc.dir)
+    file(MAKE_DIRECTORY ${_dir})
+    set(_src ${_dir}/${name}.c)
+
+    add_custom_command(OUTPUT ${_src} ${_dir}/y.tab.h ${_dir}/y.output
+        COMMAND ${B6YACC_ENV} ${B6YACC} -vd ${absy}
+        COMMAND ${CMAKE_COMMAND} -E rename y.tab.c ${_src}
+        DEPENDS ${absy} ${B6YACCPAR} ${B6YACC}
+        WORKING_DIRECTORY ${_dir}
+        COMMENT "b6yacc ${name}.c" VERBATIM)
+
+    set(${outvar} ${_src} PARENT_SCOPE)
+    set(${outvar}_DIR ${_dir} PARENT_SCOPE)
 endfunction()
 
 # ---------------------------------------------------------------------------------------

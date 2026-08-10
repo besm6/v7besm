@@ -90,6 +90,7 @@ add_subdirectory(cmd/lorder)
 add_subdirectory(cmd/cc)
 add_subdirectory(cmd/fsutil)
 add_subdirectory(cmd/man2umm)
+add_subdirectory(cmd/yacc)
 
 #
 # The system header tree.  b6cc appends <prefix>/share/besm6/include to every
@@ -325,6 +326,12 @@ if(B6RUNTIME_LIB)
     # is the external c-compiler's, so `cc foo.c' on the machine stops after the
     # preprocessor.  It is also what makes /lib and /usr/include below worth having.
     add_subdirectory(cmd/cc/rootfs)
+    # calct -- not a program on the image either, but the ONE test that says b6parse
+    # accepts the parser skeleton cmd/yacc emits (task C10a).  A grammar of its own,
+    # run through b6_yacc() and b6_prog() and executed under b6sim from
+    # build/rootfs/test/.  Here rather than in cmd/yacc/test/ because cmd/yacc is
+    # added above, outside this guard, exactly as cmd/libaout/rootfs is.
+    add_subdirectory(cmd/yacc/rootfs)
     add_subdirectory(cmd/sh)
     add_subdirectory(cmd/basename)
     add_subdirectory(cmd/cal)
