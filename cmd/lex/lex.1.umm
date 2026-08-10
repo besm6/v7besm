@@ -1,0 +1,127 @@
+<!-- UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. -->
+
+# LEX(1)
+
+## NAME
+
+lex - generator of lexical analysis programs
+
+## SYNOPSIS
+
+| **lex** [ **-tvfn** ] [ *file* ] ...
+
+## DESCRIPTION
+
+*Lex* generates programs to be used in simple lexical analysis of text. The input *files*
+(standard input default) contain regular expressions to be searched for, and actions written in
+C to be executed when expressions are found.
+
+A C source program, `lex.yy.c` is generated, to be compiled thus:
+
+> cc lex.yy.c
+
+This program, when run, copies unrecognized portions of the input to the output, and executes
+the associated C action for each regular expression that is recognized.
+
+**Note:** v7 wrote **cc lex.yy.c -ll**, naming a library, /lib/libl.a, that held a default
+*main* and *yywrap*. It is not on this system and there is nothing to link against: every
+scanner supplies both itself. The rest of what that library held - *yyreject* and *yyracc*
+behind REJECT, and *yyless* - is part of the generated scanner now, so nothing else is missing.
+
+**Note:** *lex* emits declarations for the routines it calls and the ones it defines, ahead of
+the code the scanner supplies, so a definition that disagrees with them will not compile. The
+scanner must define
+
+```
+int yywrap(void);
+```
+
+and must not define any of *yylook*, *yyback*, *yyreject*, *yyracc*, *yyless*, *yyinput*,
+*yyoutput* or *yyunput*, which the generated scanner already has. *input*, *output* and *unput*
+are macros, and a scanner that wants its own may **#undef** them.
+
+The following *lex* program converts upper case to lower, removes blanks at the end of lines,
+and replaces multiple blanks by single blanks.
+
+> ```
+> %%
+> [A-Z]  putchar(yytext[0]+'a'-'A');
+> [ ]+$
+> [ ]+    putchar(' ');
+> ```
+
+The options have the following meanings.
+
+**-t**
+: Place the result on the standard output instead of in file `lex.yy.c`.
+
+**-v**
+: Print a one-line summary of statistics of the generated analyzer.
+
+**-n**
+: Opposite of **-v**; **-n** is default.
+
+**-f**
+: `Faster` compilation: don't bother to pack the resulting tables; limited to small programs.
+
+**Note:** v7's **-r** and **-c** selected Ratfor or C as the output language. There is no Fortran
+on this machine, so the Ratfor half of *lex* is gone and both options are now unknown.
+
+## EIGHT-BIT INPUT
+
+A literal or a character class may contain any byte from 1 through 255, written as itself or as
+an octal escape; byte 0 ends the input and cannot be matched. *Lex* masks nothing, and neither
+does the scanner it generates.
+
+**A class and `.` match one byte, not one letter.** A Cyrillic letter is two bytes in UTF-8, so
+`[абв]` is a class of six bytes rather than three, and `.` matches half a letter. A literal is
+the shape that behaves as expected: `"привет"` matches those twelve bytes in order.
+
+**Note:** v7's *lex* had NCH 128 and indexed its 128-entry tables with whatever byte it read,
+so a class containing a byte above 127 wrote past the end of them.
+
+## BOUNDS
+
+Seven tables are sized at compile time and each may be enlarged for one scanner by a line in the
+definitions section. The **-v** summary prints *used*/*available* for each, named by its option,
+which is how to tell which one to raise.
+
+```
+%e n     tree nodes
+%p n     positions
+%n n     DFA states
+%a n     packed transitions
+%o n     output slots
+%k n     packed character classes
+%t n     size of the translated character set (with a %t ... %t table)
+```
+
+## FILES
+
+```
+lex.yy.c             the scanner
+/usr/lib/lex/ncform  scanner prototype for C programs
+```
+
+## ENVIRONMENT
+
+*B6LEXFORM* names the scanner prototype, overriding /usr/lib/lex/ncform. It is how the build tree
+runs a *lex* whose prototype has not been installed.
+
+## SEE ALSO
+
+| yacc(1)
+| M. E. Lesk and E. Schmidt, *LEX - Lexical Analyzer Generator*
+
+## DIAGNOSTICS
+
+Bounds exceeded and syntax errors in the scanner are reported on the standard output with the
+input file name and line number, and each bound names the option that raises it.
+
+## BUGS
+
+The output file name is fixed, so at most one *lex* process can be active in a given directory at
+a time.
+
+A rule with no start condition is active in *every* start condition, not only in INITIAL, so a
+rule meant for one condition alone must say so - `<INITIAL>` included.

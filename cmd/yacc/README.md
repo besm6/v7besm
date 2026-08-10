@@ -49,7 +49,7 @@ available to this program. It bought four words per lookahead set.
 `yaccpar.c` is **data to this tool and source to its caller** — `others()` in `y1.c` copies it
 into `y.tab.c` a byte at a time — so it is compiled by `b6cc` for a native program and by the
 host compiler for `cmd/lex`. It was the least modernised file in the tree and **nothing in
-C10b–C17 compiles until it is right**:
+C10b–C17 compiles until it is right**; C10b is the first proof that it is:
 
 * `yyparse()` had no return type and an empty parameter list.
 * `yylex()` and `yyerror()` were called with **no declaration anywhere**, which C11 refuses.
@@ -70,7 +70,11 @@ int  yylex(void);
 void yyerror(char *);
 ```
 
-C10b's `ncform` and each of C11–C17's grammars must define both with these signatures.
+C10b's `ncform` does, and each of C11–C17's grammars must define both with these signatures.
+[`../lex/README.md`](../lex/README.md) under "The contract" has nine of its own in the other
+direction — and one warning worth reading here: `FILE *yyin ={stdin}` is **not a constant
+initialiser**, which is what stopped every scanner v7's lex generated from compiling. `yaccpar.c`
+is worth re-reading for the same shape.
 
 **The action marker may appear in the skeleton exactly once, comments included.** `others()`
 splices the action stream at the first one it sees and closes the stream behind it; a second
@@ -143,8 +147,9 @@ in-tree `b6yacc` over a `.y` at build time and hands the result to `b6_obj()`, s
   regenerates every parser now, which is what the no-`make install` claim actually needs.
 
 It lives inside the `libruntime` guard and so serves the cross builds only. C10b's `b6lex` is a
-*host* program built from a generated parser and will name `$<TARGET_FILE:b6yacc>` in a custom
-command of its own.
+*host* program built from a generated parser and names `$<TARGET_FILE:b6yacc>` in a custom
+command of its own ([`../lex/CMakeLists.txt`](../lex/CMakeLists.txt)) — the first consumer of
+this tool that is not a test, and the first host one. `b6_lex()` sits beside `b6_yacc()` now.
 
 ## Tests
 
@@ -168,7 +173,8 @@ there is no engine library to link). Three kinds:
   `bc` and `awk` are as v7 wrote them; the numbers are recorded so that a change in either the
   generator or the grammar is a stop rather than a shrug.
 * a generated parser **compiled by a C compiler and run**, at `-std=c11 -pedantic-errors -Wall
-  -Werror`, which is the only host-side proof that the skeleton produces code. Two warnings are
+  -Werror`, which is the only host-side proof that the skeleton produces code. `cmd/lex/test` is
+  the second place that happens, and `parser.y` is the seventh grammar this yacc is held to. Two warnings are
   turned off there and they are properties of yacc's output rather than of this skeleton:
   `yyerrlab` is unreferenced unless the grammar uses `YYERROR`, and `yypvt` is set but unused
   unless an action names `$n`.

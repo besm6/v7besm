@@ -45,6 +45,10 @@ if(TARGET b6cc)
     # skeleton changes every generated parser and no target-level dependency sees it.
     set(B6YACCPAR ${CMAKE_SOURCE_DIR}/cmd/yacc/yaccpar.c)
     set(B6YACC_ENV ${CMAKE_COMMAND} -E env B6YACCPAR=${B6YACCPAR})
+    # ...and b6lex with its scanner skeleton, the same shape for the same reason.
+    set(B6LEX     $<TARGET_FILE:b6lex>)
+    set(B6LEXFORM ${CMAKE_SOURCE_DIR}/cmd/lex/ncform)
+    set(B6LEX_ENV ${CMAKE_COMMAND} -E env B6LEXFORM=${B6LEXFORM})
 else()
     find_program(B6CC     b6cc     REQUIRED)
     find_program(B6AS     b6as     REQUIRED)
@@ -57,11 +61,14 @@ else()
     find_program(B6DISASM b6disasm REQUIRED)
     find_program(B6SIM    b6sim    REQUIRED)
     find_program(B6YACC   b6yacc   REQUIRED)
+    find_program(B6LEX    b6lex    REQUIRED)
     set(B6CC_ENV "")
     # the installed b6yacc finds the installed skeleton by itself, which is what
     # its search path is for
     set(B6YACCPAR "")
     set(B6YACC_ENV "")
+    set(B6LEXFORM "")
+    set(B6LEX_ENV "")
 endif()
 
 # besm6 (the SIMH full-machine simulator) boots the kernel; b6sim (above) runs a user a.out.
@@ -195,7 +202,7 @@ endfunction()
 #
 # THIS SERVES THE CROSS BUILDS ONLY, being inside the libruntime guard.  cmd/lex (task C10b)
 # is a HOST program built from a b6yacc-generated parser and cannot use this; it names
-# $<TARGET_FILE:b6yacc> in a custom command of its own.
+# $<TARGET_FILE:b6yacc> in a custom command of its own, and b6_lex() below is its twin.
 # ---------------------------------------------------------------------------------------
 function(b6_yacc outvar name absy)
     set(_dir ${CMAKE_CURRENT_BINARY_DIR}/${name}.yacc.dir)
@@ -208,6 +215,45 @@ function(b6_yacc outvar name absy)
         DEPENDS ${absy} ${B6YACCPAR} ${B6YACC}
         WORKING_DIRECTORY ${_dir}
         COMMENT "b6yacc ${name}.c" VERBATIM)
+
+    set(${outvar} ${_src} PARENT_SCOPE)
+    set(${outvar}_DIR ${_dir} PARENT_SCOPE)
+endfunction()
+
+# ---------------------------------------------------------------------------------------
+# Run b6lex over a scanner and hand back a C source b6_obj() can compile.
+#
+#   b6_lex(<outvar> <name> <abs .l>)
+#
+# A WORKING DIRECTORY OF ITS OWN, per scanner, for b6_yacc()'s reason: lex.yy.c is a
+# fixed name in the current directory and cannot be moved on the command line, so two
+# scanners generating into one directory clobber each other under `make -j'.
+#
+# The generated source is RENAMED to <name>.c: b6_obj() derives the object's name from
+# the source's and CMake's NAME_WE cuts `lex.yy.c' at the first dot, so every scanner in
+# the tree would otherwise compile to lex.o.
+#
+# No flags.  -v would only fill the build log and -t would put the scanner in it.
+#
+# b6lex AND ncform are both in DEPENDS, for b6_yacc()'s reason: the $<TARGET_FILE:> in
+# COMMAND buys ordering and not staleness, and the skeleton is a data file no
+# target-level dependency can see.  Editing either regenerates every scanner.
+#
+# THIS SERVES THE CROSS BUILDS ONLY, being inside the libruntime guard.  cmd/lex itself
+# is a HOST program built from a b6yacc-generated parser and names $<TARGET_FILE:b6yacc>
+# in a custom command of its own (cmd/lex/CMakeLists.txt).
+# ---------------------------------------------------------------------------------------
+function(b6_lex outvar name absl)
+    set(_dir ${CMAKE_CURRENT_BINARY_DIR}/${name}.lex.dir)
+    file(MAKE_DIRECTORY ${_dir})
+    set(_src ${_dir}/${name}.c)
+
+    add_custom_command(OUTPUT ${_src}
+        COMMAND ${B6LEX_ENV} ${B6LEX} ${absl}
+        COMMAND ${CMAKE_COMMAND} -E rename lex.yy.c ${_src}
+        DEPENDS ${absl} ${B6LEXFORM} ${B6LEX}
+        WORKING_DIRECTORY ${_dir}
+        COMMENT "b6lex ${name}.c" VERBATIM)
 
     set(${outvar} ${_src} PARENT_SCOPE)
     set(${outvar}_DIR ${_dir} PARENT_SCOPE)

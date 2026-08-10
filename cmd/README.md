@@ -20,7 +20,7 @@ program — the source, its auxiliary files and its manual page. Everything not 
 writing a `CMakeLists.txt`, not by fetching anything.
 
 They came from `tmp/v7x86-0.8a/usr/src/cmd/`, an unpacked reference tree that is **not in the
-repository** (`tmp/` is git-ignored). **Four directories are the exception.** Two have no v7
+repository** (`tmp/` is git-ignored). **Five directories are the exception.** Two have no v7
 original behind them at all: [novi/](novi/), Dave W Plummer's full-screen editor for 2.11BSD, and
 [more/](more/), Berkeley's pager by way of RetroBSD — v7 had neither an editor of that kind nor a
 pager. They are the two tasks in [TODO.md](TODO.md) with a number and no table row. The third is
@@ -28,11 +28,13 @@ pager. They are the two tasks in [TODO.md](TODO.md) with a number and no table r
 `nroff` and there is no `nroff` here, so the source is Berkeley's 1987 C rewrite by way of
 RetroBSD and the reference tree's copy was not used.
 
-The fourth is **[yacc/](yacc/)**, and it is the only task that began by fetching: RetroBSD's
-yacc is 4.2BSD's with the ANSI pass already done, which is most of §1 gone before the work
-starts, so C10a took it from there rather than from the reference tree. `lex/` will be the same
-when C10b lands. In both, the manual page still comes from v7's `usr/man` — RetroBSD keeps its
-pages in a central tree rather than beside the source.
+The fourth and fifth are **[yacc/](yacc/)** and **[lex/](lex/)**, the two tasks that began by
+fetching: RetroBSD's yacc is 4.2BSD's with the ANSI pass already done, which is most of §1 gone
+before the work starts, and its lex is very nearly v7's — K&R and all — but carries the
+`<paths.h>` fixes and a few corrections, and there is no better starting point in existence. So
+C10a and C10b took both from there rather than from the reference tree. In both, the manual page
+still comes from v7's `usr/man` — RetroBSD keeps its pages in a central tree rather than beside
+the source.
 
 **A directory is part of the build when it holds a `CMakeLists.txt`** — that is the only marker;
 [../CMakeLists.txt](../CMakeLists.txt) names its subdirectories one by one.

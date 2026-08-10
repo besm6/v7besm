@@ -91,6 +91,7 @@ add_subdirectory(cmd/cc)
 add_subdirectory(cmd/fsutil)
 add_subdirectory(cmd/man2umm)
 add_subdirectory(cmd/yacc)
+add_subdirectory(cmd/lex)
 
 #
 # The system header tree.  b6cc appends <prefix>/share/besm6/include to every
@@ -332,6 +333,10 @@ if(B6RUNTIME_LIB)
     # build/rootfs/test/.  Here rather than in cmd/yacc/test/ because cmd/yacc is
     # added above, outside this guard, exactly as cmd/libaout/rootfs is.
     add_subdirectory(cmd/yacc/rootfs)
+    # scant -- likewise not a program on the image, but the ONE test that says
+    # b6parse accepts the scanner skeleton cmd/lex emits (task C10b), and
+    # b6_lex()'s first caller.  Here for the reason cmd/yacc/rootfs is.
+    add_subdirectory(cmd/lex/rootfs)
     add_subdirectory(cmd/sh)
     add_subdirectory(cmd/basename)
     add_subdirectory(cmd/cal)

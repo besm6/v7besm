@@ -61,8 +61,10 @@ here and already tested, whose value is in doing them together rather than one a
 | C23 | `calendar` | | small, blocked on a clock and on its data |
 | C24 | the eight hand-rolled directory readers, over `opendir(3)` | one reader instead of eight, and §5 stops being everybody's problem | medium |
 
-**Where to start: C10b.** Six of the tasks below are yacc grammars and one of those is a lex
-scanner besides. `b6yacc` exists now (C10a); `b6lex` does not.
+**Where to start: C11.** `b6yacc` and `b6lex` both exist now (C10a, C10b), so every grammar
+below can be built — and `expr` is the smallest consumer and the one that proves them end to end.
+C10c and C10d, which put the two tools on the image, are a separate axis and neither blocks a
+grammar.
 
 **Two loose ends about the terminal, one line each and neither worth a task of its own.** `TANDEM`
 is honoured by the kernel — `ttyblock()` queues the stop character when the input queue passes
@@ -96,65 +98,14 @@ already done — prototypes throughout, `<stdarg.h>` for `error()` — which is 
 the task starts. RetroBSD's lex is very nearly v7's, K&R and all, but it carries the 4.xBSD
 `<paths.h>` fixes and a few corrections, and there is no better starting point in existence.
 
-**This is the one task that starts by fetching.** [README.md](README.md) says almost every program
-named here is already in its directory as a verbatim upstream copy; [yacc/](yacc/) and `cmd/lex/`
-are the exceptions. Import verbatim all the same, so that the first diff is the porting diff.
+**This is the one task that started by fetching.** [README.md](README.md) says almost every
+program named here is already in its directory as a verbatim upstream copy; [yacc/](yacc/) and
+[lex/](lex/) are the exceptions, and both are now here.
 
 **Neither program needs a support library.** v7 shipped `liby.a` (a `main()` and a `yyerror()`) and
-`libl.a` (a `main()` and a `yywrap()`); every consumer below defines its own, so nothing here adds
-an archive to [../lib/](../lib/) or to `B6_STAGE_LIB`.
-
-### C10b. `lex`, the host tool `b6lex`
-
-`sub2.c` 952, `parser.y` 714, `sub1.c` 692, `lmain.c` 230, `ldefs.c` 166, `once.c` 131,
-`header.c` 112, and the `ncform` skeleton 181 — 2,283 lines of C and a 714-line grammar.
-**`parser.y` is built by `b6yacc`**, which is why this comes second. It is also the first
-consumer of `b6yacc` that is not a test — and the first HOST one, so it cannot use `b6_yacc()`
-(that helper is inside the `libruntime.a` guard) and names `$<TARGET_FILE:b6yacc>` itself.
-
-**Drop the Ratfor half on the way in** — the `nrform` skeleton, the `ratfor` flag, `ratname`,
-`rhd1` and `rtail`. There is no Fortran on this machine and `struct`/`ratfor` are already refused
-below. Drop the dead `/share/lex/ebcform` reference in `lmain.c` with it.
-
-**The C11 pass is the task, and it is nothing like yacc's.** Every function in all five files is
-old-style, implicit-`int` returns are everywhere, and three things are worse than mechanical:
-
-* **`error(s, p, d)` and `warning(s, p, d)` are varargs by abuse** — three untyped parameters,
-  called with one, two or three arguments, handed straight to `fprintf`. Undefined behaviour that
-  a PDP-11 calling convention happened to serve. `<stdarg.h>` and `vfprintf`, as RetroBSD's yacc
-  already does.
-* **`# ifdef unix` gates `NCH`, `CMASK`, `CWIDTH` and `ASCII`.** `b6cpp` does not predefine `unix`,
-  so `ldefs.c` will not compile at all until this is unwound — the first thing to fix, and the
-  thing that decides the next bullet.
-* `ldefs.c` re-declares `calloc` and `myalloc` in the v7 manner, and `sub1.c` defines an
-  `index(c, s)` with the arguments the other way round from the BSD one. §1's "names C11 reserved
-  that v7 used freely", both of them.
-
-**§11 has to be decided rather than inherited.** `NCH` is 128 and `CMASK` is `0177`, so this lex
-masks bit 7 off every input byte; `nchar[]`, `symbol[]`, `match[]`, `cindex[]`, `extra[]`, `tch[]`
-and `cwork[]` are all `char` holding values up to `NCH+105`. Either make it 8-bit clean or say in
-its manual page that it is not — `awk` (C17) is the program that would notice, and a scanner that
-silently turns `привет` into junk is §11's worst shape.
-
-**`ncform` needs the same C11 treatment `yaccpar.c` does** — [yacc/README.md](yacc/README.md)
-under "The skeleton" and "The contract" is the worked example, including why the prototypes it
-needs cannot be written in the skeleton itself — **and one hazard besides.** It is emitted
-verbatim into every generated scanner, so `yylook()` and `yyback(p, m)` must gain prototypes — and
-it compares `(int)yyt` against `(int)yycrank` and then forms `yycrank + (yycrank - yyt)`, a pointer
-below the base of its own array. Both are §2: a cast to a thin pointer floors a fat one, and a
-pointer formed below an array need not compare. Plain pointer relationals and `ptrdiff_t` indices.
-
-Two smaller ones: `lmain.c` tests an allocation against `(char *)-1`, §2's fabricated pointer that
-can never equal a real one; and `parser.y` allocates one combined block purely to ask whether there
-is enough core and frees it immediately. Delete both.
-
-`once.c`'s `long rcount` is the only `long` in the program and is printed with `%ld` — §3, make it
-`int`. The skeleton path is a profile like C10a's (`<prefix>/share/besm6/lex/ncform`, `B6LEXFORM`
-to override), and `b6_lex()` sits beside `b6_yacc()` with the same per-invocation working
-directory, `lex.yy.c` being another fixed name.
-
-**`ldefs.c` and `once.c` are headers with the wrong extension** — every other file `#include`s
-them. Rename them, and remember §1: a header of the program's own is a build blind spot.
+`libl.a` (a `main()`, a `yywrap()`, `yyreject()` and `yyless()`); every consumer below defines the
+first two itself and `ncform` carries the rest, so nothing here adds an archive to
+[../lib/](../lib/) or to `B6_STAGE_LIB`. [lex/README.md](lex/README.md), "No support library".
 
 ### C10c. `yacc` on the image — `/usr/bin/yacc` and `/usr/lib/yaccpar`
 
@@ -189,26 +140,40 @@ is written and staged; only its manifest stanza is missing, having waited for th
 
 ### C10d. `lex` on the image — `/usr/bin/lex` and `/usr/lib/lex/ncform`
 
-Same shape, **different binding ceiling**. Nearly every table lex owns is `calloc`'d — the parse
-tree, the state tables, the position sets — so `rootfs_lex_size` sees almost none of it and §6's
-uncheckable heap is what decides. Measured, the peak concurrent heap at the shipped sizes is about
-**11,840 words**: the parse tree 4,000 (`name`, `left`, `right`, `parent` at `TREESIZE` 1,000
-each), the phase-2 state tables 6,500, `foll` up to 1,000, and the phase-1 buffers 336. Static data
-is only about 700. **With the text that does not fit**, so a profile is not optional here:
+The C10c shape, in a `lex/rootfs/` that already exists (C10b's `scant` is there, and `cmd/lex` is
+added above the `libruntime.a` guard as well as below it): [../root.manifest](../root.manifest)
+stanzas for the binary, the skeleton and `/usr/man/man1/lex.1`, and `ROOTFS_FILES` in
+[../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The manual page is written and
+staged; only its manifest stanza is missing. `find_form()` already has its `#ifdef besm6` arm.
 
-* `SMALL` — already in `ldefs.c` — drops the peak to roughly 7,240 words.
-* A `besm6` profile of about `TREESIZE 400, NSTATES 200, MAXPOS 1000, NTRANS 1000, NOUTPUT 1000`
-  drops it to roughly 4,600.
+**Different binding ceiling from yacc's**, and C10b measured it rather than leaving it to be
+guessed — [lex/README.md](lex/README.md), "What C10d still has to measure", has the arithmetic:
 
-**Measure against `awk.lx.l`** — the only scanner this machine has to compile — and size from the
-high-water mark, §6's rule. Note that all five bounds are overridable per-`.l` with `%e %n %p %a
-%o`, so a scanner that needs more can ask, which is the escape hatch a fixed profile usually lacks.
-And **measure the break, not the request**: `malloc` grows a page at a time, so several of these
-arrays round up.
-
-The stack is fine but not trivial — `acompute()` carries `int temp[300], neg[300]`, 600 words, and
-`cfoll()` recurses over the parse tree with small frames at a depth the input chooses. §6's last
-bullet applies: give it a ceiling.
+* **The heap is what binds, not `rootfs_lex_size`.** Nearly every table lex owns is `calloc`'d, so
+  the size check sees almost none of it. At the shipped host sizes and `awk.lx.l`'s shape the peak
+  concurrent heap is about **12,400 words** — the parse tree 4,167, phase 2 about 7,600, phase 1
+  about 850. §6's uncheckable ceiling. A `besm6` size profile is **not optional**; `SMALL` is gone,
+  so it is a new `#ifdef besm6` arm in `ldefs.h` beside the one block, and the six
+  `_Static_assert`s there will refuse a set that does not hold.
+* **Size it against `awk.lx.l`**, the only scanner this machine has to compile, from the numbers
+  C10b pinned: **618** tree nodes of 1,000, **1,345** positions of 2,500, **202** states of 500,
+  **64** packed classes of 1,000, **530** packed transitions of 2,000, **455** output slots of
+  3,000. Every bound has better than 2x headroom, so the profile can come down a long way — and
+  all six stay overridable per-`.l` with `%e %n %p %a %o %k`, which is the escape hatch a fixed
+  profile usually lacks. Measure the **break**, not the request: `malloc` grows a page at a time.
+* **The stack is already dealt with.** `cgoto()`'s `tch`/`tst`, `packtrans()`'s
+  `go`/`temp`/`swork`/`cwork` and `acompute()`'s `temp`/`neg` are `static` as of C10b — some 1,700
+  words moved off the stack, none of the three recursing. What is left is the
+  `cfoll`/`first`/`follow` recursion, small frames at a depth the input chooses: §6's last bullet,
+  and **the one ceiling still to give**.
+* **What a generated scanner costs is measured**: `rootfs/scant` is **5,788 words** (80 const,
+  3,741 text, 649 data, 1,318 bss) for eleven rules over stdio. `ncform` carries `yyreject()`,
+  `yyracc()` and `yyless()` for every scanner whether or not it uses them, which `awk` does not;
+  `rootfs_awk_size` is the first measurement of what that costs, and C10b's README records the
+  fallback if it turns out to matter.
+* **The agreement test is the one that matters**, as for yacc: host `b6lex` and native
+  `/usr/bin/lex` over one scanner, `lex.yy.c` compared byte for byte, live. `awk.lx.l`'s pinned
+  statistics line is the cheap half of the same check.
 
 ---
 
@@ -266,6 +231,8 @@ it is worth nothing until the engine is on the image. Small once C15 lands.
 2,428 lines of C across nine files, plus `awk.g.y` 272 and `awk.lx.l` 173 over the 131-line
 `awk.def` header. **The only program in the tree that is a yacc grammar and a lex scanner both**,
 which makes it the real test of C10 and the reason it comes last of the grammars rather than first.
+Both halves generate today: C10a pinned `awk.g.y`'s 95 shift/reduce conflicts and C10b `awk.lx.l`'s
+statistics line.
 
 * `awk.def` is `make`'s problem again — §1, globals in a header.
 * It is **the most float-dependent program here**; read [../lib/libm/README.md](../lib/libm/README.md)
@@ -366,7 +333,7 @@ Each row is a decision that can be re-examined; the line count is there so it ca
 | `graph.c`, `plot/`, `spline.c`, `tc.c`, `tk.c` | 695 + 608 + 335 + 638 + 250 | Plotters and Tektronix terminals; no hardware, and the output would go nowhere. |
 | `learn/` | 1,066 | Needs the entire `/usr/lib/learn` lesson corpus, which is not in this tree. |
 | `adb/` | 3,547 | PDP-11 instruction decoding, PDP-11 core files, PDP-11 `ptrace` semantics. A BESM-6 debugger is **new work**, not a port — and [disasm/](disasm/) plus `ptrace(2)` is where it would start. `ptrace`'s single-step, request 9, is **refused with `EIO`** on this machine: what it would take, and the breakpoint contract to settle before writing any of it, is the bullet in [../doc/Besm6_Kernel_Reference.md](../doc/Besm6_Kernel_Reference.md) under "Known consequences, accepted". |
-| `lint/`, `mip/`, `struct/`, `ratfor/` | 1,164 + 7,615 + 4,721 + 1,200 | `lint` and `mip` are the PDP-11 C compiler's own internals; `struct`/`ratfor` are Fortran-to-Ratfor tooling with no Fortran here — which is also why C10b drops lex's `nrform`. |
+| `lint/`, `mip/`, `struct/`, `ratfor/` | 1,164 + 7,615 + 4,721 + 1,200 | `lint` and `mip` are the PDP-11 C compiler's own internals; `struct`/`ratfor` are Fortran-to-Ratfor tooling with no Fortran here — which is also why C10b dropped lex's `nrform`. |
 | `osh.c` | 846 | The pre-Bourne shell. [sh/](sh/) supersedes it. |
 | `mknod.c` | 44 | **There is no `mknod(2)` in this kernel.** Every device node on the image is made by `b6fsutil` from [../root.manifest](../root.manifest), which is where a new one is added; a program that can only fail is worse than no program. Reconsider only if the gate is ever written. |
 | `prof.c` | 310 | Reads a `mon.out` that nothing produces, and nothing will: the kernel decided against profiling, so `profil(2)` **refuses** with `EINVAL` (`../doc/Besm6_Kernel_Reference.md`, "Known consequences, accepted"), there is no `monitor`/`mcount` in libc, and `cc` has no `-p`. Reconsider only as the last step of porting all four; `b6sim` profiles a program today with no kernel help. |
