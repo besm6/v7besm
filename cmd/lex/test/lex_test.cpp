@@ -66,7 +66,10 @@ protected:
         ASSERT_EQ(setenv("B6LEXFORM", B6LEXFORM_PATH, 1), 0);
     }
 
-    void TearDown() override { (void)chdir(saved_); }
+    void TearDown() override
+    {
+        ASSERT_EQ(chdir(saved_), 0);
+    }
 
     static std::string WriteFile(const std::string &name, const std::string &text)
     {

@@ -280,7 +280,7 @@ void stin(int i)
 // finds the next i
 static int nxti(void)
 {
-    int i, max, maxi;
+    int i, max, maxi = 0;
 
     max = 0;
 

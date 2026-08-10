@@ -65,7 +65,10 @@ protected:
         ASSERT_EQ(setenv("B6YACCPAR", B6YACCPAR_PATH, 1), 0);
     }
 
-    void TearDown() override { (void)chdir(saved_); }
+    void TearDown() override
+    {
+        ASSERT_EQ(chdir(saved_), 0);
+    }
 
     // Write a grammar into the scratch directory and return its name.
     static std::string WriteFile(const std::string &name, const std::string &text)
