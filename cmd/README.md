@@ -180,7 +180,12 @@ directories inherits this.
   are (a) big scratch to the heap when the function recurses, (b) `static` when it does not, and
   (c) splitting a long function that stays resident: `cpp`'s `main` went 531 → 41 words that way.
   **And a recursion whose depth the input chooses needs a ceiling of its own** — `grep`'s
-  `MAXDEPTH`, `cpp`'s `MAXARGDEPTH`.
+  `MAXDEPTH`, `cpp`'s `MAXARGDEPTH`. **Sometimes no ceiling will do**: `lex`'s parse-tree walk is
+  as deep as the file has rules, and `awk.lx.l` alone wants 96 frames, so any ceiling that admits
+  the one scanner this machine must compile already overflows. That walk is **iterative**, with an
+  explicit worklist in bss ([lex/README.md](lex/README.md), "Walking the tree") — and note how it
+  failed before: not a fault, but the heap under the stack overwritten, surfacing as a garbled
+  diagnostic several passes later.
 * **The heap**, which is not checkable: `rootfs_<name>_size` cannot see a byte of allocated
   storage. `col`'s worst case is past the whole address space; `sort` takes every page the break
   will give. **Ask what a program will still need to allocate after it has taken what it wanted** —
@@ -225,9 +230,9 @@ One list must grow with the program and nothing catches it but a failing build: 
 in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The hard-coded `ls /bin`
 expectations that used to catch it as well went with `kernel/test/console` and `session`.
 
-The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **430 free** — it was 187
-until the `lib/test` programs moved to the test pack, and `yacc` has since taken 30 of what that
-gave back. The whole of `/usr/man` is 302 blocks, `man` 12 and `manview` 17. That is room for a
+The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **392 free** — it was 187
+until the `lib/test` programs moved to the test pack, and `yacc` and `lex` have since taken 68 of
+what that gave back. The whole of `/usr/man` is 302 blocks, `man` 12 and `manview` 17. That is room for a
 good deal of what [TODO.md](TODO.md) has open, but it is not room for anything: weigh a large
 addition against it rather than assuming. The number is printed by `b6fsutil` every time
 `root.img` is built, so it is measured and not estimated.

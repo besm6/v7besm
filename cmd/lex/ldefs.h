@@ -25,13 +25,29 @@
 #define CCLSIZE   1000
 #define NACTIONS  100
 
-// One size block; all five are overridable per-.l with %e %n %p %a %o.
-// The `besm6' arm is task C10d's.
-#define TREESIZE 1000
-#define NSTATES  500
-#define MAXPOS   2500
-#define NTRANS   2000
-#define NOUTPUT  3000
+// One size block; all five are overridable per-.l with %e %n %p %a %o.  The
+// besm6 arm is measured, not guessed.  README.md, "Building for the BESM-6".
+#if besm6
+#   define TREESIZE 800  // awk.lx.l used 618 nodes
+#   define NSTATES  288  // awk.lx.l made 202 states
+#   define MAXPOS   1700 // awk.lx.l used 1,345 positions
+#   define NTRANS   800  // awk.lx.l packed 530 transitions
+#   define NOUTPUT  700  // awk.lx.l used 455 slots; the assert below floors it at 513
+#else
+#   define TREESIZE 1000
+#   define NSTATES  500
+#   define MAXPOS   2500
+#   define NTRANS   2000
+#   define NOUTPUT  3000
+#endif
+
+// The two depths the input chooses.  README.md, "Walking the tree".
+#define MAXDEFER 400
+#define MAXDEPTH 64
+
+// Bytes of stdio buffer per stream on the BESM-6; 6*171, a whole number of
+// words, as cmd/ld/intern.h's LDBUFSIZ.  README.md has the arithmetic.
+#define LEXBUFSIZ 1026
 
 // The invariants the sizes must satisfy; none was written down.
 _Static_assert(TOKENSIZE > NCH, "token[] must hold a whole character class");
@@ -183,6 +199,8 @@ extern void statistics(void);
 
 // lmain.c
 extern char *myalloc(int a, int b);
+// Shrink one freshly opened stream's buffer; BESM-6 only, before any I/O on it.
+extern void shrink_buffer(FILE *f);
 
 // parser.y, through b6yacc
 extern int yyparse(void);

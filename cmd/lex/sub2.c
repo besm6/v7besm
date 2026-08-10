@@ -15,76 +15,118 @@ static int notin(int n);
 static void packtrans(int st, const unsigned char *tch, const int *tst, int cnt, int tryit);
 static int member(int d, const unsigned char *t);
 
+// follow() climbs the parents and stays shallow, so it keeps its recursion.
+// README.md, "Walking the tree".
+static int depth;
+
+static void enter(void)
+{
+    if (++depth > MAXDEPTH)
+        error("Regular expression nested deeper than %d", MAXDEPTH);
+}
+
+// Defer one subtree of a tree walk.  LIFO: the walk must reach a node in the
+// order the recursion would have.  README.md, "Walking the tree".
+static void defer(int *stack, int *top, int v)
+{
+    if (*top >= MAXDEFER)
+        error("Parse tree deeper than %d rules", MAXDEFER);
+    stack[(*top)++] = v;
+}
+
+// The RCCL/RNCCL arm of cfoll(), split out: its temporaries were half of cfoll's
+// frame.  Does not recurse.
+static void compress_ccl(int v, int isccl)
+{
+    register int j, k;
+    unsigned char *p;
+    const unsigned char *q;
+
+    for (j = 1; j < NCH; j++)
+        symbol[j] = !isccl;
+    q = ccl + left[v];
+    while (*q)
+        symbol[*q++] = isccl;
+    p = pcptr;
+    for (j = 1; j < NCH; j++)
+        if (symbol[j]) {
+            for (k = 0; p + k < pcptr; k++)
+                if (cindex[j] == *(p + k))
+                    break;
+            if (p + k >= pcptr)
+                *pcptr++ = cindex[j];
+        }
+    *pcptr++ = 0;
+    if (pcptr > pchar + pchlen)
+        error("Too many packed character classes %s",
+              (pchlen == TOKENSIZE ? "\nTry using %k num" : ""));
+    // left[] stops indexing ccl[] here and starts indexing pchar[]
+    left[v] = p - pchar;
+    name[v] = RCCL; // RNCCL eliminated
+}
+
+// The position sets of the leaves under v.  Split out for compress_ccl()'s reason.
+static void leaffoll(int v)
+{
+    register int j;
+
+    for (j = 0; j < tptr; j++)
+        tmpstat[j] = FALSE;
+    count = 0;
+    follow(v);
+    padd(foll, v);
+}
+
+// v7 recursed here; this walk is iterative, the tree being as deep as the file
+// has rules.  main() is the one caller, so the worklist can be static.
 void cfoll(int v)
 {
-    register int i, j;
-    unsigned char *p;
+    static int stack[MAXDEFER];
+    int top = 0;
 
-    i = name[v];
-    if (i < NCH)
-        i = 1; // character
-    switch (i) {
-    case 1:
-    case RSTR:
-    case RCCL:
-    case RNCCL:
-    case RNULLS:
-        for (j = 0; j < tptr; j++)
-            tmpstat[j] = FALSE;
-        count = 0;
-        follow(v);
-        padd(foll, v);
-        if (i == RSTR)
-            cfoll(left[v]);
-        else if (i == RCCL || i == RNCCL) { // compress ccl list
-            register int k;
-            const unsigned char *q;
-            for (j = 1; j < NCH; j++)
-                symbol[j] = (i == RNCCL);
-            q = ccl + left[v];
-            while (*q)
-                symbol[*q++] = (i == RCCL);
-            p = pcptr;
-            for (j = 1; j < NCH; j++)
-                if (symbol[j]) {
-                    for (k = 0; p + k < pcptr; k++)
-                        if (cindex[j] == *(p + k))
-                            break;
-                    if (p + k >= pcptr)
-                        *pcptr++ = cindex[j];
-                }
-            *pcptr++ = 0;
-            if (pcptr > pchar + pchlen)
-                error("Too many packed character classes %s",
-                      (pchlen == TOKENSIZE ? "\nTry using %k num" : ""));
-            // left[] stops indexing ccl[] here and starts indexing pchar[]
-            left[v] = p - pchar;
-            name[v] = RCCL; // RNCCL eliminated
+    for (;;) {
+        register int i = name[v];
+        if (i < NCH)
+            i = 1; // character
+        switch (i) {
+        case 1:
+        case RSTR:
+        case RCCL:
+        case RNCCL:
+        case RNULLS:
+            leaffoll(v);
+            if (i == RSTR) {
+                v = left[v];
+                continue;
+            }
+            if (i == RCCL || i == RNCCL)
+                compress_ccl(v, i == RCCL);
+            break;
+        case CARAT:
+        case STAR:
+        case PLUS:
+        case QUEST:
+        case RSCON:
+            v = left[v];
+            continue;
+        case BAR:
+        case RCAT:
+        case DIV:
+        case RNEWE:
+            defer(stack, &top, right[v]);
+            v = left[v];
+            continue;
+        case FINAL:
+        case S1FINAL:
+        case S2FINAL:
+            break;
+        default:
+            warning("bad switch cfoll %d", v);
+            break;
         }
-        break;
-    case CARAT:
-        cfoll(left[v]);
-        break;
-    case STAR:
-    case PLUS:
-    case QUEST:
-    case RSCON:
-        cfoll(left[v]);
-        break;
-    case BAR:
-    case RCAT:
-    case DIV:
-    case RNEWE:
-        cfoll(left[v]);
-        cfoll(right[v]);
-        break;
-    case FINAL:
-    case S1FINAL:
-    case S2FINAL:
-        break;
-    default:
-        warning("bad switch cfoll %d", v);
-        break;
+        if (top == 0)
+            return;
+        v = stack[--top];
     }
 }
 
@@ -138,6 +180,7 @@ static void follow(int v)
     p = parent[v];
     if (p == 0)
         return;
+    enter();
     switch (name[p]) {
         // will not be CHAR RNULLS FINAL S1FINAL S2FINAL RCCL RNCCL
     case RSTR:
@@ -173,63 +216,83 @@ static void follow(int v)
         warning("bad switch follow %d", p);
         break;
     }
+    depth--;
 }
 
-// set of positions with v as root which can be active initially
+// Is the current start condition among v's?  Split out of first()'s RSCON arm.
+static int scon_active(int v)
+{
+    register const unsigned char *p;
+    register int i;
+
+    i = stnum / 2 + 1;
+    p = slist + right[v];
+    while (*p)
+        if (*p++ == i)
+            return TRUE;
+    return FALSE;
+}
+
+// Set of positions with v as root which can be active initially.  Iterative for
+// cfoll()'s reason; follow() never re-enters it, so this worklist is static too.
 static void first(int v)
 {
-    register int i;
-    register const unsigned char *p;
+    static int stack[MAXDEFER];
+    int top = 0;
 
-    i = name[v];
-    if (i < NCH)
-        i = 1;
-    switch (i) {
-    case 1:
-    case RCCL:
-    case RNCCL:
-    case RNULLS:
-    case FINAL:
-    case S1FINAL:
-    case S2FINAL:
-        if (tmpstat[v] == FALSE) {
-            count++;
-            tmpstat[v] = TRUE;
-        }
-        break;
-    case BAR:
-    case RNEWE:
-        first(left[v]);
-        first(right[v]);
-        break;
-    case CARAT:
-        if (stnum % 2 == 1)
-            first(left[v]);
-        break;
-    case RSCON:
-        i = stnum / 2 + 1;
-        p = slist + right[v];
-        while (*p)
-            if (*p++ == i) {
-                first(left[v]);
-                break;
+    for (;;) {
+        register int i = name[v];
+        if (i < NCH)
+            i = 1;
+        switch (i) {
+        case 1:
+        case RCCL:
+        case RNCCL:
+        case RNULLS:
+        case FINAL:
+        case S1FINAL:
+        case S2FINAL:
+            if (tmpstat[v] == FALSE) {
+                count++;
+                tmpstat[v] = TRUE;
             }
-        break;
-    case STAR:
-    case QUEST:
-    case PLUS:
-    case RSTR:
-        first(left[v]);
-        break;
-    case RCAT:
-    case DIV:
-        first(left[v]);
-        if (nullstr[left[v]])
-            first(right[v]);
-        break;
-    default:
-        warning("bad switch first %d", v);
-        break;
+            break;
+        case BAR:
+        case RNEWE:
+            defer(stack, &top, right[v]);
+            v = left[v];
+            continue;
+        case CARAT:
+            if (stnum % 2 == 1) {
+                v = left[v];
+                continue;
+            }
+            break;
+        case RSCON:
+            if (scon_active(v)) {
+                v = left[v];
+                continue;
+            }
+            break;
+        case STAR:
+        case QUEST:
+        case PLUS:
+        case RSTR:
+            v = left[v];
+            continue;
+        case RCAT:
+        case DIV:
+            if (nullstr[left[v]])
+                defer(stack, &top, right[v]);
+            v = left[v];
+            continue;
+        default:
+            warning("bad switch first %d", v);
+            break;
+        }
+        if (top == 0)
+            return;
+        v = stack[--top];
     }
 }
 

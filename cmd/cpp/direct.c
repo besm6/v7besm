@@ -354,6 +354,12 @@ char *process_directives(char *p)
                     cpp.out_ptr = cpp.tok_ptr = p;
                     p                         = scan_token(p);
                 }
+                // Back p onto the terminating '\n' the last scan_token consumed:
+                // the loop resumes with a FAST scan looking for "\n#", and a p
+                // past that newline walks over the next line's directive.  It is
+                // then counted twice, so the presumed line is set one low below.
+                // README.md, "A directive after #line".
+                p   = cpp.tok_ptr;
                 *cp = '\0';
                 // §6.10.4p5: the operands are macro-expanded before use.
                 expand_text(optext, cp, expbuf, sizeof(expbuf));
@@ -381,6 +387,8 @@ char *process_directives(char *p)
                         cpp.inc_file[cpp.inc_level] = save_string(fname);
                     if (cpp.opt_no_lines == 0)
                         emit_line_marker();
+                    // ...and one low, the re-scanned newline bumping it back.
+                    --cpp.line_no[cpp.inc_level];
                 }
                 continue;
             }

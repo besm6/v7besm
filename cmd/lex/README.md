@@ -1,8 +1,8 @@
 # `cmd/lex` — the lexical-analyser generator
 
-Task **C10b** ([`../TODO.md`](../TODO.md)): the host tool `b6lex`, the scanner skeleton it copies,
-and the `b6_lex()` CMake helper. C10d puts the same sources on the image as `/usr/bin/lex` and
-`/usr/lib/lex/ncform`.
+Tasks **C10b and C10d** ([`../TODO.md`](../TODO.md)): the host tool `b6lex`, the scanner skeleton
+it copies, the `b6_lex()` CMake helper, and the same sources built a second time as the image's
+`/usr/bin/lex` with its skeleton at `/usr/lib/lex/ncform`.
 
 **This directory is the second exception to [`../README.md`](../README.md)'s "the sources are
 already here"**, [`../yacc/`](../yacc/) being the first. `header.c`, `lmain.c`, `sub1.c`,
@@ -98,7 +98,7 @@ under six `_Static_assert`s for invariants that were nowhere written down — th
 `ccl[]` each hold a whole character class, that `NOUTPUT` clears two of `layout()`'s guard bands,
 that a start-condition number fits the byte of `slist[]` it is stored in. All five bounds stay
 overridable per-`.l` with `%e %n %p %a %o` (and `%k`), which is the escape hatch a fixed profile
-usually lacks. The `#ifdef besm6` arm is **C10d's**.
+usually lacks. The `besm6` arm is below, under "Building for the BESM-6".
 
 ### The Ratfor half
 
@@ -243,7 +243,7 @@ twenty-eight cases in four kinds:
   compile. It generates, and its `-v` line is **pinned from a measured run** the way C10a pinned
   six conflict counts: 618/1000 nodes, 1345/2500 positions, 202/500 states, 9,663 transitions,
   64/1000 packed classes, 530/2000 packed transitions, 455/3000 output slots. Every number is
-  comfortably inside the host profile, and **C10d sizes the `besm6` arm from exactly these**;
+  comfortably inside the host profile, and **the `besm6` arm is sized from exactly these**;
 * **a generated scanner compiled by `HOST_CC` and run**, at `-std=c11 -pedantic-errors -Wall
   -Werror` — the only host-side proof that `ncform` produces code that works. Five of them: the
   manual page's own example, start conditions, a **char-compressed state** (so the negative-offset
@@ -273,31 +273,135 @@ packed by character), and an eight-bit case that reports the byte **by value**. 
 which is the scale a generated scanner costs; `calct` is 4,903 for a grammar.
 
 `rootfs/` rather than `test/` because `cmd/lex` is added to the build outside the `libruntime`
-guard, where `b6_prog()` does not exist — `cmd/yacc/rootfs` is the same shape, and C10d adds
-`/usr/bin/lex` to this directory beside it.
+guard, where `b6_prog()` does not exist — `cmd/yacc/rootfs` is the same shape, and `/usr/bin/lex`
+is in this directory beside it.
 
 **Every rule in `scant.l` is qualified with a start condition, `<INITIAL>` included**, and that is
 not decoration: **an unqualified lex rule is active in every start condition.** A bare `"if"`
 matched inside the comment and the keyword count came out 5 instead of 3. It is in the manual
 page's BUGS now.
 
-## What C10d still has to measure
+## Building for the BESM-6
 
-The heap is what binds there, not `rootfs_lex_size`: nearly every table lex owns is `calloc`'d.
-Computed from the allocation list at the shipped host sizes and `awk.lx.l`'s shape (618 tree
-nodes, 202 states), the peak concurrent heap is about **12,400 words** — the parse tree 4,167
-(`name`/`left`/`right`/`parent` 1,000 ints each plus `nullstr`), phase 2 about 7,600
-(`positions` 2,500, `nexts` 2,000, four `NSTATES` arrays, `foll`), and phase 1 about 850. §6's
-uncheckable ceiling, and a `besm6` profile is not optional.
+Task **C10d**. The five sources are built a second time by the `b6*` toolchain and staged as
+`/usr/bin/lex`; [`rootfs/CMakeLists.txt`](rootfs/CMakeLists.txt) is the whole of the machinery
+and there is **no second copy of any source** — only the size profile differs. `parser.y` goes
+through `b6_yacc()` there rather than through this directory's own custom command, that helper
+existing inside the `libruntime` guard. The skeleton is staged beside the binary because
+`find_form()`'s `besm6` arm names `/usr/lib/lex/ncform` and has no second candidate; both files
+have a stanza in [`../../root.manifest`](../../root.manifest), and `/usr/lib/lex` is a directory
+that had to be made there.
 
-**The static arrays are this port's own addition to that sum, and they are deliberate.** `NCH`
-256 costs about 60 words in `symbol[]`, `cindex[]` and `match[]` together — `char` packs six to a
-word — and 256 in `ctable[]`. Rather more went from stack to bss on purpose: `cgoto()`'s
-`tch`/`tst`, `packtrans()`'s `go`/`temp`/`swork`/`cwork` and `acompute()`'s `temp`/`neg` are
-**`static`** now, some 1,700 words moved off a 4,096-word stack that `cgoto → packtrans` would
-otherwise have carried ~1,150 of. None of the three recurses. What is left on the stack is the
-`cfoll`/`first`/`follow` recursion — small frames at a depth the input chooses, §6's last bullet,
-and a ceiling C10d has to give it.
+**The heap is what binds, not `rootfs_lex_size`.** Nearly every table lex owns is `calloc`'d, so
+the size check sees almost none of it: the staged binary is **16,866 words** (173 const, 10,391
+text, 4,443 data, 1,859 bss) against 28,672, and the remaining ~11,800 are what the tables and
+the stdio buffers have to fit into. At the host sizes and `awk.lx.l`'s shape the peak concurrent
+heap is about **12,400 words** — the parse tree 4,167 (`name`/`left`/`right`/`parent` 1,000 ints
+each plus `nullstr`), phase 2 about 7,600 (`positions` 2,500, `nexts` 2,000, four `NSTATES`
+arrays, `foll`), and phase 1 about 850 — so the program would have linked, passed every check
+here, and died in `myalloc`. §6's uncheckable ceiling; a `besm6` profile is not optional.
+
+The arm is measured against **`awk.lx.l`**, the one scanner this machine has to compile, from the
+statistics `test/` pins:
+
+| | host | BESM-6 | awk.lx.l needs | why not lower |
+|---|---|---|---|---|
+| `TREESIZE` (`%e`) | 1000 | 800 | 618 | four `int` arrays plus `nullstr`: 3,334 words as it stands |
+| `MAXPOS` (`%p`) | 2500 | 1700 | 1,345 | the single largest allocation |
+| `NSTATES` (`%n`) | 500 | 288 | 202 | charged six times over — `gotof`, `state`, `atable`, `sfall`, `cpackflg` |
+| `NTRANS` (`%a`) | 2000 | 800 | 530 | `nexts` plus `nchar` |
+| `NOUTPUT` (`%o`) | 3000 | 700 | 455 | `verify` and `advance`, and `2 * NCH` is the floor the assert enforces |
+
+Every one is a **default and not a limit** — `%e %n %p %a %o` (and `%k`) override each per-`.l`,
+which is the escape hatch a fixed profile usually lacks — and capacity does not enter `lex.yy.c`,
+so this lex and `b6lex` emit the same bytes. The five sizes the arm leaves alone are worth a few
+hundred words between them, `TOKENSIZE` doubles as `pchlen`'s initial value (which `%k` overrides
+anyway), and `STARTSIZE` has no `%` override at all, so cutting it would be a real capability
+loss for no real saving.
+
+**Four stdio streams, and `LEXBUFSIZ`.** `fin`, `fout`, `fother` and `stdout` are open at once
+and `BUFSIZ` is 3,072 bytes here, so the default buffering is 2,048 words of that same heap.
+`shrink_buffer()` cuts each to 1,026 bytes — 171 words, a whole number of them, as
+[`../ld/intern.h`](../ld/intern.h)'s `LDBUFSIZ` — at the three `fopen` sites, saving ~1,360
+words. A failure leaves the stream unbuffered, which is slow and correct, so it is not fatal.
+
+The shipped run over `awk.lx.l` reports **618/800, 1,345/1700, 202/288, 530/800, 455/700** —
+every bound the same count the host reports, against a smaller capacity — and takes ten seconds
+under `b6sim`. The disk cost is **38 blocks of 430 free**, leaving 392: 33 for the binary, 2 for
+the skeleton, 3 for the manual page.
+
+### Walking the tree
+
+**`cfoll()` and `first()` no longer recurse**, and that is the change this task turned on rather
+than the size profile. Both walk down the parse tree, whose height is the number of rules in the
+file: `awk.lx.l` alone reaches **96**, and at the frames `b6cc` gives them — 97 words for `cfoll`
+before it was split, 59 for `first` — that is two to nine times the whole 4,096-word stack. It
+did not fault; it overwrote the heap under it, and the first sign was `bad switch follow` with
+the `%d` in its own diagnostic printed literally.
+
+Splitting the arms out (`compress_ccl`, `leaffoll`, `scon_active`) took `cfoll` to 35 words,
+which is still 3,360 at that depth — enough to fit `awk.lx.l` and nothing after it. So the walk
+is **iterative**, with the deferred right subtrees in a `MAXDEFER`-entry array in bss and one
+`error()` when it fills. Two properties are load-bearing: the worklist is **LIFO**, which is what
+makes the walk reach a node in exactly the order the recursion did, and **order is not cosmetic**
+— `compress_ccl()` numbers the packed classes as it goes and those numbers reach `lex.yy.c`. The
+`rootfs_lex_*` cases are what say it: the two builds still agree byte for byte.
+
+`follow()` keeps its recursion. It climbs `parent[]` and stops at `v >= tptr - 1`, so it stays
+shallow whatever the file does — 7 on `awk.lx.l` — and `MAXDEPTH` bounds it at 64, which is
+2,048 words of stack at its 32-word frame.
+
+**The static arrays are this port's own addition to the heap sum, and they are deliberate.**
+`NCH` 256 costs about 60 words in `symbol[]`, `cindex[]` and `match[]` together — `char` packs six
+to a word — and 256 in `ctable[]`; the two worklists are 800 more. Rather more went from stack to
+bss in C10b: `cgoto()`'s `tch`/`tst`, `packtrans()`'s `go`/`temp`/`swork`/`cwork` and
+`acompute()`'s `temp`/`neg` are **`static`**, some 1,700 words off a stack that `cgoto →
+packtrans` would otherwise have carried ~1,150 of. None of those three recurses.
+
+### One bug in b6cpp, found here
+
+`b6yacc` writes a `# line` directive above the `%{ … %}` block it copies out of `parser.y`, and
+`parser.y`'s block opens with `#include "ldefs.h"`. **`b6cpp` passed that `#include` through as
+text**, so the native build failed at `b6parse` with `Empty type specifier list … lexeme:
+include`. The `#line` arm of `process_directives` drained its operands to the newline and left
+the scan pointer *past* it, while the loop it returns to resumes with a fast scan looking for
+`\n#` — so the directive on the next line was walked over and taken for text. Any directive, not
+just `#include`: a `#define` there was never defined. Every other arm reaches the shared drain,
+which the loop re-enters correctly, which is why nothing had met it in a decade of headers. One
+line in [`../cpp/direct.c`](../cpp/direct.c); [`../cpp/README.md`](../cpp/README.md) has it.
+
+## Testing the native build
+
+Two kinds, `cmd/yacc/rootfs/test`'s pair:
+
+* **`rootfs_lex_*` — agreement.** [`rootfs/test/run-lex-test.sh`](rootfs/test/run-lex-test.sh)
+  runs host `b6lex` and native `/usr/bin/lex` over one scanner and diffs `lex.yy.c` and the
+  message stream **live**. A checked-in expectation cannot express the property, which is that
+  two builds of one source agree; what it does not say is that either is right, two lexes wrong
+  the same way agreeing perfectly. `b6lex` arrives as a generator expression and never as an
+  installed file, which would be a different build of the same source and would say nothing.
+* **`cmd_lex_*` — the diagnostics**, ordinary `b6_progtest` cases with a checked-in `.expected`.
+
+**The corpus is both `.l` files this tree has and no fixture written for the suite** —
+`cmd/awk/awk.lx.l` and `rootfs/scant.l` — for `cmd/yacc/rootfs/test`'s reason: a scanner written
+here could be sized to fit the profile it is meant to test. The shapes neither reaches (`REJECT`,
+`yyless()`, a char-packed state) stay in [`test/`](test/), which compiles a generated scanner with
+the host compiler and runs it, and so proves more than a diff could.
+
+**`-v` is never passed**, and that is `y.output`'s lesson again: the statistics line quotes the
+profile's own bounds, `202/500` on the host against `202/288` here, so it is the one output the
+two builds cannot agree on. What *is* comparable is the warning stream — but only because the
+runner copies each scanner in under a fixed relative name, `error()` and `warning()` printing
+`sargv[fptr]`, so an absolute path would land in the diff.
+
+The skeleton is named through `$B6LEXFORM` because both search paths miss here: the host's ends at
+an installed file and the native one is `/usr/lib/lex/ncform`, which under `b6sim` is the build
+machine's. That is what `B6LEXFORM` is on `ENV_WHITELIST` in [`../sim/session.cpp`](../sim/session.cpp)
+for. `run-prog-test.sh` runs `env -i`, so the `cmd_lex_*` cases cannot see it — which makes
+**`noskel`** a case in its own right, feeding a whole scanner on stdin and asserting the exact
+path `find_form()` names, and leaves the other two (`notfound`, `badflag`) to fail before the
+skeleton is wanted. Every case reads its input from **stdin** where it can, an argument being an
+absolute path that `error()` would print.
 
 ## Traps
 
@@ -306,8 +410,12 @@ and a ceiling C10d has to give it.
   high half, so warning about it told a user to stop doing the right thing.
 * **Do not run `clang-format` over `ncform`.** It is not standalone C: `YYLMAX`, `struct yysvf`,
   `yycrank`, `yytop`, `yymatch` and `yyextra` are all emitted above it.
-* **`ldefs.h` and `once.h` are §1 blind spots** — `b6_obj`'s header dependency is the *system*
-  header tree, so editing either rebuilds nothing. Touch a `.c`.
+* **`ldefs.h` and `once.h` reach the native build only because `rootfs/CMakeLists.txt` appends
+  them to `KHDRS`** — `b6_obj`'s header dependency is otherwise the *system* header tree, and
+  editing the size profile would rebuild nothing. A new header of lex's own wants the same line.
+* **`cfoll()`'s and `first()`'s worklists are `static`**, which is only safe because each has
+  exactly one caller and neither is re-entered. A second call site is a silent corruption, not a
+  build error.
 * **Editing `header.c` or `sub2.c` changes every scanner this machine will ever compile.** The
   emitted-text assertions in `test/` are the only thing that notices; add one when you add
   emission.

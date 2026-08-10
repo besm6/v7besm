@@ -327,15 +327,16 @@ if(B6RUNTIME_LIB)
     # is the external c-compiler's, so `cc foo.c' on the machine stops after the
     # preprocessor.  It is also what makes /lib and /usr/include below worth having.
     add_subdirectory(cmd/cc/rootfs)
-    # calct -- not a program on the image either, but the ONE test that says b6parse
-    # accepts the parser skeleton cmd/yacc emits (task C10a).  A grammar of its own,
-    # run through b6_yacc() and b6_prog() and executed under b6sim from
-    # build/rootfs/test/.  Here rather than in cmd/yacc/test/ because cmd/yacc is
-    # added above, outside this guard, exactly as cmd/libaout/rootfs is.
+    # /usr/bin/yacc and /usr/lib/yaccpar -- task C10c, the toolchain's twelfth
+    # program -- and calct, which is NOT on the image: the one test that says
+    # b6parse accepts the parser skeleton cmd/yacc emits (task C10a).  Here
+    # rather than in cmd/yacc/ because that is added above, outside this guard,
+    # where b6_prog() and b6_yacc() do not exist -- as cmd/libaout/rootfs is.
     add_subdirectory(cmd/yacc/rootfs)
-    # scant -- likewise not a program on the image, but the ONE test that says
-    # b6parse accepts the scanner skeleton cmd/lex emits (task C10b), and
-    # b6_lex()'s first caller.  Here for the reason cmd/yacc/rootfs is.
+    # /usr/bin/lex and /usr/lib/lex/ncform -- task C10d, the thirteenth -- and
+    # scant, likewise not on the image: the one test that says b6parse accepts
+    # the scanner skeleton cmd/lex emits (task C10b), and b6_lex()'s first
+    # caller.  Here for the reason cmd/yacc/rootfs is.
     add_subdirectory(cmd/lex/rootfs)
     add_subdirectory(cmd/sh)
     add_subdirectory(cmd/basename)

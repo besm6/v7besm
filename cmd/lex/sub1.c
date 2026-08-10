@@ -96,6 +96,7 @@ void lgate(void)
         fout = fopen("lex.yy.c", "w");
         if (fout == NULL)
             error("Can't open lex.yy.c");
+        shrink_buffer(fout);
     }
     phead1();
 }

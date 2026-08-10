@@ -42,9 +42,10 @@
 // default /usr/man being the BUILD MACHINE's under this simulator.  No test needs it --
 // run-prog-test.sh runs `env -i' and every case passes -M instead.
 //
-// B6YACCPAR and B6LEXFORM are the same hazard again, for /usr/bin/yacc (C10c) and
-// /usr/bin/lex (C10d): each copies a skeleton from an absolute path of the IMAGE's --
-// /usr/lib/yaccpar, /usr/lib/lex/ncform -- which under b6sim is not there.
+// B6YACCPAR and B6LEXFORM are the same hazard again, for /usr/bin/yacc and
+// /usr/bin/lex: each copies a skeleton from an absolute path of the IMAGE's --
+// /usr/lib/yaccpar, /usr/lib/lex/ncform -- which under b6sim is the build machine's.
+// The rootfs_yacc_*/rootfs_lex_* agreement tests are what need them.
 static const char *const ENV_WHITELIST[] = {
     "LANG",  "LC_ALL", "TERM",      "SHELL",     "PATH",  "HOME",
     "USER",  "LOGNAME", "TMPDIR",   "EDITOR",    "PAGER", "MANPATH",

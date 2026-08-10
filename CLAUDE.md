@@ -58,18 +58,21 @@ relocatable symbol above word **32,767** (a 15-bit pointer's reach). Two more ce
 cannot guard, and both bind in practice: **no struct may exceed 4,096 words** (a member is a
 12-bit offset from a base register — move the big arrays to file scope), and the **4,096-word
 stack**, where a long function costs 1.5–2 words per source line before any array.
-`cmd/README.md` §6 is the account. **The root image has 430 free blocks of 2000** — it had 181
+`cmd/README.md` §6 is the account. **The root image has 392 free blocks of 2000** — it had 181
 until the `lib/test` programs moved to the test pack, which has 1,686 free of its own, and
-`/usr/bin/yacc` has since taken 30 back.
+`/usr/bin/yacc` and `/usr/bin/lex` have since taken 68 back.
 
-**Eleven programs are built twice** — `cpp`, `as`, `ld`, `nm`, `size`, `strip`, `disasm`, `ar`,
-`ranlib`, `cc`, `yacc` — as the host `b6*` tools and, from the same sources under
+**Twelve programs are built twice** — `cpp`, `as`, `ld`, `nm`, `size`, `strip`, `disasm`, `ar`,
+`ranlib`, `cc`, `yacc`, `lex` — as the host `b6*` tools and, from the same sources under
 `cmd/<x>/rootfs/`, as native `/usr/bin/*` reproducing the host tools' output byte for byte. A
 second native build needs that subdirectory, `cmd/<x>` being added above the `B6RUNTIME_LIB`
 guard where `b6_prog()` does not yet exist. Size profiles are keyed on the `besm6` macro `b6cpp`
-predefines (`cmd/cpp/defs.h`, `cmd/as/as.h`, `cmd/ld/intern.h`, `cmd/yacc/dextern.h`). **Native
-`cc` cannot compile C** — `b6parse`, `b6lower`, `b6codegen` cannot be built for the target — and
-says so. `yacc` also stages a data file, `/usr/lib/yaccpar`, which it will not run without.
+predefines (`cmd/cpp/defs.h`, `cmd/as/as.h`, `cmd/ld/intern.h`, `cmd/yacc/dextern.h`,
+`cmd/lex/ldefs.h`). **Native `cc` cannot compile C** — `b6parse`, `b6lower`, `b6codegen` cannot
+be built for the target — and says so. `yacc` and `lex` each stage a data file too,
+`/usr/lib/yaccpar` and `/usr/lib/lex/ncform`, and neither will run without its own. Where a
+profile cuts a table that is `calloc`'d rather than declared — `lex`'s are — **`rootfs_<x>_size`
+sees none of it**, and the program links, passes every check and dies in `malloc`.
 
 **Bulk I/O moves a word, not a byte**: six chars pack big-endian into a 48-bit word and a word
 on disk is six big-endian bytes, the same bit pattern, so where a stdio cursor sits on a word
@@ -221,7 +224,7 @@ let `kernel/dev/` be written in C — read before writing any driver).
 - clang-format (`.clang-format` at repo root), but **not over `include/`** — re-spacing a
   `#define` changes what `b6cpp` compares on redefinition.
 - Comments and identifiers are frequently in **Russian**; translate to English.
-- Be concise in your comments in the code.
+- Be concise in your comments in the code. Put the reasoning in the README.
 - Build artifacts (`*.o`, `*.a`, `*.i`, `*.ast`, `*.yaml`) are git-ignored.
 - `scripts/vscode-besm6/` transcribes the mnemonic tables of `cmd/as/tables.c` and
   `cmd/disasm/dis.c`; a new mnemonic goes into both places.

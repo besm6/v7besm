@@ -59,6 +59,26 @@ All of the standard directives are supported:
 `#ifndef`, `#elif`, `#else`, `#endif`, `#line`, `#error`, and `#pragma`. Unknown pragmas are
 accepted and ignored. Leading whitespace before the `#` is allowed (C11 §6.10).
 
+### A directive after `#line`
+
+**`#line` used to swallow the directive on the line after it** — silently, and whatever it was.
+`#line 11` followed by `#define AA 7` left the `#define` in the output as text and `AA`
+undefined.
+
+`process_directives` hands control back at each `#` and resumes with a *fast* scan looking for
+`\n#`. Every arm but one reaches the shared drain at the foot of the loop, which leaves the scan
+pointer **on** the newline that ends the directive line, so the next line's `#` is found. The
+`#line` arm drained its own operands — it has to collect them for the macro expansion §6.10.4p5
+requires — and left the pointer one character further on, *past* that newline. One line backs it
+up again.
+
+Nothing had met it: `#line` is written by generators rather than by hand, and the generators that
+write it put a comment or a blank line next. `b6yacc` does not. It emits `# line N "file"`
+immediately above the `%{ … %}` block it copies out of the grammar, and `cmd/lex/parser.y` opens
+that block with `#include "ldefs.h"` — so the native `lex` of task C10d was the first thing in
+this tree to compile a file with a directive in that position, and it failed at `b6parse` with
+`Empty type specifier list … lexeme: include`. `Line.*` in [`test/`](test/) covers it now.
+
 ## Macros
 
 - **Object-like** and **function-like** macros.

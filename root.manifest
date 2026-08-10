@@ -1016,9 +1016,22 @@ file /usr/bin/yacc      # cmd/yacc built natively -- task C10c, and the toolchai
 source ../../rootfs/usr/bin/yacc
 mode 0755
 
+file /usr/bin/lex       # cmd/lex built natively -- task C10d, and the toolchain's thirteenth
+                        # program.  ITS HEAP IS WHAT BINDS, not rootfs_lex_size: nearly every
+                        # table lex owns is calloc'd, so the size check sees almost none of
+                        # it.  cmd/lex/ldefs.h cuts the five bounds under the `besm6'
+                        # predefine, measured from awk.lx.l -- and awk.lx.l also wanted the
+                        # parse-tree walk taken off the 4,096-word stack, 96 frames of 35
+                        # words being more than the whole of it.  Capacity does not enter the
+                        # output, so this lex and b6lex emit identical lex.yy.c;
+                        # rootfs_lex_* asserts it live.  cmd/lex/README.md, "Building for the
+                        # BESM-6".  Needs /usr/lib/lex/ncform below.
+source ../../rootfs/usr/bin/lex
+mode 0755
+
 # AND TWO PROGRAMS HERE THAT ARE NOT THE TOOLCHAIN'S.  /usr/bin held the eleven of task C9
-# and nothing else; man and manview are the twelfth and thirteenth entries and the first that
-# are not compiled by, for or into the compiler chain.  They are here rather than in /bin
+# and nothing else; man and manview are the fourteenth and fifteenth entries and the first
+# that are not compiled by, for or into the compiler chain.  They are here rather than in /bin
 # because v7 put man here, the shell's default path is `:/bin:/usr/bin' (cmd/sh/msg.c), and
 # both are programs about /usr and not about the root -- which is also why the ls /bin
 # expectations in the deleted kernel/test/console.ini and session.expected did not have to move.
@@ -1536,6 +1549,10 @@ mode 0644
 
 file /usr/man/man1/kill.1
 source ../../rootfs/usr/man/man1/kill.1
+mode 0644
+
+file /usr/man/man1/lex.1
+source ../../rootfs/usr/man/man1/lex.1
 mode 0644
 
 file /usr/man/man1/ln.1
@@ -2226,6 +2243,22 @@ file /usr/lib/yaccpar   # cmd/yacc's parser skeleton -- task C10c, and THE FIRST
                         # candidate, so without it yacc builds every table and dies at the
                         # last step.  Same bytes as cmd/yacc/yaccpar.c.
 source ../../rootfs/usr/lib/yaccpar
+mode 0644
+
+# ...and the second, in a subdirectory of its own because that is where find_form() looks.
+dir /usr/lib/lex
+
+file /usr/lib/lex/ncform # cmd/lex's scanner skeleton -- task C10d, and the SECOND entry in
+                        # /usr/lib that is not a program.  /usr/bin/lex appends it verbatim to
+                        # every lex.yy.c, after the tables and the scanner's own subroutines:
+                        # data to lex, C source to whatever compiles the result, hence 0644.
+                        # find_form()'s `besm6' arm names this exact path and has no second
+                        # candidate, so without it lex builds every table and dies at the last
+                        # step -- which is what cmd_lex_noskel asserts.  It carries
+                        # yyreject(), yyracc() and yyless() for every scanner, so `cc
+                        # lex.yy.c' is the whole recipe and there is no libl.a here.
+                        # Same bytes as cmd/lex/ncform.
+source ../../rootfs/usr/lib/lex/ncform
 mode 0644
 
 file /usr/dict/words     # cmd/look -- task C5b.  Sorted in BYTE order, which is the order look

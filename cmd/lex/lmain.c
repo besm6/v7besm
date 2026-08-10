@@ -42,6 +42,17 @@ static const char *find_form(void)
     return path;
 }
 
+// ldefs.h's LEXBUFSIZ has the arithmetic; on the host the default is affordable.
+// A failure leaves the stream unbuffered -- slow but correct -- so it is not fatal.
+void shrink_buffer(FILE *f)
+{
+#if besm6
+    setvbuf(f, NULL, _IOFBF, LEXBUFSIZ);
+#else
+    (void)f;
+#endif
+}
+
 int main(int argc, char **argv)
 {
     register int i;
@@ -88,6 +99,7 @@ int main(int argc, char **argv)
         fin = stdin;
     if (fin == NULL)
         error("Can't read input file %s", argc > 1 ? argv[1] : "standard input");
+    shrink_buffer(fin);
     gch();
     // may be gotten: def, subs, sname, schar, ccl, dchar
     get1core();
@@ -120,6 +132,7 @@ int main(int argc, char **argv)
     fother = fopen(form, "r");
     if (fother == NULL)
         error("Lex driver missing, file %s", form);
+    shrink_buffer(fother);
     while ((i = getc(fother)) != EOF)
         putc(i, fout);
 

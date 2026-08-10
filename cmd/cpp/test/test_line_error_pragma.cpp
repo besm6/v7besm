@@ -36,6 +36,31 @@ TEST_F(LineControl, NonDigitOperandDiagnosed) {
     EXPECT_PP_DIAGNOSES("#line notanumber\n");
 }
 
+// The directive on the NEXT line is still a directive.  #line used to leave the
+// scan pointer past its own newline, so the loop's fast scan for "\n#" walked
+// over whatever came next and took it for text -- silently, and whatever it was.
+// README.md, "A directive after #line".
+TEST_F(LineControl, NextLineDirectiveNotSwallowed) {
+    EXPECT_TOKENS(
+        "#line 11\n"
+        "#define AA 7\n"
+        "AA\n",
+        "7");
+}
+
+// The shape that found it: b6yacc writes `# line N "file"' straight above the
+// %{ ... %} block it copies out of a grammar, and cmd/lex/parser.y opens that
+// block with an #include.
+TEST_F(LineControl, NextLineIncludeNotSwallowed) {
+    EXPECT_TRUE(TokensAre(
+        "# line 11 \"gen.y\"\n"
+        "#include \"defs.h\"\n"
+        "TAG\n",
+        "ok",
+        {},
+        {{"defs.h", "#define TAG ok\n"}}));
+}
+
 // §6.10.5: a #error not skipped by conditional inclusion prevents successful
 // translation.
 TEST_F(ErrorDirective, StopsTranslation) {

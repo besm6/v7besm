@@ -1,0 +1,6 @@
+%%
+"if"	nkey++;
+[a-z]+	nid++;
+%%
+int yywrap(void) { return 1; }
+int main(void) { yylex(); return 0; }

@@ -251,6 +251,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/du
     ${B6_ROOTFS}/usr/lib/diffh
     ${B6_ROOTFS}/usr/lib/yaccpar
+    ${B6_ROOTFS}/usr/lib/lex/ncform
     ${B6_ROOTFS}/usr/bin/cpp
     ${B6_ROOTFS}/usr/bin/as
     ${B6_ROOTFS}/usr/bin/ld
@@ -263,6 +264,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/usr/bin/ranlib
     ${B6_ROOTFS}/usr/bin/cc
     ${B6_ROOTFS}/usr/bin/yacc
+    ${B6_ROOTFS}/usr/bin/lex
     ${B6_ROOTFS}/usr/bin/man
     ${B6_ROOTFS}/usr/bin/manview
     ${B6_ROOTFS}/usr/guest/hello.S

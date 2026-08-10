@@ -45,7 +45,6 @@ here and already tested, whose value is in doing them together rather than one a
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C10 | `yacc` and `lex`, host and native | the seven grammars below, and a machine that generates its own parsers | large |
 | C11 | `expr` | shell arithmetic; the first thing C10 proves | small |
 | C26 | `egrep` | finishes C5c | small |
 | C13 | `m4` | macro processor | medium |
@@ -61,9 +60,10 @@ here and already tested, whose value is in doing them together rather than one a
 | C23 | `calendar` | | small, blocked on a clock and on its data |
 | C24 | the eight hand-rolled directory readers, over `opendir(3)` | one reader instead of eight, and §5 stops being everybody's problem | medium |
 
-**Where to start: C11.** `b6yacc` and `b6lex` both exist now (C10a, C10b), so every grammar
-below can be built — and `expr` is the smallest consumer and the one that proves them end to end.
-C10d, which puts `lex` on the image as C10c did `yacc`, is a separate axis and blocks no grammar.
+**Where to start: C11.** C10 is spent: `b6yacc` and `b6lex` are host tools (C10a, C10b) and
+`/usr/bin/yacc` and `/usr/bin/lex` are on the image with their skeletons (C10c, C10d), so every
+grammar below can be built — and `expr` is the smallest consumer and the one that proves them end
+to end.
 
 **Two loose ends about the terminal, one line each and neither worth a task of its own.** `TANDEM`
 is honoured by the kernel — `ttyblock()` queues the stop character when the input queue passes
@@ -79,79 +79,6 @@ boot-time `fsck` and the `rm -f /tmp/*` line wait on something else: both progra
 step 4 gave a line in that script exactly one home for its assertion, `kernel/test/console`,
 and that test is now **deleted** along with the rest of the tests that booted. So the deferral
 stands, and with nothing left that runs `/etc/rc` at all it is no longer a deferral but a gap.
-
----
-
-## C10. `yacc` and `lex`
-
-**The parser-generator decision, settled by porting them.** Six of the tasks below are yacc
-grammars — `expr.y`, `egrep.y`, `m4y.y`, `gram.y`, `bc.y`, `awk.g.y` — and `awk` is a lex scanner
-besides. The two alternatives that were on the table are both refused: **checking generated C into
-the tree** puts a machine-written file under version control and hides the grammar's real
-dependency, and **taking a host `bison`/`flex` dependency** spends a property this project has kept
-from the start, that the build needs nothing but CMake and a C++17 compiler.
-
-**The sources come from RetroBSD**, `/Users/vak/Project/BSD/retrobsd/src/cmd/yacc` and
-`.../src/cmd/lex`, not from the v7 originals. RetroBSD's yacc is 4.2BSD's with the ANSI pass
-already done — prototypes throughout, `<stdarg.h>` for `error()` — which is most of §1 gone before
-the task starts. RetroBSD's lex is very nearly v7's, K&R and all, but it carries the 4.xBSD
-`<paths.h>` fixes and a few corrections, and there is no better starting point in existence.
-
-**This is the one task that started by fetching.** [README.md](README.md) says almost every
-program named here is already in its directory as a verbatim upstream copy; [yacc/](yacc/) and
-[lex/](lex/) are the exceptions, and both are now here.
-
-**Neither program needs a support library.** v7 shipped `liby.a` (a `main()` and a `yyerror()`) and
-`libl.a` (a `main()`, a `yywrap()`, `yyreject()` and `yyless()`); every consumer below defines the
-first two itself and `ncform` carries the rest, so nothing here adds an archive to
-[../lib/](../lib/) or to `B6_STAGE_LIB`. [lex/README.md](lex/README.md), "No support library".
-
-### C10d. `lex` on the image — `/usr/bin/lex` and `/usr/lib/lex/ncform`
-
-**C10c is the worked example and it is done**, so this is that shape again over a `lex/rootfs/`
-that already exists (C10b's `scant` is there, and `cmd/lex` is added above the `libruntime.a`
-guard as well as below it): a `b6_prog()` call and a staged skeleton in
-[yacc/rootfs/CMakeLists.txt](yacc/rootfs/CMakeLists.txt)'s shape, a `rootfs/test/` on
-[yacc/rootfs/test/](yacc/rootfs/test/)'s, [../root.manifest](../root.manifest) stanzas for the
-binary, the skeleton and `/usr/man/man1/lex.1`, and `ROOTFS_FILES` in
-[../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The manual page is written and
-staged; only its manifest stanza is missing. `find_form()` already has its `#ifdef besm6` arm,
-and `B6LEXFORM` is already on `ENV_WHITELIST` in [sim/session.cpp](sim/session.cpp) — C10c put it
-there, since the agreement test is the only way a native tool reaches an image skeleton under
-`b6sim`.
-
-**Different binding ceiling from yacc's**, and C10b measured it rather than leaving it to be
-guessed — [lex/README.md](lex/README.md), "What C10d still has to measure", has the arithmetic:
-
-* **The heap is what binds, not `rootfs_lex_size`.** Nearly every table lex owns is `calloc`'d, so
-  the size check sees almost none of it. At the shipped host sizes and `awk.lx.l`'s shape the peak
-  concurrent heap is about **12,400 words** — the parse tree 4,167, phase 2 about 7,600, phase 1
-  about 850. §6's uncheckable ceiling. A `besm6` size profile is **not optional**; `SMALL` is gone,
-  so it is a new `#ifdef besm6` arm in `ldefs.h` beside the one block, and the six
-  `_Static_assert`s there will refuse a set that does not hold.
-* **Size it against `awk.lx.l`**, the only scanner this machine has to compile, from the numbers
-  C10b pinned: **618** tree nodes of 1,000, **1,345** positions of 2,500, **202** states of 500,
-  **64** packed classes of 1,000, **530** packed transitions of 2,000, **455** output slots of
-  3,000. Every bound has better than 2x headroom, so the profile can come down a long way — and
-  all six stay overridable per-`.l` with `%e %n %p %a %o %k`, which is the escape hatch a fixed
-  profile usually lacks. Measure the **break**, not the request: `malloc` grows a page at a time.
-* **The stack is already dealt with.** `cgoto()`'s `tch`/`tst`, `packtrans()`'s
-  `go`/`temp`/`swork`/`cwork` and `acompute()`'s `temp`/`neg` are `static` as of C10b — some 1,700
-  words moved off the stack, none of the three recursing. What is left is the
-  `cfoll`/`first`/`follow` recursion, small frames at a depth the input chooses: §6's last bullet,
-  and **the one ceiling still to give**.
-* **What a generated scanner costs is measured**: `rootfs/scant` is **5,788 words** (80 const,
-  3,741 text, 649 data, 1,318 bss) for eleven rules over stdio. `ncform` carries `yyreject()`,
-  `yyracc()` and `yyless()` for every scanner whether or not it uses them, which `awk` does not;
-  `rootfs_awk_size` is the first measurement of what that costs, and C10b's README records the
-  fallback if it turns out to matter.
-* **The agreement test is the one that matters**, as it was for yacc: host `b6lex` and native
-  `/usr/bin/lex` over one scanner, `lex.yy.c` compared byte for byte, live.
-  [yacc/rootfs/test/run-yacc-test.sh](yacc/rootfs/test/run-yacc-test.sh) is the script to copy,
-  and it comes with two things C10c learned. **The `-v` statistics are not comparable** — like
-  yacc's `y.output` they quote the profile's own bounds, so what `awk.lx.l`'s pinned line asserts
-  is the *host* build and the cheap half of the check, not agreement. And a case must not name
-  its input by an absolute path if the generator writes it into the output.
 
 ---
 
@@ -210,7 +137,10 @@ it is worth nothing until the engine is on the image. Small once C15 lands.
 `awk.def` header. **The only program in the tree that is a yacc grammar and a lex scanner both**,
 which makes it the real test of C10 and the reason it comes last of the grammars rather than first.
 Both halves generate today: C10a pinned `awk.g.y`'s 95 shift/reduce conflicts and C10b `awk.lx.l`'s
-statistics line.
+statistics line, and both generate **on the machine as well** — C10c and C10d sized
+`/usr/bin/yacc` and `/usr/bin/lex` against these two files, which are the largest either will
+ever be asked for here, and `rootfs_yacc_awk` and `rootfs_lex_awk` diff the result against the
+host's byte for byte.
 
 * `awk.def` is `make`'s problem again — §1, globals in a header.
 * It is **the most float-dependent program here**; read [../lib/libm/README.md](../lib/libm/README.md)
