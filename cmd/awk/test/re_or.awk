@@ -1,0 +1,1 @@
+/beta|xyz/ { print }

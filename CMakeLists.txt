@@ -339,6 +339,7 @@ if(B6RUNTIME_LIB)
     # caller.  Here for the reason cmd/yacc/rootfs is.
     add_subdirectory(cmd/lex/rootfs)
     add_subdirectory(cmd/sh)
+    add_subdirectory(cmd/awk)
     add_subdirectory(cmd/basename)
     add_subdirectory(cmd/bc)
     add_subdirectory(cmd/cal)

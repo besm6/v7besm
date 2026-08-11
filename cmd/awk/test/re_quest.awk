@@ -1,0 +1,1 @@
+/gam?ma/ { print }

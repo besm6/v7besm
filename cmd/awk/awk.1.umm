@@ -8,7 +8,7 @@ awk - pattern scanning and processing language
 
 ## SYNOPSIS
 
-| **awk** [ **-F**\&*c* ] [ prog ] [ file ] ...
+| **awk** [ **-F**\&*c* ] [ **-f** *progfile* | *prog* ] [ *file* ] ...
 
 ## DESCRIPTION
 
@@ -62,9 +62,26 @@ printf(3)).
 The built-in function *length* returns the length of its argument taken as a string, or of the
 whole line if no argument. There are also built-in functions *exp, log, sqrt,* and *int*. The
 last truncates its argument to an integer. *substr(s, m, n)* returns the *n*-character
-substring of *s* that begins at position *m*. The function *sprintf(fmt, expr, expr, ...)*
-formats the expressions according to the printf(3) format given by *fmt* and returns the
-resulting string.
+substring of *s* that begins at position *m*; with *n* omitted it runs to the end of *s*.
+*index(s, t)* returns the position in *s* where *t* first occurs, or 0 if it does not.
+*split(s, a, c)* splits *s* into the array *a* on the separator *c* -- the current FS if *c*
+is omitted -- and returns the number of pieces. *getline* reads the next input record
+immediately, setting the fields, NR and NF, and returns 1 for a record and 0 at end of file.
+The function *sprintf(fmt, expr, expr, ...)* formats the expressions according to the
+printf(3) format given by *fmt* and returns the resulting string.
+
+The *print* and *printf* statements may be followed by **>**\&*expr* to write to a file,
+**>>**\&*expr* to append to one, or **|**\&*expr* to pipe into a command.
+
+*Note:* the numbers are this machine's. There is one floating type, with a 40-bit mantissa and
+a range of about 10^\&±19, so **%g** carries at most twelve significant digits and an integer
+prints exactly only below 2^\&40. There are no infinities: an arithmetic **overflow is a fault
+and kills the program**, so a script that can produce one should scale it away. A numeric
+constant in the program text that is out of range is diagnosed rather than converted.
+
+*Note:* **^** inside a regular expression is compiled to a pseudo-character outside the byte
+range, where v7 used 0177. So **.** and **[^**\&...**]** match every byte from 1 to 255,
+including the bytes of a Cyrillic letter and including 0177 itself.
 
 Patterns are arbitrary Boolean combinations (!, ||, &&, and parentheses) of regular expressions
 and relational expressions. Regular expressions must be surrounded by slashes and are as in
@@ -87,7 +104,18 @@ contains) or !~ (for does not contain). A conditional is an arithmetic expressio
 expression, or a Boolean combination of these.
 
 The special patterns BEGIN and END may be used to capture control before the first input line
-is read and after the last. BEGIN must be the first pattern, END the last.
+is read and after the last. BEGIN must be the first pattern, END the last, and there may be
+only one of each.
+
+An input record is normally a line, but if the record separator RS is set to the null string
+then a blank line terminates a record and newline joins blank and tab as a field separator.
+
+Each variable and field can be a string or a number or both. An assignment gives its variable
+the type of the expression assigned; an arithmetic expression is a number and a concatenation
+is a string. In a comparison, if both operands are numeric the comparison is numeric, and
+otherwise both are coerced to string. Uninitialized variables have the numeric value 0 and the
+string value "", so *if (x)*, *x == 0* and *x == ""* are all true of one, while *x == "0"* is
+false. A field is numeric if it contains only a number.
 
 A single character *c* may be used to separate the fields by starting the program with
 
@@ -144,7 +172,22 @@ Print all lines whose first field is different from previous one:
 | lex(1), sed(1)
 | A. V. Aho, B. W. Kernighan, P. J. Weinberger, *Awk - a pattern scanning and processing language*
 
+## LIMITS
+
+The limits below are this machine's, and each is diagnosed rather than silently exceeded. What
+is left of the address space below the stack, once the program image is in it, is the whole of
+the heap the parse tree, the symbol table and every string value share, so the tables that
+would otherwise take it are kept small: a record is at most 767 bytes and has at most 39
+fields; a regular expression has at most 111 positions, 111 states and 191 tree nodes, and 16
+character classes may appear in one program; and an expression may nest 15 deep. A long
+regular expression may exhaust the heap before it reaches any of those and is reported the
+same way.
+
 ## BUGS
 
 There are no explicit conversions between numbers and strings. To force an expression to be
 treated as a number add 0 to it; to force it to be treated as a string concatenate "" to it.
+
+*Note:* v7's undocumented **-d**, **-S** and **-R** options are gone. The first was debugging
+output; the other two dumped and reloaded the data segment through *sbrk*(2) and *brk*(2),
+which cannot mean anything here.

@@ -1,0 +1,1 @@
+/(al|be)ta/ { print }

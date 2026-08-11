@@ -1,0 +1,1 @@
+/a.pha/ { print }

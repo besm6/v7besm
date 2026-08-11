@@ -10,7 +10,7 @@ harness tests it. Read it before starting any task below; **nothing here repeats
 
 **Task numbers carry a `C`** — `C10`, `C11`, … — because the kernel's task numbers are cited from
 source comments and from `doc/`, and a bare number would be ambiguous forever after. The numbering
-is **left as it was** when a task is finished and dropped: C1 through C11, C13 through C16 and C26
+is **left as it was** when a task is finished and dropped: C1 through C11, C13 through C17 and C26
 are spent and their sections are gone, and no number is ever re-used, because `root.manifest` stanzas
 and per-program `README.md`s cite them.
 
@@ -45,7 +45,6 @@ here and already tested, whose value is in doing them together rather than one a
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C17 | `awk` | the one program that is a grammar *and* a scanner | large |
 | C18 | `units` | | small |
 | C19 | `crypt`, `makekey` | | small |
 | C20 | `update` | one of the two [../etc/rc](../etc/rc) lines | trivial |
@@ -54,12 +53,12 @@ here and already tested, whose value is in doing them together rather than one a
 | C23 | `calendar` | | small, blocked on a clock and on its data |
 | C24 | the eight hand-rolled directory readers, over `opendir(3)` | one reader instead of eight, and §5 stops being everybody's problem | medium |
 
-**Where to start: C17**, and the calculator is done: C15 put `/bin/dc` on the image and C16 the
-`bc` that drives it, with `/usr/lib/lib.b` beside it. C10 is spent too, and so is every risk it
-left behind. `b6yacc` and `b6lex` are host tools (C10a, C10b) and `/usr/bin/yacc` and `/usr/bin/lex` are on the image with their
-skeletons (C10c, C10d), so every grammar below can be built. **C11, C26, C13, C14 and C16 proved
-it** — `expr`, `egrep`, `m4`, `make` and `bc` are on the image, built from their grammars by
-`b6_yacc()`, and the skeleton needed no change for any of them. Four things they settled, in
+**Where to start: C18**, and every grammar is done: C17 put `/bin/awk` on the image, the one
+program that is a yacc grammar *and* a lex scanner, and with it C10 is spent to the last risk.
+`b6yacc` and `b6lex` are host tools (C10a, C10b) and `/usr/bin/yacc` and `/usr/bin/lex` are on
+the image with their skeletons (C10c, C10d). **C11, C26, C13, C14, C16 and C17 proved it** —
+`expr`, `egrep`, `m4`, `make`, `bc` and `awk` are on the image, built from their grammars by
+`b6_yacc()`, and the skeleton needed no change for any of them. Five things they settled, in
 order:
 
 * **A non-zero conflict count is not by itself a sign of trouble** (C26): `egrep.y` has two
@@ -78,8 +77,15 @@ order:
   skeleton's three value copies into aggregate copies, and nothing had ever compiled one. It was
   retired ahead of the port on [yacc/rootfs/calcu.y](yacc/rootfs/calcu.y) rather than inside it,
   so that a miscompile could not read as a grammar bug, and it passed first time
-  ([yacc/README.md](yacc/README.md) under "The contract"). `awk.g.y` at C17 needs none of this
-  proved again.
+  ([yacc/README.md](yacc/README.md) under "The contract").
+* **A grammar and a scanner in one `b6_prog()`** (C17), which is all C10 ever had left to
+  prove. Two `-I`s, in opposite directions: the source directory, because the generated
+  parser and scanner include the program's own header, and `${<var>_DIR}`, because the
+  hand-written units include the `y.tab.h` `b6_yacc()` leaves beside the parser -- and that
+  generated header must be named in `KHDRS` or the units compile before `b6yacc` has run.
+  `#define YYSTYPE` wants a **typedef** behind it, since yacc writes `YYSTYPE yylval, yyval;`
+  and the second declarator of a pointer `#define` is not a pointer
+  ([awk/README.md](awk/README.md)).
 
 **Two loose ends about the terminal, one line each and neither worth a task of its own.** `TANDEM`
 is honoured by the kernel — `ttyblock()` queues the stop character when the input queue passes
@@ -97,24 +103,6 @@ and that test is now **deleted** along with the rest of the tests that booted. S
 stands, and with nothing left that runs `/etc/rc` at all it is no longer a deferral but a gap.
 
 ---
-
-## C17. `awk`
-
-2,428 lines of C across nine files, plus `awk.g.y` 272 and `awk.lx.l` 173 over the 131-line
-`awk.def` header. **The only program in the tree that is a yacc grammar and a lex scanner both**,
-which makes it the real test of C10 and the reason it comes last of the grammars rather than first.
-Both halves generate today: C10a pinned `awk.g.y`'s 95 shift/reduce conflicts and C10b `awk.lx.l`'s
-statistics line, and both generate **on the machine as well** — C10c and C10d sized
-`/usr/bin/yacc` and `/usr/bin/lex` against these two files, which are the largest either will
-ever be asked for here, and `rootfs_yacc_awk` and `rootfs_lex_awk` diff the result against the
-host's byte for byte.
-
-* `awk.def` is `make`'s problem again — §1, globals in a header.
-* It is **the most float-dependent program here**; read [../lib/libm/README.md](../lib/libm/README.md)
-  on what an overflow does on this machine before trusting a number it prints.
-* `b.c` is the same Aho-Corasick shape `fgrep` has. Its tables *are* bounded on every path, but
-  `cgotofn()`'s frame is some 900 words of them before its per-state `malloc`, so §6's stack and
-  heap ceilings both apply and [grep/README.md](grep/README.md) is again the worked example.
 
 ## C18. `units`
 

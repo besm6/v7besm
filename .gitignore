@@ -10,6 +10,13 @@
 *.s-
 *.trace
 
+# yacc and lex write these under fixed names.  A stray one beside a grammar SHADOWS the
+# generated header -- cmd/awk includes "y.tab.h" -- and the program miscompiles silently.
+y.tab.c
+y.tab.h
+y.output
+lex.yy.c
+
 cmd/as/as
 tmp/
 build/

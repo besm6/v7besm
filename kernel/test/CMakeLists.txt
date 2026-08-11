@@ -233,6 +233,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/etc/ttys
     ${B6_ROOTFS}/usr/dict/words
     ${B6_ROOTFS}/bin/sh
+    ${B6_ROOTFS}/bin/awk
     ${B6_ROOTFS}/bin/basename
     ${B6_ROOTFS}/bin/bc
     ${B6_ROOTFS}/bin/cal
