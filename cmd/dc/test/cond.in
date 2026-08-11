@@ -1,0 +1,6 @@
+[[lt]p]sl 2 1 <l
+[[gt]p]sg 1 2 >g
+[[eq]p]se 2 2 =e
+[[nolt]p]sm 1 2 <m
+[[nogt]p]sn 2 1 >n
+[[noeq]p]so 2 1 =o

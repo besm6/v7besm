@@ -8,7 +8,7 @@ dc - desk calculator
 
 ## SYNOPSIS
 
-| **dc** [ file ]
+| **dc** [ *file* ]
 
 ## DESCRIPTION
 
@@ -20,7 +20,8 @@ The following constructions are recognized:
 
 number
 : The value of the number is pushed on the stack. A number is an unbroken string of the
-  digits 0-9. It may be preceded by an underscore _ to input a negative number. Numbers may
+  digits 0-9 and A-F, the letters counting as 10 through 15 whatever the input base.
+  It may be preceded by an underscore _ to input a negative number. Numbers may
   contain decimal points.
 
 + - / \* % ^
@@ -34,6 +35,11 @@ number
   character. If the **s** is capitalized, *x* is treated as a stack and the value is pushed on
   it.
 
+  Note: a register name is one **byte**, not one letter, so a name written in a multi-byte
+  alphabet names a register with its first byte and leaves the rest to be read as commands.
+  Bytes 0241 and above name the arrays **:** and **;** use, which is *bc*'s convention; **s**
+  and **l** on such a name store and load an array and not a number.
+
 **l**\&*x*
 : The value in register *x* is pushed on the stack. The register *x* is not altered. All
   registers start with zero value. If the **l** is capitalized, register *x* is treated as a
@@ -44,7 +50,13 @@ number
 
 **p**
 : The top value on the stack is printed. The top value remains unchanged. **P** interprets the
-  top of the stack as an ascii string, removes it, and prints it.
+  top of the stack as an ascii string, removes it, and prints it, without a newline.
+
+  Note: a value on the stack carries no type, and **p** decides between a string and a number
+  by looking for a byte greater than 99 -- so a string of nothing but small bytes, `abc`, is
+  printed as a number, which is v7's own behaviour and is kept. What is *not* v7's: the scan
+  reads the bytes unchanged and allows 0377 only where a number's sign can sit, so an
+  eight-bit string prints as a string here where v7 printed it as a number.
 
 **f**
 : All values on the stack and in registers are printed.
@@ -122,9 +134,22 @@ implements functions and reasonable control structures for programs.
 
 ## DIAGNOSTICS
 
+Every diagnostic is a complaint about the command just read; *dc* prints it and goes on to the
+next command. None of them changes the exit status, which is 0 unless the *file* named on the
+command line could not be opened.
+
 - `x is unimplemented` where x is an octal number.
-- `stack empty` for not enough elements on the stack to do what was asked.
-- `Out of space` when the free list is exhausted (too many digits).
-- `Out of headers` for too many numbers being kept around.
-- `Out of pushdown` for too many items on the stack.
-- `Nesting Depth` for too many levels of nested execution.
+- `stack empty` for not enough elements on the stack to do what was asked, and
+  `empty stack` for the same condition met by **p**, **f** or **d**.
+- `out of stack space` for more than 99 items on the stack.
+- `nesting depth` for more than 99 levels of nested execution.
+- `symbol table overflow` when the 256 register slots are all in use.
+- `divide by 0` from **/** and **%**, and from the internal division a fractional number needs
+  when the input base has been set to zero. The divisor is left on the stack and the dividend
+  is not.
+- `scale too big` from **k**, `index too big` and `neg index` from **:** and **;**,
+  `exp too big` and `exp not an integer` from **^**, and `sqrt of neg number` from **v**.
+- `Q?` and `neg Q` from a bad **Q**, `readstk?` when **Q** is asked for more levels than
+  there are, and `L?` for **L** on an empty register.
+- `can't open file x`, the one condition that exits, with status 1.
+- `out of space: x` when the arena cannot be grown even after compaction. *Dc* aborts.

@@ -10,8 +10,8 @@ harness tests it. Read it before starting any task below; **nothing here repeats
 
 **Task numbers carry a `C`** — `C10`, `C11`, … — because the kernel's task numbers are cited from
 source comments and from `doc/`, and a bare number would be ambiguous forever after. The numbering
-is **left as it was** when a task is finished and dropped: C1 through C11, C13, C14 and C26 are
-spent and their sections are gone, and no number is ever re-used, because `root.manifest` stanzas
+is **left as it was** when a task is finished and dropped: C1 through C11, C13, C14, C15 and C26
+are spent and their sections are gone, and no number is ever re-used, because `root.manifest` stanzas
 and per-program `README.md`s cite them.
 
 **Three numbers are spent and have no row in the table below**, which is why they are written
@@ -45,7 +45,6 @@ here and already tested, whose value is in doing them together rather than one a
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C15 | `dc` | the calculator engine | medium |
 | C16 | `bc` | the calculator front end | small |
 | C17 | `awk` | the one program that is a grammar *and* a scanner | large |
 | C18 | `units` | | small |
@@ -56,7 +55,8 @@ here and already tested, whose value is in doing them together rather than one a
 | C23 | `calendar` | | small, blocked on a clock and on its data |
 | C24 | the eight hand-rolled directory readers, over `opendir(3)` | one reader instead of eight, and §5 stops being everybody's problem | medium |
 
-**Where to start: C15.** C10 is spent, and so is every risk it left behind. `b6yacc` and `b6lex`
+**Where to start: C16.** C15 put `/bin/dc` on the image, so the engine `bc` `exec`s is there and
+the front end is worth building. C10 is spent too, and so is every risk it left behind. `b6yacc` and `b6lex`
 are host tools (C10a, C10b) and `/usr/bin/yacc` and `/usr/bin/lex` are on the image with their
 skeletons (C10c, C10d), so every grammar below can be built. **C11, C26, C13 and C14 proved it** —
 `expr`, `egrep`, `m4` and `make` are on the image, built from their grammars by `b6_yacc()`, and
@@ -94,17 +94,22 @@ stands, and with nothing left that runs `/etc/rc` at all it is no longer a defer
 
 ---
 
-## C15. `dc`
-
-`dc/dc.c` 1,943 over `dc/dc.h` 119. The desk calculator, and the arbitrary-precision engine `bc`
-drives. Its numbers are its own representation, not the machine's, so [../lib/libm/](../lib/libm/)
-does not come into it — but it is a heap program and §6's uncheckable ceiling is the one to ask
-about.
-
 ## C16. `bc`
 
-`bc/bc.y`, 600 lines. **Blocked on C15**: `bc` is a front end that `exec`s `dc` and pipes to it, so
-it is worth nothing until the engine is on the image. Small once C15 lands.
+`bc/bc.y`, 600 lines. A front end that `exec`s `dc` and pipes to it, so it was worth nothing
+until C15 put the engine on the image. It is there now, and [dc/README.md](dc/README.md) is what
+to read first — three of the things it settled are `bc`'s to rely on and one is `bc`'s to check:
+
+* **`S` and `L` on an array register work**, which is how `bc` scopes an `auto` array across a
+  call (`atab` names 0241 upward, `pp()`/`tp()` emit `0S`*name*). A case pins the round trip.
+* **A register name is one byte and 0241 and above name arrays**, which is `bc`'s own convention
+  and is now written down in `dc.1`.
+* **An array element is one word, not v7's two bytes**, so an array of *n* costs `(n+6)*6` char
+  units — three times the PDP-11's. `MAXIND` is still 2048 because it is `bc`'s bound, and a full
+  array is about a tenth of the heap.
+* **What to check**: `bc`'s own `%D`, its K&R pass, and whether `signal(2, (int(*)())1)` at the
+  head of `yyinit()` still means `SIG_IGN` here — it is written as a bare 1 and `<signal.h>` has
+  a real prototype now.
 
 ## C17. `awk`
 

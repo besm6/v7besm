@@ -373,6 +373,38 @@ file /bin/date          # cmd/date -- what /etc/rc prints after the motd; NOT se
 source ../../rootfs/bin/date
 mode 0755
 
+file /bin/dc            # cmd/dc -- task C15, the arbitrary-precision desk calculator and the
+                        # engine bc drives.  ITS DIGITS LIVE IN char CELLS AND ITS SIGN IS A
+                        # CELL OF -1, so an unsigned char cost it every negative number at
+                        # once; the readers sign-extend, which is v7's own answer for the
+                        # Interdata 8/32 and was already in dc.h under an #ifdef.  ONE PLACE
+                        # THEY MUST NOT: `p' has no type to go on and calls a block a string
+                        # when a cell exceeds 99, so sign extension would print `[привет]p'
+                        # as a number.  It reads raw there and allows 0377 only where a sign
+                        # cell can sit, which leaves v7's own wart -- no byte of `abc'
+                        # exceeds 99, so `[abc]p' is still a number -- and repairs the
+                        # eight-bit half.  A REGISTER NAME IS ONE BYTE and 0241 and above
+                        # name ARRAYS, so a Cyrillic letter is two commands and the first
+                        # names an array; the array walk now demands a whole PTRSZ slot and
+                        # a word that could be a header address, without which `sя' followed
+                        # by `lя' read digit bytes as pointers and took the heap with it.
+                        # AN ARRAY ELEMENT IS ONE WORD, not v7's two bytes: only the
+                        # dereference goes through the word view, every cursor staying in
+                        # the byte view, because a fat char pointer carries its marker above
+                        # an int's 41 bits and word-typed arithmetic over those same words is
+                        # wrong.  An unset element is 0, where v7's PTRSZ nulls printed nine.
+                        # log2v counted down from a 32-bit long's top bit and gave a negative
+                        # digit count for every fractional print in a base but ten.  Six v7
+                        # bounds were past their arrays or their guards: the operand stack,
+                        # the execution stack twice, copy() past a block, nalloc() past its
+                        # source, and divide() returning the integer 1 on a zero divisor,
+                        # which `0i' then a fraction reached in three keystrokes.  ^C unwinds
+                        # through setjmp: v7's handler called the command loop and never came
+                        # back, and that frame is 1,460 of the 4,096 words of stack.
+                        # cmd/dc/README.md.
+source ../../rootfs/bin/dc
+mode 0755
+
 # Task C4b, and the reason it is here rather than in /etc beside quot: dd is a general copy
 # program that happens to be the only way to reach a device in bulk, not a device tool.  NOT
 # setuid, and least of all this one -- /dev/rmd0 is mode 0600 because that node is every
@@ -1485,9 +1517,9 @@ mode 0644
 #
 # IT DOES NOT CURATE.  The corpus costs about 302 of the free blocks this image had and
 # leaves 216, of which /usr/bin/man below took another 12; a manual with holes in it
-# is worth less than the blocks.  FOURTEEN OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
-# THIS IMAGE -- ac, at, awk, bc, calendar, cron, crypt, dc, mail, make, makekey,
-# sa, units and update.  Eleven are ports cmd/TODO.md still has open and their pages are
+# is worth less than the blocks.  TWELVE OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
+# THIS IMAGE -- ac, at, awk, bc, calendar, cron, crypt, mail, makekey,
+# sa, units and update.  Nine are ports cmd/TODO.md still has open and their pages are
 # already correct when one lands; mail, ac and sa are in that file's "Not ported, and why"
 # table and will never have a program, which is v7's own habit -- a manual page is where a
 # decision about a program is recorded whether or not the program exists.

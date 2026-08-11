@@ -244,6 +244,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/comm
     ${B6_ROOTFS}/bin/cp
     ${B6_ROOTFS}/bin/date
+    ${B6_ROOTFS}/bin/dc
     ${B6_ROOTFS}/bin/dd
     ${B6_ROOTFS}/bin/df
     ${B6_ROOTFS}/bin/diff
