@@ -429,6 +429,19 @@ file /bin/ed            # cmd/ed -- task C3, and THE FIRST PROGRAM ON THIS IMAGE
 source ../../rootfs/bin/ed
 mode 0755
 
+file /bin/expr          # cmd/expr -- task C11, the first v7 command here built from a yacc
+                        # grammar.  Four deliberate divergences, all in cmd/expr/README.md:
+                        # `<=' really is <= (v7 computed >=, the same expression it used for
+                        # `>='); a leading minus makes a number on both sides of a relation
+                        # and in arithmetic, where v7 allowed one only on a relation's left
+                        # operand, so `expr $a + 1' works on a negative $a; a paren is an
+                        # operator only when it is the whole argument; and division by zero
+                        # is diagnosed, the divide instruction faulting on it rather than
+                        # answering wrongly.  A character class is 256 bits as grep's and
+                        # sed's are, and length, substr, index and the match count are BYTES.
+source ../../rootfs/bin/expr
+mode 0755
+
 file /bin/file          # cmd/file -- task C5f, and the one deliberate change of it: the
                         # magic numbers are this machine's (FMAGIC/NMAGIC/ARMAG), RELFLG
                         # tells a linked executable from a relocatable object, the assembler
@@ -575,7 +588,8 @@ mode 0755
 
 file /bin/rev           # cmd/rev -- task C5a, and the one deliberate divergence in it: it
                         # reverses UTF-8 SEQUENCES where v7 reversed bytes, this machine's
-                        # text being UTF-8 since task C11.  See cmd/rev/README.md.
+                        # text being UTF-8 end to end (cmd/README.md SS11).  See
+                        # cmd/rev/README.md.
 source ../../rootfs/bin/rev
 mode 0755
 
@@ -1397,9 +1411,9 @@ mode 0644
 #
 # IT DOES NOT CURATE.  The corpus costs about 302 of the free blocks this image had and
 # leaves 216, of which /usr/bin/man below took another 12; a manual with holes in it
-# is worth less than the blocks.  SIXTEEN OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
-# THIS IMAGE -- ac, at, awk, bc, calendar, cron, crypt, dc, expr, m4, mail, make, makekey,
-# sa, units and update.  Thirteen are ports cmd/TODO.md still has open and their pages are
+# is worth less than the blocks.  FIFTEEN OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
+# THIS IMAGE -- ac, at, awk, bc, calendar, cron, crypt, dc, m4, mail, make, makekey,
+# sa, units and update.  Twelve are ports cmd/TODO.md still has open and their pages are
 # already correct when one lands; mail, ac and sa are in that file's "Not ported, and why"
 # table and will never have a program, which is v7's own habit -- a manual page is where a
 # decision about a program is recorded whether or not the program exists.

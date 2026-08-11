@@ -89,9 +89,10 @@ Everything above is built and most of it is tested: `make run` is the whole suit
 
 ## What is missing
 
-A **C compiler on the machine**, and **`yacc` and `lex`** — six of the remaining v7 programs
-are grammars (`expr`, `egrep`, `m4`, `make`, `bc`, `awk`) and none can be built until yacc
-exists. `at`, `cron` and `calendar` need a clock the hardware has not got. The typesetting
+A **C compiler on the machine**. `yacc` and `lex` are no longer missing — they are host tools
+and `/usr/bin` programs both, and `expr` is the first v7 command here built from a grammar, so
+the five that are left (`egrep`, `m4`, `make`, `bc`, `awk`) are ordinary ports now. `at`, `cron`
+and `calendar` need a clock the hardware has not got. The typesetting
 suite, tape utilities, `uucp` and the PDP-11 compiler internals are not coming at all, and
 [cmd/TODO.md](cmd/TODO.md) says why for each. The kernel has no work plan left; its reference is
 [doc/Besm6_Kernel_Reference.md](doc/Besm6_Kernel_Reference.md).

@@ -71,6 +71,16 @@ void yyerror(char *);
 ```
 
 C10b's `ncform` does, and each of C11–C17's grammars must define both with these signatures.
+
+**And `YYSTYPE` is a macro, not a type name**, which is the other half of the same contract.
+`y2.c` emits `YYSTYPE yylval, yyval;`, so a grammar whose value type is a pointer must spell it
+through a `typedef` — `#define YYSTYPE char *` declares `yyval` a plain `char` and diagnoses
+nothing. C11 is the worked example ([`../expr/README.md`](../expr/README.md)), and it also
+records why `%union` was not the answer there: **nothing in this tree exercises the union path
+yet**, and C14's [`../make/gram.y`](../make/gram.y) is the grammar that will need it. The cheap
+way to retire that risk before C14 is a `calcu.y` beside [`rootfs/calct.y`](rootfs/calct.y) —
+the same calculator with `%union { int i; char *s; }` and both tags used, built native and given
+three `b6_progtest` cases.
 [`../lex/README.md`](../lex/README.md) under "The contract" has nine of its own in the other
 direction — and one warning worth reading here: `FILE *yyin ={stdin}` is **not a constant
 initialiser**, which is what stopped every scanner v7's lex generated from compiling. `yaccpar.c`

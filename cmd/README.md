@@ -122,7 +122,8 @@ plain filters hold `int` indices already.
 * **`%D` prints the two characters `%D`.** [../lib/libc/stdio/doprnt.c](../lib/libc/stdio/doprnt.c)
   does not know that PDP-11 conversion, and an unknown conversion is echoed verbatim **and consumes
   no argument**, desynchronising every later conversion in the same format string. Grep each new
-  source for `%D` and `%O`; it costs a second.
+  source for `%D` and `%O`; it costs a second, and it is still finding them — `expr`'s was the
+  whole output of `expr a + b`.
 
 The other direction: **plain `char` is unsigned here**
 ([../doc/Besm6_Data_Representation.md](../doc/Besm6_Data_Representation.md)), so the
@@ -230,9 +231,10 @@ One list must grow with the program and nothing catches it but a failing build: 
 in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The hard-coded `ls /bin`
 expectations that used to catch it as well went with `kernel/test/console` and `session`.
 
-The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **392 free** — it was 187
+The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **378 free** — it was 187
 until the `lib/test` programs moved to the test pack, and `yacc` and `lex` have since taken 68 of
-what that gave back. The whole of `/usr/man` is 302 blocks, `man` 12 and `manview` 17. That is room for a
+what that gave back and `expr` 14. The whole of `/usr/man` is 302 blocks, `man` 12 and
+`manview` 17. That is room for a
 good deal of what [TODO.md](TODO.md) has open, but it is not room for anything: weigh a large
 addition against it rather than assuming. The number is printed by `b6fsutil` every time
 `root.img` is built, so it is measured and not estimated.
@@ -313,28 +315,24 @@ the two shapes falls.
   walks a tree while `t`, `x` and `r` do not; `ps` reads a u-area at a `p_addr` that is not the
   caller's, which one process can never produce.
 
-* **SIMH**, under the booted kernel — for everything the above cannot say. Join the existing test
-  in `kernel/test/` whose subject matches rather than taking a new volume: `console` (a typed
-  dialogue), `libtest` (a program off the test pack diffed against a `.expected`), `session`
-  (anything that writes and is fscked on the host afterwards), `files` (a tree or an inode),
-  `utils` (clock, signal, process, pipe), `login` (terminal modes, or a process that is not
-  root's), `edit` (authoring a file, and here-documents), `fsinfo` (reading a device, or reporting
-  on a filesystem), `dd` (bulk data through a device), `mkfs` (writing a device, or a second
-  drive), `fsck` (repairing a device), `mount` (the buffer cache), `filters` (anything whose
-  subject is bytes — the only place an argument can be **quoted** and the only place a temp file
-  lands in the image's own `/tmp`), `accounts` (`/etc/passwd` as a file that changes), `tar` (a
-  whole tree, and a pack that is written and never read), `inspect` (a second process, and one of
-  them asleep).
+* **SIMH**, under the booted kernel — for everything the above cannot say, and **there is very
+  little of it left**. `kernel/test/` held eighteen tests that booted — `console`, `session`,
+  `files`, `utils`, `login`, `edit`, `fsinfo`, `dd`, `mkfs`, `fsck`, `mount`, `filters`,
+  `accounts`, `tar`, `inspect` and the rest — and **all of them are deleted**. Three remain:
+  `boot`, a smoke test that a shell prompt is reached; `multi`, which goes on into multi-user
+  mode and types at two Consuls; and `core`, which mounts the test pack and runs one program off
+  it. **So a port has one world and not two now**, and a fact `b6_progtest` cannot assert — a
+  quoted argument, an empty one, a temp file in the image's own `/tmp`, a second process — has
+  nowhere to go. Say so in the port's `README.md` and check it by hand, as
+  [expr/README.md](expr/README.md) does under "What this harness cannot say".
 
-  **Joining one of those costs a section in its `.sh`; a boot of its own costs two minutes and a
-  volume number**, so take one only for something they cannot show — `tar` needed a second drive,
-  `inspect` a plurality of processes, `toolchain` a `cc` whose search path is the *image's*
-  `/usr/bin`, `/lib` and `/usr/include` rather than the build machine's. Each has its own copy of
-  the image at its own volume number; **3102 is the highest used, 3103 is the next free.** Most graft their script with `b6fsutil -a`, at a path distinct from the program
-  under test (`/etc/mkfstest`, not `/etc/mkfs`). `login`, `multi` and `accounts` type every
-  character instead, and each needs a fixed TCP port for Consul 2 (4199, 4200, 4201) — as much of
-  the `RESOURCE_LOCK`'s reason as the CPU is. An oracle that is a property of the whole image
-  should be **recomputed, not checked in**.
+  **A test with a boot of its own costs two minutes and a volume number**, each having its own
+  copy of the image; **3102 is the highest used, 3103 is the next free.** The deleted ones
+  grafted their scripts with `b6fsutil -a` at a path distinct from the program under test
+  (`/etc/mkfstest`, not `/etc/mkfs`); `login`, `multi` and `accounts` typed every character
+  instead, and each needed a fixed TCP port for Consul 2 (4199, 4200, 4201) — as much of the
+  `RESOURCE_LOCK`'s reason as the CPU is. An oracle that is a property of the whole image should
+  be **recomputed, not checked in**.
 
 Where a program can run in both worlds, **do both** — the first time the libc suite ran in both it
 found two bugs nothing else had exercised.
@@ -393,11 +391,16 @@ are silent on ASCII and wrong on the first Cyrillic byte.
 * **A table indexed by a character needs 256 entries *and* an index that lands in them** — and its
   width may be written down nowhere, as a loop condition (`!(c & 0200)`) and a pointer bump
   (`ep + 0200`). **Where a table's size is not written down, read the routine that allocates it.**
-  Four shapes are on the record: `grep`'s `CCL`, right-sized and stored into unmasked; `sort`'s,
+  Five shapes are on the record: `grep`'s `CCL`, right-sized and stored into unmasked; `sort`'s,
   256 entries reached through a `+128` bias so a grep for the size finds nothing; `sed`'s `y///`
-  table, whose width is a loop condition and a pointer bump and a number nowhere at all; and
+  table, whose width is a loop condition and a pointer bump and a number nowhere at all;
   `file`'s `english()`, a v7 wild write that this machine's unsigned `char` repairs by itself and
-  that must not be "fixed" back.
+  that must not be "fixed" back; and `expr`'s `CCL`, the same bitmap a third time and the only
+  copy with an interval repeat, so the width is written into eight places rather than five.
+  **`expr` is also where the assertion shape was settled** ([expr/README.md](expr/README.md)):
+  the wild store goes *forward*, into bytecode not yet written, so an undersized class comes out
+  **empty** and matches nothing. A case that pins the width has to be a positive one, and the
+  mask needs a negative control beside it.
 * **A `<ctype.h>` call is the quiet form of the same table**: `lib/libc/gen/ctype_.c` is **129
   entries** and only `isascii()` may be applied above `0177`. Ask what the option *means* for a
   multi-byte letter, not merely whether the call is in bounds.

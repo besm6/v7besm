@@ -1,4 +1,42 @@
-/* Yacc productions for "expr" command: */
+%{
+/*
+ * expr -- evaluate arguments as an expression
+ *
+ *	status returns:
+ *		0 - the expression is neither null nor `0'
+ *		1 - the expression is null or `0'
+ *		2 - the expression is invalid
+ *
+ * Task C11.  README.md beside this file is the account; what follows is only what a
+ * reader of the diff needs.
+ *
+ * YYSTYPE IS A MACRO, NOT A TYPE NAME, hence the typedef: `#define YYSTYPE char *'
+ * would make yyval a plain char, and an int cannot hold a fat pointer at all.
+ *
+ * THE CHARACTER CLASS IS 256 BITS, not v7's 128, as grep's and sed's are.  This copy
+ * of the engine is the only one with an interval repeat, so the width appears in
+ * eight places rather than five.
+ *
+ * FOUR DELIBERATE DIVERGENCES, also in expr.1.umm and README.md (../README.md SS10):
+ * `<=' really is <= (v7 computed >=); a leading minus makes a number on both sides of
+ * a relation and in arithmetic (v7 allowed it only on a relation's left operand); a
+ * paren is an operator only when it is the whole argument; and division by zero is
+ * diagnosed rather than left to the machine, which faults on it.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+typedef char *charptr;
+#define YYSTYPE charptr
+
+// One compiled expression.  256 in v7, whose bound test named &expbuf[512].
+#define ESIZE 512
+
+// One character class, in bytes: 256 bits, so `c >> 3' lands in 0..31 by
+// construction and the match side needs no mask.  cmd/sed/sed.h says it at length.
+#define CCLSIZE 32
+%}
 
 %token OR AND ADD SUBT MULT DIV REM EQ GT GEQ LT LEQ NEQ
 %token A_STRING SUBSTR LENGTH INDEX NOARG MATCH
@@ -19,309 +57,151 @@
 
 expression:	expr NOARG = {
 			printf("%s\n", $1);
-			exit((!strcmp($1,"0")||!strcmp($1,"\0"))? 1: 0);
+			exit(istrue($1) ? 0 : 1);
 			}
 	;
 
-
-expr:	'(' expr ')' = { $$ = $2; }
-	| expr OR expr   = { $$ = conj(OR, $1, $3); }
-	| expr AND expr   = { $$ = conj(AND, $1, $3); }
-	| expr EQ expr   = { $$ = rel(EQ, $1, $3); }
-	| expr GT expr   = { $$ = rel(GT, $1, $3); }
-	| expr GEQ expr   = { $$ = rel(GEQ, $1, $3); }
-	| expr LT expr   = { $$ = rel(LT, $1, $3); }
-	| expr LEQ expr   = { $$ = rel(LEQ, $1, $3); }
-	| expr NEQ expr   = { $$ = rel(NEQ, $1, $3); }
-	| expr ADD expr   = { $$ = arith(ADD, $1, $3); }
-	| expr SUBT expr   = { $$ = arith(SUBT, $1, $3); }
-	| expr MULT expr   = { $$ = arith(MULT, $1, $3); }
-	| expr DIV expr   = { $$ = arith(DIV, $1, $3); }
-	| expr REM expr   = { $$ = arith(REM, $1, $3); }
-	| expr MCH expr	 = { $$ = match($1, $3); }
-	| MATCH expr expr = { $$ = match($2, $3); }
+expr: '(' expr ')'          = { $$ = $2; }
+	| expr OR expr          = { $$ = conj(OR, $1, $3); }
+	| expr AND expr         = { $$ = conj(AND, $1, $3); }
+	| expr EQ expr          = { $$ = rel(EQ, $1, $3); }
+	| expr GT expr          = { $$ = rel(GT, $1, $3); }
+	| expr GEQ expr         = { $$ = rel(GEQ, $1, $3); }
+	| expr LT expr          = { $$ = rel(LT, $1, $3); }
+	| expr LEQ expr         = { $$ = rel(LEQ, $1, $3); }
+	| expr NEQ expr         = { $$ = rel(NEQ, $1, $3); }
+	| expr ADD expr         = { $$ = arith(ADD, $1, $3); }
+	| expr SUBT expr        = { $$ = arith(SUBT, $1, $3); }
+	| expr MULT expr        = { $$ = arith(MULT, $1, $3); }
+	| expr DIV expr         = { $$ = arith(DIV, $1, $3); }
+	| expr REM expr         = { $$ = arith(REM, $1, $3); }
+	| expr MCH expr	        = { $$ = match($1, $3); }
+	| MATCH expr expr       = { $$ = match($2, $3); }
 	| SUBSTR expr expr expr = { $$ = substr($2, $3, $4); }
-	| LENGTH expr       = { $$ = length($2); }
-	| INDEX expr expr = { $$ = index($2, $3); }
+	| LENGTH expr           = { $$ = length($2); }
+	| INDEX expr expr       = { $$ = idx($2, $3); }
 	| A_STRING
 	;
 %%
-/*	expression command */
-#include <stdio.h>
-#define ESIZE	256
-#define error(c)	errxx(c)
-#define EQL(x,y) !strcmp(x,y)
-long atol();
-char	**Av;
-int	Ac;
-int	Argi;
 
-char Mstring[1][128];
-char *malloc();
-extern int nbra;
+#define EQL(x, y) (strcmp(x, y) == 0)
 
-main(argc, argv) char **argv; {
-	Ac = argc;
-	Argi = 1;
-	Av = argv;
-	yyparse();
-}
+#define NUMLEN 16 // thirteen digits, a sign and a NUL
 
-char *operator[] = { "|", "&", "+", "-", "*", "/", "%", ":",
-	"=", "==", "<", "<=", ">", ">=", "!=",
-	"match", "substr", "length", "index", "\0" };
-int op[] = { OR, AND, ADD,  SUBT, MULT, DIV, REM, MCH,
-	EQ, EQ, LT, LEQ, GT, GEQ, NEQ,
-	MATCH, SUBSTR, LENGTH, INDEX };
-yylex() {
-	register char *p;
-	register i;
+static char **Av;
+static int Ac;
+static int Argi;
 
-	if(Argi >= Ac) return NOARG;
+static void reerror(void);
+static int advance(char *lp, char *ep);
 
-	p = Av[Argi++];
-
-	if(*p == '(' || *p == ')')
-		return (int)*p;
-	for(i = 0; *operator[i]; ++i)
-		if(EQL(operator[i], p))
-			return op[i];
-
-	yylval = p;
-	return A_STRING;
-}
-
-char *rel(op, r1, r2) register char *r1, *r2; {
-	register i;
-
-	if(ematch(r1, "-*[0-9]*$") && ematch(r2, "[0-9]*$"))
-		i = atol(r1) - atol(r2);
-	else
-		i = strcmp(r1, r2);
-	switch(op) {
-	case EQ: i = i==0; break;
-	case GT: i = i>0; break;
-	case GEQ: i = i>=0; break;
-	case LT: i = i<0; break;
-	case LEQ: i = i>=0; break;
-	case NEQ: i = i!=0; break;
-	}
-	return i? "1": "0";
-}
-
-char *arith(op, r1, r2) char *r1, *r2; {
-	long i1, i2;
-	register char *rv;
-
-	if(!(ematch(r1, "[0-9]*$") && ematch(r2, "[0-9]*$")))
-		yyerror("non-numeric argument");
-	i1 = atol(r1);
-	i2 = atol(r2);
-
-	switch(op) {
-	case ADD: i1 = i1 + i2; break;
-	case SUBT: i1 = i1 - i2; break;
-	case MULT: i1 = i1 * i2; break;
-	case DIV: i1 = i1 / i2; break;
-	case REM: i1 = i1 % i2; break;
-	}
-	rv = malloc(16);
-	sprintf(rv, "%D", i1);
-	return rv;
-}
-char *conj(op, r1, r2) char *r1, *r2; {
-	register char *rv;
-
-	switch(op) {
-
-	case OR:
-		if(EQL(r1, "0")
-		|| EQL(r1, ""))
-			if(EQL(r2, "0")
-			|| EQL(r2, ""))
-				rv = "0";
-			else
-				rv = r2;
-		else
-			rv = r1;
-		break;
-	case AND:
-		if(EQL(r1, "0")
-		|| EQL(r1, ""))
-			rv = "0";
-		else if(EQL(r2, "0")
-		|| EQL(r2, ""))
-			rv = "0";
-		else
-			rv = r1;
-		break;
-	}
-	return rv;
-}
-
-char *substr(v, s, w) char *v, *s, *w; {
-register si, wi;
-register char *res;
-
-	si = atol(s);
-	wi = atol(w);
-	while(--si) if(*v) ++v;
-
-	res = v;
-
-	while(wi--) if(*v) ++v;
-
-	*v = '\0';
-	return res;
-}
-
-char *length(s) register char *s; {
-	register i = 0;
-	register char *rv;
-
-	while(*s++) ++i;
-
-	rv = malloc(8);
-	sprintf(rv, "%d", i);
-	return rv;
-}
-
-char *index(s, t) char *s, *t; {
-	register i, j;
-	register char *rv;
-
-	for(i = 0; s[i] ; ++i)
-		for(j = 0; t[j] ; ++j)
-			if(s[i]==t[j]) {
-				sprintf(rv = malloc(8), "%d", ++i);
-				return rv;
-			}
-	return "0";
-}
-
-char *match(s, p)
+// A literal prefix, not argv[0]: under b6sim that is the staged absolute path.
+void yyerror(char *s)
 {
-	register char *rv;
+	fprintf(stderr, "expr: %s\n", s);
+	exit(2);
+}
 
-	sprintf(rv = malloc(8), "%d", ematch(s, p));
-	if(nbra) {
-		rv = malloc(strlen(Mstring[0])+1);
-		strcpy(rv, Mstring[0]);
-	}
+static int istrue(char *s)
+{
+	return !EQL(s, "0") && !EQL(s, "");
+}
+
+static char *numstr(int v)
+{
+	char *rv = malloc(NUMLEN);
+
+	if (rv == 0)
+		yyerror("out of space");
+	sprintf(rv, "%d", v);
 	return rv;
 }
 
-#define INIT	register char *sp = instring;
-#define GETC()		(*sp++)
-#define PEEKC()		(*sp)
-#define UNGETC(c)	(--sp)
-#define RETURN(c)	return
-#define ERROR(c)	errxx(c)
-
-
-ematch(s, p)
-char *s;
-register char *p;
+// An optional minus and one or more digits.  The null string is not a number.
+static int isnum(const char *s)
 {
-	static char expbuf[ESIZE];
-	char *compile();
-	register num;
-	extern char *braslist[], *braelist[], *loc2;
-
-	compile(p, expbuf, &expbuf[512], 0);
-	if(nbra > 1)
-		yyerror("Too many '\\('s");
-	if(advance(s, expbuf)) {
-		if(nbra == 1) {
-			p = braslist[0];
-			num = braelist[0] - p;
-			strncpy(Mstring[0], p, num);
-			Mstring[0][num] = '\0';
-		}
-		return(loc2-s);
+	if (*s == '-')
+		++s;
+	if (*s == 0)
+		return 0;
+	while (*s) {
+		if (*s < '0' || *s > '9')
+			return 0;
+		++s;
 	}
-	return(0);
+	return 1;
 }
 
-errxx(c)
+// ---- v7's regexp(3), inlined as v7 inlined it.  cmd/sed/sed.h is the twin. -------
+
+#define CBRA  2
+#define CCHR  4
+#define CDOT  8
+#define CCL   12
+#define CDOL  20
+#define CEOF  22
+#define CKET  24
+#define CBACK 36
+
+#define STAR 01
+#define RNGE 03
+
+#define NBRA 9
+
+#define PLACE(c)   ep[(c) >> 3] |= bittab[(c) & 07]
+#define ISTHERE(c) (ep[(c) >> 3] & bittab[(c) & 07])
+
+// Depth is exactly the star count; the 4,096-word stack is checked by nothing.
+#define MAXDEPTH 12
+
+static char *braslist[NBRA];
+static char *braelist[NBRA];
+static int nbra;
+static char *loc2;
+static char *matched;
+static int depth;
+
+static char bittab[] = { 1, 2, 4, 8, 16, 32, 64, 128 };
+
+static void reerror(void)
 {
 	yyerror("RE error");
 }
 
-#define	CBRA	2
-#define	CCHR	4
-#define	CDOT	8
-#define	CCL	12
-#define	CDOL	20
-#define	CEOF	22
-#define	CKET	24
-#define	CBACK	36
+#define INIT      char *sp = instring;
+#define GETC()    (*sp++)
+#define PEEKC()   (*sp)
+#define UNGETC(c) (--sp)
 
-#define	STAR	01
-#define RNGE	03
-
-#define	NBRA	9
-
-#define PLACE(c)	ep[c >> 3] |= bittab[c & 07]
-#define ISTHERE(c)	(ep[c >> 3] & bittab[c & 07])
-
-char	*braslist[NBRA];
-char	*braelist[NBRA];
-int	nbra;
-char *loc1, *loc2, *locs;
-int	sed;
-
-int	circf;
-int	low;
-int	size;
-
-char	bittab[] = {
-	1,
-	2,
-	4,
-	8,
-	16,
-	32,
-	64,
-	128
-};
-
-char *
-compile(instring, ep, endbuf, seof)
-register char *ep;
-char *instring, *endbuf;
+static void compile(char *instring, char *ep, char *endbuf, int seof)
 {
-	INIT	/* Dependent declarations and initializations */
-	register c;
-	register eof = seof;
-	char *lastep = instring;
+	INIT /* Dependent declarations and initializations */
+	int c;
+	int eof = seof;
+	char *lastep;
 	int cclcnt;
 	char bracket[NBRA], *bracketp;
 	int closed;
-	char neg;
+	int neg;
 	int lc;
 	int i, cflg;
 
 	lastep = 0;
-	if((c = GETC()) == eof) {
-		if(*ep == 0 && !sed)
-			ERROR(41);
-		RETURN(ep);
-	}
+	// v7 also tested *ep, a static buffer the previous call had filled.
+	if ((c = GETC()) == eof)
+		reerror();
 	bracketp = bracket;
-	circf = closed = nbra = 0;
-	if (c == '^')
-		circf++;
-	else
+	closed = nbra = 0;
+	if (c != '^')
 		UNGETC(c);
 	for (;;) {
 		if (ep >= endbuf)
-			ERROR(50);
-		if((c = GETC()) != '*' && ((c != '\\') || (PEEKC() != '{')))
+			reerror();
+		if ((c = GETC()) != '*' && ((c != '\\') || (PEEKC() != '{')))
 			lastep = ep;
 		if (c == eof) {
 			*ep++ = CEOF;
-			RETURN(ep);
+			return;
 		}
 		switch (c) {
 
@@ -330,81 +210,82 @@ char *instring, *endbuf;
 			continue;
 
 		case '\n':
-			ERROR(36);
+			reerror();
+			continue;
+
 		case '*':
-			if (lastep==0 || *lastep==CBRA || *lastep==CKET)
+			if (lastep == 0 || *lastep == CBRA || *lastep == CKET)
 				goto defchar;
 			*lastep |= STAR;
 			continue;
 
 		case '$':
-			if(PEEKC() != eof)
+			if (PEEKC() != eof)
 				goto defchar;
 			*ep++ = CDOL;
 			continue;
 
 		case '[':
-			if(&ep[17] >= endbuf)
-				ERROR(50);
+			if (&ep[CCLSIZE + 1] >= endbuf)
+				reerror();
 
 			*ep++ = CCL;
 			lc = 0;
-			for(i = 0; i < 16; i++)
-				ep[i] = 0;
+			memset(ep, 0, CCLSIZE);
 
 			neg = 0;
-			if((c = GETC()) == '^') {
+			if ((c = GETC()) == '^') {
 				neg = 1;
 				c = GETC();
 			}
 
 			do {
-				if(c == '\0' || c == '\n')
-					ERROR(49);
-				if(c == '-' && lc != 0) {
+				if (c == '\0' || c == '\n')
+					reerror();
+				if (c == '-' && lc != 0) {
 					if ((c = GETC()) == ']') {
 						PLACE('-');
 						break;
 					}
-					while(lc < c) {
+					while (lc < c) {
 						PLACE(lc);
 						lc++;
 					}
 				}
 				lc = c;
 				PLACE(c);
-			} while((c = GETC()) != ']');
-			if(neg) {
-				for(cclcnt = 0; cclcnt < 16; cclcnt++)
-					ep[cclcnt] ^= -1;
-				ep[0] &= 0376;
+			} while ((c = GETC()) != ']');
+			if (neg) {
+				for (cclcnt = 0; cclcnt < CCLSIZE; cclcnt++)
+					ep[cclcnt] ^= 0377; // v7 wrote -1, into a signed char
+				ep[0] &= 0376;             // a NUL is never in a class
 			}
 
-			ep += 16;
+			ep += CCLSIZE;
 
 			continue;
 
 		case '\\':
-			switch(c = GETC()) {
+			switch (c = GETC()) {
 
 			case '(':
-				if(nbra >= NBRA)
-					ERROR(43);
+				if (nbra >= NBRA)
+					reerror();
 				*bracketp++ = nbra;
 				*ep++ = CBRA;
 				*ep++ = nbra++;
 				continue;
 
 			case ')':
-				if(bracketp <= bracket)
-					ERROR(42);
+				if (bracketp <= bracket)
+					reerror();
 				*ep++ = CKET;
 				*ep++ = *--bracketp;
 				closed++;
 				continue;
 
 			case '{':
-				if(lastep == (char *) (0))
+				if (lastep == 0)
 					goto defchar;
 				*lastep |= RNGE;
 				cflg = 0;
@@ -415,40 +296,41 @@ char *instring, *endbuf;
 					if ('0' <= c && c <= '9')
 						i = 10 * i + c - '0';
 					else
-						ERROR(16);
-				} while(((c = GETC()) != '\\') && (c != ','));
+						reerror();
+				} while (((c = GETC()) != '\\') && (c != ','));
 				if (i > 255)
-					ERROR(11);
+					reerror();
 				*ep++ = i;
 				if (c == ',') {
-					if(cflg++)
-						ERROR(44);
-					if((c = GETC()) == '\\')
+					if (cflg++)
+						reerror();
+					if ((c = GETC()) == '\\')
 						*ep++ = 255;
 					else {
 						UNGETC(c);
 						goto nlim; /* get 2'nd number */
 					}
 				}
-				if(GETC() != '}')
-					ERROR(45);
-				if(!cflg)	/* one number */
+				if (GETC() != '}')
+					reerror();
+				if (!cflg) /* one number */
 					*ep++ = i;
-				else if((ep[-1] & 0377) < (ep[-2] & 0377))
-					ERROR(46);
+				else if (ep[-1] < ep[-2]) // v7 masked both with 0377
+					reerror();
 				continue;
 
 			case '\n':
-				ERROR(36);
+				reerror();
+				continue;
 
 			case 'n':
 				c = '\n';
 				goto defchar;
 
 			default:
-				if(c >= '1' && c <= '9') {
-					if((c -= '1') >= closed)
-						ERROR(25);
+				if (c >= '1' && c <= '9') {
+					if ((c -= '1') >= closed)
+						reerror();
 					*ep++ = CBACK;
 					*ep++ = c;
 					continue;
@@ -465,205 +347,370 @@ char *instring, *endbuf;
 	}
 }
 
-step(p1, p2)
-register char *p1, *p2;
+// low and size were globals; v7's & 0377 is a no-op on an unsigned char.
+static void getrnge(char *str, int *low, int *size)
 {
-	register c;
-
-	if (circf) {
-		loc1 = p1;
-		return(advance(p1, p2));
-	}
-	/* fast check for first character */
-	if (*p2==CCHR) {
-		c = p2[1];
-		do {
-			if (*p1 != c)
-				continue;
-			if (advance(p1, p2)) {
-				loc1 = p1;
-				return(1);
-			}
-		} while (*p1++);
-		return(0);
-	}
-		/* regular algorithm */
-	do {
-		if (advance(p1, p2)) {
-			loc1 = p1;
-			return(1);
-		}
-	} while (*p1++);
-	return(0);
+	*low  = *str++;
+	*size = *str == 255 ? 20000 : *str - *low;
 }
 
-advance(lp, ep)
-register char *lp, *ep;
+static int ecmp(char *a, char *b, int count)
 {
-	register char *curlp;
-	char c;
+	// Two fat pointers, and == is a raw word compare -- correct here.
+	if (a == b) /* should have been caught in compile() */
+		reerror();
+	while (count--)
+		if (*a++ != *b++)
+			return 0;
+	return 1;
+}
+
+static int match_re(char *lp, char *ep)
+{
+	char *curlp;
+	int c;
 	char *bbeg;
 	int ct;
+	int low, size;
 
-	for (;;) switch (*ep++) {
+	for (;;)
+		switch (*ep++) {
 
-	case CCHR:
-		if (*ep++ == *lp++)
+		case CCHR:
+			if (*ep++ == *lp++)
+				continue;
+			return 0;
+
+		case CDOT:
+			if (*lp++)
+				continue;
+			return 0;
+
+		case CDOL:
+			if (*lp == 0)
+				continue;
+			return 0;
+
+		case CEOF:
+			loc2 = lp;
+			return 1;
+
+		case CCL:
+			c = *lp++; // v7 masked with 0177 into a 128-bit table
+			if (ISTHERE(c)) {
+				ep += CCLSIZE;
+				continue;
+			}
+			return 0;
+
+		case CBRA:
+			braslist[(int)*ep++] = lp;
 			continue;
-		return(0);
 
-	case CDOT:
-		if (*lp++)
+		case CKET:
+			braelist[(int)*ep++] = lp;
 			continue;
-		return(0);
 
-	case CDOL:
-		if (*lp==0)
-			continue;
-		return(0);
+		case CCHR | RNGE:
+			c = *ep++;
+			getrnge(ep, &low, &size);
+			while (low--)
+				if (*lp++ != c)
+					return 0;
+			curlp = lp;
+			while (size--)
+				if (*lp++ != c)
+					break;
+			if (size < 0)
+				lp++;
+			ep += 2;
+			goto star;
 
-	case CEOF:
-		loc2 = lp;
-		return(1);
+		case CDOT | RNGE:
+			getrnge(ep, &low, &size);
+			while (low--)
+				if (*lp++ == '\0')
+					return 0;
+			curlp = lp;
+			while (size--)
+				if (*lp++ == '\0')
+					break;
+			if (size < 0)
+				lp++;
+			ep += 2;
+			goto star;
 
-	case CCL:
-		c = *lp++ & 0177;
-		if(ISTHERE(c)) {
-			ep += 16;
-			continue;
+		case CCL | RNGE:
+			getrnge(ep + CCLSIZE, &low, &size);
+			while (low--) {
+				c = *lp++;
+				if (!ISTHERE(c))
+					return 0;
+			}
+			curlp = lp;
+			while (size--) {
+				c = *lp++;
+				if (!ISTHERE(c))
+					break;
+			}
+			if (size < 0)
+				lp++;
+			ep += CCLSIZE + 2;
+			goto star;
+
+		case CBACK:
+			bbeg = braslist[(int)*ep];
+			ct   = braelist[(int)*ep++] - bbeg;
+
+			if (ecmp(bbeg, lp, ct)) {
+				lp += ct;
+				continue;
+			}
+			return 0;
+
+		case CBACK | STAR:
+			bbeg  = braslist[(int)*ep];
+			ct    = braelist[(int)*ep++] - bbeg;
+			curlp = lp;
+			while (ecmp(bbeg, lp, ct))
+				lp += ct;
+
+			while (lp >= curlp) {
+				if (advance(lp, ep))
+					return 1;
+				lp -= ct;
+			}
+			return 0;
+
+		case CDOT | STAR:
+			curlp = lp;
+			while (*lp++)
+				;
+			goto star;
+
+		case CCHR | STAR:
+			curlp = lp;
+			while (*lp++ == *ep)
+				;
+			ep++;
+			goto star;
+
+		case CCL | STAR:
+			curlp = lp;
+			do {
+				c = *lp++;
+			} while (ISTHERE(c));
+			ep += CCLSIZE;
+			goto star;
+
+		star:
+			do {
+				--lp; // v7 also tested `== locs', a null pointer
+				if (advance(lp, ep))
+					return 1;
+			} while (lp > curlp);
+			return 0;
+
+		default:
+			// v7 had none, so a bad opcode walked ep forward silently.
+			yyerror("RE botch");
 		}
-		return(0);
-	case CBRA:
-		braslist[*ep++] = lp;
-		continue;
+}
 
-	case CKET:
-		braelist[*ep++] = lp;
-		continue;
+static int advance(char *lp, char *ep)
+{
+	int r;
 
-	case CCHR|RNGE:
-		c = *ep++;
-		getrnge(ep);
-		while(low--)
-			if(*lp++ != c)
-				return(0);
-		curlp = lp;
-		while(size--) 
-			if(*lp++ != c)
-				break;
-		if(size < 0)
-			lp++;
-		ep += 2;
-		goto star;
+	if (++depth > MAXDEPTH)
+		yyerror("expression too complex");
+	r = match_re(lp, ep);
+	--depth;
+	return r;
+}
 
-	case CDOT|RNGE:
-		getrnge(ep);
-		while(low--)
-			if(*lp++ == '\0')
-				return(0);
-		curlp = lp;
-		while(size--)
-			if(*lp++ == '\0')
-				break;
-		if(size < 0)
-			lp++;
-		ep += 2;
-		goto star;
+// Returns the number of BYTES matched, leaving the \( \) capture in `matched'.
+static int ematch(char *s, char *p)
+{
+	static char expbuf[ESIZE];
+	char *q;
+	int num;
 
-	case CCL|RNGE:
-		getrnge(ep + 16);
-		while(low--) {
-			c = *lp++ & 0177;
-			if(!ISTHERE(c))
-				return(0);
+	matched = "";
+	compile(p, expbuf, &expbuf[ESIZE], 0);
+	if (nbra > 1)
+		yyerror("too many \\(");
+	depth = 0;
+	if (advance(s, expbuf)) {
+		if (nbra == 1) {
+			q   = braslist[0];
+			num = braelist[0] - q;
+			// v7 copied this into a char[1][128], with no bound on num.
+			matched = malloc(num + 1);
+			if (matched == 0)
+				yyerror("out of space");
+			strncpy(matched, q, num);
+			matched[num] = '\0';
 		}
-		curlp = lp;
-		while(size--) {
-			c = *lp++ & 0177;
-			if(!ISTHERE(c))
-				break;
-		}
-		if(size < 0)
-			lp++;
-		ep += 18;		/* 16 + 2 */
-		goto star;
-
-	case CBACK:
-		bbeg = braslist[*ep];
-		ct = braelist[*ep++] - bbeg;
-
-		if(ecmp(bbeg, lp, ct)) {
-			lp += ct;
-			continue;
-		}
-		return(0);
-
-	case CBACK|STAR:
-		bbeg = braslist[*ep];
-		ct = braelist[*ep++] - bbeg;
-		curlp = lp;
-		while(ecmp(bbeg, lp, ct))
-			lp += ct;
-
-		while(lp >= curlp) {
-			if(advance(lp, ep))	return(1);
-			lp -= ct;
-		}
-		return(0);
-
-
-	case CDOT|STAR:
-		curlp = lp;
-		while (*lp++);
-		goto star;
-
-	case CCHR|STAR:
-		curlp = lp;
-		while (*lp++ == *ep);
-		ep++;
-		goto star;
-
-	case CCL|STAR:
-		curlp = lp;
-		do {
-			c = *lp++ & 0177;
-		} while(ISTHERE(c));
-		ep += 16;
-		goto star;
-
-	star:
-		do {
-			if(--lp == locs)
-				break;
-			if (advance(lp, ep))
-				return(1);
-		} while (lp > curlp);
-		return(0);
-
+		return loc2 - s;
 	}
+	return 0;
 }
 
-getrnge(str)
-register char *str;
+// ---- the operators ----------------------------------------------------------------
+
+static char *rel(int op, char *r1, char *r2)
 {
-	low = *str++ & 0377;
-	size = *str == 255 ? 20000 : (*str &0377) - low;
+	int i;
+
+	if (isnum(r1) && isnum(r2)) {
+		int a = atoi(r1), b = atoi(r2);
+
+		i = a < b ? -1 : a > b; // three-way; a - b can overflow a word
+	} else
+		i = strcmp(r1, r2);
+
+	switch (op) {
+	case EQ:
+		i = i == 0;
+		break;
+	case GT:
+		i = i > 0;
+		break;
+	case GEQ:
+		i = i >= 0;
+		break;
+	case LT:
+		i = i < 0;
+		break;
+	case LEQ:
+		i = i <= 0; // v7 wrote i >= 0, which is GEQ
+		break;
+	case NEQ:
+		i = i != 0;
+		break;
+	}
+	return i ? "1" : "0";
 }
 
-ecmp(a, b, count)
-register char	*a, *b;
-register	count;
+static char *arith(int op, char *r1, char *r2)
 {
-	if(a == b) /* should have been caught in compile() */
-		error(51);
-	while(count--)
-		if(*a++ != *b++)	return(0);
-	return(1);
+	int i1, i2;
+
+	if (!isnum(r1) || !isnum(r2))
+		yyerror("non-numeric argument");
+	i1 = atoi(r1);
+	i2 = atoi(r2);
+
+	switch (op) {
+	case ADD:
+		i1 = i1 + i2;
+		break;
+	case SUBT:
+		i1 = i1 - i2;
+		break;
+	case MULT:
+		i1 = i1 * i2;
+		break;
+	case DIV:
+	case REM:
+		if (i2 == 0) // the divide instruction faults on it
+			yyerror("division by zero");
+		i1 = op == DIV ? i1 / i2 : i1 % i2;
+		break;
+	}
+	return numstr(i1);
 }
 
-yyerror(s)
-
+static char *conj(int op, char *r1, char *r2)
 {
-	fprintf(stderr, "%s\n", s);
-	exit(2);
+	if (op == OR)
+		return istrue(r1) ? r1 : istrue(r2) ? r2 : "0";
+	return istrue(r1) && istrue(r2) ? r1 : "0";
+}
+
+// Indices and a copy: v7 walked with `while(--si)', which does not terminate for
+// si <= 0, and then stored a NUL through its first argument -- sometimes a literal.
+static char *substr(char *v, char *s, char *w)
+{
+	int si  = atoi(s);
+	int wi  = atoi(w);
+	int len = strlen(v);
+	char *rv;
+
+	if (si < 1 || si > len || wi <= 0)
+		return "";
+	--si;
+	if (wi > len - si)
+		wi = len - si;
+	rv = malloc(wi + 1);
+	if (rv == 0)
+		yyerror("out of space");
+	strncpy(rv, v + si, wi);
+	rv[wi] = '\0';
+	return rv;
+}
+
+static char *length(char *s)
+{
+	return numstr((int)strlen(s));
+}
+
+// Not index(): libc has index(3) and execvp() calls it, so a second definition here
+// would be resolved by whichever b6ld saw first, with a diagnostic from nothing.
+static char *idx(char *s, char *t)
+{
+	int i, j;
+
+	for (i = 0; s[i]; ++i)
+		for (j = 0; t[j]; ++j)
+			if (s[i] == t[j])
+				return numstr(i + 1);
+	return "0";
+}
+
+static char *match(char *s, char *p)
+{
+	int n = ematch(s, p);
+
+	// A \( \) group replaces the count, and is the null string on no match.
+	return nbra ? matched : numstr(n);
+}
+
+// ---- the lexer, which reads the argument list -------------------------------------
+
+static const char *const opname[] = { "|",  "&",  "+",	 "-",	  "*",	   "/",	  "%",
+				      ":",  "=",  "==",	 "<",	  "<=",	   ">",	  ">=",
+				      "!=", "match", "substr", "length", "index", 0 };
+static const int optok[] = { OR,   AND, ADD,	SUBT,	MULT,  DIV, REM,
+			     MCH,  EQ,	EQ,	LT,	LEQ,   GT,  GEQ,
+			     NEQ,  MATCH, SUBSTR, LENGTH, INDEX };
+
+int yylex(void)
+{
+	char *p;
+	int i;
+
+	if (Argi >= Ac)
+		return NOARG;
+
+	p = Av[Argi++];
+
+	if (EQL(p, "(") || EQL(p, ")")) // v7 tested *p, so `(3)' was a paren
+		return p[0];
+
+	for (i = 0; opname[i]; ++i)
+		if (EQL(opname[i], p))
+			return optok[i];
+
+	yylval = p;
+	return A_STRING;
+}
+
+int main(int argc, char **argv)
+{
+	Ac   = argc;
+	Argi = 1;
+	Av   = argv;
+	yyparse();
+	return 0; // not reached: the accepting action exits
 }

@@ -8,7 +8,7 @@ place, because the divergence is about something bigger than `rev`.
 ## What was decided
 
 **v7's `rev` reverses bytes.** That is the same thing as reversing characters on a machine
-whose text is ASCII, and it is not the same thing here. Since task C11 this system's text is
+whose text is ASCII, and it is not the same thing here. This system's text is
 **UTF-8 end to end** ([../README.md](../README.md) §11): the console driver is byte-transparent
 in both directions, so are the clists and the filesystem, and `/bin/sh` stopped marking a
 quoted character with bit `0200`, so a Cyrillic string survives being typed, being written,

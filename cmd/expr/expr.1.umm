@@ -28,6 +28,18 @@ with equal precedence operators grouped.
 : where *relop is one of* < <= = != >= >, yields `1` if the indicated comparison is true, `0` if
   false. The comparison is numeric if both *expr* are integers, otherwise lexicographic.
 
+  An integer is an optional `-` followed by one or more digits. The null string is not one.
+
+  **Note:** v7 asked this question twice and differently — a leading `-` was allowed on the
+  left operand of a comparison and on neither operand of an arithmetic operator — so
+  `expr -2 < -1` compared as strings and answered `0`. A minus sign makes a number
+  everywhere here.
+
+  **Note:** v7's `<=` computed the same expression as `>=`, so it answered `0` for every
+  *expr* that really was less than the other. It is a comparison here.
+
+  A lexicographic comparison is by unsigned byte, so text in UTF-8 sorts in code point order.
+
 *expr* + *expr*
 : | *expr* - *expr*
   | addition or subtraction of the arguments.
@@ -39,12 +51,17 @@ with equal precedence operators grouped.
 
 *expr* : *expr*
 : The matching operator compares the string first argument with the regular expression second
-  argument; regular expression syntax is the same as that of ed(1). The **\\(...\\)** pattern
-  symbols can be used to select a portion of the first argument. Otherwise, the matching operator
-  yields the number of characters matched (`0` on failure).
+  argument; regular expression syntax is that of ed(1) with the addition of the interval
+  \\{*n*,*m*\\}. The match is anchored at the beginning of the first argument. The
+  **\\(...\\)** pattern symbols can be used to select a portion of the first argument, and at
+  most one such group is allowed; a group that did not match yields the null string.
+  Otherwise, the matching operator yields the number of characters matched (`0` on failure).
 
 ( *expr* )
-: parentheses for grouping.
+: parentheses for grouping. A parenthesis is an operator only when it is the whole argument,
+  so `expr (3)` yields the string `(3)`.
+
+  **Note:** v7 looked at the first character alone, and made that a syntax error.
 
 Examples:
 
@@ -59,6 +76,25 @@ which may or may not contain `/`:
 
 Note the quoted Shell metacharacters.
 
+## ARITHMETIC IS ONE MACHINE WORD
+
+An integer here is one 41-bit word, so the range is -1099511627776 through 1099511627775.
+Overflow is not detected and wraps silently.
+
+Division or remainder by zero is a diagnostic and exit code `2`. v7 left it to the machine,
+which on this one raises a division-by-zero exception rather than answering wrongly.
+
+## EVERYTHING COUNTS BYTES
+
+*length,* *substr,* *index* and the count the matching operator yields are all in bytes, not
+characters, so `expr length привет` is `12`. A character class holds any byte value, so a
+class may contain the bytes of a multi-byte letter and a range between two of them is a range
+of bytes.
+
+*substr* yields the null string when the starting position is less than 1 or past the end of
+the string, or when the length is not positive. v7 did not return from a starting position of
+zero at all.
+
 ## SEE ALSO
 
 ed(1), sh(1), test(1)
@@ -70,3 +106,8 @@ ed(1), sh(1), test(1)
 | 0 if the expression is neither null nor `0`,
 | 1 if the expression is null or `0`,
 | 2 for invalid expressions.
+
+The diagnostics are `syntax error`, `non-numeric argument`, `division by zero`, `RE error`,
+`too many \\(` and `expression too complex`, each preceded by `expr: `. The last of these is
+a limit on how deeply the matcher may recurse, which is one level per `*` in the regular
+expression; twelve levels are allowed, and nothing anyone writes comes near it.

@@ -9,7 +9,8 @@ A port of **Unix v7 to the BESM-6**, a Soviet 48-bit-word mainframe.
 - **`kernel/` + `include/`** — the v7 kernel (from Robert Nordier's v7/x86 port; see
   `COPYRIGHT`), cross-built here and **booting under SIMH** to multi-user shells.
 - **`cmd/`** — the toolchain as host tools, including `b6sim`, a user-level a.out simulator,
-  plus **94 native BESM-6 programs** staged into `build/rootfs/` for the root image.
+  plus **97 native BESM-6 programs** staged into `build/rootfs/` for the root image — the count
+  is `b6_prog()` calls under `cmd/` whose `DEST` is not `test/…`, and nothing but that rule.
 - **`lib/`** — cross-built `libc.a`, `libm.a`, `libtermcap.a`, `libcurses.a`, `crt0.o`.
 
 **The narrative lives in the per-directory READMEs, and that is where to look before touching
@@ -58,9 +59,9 @@ relocatable symbol above word **32,767** (a 15-bit pointer's reach). Two more ce
 cannot guard, and both bind in practice: **no struct may exceed 4,096 words** (a member is a
 12-bit offset from a base register — move the big arrays to file scope), and the **4,096-word
 stack**, where a long function costs 1.5–2 words per source line before any array.
-`cmd/README.md` §6 is the account. **The root image has 392 free blocks of 2000** — it had 181
+`cmd/README.md` §6 is the account. **The root image has 378 free blocks of 2000** — it had 181
 until the `lib/test` programs moved to the test pack, which has 1,686 free of its own, and
-`/usr/bin/yacc` and `/usr/bin/lex` have since taken 68 back.
+`/usr/bin/yacc` and `/usr/bin/lex` have since taken 68 back and `/bin/expr` 14.
 
 **Twelve programs are built twice** — `cpp`, `as`, `ld`, `nm`, `size`, `strip`, `disasm`, `ar`,
 `ranlib`, `cc`, `yacc`, `lex` — as the host `b6*` tools and, from the same sources under
@@ -104,7 +105,7 @@ types `/etc/mount /dev/md1 /mnt -r` and reads them as `/mnt/test/*`. It is attac
 mounted `-r`, so one shared copy serves every test; only `kernel/test/core` uses it, and that
 is the tree's only live caller of `smount()`.
 
-**Porting v7 userland**: read `cmd/README.md`, the eleven-point recipe. `b6parse` is **strict
+**Porting v7 userland**: read `cmd/README.md`, the twelve-point recipe. `b6parse` is **strict
 C11** — no implicit `int`, no K&R parameter lists — but what bites is that v7 assumes `int` and
 `char *` are the same thing: a flag packed into bit 0 of a pointer, a mask rounding to a word
 assuming `BYTESPERWORD`, pointer casts that *floor* rather than round. Also: `long` is one
