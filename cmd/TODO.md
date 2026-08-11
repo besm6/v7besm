@@ -10,9 +10,9 @@ harness tests it. Read it before starting any task below; **nothing here repeats
 
 **Task numbers carry a `C`** — `C10`, `C11`, … — because the kernel's task numbers are cited from
 source comments and from `doc/`, and a bare number would be ambiguous forever after. The numbering
-is **left as it was** when a task is finished and dropped: C1 through C11 are spent and their
-sections are gone, and no number is ever re-used, because `root.manifest` stanzas and per-program
-`README.md`s cite them.
+is **left as it was** when a task is finished and dropped: C1 through C11 and C26 are spent and
+their sections are gone, and no number is ever re-used, because `root.manifest` stanzas and
+per-program `README.md`s cite them.
 
 **Three numbers are spent and have no row in the table below**, which is why they are written
 down here rather than only in the places that cite them.
@@ -45,7 +45,6 @@ here and already tested, whose value is in doing them together rather than one a
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C26 | `egrep` | finishes C5c | small |
 | C13 | `m4` | macro processor | medium |
 | C14 | `make` | the build tool — the highest-value item here | large |
 | C15 | `dc` | the calculator engine | medium |
@@ -59,13 +58,16 @@ here and already tested, whose value is in doing them together rather than one a
 | C23 | `calendar` | | small, blocked on a clock and on its data |
 | C24 | the eight hand-rolled directory readers, over `opendir(3)` | one reader instead of eight, and §5 stops being everybody's problem | medium |
 
-**Where to start: C26.** C10 is spent: `b6yacc` and `b6lex` are host tools (C10a, C10b) and
+**Where to start: C13.** C10 is spent: `b6yacc` and `b6lex` are host tools (C10a, C10b) and
 `/usr/bin/yacc` and `/usr/bin/lex` are on the image with their skeletons (C10c, C10d), so every
-grammar below can be built. **C11 proved it** — `expr` is on the image, its grammar generated a
-parser with no conflicts and the skeleton needed no change — so what is left of C10's risk is
-written down in [yacc/README.md](yacc/README.md) under "The contract": `%union` is still
-unexercised, and C14's `make/gram.y` is the grammar that needs it. Retire that with a `calcu.y`
-beside [yacc/rootfs/calct.y](yacc/rootfs/calct.y) before starting C14, not during it.
+grammar below can be built. **C11 and C26 proved it** — `expr` and `egrep` are both on the image,
+built from their grammars by `b6_yacc()`, and the skeleton needed no change for either. C26 also
+established that **a non-zero conflict count is not by itself a sign of trouble**: `egrep.y` has
+two shift/reduce conflicts, both v7's own, both on the `error` token and both resolved by
+shifting ([egrep/README.md](egrep/README.md)). So what is left of C10's risk is written down in
+[yacc/README.md](yacc/README.md) under "The contract": `%union` is still unexercised, and C14's
+`make/gram.y` is the grammar that needs it. Retire that with a `calcu.y` beside
+[yacc/rootfs/calct.y](yacc/rootfs/calct.y) before starting C14, not during it.
 
 **Two loose ends about the terminal, one line each and neither worth a task of its own.** `TANDEM`
 is honoured by the kernel — `ttyblock()` queues the stop character when the input queue passes
@@ -83,16 +85,6 @@ and that test is now **deleted** along with the rest of the tests that booted. S
 stands, and with nothing left that runs `/etc/rc` at all it is no longer a deferral but a gap.
 
 ---
-
-## C26. `egrep`
-
-`egrep/egrep.y`, 594 lines. **Finishes C5c**, which put `grep` and `fgrep` on the image and left
-this one behind the yacc decision.
-
-[grep/README.md](grep/README.md) is the worked example for everything it will hit: the `CCL`
-bitmap that steals bit `0200`, a table whose size is written down nowhere, and a bound test that is
-not on every path. `fgrep` is 20,019 words of which 15,000 are two arrays, which is the scale to
-expect and the reason to measure early.
 
 ## C13. `m4`
 

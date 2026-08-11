@@ -9,7 +9,7 @@ A port of **Unix v7 to the BESM-6**, a Soviet 48-bit-word mainframe.
 - **`kernel/` + `include/`** — the v7 kernel (from Robert Nordier's v7/x86 port; see
   `COPYRIGHT`), cross-built here and **booting under SIMH** to multi-user shells.
 - **`cmd/`** — the toolchain as host tools, including `b6sim`, a user-level a.out simulator,
-  plus **97 native BESM-6 programs** staged into `build/rootfs/` for the root image — the count
+  plus **98 native BESM-6 programs** staged into `build/rootfs/` for the root image — the count
   is `b6_prog()` calls under `cmd/` whose `DEST` is not `test/…`, and nothing but that rule.
 - **`lib/`** — cross-built `libc.a`, `libm.a`, `libtermcap.a`, `libcurses.a`, `crt0.o`.
 

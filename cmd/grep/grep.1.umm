@@ -10,7 +10,9 @@ grep, egrep, fgrep - search a file for a pattern
 
 | **grep** [ **-bchlnsvy** ] [ **-e** ] expression [ file ] ...
 
-| **egrep** [ option ] ... [ expression ] [ file ] ...
+| **egrep** [ **-bchlnsv** ] [ **-e** ] expression [ file ] ...
+
+| **egrep** [ **-bchlnsv** ] **-f** exprfile [ file ] ...
 
 | **fgrep** [ **-bchlnsvxy** ] [ **-e** ] [ **-f** file ] [ strings ] [ file ] ...
 
@@ -25,10 +27,8 @@ nondeterministic algorithm. *Egrep* patterns are full regular expressions; it us
 deterministic algorithm that sometimes needs exponential space. *Fgrep* patterns are fixed
 strings; it is fast and compact.
 
-Note: *egrep* is not on this system. It is a yacc(1) grammar and there is no *yacc* here yet;
-see *cmd/TODO.md* in the source tree.
-
-The following options are recognized.
+The following options are recognized. *Egrep* has neither **-y** nor **-x;** *grep* has no
+**-x** and no **-f.**
 
 **-v**
 : All lines but those matching are printed.
@@ -48,9 +48,12 @@ The following options are recognized.
 
 > Note: v7 printed a *block* number here - the offset divided by a PDP-11 disk block of 512
 > bytes. 512 names nothing on this machine, a block here is 3072 bytes, and *grep* divided by
-> that constant where *fgrep* divided by a hard-coded 512, so the two commands answered
-> differently about the same match. The division is gone rather than the divisor changed: a byte
-> offset is exact, needs no unit, and both commands now agree.
+> that constant where *fgrep* and *egrep* divided a hard-coded 512, so the commands answered
+> differently about the same match. *Egrep* differed twice over: it divided the position of the
+> **end** of the line where the other two divided the start. The division is gone rather than
+> the divisor changed: a byte offset is exact, needs no unit, and all three now agree.
+> Where a line is long enough for the ring below to lose its beginning, **-b** still reports
+> where the line began, not where the printed fragment starts.
 
 **-s**
 : No output is produced, only status.
@@ -60,8 +63,8 @@ The following options are recognized.
   printed the header regardless.
 
 **-y**
-: Lower case letters in the pattern will also match upper case letters in the input. *Fgrep*
-  implements this too, and matches without regard to case in both directions; v7's manual page
+: Lower case letters in the pattern will also match upper case letters in the input. *Grep* and
+  *fgrep* only; *fgrep* matches without regard to case in both directions, and v7's manual page
   said the flag was *grep* only and was wrong about its own program.
 
 > Note: a byte above 0177 is part of a multi-byte letter, which has no case on this system, so
@@ -71,9 +74,16 @@ The following options are recognized.
 : Same as a simple *expression* argument, but useful when the *expression* begins with a -.
 
 **-f** *file*
-: The string list (*fgrep*) is taken from the *file.* This is the only way to give *fgrep* more
-  than one keyword from a script, the list being newline-separated. *Grep* has no **-f;** v7's
-  manual page implied otherwise.
+: The pattern is taken from the *file* rather than from the argument list. *Grep* has no **-f;**
+  v7's manual page implied otherwise. **The two commands that have it mean different things by
+  it.** For *fgrep* the file is the newline-separated *keyword list,* and this is the only way
+  to give *fgrep* more than one keyword from a script. For *egrep* the file is one *expression,*
+  and a newline in it is an alternation - so the same file means "any of these" to both, but by
+  two different routes, and every other *egrep* operator in it is still an operator.
+
+> Note: *egrep* **-f** did not work at all before this port. A **char** is unsigned on this
+> machine, so v7's test of getc(3) against EOF was never true, the pattern file was read for
+> ever, and *egrep* said **regular expression too long** for a two-line file.
 
 **-x**
 : (Exact) only lines matched in their entirety are printed (*fgrep* only).
@@ -116,7 +126,7 @@ concatenation then | and newline.
 
 ## EIGHT-BIT TEXT
 
-The text on this system is UTF-8 end to end, and both commands carry eight bits.
+The text on this system is UTF-8 end to end, and all three commands carry eight bits.
 
 *Fgrep* compares bytes and always did, so a keyword may be any text at all.
 
@@ -135,6 +145,18 @@ inside **ALPHA**. Worse, nothing masked the byte on the way *in,* so a class con
 above 0177 stored past the end of its own table and quietly corrupted the compiled expression.
 Both are gone.
 
+*Egrep* matches bytes by the same rule, with the same three consequences, and holds a class as a
+list of byte values rather than a bitmap - so a class may name any byte and there is no limit on
+how many it names but the length of the expression.
+
+Note: *egrep* has no mask anywhere, and its 128-entry table went wrong in the other two
+directions. The transition table was indexed by the input byte, so a byte above 0177 read the
+*next state's* row and the machine took a transition belonging to some other state; and a class
+member above 0177 was stored past the 128-byte array that collects them, which lived in a
+function's own stack frame. The first made *egrep* answer wrongly about any UTF-8 line, whatever
+the pattern; the second corrupted the machine while it was being built. The table is 256 wide
+now and both are gone.
+
 ## SEE ALSO
 
 ed(1), sed(1), sh(1)
@@ -151,17 +173,40 @@ Ideally there should be only one *grep,* but we don't know a single algorithm th
 enough range of space-time tradeoffs.
 
 *Grep* truncates a line at 511 characters and treats the remainder as a new line, so a long
-line may be reported more than once and the cut may land inside a multi-byte letter. *Fgrep*
-reads through a ring of 1024 characters: a matching line longer than that has had its beginning
-overwritten by the time the line is printed, and only its last *length* - 1024 characters come
-out. (*v7's* page said 256 for both and was wrong about both. Both limits are v7's own and
-neither was changed.)
+line may be reported more than once and the cut may land inside a multi-byte letter.
+
+*Fgrep* and *egrep* read through a ring of 1024 characters instead. A matching line of **512
+characters or fewer is always printed whole;** a longer one may have had its beginning
+overwritten by the time it is printed, depending on where in the ring it happens to start, and
+then only its tail comes out. *Egrep* notices and prints the part that survives, which is at
+least 512 characters. *Fgrep* does not notice: past 1024 characters it prints from a position
+the reader has already reused, so what comes out can include text from **later lines.** (*v7's*
+page said 256 for all three and was wrong about all three. The ring is v7's own and was not
+changed; only the 512 and the *fgrep* caveat here are measured rather than asserted.)
+
+*Grep* and *egrep* do not examine the last line of a file that does not end in a newline.
+*Fgrep* does.
 
 *Grep* matches a starred expression by recursion, one level per **\*** that consumes anything,
 and says **grep: expression too complex** past sixteen levels. An expression anybody writes
 goes two or three deep. Note: without that limit the recursion runs off this machine's
 4096-word stack - and it returns a *wrong* answer, an empty one, for a dozen levels before it
 faults.
+
+*Egrep* builds a deterministic machine before it reads anything, and three tables bound it: 350
+nodes in the parsed expression, 128 states in the machine, and 4000 positions in the state sets.
+All three say **egrep: regular expression too long,** and which one is reached first depends on
+the expression. A plain literal pattern stops at **127 characters** (128 states); one letter
+repeated stops at **85** (the state sets grow as the square of the length); and the "exponential
+space" of the DESCRIPTION above is reached by seven **(a|b)** groups. v7 also mis-tested the
+state bound and wrote one past the end of two tables instead of reporting it, which turned an
+over-large expression into a machine that matched every line or none.
+
+*Egrep* has no **expression too complex** to match *grep's.* It walked its parse tree by
+recursion, and that recursion was as deep as the pattern was **long** rather than as deep as
+some operator was nested - so an ordinary 80-character pattern ran off this machine's 4096-word
+stack, well inside the 127 the tables allow. The three walks are iterative here and there is no
+depth limit left to reach.
 
 *Fgrep* holds its keywords in a table of 3000 states - one state per character of keyword text,
 less whatever the keywords share as a prefix - and says **fgrep: wordlist too large** beyond

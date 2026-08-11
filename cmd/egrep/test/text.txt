@@ -1,0 +1,5 @@
+alpha one
+beta two
+gamma three
+привет мир
+delta four

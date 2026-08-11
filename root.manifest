@@ -429,6 +429,21 @@ file /bin/ed            # cmd/ed -- task C3, and THE FIRST PROGRAM ON THIS IMAGE
 source ../../rootfs/bin/ed
 mode 0755
 
+file /bin/egrep         # cmd/egrep -- task C26, and the second program here built from a
+                        # yacc grammar.  The transition table is 256 wide and not v7's 128:
+                        # a row was indexed with an unmasked input byte, so every byte above
+                        # 0177 took the NEXT state's transition, and a class member above
+                        # 0177 was stored past a 128-byte array in cgotofn's own STACK FRAME.
+                        # -b prints a BYTE OFFSET of the start of the line, as grep and fgrep
+                        # do; v7 printed a 512-byte block number of the END of it, so the
+                        # three commands gave three answers for one match.  -f works at all:
+                        # a char is unsigned here, so v7's test for EOF was never true.  And
+                        # the three parse-tree walks are ITERATIVE -- their depth is the
+                        # length of the pattern, and the recursion faulted this machine on an
+                        # 80-character one where the tables admit 127.  cmd/egrep/README.md.
+source ../../rootfs/bin/egrep
+mode 0755
+
 file /bin/expr          # cmd/expr -- task C11, the first v7 command here built from a yacc
                         # grammar.  Four deliberate divergences, all in cmd/expr/README.md:
                         # `<=' really is <= (v7 computed >=, the same expression it used for
@@ -1548,6 +1563,15 @@ mode 0644
 file /usr/man/man1/grep.1
 source ../../rootfs/usr/man/man1/grep.1
 mode 0644
+
+# grep.1's NAME line is `grep, egrep, fgrep', as v7 wrote it, and cmd/README.md SS10 makes the
+# NAME OF THE PAGE decide where man(1) finds it -- so `man egrep' and `man fgrep' found
+# nothing.  Two links rather than two pages: no disk, and one text to keep current.
+link /usr/man/man1/egrep.1
+target /usr/man/man1/grep.1
+
+link /usr/man/man1/fgrep.1
+target /usr/man/man1/grep.1
 
 file /usr/man/man1/icheck.1m
 source ../../rootfs/usr/man/man1/icheck.1m

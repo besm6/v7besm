@@ -270,6 +270,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/usr/guest/hello.S
     ${B6_ROOTFS}/bin/echo
     ${B6_ROOTFS}/bin/ed
+    ${B6_ROOTFS}/bin/egrep
     ${B6_ROOTFS}/bin/expr
     ${B6_ROOTFS}/bin/fgrep
     ${B6_ROOTFS}/bin/file
