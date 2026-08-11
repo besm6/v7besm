@@ -29,6 +29,7 @@ yacc_agree(bc     ${_cmd}/bc/bc.y -d)               # C15/C16: peaks WSETSIZE
 yacc_agree(awk    ${_cmd}/awk/awk.g.y -d)           # C17: peaks every other bound
 yacc_agree(parser ${_cmd}/lex/parser.y -d)          # b6lex's own grammar
 yacc_agree(calct  ${CMAKE_CURRENT_SOURCE_DIR}/../calct.y)
+yacc_agree(calcu  ${CMAKE_CURRENT_SOURCE_DIR}/../calcu.y)  # the %union path
 
 # ctest does not build; the staged program arrives through b6_progtest below.
 if(TARGET build_tests)

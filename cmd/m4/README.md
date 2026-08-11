@@ -3,9 +3,9 @@
 Task C13. `m4` is the third program on this image built from a yacc grammar, after
 [`expr`](../expr/) (C11) and [`egrep`](../egrep/) (C26), and the first that is **a grammar plus
 a hand-written translation unit** — [`m4y.y`](m4y.y) is `eval`'s expression parser, [`m4.c`](m4.c)
-the macro processor, and they share three globals across the link. It does **not** retire the
-risk [../yacc/README.md](../yacc/README.md) records: `m4y.y` writes `#define YYSTYPE int`, so
-`%union` is still unexercised and C14's `make/gram.y` is still the grammar that will exercise it.
+the macro processor, and they share three globals across the link. It did **not** retire the
+risk [../yacc/README.md](../yacc/README.md) records — `m4y.y` writes `#define YYSTYPE int` and
+never touches a union — which C14 did, on [../yacc/rootfs/calcu.y](../yacc/rootfs/calcu.y).
 The grammar has **zero shift/reduce and zero reduce/reduce conflicts**, as `expr`'s did.
 
 The C11 pass is described in the two sources' own headers and is not repeated here. Six things

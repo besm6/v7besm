@@ -1,0 +1,3 @@
+.SILENT:
+all:
+	echo invisible

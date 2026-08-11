@@ -283,6 +283,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/look
     ${B6_ROOTFS}/bin/ls
     ${B6_ROOTFS}/bin/m4
+    ${B6_ROOTFS}/bin/make
     ${B6_ROOTFS}/bin/mesg
     ${B6_ROOTFS}/bin/mkdir
     # No entry for /bin/less: it is a hard link to this one and stages no file.

@@ -42,13 +42,13 @@ typedef char *charptr;
 #define YYSTYPE charptr
 ```
 
-`%union` is the fourth way and would also have worked, but **nothing in this tree has ever
+`%union` is the fourth way and would also have worked, but at C11 **nothing in this tree had
 exercised `b6yacc`'s union path** and `expr` has exactly one value type, so it would have bought
 a `<s>` tag on every symbol and a `.s` on every `$$` in fourteen actions to buy no type checking
 at all — while putting three aggregate assignments into a guest-compiled skeleton for the first
-time. C11 is the wrong place to find that out. [`../yacc/README.md`](../yacc/README.md) records
-the follow-up: a `calcu.y` beside [`../yacc/rootfs/calct.y`](../yacc/rootfs/calct.y) is the cheap
-way to retire it before C14, whose `gram.y` is the grammar that needs it.
+time. C11 was the wrong place to find that out. It was retired later and on a grammar of its own,
+[`../yacc/rootfs/calcu.y`](../yacc/rootfs/calcu.y), ahead of C14 — whose
+[`../make/gram.y`](../make/gram.y) is the tree's one real `%union` and now works.
 
 ## `\}` ends a `%{ … %}` block
 

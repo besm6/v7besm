@@ -1,0 +1,32 @@
+t0: t1
+	echo t0
+t1: t2
+	echo t1
+t2: t3
+	echo t2
+t3: t4
+	echo t3
+t4: t5
+	echo t4
+t5: t6
+	echo t5
+t6: t7
+	echo t6
+t7: t8
+	echo t7
+t8: t9
+	echo t8
+t9: t10
+	echo t9
+t10: t11
+	echo t10
+t11: t12
+	echo t11
+t12: t13
+	echo t12
+t13: t14
+	echo t13
+t14: t15
+	echo t14
+t15:
+	echo t15

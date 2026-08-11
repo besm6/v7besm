@@ -557,6 +557,32 @@ file /bin/m4            # cmd/m4 -- task C13, the third program here built from 
 source ../../rootfs/bin/m4
 mode 0755
 
+file /bin/make          # cmd/make -- task C14, and the first program here whose grammar
+                        # declares a %union: gram.y is the description-file parser and the
+                        # other six files the engine.  THE DEFAULT RULES ARE THIS IMAGE'S,
+                        # cc/as/yacc/lex and no more; v7's f77, Ratfor and EFL suffixes and
+                        # its -ly/-ll flags named nothing that is here.  ARCHIVE MEMBERS
+                        # RESOLVE THROUGH cmd/libaout -- lib.a(member) by name and
+                        # lib.a((entry)) through the symbol table -- because an archive
+                        # header, an object header and a symbol are six-byte words here and
+                        # not structs to be read whole; a member name and a symbol name are
+                        # therefore compared entire, not v7's first 14 and 8 bytes.
+                        # DIRECTORIES GO THROUGH opendir(3): DIRSIZ is 18 and a name off the
+                        # disk carries no terminator, so v7's 15-byte copy out of a raw
+                        # `struct direct' could not stand.  doname() RECURSES ONCE PER LEVEL
+                        # of the graph at 214 words of a 4,096-word stack, so the depth is
+                        # bounded at 11 and says so rather than faulting.  funny[] is 256
+                        # entries and not v7's 128, a char being unsigned, so a target and a
+                        # command may be Russian.  subst() and the description line are
+                        # bounded, which they were not; sprintf(3) returns an int here and
+                        # v7 passed its value to fatal() as a string; mkqlist() returned
+                        # nothing at all on the empty list and wrote one byte below its
+                        # buffer on a full one.  A built-in rule is copied before it is
+                        # parsed: eqsign() writes into the line and a literal is not
+                        # writable here.  cmd/make/README.md.
+source ../../rootfs/bin/make
+mode 0755
+
 file /bin/mesg          # cmd/mesg -- task C6.  NOT setuid: chmod(2) is gated on owner(), and
                         # the terminal is the user's only because login chowned it.  The nodes
                         # below ship 0622, so a fresh boot answers `is y'.

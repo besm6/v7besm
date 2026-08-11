@@ -79,11 +79,20 @@ silent mismatch a PDP-11 linker allowed.
 `y2.c` emits `YYSTYPE yylval, yyval;`, so a grammar whose value type is a pointer must spell it
 through a `typedef` — `#define YYSTYPE char *` declares `yyval` a plain `char` and diagnoses
 nothing. C11 is the worked example ([`../expr/README.md`](../expr/README.md)), and it also
-records why `%union` was not the answer there: **nothing in this tree exercises the union path
-yet**, and C14's [`../make/gram.y`](../make/gram.y) is the grammar that will need it. The cheap
-way to retire that risk before C14 is a `calcu.y` beside [`rootfs/calct.y`](rootfs/calct.y) —
-the same calculator with `%union { int i; char *s; }` and both tags used, built native and given
-three `b6_progtest` cases.
+records why `%union` was not the answer there.
+
+**The `%union` path is exercised**, by [`rootfs/calcu.y`](rootfs/calcu.y) — `calct` again over
+`%union { int i; char *s; }` with both tags used. It exists because declaring a union changes
+what the skeleton *does*: `YYSTYPE` stops being a word and the three value copies in
+[`yaccpar.c`](yaccpar.c) — `*yypv = yyval` on a push, `yyval = yylval` on a shift, and
+`yyval = yypv[1]` for a rule with no action — become aggregate copies, compiled by `b6lower`'s
+`gen_aggregate_assign()` rather than moved in one instruction. Nothing in this tree had ever
+run one, and C14's [`../make/gram.y`](../make/gram.y) — still the only `%union` in a real
+program here — would have been the first, where a miscompile would have read as a grammar bug.
+Hence a grammar of its own, and hence the `char *` tag: a fat pointer is the member likeliest
+to survive a word move and not an aggregate one. `list: list stat '\n'` carries **no action**
+deliberately; that is the third copy. Three `b6_progtest` cases and a `yacc_agree` line, and
+`gram.y` was already among the agreement grammars.
 [`../lex/README.md`](../lex/README.md) under "The contract" has nine of its own in the other
 direction — and one warning worth reading here: `FILE *yyin ={stdin}` is **not a constant
 initialiser**, which is what stopped every scanner v7's lex generated from compiling. `yaccpar.c`

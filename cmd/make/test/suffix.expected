@@ -1,0 +1,2 @@
+cc -c x.c -o x.o
+echo linked x.o

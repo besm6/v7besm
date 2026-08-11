@@ -32,11 +32,11 @@ turn depend on `.c` files and a common file `incl`.
 
 > ```
 > pgm: a.o b.o
-> cc a.o b.o -lm -o pgm
+> 	cc a.o b.o -lm -o pgm
 > a.o: incl a.c
-> cc -c a.c
+> 	cc -c a.c
 > b.o: incl b.c
-> cc -c b.c
+> 	cc -c b.c
 > ```
 
 *Makefile* entries of the form
@@ -52,7 +52,7 @@ the `.o` file. Thus the preceding example can be done more briefly:
 
 > ```
 > pgm: a.o b.o
-> cc a.o b.o -lm -o pgm
+> 	cc a.o b.o -lm -o pgm
 > a.o b.o: incl
 > ```
 
@@ -61,7 +61,7 @@ special name `.SUFFIXES`; multiple lists accumulate; an empty list clears what c
 Order is significant; the first possible name for which both a file and a rule as described in
 the next paragraph exist is inferred. The default list is
 
-> .SUFFIXES: .out .o .c .e .r .f .y .l .s
+> .SUFFIXES: .out .o .c .s .y .l
 
 The rule to create a file with suffix *s2* that depends on a similarly named file with suffix
 *s1* is specified as an entry for the `target` *s1s2*. In such an entry, the special macro $\*
@@ -72,8 +72,10 @@ example, a rule for making optimized `.o` files from `.c` files is
 > .c.o: ; cc -c -O -o $@ $\*.c
 
 Certain macros are used by the default inference rules to communicate optional arguments to any
-resulting compilations. In particular, `CFLAGS` is used for *cc* and f77(1) options, `LFLAGS`
-and `YFLAGS` for *lex* and yacc(1) options.
+resulting compilations. In particular, `CFLAGS` is used for cc(1) options, and `LFLAGS` and
+`YFLAGS` for lex(1) and yacc(1) options. The built-in rules name only the tools this system
+has: v7's Fortran, Ratfor and EFL rules are not here, and neither are the **-ly** and **-ll**
+flags.
 
 Command lines are executed one at a time, each by its own shell. A line is printed when it is
 executed unless the special target `.SILENT` is in *makefile,* or the first character of the
@@ -84,6 +86,14 @@ target `.IGNORE` is in *makefile* or the command begins with <tab><hyphen>.
 
 Interrupt and quit cause the target to be deleted unless the target depends on the special name
 `.PRECIOUS`.
+
+A prerequisite of the form *archive*`(`*member*`)` is a file inside an archive built by ar(1),
+and one of the form *archive*`((`*entry*`))` is the member of an object archive that defines the
+external symbol *entry*. Either is out of date by the date the archive records for that member.
+Names are compared in full.
+
+A dependency graph may be **11 levels deep**. *Make* walks it recursively and says so rather
+than exhausting its stack.
 
 Other options:
 
@@ -112,7 +122,7 @@ Other options:
 
 ## SEE ALSO
 
-| sh(1), touch(1)
+| ar(1), sh(1), touch(1)
 | S. I. Feldman *Make - A Program for Maintaining Computer Programs*
 
 ## BUGS

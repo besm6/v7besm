@@ -1,0 +1,31 @@
+Macros:
+	$ = $
+
+
+b.c
+
+hdr.h
+
+a.c
+
+b.o:
+ depends on: b.c  hdr.h 
+ commands:
+	cc -c b.c
+
+
+a.o:
+ depends on: a.c  hdr.h 
+ commands:
+	cc -c a.c
+
+
+prog:  (MAIN NAME)
+ depends on: a.o  b.o 
+ commands:
+	ld -o prog a.o b.o
+
+No suffix list.
+cc -c a.c
+cc -c b.c
+ld -o prog a.o b.o

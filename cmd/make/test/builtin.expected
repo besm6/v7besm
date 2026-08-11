@@ -1,0 +1,2 @@
+cc  -c a.c
+ld -o prog a.o

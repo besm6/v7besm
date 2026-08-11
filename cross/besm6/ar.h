@@ -1,3 +1,5 @@
+#include <stdio.h> // FILE, for fgetarhdr() below
+
 #include "besm6/types.h"
 
 #define ARMAG     0177545

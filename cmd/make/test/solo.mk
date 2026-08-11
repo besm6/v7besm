@@ -1,0 +1,2 @@
+solo:
+	echo solo

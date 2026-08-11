@@ -1,465 +1,344 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 /* Changes: Copyright (c) 1999 Robert Nordier. All rights reserved. */
 
-/* UNIX DEPENDENT PROCEDURES */
+// UNIX DEPENDENT PROCEDURES
 
-
-/* DEFAULT RULES FOR UNIX */
-
-char *builtin[] =
-	{
-	".SUFFIXES : .out .o .c .f .e .r .y .yr .ye .l .s",
-	"YACC=yacc",
-	"YACCR=yacc -r",
-	"YACCE=yacc -e",
-	"YFLAGS=",
-	"LEX=lex",
-	"LFLAGS=",
-	"CC=cc",
-#ifdef vax
-	"AS=as".
-#else
-	"AS=as -",
-#endif
-	"CFLAGS=",
-	"RC=f77",
-	"RFLAGS=",
-	"EC=f77",
-	"EFLAGS=",
-	"FFLAGS=",
-	"LOADLIBES=",
-
-	".c.o :",
-	"\t$(CC) $(CFLAGS) -c $<",
-
-	".e.o .r.o .f.o :",
-	"\t$(EC) $(RFLAGS) $(EFLAGS) $(FFLAGS) -c $<",
-
-	".s.o :",
-	"\t$(AS) -o $@ $<",
-
-	".y.o :",
-	"\t$(YACC) $(YFLAGS) $<",
-	"\t$(CC) $(CFLAGS) -c y.tab.c",
-	"\trm y.tab.c",
-	"\tmv y.tab.o $@",
-
-	".yr.o:",
-	"\t$(YACCR) $(YFLAGS) $<",
-	"\t$(RC) $(RFLAGS) -c y.tab.r",
-	"\trm y.tab.r",
-	"\tmv y.tab.o $@",
-
-	".ye.o :",
-	"\t$(YACCE) $(YFLAGS) $<",
-	"\t$(EC) $(RFLAGS) -c y.tab.e",
-	"\trm y.tab.e",
-	"\tmv y.tab.o $@",
-
-	".l.o :",
-	"\t$(LEX) $(LFLAGS) $<",
-	"\t$(CC) $(CFLAGS) -c lex.yy.c",
-	"\trm lex.yy.c",
-	"\tmv lex.yy.o $@",
-
-	".y.c :",
-	"\t$(YACC) $(YFLAGS) $<",
-	"\tmv y.tab.c $@",
-
-	".l.c :",
-	"\t$(LEX) $<",
-	"\tmv lex.yy.c $@",
-
-	".yr.r:",
-	"\t$(YACCR) $(YFLAGS) $<",
-	"\tmv y.tab.r $@",
-
-	".ye.e :",
-	"\t$(YACCE) $(YFLAGS) $<",
-	"\tmv y.tab.e $@",
-
-	".s.out .c.out .o.out :",
-	"\t$(CC) $(CFLAGS) $< $(LOADLIBES) -o $@",
-
-	".f.out .r.out .e.out :",
-	"\t$(EC) $(EFLAGS) $(RFLAGS) $(FFLAGS) $< $(LOADLIBES) -o $@",
-	"\t-rm $*.o",
-
-	".y.out :",
-	"\t$(YACC) $(YFLAGS) $<",
-	"\t$(CC) $(CFLAGS) y.tab.c $(LOADLIBES) -ly -o $@",
-	"\trm y.tab.c",
-
-	".l.out :",
-	"\t$(LEX) $<",
-	"\t$(CC) $(CFLAGS) lex.yy.c $(LOADLIBES) -ll -o $@",
-	"\trm lex.yy.c",
-
-	0 };
-
-#include "defs"
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
 
+#include "besm6/ar.h"
+#include "besm6/b.out.h"
+#include "defs.h"
 
-TIMETYPE exists(filename)
-char *filename;
+// DEFAULT RULES.  Trimmed to the toolchain that is on this image: v7's f77,
+// Ratfor and EFL rules and its -ly/-ll flags name nothing that is here.
+// README.md, "The default rules".
+// clang-format off
+char *builtin[] = {
+    ".SUFFIXES : .out .o .c .s .y .l",
+    "YACC=yacc",
+    "YFLAGS=",
+    "LEX=lex",
+    "LFLAGS=",
+    "CC=cc",
+    "AS=as",
+    "CFLAGS=",
+    "LOADLIBES=",
+
+    ".c.o :",
+    "\t$(CC) $(CFLAGS) -c $<",
+
+    ".s.o :",
+    "\t$(AS) -o $@ $<",
+
+    ".y.o :",
+    "\t$(YACC) $(YFLAGS) $<",
+    "\t$(CC) $(CFLAGS) -c y.tab.c",
+    "\trm y.tab.c",
+    "\tmv y.tab.o $@",
+
+    ".l.o :",
+    "\t$(LEX) $(LFLAGS) $<",
+    "\t$(CC) $(CFLAGS) -c lex.yy.c",
+    "\trm lex.yy.c",
+    "\tmv lex.yy.o $@",
+
+    ".y.c :",
+    "\t$(YACC) $(YFLAGS) $<",
+    "\tmv y.tab.c $@",
+
+    ".l.c :",
+    "\t$(LEX) $<",
+    "\tmv lex.yy.c $@",
+
+    ".s.out .c.out .o.out :",
+    "\t$(CC) $(CFLAGS) $< $(LOADLIBES) -o $@",
+
+    ".y.out :",
+    "\t$(YACC) $(YFLAGS) $<",
+    "\t$(CC) $(CFLAGS) y.tab.c $(LOADLIBES) -o $@",
+    "\trm y.tab.c",
+
+    ".l.out :",
+    "\t$(LEX) $<",
+    "\t$(CC) $(CFLAGS) lex.yy.c $(LOADLIBES) -o $@",
+    "\trm lex.yy.c",
+
+    0
+};
+// clang-format on
+
+static TIMETYPE lookarch(char *filename);
+static int amatch(char *s, char *p);
+static int umatch(char *s, char *p);
+
+TIMETYPE exists(char *filename)
 {
-#include <sys/stat.h>
-struct stat buf;
-register char *s;
-TIMETYPE lookarch();
+    struct stat buf;
+    char *s;
 
-for(s = filename ; *s!='\0' && *s!='(' ; ++s)
-	;
+    for (s = filename; *s != '\0' && *s != '('; ++s)
+        ;
 
-if(*s == '(')
-	return(lookarch(filename));
+    if (*s == '(')
+        return lookarch(filename);
 
-if(stat(filename,&buf) < 0) 
-	return(0);
-else	return(buf.st_mtime);
+    if (stat(filename, &buf) < 0)
+        return 0;
+    else
+        return buf.st_mtime;
 }
 
-
-TIMETYPE prestime()
+TIMETYPE prestime(void)
 {
-TIMETYPE t;
-time(&t);
-return(t);
+    time_t t;
+
+    time(&t);
+    return t;
 }
 
-
-
-#include <sys/dir.h>
-FSTATIC char n15[15];
-FSTATIC char *n15end	= &n15[14];
-
-
-
-struct depblock *srchdir(pat, mkchain, nextdbl)
-register char *pat; /* pattern to be matched in directory */
-int mkchain;  /* nonzero if results to be remembered */
-struct depblock *nextdbl;  /* final value for chain */
+// Names matching pat, from a directory kept open and rewound.  v7 read raw
+// `struct direct' records: DIRSIZ is 18 here and a name off the disk carries no
+// terminator, so this goes through opendir(3).  ../README.md SS5.
+struct depblock *srchdir(char *pat, int mkchain, struct depblock *nextdbl)
 {
-FILE * dirf;
-int i, nread;
-char *dirname, *dirpref, *endir, *filepat, *p, temp[100];
-char fullname[100], *p1, *p2;
-struct nameblock *q;
-struct depblock *thisdbl;
-struct opendir *od;
-struct pattern *patp;
+    DIR *dirf;
+    char *dirname, *dirpref, *endir, *filepat, *p, temp[100];
+    char fullname[100];
+    struct dirent *dp;
+    struct nameblock *q;
+    struct depblock *thisdbl;
+    struct opendir *od;
+    struct pattern *patp;
 
-struct direct entry[32];
+    thisdbl = 0;
 
+    if (mkchain == NO)
+        for (patp = firstpat; patp; patp = patp->nxtpattern)
+            if (!unequal(pat, patp->patval))
+                return 0;
 
-thisdbl = 0;
+    patp             = ALLOC(pattern);
+    patp->nxtpattern = firstpat;
+    firstpat         = patp;
+    patp->patval     = copys(pat);
 
-if(mkchain == NO)
-	for(patp=firstpat ; patp ; patp = patp->nxtpattern)
-		if(! unequal(pat, patp->patval)) return(0);
+    endir = 0;
 
-patp = ALLOC(pattern);
-patp->nxtpattern = firstpat;
-firstpat = patp;
-patp->patval = copys(pat);
+    for (p = pat; *p != '\0'; ++p)
+        if (*p == '/')
+            endir = p;
 
-endir = 0;
+    if (endir == 0) {
+        dirname = ".";
+        dirpref = "";
+        filepat = pat;
+    } else {
+        dirname = pat;
+        *endir  = '\0';
+        if (strlen(dirname) + 2 > sizeof(temp))
+            fatal1("Directory name too long: %s", dirname);
+        dirpref = concat(dirname, "/", temp);
+        filepat = endir + 1;
+    }
 
-for(p=pat; *p!='\0'; ++p)
-	if(*p=='/') endir = p;
+    dirf = NULL;
 
-if(endir==0)
-	{
-	dirname = ".";
-	dirpref = "";
-	filepat = pat;
-	}
-else	{
-	dirname = pat;
-	*endir = '\0';
-	dirpref = concat(dirname, "/", temp);
-	filepat = endir+1;
-	}
+    for (od = firstod; od; od = od->nxtopendir)
+        if (!unequal(dirname, od->dirn)) {
+            dirf = od->dirfc;
+            if (dirf != NULL)
+                rewinddir(dirf); // start over at the beginning
+            break;
+        }
 
-dirf = NULL;
+    if (od == NULL) {
+        dirf           = opendir(dirname);
+        od             = ALLOC(opendir);
+        od->nxtopendir = firstod;
+        firstod        = od;
+        od->dirfc      = dirf;
+        od->dirn       = copys(dirname);
+    }
 
-for(od = firstod ; od; od = od->nxtopendir)
-	if(! unequal(dirname, od->dirn) )
-		{
-		dirf = od->dirfc;
-		fseek(dirf,0L,0); /* start over at the beginning  */
-		break;
-		}
+    if (dirf == NULL) {
+        fprintf(stderr, "Directory %s: ", dirname);
+        fatal("Cannot open");
+    }
 
-if(dirf == NULL)
-	{
-	dirf = fopen(dirname, "r");
-	od = ALLOC(opendir);
-	od->nxtopendir = firstod;
-	firstod = od;
-	od->dirfc = dirf;
-	od->dirn = copys(dirname);
-	}
+    while ((dp = readdir(dirf)) != NULL) {
+        if (!amatch(dp->d_name, filepat))
+            continue;
+        if (strlen(dirpref) + dp->d_namlen + 1 > sizeof(fullname))
+            continue;
+        concat(dirpref, dp->d_name, fullname);
+        if ((q = srchname(fullname)) == 0)
+            q = makename(copys(fullname));
+        if (mkchain) {
+            thisdbl              = ALLOC(depblock);
+            thisdbl->nxtdepblock = nextdbl;
+            thisdbl->depname     = q;
+            nextdbl              = thisdbl;
+        }
+    }
 
-if(dirf == NULL)
-	{
-	fprintf(stderr, "Directory %s: ", dirname);
-	fatal("Cannot open");
-	}
+    if (endir != 0)
+        *endir = '/';
 
-else do
-	{
-	nread = fread( (char *) &entry[0], sizeof(struct direct), 32, dirf) ;
-	for(i=0; i<nread; ++i)
-		if(entry[i].d_ino!= 0)
-			{
-			p1 = entry[i].d_name;
-			p2 = n15;
-			while( (p2<n15end) &&
-			  (*p2++ = *p1++)!='\0' );
-			if( amatch(n15,filepat) )
-				{
-				concat(dirpref,n15,fullname);
-				if( (q=srchname(fullname)) ==0)
-					q = makename(copys(fullname));
-				if(mkchain)
-					{
-					thisdbl = ALLOC(depblock);
-					thisdbl->nxtdepblock = nextdbl;
-					thisdbl->depname = q;
-					nextdbl = thisdbl;
-					}
-				}
-			}
-
-	} while(nread==32);
-
-if(endir != 0)  *endir = '/';
-
-return(thisdbl);
-}
-
-/* stolen from glob through find */
-
-static amatch(s, p)
-char *s, *p;
-{
-	register int cc, scc, k;
-	int c, lc;
-
-	scc = *s;
-	lc = 077777;
-	switch (c = *p) {
-
-	case '[':
-		k = 0;
-		while (cc = *++p) {
-			switch (cc) {
-
-			case ']':
-				if (k)
-					return(amatch(++s, ++p));
-				else
-					return(0);
-
-			case '-':
-				k |= (lc <= scc)  & (scc <= (cc=p[1]) ) ;
-			}
-			if (scc==(lc=cc)) k++;
-		}
-		return(0);
-
-	case '?':
-	caseq:
-		if(scc) return(amatch(++s, ++p));
-		return(0);
-	case '*':
-		return(umatch(s, ++p));
-	case 0:
-		return(!scc);
-	}
-	if (c==scc) goto caseq;
-	return(0);
+    return thisdbl;
 }
 
-static umatch(s, p)
-char *s, *p;
+// stolen from glob through find.  v7 recursed once per matched character;
+// iterating instead keeps the depth to the number of `*'s in the pattern.
+static int amatch(char *s, char *p)
 {
-	if(*p==0) return(1);
-	while(*s)
-		if (amatch(s++,p)) return(1);
-	return(0);
-}
-
-#ifdef METERFILE
-#include <pwd.h>
-int meteron	= 0;	/* default: metering off */
+    int cc, scc, k;
+    int c, lc;
 
-meter(file)
-char *file;
-{
-TIMETYPE tvec;
-char *p, *ctime();
-FILE * mout;
-struct passwd *pwd, *getpwuid();
+    for (;;) {
+        scc = *s;
+        lc  = 077777;
+        switch (c = *p) {
+        case '[':
+            k = 0;
+            while ((cc = *++p)) {
+                switch (cc) {
+                case ']':
+                    if (k)
+                        goto advance;
+                    else
+                        return 0;
 
-if(file==0 || meteron==0) return;
+                case '-':
+                    k |= (lc <= scc) & (scc <= (cc = p[1]));
+                }
+                if (scc == (lc = cc))
+                    k++;
+            }
+            return 0;
 
-pwd = getpwuid(getuid());
+        case '?':
+            if (scc)
+                goto advance;
+            return 0;
 
-time(&tvec);
+        case '*':
+            return umatch(s, ++p);
 
-if( (mout=fopen(file,"a")) != NULL )
-	{
-	p = ctime(&tvec);
-	p[16] = '\0';
-	fprintf(mout,"User %s, %s\n",pwd->pw_name,p+4);
-	fclose(mout);
-	}
-}
-#endif
-
+        case 0:
+            return !scc;
+        }
 
-/* look inside archives for notations a(b) and a((b))
-	a(b)	is file member   b   in archive a
-	a((b))	is entry point  _b  in object archive a
-*/
-#include <ar.h>
-#include <a.out.h>
-
-static struct ar_hdr arhead;
-FILE *arfd;
-long int arpos, arlen;
-
-static struct exec objhead;
-
-static struct nlist objentry;
-
-
-TIMETYPE lookarch(filename)
-char *filename;
-{
-char *p, *q, *send, s[15];
-int i, nc, nsym, objarch;
-
-for(p = filename; *p!= '(' ; ++p)
-	;
-*p = '\0';
-openarch(filename);
-*p++ = '(';
-
-if(*p == '(')
-	{
-	objarch = YES;
-	nc = 8;
-	++p;
-	}
-else
-	{
-	objarch = NO;
-	nc = 14;
-	}
-send = s + nc;
-
-for( q = s ; q<send && *p!='\0' && *p!=')' ; *q++ = *p++ )
-	;
-while(q < send)
-	*q++ = '\0';
-while(getarch())
-	{
-	if(objarch)
-		{
-		getobj();
-		nsym = objhead.a_syms / sizeof(objentry);
-		for(i = 0; i<nsym ; ++i)
-			{
-			fread( (char *) &objentry, sizeof(objentry),1,arfd);
-			if( (objentry.n_type & N_EXT)
-			   && ((objentry.n_type & ~N_EXT) || objentry.n_value)
-			   && eqstr(objentry.n_name,s,nc))
-				{
-				clarch();
-				return(arhead.ar_date);
-				}
-			}
-		}
-
-	else if( eqstr(arhead.ar_name, s, nc))
-		{
-		clarch();
-		return( arhead.ar_date);
-		}
-	}
-
-clarch();
-return( 0L);
+        if (c != scc)
+            return 0;
+    advance:
+        ++s;
+        ++p;
+    }
 }
 
-
-clarch()
+static int umatch(char *s, char *p)
 {
-fclose( arfd );
+    if (*p == 0)
+        return 1;
+    while (*s)
+        if (amatch(s++, p))
+            return 1;
+    return 0;
 }
 
-
-openarch(f)
-register char *f;
+// Look inside archives for notations a(b) and a((b))
+//      a(b)    is file member  b  in archive a
+//      a((b))  is entry point  b  in object archive a
+//
+// v7 fread() the on-disk structs straight into memory.  Here an archive header,
+// an object header and a symbol are six-byte words read through cmd/libaout, and
+// a member name and a symbol name are whole strings rather than 14 and 8 bytes.
+// The walk is cmd/nm/nm.c's.
+static TIMETYPE lookarch(char *filename)
 {
-int word;
-#include <sys/stat.h>
-struct stat buf;
+    char *p, *q, *qend;
+    char member[ARMAXNAME + 1];
+    int objarch;
+    FILE *fi;
+    struct ar_hdr arhdr;
+    struct exec hdr;
+    struct nlist sym;
+    long off, n;
+    int c;
+    TIMETYPE date;
 
-stat(f, &buf);
-arlen = buf.st_size;
+    for (p = filename; *p != '('; ++p)
+        ;
+    *p = '\0';
+    fi = fopen(filename, "r");
+    if (fi == NULL)
+        fatal1("cannot open %s", filename);
+    if (fgetw(fi) != ARMAG)
+        fatal1("%s is not an archive", filename);
+    *p++ = '(';
 
-arfd = fopen(f, "r");
-if(arfd == NULL)
-	fatal1("cannot open %s", f);
-fread( (char *) &word, sizeof(word), 1, arfd);
-if(word != ARMAG)
-	fatal1("%s is not an archive", f);
-arpos = 0;
-arhead.ar_size = 2 - sizeof(arhead);
-}
+    if (*p == '(') {
+        objarch = YES;
+        ++p;
+    } else
+        objarch = NO;
 
+    qend = member + ARMAXNAME;
+    for (q = member; q < qend && *p != '\0' && *p != ')'; *q++ = *p++)
+        ;
+    *q = '\0';
 
+    date          = 0;
+    arhdr.ar_name = NULL;
+    off           = 6L; // the first member header follows the one-word ARMAG
 
-getarch()
-{
-arpos += sizeof(arhead);
-arpos += (arhead.ar_size + 1 ) & ~1L;
-if(arpos >= arlen)
-	return(0);
-fseek(arfd, arpos, 0);
-fread( (char *) &arhead, sizeof(arhead), 1, arfd);
-return(1);
-}
+    for (;;) {
+        fseek(fi, off, 0);
+        free(arhdr.ar_name);
+        arhdr.ar_name = NULL;
+        if (!fgetarhdr(fi, &arhdr))
+            break;
+        off = arhdr.ar_size + ftell(fi);
 
+        if (!objarch) {
+            if (!unequal(arhdr.ar_name, member)) {
+                date = arhdr.ar_date;
+                break;
+            }
+            continue;
+        }
 
-getobj()
-{
-long int skip;
+        // An entry point: read the member as an object and scan its symbols.
+        if (!fgethdr(fi, &hdr) || N_BADMAG(hdr))
+            continue;
+        n = hdr.a_const + hdr.a_text + hdr.a_data;
+        if (!(hdr.a_flag & RELFLG))
+            n *= 2; // the relocation records are still there
+        fseek(fi, n, 1);
 
-fread( (char *) &objhead, sizeof(objhead), 1, arfd);
-if( objhead.a_magic != A_MAGIC1 &&
-    objhead.a_magic != A_MAGIC2 &&
-    objhead.a_magic != A_MAGIC3 &&
-    objhead.a_magic != A_MAGIC4 )
-		fatal1("%s is not an object module", arhead.ar_name);
-skip = objhead.a_text + objhead.a_data + objhead.a_trsize +
-    objhead.a_drsize;
-fseek(arfd, skip, 1);
-}
+        for (n = hdr.a_syms; n > 0; n -= c) {
+            sym.n_name = NULL;
+            c          = fgetsym(fi, &sym);
+            if (c == 0)
+                fatal("out of memory");
+            if (c == 1)
+                break;
+            if ((sym.n_type & N_EXT) && ((sym.n_type & ~N_EXT) || sym.n_value) &&
+                !unequal(sym.n_name, member))
+                date = arhdr.ar_date;
+            free(sym.n_name);
+            if (date)
+                break;
+        }
+        if (date)
+            break;
+    }
 
-
-eqstr(a,b,n)
-register char *a, *b;
-int n;
-{
-register int i;
-for(i = 0 ; i < n ; ++i)
-	if(*a++ != *b++)
-		return(NO);
-return(YES);
+    free(arhdr.ar_name);
+    fclose(fi);
+    return date;
 }

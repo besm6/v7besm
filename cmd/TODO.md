@@ -10,9 +10,9 @@ harness tests it. Read it before starting any task below; **nothing here repeats
 
 **Task numbers carry a `C`** — `C10`, `C11`, … — because the kernel's task numbers are cited from
 source comments and from `doc/`, and a bare number would be ambiguous forever after. The numbering
-is **left as it was** when a task is finished and dropped: C1 through C11, C13 and C26 are spent
-and their sections are gone, and no number is ever re-used, because `root.manifest` stanzas and
-per-program `README.md`s cite them.
+is **left as it was** when a task is finished and dropped: C1 through C11, C13, C14 and C26 are
+spent and their sections are gone, and no number is ever re-used, because `root.manifest` stanzas
+and per-program `README.md`s cite them.
 
 **Three numbers are spent and have no row in the table below**, which is why they are written
 down here rather than only in the places that cite them.
@@ -45,7 +45,6 @@ here and already tested, whose value is in doing them together rather than one a
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C14 | `make` | the build tool — the highest-value item here | large |
 | C15 | `dc` | the calculator engine | medium |
 | C16 | `bc` | the calculator front end | small |
 | C17 | `awk` | the one program that is a grammar *and* a scanner | large |
@@ -57,21 +56,26 @@ here and already tested, whose value is in doing them together rather than one a
 | C23 | `calendar` | | small, blocked on a clock and on its data |
 | C24 | the eight hand-rolled directory readers, over `opendir(3)` | one reader instead of eight, and §5 stops being everybody's problem | medium |
 
-**Where to start: C14.** C10 is spent: `b6yacc` and `b6lex` are host tools (C10a, C10b) and
-`/usr/bin/yacc` and `/usr/bin/lex` are on the image with their skeletons (C10c, C10d), so every
-grammar below can be built. **C11, C26 and C13 proved it** — `expr`, `egrep` and `m4` are on the
-image, built from their grammars by `b6_yacc()`, and the skeleton needed no change for any of
-them. C26 also established that **a non-zero conflict count is not by itself a sign of trouble**:
-`egrep.y` has two shift/reduce conflicts, both v7's own, both on the `error` token and both
-resolved by shifting ([egrep/README.md](egrep/README.md)). C13 added the other half of the shape
-C14 needs — **a grammar plus a hand-written translation unit in one `b6_prog()`**, which works,
-needs no `-I` when the C file names no token, and wants `b6nm` over the result to check that each
-shared global is defined once ([m4/CMakeLists.txt](m4/CMakeLists.txt)).
+**Where to start: C15.** C10 is spent, and so is every risk it left behind. `b6yacc` and `b6lex`
+are host tools (C10a, C10b) and `/usr/bin/yacc` and `/usr/bin/lex` are on the image with their
+skeletons (C10c, C10d), so every grammar below can be built. **C11, C26, C13 and C14 proved it** —
+`expr`, `egrep`, `m4` and `make` are on the image, built from their grammars by `b6_yacc()`, and
+the skeleton needed no change for any of them. Three things they settled, in order:
 
-So what is left of C10's risk is written down in [yacc/README.md](yacc/README.md) under "The
-contract": `%union` is still unexercised — `m4y.y` writes `#define YYSTYPE int` and does not
-touch it — and C14's `make/gram.y` is the grammar that needs it. Retire that with a `calcu.y`
-beside [yacc/rootfs/calct.y](yacc/rootfs/calct.y) before starting C14, not during it.
+* **A non-zero conflict count is not by itself a sign of trouble** (C26): `egrep.y` has two
+  shift/reduce conflicts, both v7's own, both on the `error` token and both resolved by shifting
+  ([egrep/README.md](egrep/README.md)). What matters is that the number does not move.
+* **A grammar plus a hand-written translation unit in one `b6_prog()`** works (C13), needs no
+  `-I` when the C file names no token, and wants `b6nm` over the result to check that each shared
+  global is defined once ([m4/CMakeLists.txt](m4/CMakeLists.txt)). C14 is the same shape with six
+  C files instead of one, and it does want an `-I` — on its own directory, the generated parser
+  being compiled somewhere else and including the program's header.
+* **`%union` works** (C14). It was the last of C10's risks: a union `YYSTYPE` turns the
+  skeleton's three value copies into aggregate copies, and nothing had ever compiled one. It was
+  retired ahead of the port on [yacc/rootfs/calcu.y](yacc/rootfs/calcu.y) rather than inside it,
+  so that a miscompile could not read as a grammar bug, and it passed first time
+  ([yacc/README.md](yacc/README.md) under "The contract"). `awk.g.y` at C17 needs none of this
+  proved again.
 
 **Two loose ends about the terminal, one line each and neither worth a task of its own.** `TANDEM`
 is honoured by the kernel — `ttyblock()` queues the stop character when the input queue passes
@@ -89,24 +93,6 @@ and that test is now **deleted** along with the rest of the tests that booted. S
 stands, and with nothing left that runs `/etc/rc` at all it is no longer a deferral but a gap.
 
 ---
-
-## C14. `make`
-
-`main.c` 366, `doname.c` 301, `files.c` 465, `misc.c` 339, `dosys.c` 172, `ident.c` 98 and
-`gram.y` 306 — 2,047 lines — over a 128-line `defs` header. **The highest-value item in this
-file.**
-
-Three things to plan for. `gram.y` is the tree's **only `%union`**, and C11 established that
-nothing has ever exercised `b6yacc`'s union path — three aggregate assignments land in the
-skeleton the moment one appears, in a guest build. Prove it on a `calcu.y` beside
-[yacc/rootfs/calct.y](yacc/rootfs/calct.y) first, so that a miscompile there cannot be mistaken
-for a grammar bug here; [yacc/README.md](yacc/README.md) under "The contract" is the note.
-`defs` is §1's exact trap — a v7 multi-file program defining its globals
-in a header the PDP-11 linker merged for it, which C11 and `b6ld` will not; `extern` in the header
-and one definition file, checked with one line of `b6nm`. And `dosys.c` runs commands, so it is
-`fork`/`exec`/`wait` — this system has **no `waitpid()`** and `<sys/wait.h>` has only the
-argument-less `wait(2)`, as `cc.c`'s `run()` already works around in both its builds. Measure
-against the word ceiling early: this is the largest thing here after `awk`.
 
 ## C15. `dc`
 

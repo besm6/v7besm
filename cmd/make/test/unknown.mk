@@ -1,0 +1,2 @@
+all: nosuchdep
+	echo never

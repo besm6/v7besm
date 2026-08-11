@@ -1,0 +1,1 @@
+-r -n -k -f @srcdir@/keepgoing.mk all

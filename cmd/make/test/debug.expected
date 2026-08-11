@@ -1,0 +1,14 @@
+No suffix list.
+doname(solo,0)
+echo solo
+Open directories:
+Macros:
+	? = 
+	@ = (null)
+	$ = $
+
+
+solo:  done=2  (MAIN NAME)
+ commands:
+	echo solo
+

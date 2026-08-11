@@ -1,0 +1,7 @@
+alpha = 6
+beta = alpha * 7
+beta
+alpha + beta
+gamma
+gamma = beta - alpha
+alpha

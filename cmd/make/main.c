@@ -1,366 +1,311 @@
 /* UNIX V7 source code: see /COPYRIGHT or www.tuhs.org for details. */
 
-# include "defs"
-/*
-command make to update programs.
-Flags:	'd'  print out debugging comments
-	'p'  print out a version of the input graph
-	's'  silent mode--don't print out commands
-	'f'  the next argument is the name of the description file;
-	     "makefile" is the default
-	'i'  ignore error codes from the shell
-	'S'  stop after any command fails (normally do parallel work)
-	'n'   don't issue, just print, commands
-	't'   touch (update time of) files but don't issue command
-	'q'   don't do anything, but check if object is up to date;
-	      returns exit code 0 if up to date, -1 if not
-*/
+//
+// command make to update programs.
+// Flags: 'd'  print out debugging comments
+//        'p'  print out a version of the input graph
+//        's'  silent mode--don't print out commands
+//        'f'  the next argument is the name of the description file;
+//             "makefile" is the default
+//        'i'  ignore error codes from the shell
+//        'S'  stop after any command fails (normally do parallel work)
+//        'n'  don't issue, just print, commands
+//        't'  touch (update time of) files but don't issue command
+//        'q'  don't do anything, but check if object is up to date;
+//             returns exit code 0 if up to date, -1 if not
+//
+#include <signal.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
-struct nameblock *mainname ;
+#include "defs.h"
+
+struct nameblock *mainname;
 struct nameblock *firstname;
 struct lineblock *sufflist;
 struct varblock *firstvar;
-struct pattern *firstpat ;
+struct pattern *firstpat;
 struct opendir *firstod;
 
-#include <signal.h>
-int sigivalue	= 0;
-int sigqvalue	= 0;
-int waitpid	= 0;
+int sigivalue = 0;
+int sigqvalue = 0;
+int childpid  = 0;
 
-int dbgflag	= NO;
-int prtrflag	= NO;
-int silflag	= NO;
-int noexflag	= NO;
-int keepgoing	= NO;
-int noruleflag	= NO;
-int touchflag	= NO;
-int questflag	= NO;
-int ndocoms	= NO;
-int ignerr	= NO;    /* default is to stop on error */
-int okdel	= YES;
+int dbgflag    = NO;
+int prtrflag   = NO;
+int silflag    = NO;
+int noexflag   = NO;
+int keepgoing  = NO;
+int noruleflag = NO;
+int touchflag  = NO;
+int questflag  = NO;
+int ndocoms    = NO;
+int ignerr     = NO; // default is to stop on error
+int okdel      = YES;
 int inarglist;
-char *prompt	= "";	/* other systems -- pick what you want */
+char *prompt = "";
 char junkname[20];
-char funny[128];
+char funny[256];
 
-main(argc,argv)
-int argc;
-char *argv[];
+char **linesptr = builtin;
+
+FILE *fin;
+static int firstrd = 0;
+
+static int rdd1(FILE *k);
+
+int main(int argc, char *argv[])
 {
-register struct nameblock *p;
-int i, j;
-int descset, nfargs;
-TIMETYPE tjunk;
-char c, *s;
-static char onechar[2] = "X";
-#ifdef unix
-int intrupt();
+    struct nameblock *p;
+    int i, j;
+    int descset, nfargs;
+    TIMETYPE tjunk;
+    char c, *s;
+    static char onechar[2] = "X";
 
+    descset = 0;
 
+    funny['\0'] = (META | TERMINAL);
+    for (s = "=|^();&<>*?[]:$`'\"\\\n"; *s; ++s)
+        funny[(unsigned char)*s] |= META;
+    for (s = "\n\t :;&>|"; *s; ++s)
+        funny[(unsigned char)*s] |= TERMINAL;
 
-#endif
+    inarglist = 1;
+    for (i = 1; i < argc; ++i)
+        if (argv[i] != 0 && argv[i][0] != '-' && eqsign(argv[i]))
+            argv[i] = 0;
 
-#ifdef METERFILE
-meter(METERFILE);
-#endif
+    setvar("$", "$");
+    inarglist = 0;
 
-descset = 0;
+    for (i = 1; i < argc; ++i)
+        if (argv[i] != 0 && argv[i][0] == '-') {
+            for (j = 1; (c = argv[i][j]) != '\0'; ++j)
+                switch (c) {
+                case 'd':
+                    dbgflag = YES;
+                    break;
 
-funny['\0'] = (META | TERMINAL);
-for(s = "=|^();&<>*?[]:$`'\"\\\n" ; *s ; ++s)
-	funny[*s] |= META;
-for(s = "\n\t :;&>|" ; *s ; ++s)
-	funny[*s] |= TERMINAL;
+                case 'p':
+                    prtrflag = YES;
+                    break;
 
+                case 's':
+                    silflag = YES;
+                    break;
 
-inarglist = 1;
-for(i=1; i<argc; ++i)
-	if(argv[i]!=0 && argv[i][0]!='-' && eqsign(argv[i]))
-		argv[i] = 0;
+                case 'i':
+                    ignerr = YES;
+                    break;
 
-setvar("$","$");
-inarglist = 0;
+                case 'S':
+                    keepgoing = NO;
+                    break;
 
-for(i=1; i<argc; ++i)
-    if(argv[i]!=0 && argv[i][0]=='-')
-	{
-	for(j=1 ; (c=argv[i][j])!='\0' ; ++j)  switch(c)
-		{
-		case 'd':
-			dbgflag = YES;
-			break;
+                case 'k':
+                    keepgoing = YES;
+                    break;
 
-		case 'p':
-			prtrflag = YES;
-			break;
+                case 'n':
+                    noexflag = YES;
+                    break;
 
-		case 's':
-			silflag = YES;
-			break;
+                case 'r':
+                    noruleflag = YES;
+                    break;
 
-		case 'i':
-			ignerr = YES;
-			break;
+                case 't':
+                    touchflag = YES;
+                    break;
 
-		case 'S':
-			keepgoing = NO;
-			break;
+                case 'q':
+                    questflag = YES;
+                    break;
 
-		case 'k':
-			keepgoing = YES;
-			break;
+                case 'f':
+                    if (i >= argc - 1)
+                        fatal("No description argument after -f flag");
+                    if (rddescf(argv[i + 1]))
+                        fatal1("Cannot open %s", argv[i + 1]);
+                    argv[i + 1] = 0;
+                    ++descset;
+                    break;
 
-		case 'n':
-			noexflag = YES;
-			break;
+                default:
+                    onechar[0] = c;
+                    fatal1("Unknown flag argument %s", onechar);
+                }
 
-		case 'r':
-			noruleflag = YES;
-			break;
+            argv[i] = 0;
+        }
 
-		case 't':
-			touchflag = YES;
-			break;
+    if (!descset)
+        if (rddescf("makefile"))
+            rddescf("Makefile");
 
-		case 'q':
-			questflag = YES;
-			break;
+    if (prtrflag)
+        printdesc(NO);
 
-		case 'f':
-			if(i >= argc-1)
-			  fatal("No description argument after -f flag");
-			if( rddescf(argv[i+1]) )
-				fatal1("Cannot open %s", argv[i+1]);
-			argv[i+1] = 0;
-			++descset;
-			break;
+    if (srchname(".IGNORE"))
+        ++ignerr;
+    if (srchname(".SILENT"))
+        silflag = 1;
+    if ((p = srchname(".SUFFIXES")))
+        sufflist = p->linep;
+    if (!sufflist)
+        fprintf(stderr, "No suffix list.\n");
 
-		default:
-			onechar[0] = c;	/* to make lint happy */
-			fatal1("Unknown flag argument %s", onechar);
-		}
+    // v7 punned the old handler into an int and tested bit 0 for SIG_IGN.
+    sigivalue = signal(SIGINT, SIG_IGN) == SIG_IGN;
+    sigqvalue = signal(SIGQUIT, SIG_IGN) == SIG_IGN;
+    enbint(intrupt);
 
-	argv[i] = 0;
-	}
+    nfargs = 0;
 
-if( !descset )
-#ifdef unix
-	if( rddescf("makefile") )  rddescf("Makefile");
-#endif
-#ifdef gcos
-	rddescf("makefile");
-#endif
+    for (i = 1; i < argc; ++i)
+        if ((s = argv[i]) != 0) {
+            if ((p = srchname(s)) == 0) {
+                p = makename(s);
+            }
+            ++nfargs;
+            doname(p, 0, &tjunk);
+            if (dbgflag)
+                printdesc(YES);
+        }
 
-if(prtrflag) printdesc(NO);
+    // If no file arguments have been encountered, make the first
+    // name encountered that doesn't start with a dot
+    if (nfargs == 0) {
+        if (mainname == 0)
+            fatal("No arguments or description file");
+        else {
+            doname(mainname, 0, &tjunk);
+            if (dbgflag)
+                printdesc(YES);
+        }
+    }
 
-if( srchname(".IGNORE") ) ++ignerr;
-if( srchname(".SILENT") ) silflag = 1;
-if(p=srchname(".SUFFIXES")) sufflist = p->linep;
-if( !sufflist ) fprintf(stderr,"No suffix list.\n");
-
-#ifdef unix
-sigivalue = (int) signal(SIGINT, SIG_IGN) & 01;
-sigqvalue = (int) signal(SIGQUIT, SIG_IGN) & 01;
-enbint(intrupt);
-#endif
-
-nfargs = 0;
-
-for(i=1; i<argc; ++i)
-	if((s=argv[i]) != 0)
-		{
-		if((p=srchname(s)) == 0)
-			{
-			p = makename(s);
-			}
-		++nfargs;
-		doname(p, 0, &tjunk);
-		if(dbgflag) printdesc(YES);
-		}
-
-/*
-If no file arguments have been encountered, make the first
-name encountered that doesn't start with a dot
-*/
-
-if(nfargs == 0)
-	if(mainname == 0)
-		fatal("No arguments or description file");
-	else	{
-		doname(mainname, 0, &tjunk);
-		if(dbgflag) printdesc(YES);
-		}
-
-exit(0);
+    exit(0);
 }
 
-
-
-#ifdef unix
-intrupt()
+void intrupt(int sig)
 {
-struct varblock *varptr();
-char *p;
-TIMETYPE exists();
+    char *p;
 
-if(okdel && !noexflag && !touchflag &&
-	(p = varptr("@")->varval) && exists(p)>0 && !isprecious(p) )
-		{
-		fprintf(stderr, "\n***  %s removed.", p);
-		unlink(p);
-		}
+    (void)sig;
+    if (okdel && !noexflag && !touchflag && (p = varptr("@")->varval) && exists(p) > 0 &&
+        !isprecious(p)) {
+        fprintf(stderr, "\n***  %s removed.", p);
+        unlink(p);
+    }
 
-if(junkname[0])
-	unlink(junkname);
-fprintf(stderr, "\n");
-exit(2);
+    if (junkname[0])
+        unlink(junkname);
+    fprintf(stderr, "\n");
+    exit(2);
 }
 
-
-
-
-isprecious(p)
-char *p;
+int isprecious(char *p)
 {
-register struct lineblock *lp;
-register struct depblock *dp;
-register struct nameblock *np;
+    struct lineblock *lp;
+    struct depblock *dp;
+    struct nameblock *np;
 
-if(np = srchname(".PRECIOUS"))
-	for(lp = np->linep ; lp ; lp = lp->nxtlineblock)
-		for(dp = lp->depp ; dp ; dp = dp->nxtdepblock)
-			if(! unequal(p, dp->depname->namep))
-				return(YES);
+    if ((np = srchname(".PRECIOUS")))
+        for (lp = np->linep; lp; lp = lp->nxtlineblock)
+            for (dp = lp->depp; dp; dp = dp->nxtdepblock)
+                if (!unequal(p, dp->depname->namep))
+                    return YES;
 
-return(NO);
+    return NO;
 }
 
-
-enbint(k)
-int (*k)();
+void enbint(void (*k)(int))
 {
-if(sigivalue == 0)
-	signal(SIGINT,k);
-if(sigqvalue == 0)
-	signal(SIGQUIT,k);
-}
-#endif
-
-extern char *builtin[];
-
-char **linesptr	= builtin;
-
-FILE * fin;
-int firstrd	= 0;
-
-
-rddescf(descfile)
-char *descfile;
-{
-extern int yylineno;
-extern char *zznextc;
-FILE * k;
-
-/* read and parse description */
-
-if( !firstrd++ )
-	{
-	if( !noruleflag )
-		rdd1( (FILE *) NULL);
-
-#ifdef pwb
-		{
-		char *nlog, s[100];
-		nlog = logdir();
-		if ( (k=fopen( concat(nlog,"/makecomm",s), "r")) != NULL)
-			rdd1(k);
-		else if ( (k=fopen( concat(nlog,"/Makecomm",s), "r")) != NULL)
-			rdd1(k);
-	
-		if ( (k=fopen("makecomm", "r")) != NULL)
-			rdd1(k);
-		else if ( (k=fopen("Makecomm", "r")) != NULL)
-			rdd1(k);
-		}
-#endif
-
-	}
-if(! unequal(descfile, "-"))
-	return( rdd1(stdin) );
-
-if( (k = fopen(descfile,"r")) != NULL)
-	return( rdd1(k) );
-
-return(1);
+    if (sigivalue == 0)
+        signal(SIGINT, k);
+    if (sigqvalue == 0)
+        signal(SIGQUIT, k);
 }
 
-
-
-
-rdd1(k)
-FILE * k;
+// Read and parse a description file.
+int rddescf(char *descfile)
 {
-fin = k;
-yylineno = 0;
-zznextc = 0;
+    FILE *k;
 
-if( yyparse() )
-	fatal("Description file error");
+    if (!firstrd++) {
+        if (!noruleflag)
+            rdd1((FILE *)NULL);
+    }
+    if (!unequal(descfile, "-"))
+        return rdd1(stdin);
 
-if(fin != NULL)
-	fclose(fin);
+    if ((k = fopen(descfile, "r")) != NULL)
+        return rdd1(k);
 
-return(0);
+    return 1;
 }
-
-printdesc(prntflag)
-int prntflag;
+
+static int rdd1(FILE *k)
 {
-struct nameblock *p;
-struct depblock *dp;
-struct varblock *vp;
-struct opendir *od;
-struct shblock *sp;
-struct lineblock *lp;
+    fin      = k;
+    yylineno = 0;
+    zznextc  = 0;
 
-#ifdef unix
-if(prntflag)
-	{
-	printf("Open directories:\n");
-	for(od = firstod ; od ; od = od->nxtopendir)
-		printf("\t%d: %s\n", fileno(od->dirfc), od->dirn);
-	}
-#endif
+    if (yyparse())
+        fatal("Description file error");
 
-if(firstvar != 0) printf("Macros:\n");
-for(vp = firstvar; vp ; vp = vp->nxtvarblock)
-	printf("\t%s = %s\n" , vp->varname , vp->varval);
+    if (fin != NULL)
+        fclose(fin);
 
-for(p = firstname; p; p = p->nxtnameblock)
-	{
-	printf("\n\n%s",p->namep);
-	if(p->linep != 0) printf(":");
-	if(prntflag) printf("  done=%d",p->done);
-	if(p==mainname) printf("  (MAIN NAME)");
-	for(lp = p->linep ; lp ; lp = lp->nxtlineblock)
-		{
-		if( dp = lp->depp )
-			{
-			printf("\n depends on:");
-			for(; dp ; dp = dp->nxtdepblock)
-				if(dp->depname != 0)
-					printf(" %s ", dp->depname->namep);
-			}
-	
-		if(sp = lp->shp)
-			{
-			printf("\n commands:\n");
-			for( ; sp!=0 ; sp = sp->nxtshblock)
-				printf("\t%s\n", sp->shbp);
-			}
-		}
-	}
-printf("\n");
-fflush(stdout);
+    return 0;
+}
+
+void printdesc(int prntflag)
+{
+    struct nameblock *p;
+    struct depblock *dp;
+    struct varblock *vp;
+    struct opendir *od;
+    struct shblock *sp;
+    struct lineblock *lp;
+
+    if (prntflag) {
+        printf("Open directories:\n");
+        for (od = firstod; od; od = od->nxtopendir)
+            printf("\t%d: %s\n", od->dirfc ? dirfd(od->dirfc) : -1, od->dirn);
+    }
+
+    if (firstvar != 0)
+        printf("Macros:\n");
+    for (vp = firstvar; vp; vp = vp->nxtvarblock)
+        printf("\t%s = %s\n", vp->varname, vp->varval);
+
+    for (p = firstname; p; p = p->nxtnameblock) {
+        printf("\n\n%s", p->namep);
+        if (p->linep != 0)
+            printf(":");
+        if (prntflag)
+            printf("  done=%d", p->done);
+        if (p == mainname)
+            printf("  (MAIN NAME)");
+        for (lp = p->linep; lp; lp = lp->nxtlineblock) {
+            if ((dp = lp->depp)) {
+                printf("\n depends on:");
+                for (; dp; dp = dp->nxtdepblock)
+                    if (dp->depname != 0)
+                        printf(" %s ", dp->depname->namep);
+            }
+
+            if ((sp = lp->shp)) {
+                printf("\n commands:\n");
+                for (; sp != 0; sp = sp->nxtshblock)
+                    printf("\t%s\n", sp->shbp);
+            }
+        }
+    }
+    printf("\n");
+    fflush(stdout);
 }

@@ -9,7 +9,7 @@ A port of **Unix v7 to the BESM-6**, a Soviet 48-bit-word mainframe.
 - **`kernel/` + `include/`** — the v7 kernel (from Robert Nordier's v7/x86 port; see
   `COPYRIGHT`), cross-built here and **booting under SIMH** to multi-user shells.
 - **`cmd/`** — the toolchain as host tools, including `b6sim`, a user-level a.out simulator,
-  plus **99 native BESM-6 programs** staged into `build/rootfs/` for the root image — the count
+  plus **100 native BESM-6 programs** staged into `build/rootfs/` for the root image — the count
   is `b6_prog()` calls under `cmd/` whose `DEST` is not `test/…`, and nothing but that rule.
 - **`lib/`** — cross-built `libc.a`, `libm.a`, `libtermcap.a`, `libcurses.a`, `crt0.o`.
 
@@ -59,10 +59,10 @@ relocatable symbol above word **32,767** (a 15-bit pointer's reach). Two more ce
 cannot guard, and both bind in practice: **no struct may exceed 4,096 words** (a member is a
 12-bit offset from a base register — move the big arrays to file scope), and the **4,096-word
 stack**, where a long function costs 1.5–2 words per source line before any array.
-`cmd/README.md` §6 is the account. **The root image has 345 free blocks of 2000** — it had 181
+`cmd/README.md` §6 is the account. **The root image has 321 free blocks of 2000** — it had 181
 until the `lib/test` programs moved to the test pack, which has 1,686 free of its own, and
-`/usr/bin/yacc` and `/usr/bin/lex` have since taken 68 back, `/bin/expr` 14, `/bin/egrep` 14 and
-`/bin/m4` 19.
+`/usr/bin/yacc` and `/usr/bin/lex` have since taken 68 back, `/bin/expr` 14, `/bin/egrep` 14,
+`/bin/m4` 19 and `/bin/make` 24.
 
 **Twelve programs are built twice** — `cpp`, `as`, `ld`, `nm`, `size`, `strip`, `disasm`, `ar`,
 `ranlib`, `cc`, `yacc`, `lex` — as the host `b6*` tools and, from the same sources under

@@ -49,4 +49,13 @@ b6_progtest(calct prec     DEST test/calct)
 b6_progtest(calct recover  DEST test/calct)
 b6_progtest(calct eightbit DEST test/calct)
 
+# calcu -- the same calculator over a %union, so the skeleton's three value copies
+# are aggregate copies.  ../README.md, "The contract"; ../../TODO.md, C14.
+b6_yacc(CALCU_SRC calcu ${CMAKE_CURRENT_SOURCE_DIR}/calcu.y)
+b6_prog(calcu DEST test/calcu SOURCES ${CALCU_SRC})
+
+b6_progtest(calcu uarith   DEST test/calcu)
+b6_progtest(calcu uassign  DEST test/calcu)
+b6_progtest(calcu urecover DEST test/calcu)
+
 add_subdirectory(test)

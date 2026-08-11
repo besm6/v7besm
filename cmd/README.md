@@ -168,6 +168,13 @@ takes `s_fsize` verbatim, and its page owes the mirror section, `BLOCKS HERE ARE
 a directory **is not NUL-terminated** unless the port terminates it. Anything that walks
 directories inherits this.
 
+**A new port does not inherit it, because it uses `opendir(3)`** — `readdir()` skips the free
+slots, plants the terminator and hands back `d_namlen`, and all three of those are what the eight
+hand-rolled readers C24 will convert get wrong. [`make/files.c`](make/files.c)'s `srchdir()` is
+the worked example: v7 `fread`s 32 raw `struct direct` at a time and copies each name through a
+15-byte buffer, and the port is a `readdir()` loop with the copy gone. Do that from the start
+rather than porting the hand-rolled version and adding a ninth to C24's list.
+
 ### 6. Ceilings, of which only two are checked
 
 * **28,672 words** of `const + text + data + bss` — 32 pages less the four the stack takes.
@@ -239,9 +246,9 @@ One list must grow with the program and nothing catches it but a failing build: 
 in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The hard-coded `ls /bin`
 expectations that used to catch it as well went with `kernel/test/console` and `session`.
 
-The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **345 free** — it was 187
+The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **321 free** — it was 187
 until the `lib/test` programs moved to the test pack, and `yacc` and `lex` have since taken 68 of
-what that gave back, `expr` 14, `egrep` 14 and `m4` 19. The whole of `/usr/man` is 302 blocks, `man` 12 and
+what that gave back, `expr` 14, `egrep` 14, `m4` 19 and `make` 24. The whole of `/usr/man` is 302 blocks, `man` 12 and
 `manview` 17. That is room for a
 good deal of what [TODO.md](TODO.md) has open, but it is not room for anything: weigh a large
 addition against it rather than assuming. The number is printed by `b6fsutil` every time
