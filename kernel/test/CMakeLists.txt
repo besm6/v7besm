@@ -234,6 +234,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/usr/dict/words
     ${B6_ROOTFS}/bin/sh
     ${B6_ROOTFS}/bin/basename
+    ${B6_ROOTFS}/bin/bc
     ${B6_ROOTFS}/bin/cal
     ${B6_ROOTFS}/bin/cat
     ${B6_ROOTFS}/bin/chgrp
@@ -251,6 +252,7 @@ set(ROOTFS_FILES
     ${B6_ROOTFS}/bin/dmesg
     ${B6_ROOTFS}/bin/du
     ${B6_ROOTFS}/usr/lib/diffh
+    ${B6_ROOTFS}/usr/lib/lib.b
     ${B6_ROOTFS}/usr/lib/yaccpar
     ${B6_ROOTFS}/usr/lib/lex/ncform
     ${B6_ROOTFS}/usr/bin/cpp

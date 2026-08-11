@@ -1,0 +1,7 @@
+define f(x){
+auto a, b
+a = x + 1
+b = a * 2
+return(b)
+}
+f(3)

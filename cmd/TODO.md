@@ -10,7 +10,7 @@ harness tests it. Read it before starting any task below; **nothing here repeats
 
 **Task numbers carry a `C`** — `C10`, `C11`, … — because the kernel's task numbers are cited from
 source comments and from `doc/`, and a bare number would be ambiguous forever after. The numbering
-is **left as it was** when a task is finished and dropped: C1 through C11, C13, C14, C15 and C26
+is **left as it was** when a task is finished and dropped: C1 through C11, C13 through C16 and C26
 are spent and their sections are gone, and no number is ever re-used, because `root.manifest` stanzas
 and per-program `README.md`s cite them.
 
@@ -45,7 +45,6 @@ here and already tested, whose value is in doing them together rather than one a
 
 | | task | what it buys | size |
 |---|---|---|---|
-| C16 | `bc` | the calculator front end | small |
 | C17 | `awk` | the one program that is a grammar *and* a scanner | large |
 | C18 | `units` | | small |
 | C19 | `crypt`, `makekey` | | small |
@@ -55,12 +54,13 @@ here and already tested, whose value is in doing them together rather than one a
 | C23 | `calendar` | | small, blocked on a clock and on its data |
 | C24 | the eight hand-rolled directory readers, over `opendir(3)` | one reader instead of eight, and §5 stops being everybody's problem | medium |
 
-**Where to start: C16.** C15 put `/bin/dc` on the image, so the engine `bc` `exec`s is there and
-the front end is worth building. C10 is spent too, and so is every risk it left behind. `b6yacc` and `b6lex`
-are host tools (C10a, C10b) and `/usr/bin/yacc` and `/usr/bin/lex` are on the image with their
-skeletons (C10c, C10d), so every grammar below can be built. **C11, C26, C13 and C14 proved it** —
-`expr`, `egrep`, `m4` and `make` are on the image, built from their grammars by `b6_yacc()`, and
-the skeleton needed no change for any of them. Three things they settled, in order:
+**Where to start: C17**, and the calculator is done: C15 put `/bin/dc` on the image and C16 the
+`bc` that drives it, with `/usr/lib/lib.b` beside it. C10 is spent too, and so is every risk it
+left behind. `b6yacc` and `b6lex` are host tools (C10a, C10b) and `/usr/bin/yacc` and `/usr/bin/lex` are on the image with their
+skeletons (C10c, C10d), so every grammar below can be built. **C11, C26, C13, C14 and C16 proved
+it** — `expr`, `egrep`, `m4`, `make` and `bc` are on the image, built from their grammars by
+`b6_yacc()`, and the skeleton needed no change for any of them. Four things they settled, in
+order:
 
 * **A non-zero conflict count is not by itself a sign of trouble** (C26): `egrep.y` has two
   shift/reduce conflicts, both v7's own, both on the `error` token and both resolved by shifting
@@ -70,6 +70,10 @@ the skeleton needed no change for any of them. Three things they settled, in ord
   global is defined once ([m4/CMakeLists.txt](m4/CMakeLists.txt)). C14 is the same shape with six
   C files instead of one, and it does want an `-I` — on its own directory, the generated parser
   being compiled somewhere else and including the program's header.
+* **A conflict count in the dozens is still only a number to hold still** (C16): `bc.y` reports
+  12 shift/reduce and 30 reduce/reduce, `stat` and `e` both deriving `LETTER '=' e`, and running
+  `b6yacc` over the unmodified upstream grammar gives the same two numbers
+  ([bc/README.md](bc/README.md)).
 * **`%union` works** (C14). It was the last of C10's risks: a union `YYSTYPE` turns the
   skeleton's three value copies into aggregate copies, and nothing had ever compiled one. It was
   retired ahead of the port on [yacc/rootfs/calcu.y](yacc/rootfs/calcu.y) rather than inside it,
@@ -93,23 +97,6 @@ and that test is now **deleted** along with the rest of the tests that booted. S
 stands, and with nothing left that runs `/etc/rc` at all it is no longer a deferral but a gap.
 
 ---
-
-## C16. `bc`
-
-`bc/bc.y`, 600 lines. A front end that `exec`s `dc` and pipes to it, so it was worth nothing
-until C15 put the engine on the image. It is there now, and [dc/README.md](dc/README.md) is what
-to read first — three of the things it settled are `bc`'s to rely on and one is `bc`'s to check:
-
-* **`S` and `L` on an array register work**, which is how `bc` scopes an `auto` array across a
-  call (`atab` names 0241 upward, `pp()`/`tp()` emit `0S`*name*). A case pins the round trip.
-* **A register name is one byte and 0241 and above name arrays**, which is `bc`'s own convention
-  and is now written down in `dc.1`.
-* **An array element is one word, not v7's two bytes**, so an array of *n* costs `(n+6)*6` char
-  units — three times the PDP-11's. `MAXIND` is still 2048 because it is `bc`'s bound, and a full
-  array is about a tenth of the heap.
-* **What to check**: `bc`'s own `%D`, its K&R pass, and whether `signal(2, (int(*)())1)` at the
-  head of `yyinit()` still means `SIG_IGN` here — it is written as a bare 1 and `<signal.h>` has
-  a real prototype now.
 
 ## C17. `awk`
 

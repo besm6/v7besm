@@ -246,10 +246,11 @@ One list must grow with the program and nothing catches it but a failing build: 
 in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The hard-coded `ls /bin`
 expectations that used to catch it as well went with `kernel/test/console` and `session`.
 
-The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **289 free** — it was 187
+The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **270 free** — it was 187
 until the `lib/test` programs moved to the test pack, and `yacc` and `lex` have since taken 68 of
-what that gave back, `expr` 14, `egrep` 14, `m4` 19, `make` 24 and `dc` 32 — the largest single
-addition yet, and a reminder that the number is worth reading before a port rather than after.
+what that gave back, `expr` 14, `egrep` 14, `m4` 19, `make` 24, `dc` 32 — the largest single
+addition yet, and a reminder that the number is worth reading before a port rather than after —
+and `bc` 20, with one more block for the `/usr/lib/lib.b` its `-l` reads.
 The whole of `/usr/man` is 302 blocks, `man` 12 and
 `manview` 17. That is room for a
 good deal of what [TODO.md](TODO.md) has open, but it is not room for anything: weigh a large

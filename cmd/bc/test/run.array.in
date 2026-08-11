@@ -1,0 +1,13 @@
+define s(n){
+auto v[], i, t
+for(i=0; i<n; i++){
+v[i] = i*i
+}
+t = 0
+for(i=0; i<n; i++){
+t = t + v[i]
+}
+return(t)
+}
+s(5)
+s(10)

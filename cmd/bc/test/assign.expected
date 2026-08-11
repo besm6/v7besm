@@ -1,0 +1,9 @@
+ 3sx
+lxps.
+lx 2+sx
+lx 1-sx
+lx 3*sx
+lx 2/sx
+lx 4%sx
+lx 2^sx
+q

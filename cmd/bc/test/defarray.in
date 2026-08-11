@@ -1,0 +1,5 @@
+define g(v[]){
+auto w[]
+w[0] = v[0] + 1
+return(w[0])
+}

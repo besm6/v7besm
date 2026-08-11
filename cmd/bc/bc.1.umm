@@ -14,7 +14,16 @@ bc - arbitrary-precision arithmetic language
 
 *Bc* is an interactive processor for a language which resembles C but provides unlimited
 precision arithmetic. It takes input from any files given, then reads the standard input. The
-**-l** argument stands for the name of an arbitrary precision math library. The syntax for *bc*
+**-l** argument stands for the name of an arbitrary precision math library.
+
+Note: the arguments are read in a loop, so **-c** and **-l** may be given together and in
+either order, and the library is read before the files named on the command line. In v7 only
+the first argument was examined and **-l** worked by replacing it, so `bc -c -l` opened a file
+called `-l` and `bc -l prog` read *prog* instead of the library.
+
+Note: **-d** is accepted as a synonym for **-c**. It is v7's, and was never documented.
+
+The syntax for *bc*
 programs is as follows; L means letter a-z, E means expression, S means statement.
 
 Comments
@@ -106,7 +115,10 @@ prints approximate values of the exponential function of the first ten integers.
 
 *Bc* is actually a preprocessor for dc(1), which it invokes automatically, unless the **-c**
 (compile only) option is present. In this case the *dc* input is sent to the standard output
-instead.
+instead. The program it invokes is `/bin/dc`, and `/usr/bin/dc` if that is not there.
+
+Note: a quoted string is printed literally. In v7 it reached printf(3) as a format, so a `%` in
+one read as a conversion specifier and consumed an argument that was never passed.
 
 ## FILES
 
@@ -115,6 +127,29 @@ instead.
 
 dc(1)
 : desk calculator proper
+
+## DIAGNOSTICS
+
+Every diagnostic names the line and the file it was read from, and is passed to *dc* as a
+command that prints it. A syntax error is recovered from and the next statement is read. Five
+conditions are not recovered from and stop *bc* with exit status 1:
+
+- `cannot open input file` for a *file* named on the command line, and for one that ends and
+  is followed by another that cannot be opened. v7 named neither the file nor the line here,
+  and then read on through a null stream.
+- `constant too long` for more constant text in one statement than the 1000-character buffer
+  that holds it. v7 wrote past that buffer with no test at all.
+- `string space exceeded` for more than 999 characters of quoted string in one statement.
+- `control structures nested too deeply` for more than ten nested **while** or **for**
+  statements. In v7 the eleventh wrote past the end of a ten-element array with no diagnostic.
+- `bundling space exceeded` and `expression nested too deeply` for a statement larger than the
+  compiler's working storage. v7 reported the first and then wrote past that storage anyway.
+
+`break outside a control structure` and `program too big` are also new, and are recovered from.
+The first is a condition v7 met by reading one element below an array.
+
+Note: end of input and **quit** both exit 0. In v7 they exited 1, along with every error, so a
+successful `bc -c prog > prog.dc` reported failure.
 
 ## SEE ALSO
 

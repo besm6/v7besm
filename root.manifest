@@ -320,6 +320,34 @@ file /bin/basename      # cmd/basename
 source ../../rootfs/bin/basename
 mode 0755
 
+file /bin/bc            # cmd/bc -- task C16, the calculator language, and a COMPILER rather
+                        # than a calculator: it translates into dc(1) commands and execs
+                        # /bin/dc, which C15 put here for it.  bundle() COLLECTED ITS OWN
+                        # ARGUMENTS THROUGH &a, walking the caller's frame; arguments go in
+                        # direct order here with the last left in the accumulator, so there
+                        # is no vector to walk and it takes <stdarg.h>.  A SEMANTIC VALUE IS
+                        # A char *, never an int: v7 left YYSTYPE at int and put string
+                        # literals and register names in it, and a fat pointer does not fit
+                        # in 41 bits.  Its arena could not either -- v7 kept nested-bundle
+                        # addresses and literals in one int[] and told them apart by the
+                        # address range -- so the elements are char *b_space[] and a bundle
+                        # handle names a parallel char array, which keeps the range test and
+                        # loses the cast that would floor the pointer to its word.  THE
+                        # OUTPUT WAS A printf FORMAT: routput() ended printf(p) on strings
+                        # holding the user's own quoted text, so `"50% off"' read a
+                        # conversion off the end of an empty argument list -- which is why
+                        # the grammar spelled dc's remainder "%%" twice.  fputs(3) now, and
+                        # both literals are "%".  The bundle walk is iterative, its depth
+                        # being the input's.  Five v7 bounds were unchecked or unenforced:
+                        # bstack[10], the constant arena, `break' outside a loop reading
+                        # bstack[-1], and the arena guard that diagnosed the overflow and
+                        # then wrote anyway.  Flags are parsed in a loop and the -l library
+                        # is spliced in front of the file list, where v7 took one flag and
+                        # overwrote argv[1] -- so `bc -c -l' opened a file called -l.  End
+                        # of input exits 0, not v7's 1.  cmd/bc/README.md.
+source ../../rootfs/bin/bc
+mode 0755
+
 file /bin/cal           # cmd/cal -- task C5f.  September 1752 still loses eleven days.
 source ../../rootfs/bin/cal
 mode 0755
@@ -2363,6 +2391,15 @@ file /usr/lib/diffh     # cmd/diffh -- task C5f.  diff -h execv's this path; see
                         # bounded by the input -- which is the whole reason -h exists.
 source ../../rootfs/usr/lib/diffh
 mode 0755
+
+file /usr/lib/lib.b     # cmd/bc's math library -- task C16, and the THIRD entry in /usr/lib
+                        # that is not a program: a bc program, read by /bin/bc when -l is
+                        # given, hence 0644.  s, c, e, l, a and j, as bc.1 lists them.  No
+                        # copy of it reached this tree with the rest of cmd/bc, so this one
+                        # is 2.11BSD's share/misc/lib.b, `lib.b 4.1 83/04/02', which is the
+                        # Bell original unchanged.  Same bytes as cmd/bc/lib.b.
+source ../../rootfs/usr/lib/lib.b
+mode 0644
 
 file /usr/lib/yaccpar   # cmd/yacc's parser skeleton -- task C10c, and THE FIRST ENTRY IN
                         # /usr/lib THAT IS NOT A PROGRAM.  /usr/bin/yacc copies it verbatim
