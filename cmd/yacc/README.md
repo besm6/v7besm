@@ -71,6 +71,9 @@ void yyerror(char *);
 ```
 
 C10b's `ncform` does, and each of C11–C17's grammars must define both with these signatures.
+C13 is the one that found the sharp edge: v7's `m4y.y` wrote `yyerror(s) char *s; {}`, which is
+`int` by omission, and the emitted `void` prototype makes that a **hard error** rather than the
+silent mismatch a PDP-11 linker allowed.
 
 **And `YYSTYPE` is a macro, not a type name**, which is the other half of the same contract.
 `y2.c` emits `YYSTYPE yylval, yyval;`, so a grammar whose value type is a pointer must spell it

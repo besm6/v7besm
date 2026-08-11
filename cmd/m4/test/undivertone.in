@@ -1,0 +1,3 @@
+divert(1)one
+divert(2)two
+divert(0)undivert(1)end

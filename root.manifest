@@ -524,6 +524,39 @@ file /bin/ls            # cmd/ls
 source ../../rootfs/bin/ls
 mode 0755
 
+file /bin/m4            # cmd/m4 -- task C13, the third program here built from a yacc
+                        # grammar and the first that is a grammar PLUS a hand-written
+                        # translation unit: m4y.y is eval's parser, m4.c the processor.
+                        # A BUILTIN IS AN INTEGER CODE IN THE NAME TABLE, not v7's address
+                        # of a one-byte malloc block.  free() puts that block back and the
+                        # next copy() takes it, so `define(`len',X)' left len the builtin --
+                        # the page's own rule, that a redefined builtin loses its meaning,
+                        # was the thing that did not happen -- and a later macro could be
+                        # handed the block and BECOME len.  Both are cases now.
+                        # THE CHARACTER TABLE IS 256 ENTRIES and end of file is tested for
+                        # by name: getc(3) masks with 0377, so v7's 128 entries were read
+                        # past above 0177 and at type[-1] on EOF, which put a stray 0377
+                        # into the output of any file ending in a macro call.  BYTES
+                        # 0200-0377 ARE LETTERS, so a macro name may be Russian, and len,
+                        # index, substr and translit count BYTES.  A NUL is an ordinary
+                        # byte, in the input and through a diversion both; v7 ended the
+                        # file on one.  eval is ONE 41-BIT WORD, not the page's 32 bits,
+                        # and division by zero is diagnosed rather than left to the divide
+                        # instruction, which faults -- as /bin/expr's is.  The temp name is
+                        # an ARRAY: v7 handed mktemp(3) a string literal and then wrote
+                        # into it four times.  errprint prints its argument literally and
+                        # not as a printf format.  A word longer than the token buffer is
+                        # emitted as text instead of running off it, and eight bounds are
+                        # checked that were not -- the call stack was one past its end and
+                        # its diagnostic unreachable, the pushback, the output and the
+                        # argument stack were untested per byte, include nesting was
+                        # unlimited, substr's missing length was 128 and index read past
+                        # the end of its first argument.  A failed sinclude no longer
+                        # swallows the pushback that was pending.  shift still says it is
+                        # not implemented, which is v7's own state.  cmd/m4/README.md.
+source ../../rootfs/bin/m4
+mode 0755
+
 file /bin/mesg          # cmd/mesg -- task C6.  NOT setuid: chmod(2) is gated on owner(), and
                         # the terminal is the user's only because login chowned it.  The nodes
                         # below ship 0622, so a fresh boot answers `is y'.
@@ -1426,9 +1459,9 @@ mode 0644
 #
 # IT DOES NOT CURATE.  The corpus costs about 302 of the free blocks this image had and
 # leaves 216, of which /usr/bin/man below took another 12; a manual with holes in it
-# is worth less than the blocks.  FIFTEEN OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
-# THIS IMAGE -- ac, at, awk, bc, calendar, cron, crypt, dc, m4, mail, make, makekey,
-# sa, units and update.  Twelve are ports cmd/TODO.md still has open and their pages are
+# is worth less than the blocks.  FOURTEEN OF THESE PAGES DOCUMENT PROGRAMS THAT ARE NOT ON
+# THIS IMAGE -- ac, at, awk, bc, calendar, cron, crypt, dc, mail, make, makekey,
+# sa, units and update.  Eleven are ports cmd/TODO.md still has open and their pages are
 # already correct when one lands; mail, ac and sa are in that file's "Not ported, and why"
 # table and will never have a program, which is v7's own habit -- a manual page is where a
 # decision about a program is recorded whether or not the program exists.

@@ -8,7 +8,7 @@ m4 - macro processor
 
 ## SYNOPSIS
 
-| **m4** [ files ]
+| **m4** [ *file* ... ]
 
 ## DESCRIPTION
 
@@ -43,17 +43,24 @@ define
   *n*-th argument. Argument 0 is the name of the macro; missing arguments are replaced by the
   null string.
 
+  **Note:** a replacement text containing `$0` expands to the macro's own name, which is then
+  rescanned as a call on that same macro and never terminates; *m4* stops with `pushback
+  overflow`. This is v7's own behaviour and not a limit of this port.
+
 undefine
 : removes the definition of the macro named in its argument.
 
 ifdef
 : If the first argument is defined, the value is the second argument, otherwise the third. If
-  there is no third argument, the value is null. The word *unix* is predefined on UNIX versions
-  of *m4*.
+  there is no third argument, the value is null. The word *unix* is predefined here, as it is on
+  every UNIX version of *m4*.
 
 changequote
 : Change quote characters to the first and second arguments. *Changequote* without arguments
   restores the original values (i.e., \`').
+
+  **Note:** an *empty* argument restores that side's default too. v7 would have taken the
+  argument's terminating NUL as the quote character, and a NUL is an ordinary byte here.
 
 divert
 : *M4* maintains 10 output streams, numbered 0-9. The final output is the concatenation of the
@@ -83,8 +90,13 @@ incr
   interpreting an initial digit-string as a decimal number.
 
 eval
-: evaluates its argument as an arithmetic expression, using 32-bit arithmetic. Operators include
-  +, -, \*, /, %, ^ (exponentiation); relationals; parentheses.
+: evaluates its argument as an arithmetic expression. Operators include +, -, \*, /, %, ^ (or
+  \*\*, exponentiation); the relationals `<`, `<=`, `>`, `>=`, `=` and `!=`; `|`, `&` and `!`;
+  and parentheses.
+
+  **Note:** v7 said "using 32-bit arithmetic". Arithmetic here is one machine word --- see
+  ARITHMETIC IS ONE MACHINE WORD below --- and division or remainder by zero is diagnosed
+  rather than attempted, the divide instruction faulting on it.
 
 len
 : returns the number of characters in its argument.
@@ -97,6 +109,8 @@ substr
 : returns a substring of its first argument. The second argument is a zero origin number
   selecting the first character; the third argument indicates the length of the substring. A
   missing third argument is taken to be large enough to extend to the end of the first string.
+
+  **Note:** v7 took "large enough" to be 128, which silently truncated any longer string.
 
 translit
 : transliterates the characters in its first argument from the set given by the second argument
@@ -115,11 +129,64 @@ maketemp
 : fills in a string of XXXXX in its argument with the current process id.
 
 errprint
-: prints its argument on the diagnostic output file.
+: prints its argument on the diagnostic output file, followed by a newline.
+
+  **Note:** the argument is printed literally. v7 passed it to *printf* as a *format*, so a
+  `%` in the text consumed an argument that had never been supplied.
 
 dumpdef
 : prints current names and definitions, for the named items, or for all if no arguments are
   given.
+
+shift
+: is recognised and refused, with the diagnostic `m4: shift not yet implemented`. v7's *m4*
+  did the same and its manual page did not mention the macro at all.
+
+## BESM-6 NOTES
+
+**Arithmetic is one machine word.** *Eval* computes in one 48-bit word, of which 41 bits carry
+a signed integer, so a value runs from -1099511627776 to 1099511627775. v7's manual said 32
+bits, which was the PDP-11's `long`; this is wider, and nothing that fitted there fails to fit
+here. Overflow is silent. Division and remainder by zero are *diagnosed* --- `m4: divide by
+zero in eval: ...` --- rather than attempted: the machine's divide instruction faults on a zero
+divisor, so v7's unchecked expression would have killed the process rather than printed a wrong
+answer.
+
+**Everything counts bytes.** *Len*, *index* and *substr* count bytes, and *translit*
+transliterates byte by byte. A letter outside ASCII occupies more than one byte, so
+`len(привет)` is 12 and not 6, a *substr* may cut a letter in half, and a *translit* whose two
+sets are not byte-for-byte parallel will produce letters that are in neither.
+
+**Macro names may hold those bytes.** Every byte above `0177` is a name constituent, so
+`define(привет, здравствуй)` defines a macro that `привет` calls. A NUL is an ordinary byte in
+the input and through a diversion, but it *terminates a macro argument*, arguments being held
+as strings.
+
+## LIMITS
+
+Each is diagnosed, and each stops *m4* with exit status 1.
+
+| a macro name          | 127 bytes; a longer word is passed through as text
+| nested macro calls    | 50 --- `call stack overflow`
+| arguments in flight   | 160 slots --- `arg stack overflow`
+| collected argument text | 4096 bytes --- `argument overflow`
+| pushed-back text      | 4096 bytes --- `pushback overflow`
+| nested *include*s     | 9 --- `include nesting too deep`
+| diversions            | 10, numbered 0 through 9
+
+## DIAGNOSTICS
+
+`file not found`, `EOF in string`, `unexpected EOF`, `... defined as itself`, the five overflow
+messages above, `no space for alloc` and `cannot create temp file`, each preceded by `m4: `.
+All of them exit with status 1.
+
+`invalid expression in eval` and `divide by zero in eval` are written to the diagnostic output
+but do **not** stop *m4*: the call simply produces nothing, as in v7. Nor does `shift not yet
+implemented`.
+
+## FILES
+
+| /tmp/m4a? | diversion streams 1 through 9, removed on exit
 
 ## SEE ALSO
 

@@ -92,8 +92,16 @@ A `char *` here is a **fat pointer** — byte offset in bits 47–45, word addre
 the offset *decrements* as the pointer advances, so the raw word does not sort. The compiler deals
 with it: a relational between two byte pointers lowers through **`b$pdiff`** and orders them
 correctly; `==`/`!=` are raw word compares and are right too, the encoding being canonical. A `<`
-between two `char *` in a v7 source is not a bug to hunt. It is still two out-of-line calls where
-an `int` index is a register test, so rewrite one that runs once per byte.
+between two `char *` in a v7 source is not a bug to hunt. It is still an out-of-line call more
+than the comparison needs, so rewrite one that runs once per byte.
+
+**And rewrite it as a shadow counter, not as an index.** The obvious reading — turn the cursors
+into `int` subscripts — buys nothing: `b$padd` sits beside `b$pinc` and `b$pdec` in every
+program here, so `buf[i]` is a call exactly as `*p++` is one and they cost the same. Only the
+*comparison* is removable, so the shape that pays is an `int` kept alongside the pointer and
+tested in its place. [m4/README.md](m4/README.md) is the worked example and carries the number:
+`m4`'s `getchr()` was a `b$pdiff` per input character, and retiring that one relational and two
+more took **21% off the instruction count** of a whole run.
 
 Live hazards the compiler does not cover:
 
@@ -231,9 +239,9 @@ One list must grow with the program and nothing catches it but a failing build: 
 in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The hard-coded `ls /bin`
 expectations that used to catch it as well went with `kernel/test/console` and `session`.
 
-The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **364 free** — it was 187
+The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **345 free** — it was 187
 until the `lib/test` programs moved to the test pack, and `yacc` and `lex` have since taken 68 of
-what that gave back, `expr` 14 and `egrep` 14. The whole of `/usr/man` is 302 blocks, `man` 12 and
+what that gave back, `expr` 14, `egrep` 14 and `m4` 19. The whole of `/usr/man` is 302 blocks, `man` 12 and
 `manview` 17. That is room for a
 good deal of what [TODO.md](TODO.md) has open, but it is not room for anything: weigh a large
 addition against it rather than assuming. The number is printed by `b6fsutil` every time
@@ -401,6 +409,13 @@ are silent on ASCII and wrong on the first Cyrillic byte.
   the wild store goes *forward*, into bytecode not yet written, so an undersized class comes out
   **empty** and matches nothing. A case that pins the width has to be a positive one, and the
   mask needs a negative control beside it.
+  **`m4`'s `type[]` is the sixth shape and the one to check for first**, because its index is
+  not a `char` at all but `getc(3)`'s result — masked with `0377` above, and `EOF` below, so 128
+  entries were short at one end and negative at the other ([m4/README.md](m4/README.md)). Its
+  symptom was not a misclassification either: the out-of-range read made the scanner push a
+  literal `0377` into its own input, so the fault surfaced as a stray byte in the output of a
+  program whose output logic was correct. **Ask what a table is indexed *by* before asking how
+  wide it is.**
 * **A `<ctype.h>` call is the quiet form of the same table**: `lib/libc/gen/ctype_.c` is **129
   entries** and only `isascii()` may be applied above `0177`. Ask what the option *means* for a
   multi-byte letter, not merely whether the call is in bounds.

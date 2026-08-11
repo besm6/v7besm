@@ -1,0 +1,1 @@
+define(x,sinclude(nosuchfile)tail)x

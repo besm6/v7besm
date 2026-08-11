@@ -1,0 +1,2 @@
+divert(1)привет
+divert(0)undivert()end

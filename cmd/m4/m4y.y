@@ -1,6 +1,29 @@
 %{
-extern long	evalval;
-#define	YYSTYPE	long
+/*
+ * m4 -- the expression parser behind the `eval' builtin.
+ *
+ * Task C13.  README.md beside this file is the account.
+ *
+ * YYSTYPE IS ONE MACHINE WORD.  v7 wrote `long' for the PDP-11's sake; a long is an
+ * int is one 41-bit word here, so eval is wider than the manual page's "32-bit
+ * arithmetic" and the page says so now.
+ *
+ * DIVISION BY ZERO IS DIAGNOSED.  The divide instruction faults on it, so v7's
+ * unchecked `/' and `%' killed the process.  The error rides out on evalerr and
+ * YYABORT, which the skeleton defines as `return (1)' -- the value doeval() already
+ * treated as failure, so the path is v7's own.
+ *
+ * The value channel is a global rather than yylval: yylex() sets evalval and the
+ * DIGITS rule reads it back.  That is v7's, and it works only because the state
+ * reached by shifting DIGITS reduces by default without a lookahead.
+ */
+extern int evalval;
+extern char *pe;
+extern char *evalerr;
+
+#define YYSTYPE int
+
+static int peek(int c, int r1, int r2);
 %}
 
 %term DIGITS
@@ -30,24 +53,27 @@ e	: e '|' e	={ $$ = ($1!=0 || $3!=0) ? 1 : 0; }
 	| e '+' e	={ $$ = ($1+$3); }
 	| e '-' e	={ $$ = ($1-$3); }
 	| e '*' e	={ $$ = ($1*$3); }
-	| e '/' e	={ $$ = ($1/$3); }
-	| e '%' e	={ $$ = ($1%$3); }
+	| e '/' e	={ if ($3 == 0) { evalerr = "divide by zero"; YYABORT; }
+			   $$ = ($1/$3); }
+	| e '%' e	={ if ($3 == 0) { evalerr = "divide by zero"; YYABORT; }
+			   $$ = ($1%$3); }
 	| '(' e ')'	={ $$ = ($2); }
-	| e POWER e	={ for ($$=1; $3-->0; $$ *= $1); }	
-	| '-' e %prec UMINUS	={ $$ = $2-1; $$ = -$2; }
-	| '+' e %prec UMINUS	={ $$ = $2-1; $$ = $2; }
+	| e POWER e	={ for ($$=1; $3-->0; $$ *= $1); }
+	| '-' e %prec UMINUS	={ $$ = -$2; }
+	| '+' e %prec UMINUS	={ $$ = $2; }
 	| DIGITS	={ $$ = evalval; }
 	;
 
 %%
 
-yylex() {
-	extern char *pe;
-
+int yylex(void)
+{
 	while (*pe==' ' || *pe=='\t' || *pe=='\n')
 		pe++;
 	switch(*pe) {
+	// End of the expression: do not step past the NUL, yylex being callable again.
 	case '\0':
+		return(0);
 	case '+':
 	case '-':
 	case '/':
@@ -80,7 +106,7 @@ yylex() {
 	}
 }
 
-peek(c, r1, r2)
+static int peek(int c, int r1, int r2)
 {
 	if (*++pe != c)
 		return(r2);
@@ -88,7 +114,7 @@ peek(c, r1, r2)
 	return(r1);
 }
 
-yyerror(s)
-char *s;
+// A no-op, as v7's is: doeval() prints the message, so a syntax error keeps v7's wording.
+void yyerror(char *s)
 {
 }

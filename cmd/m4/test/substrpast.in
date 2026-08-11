@@ -1,0 +1,1 @@
+substr(abcdef,99,3)[end]
