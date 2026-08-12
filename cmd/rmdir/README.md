@@ -61,22 +61,28 @@ if (c == '\0' && flag != 0)
 that rule is ever tightened, this is the caller that breaks, and the symptom will be
 `rmdir: cannot stat ""` followed by `exit(1)` in the middle of an argument list.
 
-## Two things that look like bugs and are not
+## The emptiness test, and the two arguments it no longer needs
 
-Both are commented in the source, because the neighbouring ports fixed things of the same
-*shape* and the next reader will reach for the same fix:
+The loop is [`opendir(3)`](../../lib/libc/man/directory.3.umm) since task C24 — `opendir`,
+`readdir` until it returns NULL, `closedir`, and everything that is not `.` or `..` means *not
+empty*. That is four lines and it needs no commentary, which is the point of the task.
 
-* **`read(fd, &dir, sizeof dir) == sizeof dir`** is safe as v7 wrote it, unlike the `<` form
+What it replaced was five lines that needed two paragraphs of defence, because both looked
+exactly like bugs the neighbouring ports *did* have to fix:
+
+* **`read(fd, &dir, sizeof dir) == sizeof dir`** was safe as v7 wrote it, unlike the `<` form
   [`cmd/pwd`](../pwd/README.md) had to repair: a failed read's `-1` promotes to an unsigned that
-  cannot *equal* 24 either, so the loop still ends. The `(int)` cast is house style, not a
-  defect.
-* **`strcmp(dir.d_name, ".")`** reads a bare `char[DIRSIZ]` that the kernel zero-pads but does
-  not terminate when a name fills it — the hazard `pwd` and `ls` did have to fix. It cannot fire
-  here: `strcmp` stops at the first difference, and every name that is not `.` or `..` differs
-  within two characters.
+  cannot *equal* 24 either, so the loop still ended.
+* **`strcmp(dir.d_name, ".")`** read a bare `char[DIRSIZ]` that the kernel zero-pads but does
+  not terminate when a name fills it — the hazard `pwd` and `ls` did have to fix. It could not
+  fire here, because `strcmp` stops at the first difference and every name that is not `.` or
+  `..` differs within two characters.
 
-`DIRSIZ` is 18 and a `struct direct` is four words, but nothing in this file spells either
-number — the read loop is `sizeof dir` throughout — so it ported unchanged.
+Both were true, and both had to be re-derived by every reader. `readdir()` skips the zeroed
+`d_ino` a removed entry leaves behind and hands back a terminated name, so neither question
+arises. **The cost is 238 words** — 4,221 to 4,459 — which is almost exactly the library's
+price for a caller that only walks, this program's own reader having been as small as a reader
+gets.
 
 ## Documentation
 

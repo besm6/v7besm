@@ -88,12 +88,12 @@
 // directory on a system with no mkdir(2) -- ../mkdir/README.md is the account.
 //
 
+#include <dirent.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/dir.h>
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -181,8 +181,8 @@ static union hblock dblock;
 // the header field and carries NO terminator -- that is the format, not a defect -- so the
 // field itself may never be handed to creat(), link(), unlink(), utime(), chown() or strcmp:
 // each would run on into the mode field and past it.  v7 passed dblock.dbuf.name to all six.
-// The bound is ../README.md SS5's rule, with NAMSIZ where a directory entry has DIRSIZ, and
-// the terminated copies are what let the read side go back to a plain %s.
+// The bound is ../README.md SS5's rule, one layer up from the directory entry that opendir(3)
+// now terminates, and the copies are what let the read side go back to a plain %s.
 static char hname[NAMSIZ + 1];
 static char hlink[NAMSIZ + 1];
 
@@ -236,24 +236,25 @@ static char *usefile; // `f' is mandatory: there is no default
 //
 // putfile() recurses, so its frame is paid once per level, and ../README.md SS6's third
 // ceiling -- 4,096 words of stack at 070000 -- is the one NOTHING checks: past it the stores
-// do not fault, they just land somewhere else.  This port's frame was ESTIMATED at thirty
-// words (a 101-byte path, a four-word struct direct and a dozen scalars) and b6disasm says
+// do not fault, they just land somewhere else.  Read the prologue rather than estimating it;
+// b6disasm now says
 //
-//      1444:   15 utm 0357
+//      1476:   15 utm 0332
 //
-// -- 0357 is 239 words, eight times the guess.  That is C5f's rule about find(1) arriving
-// again and costing more: read the prologue.  Against 4,096, with _doprnt's 281-word frame
-// underneath the diagnostic that reports the refusal (C5e's rule -- ask what a program still
-// has to do after it has decided to stop), 14 levels is the arithmetic:
+// -- 0332 is 218 words, where the struct direct this frame used to carry made it 239.  Against
+// 4,096, with _doprnt's 281-word frame underneath the diagnostic that reports the refusal
+// (C5e's rule -- ask what a program still has to do after it has decided to stop), 16 levels
+// is the largest that fits:
 //
-//      (14 + 1) * 239 + 281 + 100 = 3,966
+//      (16 + 1) * 218 + 281 + 100 = 4,087
 //
-// The walk also holds one open descriptor per level -- v7 closed and re-opened each directory
-// because it chdir()'d away and this port does not -- and NOFILE is 20, of which stdin,
-// stdout, stderr and the archive are gone already.  So the descriptors bind first, and the
-// limit is theirs; a tree deeper than this gets a diagnostic naming the real reason rather
-// than "cannot open file" on an arbitrary directory part way down.
-#define STACKDEPTH 14
+// The walk also holds one open directory per level -- v7 closed and re-opened each because it
+// chdir()'d away and this port does not -- and NOFILE is 20, of which stdin, stdout, stderr
+// and the archive are gone already.  So the descriptors bind first, and the limit is theirs;
+// a tree deeper than this gets a diagnostic naming the real reason rather than "cannot open
+// file" on an arbitrary directory part way down.  A DIR also costs heap per level, which
+// README.md prices; nothing checks that ceiling either, and it is far from binding here.
+#define STACKDEPTH 16
 #define MAXDEPTH   (NOFILE - 8)
 _Static_assert(MAXDEPTH <= STACKDEPTH, "the descriptor limit must be the tighter of the two");
 
@@ -560,8 +561,9 @@ static void putfile(char *path, int depth)
 {
     int infile;
     int blocks;
-    char *cp, *cp2;
-    struct direct dbuf;
+    char *cp;
+    DIR *dirp;
+    struct dirent *dp;
     char child[NAMSIZ + 1];
     int i, n;
 
@@ -600,20 +602,20 @@ static void putfile(char *path, int depth)
         child[n] = '/';
         cp       = &child[n + 1];
 
-        while (read(infile, (char *)&dbuf, sizeof(dbuf)) == sizeof(dbuf) && !term) {
-            if (dbuf.d_ino == 0)
+        // The descriptor the branch was chosen on is handed back for the DIR that replaces
+        // it: this libc has no fdopendir(), and one open at a time is what MAXDEPTH counts.
+        close(infile);
+        if ((dirp = opendir(path)) == NULL) {
+            fprintf(stderr, "tar: %s: cannot open file\n", path);
+            return;
+        }
+        while ((dp = readdir(dirp)) != NULL && !term) {
+            if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0)
                 continue;
-            // d_name is DIRSIZ bytes and is NOT terminated when a name fills it, so it may
-            // not be handed to strcmp -- ../README.md SS5, and ls(1)'s finding.
-            if (strncmp(dbuf.d_name, ".", DIRSIZ) == 0 || strncmp(dbuf.d_name, "..", DIRSIZ) == 0)
-                continue;
-            cp2 = cp;
-            for (i = 0; i < DIRSIZ && dbuf.d_name[i] != '\0'; i++)
-                *cp2++ = dbuf.d_name[i];
-            *cp2 = '\0';
+            strcpy(cp, dp->d_name);
             putfile(child, depth + 1);
         }
-        close(infile);
+        closedir(dirp);
         return;
     }
     if ((stbuf.st_mode & S_IFMT) != S_IFREG) {

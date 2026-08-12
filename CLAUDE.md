@@ -59,7 +59,7 @@ relocatable symbol above word **32,767** (a 15-bit pointer's reach). Two more ce
 cannot guard, and both bind in practice: **no struct may exceed 4,096 words** (a member is a
 12-bit offset from a base register — move the big arrays to file scope), and the **4,096-word
 stack**, where a long function costs 1.5–2 words per source line before any array.
-`cmd/README.md` §6 is the account. **The root image has 98 free blocks of 2000** — it had 181
+`cmd/README.md` §6 is the account. **The root image has 92 free blocks of 2000** — it had 181
 until the `lib/test` programs moved to the test pack, which has 1,686 free of its own, and
 `/usr/bin/yacc` and `/usr/bin/lex` have since taken 68 back, `/bin/expr` 14, `/bin/egrep` 14,
 `/bin/m4` 19, `/bin/make` 24, `/bin/dc` 32, `/bin/bc` 20 with one more for
@@ -73,7 +73,9 @@ delivers into, and one is its own manual page crossing a block boundary as C28 c
 `calendar` **42** — the largest single addition there has been, of which the two programs are 9,
 the `/usr/lib/calendars` directory 1, the manual page 1, and **29 the database**, which is data
 v7 never had and which C23 chose whole over a four-file subset because eight files cover 362 days
-of the year and four cover 114.
+of the year and four cover 114, and **C24 `6` for no new program at all** — seven directory
+readers moved onto `opendir(3)`, of which `/bin/sh` alone is 1,028 words because `opendir()` calls
+`malloc()` and the shell had never linked an allocator.
 **Take the number from a build** — `b6fsutil` prints it — rather than from this sentence,
 which C22 found to be one out.
 
@@ -126,9 +128,12 @@ is the tree's only live caller of `smount()`.
 C11** — no implicit `int`, no K&R parameter lists — but what bites is that v7 assumes `int` and
 `char *` are the same thing: a flag packed into bit 0 of a pointer, a mask rounding to a word
 assuming `BYTESPERWORD`, pointer casts that *floor* rather than round. Also: `long` is one
-word; `BSIZE` is 3072 bytes but tools report 1024-byte blocks; `DIRSIZ` 18. **`opendir(3)`
-exists**, and a new port that walks a pathname uses it rather than hand-rolling `<sys/dir.h>` —
-a name read out of a directory is **not NUL-terminated**.
+word; `BSIZE` is 3072 bytes but tools report 1024-byte blocks; `DIRSIZ` 18. **`opendir(3)` is how
+a pathname is walked** and since C24 there is no other reader in the tree, so hand-rolling
+`<sys/dir.h>` is a regression, not a shortcut — `readdir()` skips the `d_ino == 0` slot and
+terminates the name, which a raw `char d_name[DIRSIZ]` is **not**. `<sys/dir.h>` is for the five
+programs holding a raw disk block rather than a directory: `fsck`, `mkfs`, `ncheck`, `dcheck`,
+`pstat`.
 
 ### Kernel
 

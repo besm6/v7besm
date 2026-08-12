@@ -44,18 +44,17 @@
 // and the four programs that report a block count -- df, du, quot, ls -s -- were all taught
 // KBYTE in task C4a.  A user types the number they read out of `ls -s'.
 //
-// descend() CARRIED THREE PDP-11 LAYOUT CONSTANTS and they had to change together: a 512-
-// byte read, `dsize>>4' for a 16-byte entry, and a bare `for (i = 0; i < 14; ++i)' over the
-// name.  A struct direct is FOUR WORDS / 24 BYTES here and DIRSIZ is 18, so the read length
-// is a sizeof, the entry count is a divide (24 is not a power of two), and the name loop
-// takes DIRSIZ.  _Static_assert holds the first two against <sys/dir.h> (§4's rule: grep for
-// a read whose length is arithmetic rather than sizeof).
+// descend() READS THE DIRECTORY WITH opendir(3), task C24, and that retired the three PDP-11
+// layout constants it carried -- a 512-byte read, `dsize>>4' for a 16-byte entry, and a bare
+// `for (i = 0; i < 14; ++i)' over the name.  What stays is the BATCH: a bufferful of names is
+// taken before any of them recurses, which is what lets the descriptor be dropped and re-taken
+// between batches so that a deep tree cannot exhaust NOFILE.  README.md is the account.
 //
-// AND descend() IS RECURSIVE, WITH ITS DIRECTORY BLOCK IN ITS OWN FRAME.  v7's `struct
-// direct dentry[32]' is 128 words a level here, so about thirty levels filled the four-page
-// stack §6 names and nothing checked it -- C5c's grep(1) finding, where the region past the
-// stack returns wrong answers for a dozen levels before it faults.  The block is 16 entries
-// now and the depth is COUNTED, with a diagnostic; see MAXDEPTH below for the measurement.
+// AND descend() IS RECURSIVE, WITH ITS BATCH ON THE HEAP.  v7's `struct direct dentry[32]' was
+// in the FRAME -- 128 words a level here, so about thirty levels filled the four-page stack §6
+// names and nothing checked it, which is C5c's grep(1) finding, where the region past the stack
+// returns wrong answers for a dozen levels before it faults.  The depth is COUNTED now, with a
+// diagnostic; see MAXDEPTH below for the measurement.
 //
 // The rest is §1 and §6: `exp' collides with libm's, `ctime' with <time.h>'s, and `index',
 // `size', `type', `print', `and', `or', `not' and `pr' were all file-scope; execvp() takes
@@ -66,13 +65,13 @@
 // NOT SETUID: it opens and stats what the caller could open and stat itself, and -exec runs
 // as the caller.
 //
+#include <dirent.h>
 #include <fcntl.h>
 #include <grp.h>
 #include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/dir.h>
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -84,22 +83,18 @@
 #define EQ(x, y) (strcmp(x, y) == 0)
 
 #define NNODE   100 // parse-tree nodes
-#define NENTRY  32  // directory entries per read -- see descend()
+#define NENTRY  32  // names per batch -- see descend()
 #define PATHSZ  200
 #define HOMESZ  128
 #define NARGV   50 // -exec argument slots
+
+// v7 rationed descriptors against NOFILE with a bare `10', as ../du does.
+#define DIRFDMAX (NOFILE / 2)
 
 // §4: a count reported to -- or taken from -- a user is in 1024-byte blocks, as df, du, quot
 // and ls -s all are since task C4a.  KBYTE and KBPB live beside BSIZE in <sys/param.h> so
 // that retuning the block size cannot leave this program quietly lying.
 _Static_assert(BSIZE % KBYTE == 0, "a filesystem block must be a whole number of KiB");
-
-// The read length and the entry count are the same fact stated twice, so state it once and
-// let the compiler check the rest.  DIRSIZ is 18 here and was 14 on a PDP-11.
-_Static_assert(sizeof(struct direct) == 4 * sizeof(int), "struct direct is four words");
-_Static_assert(DIRSIZ == sizeof(struct direct) - sizeof(int), "d_name fills the rest");
-
-#define DIRBLK (NENTRY * (int)sizeof(struct direct)) // bytes read per call
 
 //
 // THE RECURSION CEILING, MEASURED RATHER THAN ESTIMATED, which is C5c's and C5e's shared
@@ -108,28 +103,31 @@ _Static_assert(DIRSIZ == sizeof(struct direct) - sizeof(int), "d_name fills the 
 // level here, where a PDP-11 entry was 16 bytes and this one is 24 -- and nothing checked the
 // depth at all, so about thirty levels filled the four-page stack §6 names.
 //
-// The block is on the HEAP now, one per level, freed on the way out: it is the largest thing
+// The batch is on the HEAP now, one per level, freed on the way out: it is the largest thing
 // in the frame by far and moving it is what buys the depth back.  The first draft of this
 // port merely shrank it to 16 entries and guessed the frame at eighty words; `b6disasm' says
 // that prologue was `15 utm 0277' -- 191 words -- so the guess was out by more than a factor
 // of two and MAXDEPTH would have been wrong in the unsafe direction.  ALWAYS READ THE
-// PROLOGUE.  (NENTRY is back to v7's 32 now that the block is not in the frame: 128 words on
-// the heap costs nothing and it halves the number of read(2) calls a big directory takes.)
+// PROLOGUE.  (NENTRY is back to v7's 32 now that the batch is not in the frame: 32 names are
+// 101 words on the heap and it halves the number of read(2) calls a big directory takes.)
 //
-// With the block gone, `b6disasm' puts descend()'s prologue at `15 utm 0223' -- 147 words a
-// level.  The arithmetic for the limit below:
+// `b6disasm' puts descend()'s prologue at `15 utm 0156' -- 110 words a level, where the raw
+// reader's scalars made it 147.  The arithmetic for the limit below:
 //
-//	20 levels x 147 words                          2,940
+//	20 levels x 110 words                          2,200
 //	the deepest thing it can call while stopping      127   (fputs 19 + _flsbuf 108)
 //	                                               -------
-//	                                                 3,067   of 4,096
+//	                                                 2,327   of 4,096
 //
-// -- which leaves main()'s frame and the kernel's own margin more than a quarter of the
-// stack.  C5e's warning about the diagnostic's own frame does not bite as hard here as it
-// did in sed, and the reason is worth naming: THIS PROGRAM LINKS NO _doprnt AT ALL.  pr() is
-// fputs() and -print is puts(); there is not one numeric conversion in it.  §6's rule that
-// what a program prints with dominates what it does, seen from the stack rather than the
-// image.
+// -- which leaves main()'s frame and the kernel's own margin well over a third of the stack.
+// C5e's warning about the diagnostic's own frame does not bite as hard here as it did in sed,
+// and the reason is worth naming: THIS PROGRAM LINKS NO _doprnt AT ALL.  pr() is fputs() and
+// -print is puts(); there is not one numeric conversion in it.  §6's rule that what a program
+// prints with dominates what it does, seen from the stack rather than the image.  MAXDEPTH
+// stays 20 because find.1.umm documents it, not because the stack demands it.
+//
+// The DIR the batch is read through costs heap too, but the descriptor budget bounds it: at
+// most DIRFDMAX of them are open at once however deep the tree goes.  README.md prices it.
 //
 #define MAXDEPTH 20
 
@@ -620,10 +618,11 @@ static int doex(int com)
 //
 static int descend(char *name, const char *fname, struct anode *exlist)
 {
-    int dir = 0; // open directory
-    int offset, dsize, entries, dirsize;
-    struct direct *dentry;
-    struct direct *dp;
+    DIR *dirp = NULL; // NULL meaning `dropped', not `end of directory'
+    struct dirent *dp;
+    char (*names)[DIRSIZ + 1]; // one batch, read before any of it recurses
+    long loc;
+    int nb, k, done = 0;
     char *c1;
     const char *c2;
     int i;
@@ -644,9 +643,9 @@ static int descend(char *name, const char *fname, struct anode *exlist)
         pr("find: directory tree too deep: "), pr(name), pr("\n");
         return 1;
     }
-    // On the heap and not in the frame: 32 entries are 128 words, and descend() recurses.
-    dentry = (struct direct *)malloc(NENTRY * sizeof(struct direct));
-    if (dentry == NULL) {
+    // On the heap and not in the frame: 32 names are 101 words, and descend() recurses.
+    names = malloc(NENTRY * (DIRSIZ + 1));
+    if (names == NULL) {
         --Depth;
         pr("find: out of memory\n");
         exit(1);
@@ -657,65 +656,54 @@ static int descend(char *name, const char *fname, struct anode *exlist)
     if (*(c1 - 1) == '/')
         --c1;
     endofname = c1;
-    dirsize   = Statb.st_size;
 
     if (chdir(fname) == -1) {
-        free((char *)dentry);
+        free((char *)names);
         --Depth;
         return 0;
     }
-    // v7 read 512 bytes at a time and counted entries with `dsize>>4' -- a PDP-11 directory
-    // block and a 16-byte entry.  A struct direct is 24 bytes here.
-    for (offset = 0; offset < dirsize; offset += DIRBLK) {
-        dsize = DIRBLK < (dirsize - offset) ? DIRBLK : (dirsize - offset);
-        if (!dir) {
-            if ((dir = open(".", 0)) < 0) {
-                pr("find: cannot open "), pr(name), pr("\n");
-                rv = 0;
-                goto ret;
+    if ((dirp = opendir(".")) == NULL) {
+        pr("find: cannot open "), pr(name), pr("\n");
+        rv = 0;
+        goto ret;
+    }
+
+    while (!done) {
+        // One batch of names, taken before any of them recurses: that is what makes the
+        // descriptor droppable below, and it is what the raw reader's bufferful was for.
+        for (nb = 0; nb < NENTRY;) {
+            if ((dp = readdir(dirp)) == NULL) {
+                done = 1;
+                break;
             }
-            if (offset)
-                lseek(dir, (long)offset, 0);
-            if (read(dir, (char *)dentry, dsize) < 0) {
-                pr("find: cannot read "), pr(name), pr("\n");
-                rv = 0;
-                goto ret;
-            }
-            // A descriptor budget: above fd 10 the descriptor is dropped and re-opened per
-            // block, so a deep tree cannot exhaust NOFILE.
-            if (dir > 10) {
-                close(dir);
-                dir = 0;
-            }
-        } else if (read(dir, (char *)dentry, dsize) < 0) {
-            pr("find: cannot read "), pr(name), pr("\n");
-            rv = 0;
-            goto ret;
-        }
-        // each directory entry
-        for (dp = dentry, entries = dsize / (int)sizeof(struct direct); entries;
-             --entries, ++dp) {
-            if (dp->d_ino == 0 || (dp->d_name[0] == '.' && dp->d_name[1] == '\0') ||
-                (dp->d_name[0] == '.' && dp->d_name[1] == '.' && dp->d_name[2] == '\0'))
+            // v7 abandoned the whole directory on an empty name, with a `??' beside it.
+            // A corrupt entry is skipped instead.
+            if (dp->d_namlen == 0 || EQ(dp->d_name, ".") || EQ(dp->d_name, ".."))
                 continue;
-            // §5: a name out of a directory is not NUL-terminated, and DIRSIZ is 18.
+            strcpy(names[nb++], dp->d_name);
+        }
+
+        // A descriptor budget: above DIRFDMAX the directory is dropped and re-taken per
+        // batch, so a deep tree cannot exhaust NOFILE.  The cookie survives the closedir(),
+        // and descend() leaves `.' where it found it.
+        loc = telldir(dirp);
+        if (dirfd(dirp) > DIRFDMAX) {
+            closedir(dirp);
+            dirp = NULL;
+        }
+
+        for (k = 0; k < nb; ++k) {
             if (endofname + 1 + DIRSIZ + 1 > Pathname + sizeof(Pathname)) {
                 pr("find: path too long: "), pr(name), pr("\n");
                 continue;
             }
             c1    = endofname;
             *c1++ = '/';
-            c2    = dp->d_name;
-            for (i = 0; i < DIRSIZ; ++i)
-                if (*c2)
-                    *c1++ = *c2++;
-                else
-                    break;
+            c2    = names[k];
+            while (*c2)
+                *c1++ = *c2++;
             *c1 = '\0';
-            if (c1 == endofname) { // ??
-                rv = 0;
-                goto ret;
-            }
+
             Fname = endofname + 1;
             if (!descend(name, Fname, exlist)) {
                 *endofname = '\0';
@@ -726,12 +714,21 @@ static int descend(char *name, const char *fname, struct anode *exlist)
                 }
             }
         }
+
+        if (!done && dirp == NULL) {
+            if ((dirp = opendir(".")) == NULL) {
+                pr("find: cannot open "), pr(name), pr("\n");
+                rv = 0;
+                goto ret;
+            }
+            seekdir(dirp, loc);
+        }
     }
     rv = 1;
 ret:
-    if (dir)
-        close(dir);
-    free((char *)dentry);
+    if (dirp)
+        closedir(dirp);
+    free((char *)names);
     if (chdir("..") == -1) {
         *endofname = '\0';
         pr("find: bad directory "), pr(name), pr("\n");

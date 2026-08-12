@@ -62,8 +62,19 @@ what buys the depth back:
 2536:  15 utm 0223        /* 147 words */
 ```
 
-and `MAXDEPTH` is 20 by arithmetic rather than by feel: 20 × 147 = 2,940, plus 127 for the
+and `MAXDEPTH` was 20 by arithmetic rather than by feel: 20 × 147 = 2,940, plus 127 for the
 deepest thing the program can call while stopping (`fputs` 19 + `_flsbuf` 108), against 4,096.
+
+**Task C24 made the measurement again**, because that is the rule this section exists to state.
+With the raw reader's scalars gone the prologue is
+
+```
+2517:  15 utm 0156        /* 110 words */
+```
+
+so the sum is 20 × 110 = 2,200 + 127 = **2,327 of 4,096**, over a third of the stack left. The
+limit stays 20 — [`find.1.umm`](find.1.umm) documents it and nothing asks for more — but it is
+now 20 by choice rather than 20 by arithmetic, and the comment in the source says which.
 
 **C5e's warning about the diagnostic's own frame does not bite as hard here, and the reason
 is worth naming: `find` links no `_doprnt` at all.** `pr()` is `fputs` and `-print` is
@@ -71,7 +82,7 @@ is worth naming: `find` links no `_doprnt` at all.** `pr()` is `fputs` and `-pri
 its message; this one needs 127. That is §6's "what a program prints with dominates what it
 does", seen from the *stack* rather than from the image.
 
-## Three PDP-11 layout constants that had to change together
+## Three PDP-11 layout constants that had to change together, and then stopped existing
 
 ```c
 for (offset = 0; offset < dirsize; offset += 512)          /* a PDP-11 disk block */
@@ -80,14 +91,60 @@ for (offset = 0; offset < dirsize; offset += 512)          /* a PDP-11 disk bloc
 ```
 
 `struct direct` is **24 bytes** here and `DIRSIZ` is **18**, and 24 is not a power of two, so
-the shift becomes a divide. All three are one fact stated three times, so the port states it
-once — `DIRBLK` is `NENTRY * sizeof(struct direct)` — and `_Static_assert`s the rest against
+the shift became a divide. All three were one fact stated three times, so the port stated it
+once — `DIRBLK` was `NENTRY * sizeof(struct direct)` — and `_Static_assert`ed the rest against
 `<sys/dir.h>`. §4's rule is the search that finds this class of bug: **grep for a `read` whose
 length is arithmetic rather than a `sizeof`.**
 
-A name out of a directory is not NUL-terminated (§5), which v7 knew; what it did not do is
-bound the concatenation into `Pathname[200]`, and 18-byte components reach that bound sooner
-than 14-byte ones did.
+Task C24 deleted all of it. `readdir()` owns the entry size, skips the zeroed `d_ino` a removed
+entry leaves behind, and terminates the name, so there is no length to state once and no
+assertion to hold it. The name is `strcpy`'d rather than copied `DIRSIZ` characters at a time,
+and the `Pathname[200]` bound — which v7 did not have, and which 18-byte components reach
+sooner than 14-byte ones did — is the only §5 arithmetic left in the file.
+
+## What the batch is for, and why it survived the conversion
+
+`descend()` does not read one entry at a time. It fills an array of `NENTRY` names, *then*
+recurses over them, and only then goes back for more:
+
+```c
+for (nb = 0; nb < NENTRY;)              /* fill the batch  */
+    ...
+loc = telldir(dirp);                    /* remember where  */
+if (dirfd(dirp) > DIRFDMAX) {           /* drop the fd     */
+    closedir(dirp);
+    dirp = NULL;
+}
+for (k = 0; k < nb; ++k)                /* recurse         */
+    ...
+if (!done && dirp == NULL) {            /* take it back    */
+    dirp = opendir(".");
+    seekdir(dirp, loc);
+}
+```
+
+That shape is v7's, and the reason is the **descriptor budget**: above `DIRFDMAX` the directory
+is closed for the duration of the recursion below it, so a tree of any depth costs at most
+`DIRFDMAX` open directories and `find` cannot exhaust `NOFILE` (20). A plain
+`while ((dp = readdir(dirp)))` would hold one `DIR` per level and stop working at about sixteen.
+
+The obvious way to write it under `opendir(3)` — read an entry, recurse, read the next — cannot
+drop the descriptor at all, because `readdir()`'s cursor lives in the `DIR`. Batching is what
+makes `telldir()`/`seekdir()` usable: the cookie is a plain byte offset and is meaningful across
+a `closedir()`/`opendir()` pair, and `descend()` `chdir`s in and back out, so `"."` still names
+the same directory when the batch resumes. It is the same contract the old `lseek(dir, offset)`
+relied on, expressed in the library's terms.
+
+**The budget bounds the heap as well as the descriptors**, which is new: a `DIR` costs twelve
+words plus a read buffer sized from the directory and capped at one filesystem block, so at most
+`DIRFDMAX` × ~524 words are live however deep the tree goes. The batch itself moved from 32
+`struct direct` (768 bytes) to 32 names (608 bytes), still on the heap because `descend()`
+recurses.
+
+**One behaviour changed.** v7 abandoned the whole directory on an entry with a non-zero `d_ino`
+and an empty name, with a bare `/* ?? */` beside the test. A corrupt entry is skipped now.
+
+The conversion cost **234 words**, 6,697 to 6,931.
 
 ## `-cpio` is deleted
 

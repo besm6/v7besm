@@ -127,11 +127,23 @@ Stated at length in [`mv.c`](mv.c)'s header comment; in brief, and worst first.
   component being appended to it, and `dname()` returns a pointer into `argv` where nothing
   bounds a component at `DIRSIZ`. Each is checked against the sum it actually builds. That
   test's own arithmetic changed under it as well — `MAXN-DIRSIZ-2` is 80 here and not v7's 84,
-  because `DIRSIZ` is 18 — correctly, and only because of the `<sys/dir.h>` include.
+  because `DIRSIZ` is 18 — correctly.
 
 ## What did *not* need changing, and was checked
 
-No `long`, no `%D`, no `struct direct` — `mv` never reads a directory.
+No `long`, no `%D`, and **no directory read at all.**
+
+That last one is worth stating plainly, because [`../TODO.md`](../TODO.md) task C24 listed `mv`
+among the eight programs whose hand-rolled directory readers were to go over `opendir(3)`, and
+it was wrong to. There is no `struct direct` in `mv.c`, no `open()` of a directory and no
+`read()`. What made it look like one was the `#include <sys/dir.h>` — carried for a single use
+of `DIRSIZ` in the `MAXN-DIRSIZ-2` bound above, and `DIRSIZ` lives in `<sys/param.h>`, which
+this file includes anyway. C24 dropped the include and that was the whole of its work here.
+
+The thing `mv` actually does that *looks* like a walk is `check()`, which climbs from a
+directory to the root to refuse moving one into itself. It climbs by **path string** —
+`stat(nspth)`, then `strcat(nspth, "/..")` — and compares `st_ino`, never a `d_ino`. Nothing to
+convert.
 
 Two things that look like bugs and are not, both left alone with a comment:
 

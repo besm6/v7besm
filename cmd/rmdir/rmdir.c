@@ -22,8 +22,7 @@
 // `makedir'.  `rindex' became strrchr(): rindex is in this libc but NO HEADER DECLARES IT
 // (lib/libc/gen/index.c says why -- it is not ANSI and v7 has no <strings.h>), strrchr is in
 // <string.h>, and lib/libc/gen/ttyslot.c already uses it for this same "last component of a
-// path" job.  The bare 0 and 02 handed to access() are F_OK and W_OK, and open(name, 0) is
-// O_RDONLY, as cmd/pwd did.
+// path" job.  The bare 0 and 02 handed to access() are F_OK and W_OK.
 //
 // TWO CHANGES BEYOND THE MECHANICAL PASS:
 //
@@ -39,29 +38,19 @@
 //     it.  Bounded now, for the reason ../mkdir/mkdir.c gives at greater length: the stack is
 //     the one ceiling nothing checks, and this program runs with an effective uid of 0.
 //
-// TWO THINGS THAT LOOK LIKE BUGS HERE AND ARE NOT.  Both are noted so that the next reader
-// does not "fix" them:
-//
-//  * `read(...) == (int)sizeof dir' is safe as v7 wrote it, unlike the `<' form cmd/pwd had
-//    to repair: a failed read's -1 promotes to an unsigned that cannot EQUAL 24 either, so
-//    the loop ends.  The cast is here for house style, not for a defect.
-//
-//  * `strcmp(dir.d_name, ".")' reads a bare char[DIRSIZ] that the kernel zero-pads but does
-//    not terminate when a name fills it (cmd/pwd/pwd.c, fix 2).  strcmp stops at the first
-//    difference, and every name that is not "." or ".." differs within two characters, so
-//    this one cannot walk off the struct.  DIRSIZ is 18 here and struct direct is four words;
-//    nothing in this file spells either number, so the read loop ported unchanged.
+// THE EMPTINESS TEST IS opendir(3), task C24: readdir() skips the slot a removed entry leaves
+// behind and terminates the name, so the loop says only what it means.  README.md has the two
+// arguments that the hand-rolled read() needed and this does not.
 //
 // stat("") IS DELIBERATE, and it works on this kernel: namei() starts at u.u_cdir and only
 // faults an empty path when its flag says create-or-delete (kernel/nami.c), which stat's does
 // not -- so it names the current directory, which is how rmdir refuses to remove the
 // directory it is standing in.
 //
-#include <fcntl.h>
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/dir.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -87,10 +76,10 @@ int main(int argc, char **argv)
 
 static void removedir(char *d)
 {
-    int fd;
+    DIR *dirp;
+    struct dirent *dp;
     char *np, name[NAMEBUF];
     struct stat st, cst;
-    struct direct dir;
 
     // The bound v7 had not: name grows to d + "/.." + a NUL.
     if ((int)strlen(d) + 4 > (int)sizeof name) {
@@ -127,24 +116,21 @@ static void removedir(char *d)
         return;
     }
 
-    // Empty means nothing in it but `.' and `..'.  A removed entry is a zero d_ino, not a
-    // hole, so the read walks the whole directory.
-    if ((fd = open(name, O_RDONLY)) < 0) {
+    // Empty means nothing in it but `.' and `..'.
+    if ((dirp = opendir(name)) == NULL) {
         fprintf(stderr, "rmdir: %s unreadable\n", name);
         ++Errors;
         return;
     }
-    while (read(fd, (char *)&dir, sizeof dir) == (int)sizeof dir) {
-        if (dir.d_ino == 0)
-            continue;
-        if (!strcmp(dir.d_name, ".") || !strcmp(dir.d_name, ".."))
+    while ((dp = readdir(dirp)) != NULL) {
+        if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, ".."))
             continue;
         fprintf(stderr, "rmdir: %s not empty\n", name);
         ++Errors;
-        close(fd);
+        closedir(dirp);
         return;
     }
-    close(fd);
+    closedir(dirp);
 
     if (!strcmp(np, ".") || !strcmp(np, "..")) {
         fprintf(stderr, "rmdir: cannot remove . or ..\n");

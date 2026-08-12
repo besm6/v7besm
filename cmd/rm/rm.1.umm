@@ -38,11 +38,12 @@ not need to be - but **rm -r will not work if /bin/rmdir is missing,** and will 
 tried */usr/bin/rmdir* as well; there is no */usr/bin* on this system, and that second attempt
 is kept and is dead.)
 
-**Note: rm -r** holds one file descriptor open per level of nesting, and **NOFILE** is 20
+**Note: rm -r** holds one open directory per level of nesting, and **NOFILE** is 20
 (include/sys/param.h), so it stops at twenty levels deep. This was as true of v7 as it is here.
-The recursion also builds each path in a 100-character buffer, and refuses a name that will not
-fit - v7 built it with no bound at all, which mattered rather more in a routine that recurses
-on what it builds.
+Each of those also costs a read buffer sized from the directory, up to one filesystem block, so
+a deep tree of large directories spends a few thousand words of heap as well. The recursion
+builds each path in a 100-character buffer, and refuses a name that will not fit - v7 built it
+with no bound at all, which mattered rather more in a routine that recurses on what it builds.
 
 If the **-i** (interactive) option is in effect, *rm* asks whether to delete each file, and,
 under **-r**, whether to examine each directory.

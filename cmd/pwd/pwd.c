@@ -10,36 +10,16 @@
 // matches the child it just came from, and builds the path backwards.
 //
 // The C11 pass is the usual one -- prototypes, explicit return types, `static' on everything
-// file-local, and `register i, j;' (untyped, so implicitly int) spelled out.  `open(dotdot, 0)'
-// is O_RDONLY now that <fcntl.h> names it, as cmd/init did.
+// file-local, and `register i, j;' (untyped, so implicitly int) spelled out.
 //
-// TWO REAL FIXES, both of which the BESM-6 turns from latent into live:
+// THE PARENT IS READ WITH opendir(3), task C24.  d_ino is what pwd matches on and struct
+// dirent carries it, so the algorithm is v7's; what goes is the raw read(), and with it the
+// two fixes this port had to make to it -- a signed/unsigned comparison and an unterminated
+// name.  README.md has both.  dirfd(3) is how the mount-point test still fstat()s the parent.
 //
-//  1. `read(file, &dir, sizeof(dir)) < sizeof(dir)' is a SIGNED/UNSIGNED comparison.  read()
-//     returns an int; sizeof yields an unsigned type (sys/param.h says so, and all of libc
-//     writes `(int)sizeof'), so the usual arithmetic conversions promote the -1 of a failed
-//     read to 2^48-1 and the test is FALSE -- a failed read looks like a good one, `dir'
-//     holds whatever was there before, and the do/while below either spins on stale data or
-//     matches by accident and prints a wrong path.  The end-of-directory 0 compares correctly
-//     either way, which is exactly why the common path works and hides it.  Cast, at both
-//     sites.
-//
-//  2. `while (dir.d_name[++i] != 0);' assumes the name is terminated.  d_name is a bare
-//     char[DIRSIZ] and the kernel zero-PADS a short name; a name of exactly DIRSIZ characters
-//     fills the array with no NUL, and the scan walks off the end of the struct.  That was a
-//     v7 bug at 14 characters and is the same bug at 18.  Both scans are bounded now, and the
-//     mount-crossing branch -- which hands d_name straight to stat(), which would read past
-//     the struct for the same reason -- copies into a terminated buffer first.
-//
-// DIRSIZ IS 18 HERE, not v7's 14, and a struct direct is four words with a full-word d_ino
-// (sys/param.h, sys/dir.h).  Nothing in this file hardcoded either number, so the only
-// consequence is that a 512-character buffer now holds about 27 path components instead of 34.
-//
-#include <fcntl.h>
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/dir.h>
-#include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -51,16 +31,16 @@
 static char dot[]    = ".";
 static char dotdot[] = "..";
 static char name[NAMEBUF]; // the path so far, built up from the RIGHT
-static int file;           // the open `..' that cat() is reading
 static int off = -1;       // index of the last character in name[]; -1 while it is empty
 static struct stat d, dd;
-static struct direct dir;
 
-static void prname(void); // print name[] and exit -- pwd's only exit
-static void cat(void);    // prepend dir.d_name to name[]
+static void prname(void);           // print name[] and exit -- pwd's only exit
+static void cat(const char *, int); // prepend one component to name[]
 
 int main(void)
 {
+    DIR *dirp;
+    struct dirent *dp;
     int rdev, rino;
 
     // The root is where the walk stops, and it is recognised by its device and inode number
@@ -75,47 +55,38 @@ int main(void)
         if (d.st_ino == rino && d.st_dev == rdev)
             prname(); // arrived at the root: print the path and exit
 
-        if ((file = open(dotdot, O_RDONLY)) < 0) {
+        if ((dirp = opendir(dotdot)) == NULL) {
             fprintf(stderr, "pwd: cannot open ..\n");
             exit(1);
         }
-        fstat(file, &dd);
-        chdir(dotdot); // step up; from here `.' is the parent and `file' is its contents
+        fstat(dirfd(dirp), &dd);
+        chdir(dotdot); // step up; from here `.' is the parent and `dirp' is its contents
 
         if (d.st_dev == dd.st_dev) {
             // The ordinary case: parent and child on one filesystem, so the child's inode
             // number is meaningful in the parent's directory and can simply be looked up.
             if (d.st_ino == dd.st_ino)
                 prname(); // `..' is itself -- the root of a filesystem that is not `/'
-            do {
-                if (read(file, (char *)&dir, sizeof(dir)) < (int)sizeof(dir)) {
-                    fprintf(stderr, "read error in ..\n");
-                    exit(1);
-                }
-            } while (dir.d_ino != d.st_ino);
+            while ((dp = readdir(dirp)) != NULL && dp->d_ino != d.st_ino)
+                ;
         } else {
             // A MOUNT POINT.  The child is the root of a mounted filesystem and its inode
             // number means nothing in the parent, so every entry has to be stat()ed until one
             // of them turns out to BE the child -- same device and same inode.
-            char nbuf[DIRSIZ + 1];
-            int i;
-
-            do {
-                if (read(file, (char *)&dir, sizeof(dir)) < (int)sizeof(dir)) {
-                    fprintf(stderr, "read error in ..\n");
-                    exit(1);
-                }
-                // d_name may fill the array with no room for a NUL; stat() would read past
-                // the struct.
-                for (i = 0; i < DIRSIZ; i++)
-                    nbuf[i] = dir.d_name[i];
-                nbuf[DIRSIZ] = '\0';
-                stat(nbuf, &dd);
-            } while (dd.st_ino != d.st_ino || dd.st_dev != d.st_dev);
+            while ((dp = readdir(dirp)) != NULL) {
+                stat(dp->d_name, &dd);
+                if (dd.st_ino == d.st_ino && dd.st_dev == d.st_dev)
+                    break;
+            }
+        }
+        if (dp == NULL) {
+            fprintf(stderr, "read error in ..\n");
+            exit(1);
         }
 
-        close(file);
-        cat();
+        // Before the closedir(): dp points into the stream's own storage.
+        cat(dp->d_name, dp->d_namlen);
+        closedir(dirp);
     }
 }
 
@@ -134,17 +105,13 @@ static void prname(void)
 }
 
 //
-// Prepend the component just found to the path: name[] becomes "<d_name>/<name>".  It is
+// Prepend the component just found to the path: name[] becomes "<comp>/<name>".  It is
 // built this way round because the walk discovers the components in reverse -- the deepest
 // first -- and shifting the buffer right is cheaper than reversing it at the end.
 //
-static void cat(void)
+static void cat(const char *comp, int i)
 {
-    int i, j;
-
-    // The component's length, bounded: see the header.
-    for (i = 0; i < DIRSIZ && dir.d_name[i] != 0; i++)
-        ;
+    int j;
 
     // No room for another component: print what there is rather than overrun the buffer.
     if (off + i + 2 > NAMEBUF - 1)
@@ -158,5 +125,5 @@ static void cat(void)
     // ... and write them into the hole, the slash first since the loop runs backwards.
     name[i] = '/';
     for (--i; i >= 0; --i)
-        name[i] = dir.d_name[i];
+        name[i] = comp[i];
 }

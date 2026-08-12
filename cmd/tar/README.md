@@ -151,8 +151,9 @@ Each is a visible bug, not a defensive change.
   field and past it. The read side works from terminated copies now. §5's rule, with `NAMSIZ`
   where a directory entry has `DIRSIZ`; it was found by the test that archives a name of
   exactly 100 characters, which extracted nothing at all.
-* **`strcmp(".", dbuf.d_name)`** — the same shape one layer down: `d_name` is `DIRSIZ` bytes
-  and is not terminated when a name fills it.
+* **`strcmp(".", dbuf.d_name)`** — the same shape one layer down: `d_name` was `DIRSIZ` bytes
+  and not terminated when a name filled it. Task C24 put the walk on `opendir(3)` and that one
+  went away rather than being fixed; the `NAMSIZ` half above is the format's and stays.
 * **The tail of the last record held the previous file's bytes.** v7 wrote `iobuf` whole after
   a short read, so the padding of every file carried up to 511 bytes of the one before it —
   an information leak, and noise for any byte-exact oracle. It is zero-filled.
@@ -199,11 +200,24 @@ to a `char child[NAMSIZ + 1]`, counted the locals, and estimated **thirty words*
 
 `0357` is **239**. Eight times the guess, and the same lesson `find` cost in C5f at a factor
 of two: **read the prologue.** Against 4,096, with `_doprnt`'s 281-word frame underneath the
-diagnostic that reports the refusal, the stack allows 14 levels. The walk also holds one open
-descriptor per level — v7 closed and re-opened each directory because it `chdir`'d away, and
-this port does not — and `NOFILE` is 20 less the four already spent, so the **descriptors bind
-first** and `MAXDEPTH` is theirs. A `_Static_assert` holds the two in that order, so that
-changing either cannot silently make the stack the tighter one.
+diagnostic that reports the refusal, the stack allowed 14 levels. The walk also holds one open
+directory per level — v7 closed and re-opened each because it `chdir`'d away, and this port
+does not — and `NOFILE` is 20 less the four already spent, so the **descriptors bind first**
+and `MAXDEPTH` is theirs. A `_Static_assert` holds the two in that order, so that changing
+either cannot silently make the stack the tighter one.
+
+Task C24 made it measure again, which is what that assertion is for. With the `struct direct`
+out of the frame the prologue is `15 utm 0332` — **218 words** — and the largest depth that
+fits is 16: `17 × 218 + 281 + 100 = 4,087`. `STACKDEPTH` follows the measurement; `MAXDEPTH`
+is still `NOFILE - 8` = 12 and still the tighter of the two, so nothing observable moved.
+
+The conversion also has a **heap** cost the assertion cannot see: a `DIR` is twelve words plus
+a read buffer sized from the directory and capped at one filesystem block, held per level like
+the descriptor. Twelve levels of large directories is about 6,300 words, against an address
+space of 28,672 of which `tar`'s image is 10,720 — it fits, and a realistic tree costs a tenth
+of that. `putfile()` also opens each path twice now: once to `fstat` it and choose the branch,
+and again through `opendir()`, this libc having no `fdopendir()`. One extra descriptor is live
+across that hand-off and `MAXDEPTH` leaves eight spare.
 
 ## Which harness says what
 
@@ -224,12 +238,16 @@ legal and each reads the other, so what is compared is the **files**. C4c's rule
 implementations to be transcriptions of *each other*; two transcriptions of the same *format*
 are a weaker relation, and the distinction is worth having in writing.
 
-**`kernel/test/tar`**, volume 3099 with a scratch pack at 3100, has four things that exist
-nowhere else: the tree walk (`b6sim` refuses to read a directory descriptor — `ls`'s, `du`'s
-and `find`'s limit), `checkdir()`'s exec of the setuid `/bin/mkdir`, the owner/mode/mtime an
-extraction restores, and `/dev/rmd1`. Its sharpest oracle is that **the host's `tar` reads the
-archive straight off the bare disk pack** — no filesystem on it at all — which nothing but a
-correct alignment, blocking factor and write path could produce.
+**`kernel/test/tar` is deleted**, with the other seventeen typed dialogues, and with it went the
+only assertion of four things: the tree walk (`b6sim` refuses to read a directory descriptor —
+`ls`'s, `du`'s and `find`'s limit, and `opendir(3)` makes it worse rather than better, every
+directory reading as *empty*), `checkdir()`'s exec of the setuid `/bin/mkdir`, the owner, mode
+and mtime an extraction restores, and `/dev/rmd1`. It lived on volume 3099 with a scratch pack
+at 3100, and its sharpest oracle was that **the host's `tar` read the archive straight off the
+bare disk pack** — no filesystem on it at all — which nothing but a correct alignment, blocking
+factor and write path could produce. What is written below about it is the record of what it
+did, not of what runs; task C24, which changed the tree walk, had to verify it by hand at a
+booted machine for exactly this reason.
 
 Two of its assertions are a **matched pair**, and the second was written because the first
 passed for the wrong reason. `find -newer` against a marker the script makes two seconds after

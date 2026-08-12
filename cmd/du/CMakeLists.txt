@@ -11,11 +11,10 @@
 # can see, which is the whole of what it should do.  ../README.md SS8 is the rule.
 #
 # THE ONE OF THE THREE THAT CANNOT BE TESTED UNDER b6sim, for ../ls/README.md's reason: it
-# reads a directory with read(2) and a host directory descriptor refuses that.  test/ holds
-# a CMakeLists.txt saying so and registering nothing -- ../time/test/ is the precedent for a
-# test directory whose content is an explanation.  kernel/test/fsinfo is where du is
-# asserted, over a tree the guest script builds itself, so every number in the log is
-# arithmetic on a size the test chose.
+# reads a directory, and a host directory descriptor refuses that.  opendir(3) does not rescue
+# it and makes it worse -- every directory reads as EMPTY rather than failing.  test/ holds a
+# CMakeLists.txt saying so at length and registering nothing; ../time/test/ is the precedent
+# for a test directory whose content is an explanation.
 
 # b6_obj reads both from the caller's scope.  b6cc has no -M, so the header dependency is
 # the whole tree at once, as it is in lib/, kernel/, cmd/init/ and cmd/sh/.

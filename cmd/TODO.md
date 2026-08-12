@@ -10,7 +10,7 @@ harness tests it. Read it before starting any task below; **nothing here repeats
 
 **Task numbers carry a `C`** — `C10`, `C11`, … — because the kernel's task numbers are cited from
 source comments and from `doc/`, and a bare number would be ambiguous forever after. The numbering
-is **left as it was** when a task is finished and dropped: C1 through C11, C13 through C23, C26
+is **left as it was** when a task is finished and dropped: C1 through C11, C13 through C24, C26
 and C28 are spent and their sections are gone, and no number is ever re-used, because `root.manifest` stanzas
 and per-program `README.md`s cite them.
 
@@ -40,16 +40,17 @@ and it leaves the program **on the image** — staged into `build/rootfs/`, name
 [../root.manifest](../root.manifest), and asserted by a test. A port is not done when it compiles.
 
 **One task is one program**, and they are ordered so that each is unblocked by the one before it.
-**Neither of the two left obeys that rule and both say so**: C24 is eight mechanical conversions
-of programs that are already here and already tested, and C29 is a defect in one that is.
+**The one task left does not obey that rule and says so**: C29 is not a port at all but a defect
+in a program that is already here and already tested.
 
 | | task | what it buys | size |
 |---|---|---|---|
 | C29 | `sh` corrupts itself on a `case` arm holding a `while` and a pipeline | the last v7 script this tree wants to run, and confidence in every one it already runs | small |
-| C24 | the eight hand-rolled directory readers, over `opendir(3)` | one reader instead of eight, and §5 stops being everybody's problem | medium |
 
-**Where to start: C29.** It is small, it is reproducible in one command, and C23 found it the
-hard way — by shipping a script that had to be rewritten around it.
+**C29 is the only task left**, and it is the one this file most wants done: it is small, it is
+reproducible in one command, and C23 found it the hard way — by shipping a script that had to be
+rewritten around it. Everything else that could be ported has been, or is refused with a reason
+in the table at the foot.
 
 **What the finished tasks settled has moved to [README.md](README.md)**, under "What the
 finished tasks settled" at its foot: the lessons C17 through C22 left behind, and the two loose
@@ -99,45 +100,6 @@ and not the depth.
 can be `exec`'d, so **not one case in it contains a pipeline** — the ingredient this needs.
 `case` is covered, `while` is covered, and the combination cannot be. A fix wants an assertion
 that lives where pipelines run, which means `kernel/test/multi` (§9) and not `sh/test/`.
-
-## C24. The eight hand-rolled directory readers, over `opendir(3)`
-
-**The one task here that is not one program**, and it is together on purpose: eight mechanical
-conversions whose value is not in any of them separately but in what stops being true afterwards.
-§5 — *a name read out of a directory is not NUL-terminated* — becomes something the library knows
-instead of something every future port has to be told, and the same for `d_ino == 0` and for
-re-deriving `DIRENTSZ`.
-
-`libc` grew the library with `cmd/ls`, which is 4.2BSD's now and is its first caller
-([ls/README.md](ls/README.md), [../lib/libc/man/directory.3.umm](../lib/libc/man/directory.3.umm)):
-`opendir`, `readdir`, `closedir`, `rewinddir`, `telldir`, `seekdir`, `dirfd`, about 230 words for
-a caller that only walks. Nothing else uses it yet.
-
-**The eight, and only the eight.** `du`, `find`, `rm`, `rmdir`, `mv`, `pwd`, `tar` and
-`sh/expand.c` open a **pathname** and read entries out of it. That is the whole list.
-
-**The other eight are not candidates and must not be converted.** `fsck`, `mkfs`, `ncheck`,
-`dcheck`, `icheck`, `quot`, `df` and `pstat` also include `<sys/dir.h>`, and they read a
-`struct direct` out of a block they fetched from `/dev/rmd*` themselves. `opendir(3)` has nothing
-to offer a program doing filesystem archaeology — there is no descriptor on a directory to open,
-only a block number — and `<sys/dir.h>` stays exactly the header they want. Naming both halves is
-most of what this task is for.
-
-Three things to weigh rather than assume:
-
-* **`rm -r` is the one with a cost.** [rm/README.md](rm/README.md) records that it **holds the
-  directory descriptor open across the recursion**, one per level. A bare descriptor is free; a
-  `DIR` carries a read buffer sized from the directory, so a deep tree turns a handful of
-  descriptors into a few hundred words apiece. Either `rm` keeps its raw reader, or the recursion
-  closes before it descends. Measure it; do not decide in advance.
-* **`sh/expand.c` has the other one.** Its read loop tests `trapnote & SIGSET` between entries, so
-  a globbing shell stays interruptible, and a library `readdir()` hides that seam. It may be right
-  to leave it alone for exactly that reason.
-* **A conversion that changes no output is the point**, and most of the eight already have a
-  harness that would have said so, had it not been deleted: `du` and `find` through `kernel/test/fsinfo`, `rm`/`rmdir`/`mv` through
-  `files`, `tar` through `tar`, `pwd` through `console`, the shell through [sh/test/](sh/test/).
-
----
 
 ## Not ported, and why
 

@@ -22,8 +22,9 @@ the link is `crt0.o *.o -lc -lruntime` in that order. [`CMakeLists.txt`](CMakeLi
 `b6_prog()` call plus `-I.`, which matters: `defs.h` includes `"ctype.h"`, and that must resolve
 to the shell's own character tables rather than the C11 `<ctype.h>` in the system tree.
 
-It uses **7,971 words of the 28,672** available, with the highest relocatable symbol at word
-7,979 of the 32,767 a 15-bit pointer reaches.
+It uses **8,999 words of the 28,672** available, with the highest relocatable symbol well inside
+the 32,767 a 15-bit pointer reaches. It was 7,971 until task C24; the extra 1,028 are the
+subject of the next section but one.
 
 ## What the port changed
 
@@ -105,9 +106,8 @@ an integer cast into a `char *` is not a pointer at all. `absstak()` takes an `I
 Smaller ones: `addblok()` added a byte count to the integer value of a word pointer, and built its
 end sentinel out of `end+1` — one byte past `end`, which was below `bloktop` and had bit 0 set,
 and neither property survives here. `sbrk()` reports failure as `NULL`, not `(char *)-1`, so
-`setbrk()` returns a plain flag and nobody has to cast a break address to an `int`. `struct
-direct` is four words with `DIRSIZ` 18, not v7's sixteen bytes with `DIRSIZ` 14, and
-[`expand.c`](expand.c) hardcoded both. `execve` is spelled `exece`. `itos()` printed at most five
+`setbrk()` returns a plain flag and nobody has to cast a break address to an `int`. `execve` is
+spelled `exece`. `itos()` printed at most five
 digits and turned a negative into a very large positive; an `INT` here holds a 41-bit signed
 value. `prc()`'s parameter must stay a `char`: `&c` on a standalone `char` is a fat pointer at
 byte #5, and widening it to `int` would make every `prc()` write a NUL. And `CPYSIZ`, the amount
@@ -248,6 +248,55 @@ room in a 28-page address space; the first is a feature v7 had not got.
   unbounded push tests first. `test/nospace.sh` is what proves it: without the test that script
   walks out of the address space, and with it the shell says `no space`.
 
+## Globbing, and the 1,028 words `opendir(3)` cost
+
+Task C24 put [`expand.c`](expand.c) on the library. It fixed a live bug and it was the most
+expensive of that task's seven conversions by a factor of four; both facts are worth the space.
+
+**The bug.** v7 terminated the name once, before the loop:
+
+```c
+entry.d_name[DIRSIZ - 1] = 0;   /* to end the string */
+```
+
+That works only if the write lands **outside** what `read()` overwrites, and in v7 it did: the
+file declared its own `#define DIRSIZ 15` against a fourteen-byte on-disk name and read sixteen
+bytes, so index 14 was the pad byte. The port changed both numbers and kept the line. `DIRSIZ`
+is 18 and `DIRENTSZ` is 24, so index 17 is the **last byte of `d_name`**, the write happened
+before any read, and the first read wiped it. It was never written again. So a file name of
+exactly eighteen characters reached `gmatch()` and `addg()` unterminated, and both scan to a NUL.
+
+**What it did then depended on what followed `entry` in the frame**, which is why nobody had
+noticed: `struct direct` was declared next to a `STATBUF`, and when the byte after the name
+happened to be zero — which it was in the session C24 verified against, where an 18-character
+name globbed correctly on the *unconverted* shell — the bug was invisible. That is the worst
+shape a memory bug takes, and it is the argument for the library rather than for a one-line fix
+in place. `readdir()` ends it: the name arrives terminated, with `d_namlen` beside it.
+
+Three other things went with it. The `stat()`+`S_IFDIR` test before the `open()` is `opendir()`'s
+own business, so the `STATBUF` left a frame that recurses. `open(plain, O_RDONLY) > 0` — which
+would have rejected fd 0 — became a NULL check. And the `d_ino == 0` test is the library's.
+
+**The interrupt seam survived.** The loop still reads
+
+```c
+while ((dp = readdir(dirp)) != NULL && (trapnote & SIGSET) == 0)
+```
+
+so a globbing shell is still interruptible between entries, which is the reason `cmd/TODO.md`
+gave for possibly leaving this file alone. What changed is only that `readdir()` may block in
+one buffer-sized `read(2)` where the old loop blocked in a 24-byte one — latency, not
+correctness.
+
+**The cost.** 7,971 words to 8,999. Only about 230 of that is the directory library; the rest is
+`malloc`, `free` and `realloc`, which **this shell had never linked**. It allocates through
+`brk(2)` and its own `locstak`/`endstak` arena — that is the whole subject of the section above —
+so the allocator was 700-odd words of libc that no other call reached. `opendir()` calls
+`malloc()` twice, and that one edge pulled the lot in. It is the sharpest illustration in the
+tree of §6's rule that what a program *links* is decided by its smallest call, and it is why
+`ttyname(3)` deliberately does not use this library either: `/bin/login` and `/etc/getty` should
+not carry an allocator to scan `/dev`.
+
 ## Tests
 
 Seven, under `b6sim`, run by `make run` (ctest labels `sh` and `rootfs`):
@@ -294,15 +343,20 @@ which gets it right, would have run it. `Machine::ExecError` now carries the err
 
 * **Executing a compiled program.** There is no external BESM-6 binary on the image yet, so a
   command name that is not a script only ever reaches "not found".
-* **Globbing.** [`expand.c`](expand.c) reads directories with `read()` and parses `struct direct`;
-  under `b6sim` that is a host directory in a host format, so the read fails and the pattern is
-  left literal.
+* **Globbing.** [`expand.c`](expand.c) reads directories, and `b6sim` maps that onto the host,
+  where a directory descriptor refuses to be read. Since task C24 it goes through `opendir(3)`,
+  which makes the failure **worse**: `open(2)` and `fstat(2)` on a host directory both succeed
+  and only `read(2)` refuses, so `opendir()` returns a good `DIR`, the first `readdir()` returns
+  `NULL`, and every directory reads as *empty* — indistinguishable from a real empty one. Before,
+  the read failed and the pattern was left literal; now the pattern matches nothing. Neither is
+  the machine's answer, and no expectation file can tell the second from a correct result.
 * **Traps and interrupts.** `b6sim`'s `signal()` implements only `SIG_DFL` and `SIG_IGN`.
 
-All three need the real kernel, which this shell now runs on: `kernel/test/console` types at it
-and `kernel/test/session` has it write files. Neither globs, sends a signal or grows the stack
-into a fault, though, so all three — and the memory-fault path above — are still undriven, and
-those are the stages to add.
+All three need the real kernel, which this shell runs on. `kernel/test/console` and
+`kernel/test/session`, which typed at it and had it write files, are both deleted; `kernel/test/multi`
+is what boots to a shell today, and it neither globs, sends a signal nor grows the stack into a
+fault. So all three — and the memory-fault path above — are still undriven, and those are the
+stages to add.
 
 Two notes on the fixtures. They are commented with `#`, which they were not until this shell had
 one — the `:` lines they used to carry are what the comment character replaced, and converting

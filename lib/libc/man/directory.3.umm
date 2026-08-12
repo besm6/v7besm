@@ -89,7 +89,9 @@ and on a read error alike, and does not distinguish them.
 **This is not a v7 interface.** v7 had none at all: every caller opened the directory as a file
 and read(2) raw **struct direct** records out of it, and eleven programs in *cmd/* each carried
 their own copy of the same mistakes. 4.2BSD introduced the library and this is its shape, less
-what has no meaning here.
+what has no meaning here. Every one of those eleven uses this library now; the programs that
+still read a **struct direct** - fsck(1m), mkfs(1m), ncheck(1m), dcheck(1m) and pstat(1m) - take
+it out of a block they read from the raw disk themselves, where there is no directory to open.
 
 **struct dirent is not struct direct.** dir(5)'s **struct direct** is the format on the disk:
 exactly four words, with **d_name** being **DIRSIZ** characters and **no room for a
@@ -100,7 +102,7 @@ A **struct dirent** is never read into and nothing about it is on any disk.
 
 **readdir skips the empty slots.** unlink(2) empties a directory entry by writing **d_ino** = 0
 back in place, so a hole sits in the middle of a live directory and every open-coded caller in
-this tree tests for it by hand. *Readdir* does that test once, for all of them.
+this tree had to test for it by hand. *Readdir* does that test once, for all of them.
 
 **telldir returns the plain byte offset,** and there is no machinery behind it. 4.2BSD returns
 an index into a list of seek points that *closedir* must free, because a BSD directory entry is

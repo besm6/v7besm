@@ -181,15 +181,25 @@ takes `s_fsize` verbatim, and its page owes the mirror section, `BLOCKS HERE ARE
 a directory **is not NUL-terminated** unless the port terminates it. Anything that walks
 directories inherits this.
 
-**A new port does not inherit it, because it uses `opendir(3)`** — `readdir()` skips the free
-slots, plants the terminator and hands back `d_namlen`, and all three of those are what the eight
-hand-rolled readers C24 will convert get wrong. [`make/files.c`](make/files.c)'s `srchdir()` is
-the worked example: v7 `fread`s 32 raw `struct direct` at a time and copies each name through a
-15-byte buffer, and the port is a `readdir()` loop with the copy gone. Do that from the start
-rather than porting the hand-rolled version and adding a ninth to C24's list.
-[`atrun`](atrun/) is the first port to have taken that instruction, and it is also where the
-cost of not taking it shows: the same program had `DIRSIZ` written a second time as the `14` in
-`sprintf("/bin/mv %.14s %s", …)`, which no directory-reading fix would have found.
+**No port inherits it any more, because they all use `opendir(3)`** — `readdir()` skips the free
+slots, plants the terminator and hands back `d_namlen`. Task C24 finished that: **not one program
+in `cmd/` reads a `struct direct` out of a pathname now.** [`make/files.c`](make/files.c)'s
+`srchdir()` is the worked example — v7 `fread`s 32 raw `struct direct` at a time and copies each
+name through a 15-byte buffer, and the port is a `readdir()` loop with the copy gone — and
+[`ls`](ls/), [`du`](du/), [`find`](find/), [`rm`](rm/), [`rmdir`](rmdir/), [`pwd`](pwd/),
+[`tar`](tar/), [`at`](at/) and [`sh/expand.c`](sh/expand.c) are the rest of the callers.
+
+**Five programs still include `<sys/dir.h>`, and must**: `fsck`, `mkfs`, `ncheck`, `dcheck` and
+`pstat` read a `struct direct` out of a block they fetched from `/dev/rmd*` themselves. There is
+no descriptor on a directory to open, only a block number, so `opendir(3)` has nothing to offer
+them and `<sys/dir.h>` is exactly the header they want. **That is the test**: a *pathname* takes
+the library; a *block* takes the header.
+
+So §5 now bites in one place only — where `DIRSIZ` is written into something that is not a
+directory read at all. [`atrun`](atrun/) is where the cost of that shows: it took the `opendir(3)`
+instruction and still had `DIRSIZ` written a second time as the `14` in
+`sprintf("/bin/mv %.14s %s", …)`, which no directory-reading fix would have found. Grep for the
+number, not for the loop.
 
 ### 6. Ceilings, of which only two are checked
 
@@ -265,7 +275,7 @@ One list must grow with the program and nothing catches it but a failing build: 
 in [../kernel/test/CMakeLists.txt](../kernel/test/CMakeLists.txt). The hard-coded `ls /bin`
 expectations that used to catch it as well went with `kernel/test/console` and `session`.
 
-The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **98 free** — it was 187
+The disk is one EC-5052: **2000 blocks, 6,144,000 bytes**, and there are **92 free** — it was 187
 until the `lib/test` programs moved to the test pack, and `yacc` and `lex` have since taken 68 of
 what that gave back, `expr` 14, `egrep` 14, `m4` 19, `make` 24, `dc` 32, `bc` 20 with one more
 block for the `/usr/lib/lib.b` its `-l` reads, `units` 14 with three of them the
@@ -293,7 +303,15 @@ only one where the program is the small part of it: 8 for `/usr/lib/calendar`, 1
 count — 1 more for a manual page that crossed 3072 bytes exactly as `mail`'s did one task earlier,
 and **29 for the database**, which is data v7 never had. Four of the eight files would have cost
 4 and covered 114 days of the year against 362; the whole set was chosen on that measurement and
-not on the size. `update` is
+not on the size. **C24 is the only entry here that bought no new program at all**: converting seven
+directory readers to `opendir(3)` cost **6 blocks**, 98 free to 92, and every one of them is
+library code linked seven times over. Six of the seven paid 190 to 284 words each — about the
+library's own price for a caller that only walks. The seventh, `sh`, paid **1,028**, because
+`opendir()` calls `malloc()` and the shell allocates through `brk(2)` and its own arena and had
+never linked an allocator ([sh/README.md](sh/README.md)). **What a program links is decided by its
+smallest call**, which is C19's `ed` lesson arriving from the other direction: there a shared
+routine cost more than it looked, here a two-line edit pulled in 700 words of libc that nothing
+else in the program could reach. `update` is
 the other end of the range and the cheapest thing here: **1 block**, 152 words, no stdio. `awk` is also the one whose *own* ceiling was never this
 number: what is left below the stack after its image is the whole of its heap
 ([awk/README.md](awk/README.md)).
@@ -502,6 +520,13 @@ gets this for free: it includes the real headers and inherits their assertions.
 The rule applies to test scripts as much as to C, which is why `b6fsutil -D`'s damage targets are
 **symbolic**.
 
+**The better answer, where there is one, is not to encode the layout at all.** `du` and `find`
+each carried two of these assertions to hold their own `DIRENTSZ` arithmetic honest; task C24 put
+both on `opendir(3)` and deleted the assertions with the arithmetic, because
+[`lib/libc/gen/dirdesc.h`](../lib/libc/gen/dirdesc.h) now makes that assertion once for every
+caller. §12 is a rule for code that has to know the layout — the five `/dev/rmd*` readers in §5 —
+and the first question is whether this program is one of them.
+
 The devices these programs are pointed at are all on the image: `/dev/rmd0`, `/dev/rmd1` and
 `/dev/rmb0` (`cdevsw[3]` and `[4]`), and the block nodes `/dev/md0`, `/dev/md1` and `/dev/md2`.
 
@@ -512,6 +537,44 @@ The devices these programs are pointed at are all on the image: `/dev/rmd0`, `/d
 One paragraph per finished task, newest first, kept here rather than in [TODO.md](TODO.md)
 because a work plan should shrink as it is worked and this does not. Each points at the port's
 own `README.md` for the detail; what is here is the part a *later* port needs to know.
+
+C24 took the last seven hand-rolled directory readers over `opendir(3)` — `du`, `find`, `rm`,
+`rmdir`, `pwd`, `tar` and `sh/expand.c`, six blocks, no new program — so that §5 is now a
+description of the library rather than an instruction to every future port. Five things it
+settled:
+
+* **A one-time terminator is a bug waiting for its constants to move.** `expand.c` wrote
+  `entry.d_name[DIRSIZ-1] = 0` once, before the loop, and it worked in v7 because that file
+  declared its own `DIRSIZ 15` against a fourteen-byte name and read sixteen bytes — the write
+  landed on the pad. The port changed both numbers and kept the line, so the write landed on the
+  **last byte of the name** and the first `read()` wiped it, for good. An 18-character name has
+  reached `gmatch()` unterminated for as long as this shell has been on the image. **It was
+  invisible because the byte after the field usually happened to be zero** — in the session that
+  verified C24, such a name globbed correctly on the *unconverted* shell — and no test could have
+  caught it either, because [sh/test/](sh/test/) cannot glob. **The class is "a fix that depends
+  on a number the fix does not name"**, and the way to find the rest is to grep for a constant
+  written into a bound rather than for the loop it bounds — §5's `atrun` lesson again.
+* **What a program links is decided by its smallest call.** Six of the seven paid 190–284 words,
+  about the library's own price. `sh` paid **1,028**, because `opendir()` calls `malloc()` and the
+  shell allocates through `brk(2)` and its own arena and had never linked an allocator. C19's `ed`
+  finding said a *shared* routine can cost more than it looks; this is the same fact from the
+  other side, and the place to read it is `b6size` before and after, not the diff.
+* **Read the prologue again after the conversion, not just before it.** `tar`'s frame went 239 →
+  218 words and `find`'s 147 → 110, so both files' measured depth arithmetic was quietly wrong in
+  the *safe* direction. Both were re-derived. A `_Static_assert` that holds two ceilings in order —
+  `tar`'s `MAXDEPTH <= STACKDEPTH` — is what makes that a check rather than a hope.
+* **The library hides a descriptor budget, and batching is how to keep one.** `du` and `find`
+  descend arbitrarily deep because above a descriptor ceiling they drop the directory and re-take
+  it, which a plain `while ((dp = readdir(dirp)))` cannot do — the cursor lives in the `DIR`. Both
+  fill an array of names, *then* recurse over it, and use `telldir()`/`seekdir()` across the
+  `closedir()`/`opendir()` pair. That also bounds the **heap**, which is new: a `DIR` costs twelve
+  words plus a buffer capped at one filesystem block, and without the budget a deep tree holds one
+  per level. `rm` and `tar`, which were already `NOFILE`-bounded, simply kept their per-level hold.
+* **A task list can be wrong about its own scope.** [TODO.md](TODO.md) named eight programs and
+  eight non-candidates. `mv` reads no directory at all — its `<sys/dir.h>` was carried for one use
+  of `DIRSIZ`, which lives in `<sys/param.h>` — and `df`, `icheck` and `quot` never included the
+  header. Seven and five are the real numbers. **Check the grep before trusting the list**, and
+  the grep is `^#include <sys/dir.h>`.
 
 C23 put `calendar(1)` on the image — forty-two blocks, of which twenty-nine are the database —
 and finished by opening a task rather than closing one. Four things it settled

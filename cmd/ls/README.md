@@ -45,9 +45,11 @@ already written at least once here:
 * the `DIRENTSZ` arithmetic, and
 * the `fread()` of a `struct direct`, which is what made the v7 `ls` untestable under `b6sim`.
 
-The other eight readers are **not** converted, and [`../TODO.md`](../TODO.md) **C24** is that task
-— along with the eight programs that must *not* be converted, which read `struct direct` out of a
-block they fetched from `/dev/rmd*` themselves.
+**Task C24 converted the rest**, so the four bullets above are now true of `du`, `find`, `rm`,
+`rmdir`, `pwd`, `tar`, `sh/expand.c`, `make` and `at` as well, and `ls` is the first caller rather
+than the only one. Five programs still read a `struct direct` and must — `fsck`, `mkfs`, `ncheck`,
+`dcheck` and `pstat` — because they take it out of a block they fetched from `/dev/rmd*`
+themselves, where there is no directory to open.
 
 ## What the kernel takes away
 
@@ -173,9 +175,10 @@ What *is* asserted, and where:
   `/etc/passwd`. Its expectation moved with this port: the long listing spends `%-9.9s` on an
   owner where v7 spent `%-6.6s`, and `%3d,%4d` on a device where v7 wrote `%3d,%3d`.
 * `kernel/test/session`, `files`, `filters`, `dd`, `fsinfo`, `mount`, `edit`, `fsck`, `mkfs`,
-  `tar` — all redirect, so `Cflg` is 0 and the one-name-per-line output is what it always was.
-* `kernel/test/console` — `ls -1 /bin`, and the `-1` is new. A bare `ls` there is at a terminal
-  and would print in columns, making the expectation a function of the screen width, of the
+  `tar` — **all deleted**; they redirected, so `Cflg` was 0 and the one-name-per-line output was
+  what it always was.
+* `kernel/test/console` — **deleted too.** It ran `ls -1 /bin`, and the `-1` was new. A bare `ls`
+  there is at a terminal and would print in columns, making the expectation a function of the
   terminal's `XTABS` bit and of the longest name in `/bin`, none of which that stage is about.
   It matters more than it would elsewhere because **that test is DISABLED**
   (kernel task 35), so a wrong expectation would sit there

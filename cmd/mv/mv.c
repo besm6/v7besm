@@ -70,8 +70,9 @@
 //     MAXN-DIRSIZ-2', checked the target but not the component being appended to it, and
 //     dname() returns a pointer into argv where nothing bounds a component at DIRSIZ.  Each
 //     is now checked against the sum it actually builds.  (That test's own arithmetic changed
-//     under it, from 84 to 80, because DIRSIZ is 18 here and not v7's 14; correctly, and only
-//     because of the <sys/dir.h> include.)
+//     under it, from 84 to 80, because DIRSIZ is 18 here and not v7's 14.  DIRSIZ comes from
+//     <sys/param.h>, which is where it lives; task C24 dropped the <sys/dir.h> this file also
+//     included, mv being on that task's list by mistake -- it reads no directory.)
 //
 // THREE THINGS THAT LOOK LIKE BUGS HERE AND ARE NOT.  Noted so the next reader does not
 // "fix" them:
@@ -100,7 +101,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/dir.h>
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/types.h>

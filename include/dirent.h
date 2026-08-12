@@ -4,7 +4,9 @@
 // read(2) raw `struct direct' records out of it, and eleven programs in cmd/ each grew
 // their own copy of the same four mistakes -- forgetting the free slots, running a
 // strlen() off the end of the name field, forgetting the terminator that is not there,
-// and re-deriving DIRENTSZ.  This header is where that stops.
+// and re-deriving DIRENTSZ.  This header is where that stops, and since task C24 there
+// is no other reader of a pathname in the tree.  <sys/dir.h> is for a program that has a
+// disk block rather than a directory: fsck, mkfs, ncheck, dcheck, pstat.
 //
 // THIS IS NOT THE ON-DISK ENTRY, and the difference is the whole point.  <sys/dir.h>'s
 // `struct direct' is the format ON THE DISK: exactly four words, DIRPB of them tiling a

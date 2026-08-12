@@ -335,15 +335,23 @@ healthy.
 `opendir`, `readdir`, `closedir`, `rewinddir`, `telldir`, `seekdir` and `dirfd`, seven objects in
 [`gen/`](gen/) over the private [`gen/dirdesc.h`](gen/dirdesc.h). **v7 had none of this.** Every
 caller opened the directory as a file and read raw `struct direct` records out of it, and the
-eleven programs in `cmd/` that walk a directory each grew their own reader and their own copy of
-the same four mistakes: the free slot `unlink(2)` leaves behind, the name that is not
-NUL-terminated when it fills the field, the `strlen` that then runs into the next entry's `d_ino`,
-and `DIRENTSZ` re-derived. `cmd/ls` was going to be the twelfth and is the first caller instead;
-converting the other eight is [`../../cmd/TODO.md`](../../cmd/TODO.md) task C24.
+programs in `cmd/` that walk a directory each grew their own reader and their own copy of the same
+four mistakes: the free slot `unlink(2)` leaves behind, the name that is not NUL-terminated when
+it fills the field, the `strlen` that then runs into the next entry's `d_ino`, and `DIRENTSZ`
+re-derived. `cmd/ls` was the first caller; `cmd/make` and `cmd/at` followed, and
+[`../../cmd/TODO.md`](../../cmd/TODO.md) task C24 converted the last seven — `du`, `find`, `rm`,
+`rmdir`, `pwd`, `tar` and `sh/expand.c`. **Nothing in `cmd/` reads a `struct direct` out of a
+pathname now**; the five programs that still include `<sys/dir.h>` (`fsck`, `mkfs`, `ncheck`,
+`dcheck`, `pstat`) read one out of a block they fetched from `/dev/rmd*` themselves, where there
+is no descriptor to open.
 
 About **230 words** for a caller that only walks (`opendir` 89, `readdir` 121, `closedir` 15,
 `dirfd` 5), 298 for all seven — which is why they are seven objects and not one `directory.c`: a
-program that never seeks should not link `seekdir`.
+program that never seeks should not link `seekdir`. C24 measured that price nine times and it held
+for eight of them, 190 to 284 words. **The exception is worth knowing before adding a caller:
+`cmd/sh` paid 1,028**, because `opendir()` calls `malloc()` and the shell allocates through
+`brk(2)` and its own arena and had never linked an allocator at all. The library's own cost is not
+the whole cost; `b6size` on the program before and after is.
 
 Three decisions in it are about **this machine** rather than about directories:
 
@@ -664,6 +672,14 @@ every directory in the world reads as **empty** — in exactly the way an empty 
 expectation file can tell those apart, and a `b6sim` case would pass while proving nothing. Say it
 out loud wherever it comes up: it also means a `b6sim` run of *any* program that walks a tree
 (`ls`, `du`, `find`, `tar c`) proves nothing about the walk.
+
+**Task C24 sharpened that from a limitation into a regression**, and the sharp part is that it did
+so by removing hand-rolled code that failed *honestly*. Before, `sh`'s glob and `du`'s descent read
+a directory descriptor directly, the host refused it, and the failure was visible — a pattern left
+literal, an error printed. On the library the same call now succeeds and returns nothing. The
+seven converted programs are therefore *less* testable under `b6sim` than they were, and that is
+the right trade only because `b6sim` could never have tested the walk correctly either way. The
+place to check a directory walk is a booted kernel and nowhere else.
 
 `ttyname` is the older half of the same story, and it does its own `read()` rather than using the
 library — deliberately, since `/bin/login` and `/etc/getty` should not carry `opendir` for one

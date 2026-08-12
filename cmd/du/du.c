@@ -17,41 +17,33 @@
 // bytes.  THE MULTIPLY IS AT THE printf and nowhere else -- every count in this file is a
 // filesystem block until it is printed.  du.1.umm says so; ../README.md SS4 is the rule.
 //
-// WHAT THE PORT HAD TO CHANGE, beyond the mechanical C11 pass.  Three of these are about
-// one fact -- a struct direct is FOUR WORDS, 24 bytes, where v7's was 16 -- and the first
-// is the most dangerous line in the file:
+// THE DIRECTORY IS READ WITH opendir(3), task C24, and with it went the three defects v7's
+// layout arithmetic carried into this file -- `dsize>>4' for a sixteen-byte entry, a 512-byte
+// read chunk that meant a PDP-11 block, and an unterminated d_name handed to strcmp.  What
+// stays is the BATCH: descend() still fills an array of names and only then recurses over it,
+// because that is what lets the descriptor be dropped and re-taken between batches.
+// README.md is the account of both.
 //
-//  1. `entries = dsize>>4' meant "sixteen bytes to an entry".  Left alone it walks 1.5x
-//     as many entries as were read, off the end of dentry[] and into the frame.  It is a
-//     divide by sizeof(struct direct) now, which is also not a shift: 24 is not a power
-//     of two any more than BSIZE is.
+// WHAT THE PORT HAD TO CHANGE, beyond the mechanical C11 pass:
 //
-//  2. The 512-byte read chunk was "one PDP-11 block of entries".  It is sizeof(dentry),
-//     which is what it always meant; the buffer is the unit, not the filesystem.
-//
-//  3. `blocks = (st_size + BSIZE-1) >> BSHIFT' does not compile, and that is the point:
+//  1. `blocks = (st_size + BSIZE-1) >> BSHIFT' does not compile, and that is the point:
 //     there IS no BSHIFT in this port and there cannot be (sys/param.h).  It is a divide.
 //
-//  4. dentry[] IS ON A RECURSIVE FRAME, and the stack is 4,096 words with nothing checking
-//     it (../README.md SS6).  At v7's 32 entries that is 128 words per directory level; it
-//     is 16 entries here, 64 words, so a deep tree has room.  It cannot be static: it is
-//     live across the recursive call.
+//  2. THE BATCH IS ON A RECURSIVE FRAME, and the stack is 4,096 words with nothing checking
+//     it (../README.md SS6).  Sixteen names are 51 words per directory level, where v7's
+//     thirty-two struct direct would have been 128.  It cannot be static: it is live across
+//     the recursive call.
 //
-//  5. d_name IS NOT NUL-TERMINATED ON DISK when a name fills DIRSIZ (../README.md SS5), so
-//     v7's `strcmp(dp->d_name, ".")' reads past the field.  ls(1) had to make the same fix.
-//     Every name is copied into a bounded local first now, and that copy is what the path
-//     is built from.
-//
-//  6. THE PATH APPEND HAD NO BOUND AT ALL, and it is the worst of the unbounded buffers any
+//  3. THE PATH APPEND HAD NO BOUND AT ALL, and it is the worst of the unbounded buffers any
 //     port here has met, because it accumulates: one component per recursion level into a
 //     fixed path[PATHSIZ].  It is bounded, and so is the backward scan in the chdir("..")
 //     recovery path, which walked off the front of the buffer if there was no `/' left.
 //     ../README.md SS6: every port so far has had to bound one.
 //
-//  7. `char *rindex();' -- rindex(3) is declared by no header in this tree, though libc
+//  4. `char *rindex();' -- rindex(3) is declared by no header in this tree, though libc
 //     still has one.  strrchr(3) is the spelling <string.h> offers.
 //
-//  8. Five `long's and a `%ld'.  A long is one word here; all of them are int.
+//  5. Five `long's and a `%ld'.  A long is one word here; all of them are int.
 //
 // TWO UPSTREAM BUGS, fixed rather than carried, and neither is about this machine:
 //
@@ -70,30 +62,23 @@
 // The order here does not matter and cannot be made to: clang-format sorts a block of <>
 // includes alphabetically, so the on-disk-layout headers arrive ahead of the sys/param.h
 // and sys/types.h they need.  They include what they depend on themselves -- see the note
-// at the head of each, and sys/dir.h, which is the precedent.
-#include <fcntl.h>
+// at the head of each.
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/dir.h>
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
-// What this file assumes of the layout, asserted rather than re-derived (../TODO.md, task
-// C4).  sys/dir.h carries the rest -- that an entry is DIRWORDS words and that DIRPB of
-// them tile a block.
-_Static_assert(sizeof(struct direct) == DIRENTSZ, "a directory entry must be DIRENTSZ bytes");
-_Static_assert(BSIZE % sizeof(struct direct) == 0, "entries must tile a block");
 _Static_assert(BSIZE % KBYTE == 0, "a block must be a whole number of reported blocks");
 
 #define EQ(x, y) (strcmp(x, y) == 0)
 #define ML       1000 // distinct multiply-linked files remembered; du.1.umm's second BUG
 #define PATHSIZ  256  // the path being built, and the argument it starts from
 
-// Sixteen entries, not v7's thirty-two: this array is on a RECURSIVE frame and an entry is
-// now four words.  See the header.
+// Names per batch.  Sixteen, not v7's thirty-two entries: the array is on a RECURSIVE frame.
 #define NDENT 16
 
 // v7 rationed descriptors against NOFILE with a bare `10'.  Same number, said properly.
@@ -163,12 +148,12 @@ int main(int argc, char **argv)
 //
 static int descend(char *np, char *fname)
 {
-    int dir = 0; // open directory, 0 meaning `not open'
-    int offset, dsize, entries, dirsize;
-    struct direct dentry[NDENT];
-    struct direct *dp;
-    char nbuf[DIRSIZ + 1];
-    int i, n, endoff;
+    DIR *dirp = NULL; // NULL meaning `dropped', not `end of directory'
+    struct dirent *dp;
+    char names[NDENT][DIRSIZ + 1]; // one batch, read before any of it recurses
+    long loc;
+    int nb, done = 0;
+    int i, k, n, endoff;
     int blocks = 0;
 
     if (stat(fname, &Statb) < 0) {
@@ -203,69 +188,66 @@ static int descend(char *np, char *fname)
     if (endoff > 0 && np[endoff - 1] == '/')
         --endoff;
 
-    dirsize = Statb.st_size;
     if (chdir(fname) == -1)
         return 0;
+    if ((dirp = opendir(".")) == NULL) {
+        fprintf(stderr, "--cannot open < %s >\n", np);
+        goto ret;
+    }
 
-    for (offset = 0; offset < dirsize; offset += (int)sizeof dentry) { // each bufferful
-        dsize = (int)sizeof dentry;
-        if (dsize > dirsize - offset)
-            dsize = dirsize - offset;
-        if (!dir) {
-            if ((dir = open(".", 0)) < 0) {
-                fprintf(stderr, "--cannot open < %s >\n", np);
-                goto ret;
+    while (!done) {
+        // One batch of names, taken before any of them recurses: that is what makes the
+        // descriptor droppable below, and it is what the raw reader's bufferful was for.
+        for (nb = 0; nb < NDENT;) {
+            if ((dp = readdir(dirp)) == NULL) {
+                done = 1;
+                break;
             }
-            if (offset)
-                lseek(dir, (off_t)offset, 0);
-            if (read(dir, (char *)dentry, dsize) < 0) {
-                fprintf(stderr, "--cannot read < %s >\n", np);
-                goto ret;
-            }
-            // Ration descriptors: a deep tree would otherwise hold one open per level.
-            if (dir > DIRFDMAX) {
-                close(dir);
-                dir = 0;
-            }
-        } else if (read(dir, (char *)dentry, dsize) < 0) {
-            fprintf(stderr, "--cannot read < %s >\n", np);
-            goto ret;
+            if (dp->d_namlen == 0 || EQ(dp->d_name, ".") || EQ(dp->d_name, ".."))
+                continue;
+            strcpy(names[nb++], dp->d_name);
         }
 
-        // A divide, not v7's `dsize>>4': an entry is DIRENTSZ == 24 bytes here.
-        for (dp = dentry, entries = dsize / (int)sizeof(struct direct); entries; --entries, ++dp) {
-            if (dp->d_ino == 0)
-                continue;
+        // Ration descriptors: a deep tree would otherwise hold one open per level.  The
+        // cookie survives the closedir(), and descend() leaves `.' where it found it.
+        loc = telldir(dirp);
+        if (dirfd(dirp) > DIRFDMAX) {
+            closedir(dirp);
+            dirp = NULL;
+        }
 
-            // d_name fills DIRSIZ with no NUL when the name is that long, so it is copied
-            // out before anything compares or appends it.
-            for (i = 0; i < DIRSIZ && dp->d_name[i]; ++i)
-                nbuf[i] = dp->d_name[i];
-            nbuf[i] = '\0';
-            if (nbuf[0] == '\0' || EQ(nbuf, ".") || EQ(nbuf, ".."))
-                continue;
+        for (k = 0; k < nb; ++k) {
+            i = (int)strlen(names[k]);
 
             // `/', the name, and a NUL.  v7 wrote this with no test of any kind, into a
             // buffer that had already been appended to once per level above.
             if (endoff + 1 + i + 1 > PATHSIZ) {
-                fprintf(stderr, "--path too long < %s/%s >\n", np, nbuf);
+                fprintf(stderr, "--path too long < %s/%s >\n", np, names[k]);
                 continue;
             }
             n       = endoff;
             np[n++] = '/';
-            for (i = 0; nbuf[i]; ++i)
-                np[n++] = nbuf[i];
+            for (i = 0; names[k][i]; ++i)
+                np[n++] = names[k][i];
             np[n] = '\0';
 
             blocks += descend(np, &np[endoff + 1]);
+        }
+
+        if (!done && dirp == NULL) {
+            if ((dirp = opendir(".")) == NULL) {
+                fprintf(stderr, "--cannot open < %s >\n", np);
+                goto ret;
+            }
+            seekdir(dirp, loc);
         }
     }
     np[endoff] = '\0';
     if (!Sflag)
         printf("%d\t%s\n", blocks * KBPB, np);
 ret:
-    if (dir)
-        close(dir);
+    if (dirp)
+        closedir(dirp);
     if (chdir("..") == -1) {
         np[endoff] = '\0';
         fprintf(stderr, "Bad directory <%s>\n", np);

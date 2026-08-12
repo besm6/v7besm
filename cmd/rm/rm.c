@@ -5,8 +5,7 @@
 //
 // The v7 program, unchanged in what it does: one clumped flag word (-f, -i, -r), a refusal of
 // the literal argument `..', then unlink() per file -- and under -r a recursive descent that
-// reads each directory with open()/read() of struct direct and hands the emptied directory to
-// /bin/rmdir.
+// reads each directory and hands the emptied one to /bin/rmdir.
 //
 // THAT LAST STEP IS WHY rm ITSELF NEEDS NO PRIVILEGE.  unlink() of a directory is gated on
 // suser() (kernel/sys4.c), and rm never calls it: removedir() below forks and execs
@@ -27,9 +26,7 @@
 //  1. `%.14s' TRUNCATED A NAME.  DIRSIZ is 18 here, not v7's 14 (include/sys/param.h), so
 //     `rm -r' silently built a short name for any entry of 15 to 18 characters, and then
 //     removed the wrong file or -- more usually -- reported the right one nonexistent and left
-//     the directory un-removable.  The name is copied into a terminated char[DIRSIZ + 1] and
-//     printed with %s, the same call ../ls/ls.c made.  A name that fills d_name is NOT
-//     terminated by the kernel (../pwd/pwd.c, fix 2), which is what the copy is really for.
+//     the directory un-removable.  readdir() hands back a terminated name and %s prints it.
 //
 //  2. THE RECURSIVE sprintf() WAS UNBOUNDED, and that is the sharp one: rm() recurses on the
 //     name it builds, so the path grows one component per level and the sprintf has no idea
@@ -49,29 +46,23 @@
 //     `rm -i' asked its question into the buffer and read a blind terminal.  yes() flushes
 //     before it reads, which covers all four prompt sites at once.
 //
-// THREE THINGS THAT LOOK LIKE BUGS HERE AND ARE NOT.  Noted so the next reader does not
-// "fix" them:
+// THE DESCENT READS EACH DIRECTORY WITH opendir(3), task C24, and keeps the DIR OPEN ACROSS
+// THE RECURSION as v7 kept the descriptor -- so the depth limit is still NOFILE, 20
+// (include/sys/param.h), and rm.1.umm still says so.  What a DIR adds is heap: twelve words
+// plus a read buffer per level.  README.md measures it and says why closing before descending
+// was not the answer.
 //
-//  * `read(...) == (int)sizeof direct' is safe as v7 wrote it, unlike the `<' form ../pwd had
-//    to repair: a failed read's -1 cannot EQUAL 24 either, so the loop ends.  The cast is
-//    house style, not a defect.
-//
-//  * The second execl(), of /usr/bin/rmdir, is dead: there is no /usr/bin on this image.  It
-//    is v7's and costs one failed exec on a path that has already failed once, so it stays.
-//
-//  * `rm -r' holds the directory's descriptor OPEN ACROSS THE RECURSION, so it needs one
-//    descriptor per level of nesting and NOFILE is 20 (include/sys/param.h).  Twenty levels
-//    is the real limit, not the stack; v7 had the same one.  rm.1.umm says so now.  Restructuring
-//    to close before recursing would change the program's behaviour on a directory being
-//    modified underneath it, which is not this task's business.
+// ONE THING THAT LOOKS LIKE A BUG HERE AND IS NOT.  The second execl(), of /usr/bin/rmdir, is
+// dead: there is no /usr/bin on this image.  It is v7's and costs one failed exec on a path
+// that has already failed once, so it stays.
 //
 // WHAT DID NOT NEED CHANGING, AND WAS CHECKED.  No long and no %D.
 //
-#include <fcntl.h>
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/dir.h>
+#include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -131,10 +122,9 @@ int main(int argc, char **argv)
 static void rm(char *arg, int fflg, int rflg, int iflg, int level)
 {
     struct stat buf;
-    struct direct direct;
     char name[NAMEBUF];
-    char dname[DIRSIZ + 1];
-    int d;
+    DIR *dirp;
+    struct dirent *dp;
 
     if (stat(arg, &buf)) {
         if (fflg == 0) {
@@ -164,20 +154,17 @@ static void rm(char *arg, int fflg, int rflg, int iflg, int level)
                 ++errcode;
                 return;
             }
-            if ((d = open(arg, O_RDONLY)) < 0) {
+            if ((dirp = opendir(arg)) == NULL) {
                 printf("rm: %s: cannot read\n", arg);
                 exit(1);
             }
-            while (read(d, (char *)&direct, sizeof direct) == (int)sizeof direct) {
-                if (direct.d_ino != 0 && !dotname(direct.d_name)) {
-                    // d_name is char[DIRSIZ] and is NOT terminated when a name fills it.
-                    strncpy(dname, direct.d_name, DIRSIZ);
-                    dname[DIRSIZ] = '\0';
-                    sprintf(name, "%s/%s", arg, dname);
+            while ((dp = readdir(dirp)) != NULL) {
+                if (!dotname(dp->d_name)) {
+                    sprintf(name, "%s/%s", arg, dp->d_name);
                     rm(name, fflg, rflg, iflg, level + 1);
                 }
             }
-            close(d);
+            closedir(dirp);
             errcode += removedir(arg, iflg);
             return;
         }

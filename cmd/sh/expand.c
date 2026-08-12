@@ -9,18 +9,15 @@
 //   "[...]"      in params matches character class
 //   "[...a-z...]" in params matches a through z.
 //
-// THE DIRECTORY FORMAT IS NOT v7's.  v7 read sixteen bytes at a time -- a two-byte
-// i-number and a fourteen-byte name -- and this file said so twice, with its own
-// `#define DIRSIZ 15' and a literal 16 in the read().  A struct direct here is FOUR
-// WORDS: one of i-number and three of name, so that DIRPB of them tile a 512-word block
-// exactly (include/sys/param.h, and the reasoning is in include/sys/dir.h).  Both
-// numbers now come from the header, so a change there reaches this file.
+// THE DIRECTORY IS READ WITH opendir(3), task C24, and that fixed a live bug: v7's
+// `entry.d_name[DIRSIZ-1] = 0' terminated the name once, before the loop, which worked only
+// because v7 read sixteen bytes into a fifteen-byte DIRSIZ.  Both numbers changed under it
+// here and the write landed INSIDE what every read() overwrites, so an 18-character name
+// reached gmatch() unterminated.  README.md has the account.  The loop still tests
+// trapnote & SIGSET between entries, which is what keeps a globbing shell interruptible.
 //
-#include <fcntl.h>
-#include <sys/dir.h>
-#include <sys/stat.h>
+#include <dirent.h>
 #include <sys/types.h>
-#include <unistd.h>
 
 #include "defs.h"
 
@@ -39,20 +36,17 @@ static STRING plainstak(STRING as);
 //
 INT expand(STRING as, INT rflg)
 {
-    INT count, dirf;
-    BOOL dir      = 0;
+    INT count;
+    DIR *dirp     = 0;
     BOOL slash    = 0;
     STRING rescan = 0;
     STRING s, cs;
     INT slashpos;
     ARGPTR schain = gchain;
-    struct direct entry;
-    STATBUF statb;
+    struct dirent *dp;
 
     if (trapnote & SIGSET)
         return 0;
-
-    entry.d_name[DIRSIZ - 1] = 0; // to end the string
 
     //
     // Find the first unquoted filename metacharacter, and remember where the last unquoted
@@ -112,20 +106,18 @@ INT expand(STRING as, INT rflg)
 
     {
         //
-        // stat() and open() want a real name, not the stored form, and a path hardly ever
-        // has anything in it to decode -- so the copy is made only when it does.  v7 handed
-        // the marked text straight to stat(), which is why `"/usr"/bin/*' globbed nothing
-        // there; it does here.
+        // opendir() wants a real name, not the stored form, and a path hardly ever has
+        // anything in it to decode -- so the copy is made only when it does.  v7 handed the
+        // marked text straight to stat(), which is why `"/usr"/bin/*' globbed nothing there;
+        // it does here.  opendir() also makes the separate S_IFDIR test its own business.
         //
         STRING plain = any(QESC, s) ? plainstak(s) : s;
 
-        if (stat(plain, &statb) >= 0 && (statb.st_mode & S_IFMT) == S_IFDIR &&
-            (dirf = open(plain, O_RDONLY)) > 0)
-            dir++;
+        dirp = opendir(plain);
     }
 
     count = 0;
-    if (dir) {
+    if (dirp) {
         // check for rescan
         STRING rs = cs;
         STRING here;
@@ -148,7 +140,7 @@ INT expand(STRING as, INT rflg)
             }
         }
 
-        while (read(dirf, (char *)&entry, DIRENTSZ) == DIRENTSZ && (trapnote & SIGSET) == 0) {
+        while ((dp = readdir(dirp)) != NULL && (trapnote & SIGSET) == 0) {
             STRING p = cs;
 
             //
@@ -159,14 +151,14 @@ INT expand(STRING as, INT rflg)
             // not obviously the right one -- it is kept because changing it is a change
             // to the pattern language and belongs to whoever wants it, not to task C11.
             //
-            if (entry.d_ino == 0 || (*entry.d_name == '.' && nextq(&p) != '.'))
+            if (*dp->d_name == '.' && nextq(&p) != '.')
                 continue;
-            if (gmatch(entry.d_name, cs)) {
-                addg(s, slash, entry.d_name, rescan);
+            if (gmatch(dp->d_name, cs)) {
+                addg(s, slash, dp->d_name, rescan);
                 count++;
             }
         }
-        close(dirf);
+        closedir(dirp);
 
         if (rescan) {
             ARGPTR rchain;
